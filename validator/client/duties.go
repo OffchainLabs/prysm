@@ -106,7 +106,7 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 		return errors.Wrap(err, "could not fetch duties")
 	}
 
-	if !v.duties.IsInitialized() {
+	if !v.duties.isInitialized() {
 		return nil
 	}
 
@@ -137,7 +137,7 @@ func (v *validator) updateDutiesCombined(ctx context.Context, epoch primitives.E
 	var data dutyStoreData
 	data.setFromContainer(resp)
 	data.missingNext = missingNextPtc
-	v.duties.Write(data)
+	v.duties.write(data)
 
 	if allCurrentDutiesExited(resp.CurrentEpochDuties) {
 		return ErrValidatorsAllExited
@@ -207,7 +207,7 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 	if len(indices) == 0 {
 		// No active keys for this client; drop any previously cached duties so
 		// stale entries don't keep appearing in RolesAt etc.
-		v.duties.Reset()
+		v.duties.reset()
 		return nil
 	}
 
@@ -256,7 +256,7 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 	data.epoch = epoch
 	data.missingNext = res.missingNext
 	data.indices = indices
-	v.duties.Write(data)
+	v.duties.write(data)
 
 	if allCurrentDutiesExited(res.currentDuties) {
 		return ErrValidatorsAllExited
@@ -268,9 +268,9 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 // new next-epoch duties. Cached duties already carry PtcSlots from the prior
 // fetch, so no current-epoch refetch is needed.
 func (v *validator) promoteDuties(ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex) (dutiesFetchResult, error) {
-	snap := v.duties.Snapshot()
-	currentDuties := make([]*ethpb.ValidatorDuty, 0, snap.NextDutyCount())
-	for _, d := range snap.NextDuties() {
+	snap := v.duties.snapshot()
+	currentDuties := make([]*ethpb.ValidatorDuty, 0, snap.nextDutyCount())
+	for _, d := range snap.nextDuties() {
 		if d == nil {
 			continue
 		}
@@ -282,7 +282,7 @@ func (v *validator) promoteDuties(ctx context.Context, epoch primitives.Epoch, i
 		// On promotion, last cycle's currDependentRoot (which covered next-epoch
 		// duties) becomes this cycle's prevDepRoot (covering current-epoch
 		// duties).
-		prevDepRoot: snap.CurrDependentRoot(),
+		prevDepRoot: snap.currDependentRoot(),
 	}
 
 	var (
@@ -588,7 +588,7 @@ func (v *validator) onDutiesUpdated(ctx context.Context) error {
 	if exists {
 		ctx = metadata.NewOutgoingContext(ctx, md)
 	}
-	container := v.duties.ToContainer()
+	container := v.duties.toContainer()
 	go func() {
 		if err := v.subscribeToSubnets(ctx, container); err != nil {
 			log.WithError(err).Error("Failed to subscribe to subnets")
@@ -599,8 +599,8 @@ func (v *validator) onDutiesUpdated(ctx context.Context) error {
 }
 
 func (v *validator) logDuties(slot primitives.Slot) {
-	snap := v.duties.Snapshot()
-	if !snap.IsInitialized() {
+	snap := v.duties.snapshot()
+	if !snap.isInitialized() {
 		return
 	}
 
@@ -621,7 +621,7 @@ func (v *validator) logDuties(slot primitives.Slot) {
 	}
 	var totalProposingKeys, totalAttestingKeys, totalPTCKeys uint64
 
-	for _, duty := range snap.CurrentDuties() {
+	for _, duty := range snap.currentDuties() {
 		pk := fmt.Sprintf("%#x", duty.PublicKey)
 		if v.emitAccountMetrics {
 			ValidatorStatusesGaugeVec.WithLabelValues(pk, fmt.Sprintf("%#x", duty.ValidatorIndex)).Set(float64(duty.Status))
@@ -672,7 +672,7 @@ func (v *validator) logDuties(slot primitives.Slot) {
 			}
 		}
 	}
-	for _, duty := range snap.NextDuties() {
+	for _, duty := range snap.nextDuties() {
 		pk := fmt.Sprintf("%#x", duty.PublicKey)
 		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
 			continue
@@ -747,7 +747,7 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	dutiesCtx, cancel := context.WithDeadline(ctx, v.SlotDeadline(ss-1))
 	defer cancel()
 
-	storedPrev := v.duties.PrevDependentRoot()
+	storedPrev := v.duties.prevDependentRoot()
 	needsPrevUpdate := storedPrev == nil || !bytes.Equal(prevDependentRoot, storedPrev)
 
 	if needsPrevUpdate {
@@ -766,7 +766,7 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	if bytes.Equal(currDependentRoot, params.BeaconConfig().ZeroHash[:]) {
 		return nil
 	}
-	storedCurr := v.duties.CurrDependentRoot()
+	storedCurr := v.duties.currDependentRoot()
 	needsCurrUpdate := storedCurr == nil || !bytes.Equal(currDependentRoot, storedCurr)
 	if !needsCurrUpdate {
 		return nil
