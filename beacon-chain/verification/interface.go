@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
@@ -72,6 +73,7 @@ type GloasDataColumnVerifier interface {
 type PayloadAttestationMsgVerifier interface {
 	VerifyCurrentSlot() error
 	VerifyBlockRootSeen(blockRootSeen func([32]byte) bool) error
+	VerifyBlockSlotMatches(blockSlot primitives.Slot) error
 	VerifyBlockRootValid(func([32]byte) bool) error
 	VerifyValidatorInPTC(context.Context, state.ReadOnlyBeaconState) error
 	VerifySignature(state.ReadOnlyBeaconState) error
