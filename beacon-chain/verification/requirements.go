@@ -45,6 +45,7 @@ const (
 	RequireBidFeeRecipientMatches
 	RequireBidGasLimitCompatible
 	RequireBidParentBlockRootSeen
+	RequireBidSlotHigherThanParent
 	RequireBidParentBlockHashValid
 	RequireBidBuilderCanCover
 	RequireBidSignatureValid

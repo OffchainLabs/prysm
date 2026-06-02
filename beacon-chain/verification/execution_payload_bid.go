@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/pkg/errors"
 )
 
@@ -17,6 +18,7 @@ var ExecutionPayloadBidGossipRequirements = []Requirement{
 	RequireBidExecutionPaymentZero,
 	RequireBidFeeRecipientMatches,
 	RequireBidParentBlockRootSeen,
+	RequireBidSlotHigherThanParent,
 	RequireBidParentBlockHashValid,
 	RequireBidGasLimitCompatible,
 	RequireBidBuilderCanCover,
@@ -33,6 +35,7 @@ var (
 	ErrBidFeeRecipientMismatch    = errors.New("fee recipient does not match proposer preferences")
 	ErrBidGasLimitIncompatible    = errors.New("bid gas limit is incompatible with parent and target")
 	ErrBidParentBlockRootNotSeen  = errors.New("parent block root not seen")
+	ErrBidSlotNotHigherThanParent = errors.New("bid slot is not higher than parent block slot")
 	ErrBidParentBlockHashMismatch = errors.New("parent block hash does not match forkchoice")
 	ErrBidBuilderCannotCover      = errors.New("builder cannot cover bid")
 )
@@ -163,6 +166,20 @@ func (v *BidVerifier) VerifyParentBlockRootSeen(parentSeen func([32]byte) bool) 
 		return nil
 	}
 	return fmt.Errorf("%w: root=%#x", ErrBidParentBlockRootNotSeen, root)
+}
+
+// VerifyBidSlotHigherThanParent verifies the bid slot is greater than the slot of its parent block.
+func (v *BidVerifier) VerifyBidSlotHigherThanParent(parentSlot primitives.Slot) (err error) {
+	defer v.record(RequireBidSlotHigherThanParent, &err)
+
+	bid, err := v.b.Bid()
+	if err != nil {
+		return errors.Wrap(err, "failed to get bid")
+	}
+	if bid.Slot() <= parentSlot {
+		return fmt.Errorf("%w: bid=%d parent=%d", ErrBidSlotNotHigherThanParent, bid.Slot(), parentSlot)
+	}
+	return nil
 }
 
 // VerifyParentBlockHash verifies the parent execution block hash matches forkchoice for the bid parent root.
