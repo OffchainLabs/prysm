@@ -610,15 +610,8 @@ func (v *validator) logDuties(slot primitives.Slot) {
 		return
 	}
 	attesterKeys := make([][]string, params.BeaconConfig().SlotsPerEpoch)
-	for i := range attesterKeys {
-		attesterKeys[i] = make([]string, 0)
-	}
 	proposerKeys := make([]string, params.BeaconConfig().SlotsPerEpoch)
 	ptcKeys := make([][]string, params.BeaconConfig().SlotsPerEpoch)
-	for i := range attesterKeys {
-		attesterKeys[i] = make([]string, 0)
-		ptcKeys[i] = make([]string, 0)
-	}
 	var totalProposingKeys, totalAttestingKeys, totalPTCKeys uint64
 
 	for _, duty := range snap.currentDuties() {
