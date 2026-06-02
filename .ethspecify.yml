@@ -35,6 +35,7 @@ exceptions:
     # altair
     - PARTICIPATION_FLAG_WEIGHTS#altair
     # bellatrix
+    - EMPTY_BLOCK_HASH#bellatrix
     - PAYLOAD_STATUS_INVALIDATED#bellatrix
     - PAYLOAD_STATUS_NOT_VALIDATED#bellatrix
     - PAYLOAD_STATUS_VALID#bellatrix
@@ -137,6 +138,7 @@ exceptions:
   dataclasses:
     # phase0
     - FastConfirmationStore#phase0
+    - ForkChoiceNode#phase0
     - LatestMessage#phase0
     - Seen#phase0
     - Store#phase0
@@ -156,10 +158,13 @@ exceptions:
     - Seen#electra
     # fulu
     - BlobParameters#fulu
+    - Seen#fulu
     # gloas
     - ExpectedWithdrawals#gloas
+    - ForkChoiceNode#gloas
     - LatestMessage#gloas
     - PayloadAttributes#gloas
+    - Seen#gloas
     - Store#gloas
     # heze
     - GetInclusionListResponse#heze
@@ -239,14 +244,18 @@ exceptions:
     - get_current_balance_source#phase0
     - get_current_target#phase0
     - get_current_target_score#phase0
+    - get_dependent_root#phase0
     - get_equivocation_score#phase0
     - get_fast_confirmation_store#phase0
     - get_latest_confirmed#phase0
     - get_latest_message_epoch#phase0
+    - get_node_children#phase0
+    - get_node_for_root#phase0
     - get_previous_balance_source#phase0
     - get_pulled_up_head_state#phase0
     - get_slot_committee#phase0
     - get_support_discount#phase0
+    - get_supported_node#phase0
     - is_ancestor#phase0
     - is_confirmed_chain_safe#phase0
     - is_full_validator_set_covered#phase0
@@ -346,6 +355,7 @@ exceptions:
     - validate_sync_committee_message_gossip#altair
     # bellatrix
     - get_execution_payload#bellatrix
+    - get_safe_execution_block_hash#bellatrix
     - is_merge_transition_block#bellatrix
     - is_optimistic_candidate_block#bellatrix
     - latest_verified_ancestor#bellatrix
@@ -420,6 +430,13 @@ exceptions:
     - get_data_column_sidecars_from_block#fulu
     - get_data_column_sidecars_from_column_sidecar#fulu
     - recover_matrix#fulu
+    - process_block#fulu
+    - process_deposit_request#fulu
+    - process_operations#fulu
+    - process_pending_deposits#fulu
+    - validate_beacon_block_gossip#fulu
+    - validate_data_column_sidecar_gossip#fulu
+    - validate_partial_data_column_sidecar_gossip#fulu
     # gloas
     - get_latest_message_epoch#gloas
     - get_payload_due_ms#gloas
@@ -453,9 +470,15 @@ exceptions:
     - get_forkchoice_store#gloas
     - get_head#gloas
     - get_indexed_payload_attestation#gloas
+    - get_dependent_root#gloas
     - get_next_sync_committee_indices#gloas
     - get_node_children#gloas
+    - get_node_for_root#gloas
     - get_parent_payload_status#gloas
+    - get_safe_execution_block_hash#gloas
+    - get_supported_node#gloas
+    - is_ancestor#gloas
+    - is_previous_slot_payload_decision#gloas
     - get_payload_attestation_due_ms#gloas
     - get_payload_attestation_message_signature#gloas
     - get_payload_status_tiebreaker#gloas

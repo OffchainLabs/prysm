@@ -2868,7 +2868,11 @@
     </spec>
 
 - name: get_beacon_proposer_indices#gloas
-  sources: []
+  sources:
+    - file: beacon-chain/core/helpers/validators.go
+      search: func ActiveNonSlashedValidatorIndices(
+    - file: beacon-chain/core/helpers/beacon_committee.go
+      search: func PrecomputeProposerIndices(
   spec: |
     <spec fn="get_beacon_proposer_indices" fork="gloas" hash="a160057e">
     def get_beacon_proposer_indices(
