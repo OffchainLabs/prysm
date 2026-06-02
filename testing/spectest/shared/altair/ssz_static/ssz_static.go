@@ -21,7 +21,7 @@ func customHtr(t *testing.T, htrs []common.HTR, object any) []common.HTR {
 	switch object.(type) {
 	case *ethpb.BeaconStateAltair:
 		htrs = append(htrs, func(s any) ([32]byte, error) {
-			beaconState, err := state_native.InitializeFromProtoAltair(s.(*ethpb.BeaconStateAltair))
+			beaconState, err := state_native.InitializeFromProtoUnsafeAltair(s.(*ethpb.BeaconStateAltair))
 			require.NoError(t, err)
 			return beaconState.HashTreeRoot(context.Background())
 		})

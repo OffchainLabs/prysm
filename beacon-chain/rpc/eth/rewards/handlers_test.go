@@ -268,6 +268,7 @@ func TestBlockRewards(t *testing.T) {
 		}
 		url := "http://only.the.slot.number.at.the.end.is.important/0"
 		request := httptest.NewRequest("GET", url, nil)
+		request.SetPathValue("block_id", "0")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -298,6 +299,7 @@ func TestBlockRewards(t *testing.T) {
 
 		url := "http://only.the.slot.number.at.the.end.is.important/2"
 		request := httptest.NewRequest("GET", url, nil)
+		request.SetPathValue("block_id", "2")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -334,6 +336,7 @@ func TestBlockRewards(t *testing.T) {
 
 		url := "http://only.the.slot.number.at.the.end.is.important/2"
 		request := httptest.NewRequest("GET", url, nil)
+		request.SetPathValue("block_id", "2")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -370,6 +373,7 @@ func TestBlockRewards(t *testing.T) {
 
 		url := "http://only.the.slot.number.at.the.end.is.important/2"
 		request := httptest.NewRequest("GET", url, nil)
+		request.SetPathValue("block_id", "2")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -406,6 +410,7 @@ func TestBlockRewards(t *testing.T) {
 
 		url := "http://only.the.slot.number.at.the.end.is.important/2"
 		request := httptest.NewRequest("GET", url, nil)
+		request.SetPathValue("block_id", "2")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -442,6 +447,7 @@ func TestBlockRewards(t *testing.T) {
 
 		url := "http://only.the.slot.number.at.the.end.is.important/2"
 		request := httptest.NewRequest("GET", url, nil)
+		request.SetPathValue("block_id", "2")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -511,6 +517,7 @@ func TestAttestationRewards(t *testing.T) {
 	t.Run("ideal rewards", func(t *testing.T) {
 		url := "http://only.the.epoch.number.at.the.end.is.important/1"
 		request := httptest.NewRequest("POST", url, nil)
+		request.SetPathValue("epoch", "1")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -540,6 +547,7 @@ func TestAttestationRewards(t *testing.T) {
 		_, err = body.Write(valIds)
 		require.NoError(t, err)
 		request := httptest.NewRequest("POST", url, &body)
+		request.SetPathValue("epoch", "1")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -563,6 +571,7 @@ func TestAttestationRewards(t *testing.T) {
 	t.Run("all vals", func(t *testing.T) {
 		url := "http://only.the.epoch.number.at.the.end.is.important/1"
 		request := httptest.NewRequest("POST", url, nil)
+		request.SetPathValue("epoch", "1")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -605,6 +614,7 @@ func TestAttestationRewards(t *testing.T) {
 		_, err = body.Write(valIds)
 		require.NoError(t, err)
 		request := httptest.NewRequest("POST", url, &body)
+		request.SetPathValue("epoch", "1")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -643,6 +653,7 @@ func TestAttestationRewards(t *testing.T) {
 		_, err = body.Write(valIds)
 		require.NoError(t, err)
 		request := httptest.NewRequest("POST", url, &body)
+		request.SetPathValue("epoch", "1")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -660,6 +671,7 @@ func TestAttestationRewards(t *testing.T) {
 		_, err = body.Write(valIds)
 		require.NoError(t, err)
 		request := httptest.NewRequest("POST", url, &body)
+		request.SetPathValue("epoch", "1")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -681,6 +693,7 @@ func TestAttestationRewards(t *testing.T) {
 		_, err = body.Write(valIds)
 		require.NoError(t, err)
 		request := httptest.NewRequest("POST", url, &body)
+		request.SetPathValue("epoch", "1")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -699,6 +712,7 @@ func TestAttestationRewards(t *testing.T) {
 		_, err = body.Write(valIds)
 		require.NoError(t, err)
 		request := httptest.NewRequest("POST", url, &body)
+		request.SetPathValue("epoch", "1")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -712,6 +726,7 @@ func TestAttestationRewards(t *testing.T) {
 	t.Run("phase 0", func(t *testing.T) {
 		url := "http://only.the.epoch.number.at.the.end.is.important/0"
 		request := httptest.NewRequest("POST", url, nil)
+		request.SetPathValue("epoch", "0")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -725,6 +740,7 @@ func TestAttestationRewards(t *testing.T) {
 	t.Run("invalid epoch", func(t *testing.T) {
 		url := "http://only.the.epoch.number.at.the.end.is.important/foo"
 		request := httptest.NewRequest("POST", url, nil)
+		request.SetPathValue("epoch", "foo")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -738,6 +754,7 @@ func TestAttestationRewards(t *testing.T) {
 	t.Run("previous epoch", func(t *testing.T) {
 		url := "http://only.the.epoch.number.at.the.end.is.important/2"
 		request := httptest.NewRequest("POST", url, nil)
+		request.SetPathValue("epoch", "2")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -751,6 +768,7 @@ func TestAttestationRewards(t *testing.T) {
 	t.Run("epoch overflow", func(t *testing.T) {
 		url := "http://only.the.epoch.number.at.the.end.is.important/" + strconv.FormatUint(math.MaxUint64, 10)
 		request := httptest.NewRequest("POST", url, nil)
+		request.SetPathValue("epoch", strconv.FormatUint(math.MaxUint64, 10))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -858,6 +876,7 @@ func TestSyncCommiteeRewards(t *testing.T) {
 		_, err = body.Write(valIds)
 		require.NoError(t, err)
 		request := httptest.NewRequest("POST", url, &body)
+		request.SetPathValue("block_id", "32")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -885,6 +904,7 @@ func TestSyncCommiteeRewards(t *testing.T) {
 
 		url := "http://only.the.slot.number.at.the.end.is.important/32"
 		request := httptest.NewRequest("POST", url, nil)
+		request.SetPathValue("block_id", "32")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -916,6 +936,7 @@ func TestSyncCommiteeRewards(t *testing.T) {
 		_, err = body.Write(valIds)
 		require.NoError(t, err)
 		request := httptest.NewRequest("POST", url, &body)
+		request.SetPathValue("block_id", "32")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -947,6 +968,7 @@ func TestSyncCommiteeRewards(t *testing.T) {
 		_, err = body.Write(valIds)
 		require.NoError(t, err)
 		request := httptest.NewRequest("POST", url, &body)
+		request.SetPathValue("block_id", "32")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -977,6 +999,7 @@ func TestSyncCommiteeRewards(t *testing.T) {
 		_, err = body.Write(valIds)
 		require.NoError(t, err)
 		request := httptest.NewRequest("POST", url, &body)
+		request.SetPathValue("block_id", "32")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -1004,6 +1027,7 @@ func TestSyncCommiteeRewards(t *testing.T) {
 		_, err = body.Write(valIds)
 		require.NoError(t, err)
 		request := httptest.NewRequest("POST", url, &body)
+		request.SetPathValue("block_id", "32")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -1028,6 +1052,7 @@ func TestSyncCommiteeRewards(t *testing.T) {
 		_, err = body.Write(valIds)
 		require.NoError(t, err)
 		request := httptest.NewRequest("POST", url, &body)
+		request.SetPathValue("block_id", "32")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -1047,6 +1072,7 @@ func TestSyncCommiteeRewards(t *testing.T) {
 
 		url := "http://only.the.slot.number.at.the.end.is.important/0"
 		request := httptest.NewRequest("POST", url, nil)
+		request.SetPathValue("block_id", "0")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 

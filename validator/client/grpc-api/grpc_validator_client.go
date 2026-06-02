@@ -18,6 +18,7 @@ import (
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
+	grpcretry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -149,6 +150,49 @@ func toValidatorDutyV2(duty *ethpb.DutiesV2Response_Duty) (*ethpb.ValidatorDuty,
 	}, nil
 }
 
+func (c *grpcValidatorClient) AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.AttesterDutiesResponse, error) {
+	resp, err := c.getClient().GetAttesterDuties(ctx, &ethpb.AttesterDutiesRequest{
+		Epoch:            epoch,
+		ValidatorIndices: validatorIndices,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "GetAttesterDuties")
+	}
+	return resp, nil
+}
+
+func (c *grpcValidatorClient) ProposerDuties(ctx context.Context, epoch primitives.Epoch) (*ethpb.ProposerDutiesResponse, error) {
+	resp, err := c.getClient().GetProposerDutiesV2(ctx, &ethpb.ProposerDutiesRequest{
+		Epoch: epoch,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "GetProposerDutiesV2")
+	}
+	return resp, nil
+}
+
+func (c *grpcValidatorClient) SyncCommitteeDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.SyncCommitteeDutiesResponse, error) {
+	resp, err := c.getClient().GetSyncCommitteeDuties(ctx, &ethpb.SyncCommitteeDutiesRequest{
+		Epoch:            epoch,
+		ValidatorIndices: validatorIndices,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "GetSyncCommitteeDuties")
+	}
+	return resp, nil
+}
+
+func (c *grpcValidatorClient) PTCDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.PTCDutiesResponse, error) {
+	resp, err := c.getClient().GetPTCDuties(ctx, &ethpb.PTCDutiesRequest{
+		Epoch:            epoch,
+		ValidatorIndices: validatorIndices,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "GetPTCDuties")
+	}
+	return resp, nil
+}
+
 func (c *grpcValidatorClient) CheckDoppelGanger(ctx context.Context, in *ethpb.DoppelGangerRequest) (*ethpb.DoppelGangerResponse, error) {
 	return c.getClient().CheckDoppelGanger(ctx, in)
 }
@@ -235,6 +279,14 @@ func (c *grpcValidatorClient) SubmitSyncMessage(ctx context.Context, in *ethpb.S
 
 func (c *grpcValidatorClient) SubmitValidatorRegistrations(ctx context.Context, in *ethpb.SignedValidatorRegistrationsV1) (*empty.Empty, error) {
 	return c.getClient().SubmitValidatorRegistrations(ctx, in)
+}
+
+func (c *grpcValidatorClient) SubmitSignedProposerPreferences(ctx context.Context, in *ethpb.SubmitSignedProposerPreferencesRequest) (*empty.Empty, error) {
+	return c.getClient().SubmitSignedProposerPreferences(ctx, in)
+}
+
+func (c *grpcValidatorClient) SubmitSignedExecutionPayloadBid(ctx context.Context, in *ethpb.SignedExecutionPayloadBid) (*empty.Empty, error) {
+	return c.getClient().SubmitSignedExecutionPayloadBid(ctx, in)
 }
 
 func (c *grpcValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*empty.Empty, error) {
@@ -416,12 +468,9 @@ func (c *grpcValidatorClient) PayloadAttestationData(ctx context.Context, slot p
 	req := &ethpb.PayloadAttestationDataRequest{
 		Slot: slot,
 	}
-	resp, err := c.getClient().PayloadAttestationData(ctx, req)
+	resp, err := c.getClient().PayloadAttestationData(ctx, req, grpcretry.WithMax(0))
 	if err != nil {
-		return nil, errors.Wrap(
-			client.ErrConnectionIssue,
-			errors.Wrap(err, "PayloadAttestationData").Error(),
-		)
+		return nil, errors.Wrap(err, "PayloadAttestationData")
 	}
 	return resp, nil
 }

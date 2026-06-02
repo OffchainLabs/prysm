@@ -55,6 +55,7 @@ func TestRegisterSubscriptions_Idempotent(t *testing.T) {
 	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
 	fulu := params.BeaconConfig().ElectraForkEpoch + 4096*2
 	params.BeaconConfig().FuluForkEpoch = fulu
+	params.BeaconConfig().GloasForkEpoch = params.BeaconConfig().FarFutureEpoch
 	params.BeaconConfig().InitializeForkSchedule()
 
 	current := fulu - 1
@@ -80,6 +81,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
 	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().ElectraForkEpoch + 4096*2
+	params.BeaconConfig().GloasForkEpoch = params.BeaconConfig().FarFutureEpoch
 	params.BeaconConfig().InitializeForkSchedule()
 
 	tests := []struct {

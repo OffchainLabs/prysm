@@ -462,13 +462,10 @@ func ShuffledIndices(s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]pri
 	}
 
 	indices := make([]primitives.ValidatorIndex, 0, s.NumValidators())
-	if err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	for idx, val := range s.ValidatorsReadOnlySeq() {
 		if IsActiveValidatorUsingTrie(val, epoch) {
-			indices = append(indices, primitives.ValidatorIndex(idx))
+			indices = append(indices, idx)
 		}
-		return nil
-	}); err != nil {
-		return nil, err
 	}
 
 	// UnshuffleList is used as an optimized implementation for raw speed.
@@ -658,8 +655,8 @@ func ComputeCommittee(
 }
 
 // InitializeProposerLookahead computes the list of the proposer indices for the next MIN_SEED_LOOKAHEAD + 1 epochs.
-func InitializeProposerLookahead(ctx context.Context, state state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]uint64, error) {
-	lookAhead := make([]uint64, 0, uint64(params.BeaconConfig().MinSeedLookahead+1)*uint64(params.BeaconConfig().SlotsPerEpoch))
+func InitializeProposerLookahead(ctx context.Context, state state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]primitives.ValidatorIndex, error) {
+	lookAhead := make([]primitives.ValidatorIndex, 0, uint64(params.BeaconConfig().MinSeedLookahead+1)*uint64(params.BeaconConfig().SlotsPerEpoch))
 	for i := range params.BeaconConfig().MinSeedLookahead + 1 {
 		indices, err := ActiveValidatorIndices(ctx, state, epoch+i)
 		if err != nil {
@@ -669,9 +666,7 @@ func InitializeProposerLookahead(ctx context.Context, state state.ReadOnlyBeacon
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute proposer indices")
 		}
-		for _, proposerIndex := range proposerIndices {
-			lookAhead = append(lookAhead, uint64(proposerIndex))
-		}
+		lookAhead = append(lookAhead, proposerIndices...)
 	}
 	return lookAhead, nil
 }

@@ -59,12 +59,38 @@ func (r Requirement) String() string {
 		return "RequireBuilderValid"
 	case RequirePayloadHashValid:
 		return "RequirePayloadHashValid"
+	case RequireExecutionRequestsRootValid:
+		return "RequireExecutionRequestsRootValid"
 	case RequireEnvelopeSlotAboveFinalized:
 		return "RequireEnvelopeSlotAboveFinalized"
 	case RequireEnvelopeSlotMatchesBlock:
 		return "RequireEnvelopeSlotMatchesBlock"
 	case RequireBuilderSignatureValid:
 		return "RequireBuilderSignatureValid"
+	case RequireBidCurrentOrNextSlot:
+		return "RequireBidCurrentOrNextSlot"
+	case RequireBidBuilderActive:
+		return "RequireBidBuilderActive"
+	case RequireBidExecutionPaymentZero:
+		return "RequireBidExecutionPaymentZero"
+	case RequireBidFeeRecipientMatches:
+		return "RequireBidFeeRecipientMatches"
+	case RequireBidGasLimitCompatible:
+		return "RequireBidGasLimitCompatible"
+	case RequireBidParentBlockRootSeen:
+		return "RequireBidParentBlockRootSeen"
+	case RequireBidParentBlockHashValid:
+		return "RequireBidParentBlockHashValid"
+	case RequireBidBuilderCanCover:
+		return "RequireBidBuilderCanCover"
+	case RequireBidSignatureValid:
+		return "RequireBidSignatureValid"
+	case RequireProposerPreferencesCurrentOrNextEpoch:
+		return "RequireProposerPreferencesCurrentOrNextEpoch"
+	case RequireProposerPreferencesProposalSlotValid:
+		return "RequireProposerPreferencesProposalSlotValid"
+	case RequireProposerPreferencesSignatureValid:
+		return "RequireProposerPreferencesSignatureValid"
 	default:
 		return unknownRequirementName
 	}

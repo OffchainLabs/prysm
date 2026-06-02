@@ -243,6 +243,7 @@ func TestVotes_CanFindHead(t *testing.T) {
 
 	// Set the f.justifiedBalances of the last 2 validators to 0.
 	f.justifiedBalances = []uint64{1, 1, 1, 0, 0}
+	f.ProcessAttestation(t.Context(), []uint64{3, 4}, indexToHash(9), 6*params.BeaconConfig().SlotsPerEpoch, true)
 	// The head should be back to 10.
 	r, err = f.Head(t.Context())
 	require.NoError(t, err)
@@ -250,6 +251,7 @@ func TestVotes_CanFindHead(t *testing.T) {
 
 	// Set the f.justifiedBalances back to normal.
 	f.justifiedBalances = []uint64{1, 1, 1, 1, 1}
+	f.ProcessAttestation(t.Context(), []uint64{3, 4}, indexToHash(9), 7*params.BeaconConfig().SlotsPerEpoch, true)
 	// The head should be back to 9.
 	r, err = f.Head(t.Context())
 	require.NoError(t, err)
@@ -257,6 +259,7 @@ func TestVotes_CanFindHead(t *testing.T) {
 
 	// Remove the last 2 validators.
 	f.justifiedBalances = []uint64{1, 1, 1}
+	f.ProcessAttestation(t.Context(), []uint64{3, 4}, indexToHash(9), 8*params.BeaconConfig().SlotsPerEpoch, true)
 	// The head should be back to 10.
 	r, err = f.Head(t.Context())
 	require.NoError(t, err)

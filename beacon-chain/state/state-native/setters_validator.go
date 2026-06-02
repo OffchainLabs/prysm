@@ -38,17 +38,15 @@ func (b *BeaconState) ApplyToEveryValidator(f func(idx int, val state.ReadOnlyVa
 		if err != nil {
 			return err
 		}
-		ro, err := NewValidator(v)
-		if err != nil {
-			return err
-		}
+		ro := NewValidatorFromCompact(v)
 		newVal, err := f(i, ro)
 		if err != nil {
 			return err
 		}
 		if newVal != nil {
 			changedVals = append(changedVals, uint64(i))
-			if err = b.validatorsMultiValue.UpdateAt(b, uint64(i), newVal); err != nil {
+			compactValidator := stateutil.CompactValidatorFromProto(newVal)
+			if err := b.validatorsMultiValue.UpdateAt(b, uint64(i), compactValidator); err != nil {
 				return errors.Wrapf(err, "could not update validator at index %d", i)
 			}
 		}
@@ -67,7 +65,8 @@ func (b *BeaconState) ApplyToEveryValidator(f func(idx int, val state.ReadOnlyVa
 // UpdateValidatorAtIndex for the beacon state. Updates the validator
 // at a specific index to a new value.
 func (b *BeaconState) UpdateValidatorAtIndex(idx primitives.ValidatorIndex, val *ethpb.Validator) error {
-	if err := b.validatorsMultiValue.UpdateAt(b, uint64(idx), val); err != nil {
+	compactValidator := stateutil.CompactValidatorFromProto(val)
+	if err := b.validatorsMultiValue.UpdateAt(b, uint64(idx), compactValidator); err != nil {
 		return errors.Wrap(err, "could not update validator")
 	}
 
@@ -151,7 +150,8 @@ func (b *BeaconState) UpdateSlashingsAtIndex(idx, val uint64) error {
 // AppendValidator for the beacon state. Appends the new value
 // to the end of list.
 func (b *BeaconState) AppendValidator(val *ethpb.Validator) error {
-	b.validatorsMultiValue.Append(b, val)
+	compactValidator := stateutil.CompactValidatorFromProto(val)
+	b.validatorsMultiValue.Append(b, compactValidator)
 	valIdx := primitives.ValidatorIndex(b.validatorsMultiValue.Len(b) - 1)
 
 	b.lock.Lock()

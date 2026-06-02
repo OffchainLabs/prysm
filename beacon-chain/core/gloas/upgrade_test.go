@@ -103,7 +103,7 @@ func TestUpgradeToGloas_Basic(t *testing.T) {
 }
 
 func TestUpgradeToGloas_OnboardsBuilderDeposit(t *testing.T) {
-	st, _ := util.DeterministicGenesisStateFulu(t, 4)
+	st, _ := util.DeterministicGenesisStateFulu(t, params.BeaconConfig().MaxValidatorsPerCommittee)
 
 	sk, err := bls.RandKey()
 	require.NoError(t, err)

@@ -337,7 +337,7 @@ func (v *ValidatorNode) Resume() error {
 
 // Stop stops the component and its underlying process.
 func (v *ValidatorNode) Stop() error {
-	return v.cmd.Process.Kill()
+	return helpers.GracefulStop(v.cmd.Process)
 }
 
 func (v *ValidatorNode) UnderlyingProcess() *os.Process {

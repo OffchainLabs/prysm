@@ -719,6 +719,10 @@ message BeaconStateFulu {
       [ (ethereum.eth.ext.ssz_max) = "pending_consolidations_limit" ];
 
   // Fields introduced in Fulu fork [13001-14000]
-  repeated uint64 proposer_lookahead = 13001
-      [ (ethereum.eth.ext.ssz_size) = "proposer_lookahead_size" ];
+  repeated uint64 proposer_lookahead = 13001 [
+    (ethereum.eth.ext.ssz_size) = "proposer_lookahead_size",
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/"
+        "primitives.ValidatorIndex"
+  ];
 }

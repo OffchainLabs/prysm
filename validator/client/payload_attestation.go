@@ -15,7 +15,10 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // SubmitPayloadAttestation submits a payload attestation message for a PTC member.
@@ -32,6 +35,16 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 
 	data, err := v.validatorClient.PayloadAttestationData(ctx, slot)
 	if err != nil {
+		if status.Code(errors.Cause(err)) == codes.Unavailable {
+			validatorPayloadAttestationSubmissionTotal.WithLabelValues("skipped_no_block").Inc()
+			log.WithFields(logrus.Fields{
+				"slot":   slot,
+				"reason": status.Convert(errors.Cause(err)).Message(),
+			}).Info("Skipping payload attestation: beacon node has no head block for slot")
+			tracing.AnnotateError(span, err)
+			return
+		}
+		validatorPayloadAttestationSubmissionTotal.WithLabelValues("failed").Inc()
 		log.WithError(err).Error("Could not request payload attestation data")
 		tracing.AnnotateError(span, err)
 		return
@@ -39,12 +52,14 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 
 	d, err := v.domainData(ctx, slots.ToEpoch(slot), params.BeaconConfig().DomainPTCAttester[:])
 	if err != nil {
+		validatorPayloadAttestationSubmissionTotal.WithLabelValues("failed").Inc()
 		log.WithError(err).Error("Could not get PTC attester domain data")
 		return
 	}
 
 	r, err := signing.ComputeSigningRoot(data, d.SignatureDomain)
 	if err != nil {
+		validatorPayloadAttestationSubmissionTotal.WithLabelValues("failed").Inc()
 		log.WithError(err).Error("Could not compute payload attestation signing root")
 		return
 	}
@@ -59,12 +74,14 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 		SigningSlot: slot,
 	})
 	if err != nil {
+		validatorPayloadAttestationSubmissionTotal.WithLabelValues("failed").Inc()
 		log.WithError(err).Error("Could not sign payload attestation")
 		return
 	}
 
 	duty, err := v.duty(pubKey)
 	if err != nil {
+		validatorPayloadAttestationSubmissionTotal.WithLabelValues("failed").Inc()
 		log.WithError(err).Error("Could not fetch validator assignment")
 		return
 	}
@@ -75,9 +92,11 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 		Signature:      sig.Marshal(),
 	}
 	if _, err := v.validatorClient.SubmitPayloadAttestation(ctx, msg); err != nil {
+		validatorPayloadAttestationSubmissionTotal.WithLabelValues("failed").Inc()
 		log.WithError(err).Error("Could not submit payload attestation")
 		return
 	}
+	validatorPayloadAttestationSubmissionTotal.WithLabelValues("success").Inc()
 
 	slotTime, err := slots.StartTime(v.genesisTime, slot)
 	if err != nil {
