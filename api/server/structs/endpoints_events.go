@@ -113,6 +113,11 @@ type LightClientOptimisticUpdateEvent struct {
 	Data    *LightClientOptimisticUpdate `json:"data"`
 }
 
+type ProposerPreferencesEvent struct {
+	Version string                     `json:"version"`
+	Data    *SignedProposerPreferences `json:"data"`
+}
+
 type PayloadEvent struct {
 	Slot      string `json:"slot"`
 	BlockRoot string `json:"block_root"`

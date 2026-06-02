@@ -666,7 +666,10 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		}, nil
 	case *operation.ProposerPreferencesReceivedData:
 		return func() io.Reader {
-			return jsonMarshalReader(eventName, structs.SignedProposerPreferencesFromConsensus(v.SignedProposerPreferences))
+			return jsonMarshalReader(eventName, &structs.ProposerPreferencesEvent{
+				Version: version.String(version.Gloas),
+				Data:    structs.SignedProposerPreferencesFromConsensus(v.SignedProposerPreferences),
+			})
 		}, nil
 	case *statefeed.PayloadProcessedData:
 		return func() io.Reader {

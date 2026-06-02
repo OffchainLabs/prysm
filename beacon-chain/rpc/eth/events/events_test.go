@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
@@ -383,6 +385,39 @@ func newStreamTestSync(t *testing.T) *streamTestSync {
 		undo:   undo,
 		done:   make(chan struct{}),
 	}
+}
+
+func TestStreamEvents_ProposerPreferencesWrappedWithVersion(t *testing.T) {
+	s := &Server{}
+	topics, err := newTopicRequest([]string{ProposerPreferencesTopic})
+	require.NoError(t, err)
+	ev := &feed.Event{
+		Type: operation.ProposerPreferencesReceived,
+		Data: &operation.ProposerPreferencesReceivedData{
+			SignedProposerPreferences: &eth.SignedProposerPreferences{
+				Message: &eth.ProposerPreferences{
+					DependentRoot:  make([]byte, fieldparams.RootLength),
+					ProposalSlot:   32,
+					ValidatorIndex: 7,
+					FeeRecipient:   make([]byte, 20),
+					TargetGasLimit: 30_000_000,
+				},
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+		},
+	}
+	lr, err := s.lazyReaderForEvent(t.Context(), ev, topics)
+	require.NoError(t, err)
+	out, err := io.ReadAll(lr())
+	require.NoError(t, err)
+
+	_, payload, found := strings.Cut(string(out), "data: ")
+	require.Equal(t, true, found)
+	var got structs.ProposerPreferencesEvent
+	require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(payload)), &got))
+	require.Equal(t, "gloas", got.Version)
+	require.NotNil(t, got.Data)
+	require.Equal(t, "7", got.Data.Message.ValidatorIndex)
 }
 
 func TestStreamEvents_OperationsEvents(t *testing.T) {
