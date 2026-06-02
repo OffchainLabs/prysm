@@ -30,6 +30,20 @@ type beaconApiValidatorClient struct {
 	beaconBlockConverter    BeaconBlockConverter
 	prysmChainClient        iface.PrysmChainClient
 	isEventStreamRunning    bool
+	stateless               bool
+	envelopeCache           *executionPayloadEnvelopeCache
+}
+
+// WithStateless configures the validator client to use the Gloas stateless block production path,
+// retrieving the block and execution payload envelope in a single v4 call and caching the envelope
+// for reuse by the self-build publisher.
+func WithStateless(enabled bool) ValidatorClientOpt {
+	return func(c *beaconApiValidatorClient) {
+		c.stateless = enabled
+		if enabled {
+			c.envelopeCache = newExecutionPayloadEnvelopeCache()
+		}
+	}
 }
 
 func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...ValidatorClientOpt) iface.ValidatorClient {

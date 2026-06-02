@@ -68,7 +68,7 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 		SlotNumber:    slot,
 	}
 
-	emptyRequestsRoot, err := (&enginev1.ExecutionRequests{}).HashTreeRoot()
+	emptyRequestsRoot, err := enginev1.EmptyExecutionRequestsHashTreeRoot()
 	require.NoError(t, err)
 	bid := &ethpb.ExecutionPayloadBid{
 		ParentBlockHash:       parentHash,
@@ -94,10 +94,11 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 	require.NoError(t, err)
 
 	envelope := &ethpb.ExecutionPayloadEnvelope{
-		BuilderIndex:      builderIdx,
-		BeaconBlockRoot:   headerRoot[:],
-		Payload:           payload,
-		ExecutionRequests: &enginev1.ExecutionRequests{},
+		BuilderIndex:          builderIdx,
+		BeaconBlockRoot:       headerRoot[:],
+		ParentBeaconBlockRoot: header.ParentRoot,
+		Payload:               payload,
+		ExecutionRequests:     &enginev1.ExecutionRequests{},
 	}
 
 	if mutate != nil {

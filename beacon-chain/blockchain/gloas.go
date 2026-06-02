@@ -78,7 +78,7 @@ func (s *Service) checkIfProposing(st state.ReadOnlyBeaconState, slot primitives
 // execution requests on a state copy before computing withdrawals.
 // If the parent was empty, it returns the existing payload_expected_withdrawals.
 func (s *Service) computePayloadWithdrawals(ctx context.Context, st state.BeaconState, parentRoot [32]byte, headFull bool) ([]*enginev1.Withdrawal, error) {
-	if slots.ToEpoch(s.head.slot) < params.BeaconConfig().GloasForkEpoch {
+	if slots.ToEpoch(s.HeadSlot()) < params.BeaconConfig().GloasForkEpoch {
 		result, err := st.ExpectedWithdrawalsGloas()
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute expected withdrawals")
@@ -113,17 +113,10 @@ func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnly
 	}
 
 	var err error
-	if slot > st.Slot() {
-		writable, ok := st.(state.BeaconState)
-		if !ok {
-			log.Error("head state is not writable; cannot advance slots")
-			return emptyAttri
-		}
-		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, writable, headRoot, slot)
-		if err != nil {
-			log.WithError(err).Error("Could not process slots to get payload attribute")
-			return emptyAttri
-		}
+	st, err = transition.ProcessSlotsIfNeeded(ctx, st, headRoot, slot)
+	if err != nil {
+		log.WithError(err).Error("Could not process slots to get payload attribute")
+		return emptyAttri
 	}
 
 	prevRando, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
@@ -151,6 +144,7 @@ func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnly
 		Withdrawals:           withdrawals,
 		ParentBeaconBlockRoot: headRoot,
 		SlotNumber:            uint64(slot),
+		TargetGasLimit:        val.GasLimit,
 	})
 	if err != nil {
 		log.WithError(err).Error("Could not get payload attribute")

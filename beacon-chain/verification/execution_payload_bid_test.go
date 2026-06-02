@@ -108,16 +108,20 @@ func TestBidVerifier_VerifyFeeRecipientMatches(t *testing.T) {
 	require.ErrorIs(t, verifier.VerifyFeeRecipientMatches(bytes.Repeat([]byte{0xff}, 20)), ErrBidFeeRecipientMismatch)
 }
 
-func TestBidVerifier_VerifyGasLimitMatches(t *testing.T) {
+func TestBidVerifier_VerifyGasLimitTargetCompatible(t *testing.T) {
 	signed := testSignedExecutionPayloadBid(t, 1)
 	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
 	require.NoError(t, err)
 
-	verifier := &BidVerifier{results: newResults(RequireBidGasLimitMatches), b: wrapped}
-	require.NoError(t, verifier.VerifyGasLimitMatches(signed.Message.GasLimit))
+	// bid.gas_limit is 1 (from testSignedExecutionPayloadBid). With parent=1 the
+	// elasticity rule allows only gas_limit=1, so compatible target is 1.
+	parentGasLimit := signed.Message.GasLimit
 
-	verifier = &BidVerifier{results: newResults(RequireBidGasLimitMatches), b: wrapped}
-	require.ErrorIs(t, verifier.VerifyGasLimitMatches(signed.Message.GasLimit+1), ErrBidGasLimitMismatch)
+	verifier := &BidVerifier{results: newResults(RequireBidGasLimitCompatible), b: wrapped}
+	require.NoError(t, verifier.VerifyGasLimitTargetCompatible(parentGasLimit, signed.Message.GasLimit))
+
+	verifier = &BidVerifier{results: newResults(RequireBidGasLimitCompatible), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyGasLimitTargetCompatible(parentGasLimit, signed.Message.GasLimit+1), ErrBidGasLimitIncompatible)
 }
 
 func TestBidVerifier_VerifyParentBlockRootSeen(t *testing.T) {

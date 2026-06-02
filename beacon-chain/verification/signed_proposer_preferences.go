@@ -16,6 +16,7 @@ import (
 // signed proposer preferences.
 var SignedProposerPreferencesGossipRequirements = requirementList([]Requirement{
 	RequireProposerPreferencesCurrentOrNextEpoch,
+	RequireProposerPreferencesDependentRootSeen,
 	RequireProposerPreferencesProposalSlotValid,
 	RequireProposerPreferencesSignatureValid,
 })
@@ -24,6 +25,7 @@ var (
 	ErrProposerPreferencesNotCurrentOrNextEpoch = errors.New("proposer preferences proposal slot is not in the current or next epoch")
 	ErrProposerPreferencesSlotAlreadyPassed     = errors.New("proposer preferences proposal slot has already passed")
 	ErrProposerPreferencesInvalidProposalSlot   = errors.New("proposer preferences validator is not assigned to the proposal slot")
+	ErrProposerPreferencesDependentRootNotSeen  = errors.New("proposer preferences dependent_root block not seen")
 )
 
 var _ SignedProposerPreferencesVerifier = &ProposerPreferencesVerifier{}
@@ -35,16 +37,25 @@ type ProposerPreferencesVerifier struct {
 	p       *ethpb.SignedProposerPreferences
 }
 
-// VerifyCurrentOrNextEpoch verifies the proposal slot is in the current or next
-// epoch relative to the state epoch and has not already passed.
-func (v *ProposerPreferencesVerifier) VerifyCurrentOrNextEpoch(st state.ReadOnlyBeaconState) (err error) {
+// VerifyDependentRootSeen checks that the block referenced by
+// preferences.dependent_root is known to the node, via the supplied predicate.
+func (v *ProposerPreferencesVerifier) VerifyDependentRootSeen(seen func([32]byte) bool) (err error) {
+	defer v.record(RequireProposerPreferencesDependentRootSeen, &err)
+
+	root := [32]byte(v.message().DependentRoot)
+	if seen != nil && seen(root) {
+		return nil
+	}
+	return fmt.Errorf("%w: root=%#x", ErrProposerPreferencesDependentRootNotSeen, root)
+}
+
+// VerifyCurrentOrNextEpoch checks proposal_slot is in current or next epoch
+// (wall-clock) and not already passed.
+func (v *ProposerPreferencesVerifier) VerifyCurrentOrNextEpoch() (err error) {
 	defer v.record(RequireProposerPreferencesCurrentOrNextEpoch, &err)
 
 	msg := v.message()
-	currentSlot := st.Slot()
-	if v.clock != nil && v.clock.CurrentSlot() > currentSlot {
-		currentSlot = v.clock.CurrentSlot()
-	}
+	currentSlot := v.clock.CurrentSlot()
 	currentEpoch := slots.ToEpoch(currentSlot)
 	proposalEpoch := slots.ToEpoch(msg.ProposalSlot)
 	if proposalEpoch < currentEpoch || proposalEpoch > currentEpoch.Add(1) {
@@ -58,8 +69,10 @@ func (v *ProposerPreferencesVerifier) VerifyCurrentOrNextEpoch(st state.ReadOnly
 	return nil
 }
 
-// VerifyValidProposalSlot verifies the validator matches the next-epoch
-// proposer lookahead entry for the proposal slot.
+// VerifyValidProposalSlot checks the validator matches the proposer_lookahead
+// entry for proposal_slot. The caller must pass the checkpoint state at
+// epoch(proposal_slot)-1 anchored to preferences.dependent_root, with slots
+// advanced through that boundary.
 func (v *ProposerPreferencesVerifier) VerifyValidProposalSlot(st state.ReadOnlyBeaconState) (err error) {
 	defer v.record(RequireProposerPreferencesProposalSlotValid, &err)
 
@@ -69,9 +82,13 @@ func (v *ProposerPreferencesVerifier) VerifyValidProposalSlot(st state.ReadOnlyB
 		return errors.Wrap(err, "failed to get proposer lookahead")
 	}
 
-	currentEpoch := slots.ToEpoch(st.Slot())
+	stateEpoch := slots.ToEpoch(st.Slot())
 	proposalEpoch := slots.ToEpoch(msg.ProposalSlot)
-	slotIndex := primitives.Slot(proposalEpoch.Sub(uint64(currentEpoch)))*params.BeaconConfig().SlotsPerEpoch + (msg.ProposalSlot % params.BeaconConfig().SlotsPerEpoch)
+	if proposalEpoch < stateEpoch {
+		return fmt.Errorf("%w: proposal epoch %d precedes checkpoint state epoch %d",
+			ErrProposerPreferencesInvalidProposalSlot, proposalEpoch, stateEpoch)
+	}
+	slotIndex := primitives.Slot(proposalEpoch.Sub(uint64(stateEpoch)))*params.BeaconConfig().SlotsPerEpoch + (msg.ProposalSlot % params.BeaconConfig().SlotsPerEpoch)
 	if uint64(len(lookahead)) <= uint64(slotIndex) {
 		return fmt.Errorf("%w: proposer lookahead index %d out of bounds", ErrProposerPreferencesInvalidProposalSlot, slotIndex)
 	}
@@ -98,7 +115,7 @@ func (v *ProposerPreferencesVerifier) VerifySignature(st state.ReadOnlyBeaconSta
 
 	val, err := st.ValidatorAtIndexReadOnly(msg.ValidatorIndex)
 	if err != nil {
-		return fmt.Errorf("validator %d: %w", msg.ValidatorIndex, err)
+		return errors.Wrapf(err, "validator %d", msg.ValidatorIndex)
 	}
 	pubkey := val.PublicKey()
 	if err := signing.VerifySigningRoot(msg, pubkey[:], v.p.Signature, domain); err != nil {

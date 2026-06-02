@@ -86,6 +86,7 @@ func (s *Store) insert(ctx context.Context,
 	slot := block.Slot()
 	var parent *PayloadNode
 	blockHash := &[32]byte{}
+	var gasLimit uint64
 	if block.Version() >= version.Gloas {
 		if err := s.resolveParentPayloadStatus(block, &parent, blockHash); err != nil {
 			return nil, err
@@ -97,6 +98,7 @@ func (s *Store) insert(ctx context.Context,
 				return nil, err
 			}
 			copy(blockHash[:], execution.BlockHash())
+			gasLimit = execution.GasLimit()
 		}
 		parentRoot := block.ParentRoot()
 		en := s.emptyNodeByRoot[parentRoot]
@@ -109,6 +111,7 @@ func (s *Store) insert(ctx context.Context,
 
 	n := &Node{
 		slot:                        slot,
+		proposerIndex:               block.ProposerIndex(),
 		root:                        root,
 		parent:                      parent,
 		justifiedEpoch:              justifiedEpoch,
@@ -150,6 +153,7 @@ func (s *Store) insert(ctx context.Context,
 			optimistic: true,
 			timestamp:  time.Now(),
 			full:       true,
+			gasLimit:   gasLimit,
 		}
 		ret = fn
 		s.fullNodeByRoot[root] = fn
@@ -178,7 +182,11 @@ func (s *Store) insert(ctx context.Context,
 		if err != nil {
 			return nil, fmt.Errorf("could not determine time since current slot started: %w", err)
 		}
-		boostThreshold := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().AttestationDueBPS)
+		bps := params.BeaconConfig().AttestationDueBPS
+		if block.Version() >= version.Gloas {
+			bps = params.BeaconConfig().AttestationDueBPSGloas
+		}
+		boostThreshold := params.BeaconConfig().SlotComponentDuration(bps)
 		isFirstBlock := s.proposerBoostRoot == [32]byte{}
 		if currentSlot == slot && sss < boostThreshold && isFirstBlock {
 			s.proposerBoostRoot = root
@@ -259,6 +267,7 @@ func (s *Store) prune(ctx context.Context) error {
 	if fn.parent == nil {
 		return nil
 	}
+	s.finalizedPayloadBlockHash = s.checkpointPayloadHashForRoot(finalizedRoot)
 
 	// Save the new finalized dependent root because it will be pruned
 	s.finalizedDependentRoot = fn.parent.node.root
@@ -281,13 +290,32 @@ func (s *Store) prune(ctx context.Context) error {
 		return nil
 	}
 
+	remaining := fen.children[:0]
 	for _, child := range fen.children {
 		if child != nil && child.slot <= checkpointMaxSlot {
 			if err := s.pruneFinalizedNodeByRootMap(ctx, child, fn); err != nil {
 				return errors.Wrap(err, "could not prune incompatible finalized child")
 			}
+			continue
 		}
+		remaining = append(remaining, child)
 	}
+	fen.children = remaining
+	ffn := s.fullNodeByRoot[finalizedRoot]
+	if ffn == nil {
+		return nil
+	}
+	remaining = ffn.children[:0]
+	for _, child := range ffn.children {
+		if child != nil && child.slot <= checkpointMaxSlot {
+			if err := s.pruneFinalizedNodeByRootMap(ctx, child, fn); err != nil {
+				return errors.Wrap(err, "could not prune incompatible finalized child")
+			}
+			continue
+		}
+		remaining = append(remaining, child)
+	}
+	ffn.children = remaining
 	return nil
 }
 

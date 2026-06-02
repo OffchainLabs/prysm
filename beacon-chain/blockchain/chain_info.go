@@ -41,6 +41,7 @@ type ChainInfoFetcher interface {
 type ForkchoiceFetcher interface {
 	Ancestor(context.Context, []byte, primitives.Slot) ([]byte, error)
 	BlockHash(root [32]byte) ([32]byte, error)
+	GasLimit(root [32]byte) (uint64, error)
 	CachedHeadRoot() [32]byte
 	GetProposerHead() [32]byte
 	SetForkChoiceGenesisTime(time.Time)
@@ -48,6 +49,7 @@ type ForkchoiceFetcher interface {
 	HighestReceivedBlockSlot() primitives.Slot
 	HighestReceivedBlockRoot() [32]byte
 	HasFullNode([32]byte) bool
+	PayloadEarly([32]byte) (bool, bool)
 	FullBeatsEmpty([32]byte) bool
 	ReceivedBlocksLastEpoch() (uint64, error)
 	InsertNode(context.Context, state.BeaconState, consensus_blocks.ROBlock) error
@@ -60,6 +62,7 @@ type ForkchoiceFetcher interface {
 	DependentRoot(primitives.Epoch) ([32]byte, error)
 	CanonicalNodeAtSlot(primitives.Slot) ([32]byte, bool)
 	ShouldIgnoreData(parentRoot [32]byte, dataSlot primitives.Slot) bool
+	RecordBlockForEquivocation(primitives.Slot, primitives.ValidatorIndex, [32]byte)
 }
 
 // TimeFetcher retrieves the Ethereum consensus data that's related to time.
@@ -506,11 +509,23 @@ func (s *Service) IsOptimisticForRoot(ctx context.Context, root [32]byte) (bool,
 	return !isCanonical, nil
 }
 
-// DependentRootForEpoch wraps the corresponding method in forkchoice
+// DependentRootForEpoch wraps the corresponding method in forkchoice. The
+// genesis-era underflow (slot < 2 epochs) is handled by falling back to the
+// origin block root so callers don't have to special-case it.
 func (s *Service) DependentRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+	if epoch == 0 {
+		return s.originBlockRoot, nil
+	}
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
-	return s.cfg.ForkChoiceStore.DependentRootForEpoch(root, epoch)
+	depRoot, err := s.cfg.ForkChoiceStore.DependentRootForEpoch(root, epoch)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	if depRoot == [32]byte{} {
+		return s.originBlockRoot, nil
+	}
+	return depRoot, nil
 }
 
 // TargetRootForEpoch wraps the corresponding method in forkchoice

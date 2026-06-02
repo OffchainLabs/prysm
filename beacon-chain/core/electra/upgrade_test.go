@@ -27,7 +27,7 @@ func TestUpgradeToElectra(t *testing.T) {
 	require.NoError(t, st.SetBalances(bals))
 
 	preForkState := st.Copy()
-	mSt, err := electra.UpgradeToElectra(st)
+	mSt, err := electra.UpgradeToElectra(t.Context(), st)
 	require.NoError(t, err)
 
 	require.Equal(t, preForkState.GenesisTime(), mSt.GenesisTime())
@@ -148,7 +148,7 @@ func TestUpgradeToElectra(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, primitives.Gwei(0), balance)
 
-	tab, err := helpers.TotalActiveBalance(mSt)
+	tab, err := helpers.TotalActiveBalance(t.Context(), mSt)
 	require.NoError(t, err)
 
 	ebtc, err := mSt.ExitBalanceToConsume()

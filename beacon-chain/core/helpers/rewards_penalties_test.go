@@ -77,7 +77,7 @@ func TestTotalActiveBalance(t *testing.T) {
 		}
 		state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Validators: validators})
 		require.NoError(t, err)
-		bal, err := helpers.TotalActiveBalance(state)
+		bal, err := helpers.TotalActiveBalance(t.Context(), state)
 		require.NoError(t, err)
 		require.Equal(t, uint64(test.vCount)*params.BeaconConfig().MaxEffectiveBalance, bal)
 	}
@@ -100,7 +100,7 @@ func TestTotalActiveBal_ReturnMin(t *testing.T) {
 		}
 		state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Validators: validators})
 		require.NoError(t, err)
-		bal, err := helpers.TotalActiveBalance(state)
+		bal, err := helpers.TotalActiveBalance(t.Context(), state)
 		require.NoError(t, err)
 		require.Equal(t, params.BeaconConfig().EffectiveBalanceIncrement, bal)
 	}
@@ -124,7 +124,7 @@ func TestTotalActiveBalance_WithCache(t *testing.T) {
 		}
 		state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Validators: validators})
 		require.NoError(t, err)
-		bal, err := helpers.TotalActiveBalance(state)
+		bal, err := helpers.TotalActiveBalance(t.Context(), state)
 		require.NoError(t, err)
 		require.Equal(t, uint64(test.wantCount)*params.BeaconConfig().MaxEffectiveBalance, bal)
 	}
@@ -320,7 +320,7 @@ func TestUpdateTotalActiveBalanceCache(t *testing.T) {
 
 	// Verify the cache was updated by retrieving the total active balance
 	// which should now return the cached value
-	cachedTotal, err := helpers.TotalActiveBalance(state)
+	cachedTotal, err := helpers.TotalActiveBalance(t.Context(), state)
 	require.NoError(t, err)
 	assert.Equal(t, testTotal, cachedTotal, "Cache should return the updated total")
 }

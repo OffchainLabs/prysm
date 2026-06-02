@@ -82,6 +82,51 @@ func TestSubscribe_ReceivesValidMessage(t *testing.T) {
 	}
 }
 
+// TestSubscribe_DoesNotWaitForInitialSyncToRegisterTopic verifies regular-sync topics are registered before initial sync completes.
+func TestSubscribe_DoesNotWaitForInitialSyncToRegisterTopic(t *testing.T) {
+	p2pService := p2ptest.NewTestP2P(t)
+	gt := time.Now()
+	vr := [32]byte{'A'}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	r := Service{
+		ctx: ctx,
+		cfg: &config{
+			p2p:         p2pService,
+			initialSync: &mockSync.Sync{IsSyncing: true},
+			chain: &mockChain.ChainService{
+				ValidatorsRoot: vr,
+				Genesis:        gt,
+			},
+			clock: startup.NewClock(gt, vr),
+		},
+		subHandler:          newSubTopicHandler(),
+		chainStarted:        abool.New(),
+		initialSyncComplete: make(chan struct{}),
+	}
+	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
+	p2pService.Digest = nse.ForkDigest
+	topic := "/eth2/%x/voluntary_exit"
+
+	done := make(chan struct{})
+	go func() {
+		r.subscribe(topic, r.noopValidator, func(_ context.Context, _ proto.Message) error {
+			return nil
+		}, nse)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("the node reported sync complete before it was ready to follow new gossip blocks")
+	}
+
+	fullTopic := fmt.Sprintf(topic, p2pService.Digest) + p2pService.Encoding().ProtocolSuffix()
+	assert.Equal(t, true, r.subHandler.topicExists(fullTopic))
+	r.unSubscribeFromTopic(fullTopic)
+}
+
 func markInitSyncComplete(_ *testing.T, s *Service) {
 	s.initialSyncComplete = make(chan struct{})
 	close(s.initialSyncComplete)

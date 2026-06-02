@@ -3,13 +3,18 @@ package sync
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -40,48 +45,90 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	if signedPreferences.Message == nil {
 		return pubsub.ValidationReject, errNilMessage
 	}
-
-	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
-	if err != nil {
-		return pubsub.ValidationIgnore, err
-	}
-	headRoot, err := s.cfg.chain.HeadRoot(ctx)
-	if err != nil {
-		return pubsub.ValidationIgnore, err
-	}
-	// HeadStateReadOnly returns the current head state as stored, which may still
-	// be on the previous slot or epoch until the next block arrives. Advance it to
-	// the wall-clock slot so current-epoch proposer preferences are validated
-	// against the same epoch/ProposerLookahead view used elsewhere.
-	st, err = transition.ProcessSlotsIfNeeded(ctx, st, headRoot, s.cfg.clock.CurrentSlot())
-	if err != nil {
-		return pubsub.ValidationIgnore, err
+	if len(signedPreferences.Message.DependentRoot) != fieldparams.RootLength {
+		return pubsub.ValidationReject, errors.New("dependent_root must be 32 bytes")
 	}
 
 	v := s.newSignedProposerPreferencesVerifier(signedPreferences, verification.SignedProposerPreferencesGossipRequirements)
-	// [IGNORE] preferences.proposal_slot is in the current or next epoch and has not already passed.
-	if err := v.VerifyCurrentOrNextEpoch(st); err != nil {
+
+	// [IGNORE] proposal_slot is in current or next epoch and not already passed (wall-clock only).
+	if err := v.VerifyCurrentOrNextEpoch(); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	// [REJECT] preferences.validator_index is present at the correct slot in the
-	// current or next epoch's portion of state.proposer_lookahead.
+
+	dependentRoot := bytesutil.ToBytes32(signedPreferences.Message.DependentRoot)
+	// [IGNORE] block with root preferences.dependent_root has been seen.
+	seen := func(root [32]byte) bool {
+		return s.cfg.chain.InForkchoice(root) || s.cfg.beaconDB.HasBlock(ctx, root)
+	}
+	if err := v.VerifyDependentRootSeen(seen); err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+
+	slot := signedPreferences.Message.ProposalSlot
+	// [IGNORE] dedup on (dependent_root, proposal_slot) before any state work
+	// so byte-mutated duplicates can't amplify it.
+	if s.proposerPreferencesCache.Has(dependentRoot, slot) {
+		return pubsub.ValidationIgnore, nil
+	}
+
+	proposalEpoch := slots.ToEpoch(slot)
+	dependentEpoch := proposalEpoch
+	if dependentEpoch > 0 {
+		dependentEpoch--
+	}
+	headRoot, err := s.cfg.chain.HeadRoot(ctx)
+	if err != nil {
+		return pubsub.ValidationIgnore, errors.Wrap(err, "head root")
+	}
+	expected, err := s.cfg.chain.DependentRootForEpoch(bytesutil.ToBytes32(headRoot), dependentEpoch)
+	if err != nil {
+		return pubsub.ValidationIgnore, errors.Wrap(err, "head dependent root")
+	}
+	if expected != dependentRoot {
+		return pubsub.ValidationIgnore, errors.Errorf("dependent_root %#x does not match head %#x", dependentRoot, expected)
+	}
+
+	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
+	if err != nil {
+		return pubsub.ValidationIgnore, errors.Wrap(err, "head state")
+	}
+	stateEpoch := slots.ToEpoch(st.Slot())
+
+	// Sole permitted slot advance: next-epoch preference at the boundary before
+	// the head processes a block in the new epoch (proposalEpoch == stateEpoch+2).
+	if proposalEpoch == stateEpoch.AddEpoch(2) {
+		boundarySlot, err := slots.EpochStart(dependentEpoch)
+		if err != nil {
+			return pubsub.ValidationIgnore, errors.Wrap(err, "compute boundary slot")
+		}
+		st, err = transition.ProcessSlotsIfNeeded(ctx, st, headRoot, boundarySlot)
+		if err != nil {
+			return pubsub.ValidationIgnore, errors.Wrap(err, "advance head state to boundary")
+		}
+	} else if proposalEpoch > stateEpoch.AddEpoch(1) {
+		return pubsub.ValidationIgnore, errors.Errorf("head epoch %d cannot verify proposal epoch %d", stateEpoch, proposalEpoch)
+	}
+
+	// [REJECT] is_valid_proposal_slot(state, preferences) returns True, where state
+	// is the checkpoint state at the epoch compute_epoch_at_slot(proposal_slot) - 1
+	// and the root preferences.dependent_root.
 	if err := v.VerifyValidProposalSlot(st); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
-	slot := signedPreferences.Message.ProposalSlot
-	// [IGNORE] This is the first valid signed proposer preferences message
-	// received for the given proposal slot.
-	if s.proposerPreferencesCache.Has(slot) {
-		return pubsub.ValidationIgnore, nil
-	}
 	// [REJECT] signed_proposer_preferences.signature is valid with respect to the
 	// validator's public key.
 	if err := v.VerifySignature(st); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
-	s.proposerPreferencesCache.Add(slot, signedPreferences.Message.FeeRecipient, signedPreferences.Message.GasLimit)
+	s.proposerPreferencesCache.Add(cache.ProposerPreference{
+		DependentRoot:  dependentRoot,
+		ValidatorIndex: signedPreferences.Message.ValidatorIndex,
+		FeeRecipient:   bytesutil.ToBytes20(signedPreferences.Message.FeeRecipient),
+		TargetGasLimit: signedPreferences.Message.TargetGasLimit,
+	}, slot)
 	msg.ValidatorData = signedPreferences
 	return pubsub.ValidationAccept, nil
 }

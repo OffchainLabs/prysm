@@ -8,9 +8,11 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -126,11 +128,22 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 			httputil.HandleError(w, errors.Wrap(err, "could not get execution payload envelope").Error(), http.StatusInternalServerError)
 			return
 		}
+		var blobs, kzgProofs [][]byte
+		if contents, ok := s.ExecutionPayloadEnvelopeCache.Contents(); ok &&
+			contents.Envelope.Payload.SlotNumber == primitives.Slot(slot) {
+			blobs, kzgProofs, err = blobsAndProofsFromDataColumns(contents.DataColumns)
+			if err != nil {
+				httputil.HandleError(w, errors.Wrap(err, "could not derive blobs from cached data columns").Error(), http.StatusInternalServerError)
+				return
+			}
+		}
 
 		if isSSZ {
 			sszResp, err := (&eth.BeaconBlockContentsGloas{
 				Block:                    gloasBlock.Gloas,
 				ExecutionPayloadEnvelope: envelopeResp.Envelope,
+				KzgProofs:                kzgProofs,
+				Blobs:                    blobs,
 			}).MarshalSSZ()
 			if err != nil {
 				httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
@@ -140,7 +153,7 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		blockContents, err := structs.BlockContentsGloasFromConsensus(gloasBlock.Gloas, envelopeResp.Envelope)
+		blockContents, err := structs.BlockContentsGloasFromConsensus(gloasBlock.Gloas, envelopeResp.Envelope, kzgProofs, blobs)
 		if err != nil {
 			httputil.HandleError(w, errors.Wrap(err, "could not convert block contents").Error(), http.StatusInternalServerError)
 			return
@@ -235,4 +248,35 @@ func (s *Server) ExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request
 		Version: version.String(version.Gloas),
 		Data:    jsonEnvelope,
 	})
+}
+
+// blobsAndProofsFromDataColumns derives raw blobs and the flat KZG proofs
+// vector (indexed [blob*numCols + col]) from cached sidecars. Pure memory
+// shuffling: ReconstructBlobs hits its cheap branch since we have every column.
+func blobsAndProofsFromDataColumns(sidecars []consensusblocks.RODataColumn) ([][]byte, [][]byte, error) {
+	if len(sidecars) == 0 {
+		return nil, nil, nil
+	}
+	const numColumns = fieldparams.NumberOfColumns
+	if len(sidecars) != numColumns {
+		return nil, nil, errors.Errorf("expected %d data column sidecars, got %d", numColumns, len(sidecars))
+	}
+
+	verified := make([]consensusblocks.VerifiedRODataColumn, len(sidecars))
+	for i, sc := range sidecars {
+		verified[i] = consensusblocks.NewVerifiedRODataColumn(sc)
+	}
+	blobCount := len(sidecars[0].Column())
+	blobs, err := peerdas.ReconstructBlobs(verified, nil, blobCount)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "reconstruct blobs from data columns")
+	}
+
+	proofs := make([][]byte, blobCount*numColumns)
+	for blobIdx := range blobCount {
+		for col := range numColumns {
+			proofs[blobIdx*numColumns+col] = sidecars[col].KzgProofs()[blobIdx]
+		}
+	}
+	return blobs, proofs, nil
 }

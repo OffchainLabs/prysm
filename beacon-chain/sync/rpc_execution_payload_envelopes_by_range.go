@@ -201,10 +201,11 @@ func (s *Service) streamCanonicalEnvelopes(ctx context.Context, rp rangeParams, 
 		}
 		fullEnv := &pb.SignedExecutionPayloadEnvelope{
 			Message: &pb.ExecutionPayloadEnvelope{
-				Payload:           payload,
-				ExecutionRequests: c.env.Message.ExecutionRequests,
-				BuilderIndex:      c.env.Message.BuilderIndex,
-				BeaconBlockRoot:   c.env.Message.BeaconBlockRoot,
+				Payload:               payload,
+				ExecutionRequests:     c.env.Message.ExecutionRequests,
+				BuilderIndex:          c.env.Message.BuilderIndex,
+				BeaconBlockRoot:       c.env.Message.BeaconBlockRoot,
+				ParentBeaconBlockRoot: c.env.Message.ParentBeaconBlockRoot,
 			},
 			Signature: c.env.Signature,
 		}

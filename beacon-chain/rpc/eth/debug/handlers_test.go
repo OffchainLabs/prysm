@@ -810,7 +810,81 @@ func TestDataColumnSidecars(t *testing.T) {
 
 		resp := &structs.GetDebugDataColumnSidecarsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		require.Equal(t, 0, len(resp.Data))
+		var data []*structs.DataColumnSidecar
+		require.NoError(t, json.Unmarshal(resp.Data, &data))
+		require.Equal(t, 0, len(data))
+	})
+
+	t.Run("Gloas data columns", func(t *testing.T) {
+		originalConfig := params.BeaconConfig()
+		defer func() { params.OverrideBeaconConfig(originalConfig) }()
+
+		config := params.BeaconConfig().Copy()
+		config.FuluForkEpoch = 0
+		config.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+
+		signedTestBlock := util.NewBeaconBlockGloas()
+		signedTestBlock.Block.Slot = 7
+		roBlock, err := blocks.NewSignedBeaconBlock(signedTestBlock)
+		require.NoError(t, err)
+
+		chainService := &blockchainmock.ChainService{}
+		currentSlot := primitives.Slot(7)
+		chainService.Slot = &currentSlot
+		chainService.OptimisticRoots = make(map[[32]byte]bool)
+		chainService.FinalizedRoots = make(map[[32]byte]bool)
+
+		beaconRoot := bytesutil.PadTo([]byte{0xab, 0xcd}, 32)
+		cell := bytesutil.PadTo([]byte{0x11, 0x22}, 2048)
+		proof := bytesutil.PadTo([]byte{0x33}, 48)
+		gloasSidecar := &ethpb.DataColumnSidecarGloas{
+			Index:           3,
+			Column:          [][]byte{cell},
+			KzgProofs:       [][]byte{proof},
+			Slot:            7,
+			BeaconBlockRoot: beaconRoot,
+		}
+		roDc, err := blocks.NewRODataColumnGloas(gloasSidecar)
+		require.NoError(t, err)
+		verified := blocks.NewVerifiedRODataColumn(roDc)
+
+		mockBlocker := &testutil.MockBlocker{
+			DataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+				return []blocks.VerifiedRODataColumn{verified}, nil
+			},
+			BlockToReturn: roBlock,
+		}
+
+		s := &Server{
+			GenesisTimeFetcher:    chainService,
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+			Blocker:               mockBlocker,
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/debug/beacon/data_column_sidecars/head", nil)
+		request.SetPathValue("block_id", "head")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.DataColumnSidecars(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+
+		resp := &structs.GetDebugDataColumnSidecarsResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.Equal(t, version.String(version.Gloas), resp.Version)
+
+		var data []*structs.DataColumnSidecarGloas
+		require.NoError(t, json.Unmarshal(resp.Data, &data))
+		require.Equal(t, 1, len(data))
+		require.Equal(t, "3", data[0].Index)
+		require.Equal(t, "7", data[0].Slot)
+		require.Equal(t, hexutil.Encode(beaconRoot), data[0].BeaconBlockRoot)
+		require.Equal(t, 1, len(data[0].Column))
+		require.Equal(t, hexutil.Encode(cell), data[0].Column[0])
+		require.Equal(t, 1, len(data[0].KzgProofs))
+		require.Equal(t, hexutil.Encode(proof), data[0].KzgProofs[0])
 	})
 }
 

@@ -118,6 +118,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.EnableBuilderFlag,
 			flags.BuilderGasLimitFlag,
 			flags.ValidatorsRegistrationBatchSizeFlag,
+			flags.EnableStatelessFlag,
 			flags.GraffitiFlag,
 			flags.GraffitiFileFlag,
 		},

@@ -34,7 +34,7 @@ func Setup(ctx context.Context, serviceName, processName, endpoint string, sampl
 		return errors.New("tracing service name cannot be empty")
 	}
 
-	log.Infof("Starting otel exporter endpoint at address = %s", endpoint)
+	log.WithField("endpoint", endpoint).Info("Starting otel exporter endpoint")
 	exporter, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(endpoint))
 	if err != nil {
 		return err

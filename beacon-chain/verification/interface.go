@@ -85,7 +85,8 @@ type NewPayloadAttestationMsgVerifier func(pa payloadattestation.ROMessage, reqs
 
 // SignedProposerPreferencesVerifier defines the methods implemented by the signed proposer preferences verifier.
 type SignedProposerPreferencesVerifier interface {
-	VerifyCurrentOrNextEpoch(state.ReadOnlyBeaconState) error
+	VerifyCurrentOrNextEpoch() error
+	VerifyDependentRootSeen(func([32]byte) bool) error
 	VerifyValidProposalSlot(state.ReadOnlyBeaconState) error
 	VerifySignature(state.ReadOnlyBeaconState) error
 	SatisfyRequirement(Requirement)
@@ -101,9 +102,9 @@ type ExecutionPayloadBidVerifier interface {
 	VerifyBuilderActive(state.ReadOnlyBeaconState) error
 	VerifyExecutionPaymentZero() error
 	VerifyFeeRecipientMatches([]byte) error
-	VerifyGasLimitMatches(uint64) error
 	VerifyParentBlockRootSeen(func([32]byte) bool) error
 	VerifyParentBlockHash(func([32]byte) ([32]byte, error)) error
+	VerifyGasLimitTargetCompatible(parentGasLimit, targetGasLimit uint64) error
 	VerifyBuilderCanCoverBid(state.ReadOnlyBeaconState) error
 	VerifySignature(state.ReadOnlyBeaconState) error
 	SatisfyRequirement(Requirement)

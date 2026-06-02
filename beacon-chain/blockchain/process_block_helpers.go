@@ -42,11 +42,15 @@ func (s *Service) CurrentSlot() primitives.Slot {
 // getFCUArgs returns the arguments to call forkchoice update
 // this function is only called pre-gloas hence we pass in full to getPayloadAttribute
 func (s *Service) getFCUArgs(cfg *postBlockProcessConfig) (*fcuConfig, error) {
-
 	fcuArgs, err := s.getFCUArgsEarlyBlock(cfg)
 	if err != nil {
 		return nil, err
 	}
+
+	if !s.inRegularSync() {
+		return fcuArgs, nil
+	}
+
 	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:], true)
 	return fcuArgs, nil
 }
@@ -92,7 +96,7 @@ func (s *Service) logNonCanonicalBlockReceived(blockRoot [32]byte, headRoot [32]
 // fcuArgsNonCanonicalBlock returns the arguments to the FCU call when the
 // incoming block is non-canonical, that is, based on the head root.
 func (s *Service) fcuArgsNonCanonicalBlock(cfg *postBlockProcessConfig) (*fcuConfig, error) {
-	headState, headBlock, err := s.getStateAndBlock(cfg.ctx, cfg.headRoot, cfg.headRoot)
+	headState, headBlock, err := s.getStateAndBlock(cfg.ctx, cfg.headRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -369,7 +373,8 @@ func (s *Service) ancestorByDB(ctx context.Context, r [32]byte, slot primitives.
 // This retrieves missing blocks from DB (ie. the blocks that couldn't be received over sync) and inserts them to fork choice store.
 // This is useful for block tree visualizer and additional vote accounting.
 func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock,
-	fCheckpoint, jCheckpoint *ethpb.Checkpoint) error {
+	fCheckpoint, jCheckpoint *ethpb.Checkpoint,
+) error {
 	if fCheckpoint.Epoch > jCheckpoint.Epoch {
 		return ErrInvalidCheckpointArgs
 	}
@@ -418,7 +423,8 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 		}
 		root = b.Block().ParentRoot()
 		child = b
-		args := &forkchoicetypes.BlockAndCheckpoints{Block: roblock,
+		args := &forkchoicetypes.BlockAndCheckpoints{
+			Block:               roblock,
 			JustifiedCheckpoint: jCheckpoint,
 			FinalizedCheckpoint: fCheckpoint,
 			HasPayload:          hasPayload,

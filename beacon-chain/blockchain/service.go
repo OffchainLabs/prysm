@@ -5,7 +5,6 @@ package blockchain
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"sync"
 	"time"
 
@@ -69,6 +68,8 @@ type Service struct {
 	lcStore                        *lightClient.Store
 	startWaitingDataColumnSidecars chan bool // for testing purposes only
 	syncCommitteeHeadState         *cache.SyncCommitteeHeadStateCache
+	payloadArrivals                *payloadArrivals
+	goroutineCounter               *goroutineCounter
 }
 
 // config options for the service.
@@ -190,6 +191,8 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		blockBeingSynced:       &currentlySyncingBlock{roots: make(map[[32]byte]struct{})},
 		payloadBeingSynced:     &currentlySyncingBlock{roots: make(map[[32]byte]struct{})},
 		syncCommitteeHeadState: cache.NewSyncCommitteeHeadState(),
+		payloadArrivals:        newPayloadArrivals(),
+		goroutineCounter:       &goroutineCounter{},
 	}
 	for _, opt := range opts {
 		if err := opt(srv); err != nil {
@@ -209,6 +212,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 // Start a blockchain service's main event loop.
 func (s *Service) Start() {
 	defer s.removeStartupState()
+	goroutineCountGauge.WithLabelValues("limit").Set(float64(s.cfg.MaxRoutines))
 	if err := s.StartFromSavedState(s.cfg.FinalizedStateAtStartUp); err != nil {
 		log.Fatal(err)
 	}
@@ -252,8 +256,8 @@ func (s *Service) Status() error {
 	if s.originBlockRoot == params.BeaconConfig().ZeroHash {
 		return errors.New("genesis state has not been created")
 	}
-	if runtime.NumGoroutine() > s.cfg.MaxRoutines {
-		return fmt.Errorf("too many goroutines (%d)", runtime.NumGoroutine())
+	if avg := s.goroutineCounter.average(); avg > s.cfg.MaxRoutines {
+		return fmt.Errorf("average beacon goroutine count (%d) exceeds the threshold (%d)", avg, s.cfg.MaxRoutines)
 	}
 	return nil
 }

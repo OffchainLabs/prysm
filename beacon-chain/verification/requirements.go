@@ -43,7 +43,7 @@ const (
 	RequireBidBuilderActive
 	RequireBidExecutionPaymentZero
 	RequireBidFeeRecipientMatches
-	RequireBidGasLimitMatches
+	RequireBidGasLimitCompatible
 	RequireBidParentBlockRootSeen
 	RequireBidParentBlockHashValid
 	RequireBidBuilderCanCover
@@ -51,6 +51,7 @@ const (
 
 	// Signed proposer preferences specific.
 	RequireProposerPreferencesCurrentOrNextEpoch
+	RequireProposerPreferencesDependentRootSeen
 	RequireProposerPreferencesProposalSlotValid
 	RequireProposerPreferencesSignatureValid
 )

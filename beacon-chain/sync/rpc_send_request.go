@@ -968,26 +968,39 @@ func SendExecutionPayloadEnvelopesByRangeRequest(
 		if i == max {
 			return nil, errMaxRequestEnvelopesExceeded
 		}
-		// Validate slot is within requested range.
-		envSlot := primitives.Slot(env.Message.Payload.SlotNumber)
-		endSlot := req.StartSlot.Add(req.Count)
-		if envSlot < req.StartSlot || envSlot >= endSlot {
-			return nil, errors.Wrapf(ErrInvalidFetchedData, "envelope slot %d outside requested range [%d, %d)", envSlot, req.StartSlot, endSlot)
+		envSlot, blockHash, err := validateExecutionPayloadEnvelopeByRangeResponse(env, req, prevSlot, prevHash, i > 0)
+		if err != nil {
+			return nil, err
 		}
-		// Validate slots are strictly increasing.
-		if i > 0 && envSlot <= prevSlot {
-			return nil, errors.Wrapf(ErrInvalidFetchedData, "envelope slot %d not greater than previous slot %d", envSlot, prevSlot)
-		}
-		// Validate the hash chain
-		if len(prevHash) != 0 {
-			if !bytes.Equal(env.Message.Payload.ParentHash, prevHash) {
-				return nil, errors.Wrapf(ErrInvalidFetchedData, "envelope parent hash %x does not match previous hash %x", env.Message.Payload.ParentHash, prevHash)
-			}
-		}
-		prevHash = env.Message.Payload.BlockHash
+		prevHash = blockHash
 		prevSlot = envSlot
 		envelopes = append(envelopes, env)
 	}
 
 	return envelopes, nil
+}
+
+func validateExecutionPayloadEnvelopeByRangeResponse(
+	env *ethpb.SignedExecutionPayloadEnvelope,
+	req *ethpb.ExecutionPayloadEnvelopesByRangeRequest,
+	prevSlot primitives.Slot,
+	prevHash []byte,
+	hasPrevious bool,
+) (primitives.Slot, []byte, error) {
+	if _, err := blocks.WrappedROSignedExecutionPayloadEnvelope(env); err != nil {
+		return 0, nil, errors.Wrap(ErrInvalidFetchedData, "invalid execution payload envelope")
+	}
+
+	envSlot := primitives.Slot(env.Message.Payload.SlotNumber)
+	endSlot := req.StartSlot.Add(req.Count)
+	if envSlot < req.StartSlot || envSlot >= endSlot {
+		return 0, nil, errors.Wrapf(ErrInvalidFetchedData, "envelope slot %d outside requested range [%d, %d)", envSlot, req.StartSlot, endSlot)
+	}
+	if hasPrevious && envSlot <= prevSlot {
+		return 0, nil, errors.Wrapf(ErrInvalidFetchedData, "envelope slot %d not greater than previous slot %d", envSlot, prevSlot)
+	}
+	if len(prevHash) != 0 && !bytes.Equal(env.Message.Payload.ParentHash, prevHash) {
+		return 0, nil, errors.Wrapf(ErrInvalidFetchedData, "envelope parent hash %x does not match previous hash %x", env.Message.Payload.ParentHash, prevHash)
+	}
+	return envSlot, env.Message.Payload.BlockHash, nil
 }
