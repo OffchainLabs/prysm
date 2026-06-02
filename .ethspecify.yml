@@ -122,7 +122,6 @@ exceptions:
     - ExecutionPayload#gloas
     - ExecutionPayloadBid#gloas
     - ExecutionPayloadEnvelope#gloas
-    - ForkChoiceNode#gloas
     - IndexedPayloadAttestation#gloas
     - LightClientHeader#gloas
     - PartialDataColumnGroupID#gloas
@@ -470,7 +469,6 @@ exceptions:
     - is_builder_withdrawal_credential#gloas
     - is_merge_transition_complete#gloas
     - is_parent_node_full#gloas
-    - is_supporting_vote#gloas
     - is_valid_indexed_payload_attestation#gloas
     - notify_ptc_messages#gloas
     - on_block#gloas
