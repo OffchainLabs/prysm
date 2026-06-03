@@ -2885,7 +2885,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		const builders = 8
 		var wg sync.WaitGroup
 		results := make([][]*ethpb.SignedProposerPreferences, builders)
-		for i := 0; i < builders; i++ {
+		for i := range builders {
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
