@@ -9,6 +9,7 @@ go_library(
         "block_header.go",
         "bls_to_execution_changes.go",
         "consolidations.go",
+        "deposit.go",
         "deposit_request.go",
         "execution_payload_bid.go",
         "helpers.go",
@@ -26,6 +27,7 @@ go_library(
     deps = [
         "//beacon-chain/core/altair:go_default_library",
         "//beacon-chain/core/blocks:go_default_library",
+        "//beacon-chain/core/electra:go_default_library",
         "//beacon-chain/core/gloas:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/validators:go_default_library",

@@ -293,9 +293,7 @@ func ProcessPendingDeposits(ctx context.Context, st state.BeaconState, activeBal
 	}
 	for _, pendingDeposit := range pendingDeposits {
 		// Do not process pendingDeposit requests if Eth1 bridge deposits are not yet applied.
-		// [Modified in Fulu] The former deposit mechanism is removed, so this guard only
-		// applies before Fulu.
-		if st.Version() < version.Fulu && pendingDeposit.Slot > params.BeaconConfig().GenesisSlot && st.Eth1DepositIndex() < startIndex {
+		if pendingDeposit.Slot > params.BeaconConfig().GenesisSlot && st.Eth1DepositIndex() < startIndex {
 			break
 		}
 
