@@ -83,6 +83,7 @@ type PartialColumnBroadcaster struct {
 	callbacks         ColumnCallbacks
 	// map topic -> *pubsub.Topic
 	topics                           map[string]*pubsub.Topic
+	peerFeedbackSemaphore            chan struct{}
 	concurrentValidatorSemaphore     chan struct{}
 	concurrentHeaderHandlerSemaphore chan struct{}
 	// map topic -> map[groupID]PartialColumnVerifier
@@ -255,6 +256,7 @@ func NewBroadcaster(ctx context.Context, logger *logrus.Logger) *PartialColumnBr
 		incomingReq: make(chan request, 128*16),
 		logger:      logger,
 
+		peerFeedbackSemaphore:            make(chan struct{}, concurrency),
 		concurrentValidatorSemaphore:     make(chan struct{}, concurrency),
 		concurrentHeaderHandlerSemaphore: make(chan struct{}, concurrency),
 	}
@@ -280,25 +282,25 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 
 	expectedGroupIDLen := fieldparams.RootLength + 1
 	if len(rpc.GetGroupID()) != expectedGroupIDLen {
-		_ = p.peerFeedback(rpc.GetTopicID(), from, pubsub.PeerFeedbackInvalidMessage)
 		p.logger.WithFields(logrus.Fields{
 			"peer":     from,
 			"topic":    rpc.GetTopicID(),
 			"got":      len(rpc.GetGroupID()),
 			"expected": expectedGroupIDLen,
 		}).Debug("Invalid group ID length")
+		p.reportPeerFeedbackAsync(rpc.GetTopicID(), from, pubsub.PeerFeedbackInvalidMessage)
 		return errors.Errorf("invalid group ID length: got %d, expected %d", len(rpc.GetGroupID()), expectedGroupIDLen)
 	}
 
 	columnIndex, err := extractColumnIndexFromTopic(rpc.GetTopicID())
 	if err != nil || columnIndex >= fieldparams.NumberOfColumns {
-		_ = p.peerFeedback(rpc.GetTopicID(), from, pubsub.PeerFeedbackInvalidMessage)
 		p.logger.WithError(err).WithFields(logrus.Fields{
 			"peer":        from,
 			"topic":       rpc.GetTopicID(),
 			"columnIndex": columnIndex,
 			"maxColumns":  fieldparams.NumberOfColumns,
 		}).Debug("Invalid topic ID: column index missing or out of bounds")
+		p.reportPeerFeedbackAsync(rpc.GetTopicID(), from, pubsub.PeerFeedbackInvalidMessage)
 		return errors.Errorf("invalid topic ID %q: column index missing or out of bounds", rpc.GetTopicID())
 	}
 
@@ -315,6 +317,21 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 	}
 	peerStates[from] = nextPeerState
 	return nil
+}
+
+func (p *PartialColumnBroadcaster) reportPeerFeedbackAsync(topic string, from peer.ID, kind pubsub.PeerFeedbackKind) {
+	select {
+	case p.peerFeedbackSemaphore <- struct{}{}:
+		go func() {
+			defer func() { <-p.peerFeedbackSemaphore }()
+			_ = p.peerFeedback(topic, from, kind)
+		}()
+	default:
+		p.logger.WithFields(logrus.Fields{
+			"peer":  from,
+			"topic": topic,
+		}).Debug("Peer feedback semaphore saturated, dropping feedback")
+	}
 }
 
 // AppendPubSubOpts adds the necessary pubsub options to enable partial messages.

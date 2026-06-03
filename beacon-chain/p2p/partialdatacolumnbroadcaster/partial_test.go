@@ -1097,10 +1097,12 @@ func TestPartialColumnBroadcaster_onIncomingRPC_topicValidation(t *testing.T) {
 
 			if tt.expectReject {
 				require.ErrorContains(t, "invalid topic ID", err)
+				waitForPeerFeedbackCalls(t, ps, 1)
 				feedback := ps.peerFeedbackCallsSnapshot()
 				require.Equal(t, 1, len(feedback))
 				require.Equal(t, pubsub.PeerFeedbackInvalidMessage, feedback[0].kind)
 				require.Equal(t, from, feedback[0].peerID)
+				require.Equal(t, tt.topic, feedback[0].topic)
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, 0, ps.peerFeedbackCallCount())
