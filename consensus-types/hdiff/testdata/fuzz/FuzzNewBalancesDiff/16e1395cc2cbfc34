@@ -1,0 +1,3 @@
+go test fuzz v1
+byte('U')
+[]byte("F\x17Fv\x94\xa0*OM")
