@@ -1267,3 +1267,54 @@ func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
 		require.Equal(t, validator.Uint64(40000000), merged.DefaultConfig.Builder.GasLimit)
 	})
 }
+
+func Test_mergeProposerSettings_V2LoadedOverridesDB(t *testing.T) {
+	t.Run("loaded default and per-proposer config win over db", func(t *testing.T) {
+		db := &validatorpb.ProposerSettingsPayload{
+			Version:       proposer.SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0xdb", GasLimit: 1},
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xkey": {FeeRecipient: "0xdbkey", GasLimit: 2},
+			},
+		}
+		loaded := &validatorpb.ProposerSettingsPayload{
+			Version:       proposer.SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0xloaded", GasLimit: 3},
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xkey": {FeeRecipient: "0xloadedkey", GasLimit: 4},
+			},
+		}
+		merged := mergeProposerSettings(loaded, db, &flagOptions{})
+		require.Equal(t, "0xloaded", merged.DefaultConfig.FeeRecipient)
+		require.Equal(t, validator.Uint64(3), merged.DefaultConfig.GasLimit)
+		require.Equal(t, "0xloadedkey", merged.ProposerConfig["0xkey"].FeeRecipient)
+		require.Equal(t, validator.Uint64(4), merged.ProposerConfig["0xkey"].GasLimit)
+	})
+	t.Run("db default and per-proposer config used when loaded is nil", func(t *testing.T) {
+		db := &validatorpb.ProposerSettingsPayload{
+			Version:       proposer.SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0xdb", GasLimit: 1},
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xkey": {FeeRecipient: "0xdbkey", GasLimit: 2},
+			},
+		}
+		merged := mergeProposerSettings(nil, db, &flagOptions{})
+		require.Equal(t, "0xdb", merged.DefaultConfig.FeeRecipient)
+		require.Equal(t, validator.Uint64(1), merged.DefaultConfig.GasLimit)
+		require.Equal(t, "0xdbkey", merged.ProposerConfig["0xkey"].FeeRecipient)
+		require.Equal(t, validator.Uint64(2), merged.ProposerConfig["0xkey"].GasLimit)
+	})
+}
+
+func Test_mergeProposerSettings_V2GasLimitOverwritesExistingDefault(t *testing.T) {
+	gl := validator.Uint64(12345678)
+	db := &validatorpb.ProposerSettingsPayload{
+		Version:       proposer.SchemaV2,
+		DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0xdb", GasLimit: 1},
+	}
+	merged := mergeProposerSettings(nil, db, &flagOptions{gasLimit: &gl})
+	require.NotNil(t, merged.DefaultConfig)
+	require.IsNil(t, merged.DefaultConfig.Builder)
+	require.Equal(t, "0xdb", merged.DefaultConfig.FeeRecipient)
+	require.Equal(t, gl, merged.DefaultConfig.GasLimit)
+}
