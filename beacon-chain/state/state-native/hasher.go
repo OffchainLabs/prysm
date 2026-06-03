@@ -408,7 +408,7 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 
 		fieldRoots[types.BuilderPendingPayments.RealPosition()] = bppRoot[:]
 
-		bpwRoot, err := stateutil.BuilderPendingWithdrawalsRoot(state.builderPendingWithdrawals)
+		bpwRoot, err := state.builderPendingWithdrawalsRoot()
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute builder pending withdrawals merkleization")
 		}
@@ -444,4 +444,11 @@ func payloadExpectedWithdrawalsRoot(state *BeaconState) ([32]byte, error) {
 		return ssz.WithdrawalSliceRootProgressive(state.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
 	}
 	return ssz.WithdrawalSliceRoot(state.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+}
+
+func (b *BeaconState) builderPendingWithdrawalsRoot() ([32]byte, error) {
+	if progressiveSSZEnabled(b.version) {
+		return stateutil.BuilderPendingWithdrawalsRootProgressive(b.builderPendingWithdrawals)
+	}
+	return stateutil.BuilderPendingWithdrawalsRoot(b.builderPendingWithdrawals)
 }

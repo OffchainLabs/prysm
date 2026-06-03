@@ -94,4 +94,15 @@ func TestPendingRootsProgressive(t *testing.T) {
 	expectedPC, err := ssz.SliceRootProgressive(pendingConsolidations)
 	require.NoError(t, err)
 	require.Equal(t, expectedPC, pcRoot)
+
+	builderPendingWithdrawals := []*ethpb.BuilderPendingWithdrawal{{
+		FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
+		Amount:       1,
+		BuilderIndex: 2,
+	}}
+	bpwRoot, err := stateutil.BuilderPendingWithdrawalsRootProgressive(builderPendingWithdrawals)
+	require.NoError(t, err)
+	expectedBPW, err := ssz.SliceRootProgressive(builderPendingWithdrawals)
+	require.NoError(t, err)
+	require.Equal(t, expectedBPW, bpwRoot)
 }
