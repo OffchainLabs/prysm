@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/golang/snappy"
 )
 
@@ -99,6 +100,24 @@ func RunForkTransitionTest(t *testing.T, config string) {
 				require.NoError(t, err)
 				beaconState, ok = st.(*state_native.BeaconState)
 				require.Equal(t, true, ok)
+			}
+
+			// The Eth1 bridge transition is complete before the Fulu fork. The spec test
+			// generator (do_fork) anchors deposit_requests_start_index to the deposit count
+			// at the fork when it is unset, since the test blocks carry no deposit requests.
+			// Advance to the fork slot first so intermediate roots are cached against the
+			// pre-injection (unset) state, then anchor the index on the upgraded state.
+			forkSlot, err := slots.EpochStart(types.Epoch(config.ForkEpoch))
+			require.NoError(t, err)
+			if beaconState.Slot() < forkSlot {
+				st, err := transition.ProcessSlots(ctx, beaconState, forkSlot)
+				require.NoError(t, err)
+				beaconState, ok = st.(*state_native.BeaconState)
+				require.Equal(t, true, ok)
+			}
+			if idx, err := beaconState.DepositRequestsStartIndex(); err == nil &&
+				idx == params.BeaconConfig().UnsetDepositRequestsStartIndex {
+				require.NoError(t, beaconState.SetDepositRequestsStartIndex(beaconState.Eth1Data().DepositCount))
 			}
 
 			for _, b := range postforkBlocks {
