@@ -324,6 +324,11 @@ func (p *PartialColumnBroadcaster) reportPeerFeedbackAsync(topic string, from pe
 	case p.peerFeedbackSemaphore <- struct{}{}:
 		go func() {
 			defer func() { <-p.peerFeedbackSemaphore }()
+			// return early if the context is done (e.g. the broadcaster is shutting down) as gossipsub loop
+			// might already be exiting
+			if p.ctx.Err() != nil {
+				return
+			}
 			_ = p.peerFeedback(topic, from, kind)
 		}()
 	default:
