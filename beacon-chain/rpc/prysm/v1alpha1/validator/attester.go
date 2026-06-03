@@ -271,10 +271,14 @@ func (vs *Server) proposeAtt(
 			},
 		})
 	} else {
+		eventAtt := att
+		if batchAtt, ok := att.(*ethpb.BatchAttestation); ok {
+			eventAtt = batchAtt.ToAttestationElectra()
+		}
 		vs.OperationNotifier.OperationFeed().Send(&feed.Event{
 			Type: operation.UnaggregatedAttReceived,
 			Data: &operation.UnAggregatedAttReceivedData{
-				Attestation: att,
+				Attestation: eventAtt,
 			},
 		})
 	}
