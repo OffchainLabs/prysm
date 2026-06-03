@@ -18,6 +18,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
@@ -220,6 +221,63 @@ func (s *Server) GetForkChoice(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	resp := &structs.GetForkChoiceDumpResponse{
+		JustifiedCheckpoint: structs.CheckpointFromConsensus(dump.JustifiedCheckpoint),
+		FinalizedCheckpoint: structs.CheckpointFromConsensus(dump.FinalizedCheckpoint),
+		ForkChoiceNodes:     nodes,
+		ExtraData: &structs.ForkChoiceDumpExtraData{
+			UnrealizedJustifiedCheckpoint: structs.CheckpointFromConsensus(dump.UnrealizedJustifiedCheckpoint),
+			UnrealizedFinalizedCheckpoint: structs.CheckpointFromConsensus(dump.UnrealizedFinalizedCheckpoint),
+			ProposerBoostRoot:             hexutil.Encode(dump.ProposerBoostRoot),
+			PreviousProposerBoostRoot:     hexutil.Encode(dump.PreviousProposerBoostRoot),
+			HeadRoot:                      hexutil.Encode(dump.HeadRoot),
+		},
+	}
+	httputil.WriteJson(w, resp)
+}
+
+// GetForkChoiceV2 returns a Gloas-aware dump of the forkchoice store with one entry per (root, payload_status) tuple.
+func (s *Server) GetForkChoiceV2(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "debug.GetForkChoiceV2")
+	defer span.End()
+
+	dump, err := s.ForkchoiceFetcher.ForkChoiceDumpV2(ctx)
+	if err != nil {
+		httputil.HandleError(w, "Could not get forkchoice dump: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	nodes := make([]*structs.ForkChoiceNodeV2, len(dump.ForkChoiceNodes))
+	for i, n := range dump.ForkChoiceNodes {
+		extra := &structs.ForkChoiceNodeV2ExtraData{
+			Balance:             fmt.Sprintf("%d", n.Balance),
+			ExecutionOptimistic: n.ExecutionOptimistic,
+			TimeStamp:           n.Timestamp.String(),
+		}
+		switch n.PayloadStatus {
+		case forkchoice2.PayloadStatusPending:
+			extra.Target = fmt.Sprintf("%#x", n.Target)
+			extra.JustifiedEpoch = fmt.Sprintf("%d", n.JustifiedEpoch)
+			extra.FinalizedEpoch = fmt.Sprintf("%d", n.FinalizedEpoch)
+			extra.UnrealizedJustifiedEpoch = fmt.Sprintf("%d", n.UnrealizedJustifiedEpoch)
+			extra.UnrealizedFinalizedEpoch = fmt.Sprintf("%d", n.UnrealizedFinalizedEpoch)
+			extra.PayloadAttesterCount = fmt.Sprintf("%d", n.PayloadAttesterCount)
+			extra.PayloadAvailabilityYesCount = fmt.Sprintf("%d", n.PayloadAvailabilityYesCount)
+			extra.PayloadDataAvailabilityYesCount = fmt.Sprintf("%d", n.PayloadDataAvailabilityYesCount)
+		case forkchoice2.PayloadStatusFull:
+			extra.GasLimit = fmt.Sprintf("%d", n.GasLimit)
+		}
+		nodes[i] = &structs.ForkChoiceNodeV2{
+			PayloadStatus:      n.PayloadStatus.String(),
+			Slot:               fmt.Sprintf("%d", n.Slot),
+			BlockRoot:          hexutil.Encode(n.BlockRoot),
+			ParentRoot:         hexutil.Encode(n.ParentRoot),
+			Weight:             fmt.Sprintf("%d", n.Weight),
+			Validity:           n.Validity.String(),
+			ExecutionBlockHash: hexutil.Encode(n.ExecutionBlockHash),
+			ExtraData:          extra,
+		}
+	}
+	resp := &structs.GetForkChoiceDumpV2Response{
 		JustifiedCheckpoint: structs.CheckpointFromConsensus(dump.JustifiedCheckpoint),
 		FinalizedCheckpoint: structs.CheckpointFromConsensus(dump.FinalizedCheckpoint),
 		ForkChoiceNodes:     nodes,
