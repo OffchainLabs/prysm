@@ -241,6 +241,11 @@ func (c *grpcValidatorClient) ProposeAttestationElectra(ctx context.Context, in 
 	return c.getClient().ProposeAttestationElectra(ctx, in)
 }
 
+// ProposeBatchAttestation routes EIP-8243 batches through the gRPC RPC.
+func (c *grpcValidatorClient) ProposeBatchAttestation(ctx context.Context, in *ethpb.BatchAttestation) (*ethpb.AttestResponse, error) {
+	return c.getClient().ProposeBatchAttestation(ctx, in)
+}
+
 func (c *grpcValidatorClient) ProposeBeaconBlock(ctx context.Context, in *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {
 	return c.getClient().ProposeBeaconBlock(ctx, in)
 }

@@ -6,6 +6,7 @@ go_library(
         "aggregate.go",
         "aggregator_selector.go",
         "attest.go",
+        "batch_attest.go",
         "duties.go",
         "duty_store.go",
         "health_monitor.go",
