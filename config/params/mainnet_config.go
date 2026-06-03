@@ -34,6 +34,8 @@ const (
 	mainnetFuluForkEpoch = 411392 // December 3, 2025, 09:49:11pm UTC
 	// Gloas Fork Epoch for mainnet config
 	mainnetGloasForkEpoch = math.MaxUint64
+	// EIP-8243 Batch-attestation Fork Epoch for mainnet config (unset by default).
+	mainnetBatchAttestationForkEpoch = math.MaxUint64
 )
 
 var mainnetNetworkConfig = &NetworkConfig{
@@ -198,6 +200,11 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	DomainBeaconBuilder:               bytesutil.Uint32ToBytes4(0x0B000000),
 	DomainPTCAttester:                 bytesutil.Uint32ToBytes4(0x0C000000),
 	DomainProposerPreferences:         bytesutil.Uint32ToBytes4(0x0D000000),
+	// EIP-8243 domains. Spec-deviation (Codex fix #1): the EIP text suggested
+	// DOMAIN_BATCH_ATTESTER = 0x0B000000, which collides with DomainBeaconBuilder.
+	// We assign 0x0E000000 / 0x0F000000 as placeholders pending EIP-author confirmation.
+	DomainBatchAttester: bytesutil.Uint32ToBytes4(0x0E000000),
+	DomainBatcher:       bytesutil.Uint32ToBytes4(0x0F000000),
 
 	// Prysm constants.
 	GenesisValidatorsRoot:          [32]byte{75, 54, 61, 185, 78, 40, 97, 32, 215, 110, 185, 5, 52, 15, 221, 78, 84, 191, 233, 240, 107, 243, 63, 246, 207, 90, 210, 127, 81, 27, 254, 149},
@@ -249,6 +256,10 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	FuluForkEpoch:        mainnetFuluForkEpoch,
 	GloasForkVersion:     []byte{7, 0, 0, 0},
 	GloasForkEpoch:       mainnetGloasForkEpoch,
+	// EIP-8243 — independent fork following Gloas. Fork-version slot
+	// 0x08000000 is the next available value (Gloas uses 0x07000000).
+	BatchAttestationForkVersion: []byte{8, 0, 0, 0},
+	BatchAttestationForkEpoch:   mainnetBatchAttestationForkEpoch,
 
 	// New values introduced in Altair hard fork 1.
 	// Participation flag indices.

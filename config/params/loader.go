@@ -227,6 +227,8 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("FULU_FORK_VERSION: %#x", cfg.FuluForkVersion),
 		fmt.Sprintf("GLOAS_FORK_VERSION: %#x", cfg.GloasForkVersion),
 		fmt.Sprintf("GLOAS_FORK_EPOCH: %d", cfg.GloasForkEpoch),
+		fmt.Sprintf("BATCH_ATTESTATION_FORK_VERSION: %#x", cfg.BatchAttestationForkVersion),
+		fmt.Sprintf("BATCH_ATTESTATION_FORK_EPOCH: %d", cfg.BatchAttestationForkEpoch),
 		fmt.Sprintf("EPOCHS_PER_SUBNET_SUBSCRIPTION: %d", cfg.EpochsPerSubnetSubscription),
 		fmt.Sprintf("ATTESTATION_SUBNET_EXTRA_BITS: %d", cfg.AttestationSubnetExtraBits),
 		fmt.Sprintf("ATTESTATION_SUBNET_PREFIX_BITS: %d", cfg.AttestationSubnetPrefixBits),
