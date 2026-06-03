@@ -18,6 +18,12 @@ func (t Transaction) HashTreeRoot() ([32]byte, error) {
 	return ByteSliceRoot(t, fieldparams.MaxBytesPerTxLength)
 }
 
+type ProgressiveTransaction []byte
+
+func (t ProgressiveTransaction) HashTreeRoot() ([32]byte, error) {
+	return ByteSliceRootProgressive(t)
+}
+
 // Uint64Root computes the HashTreeRoot Merkleization of
 // a simple uint64 value according to the Ethereum
 // Simple Serialize specification.
@@ -90,15 +96,34 @@ func SlashingsRoot(slashings []uint64) ([32]byte, error) {
 func TransactionsRoot(txs [][]byte) ([32]byte, error) {
 	transactions := make([]Transaction, len(txs))
 	for i, tx := range txs {
-		transactions[i] = Transaction(tx)
+		transactions[i] = tx
 	}
 	return SliceRoot(transactions, fieldparams.MaxTxsPerPayloadLength)
+}
+
+// TransactionsRootProgressive computes the progressive HTR for the Transactions
+// property of the ExecutionPayload.
+func TransactionsRootProgressive(txs [][]byte) ([32]byte, error) {
+	transactions := make([]ProgressiveTransaction, len(txs))
+	for i, tx := range txs {
+		transactions[i] = tx
+	}
+	return SliceRootProgressive(transactions)
 }
 
 // WithdrawalSliceRoot computes the HTR of a slice of withdrawals.
 // The limit parameter is used as input to the bitwise merkleization algorithm.
 func WithdrawalSliceRoot(withdrawals []*enginev1.Withdrawal, limit uint64) ([32]byte, error) {
 	return SliceRoot(withdrawals, limit)
+}
+
+// WithdrawalSliceRootProgressive computes the progressive HTR of a slice of
+// withdrawals.
+func WithdrawalSliceRootProgressive(withdrawals []*enginev1.Withdrawal, limit uint64) ([32]byte, error) {
+	if uint64(len(withdrawals)) > limit {
+		return [32]byte{}, errors.Errorf("slice exceeds max length %d", limit)
+	}
+	return SliceRootProgressive(withdrawals)
 }
 
 // DepositRequestsSliceRoot computes the HTR of a slice of deposit requests.
