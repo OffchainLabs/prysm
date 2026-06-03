@@ -327,6 +327,21 @@ func (mr *MockValidatorClientMockRecorder) ProposeAttestationElectra(ctx, in any
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposeAttestationElectra", reflect.TypeOf((*MockValidatorClient)(nil).ProposeAttestationElectra), ctx, in)
 }
 
+// ProposeBatchAttestation mocks base method.
+func (m *MockValidatorClient) ProposeBatchAttestation(ctx context.Context, in *eth.BatchAttestation) (*eth.AttestResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ProposeBatchAttestation", ctx, in)
+	ret0, _ := ret[0].(*eth.AttestResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ProposeBatchAttestation indicates an expected call of ProposeBatchAttestation.
+func (mr *MockValidatorClientMockRecorder) ProposeBatchAttestation(ctx, in any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposeBatchAttestation", reflect.TypeOf((*MockValidatorClient)(nil).ProposeBatchAttestation), ctx, in)
+}
+
 // ProposeBeaconBlock mocks base method.
 func (m *MockValidatorClient) ProposeBeaconBlock(ctx context.Context, in *eth.GenericSignedBeaconBlock) (*eth.ProposeResponse, error) {
 	m.ctrl.T.Helper()
