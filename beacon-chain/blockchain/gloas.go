@@ -204,3 +204,19 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 	copy(pId[:], pid[:])
 	s.cfg.PayloadIDCache.Set(currentSlot+1, hr, pId)
 }
+
+func (s *Service) fcuFromReorgData(hr [32]byte, hash [32]byte, attr payloadattribute.Attributer, proposingSlot primitives.Slot) {
+	pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, hash, attr)
+	if err != nil {
+		log.WithError(err).Error("Could not update forkchoice with engine")
+	}
+	if pid == nil {
+		if attr != nil {
+			log.Warn("Engine did not return a payload ID for the fork choice update with attributes")
+		}
+		return
+	}
+	var pId [8]byte
+	copy(pId[:], pid[:])
+	s.cfg.PayloadIDCache.Set(proposingSlot, hr, pId)
+}

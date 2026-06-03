@@ -136,6 +136,7 @@ go_test(
         "mock_test.go",
         "pow_block_test.go",
         "process_attestation_test.go",
+        "process_block_helpers_test.go",
         "process_block_test.go",
         "receive_attestation_test.go",
         "receive_block_test.go",
