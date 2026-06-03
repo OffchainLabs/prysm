@@ -166,6 +166,11 @@ type Service struct {
 	seenAggregatedAttestationCache       *lru.Cache
 	seenUnAggregatedAttestationLock      sync.RWMutex
 	seenUnAggregatedAttestationCache     *lru.Cache
+	// EIP-8243 batch attestation dedup. Distinct from the unaggregated cache:
+	// keyed by (slot, committee_index) and tracks per-duty seen_attesters and
+	// seen_batchers per the EIP §"Gossip rules" semantics (see Codex fix #4).
+	seenBatchAttestationLock  sync.Mutex
+	seenBatchAttestationCache *lru.Cache
 	seenExitLock                         sync.RWMutex
 	seenExitCache                        *lru.Cache
 	seenProposerSlashingLock             sync.RWMutex
@@ -413,6 +418,9 @@ func (s *Service) initCaches() {
 	s.seenDataColumnCache = newSlotAwareCache(seenDataColumnSize)
 	s.seenAggregatedAttestationCache = lruwrpr.New(seenAggregatedAttSize)
 	s.seenUnAggregatedAttestationCache = lruwrpr.New(seenUnaggregatedAttSize)
+	// EIP-8243 batch attestation dedup. Sized similarly to the unaggregated
+	// cache since each entry corresponds to at most one (slot, committee).
+	s.seenBatchAttestationCache = lruwrpr.New(seenUnaggregatedAttSize)
 	s.seenSyncMessageCache = lruwrpr.New(seenSyncMsgSize)
 	s.seenSyncContributionCache = lruwrpr.New(seenSyncContributionSize)
 	s.syncContributionBitsOverlapCache = lruwrpr.New(seenSyncContributionSize)

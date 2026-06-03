@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/slasher/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -66,6 +67,30 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return pubsub.ValidationReject, err
+	}
+
+	// EIP-8243: post-fork the wire-level payload is a WireAttestation union
+	// framing either a SingleAttestation or a BatchAttestation. Unwrap to the
+	// typed inner before continuing — batches branch to a dedicated validation
+	// path because their dedup, signature, and bitlist checks diverge from
+	// the single path significantly.
+	if wire, ok := m.(*eth.WireAttestation); ok {
+		inner, innerErr := wire.Inner()
+		if innerErr != nil {
+			return pubsub.ValidationReject, innerErr
+		}
+		if batch, isBatch := inner.(*eth.BatchAttestation); isBatch {
+			// EIP-8243 batches are feature-flag gated through Release N+1.
+			// Until then we silently IGNORE rather than reject so the message
+			// still propagates to nodes that have the flag enabled.
+			if !features.Get().EnableBatchAttestations {
+				return pubsub.ValidationIgnore, nil
+			}
+			return s.validateBatchAttestation(ctx, msg, batch)
+		}
+		// Single under WireAttestation framing — fall through to the existing
+		// single-attestation path using the unwrapped inner.
+		m = inner
 	}
 
 	att, ok := m.(eth.Att)
