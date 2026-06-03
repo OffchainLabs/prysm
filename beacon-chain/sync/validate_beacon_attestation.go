@@ -182,6 +182,18 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	if validationRes != pubsub.ValidationAccept {
 		return validationRes, wrapAttestationError(err, att)
 	}
+	batchDedupActive := slots.ToEpoch(data.Slot) >= params.BeaconConfig().BatchAttestationForkEpoch
+	var attesterCommitteePosition uint64
+	if batchDedupActive {
+		attesterCommitteePosition, err = singleAttesterCommitteePosition(att, committee)
+		if err != nil {
+			return pubsub.ValidationReject, wrapAttestationError(err, att)
+		}
+		key := batchDedupKey{slot: data.Slot, committeeIndex: committeeIndex}
+		if s.hasSeenBatchAttester(key, uint64(len(committee)), attesterCommitteePosition) {
+			return pubsub.ValidationIgnore, nil
+		}
+	}
 
 	// Consolidated handling of Electra SingleAttestation vs Phase0 unaggregated attestation
 	var (
@@ -253,6 +265,12 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		Data: eventData,
 	})
 
+	if batchDedupActive {
+		key := batchDedupKey{slot: data.Slot, committeeIndex: committeeIndex}
+		if first := s.setSeenBatchAttester(key, uint64(len(committee)), attesterCommitteePosition); !first {
+			return pubsub.ValidationIgnore, nil
+		}
+	}
 	if first := s.setSeenUnaggregatedAtt(attKey); !first {
 		// Another concurrent validation processed the same attestation meanwhile
 		return pubsub.ValidationIgnore, nil
@@ -390,6 +408,25 @@ func validateAttestingIndex(
 	return pubsub.ValidationAccept, nil
 }
 
+func singleAttesterCommitteePosition(att eth.Att, committee []primitives.ValidatorIndex) (uint64, error) {
+	if att.Version() >= version.Electra {
+		idx := slices.Index(committee, att.GetAttestingIndex())
+		if idx < 0 {
+			return 0, errors.Errorf("attester %d is not a member of the committee", att.GetAttestingIndex())
+		}
+		return uint64(idx), nil
+	}
+	aggBits := att.GetAggregationBits()
+	if aggBits.Count() != 1 {
+		return 0, errors.New("attestation does not have exactly 1 bit set")
+	}
+	pos := aggBits.BitIndices()[0]
+	if pos >= len(committee) {
+		return 0, errors.New("attestation bitfield is invalid")
+	}
+	return uint64(pos), nil
+}
+
 // validateGloasCommitteeIndex validates committee index rules for Gloas fork.
 // [REJECT] attestation.data.index < 2. (New in Gloas)
 // [REJECT] attestation.data.index == 0 if block.slot == attestation.data.slot. (New in Gloas)
@@ -441,11 +478,15 @@ func generateUnaggregatedAttCacheKey(att eth.Att) (string, error) {
 		attester = uint64(att.GetAggregationBits().BitIndices()[0])
 	}
 
+	return generateUnaggregatedAttCacheKeyForAttester(att.GetData().Slot, att.GetCommitteeIndex(), attester), nil
+}
+
+func generateUnaggregatedAttCacheKeyForAttester(slot primitives.Slot, committeeIndex primitives.CommitteeIndex, attester uint64) string {
 	b := make([]byte, 24)
-	binary.LittleEndian.PutUint64(b, uint64(att.GetData().Slot))
-	binary.LittleEndian.PutUint64(b[8:16], uint64(att.GetCommitteeIndex()))
+	binary.LittleEndian.PutUint64(b, uint64(slot))
+	binary.LittleEndian.PutUint64(b[8:16], uint64(committeeIndex))
 	binary.LittleEndian.PutUint64(b[16:], attester)
-	return string(b), nil
+	return string(b)
 }
 
 // Returns true if the attestation was already seen for the participating validator for the slot.

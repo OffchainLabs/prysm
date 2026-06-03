@@ -90,6 +90,36 @@ func (s *Service) getOrCreateBatchDedupEntry(key batchDedupKey, committeeSize ui
 	return e
 }
 
+func (s *Service) hasSeenBatchAttester(key batchDedupKey, committeeSize uint64, committeePosition uint64) bool {
+	entry := s.getOrCreateBatchDedupEntry(key, committeeSize)
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+	if committeePosition >= uint64(entry.seenAttesters.Len()) {
+		return false
+	}
+	return entry.seenAttesters.BitAt(committeePosition)
+}
+
+func (s *Service) setSeenBatchAttester(key batchDedupKey, committeeSize uint64, committeePosition uint64) bool {
+	entry := s.getOrCreateBatchDedupEntry(key, committeeSize)
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+	if committeePosition >= uint64(entry.seenAttesters.Len()) {
+		return false
+	}
+	if entry.seenAttesters.BitAt(committeePosition) {
+		return false
+	}
+	entry.seenAttesters.SetBitAt(committeePosition, true)
+	return true
+}
+
+func (s *Service) setSeenUnaggregatedAttesters(slot primitives.Slot, committeeIndex primitives.CommitteeIndex, attesters []primitives.ValidatorIndex) {
+	for _, attester := range attesters {
+		_ = s.setSeenUnaggregatedAtt(generateUnaggregatedAttCacheKeyForAttester(slot, committeeIndex, uint64(attester)))
+	}
+}
+
 // validateBatchAttestation runs the full gossip validation pipeline for a
 // post-EIP-8243 BatchAttestation. The caller must have already unwrapped the
 // WireAttestation and confirmed the inner type.
@@ -244,6 +274,7 @@ func (s *Service) validateBatchAttestation(
 	entry.seenBatchers[batch.Batcher] = struct{}{}
 	entry.seenAttesters = orBitlists(entry.seenAttesters, batch.AggregationBits, uint64(len(committee)))
 	entry.mu.Unlock()
+	s.setSeenUnaggregatedAttesters(data.Slot, batch.CommitteeIndex, attesterIndices)
 
 	batchAttReceivedCount.Inc()
 	batchAttAttestersHistogram.Observe(float64(batch.AggregationBits.Count()))
