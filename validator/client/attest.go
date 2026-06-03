@@ -138,7 +138,14 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 			Signature:     sig,
 		}
 		attestation = sa
-		attResp, err = v.validatorClient.ProposeAttestationElectra(ctx, sa)
+		var handled bool
+		attResp, handled, err = v.trySubmitBatchAttestation(ctx, pubKey, duty, data, sig)
+		if err != nil {
+			log.WithError(err).Debug("Could not submit batch attestation, falling back to single attestation")
+		}
+		if !handled {
+			attResp, err = v.validatorClient.ProposeAttestationElectra(ctx, sa)
+		}
 	} else {
 		aggregationBitfield = bitfield.NewBitlist(duty.CommitteeLength)
 		aggregationBitfield.SetBitAt(duty.ValidatorCommitteeIndex, true)

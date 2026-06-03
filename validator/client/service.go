@@ -232,6 +232,7 @@ func (v *ValidatorService) Start() {
 		disableDutiesPolling:         v.disableDutiesPolling,
 		accountsChangedChannel:       make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
 		eventsChannel:                make(chan *eventClient.Event, 1),
+		batchAttestations:            newBatchAttestationCoordinator(),
 	}
 
 	val := v.validator.(*validator)

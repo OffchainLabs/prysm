@@ -79,6 +79,48 @@ func TestSingleAttestation_ToConsensus(t *testing.T) {
 	require.ErrorContains(t, errNilValue.Error(), err)
 }
 
+func TestBatchAttestation_ToConsensus(t *testing.T) {
+	s := &BatchAttestation{
+		CommitteeIndex:   "1",
+		AggregationBits:  "0x03",
+		Data:             nil,
+		Signature:        hexutil.Encode(bytes.Repeat([]byte{1}, 96)),
+		Batcher:          "2",
+		BatchSeal:        hexutil.Encode(bytes.Repeat([]byte{2}, 96)),
+		BatcherSignature: hexutil.Encode(bytes.Repeat([]byte{3}, 96)),
+	}
+	_, err := s.ToConsensus()
+	require.ErrorContains(t, errNilValue.Error(), err)
+}
+
+func TestBatchAttestation_RoundTrip(t *testing.T) {
+	input := &eth.BatchAttestation{
+		CommitteeIndex:  1,
+		AggregationBits: []byte{0x03},
+		Data: &eth.AttestationData{
+			Slot:            4,
+			CommitteeIndex:  0,
+			BeaconBlockRoot: bytes.Repeat([]byte{5}, 32),
+			Source: &eth.Checkpoint{
+				Epoch: 1,
+				Root:  bytes.Repeat([]byte{6}, 32),
+			},
+			Target: &eth.Checkpoint{
+				Epoch: 2,
+				Root:  bytes.Repeat([]byte{7}, 32),
+			},
+		},
+		Signature:        bytes.Repeat([]byte{8}, 96),
+		Batcher:          9,
+		BatchSeal:        bytes.Repeat([]byte{10}, 96),
+		BatcherSignature: bytes.Repeat([]byte{11}, 96),
+	}
+
+	got, err := BatchAttFromConsensus(input).ToConsensus()
+	require.NoError(t, err)
+	assert.DeepEqual(t, input, got)
+}
+
 func TestSignedVoluntaryExit_ToConsensus(t *testing.T) {
 	s := &SignedVoluntaryExit{Message: nil, Signature: ""}
 	_, err := s.ToConsensus()

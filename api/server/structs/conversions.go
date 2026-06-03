@@ -505,6 +505,62 @@ func (a *SingleAttestation) ToConsensus() (*eth.SingleAttestation, error) {
 	}, nil
 }
 
+func BatchAttFromConsensus(a *eth.BatchAttestation) *BatchAttestation {
+	return &BatchAttestation{
+		CommitteeIndex:   fmt.Sprintf("%d", a.CommitteeIndex),
+		AggregationBits:  hexutil.Encode(a.AggregationBits),
+		Data:             AttDataFromConsensus(a.Data),
+		Signature:        hexutil.Encode(a.Signature),
+		Batcher:          fmt.Sprintf("%d", a.Batcher),
+		BatchSeal:        hexutil.Encode(a.BatchSeal),
+		BatcherSignature: hexutil.Encode(a.BatcherSignature),
+	}
+}
+
+func (a *BatchAttestation) ToConsensus() (*eth.BatchAttestation, error) {
+	ci, err := strconv.ParseUint(a.CommitteeIndex, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "CommitteeIndex")
+	}
+	aggBits, err := hexutil.Decode(a.AggregationBits)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "AggregationBits")
+	}
+	if a.Data == nil {
+		return nil, server.NewDecodeError(errNilValue, "Data")
+	}
+	data, err := a.Data.ToConsensus()
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Data")
+	}
+	sig, err := bytesutil.DecodeHexWithLength(a.Signature, fieldparams.BLSSignatureLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Signature")
+	}
+	batcher, err := strconv.ParseUint(a.Batcher, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Batcher")
+	}
+	batchSeal, err := bytesutil.DecodeHexWithLength(a.BatchSeal, fieldparams.BLSSignatureLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "BatchSeal")
+	}
+	batcherSig, err := bytesutil.DecodeHexWithLength(a.BatcherSignature, fieldparams.BLSSignatureLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "BatcherSignature")
+	}
+
+	return &eth.BatchAttestation{
+		CommitteeIndex:   primitives.CommitteeIndex(ci),
+		AggregationBits:  aggBits,
+		Data:             data,
+		Signature:        sig,
+		Batcher:          primitives.ValidatorIndex(batcher),
+		BatchSeal:        batchSeal,
+		BatcherSignature: batcherSig,
+	}, nil
+}
+
 func AttElectraFromConsensus(a *eth.AttestationElectra) *AttestationElectra {
 	return &AttestationElectra{
 		AggregationBits: hexutil.Encode(a.AggregationBits),

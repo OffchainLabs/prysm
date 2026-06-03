@@ -300,6 +300,17 @@ func (s *Service) validatorEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+			template: "/eth/v1alpha1/validator/batch_attestation",
+			name:     namespace + ".SubmitBatchAttestation",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.SubmitBatchAttestation,
+			methods: []string{http.MethodPost},
+		},
+		{
 			template: "/eth/v1/validator/register_validator",
 			name:     namespace + ".RegisterValidator",
 			middleware: []middleware.Middleware{

@@ -76,6 +76,7 @@ type validator struct {
 	prevEpochBalancesLock        sync.RWMutex
 	cachedAttestationDataLock    sync.RWMutex
 	dutiesLock                   sync.RWMutex
+	batchAttestationsLock        sync.Mutex
 	aggSelector                  aggregatorSelector
 	cachedAttestationData        *ethpb.AttestationData
 	accountsChangedChannel       chan [][fieldparams.BLSPubkeyLength]byte
@@ -114,6 +115,7 @@ type validator struct {
 	genesisTime                  time.Time
 	graffiti                     []byte
 	voteStats                    voteStats
+	batchAttestations            *batchAttestationCoordinator
 }
 
 type validatorStatus struct {

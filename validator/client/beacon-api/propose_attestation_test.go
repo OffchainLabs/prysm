@@ -296,3 +296,131 @@ func TestProposeAttestationElectra(t *testing.T) {
 		})
 	}
 }
+
+func TestProposeBatchAttestation(t *testing.T) {
+	attestation := &ethpb.BatchAttestation{
+		CommitteeIndex:  76,
+		AggregationBits: testhelpers.FillByteSlice(4, 74),
+		Data: &ethpb.AttestationData{
+			Slot:            75,
+			CommitteeIndex:  0,
+			BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
+			Source: &ethpb.Checkpoint{
+				Epoch: 78,
+				Root:  testhelpers.FillByteSlice(32, 79),
+			},
+			Target: &ethpb.Checkpoint{
+				Epoch: 80,
+				Root:  testhelpers.FillByteSlice(32, 81),
+			},
+		},
+		Signature:        testhelpers.FillByteSlice(96, 82),
+		Batcher:          83,
+		BatchSeal:        testhelpers.FillByteSlice(96, 84),
+		BatcherSignature: testhelpers.FillByteSlice(96, 85),
+	}
+
+	tests := []struct {
+		name                 string
+		attestation          *ethpb.BatchAttestation
+		expectedErrorMessage string
+		endpointError        error
+		endpointCall         int
+	}{
+		{
+			name:         "valid",
+			attestation:  attestation,
+			endpointCall: 1,
+		},
+		{
+			name:                 "nil attestation",
+			expectedErrorMessage: "attestation is nil",
+		},
+		{
+			name: "nil attestation data",
+			attestation: &ethpb.BatchAttestation{
+				AggregationBits:  testhelpers.FillByteSlice(4, 74),
+				Signature:        testhelpers.FillByteSlice(96, 82),
+				Batcher:          83,
+				BatchSeal:        testhelpers.FillByteSlice(96, 84),
+				BatcherSignature: testhelpers.FillByteSlice(96, 85),
+			},
+			expectedErrorMessage: "attestation is nil",
+		},
+		{
+			name: "nil source checkpoint",
+			attestation: &ethpb.BatchAttestation{
+				AggregationBits: testhelpers.FillByteSlice(4, 74),
+				Data: &ethpb.AttestationData{
+					Target: &ethpb.Checkpoint{},
+				},
+				Signature:        testhelpers.FillByteSlice(96, 82),
+				Batcher:          83,
+				BatchSeal:        testhelpers.FillByteSlice(96, 84),
+				BatcherSignature: testhelpers.FillByteSlice(96, 85),
+			},
+			expectedErrorMessage: "attestation's source can't be nil",
+		},
+		{
+			name: "nil aggregation bits",
+			attestation: &ethpb.BatchAttestation{
+				Data: &ethpb.AttestationData{
+					Source: &ethpb.Checkpoint{},
+					Target: &ethpb.Checkpoint{},
+				},
+				Signature:        testhelpers.FillByteSlice(96, 82),
+				Batcher:          83,
+				BatchSeal:        testhelpers.FillByteSlice(96, 84),
+				BatcherSignature: testhelpers.FillByteSlice(96, 85),
+			},
+			expectedErrorMessage: "attestation's bitfield can't be nil",
+		},
+		{
+			name:                 "bad request",
+			attestation:          attestation,
+			expectedErrorMessage: "bad request",
+			endpointError:        errors.New("bad request"),
+			endpointCall:         1,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			handler := mock.NewMockJsonRestHandler(ctrl)
+
+			var marshalledAttestation []byte
+			if helpers.ValidateNilAttestation(test.attestation) == nil {
+				b, err := json.Marshal(jsonifyBatchAttestation(test.attestation))
+				require.NoError(t, err)
+				marshalledAttestation = b
+			}
+
+			ctx := t.Context()
+			handler.EXPECT().Post(
+				gomock.Any(),
+				"/eth/v1alpha1/validator/batch_attestation",
+				nil,
+				bytes.NewBuffer(marshalledAttestation),
+				nil,
+			).Return(
+				test.endpointError,
+			).Times(test.endpointCall)
+
+			validatorClient := &beaconApiValidatorClient{handler: handler}
+			proposeResponse, err := validatorClient.proposeBatchAttestation(ctx, test.attestation)
+			if test.expectedErrorMessage != "" {
+				require.ErrorContains(t, test.expectedErrorMessage, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, proposeResponse)
+
+			expectedAttestationDataRoot, err := attestation.Data.HashTreeRoot()
+			require.NoError(t, err)
+
+			assert.DeepEqual(t, expectedAttestationDataRoot[:], proposeResponse.AttestationDataRoot)
+		})
+	}
+}

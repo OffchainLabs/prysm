@@ -374,6 +374,10 @@ func ConfigureValidator(ctx *cli.Context) error {
 		logEnabled(EnableWebFlag)
 		cfg.EnableWeb = true
 	}
+	if ctx.IsSet(EnableBatchAttestations.Name) {
+		logEnabled(EnableBatchAttestations)
+		cfg.EnableBatchAttestations = true
+	}
 
 	cfg.KeystoreImportDebounceInterval = ctx.Duration(dynamicKeyReloadDebounceInterval.Name)
 	Init(cfg)

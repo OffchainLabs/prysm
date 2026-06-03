@@ -253,6 +253,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	EnableBeaconRESTApi,
 	DisableDutiesV2,
 	EnableWebFlag,
+	EnableBatchAttestations,
 }...)
 
 // E2EValidatorFlags contains a list of the validator feature flags to be tested in E2E.

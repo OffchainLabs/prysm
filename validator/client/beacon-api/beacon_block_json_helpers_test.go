@@ -83,6 +83,53 @@ func TestBeaconBlockJsonHelpers_JsonifyEth1Data(t *testing.T) {
 	assert.DeepEqual(t, expectedResult, result)
 }
 
+func TestBeaconBlockJsonHelpers_JsonifyBatchAttestation(t *testing.T) {
+	input := &ethpb.BatchAttestation{
+		CommitteeIndex:  1,
+		AggregationBits: []byte{2},
+		Data: &ethpb.AttestationData{
+			Slot:            3,
+			CommitteeIndex:  4,
+			BeaconBlockRoot: []byte{5},
+			Source: &ethpb.Checkpoint{
+				Epoch: 6,
+				Root:  []byte{7},
+			},
+			Target: &ethpb.Checkpoint{
+				Epoch: 8,
+				Root:  []byte{9},
+			},
+		},
+		Signature:        []byte{10},
+		Batcher:          11,
+		BatchSeal:        []byte{12},
+		BatcherSignature: []byte{13},
+	}
+	expectedResult := &structs.BatchAttestation{
+		CommitteeIndex:  "1",
+		AggregationBits: hexutil.Encode([]byte{2}),
+		Data: &structs.AttestationData{
+			Slot:            "3",
+			CommitteeIndex:  "4",
+			BeaconBlockRoot: hexutil.Encode([]byte{5}),
+			Source: &structs.Checkpoint{
+				Epoch: "6",
+				Root:  hexutil.Encode([]byte{7}),
+			},
+			Target: &structs.Checkpoint{
+				Epoch: "8",
+				Root:  hexutil.Encode([]byte{9}),
+			},
+		},
+		Signature:        hexutil.Encode([]byte{10}),
+		Batcher:          "11",
+		BatchSeal:        hexutil.Encode([]byte{12}),
+		BatcherSignature: hexutil.Encode([]byte{13}),
+	}
+
+	assert.DeepEqual(t, expectedResult, jsonifyBatchAttestation(input))
+}
+
 func TestBeaconBlockJsonHelpers_JsonifyAttestations(t *testing.T) {
 	input := []*ethpb.Attestation{
 		{

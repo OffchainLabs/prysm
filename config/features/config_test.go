@@ -48,6 +48,17 @@ func TestConfigureBeaconConfig(t *testing.T) {
 	assert.Equal(t, true, c.SaveInvalidBlock)
 }
 
+func TestConfigureValidatorEnablesBatchAttestations(t *testing.T) {
+	defer Init(&Flags{})
+	app := cli.App{}
+	set := flag.NewFlagSet("test", 0)
+	set.Bool(EnableBatchAttestations.Name, true, "test")
+	require.NoError(t, set.Set(EnableBatchAttestations.Name, "true"))
+	context := cli.NewContext(&app, set, nil)
+	require.NoError(t, ConfigureValidator(context))
+	assert.Equal(t, true, Get().EnableBatchAttestations)
+}
+
 func TestValidateNetworkFlags(t *testing.T) {
 	// Define the test cases
 	tests := []struct {

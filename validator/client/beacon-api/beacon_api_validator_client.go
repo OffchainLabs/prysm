@@ -185,11 +185,13 @@ func (c *beaconApiValidatorClient) ProposeAttestationElectra(ctx context.Context
 	})
 }
 
-// ProposeBatchAttestation is the EIP-8243 entry point for REST-based VCs.
-// REST endpoint integration is added in Phase 7; until then the call returns
-// an unimplemented error rather than a silent drop.
-func (c *beaconApiValidatorClient) ProposeBatchAttestation(_ context.Context, _ *ethpb.BatchAttestation) (*ethpb.AttestResponse, error) {
-	return nil, errors.New("EIP-8243 batch attestation REST endpoint not yet implemented (see Phase 7)")
+func (c *beaconApiValidatorClient) ProposeBatchAttestation(ctx context.Context, in *ethpb.BatchAttestation) (*ethpb.AttestResponse, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.ProposeBatchAttestation")
+	defer span.End()
+
+	return wrapInMetrics[*ethpb.AttestResponse]("ProposeBatchAttestation", func() (*ethpb.AttestResponse, error) {
+		return c.proposeBatchAttestation(ctx, in)
+	})
 }
 
 func (c *beaconApiValidatorClient) ProposeBeaconBlock(ctx context.Context, in *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {

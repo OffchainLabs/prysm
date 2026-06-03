@@ -43,6 +43,16 @@ type SingleAttestation struct {
 	Signature      string           `json:"signature"`
 }
 
+type BatchAttestation struct {
+	CommitteeIndex   string           `json:"committee_index"`
+	AggregationBits  string           `json:"aggregation_bits"`
+	Data             *AttestationData `json:"data"`
+	Signature        string           `json:"signature"`
+	Batcher          string           `json:"batcher"`
+	BatchSeal        string           `json:"batch_seal"`
+	BatcherSignature string           `json:"batcher_signature"`
+}
+
 type AttestationData struct {
 	Slot            string      `json:"slot"`
 	CommitteeIndex  string      `json:"index"`
