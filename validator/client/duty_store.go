@@ -122,14 +122,20 @@ func (d *dutyStoreData) toContainer() *ethpb.ValidatorDutiesContainer {
 	}
 }
 
+// reset returns d to its zero value. Clearing every field is what keeps stale
+// state (notably indices, which canPromote keys on) from surviving a rebuild.
+func (d *dutyStoreData) reset() {
+	*d = dutyStoreData{}
+}
+
 func (d *dutyStoreData) setFromContainer(container *ethpb.ValidatorDutiesContainer) {
+	// Rebuild from scratch so no field can leak from a prior fetch, even if this
+	// is ever called on an already-populated struct.
+	d.reset()
 	if container == nil {
-		*d = dutyStoreData{}
 		return
 	}
 
-	d.epoch = 0
-	d.missingNext = 0
 	d.proposerSlots = make(map[primitives.ValidatorIndex][]primitives.Slot)
 	d.ptcSlots = make(map[primitives.ValidatorIndex][]primitives.Slot)
 	d.syncCurrentMap = make(map[primitives.ValidatorIndex]bool)
@@ -176,8 +182,8 @@ type dutyStore struct {
 	data dutyStoreData
 }
 
-// roDutySnapshot is a read-only view of dutyStore. Getters return defensive
-// copies, so mutating the returned values can't affect the live store.
+// roDutySnapshot is a read-only view of dutyStore. Getters return copies; the
+// duty iterators yield aliases that callers must not mutate.
 type roDutySnapshot struct {
 	d dutyStoreData
 }
@@ -224,28 +230,28 @@ func (s roDutySnapshot) isNextSyncCommittee(idx primitives.ValidatorIndex) bool 
 	return s.d.isNextSyncCommittee(idx)
 }
 
-// currentDuties yields cloned current-epoch duties. The iterator is re-rangeable.
+// currentDuties yields read-only current-epoch duty aliases. Re-rangeable.
 func (s roDutySnapshot) currentDuties() iter.Seq2[pubkey, *ethpb.ValidatorDuty] {
 	return func(yield func(pubkey, *ethpb.ValidatorDuty) bool) {
 		if !s.d.initialized {
 			return
 		}
 		for pk, duty := range s.d.currentDuties {
-			if !yield(pk, cloneValidatorDuty(duty)) {
+			if !yield(pk, duty) {
 				return
 			}
 		}
 	}
 }
 
-// nextDuties yields cloned next-epoch duties. The iterator is re-rangeable.
+// nextDuties yields read-only next-epoch duty aliases. Re-rangeable.
 func (s roDutySnapshot) nextDuties() iter.Seq2[pubkey, *ethpb.ValidatorDuty] {
 	return func(yield func(pubkey, *ethpb.ValidatorDuty) bool) {
 		if !s.d.initialized {
 			return
 		}
 		for pk, duty := range s.d.nextDuties {
-			if !yield(pk, cloneValidatorDuty(duty)) {
+			if !yield(pk, duty) {
 				return
 			}
 		}
@@ -281,7 +287,7 @@ func (ds *dutyStore) snapshot() roDutySnapshot {
 func (ds *dutyStore) reset() {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
-	ds.data.setFromContainer(nil)
+	ds.data.reset()
 }
 
 func (ds *dutyStore) isInitialized() bool {

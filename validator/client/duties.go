@@ -274,8 +274,11 @@ func (v *validator) promoteDuties(ctx context.Context, epoch primitives.Epoch, i
 		if d == nil {
 			continue
 		}
-		d.Status = v.statusForPubkey(d.PublicKey)
-		currentDuties = append(currentDuties, d)
+		// nextDuties yields read-only aliases into the live store, so clone
+		// before refreshing the status to avoid mutating cached state in place.
+		promoted := cloneValidatorDuty(d)
+		promoted.Status = v.statusForPubkey(promoted.PublicKey)
+		currentDuties = append(currentDuties, promoted)
 	}
 	res := dutiesFetchResult{
 		currentDuties: currentDuties,

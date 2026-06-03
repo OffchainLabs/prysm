@@ -1,6 +1,7 @@
 package client
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -140,6 +141,39 @@ func TestDutyStore_Reset(t *testing.T) {
 	ds.reset()
 	assert.Equal(t, false, ds.isInitialized())
 	assert.Equal(t, 0, ds.snapshot().currentDutyCount())
+}
+
+func TestDutyStoreData_Reset(t *testing.T) {
+	populated := func() dutyStoreData {
+		return dutyStoreData{
+			initialized:       true,
+			epoch:             9,
+			missingNext:       missingNextPtc,
+			indices:           []primitives.ValidatorIndex{1, 5, 7},
+			currentDuties:     map[pubkey]*ethpb.ValidatorDuty{{}: {}},
+			prevDependentRoot: []byte("prev"),
+		}
+	}
+
+	t.Run("reset zeroes every field", func(t *testing.T) {
+		d := populated()
+		d.reset()
+		// Covers every field, including any added later: IsZero reports whether
+		// the whole struct equals its zero value.
+		assert.Equal(t, true, reflect.ValueOf(d).IsZero())
+	})
+
+	t.Run("setFromContainer drops stale indices on a populated struct", func(t *testing.T) {
+		d := populated()
+		d.setFromContainer(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{{PublicKey: make([]byte, 48), ValidatorIndex: 2}},
+		})
+		assert.Equal(t, true, d.indices == nil)
+		// With indices cleared, a stale validator set can't satisfy canPromote
+		// even when the epoch lines up.
+		d.epoch = 9
+		assert.Equal(t, false, d.canPromote(10, []primitives.ValidatorIndex{1, 5, 7}))
+	})
 }
 
 func TestDutyStore_WriteNilResets(t *testing.T) {
