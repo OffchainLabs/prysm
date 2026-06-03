@@ -222,6 +222,21 @@ func (s *Server) SubmitSignedProposerPreferences(w http.ResponseWriter, r *http.
 	ctx, span := trace.StartSpan(r.Context(), "validator.SubmitSignedProposerPreferences")
 	defer span.End()
 
+	versionHeader := r.Header.Get(api.VersionHeader)
+	if versionHeader == "" {
+		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+		return
+	}
+	v, err := version.FromString(versionHeader)
+	if err != nil {
+		httputil.HandleError(w, "Invalid version: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if v < version.Gloas {
+		httputil.HandleError(w, "Signed proposer preferences are only supported from the gloas fork", http.StatusBadRequest)
+		return
+	}
+
 	var data []*structs.SignedProposerPreferences
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
 		if errors.Is(err, io.EOF) {
@@ -239,13 +254,22 @@ func (s *Server) SubmitSignedProposerPreferences(w http.ResponseWriter, r *http.
 	req := &ethpbalpha.SubmitSignedProposerPreferencesRequest{
 		SignedProposerPreferences: make([]*ethpbalpha.SignedProposerPreferences, len(data)),
 	}
+	var failures []*server.IndexedError
 	for i, item := range data {
 		consensusItem, err := item.ToConsensus()
 		if err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Could not convert signed proposer preferences at index %d: %s", i, err.Error()), http.StatusBadRequest)
-			return
+			failures = append(failures, &server.IndexedError{Index: i, Message: err.Error()})
+			continue
 		}
 		req.SignedProposerPreferences[i] = consensusItem
+	}
+	if len(failures) > 0 {
+		httputil.WriteError(w, &server.IndexedErrorContainer{
+			Code:     http.StatusBadRequest,
+			Message:  server.ErrIndexedValidationFail,
+			Failures: failures,
+		})
+		return
 	}
 
 	if _, err := s.V1Alpha1Server.SubmitSignedProposerPreferences(ctx, req); err != nil {

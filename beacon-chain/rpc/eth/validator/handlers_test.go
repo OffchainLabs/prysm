@@ -13,6 +13,7 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/server"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	builderTest "github.com/OffchainLabs/prysm/v7/beacon-chain/builder/testing"
@@ -4572,6 +4573,7 @@ func TestSubmitSignedProposerPreferences_OK(t *testing.T) {
 
 	s := &Server{V1Alpha1Server: v1alpha1Server}
 	req := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/validator/proposer_preferences", bytes.NewBufferString(validProposerPreferencesBody()))
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -4587,6 +4589,7 @@ func TestSubmitSignedProposerPreferences_OK(t *testing.T) {
 func TestSubmitSignedProposerPreferences_NoBody(t *testing.T) {
 	s := &Server{}
 	req := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -4600,6 +4603,7 @@ func TestSubmitSignedProposerPreferences_NoBody(t *testing.T) {
 func TestSubmitSignedProposerPreferences_Empty(t *testing.T) {
 	s := &Server{}
 	req := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewBufferString("[]"))
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -4610,11 +4614,16 @@ func TestSubmitSignedProposerPreferences_Empty(t *testing.T) {
 func TestSubmitSignedProposerPreferences_InvalidJSON(t *testing.T) {
 	s := &Server{}
 	req := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewBufferString(`[{"message": null, "signature": "0x00"}]`))
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
 	s.SubmitSignedProposerPreferences(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+	e := &server.IndexedErrorContainer{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), e))
+	require.Equal(t, 1, len(e.Failures))
+	assert.Equal(t, 0, e.Failures[0].Index)
 }
 
 func runWithGRPCError(t *testing.T, code codes.Code) int {
@@ -4627,6 +4636,7 @@ func runWithGRPCError(t *testing.T, code codes.Code) int {
 
 	s := &Server{V1Alpha1Server: v1alpha1Server}
 	req := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewBufferString(validProposerPreferencesBody()))
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -4644,4 +4654,45 @@ func TestSubmitSignedProposerPreferences_UnavailableMapsTo503(t *testing.T) {
 
 func TestSubmitSignedProposerPreferences_InternalMapsTo500(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, runWithGRPCError(t, codes.Internal))
+}
+
+func TestSubmitSignedProposerPreferences_MissingVersionHeader(t *testing.T) {
+	s := &Server{}
+	req := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewBufferString(validProposerPreferencesBody()))
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.SubmitSignedProposerPreferences(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	e := &httputil.DefaultJsonError{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), e))
+	assert.Equal(t, true, strings.Contains(e.Message, api.VersionHeader+" header is required"))
+}
+
+func TestSubmitSignedProposerPreferences_InvalidVersionHeader(t *testing.T) {
+	s := &Server{}
+	req := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewBufferString(validProposerPreferencesBody()))
+	req.Header.Set(api.VersionHeader, "notaversion")
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.SubmitSignedProposerPreferences(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	e := &httputil.DefaultJsonError{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), e))
+	assert.Equal(t, true, strings.Contains(e.Message, "Invalid version"))
+}
+
+func TestSubmitSignedProposerPreferences_PreGloasVersion(t *testing.T) {
+	s := &Server{}
+	req := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewBufferString(validProposerPreferencesBody()))
+	req.Header.Set(api.VersionHeader, version.String(version.Fulu))
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.SubmitSignedProposerPreferences(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	e := &httputil.DefaultJsonError{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), e))
+	assert.Equal(t, true, strings.Contains(e.Message, "only supported from the gloas fork"))
 }

@@ -42,7 +42,7 @@ func TestSubmitSignedProposerPreferences_Valid(t *testing.T) {
 	handler.EXPECT().Post(
 		gomock.Any(),
 		proposerPreferencesEndpoint,
-		nil,
+		map[string]string{"Eth-Consensus-Version": "gloas"},
 		bytes.NewBuffer(body),
 		nil,
 	).Return(nil).Times(1)
@@ -69,7 +69,7 @@ func TestSubmitSignedProposerPreferences_HandlerError(t *testing.T) {
 	handler.EXPECT().Post(
 		gomock.Any(),
 		proposerPreferencesEndpoint,
-		nil,
+		map[string]string{"Eth-Consensus-Version": "gloas"},
 		gomock.Any(),
 		nil,
 	).Return(errors.New("foo error")).Times(1)

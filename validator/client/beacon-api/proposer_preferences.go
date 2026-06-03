@@ -8,6 +8,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 )
@@ -35,5 +36,6 @@ func (c *beaconApiValidatorClient) submitSignedProposerPreferences(ctx context.C
 		return errors.Wrap(err, "failed to marshal signed proposer preferences")
 	}
 
-	return c.handler.Post(ctx, "/eth/v1/validator/proposer_preferences", nil, bytes.NewBuffer(body), nil)
+	headers := map[string]string{"Eth-Consensus-Version": version.String(version.Gloas)}
+	return c.handler.Post(ctx, "/eth/v1/validator/proposer_preferences", headers, bytes.NewBuffer(body), nil)
 }
