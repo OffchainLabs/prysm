@@ -154,6 +154,13 @@ var (
 		Name:  "enable-light-client",
 		Usage: "Enables the light client support in the beacon node",
 	}
+	// EnableBatchAttestations gates the EIP-8243 batch attestation gossip & VC
+	// composition paths. Off by default until the fork epoch is scheduled; the
+	// proto types and validation code are always compiled in.
+	EnableBatchAttestations = &cli.BoolFlag{
+		Name:  "enable-batch-attestations",
+		Usage: "Enable EIP-8243 batch attestation gossip & VC composition. Has no effect before BatchAttestationForkEpoch.",
+	}
 	disableResourceManager = &cli.BoolFlag{
 		Name:  "disable-resource-manager",
 		Usage: "Disables running the libp2p resource manager.",
@@ -281,6 +288,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	disableResourceManager,
 	DisableRegistrationCache,
 	EnableLightClient,
+	EnableBatchAttestations,
 	BlobSaveFsync,
 	DisableQUIC,
 	EnableDiscoveryReboot,
