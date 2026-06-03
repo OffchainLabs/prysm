@@ -179,9 +179,40 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 		return
 	}
 
-	if err := s.broadcastObject(ctx, att, attestationToTopic(subnet, forkDigest)); err != nil {
+	// EIP-8243 — post-fork, all attestation subnet payloads ride inside a
+	// WireAttestation SSZ union. Wrap the typed inner attestation here so the
+	// caller doesn't need to know about the wire framing.
+	var msgOut ssz.Marshaler = att
+	if slots.ToEpoch(att.GetData().Slot) >= params.BeaconConfig().BatchAttestationForkEpoch {
+		wire, err := wrapAsWireAttestation(att)
+		if err != nil {
+			log.WithError(err).Error("Failed to wrap attestation in WireAttestation")
+			tracing.AnnotateError(span, err)
+			return
+		}
+		msgOut = wire
+	}
+
+	if err := s.broadcastObject(ctx, msgOut, attestationToTopic(subnet, forkDigest)); err != nil {
 		log.WithError(err).Error("Failed to broadcast attestation")
 		tracing.AnnotateError(span, err)
+	}
+}
+
+// wrapAsWireAttestation wraps a *SingleAttestation or *BatchAttestation into a
+// WireAttestation with the appropriate selector. Returns an error for any
+// other inner type — EIP-8243 only admits these two on the gossip topic.
+func wrapAsWireAttestation(att ethpb.Att) (*ethpb.WireAttestation, error) {
+	switch v := att.(type) {
+	case *ethpb.SingleAttestation:
+		return &ethpb.WireAttestation{Selector: ethpb.WireSelectorSingle, Single: v}, nil
+	case *ethpb.BatchAttestation:
+		return &ethpb.WireAttestation{Selector: ethpb.WireSelectorBatch, Batch: v}, nil
+	case *ethpb.WireAttestation:
+		// Already wrapped — pass through. Defends against double-wrap callers.
+		return v, nil
+	default:
+		return nil, errors.Errorf("unsupported attestation type for EIP-8243 fork: %T", att)
 	}
 }
 

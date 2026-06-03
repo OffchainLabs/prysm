@@ -59,6 +59,12 @@ func GossipTopicMappings(topic string, epoch primitives.Epoch) proto.Message {
 		}
 		return gossipMessage(topic)
 	case AttestationSubnetTopicFormat:
+		if epoch >= params.BeaconConfig().BatchAttestationForkEpoch {
+			// EIP-8243 — the attestation subnet payload becomes a WireAttestation
+			// SSZ union framing either a SingleAttestation (selector 0x00) or a
+			// BatchAttestation (selector 0x01).
+			return &ethpb.WireAttestation{}
+		}
 		if epoch >= params.BeaconConfig().ElectraForkEpoch {
 			return &ethpb.SingleAttestation{}
 		}
@@ -153,6 +159,10 @@ func init() {
 	GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashingElectra]()] = AttesterSlashingSubnetTopicFormat
 	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedAggregateAttestationAndProofElectra]()] = AggregateAndProofSubnetTopicFormat
 	GossipTypeMapping[reflect.TypeFor[*ethpb.LightClientFinalityUpdateElectra]()] = LightClientFinalityUpdateTopicFormat
+
+	// EIP-8243 — register the wire-level union on the same attestation subnet.
+	GossipTypeMapping[reflect.TypeFor[*ethpb.WireAttestation]()] = AttestationSubnetTopicFormat
+	GossipTypeMapping[reflect.TypeFor[*ethpb.BatchAttestation]()] = AttestationSubnetTopicFormat
 
 	// Specially handle Fulu objects.
 	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlockFulu]()] = BlockSubnetTopicFormat
