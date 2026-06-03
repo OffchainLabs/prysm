@@ -773,7 +773,7 @@ func TestLatestAncestor_FinalizedTOCTOU(t *testing.T) {
 	}()
 
 	const iters = 200000
-	for i := 0; i < iters; i++ {
+	for range iters {
 		st, _ := service.latestAncestor(ctx, r1)
 		if st == nil {
 			continue
