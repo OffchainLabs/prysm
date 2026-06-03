@@ -945,6 +945,8 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 			h.broadcaster.callbacks = recorder
 
 			setup := tt.setup(t, h.broadcaster)
+
+			h.broadcaster.topics[setup.inputRPC.GetTopicID()] = nil
 			err := h.broadcaster.handleIncomingRPC(setup.inputRPC)
 
 			if tt.expectedErrContains != "" {
@@ -1017,6 +1019,98 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 
 			if tt.expectedStoreColumn != nil {
 				assertPartialColumnsEqual(t, tt.expectedStoreColumn(t), stored)
+			}
+		})
+	}
+}
+
+func TestPartialColumnBroadcaster_handleIncomingRPC_ignoresUnsubscribedTopic(t *testing.T) {
+	ps := newMockPubSub(nil, nil)
+	recorder := newCallbackRecorder(8, false, nil, nil)
+	h := newBroadcasterHarness(t, ps)
+	h.broadcaster.callbacks = recorder
+
+	col := createPartialColumn(t, 2, nil)
+	group := col.GroupID()
+	// In-bounds, well-formed topic, but intentionally NOT registered in
+	// h.broadcaster.topics, i.e. we are not subscribed to it.
+	const topic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	err := h.broadcaster.handleIncomingRPC(buildIncomingRPC(topic, group, buildHeaderOnlySidecar(col), nil))
+	require.NoError(t, err)
+
+	require.IsNil(t, h.broadcaster.getDataColumn(topic, group))
+	require.Equal(t, 0, ps.publishedColumnCount())
+	require.Equal(t, 0, ps.peerFeedbackCallCount())
+	require.Equal(t, 0, len(h.broadcaster.incomingReq))
+}
+
+func TestPartialColumnBroadcaster_onIncomingRPC_topicValidation(t *testing.T) {
+	const from = peer.ID("peer-a")
+	group := createPartialColumn(t, 2, nil).GroupID()
+
+	tests := []struct {
+		name           string
+		topic          string
+		expectReject   bool
+		expectEnqueued bool
+	}{
+		{
+			name:           "in-bounds topic is accepted and enqueued",
+			topic:          "/eth2/abcd1234/data_column_sidecar_0/ssz_snappy",
+			expectReject:   false,
+			expectEnqueued: true,
+		},
+		{
+			name:           "column index at NumberOfColumns is rejected",
+			topic:          "/eth2/abcd1234/data_column_sidecar_128/ssz_snappy",
+			expectReject:   true,
+			expectEnqueued: false,
+		},
+		{
+			name:           "column index far out of bounds is rejected",
+			topic:          "/eth2/abcd1234/data_column_sidecar_999999/ssz_snappy",
+			expectReject:   true,
+			expectEnqueued: false,
+		},
+		{
+			name:           "topic without a column index is rejected",
+			topic:          "/eth2/abcd1234/not_a_data_column_topic/ssz_snappy",
+			expectReject:   true,
+			expectEnqueued: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ps := newMockPubSub(nil, nil)
+			h := newBroadcasterHarness(t, ps)
+
+			topic := tt.topic
+			rpc := &pubsub_pb.PartialMessagesExtension{
+				TopicID: &topic,
+				GroupID: slices.Clone(group),
+			}
+			peerStates := map[peer.ID]blocks.PartialDataColumnPeerState{}
+
+			err := h.broadcaster.onIncomingRPC(from, peerStates, rpc)
+
+			if tt.expectReject {
+				require.ErrorContains(t, "invalid topic ID", err)
+				feedback := ps.peerFeedbackCallsSnapshot()
+				require.Equal(t, 1, len(feedback))
+				require.Equal(t, pubsub.PeerFeedbackInvalidMessage, feedback[0].kind)
+				require.Equal(t, from, feedback[0].peerID)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, 0, ps.peerFeedbackCallCount())
+			}
+
+			enqueued := len(h.broadcaster.incomingReq)
+			if tt.expectEnqueued {
+				require.Equal(t, 1, enqueued)
+			} else {
+				require.Equal(t, 0, enqueued)
 			}
 		})
 	}

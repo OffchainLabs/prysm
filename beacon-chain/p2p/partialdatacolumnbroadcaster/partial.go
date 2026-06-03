@@ -289,6 +289,19 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 		}).Debug("Invalid group ID length")
 		return errors.Errorf("invalid group ID length: got %d, expected %d", len(rpc.GetGroupID()), expectedGroupIDLen)
 	}
+
+	columnIndex, err := extractColumnIndexFromTopic(rpc.GetTopicID())
+	if err != nil || columnIndex >= fieldparams.NumberOfColumns {
+		_ = p.peerFeedback(rpc.GetTopicID(), from, pubsub.PeerFeedbackInvalidMessage)
+		p.logger.WithError(err).WithFields(logrus.Fields{
+			"peer":        from,
+			"topic":       rpc.GetTopicID(),
+			"columnIndex": columnIndex,
+			"maxColumns":  fieldparams.NumberOfColumns,
+		}).Debug("Invalid topic ID: column index missing or out of bounds")
+		return errors.Errorf("invalid topic ID %q: column index missing or out of bounds", rpc.GetTopicID())
+	}
+
 	nextPeerState, message, err := updatePeerStateFromIncomingRPC(peerStates[from], rpc)
 	if err != nil {
 		return err
@@ -514,10 +527,18 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 		return errors.New("pubsub not initialized")
 	}
 
+	topicID := rpc.GetTopicID()
+	// Only act on partial messages for topics we are currently subscribed to.
+	// The topic ID is peer-controlled, so this prevents a peer from making us
+	// allocate verifier/header state for columns we never asked for.
+	if _, subscribed := p.topics[topicID]; !subscribed {
+		p.logger.WithFields(rpc.logFields()).Debug("Ignoring partial message for unsubscribed topic")
+		return nil
+	}
+
 	message := rpc.message
 	hasMessage := message != nil
 
-	topicID := rpc.GetTopicID()
 	groupID := rpc.GroupID
 	ourVerifier := p.getPartialVerifier(topicID, groupID)
 	var shouldRepublish bool
