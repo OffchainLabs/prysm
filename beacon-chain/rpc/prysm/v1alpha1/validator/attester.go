@@ -158,7 +158,7 @@ func (vs *Server) ProposeBatchAttestation(ctx context.Context, batch *ethpb.Batc
 				log.WithError(err).Error("Could not save batch attestation to cache")
 			}
 		} else {
-			if err := vs.AttPool.SaveUnaggregatedAttestation(att); err != nil {
+			if err := vs.AttPool.SaveAggregatedAttestation(att); err != nil {
 				log.WithError(err).Error("Could not save batch attestation")
 			}
 		}
