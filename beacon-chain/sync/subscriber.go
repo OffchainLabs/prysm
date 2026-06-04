@@ -64,6 +64,8 @@ type subscribeParameters struct {
 	// but for which no subscriptions are needed.
 	getSubnetsRequiringPeers func(currentSlot primitives.Slot) map[uint64]bool
 
+	// partial is the ONLY topic specific field allowed here (nil for non-data-column topics).
+	// Don't add more: If you need topic specific behavior, generalize this into a topic agnostic hooks instead.
 	partial *partialSubscribeParameters
 }
 
