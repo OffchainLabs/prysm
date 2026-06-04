@@ -963,8 +963,8 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		return nil, nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
 	}
 	log.WithFields(logrus.Fields{
-		"included":    cp.Included,
-		"cells count": len(cp.CellsPerBlob),
+		"included":   cp.Included,
+		"cellsCount": len(cp.CellsPerBlob),
 	}).Debug("Received cells and proofs from execution client")
 
 	var partialColumns []blocks.PartialDataColumn
