@@ -117,3 +117,10 @@ type PayloadEvent struct {
 	Slot      string `json:"slot"`
 	BlockRoot string `json:"block_root"`
 }
+
+type ExecutionPayloadGossipEvent struct {
+	Slot         string `json:"slot"`
+	BuilderIndex string `json:"builder_index"`
+	BlockHash    string `json:"block_hash"`
+	BlockRoot    string `json:"block_root"`
+}
