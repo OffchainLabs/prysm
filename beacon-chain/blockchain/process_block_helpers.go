@@ -507,24 +507,3 @@ func (s *Service) ensureRootNotZeros(root [32]byte) [32]byte {
 	}
 	return root
 }
-
-// This saves head and prunes atts from the pool only if the head is new and if we are either
-// 1. Not proposing next slot or, if we are,
-// 2. The incoming head block is not late.
-// If we are going to attempt to reorg the block we do not save head in the blockchain package
-// and continue treating the previous head as the tip of the chain. 
-func (s *Service) saveHeadIfNeeded(ctx context.Context, cfg *postBlockProcessConfig) {
-	full := false
-	if !s.isNewHead(cfg.headRoot, full) {
-		return
-	}
-	proposingSlot := s.CurrentSlot() + 1
-	attr := s.getPayloadAttribute(ctx, cfg.postState, proposingSlot, cfg.headRoot[:], full)
-	if !attr.IsEmpty() && s.shouldOverrideFCU(cfg.headRoot, proposingSlot) {
-		return
-	}
-	if err := s.saveHead(ctx, cfg.headRoot, cfg.roblock, cfg.postState, full); err != nil {
-		log.WithError(err).Error("Could not save head")
-	}
-	s.pruneAttsFromPool(ctx, cfg.postState, cfg.roblock)
-}
