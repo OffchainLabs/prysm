@@ -136,7 +136,7 @@ func (s *Service) ensureDeregistrationForEpoch(currentEpoch primitives.Epoch) er
 		// Also unsubscribe from partial topics
 		if partialBroadcaster != nil && strings.Contains(t, p2p.GossipDataColumnSidecarMessage) {
 			if err := partialBroadcaster.Unsubscribe(s.ctx, t); err != nil {
-				log.WithError(err).WithField("topic", t).Debug("Could not unsubscribe partial column broadcaster")
+				log.WithError(err).WithField("topic", t).Error("Could not unsubscribe partial column broadcaster")
 			}
 		}
 		s.unSubscribeFromTopic(t)
