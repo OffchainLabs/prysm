@@ -460,7 +460,7 @@ func (p *PartialDataColumn) ExtendFromVerifiedCell(cellIndex uint64, cell, proof
 			"cellIndex":    cellIndex,
 			"columnLen":    len(p.Column),
 			"kzgProofsLen": len(p.KzgProofs),
-		}).Error("cellIndex out of range for partial data column")
+		}).Error("Cell index out of range for partial data column")
 		return false
 	}
 	if p.Included.BitAt(cellIndex) {
