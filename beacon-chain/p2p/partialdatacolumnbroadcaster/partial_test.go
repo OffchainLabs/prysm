@@ -681,7 +681,7 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			peerState := tt.inputPeerState()
-			originalPeerState := blocks.ClonePeerState(peerState)
+			originalPeerState := peerState.Clone()
 
 			nextPeerState, msg, err := updatePeerStateFromIncomingRPC(peerState, tt.inputRPC(t))
 

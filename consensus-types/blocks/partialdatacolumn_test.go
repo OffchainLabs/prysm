@@ -491,7 +491,7 @@ func TestPartialDataColumn_buildEagerPushBytes(t *testing.T) {
 			name: "nominal sends header only",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 3, 0)
-				encoded, err := p.buildEagerPushBytes(true)
+				encoded, err := p.buildEagerPushBytes()
 				require.NoError(t, err)
 				msg := mustDecodeSidecar(t, encoded)
 				require.Equal(t, 1, len(msg.Header))
@@ -506,7 +506,7 @@ func TestPartialDataColumn_buildEagerPushBytes(t *testing.T) {
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
 				p.KzgCommitments[0] = []byte{1}
-				_, err := p.buildEagerPushBytes(true)
+				_, err := p.buildEagerPushBytes()
 				require.ErrorContains(t, "KzgCommitments", err)
 			},
 		},
@@ -515,17 +515,8 @@ func TestPartialDataColumn_buildEagerPushBytes(t *testing.T) {
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
 				p.KzgCommitmentsInclusionProof = p.KzgCommitmentsInclusionProof[:3]
-				_, err := p.buildEagerPushBytes(true)
+				_, err := p.buildEagerPushBytes()
 				require.ErrorContains(t, "KzgCommitmentsInclusionProof", err)
-			},
-		},
-		{
-			name: "includeHeader false returns nil",
-			run: func(t *testing.T) {
-				p := mustNewPartialColumn(t, 3, 0)
-				encoded, err := p.buildEagerPushBytes(false)
-				require.NoError(t, err)
-				require.IsNil(t, encoded)
 			},
 		},
 	}
@@ -555,7 +546,7 @@ func TestMergeAvailableIntoPartsMetadata(t *testing.T) {
 				Requests:  bitfield.NewBitlist(4),
 			},
 			add:       bitfield.NewBitlist(4),
-			expectErr: "bitlists are different lengths",
+			expectErr: "available length mismatch",
 		},
 		{
 			name: "requests length mismatch",
@@ -1096,7 +1087,7 @@ func TestPartialDataColumn_ExtendFromVerifiedCell(t *testing.T) {
 	}
 }
 
-func TestClonePeerState(t *testing.T) {
+func TestPartialDataColumnPeerState_Clone(t *testing.T) {
 	tests := []struct {
 		name  string
 		input PartialDataColumnPeerState
@@ -1137,7 +1128,7 @@ func TestClonePeerState(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cloned := ClonePeerState(tt.input)
+			cloned := tt.input.Clone()
 
 			if tt.input.Recvd != nil {
 				assertMetaCloned(t, tt.input.Recvd, cloned.Recvd)

@@ -136,10 +136,10 @@ func marshalPartsMetadata(meta *ethpb.PartialDataColumnPartsMetadata) (partialme
 	return partialmessages.PartsMetadata(b), nil
 }
 
-// ClonePeerState creates a deep copy of the given PeerState. It clones the
-// RecvdState and SentState fields if they are of type *PartialDataColumnPartsMetadata,
-// ensuring that modifications to the returned state do not affect the original.
-func ClonePeerState(peerState PartialDataColumnPeerState) PartialDataColumnPeerState {
+// Clone creates a deep copy of the PeerState. It clones the Recvd and Sent
+// fields when they are non-nil, ensuring that modifications to the returned
+// state do not affect the original.
+func (peerState PartialDataColumnPeerState) Clone() PartialDataColumnPeerState {
 	clonePartsMetadataF := func(meta *ethpb.PartialDataColumnPartsMetadata) *ethpb.PartialDataColumnPartsMetadata {
 		if meta == nil {
 			return nil
@@ -213,13 +213,8 @@ func (p *PartialDataColumn) cellsToSendToPeer(peerMeta *ethpb.PartialDataColumnP
 }
 
 // buildEagerPushBytes builds the SSZ-encoded PartialDataColumnSidecar for an
-// initial eager push. Only the column header is included (no cells). It returns
-// (nil, nil) when there is no header to send.
-func (p *PartialDataColumn) buildEagerPushBytes(includeHeader bool) (encoded []byte, err error) {
-	if !includeHeader {
-		return nil, nil
-	}
-
+// initial eager push. Only the column header is included (no cells).
+func (p *PartialDataColumn) buildEagerPushBytes() (encoded []byte, err error) {
 	outMessage := &ethpb.PartialDataColumnSidecar{
 		Header: []*ethpb.PartialDataColumnHeader{{
 			KzgCommitments:               p.KzgCommitments,
@@ -243,6 +238,10 @@ func (p *PartialDataColumn) PartsMetadata() (partialmessages.PartsMetadata, erro
 func MergeAvailableIntoPartsMetadata(base *ethpb.PartialDataColumnPartsMetadata, additionalAvailable bitfield.Bitlist) (*ethpb.PartialDataColumnPartsMetadata, error) {
 	if base == nil {
 		return nil, errors.New("base is nil")
+	}
+
+	if base.Available.Len() != additionalAvailable.Len() {
+		return nil, errors.New("available length mismatch")
 	}
 	if base.Requests.Len() != additionalAvailable.Len() {
 		return nil, errors.New("requests length mismatch")
@@ -307,7 +306,7 @@ func (p *PartialDataColumn) recordHeaderSent(peerID peer.ID, includeHeader bool,
 
 // forPeer returns the next peer state and the publish action for this peer
 func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerState PartialDataColumnPeerState, includeHeader bool) (PartialDataColumnPeerState, partialmessages.PublishAction, bool) {
-	peerState = ClonePeerState(peerState)
+	peerState = peerState.Clone()
 
 	// Eager push - we don't know what the peer has and message has been requested.
 	// Set RecvdState so subsequent calls skip the eager push path.
@@ -317,9 +316,13 @@ func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerS
 			"index":         p.Index,
 			"includeHeader": includeHeader,
 		}).Debug("Eager push")
-		encoded, err := p.buildEagerPushBytes(includeHeader)
-		if err != nil {
-			return peerState, partialmessages.PublishAction{Err: err}, false
+		var encoded []byte
+		if includeHeader {
+			var err error
+			encoded, err = p.buildEagerPushBytes()
+			if err != nil {
+				return peerState, partialmessages.PublishAction{Err: err}, false
+			}
 		}
 		myPartsMeta := p.newPartsMetadata()
 		peerState.Recvd = NewPartsMetaWithNoAvailableAndNoRequests(p.KzgCommitmentCount())

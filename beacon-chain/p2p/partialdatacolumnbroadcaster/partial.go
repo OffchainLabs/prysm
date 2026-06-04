@@ -470,7 +470,7 @@ func decodePartsMetadataFromPeerState(state *ethpb.PartialDataColumnPartsMetadat
 
 func updatePeerStateFromIncomingRPC(peerState blocks.PartialDataColumnPeerState, rpc *pubsub_pb.PartialMessagesExtension) (blocks.PartialDataColumnPeerState,
 	*ethpb.PartialDataColumnSidecar, error) {
-	peerState = blocks.ClonePeerState(peerState)
+	peerState = peerState.Clone()
 	hasIncomingPartsMetadata := len(rpc.PartsMetadata) > 0
 	hasMessage := len(rpc.PartialMessage) > 0
 
