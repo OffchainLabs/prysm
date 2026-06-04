@@ -1,7 +1,6 @@
 package blocks
 
 import (
-	"iter"
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -174,14 +173,6 @@ func TestDataColumn_ProposerIndex(t *testing.T) {
 	assert.Equal(t, proposerIndex, pi)
 }
 
-func collectBundles(seq iter.Seq[CellProofBundle]) []CellProofBundle {
-	var out []CellProofBundle
-	for b := range seq {
-		out = append(out, b)
-	}
-	return out
-}
-
 func TestRODataColumnsToCellProofBundles(t *testing.T) {
 	sidecars := []RODataColumn{
 		{fulu: &ethpb.DataColumnSidecar{
@@ -198,7 +189,8 @@ func TestRODataColumnsToCellProofBundles(t *testing.T) {
 		}},
 	}
 
-	got := collectBundles(RODataColumnsToCellProofBundles(sidecars))
+	got, err := RODataColumnsToCellProofBundles(sidecars)
+	require.NoError(t, err)
 	require.Equal(t, 5, len(got))
 
 	// First bundle pairs the first sidecar's first cell/commitment/proof.
@@ -209,24 +201,6 @@ func TestRODataColumnsToCellProofBundles(t *testing.T) {
 
 	// Bundles for the second sidecar carry its own column index.
 	require.Equal(t, uint64(2), got[2].ColumnIndex)
-}
-
-func TestRODataColumnsToCellProofBundlesStopsEarly(t *testing.T) {
-	sidecars := []RODataColumn{
-		{fulu: &ethpb.DataColumnSidecar{
-			Index:          1,
-			Column:         sizedSlices(3, 2048, 1),
-			KzgCommitments: sizedSlices(3, 48, 10),
-			KzgProofs:      sizedSlices(3, 48, 20),
-		}},
-	}
-
-	count := 0
-	for range RODataColumnsToCellProofBundles(sidecars) {
-		count++
-		break
-	}
-	require.Equal(t, 1, count)
 }
 
 func TestRODataColumnsToCellProofBundlesLengthMismatch(t *testing.T) {
@@ -253,8 +227,10 @@ func TestRODataColumnsToCellProofBundlesLengthMismatch(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Must not panic on a mismatched sidecar; it yields nothing.
-			got := collectBundles(RODataColumnsToCellProofBundles([]RODataColumn{{fulu: tc.dc}}))
+			// A mismatched sidecar must surface an error rather than silently
+			// returning a partial/empty result.
+			got, err := RODataColumnsToCellProofBundles([]RODataColumn{{fulu: tc.dc}})
+			require.NotNil(t, err)
 			require.Equal(t, 0, len(got))
 		})
 	}

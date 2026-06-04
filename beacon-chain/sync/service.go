@@ -6,7 +6,6 @@ package sync
 
 import (
 	"context"
-	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -491,7 +490,7 @@ func (c *partialColumnCallbacks) PartialVerifierFromTrustedColumn(col *blocks.Pa
 }
 
 func (c *partialColumnCallbacks) ValidateColumn(cellsToVerify []blocks.CellProofBundle) error {
-	return c.s.validateKZGProofs(c.s.ctx, len(cellsToVerify), slices.Values(cellsToVerify))
+	return c.s.validateKZGProofs(c.s.ctx, cellsToVerify)
 }
 
 func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedRODataColumn) {

@@ -2,7 +2,6 @@ package peerdas
 
 import (
 	stderrors "errors"
-	"iter"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -92,9 +91,9 @@ func (s CellProofBundleSegment) Verify() error {
 	return nil
 }
 
-func VerifyDataColumnsCellsKZGProofs(sizeHint int, cellProofsIter iter.Seq[blocks.CellProofBundle]) error {
+func VerifyDataColumnsCellsKZGProofs(cellProofs []blocks.CellProofBundle) error {
 	// ignore the failed segment list since we are just passing in one segment.
-	_, err := BatchVerifyDataColumnsCellsKZGProofs(sizeHint, []iter.Seq[blocks.CellProofBundle]{cellProofsIter})
+	_, err := BatchVerifyDataColumnsCellsKZGProofs([][]blocks.CellProofBundle{cellProofs})
 	return err
 }
 
@@ -108,17 +107,22 @@ func VerifyDataColumnsCellsKZGProofs(sizeHint int, cellProofsIter iter.Seq[block
 // batching. On success the failed segment list is empty.
 //
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar_kzg_proofs
-func BatchVerifyDataColumnsCellsKZGProofs(sizeHint int, cellProofsIters []iter.Seq[blocks.CellProofBundle]) ( /* failed segment list */ []CellProofBundleSegment, error) {
-	commitments := make([]kzg.Bytes48, 0, sizeHint)
-	indices := make([]uint64, 0, sizeHint)
-	cells := make([]kzg.Cell, 0, sizeHint)
-	proofs := make([]kzg.Bytes48, 0, sizeHint)
+func BatchVerifyDataColumnsCellsKZGProofs(cellProofsBatches [][]blocks.CellProofBundle) ( /* failed segment list */ []CellProofBundleSegment, error) {
+	var size int
+	for _, batch := range cellProofsBatches {
+		size += len(batch)
+	}
+
+	commitments := make([]kzg.Bytes48, 0, size)
+	indices := make([]uint64, 0, size)
+	cells := make([]kzg.Cell, 0, size)
+	proofs := make([]kzg.Bytes48, 0, size)
 
 	var anySegmentEmpty bool
 	var segments []CellProofBundleSegment
-	for _, cellProofsIter := range cellProofsIters {
+	for _, batch := range cellProofsBatches {
 		startIdx := len(cells)
-		for bundle := range cellProofsIter {
+		for _, bundle := range batch {
 			var (
 				commitment kzg.Bytes48
 				cell       kzg.Cell

@@ -2,7 +2,6 @@ package sync
 
 import (
 	"context"
-	"iter"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
@@ -30,8 +29,7 @@ type errorWithSegment struct {
 }
 
 type kzgVerifier struct {
-	sizeHint   int
-	cellProofs iter.Seq[blocks.CellProofBundle]
+	cellProofs []blocks.CellProofBundle
 	resChan    chan errorWithSegment
 }
 
@@ -163,14 +161,14 @@ func performBatchAggregation(aggSet *bls.SignatureBatch) (*bls.SignatureBatch, e
 	return aggSet, nil
 }
 
-func (s *Service) validateKZGProofs(ctx context.Context, sizeHint int, cellProofs iter.Seq[blocks.CellProofBundle]) error {
+func (s *Service) validateKZGProofs(ctx context.Context, cellProofs []blocks.CellProofBundle) error {
 	_, span := trace.StartSpan(ctx, "sync.validateKZGProofs")
 	defer span.End()
 
 	timeout := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
 
 	resChan := make(chan errorWithSegment, 1)
-	verificationSet := &kzgVerifier{sizeHint: sizeHint, cellProofs: cellProofs, resChan: resChan}
+	verificationSet := &kzgVerifier{cellProofs: cellProofs, resChan: resChan}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -216,16 +214,14 @@ func verifyKzgBatch(kzgBatch []*kzgVerifier) {
 		return
 	}
 
-	cellProofIters := make([]iter.Seq[blocks.CellProofBundle], 0, len(kzgBatch))
-	var sizeHint int
+	cellProofBatches := make([][]blocks.CellProofBundle, 0, len(kzgBatch))
 	for _, kzgVerifier := range kzgBatch {
-		sizeHint += kzgVerifier.sizeHint
-		cellProofIters = append(cellProofIters, kzgVerifier.cellProofs)
+		cellProofBatches = append(cellProofBatches, kzgVerifier.cellProofs)
 	}
 
 	var verificationErr error
 	start := time.Now()
-	segments, err := peerdas.BatchVerifyDataColumnsCellsKZGProofs(sizeHint, cellProofIters)
+	segments, err := peerdas.BatchVerifyDataColumnsCellsKZGProofs(cellProofBatches)
 	elapsed := float64(time.Since(start).Milliseconds())
 	if err != nil {
 		verificationErr = errors.Wrap(err, "batch KZG verification failed")

@@ -78,8 +78,10 @@ func TestVerifierRoutine(t *testing.T) {
 		go service.kzgVerifierRoutine()
 
 		dataColumns := createValidTestDataColumns(t, 1)
+		bundles, err := blocks.RODataColumnsToCellProofBundles(dataColumns)
+		require.NoError(t, err)
 		resChan := make(chan errorWithSegment, 1)
-		service.kzgChan <- &kzgVerifier{sizeHint: 1, cellProofs: blocks.RODataColumnsToCellProofBundles(dataColumns), resChan: resChan}
+		service.kzgChan <- &kzgVerifier{cellProofs: bundles, resChan: resChan}
 
 		select {
 		case errWithSegment := <-resChan:
@@ -103,9 +105,11 @@ func TestVerifierRoutine(t *testing.T) {
 
 		for i := range numRequests {
 			dataColumns := createValidTestDataColumns(t, 1)
+			bundles, err := blocks.RODataColumnsToCellProofBundles(dataColumns)
+			require.NoError(t, err)
 			resChan := make(chan errorWithSegment, 1)
 			resChans[i] = resChan
-			service.kzgChan <- &kzgVerifier{sizeHint: 1, cellProofs: blocks.RODataColumnsToCellProofBundles(dataColumns), resChan: resChan}
+			service.kzgChan <- &kzgVerifier{cellProofs: bundles, resChan: resChan}
 		}
 
 		for i := range numRequests {
