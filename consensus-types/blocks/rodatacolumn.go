@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -249,15 +250,16 @@ func RODataColumnsToCellProofBundles(sidecars []RODataColumn) iter.Seq[CellProof
 			cells := sidecar.Column()
 			kcs, err := sidecar.KzgCommitments()
 			if err != nil {
-				log.WithError(err).Error("kzg commitments not present on sidecar")
+				log.WithError(err).Error("Kzg commitments not present on sidecar")
 				return
 			}
 			kps := sidecar.KzgProofs()
 			if len(kcs) != len(cells) || len(kps) != len(cells) {
-				log.WithField("cells", len(cells)).
-					WithField("commitments", len(kcs)).
-					WithField("proofs", len(kps)).
-					Error("mismatched cell/commitment/proof counts in data column sidecar")
+				log.WithFields(logrus.Fields{
+					"cells":       len(cells),
+					"commitments": len(kcs),
+					"proofs":      len(kps),
+				}).Error("Mismatched cell/commitment/proof counts in data column sidecar")
 				return
 			}
 			for i := range cells {
