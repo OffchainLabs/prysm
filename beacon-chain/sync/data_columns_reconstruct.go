@@ -79,7 +79,10 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 			duration := time.Since(startTime)
 			dataColumnReconstructionHistogram.Observe(float64(duration.Milliseconds()))
 			if len(reconstructedSidecars) < len(verifiedSidecars) {
-				log.Error("More verified sidecars than reconstructed sidecars")
+				log.WithFields(logrus.Fields{
+					"reconstructedSidecars": len(reconstructedSidecars),
+					"verifiedSidecars":      len(verifiedSidecars),
+				}).Error("More verified sidecars than reconstructed sidecars")
 				return
 			}
 			dataColumnReconstructionCounter.Add(float64(len(reconstructedSidecars) - len(verifiedSidecars)))
