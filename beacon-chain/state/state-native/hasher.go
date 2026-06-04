@@ -385,7 +385,7 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 	}
 
 	if state.version >= version.Gloas {
-		buildersRoot, err := stateutil.BuildersRoot(state.builders)
+		buildersRoot, err := state.buildersRoot()
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute builders merkleization")
 		}
@@ -444,6 +444,13 @@ func payloadExpectedWithdrawalsRoot(state *BeaconState) ([32]byte, error) {
 		return ssz.WithdrawalSliceRootProgressive(state.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
 	}
 	return ssz.WithdrawalSliceRoot(state.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+}
+
+func (b *BeaconState) buildersRoot() ([32]byte, error) {
+	if progressiveSSZEnabled(b.version) {
+		return stateutil.BuildersRootProgressive(b.builders)
+	}
+	return stateutil.BuildersRoot(b.builders)
 }
 
 func (b *BeaconState) builderPendingWithdrawalsRoot() ([32]byte, error) {

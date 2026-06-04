@@ -1497,7 +1497,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.LatestExecutionPayloadBid:
 		return b.latestExecutionPayloadBid.HashTreeRoot()
 	case types.Builders:
-		return stateutil.BuildersRoot(b.builders)
+		return b.buildersRoot()
 	case types.NextWithdrawalBuilderIndex:
 		return ssz.Uint64Root(uint64(b.nextWithdrawalBuilderIndex)), nil
 	case types.ExecutionPayloadAvailability:
