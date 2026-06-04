@@ -81,20 +81,24 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return elErr
 	})
 
+	g.Go(func() error {
+		bid, err := blockState.LatestExecutionPayloadBid()
+		if err != nil {
+			return errors.Wrap(err, "could not get latest execution payload bid")
+		}
+		if bid == nil || len(bid.BlobKzgCommitments()) == 0 {
+			return nil
+		}
+		if err := s.areDataColumnsAvailable(gCtx, root, envelope.Slot()); err != nil {
+			return errors.Wrap(err, "data availability check failed for payload envelope")
+		}
+		return nil
+	})
+
 	if err := g.Wait(); err != nil {
 		return err
 	}
 
-	// DA check: verify data columns are available before inserting payload.
-	bid, err := blockState.LatestExecutionPayloadBid()
-	if err != nil {
-		return errors.Wrap(err, "could not get latest execution payload bid")
-	}
-	if bid != nil && len(bid.BlobKzgCommitments()) > 0 {
-		if err := s.areDataColumnsAvailable(ctx, root, envelope.Slot()); err != nil {
-			return errors.Wrap(err, "data availability check failed for payload envelope")
-		}
-	}
 	if err := s.savePostPayload(ctx, signed); err != nil {
 		return err
 	}
