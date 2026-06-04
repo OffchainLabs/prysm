@@ -225,7 +225,7 @@ func (s *Service) fcuFromReorgData(hr [32]byte, hash [32]byte, attr payloadattri
 // 1. Not proposing next slot or, if we are,
 // 2. The incoming head block is not late.
 // If we are going to attempt to reorg the block we do not save head in the blockchain package
-// and continue treating the previous head as the tip of the chain. 
+// and continue treating the previous head as the tip of the chain.
 func (s *Service) saveHeadIfNeeded(ctx context.Context, cfg *postBlockProcessConfig) {
 	full := false
 	if !s.isNewHead(cfg.headRoot, full) {
