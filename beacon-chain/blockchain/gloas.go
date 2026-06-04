@@ -211,7 +211,7 @@ func (s *Service) fcuFromReorgData(hr [32]byte, hash [32]byte, attr payloadattri
 		log.WithError(err).Error("Could not update forkchoice with engine")
 	}
 	if pid == nil {
-		if attr != nil {
+		if !attr.IsEmpty() {
 			log.Warn("Engine did not return a payload ID for the fork choice update with attributes")
 		}
 		return
