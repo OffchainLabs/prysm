@@ -1080,6 +1080,16 @@ func TestPartialDataColumn_ExtendFromVerifiedCell(t *testing.T) {
 				require.DeepEqual(t, []byte{8}, p.KzgProofs[0])
 			},
 		},
+		{
+			name: "out of range index returns false without panicking",
+			run: func(t *testing.T) {
+				p := mustNewPartialColumn(t, 2, 1)
+				ok := p.ExtendFromVerifiedCell(5, []byte{9}, []byte{8})
+				require.Equal(t, false, ok)
+				// Nothing should have been recorded as included.
+				require.Equal(t, uint64(1), p.Included.Count())
+			},
+		},
 	}
 
 	for _, tt := range tests {

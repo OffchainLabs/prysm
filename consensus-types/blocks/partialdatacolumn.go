@@ -450,8 +450,19 @@ func (p *PartialDataColumn) CellsToVerifyFromPartialMessage(message *ethpb.Parti
 	return cellIndices, cellsToVerify, nil
 }
 
-// ExtendFromVerifiedCell extends this partial column with one verified cell.
+// ExtendFromVerifiedCell extends this partial column with one verified cell. It
+// returns false without modifying the column if the cell is already present or
+// if cellIndex is out of range.
 func (p *PartialDataColumn) ExtendFromVerifiedCell(cellIndex uint64, cell, proof []byte) bool {
+	if cellIndex >= uint64(len(p.Column)) || cellIndex >= uint64(len(p.KzgProofs)) {
+		log.WithFields(logrus.Fields{
+			"index":        p.Index,
+			"cellIndex":    cellIndex,
+			"columnLen":    len(p.Column),
+			"kzgProofsLen": len(p.KzgProofs),
+		}).Error("cellIndex out of range for partial data column")
+		return false
+	}
 	if p.Included.BitAt(cellIndex) {
 		// We already have this cell
 		return false
