@@ -33,8 +33,10 @@ const (
 	LightClientOptimisticUpdate
 	// PayloadAttributes events are fired upon a missed slot or new head.
 	PayloadAttributes
-	// PayloadProcessed is sent after a payload envelope has been processed.
-	PayloadProcessed
+	// ExecutionPayloadAvailable is sent when a new execution payload is available (without EL validation results).
+	ExecutionPayloadAvailable
+	// ExecutionPayloadProcessed is sent after a payload envelope has been processed.
+	ExecutionPayloadProcessed
 )
 
 // BlockProcessedData is the data sent with BlockProcessed events.
@@ -75,8 +77,18 @@ type InitializedData struct {
 	GenesisValidatorsRoot []byte
 }
 
-// PayloadProcessedData is the data sent with PayloadProcessed events.
-type PayloadProcessedData struct {
+// ExecutionPayloadAvailableData is the data sent with ExecutionPayloadAvailable events.
+type ExecutionPayloadAvailableData struct {
 	Slot      primitives.Slot
 	BlockRoot [32]byte
+}
+
+// ExecutionPayloadProcessedData is the data sent with ExecutionPayloadProcessed events.
+type ExecutionPayloadProcessedData struct {
+	Slot         primitives.Slot
+	BuilderIndex primitives.BuilderIndex
+	BlockHash    [32]byte
+	BlockRoot    [32]byte
+	// Optimistic is true if the imported payload has not been fully validated by the execution layer.
+	Optimistic bool
 }

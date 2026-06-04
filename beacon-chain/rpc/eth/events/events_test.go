@@ -419,6 +419,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 			FinalizedCheckpointTopic,
 			ChainReorgTopic,
 			BlockTopic,
+			ExecutionPayloadAvailableTopic,
 			ExecutionPayloadTopic,
 		})
 		require.NoError(t, err)
@@ -473,10 +474,20 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 				},
 			},
 			{
-				Type: statefeed.PayloadProcessed,
-				Data: &statefeed.PayloadProcessedData{
+				Type: statefeed.ExecutionPayloadAvailable,
+				Data: &statefeed.ExecutionPayloadAvailableData{
 					Slot:      10,
 					BlockRoot: [32]byte{0x9a},
+				},
+			},
+			{
+				Type: statefeed.ExecutionPayloadProcessed,
+				Data: &statefeed.ExecutionPayloadProcessedData{
+					Slot:         11,
+					BuilderIndex: 12,
+					BlockHash:    [32]byte{0xbb},
+					BlockRoot:    [32]byte{0x9a},
+					Optimistic:   true,
 				},
 			},
 		}

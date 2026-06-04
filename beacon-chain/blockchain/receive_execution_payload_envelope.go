@@ -121,10 +121,27 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	}
 
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
-		Type: statefeed.PayloadProcessed,
-		Data: &statefeed.PayloadProcessedData{
+		Type: statefeed.ExecutionPayloadAvailable,
+		Data: &statefeed.ExecutionPayloadAvailableData{
 			Slot:      envelope.Slot(),
 			BlockRoot: root,
+		},
+	})
+
+	isOptimistic, err := s.cfg.ForkChoiceStore.IsOptimistic(root)
+	if err != nil {
+		log.WithError(err).Error("Could not get optimistic status of block root")
+		isOptimistic = false
+	}
+
+	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
+		Type: statefeed.ExecutionPayloadProcessed,
+		Data: &statefeed.ExecutionPayloadProcessedData{
+			Slot:         envelope.Slot(),
+			BuilderIndex: envelope.BuilderIndex(),
+			BlockHash:    envelope.BlockHash(),
+			BlockRoot:    root,
+			Optimistic:   isOptimistic,
 		},
 	})
 
