@@ -6,6 +6,9 @@ import (
 	"testing"
 
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	// enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -20,19 +23,45 @@ func RunSSZStaticTests(t *testing.T, config string) {
 }
 
 func customHtr(t *testing.T, htrs []common.HTR, object any) []common.HTR {
-	_, ok := object.(*ethpb.BeaconStateGloas)
-	if !ok {
-		return htrs
+	switch object.(type) {
+	case *ethpb.BeaconStateGloas:
+		htrs = append(htrs, func(s any) ([32]byte, error) {
+			beaconState, err := state_native.InitializeFromProtoUnsafeGloas(s.(*ethpb.BeaconStateGloas))
+			require.NoError(t, err)
+
+			return beaconState.HashTreeRoot(context.Background())
+		})
+	case *ethpb.BeaconBlockBodyGloas:
+		htrs = append(htrs, beaconBlockBodyHTR)
 	}
 
-	htrs = append(htrs, func(s any) ([32]byte, error) {
-		beaconState, err := state_native.InitializeFromProtoUnsafeGloas(s.(*ethpb.BeaconStateGloas))
-		require.NoError(t, err)
-
-		return beaconState.HashTreeRoot(context.Background())
-	})
-
 	return htrs
+}
+
+func beaconBlockBodyHTR(s any) ([32]byte, error) {
+	wrapped, err := blocks.NewBeaconBlockBody(s.(*ethpb.BeaconBlockBodyGloas))
+	if err != nil {
+		return [32]byte{}, err
+	}
+	blockBody, ok := wrapped.(*blocks.BeaconBlockBody)
+	if !ok {
+		return [32]byte{}, errors.New("could not convert wrapped block body")
+	}
+
+	fieldRoots, err := blocks.ComputeBlockBodyFieldRoots(context.Background(), blockBody)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	progressiveFieldRoots := make([][32]byte, len(fieldRoots))
+	for i, fieldRoot := range fieldRoots {
+		progressiveFieldRoots[i] = bytesutil.ToBytes32(fieldRoot)
+	}
+
+	activeFields := make([]bool, len(fieldRoots))
+	for i := range activeFields {
+		activeFields[i] = true
+	}
+	return ssz.ContainerRootProgressive(progressiveFieldRoots, activeFields)
 }
 
 // unmarshalledSSZ unmarshalls serialized input.

@@ -85,7 +85,7 @@ func RunSSZStaticTests(t *testing.T, config, forkOrPhase string, unmarshaller Un
 							require.NoError(t, err)
 							rootBytes, err := hex.DecodeString(rootsYaml.Root[2:])
 							require.NoError(t, err)
-							require.DeepEqual(t, rootBytes, root[:], "Did not receive expected hash tree root")
+							require.Equal(t, [32]byte(rootBytes), root, "Did not receive expected hash tree root")
 
 							if rootsYaml.SigningRoot == "" {
 								return
@@ -101,7 +101,7 @@ func RunSSZStaticTests(t *testing.T, config, forkOrPhase string, unmarshaller Un
 							require.NoError(t, err)
 							signingRootBytes, err := hex.DecodeString(rootsYaml.SigningRoot[2:])
 							require.NoError(t, err)
-							require.DeepEqual(t, signingRootBytes, signingRoot[:], "Did not receive expected signing root")
+							require.Equal(t, [32]byte(signingRootBytes), signingRoot, "Did not receive expected signing root")
 						})
 					}
 				})

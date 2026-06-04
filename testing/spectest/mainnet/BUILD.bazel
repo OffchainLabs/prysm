@@ -188,7 +188,6 @@ go_test(
         "fulu__operations__bls_to_execution_change_test.go",
         "fulu__operations__consolidation_test.go",
         "fulu__operations__deposit_requests_test.go",
-        "fulu__operations__deposit_test.go",
         "fulu__operations__execution_layer_withdrawals_test.go",
         "fulu__operations__execution_payload_test.go",
         "fulu__operations__proposer_slashing_test.go",
@@ -226,7 +225,6 @@ go_test(
         "gloas__operations__bls_to_execution_change_test.go",
         "gloas__operations__consolidation_test.go",
         "gloas__operations__deposit_requests_test.go",
-        "gloas__operations__deposit_test.go",
         "gloas__operations__execution_payload_header_test.go",
         "gloas__operations__parent_execution_payload_test.go",
         "gloas__operations__payload_attestation_test.go",
@@ -268,6 +266,7 @@ go_test(
     data = ["@consensus_spec_tests//:test_data"],
     tags = ["spectest"],
     deps = [
+        "//config/features:go_default_library",
         "//config/params:go_default_library",
         "//runtime/version:go_default_library",
         "//testing/spectest/shared/altair/epoch_processing:go_default_library",
