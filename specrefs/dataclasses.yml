@@ -185,13 +185,13 @@
 - name: InclusionListStore#heze
   sources: []
   spec: |
-    <spec dataclass="InclusionListStore" fork="heze" hash="5a6caa3b">
+    <spec dataclass="InclusionListStore" fork="heze" hash="23eb74f0">
     class InclusionListStore:
-        inclusion_lists: DefaultDict[Tuple[Slot, Root], Dict[Root, InclusionList]] = field(
+        inclusion_lists: DefaultDict[Root, Dict[Root, InclusionList]] = field(
             default_factory=lambda: defaultdict(dict)
         )
         inclusion_list_timeliness: Dict[Root, boolean] = field(default_factory=dict)
-        equivocators: DefaultDict[Tuple[Slot, Root], Set[ValidatorIndex]] = field(
+        equivocators: DefaultDict[Root, Set[ValidatorIndex]] = field(
             default_factory=lambda: defaultdict(set)
         )
     </spec>
