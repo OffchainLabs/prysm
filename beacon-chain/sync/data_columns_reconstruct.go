@@ -8,7 +8,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -94,7 +93,8 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 				return
 			}
 
-			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, slot, proposerIndex, columnIndicesToSample, reconstructedSidecars)
+			isPartialEnabled := s.cfg.p2p.PartialColumnBroadcaster() != nil
+			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, slot, proposerIndex, columnIndicesToSample, reconstructedSidecars, isPartialEnabled)
 			if err != nil {
 				log.WithError(err).Error("Failed to broadcast and receive unseen data column sidecars")
 				return
@@ -112,46 +112,6 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 				"indices":       helpers.SortedPrettySliceFromMap(unseenIndices),
 				"duration":      duration,
 			}).Debug("Reconstructed data column sidecars")
-
-			broadcaster := s.cfg.p2p.PartialColumnBroadcaster()
-			if broadcaster == nil {
-				return
-			}
-
-			// Publish partial columns for unseen indices.
-			digest, err := s.currentForkDigest()
-			if err != nil {
-				log.Error("Failed to get current fork digest")
-				return
-			}
-
-			if err := broadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
-				for _, sc := range reconstructedSidecars {
-					if !unseenIndices[sc.Index()] {
-						continue
-					}
-
-					subnet := peerdas.ComputeSubnetForDataColumnSidecar(sc.Index())
-					topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
-					partialColumn, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(sc)
-					if err != nil {
-						log.WithError(err).WithField("index", sc.Index()).Error("Failed to create partial data column from verified RO data column")
-						continue
-					}
-
-					if !yield(topic, partialColumn) {
-						return
-					}
-				}
-			}); err != nil {
-				log.WithFields(logrus.Fields{
-					"root":          fmt.Sprintf("%#x", root),
-					"slot":          slot,
-					"proposerIndex": proposerIndex,
-					"count":         len(unseenIndices),
-					"indices":       helpers.SortedPrettySliceFromMap(unseenIndices),
-				}).WithError(err).Error("Failed to publish reconstructed partial column")
-			}
 		})
 
 		wg.Wait()

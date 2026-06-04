@@ -292,7 +292,9 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", constructedSidecarCount, fieldparams.NumberOfColumns)
 			}
 
-			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, source.Slot(), proposerIndex, columnIndicesToSample, constructedSidecars)
+			// Partial columns are published separately above (for all sampled indices), so do not
+			// re-broadcast them here.
+			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, source.Slot(), proposerIndex, columnIndicesToSample, constructedSidecars, false)
 			if err != nil {
 				return nil, errors.Wrap(err, "broadcast and receive unseen data column sidecars")
 			}
@@ -330,6 +332,7 @@ func (s *Service) broadcastAndReceiveUnseenDataColumnSidecars(
 	proposerIndex primitives.ValidatorIndex,
 	neededIndices map[uint64]bool,
 	sidecars []blocks.VerifiedRODataColumn,
+	broadcastPartialColumns bool,
 ) (map[uint64]bool, error) {
 	// Compute sidecars we need to broadcast and receive.
 	unseenSidecars := make([]blocks.VerifiedRODataColumn, 0, len(sidecars))
@@ -354,8 +357,23 @@ func (s *Service) broadcastAndReceiveUnseenDataColumnSidecars(
 		return nil, nil
 	}
 
+	var partialColumns []blocks.PartialDataColumn
+	if broadcastPartialColumns {
+		partialColumns = make([]blocks.PartialDataColumn, 0, len(unseenSidecars))
+		for i := range unseenSidecars {
+			partialColumn, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(unseenSidecars[i])
+			if err != nil {
+				// Skip a single bad column; do not abort broadcasting the rest.
+				log.WithError(err).WithField("index", unseenSidecars[i].Index()).Error("Failed to create partial data column from verified RO data column")
+				continue
+			}
+
+			partialColumns = append(partialColumns, partialColumn)
+		}
+	}
+
 	// Broadcast all the data column sidecars we reconstructed but did not see via gossip (non blocking).
-	if err := s.cfg.p2p.BroadcastDataColumnSidecars(ctx, unseenSidecars, nil); err != nil {
+	if err := s.cfg.p2p.BroadcastDataColumnSidecars(ctx, unseenSidecars, partialColumns); err != nil {
 		return nil, errors.Wrap(err, "broadcast data column sidecars")
 	}
 
