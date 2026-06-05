@@ -113,9 +113,11 @@ test-race: testdata ## Run unit tests with the race detector
 gen:       ## [Phase 1] Regenerate all generated code (proto, SSZ, mocks)
 gen-proto: ## [Phase 1] Regenerate *.pb.go from .proto definitions
 gen-ssz:   ## [Phase 1] Regenerate *.ssz.go (mainnet + minimal variants)
-gen-mocks: ## [Phase 1] Regenerate gomock mocks
-gen gen-proto gen-ssz gen-mocks:
+gen gen-proto gen-ssz:
 	@echo "❌ '$@' is not implemented yet — Phase 1 (code generation). See BAZEL_MIGRATION.md."; exit 1
+
+gen-mocks: ## [Phase 1] Regenerate gomock mocks (go.mod-pinned mockgen)
+	@./hack/update-mockgen.sh
 
 lint: ## [Phase 7] Static analysis (nogo → prysm-vet multichecker)
 	@echo "❌ 'lint' is not implemented yet — Phase 7 (static analysis). See BAZEL_MIGRATION.md."; exit 1

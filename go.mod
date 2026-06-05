@@ -287,4 +287,7 @@ replace github.com/json-iterator/go => github.com/prestonvanloon/go v1.1.7-0.201
 
 replace github.com/tyler-smith/go-bip39 => ./third_party/go-bip39
 
-tool gotest.tools/gotestsum
+tool (
+	go.uber.org/mock/mockgen
+	gotest.tools/gotestsum
+)

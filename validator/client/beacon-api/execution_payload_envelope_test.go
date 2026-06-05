@@ -44,7 +44,7 @@ func TestGetExecutionPayloadEnvelope_CachedHit(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	// No Get expectation: cache hit must skip the HTTP call.
 
 	envelope := testProtoEnvelope()
@@ -72,7 +72,7 @@ func TestGetExecutionPayloadEnvelope_Valid(t *testing.T) {
 	jsonEnvelope, err := structs.ExecutionPayloadEnvelopeFromConsensus(envelope)
 	require.NoError(t, err)
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Get(
 		gomock.Any(),
 		"/eth/v1/validator/execution_payload_envelope/100",
@@ -98,7 +98,7 @@ func TestGetExecutionPayloadEnvelope_Error(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Get(
 		gomock.Any(), gomock.Any(), gomock.Any(),
 	).Return(errors.New("not found"))
@@ -112,7 +112,7 @@ func TestGetExecutionPayloadEnvelope_NilData(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Get(
 		gomock.Any(), gomock.Any(), gomock.Any(),
 	).SetArg(
@@ -143,7 +143,7 @@ func TestPublishExecutionPayloadEnvelope_Valid(t *testing.T) {
 	expectedBody, err := json.Marshal(jsonEnvelope)
 	require.NoError(t, err)
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/beacon/execution_payload_envelope",
@@ -175,7 +175,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessSendsContents(t *testing.T) {
 	expectedBody, err := json.Marshal(contents)
 	require.NoError(t, err)
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/beacon/execution_payload_envelope",
@@ -215,7 +215,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessSendsContentsWithEmptyBlobs(t 
 	expectedBody, err := json.Marshal(contents)
 	require.NoError(t, err)
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/beacon/execution_payload_envelope",
@@ -252,7 +252,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessFallsBackWithoutBlobs(t *testi
 	expectedBody, err := json.Marshal(jsonEnvelope)
 	require.NoError(t, err)
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/beacon/execution_payload_envelope",
@@ -282,7 +282,7 @@ func TestPublishExecutionPayloadEnvelope_Error(t *testing.T) {
 		Signature: bytesutil.PadTo([]byte("sig"), 96),
 	}
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 	).Return(errors.New("server error"))
