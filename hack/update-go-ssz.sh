@@ -12,6 +12,14 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Remove any leftover staging dirs on exit, so a failed sszgen run never leaves
+# generated-only *.pb.go copies polluting the proto packages.
+cleanup() {
+  find proto -type d \( -name '.sszgen_tmp' -o -name '.sszinc_tmp' \) 2>/dev/null \
+    | while IFS= read -r d; do rm -rf "$d"; done
+}
+trap cleanup EXIT
+
 sszgen() { go tool sszgen "$@"; }
 join() { local IFS=,; echo "$*"; }
 

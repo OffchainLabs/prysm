@@ -11,13 +11,15 @@ VERSION_PKG := github.com/OffchainLabs/prysm/v7/runtime/version
 # Binaries: name -> main package. Extend as more are migrated off Bazel.
 BINARIES := beacon-chain validator prysmctl bootnode
 PKG_beacon-chain := ./cmd/beacon-chain
-PKG_validator    := ./cmd/validatorI 
+PKG_validator    := ./cmd/validator
 PKG_prysmctl     := ./cmd/prysmctl
 PKG_bootnode     := ./tools/bootnode
 
-# Version stamping (replaces Bazel --stamp / workspace_status.sh; fleshed out in Phase 2).
+# Version stamping: replaces Bazel --stamp / hack/workspace_status.sh, setting the
+# same runtime/version vars its x_defs did. gitTag uses --abbrev=0 to get a clean
+# vX.Y.Z (it feeds version.SemanticVersion()/BuildData()), matching workspace_status.sh.
 GIT_COMMIT      := $(shell git rev-parse HEAD 2>/dev/null)
-GIT_TAG         := $(shell git describe --tags --always 2>/dev/null)
+GIT_TAG         := $(shell git describe --tags --abbrev=0 2>/dev/null || echo Unknown)
 BUILD_DATE      := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 BUILD_DATE_UNIX := $(shell date -u +%s)
 LDFLAGS := -X $(VERSION_PKG).gitCommit=$(GIT_COMMIT) \
@@ -56,6 +58,28 @@ build: $(addprefix build-,$(BINARIES)) ## Build all binaries into $(DIST)/
 $(addprefix build-,$(BINARIES)): build-%:
 	@mkdir -p $(DIST)
 	$(GO) build $(TAGFLAG) -trimpath -ldflags "$(LDFLAGS)" -o $(DIST)/$* $(PKG_$*)
+
+# build-all builds every `package main` in the module (the 4 primaries plus all
+# cmd/* and tools/* utilities) into $(DIST)/, discovered via `go list` so there is
+# no list to maintain. Output names are the package basenames (all unique).
+.PHONY: build-all
+build-all: ## Build every main package (cmd/* + tools/*) into $(DIST)/
+	@mkdir -p $(DIST)
+	@for p in $$($(GO) list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./...); do \
+		echo "building $$(basename $$p)"; \
+		$(GO) build $(TAGFLAG) -trimpath -ldflags "$(LDFLAGS)" -o "$(DIST)/$$(basename $$p)" "$$p" || exit 1; \
+	done
+
+# release builds the shippable binaries the way Bazel's `--config=release` did:
+# optimized (Go's default build), version-stamped, stripped (-s -w ≈ --strip=always),
+# and PGO-optimized for beacon-chain (the only binary with a committed profile).
+PGO_beacon-chain := -pgo=cmd/beacon-chain/pprof.beacon-chain.samples.cpu.pb.gz
+
+.PHONY: release $(addprefix release-,$(BINARIES))
+release: $(addprefix release-,$(BINARIES)) ## Build optimized, stripped, PGO'd release binaries
+$(addprefix release-,$(BINARIES)): release-%:
+	@mkdir -p $(DIST)
+	$(GO) build $(TAGFLAG) -trimpath $(PGO_$*) -ldflags "$(LDFLAGS) -s -w" -o $(DIST)/$* $(PKG_$*)
 
 .PHONY: testdata
 testdata: ## Download external spec-test data
@@ -110,15 +134,15 @@ test-race: testdata ## Run unit tests with the race detector
 # ---------------------------------------------------------------------------
 .PHONY: gen gen-proto gen-ssz gen-mocks lint docker deb cross
 
-gen:       ## [Phase 1] Regenerate all generated code (proto, SSZ, mocks)
-gen-proto: ## [Phase 1] Regenerate *.pb.go from .proto definitions
-gen gen-proto:
-	@echo "❌ '$@' is not implemented yet — Phase 1 (code generation). See BAZEL_MIGRATION.md."; exit 1
+gen: gen-proto gen-ssz gen-mocks ## Regenerate all generated code (proto, SSZ, mocks)
 
-gen-ssz: ## [Phase 1] Regenerate *.ssz.go (mainnet) via go.mod-pinned sszgen
+gen-proto: ## Regenerate *.pb.go via go.mod-pinned protoc-gen-go-cast
+	@./hack/update-go-pbs.sh
+
+gen-ssz: ## Regenerate *.ssz.go (mainnet) via go.mod-pinned sszgen
 	@./hack/update-go-ssz.sh
 
-gen-mocks: ## [Phase 1] Regenerate gomock mocks (go.mod-pinned mockgen)
+gen-mocks: ## Regenerate gomock mocks (go.mod-pinned mockgen)
 	@./hack/update-mockgen.sh
 
 lint: ## [Phase 7] Static analysis (nogo → prysm-vet multichecker)
