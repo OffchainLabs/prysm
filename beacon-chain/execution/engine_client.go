@@ -1017,7 +1017,7 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	}
 
 	if err != nil {
-		return peerdas.StructuredCellsAndProofs{}, errors.Wrapf(err, "get blobs V2/3")
+		return peerdas.StructuredCellsAndProofs{}, errors.Wrap(err, "get blobs V2/3")
 	}
 
 	// Compute cells and proofs from the blobs and cell proofs.
