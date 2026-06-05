@@ -1121,6 +1121,16 @@ func (s *Service) debugEndpoints(stater lookup.Stater, blocker lookup.Blocker) [
 			methods: []string{http.MethodGet},
 		},
 		{
+			template: "/eth/v2/debug/fork_choice",
+			name:     namespace + ".GetForkChoiceV2",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetForkChoiceV2,
+			methods: []string{http.MethodGet},
+		},
+		{
 			template: "/eth/v1/debug/beacon/data_column_sidecars/{block_id}",
 			name:     namespace + ".GetDataColumnSidecars",
 			middleware: []middleware.Middleware{

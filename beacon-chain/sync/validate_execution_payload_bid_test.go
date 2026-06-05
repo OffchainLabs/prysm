@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -138,6 +139,12 @@ func TestValidateExecutionPayloadBidGossip_ErrorPathsWithMock(t *testing.T) {
 		{
 			name:      "inactive builder",
 			verifier:  mockExecutionPayloadBidVerifier{errBuilderActive: errors.New("inactive builder")},
+			result:    pubsub.ValidationReject,
+			wantError: true,
+		},
+		{
+			name:      "slot not higher than parent",
+			verifier:  mockExecutionPayloadBidVerifier{errSlotHigherThanParent: errors.New("slot not higher than parent")},
 			result:    pubsub.ValidationReject,
 			wantError: true,
 		},
@@ -307,6 +314,7 @@ type mockExecutionPayloadBidVerifier struct {
 	errFeeRecipientMismatch error
 	errGasLimitIncompatible error
 	errParentBlockRootSeen  error
+	errSlotHigherThanParent error
 	errParentBlockHash      error
 	errBuilderCanCoverBid   error
 	errSignature            error
@@ -336,6 +344,10 @@ func (m *mockExecutionPayloadBidVerifier) VerifyGasLimitTargetCompatible(uint64,
 
 func (m *mockExecutionPayloadBidVerifier) VerifyParentBlockRootSeen(func([32]byte) bool) error {
 	return m.errParentBlockRootSeen
+}
+
+func (m *mockExecutionPayloadBidVerifier) VerifyBidSlotHigherThanParent(primitives.Slot) error {
+	return m.errSlotHigherThanParent
 }
 
 func (m *mockExecutionPayloadBidVerifier) VerifyParentBlockHash(func([32]byte) ([32]byte, error)) error {

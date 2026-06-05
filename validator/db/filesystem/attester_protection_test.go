@@ -293,7 +293,7 @@ func TestStore_SaveAttestationForPubKey(t *testing.T) {
 }
 
 func pointerFromInt(i uint64) *uint64 {
-	return &i
+	return new(i)
 }
 
 func TestStore_SaveAttestationsForPubKey2(t *testing.T) {

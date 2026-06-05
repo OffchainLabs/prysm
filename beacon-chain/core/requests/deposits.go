@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
 
@@ -48,16 +49,20 @@ func ProcessDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 //	    slot=state.slot,
 //	))
 func processDepositRequest(beaconState state.BeaconState, req *enginev1.DepositRequest) (state.BeaconState, error) {
-	requestsStartIndex, err := beaconState.DepositRequestsStartIndex()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get deposit requests start index")
-	}
 	if req == nil {
 		return nil, errors.New("nil deposit request")
 	}
-	if requestsStartIndex == params.BeaconConfig().UnsetDepositRequestsStartIndex {
-		if err := beaconState.SetDepositRequestsStartIndex(req.Index); err != nil {
-			return nil, errors.Wrap(err, "could not set deposit requests start index")
+	// [Modified in Fulu] The former deposit mechanism is removed, so the deposit
+	// requests start index is no longer set from Fulu onward.
+	if beaconState.Version() < version.Fulu {
+		requestsStartIndex, err := beaconState.DepositRequestsStartIndex()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get deposit requests start index")
+		}
+		if requestsStartIndex == params.BeaconConfig().UnsetDepositRequestsStartIndex {
+			if err := beaconState.SetDepositRequestsStartIndex(req.Index); err != nil {
+				return nil, errors.Wrap(err, "could not set deposit requests start index")
+			}
 		}
 	}
 	if err := beaconState.AppendPendingDeposit(&ethpb.PendingDeposit{

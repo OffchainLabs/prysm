@@ -67,6 +67,7 @@ type Node struct {
 	weight                      uint64                       // weight of this node: the total balance including children
 	payloadAvailabilityVote     bitfield.Bitvector512        // PTC payload availability votes
 	payloadDataAvailabilityVote bitfield.Bitvector512        // PTC payload data availability votes
+	payloadAttesters            bitfield.Bitvector512        // PTC members that have submitted a vote
 }
 
 // PayloadNode defines a full Forkchoice node after the Gloas fork, with the payload status either empty of full
