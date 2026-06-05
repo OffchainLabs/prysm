@@ -293,6 +293,13 @@
     DOMAIN_VOLUNTARY_EXIT: DomainType = '0x04000000'
     </spec>
 
+- name: EMPTY_BLOCK_HASH#bellatrix
+  sources: []
+  spec: |
+    <spec constant_var="EMPTY_BLOCK_HASH" fork="bellatrix" hash="23cdf402">
+    EMPTY_BLOCK_HASH: Hash32 =
+    </spec>
+
 - name: ENDIANNESS#phase0
   sources: []
   spec: |

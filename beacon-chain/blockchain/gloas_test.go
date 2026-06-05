@@ -378,6 +378,66 @@ func TestNotifyForkchoiceUpdateGloas_NilAttributes(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestFcuFromReorgData_CachesPayloadID(t *testing.T) {
+	logHook := logTest.NewGlobal()
+	pid := &enginev1.PayloadIDBytes{1, 2, 3, 4, 5, 6, 7, 8}
+	s, _ := setupGloasService(t, &mockExecution.EngineClient{PayloadIDBytes: pid})
+
+	headRoot := bytesutil.ToBytes32([]byte("headroot"))
+	headHash := bytesutil.ToBytes32([]byte("headhash"))
+	proposingSlot := primitives.Slot(2)
+	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV4{
+		Timestamp:             1,
+		PrevRandao:            make([]byte, 32),
+		SuggestedFeeRecipient: make([]byte, 20),
+		Withdrawals:           []*enginev1.Withdrawal{},
+		ParentBeaconBlockRoot: make([]byte, 32),
+	})
+	require.NoError(t, err)
+	require.Equal(t, false, attr.IsEmpty())
+
+	s.fcuFromReorgData(headRoot, headHash, attr, proposingSlot)
+
+	require.LogsDoNotContain(t, logHook, "Could not update forkchoice with engine")
+	cachedPid, has := s.cfg.PayloadIDCache.PayloadID(proposingSlot, headRoot)
+	require.Equal(t, true, has)
+	require.Equal(t, primitives.PayloadID(pid[:]), cachedPid)
+}
+
+func TestFcuFromReorgData_NilPayloadID_NoCache(t *testing.T) {
+	// Engine returns no payload ID (nil), so nothing should be cached.
+	s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+
+	headRoot := bytesutil.ToBytes32([]byte("headroot"))
+	headHash := bytesutil.ToBytes32([]byte("headhash"))
+	proposingSlot := primitives.Slot(2)
+	attr := payloadattribute.EmptyWithVersion(version.Gloas)
+
+	s.fcuFromReorgData(headRoot, headHash, attr, proposingSlot)
+
+	_, has := s.cfg.PayloadIDCache.PayloadID(proposingSlot, headRoot)
+	require.Equal(t, false, has)
+}
+
+func TestFcuFromReorgData_EngineError(t *testing.T) {
+	logHook := logTest.NewGlobal()
+	// An invalid-payload status surfaces as an error from notifyForkchoiceUpdateGloas.
+	s, _ := setupGloasService(t, &mockExecution.EngineClient{
+		ErrForkchoiceUpdated: execution.ErrInvalidPayloadStatus,
+	})
+
+	headRoot := bytesutil.ToBytes32([]byte("headroot"))
+	headHash := bytesutil.ToBytes32([]byte("headhash"))
+	proposingSlot := primitives.Slot(2)
+	attr := payloadattribute.EmptyWithVersion(version.Gloas)
+
+	s.fcuFromReorgData(headRoot, headHash, attr, proposingSlot)
+
+	require.LogsContain(t, logHook, "Could not update forkchoice with engine")
+	_, has := s.cfg.PayloadIDCache.PayloadID(proposingSlot, headRoot)
+	require.Equal(t, false, has)
+}
+
 func TestSavePostPayload(t *testing.T) {
 	s, _ := setupGloasService(t, &mockExecution.EngineClient{})
 	ctx := t.Context()
