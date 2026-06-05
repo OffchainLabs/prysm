@@ -679,9 +679,11 @@ func (s *Service) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash)
 
 	getBlobsV3RequestsTotal.Inc()
 	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
-	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV3, versionedHashes)
+	if err := s.rpcClient.CallContext(ctx, &result, GetBlobsV3, versionedHashes); err != nil {
+		return nil, handleRPCError(err)
+	}
 	getBlobsV3Latency.Observe(float64(time.Since(start).Milliseconds()))
-	return result, handleRPCError(err)
+	return result, nil
 }
 
 // ReconstructFullBlock takes in a blinded beacon block and reconstructs
