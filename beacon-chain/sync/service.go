@@ -315,7 +315,7 @@ func (s *Service) Start() {
 	go s.verifierRoutine()
 
 	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
-		go broadcaster.Start(&partialColumnCallbacks{s: s})
+		go broadcaster.Start(&partialColumnCallbacks{service: s})
 	}
 
 	go s.startDiscoveryAndSubscriptions()
@@ -470,17 +470,17 @@ func (s *Service) waitForChainStart() {
 
 // partialColumnCallbacks implements the callbacks the partial column broadcaster uses to verify and handle partial messages.
 type partialColumnCallbacks struct {
-	s *Service
+	service *Service
 }
 
 // PartialVerifierFromHeader returns a partial column verifier seeded from an untrusted partial data column header.
-func (c *partialColumnCallbacks) PartialVerifierFromHeader(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, bool, error) {
-	return c.s.validatePartialDataColumnHeader(c.s.ctx, col)
+func (c *partialColumnCallbacks) PartialVerifierFromHeader(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, pubsub.ValidationResult, error) {
+	return c.service.validatePartialDataColumnHeader(c.service.ctx, col)
 }
 
 // PartialVerifierFromTrustedColumn returns a partial column verifier seeded from a trusted data column.
 func (c *partialColumnCallbacks) PartialVerifierFromTrustedColumn(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
-	return c.s.partialVerifierFromTrustedColumn(c.s.ctx, col)
+	return c.service.partialVerifierFromTrustedColumn(c.service.ctx, col)
 }
 
 // ValidateColumn verifies the KZG proofs for the given cells.
@@ -490,7 +490,7 @@ func (c *partialColumnCallbacks) ValidateColumn(cellsToVerify []blocks.CellProof
 
 // HandleColumn handles a data column completed from a partial message.
 func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedRODataColumn) {
-	ctx, cancel := context.WithTimeout(c.s.ctx, pubsubMessageTimeout)
+	ctx, cancel := context.WithTimeout(c.service.ctx, pubsubMessageTimeout)
 	defer cancel()
 
 	slot := col.Slot()
@@ -504,24 +504,24 @@ func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedR
 		log.WithError(err).Error("Failed to get KZG commitments from data column")
 		return
 	}
-	if c.s.hasSeenDataColumnIndex(slot, proposerIndex, col.Index()) {
+	if c.service.hasSeenDataColumnIndex(slot, proposerIndex, col.Index()) {
 		return
 	}
 
-	c.s.setSeenDataColumnIndex(slot, proposerIndex, col.Index())
+	c.service.setSeenDataColumnIndex(slot, proposerIndex, col.Index())
 	if len(commitments) == 0 {
 		return
 	}
 	// This column was completed from a partial message.
 	partialMessageColumnCompletionsTotal.WithLabelValues(strconv.FormatUint(col.Index(), 10)).Inc()
-	if err := c.s.verifiedRODataColumnSubscriber(ctx, col); err != nil {
+	if err := c.service.verifiedRODataColumnSubscriber(ctx, col); err != nil {
 		log.WithError(err).Error("Failed to handle verified RO data column subscriber")
 	}
 }
 
 // HandleHeader handles a received partial data column header.
 func (c *partialColumnCallbacks) HandleHeader(header *ethpb.PartialDataColumnHeader, groupID string) {
-	ctx, cancel := context.WithTimeout(c.s.ctx, pubsubMessageTimeout)
+	ctx, cancel := context.WithTimeout(c.service.ctx, pubsubMessageTimeout)
 	defer cancel()
 	source, err := peerdas.PopulateFromPartialHeader(header)
 	if err != nil {
@@ -529,7 +529,7 @@ func (c *partialColumnCallbacks) HandleHeader(header *ethpb.PartialDataColumnHea
 		return
 	}
 	log.WithField("slot", source.Slot()).Debug("Received data column header")
-	err = c.s.processDataColumnSidecarsFromExecution(ctx, source)
+	err = c.service.processDataColumnSidecarsFromExecution(ctx, source)
 	if err != nil {
 		log.WithError(err).Error("Failed to process partial data column header")
 	}

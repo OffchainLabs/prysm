@@ -35,18 +35,18 @@ type testColumnCallbacks struct {
 	label       string
 }
 
-func (c *testColumnCallbacks) PartialVerifierFromHeader(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, bool, error) {
+func (c *testColumnCallbacks) PartialVerifierFromHeader(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, pubsub.ValidationResult, error) {
 	if col.SignedBlockHeader == nil || col.SignedBlockHeader.Header == nil {
-		return nil, true, fmt.Errorf("nil signed block header")
+		return nil, pubsub.ValidationReject, fmt.Errorf("nil signed block header")
 	}
 	if len(col.KzgCommitments) == 0 {
-		return nil, true, fmt.Errorf("empty kzg commitments")
+		return nil, pubsub.ValidationReject, fmt.Errorf("empty kzg commitments")
 	}
 	verifier, err := c.newVerifier(col)
 	if err != nil {
-		return nil, true, err
+		return nil, pubsub.ValidationReject, err
 	}
-	return verifier, false, nil
+	return verifier, pubsub.ValidationAccept, nil
 }
 
 func (c *testColumnCallbacks) PartialVerifierFromTrustedColumn(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {

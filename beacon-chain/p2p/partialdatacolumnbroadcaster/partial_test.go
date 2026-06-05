@@ -63,10 +63,16 @@ func newCallbackRecorder(callBuffer int, validateHeaderReject bool, validateColu
 	}
 }
 
-func (r *callbackRecorder) PartialVerifierFromHeader(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, bool, error) {
+func (r *callbackRecorder) PartialVerifierFromHeader(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, pubsub.ValidationResult, error) {
 	r.partialVerifierFromHeaderCallCh <- col
-	return newMockPartialVerifier(col),
-		r.partialVerifierFromHeaderReject, r.partialVerifierFromHeaderErr
+	result := pubsub.ValidationAccept
+	if r.partialVerifierFromHeaderErr != nil {
+		result = pubsub.ValidationIgnore
+		if r.partialVerifierFromHeaderReject {
+			result = pubsub.ValidationReject
+		}
+	}
+	return newMockPartialVerifier(col), result, r.partialVerifierFromHeaderErr
 }
 
 func (r *callbackRecorder) PartialVerifierFromTrustedColumn(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {

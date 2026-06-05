@@ -47,11 +47,11 @@ func extractColumnIndexFromTopic(topic string) (uint64, error) {
 // partial data column headers and cells.
 type ColumnCallbacks interface {
 	// PartialVerifierFromHeader builds and validates a partial column from a new header.
-	// Returns (verifier, reject, err) where:
-	//   - reject=true, err!=nil: REJECT - peer should be penalized
-	//   - reject=false, err!=nil: IGNORE - don't penalize, just ignore
-	//   - reject=false, err=nil: valid verifier
-	PartialVerifierFromHeader(col *blocks.PartialDataColumn) (verifier *verification.PartialColumnVerifier, reject bool, err error)
+	// Returns (verifier, result, err) where:
+	//   - ValidationReject, err!=nil: peer should be penalized
+	//   - ValidationIgnore, err!=nil: don't penalize, just ignore
+	//   - ValidationAccept, err=nil: valid verifier
+	PartialVerifierFromHeader(col *blocks.PartialDataColumn) (verifier *verification.PartialColumnVerifier, result pubsub.ValidationResult, err error)
 	// PartialVerifierFromTrustedColumn creates a verifier from a previously validated column.
 	PartialVerifierFromTrustedColumn(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error)
 	// ValidateColumn validates the KZG proofs of the given cells.
@@ -672,11 +672,10 @@ func (p *PartialColumnBroadcaster) makeVerifierFromHeader(root [fieldparams.Root
 		}
 		return verifier, nil
 	}
-	var reject bool
-	verifier, reject, err := p.callbacks.PartialVerifierFromHeader(&newColumn)
+	verifier, result, err := p.callbacks.PartialVerifierFromHeader(&newColumn)
 	if err != nil {
-		p.logger.WithError(err).WithField("reject", reject).Debug("Header validation failed")
-		if reject {
+		p.logger.WithError(err).WithField("result", result).Debug("Header validation failed")
+		if result == pubsub.ValidationReject {
 			// REJECT case: penalize the peer
 			_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
 		}

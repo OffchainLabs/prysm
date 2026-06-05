@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 )
@@ -107,21 +108,16 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 }
 
 func (s *Service) verifiedRODataColumnSubscriber(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
-	log.WithField("slot", sidecar.Slot()).WithField("column", sidecar.Index).Debug("Received data column sidecar")
+	log.WithFields(logrus.Fields{
+		"slot":   sidecar.Slot(),
+		"column": sidecar.Index,
+	}).Debug("Received data column sidecar")
 
 	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
 		return errors.Wrap(err, "receive data column sidecar")
 	}
 
 	var wg errgroup.Group
-	wg.Go(func() error {
-		if err := s.processDataColumnSidecarsFromReconstruction(ctx, sidecar); err != nil {
-			return errors.Wrap(err, "process data column sidecars from reconstruction")
-		}
-
-		return nil
-	})
-
 	wg.Go(func() error {
 		// Broadcast our complete column for peers that don't use partial messages
 		if err := s.cfg.p2p.BroadcastDataColumnSidecars(ctx, []blocks.VerifiedRODataColumn{sidecar}, nil); err != nil {
@@ -130,6 +126,10 @@ func (s *Service) verifiedRODataColumnSubscriber(ctx context.Context, sidecar bl
 
 		return nil
 	})
+
+	if err := s.processDataColumnSidecarsFromReconstruction(ctx, sidecar); err != nil {
+		return errors.Wrap(err, "process data column sidecars from reconstruction")
+	}
 
 	return wg.Wait()
 }

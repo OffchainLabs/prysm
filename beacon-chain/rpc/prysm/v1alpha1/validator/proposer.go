@@ -317,6 +317,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	var (
 		blobSidecars       []*ethpb.BlobSidecar
 		dataColumnSidecars []blocks.RODataColumn
+		partialColumns     []blocks.PartialDataColumn
 	)
 
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.ProposeBeaconBlock")
@@ -345,7 +346,6 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	}
 
 	rob, err := blocks.NewROBlockWithRoot(block, root)
-	var partialColumns []blocks.PartialDataColumn
 	if block.IsBlinded() {
 		block, blobSidecars, err = vs.handleBlindedBlock(ctx, block)
 		if errors.Is(err, builderapi.ErrBadGateway) {
