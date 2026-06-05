@@ -65,23 +65,28 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	}
 
 	var isValidPayload bool
-	g, gCtx := errgroup.WithContext(ctx)
 
-	g.Go(func() error {
-		if err := gloas.VerifyExecutionPayloadEnvelope(gCtx, blockState, signed); err != nil {
+	// EL Validation runs separately from consensus validation in different errgroup.
+	elCtx, cancelEL := context.WithCancel(ctx)
+	defer cancelEL()
+
+	var elGroup errgroup.Group
+	elGroup.Go(func() error {
+		var elErr error
+		isValidPayload, elErr = s.validateExecutionOnEnvelope(elCtx, blockState, envelope)
+		return elErr
+	})
+
+	// Check data availability with consensus verification.
+	availGroup, availCtx := errgroup.WithContext(ctx)
+	availGroup.Go(func() error {
+		if err := gloas.VerifyExecutionPayloadEnvelope(availCtx, blockState, signed); err != nil {
 			return err
 		}
 		s.recordPayloadArrival(root, envelope.Slot(), start)
 		return nil
 	})
-
-	g.Go(func() error {
-		var elErr error
-		isValidPayload, elErr = s.validateExecutionOnEnvelope(gCtx, blockState, envelope)
-		return elErr
-	})
-
-	g.Go(func() error {
+	availGroup.Go(func() error {
 		bid, err := blockState.LatestExecutionPayloadBid()
 		if err != nil {
 			return errors.Wrap(err, "could not get latest execution payload bid")
@@ -89,13 +94,31 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		if bid == nil || len(bid.BlobKzgCommitments()) == 0 {
 			return nil
 		}
-		if err := s.areDataColumnsAvailable(gCtx, root, envelope.Slot()); err != nil {
+		if err := s.areDataColumnsAvailable(availCtx, root, envelope.Slot()); err != nil {
 			return errors.Wrap(err, "data availability check failed for payload envelope")
 		}
 		return nil
 	})
 
-	if err := g.Wait(); err != nil {
+	if err := availGroup.Wait(); err != nil {
+		cancelEL()
+		_ = elGroup.Wait()
+		return err
+	}
+
+	// execution_payload_available is emitted when an execution payload
+	// and all data are available for payload attestation
+	// without verifying the execution payload itself
+	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
+		Type: statefeed.ExecutionPayloadAvailable,
+		Data: &statefeed.ExecutionPayloadAvailableData{
+			Slot:      envelope.Slot(),
+			BlockRoot: root,
+		},
+	})
+
+	// Join EL validation group after firing availability event.
+	if err := elGroup.Wait(); err != nil {
 		return err
 	}
 
@@ -124,11 +147,21 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return err
 	}
 
+	// execution_payload is emitted when an execution payload is successfully imported.
+	isOptimistic, err := s.cfg.ForkChoiceStore.IsOptimistic(root)
+	if err != nil {
+		log.WithError(err).Error("Could not get optimistic status of block root")
+		isOptimistic = false
+	}
+
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
-		Type: statefeed.PayloadProcessed,
-		Data: &statefeed.PayloadProcessedData{
-			Slot:      envelope.Slot(),
-			BlockRoot: root,
+		Type: statefeed.ExecutionPayloadProcessed,
+		Data: &statefeed.ExecutionPayloadProcessedData{
+			Slot:         envelope.Slot(),
+			BuilderIndex: envelope.BuilderIndex(),
+			BlockHash:    envelope.BlockHash(),
+			BlockRoot:    root,
+			Optimistic:   isOptimistic,
 		},
 	})
 
