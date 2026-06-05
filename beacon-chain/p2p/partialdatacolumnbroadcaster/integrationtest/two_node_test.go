@@ -73,14 +73,14 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		latency := time.Millisecond * 10
 		network, meta, err := simlibp2p.SimpleLibp2pNetwork([]simlibp2p.NodeLinkSettingsAndCount{
 			{LinkSettings: simnet.NodeBiDiLinkSettings{
-				Downlink: simnet.LinkSettings{BitsPerSecond: 20 * simlibp2p.OneMbps, Latency: latency / 2},
-				Uplink:   simnet.LinkSettings{BitsPerSecond: 20 * simlibp2p.OneMbps, Latency: latency / 2},
+				Downlink: simnet.LinkSettings{BitsPerSecond: 20 * simlibp2p.OneMbps},
+				Uplink:   simnet.LinkSettings{BitsPerSecond: 20 * simlibp2p.OneMbps},
 			}, Count: 2},
-		}, simlibp2p.NetworkSettings{UseBlankHost: true})
+		}, simnet.StaticLatency(latency/2), simlibp2p.NetworkSettings{UseBlankHost: true})
 		require.NoError(t, err)
-		require.NoError(t, network.Start())
+		network.Start()
 		defer func() {
-			require.NoError(t, network.Close())
+			network.Close()
 		}()
 		defer func() {
 			for _, node := range meta.Nodes {
