@@ -226,6 +226,7 @@ func NewVerifiedRODataColumn(roDataColumn RODataColumn) VerifiedRODataColumn {
 	return VerifiedRODataColumn{RODataColumn: roDataColumn}
 }
 
+// RODataColumnsToCellProofBundles flattens the cells, commitments and proofs of the given data column sidecars into CellProofBundles.
 func RODataColumnsToCellProofBundles(sidecars []RODataColumn) ([]CellProofBundle, error) {
 	if len(sidecars) == 0 {
 		return nil, nil

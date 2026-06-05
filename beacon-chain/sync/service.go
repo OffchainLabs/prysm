@@ -314,7 +314,9 @@ func (s *Service) Start() {
 
 	go s.verifierRoutine()
 
-	s.startPartialColumnBroadcaster()
+	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
+		go broadcaster.Start(&partialColumnCallbacks{s: s})
+	}
 
 	go s.startDiscoveryAndSubscriptions()
 	go s.processDataColumnLogs()
@@ -347,12 +349,6 @@ func (s *Service) Start() {
 		log.WithError(err).Error("Failed to maintain custody info")
 	}
 
-}
-
-func (s *Service) startPartialColumnBroadcaster() {
-	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
-		go broadcaster.Start(&partialColumnCallbacks{s: s})
-	}
 }
 
 // Stop the regular sync service.
@@ -472,22 +468,27 @@ func (s *Service) waitForChainStart() {
 	s.markForChainStart()
 }
 
+// partialColumnCallbacks implements the callbacks the partial column broadcaster uses to verify and handle partial messages.
 type partialColumnCallbacks struct {
 	s *Service
 }
 
+// PartialVerifierFromHeader returns a partial column verifier seeded from an untrusted partial data column header.
 func (c *partialColumnCallbacks) PartialVerifierFromHeader(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, bool, error) {
 	return c.s.validatePartialDataColumnHeader(c.s.ctx, col)
 }
 
+// PartialVerifierFromTrustedColumn returns a partial column verifier seeded from a trusted data column.
 func (c *partialColumnCallbacks) PartialVerifierFromTrustedColumn(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
 	return c.s.partialVerifierFromTrustedColumn(c.s.ctx, col)
 }
 
+// ValidateColumn verifies the KZG proofs for the given cells.
 func (c *partialColumnCallbacks) ValidateColumn(cellsToVerify []blocks.CellProofBundle) error {
 	return peerdas.VerifyDataColumnsCellsKZGProofs(cellsToVerify)
 }
 
+// HandleColumn handles a data column completed from a partial message.
 func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedRODataColumn) {
 	ctx, cancel := context.WithTimeout(c.s.ctx, pubsubMessageTimeout)
 	defer cancel()
@@ -519,6 +520,7 @@ func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedR
 	}
 }
 
+// HandleHeader handles a received partial data column header.
 func (c *partialColumnCallbacks) HandleHeader(header *ethpb.PartialDataColumnHeader, groupID string) {
 	ctx, cancel := context.WithTimeout(c.s.ctx, pubsubMessageTimeout)
 	defer cancel()

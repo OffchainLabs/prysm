@@ -1,6 +1,7 @@
 package blocks
 
 import (
+	"maps"
 	"slices"
 	"testing"
 
@@ -966,11 +967,7 @@ func runPublishActions(
 	requests map[peer.ID]bool,
 ) map[peer.ID]partialmessages.PublishAction {
 	seq := p.PublishActionsFn(headerSentCache)(peerStates, func(id peer.ID) bool { return requests[id] })
-	out := make(map[peer.ID]partialmessages.PublishAction)
-	for pid, action := range seq {
-		out[pid] = action
-	}
-	return out
+	return maps.Collect(seq)
 }
 
 func TestPartialDataColumn_PublishActionsFn(t *testing.T) {
