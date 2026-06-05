@@ -114,14 +114,9 @@ func Method(auth string) authorization.Method {
 // NewHttpClientWithSecret returns a http client that utilizes
 // jwt authentication.
 func NewHttpClientWithSecret(secret, id string) *http.Client {
-	authTransport := &jwtTransport{
-		underlyingTransport: http.DefaultTransport,
-		jwtSecret:           []byte(secret),
-		jwtId:               id,
-	}
 	return &http.Client{
 		Timeout:   DefaultRPCHTTPTimeout,
-		Transport: otelhttp.NewTransport(authTransport),
+		Transport: otelhttp.NewTransport(NewJWTRoundTripper(http.DefaultTransport, []byte(secret), id)),
 	}
 }
 
