@@ -2752,6 +2752,7 @@ func TestConstructDataColumnSidecars_PartialColumns(t *testing.T) {
 		name              string
 		blobMasks         []bool
 		wantSidecars      int     // verified sidecars are only returned when every blob is present
+		wantPartials      int     // partial columns returned (0 when the EL returns nothing)
 		wantIncluded      uint64  // cells included per partial column
 		wantCompleteDelta float64 // expected increment of the complete-response metric
 		wantPartialDelta  float64 // expected increment of the partial-response metric
@@ -2760,6 +2761,7 @@ func TestConstructDataColumnSidecars_PartialColumns(t *testing.T) {
 			name:              "complete response returns sidecars and full partial columns",
 			blobMasks:         []bool{true, true, true, true, true, true},
 			wantSidecars:      fieldparams.NumberOfColumns,
+			wantPartials:      fieldparams.NumberOfColumns,
 			wantIncluded:      6,
 			wantCompleteDelta: 1,
 			wantPartialDelta:  0,
@@ -2768,14 +2770,25 @@ func TestConstructDataColumnSidecars_PartialColumns(t *testing.T) {
 			name:              "partial response returns only partial columns",
 			blobMasks:         []bool{true, false, true, false, true, false},
 			wantSidecars:      0,
+			wantPartials:      fieldparams.NumberOfColumns,
 			wantIncluded:      3,
 			wantCompleteDelta: 0,
 			wantPartialDelta:  1,
 		},
 		{
-			name:              "empty response increments no response metric",
+			name:              "null response returns no sidecars or partial columns",
 			blobMasks:         []bool{false, false, false, false, false, false},
 			wantSidecars:      0,
+			wantPartials:      0,
+			wantIncluded:      0,
+			wantCompleteDelta: 0,
+			wantPartialDelta:  0,
+		},
+		{
+			name:              "empty response returns no sidecars or partial columns",
+			blobMasks:         []bool{},
+			wantSidecars:      0,
+			wantPartials:      0,
 			wantIncluded:      0,
 			wantCompleteDelta: 0,
 			wantPartialDelta:  0,
@@ -2798,8 +2811,7 @@ func TestConstructDataColumnSidecars_PartialColumns(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.wantSidecars, len(sidecars))
 
-			// A partial column is always built for every column when partial support is enabled.
-			require.Equal(t, fieldparams.NumberOfColumns, len(partials))
+			require.Equal(t, tt.wantPartials, len(partials))
 			for _, p := range partials {
 				require.Equal(t, tt.wantIncluded, p.Included.Count())
 			}

@@ -965,6 +965,12 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		"cellsCount": len(cp.CellsPerBlob),
 	}).Debug("Received cells and proofs from execution client")
 
+	// Return early if the execution client returned nothing; otherwise we would
+	// build and broadcast empty partial columns.
+	if cp.Included == nil || cp.Included.Count() == 0 {
+		return nil, nil, nil
+	}
+
 	var partialColumns []blocks.PartialDataColumn
 	if s.partialColumnsSupported {
 		partialColumns, err = peerdas.PartialColumns(cp.Included, cp.CellsPerBlob, cp.ProofsPerBlob, populator)
@@ -1016,6 +1022,10 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 
 	if err != nil {
 		return peerdas.StructuredCellsAndProofs{}, errors.Wrap(err, "get blobs V2/3")
+	}
+
+	if len(blobAndProofs) == 0 {
+		return peerdas.StructuredCellsAndProofs{}, nil
 	}
 
 	// Compute cells and proofs from the blobs and cell proofs.
