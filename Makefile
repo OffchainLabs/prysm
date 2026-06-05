@@ -103,6 +103,32 @@ test-race: testdata ## Run unit tests with the race detector
 	  && { echo; echo "✅ All tests passed (any 'failure' above was a flake recovered within $(RERUN_ATTEMPTS) attempts)"; } \
 	  || { echo; echo "❌ Some failure: At least one test failed all $(RERUN_ATTEMPTS) attempts"; exit 1; }
 
+# ---------------------------------------------------------------------------
+# Phase 1+ targets — not migrated off Bazel yet. Stubbed to fail loudly so that
+# `make <target>` makes clear what still needs implementing, and `make help`
+# lists the full surface. See BAZEL_MIGRATION.md.
+# ---------------------------------------------------------------------------
+.PHONY: gen gen-proto gen-ssz gen-mocks lint docker deb cross
+
+gen:       ## [Phase 1] Regenerate all generated code (proto, SSZ, mocks)
+gen-proto: ## [Phase 1] Regenerate *.pb.go from .proto definitions
+gen-ssz:   ## [Phase 1] Regenerate *.ssz.go (mainnet + minimal variants)
+gen-mocks: ## [Phase 1] Regenerate gomock mocks
+gen gen-proto gen-ssz gen-mocks:
+	@echo "❌ '$@' is not implemented yet — Phase 1 (code generation). See BAZEL_MIGRATION.md."; exit 1
+
+lint: ## [Phase 7] Static analysis (nogo → prysm-vet multichecker)
+	@echo "❌ 'lint' is not implemented yet — Phase 7 (static analysis). See BAZEL_MIGRATION.md."; exit 1
+
+cross: ## [Phase 4] Cross-compile binaries via zig cc
+	@echo "❌ 'cross' is not implemented yet — Phase 4 (CGO cross-compilation). See BAZEL_MIGRATION.md."; exit 1
+
+docker: ## [Phase 5] Build OCI/Docker images
+	@echo "❌ 'docker' is not implemented yet — Phase 5 (Docker/OCI images). See BAZEL_MIGRATION.md."; exit 1
+
+deb: ## [Phase 6] Build .deb packages
+	@echo "❌ 'deb' is not implemented yet — Phase 6 (.deb packaging). See BAZEL_MIGRATION.md."; exit 1
+
 .PHONY: clean
 clean: ## Remove build output
 	rm -rf $(DIST)
