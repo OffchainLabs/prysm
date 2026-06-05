@@ -240,6 +240,8 @@ func DataColumnSidecarsGloas(
 	return roSidecars, nil
 }
 
+// PartialColumns builds partial data columns from the cells and proofs of the included blobs,
+// where the included bitlist marks which blob commitments are present in the partial.
 func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, src ConstructionPopulator) ([]blocks.PartialDataColumn, error) {
 	start := time.Now()
 	const numberOfColumns = uint64(fieldparams.NumberOfColumns)
