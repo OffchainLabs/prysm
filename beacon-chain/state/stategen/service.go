@@ -218,10 +218,7 @@ func (s *State) FinalizedState() state.BeaconState {
 }
 
 // finalizedStateIfRoot returns a copy of the cached finalized state only if
-// the cached finalized root still matches r at the moment of the read. This
-// avoids a TOCTOU between isFinalizedRoot and FinalizedState across a
-// concurrent SaveFinalizedState, which would otherwise return a state
-// belonging to a different root.
+// the cached finalized root matches r at the moment of the read.
 func (s *State) finalizedStateIfRoot(r [32]byte) state.BeaconState {
 	s.finalizedInfo.lock.RLock()
 	defer s.finalizedInfo.lock.RUnlock()
