@@ -62,6 +62,7 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 	// Remove old blocks from our expiration cache.
 	s.deleteExpiredBlocksFromCache()
 	s.prunePendingPayloadEnvelopes()
+	s.prunePendingPayloadAttestations()
 
 	// Validate pending slots before processing.
 	if err := s.validatePendingSlots(); err != nil {
@@ -161,6 +162,7 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 
 			// Process synchronously because it's likely that the next pending block depends on it.
 			s.processPendingPayloadEnvelope(ctx, blkRoot)
+			s.processPendingPayloadAttestation(ctx, blkRoot)
 			s.processPendingGloasColumns(blkRoot, b)
 			blkRoots = append(blkRoots, blkRoot)
 
