@@ -170,6 +170,7 @@ func (s *Service) queuePendingPayloadEnvelope(
 ) (pubsub.ValidationResult, error) {
 	currentSlot := s.cfg.clock.CurrentSlot()
 	if env.Slot() != currentSlot {
+		log.WithField("envelopeSlot", env.Slot()).WithField("currentSlot", currentSlot).Debug("Ignoring payload envelope not for current slot")
 		return pubsub.ValidationIgnore, nil
 	}
 	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
