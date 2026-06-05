@@ -514,8 +514,7 @@ func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedR
 	}
 	// This column was completed from a partial message.
 	partialMessageColumnCompletionsTotal.WithLabelValues(strconv.FormatUint(col.Index(), 10)).Inc()
-	err = c.s.verifiedRODataColumnSubscriber(ctx, col)
-	if err != nil {
+	if err := c.s.verifiedRODataColumnSubscriber(ctx, col); err != nil {
 		log.WithError(err).Error("Failed to handle verified RO data column subscriber")
 	}
 }

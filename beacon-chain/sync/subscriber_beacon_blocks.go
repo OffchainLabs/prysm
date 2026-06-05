@@ -262,12 +262,14 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				return nil, errors.Wrap(err, "reconstruct data column sidecars")
 			}
 
-			if isPartialEnabled && len(partialColumns) > 0 {
-				log.WithField("len(partialColumns)", len(partialColumns)).Debug("Publishing partial columns")
+			count := len(partialColumns)
+
+			if isPartialEnabled && count > 0 {
+				log.WithField("count", count).Debug("Publishing partial columns")
 				// Publish the partial column. This is idempotent if we republish the same data twice.
 				// Note, the "partial column" may indeed be complete. We still
 				// should publish to help our peers.
-				err = partialBroadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
+				if err := partialBroadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
 					for i := range uint64(len(partialColumns)) {
 						if !columnIndicesToSample[i] {
 							continue
@@ -278,10 +280,9 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 							return
 						}
 					}
-				})
-				if err != nil {
-					log.WithError(err).Warn("Failed to publish partial columns")
-				}
+				}); err != nil {
+					log.WithError(err).Error("Failed to publish partial columns")
+                }
 			}
 
 			// No sidecars are retrieved from the EL, retry later

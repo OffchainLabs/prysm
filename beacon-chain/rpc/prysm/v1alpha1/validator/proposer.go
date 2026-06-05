@@ -471,7 +471,7 @@ func (vs *Server) handleUnblindedBlock(
 		included = included.Not() // all bits set to 1
 		partialColumns, err := peerdas.PartialColumns(included, cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(block))
 		if err != nil {
-			return nil, nil, nil, errors.Wrap(err, "data column sidecars")
+			return nil, nil, nil, errors.Wrap(err, "partial columns")
 		}
 
 		return nil, roDataColumnSidecars, partialColumns, nil
