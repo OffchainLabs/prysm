@@ -162,6 +162,7 @@ type Service struct {
 	verifierWaiter          *verification.InitializerWaiter
 	blobVerifier            verification.NewBlobVerifier
 	capabilityCache         *capabilityCache
+	sszRestClient           *sszRestClient
 	graffitiInfo            *GraffitiInfo
 }
 

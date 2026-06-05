@@ -84,6 +84,7 @@ func (s *Service) pollConnectionStatus(ctx context.Context) {
 				errorLogger(err, "Could not exchange capabilities with execution client")
 			}
 			s.capabilityCache.save(c)
+			s.setupSSZRestClient()
 
 			return
 		case <-s.ctx.Done():
