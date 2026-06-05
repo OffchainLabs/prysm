@@ -227,6 +227,7 @@ func (r *testRunner) testDepositsAndTx(ctx context.Context, g *errgroup.Group,
 			return errors.Wrap(err, "testDepositsAndTx unable to run, depositor did not Start")
 		}
 		go func() {
+			shouldStartTxGen := r.config.TestDeposits || r.config.TestFeature || r.config.UseBuilder
 			if r.config.TestDeposits {
 				log.Info("Running deposit tests")
 				// The validators with an index < minGenesisActiveCount all have deposits already from the chain start.
@@ -238,10 +239,13 @@ func (r *testRunner) testDepositsAndTx(ctx context.Context, g *errgroup.Group,
 					if r.t.Context().Err() == nil {
 						r.t.Error(errors.Wrap(err, "depositor.SendAndMine failed"))
 					}
+					return
 				}
 			}
 			// Only generate background transactions when relevant for the test.
-			if r.config.TestDeposits || r.config.TestFeature || r.config.UseBuilder {
+			// When deposit testing is enabled, start after post-genesis deposit mining
+			// to avoid nonce contention on the shared miner account.
+			if shouldStartTxGen {
 				r.testTxGeneration(ctx, g, keystorePath, []e2etypes.ComponentRunner{})
 			}
 		}()
@@ -364,6 +368,7 @@ func (r *testRunner) testCheckpointSync(ctx context.Context, g *errgroup.Group, 
 func (r *testRunner) testBeaconChainSync(ctx context.Context, g *errgroup.Group,
 	conns []*grpc.ClientConn, tickingStartTime time.Time, bootnodeEnr, minerEnr string) error {
 	t, config := r.t, r.config
+	matchTimeout := 5 * time.Minute
 	index := e2e.TestParams.BeaconNodeCount + e2e.TestParams.LighthouseBeaconNodeCount
 	ethNode := eth1.NewNode(index, minerEnr)
 	g.Go(func() error {
@@ -390,24 +395,16 @@ func (r *testRunner) testBeaconChainSync(ctx context.Context, g *errgroup.Group,
 	require.NoError(t, err, "Failed to dial")
 	conns = append(conns, syncConn)
 
-	// Sleep a second for every 4 blocks that need to be synced for the newly started node.
-	secondsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
-	extraSecondsToSync := (config.EpochsToRun)*secondsPerEpoch + uint64(params.BeaconConfig().SlotsPerEpoch.Div(4).Mul(config.EpochsToRun))
-	waitForSync := tickingStartTime.Add(time.Duration(extraSecondsToSync) * time.Second)
-	time.Sleep(time.Until(waitForSync))
-
 	syncLogFile, err := os.Open(path.Join(e2e.TestParams.LogPath, fmt.Sprintf(e2e.BeaconNodeLogFileName, index)))
 	require.NoError(t, err)
 	defer func() { _ = syncLogFile.Close() }()
 	defer helpers.LogErrorOutput(t, syncLogFile, "beacon chain node", index)
-	t.Run("sync completed", func(t *testing.T) {
-		assert.NoError(t, helpers.WaitForTextInFile(syncLogFile, "Synced up to"), "Failed to sync")
-	})
-	if t.Failed() {
-		return errors.New("cannot sync beacon node")
+	if err := r.waitForMatchingHead(ctx, matchTimeout, syncConn, conns[0]); err != nil {
+		return errors.Wrap(err, "cannot sync beacon node")
 	}
 
 	// Sleep a slot to make sure the synced state is made.
+	secondsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
 	time.Sleep(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
 	syncEvaluators := []e2etypes.Evaluator{ev.FinishedSyncing, ev.AllNodesHaveSameHead}
 	// Only execute in the middle of an epoch to prevent race conditions around slot 0.
@@ -445,15 +442,16 @@ func (r *testRunner) testDoppelGangerProtection(ctx context.Context) error {
 	if err := helpers.ComponentsStarted(ctx, []e2etypes.ComponentRunner{valNode}); err != nil {
 		return fmt.Errorf("validator not ready: %w", err)
 	}
-	logFile, err := os.Create(path.Join(e2e.TestParams.LogPath, fmt.Sprintf(e2e.ValidatorLogFileName, valIndex)))
+	logFile, err := os.Open(path.Join(e2e.TestParams.LogPath, fmt.Sprintf(e2e.ValidatorLogFileName, valIndex)))
 	if err != nil {
 		return fmt.Errorf("unable to open log file: %w", err)
 	}
 	defer func() { _ = logFile.Close() }()
+	doppelErr := helpers.WaitForTextInFile(logFile, "Duplicate instances exists in the network for validator keys")
 	r.t.Run("doppelganger found", func(t *testing.T) {
-		assert.NoError(t, helpers.WaitForTextInFile(logFile, "Duplicate instances exists in the network for validator keys"), "Failed to carry out doppelganger check correctly")
+		assert.NoError(t, doppelErr, "Failed to carry out doppelganger check correctly")
 	})
-	if r.t.Failed() {
+	if doppelErr != nil {
 		return errors.New("doppelganger was unable to be found")
 	}
 	require.NoError(r.t, g.Wait())

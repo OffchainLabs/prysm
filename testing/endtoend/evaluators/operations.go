@@ -2,9 +2,11 @@ package evaluators
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/api/client/beacon"
@@ -539,8 +541,10 @@ func validatorsHaveExited(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 }
 
 func validatorsVoteWithTheMajority(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
-	conn := conns[0]
-	client := ethpb.NewBeaconChainClient(conn)
+	return validatorsVoteWithTheMajorityForClient(ec, ethpb.NewBeaconChainClient(conns[0]))
+}
+
+func validatorsVoteWithTheMajorityForClient(ec *e2etypes.EvaluationContext, client ethpb.BeaconChainClient) error {
 	chainHead, err := client.GetChainHead(context.Background(), &emptypb.Empty{})
 	if err != nil {
 		return errors.Wrap(err, "failed to get chain head")
@@ -556,61 +560,16 @@ func validatorsVoteWithTheMajority(ec *e2etypes.EvaluationContext, conns ...*grp
 	if err != nil {
 		return errors.Wrap(err, "failed to get blocks from beacon-chain")
 	}
+	slices.SortFunc(blks.BlockContainers, func(a, b *ethpb.BeaconBlockContainer) int {
+		aSlot, _ := blockContainerSlotAndVote(a)
+		bSlot, _ := blockContainerSlotAndVote(b)
+		return cmp.Compare(aSlot, bSlot)
+	})
 
 	slotsPerVotingPeriod := params.E2ETestConfig().SlotsPerEpoch.Mul(uint64(params.E2ETestConfig().EpochsPerEth1VotingPeriod))
 	for _, blk := range blks.BlockContainers {
-		var slot primitives.Slot
-		var vote []byte
-		switch blk.Block.(type) {
-		case *ethpb.BeaconBlockContainer_Phase0Block:
-			b := blk.GetPhase0Block().Block
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_AltairBlock:
-			b := blk.GetAltairBlock().Block
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_BellatrixBlock:
-			b := blk.GetBellatrixBlock().Block
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_BlindedBellatrixBlock:
-			b := blk.GetBlindedBellatrixBlock().Block
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_CapellaBlock:
-			b := blk.GetCapellaBlock().Block
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_BlindedCapellaBlock:
-			b := blk.GetBlindedCapellaBlock().Block
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_DenebBlock:
-			b := blk.GetDenebBlock().Block
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_BlindedDenebBlock:
-			b := blk.GetBlindedDenebBlock().Message
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_ElectraBlock:
-			b := blk.GetElectraBlock().Block
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_BlindedElectraBlock:
-			b := blk.GetBlindedElectraBlock().Message
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_FuluBlock:
-			b := blk.GetFuluBlock().Block
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_BlindedFuluBlock:
-			b := blk.GetBlindedFuluBlock().Message
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		default:
+		slot, vote := blockContainerSlotAndVote(blk)
+		if vote == nil {
 			return fmt.Errorf("block of type %T is unknown", blk.Block)
 		}
 		ec.SeenVotes[slot] = vote
@@ -641,7 +600,7 @@ func validatorsVoteWithTheMajority(ec *e2etypes.EvaluationContext, conns ...*grp
 			ec.Eth1DataMismatchCount++
 			// Allow up to 2 mismatches per voting period before failing.
 			if ec.Eth1DataMismatchCount > 2 {
-				for i := primitives.Slot(0); i < slot; i++ {
+				for i := range slot {
 					v, ok := ec.SeenVotes[i]
 					if ok {
 						fmt.Printf("vote at slot=%d = %#x\n", i, v)
@@ -655,6 +614,49 @@ func validatorsVoteWithTheMajority(ec *e2etypes.EvaluationContext, conns ...*grp
 		}
 	}
 	return nil
+}
+
+func blockContainerSlotAndVote(blk *ethpb.BeaconBlockContainer) (primitives.Slot, []byte) {
+	switch blk.Block.(type) {
+	case *ethpb.BeaconBlockContainer_Phase0Block:
+		b := blk.GetPhase0Block().Block
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_AltairBlock:
+		b := blk.GetAltairBlock().Block
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_BellatrixBlock:
+		b := blk.GetBellatrixBlock().Block
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_BlindedBellatrixBlock:
+		b := blk.GetBlindedBellatrixBlock().Block
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_CapellaBlock:
+		b := blk.GetCapellaBlock().Block
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_BlindedCapellaBlock:
+		b := blk.GetBlindedCapellaBlock().Block
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_DenebBlock:
+		b := blk.GetDenebBlock().Block
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_BlindedDenebBlock:
+		b := blk.GetBlindedDenebBlock().Message
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_ElectraBlock:
+		b := blk.GetElectraBlock().Block
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_BlindedElectraBlock:
+		b := blk.GetBlindedElectraBlock().Message
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_FuluBlock:
+		b := blk.GetFuluBlock().Block
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_BlindedFuluBlock:
+		b := blk.GetBlindedFuluBlock().Message
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	default:
+		return 0, nil
+	}
 }
 
 func submitWithdrawal(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {

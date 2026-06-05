@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	"github.com/ethereum/go-ethereum"
@@ -30,17 +31,34 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const txCount = 20
+const txCount = 4
+const blobTxCount = 2
 
-var fundedAccount *keystore.Key
+type blobTxMode uint8
+
+const (
+	blobTxModeNone blobTxMode = iota
+	blobTxModeSidecar
+	blobTxModeCellProof
+)
 
 type TransactionGenerator struct {
-	keystore      string
-	seed          int64
-	started       chan struct{}
-	cancel        context.CancelFunc
-	paused        bool
+	hasBlobState  bool
+	hasTxState    bool
 	useLargeBlobs bool // Use large blob transactions (6 blobs per tx) for BPO testing
+	paused        bool
+	blobMode      blobTxMode
+	blobFeeCap    *big.Int
+	blobGasPrice  *big.Int
+	blobNonce     uint64
+	sidecarAccount   *keystore.Key
+	cellProofAccount *keystore.Key
+	txGasPrice    *big.Int
+	txNonce       uint64
+	cancel        context.CancelFunc
+	started       chan struct{}
+	seed          int64
+	keystore      string
 }
 
 func (t *TransactionGenerator) UnderlyingProcess() *os.Process {
@@ -50,7 +68,12 @@ func (t *TransactionGenerator) UnderlyingProcess() *os.Process {
 }
 
 func NewTransactionGenerator(keystore string, seed int64, useLargeBlobs bool) *TransactionGenerator {
-	return &TransactionGenerator{keystore: keystore, seed: seed, useLargeBlobs: useLargeBlobs}
+	return &TransactionGenerator{
+		keystore:      keystore,
+		seed:          seed,
+		useLargeBlobs: useLargeBlobs,
+		started:       make(chan struct{}, 1),
+	}
 }
 
 func (t *TransactionGenerator) Start(ctx context.Context) error {
@@ -82,26 +105,35 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	newKey := keystore.NewKeyForDirectICAP(newGen)
-	if err := fundAccount(client, mineKey, newKey); err != nil {
+	sidecarAccount := keystore.NewKeyForDirectICAP(newGen)
+	if err := fundAccount(client, mineKey, sidecarAccount); err != nil {
 		return err
 	}
-	fundedAccount = newKey
+	cellProofAccount := keystore.NewKeyForDirectICAP(newGen)
+	if err := fundAccount(client, mineKey, cellProofAccount); err != nil {
+		return err
+	}
+	t.sidecarAccount = sidecarAccount
+	t.cellProofAccount = cellProofAccount
 	// Ensure funding tx is mined before generating txs that rely on balance.
-	// Mine 1 block using the miner key to include the funding transfer.
+	// Mine 1 block using the miner key to include the funding transfers.
 	backend := ethclient.NewClient(client)
 	defer backend.Close()
 
 	if err := WaitForBlocks(ctx, backend, mineKey, 1); err != nil {
-		return errors.Wrap(err, "failed to mine block for funding tx")
+		return errors.Wrap(err, "failed to mine block for funding txs")
 	}
 
 	// Ensure the funded account has a comfortable minimum balance for blob and fuzzed txs.
 	minWei := new(big.Int).Mul(big.NewInt(1000), big.NewInt(0).SetUint64(params.BeaconConfig().GweiPerEth))
 	minWei.Mul(minWei, big.NewInt(1e9)) // 1000 ETH in wei
-	if err := ensureMinBalance(ctx, client, backend, mineKey, fundedAccount, minWei); err != nil {
+	if err := ensureMinBalance(ctx, client, backend, mineKey, t.sidecarAccount, minWei); err != nil {
 		return err
 	}
+	if err := ensureMinBalance(ctx, client, backend, mineKey, t.cellProofAccount, minWei); err != nil {
+		return err
+	}
+	close(t.started)
 	// Broadcast Transactions every slot
 	txPeriod := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
 	ticker := time.NewTicker(txPeriod)
@@ -115,7 +147,7 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 				continue
 			}
 			backend := ethclient.NewClient(client)
-			err = SendTransaction(client, mineKey.PrivateKey, gasPrice, mineKey.Address.String(), txCount, backend, false, t.useLargeBlobs)
+			err = t.SendTransaction(client, mineKey.PrivateKey, gasPrice, mineKey.Address.String(), txCount, backend, false, t.useLargeBlobs)
 			if err != nil {
 				return err
 			}
@@ -129,12 +161,8 @@ func (s *TransactionGenerator) Started() <-chan struct{} {
 	return s.started
 }
 
-func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.Int, addr string, txCount uint64, backend *ethclient.Client, al bool, useLargeBlobs bool) error {
+func (t *TransactionGenerator) SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.Int, addr string, txCount uint64, backend *ethclient.Client, al bool, useLargeBlobs bool) error {
 	sender := common.HexToAddress(addr)
-	nonce, err := backend.PendingNonceAt(context.Background(), fundedAccount.Address)
-	if err != nil {
-		return err
-	}
 	chainid, err := backend.ChainID(context.Background())
 	if err != nil {
 		return err
@@ -146,30 +174,31 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 	if expectedPrice.Cmp(gasPrice) > 0 {
 		gasPrice = expectedPrice
 	}
-
 	cfg := params.BeaconConfig()
 	clock := startup.NewClock(e2e.TestParams.CLGenesisTime, [32]byte{})
-	isPostFulu := clock.CurrentEpoch() >= cfg.FuluForkEpoch
-	// Skip pre-Fulu V0 sends only when Fulu is scheduled: V0 sidecars left in
-	// the pool at the Osaka boundary become invalid under geth >= v1.17 and
-	// occupy maxTxsPerAccount=16, blocking later V1 cell-proof txs. When Fulu
-	// is never scheduled (Deneb/Electra-only tests), V0 is the only path.
-	fuluScheduled := cfg.FuluForkEpoch != cfg.FarFutureEpoch
+	mode := currentBlobTxMode(clock.CurrentEpoch(), cfg)
+	t.syncBlobMode(mode)
+	blobAccount := t.blobAccount(mode)
+	nonce, err := backend.PendingNonceAt(context.Background(), blobAccount.Address)
+	if err != nil {
+		return err
+	}
+	gasPrice, blobFeeCap := t.nextBlobPricing(nonce, gasPrice)
 
 	g, _ := errgroup.WithContext(context.Background())
 	var txs []*types.Transaction
 
-	switch {
-	case isPostFulu:
+	switch mode {
+	case blobTxModeCellProof:
 		logrus.Info("Sending blob transactions with cell proofs")
-		txs = make([]*types.Transaction, 5)
-		for index := range uint64(5) {
+		txs = make([]*types.Transaction, blobTxCount)
+		for index := range uint64(blobTxCount) {
 			g.Go(func() error {
-				tx, err := RandomBlobCellTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al, useLargeBlobs)
+				tx, err := RandomBlobCellTx(client, blobAccount.Address, nonce+index, gasPrice, blobFeeCap, chainid, al, useLargeBlobs)
 				if err != nil {
 					return errors.Wrap(err, "Could not create blob cell tx")
 				}
-				signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), fundedAccount.PrivateKey)
+				signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), blobAccount.PrivateKey)
 				if err != nil {
 					return errors.Wrap(err, "Could not sign blob cell tx")
 				}
@@ -177,18 +206,18 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 				return nil
 			})
 		}
-	case !fuluScheduled:
+	case blobTxModeSidecar:
 		logrus.Info("Sending blob transactions with sidecars")
-		txs = make([]*types.Transaction, 5)
-		for index := range uint64(5) {
+		txs = make([]*types.Transaction, blobTxCount)
+		for index := range uint64(blobTxCount) {
 			g.Go(func() error {
-				tx, err := RandomBlobTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al, useLargeBlobs)
+				tx, err := RandomBlobTx(client, blobAccount.Address, nonce+index, gasPrice, blobFeeCap, chainid, al, useLargeBlobs)
 				if err != nil {
 					logrus.WithError(err).Error("Could not create blob tx")
 					//nolint:nilerr
 					return nil
 				}
-				signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), fundedAccount.PrivateKey)
+				signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), blobAccount.PrivateKey)
 				if err != nil {
 					logrus.WithError(err).Error("Could not sign blob tx")
 					//nolint:nilerr
@@ -205,6 +234,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 	}
 	// Stop on first failure: any nonce gap trips geth's gapped-queue
 	// allowance=log10(nonce+1), which rejects every subsequent nonce.
+	acceptedBlobTxs := uint64(0)
 	for i, tx := range txs {
 		if tx == nil {
 			continue
@@ -218,12 +248,20 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 			}
 			break
 		}
+		acceptedBlobTxs++
+	}
+	if acceptedBlobTxs > 0 {
+		t.blobNonce = nonce + acceptedBlobTxs
+		t.blobGasPrice = new(big.Int).Set(gasPrice)
+		t.blobFeeCap = new(big.Int).Set(blobFeeCap)
+		t.hasBlobState = true
 	}
 
 	nonce, err = backend.PendingNonceAt(context.Background(), sender)
 	if err != nil {
 		return err
 	}
+	nonce, gasPrice = t.nextTxPricing(nonce, gasPrice)
 
 	txs = make([]*types.Transaction, txCount)
 	for index := range txCount {
@@ -253,6 +291,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 	if err := g.Wait(); err != nil {
 		return err
 	}
+	acceptedTxs := uint64(0)
 	for _, tx := range txs {
 		if tx == nil {
 			continue
@@ -262,8 +301,74 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 			// Do nothing
 			continue
 		}
+		acceptedTxs++
+	}
+	if acceptedTxs > 0 {
+		t.txNonce = nonce + acceptedTxs
+		t.txGasPrice = new(big.Int).Set(gasPrice)
+		t.hasTxState = true
 	}
 	return nil
+}
+
+func (t *TransactionGenerator) syncBlobMode(mode blobTxMode) {
+	if t.blobMode == mode {
+		return
+	}
+	t.blobMode = mode
+	t.hasBlobState = false
+	t.blobNonce = 0
+	t.blobGasPrice = nil
+	t.blobFeeCap = nil
+}
+
+func (t *TransactionGenerator) blobAccount(mode blobTxMode) *keystore.Key {
+	if mode == blobTxModeCellProof {
+		return t.cellProofAccount
+	}
+	return t.sidecarAccount
+}
+
+func (t *TransactionGenerator) nextBlobPricing(currentNonce uint64, suggestedGasPrice *big.Int) (*big.Int, *big.Int) {
+	gasPrice := new(big.Int).Set(suggestedGasPrice)
+	blobFeeCap := initialBlobFeeCap(gasPrice)
+	if !t.hasBlobState {
+		return gasPrice, blobFeeCap
+	}
+	if currentNonce >= t.blobNonce {
+		return gasPrice, blobFeeCap
+	}
+	return bumpReplacementPrice(t.blobGasPrice), bumpReplacementPrice(t.blobFeeCap)
+}
+
+func (t *TransactionGenerator) nextTxPricing(currentNonce uint64, suggestedGasPrice *big.Int) (uint64, *big.Int) {
+	gasPrice := new(big.Int).Set(suggestedGasPrice)
+	if !t.hasTxState {
+		return currentNonce, gasPrice
+	}
+	if currentNonce >= t.txNonce {
+		return currentNonce, gasPrice
+	}
+	return t.txNonce, bumpReplacementPrice(t.txGasPrice)
+}
+
+func initialBlobFeeCap(gasPrice *big.Int) *big.Int {
+	return new(big.Int).Mul(gasPrice, big.NewInt(2))
+}
+
+func bumpReplacementPrice(price *big.Int) *big.Int {
+	bumped := new(big.Int).Mul(price, big.NewInt(120))
+	return bumped.Div(bumped, big.NewInt(100))
+}
+
+func currentBlobTxMode(currentEpoch primitives.Epoch, cfg *params.BeaconChainConfig) blobTxMode {
+	if cfg.FuluForkEpoch != cfg.FarFutureEpoch && currentEpoch >= cfg.FuluForkEpoch {
+		return blobTxModeCellProof
+	}
+	if cfg.DenebForkEpoch != cfg.FarFutureEpoch && currentEpoch >= cfg.DenebForkEpoch {
+		return blobTxModeSidecar
+	}
+	return blobTxModeNone
 }
 
 // Pause pauses the component and its underlying process.
@@ -284,7 +389,7 @@ func (t *TransactionGenerator) Stop() error {
 	return nil
 }
 
-func RandomBlobCellTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice, chainID *big.Int, al bool, useLargeBlobs bool) (*types.Transaction, error) {
+func RandomBlobCellTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice, blobFeeCap, chainID *big.Int, al bool, useLargeBlobs bool) (*types.Transaction, error) {
 	// Set fields if non-nil
 	if rpc != nil {
 		client := ethclient.NewClient(rpc)
@@ -338,7 +443,7 @@ func RandomBlobCellTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasP
 			return nil, errors.Wrap(err, "getBlobData")
 		}
 
-		return New4844CellTx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, make(types.AccessList, 0))
+		return New4844CellTx(nonce, &to, gas, chainID, tip, feecap, value, code, blobFeeCap, data, make(types.AccessList, 0))
 	case 1:
 		// Blob transaction with cell proofs and access list
 		tx := types.NewTx(&types.LegacyTx{
@@ -375,13 +480,13 @@ func RandomBlobCellTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasP
 			return nil, errors.Wrap(err, "getBlobData")
 		}
 
-		return New4844CellTx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, *al)
+		return New4844CellTx(nonce, &to, gas, chainID, tip, feecap, value, code, blobFeeCap, data, *al)
 	}
 
 	return nil, nil
 }
 
-func RandomBlobTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice, chainID *big.Int, al bool, useLargeBlobs bool) (*types.Transaction, error) {
+func RandomBlobTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice, blobFeeCap, chainID *big.Int, al bool, useLargeBlobs bool) (*types.Transaction, error) {
 	// Set fields if non-nil
 	if rpc != nil {
 		client := ethclient.NewClient(rpc)
@@ -432,7 +537,7 @@ func RandomBlobTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice
 		if err != nil {
 			return nil, errors.Wrap(err, "getBlobData")
 		}
-		return New4844Tx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, make(types.AccessList, 0)), nil
+		return New4844Tx(nonce, &to, gas, chainID, tip, feecap, value, code, blobFeeCap, data, make(types.AccessList, 0)), nil
 	case 1:
 		// 4844 transaction with AL nonce, to, value, gas, gasPrice, code
 		tx := types.NewTx(&types.LegacyTx{
@@ -468,7 +573,7 @@ func RandomBlobTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice
 		if err != nil {
 			return nil, errors.Wrap(err, "getBlobData")
 		}
-		return New4844Tx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, *al), nil
+		return New4844Tx(nonce, &to, gas, chainID, tip, feecap, value, code, blobFeeCap, data, *al), nil
 	}
 	return nil, errors.New("asdf")
 }
@@ -614,8 +719,9 @@ func encodeBlobs(data []byte) []kzg4844.Blob {
 	fieldIndex := -1
 	numOfElems := fieldparams.BlobLength / 32
 	// Allow up to 6 blobs per transaction to properly test BPO limits.
-	// With 10 blob txs per slot × 6 blobs = 60 max blobs submitted,
-	// which exceeds the highest BPO limit (21) and ensures we can hit it.
+	// With 2 blob txs per slot × 6 blobs = 12 max blobs submitted,
+	// which exceeds the first BPO transition threshold (>9 blobs) while
+	// staying below the geth per-account pool cap that was causing churn.
 	const maxBlobsPerTx = 6
 	for i := 0; i < len(data); i += 31 {
 		fieldIndex++
@@ -688,8 +794,9 @@ func randomBlobData() ([]byte, error) {
 
 // randomBlobDataLarge generates 6 blobs worth of data for BPO testing.
 // This is used post-Fulu to ensure we can test increased blob limits.
-// With 5 blob txs per slot × 6 blobs = 30 max blobs submitted,
-// which exceeds the highest BPO limit (21) and ensures we can hit it.
+// With 2 blob txs per slot × 6 blobs = 12 max blobs submitted,
+// which is enough to exceed the first BPO transition threshold (>9 blobs)
+// without saturating the local txpool.
 // The data is mostly zeros with only the first 1KB randomized for uniqueness,
 // which is sufficient for testing without the overhead of generating ~786KB of random data.
 func randomBlobDataLarge() ([]byte, error) {

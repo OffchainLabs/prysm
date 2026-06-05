@@ -111,6 +111,8 @@ func WaitForTextInFile(src *os.File, match string) error {
 					return
 				}
 				lineScanner := bufio.NewScanner(f)
+				buf := make([]byte, 0, fileBufferSize)
+				lineScanner.Buffer(buf, maxFileBufferSize)
 				// Scan will return true until it hits EOF or another error.
 				// If .Close is called on the underlying file, Scan will return false, causing this goroutine to exit.
 				for lineScanner.Scan() {
