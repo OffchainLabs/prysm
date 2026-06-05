@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -21,6 +22,52 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// payloadAvailability releases per-slot waiters when an execution_payload_available
+// event is received, so PTC members can attest as soon as the payload and blobs are
+// available rather than waiting for the attestation deadline.
+type payloadAvailability struct {
+	mu    sync.Mutex
+	chans map[primitives.Slot]chan struct{}
+}
+
+func newPayloadAvailability() *payloadAvailability {
+	return &payloadAvailability{chans: make(map[primitives.Slot]chan struct{})}
+}
+
+// waiter returns a channel closed once the payload for slot is available.
+func (p *payloadAvailability) waiter(slot primitives.Slot) <-chan struct{} {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	ch, ok := p.chans[slot]
+	if !ok {
+		ch = make(chan struct{})
+		p.chans[slot] = ch
+	}
+	return ch
+}
+
+// notify releases waiters for slot and prunes older slots. A closed channel is
+// stored so a waiter that registers after the event still observes availability.
+func (p *payloadAvailability) notify(slot primitives.Slot) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	ch, ok := p.chans[slot]
+	if !ok {
+		ch = make(chan struct{})
+		p.chans[slot] = ch
+	}
+	select {
+	case <-ch:
+	default:
+		close(ch)
+	}
+	for s := range p.chans {
+		if s < slot {
+			delete(p.chans, s)
+		}
+	}
+}
+
 // SubmitPayloadAttestation submits a payload attestation message for a PTC member.
 func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) {
 	ctx, span := trace.StartSpan(ctx, "validator.SubmitPayloadAttestation")
@@ -31,7 +78,7 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 		return
 	}
 
-	v.waitUntilSlotComponent(ctx, slot, params.BeaconConfig().PayloadAttestationDueBPS)
+	v.waitForPayloadAvailableOrDeadline(ctx, slot)
 
 	data, err := v.validatorClient.PayloadAttestationData(ctx, slot)
 	if err != nil {
