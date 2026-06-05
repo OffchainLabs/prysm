@@ -4,9 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
@@ -22,15 +19,9 @@ type signatureVerifier struct {
 	resChan chan error
 }
 
-type errorWithSegment struct {
-	err error
-	// segment is only available if the batched verification failed
-	segment *peerdas.CellProofBundleSegment
-}
-
 type kzgVerifier struct {
-	cellProofs []blocks.CellProofBundle
-	resChan    chan errorWithSegment
+	dataColumns []blocks.RODataColumn
+	resChan     chan error
 }
 
 // A routine that runs in the background to perform batch
@@ -58,33 +49,6 @@ func (s *Service) verifierRoutine() {
 				verifyBatch(verifierBatch)
 				verifierBatch = []*signatureVerifier{}
 			}
-		}
-	}
-}
-
-// A routine that runs in the background to perform batch
-// KZG verifications by draining the channel and processing all pending requests.
-func (s *Service) kzgVerifierRoutine() {
-	kzgBatch := make([]*kzgVerifier, 0, 1)
-	for {
-		kzgBatch = kzgBatch[:0]
-		select {
-		case <-s.ctx.Done():
-			return
-		case kzg := <-s.kzgChan:
-			kzgBatch = append(kzgBatch, kzg)
-		}
-		for {
-			select {
-			case <-s.ctx.Done():
-				return
-			case kzg := <-s.kzgChan:
-				kzgBatch = append(kzgBatch, kzg)
-				continue
-			default:
-				verifyKzgBatch(kzgBatch)
-			}
-			break
 		}
 	}
 }
@@ -159,89 +123,4 @@ func performBatchAggregation(aggSet *bls.SignatureBatch) (*bls.SignatureBatch, e
 		numberOfSetsAggregated.Observe(float64(currLen - len(aggSet.Signatures)))
 	}
 	return aggSet, nil
-}
-
-func (s *Service) validateKZGProofs(ctx context.Context, cellProofs []blocks.CellProofBundle) error {
-	_, span := trace.StartSpan(ctx, "sync.validateKZGProofs")
-	defer span.End()
-
-	timeout := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
-
-	resChan := make(chan errorWithSegment, 1)
-	verificationSet := &kzgVerifier{cellProofs: cellProofs, resChan: resChan}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	select {
-	case s.kzgChan <- verificationSet:
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err() // parent context canceled, give up
-	case errWithSegment := <-resChan:
-		if errWithSegment.err != nil {
-			err := errWithSegment.err
-			log.WithError(err).Trace("Could not perform batch verification of cells")
-			tracing.AnnotateError(span, err)
-			if errWithSegment.segment == nil {
-				return err
-			}
-			// We failed batch verification. Try again in this goroutine without batching
-			return validateUnbatchedKZGProofs(ctx, *errWithSegment.segment)
-		}
-	}
-	return nil
-}
-
-func validateUnbatchedKZGProofs(ctx context.Context, segment peerdas.CellProofBundleSegment) error {
-	_, span := trace.StartSpan(ctx, "sync.validateUnbatchedColumnsKzg")
-	defer span.End()
-	start := time.Now()
-	if err := segment.Verify(); err != nil {
-		err = errors.Wrap(err, "could not verify")
-		tracing.AnnotateError(span, err)
-		return err
-	}
-	verification.DataColumnBatchKZGVerificationHistogram.WithLabelValues("fallback").Observe(float64(time.Since(start).Milliseconds()))
-	return nil
-}
-
-func verifyKzgBatch(kzgBatch []*kzgVerifier) {
-	if len(kzgBatch) == 0 {
-		return
-	}
-
-	cellProofBatches := make([][]blocks.CellProofBundle, 0, len(kzgBatch))
-	for _, kzgVerifier := range kzgBatch {
-		cellProofBatches = append(cellProofBatches, kzgVerifier.cellProofs)
-	}
-
-	var verificationErr error
-	start := time.Now()
-	segments, err := peerdas.BatchVerifyDataColumnsCellsKZGProofs(cellProofBatches)
-	elapsed := float64(time.Since(start).Milliseconds())
-	if err != nil {
-		verificationErr = errors.Wrap(err, "batch KZG verification failed")
-		verification.DataColumnBatchKZGVerificationHistogram.WithLabelValues("batch_failed").Observe(elapsed)
-	} else {
-		verification.DataColumnBatchKZGVerificationHistogram.WithLabelValues("batch").Observe(elapsed)
-	}
-
-	segmentAvailable := verificationErr != nil && len(segments) == len(kzgBatch)
-
-	// Send the same result to all verifiers in the batch
-	for i, verifier := range kzgBatch {
-		var segment *peerdas.CellProofBundleSegment
-		if segmentAvailable {
-			failedSegment := segments[i]
-			segment = &failedSegment
-		}
-		verifier.resChan <- errorWithSegment{
-			err:     verificationErr,
-			segment: segment,
-		}
-	}
 }

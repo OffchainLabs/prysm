@@ -67,28 +67,13 @@ func VerifyDataColumnSidecar(sidecar blocks.RODataColumn) error {
 	return nil
 }
 
-// CellProofBundleSegment is returned when a batch fails. The caller can call
-// the `.Verify` method to verify just this segment.
+// CellProofBundleSegment identifies the cells of a single batch that failed
+// batch verification.
 type CellProofBundleSegment struct {
 	indices     []uint64
 	commitments []kzg.Bytes48
 	cells       []kzg.Cell
 	proofs      []kzg.Bytes48
-}
-
-// Verify verifies this segment without batching.
-func (s CellProofBundleSegment) Verify() error {
-	if len(s.cells) == 0 {
-		return ErrEmptySegment
-	}
-	verified, err := kzg.VerifyCellKZGProofBatch(s.commitments, s.indices, s.cells, s.proofs)
-	if err != nil {
-		return stderrors.Join(err, ErrInvalidKZGProof)
-	}
-	if !verified {
-		return ErrInvalidKZGProof
-	}
-	return nil
 }
 
 func VerifyDataColumnsCellsKZGProofs(cellProofs []blocks.CellProofBundle) error {

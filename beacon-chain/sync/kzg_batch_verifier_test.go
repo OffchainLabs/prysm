@@ -1,11 +1,8 @@
 package sync
 
 import (
-	"context"
 	"testing"
-	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -62,86 +59,4 @@ func createInvalidTestDataColumns(t *testing.T, count int) []blocks.RODataColumn
 		}
 	}
 	return dataColumns
-}
-
-func TestVerifierRoutine(t *testing.T) {
-	err := kzg.Start()
-	require.NoError(t, err)
-
-	t.Run("processes single request", func(t *testing.T) {
-		ctx := t.Context()
-
-		service := &Service{
-			ctx:     ctx,
-			kzgChan: make(chan *kzgVerifier, 100),
-		}
-		go service.kzgVerifierRoutine()
-
-		dataColumns := createValidTestDataColumns(t, 1)
-		bundles, err := blocks.RODataColumnsToCellProofBundles(dataColumns)
-		require.NoError(t, err)
-		resChan := make(chan errorWithSegment, 1)
-		service.kzgChan <- &kzgVerifier{cellProofs: bundles, resChan: resChan}
-
-		select {
-		case errWithSegment := <-resChan:
-			require.NoError(t, errWithSegment.err)
-		case <-time.After(time.Second):
-			t.Fatal("timeout waiting for verification result")
-		}
-	})
-
-	t.Run("batches multiple requests", func(t *testing.T) {
-		ctx := t.Context()
-
-		service := &Service{
-			ctx:     ctx,
-			kzgChan: make(chan *kzgVerifier, 100),
-		}
-		go service.kzgVerifierRoutine()
-
-		const numRequests = 5
-		resChans := make([]chan errorWithSegment, numRequests)
-
-		for i := range numRequests {
-			dataColumns := createValidTestDataColumns(t, 1)
-			bundles, err := blocks.RODataColumnsToCellProofBundles(dataColumns)
-			require.NoError(t, err)
-			resChan := make(chan errorWithSegment, 1)
-			resChans[i] = resChan
-			service.kzgChan <- &kzgVerifier{cellProofs: bundles, resChan: resChan}
-		}
-
-		for i := range numRequests {
-			select {
-			case errWithSegment := <-resChans[i]:
-				require.NoError(t, errWithSegment.err)
-			case <-time.After(time.Second):
-				t.Fatalf("timeout waiting for verification result %d", i)
-			}
-		}
-	})
-
-	t.Run("context cancellation stops routine", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-
-		service := &Service{
-			ctx:     ctx,
-			kzgChan: make(chan *kzgVerifier, 100),
-		}
-
-		routineDone := make(chan struct{})
-		go func() {
-			service.kzgVerifierRoutine()
-			close(routineDone)
-		}()
-
-		cancel()
-
-		select {
-		case <-routineDone:
-		case <-time.After(time.Second):
-			t.Fatal("timeout waiting for routine to exit")
-		}
-	})
 }

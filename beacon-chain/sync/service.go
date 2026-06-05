@@ -184,7 +184,6 @@ type Service struct {
 	syncContributionBitsOverlapLock      sync.RWMutex
 	syncContributionBitsOverlapCache     *lru.Cache
 	signatureChan                        chan *signatureVerifier
-	kzgChan                              chan *kzgVerifier
 	clockWaiter                          startup.ClockWaiter
 	initialSyncComplete                  chan struct{}
 	verifierWaiter                       *verification.InitializerWaiter
@@ -239,9 +238,6 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	}
 	// Initialize signature channel with configured limit
 	r.signatureChan = make(chan *signatureVerifier, r.cfg.batchVerifierLimit)
-	// Initialize KZG channel with fixed buffer size of 128 (maximum number of column topics).
-	// This buffer size is designed to handle burst traffic of partial data column cells:
-	r.kzgChan = make(chan *kzgVerifier, 128)
 
 	// Correctly remove it from our seen pending block map.
 	// The eviction method always assumes that the mutex is held.
@@ -317,7 +313,6 @@ func (s *Service) Start() {
 	s.newExecutionPayloadEnvelopeVerifier = newPayloadVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
-	go s.kzgVerifierRoutine()
 
 	s.startPartialColumnBroadcaster()
 
@@ -490,7 +485,7 @@ func (c *partialColumnCallbacks) PartialVerifierFromTrustedColumn(col *blocks.Pa
 }
 
 func (c *partialColumnCallbacks) ValidateColumn(cellsToVerify []blocks.CellProofBundle) error {
-	return c.s.validateKZGProofs(c.s.ctx, cellsToVerify)
+	return peerdas.VerifyDataColumnsCellsKZGProofs(cellsToVerify)
 }
 
 func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedRODataColumn) {
