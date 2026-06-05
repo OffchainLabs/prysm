@@ -8,7 +8,7 @@ import (
 )
 
 // Helper to get pointer to uint64
-func u64(v uint64) *uint64 { return &v }
+func u64(v uint64) *uint64 { return new(v) }
 
 func TestParsePath(t *testing.T) {
 	tests := []struct {

@@ -26,7 +26,6 @@ go_library(
     deps = [
         "//beacon-chain/core/electra:go_default_library",
         "//beacon-chain/core/epoch/precompute:go_default_library",
-        "//beacon-chain/core/fulu:go_default_library",
         "//beacon-chain/core/gloas:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/state:go_default_library",

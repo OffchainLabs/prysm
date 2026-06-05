@@ -664,6 +664,48 @@ func (f *ForkChoice) ForkChoiceDump(ctx context.Context) (*forkchoice2.Dump, err
 	return resp, nil
 }
 
+// ForkChoiceDumpV2 returns a Gloas-aware dump of forkchoice, emitting one entry per (root, payload_status) tuple.
+func (f *ForkChoice) ForkChoiceDumpV2(ctx context.Context) (*forkchoice2.DumpV2, error) {
+	jc := &ethpb.Checkpoint{
+		Epoch: f.store.justifiedCheckpoint.Epoch,
+		Root:  f.store.justifiedCheckpoint.Root[:],
+	}
+	ujc := &ethpb.Checkpoint{
+		Epoch: f.store.unrealizedJustifiedCheckpoint.Epoch,
+		Root:  f.store.unrealizedJustifiedCheckpoint.Root[:],
+	}
+	fc := &ethpb.Checkpoint{
+		Epoch: f.store.finalizedCheckpoint.Epoch,
+		Root:  f.store.finalizedCheckpoint.Root[:],
+	}
+	ufc := &ethpb.Checkpoint{
+		Epoch: f.store.unrealizedFinalizedCheckpoint.Epoch,
+		Root:  f.store.unrealizedFinalizedCheckpoint.Root[:],
+	}
+	nodes := make([]*forkchoice2.NodeV2, 0, f.NodeCount())
+	var err error
+	if f.store.treeRootNode != nil {
+		nodes, err = f.store.nodeTreeDumpV2(ctx, f.store.treeRootNode, nodes)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var headRoot [32]byte
+	if f.store.headNode != nil {
+		headRoot = f.store.headNode.root
+	}
+	return &forkchoice2.DumpV2{
+		JustifiedCheckpoint:           jc,
+		UnrealizedJustifiedCheckpoint: ujc,
+		FinalizedCheckpoint:           fc,
+		UnrealizedFinalizedCheckpoint: ufc,
+		ProposerBoostRoot:             f.store.proposerBoostRoot[:],
+		PreviousProposerBoostRoot:     f.store.previousProposerBoostRoot[:],
+		HeadRoot:                      headRoot[:],
+		ForkChoiceNodes:               nodes,
+	}, nil
+}
+
 // SetBalancesByRooter sets the balanceByRoot handler in forkchoice
 func (f *ForkChoice) SetBalancesByRooter(handler forkchoice.BalancesByRooter) {
 	f.balancesByRoot = handler

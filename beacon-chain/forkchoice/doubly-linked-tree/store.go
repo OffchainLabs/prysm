@@ -121,6 +121,7 @@ func (s *Store) insert(ctx context.Context,
 		blockHash:                   *blockHash,
 		payloadAvailabilityVote:     bitfield.NewBitvector512(),
 		payloadDataAvailabilityVote: bitfield.NewBitvector512(),
+		payloadAttesters:            bitfield.NewBitvector512(),
 	}
 	// Set the node's target checkpoint
 	if slot%params.BeaconConfig().SlotsPerEpoch == 0 {
