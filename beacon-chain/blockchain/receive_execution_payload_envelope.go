@@ -177,20 +177,21 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 	s.headLock.Unlock()
 
 	attr := s.getPayloadAttribute(ctx, st, envelope.Slot()+1, headRoot[:], true)
-	if s.inRegularSync() {
-		go func() {
-			pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)
-			if err != nil {
-				log.WithError(err).Error("Could not notify forkchoice update")
-				return
-			}
-			if attr != nil && !attr.IsEmpty() && pid != nil {
-				var pId [8]byte
-				copy(pId[:], pid[:])
-				s.cfg.PayloadIDCache.Set(envelope.Slot()+1, root, pId)
-			}
-		}()
+	if !s.inRegularSync() {
+		return nil
 	}
+	go func() {
+		pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)
+		if err != nil {
+			log.WithError(err).Error("Could not notify forkchoice update")
+			return
+		}
+		if !attr.IsEmpty() && pid != nil {
+			var pId [8]byte
+			copy(pId[:], pid[:])
+			s.cfg.PayloadIDCache.Set(envelope.Slot()+1, root, pId)
+		}
+	}()
 	return nil
 }
 
