@@ -956,7 +956,7 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
-			template: "/eth/v1/beacon/execution_payload_envelope/{block_id}",
+			template: "/eth/v1/beacon/execution_payload_envelopes/{block_id}",
 			name:     namespace + ".GetExecutionPayloadEnvelope",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
@@ -975,7 +975,7 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
-			template: "/eth/v1/beacon/execution_payload_bid",
+			template: "/eth/v1/beacon/execution_payload_bids",
 			name:     namespace + ".PublishSignedExecutionPayloadBid",
 			middleware: []middleware.Middleware{
 				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),

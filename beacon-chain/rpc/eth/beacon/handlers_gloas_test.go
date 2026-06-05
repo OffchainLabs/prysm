@@ -91,7 +91,7 @@ func TestGetExecutionPayloadEnvelope_AcceptsSlotID(t *testing.T) {
 		FinalizationFetcher:    chain,
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/execution_payload_envelope/{block_id}", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/execution_payload_envelopes/{block_id}", nil)
 	req.SetPathValue("block_id", "177")
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
@@ -108,7 +108,7 @@ func TestGetExecutionPayloadEnvelope_BlockNotFound(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/execution_payload_envelope/{block_id}", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/execution_payload_envelopes/{block_id}", nil)
 	req.SetPathValue("block_id", "not-a-root")
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
