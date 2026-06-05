@@ -257,6 +257,10 @@ var (
 		Name: "beacon_late_payload_task_triggered_total",
 		Help: "Count the number of times late payload tasks fired.",
 	})
+	goroutineCountGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "beacon_goroutine_count",
+		Help: "Goroutine count sampled once per slot.",
+	}, []string{"kind"})
 )
 
 // reportSlotMetrics reports slot related metrics.

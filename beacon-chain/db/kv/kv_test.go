@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/golang/snappy"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -96,21 +97,20 @@ func TestStartStateDiff_ValidateOnStartup(t *testing.T) {
 	}
 	flags.Init(&globalFlags)
 
+	st, _ := createState(t, 0, version.Phase0)
+	stateBytes, err := st.MarshalSSZ()
+	require.NoError(t, err)
+	enc, err := addKey(st.Version(), stateBytes)
+	require.NoError(t, err)
+	enc = snappy.Encode(nil, enc)
+
 	store := setupDB(t)
 	require.NoError(t, store.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
 		if bucket == nil {
 			return bolt.ErrBucketNotFound
 		}
-		st, _ := createState(t, 0, version.Phase0)
-		stateBytes, err := st.MarshalSSZ()
-		if err != nil {
-			return err
-		}
-		enc, err := addKey(st.Version(), stateBytes)
-		if err != nil {
-			return err
-		}
+
 		offsetBytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(offsetBytes, 0)
 		if err := bucket.Put(offsetKey, offsetBytes); err != nil {
@@ -127,7 +127,7 @@ func TestStartStateDiff_ValidateOnStartup(t *testing.T) {
 		return bucket.Put(key, enc)
 	}))
 
-	err := store.startStateDiff(t.Context())
+	err = store.startStateDiff(t.Context())
 	require.NoError(t, err)
 }
 

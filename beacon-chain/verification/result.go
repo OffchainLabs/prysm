@@ -51,6 +51,8 @@ func (r Requirement) String() string {
 		return "RequireValidatorInPTC"
 	case RequireBlockRootSeen:
 		return "RequireBlockRootSeen"
+	case RequireBlockSlotMatches:
+		return "RequireBlockSlotMatches"
 	case RequireBlockRootValid:
 		return "RequireBlockRootValid"
 	case RequireSignatureValid:
@@ -75,10 +77,12 @@ func (r Requirement) String() string {
 		return "RequireBidExecutionPaymentZero"
 	case RequireBidFeeRecipientMatches:
 		return "RequireBidFeeRecipientMatches"
-	case RequireBidGasLimitMatches:
-		return "RequireBidGasLimitMatches"
+	case RequireBidGasLimitCompatible:
+		return "RequireBidGasLimitCompatible"
 	case RequireBidParentBlockRootSeen:
 		return "RequireBidParentBlockRootSeen"
+	case RequireBidSlotHigherThanParent:
+		return "RequireBidSlotHigherThanParent"
 	case RequireBidParentBlockHashValid:
 		return "RequireBidParentBlockHashValid"
 	case RequireBidBuilderCanCover:

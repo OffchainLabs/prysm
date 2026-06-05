@@ -27,6 +27,7 @@ const (
 	RequireMessageNotSeen
 	RequireValidatorInPTC
 	RequireBlockRootSeen
+	RequireBlockSlotMatches
 	RequireBlockRootValid
 	RequireSignatureValid
 
@@ -43,8 +44,9 @@ const (
 	RequireBidBuilderActive
 	RequireBidExecutionPaymentZero
 	RequireBidFeeRecipientMatches
-	RequireBidGasLimitMatches
+	RequireBidGasLimitCompatible
 	RequireBidParentBlockRootSeen
+	RequireBidSlotHigherThanParent
 	RequireBidParentBlockHashValid
 	RequireBidBuilderCanCover
 	RequireBidSignatureValid

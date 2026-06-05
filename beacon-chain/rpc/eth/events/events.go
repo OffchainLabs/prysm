@@ -76,6 +76,9 @@ const (
 	DataColumnTopic = "data_column_sidecar"
 	// ExecutionPayloadTopic represents a new execution payload envelope event topic
 	ExecutionPayloadTopic = "execution_payload_available"
+	// ExecutionPayloadGossipTopic represents an execution payload envelope received from gossip or API
+	// that passes validation rules.
+	ExecutionPayloadGossipTopic = "execution_payload_gossip"
 	// ExecutionPayloadBidTopic represents a new execution payload bid event topic.
 	// This topic is currently not triggered but is recognized to avoid client subscription errors.
 	ExecutionPayloadBidTopic = "execution_payload_bid"
@@ -116,6 +119,7 @@ var opsFeedEventTopics = map[feed.EventType]string{
 	operation.BlockGossipReceived:               BlockGossipTopic,
 	operation.DataColumnReceived:                DataColumnTopic,
 	operation.PayloadAttestationMessageReceived: PayloadAttestationMessageTopic,
+	operation.ExecutionPayloadGossipReceived:    ExecutionPayloadGossipTopic,
 }
 
 var stateFeedEventTopics = map[feed.EventType]string{
@@ -483,6 +487,8 @@ func topicForEvent(event *feed.Event) string {
 		return PayloadAttestationMessageTopic
 	case *statefeed.PayloadProcessedData:
 		return ExecutionPayloadTopic
+	case *operation.ExecutionPayloadGossipReceivedData:
+		return ExecutionPayloadGossipTopic
 	default:
 		return InvalidTopic
 	}
@@ -664,6 +670,15 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 			return jsonMarshalReader(eventName, &structs.PayloadEvent{
 				Slot:      fmt.Sprintf("%d", v.Slot),
 				BlockRoot: hexutil.Encode(v.BlockRoot[:]),
+			})
+		}, nil
+	case *operation.ExecutionPayloadGossipReceivedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, &structs.ExecutionPayloadGossipEvent{
+				Slot:         fmt.Sprintf("%d", v.Slot),
+				BuilderIndex: fmt.Sprintf("%d", v.BuilderIndex),
+				BlockHash:    hexutil.Encode(v.BlockHash[:]),
+				BlockRoot:    hexutil.Encode(v.BlockRoot[:]),
 			})
 		}, nil
 	default:

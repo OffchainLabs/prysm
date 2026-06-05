@@ -897,6 +897,7 @@ func TestAddBuilderFromDeposit(t *testing.T) {
 					Balance:           0,
 				},
 			},
+			builderIdxMap: map[[fieldparams.BLSPubkeyLength]byte]primitives.BuilderIndex{},
 		}
 
 		require.NoError(t, st.AddBuilderFromDeposit(pubkey, wc, 123))
@@ -931,6 +932,7 @@ func TestAddBuilderFromDeposit(t *testing.T) {
 					Balance:           1,
 				},
 			},
+			builderIdxMap: map[[fieldparams.BLSPubkeyLength]byte]primitives.BuilderIndex{},
 		}
 
 		require.NoError(t, st.AddBuilderFromDeposit(pubkey, wc, 5))

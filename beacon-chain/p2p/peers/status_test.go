@@ -58,7 +58,7 @@ func TestPeerExplicitAdd(t *testing.T) {
 
 	resAddress, err := p.Address(id)
 	require.NoError(t, err)
-	assert.Equal(t, address, resAddress, "Unexpected address")
+	assert.Equal(t, true, address.Equal(resAddress), "Unexpected address")
 
 	resDirection, err := p.Direction(id)
 	require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestPeerExplicitAdd(t *testing.T) {
 
 	resAddress2, err := p.Address(id)
 	require.NoError(t, err)
-	assert.Equal(t, address2, resAddress2, "Unexpected address")
+	assert.Equal(t, true, address2.Equal(resAddress2), "Unexpected address")
 
 	resDirection2, err := p.Direction(id)
 	require.NoError(t, err)

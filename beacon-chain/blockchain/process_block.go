@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
@@ -109,15 +110,8 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	if cfg.roblock.Version() < version.Gloas {
 		s.sendFCU(cfg)
 	} else {
-		full := false
-		if s.isNewHead(cfg.headRoot, full) {
-			if err := s.saveHead(ctx, cfg.headRoot, cfg.roblock, cfg.postState, full); err != nil {
-				log.WithError(err).Error("Could not save head")
-			}
-			s.pruneAttsFromPool(ctx, cfg.postState, cfg.roblock)
-		}
+		s.saveHeadIfNeeded(ctx, cfg)
 	}
-
 	// Pre-Fulu the caches are updated when computing the payload attributes
 	if cfg.postState.Version() >= version.Fulu {
 		go func() {
@@ -259,6 +253,21 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		if err != nil {
 			return invalidBlock{error: err}
 		}
+		sig := b.Signature()
+		root := b.Root()
+		domain, err := signing.Domain(preState.Fork(), slots.ToEpoch(preState.Slot()), params.BeaconConfig().DomainBeaconProposer, preState.GenesisValidatorsRoot())
+		if err != nil {
+			return err
+		}
+		proposer, err := preState.ValidatorAtIndex(b.Block().ProposerIndex())
+		if err != nil {
+			return err
+		}
+		proposerSig, err := signing.BlockSignatureBatch(proposer.PublicKey, sig[:], domain, func() ([32]byte, error) { return root, nil })
+		if err != nil {
+			return err
+		}
+		sigSet.Join(proposerSig)
 		if b.Root() == br && eidx < len(envelopes) {
 			envSigSet, err := gloas.VerifyExecutionPayloadEnvelopeWithDeferredSig(ctx, preState, envelopes[eidx])
 			if err != nil {
@@ -484,7 +493,7 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 		// Use a custom deadline here, since this method runs asynchronously.
 		// We ignore the parent method's context and instead create a new one
 		// with a custom deadline, therefore using the background context instead.
-		slotCtx, cancel := context.WithTimeout(context.Background(), slotDeadline)
+		slotCtx, cancel := context.WithTimeout(s.ctx, slotDeadline)
 		defer cancel()
 
 		if err := helpers.UpdateCommitteeCache(slotCtx, st, ep+1); err != nil {
@@ -654,6 +663,13 @@ func (s *Service) InsertSlashingsToForkChoiceStore(ctx context.Context, slashing
 			s.cfg.ForkChoiceStore.InsertSlashedIndex(ctx, primitives.ValidatorIndex(index))
 		}
 	}
+}
+
+// RecordBlockForEquivocation forwards to the forkchoice store under the write lock.
+func (s *Service) RecordBlockForEquivocation(slot primitives.Slot, proposer primitives.ValidatorIndex, root [32]byte) {
+	s.cfg.ForkChoiceStore.Lock()
+	defer s.cfg.ForkChoiceStore.Unlock()
+	s.cfg.ForkChoiceStore.RecordBlockForEquivocation(slot, proposer, root)
 }
 
 // This saves post state info to DB or cache. This also saves post state info to fork choice store.
@@ -833,6 +849,7 @@ func (s *Service) runLateBlockTasks() {
 				attThreshold = cfg.SlotComponentDuration(attDueBPS)
 				ticker = slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SecondsPerSlot)
 			}
+			s.goroutineCounter.sample(slot)
 			s.lateBlockTasks(s.ctx)
 		case <-s.ctx.Done():
 			log.Debug("Context closed, exiting routine")

@@ -103,7 +103,7 @@ func TestProposerPreferencesVerifier_VerifySignature_ForkBoundary(t *testing.T) 
 			ProposalSlot:   proposalSlot,
 			ValidatorIndex: validatorIndex,
 			FeeRecipient:   bytes.Repeat([]byte{0x01}, 20),
-			GasLimit:       30_000_000,
+			TargetGasLimit: 30_000_000,
 		},
 	}
 	// Sign using config fork (like the DomainData RPC does).
@@ -143,7 +143,7 @@ func newSignedProposerPreferencesState(t *testing.T, currentSlot, proposalSlot p
 			ProposalSlot:   proposalSlot,
 			ValidatorIndex: validatorIndex,
 			FeeRecipient:   bytes.Repeat([]byte{0x01}, 20),
-			GasLimit:       30_000_000,
+			TargetGasLimit: 30_000_000,
 		},
 	}
 	signed.Signature = signProposerPreferencesWithConfigFork(t, keys[validatorIndex], signed.Message, st)
