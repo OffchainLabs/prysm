@@ -330,6 +330,7 @@ func (s *Service) Start() {
 
 	s.processPendingBlocksQueue()
 	s.processPendingPayloadEnvelopeQueue()
+	go s.runLatePayloadRequest()
 	s.maintainPeerStatuses()
 	s.resyncIfBehind()
 
