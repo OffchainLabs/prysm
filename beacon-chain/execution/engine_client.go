@@ -673,10 +673,6 @@ func (s *Service) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash)
 	defer span.End()
 	start := time.Now()
 
-	if !s.capabilityCache.has(GetBlobsV3) {
-		return nil, fmt.Errorf("%s is not supported", GetBlobsV3)
-	}
-
 	getBlobsV3RequestsTotal.Inc()
 	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
 	if err := s.rpcClient.CallContext(ctx, &result, GetBlobsV3, versionedHashes); err != nil {
@@ -978,7 +974,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 	}
 
 	haveAllBlobs := cp.Included.Count() == uint64(len(commitments))
-	log.Debug("Constructed partial columns", "haveAllBlobs", haveAllBlobs)
+	log.WithField("haveAllBlobs", haveAllBlobs).Debug("Constructed partial columns")
 
 	if haveAllBlobs {
 		// Construct data column sidecars from the signed block and cells and proofs.
