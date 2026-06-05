@@ -1,0 +1,260 @@
+// Copyright 2026 Offchain Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SSZ wire containers for the REST + SSZ Engine API v2
+// (ethereum/execution-apis#793). These are the request/response bodies for
+// the POST/GET /engine/v2/{fork}/... endpoints. The inner ExecutionPayload,
+// PayloadAttributes, ForkchoiceState, Withdrawal and BlobsBundle types are
+// reused from proto/engine/v1.
+//
+// Encoding conventions (refactor-ssz.md):
+//   - Optional[T] == List[T, 1] (0 elements = absent, 1 = present).
+//   - String     == List[byte, MAX_ERROR_BYTES] (MAX_ERROR_BYTES = 1024).
+//   - All uints are little-endian.
+//   - PayloadStatus.status is a uint8 enum encoded as a single byte.
+//
+// Fork coverage: Fulu (EL "Osaka") and Gloas (EL "Amsterdam"). Per the spec,
+// Fulu reuses the Deneb-shaped payload / V3 attributes; Gloas adds
+// block_access_list + slot_number (payload) and slot_number + target_gas_limit
+// (attributes) plus the custody_columns bitvector on forkchoice.
+syntax = "proto3";
+
+package ethereum.engine.v2;
+
+import "proto/eth/ext/options.proto";
+import "proto/engine/v1/execution_engine.proto";
+
+option csharp_namespace = "Ethereum.Engine.V2";
+option go_package = "github.com/OffchainLabs/prysm/v7/proto/engine/v2;enginev2";
+option java_multiple_files = true;
+option java_outer_classname = "EngineV2Proto";
+option java_package = "org.ethereum.engine.v2";
+option php_namespace = "Ethereum\\Engine\\v2";
+
+// PayloadStatus is the result of submitting a payload (POST /{fork}/payloads)
+// and the embedded status of a forkchoice update. The status byte is a uint8
+// enum: VALID=0, INVALID=1, SYNCING=2, ACCEPTED=3 (ACCEPTED only on /payloads).
+// INVALID_BLOCK_HASH is removed (supplanted by INVALID).
+message PayloadStatus {
+  // uint8 enum, one byte on the wire.
+  bytes status = 1 [ (ethereum.eth.ext.ssz_size) = "1" ];
+  // Optional[Hash32] == List[Hash32, 1].
+  repeated bytes latest_valid_hash = 2 [
+    (ethereum.eth.ext.ssz_size) = "?,32",
+    (ethereum.eth.ext.ssz_max) = "1"
+  ];
+  // Optional[String] == List[List[byte, 1024], 1].
+  repeated bytes validation_error = 3
+      [ (ethereum.eth.ext.ssz_max) = "1,1024" ];
+}
+
+// ForkchoiceUpdateResponse is the response body for POST /{fork}/forkchoice.
+// payload_status uses the restricted enum (VALID | INVALID | SYNCING); CLs MUST
+// treat ACCEPTED here as a protocol error. payload_id is the opaque,
+// server-assigned token, present iff a build was started.
+message ForkchoiceUpdateResponse {
+  PayloadStatus payload_status = 1;
+  // Optional[Bytes8] == List[Bytes8, 1].
+  repeated bytes payload_id = 2 [
+    (ethereum.eth.ext.ssz_size) = "?,8",
+    (ethereum.eth.ext.ssz_max) = "1"
+  ];
+}
+
+// BodiesByHashRequest is the SSZ request body for POST /{fork}/bodies/hash.
+// (The range variant uses ?from&count query params, no SSZ body.)
+message BodiesByHashRequest {
+  // List[Hash32, MAX_BODIES_REQUEST]; MAX_BODIES_REQUEST = 32.
+  repeated bytes block_hashes = 1 [
+    (ethereum.eth.ext.ssz_size) = "?,32",
+    (ethereum.eth.ext.ssz_max) = "32"
+  ];
+}
+
+// BlobsRequest is the SSZ request body for POST /blobs/v{1,2,3}.
+// It includes BlobsV1Request, BlobsV2Request and BlobsV3Request.
+message BlobsRequest {
+  // List[VersionedHash, MAX_BLOBS_REQUEST]; MAX_BLOBS_REQUEST = 128.
+  repeated bytes versioned_hashes = 1 [
+    (ethereum.eth.ext.ssz_size) = "?,32",
+    (ethereum.eth.ext.ssz_max) = "128"
+  ];
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Fulu (EL "Osaka") containers
+//////////////////////////////////////////////////////////////////////////////
+
+// ExecutionPayloadEnvelopeFulu is the request body for POST
+// /osaka/payloads.
+message ExecutionPayloadEnvelopeFulu {
+  ethereum.engine.v1.ExecutionPayloadDeneb payload = 1;
+  bytes parent_beacon_block_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  repeated bytes execution_requests = 3
+      [ (ethereum.eth.ext.ssz_max) = "256,1073741824" ];
+}
+
+// ForkchoiceUpdateFulu is the request body for POST /osaka/forkchoice. Fulu is
+// pre-Amsterdam, so no custody_columns field.
+message ForkchoiceUpdateFulu {
+  ethereum.engine.v1.ForkchoiceState forkchoice_state = 1;
+  // Optional[PayloadAttributes] == List[PayloadAttributesV3, 1].
+  repeated ethereum.engine.v1.PayloadAttributesV3 payload_attributes = 2
+      [ (ethereum.eth.ext.ssz_max) = "1" ];
+}
+
+// BuiltPayloadFulu is the response body for GET /osaka/payloads/{id} (replaces
+// engine_getPayload). Field order matches the spec's BuiltPayload.
+message BuiltPayloadFulu {
+  ethereum.engine.v1.ExecutionPayloadDeneb payload = 1;
+  bytes block_value = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  ethereum.engine.v1.BlobsBundleV2 blobs_bundle = 3;
+  repeated bytes execution_requests = 4
+      [ (ethereum.eth.ext.ssz_max) = "256,1073741824" ];
+  bool should_override_builder = 5;
+}
+
+// ExecutionPayloadBodyFulu is the inner body for /osaka/bodies entries
+// (Shanghai shape: transactions + withdrawals).
+message ExecutionPayloadBodyFulu {
+  repeated bytes transactions = 1 [
+    (ethereum.eth.ext.ssz_size) = "?,?",
+    (ethereum.eth.ext.ssz_max) = "1048576,1073741824"
+  ];
+  repeated ethereum.engine.v1.Withdrawal withdrawals = 2
+      [ (ethereum.eth.ext.ssz_max) = "withdrawal.size" ];
+}
+
+// BodyEntryFulu wraps a single body in a /osaka/bodies response. When
+// available=false, body is zero-valued and MUST be ignored.
+message BodyEntryFulu {
+  bool available = 1;
+  ExecutionPayloadBodyFulu body = 2;
+}
+
+// BodiesResponseFulu is the response body for /osaka/bodies (hash and range).
+message BodiesResponseFulu {
+  // List[BodyEntry, MAX_BODIES_REQUEST]; MAX_BODIES_REQUEST = 32.
+  repeated BodyEntryFulu entries = 1 [ (ethereum.eth.ext.ssz_max) = "32" ];
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Gloas (EL "Amsterdam") containers
+//////////////////////////////////////////////////////////////////////////////
+
+// ExecutionPayloadEnvelopeGloas is the request body for POST
+// /amsterdam/payloads.
+message ExecutionPayloadEnvelopeGloas {
+  ethereum.engine.v1.ExecutionPayloadGloas payload = 1;
+  bytes parent_beacon_block_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  repeated bytes execution_requests = 3
+      [ (ethereum.eth.ext.ssz_max) = "256,1073741824" ];
+}
+
+// ForkchoiceUpdateGloas is the request body for POST /amsterdam/forkchoice.
+// Adds the Amsterdam custody_columns bitvector (Bitvector[CELLS_PER_EXT_BLOB]
+// = Bitvector[128] = 16 bytes), wrapped in Optional.
+message ForkchoiceUpdateGloas {
+  ethereum.engine.v1.ForkchoiceState forkchoice_state = 1;
+  // Optional[PayloadAttributes] == List[PayloadAttributesV4, 1].
+  repeated ethereum.engine.v1.PayloadAttributesV4 payload_attributes = 2
+      [ (ethereum.eth.ext.ssz_max) = "1" ];
+  // Optional[Bitvector[128]] == List[ByteVector[16], 1].
+  repeated bytes custody_columns = 3 [
+    (ethereum.eth.ext.ssz_size) = "?,16",
+    (ethereum.eth.ext.ssz_max) = "1"
+  ];
+}
+
+// BuiltPayloadGloas is the response body for GET /amsterdam/payloads/{id}.
+message BuiltPayloadGloas {
+  ethereum.engine.v1.ExecutionPayloadGloas payload = 1;
+  bytes block_value = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  ethereum.engine.v1.BlobsBundleV2 blobs_bundle = 3;
+  repeated bytes execution_requests = 4
+      [ (ethereum.eth.ext.ssz_max) = "256,1073741824" ];
+  bool should_override_builder = 5;
+}
+
+// ExecutionPayloadBodyGloas is the inner body for /amsterdam/bodies entries
+// (Shanghai shape + block_access_list).
+message ExecutionPayloadBodyGloas {
+  repeated bytes transactions = 1 [
+    (ethereum.eth.ext.ssz_size) = "?,?",
+    (ethereum.eth.ext.ssz_max) = "1048576,1073741824"
+  ];
+  repeated ethereum.engine.v1.Withdrawal withdrawals = 2
+      [ (ethereum.eth.ext.ssz_max) = "withdrawal.size" ];
+  // RLP-encoded EIP-7928 block access list; MAX_BAL_BYTES placeholder = 2**30.
+  bytes block_access_list = 3 [ (ethereum.eth.ext.ssz_max) = "1073741824" ];
+}
+
+// BodyEntryGloas wraps a single body in a /amsterdam/bodies response.
+message BodyEntryGloas {
+  bool available = 1;
+  ExecutionPayloadBodyGloas body = 2;
+}
+
+// BodiesResponseGloas is the response body for /amsterdam/bodies.
+message BodiesResponseGloas {
+  repeated BodyEntryGloas entries = 1 [ (ethereum.eth.ext.ssz_max) = "32" ];
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Blob-pool endpoints (POST /blobs/v{1,2,3}) — version-scoped, not fork-scoped
+//////////////////////////////////////////////////////////////////////////////
+
+// BlobAndProofV1 is a whole blob with a single proof (Cancun, /blobs/v1).
+message BlobAndProofV1 {
+  bytes blob = 1 [ (ethereum.eth.ext.ssz_size) = "blob.size" ];
+  bytes proof = 2 [ (ethereum.eth.ext.ssz_size) = "48" ];
+}
+
+// BlobV1Entry is one entry in a /blobs/v1 response. When available=false,
+// contents is zero-valued and MUST be ignored.
+message BlobV1Entry {
+  bool available = 1;
+  BlobAndProofV1 contents = 2;
+}
+
+// BlobsV1Response is the 200 body for POST /blobs/v1 (204 = cannot serve).
+message BlobsV1Response {
+  // List[BlobV1Entry, MAX_BLOBS_REQUEST]; MAX_BLOBS_REQUEST = 128.
+  repeated BlobV1Entry entries = 1 [ (ethereum.eth.ext.ssz_max) = "128" ];
+}
+
+// BlobAndProofV2 is a whole blob with CELLS_PER_EXT_BLOB cell proofs (Osaka,
+// /blobs/v2 and /blobs/v3).
+message BlobAndProofV2 {
+  bytes blob = 1 [ (ethereum.eth.ext.ssz_size) = "blob.size" ];
+  // List[Bytes48, CELLS_PER_EXT_BLOB]; CELLS_PER_EXT_BLOB = 128. (Numeric
+  // literal, not cells_per_blob.size, to avoid the blob.size substring being
+  // substituted by the ssz template expander.)
+  repeated bytes proofs = 2 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "128"
+  ];
+}
+
+// BlobV2Entry is one entry in a /blobs/v2 or /blobs/v3 response.
+message BlobV2Entry {
+  bool available = 1;
+  BlobAndProofV2 contents = 2;
+}
+
+// BlobsV2Response is the 200 body for POST /blobs/v2 (all-or-nothing) and
+// POST /blobs/v3 (per-entry available flag for partial responses).
+message BlobsV2Response {
+  repeated BlobV2Entry entries = 1 [ (ethereum.eth.ext.ssz_max) = "128" ];
+}

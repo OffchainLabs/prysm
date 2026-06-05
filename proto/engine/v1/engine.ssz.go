@@ -3532,6 +3532,478 @@ func (e *ExecutionPayloadHeaderDeneb) HashTreeRootWith(hh *ssz.Hasher) (err erro
 	return
 }
 
+// MarshalSSZ ssz marshals the PayloadAttributesV3 object
+func (p *PayloadAttributesV3) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the PayloadAttributesV3 object to a target array
+func (p *PayloadAttributesV3) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(96)
+
+	// Field (0) 'Timestamp'
+	dst = ssz.MarshalUint(dst, p.Timestamp)
+
+	// Field (1) 'PrevRandao'
+	if size := len(p.PrevRandao); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.PrevRandao", size, 32)
+		return
+	}
+	dst = append(dst, p.PrevRandao...)
+
+	// Field (2) 'SuggestedFeeRecipient'
+	if size := len(p.SuggestedFeeRecipient); size != 20 {
+		err = ssz.ErrBytesLengthFn("--.SuggestedFeeRecipient", size, 20)
+		return
+	}
+	dst = append(dst, p.SuggestedFeeRecipient...)
+
+	// Offset (3) 'Withdrawals'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.Withdrawals) * 44
+
+	// Field (4) 'ParentBeaconBlockRoot'
+	if size := len(p.ParentBeaconBlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentBeaconBlockRoot", size, 32)
+		return
+	}
+	dst = append(dst, p.ParentBeaconBlockRoot...)
+
+	// Field (3) 'Withdrawals'
+	if size := len(p.Withdrawals); size > 16 {
+		err = ssz.ErrListTooBigFn("--.Withdrawals", size, 16)
+		return
+	}
+	for ii := 0; ii < len(p.Withdrawals); ii++ {
+		if dst, err = p.Withdrawals[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the PayloadAttributesV3 object
+func (p *PayloadAttributesV3) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 96 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o3 uint64
+
+	// Field (0) 'Timestamp'
+	p.Timestamp = ssz.UnmarshallUint[uint64](buf[0:8])
+
+	// Field (1) 'PrevRandao'
+	if cap(p.PrevRandao) == 0 {
+		p.PrevRandao = make([]byte, 0, len(buf[8:40]))
+	}
+	p.PrevRandao = append(p.PrevRandao, buf[8:40]...)
+
+	// Field (2) 'SuggestedFeeRecipient'
+	if cap(p.SuggestedFeeRecipient) == 0 {
+		p.SuggestedFeeRecipient = make([]byte, 0, len(buf[40:60]))
+	}
+	p.SuggestedFeeRecipient = append(p.SuggestedFeeRecipient, buf[40:60]...)
+
+	// Offset (3) 'Withdrawals'
+	if o3 = ssz.ReadOffset(buf[60:64]); o3 > size {
+		return ssz.ErrOffset
+	}
+
+	if o3 != 96 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (4) 'ParentBeaconBlockRoot'
+	if cap(p.ParentBeaconBlockRoot) == 0 {
+		p.ParentBeaconBlockRoot = make([]byte, 0, len(buf[64:96]))
+	}
+	p.ParentBeaconBlockRoot = append(p.ParentBeaconBlockRoot, buf[64:96]...)
+
+	// Field (3) 'Withdrawals'
+	{
+		buf = tail[o3:]
+		num, err := ssz.DivideInt2(len(buf), 44, 16)
+		if err != nil {
+			return err
+		}
+		p.Withdrawals = make([]*Withdrawal, num)
+		for ii := 0; ii < num; ii++ {
+			if p.Withdrawals[ii] == nil {
+				p.Withdrawals[ii] = new(Withdrawal)
+			}
+			if err = p.Withdrawals[ii].UnmarshalSSZ(buf[ii*44 : (ii+1)*44]); err != nil {
+				return err
+			}
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the PayloadAttributesV3 object
+func (p *PayloadAttributesV3) SizeSSZ() (size int) {
+	size = 96
+
+	// Field (3) 'Withdrawals'
+	size += len(p.Withdrawals) * 44
+
+	return
+}
+
+// HashTreeRoot ssz hashes the PayloadAttributesV3 object
+func (p *PayloadAttributesV3) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(p)
+}
+
+// HashTreeRootWith ssz hashes the PayloadAttributesV3 object with a hasher
+func (p *PayloadAttributesV3) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Timestamp'
+	ssz.PutUint(hh, p.Timestamp)
+
+	// Field (1) 'PrevRandao'
+	if size := len(p.PrevRandao); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.PrevRandao", size, 32)
+		return
+	}
+	hh.PutBytes(p.PrevRandao)
+
+	// Field (2) 'SuggestedFeeRecipient'
+	if size := len(p.SuggestedFeeRecipient); size != 20 {
+		err = ssz.ErrBytesLengthFn("--.SuggestedFeeRecipient", size, 20)
+		return
+	}
+	hh.PutBytes(p.SuggestedFeeRecipient)
+
+	// Field (3) 'Withdrawals'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(p.Withdrawals))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range p.Withdrawals {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	// Field (4) 'ParentBeaconBlockRoot'
+	if size := len(p.ParentBeaconBlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentBeaconBlockRoot", size, 32)
+		return
+	}
+	hh.PutBytes(p.ParentBeaconBlockRoot)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the PayloadAttributesV4 object
+func (p *PayloadAttributesV4) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the PayloadAttributesV4 object to a target array
+func (p *PayloadAttributesV4) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(112)
+
+	// Field (0) 'Timestamp'
+	dst = ssz.MarshalUint(dst, p.Timestamp)
+
+	// Field (1) 'PrevRandao'
+	if size := len(p.PrevRandao); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.PrevRandao", size, 32)
+		return
+	}
+	dst = append(dst, p.PrevRandao...)
+
+	// Field (2) 'SuggestedFeeRecipient'
+	if size := len(p.SuggestedFeeRecipient); size != 20 {
+		err = ssz.ErrBytesLengthFn("--.SuggestedFeeRecipient", size, 20)
+		return
+	}
+	dst = append(dst, p.SuggestedFeeRecipient...)
+
+	// Offset (3) 'Withdrawals'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.Withdrawals) * 44
+
+	// Field (4) 'ParentBeaconBlockRoot'
+	if size := len(p.ParentBeaconBlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentBeaconBlockRoot", size, 32)
+		return
+	}
+	dst = append(dst, p.ParentBeaconBlockRoot...)
+
+	// Field (5) 'SlotNumber'
+	dst = ssz.MarshalUint(dst, p.SlotNumber)
+
+	// Field (6) 'TargetGasLimit'
+	dst = ssz.MarshalUint(dst, p.TargetGasLimit)
+
+	// Field (3) 'Withdrawals'
+	if size := len(p.Withdrawals); size > 16 {
+		err = ssz.ErrListTooBigFn("--.Withdrawals", size, 16)
+		return
+	}
+	for ii := 0; ii < len(p.Withdrawals); ii++ {
+		if dst, err = p.Withdrawals[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the PayloadAttributesV4 object
+func (p *PayloadAttributesV4) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 112 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o3 uint64
+
+	// Field (0) 'Timestamp'
+	p.Timestamp = ssz.UnmarshallUint[uint64](buf[0:8])
+
+	// Field (1) 'PrevRandao'
+	if cap(p.PrevRandao) == 0 {
+		p.PrevRandao = make([]byte, 0, len(buf[8:40]))
+	}
+	p.PrevRandao = append(p.PrevRandao, buf[8:40]...)
+
+	// Field (2) 'SuggestedFeeRecipient'
+	if cap(p.SuggestedFeeRecipient) == 0 {
+		p.SuggestedFeeRecipient = make([]byte, 0, len(buf[40:60]))
+	}
+	p.SuggestedFeeRecipient = append(p.SuggestedFeeRecipient, buf[40:60]...)
+
+	// Offset (3) 'Withdrawals'
+	if o3 = ssz.ReadOffset(buf[60:64]); o3 > size {
+		return ssz.ErrOffset
+	}
+
+	if o3 != 112 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (4) 'ParentBeaconBlockRoot'
+	if cap(p.ParentBeaconBlockRoot) == 0 {
+		p.ParentBeaconBlockRoot = make([]byte, 0, len(buf[64:96]))
+	}
+	p.ParentBeaconBlockRoot = append(p.ParentBeaconBlockRoot, buf[64:96]...)
+
+	// Field (5) 'SlotNumber'
+	p.SlotNumber = ssz.UnmarshallUint[uint64](buf[96:104])
+
+	// Field (6) 'TargetGasLimit'
+	p.TargetGasLimit = ssz.UnmarshallUint[uint64](buf[104:112])
+
+	// Field (3) 'Withdrawals'
+	{
+		buf = tail[o3:]
+		num, err := ssz.DivideInt2(len(buf), 44, 16)
+		if err != nil {
+			return err
+		}
+		p.Withdrawals = make([]*Withdrawal, num)
+		for ii := 0; ii < num; ii++ {
+			if p.Withdrawals[ii] == nil {
+				p.Withdrawals[ii] = new(Withdrawal)
+			}
+			if err = p.Withdrawals[ii].UnmarshalSSZ(buf[ii*44 : (ii+1)*44]); err != nil {
+				return err
+			}
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the PayloadAttributesV4 object
+func (p *PayloadAttributesV4) SizeSSZ() (size int) {
+	size = 112
+
+	// Field (3) 'Withdrawals'
+	size += len(p.Withdrawals) * 44
+
+	return
+}
+
+// HashTreeRoot ssz hashes the PayloadAttributesV4 object
+func (p *PayloadAttributesV4) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(p)
+}
+
+// HashTreeRootWith ssz hashes the PayloadAttributesV4 object with a hasher
+func (p *PayloadAttributesV4) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Timestamp'
+	ssz.PutUint(hh, p.Timestamp)
+
+	// Field (1) 'PrevRandao'
+	if size := len(p.PrevRandao); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.PrevRandao", size, 32)
+		return
+	}
+	hh.PutBytes(p.PrevRandao)
+
+	// Field (2) 'SuggestedFeeRecipient'
+	if size := len(p.SuggestedFeeRecipient); size != 20 {
+		err = ssz.ErrBytesLengthFn("--.SuggestedFeeRecipient", size, 20)
+		return
+	}
+	hh.PutBytes(p.SuggestedFeeRecipient)
+
+	// Field (3) 'Withdrawals'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(p.Withdrawals))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range p.Withdrawals {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	// Field (4) 'ParentBeaconBlockRoot'
+	if size := len(p.ParentBeaconBlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentBeaconBlockRoot", size, 32)
+		return
+	}
+	hh.PutBytes(p.ParentBeaconBlockRoot)
+
+	// Field (5) 'SlotNumber'
+	ssz.PutUint(hh, p.SlotNumber)
+
+	// Field (6) 'TargetGasLimit'
+	ssz.PutUint(hh, p.TargetGasLimit)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the ForkchoiceState object
+func (f *ForkchoiceState) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(f)
+}
+
+// MarshalSSZTo ssz marshals the ForkchoiceState object to a target array
+func (f *ForkchoiceState) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'HeadBlockHash'
+	if size := len(f.HeadBlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.HeadBlockHash", size, 32)
+		return
+	}
+	dst = append(dst, f.HeadBlockHash...)
+
+	// Field (1) 'SafeBlockHash'
+	if size := len(f.SafeBlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.SafeBlockHash", size, 32)
+		return
+	}
+	dst = append(dst, f.SafeBlockHash...)
+
+	// Field (2) 'FinalizedBlockHash'
+	if size := len(f.FinalizedBlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.FinalizedBlockHash", size, 32)
+		return
+	}
+	dst = append(dst, f.FinalizedBlockHash...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the ForkchoiceState object
+func (f *ForkchoiceState) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 96 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'HeadBlockHash'
+	if cap(f.HeadBlockHash) == 0 {
+		f.HeadBlockHash = make([]byte, 0, len(buf[0:32]))
+	}
+	f.HeadBlockHash = append(f.HeadBlockHash, buf[0:32]...)
+
+	// Field (1) 'SafeBlockHash'
+	if cap(f.SafeBlockHash) == 0 {
+		f.SafeBlockHash = make([]byte, 0, len(buf[32:64]))
+	}
+	f.SafeBlockHash = append(f.SafeBlockHash, buf[32:64]...)
+
+	// Field (2) 'FinalizedBlockHash'
+	if cap(f.FinalizedBlockHash) == 0 {
+		f.FinalizedBlockHash = make([]byte, 0, len(buf[64:96]))
+	}
+	f.FinalizedBlockHash = append(f.FinalizedBlockHash, buf[64:96]...)
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ForkchoiceState object
+func (f *ForkchoiceState) SizeSSZ() (size int) {
+	size = 96
+	return
+}
+
+// HashTreeRoot ssz hashes the ForkchoiceState object
+func (f *ForkchoiceState) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(f)
+}
+
+// HashTreeRootWith ssz hashes the ForkchoiceState object with a hasher
+func (f *ForkchoiceState) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'HeadBlockHash'
+	if size := len(f.HeadBlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.HeadBlockHash", size, 32)
+		return
+	}
+	hh.PutBytes(f.HeadBlockHash)
+
+	// Field (1) 'SafeBlockHash'
+	if size := len(f.SafeBlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.SafeBlockHash", size, 32)
+		return
+	}
+	hh.PutBytes(f.SafeBlockHash)
+
+	// Field (2) 'FinalizedBlockHash'
+	if size := len(f.FinalizedBlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.FinalizedBlockHash", size, 32)
+		return
+	}
+	hh.PutBytes(f.FinalizedBlockHash)
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the Withdrawal object
 func (w *Withdrawal) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(w)
