@@ -21,6 +21,7 @@ import (
 	"errors"
 	"runtime"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -72,42 +73,46 @@ loop:
 func TestResubscribe(t *testing.T) {
 	t.Parallel()
 
-	var i int
-	nfails := 6
-	sub := Resubscribe(100*time.Millisecond, func(ctx context.Context) (Subscription, error) {
-		// fmt.Printf("call #%d @ %v\n", i, time.Now())
-		i++
-		if i == 2 {
-			// Delay the second failure a bit to reset the resubscribe interval.
-			time.Sleep(200 * time.Millisecond)
-		}
-		if i < nfails {
-			return nil, errors.New("oops")
-		}
-		sub := NewSubscription(func(unsubscribed <-chan struct{}) error { return nil })
-		return sub, nil
-	})
+	synctest.Test(t, func(t *testing.T) {
+		var i int
+		nfails := 6
+		sub := Resubscribe(100*time.Millisecond, func(ctx context.Context) (Subscription, error) {
+			// fmt.Printf("call #%d @ %v\n", i, time.Now())
+			i++
+			if i == 2 {
+				// Delay the second failure a bit to reset the resubscribe interval.
+				time.Sleep(200 * time.Millisecond)
+			}
+			if i < nfails {
+				return nil, errors.New("oops")
+			}
+			sub := NewSubscription(func(unsubscribed <-chan struct{}) error { return nil })
+			return sub, nil
+		})
 
-	<-sub.Err()
-	require.Equal(t, nfails, i)
+		<-sub.Err()
+		require.Equal(t, nfails, i)
+	})
 }
 
 func TestResubscribeAbort(t *testing.T) {
 	t.Parallel()
 
-	done := make(chan error)
-	sub := Resubscribe(0, func(ctx context.Context) (Subscription, error) {
-		select {
-		case <-ctx.Done():
-			done <- nil
-		case <-time.After(2 * time.Second):
-			done <- errors.New("context given to resubscribe function not canceled within 2s")
-		}
-		return nil, nil
-	})
+	synctest.Test(t, func(t *testing.T) {
+		done := make(chan error)
+		sub := Resubscribe(0, func(ctx context.Context) (Subscription, error) {
+			select {
+			case <-ctx.Done():
+				done <- nil
+			case <-time.After(2 * time.Second):
+				done <- errors.New("context given to resubscribe function not canceled within 2s")
+			}
+			return nil, nil
+		})
 
-	sub.Unsubscribe()
-	require.NoError(t, <-done)
+		sub.Unsubscribe()
+		require.NoError(t, <-done)
+	})
 }
 
 func TestResubscribeNonBlocking(t *testing.T) {
