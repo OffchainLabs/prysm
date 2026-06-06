@@ -905,7 +905,7 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 				log.WithError(err).Error("Failed to check dependent roots")
 			}
 		}
-	case eventClient.EventExecutionPayload:
+	case eventClient.EventExecutionPayloadAvailable:
 		payloadEvent := &structs.ExecutionPayloadAvailableEvent{}
 		if err := json.Unmarshal(event.Data, payloadEvent); err != nil {
 			log.WithError(err).Error("Failed to unmarshal execution payload event into JSON")

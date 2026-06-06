@@ -73,7 +73,7 @@ func TestProcessEvent_ExecutionPayloadAvailableNotifiesWaiter(t *testing.T) {
 
 	data, err := json.Marshal(&structs.ExecutionPayloadAvailableEvent{Slot: "42", BlockRoot: "0xabc"})
 	require.NoError(t, err)
-	v.ProcessEvent(t.Context(), &eventClient.Event{EventType: eventClient.EventExecutionPayload, Data: data})
+	v.ProcessEvent(t.Context(), &eventClient.Event{EventType: eventClient.EventExecutionPayloadAvailable, Data: data})
 
 	require.Equal(t, true, isClosed(ch))
 }
@@ -84,7 +84,7 @@ func TestProcessEvent_ExecutionPayloadBadSlotDoesNotNotify(t *testing.T) {
 
 	data, err := json.Marshal(&structs.ExecutionPayloadAvailableEvent{Slot: "not-a-number", BlockRoot: "0xabc"})
 	require.NoError(t, err)
-	v.ProcessEvent(t.Context(), &eventClient.Event{EventType: eventClient.EventExecutionPayload, Data: data})
+	v.ProcessEvent(t.Context(), &eventClient.Event{EventType: eventClient.EventExecutionPayloadAvailable, Data: data})
 
 	require.Equal(t, false, isClosed(ch))
 }

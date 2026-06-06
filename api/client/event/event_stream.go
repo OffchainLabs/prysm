@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	EventHead             = "head"
-	EventExecutionPayload = "execution_payload_available"
+	EventHead                      = "head"
+	EventExecutionPayloadAvailable = "execution_payload_available"
 
 	EventError           = "error"
 	EventConnectionError = "connection_error"
@@ -24,7 +24,7 @@ var (
 	_ = EventStreamClient(&EventStream{})
 )
 
-var DefaultEventTopics = []string{EventHead, EventExecutionPayload}
+var DefaultEventTopics = []string{EventHead, EventExecutionPayloadAvailable}
 
 type EventStreamClient interface {
 	Subscribe(eventsChannel chan<- *Event)
