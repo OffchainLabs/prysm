@@ -14,6 +14,7 @@ go_library(
         "log_helpers.go",
         "metrics.go",
         "payload_attestation.go",
+        "payload_availability.go",
         "propose.go",
         "propose_gloas.go",
         "registration.go",
