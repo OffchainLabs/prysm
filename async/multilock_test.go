@@ -17,6 +17,7 @@ package async
 import (
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -52,57 +53,59 @@ func TestGetChan(t *testing.T) {
 	a.Equal(ch1, ch3)
 }
 
-func TestLockUnlock(_ *testing.T) {
-	var wg sync.WaitGroup
+func TestLockUnlock(t *testing.T) {
+	synctest.Test(t, func(_ *testing.T) {
+		var wg sync.WaitGroup
 
-	wg.Add(5)
+		wg.Add(5)
 
-	go func() {
-		lock := NewMultilock("dog", "cat", "owl")
-		lock.Lock()
-		defer lock.Unlock()
+		go func() {
+			lock := NewMultilock("dog", "cat", "owl")
+			lock.Lock()
+			defer lock.Unlock()
 
-		<-time.After(100 * time.Millisecond)
-		wg.Done()
-	}()
+			<-time.After(100 * time.Millisecond)
+			wg.Done()
+		}()
 
-	go func() {
-		lock := NewMultilock("cat", "dog", "bird")
-		lock.Lock()
-		defer lock.Unlock()
+		go func() {
+			lock := NewMultilock("cat", "dog", "bird")
+			lock.Lock()
+			defer lock.Unlock()
 
-		<-time.After(100 * time.Millisecond)
-		wg.Done()
-	}()
+			<-time.After(100 * time.Millisecond)
+			wg.Done()
+		}()
 
-	go func() {
-		lock := NewMultilock("cat", "bird", "owl")
-		lock.Lock()
-		defer lock.Unlock()
+		go func() {
+			lock := NewMultilock("cat", "bird", "owl")
+			lock.Lock()
+			defer lock.Unlock()
 
-		<-time.After(100 * time.Millisecond)
-		wg.Done()
-	}()
+			<-time.After(100 * time.Millisecond)
+			wg.Done()
+		}()
 
-	go func() {
-		lock := NewMultilock("bird", "owl", "snake")
-		lock.Lock()
-		defer lock.Unlock()
+		go func() {
+			lock := NewMultilock("bird", "owl", "snake")
+			lock.Lock()
+			defer lock.Unlock()
 
-		<-time.After(100 * time.Millisecond)
-		wg.Done()
-	}()
+			<-time.After(100 * time.Millisecond)
+			wg.Done()
+		}()
 
-	go func() {
-		lock := NewMultilock("owl", "snake")
-		lock.Lock()
-		defer lock.Unlock()
+		go func() {
+			lock := NewMultilock("owl", "snake")
+			lock.Lock()
+			defer lock.Unlock()
 
-		<-time.After(1 * time.Second)
-		wg.Done()
-	}()
+			<-time.After(1 * time.Second)
+			wg.Done()
+		}()
 
-	wg.Wait()
+		wg.Wait()
+	})
 }
 
 func TestLockUnlock_CleansUnused(t *testing.T) {
@@ -121,33 +124,48 @@ func TestLockUnlock_CleansUnused(t *testing.T) {
 }
 
 func TestLockUnlock_DoesNotCleanIfHeldElsewhere(t *testing.T) {
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		lock := NewMultilock("cat")
-		lock.Lock()
-		// We take 200 milliseconds to release the lock on "cat"
-		<-time.After(200 * time.Millisecond)
-		lock.Unlock()
-		// Assert that at the end of this goroutine, all locks are cleared.
-		assert.Equal(t, 0, len(locks.list))
-		wg.Done()
-	}()
-	go func() {
-		lock := NewMultilock("dog", "cat", "owl")
-		lock.Lock()
-		// We release the locks after 100 milliseconds, and check that "cat" is not
-		// cleared as a lock for it is still held by the previous goroutine.
-		<-time.After(100 * time.Millisecond)
-		lock.Unlock()
-		assert.Equal(t, 1, len(locks.list))
+	synctest.Test(t, func(t *testing.T) {
+		// Acquire the multi-key lock first so it deterministically owns "cat".
+		multi := NewMultilock("dog", "cat", "owl")
+		multi.Lock()
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// This blocks on "cat" until the multi-key lock releases it, then
+			// immediately re-acquires it.
+			lock := NewMultilock("cat")
+			lock.Lock()
+			// Hold "cat" for a while before releasing; afterwards all locks are cleared.
+			time.Sleep(200 * time.Millisecond)
+			lock.Unlock()
+		}()
+
+		// Settle so the goroutine is durably blocked waiting on "cat".
+		synctest.Wait()
+
+		// Release the multi-key lock. "dog" and "owl" become unused and are
+		// cleaned, but "cat" is handed off to the waiting goroutine, so Clean
+		// must NOT remove it.
+		multi.Unlock()
+
+		// Settle so the goroutine has re-acquired "cat" and is holding it.
+		synctest.Wait()
+		// Inspect the global lock map under its own guard: the holding goroutine
+		// will later mutate it via Clean during Unlock, so reading it unguarded
+		// would race (synctest does not serialize goroutine execution).
+		locks.lock <- 1
+		n := len(locks.list)
 		_, ok := locks.list["cat"]
+		<-locks.lock
+		assert.Equal(t, 1, n)
 		assert.Equal(t, true, ok)
-		wg.Done()
-	}()
-	wg.Wait()
-	// We expect that at the end of this test, all locks are cleared.
-	assert.Equal(t, 0, len(locks.list))
+
+		// Wait for the goroutine to release "cat"; everything is then cleared.
+		wg.Wait()
+		assert.Equal(t, 0, len(locks.list))
+	})
 }
 
 func TestYield(t *testing.T) {
@@ -189,69 +207,71 @@ func TestYield(t *testing.T) {
 }
 
 func TestClean(t *testing.T) {
-	var wg sync.WaitGroup
+	synctest.Test(t, func(t *testing.T) {
+		var wg sync.WaitGroup
 
-	wg.Add(3)
+		wg.Add(3)
 
-	// some goroutine that holds multiple locks
-	go1done := make(chan bool, 1)
-	go func() {
-	Loop:
-		for {
-			select {
-			case <-go1done:
-				break Loop
-			default:
-				lock := NewMultilock("A", "B", "C", "E", "Z")
-				lock.Lock()
-				<-time.After(30 * time.Millisecond)
-				lock.Unlock()
+		// some goroutine that holds multiple locks
+		go1done := make(chan bool, 1)
+		go func() {
+		Loop:
+			for {
+				select {
+				case <-go1done:
+					break Loop
+				default:
+					lock := NewMultilock("A", "B", "C", "E", "Z")
+					lock.Lock()
+					<-time.After(30 * time.Millisecond)
+					lock.Unlock()
+				}
 			}
-		}
-		wg.Done()
-	}()
+			wg.Done()
+		}()
 
-	// another goroutine
-	go2done := make(chan bool, 1)
-	go func() {
-	Loop:
-		for {
-			select {
-			case <-go2done:
-				break Loop
-			default:
-				lock := NewMultilock("B", "C", "K", "L", "Z")
-				lock.Lock()
-				<-time.After(200 * time.Millisecond)
-				lock.Unlock()
+		// another goroutine
+		go2done := make(chan bool, 1)
+		go func() {
+		Loop:
+			for {
+				select {
+				case <-go2done:
+					break Loop
+				default:
+					lock := NewMultilock("B", "C", "K", "L", "Z")
+					lock.Lock()
+					<-time.After(200 * time.Millisecond)
+					lock.Unlock()
+				}
 			}
-		}
-		wg.Done()
-	}()
+			wg.Done()
+		}()
 
-	// this one cleans up the locks every 100 ms
-	done := make(chan bool, 1)
-	go func() {
-		c := time.Tick(100 * time.Millisecond)
-	Loop:
-		for {
-			select {
-			case <-done:
-				break Loop
-			case <-c:
-				Clean()
+		// this one cleans up the locks every 100 ms
+		done := make(chan bool, 1)
+		go func() {
+			c := time.Tick(100 * time.Millisecond)
+		Loop:
+			for {
+				select {
+				case <-done:
+					break Loop
+				case <-c:
+					Clean()
+				}
 			}
-		}
-		wg.Done()
-	}()
+			wg.Done()
+		}()
 
-	<-time.After(2 * time.Second)
-	go1done <- true
-	go2done <- true
-	<-time.After(1 * time.Second)
-	done <- true
-	wg.Wait()
-	assert.Equal(t, []string{}, Clean())
+		<-time.After(2 * time.Second)
+		go1done <- true
+		go2done <- true
+		<-time.After(1 * time.Second)
+		done <- true
+		wg.Wait()
+		assert.Equal(t, []string{}, Clean())
+	})
 }
 
 func TestBankAccountProblem(t *testing.T) {
