@@ -130,9 +130,7 @@ func TestLockUnlock_DoesNotCleanIfHeldElsewhere(t *testing.T) {
 		multi.Lock()
 
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			// This blocks on "cat" until the multi-key lock releases it, then
 			// immediately re-acquires it.
 			lock := NewMultilock("cat")
@@ -140,7 +138,7 @@ func TestLockUnlock_DoesNotCleanIfHeldElsewhere(t *testing.T) {
 			// Hold "cat" for a while before releasing; afterwards all locks are cleared.
 			time.Sleep(200 * time.Millisecond)
 			lock.Unlock()
-		}()
+		})
 
 		// Settle so the goroutine is durably blocked waiting on "cat".
 		synctest.Wait()
