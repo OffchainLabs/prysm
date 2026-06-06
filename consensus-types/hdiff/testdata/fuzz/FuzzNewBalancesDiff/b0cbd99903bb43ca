@@ -1,0 +1,3 @@
+go test fuzz v1
+byte('\\')
+[]byte("\x17\x97Ӌ\n\x98\x9dw\xed\xbf")
