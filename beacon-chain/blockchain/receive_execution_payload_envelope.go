@@ -190,9 +190,13 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 	}
 	blockHash := bytesutil.ToBytes32(payload.BlockHash())
 
+	s.cfg.ForkChoiceStore.RLock()
+	full := s.cfg.ForkChoiceStore.FullBeatsEmpty(root)
+	s.cfg.ForkChoiceStore.RUnlock()
+
 	s.headLock.Lock()
 	if s.head != nil && s.head.root == root {
-		s.head.full = true
+		s.head.full = full
 	}
 	s.headLock.Unlock()
 
