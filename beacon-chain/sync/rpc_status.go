@@ -33,11 +33,8 @@ func (s *Service) maintainPeerStatuses() {
 	interval := time.Duration(params.BeaconConfig().SlotsPerEpoch.Div(2).Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second
 	async.RunEvery(s.ctx, interval, func() {
 		wg := new(sync.WaitGroup)
-		for _, pid := range s.cfg.p2p.Peers().Connected() {
-			wg.Add(1)
-			go func(id peer.ID) {
-				defer wg.Done()
-
+		for _, id := range s.cfg.p2p.Peers().Connected() {
+			wg.Go(func() {
 				log := log.WithFields(logrus.Fields{
 					"peer":  id,
 					"agent": agentString(id, s.cfg.p2p.Host()),
@@ -73,7 +70,7 @@ func (s *Service) maintainPeerStatuses() {
 						log.WithError(err).Debug("Cannot re-validate peer")
 					}
 				}
-			}(pid)
+			})
 		}
 		// Wait for all status checks to finish and then proceed onwards to
 		// pruning excess peers.
