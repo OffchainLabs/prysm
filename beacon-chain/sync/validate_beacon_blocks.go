@@ -233,7 +233,7 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 
 	err = s.validateBeaconBlock(ctx, blk, blockRoot)
 	if err != nil {
-		if s.hasBadBlock(blockRoot) {
+		if s.hasBadBlock(blockRoot) || errors.Is(err, blocks.ErrInvalidProposerIndex) {
 			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not validate beacon block")
 			return pubsub.ValidationReject, err
 		}
