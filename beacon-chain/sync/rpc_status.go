@@ -27,6 +27,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const maxFutureStatusHeadSlot = 1
+
 // maintainPeerStatuses maintains peer statuses by polling peers for their latest status twice per epoch.
 func (s *Service) maintainPeerStatuses() {
 	// Run twice per epoch.
@@ -428,6 +430,10 @@ func (s *Service) validateStatusMessage(ctx context.Context, genericMsg any) err
 	msg, err := statusV2(genericMsg)
 	if err != nil {
 		return errors.Wrap(err, "status data")
+	}
+
+	if msg.HeadSlot > s.cfg.clock.CurrentSlot()+maxFutureStatusHeadSlot {
+		return p2ptypes.ErrInvalidRequest
 	}
 
 	forkDigest, err := s.currentForkDigest()
