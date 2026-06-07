@@ -159,11 +159,15 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	}
 	s.reportPostBlockProcessing(blockCopy, blockRoot, receivedTime, daWaitedTime)
 
-	// Defragment the imported state off the hot path. Running it inline before
-	// forkchoice walked the whole state tree and added directly to block-import
-	// latency. Defragment takes the state's write lock, so it is safe to run
-	// concurrently with readers of the now-imported state.
-	go s.defragmentState(postState)
+	// Queue the imported state for background defragmentation. Running it inline
+	// before forkchoice walked the whole state tree and added directly to
+	// block-import latency. The send is non-blocking so it never delays import;
+	// if the worker is still busy (e.g. during sync) we skip this round, since
+	// defragmentation is a best-effort optimization.
+	select {
+	case s.defragmentRequests <- postState:
+	default:
+	}
 
 	return nil
 }
