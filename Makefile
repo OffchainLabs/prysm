@@ -85,10 +85,20 @@ $(addprefix release-,$(BINARIES)): release-%:
 testdata: ## Download external spec-test data
 	@./hack/testdata.sh
 
-# TODO: HANDLE THAT:
-# Exclude all tests needing minimal configs + E2E (defer to BAZEL_MIGRATION.md Phase 3).
+# Mainnet pass excludes E2E (Phase 8) and the minimal-config packages — the
+# latter run in the separate minimal pass below.
 TEST_EXCLUDE := /testing/endtoend|/testing/spectest/minimal|/beacon-chain/rpc/prysm/v1alpha1/beacon$$|/beacon-chain/rpc/prysm/v1alpha1/validator$$
 TEST_PKGS = $$($(GO) list ./... | grep -vE '$(TEST_EXCLUDE)')
+
+# Packages tested under -tags=minimal (minimal consensus config): the minimal spec
+# tests, the beacon + validator rpc packages (eth_network=minimal in Bazel), and the
+# minimal fieldparams test. fieldparams also runs in the mainnet pass (mainnet_test.go).
+# validator is a minimal-config package (its TestMain sets minimal config), so it runs
+# only here; its few mainnet-only tests are tagged //go:build !minimal to keep them out
+# of the minimal build (they aren't run in either pass, as before Phase 3 — running them
+# would need a dedicated mainnet harness).
+MINIMAL_PKGS := ./testing/spectest/minimal/... ./beacon-chain/rpc/prysm/v1alpha1/beacon ./beacon-chain/rpc/prysm/v1alpha1/validator ./config/fieldparams
+MINIMAL_TAGFLAG := -tags=$(TEST_TAGS),minimal
 
 # gotestsum (pinned via the go.mod tool directive) wraps `go test`, reformats
 # output, and reruns flaky failures up to 5 times — matching Bazel's
@@ -110,13 +120,18 @@ awk -v t=$(1) 'BEGIN{w=length(t)} /(✓|✖|∅|↻)/{c++; printf "[%*d/%d] %s\n
 endef
 
 .PHONY: test
-test: testdata ## Run unit tests (mainnet config). Use `make test TAGS=minimal` for minimal.
+test: testdata ## Run unit tests: a mainnet pass then a minimal (-tags=minimal) pass.
 	@set -o pipefail; \
-	echo; \
+	fail=0; \
+	echo; echo "=== mainnet pass ==="; \
 	total=$$( $(GO) list ./... | grep -vcE '$(TEST_EXCLUDE)' ); \
-	$(GOTESTSUM) $(GOTESTSUM_FLAGS) --packages="$(TEST_PKGS)" -- $(TEST_TAGFLAG) | $(call progress,$$total) \
-	  && { echo; echo "✅ All tests passed (any 'failure' above was a flake recovered within $(RERUN_ATTEMPTS) attempts)"; } \
-	  || { echo; echo "❌ Some failure: a test failed all $(RERUN_ATTEMPTS) attempts"; exit 1; }
+	$(GOTESTSUM) $(GOTESTSUM_FLAGS) --packages="$(TEST_PKGS)" -- $(TEST_TAGFLAG) | $(call progress,$$total) || fail=1; \
+	echo; echo "=== minimal pass (-tags=minimal) ==="; \
+	mtotal=$$( $(GO) list $(MINIMAL_PKGS) | wc -l | tr -d ' ' ); \
+	$(GOTESTSUM) $(GOTESTSUM_FLAGS) --packages="$(MINIMAL_PKGS)" -- $(MINIMAL_TAGFLAG) | $(call progress,$$mtotal) || fail=1; \
+	echo; \
+	if [ $$fail -eq 0 ]; then echo "✅ All tests passed (mainnet + minimal; any 'failure' above was a flake recovered within $(RERUN_ATTEMPTS) attempts)"; \
+	else echo "❌ Some failure: a test failed all $(RERUN_ATTEMPTS) attempts (mainnet or minimal pass)"; exit 1; fi
 
 .PHONY: test-race
 test-race: testdata ## Run unit tests with the race detector

@@ -12,67 +12,86 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# Remove any leftover staging dirs on exit, so a failed sszgen run never leaves
-# generated-only *.pb.go copies polluting the proto packages.
+# Minimal *.pb.go (Phase 3): the minimal ssz variants must be generated from
+# minimal *.pb.go (different bitvector types + ssz-size tags). We get those from
+# the proto generator's emit mode into a temp tree.
+MINPB="$(mktemp -d)"
 cleanup() {
+  rm -rf "$MINPB"
+  # Remove any leftover staging dirs so a failed sszgen run never leaves
+  # generated-only *.pb.go copies polluting the proto packages.
   find proto -type d \( -name '.sszgen_tmp' -o -name '.sszinc_tmp' \) 2>/dev/null \
     | while IFS= read -r d; do rm -rf "$d"; done
 }
 trap cleanup EXIT
+
+echo "emitting minimal *.pb.go for sszgen input"
+./hack/update-go-pbs.sh --emit-minimal-pbgo "$MINPB" >/dev/null
 
 sszgen() { go tool sszgen "$@"; }
 join() { local IFS=,; echo "$*"; }
 
 stage_pbgo() { # stage_pbgo <pkg_dir> <stage_dir> : copy only the generated *.pb.go
   mkdir -p "$2"
-  cp "$1"/*.pb.go "$2/"
+  local f
+  for f in "$1"/*.pb.go; do
+    case "$f" in *.minimal.pb.go) continue ;; esac  # skip committed minimal twins
+    cp "$f" "$2/"
+  done
 }
 unstage() { find "$1" -type f -delete; rmdir "$1"; }
 
-# gen_ssz <pkg_dir> <out> <lib-includes-csv> <proto-includes-csv> <objs-csv> [<exclude-objs-csv>]
+# ssz_one <network> <out_file> <pkg> <lib-inc-csv> <proto-inc-csv> <objs> [<exclude>]
 #
-# sszgen must see a package as ONLY its generated *.pb.go. That is true both for
-# the target package (--path) and for any proto-package --include: pointing at the
-# source dir (which also holds hand-written files) makes sszgen mis-resolve
-# cross-package references (e.g. BeaconStateGloas -> []*enginev1.Withdrawal) and
-# panic with "create not implemented for type reference". So proto includes are
-# staged into generated-only dirs too, mirroring Bazel's go_proto_ output dir.
-# Library includes (consensus-types/primitives, math) are plain Go packages and
-# are passed as their source dirs, exactly as Bazel does.
-gen_ssz() {
-  local pkg=$1 out=$2 lib_inc=$3 proto_inc=$4 objs=$5 exclude=${6:-}
-  local stage="$pkg/.sszgen_tmp"
-  local tmp_out staged_incs=() inc="$lib_inc"
-  tmp_out=$(mktemp)
-  echo "generating $pkg/$out"
-
-  stage_pbgo "$pkg" "$stage"
+# Runs sszgen for one (network, target). sszgen must see a package as ONLY its
+# generated *.pb.go, both for --path and for proto-package --includes (source dirs
+# trip its loader). For minimal, --path and proto includes come from the
+# minimal-pb.go temp tree ($MINPB); library includes (primitives, math) are
+# config-invariant Go packages passed as source dirs for both networks.
+ssz_one() {
+  local net=$1 out=$2 pkg=$3 lib_inc=$4 proto_inc=$5 objs=$6 exclude=${7:-}
+  local root=""; [ "$net" = minimal ] && root="$MINPB/"
+  local stage="${root}${pkg}/.sszgen_tmp"
+  local staged_incs=() inc="$lib_inc" p
+  stage_pbgo "${root}${pkg}" "$stage"
   if [ -n "$proto_inc" ]; then
-    local p
     for p in $(echo "$proto_inc" | tr ',' ' '); do
-      local istage="$p/.sszinc_tmp"
-      stage_pbgo "$p" "$istage"
+      local istage="${root}${p}/.sszinc_tmp"
+      stage_pbgo "${root}${p}" "$istage"
       staged_incs+=("$istage")
       inc="${inc:+$inc,}$istage"
     done
   fi
-
-  local args=(--output="$tmp_out" --path="$stage" --objs="$objs")
+  local args=(--output="$out" --path="$stage" --objs="$objs")
   [ -n "$inc" ] && args+=(--include="$inc")
   [ -n "$exclude" ] && args+=(--exclude-objs="$exclude")
   sszgen "${args[@]}"
-
-  # Strip the `// Hash: ...` line (as the old bazel copy-back did) on the way in.
-  sed '/\/\/ Hash: /d' "$tmp_out" > "$pkg/$out"
-
-  rm -f "$tmp_out"
   unstage "$stage"
-  # Guard the array expansion: macOS bash 3.2 treats "${empty[@]}" as unbound
-  # under `set -u`.
-  if [ "${#staged_incs[@]}" -gt 0 ]; then
-    local d
-    for d in "${staged_incs[@]}"; do unstage "$d"; done
+  if [ "${#staged_incs[@]}" -gt 0 ]; then local d; for d in "${staged_incs[@]}"; do unstage "$d"; done; fi
+}
+
+# gen_ssz <pkg_dir> <out> <lib-includes-csv> <proto-includes-csv> <objs-csv> [<exclude-objs-csv>]
+#
+# Generates the mainnet and minimal ssz for a target; if they differ, commits
+# build-tagged twins (mainnet `//go:build !minimal` + <name>.minimal.ssz.go
+# `//go:build minimal`), else a single untagged file.
+gen_ssz() {
+  local pkg=$1 out=$2 lib_inc=$3 proto_inc=$4 objs=$5 exclude=${6:-}
+  local tmain tmin
+  tmain=$(mktemp); tmin=$(mktemp)
+  echo "generating $pkg/$out"
+  ssz_one mainnet "$tmain" "$pkg" "$lib_inc" "$proto_inc" "$objs" "$exclude"
+  ssz_one minimal "$tmin"  "$pkg" "$lib_inc" "$proto_inc" "$objs" "$exclude"
+  # Strip the `// Hash: ...` line (as the old bazel copy-back did).
+  sed '/\/\/ Hash: /d' "$tmain" > "$tmain.s"
+  sed '/\/\/ Hash: /d' "$tmin"  > "$tmin.s"
+  if diff -q "$tmain.s" "$tmin.s" >/dev/null; then
+    cp "$tmain.s" "$pkg/$out"
+  else
+    { printf '//go:build !minimal\n\n'; cat "$tmain.s"; } > "$pkg/$out"
+    { printf '//go:build minimal\n\n'; cat "$tmin.s"; } > "$pkg/${out%.ssz.go}.minimal.ssz.go"
   fi
+  rm -f "$tmain" "$tmin" "$tmain.s" "$tmin.s"
 }
 
 # --- proto/prysm/v1alpha1 -----------------------------------------------------
