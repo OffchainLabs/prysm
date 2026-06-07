@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("Nj\x97h*C<fk/#b;+9\xaa/#b\x11GM\xe0\x8c\rB3")
