@@ -1194,6 +1194,48 @@ func TestIsSidecarIndexRequested(t *testing.T) {
 	}
 }
 
+func TestIsSidecarSizeValid(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	validator := isSidecarSizeValid()
+	const slot = 0
+	maxBlobs := params.BeaconConfig().MaxBlobsPerBlock(slot)
+
+	build := func(cells int) blocks.RODataColumn {
+		column := make([][]byte, cells)
+		commitments := make([][]byte, cells)
+		proofs := make([][]byte, cells)
+		for i := range cells {
+			column[i] = make([]byte, 2048)
+			commitments[i] = make([]byte, 48)
+			proofs[i] = make([]byte, 48)
+		}
+		incl := make([][]byte, 4)
+		for i := range incl {
+			incl[i] = make([]byte, fieldparams.RootLength)
+		}
+		sc, err := blocks.NewRODataColumn(&ethpb.DataColumnSidecar{
+			Column:         column,
+			KzgCommitments: commitments,
+			KzgProofs:      proofs,
+			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					Slot: slot, ParentRoot: make([]byte, fieldparams.RootLength),
+					StateRoot: make([]byte, fieldparams.RootLength), BodyRoot: make([]byte, fieldparams.RootLength),
+				},
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+			KzgCommitmentsInclusionProof: incl,
+		})
+		require.NoError(t, err)
+		return sc
+	}
+
+	require.NoError(t, validator(build(maxBlobs)))
+
+	err := validator(build(fieldparams.MaxBlobCommitmentsPerBlock))
+	require.ErrorContains(t, "more cells", err)
+}
+
 func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
