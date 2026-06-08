@@ -14,6 +14,41 @@ PKG_beacon-chain := ./cmd/beacon-chain
 PKG_validator    := ./cmd/validator
 PKG_prysmctl     := ./cmd/prysmctl
 PKG_bootnode     := ./tools/bootnode
+PKG_client-stats := ./cmd/client-stats
+
+# Cross-compilation (Phase 4). The set of binaries DISTRIBUTED via prysm.sh/prysm.bat
+# (prysmaticlabs.com/releases) — note this differs from BINARIES: client-stats is shipped,
+# bootnode is not. All four live at ./cmd/<name>.
+CROSS_BINARIES := beacon-chain validator client-stats prysmctl
+
+# Run-targets as "<goos>/<goarch>/<c-target-triple>". The C toolchain is chosen per-OS
+# (see the `cross` recipe), mirroring exactly what Bazel used — all five targets build from
+# a single Linux x86_64 host, and only Linux was ever hermetic:
+#   linux   -> `zig cc` (hermetic, any host; triple selects glibc 2.31, Bazel's baseline)
+#   darwin  -> osxcross o64-clang/oa64-clang (Linux->macOS, embeds MacOSX12.3 SDK). Needed
+#              because herumi's prebuilt C++ lib + the prometheus/mach cgo require Apple's SDK.
+#   windows -> mingw-w64 (`x86_64-w64-mingw32-gcc`); zig's windows-gnu can't resolve the
+#              libstdc++ symbols in herumi's MinGW-built prebuilt lib (crypto/bls/herumi)
+# `make cross` runs on a Linux x86_64 host only and auto-provisions every toolchain it needs
+# (no manual setup): zig via install-zig.sh, mingw-w64 via install-mingw.sh, osxcross via
+# install-osxcross.sh. Each is idempotent (no-op if already present); the package-manager and
+# osxcross steps use sudo when not root.
+CROSS_TARGETS := \
+	linux/amd64/x86_64-linux-gnu.2.31 \
+	linux/arm64/aarch64-linux-gnu.2.31 \
+	darwin/amd64/x86_64-macos \
+	darwin/arm64/aarch64-macos \
+	windows/amd64/x86_64-windows-gnu
+
+# linux/arm64 C optimization flags, ported from build/bazelrc/cross.bazelrc:32-37.
+# -march=armv8-a is dropped: it is the aarch64 baseline already, and `zig cc` rejects the
+# bare CPU name ("unknown CPU: 'armv8'").
+CGO_CFLAGS_LINUX_ARM64 := -ftree-vectorize -funsafe-math-optimizations -fomit-frame-pointer
+
+# blst (Prysm's only CGO dep) defaults to ADX/modern on amd64 via upstream's
+# `#cgo amd64 CFLAGS: -D__ADX__`. -D__BLST_PORTABLE__ forces the portable path, matching
+# Bazel's shipped default; the modern beacon-chain artifact omits it (amd64 only — ADX is x86).
+BLST_PORTABLE := -D__BLST_PORTABLE__
 
 # Version stamping: replaces Bazel --stamp / hack/workspace_status.sh, setting the
 # same runtime/version vars its x_defs did. gitTag uses --abbrev=0 to get a clean
@@ -166,8 +201,12 @@ gen-mocks: ## Regenerate gomock mocks (go.mod-pinned mockgen)
 lint: ## [Phase 7] Static analysis (nogo → prysm-vet multichecker)
 	@echo "❌ 'lint' is not implemented yet — Phase 7 (static analysis). See BAZEL_MIGRATION.md."; exit 1
 
-cross: ## [Phase 4] Cross-compile binaries via zig cc
-	@echo "❌ 'cross' is not implemented yet — Phase 4 (CGO cross-compilation). See BAZEL_MIGRATION.md."; exit 1
+cross: ## [Phase 4] Cross-compile distributed binaries for all run-targets (Linux host only)
+	@GO="$(GO)" DIST="$(DIST)" GIT_TAG="$(GIT_TAG)" \
+		CROSS_BINARIES="$(CROSS_BINARIES)" CROSS_TARGETS="$(CROSS_TARGETS)" \
+		CGO_CFLAGS_LINUX_ARM64="$(CGO_CFLAGS_LINUX_ARM64)" BLST_PORTABLE="$(BLST_PORTABLE)" \
+		LDFLAGS="$(LDFLAGS)" TAGFLAG="$(TAGFLAG)" PGO_beacon_chain="$(PGO_beacon-chain)" \
+		./tools/cross-toolchain/cross-build.sh
 
 docker: ## [Phase 5] Build OCI/Docker images
 	@echo "❌ 'docker' is not implemented yet — Phase 5 (Docker/OCI images). See BAZEL_MIGRATION.md."; exit 1

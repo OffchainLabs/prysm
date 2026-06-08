@@ -112,21 +112,60 @@ can't do that mid-build. Options:
   codegen with the minimal dict first). Simpler to set up, but stateful/dirty-tree — not
   recommended.
 
-### Phase 4 — CGO cross-compilation
-Prysm needs CGO (blst, hashtree, some libp2p). Replace the hermetic Zig toolchain
-(`hermetic_cc_toolchain`, already in the Bazel setup) with **`zig cc` as the C compiler**:
+### Phase 4 — CGO cross-compilation — ✅ DONE (windows pending mingw on the release host)
+Implemented as `make cross` (Makefile) + `tools/cross-toolchain/install-zig.sh`. The five
+distributed run-targets (linux/{amd64,arm64}, darwin/{amd64,arm64}, windows/amd64) for the
+shipped binary set (beacon-chain, validator, client-stats, prysmctl — **not** bootnode),
+matching the names `prysm.sh`/`prysm.bat` fetch.
+
+**CGO surface (discovered):** Prysm's cgo deps are **blst** (C), **herumi
+`bls-eth-go-binary`** (prebuilt C++ static libs, imported *unconditionally* by
+`crypto/bls/bls.go` "temporarily while we transition to blst for ethdo"), and a small
+**prometheus/client_golang** darwin mach cgo file. `gohashtree` is **not** cgo (pure Go +
+Go-asm). The herumi C++ libs and the darwin mach headers are what break full hermeticity.
+
+**Build host: a single Linux x86_64 machine builds all five targets** — exactly as Bazel
+did (its RBE worker was `debian:bullseye-slim` with osxcross + mingw-w64; `cross.bazelrc:42`
+"all docker sandbox configs must run from a linux x86_64 host").
+
+**`make cross` runs on a Linux x86_64 host only and is turnkey — it auto-provisions every
+toolchain it needs** (no manual setup), each via an idempotent script under
+`tools/cross-toolchain/`:
+- `install-zig.sh` — pinned zig (user cache, no root)
+- `install-mingw.sh` — gcc + g++ mingw-w64 (POSIX threads) via apt/dnf/pacman
+- `install-osxcross.sh` — build deps + osxcross (delegates to the unchanged
+  `install_osxcross.sh` + `link_osxcross.sh`, MacOSX12.3 SDK)
+The package-manager and osxcross steps use `sudo` when not already root. Running `make cross`
+on a non-Linux host errors out early. For CI, baking mingw-w64 + osxcross into the build image
+(as Bazel's RBE worker did) avoids the per-run install.
+
+**Per-OS toolchain** (mirrors what Bazel actually used — only Linux was hermetic):
 ```
-GOOS=linux  GOARCH=amd64 CGO_ENABLED=1 CC="zig cc -target x86_64-linux-gnu"   go build ...
-GOOS=linux  GOARCH=arm64 CGO_ENABLED=1 CC="zig cc -target aarch64-linux-gnu"  go build ...
-GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 CC="zig cc -target aarch64-macos"      go build ...
-GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC="zig cc -target x86_64-windows-gnu" go build ...
+linux   amd64  CC="zig cc -target x86_64-linux-gnu.2.31"
+linux   arm64  CC="zig cc -target aarch64-linux-gnu.2.31"   CGO_CFLAGS+=-ftree-vectorize -funsafe-math-optimizations -fomit-frame-pointer
+darwin  amd64  CC="o64-clang"              # osxcross (Linux->macOS), embeds MacOSX12.3 SDK
+darwin  arm64  CC="oa64-clang"             # osxcross (Linux->macOS), embeds MacOSX12.3 SDK
+windows amd64  CC="x86_64-w64-mingw32-gcc" # mingw-w64; zig's windows-gnu can't link herumi's libstdc++
 ```
-- Port the ARM64 optimization flags from `build/bazelrc/cross.bazelrc`
-  (`-march=armv8-a -ftree-vectorize ...`) into `CGO_CFLAGS`.
-- Pin Zig version (currently 3.0.1 via `hermetic_cc_toolchain`). `xx` / `goreleaser` can
-  manage this, or a thin wrapper script in `tools/cross-toolchain/`.
-- Validate blst SIMD variants (`blst_modern` / portable builds) map to the right CGO
-  flags (Bazel uses `--define=blst_modern=false` for the portable image).
+Notes / deviations from the original "zig for everything" sketch:
+- **zig pinned to 0.14.1** (not hermetic_cc_toolchain's 3.0.1 numbering — that's the Bazel
+  rule version; we pin the zig *compiler*). `install-zig.sh` downloads+verifies it per host.
+- **glibc 2.31** pinned via the `.2.31` triple suffix (Bazel's Ubuntu-20.04 baseline).
+- `-march=armv8-a` **dropped** — it is the aarch64 baseline and `zig cc` rejects the name.
+- **darwin is not hermetic and is not zig**: zig doesn't ship Apple's SDK and can't consume
+  the SDK header layout even with `-isysroot`. We keep Bazel's osxcross path unchanged
+  (`tools/cross-toolchain/{common,install,link}_osxcross.sh`, SDK 12.3) and the Makefile
+  invokes its `o64-clang`/`oa64-clang` wrappers. A macOS host with native `clang -arch` also
+  works for local dev, but the faithful/CI path is osxcross-on-Linux.
+- **windows needs mingw-w64**, not zig: herumi's Windows lib is MinGW/libstdc++-built and
+  zig's `windows-gnu` provides libc++, leaving libstdc++ symbols undefined.
+- **blst variant:** `-D__BLST_PORTABLE__` is passed by default (matches Bazel's shipped
+  portable images; upstream's Go bindings otherwise default to `-D__ADX__` on amd64). The
+  `beacon-chain-<tag>-modern-<os>-amd64` artifact omits it (ADX is x86-only). Verified: the
+  modern build SIGILLs on a non-ADX CPU while portable runs — proof the flag takes effect.
+- **Path to full hermeticity:** removing the unconditional `crypto/bls/herumi` import (once
+  the ethdo transition completes) would let windows build under zig and drop the mingw
+  dependency; darwin would still need osxcross/macOS for the prometheus mach cgo.
 
 ### Phase 5 — Docker / OCI images
 Replace `rules_oci` + `prysm_image.bzl` with **multi-stage Dockerfiles + `docker buildx`**:
