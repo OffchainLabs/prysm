@@ -178,7 +178,7 @@ func TestDistributedSelector_EpochGuard(t *testing.T) {
 				Status:         ethpb.ValidatorStatus_ACTIVE,
 			}},
 		})
-		ds.v.duties.Write(data)
+		ds.v.duties.write(data)
 	}
 
 	sigDomain := make([]byte, 32)
@@ -211,7 +211,7 @@ func TestDistributedSelector_ReadyCh_BlocksUntilRefresh(t *testing.T) {
 				Status:         ethpb.ValidatorStatus_ACTIVE,
 			}},
 		})
-		ds.v.duties.Write(data)
+		ds.v.duties.write(data)
 	}
 
 	proof := make([]byte, 96)
@@ -272,7 +272,7 @@ func TestDistributedSelector_ErrorIsStickyWithinEpoch(t *testing.T) {
 				Status:         ethpb.ValidatorStatus_ACTIVE,
 			}},
 		})
-		ds.v.duties.Write(data)
+		ds.v.duties.write(data)
 	}
 
 	sigDomain := make([]byte, 32)

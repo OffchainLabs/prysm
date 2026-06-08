@@ -42,7 +42,7 @@ func TestUpdateDuties_ReturnsError(t *testing.T) {
 	).Return(nil, expected)
 
 	assert.ErrorContains(t, expected.Error(), v.UpdateDuties(t.Context()))
-	assert.Equal(t, true, v.duties.IsInitialized(), "Existing assignments should be preserved across transient errors")
+	assert.Equal(t, true, v.duties.isInitialized(), "Existing assignments should be preserved across transient errors")
 }
 
 func TestUpdateDuties_OK(t *testing.T) {
@@ -89,10 +89,10 @@ func TestUpdateDuties_OK(t *testing.T) {
 
 	util.WaitTimeout(&wg, 2*time.Second)
 
-	snap := v.duties.Snapshot()
-	require.Equal(t, 1, snap.CurrentDutyCount(), "Expected one duty")
+	snap := v.duties.snapshot()
+	require.Equal(t, 1, snap.currentDutyCount(), "Expected one duty")
 	var gotDuty *ethpb.ValidatorDuty
-	for _, d := range snap.CurrentDuties() {
+	for _, d := range snap.currentDuties() {
 		gotDuty = d
 	}
 	assert.Equal(t, params.BeaconConfig().SlotsPerEpoch+1, gotDuty.ProposerSlots[0], "Unexpected validator assignments")
@@ -312,7 +312,7 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 	{
 		var data dutyStoreData
 		data.setFromContainer(dutiesContainer)
-		ds.Write(data)
+		ds.write(data)
 	}
 	v := &validator{
 		km:              newMockKeymanager(t, randKeypair(t)),
@@ -393,7 +393,7 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 		}
 		curr, err := bytesutil.DecodeHexWithLength(head.CurrentDutyDependentRoot, fieldparams.RootLength)
 		require.NoError(t, err)
-		require.DeepEqual(t, curr, v.duties.CurrDependentRoot())
+		require.DeepEqual(t, curr, v.duties.currDependentRoot())
 		require.NoError(t, v.checkDependentRoots(ctx, head))
 	})
 }
@@ -429,7 +429,7 @@ func TestValidator_CheckDependentRoots_NoEmptyWindowDuringRefetch(t *testing.T) 
 	{
 		var data dutyStoreData
 		data.setFromContainer(oldContainer)
-		ds.Write(data)
+		ds.write(data)
 	}
 	v := &validator{
 		km:              newMockKeymanager(t, randKeypair(t)),
@@ -469,20 +469,20 @@ func TestValidator_CheckDependentRoots_NoEmptyWindowDuringRefetch(t *testing.T) 
 	// The bug: with clearDuties() before UpdateDuties(), the dependent roots
 	// would be (nil, nil) here. The fix keeps the OLD values visible until
 	// the atomic swap at the end of updateDuties.
-	prev := v.duties.PrevDependentRoot()
-	curr := v.duties.CurrDependentRoot()
+	prev := v.duties.prevDependentRoot()
+	curr := v.duties.currDependentRoot()
 	require.NotNil(t, prev, "duty store was cleared mid-refetch (prev)")
 	require.NotNil(t, curr, "duty store was cleared mid-refetch (curr)")
 	require.DeepEqual(t, oldContainer.PrevDependentRoot, prev)
 	require.DeepEqual(t, oldContainer.CurrDependentRoot, curr)
-	require.Equal(t, true, v.duties.IsInitialized())
+	require.Equal(t, true, v.duties.isInitialized())
 
 	close(release)
 	require.NoError(t, <-done)
 
 	// After completion, the new roots must be in place.
-	require.DeepEqual(t, newContainer.PrevDependentRoot, v.duties.PrevDependentRoot())
-	require.DeepEqual(t, newContainer.CurrDependentRoot, v.duties.CurrDependentRoot())
+	require.DeepEqual(t, newContainer.PrevDependentRoot, v.duties.prevDependentRoot())
+	require.DeepEqual(t, newContainer.CurrDependentRoot, v.duties.currDependentRoot())
 }
 
 func TestUpdateDutiesSplit(t *testing.T) {
@@ -548,10 +548,10 @@ func TestUpdateDutiesSplit(t *testing.T) {
 
 		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, []primitives.ValidatorIndex{42}))
 
-		snap := v.duties.Snapshot()
+		snap := v.duties.snapshot()
 		// Current epoch: attester + proposer + sync + PTC.
-		require.Equal(t, 1, snap.CurrentDutyCount())
-		for _, d := range snap.CurrentDuties() {
+		require.Equal(t, 1, snap.currentDutyCount())
+		for _, d := range snap.currentDuties() {
 			assert.Equal(t, primitives.Slot(epoch)*spe+3, d.AttesterSlot)
 			require.Equal(t, 1, len(d.ProposerSlots))
 			assert.Equal(t, primitives.Slot(epoch)*spe+1, d.ProposerSlots[0])
@@ -561,8 +561,8 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		}
 
 		// Next epoch: attester + PTC look-ahead.
-		require.Equal(t, 1, snap.NextDutyCount())
-		for _, d := range snap.NextDuties() {
+		require.Equal(t, 1, snap.nextDutyCount())
+		for _, d := range snap.nextDuties() {
 			assert.Equal(t, primitives.Slot(epoch+1)*spe+7, d.AttesterSlot)
 			require.Equal(t, 1, len(d.PtcSlots))
 			assert.Equal(t, primitives.Slot(epoch+1)*spe+2, d.PtcSlots[0])
@@ -570,10 +570,10 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		}
 
 		// Duty store accessors.
-		assert.DeepEqual(t, []primitives.Slot{primitives.Slot(epoch)*spe + 1}, v.duties.ProposerSlots(42))
-		assert.DeepEqual(t, []primitives.Slot{primitives.Slot(epoch)*spe + 5}, v.duties.PtcSlots(42))
-		assert.Equal(t, true, v.duties.IsSyncCommittee(42))
-		assert.Equal(t, false, v.duties.IsNextSyncCommittee(42))
+		assert.DeepEqual(t, []primitives.Slot{primitives.Slot(epoch)*spe + 1}, v.duties.proposerSlots(42))
+		assert.DeepEqual(t, []primitives.Slot{primitives.Slot(epoch)*spe + 5}, v.duties.ptcSlots(42))
+		assert.Equal(t, true, v.duties.isSyncCommittee(42))
+		assert.Equal(t, false, v.duties.isNextSyncCommittee(42))
 	})
 
 	t.Run("attester error preserves existing duties", func(t *testing.T) {
@@ -588,7 +588,7 @@ func TestUpdateDutiesSplit(t *testing.T) {
 			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
 				CurrentEpochDuties: []*ethpb.ValidatorDuty{seedDuty},
 			})
-			v.duties.Write(data)
+			v.duties.write(data)
 		}
 
 		client.EXPECT().AttesterDuties(gomock.Any(), epoch, gomock.Any()).Return(nil, errors.New("attester fail"))
@@ -599,8 +599,8 @@ func TestUpdateDutiesSplit(t *testing.T) {
 
 		err := v.updateDutiesSplit(t.Context(), epoch, []primitives.ValidatorIndex{42})
 		require.ErrorContains(t, "attester fail", err)
-		assert.Equal(t, true, v.duties.IsInitialized())
-		assert.Equal(t, 1, v.duties.Snapshot().CurrentDutyCount())
+		assert.Equal(t, true, v.duties.isInitialized())
+		assert.Equal(t, 1, v.duties.snapshot().currentDutyCount())
 	})
 
 	t.Run("proposer error preserves existing duties", func(t *testing.T) {
@@ -615,7 +615,7 @@ func TestUpdateDutiesSplit(t *testing.T) {
 			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
 				CurrentEpochDuties: []*ethpb.ValidatorDuty{seedDuty},
 			})
-			v.duties.Write(data)
+			v.duties.write(data)
 		}
 
 		client.EXPECT().AttesterDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.AttesterDutiesResponse{}, nil).AnyTimes()
@@ -626,8 +626,8 @@ func TestUpdateDutiesSplit(t *testing.T) {
 
 		err := v.updateDutiesSplit(t.Context(), epoch, []primitives.ValidatorIndex{42})
 		require.ErrorContains(t, "proposer fail", err)
-		assert.Equal(t, true, v.duties.IsInitialized())
-		assert.Equal(t, 1, v.duties.Snapshot().CurrentDutyCount())
+		assert.Equal(t, true, v.duties.isInitialized())
+		assert.Equal(t, 1, v.duties.snapshot().currentDutyCount())
 	})
 
 	t.Run("PTC error is non-fatal", func(t *testing.T) {
@@ -649,8 +649,8 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		client.EXPECT().PTCDuties(gomock.Any(), epoch+1, gomock.Any()).Return(&ethpb.PTCDutiesResponse{}, nil)
 
 		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, []primitives.ValidatorIndex{42}))
-		assert.Equal(t, true, v.duties.IsInitialized())
-		assert.Equal(t, 0, len(v.duties.PtcSlots(42)))
+		assert.Equal(t, true, v.duties.isInitialized())
+		assert.Equal(t, 0, len(v.duties.ptcSlots(42)))
 	})
 
 	t.Run("no known indices clears existing duties", func(t *testing.T) {
@@ -667,12 +667,12 @@ func TestUpdateDutiesSplit(t *testing.T) {
 					Status: ethpb.ValidatorStatus_ACTIVE,
 				}},
 			})
-			v.duties.Write(data)
-			require.Equal(t, true, v.duties.IsInitialized())
+			v.duties.write(data)
+			require.Equal(t, true, v.duties.isInitialized())
 		}
 
 		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, nil))
-		assert.Equal(t, false, v.duties.IsInitialized())
+		assert.Equal(t, false, v.duties.isInitialized())
 	})
 
 	t.Run("promote-path dependent root divergence falls back to full refetch", func(t *testing.T) {
@@ -691,7 +691,7 @@ func TestUpdateDutiesSplit(t *testing.T) {
 					Status:       ethpb.ValidatorStatus_ACTIVE,
 				}},
 			})
-			v.duties.Write(data)
+			v.duties.write(data)
 		}
 		v.duties.data.epoch = epoch - 1
 		v.duties.data.currDependentRoot = bytesutil.PadTo([]byte{0xaa}, 32)
@@ -739,7 +739,7 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		assert.LogsContain(t, hook, "diverged on promotion")
 
 		// Refetch's currDepRoot is the next-epoch attester root.
-		require.DeepEqual(t, rootC, v.duties.CurrDependentRoot())
+		require.DeepEqual(t, rootC, v.duties.currDependentRoot())
 		assert.Equal(t, epoch, v.duties.data.epoch)
 	})
 
@@ -812,7 +812,7 @@ func TestUpdateDutiesSplit(t *testing.T) {
 			})
 			data.epoch = epoch - 1
 			data.indices = []primitives.ValidatorIndex{42}
-			v.duties.Write(data)
+			v.duties.write(data)
 		}
 
 		// Caller now presents a different (larger) index set; canPromote must
@@ -850,7 +850,7 @@ func TestUpdateDutiesSplit(t *testing.T) {
 				}},
 			})
 			data.missingNext = missingNextPtc
-			v.duties.Write(data)
+			v.duties.write(data)
 		}
 
 		// Expect full-fetch RPC pattern (8 endpoints), not promote (4).
@@ -890,7 +890,7 @@ func TestUpdateDutiesSplit(t *testing.T) {
 			})
 			data.epoch = epoch - 1
 			data.indices = []primitives.ValidatorIndex{42}
-			v.duties.Write(data)
+			v.duties.write(data)
 		}
 
 		root := bytesutil.PadTo([]byte{0x01}, 32)
@@ -907,9 +907,9 @@ func TestUpdateDutiesSplit(t *testing.T) {
 
 		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, []primitives.ValidatorIndex{42}))
 
-		snap := v.duties.Snapshot()
-		require.Equal(t, 1, snap.CurrentDutyCount())
-		for _, d := range snap.CurrentDuties() {
+		snap := v.duties.snapshot()
+		require.Equal(t, 1, snap.currentDutyCount())
+		for _, d := range snap.currentDuties() {
 			assert.Equal(t, ethpb.ValidatorStatus_ACTIVE, d.Status)
 		}
 	})

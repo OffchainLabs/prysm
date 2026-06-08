@@ -86,7 +86,7 @@ func TestSubmitPayloadAttestation_ValidatorDutiesRequestFailure(t *testing.T) {
 			{
 				var data dutyStoreData
 				data.setFromContainer(&ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{}})
-				validator.duties.Write(data)
+				validator.duties.write(data)
 			}
 			defer finish()
 
@@ -131,7 +131,7 @@ func TestSubmitPayloadAttestation_BadDomainData(t *testing.T) {
 						ValidatorIndex: validatorIndex,
 					},
 				}})
-				validator.duties.Write(data)
+				validator.duties.write(data)
 			}
 
 			m.validatorClient.EXPECT().
@@ -175,7 +175,7 @@ func TestSubmitPayloadAttestation_CouldNotSubmit(t *testing.T) {
 						ValidatorIndex: validatorIndex,
 					},
 				}})
-				validator.duties.Write(data)
+				validator.duties.write(data)
 			}
 
 			m.validatorClient.EXPECT().
@@ -223,7 +223,7 @@ func TestSubmitPayloadAttestation_OK(t *testing.T) {
 						ValidatorIndex: validatorIndex,
 					},
 				}})
-				validator.duties.Write(data)
+				validator.duties.write(data)
 			}
 
 			blockRoot := bytesutil.PadTo([]byte{'b'}, 32)
