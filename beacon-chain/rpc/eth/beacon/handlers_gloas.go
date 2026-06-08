@@ -104,8 +104,9 @@ func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.
 		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
 		return
 	}
-	if versionHeader != version.String(version.Gloas) {
-		httputil.HandleError(w, api.VersionHeader+" header must be gloas", http.StatusBadRequest)
+	v, err := version.FromString(versionHeader)
+	if err != nil || v < version.Gloas {
+		httputil.HandleError(w, api.VersionHeader+" header must be gloas or later", http.StatusBadRequest)
 		return
 	}
 	blindedHeader := r.Header.Get(api.ExecutionPayloadBlindedHeader)

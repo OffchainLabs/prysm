@@ -254,23 +254,24 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_NoBlobs(t *testing.T)
 	require.Equal(t, http.StatusOK, w.Code)
 }
 
-// Broadcast succeeded but DB integration failed -> Aborted maps to 202.
+// DB integration failed -> Aborted maps to 202.
 func TestPublishExecutionPayloadEnvelope_ImportFailureReturns202(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	signed := testSignedEnvelope()
+	contents, err := structs.SignedExecutionPayloadEnvelopeContentsFromConsensus(signed, nil, nil)
+	require.NoError(t, err)
+	body, err := json.Marshal(contents)
+	require.NoError(t, err)
 
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
 		gomock.Any(), gomock.Any(),
 	).Return(nil, status.Error(codes.Aborted, "import failed"))
 
-	s := &Server{
-		V1Alpha1ValidatorServer:       v1alpha1Server,
-		ExecutionPayloadEnvelopeCache: envelopeCacheFor(signed),
-	}
-	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(blindedJSONBody(t, signed)))
+	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
+	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
 	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
-	req.Header.Set(api.ExecutionPayloadBlindedHeader, "true")
+	req.Header.Set(api.ExecutionPayloadBlindedHeader, "false")
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 

@@ -411,7 +411,7 @@ message BeaconBlockContentsGloas {
   ExecutionPayloadEnvelope execution_payload_envelope = 2;
   repeated bytes kzg_proofs = 3 [
     (ethereum.eth.ext.ssz_size) = "?,48",
-    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+    (ethereum.eth.ext.ssz_max) = "max_cell_proofs_length.size"
   ];
   repeated bytes blobs = 4 [
     (ethereum.eth.ext.ssz_size) = "?,blob.size",
@@ -427,7 +427,7 @@ message SignedExecutionPayloadEnvelopeContents {
   SignedExecutionPayloadEnvelope signed_execution_payload_envelope = 1;
   repeated bytes kzg_proofs = 2 [
     (ethereum.eth.ext.ssz_size) = "?,48",
-    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+    (ethereum.eth.ext.ssz_max) = "max_cell_proofs_length.size"
   ];
   repeated bytes blobs = 3 [
     (ethereum.eth.ext.ssz_size) = "?,blob.size",

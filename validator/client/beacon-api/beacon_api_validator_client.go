@@ -353,13 +353,24 @@ func (c *beaconApiValidatorClient) AggregatedSyncSelections(ctx context.Context,
 func wrapInMetrics[Resp any](action string, f func() (Resp, error)) (Resp, error) {
 	now := time.Now()
 	resp, err := f()
+	recordMetrics(action, now, err)
+	return resp, err
+}
+
+func wrapInMetrics2[R1, R2 any](action string, f func() (R1, R2, error)) (R1, R2, error) {
+	now := time.Now()
+	r1, r2, err := f()
+	recordMetrics(action, now, err)
+	return r1, r2, err
+}
+
+func recordMetrics(action string, start time.Time, err error) {
 	httpActionCount.WithLabelValues(action).Inc()
 	if err == nil {
-		httpActionLatency.WithLabelValues(action).Observe(time.Since(now).Seconds())
+		httpActionLatency.WithLabelValues(action).Observe(time.Since(start).Seconds())
 	} else {
 		failedHTTPActionCount.WithLabelValues(action).Inc()
 	}
-	return resp, err
 }
 
 func (c *beaconApiValidatorClient) Host() string {
@@ -376,7 +387,9 @@ func (c *beaconApiValidatorClient) GetExecutionPayloadEnvelope(ctx context.Conte
 	ctx, span := trace.StartSpan(ctx, "beacon-api.GetExecutionPayloadEnvelope")
 	defer span.End()
 
-	return c.getExecutionPayloadEnvelope(ctx, slot, beaconBlockRoot)
+	return wrapInMetrics2("GetExecutionPayloadEnvelope", func() (*ethpb.ExecutionPayloadEnvelope, *ethpb.WireBlindedExecutionPayloadEnvelope, error) {
+		return c.getExecutionPayloadEnvelope(ctx, slot, beaconBlockRoot)
+	})
 }
 
 func (c *beaconApiValidatorClient) PublishExecutionPayloadEnvelope(ctx context.Context, in *ethpb.SignedExecutionPayloadEnvelope) (*empty.Empty, error) {
