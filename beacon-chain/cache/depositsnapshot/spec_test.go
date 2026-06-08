@@ -7,12 +7,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/build/bazel"
+	"github.com/OffchainLabs/prysm/v7/build/externaldata"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"github.com/OffchainLabs/prysm/v7/build/bazel"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
@@ -162,12 +163,15 @@ func (sd *snapshot) UnmarshalYAML(value *yaml.Node) error {
 }
 
 func readTestCases() ([]testCase, error) {
+	if err := externaldata.Fetch(externaldata.EIP4881SpecTests); err != nil {
+		return nil, fmt.Errorf("fetch")
+	}
 	testFolders, err := bazel.ListRunfiles()
 	if err != nil {
 		return nil, err
 	}
 	for _, ff := range testFolders {
-		if strings.Contains(ff.ShortPath, "eip4881_spec_tests") &&
+		if strings.Contains(ff.ShortPath, externaldata.EIP4881SpecTests) &&
 			strings.Contains(ff.ShortPath, "eip-4881/test_cases.yaml") {
 			enc, err := file.ReadFileAsBytes(ff.Path)
 			if err != nil {

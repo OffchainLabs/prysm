@@ -24,9 +24,10 @@ import (
 // from a local test-data cache instead of a Bazel runfiles directory.
 //
 // External test data that Bazel fetches as http_archive repositories (spec
-// tests, BLS vectors, network configs, ...) is downloaded by hack/testdata.sh
-// into the test-data root (see testdataRoot). See bazel.go for the Bazel-backed
-// implementations.
+// tests, BLS vectors, network configs, ...) is downloaded lazily by the
+// build/externaldata package into the test-data root (see testdataRoot): Runfile
+// fetches on demand, and `make testdata` pre-fetches everything. See bazel.go for
+// the Bazel-backed implementations.
 
 // BuiltWithBazel returns true iff this library was built with Bazel.
 func BuiltWithBazel() bool {
@@ -55,7 +56,7 @@ func moduleRoot() (string, error) {
 
 // testdataRoot returns the directory holding downloaded external test data. It
 // honors $PRYSM_TESTDATA, otherwise defaults to <module root>/third_party/testdata.
-// Populated by hack/testdata.sh (make testdata).
+// Populated lazily by build/externaldata (and eagerly by `make testdata`).
 func testdataRoot() string {
 	if d := os.Getenv("PRYSM_TESTDATA"); d != "" {
 		return d
@@ -102,8 +103,10 @@ func FindBinary(_, name string) (string, bool) {
 }
 
 // Runfile resolves path against, in order: an absolute path, the current working
-// directory, the module root, and the test-data root. It returns an error if the
-// file/dir cannot be found.
+// directory, the module root, and the test-data root. External test data is a
+// lazy fixture: if the path is not on disk but maps to a known external-data
+// archive, that archive is fetched (once, idempotently) and resolution retried.
+// It returns an error if the file/dir still cannot be found.
 func Runfile(path string) (string, error) {
 	if filepath.IsAbs(path) {
 		if _, err := os.Stat(path); err == nil {
@@ -111,17 +114,34 @@ func Runfile(path string) (string, error) {
 		}
 		return "", fmt.Errorf("runfile not found: %s", path)
 	}
-	for _, base := range searchBases() {
-		candidate := filepath.Join(base, path)
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate, nil
+	if resolved, ok := findRunfile(path); ok {
+		return resolved, nil
+	}
+	// Not on disk: try fetching the external-data archive that would provide it,
+	// then resolve again. fetchOnMiss is a no-op for paths with no archive mapping
+	// or for already-cached archives.
+	if fetchOnMiss(path) {
+		if resolved, ok := findRunfile(path); ok {
+			return resolved, nil
 		}
 	}
 	// The "could not locate file" wording matches rules_go's bazel.Runfile so
 	// callers that distinguish a legitimately-absent file (e.g. spec tests with
 	// no post-state for invalid cases) keep working. Genuinely-missing external
 	// data is still caught by callers that require.NoError on must-exist files.
-	return "", fmt.Errorf("Runfile %s: could not locate file (run `make testdata` to fetch external test data)", path)
+	return "", fmt.Errorf("Runfile %s: could not locate file (external test data is fetched on demand; check network access)", path)
+}
+
+// findRunfile searches the resolution bases for a (relative) path and returns the
+// first existing candidate.
+func findRunfile(path string) (string, bool) {
+	for _, base := range searchBases() {
+		candidate := filepath.Join(base, path)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, true
+		}
+	}
+	return "", false
 }
 
 // RunfilesPath returns the module root.

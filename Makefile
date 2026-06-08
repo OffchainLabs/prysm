@@ -82,8 +82,8 @@ $(addprefix release-,$(BINARIES)): release-%:
 	$(GO) build $(TAGFLAG) -trimpath $(PGO_$*) -ldflags "$(LDFLAGS) -s -w" -o $(DIST)/$* $(PKG_$*)
 
 .PHONY: testdata
-testdata: ## Download external spec-test data
-	@./hack/testdata.sh
+testdata: ## Pre-fetch all external spec-test data (tests fetch lazily otherwise)
+	$(GO) run ./tools/cmd/fetch-testdata
 
 # Mainnet pass excludes E2E (Phase 8) and the minimal-config packages — the
 # latter run in the separate minimal pass below.
@@ -109,7 +109,10 @@ RERUN_ATTEMPTS ?= 5
 RERUN_MAX ?= 1000
 # --no-color=false forces color even though we pipe gotestsum into the progress
 # counter (a pipe is not a TTY, so gotestsum would otherwise disable color).
-GOTESTSUM_FLAGS := --format=pkgname --no-color=false --rerun-fails=$(RERUN_ATTEMPTS) --rerun-fails-max-failures=$(RERUN_MAX)
+# --hide-summary=skipped drops the per-skipped-test "=== SKIP:" list from the
+# end-of-run summary (spec tests skip thousands of "unused type" cases); failures
+# and errors are still summarized.
+GOTESTSUM_FLAGS := --format=pkgname --no-color=false --hide-summary=skipped --rerun-fails=$(RERUN_ATTEMPTS) --rerun-fails-max-failures=$(RERUN_MAX)
 
 # progress prepends a running [X/N] package counter to gotestsum's pkgname
 # lines (those containing a ✓/✖/∅/↻ status icon — matched anywhere on the line
@@ -120,7 +123,7 @@ awk -v t=$(1) 'BEGIN{w=length(t)} /(✓|✖|∅|↻)/{c++; printf "[%*d/%d] %s\n
 endef
 
 .PHONY: test
-test: testdata ## Run unit tests: a mainnet pass then a minimal (-tags=minimal) pass.
+test: ## Run unit tests: a mainnet pass then a minimal (-tags=minimal) pass.
 	@set -o pipefail; \
 	fail=0; \
 	echo; echo "=== mainnet pass ==="; \
@@ -134,7 +137,7 @@ test: testdata ## Run unit tests: a mainnet pass then a minimal (-tags=minimal) 
 	else echo "❌ Some failure: a test failed all $(RERUN_ATTEMPTS) attempts (mainnet or minimal pass)"; exit 1; fi
 
 .PHONY: test-race
-test-race: testdata ## Run unit tests with the race detector
+test-race: ## Run unit tests with the race detector
 	@set -o pipefail; \
 	echo; \
 	total=$$( $(GO) list ./... | grep -vcE '$(TEST_EXCLUDE)' ); \

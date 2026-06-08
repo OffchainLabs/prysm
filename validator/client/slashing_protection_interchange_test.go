@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/build/bazel"
+	"github.com/OffchainLabs/prysm/v7/build/externaldata"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/io/file"
@@ -15,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/validator/helpers"
-	"github.com/OffchainLabs/prysm/v7/build/bazel"
 )
 
 type eip3076TestCase struct {
@@ -61,11 +62,15 @@ type eip3076TestCase struct {
 }
 
 func setupEIP3076SpecTests(t *testing.T) []*eip3076TestCase {
+	err := externaldata.Fetch(externaldata.EIP3076SpecTests)
+	require.NoError(t, err)
+
 	testFolders, err := bazel.ListRunfiles()
 	require.NoError(t, err)
+
 	testCases := make([]*eip3076TestCase, 0)
 	for _, ff := range testFolders {
-		if strings.Contains(ff.ShortPath, "eip3076_spec_tests") &&
+		if strings.Contains(ff.ShortPath, externaldata.EIP3076SpecTests) &&
 			strings.Contains(ff.ShortPath, "generated/") {
 			enc, err := file.ReadFileAsBytes(ff.Path)
 			require.NoError(t, err)
