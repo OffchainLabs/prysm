@@ -1510,6 +1510,9 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.LatestBlockHash:
 		return bytesutil.ToBytes32(b.latestBlockHash), nil
 	case types.PayloadExpectedWithdrawals:
+		if progressiveSSZ {
+			return ssz.WithdrawalSliceRootProgressive(b.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+		}
 		return ssz.WithdrawalSliceRoot(b.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
 	case types.PTCWindow:
 		return stateutil.PTCWindowRoot(b.ptcWindow)

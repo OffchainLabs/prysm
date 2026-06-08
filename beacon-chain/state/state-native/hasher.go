@@ -418,7 +418,7 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		lbhRoot := bytesutil.ToBytes32(state.latestBlockHash)
 		fieldRoots[types.LatestBlockHash.RealPosition()] = lbhRoot[:]
 
-		expectedWithdrawalsRoot, err := ssz.WithdrawalSliceRoot(state.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+		expectedWithdrawalsRoot, err := payloadExpectedWithdrawalsRoot(state)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute payload expected withdrawals root")
 		}
@@ -437,4 +437,11 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 
 func progressiveSSZEnabled(stateVersion int) bool {
 	return stateVersion >= version.Gloas && features.Get().EnableProgressiveSSZ
+}
+
+func payloadExpectedWithdrawalsRoot(state *BeaconState) ([32]byte, error) {
+	if progressiveSSZEnabled(state.version) {
+		return ssz.WithdrawalSliceRootProgressive(state.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+	}
+	return ssz.WithdrawalSliceRoot(state.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
 }
