@@ -433,7 +433,7 @@ func (s *Service) validateStatusMessage(ctx context.Context, genericMsg any) err
 	}
 
 	if msg.HeadSlot > s.cfg.clock.CurrentSlot()+maxFutureStatusHeadSlot {
-		return p2ptypes.ErrInvalidRequest
+		return errors.Wrap(p2ptypes.ErrInvalidRequest, "head slot too far in the future")
 	}
 
 	forkDigest, err := s.currentForkDigest()
