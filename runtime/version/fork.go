@@ -15,17 +15,19 @@ const (
 	Electra
 	Fulu
 	Gloas
+	BatchAttestation
 )
 
 var versionToString = map[int]string{
-	Phase0:    "phase0",
-	Altair:    "altair",
-	Bellatrix: "bellatrix",
-	Capella:   "capella",
-	Deneb:     "deneb",
-	Electra:   "electra",
-	Fulu:      "fulu",
-	Gloas:     "gloas",
+	Phase0:           "phase0",
+	Altair:           "altair",
+	Bellatrix:        "bellatrix",
+	Capella:          "capella",
+	Deneb:            "deneb",
+	Electra:          "electra",
+	Fulu:             "fulu",
+	Gloas:            "gloas",
+	BatchAttestation: "batch_attestation",
 }
 
 // stringToVersion and allVersions are populated in init()
@@ -36,7 +38,8 @@ var supportedVersions []int
 // unsupportedVersions contains fork versions that exist in the enums but are not yet
 // enabled on any supported network. These versions are removed from All().
 var unsupportedVersions = map[int]struct{}{
-	Gloas: {},
+	Gloas:            {},
+	BatchAttestation: {},
 }
 
 // ErrUnrecognizedVersionName means a string does not match the list of canonical version names.

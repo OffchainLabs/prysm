@@ -68,3 +68,29 @@ func (c *beaconApiValidatorClient) proposeAttestationElectra(ctx context.Context
 
 	return &ethpb.AttestResponse{AttestationDataRoot: attestationDataRoot[:]}, nil
 }
+
+func (c *beaconApiValidatorClient) proposeBatchAttestation(ctx context.Context, attestation *ethpb.BatchAttestation) (*ethpb.AttestResponse, error) {
+	if err := helpers.ValidateNilAttestation(attestation); err != nil {
+		return nil, err
+	}
+	marshalledAttestation, err := json.Marshal(jsonifyBatchAttestation(attestation))
+	if err != nil {
+		return nil, err
+	}
+	if err = c.handler.Post(
+		ctx,
+		"/eth/v1alpha1/validator/batch_attestation",
+		nil,
+		bytes.NewBuffer(marshalledAttestation),
+		nil,
+	); err != nil {
+		return nil, err
+	}
+
+	attestationDataRoot, err := attestation.Data.HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to compute attestation data root")
+	}
+
+	return &ethpb.AttestResponse{AttestationDataRoot: attestationDataRoot[:]}, nil
+}

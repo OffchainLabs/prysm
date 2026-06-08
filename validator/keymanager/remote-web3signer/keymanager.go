@@ -441,6 +441,14 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 	case *validatorpb.SignRequest_ProposerPreference:
 		// TODO: Implement proposer preferences signing for web3signer.
 		return nil, fmt.Errorf("web3signer proposer preferences signing not yet implemented")
+	case *validatorpb.SignRequest_BatchSealPreimage:
+		// TODO: EIP-8243 — Web3Signer must add support for DOMAIN_BATCH_ATTESTER
+		// before remote-signed batch seals can be produced.
+		return nil, fmt.Errorf("web3signer EIP-8243 batch seal signing not yet implemented")
+	case *validatorpb.SignRequest_BatcherPreimage:
+		// TODO: EIP-8243 — Web3Signer must add support for DOMAIN_BATCHER before
+		// remote-signed batcher compositions can be produced.
+		return nil, fmt.Errorf("web3signer EIP-8243 batcher signing not yet implemented")
 
 	// We do not support "DEPOSIT" type.
 	/*

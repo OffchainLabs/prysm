@@ -2,6 +2,7 @@ package validator
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -40,6 +41,7 @@ import (
 	ethpbalpha "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	testingmock "github.com/OffchainLabs/prysm/v7/testing/mock"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -47,7 +49,49 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
+	"go.uber.org/mock/gomock"
 )
+
+func TestSubmitBatchAttestation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	v1alpha1Server := testingmock.NewMockBeaconNodeValidatorServer(ctrl)
+	batch := &ethpbalpha.BatchAttestation{
+		CommitteeIndex:  1,
+		AggregationBits: []byte{0x03},
+		Data: &ethpbalpha.AttestationData{
+			Slot:            2,
+			CommitteeIndex:  0,
+			BeaconBlockRoot: bytes.Repeat([]byte{3}, 32),
+			Source: &ethpbalpha.Checkpoint{
+				Epoch: 1,
+				Root:  bytes.Repeat([]byte{4}, 32),
+			},
+			Target: &ethpbalpha.Checkpoint{
+				Epoch: 2,
+				Root:  bytes.Repeat([]byte{5}, 32),
+			},
+		},
+		Signature:        bytes.Repeat([]byte{6}, 96),
+		Batcher:          7,
+		BatchSeal:        bytes.Repeat([]byte{8}, 96),
+		BatcherSignature: bytes.Repeat([]byte{9}, 96),
+	}
+	body, err := json.Marshal(structs.BatchAttFromConsensus(batch))
+	require.NoError(t, err)
+	v1alpha1Server.EXPECT().ProposeBatchAttestation(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, got *ethpbalpha.BatchAttestation) (*ethpbalpha.AttestResponse, error) {
+			assert.DeepEqual(t, batch, got)
+			return &ethpbalpha.AttestResponse{}, nil
+		},
+	)
+
+	s := &Server{V1Alpha1Server: v1alpha1Server}
+	request := httptest.NewRequest(http.MethodPost, "/eth/v1alpha1/validator/batch_attestation", bytes.NewReader(body))
+	writer := httptest.NewRecorder()
+
+	s.SubmitBatchAttestation(writer, request)
+	assert.Equal(t, http.StatusOK, writer.Code)
+}
 
 func TestGetAggregateAttestationV2(t *testing.T) {
 	root1 := bytesutil.PadTo([]byte("root1"), 32)

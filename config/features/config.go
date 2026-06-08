@@ -46,6 +46,7 @@ type Flags struct {
 	EnableHistoricalSpaceRepresentation bool // EnableHistoricalSpaceRepresentation enables the saving of registry validators in separate buckets to save space
 	EnableBeaconRESTApi                 bool // EnableBeaconRESTApi enables experimental usage of the beacon REST API by the validator when querying a beacon node
 	EnableExperimentalAttestationPool   bool // EnableExperimentalAttestationPool enables an experimental attestation pool design.
+	EnableBatchAttestations             bool // EnableBatchAttestations gates the EIP-8243 batch attestation gossip & VC composition paths.
 	DisableDutiesV2                     bool // DisableDutiesV2 sets validator client to use the get Duties endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
 	EnableStateDiff                     bool // EnableStateDiff enables the experimental state diff feature for the beacon node.
@@ -264,6 +265,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(EnableLightClient)
 		cfg.EnableLightClient = true
 	}
+	if ctx.IsSet(EnableBatchAttestations.Name) {
+		logEnabled(EnableBatchAttestations)
+		cfg.EnableBatchAttestations = true
+	}
 	if ctx.IsSet(BlobSaveFsync.Name) {
 		logEnabled(BlobSaveFsync)
 		cfg.BlobSaveFsync = true
@@ -368,6 +373,10 @@ func ConfigureValidator(ctx *cli.Context) error {
 	if ctx.Bool(EnableWebFlag.Name) {
 		logEnabled(EnableWebFlag)
 		cfg.EnableWeb = true
+	}
+	if ctx.IsSet(EnableBatchAttestations.Name) {
+		logEnabled(EnableBatchAttestations)
+		cfg.EnableBatchAttestations = true
 	}
 
 	cfg.KeystoreImportDebounceInterval = ctx.Duration(dynamicKeyReloadDebounceInterval.Name)

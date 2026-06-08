@@ -87,6 +87,12 @@ message SignRequest {
     ethereum.eth.v1alpha1.ExecutionPayloadEnvelope execution_payload_envelope = 124;
     ethereum.eth.v1alpha1.PayloadAttestationData payload_attestation_data = 125;
     ethereum.eth.v1alpha1.ProposerPreferences proposer_preference = 126;
+
+    // EIP-8243 batch attestation objects. The local keymanager signs the
+    // pre-computed SigningRoot directly; remote signers (Web3Signer) need to
+    // be extended to consume these object types.
+    ethereum.eth.v1alpha1.BatchSealPreimage batch_seal_preimage = 127;
+    ethereum.eth.v1alpha1.BatcherPreimage batcher_preimage = 128;
   }
 
   reserved 4, 5; // Reserving old, deleted fields.

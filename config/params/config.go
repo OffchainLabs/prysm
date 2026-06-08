@@ -155,6 +155,8 @@ type BeaconChainConfig struct {
 	DomainBeaconBuilder               [4]byte `yaml:"DOMAIN_BEACON_BUILDER" spec:"true"`                 // DomainBeaconBuilder defines the BLS signature domain for beacon block builder.
 	DomainPTCAttester                 [4]byte `yaml:"DOMAIN_PTC_ATTESTER" spec:"true"`                   // DomainPTCAttester defines the BLS signature domain for payload transaction committee attester.
 	DomainProposerPreferences         [4]byte `yaml:"DOMAIN_PROPOSER_PREFERENCES" spec:"true"`           // DomainProposerPreferences defines the BLS signature domain for proposer preferences.
+	DomainBatchAttester               [4]byte `yaml:"DOMAIN_BATCH_ATTESTER" spec:"true"`                 // DomainBatchAttester defines the BLS signature domain for EIP-8243 batch seal signatures.
+	DomainBatcher                     [4]byte `yaml:"DOMAIN_BATCHER" spec:"true"`                        // DomainBatcher defines the BLS signature domain for EIP-8243 batcher composition signatures.
 
 	// Prysm constants.
 	GenesisValidatorsRoot          [32]byte        // GenesisValidatorsRoot is the root hash of the genesis validators.
@@ -202,6 +204,9 @@ type BeaconChainConfig struct {
 	FuluForkEpoch        primitives.Epoch `yaml:"FULU_FORK_EPOCH" spec:"true"`        // FuluForkEpoch is used to represent the assigned fork epoch for fulu.
 	GloasForkVersion     []byte           `yaml:"GLOAS_FORK_VERSION" spec:"true"`     // GloasForkVersion is used to represent the fork version for gloas.
 	GloasForkEpoch       primitives.Epoch `yaml:"GLOAS_FORK_EPOCH" spec:"true"`       // GloasForkEpoch is used to represent the assigned fork epoch for gloas.
+	// EIP-8243 (Batching Attestations at Source) — opt-in post-Gloas fork.
+	BatchAttestationForkVersion []byte           `yaml:"BATCH_ATTESTATION_FORK_VERSION" spec:"true"` // BatchAttestationForkVersion is used to represent the fork version for the EIP-8243 batch-attestation fork.
+	BatchAttestationForkEpoch   primitives.Epoch `yaml:"BATCH_ATTESTATION_FORK_EPOCH" spec:"true"`   // BatchAttestationForkEpoch is used to represent the assigned fork epoch for the EIP-8243 batch-attestation fork.
 
 	ForkVersionSchedule map[[fieldparams.VersionLength]byte]primitives.Epoch // Schedule of fork epochs by version.
 	ForkVersionNames    map[[fieldparams.VersionLength]byte]string           // Human-readable names of fork versions.
@@ -626,6 +631,7 @@ func initForkSchedule(b *BeaconChainConfig) *NetworkSchedule {
 		{Epoch: b.ElectraForkEpoch, isFork: true, ForkVersion: to4(b.ElectraForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlockElectra), VersionEnum: version.Electra},
 		{Epoch: b.FuluForkEpoch, isFork: true, ForkVersion: to4(b.FuluForkVersion), VersionEnum: version.Fulu},
 		{Epoch: b.GloasForkEpoch, isFork: true, ForkVersion: to4(b.GloasForkVersion), VersionEnum: version.Gloas},
+		{Epoch: b.BatchAttestationForkEpoch, isFork: true, ForkVersion: to4(b.BatchAttestationForkVersion), VersionEnum: version.BatchAttestation},
 	})
 }
 
@@ -651,6 +657,7 @@ func configForkSchedule(b *BeaconChainConfig) map[[fieldparams.VersionLength]byt
 	fvs[bytesutil.ToBytes4(b.ElectraForkVersion)] = b.ElectraForkEpoch
 	fvs[bytesutil.ToBytes4(b.FuluForkVersion)] = b.FuluForkEpoch
 	fvs[bytesutil.ToBytes4(b.GloasForkVersion)] = b.GloasForkEpoch
+	fvs[bytesutil.ToBytes4(b.BatchAttestationForkVersion)] = b.BatchAttestationForkEpoch
 	return fvs
 }
 
@@ -667,14 +674,15 @@ func configForkNames(b *BeaconChainConfig) map[[fieldparams.VersionLength]byte]s
 // from the runtime/version package.
 func ConfigForkVersions(b *BeaconChainConfig) map[[fieldparams.VersionLength]byte]int {
 	return map[[fieldparams.VersionLength]byte]int{
-		bytesutil.ToBytes4(b.GenesisForkVersion):   version.Phase0,
-		bytesutil.ToBytes4(b.AltairForkVersion):    version.Altair,
-		bytesutil.ToBytes4(b.BellatrixForkVersion): version.Bellatrix,
-		bytesutil.ToBytes4(b.CapellaForkVersion):   version.Capella,
-		bytesutil.ToBytes4(b.DenebForkVersion):     version.Deneb,
-		bytesutil.ToBytes4(b.ElectraForkVersion):   version.Electra,
-		bytesutil.ToBytes4(b.FuluForkVersion):      version.Fulu,
-		bytesutil.ToBytes4(b.GloasForkVersion):     version.Gloas,
+		bytesutil.ToBytes4(b.GenesisForkVersion):         version.Phase0,
+		bytesutil.ToBytes4(b.AltairForkVersion):          version.Altair,
+		bytesutil.ToBytes4(b.BellatrixForkVersion):       version.Bellatrix,
+		bytesutil.ToBytes4(b.CapellaForkVersion):         version.Capella,
+		bytesutil.ToBytes4(b.DenebForkVersion):           version.Deneb,
+		bytesutil.ToBytes4(b.ElectraForkVersion):         version.Electra,
+		bytesutil.ToBytes4(b.FuluForkVersion):            version.Fulu,
+		bytesutil.ToBytes4(b.GloasForkVersion):           version.Gloas,
+		bytesutil.ToBytes4(b.BatchAttestationForkVersion): version.BatchAttestation,
 	}
 }
 

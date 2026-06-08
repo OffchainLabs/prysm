@@ -286,6 +286,16 @@ service BeaconNodeValidator {
     };
   }
 
+  // EIP-8243: submits an authored BatchAttestation. The batcher VC calls this
+  // after collecting pre-signed seals from co-committee validators, signing
+  // the composition, and aggregating the attestation signatures.
+  rpc ProposeBatchAttestation(BatchAttestation) returns (AttestResponse) {
+    option (google.api.http) = {
+      post : "/eth/v1alpha1/validator/batch_attestation"
+      body : "*"
+    };
+  }
+
   // Submit selection proof to the beacon node to aggregate all matching wire
   // attestations with the same data root. the beacon node responses with an
   // aggregate and proof object back to validator to sign over.

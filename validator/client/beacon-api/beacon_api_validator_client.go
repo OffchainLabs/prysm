@@ -185,6 +185,15 @@ func (c *beaconApiValidatorClient) ProposeAttestationElectra(ctx context.Context
 	})
 }
 
+func (c *beaconApiValidatorClient) ProposeBatchAttestation(ctx context.Context, in *ethpb.BatchAttestation) (*ethpb.AttestResponse, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.ProposeBatchAttestation")
+	defer span.End()
+
+	return wrapInMetrics[*ethpb.AttestResponse]("ProposeBatchAttestation", func() (*ethpb.AttestResponse, error) {
+		return c.proposeBatchAttestation(ctx, in)
+	})
+}
+
 func (c *beaconApiValidatorClient) ProposeBeaconBlock(ctx context.Context, in *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.ProposeBeaconBlock")
 	defer span.End()

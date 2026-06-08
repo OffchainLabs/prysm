@@ -122,6 +122,51 @@ func (vs *Server) ProposeAttestationElectra(ctx context.Context, singleAtt *ethp
 	return resp, nil
 }
 
+// ProposeBatchAttestation is invoked by an authoring batcher to submit a
+// composed EIP-8243 BatchAttestation. The handler validates the fork epoch,
+// runs the standard proposeAtt path (which broadcasts to the subnet — the
+// p2p broadcaster wraps the batch into a WireAttestation), and asynchronously
+// inserts the stripped AttestationElectra form into the pool.
+func (vs *Server) ProposeBatchAttestation(ctx context.Context, batch *ethpb.BatchAttestation) (*ethpb.AttestResponse, error) {
+	ctx, span := trace.StartSpan(ctx, "AttesterServer.ProposeBatchAttestation")
+	defer span.End()
+
+	if vs.SyncChecker.Syncing() {
+		return nil, status.Errorf(codes.Unavailable, "Syncing to latest head, not ready to respond")
+	}
+	if batch == nil || batch.Data == nil {
+		return nil, status.Error(codes.InvalidArgument, "batch attestation or data is nil")
+	}
+
+	attEpoch := slots.ToEpoch(batch.Data.Slot)
+	if attEpoch < params.BeaconConfig().BatchAttestationForkEpoch {
+		return nil, status.Errorf(codes.FailedPrecondition,
+			"batch attestations not active until epoch %d", params.BeaconConfig().BatchAttestationForkEpoch)
+	}
+
+	resp, err := vs.proposeAtt(ctx, batch, batch.GetCommitteeIndex())
+	if err != nil {
+		return nil, err
+	}
+
+	// Stash the AttestationElectra form into the pool. The seal/batcher_sig
+	// fields are gossip-only and dropped here (EIP §"State transition changes").
+	go func() {
+		att := batch.ToAttestationElectra()
+		if features.Get().EnableExperimentalAttestationPool {
+			if err := vs.AttestationCache.Add(att); err != nil {
+				log.WithError(err).Error("Could not save batch attestation to cache")
+			}
+		} else {
+			if err := vs.AttPool.SaveAggregatedAttestation(att); err != nil {
+				log.WithError(err).Error("Could not save batch attestation")
+			}
+		}
+	}()
+
+	return resp, nil
+}
+
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // SubscribeCommitteeSubnets subscribes to the committee ID subnet given subscribe request.
@@ -226,10 +271,14 @@ func (vs *Server) proposeAtt(
 			},
 		})
 	} else {
+		eventAtt := att
+		if batchAtt, ok := att.(*ethpb.BatchAttestation); ok {
+			eventAtt = batchAtt.ToAttestationElectra()
+		}
 		vs.OperationNotifier.OperationFeed().Send(&feed.Event{
 			Type: operation.UnaggregatedAttReceived,
 			Data: &operation.UnAggregatedAttReceivedData{
-				Attestation: att,
+				Attestation: eventAtt,
 			},
 		})
 	}

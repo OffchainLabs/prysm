@@ -8,6 +8,8 @@ import (
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
@@ -221,6 +223,62 @@ func TestProposeAttestation(t *testing.T) {
 		_, err = server.ProposeAttestationElectra(t.Context(), req)
 		assert.NoError(t, err)
 	})
+}
+
+func TestProposeBatchAttestationEmitsAttestationElectraEvent(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig().Copy()
+	config.ElectraForkEpoch = 0
+	config.BatchAttestationForkEpoch = 0
+	params.OverrideBeaconConfig(config)
+
+	currentSlot := primitives.Slot(1)
+	chainService := &mock.ChainService{Slot: &currentSlot}
+	opChannel := make(chan *feed.Event, 1)
+	opSub := chainService.OperationNotifier().OperationFeed().Subscribe(opChannel)
+	defer opSub.Unsubscribe()
+	attesterServer := &Server{
+		HeadFetcher:       chainService,
+		P2P:               &mockp2p.MockBroadcaster{},
+		AttPool:           attestations.NewPool(),
+		OperationNotifier: chainService.OperationNotifier(),
+		TimeFetcher:       chainService,
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+	}
+	sk, err := bls.RandKey()
+	require.NoError(t, err)
+	sig := sk.Sign([]byte("dummy_test_data"))
+	batch := &ethpb.BatchAttestation{
+		CommitteeIndex:  3,
+		AggregationBits: []byte{0x07},
+		Data: &ethpb.AttestationData{
+			Slot:            currentSlot,
+			CommitteeIndex:  0,
+			BeaconBlockRoot: bytesutil.PadTo([]byte("block"), 32),
+			Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+			Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+		},
+		Signature:        sig.Marshal(),
+		Batcher:          1,
+		BatchSeal:        sig.Marshal(),
+		BatcherSignature: sig.Marshal(),
+	}
+
+	_, err = attesterServer.ProposeBatchAttestation(t.Context(), batch)
+	require.NoError(t, err)
+
+	select {
+	case event := <-opChannel:
+		assert.Equal(t, feed.EventType(operation.UnaggregatedAttReceived), event.Type)
+		data, ok := event.Data.(*operation.UnAggregatedAttReceivedData)
+		require.Equal(t, true, ok)
+		_, ok = data.Attestation.(*ethpb.BatchAttestation)
+		assert.Equal(t, false, ok)
+		_, ok = data.Attestation.(*ethpb.AttestationElectra)
+		assert.Equal(t, true, ok)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for attestation event")
+	}
 }
 
 func TestProposeAttestation_IncorrectSignature(t *testing.T) {

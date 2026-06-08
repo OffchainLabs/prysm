@@ -126,6 +126,21 @@ var (
 		Help: "Increased when a gossip attestation has a bad signature batch",
 	})
 
+	// EIP-8243 batch-attestation metrics.
+	batchAttReceivedCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "gossip_batch_attestation_received_total",
+		Help: "Increased every time the node accepts an EIP-8243 batch attestation from gossip",
+	})
+	batchAttDedupIgnoreCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "gossip_batch_attestation_dedup_ignore_total",
+		Help: "Increased when a batch attestation is IGNOREd by the EIP-8243 dedup rules",
+	}, []string{"rule"})
+	batchAttAttestersHistogram = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "gossip_batch_attestation_attesters_count",
+		Help:    "Distribution of attesters per accepted batch attestation",
+		Buckets: []float64{2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048},
+	})
+
 	// Attestation and block gossip verification performance.
 	aggregateAttestationVerificationGossipSummary = promauto.NewSummary(
 		prometheus.SummaryOpts{

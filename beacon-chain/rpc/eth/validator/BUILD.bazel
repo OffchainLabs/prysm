@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "handlers.go",
+        "handlers_batch_attestation.go",
         "handlers_block.go",
         "handlers_block_gloas.go",
         "log.go",

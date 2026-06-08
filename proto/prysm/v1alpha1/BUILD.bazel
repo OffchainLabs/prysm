@@ -320,6 +320,25 @@ ssz_gen_marshal(
     objs = ssz_gloas_objs,
 )
 
+ssz_batch_attestation_objs = [
+    "BatchAttestation",
+    "BatchSealPreimage",
+    "BatcherPreimage",
+]
+
+ssz_gen_marshal(
+    name = "ssz_generated_batch_attestation",
+    out = "batch_attestation.ssz.go",
+    exclude_objs = ssz_phase0_objs + ssz_altair_objs + ssz_bellatrix_objs + ssz_capella_objs + ssz_deneb_objs + ssz_electra_objs + ssz_fulu_objs + ssz_gloas_objs,
+    go_proto = ":go_proto",
+    includes = [
+        "//consensus-types/primitives:go_default_library",
+        "//math:go_default_library",
+        "//proto/engine/v1:go_default_library",
+    ],
+    objs = ssz_batch_attestation_objs,
+)
+
 ssz_gen_marshal(
     name = "ssz_generated_non_core",
     out = "non-core.ssz.go",
@@ -376,6 +395,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "attestation.go",
+        "batch_attestation.go",
         "beacon_block.go",
         "cloners.go",
         "eip_7521.go",
@@ -386,7 +406,9 @@ go_library(
         "payload_attestation_mainnet.go",
         "payload_attestation_minimal.go",  # keep
         "validator.go",
+        "wire_attestation.go",
         ":ssz_generated_altair",  # keep
+        ":ssz_generated_batch_attestation",  # keep
         ":ssz_generated_bellatrix",  # keep
         ":ssz_generated_capella",  # keep
         ":ssz_generated_deneb",  # keep

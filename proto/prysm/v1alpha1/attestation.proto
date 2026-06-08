@@ -163,3 +163,67 @@ message SingleAttestation {
   AttestationData data = 3;
   bytes signature = 4 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
+
+// ----------------------------------------------------------------------------
+// EIP-8243 — Batching Attestations at Source
+// ----------------------------------------------------------------------------
+
+// BatchSealPreimage is the message each attester signs to consent to a specific
+// batcher composing their attestation for a specific duty. Bound to
+// (slot, committee_index, batcher) only — not aggregation_bits — so seals can
+// be pre-signed at epoch start.
+message BatchSealPreimage {
+  uint64 slot = 1 [ (ethereum.eth.ext.cast_type) =
+                        "github.com/OffchainLabs/prysm/v7/"
+                        "consensus-types/primitives.Slot" ];
+  uint64 committee_index = 2 [ (ethereum.eth.ext.cast_type) =
+                                   "github.com/OffchainLabs/prysm/v7/"
+                                   "consensus-types/primitives.CommitteeIndex" ];
+  uint64 batcher = 3 [ (ethereum.eth.ext.cast_type) =
+                           "github.com/OffchainLabs/prysm/v7/"
+                           "consensus-types/primitives.ValidatorIndex" ];
+}
+
+// BatcherPreimage is what the batcher signs to commit to the composition.
+// Includes data_root (Prysm spec deviation, Codex fix #6) to bind the
+// composition to the AttestationData and prevent replay across conflicting
+// votes.
+message BatcherPreimage {
+  uint64 slot = 1 [ (ethereum.eth.ext.cast_type) =
+                        "github.com/OffchainLabs/prysm/v7/"
+                        "consensus-types/primitives.Slot" ];
+  uint64 committee_index = 2 [ (ethereum.eth.ext.cast_type) =
+                                   "github.com/OffchainLabs/prysm/v7/"
+                                   "consensus-types/primitives.CommitteeIndex" ];
+  bytes aggregation_bits = 3 [
+    (ethereum.eth.ext.ssz_max) = "2048",
+    (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
+  ];
+  bytes data_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+// BatchAttestation carries N attesters' votes for a single committee under one
+// envelope. batch_seal and batcher_signature are gossip-only and discarded
+// after validation; the on-chain Attestation container is unchanged.
+message BatchAttestation {
+  uint64 committee_index = 1 [ (ethereum.eth.ext.cast_type) =
+                                   "github.com/OffchainLabs/prysm/v7/"
+                                   "consensus-types/primitives.CommitteeIndex" ];
+  bytes aggregation_bits = 2 [
+    (ethereum.eth.ext.ssz_max) = "2048",
+    (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
+  ];
+  AttestationData data = 3;
+  // Standard aggregate BLS signature over AttestationData under
+  // DomainBeaconAttester. Identical in domain and message to a standard
+  // aggregated attestation signature.
+  bytes signature = 4 [ (ethereum.eth.ext.ssz_size) = "96" ];
+  uint64 batcher = 5 [ (ethereum.eth.ext.cast_type) =
+                           "github.com/OffchainLabs/prysm/v7/"
+                           "consensus-types/primitives.ValidatorIndex" ];
+  // Aggregate seal signatures over BatchSealPreimage under
+  // DomainBatchAttester. Gossip-only.
+  bytes batch_seal = 6 [ (ethereum.eth.ext.ssz_size) = "96" ];
+  // Batcher's signature over BatcherPreimage under DomainBatcher. Gossip-only.
+  bytes batcher_signature = 7 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}

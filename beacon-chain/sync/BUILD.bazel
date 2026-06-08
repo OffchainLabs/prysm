@@ -57,6 +57,7 @@ go_library(
         "subscription_topic_handler.go",
         "validate_aggregate_proof.go",
         "validate_attester_slashing.go",
+        "validate_batch_attestation.go",
         "validate_beacon_attestation.go",
         "validate_beacon_block_gloas.go",
         "validate_beacon_blocks.go",

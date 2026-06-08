@@ -43,6 +43,10 @@ func jsonifySingleAttestations(attestations []*ethpb.SingleAttestation) []*struc
 	return jsonAttestations
 }
 
+func jsonifyBatchAttestation(attestation *ethpb.BatchAttestation) *structs.BatchAttestation {
+	return structs.BatchAttFromConsensus(attestation)
+}
+
 // JsonifySignedVoluntaryExits converts an array of voluntary exit structs to a JSON hex string compatible format.
 func JsonifySignedVoluntaryExits(voluntaryExits []*ethpb.SignedVoluntaryExit) []*structs.SignedVoluntaryExit {
 	jsonSignedVoluntaryExits := make([]*structs.SignedVoluntaryExit, len(voluntaryExits))

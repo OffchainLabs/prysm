@@ -149,6 +149,11 @@ func InitializeDataMaps() {
 		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (ethpb.Att, error) {
 			return &ethpb.SingleAttestation{}, nil
 		},
+		bytesutil.ToBytes4(params.BeaconConfig().BatchAttestationForkVersion): func() (ethpb.Att, error) {
+			// EIP-8243 — both single and batch wire-form messages decode into a
+			// WireAttestation; downstream validation unwraps via Inner().
+			return &ethpb.WireAttestation{}, nil
+		},
 	}
 
 	// Reset our aggregate attestation map.
