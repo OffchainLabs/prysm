@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
@@ -110,6 +111,10 @@ func VerifyBlockSignatureUsingCurrentFork(beaconState state.ReadOnlyBeaconState,
 	}
 	proposer, err := beaconState.ValidatorAtIndex(blk.Block().ProposerIndex())
 	if err != nil {
+		// Only an invalid index can cause an error here
+		if errors.Is(err, mvslice.ErrOutOfBounds) {
+			return errors.Wrap(ErrInvalidProposerIndex, err.Error())
+		}
 		return err
 	}
 	proposerPubKey := proposer.PublicKey
