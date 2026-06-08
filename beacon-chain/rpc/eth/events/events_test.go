@@ -335,7 +335,7 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 		{
 			Type: operation.ProposerPreferencesReceived,
 			Data: &operation.ProposerPreferencesReceivedData{
-				SignedProposerPreferences: &eth.SignedProposerPreferences{
+				Data: &eth.SignedProposerPreferences{
 					Message: &eth.ProposerPreferences{
 						DependentRoot:  make([]byte, fieldparams.RootLength),
 						ProposalSlot:   32,
@@ -398,13 +398,18 @@ func newStreamTestSync(t *testing.T) *streamTestSync {
 }
 
 func TestStreamEvents_ProposerPreferencesWrappedWithVersion(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	s := &Server{}
 	topics, err := newTopicRequest([]string{ProposerPreferencesTopic})
 	require.NoError(t, err)
 	ev := &feed.Event{
 		Type: operation.ProposerPreferencesReceived,
 		Data: &operation.ProposerPreferencesReceivedData{
-			SignedProposerPreferences: &eth.SignedProposerPreferences{
+			Data: &eth.SignedProposerPreferences{
 				Message: &eth.ProposerPreferences{
 					DependentRoot:  make([]byte, fieldparams.RootLength),
 					ProposalSlot:   32,
@@ -817,7 +822,7 @@ func TestStuckReaderScenarios(t *testing.T) {
 
 func wedgedWriterTestCase(t *testing.T, queueDepth func([]*feed.Event) int) {
 	topics, events := operationEventsFixtures(t)
-	require.Equal(t, 14, len(events))
+	require.Equal(t, 15, len(events))
 
 	// set eventFeedDepth to a number lower than the events we intend to send to force the server to drop the reader.
 	stn := mockChain.NewEventFeedWrapper()

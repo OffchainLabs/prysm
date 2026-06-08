@@ -680,9 +680,10 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		}, nil
 	case *operation.ProposerPreferencesReceivedData:
 		return func() io.Reader {
+			epoch := slots.ToEpoch(v.Data.Message.ProposalSlot)
 			return jsonMarshalReader(eventName, &structs.ProposerPreferencesEvent{
-				Version: version.String(version.Gloas),
-				Data:    structs.SignedProposerPreferencesFromConsensus(v.SignedProposerPreferences),
+				Version: version.String(params.GetNetworkScheduleEntry(epoch).VersionEnum),
+				Data:    structs.SignedProposerPreferencesFromConsensus(v.Data),
 			})
 		}, nil
 	case *statefeed.ExecutionPayloadAvailableData:
