@@ -96,7 +96,7 @@ func (s *Service) logNonCanonicalBlockReceived(blockRoot [32]byte, headRoot [32]
 // fcuArgsNonCanonicalBlock returns the arguments to the FCU call when the
 // incoming block is non-canonical, that is, based on the head root.
 func (s *Service) fcuArgsNonCanonicalBlock(cfg *postBlockProcessConfig) (*fcuConfig, error) {
-	headState, headBlock, err := s.getStateAndBlock(cfg.ctx, cfg.headRoot, cfg.headRoot)
+	headState, headBlock, err := s.getStateAndBlock(cfg.ctx, cfg.headRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -186,16 +186,19 @@ func (s *Service) processLightClientUpdates(cfg *postBlockProcessConfig) {
 // boundary in order to compute the right proposer indices after processing
 // state transition. The caller of this function must not hold a lock in forkchoice store.
 func (s *Service) updateCachesPostBlockProcessing(cfg *postBlockProcessConfig) {
+	ctx, span := trace.StartSpan(cfg.ctx, "blockChain.updateCachesPostBlockProcessing")
+	defer span.End()
+
 	slot := cfg.postState.Slot()
 	root := cfg.roblock.Root()
-	if err := transition.UpdateNextSlotCache(cfg.ctx, root[:], cfg.postState); err != nil {
+	if err := transition.UpdateNextSlotCache(ctx, root[:], cfg.postState); err != nil {
 		log.WithError(err).Error("Could not update next slot state cache")
 		return
 	}
 	if !slots.IsEpochEnd(slot) {
 		return
 	}
-	if err := s.handleEpochBoundary(cfg.ctx, slot, cfg.postState, root[:]); err != nil {
+	if err := s.handleEpochBoundary(ctx, slot, cfg.postState, root[:]); err != nil {
 		log.WithError(err).Error("Could not handle epoch boundary")
 	}
 }
@@ -373,7 +376,8 @@ func (s *Service) ancestorByDB(ctx context.Context, r [32]byte, slot primitives.
 // This retrieves missing blocks from DB (ie. the blocks that couldn't be received over sync) and inserts them to fork choice store.
 // This is useful for block tree visualizer and additional vote accounting.
 func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock,
-	fCheckpoint, jCheckpoint *ethpb.Checkpoint) error {
+	fCheckpoint, jCheckpoint *ethpb.Checkpoint,
+) error {
 	if fCheckpoint.Epoch > jCheckpoint.Epoch {
 		return ErrInvalidCheckpointArgs
 	}
@@ -422,7 +426,8 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 		}
 		root = b.Block().ParentRoot()
 		child = b
-		args := &forkchoicetypes.BlockAndCheckpoints{Block: roblock,
+		args := &forkchoicetypes.BlockAndCheckpoints{
+			Block:               roblock,
 			JustifiedCheckpoint: jCheckpoint,
 			FinalizedCheckpoint: fCheckpoint,
 			HasPayload:          hasPayload,

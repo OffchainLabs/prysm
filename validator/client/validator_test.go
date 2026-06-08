@@ -3497,12 +3497,10 @@ func TestGetAttestationData_PostElectraConcurrentAccess(t *testing.T) {
 	results := make([]*ethpb.AttestationData, numGoroutines)
 	errs := make([]error, numGoroutines)
 
-	for i := range numGoroutines {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
+	for idx := range numGoroutines {
+		wg.Go(func() {
 			results[idx], errs[idx] = v.getAttestationData(context.Background(), postElectraSlot, primitives.CommitteeIndex(idx))
-		}(i)
+		})
 	}
 
 	wg.Wait()

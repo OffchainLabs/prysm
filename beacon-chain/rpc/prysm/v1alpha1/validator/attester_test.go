@@ -375,14 +375,12 @@ func BenchmarkGetAttestationDataConcurrent(b *testing.B) {
 
 	for b.Loop() {
 		var wg sync.WaitGroup
-		wg.Add(5000) // for 5000 concurrent accesses
 
 		for range 5000 {
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				_, err := attesterServer.GetAttestationData(b.Context(), req)
 				require.NoError(b, err, "Could not get attestation info at slot")
-			}()
+			})
 		}
 		wg.Wait() // Wait for all goroutines to finish
 	}

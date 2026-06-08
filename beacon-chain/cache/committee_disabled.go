@@ -5,12 +5,16 @@ package cache
 
 import (
 	"context"
+	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"golang.org/x/sync/singleflight"
 )
 
 // FakeCommitteeCache is a struct with 1 queue for looking up shuffled indices list by seed.
 type FakeCommitteeCache struct {
+	Wg  sync.WaitGroup
+	Sf singleflight.Group
 }
 
 // NewCommitteesCache creates a new committee cache for storing/accessing shuffled indices of a committee.
@@ -41,7 +45,7 @@ func (c *FakeCommitteeCache) ActiveIndices(ctx context.Context, seed [32]byte) (
 }
 
 // ActiveIndicesCount returns the active indices count of a given seed stored in cache.
-func (c *FakeCommitteeCache) ActiveIndicesCount(ctx context.Context, seed [32]byte) (int, error) {
+func (c *FakeCommitteeCache) ActiveIndicesCount(seed [32]byte) (int, error) {
 	return 0, nil
 }
 
@@ -58,16 +62,6 @@ func (c *FakeCommitteeCache) ProposerIndices(seed [32]byte) ([]primitives.Valida
 // HasEntry returns true if the committee cache has a value.
 func (c *FakeCommitteeCache) HasEntry(string) bool {
 	return false
-}
-
-// MarkInProgress is a stub.
-func (c *FakeCommitteeCache) MarkInProgress(seed [32]byte) error {
-	return nil
-}
-
-// MarkNotInProgress is a stub.
-func (c *FakeCommitteeCache) MarkNotInProgress(seed [32]byte) error {
-	return nil
 }
 
 // Clear is a stub.

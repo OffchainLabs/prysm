@@ -217,6 +217,17 @@ func (s *State) FinalizedState() state.BeaconState {
 	return s.finalizedInfo.state.Copy()
 }
 
+// finalizedStateIfRoot returns a copy of the cached finalized state only if
+// the cached finalized root matches r at the moment of the read.
+func (s *State) finalizedStateIfRoot(r [32]byte) state.BeaconState {
+	s.finalizedInfo.lock.RLock()
+	defer s.finalizedInfo.lock.RUnlock()
+	if r != s.finalizedInfo.root || s.finalizedInfo.state == nil {
+		return nil
+	}
+	return s.finalizedInfo.state.Copy()
+}
+
 // Returns the finalized state as a ReadOnlyBalances so that it can be used read-only without copying.
 func (s *State) FinalizedReadOnlyBalances() NilCheckableReadOnlyBalances {
 	return s.finalizedInfo.state

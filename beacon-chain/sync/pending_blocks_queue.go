@@ -250,7 +250,7 @@ func (s *Service) processBlock(ctx context.Context, b interfaces.ReadOnlySignedB
 	blockSlot := b.Block().Slot()
 
 	if err := s.validateBeaconBlock(ctx, b, blkRoot); err != nil {
-		if !errors.Is(ErrOptimisticParent, err) {
+		if !errors.Is(err, ErrOptimisticParent) {
 			log.WithError(err).WithField("slot", blockSlot).Debug("Could not validate block")
 			return err
 		}
