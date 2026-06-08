@@ -270,11 +270,13 @@ func (c *beaconApiValidatorClient) SubmitValidatorRegistrations(ctx context.Cont
 	})
 }
 
-// TODO(gloas): Wire up actual REST call to POST /eth/v1/validator/proposer_preferences
-// once the beacon API endpoint is available (lodekeeper/beacon-APIs#1).
-func (c *beaconApiValidatorClient) SubmitSignedProposerPreferences(_ context.Context, in *ethpb.SubmitSignedProposerPreferencesRequest) (*empty.Empty, error) {
-	log.WithField("count", len(in.GetSignedProposerPreferences())).Debug("SubmitSignedProposerPreferences not yet implemented, skipping")
-	return new(empty.Empty), nil
+func (c *beaconApiValidatorClient) SubmitSignedProposerPreferences(ctx context.Context, in *ethpb.SubmitSignedProposerPreferencesRequest) (*empty.Empty, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.SubmitSignedProposerPreferences")
+	defer span.End()
+
+	return wrapInMetrics[*empty.Empty]("SubmitSignedProposerPreferences", func() (*empty.Empty, error) {
+		return new(empty.Empty), c.submitSignedProposerPreferences(ctx, in.GetSignedProposerPreferences())
+	})
 }
 
 // TODO(gloas): Wire up actual REST call to POST /eth/v2/beacon/execution_payload/bid
