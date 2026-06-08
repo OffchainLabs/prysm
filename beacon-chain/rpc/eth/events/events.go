@@ -473,7 +473,7 @@ func topicForEvent(event *feed.Event) string {
 		return ProposerSlashingTopic
 	case *operation.BlockGossipReceivedData:
 		return BlockGossipTopic
-	case *ethpb.EventHead:
+	case *statefeed.HeadData:
 		return HeadTopic
 	case *ethpb.EventFinalizedCheckpoint:
 		return FinalizedCheckpointTopic
@@ -513,11 +513,11 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 	switch v := event.Data.(type) {
 	case payloadattribute.EventData:
 		return s.payloadAttributesReader(ctx, v)
-	case *ethpb.EventHead:
+	case *statefeed.HeadData:
 		// The head event is a special case because, if the client requested the payload attributes topic,
 		// we send two event messages in reaction; the head event and the payload attributes.
 		return func() io.Reader {
-			return jsonMarshalReader(eventName, structs.HeadEventFromV1(v))
+			return jsonMarshalReader(eventName, structs.HeadEventFromHeadData(v))
 		}, nil
 	case *operation.BlockGossipReceivedData:
 		blockRoot, err := v.SignedBlock.Block().HashTreeRoot()

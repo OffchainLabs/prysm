@@ -441,13 +441,13 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 			},
 			{
 				Type: statefeed.NewHead,
-				Data: &ethpb.EventHead{
+				Data: &statefeed.HeadData{
 					Slot:                      0,
-					Block:                     make([]byte, 32),
-					State:                     make([]byte, 32),
+					Block:                     [32]byte{0x01},
+					State:                     [32]byte{0x02},
 					EpochTransition:           true,
-					PreviousDutyDependentRoot: make([]byte, 32),
-					CurrentDutyDependentRoot:  make([]byte, 32),
+					PreviousDutyDependentRoot: [32]byte{0x03},
+					CurrentDutyDependentRoot:  [32]byte{0x04},
 					ExecutionOptimistic:       false,
 				},
 			},

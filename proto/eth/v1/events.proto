@@ -25,32 +25,6 @@ option java_outer_classname = "BeaconEventsProto";
 option java_package = "org.ethereum.eth.v1";
 option php_namespace = "Ethereum\\Eth\\v1";
 
-message EventHead {
-  // Slot of the new chain head.
-  uint64 slot = 1 [
-    (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
-  ];
-
-  // Block root of the new chain head.
-  bytes block = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
-
-  // State root of the new chain head.
-  bytes state = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
-
-  // Whether or not the new chain head is at an epoch transition.
-  bool epoch_transition = 4;
-
-  // The previous dependent root.
-  bytes previous_duty_dependent_root = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
-
-  // The current dependent root.
-  bytes current_duty_dependent_root = 6 [ (ethereum.eth.ext.ssz_size) = "32" ];
-
-  // Information about optimistic sync.
-  bool execution_optimistic = 7;
-}
-
 message EventBlock {
   // The slot of the observed block.
   uint64 slot = 1 [
