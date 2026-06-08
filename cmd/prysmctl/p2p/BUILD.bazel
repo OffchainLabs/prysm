@@ -16,6 +16,7 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/cmd/prysmctl/p2p",
     visibility = ["//visibility:public"],
     deps = [
+        "//api/grpc:go_default_library",
         "//beacon-chain/forkchoice:go_default_library",
         "//beacon-chain/p2p:go_default_library",
         "//beacon-chain/p2p/encoder:go_default_library",
