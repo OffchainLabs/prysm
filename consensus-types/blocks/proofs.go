@@ -7,6 +7,8 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
@@ -44,6 +46,8 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 		fieldRoots = make([][]byte, 13)
 	case version.Fulu:
 		fieldRoots = make([][]byte, 13)
+	case version.Gloas:
+		fieldRoots = make([][]byte, 13)
 	default:
 		return nil, fmt.Errorf("unknown block body version %s", version.String(blockBody.version))
 	}
@@ -74,7 +78,7 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 
 	// Proposer slashings
 	ps := blockBody.ProposerSlashings()
-	root, err = ssz.MerkleizeListSSZ(ps, params.BeaconConfig().MaxProposerSlashings)
+	root, err = blockBodyListRoot(blockBody.version, ps, params.BeaconConfig().MaxProposerSlashings)
 	if err != nil {
 		return nil, err
 	}
@@ -84,9 +88,9 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 	as := blockBody.AttesterSlashings()
 	bodyVersion := blockBody.Version()
 	if bodyVersion < version.Electra {
-		root, err = ssz.MerkleizeListSSZ(as, params.BeaconConfig().MaxAttesterSlashings)
+		root, err = blockBodyListRoot(bodyVersion, as, params.BeaconConfig().MaxAttesterSlashings)
 	} else {
-		root, err = ssz.MerkleizeListSSZ(as, params.BeaconConfig().MaxAttesterSlashingsElectra)
+		root, err = blockBodyListRoot(bodyVersion, as, params.BeaconConfig().MaxAttesterSlashingsElectra)
 	}
 	if err != nil {
 		return nil, err
@@ -96,9 +100,9 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 	// Attestations
 	att := blockBody.Attestations()
 	if bodyVersion < version.Electra {
-		root, err = ssz.MerkleizeListSSZ(att, params.BeaconConfig().MaxAttestations)
+		root, err = blockBodyListRoot(bodyVersion, att, params.BeaconConfig().MaxAttestations)
 	} else {
-		root, err = ssz.MerkleizeListSSZ(att, params.BeaconConfig().MaxAttestationsElectra)
+		root, err = blockBodyListRoot(bodyVersion, att, params.BeaconConfig().MaxAttestationsElectra)
 	}
 	if err != nil {
 		return nil, err
@@ -107,7 +111,7 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 
 	// Deposits
 	dep := blockBody.Deposits()
-	root, err = ssz.MerkleizeListSSZ(dep, params.BeaconConfig().MaxDeposits)
+	root, err = blockBodyListRoot(blockBody.version, dep, params.BeaconConfig().MaxDeposits)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +119,7 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 
 	// Voluntary Exits
 	ve := blockBody.VoluntaryExits()
-	root, err = ssz.MerkleizeListSSZ(ve, params.BeaconConfig().MaxVoluntaryExits)
+	root, err = blockBodyListRoot(blockBody.version, ve, params.BeaconConfig().MaxVoluntaryExits)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +138,7 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 		copy(fieldRoots[8], root[:])
 	}
 
-	if blockBody.version >= version.Bellatrix {
+	if blockBody.version >= version.Bellatrix && blockBody.version < version.Gloas {
 		// Execution Payload
 		ep, err := blockBody.Execution()
 		if err != nil {
@@ -147,20 +151,20 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 		copy(fieldRoots[9], root[:])
 	}
 
-	if blockBody.version >= version.Capella {
+	if blockBody.version >= version.Capella && blockBody.version < version.Gloas {
 		// BLS Changes
 		bls, err := blockBody.BLSToExecutionChanges()
 		if err != nil {
 			return nil, err
 		}
-		root, err = ssz.MerkleizeListSSZ(bls, params.BeaconConfig().MaxBlsToExecutionChanges)
+		root, err = blockBodyListRoot(blockBody.version, bls, params.BeaconConfig().MaxBlsToExecutionChanges)
 		if err != nil {
 			return nil, err
 		}
 		copy(fieldRoots[10], root[:])
 	}
 
-	if blockBody.version >= version.Deneb {
+	if blockBody.version >= version.Deneb && blockBody.version < version.Gloas {
 		// KZG commitments
 		roots := make([][32]byte, len(blockBody.blobKzgCommitments))
 		for i, commitment := range blockBody.blobKzgCommitments {
@@ -180,7 +184,7 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 		copy(fieldRoots[11], root[:])
 	}
 
-	if blockBody.version >= version.Electra {
+	if blockBody.version >= version.Electra && blockBody.version < version.Gloas {
 		// Execution Requests
 		er, err := blockBody.ExecutionRequests()
 		if err != nil {
@@ -192,7 +196,66 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 		}
 		copy(fieldRoots[12], root[:])
 	}
+	if blockBody.version >= version.Gloas {
+		if err := computeGloasBlockBodyFieldRoots(blockBody, fieldRoots); err != nil {
+			return nil, err
+		}
+	}
 	return fieldRoots, nil
+}
+
+func blockBodyListRoot[T ssz.Hashable](bodyVersion int, elements []T, limit uint64) ([32]byte, error) {
+	if bodyVersion >= version.Gloas && features.Get().EnableProgressiveSSZ {
+		if uint64(len(elements)) > limit {
+			return [32]byte{}, fmt.Errorf("slice exceeds max length %d", limit)
+		}
+		return ssz.MerkleizeListSSZProgressive(elements)
+	}
+	return ssz.MerkleizeListSSZ(elements, limit)
+}
+
+func computeGloasBlockBodyFieldRoots(blockBody *BeaconBlockBody, fieldRoots [][]byte) error {
+	bls, err := blockBody.BLSToExecutionChanges()
+	if err != nil {
+		return err
+	}
+	root, err := blockBodyListRoot(blockBody.version, bls, params.BeaconConfig().MaxBlsToExecutionChanges)
+	if err != nil {
+		return err
+	}
+	copy(fieldRoots[9], root[:])
+
+	bid, err := blockBody.SignedExecutionPayloadBid()
+	if err != nil {
+		return err
+	}
+	root, err = bid.HashTreeRoot()
+	if err != nil {
+		return err
+	}
+	copy(fieldRoots[10], root[:])
+
+	payloadAttestations, err := blockBody.PayloadAttestations()
+	if err != nil {
+		return err
+	}
+	root, err = blockBodyListRoot(blockBody.version, payloadAttestations, fieldparams.MaxPayloadAttestations)
+	if err != nil {
+		return err
+	}
+	copy(fieldRoots[11], root[:])
+
+	parentExecutionRequests, err := blockBody.ParentExecutionRequests()
+	if err != nil {
+		return err
+	}
+	root, err = parentExecutionRequests.HashTreeRoot()
+	if err != nil {
+		return err
+	}
+	copy(fieldRoots[12], root[:])
+
+	return nil
 }
 
 func PayloadProof(ctx context.Context, block interfaces.ReadOnlyBeaconBlock) ([][]byte, error) {
