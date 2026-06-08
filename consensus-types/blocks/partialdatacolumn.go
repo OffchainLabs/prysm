@@ -2,6 +2,7 @@ package blocks
 
 import (
 	"bytes"
+	"fmt"
 	"iter"
 	"slices"
 
@@ -54,6 +55,12 @@ func NewPartialDataColumnFromVerifiedRODataColumn(c VerifiedRODataColumn) (Parti
 	included := bitfield.NewBitlist(uint64(len(commitments)))
 	included = included.Not()
 
+	log.WithFields(logrus.Fields{
+		"index":    c.Index(),
+		"root":     fmt.Sprintf("%#x", c.root),
+		"numCells": len(commitments),
+	}).Debug("[PDC] Created complete partial column from verified RO data column (all cells included)")
+
 	return PartialDataColumn{
 		DataColumnSidecar: c.DataColumnSidecar(),
 		root:              c.root,
@@ -99,6 +106,13 @@ func NewPartialDataColumn(
 		groupID:           groupIdFromRoot(root),
 		Included:          bitfield.NewBitlist(uint64(len(sidecar.KzgCommitments))),
 	}
+
+	log.WithFields(logrus.Fields{
+		"index":          columnIndex,
+		"root":           fmt.Sprintf("%#x", root),
+		"numCommitments": len(kzgCommitments),
+	}).Debug("[PDC] Created empty partial column from header (awaiting cells)")
+
 	return c, nil
 }
 
@@ -471,6 +485,14 @@ func (p *PartialDataColumn) ExtendFromVerifiedCell(cellIndex uint64, cell, proof
 	p.Included.SetBitAt(cellIndex, true)
 	p.Column[cellIndex] = cell
 	p.KzgProofs[cellIndex] = proof
+
+	log.WithFields(logrus.Fields{
+		"index":     p.Index,
+		"cellIndex": cellIndex,
+		"included":  p.Included.Count(),
+		"total":     p.KzgCommitmentCount(),
+	}).Debug("[PDC] Extended partial column with verified cell")
+
 	return true
 }
 

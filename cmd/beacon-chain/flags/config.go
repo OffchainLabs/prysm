@@ -19,6 +19,7 @@ const (
 type GlobalFlags struct {
 	Supernode                       bool
 	DisableGetBlobsV2               bool
+	SimulatePartialELBlobs          bool
 	SemiSupernode                   bool
 	SubscribeToAllSubnets           bool
 	BlobBatchLimitBurstFactor       int
@@ -79,6 +80,11 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 	if ctx.Bool(DisableGetBlobsV2.Name) {
 		log.Warning("Disabling `engine_getBlobsV2` API")
 		cfg.DisableGetBlobsV2 = true
+	}
+
+	if ctx.Bool(SimulatePartialELBlobs.Name) {
+		log.Warning("Simulating partial engine_getBlobs responses: dropping a subset of blobs to force peer-to-peer partial-column cell exchange")
+		cfg.SimulatePartialELBlobs = true
 	}
 
 	// State-diff-exponents

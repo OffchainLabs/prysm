@@ -998,6 +998,13 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 			}
 		}
 
+		log.WithFields(logrus.Fields{
+			"root":              fmt.Sprintf("%#x", root),
+			"haveAllBlobs":      true,
+			"numColumns":        len(verifiedROSidecars),
+			"numPartialColumns": len(partialColumns),
+		}).Debug("[PDC] Constructed full data columns + partial columns from EL (engine_getBlobs)")
+
 		return verifiedROSidecars, partialColumns, nil
 	}
 
@@ -1008,6 +1015,13 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 			return nil, nil, wrapWithBlockRoot(err, root, "construct partial columns")
 		}
 	}
+
+	log.WithFields(logrus.Fields{
+		"root":              fmt.Sprintf("%#x", root),
+		"haveAllBlobs":      false,
+		"includedCells":     cp.Included.Count(),
+		"numPartialColumns": len(partialColumns),
+	}).Debug("[PDC] Constructed partial columns from EL (partial engine_getBlobs response)")
 
 	return nil, partialColumns, nil
 }
@@ -1039,6 +1053,26 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 
 	if len(blobAndProofs) == 0 {
 		return peerdas.StructuredCellsAndProofs{}, nil
+	}
+
+	// Test only: simulate an execution client that returns only a subset of the
+	// blobs, so the node must obtain the missing cells from peers via the
+	// partial-data-column protocol. Drops every other blob, always keeping the
+	// first one so the column never ends up empty.
+	if flags.Get().SimulatePartialELBlobs && useGetBlobsV3 {
+		dropped := 0
+		for i := range blobAndProofs {
+			if i%2 == 1 && blobAndProofs[i] != nil {
+				blobAndProofs[i] = nil
+				dropped++
+			}
+		}
+		if dropped > 0 {
+			log.WithFields(logrus.Fields{
+				"droppedBlobs": dropped,
+				"totalBlobs":   len(blobAndProofs),
+			}).Debug("[PDC] Simulating partial EL blob response: dropped subset to force peer-to-peer cell exchange")
+		}
 	}
 
 	// Compute cells and proofs from the blobs and cell proofs.

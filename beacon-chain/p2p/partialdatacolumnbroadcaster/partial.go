@@ -613,6 +613,14 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 		topicStore[string(groupID)] = verifier
 		p.groupTTL[string(groupID)] = TTLInSlots
 
+		p.logger.WithFields(logrus.Fields{
+			"from":            rpc.from,
+			"topic":           topicID,
+			"columnIndex":     columnIndex,
+			"numCommitments":  len(header.KzgCommitments),
+			"headerWasCached": headerWasCached,
+		}).Debug("[PDC] Started tracking new partial column from peer header")
+
 		ourVerifier = verifier
 		shouldRepublish = true
 	}
@@ -740,6 +748,14 @@ func (p *PartialColumnBroadcaster) handlePartialCells(ourDataColumn *blocks.Part
 	if len(cellIndices) > 0 {
 		columnIndexStr := strconv.FormatUint(ourDataColumn.Index, 10)
 		partialMessageCellsReceivedTotal.WithLabelValues(columnIndexStr).Add(float64(len(cellIndices)))
+		p.logger.WithFields(logrus.Fields{
+			"from":     rpc.from,
+			"topic":    topicId,
+			"index":    ourDataColumn.Index,
+			"newCells": len(cellIndices),
+			"included": ourDataColumn.Included.Count(),
+			"total":    ourDataColumn.KzgCommitmentCount(),
+		}).Debug("[PDC] Received new cells via partial message, queued for verification")
 	}
 	if len(cellsToVerify) > 0 {
 		p.concurrentValidatorSemaphore <- struct{}{}
@@ -802,7 +818,15 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 			extended = true
 		}
 	}
-	p.logger.WithFields(logrus.Fields{"duration": cells.validationTook, "extended": extended}).Debug("Extended partial message")
+	p.logger.WithFields(logrus.Fields{
+		"topic":    cells.topic,
+		"index":    ourDataColumn.Index,
+		"numCells": len(cells.cells),
+		"extended": extended,
+		"included": ourDataColumn.Included.Count(),
+		"total":    ourDataColumn.KzgCommitmentCount(),
+		"duration": cells.validationTook,
+	}).Debug("[PDC] Processed validated cells")
 
 	columnIndexStr := strconv.FormatUint(ourDataColumn.Index, 10)
 	if extended {
@@ -815,10 +839,19 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 			return err
 		}
 		if ok {
-			p.logger.WithFields(cells.logFields()).Info("Completed partial column")
+			p.logger.WithFields(logrus.Fields{
+				"topic": cells.topic,
+				"index": ourDataColumn.Index,
+				"total": ourDataColumn.KzgCommitmentCount(),
+			}).Info("[PDC] Completed partial column (all cells received)")
 			go p.callbacks.HandleColumn(cells.topic, col)
 		} else {
-			p.logger.WithFields(cells.logFields()).Info("Extended partial column")
+			p.logger.WithFields(logrus.Fields{
+				"topic":    cells.topic,
+				"index":    ourDataColumn.Index,
+				"included": ourDataColumn.Included.Count(),
+				"total":    ourDataColumn.KzgCommitmentCount(),
+			}).Info("[PDC] Extended partial column")
 		}
 
 		if !ourDataColumn.Published {
@@ -909,6 +942,12 @@ func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, bl
 		err := p.publishPartialCol(topic, ourColummn.GroupID(), ourColummn)
 		if err == nil {
 			ourColummn.Published = true
+			p.logger.WithFields(logrus.Fields{
+				"topic":    topic,
+				"index":    ourColummn.Index,
+				"included": ourColummn.Included.Count(),
+				"total":    ourColummn.KzgCommitmentCount(),
+			}).Debug("[PDC] Published partial column to gossip")
 		} else {
 			aggErr = stderrors.Join(aggErr, err)
 		}

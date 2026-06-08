@@ -482,6 +482,15 @@ func (vs *Server) handleUnblindedBlock(
 			}
 		}
 
+		log.WithFields(logrus.Fields{
+			"slot":              block.Block().Slot(),
+			"root":              fmt.Sprintf("%#x", block.Root()),
+			"numBlobs":          len(cellsPerBlob),
+			"numColumns":        len(roDataColumnSidecars),
+			"numPartialColumns": len(partialColumns),
+			"isGloas":           isGloas,
+		}).Debug("[PDC] Built block: generated data columns and partial columns")
+
 		return nil, roDataColumnSidecars, partialColumns, nil
 	}
 
@@ -564,6 +573,11 @@ func (vs *Server) broadcastAndReceiveDataColumns(ctx context.Context, roSidecars
 		verifiedSidecar := blocks.NewVerifiedRODataColumn(sidecar)
 		verifiedSidecars = append(verifiedSidecars, verifiedSidecar)
 	}
+
+	log.WithFields(logrus.Fields{
+		"numFullSidecars":   len(verifiedSidecars),
+		"numPartialColumns": len(partialColumns),
+	}).Debug("[PDC] Broadcasting data column sidecars and partial columns")
 
 	// Broadcast sidecars (non blocking).
 	if err := vs.P2P.BroadcastDataColumnSidecars(ctx, verifiedSidecars, partialColumns); err != nil {
