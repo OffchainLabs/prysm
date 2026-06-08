@@ -30,7 +30,7 @@ func TestProgressiveSSZEnabled(t *testing.T) {
 	require.Equal(t, false, progressiveSSZEnabled(version.Fulu))
 }
 
-func TestRootSelector_ProgressiveSSZGate_ValidatorsBalancesAndExpectedWithdrawals(t *testing.T) {
+func TestRootSelector_ProgressiveSSZGate_ValidatorsBalancesAndGloasWithdrawalLists(t *testing.T) {
 	st := newGloasStateForProgressiveSSZTests(t)
 
 	reset := features.InitWithReset(&features.Flags{})
@@ -53,6 +53,12 @@ func TestRootSelector_ProgressiveSSZGate_ValidatorsBalancesAndExpectedWithdrawal
 	expectedLegacyExpectedWithdrawalsRoot, err := ssz.WithdrawalSliceRoot(st.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
 	require.NoError(t, err)
 	require.Equal(t, expectedLegacyExpectedWithdrawalsRoot, legacyExpectedWithdrawalsRoot)
+
+	legacyBuilderPendingWithdrawalsRoot, err := st.rootSelector(context.Background(), types.BuilderPendingWithdrawals)
+	require.NoError(t, err)
+	expectedLegacyBuilderPendingWithdrawalsRoot, err := stateutil.BuilderPendingWithdrawalsRoot(st.builderPendingWithdrawals)
+	require.NoError(t, err)
+	require.Equal(t, expectedLegacyBuilderPendingWithdrawalsRoot, legacyBuilderPendingWithdrawalsRoot)
 
 	reset = features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
 	defer reset()
@@ -77,9 +83,16 @@ func TestRootSelector_ProgressiveSSZGate_ValidatorsBalancesAndExpectedWithdrawal
 	require.NoError(t, err)
 	require.Equal(t, expectedProgressiveExpectedWithdrawalsRoot, progressiveExpectedWithdrawalsRoot)
 	require.DeepNotSSZEqual(t, legacyExpectedWithdrawalsRoot, progressiveExpectedWithdrawalsRoot)
+
+	progressiveBuilderPendingWithdrawalsRoot, err := st.rootSelector(context.Background(), types.BuilderPendingWithdrawals)
+	require.NoError(t, err)
+	expectedProgressiveBuilderPendingWithdrawalsRoot, err := stateutil.BuilderPendingWithdrawalsRootProgressive(st.builderPendingWithdrawals)
+	require.NoError(t, err)
+	require.Equal(t, expectedProgressiveBuilderPendingWithdrawalsRoot, progressiveBuilderPendingWithdrawalsRoot)
+	require.DeepNotSSZEqual(t, legacyBuilderPendingWithdrawalsRoot, progressiveBuilderPendingWithdrawalsRoot)
 }
 
-func TestComputeFieldRootsWithHasher_ProgressiveSSZGate_PendingDepositsAndExpectedWithdrawals(t *testing.T) {
+func TestComputeFieldRootsWithHasher_ProgressiveSSZGate_PendingDepositsAndGloasWithdrawalLists(t *testing.T) {
 	st := newGloasStateForProgressiveSSZTests(t)
 
 	reset := features.InitWithReset(&features.Flags{})
@@ -93,6 +106,9 @@ func TestComputeFieldRootsWithHasher_ProgressiveSSZGate_PendingDepositsAndExpect
 	expectedLegacyWithdrawalsRoot, err := ssz.WithdrawalSliceRoot(st.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
 	require.NoError(t, err)
 	require.DeepEqual(t, expectedLegacyWithdrawalsRoot[:], legacyRoots[types.PayloadExpectedWithdrawals.RealPosition()])
+	expectedLegacyBuilderPendingWithdrawalsRoot, err := stateutil.BuilderPendingWithdrawalsRoot(st.builderPendingWithdrawals)
+	require.NoError(t, err)
+	require.DeepEqual(t, expectedLegacyBuilderPendingWithdrawalsRoot[:], legacyRoots[types.BuilderPendingWithdrawals.RealPosition()])
 
 	reset = features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
 	defer reset()
@@ -107,6 +123,10 @@ func TestComputeFieldRootsWithHasher_ProgressiveSSZGate_PendingDepositsAndExpect
 	require.NoError(t, err)
 	require.DeepEqual(t, expectedProgressiveWithdrawalsRoot[:], progressiveRoots[types.PayloadExpectedWithdrawals.RealPosition()])
 	require.DeepNotSSZEqual(t, legacyRoots[types.PayloadExpectedWithdrawals.RealPosition()], progressiveRoots[types.PayloadExpectedWithdrawals.RealPosition()])
+	expectedProgressiveBuilderPendingWithdrawalsRoot, err := stateutil.BuilderPendingWithdrawalsRootProgressive(st.builderPendingWithdrawals)
+	require.NoError(t, err)
+	require.DeepEqual(t, expectedProgressiveBuilderPendingWithdrawalsRoot[:], progressiveRoots[types.BuilderPendingWithdrawals.RealPosition()])
+	require.DeepNotSSZEqual(t, legacyRoots[types.BuilderPendingWithdrawals.RealPosition()], progressiveRoots[types.BuilderPendingWithdrawals.RealPosition()])
 }
 
 func TestHashTreeRoot_ProgressiveSSZGate(t *testing.T) {
@@ -168,6 +188,21 @@ func newGloasStateForProgressiveSSZTests(t *testing.T) *BeaconState {
 			},
 		}
 	}
+
+	builderPendingWithdrawals := []*ethpb.BuilderPendingWithdrawal{
+		{
+			FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
+			Amount:       9,
+			BuilderIndex: 1,
+		},
+		{
+			FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
+			Amount:       10,
+			BuilderIndex: 2,
+		},
+	}
+	builderPendingWithdrawals[0].FeeRecipient[0] = 1
+	builderPendingWithdrawals[1].FeeRecipient[0] = 2
 
 	ptcWindow := make([]*ethpb.PTCs, 3*params.BeaconConfig().SlotsPerEpoch)
 	for i := range ptcWindow {
@@ -250,7 +285,7 @@ func newGloasStateForProgressiveSSZTests(t *testing.T) *BeaconState {
 		Builders:                     make([]*ethpb.Builder, 0),
 		ExecutionPayloadAvailability: make([]byte, 1024),
 		BuilderPendingPayments:       builderPendingPayments,
-		BuilderPendingWithdrawals:    make([]*ethpb.BuilderPendingWithdrawal, 0),
+		BuilderPendingWithdrawals:    builderPendingWithdrawals,
 		LatestBlockHash:              make([]byte, fieldparams.RootLength),
 		PayloadExpectedWithdrawals:   make([]*enginev1.Withdrawal, 0),
 		PtcWindow:                    ptcWindow,
