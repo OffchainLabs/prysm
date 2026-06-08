@@ -138,6 +138,7 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 		log.WithError(err).Error("Could not compute head from new attestations")
 		return
 	}
+	newAttHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
 	if !s.isNewHead(newHeadRoot, full) {
 		return
 	}
@@ -147,7 +148,6 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 		log.WithError(err).Error("Could not get head block and state")
 		return
 	}
-	newAttHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
 	if s.inRegularSync() {
 		attr := s.getPayloadAttribute(ctx, headState, proposingSlot, newHeadRoot[:], full)
 		if !attr.IsEmpty() && s.shouldOverrideFCU(newHeadRoot, proposingSlot) {
