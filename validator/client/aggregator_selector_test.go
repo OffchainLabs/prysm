@@ -95,12 +95,10 @@ func TestLocalSelector_AttestationSelectionProof_ConcurrentDedup(t *testing.T) {
 	results := make([][]byte, goroutines)
 	errs := make([]error, goroutines)
 
-	wg.Add(goroutines)
-	for i := range goroutines {
-		go func(idx int) {
-			defer wg.Done()
+	for idx := range goroutines {
+		wg.Go(func() {
 			results[idx], errs[idx] = s.AttestationSelectionProof(t.Context(), slot, pubKey)
-		}(i)
+		})
 	}
 	wg.Wait()
 

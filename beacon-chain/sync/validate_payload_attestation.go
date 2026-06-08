@@ -66,6 +66,15 @@ func (s *Service) validatePayloadAttestation(ctx context.Context, pid peer.ID, m
 		return pubsub.ValidationIgnore, err
 	}
 
+	// [IGNORE] The block referenced by data.beacon_block_root is at slot data.slot.
+	blockSlot, err := s.cfg.chain.RecentBlockSlot(pa.BeaconBlockRoot())
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	if err := v.VerifyBlockSlotMatches(blockSlot); err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+
 	// [REJECT] The message's block data.beacon_block_root passes validation.
 	if err := v.VerifyBlockRootValid(s.hasBadBlock); err != nil {
 		return pubsub.ValidationReject, err

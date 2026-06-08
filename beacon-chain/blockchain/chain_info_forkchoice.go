@@ -105,6 +105,13 @@ func (s *Service) ForkChoiceDump(ctx context.Context) (*forkchoice.Dump, error) 
 	return s.cfg.ForkChoiceStore.ForkChoiceDump(ctx)
 }
 
+// ForkChoiceDumpV2 returns the corresponding value from forkchoice
+func (s *Service) ForkChoiceDumpV2(ctx context.Context) (*forkchoice.DumpV2, error) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.ForkChoiceDumpV2(ctx)
+}
+
 // NewSlot returns the corresponding value from forkchoice
 func (s *Service) NewSlot(ctx context.Context, slot primitives.Slot) error {
 	s.cfg.ForkChoiceStore.Lock()

@@ -848,6 +848,14 @@ func (s *ChainService) ForkChoiceDump(ctx context.Context) (*forkchoice2.Dump, e
 	return nil, nil
 }
 
+// ForkChoiceDumpV2 mocks the same method in the chain service
+func (s *ChainService) ForkChoiceDumpV2(ctx context.Context) (*forkchoice2.DumpV2, error) {
+	if s.ForkChoiceStore != nil {
+		return s.ForkChoiceStore.ForkChoiceDumpV2(ctx)
+	}
+	return nil, nil
+}
+
 // NewSlot mocks the same method in the chain service
 func (s *ChainService) NewSlot(ctx context.Context, slot primitives.Slot) error {
 	if s.ForkChoiceStore != nil {

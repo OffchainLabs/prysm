@@ -779,10 +779,16 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			s.Broadcaster = broadcaster
 			s.AttestationsPool = attestations.NewPool()
 
-			var body bytes.Buffer
-			_, err := body.WriteString(singleAttElectra)
+			attRoot := hexutil.MustDecode("0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2")
+			data := &ethpbv1alpha1.AttestationData{
+				BeaconBlockRoot: attRoot,
+				Source:          &ethpbv1alpha1.Checkpoint{Epoch: 0, Root: attRoot},
+				Target:          &ethpbv1alpha1.Checkpoint{Epoch: 0, Root: attRoot},
+			}
+			att := signedSingleAttElectra(t, bs.Fork(), bs.GenesisValidatorsRoot(), keys[1], 1, data)
+			reqBody, err := json.Marshal([]*structs.SingleAttestation{att})
 			require.NoError(t, err)
-			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewReader(reqBody))
 			request.Header.Set(api.VersionHeader, version.String(version.Electra))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
@@ -793,7 +799,6 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
 			assert.Equal(t, 1, broadcaster.NumAttestations())
 			assert.Equal(t, primitives.ValidatorIndex(1), broadcaster.BroadcastAttestations[0].GetAttestingIndex())
-			assert.Equal(t, "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetSignature()))
 			assert.Equal(t, primitives.Slot(0), broadcaster.BroadcastAttestations[0].GetData().Slot)
 			assert.Equal(t, primitives.CommitteeIndex(0), broadcaster.BroadcastAttestations[0].GetData().CommitteeIndex)
 			assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().BeaconBlockRoot))
@@ -805,15 +810,51 @@ func TestSubmitAttestationsV2(t *testing.T) {
 				return s.AttestationsPool.UnaggregatedAttestationCount() == 1
 			}, time.Second, 10*time.Millisecond, "Expected 1 attestation in pool")
 		})
-		t.Run("multiple", func(t *testing.T) {
+		t.Run("invalid signature not added to pool", func(t *testing.T) {
 			broadcaster := &p2pMock.MockBroadcaster{}
 			s.Broadcaster = broadcaster
 			s.AttestationsPool = attestations.NewPool()
 
 			var body bytes.Buffer
-			_, err := body.WriteString(multipleAttsElectra)
+			_, err := body.WriteString(singleAttElectra) // well-formed but invalid signature
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.SubmitAttestationsV2(writer, request)
+
+			assert.Equal(t, http.StatusOK, writer.Code)
+			assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
+			// The save path verifies the signature asynchronously; an invalid attestation must never reach the pool.
+			time.Sleep(500 * time.Millisecond)
+			assert.Equal(t, 0, s.AttestationsPool.UnaggregatedAttestationCount(), "Invalid-signature attestation must not enter the pool")
+		})
+		t.Run("multiple", func(t *testing.T) {
+			broadcaster := &p2pMock.MockBroadcaster{}
+			s.Broadcaster = broadcaster
+			s.AttestationsPool = attestations.NewPool()
+
+			blockRoot := hexutil.MustDecode("0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2")
+			sourceRoot := bytesutil.PadTo([]byte("sourceroot1"), 32)
+			data0 := &ethpbv1alpha1.AttestationData{
+				BeaconBlockRoot: blockRoot,
+				Source:          &ethpbv1alpha1.Checkpoint{Epoch: 0, Root: sourceRoot},
+				Target:          &ethpbv1alpha1.Checkpoint{Epoch: 0, Root: bytesutil.PadTo([]byte("targetroot1"), 32)},
+			}
+			data1 := &ethpbv1alpha1.AttestationData{
+				BeaconBlockRoot: blockRoot,
+				Source:          &ethpbv1alpha1.Checkpoint{Epoch: 0, Root: sourceRoot},
+				Target:          &ethpbv1alpha1.Checkpoint{Epoch: 0, Root: bytesutil.PadTo([]byte("targetroot2"), 32)},
+			}
+			atts := []*structs.SingleAttestation{
+				signedSingleAttElectra(t, bs.Fork(), bs.GenesisValidatorsRoot(), keys[0], 0, data0),
+				signedSingleAttElectra(t, bs.Fork(), bs.GenesisValidatorsRoot(), keys[1], 1, data1),
+			}
+			reqBody, err := json.Marshal(atts)
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewReader(reqBody))
 			request.Header.Set(api.VersionHeader, version.String(version.Electra))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
@@ -944,6 +985,27 @@ func TestSubmitAttestationsV2(t *testing.T) {
 		assert.Equal(t, http.StatusServiceUnavailable, writer.Code)
 		assert.Equal(t, true, strings.Contains(writer.Body.String(), "Beacon node is currently syncing"))
 	})
+}
+
+// signedSingleAttElectra builds a SingleAttestation with a valid BLS signature over data for the given state's fork.
+func signedSingleAttElectra(t *testing.T, fork *ethpbv1alpha1.Fork, genesisRoot []byte, key bls.SecretKey, attesterIndex primitives.ValidatorIndex, data *ethpbv1alpha1.AttestationData) *structs.SingleAttestation {
+	domain, err := signing.Domain(fork, data.Target.Epoch, params.BeaconConfig().DomainBeaconAttester, genesisRoot)
+	require.NoError(t, err)
+	root, err := signing.ComputeSigningRoot(data, domain)
+	require.NoError(t, err)
+	sig := key.Sign(root[:]).Marshal()
+	return &structs.SingleAttestation{
+		CommitteeIndex: fmt.Sprintf("%d", data.CommitteeIndex),
+		AttesterIndex:  fmt.Sprintf("%d", attesterIndex),
+		Signature:      hexutil.Encode(sig),
+		Data: &structs.AttestationData{
+			Slot:            fmt.Sprintf("%d", data.Slot),
+			CommitteeIndex:  fmt.Sprintf("%d", data.CommitteeIndex),
+			BeaconBlockRoot: hexutil.Encode(data.BeaconBlockRoot),
+			Source:          &structs.Checkpoint{Epoch: fmt.Sprintf("%d", data.Source.Epoch), Root: hexutil.Encode(data.Source.Root)},
+			Target:          &structs.Checkpoint{Epoch: fmt.Sprintf("%d", data.Target.Epoch), Root: hexutil.Encode(data.Target.Root)},
+		},
+	}
 }
 
 func TestListVoluntaryExits(t *testing.T) {
@@ -2389,44 +2451,6 @@ var (
       "target": {
         "epoch": "0",
         "root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
-      }
-    }
-  }
-]`
-	multipleAttsElectra = `[
-  {
-    "committee_index": "0",
-	"attester_index": "0",
-    "signature": "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15",
-    "data": {
-      "slot": "0",
-      "index": "0",
-      "beacon_block_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-      "source": {
-        "epoch": "0",
-        "root": "0x736f75726365726f6f7431000000000000000000000000000000000000000000"
-      },
-      "target": {
-        "epoch": "0",
-        "root": "0x746172676574726f6f7431000000000000000000000000000000000000000000"
-      }
-    }
-  },
-  {
-    "committee_index": "0",
-	"attester_index": "1",
-    "signature": "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15",
-    "data": {
-      "slot": "0",
-      "index": "0",
-      "beacon_block_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-      "source": {
-        "epoch": "0",
-        "root": "0x736f75726365726f6f7431000000000000000000000000000000000000000000"
-      },
-      "target": {
-        "epoch": "0",
-        "root": "0x746172676574726f6f7432000000000000000000000000000000000000000000"
       }
     }
   }

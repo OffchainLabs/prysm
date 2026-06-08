@@ -1209,15 +1209,6 @@
         epoch: Epoch
     </spec>
 
-- name: ForkChoiceNode#gloas
-  sources: []
-  spec: |
-    <spec ssz_object="ForkChoiceNode" fork="gloas" hash="755a4b34">
-    class ForkChoiceNode(Container):
-        root: Root
-        payload_status: PayloadStatus  # One of PAYLOAD_STATUS_* values
-    </spec>
-
 - name: ForkData#phase0
   sources:
     - file: proto/prysm/v1alpha1/beacon_state.proto

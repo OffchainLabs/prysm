@@ -133,48 +133,29 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 	processAttsElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
 
 	start = time.Now()
-	newHeadRoot, _, full, err := s.cfg.ForkChoiceStore.FullHead(ctx)
+	newHeadRoot, headHash, full, err := s.cfg.ForkChoiceStore.FullHead(ctx)
 	if err != nil {
 		log.WithError(err).Error("Could not compute head from new attestations")
 		return
 	}
+	newAttHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
 	if !s.isNewHead(newHeadRoot, full) {
 		return
 	}
 	log.WithField("newHeadRoot", fmt.Sprintf("%#x", newHeadRoot)).Debug("Head changed due to attestations")
-	headState, headBlock, err := s.getStateAndBlock(ctx, newHeadRoot, newHeadRoot)
+	headState, headBlock, err := s.getStateAndBlock(ctx, newHeadRoot)
 	if err != nil {
 		log.WithError(err).Error("Could not get head block and state")
 		return
 	}
-	newAttHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
 	if s.inRegularSync() {
 		attr := s.getPayloadAttribute(ctx, headState, proposingSlot, newHeadRoot[:], full)
-		if attr != nil && s.shouldOverrideFCU(newHeadRoot, proposingSlot) {
+		if !attr.IsEmpty() && s.shouldOverrideFCU(newHeadRoot, proposingSlot) {
 			return
 		}
 		postGloas := slots.ToEpoch(proposingSlot) >= params.BeaconConfig().GloasForkEpoch
 		if postGloas {
-			blockHash, hashErr := s.cfg.ForkChoiceStore.BlockHash(newHeadRoot)
-			if hashErr != nil {
-				log.WithError(hashErr).Error("Could not get block hash from forkchoice for FCU")
-			} else {
-				go func() {
-					pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)
-					if err != nil {
-						log.WithError(err).Error("Could not update forkchoice with engine")
-					}
-					if pid == nil {
-						if attr != nil {
-							log.Warn("Engine did not return a payload ID for the fork choice update with attributes")
-						}
-						return
-					}
-					var pId [8]byte
-					copy(pId[:], pid[:])
-					s.cfg.PayloadIDCache.Set(proposingSlot, newHeadRoot, pId)
-				}()
-			}
+			go s.fcuFromReorgData(newHeadRoot, headHash, attr, proposingSlot)
 		} else {
 			fcuArgs := &fcuConfig{
 				headState:     headState,

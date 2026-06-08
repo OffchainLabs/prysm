@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -141,6 +143,20 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	} else {
 		log.WithError(err).WithField("slot", env.Slot()).Debug("Could not compute execution payload envelope slot start time")
 	}
+
+	// execution_payload_gossip fires once the envelope passes gossip validation.
+	if s.cfg.operationNotifier != nil {
+		s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
+			Type: operation.ExecutionPayloadGossipReceived,
+			Data: &operation.ExecutionPayloadGossipReceivedData{
+				Slot:         env.Slot(),
+				BuilderIndex: env.BuilderIndex(),
+				BlockHash:    env.BlockHash(),
+				BlockRoot:    env.BeaconBlockRoot(),
+			},
+		})
+	}
+
 	return pubsub.ValidationAccept, nil
 }
 
@@ -154,6 +170,7 @@ func (s *Service) queuePendingPayloadEnvelope(
 ) (pubsub.ValidationResult, error) {
 	currentSlot := s.cfg.clock.CurrentSlot()
 	if env.Slot() != currentSlot {
+		log.WithField("envelopeSlot", env.Slot()).WithField("currentSlot", currentSlot).Debug("Ignoring payload envelope not for current slot")
 		return pubsub.ValidationIgnore, nil
 	}
 	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
