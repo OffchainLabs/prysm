@@ -165,6 +165,42 @@ func TestByteSliceRootProgressive_EmptyReferenceRoot(t *testing.T) {
 	}
 }
 
+func TestContainerRootProgressive(t *testing.T) {
+	fieldRoots := [][32]byte{
+		chunkFromIndex(0),
+		chunkFromIndex(1),
+	}
+	activeFields := []bool{true, false, true}
+
+	got, err := ssz.ContainerRootProgressive(fieldRoots, activeFields)
+	require.NoError(t, err)
+
+	body := ssz.MerkleizeProgressiveChunks(fieldRoots)
+	expected, err := ssz.MixInActiveFields(body, activeFields)
+	require.NoError(t, err)
+	require.Equal(t, expected, got)
+}
+
+func TestContainerRootProgressive_EmptyActiveFields(t *testing.T) {
+	_, err := ssz.ContainerRootProgressive([][32]byte{}, []bool{})
+	require.ErrorContains(t, "active fields cannot be empty", err)
+}
+
+func TestContainerRootProgressive_ActiveFieldsExceedsLimit(t *testing.T) {
+	af := make([]bool, 257)
+	_, err := ssz.ContainerRootProgressive([][32]byte{}, af)
+	require.ErrorContains(t, "exceeds maximum", err)
+}
+
+func TestContainerRootProgressive_ActiveCountMismatch(t *testing.T) {
+	fieldRoots := [][32]byte{
+		chunkFromIndex(0),
+		chunkFromIndex(1),
+	}
+	_, err := ssz.ContainerRootProgressive(fieldRoots, []bool{true, false})
+	require.ErrorContains(t, "active fields count", err)
+}
+
 func TestMixInActiveFields(t *testing.T) {
 	root := chunkFromIndex(42)
 	activeFields := []bool{true, false, true, true, false, false, false, true, true}
