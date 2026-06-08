@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/inspect"
-	"golang.org/x/tools/go/ast/astutil"
+
 	"golang.org/x/tools/go/ast/inspector"
 	"golang.org/x/tools/go/types/typeutil"
 )
@@ -445,7 +445,7 @@ func mapSelTypes(c *ast.CallExpr, pass *analysis.Pass) *selIdentList {
 
 // recursively identifies the type of each identity node in a selector expression
 func (l *selIdentList) recurMapSelTypes(e ast.Expr, next *selIdentNode, t *types.Info) bool {
-	expr := astutil.Unparen(e)
+	expr := ast.Unparen(e)
 	l.length++
 	s := &selIdentNode{next: next}
 	switch stmt := expr.(type) {
