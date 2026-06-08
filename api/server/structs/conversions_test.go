@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -363,51 +364,54 @@ func TestIndexedAttestation_ToConsensus(t *testing.T) {
 func TestROExecutionPayloadBidFromConsensus(t *testing.T) {
 	t.Run("empty blobkzg commitments", func(t *testing.T) {
 		bid := &eth.ExecutionPayloadBid{
-			ParentBlockHash:    bytes.Repeat([]byte{0x01}, 32),
-			ParentBlockRoot:    bytes.Repeat([]byte{0x02}, 32),
-			BlockHash:          bytes.Repeat([]byte{0x03}, 32),
-			PrevRandao:         bytes.Repeat([]byte{0x04}, 32),
-			FeeRecipient:       bytes.Repeat([]byte{0x05}, 20),
-			GasLimit:           100,
-			BuilderIndex:       7,
-			Slot:               9,
-			Value:              11,
-			ExecutionPayment:   22,
-			BlobKzgCommitments: [][]byte{},
+			ParentBlockHash:       bytes.Repeat([]byte{0x01}, 32),
+			ParentBlockRoot:       bytes.Repeat([]byte{0x02}, 32),
+			BlockHash:             bytes.Repeat([]byte{0x03}, 32),
+			PrevRandao:            bytes.Repeat([]byte{0x04}, 32),
+			FeeRecipient:          bytes.Repeat([]byte{0x05}, 20),
+			GasLimit:              100,
+			BuilderIndex:          7,
+			Slot:                  9,
+			Value:                 11,
+			ExecutionPayment:      22,
+			BlobKzgCommitments:    [][]byte{},
+			ExecutionRequestsRoot: bytes.Repeat([]byte{0x07}, 32),
 		}
 		roBid, err := blocks.WrappedROExecutionPayloadBid(bid)
 		require.NoError(t, err)
 
 		got := ROExecutionPayloadBidFromConsensus(roBid)
 		want := &ExecutionPayloadBid{
-			ParentBlockHash:    hexutil.Encode(bid.ParentBlockHash),
-			ParentBlockRoot:    hexutil.Encode(bid.ParentBlockRoot),
-			BlockHash:          hexutil.Encode(bid.BlockHash),
-			PrevRandao:         hexutil.Encode(bid.PrevRandao),
-			FeeRecipient:       hexutil.Encode(bid.FeeRecipient),
-			GasLimit:           "100",
-			BuilderIndex:       "7",
-			Slot:               "9",
-			Value:              "11",
-			ExecutionPayment:   "22",
-			BlobKzgCommitments: []string{},
+			ParentBlockHash:       hexutil.Encode(bid.ParentBlockHash),
+			ParentBlockRoot:       hexutil.Encode(bid.ParentBlockRoot),
+			BlockHash:             hexutil.Encode(bid.BlockHash),
+			PrevRandao:            hexutil.Encode(bid.PrevRandao),
+			FeeRecipient:          hexutil.Encode(bid.FeeRecipient),
+			GasLimit:              "100",
+			BuilderIndex:          "7",
+			Slot:                  "9",
+			Value:                 "11",
+			ExecutionPayment:      "22",
+			BlobKzgCommitments:    []string{},
+			ExecutionRequestsRoot: hexutil.Encode(bid.ExecutionRequestsRoot),
 		}
 		assert.DeepEqual(t, want, got)
 	})
 
 	t.Run("default", func(t *testing.T) {
 		bid := &eth.ExecutionPayloadBid{
-			ParentBlockHash:    bytes.Repeat([]byte{0x01}, 32),
-			ParentBlockRoot:    bytes.Repeat([]byte{0x02}, 32),
-			BlockHash:          bytes.Repeat([]byte{0x03}, 32),
-			PrevRandao:         bytes.Repeat([]byte{0x04}, 32),
-			FeeRecipient:       bytes.Repeat([]byte{0x05}, 20),
-			GasLimit:           100,
-			BuilderIndex:       7,
-			Slot:               9,
-			Value:              11,
-			ExecutionPayment:   22,
-			BlobKzgCommitments: [][]byte{bytes.Repeat([]byte{0x06}, 48)},
+			ParentBlockHash:       bytes.Repeat([]byte{0x01}, 32),
+			ParentBlockRoot:       bytes.Repeat([]byte{0x02}, 32),
+			BlockHash:             bytes.Repeat([]byte{0x03}, 32),
+			PrevRandao:            bytes.Repeat([]byte{0x04}, 32),
+			FeeRecipient:          bytes.Repeat([]byte{0x05}, 20),
+			GasLimit:              100,
+			BuilderIndex:          7,
+			Slot:                  9,
+			Value:                 11,
+			ExecutionPayment:      22,
+			BlobKzgCommitments:    [][]byte{bytes.Repeat([]byte{0x06}, 48)},
+			ExecutionRequestsRoot: bytes.Repeat([]byte{0x07}, 32),
 		}
 		roBid, err := blocks.WrappedROExecutionPayloadBid(bid)
 		require.NoError(t, err)
@@ -419,17 +423,18 @@ func TestROExecutionPayloadBidFromConsensus(t *testing.T) {
 
 		got := ROExecutionPayloadBidFromConsensus(roBid)
 		want := &ExecutionPayloadBid{
-			ParentBlockHash:    hexutil.Encode(bid.ParentBlockHash),
-			ParentBlockRoot:    hexutil.Encode(bid.ParentBlockRoot),
-			BlockHash:          hexutil.Encode(bid.BlockHash),
-			PrevRandao:         hexutil.Encode(bid.PrevRandao),
-			FeeRecipient:       hexutil.Encode(bid.FeeRecipient),
-			GasLimit:           "100",
-			BuilderIndex:       "7",
-			Slot:               "9",
-			Value:              "11",
-			ExecutionPayment:   "22",
-			BlobKzgCommitments: bkcs,
+			ParentBlockHash:       hexutil.Encode(bid.ParentBlockHash),
+			ParentBlockRoot:       hexutil.Encode(bid.ParentBlockRoot),
+			BlockHash:             hexutil.Encode(bid.BlockHash),
+			PrevRandao:            hexutil.Encode(bid.PrevRandao),
+			FeeRecipient:          hexutil.Encode(bid.FeeRecipient),
+			GasLimit:              "100",
+			BuilderIndex:          "7",
+			Slot:                  "9",
+			Value:                 "11",
+			ExecutionPayment:      "22",
+			BlobKzgCommitments:    bkcs,
+			ExecutionRequestsRoot: hexutil.Encode(bid.ExecutionRequestsRoot),
 		}
 		assert.DeepEqual(t, want, got)
 	})
@@ -488,19 +493,20 @@ func TestBeaconStateGloasFromConsensus(t *testing.T) {
 		state.GenesisTime = 123
 		state.GenesisValidatorsRoot = bytes.Repeat([]byte{0x10}, 32)
 		state.Slot = 5
-		state.ProposerLookahead = []uint64{1, 2}
+		state.ProposerLookahead = []primitives.ValidatorIndex{1, 2}
 		state.LatestExecutionPayloadBid = &eth.ExecutionPayloadBid{
-			ParentBlockHash:    bytes.Repeat([]byte{0x11}, 32),
-			ParentBlockRoot:    bytes.Repeat([]byte{0x12}, 32),
-			BlockHash:          bytes.Repeat([]byte{0x13}, 32),
-			PrevRandao:         bytes.Repeat([]byte{0x14}, 32),
-			FeeRecipient:       bytes.Repeat([]byte{0x15}, 20),
-			GasLimit:           64,
-			BuilderIndex:       3,
-			Slot:               5,
-			Value:              99,
-			ExecutionPayment:   7,
-			BlobKzgCommitments: [][]byte{bytes.Repeat([]byte{0x16}, 48)},
+			ParentBlockHash:       bytes.Repeat([]byte{0x11}, 32),
+			ParentBlockRoot:       bytes.Repeat([]byte{0x12}, 32),
+			BlockHash:             bytes.Repeat([]byte{0x13}, 32),
+			PrevRandao:            bytes.Repeat([]byte{0x14}, 32),
+			FeeRecipient:          bytes.Repeat([]byte{0x15}, 20),
+			GasLimit:              64,
+			BuilderIndex:          3,
+			Slot:                  5,
+			Value:                 99,
+			ExecutionPayment:      7,
+			BlobKzgCommitments:    [][]byte{bytes.Repeat([]byte{0x16}, 48)},
+			ExecutionRequestsRoot: make([]byte, 32),
 		}
 		state.Builders = []*eth.Builder{
 			{

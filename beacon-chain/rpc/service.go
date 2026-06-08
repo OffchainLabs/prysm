@@ -127,7 +127,10 @@ type Config struct {
 	BlobStorage                      *filesystem.BlobStorage
 	DataColumnStorage                *filesystem.DataColumnStorage
 	TrackedValidatorsCache           *cache.TrackedValidatorsCache
+	ProposerPreferencesCache         *cache.ProposerPreferencesCache
+	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
 	PayloadIDCache                   *cache.PayloadIDCache
+	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache
 	LCStore                          *lightClient.Store
 	GraffitiInfo                     *execution.GraffitiInfo
 }
@@ -210,6 +213,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		BeaconDB:              s.cfg.BeaconDB,
 		ChainInfoFetcher:      s.cfg.ChainInfoFetcher,
 		HeadFetcher:           s.cfg.HeadFetcher,
+		ForkchoiceFetcher:     s.cfg.ForkchoiceFetcher,
 		GenesisTimeFetcher:    s.cfg.GenesisTimeFetcher,
 		SyncChecker:           s.cfg.SyncService,
 		Broadcaster:           s.cfg.Broadcaster,
@@ -263,7 +267,10 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		ClockWaiter:                      s.cfg.ClockWaiter,
 		CoreService:                      coreService,
 		TrackedValidatorsCache:           s.cfg.TrackedValidatorsCache,
+		ProposerPreferencesCache:         s.cfg.ProposerPreferencesCache,
+		HighestBidCache:                  s.cfg.HighestBidCache,
 		PayloadIDCache:                   s.cfg.PayloadIDCache,
+		ExecutionPayloadEnvelopeCache:    s.cfg.ExecutionPayloadEnvelopeCache,
 		AttestationStateFetcher:          s.cfg.AttestationReceiver,
 		GraffitiInfo:                     s.cfg.GraffitiInfo,
 	}

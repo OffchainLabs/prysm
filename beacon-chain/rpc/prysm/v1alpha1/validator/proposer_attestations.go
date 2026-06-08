@@ -207,7 +207,7 @@ func (a proposerAtts) sortOnChainAggregates(ctx context.Context, st state.ReadOn
 		return a, nil
 	}
 
-	totalBalance, err := helpers.TotalActiveBalance(st)
+	totalBalance, err := helpers.TotalActiveBalance(ctx, st)
 	if err != nil {
 		return nil, err
 	}

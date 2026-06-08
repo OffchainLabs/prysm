@@ -94,7 +94,7 @@ func (node *BootNode) Resume() error {
 
 // Stop stops the component and its underlying process.
 func (node *BootNode) Stop() error {
-	return node.cmd.Process.Kill()
+	return helpers.GracefulStop(node.cmd.Process)
 }
 
 func enrFromLogFile(name string) (string, error) {

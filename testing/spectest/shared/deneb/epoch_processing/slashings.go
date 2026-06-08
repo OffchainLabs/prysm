@@ -26,6 +26,6 @@ func RunSlashingsTests(t *testing.T, config string) {
 }
 
 func processSlashingsWrapper(t *testing.T, st state.BeaconState) (state.BeaconState, error) {
-	require.NoError(t, epoch.ProcessSlashings(st), "Could not process slashings")
+	require.NoError(t, epoch.ProcessSlashings(t.Context(), st), "Could not process slashings")
 	return st, nil
 }

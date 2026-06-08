@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -85,8 +86,19 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 	if rpcErr != nil {
 		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
-	// PTC assignments are not stable for the next epoch, so only compute for current epoch.
+	// Next epoch proposer duties are only needed from Fulu onwards (for Gloas proposer preferences).
+	var nextProposerDuties []*core.ProposerDutyResult
+	if req.Epoch+1 >= params.BeaconConfig().FuluForkEpoch {
+		nextProposerDuties, rpcErr = vs.CoreService.ProposerDuties(ctx, s, req.Epoch+1)
+		if rpcErr != nil {
+			return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
+		}
+	}
 	currentPTCDuties, rpcErr := vs.CoreService.PTCDuties(ctx, s, req.Epoch, requestIndices)
+	if rpcErr != nil {
+		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
+	}
+	nextPTCDuties, rpcErr := vs.CoreService.PTCDuties(ctx, s, req.Epoch.Add(1), requestIndices)
 	if rpcErr != nil {
 		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
@@ -95,7 +107,9 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 	currentAttesterMap := buildAttesterMap(currentAttesterDuties)
 	nextAttesterMap := buildAttesterMap(nextAttesterDuties)
 	proposerMap := buildProposerMap(proposerDuties)
+	nextProposerMap := buildProposerMap(nextProposerDuties)
 	currentPTCAssignments := buildPTCMap(currentPTCDuties)
+	nextPTCAssignments := buildPTCMap(nextPTCDuties)
 	validatorAssignments := make([]*ethpb.DutiesV2Response_Duty, 0, len(req.PublicKeys))
 	nextValidatorAssignments := make([]*ethpb.DutiesV2Response_Duty, 0, len(req.PublicKeys))
 
@@ -141,6 +155,7 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 			PublicKey:      pubKey,
 			ValidatorIndex: info.index,
 			Status:         statusEnum,
+			ProposerSlots:  nextProposerMap[info.index],
 		}
 		if ad, ok := nextAttesterMap[info.index]; ok {
 			nextDuty.AttesterSlot = ad.Slot
@@ -149,6 +164,10 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 			nextDuty.CommitteesAtSlot = ad.CommitteesAtSlot
 			nextDuty.ValidatorCommitteeIndex = ad.ValidatorCommitteeIndex
 		}
+		if ptcSlots, ok := nextPTCAssignments[info.index]; ok {
+			nextDuty.PtcSlots = ptcSlots
+		}
+
 		// Sync committee flags
 		if coreTime.HigherEqualThanAltairVersionAndEpoch(s, req.Epoch) {
 			inSync, err := helpers.IsCurrentPeriodSyncCommittee(s, info.index)

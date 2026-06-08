@@ -66,6 +66,7 @@ type Getter interface {
 	AncestorRoot(ctx context.Context, root [32]byte, slot primitives.Slot) ([32]byte, error)
 	CommonAncestor(ctx context.Context, root1 [32]byte, root2 [32]byte) ([32]byte, primitives.Slot, error)
 	ForkChoiceDump(context.Context) (*forkchoice2.Dump, error)
+	ForkChoiceDumpV2(context.Context) (*forkchoice2.DumpV2, error)
 	Tips() ([][32]byte, []primitives.Slot)
 }
 
@@ -74,6 +75,7 @@ type FastGetter interface {
 	FinalizedPayloadBlockHash() [32]byte
 	HasFullNode([32]byte) bool
 	HasNode([32]byte) bool
+	FullBeatsEmpty([32]byte) bool
 	HighestReceivedBlockSlot() primitives.Slot
 	HighestReceivedBlockRoot() [32]byte
 	IsCanonical(root [32]byte) bool
@@ -96,6 +98,7 @@ type FastGetter interface {
 	PayloadWeights(root [32]byte) (emptyWeight, fullWeight uint64, err error)
 	ParentRoot(root [32]byte) ([32]byte, error)
 	BlockHash(root [32]byte) ([32]byte, error)
+	GasLimit(root [32]byte) (uint64, error)
 	CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool)
 }
 
@@ -110,5 +113,7 @@ type Setter interface {
 	NewSlot(context.Context, primitives.Slot) error
 	SetBalancesByRooter(BalancesByRooter)
 	InsertSlashedIndex(context.Context, primitives.ValidatorIndex)
+	RecordBlockForEquivocation(primitives.Slot, primitives.ValidatorIndex, [32]byte)
 	SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, blobDataAvailable bool)
+	MarkFullNode(root [32]byte)
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/runtime/interop"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
@@ -136,7 +137,7 @@ func (w *Web3RemoteSigner) Resume() error {
 
 // Stop stops the component and its underlying process.
 func (w *Web3RemoteSigner) Stop() error {
-	return w.cmd.Process.Kill()
+	return helpers.GracefulStop(w.cmd.Process)
 }
 
 // monitorStart by polling server until it returns a 200 at /upcheck.

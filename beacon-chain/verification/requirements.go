@@ -27,13 +27,33 @@ const (
 	RequireMessageNotSeen
 	RequireValidatorInPTC
 	RequireBlockRootSeen
+	RequireBlockSlotMatches
 	RequireBlockRootValid
 	RequireSignatureValid
 
 	// Execution payload envelope specific.
 	RequireBuilderValid
 	RequirePayloadHashValid
+	RequireExecutionRequestsRootValid
 	RequireEnvelopeSlotAboveFinalized
 	RequireEnvelopeSlotMatchesBlock
 	RequireBuilderSignatureValid
+
+	// Execution payload bid specific.
+	RequireBidCurrentOrNextSlot
+	RequireBidBuilderActive
+	RequireBidExecutionPaymentZero
+	RequireBidFeeRecipientMatches
+	RequireBidGasLimitCompatible
+	RequireBidParentBlockRootSeen
+	RequireBidSlotHigherThanParent
+	RequireBidParentBlockHashValid
+	RequireBidBuilderCanCover
+	RequireBidSignatureValid
+
+	// Signed proposer preferences specific.
+	RequireProposerPreferencesCurrentOrNextEpoch
+	RequireProposerPreferencesDependentRootSeen
+	RequireProposerPreferencesProposalSlotValid
+	RequireProposerPreferencesSignatureValid
 )

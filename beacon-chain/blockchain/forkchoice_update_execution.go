@@ -32,7 +32,7 @@ func (s *Service) isNewHead(r [32]byte, full bool) bool {
 	return r != currentHeadRoot || full != currentFull || r == [32]byte{}
 }
 
-func (s *Service) getStateAndBlock(ctx context.Context, r, h [32]byte) (state.BeaconState, interfaces.ReadOnlySignedBeaconBlock, error) {
+func (s *Service) getStateAndBlock(ctx context.Context, r [32]byte) (state.BeaconState, interfaces.ReadOnlySignedBeaconBlock, error) {
 	if !s.hasBlockInInitSyncOrDB(ctx, r) {
 		return nil, nil, errors.New("block does not exist")
 	}
@@ -40,7 +40,7 @@ func (s *Service) getStateAndBlock(ctx context.Context, r, h [32]byte) (state.Be
 	if err != nil {
 		return nil, nil, err
 	}
-	headState, err := s.cfg.StateGen.StateByRoot(ctx, h)
+	headState, err := s.cfg.StateGen.StateByRoot(ctx, r)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -72,7 +72,7 @@ func (s *Service) sendFCU(cfg *postBlockProcessConfig) {
 		return
 	}
 	// If head has not been updated and attributes are nil, we can skip the FCU.
-	if !s.isNewHead(cfg.headRoot, false) && (fcuArgs.attributes == nil || fcuArgs.attributes.IsEmpty()) {
+	if !s.isNewHead(cfg.headRoot, true) && (fcuArgs.attributes == nil || fcuArgs.attributes.IsEmpty()) {
 		return
 	}
 	// If we are proposing and we aim to reorg the block, we have already sent FCU with attributes on lateBlockTasks
@@ -83,8 +83,8 @@ func (s *Service) sendFCU(cfg *postBlockProcessConfig) {
 		go s.forkchoiceUpdateWithExecution(cfg.ctx, fcuArgs)
 	}
 
-	if s.isNewHead(fcuArgs.headRoot, false) {
-		if err := s.saveHead(cfg.ctx, fcuArgs.headRoot, fcuArgs.headBlock, fcuArgs.headState); err != nil {
+	if s.isNewHead(fcuArgs.headRoot, true) {
+		if err := s.saveHead(cfg.ctx, fcuArgs.headRoot, fcuArgs.headBlock, fcuArgs.headState, true); err != nil {
 			log.WithError(err).Error("Could not save head")
 		}
 		s.pruneAttsFromPool(s.ctx, fcuArgs.headState, fcuArgs.headBlock)

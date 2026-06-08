@@ -2,7 +2,10 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["pool.go"],
+    srcs = [
+        "metrics.go",
+        "pool.go",
+    ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation",
     visibility = ["//visibility:public"],
     deps = [
@@ -12,6 +15,8 @@ go_library(
         "//encoding/bytesutil:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
+        "@com_github_prometheus_client_golang//prometheus:go_default_library",
+        "@com_github_prometheus_client_golang//prometheus/promauto:go_default_library",
     ],
 )
 

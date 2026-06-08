@@ -2,6 +2,7 @@ package debug
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
@@ -233,6 +235,63 @@ func (s *Server) GetForkChoice(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, resp)
 }
 
+// GetForkChoiceV2 returns a Gloas-aware dump of the forkchoice store with one entry per (root, payload_status) tuple.
+func (s *Server) GetForkChoiceV2(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "debug.GetForkChoiceV2")
+	defer span.End()
+
+	dump, err := s.ForkchoiceFetcher.ForkChoiceDumpV2(ctx)
+	if err != nil {
+		httputil.HandleError(w, "Could not get forkchoice dump: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	nodes := make([]*structs.ForkChoiceNodeV2, len(dump.ForkChoiceNodes))
+	for i, n := range dump.ForkChoiceNodes {
+		extra := &structs.ForkChoiceNodeV2ExtraData{
+			Balance:             fmt.Sprintf("%d", n.Balance),
+			ExecutionOptimistic: n.ExecutionOptimistic,
+			TimeStamp:           n.Timestamp.String(),
+		}
+		switch n.PayloadStatus {
+		case forkchoice2.PayloadStatusPending:
+			extra.Target = fmt.Sprintf("%#x", n.Target)
+			extra.JustifiedEpoch = fmt.Sprintf("%d", n.JustifiedEpoch)
+			extra.FinalizedEpoch = fmt.Sprintf("%d", n.FinalizedEpoch)
+			extra.UnrealizedJustifiedEpoch = fmt.Sprintf("%d", n.UnrealizedJustifiedEpoch)
+			extra.UnrealizedFinalizedEpoch = fmt.Sprintf("%d", n.UnrealizedFinalizedEpoch)
+			extra.PayloadAttesterCount = fmt.Sprintf("%d", n.PayloadAttesterCount)
+			extra.PayloadAvailabilityYesCount = fmt.Sprintf("%d", n.PayloadAvailabilityYesCount)
+			extra.PayloadDataAvailabilityYesCount = fmt.Sprintf("%d", n.PayloadDataAvailabilityYesCount)
+		case forkchoice2.PayloadStatusFull:
+			extra.GasLimit = fmt.Sprintf("%d", n.GasLimit)
+		}
+		nodes[i] = &structs.ForkChoiceNodeV2{
+			PayloadStatus:      n.PayloadStatus.String(),
+			Slot:               fmt.Sprintf("%d", n.Slot),
+			BlockRoot:          hexutil.Encode(n.BlockRoot),
+			ParentRoot:         hexutil.Encode(n.ParentRoot),
+			Weight:             fmt.Sprintf("%d", n.Weight),
+			Validity:           n.Validity.String(),
+			ExecutionBlockHash: hexutil.Encode(n.ExecutionBlockHash),
+			ExtraData:          extra,
+		}
+	}
+	resp := &structs.GetForkChoiceDumpV2Response{
+		JustifiedCheckpoint: structs.CheckpointFromConsensus(dump.JustifiedCheckpoint),
+		FinalizedCheckpoint: structs.CheckpointFromConsensus(dump.FinalizedCheckpoint),
+		ForkChoiceNodes:     nodes,
+		ExtraData: &structs.ForkChoiceDumpExtraData{
+			UnrealizedJustifiedCheckpoint: structs.CheckpointFromConsensus(dump.UnrealizedJustifiedCheckpoint),
+			UnrealizedFinalizedCheckpoint: structs.CheckpointFromConsensus(dump.UnrealizedFinalizedCheckpoint),
+			ProposerBoostRoot:             hexutil.Encode(dump.ProposerBoostRoot),
+			PreviousProposerBoostRoot:     hexutil.Encode(dump.PreviousProposerBoostRoot),
+			HeadRoot:                      hexutil.Encode(dump.HeadRoot),
+		},
+	}
+	httputil.WriteJson(w, resp)
+}
+
 // DataColumnSidecars retrieves data column sidecars for a given block id.
 func (s *Server) DataColumnSidecars(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "debug.DataColumnSidecars")
@@ -258,8 +317,7 @@ func (s *Server) DataColumnSidecars(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	segments := strings.Split(r.URL.Path, "/")
-	blockId := segments[len(segments)-1]
+	blockId := r.PathValue("block_id")
 
 	verifiedDataColumns, rpcErr := s.Blocker.DataColumns(ctx, blockId, indices)
 	if rpcErr != nil {
@@ -307,7 +365,22 @@ func (s *Server) DataColumnSidecars(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := buildDataColumnSidecarsJsonResponse(verifiedDataColumns)
+	var data json.RawMessage
+	if blk.Version() >= version.Gloas {
+		sidecars := buildDataColumnSidecarsGloasJsonResponse(verifiedDataColumns)
+		data, err = json.Marshal(sidecars)
+	} else {
+		sidecars, buildErr := buildDataColumnSidecarsJsonResponse(verifiedDataColumns)
+		if buildErr != nil {
+			httputil.HandleError(w, "Could not build data column sidecars response: "+buildErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		data, err = json.Marshal(sidecars)
+	}
+	if err != nil {
+		httputil.HandleError(w, "Could not marshal data column sidecars: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 	resp := &structs.GetDebugDataColumnSidecarsResponse{
 		Version:             version.String(blk.Version()),
 		Data:                data,
@@ -349,36 +422,74 @@ loop:
 	return indices, nil
 }
 
-func buildDataColumnSidecarsJsonResponse(verifiedDataColumns []blocks.VerifiedRODataColumn) []*structs.DataColumnSidecar {
+func buildDataColumnSidecarsJsonResponse(verifiedDataColumns []blocks.VerifiedRODataColumn) ([]*structs.DataColumnSidecar, error) {
 	sidecars := make([]*structs.DataColumnSidecar, len(verifiedDataColumns))
 	for i, dc := range verifiedDataColumns {
-		column := make([]string, len(dc.Column))
-		for j, cell := range dc.Column {
+		cells := dc.Column()
+		column := make([]string, len(cells))
+		for j, cell := range cells {
 			column[j] = hexutil.Encode(cell)
 		}
 
-		kzgCommitments := make([]string, len(dc.KzgCommitments))
-		for j, commitment := range dc.KzgCommitments {
+		comms, err := dc.KzgCommitments()
+		if err != nil {
+			return nil, err
+		}
+		kzgCommitments := make([]string, len(comms))
+		for j, commitment := range comms {
 			kzgCommitments[j] = hexutil.Encode(commitment)
 		}
 
-		kzgProofs := make([]string, len(dc.KzgProofs))
-		for j, proof := range dc.KzgProofs {
+		kzgProofs := make([]string, len(dc.KzgProofs()))
+		for j, proof := range dc.KzgProofs() {
 			kzgProofs[j] = hexutil.Encode(proof)
 		}
 
-		kzgCommitmentsInclusionProof := make([]string, len(dc.KzgCommitmentsInclusionProof))
-		for j, proof := range dc.KzgCommitmentsInclusionProof {
+		incProof, err := dc.KzgCommitmentsInclusionProof()
+		if err != nil {
+			return nil, err
+		}
+		kzgCommitmentsInclusionProof := make([]string, len(incProof))
+		for j, proof := range incProof {
 			kzgCommitmentsInclusionProof[j] = hexutil.Encode(proof)
 		}
 
+		sbh, err := dc.SignedBlockHeader()
+		if err != nil {
+			return nil, err
+		}
 		sidecars[i] = &structs.DataColumnSidecar{
-			Index:                        strconv.FormatUint(dc.Index, 10),
+			Index:                        strconv.FormatUint(dc.Index(), 10),
 			Column:                       column,
 			KzgCommitments:               kzgCommitments,
 			KzgProofs:                    kzgProofs,
-			SignedBeaconBlockHeader:      structs.SignedBeaconBlockHeaderFromConsensus(dc.SignedBlockHeader),
+			SignedBeaconBlockHeader:      structs.SignedBeaconBlockHeaderFromConsensus(sbh),
 			KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
+		}
+	}
+	return sidecars, nil
+}
+
+func buildDataColumnSidecarsGloasJsonResponse(verifiedDataColumns []blocks.VerifiedRODataColumn) []*structs.DataColumnSidecarGloas {
+	sidecars := make([]*structs.DataColumnSidecarGloas, len(verifiedDataColumns))
+	for i, dc := range verifiedDataColumns {
+		cells := dc.Column()
+		column := make([]string, len(cells))
+		for j, cell := range cells {
+			column[j] = hexutil.Encode(cell)
+		}
+		proofs := dc.KzgProofs()
+		kzgProofs := make([]string, len(proofs))
+		for j, proof := range proofs {
+			kzgProofs[j] = hexutil.Encode(proof)
+		}
+		root := dc.BlockRoot()
+		sidecars[i] = &structs.DataColumnSidecarGloas{
+			Index:           strconv.FormatUint(dc.Index(), 10),
+			Column:          column,
+			KzgProofs:       kzgProofs,
+			Slot:            strconv.FormatUint(uint64(dc.Slot()), 10),
+			BeaconBlockRoot: hexutil.Encode(root[:]),
 		}
 	}
 	return sidecars

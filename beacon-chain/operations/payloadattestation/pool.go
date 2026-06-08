@@ -44,9 +44,11 @@ type Pool struct {
 
 // NewPool returns an initialized pool.
 func NewPool() *Pool {
-	return &Pool{
+	pool := &Pool{
 		pending: make(map[payloadAttestationDataKey]*ethpb.PayloadAttestation),
 	}
+	payloadAttestationPoolSize.Set(0)
+	return pool
 }
 
 // PendingPayloadAttestations returns payload attestations for the requested slot.
@@ -89,6 +91,7 @@ func (p *Pool) InsertPayloadAttestation(msg *ethpb.PayloadAttestationMessage, id
 	existing, ok := p.pending[key]
 	if !ok {
 		p.pending[key] = messageToPayloadAttestation(msg, idx)
+		payloadAttestationPoolSize.Set(float64(len(p.pending)))
 		return nil
 	}
 
@@ -102,6 +105,7 @@ func (p *Pool) InsertPayloadAttestation(msg *ethpb.PayloadAttestationMessage, id
 	}
 	existing.Signature = sig
 	existing.AggregationBits.SetBitAt(idx, true)
+	payloadAttestationPoolSize.Set(float64(len(p.pending)))
 	return nil
 }
 
@@ -111,6 +115,7 @@ func (p *Pool) pruneOlderSlotsLocked(slot primitives.Slot) {
 			delete(p.pending, key)
 		}
 	}
+	payloadAttestationPoolSize.Set(float64(len(p.pending)))
 }
 
 // Seen reports whether idx has already been observed for the given

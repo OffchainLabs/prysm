@@ -55,9 +55,11 @@ func DeepEqual(loggerFn assertionLoggerFn, expected, actual any, msg ...any) {
 	if !isDeepEqual(expected, actual) {
 		errMsg := parseMsg("Values are not equal", msg...)
 		_, file, line, _ := runtime.Caller(2)
-		opts := cmp.Options{cmp.AllowUnexported(expected), cmp.AllowUnexported(actual)}
+		var opts cmp.Options
 		if _, isProto := expected.(proto.Message); isProto {
-			opts = append(opts, protocmp.Transform())
+			opts = cmp.Options{protocmp.Transform()}
+		} else {
+			opts = cmp.Options{cmp.AllowUnexported(expected), cmp.AllowUnexported(actual)}
 		}
 		diff := cmp.Diff(expected, actual, opts...)
 		loggerFn("%s:%d %s, expected != actual, diff: %s", filepath.Base(file), line, errMsg, diff)
@@ -146,7 +148,7 @@ func NoError(loggerFn assertionLoggerFn, err error, msg ...any) {
 	// Only check IsNil for types that support it to avoid panics on struct types.
 	v := reflect.ValueOf(err)
 	switch v.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice, reflect.UnsafePointer:
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
 		if v.IsNil() {
 			return
 		}
@@ -203,7 +205,7 @@ func deepNil(got any) bool {
 	}
 	value := reflect.ValueOf(got)
 	switch value.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice, reflect.UnsafePointer:
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
 		return value.IsNil()
 	}
 	return false
@@ -318,7 +320,7 @@ func notEmpty(loggerFn assertionLoggerFn, obj any, ignoreFieldsWithoutTags bool,
 		fields := append(fields, fieldName)
 
 		switch k := v.Field(i).Kind(); k {
-		case reflect.Ptr:
+		case reflect.Pointer:
 			notEmpty(loggerFn, v.Field(i), ignoreFieldsWithoutTags, fields, stackSize+1, msg...)
 		case reflect.Slice:
 			f := v.Field(i)

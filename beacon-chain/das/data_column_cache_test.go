@@ -23,7 +23,7 @@ func TestEnsureDeleteSetDiskSummary(t *testing.T) {
 	expect, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{{Index: 1}})
 	require.NoError(t, entry.stash(expect[0]))
 	require.Equal(t, 1, len(entry.scs))
-	cols, err := nonDupe.append([]blocks.RODataColumn{}, peerdas.NewColumnIndicesFromSlice([]uint64{expect[0].Index}))
+	cols, err := nonDupe.append([]blocks.RODataColumn{}, peerdas.NewColumnIndicesFromSlice([]uint64{expect[0].Index()}))
 	require.NoError(t, err)
 	require.DeepEqual(t, expect[0], cols[0])
 
@@ -109,10 +109,10 @@ func TestAppendDataColumns(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, len(expected), len(actual))
 		slices.SortFunc(actual, func(i, j blocks.RODataColumn) int {
-			return int(i.Index) - int(j.Index)
+			return int(i.Index()) - int(j.Index())
 		})
 		for i := range expected {
-			require.Equal(t, expected[i].Index, actual[i].Index)
+			require.Equal(t, expected[i].Index(), actual[i].Index())
 		}
 		require.Equal(t, 1, len(original))
 	})

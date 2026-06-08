@@ -12,6 +12,7 @@ import (
 	beaconsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -99,6 +100,7 @@ type blocksQueueFetchedData struct {
 	blocksFrom peer.ID
 	blobsFrom  peer.ID
 	bwb        []blocks.BlockWithROSidecars
+	envelopes  []interfaces.ROSignedExecutionPayloadEnvelope
 }
 
 // newBlocksQueue creates initialized priority queue.

@@ -322,7 +322,7 @@ type withdrawalsState struct {
 	expectedResult                   state.ExpectedWithdrawalsGloasResult
 }
 
-func (w *withdrawalsState) IsParentBlockFull() (bool, error) {
+func (w *withdrawalsState) LatestBlockHashMatchesBidBlockHash() (bool, error) {
 	return w.parentFull, w.parentErr
 }
 

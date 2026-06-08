@@ -22,5 +22,5 @@ func RunBuilderPendingPaymentsTests(t *testing.T, config string) {
 }
 
 func processBuilderPendingPayments(t *testing.T, st state.BeaconState) (state.BeaconState, error) {
-	return st, gloas.ProcessBuilderPendingPayments(st)
+	return st, gloas.ProcessBuilderPendingPayments(t.Context(), st)
 }

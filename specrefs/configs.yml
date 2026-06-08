@@ -82,16 +82,6 @@
     ATTESTATION_SUBNET_EXTRA_BITS = 0
     </spec>
 
-- name: ATTESTATION_SUBNET_PREFIX_BITS#phase0
-  sources:
-    - file: config/params/config.go
-      search: AttestationSubnetPrefixBits\s+uint64
-      regex: true
-  spec: |
-    <spec config_var="ATTESTATION_SUBNET_PREFIX_BITS" fork="phase0" hash="d6f5ea62">
-    ATTESTATION_SUBNET_PREFIX_BITS: int = 6
-    </spec>
-
 - name: BALANCE_PER_ADDITIONAL_CUSTODY_GROUP#fulu
   sources:
     - file: config/params/config.go
@@ -184,11 +174,32 @@
 - name: CHURN_LIMIT_QUOTIENT#phase0
   sources:
     - file: config/params/config.go
-      search: ChurnLimitQuotient\s+uint64
+      search: \bChurnLimitQuotient\s+uint64
       regex: true
   spec: |
     <spec config_var="CHURN_LIMIT_QUOTIENT" fork="phase0" hash="a43a1d33">
     CHURN_LIMIT_QUOTIENT: uint64 = 65536
+    </spec>
+
+- name: CHURN_LIMIT_QUOTIENT_GLOAS#gloas
+  sources: []
+  spec: |
+    <spec config_var="CHURN_LIMIT_QUOTIENT_GLOAS" fork="gloas" hash="fe8d5d9f">
+    CHURN_LIMIT_QUOTIENT_GLOAS: uint64 = 32768
+    </spec>
+
+- name: CONFIRMATION_BYZANTINE_THRESHOLD#phase0
+  sources: []
+  spec: |
+    <spec config_var="CONFIRMATION_BYZANTINE_THRESHOLD" fork="phase0" hash="60de2e33">
+    CONFIRMATION_BYZANTINE_THRESHOLD: uint64 = 25
+    </spec>
+
+- name: CONSOLIDATION_CHURN_LIMIT_QUOTIENT#gloas
+  sources: []
+  spec: |
+    <spec config_var="CONSOLIDATION_CHURN_LIMIT_QUOTIENT" fork="gloas" hash="03f92b84">
+    CONSOLIDATION_CHURN_LIMIT_QUOTIENT: uint64 = 65536
     </spec>
 
 - name: CONTRIBUTION_DUE_BPS#altair
@@ -352,6 +363,20 @@
     GLOAS_FORK_VERSION: Version = '0x07000000'
     </spec>
 
+- name: HEZE_FORK_EPOCH#heze
+  sources: []
+  spec: |
+    <spec config_var="HEZE_FORK_EPOCH" fork="heze" hash="f4539c03">
+    HEZE_FORK_EPOCH: Epoch = 18446744073709551615
+    </spec>
+
+- name: HEZE_FORK_VERSION#heze
+  sources: []
+  spec: |
+    <spec config_var="HEZE_FORK_VERSION" fork="heze" hash="29986fed">
+    HEZE_FORK_VERSION: Version = '0x08000000'
+    </spec>
+
 - name: INACTIVITY_SCORE_BIAS#altair
   sources:
     - file: config/params/config.go
@@ -370,6 +395,13 @@
   spec: |
     <spec config_var="INACTIVITY_SCORE_RECOVERY_RATE" fork="altair" hash="d7876320">
     INACTIVITY_SCORE_RECOVERY_RATE: uint64 = 16
+    </spec>
+
+- name: INCLUSION_LIST_DUE_BPS#heze
+  sources: []
+  spec: |
+    <spec config_var="INCLUSION_LIST_DUE_BPS" fork="heze" hash="dec96f13">
+    INCLUSION_LIST_DUE_BPS: uint64 = 6667
     </spec>
 
 - name: MAXIMUM_GOSSIP_CLOCK_DISPARITY#phase0
@@ -402,6 +434,13 @@
     MAX_BLOBS_PER_BLOCK_ELECTRA: uint64 = 9
     </spec>
 
+- name: MAX_BYTES_PER_INCLUSION_LIST#heze
+  sources: []
+  spec: |
+    <spec config_var="MAX_BYTES_PER_INCLUSION_LIST" fork="heze" hash="9202c516">
+    MAX_BYTES_PER_INCLUSION_LIST = 8192
+    </spec>
+
 - name: MAX_PAYLOAD_SIZE#phase0
   sources:
     - file: config/params/config.go
@@ -422,6 +461,13 @@
     MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT: uint64 = 8
     </spec>
 
+- name: MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT_GLOAS#gloas
+  sources: []
+  spec: |
+    <spec config_var="MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT_GLOAS" fork="gloas" hash="5a9fd595">
+    MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT_GLOAS: Gwei = 256000000000
+    </spec>
+
 - name: MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT#electra
   sources:
     - file: config/params/config.go
@@ -430,26 +476,6 @@
   spec: |
     <spec config_var="MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT" fork="electra" hash="87c05125">
     MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT: Gwei = 256000000000
-    </spec>
-
-- name: MAX_REQUEST_BLOB_SIDECARS#deneb
-  sources:
-    - file: config/params/config.go
-      search: MaxRequestBlobSidecars\s+uint64
-      regex: true
-  spec: |
-    <spec config_var="MAX_REQUEST_BLOB_SIDECARS" fork="deneb" hash="9b8ad30b">
-    MAX_REQUEST_BLOB_SIDECARS = 768
-    </spec>
-
-- name: MAX_REQUEST_BLOB_SIDECARS_ELECTRA#electra
-  sources:
-    - file: config/params/config.go
-      search: MaxRequestBlobSidecarsElectra\s+uint64
-      regex: true
-  spec: |
-    <spec config_var="MAX_REQUEST_BLOB_SIDECARS_ELECTRA" fork="electra" hash="decc80ab">
-    MAX_REQUEST_BLOB_SIDECARS_ELECTRA = 1152
     </spec>
 
 - name: MAX_REQUEST_BLOCKS#phase0
@@ -472,14 +498,11 @@
     MAX_REQUEST_BLOCKS_DENEB = 128
     </spec>
 
-- name: MAX_REQUEST_DATA_COLUMN_SIDECARS#fulu
-  sources:
-    - file: config/params/config.go
-      search: MaxRequestDataColumnSidecars\s+uint64
-      regex: true
+- name: MAX_REQUEST_INCLUSION_LIST#heze
+  sources: []
   spec: |
-    <spec config_var="MAX_REQUEST_DATA_COLUMN_SIDECARS" fork="fulu" hash="bbe5c650">
-    MAX_REQUEST_DATA_COLUMN_SIDECARS = 16384
+    <spec config_var="MAX_REQUEST_INCLUSION_LIST" fork="heze" hash="0d52ccf4">
+    MAX_REQUEST_INCLUSION_LIST = 16
     </spec>
 
 - name: MAX_REQUEST_PAYLOADS#gloas
@@ -513,10 +536,12 @@
     </spec>
 
 - name: MIN_BUILDER_WITHDRAWABILITY_DELAY#gloas
-  sources: []
+  sources:
+    - file: config/params/mainnet_config.go
+      search: MinBuilderWithdrawabilityDelay
   spec: |
-    <spec config_var="MIN_BUILDER_WITHDRAWABILITY_DELAY" fork="gloas" hash="be7f8473">
-    MIN_BUILDER_WITHDRAWABILITY_DELAY: uint64 = 64
+    <spec config_var="MIN_BUILDER_WITHDRAWABILITY_DELAY" fork="gloas" hash="e1cd053c">
+    MIN_BUILDER_WITHDRAWABILITY_DELAY: uint64 = 8192
     </spec>
 
 - name: MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS#deneb
@@ -527,16 +552,6 @@
   spec: |
     <spec config_var="MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS" fork="deneb" hash="3df9114c">
     MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS = 4096
-    </spec>
-
-- name: MIN_EPOCHS_FOR_BLOCK_REQUESTS#phase0
-  sources:
-    - file: config/params/config.go
-      search: MinEpochsForBlockRequests\s+uint64
-      regex: true
-  spec: |
-    <spec config_var="MIN_EPOCHS_FOR_BLOCK_REQUESTS" fork="phase0" hash="8ab131c4">
-    MIN_EPOCHS_FOR_BLOCK_REQUESTS = 33024
     </spec>
 
 - name: MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS#fulu
@@ -619,6 +634,16 @@
     PAYLOAD_ATTESTATION_DUE_BPS: uint64 = 7500
     </spec>
 
+- name: PAYLOAD_DUE_BPS#gloas
+  sources:
+    - file: config/params/config.go
+      search: PayloadDueBPS\s+primitives.BP
+      regex: true
+  spec: |
+    <spec config_var="PAYLOAD_DUE_BPS" fork="gloas" hash="ee4d44de">
+    PAYLOAD_DUE_BPS: uint64 = 7500
+    </spec>
+
 - name: PROPOSER_REORG_CUTOFF_BPS#phase0
   sources:
     - file: config/params/config.go
@@ -687,16 +712,6 @@
   spec: |
     <spec config_var="SECONDS_PER_ETH1_BLOCK" fork="phase0" hash="90c9f3d1">
     SECONDS_PER_ETH1_BLOCK: uint64 = 14
-    </spec>
-
-- name: SECONDS_PER_SLOT#phase0
-  sources:
-    - file: config/params/config.go
-      search: SecondsPerSlot\s+uint64
-      regex: true
-  spec: |
-    <spec config_var="SECONDS_PER_SLOT" fork="phase0" hash="a9118f10">
-    SECONDS_PER_SLOT: uint64 = 12
     </spec>
 
 - name: SHARD_COMMITTEE_PERIOD#phase0

@@ -167,6 +167,7 @@ func TestProcessAggregatedAttestationStateNotCached(t *testing.T) {
 }
 
 func TestProcessAggregatedAttestationStateCached(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
 	hook := logTest.NewGlobal()
 	ctx := t.Context()
 	s := setupService(t)
@@ -202,6 +203,7 @@ func TestProcessAggregatedAttestationStateCached(t *testing.T) {
 	require.LogsContain(t, hook, "\"Processed attestation aggregation\" aggregatorIndex=2 beaconBlockRoot=0x68656c6c6f2d package=beacon-chain/monitor slot=1 sourceRoot=0x68656c6c6f2d targetRoot=0x68656c6c6f2d")
 	require.LogsContain(t, hook, "\"Processed aggregated attestation\" head=0x68656c6c6f2d package=beacon-chain/monitor slot=1 source=0x68656c6c6f2d target=0x68656c6c6f2d validatorIndex=2")
 	require.LogsDoNotContain(t, hook, "\"Processed aggregated attestation\" head=0x68656c6c6f2d package=beacon-chain/monitor slot=1 source=0x68656c6c6f2d target=0x68656c6c6f2d validatorIndex=12")
+	logrus.SetLevel(logrus.InfoLevel)
 }
 
 func TestProcessAttestations(t *testing.T) {
