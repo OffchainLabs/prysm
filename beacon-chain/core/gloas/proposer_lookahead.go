@@ -1,9 +1,8 @@
-package fulu
+package gloas
 
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -12,18 +11,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-func ProcessEpoch(ctx context.Context, state state.BeaconState) error {
-	ctx, span := trace.StartSpan(ctx, "fulu.ProcessEpoch")
-	defer span.End()
-
-	if err := electra.ProcessEpoch(ctx, state); err != nil {
-		return errors.Wrap(err, "could not process epoch in fulu transition")
-	}
-	return ProcessProposerLookahead(ctx, state)
-}
-
+// ProcessProposerLookahead advances the cached proposer lookahead by one epoch
+// using EIP-8045 semantics: slashed validators are excluded from the candidate
+// pool used to derive the new last-epoch proposer indices.
 func ProcessProposerLookahead(ctx context.Context, state state.BeaconState) error {
-	ctx, span := trace.StartSpan(ctx, "fulu.processProposerLookahead")
+	_, span := trace.StartSpan(ctx, "gloas.processProposerLookahead")
 	defer span.End()
 
 	if state == nil || state.IsNil() {
@@ -36,8 +28,8 @@ func ProcessProposerLookahead(ctx context.Context, state state.BeaconState) erro
 	}
 	lastEpochStart := len(lookAhead) - int(params.BeaconConfig().SlotsPerEpoch)
 	copy(lookAhead[:lastEpochStart], lookAhead[params.BeaconConfig().SlotsPerEpoch:])
-	lastEpoch := slots.ToEpoch(state.Slot()) + params.BeaconConfig().MinSeedLookahead + 1
-	indices, err := helpers.ActiveValidatorIndices(ctx, state, lastEpoch)
+	lastEpoch := slots.ToEpoch(state.Slot()).AddEpoch(params.BeaconConfig().MinSeedLookahead).Add(1)
+	indices, err := helpers.ActiveNonSlashedValidatorIndices(ctx, state, lastEpoch)
 	if err != nil {
 		return err
 	}

@@ -49,6 +49,10 @@ const (
 
 	// PayloadAttestationMessageReceived is sent after a payload attestation message is received from gossip or rpc.
 	PayloadAttestationMessageReceived = 13
+
+	// ExecutionPayloadGossipReceived is sent after an execution payload envelope has been received from
+	// gossip or API that passes validation rules.
+	ExecutionPayloadGossipReceived = 14
 )
 
 // UnAggregatedAttReceivedData is the data sent with UnaggregatedAttReceived events.
@@ -121,4 +125,12 @@ type DataColumnReceivedData struct {
 // PayloadAttestationMessageReceivedData is the data sent with PayloadAttestationMessageReceived events.
 type PayloadAttestationMessageReceivedData struct {
 	Message *ethpb.PayloadAttestationMessage
+}
+
+// ExecutionPayloadGossipReceivedData is the data sent with ExecutionPayloadGossipReceived events.
+type ExecutionPayloadGossipReceivedData struct {
+	Slot         primitives.Slot
+	BuilderIndex primitives.BuilderIndex
+	BlockHash    [32]byte
+	BlockRoot    [32]byte
 }
