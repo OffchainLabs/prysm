@@ -110,15 +110,8 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	if cfg.roblock.Version() < version.Gloas {
 		s.sendFCU(cfg)
 	} else {
-		full := false
-		if s.isNewHead(cfg.headRoot, full) {
-			if err := s.saveHead(ctx, cfg.headRoot, cfg.roblock, cfg.postState, full); err != nil {
-				log.WithError(err).Error("Could not save head")
-			}
-			s.pruneAttsFromPool(ctx, cfg.postState, cfg.roblock)
-		}
+		s.saveHeadIfNeeded(ctx, cfg)
 	}
-
 	// Pre-Fulu the caches are updated when computing the payload attributes
 	if cfg.postState.Version() >= version.Fulu {
 		go func() {
@@ -500,7 +493,7 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 		// Use a custom deadline here, since this method runs asynchronously.
 		// We ignore the parent method's context and instead create a new one
 		// with a custom deadline, therefore using the background context instead.
-		slotCtx, cancel := context.WithTimeout(context.Background(), slotDeadline)
+		slotCtx, cancel := context.WithTimeout(s.ctx, slotDeadline)
 		defer cancel()
 
 		if err := helpers.UpdateCommitteeCache(slotCtx, st, ep+1); err != nil {

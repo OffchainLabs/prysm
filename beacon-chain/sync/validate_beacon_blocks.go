@@ -237,7 +237,7 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not validate beacon block")
 			return pubsub.ValidationReject, err
 		}
-		if !errors.Is(ErrOptimisticParent, err) {
+		if !errors.Is(err, ErrOptimisticParent) {
 			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not validate beacon block")
 			return pubsub.ValidationIgnore, err
 		}

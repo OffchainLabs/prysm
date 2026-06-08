@@ -76,7 +76,7 @@ func GetSpec(w http.ResponseWriter, r *http.Request) {
 
 func convertValueForJSON(v reflect.Value, tag string) any {
 	// Unwrap pointers / interfaces
-	for v.Kind() == reflect.Interface || v.Kind() == reflect.Ptr {
+	for v.Kind() == reflect.Interface || v.Kind() == reflect.Pointer {
 		if v.IsNil() {
 			return nil
 		}
