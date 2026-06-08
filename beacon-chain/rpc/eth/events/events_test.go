@@ -127,6 +127,7 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 		DataColumnTopic,
 		PayloadAttestationMessageTopic,
 		ProposerPreferencesTopic,
+		ExecutionPayloadGossipTopic,
 	})
 	require.NoError(t, err)
 	ro, err := blocks.NewROBlob(util.HydrateBlobSidecar(&eth.BlobSidecar{}))
@@ -346,6 +347,15 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 				},
 			},
 		},
+		{
+			Type: operation.ExecutionPayloadGossipReceived,
+			Data: &operation.ExecutionPayloadGossipReceivedData{
+				Slot:         1,
+				BuilderIndex: 2,
+				BlockHash:    [32]byte{'h'},
+				BlockRoot:    [32]byte{'r'},
+			},
+		},
 	}
 }
 
@@ -460,6 +470,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 			FinalizedCheckpointTopic,
 			ChainReorgTopic,
 			BlockTopic,
+			ExecutionPayloadAvailableTopic,
 			ExecutionPayloadTopic,
 		})
 		require.NoError(t, err)
@@ -514,10 +525,20 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 				},
 			},
 			{
-				Type: statefeed.PayloadProcessed,
-				Data: &statefeed.PayloadProcessedData{
+				Type: statefeed.ExecutionPayloadAvailable,
+				Data: &statefeed.ExecutionPayloadAvailableData{
 					Slot:      10,
 					BlockRoot: [32]byte{0x9a},
+				},
+			},
+			{
+				Type: statefeed.ExecutionPayloadProcessed,
+				Data: &statefeed.ExecutionPayloadProcessedData{
+					Slot:         11,
+					BuilderIndex: 12,
+					BlockHash:    [32]byte{0xbb},
+					BlockRoot:    [32]byte{0x9a},
+					Optimistic:   true,
 				},
 			},
 		}

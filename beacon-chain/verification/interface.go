@@ -73,6 +73,7 @@ type GloasDataColumnVerifier interface {
 type PayloadAttestationMsgVerifier interface {
 	VerifyCurrentSlot() error
 	VerifyBlockRootSeen(blockRootSeen func([32]byte) bool) error
+	VerifyBlockSlotMatches(blockSlot primitives.Slot) error
 	VerifyBlockRootValid(func([32]byte) bool) error
 	VerifyValidatorInPTC(context.Context, state.ReadOnlyBeaconState) error
 	VerifySignature(state.ReadOnlyBeaconState) error
