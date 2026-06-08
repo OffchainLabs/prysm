@@ -71,3 +71,93 @@ func TestBlockContentsGloasFromConsensus(t *testing.T) {
 	require.Equal(t, 1, len(result.Blobs))
 	require.Equal(t, hexutil.Encode(blobs[0]), result.Blobs[0])
 }
+
+func validProposerPreferences() *ProposerPreferences {
+	return &ProposerPreferences{
+		DependentRoot:  hexutil.Encode(bytes.Repeat([]byte{0xcc}, fieldparams.RootLength)),
+		ProposalSlot:   "32",
+		ValidatorIndex: "2",
+		FeeRecipient:   hexutil.Encode(bytes.Repeat([]byte{0xab}, 20)),
+		TargetGasLimit: "30000000",
+	}
+}
+
+func TestSignedProposerPreferences_ToConsensus_NilMessage(t *testing.T) {
+	s := &SignedProposerPreferences{Message: nil, Signature: ""}
+	_, err := s.ToConsensus()
+	require.ErrorContains(t, errNilValue.Error(), err)
+}
+
+func TestSignedProposerPreferences_ToConsensus_NilReceiver(t *testing.T) {
+	var s *SignedProposerPreferences
+	_, err := s.ToConsensus()
+	require.ErrorContains(t, errNilValue.Error(), err)
+}
+
+func TestSignedProposerPreferences_ToConsensus_BadSignature(t *testing.T) {
+	s := &SignedProposerPreferences{Message: validProposerPreferences(), Signature: "0xnothex"}
+	_, err := s.ToConsensus()
+	require.ErrorContains(t, "Signature", err)
+}
+
+func TestSignedProposerPreferences_ToConsensus_OK(t *testing.T) {
+	sig := hexutil.Encode(bytes.Repeat([]byte{0x01}, fieldparams.BLSSignatureLength))
+	s := &SignedProposerPreferences{Message: validProposerPreferences(), Signature: sig}
+	out, err := s.ToConsensus()
+	require.NoError(t, err)
+	require.Equal(t, uint64(30_000_000), out.Message.TargetGasLimit)
+	require.Equal(t, uint64(32), uint64(out.Message.ProposalSlot))
+	require.Equal(t, uint64(2), uint64(out.Message.ValidatorIndex))
+	require.Equal(t, fieldparams.BLSSignatureLength, len(out.Signature))
+	require.Equal(t, 20, len(out.Message.FeeRecipient))
+	require.Equal(t, fieldparams.RootLength, len(out.Message.DependentRoot))
+}
+
+func TestProposerPreferences_ToConsensus_BadDependentRootHex(t *testing.T) {
+	p := validProposerPreferences()
+	p.DependentRoot = "0xnothex"
+	_, err := p.ToConsensus()
+	require.ErrorContains(t, "DependentRoot", err)
+}
+
+func TestProposerPreferences_ToConsensus_ShortDependentRoot(t *testing.T) {
+	p := validProposerPreferences()
+	p.DependentRoot = "0xcc"
+	_, err := p.ToConsensus()
+	require.ErrorContains(t, "DependentRoot", err)
+}
+
+func TestProposerPreferences_ToConsensus_BadProposalSlot(t *testing.T) {
+	p := validProposerPreferences()
+	p.ProposalSlot = "nope"
+	_, err := p.ToConsensus()
+	require.ErrorContains(t, "ProposalSlot", err)
+}
+
+func TestProposerPreferences_ToConsensus_BadValidatorIndex(t *testing.T) {
+	p := validProposerPreferences()
+	p.ValidatorIndex = "nope"
+	_, err := p.ToConsensus()
+	require.ErrorContains(t, "ValidatorIndex", err)
+}
+
+func TestProposerPreferences_ToConsensus_BadFeeRecipientHex(t *testing.T) {
+	p := validProposerPreferences()
+	p.FeeRecipient = "0xnothex"
+	_, err := p.ToConsensus()
+	require.ErrorContains(t, "FeeRecipient", err)
+}
+
+func TestProposerPreferences_ToConsensus_ShortFeeRecipient(t *testing.T) {
+	p := validProposerPreferences()
+	p.FeeRecipient = "0xab"
+	_, err := p.ToConsensus()
+	require.ErrorContains(t, "FeeRecipient", err)
+}
+
+func TestProposerPreferences_ToConsensus_BadTargetGasLimit(t *testing.T) {
+	p := validProposerPreferences()
+	p.TargetGasLimit = "nope"
+	_, err := p.ToConsensus()
+	require.ErrorContains(t, "TargetGasLimit", err)
+}
