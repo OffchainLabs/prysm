@@ -5,6 +5,7 @@ package cache
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
@@ -143,15 +144,22 @@ func (c *CommitteeCache) Committee(ctx context.Context, slot primitives.Slot, se
 // AddCommitteeShuffledList adds Committee shuffled list object to the cache. T
 // his method also trims the least recently list if the cache size has ready the max cache size limit.
 func (c *CommitteeCache) AddCommitteeShuffledList(ctx context.Context, committees *Committees) error {
+	ctx, span := trace.StartSpan(ctx, "committeeCache.AddCommitteeShuffledList")
+	defer span.End()
+
 	c.lock.Lock()
 	defer c.lock.Unlock()
+
 	if err := ctx.Err(); err != nil {
+		span.SetAttributes(trace.StringAttribute("context_error", err.Error()))
 		return err
 	}
+
 	key, err := committeeKeyFn(committees)
 	if err != nil {
-		return err
+		return fmt.Errorf("committee key fn: %w", err)
 	}
+
 	_ = c.CommitteeCache.Add(key, committees)
 	return nil
 }

@@ -74,8 +74,13 @@ const (
 	LightClientOptimisticUpdateTopic = "light_client_optimistic_update"
 	// DataColumnTopic represents a data column sidecar event topic
 	DataColumnTopic = "data_column_sidecar"
-	// ExecutionPayloadTopic represents a new execution payload envelope event topic
-	ExecutionPayloadTopic = "execution_payload_available"
+	// ExecutionPayloadAvailableTopic represents the event topic fired when an execution payload envelope
+	// and its custody data are available (for PTC voting). It does not require EL validity.
+	// TODO: Decouple emitting this event from EL validation.
+	ExecutionPayloadAvailableTopic = "execution_payload_available"
+	// ExecutionPayloadTopic represents the event topic fired after an execution payload envelope is
+	// successfully imported into fork choice (post EL execution).
+	ExecutionPayloadTopic = "execution_payload"
 	// ExecutionPayloadGossipTopic represents an execution payload envelope received from gossip or API
 	// that passes validation rules.
 	ExecutionPayloadGossipTopic = "execution_payload_gossip"
@@ -130,7 +135,8 @@ var stateFeedEventTopics = map[feed.EventType]string{
 	statefeed.Reorg:                       ChainReorgTopic,
 	statefeed.BlockProcessed:              BlockTopic,
 	statefeed.PayloadAttributes:           PayloadAttributesTopic,
-	statefeed.PayloadProcessed:            ExecutionPayloadTopic,
+	statefeed.ExecutionPayloadAvailable:   ExecutionPayloadAvailableTopic,
+	statefeed.ExecutionPayloadProcessed:   ExecutionPayloadTopic,
 }
 
 var topicsForStateFeed = func() map[string]bool {
@@ -485,7 +491,9 @@ func topicForEvent(event *feed.Event) string {
 		return DataColumnTopic
 	case *operation.PayloadAttestationMessageReceivedData:
 		return PayloadAttestationMessageTopic
-	case *statefeed.PayloadProcessedData:
+	case *statefeed.ExecutionPayloadAvailableData:
+		return ExecutionPayloadAvailableTopic
+	case *statefeed.ExecutionPayloadProcessedData:
 		return ExecutionPayloadTopic
 	case *operation.ExecutionPayloadGossipReceivedData:
 		return ExecutionPayloadGossipTopic
@@ -665,11 +673,21 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, structs.PayloadAttestationMessageFromConsensus(v.Message))
 		}, nil
-	case *statefeed.PayloadProcessedData:
+	case *statefeed.ExecutionPayloadAvailableData:
 		return func() io.Reader {
-			return jsonMarshalReader(eventName, &structs.PayloadEvent{
+			return jsonMarshalReader(eventName, &structs.ExecutionPayloadAvailableEvent{
 				Slot:      fmt.Sprintf("%d", v.Slot),
 				BlockRoot: hexutil.Encode(v.BlockRoot[:]),
+			})
+		}, nil
+	case *statefeed.ExecutionPayloadProcessedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, &structs.ExecutionPayloadEvent{
+				Slot:                fmt.Sprintf("%d", v.Slot),
+				BuilderIndex:        fmt.Sprintf("%d", v.BuilderIndex),
+				BlockHash:           hexutil.Encode(v.BlockHash[:]),
+				BlockRoot:           hexutil.Encode(v.BlockRoot[:]),
+				ExecutionOptimistic: v.Optimistic,
 			})
 		}, nil
 	case *operation.ExecutionPayloadGossipReceivedData:

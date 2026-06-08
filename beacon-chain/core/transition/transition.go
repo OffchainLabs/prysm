@@ -329,6 +329,9 @@ func ProcessSlotsCore(ctx context.Context, span trace.Span, state state.BeaconSt
 
 // ProcessEpoch is a wrapper on fork specific epoch processing
 func ProcessEpoch(ctx context.Context, state state.BeaconState) (state.BeaconState, error) {
+	ctx, span := prysmTrace.StartSpan(ctx, "core.state.ProcessEpoch")
+	defer span.End()
+
 	var err error
 	if time.CanProcessEpoch(state) {
 		if state.Version() >= version.Gloas {

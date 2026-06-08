@@ -82,9 +82,7 @@ func TestService_Broadcast(t *testing.T) {
 
 	// Async listen for the pubsub, must be before the broadcast.
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func(tt *testing.T) {
-		defer wg.Done()
+	wg.Go(func() {
 		ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 		defer cancel()
 
@@ -94,9 +92,9 @@ func TestService_Broadcast(t *testing.T) {
 		result := &ethpb.Fork{}
 		require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
 		if !proto.Equal(result, msg) {
-			tt.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
+			t.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
 		}
-	}(t)
+	})
 
 	// Broadcast to peers and wait.
 	require.NoError(t, p.Broadcast(t.Context(), msg))
@@ -199,9 +197,7 @@ func TestService_BroadcastAttestation(t *testing.T) {
 
 	// Async listen for the pubsub, must be before the broadcast.
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func(tt *testing.T) {
-		defer wg.Done()
+	wg.Go(func() {
 		ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 		defer cancel()
 
@@ -211,9 +207,9 @@ func TestService_BroadcastAttestation(t *testing.T) {
 		result := &ethpb.Attestation{}
 		require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
 		if !proto.Equal(result, msg) {
-			tt.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
+			t.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
 		}
-	}(t)
+	})
 
 	// Attempt to broadcast nil object should fail.
 	ctx := t.Context()
@@ -389,21 +385,19 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 
 	// Async listen for the pubsub, must be before the broadcast.
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func(tt *testing.T) {
-		defer wg.Done()
+	wg.Go(func() {
 		ctx, cancel := context.WithTimeout(t.Context(), 4*time.Second)
 		defer cancel()
 
 		incomingMessage, err := sub.Next(ctx)
-		require.NoError(tt, err)
+		require.NoError(t, err)
 
 		result := &ethpb.Attestation{}
-		require.NoError(tt, p.Encoding().DecodeGossip(incomingMessage.Data, result))
+		require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
 		if !proto.Equal(result, msg) {
-			tt.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
+			t.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
 		}
-	}(t)
+	})
 
 	// Broadcast to peers and wait.
 	require.NoError(t, p.BroadcastAttestation(t.Context(), subnet, msg))
@@ -455,9 +449,7 @@ func TestService_BroadcastSyncCommittee(t *testing.T) {
 
 	// Async listen for the pubsub, must be before the broadcast.
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func(tt *testing.T) {
-		defer wg.Done()
+	wg.Go(func() {
 		ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 		defer cancel()
 
@@ -467,9 +459,9 @@ func TestService_BroadcastSyncCommittee(t *testing.T) {
 		result := &ethpb.SyncCommitteeMessage{}
 		require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
 		if !proto.Equal(result, msg) {
-			tt.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
+			t.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
 		}
-	}(t)
+	})
 
 	// Broadcasting nil should fail.
 	ctx := t.Context()
@@ -535,9 +527,7 @@ func TestService_BroadcastBlob(t *testing.T) {
 
 	// Async listen for the pubsub, must be before the broadcast.
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func(tt *testing.T) {
-		defer wg.Done()
+	wg.Go(func() {
 		ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 		defer cancel()
 
@@ -547,7 +537,7 @@ func TestService_BroadcastBlob(t *testing.T) {
 		result := &ethpb.BlobSidecar{}
 		require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
 		require.DeepEqual(t, result, blobSidecar)
-	}(t)
+	})
 
 	// Attempt to broadcast nil object should fail.
 	ctx := t.Context()
@@ -601,9 +591,7 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 
 	// Async listen for the pubsub, must be before the broadcast.
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func(tt *testing.T) {
-		defer wg.Done()
+	wg.Go(func() {
 		ctx, cancel := context.WithTimeout(t.Context(), 150*time.Millisecond)
 		defer cancel()
 
@@ -614,15 +602,15 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 		require.NoError(t, err)
 		expectedDelay := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)
 		if time.Now().Before(slotStartTime.Add(expectedDelay)) {
-			tt.Errorf("Message received too early, now %v, expected at least %v", time.Now(), slotStartTime.Add(expectedDelay))
+			t.Errorf("Message received too early, now %v, expected at least %v", time.Now(), slotStartTime.Add(expectedDelay))
 		}
 
 		result := &ethpb.LightClientOptimisticUpdateAltair{}
 		require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
 		if !proto.Equal(result, msg.Proto()) {
-			tt.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
+			t.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
 		}
-	}(t)
+	})
 
 	// Broadcasting nil should fail.
 	ctx := t.Context()
@@ -680,9 +668,7 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 
 	// Async listen for the pubsub, must be before the broadcast.
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func(tt *testing.T) {
-		defer wg.Done()
+	wg.Go(func() {
 		ctx, cancel := context.WithTimeout(t.Context(), 150*time.Millisecond)
 		defer cancel()
 
@@ -693,15 +679,15 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 		require.NoError(t, err)
 		expectedDelay := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)
 		if time.Now().Before(slotStartTime.Add(expectedDelay)) {
-			tt.Errorf("Message received too early, now %v, expected at least %v", time.Now(), slotStartTime.Add(expectedDelay))
+			t.Errorf("Message received too early, now %v, expected at least %v", time.Now(), slotStartTime.Add(expectedDelay))
 		}
 
 		result := &ethpb.LightClientFinalityUpdateAltair{}
 		require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
 		if !proto.Equal(result, msg.Proto()) {
-			tt.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
+			t.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
 		}
-	}(t)
+	})
 
 	// Broadcasting nil should fail.
 	ctx := t.Context()

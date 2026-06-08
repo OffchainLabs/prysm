@@ -367,15 +367,13 @@ func (s *Service) Stop() error {
 
 	// Use WaitGroup to ensure all goodbye messages complete
 	var wg sync.WaitGroup
-	for _, peerID := range s.cfg.p2p.Peers().Connected() {
-		if s.cfg.p2p.Host().Network().Connectedness(peerID) == network.Connected {
-			wg.Add(1)
-			go func(pid peer.ID) {
-				defer wg.Done()
+	for _, pid := range s.cfg.p2p.Peers().Connected() {
+		if s.cfg.p2p.Host().Network().Connectedness(pid) == network.Connected {
+			wg.Go(func() {
 				if err := s.sendGoodByeAndDisconnect(goodbyeCtx, p2ptypes.GoodbyeCodeClientShutdown, pid); err != nil {
 					log.WithError(err).WithField("peerID", pid).Error("Failed to send goodbye message")
 				}
-			}(peerID)
+			})
 		}
 	}
 	wg.Wait()

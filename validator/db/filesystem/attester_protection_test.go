@@ -493,15 +493,11 @@ func BenchmarkStore_SaveAttestationForPubKey(b *testing.B) {
 		err := validatorDB.ClearDB()
 		require.NoError(b, err)
 
-		for _, pubkey := range pubkeys {
-			wg.Add(1)
-
-			go func(pk [fieldparams.BLSPubkeyLength]byte) {
-				defer wg.Done()
-
+		for _, pk := range pubkeys {
+			wg.Go(func() {
 				err := validatorDB.SaveAttestationForPubKey(ctx, pk, signingRoot, attestation)
 				require.NoError(b, err)
-			}(pubkey)
+			})
 		}
 
 		b.StartTimer()

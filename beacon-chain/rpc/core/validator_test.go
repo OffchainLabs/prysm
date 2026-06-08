@@ -337,14 +337,12 @@ func TestPayloadAttestationData(t *testing.T) {
 		start := make(chan struct{})
 		var wg sync.WaitGroup
 		for i := range callers {
-			wg.Add(1)
-			go func(i int) {
-				defer wg.Done()
+			wg.Go(func() {
 				<-start
 				resp, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 				require.IsNil(t, rpcErr)
 				results[i] = resp
-			}(i)
+			})
 		}
 		close(start)
 		wg.Wait()
