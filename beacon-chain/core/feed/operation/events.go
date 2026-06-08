@@ -140,5 +140,5 @@ type ExecutionPayloadGossipReceivedData struct {
 
 // ProposerPreferencesReceivedData is the data sent with ProposerPreferencesReceived events.
 type ProposerPreferencesReceivedData struct {
-	SignedProposerPreferences *ethpb.SignedProposerPreferences
+	Data *ethpb.SignedProposerPreferences
 }
