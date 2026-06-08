@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/go-bitfield"
 	builderapi "github.com/OffchainLabs/prysm/v7/api/client/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
@@ -457,8 +456,11 @@ func (vs *Server) handleUnblindedBlock(
 			return nil, nil, nil, errors.Wrap(err, "compute cells and proofs")
 		}
 
+		source := peerdas.PopulateFromBlock(block)
+		isGloas := slots.ToEpoch(source.Slot()) >= params.BeaconConfig().GloasForkEpoch
+
 		// Construct data column sidecars from the signed block and cells and proofs.
-		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(block))
+		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, source)
 		if err != nil {
 			return nil, nil, nil, errors.Wrap(err, "data column sidecars")
 		}
@@ -467,11 +469,17 @@ func (vs *Server) handleUnblindedBlock(
 			return nil, roDataColumnSidecars, nil, nil
 		}
 
-		included := bitfield.NewBitlist(uint64(len(cellsPerBlob)))
-		included = included.Not() // all bits set to 1
-		partialColumns, err := peerdas.PartialColumns(included, cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(block))
-		if err != nil {
-			return nil, nil, nil, errors.Wrap(err, "partial columns")
+		var partialColumns []blocks.PartialDataColumn
+		if !isGloas {
+			// We built this block ourselves, so we can upgrade the read only data column sidecar into a verified one.
+			for _, sidecar := range roDataColumnSidecars {
+				verifiedSidecar := blocks.NewVerifiedRODataColumn(sidecar)
+				pc, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(verifiedSidecar)
+				if err != nil {
+					return nil, nil, nil, errors.Wrap(err, "partial column from verified ro data column")
+				}
+				partialColumns = append(partialColumns, pc)
+			}
 		}
 
 		return nil, roDataColumnSidecars, partialColumns, nil
