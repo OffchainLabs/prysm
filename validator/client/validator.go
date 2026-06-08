@@ -1121,8 +1121,7 @@ func (v *validator) buildProposerPreferences(
 
 // processProposerDuties signs proposer preferences for the given duties and
 // records the slots submitted, returning the signed preferences and the number
-// of signing failures. It holds submittedPrefSlotsLock for the whole pass so the
-// submitted-slot set stays consistent across the loop.
+// of signing failures.
 func (v *validator) processProposerDuties(
 	ctx context.Context,
 	km keymanager.IKeymanager,
@@ -1135,8 +1134,6 @@ func (v *validator) processProposerDuties(
 		return nil, 0
 	}
 
-	v.submittedPrefSlotsLock.Lock()
-	defer v.submittedPrefSlotsLock.Unlock()
 	for pk, duty := range duties {
 		if len(duty.ProposerSlots) == 0 {
 			continue
@@ -1153,7 +1150,7 @@ func (v *validator) processProposerDuties(
 			if !isNextEpoch && proposalSlot <= slot+1 {
 				continue
 			}
-			if v.submittedPrefSlots[proposalSlot] {
+			if !v.reservePrefSlot(proposalSlot) {
 				continue
 			}
 
@@ -1167,13 +1164,31 @@ func (v *validator) processProposerDuties(
 			signedPref, err := v.signProposerPreferences(ctx, km, pk, pref)
 			if err != nil {
 				sigFailCount++
+				v.releasePrefSlot(proposalSlot)
 				continue
 			}
 			signedPrefs = append(signedPrefs, signedPref)
-			v.submittedPrefSlots[proposalSlot] = true
 		}
 	}
 	return signedPrefs, sigFailCount
+}
+
+// reservePrefSlot marks proposalSlot as submitted, returning false if another
+// pass already claimed it.
+func (v *validator) reservePrefSlot(proposalSlot primitives.Slot) bool {
+	v.submittedPrefSlotsLock.Lock()
+	defer v.submittedPrefSlotsLock.Unlock()
+	if v.submittedPrefSlots[proposalSlot] {
+		return false
+	}
+	v.submittedPrefSlots[proposalSlot] = true
+	return true
+}
+
+func (v *validator) releasePrefSlot(proposalSlot primitives.Slot) {
+	v.submittedPrefSlotsLock.Lock()
+	defer v.submittedPrefSlotsLock.Unlock()
+	delete(v.submittedPrefSlots, proposalSlot)
 }
 
 // proposerConfigForKey returns the fee recipient and gas limit for pk, using the
