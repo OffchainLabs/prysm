@@ -878,8 +878,10 @@ func TestStatusRPCRequest_FinalizedBlockSkippedSlots(t *testing.T) {
 		r.rateLimiter.limiterMap[topic] = leakybucket.NewCollector(1, 1, time.Second, false)
 		var wg sync.WaitGroup
 		wg.Add(1)
+		// The handler can fire more than once.
+		var once sync.Once
 		p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
-			defer wg.Done()
+			defer once.Do(wg.Done)
 			out := &ethpb.Status{}
 			assert.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, out))
 			assert.Equal(t, tt.expectError, r2.validateStatusMessage(ctx, out) != nil)

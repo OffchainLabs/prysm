@@ -465,20 +465,20 @@ func TestSaveOrphanedOps(t *testing.T) {
 	st, keys := util.DeterministicGenesisState(t, 64)
 	service.head = &head{state: st}
 	blkG, err := util.GenerateFullBlock(st, keys, util.DefaultBlockGenConfig(), 0)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	util.SaveBlock(t, ctx, service.cfg.BeaconDB, blkG)
 	rG, err := blkG.Block.HashTreeRoot()
 	require.NoError(t, err)
 
 	blk1, err := util.GenerateFullBlock(st, keys, util.DefaultBlockGenConfig(), 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	blk1.Block.ParentRoot = rG[:]
 	r1, err := blk1.Block.HashTreeRoot()
 	require.NoError(t, err)
 
 	blk2, err := util.GenerateFullBlock(st, keys, util.DefaultBlockGenConfig(), 2)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	blk2.Block.ParentRoot = r1[:]
 	r2, err := blk2.Block.HashTreeRoot()
 	require.NoError(t, err)
@@ -489,7 +489,7 @@ func TestSaveOrphanedOps(t *testing.T) {
 	blkConfig.NumAttesterSlashings = 1
 	blkConfig.NumVoluntaryExits = 1
 	blk3, err := util.GenerateFullBlock(st, keys, blkConfig, 3)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	blk3.Block.ParentRoot = r2[:]
 	r3, err := blk3.Block.HashTreeRoot()
 	require.NoError(t, err)

@@ -45,7 +45,7 @@ func expectFailure(t *testing.T, expectedCode uint8, expectedErrorMsg string, st
 func expectResetStream(t *testing.T, stream network.Stream) {
 	expectedErr := "stream reset"
 	_, _, err := ReadStatusCode(stream, &encoder.SszNetworkEncoder{})
-	require.ErrorContains(t, expectedErr, err)
+	assert.ErrorContains(t, expectedErr, err)
 }
 
 func TestRegisterRPC_ReceivesValidMessage(t *testing.T) {
