@@ -42,6 +42,9 @@ const (
 	InvalidTopic = "__invalid__"
 	// HeadTopic represents a new chain head event topic.
 	HeadTopic = "head"
+	// HeadV2Topic represents the versioned, Gloas-aware chain head event topic
+	// (beacon-APIs#590). The legacy HeadTopic is still emitted alongside it.
+	HeadV2Topic = "head_v2"
 	// BlockTopic represents a new produced block event topic.
 	BlockTopic = "block"
 	// BlockGossipTopic represents a block received from gossip or API that passes validation rules.
@@ -129,6 +132,7 @@ var opsFeedEventTopics = map[feed.EventType]string{
 
 var stateFeedEventTopics = map[feed.EventType]string{
 	statefeed.NewHead:                     HeadTopic,
+	statefeed.NewHeadV2:                   HeadV2Topic,
 	statefeed.FinalizedCheckpoint:         FinalizedCheckpointTopic,
 	statefeed.LightClientFinalityUpdate:   LightClientFinalityUpdateTopic,
 	statefeed.LightClientOptimisticUpdate: LightClientOptimisticUpdateTopic,
@@ -475,6 +479,8 @@ func topicForEvent(event *feed.Event) string {
 		return BlockGossipTopic
 	case *ethpb.EventHead:
 		return HeadTopic
+	case *statefeed.HeadV2Data:
+		return HeadV2Topic
 	case *ethpb.EventFinalizedCheckpoint:
 		return FinalizedCheckpointTopic
 	case interfaces.LightClientFinalityUpdate:
@@ -518,6 +524,22 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		// we send two event messages in reaction; the head event and the payload attributes.
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, structs.HeadEventFromV1(v))
+		}, nil
+	case *statefeed.HeadV2Data:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, &structs.HeadEventV2{
+				Version: version.String(v.Version),
+				Data: &structs.HeadEventV2Data{
+					Slot:                      fmt.Sprintf("%d", v.Slot),
+					Block:                     hexutil.Encode(v.Block[:]),
+					State:                     hexutil.Encode(v.State[:]),
+					PayloadStatus:             v.PayloadStatus,
+					CurrentEpochDependentRoot: hexutil.Encode(v.CurrentEpochDependentRoot[:]),
+					NextEpochDependentRoot:    hexutil.Encode(v.NextEpochDependentRoot[:]),
+					EpochTransition:           v.EpochTransition,
+					ExecutionOptimistic:       v.ExecutionOptimistic,
+				},
+			})
 		}, nil
 	case *operation.BlockGossipReceivedData:
 		blockRoot, err := v.SignedBlock.Block().HashTreeRoot()
