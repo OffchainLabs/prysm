@@ -1,3 +1,5 @@
+[![Quantum-Safe by QuantumScan](https://quantumscan.io/api/badge/prysmaticlabs/prysm.svg)](https://quantumscan.io/en/share/af6fc416-60ac-4da0-8f45-1e0ff10a4cab)
+
 <h1 align="left">Prysm: An Ethereum Consensus Implementation Written in Go</h1>
 
 <div align="left">
