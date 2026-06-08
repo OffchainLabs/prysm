@@ -106,7 +106,7 @@ func Test_setupForkchoiceTree_Head(t *testing.T) {
 	require.NoError(t, err)
 	roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 	require.NoError(t, err)
-	preState, err := service.getBlockPreState(ctx, roblock)
+	preState, err := service.GetBlockPreState(ctx, roblock)
 	require.NoError(t, err)
 	postState, err := service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)

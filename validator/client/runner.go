@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/client"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -64,8 +63,7 @@ func newRunner(ctx context.Context, v iface.Validator, monitor *healthMonitor) (
 			" and will continue to use settings provided in the beacon node.")
 	}
 	if err := v.PushProposerSettings(ctx, currentSlot, true); err != nil {
-		v.Done()
-		return nil, errors.Wrap(err, "failed to update proposer settings")
+		log.WithError(err).Warn("Failed to push initial proposer settings, will retry on next slot")
 	}
 	return &runner{
 		validator:     v,
@@ -238,10 +236,8 @@ func initialize(ctx context.Context, v iface.Validator) error {
 
 func performRoles(slotCtx context.Context, allRoles map[[48]byte][]iface.ValidatorRole, v iface.Validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
 	for pubKey, roles := range allRoles {
-		wg.Add(len(roles))
 		for _, role := range roles {
-			go func(role iface.ValidatorRole, pubKey [fieldparams.BLSPubkeyLength]byte) {
-				defer wg.Done()
+			wg.Go(func() {
 				switch role {
 				case iface.RoleAttester:
 					v.SubmitAttestation(slotCtx, slot, pubKey)
@@ -253,12 +249,14 @@ func performRoles(slotCtx context.Context, allRoles map[[48]byte][]iface.Validat
 					v.SubmitSyncCommitteeMessage(slotCtx, slot, pubKey)
 				case iface.RoleSyncCommitteeAggregator:
 					v.SubmitSignedContributionAndProof(slotCtx, slot, pubKey)
+				case iface.RolePTCMember:
+					v.SubmitPayloadAttestation(slotCtx, slot, pubKey)
 				case iface.RoleUnknown:
 					log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:]))).Trace("No active roles, doing nothing")
 				default:
 					log.Warnf("Unhandled role %v", role)
 				}
-			}(role, pubKey)
+			})
 		}
 	}
 

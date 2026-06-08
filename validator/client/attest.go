@@ -1,7 +1,6 @@
 package client
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -194,17 +193,14 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 func (v *validator) duty(pubKey [fieldparams.BLSPubkeyLength]byte) (*ethpb.ValidatorDuty, error) {
 	v.dutiesLock.RLock()
 	defer v.dutiesLock.RUnlock()
-	if v.duties == nil {
+	if !v.duties.IsInitialized() {
 		return nil, errors.New("no duties for validators")
 	}
-
-	for _, duty := range v.duties.CurrentEpochDuties {
-		if bytes.Equal(pubKey[:], duty.PublicKey) {
-			return duty, nil
-		}
+	d, ok := v.duties.CurrentDuty(pubKey)
+	if !ok {
+		return nil, fmt.Errorf("pubkey %#x not in duties", bytesutil.Trunc(pubKey[:]))
 	}
-
-	return nil, fmt.Errorf("pubkey %#x not in duties", bytesutil.Trunc(pubKey[:]))
+	return d, nil
 }
 
 // Given validator's public key, this function returns the signature of an attestation data and its signing root.

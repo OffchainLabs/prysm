@@ -42,7 +42,7 @@ func init() {
 // Run executes "forkchoice"  and "sync" test.
 func Run(t *testing.T, config string, fork int) {
 	runTest(t, config, fork, "fork_choice")
-	if fork >= version.Bellatrix {
+	if fork >= version.Bellatrix && fork < version.Gloas {
 		runTest(t, config, fork, "sync")
 	}
 }
@@ -114,6 +114,9 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 				case version.Fulu:
 					beaconState = unmarshalFuluState(t, preBeaconStateSSZ)
 					beaconBlock = unmarshalFuluBlock(t, blockSSZ)
+				case version.Gloas:
+					beaconState = unmarshalGloasState(t, preBeaconStateSSZ)
+					beaconBlock = unmarshalGloasBlock(t, blockSSZ)
 				default:
 					t.Fatalf("unknown fork version: %v", fork)
 				}
@@ -156,6 +159,8 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 							beaconBlock = unmarshalSignedElectraBlock(t, blockSSZ)
 						case version.Fulu:
 							beaconBlock = unmarshalSignedFuluBlock(t, blockSSZ)
+						case version.Gloas:
+							beaconBlock = unmarshalSignedGloasBlock(t, blockSSZ)
 						default:
 							t.Fatalf("unknown fork version: %v", fork)
 						}
@@ -196,6 +201,16 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 					}
 					if step.PayloadStatus != nil {
 						require.NoError(t, builder.SetPayloadStatus(step.PayloadStatus))
+					}
+					if step.ExecutionPayload != nil {
+						envFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), fmt.Sprint(*step.ExecutionPayload, ".ssz_snappy"))
+						require.NoError(t, err)
+						envSSZ, err := snappy.Decode(nil /* dst */, envFile)
+						require.NoError(t, err)
+						signed := &ethpb.SignedExecutionPayloadEnvelope{}
+						require.NoError(t, signed.UnmarshalSSZ(envSSZ), "Failed to unmarshal signed envelope")
+						expectValid := step.Valid == nil || *step.Valid
+						builder.ExecutionPayloadEnvelope(t, signed, expectValid)
 					}
 					if step.PowBlock != nil {
 						powBlockFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), fmt.Sprint(*step.PowBlock, ".ssz_snappy"))
@@ -483,7 +498,7 @@ func errAssertionForStep(step Step, expect error) func(t *testing.T, err error) 
 func unmarshalPhase0State(t *testing.T, raw []byte) state.BeaconState {
 	base := &ethpb.BeaconState{}
 	require.NoError(t, base.UnmarshalSSZ(raw))
-	st, err := state_native.InitializeFromProtoPhase0(base)
+	st, err := state_native.InitializeFromProtoUnsafePhase0(base)
 	require.NoError(t, err)
 	return st
 }
@@ -511,7 +526,7 @@ func unmarshalSignedPhase0Block(t *testing.T, raw []byte) interfaces.ReadOnlySig
 func unmarshalAltairState(t *testing.T, raw []byte) state.BeaconState {
 	base := &ethpb.BeaconStateAltair{}
 	require.NoError(t, base.UnmarshalSSZ(raw))
-	st, err := state_native.InitializeFromProtoAltair(base)
+	st, err := state_native.InitializeFromProtoUnsafeAltair(base)
 	require.NoError(t, err)
 	return st
 }
@@ -539,7 +554,7 @@ func unmarshalSignedAltairBlock(t *testing.T, raw []byte) interfaces.ReadOnlySig
 func unmarshalBellatrixState(t *testing.T, raw []byte) state.BeaconState {
 	base := &ethpb.BeaconStateBellatrix{}
 	require.NoError(t, base.UnmarshalSSZ(raw))
-	st, err := state_native.InitializeFromProtoBellatrix(base)
+	st, err := state_native.InitializeFromProtoUnsafeBellatrix(base)
 	require.NoError(t, err)
 	return st
 }
@@ -567,7 +582,7 @@ func unmarshalSignedBellatrixBlock(t *testing.T, raw []byte) interfaces.ReadOnly
 func unmarshalCapellaState(t *testing.T, raw []byte) state.BeaconState {
 	base := &ethpb.BeaconStateCapella{}
 	require.NoError(t, base.UnmarshalSSZ(raw))
-	st, err := state_native.InitializeFromProtoCapella(base)
+	st, err := state_native.InitializeFromProtoUnsafeCapella(base)
 	require.NoError(t, err)
 	return st
 }
@@ -595,7 +610,7 @@ func unmarshalSignedCapellaBlock(t *testing.T, raw []byte) interfaces.ReadOnlySi
 func unmarshalDenebState(t *testing.T, raw []byte) state.BeaconState {
 	base := &ethpb.BeaconStateDeneb{}
 	require.NoError(t, base.UnmarshalSSZ(raw))
-	st, err := state_native.InitializeFromProtoDeneb(base)
+	st, err := state_native.InitializeFromProtoUnsafeDeneb(base)
 	require.NoError(t, err)
 	return st
 }
@@ -623,7 +638,7 @@ func unmarshalSignedDenebBlock(t *testing.T, raw []byte) interfaces.SignedBeacon
 func unmarshalElectraState(t *testing.T, raw []byte) state.BeaconState {
 	base := &ethpb.BeaconStateElectra{}
 	require.NoError(t, base.UnmarshalSSZ(raw))
-	st, err := state_native.InitializeFromProtoElectra(base)
+	st, err := state_native.InitializeFromProtoUnsafeElectra(base)
 	require.NoError(t, err)
 	return st
 }
@@ -651,7 +666,7 @@ func unmarshalSignedElectraBlock(t *testing.T, raw []byte) interfaces.SignedBeac
 func unmarshalFuluState(t *testing.T, raw []byte) state.BeaconState {
 	base := &ethpb.BeaconStateFulu{}
 	require.NoError(t, base.UnmarshalSSZ(raw))
-	st, err := state_native.InitializeFromProtoFulu(base)
+	st, err := state_native.InitializeFromProtoUnsafeFulu(base)
 	require.NoError(t, err)
 	return st
 }
@@ -666,6 +681,34 @@ func unmarshalFuluBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
 
 func unmarshalSignedFuluBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
 	base := &ethpb.SignedBeaconBlockFulu{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(base)
+	require.NoError(t, err)
+	return blk
+}
+
+// ----------------------------------------------------------------------------
+// Gloas
+// ----------------------------------------------------------------------------
+
+func unmarshalGloasState(t *testing.T, raw []byte) state.BeaconState {
+	base := &ethpb.BeaconStateGloas{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	require.NoError(t, err)
+	return st
+}
+
+func unmarshalGloasBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
+	base := &ethpb.BeaconBlockGloas{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{Block: base, Signature: make([]byte, fieldparams.BLSSignatureLength)})
+	require.NoError(t, err)
+	return blk
+}
+
+func unmarshalSignedGloasBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
+	base := &ethpb.SignedBeaconBlockGloas{}
 	require.NoError(t, base.UnmarshalSSZ(raw))
 	blk, err := blocks.NewSignedBeaconBlock(base)
 	require.NoError(t, err)

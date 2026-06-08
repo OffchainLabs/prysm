@@ -507,6 +507,7 @@ func TestService_rejectIncorrectSyncCommittee(t *testing.T) {
 			cfg: &config{
 				chain: &mockChain.ChainService{},
 				clock: startup.NewClock(time.Now(), [32]byte{1}),
+				p2p:   mockp2p.NewTestP2P(t),
 			},
 			committeeIndices: []primitives.CommitteeIndex{0},
 			setupTopic: func(_ *Service) string {
@@ -519,6 +520,7 @@ func TestService_rejectIncorrectSyncCommittee(t *testing.T) {
 			cfg: &config{
 				chain: &mockChain.ChainService{},
 				clock: startup.NewClock(time.Now(), [32]byte{1}),
+				p2p:   mockp2p.NewTestP2P(t),
 			},
 			committeeIndices: []primitives.CommitteeIndex{0},
 			setupTopic: func(s *Service) string {
@@ -527,8 +529,7 @@ func TestService_rejectIncorrectSyncCommittee(t *testing.T) {
 				digest, err := s.currentForkDigest()
 				require.NoError(t, err)
 				prefix := fmt.Sprintf(format, digest, 0 /* validator index 0 */)
-				topic := prefix + "foobar"
-				return topic
+				return prefix + s.cfg.p2p.Encoding().ProtocolSuffix()
 			},
 			want: pubsub.ValidationAccept,
 		},

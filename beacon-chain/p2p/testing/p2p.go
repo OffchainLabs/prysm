@@ -211,6 +211,12 @@ func (p *TestP2P) ReceivePubSub(topic string, msg proto.Message) {
 	}
 }
 
+// BroadcastForEpoch mocks broadcasting for a specific epoch.
+func (p *TestP2P) BroadcastForEpoch(_ context.Context, _ proto.Message, _ primitives.Epoch) error {
+	p.BroadcastCalled.Store(true)
+	return nil
+}
+
 // Broadcast a message.
 func (p *TestP2P) Broadcast(_ context.Context, _ proto.Message) error {
 	p.BroadcastCalled.Store(true)

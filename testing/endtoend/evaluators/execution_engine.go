@@ -33,6 +33,7 @@ func optimisticSyncEnabled(_ *types.EvaluationContext, conns ...*grpc.ClientConn
 		if err != nil {
 			return err
 		}
+		defer func() { _ = httpResp.Body.Close() }()
 		if httpResp.StatusCode != http.StatusOK {
 			e := httputil.DefaultJsonError{}
 			if err = json.NewDecoder(httpResp.Body).Decode(&e); err != nil {
@@ -59,6 +60,7 @@ func optimisticSyncEnabled(_ *types.EvaluationContext, conns ...*grpc.ClientConn
 			if err != nil {
 				return err
 			}
+			defer func() { _ = httpResp.Body.Close() }()
 			if httpResp.StatusCode == http.StatusNotFound {
 				// Continue in the event of non-existent blocks.
 				continue

@@ -123,6 +123,8 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 		ProposerSlashingTopic,
 		BlockGossipTopic,
 		DataColumnTopic,
+		PayloadAttestationMessageTopic,
+		ExecutionPayloadGossipTopic,
 	})
 	require.NoError(t, err)
 	ro, err := blocks.NewROBlob(util.HydrateBlobSidecar(&eth.BlobSidecar{}))
@@ -312,6 +314,30 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 				KzgCommitments: [][]byte{{'a'}, {'b'}, {'c'}},
 			},
 		},
+		{
+			Type: operation.PayloadAttestationMessageReceived,
+			Data: &operation.PayloadAttestationMessageReceivedData{
+				Message: &eth.PayloadAttestationMessage{
+					ValidatorIndex: 0,
+					Data: &eth.PayloadAttestationData{
+						BeaconBlockRoot:   make([]byte, fieldparams.RootLength),
+						Slot:              0,
+						PayloadPresent:    true,
+						BlobDataAvailable: true,
+					},
+					Signature: make([]byte, fieldparams.BLSSignatureLength),
+				},
+			},
+		},
+		{
+			Type: operation.ExecutionPayloadGossipReceived,
+			Data: &operation.ExecutionPayloadGossipReceivedData{
+				Slot:         1,
+				BuilderIndex: 2,
+				BlockHash:    [32]byte{'h'},
+				BlockRoot:    [32]byte{'r'},
+			},
+		},
 	}
 }
 
@@ -393,6 +419,8 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 			FinalizedCheckpointTopic,
 			ChainReorgTopic,
 			BlockTopic,
+			ExecutionPayloadAvailableTopic,
+			ExecutionPayloadTopic,
 		})
 		require.NoError(t, err)
 		request := topics.testHttpRequest(testSync.ctx, t)
@@ -443,6 +471,23 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 					State:               make([]byte, 32),
 					Epoch:               0,
 					ExecutionOptimistic: false,
+				},
+			},
+			{
+				Type: statefeed.ExecutionPayloadAvailable,
+				Data: &statefeed.ExecutionPayloadAvailableData{
+					Slot:      10,
+					BlockRoot: [32]byte{0x9a},
+				},
+			},
+			{
+				Type: statefeed.ExecutionPayloadProcessed,
+				Data: &statefeed.ExecutionPayloadProcessedData{
+					Slot:         11,
+					BuilderIndex: 12,
+					BlockHash:    [32]byte{0xbb},
+					BlockRoot:    [32]byte{0x9a},
+					Optimistic:   true,
 				},
 			},
 		}
@@ -721,7 +766,7 @@ func TestStuckReaderScenarios(t *testing.T) {
 
 func wedgedWriterTestCase(t *testing.T, queueDepth func([]*feed.Event) int) {
 	topics, events := operationEventsFixtures(t)
-	require.Equal(t, 12, len(events))
+	require.Equal(t, 14, len(events))
 
 	// set eventFeedDepth to a number lower than the events we intend to send to force the server to drop the reader.
 	stn := mockChain.NewEventFeedWrapper()

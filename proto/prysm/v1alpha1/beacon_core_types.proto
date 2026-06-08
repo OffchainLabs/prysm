@@ -1,4 +1,5 @@
-// Common beacon chain types shared between beacon blocks, beacon state, and other components
+// Common beacon chain types shared between beacon blocks, beacon state, and
+// other components
 
 syntax = "proto3";
 
@@ -136,7 +137,7 @@ message AttesterSlashingElectra {
 
 message IndexedAttestationElectra {
   repeated uint64 attesting_indices = 1
-  [ (ethereum.eth.ext.ssz_max) = "max_attesting_indices.size" ];
+      [ (ethereum.eth.ext.ssz_max) = "max_attesting_indices.size" ];
 
   AttestationData data = 2;
 
@@ -170,7 +171,7 @@ message Fork {
 // beacon chain.
 message SyncCommittee {
   repeated bytes pubkeys = 1
-  [ (ethereum.eth.ext.ssz_size) = "sync_committee_bits.size,48" ];
+      [ (ethereum.eth.ext.ssz_size) = "sync_committee_bits.size,48" ];
   bytes aggregate_pubkey = 2 [ (ethereum.eth.ext.ssz_size) = "48" ];
 }
 

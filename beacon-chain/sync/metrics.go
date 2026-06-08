@@ -139,6 +139,13 @@ var (
 			Help: "Time to verify gossiped attestations",
 		},
 	)
+	syncPayloadAttestationArrivalDelaySeconds = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "sync_payload_attestation_arrival_delay_seconds",
+			Help:    "Time from slot start to payload attestation gossip arrival.",
+			Buckets: prometheus.DefBuckets,
+		},
+	)
 	blockVerificationGossipSummary = promauto.NewSummary(
 		prometheus.SummaryOpts{
 			Name: "gossip_block_verification_milliseconds",
@@ -217,6 +224,32 @@ var (
 			Help: "Count the number of times data columns have been recovered from the execution layer.",
 		},
 	)
+	syncExecutionPayloadEnvelopeArrivalDelaySeconds = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "sync_execution_payload_envelope_arrival_delay_seconds",
+			Help:    "Time from slot start to execution payload envelope gossip arrival.",
+			Buckets: prometheus.DefBuckets,
+		},
+	)
+	syncPayloadEnvelopeByRangeServedTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "sync_payload_envelope_by_range_served_total",
+			Help: "Count the number of execution payload envelopes by range RPC requests served.",
+		},
+	)
+	syncPayloadEnvelopeByRootServedTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "sync_payload_envelope_by_root_served_total",
+			Help: "Count the number of execution payload envelopes by root RPC requests served.",
+		},
+	)
+	gloasExecutionPayloadEnvelopesRPCRequestsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "gloas_execution_payload_envelopes_rpc_requests_total",
+			Help: "Count execution payload envelope RPC requests by method and outcome.",
+		},
+		[]string{"rpc", "result"},
+	)
 
 	// Data column sidecar validation, beacon metrics specs
 	dataColumnSidecarVerificationRequestsCounter = promauto.NewCounter(prometheus.CounterOpts{
@@ -256,6 +289,16 @@ var (
 			Help: "Count the number of data column sidecars obtained via the execution layer.",
 		},
 	)
+
+	ignoredPreJustifiedBlockCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "gossip_ignored_pre_justified_block_total",
+		Help: "Count of blocks ignored because their canonical parent is before the justified checkpoint.",
+	})
+
+	ignoredPreJustifiedDataColumnCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "gossip_ignored_pre_justified_data_column_total",
+		Help: "Count of data column sidecars ignored because their canonical parent is before the justified checkpoint.",
+	})
 )
 
 func (s *Service) updateMetrics() {

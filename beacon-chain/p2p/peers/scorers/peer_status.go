@@ -88,9 +88,9 @@ func (s *PeerStatusScorer) isBadPeerNoLock(pid peer.ID) error {
 		p2ptypes.ErrInvalidRequest,
 	}
 
-	for _, err := range terminalErrs {
-		if errors.Is(peerData.ChainStateValidationError, err) {
-			return err
+	for _, terminalErr := range terminalErrs {
+		if errors.Is(peerData.ChainStateValidationError, terminalErr) {
+			return terminalErr
 		}
 	}
 

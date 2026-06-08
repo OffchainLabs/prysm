@@ -70,9 +70,9 @@ func (s *Store) SaveFinalizedCheckpoint(ctx context.Context, checkpoint *ethpb.C
 		return err
 	}
 	hasStateSummary := s.HasStateSummary(ctx, bytesutil.ToBytes32(checkpoint.Root))
+	hasStateInDB := s.HasState(ctx, bytesutil.ToBytes32(checkpoint.Root))
 	err = s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(checkpointBucket)
-		hasStateInDB := tx.Bucket(stateBucket).Get(checkpoint.Root) != nil
 		if !(hasStateInDB || hasStateSummary) {
 			log.Warnf("Recovering state summary for finalized root: %#x", bytesutil.Trunc(checkpoint.Root))
 			if err := recoverStateSummary(ctx, tx, checkpoint.Root); err != nil {
@@ -99,9 +99,9 @@ func (s *Store) saveCheckpoint(ctx context.Context, key []byte, checkpoint *ethp
 		return err
 	}
 	hasStateSummary := s.HasStateSummary(ctx, bytesutil.ToBytes32(checkpoint.Root))
+	hasStateInDB := s.HasState(ctx, bytesutil.ToBytes32(checkpoint.Root))
 	err = s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(checkpointBucket)
-		hasStateInDB := tx.Bucket(stateBucket).Get(checkpoint.Root) != nil
 		if !(hasStateInDB || hasStateSummary) {
 			log.WithField("root", fmt.Sprintf("%#x", bytesutil.Trunc(checkpoint.Root))).Warn("Recovering state summary")
 			if err := recoverStateSummary(ctx, tx, checkpoint.Root); err != nil {

@@ -159,6 +159,20 @@ func ProcessSlot(ctx context.Context, state state.BeaconState) (state.BeaconStat
 	return state, nil
 }
 
+// ProcessSlotsIfNeeded advances st to slot with at most one Copy; NextSlotState returns its own.
+func ProcessSlotsIfNeeded(ctx context.Context, st state.ReadOnlyBeaconState, parentRoot []byte, slot primitives.Slot) (state.ReadOnlyBeaconState, error) {
+	if slot <= st.Slot() {
+		return st, nil
+	}
+	if cached := NextSlotState(parentRoot, slot); cached != nil {
+		if cached.Slot() >= slot {
+			return cached, nil
+		}
+		return ProcessSlots(ctx, cached, slot)
+	}
+	return ProcessSlots(ctx, st.Copy(), slot)
+}
+
 // ProcessSlotsUsingNextSlotCache processes slots by using next slot cache for higher efficiency.
 func ProcessSlotsUsingNextSlotCache(
 	ctx context.Context,
@@ -315,6 +329,9 @@ func ProcessSlotsCore(ctx context.Context, span trace.Span, state state.BeaconSt
 
 // ProcessEpoch is a wrapper on fork specific epoch processing
 func ProcessEpoch(ctx context.Context, state state.BeaconState) (state.BeaconState, error) {
+	ctx, span := prysmTrace.StartSpan(ctx, "core.state.ProcessEpoch")
+	defer span.End()
+
 	var err error
 	if time.CanProcessEpoch(state) {
 		if state.Version() >= version.Gloas {
@@ -390,7 +407,7 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 	}
 
 	if time.CanUpgradeToElectra(slot) {
-		state, err = electra.UpgradeToElectra(state)
+		state, err = electra.UpgradeToElectra(ctx, state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
 			return nil, err

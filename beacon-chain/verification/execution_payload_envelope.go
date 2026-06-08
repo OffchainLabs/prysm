@@ -1,8 +1,10 @@
 package verification
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -21,6 +23,7 @@ type ExecutionPayloadEnvelopeVerifier interface {
 	VerifySlotMatchesBlock(primitives.Slot) error
 	VerifyBuilderValid(interfaces.ROExecutionPayloadBid) error
 	VerifyPayloadHash(interfaces.ROExecutionPayloadBid) error
+	VerifyExecutionRequestsRoot(interfaces.ROExecutionPayloadBid) error
 	VerifySignature(state.ReadOnlyBeaconState) error
 	SatisfyRequirement(Requirement)
 }
@@ -38,6 +41,7 @@ var ExecutionPayloadEnvelopeGossipRequirements = []Requirement{
 	RequireEnvelopeSlotMatchesBlock,
 	RequireBuilderValid,
 	RequirePayloadHashValid,
+	RequireExecutionRequestsRootValid,
 	RequireBuilderSignatureValid,
 }
 
@@ -45,12 +49,13 @@ var ExecutionPayloadEnvelopeGossipRequirements = []Requirement{
 var GossipExecutionPayloadEnvelopeRequirements = requirementList(ExecutionPayloadEnvelopeGossipRequirements)
 
 var (
-	ErrEnvelopeBlockRootNotSeen    = errors.New("block root not seen")
-	ErrEnvelopeBlockRootInvalid    = errors.New("block root invalid")
-	ErrEnvelopeSlotBeforeFinalized = errors.New("envelope slot is before finalized checkpoint")
-	ErrEnvelopeSlotMismatch        = errors.New("envelope slot does not match block slot")
-	ErrIncorrectEnvelopeBuilder    = errors.New("builder index does not match committed header")
-	ErrIncorrectEnvelopeBlockHash  = errors.New("block hash does not match committed header")
+	ErrEnvelopeBlockRootNotSeen       = errors.New("block root not seen")
+	ErrEnvelopeBlockRootInvalid       = errors.New("block root invalid")
+	ErrEnvelopeSlotBeforeFinalized    = errors.New("envelope slot is before finalized checkpoint")
+	ErrEnvelopeSlotMismatch           = errors.New("envelope slot does not match block slot")
+	ErrIncorrectEnvelopeBuilder       = errors.New("builder index does not match committed header")
+	ErrIncorrectEnvelopeBlockHash     = errors.New("block hash does not match committed header")
+	ErrIncorrectExecutionRequestsRoot = errors.New("execution requests root does not match committed bid")
 )
 
 var _ ExecutionPayloadEnvelopeVerifier = &EnvelopeVerifier{}
@@ -140,12 +145,26 @@ func (v *EnvelopeVerifier) VerifyPayloadHash(bid interfaces.ROExecutionPayloadBi
 	if env.IsBlinded() {
 		return nil
 	}
-	payload, err := env.Execution()
-	if err != nil {
-		return errors.Wrap(err, "failed to get payload execution")
+	if bid.BlockHash() != env.BlockHash() {
+		return fmt.Errorf("%w: payload=%#x bid=%#x", ErrIncorrectEnvelopeBlockHash, env.BlockHash(), bid.BlockHash())
 	}
-	if bid.BlockHash() != [32]byte(payload.BlockHash()) {
-		return fmt.Errorf("%w: payload=%#x bid=%#x", ErrIncorrectEnvelopeBlockHash, payload.BlockHash(), bid.BlockHash())
+	return nil
+}
+
+// VerifyExecutionRequestsRoot checks that hash_tree_root(envelope.execution_requests) == bid.execution_requests_root.
+func (v *EnvelopeVerifier) VerifyExecutionRequestsRoot(bid interfaces.ROExecutionPayloadBid) (err error) {
+	defer v.record(RequireExecutionRequestsRootValid, &err)
+	env, err := v.e.Envelope()
+	if err != nil {
+		return errors.Wrap(err, "failed to get envelope")
+	}
+	requestsRoot, err := env.ExecutionRequests().HashTreeRoot()
+	if err != nil {
+		return errors.Wrap(err, "could not compute execution requests root")
+	}
+	bidRoot := bid.ExecutionRequestsRoot()
+	if requestsRoot != bidRoot {
+		return fmt.Errorf("%w: envelope=%#x bid=%#x", ErrIncorrectExecutionRequestsRoot, requestsRoot, bidRoot)
 	}
 	return nil
 }
@@ -188,11 +207,11 @@ func validatePayloadEnvelopeSignature(st state.ReadOnlyBeaconState, e interfaces
 	}
 	var pubkey []byte
 	if env.BuilderIndex() == params.BeaconConfig().BuilderIndexSelfBuild {
-		header := st.LatestBlockHeader()
-		if header == nil {
-			return errors.New("latest block header is nil")
+		proposerIdx, err := helpers.BeaconProposerIndexAtSlot(context.TODO(), st, env.Slot())
+		if err != nil {
+			return errors.Wrap(err, "failed to get proposer index at slot")
 		}
-		val, err := st.ValidatorAtIndex(primitives.ValidatorIndex(header.ProposerIndex))
+		val, err := st.ValidatorAtIndex(proposerIdx)
 		if err != nil {
 			return errors.Wrap(err, "failed to get proposer validator")
 		}

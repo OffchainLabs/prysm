@@ -1,2 +1,0 @@
-### Ignored
-- Run go fmt

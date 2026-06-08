@@ -147,7 +147,7 @@ func TestProcessBLSToExecutionChange(t *testing.T) {
 		_, err = blocks.ValidateBLSToExecutionChange(st, signed)
 		// The state should return an empty validator, even when the validator object in the registry is
 		// nil. This error should return when the withdrawal credentials are invalid or too short.
-		require.ErrorIs(t, err, blocks.ErrInvalidBLSPrefix)
+		require.ErrorIs(t, err, blocks.ErrInvalidWithdrawalCredentials)
 	})
 	t.Run("non-existent validator", func(t *testing.T) {
 		priv, err := bls.RandKey()

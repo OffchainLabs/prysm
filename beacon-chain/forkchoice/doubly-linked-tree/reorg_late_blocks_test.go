@@ -26,7 +26,7 @@ func TestForkChoice_ShouldOverrideFCU(t *testing.T) {
 	for i := range attesters {
 		attesters[i] = uint64(i + 64)
 	}
-	f.ProcessAttestation(ctx, attesters, blk.Root(), 0, true)
+	f.ProcessAttestation(ctx, attesters, blk.Root(), 1, true)
 
 	orphanLateBlockFirstThreshold := time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot) * time.Second
 	driftGenesisTime(f, 2, orphanLateBlockFirstThreshold+time.Second)
@@ -124,7 +124,7 @@ func TestForkChoice_GetProposerHead(t *testing.T) {
 	for i := range attesters {
 		attesters[i] = uint64(i + 64)
 	}
-	f.ProcessAttestation(ctx, attesters, blk.Root(), 0, true)
+	f.ProcessAttestation(ctx, attesters, blk.Root(), 1, true)
 
 	driftGenesisTime(f, 3, 1*time.Second)
 	childRoot := [32]byte{'b'}

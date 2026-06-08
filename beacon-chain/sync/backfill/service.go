@@ -2,6 +2,7 @@ package backfill
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
@@ -45,7 +46,10 @@ type Service struct {
 	workerCfg       *workerCfg
 	fuluStart       primitives.Slot
 	denebStart      primitives.Slot
+	progressLogger  *intervalLogger
 }
+
+const progressLogInterval = 60
 
 var _ runtime.Service = (*Service)(nil)
 
@@ -193,6 +197,27 @@ func (s *Service) importBatches(ctx context.Context) {
 	}
 }
 
+// logProgress emits a periodic INFO summary of backfill progress.
+func (s *Service) logProgress() {
+	status := s.store.status()
+	target := s.syncNeeds.Currently().Block.Begin
+	lowest := primitives.Slot(status.LowSlot)
+	origin := primitives.Slot(status.OriginSlot)
+
+	fields := logrus.Fields{
+		"lowestBackfilledSlot": lowest,
+		"targetSlot":           target,
+		"batchesRemaining":     s.batchSeq.numTodo(),
+	}
+
+	if origin > target && lowest <= origin && lowest >= target {
+		percent := float64(origin-lowest) / float64(origin-target) * 100
+		fields["completion"] = fmt.Sprintf("%.2f%%", percent)
+	}
+
+	s.progressLogger.WithFields(fields).Info("Backfill in progress")
+}
+
 func (s *Service) defaultBatchImporter(ctx context.Context, current primitives.Slot, b batch, su *Store) (*dbval.BackfillStatus, error) {
 	status := su.status()
 	if err := b.ensureParent(bytesutil.ToBytes32(status.LowParentRoot)); err != nil {
@@ -307,6 +332,13 @@ func (s *Service) Start() {
 		return
 	}
 
+	log.WithFields(logrus.Fields{
+		"lowestBackfilledSlot": status.LowSlot,
+		"targetSlot":           needs.Block.Begin,
+	}).Info("Starting backfill")
+
+	s.progressLogger = newIntervalLogger(log, progressLogInterval)
+
 	for {
 		if ctx.Err() != nil {
 			return
@@ -318,6 +350,7 @@ func (s *Service) Start() {
 		s.importBatches(ctx)
 		batchesWaiting.Set(float64(s.batchSeq.countWithState(batchImportable)))
 		s.scheduleTodos()
+		s.logProgress()
 	}
 }
 
