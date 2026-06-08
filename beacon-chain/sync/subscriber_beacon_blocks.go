@@ -282,7 +282,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 					}
 				}); err != nil {
 					log.WithError(err).Error("Failed to publish partial columns")
-                }
+				}
 			}
 
 			// No sidecars are retrieved from the EL, retry later
