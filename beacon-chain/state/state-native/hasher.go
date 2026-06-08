@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -121,15 +122,27 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 	eth1DepositBuf := bytesutil.ToBytes32(eth1DepositIndexBuf)
 	fieldRoots[types.Eth1DepositIndex.RealPosition()] = eth1DepositBuf[:]
 
+	progressiveSSZ := progressiveSSZEnabled(state.version)
+
 	// Validators slice root.
-	validatorsRoot, err := stateutil.ValidatorRegistryRoot(state.validatorsCompactVal())
+	var validatorsRoot [32]byte
+	if progressiveSSZ {
+		validatorsRoot, err = stateutil.ValidatorRegistryRootProgressive(state.validatorsCompactVal())
+	} else {
+		validatorsRoot, err = stateutil.ValidatorRegistryRoot(state.validatorsCompactVal())
+	}
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute validator registry merkleization")
 	}
 	fieldRoots[types.Validators.RealPosition()] = validatorsRoot[:]
 
 	// Balances slice root.
-	balancesRoot, err := stateutil.Uint64ListRootWithRegistryLimit(state.balancesVal())
+	var balancesRoot [32]byte
+	if progressiveSSZ {
+		balancesRoot, err = stateutil.Uint64ListRootProgressive(state.balancesVal())
+	} else {
+		balancesRoot, err = stateutil.Uint64ListRootWithRegistryLimit(state.balancesVal())
+	}
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute validator balances merkleization")
 	}
@@ -167,14 +180,24 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 
 	if state.version >= version.Altair {
 		// PreviousEpochParticipation slice root.
-		prevParticipationRoot, err := stateutil.ParticipationBitsRoot(state.previousEpochParticipation)
+		var prevParticipationRoot [32]byte
+		if progressiveSSZ {
+			prevParticipationRoot, err = stateutil.ParticipationBitsRootProgressive(state.previousEpochParticipation)
+		} else {
+			prevParticipationRoot, err = stateutil.ParticipationBitsRoot(state.previousEpochParticipation)
+		}
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute previous epoch participation merkleization")
 		}
 		fieldRoots[types.PreviousEpochParticipationBits.RealPosition()] = prevParticipationRoot[:]
 
 		// CurrentEpochParticipation slice root.
-		currParticipationRoot, err := stateutil.ParticipationBitsRoot(state.currentEpochParticipation)
+		var currParticipationRoot [32]byte
+		if progressiveSSZ {
+			currParticipationRoot, err = stateutil.ParticipationBitsRootProgressive(state.currentEpochParticipation)
+		} else {
+			currParticipationRoot, err = stateutil.ParticipationBitsRoot(state.currentEpochParticipation)
+		}
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute current epoch participation merkleization")
 		}
@@ -208,7 +231,12 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 
 	if state.version >= version.Altair {
 		// Inactivity scores root.
-		inactivityScoresRoot, err := stateutil.Uint64ListRootWithRegistryLimit(state.inactivityScoresVal())
+		var inactivityScoresRoot [32]byte
+		if progressiveSSZ {
+			inactivityScoresRoot, err = stateutil.Uint64ListRootProgressive(state.inactivityScoresVal())
+		} else {
+			inactivityScoresRoot, err = stateutil.Uint64ListRootWithRegistryLimit(state.inactivityScoresVal())
+		}
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute inactivityScoreRoot")
 		}
@@ -311,21 +339,36 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		fieldRoots[types.EarliestConsolidationEpoch.RealPosition()] = eceRoot[:]
 
 		// PendingDeposits root.
-		pbdRoot, err := stateutil.PendingDepositsRoot(state.pendingDeposits)
+		var pbdRoot [32]byte
+		if progressiveSSZ {
+			pbdRoot, err = stateutil.PendingDepositsRootProgressive(state.pendingDeposits)
+		} else {
+			pbdRoot, err = stateutil.PendingDepositsRoot(state.pendingDeposits)
+		}
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute pending balance deposits merkleization")
 		}
 		fieldRoots[types.PendingDeposits.RealPosition()] = pbdRoot[:]
 
 		// PendingPartialWithdrawals root.
-		ppwRoot, err := stateutil.PendingPartialWithdrawalsRoot(state.pendingPartialWithdrawals)
+		var ppwRoot [32]byte
+		if progressiveSSZ {
+			ppwRoot, err = stateutil.PendingPartialWithdrawalsRootProgressive(state.pendingPartialWithdrawals)
+		} else {
+			ppwRoot, err = stateutil.PendingPartialWithdrawalsRoot(state.pendingPartialWithdrawals)
+		}
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute pending partial withdrawals merkleization")
 		}
 		fieldRoots[types.PendingPartialWithdrawals.RealPosition()] = ppwRoot[:]
 
 		// PendingConsolidations root.
-		pcRoot, err := stateutil.PendingConsolidationsRoot(state.pendingConsolidations)
+		var pcRoot [32]byte
+		if progressiveSSZ {
+			pcRoot, err = stateutil.PendingConsolidationsRootProgressive(state.pendingConsolidations)
+		} else {
+			pcRoot, err = stateutil.PendingConsolidationsRoot(state.pendingConsolidations)
+		}
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute pending consolidations merkleization")
 		}
@@ -390,4 +433,8 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		fieldRoots[types.PTCWindow.RealPosition()] = ptcWindowRoot[:]
 	}
 	return fieldRoots, nil
+}
+
+func progressiveSSZEnabled(stateVersion int) bool {
+	return stateVersion >= version.Gloas && features.Get().EnableProgressiveSSZ
 }
