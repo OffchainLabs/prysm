@@ -19,16 +19,7 @@ func (c *beaconApiValidatorClient) submitSignedProposerPreferences(ctx context.C
 		if p == nil || p.Message == nil {
 			return errors.Errorf("signed proposer preferences at index %d is nil", i)
 		}
-		jsonPrefs[i] = &structs.SignedProposerPreferences{
-			Message: &structs.ProposerPreferences{
-				DependentRoot:  hexutil.Encode(p.Message.DependentRoot),
-				ProposalSlot:   strconv.FormatUint(uint64(p.Message.ProposalSlot), 10),
-				ValidatorIndex: strconv.FormatUint(uint64(p.Message.ValidatorIndex), 10),
-				FeeRecipient:   hexutil.Encode(p.Message.FeeRecipient),
-				TargetGasLimit: strconv.FormatUint(p.Message.TargetGasLimit, 10),
-			},
-			Signature: hexutil.Encode(p.Signature),
-		}
+		jsonPrefs[i] = structs.SignedProposerPreferencesFromConsensus(p)
 	}
 
 	body, err := json.Marshal(jsonPrefs)
