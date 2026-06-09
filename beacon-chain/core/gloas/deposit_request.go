@@ -15,22 +15,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// depositSigValidity builds a per-request "signature valid" slice from a list of
-// invalid indices. A nil/empty invalidIdx means every request is valid.
-func depositSigValidity(n int, invalidIdx []int) ([]bool, error) {
-	valid := make([]bool, n)
-	for i := range valid {
-		valid[i] = true
-	}
-	for _, idx := range invalidIdx {
-		if idx < 0 || idx >= n {
-			return nil, errors.Errorf("deposit signature index %d out of range [0,%d)", idx, n)
-		}
-		valid[idx] = false
-	}
-	return valid, nil
-}
-
 // prefetchedDepositSigs returns the cached per-request validity slice, or nil
 // on cache miss.
 func prefetchedDepositSigs(rqs *enginev1.ExecutionRequests) []bool {
@@ -45,9 +29,15 @@ func prefetchedDepositSigs(rqs *enginev1.ExecutionRequests) []bool {
 	if !ok {
 		return nil
 	}
-	valid, err := depositSigValidity(len(rqs.Deposits), invalidIdx)
-	if err != nil {
-		return nil
+	valid := make([]bool, len(rqs.Deposits))
+	for i := range valid {
+		valid[i] = true
+	}
+	for _, idx := range invalidIdx {
+		if idx < 0 || idx >= len(valid) {
+			return nil
+		}
+		valid[idx] = false
 	}
 	return valid
 }
@@ -57,20 +47,12 @@ func ProcessDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 		return nil
 	}
 
-	// On a prefetch cache miss the validity slice is nil; verify all signatures
-	// now so the per-request handling only ever sees a plain bool.
-	if prefetched == nil {
-		invalidIdx, err := helpers.BatchVerifyDepositRequestSignatures(ctx, requests)
-		if err != nil {
-			return errors.Wrap(err, "could not verify deposit signatures")
+	for i, receipt := range requests {
+		var sigValid *bool
+		if prefetched != nil {
+			sigValid = &prefetched[i]
 		}
-		if prefetched, err = depositSigValidity(len(requests), invalidIdx); err != nil {
-			return err
-		}
-	}
-
-	for i, request := range requests {
-		if err := processDepositRequest(beaconState, request, prefetched[i]); err != nil {
+		if err := processDepositRequest(beaconState, receipt, sigValid); err != nil {
 			return errors.Wrap(err, "could not apply deposit request")
 		}
 	}
@@ -117,12 +99,12 @@ func ProcessDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 //	        )
 //	    )
 //	</spec>
-func processDepositRequest(beaconState state.BeaconState, request *enginev1.DepositRequest, sigValid bool) error {
+func processDepositRequest(beaconState state.BeaconState, request *enginev1.DepositRequest, prefetchedValid *bool) error {
 	if request == nil {
 		return errors.New("nil deposit request")
 	}
 
-	applied, err := applyBuilderDepositRequest(beaconState, request, sigValid)
+	applied, err := applyBuilderDepositRequest(beaconState, request, prefetchedValid)
 	if err != nil {
 		return errors.Wrap(err, "could not apply builder deposit")
 	}
@@ -166,7 +148,7 @@ func processDepositRequest(beaconState state.BeaconState, request *enginev1.Depo
 //	    state.builders[builder_index].balance += amount
 //
 // </spec>
-func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1.DepositRequest, sigValid bool) (bool, error) {
+func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1.DepositRequest, prefetchedValid *bool) (bool, error) {
 	if beaconState.Version() < version.Gloas {
 		return false, nil
 	}
@@ -199,7 +181,8 @@ func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1
 		request.Pubkey,
 		request.WithdrawalCredentials,
 		request.Amount,
-		sigValid,
+		request.Signature,
+		prefetchedValid,
 	); err != nil {
 		return false, err
 	}
@@ -211,16 +194,32 @@ func applyDepositForNewBuilder(
 	pubkey []byte,
 	withdrawalCredentials []byte,
 	amount uint64,
-	sigValid bool,
+	signature []byte,
+	prefetchedValid *bool,
 ) error {
-	if !sigValid {
+	pubkeyBytes := bytesutil.ToBytes48(pubkey)
+	var valid bool
+	if prefetchedValid != nil {
+		valid = *prefetchedValid
+	} else {
+		var err error
+		valid, err = helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
+			PublicKey:             pubkey,
+			WithdrawalCredentials: withdrawalCredentials,
+			Amount:                amount,
+			Signature:             signature,
+		})
+		if err != nil {
+			return errors.Wrap(err, "could not verify deposit signature")
+		}
+	}
+	if !valid {
 		log.WithFields(logrus.Fields{
 			"pubkey": fmt.Sprintf("%x", pubkey),
 		}).Warn("ignoring builder deposit: invalid signature")
 		return nil
 	}
 
-	pubkeyBytes := bytesutil.ToBytes48(pubkey)
 	withdrawalCredBytes := bytesutil.ToBytes32(withdrawalCredentials)
 	return beaconState.AddBuilderFromDeposit(pubkeyBytes, withdrawalCredBytes, amount)
 }

@@ -38,7 +38,7 @@ func TestProcessDepositRequest_BuilderDepositAddsBuilder(t *testing.T) {
 	req := depositRequestFromPending(pd, 1)
 
 	st := newGloasState(t, nil, nil)
-	err = processDepositRequest(st, req, true)
+	err = processDepositRequest(st, req, nil)
 	require.NoError(t, err)
 
 	idx, ok := st.BuilderIndexByPubkey(toBytes48(req.Pubkey))
@@ -78,7 +78,7 @@ func TestProcessDepositRequest_ExistingBuilderIncreasesBalance(t *testing.T) {
 	pd := stateTesting.GeneratePendingDeposit(t, sk, 200, cred, 0)
 	req := depositRequestFromPending(pd, 9)
 
-	err = processDepositRequest(st, req, true)
+	err = processDepositRequest(st, req, nil)
 	require.NoError(t, err)
 
 	idx, ok := st.BuilderIndexByPubkey(toBytes48(pubkey))
@@ -104,7 +104,7 @@ func TestProcessDepositRequest_BuilderDepositWithExistingPendingDepositStaysPend
 	st := newGloasState(t, nil, nil)
 	require.NoError(t, st.SetPendingDeposits([]*ethpb.PendingDeposit{existingPending}))
 
-	err = processDepositRequest(st, req, true)
+	err = processDepositRequest(st, req, nil)
 	require.NoError(t, err)
 
 	_, ok := st.BuilderIndexByPubkey(toBytes48(req.Pubkey))
@@ -125,7 +125,7 @@ func TestApplyDepositForBuilder_InvalidSignatureIgnoresDeposit(t *testing.T) {
 
 	cred := builderWithdrawalCredentials()
 	st := newGloasState(t, nil, nil)
-	err = applyDepositForNewBuilder(st, sk.PublicKey().Marshal(), cred[:], 100, false)
+	err = applyDepositForNewBuilder(st, sk.PublicKey().Marshal(), cred[:], 100, make([]byte, 96), nil)
 	require.NoError(t, err)
 
 	_, ok := st.BuilderIndexByPubkey(toBytes48(sk.PublicKey().Marshal()))
@@ -220,41 +220,6 @@ func TestProcessDepositRequests_PrefetchedValidBypassesBLS(t *testing.T) {
 
 	_, ok := st.BuilderIndexByPubkey(toBytes48(req.Pubkey))
 	require.Equal(t, true, ok)
-}
-
-func TestProcessDepositRequests_NilPrefetchVerifiesValidSignature(t *testing.T) {
-	sk, err := bls.RandKey()
-	require.NoError(t, err)
-	cred := builderWithdrawalCredentials()
-	pd := stateTesting.GeneratePendingDeposit(t, sk, 1234, cred, 0)
-	req := depositRequestFromPending(pd, 1)
-
-	st := newGloasState(t, nil, nil)
-	err = ProcessDepositRequests(t.Context(), st, []*enginev1.DepositRequest{req}, nil)
-	require.NoError(t, err)
-
-	_, ok := st.BuilderIndexByPubkey(toBytes48(req.Pubkey))
-	require.Equal(t, true, ok)
-}
-
-func TestProcessDepositRequests_NilPrefetchSkipsInvalidSignature(t *testing.T) {
-	sk, err := bls.RandKey()
-	require.NoError(t, err)
-	cred := builderWithdrawalCredentials()
-	req := &enginev1.DepositRequest{
-		Pubkey:                sk.PublicKey().Marshal(),
-		WithdrawalCredentials: cred[:],
-		Amount:                1234,
-		Signature:             make([]byte, 96),
-		Index:                 1,
-	}
-
-	st := newGloasState(t, nil, nil)
-	err = ProcessDepositRequests(t.Context(), st, []*enginev1.DepositRequest{req}, nil)
-	require.NoError(t, err)
-
-	_, ok := st.BuilderIndexByPubkey(toBytes48(req.Pubkey))
-	require.Equal(t, false, ok)
 }
 
 func newGloasState(t *testing.T, validators []*ethpb.Validator, builders []*ethpb.Builder) state.BeaconState {
