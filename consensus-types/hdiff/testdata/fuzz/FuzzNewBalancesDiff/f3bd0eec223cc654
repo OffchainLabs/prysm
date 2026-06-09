@@ -1,0 +1,3 @@
+go test fuzz v1
+byte('Ô')
+[]byte("11111}111")
