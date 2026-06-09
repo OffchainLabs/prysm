@@ -1,0 +1,318 @@
+package execution
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
+)
+
+// jsonEngine is the JSON-RPC (engine_*) implementation of engineTransport. It
+// holds only its wire dependencies — the shared JSON-RPC connection and the
+// engine-capability cache, injected by engine() — mirroring sszEngine (which
+// holds its enginehttp client). It does not reach back into Service.
+type jsonEngine struct {
+	rpc  RPCClient
+	caps *capabilityCache
+}
+
+// NewPayload calls the engine_newPayloadVX method via JSON-RPC.
+func (j jsonEngine) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.NewPayload")
+	defer span.End()
+	defer func(start time.Time) {
+		newPayloadLatency.Observe(float64(time.Since(start).Milliseconds()))
+	}(time.Now())
+
+	d := time.Now().Add(time.Duration(params.BeaconConfig().ExecutionEngineTimeoutValue) * time.Second)
+	ctx, cancel := context.WithDeadline(ctx, d)
+	defer cancel()
+	result := &pb.PayloadStatus{}
+
+	switch payloadPb := payload.Proto().(type) {
+	case *pb.ExecutionPayload:
+		err := j.rpc.CallContext(ctx, result, NewPayloadMethod, payloadPb)
+		if err != nil {
+			return nil, handleRPCError(err)
+		}
+	case *pb.ExecutionPayloadCapella:
+		err := j.rpc.CallContext(ctx, result, NewPayloadMethodV2, payloadPb)
+		if err != nil {
+			return nil, handleRPCError(err)
+		}
+	case *pb.ExecutionPayloadDeneb:
+		if executionRequests == nil {
+			err := j.rpc.CallContext(ctx, result, NewPayloadMethodV3, payloadPb, versionedHashes, parentBlockRoot)
+			if err != nil {
+				return nil, handleRPCError(err)
+			}
+		} else {
+			flattenedRequests, err := pb.EncodeExecutionRequests(executionRequests)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to encode execution requests")
+			}
+			err = j.rpc.CallContext(ctx, result, NewPayloadMethodV4, payloadPb, versionedHashes, parentBlockRoot, flattenedRequests)
+			if err != nil {
+				return nil, handleRPCError(err)
+			}
+		}
+	case *pb.ExecutionPayloadGloas:
+		flattenedRequests, err := pb.EncodeExecutionRequests(executionRequests)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to encode execution requests")
+		}
+		err = j.rpc.CallContext(ctx, result, NewPayloadMethodV5, payloadPb, versionedHashes, parentBlockRoot, flattenedRequests)
+		if err != nil {
+			return nil, handleRPCError(err)
+		}
+	default:
+		return nil, errors.New("unknown execution data type")
+	}
+	if result.ValidationError != "" {
+		log.WithField("status", result.Status.String()).
+			WithField("parentRoot", fmt.Sprintf("%#x", parentBlockRoot)).
+			WithError(errors.New(result.ValidationError)).
+			Error("Got a validation error in newPayload")
+	}
+	switch result.Status {
+	case pb.PayloadStatus_INVALID_BLOCK_HASH:
+		return nil, ErrInvalidBlockHashPayloadStatus
+	case pb.PayloadStatus_ACCEPTED, pb.PayloadStatus_SYNCING:
+		return nil, ErrAcceptedSyncingPayloadStatus
+	case pb.PayloadStatus_INVALID:
+		return result.LatestValidHash, ErrInvalidPayloadStatus
+	case pb.PayloadStatus_VALID:
+		return result.LatestValidHash, nil
+	default:
+		return nil, errors.Wrapf(ErrUnknownPayloadStatus, "unknown payload status: %s", result.Status.String())
+	}
+}
+
+// ForkchoiceUpdated calls the engine_forkchoiceUpdatedV1 method via JSON-RPC.
+func (j jsonEngine) ForkchoiceUpdated(
+	ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer,
+) (*pb.PayloadIDBytes, []byte, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ForkchoiceUpdated")
+	defer span.End()
+	start := time.Now()
+	defer func() {
+		forkchoiceUpdatedLatency.Observe(float64(time.Since(start).Milliseconds()))
+	}()
+
+	d := time.Now().Add(time.Duration(params.BeaconConfig().ExecutionEngineTimeoutValue) * time.Second)
+	ctx, cancel := context.WithDeadline(ctx, d)
+	defer cancel()
+	result := &ForkchoiceUpdatedResponse{}
+
+	if attrs == nil {
+		return nil, nil, errors.New("nil payload attributer")
+	}
+	switch attrs.Version() {
+	case version.Bellatrix:
+		a, err := attrs.PbV1()
+		if err != nil {
+			return nil, nil, err
+		}
+		err = j.rpc.CallContext(ctx, result, ForkchoiceUpdatedMethod, state, a)
+		if err != nil {
+			return nil, nil, handleRPCError(err)
+		}
+	case version.Capella:
+		a, err := attrs.PbV2()
+		if err != nil {
+			return nil, nil, err
+		}
+		err = j.rpc.CallContext(ctx, result, ForkchoiceUpdatedMethodV2, state, a)
+		if err != nil {
+			return nil, nil, handleRPCError(err)
+		}
+	case version.Deneb, version.Electra, version.Fulu:
+		a, err := attrs.PbV3()
+		if err != nil {
+			return nil, nil, err
+		}
+		err = j.rpc.CallContext(ctx, result, ForkchoiceUpdatedMethodV3, state, a)
+		if err != nil {
+			return nil, nil, handleRPCError(err)
+		}
+	case version.Gloas:
+		a, err := attrs.PbV4()
+		if err != nil {
+			return nil, nil, err
+		}
+		err = j.rpc.CallContext(ctx, result, ForkchoiceUpdatedMethodV4, state, a)
+		if err != nil {
+			return nil, nil, handleRPCError(err)
+		}
+	default:
+		return nil, nil, fmt.Errorf("unknown payload attribute version: %v", attrs.Version())
+	}
+
+	if result.Status == nil {
+		return nil, nil, ErrNilResponse
+	}
+	if result.ValidationError != "" {
+		log.WithError(errors.New(result.ValidationError)).Error("Got a validation error in forkChoiceUpdated")
+	}
+	resp := result.Status
+	switch resp.Status {
+	case pb.PayloadStatus_SYNCING:
+		return nil, nil, ErrAcceptedSyncingPayloadStatus
+	case pb.PayloadStatus_INVALID:
+		return nil, resp.LatestValidHash, ErrInvalidPayloadStatus
+	case pb.PayloadStatus_VALID:
+		return result.PayloadId, resp.LatestValidHash, nil
+	default:
+		return nil, nil, ErrUnknownPayloadStatus
+	}
+}
+
+// GetPayload calls the engine_getPayloadVX method via JSON-RPC.
+// It returns the execution data as well as the blobs bundle.
+func (j jsonEngine) GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetPayload")
+	defer span.End()
+	start := time.Now()
+	defer func() {
+		getPayloadLatency.Observe(float64(time.Since(start).Milliseconds()))
+	}()
+	d := time.Now().Add(defaultEngineTimeout)
+	ctx, cancel := context.WithDeadline(ctx, d)
+	defer cancel()
+
+	method, result := getPayloadMethodAndMessage(slot)
+	err := j.rpc.CallContext(ctx, result, method, pb.PayloadIDBytes(payloadId))
+	if err != nil {
+		return nil, handleRPCError(err)
+	}
+	res, err := blocks.NewGetPayloadResponse(result)
+	if err != nil {
+		return nil, errors.Wrap(err, "new get payload response")
+	}
+	return res, nil
+}
+
+func (j jsonEngine) ExchangeCapabilities(ctx context.Context) ([]string, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExchangeCapabilities")
+	defer span.End()
+
+	if params.ElectraEnabled() {
+		supportedEngineEndpoints = append(supportedEngineEndpoints, electraEngineEndpoints...)
+	}
+
+	if params.FuluEnabled() {
+		supportedEngineEndpoints = append(supportedEngineEndpoints, fuluEngineEndpoints...)
+	}
+
+	if params.GloasEnabled() {
+		supportedEngineEndpoints = append(supportedEngineEndpoints, gloasEngineEndpoints...)
+	}
+
+	elSupportedEndpointsSlice := make([]string, len(supportedEngineEndpoints))
+	if err := j.rpc.CallContext(ctx, &elSupportedEndpointsSlice, ExchangeCapabilities, supportedEngineEndpoints); err != nil {
+		return nil, handleRPCError(err)
+	}
+
+	elSupportedEndpoints := make(map[string]bool, len(elSupportedEndpointsSlice))
+	for _, method := range elSupportedEndpointsSlice {
+		elSupportedEndpoints[method] = true
+	}
+
+	unsupported := make([]string, 0)
+	for _, method := range supportedEngineEndpoints {
+		if !elSupportedEndpoints[method] {
+			unsupported = append(unsupported, method)
+		}
+	}
+
+	if len(unsupported) != 0 {
+		log.WithField("methods", unsupported).Warning("Connected execution client does not support some requested engine methods")
+	}
+
+	return elSupportedEndpointsSlice, nil
+}
+
+// GetBlobs returns the blob and proof from the execution engine for the given versioned hashes.
+func (j jsonEngine) GetBlobs(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProof, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobs")
+	defer span.End()
+
+	// If the execution engine does not support `GetBlobsV1`, return early to prevent encountering an error later.
+	if !j.caps.has(GetBlobsV1) {
+		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV1))
+	}
+
+	result := make([]*pb.BlobAndProof, len(versionedHashes))
+	err := j.rpc.CallContext(ctx, &result, GetBlobsV1, versionedHashes)
+	return result, handleRPCError(err)
+}
+
+func (j jsonEngine) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsV2")
+	defer span.End()
+
+	start := time.Now()
+
+	if !j.caps.has(GetBlobsV2) {
+		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV2))
+	}
+
+	if flags.Get().DisableGetBlobsV2 {
+		return []*pb.BlobAndProofV2{}, nil
+	}
+
+	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
+	err := j.rpc.CallContext(ctx, &result, GetBlobsV2, versionedHashes)
+
+	if len(result) != 0 {
+		getBlobsV2Latency.Observe(float64(time.Since(start).Milliseconds()))
+	}
+
+	return result, handleRPCError(err)
+}
+
+// GetClientVersion calls engine_getClientVersionV1 to retrieve EL client information.
+func (s *Service) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetClientVersionV1")
+	defer span.End()
+
+	// First 4 bytes of the git commit are used.
+	commit := version.GitCommit()
+	if len(commit) >= 8 {
+		commit = commit[:8]
+	}
+
+	var result []*structs.ClientVersionV1
+	err := s.rpcClient.CallContext(
+		ctx,
+		&result,
+		GetClientVersionV1,
+		structs.ClientVersionV1{
+			Code:    PrysmClientCode,
+			Name:    PrysmClientName,
+			Version: version.SemanticVersion(),
+			Commit:  commit,
+		},
+	)
+	if err != nil {
+		return nil, handleRPCError(err)
+	}
+
+	if len(result) == 0 {
+		return nil, errors.New("execution client returned no result")
+	}
+
+	return result, nil
+}
