@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -169,14 +170,27 @@ func (s *Server) publishBlindedEnvelope(ctx context.Context, w http.ResponseWrit
 		httputil.HandleError(w, "cached envelope beacon_block_root does not match blinded envelope", http.StatusBadRequest)
 		return
 	}
+	blindedRoot, err := signedBlinded.Message.HashTreeRoot()
+	if err != nil {
+		httputil.HandleError(w, "could not hash blinded envelope: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	cachedRoot, err := cached.Envelope.HashTreeRoot()
+	if err != nil {
+		httputil.HandleError(w, "could not hash cached envelope: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if blindedRoot != cachedRoot {
+		httputil.HandleError(w, "cached envelope hash tree root does not match blinded envelope", http.StatusBadRequest)
+		return
+	}
 
 	full := &eth.SignedExecutionPayloadEnvelope{
 		Message:   cached.Envelope,
 		Signature: signedBlinded.Signature,
 	}
 
-	if err := s.validateEnvelopeBroadcast(ctx, r, full); err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
+	if !s.validateEnvelopeBroadcast(ctx, w, r, full) {
 		return
 	}
 
@@ -245,8 +259,7 @@ func (s *Server) publishExecutionPayloadEnvelopeContentsSSZ(ctx context.Context,
 // processEnvelopeContents verifies caller-supplied blobs/proofs, broadcasts
 // derived sidecars, then delegates the envelope to the bare publish path.
 func (s *Server) processEnvelopeContents(ctx context.Context, w http.ResponseWriter, r *http.Request, signed *eth.SignedExecutionPayloadEnvelope, kzgProofs, blobs [][]byte) {
-	if err := s.validateEnvelopeBroadcast(ctx, r, signed); err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
+	if !s.validateEnvelopeBroadcast(ctx, w, r, signed) {
 		return
 	}
 
@@ -290,52 +303,65 @@ func (s *Server) processEnvelopeContents(ctx context.Context, w http.ResponseWri
 
 // validateEnvelopeBroadcast applies broadcast_validation semantics to an
 // envelope publish before it is broadcast to gossip. Spec: beacon-APIs #580.
+// Writes the HTTP error and returns false on failure: 400 for validation
+// failures, 500 for internal errors.
 //   - gossip (default): no extra REST-layer checks — the downstream gossip
 //     pipeline performs validation.
 //   - consensus: full envelope consensus checks against the head state. Submission
 //     path requires envRoot to equal head.
 //   - consensus_and_equivocation: consensus + reject if a different beacon
 //     block at the envelope's slot has already been received.
-func (s *Server) validateEnvelopeBroadcast(ctx context.Context, r *http.Request, signed *eth.SignedExecutionPayloadEnvelope) error {
+func (s *Server) validateEnvelopeBroadcast(ctx context.Context, w http.ResponseWriter, r *http.Request, signed *eth.SignedExecutionPayloadEnvelope) bool {
 	level := r.URL.Query().Get(broadcastValidationQueryParam)
 	switch level {
 	case "", broadcastValidationGossip:
 		// TODO: run lightweight gossip checks (sig + bid consistency) here — beacon-APIs #580.
-		return nil
+		return true
 	case broadcastValidationConsensus, broadcastValidationConsensusAndEquivocation:
 	default:
-		return errors.Errorf("invalid %s value: %q", broadcastValidationQueryParam, level)
+		httputil.HandleError(w, fmt.Sprintf("invalid %s value: %q", broadcastValidationQueryParam, level), http.StatusBadRequest)
+		return false
 	}
 
 	envSlot := signed.Message.Payload.SlotNumber
 	envRoot := bytesutil.ToBytes32(signed.Message.BeaconBlockRoot)
 
 	if level == broadcastValidationConsensusAndEquivocation {
-		if canonRoot, ok := s.ForkchoiceFetcher.CanonicalNodeAtSlot(envSlot); ok && canonRoot != envRoot {
-			return errors.Wrapf(errEquivocatedBlock, "another block for slot %d already exists in fork choice", envSlot)
+		// CanonicalNodeAtSlot's bool means "payload full", not "node found" — at the
+		// wall clock slot it is always false. A non-zero root is the found signal.
+		canonRoot, _ := s.ForkchoiceFetcher.CanonicalNodeAtSlot(envSlot)
+		if canonRoot != ([32]byte{}) && canonRoot != envRoot {
+			err := errors.Wrapf(errEquivocatedBlock, "another block for slot %d already exists in fork choice", envSlot)
+			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
+			return false
 		}
 	}
 
 	// Submission path: envelope must be for the current head.
 	headRoot, err := s.HeadFetcher.HeadRoot(ctx)
 	if err != nil {
-		return errors.Wrap(err, "could not get head root")
+		httputil.HandleError(w, "could not get head root: "+err.Error(), http.StatusInternalServerError)
+		return false
 	}
 	if !bytes.Equal(headRoot, envRoot[:]) {
-		return errors.Errorf("envelope beacon block root %#x is not canonical head", envRoot)
+		httputil.HandleError(w, fmt.Sprintf("envelope beacon block root %#x is not canonical head", envRoot), http.StatusBadRequest)
+		return false
 	}
 	st, err := s.HeadFetcher.HeadState(ctx)
 	if err != nil {
-		return errors.Wrap(err, "could not get head state")
+		httputil.HandleError(w, "could not get head state: "+err.Error(), http.StatusInternalServerError)
+		return false
 	}
 	roSigned, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(signed)
 	if err != nil {
-		return errors.Wrap(err, "could not wrap signed envelope")
+		httputil.HandleError(w, "could not wrap signed envelope: "+err.Error(), http.StatusInternalServerError)
+		return false
 	}
 	if err := gloas.VerifyExecutionPayloadEnvelope(ctx, st, roSigned); err != nil {
-		return errors.Wrap(err, "consensus validation failed")
+		httputil.HandleError(w, "consensus validation failed: "+err.Error(), http.StatusBadRequest)
+		return false
 	}
-	return nil
+	return true
 }
 
 // verifyCellProofs batch-verifies cell proofs against commitments derived
