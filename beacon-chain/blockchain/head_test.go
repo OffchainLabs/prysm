@@ -246,7 +246,7 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 			PreviousDutyDependentRoot: srv.originBlockRoot,
 			CurrentDutyDependentRoot:  srv.originBlockRoot,
 		}
-		require.DeepSSZEqual(t, wanted, eventHead)
+		require.DeepEqual(t, wanted, eventHead)
 	})
 	t.Run("previous dependent root zero hash falls back to origin", func(t *testing.T) {
 		srv := testServiceWithDB(t)
@@ -269,8 +269,8 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		require.Equal(t, true, ok)
 		// DependentRoot(0) returns zero hash since the forkchoice tree is sparse.
 		// The fix ensures it falls back to originBlockRoot instead of sending zeros.
-		assert.DeepEqual(t, srv.originBlockRoot[:], eventHead.PreviousDutyDependentRoot)
-		assert.DeepEqual(t, srv.originBlockRoot[:], eventHead.CurrentDutyDependentRoot)
+		assert.DeepEqual(t, srv.originBlockRoot, eventHead.PreviousDutyDependentRoot)
+		assert.DeepEqual(t, srv.originBlockRoot, eventHead.CurrentDutyDependentRoot)
 	})
 }
 
