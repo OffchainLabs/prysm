@@ -1,0 +1,189 @@
+# ============================================================================
+# EIP-8243 Kurtosis test harness
+# ============================================================================
+#
+# All-Prysm cohort — required because only our binary knows how to decode
+# WireAttestation post-fork; other clients would fail SSZ decode on the
+# selector-prefixed payload on the attestation subnet.
+#
+# ----------------------------------------------------------------------------
+# 0. Prerequisites on the host
+# ----------------------------------------------------------------------------
+#   - macOS arm64 (this config uses linux_arm64_cgo cross-compile from Mac).
+#     For x86 hosts, swap the platform flag in the bazel commands below.
+#   - bazel, docker, kurtosis CLI installed.
+#   - You're on the EIP-8243 branch (e.g. eip-8243-prototype).
+#
+# ----------------------------------------------------------------------------
+# 1. Apply the two temp test patches
+# ----------------------------------------------------------------------------
+# These are *test-only* changes; revert before merging.
+#
+#   (a) Force a small BatchAttestationForkEpoch so the fork activates within
+#       a few minutes of genesis. Edit config/params/minimal_config.go:
+#
+#       - minimalConfig.BatchAttestationForkEpoch = minimalConfig.FarFutureEpoch
+#       + minimalConfig.BatchAttestationForkEpoch = 2   // or 4
+#
+#       (Epoch 2 is the cheapest choice — fork happens ~96 s after genesis
+#       with minimal preset's 6 s slots × 8 slots/epoch.)
+#
+#   (b) Relax the configset fork-version collision check. ethereum-package
+#       generates a chain.yaml with CONFIG_NAME=testnet that inherits
+#       BatchAttestationForkVersion verbatim from minimal — Prysm would
+#       otherwise refuse to register the resulting config. Edit
+#       config/params/configset.go inside the .add() method:
+#
+#       -   c.InitializeForkSchedule()
+#       -   for v := range c.ForkVersionSchedule {
+#       -     if n, exists := r.versionToName[v]; exists {
+#       -       cfv := ConfigForkVersions(c)
+#       -       versionId := cfv[v]
+#       -       msg := fmt.Sprintf("version %#x for fork %s in config %s conflicts with existing config named=%s",
+#       -         v, version.String(versionId), name, n)
+#       -       return errors.Wrap(errCollisionFork, msg)
+#       -     }
+#       -     r.versionToName[v] = name
+#       -   }
+#       +   c.InitializeForkSchedule()
+#       +   // TEMP for Kurtosis test — last writer wins.
+#       +   for v := range c.ForkVersionSchedule {
+#       +     r.versionToName[v] = name
+#       +   }
+#
+#       Then drop the now-unused imports at the top of the file
+#       ("fmt" and "github.com/OffchainLabs/prysm/v7/runtime/version").
+#
+# ----------------------------------------------------------------------------
+# 2. Build the Prysm beacon-chain + validator images (minimal preset, arm64)
+# ----------------------------------------------------------------------------
+#
+#   bazel build //cmd/beacon-chain:oci_image_tarball //cmd/validator:oci_image_tarball \
+#     --platforms=@io_bazel_rules_go//go/toolchain:linux_arm64_cgo \
+#     --config=release \
+#     --//proto:network=minimal \
+#     --@io_bazel_rules_go//go/config:tags=minimal
+#
+# Cold cache: ~10–20 min. Warm: ~30 s.
+#
+# ----------------------------------------------------------------------------
+# 3. Load + tag the images into Docker
+# ----------------------------------------------------------------------------
+#
+#   docker load -i bazel-bin/cmd/beacon-chain/oci_image_tarball/tarball.tar
+#   docker tag gcr.io/offchainlabs/prysm/beacon-chain prysm-bn-custom-image:minimal-build
+#
+#   docker load -i bazel-bin/cmd/validator/oci_image_tarball/tarball.tar
+#   docker tag gcr.io/offchainlabs/prysm/validator prysm-vc-custom-image:minimal-build
+#
+# Confirm:
+#   docker images | grep minimal-build
+#
+# ----------------------------------------------------------------------------
+# 4. Launch the enclave
+# ----------------------------------------------------------------------------
+#
+#   kurtosis enclave rm -f eip8243 2>/dev/null
+#   kurtosis run github.com/ethpandaops/ethereum-package \
+#       --enclave eip8243 --args-file eip-8243-kurtosis.yaml
+#
+# Brings up 4 Prysm BNs + 4 VCs + 4 geth ELs + Prometheus + Grafana + Dora.
+# PeerDAS requires ≥128 validators/node (see num_validator_keys_per_node below).
+#
+# ----------------------------------------------------------------------------
+# 5. Wait past the fork epoch
+# ----------------------------------------------------------------------------
+# Minimal preset uses 6 s slots × 8 slots/epoch = 48 s per epoch.
+#   Fork epoch 2 → fork at ~96 s after genesis.
+#   Fork epoch 4 → fork at ~192 s after genesis.
+# Wait at least 4 epochs past the fork so finalization has a chance to advance.
+#
+#   sleep 480   # 8 minutes — generous, covers either fork-epoch choice.
+#
+# ----------------------------------------------------------------------------
+# 6. Verify
+# ----------------------------------------------------------------------------
+# Capture endpoints:
+#
+#   BN1=$(kurtosis enclave inspect eip8243 | grep "cl-1-prysm" | grep -oE "http://127.0.0.1:[0-9]+" | head -1)
+#   PROM=$(kurtosis enclave inspect eip8243 | grep "prometheus" | grep -oE "http://127.0.0.1:[0-9]+" | head -1)
+#
+# Finality should advance past the fork epoch:
+#
+#   curl -s "$BN1/eth/v1/beacon/states/head/finality_checkpoints" \
+#     | python3 -c "import sys,json; d=json.load(sys.stdin)['data']; \
+#         print(f'finalized={d[\"finalized\"][\"epoch\"]} justified={d[\"current_justified\"][\"epoch\"]}')"
+#
+# Peers should stay connected (3/3 across all 4 BNs):
+#
+#   for i in 1 2 3 4; do
+#     U=$(kurtosis enclave inspect eip8243 | grep "cl-$i-prysm" | grep -oE "http://127.0.0.1:[0-9]+" | head -1)
+#     curl -s "$U/eth/v1/node/peer_count" | python3 -c "import sys,json; d=json.load(sys.stdin)['data']; \
+#         print(f'  cl-$i: connected={d[\"connected\"]} disconnected={d[\"disconnected\"]}')"
+#   done
+#
+# Batches should be received on every BN:
+#
+#   curl -s "$PROM/api/v1/query?query=gossip_batch_attestation_received_total" \
+#     | python3 -c "import sys,json; d=json.load(sys.stdin); \
+#         [print(r['metric'].get('instance'),'→',r['value'][1]) for r in d['data']['result'] if 'cl-' in r['metric'].get('instance','')]"
+#
+# Sanity-check: no BLS-verify failures and no bad-peer disconnects:
+#
+#   docker logs $(docker ps --filter "name=cl-1-prysm-geth" --format "{{.Names}}") 2>&1 \
+#     | grep -cE "Verification of (batch_attestation|attestation) failed"
+#   docker logs $(docker ps --filter "name=cl-1-prysm-geth" --format "{{.Names}}") 2>&1 \
+#     | grep -c "bad peer disconnection"
+#
+# Expected (with both fixes applied): finalized epoch > fork epoch, peers
+# 3/3 everywhere, batch counters > 100 per BN after 8 min, both grep counts
+# at 0.
+#
+# ----------------------------------------------------------------------------
+# 7. Tear down + revert temp patches
+# ----------------------------------------------------------------------------
+#
+#   kurtosis enclave rm -f eip8243
+#   git checkout config/params/minimal_config.go config/params/configset.go
+#
+# ============================================================================
+
+participants_matrix:
+  el:
+    - el_type: geth
+      el_image: ethpandaops/geth:glamsterdam-devnet-0
+  cl:
+    - cl_type: prysm
+      cl_image: prysm-bn-custom-image:minimal-build
+      vc_image: prysm-vc-custom-image:minimal-build
+      cl_extra_params:
+        - "--enable-batch-attestations"
+        - "--verbosity=debug"
+      vc_extra_params:
+        - "--enable-batch-attestations"
+  count: 4
+
+network_params:
+  preset: minimal
+  num_validator_keys_per_node: 128
+  electra_fork_epoch: 0
+  fulu_fork_epoch: 0
+  gloas_fork_epoch: 1
+  withdrawal_type: "0x01"
+  validator_balance: 40000
+
+additional_services:
+  - dora
+  - prometheus_grafana
+
+global_log_level: debug
+
+port_publisher:
+  additional_services:
+    enabled: true
+
+dora_params:
+  image: ethpandaops/dora:master
+
+ethereum_genesis_generator_params:
+  image: ethpandaops/ethereum-genesis-generator:bbusa-fix-gloas-genesis
