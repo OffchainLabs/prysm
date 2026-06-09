@@ -42,8 +42,7 @@ const (
 	InvalidTopic = "__invalid__"
 	// HeadTopic represents a new chain head event topic.
 	HeadTopic = "head"
-	// HeadV2Topic represents the versioned, Gloas-aware chain head event topic
-	// (beacon-APIs#590). The legacy HeadTopic is still emitted alongside it.
+	// HeadV2Topic represents the versioned, Gloas-aware chain head event topic.
 	HeadV2Topic = "head_v2"
 	// BlockTopic represents a new produced block event topic.
 	BlockTopic = "block"
@@ -527,19 +526,7 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		}, nil
 	case *statefeed.HeadV2Data:
 		return func() io.Reader {
-			return jsonMarshalReader(eventName, &structs.HeadEventV2{
-				Version: version.String(v.Version),
-				Data: &structs.HeadEventV2Data{
-					Slot:                      fmt.Sprintf("%d", v.Slot),
-					Block:                     hexutil.Encode(v.Block[:]),
-					State:                     hexutil.Encode(v.State[:]),
-					PayloadStatus:             v.PayloadStatus,
-					CurrentEpochDependentRoot: hexutil.Encode(v.CurrentEpochDependentRoot[:]),
-					NextEpochDependentRoot:    hexutil.Encode(v.NextEpochDependentRoot[:]),
-					EpochTransition:           v.EpochTransition,
-					ExecutionOptimistic:       v.ExecutionOptimistic,
-				},
-			})
+			return jsonMarshalReader(eventName, structs.HeadEventFromDataV2(v))
 		}, nil
 	case *operation.BlockGossipReceivedData:
 		blockRoot, err := v.SignedBlock.Block().HashTreeRoot()

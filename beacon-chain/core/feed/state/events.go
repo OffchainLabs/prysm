@@ -25,6 +25,8 @@ const (
 	FinalizedCheckpoint
 	// NewHead of the chain event.
 	NewHead
+	// NewHeadV2 of the chain event, carrying the versioned, Gloas-aware head_v2 payload.
+	NewHeadV2
 	// MissedSlot is sent when we need to notify users that a slot was missed.
 	MissedSlot
 	// LightClientFinalityUpdate event
@@ -37,10 +39,6 @@ const (
 	ExecutionPayloadAvailable
 	// ExecutionPayloadProcessed is sent after a payload envelope has been processed.
 	ExecutionPayloadProcessed
-	// PayloadProcessed is sent after a payload envelope has been processed.
-	PayloadProcessed
-	// NewHeadV2 of the chain event, carrying the versioned, Gloas-aware head_v2 payload.
-	NewHeadV2
 )
 
 // BlockProcessedData is the data sent with BlockProcessed events.
@@ -97,22 +95,17 @@ type ExecutionPayloadProcessedData struct {
 	Optimistic bool
 }
 
-// HeadV2Data is the data sent with NewHeadV2 events. It carries the same head
-// information as the legacy NewHead event, with the duty-dependent roots renamed
-// per beacon-APIs#590, plus the execution payload status and the head block's fork
-// version used to render the versioned head_v2 event.
+// HeadV2Data is the data sent with NewHeadV2 events.
 type HeadV2Data struct {
-	Slot                primitives.Slot
-	Block               [32]byte
-	State               [32]byte
-	EpochTransition     bool
-	ExecutionOptimistic bool
-	// CurrentEpochDependentRoot is the legacy previous_duty_dependent_root.
+	Slot                      primitives.Slot
+	Block                     [32]byte
+	State                     [32]byte
+	EpochTransition           bool
+	ExecutionOptimistic       bool
 	CurrentEpochDependentRoot [32]byte
-	// NextEpochDependentRoot is the legacy current_duty_dependent_root.
-	NextEpochDependentRoot [32]byte
+	NextEpochDependentRoot    [32]byte
 	// PayloadStatus is "empty" or "full" (always "full" pre-Gloas).
 	PayloadStatus string
-	// Version is the head block's fork version (runtime/version).
+	// Version is the head block's fork version.
 	Version int
 }
