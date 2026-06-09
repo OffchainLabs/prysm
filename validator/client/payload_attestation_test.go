@@ -66,7 +66,7 @@ func TestSubmitPayloadAttestation_NoHeadBlockForSlot(t *testing.T) {
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
 			validator.SubmitPayloadAttestation(t.Context(), 1, pubKey)
-			require.LogsContain(t, hook, "Skipping payload attestation: beacon node has no head block for slot")
+			require.LogsContain(t, hook, "Skipping payload attestation: data unavailable")
 			require.LogsDoNotContain(t, hook, "Could not request payload attestation data")
 		})
 	}
