@@ -147,6 +147,20 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return err
 	}
 
+	// If the imported payload makes the current head's payload status full, emit a
+	// second head_v2 event for the empty->full transition.
+	if headRoot == root && s.FullBeatsEmpty(root) {
+		headBlock, err := s.HeadBlock(ctx)
+		if err != nil || headBlock == nil || headBlock.IsNil() {
+			log.WithError(err).Error("Could not get head block for head_v2 payload update event")
+		} else if err := s.notifyNewHeadV2Event(
+			ctx, headBlock.Block().Slot(), headBlock.Block().StateRoot(), root,
+			true /* payload status is full */, headBlock.Version(),
+		); err != nil {
+			log.WithError(err).Error("Could not notify event feed of head_v2 payload update")
+		}
+	}
+
 	// execution_payload is emitted when an execution payload is successfully imported.
 	isOptimistic, err := s.cfg.ForkChoiceStore.IsOptimistic(root)
 	if err != nil {
