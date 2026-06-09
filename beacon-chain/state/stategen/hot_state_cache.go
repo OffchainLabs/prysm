@@ -24,20 +24,20 @@ var (
 
 // hotStateCache is used to store the processed beacon state after finalized check point.
 type hotStateCache struct {
-	cache *lru.Cache
+	*lru.Cache
 }
 
 // newHotStateCache initializes the map and underlying cache.
 func newHotStateCache() *hotStateCache {
 	return &hotStateCache{
-		cache: lruwrpr.New(hotStateCacheSize),
+		Cache: lruwrpr.New(hotStateCacheSize),
 	}
 }
 
 // Get returns a cached response via input block root, if any.
 // The response is copied by default.
 func (c *hotStateCache) get(blockRoot [32]byte) state.BeaconState {
-	item, exists := c.cache.Get(blockRoot)
+	item, exists := c.Get(blockRoot)
 
 	if exists && item != nil {
 		hotStateCacheHit.Inc()
@@ -57,7 +57,7 @@ func (c *hotStateCache) ByBlockRoot(r [32]byte) (state.BeaconState, error) {
 
 // GetWithoutCopy returns a non-copied cached response via input block root.
 func (c *hotStateCache) getWithoutCopy(blockRoot [32]byte) state.BeaconState {
-	item, exists := c.cache.Get(blockRoot)
+	item, exists := c.Get(blockRoot)
 	if exists && item != nil {
 		hotStateCacheHit.Inc()
 		return item.(state.BeaconState)
@@ -68,15 +68,15 @@ func (c *hotStateCache) getWithoutCopy(blockRoot [32]byte) state.BeaconState {
 
 // put the response in the cache.
 func (c *hotStateCache) put(blockRoot [32]byte, state state.BeaconState) {
-	c.cache.Add(blockRoot, state)
+	c.Add(blockRoot, state)
 }
 
 // has returns true if the key exists in the cache.
 func (c *hotStateCache) has(blockRoot [32]byte) bool {
-	return c.cache.Contains(blockRoot)
+	return c.Contains(blockRoot)
 }
 
 // delete deletes the key exists in the cache.
 func (c *hotStateCache) delete(blockRoot [32]byte) bool {
-	return c.cache.Remove(blockRoot)
+	return c.Remove(blockRoot)
 }
