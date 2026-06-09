@@ -972,7 +972,6 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 	}
 
 	haveAllBlobs := cp.Included.Count() == uint64(len(commitments))
-	log.WithField("haveAllBlobs", haveAllBlobs).Debug("Constructed partial columns")
 
 	var partialColumns []blocks.PartialDataColumn
 	isGloas := slots.ToEpoch(populator.Slot()) >= params.BeaconConfig().GloasForkEpoch
@@ -982,6 +981,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		if err != nil {
 			return nil, nil, wrapWithBlockRoot(err, populator.Root(), "data column sidecars from column sidecar")
 		}
+		log.WithField("haveAllBlobs", haveAllBlobs).Debug("Constructed full data column sidecars")
 
 		// Upgrade the sidecars to verified sidecars.
 		// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
@@ -996,6 +996,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 				}
 				partialColumns = append(partialColumns, pc)
 			}
+			log.WithField("haveAllBlobs", haveAllBlobs).Debug("Constructed partial data column sidecars")
 		}
 
 		return verifiedROSidecars, partialColumns, nil
@@ -1007,6 +1008,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		if err != nil {
 			return nil, nil, wrapWithBlockRoot(err, root, "construct partial columns")
 		}
+		log.WithField("haveAllBlobs", haveAllBlobs).Debug("Constructed partial data column sidecars")
 	}
 
 	return nil, partialColumns, nil
