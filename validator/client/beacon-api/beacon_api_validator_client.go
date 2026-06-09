@@ -30,6 +30,20 @@ type beaconApiValidatorClient struct {
 	beaconBlockConverter    BeaconBlockConverter
 	prysmChainClient        iface.PrysmChainClient
 	isEventStreamRunning    bool
+	stateless               bool
+	envelopeCache           *executionPayloadEnvelopeCache
+}
+
+// WithStateless configures the validator client to use the Gloas stateless block production path,
+// retrieving the block and execution payload envelope in a single v4 call and caching the envelope
+// for reuse by the self-build publisher.
+func WithStateless(enabled bool) ValidatorClientOpt {
+	return func(c *beaconApiValidatorClient) {
+		c.stateless = enabled
+		if enabled {
+			c.envelopeCache = newExecutionPayloadEnvelopeCache()
+		}
+	}
 }
 
 func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...ValidatorClientOpt) iface.ValidatorClient {
@@ -256,6 +270,21 @@ func (c *beaconApiValidatorClient) SubmitValidatorRegistrations(ctx context.Cont
 	})
 }
 
+func (c *beaconApiValidatorClient) SubmitSignedProposerPreferences(ctx context.Context, in *ethpb.SubmitSignedProposerPreferencesRequest) (*empty.Empty, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.SubmitSignedProposerPreferences")
+	defer span.End()
+
+	return wrapInMetrics[*empty.Empty]("SubmitSignedProposerPreferences", func() (*empty.Empty, error) {
+		return new(empty.Empty), c.submitSignedProposerPreferences(ctx, in.GetSignedProposerPreferences())
+	})
+}
+
+// TODO(gloas): Wire up actual REST call to POST /eth/v2/beacon/execution_payload/bid
+func (c *beaconApiValidatorClient) SubmitSignedExecutionPayloadBid(_ context.Context, _ *ethpb.SignedExecutionPayloadBid) (*empty.Empty, error) {
+	log.Debug("SubmitSignedExecutionPayloadBid not yet implemented for beacon API client, skipping")
+	return new(empty.Empty), nil
+}
+
 func (c *beaconApiValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, duties []*ethpb.ValidatorDuty) (*empty.Empty, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.SubscribeCommitteeSubnets")
 	defer span.End()
@@ -360,5 +389,23 @@ func (c *beaconApiValidatorClient) PublishExecutionPayloadEnvelope(ctx context.C
 
 	return wrapInMetrics[*empty.Empty]("PublishExecutionPayloadEnvelope", func() (*empty.Empty, error) {
 		return c.publishExecutionPayloadEnvelope(ctx, in)
+	})
+}
+
+func (c *beaconApiValidatorClient) PayloadAttestationData(ctx context.Context, _ primitives.Slot) (*ethpb.PayloadAttestationData, error) {
+	_, span := trace.StartSpan(ctx, "beacon-api.PayloadAttestationData")
+	defer span.End()
+
+	return wrapInMetrics[*ethpb.PayloadAttestationData]("PayloadAttestationData", func() (*ethpb.PayloadAttestationData, error) {
+		return nil, errors.New("PayloadAttestationData not implemented")
+	})
+}
+
+func (c *beaconApiValidatorClient) SubmitPayloadAttestation(ctx context.Context, _ *ethpb.PayloadAttestationMessage) (*empty.Empty, error) {
+	_, span := trace.StartSpan(ctx, "beacon-api.SubmitPayloadAttestation")
+	defer span.End()
+
+	return wrapInMetrics[*empty.Empty]("SubmitPayloadAttestation", func() (*empty.Empty, error) {
+		return nil, errors.New("SubmitPayloadAttestation not implemented")
 	})
 }

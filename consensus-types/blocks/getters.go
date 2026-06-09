@@ -1303,6 +1303,14 @@ func (b *BeaconBlockBody) SignedExecutionPayloadBid() (*eth.SignedExecutionPaylo
 	return nil, consensus_types.ErrNotSupported("SignedExecutionPayloadBid", b.version)
 }
 
+// ParentExecutionRequests returns the parent's deferred execution requests.
+func (b *BeaconBlockBody) ParentExecutionRequests() (*enginev1.ExecutionRequests, error) {
+	if b.version >= version.Gloas {
+		return b.parentExecutionRequests, nil
+	}
+	return nil, consensus_types.ErrNotSupported("ParentExecutionRequests", b.version)
+}
+
 // Version returns the version of the beacon block body
 func (b *BeaconBlockBody) Version() int {
 	return b.version

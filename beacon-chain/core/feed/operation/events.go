@@ -46,6 +46,16 @@ const (
 
 	// DataColumnReceived is sent after a data column has been seen after gossip validation rules.
 	DataColumnReceived = 12
+
+	// PayloadAttestationMessageReceived is sent after a payload attestation message is received from gossip or rpc.
+	PayloadAttestationMessageReceived = 13
+
+	// ExecutionPayloadGossipReceived is sent after an execution payload envelope has been received from
+	// gossip or API that passes validation rules.
+	ExecutionPayloadGossipReceived = 14
+
+	// ProposerPreferencesReceived is sent after signed proposer preferences are received from gossip or rpc.
+	ProposerPreferencesReceived = 15
 )
 
 // UnAggregatedAttReceivedData is the data sent with UnaggregatedAttReceived events.
@@ -113,4 +123,22 @@ type DataColumnReceivedData struct {
 	Index          uint64
 	BlockRoot      [32]byte
 	KzgCommitments [][]byte
+}
+
+// PayloadAttestationMessageReceivedData is the data sent with PayloadAttestationMessageReceived events.
+type PayloadAttestationMessageReceivedData struct {
+	Message *ethpb.PayloadAttestationMessage
+}
+
+// ExecutionPayloadGossipReceivedData is the data sent with ExecutionPayloadGossipReceived events.
+type ExecutionPayloadGossipReceivedData struct {
+	Slot         primitives.Slot
+	BuilderIndex primitives.BuilderIndex
+	BlockHash    [32]byte
+	BlockRoot    [32]byte
+}
+
+// ProposerPreferencesReceivedData is the data sent with ProposerPreferencesReceived events.
+type ProposerPreferencesReceivedData struct {
+	Data *ethpb.SignedProposerPreferences
 }

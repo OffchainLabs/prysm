@@ -5,12 +5,14 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 const (
 	maxPendingPayloadRoots    = 128
 	maxPendingBuildersPerRoot = 2
+	maxSelfBuildSigFailures   = 3
 )
 
 // processPendingPayloadEnvelopeQueue sweeps the pending envelope map at
@@ -56,8 +58,13 @@ func (s *Service) processPendingPayloadEnvelope(ctx context.Context, root [32]by
 			continue
 		}
 		s.setSeenPayloadEnvelope(root, env.BuilderIndex())
+
 		if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(ctx, e); err != nil {
 			log.WithError(err).Debug("Could not process pending payload envelope")
+			continue
+		}
+		if err := s.cfg.p2p.Broadcast(ctx, signedEnvelope); err != nil {
+			log.WithError(err).Warn("Could not broadcast pending payload envelope")
 		}
 	}
 }
@@ -87,12 +94,17 @@ func (s *Service) prunePendingPayloadEnvelopes() {
 	defer s.pendingEnvelopeLock.Unlock()
 
 	finalizedEpoch := s.cfg.chain.FinalizedCheckpt().Epoch
+	deleted := false
 	for root, inner := range s.pendingPayloadEnvelopes {
 		for _, env := range inner {
-			if slots.ToEpoch(env.Message.Slot) < finalizedEpoch {
+			if env.Message != nil && env.Message.Payload != nil && slots.ToEpoch(primitives.Slot(env.Message.Payload.SlotNumber)) < finalizedEpoch {
 				delete(s.pendingPayloadEnvelopes, root)
+				deleted = true
 			}
 			break // only need one envelope per root; admission enforces current-slot
 		}
+	}
+	if deleted {
+		s.selfBuildSigFailures = 0
 	}
 }

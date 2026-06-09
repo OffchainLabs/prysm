@@ -6,7 +6,6 @@ package validator
 import (
 	"bytes"
 	"context"
-	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
@@ -21,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
@@ -48,8 +48,9 @@ type Server struct {
 	Ctx                              context.Context
 	PayloadIDCache                   *cache.PayloadIDCache
 	TrackedValidatorsCache           *cache.TrackedValidatorsCache
-	executionPayloadEnvelopeMu       sync.RWMutex
-	executionPayloadEnvelope         *ethpb.ExecutionPayloadEnvelope
+	ProposerPreferencesCache         *cache.ProposerPreferencesCache
+	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
+	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache
 	HeadFetcher                      blockchain.HeadFetcher
 	ForkFetcher                      blockchain.ForkFetcher
 	ForkchoiceFetcher                blockchain.ForkchoiceFetcher
@@ -67,10 +68,12 @@ type Server struct {
 	P2P                              p2p.Broadcaster
 	AttestationCache                 *cache.AttestationCache
 	AttPool                          attestations.Pool
+	PayloadAttestationPool           payloadattestation.PoolManager
 	SlashingsPool                    slashings.PoolManager
 	ExitPool                         voluntaryexits.PoolManager
 	SyncCommitteePool                synccommittee.Pool
 	BlockReceiver                    blockchain.BlockReceiver
+	PayloadAttestationReceiver       blockchain.PayloadAttestationReceiver
 	ExecutionPayloadEnvelopeReceiver blockchain.ExecutionPayloadEnvelopeReceiver
 	BlobReceiver                     blockchain.BlobReceiver
 	DataColumnReceiver               blockchain.DataColumnReceiver

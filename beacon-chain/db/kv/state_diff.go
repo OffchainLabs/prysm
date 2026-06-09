@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/hdiff"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	bolt "go.etcd.io/bbolt"
 )
@@ -18,6 +19,8 @@ const (
 	validatorSuffix = "_v"
 	balancesSuffix  = "_b"
 )
+
+var errSnapshotNotFound = errors.New("full snapshot not found")
 
 /*
 	We use a level-based approach to save state diffs. Each level corresponds to an exponent of 2 (exponents[lvl]).
@@ -58,7 +61,7 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 	}
 
 	// Get anchor state to compute the diff from.
-	anchorState, err := s.getAnchorState(offset, lvl, slot)
+	anchorState, err := s.getAnchorState(ctx, offset, lvl, slot)
 	if err != nil {
 		return err
 	}
@@ -133,6 +136,9 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 			return err
 		}
 	}
+	if err := s.stateDiffCache.setLevelHasData(lvl); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -150,6 +156,7 @@ func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
 	if err != nil {
 		return err
 	}
+	compressed := snappy.Encode(nil, enc)
 
 	err = s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
@@ -157,7 +164,7 @@ func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
 			return bolt.ErrBucketNotFound
 		}
 
-		if err := bucket.Put(key, enc); err != nil {
+		if err := bucket.Put(key, compressed); err != nil {
 			return err
 		}
 
@@ -168,8 +175,12 @@ func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
 	}
 	// Save the full state to the cache, and invalidate other levels.
 	s.stateDiffCache.clearAnchors()
-	err = s.stateDiffCache.setAnchor(0, st)
-	if err != nil {
+	if len(flags.Get().StateDiffExponents) > 1 {
+		if err = s.stateDiffCache.setAnchor(0, st); err != nil {
+			return err
+		}
+	}
+	if err := s.stateDiffCache.setLevelHasData(0); err != nil {
 		return err
 	}
 
@@ -221,7 +232,7 @@ func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
 
 func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
 	key := makeKeyForStateDiffTree(0, slot)
-	var enc []byte
+	var compressed []byte
 
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
@@ -230,12 +241,16 @@ func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
 		}
 		rawEnc := bucket.Get(key)
 		if rawEnc == nil {
-			return errors.New("state not found")
+			return errSnapshotNotFound
 		}
-		enc = slices.Clone(rawEnc)
+		compressed = slices.Clone(rawEnc)
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
+	enc, err := snappy.Decode(nil, compressed)
 	if err != nil {
 		return nil, err
 	}

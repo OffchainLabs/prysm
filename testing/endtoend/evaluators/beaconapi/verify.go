@@ -219,6 +219,7 @@ func postEvaluation(nodeIdx int, requests map[string]endpoint, epoch primitives.
 	if err != nil {
 		return errors.Wrap(err, "could not perform a health check")
 	}
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("health check response's status code is %d", resp.StatusCode)
 	}

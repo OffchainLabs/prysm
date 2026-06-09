@@ -17,6 +17,8 @@ const (
 	unlockCalled
 	rlockCalled
 	runlockCalled
+	hasFullNodeCalled
+	isFullNodeCalled
 	hasNodeCalled
 	proposerBoostCalled
 	isCanonicalCalled
@@ -40,6 +42,7 @@ const (
 	targetRootForEpochCalled
 	parentRootCalled
 	blockHashCalled
+	gasLimitCalled
 	dependentRootCalled
 	dependentRootForEpochCalled
 	canonicalNodeAtSlotCalled
@@ -61,6 +64,16 @@ func TestROLocking(t *testing.T) {
 		call mockCall
 		cb   func(FastGetter)
 	}{
+		{
+			name: "hasFullNodeCalled",
+			call: hasFullNodeCalled,
+			cb:   func(g FastGetter) { g.HasFullNode([32]byte{}) },
+		},
+		{
+			name: "isFullNodeCalled",
+			call: isFullNodeCalled,
+			cb:   func(g FastGetter) { g.FullBeatsEmpty([32]byte{}) },
+		},
 		{
 			name: "hasNodeCalled",
 			call: hasNodeCalled,
@@ -166,6 +179,11 @@ func TestROLocking(t *testing.T) {
 			call: canonicalNodeAtSlotCalled,
 			cb:   func(g FastGetter) { g.CanonicalNodeAtSlot(0) },
 		},
+		{
+			name: "gasLimitCalled",
+			call: gasLimitCalled,
+			cb:   func(g FastGetter) { _, err := g.GasLimit([32]byte{}); _discard(t, err) },
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -201,6 +219,16 @@ func (ro *mockROForkchoice) Unlock() {
 
 func (ro *mockROForkchoice) RUnlock() {
 	ro.calls = append(ro.calls, runlockCalled)
+}
+
+func (ro *mockROForkchoice) HasFullNode(_ [32]byte) bool {
+	ro.calls = append(ro.calls, hasFullNodeCalled)
+	return false
+}
+
+func (ro *mockROForkchoice) FullBeatsEmpty(_ [32]byte) bool {
+	ro.calls = append(ro.calls, isFullNodeCalled)
+	return false
 }
 
 func (ro *mockROForkchoice) HasNode(_ [32]byte) bool {
@@ -329,6 +357,11 @@ func (ro *mockROForkchoice) ParentRoot(_ [32]byte) ([32]byte, error) {
 func (ro *mockROForkchoice) BlockHash(_ [32]byte) ([32]byte, error) {
 	ro.calls = append(ro.calls, blockHashCalled)
 	return [32]byte{}, nil
+}
+
+func (ro *mockROForkchoice) GasLimit(_ [32]byte) (uint64, error) {
+	ro.calls = append(ro.calls, gasLimitCalled)
+	return 0, nil
 }
 
 func (ro *mockROForkchoice) CanonicalNodeAtSlot(_ primitives.Slot) ([32]byte, bool) {

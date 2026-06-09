@@ -47,8 +47,9 @@ type StateManager interface {
 	SaveFinalizedState(fSlot primitives.Slot, fRoot [32]byte, fState state.BeaconState)
 	MigrateToCold(ctx context.Context, fRoot [32]byte) error
 	StateByRoot(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
+	StateByRootNoCopy(ctx context.Context, blockRoot [32]byte) (state.ReadOnlyBeaconState, error)
 	ActiveNonSlashedBalancesByRoot(context.Context, [32]byte) ([]uint64, error)
-	StateByRootIfCachedNoCopy(blockRoot [32]byte) state.BeaconState
+	StateByRootIfCachedNoCopy(blockRoot [32]byte) state.ReadOnlyBeaconState
 	StateByRootInitialSync(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
 	FinalizedReadOnlyBalances() NilCheckableReadOnlyBalances
 }
@@ -162,25 +163,31 @@ func (s *State) Resume(ctx context.Context, fState state.BeaconState) (state.Bea
 	return st, nil
 }
 
-func populatePubkeyCache(ctx context.Context, st state.BeaconState) {
+func populatePubkeyCache(ctx context.Context, st state.ReadOnlyBeaconState) {
 	epoch := slots.ToEpoch(st.Slot())
+
 	go populatePubkeyCacheOnce.Do(func() {
 		log.Debug("Populating pubkey cache")
 		start := time.Now()
-		if err := st.ReadFromEveryValidator(func(_ int, val state.ReadOnlyValidator) error {
-			if ctx.Err() != nil {
-				return ctx.Err()
+
+		for _, val := range st.ValidatorsReadOnlySeq() {
+			if err := ctx.Err(); err != nil {
+				log.WithError(err).Error("Failed to populate pubkey cache")
+				break
 			}
+
 			// Do not cache for non-active validators.
 			if !helpers.IsActiveValidatorUsingTrie(val, epoch) {
-				return nil
+				continue
 			}
+
 			pub := val.PublicKey()
-			_, err := bls.PublicKeyFromBytes(pub[:])
-			return err
-		}); err != nil {
-			log.WithError(err).Error("Failed to populate pubkey cache")
+			if _, err := bls.PublicKeyFromBytes(pub[:]); err != nil {
+				log.WithError(err).Error("Failed to populate pubkey cache")
+				break
+			}
 		}
+
 		log.WithField("duration", time.Since(start)).Debug("Done populating pubkey cache")
 	})
 }
@@ -207,6 +214,17 @@ func (s *State) isFinalizedRoot(r [32]byte) bool {
 func (s *State) FinalizedState() state.BeaconState {
 	s.finalizedInfo.lock.RLock()
 	defer s.finalizedInfo.lock.RUnlock()
+	return s.finalizedInfo.state.Copy()
+}
+
+// finalizedStateIfRoot returns a copy of the cached finalized state only if
+// the cached finalized root matches r at the moment of the read.
+func (s *State) finalizedStateIfRoot(r [32]byte) state.BeaconState {
+	s.finalizedInfo.lock.RLock()
+	defer s.finalizedInfo.lock.RUnlock()
+	if r != s.finalizedInfo.root || s.finalizedInfo.state == nil {
+		return nil
+	}
 	return s.finalizedInfo.state.Copy()
 }
 

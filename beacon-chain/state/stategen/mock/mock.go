@@ -26,7 +26,7 @@ func NewService() *StateManager {
 }
 
 // StateByRootIfCachedNoCopy --
-func (m *StateManager) StateByRootIfCachedNoCopy(root [32]byte) state.BeaconState {
+func (m *StateManager) StateByRootIfCachedNoCopy(root [32]byte) state.ReadOnlyBeaconState {
 	return m.StatesByRoot[root]
 }
 
@@ -52,6 +52,11 @@ func (_ *StateManager) HasState(_ context.Context, _ [32]byte) (bool, error) {
 
 // StateByRoot --
 func (m *StateManager) StateByRoot(_ context.Context, blockRoot [32]byte) (state.BeaconState, error) {
+	return m.StatesByRoot[blockRoot], nil
+}
+
+// StateByRootNoCopy --
+func (m *StateManager) StateByRootNoCopy(_ context.Context, blockRoot [32]byte) (state.ReadOnlyBeaconState, error) {
 	return m.StatesByRoot[blockRoot], nil
 }
 

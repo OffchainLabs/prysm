@@ -249,7 +249,7 @@ func ReadFileAsBytes(filename string) ([]byte, error) {
 }
 
 // CopyFile copy a file from source to destination path.
-func CopyFile(src, dst string) error {
+func CopyFile(src, dst string) (err error) {
 	exists, err := Exists(src, Regular)
 	if err != nil {
 		return errors.Wrapf(err, "could not check if file exists at path %s", src)
@@ -262,10 +262,20 @@ func CopyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 	dstFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, params.BeaconIoConfig().ReadWritePermissions) // #nosec G304
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if closeErr := dstFile.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 	_, err = io.Copy(dstFile, f)
 	return err
 }

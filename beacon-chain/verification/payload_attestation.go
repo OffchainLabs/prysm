@@ -2,17 +2,17 @@ package verification
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/pkg/errors"
 )
 
 // RequirementList defines a list of requirements.
@@ -24,6 +24,7 @@ var PayloadAttGossipRequirements = []Requirement{
 	RequireMessageNotSeen,
 	RequireValidatorInPTC,
 	RequireBlockRootSeen,
+	RequireBlockSlotMatches,
 	RequireBlockRootValid,
 	RequireSignatureValid,
 }
@@ -34,6 +35,7 @@ var GossipPayloadAttestationMessageRequirements = RequirementList(PayloadAttGoss
 var (
 	ErrIncorrectPayloadAttSlot      = errors.New("payload att slot does not match the current slot")
 	ErrPayloadAttBlockRootNotSeen   = errors.New("block root not seen")
+	ErrPayloadAttBlockSlotMismatch  = errors.New("block slot does not match attestation slot")
 	ErrPayloadAttBlockRootInvalid   = errors.New("block root invalid")
 	ErrIncorrectPayloadAttValidator = errors.New("validator not present in payload timeliness committee")
 	ErrInvalidPayloadAttMessage     = errors.New("invalid payload attestation message")
@@ -73,6 +75,18 @@ func (v *PayloadAttMsgVerifier) VerifyBlockRootSeen(blockRootSeen func([32]byte)
 	return fmt.Errorf("%w: root=%#x", ErrPayloadAttBlockRootNotSeen, v.pa.BeaconBlockRoot())
 }
 
+// VerifyBlockSlotMatches verifies the block referenced by data.beacon_block_root is at slot data.slot.
+// Represents the following spec verification:
+// [IGNORE] The block referenced by data.beacon_block_root is at slot data.slot.
+func (v *PayloadAttMsgVerifier) VerifyBlockSlotMatches(blockSlot primitives.Slot) (err error) {
+	defer v.record(RequireBlockSlotMatches, &err)
+
+	if blockSlot != v.pa.Slot() {
+		return fmt.Errorf("%w: block=%d attestation=%d", ErrPayloadAttBlockSlotMismatch, blockSlot, v.pa.Slot())
+	}
+	return nil
+}
+
 // VerifyBlockRootValid verifies if the block root is valid.
 // Represents the following spec verification:
 // [REJECT] The beacon block with root data.beacon_block_root passes validation.
@@ -92,13 +106,10 @@ func (v *PayloadAttMsgVerifier) VerifyBlockRootValid(badBlock func([32]byte) boo
 func (v *PayloadAttMsgVerifier) VerifyValidatorInPTC(ctx context.Context, st state.ReadOnlyBeaconState) (err error) {
 	defer v.record(RequireValidatorInPTC, &err)
 
-	ptc, err := gloas.PayloadCommittee(ctx, st, v.pa.Slot())
-	if err != nil {
-		return err
-	}
-
-	if slices.Index(ptc, v.pa.ValidatorIndex()) == -1 {
+	if _, err := gloas.PayloadCommitteeIndex(ctx, st, v.pa.Slot(), v.pa.ValidatorIndex()); errors.Is(err, gloas.ErrValidatorNotInPTC) {
 		return fmt.Errorf("%w: validatorIndex=%d", ErrIncorrectPayloadAttValidator, v.pa.ValidatorIndex())
+	} else if err != nil {
+		return err
 	}
 
 	return nil

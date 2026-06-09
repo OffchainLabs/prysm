@@ -64,11 +64,11 @@ func TestProcessPendingAtts_NoBlockRequestBlock(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.SaveState(t.Context(), stateA, rootA))
 
-	// Setup chain service with block 'A' in forkchoice
+	// Setup chain service with only block 'A' in forkchoice
 	chain := &mock.ChainService{
 		Genesis:             prysmTime.Now(),
 		FinalizedCheckPoint: &ethpb.Checkpoint{},
-		// NotFinalized: false means InForkchoice returns true
+		ForkchoiceRoots:     map[[32]byte]bool{rootA: true},
 	}
 
 	r := &Service{

@@ -86,6 +86,38 @@ service BeaconNodeValidator {
     };
   }
 
+  // Deprecated: Use the REST API instead. GetAttesterDuties retrieves attester duties for the requested validators at the given epoch.
+  rpc GetAttesterDuties(AttesterDutiesRequest) returns (AttesterDutiesResponse) {
+    option deprecated = true;
+    option (google.api.http) = {
+      get : "/eth/v1alpha1/validator/duties/attester"
+    };
+  }
+
+  // Deprecated: Use the REST API instead. GetProposerDutiesV2 retrieves proposer duties for the given epoch.
+  rpc GetProposerDutiesV2(ProposerDutiesRequest) returns (ProposerDutiesResponse) {
+    option deprecated = true;
+    option (google.api.http) = {
+      get : "/eth/v1alpha1/validator/duties/proposer"
+    };
+  }
+
+  // Deprecated: Use the REST API instead. GetSyncCommitteeDuties retrieves sync committee duties for the requested validators at the given epoch.
+  rpc GetSyncCommitteeDuties(SyncCommitteeDutiesRequest) returns (SyncCommitteeDutiesResponse) {
+    option deprecated = true;
+    option (google.api.http) = {
+      get : "/eth/v1alpha1/validator/duties/sync_committee"
+    };
+  }
+
+  // Deprecated: Use the REST API instead. GetPTCDuties retrieves payload timeliness committee duties for the requested validators at the given epoch.
+  rpc GetPTCDuties(PTCDutiesRequest) returns (PTCDutiesResponse) {
+    option deprecated = true;
+    option (google.api.http) = {
+      get : "/eth/v1alpha1/validator/duties/ptc"
+    };
+  }
+
   // DomainData fetches the current BLS signature domain version information
   // from the running beacon node's state. This information is used when
   // validators sign blocks and attestations appropriately based on their duty.
@@ -476,6 +508,47 @@ service BeaconNodeValidator {
       body : "*"
     };
   }
+
+  // PayloadAttestationData retrieves payload attestation data for the given slot.
+  rpc PayloadAttestationData(PayloadAttestationDataRequest)
+      returns (.ethereum.eth.v1alpha1.PayloadAttestationData) {
+    option deprecated = true;
+    option (google.api.http) = {
+      get : "/eth/v1alpha1/validator/payload_attestation_data/{slot}"
+    };
+  }
+
+  // SubmitPayloadAttestation broadcasts a signed payload attestation message.
+  rpc SubmitPayloadAttestation(PayloadAttestationMessage)
+      returns (google.protobuf.Empty) {
+    option deprecated = true;
+    option (google.api.http) = {
+      post : "/eth/v1alpha1/validator/payload_attestation"
+      body : "*"
+    };
+  }
+
+  // SubmitSignedProposerPreferences broadcasts signed proposer preferences for
+  // a future proposal slot.
+  rpc SubmitSignedProposerPreferences(SubmitSignedProposerPreferencesRequest)
+      returns (google.protobuf.Empty) {
+    option deprecated = true;
+    option (google.api.http) = {
+      post : "/eth/v1alpha1/validator/proposer_preferences"
+      body : "*"
+    };
+  }
+
+  // SubmitSignedExecutionPayloadBid broadcasts a signed execution payload bid
+  // to the P2P gossip network.
+  rpc SubmitSignedExecutionPayloadBid(SignedExecutionPayloadBid)
+      returns (google.protobuf.Empty) {
+    option deprecated = true;
+    option (google.api.http) = {
+      post : "/eth/v1alpha1/validator/execution_payload_bid"
+      body : "*"
+    };
+  }
 }
 
 // SyncMessageBlockRootResponse for beacon chain validator to retrieve and
@@ -857,6 +930,12 @@ message DutiesV2Response {
     // Whether the validator belongs in the sync committee and has to perform
     // sync committee duty.
     bool is_sync_committee = 10;
+
+    // Slots in which the validator is assigned to the Payload Timeliness Committee (PTC).
+    repeated uint64 ptc_slots = 11 [
+      (ethereum.eth.ext.cast_type) =
+          "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+    ];
   }
 }
 
@@ -882,6 +961,12 @@ message BlockRequest {
   // Percentage multiplier to apply to the builder's payload value when choosing
   // between a builder payload header and payload from the paired execution node
   google.protobuf.UInt64Value builder_boost_factor = 5;
+
+  // When true, eagerly compute the post-payload state root in the envelope
+  // during block production. Used by the V4 produce-block endpoint when
+  // include_payload=true so the envelope is immediately available with a
+  // populated state root.
+  bool eager_payload_state_root = 6;
 }
 
 message ProposeResponse {
@@ -1170,6 +1255,209 @@ message AggregatedSigAndAggregationBitsResponse {
   bytes bits = 2;
 }
 
+// AttesterDutiesRequest is the request for GetAttesterDuties.
+message AttesterDutiesRequest {
+  // Epoch at which validators should perform attester duties.
+  uint64 epoch = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
+  ];
+
+  // Validator indices to get duties for.
+  repeated uint64 validator_indices = 2 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/"
+        "primitives.ValidatorIndex"
+  ];
+}
+
+// AttesterDutiesResponse is the response for GetAttesterDuties.
+message AttesterDutiesResponse {
+  // The block root the duties are dependent on. If this root changes, duties must be refetched.
+  bytes dependent_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  // Whether the response was computed optimistically.
+  bool execution_optimistic = 2;
+
+  // The attester duties for the requested validators.
+  repeated AttesterDuty duties = 3;
+}
+
+// AttesterDuty is a single attester duty assignment.
+message AttesterDuty {
+  // 48 byte BLS public key for the validator.
+  bytes pubkey = 1 [
+    (ethereum.eth.ext.ssz_size) = "48",
+    (ethereum.eth.ext.spec_name) = "pubkey"
+  ];
+
+  // The index of the validator in the beacon state.
+  uint64 validator_index = 2 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/"
+        "primitives.ValidatorIndex"
+  ];
+
+  // The committee index.
+  uint64 committee_index = 3 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/"
+        "primitives.CommitteeIndex"
+  ];
+
+  // The total number of validators in the committee.
+  uint64 committee_length = 4;
+
+  // The number of committees at the slot.
+  uint64 committees_at_slot = 5;
+
+  // The validator's position within the committee.
+  uint64 validator_committee_index = 6;
+
+  // The slot at which the validator must attest.
+  uint64 slot = 7 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+}
+
+// ProposerDutiesRequest is the request for GetProposerDutiesV2.
+message ProposerDutiesRequest {
+  // Epoch at which to get proposer duties.
+  uint64 epoch = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
+  ];
+}
+
+// ProposerDutiesResponse is the response for GetProposerDutiesV2.
+message ProposerDutiesResponse {
+  // The block root the duties are dependent on. If this root changes, duties must be refetched.
+  bytes dependent_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  // Whether the response was computed optimistically.
+  bool execution_optimistic = 2;
+
+  // The proposer duties for the epoch.
+  repeated ProposerDutyV2 duties = 3;
+}
+
+// ProposerDutyV2 is a single proposer duty assignment.
+message ProposerDutyV2 {
+  // 48 byte BLS public key for the validator.
+  bytes pubkey = 1 [
+    (ethereum.eth.ext.ssz_size) = "48",
+    (ethereum.eth.ext.spec_name) = "pubkey"
+  ];
+
+  // The index of the validator in the beacon state.
+  uint64 validator_index = 2 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/"
+        "primitives.ValidatorIndex"
+  ];
+
+  // The slot at which the validator must propose a block.
+  uint64 slot = 3 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+}
+
+// SyncCommitteeDutiesRequest is the request for GetSyncCommitteeDuties.
+message SyncCommitteeDutiesRequest {
+  // Epoch at which to get sync committee duties.
+  uint64 epoch = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
+  ];
+
+  // Validator indices to get duties for.
+  repeated uint64 validator_indices = 2 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/"
+        "primitives.ValidatorIndex"
+  ];
+}
+
+// SyncCommitteeDutiesResponse is the response for GetSyncCommitteeDuties.
+message SyncCommitteeDutiesResponse {
+  // Whether the response was computed optimistically.
+  bool execution_optimistic = 1;
+
+  // The sync committee duties for the requested validators.
+  repeated SyncCommitteeDuty duties = 2;
+}
+
+// SyncCommitteeDuty is a single sync committee duty assignment.
+message SyncCommitteeDuty {
+  // 48 byte BLS public key for the validator.
+  bytes pubkey = 1 [
+    (ethereum.eth.ext.ssz_size) = "48",
+    (ethereum.eth.ext.spec_name) = "pubkey"
+  ];
+
+  // The index of the validator in the beacon state.
+  uint64 validator_index = 2 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/"
+        "primitives.ValidatorIndex"
+  ];
+
+  // The indices of the validator in the sync committee.
+  repeated uint64 validator_sync_committee_indices = 3;
+}
+
+// PTCDutiesRequest is the request for GetPTCDuties.
+message PTCDutiesRequest {
+  // Epoch at which to get PTC duties.
+  uint64 epoch = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
+  ];
+
+  // Validator indices to get duties for.
+  repeated uint64 validator_indices = 2 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/"
+        "primitives.ValidatorIndex"
+  ];
+}
+
+// PTCDutiesResponse is the response for GetPTCDuties.
+message PTCDutiesResponse {
+  // The block root the duties are dependent on. If this root changes, duties must be refetched.
+  bytes dependent_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  // Whether the response was computed optimistically.
+  bool execution_optimistic = 2;
+
+  // The PTC duties for the requested validators.
+  repeated PTCDuty duties = 3;
+}
+
+// PTCDuty is a single payload timeliness committee duty assignment.
+message PTCDuty {
+  // 48 byte BLS public key for the validator.
+  bytes pubkey = 1 [
+    (ethereum.eth.ext.ssz_size) = "48",
+    (ethereum.eth.ext.spec_name) = "pubkey"
+  ];
+
+  // The index of the validator in the beacon state.
+  uint64 validator_index = 2 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/"
+        "primitives.ValidatorIndex"
+  ];
+
+  // The slot at which the validator must perform PTC duties.
+  uint64 slot = 3 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+}
+
 // =============================================================================
 // Gloas Fork Messages
 // =============================================================================
@@ -1194,4 +1482,16 @@ message ExecutionPayloadEnvelopeResponse {
 
   // The execution payload envelope for the requested slot and builder.
   ExecutionPayloadEnvelope envelope = 1;
+}
+
+// PayloadAttestationDataRequest is the request for retrieving payload
+// attestation data for a slot.
+message PayloadAttestationDataRequest {
+  option deprecated = true;
+
+  // The slot for which to retrieve payload attestation data.
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
 }

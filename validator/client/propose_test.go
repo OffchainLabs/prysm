@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
-	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
@@ -90,17 +89,19 @@ func setupWithKey(t *testing.T, validatorKey bls.SecretKey, isSlashingProtection
 			return mockSignature{}, nil
 		},
 	}
-	aggregatedSlotCommitteeIDCache := lruwrpr.New(int(params.BeaconConfig().MaxCommitteesPerSlot))
-
 	validator := &validator{
-		db:                             valDB,
-		km:                             newMockKeymanager(t, keypair{pub: pubKey, pri: validatorKey}),
-		validatorClient:                m.validatorClient,
-		graffiti:                       []byte{},
-		submittedAtts:                  make(map[submittedAttKey]*submittedAtt),
-		submittedAggregates:            make(map[submittedAttKey]*submittedAtt),
-		aggregatedSlotCommitteeIDCache: aggregatedSlotCommitteeIDCache,
+		db:                  valDB,
+		km:                  newMockKeymanager(t, keypair{pub: pubKey, pri: validatorKey}),
+		validatorClient:     m.validatorClient,
+		graffiti:            []byte{},
+		duties:              &dutyStore{},
+		submittedAtts:       make(map[submittedAttKey]*submittedAtt),
+		submittedAggregates: make(map[submittedAttKey]*submittedAtt),
+		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
+			pubKey: {publicKey: validatorKey.PublicKey().Marshal(), index: 0},
+		},
 	}
+	validator.aggSelector = testLocalSelector(t, validator)
 
 	return validator, m, validatorKey, ctrl.Finish
 }

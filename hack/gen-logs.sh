@@ -11,7 +11,7 @@ EXCLUDED_PATH_PREFIXES=(
   "beacon-chain/rpc/eth/config"
   "beacon-chain/rpc/prysm/v1alpha1/debug"
   "tools"
-  "runtime"
+  "runtime/logging"
   "monitoring"
   "io"
   ".well-known"
