@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/async/abool"
@@ -59,19 +60,19 @@ func TestService_InitStartStop(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		assert       func()
+		assert       func(*testing.T)
 		setGenesis   func() *startup.Clock
-		chainService func() *mock.ChainService
+		chainService func(*testing.T) *mock.ChainService
 	}{
 		{
 			name: "head is not ready",
-			assert: func() {
+			assert: func(t *testing.T) {
 				assert.LogsContain(t, hook, "Waiting for state to be initialized")
 			},
 		},
 		{
 			name: "future genesis",
-			chainService: func() *mock.ChainService {
+			chainService: func(t *testing.T) *mock.ChainService {
 				// Set to future time (genesis time hasn't arrived yet).
 				st, err := util.NewBeaconState()
 				require.NoError(t, err)
@@ -89,14 +90,14 @@ func TestService_InitStartStop(t *testing.T) {
 				var vr [32]byte
 				return startup.NewClock(time.Unix(4113849600, 0), vr)
 			},
-			assert: func() {
+			assert: func(t *testing.T) {
 				assert.LogsContain(t, hook, "Genesis time has not arrived - not syncing")
 				assert.LogsContain(t, hook, "Waiting for state to be initialized")
 			},
 		},
 		{
 			name: "zeroth epoch",
-			chainService: func() *mock.ChainService {
+			chainService: func(t *testing.T) *mock.ChainService {
 				// Set to nearby slot.
 				st, err := util.NewBeaconState()
 				require.NoError(t, err)
@@ -113,7 +114,7 @@ func TestService_InitStartStop(t *testing.T) {
 				var vr [32]byte
 				return startup.NewClock(time.Now().Add(-5*time.Minute), vr)
 			},
-			assert: func() {
+			assert: func(t *testing.T) {
 				assert.LogsContain(t, hook, "Chain started within the last epoch - not syncing")
 				assert.LogsDoNotContain(t, hook, "Genesis time has not arrived - not syncing")
 				assert.LogsContain(t, hook, "Waiting for state to be initialized")
@@ -121,7 +122,7 @@ func TestService_InitStartStop(t *testing.T) {
 		},
 		{
 			name: "already synced",
-			chainService: func() *mock.ChainService {
+			chainService: func(t *testing.T) *mock.ChainService {
 				// Set to some future slot, and then make sure that current head matches it.
 				st, err := util.NewBeaconState()
 				require.NoError(t, err)
@@ -141,7 +142,7 @@ func TestService_InitStartStop(t *testing.T) {
 				var vr [32]byte
 				return startup.NewClock(makeGenesisTime(futureSlot), vr)
 			},
-			assert: func() {
+			assert: func(t *testing.T) {
 				assert.LogsContain(t, hook, "Starting initial chain sync...")
 				assert.LogsContain(t, hook, "Already synced to the current chain head")
 				assert.LogsDoNotContain(t, hook, "Chain started within the last epoch - not syncing")
@@ -155,48 +156,42 @@ func TestService_InitStartStop(t *testing.T) {
 	connectPeers(t, p, []*peerData{}, p.Peers())
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer hook.Reset()
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-			mc := &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}}
-			// Allow overriding with customized chain service.
-			if tt.chainService != nil {
-				mc = tt.chainService()
-			}
-			// Initialize feed
-			gs := startup.NewClockSynchronizer()
-			s := NewService(ctx, &Config{
-				P2P:                 p,
-				Chain:               mc,
-				ClockWaiter:         gs,
-				StateNotifier:       &mock.MockStateNotifier{},
-				InitialSyncComplete: make(chan struct{}),
-			})
-			s.verifierWaiter = verification.NewInitializerWaiter(gs, nil, nil, nil)
-
-			s.blobRetentionChecker = func(primitives.Slot) bool { return true }
-			time.Sleep(500 * time.Millisecond)
-			assert.NotNil(t, s)
-			if tt.setGenesis != nil {
-				require.NoError(t, gs.SetClock(tt.setGenesis()))
-			}
-
-			wg := &sync.WaitGroup{}
-			wg.Go(func() {
-				s.Start()
-			})
-
-			go func() {
-				// Allow to exit from test (on no head loop waiting for head is started).
-				// In most tests, this is redundant, as Start() already exited.
-				time.AfterFunc(3*time.Second, func() {
-					cancel()
+			synctest.Test(t, func(t *testing.T) {
+				defer hook.Reset()
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				mc := &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}}
+				// Allow overriding with customized chain service.
+				if tt.chainService != nil {
+					mc = tt.chainService(t)
+				}
+				// Initialize feed
+				gs := startup.NewClockSynchronizer()
+				s := NewService(ctx, &Config{
+					P2P:                 p,
+					Chain:               mc,
+					ClockWaiter:         gs,
+					StateNotifier:       &mock.MockStateNotifier{},
+					InitialSyncComplete: make(chan struct{}),
 				})
-			}()
-			if util.WaitTimeout(wg, time.Second*4) {
-				t.Fatalf("Test should have exited by now, timed out")
-			}
-			tt.assert()
+				s.verifierWaiter = verification.NewInitializerWaiter(gs, nil, nil, nil)
+
+				s.blobRetentionChecker = func(primitives.Slot) bool { return true }
+				assert.NotNil(t, s)
+				if tt.setGenesis != nil {
+					require.NoError(t, gs.SetClock(tt.setGenesis()))
+				}
+
+				wg := &sync.WaitGroup{}
+				wg.Go(func() {
+					s.Start()
+				})
+
+				// Allow the no-head case to exit after reaching the clock wait.
+				time.AfterFunc(3*time.Second, cancel)
+				wg.Wait()
+				tt.assert(t)
+			})
 		})
 	}
 }
@@ -224,82 +219,82 @@ func useMinimalInitialSyncConfig(t *testing.T) {
 	})
 }
 
-func newClockAtSlot(slot primitives.Slot) (*startup.Clock, time.Time) {
-	genesisTime := time.Unix(1_700_000_000, 0)
-	var validatorsRoot [32]byte
-	return startup.NewClock(genesisTime, validatorsRoot, startup.WithSlotAsNow(slot)), genesisTime
-}
-
 // TestService_Start_DoesNotMarkSyncedWhenStillBehindInSameEpoch verifies startup does not skip sync when head and current slot share an epoch but differ by slots.
 func TestService_Start_DoesNotMarkSyncedWhenStillBehindInSameEpoch(t *testing.T) {
 	useMinimalInitialSyncConfig(t)
+	p := p2ptest.NewTestP2P(t)
 
-	headSlot := primitives.Slot(88)
-	currentSlot := primitives.Slot(95)
+	synctest.Test(t, func(t *testing.T) {
+		headSlot := primitives.Slot(88)
+		currentSlot := primitives.Slot(95)
 
-	st, err := util.NewBeaconState()
-	require.NoError(t, err)
-	require.NoError(t, st.SetSlot(headSlot))
+		st, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, st.SetSlot(headSlot))
 
-	clock, genesisTime := newClockAtSlot(currentSlot)
-	gs := startup.NewClockSynchronizer()
-	require.NoError(t, gs.SetClock(clock))
+		genesisTime := time.Now().Add(-time.Hour)
+		var validatorsRoot [32]byte
+		clock := startup.NewClock(genesisTime, validatorsRoot, startup.WithSlotAsNow(currentSlot))
+		gs := startup.NewClockSynchronizer()
+		require.NoError(t, gs.SetClock(clock))
 
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
 
-	initialSyncComplete := make(chan struct{})
-	mc := &mock.ChainService{
-		State: st,
-		FinalizedCheckPoint: &ethpb.Checkpoint{
-			Epoch: 0,
-		},
-		Genesis:        genesisTime,
-		ValidatorsRoot: [32]byte{},
-	}
+		initialSyncComplete := make(chan struct{})
+		mc := &mock.ChainService{
+			State: st,
+			FinalizedCheckPoint: &ethpb.Checkpoint{
+				Epoch: 0,
+			},
+			Genesis:        genesisTime,
+			ValidatorsRoot: [32]byte{},
+		}
 
-	s := NewService(ctx, &Config{
-		P2P:                 p2ptest.NewTestP2P(t),
-		Chain:               mc,
-		ClockWaiter:         gs,
-		StateNotifier:       &mock.MockStateNotifier{},
-		InitialSyncComplete: initialSyncComplete,
+		s := NewService(ctx, &Config{
+			P2P:                 p,
+			Chain:               mc,
+			ClockWaiter:         gs,
+			StateNotifier:       &mock.MockStateNotifier{},
+			InitialSyncComplete: initialSyncComplete,
+		})
+		s.verifierWaiter = verification.NewInitializerWaiter(gs, nil, nil, nil)
+		s.blobRetentionChecker = func(primitives.Slot) bool { return true }
+
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			s.Start()
+		}()
+
+		synctest.Wait()
+
+		select {
+		case <-done:
+			t.Fatal("initial sync exited early while the node was still seven slots behind in the current epoch")
+		default:
+		}
+		require.Equal(t, true, s.Syncing(), "service should still be syncing while behind in the current epoch")
+		require.Equal(t, false, s.Synced(), "service should not report synced while behind in the current epoch")
+		select {
+		case <-initialSyncComplete:
+			t.Fatal("service closed InitialSyncComplete while still behind in the current epoch")
+		default:
+		}
+
+		cancel()
+		synctest.Wait()
+		select {
+		case <-done:
+		default:
+			t.Fatal("initial sync did not stop after context cancellation")
+		}
 	})
-	s.verifierWaiter = verification.NewInitializerWaiter(gs, nil, nil, nil)
-	s.blobRetentionChecker = func(primitives.Slot) bool { return true }
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		s.Start()
-	}()
-
-	time.Sleep(200 * time.Millisecond)
-
-	select {
-	case <-done:
-		t.Fatal("initial sync exited early while the node was still seven slots behind in the current epoch")
-	default:
-	}
-	require.Equal(t, true, s.Syncing(), "service should still be syncing while behind in the current epoch")
-	require.Equal(t, false, s.Synced(), "service should not report synced while behind in the current epoch")
-	select {
-	case <-initialSyncComplete:
-		t.Fatal("service closed InitialSyncComplete while still behind in the current epoch")
-	default:
-	}
-
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(6 * time.Second):
-		t.Fatal("initial sync did not stop after context cancellation")
-	}
 }
 
 func TestService_waitForStateInitialization(t *testing.T) {
 	hook := logTest.NewGlobal()
-	newService := func(ctx context.Context, mc *mock.ChainService) (*Service, *startup.ClockSynchronizer) {
+	newService := func(t *testing.T, ctx context.Context, mc *mock.ChainService) (*Service, *startup.ClockSynchronizer) {
 		cs := startup.NewClockSynchronizer()
 		ctx, cancel := context.WithCancel(ctx)
 		s := &Service{
@@ -323,86 +318,80 @@ func TestService_waitForStateInitialization(t *testing.T) {
 	}
 
 	t.Run("no state and context close", func(t *testing.T) {
-		defer hook.Reset()
-		ctx, cancel := context.WithCancel(t.Context())
-		defer cancel()
+		synctest.Test(t, func(t *testing.T) {
+			defer hook.Reset()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
 
-		s, _ := newService(ctx, &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}})
-		s.blobRetentionChecker = func(primitives.Slot) bool { return true }
-		wg := &sync.WaitGroup{}
-		wg.Go(func() {
-			s.Start()
-		})
-		go func() {
-			time.AfterFunc(500*time.Millisecond, func() {
-				cancel()
+			s, _ := newService(t, ctx, &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}})
+			s.blobRetentionChecker = func(primitives.Slot) bool { return true }
+			wg := &sync.WaitGroup{}
+			wg.Go(func() {
+				s.Start()
 			})
-		}()
+			time.AfterFunc(500*time.Millisecond, cancel)
 
-		if util.WaitTimeout(wg, time.Second*2) {
-			t.Fatalf("Test should have exited by now, timed out")
-		}
-		assert.LogsContain(t, hook, "Waiting for state to be initialized")
-		assert.LogsContain(t, hook, "Initial-sync failed to receive startup event")
-		assert.LogsDoNotContain(t, hook, "Subscription to state notifier failed")
+			wg.Wait()
+			assert.LogsContain(t, hook, "Waiting for state to be initialized")
+			assert.LogsContain(t, hook, "Initial-sync failed to receive startup event")
+			assert.LogsDoNotContain(t, hook, "Subscription to state notifier failed")
+		})
 	})
 
 	t.Run("no state and state init event received", func(t *testing.T) {
-		defer hook.Reset()
-		ctx, cancel := context.WithCancel(t.Context())
-		defer cancel()
+		synctest.Test(t, func(t *testing.T) {
+			defer hook.Reset()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
 
-		st, err := util.NewBeaconState()
-		require.NoError(t, err)
-		gt := st.GenesisTime()
-		s, gs := newService(ctx, &mock.ChainService{State: st, Genesis: gt, ValidatorsRoot: [32]byte{}})
-		s.blobRetentionChecker = func(primitives.Slot) bool { return true }
+			st, err := util.NewBeaconState()
+			require.NoError(t, err)
+			gt := st.GenesisTime()
+			s, gs := newService(t, ctx, &mock.ChainService{State: st, Genesis: gt, ValidatorsRoot: [32]byte{}})
+			s.blobRetentionChecker = func(primitives.Slot) bool { return true }
 
-		expectedGenesisTime := gt
-		wg := &sync.WaitGroup{}
-		wg.Go(func() {
-			s.Start()
-		})
-		rg := func() time.Time { return gt.Add(time.Second * 12) }
-		go func() {
+			expectedGenesisTime := gt
+			wg := &sync.WaitGroup{}
+			wg.Go(func() {
+				s.Start()
+			})
+			rg := func() time.Time { return gt.Add(time.Second * 12) }
 			time.AfterFunc(200*time.Millisecond, func() {
 				var vr [32]byte
 				require.NoError(t, gs.SetClock(startup.NewClock(expectedGenesisTime, vr, startup.WithNower(rg))))
 			})
-		}()
 
-		if util.WaitTimeout(wg, time.Second*2) {
-			t.Fatalf("Test should have exited by now, timed out")
-		}
-		assert.LogsContain(t, hook, "Waiting for state to be initialized")
-		assert.LogsContain(t, hook, "Received state initialized event")
-		assert.LogsDoNotContain(t, hook, "Context closed, exiting goroutine")
+			wg.Wait()
+			assert.LogsContain(t, hook, "Waiting for state to be initialized")
+			assert.LogsContain(t, hook, "Received state initialized event")
+			assert.LogsDoNotContain(t, hook, "Context closed, exiting goroutine")
+		})
 	})
 
 	t.Run("no state and state init event received and service start", func(t *testing.T) {
-		defer hook.Reset()
-		ctx, cancel := context.WithCancel(t.Context())
-		defer cancel()
-		s, gs := newService(ctx, &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}})
-		// Initialize mock feed
-		_ = s.cfg.StateNotifier.StateFeed()
+		synctest.Test(t, func(t *testing.T) {
+			defer hook.Reset()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			s, gs := newService(t, ctx, &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}})
+			// Initialize mock feed
+			_ = s.cfg.StateNotifier.StateFeed()
 
-		expectedGenesisTime := time.Now().Add(60 * time.Second)
-		wg := &sync.WaitGroup{}
-		wg.Go(func() {
+			expectedGenesisTime := time.Now().Add(60 * time.Second)
+			wg := &sync.WaitGroup{}
 			time.AfterFunc(500*time.Millisecond, func() {
 				var vr [32]byte
 				require.NoError(t, gs.SetClock(startup.NewClock(expectedGenesisTime, vr)))
 			})
-			s.Start()
-		})
+			wg.Go(func() {
+				s.Start()
+			})
 
-		if util.WaitTimeout(wg, time.Second*5) {
-			t.Fatalf("Test should have exited by now, timed out")
-		}
-		assert.LogsContain(t, hook, "Waiting for state to be initialized")
-		assert.LogsContain(t, hook, "Received state initialized event")
-		assert.LogsDoNotContain(t, hook, "Context closed, exiting goroutine")
+			wg.Wait()
+			assert.LogsContain(t, hook, "Waiting for state to be initialized")
+			assert.LogsContain(t, hook, "Received state initialized event")
+			assert.LogsDoNotContain(t, hook, "Context closed, exiting goroutine")
+		})
 	})
 }
 
