@@ -92,6 +92,18 @@ func TestSubmitPayloadAttestation(t *testing.T) {
 		Signature: testhelpers.FillByteSlice(96, 0x22),
 	}
 
+	validBody, err := json.Marshal([]*structs.PayloadAttestationMessage{{
+		ValidatorIndex: "7",
+		Data: &structs.PayloadAttestationData{
+			BeaconBlockRoot:   hexutil.Encode(testhelpers.FillByteSlice(32, 0x11)),
+			Slot:              "99",
+			PayloadPresent:    true,
+			BlobDataAvailable: true,
+		},
+		Signature: hexutil.Encode(testhelpers.FillByteSlice(96, 0x22)),
+	}})
+	require.NoError(t, err)
+
 	tests := []struct {
 		name          string
 		msg           *ethpb.PayloadAttestationMessage
@@ -113,10 +125,7 @@ func TestSubmitPayloadAttestation(t *testing.T) {
 
 			var body []byte
 			if tt.msg != nil && tt.msg.Data != nil {
-				jsonMsg := structs.PayloadAttestationMessageFromConsensus(tt.msg)
-				b, err := json.Marshal([]*structs.PayloadAttestationMessage{jsonMsg})
-				require.NoError(t, err)
-				body = b
+				body = validBody
 			}
 
 			headers := map[string]string{api.VersionHeader: version.String(version.Gloas)}
