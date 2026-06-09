@@ -312,7 +312,7 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 		incomingRPC: incomingPartialRPC{rpc, from, message},
 	})
 	if !ok {
-		p.logger.Warn("Dropping incoming partial RPC", "rpc", rpc)
+		p.logger.WithField("rpc", rpc).Warn("Dropping incoming partial RPC")
 		return errors.New("incomingReq channel is full, dropping RPC")
 	}
 	peerStates[from] = nextPeerState
@@ -742,29 +742,35 @@ func (p *PartialColumnBroadcaster) handlePartialCells(ourDataColumn *blocks.Part
 		partialMessageCellsReceivedTotal.WithLabelValues(columnIndexStr).Add(float64(len(cellIndices)))
 	}
 	if len(cellsToVerify) > 0 {
-		p.concurrentValidatorSemaphore <- struct{}{}
-		go func() {
-			defer func() {
-				<-p.concurrentValidatorSemaphore
+		select {
+		case p.concurrentValidatorSemaphore <- struct{}{}:
+			go func() {
+				defer func() {
+					<-p.concurrentValidatorSemaphore
+				}()
+				start := time.Now()
+				err := p.callbacks.ValidateColumn(cellsToVerify)
+				if err != nil {
+					p.logger.WithError(err).WithFields(rpc.logFields()).Error("Failed to validate cells")
+					_ = p.peerFeedback(topicId, rpc.from, pubsub.PeerFeedbackInvalidMessage)
+					return
+				}
+				_ = p.peerFeedback(topicId, rpc.from, pubsub.PeerFeedbackUsefulMessage)
+				_, _ = p.enqueue(p.ctx, requestKindCellsValidated, requestValues{
+					cellsValidated: &cellsValidated{
+						validationTook: time.Since(start),
+						topic:          topicId,
+						group:          ourDataColumn.GroupID(),
+						cells:          cellsToVerify,
+						cellIndices:    cellIndices,
+					},
+				})
 			}()
-			start := time.Now()
-			err := p.callbacks.ValidateColumn(cellsToVerify)
-			if err != nil {
-				p.logger.WithError(err).WithFields(rpc.logFields()).Error("Failed to validate cells")
-				_ = p.peerFeedback(topicId, rpc.from, pubsub.PeerFeedbackInvalidMessage)
-				return
-			}
-			_ = p.peerFeedback(topicId, rpc.from, pubsub.PeerFeedbackUsefulMessage)
-			_, _ = p.enqueue(p.ctx, requestKindCellsValidated, requestValues{
-				cellsValidated: &cellsValidated{
-					validationTook: time.Since(start),
-					topic:          topicId,
-					group:          ourDataColumn.GroupID(),
-					cells:          cellsToVerify,
-					cellIndices:    cellIndices,
-				},
-			})
-		}()
+		default:
+			columnIndexStr := strconv.FormatUint(ourDataColumn.Index, 10)
+			partialMessageValidationsDroppedTotal.WithLabelValues(columnIndexStr).Add(float64(len(cellsToVerify)))
+			p.logger.WithFields(rpc.logFields()).Warn("Validator semaphore saturated, dropping cell validation")
+		}
 	}
 	return nil
 }

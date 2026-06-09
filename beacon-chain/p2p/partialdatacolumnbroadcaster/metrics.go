@@ -15,4 +15,9 @@ var (
 		Name: "beacon_partial_message_cells_received_total",
 		Help: "Number of total cells received via a partial message",
 	}, []string{"column_index"})
+
+	partialMessageValidationsDroppedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "beacon_partial_message_validations_dropped_total",
+		Help: "Number of cell validations dropped because the validator semaphore was saturated",
+	}, []string{"column_index"})
 )

@@ -1030,6 +1030,57 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 	}
 }
 
+// Regression test for the validator-semaphore deadlock: when every validator slot is in
+// flight, handlePartialCells must shed the work rather than block the loop goroutine on the
+// semaphore send (a blocking send there deadlocks with the validators that report results
+// back via the blocking enqueue). It must also still fall through to republishColumn.
+func TestPartialColumnBroadcaster_handleIncomingRPC_dropsValidationWhenSaturated(t *testing.T) {
+	const validTopic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	ps := newMockPubSub(nil, nil)
+	recorder := newCallbackRecorder(8, false, nil, nil)
+	h := newBroadcasterHarness(t, ps)
+	h.broadcaster.callbacks = recorder
+	h.broadcaster.topics[validTopic] = nil
+
+	// Existing, already-published column so republish can fire.
+	existing := createPartialColumn(t, 3, map[uint64][]byte{0: {0x11}})
+	group := existing.GroupID()
+	h.broadcaster.partialMsgStore[validTopic] = map[string]*verification.PartialColumnVerifier{
+		string(group): newMarkedVerifier(existing),
+	}
+	h.broadcaster.partialMsgStore[validTopic][string(group)].Column.Published = true
+
+	// Incoming message carries a new cell (so cellsToVerify is non-empty) and differing parts
+	// metadata (so republish should fire even though we drop the validation).
+	msg := buildSidecarWithCells(3, map[uint64][]byte{1: {0x22}})
+	rpc := buildIncomingRPC(validTopic, group, msg, []byte{0x01, 0x02})
+
+	// Saturate the validator semaphore so the acquire must take the default (drop) path.
+	for range cap(h.broadcaster.concurrentValidatorSemaphore) {
+		h.broadcaster.concurrentValidatorSemaphore <- struct{}{}
+	}
+
+	// Must not block: a blocking send on the saturated semaphore would deadlock the loop.
+	done := make(chan error, 1)
+	go func() { done <- h.broadcaster.handleIncomingRPC(rpc) }()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("handleIncomingRPC blocked on a saturated validator semaphore (deadlock regression)")
+	}
+
+	// Validation was shed, not run, and no cellsValidated result was enqueued.
+	require.Equal(t, 0, len(recorder.validateColumnCallCh))
+	require.Equal(t, 0, len(h.broadcaster.incomingReq))
+
+	// Crucially, we still fell through to republish (unlike returning an error, which skips it).
+	ps.assertPartialColumnsPublished(t, validTopic, []*blocks.PartialDataColumn{
+		h.broadcaster.getDataColumn(validTopic, group),
+	})
+}
+
 func TestPartialColumnBroadcaster_handleIncomingRPC_ignoresUnsubscribedTopic(t *testing.T) {
 	ps := newMockPubSub(nil, nil)
 	recorder := newCallbackRecorder(8, false, nil, nil)
