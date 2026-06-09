@@ -92,6 +92,26 @@ func TestRetrieveForkDataFromDigest(t *testing.T) {
 	require.Equal(t, params.BeaconConfig().AltairForkEpoch, epoch)
 }
 
+func TestBatchAttestationForkEpochDoesNotChangeForkDigest(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.MainnetConfig()
+	cfg.BatchAttestationForkEpoch = cfg.FuluForkEpoch + 1
+	params.OverrideBeaconConfig(cfg)
+
+	preBatchDigest := params.ForkDigest(cfg.BatchAttestationForkEpoch - 1)
+	batchDigest := params.ForkDigest(cfg.BatchAttestationForkEpoch)
+	require.Equal(t, preBatchDigest, batchDigest)
+
+	forkVersion, forkEpoch, err := params.ForkDataFromDigest(batchDigest)
+	require.NoError(t, err)
+	require.Equal(t, [4]byte(cfg.FuluForkVersion), forkVersion)
+	require.Equal(t, cfg.FuluForkEpoch, forkEpoch)
+
+	fork, err := params.Fork(cfg.BatchAttestationForkEpoch)
+	require.NoError(t, err)
+	require.DeepEqual(t, cfg.FuluForkVersion, fork.CurrentVersion)
+}
+
 func TestNextForkData(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.BeaconConfig().InitializeForkSchedule()

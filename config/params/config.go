@@ -388,8 +388,7 @@ type NetworkScheduleEntry struct {
 	isFork           bool                            `yaml:"-" json:"-"`
 	// isStateFork is true for forks that update state.fork.current_version
 	// (i.e. require a process_fork-style state transition). Gossip-only
-	// forks like EIP-8243's BatchAttestation set this to false: they
-	// contribute a new fork digest for topic isolation but must NOT
+	// network schedule entries can set this to false: they must NOT
 	// participate in signing-domain fork-version selection.
 	isStateFork bool `yaml:"-" json:"-"`
 }
@@ -650,11 +649,6 @@ func initForkSchedule(b *BeaconChainConfig) *NetworkSchedule {
 		{Epoch: b.ElectraForkEpoch, isFork: true, isStateFork: true, ForkVersion: to4(b.ElectraForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlockElectra), VersionEnum: version.Electra},
 		{Epoch: b.FuluForkEpoch, isFork: true, isStateFork: true, ForkVersion: to4(b.FuluForkVersion), VersionEnum: version.Fulu},
 		{Epoch: b.GloasForkEpoch, isFork: true, isStateFork: true, ForkVersion: to4(b.GloasForkVersion), VersionEnum: version.Gloas},
-		// EIP-8243: gossip-only fork. Contributes a new fork digest for
-		// topic isolation but must not enter signing-domain fork-version
-		// selection: state.fork.current_version stays at GloasForkVersion
-		// post-fork, so ForkFromConfig must match that.
-		{Epoch: b.BatchAttestationForkEpoch, isFork: true, isStateFork: false, ForkVersion: to4(b.BatchAttestationForkVersion), VersionEnum: version.BatchAttestation},
 	})
 }
 
@@ -697,14 +691,14 @@ func configForkNames(b *BeaconChainConfig) map[[fieldparams.VersionLength]byte]s
 // from the runtime/version package.
 func ConfigForkVersions(b *BeaconChainConfig) map[[fieldparams.VersionLength]byte]int {
 	return map[[fieldparams.VersionLength]byte]int{
-		bytesutil.ToBytes4(b.GenesisForkVersion):         version.Phase0,
-		bytesutil.ToBytes4(b.AltairForkVersion):          version.Altair,
-		bytesutil.ToBytes4(b.BellatrixForkVersion):       version.Bellatrix,
-		bytesutil.ToBytes4(b.CapellaForkVersion):         version.Capella,
-		bytesutil.ToBytes4(b.DenebForkVersion):           version.Deneb,
-		bytesutil.ToBytes4(b.ElectraForkVersion):         version.Electra,
-		bytesutil.ToBytes4(b.FuluForkVersion):            version.Fulu,
-		bytesutil.ToBytes4(b.GloasForkVersion):           version.Gloas,
+		bytesutil.ToBytes4(b.GenesisForkVersion):          version.Phase0,
+		bytesutil.ToBytes4(b.AltairForkVersion):           version.Altair,
+		bytesutil.ToBytes4(b.BellatrixForkVersion):        version.Bellatrix,
+		bytesutil.ToBytes4(b.CapellaForkVersion):          version.Capella,
+		bytesutil.ToBytes4(b.DenebForkVersion):            version.Deneb,
+		bytesutil.ToBytes4(b.ElectraForkVersion):          version.Electra,
+		bytesutil.ToBytes4(b.FuluForkVersion):             version.Fulu,
+		bytesutil.ToBytes4(b.GloasForkVersion):            version.Gloas,
 		bytesutil.ToBytes4(b.BatchAttestationForkVersion): version.BatchAttestation,
 	}
 }

@@ -83,7 +83,7 @@ func extractValidDataTypeFromTopic(topic string, digest []byte, clock *startup.C
 	case p2p.BlockSubnetTopicFormat:
 		return extractDataTypeFromTypeMap(types.BlockMap, digest, clock)
 	case p2p.AttestationSubnetTopicFormat:
-		return extractDataTypeFromTypeMap(types.AttestationMap, digest, clock)
+		return extractAttestationDataTypeFromTopic(digest, clock)
 	case p2p.AggregateAndProofSubnetTopicFormat:
 		return extractDataTypeFromTypeMap(types.AggregateAttestationMap, digest, clock)
 	case p2p.AttesterSlashingSubnetTopicFormat:
@@ -96,6 +96,17 @@ func extractValidDataTypeFromTopic(topic string, digest []byte, clock *startup.C
 		return extractDataTypeFromTypeMap(types.DataColumnSidecarMap, digest, clock)
 	}
 	return nil, nil
+}
+
+func extractAttestationDataTypeFromTopic(digest []byte, clock *startup.Clock) (ethpb.Att, error) {
+	att, err := extractDataTypeFromTypeMap(types.AttestationMap, digest, clock)
+	if err != nil {
+		return nil, err
+	}
+	if clock != nil && clock.CurrentEpoch() >= params.BeaconConfig().BatchAttestationForkEpoch {
+		return &ethpb.WireAttestation{}, nil
+	}
+	return att, nil
 }
 
 func extractDataTypeFromTypeMap[T any](typeMap map[[4]byte]func() (T, error), digest []byte, tor blockchain.TemporalOracle) (T, error) {

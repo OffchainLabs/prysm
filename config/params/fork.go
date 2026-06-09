@@ -37,9 +37,8 @@ func Fork(epoch primitives.Epoch) (*ethpb.Fork, error) {
 }
 
 func ForkFromConfig(cfg *BeaconChainConfig, epoch primitives.Epoch) *ethpb.Fork {
-	// Walk only state-transition forks, so gossip-only forks like
-	// EIP-8243's BatchAttestation do not enter signing-domain fork-version
-	// selection.
+	// Walk only state-transition forks, so gossip-only schedule entries do
+	// not enter signing-domain fork-version selection.
 	current := cfg.networkSchedule.stateForkAtEpoch(epoch)
 	previous := current
 	if current.Epoch > 0 {

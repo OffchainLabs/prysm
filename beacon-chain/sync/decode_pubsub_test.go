@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/wrapper"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -302,6 +303,34 @@ func TestExtractDataType(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExtractAttestationDataTypeFromTopicUsesWireAtBatchEpoch(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.MainnetConfig()
+	cfg.BatchAttestationForkEpoch = cfg.FuluForkEpoch + 1
+	params.OverrideBeaconConfig(cfg)
+
+	digest := params.ForkDigest(cfg.BatchAttestationForkEpoch)
+	genesis := time.Now()
+	preBatchClock := startup.NewClock(
+		genesis,
+		[32]byte{},
+		startup.WithSlotAsNow(primitives.Slot(cfg.BatchAttestationForkEpoch-1)*cfg.SlotsPerEpoch),
+	)
+	batchClock := startup.NewClock(
+		genesis,
+		[32]byte{},
+		startup.WithSlotAsNow(primitives.Slot(cfg.BatchAttestationForkEpoch)*cfg.SlotsPerEpoch),
+	)
+
+	preBatch, err := extractAttestationDataTypeFromTopic(digest[:], preBatchClock)
+	require.NoError(t, err)
+	require.Equal(t, reflect.TypeFor[*ethpb.SingleAttestation](), reflect.TypeOf(preBatch))
+
+	postBatch, err := extractAttestationDataTypeFromTopic(digest[:], batchClock)
+	require.NoError(t, err)
+	require.Equal(t, reflect.TypeFor[*ethpb.WireAttestation](), reflect.TypeOf(postBatch))
 }
 
 func TestExtractDataTypeFromTypeMapInvalid(t *testing.T) {
