@@ -159,7 +159,7 @@ type GraffitiConfig struct {
 }
 
 // Option is a Prysm internal representation of the ProposerOptionPayload on the validator client in bytes format instead of hex.
-// GasLimit is the v2 home for the gas-limit signal (default_config only).
+// GasLimit is the v2 home for the gas-limit signal, per-pubkey or in default_config.
 type Option struct {
 	FeeRecipientConfig *FeeRecipientConfig
 	BuilderConfig      *BuilderConfig
@@ -299,8 +299,8 @@ func (ps *Settings) UpgradeToV2() bool {
 	return true
 }
 
-// GasLimit returns the configured gas limit (gwei) for pubkey, or the chain
-// default if no override is configured. v2 ignores the pubkey.
+// GasLimit returns the gas limit (gwei) for pubkey: the per-pubkey override,
+// else the default config value, else the chain default.
 func (ps *Settings) GasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) validator.Uint64 {
 	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
 	if ps == nil {
@@ -324,8 +324,8 @@ func (ps *Settings) GasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) validator
 	return chainDefault
 }
 
-// SetGasLimit writes the gas limit. v2 writes DefaultConfig.GasLimit and
-// ignores the pubkey; v1 requires existing settings with builder enabled.
+// SetGasLimit writes the per-pubkey gas limit. v1 requires existing settings
+// with builder enabled.
 func (ps *Settings) SetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, gasLimit validator.Uint64) error {
 	if ps == nil {
 		return errors.New("No proposer settings were found to update")
@@ -371,9 +371,8 @@ func (ps *Settings) SetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, gasLim
 	return nil
 }
 
-// ResetGasLimit resets the gas limit to the chain default. v2 resets
-// DefaultConfig.GasLimit; v1 resets the per-validator BuilderConfig.GasLimit.
-// Returns false when there's nothing to reset.
+// ResetGasLimit reverts pubkey's gas limit to the configured default (or chain
+// default). Returns false when there's nothing to reset.
 func (ps *Settings) ResetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) bool {
 	if ps == nil {
 		return false
