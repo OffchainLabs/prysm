@@ -2,9 +2,12 @@ package enginehttp
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"slices"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
@@ -57,11 +60,46 @@ func TestGetBlobs(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// capabilitiesBody mirrors docs/fixtures/ethrex-capabilities.json.
+const capabilitiesBody = `{
+  "supported_forks": ["paris","shanghai","cancun","prague","osaka","amsterdam"],
+  "fork_scoped_endpoints": ["payloads","forkchoice","bodies"],
+  "independently_versioned": {"blobs": ["v1","v2","v3","v4"]},
+  "unscoped_endpoints": ["capabilities","identity"],
+  "limits": {"blobs.max_versioned_hashes": 128, "bodies.max_count": 32, "payload.max_bytes": 268435456}
+}`
+
 func TestCapabilities(t *testing.T) {
-	t.Skip("TODO(ssz-over-http): implement Client.Capabilities — GET /engine/v2/capabilities (JSON; 404 -> JSON-RPC fallback)")
-	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {})
-	_, err := c.Capabilities(context.Background())
+	var gotPath, gotAccept string
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotAccept = r.Header.Get("Accept")
+		w.Header().Set("Content-Type", contentTypeJSON)
+		_, _ = w.Write([]byte(capabilitiesBody))
+	})
+
+	caps, err := c.Capabilities(context.Background())
 	require.NoError(t, err)
+	require.NotNil(t, caps)
+	assert.Equal(t, "/engine/v2/capabilities", gotPath)
+	assert.Equal(t, contentTypeJSON, gotAccept)
+	assert.Equal(t, true, slices.Contains(caps.SupportedForks, "amsterdam"))
+	assert.Equal(t, uint64(268435456), caps.Limits["payload.max_bytes"])
+	require.Equal(t, 4, len(caps.IndependentlyVersioned["blobs"]))
+}
+
+// A 404 surfaces as an *Error; the connection-setup probe maps this to a
+// JSON-RPC fallback (the EL has no engine v2 surface).
+func TestCapabilities_NotFound(t *testing.T) {
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+
+	_, err := c.Capabilities(context.Background())
+	require.NotNil(t, err)
+	var apiErr *Error
+	require.Equal(t, true, errors.As(err, &apiErr))
+	assert.Equal(t, http.StatusNotFound, apiErr.Status)
 }
 
 func TestIdentity(t *testing.T) {

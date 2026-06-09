@@ -93,24 +93,26 @@ func (c *Client) GetBlobs(ctx context.Context, version int, req ssz.Marshaler, o
 	return errNotImplemented("GetBlobs")
 }
 
-// Capabilities is the JSON body of GET /engine/v2/capabilities.
-//
-// TODO(ssz-over-http): complete the schema from the spec/fixtures (e.g.
-// supported_methods, limits.*); see docs/fixtures/*-capabilities.json.
+// Capabilities is the JSON body of GET /engine/v2/capabilities. Field shape
+// matches the EL ground truth in docs/fixtures/*-capabilities.json.
 type Capabilities struct {
-	SupportedForks []string         `json:"supported_forks"`
-	Limits         map[string]int64 `json:"limits"`
+	SupportedForks         []string            `json:"supported_forks"`
+	ForkScopedEndpoints    []string            `json:"fork_scoped_endpoints"`
+	IndependentlyVersioned map[string][]string `json:"independently_versioned"`
+	UnscopedEndpoints      []string            `json:"unscoped_endpoints"`
+	Limits                 map[string]uint64   `json:"limits"`
 }
 
 // Capabilities probes the EL's v2 capabilities (replaces
-// engine_exchangeCapabilities). A 404 means the EL has no v2 surface and the
-// caller should fall back to JSON-RPC for the connection's lifetime.
-// GET /engine/v2/capabilities (JSON).
-//
-// TODO(ssz-over-http): JSONGet into Capabilities; surface limits.* and detect
-// 404 -> fallback at the call site.
+// engine_exchangeCapabilities). GET /engine/v2/capabilities (JSON). A 404
+// (returned as an *Error) means the EL has no v2 surface and the caller should
+// fall back to JSON-RPC for the connection's lifetime.
 func (c *Client) Capabilities(ctx context.Context) (*Capabilities, error) {
-	return nil, errNotImplemented("Capabilities")
+	var caps Capabilities
+	if err := c.JSONGet(ctx, "/capabilities", &caps); err != nil {
+		return nil, err
+	}
+	return &caps, nil
 }
 
 // Identity is the JSON body of GET /engine/v2/identity.
