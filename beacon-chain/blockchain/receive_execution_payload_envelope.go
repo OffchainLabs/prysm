@@ -154,8 +154,7 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		if err != nil || headBlock == nil || headBlock.IsNil() {
 			log.WithError(err).Error("Could not get head block for head_v2 payload update event")
 		} else if err := s.notifyNewHeadV2Event(
-			ctx, headBlock.Block().Slot(), headBlock.Block().StateRoot(), root,
-			true /* payload status is full */, headBlock.Version(),
+			ctx, headBlock.Block().Slot(), headBlock.Block().StateRoot(), root, headBlock.Version(),
 		); err != nil {
 			log.WithError(err).Error("Could not notify event feed of head_v2 payload update")
 		}

@@ -322,7 +322,7 @@ func Test_notifyNewHeadV2Event(t *testing.T) {
 
 	t.Run("dependent roots fall back to genesis block root on underflow", func(t *testing.T) {
 		srv, events, newHeadStateRoot, newHeadRoot := setupHeadV2Service(t, 1)
-		require.NoError(t, srv.notifyNewHeadV2Event(t.Context(), 1, newHeadStateRoot, newHeadRoot, true, version.Gloas))
+		require.NoError(t, srv.notifyNewHeadV2Event(t.Context(), 1, newHeadStateRoot, newHeadRoot, version.Gloas))
 		wantedV2 := &statefeed.HeadV2Data{
 			Slot:                      1,
 			Block:                     newHeadRoot,
@@ -338,7 +338,7 @@ func Test_notifyNewHeadV2Event(t *testing.T) {
 
 	t.Run("pre-gloas always reports a full payload status", func(t *testing.T) {
 		srv, events, newHeadStateRoot, newHeadRoot := setupHeadV2Service(t, 1)
-		require.NoError(t, srv.notifyNewHeadV2Event(t.Context(), 1, newHeadStateRoot, newHeadRoot, false, version.Deneb))
+		require.NoError(t, srv.notifyNewHeadV2Event(t.Context(), 1, newHeadStateRoot, newHeadRoot, version.Deneb))
 		wantedV2 := &statefeed.HeadV2Data{
 			Slot:                      1,
 			Block:                     newHeadRoot,
@@ -352,25 +352,9 @@ func Test_notifyNewHeadV2Event(t *testing.T) {
 		require.DeepEqual(t, wantedV2, requireSingleHeadV2(t, events))
 	})
 
-	t.Run("gloas head with undelivered payload reports empty", func(t *testing.T) {
-		srv, events, newHeadStateRoot, newHeadRoot := setupHeadV2Service(t, 1)
-		require.NoError(t, srv.notifyNewHeadV2Event(t.Context(), 1, newHeadStateRoot, newHeadRoot, false, version.Gloas))
-		wantedV2 := &statefeed.HeadV2Data{
-			Slot:                      1,
-			Block:                     newHeadRoot,
-			State:                     newHeadStateRoot,
-			EpochTransition:           false,
-			CurrentEpochDependentRoot: srv.originBlockRoot,
-			NextEpochDependentRoot:    srv.originBlockRoot,
-			PayloadStatus:             statefeed.PayloadStatusEmpty,
-			Version:                   version.Gloas,
-		}
-		require.DeepEqual(t, wantedV2, requireSingleHeadV2(t, events))
-	})
-
 	t.Run("gloas head with delivered payload reports full", func(t *testing.T) {
 		srv, events, newHeadStateRoot, newHeadRoot := setupHeadV2Service(t, 1)
-		require.NoError(t, srv.notifyNewHeadV2Event(t.Context(), 1, newHeadStateRoot, newHeadRoot, true, version.Gloas))
+		require.NoError(t, srv.notifyNewHeadV2Event(t.Context(), 1, newHeadStateRoot, newHeadRoot, version.Gloas))
 		require.Equal(t, "full", requireSingleHeadV2(t, events).PayloadStatus.String())
 	})
 
@@ -387,14 +371,14 @@ func Test_notifyNewHeadV2Event(t *testing.T) {
 			slot:       1,
 			optimistic: true,
 		}
-		require.NoError(t, srv.notifyNewHeadV2Event(t.Context(), 1, newHeadStateRoot, newHeadRoot, true, version.Gloas))
+		require.NoError(t, srv.notifyNewHeadV2Event(t.Context(), 1, newHeadStateRoot, newHeadRoot, version.Gloas))
 		require.Equal(t, false, requireSingleHeadV2(t, events).ExecutionOptimistic)
 	})
 
 	t.Run("epoch transition is reported when the head crosses an epoch boundary", func(t *testing.T) {
 		newHeadSlot := params.BeaconConfig().SlotsPerEpoch
 		srv, events, newHeadStateRoot, newHeadRoot := setupHeadV2Service(t, newHeadSlot)
-		require.NoError(t, srv.notifyNewHeadV2Event(t.Context(), newHeadSlot, newHeadStateRoot, newHeadRoot, true, version.Gloas))
+		require.NoError(t, srv.notifyNewHeadV2Event(t.Context(), newHeadSlot, newHeadStateRoot, newHeadRoot, version.Gloas))
 		require.Equal(t, true, requireSingleHeadV2(t, events).EpochTransition)
 	})
 }

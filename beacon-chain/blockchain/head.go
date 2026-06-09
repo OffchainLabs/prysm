@@ -178,7 +178,7 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 
 	}()
 	go func() {
-		if err := s.notifyNewHeadV2Event(ctx, newHeadSlot, newStateRoot, newHeadRoot, full, headBlock.Version()); err != nil {
+		if err := s.notifyNewHeadV2Event(ctx, newHeadSlot, newStateRoot, newHeadRoot, headBlock.Version()); err != nil {
 			log.WithError(err).Error("Could not notify event feed of new chain head_v2")
 		}
 	}()
@@ -373,7 +373,6 @@ func (s *Service) notifyNewHeadV2Event(
 	ctx context.Context,
 	newHeadSlot primitives.Slot,
 	newHeadStateRoot, newHeadRoot [32]byte,
-	full bool,
 	headVersion int,
 ) error {
 	currEpoch := slots.ToEpoch(newHeadSlot)
@@ -396,7 +395,7 @@ func (s *Service) notifyNewHeadV2Event(
 	// AND the execution payload has not been delivered for the head.
 	var payloadStatus statefeed.PayloadStatus
 	payloadStatus = statefeed.PayloadStatusFull
-	if headVersion >= version.Gloas && !full {
+	if headVersion >= version.Gloas && !s.HasFullNode(newHeadRoot) {
 		payloadStatus = statefeed.PayloadStatusEmpty
 	}
 
