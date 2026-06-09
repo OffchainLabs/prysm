@@ -220,11 +220,6 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			return nil, errors.Wrap(err, "proposer index")
 		}
 
-		digest, err := s.currentForkDigest()
-		if err != nil {
-			return nil, err
-		}
-
 		log := log.WithFields(logrus.Fields{
 			"root":          fmt.Sprintf("%#x", source.Root()),
 			"slot":          source.Slot(),
@@ -265,6 +260,10 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			count := len(partialColumns)
 
 			if isPartialEnabled && count > 0 {
+				digest, err := s.currentForkDigest()
+				if err != nil {
+					return nil, errors.Wrap(err, "current fork digest")
+				}
 				log.WithField("count", count).Debug("Publishing partial columns")
 				// Publish the partial column. This is idempotent if we republish the same data twice.
 				// Note, the "partial column" may indeed be complete. We still
