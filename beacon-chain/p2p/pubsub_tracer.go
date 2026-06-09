@@ -165,6 +165,8 @@ func (g *gossipTracer) RecvRPC(rpc *pubsub.RPC) {
 				delete(g.partialMessagePeers, topic)
 			}
 		}
+
+		g.updateMeshPeersMetric(topic)
 	}
 }
 
@@ -208,10 +210,8 @@ func (g *gossipTracer) updateMeshPeersMetric(topic string) {
 	if !ok {
 		return
 	}
-	partialPeers, ok := g.partialMessagePeers[topic]
-	if !ok {
-		return
-	}
+	// It's okay even if this map is nil as we're not writing to it.
+	partialPeers := g.partialMessagePeers[topic]
 
 	var supportsPartial, doesNotSupportPartial float64
 	for p := range meshPeers {
