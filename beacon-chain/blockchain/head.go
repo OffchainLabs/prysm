@@ -379,7 +379,7 @@ func (s *Service) notifyNewHeadV2Event(
 		return err
 	}
 
-	isOptimistic, err := s.IsOptimistic(ctx)
+	isOptimistic, err := s.IsOptimisticForRoot(ctx, newHeadRoot)
 	if err != nil {
 		return errors.Wrap(err, "could not check if node is optimistically synced")
 	}

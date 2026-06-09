@@ -290,6 +290,7 @@ func Test_notifyNewHeadV2Event(t *testing.T) {
 		st, blk, err = prepareForkchoiceState(t.Context(), headSlot, newHeadRoot, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
 		require.NoError(t, err)
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
+		require.NoError(t, srv.cfg.ForkChoiceStore.SetOptimisticToValid(t.Context(), newHeadRoot))
 		events := make(chan *feed.Event, 10)
 		srv.cfg.StateNotifier.StateFeed().Subscribe(events)
 		return srv, events, newHeadStateRoot, newHeadRoot
@@ -371,6 +372,23 @@ func Test_notifyNewHeadV2Event(t *testing.T) {
 		srv, events, newHeadStateRoot, newHeadRoot := setupHeadV2Service(t, 1)
 		require.NoError(t, srv.notifyNewHeadV2Event(t.Context(), 1, newHeadStateRoot, newHeadRoot, true, version.Gloas))
 		require.Equal(t, "full", requireSingleHeadV2(t, events).PayloadStatus.String())
+	})
+
+	t.Run("optimistic status is scoped to the event root", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.BellatrixForkEpoch = 0
+		cfg.InitializeForkSchedule()
+		params.OverrideBeaconConfig(cfg)
+
+		srv, events, newHeadStateRoot, newHeadRoot := setupHeadV2Service(t, 1)
+		srv.head = &head{
+			root:       [32]byte{0x99},
+			slot:       1,
+			optimistic: true,
+		}
+		require.NoError(t, srv.notifyNewHeadV2Event(t.Context(), 1, newHeadStateRoot, newHeadRoot, true, version.Gloas))
+		require.Equal(t, false, requireSingleHeadV2(t, events).ExecutionOptimistic)
 	})
 
 	t.Run("epoch transition is reported when the head crosses an epoch boundary", func(t *testing.T) {
