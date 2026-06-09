@@ -250,7 +250,7 @@ func TestPayloadAttestationData(t *testing.T) {
 		assert.Equal(t, true, data.PayloadPresent)
 		assert.Equal(t, true, data.BlobDataAvailable)
 	})
-	t.Run("before PTC deadline → Unavailable", func(t *testing.T) {
+	t.Run("before PTC deadline and not final → Unavailable", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig().Copy()
 		cfg.GloasForkEpoch = 0
@@ -267,8 +267,33 @@ func TestPayloadAttestationData(t *testing.T) {
 		_, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 		require.NotNil(t, rpcErr)
 		assert.Equal(t, ErrorReason(Unavailable), rpcErr.Reason)
-		assert.ErrorContains(t, "PTC deadline not yet reached", rpcErr.Err)
+		assert.ErrorContains(t, "not yet final", rpcErr.Err)
 		assert.Equal(t, (*ethpb.PayloadAttestationData)(nil), s.payloadAttestationData.Load())
+	})
+	t.Run("before PTC deadline but final → returns data early", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(0)
+		root := bytesutil.PadTo([]byte{0xAA}, 32)
+		chain := &mockChain.ChainService{
+			Slot:               &slot,
+			Genesis:            time.Now(),
+			Root:               root,
+			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
+			MockCanonicalFull:  map[primitives.Slot]bool{slot: true},
+			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
+		}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+
+		data, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.IsNil(t, rpcErr)
+		assert.DeepEqual(t, root, data.BeaconBlockRoot)
+		assert.Equal(t, true, data.PayloadPresent)
+		assert.Equal(t, true, data.BlobDataAvailable)
+		require.NotNil(t, s.payloadAttestationData.Load())
 	})
 	t.Run("result is cached per slot and bypassed on slot change", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
