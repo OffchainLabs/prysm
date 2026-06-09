@@ -215,21 +215,21 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 			s.cfg.PayloadIDCache.Set(proposingSlot, root, pId)
 		}
 	}()
-  if requests := envelope.ExecutionRequests(); requests != nil && len(requests.Deposits) > 0 {
-				s.prefetchDepositSignatures(requests)
-  }
+	if requests := envelope.ExecutionRequests(); requests != nil && len(requests.Deposits) > 0 {
+		s.prefetchDepositSignatures(requests)
+	}
 	return nil
 }
 
 func (s *Service) prefetchDepositSignatures(requests *enginev1.ExecutionRequests) {
-	root, err := requests.HashTreeRoot()
-	if err != nil {
-		log.WithError(err).Debug("Could not hash execution requests for deposit sig prefetch")
-		return
-	}
 	invalidIdx, err := helpers.BatchVerifyDepositRequestSignatures(s.ctx, requests.Deposits)
 	if err != nil {
 		log.WithError(err).Debug("Could not batch verify deposit signatures for prefetch")
+		return
+	}
+	root, err := requests.HashTreeRoot()
+	if err != nil {
+		log.WithError(err).Debug("Could not hash execution requests for deposit sig prefetch")
 		return
 	}
 	cache.DepositSig.Put(root, invalidIdx)
