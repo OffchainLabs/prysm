@@ -132,6 +132,44 @@ func (v *validator) signProposerPreferences(
 	}, nil
 }
 
+// signRequestAuth signs a builder bid RequestAuthV1. Per the builder spec the
+// domain is fork-independent: compute_domain(DOMAIN_REQUEST_AUTH) with the
+// genesis fork version and a zero genesis validators root.
+func (v *validator) signRequestAuth(
+	ctx context.Context,
+	km keymanager.IKeymanager,
+	pubkey [fieldparams.BLSPubkeyLength]byte,
+	auth *ethpb.RequestAuthV1,
+) (*ethpb.SignedRequestAuthV1, error) {
+	ctx, span := trace.StartSpan(ctx, "validator.signRequestAuth")
+	defer span.End()
+
+	domain, err := signing.ComputeDomain(params.BeaconConfig().DomainRequestAuth, params.BeaconConfig().GenesisForkVersion, make([]byte, 32))
+	if err != nil {
+		return nil, errors.Wrap(err, "could not compute request auth domain")
+	}
+
+	r, err := signing.ComputeSigningRoot(auth, domain)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not compute signing root")
+	}
+
+	sig, err := km.Sign(ctx, &validatorpb.SignRequest{
+		PublicKey:       pubkey[:],
+		SigningRoot:     r[:],
+		SignatureDomain: domain,
+		Object:          &validatorpb.SignRequest_RequestAuth{RequestAuth: auth},
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "could not sign request auth")
+	}
+
+	return &ethpb.SignedRequestAuthV1{
+		Message:   auth,
+		Signature: sig.Marshal(),
+	}, nil
+}
+
 // SignValidatorRegistrationRequest compares and returns either the cached validator registration request or signs a new one.
 func (v *validator) SignValidatorRegistrationRequest(ctx context.Context, signer iface.SigningFunc, newValidatorRegistration *ethpb.ValidatorRegistrationV1) (*ethpb.SignedValidatorRegistrationV1, bool /* isCached */, error) {
 	signedReg, ok := v.signedValidatorRegistrations[bytesutil.ToBytes48(newValidatorRegistration.Pubkey)]

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/api/client/builder"
+	beaconbuilder "github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -39,10 +40,11 @@ type MockBuilderService struct {
 	RegistrationCache             *cache.RegistrationCache
 	ErrGetHeader                  error
 	ErrRegisterValidator          error
-	ErrSubmitBuilderPreferences   error
+	PayloadBid                    *ethpb.SignedExecutionPayloadBid
+	PayloadBids                   []beaconbuilder.PayloadBid
 	ErrGetExecutionPayloadBid     error
 	ErrSubmitSignedBeaconBlock    error
-	ExecutionPayloadBid           *ethpb.SignedExecutionPayloadBid
+	ErrSubmitBuilderPreferences   error
 	Cfg                           *Config
 }
 
@@ -126,17 +128,23 @@ func (s *MockBuilderService) SubmitBuilderPreferences(_ context.Context, _ [48]b
 	return s.ErrSubmitBuilderPreferences
 }
 
-// GetExecutionPayloadBid for mocking.
-func (s *MockBuilderService) GetExecutionPayloadBid(_ context.Context, _ primitives.Slot, _, _ [32]byte, _ [48]byte, _ []*ethpb.SignedRequestAuthV1) (*ethpb.SignedExecutionPayloadBid, error) {
-	return s.ExecutionPayloadBid, s.ErrGetExecutionPayloadBid
-}
-
-// SubmitSignedBeaconBlock for mocking.
-func (s *MockBuilderService) SubmitSignedBeaconBlock(_ context.Context, _ interfaces.ReadOnlySignedBeaconBlock) error {
-	return s.ErrSubmitSignedBeaconBlock
-}
-
 // SubmitBlindedBlockPostFulu for mocking.
 func (s *MockBuilderService) SubmitBlindedBlockPostFulu(_ context.Context, _ interfaces.ReadOnlySignedBeaconBlock) error {
 	return s.ErrSubmitBlindedBlockPostFulu
+}
+
+// GetExecutionPayloadBid for mocking.
+func (s *MockBuilderService) GetExecutionPayloadBid(_ context.Context, _ primitives.Slot, _, _ [32]byte, _ [48]byte, _ []*ethpb.SignedRequestAuthV1) ([]beaconbuilder.PayloadBid, error) {
+	if s.PayloadBids != nil {
+		return s.PayloadBids, s.ErrGetExecutionPayloadBid
+	}
+	if s.PayloadBid != nil {
+		return []beaconbuilder.PayloadBid{{Bid: s.PayloadBid}}, s.ErrGetExecutionPayloadBid
+	}
+	return nil, s.ErrGetExecutionPayloadBid
+}
+
+// SubmitSignedBeaconBlock for mocking.
+func (s *MockBuilderService) SubmitSignedBeaconBlock(_ context.Context, _ string, _ interfaces.ReadOnlySignedBeaconBlock) error {
+	return s.ErrSubmitSignedBeaconBlock
 }

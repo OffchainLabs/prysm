@@ -1123,14 +1123,6 @@ func (v *validator) buildProposerPreferences(
 	currentDuties := snap.currentDuties()
 	nextDuties := snap.nextDuties()
 
-	var currentProposerCount, nextProposerCount int
-	for _, d := range currentDuties {
-		currentProposerCount += len(d.ProposerSlots)
-	}
-	for _, d := range nextDuties {
-		nextProposerCount += len(d.ProposerSlots)
-	}
-
 	// Current-epoch: submit after first slot of epoch to avoid stale state.
 	// force bypasses the timing gate for reorg resubmission.
 	if currentEpoch >= gloasEpoch && (force || slot > epochStart) {
@@ -1143,16 +1135,6 @@ func (v *validator) buildProposerPreferences(
 		signedPrefs = append(signedPrefs, v.processProposerDuties(ctx, km, nextDuties, slot, currDepRoot, true)...)
 	}
 
-	log.WithFields(logrus.Fields{
-		"slot":                 slot,
-		"epoch":                currentEpoch,
-		"epochStart":           epochStart,
-		"midEpoch":             midEpoch,
-		"currentProposerSlots": currentProposerCount,
-		"nextProposerSlots":    nextProposerCount,
-		"prefsBuilt":           len(signedPrefs),
-		"alreadySubmitted":     v.submittedPrefSlotsCount(),
-	}).Debug("Build proposer preferences result")
 	return signedPrefs
 }
 
@@ -1258,10 +1240,132 @@ func (v *validator) proposerConfigForKey(pk pubkey) (common.Address, uint64) {
 	return feeRecipient, gasLimit
 }
 
-func (v *validator) submittedPrefSlotsCount() int {
-	v.submittedPrefSlotsLock.RLock()
-	defer v.submittedPrefSlotsLock.RUnlock()
-	return len(v.submittedPrefSlots)
+// builderConfigForKey returns pk's builder relays, max execution payment, and whether building is enabled.
+func (v *validator) builderConfigForKey(pk pubkey) ([]string, uint64, bool) {
+	ps := v.ProposerSettings()
+	if ps == nil {
+		return nil, 0, false
+	}
+	var bc *proposer.BuilderConfig
+	if ps.DefaultConfig != nil {
+		bc = ps.DefaultConfig.BuilderConfig
+	}
+	if ps.ProposeConfig != nil {
+		if c, ok := ps.ProposeConfig[pk]; ok && c != nil && c.BuilderConfig != nil {
+			bc = c.BuilderConfig
+		}
+	}
+	if bc == nil {
+		return nil, 0, false
+	}
+	return bc.Relays, uint64(bc.MaxExecutionPayment), bc.Enabled
+}
+
+// buildBuilderPreferenceRequests signs builder preferences for upcoming proposal
+// slots across the configured builders. Submissions are idempotent and resubmitted
+// every push (repopulating the beacon node after a restart); signed auths are
+// cached so repeated pushes don't re-sign.
+func (v *validator) buildBuilderPreferenceRequests(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot) []*ethpb.SubmitBuilderPreferencesRequest {
+	if slots.ToEpoch(slot)+1 < params.BeaconConfig().GloasForkEpoch {
+		return nil
+	}
+	snap := v.duties.snapshot()
+	if !snap.isInitialized() {
+		return nil
+	}
+	v.pruneSignedRequestAuths(slot)
+
+	reqs := v.builderPreferenceRequestsForDuties(ctx, km, slot, snap.currentDuties())
+	return append(reqs, v.builderPreferenceRequestsForDuties(ctx, km, slot, snap.nextDuties())...)
+}
+
+func (v *validator) builderPreferenceRequestsForDuties(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, duties iter.Seq2[pubkey, *ethpb.ValidatorDuty]) []*ethpb.SubmitBuilderPreferencesRequest {
+	var reqs []*ethpb.SubmitBuilderPreferencesRequest
+	for pk, duty := range duties {
+		relays, maxPayment, enabled := v.builderConfigForKey(pk)
+		if !enabled || len(relays) == 0 {
+			continue
+		}
+		for _, proposalSlot := range duty.ProposerSlots {
+			if proposalSlot <= slot {
+				continue
+			}
+			for _, relay := range relays {
+				signed, err := v.signRequestAuthCached(ctx, km, pk, relay, proposalSlot)
+				if err != nil {
+					log.WithError(err).Warn("Failed to sign builder request auth")
+					continue
+				}
+				reqs = append(reqs, &ethpb.SubmitBuilderPreferencesRequest{
+					ValidatorPubkey: pk[:],
+					Request: &ethpb.BuilderPreferencesRequestV1{
+						Preferences: &ethpb.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(maxPayment)},
+						Auth:        signed,
+					},
+				})
+			}
+		}
+	}
+	return reqs
+}
+
+type requestAuthKey struct {
+	pk    pubkey
+	slot  primitives.Slot
+	relay string
+}
+
+// builderRequestAuthsForSlot returns the cached signed request auths for pk at slot,
+// one per configured builder, to ride along with the block request.
+func (v *validator) builderRequestAuthsForSlot(pk pubkey, slot primitives.Slot) []*ethpb.SignedRequestAuthV1 {
+	v.signedRequestAuthsLock.Lock()
+	defer v.signedRequestAuthsLock.Unlock()
+	var auths []*ethpb.SignedRequestAuthV1
+	for k, signed := range v.signedRequestAuths {
+		if k.pk == pk && k.slot == slot {
+			auths = append(auths, signed)
+		}
+	}
+	return auths
+}
+
+func (v *validator) pruneSignedRequestAuths(slot primitives.Slot) {
+	v.signedRequestAuthsLock.Lock()
+	defer v.signedRequestAuthsLock.Unlock()
+	for k := range v.signedRequestAuths {
+		if k.slot < slot {
+			delete(v.signedRequestAuths, k)
+		}
+	}
+}
+
+func (v *validator) signRequestAuthCached(ctx context.Context, km keymanager.IKeymanager, pk pubkey, relay string, slot primitives.Slot) (*ethpb.SignedRequestAuthV1, error) {
+	key := requestAuthKey{pk: pk, slot: slot, relay: relay}
+	v.signedRequestAuthsLock.Lock()
+	signed, ok := v.signedRequestAuths[key]
+	v.signedRequestAuthsLock.Unlock()
+	if ok {
+		return signed, nil
+	}
+	signed, err := v.signRequestAuth(ctx, km, pk, &ethpb.RequestAuthV1{Data: []byte(relay), Slot: slot})
+	if err != nil {
+		return nil, err
+	}
+	v.signedRequestAuthsLock.Lock()
+	if v.signedRequestAuths == nil {
+		v.signedRequestAuths = make(map[requestAuthKey]*ethpb.SignedRequestAuthV1)
+	}
+	v.signedRequestAuths[key] = signed
+	v.signedRequestAuthsLock.Unlock()
+	return signed, nil
+}
+
+func (v *validator) submitBuilderPreferenceRequests(ctx context.Context, reqs []*ethpb.SubmitBuilderPreferencesRequest) {
+	for _, req := range reqs {
+		if _, err := v.validatorClient.SubmitBuilderPreferences(ctx, req); err != nil {
+			log.WithError(err).Warn("Failed to submit builder preferences")
+		}
+	}
 }
 
 func (v *validator) builderConfigForKey(pk pubkey) ([]string, uint64, bool) {
