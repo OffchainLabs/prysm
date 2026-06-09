@@ -48,6 +48,16 @@ func TestConfigureBeaconConfig(t *testing.T) {
 	assert.Equal(t, true, c.SaveInvalidBlock)
 }
 
+func TestConfigureBeaconChain_EngineSSZHTTP(t *testing.T) {
+	defer Init(&Flags{})
+	app := cli.App{}
+	set := flag.NewFlagSet("test", 0)
+	set.Bool(EnableEngineSSZHTTP.Name, true, "test")
+	context := cli.NewContext(&app, set, nil)
+	require.NoError(t, ConfigureBeaconChain(context))
+	assert.Equal(t, true, Get().EnableEngineSSZHTTP)
+}
+
 func TestValidateNetworkFlags(t *testing.T) {
 	// Define the test cases
 	tests := []struct {

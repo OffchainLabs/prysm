@@ -185,6 +185,11 @@ var (
 		Name:  "enable-state-diff",
 		Usage: "Enables the experimental state diff feature.",
 	}
+	// EnableEngineSSZHTTP enables the REST + SSZ Engine API v2 transport.
+	EnableEngineSSZHTTP = &cli.BoolFlag{
+		Name:  "engine-ssz-http",
+		Usage: "(Experimental): Enables the REST + SSZ Engine API v2 transport (ethereum/execution-apis#793), falling back to JSON-RPC engine_* when the execution layer does not support it.",
+	}
 	// forceHeadFlag is a flag to force the head of the beacon chain to a specific block.
 	forceHeadFlag = &cli.StringFlag{
 		Name: "sync-from",
@@ -286,6 +291,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
 	EnableStateDiff,
+	EnableEngineSSZHTTP,
 	forceHeadFlag,
 	blacklistRoots,
 	enableHashtree,
