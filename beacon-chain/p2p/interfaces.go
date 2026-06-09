@@ -95,7 +95,7 @@ type (
 		PubSub() *pubsub.PubSub
 	}
 
-	// PubSubProvider provides the p2p pubsub protocol.
+	// PartialColumnBroadcasterProvider provides the broadcaster for partial messages.
 	PartialColumnBroadcasterProvider interface {
 		PartialColumnBroadcaster() partialdatacolumnbroadcaster.Broadcaster
 	}
