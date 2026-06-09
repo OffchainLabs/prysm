@@ -446,7 +446,7 @@ func (vs *Server) handleUnblindedBlock(
 ) ([]*ethpb.BlobSidecar, []blocks.RODataColumn, []blocks.PartialDataColumn, error) {
 	rawBlobs, proofs, err := blobsAndProofs(req)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, errors.Wrap(err, "blobs and proofs")
 	}
 
 	if block.Version() >= version.Fulu {
