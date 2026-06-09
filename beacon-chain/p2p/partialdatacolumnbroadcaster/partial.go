@@ -335,7 +335,7 @@ func (p *PartialColumnBroadcaster) reportPeerFeedbackAsync(topic string, from pe
 		p.logger.WithFields(logrus.Fields{
 			"peer":  from,
 			"topic": topic,
-		}).Debug("Peer feedback semaphore saturated, dropping feedback")
+		}).Warn("Peer feedback semaphore saturated, dropping feedback")
 	}
 }
 
