@@ -501,7 +501,8 @@ func TestPostPayloadTasks_NotHead(t *testing.T) {
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
 
-	require.NoError(t, s.postPayloadTasks(ctx, envelope, st, root, headRoot))
+	_, err = s.postPayloadTasks(ctx, envelope, st, root, headRoot)
+	require.NoError(t, err)
 }
 
 func TestPostPayloadTasks_DoesNotMutateHead(t *testing.T) {
@@ -531,7 +532,8 @@ func TestPostPayloadTasks_DoesNotMutateHead(t *testing.T) {
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
 
-	require.NoError(t, s.postPayloadTasks(ctx, envelope, st, root, root))
+	_, err = s.postPayloadTasks(ctx, envelope, st, root, root)
+	require.NoError(t, err)
 
 	s.headLock.RLock()
 	require.Equal(t, root, s.head.root)

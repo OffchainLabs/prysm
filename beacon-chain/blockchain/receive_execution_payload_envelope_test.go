@@ -229,6 +229,74 @@ func TestReceiveExecutionPayloadEnvelope_EmitsHeadV2Event(t *testing.T) {
 	require.Equal(t, "full", headV2.PayloadStatus.String())
 }
 
+// TestReceiveExecutionPayloadEnvelope_EmitsHeadV2OnceForDuplicateEnvelope verifies
+// that only the empty->full transition for the head root emits a head_v2 update.
+func TestReceiveExecutionPayloadEnvelope_EmitsHeadV2OnceForDuplicateEnvelope(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	cfg.InitializeForkSchedule()
+	params.OverrideBeaconConfig(cfg)
+
+	s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+	ctx := t.Context()
+
+	blockRoot := bytesutil.ToBytes32([]byte("envelope-root"))
+	base, blk, signedProto := gloasEnvelopeFixture(t, blockRoot)
+
+	parentRoot := bytesutil.ToBytes32(bytes.Repeat([]byte{0x11}, 32))
+	parentBlockHash := [32]byte{0xaa}
+	zeroHash := params.BeaconConfig().ZeroHash
+	pst, parentROBlock, err := prepareGloasForkchoiceState(ctx, 4, parentRoot, zeroHash, parentBlockHash, zeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, s.cfg.ForkChoiceStore.InsertNode(ctx, pst, parentROBlock))
+
+	insertGloasBlock(t, s, base, blk, blockRoot)
+
+	headBlock, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	headState, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	require.NoError(t, err)
+	s.head = &head{
+		root:  blockRoot,
+		block: headBlock,
+		state: headState,
+		slot:  blk.Block.Slot,
+		full:  false,
+	}
+
+	events := make(chan *feed.Event, 10)
+	sub := s.cfg.StateNotifier.StateFeed().Subscribe(events)
+	defer sub.Unsubscribe()
+
+	signed, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedProto)
+	require.NoError(t, err)
+
+	// Deliberately import the same envelope twice to verify that
+	// only the first import triggers a head_v2 event for the empty->full transition.
+	require.NoError(t, s.ReceiveExecutionPayloadEnvelope(ctx, signed))
+	require.NoError(t, s.ReceiveExecutionPayloadEnvelope(ctx, signed))
+
+	var headV2Count int
+	for {
+		select {
+		case e := <-events:
+			if e.Type == statefeed.NewHeadV2 {
+				headV2Count++
+				d, ok := e.Data.(*statefeed.HeadV2Data)
+				require.Equal(t, true, ok)
+				require.Equal(t, blockRoot, d.Block)
+				require.Equal(t, "full", d.PayloadStatus.String())
+			}
+			continue
+		default:
+		}
+		break
+	}
+
+	require.Equal(t, 1, headV2Count)
+}
+
 // countStateEventsByType is a helper function for counting the number of events
 // of each type received on a channel.
 func countStateEventsByType(ch chan *feed.Event) map[feed.EventType]int {
