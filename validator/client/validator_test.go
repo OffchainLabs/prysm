@@ -2412,7 +2412,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		require.Equal(t, 0, len(prefs))
 	})
 
-	t.Run("per-validator fee recipient overrides default; gas limit stays default", func(t *testing.T) {
+	t.Run("per-validator fee recipient and gas limit override default", func(t *testing.T) {
 		cfg := params.BeaconConfig().Copy()
 		cfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
@@ -2430,7 +2430,6 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					FeeRecipientConfig: &proposer.FeeRecipientConfig{
 						FeeRecipient: customFeeRecipient,
 					},
-					// Per-validator gas_limit is intentionally ignored; default-only.
 					GasLimit: 99000000,
 				},
 			},
@@ -2466,7 +2465,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
 		require.Equal(t, 1, len(prefs))
 		require.DeepEqual(t, customFeeRecipient[:], prefs[0].Message.FeeRecipient)
-		require.Equal(t, uint64(42000000), prefs[0].Message.TargetGasLimit)
+		require.Equal(t, uint64(99000000), prefs[0].Message.TargetGasLimit)
 
 		// Restore default settings for other subtests.
 		v.proposerSettings = &proposer.Settings{

@@ -179,23 +179,30 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 	if err != nil {
 		return nil, err
 	}
-	warnUnusedSchemaFields(ps)
+	warnDeprecatedSchema(ps)
 	if err := psl.db.SaveProposerSettings(cliCtx.Context, ps); err != nil {
 		return nil, err
 	}
 	return ps, nil
 }
 
-func warnUnusedSchemaFields(ps *proposer.Settings) {
-	if ps == nil || ps.Version != proposer.SchemaV2 {
-		return
+func hasBuilderShape(p *validatorpb.ProposerSettingsPayload) bool {
+	if p.DefaultConfig != nil && p.DefaultConfig.Builder != nil {
+		return true
 	}
-	for _, opt := range ps.ProposeConfig {
-		if opt != nil && opt.GasLimit != 0 {
-			log.Warn("v2 proposer settings: per-validator 'gas_limit' is ignored; only default_config.gas_limit is honored.")
-			return
+	for _, o := range p.ProposerConfig {
+		if o != nil && o.Builder != nil {
+			return true
 		}
 	}
+	return false
+}
+
+func warnDeprecatedSchema(ps *proposer.Settings) {
+	if ps == nil || ps.Version == proposer.SchemaV2 || !params.GloasEnabled() {
+		return
+	}
+	log.Warn("Proposer settings use the deprecated v1 schema; they are upgraded automatically at the gloas fork. Please migrate your settings source to v2.")
 }
 
 func (psl *SettingsLoader) applyOverrides() {
@@ -271,7 +278,8 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 	if db != nil {
 		merged.Version = db.Version
 	}
-	if loaded != nil && loaded.Version != 0 {
+	// v1-shaped source content must not inherit DB's v2, else the runtime upgrade is skipped.
+	if loaded != nil && (loaded.Version != 0 || hasBuilderShape(loaded)) {
 		merged.Version = loaded.Version
 	}
 
@@ -358,6 +366,11 @@ func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPay
 		merged.DefaultConfig = &validatorpb.ProposerOptionPayload{GasLimit: *gasLimitOnly}
 	} else {
 		merged.DefaultConfig.GasLimit = *gasLimitOnly
+	}
+	for _, option := range merged.ProposerConfig {
+		if option != nil {
+			option.GasLimit = *gasLimitOnly
+		}
 	}
 	return merged
 }

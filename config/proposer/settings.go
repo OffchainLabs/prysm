@@ -282,24 +282,18 @@ func (ps *Settings) UpgradeToV2() bool {
 	if ps == nil || ps.isV2() {
 		return false
 	}
-	if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil {
-		if ps.DefaultConfig.GasLimit == 0 {
-			ps.DefaultConfig.GasLimit = ps.DefaultConfig.BuilderConfig.GasLimit
-		}
-		ps.DefaultConfig.BuilderConfig = nil
-	}
-	dropped := 0
-	for _, opt := range ps.ProposeConfig {
+	migrate := func(opt *Option) {
 		if opt == nil || opt.BuilderConfig == nil {
-			continue
+			return
 		}
-		if opt.BuilderConfig.GasLimit != 0 {
-			dropped++
+		if opt.GasLimit == 0 {
+			opt.GasLimit = opt.BuilderConfig.GasLimit
 		}
 		opt.BuilderConfig = nil
 	}
-	if dropped > 0 {
-		log.Warnf("Dropped per-validator builder.gas_limit on %d key(s) during v1->v2 upgrade; only default_config.gas_limit is honored.", dropped)
+	migrate(ps.DefaultConfig)
+	for _, opt := range ps.ProposeConfig {
+		migrate(opt)
 	}
 	ps.Version = SchemaV2
 	return true
@@ -313,6 +307,9 @@ func (ps *Settings) GasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) validator
 		return chainDefault
 	}
 	if ps.isV2() {
+		if opt, ok := ps.ProposeConfig[pubkey]; ok && opt != nil && opt.GasLimit != 0 {
+			return opt.GasLimit
+		}
 		if ps.DefaultConfig != nil && ps.DefaultConfig.GasLimit != 0 {
 			return ps.DefaultConfig.GasLimit
 		}
@@ -334,10 +331,15 @@ func (ps *Settings) SetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, gasLim
 		return errors.New("No proposer settings were found to update")
 	}
 	if ps.isV2() {
-		if ps.DefaultConfig == nil {
-			ps.DefaultConfig = &Option{}
+		if ps.ProposeConfig == nil {
+			ps.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
 		}
-		ps.DefaultConfig.GasLimit = gasLimit
+		opt := ps.ProposeConfig[pubkey]
+		if opt == nil {
+			opt = &Option{}
+			ps.ProposeConfig[pubkey] = opt
+		}
+		opt.GasLimit = gasLimit
 		return nil
 	}
 	builderEnabled := func(o *Option) bool {
@@ -378,10 +380,15 @@ func (ps *Settings) ResetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) bool
 	}
 	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
 	if ps.isV2() {
-		if ps.DefaultConfig == nil || ps.DefaultConfig.GasLimit == 0 {
+		opt, found := ps.ProposeConfig[pubkey]
+		if !found || opt == nil || opt.GasLimit == 0 {
 			return false
 		}
-		ps.DefaultConfig.GasLimit = chainDefault
+		if ps.DefaultConfig != nil && ps.DefaultConfig.GasLimit != 0 {
+			opt.GasLimit = ps.DefaultConfig.GasLimit
+		} else {
+			opt.GasLimit = chainDefault
+		}
 		return true
 	}
 	opt, found := ps.ProposeConfig[pubkey]

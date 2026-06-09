@@ -1395,7 +1395,7 @@ func TestServer_GasLimit_V2Schema(t *testing.T) {
 		}
 	}
 
-	t.Run("SetGasLimit on v2 writes top-level DefaultConfig.GasLimit and ignores pubkey", func(t *testing.T) {
+	t.Run("SetGasLimit on v2 writes per-validator GasLimit", func(t *testing.T) {
 		s := setupServer(t, &proposer.Settings{Version: 2})
 		body, err := json.Marshal(&SetGasLimitRequest{GasLimit: "12345678"})
 		require.NoError(t, err)
@@ -1407,11 +1407,10 @@ func TestServer_GasLimit_V2Schema(t *testing.T) {
 		s.SetGasLimit(w, req)
 		assert.Equal(t, http.StatusAccepted, w.Code)
 		settings := s.validatorService.ProposerSettings()
-		require.NotNil(t, settings.DefaultConfig)
-		assert.Equal(t, validator.Uint64(12345678), settings.DefaultConfig.GasLimit)
-		assert.Equal(t, true, settings.DefaultConfig.BuilderConfig == nil)
-		_, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey1)]
-		assert.Equal(t, false, found)
+		opt, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey1)]
+		require.Equal(t, true, found)
+		assert.Equal(t, validator.Uint64(12345678), opt.GasLimit)
+		assert.Equal(t, true, opt.BuilderConfig == nil)
 	})
 
 	t.Run("GetGasLimit returns top-level DefaultConfig.GasLimit on v2", func(t *testing.T) {
@@ -1433,12 +1432,12 @@ func TestServer_GasLimit_V2Schema(t *testing.T) {
 		assert.Equal(t, "42424242", resp.Data.GasLimit)
 	})
 
-	t.Run("DeleteGasLimit resets DefaultConfig.GasLimit to chain default on v2", func(t *testing.T) {
+	t.Run("DeleteGasLimit resets per-validator GasLimit to chain default on v2", func(t *testing.T) {
 		params.BeaconConfig().DefaultBuilderGasLimit = uint64(0xbbdd)
 		s := setupServer(t, &proposer.Settings{
 			Version: 2,
-			DefaultConfig: &proposer.Option{
-				GasLimit: validator.Uint64(99887766),
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+				bytesutil.ToBytes48(pubkey1): {GasLimit: validator.Uint64(99887766)},
 			},
 		})
 		req := httptest.NewRequest(http.MethodDelete, "/eth/v1/validator/{pubkey}/gas_limit", nil)
@@ -1448,10 +1447,10 @@ func TestServer_GasLimit_V2Schema(t *testing.T) {
 
 		s.DeleteGasLimit(w, req)
 		assert.Equal(t, http.StatusNoContent, w.Code)
-		assert.Equal(t, validator.Uint64(0xbbdd), s.validatorService.ProposerSettings().DefaultConfig.GasLimit)
+		assert.Equal(t, validator.Uint64(0xbbdd), s.validatorService.ProposerSettings().ProposeConfig[bytesutil.ToBytes48(pubkey1)].GasLimit)
 	})
 
-	t.Run("DeleteGasLimit returns 404 on v2 when no default exists", func(t *testing.T) {
+	t.Run("DeleteGasLimit returns 404 on v2 when no per-validator entry exists", func(t *testing.T) {
 		s := setupServer(t, nil)
 		req := httptest.NewRequest(http.MethodDelete, "/eth/v1/validator/{pubkey}/gas_limit", nil)
 		req.SetPathValue("pubkey", hexutil.Encode(pubkey1))

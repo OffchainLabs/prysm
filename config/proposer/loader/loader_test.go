@@ -1155,41 +1155,39 @@ func Test_ProposerSettingsLoader_DoesNotMigrateAtLoad(t *testing.T) {
 	})
 }
 
-func Test_warnUnusedSchemaFields(t *testing.T) {
-	key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
-	require.NoError(t, err)
+func Test_warnDeprecatedSchema(t *testing.T) {
+	v1Settings := &proposer.Settings{
+		Version: proposer.SchemaV1,
+		DefaultConfig: &proposer.Option{
+			BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 30000000},
+		},
+	}
 
-	t.Run("v1 silent", func(t *testing.T) {
+	t.Run("v1 on gloas-scheduled network warns", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 100
+		params.OverrideBeaconConfig(cfg)
 		hook := logtest.NewGlobal()
-		warnUnusedSchemaFields(&proposer.Settings{
-			Version: proposer.SchemaV1,
-			DefaultConfig: &proposer.Option{
-				BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 30000000},
-			},
-		})
-		assert.LogsDoNotContain(t, hook, "per-validator 'gas_limit'")
+		warnDeprecatedSchema(v1Settings)
+		assert.LogsContain(t, hook, "deprecated v1 schema")
 	})
-	t.Run("v2 default-only gas_limit silent", func(t *testing.T) {
+	t.Run("v1 without gloas scheduled silent", func(t *testing.T) {
 		hook := logtest.NewGlobal()
-		warnUnusedSchemaFields(&proposer.Settings{
-			Version: proposer.SchemaV2,
-			DefaultConfig: &proposer.Option{
-				GasLimit: 30000000,
-			},
-		})
-		assert.LogsDoNotContain(t, hook, "per-validator 'gas_limit'")
+		warnDeprecatedSchema(v1Settings)
+		assert.LogsDoNotContain(t, hook, "deprecated v1 schema")
 	})
-	t.Run("v2 per-validator gas_limit warns", func(t *testing.T) {
+	t.Run("v2 silent", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 100
+		params.OverrideBeaconConfig(cfg)
 		hook := logtest.NewGlobal()
-		warnUnusedSchemaFields(&proposer.Settings{
-			Version: proposer.SchemaV2,
-			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
-				bytesutil.ToBytes48(key1): {
-					GasLimit: 30000000,
-				},
-			},
+		warnDeprecatedSchema(&proposer.Settings{
+			Version:       proposer.SchemaV2,
+			DefaultConfig: &proposer.Option{GasLimit: 30000000},
 		})
-		assert.LogsContain(t, hook, "per-validator 'gas_limit'")
+		assert.LogsDoNotContain(t, hook, "deprecated v1 schema")
 	})
 }
 
@@ -1218,6 +1216,58 @@ func Test_mergeProposerSettings_VersionPrecedence(t *testing.T) {
 		)
 		require.Equal(t, uint32(proposer.SchemaV2), merged.Version)
 	})
+	t.Run("unversioned v1 content does not inherit v2 from db", func(t *testing.T) {
+		merged := mergeProposerSettings(
+			&validatorpb.ProposerSettingsPayload{
+				DefaultConfig: &validatorpb.ProposerOptionPayload{
+					Builder: &validatorpb.BuilderConfig{Enabled: true, GasLimit: 30000000},
+				},
+			},
+			&validatorpb.ProposerSettingsPayload{Version: proposer.SchemaV2},
+			&flagOptions{},
+		)
+		require.Equal(t, uint32(0), merged.Version)
+		require.NotNil(t, merged.DefaultConfig.Builder)
+	})
+}
+
+// Restarting with the same v1 file after migration persisted v2 to the DB must
+// reload in v1 form so the runtime upgrade re-applies the file's gas limits.
+func TestSettingsLoader_V1FileAfterMigratedDB(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 100
+	params.OverrideBeaconConfig(cfg)
+
+	app := cli.App{}
+	set := flag.NewFlagSet("test", 0)
+	set.String(flags.ProposerSettingsFlag.Name, "", "")
+	require.NoError(t, set.Set(flags.ProposerSettingsFlag.Name, "./testdata/good-prepare-beacon-proposer-config-multiple.json"))
+	cliCtx := cli.NewContext(&app, set, nil)
+
+	validatorDB := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false)
+	migrated := &proposer.Settings{
+		Version:       proposer.SchemaV2,
+		DefaultConfig: &proposer.Option{GasLimit: 40000000},
+	}
+	require.NoError(t, validatorDB.SaveProposerSettings(cliCtx.Context, migrated))
+
+	hook := logtest.NewGlobal()
+	loader, err := NewProposerSettingsLoader(cliCtx, validatorDB, WithBuilderConfig(), WithGasLimit())
+	require.NoError(t, err)
+	got, err := loader.Load(cliCtx)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+
+	require.Equal(t, uint32(0), got.Version)
+	require.NotNil(t, got.DefaultConfig.BuilderConfig)
+	require.Equal(t, validator.Uint64(40000000), got.DefaultConfig.BuilderConfig.GasLimit)
+	assert.LogsContain(t, hook, "deprecated v1 schema")
+
+	require.Equal(t, true, got.UpgradeToV2())
+	key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+	require.NoError(t, err)
+	require.Equal(t, validator.Uint64(60000000), got.GasLimit(bytesutil.ToBytes48(key1)))
 }
 
 func Test_mergeProposerSettings_CreatesDefaultFromGasLimitFlag(t *testing.T) {
@@ -1317,4 +1367,18 @@ func Test_mergeProposerSettings_V2GasLimitOverwritesExistingDefault(t *testing.T
 	require.IsNil(t, merged.DefaultConfig.Builder)
 	require.Equal(t, "0xdb", merged.DefaultConfig.FeeRecipient)
 	require.Equal(t, gl, merged.DefaultConfig.GasLimit)
+}
+
+func Test_mergeProposerSettings_V2GasLimitOverwritesPerValidator(t *testing.T) {
+	gl := validator.Uint64(12345678)
+	db := &validatorpb.ProposerSettingsPayload{
+		Version:       proposer.SchemaV2,
+		DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0xdb", GasLimit: 1},
+		ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+			"0xkey": {FeeRecipient: "0xdbkey", GasLimit: 2},
+		},
+	}
+	merged := mergeProposerSettings(nil, db, &flagOptions{gasLimit: &gl})
+	require.Equal(t, gl, merged.DefaultConfig.GasLimit)
+	require.Equal(t, gl, merged.ProposerConfig["0xkey"].GasLimit)
 }

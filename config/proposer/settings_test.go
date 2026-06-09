@@ -7,11 +7,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	logtest "github.com/sirupsen/logrus/hooks/test"
 )
 
 func Test_Proposer_Setting_Cloning(t *testing.T) {
@@ -214,7 +212,18 @@ func TestSettings_GasLimit(t *testing.T) {
 		require.Equal(t, chainDefault, ps.GasLimit(pk))
 	})
 
-	t.Run("v2 returns DefaultConfig.GasLimit", func(t *testing.T) {
+	t.Run("v2 returns per-validator GasLimit over default", func(t *testing.T) {
+		ps := &Settings{
+			Version: SchemaV2,
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				pk: {GasLimit: validator.Uint64(55_000_000)},
+			},
+			DefaultConfig: &Option{GasLimit: validator.Uint64(42_000_000)},
+		}
+		require.Equal(t, validator.Uint64(55_000_000), ps.GasLimit(pk))
+	})
+
+	t.Run("v2 falls back to DefaultConfig.GasLimit", func(t *testing.T) {
 		ps := &Settings{
 			Version:       SchemaV2,
 			DefaultConfig: &Option{GasLimit: validator.Uint64(42_000_000)},
@@ -222,7 +231,7 @@ func TestSettings_GasLimit(t *testing.T) {
 		require.Equal(t, validator.Uint64(42_000_000), ps.GasLimit(pk))
 	})
 
-	t.Run("v2 unset DefaultConfig.GasLimit returns chain default", func(t *testing.T) {
+	t.Run("v2 unset returns chain default", func(t *testing.T) {
 		ps := &Settings{Version: SchemaV2}
 		require.Equal(t, chainDefault, ps.GasLimit(pk))
 	})
@@ -242,6 +251,11 @@ func TestSettings_GasLimit(t *testing.T) {
 		}
 		require.Equal(t, validator.Uint64(60_000_000), ps.GasLimit(pk))
 	})
+
+	t.Run("v1 with no builder config returns chain default", func(t *testing.T) {
+		ps := &Settings{DefaultConfig: &Option{}}
+		require.Equal(t, chainDefault, ps.GasLimit(pk))
+	})
 }
 
 func TestSettings_SetGasLimit(t *testing.T) {
@@ -255,12 +269,21 @@ func TestSettings_SetGasLimit(t *testing.T) {
 		require.ErrorContains(t, "No proposer settings were found to update", err)
 	})
 
-	t.Run("v2 writes top-level DefaultConfig.GasLimit and ignores pubkey", func(t *testing.T) {
+	t.Run("v2 writes per-validator GasLimit", func(t *testing.T) {
 		ps := &Settings{Version: SchemaV2}
 		require.NoError(t, ps.SetGasLimit(pk, validator.Uint64(70_000_000)))
-		require.Equal(t, validator.Uint64(70_000_000), ps.DefaultConfig.GasLimit)
-		_, found := ps.ProposeConfig[pk]
-		require.Equal(t, false, found)
+		require.Equal(t, validator.Uint64(70_000_000), ps.ProposeConfig[pk].GasLimit)
+	})
+
+	t.Run("v2 updates existing per-validator entry", func(t *testing.T) {
+		ps := &Settings{
+			Version: SchemaV2,
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				pk: {GasLimit: validator.Uint64(10_000_000)},
+			},
+		}
+		require.NoError(t, ps.SetGasLimit(pk, validator.Uint64(20_000_000)))
+		require.Equal(t, validator.Uint64(20_000_000), ps.ProposeConfig[pk].GasLimit)
 	})
 
 	t.Run("v1 with no builder rejects", func(t *testing.T) {
@@ -323,18 +346,32 @@ func TestSettings_ResetGasLimit(t *testing.T) {
 		require.Equal(t, false, ps.ResetGasLimit(pk))
 	})
 
-	t.Run("v2 with no default returns false", func(t *testing.T) {
+	t.Run("v2 returns false for missing per-validator entry", func(t *testing.T) {
 		ps := &Settings{Version: SchemaV2}
 		require.Equal(t, false, ps.ResetGasLimit(pk))
 	})
 
-	t.Run("v2 resets DefaultConfig.GasLimit to chain default", func(t *testing.T) {
+	t.Run("v2 resets per-validator to DefaultConfig.GasLimit", func(t *testing.T) {
 		ps := &Settings{
 			Version:       SchemaV2,
-			DefaultConfig: &Option{GasLimit: validator.Uint64(99_000_000)},
+			DefaultConfig: &Option{GasLimit: validator.Uint64(40_000_000)},
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				pk: {GasLimit: validator.Uint64(99_000_000)},
+			},
 		}
 		require.Equal(t, true, ps.ResetGasLimit(pk))
-		require.Equal(t, chainDefault, ps.DefaultConfig.GasLimit)
+		require.Equal(t, validator.Uint64(40_000_000), ps.ProposeConfig[pk].GasLimit)
+	})
+
+	t.Run("v2 resets per-validator to chain default when no default", func(t *testing.T) {
+		ps := &Settings{
+			Version: SchemaV2,
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				pk: {GasLimit: validator.Uint64(99_000_000)},
+			},
+		}
+		require.Equal(t, true, ps.ResetGasLimit(pk))
+		require.Equal(t, chainDefault, ps.ProposeConfig[pk].GasLimit)
 	})
 
 	t.Run("v1 returns false for missing per-validator entry", func(t *testing.T) {
@@ -404,8 +441,7 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		require.Equal(t, validator.Uint64(70_000_000), ps.DefaultConfig.GasLimit)
 	})
 
-	t.Run("per-validator builder.gas_limit is dropped with warning", func(t *testing.T) {
-		hook := logtest.NewGlobal()
+	t.Run("per-validator builder.gas_limit is migrated to top-level", func(t *testing.T) {
 		ps := &Settings{
 			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
 				pk: {BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(35_000_000)}},
@@ -413,11 +449,10 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		}
 		require.Equal(t, true, ps.UpgradeToV2())
 		require.Equal(t, true, ps.ProposeConfig[pk].BuilderConfig == nil)
-		assert.LogsContain(t, hook, "Dropped per-validator builder.gas_limit on 1 key(s)")
+		require.Equal(t, validator.Uint64(35_000_000), ps.ProposeConfig[pk].GasLimit)
 	})
 
-	t.Run("nil DefaultConfig still bumps to v2 and drops per-validator builders", func(t *testing.T) {
-		hook := logtest.NewGlobal()
+	t.Run("nil DefaultConfig still bumps to v2 and migrates per-validator builders", func(t *testing.T) {
 		ps := &Settings{
 			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
 				pk: {BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(35_000_000)}},
@@ -427,7 +462,7 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		require.Equal(t, SchemaV2, ps.Version)
 		require.Equal(t, true, ps.DefaultConfig == nil)
 		require.Equal(t, true, ps.ProposeConfig[pk].BuilderConfig == nil)
-		assert.LogsContain(t, hook, "Dropped per-validator builder.gas_limit on 1 key(s)")
+		require.Equal(t, validator.Uint64(35_000_000), ps.ProposeConfig[pk].GasLimit)
 	})
 
 	t.Run("default with no builder and zero GasLimit still bumps to v2", func(t *testing.T) {
@@ -444,8 +479,7 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		require.Equal(t, validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit), ps.GasLimit(pk))
 	})
 
-	t.Run("multiple per-validator entries only count non-zero gas limits", func(t *testing.T) {
-		hook := logtest.NewGlobal()
+	t.Run("multiple per-validator entries migrate gas limits", func(t *testing.T) {
 		pubkey2, err := hexutil.Decode("0xbedefeaa94e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2cdddddddddddddddddddddddd")
 		require.NoError(t, err)
 		pk2 := bytesutil.ToBytes48(pubkey2)
@@ -460,9 +494,9 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 			},
 		}
 		require.Equal(t, true, ps.UpgradeToV2())
+		require.Equal(t, validator.Uint64(35_000_000), ps.ProposeConfig[pk].GasLimit)
+		require.Equal(t, validator.Uint64(40_000_000), ps.ProposeConfig[pk2].GasLimit)
+		require.Equal(t, validator.Uint64(0), ps.ProposeConfig[pk3].GasLimit)
 		require.Equal(t, true, ps.ProposeConfig[pk].BuilderConfig == nil)
-		require.Equal(t, true, ps.ProposeConfig[pk2].BuilderConfig == nil)
-		require.Equal(t, true, ps.ProposeConfig[pk3].BuilderConfig == nil)
-		assert.LogsContain(t, hook, "Dropped per-validator builder.gas_limit on 2 key(s)")
 	})
 }

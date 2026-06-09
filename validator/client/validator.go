@@ -1217,7 +1217,6 @@ func (v *validator) releasePrefSlot(proposalSlot primitives.Slot) {
 func (v *validator) proposerConfigForKey(pk pubkey) (common.Address, uint64) {
 	feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
 	ps := v.ProposerSettings()
-	// Per-validator gas limits are intentionally not honored; gas limit is default-only.
 	gasLimit := uint64(ps.GasLimit(pk))
 	if ps == nil {
 		return feeRecipient, gasLimit
