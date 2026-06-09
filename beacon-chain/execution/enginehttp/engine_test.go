@@ -1,0 +1,72 @@
+package enginehttp
+
+import (
+	"context"
+	"net/http"
+	"testing"
+
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+)
+
+// The tests below are scaffolds for the Phase 4 endpoint implementations. Each
+// is skipped with a TODO until the matching Client method in engine.go is
+// filled in; the body shows the intended call shape against the h2c test
+// harness in client_test.go (testClient/stubSSZ). When implementing an
+// endpoint, drop the t.Skip and assert method/path/headers + decoded response,
+// mirroring TestSSZRequest_* in client_test.go.
+
+func TestNewPayload(t *testing.T) {
+	t.Skip("TODO(ssz-over-http): implement Client.NewPayload — POST /engine/v2/{fork}/payloads")
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {})
+	_, err := c.NewPayload(context.Background(), ForkAmsterdam, &stubSSZ{data: []byte("envelope")})
+	require.NoError(t, err)
+}
+
+func TestForkchoiceUpdated(t *testing.T) {
+	t.Skip("TODO(ssz-over-http): implement Client.ForkchoiceUpdated — POST /engine/v2/{fork}/forkchoice")
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {})
+	_, err := c.ForkchoiceUpdated(context.Background(), ForkAmsterdam, &stubSSZ{data: []byte("fcu")})
+	require.NoError(t, err)
+}
+
+func TestGetPayload(t *testing.T) {
+	t.Skip("TODO(ssz-over-http): implement Client.GetPayload — GET /engine/v2/{fork}/payloads/{id}")
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {})
+	err := c.GetPayload(context.Background(), ForkAmsterdam, [8]byte{}, &stubSSZ{})
+	require.NoError(t, err)
+}
+
+func TestGetPayloadBodiesByHash(t *testing.T) {
+	t.Skip("TODO(ssz-over-http): implement Client.GetPayloadBodiesByHash — POST /engine/v2/{fork}/bodies/hash")
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {})
+	err := c.GetPayloadBodiesByHash(context.Background(), ForkAmsterdam, nil, &stubSSZ{})
+	require.NoError(t, err)
+}
+
+func TestGetPayloadBodiesByRange(t *testing.T) {
+	t.Skip("TODO(ssz-over-http): implement Client.GetPayloadBodiesByRange — GET /engine/v2/{fork}/bodies?from&count")
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {})
+	err := c.GetPayloadBodiesByRange(context.Background(), ForkAmsterdam, 1, 2, &stubSSZ{})
+	require.NoError(t, err)
+}
+
+func TestGetBlobs(t *testing.T) {
+	t.Skip("TODO(ssz-over-http): implement Client.GetBlobs — POST /engine/v2/blobs/v{version}")
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {})
+	err := c.GetBlobs(context.Background(), 1, &stubSSZ{data: []byte("blobreq")}, &stubSSZ{})
+	require.NoError(t, err)
+}
+
+func TestCapabilities(t *testing.T) {
+	t.Skip("TODO(ssz-over-http): implement Client.Capabilities — GET /engine/v2/capabilities (JSON; 404 -> JSON-RPC fallback)")
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {})
+	_, err := c.Capabilities(context.Background())
+	require.NoError(t, err)
+}
+
+func TestIdentity(t *testing.T) {
+	t.Skip("TODO(ssz-over-http): implement Client.Identity — GET /engine/v2/identity (JSON)")
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {})
+	_, err := c.Identity(context.Background())
+	require.NoError(t, err)
+}
