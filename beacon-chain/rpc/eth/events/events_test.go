@@ -463,7 +463,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 					ExecutionOptimistic:       false,
 					CurrentEpochDependentRoot: [32]byte{},
 					NextEpochDependentRoot:    [32]byte{},
-					PayloadStatus:             "full",
+					PayloadStatus:             statefeed.PayloadStatusFull,
 					Version:                   version.Gloas,
 				},
 			},
