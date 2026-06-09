@@ -21,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -540,6 +541,35 @@ func TestPostPayloadTasks_DoesNotMutateHead(t *testing.T) {
 	require.Equal(t, root, s.head.root)
 	require.Equal(t, primitives.Slot(0), s.head.state.Slot())
 	s.headLock.RUnlock()
+}
+
+func TestReorgingLatePayload(t *testing.T) {
+	service, _ := setupGloasService(t, &mockExecution.EngineClient{})
+	root := bytesutil.ToBytes32([]byte("root1"))
+
+	service.SetGenesisTime(time.Now().Add(-time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second))
+	slot := service.CurrentSlot()
+	slotStart, err := slots.StartTime(service.genesisTime, slot)
+	require.NoError(t, err)
+	due := slotStart.Add(params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().PayloadDueBPS))
+
+	resetCfg := features.InitWithReset(&features.Flags{})
+	service.recordPayloadArrival(root, slot, due.Add(time.Millisecond))
+	require.Equal(t, false, service.reorgingLatePayload(root, slot))
+	resetCfg()
+
+	resetCfg = features.InitWithReset(&features.Flags{ReorgLatePayloads: true})
+	defer resetCfg()
+
+	earlyRoot := bytesutil.ToBytes32([]byte("early"))
+	service.recordPayloadArrival(earlyRoot, slot, due.Add(-time.Millisecond))
+	require.Equal(t, false, service.reorgingLatePayload(earlyRoot, slot))
+
+	require.Equal(t, true, service.reorgingLatePayload(root, slot))
+	require.Equal(t, false, service.reorgingLatePayload(root, slot+1))
+
+	unknownRoot := bytesutil.ToBytes32([]byte("unknown"))
+	require.Equal(t, false, service.reorgingLatePayload(unknownRoot, slot))
 }
 
 func TestLatePayloadTasks_ReturnsEarlyWhenBlockLate(t *testing.T) {

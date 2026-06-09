@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -205,6 +206,26 @@ func (s *Service) checkPayloadIsHead(ctx context.Context, envelope interfaces.RO
 	return true
 }
 
+func (s *Service) reorgingLatePayload(root [32]byte, slot primitives.Slot) bool {
+	if !features.Get().ReorgLatePayloads {
+		return false
+	}
+	if slot != s.CurrentSlot() {
+		return false
+	}
+	early, ok := s.PayloadEarly(root)
+	if !ok || early {
+		return false
+	}
+	// rollBack head insertion
+	s.headLock.Lock()
+	if s.head.root == root {
+		s.head.full = false
+	}
+	s.headLock.Unlock()
+	return true
+}
+
 func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope, st state.BeaconState) error {
 	if !s.checkPayloadIsHead(ctx, envelope) {
 		return nil
@@ -242,6 +263,13 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 
 	proposingSlot := s.CurrentSlot() + 1
 	attr := s.getPayloadAttribute(ctx, st, proposingSlot, root[:], true)
+	if !attr.IsEmpty() && s.reorgingLatePayload(root, envelope.Slot()) {
+		log.WithFields(logrus.Fields{
+			"blockRoot": fmt.Sprintf("%#x", root),
+			"slot":      proposingSlot - 1,
+		}).Info("Not notifying forkchoice update for late payload")
+		return nil
+	}
 	go func() {
 		pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)
 		if err != nil {
