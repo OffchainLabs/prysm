@@ -95,6 +95,24 @@ type ExecutionPayloadProcessedData struct {
 	Optimistic bool
 }
 
+type PayloadStatus int
+
+const (
+	PayloadStatusEmpty = iota + 1
+	PayloadStatusFull
+)
+
+func (ps PayloadStatus) String() string {
+	switch ps {
+	case PayloadStatusEmpty:
+		return "empty"
+	case PayloadStatusFull:
+		return "full"
+	default:
+		return "unknown"
+	}
+}
+
 // HeadV2Data is the data sent with NewHeadV2 events.
 type HeadV2Data struct {
 	Slot                      primitives.Slot
@@ -104,8 +122,6 @@ type HeadV2Data struct {
 	ExecutionOptimistic       bool
 	CurrentEpochDependentRoot [32]byte
 	NextEpochDependentRoot    [32]byte
-	// PayloadStatus is "empty" or "full" (always "full" pre-Gloas).
-	PayloadStatus string
-	// Version is the head block's fork version.
-	Version int
+	PayloadStatus             PayloadStatus
+	Version                   int
 }

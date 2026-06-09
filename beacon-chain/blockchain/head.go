@@ -175,6 +175,9 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 		if err := s.notifyNewHeadEvent(ctx, newHeadSlot, newStateRoot[:], newHeadRoot[:]); err != nil {
 			log.WithError(err).Error("Could not notify event feed of new chain head")
 		}
+		if err := s.notifyNewHeadV2Event(ctx, newHeadSlot, newStateRoot, newHeadRoot, full, headBlock.Version()); err != nil {
+			log.WithError(err).Error("Could not notify event feed of new chain head_v2")
+		}
 	}()
 
 	return nil
@@ -329,22 +332,9 @@ func (s *Service) notifyNewHeadEvent(
 	newHeadRoot []byte,
 ) error {
 	currEpoch := slots.ToEpoch(newHeadSlot)
-	currentDutyDependentRoot, err := s.DependentRoot(currEpoch)
+	previousDutyDependentRoot, currentDutyDependentRoot, err := s.headEventDependentRoots(currEpoch)
 	if err != nil {
-		return errors.Wrap(err, "could not get duty dependent root")
-	}
-	if currentDutyDependentRoot == [32]byte{} {
-		currentDutyDependentRoot = s.originBlockRoot
-	}
-	var previousDutyDependentRoot [32]byte
-	if currEpoch > 0 {
-		previousDutyDependentRoot, err = s.DependentRoot(currEpoch.Sub(1))
-		if err != nil {
-			return errors.Wrap(err, "could not get duty dependent root")
-		}
-	}
-	if previousDutyDependentRoot == [32]byte{} {
-		previousDutyDependentRoot = s.originBlockRoot
+		return err
 	}
 
 	isOptimistic, err := s.IsOptimistic(ctx)
@@ -352,15 +342,10 @@ func (s *Service) notifyNewHeadEvent(
 		return errors.Wrap(err, "could not check if node is optimistically synced")
 	}
 
-	parentRoot, err := s.ParentRoot([32]byte(newHeadRoot))
+	epochTransition, err := s.headEpochTransition(newHeadSlot, bytesutil.ToBytes32(newHeadRoot))
 	if err != nil {
-		return errors.Wrap(err, "could not obtain parent root in forkchoice")
+		return err
 	}
-	parentSlot, err := s.RecentBlockSlot(parentRoot)
-	if err != nil {
-		return errors.Wrap(err, "could not obtain parent slot in forkchoice")
-	}
-	epochTransition := slots.ToEpoch(newHeadSlot) > slots.ToEpoch(parentSlot)
 
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.NewHead,
@@ -374,7 +359,98 @@ func (s *Service) notifyNewHeadEvent(
 			ExecutionOptimistic:       isOptimistic,
 		},
 	})
+
 	return nil
+}
+
+// notifyNewHeadV2Event emits the head_v2 event for the head at newHeadRoot.
+// This event can be emitted twice for the same head root, depending on
+// delivery of the execution payload.
+func (s *Service) notifyNewHeadV2Event(
+	ctx context.Context,
+	newHeadSlot primitives.Slot,
+	newHeadStateRoot, newHeadRoot [32]byte,
+	full bool,
+	headVersion int,
+) error {
+	currEpoch := slots.ToEpoch(newHeadSlot)
+	currentEpochDependentRoot, nextEpochDependentRoot, err := s.headEventDependentRoots(currEpoch)
+	if err != nil {
+		return err
+	}
+
+	isOptimistic, err := s.IsOptimistic(ctx)
+	if err != nil {
+		return errors.Wrap(err, "could not check if node is optimistically synced")
+	}
+
+	epochTransition, err := s.headEpochTransition(newHeadSlot, newHeadRoot)
+	if err != nil {
+		return err
+	}
+
+	var payloadStatus statefeed.PayloadStatus
+	payloadStatus = statefeed.PayloadStatusFull
+	if headVersion >= version.Gloas && !full {
+		payloadStatus = statefeed.PayloadStatusEmpty
+	}
+
+	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
+		Type: statefeed.NewHeadV2,
+		Data: &statefeed.HeadV2Data{
+			Slot:                      newHeadSlot,
+			Block:                     newHeadRoot,
+			State:                     newHeadStateRoot,
+			EpochTransition:           epochTransition,
+			ExecutionOptimistic:       isOptimistic,
+			CurrentEpochDependentRoot: currentEpochDependentRoot,
+			NextEpochDependentRoot:    nextEpochDependentRoot,
+			PayloadStatus:             payloadStatus,
+			Version:                   headVersion,
+		},
+	})
+
+	return nil
+}
+
+// headEventDependentRoots computes the previous/current duty dependent roots shared by the
+// head and head_v2 events for the given head epoch, falling back to the origin root.
+// Note that the return values can be differently named depending on the context
+// they are used; head and head_v2.
+//
+// All dependent roots use the genesis block root in the case of underflow.
+func (s *Service) headEventDependentRoots(currEpoch primitives.Epoch) (previousDutyDependentRoot, currentDutyDependentRoot [32]byte, err error) {
+	currentDutyDependentRoot, err = s.DependentRoot(currEpoch)
+	if err != nil {
+		return [32]byte{}, [32]byte{}, errors.Wrap(err, "could not get duty dependent root")
+	}
+	if currentDutyDependentRoot == [32]byte{} {
+		currentDutyDependentRoot = s.originBlockRoot
+	}
+	if currEpoch > 0 {
+		previousDutyDependentRoot, err = s.DependentRoot(currEpoch.Sub(1))
+		if err != nil {
+			return [32]byte{}, [32]byte{}, errors.Wrap(err, "could not get duty dependent root")
+		}
+	}
+	if previousDutyDependentRoot == [32]byte{} {
+		previousDutyDependentRoot = s.originBlockRoot
+	}
+	return previousDutyDependentRoot, currentDutyDependentRoot, nil
+}
+
+// headEpochTransition reports whether the head at newHeadSlot crossed an epoch boundary
+// relative to its parent block.
+func (s *Service) headEpochTransition(newHeadSlot primitives.Slot, newHeadRoot [32]byte) (bool, error) {
+	parentRoot, err := s.ParentRoot(newHeadRoot)
+	if err != nil {
+		return false, errors.Wrap(err, "could not obtain parent root in forkchoice")
+	}
+	parentSlot, err := s.RecentBlockSlot(parentRoot)
+	if err != nil {
+		return false, errors.Wrap(err, "could not obtain parent slot in forkchoice")
+	}
+	return slots.ToEpoch(newHeadSlot) > slots.ToEpoch(parentSlot), nil
 }
 
 // This saves the Attestations and BLSToExecChanges between `orphanedRoot` and the common ancestor root that is derived using `newHeadRoot`.

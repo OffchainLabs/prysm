@@ -1550,7 +1550,7 @@ func HeadEventFromDataV2(data *statefeed.HeadV2Data) *HeadEventV2 {
 			Slot:                      fmt.Sprintf("%d", data.Slot),
 			Block:                     hexutil.Encode(data.Block[:]),
 			State:                     hexutil.Encode(data.State[:]),
-			PayloadStatus:             data.PayloadStatus,
+			PayloadStatus:             string(rune(data.PayloadStatus)),
 			CurrentEpochDependentRoot: hexutil.Encode(data.CurrentEpochDependentRoot[:]),
 			NextEpochDependentRoot:    hexutil.Encode(data.NextEpochDependentRoot[:]),
 			EpochTransition:           data.EpochTransition,
