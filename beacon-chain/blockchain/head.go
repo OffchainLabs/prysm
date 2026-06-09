@@ -389,6 +389,8 @@ func (s *Service) notifyNewHeadV2Event(
 		return err
 	}
 
+	// The payload status is empty iff it is post-Gloas
+	// AND the execution payload has not been delivered for the head.
 	var payloadStatus statefeed.PayloadStatus
 	payloadStatus = statefeed.PayloadStatusFull
 	if headVersion >= version.Gloas && !full {
