@@ -205,7 +205,8 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 	// Mark the head's payload status as full.
 	markedEvent := s.markHeadPayloadFull(root)
 
-	attr := s.getPayloadAttribute(ctx, st, envelope.Slot()+1, headRoot[:], true)
+	proposingSlot := s.CurrentSlot() + 1
+	attr := s.getPayloadAttribute(ctx, st, proposingSlot, headRoot[:], true)
 	if !s.inRegularSync() {
 		return markedEvent, nil
 	}
@@ -218,7 +219,7 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 		if !attr.IsEmpty() && pid != nil {
 			var pId [8]byte
 			copy(pId[:], pid[:])
-			s.cfg.PayloadIDCache.Set(envelope.Slot()+1, root, pId)
+			s.cfg.PayloadIDCache.Set(proposingSlot, root, pId)
 		}
 	}()
 	return markedEvent, nil

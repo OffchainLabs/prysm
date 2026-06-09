@@ -91,6 +91,8 @@ const (
 	ExecutionPayloadBidTopic = "execution_payload_bid"
 	// PayloadAttestationMessageTopic represents a new payload attestation message event topic.
 	PayloadAttestationMessageTopic = "payload_attestation_message"
+	// ProposerPreferencesTopic represents a new signed proposer preferences event topic.
+	ProposerPreferencesTopic = "proposer_preferences"
 )
 
 var (
@@ -126,6 +128,7 @@ var opsFeedEventTopics = map[feed.EventType]string{
 	operation.BlockGossipReceived:               BlockGossipTopic,
 	operation.DataColumnReceived:                DataColumnTopic,
 	operation.PayloadAttestationMessageReceived: PayloadAttestationMessageTopic,
+	operation.ProposerPreferencesReceived:       ProposerPreferencesTopic,
 	operation.ExecutionPayloadGossipReceived:    ExecutionPayloadGossipTopic,
 }
 
@@ -496,6 +499,8 @@ func topicForEvent(event *feed.Event) string {
 		return DataColumnTopic
 	case *operation.PayloadAttestationMessageReceivedData:
 		return PayloadAttestationMessageTopic
+	case *operation.ProposerPreferencesReceivedData:
+		return ProposerPreferencesTopic
 	case *statefeed.ExecutionPayloadAvailableData:
 		return ExecutionPayloadAvailableTopic
 	case *statefeed.ExecutionPayloadProcessedData:
@@ -681,6 +686,14 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 	case *operation.PayloadAttestationMessageReceivedData:
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, structs.PayloadAttestationMessageFromConsensus(v.Message))
+		}, nil
+	case *operation.ProposerPreferencesReceivedData:
+		return func() io.Reader {
+			epoch := slots.ToEpoch(v.Data.Message.ProposalSlot)
+			return jsonMarshalReader(eventName, &structs.ProposerPreferencesEvent{
+				Version: version.String(params.GetNetworkScheduleEntry(epoch).VersionEnum),
+				Data:    structs.SignedProposerPreferencesFromConsensus(v.Data),
+			})
 		}, nil
 	case *statefeed.ExecutionPayloadAvailableData:
 		return func() io.Reader {
