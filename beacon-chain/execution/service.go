@@ -151,6 +151,7 @@ type Service struct {
 	eth1HeadTicker          *time.Ticker
 	httpLogger              bind.ContractFilterer
 	rpcClient               RPCClient
+	sszTransport            *sszEngine   // non-nil when the engine API is driven over SSZ-over-HTTP for this connection.
 	headerCache             *headerCache // cache to store block hash/block height.
 	latestEth1Data          *ethpb.LatestETH1Data
 	depositContractCaller   *contracts.DepositContractCaller

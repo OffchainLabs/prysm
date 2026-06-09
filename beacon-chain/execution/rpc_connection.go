@@ -46,6 +46,8 @@ func (s *Service) setupExecutionClientConnections(ctx context.Context, currEndpo
 		return errors.Wrap(err, errStr)
 	}
 	s.updateConnectedETH1(true)
+	// Decide JSON-RPC vs SSZ-over-HTTP for the engine API on this connection.
+	s.selectEngineTransport(ctx, currEndpoint)
 	s.runError = nil
 	return nil
 }

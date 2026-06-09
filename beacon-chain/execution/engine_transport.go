@@ -4,17 +4,21 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/enginehttp"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/network"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
 )
 
 // engineTransport abstracts the wire transport for the engine namespace so the
-// Service can speak either JSON-RPC (engine_*, jsonEngine) or — in a later
-// change — REST + SSZ (ethereum/execution-apis#793) below the public
+// Service can speak either JSON-RPC (engine_*, jsonEngine) or REST + SSZ
+// (/engine/v2/..., sszEngine; ethereum/execution-apis#793) below the public
 // EngineCaller/Reconstructor surface. Methods are Prysm-typed because the
 // Prysm-type <-> wire conversion is itself transport-specific. The eth_*
 // namespace (ExecutionBlockByHash, GetTerminalBlockHash, HeaderBy*, ...) is not
@@ -29,11 +33,44 @@ type engineTransport interface {
 	GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error)
 }
 
-// engine returns the engine transport for the current connection. Today this is
-// always the JSON-RPC implementation; an alternative SSZ-over-HTTP transport is
-// selected in a later change.
+// engine returns the engine transport selected for the current connection.
+// JSON-RPC is the default; selectEngineTransport sets sszTransport when the
+// feature flag is on and the execution client serves the v2 (REST+SSZ) surface.
 func (s *Service) engine() engineTransport {
+	if s.sszTransport != nil {
+		return s.sszTransport
+	}
 	return jsonEngine{rpc: s.rpcClient, caps: s.capabilityCache}
+}
+
+// selectEngineTransport decides whether to drive the engine API over
+// SSZ-over-HTTP (execution-apis#793) or JSON-RPC for this connection. With the
+// feature flag set it probes GET /engine/v2/capabilities; on success the SSZ
+// transport is used, otherwise (no v2 surface, non-h2c endpoint, or probe
+// error) it falls back to JSON-RPC for the connection's lifetime — per spec
+// there is no per-method fallback ladder. Called on every (re)connection.
+func (s *Service) selectEngineTransport(ctx context.Context, endpoint network.Endpoint) {
+	s.sszTransport = nil
+	if !features.Get().EnableEngineSSZHTTP {
+		return
+	}
+	client, err := enginehttp.New(enginehttp.Config{
+		BaseURL:       endpoint.Url,
+		JWTSecret:     []byte(endpoint.Auth.Value),
+		JWTID:         endpoint.Auth.JwtId,
+		ClientVersion: "Prysm/" + version.SemanticVersion(),
+	})
+	if err != nil {
+		log.WithError(err).Warn("SSZ-over-HTTP engine transport unavailable; using JSON-RPC")
+		return
+	}
+	caps, err := client.Capabilities(ctx)
+	if err != nil {
+		log.WithError(err).Info("Execution client has no engine v2 (REST+SSZ) surface; using JSON-RPC")
+		return
+	}
+	s.sszTransport = &sszEngine{client: client, caps: caps}
+	log.WithField("supportedForks", caps.SupportedForks).Info("Using SSZ-over-HTTP engine transport")
 }
 
 // Public EngineCaller-facing entry points. Each dispatches to the selected
