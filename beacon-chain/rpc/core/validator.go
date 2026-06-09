@@ -956,9 +956,6 @@ func (s *Service) PayloadAttestationData(
 	}
 	cfg := params.BeaconConfig()
 	deadline := slotStart.Add(cfg.SlotComponentDuration(cfg.PayloadAttestationDueBPS))
-	if prysmTime.Now().Before(deadline) {
-		return nil, &RpcError{Reason: Unavailable, Err: fmt.Errorf("PTC deadline not yet reached for slot %d", slot)}
-	}
 
 	if cached := s.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
 		return cached, nil
@@ -971,6 +968,12 @@ func (s *Service) PayloadAttestationData(
 		data, rpcErr := s.buildPayloadAttestationData(slot)
 		if rpcErr != nil {
 			return rpcErr, nil
+		}
+		// Before the deadline only the final result is safe to return: the payload
+		// arrived timely and the data is available. Otherwise both flags may still
+		// flip, so wait for the deadline.
+		if prysmTime.Now().Before(deadline) && !(data.PayloadPresent && data.BlobDataAvailable) {
+			return &RpcError{Reason: Unavailable, Err: fmt.Errorf("payload attestation data not yet final for slot %d", slot)}, nil
 		}
 		s.payloadAttestationData.Store(data)
 		return data, nil

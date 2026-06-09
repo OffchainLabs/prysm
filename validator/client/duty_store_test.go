@@ -1,6 +1,7 @@
 package client
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -10,7 +11,8 @@ import (
 )
 
 func testDutyStore(current ...*ethpb.ValidatorDuty) *dutyStore {
-	ds := &dutyStore{
+	ds := &dutyStore{}
+	ds.data = dutyStoreData{
 		currentDuties:  make(map[pubkey]*ethpb.ValidatorDuty),
 		nextDuties:     make(map[pubkey]*ethpb.ValidatorDuty),
 		proposerSlots:  make(map[primitives.ValidatorIndex][]primitives.Slot),
@@ -20,15 +22,15 @@ func testDutyStore(current ...*ethpb.ValidatorDuty) *dutyStore {
 		initialized:    true,
 	}
 	for _, d := range current {
-		ds.currentDuties[bytesutil.ToBytes48(d.PublicKey)] = d
+		ds.data.currentDuties[bytesutil.ToBytes48(d.PublicKey)] = d
 		if len(d.ProposerSlots) > 0 {
-			ds.proposerSlots[d.ValidatorIndex] = d.ProposerSlots
+			ds.data.proposerSlots[d.ValidatorIndex] = d.ProposerSlots
 		}
 		if d.IsSyncCommittee {
-			ds.syncCurrentMap[d.ValidatorIndex] = true
+			ds.data.syncCurrentMap[d.ValidatorIndex] = true
 		}
 		if len(d.PtcSlots) > 0 {
-			ds.ptcSlots[d.ValidatorIndex] = d.PtcSlots
+			ds.data.ptcSlots[d.ValidatorIndex] = d.PtcSlots
 		}
 	}
 	return ds
@@ -36,30 +38,30 @@ func testDutyStore(current ...*ethpb.ValidatorDuty) *dutyStore {
 
 func TestDutyStore_Uninitialized(t *testing.T) {
 	ds := &dutyStore{}
-	assert.Equal(t, false, ds.IsInitialized())
-	assert.Equal(t, true, ds.CurrentEpochDuties() == nil)
-	assert.Equal(t, true, ds.NextEpochDuties() == nil)
+	assert.Equal(t, false, ds.isInitialized())
+	snap := ds.snapshot()
+	assert.Equal(t, 0, snap.currentDutyCount())
+	assert.Equal(t, 0, snap.nextDutyCount())
 
-	prev, curr := ds.DependentRoots()
-	assert.Equal(t, true, prev == nil)
-	assert.Equal(t, true, curr == nil)
+	assert.Equal(t, true, ds.prevDependentRoot() == nil)
+	assert.Equal(t, true, ds.currDependentRoot() == nil)
 
-	d, ok := ds.CurrentDuty(pubkey{})
+	d, ok := ds.currentDuty(pubkey{})
 	assert.Equal(t, false, ok)
 	assert.Equal(t, (*ethpb.ValidatorDuty)(nil), d)
 
-	assert.Equal(t, true, ds.ProposerSlots(0) == nil)
-	assert.Equal(t, true, ds.PtcSlots(0) == nil)
-	assert.Equal(t, false, ds.IsSyncCommittee(0))
-	assert.Equal(t, false, ds.IsNextSyncCommittee(0))
+	assert.Equal(t, true, ds.proposerSlots(0) == nil)
+	assert.Equal(t, true, ds.ptcSlots(0) == nil)
+	assert.Equal(t, false, ds.isSyncCommittee(0))
+	assert.Equal(t, false, ds.isNextSyncCommittee(0))
 }
 
 func TestDutyStore_ZeroValueIsNotInitialized(t *testing.T) {
 	ds := &dutyStore{}
-	assert.Equal(t, false, ds.IsInitialized())
+	assert.Equal(t, false, ds.isInitialized())
 }
 
-func TestDutyStore_SetFromCombinedDutiesResponse(t *testing.T) {
+func TestDutyStore_Write(t *testing.T) {
 	pk1 := bytesutil.ToBytes48([]byte{1})
 	pk2 := bytesutil.ToBytes48([]byte{2})
 
@@ -87,68 +89,174 @@ func TestDutyStore_SetFromCombinedDutiesResponse(t *testing.T) {
 	}
 
 	ds := &dutyStore{}
-	ds.SetFromCombinedDutiesResponse(container)
+	{
+		var data dutyStoreData
+		data.setFromContainer(container)
+		ds.write(data)
+	}
 
-	assert.Equal(t, true, ds.IsInitialized())
+	assert.Equal(t, true, ds.isInitialized())
 
 	// Current duties.
-	d, ok := ds.CurrentDuty(pk1)
+	d, ok := ds.currentDuty(pk1)
 	assert.Equal(t, true, ok)
 	assert.Equal(t, primitives.ValidatorIndex(10), d.ValidatorIndex)
 
-	_, ok = ds.CurrentDuty(pk2)
+	_, ok = ds.currentDuty(pk2)
 	assert.Equal(t, false, ok)
 
 	// Next duties.
-	next := ds.NextEpochDuties()
-	assert.Equal(t, 1, len(next))
-	assert.Equal(t, primitives.ValidatorIndex(20), next[pk2].ValidatorIndex)
+	snap := ds.snapshot()
+	assert.Equal(t, 1, snap.nextDutyCount())
+	for pk, duty := range snap.nextDuties() {
+		assert.Equal(t, pk2, pk)
+		assert.Equal(t, primitives.ValidatorIndex(20), duty.ValidatorIndex)
+	}
 
 	// Dependent roots.
-	prev, curr := ds.DependentRoots()
-	assert.DeepEqual(t, []byte("prev"), prev)
-	assert.DeepEqual(t, []byte("curr"), curr)
+	assert.DeepEqual(t, []byte("prev"), ds.prevDependentRoot())
+	assert.DeepEqual(t, []byte("curr"), ds.currDependentRoot())
 
 	// Proposer slots.
-	assert.DeepEqual(t, []primitives.Slot{3, 7}, ds.ProposerSlots(10))
-	assert.Equal(t, true, ds.ProposerSlots(20) == nil)
+	assert.DeepEqual(t, []primitives.Slot{3, 7}, ds.proposerSlots(10))
+	assert.Equal(t, true, ds.proposerSlots(20) == nil)
 
 	// PTC slots.
-	assert.DeepEqual(t, []primitives.Slot{4, 6}, ds.PtcSlots(10))
-	assert.Equal(t, true, ds.PtcSlots(20) == nil)
+	assert.DeepEqual(t, []primitives.Slot{4, 6}, ds.ptcSlots(10))
+	assert.Equal(t, true, ds.ptcSlots(20) == nil)
 
 	// Sync committee.
-	assert.Equal(t, true, ds.IsSyncCommittee(10))
-	assert.Equal(t, false, ds.IsSyncCommittee(20))
-	assert.Equal(t, false, ds.IsNextSyncCommittee(10))
-	assert.Equal(t, true, ds.IsNextSyncCommittee(20))
+	assert.Equal(t, true, ds.isSyncCommittee(10))
+	assert.Equal(t, false, ds.isSyncCommittee(20))
+	assert.Equal(t, false, ds.isNextSyncCommittee(10))
+	assert.Equal(t, true, ds.isNextSyncCommittee(20))
 }
 
 func TestDutyStore_Reset(t *testing.T) {
 	ds := testDutyStore(&ethpb.ValidatorDuty{PublicKey: make([]byte, 48)})
-	ds.prevDependentRoot = []byte("prev")
-	ds.currDependentRoot = []byte("curr")
-	assert.Equal(t, true, ds.IsInitialized())
+	ds.data.prevDependentRoot = []byte("prev")
+	ds.data.currDependentRoot = []byte("curr")
+	assert.Equal(t, true, ds.isInitialized())
 
-	ds.Reset()
-	assert.Equal(t, false, ds.IsInitialized())
-	assert.Equal(t, true, ds.CurrentEpochDuties() == nil)
+	ds.reset()
+	assert.Equal(t, false, ds.isInitialized())
+	assert.Equal(t, 0, ds.snapshot().currentDutyCount())
 }
 
-func TestDutyStore_SetFromCombinedDutiesResponseNilResets(t *testing.T) {
-	ds := testDutyStore(&ethpb.ValidatorDuty{PublicKey: make([]byte, 48)})
-	assert.Equal(t, true, ds.IsInitialized())
+func TestDutyStoreData_Reset(t *testing.T) {
+	populated := func() dutyStoreData {
+		return dutyStoreData{
+			initialized:       true,
+			epoch:             9,
+			missingNext:       missingNextPtc,
+			indices:           []primitives.ValidatorIndex{1, 5, 7},
+			currentDuties:     map[pubkey]*ethpb.ValidatorDuty{{}: {}},
+			prevDependentRoot: []byte("prev"),
+		}
+	}
 
-	ds.SetFromCombinedDutiesResponse(nil)
-	assert.Equal(t, false, ds.IsInitialized())
-}
-
-func TestDutyStore_SetFromCombinedDutiesResponseSkipsNilDuties(t *testing.T) {
-	ds := &dutyStore{}
-	ds.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-		CurrentEpochDuties: []*ethpb.ValidatorDuty{nil, {PublicKey: make([]byte, 48), ValidatorIndex: 1}},
-		NextEpochDuties:    []*ethpb.ValidatorDuty{nil},
+	t.Run("reset zeroes every field", func(t *testing.T) {
+		d := populated()
+		d.reset()
+		// Covers every field, including any added later: IsZero reports whether
+		// the whole struct equals its zero value.
+		assert.Equal(t, true, reflect.ValueOf(d).IsZero())
 	})
-	assert.Equal(t, 1, len(ds.CurrentEpochDuties()))
-	assert.Equal(t, 0, len(ds.NextEpochDuties()))
+
+	t.Run("setFromContainer drops stale indices on a populated struct", func(t *testing.T) {
+		d := populated()
+		d.setFromContainer(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{{PublicKey: make([]byte, 48), ValidatorIndex: 2}},
+		})
+		assert.Equal(t, true, d.indices == nil)
+		// With indices cleared, a stale validator set can't satisfy canPromote
+		// even when the epoch lines up.
+		d.epoch = 9
+		assert.Equal(t, false, d.canPromote(10, []primitives.ValidatorIndex{1, 5, 7}))
+	})
+}
+
+func TestDutyStore_WriteNilResets(t *testing.T) {
+	ds := testDutyStore(&ethpb.ValidatorDuty{PublicKey: make([]byte, 48)})
+	assert.Equal(t, true, ds.isInitialized())
+
+	{
+		var data dutyStoreData
+		data.setFromContainer(nil)
+		ds.write(data)
+	}
+	assert.Equal(t, false, ds.isInitialized())
+}
+
+func TestDutyStore_WriteSkipsNilDuties(t *testing.T) {
+	ds := &dutyStore{}
+	{
+		var data dutyStoreData
+		data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{nil, {PublicKey: make([]byte, 48), ValidatorIndex: 1}},
+			NextEpochDuties:    []*ethpb.ValidatorDuty{nil},
+		})
+		ds.write(data)
+	}
+	snap := ds.snapshot()
+	assert.Equal(t, 1, snap.currentDutyCount())
+	assert.Equal(t, 0, snap.nextDutyCount())
+}
+
+func TestDutyStoreData_CanPromote(t *testing.T) {
+	base := func() dutyStoreData {
+		return dutyStoreData{
+			initialized: true,
+			epoch:       9,
+			indices:     []primitives.ValidatorIndex{1, 5, 7},
+		}
+	}
+
+	t.Run("happy path: matching epoch + indices + zero missing", func(t *testing.T) {
+		d := base()
+		assert.Equal(t, true, d.canPromote(10, []primitives.ValidatorIndex{1, 5, 7}))
+	})
+
+	t.Run("uninitialized cannot promote", func(t *testing.T) {
+		d := base()
+		d.initialized = false
+		assert.Equal(t, false, d.canPromote(10, []primitives.ValidatorIndex{1, 5, 7}))
+	})
+
+	t.Run("non-adjacent epoch cannot promote", func(t *testing.T) {
+		d := base()
+		assert.Equal(t, false, d.canPromote(11, []primitives.ValidatorIndex{1, 5, 7}))
+		assert.Equal(t, false, d.canPromote(9, []primitives.ValidatorIndex{1, 5, 7}))
+	})
+
+	t.Run("non-zero missingNext blocks promote", func(t *testing.T) {
+		d := base()
+		d.missingNext = missingNextPtc
+		assert.Equal(t, false, d.canPromote(10, []primitives.ValidatorIndex{1, 5, 7}))
+	})
+
+	t.Run("drift: added index blocks promote", func(t *testing.T) {
+		d := base()
+		assert.Equal(t, false, d.canPromote(10, []primitives.ValidatorIndex{1, 5, 7, 9}))
+	})
+
+	t.Run("drift: removed index blocks promote", func(t *testing.T) {
+		d := base()
+		assert.Equal(t, false, d.canPromote(10, []primitives.ValidatorIndex{1, 7}))
+	})
+
+	t.Run("drift: substituted index blocks promote", func(t *testing.T) {
+		d := base()
+		assert.Equal(t, false, d.canPromote(10, []primitives.ValidatorIndex{1, 5, 8}))
+	})
+
+	t.Run("nil current indices treated as empty: blocks promote when stored is non-empty", func(t *testing.T) {
+		d := base()
+		assert.Equal(t, false, d.canPromote(10, nil))
+	})
+
+	t.Run("both empty index sets is a no-op promote", func(t *testing.T) {
+		d := dutyStoreData{initialized: true, epoch: 9}
+		assert.Equal(t, true, d.canPromote(10, nil))
+	})
 }
