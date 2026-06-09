@@ -221,7 +221,11 @@ func (p *PartialDataColumn) buildPartialColumnHeader() (encoded []byte, err erro
 		}},
 		CellsPresentBitmap: bitfield.NewBitlist(uint64(len(p.KzgCommitments))),
 	}
-	return outMessage.MarshalSSZ()
+	encoded, err = outMessage.MarshalSSZ()
+	if err != nil {
+		return nil, errors.Wrap(err, "marshal partial column header")
+	}
+	return encoded, nil
 }
 
 // PartsMetadata returns SSZ-encoded PartialDataColumnPartsMetadata.
@@ -368,7 +372,7 @@ func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerS
 		} else {
 			contains, err := sentMeta.Available.Contains(myPartsMeta.Available)
 			if err != nil {
-				return peerState, partialmessages.PublishAction{Err: err}, false
+				return peerState, partialmessages.PublishAction{Err: errors.Wrap(err, "check available parts metadata containment")}, false
 			}
 			shouldSendPartsMetadata = !contains
 		}
