@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -46,6 +47,26 @@ func TestValidateExecutionPayloadBidGossip_AlreadySeenBuilder(t *testing.T) {
 
 	key := executionPayloadBidBuilderKey(signedBid.Message.Slot, signedBid.Message.BuilderIndex)
 	s.setSeenExecutionPayloadBidBuilder(signedBid.Message.Slot, key)
+	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+}
+
+// Dedup must short-circuit before every later check; duplicates pay only the cache lookup.
+func TestValidateExecutionPayloadBidGossip_DedupShortCircuitsAllLaterChecks(t *testing.T) {
+	ctx := context.Background()
+	s, msg, signedBid := setupExecutionPayloadBidService(t)
+	key := executionPayloadBidBuilderKey(signedBid.Message.Slot, signedBid.Message.BuilderIndex)
+	s.setSeenExecutionPayloadBidBuilder(signedBid.Message.Slot, key)
+	// Every subsequent verifier method would Reject/Ignore if it ran; the cache hit must skip them all.
+	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{
+		errCurrentOrNextSlot:    errors.New("slot"),
+		errBuilderActive:        errors.New("builder"),
+		errExecutionPayment:     errors.New("payment"),
+		errFeeRecipientMismatch: errors.New("fee"),
+		errSignature:            errors.New("sig"),
+	})
+
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
@@ -118,6 +139,12 @@ func TestValidateExecutionPayloadBidGossip_ErrorPathsWithMock(t *testing.T) {
 		{
 			name:      "inactive builder",
 			verifier:  mockExecutionPayloadBidVerifier{errBuilderActive: errors.New("inactive builder")},
+			result:    pubsub.ValidationReject,
+			wantError: true,
+		},
+		{
+			name:      "slot not higher than parent",
+			verifier:  mockExecutionPayloadBidVerifier{errSlotHigherThanParent: errors.New("slot not higher than parent")},
 			result:    pubsub.ValidationReject,
 			wantError: true,
 		},
@@ -287,6 +314,7 @@ type mockExecutionPayloadBidVerifier struct {
 	errFeeRecipientMismatch error
 	errGasLimitIncompatible error
 	errParentBlockRootSeen  error
+	errSlotHigherThanParent error
 	errParentBlockHash      error
 	errBuilderCanCoverBid   error
 	errSignature            error
@@ -316,6 +344,10 @@ func (m *mockExecutionPayloadBidVerifier) VerifyGasLimitTargetCompatible(uint64,
 
 func (m *mockExecutionPayloadBidVerifier) VerifyParentBlockRootSeen(func([32]byte) bool) error {
 	return m.errParentBlockRootSeen
+}
+
+func (m *mockExecutionPayloadBidVerifier) VerifyBidSlotHigherThanParent(primitives.Slot) error {
+	return m.errSlotHigherThanParent
 }
 
 func (m *mockExecutionPayloadBidVerifier) VerifyParentBlockHash(func([32]byte) ([32]byte, error)) error {

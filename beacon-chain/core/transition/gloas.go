@@ -6,7 +6,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/fulu"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	v "github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
@@ -21,18 +20,9 @@ import (
 //
 // Spec definition:
 //
-//	<spec fn="process_operations" fork="gloas" hash="05a7a4ea">
+//	<spec fn="process_operations" fork="gloas" hash="e0633745">
 //	def process_operations(state: BeaconState, body: BeaconBlockBody) -> None:
-//	    # Disable former deposit mechanism once all prior deposits are processed
-//	    eth1_deposit_index_limit = min(
-//	        state.eth1_data.deposit_count, state.deposit_requests_start_index
-//	    )
-//	    if state.eth1_deposit_index < eth1_deposit_index_limit:
-//	        assert len(body.deposits) == min(
-//	            MAX_DEPOSITS, eth1_deposit_index_limit - state.eth1_deposit_index
-//	        )
-//	    else:
-//	        assert len(body.deposits) == 0
+//	    assert len(body.deposits) == 0
 //
 //	    def for_ops(operations: Sequence[Any], fn: Callable[[BeaconState, Any], None]) -> None:
 //	        for operation in operations:
@@ -43,7 +33,6 @@ import (
 //	    for_ops(body.attester_slashings, process_attester_slashing)
 //	    # [Modified in Gloas:EIP7732]
 //	    for_ops(body.attestations, process_attestation)
-//	    for_ops(body.deposits, process_deposit)
 //	    # [Modified in Gloas:EIP7732]
 //	    for_ops(body.voluntary_exits, process_voluntary_exit)
 //	    for_ops(body.bls_to_execution_changes, process_bls_to_execution_change)
@@ -200,7 +189,7 @@ func processEpochGloas(ctx context.Context, state state.BeaconState) error {
 	if err != nil {
 		return err
 	}
-	if err := fulu.ProcessProposerLookahead(ctx, state); err != nil {
+	if err := gloas.ProcessProposerLookahead(ctx, state); err != nil {
 		return err
 	}
 	return gloas.ProcessPTCWindow(ctx, state)

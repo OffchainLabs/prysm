@@ -37,6 +37,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // GetAggregateAttestationV2 aggregates all attestations matching the given attestation data root and slot, returning the aggregated result.
@@ -211,6 +213,80 @@ func matchingAtts(atts []ethpbalpha.Att, slot primitives.Slot, attDataRoot []byt
 	}
 
 	return result, nil
+}
+
+// SubmitSignedProposerPreferences broadcasts signed proposer preferences and
+// caches them for subsequent bid validation. Delegates to the gRPC server so
+// validation and broadcast logic remain in one place.
+func (s *Server) SubmitSignedProposerPreferences(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.SubmitSignedProposerPreferences")
+	defer span.End()
+
+	versionHeader := r.Header.Get(api.VersionHeader)
+	if versionHeader == "" {
+		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+		return
+	}
+	v, err := version.FromString(versionHeader)
+	if err != nil {
+		httputil.HandleError(w, "Invalid version: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if v < version.Gloas {
+		httputil.HandleError(w, "Signed proposer preferences are only supported from the gloas fork", http.StatusBadRequest)
+		return
+	}
+
+	var data []*structs.SignedProposerPreferences
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		if errors.Is(err, io.EOF) {
+			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		} else {
+			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		}
+		return
+	}
+	if len(data) == 0 {
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return
+	}
+
+	req := &ethpbalpha.SubmitSignedProposerPreferencesRequest{
+		SignedProposerPreferences: make([]*ethpbalpha.SignedProposerPreferences, len(data)),
+	}
+	var failures []*server.IndexedError
+	for i, item := range data {
+		consensusItem, err := item.ToConsensus()
+		if err != nil {
+			failures = append(failures, &server.IndexedError{Index: i, Message: err.Error()})
+			continue
+		}
+		req.SignedProposerPreferences[i] = consensusItem
+	}
+	if len(failures) > 0 {
+		httputil.WriteError(w, &server.IndexedErrorContainer{
+			Code:     http.StatusBadRequest,
+			Message:  server.ErrIndexedValidationFail,
+			Failures: failures,
+		})
+		return
+	}
+
+	if _, err := s.V1Alpha1Server.SubmitSignedProposerPreferences(ctx, req); err != nil {
+		if st, ok := status.FromError(err); ok {
+			switch st.Code() {
+			case codes.InvalidArgument:
+				httputil.HandleError(w, st.Message(), http.StatusBadRequest)
+			case codes.Unavailable:
+				httputil.HandleError(w, st.Message(), http.StatusServiceUnavailable)
+			default:
+				httputil.HandleError(w, st.Message(), http.StatusInternalServerError)
+			}
+			return
+		}
+		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 // SubmitContributionAndProofs publishes multiple signed sync committee contribution and proofs.
@@ -1557,4 +1633,43 @@ func (s *Server) BeaconCommitteeSelections(w http.ResponseWriter, _ *http.Reques
 // https://ethereum.github.io/beacon-APIs/#/Validator/submitSyncCommitteeSelections.
 func (s *Server) SyncCommitteeSelections(w http.ResponseWriter, _ *http.Request) {
 	httputil.HandleError(w, "Endpoint not implemented", 501)
+}
+
+// GetPayloadAttestationData produces payload attestation data for the requested slot.
+func (s *Server) GetPayloadAttestationData(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.GetPayloadAttestationData")
+	defer span.End()
+
+	if shared.IsSyncing(ctx, w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
+		return
+	}
+
+	_, slot, ok := shared.UintFromRoute(w, r, "slot")
+	if !ok {
+		return
+	}
+
+	data, rpcErr := s.CoreService.PayloadAttestationData(ctx, primitives.Slot(slot))
+	if rpcErr != nil {
+		httputil.HandleError(w, rpcErr.Err.Error(), core.ErrorReasonToHTTP(rpcErr.Reason))
+		return
+	}
+
+	if httputil.RespondWithSsz(r) {
+		sszData, err := data.MarshalSSZ()
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal payload attestation data: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set(api.VersionHeader, version.String(version.Gloas))
+		httputil.WriteSsz(w, sszData)
+		return
+	}
+
+	response := &structs.GetPayloadAttestationDataResponse{
+		Version: version.String(version.Gloas),
+		Data:    structs.PayloadAttestationDataFromConsensus(data),
+	}
+	w.Header().Set(api.VersionHeader, version.String(version.Gloas))
+	httputil.WriteJson(w, response)
 }

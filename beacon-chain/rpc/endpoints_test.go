@@ -51,6 +51,7 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/beacon/pool/sync_committees":                          {http.MethodPost},
 		"/eth/v1/beacon/pool/voluntary_exits":                          {http.MethodGet, http.MethodPost},
 		"/eth/v1/beacon/pool/bls_to_execution_changes":                 {http.MethodGet, http.MethodPost},
+		"/eth/v1/beacon/pool/payload_attestations":                     {http.MethodGet, http.MethodPost},
 		"/prysm/v1/beacon/individual_votes":                            {http.MethodPost},
 	}
 
@@ -76,6 +77,7 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v2/debug/beacon/states/{state_id}":               {http.MethodGet},
 		"/eth/v2/debug/beacon/heads":                           {http.MethodGet},
 		"/eth/v1/debug/fork_choice":                            {http.MethodGet},
+		"/eth/v2/debug/fork_choice":                            {http.MethodGet},
 		"/eth/v1/debug/beacon/data_column_sidecars/{block_id}": {http.MethodGet},
 	}
 
@@ -113,8 +115,10 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/validator/sync_committee_contribution":       {http.MethodGet},
 		"/eth/v1/validator/contribution_and_proofs":           {http.MethodPost},
 		"/eth/v1/validator/prepare_beacon_proposer":           {http.MethodPost},
+		"/eth/v1/validator/proposer_preferences":              {http.MethodPost},
 		"/eth/v1/validator/register_validator":                {http.MethodPost},
 		"/eth/v1/validator/liveness/{epoch}":                  {http.MethodPost},
+		"/eth/v1/validator/payload_attestation_data/{slot}":   {http.MethodGet},
 	}
 
 	prysmBeaconRoutes := map[string][]string{

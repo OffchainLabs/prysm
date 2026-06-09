@@ -80,6 +80,7 @@ type validator struct {
 	cachedAttestationData        *ethpb.AttestationData
 	accountsChangedChannel       chan [][fieldparams.BLSPubkeyLength]byte
 	eventsChannel                chan *eventClient.Event
+	payloadAvailability          *payloadAvailability
 	highestValidSlot             primitives.Slot
 	submittedAggregates          map[submittedAttKey]*submittedAtt
 	graffitiStruct               *graffiti.Graffiti
@@ -904,6 +905,18 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 				log.WithError(err).Error("Failed to check dependent roots")
 			}
 		}
+	case eventClient.EventExecutionPayloadAvailable:
+		payloadEvent := &structs.ExecutionPayloadAvailableEvent{}
+		if err := json.Unmarshal(event.Data, payloadEvent); err != nil {
+			log.WithError(err).Error("Failed to unmarshal execution payload event into JSON")
+			return
+		}
+		uintSlot, err := strconv.ParseUint(payloadEvent.Slot, 10, 64)
+		if err != nil {
+			log.WithError(err).Error("Failed to parse execution payload event slot")
+			return
+		}
+		v.payloadAvailability.notify(primitives.Slot(uintSlot))
 	default:
 		// just keep going and log the error
 		log.WithField("type", event.EventType).WithField("data", string(event.Data)).Warn("Received an unknown event")
