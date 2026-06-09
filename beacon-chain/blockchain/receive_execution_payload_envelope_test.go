@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -16,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
@@ -151,6 +153,80 @@ func TestReceiveExecutionPayloadEnvelope_EmitEvents(t *testing.T) {
 			require.Equal(t, tt.wantProcessed, got[statefeed.ExecutionPayloadProcessed])
 		})
 	}
+}
+
+// TestReceiveExecutionPayloadEnvelope_EmitsHeadV2Event verifies the second
+// head_v2 emission with payload status updated from empty to full.
+func TestReceiveExecutionPayloadEnvelope_EmitsHeadV2Event(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	cfg.InitializeForkSchedule()
+	params.OverrideBeaconConfig(cfg)
+
+	s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+	ctx := t.Context()
+
+	blockRoot := bytesutil.ToBytes32([]byte("envelope-root"))
+	base, blk, signedProto := gloasEnvelopeFixture(t, blockRoot)
+
+	parentRoot := bytesutil.ToBytes32(bytes.Repeat([]byte{0x11}, 32))
+	parentBlockHash := [32]byte{0xaa}
+	zeroHash := params.BeaconConfig().ZeroHash
+	pst, parentROBlock, err := prepareGloasForkchoiceState(ctx, 4, parentRoot, zeroHash, parentBlockHash, zeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, s.cfg.ForkChoiceStore.InsertNode(ctx, pst, parentROBlock))
+
+	insertGloasBlock(t, s, base, blk, blockRoot)
+
+	// Make the envelope's block the current head while it is still payload-empty, so the
+	// import drives the empty->full transition for the head root.
+	headBlock, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	headState, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	require.NoError(t, err)
+	s.head = &head{
+		root:  blockRoot,
+		block: headBlock,
+		state: headState,
+		slot:  blk.Block.Slot,
+		full:  false, // head is not full until the payload is imported
+	}
+
+	events := make(chan *feed.Event, 10)
+	sub := s.cfg.StateNotifier.StateFeed().Subscribe(events)
+	defer sub.Unsubscribe()
+
+	signed, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedProto)
+	require.NoError(t, err)
+	require.NoError(t, s.ReceiveExecutionPayloadEnvelope(ctx, signed))
+
+	var headV2 *statefeed.HeadV2Data
+	var headV2Count int
+	for {
+		select {
+		case e := <-events:
+			if e.Type == statefeed.NewHeadV2 {
+				headV2Count++
+				d, ok := e.Data.(*statefeed.HeadV2Data)
+				require.Equal(t, true, ok)
+				headV2 = d
+			}
+			continue
+		default:
+		}
+		break
+	}
+
+	// Assertion: `head_v2` must be emitted once,
+	// with the payload status updated to "full"
+	// and other fields consistent with the imported block and state.
+	require.Equal(t, 1, headV2Count)
+	require.NotNil(t, headV2)
+	require.Equal(t, blockRoot, headV2.Block)
+	require.Equal(t, blk.Block.Slot, headV2.Slot)
+	require.Equal(t, version.Gloas, headV2.Version)
+	require.Equal(t, "full", headV2.PayloadStatus.String())
 }
 
 // countStateEventsByType is a helper function for counting the number of events
