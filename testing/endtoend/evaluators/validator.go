@@ -285,9 +285,9 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 			// Skip fork slot.
 			continue
 		}
-		// Skip slots 1-2 at genesis - validators need time to ramp up after chain start
+		// Skip slots 1-3 at genesis - validators need time to ramp up after chain start
 		// due to doppelganger protection. This is a startup timing issue, not a fork transition issue.
-		if b.Block().Slot() < 3 {
+		if skipStartupSyncParticipationSlot(b.Block().Slot()) {
 			continue
 		}
 		expectedParticipation := expectedSyncParticipation
@@ -362,6 +362,10 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 		}
 	}
 	return nil
+}
+
+func skipStartupSyncParticipationSlot(slot primitives.Slot) bool {
+	return slot <= 3
 }
 
 func syncCompatibleBlockFromCtr(container *ethpb.BeaconBlockContainer) (interfaces.ReadOnlySignedBeaconBlock, error) {
