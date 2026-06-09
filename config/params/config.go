@@ -386,6 +386,12 @@ type NetworkScheduleEntry struct {
 	BPOEpoch         primitives.Epoch                `yaml:"-" json:"-"`
 	VersionEnum      int                             `yaml:"-" json:"-"`
 	isFork           bool                            `yaml:"-" json:"-"`
+	// isStateFork is true for forks that update state.fork.current_version
+	// (i.e. require a process_fork-style state transition). Gossip-only
+	// forks like EIP-8243's BatchAttestation set this to false: they
+	// contribute a new fork digest for topic isolation but must NOT
+	// participate in signing-domain fork-version selection.
+	isStateFork bool `yaml:"-" json:"-"`
 }
 
 func (e NetworkScheduleEntry) LogFields() logrus.Fields {
@@ -512,6 +518,19 @@ func (ns *NetworkSchedule) forEpoch(epoch primitives.Epoch) NetworkScheduleEntry
 	return ns.safeIndex(ns.epochIdx(epoch))
 }
 
+// stateForkAtEpoch returns the latest entry where isStateFork == true and
+// Epoch <= the queried epoch. Gossip-only forks (isStateFork == false) are
+// skipped so they do not enter signing-domain fork-version selection.
+func (ns *NetworkSchedule) stateForkAtEpoch(epoch primitives.Epoch) NetworkScheduleEntry {
+	for i := len(ns.entries) - 1; i >= 0; i-- {
+		e := ns.entries[i]
+		if e.isStateFork && e.Epoch <= epoch {
+			return e
+		}
+	}
+	return genesisNetworkScheduleEntry()
+}
+
 func (ns *NetworkSchedule) merge(other *NetworkSchedule) *NetworkSchedule {
 	merged := make([]NetworkScheduleEntry, 0, len(ns.entries)+len(other.entries))
 	merged = append(merged, ns.entries...)
@@ -623,15 +642,19 @@ var to4 = bytesutil.ToBytes4
 
 func initForkSchedule(b *BeaconChainConfig) *NetworkSchedule {
 	return newNetworkSchedule([]NetworkScheduleEntry{
-		{Epoch: b.GenesisEpoch, isFork: true, ForkVersion: to4(b.GenesisForkVersion), VersionEnum: version.Phase0},
-		{Epoch: b.AltairForkEpoch, isFork: true, ForkVersion: to4(b.AltairForkVersion), VersionEnum: version.Altair},
-		{Epoch: b.BellatrixForkEpoch, isFork: true, ForkVersion: to4(b.BellatrixForkVersion), VersionEnum: version.Bellatrix},
-		{Epoch: b.CapellaForkEpoch, isFork: true, ForkVersion: to4(b.CapellaForkVersion), VersionEnum: version.Capella},
-		{Epoch: b.DenebForkEpoch, isFork: true, ForkVersion: to4(b.DenebForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlock), VersionEnum: version.Deneb},
-		{Epoch: b.ElectraForkEpoch, isFork: true, ForkVersion: to4(b.ElectraForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlockElectra), VersionEnum: version.Electra},
-		{Epoch: b.FuluForkEpoch, isFork: true, ForkVersion: to4(b.FuluForkVersion), VersionEnum: version.Fulu},
-		{Epoch: b.GloasForkEpoch, isFork: true, ForkVersion: to4(b.GloasForkVersion), VersionEnum: version.Gloas},
-		{Epoch: b.BatchAttestationForkEpoch, isFork: true, ForkVersion: to4(b.BatchAttestationForkVersion), VersionEnum: version.BatchAttestation},
+		{Epoch: b.GenesisEpoch, isFork: true, isStateFork: true, ForkVersion: to4(b.GenesisForkVersion), VersionEnum: version.Phase0},
+		{Epoch: b.AltairForkEpoch, isFork: true, isStateFork: true, ForkVersion: to4(b.AltairForkVersion), VersionEnum: version.Altair},
+		{Epoch: b.BellatrixForkEpoch, isFork: true, isStateFork: true, ForkVersion: to4(b.BellatrixForkVersion), VersionEnum: version.Bellatrix},
+		{Epoch: b.CapellaForkEpoch, isFork: true, isStateFork: true, ForkVersion: to4(b.CapellaForkVersion), VersionEnum: version.Capella},
+		{Epoch: b.DenebForkEpoch, isFork: true, isStateFork: true, ForkVersion: to4(b.DenebForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlock), VersionEnum: version.Deneb},
+		{Epoch: b.ElectraForkEpoch, isFork: true, isStateFork: true, ForkVersion: to4(b.ElectraForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlockElectra), VersionEnum: version.Electra},
+		{Epoch: b.FuluForkEpoch, isFork: true, isStateFork: true, ForkVersion: to4(b.FuluForkVersion), VersionEnum: version.Fulu},
+		{Epoch: b.GloasForkEpoch, isFork: true, isStateFork: true, ForkVersion: to4(b.GloasForkVersion), VersionEnum: version.Gloas},
+		// EIP-8243: gossip-only fork. Contributes a new fork digest for
+		// topic isolation but must not enter signing-domain fork-version
+		// selection: state.fork.current_version stays at GloasForkVersion
+		// post-fork, so ForkFromConfig must match that.
+		{Epoch: b.BatchAttestationForkEpoch, isFork: true, isStateFork: false, ForkVersion: to4(b.BatchAttestationForkVersion), VersionEnum: version.BatchAttestation},
 	})
 }
 

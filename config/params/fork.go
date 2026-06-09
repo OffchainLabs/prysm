@@ -37,10 +37,13 @@ func Fork(epoch primitives.Epoch) (*ethpb.Fork, error) {
 }
 
 func ForkFromConfig(cfg *BeaconChainConfig, epoch primitives.Epoch) *ethpb.Fork {
-	current := cfg.networkSchedule.forEpoch(epoch)
+	// Walk only state-transition forks, so gossip-only forks like
+	// EIP-8243's BatchAttestation do not enter signing-domain fork-version
+	// selection.
+	current := cfg.networkSchedule.stateForkAtEpoch(epoch)
 	previous := current
 	if current.Epoch > 0 {
-		previous = cfg.networkSchedule.forEpoch(current.Epoch - 1)
+		previous = cfg.networkSchedule.stateForkAtEpoch(current.Epoch - 1)
 	}
 	return &ethpb.Fork{
 		PreviousVersion: previous.ForkVersion[:],
@@ -109,5 +112,5 @@ func genesisNetworkScheduleEntry() NetworkScheduleEntry {
 	b := BeaconConfig()
 	// TODO: note this has a zero digest, but we would never hit this fallback condition on
 	// a properly initialized fork schedule.
-	return NetworkScheduleEntry{Epoch: b.GenesisEpoch, isFork: true, ForkVersion: to4(b.GenesisForkVersion), VersionEnum: version.Phase0}
+	return NetworkScheduleEntry{Epoch: b.GenesisEpoch, isFork: true, isStateFork: true, ForkVersion: to4(b.GenesisForkVersion), VersionEnum: version.Phase0}
 }
