@@ -457,7 +457,6 @@ func (vs *Server) handleUnblindedBlock(
 		}
 
 		source := peerdas.PopulateFromBlock(block)
-		isGloas := slots.ToEpoch(source.Slot()) >= params.BeaconConfig().GloasForkEpoch
 
 		// Construct data column sidecars from the signed block and cells and proofs.
 		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, source)
@@ -470,7 +469,7 @@ func (vs *Server) handleUnblindedBlock(
 		}
 
 		var partialColumns []blocks.PartialDataColumn
-		if !isGloas {
+		if vs.ExecutionEngineCaller.PartialColumnsSupported() {
 			// We built this block ourselves, so we can upgrade the read only data column sidecar into a verified one.
 			for _, sidecar := range roDataColumnSidecars {
 				verifiedSidecar := blocks.NewVerifiedRODataColumn(sidecar)

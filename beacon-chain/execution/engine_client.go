@@ -174,6 +174,7 @@ type EngineCaller interface {
 	ExecutionBlockByHash(ctx context.Context, hash common.Hash, withTxs bool) (*pb.ExecutionBlock, error)
 	GetTerminalBlockHash(ctx context.Context, transitionTime uint64) ([]byte, bool, error)
 	GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error)
+	PartialColumnsSupported() bool
 }
 
 var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
@@ -1061,6 +1062,11 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 
 func (s *Service) useGetBlobsV3() bool {
 	return s.capabilityCache.has(GetBlobsV3) && s.partialColumnsSupported
+}
+
+// PartialColumnsSupported reports whether cell-level (partial) column dissemination is enabled.
+func (s *Service) PartialColumnsSupported() bool {
+	return s.partialColumnsSupported
 }
 
 // upgradeSidecarsToVerifiedSidecars upgrades a list of data column sidecars into verified data column sidecars.
