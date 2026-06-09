@@ -212,9 +212,7 @@ func (p *PartialDataColumn) cellsToSendToPeer(peerMeta *ethpb.PartialDataColumnP
 	return marshalled, meetsNeeds, nil
 }
 
-// buildEagerPushBytes builds the SSZ-encoded PartialDataColumnSidecar for an
-// initial eager push. Only the column header is included (no cells).
-func (p *PartialDataColumn) buildEagerPushBytes() (encoded []byte, err error) {
+func (p *PartialDataColumn) buildPartialColumnHeader() (encoded []byte, err error) {
 	outMessage := &ethpb.PartialDataColumnSidecar{
 		Header: []*ethpb.PartialDataColumnHeader{{
 			KzgCommitments:               p.KzgCommitments,
@@ -319,7 +317,7 @@ func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerS
 		var encoded []byte
 		if includeHeader {
 			var err error
-			encoded, err = p.buildEagerPushBytes()
+			encoded, err = p.buildPartialColumnHeader()
 			if err != nil {
 				return peerState, partialmessages.PublishAction{Err: err}, false
 			}
