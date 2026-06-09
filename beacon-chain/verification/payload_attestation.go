@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
@@ -23,6 +24,7 @@ var PayloadAttGossipRequirements = []Requirement{
 	RequireMessageNotSeen,
 	RequireValidatorInPTC,
 	RequireBlockRootSeen,
+	RequireBlockSlotMatches,
 	RequireBlockRootValid,
 	RequireSignatureValid,
 }
@@ -33,6 +35,7 @@ var GossipPayloadAttestationMessageRequirements = RequirementList(PayloadAttGoss
 var (
 	ErrIncorrectPayloadAttSlot      = errors.New("payload att slot does not match the current slot")
 	ErrPayloadAttBlockRootNotSeen   = errors.New("block root not seen")
+	ErrPayloadAttBlockSlotMismatch  = errors.New("block slot does not match attestation slot")
 	ErrPayloadAttBlockRootInvalid   = errors.New("block root invalid")
 	ErrIncorrectPayloadAttValidator = errors.New("validator not present in payload timeliness committee")
 	ErrInvalidPayloadAttMessage     = errors.New("invalid payload attestation message")
@@ -70,6 +73,18 @@ func (v *PayloadAttMsgVerifier) VerifyBlockRootSeen(blockRootSeen func([32]byte)
 		return nil
 	}
 	return fmt.Errorf("%w: root=%#x", ErrPayloadAttBlockRootNotSeen, v.pa.BeaconBlockRoot())
+}
+
+// VerifyBlockSlotMatches verifies the block referenced by data.beacon_block_root is at slot data.slot.
+// Represents the following spec verification:
+// [IGNORE] The block referenced by data.beacon_block_root is at slot data.slot.
+func (v *PayloadAttMsgVerifier) VerifyBlockSlotMatches(blockSlot primitives.Slot) (err error) {
+	defer v.record(RequireBlockSlotMatches, &err)
+
+	if blockSlot != v.pa.Slot() {
+		return fmt.Errorf("%w: block=%d attestation=%d", ErrPayloadAttBlockSlotMismatch, blockSlot, v.pa.Slot())
+	}
+	return nil
 }
 
 // VerifyBlockRootValid verifies if the block root is valid.

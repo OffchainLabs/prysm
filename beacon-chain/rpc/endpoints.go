@@ -375,6 +375,17 @@ func (s *Service) validatorEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
+			template: "/eth/v1/validator/proposer_preferences",
+			name:     namespace + ".SubmitSignedProposerPreferences",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.SubmitSignedProposerPreferences,
+			methods: []string{http.MethodPost},
+		},
+		{
 			template: "/eth/v1/validator/liveness/{epoch}",
 			name:     namespace + ".GetLiveness",
 			middleware: []middleware.Middleware{
@@ -1118,6 +1129,16 @@ func (s *Service) debugEndpoints(stater lookup.Stater, blocker lookup.Blocker) [
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetForkChoice,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v2/debug/fork_choice",
+			name:     namespace + ".GetForkChoiceV2",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetForkChoiceV2,
 			methods: []string{http.MethodGet},
 		},
 		{

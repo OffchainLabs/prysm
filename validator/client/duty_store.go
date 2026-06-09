@@ -1,153 +1,388 @@
 package client
 
 import (
+	"bytes"
+	"iter"
+	"slices"
+	"sync"
+
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
+// cloneValidatorDuty returns a deep copy: scalar fields are copied by value
+// and slice fields are independently allocated, so the returned duty shares
+// no memory with d.
+func cloneValidatorDuty(d *ethpb.ValidatorDuty) *ethpb.ValidatorDuty {
+	if d == nil {
+		return nil
+	}
+	return &ethpb.ValidatorDuty{
+		CommitteeLength:         d.CommitteeLength,
+		CommitteeIndex:          d.CommitteeIndex,
+		CommitteesAtSlot:        d.CommitteesAtSlot,
+		ValidatorCommitteeIndex: d.ValidatorCommitteeIndex,
+		AttesterSlot:            d.AttesterSlot,
+		ProposerSlots:           slices.Clone(d.ProposerSlots),
+		PublicKey:               bytes.Clone(d.PublicKey),
+		Status:                  d.Status,
+		ValidatorIndex:          d.ValidatorIndex,
+		IsSyncCommittee:         d.IsSyncCommittee,
+		PtcSlots:                slices.Clone(d.PtcSlots),
+	}
+}
+
 type pubkey = [fieldparams.BLSPubkeyLength]byte
 
-// dutyStore stores validator duties from the beacon node.
-// Both the legacy combined endpoint and the split per-duty endpoints
-// populate the same internal maps, so accessor methods have a single code path.
-type dutyStore struct {
-	currentDuties map[pubkey]*ethpb.ValidatorDuty
-	nextDuties    map[pubkey]*ethpb.ValidatorDuty
-
-	prevDependentRoot []byte
+// dutyStoreData holds duty state with no synchronization. Methods on this
+// type never lock; the surrounding dutyStore is responsible for serializing
+// access. Maps and slices are aliased by snapshots rather than deep copied,
+// which is safe because writers replace them wholesale via setFromContainer.
+type dutyStoreData struct {
+	missingNext       missingNextDuties
+	initialized       bool
+	syncNextMap       map[primitives.ValidatorIndex]bool
+	syncCurrentMap    map[primitives.ValidatorIndex]bool
+	ptcSlots          map[primitives.ValidatorIndex][]primitives.Slot
+	proposerSlots     map[primitives.ValidatorIndex][]primitives.Slot
+	nextDuties        map[pubkey]*ethpb.ValidatorDuty
+	currentDuties     map[pubkey]*ethpb.ValidatorDuty
+	epoch             primitives.Epoch
 	currDependentRoot []byte
-
-	proposerSlots  map[primitives.ValidatorIndex][]primitives.Slot
-	ptcSlots       map[primitives.ValidatorIndex][]primitives.Slot
-	syncCurrentMap map[primitives.ValidatorIndex]bool
-	syncNextMap    map[primitives.ValidatorIndex]bool
-
-	initialized bool
+	prevDependentRoot []byte
+	// indices is the sorted set of validator indices the last fetch was built
+	// from. canPromote requires this to match the current request's indices.
+	indices []primitives.ValidatorIndex
 }
 
-// Reset clears all duty data, marking the store as uninitialized.
-func (ds *dutyStore) Reset() {
-	*ds = dutyStore{}
-}
+func (d *dutyStoreData) isInitialized() bool { return d.initialized }
 
-// IsInitialized returns true if any duty data has been populated.
-func (ds *dutyStore) IsInitialized() bool {
-	if ds == nil {
-		return false
-	}
-	return ds.initialized
-}
-
-// DependentRoots returns the previous and current dependent roots.
-func (ds *dutyStore) DependentRoots() (prev, curr []byte) {
-	if !ds.IsInitialized() {
-		return nil, nil
-	}
-	return ds.prevDependentRoot, ds.currDependentRoot
-}
-
-// CurrentEpochDuties returns the current epoch duties.
-func (ds *dutyStore) CurrentEpochDuties() map[pubkey]*ethpb.ValidatorDuty {
-	if !ds.IsInitialized() {
-		return nil
-	}
-	return ds.currentDuties
-}
-
-// NextEpochDuties returns the next epoch duties.
-func (ds *dutyStore) NextEpochDuties() map[pubkey]*ethpb.ValidatorDuty {
-	if !ds.IsInitialized() {
-		return nil
-	}
-	return ds.nextDuties
-}
-
-// CurrentDuty returns the current epoch duty for a given pubkey.
-func (ds *dutyStore) CurrentDuty(pk pubkey) (*ethpb.ValidatorDuty, bool) {
-	if !ds.IsInitialized() {
+func (d *dutyStoreData) currentDuty(pk pubkey) (*ethpb.ValidatorDuty, bool) {
+	if !d.initialized {
 		return nil, false
 	}
-	d, ok := ds.currentDuties[pk]
-	return d, ok
-}
-
-// ProposerSlots returns the proposer slots for a given validator index.
-func (ds *dutyStore) ProposerSlots(idx primitives.ValidatorIndex) []primitives.Slot {
-	if !ds.IsInitialized() {
-		return nil
+	v, ok := d.currentDuties[pk]
+	if !ok {
+		return nil, false
 	}
-	return ds.proposerSlots[idx]
+	return cloneValidatorDuty(v), true
 }
 
-// PtcSlots returns the PTC slots for a given validator index.
-func (ds *dutyStore) PtcSlots(idx primitives.ValidatorIndex) []primitives.Slot {
-	if !ds.IsInitialized() {
-		return nil
-	}
-	return ds.ptcSlots[idx]
-}
-
-// IsSyncCommittee returns whether a validator is in the current sync committee.
-func (ds *dutyStore) IsSyncCommittee(idx primitives.ValidatorIndex) bool {
-	if !ds.IsInitialized() {
+func (d *dutyStoreData) isSyncCommittee(idx primitives.ValidatorIndex) bool {
+	if !d.initialized {
 		return false
 	}
-	return ds.syncCurrentMap[idx]
+	return d.syncCurrentMap[idx]
 }
 
-// IsNextSyncCommittee returns whether a validator is in the next epoch's sync committee.
-func (ds *dutyStore) IsNextSyncCommittee(idx primitives.ValidatorIndex) bool {
-	if !ds.IsInitialized() {
+func (d *dutyStoreData) isNextSyncCommittee(idx primitives.ValidatorIndex) bool {
+	if !d.initialized {
 		return false
 	}
-	return ds.syncNextMap[idx]
+	return d.syncNextMap[idx]
 }
 
-// SetFromCombinedDutiesResponse stores a combined duties response by decomposing it into
-// duty maps, proposer slots, and sync committee maps.
-// DEPRECATED: GetDutiesV2, use the split GetAttesterDuties, GetProposerDutiesV2, GetSyncCommitteeDuties, GetPTCduties endpoints.
-func (ds *dutyStore) SetFromCombinedDutiesResponse(container *ethpb.ValidatorDutiesContainer) {
+func (d *dutyStoreData) canPromote(nextEpoch primitives.Epoch, indices []primitives.ValidatorIndex) bool {
+	if !d.initialized || d.epoch+1 != nextEpoch || d.missingNext != 0 {
+		return false
+	}
+	// Both slices are kept sorted; differing length or any element mismatch
+	// signals a validator-set drift (activation, exit, keymanager change) and
+	// invalidates the cached duties for promotion.
+	if len(d.indices) != len(indices) {
+		return false
+	}
+	for i, idx := range d.indices {
+		if idx != indices[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func (d *dutyStoreData) toContainer() *ethpb.ValidatorDutiesContainer {
+	if !d.initialized {
+		return &ethpb.ValidatorDutiesContainer{}
+	}
+	current := make([]*ethpb.ValidatorDuty, 0, len(d.currentDuties))
+	for _, duty := range d.currentDuties {
+		current = append(current, duty)
+	}
+	next := make([]*ethpb.ValidatorDuty, 0, len(d.nextDuties))
+	for _, duty := range d.nextDuties {
+		next = append(next, duty)
+	}
+	return &ethpb.ValidatorDutiesContainer{
+		PrevDependentRoot:  d.prevDependentRoot,
+		CurrDependentRoot:  d.currDependentRoot,
+		CurrentEpochDuties: current,
+		NextEpochDuties:    next,
+	}
+}
+
+// reset returns d to its zero value. Clearing every field is what keeps stale
+// state (notably indices, which canPromote keys on) from surviving a rebuild.
+func (d *dutyStoreData) reset() {
+	*d = dutyStoreData{}
+}
+
+func (d *dutyStoreData) setFromContainer(container *ethpb.ValidatorDutiesContainer) {
+	// Rebuild from scratch so no field can leak from a prior fetch, even if this
+	// is ever called on an already-populated struct.
+	d.reset()
 	if container == nil {
-		ds.Reset()
 		return
 	}
 
-	ds.proposerSlots = make(map[primitives.ValidatorIndex][]primitives.Slot)
-	ds.ptcSlots = make(map[primitives.ValidatorIndex][]primitives.Slot)
-	ds.syncCurrentMap = make(map[primitives.ValidatorIndex]bool)
-	ds.syncNextMap = make(map[primitives.ValidatorIndex]bool)
+	d.proposerSlots = make(map[primitives.ValidatorIndex][]primitives.Slot)
+	d.ptcSlots = make(map[primitives.ValidatorIndex][]primitives.Slot)
+	d.syncCurrentMap = make(map[primitives.ValidatorIndex]bool)
+	d.syncNextMap = make(map[primitives.ValidatorIndex]bool)
 
-	ds.currentDuties = make(map[pubkey]*ethpb.ValidatorDuty, len(container.CurrentEpochDuties))
-	for _, d := range container.CurrentEpochDuties {
-		if d == nil {
+	d.currentDuties = make(map[pubkey]*ethpb.ValidatorDuty, len(container.CurrentEpochDuties))
+	for _, duty := range container.CurrentEpochDuties {
+		if duty == nil {
 			continue
 		}
-		ds.currentDuties[bytesutil.ToBytes48(d.PublicKey)] = d
-		if len(d.ProposerSlots) > 0 {
-			ds.proposerSlots[d.ValidatorIndex] = d.ProposerSlots
+		d.currentDuties[bytesutil.ToBytes48(duty.PublicKey)] = duty
+		if len(duty.ProposerSlots) > 0 {
+			d.proposerSlots[duty.ValidatorIndex] = duty.ProposerSlots
 		}
-		if d.IsSyncCommittee {
-			ds.syncCurrentMap[d.ValidatorIndex] = true
+		if duty.IsSyncCommittee {
+			d.syncCurrentMap[duty.ValidatorIndex] = true
 		}
-		if len(d.PtcSlots) > 0 {
-			ds.ptcSlots[d.ValidatorIndex] = d.PtcSlots
+		if len(duty.PtcSlots) > 0 {
+			d.ptcSlots[duty.ValidatorIndex] = duty.PtcSlots
 		}
 	}
 
-	ds.nextDuties = make(map[pubkey]*ethpb.ValidatorDuty, len(container.NextEpochDuties))
-	for _, d := range container.NextEpochDuties {
-		if d == nil {
+	d.nextDuties = make(map[pubkey]*ethpb.ValidatorDuty, len(container.NextEpochDuties))
+	for _, duty := range container.NextEpochDuties {
+		if duty == nil {
 			continue
 		}
-		ds.nextDuties[bytesutil.ToBytes48(d.PublicKey)] = d
-		if d.IsSyncCommittee {
-			ds.syncNextMap[d.ValidatorIndex] = true
+		d.nextDuties[bytesutil.ToBytes48(duty.PublicKey)] = duty
+		if duty.IsSyncCommittee {
+			d.syncNextMap[duty.ValidatorIndex] = true
 		}
 	}
 
-	ds.prevDependentRoot = container.PrevDependentRoot
-	ds.currDependentRoot = container.CurrDependentRoot
-	ds.initialized = true
+	d.prevDependentRoot = container.PrevDependentRoot
+	d.currDependentRoot = container.CurrDependentRoot
+	d.initialized = true
+}
+
+// dutyStore is the concurrency-safe wrapper around dutyStoreData. All methods
+// acquire mu internally. Compound reads should use snapshot to get a coherent
+// view without holding the lock across long operations.
+type dutyStore struct {
+	mu   sync.RWMutex
+	data dutyStoreData
+}
+
+// roDutySnapshot is a read-only view of dutyStore. Getters return copies; the
+// duty iterators yield aliases that callers must not mutate.
+type roDutySnapshot struct {
+	d dutyStoreData
+}
+
+func (s roDutySnapshot) isInitialized() bool { return s.d.isInitialized() }
+
+func (s roDutySnapshot) prevDependentRoot() []byte {
+	if !s.d.initialized {
+		return nil
+	}
+	return bytes.Clone(s.d.prevDependentRoot)
+}
+
+func (s roDutySnapshot) currDependentRoot() []byte {
+	if !s.d.initialized {
+		return nil
+	}
+	return bytes.Clone(s.d.currDependentRoot)
+}
+
+func (s roDutySnapshot) currentDuty(pk pubkey) (*ethpb.ValidatorDuty, bool) {
+	return s.d.currentDuty(pk)
+}
+
+func (s roDutySnapshot) proposerSlots(idx primitives.ValidatorIndex) []primitives.Slot {
+	if !s.d.initialized {
+		return nil
+	}
+	return slices.Clone(s.d.proposerSlots[idx])
+}
+
+func (s roDutySnapshot) ptcSlots(idx primitives.ValidatorIndex) []primitives.Slot {
+	if !s.d.initialized {
+		return nil
+	}
+	return slices.Clone(s.d.ptcSlots[idx])
+}
+
+func (s roDutySnapshot) isSyncCommittee(idx primitives.ValidatorIndex) bool {
+	return s.d.isSyncCommittee(idx)
+}
+
+func (s roDutySnapshot) isNextSyncCommittee(idx primitives.ValidatorIndex) bool {
+	return s.d.isNextSyncCommittee(idx)
+}
+
+// currentDuties yields read-only current-epoch duty aliases. Re-rangeable.
+func (s roDutySnapshot) currentDuties() iter.Seq2[pubkey, *ethpb.ValidatorDuty] {
+	return func(yield func(pubkey, *ethpb.ValidatorDuty) bool) {
+		if !s.d.initialized {
+			return
+		}
+		for pk, duty := range s.d.currentDuties {
+			if !yield(pk, duty) {
+				return
+			}
+		}
+	}
+}
+
+// nextDuties yields read-only next-epoch duty aliases. Re-rangeable.
+func (s roDutySnapshot) nextDuties() iter.Seq2[pubkey, *ethpb.ValidatorDuty] {
+	return func(yield func(pubkey, *ethpb.ValidatorDuty) bool) {
+		if !s.d.initialized {
+			return
+		}
+		for pk, duty := range s.d.nextDuties {
+			if !yield(pk, duty) {
+				return
+			}
+		}
+	}
+}
+
+func (s roDutySnapshot) currentDutyCount() int {
+	if !s.d.initialized {
+		return 0
+	}
+	return len(s.d.currentDuties)
+}
+
+func (s roDutySnapshot) nextDutyCount() int {
+	if !s.d.initialized {
+		return 0
+	}
+	return len(s.d.nextDuties)
+}
+
+// snapshot returns a coherent read-only view of the store. The returned value
+// can be inspected without holding any lock; maps and slices alias internal
+// state but are never mutated in place (setFromContainer replaces them).
+func (ds *dutyStore) snapshot() roDutySnapshot {
+	if ds == nil {
+		return roDutySnapshot{}
+	}
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	return roDutySnapshot{d: ds.data}
+}
+
+func (ds *dutyStore) reset() {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	ds.data.reset()
+}
+
+func (ds *dutyStore) isInitialized() bool {
+	if ds == nil {
+		return false
+	}
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	return ds.data.isInitialized()
+}
+
+func (ds *dutyStore) canPromote(nextEpoch primitives.Epoch, indices []primitives.ValidatorIndex) bool {
+	if ds == nil {
+		return false
+	}
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	return ds.data.canPromote(nextEpoch, indices)
+}
+
+func (ds *dutyStore) prevDependentRoot() []byte {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	if !ds.data.initialized {
+		return nil
+	}
+	return bytes.Clone(ds.data.prevDependentRoot)
+}
+
+func (ds *dutyStore) currDependentRoot() []byte {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	if !ds.data.initialized {
+		return nil
+	}
+	return bytes.Clone(ds.data.currDependentRoot)
+}
+
+// dependentRoots returns both dependent roots. Retained for compatibility
+// with callers that want them in a single call; see prevDependentRoot and
+// currDependentRoot for naming semantics.
+func (ds *dutyStore) dependentRoots() (prev, curr []byte) {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	if !ds.data.initialized {
+		return nil, nil
+	}
+	return bytes.Clone(ds.data.prevDependentRoot), bytes.Clone(ds.data.currDependentRoot)
+}
+
+func (ds *dutyStore) currentDuty(pk pubkey) (*ethpb.ValidatorDuty, bool) {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	return ds.data.currentDuty(pk)
+}
+
+func (ds *dutyStore) proposerSlots(idx primitives.ValidatorIndex) []primitives.Slot {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	if !ds.data.initialized {
+		return nil
+	}
+	return slices.Clone(ds.data.proposerSlots[idx])
+}
+
+func (ds *dutyStore) ptcSlots(idx primitives.ValidatorIndex) []primitives.Slot {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	if !ds.data.initialized {
+		return nil
+	}
+	return slices.Clone(ds.data.ptcSlots[idx])
+}
+
+func (ds *dutyStore) isSyncCommittee(idx primitives.ValidatorIndex) bool {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	return ds.data.isSyncCommittee(idx)
+}
+
+func (ds *dutyStore) isNextSyncCommittee(idx primitives.ValidatorIndex) bool {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	return ds.data.isNextSyncCommittee(idx)
+}
+
+func (ds *dutyStore) toContainer() *ethpb.ValidatorDutiesContainer {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	return ds.data.toContainer()
+}
+
+// write atomically replaces the store's state with the given data.
+func (ds *dutyStore) write(data dutyStoreData) {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	ds.data = data
 }

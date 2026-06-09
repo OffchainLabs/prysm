@@ -316,6 +316,16 @@ func (s *Server) handleAttestationsPostElectra(
 			}
 			att := singleAtt.ToAttestationElectra(committee)
 
+			set, err := blocks.AttestationSignatureBatch(context.Background(), targetState, []eth.Att{att})
+			if err != nil {
+				log.WithError(err).Error("Could not create attestation signature set")
+				continue
+			}
+			if verified, err := set.Verify(); err != nil || !verified {
+				log.WithError(err).Error("Attestation signature verification failed")
+				continue
+			}
+
 			if features.Get().EnableExperimentalAttestationPool {
 				if err = s.AttestationCache.Add(att); err != nil {
 					log.WithError(err).Error("Could not save attestation")

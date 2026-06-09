@@ -664,6 +664,48 @@ func (f *ForkChoice) ForkChoiceDump(ctx context.Context) (*forkchoice2.Dump, err
 	return resp, nil
 }
 
+// ForkChoiceDumpV2 returns a Gloas-aware dump of forkchoice, emitting one entry per (root, payload_status) tuple.
+func (f *ForkChoice) ForkChoiceDumpV2(ctx context.Context) (*forkchoice2.DumpV2, error) {
+	jc := &ethpb.Checkpoint{
+		Epoch: f.store.justifiedCheckpoint.Epoch,
+		Root:  f.store.justifiedCheckpoint.Root[:],
+	}
+	ujc := &ethpb.Checkpoint{
+		Epoch: f.store.unrealizedJustifiedCheckpoint.Epoch,
+		Root:  f.store.unrealizedJustifiedCheckpoint.Root[:],
+	}
+	fc := &ethpb.Checkpoint{
+		Epoch: f.store.finalizedCheckpoint.Epoch,
+		Root:  f.store.finalizedCheckpoint.Root[:],
+	}
+	ufc := &ethpb.Checkpoint{
+		Epoch: f.store.unrealizedFinalizedCheckpoint.Epoch,
+		Root:  f.store.unrealizedFinalizedCheckpoint.Root[:],
+	}
+	nodes := make([]*forkchoice2.NodeV2, 0, f.NodeCount())
+	var err error
+	if f.store.treeRootNode != nil {
+		nodes, err = f.store.nodeTreeDumpV2(ctx, f.store.treeRootNode, nodes)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var headRoot [32]byte
+	if f.store.headNode != nil {
+		headRoot = f.store.headNode.root
+	}
+	return &forkchoice2.DumpV2{
+		JustifiedCheckpoint:           jc,
+		UnrealizedJustifiedCheckpoint: ujc,
+		FinalizedCheckpoint:           fc,
+		UnrealizedFinalizedCheckpoint: ufc,
+		ProposerBoostRoot:             f.store.proposerBoostRoot[:],
+		PreviousProposerBoostRoot:     f.store.previousProposerBoostRoot[:],
+		HeadRoot:                      headRoot[:],
+		ForkChoiceNodes:               nodes,
+	}, nil
+}
+
 // SetBalancesByRooter sets the balanceByRoot handler in forkchoice
 func (f *ForkChoice) SetBalancesByRooter(handler forkchoice.BalancesByRooter) {
 	f.balancesByRoot = handler
@@ -731,19 +773,36 @@ func (f *ForkChoice) Slot(root [32]byte) (primitives.Slot, error) {
 
 // DependentRoot returns the last root of the epoch prior to the requested ecoch in the canonical chain.
 func (f *ForkChoice) DependentRoot(epoch primitives.Epoch) ([32]byte, error) {
-	return f.DependentRootForEpoch(f.CachedHeadRoot(), epoch)
+	return f.store.dependentRoot(epoch)
 }
 
 // DependentRootForEpoch return the last root of the epoch prior to the requested epoch for the given root.
 func (f *ForkChoice) DependentRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
-	tr, err := f.TargetRootForEpoch(root, epoch)
+	return f.store.dependentRootForEpoch(root, epoch)
+}
+
+// TargetRootForEpoch returns the root of the target block for a given epoch.
+func (f *ForkChoice) TargetRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+	return f.store.targetRootForEpoch(root, epoch)
+}
+
+func (s *Store) dependentRoot(epoch primitives.Epoch) ([32]byte, error) {
+	var headRoot [32]byte
+	if s.headNode != nil {
+		headRoot = s.headNode.root
+	}
+	return s.dependentRootForEpoch(headRoot, epoch)
+}
+
+func (s *Store) dependentRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+	tr, err := s.targetRootForEpoch(root, epoch)
 	if err != nil {
 		return [32]byte{}, err
 	}
 	if tr == [32]byte{} {
 		return [32]byte{}, nil
 	}
-	en, ok := f.store.emptyNodeByRoot[tr]
+	en, ok := s.emptyNodeByRoot[tr]
 	if !ok || en == nil {
 		return [32]byte{}, ErrNilNode
 	}
@@ -751,13 +810,13 @@ func (f *ForkChoice) DependentRootForEpoch(root [32]byte, epoch primitives.Epoch
 		if en.node.parent != nil {
 			en = en.node.parent
 		} else {
-			return f.store.finalizedDependentRoot, nil
+			return s.finalizedDependentRoot, nil
 		}
 	}
 	return en.node.root, nil
 }
 
-// TargetRootForEpoch returns the root of the target block for a given epoch.
+// targetRootForEpoch returns the root of the target block for a given epoch.
 // The epoch parameter is crucial to identify the correct target root. For example:
 // When inserting a block at slot 63 with block root 0xA and target root 0xB (pointing to the block at slot 32),
 // and at slot 64, where the block is skipped, the attestation will reference the target root as 0xA (for slot 63), not 0xB (for slot 32).
@@ -765,8 +824,8 @@ func (f *ForkChoice) DependentRootForEpoch(root [32]byte, epoch primitives.Epoch
 // We also allow for the epoch to be below the current target for this root, in
 // which case we return the root of the checkpoint of the chain containing the
 // passed root, at the given epoch
-func (f *ForkChoice) TargetRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
-	n, ok := f.store.emptyNodeByRoot[root]
+func (s *Store) targetRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+	n, ok := s.emptyNodeByRoot[root]
 	if !ok || n == nil {
 		return [32]byte{}, ErrNilNode
 	}
@@ -782,7 +841,7 @@ func (f *ForkChoice) TargetRootForEpoch(root [32]byte, epoch primitives.Epoch) (
 	if epoch == nodeEpoch {
 		return targetRoot, nil
 	}
-	targetNode, ok := f.store.emptyNodeByRoot[targetRoot]
+	targetNode, ok := s.emptyNodeByRoot[targetRoot]
 	if !ok || targetNode == nil {
 		return [32]byte{}, ErrNilNode
 	}
@@ -793,7 +852,7 @@ func (f *ForkChoice) TargetRootForEpoch(root [32]byte, epoch primitives.Epoch) (
 			return [32]byte{}, ErrNilNode
 		}
 	}
-	return f.TargetRootForEpoch(targetNode.node.root, epoch)
+	return s.targetRootForEpoch(targetNode.node.root, epoch)
 }
 
 // ParentRoot returns the block root of the parent node if it is in forkchoice.
