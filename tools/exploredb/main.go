@@ -194,10 +194,8 @@ func readBucketStat(dbNameWithPath string, statsC chan<- *bucketStat) {
 	// for every bucket, calculate the stats and send it for printing.
 	// calculate the state of all the buckets in parallel.
 	var wg sync.WaitGroup
-	for _, bName := range buckets {
-		wg.Add(1)
-		go func(bukName string) {
-			defer wg.Done()
+	for _, bukName := range buckets {
+		wg.Go(func() {
 			count := uint64(0)
 			minValueSize := ^uint64(0)
 			maxValueSize := uint64(0)
@@ -247,7 +245,7 @@ func readBucketStat(dbNameWithPath string, statsC chan<- *bucketStat) {
 				maxValueSize:   maxValueSize,
 			}
 			statsC <- stat
-		}(bName)
+		})
 	}
 	wg.Wait()
 	close(statsC)
