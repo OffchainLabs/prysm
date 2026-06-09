@@ -223,6 +223,17 @@ func (l *limiter) free() {
 	}
 }
 
+// removePeer reclaims the per-peer leaky buckets on disconnect
+func (l *limiter) removePeer(pid peer.ID) {
+	l.Lock()
+	defer l.Unlock()
+
+	key := pid.String()
+	for _, collector := range l.limiterMap {
+		collector.Remove(key)
+	}
+}
+
 // not to be used outside the rate limiter file as it is unsafe for concurrent usage
 // and is protected by a lock on all of its usages here.
 func (l *limiter) retrieveCollector(topic string) (*leakybucket.Collector, error) {
