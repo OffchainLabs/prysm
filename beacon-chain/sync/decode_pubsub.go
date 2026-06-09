@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
@@ -63,6 +64,12 @@ func (s *Service) decodePubsubMessage(msg *pubsub.Message) (ssz.Unmarshaler, err
 		m = dt
 	}
 	if err := s.cfg.p2p.Encoding().DecodeGossip(msg.Data, m); err != nil {
+		if topic == p2p.AttestationSubnetTopicFormat {
+			fallback, fallbackErr := s.decodeAlternateAttestationType(msg.Data, fDigest[:], m)
+			if fallbackErr == nil {
+				return fallback, nil
+			}
+		}
 		return nil, err
 	}
 	return m, nil
@@ -107,6 +114,36 @@ func extractAttestationDataTypeFromTopic(digest []byte, clock *startup.Clock) (e
 		return &ethpb.WireAttestation{}, nil
 	}
 	return att, nil
+}
+
+func (s *Service) decodeAlternateAttestationType(data []byte, digest []byte, current ssz.Unmarshaler) (ssz.Unmarshaler, error) {
+	batchEpoch := params.BeaconConfig().BatchAttestationForkEpoch
+	if _, currentIsWire := current.(*ethpb.WireAttestation); currentIsWire {
+		legacy, err := extractDataTypeFromTypeMap(types.AttestationMap, digest, s.cfg.clock)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.cfg.p2p.Encoding().DecodeGossip(data, legacy); err != nil {
+			return nil, err
+		}
+		if data := legacy.GetData(); data != nil && slots.ToEpoch(data.Slot) < batchEpoch {
+			return legacy, nil
+		}
+		return nil, errors.New("decoded legacy attestation is not pre-batch")
+	}
+
+	wire := &ethpb.WireAttestation{}
+	if err := s.cfg.p2p.Encoding().DecodeGossip(data, wire); err != nil {
+		return nil, err
+	}
+	inner, err := wire.Inner()
+	if err != nil {
+		return nil, err
+	}
+	if data := inner.GetData(); data != nil && slots.ToEpoch(data.Slot) >= batchEpoch {
+		return wire, nil
+	}
+	return nil, errors.New("decoded wire attestation is not post-batch")
 }
 
 func extractDataTypeFromTypeMap[T any](typeMap map[[4]byte]func() (T, error), digest []byte, tor blockchain.TemporalOracle) (T, error) {

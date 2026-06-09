@@ -26,6 +26,7 @@ import (
 	"github.com/d4l3k/messagediff"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
+	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 func TestService_decodePubsubMessage(t *testing.T) {
@@ -331,6 +332,88 @@ func TestExtractAttestationDataTypeFromTopicUsesWireAtBatchEpoch(t *testing.T) {
 	postBatch, err := extractAttestationDataTypeFromTopic(digest[:], batchClock)
 	require.NoError(t, err)
 	require.Equal(t, reflect.TypeFor[*ethpb.WireAttestation](), reflect.TypeOf(postBatch))
+}
+
+func TestDecodePubsubMessageAttestationBoundaryFallback(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.MainnetConfig()
+	cfg.BatchAttestationForkEpoch = cfg.FuluForkEpoch + 1
+	params.OverrideBeaconConfig(cfg)
+
+	genesis := time.Now()
+	preBatchSlot := primitives.Slot(cfg.BatchAttestationForkEpoch-1) * cfg.SlotsPerEpoch
+	batchSlot := primitives.Slot(cfg.BatchAttestationForkEpoch) * cfg.SlotsPerEpoch
+	digest := params.ForkDigest(cfg.BatchAttestationForkEpoch)
+	topic := fmt.Sprintf(p2p.AttestationSubnetTopicFormat, digest, uint64(0))
+
+	testP2P := p2ptesting.NewTestP2P(t)
+	encode := func(msg ssz.Marshaler) []byte {
+		buf := new(bytes.Buffer)
+		if _, err := testP2P.Encoding().EncodeGossip(buf, msg); err != nil {
+			t.Fatal(err)
+		}
+		return buf.Bytes()
+	}
+	attestationData := func(slot primitives.Slot) *ethpb.AttestationData {
+		return &ethpb.AttestationData{
+			Slot:            slot,
+			BeaconBlockRoot: make([]byte, 32),
+			Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+			Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+		}
+	}
+	singleAt := func(slot primitives.Slot) *ethpb.SingleAttestation {
+		return &ethpb.SingleAttestation{
+			Data:      attestationData(slot),
+			Signature: make([]byte, 96),
+		}
+	}
+
+	tests := []struct {
+		name      string
+		clockSlot primitives.Slot
+		payload   []byte
+		want      reflect.Type
+	}{
+		{
+			name:      "pre-batch clock decodes post-batch wire attestation",
+			clockSlot: preBatchSlot,
+			payload: encode(&ethpb.WireAttestation{
+				Selector: ethpb.WireSelectorSingle,
+				Single:   singleAt(batchSlot),
+			}),
+			want: reflect.TypeFor[*ethpb.WireAttestation](),
+		},
+		{
+			name:      "post-batch clock decodes pre-batch legacy attestation",
+			clockSlot: batchSlot,
+			payload:   encode(singleAt(preBatchSlot)),
+			want:      reflect.TypeFor[*ethpb.SingleAttestation](),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Service{
+				cfg: &config{
+					p2p: testP2P,
+					clock: startup.NewClock(
+						genesis,
+						[32]byte{},
+						startup.WithSlotAsNow(tt.clockSlot),
+					),
+				},
+			}
+			fullTopic := topic + testP2P.Encoding().ProtocolSuffix()
+			got, err := s.decodePubsubMessage(&pubsub.Message{
+				Message: &pb.Message{
+					Topic: &fullTopic,
+					Data:  tt.payload,
+				},
+			})
+			require.NoError(t, err)
+			require.Equal(t, tt.want, reflect.TypeOf(got))
+		})
+	}
 }
 
 func TestExtractDataTypeFromTypeMapInvalid(t *testing.T) {
