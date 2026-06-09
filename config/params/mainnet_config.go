@@ -200,7 +200,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	DomainBeaconBuilder:               bytesutil.Uint32ToBytes4(0x0B000000),
 	DomainPTCAttester:                 bytesutil.Uint32ToBytes4(0x0C000000),
 	DomainProposerPreferences:         bytesutil.Uint32ToBytes4(0x0D000000),
-	// EIP-8243 domains. Spec-deviation (Codex fix #1): the EIP text suggested
+	// EIP-8243 domains. Spec-deviation: the EIP text suggested
 	// DOMAIN_BATCH_ATTESTER = 0x0B000000, which collides with DomainBeaconBuilder.
 	// We assign 0x0E000000 / 0x0F000000 as placeholders pending EIP-author confirmation.
 	DomainBatchAttester: bytesutil.Uint32ToBytes4(0x0E000000),

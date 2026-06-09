@@ -185,7 +185,7 @@ message BatchSealPreimage {
 }
 
 // BatcherPreimage is what the batcher signs to commit to the composition.
-// Includes data_root (Prysm spec deviation, Codex fix #6) to bind the
+// Includes data_root to bind the
 // composition to the AttestationData and prevent replay across conflicting
 // votes.
 message BatcherPreimage {

@@ -168,7 +168,7 @@ type Service struct {
 	seenUnAggregatedAttestationCache     *lru.Cache
 	// EIP-8243 batch attestation dedup. Distinct from the unaggregated cache:
 	// keyed by (slot, committee_index) and tracks per-duty seen_attesters and
-	// seen_batchers per the EIP §"Gossip rules" semantics (see Codex fix #4).
+	// seen_batchers per the EIP §"Gossip rules" semantics.
 	seenBatchAttestationLock  sync.Mutex
 	seenBatchAttestationCache *lru.Cache
 	seenExitLock                         sync.RWMutex

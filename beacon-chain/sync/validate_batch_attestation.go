@@ -3,7 +3,7 @@
 // inner attestation unwrapped from a WireAttestation is a *BatchAttestation.
 //
 // The validation runs ALL the inherited single-attestation gossip checks
-// (Codex fix #3) — slot window, target epoch, bad-block, block+state
+// — slot window, target epoch, bad-block, block+state
 // availability, forkchoice descent, LMD-FFG, subnet — and then the
 // batch-specific checks: bitlist length, batcher membership, 3-signature BLS
 // batch (data signature + aggregate seal + batcher composition signature) and
@@ -41,7 +41,7 @@ import (
 // can publish one duration histogram per batch.
 const batchAttSignatureBatchDesc = "batch_attestation"
 
-// batchDedupKey identifies a (slot, committee) duty. Per Codex fix #4, the
+// batchDedupKey identifies a (slot, committee) duty. The
 // EIP's data_root suffix is intentionally omitted: keying by data_root would
 // let one attester re-spam across conflicting votes by varying the vote data,
 // since each variation would land in a different bucket.
@@ -136,7 +136,7 @@ func (s *Service) validateBatchAttestation(
 	}
 	data := batch.GetData()
 
-	// ----- Common gossip checks (Codex fix #3: applied identically to singles) -----
+	// ----- Common gossip checks  -----
 
 	// Slot 0 attestations are not processed at any phase.
 	if data.Slot == 0 {
@@ -191,7 +191,7 @@ func (s *Service) validateBatchAttestation(
 	}
 
 	// Subnet check: the topic must match the committee. Reused as-is from the
-	// single-attestation path (Codex fix #3).
+	// single-attestation path .
 	validationRes, err := s.validateUnaggregatedAttTopic(ctx, batch, preState, *msg.Topic)
 	if validationRes != pubsub.ValidationAccept {
 		return validationRes, wrapAttestationError(err, batch)
@@ -203,7 +203,7 @@ func (s *Service) validateBatchAttestation(
 		return pubsub.ValidationIgnore, err
 	}
 
-	// Codex fix #5: REJECT if bitlist length does not equal committee size.
+	// REJECT if bitlist length does not equal committee size.
 	// Without this, an overlong bitlist would otherwise be quietly truncated
 	// and processed.
 	if err := helpers.VerifyBitfieldLength(batch.AggregationBits, uint64(len(committee))); err != nil {
@@ -330,8 +330,8 @@ func orBitlists(dst, src bitfield.Bitlist, committeeSize uint64) bitfield.Bitlis
 // verifier can amortize pairing operations across all three.
 //
 // All three signatures use a domain derived from the attestation's TARGET
-// epoch (matching VerifyIndexedAttestation in attestation.go:259 — Codex
-// fix #2), so the verifier can construct the signing root without referring
+// epoch (matching VerifyIndexedAttestation in attestation.go:259 
+// , so the verifier can construct the signing root without referring
 // to the inner state for each domain.
 func (s *Service) buildBatchAttestationSignatureSet(
 	ctx context.Context,
@@ -386,7 +386,7 @@ func (s *Service) buildBatchAttestationSignatureSet(
 	set.Descriptions = append(set.Descriptions, "batch_att_data")
 
 	// 2) Aggregate batch seal over BatchSealPreimage(slot, ci, batcher) under
-	//    DomainBatchAttester. Codex fix #1: domain must be present (the EIP
+	//    DomainBatchAttester. domain must be present (the EIP
 	//    text omitted it).
 	sealDomain, err := signing.Domain(fork, targetEpoch, params.BeaconConfig().DomainBatchAttester, gvr)
 	if err != nil {
@@ -407,7 +407,7 @@ func (s *Service) buildBatchAttestationSignatureSet(
 	set.Descriptions = append(set.Descriptions, "batch_seal")
 
 	// 3) Batcher's composition signature over BatcherPreimage(slot, ci,
-	//    aggregation_bits, data_root) under DomainBatcher. Codex fix #6:
+	//    aggregation_bits, data_root) under DomainBatcher. 
 	//    data_root binds the composition to a specific AttestationData,
 	//    preventing replay across conflicting votes.
 	dataRoot, err := att.GetData().HashTreeRoot()

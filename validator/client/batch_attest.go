@@ -89,7 +89,7 @@ func (v *validator) SignBatchSeal(
 
 // SignBatcherComposition produces the batcher's signature binding it to a
 // specific (slot, ci, aggregation_bits, data_root) composition. Includes
-// data_root per Codex fix #6 so the signature is not replayable across
+// data_root so the signature is not replayable across
 // conflicting AttestationData.
 func (v *validator) SignBatcherComposition(
 	ctx context.Context,

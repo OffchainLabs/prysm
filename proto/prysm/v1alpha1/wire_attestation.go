@@ -20,7 +20,7 @@ const (
 
 // ErrWireAttestationUnknownSelector is returned when SSZ-decoded bytes carry
 // a selector outside {0x00, 0x01}. EIP-8243 reserves all other selectors;
-// per Codex fix #7 the implementation rejects them strictly rather than
+// the implementation rejects them strictly rather than
 // quietly accepting any non-zero byte.
 var ErrWireAttestationUnknownSelector = fmt.Errorf("wire attestation: unknown selector")
 
@@ -111,7 +111,7 @@ func (w *WireAttestation) SizeSSZ() int {
 }
 
 // UnmarshalSSZ decodes `selector_byte || ssz(inner)`. Unknown selectors are
-// rejected — see Codex fix #7.
+// rejected.
 func (w *WireAttestation) UnmarshalSSZ(b []byte) error {
 	if len(b) < 1 {
 		return fmt.Errorf("wire attestation: empty buffer")
