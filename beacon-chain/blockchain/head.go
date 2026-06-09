@@ -175,6 +175,9 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 		if err := s.notifyNewHeadEvent(ctx, newHeadSlot, newStateRoot[:], newHeadRoot[:]); err != nil {
 			log.WithError(err).Error("Could not notify event feed of new chain head")
 		}
+
+	}()
+	go func() {
 		if err := s.notifyNewHeadV2Event(ctx, newHeadSlot, newStateRoot, newHeadRoot, full, headBlock.Version()); err != nil {
 			log.WithError(err).Error("Could not notify event feed of new chain head_v2")
 		}
