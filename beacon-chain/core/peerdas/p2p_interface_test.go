@@ -93,16 +93,7 @@ func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
 		sidecars := generateRandomSidecars(t, seed, blobCount)
 		bundles, err := blocks.RODataColumnsToCellProofBundles(sidecars)
 		require.NoError(t, err)
-		failedSegments, err := peerdas.BatchVerifyDataColumnsCellsKZGProofs([][]blocks.CellProofBundle{bundles})
-		require.NoError(t, err)
-		require.Equal(t, 0, len(failedSegments))
-	})
-
-	t.Run("with commitments", func(t *testing.T) {
-		sidecars := generateRandomSidecars(t, seed, blobCount)
-		bundles, err := blocks.RODataColumnsToCellProofBundles(sidecars)
-		require.NoError(t, err)
-		_, err = peerdas.BatchVerifyDataColumnsCellsKZGProofs([][]blocks.CellProofBundle{bundles})
+		err = peerdas.VerifyDataColumnsCellsKZGProofs(bundles)
 		require.NoError(t, err)
 	})
 }
@@ -282,7 +273,7 @@ func TestCustodyGroupCountFromRecord(t *testing.T) {
 	})
 }
 
-func BenchmarkVerifyDataColumnSidecarKZGProofs_SameCommitments_NoBatch(b *testing.B) {
+func BenchmarkVerifyDataColumnsCellsKZGProofs_SameCommitments_NoBatch(b *testing.B) {
 	const blobCount = 12
 	err := kzg.Start()
 	require.NoError(b, err)
@@ -305,7 +296,7 @@ func BenchmarkVerifyDataColumnSidecarKZGProofs_SameCommitments_NoBatch(b *testin
 	}
 }
 
-func BenchmarkVerifyDataColumnSidecarKZGProofs_DiffCommitments_Batch(b *testing.B) {
+func BenchmarkVerifyDataColumnsCellsKZGProofs_DiffCommitments_Batch(b *testing.B) {
 	const (
 		blobCount       = 12
 		numberOfColumns = fieldparams.NumberOfColumns
@@ -343,7 +334,7 @@ func BenchmarkVerifyDataColumnSidecarKZGProofs_DiffCommitments_Batch(b *testing.
 	}
 }
 
-func BenchmarkVerifyDataColumnSidecarKZGProofs_DiffCommitments_Batch4(b *testing.B) {
+func BenchmarkVerifyDataColumnsCellsKZGProofs_DiffCommitments_Batch4(b *testing.B) {
 	const (
 		blobCount = 12
 
@@ -376,16 +367,6 @@ func BenchmarkVerifyDataColumnSidecarKZGProofs_DiffCommitments_Batch4(b *testing
 			require.NoError(b, err)
 		}
 	}
-}
-
-func sidecarCommitments(t *testing.T, sidecars []blocks.RODataColumn) [][][]byte {
-	commitmentsBySidecar := make([][][]byte, len(sidecars))
-	for i := range sidecars {
-		var err error
-		commitmentsBySidecar[i], err = sidecars[i].KzgCommitments()
-		require.NoError(t, err)
-	}
-	return commitmentsBySidecar
 }
 
 func createTestSidecar(t *testing.T, index uint64, column, kzgCommitments, kzgProofs [][]byte) blocks.RODataColumn {
