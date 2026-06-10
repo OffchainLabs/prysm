@@ -78,10 +78,28 @@ func TestForkchoiceUpdated(t *testing.T) {
 }
 
 func TestGetPayload(t *testing.T) {
-	t.Skip("TODO(ssz-over-http): implement Client.GetPayload — GET /engine/v2/{fork}/payloads/{id}")
-	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {})
-	err := c.GetPayload(context.Background(), ForkAmsterdam, [8]byte{}, &stubSSZ{})
+	payloadID := [8]byte{0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef}
+	respBytes := []byte("built-payload-ssz")
+
+	var gotMethod, gotPath string
+	var hadBody bool
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		b, _ := io.ReadAll(r.Body)
+		hadBody = len(b) > 0
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(respBytes)
+	})
+
+	out := &stubSSZ{}
+	err := c.GetPayload(context.Background(), ForkAmsterdam, payloadID, out)
 	require.NoError(t, err)
+	assert.Equal(t, http.MethodGet, gotMethod)
+	assert.Equal(t, "/engine/v2/amsterdam/payloads/0x0123456789abcdef", gotPath) // hex-encoded opaque id
+	assert.Equal(t, false, hadBody)
+	assert.DeepEqual(t, respBytes, out.data)
 }
 
 func TestGetPayloadBodiesByHash(t *testing.T) {

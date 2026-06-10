@@ -18,6 +18,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	enginev2 "github.com/OffchainLabs/prysm/v7/proto/engine/v2"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
@@ -61,13 +62,13 @@ func (c *Client) ForkchoiceUpdated(ctx context.Context, fork string, update ssz.
 }
 
 // GetPayload retrieves a previously started build by its opaque id.
-// GET /engine/v2/{fork}/payloads/{id} (replaces engine_getPayloadV1..6).
-//
-// TODO(ssz-over-http): hex-encode the opaque payload id into the path, GET via
-// SSZRequest, decode the fork's BuiltPayload into out (e.g.
-// enginev2.BuiltPayloadGloas). Honor Cache-Control: no-store (do not cache).
+// GET /engine/v2/{fork}/payloads/{id} (replaces engine_getPayloadV1..6). The
+// opaque payload id is hex-encoded (0x-prefixed Bytes8) into the path. The EL
+// keeps optimising the build, so the response is never cacheable (it carries
+// Cache-Control: no-store); each call returns the latest snapshot — Prysm does
+// not cache it.
 func (c *Client) GetPayload(ctx context.Context, fork string, payloadID [8]byte, out ssz.Unmarshaler) error {
-	return errNotImplemented("GetPayload")
+	return c.SSZRequest(ctx, http.MethodGet, "/"+fork+"/payloads/"+hexutil.Encode(payloadID[:]), nil, nil, out)
 }
 
 // GetPayloadBodiesByHash fetches execution bodies by block hash.

@@ -13,6 +13,7 @@ go_library(
         "//api/server/structs:go_default_library",
         "//network:go_default_library",
         "//proto/engine/v2:go_default_library",
+        "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
         "@com_github_prysmaticlabs_fastssz//:go_default_library",
         "@io_opentelemetry_go_contrib_instrumentation_net_http_otelhttp//:go_default_library",

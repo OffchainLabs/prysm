@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/enginehttp"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
@@ -12,9 +13,11 @@ import (
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	enginev2 "github.com/OffchainLabs/prysm/v7/proto/engine/v2"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
+	"google.golang.org/protobuf/proto"
 )
 
 // sszEngine drives the engine namespace over the REST + SSZ Engine API v2
@@ -254,8 +257,68 @@ func mapEngineError(err error) error {
 	}
 }
 
+// GetPayload retrieves a built payload over GET /engine/v2/{fork}/payloads/{id}
+// (replaces engine_getPayloadV*). The fork is selected by the slot; the opaque
+// id is echoed into the path. The v2 BuiltPayload is converted into the existing
+// ExecutionBundle proto and run through blocks.NewGetPayloadResponse so the
+// result is identical to the JSON-RPC path. The response is never cached.
 func (e *sszEngine) GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error) {
-	return nil, sszNotImplemented("GetPayload")
+	fork, out, err := builtPayloadForSlot(slot)
+	if err != nil {
+		return nil, err
+	}
+	if err := e.client.GetPayload(ctx, fork, payloadId, out); err != nil {
+		return nil, mapEngineError(err)
+	}
+	bundle, err := builtPayloadToBundle(out)
+	if err != nil {
+		return nil, err
+	}
+	res, err := blocks.NewGetPayloadResponse(bundle)
+	if err != nil {
+		return nil, errors.Wrap(err, "new get payload response")
+	}
+	return res, nil
+}
+
+// builtPayloadForSlot selects the EL fork URL and a fresh BuiltPayload container
+// to decode into, by the slot's fork (mirrors getPayloadMethodAndMessage).
+func builtPayloadForSlot(slot primitives.Slot) (string, ssz.Unmarshaler, error) {
+	epoch := slots.ToEpoch(slot)
+	if epoch >= params.BeaconConfig().GloasForkEpoch {
+		return enginehttp.ForkAmsterdam, &enginev2.BuiltPayloadGloas{}, nil
+	}
+	if epoch >= params.BeaconConfig().FuluForkEpoch {
+		return enginehttp.ForkOsaka, &enginev2.BuiltPayloadFulu{}, nil
+	}
+	return "", nil, errors.Errorf("ssz-http engine transport: no v2 BuiltPayload container for slot %d (pre-Fulu)", slot)
+}
+
+// builtPayloadToBundle maps a decoded v2 BuiltPayload onto the existing
+// ExecutionBundle proto (a flat field copy — both reuse the same v1 inner
+// payload/blobs types) so blocks.NewGetPayloadResponse builds the response the
+// same way it does for the JSON-RPC path.
+func builtPayloadToBundle(out ssz.Unmarshaler) (proto.Message, error) {
+	switch p := out.(type) {
+	case *enginev2.BuiltPayloadFulu:
+		return &pb.ExecutionBundleFulu{
+			Payload:               p.Payload,
+			Value:                 p.BlockValue,
+			BlobsBundle:           p.BlobsBundle,
+			ShouldOverrideBuilder: p.ShouldOverrideBuilder,
+			ExecutionRequests:     p.ExecutionRequests,
+		}, nil
+	case *enginev2.BuiltPayloadGloas:
+		return &pb.ExecutionBundleGloas{
+			Payload:               p.Payload,
+			Value:                 p.BlockValue,
+			BlobsBundle:           p.BlobsBundle,
+			ShouldOverrideBuilder: p.ShouldOverrideBuilder,
+			ExecutionRequests:     p.ExecutionRequests,
+		}, nil
+	default:
+		return nil, errors.Errorf("ssz-http engine transport: unexpected BuiltPayload type %T", out)
+	}
 }
 
 func (e *sszEngine) GetBlobs(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProof, error) {

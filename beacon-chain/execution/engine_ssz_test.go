@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/enginehttp"
+	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	enginev2 "github.com/OffchainLabs/prysm/v7/proto/engine/v2"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -131,4 +132,44 @@ func TestMapEngineError(t *testing.T) {
 
 	other := &enginehttp.Error{Status: 500, Problem: enginehttp.Problem{Type: "/engine-api/errors/teapot"}}
 	assert.Equal(t, other, mapEngineError(other)) // unmapped problem type passes through
+}
+
+// builtPayloadToBundle must copy a decoded v2 BuiltPayload onto the matching
+// ExecutionBundle proto field-for-field so the JSON-RPC response builder applies.
+func TestBuiltPayloadToBundle(t *testing.T) {
+	val := []byte{0xaa, 0xbb}
+	reqs := [][]byte{{0x01, 0x02}}
+
+	t.Run("Fulu", func(t *testing.T) {
+		bundle, err := builtPayloadToBundle(&enginev2.BuiltPayloadFulu{
+			BlockValue:            val,
+			ShouldOverrideBuilder: true,
+			ExecutionRequests:     reqs,
+		})
+		require.NoError(t, err)
+		fb, ok := bundle.(*pb.ExecutionBundleFulu)
+		require.Equal(t, true, ok)
+		assert.DeepEqual(t, val, fb.Value)
+		assert.Equal(t, true, fb.ShouldOverrideBuilder)
+		assert.DeepEqual(t, reqs, fb.ExecutionRequests)
+	})
+
+	t.Run("Gloas", func(t *testing.T) {
+		bundle, err := builtPayloadToBundle(&enginev2.BuiltPayloadGloas{
+			BlockValue:            val,
+			ShouldOverrideBuilder: false,
+			ExecutionRequests:     reqs,
+		})
+		require.NoError(t, err)
+		gb, ok := bundle.(*pb.ExecutionBundleGloas)
+		require.Equal(t, true, ok)
+		assert.DeepEqual(t, val, gb.Value)
+		assert.Equal(t, false, gb.ShouldOverrideBuilder)
+		assert.DeepEqual(t, reqs, gb.ExecutionRequests)
+	})
+
+	t.Run("unexpected type errors", func(t *testing.T) {
+		_, err := builtPayloadToBundle(&enginev2.PayloadStatus{})
+		require.ErrorContains(t, "unexpected BuiltPayload type", err)
+	})
 }
