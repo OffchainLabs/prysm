@@ -391,11 +391,13 @@ func (s *Service) notifyNewHeadV2Event(
 		return err
 	}
 
-	// The payload status is empty iff it is post-Gloas
-	// AND the execution payload has not been delivered for the head.
+	// The payload status is full when fork choice selects the full payload variant
+	// for the head. Otherwise — a post-Gloas head whose full payload does not beat
+	// the empty one (not yet delivered, or delivered but not voted canonical) — it
+	// is empty.
 	var payloadStatus statefeed.PayloadStatus
 	payloadStatus = statefeed.PayloadStatusFull
-	if headVersion >= version.Gloas && !s.HasFullNode(newHeadRoot) {
+	if headVersion >= version.Gloas && !s.FullBeatsEmpty(newHeadRoot) {
 		payloadStatus = statefeed.PayloadStatusEmpty
 	}
 

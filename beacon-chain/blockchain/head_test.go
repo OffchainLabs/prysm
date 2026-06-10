@@ -279,6 +279,12 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 
 func Test_notifyNewHeadV2Event(t *testing.T) {
 	setupHeadV2Service := func(t *testing.T, headSlot primitives.Slot) (*Service, chan *feed.Event, [32]byte, [32]byte) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		cfg.InitializeForkSchedule()
+		params.OverrideBeaconConfig(cfg)
+
 		srv := testServiceWithDB(t)
 		srv.SetGenesisTime(time.Now())
 		srv.originBlockRoot = [32]byte{1}
