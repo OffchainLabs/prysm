@@ -1,0 +1,49 @@
+name: "CodeQL"
+
+on:
+  push:
+    branches: [ develop, master ]
+  pull_request:
+    branches: [ '*' ]
+  schedule:
+    - cron: '0 6 * * 1'
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'go' ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: autobuild
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+        env:
+          CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
