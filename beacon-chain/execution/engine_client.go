@@ -1110,6 +1110,18 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 		return peerdas.StructuredCellsAndProofs{}, nil
 	}
 
+	// Test only: simulate an execution client that returns only a subset of the
+	// blobs, so the node must obtain the missing cells from peers via the
+	// partial-data-column protocol. Drops every other blob, always keeping the
+	// first one so the column never ends up empty.
+	if flags.Get().SimulatePartialELBlobs && useGetBlobsV3 {
+		for i := range blobAndProofs {
+			if i%2 == 1 && blobAndProofs[i] != nil {
+				blobAndProofs[i] = nil
+			}
+		}
+	}
+
 	// Compute cells and proofs from the blobs and cell proofs.
 	result, err := peerdas.ComputeCellsAndProofsFromStructured(uint64(len(kzgCommitments)), blobAndProofs)
 	if err != nil {
