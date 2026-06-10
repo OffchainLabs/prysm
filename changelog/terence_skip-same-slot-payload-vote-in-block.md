@@ -1,3 +1,3 @@
 ### Fixed
 
-- Skip block-included same-slot payload-present attestations in fork choice, matching `validate_on_attestation`.
+- Drop same-slot payload-present attestations in fork choice `ProcessAttestation`, matching `validate_on_attestation`.

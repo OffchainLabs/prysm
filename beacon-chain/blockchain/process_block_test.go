@@ -3697,13 +3697,13 @@ func TestHandleBlockAttestations_GloasSameSlotPayloadVote(t *testing.T) {
 	t.Run("same-slot payload vote is skipped", func(t *testing.T) {
 		logHook := logTest.NewGlobal()
 		require.NoError(t, s.handleBlockAttestations(ctx, blockWithPayloadVote(1), headState))
-		require.LogsContain(t, logHook, "Skipping same-slot payload-present attestation in block")
+		require.LogsContain(t, logHook, "Skipping same-slot payload-present attestation")
 	})
 
 	t.Run("prior-slot payload vote is processed", func(t *testing.T) {
 		logHook := logTest.NewGlobal()
 		require.NoError(t, s.handleBlockAttestations(ctx, blockWithPayloadVote(2), headState))
-		require.LogsDoNotContain(t, logHook, "Skipping same-slot payload-present attestation in block")
+		require.LogsDoNotContain(t, logHook, "Skipping same-slot payload-present attestation")
 	})
 }
 
