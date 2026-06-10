@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -158,7 +159,13 @@ func (v *EnvelopeVerifier) VerifyExecutionRequestsRoot(bid interfaces.ROExecutio
 	if err != nil {
 		return errors.Wrap(err, "failed to get envelope")
 	}
-	requestsRoot, err := env.ExecutionRequests().HashTreeRoot()
+	requests := env.ExecutionRequests()
+	var requestsRoot [32]byte
+	if features.Get().EnableProgressiveSSZ && slots.ToEpoch(env.Slot()) >= params.BeaconConfig().GloasForkEpoch {
+		requestsRoot, err = requests.HashTreeRootProgressive()
+	} else {
+		requestsRoot, err = requests.HashTreeRoot()
+	}
 	if err != nil {
 		return errors.Wrap(err, "could not compute execution requests root")
 	}

@@ -133,7 +133,7 @@ func validatePayloadConsistency(ctx context.Context, st state.BeaconState, envel
 	}
 
 	// Verify execution_requests_root matches the bid commitment.
-	executionRequestsRoot, err := envelope.ExecutionRequests().HashTreeRoot()
+	executionRequestsRoot, err := executionRequestsHashTreeRoot(st.Version(), envelope.ExecutionRequests())
 	if err != nil {
 		return errors.Wrap(err, "could not compute execution requests root")
 	}

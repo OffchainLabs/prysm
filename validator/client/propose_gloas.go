@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -39,7 +40,12 @@ func (v *validator) signExecutionPayloadEnvelope(
 		return nil, errors.New("nil domain data")
 	}
 
-	signingRoot, err := signing.ComputeSigningRoot(envelope, domain.SignatureDomain)
+	var signingRoot [32]byte
+	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch && features.Get().EnableProgressiveSSZ {
+		signingRoot, err = signing.ComputeSigningRootProgressive(envelope, domain.SignatureDomain)
+	} else {
+		signingRoot, err = signing.ComputeSigningRoot(envelope, domain.SignatureDomain)
+	}
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute signing root")
 	}

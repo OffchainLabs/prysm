@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -11,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -109,7 +111,13 @@ func (vs *Server) createSelfBuildExecutionPayloadBid(
 	}
 
 	parentBlockRoot := block.ParentRoot()
-	executionRequestsRoot, err := local.ExecutionRequests.HashTreeRoot()
+	var executionRequestsRoot [32]byte
+	var err error
+	if block.Version() >= version.Gloas && features.Get().EnableProgressiveSSZ {
+		executionRequestsRoot, err = local.ExecutionRequests.HashTreeRootProgressive()
+	} else {
+		executionRequestsRoot, err = local.ExecutionRequests.HashTreeRoot()
+	}
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute execution requests root")
 	}

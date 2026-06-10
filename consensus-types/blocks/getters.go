@@ -772,7 +772,11 @@ func (b *BeaconBlock) HashTreeRoot() ([field_params.RootLength]byte, error) {
 		}
 		return pb.(*eth.BeaconBlockElectra).HashTreeRoot()
 	case version.Gloas:
-		return pb.(*eth.BeaconBlockGloas).HashTreeRoot()
+		block := pb.(*eth.BeaconBlockGloas)
+		if progressiveSSZEnabledForVersion(b.version) {
+			return block.HashTreeRootProgressive()
+		}
+		return block.HashTreeRoot()
 
 	default:
 		return [field_params.RootLength]byte{}, errIncorrectBlockVersion
@@ -1353,7 +1357,11 @@ func (b *BeaconBlockBody) HashTreeRoot() ([field_params.RootLength]byte, error) 
 		}
 		return pb.(*eth.BeaconBlockBodyElectra).HashTreeRoot()
 	case version.Gloas:
-		return pb.(*eth.BeaconBlockBodyGloas).HashTreeRoot()
+		body := pb.(*eth.BeaconBlockBodyGloas)
+		if progressiveSSZEnabledForVersion(b.version) {
+			return body.HashTreeRootProgressive()
+		}
+		return body.HashTreeRoot()
 	default:
 		return [field_params.RootLength]byte{}, errIncorrectBodyVersion
 	}

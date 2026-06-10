@@ -3,7 +3,6 @@ package blocks
 import (
 	"bytes"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	field_params "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -78,7 +77,11 @@ func (s signedExecutionPayloadEnvelope) IsNil() bool {
 
 // SigningRoot computes the signing root for the signed envelope with the provided domain.
 func (s signedExecutionPayloadEnvelope) SigningRoot(domain []byte) (root [32]byte, err error) {
-	return signing.ComputeSigningRoot(s.s.Message, domain)
+	slot := primitives.Slot(0)
+	if s.s != nil && s.s.Message != nil && s.s.Message.Payload != nil {
+		slot = s.s.Message.Payload.SlotNumber
+	}
+	return signingRootForSlot(slot, s.s.Message, domain)
 }
 
 // Proto returns the underlying protobuf message.

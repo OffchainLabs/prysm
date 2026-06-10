@@ -1,7 +1,6 @@
 package blocks
 
 import (
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -84,7 +83,7 @@ func (s signedExecutionPayloadBid) Bid() (interfaces.ROExecutionPayloadBid, erro
 
 // SigningRoot computes the signing root for the execution payload bid with the given domain.
 func (s signedExecutionPayloadBid) SigningRoot(domain []byte) ([32]byte, error) {
-	return signing.ComputeSigningRoot(s.bid.Message, domain)
+	return signingRootForSlot(s.bid.Message.Slot, s.bid.Message, domain)
 }
 
 // Signature returns the BLS signature as a 96-byte array.

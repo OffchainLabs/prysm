@@ -24,6 +24,19 @@ func (s staticHashable) HashTreeRoot() ([32]byte, error) {
 	return s.root, nil
 }
 
+type progressiveStaticHashable struct {
+	legacyRoot      [32]byte
+	progressiveRoot [32]byte
+}
+
+func (s progressiveStaticHashable) HashTreeRoot() ([32]byte, error) {
+	return s.legacyRoot, nil
+}
+
+func (s progressiveStaticHashable) HashTreeRootProgressive() ([32]byte, error) {
+	return s.progressiveRoot, nil
+}
+
 func chunkFromIndex(i int) [32]byte {
 	var out [32]byte
 	binary.LittleEndian.PutUint64(out[:8], uint64(i+1))
@@ -112,6 +125,25 @@ func TestMerkleizeListSSZProgressive(t *testing.T) {
 		elements[0].root,
 		elements[1].root,
 		elements[2].root,
+	})
+	var length [32]byte
+	binary.LittleEndian.PutUint64(length[:8], uint64(len(elements)))
+	expected := ssz.MixInLength(body, length[:])
+	require.Equal(t, expected, got)
+}
+
+func TestMerkleizeListSSZProgressive_UsesProgressiveElementRoots(t *testing.T) {
+	elements := []progressiveStaticHashable{
+		{legacyRoot: chunkFromIndex(0), progressiveRoot: chunkFromIndex(10)},
+		{legacyRoot: chunkFromIndex(1), progressiveRoot: chunkFromIndex(11)},
+	}
+
+	got, err := ssz.MerkleizeListSSZProgressive(elements)
+	require.NoError(t, err)
+
+	body := ssz.MerkleizeProgressiveChunks([][32]byte{
+		elements[0].progressiveRoot,
+		elements[1].progressiveRoot,
 	})
 	var length [32]byte
 	binary.LittleEndian.PutUint64(length[:8], uint64(len(elements)))

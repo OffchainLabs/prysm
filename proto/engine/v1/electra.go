@@ -22,9 +22,20 @@ var emptyRequestsRootOnce = sync.OnceValues(func() ([32]byte, error) {
 	return (&ExecutionRequests{}).HashTreeRoot()
 })
 
+// emptyRequestsRootProgressiveOnce progressively merkleizes a zero-value ExecutionRequests.
+var emptyRequestsRootProgressiveOnce = sync.OnceValues(func() ([32]byte, error) {
+	return (&ExecutionRequests{}).HashTreeRootProgressive()
+})
+
 // EmptyExecutionRequestsHashTreeRoot returns the merkle root of an empty ExecutionRequests.
 func EmptyExecutionRequestsHashTreeRoot() ([32]byte, error) {
 	return emptyRequestsRootOnce()
+}
+
+// EmptyExecutionRequestsHashTreeRootProgressive returns the progressive merkle
+// root of an empty ExecutionRequests.
+func EmptyExecutionRequestsHashTreeRootProgressive() ([32]byte, error) {
+	return emptyRequestsRootProgressiveOnce()
 }
 
 const (

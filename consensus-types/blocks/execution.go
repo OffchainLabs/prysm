@@ -1253,6 +1253,11 @@ func (e executionPayloadGloas) HashTreeRoot() ([32]byte, error) {
 	return e.p.HashTreeRoot()
 }
 
+// HashTreeRootProgressive returns the progressive SSZ root for Gloas payloads.
+func (e executionPayloadGloas) HashTreeRootProgressive() ([32]byte, error) {
+	return e.p.HashTreeRootProgressive()
+}
+
 // HashTreeRootWith --
 func (e executionPayloadGloas) HashTreeRootWith(hh *fastssz.Hasher) error {
 	return e.p.HashTreeRootWith(hh)

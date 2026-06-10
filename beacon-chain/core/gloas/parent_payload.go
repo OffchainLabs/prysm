@@ -47,7 +47,7 @@ func ProcessParentExecutionPayload(ctx context.Context, st state.BeaconState, bl
 		return nil
 	}
 
-	requestsRoot, err := parentExecutionRequests.HashTreeRoot()
+	requestsRoot, err := executionRequestsHashTreeRoot(st.Version(), parentExecutionRequests)
 	if err != nil {
 		return errors.Wrap(err, "could not compute parent execution requests root")
 	}

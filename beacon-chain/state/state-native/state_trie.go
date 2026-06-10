@@ -1495,7 +1495,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.ProposerLookahead:
 		return stateutil.ProposerLookaheadRoot(b.proposerLookahead)
 	case types.LatestExecutionPayloadBid:
-		return b.latestExecutionPayloadBid.HashTreeRoot()
+		return b.latestExecutionPayloadBidRoot()
 	case types.Builders:
 		return b.buildersRoot()
 	case types.NextWithdrawalBuilderIndex:

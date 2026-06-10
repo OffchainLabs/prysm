@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	encodingssz "github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 	fssz "github.com/prysmaticlabs/fastssz"
@@ -96,6 +97,15 @@ func ComputeDomainAndSignWithoutState(fork *ethpb.Fork, epoch primitives.Epoch, 
 //	   ))
 func ComputeSigningRoot(object fssz.HashRoot, domain []byte) ([32]byte, error) {
 	return Data(object.HashTreeRoot, domain)
+}
+
+// ComputeSigningRootProgressive computes signing data using the progressive
+// root when the object supports it, otherwise it falls back to the legacy root.
+func ComputeSigningRootProgressive(object fssz.HashRoot, domain []byte) ([32]byte, error) {
+	if progressive, ok := object.(encodingssz.ProgressiveHashable); ok {
+		return Data(progressive.HashTreeRootProgressive, domain)
+	}
+	return ComputeSigningRoot(object, domain)
 }
 
 // Data computes the signing data by utilising the provided root function and then

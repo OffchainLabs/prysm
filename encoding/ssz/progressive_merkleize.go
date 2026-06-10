@@ -60,7 +60,7 @@ func MerkleizeProgressiveChunks(chunks [][32]byte) [32]byte {
 func MerkleizeVectorSSZProgressive[T Hashable](elements []T) ([32]byte, error) {
 	roots := make([][32]byte, len(elements))
 	for i, el := range elements {
-		r, err := el.HashTreeRoot()
+		r, err := hashTreeRootProgressive(el)
 		if err != nil {
 			return [32]byte{}, err
 		}
@@ -85,6 +85,18 @@ func MerkleizeListSSZProgressive[T Hashable](elements []T) ([32]byte, error) {
 // SliceRootProgressive computes the progressive list root of hashable elements.
 func SliceRootProgressive[T Hashable](slice []T) ([32]byte, error) {
 	return MerkleizeListSSZProgressive(slice)
+}
+
+// ProgressiveHashable is implemented by types with a progressive SSZ root.
+type ProgressiveHashable interface {
+	HashTreeRootProgressive() ([32]byte, error)
+}
+
+func hashTreeRootProgressive[T Hashable](el T) ([32]byte, error) {
+	if progressive, ok := any(el).(ProgressiveHashable); ok {
+		return progressive.HashTreeRootProgressive()
+	}
+	return el.HashTreeRoot()
 }
 
 // ByteSliceRootProgressive computes the progressive list root of a byte slice

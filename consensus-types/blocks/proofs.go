@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -205,7 +204,7 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 }
 
 func blockBodyListRoot[T ssz.Hashable](bodyVersion int, elements []T, limit uint64) ([32]byte, error) {
-	if bodyVersion >= version.Gloas && features.Get().EnableProgressiveSSZ {
+	if progressiveSSZEnabledForVersion(bodyVersion) {
 		if uint64(len(elements)) > limit {
 			return [32]byte{}, fmt.Errorf("slice exceeds max length %d", limit)
 		}
@@ -229,7 +228,7 @@ func computeGloasBlockBodyFieldRoots(blockBody *BeaconBlockBody, fieldRoots [][]
 	if err != nil {
 		return err
 	}
-	root, err = bid.HashTreeRoot()
+	root, err = hashTreeRootForVersion(blockBody.version, bid)
 	if err != nil {
 		return err
 	}
@@ -249,7 +248,7 @@ func computeGloasBlockBodyFieldRoots(blockBody *BeaconBlockBody, fieldRoots [][]
 	if err != nil {
 		return err
 	}
-	root, err = parentExecutionRequests.HashTreeRoot()
+	root, err = hashTreeRootForVersion(blockBody.version, parentExecutionRequests)
 	if err != nil {
 		return err
 	}

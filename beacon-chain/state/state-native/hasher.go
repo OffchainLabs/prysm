@@ -286,7 +286,7 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 
 	if state.version >= version.Gloas {
 		// Execution payload bid root for Gloas.
-		bidRoot, err := state.latestExecutionPayloadBid.HashTreeRoot()
+		bidRoot, err := state.latestExecutionPayloadBidRoot()
 		if err != nil {
 			return nil, err
 		}
@@ -444,6 +444,13 @@ func payloadExpectedWithdrawalsRoot(state *BeaconState) ([32]byte, error) {
 		return ssz.WithdrawalSliceRootProgressive(state.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
 	}
 	return ssz.WithdrawalSliceRoot(state.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+}
+
+func (b *BeaconState) latestExecutionPayloadBidRoot() ([32]byte, error) {
+	if progressiveSSZEnabled(b.version) {
+		return b.latestExecutionPayloadBid.HashTreeRootProgressive()
+	}
+	return b.latestExecutionPayloadBid.HashTreeRoot()
 }
 
 func (b *BeaconState) buildersRoot() ([32]byte, error) {
