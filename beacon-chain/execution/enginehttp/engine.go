@@ -14,6 +14,7 @@ package enginehttp
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	enginev2 "github.com/OffchainLabs/prysm/v7/proto/engine/v2"
@@ -32,15 +33,17 @@ const (
 )
 
 // NewPayload submits an execution payload for validation/import.
-// POST /engine/v2/{fork}/payloads (replaces engine_newPayloadV1..5).
-//
-// TODO(ssz-over-http): marshal the fork's ExecutionPayloadEnvelope (e.g.
-// enginev2.ExecutionPayloadEnvelopeGloas — parent_beacon_block_root and
-// execution_requests fold inside; expected_blob_versioned_hashes is removed),
-// POST it via SSZRequest, decode PayloadStatus. Map the uint8 status enum back
-// to pb.PayloadStatus and account for the removed INVALID_BLOCK_HASH.
+// POST /engine/v2/{fork}/payloads (replaces engine_newPayloadV1..5). The fork's
+// ExecutionPayloadEnvelope folds parent_beacon_block_root and execution_requests
+// inside; expected_blob_versioned_hashes is removed (the EL recomputes it). The
+// four validation outcomes all return HTTP 200 with a PayloadStatus body — the
+// caller maps the uint8 status enum back to Prysm's sentinels.
 func (c *Client) NewPayload(ctx context.Context, fork string, envelope ssz.Marshaler) (*enginev2.PayloadStatus, error) {
-	return nil, errNotImplemented("NewPayload")
+	status := &enginev2.PayloadStatus{}
+	if err := c.SSZRequest(ctx, http.MethodPost, "/"+fork+"/payloads", nil, envelope, status); err != nil {
+		return nil, err
+	}
+	return status, nil
 }
 
 // ForkchoiceUpdated updates fork choice and optionally starts a build.

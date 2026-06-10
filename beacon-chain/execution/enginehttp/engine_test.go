@@ -3,10 +3,12 @@ package enginehttp
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"slices"
 	"testing"
 
+	enginev2 "github.com/OffchainLabs/prysm/v7/proto/engine/v2"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
@@ -19,10 +21,29 @@ import (
 // mirroring TestSSZRequest_* in client_test.go.
 
 func TestNewPayload(t *testing.T) {
-	t.Skip("TODO(ssz-over-http): implement Client.NewPayload — POST /engine/v2/{fork}/payloads")
-	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {})
-	_, err := c.NewPayload(context.Background(), ForkAmsterdam, &stubSSZ{data: []byte("envelope")})
+	statusSSZ, err := (&enginev2.PayloadStatus{Status: enginev2.StatusByte(enginev2.PayloadStatusValid)}).MarshalSSZ()
 	require.NoError(t, err)
+
+	var gotMethod, gotPath, gotCT, gotAccept string
+	var gotBody []byte
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		gotCT = r.Header.Get("Content-Type")
+		gotAccept = r.Header.Get("Accept")
+		gotBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", contentTypeSSZ)
+		_, _ = w.Write(statusSSZ)
+	})
+
+	status, err := c.NewPayload(context.Background(), ForkAmsterdam, &stubSSZ{data: []byte("envelope")})
+	require.NoError(t, err)
+	assert.Equal(t, http.MethodPost, gotMethod)
+	assert.Equal(t, "/engine/v2/amsterdam/payloads", gotPath)
+	assert.Equal(t, contentTypeSSZ, gotCT)
+	assert.Equal(t, contentTypeSSZ, gotAccept)
+	assert.DeepEqual(t, []byte("envelope"), gotBody)
+	assert.Equal(t, enginev2.PayloadStatusValid, status.Enum())
 }
 
 func TestForkchoiceUpdated(t *testing.T) {

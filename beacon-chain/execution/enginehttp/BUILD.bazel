@@ -29,6 +29,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//proto/engine/v2:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "@com_github_golang_jwt_jwt_v4//:go_default_library",

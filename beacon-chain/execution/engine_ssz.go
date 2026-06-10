@@ -10,8 +10,10 @@ import (
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	enginev2 "github.com/OffchainLabs/prysm/v7/proto/engine/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
+	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 // sszEngine drives the engine namespace over the REST + SSZ Engine API v2
@@ -27,8 +29,96 @@ func sszNotImplemented(op string) error {
 	return errors.Errorf("ssz-http engine transport: %s not implemented", op)
 }
 
+// NewPayload submits a payload over POST /engine/v2/{fork}/payloads
+// (replaces engine_newPayloadV*). It folds parent_beacon_block_root and
+// execution_requests into the SSZ envelope; versionedHashes is dropped (the EL
+// recomputes it from payload.transactions). The result maps onto the same
+// (latestValidHash, sentinel) contract as jsonEngine.NewPayload.
 func (e *sszEngine) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
-	return nil, sszNotImplemented("NewPayload")
+	var (
+		fork       string
+		envelope   ssz.Marshaler
+		parentRoot []byte
+	)
+
+	if parentBlockRoot != nil {
+		parentRoot = parentBlockRoot[:]
+	}
+
+	switch p := payload.Proto().(type) {
+	case *pb.ExecutionPayloadDeneb:
+		envelope = &enginev2.ExecutionPayloadEnvelopeFulu{
+			Payload:               p,
+			ParentBeaconBlockRoot: parentRoot,
+		}
+
+		if executionRequests != nil {
+			reqs, err := encodeExecutionRequests(executionRequests)
+			if err != nil {
+				return nil, err
+			}
+			envelope.(*enginev2.ExecutionPayloadEnvelopeFulu).ExecutionRequests = reqs
+		}
+
+		fork = enginehttp.ForkOsaka
+	case *pb.ExecutionPayloadGloas:
+		reqs, err := encodeExecutionRequests(executionRequests)
+		if err != nil {
+			return nil, err
+		}
+		envelope = &enginev2.ExecutionPayloadEnvelopeGloas{
+			Payload:               p,
+			ParentBeaconBlockRoot: parentRoot,
+			ExecutionRequests:     reqs,
+		}
+
+		fork = enginehttp.ForkAmsterdam
+	default:
+		// Currently only support from Fulu (Osaka).
+		// Note that Fulu has same payload shape as Deneb.
+		return nil, errors.Errorf("ssz-http engine transport: no v2 ExecutionPayloadEnvelope container for payload type %T", p)
+	}
+
+	status, err := e.client.NewPayload(ctx, fork, envelope)
+	if err != nil {
+		return nil, err
+	}
+	return payloadStatusResult(status)
+}
+
+// payloadStatusResult maps a v2 PayloadStatus onto the (latestValidHash, error)
+// contract EngineCaller consumers expect, identical to jsonEngine.NewPayload.
+// The removed INVALID_BLOCK_HASH folds into INVALID; ACCEPTED/SYNCING, INVALID
+// and VALID map to the same sentinels as JSON-RPC.
+func payloadStatusResult(s *enginev2.PayloadStatus) ([]byte, error) {
+	lvh, _ := enginev2.OptionalBytes(s.LatestValidHash)
+	if valErr, ok := enginev2.OptionalBytes(s.ValidationError); ok && len(valErr) > 0 {
+		log.WithError(errors.New(string(valErr))).Error("Got a validation error in newPayload")
+	}
+	switch s.Enum() {
+	case enginev2.PayloadStatusAccepted, enginev2.PayloadStatusSyncing:
+		return nil, ErrAcceptedSyncingPayloadStatus
+	case enginev2.PayloadStatusInvalid:
+		return lvh, ErrInvalidPayloadStatus
+	case enginev2.PayloadStatusValid:
+		return lvh, nil
+	default:
+		return nil, errors.Wrapf(ErrUnknownPayloadStatus, "unknown payload status: %d", s.Enum())
+	}
+}
+
+// encodeExecutionRequests flattens execution requests into the SSZ envelope's
+// List[ByteList, MAX_REQUESTS] field, matching the JSON-RPC flattening.
+func encodeExecutionRequests(requests *pb.ExecutionRequests) ([][]byte, error) {
+	encoded, err := pb.EncodeExecutionRequests(requests)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to encode execution requests")
+	}
+	reqs := make([][]byte, len(encoded))
+	for i := range encoded {
+		reqs[i] = encoded[i]
+	}
+	return reqs, nil
 }
 
 func (e *sszEngine) ForkchoiceUpdated(ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer) (*pb.PayloadIDBytes, []byte, error) {
