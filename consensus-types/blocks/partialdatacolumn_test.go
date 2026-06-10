@@ -263,6 +263,18 @@ func TestPartialDataColumn_newPartsMetadata_WithPartsRequests(t *testing.T) {
 	require.Equal(t, true, bitfield.Bitlist(meta.Requests).BitAt(3))
 }
 
+func TestPartialDataColumn_SetPartsRequests_LengthMismatch(t *testing.T) {
+	p := mustNewPartialColumn(t, 4, 1)
+	require.ErrorContains(t, "parts requests length mismatch", p.SetPartsRequests(testBitlist(3)))
+	_, ok := p.PartsRequests()
+	require.Equal(t, false, ok)
+
+	// ClearPartsRequests is a no-op when no override is set.
+	p.ClearPartsRequests()
+	_, ok = p.PartsRequests()
+	require.Equal(t, false, ok)
+}
+
 func TestNewPartsMetaWithNoAvailableAndNoRequests(t *testing.T) {
 	tests := []struct {
 		name string

@@ -227,31 +227,13 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			"type":          source.Type(),
 		})
 
-		partialBroadcaster := s.cfg.p2p.PartialColumnBroadcaster()
-		isPartialEnabled := partialBroadcaster != nil
-		publishPartialColumns := func(partialColumns []blocks.PartialDataColumn) error {
-			if !isPartialEnabled || len(partialColumns) == 0 {
-				return nil
-			}
-			digest, err := s.currentForkDigest()
-			if err != nil {
-				return errors.Wrap(err, "current fork digest")
-			}
-			return partialBroadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
-				for i := range uint64(len(partialColumns)) {
-					if !columnIndicesToSample[i] {
-						continue
-					}
-					subnet := peerdas.ComputeSubnetForDataColumnSidecar(i)
-					topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
-					if !yield(topic, partialColumns[i]) {
-						return
-					}
-				}
-			})
-		}
+		isPartialEnabled := s.cfg.p2p.PartialColumnBroadcaster() != nil
 
 		var constructedSidecarCount uint64
+		// Header-only columns published from the EL's HasBlobs response on the
+		// first iteration; retained so their requests override can be cleared
+		// once GetBlobsV3 has answered.
+		var hasBlobsColumns []blocks.PartialDataColumn
 		for iteration := uint64(0); ; /*no stop condition*/ iteration++ {
 			log = log.WithField("iteration", iteration)
 
@@ -272,17 +254,9 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			if iteration == 0 {
 				dataColumnsRecoveredFromELAttempts.Inc()
 				if isPartialEnabled {
-					partialColumns, supported, err := s.cfg.executionReconstructor.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
-					if err != nil {
-						if ctx.Err() != nil {
-							return nil, ctx.Err()
-						}
-						log.WithError(err).Warn("Failed to construct partial columns from HasBlobs")
-					} else if supported && len(partialColumns) > 0 {
-						log.WithField("len(partialColumns)", len(partialColumns)).Debug("Publishing HasBlobs partial columns")
-						if err := publishPartialColumns(partialColumns); err != nil {
-							log.WithError(err).Warn("Failed to publish HasBlobs partial columns")
-						}
+					hasBlobsColumns = s.publishHasBlobsPartialColumns(ctx, source, columnIndicesToSample)
+					if ctx.Err() != nil {
+						return nil, ctx.Err()
 					}
 				}
 			}
@@ -300,9 +274,25 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				// Publish the partial column. This is idempotent if we republish the same data twice.
 				// Note, the "partial column" may indeed be complete. We still
 				// should publish to help our peers.
-				if err := publishPartialColumns(partialColumns); err != nil {
+				if err := s.publishPartialColumns(ctx, columnIndicesToSample, partialColumns); err != nil {
 					log.WithError(err).Error("Failed to publish partial columns")
 				}
+				// These columns carry no requests override, so publishing them already
+				// cleared any HasBlobs-derived override on the broadcaster side.
+				hasBlobsColumns = nil
+			} else if len(hasBlobsColumns) > 0 {
+				// GetBlobsV3 answered but yielded no partial columns (the EL returned
+				// no blobs). The HasBlobs-derived requests override may now be stale
+				// and would under-request cells from peers, so republish the
+				// header-only columns with the override cleared: parts metadata then
+				// falls back to requesting all missing cells.
+				for i := range hasBlobsColumns {
+					hasBlobsColumns[i].ClearPartsRequests()
+				}
+				if err := s.publishPartialColumns(ctx, columnIndicesToSample, hasBlobsColumns); err != nil {
+					log.WithError(err).Warn("Failed to clear HasBlobs parts requests")
+				}
+				hasBlobsColumns = nil
 			}
 
 			// No sidecars are retrieved from the EL, retry later
@@ -344,6 +334,62 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 	}
 
 	return nil
+}
+
+// publishHasBlobsPartialColumns asks the execution client which blobs it is
+// missing (engine_hasBlobs) and eagerly publishes header-only partial columns
+// whose parts metadata requests exactly those blobs, ahead of the GetBlobsV3
+// fetch. It returns the published columns so the caller can clear the requests
+// override once GetBlobsV3 has answered, or nil if nothing was published.
+// Best effort: failures are logged, not returned.
+func (s *Service) publishHasBlobsPartialColumns(ctx context.Context, source peerdas.ConstructionPopulator, indices map[uint64]bool) []blocks.PartialDataColumn {
+	log := log.WithFields(logrus.Fields{
+		"root": fmt.Sprintf("%#x", source.Root()),
+		"slot": source.Slot(),
+	})
+
+	partialColumns, supported, err := s.cfg.executionReconstructor.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
+	if err != nil {
+		log.WithError(err).Warn("Failed to construct partial columns from HasBlobs")
+		return nil
+	}
+	if !supported || len(partialColumns) == 0 {
+		return nil
+	}
+
+	log.WithField("count", len(partialColumns)).Debug("Publishing HasBlobs partial columns")
+	if err := s.publishPartialColumns(ctx, indices, partialColumns); err != nil {
+		log.WithError(err).Warn("Failed to publish HasBlobs partial columns")
+	}
+	return partialColumns
+}
+
+// publishPartialColumns publishes the partial columns whose index is in indices
+// to their data column subnet topics via the partial column broadcaster. It is
+// a no-op if the broadcaster is disabled.
+func (s *Service) publishPartialColumns(ctx context.Context, indices map[uint64]bool, partialColumns []blocks.PartialDataColumn) error {
+	partialBroadcaster := s.cfg.p2p.PartialColumnBroadcaster()
+	if partialBroadcaster == nil || len(partialColumns) == 0 {
+		return nil
+	}
+
+	digest, err := s.currentForkDigest()
+	if err != nil {
+		return errors.Wrap(err, "current fork digest")
+	}
+
+	return partialBroadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
+		for i := range uint64(len(partialColumns)) {
+			if !indices[i] {
+				continue
+			}
+			subnet := peerdas.ComputeSubnetForDataColumnSidecar(i)
+			topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
+			if !yield(topic, partialColumns[i]) {
+				return
+			}
+		}
+	})
 }
 
 // broadcastAndReceiveUnseenDataColumnSidecars broadcasts and receives unseen data column sidecars.

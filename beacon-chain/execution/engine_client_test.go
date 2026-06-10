@@ -2761,12 +2761,12 @@ func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
 	t.Run("EL has all blobs returns early with no partial columns", func(t *testing.T) {
 		cli, engine := newMockEngine(t)
 		defer cli.Close()
-		engine.register(HasBlobsV1, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+		engine.register(HasBlobs, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
 			mockWriteResult(t, w, msg, []bool{true, true, true})
 		})
 		client := &Service{
 			rpcClient:               cli,
-			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobsV1: nil}},
+			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}},
 			partialColumnsSupported: true,
 		}
 		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
@@ -2778,12 +2778,12 @@ func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
 	t.Run("EL missing first blob sets request bit 0 only", func(t *testing.T) {
 		cli, engine := newMockEngine(t)
 		defer cli.Close()
-		engine.register(HasBlobsV1, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+		engine.register(HasBlobs, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
 			mockWriteResult(t, w, msg, []bool{false, true, true}) // blob 0 missing
 		})
 		client := &Service{
 			rpcClient:               cli,
-			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobsV1: nil}},
+			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}},
 			partialColumnsSupported: true,
 		}
 		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
@@ -2803,12 +2803,12 @@ func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
 	t.Run("EL missing all blobs sets all request bits", func(t *testing.T) {
 		cli, engine := newMockEngine(t)
 		defer cli.Close()
-		engine.register(HasBlobsV1, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+		engine.register(HasBlobs, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
 			mockWriteResult(t, w, msg, []bool{false, false, false})
 		})
 		client := &Service{
 			rpcClient:               cli,
-			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobsV1: nil}},
+			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}},
 			partialColumnsSupported: true,
 		}
 		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
@@ -2822,6 +2822,23 @@ func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
 			require.Equal(t, true, requests.BitAt(1))
 			require.Equal(t, true, requests.BitAt(2))
 		}
+	})
+
+	// Keep this subtest last: it overrides the Gloas fork epoch and relies on
+	// SetupTestConfigCleanup to restore the config after the test.
+	t.Run("Gloas-epoch block is gated off and reports unsupported", func(t *testing.T) {
+		gloasCfg := params.BeaconConfig().Copy()
+		gloasCfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(gloasCfg)
+
+		client := &Service{
+			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}},
+			partialColumnsSupported: true,
+		}
+		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
+		require.NoError(t, err)
+		require.Equal(t, false, supported)
+		require.Equal(t, 0, len(cols))
 	})
 }
 

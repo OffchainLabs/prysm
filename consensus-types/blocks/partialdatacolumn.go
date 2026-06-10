@@ -131,6 +131,12 @@ func (p *PartialDataColumn) newPartsMetadata() (*ethpb.PartialDataColumnPartsMet
 }
 
 // SetPartsRequests overrides the request bitmap emitted in parts metadata.
+//
+// PartialDataColumn is not safe for concurrent use. The partial column
+// broadcaster serializes all mutations (SetPartsRequests, ClearPartsRequests,
+// ExtendFromVerifiedCell) on its event loop, and reads via forPeer happen on
+// the pubsub eval goroutine only while the broadcaster blocks inside
+// pubsub.PublishPartial, so the channel handoff orders them.
 func (p *PartialDataColumn) SetPartsRequests(requests bitfield.Bitlist) error {
 	if requests.Len() != uint64(len(p.KzgCommitments)) {
 		return errors.New("parts requests length mismatch")

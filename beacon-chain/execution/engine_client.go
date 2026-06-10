@@ -61,7 +61,7 @@ var (
 		GetPayloadMethodV5,
 		GetBlobsV2,
 		GetBlobsV3,
-		HasBlobsV1,
+		HasBlobs,
 	}
 
 	gloasEngineEndpoints = []string{
@@ -133,8 +133,8 @@ const (
 	GetBlobsV2 = "engine_getBlobsV2"
 	// GetBlobsV3 request string for JSON-RPC.
 	GetBlobsV3 = "engine_getBlobsV3"
-	// HasBlobsV1 request string for JSON-RPC.
-	HasBlobsV1 = "engine_hasBlobs"
+	// HasBlobs request string for JSON-RPC.
+	HasBlobs = "engine_hasBlobs"
 	// GetClientVersionV1 is the JSON-RPC method that identifies the execution client.
 	GetClientVersionV1 = "engine_getClientVersionV1"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
@@ -696,18 +696,17 @@ func (s *Service) HasBlobs(ctx context.Context, versionedHashes []common.Hash) (
 	defer span.End()
 	start := time.Now()
 
-	if !s.capabilityCache.has(HasBlobsV1) {
-		log.Debug("HasBlobs is not supported")
-		return nil, fmt.Errorf("%s is not supported", HasBlobsV1)
+	if !s.capabilityCache.has(HasBlobs) {
+		return nil, errors.Errorf("%s is not supported", HasBlobs)
 	}
 
-	log.Debug("HasBlobs is supported")
-
 	hasBlobsRequestsTotal.Inc()
-	result := make([]bool, len(versionedHashes))
-	err := s.rpcClient.CallContext(ctx, &result, HasBlobsV1, versionedHashes)
+	var result []bool
+	if err := s.rpcClient.CallContext(ctx, &result, HasBlobs, versionedHashes); err != nil {
+		return nil, handleRPCError(err)
+	}
 	hasBlobsLatency.Observe(float64(time.Since(start).Milliseconds()))
-	return result, handleRPCError(err)
+	return result, nil
 }
 
 // ReconstructFullBlock takes in a blinded beacon block and reconstructs
@@ -1083,6 +1082,11 @@ func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Con
 	if err != nil {
 		return nil, true, wrapWithBlockRoot(err, root, "construct partial columns from has blobs")
 	}
+	// The requests override reflects the EL's blob pool at this instant. The
+	// subscriber clears it once GetBlobsV3 has answered (either by publishing
+	// cell-bearing partial columns or by an explicit clearing republish), so a
+	// pool that shrinks after this call cannot leave us under-requesting from
+	// peers indefinitely.
 	for i := range partialColumns {
 		if err := partialColumns[i].SetPartsRequests(requests); err != nil {
 			return nil, true, wrapWithBlockRoot(err, root, "set parts requests")
@@ -1136,7 +1140,7 @@ func (s *Service) useGetBlobsV3() bool {
 }
 
 func (s *Service) useHasBlobs() bool {
-	return s.useGetBlobsV3() && s.capabilityCache.has(HasBlobsV1)
+	return s.useGetBlobsV3() && s.capabilityCache.has(HasBlobs)
 }
 
 // PartialColumnsSupported reports whether cell-level (partial) column dissemination is enabled.
