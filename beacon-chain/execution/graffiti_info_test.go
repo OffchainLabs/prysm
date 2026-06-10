@@ -15,13 +15,13 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 		wantPrefix   string // user graffiti appears first
 		wantSuffix   string // client version info appended after
 	}{
-		// No EL info cases (CL info "PR" + commit still included when space allows)
+		// No EL info cases (CL info "PM" + commit still included when space allows)
 		{
 			name:         "No EL - empty user graffiti",
 			elCode:       "",
 			elCommit:     "",
 			userGraffiti: []byte{},
-			wantPrefix:   "PR", // Only CL code + commit (no user graffiti to prefix)
+			wantPrefix:   "PM", // Only CL code + commit (no user graffiti to prefix)
 		},
 		{
 			name:         "No EL - short user graffiti",
@@ -29,7 +29,7 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			elCommit:     "",
 			userGraffiti: []byte("my validator"),
 			wantPrefix:   "my validator",
-			wantSuffix:   " PR", // space + CL code appended
+			wantSuffix:   " PM", // space + CL code appended
 		},
 		{
 			name:         "No EL - 28 char user graffiti (4 bytes available)",
@@ -37,15 +37,15 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			elCommit:     "",
 			userGraffiti: []byte("1234567890123456789012345678"), // 28 chars, 4 bytes available = codes only
 			wantPrefix:   "1234567890123456789012345678",
-			wantSuffix:   "PR", // CL code (no EL, so just PR)
+			wantSuffix:   "PM", // CL code (no EL, so just PM)
 		},
 		{
 			name:         "No EL - 30 char user graffiti (2 bytes available)",
 			elCode:       "",
 			elCommit:     "",
-			userGraffiti: []byte("123456789012345678901234567890"), // 30 chars, 2 bytes available = fits PR
+			userGraffiti: []byte("123456789012345678901234567890"), // 30 chars, 2 bytes available = fits PM
 			wantPrefix:   "123456789012345678901234567890",
-			wantSuffix:   "PR",
+			wantSuffix:   "PM",
 		},
 		{
 			name:         "No EL - 31 char user graffiti (1 byte available)",
@@ -67,7 +67,7 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			elCode:       "GE",
 			elCommit:     "abcd1234",
 			userGraffiti: []byte{},
-			wantPrefix:   "GEabcdPR", // No user graffiti, starts with client info
+			wantPrefix:   "GEabcdPM", // No user graffiti, starts with client info
 		},
 		{
 			name:         "With EL - full format (short user graffiti)",
@@ -75,7 +75,7 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			elCommit:     "abcd1234",
 			userGraffiti: []byte("Bob"),
 			wantPrefix:   "Bob",
-			wantSuffix:   " GEabcdPR", // space + EL(2)+commit(4)+CL(2)+commit(4)
+			wantSuffix:   " GEabcdPM", // space + EL(2)+commit(4)+CL(2)+commit(4)
 		},
 		{
 			name:         "With EL - full format (20 char user, 12 bytes available) - no space, would reduce tier",
@@ -83,7 +83,7 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			elCommit:     "abcd1234",
 			userGraffiti: []byte("12345678901234567890"), // 20 chars, leaves exactly 12 bytes = full format, no room for space
 			wantPrefix:   "12345678901234567890",
-			wantSuffix:   "GEabcdPR",
+			wantSuffix:   "GEabcdPM",
 		},
 		{
 			name:         "With EL - full format (19 char user, 13 bytes available) - space fits",
@@ -91,7 +91,7 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			elCommit:     "abcd1234",
 			userGraffiti: []byte("1234567890123456789"), // 19 chars, leaves 13 bytes = full format + space
 			wantPrefix:   "1234567890123456789",
-			wantSuffix:   " GEabcdPR",
+			wantSuffix:   " GEabcdPM",
 		},
 		{
 			name:         "With EL - reduced commits (24 char user, 8 bytes available) - no space, would reduce tier",
@@ -99,7 +99,7 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			elCommit:     "abcd1234",
 			userGraffiti: []byte("123456789012345678901234"), // 24 chars, leaves exactly 8 bytes = reduced format, no room for space
 			wantPrefix:   "123456789012345678901234",
-			wantSuffix:   "GEabPR",
+			wantSuffix:   "GEabPM",
 		},
 		{
 			name:         "With EL - reduced commits (23 char user, 9 bytes available) - space fits",
@@ -107,7 +107,7 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			elCommit:     "abcd1234",
 			userGraffiti: []byte("12345678901234567890123"), // 23 chars, leaves 9 bytes = reduced format + space
 			wantPrefix:   "12345678901234567890123",
-			wantSuffix:   " GEabPR",
+			wantSuffix:   " GEabPM",
 		},
 		{
 			name:         "With EL - codes only (28 char user, 4 bytes available) - no space, would reduce tier",
@@ -115,7 +115,7 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			elCommit:     "abcd1234",
 			userGraffiti: []byte("1234567890123456789012345678"), // 28 chars, leaves exactly 4 bytes = codes only, no room for space
 			wantPrefix:   "1234567890123456789012345678",
-			wantSuffix:   "GEPR",
+			wantSuffix:   "GEPM",
 		},
 		{
 			name:         "With EL - codes only (27 char user, 5 bytes available) - space fits",
@@ -123,7 +123,7 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			elCommit:     "abcd1234",
 			userGraffiti: []byte("123456789012345678901234567"), // 27 chars, leaves 5 bytes = codes only + space
 			wantPrefix:   "123456789012345678901234567",
-			wantSuffix:   " GEPR",
+			wantSuffix:   " GEPM",
 		},
 		{
 			name:         "With EL - EL code only (30 char user, 2 bytes available) - no space, would reduce tier",
@@ -162,7 +162,7 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			elCommit:     "abcd1234",
 			userGraffiti: append([]byte("test"), 0, 0, 0),
 			wantPrefix:   "test",
-			wantSuffix:   " GEabcdPR",
+			wantSuffix:   " GEabcdPM",
 		},
 		// 0x prefix handling - some ELs return 0x-prefixed commits
 		{
@@ -170,14 +170,14 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			elCode:       "GE",
 			elCommit:     "0xabcd1234",
 			userGraffiti: []byte{},
-			wantPrefix:   "GEabcdPR",
+			wantPrefix:   "GEabcdPM",
 		},
 		{
 			name:         "No 0x prefix - commit used as-is",
 			elCode:       "NM",
 			elCommit:     "abcd1234",
 			userGraffiti: []byte{},
-			wantPrefix:   "NMabcdPR",
+			wantPrefix:   "NMabcdPM",
 		},
 	}
 
@@ -211,7 +211,7 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 func TestGraffitiInfo_UpdateFromEngine(t *testing.T) {
 	g := NewGraffitiInfo()
 
-	// Initially no EL info - should still have CL info (PR + commit)
+	// Initially no EL info - should still have CL info (PM + commit)
 	result := g.GenerateGraffiti([]byte{})
 	resultStr := trimNullBytes(string(result[:]))
 	require.Equal(t, "PM", resultStr[:2], "Expected CL info before update")

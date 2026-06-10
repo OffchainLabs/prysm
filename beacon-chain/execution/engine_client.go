@@ -610,6 +610,12 @@ func (s *Service) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVers
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetClientVersionV1")
 	defer span.End()
 
+	// First 4 bytes of the git commit are used.
+	commit := version.GitCommit()
+	if len(commit) >= 8 {
+		commit = commit[:8]
+	}
+
 	var result []*structs.ClientVersionV1
 	err := s.rpcClient.CallContext(
 		ctx,
@@ -619,7 +625,7 @@ func (s *Service) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVers
 			Code:    PrysmClientCode,
 			Name:    PrysmClientName,
 			Version: version.SemanticVersion(),
-			Commit:  version.GetCommitPrefix(),
+			Commit:  commit,
 		},
 	)
 	if err != nil {
