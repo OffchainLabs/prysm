@@ -354,9 +354,11 @@ func TestExecutionPayloadEnvelope_BeaconBlockRootMismatch(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	envelope := testEnvelope()
+	wireBlinded, err := blocks.WireBlindedFromFull(envelope)
+	require.NoError(t, err)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 	v1alpha1Server.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).Return(
-		&eth.ExecutionPayloadEnvelopeResponse{Envelope: envelope}, nil,
+		&eth.ExecutionPayloadEnvelopeResponse{Blinded: wireBlinded}, nil,
 	)
 
 	server := &Server{V1Alpha1Server: v1alpha1Server}
