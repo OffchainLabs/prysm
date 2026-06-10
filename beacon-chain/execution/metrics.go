@@ -46,6 +46,10 @@ var (
 		Name: "beacon_engine_getBlobsV3_partial_responses_total",
 		Help: "Total number of engine_getBlobsV3 partial responses received",
 	})
+	getBlobsV3EmptyResponsesTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_engine_getBlobsV3_empty_responses_total",
+		Help: "Total number of engine_getBlobsV3 responses received with no included blobs",
+	})
 	getBlobsV3Latency = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "beacon_engine_getBlobsV3_request_duration_milliseconds",

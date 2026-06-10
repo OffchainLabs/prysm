@@ -264,7 +264,6 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				if err != nil {
 					return nil, errors.Wrap(err, "current fork digest")
 				}
-				log.WithField("count", count).Debug("Publishing partial columns")
 				// Publish the partial column.
 				// Note, the "partial column" may indeed be complete. We still
 				// should publish to help our peers.

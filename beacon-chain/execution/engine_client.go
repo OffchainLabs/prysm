@@ -1050,10 +1050,13 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 		return peerdas.StructuredCellsAndProofs{}, errors.Wrap(err, "compute cells and proofs")
 	}
 	if useGetBlobsV3 {
-		if result.Included.Count() == uint64(len(kzgCommitments)) {
+		switch includedCount := result.Included.Count(); {
+		case includedCount == uint64(len(kzgCommitments)):
 			getBlobsV3CompleteResponsesTotal.Inc()
-		} else if result.Included.Count() > 0 {
+		case includedCount > 0:
 			getBlobsV3PartialResponsesTotal.Inc()
+		default:
+			getBlobsV3EmptyResponsesTotal.Inc()
 		}
 	}
 
