@@ -6,7 +6,6 @@ package sync
 
 import (
 	"context"
-	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -185,7 +184,6 @@ type Service struct {
 	syncContributionBitsOverlapLock      sync.RWMutex
 	syncContributionBitsOverlapCache     *lru.Cache
 	signatureChan                        chan *signatureVerifier
-	kzgChan                              chan *kzgVerifier
 	clockWaiter                          startup.ClockWaiter
 	initialSyncComplete                  chan struct{}
 	verifierWaiter                       *verification.InitializerWaiter
@@ -196,6 +194,7 @@ type Service struct {
 	newExecutionPayloadBidVerifier       verification.NewExecutionPayloadBidVerifier
 	columnSidecarsExecSingleFlight       singleflight.Group
 	reconstructionSingleFlight           singleflight.Group
+	payloadEnvelopeRequestSingleFlight   singleflight.Group
 	availableBlocker                     coverage.AvailableBlocker
 	reconstructionRandGen                *rand.Rand
 	trackedValidatorsCache               *cache.TrackedValidatorsCache
@@ -239,9 +238,6 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	}
 	// Initialize signature channel with configured limit
 	r.signatureChan = make(chan *signatureVerifier, r.cfg.batchVerifierLimit)
-	// Initialize KZG channel with fixed buffer size of 100.
-	// This buffer size is designed to handle burst traffic of partial data column cells:
-	r.kzgChan = make(chan *kzgVerifier, 100)
 
 	// Correctly remove it from our seen pending block map.
 	// The eviction method always assumes that the mutex is held.
@@ -317,16 +313,17 @@ func (s *Service) Start() {
 	s.newExecutionPayloadEnvelopeVerifier = newPayloadVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
-	go s.kzgVerifierRoutine()
 
-	s.startPartialColumnBroadcaster()
+	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
+		go broadcaster.Start(&partialColumnCallbacks{service: s})
+	}
 
 	go s.startDiscoveryAndSubscriptions()
 	go s.processDataColumnLogs()
 
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
-	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, _ peer.ID) error {
-		// no-op
+	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, id peer.ID) error {
+		s.rateLimiter.removePeer(id)
 		return nil
 	})
 	s.cfg.p2p.AddPingMethod(s.sendPingRequest)
@@ -354,12 +351,6 @@ func (s *Service) Start() {
 
 }
 
-func (s *Service) startPartialColumnBroadcaster() {
-	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
-		go broadcaster.Start(&partialColumnCallbacks{s: s})
-	}
-}
-
 // Stop the regular sync service.
 func (s *Service) Stop() error {
 	defer func() {
@@ -376,15 +367,13 @@ func (s *Service) Stop() error {
 
 	// Use WaitGroup to ensure all goodbye messages complete
 	var wg sync.WaitGroup
-	for _, peerID := range s.cfg.p2p.Peers().Connected() {
-		if s.cfg.p2p.Host().Network().Connectedness(peerID) == network.Connected {
-			wg.Add(1)
-			go func(pid peer.ID) {
-				defer wg.Done()
+	for _, pid := range s.cfg.p2p.Peers().Connected() {
+		if s.cfg.p2p.Host().Network().Connectedness(pid) == network.Connected {
+			wg.Go(func() {
 				if err := s.sendGoodByeAndDisconnect(goodbyeCtx, p2ptypes.GoodbyeCodeClientShutdown, pid); err != nil {
 					log.WithError(err).WithField("peerID", pid).Error("Failed to send goodbye message")
 				}
-			}(peerID)
+			})
 		}
 	}
 	wg.Wait()
@@ -397,9 +386,7 @@ func (s *Service) Stop() error {
 	for _, t := range s.cfg.p2p.PubSub().GetTopics() {
 		s.unSubscribeFromTopic(t)
 	}
-	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
-		broadcaster.Stop()
-	}
+
 	return nil
 }
 
@@ -479,24 +466,29 @@ func (s *Service) waitForChainStart() {
 	s.markForChainStart()
 }
 
+// partialColumnCallbacks implements the callbacks the partial column broadcaster uses to verify and handle partial messages.
 type partialColumnCallbacks struct {
-	s *Service
+	service *Service
 }
 
-func (c *partialColumnCallbacks) PartialVerifierFromHeader(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, bool, error) {
-	return c.s.validatePartialDataColumnHeader(c.s.ctx, col)
+// PartialVerifierFromHeader returns a partial column verifier seeded from an untrusted partial data column header.
+func (c *partialColumnCallbacks) PartialVerifierFromHeader(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, pubsub.ValidationResult, error) {
+	return c.service.validatePartialDataColumnHeader(c.service.ctx, col)
 }
 
+// PartialVerifierFromTrustedColumn returns a partial column verifier seeded from a trusted data column.
 func (c *partialColumnCallbacks) PartialVerifierFromTrustedColumn(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
-	return c.s.partialVerifierFromTrustedColumn(c.s.ctx, col)
+	return c.service.partialVerifierFromTrustedColumn(c.service.ctx, col)
 }
 
+// ValidateColumn verifies the KZG proofs for the given cells.
 func (c *partialColumnCallbacks) ValidateColumn(cellsToVerify []blocks.CellProofBundle) error {
-	return c.s.validateKZGProofs(c.s.ctx, len(cellsToVerify), slices.Values(cellsToVerify))
+	return peerdas.VerifyDataColumnsCellsKZGProofs(cellsToVerify)
 }
 
+// HandleColumn handles a data column completed from a partial message.
 func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedRODataColumn) {
-	ctx, cancel := context.WithTimeout(c.s.ctx, pubsubMessageTimeout)
+	ctx, cancel := context.WithTimeout(c.service.ctx, pubsubMessageTimeout)
 	defer cancel()
 
 	slot := col.Slot()
@@ -510,24 +502,24 @@ func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedR
 		log.WithError(err).Error("Failed to get KZG commitments from data column")
 		return
 	}
-	if c.s.hasSeenDataColumnIndex(slot, proposerIndex, col.Index()) {
+	if c.service.hasSeenDataColumnIndex(slot, proposerIndex, col.Index()) {
 		return
 	}
 
-	c.s.setSeenDataColumnIndex(slot, proposerIndex, col.Index())
+	c.service.setSeenDataColumnIndex(slot, proposerIndex, col.Index())
 	if len(commitments) == 0 {
 		return
 	}
 	// This column was completed from a partial message.
 	partialMessageColumnCompletionsTotal.WithLabelValues(strconv.FormatUint(col.Index(), 10)).Inc()
-	err = c.s.verifiedRODataColumnSubscriber(ctx, col)
-	if err != nil {
+	if err := c.service.verifiedRODataColumnSubscriber(ctx, col); err != nil {
 		log.WithError(err).Error("Failed to handle verified RO data column subscriber")
 	}
 }
 
+// HandleHeader handles a received partial data column header.
 func (c *partialColumnCallbacks) HandleHeader(header *ethpb.PartialDataColumnHeader, groupID string) {
-	ctx, cancel := context.WithTimeout(c.s.ctx, pubsubMessageTimeout)
+	ctx, cancel := context.WithTimeout(c.service.ctx, pubsubMessageTimeout)
 	defer cancel()
 	source, err := peerdas.PopulateFromPartialHeader(header)
 	if err != nil {
@@ -535,7 +527,7 @@ func (c *partialColumnCallbacks) HandleHeader(header *ethpb.PartialDataColumnHea
 		return
 	}
 	log.WithField("slot", source.Slot()).Debug("Received data column header")
-	err = c.s.processDataColumnSidecarsFromExecution(ctx, source)
+	err = c.service.processDataColumnSidecarsFromExecution(ctx, source)
 	if err != nil {
 		log.WithError(err).Error("Failed to process partial data column header")
 	}

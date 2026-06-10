@@ -240,8 +240,9 @@ func DataColumnSidecarsGloas(
 	return roSidecars, nil
 }
 
-func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, src ConstructionPopulator,
-	opts ...blocks.PartialDataColumnOption) ([]blocks.PartialDataColumn, error) {
+// PartialColumns builds partial data columns from the cells and proofs of the included blobs,
+// where the included bitlist marks which blob commitments are present in the partial.
+func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, src ConstructionPopulator) ([]blocks.PartialDataColumn, error) {
 	start := time.Now()
 	const numberOfColumns = uint64(fieldparams.NumberOfColumns)
 	cells, proofs, err := rotateRowsToCols(cellsPerBlob, proofsPerBlob, numberOfColumns)
@@ -255,7 +256,7 @@ func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofs
 
 	dataColumns := make([]blocks.PartialDataColumn, 0, numberOfColumns)
 	for idx := range numberOfColumns {
-		dc, err := blocks.NewPartialDataColumn(src.Root(), info.signedBlockHeader, idx, info.kzgCommitments, info.kzgInclusionProof, opts...)
+		dc, err := blocks.NewPartialDataColumn(src.Root(), info.signedBlockHeader, idx, info.kzgCommitments, info.kzgInclusionProof)
 		if err != nil {
 			return nil, errors.Wrap(err, "new ro data column")
 		}

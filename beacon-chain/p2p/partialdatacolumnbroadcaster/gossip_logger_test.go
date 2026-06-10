@@ -30,7 +30,7 @@ func TestGossipUsesInjectedLogger(t *testing.T) {
 	topic := "/eth2/00000000/data_column_sidecar_7/ssz_snappy"
 	groupID := []byte{0, 1, 2, 3}
 
-	b := NewBroadcaster(injectedLogger)
+	b := NewBroadcaster(t.Context(), injectedLogger)
 	// Wire up a publishPartialCol that always errors so gossip() logs the failure.
 	b.publishPartialCol = func(t string, g []byte, c *blocks.PartialDataColumn) error {
 		return errors.New("publish failed")
@@ -72,7 +72,7 @@ func TestGossipUsesInjectedLoggerSuccess(t *testing.T) {
 	topic := "/eth2/00000000/data_column_sidecar_7/ssz_snappy"
 	groupID := []byte{0, 1, 2, 3}
 
-	b := NewBroadcaster(injectedLogger)
+	b := NewBroadcaster(t.Context(), injectedLogger)
 	b.publishPartialCol = func(t string, g []byte, c *blocks.PartialDataColumn) error {
 		return nil // success
 	}

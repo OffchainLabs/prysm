@@ -348,11 +348,18 @@ type StructuredCellsAndProofs struct {
 
 // ComputeCellsAndProofsFromStructured computes the cells and proofs from blobs and cell proofs.
 // commitmentCount is required to return the correct sized bitlist even if we see a nil slice of blobsAndProofs.
-func ComputeCellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs []*pb.BlobAndProofV2) (StructuredCellsAndProofs, error) {
+func ComputeCellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs []*pb.BlobAndProofV2) (_ StructuredCellsAndProofs, err error) {
 	start := time.Now()
 	defer func() {
-		cellsAndProofsFromStructuredComputationTime.Observe(float64(time.Since(start).Milliseconds()))
+		// Only record the computation time on success, so error returns don't pollute the metric.
+		if err == nil {
+			cellsAndProofsFromStructuredComputationTime.Observe(float64(time.Since(start).Milliseconds()))
+		}
 	}()
+
+	if uint64(len(blobsAndProofs)) > commitmentCount {
+		return StructuredCellsAndProofs{}, errors.Errorf("blobs and proofs length (%d) exceeds commitment count (%d)", len(blobsAndProofs), commitmentCount)
+	}
 
 	var wg errgroup.Group
 
@@ -407,8 +414,8 @@ func ComputeCellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs 
 		j++
 	}
 
-	if err := wg.Wait(); err != nil {
-		return StructuredCellsAndProofs{}, err
+	if err = wg.Wait(); err != nil {
+		return StructuredCellsAndProofs{}, errors.Wrap(err, "wait for ComputeCells")
 	}
 
 	return StructuredCellsAndProofs{

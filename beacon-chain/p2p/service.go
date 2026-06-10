@@ -78,7 +78,7 @@ type Service struct {
 	privKey                  *ecdsa.PrivateKey
 	metaData                 metadata.Metadata
 	pubsub                   *pubsub.PubSub
-	partialColumnBroadcaster *partialdatacolumnbroadcaster.PartialColumnBroadcaster
+	partialColumnBroadcaster partialdatacolumnbroadcaster.Broadcaster
 	joinedTopics             map[string]*pubsub.Topic
 	joinedTopicsLock         sync.RWMutex
 	subnetsLock              map[uint64]*sync.RWMutex
@@ -150,7 +150,7 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	}
 
 	if cfg.PartialDataColumns {
-		s.partialColumnBroadcaster = partialdatacolumnbroadcaster.NewBroadcaster(log.Logger)
+		s.partialColumnBroadcaster = partialdatacolumnbroadcaster.NewBroadcaster(ctx, log.Logger)
 	}
 
 	ipAddr := prysmnetwork.IPAddr()
@@ -357,7 +357,7 @@ func (s *Service) PubSub() *pubsub.PubSub {
 	return s.pubsub
 }
 
-func (s *Service) PartialColumnBroadcaster() *partialdatacolumnbroadcaster.PartialColumnBroadcaster {
+func (s *Service) PartialColumnBroadcaster() partialdatacolumnbroadcaster.Broadcaster {
 	return s.partialColumnBroadcaster
 }
 

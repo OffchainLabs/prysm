@@ -179,6 +179,7 @@ type EngineCaller interface {
 	ExecutionBlockByHash(ctx context.Context, hash common.Hash, withTxs bool) (*pb.ExecutionBlock, error)
 	GetTerminalBlockHash(ctx context.Context, transitionTime uint64) ([]byte, bool, error)
 	GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error)
+	PartialColumnsSupported() bool
 }
 
 var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
@@ -678,16 +679,13 @@ func (s *Service) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash)
 	defer span.End()
 	start := time.Now()
 
-	if !s.capabilityCache.has(GetBlobsV3) {
-		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV3))
-	}
-
 	getBlobsV3RequestsTotal.Inc()
-	getBlobsV3Latency.Observe(time.Since(start).Seconds())
 	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
-	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV3, versionedHashes)
-	getBlobsV3Latency.Observe(time.Since(start).Seconds())
-	return result, handleRPCError(err)
+	if err := s.rpcClient.CallContext(ctx, &result, GetBlobsV3, versionedHashes); err != nil {
+		return nil, handleRPCError(err)
+	}
+	getBlobsV3Latency.Observe(float64(time.Since(start).Milliseconds()))
+	return result, nil
 }
 
 // HasBlobs checks whether the given versioned hashes are available in the
@@ -708,7 +706,7 @@ func (s *Service) HasBlobs(ctx context.Context, versionedHashes []common.Hash) (
 	hasBlobsRequestsTotal.Inc()
 	result := make([]bool, len(versionedHashes))
 	err := s.rpcClient.CallContext(ctx, &result, HasBlobsV1, versionedHashes)
-	hasBlobsLatency.Observe(time.Since(start).Seconds())
+	hasBlobsLatency.Observe(float64(time.Since(start).Milliseconds()))
 	return result, handleRPCError(err)
 }
 
@@ -758,10 +756,11 @@ func (s *Service) ReconstructExecutionPayloadEnvelope(
 	}
 	return &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
-			Payload:           payload,
-			ExecutionRequests: envelope.Message.ExecutionRequests,
-			BuilderIndex:      envelope.Message.BuilderIndex,
-			BeaconBlockRoot:   envelope.Message.BeaconBlockRoot,
+			Payload:               payload,
+			ExecutionRequests:     envelope.Message.ExecutionRequests,
+			BuilderIndex:          envelope.Message.BuilderIndex,
+			BeaconBlockRoot:       envelope.Message.BeaconBlockRoot,
+			ParentBeaconBlockRoot: envelope.Message.ParentBeaconBlockRoot,
 		},
 		Signature: envelope.Signature,
 	}, nil
@@ -875,22 +874,23 @@ func gloasPayloadFromExecutionBlock(
 	}
 
 	return &pb.ExecutionPayloadGloas{
-		ParentHash:    blk.ParentHash.Bytes(),
-		FeeRecipient:  blk.Coinbase.Bytes(),
-		StateRoot:     blk.Root.Bytes(),
-		ReceiptsRoot:  blk.ReceiptHash.Bytes(),
-		LogsBloom:     blk.Bloom.Bytes(),
-		PrevRandao:    blk.MixDigest.Bytes(),
-		BlockNumber:   blk.Number.Uint64(),
-		GasLimit:      blk.GasLimit,
-		GasUsed:       blk.GasUsed,
-		Timestamp:     blk.Time,
-		ExtraData:     blk.Extra,
-		BaseFeePerGas: bytesutil.PadTo(bytesutil.ReverseByteOrder(blk.BaseFee.Bytes()), fieldparams.RootLength),
-		BlockHash:     blk.Hash.Bytes(),
-		BlobGasUsed:   *blk.BlobGasUsed,
-		ExcessBlobGas: *blk.ExcessBlobGas,
-		SlotNumber:    primitives.Slot(*blk.SlotNumber),
+		ParentHash:      blk.ParentHash.Bytes(),
+		FeeRecipient:    blk.Coinbase.Bytes(),
+		StateRoot:       blk.Root.Bytes(),
+		ReceiptsRoot:    blk.ReceiptHash.Bytes(),
+		LogsBloom:       blk.Bloom.Bytes(),
+		PrevRandao:      blk.MixDigest.Bytes(),
+		BlockNumber:     blk.Number.Uint64(),
+		GasLimit:        blk.GasLimit,
+		GasUsed:         blk.GasUsed,
+		Timestamp:       blk.Time,
+		ExtraData:       blk.Extra,
+		BaseFeePerGas:   bytesutil.PadTo(bytesutil.ReverseByteOrder(blk.BaseFee.Bytes()), fieldparams.RootLength),
+		BlockHash:       blk.Hash.Bytes(),
+		BlobGasUsed:     *blk.BlobGasUsed,
+		ExcessBlobGas:   *blk.ExcessBlobGas,
+		SlotNumber:      primitives.Slot(*blk.SlotNumber),
+		BlockAccessList: blk.BlockAccessList,
 	}, nil
 }
 
@@ -988,31 +988,52 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 	if err != nil {
 		return nil, nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
 	}
-	log.Debug("Received cells and proofs from execution client", "included", cp.Included, "cells count", len(cp.CellsPerBlob), "err", err)
+	log.WithFields(logrus.Fields{
+		"included":   cp.Included,
+		"cellsCount": len(cp.CellsPerBlob),
+	}).Debug("Received cells and proofs from execution client")
 
-	var partialColumns []blocks.PartialDataColumn
-	if s.partialColumnsSupported {
-		partialColumns, err = peerdas.PartialColumns(cp.Included, cp.CellsPerBlob, cp.ProofsPerBlob, populator)
-		if err != nil {
-			return nil, nil, wrapWithBlockRoot(err, root, "construct partial columns")
-		}
+	// Return early if the execution client returned nothing; otherwise we would
+	// build and broadcast empty partial columns.
+	if cp.Included == nil || cp.Included.Count() == 0 {
+		return nil, nil, nil
 	}
 
 	haveAllBlobs := cp.Included.Count() == uint64(len(commitments))
-	log.Debug("Constructed partial columns", "haveAllBlobs", haveAllBlobs)
 
+	var partialColumns []blocks.PartialDataColumn
 	if haveAllBlobs {
 		// Construct data column sidecars from the signed block and cells and proofs.
 		roSidecars, err := peerdas.DataColumnSidecars(cp.CellsPerBlob, cp.ProofsPerBlob, populator)
 		if err != nil {
 			return nil, nil, wrapWithBlockRoot(err, populator.Root(), "data column sidecars from column sidecar")
 		}
+		log.WithField("haveAllBlobs", haveAllBlobs).Debug("Constructed full data column sidecars")
 
 		// Upgrade the sidecars to verified sidecars.
 		// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
 		verifiedROSidecars := upgradeSidecarsToVerifiedSidecars(roSidecars)
 
+		if s.partialColumnsEnabledForSlot(populator.Slot()) {
+			for _, sidecar := range verifiedROSidecars {
+				pc, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar)
+				if err != nil {
+					return nil, nil, wrapWithBlockRoot(err, populator.Root(), "partial column from verified ro data column")
+				}
+				partialColumns = append(partialColumns, pc)
+			}
+			log.WithField("haveAllBlobs", haveAllBlobs).Debug("Constructed partial data column sidecars")
+		}
+
 		return verifiedROSidecars, partialColumns, nil
+	}
+
+	if s.partialColumnsEnabledForSlot(populator.Slot()) {
+		partialColumns, err = peerdas.PartialColumns(cp.Included, cp.CellsPerBlob, cp.ProofsPerBlob, populator)
+		if err != nil {
+			return nil, nil, wrapWithBlockRoot(err, root, "construct partial columns")
+		}
+		log.WithField("haveAllBlobs", haveAllBlobs).Debug("Constructed partial data column sidecars")
 	}
 
 	return nil, partialColumns, nil
@@ -1021,7 +1042,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 // ConstructPartialDataColumnSidecarsFromHasBlobs constructs header-only partial
 // columns whose parts metadata requests only the blobs missing from the EL.
 func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.PartialDataColumn, bool, error) {
-	if !s.useHasBlobs() {
+	if !s.useHasBlobs() || !s.partialColumnsEnabledForSlot(populator.Slot()) {
 		return nil, false, nil
 	}
 
@@ -1058,9 +1079,14 @@ func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Con
 	}
 
 	included := bitfield.NewBitlist(uint64(len(commitments)))
-	partialColumns, err := peerdas.PartialColumns(included, nil, nil, populator, blocks.WithPartsRequests(requests))
+	partialColumns, err := peerdas.PartialColumns(included, nil, nil, populator)
 	if err != nil {
 		return nil, true, wrapWithBlockRoot(err, root, "construct partial columns from has blobs")
+	}
+	for i := range partialColumns {
+		if err := partialColumns[i].SetPartsRequests(requests); err != nil {
+			return nil, true, wrapWithBlockRoot(err, root, "set parts requests")
+		}
 	}
 	return partialColumns, true, nil
 }
@@ -1073,8 +1099,8 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 
 	// Fetch all blobsAndCellsProofs from the execution client.
 	var err error
-	useV3 := s.useV3()
-	if useV3 {
+	useGetBlobsV3 := s.useGetBlobsV3()
+	if useGetBlobsV3 {
 		// v3 can return a partial response. V2 is all or nothing
 		blobAndProofs, err = s.GetBlobsV3(ctx, versionedHashes)
 	} else {
@@ -1082,7 +1108,11 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	}
 
 	if err != nil {
-		return peerdas.StructuredCellsAndProofs{}, errors.Wrapf(err, "get blobs V2/3")
+		return peerdas.StructuredCellsAndProofs{}, errors.Wrap(err, "get blobs V2/3")
+	}
+
+	if len(blobAndProofs) == 0 {
+		return peerdas.StructuredCellsAndProofs{}, nil
 	}
 
 	// Compute cells and proofs from the blobs and cell proofs.
@@ -1090,7 +1120,7 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	if err != nil {
 		return peerdas.StructuredCellsAndProofs{}, errors.Wrap(err, "compute cells and proofs")
 	}
-	if useV3 {
+	if useGetBlobsV3 {
 		if result.Included.Count() == uint64(len(kzgCommitments)) {
 			getBlobsV3CompleteResponsesTotal.Inc()
 		} else if result.Included.Count() > 0 {
@@ -1101,12 +1131,26 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	return result, nil
 }
 
-func (s *Service) useV3() bool {
+func (s *Service) useGetBlobsV3() bool {
 	return s.capabilityCache.has(GetBlobsV3) && s.partialColumnsSupported
 }
 
 func (s *Service) useHasBlobs() bool {
-	return s.useV3() && s.capabilityCache.has(HasBlobsV1)
+	return s.useGetBlobsV3() && s.capabilityCache.has(HasBlobsV1)
+}
+
+// PartialColumnsSupported reports whether cell-level (partial) column dissemination is enabled.
+func (s *Service) PartialColumnsSupported() bool {
+	return s.partialColumnsSupported
+}
+
+// partialColumnsEnabledForSlot reports whether partial column dissemination is
+// active for the given slot. Partial columns are not yet constructed for Gloas
+// blocks.
+// TODO: Partial Columns for Gloas.
+func (s *Service) partialColumnsEnabledForSlot(slot primitives.Slot) bool {
+	isGloas := slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch
+	return !isGloas && s.partialColumnsSupported
 }
 
 func versionedHashesFromCommitments(kzgCommitments [][]byte) []common.Hash {

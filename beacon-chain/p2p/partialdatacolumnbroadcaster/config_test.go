@@ -28,7 +28,7 @@ func TestNewBroadcasterRespectsConfigOverride(t *testing.T) {
 	cfg.DataColumnSidecarSubnetCount = 42
 	params.OverrideBeaconConfig(cfg)
 
-	b := NewBroadcaster(nil)
+	b := NewBroadcaster(t.Context(), nil)
 
 	// The semaphore capacity should match the overridden config value.
 	gotValidatorCap := cap(b.concurrentValidatorSemaphore)

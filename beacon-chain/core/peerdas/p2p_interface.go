@@ -1,9 +1,6 @@
 package peerdas
 
 import (
-	stderrors "errors"
-	"iter"
-
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -19,7 +16,6 @@ var (
 	ErrIndexTooLarge               = errors.New("column index is larger than the specified columns count")
 	ErrNoKzgCommitments            = errors.New("no KZG commitments found")
 	ErrMismatchLength              = errors.New("mismatch in the length of the column, commitments or proofs")
-	ErrEmptySegment                = errors.New("empty segment in batch")
 	ErrInvalidKZGProof             = errors.New("invalid KZG proof")
 	ErrBadRootLength               = errors.New("bad root length")
 	ErrInvalidInclusionProof       = errors.New("invalid inclusion proof")
@@ -68,104 +64,54 @@ func VerifyDataColumnSidecar(sidecar blocks.RODataColumn) error {
 	return nil
 }
 
-// CellProofBundleSegment is returned when a batch fails. The caller can call
-// the `.Verify` method to verify just this segment.
-type CellProofBundleSegment struct {
-	indices     []uint64
-	commitments []kzg.Bytes48
-	cells       []kzg.Cell
-	proofs      []kzg.Bytes48
-}
-
-// Verify verifies this segment without batching.
-func (s CellProofBundleSegment) Verify() error {
-	if len(s.cells) == 0 {
-		return ErrEmptySegment
-	}
-	verified, err := kzg.VerifyCellKZGProofBatch(s.commitments, s.indices, s.cells, s.proofs)
-	if err != nil {
-		return stderrors.Join(err, ErrInvalidKZGProof)
-	}
-	if !verified {
-		return ErrInvalidKZGProof
-	}
-	return nil
-}
-
-func VerifyDataColumnsCellsKZGProofs(sizeHint int, cellProofsIter iter.Seq[blocks.CellProofBundle]) error {
-	// ignore the failed segment list since we are just passing in one segment.
-	_, err := BatchVerifyDataColumnsCellsKZGProofs(sizeHint, []iter.Seq[blocks.CellProofBundle]{cellProofsIter})
-	return err
-}
-
-// BatchVerifyDataColumnsCellsKZGProofs verifies if the KZG proofs are correct.
+// VerifyDataColumnsCellsKZGProofs verifies that the given cell/proof bundles are correct.
 // Note: We are slightly deviating from the specification here:
 // The specification verifies the KZG proofs for each sidecar separately,
-// while we are verifying all the KZG proofs from multiple sidecars in a batch.
+// while we verify all the KZG proofs in a single batch.
 // This is done to improve performance since the internal KZG library is way more
-// efficient when verifying in batch. If the batch fails, the failed segments
-// are returned to the caller so that they may try segment by segment without
-// batching. On success the failed segment list is empty.
+// efficient when verifying in batch.
 //
-// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar_kzg_proofs
-func BatchVerifyDataColumnsCellsKZGProofs(sizeHint int, cellProofsIters []iter.Seq[blocks.CellProofBundle]) ( /* failed segment list */ []CellProofBundleSegment, error) {
-	commitments := make([]kzg.Bytes48, 0, sizeHint)
-	indices := make([]uint64, 0, sizeHint)
-	cells := make([]kzg.Cell, 0, sizeHint)
-	proofs := make([]kzg.Bytes48, 0, sizeHint)
+// https://github.com/ethereum/consensus-specs/blob/master/specs/gloas/p2p-interface.md#modified-verify_data_column_sidecar_kzg_proofs
+func VerifyDataColumnsCellsKZGProofs(cellProofs []blocks.CellProofBundle) error {
+	commitments := make([]kzg.Bytes48, 0, len(cellProofs))
+	indices := make([]uint64, 0, len(cellProofs))
+	cells := make([]kzg.Cell, 0, len(cellProofs))
+	proofs := make([]kzg.Bytes48, 0, len(cellProofs))
 
-	var anySegmentEmpty bool
-	var segments []CellProofBundleSegment
-	for _, cellProofsIter := range cellProofsIters {
-		startIdx := len(cells)
-		for bundle := range cellProofsIter {
-			var (
-				commitment kzg.Bytes48
-				cell       kzg.Cell
-				proof      kzg.Bytes48
-			)
+	for _, bundle := range cellProofs {
+		var (
+			commitment kzg.Bytes48
+			cell       kzg.Cell
+			proof      kzg.Bytes48
+		)
 
-			if len(bundle.Commitment) != len(commitment) ||
-				len(bundle.Cell) != len(cell) ||
-				len(bundle.Proof) != len(proof) {
-				return nil, ErrMismatchLength
-			}
-
-			copy(commitment[:], bundle.Commitment)
-			copy(cell[:], bundle.Cell)
-			copy(proof[:], bundle.Proof)
-
-			commitments = append(commitments, commitment)
-			indices = append(indices, bundle.ColumnIndex)
-			cells = append(cells, cell)
-			proofs = append(proofs, proof)
+		if len(bundle.Commitment) != len(commitment) ||
+			len(bundle.Cell) != len(cell) ||
+			len(bundle.Proof) != len(proof) {
+			return ErrMismatchLength
 		}
-		if len(cells[startIdx:]) == 0 {
-			anySegmentEmpty = true
-		}
-		segments = append(segments, CellProofBundleSegment{
-			indices:     indices[startIdx:],
-			commitments: commitments[startIdx:],
-			cells:       cells[startIdx:],
-			proofs:      proofs[startIdx:],
-		})
-	}
 
-	if anySegmentEmpty {
-		return segments, ErrEmptySegment
+		copy(commitment[:], bundle.Commitment)
+		copy(cell[:], bundle.Cell)
+		copy(proof[:], bundle.Proof)
+
+		commitments = append(commitments, commitment)
+		indices = append(indices, bundle.ColumnIndex)
+		cells = append(cells, cell)
+		proofs = append(proofs, proof)
 	}
 
 	// Batch verify that the cells match the corresponding commitments and proofs.
 	verified, err := kzg.VerifyCellKZGProofBatch(commitments, indices, cells, proofs)
 	if err != nil {
-		return segments, stderrors.Join(err, ErrInvalidKZGProof)
+		return errors.Wrap(err, "verify cell KZG proof batch")
 	}
 
 	if !verified {
-		return segments, ErrInvalidKZGProof
+		return ErrInvalidKZGProof
 	}
 
-	return nil, nil
+	return nil
 }
 
 // VerifyDataColumnSidecarInclusionProof verifies if the given KZG commitments included in the given beacon block.

@@ -88,12 +88,11 @@ func (ini *Initializer) NewDataColumnsVerifier(roDataColumns []blocks.RODataColu
 			if len(rc) == 0 {
 				return nil
 			}
-			var sizeHint int
-			if len(rc) > 0 {
-				sizeHint = len(rc[0].Column())
+			bundles, err := blocks.RODataColumnsToCellProofBundles(rc)
+			if err != nil {
+				return err
 			}
-			sizeHint *= len(rc)
-			return peerdas.VerifyDataColumnsCellsKZGProofs(sizeHint, blocks.RODataColumnsToCellProofBundles(rc))
+			return peerdas.VerifyDataColumnsCellsKZGProofs(bundles)
 		},
 		stateByRoot: make(map[[fieldparams.RootLength]byte]state.BeaconState),
 	}

@@ -25,7 +25,6 @@ mainnet = {
     "extra_data.size": "32",
     "max_blobs_per_block.size": "6",
     "max_blob_commitments.size": "4096",
-    "max_blob_commitments_bitmap.size": "512", # MAX_BLOB_COMMITMENTS_PER_BLOCK / 8
     "max_cell_proofs_length.size": "33554432",  # FIELD_ELEMENTS_PER_EXT_BLOB * MAX_BLOB_COMMITMENTS_PER_BLOCK
     "kzg_commitment_inclusion_proof_depth.size": "17",
     "max_withdrawal_requests_per_payload.size": "16",
@@ -73,7 +72,6 @@ minimal = {
     "extra_data.size": "32",
     "max_blobs_per_block.size": "6",
     "max_blob_commitments.size": "4096",
-    "max_blob_commitments_bitmap.size": "512", # MAX_BLOB_COMMITMENTS_PER_BLOCK / 8
     "max_cell_proofs_length.size": "33554432",  # FIELD_ELEMENTS_PER_EXT_BLOB * MAX_BLOB_COMMITMENTS_PER_BLOCK
     "kzg_commitment_inclusion_proof_depth.size": "17",
     "max_withdrawal_requests_per_payload.size": "16",
@@ -93,9 +91,9 @@ minimal = {
     "kzg_commitments_inclusion_proof_depth.size": "4",
     "proposer_lookahead_size": "16",  # (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH
     "ptc_window.size": "24",  # (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH
-    "ptc_committee_indices.size": "2",  # PTC_SIZE
-    "ptc.size": "1",  # Gloas: Payload Timeliness Committee aggregation bits
-    "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector2",
+    "ptc_committee_indices.size": "16",  # PTC_SIZE
+    "ptc.size": "2",  # Gloas: Payload Timeliness Committee aggregation bits (PTC_SIZE = 16)
+    "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector16",
     "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
     "execution_payload_availability.size": "8",  # Gloas: SLOTS_PER_HISTORICAL_ROOT
     "builder_pending_payments.size": "16",  # Gloas: vector length (2 * SLOTS_PER_EPOCH)

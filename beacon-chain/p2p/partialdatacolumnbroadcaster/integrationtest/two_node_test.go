@@ -35,18 +35,18 @@ type testColumnCallbacks struct {
 	label       string
 }
 
-func (c *testColumnCallbacks) PartialVerifierFromHeader(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, bool, error) {
+func (c *testColumnCallbacks) PartialVerifierFromHeader(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, pubsub.ValidationResult, error) {
 	if col.SignedBlockHeader == nil || col.SignedBlockHeader.Header == nil {
-		return nil, true, fmt.Errorf("nil signed block header")
+		return nil, pubsub.ValidationReject, fmt.Errorf("nil signed block header")
 	}
 	if len(col.KzgCommitments) == 0 {
-		return nil, true, fmt.Errorf("empty kzg commitments")
+		return nil, pubsub.ValidationReject, fmt.Errorf("empty kzg commitments")
 	}
 	verifier, err := c.newVerifier(col)
 	if err != nil {
-		return nil, true, err
+		return nil, pubsub.ValidationReject, err
 	}
-	return verifier, false, nil
+	return verifier, pubsub.ValidationAccept, nil
 }
 
 func (c *testColumnCallbacks) PartialVerifierFromTrustedColumn(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
@@ -73,14 +73,14 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		latency := time.Millisecond * 10
 		network, meta, err := simlibp2p.SimpleLibp2pNetwork([]simlibp2p.NodeLinkSettingsAndCount{
 			{LinkSettings: simnet.NodeBiDiLinkSettings{
-				Downlink: simnet.LinkSettings{BitsPerSecond: 20 * simlibp2p.OneMbps, Latency: latency / 2},
-				Uplink:   simnet.LinkSettings{BitsPerSecond: 20 * simlibp2p.OneMbps, Latency: latency / 2},
+				Downlink: simnet.LinkSettings{BitsPerSecond: 20 * simlibp2p.OneMbps},
+				Uplink:   simnet.LinkSettings{BitsPerSecond: 20 * simlibp2p.OneMbps},
 			}, Count: 2},
-		}, simlibp2p.NetworkSettings{UseBlankHost: true})
+		}, simnet.StaticLatency(latency/2), simlibp2p.NetworkSettings{UseBlankHost: true})
 		require.NoError(t, err)
-		require.NoError(t, network.Start())
+		network.Start()
 		defer func() {
-			require.NoError(t, network.Close())
+			network.Close()
 		}()
 		defer func() {
 			for _, node := range meta.Nodes {
@@ -96,8 +96,10 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 
 		logger := logrus.New()
 		logger.SetLevel(logrus.DebugLevel)
-		broadcaster1 := partialdatacolumnbroadcaster.NewBroadcaster(logger)
-		broadcaster2 := partialdatacolumnbroadcaster.NewBroadcaster(logger)
+		bcastCtx1, cancelBcast1 := context.WithCancel(t.Context())
+		bcastCtx2, cancelBcast2 := context.WithCancel(t.Context())
+		broadcaster1 := partialdatacolumnbroadcaster.NewBroadcaster(bcastCtx1, logger)
+		broadcaster2 := partialdatacolumnbroadcaster.NewBroadcaster(bcastCtx2, logger)
 
 		opts1 := broadcaster1.AppendPubSubOpts([]pubsub.Option{
 			pubsub.WithMessageSigning(false),
@@ -116,8 +118,8 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		require.NoError(t, err)
 
 		defer func() {
-			broadcaster1.Stop()
-			broadcaster2.Stop()
+			cancelBcast1()
+			cancelBcast2()
 		}()
 
 		// Generate Test Data

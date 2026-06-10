@@ -1,6 +1,8 @@
 package core
 
 import (
+	"sync/atomic"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
@@ -9,12 +11,15 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"golang.org/x/sync/singleflight"
 )
 
 type Service struct {
 	BeaconDB              db.ReadOnlyDatabase
 	ChainInfoFetcher      blockchain.ChainInfoFetcher
 	HeadFetcher           blockchain.HeadFetcher
+	ForkchoiceFetcher     blockchain.ForkchoiceFetcher
 	FinalizedFetcher      blockchain.FinalizationFetcher
 	GenesisTimeFetcher    blockchain.TimeFetcher
 	SyncChecker           sync.Checker
@@ -26,4 +31,7 @@ type Service struct {
 	P2P                   p2p.Broadcaster
 	ReplayerBuilder       stategen.ReplayerBuilder
 	OptimisticModeFetcher blockchain.OptimisticModeFetcher
+
+	payloadAttestationData   atomic.Pointer[ethpb.PayloadAttestationData]
+	payloadAttestationFlight singleflight.Group
 }

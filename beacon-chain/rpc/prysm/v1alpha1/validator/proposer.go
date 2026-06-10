@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/go-bitfield"
 	builderapi "github.com/OffchainLabs/prysm/v7/api/client/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
@@ -193,6 +192,12 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 }
 
 func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull bool) (*ethpb.GenericBeaconBlock, error) {
+	if sBlk.Version() >= version.Gloas && parentFull {
+		if err := vs.applyParentExecutionPayloadToHead(ctx, head, sBlk.Block().ParentRoot()); err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not apply parent execution payload: %v", err)
+		}
+	}
+
 	// Build consensus fields in background
 	var wg sync.WaitGroup
 	wg.Go(func() {
@@ -311,6 +316,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	var (
 		blobSidecars       []*ethpb.BlobSidecar
 		dataColumnSidecars []blocks.RODataColumn
+		partialColumns     []blocks.PartialDataColumn
 	)
 
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.ProposeBeaconBlock")
@@ -339,7 +345,6 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	}
 
 	rob, err := blocks.NewROBlockWithRoot(block, root)
-	var partialColumns []blocks.PartialDataColumn
 	if block.IsBlinded() {
 		block, blobSidecars, err = vs.handleBlindedBlock(ctx, block)
 		if errors.Is(err, builderapi.ErrBadGateway) {
@@ -441,7 +446,7 @@ func (vs *Server) handleUnblindedBlock(
 ) ([]*ethpb.BlobSidecar, []blocks.RODataColumn, []blocks.PartialDataColumn, error) {
 	rawBlobs, proofs, err := blobsAndProofs(req)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, errors.Wrap(err, "blobs and proofs")
 	}
 
 	if block.Version() >= version.Fulu {
@@ -451,8 +456,10 @@ func (vs *Server) handleUnblindedBlock(
 			return nil, nil, nil, errors.Wrap(err, "compute cells and proofs")
 		}
 
+		source := peerdas.PopulateFromBlock(block)
+
 		// Construct data column sidecars from the signed block and cells and proofs.
-		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(block))
+		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, source)
 		if err != nil {
 			return nil, nil, nil, errors.Wrap(err, "data column sidecars")
 		}
@@ -461,16 +468,17 @@ func (vs *Server) handleUnblindedBlock(
 			return nil, roDataColumnSidecars, nil, nil
 		}
 
-		included := bitfield.NewBitlist(uint64(len(cellsPerBlob)))
-		included = included.Not() // all bits set to 1
-		var partialColumnOpts []blocks.PartialDataColumnOption
-		if vs.BlockProposalEagerPushCells {
-			log.Debug("Block proposer eager push cells enabled, including cells in eager push")
-			partialColumnOpts = append(partialColumnOpts, blocks.WithByBlockProposer())
-		}
-		partialColumns, err := peerdas.PartialColumns(included, cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(block), partialColumnOpts...)
-		if err != nil {
-			return nil, nil, nil, errors.Wrap(err, "data column sidecars")
+		var partialColumns []blocks.PartialDataColumn
+		if vs.ExecutionEngineCaller.PartialColumnsSupported() {
+			// We built this block ourselves, so we can upgrade the read only data column sidecar into a verified one.
+			for _, sidecar := range roDataColumnSidecars {
+				verifiedSidecar := blocks.NewVerifiedRODataColumn(sidecar)
+				pc, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(verifiedSidecar)
+				if err != nil {
+					return nil, nil, nil, errors.Wrap(err, "partial column from verified ro data column")
+				}
+				partialColumns = append(partialColumns, pc)
+			}
 		}
 
 		return nil, roDataColumnSidecars, partialColumns, nil

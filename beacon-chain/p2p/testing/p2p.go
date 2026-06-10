@@ -59,6 +59,8 @@ type TestP2P struct {
 	pubsub                *pubsub.PubSub
 	joinedTopics          map[string]*pubsub.Topic
 	BroadcastCalled       atomic.Bool
+	broadcastedPartials   []blocks.PartialDataColumn
+	partialBroadcaster    partialdatacolumnbroadcaster.Broadcaster
 	DelaySend             bool
 	Digest                [4]byte
 	peers                 *peers.Status
@@ -255,9 +257,25 @@ func (p *TestP2P) BroadcastLightClientFinalityUpdate(_ context.Context, _ interf
 }
 
 // BroadcastDataColumnSidecar broadcasts a data column for mock.
-func (p *TestP2P) BroadcastDataColumnSidecars(context.Context, []blocks.VerifiedRODataColumn, []blocks.PartialDataColumn) error {
+func (p *TestP2P) BroadcastDataColumnSidecars(_ context.Context, _ []blocks.VerifiedRODataColumn, partialColumns []blocks.PartialDataColumn) error {
 	p.BroadcastCalled.Store(true)
+	p.mu.Lock()
+	p.broadcastedPartials = partialColumns
+	p.mu.Unlock()
 	return nil
+}
+
+// BroadcastedPartialColumns returns the partial data columns passed to the most recent
+// BroadcastDataColumnSidecars call.
+func (p *TestP2P) BroadcastedPartialColumns() []blocks.PartialDataColumn {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.broadcastedPartials
+}
+
+// EnablePartialColumnBroadcaster sets a non-nil partial column broadcaster.
+func (p *TestP2P) EnablePartialColumnBroadcaster() {
+	p.partialBroadcaster = partialdatacolumnbroadcaster.NewBroadcaster(context.Background(), logrus.StandardLogger())
 }
 
 // SetStreamHandler for RPC.
@@ -321,8 +339,8 @@ func (p *TestP2P) PubSub() *pubsub.PubSub {
 	return p.pubsub
 }
 
-func (p *TestP2P) PartialColumnBroadcaster() *partialdatacolumnbroadcaster.PartialColumnBroadcaster {
-	return nil
+func (p *TestP2P) PartialColumnBroadcaster() partialdatacolumnbroadcaster.Broadcaster {
+	return p.partialBroadcaster
 }
 
 // Disconnect from a peer.

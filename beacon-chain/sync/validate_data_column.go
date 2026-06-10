@@ -86,7 +86,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 
 	var verifiedRODataColumn blocks.VerifiedRODataColumn
 	if slots.ToEpoch(roDataColumn.Slot()) >= params.BeaconConfig().GloasForkEpoch {
-		verifiedRODataColumn, err = s.validateDataColumnGloas(ctx, msg, roDataColumn, dataColumnSidecarSubTopic)
+		verifiedRODataColumn, err = s.validateDataColumnGloas(ctx, pid, msg, roDataColumn, dataColumnSidecarSubTopic)
 		if err != nil {
 			return validationResultFromError(err), baseValidationErr(err)
 		}

@@ -34,6 +34,12 @@ type writeOnlyGloasFields interface {
 	UpdatePendingPaymentWeight(att ethpb.Att, indices []uint64, participatedFlags map[uint8]bool) error
 	UpdateBuilderAtIndex(index primitives.BuilderIndex, builder *ethpb.Builder) error
 
+	// Bulk setters (used by hdiff).
+	SetBuilders([]*ethpb.Builder) error
+	SetBuilderPendingPayments([]*ethpb.BuilderPendingPayment) error
+	SetBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal) error
+	SetExecutionPayloadAvailabilityVector([]byte) error
+
 	// Withdrawals.
 	SetPayloadExpectedWithdrawals(withdrawals []*enginev1.Withdrawal) error
 	DecreaseWithdrawalBalances(withdrawals []*enginev1.Withdrawal) error

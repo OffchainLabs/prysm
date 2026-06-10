@@ -86,20 +86,17 @@ func TestMap(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range 100 {
-		wg.Add(1)
-		go func(w *sync.WaitGroup, scopedMap *Map[int, string]) {
-			defer w.Done()
-			v, ok := scopedMap.Get(1)
+		wg.Go(func() {
+			v, ok := tMap.Get(1)
 			require.Equal(t, true, ok)
 			require.Equal(t, "foo", v)
 
-			scopedMap.Put(3, "nyan")
+			tMap.Put(3, "nyan")
 
-			v, ok = scopedMap.Get(3)
+			v, ok = tMap.Get(3)
 			require.Equal(t, true, ok)
 			require.Equal(t, "nyan", v)
-
-		}(&wg, tMap)
+		})
 	}
 	wg.Wait()
 

@@ -159,6 +159,7 @@ go_test(
         "//beacon-chain/db/iface:go_default_library",
         "//beacon-chain/db/testing:go_default_library",
         "//beacon-chain/p2p/encoder:go_default_library",
+        "//beacon-chain/p2p/partialdatacolumnbroadcaster:go_default_library",
         "//beacon-chain/p2p/peers:go_default_library",
         "//beacon-chain/p2p/peers/peerdata:go_default_library",
         "//beacon-chain/p2p/peers/scorers:go_default_library",

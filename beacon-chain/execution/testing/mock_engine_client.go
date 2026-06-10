@@ -38,6 +38,7 @@ type EngineClient struct {
 	NumReconstructedPayloads    uint64
 	TerminalBlockHash           []byte
 	TerminalBlockHashExists     bool
+	PartialColumnsSupportedFlag bool
 	OverrideValidHash           [32]byte
 	GetPayloadResponse          *blocks.GetPayloadResponse
 	ErrGetPayload               error
@@ -48,6 +49,11 @@ type EngineClient struct {
 	HasBlobsPartialColumns      []blocks.PartialDataColumn
 	ClientVersion               []*structs.ClientVersionV1
 	ErrorClientVersion          error
+}
+
+// PartialColumnsSupported --
+func (e *EngineClient) PartialColumnsSupported() bool {
+	return e.PartialColumnsSupportedFlag
 }
 
 // NewPayload --

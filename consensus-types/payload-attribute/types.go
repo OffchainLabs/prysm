@@ -22,6 +22,7 @@ type data struct {
 	withdrawals           []*enginev1.Withdrawal
 	parentBeaconBlockRoot []byte
 	slotNumber            uint64
+	targetGasLimit        uint64
 }
 
 var (
@@ -110,6 +111,7 @@ func initPayloadAttributeFromV4(a *enginev1.PayloadAttributesV4) (Attributer, er
 		withdrawals:           a.Withdrawals,
 		parentBeaconBlockRoot: a.ParentBeaconBlockRoot,
 		slotNumber:            a.SlotNumber,
+		targetGasLimit:        a.TargetGasLimit,
 	}, nil
 }
 

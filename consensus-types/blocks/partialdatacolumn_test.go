@@ -1,6 +1,7 @@
 package blocks
 
 import (
+	"maps"
 	"slices"
 	"testing"
 
@@ -96,26 +97,6 @@ func mustNewPartialColumn(t *testing.T, n int, included ...uint64) *PartialDataC
 	return mustNewPartialColumnWithSigLen(t, n, fieldparams.BLSSignatureLength, included...)
 }
 
-func mustNewPartialColumnWithOpts(t *testing.T, n int, included []uint64, opts ...PartialDataColumnOption) *PartialDataColumn {
-	t.Helper()
-	pdc, err := NewPartialDataColumn(
-		[fieldparams.RootLength]byte{},
-		testSignedHeader(true, fieldparams.BLSSignatureLength),
-		7,
-		sizedSlices(n, 48, 1),
-		sizedSlices(4, 32, 90),
-		opts...,
-	)
-	require.NoError(t, err)
-
-	for _, idx := range included {
-		pdc.Included.SetBitAt(idx, true)
-		pdc.Column[idx] = sizedSlices(1, 2048, byte(idx+1))[0]
-		pdc.KzgProofs[idx] = sizedSlices(1, 48, byte(idx+11))[0]
-	}
-	return &pdc
-}
-
 func mustDecodeSidecar(t *testing.T, encoded []byte) *ethpb.PartialDataColumnSidecar {
 	t.Helper()
 	var msg ethpb.PartialDataColumnSidecar
@@ -176,6 +157,69 @@ func TestNewPartialDataColumn(t *testing.T) {
 	}
 }
 
+func TestNewPartialDataColumnFromVerifiedRODataColumn(t *testing.T) {
+	tests := []struct {
+		name string
+		run  func(t *testing.T)
+	}{
+		{
+			name: "nominal marks all cells included",
+			run: func(t *testing.T) {
+				commitments := sizedSlices(3, 48, 10)
+				sidecar := &ethpb.DataColumnSidecar{
+					KzgCommitments:    commitments,
+					SignedBlockHeader: testSignedHeader(true, fieldparams.BLSSignatureLength),
+				}
+				roCol, err := NewRODataColumn(sidecar)
+				require.NoError(t, err)
+				verified := NewVerifiedRODataColumn(roCol)
+
+				pdc, err := NewPartialDataColumnFromVerifiedRODataColumn(verified)
+				require.NoError(t, err)
+				require.Equal(t, sidecar, pdc.DataColumnSidecar)
+				require.Equal(t, uint64(3), pdc.Included.Len())
+				// All cells of a verified column should be marked as included.
+				require.Equal(t, uint64(3), pdc.Included.Count())
+
+				// groupID is derived from the column's block root.
+				root, err := sidecar.SignedBlockHeader.Header.HashTreeRoot()
+				require.NoError(t, err)
+				require.DeepEqual(t, groupIdFromRoot(root), pdc.groupID)
+			},
+		},
+		{
+			name: "no commitments",
+			run: func(t *testing.T) {
+				sidecar := &ethpb.DataColumnSidecar{
+					KzgCommitments:    nil,
+					SignedBlockHeader: testSignedHeader(true, fieldparams.BLSSignatureLength),
+				}
+				roCol, err := NewRODataColumn(sidecar)
+				require.NoError(t, err)
+
+				pdc, err := NewPartialDataColumnFromVerifiedRODataColumn(NewVerifiedRODataColumn(roCol))
+				require.NoError(t, err)
+				require.Equal(t, uint64(0), pdc.Included.Len())
+				require.Equal(t, uint64(0), pdc.Included.Count())
+			},
+		},
+		{
+			name: "KzgCommitments error is propagated",
+			run: func(t *testing.T) {
+				// A gloas data column with no bid commitments set causes
+				// KzgCommitments() to return an error.
+				verified := NewVerifiedRODataColumn(RODataColumn{gloas: &ethpb.DataColumnSidecarGloas{}})
+				_, err := NewPartialDataColumnFromVerifiedRODataColumn(verified)
+				require.ErrorContains(t, "get KZG commitments", err)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, tt.run)
+	}
+}
+
 func TestPartialDataColumn_newPartsMetadata(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -207,7 +251,8 @@ func TestPartialDataColumn_newPartsMetadata(t *testing.T) {
 
 func TestPartialDataColumn_newPartsMetadata_WithPartsRequests(t *testing.T) {
 	requests := testBitlist(4, 1, 3)
-	p := mustNewPartialColumnWithOpts(t, 4, []uint64{1}, WithPartsRequests(requests))
+	p := mustNewPartialColumn(t, 4, 1)
+	require.NoError(t, p.SetPartsRequests(requests))
 
 	meta, err := p.newPartsMetadata()
 	require.NoError(t, err)
@@ -254,7 +299,8 @@ func TestMarshalPartsMetadata(t *testing.T) {
 		{
 			name: "available too large",
 			meta: &ethpb.PartialDataColumnPartsMetadata{
-				Available: bitfield.NewBitlist(4096),
+				// 32768 bits serializes to 4097 bytes, one over the 4096-byte ssz_max.
+				Available: bitfield.NewBitlist(32768),
 				Requests:  bitfield.NewBitlist(1),
 			},
 			wantErr: "Available",
@@ -263,7 +309,7 @@ func TestMarshalPartsMetadata(t *testing.T) {
 			name: "requests too large",
 			meta: &ethpb.PartialDataColumnPartsMetadata{
 				Available: bitfield.NewBitlist(1),
-				Requests:  bitfield.NewBitlist(4096),
+				Requests:  bitfield.NewBitlist(32768),
 			},
 			wantErr: "Requests",
 		},
@@ -362,7 +408,8 @@ func TestPartialDataColumn_PartsMetadata(t *testing.T) {
 				DataColumnSidecar: &ethpb.DataColumnSidecar{
 					KzgCommitments: make([][]byte, 4096),
 				},
-				Included: bitfield.NewBitlist(4096),
+				// 32768 bits serializes to 4097 bytes, one over the 4096-byte ssz_max.
+				Included: bitfield.NewBitlist(32768),
 			},
 			expectErr: "Available",
 		},
@@ -384,7 +431,7 @@ func TestPartialDataColumn_PartsMetadata(t *testing.T) {
 	}
 }
 
-func TestPartialDataColumn_cellsToSendForPeer(t *testing.T) {
+func TestPartialDataColumn_cellsToSendToPeer(t *testing.T) {
 	tests := []struct {
 		name string
 		run  func(t *testing.T)
@@ -393,7 +440,7 @@ func TestPartialDataColumn_cellsToSendForPeer(t *testing.T) {
 			name: "metadata length mismatch",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 4, 0)
-				_, _, err := p.cellsToSendForPeer(testPeerMeta(3, nil, allSet(3)))
+				_, _, err := p.cellsToSendToPeer(testPeerMeta(3, nil, allSet(3)))
 				require.ErrorContains(t, "peer metadata bitmap length mismatch", err)
 			},
 		},
@@ -401,7 +448,7 @@ func TestPartialDataColumn_cellsToSendForPeer(t *testing.T) {
 			name: "no cells to send",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 3, 1)
-				encoded, sent, err := p.cellsToSendForPeer(testPeerMeta(3, []uint64{1}, allSet(3)))
+				encoded, sent, err := p.cellsToSendToPeer(testPeerMeta(3, []uint64{1}, allSet(3)))
 				require.NoError(t, err)
 				require.IsNil(t, encoded)
 				require.IsNil(t, sent)
@@ -411,7 +458,7 @@ func TestPartialDataColumn_cellsToSendForPeer(t *testing.T) {
 			name: "sends only requested and missing cells",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 4, 0, 1, 3)
-				encoded, sent, err := p.cellsToSendForPeer(testPeerMeta(4, []uint64{1}, allSet(4)))
+				encoded, sent, err := p.cellsToSendToPeer(testPeerMeta(4, []uint64{1}, allSet(4)))
 				require.NoError(t, err)
 				require.NotNil(t, encoded)
 				require.NotNil(t, sent)
@@ -432,7 +479,7 @@ func TestPartialDataColumn_cellsToSendForPeer(t *testing.T) {
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 1, 0)
 				p.Column[0] = []byte{1}
-				_, _, err := p.cellsToSendForPeer(testPeerMeta(1, nil, []uint64{0}))
+				_, _, err := p.cellsToSendToPeer(testPeerMeta(1, nil, []uint64{0}))
 				require.ErrorContains(t, "PartialColumn", err)
 			},
 		},
@@ -441,7 +488,7 @@ func TestPartialDataColumn_cellsToSendForPeer(t *testing.T) {
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 1, 0)
 				p.KzgProofs[0] = []byte{1}
-				_, _, err := p.cellsToSendForPeer(testPeerMeta(1, nil, []uint64{0}))
+				_, _, err := p.cellsToSendToPeer(testPeerMeta(1, nil, []uint64{0}))
 				require.ErrorContains(t, "KzgProofs", err)
 			},
 		},
@@ -452,16 +499,16 @@ func TestPartialDataColumn_cellsToSendForPeer(t *testing.T) {
 	}
 }
 
-func TestPartialDataColumn_eagerPushBytes(t *testing.T) {
+func TestPartialDataColumn_buildPartialColumnHeader(t *testing.T) {
 	tests := []struct {
 		name string
 		run  func(t *testing.T)
 	}{
 		{
-			name: "nominal",
+			name: "nominal sends header only",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 3, 0)
-				encoded, err := p.eagerPushBytes(peer.ID("test-peer"), false, true)
+				encoded, err := p.buildPartialColumnHeader()
 				require.NoError(t, err)
 				msg := mustDecodeSidecar(t, encoded)
 				require.Equal(t, 1, len(msg.Header))
@@ -476,7 +523,7 @@ func TestPartialDataColumn_eagerPushBytes(t *testing.T) {
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
 				p.KzgCommitments[0] = []byte{1}
-				_, err := p.eagerPushBytes(peer.ID("test-peer"), false, true)
+				_, err := p.buildPartialColumnHeader()
 				require.ErrorContains(t, "KzgCommitments", err)
 			},
 		},
@@ -485,90 +532,8 @@ func TestPartialDataColumn_eagerPushBytes(t *testing.T) {
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
 				p.KzgCommitmentsInclusionProof = p.KzgCommitmentsInclusionProof[:3]
-				_, err := p.eagerPushBytes(peer.ID("test-peer"), false, true)
+				_, err := p.buildPartialColumnHeader()
 				require.ErrorContains(t, "KzgCommitmentsInclusionProof", err)
-			},
-		},
-		{
-			name: "byBlockProposer includes cells and proofs",
-			run: func(t *testing.T) {
-				p := mustNewPartialColumnWithOpts(t, 3, []uint64{0, 2}, WithByBlockProposer())
-				encoded, err := p.eagerPushBytes(peer.ID("test-peer"), true, true)
-				require.NoError(t, err)
-				msg := mustDecodeSidecar(t, encoded)
-				require.Equal(t, 1, len(msg.Header))
-				// Should include cells for indices 0 and 2.
-				require.Equal(t, 2, len(msg.PartialColumn))
-				require.Equal(t, 2, len(msg.KzgProofs))
-				bitmap := bitfield.Bitlist(msg.CellsPresentBitmap)
-				require.Equal(t, uint64(3), bitmap.Len())
-				require.Equal(t, true, bitmap.BitAt(0))
-				require.Equal(t, false, bitmap.BitAt(1))
-				require.Equal(t, true, bitmap.BitAt(2))
-				// Verify cell content matches.
-				require.DeepEqual(t, p.Column[0], msg.PartialColumn[0])
-				require.DeepEqual(t, p.Column[2], msg.PartialColumn[1])
-				require.DeepEqual(t, p.KzgProofs[0], msg.KzgProofs[0])
-				require.DeepEqual(t, p.KzgProofs[2], msg.KzgProofs[1])
-			},
-		},
-		{
-			name: "byBlockProposer with no cells still works",
-			run: func(t *testing.T) {
-				p := mustNewPartialColumnWithOpts(t, 2, nil, WithByBlockProposer())
-				encoded, err := p.eagerPushBytes(peer.ID("test-peer"), true, true)
-				require.NoError(t, err)
-				msg := mustDecodeSidecar(t, encoded)
-				require.Equal(t, 1, len(msg.Header))
-				require.Equal(t, 0, len(msg.PartialColumn))
-				require.Equal(t, 0, len(msg.KzgProofs))
-			},
-		},
-		{
-			name: "includeHeader false and includeCellAndProofs false returns nil",
-			run: func(t *testing.T) {
-				p := mustNewPartialColumn(t, 3, 0)
-				encoded, err := p.eagerPushBytes(peer.ID("test-peer"), false, false)
-				require.NoError(t, err)
-				require.IsNil(t, encoded)
-			},
-		},
-		{
-			name: "includeHeader false with byBlockProposer includes cells but no header",
-			run: func(t *testing.T) {
-				p := mustNewPartialColumnWithOpts(t, 3, []uint64{0, 2}, WithByBlockProposer())
-				encoded, err := p.eagerPushBytes(peer.ID("test-peer"), true, false)
-				require.NoError(t, err)
-				require.NotNil(t, encoded)
-				msg := mustDecodeSidecar(t, encoded)
-				require.Equal(t, 0, len(msg.Header))
-				require.Equal(t, 2, len(msg.PartialColumn))
-				require.Equal(t, 2, len(msg.KzgProofs))
-				bitmap := bitfield.Bitlist(msg.CellsPresentBitmap)
-				require.Equal(t, true, bitmap.BitAt(0))
-				require.Equal(t, false, bitmap.BitAt(1))
-				require.Equal(t, true, bitmap.BitAt(2))
-			},
-		},
-		{
-			name: "includeHeader false with byBlockProposer no cells returns nil",
-			run: func(t *testing.T) {
-				p := mustNewPartialColumnWithOpts(t, 2, nil, WithByBlockProposer())
-				encoded, err := p.eagerPushBytes(peer.ID("test-peer"), true, false)
-				require.NoError(t, err)
-				require.IsNil(t, encoded)
-			},
-		},
-		{
-			name: "includeHeader true with includeCellAndProofs false sends header only",
-			run: func(t *testing.T) {
-				p := mustNewPartialColumn(t, 3, 0)
-				encoded, err := p.eagerPushBytes(peer.ID("test-peer"), false, true)
-				require.NoError(t, err)
-				msg := mustDecodeSidecar(t, encoded)
-				require.Equal(t, 1, len(msg.Header))
-				require.Equal(t, 0, len(msg.PartialColumn))
-				require.Equal(t, uint64(0), bitfield.Bitlist(msg.CellsPresentBitmap).Count())
 			},
 		},
 	}
@@ -598,7 +563,7 @@ func TestMergeAvailableIntoPartsMetadata(t *testing.T) {
 				Requests:  bitfield.NewBitlist(4),
 			},
 			add:       bitfield.NewBitlist(4),
-			expectErr: "bitlists are different lengths",
+			expectErr: "available length mismatch",
 		},
 		{
 			name: "requests length mismatch",
@@ -632,8 +597,8 @@ func TestMergeAvailableIntoPartsMetadata(t *testing.T) {
 			require.Equal(t, true, bitfield.Bitlist(out.Available).BitAt(1))
 			require.Equal(t, true, bitfield.Bitlist(out.Available).BitAt(2))
 			require.Equal(t, false, bitfield.Bitlist(out.Available).BitAt(3))
-			// Verify that MergeAvailableIntoPartsMetadata mutates its base argument.
-			require.Equal(t, true, bitfield.Bitlist(tt.base.Available).BitAt(2))
+			// MergeAvailableIntoPartsMetadata must not mutate its base argument.
+			require.Equal(t, false, bitfield.Bitlist(tt.base.Available).BitAt(2))
 		})
 	}
 }
@@ -996,26 +961,6 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 			},
 		},
 		{
-			name: "eager push includeHeader false for proposer sends cells without header",
-			run: func(t *testing.T) {
-				p := mustNewPartialColumnWithOpts(t, 3, []uint64{0, 1, 2}, WithByBlockProposer())
-				var initial PartialDataColumnPeerState
-				nextState, action, headerIncluded := p.forPeer(peer.ID("peer-a"), true, initial, false)
-				require.NoError(t, action.Err)
-				require.Equal(t, false, headerIncluded)
-				require.NotNil(t, action.EncodedPartialMessage)
-				require.NotNil(t, action.EncodedPartsMetadata)
-				// Decode and verify no header but cells are present.
-				decoded := mustDecodeSidecar(t, action.EncodedPartialMessage)
-				require.Equal(t, 0, len(decoded.Header))
-				require.Equal(t, 3, len(decoded.PartialColumn))
-				require.Equal(t, 3, len(decoded.KzgProofs))
-				// Recvd should reflect cells we pushed.
-				require.NotNil(t, nextState.Recvd)
-				require.Equal(t, uint64(3), bitfield.Bitlist(nextState.Recvd.Available).Count())
-			},
-		},
-		{
 			name: "non-eager path always returns includeHeader false",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 3, 0, 1, 2)
@@ -1035,53 +980,132 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 	}
 }
 
-func TestPartialDataColumn_ForPeer_ByBlockProposer(t *testing.T) {
+func runPublishActions(
+	p *PartialDataColumn,
+	peerStates map[peer.ID]PartialDataColumnPeerState,
+	headerSentCache map[peer.ID]bool,
+	requests map[peer.ID]bool,
+) map[peer.ID]partialmessages.PublishAction {
+	seq := p.PublishActionsFn(headerSentCache)(peerStates, func(id peer.ID) bool { return requests[id] })
+	return maps.Collect(seq)
+}
+
+func TestPartialDataColumn_PublishActionsFn(t *testing.T) {
 	tests := []struct {
 		name string
 		run  func(t *testing.T)
 	}{
 		{
-			name: "eager push includes all cells and proofs",
+			name: "every requesting peer is yielded with state and header cache updated",
 			run: func(t *testing.T) {
-				p := mustNewPartialColumnWithOpts(t, 4, []uint64{0, 1, 2, 3}, WithByBlockProposer())
-				var initial PartialDataColumnPeerState
-				nextState, action, headerIncluded := p.forPeer(peer.ID("peer-a"), true, initial, true)
+				p := mustNewPartialColumn(t, 2, 0)
+				peerStates := map[peer.ID]PartialDataColumnPeerState{
+					"peer-a": {},
+					"peer-b": {},
+				}
+				headerSentCache := map[peer.ID]bool{}
+				actions := runPublishActions(p, peerStates, headerSentCache, map[peer.ID]bool{"peer-a": true, "peer-b": true})
+
+				require.Equal(t, 2, len(actions))
+				for _, pid := range []peer.ID{"peer-a", "peer-b"} {
+					action := actions[pid]
+					require.NoError(t, action.Err)
+					require.NotNil(t, action.EncodedPartsMetadata)
+					// Fresh header cache → the eager push includes the header.
+					require.NotNil(t, action.EncodedPartialMessage)
+					require.Equal(t, 1, len(mustDecodeSidecar(t, action.EncodedPartialMessage).Header))
+					// State is committed back into peerStates.
+					require.NotNil(t, peerStates[pid].Recvd)
+					require.NotNil(t, peerStates[pid].Sent)
+					// Header is recorded as sent so it is not sent again.
+					require.Equal(t, true, headerSentCache[pid])
+				}
+			},
+		},
+		{
+			name: "breaking out of the iterator early leaves unconsumed peers untouched",
+			run: func(t *testing.T) {
+				p := mustNewPartialColumn(t, 2, 0)
+				peerStates := map[peer.ID]PartialDataColumnPeerState{
+					"peer-a": {},
+					"peer-b": {},
+				}
+				headerSentCache := map[peer.ID]bool{}
+				seq := p.PublishActionsFn(headerSentCache)(peerStates, func(peer.ID) bool { return true })
+
+				yielded := 0
+				for _, action := range seq {
+					require.NoError(t, action.Err)
+					yielded++
+					break
+				}
+				require.Equal(t, 1, yielded)
+
+				// Exactly one peer was processed before we broke out: it has its
+				// state committed and header recorded. The other is untouched.
+				// Order-independent because we only assert the counts, not which peer.
+				committed := 0
+				for _, pid := range []peer.ID{"peer-a", "peer-b"} {
+					if peerStates[pid].Recvd != nil {
+						committed++
+					}
+				}
+				require.Equal(t, 1, committed)
+				require.Equal(t, 1, len(headerSentCache))
+			},
+		},
+		{
+			name: "header is omitted when headerSentCache already records it",
+			run: func(t *testing.T) {
+				p := mustNewPartialColumn(t, 2, 0)
+				peerStates := map[peer.ID]PartialDataColumnPeerState{"peer-a": {}}
+				// Header already sent to this peer on a previous round.
+				headerSentCache := map[peer.ID]bool{"peer-a": true}
+				actions := runPublishActions(p, peerStates, headerSentCache, map[peer.ID]bool{"peer-a": true})
+
+				action := actions["peer-a"]
 				require.NoError(t, action.Err)
-				require.Equal(t, true, headerIncluded)
-				require.NotNil(t, action.EncodedPartialMessage)
+				// Eager push without a header for a non-proposer column → no partial message.
+				require.IsNil(t, action.EncodedPartialMessage)
+				// Parts metadata is still sent and Recvd is initialized so we don't eager push again.
 				require.NotNil(t, action.EncodedPartsMetadata)
+				require.NotNil(t, peerStates["peer-a"].Recvd)
+				require.Equal(t, true, headerSentCache["peer-a"])
+			},
+		},
+		{
+			name: "forPeer error is yielded and neither peer state nor header cache is updated",
+			run: func(t *testing.T) {
+				p := mustNewPartialColumn(t, 3, 0)
+				// A Recvd whose bitmap length (2) does not match the column (3) makes
+				// cellsToSendToPeer fail.
+				badRecvd := &ethpb.PartialDataColumnPartsMetadata{
+					Available: testBitlist(2),
+					Requests:  testBitlist(2, 0, 1),
+				}
+				peerStates := map[peer.ID]PartialDataColumnPeerState{
+					"peer-a": {Recvd: badRecvd},
+				}
+				headerSentCache := map[peer.ID]bool{}
+				actions := runPublishActions(p, peerStates, headerSentCache, map[peer.ID]bool{"peer-a": true})
 
-				// Decode and verify the partial message includes cells.
-				decoded := mustDecodeSidecar(t, action.EncodedPartialMessage)
-				require.Equal(t, 1, len(decoded.Header))
-				require.Equal(t, 4, len(decoded.PartialColumn))
-				require.Equal(t, 4, len(decoded.KzgProofs))
-				bitmap := bitfield.Bitlist(decoded.CellsPresentBitmap)
-				require.Equal(t, uint64(4), bitmap.Count())
-
-				// Verify cell content.
-				require.DeepEqual(t, p.Column[0], decoded.PartialColumn[0])
-				require.DeepEqual(t, p.Column[3], decoded.PartialColumn[3])
-				require.DeepEqual(t, p.KzgProofs[0], decoded.KzgProofs[0])
-				require.DeepEqual(t, p.KzgProofs[3], decoded.KzgProofs[3])
-
-				// Recvd.Available should reflect the cells we pushed.
-				require.NotNil(t, nextState.Recvd)
-				require.Equal(t, uint64(4), bitfield.Bitlist(nextState.Recvd.Available).Count())
-				require.Equal(t, true, bitfield.Bitlist(nextState.Recvd.Available).BitAt(0))
-				require.Equal(t, true, bitfield.Bitlist(nextState.Recvd.Available).BitAt(3))
-
-				// Sent should reflect our partsMetadata: available = all 4 cells, requests = none.
-				require.NotNil(t, nextState.Sent)
-				require.Equal(t, uint64(4), bitfield.Bitlist(nextState.Sent.Available).Count())
-				require.Equal(t, true, bitfield.Bitlist(nextState.Sent.Available).BitAt(0))
-				require.Equal(t, true, bitfield.Bitlist(nextState.Sent.Available).BitAt(3))
-				require.Equal(t, uint64(0), bitfield.Bitlist(nextState.Sent.Requests).Count())
-				// Verify Sent matches the wire-encoded partsMetadata.
-				sentMetaWire, err := decodePartsMetadata(action.EncodedPartsMetadata, 4)
-				require.NoError(t, err)
-				require.DeepEqual(t, sentMetaWire.Available, nextState.Sent.Available)
-				require.DeepEqual(t, sentMetaWire.Requests, nextState.Sent.Requests)
+				require.ErrorContains(t, "peer metadata bitmap length mismatch", actions["peer-a"].Err)
+				// State is left untouched on error: still the original mismatched Recvd, no Sent.
+				require.Equal(t, uint64(2), bitfield.Bitlist(peerStates["peer-a"].Recvd.Requests).Len())
+				require.IsNil(t, peerStates["peer-a"].Sent)
+				// Header is not recorded for a failed action.
+				require.Equal(t, 0, len(headerSentCache))
+			},
+		},
+		{
+			name: "empty peerStates yields no actions",
+			run: func(t *testing.T) {
+				p := mustNewPartialColumn(t, 2, 0)
+				peerStates := map[peer.ID]PartialDataColumnPeerState{}
+				headerSentCache := map[peer.ID]bool{}
+				actions := runPublishActions(p, peerStates, headerSentCache, map[peer.ID]bool{})
+				require.Equal(t, 0, len(actions))
+				require.Equal(t, 0, len(headerSentCache))
 			},
 		},
 	}
@@ -1212,6 +1236,16 @@ func TestPartialDataColumn_ExtendFromVerifiedCell(t *testing.T) {
 				require.DeepEqual(t, []byte{8}, p.KzgProofs[0])
 			},
 		},
+		{
+			name: "out of range index returns false without panicking",
+			run: func(t *testing.T) {
+				p := mustNewPartialColumn(t, 2, 1)
+				ok := p.ExtendFromVerifiedCell(5, []byte{9}, []byte{8})
+				require.Equal(t, false, ok)
+				// Nothing should have been recorded as included.
+				require.Equal(t, uint64(1), p.Included.Count())
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1219,7 +1253,7 @@ func TestPartialDataColumn_ExtendFromVerifiedCell(t *testing.T) {
 	}
 }
 
-func TestClonePeerState(t *testing.T) {
+func TestPartialDataColumnPeerState_Clone(t *testing.T) {
 	tests := []struct {
 		name  string
 		input PartialDataColumnPeerState
@@ -1260,7 +1294,7 @@ func TestClonePeerState(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cloned := ClonePeerState(tt.input)
+			cloned := tt.input.Clone()
 
 			if tt.input.Recvd != nil {
 				assertMetaCloned(t, tt.input.Recvd, cloned.Recvd)

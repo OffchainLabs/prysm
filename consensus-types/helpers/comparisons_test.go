@@ -635,3 +635,94 @@ func TestPendingConsolidationsEqual(t *testing.T) {
 		})
 	}
 }
+
+func TestBuilderPendingWithdrawalsEqual(t *testing.T) {
+	tests := []struct {
+		name string
+		s    *ethpb.BuilderPendingWithdrawal
+		t    *ethpb.BuilderPendingWithdrawal
+		want bool
+	}{
+		{
+			name: "both nil",
+			s:    nil,
+			t:    nil,
+			want: true,
+		},
+		{
+			name: "first nil",
+			s:    nil,
+			t:    &ethpb.BuilderPendingWithdrawal{Amount: 1},
+			want: false,
+		},
+		{
+			name: "second nil",
+			s:    &ethpb.BuilderPendingWithdrawal{Amount: 1},
+			t:    nil,
+			want: false,
+		},
+		{
+			name: "equal",
+			s: &ethpb.BuilderPendingWithdrawal{
+				FeeRecipient: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20},
+				Amount:       1000,
+				BuilderIndex: 5,
+			},
+			t: &ethpb.BuilderPendingWithdrawal{
+				FeeRecipient: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20},
+				Amount:       1000,
+				BuilderIndex: 5,
+			},
+			want: true,
+		},
+		{
+			name: "different amount",
+			s: &ethpb.BuilderPendingWithdrawal{
+				FeeRecipient: make([]byte, 20),
+				Amount:       1000,
+				BuilderIndex: 5,
+			},
+			t: &ethpb.BuilderPendingWithdrawal{
+				FeeRecipient: make([]byte, 20),
+				Amount:       2000,
+				BuilderIndex: 5,
+			},
+			want: false,
+		},
+		{
+			name: "different builder index",
+			s: &ethpb.BuilderPendingWithdrawal{
+				FeeRecipient: make([]byte, 20),
+				Amount:       1000,
+				BuilderIndex: 5,
+			},
+			t: &ethpb.BuilderPendingWithdrawal{
+				FeeRecipient: make([]byte, 20),
+				Amount:       1000,
+				BuilderIndex: 10,
+			},
+			want: false,
+		},
+		{
+			name: "different fee recipient",
+			s: &ethpb.BuilderPendingWithdrawal{
+				FeeRecipient: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20},
+				Amount:       1000,
+				BuilderIndex: 5,
+			},
+			t: &ethpb.BuilderPendingWithdrawal{
+				FeeRecipient: []byte{20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1},
+				Amount:       1000,
+				BuilderIndex: 5,
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := BuilderPendingWithdrawalsEqual(tt.s, tt.t); got != tt.want {
+				t.Errorf("BuilderPendingWithdrawalsEqual() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

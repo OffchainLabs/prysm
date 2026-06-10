@@ -7,7 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -132,6 +135,51 @@ func TestValidateExecutionPayloadEnvelope_HappyPath(t *testing.T) {
 	require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
 }
 
+func TestValidateExecutionPayloadEnvelope_GossipEvent(t *testing.T) {
+	ctx := context.Background()
+	s, msg, builderIdx, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
+
+	opChannel := make(chan *feed.Event, 1)
+	opSub := s.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
+	defer opSub.Unsubscribe()
+
+	t.Run("gossip event emitted on valid envelope", func(t *testing.T) {
+		result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationAccept, result)
+
+		signed, ok := msg.ValidatorData.(*ethpb.SignedExecutionPayloadEnvelope)
+		require.Equal(t, true, ok)
+
+		select {
+		case event := <-opChannel:
+			require.Equal(t, feed.EventType(opfeed.ExecutionPayloadGossipReceived), event.Type)
+			data, ok := event.Data.(*opfeed.ExecutionPayloadGossipReceivedData)
+			require.Equal(t, true, ok)
+			require.Equal(t, primitives.Slot(1), data.Slot)
+			require.Equal(t, builderIdx, data.BuilderIndex)
+			require.Equal(t, root, data.BlockRoot)
+			require.Equal(t, bytesutil.ToBytes32(signed.Message.Payload.BlockHash), data.BlockHash)
+		case <-time.After(time.Second):
+			t.Fatal("expected execution_payload_gossip event was not received")
+		}
+	})
+
+	t.Run("self-origin envelope does not emit gossip event", func(t *testing.T) {
+		result, err := s.validateExecutionPayloadEnvelope(ctx, s.cfg.p2p.PeerID(), msg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationAccept, result)
+
+		select {
+		case event := <-opChannel:
+			t.Fatalf("did not expect a gossip event for a self-origin envelope, got type %v", event.Type)
+		case <-time.After(50 * time.Millisecond):
+			// No event received, as expected.
+		}
+	})
+}
+
 func TestExecutionPayloadEnvelopeSubscriber_WrongMessage(t *testing.T) {
 	s := &Service{cfg: &config{}}
 	err := s.executionPayloadEnvelopeSubscriber(context.Background(), &ethpb.BeaconBlock{})
@@ -140,7 +188,8 @@ func TestExecutionPayloadEnvelopeSubscriber_WrongMessage(t *testing.T) {
 
 func TestExecutionPayloadEnvelopeSubscriber_HappyPath(t *testing.T) {
 	s := &Service{
-		cfg: &config{chain: &mock.ChainService{}},
+		cfg:          &config{chain: &mock.ChainService{}},
+		chainStarted: abool.New(),
 	}
 	root := [32]byte{0x01}
 	blockHash := [32]byte{0x02}
@@ -190,7 +239,7 @@ func (m *mockExecutionPayloadEnvelopeVerifier) VerifyExecutionRequestsRoot(_ int
 	return nil
 }
 
-func (m *mockExecutionPayloadEnvelopeVerifier) VerifySignature(_ state.ReadOnlyBeaconState) error {
+func (m *mockExecutionPayloadEnvelopeVerifier) VerifySignature(_ context.Context, _ state.ReadOnlyBeaconState) error {
 	return m.errSignature
 }
 
@@ -219,12 +268,13 @@ func setupExecutionPayloadEnvelopeService(t *testing.T, envelopeSlot, blockSlot 
 		seenPayloadEnvelopeCache: lruwrpr.New(10),
 		pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
 		cfg: &config{
-			p2p:         p,
-			initialSync: &mockSync.Sync{},
-			chain:       chainService,
-			beaconDB:    db,
-			stateGen:    stateGen,
-			clock:       startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+			p2p:               p,
+			initialSync:       &mockSync.Sync{},
+			chain:             chainService,
+			beaconDB:          db,
+			stateGen:          stateGen,
+			clock:             startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+			operationNotifier: chainService.OperationNotifier(),
 		},
 	}
 
@@ -361,8 +411,9 @@ func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, buil
 			ExecutionRequests: &enginev1.ExecutionRequests{
 				Deposits: []*enginev1.DepositRequest{},
 			},
-			BuilderIndex:    builderIdx,
-			BeaconBlockRoot: root[:],
+			BuilderIndex:          builderIdx,
+			BeaconBlockRoot:       root[:],
+			ParentBeaconBlockRoot: make([]byte, 32),
 		},
 		Signature: bytes.Repeat([]byte{0xAA}, 96),
 	}

@@ -1,8 +1,6 @@
 package blocks
 
 import (
-	"iter"
-
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -228,41 +226,34 @@ func NewVerifiedRODataColumn(roDataColumn RODataColumn) VerifiedRODataColumn {
 	return VerifiedRODataColumn{RODataColumn: roDataColumn}
 }
 
-type CellProofBundleWithSize struct {
-	Size     int
-	Iterator iter.Seq[CellProofBundle]
-}
-
-func RODataColumnsToCellProofBundlesWithSize(sidecars ...RODataColumn) CellProofBundleWithSize {
+// RODataColumnsToCellProofBundles flattens the cells, commitments and proofs of the given data column sidecars into CellProofBundles.
+func RODataColumnsToCellProofBundles(sidecars []RODataColumn) ([]CellProofBundle, error) {
 	if len(sidecars) == 0 {
-		return CellProofBundleWithSize{Size: 0, Iterator: func(_ func(CellProofBundle) bool) {}}
+		return nil, nil
 	}
-	return CellProofBundleWithSize{
-		Size:     len(sidecars) * len(sidecars[0].Column()), // assuming all sidecars have the same number of cells
-		Iterator: RODataColumnsToCellProofBundles(sidecars),
-	}
-}
-
-func RODataColumnsToCellProofBundles(sidecars []RODataColumn) iter.Seq[CellProofBundle] {
-	return func(yield func(CellProofBundle) bool) {
-		for _, sidecar := range sidecars {
-			cells := sidecar.Column()
-			kcs, err := sidecar.KzgCommitments()
-			if err != nil {
-				log.WithError(err).Error("kzg commitments not present on sidecar")
-				return
-			}
-			kps := sidecar.KzgProofs()
-			for i := range cells {
-				if !yield(CellProofBundle{
-					ColumnIndex: sidecar.Index(),
-					Commitment:  kcs[i],
-					Cell:        cells[i],
-					Proof:       kps[i],
-				}) {
-					return
-				}
-			}
+	// Assuming all sidecars have the same number of cells.
+	out := make([]CellProofBundle, 0, len(sidecars)*len(sidecars[0].Column()))
+	for _, sidecar := range sidecars {
+		cells := sidecar.Column()
+		kcs, err := sidecar.KzgCommitments()
+		if err != nil {
+			return nil, errors.Wrapf(err, "kzg commitments not present on data column sidecar at index %d", sidecar.Index())
+		}
+		kps := sidecar.KzgProofs()
+		if len(kcs) != len(cells) || len(kps) != len(cells) {
+			return nil, errors.Errorf(
+				"mismatched cell/commitment/proof counts in data column sidecar at index %d: cells=%d commitments=%d proofs=%d",
+				sidecar.Index(), len(cells), len(kcs), len(kps),
+			)
+		}
+		for i := range cells {
+			out = append(out, CellProofBundle{
+				ColumnIndex: sidecar.Index(),
+				Commitment:  kcs[i],
+				Cell:        cells[i],
+				Proof:       kps[i],
+			})
 		}
 	}
+	return out, nil
 }

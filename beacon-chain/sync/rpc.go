@@ -280,7 +280,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 		// Given we have an input argument that can be pointer or the actual object, this gives us
 		// a way to check for its reflect.Kind and based on the result, we can decode
 		// accordingly.
-		if t.Kind() == reflect.Ptr {
+		if t.Kind() == reflect.Pointer {
 			msg, ok := reflect.New(t.Elem()).Interface().(ssz.Unmarshaler)
 			if !ok {
 				log.Errorf("message of %T does not support marshaller interface", msg)
