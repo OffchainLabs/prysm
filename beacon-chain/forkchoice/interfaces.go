@@ -66,6 +66,7 @@ type Getter interface {
 	AncestorRoot(ctx context.Context, root [32]byte, slot primitives.Slot) ([32]byte, error)
 	CommonAncestor(ctx context.Context, root1 [32]byte, root2 [32]byte) ([32]byte, primitives.Slot, error)
 	ForkChoiceDump(context.Context) (*forkchoice2.Dump, error)
+	ForkChoiceDumpV2(context.Context) (*forkchoice2.DumpV2, error)
 	Tips() ([][32]byte, []primitives.Slot)
 }
 

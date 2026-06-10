@@ -322,11 +322,8 @@ func (s *State) latestAncestor(ctx context.Context, blockRoot [32]byte) (state.B
 	ctx, span := trace.StartSpan(ctx, "stateGen.latestAncestor")
 	defer span.End()
 
-	if s.isFinalizedRoot(blockRoot) {
-		finalizedState := s.FinalizedState()
-		if finalizedState != nil {
-			return finalizedState, nil
-		}
+	if finalizedState := s.finalizedStateIfRoot(blockRoot); finalizedState != nil {
+		return finalizedState, nil
 	}
 
 	b, err := s.beaconDB.Block(ctx, blockRoot)
@@ -360,8 +357,8 @@ func (s *State) latestAncestor(ctx context.Context, blockRoot [32]byte) (state.B
 		}
 
 		// Does the state exist in finalized info cache.
-		if s.isFinalizedRoot(parentRoot) {
-			return s.FinalizedState(), nil
+		if finalizedState := s.finalizedStateIfRoot(parentRoot); finalizedState != nil {
+			return finalizedState, nil
 		}
 
 		// Does the state exist in epoch boundary cache.

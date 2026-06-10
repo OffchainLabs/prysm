@@ -75,13 +75,23 @@ const (
 	LightClientOptimisticUpdateTopic = "light_client_optimistic_update"
 	// DataColumnTopic represents a data column sidecar event topic
 	DataColumnTopic = "data_column_sidecar"
-	// ExecutionPayloadTopic represents a new execution payload envelope event topic
-	ExecutionPayloadTopic = "execution_payload_available"
+	// ExecutionPayloadAvailableTopic represents the event topic fired when an execution payload envelope
+	// and its custody data are available (for PTC voting). It does not require EL validity.
+	// TODO: Decouple emitting this event from EL validation.
+	ExecutionPayloadAvailableTopic = "execution_payload_available"
+	// ExecutionPayloadTopic represents the event topic fired after an execution payload envelope is
+	// successfully imported into fork choice (post EL execution).
+	ExecutionPayloadTopic = "execution_payload"
+	// ExecutionPayloadGossipTopic represents an execution payload envelope received from gossip or API
+	// that passes validation rules.
+	ExecutionPayloadGossipTopic = "execution_payload_gossip"
 	// ExecutionPayloadBidTopic represents a new execution payload bid event topic.
 	// This topic is currently not triggered but is recognized to avoid client subscription errors.
 	ExecutionPayloadBidTopic = "execution_payload_bid"
 	// PayloadAttestationMessageTopic represents a new payload attestation message event topic.
 	PayloadAttestationMessageTopic = "payload_attestation_message"
+	// ProposerPreferencesTopic represents a new signed proposer preferences event topic.
+	ProposerPreferencesTopic = "proposer_preferences"
 )
 
 var (
@@ -117,6 +127,8 @@ var opsFeedEventTopics = map[feed.EventType]string{
 	operation.BlockGossipReceived:               BlockGossipTopic,
 	operation.DataColumnReceived:                DataColumnTopic,
 	operation.PayloadAttestationMessageReceived: PayloadAttestationMessageTopic,
+	operation.ProposerPreferencesReceived:       ProposerPreferencesTopic,
+	operation.ExecutionPayloadGossipReceived:    ExecutionPayloadGossipTopic,
 }
 
 var stateFeedEventTopics = map[feed.EventType]string{
@@ -127,7 +139,8 @@ var stateFeedEventTopics = map[feed.EventType]string{
 	statefeed.Reorg:                       ChainReorgTopic,
 	statefeed.BlockProcessed:              BlockTopic,
 	statefeed.PayloadAttributes:           PayloadAttributesTopic,
-	statefeed.PayloadProcessed:            ExecutionPayloadTopic,
+	statefeed.ExecutionPayloadAvailable:   ExecutionPayloadAvailableTopic,
+	statefeed.ExecutionPayloadProcessed:   ExecutionPayloadTopic,
 }
 
 var topicsForStateFeed = func() map[string]bool {
@@ -482,8 +495,14 @@ func topicForEvent(event *feed.Event) string {
 		return DataColumnTopic
 	case *operation.PayloadAttestationMessageReceivedData:
 		return PayloadAttestationMessageTopic
-	case *statefeed.PayloadProcessedData:
+	case *operation.ProposerPreferencesReceivedData:
+		return ProposerPreferencesTopic
+	case *statefeed.ExecutionPayloadAvailableData:
+		return ExecutionPayloadAvailableTopic
+	case *statefeed.ExecutionPayloadProcessedData:
 		return ExecutionPayloadTopic
+	case *operation.ExecutionPayloadGossipReceivedData:
+		return ExecutionPayloadGossipTopic
 	default:
 		return InvalidTopic
 	}
@@ -660,11 +679,38 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, structs.PayloadAttestationMessageFromConsensus(v.Message))
 		}, nil
-	case *statefeed.PayloadProcessedData:
+	case *operation.ProposerPreferencesReceivedData:
 		return func() io.Reader {
-			return jsonMarshalReader(eventName, &structs.PayloadEvent{
+			epoch := slots.ToEpoch(v.Data.Message.ProposalSlot)
+			return jsonMarshalReader(eventName, &structs.ProposerPreferencesEvent{
+				Version: version.String(params.GetNetworkScheduleEntry(epoch).VersionEnum),
+				Data:    structs.SignedProposerPreferencesFromConsensus(v.Data),
+			})
+		}, nil
+	case *statefeed.ExecutionPayloadAvailableData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, &structs.ExecutionPayloadAvailableEvent{
 				Slot:      fmt.Sprintf("%d", v.Slot),
 				BlockRoot: hexutil.Encode(v.BlockRoot[:]),
+			})
+		}, nil
+	case *statefeed.ExecutionPayloadProcessedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, &structs.ExecutionPayloadEvent{
+				Slot:                fmt.Sprintf("%d", v.Slot),
+				BuilderIndex:        fmt.Sprintf("%d", v.BuilderIndex),
+				BlockHash:           hexutil.Encode(v.BlockHash[:]),
+				BlockRoot:           hexutil.Encode(v.BlockRoot[:]),
+				ExecutionOptimistic: v.Optimistic,
+			})
+		}, nil
+	case *operation.ExecutionPayloadGossipReceivedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, &structs.ExecutionPayloadGossipEvent{
+				Slot:         fmt.Sprintf("%d", v.Slot),
+				BuilderIndex: fmt.Sprintf("%d", v.BuilderIndex),
+				BlockHash:    hexutil.Encode(v.BlockHash[:]),
+				BlockRoot:    hexutil.Encode(v.BlockRoot[:]),
 			})
 		}, nil
 	default:

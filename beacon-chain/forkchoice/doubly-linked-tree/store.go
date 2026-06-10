@@ -121,6 +121,7 @@ func (s *Store) insert(ctx context.Context,
 		blockHash:                   *blockHash,
 		payloadAvailabilityVote:     bitfield.NewBitvector512(),
 		payloadDataAvailabilityVote: bitfield.NewBitvector512(),
+		payloadAttesters:            bitfield.NewBitvector512(),
 	}
 	// Set the node's target checkpoint
 	if slot%params.BeaconConfig().SlotsPerEpoch == 0 {
@@ -189,7 +190,21 @@ func (s *Store) insert(ctx context.Context,
 		boostThreshold := params.BeaconConfig().SlotComponentDuration(bps)
 		isFirstBlock := s.proposerBoostRoot == [32]byte{}
 		if currentSlot == slot && sss < boostThreshold && isFirstBlock {
-			s.proposerBoostRoot = root
+			depEpoch := slots.ToEpoch(currentSlot)
+			if depEpoch > 0 {
+				depEpoch--
+			}
+			depRoot, err := s.dependentRootForEpoch(root, depEpoch)
+			if err != nil {
+				return nil, errors.Wrap(err, "could not get block dependent root.")
+			}
+			headDepRoot, err := s.dependentRoot(depEpoch)
+			if err != nil {
+				return nil, errors.Wrap(err, "could not get head dependent root.")
+			}
+			if depRoot == headDepRoot {
+				s.proposerBoostRoot = root
+			}
 		}
 
 		// Update best descendants

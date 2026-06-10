@@ -354,6 +354,96 @@ func (s *Store) nodeTreeDump(ctx context.Context, n *Node, nodes []*forkchoice2.
 	return nodes, nil
 }
 
+// nodeTreeDumpV2 appends to the given list one entry per (root, payload_status) tuple descending from n.
+func (s *Store) nodeTreeDumpV2(ctx context.Context, n *Node, nodes []*forkchoice2.NodeV2) ([]*forkchoice2.NodeV2, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	var parentRoot [32]byte
+	if n.parent != nil {
+		parentRoot = n.parent.node.root
+	}
+	target := [32]byte{}
+	if n.target != nil {
+		target = n.target.root
+	}
+	en := s.emptyNodeByRoot[n.root]
+	fn := s.fullNodeByRoot[n.root]
+	optimistic := false
+	if n.parent != nil {
+		optimistic = n.parent.optimistic
+	}
+	if fn != nil {
+		optimistic = fn.optimistic
+	}
+
+	pending := &forkchoice2.NodeV2{
+		PayloadStatus:                   forkchoice2.PayloadStatusPending,
+		BlockRoot:                       n.root[:],
+		ParentRoot:                      parentRoot[:],
+		Slot:                            n.slot,
+		Weight:                          n.weight,
+		Balance:                         n.balance,
+		ExecutionOptimistic:             optimistic,
+		Timestamp:                       en.timestamp,
+		ExecutionBlockHash:              n.blockHash[:],
+		Target:                          target[:],
+		JustifiedEpoch:                  n.justifiedEpoch,
+		FinalizedEpoch:                  n.finalizedEpoch,
+		UnrealizedJustifiedEpoch:        n.unrealizedJustifiedEpoch,
+		UnrealizedFinalizedEpoch:        n.unrealizedFinalizedEpoch,
+		PayloadAttesterCount:            n.payloadAttesters.Count(),
+		PayloadAvailabilityYesCount:     n.payloadAvailabilityVote.Count(),
+		PayloadDataAvailabilityYesCount: n.payloadDataAvailabilityVote.Count(),
+	}
+	if optimistic {
+		pending.Validity = forkchoice2.Optimistic
+	} else {
+		pending.Validity = forkchoice2.Valid
+	}
+	nodes = append(nodes, pending)
+
+	emptyEntry := &forkchoice2.NodeV2{
+		PayloadStatus:       forkchoice2.PayloadStatusEmpty,
+		BlockRoot:           n.root[:],
+		ParentRoot:          parentRoot[:],
+		Slot:                n.slot,
+		Weight:              en.weight,
+		Balance:             en.balance,
+		Validity:            pending.Validity,
+		ExecutionOptimistic: en.optimistic,
+		Timestamp:           en.timestamp,
+		ExecutionBlockHash:  n.blockHash[:],
+	}
+	nodes = append(nodes, emptyEntry)
+
+	if fn != nil {
+		fullEntry := &forkchoice2.NodeV2{
+			PayloadStatus:       forkchoice2.PayloadStatusFull,
+			BlockRoot:           n.root[:],
+			ParentRoot:          parentRoot[:],
+			Slot:                n.slot,
+			Weight:              fn.weight,
+			Balance:             fn.balance,
+			Validity:            pending.Validity,
+			ExecutionOptimistic: fn.optimistic,
+			Timestamp:           fn.timestamp,
+			ExecutionBlockHash:  n.blockHash[:],
+			GasLimit:            fn.gasLimit,
+		}
+		nodes = append(nodes, fullEntry)
+	}
+
+	var err error
+	for _, child := range s.allConsensusChildren(n) {
+		nodes, err = s.nodeTreeDumpV2(ctx, child, nodes)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return nodes, nil
+}
+
 // MarkFullNode creates a full payload node for an existing empty node at the
 // given beacon block root. This is used during forkchoice tree reconstruction on
 // startup to mark blocks whose execution payload was delivered. The caller must
@@ -419,35 +509,16 @@ func (f *ForkChoice) updateNewFullNodeWeight(fn *PayloadNode) {
 	fn.weight = fn.balance
 }
 
-// SetPTCVote sets the PTC vote bits on the consensus node identified by root.
+// SetPTCVote records ptcIdx's vote on root, overwriting any previous vote from the same index.
 func (f *ForkChoice) SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, blobDataAvailable bool) {
 	n := f.store.emptyNodeByRoot[root]
 	if n == nil {
 		return
 	}
 	ptcVoteCount.Inc()
-	if payloadPresent {
-		n.node.setPayloadAvailabilityVote(ptcIdx)
-	}
-	if blobDataAvailable {
-		n.node.setPayloadDataAvailabilityVote(ptcIdx)
-	}
-}
-
-func (n *Node) setPayloadAvailabilityVote(idx uint64) {
-	n.payloadAvailabilityVote.SetBitAt(idx, true)
-}
-
-func (n *Node) setPayloadDataAvailabilityVote(idx uint64) {
-	n.payloadDataAvailabilityVote.SetBitAt(idx, true)
-}
-
-func (n *Node) payloadAvailabilityVoteCount() uint64 {
-	return n.payloadAvailabilityVote.Count()
-}
-
-func (n *Node) payloadDataAvailabilityVoteCount() uint64 {
-	return n.payloadDataAvailabilityVote.Count()
+	n.node.payloadAttesters.SetBitAt(ptcIdx, true)
+	n.node.payloadAvailabilityVote.SetBitAt(ptcIdx, payloadPresent)
+	n.node.payloadDataAvailabilityVote.SetBitAt(ptcIdx, blobDataAvailable)
 }
 
 // resolveVoteNode returns the node that should receive the balance of a vote. It returns always a PayloadNode, but the boolean indicates
