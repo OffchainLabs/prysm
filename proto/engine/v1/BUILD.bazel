@@ -52,6 +52,7 @@ ssz_gen_marshal(
         "DepositRequest",
         "ConsolidationRequest",
         "ExecutionRequests",
+        "ExecutionRequestsGloas",
     ],
 )
 

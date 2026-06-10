@@ -46,7 +46,7 @@ func gloasEnvelopeFixture(t *testing.T, blockRoot [32]byte) (*ethpb.BeaconStateG
 		ExecutionAddress: make([]byte, 20),
 	}}
 
-	emptyRequestsRoot, err := enginev1.EmptyExecutionRequestsHashTreeRoot()
+	emptyRequestsRoot, err := enginev1.EmptyExecutionRequestsGloasHashTreeRoot()
 	require.NoError(t, err)
 
 	base.LatestExecutionPayloadBid.ExecutionRequestsRoot = emptyRequestsRoot[:]
@@ -78,7 +78,7 @@ func gloasEnvelopeFixture(t *testing.T, blockRoot [32]byte) (*ethpb.BeaconStateG
 		BeaconBlockRoot:       blockRoot[:],
 		ParentBeaconBlockRoot: parentBeaconRoot,
 		Payload:               payload,
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 	}
 
 	domain, err := signing.Domain(base.Fork, slots.ToEpoch(slot), cfg.DomainBeaconBuilder, base.GenesisValidatorsRoot)

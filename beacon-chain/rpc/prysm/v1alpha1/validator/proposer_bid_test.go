@@ -45,11 +45,30 @@ func TestSetSelfBuildExecutionPayloadBid(t *testing.T) {
 
 	// 5 Gwei = 5,000,000,000 Wei
 	bidValue := big.NewInt(5_000_000_000)
+	executionRequests := &enginev1.ExecutionRequests{
+		Deposits: []*enginev1.DepositRequest{{
+			Pubkey:                make([]byte, 48),
+			WithdrawalCredentials: make([]byte, 32),
+			Amount:                1,
+			Signature:             make([]byte, 96),
+			Index:                 2,
+		}},
+		Withdrawals: []*enginev1.WithdrawalRequest{{
+			SourceAddress:   make([]byte, 20),
+			ValidatorPubkey: make([]byte, 48),
+			Amount:          3,
+		}},
+		Consolidations: []*enginev1.ConsolidationRequest{{
+			SourceAddress: make([]byte, 20),
+			SourcePubkey:  make([]byte, 48),
+			TargetPubkey:  make([]byte, 48),
+		}},
+	}
 	local := &consensusblocks.GetPayloadResponse{
 		ExecutionData:     ed,
 		Bid:               bidValue,
 		BlobsBundler:      &enginev1.BlobsBundle{},
-		ExecutionRequests: &enginev1.ExecutionRequests{},
+		ExecutionRequests: executionRequests,
 	}
 
 	vs := &Server{}
@@ -75,6 +94,9 @@ func TestSetSelfBuildExecutionPayloadBid(t *testing.T) {
 	require.DeepEqual(t, parentRoot[:], bid.ParentBlockRoot)
 	require.Equal(t, primitives.Gwei(0), bid.Value)
 	require.Equal(t, primitives.Gwei(0), bid.ExecutionPayment)
+	expectedExecutionRequestsRoot, err := enginev1.CopyExecutionRequestsGloas(executionRequests).HashTreeRoot()
+	require.NoError(t, err)
+	require.DeepEqual(t, expectedExecutionRequestsRoot[:], bid.ExecutionRequestsRoot)
 }
 
 func TestSetSelfBuildExecutionPayloadBid_BlobCommitments(t *testing.T) {

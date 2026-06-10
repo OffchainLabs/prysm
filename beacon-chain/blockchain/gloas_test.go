@@ -183,7 +183,7 @@ func testSignedEnvelope(t *testing.T, blockRoot [32]byte, slot primitives.Slot, 
 				Transactions:  [][]byte{},
 				Withdrawals:   []*enginev1.Withdrawal{},
 			},
-			ExecutionRequests:     &enginev1.ExecutionRequests{},
+			ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 			BuilderIndex:          0,
 			BeaconBlockRoot:       blockRoot[:],
 			ParentBeaconBlockRoot: make([]byte, 32),
@@ -269,7 +269,7 @@ func TestNotifyNewEnvelope_Valid(t *testing.T) {
 		BeaconBlockRoot:       blockRoot[:],
 		ParentBeaconBlockRoot: make([]byte, 32),
 		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:]},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
@@ -297,7 +297,7 @@ func TestNotifyNewEnvelope_Syncing(t *testing.T) {
 		BeaconBlockRoot:       blockRoot[:],
 		ParentBeaconBlockRoot: make([]byte, 32),
 		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:]},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
@@ -325,7 +325,7 @@ func TestNotifyNewEnvelope_Invalid(t *testing.T) {
 		BeaconBlockRoot:       blockRoot[:],
 		ParentBeaconBlockRoot: make([]byte, 32),
 		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:]},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
@@ -471,7 +471,7 @@ func TestValidateExecutionOnEnvelope_Valid(t *testing.T) {
 		BeaconBlockRoot:       blockRoot[:],
 		ParentBeaconBlockRoot: make([]byte, 32),
 		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:], ParentHash: make([]byte, 32)},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)

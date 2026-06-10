@@ -80,12 +80,13 @@ func (e *ExecutionPayloadEnvelope) ToConsensus() (*eth.ExecutionPayloadEnvelope,
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Payload")
 	}
-	var requests *enginev1.ExecutionRequests
+	var requests *enginev1.ExecutionRequestsGloas
 	if e.ExecutionRequests != nil {
-		requests, err = e.ExecutionRequests.ToConsensus()
+		legacyRequests, err := e.ExecutionRequests.ToConsensus()
 		if err != nil {
 			return nil, server.NewDecodeError(err, "ExecutionRequests")
 		}
+		requests = enginev1.CopyExecutionRequestsGloas(legacyRequests)
 	}
 	builderIndex, err := strconv.ParseUint(e.BuilderIndex, 10, 64)
 	if err != nil {
@@ -262,7 +263,7 @@ func WireBlindedFromFull(full *eth.ExecutionPayloadEnvelope) (*eth.WireBlindedEx
 	}
 	return &eth.WireBlindedExecutionPayloadEnvelope{
 		PayloadRoot:           payloadRoot[:],
-		ExecutionRequests:     full.ExecutionRequests,
+		ExecutionRequests:     enginev1.CopyExecutionRequests(full.ExecutionRequests),
 		BuilderIndex:          full.BuilderIndex,
 		BeaconBlockRoot:       bytesutil.SafeCopyBytes(full.BeaconBlockRoot),
 		ParentBeaconBlockRoot: bytesutil.SafeCopyBytes(full.ParentBeaconBlockRoot),

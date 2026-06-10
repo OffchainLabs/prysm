@@ -53,7 +53,7 @@ func (s stubBlockBody) PayloadAttestations() ([]*ethpb.PayloadAttestation, error
 func (s stubBlockBody) SignedExecutionPayloadBid() (*ethpb.SignedExecutionPayloadBid, error) {
 	return s.signedBid, nil
 }
-func (s stubBlockBody) ParentExecutionRequests() (*enginev1.ExecutionRequests, error) {
+func (s stubBlockBody) ParentExecutionRequests() (interfaces.ExecutionRequests, error) {
 	return nil, nil
 }
 func (s stubBlockBody) MarshalSSZ() ([]byte, error)         { return nil, nil }
