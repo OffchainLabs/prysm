@@ -8,31 +8,40 @@ GO         ?= go
 DIST       ?= dist
 VERSION_PKG := github.com/OffchainLabs/prysm/v7/runtime/version
 
-# Binaries: name -> main package. Extend as more are migrated off Bazel.
-BINARIES := beacon-chain validator prysmctl bootnode
-PKG_beacon-chain := ./cmd/beacon-chain
-PKG_validator    := ./cmd/validator
-PKG_prysmctl     := ./cmd/prysmctl
-PKG_bootnode     := ./tools/bootnode
-PKG_client-stats := ./cmd/client-stats
+# Binaries built by `make build` (mode=dev or mode=release): every main package under cmd/,
+# auto-discovered from cmd/*/main.go (a pure-make wildcard, no subprocess). The output
+# name is the directory name and the package path is ./cmd/<name>, so there is no list
+# to maintain — a new cmd/<tool>/main.go is picked up automatically. Non-cmd mains (e.g.
+# the bootnode tool under tools/) are not built here; use `make build-tools` for those.
+BINARIES := $(notdir $(patsubst %/,%,$(dir $(wildcard cmd/*/main.go))))
+
+# Code-generation kinds (for `make gen [proto|ssz|mocks]`) -> the script each one runs.
+GEN_KINDS := proto ssz mocks
+GEN_SCRIPT_proto := ./hack/update-go-pbs.sh
+GEN_SCRIPT_ssz   := ./hack/update-go-ssz.sh
+GEN_SCRIPT_mocks := ./hack/update-mockgen.sh
 
 # Cross-compilation (Phase 4). The set of binaries DISTRIBUTED via prysm.sh/prysm.bat
-# (prysmaticlabs.com/releases) — note this differs from BINARIES: client-stats is shipped,
-# bootnode is not. All four live at ./cmd/<name>.
+# (prysmaticlabs.com/releases), built by `make build platforms=all`. All live at ./cmd/<name>.
+# This currently matches the full cmd/ set ($(BINARIES)) but is kept an explicit list, since
+# "built" and "distributed" are distinct concerns (a new cmd/ tool would be built by
+# `make build` but not auto-shipped).
 CROSS_BINARIES := beacon-chain validator client-stats prysmctl
 
-# Run-targets as "<goos>/<goarch>/<c-target-triple>". The C toolchain is chosen per-OS
-# (see the `cross` recipe), mirroring exactly what Bazel used — all five targets build from
-# a single Linux x86_64 host, and only Linux was ever hermetic:
+# Run-targets as "<goos>/<goarch>/<c-target-triple>" for `make build platforms=all` (and the
+# docker image build). The C toolchain is chosen per-OS by build/cross, mirroring exactly what
+# Bazel used — all five targets build from a single Linux x86_64 host, and only Linux was ever
+# hermetic:
 #   linux   -> `zig cc` (hermetic, any host; triple selects glibc 2.31, Bazel's baseline)
 #   darwin  -> osxcross o64-clang/oa64-clang (Linux->macOS, embeds MacOSX12.3 SDK). Needed
 #              because herumi's prebuilt C++ lib + the prometheus/mach cgo require Apple's SDK.
 #   windows -> mingw-w64 (`x86_64-w64-mingw32-gcc`); zig's windows-gnu can't resolve the
 #              libstdc++ symbols in herumi's MinGW-built prebuilt lib (crypto/bls/herumi)
-# `make cross` runs on a Linux x86_64 host only and auto-provisions every toolchain it needs
-# (no manual setup): zig via install-zig.sh, mingw-w64 via install-mingw.sh, osxcross via
-# install-osxcross.sh. Each is idempotent (no-op if already present); the package-manager and
-# osxcross steps use sudo when not root.
+# `make build platforms=all` auto-provisions every toolchain it needs (no manual setup): zig via
+# install-zig.sh, mingw-w64 via install-mingw.sh, osxcross via install-osxcross.sh. Each is
+# idempotent (no-op if already present); the package-manager and osxcross steps use sudo when
+# not root. The darwin (osxcross) and windows (mingw) targets require a Linux x86_64 host; the
+# linux targets use zig and build from any host (so `make build docker=true` works from macOS too).
 CROSS_TARGETS := \
 	linux/amd64/x86_64-linux-gnu.2.31 \
 	linux/arm64/aarch64-linux-gnu.2.31 \
@@ -57,8 +66,12 @@ GIT_COMMIT      := $(shell git rev-parse HEAD 2>/dev/null)
 GIT_TAG         := $(shell git describe --tags --abbrev=0 2>/dev/null || echo Unknown)
 BUILD_DATE      := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 BUILD_DATE_UNIX := $(shell date -u +%s)
+# Dev builds (mode=dev) stamp only the stable commit/tag, so a repeat build hits Go's link
+# cache instead of relinking — no volatile timestamp in the ldflags. The release paths
+# (mode=release, in any of build's outputs) use LDFLAGS_STAMPED, which adds the wall-clock date.
 LDFLAGS := -X $(VERSION_PKG).gitCommit=$(GIT_COMMIT) \
-           -X $(VERSION_PKG).gitTag=$(GIT_TAG) \
+           -X $(VERSION_PKG).gitTag=$(GIT_TAG)
+LDFLAGS_STAMPED := $(LDFLAGS) \
            -X $(VERSION_PKG).buildDate=$(BUILD_DATE) \
            -X $(VERSION_PKG).buildDateUnix=$(BUILD_DATE_UNIX)
 
@@ -75,55 +88,163 @@ TEST_TAGFLAG := -tags=$(TEST_TAGS)
 .DEFAULT_GOAL := help
 .PHONY: help
 help: ## Show this help
-	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | \
-		awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@grep -hE '^[a-zA-Z0-9_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*## "}{printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ""
-	@echo "Per-binary build targets (from BINARIES):"
-	@for b in $(BINARIES); do \
-		printf "  \033[36m%-18s\033[0m %s\n" "build-$$b" "Build only $$b"; \
-	done
+	@echo "Run a subset by naming the part(s); omit to do all (e.g. 'make build beacon-chain', 'make gen proto'):"
+	@printf "  \033[36m%-14s\033[0m %s\n" "build"       "$(BINARIES)"
+	@printf "  \033[36m%-14s\033[0m %s\n" "gen"         "$(GEN_KINDS)"
+	@printf "  \033[36m%-14s\033[0m %s\n" "test"        "$(TEST_KINDS) [mode=no-race|race] (default: no-race)"
+	@echo ""
+	@echo "build flags (make variables, since make can't take --flags; default in parens):"
+	@printf "  \033[36m%-20s\033[0m %s\n" "mode=dev|release"   "(default: dev) optimized/stamped/stripped/PGO'd output"
+	@printf "  \033[36m%-20s\033[0m %s\n" "docker=true|false"  "(default: false) build an OCI image instead of a host binary"
+	@printf "  \033[36m%-20s\033[0m %s\n" "push=true|false"    "(default: false) push the multi-arch image (implies docker=true)"
+	@printf "  \033[36m%-20s\033[0m %s\n" "platforms=host|all" "(default: host) cross-compile all release targets (implies docker=false)"
 
 # ---------------------------------------------------------------------------
 # Build & test
 # ---------------------------------------------------------------------------
+# `make build [TARGET...]` is the single build command. Behaviour is set by flag variables
+# (make can't take --flags — see `make help` for the legend). Defaults: mode=dev docker=false
+# push=false platforms=host. It subsumes the old cross-build / docker-build / docker-push:
+#   docker=false platforms=host : native host binaries          -> dist/
+#   docker=false platforms=all  : cross-compile all 5 targets   -> dist/        (build/cross)
+#   docker=true                 : OCI image, local --load (host arch)           (build/docker)
+#   docker=true  push=true      : OCI image, multi-arch amd64+arm64 --push      (build/docker)
+# mode applies to every path: release = stamped + stripped + PGO'd; dev = fast, unstripped.
+
+# PGO profile for beacon-chain (release only; the sole binary with a committed profile).
+# Consumed by every release path (native loop below, and build/cross|docker via BUILD_PGO).
+PGO_beacon-chain := -pgo=cmd/beacon-chain/pprof.beacon-chain.samples.cpu.pb.gz
+
+# --- flags + validation -----------------------------------------------------------------
+docker    ?= false
+push      ?= false
+platforms ?= host
+# mode is per-verb (test uses no-race|race; build uses dev|release), with its own default.
+ifneq ($(filter test,$(MAKECMDGOALS)),)
+VALID_MODES := no-race race
+mode ?= no-race
+else
+VALID_MODES := dev release
+mode ?= dev
+endif
+ifeq ($(filter $(mode),$(VALID_MODES)),)
+$(error invalid mode '$(mode)' — for this target use one of: $(VALID_MODES))
+endif
+ifeq ($(filter $(docker),true false),)
+$(error invalid docker '$(docker)' — use docker=true|false)
+endif
+ifeq ($(filter $(push),true false),)
+$(error invalid push '$(push)' — use push=true|false)
+endif
+ifeq ($(filter $(platforms),host all),)
+$(error invalid platforms '$(platforms)' — use platforms=host|all)
+endif
+ifeq ($(push)$(docker),truefalse)
+$(error push=true requires docker=true)
+endif
+ifeq ($(platforms)$(docker),alltrue)
+$(error platforms applies to native binary builds only (docker=false); it has no effect on docker images, which are linux-only)
+endif
+
+RELEASE       := $(filter release,$(mode))
+BUILD_LDFLAGS := $(if $(RELEASE),$(LDFLAGS_STAMPED) -s -w,$(LDFLAGS))
+BUILD_PGO     := $(if $(RELEASE),$(PGO_beacon-chain),)
+# dev|release label for the progress line (BUILD_CROSS_ENV passes it to the cross/docker
+# helpers so every path prints the same "(mode - portable|modern)" suffix).
+BUILD_MODE    := $(if $(RELEASE),release,dev)
+
+# Host platform + blst variant for the native build's progress line, so it matches the
+# cross path's "[n/m] → os/arch  bin  (mode - portable|modern)" format. One `go env` call
+# (two values). Native builds pass no CGO_CFLAGS, so blst takes upstream's amd64 ADX default
+# (modern); every other arch is portable (ADX is x86-only — see BLST_PORTABLE above).
+HOST_PLATFORM := $(shell $(GO) env GOHOSTOS GOHOSTARCH)
+HOST_OS       := $(word 1,$(HOST_PLATFORM))
+HOST_ARCH     := $(word 2,$(HOST_PLATFORM))
+HOST_BLST     := $(if $(filter amd64,$(HOST_ARCH)),modern,portable)
+
+# Active binary set per output, and the named-subset / bad-token selection from the goals
+# (consolidates the old DOCKER_/CROSS_ guards). docker -> image set; platforms=all ->
+# distributed set; otherwise the cmd/ set. (recursive '=': $(DOCKER_BINARIES)/$(POSITIONAL)
+# are defined just below.)
+ifeq ($(docker),true)
+BUILD_SET = $(DOCKER_BINARIES)
+else ifeq ($(platforms),all)
+BUILD_SET = $(CROSS_BINARIES)
+else
+BUILD_SET = $(BINARIES)
+endif
+BUILD_BINS = $(strip $(filter $(BUILD_SET),$(MAKECMDGOALS)))
+BUILD_BAD  = $(strip $(filter-out $(BUILD_SET),$(filter $(POSITIONAL),$(MAKECMDGOALS))))
+
+# Env for the cross/docker Go helpers — mode-aware (replaces the old always-stamped CROSS_ENV).
+BUILD_CROSS_ENV = GO="$(GO)" DIST="$(DIST)" GIT_TAG="$(GIT_TAG)" \
+	CGO_CFLAGS_LINUX_ARM64="$(CGO_CFLAGS_LINUX_ARM64)" BLST_PORTABLE="$(BLST_PORTABLE)" \
+	LDFLAGS="$(BUILD_LDFLAGS)" TAGFLAG="$(TAGFLAG)" PGO_beacon_chain="$(BUILD_PGO)" \
+	BUILD_MODE="$(BUILD_MODE)"
+
+# Docker image config (used by `make build ... docker=true`). Faithful repos: beacon-chain,
+# validator -> $(DOCKER_REGISTRY)/<bin>; prysmctl -> $(DOCKER_REGISTRY)/cmd/prysmctl.
+DOCKER_REGISTRY     ?= gcr.io/offchainlabs/prysm
+DOCKER_TAG          ?= $(GIT_TAG)
+DOCKER_BINARIES     := beacon-chain validator prysmctl
+CROSS_TARGETS_LINUX := $(filter linux/%,$(CROSS_TARGETS))
+
+# Positional goals: `make build beacon-chain`, `make build prysmctl docker=true`, `make gen
+# proto`. These tokens are phony no-op goals so make doesn't error on the extra word; each verb
+# recipe reads $(MAKECMDGOALS) to pick what to do (none named -> all). beacon-chain/, validator/
+# and proto/ are real dirs, so .PHONY is required.
+POSITIONAL = $(sort $(BINARIES) $(CROSS_BINARIES) $(DOCKER_BINARIES) $(GEN_KINDS) $(TEST_KINDS))
+.PHONY: $(POSITIONAL)
+$(POSITIONAL):
+	@:
+
 .PHONY: build
-build: $(addprefix build-,$(BINARIES)) ## Build all binaries into $(DIST)/
+build:
+	@$(if $(BUILD_BAD),echo "❌ build: not buildable here: $(BUILD_BAD) (available: $(BUILD_SET))" >&2; exit 1;) \
+	bins="$(or $(BUILD_BINS),$(BUILD_SET))"; \
+	if [ "$(docker)" = true ]; then \
+	  if [ "$(push)" = true ]; then M=push; else M=load; fi; \
+	  $(BUILD_CROSS_ENV) MODE=$$M TAG="$(DOCKER_TAG)" REGISTRY="$(DOCKER_REGISTRY)" \
+	    DOCKER_BINARIES="$$bins" CROSS_TARGETS_LINUX="$(CROSS_TARGETS_LINUX)" \
+	    $(GO) run ./build/docker; \
+	elif [ "$(platforms)" = all ]; then \
+	  $(BUILD_CROSS_ENV) CROSS_BINARIES="$$bins" CROSS_TARGETS="$(CROSS_TARGETS)" \
+	    $(GO) run ./build/cross; \
+	else \
+	  mkdir -p $(DIST); \
+	  m=$$(set -- $$bins; echo $$#); n=0; \
+	  for b in $$bins; do \
+	    n=$$((n + 1)); \
+	    pgo=""; $(if $(RELEASE),[ "$$b" = beacon-chain ] && pgo="$(PGO_beacon-chain)";) \
+	    echo "[$$n/$$m] → $(HOST_OS)/$(HOST_ARCH)  $$b  ($(mode) - $(HOST_BLST))"; \
+	    $(GO) build $(TAGFLAG) -trimpath $$pgo -ldflags "$(BUILD_LDFLAGS)" -o "$(DIST)/$$b" "./cmd/$$b" || exit 1; \
+	  done; \
+	  echo "✅ build: built $$n/$$m binaries → $(DIST)/"; \
+	fi
 
-.PHONY: $(addprefix build-,$(BINARIES))
-$(addprefix build-,$(BINARIES)): build-%:
+# build-tools builds every tool (each `package main` under tools/) into $(DIST)/,
+# discovered via `go list` so there is no list to maintain. Output names are the
+# package basenames (all unique). The cmd/ primaries are built by `make build`; the
+# build/ packages (cross, docker, test — this build system itself) live outside tools/
+# and are run via `go run`, so neither is included here.
+.PHONY: build-tools
+build-tools: ## Build every tool (main packages under tools/) into $(DIST)/
 	@mkdir -p $(DIST)
-	$(GO) build $(TAGFLAG) -trimpath -ldflags "$(LDFLAGS)" -o $(DIST)/$* $(PKG_$*)
-
-# build-all builds every `package main` in the module (the 4 primaries plus all
-# cmd/* and tools/* utilities) into $(DIST)/, discovered via `go list` so there is
-# no list to maintain. Output names are the package basenames (all unique).
-.PHONY: build-all
-build-all: ## Build every main package (cmd/* + tools/*) into $(DIST)/
-	@mkdir -p $(DIST)
-	@for p in $$($(GO) list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./...); do \
+	@for p in $$($(GO) list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./tools/...); do \
 		echo "building $$(basename $$p)"; \
 		$(GO) build $(TAGFLAG) -trimpath -ldflags "$(LDFLAGS)" -o "$(DIST)/$$(basename $$p)" "$$p" || exit 1; \
 	done
-
-# release builds the shippable binaries the way Bazel's `--config=release` did:
-# optimized (Go's default build), version-stamped, stripped (-s -w ≈ --strip=always),
-# and PGO-optimized for beacon-chain (the only binary with a committed profile).
-PGO_beacon-chain := -pgo=cmd/beacon-chain/pprof.beacon-chain.samples.cpu.pb.gz
-
-.PHONY: release $(addprefix release-,$(BINARIES))
-release: $(addprefix release-,$(BINARIES)) ## Build optimized, stripped, PGO'd release binaries
-$(addprefix release-,$(BINARIES)): release-%:
-	@mkdir -p $(DIST)
-	$(GO) build $(TAGFLAG) -trimpath $(PGO_$*) -ldflags "$(LDFLAGS) -s -w" -o $(DIST)/$* $(PKG_$*)
 
 .PHONY: testdata
 testdata: ## Pre-fetch all external spec-test data (tests fetch lazily otherwise)
 	$(GO) run ./tools/cmd/fetch-testdata
 
 # Mainnet pass excludes E2E (Phase 8) and the minimal-config packages — the
-# latter run in the separate minimal pass below.
+# latter run in the separate minimal pass below. The package enumeration/filtering
+# now lives in build/test (which reads this regexp via TEST_EXCLUDE).
 TEST_EXCLUDE := /testing/endtoend|/testing/spectest/minimal|/beacon-chain/rpc/prysm/v1alpha1/beacon$$|/beacon-chain/rpc/prysm/v1alpha1/validator$$
-TEST_PKGS = $$($(GO) list ./... | grep -vE '$(TEST_EXCLUDE)')
 
 # Packages tested under -tags=minimal (minimal consensus config): the minimal spec
 # tests, the beacon + validator rpc packages (eth_network=minimal in Bazel), and the
@@ -135,81 +256,52 @@ TEST_PKGS = $$($(GO) list ./... | grep -vE '$(TEST_EXCLUDE)')
 MINIMAL_PKGS := ./testing/spectest/minimal/... ./beacon-chain/rpc/prysm/v1alpha1/beacon ./beacon-chain/rpc/prysm/v1alpha1/validator ./config/fieldparams
 MINIMAL_TAGFLAG := -tags=$(TEST_TAGS),minimal
 
+# The two `make test` passes (`make test mainnet` / `minimal` runs just one; none -> both).
+TEST_KINDS := mainnet minimal
+
 # gotestsum (pinned via the go.mod tool directive) wraps `go test`, reformats
 # output, and reruns flaky failures up to 5 times — matching Bazel's
 # --flaky_test_attempts=5. If more than RERUN_MAX distinct tests fail it's a real
 # breakage, not flakiness, so reruns are skipped.
-GOTESTSUM := $(GO) tool gotestsum
 RERUN_ATTEMPTS ?= 5
 RERUN_MAX ?= 1000
-# --no-color=false forces color even though we pipe gotestsum into the progress
-# counter (a pipe is not a TTY, so gotestsum would otherwise disable color).
-# --hide-summary=skipped drops the per-skipped-test "=== SKIP:" list from the
-# end-of-run summary (spec tests skip thousands of "unused type" cases); failures
-# and errors are still summarized.
+# --no-color=false forces color even though build/test pipes gotestsum into its
+# [X/N] progress counter (a pipe is not a TTY, so gotestsum would otherwise disable
+# color). --hide-summary=skipped drops the per-skipped-test "=== SKIP:" list from
+# the end-of-run summary (spec tests skip thousands of "unused type" cases);
+# failures and errors are still summarized.
 GOTESTSUM_FLAGS := --format=pkgname --no-color=false --hide-summary=skipped --rerun-fails=$(RERUN_ATTEMPTS) --rerun-fails-max-failures=$(RERUN_MAX)
 
-# progress prepends a running [X/N] package counter to gotestsum's pkgname
-# lines (those containing a ✓/✖/∅/↻ status icon — matched anywhere on the line
-# since a leading ANSI color code now precedes the icon), so you can see roughly
-# how many packages remain. $1 is the total package count.
-define progress
-awk -v t=$(1) 'BEGIN{w=length(t)} /(✓|✖|∅|↻)/{c++; printf "[%*d/%d] %s\n", w, c, t, $$0; fflush(); next} {print; fflush()}'
-endef
+# Shared environment for build/test (the gotestsum runner): which packages each pass
+# covers, the build-tag flags, and gotestsum's flags. The pass dispatch, single
+# `go list`, and progress counter all live in build/test.
+TEST_ENV = GO="$(GO)" TEST_EXCLUDE='$(TEST_EXCLUDE)' MINIMAL_PKGS='$(MINIMAL_PKGS)' \
+	TEST_TAGFLAG='$(TEST_TAGFLAG)' MINIMAL_TAGFLAG='$(MINIMAL_TAGFLAG)' \
+	GOTESTSUM_FLAGS='$(GOTESTSUM_FLAGS)' RERUN_ATTEMPTS='$(RERUN_ATTEMPTS)'
 
+# Run unit tests — both passes ($(TEST_KINDS)), or only those named (e.g. make test minimal).
+# mode=race adds the race detector (e.g. `make test mainnet mode=race`).
 .PHONY: test
-test: ## Run unit tests: a mainnet pass then a minimal (-tags=minimal) pass.
-	@set -o pipefail; \
-	fail=0; \
-	echo; echo "=== mainnet pass ==="; \
-	total=$$( $(GO) list ./... | grep -vcE '$(TEST_EXCLUDE)' ); \
-	$(GOTESTSUM) $(GOTESTSUM_FLAGS) --packages="$(TEST_PKGS)" -- $(TEST_TAGFLAG) | $(call progress,$$total) || fail=1; \
-	echo; echo "=== minimal pass (-tags=minimal) ==="; \
-	mtotal=$$( $(GO) list $(MINIMAL_PKGS) | wc -l | tr -d ' ' ); \
-	$(GOTESTSUM) $(GOTESTSUM_FLAGS) --packages="$(MINIMAL_PKGS)" -- $(MINIMAL_TAGFLAG) | $(call progress,$$mtotal) || fail=1; \
-	echo; \
-	if [ $$fail -eq 0 ]; then echo "✅ All tests passed (mainnet + minimal; any 'failure' above was a flake recovered within $(RERUN_ATTEMPTS) attempts)"; \
-	else echo "❌ Some failure: a test failed all $(RERUN_ATTEMPTS) attempts (mainnet or minimal pass)"; exit 1; fi
-
-.PHONY: test-race
-test-race: ## Run unit tests with the race detector
-	@set -o pipefail; \
-	echo; \
-	total=$$( $(GO) list ./... | grep -vcE '$(TEST_EXCLUDE)' ); \
-	$(GOTESTSUM) $(GOTESTSUM_FLAGS) --packages="$(TEST_PKGS)" -- $(TEST_TAGFLAG) -race | $(call progress,$$total) \
-	  && { echo; echo "✅ All tests passed (any 'failure' above was a flake recovered within $(RERUN_ATTEMPTS) attempts)"; } \
-	  || { echo; echo "❌ Some failure: At least one test failed all $(RERUN_ATTEMPTS) attempts"; exit 1; }
+test:
+	@$(TEST_ENV) $(GO) run ./build/test $(if $(filter race,$(mode)),-race,) $(filter $(POSITIONAL),$(MAKECMDGOALS))
 
 # ---------------------------------------------------------------------------
 # Phase 1+ targets — not migrated off Bazel yet. Stubbed to fail loudly so that
 # `make <target>` makes clear what still needs implementing, and `make help`
 # lists the full surface. See BAZEL_MIGRATION.md.
 # ---------------------------------------------------------------------------
-.PHONY: gen gen-proto gen-ssz gen-mocks lint docker deb cross
+.PHONY: gen lint deb
 
-gen: gen-proto gen-ssz gen-mocks ## Regenerate all generated code (proto, SSZ, mocks)
-
-gen-proto: ## Regenerate *.pb.go via go.mod-pinned protoc-gen-go-cast
-	@./hack/update-go-pbs.sh
-
-gen-ssz: ## Regenerate *.ssz.go (mainnet) via go.mod-pinned sszgen
-	@./hack/update-go-ssz.sh
-
-gen-mocks: ## Regenerate gomock mocks (go.mod-pinned mockgen)
-	@./hack/update-mockgen.sh
+# Regenerate generated code — all of $(GEN_KINDS), or only those named (e.g. make gen proto).
+gen:
+	@kinds="$(strip $(filter $(GEN_KINDS),$(MAKECMDGOALS)))"; [ -n "$$kinds" ] || kinds="$(GEN_KINDS)"; \
+	for k in $$kinds; do \
+	  script=""; $(foreach g,$(GEN_KINDS),if [ "$$k" = "$(g)" ]; then script="$(GEN_SCRIPT_$(g))"; fi;) \
+	  echo "==> gen $$k"; "$$script" || exit 1; \
+	done
 
 lint: ## [Phase 7] Static analysis (nogo → prysm-vet multichecker)
 	@echo "❌ 'lint' is not implemented yet — Phase 7 (static analysis). See BAZEL_MIGRATION.md."; exit 1
-
-cross: ## [Phase 4] Cross-compile distributed binaries for all run-targets (Linux host only)
-	@GO="$(GO)" DIST="$(DIST)" GIT_TAG="$(GIT_TAG)" \
-		CROSS_BINARIES="$(CROSS_BINARIES)" CROSS_TARGETS="$(CROSS_TARGETS)" \
-		CGO_CFLAGS_LINUX_ARM64="$(CGO_CFLAGS_LINUX_ARM64)" BLST_PORTABLE="$(BLST_PORTABLE)" \
-		LDFLAGS="$(LDFLAGS)" TAGFLAG="$(TAGFLAG)" PGO_beacon_chain="$(PGO_beacon-chain)" \
-		./tools/cross-toolchain/cross-build.sh
-
-docker: ## [Phase 5] Build OCI/Docker images
-	@echo "❌ 'docker' is not implemented yet — Phase 5 (Docker/OCI images). See BAZEL_MIGRATION.md."; exit 1
 
 deb: ## [Phase 6] Build .deb packages
 	@echo "❌ 'deb' is not implemented yet — Phase 6 (.deb packaging). See BAZEL_MIGRATION.md."; exit 1

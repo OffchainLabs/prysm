@@ -113,7 +113,7 @@ can't do that mid-build. Options:
   recommended.
 
 ### Phase 4 — CGO cross-compilation — ✅ DONE (windows pending mingw on the release host)
-Implemented as `make cross` (Makefile) + `tools/cross-toolchain/install-zig.sh`. The five
+Implemented as `make build platforms=all` (Makefile) + `tools/cross-toolchain/install-zig.sh`. The five
 distributed run-targets (linux/{amd64,arm64}, darwin/{amd64,arm64}, windows/amd64) for the
 shipped binary set (beacon-chain, validator, client-stats, prysmctl — **not** bootnode),
 matching the names `prysm.sh`/`prysm.bat` fetch.
@@ -128,16 +128,17 @@ Go-asm). The herumi C++ libs and the darwin mach headers are what break full her
 did (its RBE worker was `debian:bullseye-slim` with osxcross + mingw-w64; `cross.bazelrc:42`
 "all docker sandbox configs must run from a linux x86_64 host").
 
-**`make cross` runs on a Linux x86_64 host only and is turnkey — it auto-provisions every
-toolchain it needs** (no manual setup), each via an idempotent script under
-`tools/cross-toolchain/`:
+**`make build platforms=all` is turnkey — it auto-provisions every toolchain it needs** (no manual setup),
+each via an idempotent script under `tools/cross-toolchain/`:
 - `install-zig.sh` — pinned zig (user cache, no root)
 - `install-mingw.sh` — gcc + g++ mingw-w64 (POSIX threads) via apt/dnf/pacman
 - `install-osxcross.sh` — build deps + osxcross (delegates to the unchanged
   `install_osxcross.sh` + `link_osxcross.sh`, MacOSX12.3 SDK)
-The package-manager and osxcross steps use `sudo` when not already root. Running `make cross`
-on a non-Linux host errors out early. For CI, baking mingw-w64 + osxcross into the build image
-(as Bazel's RBE worker did) avoids the per-run install.
+The package-manager and osxcross steps use `sudo` when not already root. **Host requirement is
+per-target**: the **darwin** (osxcross) and **windows** (mingw-w64) targets require a Linux
+x86_64 host; the **linux** targets use zig and build from any host — so `make build platforms=all` for
+linux targets, and therefore `make build docker=true` (linux images only), also run on macOS. For CI, baking
+mingw-w64 + osxcross into the build image (as Bazel's RBE worker did) avoids the per-run install.
 
 **Per-OS toolchain** (mirrors what Bazel actually used — only Linux was hermetic):
 ```
@@ -167,15 +168,45 @@ Notes / deviations from the original "zig for everything" sketch:
   the ethdo transition completes) would let windows build under zig and drop the mingw
   dependency; darwin would still need osxcross/macOS for the prometheus mach cgo.
 
-### Phase 5 — Docker / OCI images
-Replace `rules_oci` + `prysm_image.bzl` with **multi-stage Dockerfiles + `docker buildx`**:
-- Cross-compile binaries in Phase 4, `COPY` into a thin `gcr.io/distroless/cc` (or the
-  existing Debian 11 base) runtime stage.
-- `docker buildx build --platform linux/amd64,linux/arm64 --push -t gcr.io/offchainlabs/prysm/<bin>:<tag>`
-  gives the multi-arch manifest that `oci_image_index` produced.
-- One Dockerfile per binary (or one parameterized). Preserve labels
-  (`org.opencontainers.image.source`), entrypoints, and the backwards-compat symlinks.
-- Replaces `hack/build_and_upload_docker.sh`.
+### Phase 5 — Docker / OCI images — ✅ DONE
+Replaced `rules_oci` + `prysm_image.bzl` with a single parameterized **multi-stage Dockerfile
++ `docker buildx`** (`tools/docker/Dockerfile`), driven by `make build docker=true [push=true]`
+(the `build/docker` Go command). Images embed the portable binaries from Phase 4's `build/cross`.
+
+- **Faithful base reproduction** (user's choice): final stage `FROM` the pinned
+  `gcr.io/prysmaticlabs/distroless/cc-debian11@sha256:55a5…`, with a `rootfs` builder stage
+  (`debian:bullseye-slim`) that downloads+verifies+extracts the exact Debian-11 userland
+  (bash, coreutils + lib deps) via `tools/docker/debian-pkgs.sh` (a byte-faithful port of
+  `tools/image_deps.bzl`), writes `/etc/passwd` (root+nonroot), and creates `/bin/sh`→`/bin/bash`,
+  the `/app/cmd/<bin>/<bin>`→`/<bin>` backwards-compat symlink, and `/entrypoint`→`/<bin>`.
+  (Fixed a latent bug in `image_deps.bzl`: the arm64 `libtinfo6` pool path said `deb11u1`,
+  but the pinned sha and the only existing file are `deb11u2`.)
+- **Images** (unchanged set): beacon-chain, validator, prysmctl (no client-stats).
+- **Faithful tags** (user's choice = same as Bazel): beacon-chain → `$TAG` **and**
+  `$TAG-portable` (both portable); validator → `$TAG`; prysmctl → `$TAG`. Repos:
+  `gcr.io/offchainlabs/prysm/{beacon-chain,validator,cmd/prysmctl}`. Label
+  `org.opencontainers.image.source` preserved.
+- **`make build docker=true`** builds host-arch images and `--load`s them locally
+  (`prysm/<bin>:<tag>`) for testing; **`make build docker=true push=true`** builds the
+  linux/amd64+arm64 multi-arch manifest (the `oci_image_index` equivalent) and `--push`es it.
+  The push auto-creates a `docker-container` buildx builder (the default `docker` driver can't do
+  multi-arch). `mode=dev` (default) yields a fast unstripped image; `mode=release` a
+  stamped/stripped/PGO'd one. Uses `tools/docker/Dockerfile`, which *assembles* a binary
+  cross-compiled in-process by `build/crossbuild`. Replaces `hack/build_and_upload_docker.sh`
+  (left for Phase 10 deletion).
+- **Self-contained root `Dockerfile`** for one-command dev builds: `docker build . -t <name>`
+  compiles the binary in-container (defaults to beacon-chain; `--build-arg BIN=validator|prysmctl`)
+  *and* assembles the image — no `make build platforms=all`/`dist/` prerequisite. It compiles with the same
+  pinned **zig** toolchain (portable blst, glibc-2.31 floor) so the binary matches what we ship,
+  rather than the builder image's gcc (golang:1.25-bookworm is glibc 2.36, which would break the
+  glibc-2.31 distroless base). Version stamping defaults to `gitTag=dev` (`--build-arg TAG=…` to set).
+- **Verified**: amd64 image builds + runs (`--version` shows the stamped tag); `/bin/sh` shell
+  works; `/beacon-chain`, `/app/cmd/beacon-chain/beacon-chain`, `/entrypoint` all resolve;
+  passwd has root+nonroot; OCI source label + entrypoint correct; multi-arch OCI manifest
+  contains both linux/amd64 and linux/arm64.
+- Notes: entrypoint is `/entrypoint` (a symlink → `/<bin>`) since one Dockerfile can't put an
+  `ARG` in `ENTRYPOINT`; the real binary stays at the faithful `/<bin>` path. `make build docker=true`
+  builds only linux binaries (via zig), so it runs from any host including macOS.
 
 ### Phase 6 — `.deb` packaging
 Replace `rules_pkg` (`pkg_deb`/`pkg_tar`) with **`nfpm`** (single YAML → deb/rpm/tar):

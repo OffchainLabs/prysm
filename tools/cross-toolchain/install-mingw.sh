@@ -18,7 +18,7 @@ if command -v "$GCC" >/dev/null 2>&1 && command -v x86_64-w64-mingw32-g++ >/dev/
 fi
 
 if [ "$(uname -s)" != "Linux" ]; then
-  log "make cross runs on a Linux host only; cannot provision mingw-w64 on $(uname -s)"; exit 1
+  log "make cross-build runs on a Linux host only; cannot provision mingw-w64 on $(uname -s)"; exit 1
 fi
 
 SUDO=""
