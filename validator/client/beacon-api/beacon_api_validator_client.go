@@ -77,6 +77,38 @@ func (c *beaconApiValidatorClient) Duties(ctx context.Context, in *ethpb.DutiesR
 	})
 }
 
+func (c *beaconApiValidatorClient) AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.AttesterDutiesResponse, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.AttesterDuties")
+	defer span.End()
+	return wrapInMetrics[*ethpb.AttesterDutiesResponse]("AttesterDuties", func() (*ethpb.AttesterDutiesResponse, error) {
+		return c.attesterDuties(ctx, epoch, validatorIndices)
+	})
+}
+
+func (c *beaconApiValidatorClient) ProposerDuties(ctx context.Context, epoch primitives.Epoch) (*ethpb.ProposerDutiesResponse, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.ProposerDuties")
+	defer span.End()
+	return wrapInMetrics[*ethpb.ProposerDutiesResponse]("ProposerDuties", func() (*ethpb.ProposerDutiesResponse, error) {
+		return c.proposerDuties(ctx, epoch)
+	})
+}
+
+func (c *beaconApiValidatorClient) SyncCommitteeDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.SyncCommitteeDutiesResponse, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.SyncCommitteeDuties")
+	defer span.End()
+	return wrapInMetrics[*ethpb.SyncCommitteeDutiesResponse]("SyncCommitteeDuties", func() (*ethpb.SyncCommitteeDutiesResponse, error) {
+		return c.syncCommitteeDuties(ctx, epoch, validatorIndices)
+	})
+}
+
+func (c *beaconApiValidatorClient) PTCDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.PTCDutiesResponse, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.PTCDuties")
+	defer span.End()
+	return wrapInMetrics[*ethpb.PTCDutiesResponse]("PTCDuties", func() (*ethpb.PTCDutiesResponse, error) {
+		return c.ptcDuties(ctx, epoch, validatorIndices)
+	})
+}
+
 func (c *beaconApiValidatorClient) CheckDoppelGanger(ctx context.Context, in *ethpb.DoppelGangerRequest) (*ethpb.DoppelGangerResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.CheckDoppelGanger")
 	defer span.End()
