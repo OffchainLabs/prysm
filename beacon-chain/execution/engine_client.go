@@ -176,7 +176,7 @@ type EngineCaller interface {
 
 var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
 
-// NewPayload request calls the engine_newPayloadVX method via JSON-RPC.
+// NewPayload request calls the engine_newPayloadVX method.
 func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.NewPayload")
 	defer span.End()
@@ -187,6 +187,11 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 	d := time.Now().Add(time.Duration(params.BeaconConfig().ExecutionEngineTimeoutValue) * time.Second)
 	ctx, cancel := context.WithDeadline(ctx, d)
 	defer cancel()
+
+	if s.isSSZRestAvailable() {
+		return s.newPayloadSSZRest(ctx, payload, versionedHashes, parentBlockRoot, executionRequests)
+	}
+
 	result := &pb.PayloadStatus{}
 
 	switch payloadPb := payload.Proto().(type) {
@@ -248,7 +253,7 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 	}
 }
 
-// ForkchoiceUpdated calls the engine_forkchoiceUpdatedV1 method via JSON-RPC.
+// ForkchoiceUpdated calls the engine_forkchoiceUpdatedVX method.
 func (s *Service) ForkchoiceUpdated(
 	ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer,
 ) (*pb.PayloadIDBytes, []byte, error) {
@@ -262,11 +267,17 @@ func (s *Service) ForkchoiceUpdated(
 	d := time.Now().Add(time.Duration(params.BeaconConfig().ExecutionEngineTimeoutValue) * time.Second)
 	ctx, cancel := context.WithDeadline(ctx, d)
 	defer cancel()
-	result := &ForkchoiceUpdatedResponse{}
 
 	if attrs == nil {
 		return nil, nil, errors.New("nil payload attributer")
 	}
+
+	if s.isSSZRestAvailable() {
+		return s.forkchoiceUpdatedSSZRest(ctx, state, attrs)
+	}
+
+	result := &ForkchoiceUpdatedResponse{}
+
 	switch attrs.Version() {
 	case version.Bellatrix:
 		a, err := attrs.PbV1()
@@ -347,8 +358,7 @@ func getPayloadMethodAndMessage(slot primitives.Slot) (string, proto.Message) {
 	return GetPayloadMethod, &pb.ExecutionPayload{}
 }
 
-// GetPayload calls the engine_getPayloadVX method via JSON-RPC.
-// It returns the execution data as well as the blobs bundle.
+// GetPayload calls the engine_getPayloadVX method.
 func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetPayload")
 	defer span.End()
@@ -359,6 +369,10 @@ func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte, slot primit
 	d := time.Now().Add(defaultEngineTimeout)
 	ctx, cancel := context.WithDeadline(ctx, d)
 	defer cancel()
+
+	if s.isSSZRestAvailable() {
+		return s.getPayloadSSZRest(ctx, payloadId, slot)
+	}
 
 	method, result := getPayloadMethodAndMessage(slot)
 	err := s.rpcClient.CallContext(ctx, result, method, pb.PayloadIDBytes(payloadId))
@@ -372,6 +386,9 @@ func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte, slot primit
 	return res, nil
 }
 
+// ExchangeCapabilities calls engine_exchangeCapabilitiesV2 (EIP-8160) first,
+// falling back to engine_exchangeCapabilities (V1) if V2 is not supported.
+// V2 also returns supportedProtocols, which we use to discover SSZ-REST endpoints.
 func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExchangeCapabilities")
 	defer span.End()
@@ -388,9 +405,20 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 		supportedEngineEndpoints = append(supportedEngineEndpoints, gloasEngineEndpoints...)
 	}
 
-	elSupportedEndpointsSlice := make([]string, len(supportedEngineEndpoints))
-	if err := s.rpcClient.CallContext(ctx, &elSupportedEndpointsSlice, ExchangeCapabilities, supportedEngineEndpoints); err != nil {
-		return nil, handleRPCError(err)
+	// The first call happens before setupSSZRestClient runs, so it falls
+	// through to the JSON-RPC path below — that's bootstrap, not fallback.
+	var elSupportedEndpointsSlice []string
+	if s.isSSZRestAvailable() {
+		result, err := s.exchangeCapabilitiesSSZRest(ctx, supportedEngineEndpoints)
+		if err != nil {
+			return nil, err
+		}
+		elSupportedEndpointsSlice = result
+	} else {
+		err := s.rpcClient.CallContext(ctx, &elSupportedEndpointsSlice, ExchangeCapabilities, supportedEngineEndpoints)
+		if err != nil {
+			return nil, handleRPCError(err)
+		}
 	}
 
 	elSupportedEndpoints := make(map[string]bool, len(elSupportedEndpointsSlice))
@@ -604,6 +632,10 @@ func (s *Service) GetBlobs(ctx context.Context, versionedHashes []common.Hash) (
 		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV1))
 	}
 
+	if s.isSSZRestAvailable() {
+		return s.getBlobsSSZRest(ctx, versionedHashes)
+	}
+
 	result := make([]*pb.BlobAndProof, len(versionedHashes))
 	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV1, versionedHashes)
 	return result, handleRPCError(err)
@@ -623,6 +655,14 @@ func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash)
 		return []*pb.BlobAndProofV2{}, nil
 	}
 
+	if s.isSSZRestAvailable() {
+		result, err := s.getBlobsV2SSZRest(ctx, versionedHashes)
+		if len(result) != 0 {
+			getBlobsV2Latency.Observe(float64(time.Since(start).Milliseconds()))
+		}
+		return result, err
+	}
+
 	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
 	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV2, versionedHashes)
 
@@ -633,9 +673,21 @@ func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash)
 	return result, handleRPCError(err)
 }
 
+// GetClientVersionV1 calls engine_getClientVersionV1.
 func (s *Service) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetClientVersionV1")
 	defer span.End()
+
+	if s.isSSZRestAvailable() {
+		result, err := s.getClientVersionSSZRest(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(result) == 0 {
+			return nil, errors.New("execution client returned no result")
+		}
+		return result, nil
+	}
 
 	commit := version.GitCommit()
 	if len(commit) >= 8 {
