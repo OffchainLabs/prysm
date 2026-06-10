@@ -190,34 +190,38 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 	}
 	blockHash := bytesutil.ToBytes32(payload.BlockHash())
 
-	var headBlk interfaces.ReadOnlySignedBeaconBlock
+	var (
+		emitHeadV2    bool
+		headSlot      primitives.Slot
+		headStateRoot [32]byte
+		headVersion   int
+	)
 
 	s.headLock.Lock()
 	if s.head != nil && s.head.root == root {
 		wasFull := s.head.full
 		s.head.full = true
 
+		// Capture head details for head_v2 event.
 		if !wasFull {
-			// Copy head block for head_v2 payload update event.
-			var err error
-			if headBlk, err = s.headBlock(); err != nil {
-				log.WithError(err).Error("Could not copy head block for head_v2 payload update")
-			}
+			headBlock := s.head.block.Block()
+			headSlot = headBlock.Slot()
+			headStateRoot = headBlock.StateRoot()
+			headVersion = s.head.block.Version()
+			emitHeadV2 = true
 		}
 	}
 	s.headLock.Unlock()
 
 	// If the imported payload makes the current head's payload status full, emit a
 	// second head_v2 event for the empty->full transition.
-	if headBlk != nil {
-		blk := headBlk.Block()
+	if emitHeadV2 {
 		if err := s.notifyNewHeadV2Event(
-			ctx, blk.Slot(), blk.StateRoot(), root, headBlk.Version(),
+			ctx, headSlot, headStateRoot, root, headVersion,
 		); err != nil {
 			// Log the error but continue on (not returning error).
 			log.WithError(err).Error("Could not notify event feed of head_v2 payload update")
 		}
-
 	}
 
 	proposingSlot := s.CurrentSlot() + 1
