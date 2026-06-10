@@ -41,7 +41,7 @@ func deepValueEqual(v1, v2 reflect.Value, visited map[visit]bool, depth int) boo
 	// hard(t) needs to return true for at least one of the types in the cycle.
 	hard := func(k reflect.Kind) bool {
 		switch k {
-		case reflect.Slice, reflect.Ptr, reflect.Interface:
+		case reflect.Slice, reflect.Pointer, reflect.Interface:
 			return true
 		}
 		return false
@@ -103,7 +103,7 @@ func deepValueEqual(v1, v2 reflect.Value, visited map[visit]bool, depth int) boo
 			return v1.IsNil() == v2.IsNil()
 		}
 		return deepValueEqual(v1.Elem(), v2.Elem(), visited, depth+1)
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if v1.Pointer() == v2.Pointer() {
 			return true
 		}
@@ -132,7 +132,7 @@ func deepValueEqualExportedOnly(v1, v2 reflect.Value, visited map[visit]bool, de
 	// hard(t) needs to return true for at least one of the types in the cycle.
 	hard := func(k reflect.Kind) bool {
 		switch k {
-		case reflect.Slice, reflect.Ptr, reflect.Interface:
+		case reflect.Slice, reflect.Pointer, reflect.Interface:
 			return true
 		}
 		return false
@@ -193,7 +193,7 @@ func deepValueEqualExportedOnly(v1, v2 reflect.Value, visited map[visit]bool, de
 			return v1.IsNil() == v2.IsNil()
 		}
 		return deepValueEqualExportedOnly(v1.Elem(), v2.Elem(), visited, depth+1)
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if v1.Pointer() == v2.Pointer() {
 			return true
 		}

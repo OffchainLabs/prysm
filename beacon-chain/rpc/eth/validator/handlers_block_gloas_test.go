@@ -346,6 +346,33 @@ func TestExecutionPayloadEnvelope_SSZ(t *testing.T) {
 	assert.Equal(t, wantHTR, gotHTR)
 }
 
+func TestExecutionPayloadEnvelope_BeaconBlockRootMismatch(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	ctrl := gomock.NewController(t)
+	envelope := testEnvelope()
+	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+	v1alpha1Server.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).Return(
+		&eth.ExecutionPayloadEnvelopeResponse{Envelope: envelope}, nil,
+	)
+
+	server := &Server{V1Alpha1Server: v1alpha1Server}
+	requested := make([]byte, 32)
+	requested[0] = 1 // differs from the cached envelope's zero root
+	bbrHex := hexutil.Encode(requested)
+	request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/validator/execution_payload_envelope/1/"+bbrHex, nil)
+	request.SetPathValue("slot", "1")
+	request.SetPathValue("beacon_block_root", bbrHex)
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+	server.ExecutionPayloadEnvelope(writer, request)
+	assert.Equal(t, http.StatusNotFound, writer.Code)
+	assert.StringContains(t, "does not match", writer.Body.String())
+}
+
 func TestProduceBlockV4_SSZ_IncludePayloadFalse(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()

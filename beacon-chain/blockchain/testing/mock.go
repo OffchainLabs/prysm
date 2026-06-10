@@ -400,6 +400,9 @@ func (s *ChainService) HeadBlock(context.Context) (interfaces.ReadOnlySignedBeac
 
 // HeadState mocks HeadState method in chain service.
 func (s *ChainService) HeadState(context.Context) (state.BeaconState, error) {
+	if s.HeadStateErr != nil {
+		return nil, s.HeadStateErr
+	}
 	return s.State, nil
 }
 
@@ -844,6 +847,14 @@ func (s *ChainService) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) e
 func (s *ChainService) ForkChoiceDump(ctx context.Context) (*forkchoice2.Dump, error) {
 	if s.ForkChoiceStore != nil {
 		return s.ForkChoiceStore.ForkChoiceDump(ctx)
+	}
+	return nil, nil
+}
+
+// ForkChoiceDumpV2 mocks the same method in the chain service
+func (s *ChainService) ForkChoiceDumpV2(ctx context.Context) (*forkchoice2.DumpV2, error) {
+	if s.ForkChoiceStore != nil {
+		return s.ForkChoiceStore.ForkChoiceDumpV2(ctx)
 	}
 	return nil, nil
 }

@@ -3,6 +3,7 @@ package beacon
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -256,23 +257,24 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_NoBlobs(t *testing.T)
 	require.Equal(t, http.StatusOK, w.Code)
 }
 
-// Broadcast succeeded but DB integration failed -> Aborted maps to 202.
+// DB integration failed -> Aborted maps to 202.
 func TestPublishExecutionPayloadEnvelope_ImportFailureReturns202(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	signed := testSignedEnvelope()
+	contents, err := structs.SignedExecutionPayloadEnvelopeContentsFromConsensus(signed, nil, nil)
+	require.NoError(t, err)
+	body, err := json.Marshal(contents)
+	require.NoError(t, err)
 
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
 		gomock.Any(), gomock.Any(),
 	).Return(nil, status.Error(codes.Aborted, "import failed"))
 
-	s := &Server{
-		V1Alpha1ValidatorServer:       v1alpha1Server,
-		ExecutionPayloadEnvelopeCache: envelopeCacheFor(signed),
-	}
-	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(blindedJSONBody(t, signed)))
+	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
+	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
 	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
-	req.Header.Set(api.ExecutionPayloadBlindedHeader, "true")
+	req.Header.Set(api.ExecutionPayloadBlindedHeader, "false")
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -462,6 +464,34 @@ func TestPublishExecutionPayloadEnvelope_SSZ_StatefulBlinded_CacheMiss(t *testin
 	assert.Equal(t, true, bytes.Contains(w.Body.Bytes(), []byte("no cached execution payload envelope")))
 }
 
+// A cached envelope whose HTR differs from the signed blinded envelope must be rejected,
+// even when the beacon_block_root matches.
+func TestPublishExecutionPayloadEnvelope_StatefulBlinded_HTRMismatch(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	signed := testSignedEnvelope()
+	body := blindedJSONBody(t, signed)
+
+	tampered := testSignedEnvelope()
+	tampered.Message.BuilderIndex = signed.Message.BuilderIndex + 1
+
+	s := &Server{
+		ExecutionPayloadEnvelopeCache: envelopeCacheFor(tampered),
+	}
+	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	req.Header.Set(api.ExecutionPayloadBlindedHeader, "true")
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.PublishExecutionPayloadEnvelope(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, true, bytes.Contains(w.Body.Bytes(), []byte("hash tree root does not match")))
+}
+
 func TestPublishExecutionPayloadEnvelope_SSZ_Contents(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -516,7 +546,8 @@ func TestPublishExecutionPayloadEnvelope_BroadcastValidation(t *testing.T) {
 		query             string
 		headRoot          [32]byte
 		headState         state.BeaconState
-		canonicalAtEnvSlt *[32]byte // nil → CanonicalNodeAtSlot returns ok=false
+		headStateErr      error
+		canonicalAtEnvSlt *[32]byte // nil → CanonicalNodeAtSlot returns a zero root
 		expectPublish     bool
 		expectedStatus    int
 		expectedBody      string
@@ -554,6 +585,14 @@ func TestPublishExecutionPayloadEnvelope_BroadcastValidation(t *testing.T) {
 			expectedBody:   "consensus validation failed",
 		},
 		{
+			name:           "consensus head state error is internal",
+			query:          "?broadcast_validation=consensus",
+			headRoot:       envRoot,
+			headStateErr:   errors.New("state unavailable"),
+			expectedStatus: http.StatusInternalServerError,
+			expectedBody:   "could not get head state",
+		},
+		{
 			name:           "invalid value",
 			query:          "?broadcast_validation=bogus",
 			expectedStatus: http.StatusBadRequest,
@@ -572,12 +611,14 @@ func TestPublishExecutionPayloadEnvelope_BroadcastValidation(t *testing.T) {
 			}
 
 			chainSvc := &chainMock.ChainService{
-				Root:  tc.headRoot[:],
-				State: tc.headState,
+				Root:         tc.headRoot[:],
+				State:        tc.headState,
+				HeadStateErr: tc.headStateErr,
 			}
 			if tc.canonicalAtEnvSlt != nil {
 				chainSvc.MockCanonicalRoots = map[primitives.Slot][32]byte{envSlot: *tc.canonicalAtEnvSlt}
-				chainSvc.MockCanonicalFull = map[primitives.Slot]bool{envSlot: true}
+				// full=false mirrors the wall clock slot case; the root alone must trip the check.
+				chainSvc.MockCanonicalFull = map[primitives.Slot]bool{envSlot: false}
 			}
 			s := &Server{
 				V1Alpha1ValidatorServer:       v1alpha1Server,
