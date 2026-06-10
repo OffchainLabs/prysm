@@ -393,40 +393,6 @@ type ExecutionPayloadDenebJSON struct {
 	Withdrawals   []*Withdrawal   `json:"withdrawals"`
 }
 
-// DepositRequestV1 represents an execution engine DepositRequestV1 value
-// https://github.com/ethereum/execution-apis/blob/main/src/engine/prague.md#depositrequestv1
-type DepositRequestV1 struct {
-	// pubkey: DATA, 48 Bytes
-	PubKey *BlsPubkey `json:"pubkey"`
-	// withdrawalCredentials: DATA, 32 Bytes
-	WithdrawalCredentials *common.Hash `json:"withdrawalCredentials"`
-	// amount: QUANTITY, 64 Bits
-	Amount *hexutil.Uint64 `json:"amount"`
-	// signature: DATA, 96 Bytes
-	Signature *BlsSig `json:"signature"`
-	// index: QUANTITY, 64 Bits
-	Index *hexutil.Uint64 `json:"index"`
-}
-
-func (r DepositRequestV1) Validate() error {
-	if r.PubKey == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'pubkey' for DepositRequestV1")
-	}
-	if r.WithdrawalCredentials == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'withdrawalCredentials' for DepositRequestV1")
-	}
-	if r.Amount == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'amount' for DepositRequestV1")
-	}
-	if r.Signature == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'signature' for DepositRequestV1")
-	}
-	if r.Index == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'index' for DepositRequestV1")
-	}
-	return nil
-}
-
 // ConsolidationRequestV1 represents an execution engine ConsolidationRequestV1 value
 // https://github.com/ethereum/execution-apis/blob/main/src/engine/prague.md#consolidationrequestv1
 type ConsolidationRequestV1 struct {
@@ -987,48 +953,6 @@ func (e *ExecutionPayloadDeneb) MarshalJSON() ([]byte, error) {
 		BlobGasUsed:   &blobGasUsed,
 		ExcessBlobGas: &excessBlobGas,
 	})
-}
-
-func JsonDepositRequestsToProto(j []DepositRequestV1) ([]*DepositRequest, error) {
-	reqs := make([]*DepositRequest, len(j))
-
-	for i := range j {
-		req := j[i]
-		if err := req.Validate(); err != nil {
-			return nil, err
-		}
-		reqs[i] = &DepositRequest{
-			Pubkey:                req.PubKey.Bytes(),
-			WithdrawalCredentials: req.WithdrawalCredentials.Bytes(),
-			Amount:                uint64(*req.Amount),
-			Signature:             req.Signature.Bytes(),
-			Index:                 uint64(*req.Index),
-		}
-	}
-
-	return reqs, nil
-}
-
-func ProtoDepositRequestsToJson(reqs []*DepositRequest) []DepositRequestV1 {
-	j := make([]DepositRequestV1, len(reqs))
-	for i := range reqs {
-		r := reqs[i]
-		pk := BlsPubkey{}
-		copy(pk[:], r.Pubkey)
-		creds := common.BytesToHash(r.WithdrawalCredentials)
-		amt := hexutil.Uint64(r.Amount)
-		sig := BlsSig{}
-		copy(sig[:], r.Signature)
-		idx := hexutil.Uint64(r.Index)
-		j[i] = DepositRequestV1{
-			PubKey:                &pk,
-			WithdrawalCredentials: &creds,
-			Amount:                &amt,
-			Signature:             &sig,
-			Index:                 &idx,
-		}
-	}
-	return j
 }
 
 func JsonConsolidationRequestsToProto(j []ConsolidationRequestV1) ([]*ConsolidationRequest, error) {

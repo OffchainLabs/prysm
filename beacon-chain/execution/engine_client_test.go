@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -1773,24 +1772,6 @@ func fixturesStruct() *payloadFixtures {
 		// added on top of the empty payload
 		Transactions: [][]byte{foo[:]},
 		Withdrawals:  []*pb.Withdrawal{},
-	}
-	depositRequests := make([]pb.DepositRequestV1, 3)
-	for i := range depositRequests {
-		amount := hexutil.Uint64(math.MaxUint16 - i)
-		creds := &common.Hash{}
-		creds.SetBytes([]byte{0, 0, byte(i)})
-		pubkey := pb.BlsPubkey{}
-		copy(pubkey[:], []byte{0, byte(i)})
-		sig := pb.BlsSig{}
-		copy(sig[:], []byte{0, 0, 0, byte(i)})
-		idx := hexutil.Uint64(i)
-		depositRequests[i] = pb.DepositRequestV1{
-			PubKey:                &pubkey,
-			WithdrawalCredentials: creds,
-			Amount:                &amount,
-			Signature:             &sig,
-			Index:                 &idx,
-		}
 	}
 	consolidationRequests := make([]pb.ConsolidationRequestV1, 1)
 	for i := range consolidationRequests {
