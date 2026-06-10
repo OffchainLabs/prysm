@@ -214,14 +214,14 @@ func TestGraffitiInfo_UpdateFromEngine(t *testing.T) {
 	// Initially no EL info - should still have CL info (PR + commit)
 	result := g.GenerateGraffiti([]byte{})
 	resultStr := trimNullBytes(string(result[:]))
-	require.Equal(t, "PR", resultStr[:2], "Expected CL info before update")
+	require.Equal(t, "PM", resultStr[:2], "Expected CL info before update")
 
 	// Update with EL info
 	g.UpdateFromEngine("GE", "1234abcd")
 
 	result = g.GenerateGraffiti([]byte{})
 	resultStr = trimNullBytes(string(result[:]))
-	require.Equal(t, "GE1234PR", resultStr[:8], "Expected EL+CL info after update")
+	require.Equal(t, "GE1234PM", resultStr[:8], "Expected EL+CL info after update")
 }
 
 func TestTruncateCommit(t *testing.T) {
