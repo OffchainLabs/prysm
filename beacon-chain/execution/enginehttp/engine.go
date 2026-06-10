@@ -48,13 +48,16 @@ func (c *Client) NewPayload(ctx context.Context, fork string, envelope ssz.Marsh
 
 // ForkchoiceUpdated updates fork choice and optionally starts a build.
 // POST /engine/v2/{fork}/forkchoice (replaces engine_forkchoiceUpdatedV1..4).
-//
-// TODO(ssz-over-http): marshal the fork's ForkchoiceUpdate (optional attrs;
-// Gloas adds the custody_columns bitvector), POST via SSZRequest, decode
-// ForkchoiceUpdateResponse. Store the opaque payload_id verbatim (never
-// recompute it); map 409/422 to the existing forkchoice/attribute errors.
+// The fork's ForkchoiceUpdate carries the optional payload_attributes (and, for
+// Gloas, an optional custody_columns bitvector). The response carries the
+// payload_status plus an opaque server-assigned payload_id; the caller echoes
+// that token verbatim and never recomputes it.
 func (c *Client) ForkchoiceUpdated(ctx context.Context, fork string, update ssz.Marshaler) (*enginev2.ForkchoiceUpdateResponse, error) {
-	return nil, errNotImplemented("ForkchoiceUpdated")
+	resp := &enginev2.ForkchoiceUpdateResponse{}
+	if err := c.SSZRequest(ctx, http.MethodPost, "/"+fork+"/forkchoice", nil, update, resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 // GetPayload retrieves a previously started build by its opaque id.

@@ -125,6 +125,7 @@ go_test(
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/db/filesystem:go_default_library",
         "//beacon-chain/db/testing:go_default_library",
+        "//beacon-chain/execution/enginehttp:go_default_library",
         "//beacon-chain/execution/testing:go_default_library",
         "//beacon-chain/execution/types:go_default_library",
         "//beacon-chain/forkchoice:go_default_library",

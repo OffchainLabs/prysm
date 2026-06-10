@@ -47,10 +47,34 @@ func TestNewPayload(t *testing.T) {
 }
 
 func TestForkchoiceUpdated(t *testing.T) {
-	t.Skip("TODO(ssz-over-http): implement Client.ForkchoiceUpdated — POST /engine/v2/{fork}/forkchoice")
-	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {})
-	_, err := c.ForkchoiceUpdated(context.Background(), ForkAmsterdam, &stubSSZ{data: []byte("fcu")})
+	payloadID := []byte{1, 2, 3, 4, 5, 6, 7, 8}
+	respSSZ, err := (&enginev2.ForkchoiceUpdateResponse{
+		PayloadStatus: &enginev2.PayloadStatus{Status: enginev2.StatusByte(enginev2.PayloadStatusValid)},
+		PayloadId:     enginev2.PresentBytes(payloadID),
+	}).MarshalSSZ()
 	require.NoError(t, err)
+
+	var gotMethod, gotPath, gotCT string
+	var gotBody []byte
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		gotCT = r.Header.Get("Content-Type")
+		gotBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", contentTypeSSZ)
+		_, _ = w.Write(respSSZ)
+	})
+
+	resp, err := c.ForkchoiceUpdated(context.Background(), ForkAmsterdam, &stubSSZ{data: []byte("fcu")})
+	require.NoError(t, err)
+	assert.Equal(t, http.MethodPost, gotMethod)
+	assert.Equal(t, "/engine/v2/amsterdam/forkchoice", gotPath)
+	assert.Equal(t, contentTypeSSZ, gotCT)
+	assert.DeepEqual(t, []byte("fcu"), gotBody)
+	assert.Equal(t, enginev2.PayloadStatusValid, resp.PayloadStatus.Enum())
+	gotID, present := enginev2.OptionalBytes(resp.PayloadId)
+	assert.Equal(t, true, present)
+	assert.DeepEqual(t, payloadID, gotID)
 }
 
 func TestGetPayload(t *testing.T) {

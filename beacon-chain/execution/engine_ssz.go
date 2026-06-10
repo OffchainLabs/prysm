@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	enginev2 "github.com/OffchainLabs/prysm/v7/proto/engine/v2"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
@@ -121,8 +122,136 @@ func encodeExecutionRequests(requests *pb.ExecutionRequests) ([][]byte, error) {
 	return reqs, nil
 }
 
+// ForkchoiceUpdated updates fork choice (and optionally starts a build) over
+// POST /engine/v2/{fork}/forkchoice (replaces engine_forkchoiceUpdatedV*). The
+// returned payload_id is the EL's opaque token, echoed verbatim. Results and
+// errors map onto the same returns/sentinels as jsonEngine.ForkchoiceUpdated.
 func (e *sszEngine) ForkchoiceUpdated(ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer) (*pb.PayloadIDBytes, []byte, error) {
-	return nil, nil, sszNotImplemented("ForkchoiceUpdated")
+	if attrs == nil {
+		return nil, nil, errors.New("nil payload attributer")
+	}
+	fork, update, err := buildForkchoiceUpdate(state, attrs)
+	if err != nil {
+		return nil, nil, err
+	}
+	resp, err := e.client.ForkchoiceUpdated(ctx, fork, update)
+	if err != nil {
+		return nil, nil, mapEngineError(err)
+	}
+	return forkchoiceResult(resp)
+}
+
+// buildForkchoiceUpdate selects the EL fork URL and builds the fork's
+// ForkchoiceUpdate container. payload_attributes is an Optional (List[T,1]):
+// absent (empty list) for a pure head update, present when a build is wanted —
+// PbV3/PbV4 return nil for empty attributes, mirroring the JSON-RPC null param.
+func buildForkchoiceUpdate(state *pb.ForkchoiceState, attrs payloadattribute.Attributer) (string, ssz.Marshaler, error) {
+	switch attrs.Version() {
+	case version.Fulu:
+		a, err := attrs.PbV3()
+		if err != nil {
+			return "", nil, err
+		}
+		var list []*pb.PayloadAttributesV3
+		if a != nil {
+			list = []*pb.PayloadAttributesV3{a}
+		}
+		return enginehttp.ForkOsaka, &enginev2.ForkchoiceUpdateFulu{
+			ForkchoiceState:   state,
+			PayloadAttributes: list,
+		}, nil
+	case version.Gloas:
+		a, err := attrs.PbV4()
+		if err != nil {
+			return "", nil, err
+		}
+		var list []*pb.PayloadAttributesV4
+		if a != nil {
+			list = []*pb.PayloadAttributesV4{a}
+		}
+		// custody_columns is left absent: Prysm's forkchoice path does not yet
+		// manage the EL custody set, matching the JSON-RPC V4 path. An omitted
+		// field leaves the EL's custody set unchanged (execution-apis#793).
+		return enginehttp.ForkAmsterdam, &enginev2.ForkchoiceUpdateGloas{
+			ForkchoiceState:   state,
+			PayloadAttributes: list,
+		}, nil
+	default:
+		return "", nil, errors.Errorf("ssz-http engine transport: no v2 ForkchoiceUpdate container for attribute version %s", version.String(attrs.Version()))
+	}
+}
+
+// forkchoiceResult maps a v2 ForkchoiceUpdateResponse onto the same returns and
+// sentinels as jsonEngine.ForkchoiceUpdated. forkchoice returns the restricted
+// enum (VALID|INVALID|SYNCING); an out-of-range value is a protocol error.
+func forkchoiceResult(resp *enginev2.ForkchoiceUpdateResponse) (*pb.PayloadIDBytes, []byte, error) {
+	if resp.PayloadStatus == nil {
+		return nil, nil, ErrNilResponse
+	}
+	status := resp.PayloadStatus
+	if valErr, ok := enginev2.OptionalBytes(status.ValidationError); ok && len(valErr) > 0 {
+		log.WithError(errors.New(string(valErr))).Error("Got a validation error in forkChoiceUpdated")
+	}
+	lvh, _ := enginev2.OptionalBytes(status.LatestValidHash)
+	switch status.Enum() {
+	case enginev2.PayloadStatusSyncing:
+		return nil, nil, ErrAcceptedSyncingPayloadStatus
+	case enginev2.PayloadStatusInvalid:
+		return nil, lvh, ErrInvalidPayloadStatus
+	case enginev2.PayloadStatusValid:
+		return optionalPayloadID(resp.PayloadId), lvh, nil
+	default:
+		return nil, nil, ErrUnknownPayloadStatus
+	}
+}
+
+// optionalPayloadID reads the opaque server-assigned payload_id from its
+// Optional[Bytes8] list, copying the bytes verbatim (never recomputed). Absent
+// (no build started) yields nil.
+func optionalPayloadID(list [][]byte) *pb.PayloadIDBytes {
+	idBytes, ok := enginev2.OptionalBytes(list)
+	if !ok {
+		return nil
+	}
+	var id pb.PayloadIDBytes
+	copy(id[:], idBytes)
+	return &id
+}
+
+// mapEngineError converts an enginehttp transport error (RFC 7807 problem+json,
+// execution-apis#793) into the JSON-RPC sentinels consumers already branch on,
+// keyed on the stable `type` URI. Non-*Error errors (timeouts, ErrNoContent,
+// IO) pass through unchanged.
+func mapEngineError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var apiErr *enginehttp.Error
+	if !errors.As(err, &apiErr) {
+		return err
+	}
+	switch apiErr.Problem.Type {
+	case enginehttp.ProblemInvalidForkchoice:
+		return ErrInvalidForkchoiceState
+	case enginehttp.ProblemInvalidAttributes:
+		return ErrInvalidPayloadAttributes
+	case enginehttp.ProblemUnknownPayload:
+		return ErrUnknownPayload
+	case enginehttp.ProblemRequestTooLarge:
+		return ErrRequestTooLarge
+	case enginehttp.ProblemParseError:
+		return ErrParse
+	case enginehttp.ProblemInvalidRequest:
+		return ErrInvalidRequest
+	case enginehttp.ProblemMethodNotFound:
+		return ErrMethodNotFound
+	case enginehttp.ProblemInvalidBody:
+		return ErrInvalidParams
+	case enginehttp.ProblemInternal:
+		return ErrInternal
+	default:
+		return err
+	}
 }
 
 func (e *sszEngine) GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error) {
