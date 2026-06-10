@@ -193,13 +193,16 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 	var headBlk interfaces.ReadOnlySignedBeaconBlock
 
 	s.headLock.Lock()
-	if s.head != nil && s.head.root == root && !s.head.full {
+	if s.head != nil && s.head.root == root {
+		wasFull := s.head.full
 		s.head.full = true
 
-		// Copy head block for head_v2 payload update event.
-		var err error
-		if headBlk, err = s.headBlock(); err != nil {
-			log.WithError(err).Error("Could not copy head block for head_v2 payload update")
+		if !wasFull {
+			// Copy head block for head_v2 payload update event.
+			var err error
+			if headBlk, err = s.headBlock(); err != nil {
+				log.WithError(err).Error("Could not copy head block for head_v2 payload update")
+			}
 		}
 	}
 	s.headLock.Unlock()
