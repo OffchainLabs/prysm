@@ -610,6 +610,16 @@ func (s *Service) handleBlockAttestations(ctx context.Context, blk interfaces.Re
 			payloadStatus := true
 			if a.GetData().Target.Epoch >= params.BeaconConfig().GloasForkEpoch {
 				payloadStatus = a.GetData().CommitteeIndex == 1
+				if payloadStatus {
+					blockSlot, err := s.cfg.ForkChoiceStore.Slot(r)
+					if err == nil && blockSlot == a.GetData().Slot {
+						log.WithFields(logrus.Fields{
+							"slot":            a.GetData().Slot,
+							"beaconBlockRoot": fmt.Sprintf("%#x", bytesutil.Trunc(r[:])),
+						}).Debug("Skipping same-slot payload-present attestation in block")
+						continue
+					}
+				}
 			}
 			s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indices, r, a.GetData().Slot, payloadStatus)
 		} else if features.Get().EnableExperimentalAttestationPool {
