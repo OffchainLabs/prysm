@@ -143,17 +143,18 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return nil
 	}
 	headRoot := bytesutil.ToBytes32(headRootSlice)
-	markedEvent, err := s.postPayloadTasks(ctx, envelope, blockState, root, headRoot)
-	if err != nil {
+	if err := s.postPayloadTasks(ctx, envelope, blockState, root, headRoot); err != nil {
 		return err
 	}
 
-	// Emit second head_v2 event when the event is present,
-	// which indicates the head's payload status transitioned
-	// from empty to full due to the imported payload.
-	if markedEvent != nil {
-		if err := s.notifyNewHeadV2Event(
-			ctx, markedEvent.slot, markedEvent.stateRoot, markedEvent.root, markedEvent.version,
+	// If the imported payload makes the current head's payload status full, emit a
+	// second head_v2 event for the empty->full transition.
+	if headRoot == root && s.FullBeatsEmpty(root) {
+		headBlock, err := s.HeadBlock(ctx)
+		if err != nil || headBlock == nil || headBlock.IsNil() {
+			log.WithError(err).Error("Could not get head block for head_v2 payload update event")
+		} else if err := s.notifyNewHeadV2Event(
+			ctx, headBlock.Block().Slot(), headBlock.Block().StateRoot(), root, headBlock.Version(),
 		); err != nil {
 			log.WithError(err).Error("Could not notify event feed of head_v2 payload update")
 		}
@@ -192,23 +193,26 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	return nil
 }
 
-func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope, st state.BeaconState, root, headRoot [32]byte) (*headPayloadFullEvent, error) {
+func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope, st state.BeaconState, root, headRoot [32]byte) error {
 	if headRoot != root {
-		return nil, nil
+		return nil
 	}
 	payload, err := envelope.Execution()
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get execution payload from envelope")
+		return errors.Wrap(err, "could not get execution payload from envelope")
 	}
 	blockHash := bytesutil.ToBytes32(payload.BlockHash())
 
-	// Mark the head's payload status as full.
-	markedEvent := s.markHeadPayloadFull(root)
+	s.headLock.Lock()
+	if s.head != nil && s.head.root == root {
+		s.head.full = true
+	}
+	s.headLock.Unlock()
 
 	proposingSlot := s.CurrentSlot() + 1
 	attr := s.getPayloadAttribute(ctx, st, proposingSlot, headRoot[:], true)
 	if !s.inRegularSync() {
-		return markedEvent, nil
+		return nil
 	}
 	go func() {
 		pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)
@@ -222,7 +226,7 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 			s.cfg.PayloadIDCache.Set(proposingSlot, root, pId)
 		}
 	}()
-	return markedEvent, nil
+	return nil
 }
 
 func (s *Service) getPayloadEnvelopePrestate(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope) (state.BeaconState, error) {
@@ -401,39 +405,5 @@ func (s *Service) notifyForkchoiceUpdateGloas(ctx context.Context, blockHash [32
 	default:
 		log.WithError(err).Error(ErrUndefinedExecutionEngineError)
 		return nil, nil
-	}
-}
-
-// headPayloadFullEvent holds all information to emit second head_v2 event.
-type headPayloadFullEvent struct {
-	slot      primitives.Slot
-	stateRoot [32]byte
-	root      [32]byte
-	version   int
-}
-
-// markHeadPayloadFull marks the head's payload status as full
-// if 1) the head's root matches the given root AND
-// 2) the payload status is not already full.
-// Returns an event that can be referenced from the caller.
-func (s *Service) markHeadPayloadFull(root [32]byte) *headPayloadFullEvent {
-	s.headLock.Lock()
-	defer s.headLock.Unlock()
-
-	if s.head == nil || s.head.root != root {
-		return nil
-	}
-	if s.head.full {
-		return nil
-	}
-
-	// Core: make the head's payload status full when holding the head lock.
-	s.head.full = true
-
-	return &headPayloadFullEvent{
-		slot:      s.head.block.Block().Slot(),
-		stateRoot: s.head.block.Block().StateRoot(),
-		root:      root,
-		version:   s.head.block.Version(),
 	}
 }
