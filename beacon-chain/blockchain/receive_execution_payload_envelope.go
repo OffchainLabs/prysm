@@ -147,19 +147,6 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return err
 	}
 
-	// If the imported payload makes the current head's payload status full, emit a
-	// second head_v2 event for the empty->full transition.
-	if headRoot == root && s.FullBeatsEmpty(root) {
-		headBlock, err := s.HeadBlock(ctx)
-		if err != nil || headBlock == nil || headBlock.IsNil() {
-			log.WithError(err).Error("Could not get head block for head_v2 payload update event")
-		} else if err := s.notifyNewHeadV2Event(
-			ctx, headBlock.Block().Slot(), headBlock.Block().StateRoot(), root, headBlock.Version(),
-		); err != nil {
-			log.WithError(err).Error("Could not notify event feed of head_v2 payload update")
-		}
-	}
-
 	// execution_payload is emitted when an execution payload is successfully imported.
 	isOptimistic, err := s.cfg.ForkChoiceStore.IsOptimistic(root)
 	if err != nil {
@@ -203,11 +190,32 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 	}
 	blockHash := bytesutil.ToBytes32(payload.BlockHash())
 
+	var headBlk interfaces.ReadOnlySignedBeaconBlock
+
 	s.headLock.Lock()
-	if s.head != nil && s.head.root == root {
+	if s.head != nil && s.head.root == root && !s.head.full {
 		s.head.full = true
+
+		// Copy head block for head_v2 payload update event.
+		var err error
+		if headBlk, err = s.headBlock(); err != nil {
+			log.WithError(err).Error("Could not copy head block for head_v2 payload update")
+		}
 	}
 	s.headLock.Unlock()
+
+	// If the imported payload makes the current head's payload status full, emit a
+	// second head_v2 event for the empty->full transition.
+	if headBlk != nil {
+		blk := headBlk.Block()
+		if err := s.notifyNewHeadV2Event(
+			ctx, blk.Slot(), blk.StateRoot(), root, headBlk.Version(),
+		); err != nil {
+			// Log the error but continue on (not returning error).
+			log.WithError(err).Error("Could not notify event feed of head_v2 payload update")
+		}
+
+	}
 
 	proposingSlot := s.CurrentSlot() + 1
 	attr := s.getPayloadAttribute(ctx, st, proposingSlot, headRoot[:], true)
