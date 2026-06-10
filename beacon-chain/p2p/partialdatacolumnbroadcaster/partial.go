@@ -421,21 +421,25 @@ func (p *PartialColumnBroadcaster) loop() {
 				}
 			}
 		case <-cleanup.C:
-			for groupID, ttl := range p.groupTTL {
-				if ttl > 0 {
-					p.groupTTL[groupID] = ttl - 1
-					continue
-				}
+			p.evictExpiredGroups()
+		}
+	}
+}
 
-				delete(p.groupTTL, groupID)
-				delete(p.validHeaderCache, groupID)
-				delete(p.headerSentCache, groupID)
-				for topic, msgStore := range p.partialMsgStore {
-					delete(msgStore, groupID)
-					if len(msgStore) == 0 {
-						delete(p.partialMsgStore, topic)
-					}
-				}
+func (p *PartialColumnBroadcaster) evictExpiredGroups() {
+	for groupID, ttl := range p.groupTTL {
+		if ttl > 0 {
+			p.groupTTL[groupID] = ttl - 1
+			continue
+		}
+
+		delete(p.groupTTL, groupID)
+		delete(p.validHeaderCache, groupID)
+		delete(p.headerSentCache, groupID)
+		for topic, msgStore := range p.partialMsgStore {
+			delete(msgStore, groupID)
+			if len(msgStore) == 0 {
+				delete(p.partialMsgStore, topic)
 			}
 		}
 	}
