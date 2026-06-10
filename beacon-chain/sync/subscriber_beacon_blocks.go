@@ -265,7 +265,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 					return nil, errors.Wrap(err, "current fork digest")
 				}
 				log.WithField("count", count).Debug("Publishing partial columns")
-				// Publish the partial column. This is idempotent if we republish the same data twice.
+				// Publish the partial column.
 				// Note, the "partial column" may indeed be complete. We still
 				// should publish to help our peers.
 				if err := partialBroadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
