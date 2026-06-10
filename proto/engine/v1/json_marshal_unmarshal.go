@@ -360,20 +360,17 @@ type GetPayloadV6ResponseJson struct {
 	ExecutionRequests     []hexutil.Bytes            `json:"executionRequests"`
 }
 
+// ExecutionPayloadBodyV1 represents the engine API ExecutionPayloadV1 type.
+type ExecutionPayloadBodyV1 struct {
+	Transactions []hexutil.Bytes `json:"transactions"`
+	Withdrawals  []*Withdrawal   `json:"withdrawals"`
+}
+
 // ExecutionPayloadBodyV2 represents the engine API ExecutionPayloadBodyV2 type (Amsterdam).
 type ExecutionPayloadBodyV2 struct {
 	Transactions    []hexutil.Bytes `json:"transactions"`
 	Withdrawals     []*Withdrawal   `json:"withdrawals"`
 	BlockAccessList *hexutil.Bytes  `json:"blockAccessList"`
-}
-
-// ExecutionPayloadBody represents the engine API ExecutionPayloadV1 or ExecutionPayloadV2 type.
-type ExecutionPayloadBody struct {
-	Transactions          []hexutil.Bytes          `json:"transactions"`
-	Withdrawals           []*Withdrawal            `json:"withdrawals"`
-	WithdrawalRequests    []WithdrawalRequestV1    `json:"withdrawalRequests"`
-	DepositRequests       []DepositRequestV1       `json:"depositRequests"`
-	ConsolidationRequests []ConsolidationRequestV1 `json:"consolidationRequests"`
 }
 
 type ExecutionPayloadDenebJSON struct {

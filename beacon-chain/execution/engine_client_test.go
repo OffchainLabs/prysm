@@ -1716,7 +1716,7 @@ func fixturesStruct() *payloadFixtures {
 		BlockHash:     foo[:],
 		Transactions:  [][]byte{foo[:]},
 	}
-	executionPayloadBodyFixture := &pb.ExecutionPayloadBody{
+	executionPayloadBodyFixture := &pb.ExecutionPayloadBodyV1{
 		Transactions: []hexutil.Bytes{foo[:]},
 		Withdrawals:  []*pb.Withdrawal{},
 	}
@@ -2058,7 +2058,7 @@ func fixturesStruct() *payloadFixtures {
 
 type payloadFixtures struct {
 	ExecutionBlock                    *pb.ExecutionBlock
-	ExecutionPayloadBody              *pb.ExecutionPayloadBody
+	ExecutionPayloadBody              *pb.ExecutionPayloadBodyV1
 	ExecutionPayload                  *pb.ExecutionPayload
 	ExecutionPayloadCapella           *pb.ExecutionPayloadCapella
 	EmptyExecutionPayloadDeneb        *pb.ExecutionPayloadDeneb
@@ -2492,7 +2492,7 @@ func TestReconstructBlindedBlockBatch(t *testing.T) {
 		blk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, slot, 0)
 		cli, srv := newMockEngine(t)
 		srv.registerDefault(func(msg *jsonrpcMessage, w http.ResponseWriter, req *http.Request) {
-			executionPayloadBodies := []*pb.ExecutionPayloadBody{nil}
+			executionPayloadBodies := []*pb.ExecutionPayloadBodyV1{nil}
 			mockWriteResult(t, w, msg, executionPayloadBodies)
 		})
 
