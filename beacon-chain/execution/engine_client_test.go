@@ -1774,19 +1774,6 @@ func fixturesStruct() *payloadFixtures {
 		Transactions: [][]byte{foo[:]},
 		Withdrawals:  []*pb.Withdrawal{},
 	}
-	withdrawalRequests := make([]pb.WithdrawalRequestV1, 3)
-	for i := range withdrawalRequests {
-		amount := hexutil.Uint64(i)
-		address := &common.Address{}
-		address.SetBytes([]byte{0, 0, byte(i)})
-		pubkey := pb.BlsPubkey{}
-		copy(pubkey[:], []byte{0, byte(i)})
-		withdrawalRequests[i] = pb.WithdrawalRequestV1{
-			SourceAddress:   address,
-			ValidatorPubkey: &pubkey,
-			Amount:          &amount,
-		}
-	}
 	depositRequests := make([]pb.DepositRequestV1, 3)
 	for i := range depositRequests {
 		amount := hexutil.Uint64(math.MaxUint16 - i)

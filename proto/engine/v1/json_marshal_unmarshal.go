@@ -393,27 +393,6 @@ type ExecutionPayloadDenebJSON struct {
 	Withdrawals   []*Withdrawal   `json:"withdrawals"`
 }
 
-// WithdrawalRequestV1 represents an execution engine WithdrawalRequestV1 value
-// https://github.com/ethereum/execution-apis/blob/main/src/engine/prague.md#withdrawalrequestv1
-type WithdrawalRequestV1 struct {
-	SourceAddress   *common.Address `json:"sourceAddress"`
-	ValidatorPubkey *BlsPubkey      `json:"validatorPubkey"`
-	Amount          *hexutil.Uint64 `json:"amount"`
-}
-
-func (r WithdrawalRequestV1) Validate() error {
-	if r.SourceAddress == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'sourceAddress' for WithdrawalRequestV1")
-	}
-	if r.ValidatorPubkey == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'validatorPubkey' for WithdrawalRequestV1")
-	}
-	if r.Amount == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'amount' for WithdrawalRequestV1")
-	}
-	return nil
-}
-
 // DepositRequestV1 represents an execution engine DepositRequestV1 value
 // https://github.com/ethereum/execution-apis/blob/main/src/engine/prague.md#depositrequestv1
 type DepositRequestV1 struct {
@@ -1047,41 +1026,6 @@ func ProtoDepositRequestsToJson(reqs []*DepositRequest) []DepositRequestV1 {
 			Amount:                &amt,
 			Signature:             &sig,
 			Index:                 &idx,
-		}
-	}
-	return j
-}
-
-func JsonWithdrawalRequestsToProto(j []WithdrawalRequestV1) ([]*WithdrawalRequest, error) {
-	reqs := make([]*WithdrawalRequest, len(j))
-
-	for i := range j {
-		req := j[i]
-		if err := req.Validate(); err != nil {
-			return nil, err
-		}
-		reqs[i] = &WithdrawalRequest{
-			SourceAddress:   req.SourceAddress.Bytes(),
-			ValidatorPubkey: req.ValidatorPubkey.Bytes(),
-			Amount:          uint64(*req.Amount),
-		}
-	}
-
-	return reqs, nil
-}
-
-func ProtoWithdrawalRequestsToJson(reqs []*WithdrawalRequest) []WithdrawalRequestV1 {
-	j := make([]WithdrawalRequestV1, len(reqs))
-	for i := range reqs {
-		r := reqs[i]
-		pk := BlsPubkey{}
-		amt := hexutil.Uint64(r.Amount)
-		copy(pk[:], r.ValidatorPubkey)
-		address := common.BytesToAddress(r.SourceAddress)
-		j[i] = WithdrawalRequestV1{
-			SourceAddress:   &address,
-			ValidatorPubkey: &pk,
-			Amount:          &amt,
 		}
 	}
 	return j
