@@ -211,6 +211,61 @@ func TestValidateBeaconBlockPubSub_InvalidSignature_MarksBlockAsBad(t *testing.T
 	}
 }
 
+func TestValidateBeaconBlockPubSub_OutOfRangeProposerIndex(t *testing.T) {
+	db := dbtest.SetupDB(t)
+	p := p2ptest.NewTestP2P(t)
+	ctx := t.Context()
+	beaconState, _ := util.DeterministicGenesisState(t, 100)
+	parentBlock := util.NewBeaconBlock()
+	util.SaveBlock(t, ctx, db, parentBlock)
+	bRoot, err := parentBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, db.SaveState(ctx, beaconState, bRoot))
+	require.NoError(t, db.SaveStateSummary(ctx, &ethpb.StateSummary{Root: bRoot[:]}))
+
+	msg := util.NewBeaconBlock()
+	msg.Block.ParentRoot = bRoot[:]
+	msg.Block.Slot = 1
+	msg.Block.ProposerIndex = 1 << 40 // out of range for the 100-validator registry
+	blockRoot, err := msg.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+		FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, 32)},
+		DB:                  db,
+		State:               beaconState,
+		Root:                bRoot[:],
+	}
+	r := &Service{
+		cfg: &config{
+			beaconDB:          db,
+			p2p:               p,
+			initialSync:       &mockSync.Sync{IsSyncing: false},
+			chain:             chainService,
+			clock:             startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+			blockNotifier:     chainService.BlockNotifier(),
+			operationNotifier: chainService.OperationNotifier(),
+			stateGen:          stategen.New(db, doublylinkedtree.New()),
+		},
+		seenBlockCache: lruwrpr.New(10),
+		badBlockCache:  lruwrpr.New(10),
+	}
+
+	buf := new(bytes.Buffer)
+	_, err = p.Encoding().EncodeGossip(buf, msg)
+	require.NoError(t, err)
+	digest, err := r.currentForkDigest()
+	require.NoError(t, err)
+	topic := r.addDigestToTopic(p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlock]()], digest)
+	m := &pubsub.Message{Message: &pubsubpb.Message{Data: buf.Bytes(), Topic: &topic}}
+
+	res, err := r.validateBeaconBlockPubSub(ctx, "", m)
+	require.ErrorContains(t, "invalid proposer index", err)
+	assert.Equal(t, pubsub.ValidationReject, res)
+	// rejected via gossip scoring, not the bad-block cache
+	assert.Equal(t, false, r.hasBadBlock(blockRoot))
+}
+
 func TestValidateBeaconBlockPubSub_BlockAlreadyPresentInDB(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	ctx := t.Context()

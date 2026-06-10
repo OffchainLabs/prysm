@@ -14,6 +14,7 @@ go_library(
         "log_helpers.go",
         "metrics.go",
         "payload_attestation.go",
+        "payload_availability.go",
         "propose.go",
         "propose_gloas.go",
         "registration.go",
@@ -117,6 +118,7 @@ go_test(
         "log_test.go",
         "metrics_test.go",
         "payload_attestation_test.go",
+        "payload_availability_test.go",
         "propose_gloas_test.go",
         "propose_test.go",
         "registration_test.go",
@@ -133,6 +135,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//api/client/event:go_default_library",
         "//api/grpc:go_default_library",
         "//api/server/structs:go_default_library",
         "//async/event:go_default_library",

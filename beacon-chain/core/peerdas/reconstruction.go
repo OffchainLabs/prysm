@@ -415,7 +415,7 @@ func ComputeCellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs 
 	}
 
 	if err = wg.Wait(); err != nil {
-		return StructuredCellsAndProofs{}, err
+		return StructuredCellsAndProofs{}, errors.Wrap(err, "wait for ComputeCells")
 	}
 
 	return StructuredCellsAndProofs{

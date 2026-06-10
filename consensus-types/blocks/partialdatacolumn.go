@@ -226,9 +226,7 @@ func (p *PartialDataColumn) cellsToSendToPeer(peerMeta *ethpb.PartialDataColumnP
 	return marshalled, meetsNeeds, nil
 }
 
-// buildEagerPushBytes builds the SSZ-encoded PartialDataColumnSidecar for an
-// initial eager push. Only the column header is included (no cells).
-func (p *PartialDataColumn) buildEagerPushBytes() (encoded []byte, err error) {
+func (p *PartialDataColumn) buildPartialColumnHeader() (encoded []byte, err error) {
 	outMessage := &ethpb.PartialDataColumnSidecar{
 		Header: []*ethpb.PartialDataColumnHeader{{
 			KzgCommitments:               p.KzgCommitments,
@@ -237,7 +235,11 @@ func (p *PartialDataColumn) buildEagerPushBytes() (encoded []byte, err error) {
 		}},
 		CellsPresentBitmap: bitfield.NewBitlist(uint64(len(p.KzgCommitments))),
 	}
-	return outMessage.MarshalSSZ()
+	encoded, err = outMessage.MarshalSSZ()
+	if err != nil {
+		return nil, errors.Wrap(err, "marshal partial column header")
+	}
+	return encoded, nil
 }
 
 // PartsMetadata returns SSZ-encoded PartialDataColumnPartsMetadata.
@@ -333,7 +335,7 @@ func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerS
 		var encoded []byte
 		if includeHeader {
 			var err error
-			encoded, err = p.buildEagerPushBytes()
+			encoded, err = p.buildPartialColumnHeader()
 			if err != nil {
 				return peerState, partialmessages.PublishAction{Err: err}, false
 			}
@@ -384,7 +386,7 @@ func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerS
 		} else {
 			contains, err := sentMeta.Available.Contains(myPartsMeta.Available)
 			if err != nil {
-				return peerState, partialmessages.PublishAction{Err: err}, false
+				return peerState, partialmessages.PublishAction{Err: errors.Wrap(err, "check available parts metadata containment")}, false
 			}
 			shouldSendPartsMetadata = !contains
 		}

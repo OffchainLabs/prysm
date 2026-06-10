@@ -110,3 +110,16 @@ func Test_limiter_retrieveCollector_requiresLock(t *testing.T) {
 	_, err := l.retrieveCollector("")
 	require.ErrorContains(t, "caller must hold read/write lock", err)
 }
+
+func TestRateLimiter_RemovePeer(t *testing.T) {
+	p1 := mockp2p.NewTestP2P(t)
+	rlimiter := newRateLimiter(p1)
+	pid := p1.PeerID()
+
+	c := rlimiter.limiterMap[rpcLimiterTopic]
+	c.Add(pid.String(), 1)
+	require.Equal(t, int64(1), c.Count(pid.String()))
+
+	rlimiter.removePeer(pid)
+	require.Equal(t, int64(0), c.Count(pid.String()))
+}

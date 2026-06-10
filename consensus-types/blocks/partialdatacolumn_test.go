@@ -483,7 +483,7 @@ func TestPartialDataColumn_cellsToSendToPeer(t *testing.T) {
 	}
 }
 
-func TestPartialDataColumn_buildEagerPushBytes(t *testing.T) {
+func TestPartialDataColumn_buildPartialColumnHeader(t *testing.T) {
 	tests := []struct {
 		name string
 		run  func(t *testing.T)
@@ -492,7 +492,7 @@ func TestPartialDataColumn_buildEagerPushBytes(t *testing.T) {
 			name: "nominal sends header only",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 3, 0)
-				encoded, err := p.buildEagerPushBytes()
+				encoded, err := p.buildPartialColumnHeader()
 				require.NoError(t, err)
 				msg := mustDecodeSidecar(t, encoded)
 				require.Equal(t, 1, len(msg.Header))
@@ -507,7 +507,7 @@ func TestPartialDataColumn_buildEagerPushBytes(t *testing.T) {
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
 				p.KzgCommitments[0] = []byte{1}
-				_, err := p.buildEagerPushBytes()
+				_, err := p.buildPartialColumnHeader()
 				require.ErrorContains(t, "KzgCommitments", err)
 			},
 		},
@@ -516,7 +516,7 @@ func TestPartialDataColumn_buildEagerPushBytes(t *testing.T) {
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
 				p.KzgCommitmentsInclusionProof = p.KzgCommitmentsInclusionProof[:3]
-				_, err := p.buildEagerPushBytes()
+				_, err := p.buildPartialColumnHeader()
 				require.ErrorContains(t, "KzgCommitmentsInclusionProof", err)
 			},
 		},

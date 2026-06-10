@@ -656,7 +656,7 @@ func (s *Service) trySubscribeSubnets(ctx context.Context, t *subnetTracker) {
 		}
 
 		if requestPartial {
-			log.Info("Subscribing to partial columns on", topicStr)
+			log.WithField("topic", topicStr).Info("Subscribing to partial columns")
 			// A failed partial subscription is non-fatal; we log and continue, and still
 			// subscribe to the full columns below as a fallback.
 			if err := t.partial.broadcaster.Subscribe(ctx, topic); err != nil {

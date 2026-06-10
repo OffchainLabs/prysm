@@ -285,6 +285,15 @@ func newMarkedVerifier(col *blocks.PartialDataColumn) *verification.PartialColum
 	return newMockPartialVerifier(col)
 }
 
+func newMockPartialVerifierWithValidFieldsErr(col *blocks.PartialDataColumn, validFieldsErr error) *verification.PartialColumnVerifier {
+	mv := &verification.MockDataColumnsVerifier{ErrValidFields: validFieldsErr}
+	ro, err := blocks.NewRODataColumn(col.DataColumnSidecar)
+	if err == nil {
+		mv.AppendRODataColumns(ro)
+	}
+	return verification.NewPartialColumnVerifier(mv, col)
+}
+
 func testBitlist(n uint64, set ...uint64) bitfield.Bitlist {
 	bl := bitfield.NewBitlist(n)
 	for _, idx := range set {
@@ -742,6 +751,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 		expectPeerFeedbackCall   bool
 		expectHeaderHandleCall   bool
 		expectValidateColumnCall bool
+		expectTrustedColumnCall  bool
 		expectPublish            bool
 		expectHeaderValidateCall bool
 		expectedStoreColumn      func(t *testing.T) *blocks.PartialDataColumn
@@ -750,6 +760,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 		expectedErrContains      string
 		validateHeaderErr        error
 		validateColumnErr        error
+		trustedColErr            error
 		name                     string
 	}{
 		{
@@ -940,12 +951,138 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 				})
 			},
 		},
+		{
+			name: "cached header builds verifier via trusted column and processes incoming cells",
+			setup: func(t *testing.T, b *PartialColumnBroadcaster) testSetup {
+				// Header already validated for this group, e.g. seen earlier on another column's topic.
+				col := createPartialColumn(t, 3, nil)
+				group := col.GroupID()
+				b.validHeaderCache[string(group)] = buildHeaderFromColumn(col)
+				msg := buildSidecarWithCells(3, map[uint64][]byte{
+					1: {0x22},
+				})
+				cellIndices, cellsToVerify := buildExpectedCellsToVerify(col, map[uint64][]byte{
+					1: {0x22},
+				})
+				return testSetup{
+					inputRPC:                   buildIncomingRPC(validTopic, group, msg, nil),
+					expectedValidateColumnCall: cellsToVerify,
+					expectedCellsValidatedReq: &cellsValidated{
+						topic:       validTopic,
+						group:       slices.Clone(group),
+						cellIndices: cellIndices,
+						cells:       cellsToVerify,
+					},
+				}
+			},
+			expectTrustedColumnCall:  true,
+			expectValidateColumnCall: true,
+			expectCellsValidatedReq:  true,
+			expectPeerFeedbackCall:   true,
+			expectPeerFeedback:       pubsub.PeerFeedbackUsefulMessage,
+			expectedStoreColumn: func(t *testing.T) *blocks.PartialDataColumn {
+				return createPartialColumn(t, 3, nil)
+			},
+		},
+		{
+			name:                "cached header trusted column error returns error",
+			expectedErrContains: "partial verifier from trusted column",
+			trustedColErr:       errors.New("trusted boom"),
+			setup: func(t *testing.T, b *PartialColumnBroadcaster) testSetup {
+				col := createPartialColumn(t, 2, nil)
+				group := col.GroupID()
+				b.validHeaderCache[string(group)] = buildHeaderFromColumn(col)
+				msg := buildSidecarWithCells(2, map[uint64][]byte{
+					0: {0x11},
+				})
+				return testSetup{
+					inputRPC: buildIncomingRPC(validTopic, group, msg, nil),
+				}
+			},
+			expectTrustedColumnCall: true,
+		},
+		{
+			name:                "header with nil signed block header rejects peer and returns error",
+			expectedErrContains: "header is missing signed block header or header",
+			setup: func(t *testing.T, _ *PartialColumnBroadcaster) testSetup {
+				col := createPartialColumn(t, 2, nil)
+				group := col.GroupID()
+				msg := &ethpb.PartialDataColumnSidecar{
+					CellsPresentBitmap: testBitlist(2),
+					Header: []*ethpb.PartialDataColumnHeader{{
+						SignedBlockHeader: nil,
+						KzgCommitments:    col.KzgCommitments,
+					}},
+				}
+				return testSetup{
+					inputRPC: buildIncomingRPC(validTopic, group, msg, nil),
+				}
+			},
+			expectPeerFeedbackCall: true,
+			expectPeerFeedback:     pubsub.PeerFeedbackInvalidMessage,
+		},
+		{
+			name:                "header with nil block header field rejects peer and returns error",
+			expectedErrContains: "header is missing signed block header or header",
+			setup: func(t *testing.T, _ *PartialColumnBroadcaster) testSetup {
+				col := createPartialColumn(t, 2, nil)
+				group := col.GroupID()
+				msg := &ethpb.PartialDataColumnSidecar{
+					CellsPresentBitmap: testBitlist(2),
+					Header: []*ethpb.PartialDataColumnHeader{{
+						SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{Header: nil, Signature: []byte{1}},
+						KzgCommitments:    col.KzgCommitments,
+					}},
+				}
+				return testSetup{
+					inputRPC: buildIncomingRPC(validTopic, group, msg, nil),
+				}
+			},
+			expectPeerFeedbackCall: true,
+			expectPeerFeedback:     pubsub.PeerFeedbackInvalidMessage,
+		},
+		{
+			name: "no message and no verifier for unknown group is ignored",
+			setup: func(t *testing.T, _ *PartialColumnBroadcaster) testSetup {
+				group := createPartialColumn(t, 2, nil).GroupID()
+				// Only parts metadata, no partial message: nothing to build a verifier from.
+				return testSetup{
+					inputRPC: buildIncomingRPC(validTopic, group, nil, []byte{0x01, 0x02}),
+				}
+			},
+		},
+		{
+			name:                "incoming cells with mismatched bitmap length returns error",
+			expectedErrContains: "cells to verify from partial message",
+			setup: func(t *testing.T, b *PartialColumnBroadcaster) testSetup {
+				existing := createPartialColumn(t, 3, map[uint64][]byte{
+					0: {0x11},
+				})
+				group := existing.GroupID()
+				b.partialMsgStore[validTopic] = map[string]*verification.PartialColumnVerifier{
+					string(group): newMarkedVerifier(existing),
+				}
+				// Message bitmap length (2) disagrees with our column's commitment count (3).
+				msg := buildSidecarWithCells(2, map[uint64][]byte{
+					0: {0x22},
+				})
+				return testSetup{
+					inputRPC: buildIncomingRPC(validTopic, group, msg, nil),
+				}
+			},
+			expectedStoreColumn: func(t *testing.T) *blocks.PartialDataColumn {
+				return createPartialColumn(t, 3, map[uint64][]byte{
+					0: {0x11},
+				})
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ps := newMockPubSub(nil, nil)
 			recorder := newCallbackRecorder(8, tt.validateHeaderReject, tt.validateColumnErr, tt.validateHeaderErr)
+			recorder.partialVerifierFromTrustedColErr = tt.trustedColErr
 			h := newBroadcasterHarness(t, ps)
 
 			h.broadcaster.callbacks = recorder
@@ -969,6 +1106,15 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 					require.DeepEqual(t, setup.expectedHeader.SignedBlockHeader, call.SignedBlockHeader)
 				case <-t.Context().Done():
 					t.Fatalf("header validation call not received")
+				}
+			}
+
+			if tt.expectTrustedColumnCall {
+				select {
+				case call := <-recorder.partialVerifierFromTrustedColumnCallCh:
+					require.NotNil(t, call)
+				case <-t.Context().Done():
+					t.Fatalf("trusted column call not received")
 				}
 			}
 
@@ -1030,6 +1176,57 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 	}
 }
 
+// Regression test for the validator-semaphore deadlock: when every validator slot is in
+// flight, handlePartialCells must shed the work rather than block the loop goroutine on the
+// semaphore send (a blocking send there deadlocks with the validators that report results
+// back via the blocking enqueue). It must also still fall through to republishColumn.
+func TestPartialColumnBroadcaster_handleIncomingRPC_dropsValidationWhenSaturated(t *testing.T) {
+	const validTopic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	ps := newMockPubSub(nil, nil)
+	recorder := newCallbackRecorder(8, false, nil, nil)
+	h := newBroadcasterHarness(t, ps)
+	h.broadcaster.callbacks = recorder
+	h.broadcaster.topics[validTopic] = nil
+
+	// Existing, already-published column so republish can fire.
+	existing := createPartialColumn(t, 3, map[uint64][]byte{0: {0x11}})
+	group := existing.GroupID()
+	h.broadcaster.partialMsgStore[validTopic] = map[string]*verification.PartialColumnVerifier{
+		string(group): newMarkedVerifier(existing),
+	}
+	h.broadcaster.partialMsgStore[validTopic][string(group)].Column.Published = true
+
+	// Incoming message carries a new cell (so cellsToVerify is non-empty) and differing parts
+	// metadata (so republish should fire even though we drop the validation).
+	msg := buildSidecarWithCells(3, map[uint64][]byte{1: {0x22}})
+	rpc := buildIncomingRPC(validTopic, group, msg, []byte{0x01, 0x02})
+
+	// Saturate the validator semaphore so the acquire must take the default (drop) path.
+	for range cap(h.broadcaster.concurrentValidatorSemaphore) {
+		h.broadcaster.concurrentValidatorSemaphore <- struct{}{}
+	}
+
+	// Must not block: a blocking send on the saturated semaphore would deadlock the loop.
+	done := make(chan error, 1)
+	go func() { done <- h.broadcaster.handleIncomingRPC(rpc) }()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("handleIncomingRPC blocked on a saturated validator semaphore (deadlock regression)")
+	}
+
+	// Validation was shed, not run, and no cellsValidated result was enqueued.
+	require.Equal(t, 0, len(recorder.validateColumnCallCh))
+	require.Equal(t, 0, len(h.broadcaster.incomingReq))
+
+	// Crucially, we still fell through to republish (unlike returning an error, which skips it).
+	ps.assertPartialColumnsPublished(t, validTopic, []*blocks.PartialDataColumn{
+		h.broadcaster.getDataColumn(validTopic, group),
+	})
+}
+
 func TestPartialColumnBroadcaster_handleIncomingRPC_ignoresUnsubscribedTopic(t *testing.T) {
 	ps := newMockPubSub(nil, nil)
 	recorder := newCallbackRecorder(8, false, nil, nil)
@@ -1051,13 +1248,16 @@ func TestPartialColumnBroadcaster_handleIncomingRPC_ignoresUnsubscribedTopic(t *
 	require.Equal(t, 0, len(h.broadcaster.incomingReq))
 }
 
-func TestPartialColumnBroadcaster_onIncomingRPC_topicValidation(t *testing.T) {
+func TestPartialColumnBroadcaster_onIncomingRPC_inputValidation(t *testing.T) {
 	const from = peer.ID("peer-a")
-	group := createPartialColumn(t, 2, nil).GroupID()
+	validGroup := createPartialColumn(t, 2, nil).GroupID()
 
 	tests := []struct {
 		name           string
 		topic          string
+		group          []byte // defaults to a valid-length group when nil
+		expectedErr    string // defaults to "invalid topic ID" when reject and empty
+		nilRPC         bool
 		expectReject   bool
 		expectEnqueued bool
 	}{
@@ -1066,6 +1266,20 @@ func TestPartialColumnBroadcaster_onIncomingRPC_topicValidation(t *testing.T) {
 			topic:          "/eth2/abcd1234/data_column_sidecar_0/ssz_snappy",
 			expectReject:   false,
 			expectEnqueued: true,
+		},
+		{
+			name:           "nil rpc is ignored",
+			nilRPC:         true,
+			expectReject:   false,
+			expectEnqueued: false,
+		},
+		{
+			name:           "invalid group ID length is rejected",
+			topic:          "/eth2/abcd1234/data_column_sidecar_0/ssz_snappy",
+			group:          []byte("too-short"),
+			expectedErr:    "invalid group ID length",
+			expectReject:   true,
+			expectEnqueued: false,
 		},
 		{
 			name:           "column index at NumberOfColumns is rejected",
@@ -1092,17 +1306,28 @@ func TestPartialColumnBroadcaster_onIncomingRPC_topicValidation(t *testing.T) {
 			ps := newMockPubSub(nil, nil)
 			h := newBroadcasterHarness(t, ps)
 
-			topic := tt.topic
-			rpc := &pubsub_pb.PartialMessagesExtension{
-				TopicID: &topic,
-				GroupID: slices.Clone(group),
+			var rpc *pubsub_pb.PartialMessagesExtension
+			if !tt.nilRPC {
+				group := validGroup
+				if tt.group != nil {
+					group = tt.group
+				}
+				topic := tt.topic
+				rpc = &pubsub_pb.PartialMessagesExtension{
+					TopicID: &topic,
+					GroupID: slices.Clone(group),
+				}
 			}
 			peerStates := map[peer.ID]blocks.PartialDataColumnPeerState{}
 
 			err := h.broadcaster.onIncomingRPC(from, peerStates, rpc)
 
 			if tt.expectReject {
-				require.ErrorContains(t, "invalid topic ID", err)
+				wantErr := tt.expectedErr
+				if wantErr == "" {
+					wantErr = "invalid topic ID"
+				}
+				require.ErrorContains(t, wantErr, err)
 				waitForPeerFeedbackCalls(t, ps, 1)
 				feedback := ps.peerFeedbackCallsSnapshot()
 				require.Equal(t, 1, len(feedback))
@@ -1124,6 +1349,28 @@ func TestPartialColumnBroadcaster_onIncomingRPC_topicValidation(t *testing.T) {
 	}
 }
 
+func TestPartialColumnBroadcaster_onIncomingRPC_dropsWhenQueueFull(t *testing.T) {
+	const from = peer.ID("peer-a")
+	topic := "/eth2/abcd1234/data_column_sidecar_0/ssz_snappy"
+
+	ps := newMockPubSub(nil, nil)
+	h := newBroadcasterHarness(t, ps)
+	fillRequestQueue(h.broadcaster)
+
+	rpc := &pubsub_pb.PartialMessagesExtension{
+		TopicID:       &topic,
+		GroupID:       slices.Clone(createPartialColumn(t, 2, nil).GroupID()),
+		PartsMetadata: mustMarshalPartsMetadata(t, testPartsMetadata(2, []uint64{0}, nil)),
+	}
+	peerStates := map[peer.ID]blocks.PartialDataColumnPeerState{}
+
+	err := h.broadcaster.onIncomingRPC(from, peerStates, rpc)
+	require.ErrorContains(t, "incomingReq channel is full", err)
+	// The peer state update is discarded along with the dropped RPC.
+	require.Equal(t, 0, len(peerStates))
+	require.Equal(t, 0, ps.peerFeedbackCallCount())
+}
+
 func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 	const topic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
 
@@ -1137,8 +1384,10 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 		wantErrContains  string
 		name             string
 		publishErr       error
+		validFieldsErr   error
 		setup            func(t *testing.T) testSetup
 		validatedCells   map[uint64][]byte
+		wrongColumnIndex bool
 		expectPublish    bool
 		expectHandle     bool
 		expectedStoreCol func(t *testing.T) *blocks.PartialDataColumn
@@ -1152,6 +1401,29 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 			},
 			validatedCells:  map[uint64][]byte{0: {0xA0}},
 			wantErrContains: "data column not found for verified cells",
+		},
+		{
+			name: "cell bundle with wrong column index returns error",
+			setup: func(t *testing.T) testSetup {
+				c := createPartialColumn(t, 3, map[uint64][]byte{
+					0: {0x70},
+				})
+				return testSetup{
+					column:    c,
+					group:     c.GroupID(),
+					published: true,
+				}
+			},
+			validatedCells: map[uint64][]byte{
+				1: {0x71},
+			},
+			wrongColumnIndex: true,
+			wantErrContains:  "cell bundle has wrong column index",
+			expectedStoreCol: func(t *testing.T) *blocks.PartialDataColumn {
+				return createPartialColumn(t, 3, map[uint64][]byte{
+					0: {0x70},
+				})
+			},
 		},
 		{
 			name: "duplicate validated cells do not extend and do not publish",
@@ -1291,6 +1563,32 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 				})
 			},
 		},
+		{
+			// The final cell completes the column, so Complete() runs the failing ValidFields check.
+			name:           "complete error is returned when ValidFields fails",
+			validFieldsErr: errors.New("invalid fields"),
+			setup: func(t *testing.T) testSetup {
+				c := createPartialColumn(t, 2, map[uint64][]byte{
+					0: {0x80},
+				})
+				return testSetup{
+					column:    c,
+					group:     c.GroupID(),
+					published: true,
+				}
+			},
+			validatedCells: map[uint64][]byte{
+				1: {0x81},
+			},
+			wantErrContains: "complete partial column verifier",
+			expectedStoreCol: func(t *testing.T) *blocks.PartialDataColumn {
+				// The cell was extended before Complete() failed, so it stays stored.
+				return createPartialColumn(t, 2, map[uint64][]byte{
+					0: {0x80},
+					1: {0x81},
+				})
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1301,8 +1599,12 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 
 			setup := tt.setup(t)
 			if setup.column != nil {
+				verifier := newMarkedVerifier(setup.column)
+				if tt.validFieldsErr != nil {
+					verifier = newMockPartialVerifierWithValidFieldsErr(setup.column, tt.validFieldsErr)
+				}
 				h.broadcaster.partialMsgStore[topic] = map[string]*verification.PartialColumnVerifier{
-					string(setup.group): newMarkedVerifier(setup.column),
+					string(setup.group): verifier,
 				}
 				h.broadcaster.partialMsgStore[topic][string(setup.group)].Column.Published = setup.published
 			}
@@ -1311,7 +1613,11 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 			var cellIndices []uint64
 			var cells []blocks.CellProofBundle
 			if setup.column != nil {
-				cellIndices, cells = buildValidatedCells(setup.column.Index, tt.validatedCells)
+				columnIndex := setup.column.Index
+				if tt.wrongColumnIndex {
+					columnIndex = setup.column.Index + 1
+				}
+				cellIndices, cells = buildValidatedCells(columnIndex, tt.validatedCells)
 			} else {
 				cellIndices, cells = buildValidatedCells(12, tt.validatedCells)
 			}
@@ -1371,6 +1677,7 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 		expectTrustedCall   bool
 		expectedErrContains string
 		publishErr          error
+		trustedColErr       error
 		name                string
 		existingColumn      func(t *testing.T) *blocks.PartialDataColumn
 		publishColumn       func(t *testing.T) *blocks.PartialDataColumn
@@ -1431,6 +1738,16 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 				1: {0xB1},
 			}),
 		},
+		{
+			name:          "column with no KZG commitments is skipped",
+			publishColumn: pc(0, nil),
+		},
+		{
+			name:                "trusted verifier error is aggregated and returned",
+			publishColumn:       column1,
+			trustedColErr:       errors.New("trusted boom"),
+			expectedErrContains: "partial verifier from trusted column",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1440,6 +1757,7 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 
 			ps := newMockPubSub(tt.publishErr, nil)
 			recorder := newCallbackRecorder(1, false, nil, nil)
+			recorder.partialVerifierFromTrustedColErr = tt.trustedColErr
 
 			h := newBroadcasterHarness(t, ps)
 			if tt.existingColumn != nil {
@@ -1462,6 +1780,12 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 			}
 
 			stored := h.broadcaster.getDataColumn(topic, column.GroupID())
+			if tt.expectedStoreColumn == nil {
+				// Column was skipped or never stored (no commitments / verifier error).
+				require.IsNil(t, stored)
+				require.Equal(t, 0, ps.publishedColumnCount())
+				return
+			}
 			expectedStored := tt.expectedStoreColumn(t)
 			assertPartialColumnsEqual(t, expectedStored, stored)
 			ps.assertPartialColumnsPublished(t, topic, []*blocks.PartialDataColumn{expectedStored})
@@ -1607,4 +1931,485 @@ func TestPartialColumnBroadcaster_Unsubscribe(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPartialColumnBroadcaster_reportPeerFeedbackAsync(t *testing.T) {
+	const (
+		topic = "/eth2/abcd1234/data_column_sidecar_3/ssz_snappy"
+		from  = peer.ID("peer-x")
+	)
+
+	tests := []struct {
+		name       string
+		saturate   bool
+		expectCall bool
+	}{
+		{
+			name:       "delivers feedback when semaphore has capacity",
+			expectCall: true,
+		},
+		{
+			name:     "drops feedback when semaphore is saturated",
+			saturate: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ps := newMockPubSub(nil, nil)
+			h := newBroadcasterHarness(t, ps)
+
+			if tt.saturate {
+				for range cap(h.broadcaster.peerFeedbackSemaphore) {
+					h.broadcaster.peerFeedbackSemaphore <- struct{}{}
+				}
+			}
+
+			h.broadcaster.reportPeerFeedbackAsync(topic, from, pubsub.PeerFeedbackInvalidMessage)
+
+			if tt.expectCall {
+				require.Eventually(t, func() bool {
+					return ps.peerFeedbackCallCount() == 1
+				}, 2*time.Second, 5*time.Millisecond)
+				calls := ps.peerFeedbackCallsSnapshot()
+				require.Equal(t, pubsub.PeerFeedbackInvalidMessage, calls[0].kind)
+				require.Equal(t, from, calls[0].peerID)
+				require.Equal(t, topic, calls[0].topic)
+			} else {
+				// The drop path is synchronous, so no feedback is ever sent.
+				require.Equal(t, 0, ps.peerFeedbackCallCount())
+			}
+		})
+	}
+}
+
+func TestPartialColumnBroadcaster_handleHeader(t *testing.T) {
+	const topic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	tests := []struct {
+		name       string
+		saturate   bool
+		expectCall bool
+	}{
+		{
+			name:       "caches header and invokes handler",
+			expectCall: true,
+		},
+		{
+			name:     "caches header but drops handler when saturated",
+			saturate: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ps := newMockPubSub(nil, nil)
+			recorder := newCallbackRecorder(1, false, nil, nil)
+			h := newBroadcasterHarness(t, ps)
+			h.broadcaster.callbacks = recorder
+
+			col := createPartialColumn(t, 2, nil)
+			header := buildHeaderFromColumn(col)
+			rpc := buildIncomingRPC(topic, col.GroupID(), nil, nil)
+
+			if tt.saturate {
+				for range cap(h.broadcaster.concurrentHeaderHandlerSemaphore) {
+					h.broadcaster.concurrentHeaderHandlerSemaphore <- struct{}{}
+				}
+			}
+
+			h.broadcaster.handleHeader(rpc, header)
+
+			// The header is cached synchronously regardless of handler dispatch.
+			cached, ok := h.broadcaster.validHeaderCache[string(col.GroupID())]
+			require.Equal(t, true, ok)
+			require.Equal(t, true, header == cached)
+
+			if tt.expectCall {
+				require.Eventually(t, func() bool {
+					return len(recorder.handleHeaderCallCh) == 1
+				}, 2*time.Second, 5*time.Millisecond)
+				call := <-recorder.handleHeaderCallCh
+				require.Equal(t, string(col.GroupID()), call.groupID)
+				require.DeepEqual(t, header.KzgCommitments, call.header.KzgCommitments)
+			} else {
+				// The drop path is synchronous, so the handler is never invoked.
+				require.Equal(t, 0, len(recorder.handleHeaderCallCh))
+			}
+		})
+	}
+}
+
+func TestPartialColumnBroadcaster_gossip(t *testing.T) {
+	const topic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	tests := []struct {
+		name string
+		// setup primes the broadcaster and returns the group ID to gossip.
+		setup         func(t *testing.T, b *PartialColumnBroadcaster) []byte
+		expectPublish bool
+	}{
+		{
+			name: "unknown topic is a no-op",
+			setup: func(t *testing.T, _ *PartialColumnBroadcaster) []byte {
+				return createPartialColumn(t, 2, nil).GroupID()
+			},
+		},
+		{
+			name: "unknown group is a no-op",
+			setup: func(_ *testing.T, b *PartialColumnBroadcaster) []byte {
+				b.partialMsgStore[topic] = map[string]*verification.PartialColumnVerifier{}
+				return []byte("missing-group")
+			},
+		},
+		{
+			name: "column with no included cells is a no-op",
+			setup: func(t *testing.T, b *PartialColumnBroadcaster) []byte {
+				col := createPartialColumn(t, 2, nil)
+				col.Published = true
+				b.partialMsgStore[topic] = map[string]*verification.PartialColumnVerifier{
+					string(col.GroupID()): newMarkedVerifier(col),
+				}
+				return col.GroupID()
+			},
+		},
+		{
+			name: "unpublished column is a no-op",
+			setup: func(t *testing.T, b *PartialColumnBroadcaster) []byte {
+				col := createPartialColumn(t, 2, map[uint64][]byte{0: {0x10}})
+				col.Published = false
+				b.partialMsgStore[topic] = map[string]*verification.PartialColumnVerifier{
+					string(col.GroupID()): newMarkedVerifier(col),
+				}
+				return col.GroupID()
+			},
+		},
+		{
+			name: "published column with cells is gossiped",
+			setup: func(t *testing.T, b *PartialColumnBroadcaster) []byte {
+				col := createPartialColumn(t, 2, map[uint64][]byte{0: {0x10}})
+				col.Published = true
+				b.partialMsgStore[topic] = map[string]*verification.PartialColumnVerifier{
+					string(col.GroupID()): newMarkedVerifier(col),
+				}
+				return col.GroupID()
+			},
+			expectPublish: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ps := newMockPubSub(nil, nil)
+			h := newBroadcasterHarness(t, ps)
+
+			group := tt.setup(t, h.broadcaster)
+
+			h.broadcaster.gossip(topic, group)
+
+			if tt.expectPublish {
+				ps.assertPartialColumnsPublished(t, topic, []*blocks.PartialDataColumn{
+					h.broadcaster.getDataColumn(topic, group),
+				})
+			} else {
+				require.Equal(t, 0, ps.publishedColumnCount())
+			}
+		})
+	}
+}
+
+// recvResponse blocks until the request's response channel yields, returning the error.
+func recvResponse(t *testing.T, req request) error {
+	t.Helper()
+	var got error
+	received := false
+	require.Eventually(t, func() bool {
+		if received {
+			return true
+		}
+		select {
+		case err := <-req.response:
+			got = err
+			received = true
+			return true
+		default:
+			return false
+		}
+	}, 2*time.Second, 5*time.Millisecond)
+	return got
+}
+
+func TestPartialColumnBroadcaster_loopRequestHandling(t *testing.T) {
+	const topic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	tests := []struct {
+		name            string
+		kind            requestKind
+		reqCtxCancelled bool
+		expectedErr     string
+	}{
+		{
+			name:            "request with cancelled context is skipped",
+			kind:            requestKindPublish,
+			reqCtxCancelled: true,
+			expectedErr:     "context canceled",
+		},
+		{
+			name:        "unknown request kind returns error",
+			kind:        requestKind(255),
+			expectedErr: "unknown request kind",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ps := newMockPubSub(nil, nil)
+			recorder := newCallbackRecorder(1, false, nil, nil)
+			h := newBroadcasterHarness(t, ps)
+
+			reqCtx := context.Background()
+			if tt.reqCtxCancelled {
+				cctx, ccancel := context.WithCancel(context.Background())
+				ccancel()
+				reqCtx = cctx
+			}
+
+			// A publish that would store and publish a column if the loop processed it.
+			col := createPartialColumn(t, 2, map[uint64][]byte{0: {0x10}})
+			req := newRequest(reqCtx, tt.kind, requestValues{
+				publish: publish{
+					topicsAndColumns: func(yield func(string, blocks.PartialDataColumn) bool) {
+						yield(topic, *col)
+					},
+				},
+			})
+			h.broadcaster.incomingReq <- req
+
+			h.start(recorder)
+			defer h.Stop()
+
+			err := recvResponse(t, req)
+			require.ErrorContains(t, tt.expectedErr, err)
+			require.Equal(t, 0, ps.publishedColumnCount())
+		})
+	}
+}
+
+func TestPartialColumnBroadcaster_loopDrainsOnShutdown(t *testing.T) {
+	ps := newMockPubSub(nil, nil)
+	recorder := newCallbackRecorder(1, false, nil, nil)
+	h := newBroadcasterHarness(t, ps)
+	h.broadcaster.callbacks = recorder
+
+	// Enough buffered requests that the shutdown drain is overwhelmingly likely to observe some.
+	const n = 500
+	reqs := make([]request, 0, n)
+	for range n {
+		req := newRequest(context.Background(), requestKindGossip, requestValues{
+			gossip: gossip{topic: "unsubscribed-topic", groupID: []byte("g")},
+		})
+		h.broadcaster.incomingReq <- req
+		reqs = append(reqs, req)
+	}
+
+	// Cancel before starting the loop so buffered requests hit the shutdown drain.
+	h.Stop()
+	go h.broadcaster.loop()
+
+	got := make([]bool, n)
+	errs := make([]error, n)
+	require.Eventually(t, func() bool {
+		for i := range reqs {
+			if got[i] {
+				continue
+			}
+			select {
+			case err := <-reqs[i].response:
+				errs[i] = err
+				got[i] = true
+			default:
+			}
+		}
+		for i := range got {
+			if !got[i] {
+				return false
+			}
+		}
+		return true
+	}, 5*time.Second, 5*time.Millisecond)
+
+	stopped := 0
+	for _, err := range errs {
+		if errors.Is(err, errPartialBroadcasterStopped) {
+			stopped++
+		}
+	}
+	require.Equal(t, true, stopped > 0)
+}
+
+func TestPartialColumnBroadcaster_evictExpiredGroups(t *testing.T) {
+	const topic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	t.Run("decrements positive ttl and keeps state", func(t *testing.T) {
+		ps := newMockPubSub(nil, nil)
+		b := newBroadcasterHarness(t, ps).broadcaster
+		const group = "group-live"
+		b.groupTTL[group] = 2
+		b.validHeaderCache[group] = &ethpb.PartialDataColumnHeader{}
+		b.headerSentCache[group] = map[peer.ID]bool{}
+		b.partialMsgStore[topic] = map[string]*verification.PartialColumnVerifier{
+			group: newMarkedVerifier(createPartialColumn(t, 2, map[uint64][]byte{0: {0x10}})),
+		}
+
+		b.evictExpiredGroups()
+
+		require.Equal(t, int8(1), b.groupTTL[group])
+		_, headerOK := b.validHeaderCache[group]
+		require.Equal(t, true, headerOK)
+		_, sentOK := b.headerSentCache[group]
+		require.Equal(t, true, sentOK)
+		_, storeOK := b.partialMsgStore[topic][group]
+		require.Equal(t, true, storeOK)
+	})
+
+	t.Run("evicts expired group and cleans all caches and empty topic", func(t *testing.T) {
+		ps := newMockPubSub(nil, nil)
+		b := newBroadcasterHarness(t, ps).broadcaster
+		const group = "group-expired"
+		b.groupTTL[group] = 0
+		b.validHeaderCache[group] = &ethpb.PartialDataColumnHeader{}
+		b.headerSentCache[group] = map[peer.ID]bool{}
+		b.partialMsgStore[topic] = map[string]*verification.PartialColumnVerifier{
+			group: newMarkedVerifier(createPartialColumn(t, 2, map[uint64][]byte{0: {0x10}})),
+		}
+
+		b.evictExpiredGroups()
+
+		_, ttlOK := b.groupTTL[group]
+		require.Equal(t, false, ttlOK)
+		_, headerOK := b.validHeaderCache[group]
+		require.Equal(t, false, headerOK)
+		_, sentOK := b.headerSentCache[group]
+		require.Equal(t, false, sentOK)
+		// The topic's only group was removed, so the topic entry is dropped too.
+		_, topicOK := b.partialMsgStore[topic]
+		require.Equal(t, false, topicOK)
+	})
+
+	t.Run("evicting one group leaves other groups on the same topic", func(t *testing.T) {
+		ps := newMockPubSub(nil, nil)
+		b := newBroadcasterHarness(t, ps).broadcaster
+		const live, expired = "group-live", "group-expired"
+		b.groupTTL[live] = 1
+		b.groupTTL[expired] = 0
+		b.partialMsgStore[topic] = map[string]*verification.PartialColumnVerifier{
+			live:    newMarkedVerifier(createPartialColumn(t, 2, map[uint64][]byte{0: {0x10}})),
+			expired: newMarkedVerifier(createPartialColumn(t, 2, map[uint64][]byte{0: {0x20}})),
+		}
+
+		b.evictExpiredGroups()
+
+		_, expiredOK := b.partialMsgStore[topic][expired]
+		require.Equal(t, false, expiredOK)
+		_, liveOK := b.partialMsgStore[topic][live]
+		require.Equal(t, true, liveOK)
+		// The topic remains because the live group is still tracked.
+		_, topicOK := b.partialMsgStore[topic]
+		require.Equal(t, true, topicOK)
+	})
+}
+
+// fillRequestQueue saturates the request channel so enqueue can no longer accept requests.
+func fillRequestQueue(b *PartialColumnBroadcaster) {
+	for range cap(b.incomingReq) {
+		b.incomingReq <- request{}
+	}
+}
+
+func TestPartialColumnBroadcaster_requestEnqueueStopped(t *testing.T) {
+	const topicName = "/eth2/abcd1234/data_column_sidecar_1/ssz_snappy"
+	col := createPartialColumn(t, 2, map[uint64][]byte{0: {0x10}})
+
+	tests := []struct {
+		name string
+		call func(ctx context.Context, b *PartialColumnBroadcaster, topic *pubsub.Topic) error
+	}{
+		{
+			name: "Publish",
+			call: func(ctx context.Context, b *PartialColumnBroadcaster, topic *pubsub.Topic) error {
+				return b.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
+					yield(topic.String(), *col)
+				})
+			},
+		},
+		{
+			name: "Subscribe",
+			call: func(ctx context.Context, b *PartialColumnBroadcaster, topic *pubsub.Topic) error {
+				return b.Subscribe(ctx, topic)
+			},
+		},
+		{
+			name: "Unsubscribe",
+			call: func(ctx context.Context, b *PartialColumnBroadcaster, topic *pubsub.Topic) error {
+				return b.Unsubscribe(ctx, topic.String())
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ps := newMockPubSub(nil, nil)
+			h := newBroadcasterHarness(t, ps)
+			topic := newTestTopic(t, topicName)
+
+			// With a full queue and a stopped broadcaster, p.ctx.Done() is enqueue's only ready case.
+			fillRequestQueue(h.broadcaster)
+			h.Stop()
+
+			err := tt.call(context.Background(), h.broadcaster, topic)
+			require.ErrorIs(t, err, errPartialBroadcasterStopped)
+		})
+	}
+}
+
+// Verifies AppendPubSubOpts wires the peer feedback and partial publish hooks at pubsub construction.
+func TestPartialColumnBroadcaster_AppendPubSubOpts(t *testing.T) {
+	host, err := libp2p.New(libp2p.NoListenAddrs)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = host.Close() })
+
+	b := NewBroadcaster(t.Context(), logrus.New())
+	opts := b.AppendPubSubOpts(nil)
+	require.Equal(t, 2, len(opts))
+
+	_, err = pubsub.NewGossipSub(t.Context(), host, opts...)
+	require.NoError(t, err)
+	require.NotNil(t, b.peerFeedback)
+	require.NotNil(t, b.publishPartialCol)
+}
+
+func TestPartialColumnBroadcaster_Publish_pubsubNotInitialized(t *testing.T) {
+	ps := newMockPubSub(nil, nil)
+	h := newBroadcasterHarness(t, ps)
+	h.broadcaster.publishPartialCol = nil
+
+	err := h.broadcaster.Publish(context.Background(), func(_ func(string, blocks.PartialDataColumn) bool) {})
+	require.ErrorContains(t, "pubsub not initialized", err)
+}
+
+// Verifies republishColumn surfaces a PartsMetadata() marshal failure.
+func TestPartialColumnBroadcaster_republishColumn_partsMetadataError(t *testing.T) {
+	const validTopic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	ps := newMockPubSub(nil, nil)
+	h := newBroadcasterHarness(t, ps)
+
+	// 40000 commitments -> Available bitlist of 5001 bytes, exceeding the 4096-byte cap.
+	col := createPartialColumn(t, 40000, nil)
+	col.Published = true
+	rpc := buildIncomingRPC(validTopic, col.GroupID(), nil, nil)
+
+	err := h.broadcaster.republishColumn(col, rpc, false)
+	require.ErrorContains(t, "parts metadata", err)
+	require.Equal(t, 0, ps.publishedColumnCount())
 }

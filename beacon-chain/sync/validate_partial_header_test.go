@@ -73,7 +73,7 @@ func TestService_PartialVerifierFromTrustedColumn(t *testing.T) {
 				newColumnsVerifier: testNewColumnsVerifier(tc.verifier),
 			}
 			got, err := service.partialVerifierFromTrustedColumn(ctx, tc.col)
-			require.ErrorIs(t, tc.wantErr, err)
+			require.ErrorIs(t, err, tc.wantErr)
 			require.Equal(t, tc.expectResult, got != nil)
 			if tc.verify != nil {
 				tc.verify(t, got)
@@ -242,7 +242,7 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 				service.cfg = &config{chain: tc.chain}
 			}
 			got, result, err := service.validatePartialDataColumnHeader(ctx, tc.col)
-			require.ErrorIs(t, tc.wantErr, err)
+			require.ErrorIs(t, err, tc.wantErr)
 			require.Equal(t, tc.wantResult, result)
 			require.Equal(t, tc.expectResult, got != nil)
 		})

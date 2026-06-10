@@ -322,8 +322,8 @@ func (s *Service) Start() {
 	go s.processDataColumnLogs()
 
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
-	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, _ peer.ID) error {
-		// no-op
+	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, id peer.ID) error {
+		s.rateLimiter.removePeer(id)
 		return nil
 	})
 	s.cfg.p2p.AddPingMethod(s.sendPingRequest)
