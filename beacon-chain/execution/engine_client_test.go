@@ -1773,20 +1773,6 @@ func fixturesStruct() *payloadFixtures {
 		Transactions: [][]byte{foo[:]},
 		Withdrawals:  []*pb.Withdrawal{},
 	}
-	consolidationRequests := make([]pb.ConsolidationRequestV1, 1)
-	for i := range consolidationRequests {
-		address := &common.Address{}
-		address.SetBytes([]byte{0, 0, byte(i)})
-		sPubkey := pb.BlsPubkey{}
-		copy(sPubkey[:], []byte{0, byte(i)})
-		tPubkey := pb.BlsPubkey{}
-		copy(tPubkey[:], []byte{0, byte(i)})
-		consolidationRequests[i] = pb.ConsolidationRequestV1{
-			SourceAddress: address,
-			SourcePubkey:  &sPubkey,
-			TargetPubkey:  &tPubkey,
-		}
-	}
 	hexUint := hexutil.Uint64(1)
 	executionPayloadWithValueFixtureCapella := &pb.GetPayloadV2ResponseJson{
 		ExecutionPayload: &pb.ExecutionPayloadCapellaJSON{
