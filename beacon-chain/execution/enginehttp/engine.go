@@ -15,6 +15,7 @@ package enginehttp
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	enginev2 "github.com/OffchainLabs/prysm/v7/proto/engine/v2"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
@@ -115,24 +116,16 @@ func (c *Client) Capabilities(ctx context.Context) (*Capabilities, error) {
 	return &caps, nil
 }
 
-// Identity is the JSON body of GET /engine/v2/identity.
-//
-// TODO(ssz-over-http): complete the client-version schema; see
-// docs/fixtures/*-identity.json.
-type Identity struct {
-	Code    string `json:"code"`
-	Name    string `json:"name"`
-	Version string `json:"version"`
-	Commit  string `json:"commit"`
-}
-
-// Identity fetches the EL client version (replaces engine_getClientVersionV1;
-// Prysm also sends its own version via the X-Engine-Client-Version header).
-// GET /engine/v2/identity (JSON).
-//
-// TODO(ssz-over-http): JSONGet into Identity and adapt to []*structs.ClientVersionV1.
-func (c *Client) Identity(ctx context.Context) (*Identity, error) {
-	return nil, errNotImplemented("Identity")
+// Identity fetches the EL client versions (replaces engine_getClientVersionV1).
+// GET /engine/v2/identity (JSON array). Prysm identifies itself via the
+// X-Engine-Client-Version header sent on every request, so this is a one-way
+// GET with no body — the mutual-exchange handshake is gone.
+func (c *Client) Identity(ctx context.Context) ([]*structs.ClientVersionV1, error) {
+	var versions []*structs.ClientVersionV1
+	if err := c.JSONGet(ctx, "/identity", &versions); err != nil {
+		return nil, err
+	}
+	return versions, nil
 }
 
 // errNotImplemented marks an unimplemented v2 endpoint operation (Phase 4).

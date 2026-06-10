@@ -58,6 +58,9 @@ func (e *sszEngine) ExchangeCapabilities(ctx context.Context) ([]string, error) 
 	return e.caps.SupportedForks, nil
 }
 
+// GetClientVersionV1 fetches the EL client versions over GET /engine/v2/identity
+// (replaces engine_getClientVersionV1). Prysm's own version travels in the
+// X-Engine-Client-Version header on every request, so there is no handshake.
 func (e *sszEngine) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error) {
-	return nil, sszNotImplemented("GetClientVersionV1")
+	return e.client.Identity(ctx)
 }

@@ -102,9 +102,27 @@ func TestCapabilities_NotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, apiErr.Status)
 }
 
+// identityBody mirrors docs/fixtures/ethrex-identity.json.
+const identityBody = `[{"code":"EX","name":"ethrex","version":"v15.0.0","commit":"30e847af"}]`
+
 func TestIdentity(t *testing.T) {
-	t.Skip("TODO(ssz-over-http): implement Client.Identity — GET /engine/v2/identity (JSON)")
-	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {})
-	_, err := c.Identity(context.Background())
+	var gotPath, gotAccept, gotCV string
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotAccept = r.Header.Get("Accept")
+		gotCV = r.Header.Get(clientVersionHeader)
+		w.Header().Set("Content-Type", contentTypeJSON)
+		_, _ = w.Write([]byte(identityBody))
+	})
+
+	versions, err := c.Identity(context.Background())
 	require.NoError(t, err)
+	require.Equal(t, 1, len(versions))
+	assert.Equal(t, "/engine/v2/identity", gotPath)
+	assert.Equal(t, contentTypeJSON, gotAccept)
+	assert.Equal(t, "Prysm/test", gotCV) // CL identifies itself via the header
+	assert.Equal(t, "EX", versions[0].Code)
+	assert.Equal(t, "ethrex", versions[0].Name)
+	assert.Equal(t, "v15.0.0", versions[0].Version)
+	assert.Equal(t, "30e847af", versions[0].Commit)
 }
