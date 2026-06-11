@@ -1056,6 +1056,11 @@ func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Con
 	}
 	if requests.Count() == 0 {
 		// EL has all blobs; GetBlobsV3 will succeed immediately, no need for an early publish.
+		log.WithFields(logrus.Fields{
+			"blockRoot":   fmt.Sprintf("%#x", root),
+			"slot":        populator.Slot(),
+			"commitments": len(commitments),
+		}).Debug("Execution client has all blobs, skipping header-only partial column construction")
 		return nil, true, nil
 	}
 
@@ -1064,16 +1069,20 @@ func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Con
 	if err != nil {
 		return nil, true, wrapWithBlockRoot(err, root, "construct partial columns from has blobs")
 	}
-	// The requests override reflects the EL's blob pool at this instant. The
-	// subscriber clears it once GetBlobsV3 has answered (either by publishing
-	// cell-bearing partial columns or by an explicit clearing republish), so a
-	// pool that shrinks after this call cannot leave us under-requesting from
-	// peers indefinitely.
+
 	for i := range partialColumns {
 		if err := partialColumns[i].SetPartsRequests(requests); err != nil {
 			return nil, true, wrapWithBlockRoot(err, root, "set parts requests")
 		}
 	}
+	log.WithFields(logrus.Fields{
+		"blockRoot":      fmt.Sprintf("%#x", root),
+		"slot":           populator.Slot(),
+		"commitments":    len(commitments),
+		"missingBlobs":   requests.Count(),
+		"missingIndices": requests.BitIndices(),
+		"partialColumns": len(partialColumns),
+	}).Debug("Constructed header-only partial data column sidecars requesting missing blobs")
 	return partialColumns, true, nil
 }
 
@@ -1125,7 +1134,13 @@ func (s *Service) useGetBlobsV3() bool {
 }
 
 func (s *Service) useHasBlobs() bool {
-	return s.useGetBlobsV3() && s.capabilityCache.has(HasBlobs)
+	supported := s.useGetBlobsV3() && s.capabilityCache.has(HasBlobs)
+	if supported {
+		s.hasBlobsLogOnce.Do(func() {
+			log.WithField("method", HasBlobs).Info("Execution client supports blob availability checks, missing blobs will be requested via partial columns")
+		})
+	}
+	return supported
 }
 
 // PartialColumnsSupported reports whether cell-level (partial) column dissemination is enabled.

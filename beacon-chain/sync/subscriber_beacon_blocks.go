@@ -230,9 +230,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 		isPartialEnabled := s.cfg.p2p.PartialColumnBroadcaster() != nil
 
 		var constructedSidecarCount uint64
-		// Header-only columns published from the EL's HasBlobs response on the
-		// first iteration; retained so their requests override can be cleared
-		// once GetBlobsV3 has answered.
+
 		var hasBlobsColumns []blocks.PartialDataColumn
 		for iteration := uint64(0); ; /*no stop condition*/ iteration++ {
 			log = log.WithField("iteration", iteration)
@@ -254,7 +252,10 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			if iteration == 0 {
 				dataColumnsRecoveredFromELAttempts.Inc()
 				if isPartialEnabled {
-					hasBlobsColumns = s.publishHasBlobsPartialColumns(ctx, source, columnIndicesToSample)
+					hasBlobsColumns, err = s.publishHasBlobsPartialColumns(ctx, source, columnIndicesToSample)
+					if err != nil {
+						log.WithError(err).WithField("hasBlobsColumns", len(hasBlobsColumns)).Error("Failed to publish HasBlobs partial columns")
+					}
 					if ctx.Err() != nil {
 						return nil, ctx.Err()
 					}
@@ -275,11 +276,16 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				// should publish to help our peers.
 				if err := s.publishPartialColumns(ctx, columnIndicesToSample, partialColumns); err != nil {
 					log.WithError(err).Error("Failed to publish partial columns")
+				} else {
+					log.WithFields(logrus.Fields{
+						"count":                      count,
+						"supersedesHasBlobsRequests": len(hasBlobsColumns) > 0,
+					}).Debug("Published partial data column sidecars from the execution client")
 				}
 				// These columns carry no requests override, so publishing them already
 				// cleared any HasBlobs-derived override on the broadcaster side.
 				hasBlobsColumns = nil
-			} else if len(hasBlobsColumns) > 0 {
+			} else if isPartialEnabled && len(hasBlobsColumns) > 0 {
 				// GetBlobsV3 answered but yielded no partial columns (the EL returned
 				// no blobs). The HasBlobs-derived requests override may now be stale
 				// and would under-request cells from peers, so republish the
@@ -289,7 +295,9 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 					hasBlobsColumns[i].ClearPartsRequests()
 				}
 				if err := s.publishPartialColumns(ctx, columnIndicesToSample, hasBlobsColumns); err != nil {
-					log.WithError(err).Warn("Failed to clear HasBlobs parts requests")
+					log.WithError(err).Error("Failed to publish partial columns after clearing HasBlobs parts requests")
+				} else {
+					log.WithField("count", len(hasBlobsColumns)).Debug("Republished header-only partial columns with HasBlobs parts requests cleared")
 				}
 				hasBlobsColumns = nil
 			}
@@ -335,37 +343,33 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 	return nil
 }
 
-// publishHasBlobsPartialColumns asks the execution client which blobs it is
-// missing (engine_hasBlobs) and eagerly publishes header-only partial columns
-// whose parts metadata requests exactly those blobs, ahead of the GetBlobsV3
-// fetch. It returns the published columns so the caller can clear the requests
-// override once GetBlobsV3 has answered, or nil if nothing was published.
-// Best effort: failures are logged, not returned.
-func (s *Service) publishHasBlobsPartialColumns(ctx context.Context, source peerdas.ConstructionPopulator, indices map[uint64]bool) []blocks.PartialDataColumn {
-	log := log.WithFields(logrus.Fields{
-		"root": fmt.Sprintf("%#x", source.Root()),
-		"slot": source.Slot(),
-	})
-
+func (s *Service) publishHasBlobsPartialColumns(ctx context.Context, source peerdas.ConstructionPopulator, indices map[uint64]bool) ([]blocks.PartialDataColumn, error) {
 	partialColumns, supported, err := s.cfg.executionReconstructor.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
 	if err != nil {
-		log.WithError(err).Warn("Failed to construct partial columns from HasBlobs")
-		return nil
+		return nil, errors.Wrap(err, "construct partial data column sidecars from has blobs")
 	}
 	if !supported || len(partialColumns) == 0 {
-		return nil
+		return nil, nil
 	}
 
-	log.WithField("count", len(partialColumns)).Debug("Publishing HasBlobs partial columns")
-	if err := s.publishPartialColumns(ctx, indices, partialColumns); err != nil {
-		log.WithError(err).Warn("Failed to publish HasBlobs partial columns")
+	var requestedBlobs []int
+	if requests, ok := partialColumns[0].PartsRequests(); ok {
+		requestedBlobs = requests.BitIndices()
 	}
-	return partialColumns
+
+	if err := s.publishPartialColumns(ctx, indices, partialColumns); err != nil {
+		return partialColumns, errors.Wrap(err, "publish partial columns")
+	}
+
+	log.WithFields(logrus.Fields{
+		"root":           fmt.Sprintf("%#x", source.Root()),
+		"slot":           source.Slot(),
+		"count":          len(partialColumns),
+		"requestedBlobs": requestedBlobs,
+	}).Debug("Published header-only HasBlobs partial columns ahead of GetBlobsV3")
+	return partialColumns, nil
 }
 
-// publishPartialColumns publishes the partial columns whose index is in indices
-// to their data column subnet topics via the partial column broadcaster. It is
-// a no-op if the broadcaster is disabled.
 func (s *Service) publishPartialColumns(ctx context.Context, indices map[uint64]bool, partialColumns []blocks.PartialDataColumn) error {
 	partialBroadcaster := s.cfg.p2p.PartialColumnBroadcaster()
 	if partialBroadcaster == nil || len(partialColumns) == 0 {

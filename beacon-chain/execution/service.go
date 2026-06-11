@@ -144,6 +144,7 @@ type Service struct {
 	connectedETH1           bool
 	isRunning               bool
 	depositRequestsStarted  bool
+	hasBlobsLogOnce         sync.Once
 	processingLock          sync.RWMutex
 	latestEth1DataLock      sync.RWMutex
 	cfg                     *config
