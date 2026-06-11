@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -319,7 +320,7 @@ func (j jsonEngine) GetPayload(ctx context.Context, payloadId [8]byte, slot prim
 	return res, nil
 }
 
-func (j jsonEngine) ExchangeCapabilities(ctx context.Context) ([]string, error) {
+func (j jsonEngine) ExchangeCapabilities(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExchangeCapabilities")
 	defer span.End()
 
@@ -337,7 +338,7 @@ func (j jsonEngine) ExchangeCapabilities(ctx context.Context) ([]string, error) 
 
 	elSupportedEndpointsSlice := make([]string, len(supportedEngineEndpoints))
 	if err := j.rpc.CallContext(ctx, &elSupportedEndpointsSlice, ExchangeCapabilities, supportedEngineEndpoints); err != nil {
-		return nil, handleRPCError(err)
+		return handleRPCError(err)
 	}
 
 	elSupportedEndpoints := make(map[string]bool, len(elSupportedEndpointsSlice))
@@ -356,7 +357,10 @@ func (j jsonEngine) ExchangeCapabilities(ctx context.Context) ([]string, error) 
 		log.WithField("methods", unsupported).Warning("Connected execution client does not support some requested engine methods")
 	}
 
-	return elSupportedEndpointsSlice, nil
+	// Cache the supported endpoints.
+	j.caps.save(elSupportedEndpointsSlice)
+
+	return nil
 }
 
 // GetBlobs returns the blob and proof from the execution engine for the given versioned hashes.
@@ -430,4 +434,34 @@ func (j jsonEngine) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVe
 	}
 
 	return result, nil
+}
+
+type capabilityCache struct {
+	capabilities     map[string]any
+	capabilitiesLock sync.RWMutex
+}
+
+func (c *capabilityCache) save(cs []string) {
+	c.capabilitiesLock.Lock()
+	defer c.capabilitiesLock.Unlock()
+
+	if c.capabilities == nil {
+		c.capabilities = make(map[string]any)
+	}
+
+	for _, capability := range cs {
+		c.capabilities[capability] = struct{}{}
+	}
+}
+
+func (c *capabilityCache) has(capability string) bool {
+	c.capabilitiesLock.RLock()
+	defer c.capabilitiesLock.RUnlock()
+
+	if c.capabilities == nil {
+		return false
+	}
+
+	_, ok := c.capabilities[capability]
+	return ok
 }

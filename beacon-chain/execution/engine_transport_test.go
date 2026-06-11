@@ -46,7 +46,7 @@ func TestSelectEngineTransport_FlagOff(t *testing.T) {
 	s.selectEngineTransport(context.Background(), bearerEndpoint(srv.URL))
 
 	require.IsNil(t, s.sszTransport)
-	_, ok := s.engine().(jsonEngine)
+	_, ok := s.engine().(*jsonEngine)
 	assert.Equal(t, true, ok)
 }
 
@@ -80,6 +80,6 @@ func TestSelectEngineTransport_Fallback(t *testing.T) {
 	s.selectEngineTransport(context.Background(), bearerEndpoint(srv.URL))
 
 	require.IsNil(t, s.sszTransport)
-	_, ok := s.engine().(jsonEngine)
+	_, ok := s.engine().(*jsonEngine)
 	assert.Equal(t, true, ok)
 }

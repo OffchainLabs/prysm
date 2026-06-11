@@ -140,18 +140,22 @@ type config struct {
 // Validator Registration Contract on the eth1 chain to kick off the beacon
 // chain's validator registration process.
 type Service struct {
-	connectedETH1           bool
-	isRunning               bool
-	depositRequestsStarted  bool
-	processingLock          sync.RWMutex
-	latestEth1DataLock      sync.RWMutex
-	cfg                     *config
-	ctx                     context.Context
-	cancel                  context.CancelFunc
-	eth1HeadTicker          *time.Ticker
-	httpLogger              bind.ContractFilterer
-	rpcClient               RPCClient
-	sszTransport            *sszEngine   // non-nil when the engine API is driven over SSZ-over-HTTP for this connection.
+	connectedETH1          bool
+	isRunning              bool
+	depositRequestsStarted bool
+	processingLock         sync.RWMutex
+	latestEth1DataLock     sync.RWMutex
+	cfg                    *config
+	ctx                    context.Context
+	cancel                 context.CancelFunc
+	eth1HeadTicker         *time.Ticker
+	httpLogger             bind.ContractFilterer
+	rpcClient              RPCClient
+
+	// Engine Transports.
+	sszTransport  *sszEngine // non-nil when the engine API is driven over SSZ-over-HTTP for this connection.
+	jsonTransport *jsonEngine
+
 	headerCache             *headerCache // cache to store block hash/block height.
 	latestEth1Data          *ethpb.LatestETH1Data
 	depositContractCaller   *contracts.DepositContractCaller
@@ -162,7 +166,6 @@ type Service struct {
 	preGenesisState         state.BeaconState
 	verifierWaiter          *verification.InitializerWaiter
 	blobVerifier            verification.NewBlobVerifier
-	capabilityCache         *capabilityCache
 	graffitiInfo            *GraffitiInfo
 }
 
@@ -201,7 +204,6 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		lastReceivedMerkleIndex: -1,
 		preGenesisState:         genState,
 		eth1HeadTicker:          time.NewTicker(time.Duration(params.BeaconConfig().SecondsPerETH1Block) * time.Second),
-		capabilityCache:         &capabilityCache{},
 	}
 
 	for _, opt := range opts {
@@ -951,34 +953,4 @@ func newBlobVerifierFromInitializer(ini *verification.Initializer) verification.
 	return func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
 		return ini.NewBlobVerifier(b, reqs)
 	}
-}
-
-type capabilityCache struct {
-	capabilities     map[string]any
-	capabilitiesLock sync.RWMutex
-}
-
-func (c *capabilityCache) save(cs []string) {
-	c.capabilitiesLock.Lock()
-	defer c.capabilitiesLock.Unlock()
-
-	if c.capabilities == nil {
-		c.capabilities = make(map[string]any)
-	}
-
-	for _, capability := range cs {
-		c.capabilities[capability] = struct{}{}
-	}
-}
-
-func (c *capabilityCache) has(capability string) bool {
-	c.capabilitiesLock.RLock()
-	defer c.capabilitiesLock.RUnlock()
-
-	if c.capabilities == nil {
-		return false
-	}
-
-	_, ok := c.capabilities[capability]
-	return ok
 }

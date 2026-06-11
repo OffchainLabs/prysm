@@ -14,6 +14,7 @@ import (
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/sirupsen/logrus"
 )
 
 // engineTransport abstracts the wire transport for the engine namespace so the
@@ -29,18 +30,23 @@ type engineTransport interface {
 	GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error)
 	GetBlobs(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProof, error)
 	GetBlobsV2(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error)
-	ExchangeCapabilities(ctx context.Context) ([]string, error)
+	ExchangeCapabilities(ctx context.Context) error
 	GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error)
 }
 
 // engine returns the engine transport selected for the current connection.
 // JSON-RPC is the default; selectEngineTransport sets sszTransport when the
 // feature flag is on and the execution client serves the v2 (REST+SSZ) surface.
+// The jsonEngine is built once per connection and cached so it owns a stable
+// capability cache across calls (selectEngineTransport clears it on reconnect).
 func (s *Service) engine() engineTransport {
 	if s.sszTransport != nil {
 		return s.sszTransport
 	}
-	return jsonEngine{rpc: s.rpcClient, caps: s.capabilityCache}
+	if s.jsonTransport == nil {
+		s.jsonTransport = &jsonEngine{rpc: s.rpcClient, caps: &capabilityCache{}}
+	}
+	return s.jsonTransport
 }
 
 // selectEngineTransport decides whether to drive the engine API over
@@ -50,10 +56,14 @@ func (s *Service) engine() engineTransport {
 // error) it falls back to JSON-RPC for the connection's lifetime — per spec
 // there is no per-method fallback ladder. Called on every (re)connection.
 func (s *Service) selectEngineTransport(ctx context.Context, endpoint network.Endpoint) {
+	// Reset the transport.
 	s.sszTransport = nil
+	s.jsonTransport = nil
+
 	if !features.Get().EnableEngineSSZHTTP {
 		return
 	}
+
 	client, err := enginehttp.New(enginehttp.Config{
 		BaseURL:       endpoint.Url,
 		JWTSecret:     []byte(endpoint.Auth.Value),
@@ -64,13 +74,21 @@ func (s *Service) selectEngineTransport(ctx context.Context, endpoint network.En
 		log.WithError(err).Warn("SSZ-over-HTTP engine transport unavailable; using JSON-RPC")
 		return
 	}
+
 	caps, err := client.Capabilities(ctx)
 	if err != nil {
 		log.WithError(err).Info("Execution client has no engine v2 (REST+SSZ) surface; using JSON-RPC")
 		return
 	}
+
 	s.sszTransport = &sszEngine{client: client, caps: caps}
-	log.WithField("supportedForks", caps.SupportedForks).Info("Using SSZ-over-HTTP engine transport")
+
+	log.WithFields(logrus.Fields{
+		"supportedForks":         caps.SupportedForks,
+		"forkScopedEndpoints":    caps.ForkScopedEndpoints,
+		"independentlyVersioned": caps.IndependentlyVersioned,
+		"unscopedEndpoints":      caps.UnscopedEndpoints,
+	}).Info("Using SSZ-over-HTTP engine transport")
 }
 
 // Public EngineCaller-facing entry points. Each dispatches to the selected
@@ -97,7 +115,7 @@ func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash)
 	return s.engine().GetBlobsV2(ctx, versionedHashes)
 }
 
-func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
+func (s *Service) ExchangeCapabilities(ctx context.Context) error {
 	return s.engine().ExchangeCapabilities(ctx)
 }
 

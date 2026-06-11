@@ -2529,13 +2529,8 @@ func Test_ExchangeCapabilities(t *testing.T) {
 		service := &Service{}
 		service.rpcClient = rpcClient
 
-		results, err := service.ExchangeCapabilities(ctx)
-		require.NoError(t, err)
-		require.Equal(t, 0, len(results))
-
-		for _, item := range results {
-			require.NotNil(t, item)
-		}
+		require.NoError(t, service.ExchangeCapabilities(ctx))
+		require.Equal(t, 0, len(service.jsonTransport.caps.capabilities))
 		assert.LogsContain(t, logHook, "Connected execution client does not support some requested engine methods")
 	})
 	t.Run("list of items", func(t *testing.T) {
@@ -2561,13 +2556,10 @@ func Test_ExchangeCapabilities(t *testing.T) {
 		service := &Service{}
 		service.rpcClient = rpcClient
 
-		results, err := service.ExchangeCapabilities(ctx)
-		require.NoError(t, err)
-		require.Equal(t, 3, len(results))
-
-		for _, item := range results {
-			require.NotNil(t, item)
-		}
+		require.NoError(t, service.ExchangeCapabilities(ctx))
+		require.Equal(t, true, service.jsonTransport.caps.has("A"))
+		require.Equal(t, true, service.jsonTransport.caps.has("B"))
+		require.Equal(t, true, service.jsonTransport.caps.has("C"))
 	})
 }
 
@@ -2578,7 +2570,7 @@ func mockSummary(t *testing.T, exists []bool) func(uint64) bool {
 }
 
 func TestReconstructBlobSidecars(t *testing.T) {
-	client := &Service{capabilityCache: &capabilityCache{}}
+	client := &Service{}
 	b := util.NewBeaconBlockDeneb()
 	kzgCommitments := createRandomKzgCommitments(t, 6)
 
@@ -2603,7 +2595,7 @@ func TestReconstructBlobSidecars(t *testing.T) {
 		require.Equal(t, 0, len(verifiedBlobs))
 	})
 
-	client.capabilityCache = &capabilityCache{capabilities: map[string]any{GetBlobsV1: nil}}
+	client.jsonTransport = &jsonEngine{caps: &capabilityCache{capabilities: map[string]any{GetBlobsV1: nil}}}
 
 	t.Run("recovered 6 missing blobs", func(t *testing.T) {
 		srv := createBlobServer(t, 6)
@@ -2665,7 +2657,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 	cfg.FuluForkEpoch = 4
 	params.OverrideBeaconConfig(cfg)
 
-	client := &Service{capabilityCache: &capabilityCache{}}
+	client := &Service{}
 	b := util.NewBeaconBlockFulu()
 	b.Block.Slot = 4 * params.BeaconConfig().SlotsPerEpoch
 	kzgCommitments := createRandomKzgCommitments(t, 6)
@@ -2799,7 +2791,7 @@ func setupRpcClient(t *testing.T, url string, client *Service) (*rpc.Client, *Se
 	require.NoError(t, err)
 
 	client.rpcClient = rpcClient
-	client.capabilityCache = &capabilityCache{capabilities: map[string]any{GetBlobsV1: nil}}
+	client.jsonTransport = &jsonEngine{rpc: rpcClient, caps: &capabilityCache{capabilities: map[string]any{GetBlobsV1: nil}}}
 	client.blobVerifier = testNewBlobVerifier()
 
 	return rpcClient, client
@@ -2807,7 +2799,7 @@ func setupRpcClient(t *testing.T, url string, client *Service) (*rpc.Client, *Se
 
 func setupRpcClientV2(t *testing.T, url string, client *Service) (*rpc.Client, *Service) {
 	rpcClient, client := setupRpcClient(t, url, client)
-	client.capabilityCache = &capabilityCache{capabilities: map[string]any{GetBlobsV2: nil}}
+	client.jsonTransport = &jsonEngine{rpc: rpcClient, caps: &capabilityCache{capabilities: map[string]any{GetBlobsV2: nil}}}
 	return rpcClient, client
 }
 

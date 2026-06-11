@@ -46,6 +46,7 @@ func (s *Service) setupExecutionClientConnections(ctx context.Context, currEndpo
 		return errors.Wrap(err, errStr)
 	}
 	s.updateConnectedETH1(true)
+
 	// Decide JSON-RPC vs SSZ-over-HTTP for the engine API on this connection.
 	s.selectEngineTransport(ctx, currEndpoint)
 	s.runError = nil
@@ -81,11 +82,9 @@ func (s *Service) pollConnectionStatus(ctx context.Context) {
 			}
 			log.WithField("endpoint", logs.MaskCredentialsLogging(s.cfg.currHttpEndpoint.Url)).Info("Connected to new endpoint")
 
-			c, err := s.ExchangeCapabilities(ctx)
-			if err != nil {
+			if err := s.ExchangeCapabilities(ctx); err != nil {
 				errorLogger(err, "Could not exchange capabilities with execution client")
 			}
-			s.capabilityCache.save(c)
 
 			return
 		case <-s.ctx.Done():

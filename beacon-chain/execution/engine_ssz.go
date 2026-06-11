@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/enginehttp"
@@ -26,7 +27,9 @@ import (
 // land one group per PR (Phase 4) and until then return sszNotImplemented.
 type sszEngine struct {
 	client *enginehttp.Client
-	caps   *enginehttp.Capabilities // captured by the connection-setup probe.
+
+	capsLock sync.RWMutex
+	caps     *enginehttp.Capabilities
 }
 
 func sszNotImplemented(op string) error {
@@ -329,15 +332,19 @@ func (e *sszEngine) GetBlobsV2(ctx context.Context, versionedHashes []common.Has
 	return nil, sszNotImplemented("GetBlobsV2")
 }
 
-// ExchangeCapabilities returns the supported_forks captured by the setup probe
-// (no second round-trip). TODO(ssz-over-http): translate the v2 capability
-// shape (independently_versioned, fork_scoped_endpoints) into the engine
-// method-name semantics the capabilityCache expects.
-func (e *sszEngine) ExchangeCapabilities(ctx context.Context) ([]string, error) {
-	if e.caps == nil {
-		return nil, nil
+// ExchangeCapabilities probes the EL's v2 capabilities over GET /engine/v2/capabilities
+// and saves them in the engine's capability.
+func (e *sszEngine) ExchangeCapabilities(ctx context.Context) error {
+	e.capsLock.Lock()
+	defer e.capsLock.Unlock()
+
+	caps, err := e.client.Capabilities(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to exchange capabilities with execution client")
 	}
-	return e.caps.SupportedForks, nil
+
+	e.caps = caps
+	return nil
 }
 
 // GetClientVersionV1 fetches the EL client versions over GET /engine/v2/identity
