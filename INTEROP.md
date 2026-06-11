@@ -9,9 +9,9 @@ This README details how to setup Prysm for interop testing for usage with other 
 
 ## Installation & Setup
 
-1. Install [Bazel](https://bazel.build/install) **(Recommended)**
+1. Install [Go](https://go.dev/dl/) (see the `go` directive in `go.mod` for the version) and a C toolchain (cgo is required for blst).
 2. `git clone https://github.com/OffchainLabs/prysm && cd prysm`
-3. `bazel build //cmd/...`
+3. `make build` (binaries are written to `dist/`)
 
 ## Starting from Genesis
 
@@ -31,7 +31,7 @@ You can use `prysmctl` to create a deterministic genesis state for interop.
 curl https://raw.githubusercontent.com/ethereum/consensus-specs/refs/heads/dev/configs/minimal.yaml -o /tmp/minimal.yaml
 
 # Run prysmctl to generate genesis with a 2 minute genesis delay and 256 validators. 
-bazel run //cmd/prysmctl --config=minimal -- \
+go run -tags=minimal ./cmd/prysmctl \
   testnet generate-genesis \
   --genesis-time-delay=120 \
   --num-validators=256 \
@@ -40,9 +40,8 @@ bazel run //cmd/prysmctl --config=minimal -- \
 ```
 
 The flags are explained below:
-- `bazel run //cmd/prysmctl` is the bazel command to compile and run prysmctl.
-- `--config=minimal` is a bazel build time configuration flag to compile Prysm with minimal state constants.
-- `--` is an argument divider to tell bazel that everything after this divider should be passed as arguments to prysmctl. Without this divider, it isn't clear to bazel if the arguments are meant to be build time arguments or runtime arguments so the operation complains and fails to build without this divider.
+- `go run ./cmd/prysmctl` compiles and runs prysmctl.
+- `-tags=minimal` is the Go build tag that compiles Prysm with minimal state constants.
 - `testnet` is the primary command argument for prysmctl.
 - `generate-genesis` is the subcommand to `testnet` in prysmctl.
 - `--genesis-time-delay` uint: The number of seconds in the future to define genesis. Example: a value of 60 will set the genesis time to 1 minute in the future. This should be sufficiently large enough to allow for you to start the beacon node before the genesis time. 
@@ -60,7 +59,7 @@ restarted. Consider tweaking the arguments if persistence is needed.
 Open up two terminal windows, run:
 
 ```
-bazel run //cmd/beacon-chain --config=minimal -- \
+go run -tags=minimal ./cmd/beacon-chain \
   --minimal-config \
   --bootstrap-node= \
   --deposit-contract 0x8A04d14125D0FDCDc742F4A05C051De07232EDa4 \
@@ -73,9 +72,8 @@ bazel run //cmd/beacon-chain --config=minimal -- \
 
 This will start the system with 256 validators. The flags used can be explained as such:
 
-- `bazel run //cmd/beacon-chain --config=minimal` builds and runs the beacon node in minimal build configuration.
-- `--` is a flag divider to distinguish between bazel flags and flags that should be passed to the application. All flags and arguments after this divider are passed to the beacon chain.
-- `--minimal-config` tells the beacon node to use minimal network configuration. This is different from the compile time state configuration flag `--config=minimal` and both are required.
+- `go run -tags=minimal ./cmd/beacon-chain` builds and runs the beacon node with minimal state constants.
+- `--minimal-config` tells the beacon node to use minimal network configuration. This is different from the compile-time state configuration build tag `-tags=minimal` and both are required.
 - `--bootstrap-node=` disables the default bootstrap nodes. This prevents the client from attempting to peer with mainnet nodes.
 - `--datadir=/tmp/beacon-chain-minimal-devnet` sets the data directory in a temporary location. Change this to your preferred destination.
 - `--force-clear-db` will delete the beaconchain.db file without confirming with the user. This is helpful for iteratively running local devnets without changing the datadir, but less helpful for one off runs where there was no database in the data directory.
@@ -86,7 +84,7 @@ This will start the system with 256 validators. The flags used can be explained 
 As soon as the beacon node has started, start the validator in the other terminal window. 
 
 ```
-bazel run //cmd/validator --config=minimal -- --datadir=/tmp/validator --interop-num-validators=256 --minimal-config --suggested-fee-recipient=0x8A04d14125D0FDCDc742F4A05C051De07232EDa4
+go run -tags=minimal ./cmd/validator --datadir=/tmp/validator --interop-num-validators=256 --minimal-config --suggested-fee-recipient=0x8A04d14125D0FDCDc742F4A05C051De07232EDa4
 ```
 
 This will launch and kickstart the system with your 256 validators performing their duties accordingly.

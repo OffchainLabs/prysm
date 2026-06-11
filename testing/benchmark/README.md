@@ -12,29 +12,29 @@ Due to the sheer size of the benchmarking configurations (16384 validators), the
 To generate new files to use for benchmarking, run the below command in the root of Prysm.
 
 ```
-bazel run //tools/benchmark-files-gen -- --output-dir $PRYSMPATH/testing/benchmark/benchmark_files/ --overwrite
+go run ./tools/benchmark-files-gen --output-dir $PRYSMPATH/testing/benchmark/benchmark_files/ --overwrite
 ```
 
 ## Running the benchmarks
 To run the ExecuteStateTransition benchmark:
 
-```bazel test //beacon-chain/core/state:go_default_test --test_filter=BenchmarkExecuteStateTransition_FullBlock --test_arg=-test.bench=BenchmarkExecuteStateTransition_FullBlock```
+```go test ./beacon-chain/core/state -run='^$' -bench=BenchmarkExecuteStateTransition_FullBlock```
 
 To run the ExecuteStateTransition (with cache) benchmark:
 
-```bazel test //beacon-chain/core/state:go_default_test --test_filter=BenchmarkExecuteStateTransition_WithCache --test_arg=-test.bench=BenchmarkExecuteStateTransition_WithCache```
+```go test ./beacon-chain/core/state -run='^$' -bench=BenchmarkExecuteStateTransition_WithCache```
 
 To run the ProcessEpoch benchmark:
 
-```bazel test //beacon-chain/core/state:go_default_test --test_filter=BenchmarkProcessEpoch_2FullEpochs --test_arg=-test.bench=BenchmarkProcessEpoch_2FullEpochs```
+```go test ./beacon-chain/core/state -run='^$' -bench=BenchmarkProcessEpoch_2FullEpochs```
 
 To run the HashTreeRoot benchmark:
 
-```bazel test //beacon-chain/core/state:go_default_test --test_filter=BenchmarkHashTreeRoot_FullState --test_arg=-test.bench=BenchmarkHashTreeRoot_FullState```
+```go test ./beacon-chain/core/state -run='^$' -bench=BenchmarkHashTreeRoot_FullState```
 
 To run the HashTreeRootState benchmark:
 
-```bazel test //beacon-chain/core/state:go_default_test --test_filter=BenchmarkHashTreeRootState_FullState --test_arg=-test.bench=BenchmarkHashTreeRootState_FullState```
+```go test ./beacon-chain/core/state -run='^$' -bench=BenchmarkHashTreeRootState_FullState```
 
 Extra flags needed to benchmark properly:
 

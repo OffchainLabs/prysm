@@ -1,80 +1,65 @@
 # Dependency Management in Prysm
 
-Prysm is go project with many complicated dependencies, including some c++ based libraries. There
-are two parts to Prysm's dependency management. Go modules and bazel managed dependencies. Be sure 
-to read [Why Bazel?](https://prysm.offchainlabs.com/docs/install-prysm/install-with-bazel/#why-bazel) to fully
-understand the reasoning behind an additional layer of build tooling via Bazel rather than a pure
-"go build" project.
+Prysm is a Go project with some cgo (C/C++) dependencies. Since the migration off Bazel,
+**`go.mod` is the single source of truth** for dependencies and the build is driven by the Go
+toolchain via the root `Makefile` (see `make help`).
 
-## Go Module support
+## Go modules
 
-The Prysm project officially supports go modules with some caveats. 
+The Prysm project uses standard Go modules.
 
-### Caveat 1: Some c++ libraries are precompiled archives
+### Caveat 1: Some C/C++ libraries are precompiled archives
 
-Given some of Prysm's c++ dependencies have very complicated project structures which make building
-difficult or impossible with "go build" alone. Additionally, building c++ dependencies with certain
-compilers, like clang / LLVM, offer a significant performance improvement. To get around this 
-issue, c++ dependencies have been precompiled as linkable archives. While there isn't necessarily
-anything bad about precompiled archives, these files are a "blackbox" which a 3rd party author
-could have compiled anything for this archive and detecting undesired behavior would be nearly
-impossible. If your risk tolerance is low, always compile everything from source yourself, 
-including complicated c++ dependencies.
+Some of Prysm's C/C++ dependencies (notably `blst` and the herumi `bls-eth-go-binary`) ship as
+precompiled, linkable archives. While there isn't necessarily anything wrong with precompiled
+archives, they are a "blackbox": a third party could have compiled anything into the archive and
+detecting undesired behavior would be nearly impossible. If your risk tolerance is low, compile
+everything from source yourself.
 
-*Recommendation: Use go build only for local development and use bazel build for production.*
+A C toolchain is required (cgo). For reproducible cross-compilation, `make build platforms=all`
+provisions a pinned toolchain per target (zig for linux, osxcross for darwin, mingw-w64 for
+windows — see `tools/cross-toolchain/`).
 
-### Caveat 2: Generated gRPC protobuf libraries
+### Caveat 2: Generated gRPC/protobuf and SSZ code
 
-One key advantage of Bazel over vanilla `go build` is that Bazel automatically (re)builds generated
-pb.go files at build time when file changes are present in any protobuf definition file or after
-any updates to the protobuf compiler or other relevant dependencies. Vanilla go users should run
-the following scripts often to ensure their generated files are up to date. Furthermore, Prysm
-generates SSZ marshal related code based on defined data structures. These generated files must
-also be updated and checked in as frequently.
+Generated `*.pb.go` and `*.ssz.go` files (and mocks) are committed to the tree. Regenerate them
+whenever a `.proto` definition or a mocked interface changes, and commit the result:
 
 ```bash
-./hack/update-go-pbs.sh
-./hack/update-go-ssz.sh
+make gen           # proto + ssz + mocks
+# or a subset: make gen proto | make gen ssz | make gen mocks
 ```
 
-*Recommendation: Use go build only for local development and use bazel build for production.*
+CI enforces this via the `check-generated-go` workflow (`make gen && git diff --exit-code`).
 
-### Caveat 3: Compile-time optimizations 
+### Caveat 3: Compile-time optimizations
 
-When Prysmatic Labs builds production binaries, they use the "release" configuration of bazel to
-compile with several compiler optimizations and recommended production build configurations.
-Additionally, the release build properly stamps the built binaries to include helpful metadata
-about how and when the binary was built. 
-
-*Recommendation: Use go build only for local development and use bazel build for production.*
+Production binaries use the release build, which strips symbols, stamps version metadata, and
+applies PGO for the beacon-chain:
 
 ```bash
-bazel build //beacon-chain --config=release
+make build mode=release            # host binaries
+make build platforms=all mode=release   # all distributed targets
 ```
- 
+
 ## Adding / updating dependencies
 
-1. Add your dependency as you would with go modules. I.e. `go get ...`
-1. Run `bazel run //:gazelle -- update-repos -from_file=go.mod -to_macro=deps.bzl%prysm_deps -prune=true` to update the bazel managed dependencies.
-
-Example:
+Use Go modules directly — there is no separate Bazel dependency macro to update anymore:
 
 ```bash
 go get github.com/OffchainLabs/example@v1.2.3
-bazel run //:gazelle -- update-repos -from_file=go.mod -to_macro=deps.bzl%prysm_deps -prune=true
+go mod tidy
 ```
-
-The deps.bzl file should have been updated with the dependency and any transitive dependencies. 
-
-Do NOT add new `go_repository` to the WORKSPACE file. All dependencies should live in deps.bzl.
 
 ## Running tests
 
-To enable conditional compilation and custom configuration for tests (where compiled code has more 
-debug info, while not being completely optimized), we rely on Go's build tags/constraints mechanism 
-(see official docs on [build constraints](https://pkg.go.dev/go/build#hdr-Build_Constraints)). 
-Therefore, whenever using `go test`, do not forget to pass in extra build tag, eg:
+To enable conditional compilation and custom configuration for tests (more debug info, not fully
+optimized), Prysm relies on Go build tags/constraints (see the official docs on
+[build constraints](https://pkg.go.dev/go/build#hdr-Build_Constraints)). The `make test` target
+sets these for you (the `develop` tag, plus `minimal` for the minimal pass). To run `go test`
+directly, pass the `develop` tag, e.g.:
 
 ```bash
-go test ./beacon-chain/sync/initial-sync -tags develop 
+make test                                         # mainnet + minimal passes
+go test ./beacon-chain/sync/initial-sync -tags develop
 ```

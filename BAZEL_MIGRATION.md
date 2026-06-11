@@ -364,19 +364,29 @@ Replaced `nogo` with a **single `multichecker` binary** (`tools/cmd/prysm-vet`, 
 `bazel.sh`, `hack/workspace_status*.sh`, and the `bazelisk` CI install. (Note: `tools/gocovmerge`
 is **kept** — `ci-coverage.sh` now uses it via `go run`.)
 
-### Phase 10 — Delete Bazel
-Once Phases 1–9 are green in CI, remove:
-- `WORKSPACE`, `MODULE.bazel`, `.bazelrc`, `.bazelversion`, `.buildkite-bazelrc`,
-  `bazel.sh`, `deps.bzl`, `distroless_deps.bzl`
-- CI/bazel helper scripts now unused: `hack/check_gazelle.sh`, `hack/workspace_status.sh`,
-  `hack/workspace_status_ci.sh`
-- all `BUILD.bazel` files (`git ls-files '*BUILD.bazel' | xargs rm`)
-- `tools/ssz.bzl`, `proto/ssz_proto_library.bzl`, `tools/prysm_image.bzl`,
-  `tools/image_deps.bzl`, `tools/download_spectests.bzl`,
-  `build/bazelrc/`, `tools/nogo_config/` (NOT `nogo_config.json` — Phase 7's
-  `tools/cmd/prysm-vet` now reads it as its exclusion config)
-- the `bazelbuild/rules_go` line in `go.mod` if unused after migration
-- gazelle directives are mooted by deleting the BUILD files.
+### Phase 10 — Delete Bazel — ✅ DONE
+Bazel is fully removed; the Go toolchain + `make` is the only build system.
+- Deleted all **465 `BUILD.bazel`** + 3 bare `BUILD` + **all 17 `*.bzl`** files
+  (`deps.bzl`, `distroless_deps.bzl`, `proto/ssz_proto_library.bzl`, `tools/*.bzl`,
+  `tools/go/def.bzl`, `third_party/herumi/herumi.bzl`, the cross-toolchain `*.bzl`, …).
+- Deleted the root Bazel files (`WORKSPACE`, `MODULE.bazel`, `MODULE.bazel.lock`, `.bazelrc`,
+  `.bazelversion`, `.buildkite-bazelrc`, `bazel.sh`), `build/bazelrc/`, and the Bazel-only CI
+  scripts (`hack/check_gazelle.sh`, `hack/workspace_status.sh`, `hack/workspace_status_ci.sh`).
+- Deleted `tools/nogo_config/` and `build/bazel/{bazel,bazel_test}.go` (the `//go:build bazel`
+  rules_go runfiles wrapper) — the only Go importers of `bazelbuild/rules_go`; dropped that dep
+  via `go mod tidy`. The pure-Go `build/bazel` runfiles helper (`non_bazel.go` et al.) stays,
+  now with no build tag.
+- **Dependents fixed:** `check-specrefs.yml` now reads the consensus-spec version from
+  `build/externaldata/externaldata.go` (was `WORKSPACE`); `CODEOWNERS` lost its `*.bzl`/`deps.bzl`
+  lines; and the dev/build docs that gave `bazel run/build/test` instructions
+  (`INTEROP.md`, `DEPENDENCIES.md`, `testing/spectest/README.md`, `tools/cross-toolchain/README.md`,
+  and several `tools/*/README.md`) were converted to `go run`/`make`.
+- **Kept** (not Bazel-only): `nogo_config.json`, `tools/cross-toolchain/*.sh`, `tools/gocovmerge`,
+  the rewritten `hack/{spectest-report,build_and_upload_docker,ci-coverage}.sh`, and `build/`.
+- Verified: `git ls-files '*.bzl' '*BUILD.bazel'` empty; `go build ./...` + `go test ./build/bazel/...`
+  green; `go.mod` no longer lists `bazelbuild/rules_go`; `make {build,test,gen,lint,deb,e2e}` dispatch.
+
+**The Bazel → Go-toolchain migration is complete.**
 
 **Keep (NOT Bazel-only, used by the Go/Make build):** `tools/cross-toolchain/` (zig/osxcross/
 mingw provisioning for `build/cross`), `tools/gocovmerge` (used by `hack/ci-coverage.sh`),
