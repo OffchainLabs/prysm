@@ -20,7 +20,7 @@ type topicPeer struct {
 // to block until specific gossipsub-internal events have fired, which is useful
 // for avoiding races between the various maps maintained by the pubsub event loop.
 //
-// Individual methods (RemovePeer, Prune, ValidateMessage, etc.) can be extended
+// Individual methods (OnClosedOutboundStream, Prune, ValidateMessage, etc.) can be extended
 // as needed by future tests.
 type GossipTracer struct {
 	mu             sync.Mutex
@@ -104,8 +104,8 @@ func (t *GossipTracer) isSubscribed(topic string) bool {
 //   - Subscribed (mesh path): waits until pid has been grafted into our mesh
 //     for the topic.
 //   - Not subscribed (fanout path): waits until both PeerJoin (pid is in
-//     p.topics[topic]) and AddPeer (pid is in p.peers with an rpcQueue) have
-//     fired.
+//     p.topics[topic]) and OnNewOutboundStream (pid is in p.peers with an
+//     rpcQueue) have fired.
 //
 // Note: You must call 'JoinAndWatchTopic' first before calling this method.
 func (t *GossipTracer) CanPublishToPeer(ctx context.Context, topic string, pid peer.ID) error {
@@ -113,7 +113,7 @@ func (t *GossipTracer) CanPublishToPeer(ctx context.Context, topic string, pid p
 		return t.waitForGraft(ctx, topic, pid)
 	}
 
-	// Fanout path: need both PeerJoin and AddPeer.
+	// Fanout path: need both PeerJoin and OnNewOutboundStream.
 	w := t.getTopicWaiter(topic)
 	if w == nil {
 		return errors.New("topic waiter not found, please call JoinAndWatchTopic first")
@@ -224,9 +224,9 @@ func (w *topicEventWaiter) waitForPeerJoin(ctx context.Context, pid peer.ID) err
 
 // --- pubsub.RawTracer implementation ---
 
-// AddPeer is invoked by the gossipsub event loop after a peer has been fully
+// OnNewOutboundStream is invoked by the gossipsub event loop after a peer has been fully
 // registered in p.peers (i.e., it has an rpcQueue and an outbound stream).
-func (t *GossipTracer) AddPeer(p peer.ID, proto protocol.ID) {
+func (t *GossipTracer) OnNewOutboundStream(p peer.ID, proto protocol.ID) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -237,8 +237,8 @@ func (t *GossipTracer) AddPeer(p peer.ID, proto protocol.ID) {
 	}
 }
 
-// RemovePeer can be extended by future tests to track peer removal.
-func (t *GossipTracer) RemovePeer(p peer.ID) {}
+// OnClosedOutboundStream can be extended by future tests to track peer removal.
+func (t *GossipTracer) OnClosedOutboundStream(p peer.ID) {}
 
 // Join is invoked when we locally subscribe to a topic (a mesh is created).
 func (t *GossipTracer) Join(topic string) {

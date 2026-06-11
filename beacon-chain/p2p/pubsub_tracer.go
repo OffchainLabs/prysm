@@ -35,13 +35,13 @@ type gossipTracer struct {
 	meshPeers map[string]map[peer.ID]struct{}
 }
 
-// AddPeer .
-func (g *gossipTracer) AddPeer(p peer.ID, proto protocol.ID) {
+// OnNewOutboundStream .
+func (g *gossipTracer) OnNewOutboundStream(p peer.ID, proto protocol.ID) {
 	// no-op
 }
 
-// RemovePeer .
-func (g *gossipTracer) RemovePeer(p peer.ID) {
+// OnClosedOutboundStream .
+func (g *gossipTracer) OnClosedOutboundStream(p peer.ID) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	for _, peers := range g.partialMessagePeers {
