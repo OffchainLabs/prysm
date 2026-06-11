@@ -48,6 +48,9 @@ const (
 	// allNodesStartTimeout defines period after which nodes are considered
 	// stalled (safety measure for nodes stuck at startup, shouldn't normally happen).
 	allNodesStartTimeout = 5 * time.Minute
+	// syncMatchTimeout is the longest checkpoint/beacon sync helpers should wait for a new node
+	// to match a known-good head. A matching head usually happens quickly, but CI can be slow.
+	syncMatchTimeout = 5 * time.Minute
 
 	// errGeneralCode is used to represent the string value for all general process errors.
 	errGeneralCode = "exit status 1"
@@ -301,7 +304,6 @@ func (r *testRunner) waitForMatchingHead(ctx context.Context, timeout time.Durat
 }
 
 func (r *testRunner) testCheckpointSync(ctx context.Context, g *errgroup.Group, i int, conns []*grpc.ClientConn, bnAPI, enr, minerEnr string) error {
-	matchTimeout := 5 * time.Minute
 	ethNode := eth1.NewNode(i, minerEnr)
 	g.Go(func() error {
 		return ethNode.Start(ctx)
@@ -350,7 +352,7 @@ func (r *testRunner) testCheckpointSync(ctx context.Context, g *errgroup.Group, 
 
 	// this is so that the syncEvaluators checks can run on the checkpoint sync'd node
 	conns = append(conns, c)
-	err = r.waitForMatchingHead(ctx, matchTimeout, c, conns[0])
+	err = r.waitForMatchingHead(ctx, syncMatchTimeout, c, conns[0])
 	if err != nil {
 		return err
 	}
@@ -368,7 +370,6 @@ func (r *testRunner) testCheckpointSync(ctx context.Context, g *errgroup.Group, 
 func (r *testRunner) testBeaconChainSync(ctx context.Context, g *errgroup.Group,
 	conns []*grpc.ClientConn, tickingStartTime time.Time, bootnodeEnr, minerEnr string) error {
 	t, config := r.t, r.config
-	matchTimeout := 5 * time.Minute
 	index := e2e.TestParams.BeaconNodeCount + e2e.TestParams.LighthouseBeaconNodeCount
 	ethNode := eth1.NewNode(index, minerEnr)
 	g.Go(func() error {
@@ -399,13 +400,11 @@ func (r *testRunner) testBeaconChainSync(ctx context.Context, g *errgroup.Group,
 	require.NoError(t, err)
 	defer func() { _ = syncLogFile.Close() }()
 	defer helpers.LogErrorOutput(t, syncLogFile, "beacon chain node", index)
-	if err := r.waitForMatchingHead(ctx, matchTimeout, syncConn, conns[0]); err != nil {
+	if err := r.waitForMatchingHead(ctx, syncMatchTimeout, syncConn, conns[0]); err != nil {
 		return errors.Wrap(err, "cannot sync beacon node")
 	}
 
-	// Sleep a slot to make sure the synced state is made.
 	secondsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
-	time.Sleep(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
 	syncEvaluators := []e2etypes.Evaluator{ev.FinishedSyncing, ev.AllNodesHaveSameHead}
 	// Only execute in the middle of an epoch to prevent race conditions around slot 0.
 	ticker := helpers.NewEpochTicker(tickingStartTime, secondsPerEpoch)
@@ -447,12 +446,8 @@ func (r *testRunner) testDoppelGangerProtection(ctx context.Context) error {
 		return fmt.Errorf("unable to open log file: %w", err)
 	}
 	defer func() { _ = logFile.Close() }()
-	doppelErr := helpers.WaitForTextInFile(logFile, "Duplicate instances exists in the network for validator keys")
-	r.t.Run("doppelganger found", func(t *testing.T) {
-		assert.NoError(t, doppelErr, "Failed to carry out doppelganger check correctly")
-	})
-	if doppelErr != nil {
-		return errors.New("doppelganger was unable to be found")
+	if err := helpers.WaitForTextInFile(logFile, "Duplicate instances exists in the network for validator keys"); err != nil {
+		return errors.Wrap(err, "doppelganger was unable to be found")
 	}
 	require.NoError(r.t, g.Wait())
 	return nil

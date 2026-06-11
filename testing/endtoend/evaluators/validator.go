@@ -285,7 +285,7 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 			// Skip fork slot.
 			continue
 		}
-		// Skip slots 1-3 at genesis - validators need time to ramp up after chain start
+		// Skip slots 0-3 at genesis - validators need time to ramp up after chain start
 		// due to doppelganger protection. This is a startup timing issue, not a fork transition issue.
 		if skipStartupSyncParticipationSlot(b.Block().Slot()) {
 			continue
