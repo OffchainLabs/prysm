@@ -52,9 +52,9 @@ var (
 	})
 	getBlobsV3Latency = promauto.NewHistogram(
 		prometheus.HistogramOpts{
-			Name:    "beacon_engine_getBlobsV3_request_duration_milliseconds",
-			Help:    "Duration of engine_getBlobsV3 requests in milliseconds",
-			Buckets: []float64{25, 50, 100, 200, 500, 1000, 2000, 4000},
+			Name:    "beacon_engine_getBlobsV3_request_duration_seconds",
+			Help:    "Duration of engine_getBlobsV3 requests in seconds",
+			Buckets: prometheus.DefBuckets,
 		},
 	)
 	hasBlobsRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
@@ -63,9 +63,9 @@ var (
 	})
 	hasBlobsLatency = promauto.NewHistogram(
 		prometheus.HistogramOpts{
-			Name:    "beacon_engine_hasBlobs_request_duration_milliseconds",
-			Help:    "Duration of engine_hasBlobs requests in milliseconds",
-			Buckets: []float64{25, 50, 100, 200, 500, 1000, 2000, 4000},
+			Name:    "beacon_engine_hasBlobs_request_duration_seconds",
+			Help:    "Duration of engine_hasBlobs requests in seconds",
+			Buckets: prometheus.DefBuckets,
 		},
 	)
 	errParseCount = promauto.NewCounter(prometheus.CounterOpts{
