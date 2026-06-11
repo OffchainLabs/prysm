@@ -495,6 +495,16 @@ func (a *IndexedAttestationElectra) IsNil() bool {
 	return a == nil || a.Data == nil
 }
 
+// Version --
+func (a *IndexedAttestationGloas) Version() int {
+	return version.Gloas
+}
+
+// IsNil --
+func (a *IndexedAttestationGloas) IsNil() bool {
+	return a == nil || a.Data == nil
+}
+
 // Copy --
 func (a *IndexedAttestation) Copy() *IndexedAttestation {
 	var indices []uint64
@@ -521,6 +531,38 @@ func (a *IndexedAttestationElectra) Copy() *IndexedAttestationElectra {
 		copy(indices, a.AttestingIndices)
 	}
 	return &IndexedAttestationElectra{
+		AttestingIndices: indices,
+		Data:             a.Data.Copy(),
+		Signature:        bytesutil.SafeCopyBytes(a.Signature),
+	}
+}
+
+// Copy --
+func (a *IndexedAttestationGloas) Copy() *IndexedAttestationGloas {
+	var indices []uint64
+	if a == nil {
+		return nil
+	} else if a.AttestingIndices != nil {
+		indices = make([]uint64, len(a.AttestingIndices))
+		copy(indices, a.AttestingIndices)
+	}
+	return &IndexedAttestationGloas{
+		AttestingIndices: indices,
+		Data:             a.Data.Copy(),
+		Signature:        bytesutil.SafeCopyBytes(a.Signature),
+	}
+}
+
+// IndexedAttestationElectraToGloas copies an Electra indexed attestation into the Gloas wire-compatible type.
+func IndexedAttestationElectraToGloas(a *IndexedAttestationElectra) *IndexedAttestationGloas {
+	var indices []uint64
+	if a == nil {
+		return nil
+	} else if a.AttestingIndices != nil {
+		indices = make([]uint64, len(a.AttestingIndices))
+		copy(indices, a.AttestingIndices)
+	}
+	return &IndexedAttestationGloas{
 		AttestingIndices: indices,
 		Data:             a.Data.Copy(),
 		Signature:        bytesutil.SafeCopyBytes(a.Signature),
@@ -571,6 +613,28 @@ func (a *AttesterSlashingElectra) SecondAttestation() IndexedAtt {
 	return a.Attestation_2
 }
 
+// Version --
+func (a *AttesterSlashingGloas) Version() int {
+	return version.Gloas
+}
+
+// IsNil --
+func (a *AttesterSlashingGloas) IsNil() bool {
+	return a == nil ||
+		a.Attestation_1 == nil || a.Attestation_1.IsNil() ||
+		a.Attestation_2 == nil || a.Attestation_2.IsNil()
+}
+
+// FirstAttestation --
+func (a *AttesterSlashingGloas) FirstAttestation() IndexedAtt {
+	return a.Attestation_1
+}
+
+// SecondAttestation --
+func (a *AttesterSlashingGloas) SecondAttestation() IndexedAtt {
+	return a.Attestation_2
+}
+
 func (a *AttesterSlashing) Copy() *AttesterSlashing {
 	if a == nil {
 		return nil
@@ -589,6 +653,40 @@ func (a *AttesterSlashingElectra) Copy() *AttesterSlashingElectra {
 	return &AttesterSlashingElectra{
 		Attestation_1: a.Attestation_1.Copy(),
 		Attestation_2: a.Attestation_2.Copy(),
+	}
+}
+
+// Copy --
+func (a *AttesterSlashingGloas) Copy() *AttesterSlashingGloas {
+	if a == nil {
+		return nil
+	}
+	return &AttesterSlashingGloas{
+		Attestation_1: a.Attestation_1.Copy(),
+		Attestation_2: a.Attestation_2.Copy(),
+	}
+}
+
+// AttesterSlashingElectraToGloas copies an Electra attester slashing into the Gloas wire-compatible type.
+func AttesterSlashingElectraToGloas(a *AttesterSlashingElectra) *AttesterSlashingGloas {
+	if a == nil {
+		return nil
+	}
+	return &AttesterSlashingGloas{
+		Attestation_1: IndexedAttestationElectraToGloas(a.Attestation_1),
+		Attestation_2: IndexedAttestationElectraToGloas(a.Attestation_2),
+	}
+}
+
+// AttesterSlashingGloasFromAttSlashing converts supported post-Electra slashings into the Gloas concrete type.
+func AttesterSlashingGloasFromAttSlashing(slashing AttSlashing) (*AttesterSlashingGloas, bool) {
+	switch s := slashing.(type) {
+	case *AttesterSlashingGloas:
+		return s, true
+	case *AttesterSlashingElectra:
+		return AttesterSlashingElectraToGloas(s), true
+	default:
+		return nil, false
 	}
 }
 

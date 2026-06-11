@@ -1266,6 +1266,18 @@ func AttesterSlashingsElectraToConsensus(src []*AttesterSlashingElectra) ([]*eth
 	return attesterSlashings, nil
 }
 
+func AttesterSlashingsGloasToConsensus(src []*AttesterSlashingElectra) ([]*eth.AttesterSlashingGloas, error) {
+	electraSlashings, err := AttesterSlashingsElectraToConsensus(src)
+	if err != nil {
+		return nil, err
+	}
+	attesterSlashings := make([]*eth.AttesterSlashingGloas, len(electraSlashings))
+	for i, s := range electraSlashings {
+		attesterSlashings[i] = eth.AttesterSlashingElectraToGloas(s)
+	}
+	return attesterSlashings, nil
+}
+
 func AttesterSlashingsElectraFromConsensus(src []*eth.AttesterSlashingElectra) []*AttesterSlashingElectra {
 	attesterSlashings := make([]*AttesterSlashingElectra, len(src))
 	for i, s := range src {
@@ -1274,7 +1286,62 @@ func AttesterSlashingsElectraFromConsensus(src []*eth.AttesterSlashingElectra) [
 	return attesterSlashings
 }
 
+func AttesterSlashingsGloasFromConsensus(src []*eth.AttesterSlashingGloas) []*AttesterSlashingElectra {
+	attesterSlashings := make([]*AttesterSlashingElectra, len(src))
+	for i, s := range src {
+		attesterSlashings[i] = AttesterSlashingGloasFromConsensus(s)
+	}
+	return attesterSlashings
+}
+
 func AttesterSlashingElectraFromConsensus(src *eth.AttesterSlashingElectra) *AttesterSlashingElectra {
+	a1AttestingIndices := make([]string, len(src.Attestation_1.AttestingIndices))
+	for j, ix := range src.Attestation_1.AttestingIndices {
+		a1AttestingIndices[j] = fmt.Sprintf("%d", ix)
+	}
+	a2AttestingIndices := make([]string, len(src.Attestation_2.AttestingIndices))
+	for j, ix := range src.Attestation_2.AttestingIndices {
+		a2AttestingIndices[j] = fmt.Sprintf("%d", ix)
+	}
+	return &AttesterSlashingElectra{
+		Attestation1: &IndexedAttestationElectra{
+			AttestingIndices: a1AttestingIndices,
+			Data: &AttestationData{
+				Slot:            fmt.Sprintf("%d", src.Attestation_1.Data.Slot),
+				CommitteeIndex:  fmt.Sprintf("%d", src.Attestation_1.Data.CommitteeIndex),
+				BeaconBlockRoot: hexutil.Encode(src.Attestation_1.Data.BeaconBlockRoot),
+				Source: &Checkpoint{
+					Epoch: fmt.Sprintf("%d", src.Attestation_1.Data.Source.Epoch),
+					Root:  hexutil.Encode(src.Attestation_1.Data.Source.Root),
+				},
+				Target: &Checkpoint{
+					Epoch: fmt.Sprintf("%d", src.Attestation_1.Data.Target.Epoch),
+					Root:  hexutil.Encode(src.Attestation_1.Data.Target.Root),
+				},
+			},
+			Signature: hexutil.Encode(src.Attestation_1.Signature),
+		},
+		Attestation2: &IndexedAttestationElectra{
+			AttestingIndices: a2AttestingIndices,
+			Data: &AttestationData{
+				Slot:            fmt.Sprintf("%d", src.Attestation_2.Data.Slot),
+				CommitteeIndex:  fmt.Sprintf("%d", src.Attestation_2.Data.CommitteeIndex),
+				BeaconBlockRoot: hexutil.Encode(src.Attestation_2.Data.BeaconBlockRoot),
+				Source: &Checkpoint{
+					Epoch: fmt.Sprintf("%d", src.Attestation_2.Data.Source.Epoch),
+					Root:  hexutil.Encode(src.Attestation_2.Data.Source.Root),
+				},
+				Target: &Checkpoint{
+					Epoch: fmt.Sprintf("%d", src.Attestation_2.Data.Target.Epoch),
+					Root:  hexutil.Encode(src.Attestation_2.Data.Target.Root),
+				},
+			},
+			Signature: hexutil.Encode(src.Attestation_2.Signature),
+		},
+	}
+}
+
+func AttesterSlashingGloasFromConsensus(src *eth.AttesterSlashingGloas) *AttesterSlashingElectra {
 	a1AttestingIndices := make([]string, len(src.Attestation_1.AttestingIndices))
 	for j, ix := range src.Attestation_1.AttestingIndices {
 		a1AttestingIndices[j] = fmt.Sprintf("%d", ix)

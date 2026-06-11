@@ -78,6 +78,16 @@ func (b *SignedBeaconBlock) SetAttesterSlashings(slashings []eth.AttSlashing) er
 			blockSlashings = append(blockSlashings, s)
 		}
 		b.block.body.attesterSlashings = blockSlashings
+	} else if b.version == version.Gloas {
+		blockSlashings := make([]*eth.AttesterSlashingGloas, 0, len(slashings))
+		for _, slashing := range slashings {
+			s, ok := eth.AttesterSlashingGloasFromAttSlashing(slashing)
+			if !ok {
+				return fmt.Errorf("slashing of type %T is not *eth.AttesterSlashingGloas or *eth.AttesterSlashingElectra", slashing)
+			}
+			blockSlashings = append(blockSlashings, s)
+		}
+		b.block.body.attesterSlashingsGloas = blockSlashings
 	} else {
 		blockSlashings := make([]*eth.AttesterSlashingElectra, 0, len(slashings))
 		for _, slashing := range slashings {
