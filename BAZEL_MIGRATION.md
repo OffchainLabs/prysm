@@ -322,24 +322,65 @@ Replaced `nogo` with a **single `multichecker` binary** (`tools/cmd/prysm-vet`, 
   make e2e minimal builder web3signer slasher slashing scenario postmerge statediff mainnet multiclient
   ```
 
-### Phase 9 — CI/CD rewiring
-- Rewrite `.github/workflows/*.yml` and Buildkite to call the Makefile targets
-  (`make gen && git diff --exit-code` replaces `check_gazelle.sh` + the proto/ssz
-  generated-code check).
-- Drop `gazelle` / `deps.bzl` entirely — `go.mod` is the single source of truth.
-- Docker push job → `docker buildx` (Phase 5).
+### Phase 9 — CI/CD rewiring — ✅ DONE (GitHub Actions + hack scripts; Buildkite UI is out-of-repo)
+**GitHub Actions** (the only in-repo CI):
+- `check-generated-go.yml`: dropped the `bazelisk` install; installs a pinned `protoc` (21.7,
+  the `// protoc v3.21.7` stamp) and runs **`make gen`** (proto + ssz + **mocks**) then
+  `git status` exit-1. `protoc` is the only external tool needed — sszgen/mockgen/goimports
+  run from the module (`go tool` / `go run`), and `third_party/googleapis` is vendored.
+- `go.yml`: added a **`vet`** job running **`make lint`** (the `tools/cmd/prysm-vet`
+  multichecker, nogo's replacement) with the portable blst cgo flag. `golangci-lint`, `gosec`,
+  `go build ./...`, fuzz, and gomodtidy stay as-is. The commented-out "tests via Bazel" note
+  now points to Buildkite's `make test`.
+- **Unit tests stay in Buildkite** (per decision) — no GHA test job added.
+- New **`e2e.yml`**: `workflow_dispatch` (scenario/suite input, default `presubmit`) + nightly
+  cron, runs `make e2e <target>` on a linux/amd64 runner with Go + Java (for web3signer) and
+  portable-blst cgo. Heavy, so deliberately not on every PR.
+- New **`release.yml`**: on `v*` tag push + `workflow_dispatch`. `artifacts` job runs
+  `make build platforms=all mode=release` + `make deb` and uploads everything to the GitHub
+  Release via `gh`. `docker` job runs `hack/build_and_upload_docker.sh <tag>`
+  (`make build docker=true push=true`) behind QEMU/buildx + GCR login — **gated on a new
+  `GCR_SA_KEY` secret** (no-ops with a notice when unset; must be configured in repo settings).
+
+**Bazel-based `hack/` scripts the Buildkite pipeline calls — rewritten Bazel-free:**
+- `spectest-report.sh`: `bazel test //testing/spectest/...` → `go test` over
+  `general`+`mainnet` (`-tags=develop`) and `minimal` (`-tags=develop,minimal`), writing to
+  `SPEC_TEST_REPORT_OUTPUT_DIR`; report/compare logic unchanged.
+- `build_and_upload_docker.sh`: the 5 `bazel run …push_oci_image` → one
+  `make build docker=true push=true mode=release DOCKER_TAG=<tag>` (Phase 5 produces the same
+  `<tag>`/`<tag>-portable`/validator/prysmctl tags).
+- `ci-coverage.sh`: `bazel coverage //...` → `go test -coverprofile` over the mainnet+minimal
+  package sets (mirrors `build/test`), merged with `go run ./tools/gocovmerge`, then the
+  existing deepsource + `hack/codecov.sh` uploads.
+
+**Buildkite UI pipeline changes (must be applied in Buildkite's web UI — not in the repo):**
+- `bazel test //...` → `make test` (mainnet + minimal; `mode=race` where wanted).
+- **Stop running `hack/check_gazelle.sh`** — the generated-code gate is now the GHA
+  `check-generated-go` job (`make gen && git diff`); gazelle/`deps.bzl`/`BUILD.bazel` are
+  obsolete. (`go.mod` is the single source of truth.)
+- spec tests / coverage / docker-push steps invoke the rewritten scripts above.
+
+**Phase 10 deletions this unblocks:** `hack/check_gazelle.sh`, `.buildkite-bazelrc`,
+`bazel.sh`, `hack/workspace_status*.sh`, and the `bazelisk` CI install. (Note: `tools/gocovmerge`
+is **kept** — `ci-coverage.sh` now uses it via `go run`.)
 
 ### Phase 10 — Delete Bazel
 Once Phases 1–9 are green in CI, remove:
 - `WORKSPACE`, `MODULE.bazel`, `.bazelrc`, `.bazelversion`, `.buildkite-bazelrc`,
   `bazel.sh`, `deps.bzl`, `distroless_deps.bzl`
+- CI/bazel helper scripts now unused: `hack/check_gazelle.sh`, `hack/workspace_status.sh`,
+  `hack/workspace_status_ci.sh`
 - all `BUILD.bazel` files (`git ls-files '*BUILD.bazel' | xargs rm`)
 - `tools/ssz.bzl`, `proto/ssz_proto_library.bzl`, `tools/prysm_image.bzl`,
-  `tools/cross-toolchain/`, `tools/image_deps.bzl`, `tools/download_spectests.bzl`,
+  `tools/image_deps.bzl`, `tools/download_spectests.bzl`,
   `build/bazelrc/`, `tools/nogo_config/` (NOT `nogo_config.json` — Phase 7's
   `tools/cmd/prysm-vet` now reads it as its exclusion config)
 - the `bazelbuild/rules_go` line in `go.mod` if unused after migration
 - gazelle directives are mooted by deleting the BUILD files.
+
+**Keep (NOT Bazel-only, used by the Go/Make build):** `tools/cross-toolchain/` (zig/osxcross/
+mingw provisioning for `build/cross`), `tools/gocovmerge` (used by `hack/ci-coverage.sh`),
+`nogo_config.json`, and the rewritten `hack/{spectest-report,build_and_upload_docker,ci-coverage}.sh`.
 
 ---
 
