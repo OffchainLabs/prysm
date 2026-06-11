@@ -424,7 +424,8 @@ func (s *Service) SubmitSignedAggregateSelectionProof(
 // associated with a particular set of sync committee messages.
 func (s *Service) AggregatedSigAndAggregationBits(
 	ctx context.Context,
-	req *ethpb.AggregatedSigAndAggregationBitsRequest) ([]byte, []byte, error) {
+	req *ethpb.AggregatedSigAndAggregationBitsRequest,
+) ([]byte, []byte, error) {
 	subCommitteeSize := params.BeaconConfig().SyncCommitteeSize / params.BeaconConfig().SyncCommitteeSubnetCount
 	sigs := make([][]byte, 0, subCommitteeSize)
 	bits := ethpb.NewSyncCommitteeAggregationBits()
@@ -558,6 +559,25 @@ func (s *Service) GetAttestationData(
 			}).Error("Forkchoice head root does not match head root")
 		}
 		isPayloadFull = full
+	}
+
+	if slots.ToEpoch(req.Slot) >= params.BeaconConfig().GloasForkEpoch {
+		headSlot, err := s.ChainInfoFetcher.RecentBlockSlot(bytesutil.ToBytes32(headRoot))
+		if err != nil {
+			return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get head block slot")}
+		}
+		payloadStr := "empty"
+		if headSlot == req.Slot {
+			payloadStr = "pending"
+		} else if isPayloadFull {
+			payloadStr = "full"
+		}
+		log.WithFields(logrus.Fields{
+			"slot":     req.Slot,
+			"headRoot": fmt.Sprintf("%#x", headRoot),
+			"headSlot": headSlot,
+			"payload":  payloadStr,
+		}).Info("Attester request")
 	}
 
 	if err = s.AttestationCache.Put(&cache.AttestationConsensusData{
@@ -969,6 +989,14 @@ func (s *Service) PayloadAttestationData(
 		if rpcErr != nil {
 			return rpcErr, nil
 		}
+
+		log.WithFields(logrus.Fields{
+			"slot":      slot,
+			"blockRoot": fmt.Sprintf("%#x", data.BeaconBlockRoot),
+			"payload":   data.PayloadPresent,
+			"blobData":  data.BlobDataAvailable,
+		}).Info("PTC request")
+
 		// Before the deadline only the final result is safe to return: the payload
 		// arrived timely and the data is available. Otherwise both flags may still
 		// flip, so wait for the deadline.
@@ -991,6 +1019,27 @@ func (s *Service) PayloadAttestationData(
 	}
 }
 
+// hasCanonicalShuffling returns whether the current root at the given slot is in the same shuffling as head.
+func (s *Service) hasCanonicalShuffling(root [32]byte, slot primitives.Slot) bool {
+	epoch := slots.ToEpoch(slot)
+	if epoch > 0 {
+		epoch--
+	}
+	hdr, err := s.ForkchoiceFetcher.DependentRoot(epoch)
+	if err != nil {
+		log.WithError(err).Error("Could not get head dependent root to check canonical shuffle")
+		return false
+	}
+	rdr, err := s.HeadFetcher.DependentRootForEpoch(root, epoch)
+	if err != nil {
+		log.WithError(err).Error("Could not get head dependent root to check canonical shuffle")
+		return false
+	}
+	return hdr == rdr
+}
+
+// buildPayloadAttestationData builds a payload attestation message for the validator to sign. It attempts first
+// to build from the highest received slot but only if it is compatible with the head view.
 func (s *Service) buildPayloadAttestationData(slot primitives.Slot) (*ethpb.PayloadAttestationData, *RpcError) {
 	highestReceivedSlot := s.ForkchoiceFetcher.HighestReceivedBlockSlot()
 	if highestReceivedSlot != slot {
@@ -999,6 +1048,9 @@ func (s *Service) buildPayloadAttestationData(slot primitives.Slot) (*ethpb.Payl
 	root := s.ForkchoiceFetcher.HighestReceivedBlockRoot()
 	if root == [32]byte{} {
 		return nil, &RpcError{Reason: Internal, Err: fmt.Errorf("could not retrieve highest received block root for slot %d", slot)}
+	}
+	if !s.hasCanonicalShuffling(root, slot) {
+		return nil, &RpcError{Reason: Internal, Err: fmt.Errorf("no canonical shuffling block for slot %d", slot)}
 	}
 	payloadEarly, _ := s.ForkchoiceFetcher.PayloadEarly(root)
 	return &ethpb.PayloadAttestationData{
