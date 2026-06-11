@@ -1914,6 +1914,94 @@ func TestPartialColumnBroadcaster_Publish_PartsRequestsOverride(t *testing.T) {
 	})
 }
 
+func TestPartialColumnBroadcaster_Publish_CompletesColumnFromTrustedCells(t *testing.T) {
+	const topic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	publish := func(t *testing.T, h *broadcasterHarness, col *blocks.PartialDataColumn) {
+		t.Helper()
+		require.NoError(t, h.broadcaster.Publish(t.Context(), func(yield func(string, blocks.PartialDataColumn) bool) {
+			yield(topic, *col)
+		}))
+	}
+
+	assertNoHandleColumnCall := func(t *testing.T, recorder *callbackRecorder) {
+		t.Helper()
+		select {
+		case <-recorder.handleColumnCallCh:
+			t.Fatal("HandleColumn called for incomplete column")
+		default:
+		}
+	}
+
+	t.Run("merge completing the column calls HandleColumn", func(t *testing.T) {
+		ps := newMockPubSub(nil, nil)
+		recorder := newCallbackRecorder(1, false, nil, nil)
+		h := newBroadcasterHarness(t, ps)
+		h.start(recorder)
+		defer h.Stop()
+
+		// First publish stores a column missing cell 1; nothing is complete yet.
+		first := createPartialColumn(t, 2, map[uint64][]byte{0: {0x11}})
+		publish(t, h, first)
+		assertNoHandleColumnCall(t, recorder)
+
+		// Second publish merges the missing trusted cell into the stored verifier.
+		second := createPartialColumn(t, 2, map[uint64][]byte{1: {0x22}})
+		publish(t, h, second)
+
+		select {
+		case call := <-recorder.handleColumnCallCh:
+			require.Equal(t, topic, call.topic)
+			require.Equal(t, true, len(call.column.Column()) > 0)
+		case <-t.Context().Done():
+			t.Fatal("handle column call not received")
+		}
+
+		assertPartialColumnsEqual(t,
+			createPartialColumn(t, 2, map[uint64][]byte{0: {0x11}, 1: {0x22}}),
+			h.broadcaster.getDataColumn(topic, first.GroupID()))
+	})
+
+	t.Run("merge leaving the column incomplete does not call HandleColumn", func(t *testing.T) {
+		ps := newMockPubSub(nil, nil)
+		recorder := newCallbackRecorder(1, false, nil, nil)
+		h := newBroadcasterHarness(t, ps)
+		h.start(recorder)
+		defer h.Stop()
+
+		first := createPartialColumn(t, 3, map[uint64][]byte{0: {0x11}})
+		publish(t, h, first)
+
+		// Merging cell 1 still leaves cell 2 missing.
+		second := createPartialColumn(t, 3, map[uint64][]byte{1: {0x22}})
+		publish(t, h, second)
+		assertNoHandleColumnCall(t, recorder)
+	})
+
+	t.Run("redundant merge after completion does not call HandleColumn again", func(t *testing.T) {
+		ps := newMockPubSub(nil, nil)
+		recorder := newCallbackRecorder(2, false, nil, nil)
+		h := newBroadcasterHarness(t, ps)
+		h.start(recorder)
+		defer h.Stop()
+
+		first := createPartialColumn(t, 2, map[uint64][]byte{0: {0x11}})
+		publish(t, h, first)
+		second := createPartialColumn(t, 2, map[uint64][]byte{1: {0x22}})
+		publish(t, h, second)
+
+		select {
+		case <-recorder.handleColumnCallCh:
+		case <-t.Context().Done():
+			t.Fatal("handle column call not received")
+		}
+
+		// Republishing already-merged cells extends nothing and must not hand the column over again.
+		publish(t, h, second)
+		assertNoHandleColumnCall(t, recorder)
+	})
+}
+
 func newTestTopic(t *testing.T, name string) *pubsub.Topic {
 	t.Helper()
 	h, err := libp2p.New(libp2p.NoListenAddrs)

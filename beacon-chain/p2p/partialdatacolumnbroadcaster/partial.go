@@ -914,27 +914,34 @@ func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, bl
 			topicStore[string(groupIDBytes)] = verifier
 		} else {
 			if requests, ok := partialCol.PartsRequests(); ok {
-				p.logger.WithFields(logrus.Fields{
-					"topic":    topic,
-					"groupID":  fmt.Sprintf("%#x", groupIDBytes),
-					"requests": fmt.Sprintf("%#x", requests),
-				}).Debug("Setting parts requests")
 				if err := verifier.Column.SetPartsRequests(requests); err != nil {
 					aggErr = stderrors.Join(aggErr, errors.Wrap(err, "set parts requests"))
 					continue
 				}
 			} else {
-				// Phase 2 (GetBlobsV3): clear the HasBlobs-derived override so that
-				// newPartsMetadata computes requests from actual cell presence (!included).
-				p.logger.WithFields(logrus.Fields{
-					"topic":   topic,
-					"groupID": fmt.Sprintf("%#x", groupIDBytes),
-				}).Debug("Clearing parts requests")
 				verifier.Column.ClearPartsRequests()
 			}
+			var extended bool
 			for i := range partialCol.Included.Len() {
 				if partialCol.Included.BitAt(i) {
-					verifier.ExtendFromVerifiedCell(uint64(i), partialCol.Column[i], partialCol.KzgProofs[i])
+					if verifier.ExtendFromVerifiedCell(uint64(i), partialCol.Column[i], partialCol.KzgProofs[i]) {
+						extended = true
+					}
+				}
+			}
+			if extended {
+				// A column completed by this merge never reaches handleCellsValidated, so hand it to the callback here.
+				col, ok, err := verifier.Complete()
+				if err != nil {
+					aggErr = stderrors.Join(aggErr, errors.Wrap(err, "complete partial column verifier"))
+					continue
+				}
+				if ok {
+					p.logger.WithFields(logrus.Fields{
+						"topic":   topic,
+						"groupID": fmt.Sprintf("%#x", groupIDBytes),
+					}).Info("Completed partial column")
+					go p.callbacks.HandleColumn(topic, col)
 				}
 			}
 		}
