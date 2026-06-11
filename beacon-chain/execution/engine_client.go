@@ -1013,6 +1013,15 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 
 // ConstructPartialDataColumnSidecarsFromHasBlobs constructs header-only partial
 // columns whose parts metadata requests only the blobs missing from the EL.
+//
+// It returns:
+//   - the header-only partial columns carrying the requests override; nil when
+//     the block has no commitments, the EL already has every blob, or an error
+//     occurred.
+//   - whether the HasBlobs flow is supported: false when the engine lacks the
+//     HasBlobs capability or partial columns are disabled for the block's slot,
+//     in which case the other return values are always nil.
+//   - any error from querying the EL or building the partial columns.
 func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.PartialDataColumn, bool, error) {
 	if !s.useHasBlobs() || !s.partialColumnsEnabledForSlot(populator.Slot()) {
 		return nil, false, nil
