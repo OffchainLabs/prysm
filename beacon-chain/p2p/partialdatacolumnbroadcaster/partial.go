@@ -727,7 +727,6 @@ func (p *PartialColumnBroadcaster) republishColumn(ourDataColumn *blocks.Partial
 	if !shouldRepublish && len(peerMeta) > 0 && !bytes.Equal(peerMeta, myMeta) {
 		// Either we have something they don't or vice versa
 		shouldRepublish = true
-		p.logger.WithFields(rpc.logFields()).Debug("Republishing due to parts metadata difference")
 	}
 
 	if shouldRepublish {
