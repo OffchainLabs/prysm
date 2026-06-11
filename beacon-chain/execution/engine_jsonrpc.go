@@ -15,9 +15,116 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 )
+
+var (
+	supportedEngineEndpoints = []string{
+		NewPayloadMethod,
+		NewPayloadMethodV2,
+		NewPayloadMethodV3,
+		ForkchoiceUpdatedMethod,
+		ForkchoiceUpdatedMethodV2,
+		ForkchoiceUpdatedMethodV3,
+		GetPayloadMethod,
+		GetPayloadMethodV2,
+		GetPayloadMethodV3,
+		GetPayloadBodiesByHashV1,
+		GetPayloadBodiesByRangeV1,
+		GetBlobsV1,
+	}
+
+	electraEngineEndpoints = []string{
+		NewPayloadMethodV4,
+		GetPayloadMethodV4,
+	}
+
+	fuluEngineEndpoints = []string{
+		GetPayloadMethodV5,
+		GetBlobsV2,
+	}
+
+	gloasEngineEndpoints = []string{
+		NewPayloadMethodV5,
+		GetPayloadMethodV6,
+		ForkchoiceUpdatedMethodV4,
+		GetPayloadBodiesByHashV2,
+		GetPayloadBodiesByRangeV2,
+	}
+)
+
+const (
+	// NewPayloadMethod v1 request string for JSON-RPC.
+	NewPayloadMethod = "engine_newPayloadV1"
+	// NewPayloadMethodV2 v2 request string for JSON-RPC.
+	NewPayloadMethodV2 = "engine_newPayloadV2"
+	NewPayloadMethodV3 = "engine_newPayloadV3"
+	// NewPayloadMethodV4 is the engine_newPayloadVX method added at Electra.
+	NewPayloadMethodV4 = "engine_newPayloadV4"
+	// NewPayloadMethodV5 is the engine_newPayloadVX method added at Gloas.
+	NewPayloadMethodV5 = "engine_newPayloadV5"
+	// ForkchoiceUpdatedMethod v1 request string for JSON-RPC.
+	ForkchoiceUpdatedMethod = "engine_forkchoiceUpdatedV1"
+	// ForkchoiceUpdatedMethodV2 v2 request string for JSON-RPC.
+	ForkchoiceUpdatedMethodV2 = "engine_forkchoiceUpdatedV2"
+	// ForkchoiceUpdatedMethodV3 v3 request string for JSON-RPC.
+	ForkchoiceUpdatedMethodV3 = "engine_forkchoiceUpdatedV3"
+	// GetPayloadMethod v1 request string for JSON-RPC.
+	GetPayloadMethod = "engine_getPayloadV1"
+	// GetPayloadMethodV2 v2 request string for JSON-RPC.
+	GetPayloadMethodV2 = "engine_getPayloadV2"
+	// GetPayloadMethodV3 is the get payload method added for deneb
+	GetPayloadMethodV3 = "engine_getPayloadV3"
+	// GetPayloadMethodV4 is the get payload method added for electra
+	GetPayloadMethodV4 = "engine_getPayloadV4"
+	// GetPayloadMethodV5 is the get payload method added for fulu
+	GetPayloadMethodV5 = "engine_getPayloadV5"
+	// GetPayloadMethodV6 is the get payload method added for gloas/amsterdam.
+	GetPayloadMethodV6 = "engine_getPayloadV6"
+	// ForkchoiceUpdatedMethodV4 is the forkchoice updated method added for gloas/amsterdam.
+	ForkchoiceUpdatedMethodV4 = "engine_forkchoiceUpdatedV4"
+	// GetPayloadBodiesByHashV1 is the engine_getPayloadBodiesByHashX JSON-RPC method for pre-Electra payloads.
+	GetPayloadBodiesByHashV1 = "engine_getPayloadBodiesByHashV1"
+	// GetPayloadBodiesByRangeV1 is the engine_getPayloadBodiesByRangeX JSON-RPC method for pre-Electra payloads.
+	GetPayloadBodiesByRangeV1 = "engine_getPayloadBodiesByRangeV1"
+	// GetPayloadBodiesByHashV2 is the engine_getPayloadBodiesByHashV2 JSON-RPC method for amsterdam payloads.
+	GetPayloadBodiesByHashV2 = "engine_getPayloadBodiesByHashV2"
+	// GetPayloadBodiesByRangeV2 is the engine_getPayloadBodiesByRangeV2 JSON-RPC method for amsterdam payloads.
+	GetPayloadBodiesByRangeV2 = "engine_getPayloadBodiesByRangeV2"
+	// ExchangeCapabilities request string for JSON-RPC.
+	ExchangeCapabilities = "engine_exchangeCapabilities"
+	// GetBlobsV1 request string for JSON-RPC.
+	GetBlobsV1 = "engine_getBlobsV1"
+	// GetBlobsV2 request string for JSON-RPC.
+	GetBlobsV2 = "engine_getBlobsV2"
+	// GetClientVersionV1 is the JSON-RPC method that identifies the execution client.
+	GetClientVersionV1 = "engine_getClientVersionV1"
+	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
+	defaultEngineTimeout = time.Second
+)
+
+func getPayloadMethodAndMessage(slot primitives.Slot) (string, proto.Message) {
+	epoch := slots.ToEpoch(slot)
+	if epoch >= params.BeaconConfig().GloasForkEpoch {
+		return GetPayloadMethodV6, &pb.ExecutionBundleGloas{}
+	}
+	if epoch >= params.BeaconConfig().FuluForkEpoch {
+		return GetPayloadMethodV5, &pb.ExecutionBundleFulu{}
+	}
+	if epoch >= params.BeaconConfig().ElectraForkEpoch {
+		return GetPayloadMethodV4, &pb.ExecutionBundleElectra{}
+	}
+	if epoch >= params.BeaconConfig().DenebForkEpoch {
+		return GetPayloadMethodV3, &pb.ExecutionPayloadDenebWithValueAndBlobsBundle{}
+	}
+	if epoch >= params.BeaconConfig().CapellaForkEpoch {
+		return GetPayloadMethodV2, &pb.ExecutionPayloadCapellaWithValue{}
+	}
+	return GetPayloadMethod, &pb.ExecutionPayload{}
+}
 
 // jsonEngine is the JSON-RPC (engine_*) implementation of engineTransport. It
 // holds only its wire dependencies — the shared JSON-RPC connection and the
@@ -98,6 +205,14 @@ func (j jsonEngine) NewPayload(ctx context.Context, payload interfaces.Execution
 	default:
 		return nil, errors.Wrapf(ErrUnknownPayloadStatus, "unknown payload status: %s", result.Status.String())
 	}
+}
+
+// ForkchoiceUpdatedResponse is the response kind received by the
+// engine_forkchoiceUpdatedV1 endpoint.
+type ForkchoiceUpdatedResponse struct {
+	Status          *pb.PayloadStatus  `json:"payloadStatus"`
+	PayloadId       *pb.PayloadIDBytes `json:"payloadId"`
+	ValidationError string             `json:"validationError"`
 }
 
 // ForkchoiceUpdated calls the engine_forkchoiceUpdatedV1 method via JSON-RPC.
@@ -284,7 +399,7 @@ func (j jsonEngine) GetBlobsV2(ctx context.Context, versionedHashes []common.Has
 }
 
 // GetClientVersion calls engine_getClientVersionV1 to retrieve EL client information.
-func (s *Service) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error) {
+func (j jsonEngine) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetClientVersionV1")
 	defer span.End()
 
@@ -295,7 +410,7 @@ func (s *Service) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVers
 	}
 
 	var result []*structs.ClientVersionV1
-	err := s.rpcClient.CallContext(
+	err := j.rpc.CallContext(
 		ctx,
 		&result,
 		GetClientVersionV1,
