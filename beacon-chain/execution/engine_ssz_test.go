@@ -173,3 +173,19 @@ func TestBuiltPayloadToBundle(t *testing.T) {
 		require.ErrorContains(t, "unexpected BuiltPayload type", err)
 	})
 }
+
+// supportsBlob gates the blob endpoints on the probed v2 capability document,
+// mirroring jsonEngine's caps.has check.
+func TestSupportsBlob(t *testing.T) {
+	e := &sszEngine{caps: &enginehttp.Capabilities{
+		IndependentlyVersioned: map[string][]string{"blobs": {"v1", "v2", "v3", "v4"}},
+	}}
+	assert.Equal(t, true, e.supportsBlob("v1"))
+	assert.Equal(t, true, e.supportsBlob("v2"))
+
+	none := &sszEngine{caps: &enginehttp.Capabilities{IndependentlyVersioned: map[string][]string{}}}
+	assert.Equal(t, false, none.supportsBlob("v1"))
+
+	// No capability document (defensive): permit the request to surface support.
+	assert.Equal(t, true, (&sszEngine{}).supportsBlob("v1"))
+}

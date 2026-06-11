@@ -2,10 +2,12 @@ package execution
 
 import (
 	"context"
+	"slices"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/enginehttp"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -324,12 +326,86 @@ func builtPayloadToBundle(out ssz.Unmarshaler) (proto.Message, error) {
 	}
 }
 
+// GetBlobs fetches blobs-and-proofs over POST /engine/v2/blobs/v1 (replaces
+// engine_getBlobsV1). The result is request-aligned: one slot per requested
+// hash, nil where the EL reported available=false. A 204 (ErrNoContent) means
+// the EL cannot serve the request, returned as an empty result.
 func (e *sszEngine) GetBlobs(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProof, error) {
-	return nil, sszNotImplemented("GetBlobs")
+	if !e.supportsBlob("v1") {
+		return nil, errors.Errorf("%s is not supported", GetBlobsV1)
+	}
+	resp := &enginev2.BlobsV1Response{}
+	if err := e.client.GetBlobs(ctx, 1, blobsRequest(versionedHashes), resp); err != nil {
+		if errors.Is(err, enginehttp.ErrNoContent) {
+			return nil, nil
+		}
+		return nil, mapEngineError(err)
+	}
+	result := make([]*pb.BlobAndProof, len(versionedHashes))
+	for i := range result {
+		if i >= len(resp.Entries) {
+			break
+		}
+		entry := resp.Entries[i]
+		if entry == nil || !entry.Available || entry.Contents == nil {
+			continue
+		}
+		result[i] = &pb.BlobAndProof{Blob: entry.Contents.Blob, KzgProof: entry.Contents.Proof}
+	}
+	return result, nil
 }
 
+// GetBlobsV2 fetches blobs-and-cell-proofs over POST /engine/v2/blobs/v2
+// (replaces engine_getBlobsV2, all-or-nothing). A 204 (ErrNoContent) means the
+// EL cannot serve the request or at least one blob is missing — returned as an
+// empty result, matching the JSON-RPC "nothing returned" path.
 func (e *sszEngine) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
-	return nil, sszNotImplemented("GetBlobsV2")
+	if !e.supportsBlob("v2") {
+		return nil, errors.Errorf("%s is not supported", GetBlobsV2)
+	}
+	if flags.Get().DisableGetBlobsV2 {
+		return []*pb.BlobAndProofV2{}, nil
+	}
+	resp := &enginev2.BlobsV2Response{}
+	if err := e.client.GetBlobs(ctx, 2, blobsRequest(versionedHashes), resp); err != nil {
+		if errors.Is(err, enginehttp.ErrNoContent) {
+			return nil, nil
+		}
+		return nil, mapEngineError(err)
+	}
+	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
+	for i := range result {
+		if i >= len(resp.Entries) {
+			break
+		}
+		entry := resp.Entries[i]
+		if entry == nil || !entry.Available || entry.Contents == nil {
+			continue
+		}
+		result[i] = &pb.BlobAndProofV2{Blob: entry.Contents.Blob, KzgProofs: entry.Contents.Proofs}
+	}
+	return result, nil
+}
+
+// blobsRequest builds the SSZ List[VersionedHash] request body shared by the
+// blob-pool endpoints.
+func blobsRequest(versionedHashes []common.Hash) *enginev2.BlobsRequest {
+	req := &enginev2.BlobsRequest{VersionedHashes: make([][]byte, len(versionedHashes))}
+	for i := range versionedHashes {
+		req.VersionedHashes[i] = versionedHashes[i][:]
+	}
+	return req
+}
+
+// supportsBlob reports whether the EL advertised the given /blobs/vN revision in
+// its capabilities (the SSZ-native equivalent of jsonEngine's caps.has check).
+func (e *sszEngine) supportsBlob(version string) bool {
+	e.capsLock.RLock()
+	defer e.capsLock.RUnlock()
+	if e.caps == nil {
+		return true
+	}
+	return slices.Contains(e.caps.IndependentlyVersioned["blobs"], version)
 }
 
 // ExchangeCapabilities probes the EL's v2 capabilities over GET /engine/v2/capabilities

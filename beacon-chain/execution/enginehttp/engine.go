@@ -14,6 +14,7 @@ package enginehttp
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -91,14 +92,14 @@ func (c *Client) GetPayloadBodiesByRange(ctx context.Context, fork string, from,
 
 // GetBlobs fetches blobs-and-proofs from the EL blob pool.
 // POST /engine/v2/blobs/v{version} (replaces engine_getBlobsV1..4). The blob
-// endpoints are version-scoped, not fork-scoped.
-//
-// TODO(ssz-over-http): build /blobs/v{version}, POST req via SSZRequest, decode
-// the matching response (BlobsV1Response for v1, BlobsV2Response for v2/v3).
-// 204 (ErrNoContent) means "cannot serve" vs a per-entry available=false. v4
-// takes a bitvector cell-selection request whose container is not defined yet.
+// endpoints are version-scoped, not fork-scoped. The caller decodes the
+// matching response (BlobsV1Response for v1, BlobsV2Response for v2/v3). HTTP
+// 204 surfaces as ErrNoContent and means "the EL cannot serve this request"
+// (syncing, or a V2 all-or-nothing miss) — distinct from a per-entry
+// available=false within a 200 body. The v4 cell-range request container is not
+// yet defined in proto/engine/v2, so v4 is not wired here.
 func (c *Client) GetBlobs(ctx context.Context, version int, req ssz.Marshaler, out ssz.Unmarshaler) error {
-	return errNotImplemented("GetBlobs")
+	return c.SSZRequest(ctx, http.MethodPost, fmt.Sprintf("/blobs/v%d", version), nil, req, out)
 }
 
 // Capabilities is the JSON body of GET /engine/v2/capabilities. Field shape

@@ -5,3 +5,4 @@
 - SSZ-over-HTTP `POST /engine/v2/{fork}/payloads` (`engine_newPayload` equivalent) for the Amsterdam/Gloas envelope, behind `--engine-ssz-http`.
 - SSZ-over-HTTP `POST /engine/v2/{fork}/forkchoice` (`engine_forkchoiceUpdated` equivalent) for the Osaka/Fulu and Amsterdam/Gloas forks, behind `--engine-ssz-http`. The opaque `payload_id` is echoed verbatim; problem+json errors map onto the existing forkchoice/attribute sentinels.
 - SSZ-over-HTTP `GET /engine/v2/{fork}/payloads/{id}` (`engine_getPayload` equivalent) for the Osaka/Fulu and Amsterdam/Gloas forks, behind `--engine-ssz-http`. The opaque id is hex-encoded into the path and the response is never cached.
+- SSZ-over-HTTP `POST /engine/v2/blobs/v1` and `/blobs/v2` (`engine_getBlobsV1`/`engine_getBlobsV2` equivalents), behind `--engine-ssz-http`. `204 No Content` is treated as "EL cannot serve"; results are request-aligned.

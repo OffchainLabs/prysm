@@ -117,10 +117,38 @@ func TestGetPayloadBodiesByRange(t *testing.T) {
 }
 
 func TestGetBlobs(t *testing.T) {
-	t.Skip("TODO(ssz-over-http): implement Client.GetBlobs — POST /engine/v2/blobs/v{version}")
-	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {})
-	err := c.GetBlobs(context.Background(), 1, &stubSSZ{data: []byte("blobreq")}, &stubSSZ{})
+	respSSZ, err := (&enginev2.BlobsV1Response{}).MarshalSSZ()
 	require.NoError(t, err)
+
+	var gotMethod, gotPath, gotCT string
+	var gotBody []byte
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		gotCT = r.Header.Get("Content-Type")
+		gotBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", contentTypeSSZ)
+		_, _ = w.Write(respSSZ)
+	})
+
+	err = c.GetBlobs(context.Background(), 1, &stubSSZ{data: []byte("blobreq")}, &enginev2.BlobsV1Response{})
+	require.NoError(t, err)
+	assert.Equal(t, http.MethodPost, gotMethod)
+	assert.Equal(t, "/engine/v2/blobs/v1", gotPath) // version-scoped, not fork-scoped
+	assert.Equal(t, contentTypeSSZ, gotCT)
+	assert.DeepEqual(t, []byte("blobreq"), gotBody)
+}
+
+// A 204 No Content means the EL cannot serve the request (syncing / V2
+// all-or-nothing miss); it surfaces as ErrNoContent.
+func TestGetBlobs_NoContent(t *testing.T) {
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	err := c.GetBlobs(context.Background(), 2, &stubSSZ{data: []byte("x")}, &enginev2.BlobsV2Response{})
+	require.NotNil(t, err)
+	require.Equal(t, true, errors.Is(err, ErrNoContent))
 }
 
 // capabilitiesBody mirrors docs/fixtures/ethrex-capabilities.json.
