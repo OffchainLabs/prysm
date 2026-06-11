@@ -38,6 +38,7 @@ import (
 
 const (
 	broadcastValidationQueryParam               = "broadcast_validation"
+	broadcastValidationGossip                   = "gossip"
 	broadcastValidationConsensus                = "consensus"
 	broadcastValidationConsensusAndEquivocation = "consensus_and_equivocation"
 )
