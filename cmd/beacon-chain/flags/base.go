@@ -374,4 +374,12 @@ var (
 		Name:  "partial-data-columns",
 		Usage: "Enable cell-level dissemination for PeerDAS data columns",
 	}
+	// SimulatePartialELBlobs forces the node to drop a subset of the blobs returned by
+	// engine_getBlobs so the missing cells must be fetched from peers via the
+	// partial-data-column protocol. Test/debug only.
+	SimulatePartialELBlobs = &cli.BoolFlag{
+		Name:   "simulate-partial-el-blobs",
+		Usage:  "Test only: drop ~half of the blobs returned by engine_getBlobs to force peer-to-peer partial-column cell exchange.",
+		Hidden: true,
+	}
 )

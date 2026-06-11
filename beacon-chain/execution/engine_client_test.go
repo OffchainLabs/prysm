@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	mocks "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -2793,6 +2794,95 @@ func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, false, supported)
 		require.Equal(t, 0, len(cols))
+	})
+}
+
+// TestSimulatePartialELBlobsAlignment verifies that with the simulate-partial-el-blobs flag
+// set, the HasBlobs flow requests exactly the blobs the GetBlobsV3 flow drops.
+func TestSimulatePartialELBlobsAlignment(t *testing.T) {
+	require.NoError(t, kzg.Start())
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	flags.Init(&flags.GlobalFlags{SimulatePartialELBlobs: true})
+	defer flags.Init(new(flags.GlobalFlags))
+
+	const numBlobs = 5
+	b := util.NewBeaconBlockFulu()
+	b.Block.Body.BlobKzgCommitments = createRandomKzgCommitments(t, numBlobs)
+	r, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	sb, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	roBlock, err := blocks.NewROBlockWithRoot(sb, r)
+	require.NoError(t, err)
+	source := peerdas.PopulateFromBlock(roBlock)
+	ctx := context.Background()
+
+	// runAlignment mocks an EL whose blob pool is described by elHasBlob, runs the HasBlobs and
+	// GetBlobsV3 flows, and asserts both report exactly wantMissing as the missing blobs.
+	runAlignment := func(t *testing.T, elHasBlob []bool, wantMissing []uint64) {
+		cli, engine := newMockEngine(t)
+		defer cli.Close()
+		engine.register(HasBlobs, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+			mockWriteResult(t, w, msg, elHasBlob)
+		})
+		engine.register(GetBlobsV3, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+			blobAndProofs := make([]*pb.BlobAndProofV2Json, numBlobs)
+			for i, has := range elHasBlob {
+				if !has {
+					continue
+				}
+				blobAndProofs[i] = &pb.BlobAndProofV2Json{Blob: []byte("0xblob"), KzgProofs: []hexutil.Bytes{}}
+				for range fieldparams.NumberOfColumns {
+					blobAndProofs[i].KzgProofs = append(blobAndProofs[i].KzgProofs, make([]byte, 48))
+				}
+			}
+			mockWriteResult(t, w, msg, blobAndProofs)
+		})
+		client := &Service{
+			rpcClient:               cli,
+			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}},
+			partialColumnsSupported: true,
+		}
+
+		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
+		require.NoError(t, err)
+		require.Equal(t, true, supported)
+		require.Equal(t, fieldparams.NumberOfColumns, len(cols))
+
+		commitments, err := source.Commitments()
+		require.NoError(t, err)
+		cp, err := client.fetchCellsAndProofsFromExecution(ctx, commitments)
+		require.NoError(t, err)
+
+		missing := make(map[uint64]bool, len(wantMissing))
+		for _, i := range wantMissing {
+			missing[i] = true
+		}
+		for _, col := range cols {
+			requests, ok := col.PartsRequests()
+			require.Equal(t, true, ok)
+			require.Equal(t, uint64(numBlobs), requests.Len())
+			for i := range uint64(numBlobs) {
+				require.Equal(t, missing[i], requests.BitAt(i))
+				// The HasBlobs flow must request exactly the blobs missing from the GetBlobsV3 response.
+				require.Equal(t, !requests.BitAt(i), cp.Included.BitAt(i))
+			}
+		}
+	}
+
+	t.Run("simulation drops the same blobs from HasBlobs and GetBlobsV3", func(t *testing.T) {
+		// The EL has every blob: only the simulation makes odd-indexed blobs go missing.
+		runAlignment(t, []bool{true, true, true, true, true}, []uint64{1, 3})
+	})
+
+	t.Run("genuinely missing blobs combine with simulated drops", func(t *testing.T) {
+		// Blob 2 is genuinely missing from the EL; blobs 1 and 3 are dropped by the simulation.
+		runAlignment(t, []bool{true, true, false, true, true}, []uint64{1, 2, 3})
 	})
 }
 

@@ -1044,6 +1044,15 @@ func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Con
 		)
 	}
 
+	// Test only: mark the blobs the GetBlobsV3 simulation will drop as missing so both responses align.
+	if flags.Get().SimulatePartialELBlobs {
+		for i := range hasBlobs {
+			if simulatedBlobDropped(i) {
+				hasBlobs[i] = false
+			}
+		}
+	}
+
 	requests := bitfield.NewBitlist(uint64(len(commitments)))
 	for i, hasBlob := range hasBlobs {
 		if !hasBlob {
@@ -1106,6 +1115,18 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 		return peerdas.StructuredCellsAndProofs{}, nil
 	}
 
+	// Test only: simulate an execution client that returns only a subset of the
+	// blobs, so the node must obtain the missing cells from peers via the
+	// partial-data-column protocol. Drops every other blob, always keeping the
+	// first one so the column never ends up empty.
+	if flags.Get().SimulatePartialELBlobs && useGetBlobsV3 {
+		for i := range blobAndProofs {
+			if simulatedBlobDropped(i) {
+				blobAndProofs[i] = nil
+			}
+		}
+	}
+
 	// Compute cells and proofs from the blobs and cell proofs.
 	result, err := peerdas.ComputeCellsAndProofsFromStructured(uint64(len(kzgCommitments)), blobAndProofs)
 	if err != nil {
@@ -1123,6 +1144,12 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	}
 
 	return result, nil
+}
+
+// simulatedBlobDropped reports whether the simulate-partial-el-blobs simulation drops the
+// blob at index i — shared by the GetBlobsV3 and HasBlobs paths so both see the same missing blobs.
+func simulatedBlobDropped(i int) bool {
+	return i%2 == 1
 }
 
 func (s *Service) useGetBlobsV3() bool {
