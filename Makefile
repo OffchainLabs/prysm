@@ -290,7 +290,7 @@ test:
 # `make <target>` makes clear what still needs implementing, and `make help`
 # lists the full surface. See BAZEL_MIGRATION.md.
 # ---------------------------------------------------------------------------
-.PHONY: gen lint deb
+.PHONY: gen lint
 
 # Regenerate generated code — all of $(GEN_KINDS), or only those named (e.g. make gen proto).
 gen:
@@ -303,8 +303,15 @@ gen:
 lint: ## [Phase 7] Static analysis (nogo → prysm-vet multichecker)
 	@echo "❌ 'lint' is not implemented yet — Phase 7 (static analysis). See BAZEL_MIGRATION.md."; exit 1
 
-deb: ## [Phase 6] Build .deb packages
-	@echo "❌ 'deb' is not implemented yet — Phase 6 (.deb packaging). See BAZEL_MIGRATION.md."; exit 1
+# Build the .deb packages (prysm-beacon-chain, prysm-validator) with nfpm. Replaces the
+# Bazel rules_pkg pkg_deb rules. build/deb cross-builds the linux portable binaries
+# in-process (reusing build/cross via BUILD_CROSS_ENV) then runs `go tool nfpm` per arch.
+# Contrary to Bazel (amd64 only) we ship both amd64 and arm64, matching the docker images.
+# Turnkey on any host: the linux targets build via zig (like `make build docker=true`).
+.PHONY: deb
+deb: ## [Phase 6] Build .deb packages (prysm-beacon-chain, prysm-validator; amd64+arm64)
+	@$(BUILD_CROSS_ENV) DEB_ARCHES="amd64 arm64" \
+	  CROSS_TARGETS_LINUX="$(CROSS_TARGETS_LINUX)" $(GO) run ./build/deb
 
 .PHONY: clean
 clean: ## Remove build output

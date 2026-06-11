@@ -208,10 +208,31 @@ Replaced `rules_oci` + `prysm_image.bzl` with a single parameterized **multi-sta
   `ARG` in `ENTRYPOINT`; the real binary stays at the faithful `/<bin>` path. `make build docker=true`
   builds only linux binaries (via zig), so it runs from any host including macOS.
 
-### Phase 6 — `.deb` packaging
-Replace `rules_pkg` (`pkg_deb`/`pkg_tar`) with **`nfpm`** (single YAML → deb/rpm/tar):
-- One `nfpm.yaml` each for `prysm-beacon-chain` and `prysm-validator`, bundling binary +
-  config + systemd unit (mirror `beacon-chain/package/` and `validator/package/`).
+### Phase 6 — `.deb` packaging — ✅ DONE
+Replaced `rules_pkg` (`pkg_deb`/`pkg_tar`) with **`nfpm`** (pinned in the go.mod `tool`
+block, invoked as `go tool nfpm`), driven by `make deb` (the `build/deb` Go command +
+`build/debpkg` logic, mirroring the `build/docker`⇄`build/crossbuild` split).
+
+- **Packages** (unchanged set): `prysm-beacon-chain`, `prysm-validator` — one `nfpm.yaml`
+  each at `beacon-chain/package/` / `validator/package/`, reusing the existing config
+  YAML, systemd unit, and `preinst.sh`/`postinst.sh` verbatim.
+- **Faithful deb layout** (byte-checked against the old `pkg_deb`): `/usr/bin/<bin>`
+  (0755), `/etc/prysm/<bin>.yaml` (0640, marked `type: config` → Debian conffile),
+  `/usr/lib/systemd/system/prysm-<name>.service` (0640); same package name, description,
+  maintainer (`Prysmatic Labs <contact@prysmaticlabs.com>`), homepage; no
+  `depends`/`prerm`/`postrm`. **Version** = `GIT_TAG` with the leading `v` stripped
+  (`version_schema: none` passes it through verbatim), matching the old
+  `//runtime:version_file` genrule (`... | tr -d v`).
+- **Contrary to Bazel (which shipped `amd64` only), we build both `amd64` and `arm64`**
+  — matching the Phase 5 multi-arch docker images; Phase 4 already cross-builds both
+  linux binaries, so it is free. Output: `dist/prysm-{beacon-chain,validator}_<ver>_{amd64,arm64}.deb`.
+- **`make deb` is turnkey** — `build/deb` cross-builds the linux **portable** binaries
+  in-process (reusing `build/crossbuild` via `BUILD_CROSS_ENV`, exactly as `build/docker`
+  does), then runs `nfpm` per (package × arch). Runs from any host (the linux targets use
+  zig), like `make build docker=true`.
+- nfpm gotcha: a content entry's `src`/`dst` are env-expanded only with `expand: true` on
+  that entry (`nfpm.go:197`); the binary entry uses `${PRYSM_BIN_SRC}` and sets it.
+- The old `*/package/BUILD.bazel` + `rules_pkg` in `WORKSPACE` are left for Phase 10 deletion.
 
 ### Phase 7 — Static analysis (nogo → standalone vettool)
 Replace `nogo` with a **single `multichecker` binary** (`tools/cmd/prysm-vet`) built from

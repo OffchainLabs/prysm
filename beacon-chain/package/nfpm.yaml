@@ -1,0 +1,29 @@
+# nfpm config for the prysm-beacon-chain .deb (Phase 6, replaces the pkg_deb rule
+# that lived in BUILD.bazel). Faithfully reproduces the Bazel package layout. The
+# per-build values (arch, version, binary path) are supplied via env vars expanded
+# by nfpm; build/debpkg sets them and runs `go tool nfpm` once per architecture.
+name: prysm-beacon-chain
+arch: ${PRYSM_ARCH}          # amd64 | arm64
+version: ${PRYSM_VERSION}    # GIT_TAG with the leading "v" stripped (matches runtime/version_file)
+version_schema: none         # pass the version through verbatim, like Bazel's text-only version.txt
+maintainer: Prysmatic Labs <contact@prysmaticlabs.com>
+description: Prysm Beacon Chain - Ethereum consensus network communications
+homepage: https://prysmaticlabs.com/
+contents:
+  - src: ${PRYSM_BIN_SRC}    # dist/beacon-chain-<tag>-linux-<arch> (portable)
+    dst: /usr/bin/beacon-chain
+    expand: true             # required for nfpm to env-expand src/dst (nfpm.go:197)
+    file_info:
+      mode: 0755
+  - src: beacon-chain/package/beacon-chain.yaml
+    dst: /etc/prysm/beacon-chain.yaml
+    type: config             # → Debian conffile (preserved on upgrade)
+    file_info:
+      mode: 0640
+  - src: beacon-chain/package/prysm-beacon-chain.service
+    dst: /usr/lib/systemd/system/prysm-beacon-chain.service
+    file_info:
+      mode: 0640
+scripts:
+  preinstall: beacon-chain/package/preinst.sh
+  postinstall: beacon-chain/package/postinst.sh
