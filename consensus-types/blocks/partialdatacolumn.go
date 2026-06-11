@@ -44,7 +44,7 @@ type PartialDataColumn struct {
 	Published bool
 
 	// partsRequests overrides the request bitmap in parts metadata. This is used
-	// when we know which parts to request before cells/proofs are materialized.
+	// when we know which parts to request from other peers before we actually fetch cells from the EL.
 	partsRequests bitfield.Bitlist
 }
 
@@ -120,7 +120,7 @@ func (p *PartialDataColumn) newPartsMetadata() (*ethpb.PartialDataColumnPartsMet
 		var err error
 		requests, err = slices.Clone(p.partsRequests).And(missing)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "intersect parts requests with missing cells")
 		}
 	}
 
@@ -131,15 +131,9 @@ func (p *PartialDataColumn) newPartsMetadata() (*ethpb.PartialDataColumnPartsMet
 }
 
 // SetPartsRequests overrides the request bitmap emitted in parts metadata.
-//
-// PartialDataColumn is not safe for concurrent use. The partial column
-// broadcaster serializes all mutations (SetPartsRequests, ClearPartsRequests,
-// ExtendFromVerifiedCell) on its event loop, and reads via forPeer happen on
-// the pubsub eval goroutine only while the broadcaster blocks inside
-// pubsub.PublishPartial, so the channel handoff orders them.
 func (p *PartialDataColumn) SetPartsRequests(requests bitfield.Bitlist) error {
 	if requests.Len() != uint64(len(p.KzgCommitments)) {
-		return errors.New("parts requests length mismatch")
+		return errors.Errorf("parts requests length mismatch: got %d, want %d", requests.Len(), len(p.KzgCommitments))
 	}
 	p.partsRequests = slices.Clone(requests)
 	return nil

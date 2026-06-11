@@ -378,7 +378,7 @@ func (s *Service) publishPartialColumns(ctx context.Context, indices map[uint64]
 		return errors.Wrap(err, "current fork digest")
 	}
 
-	return partialBroadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
+	err = partialBroadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
 		for i := range uint64(len(partialColumns)) {
 			if !indices[i] {
 				continue
@@ -390,6 +390,7 @@ func (s *Service) publishPartialColumns(ctx context.Context, indices map[uint64]
 			}
 		}
 	})
+	return errors.Wrap(err, "publish partial columns")
 }
 
 // broadcastAndReceiveUnseenDataColumnSidecars broadcasts and receives unseen data column sidecars.
