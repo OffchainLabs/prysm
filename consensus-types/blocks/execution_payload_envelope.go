@@ -8,7 +8,6 @@ import (
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"google.golang.org/protobuf/proto"
@@ -199,41 +198,6 @@ func (p *blindedExecutionPayloadEnvelope) Slot() primitives.Slot {
 
 func (p *blindedExecutionPayloadEnvelope) BlockHash() [field_params.RootLength]byte {
 	return [field_params.RootLength]byte(p.p.BlockHash)
-}
-
-// WireBlindedFromFull derives the spec-wire blinded envelope (beacon-APIs #580) from a full one:
-// the payload is replaced by payload_root = HashTreeRoot(payload), so HashTreeRoot(blinded) ==
-// HashTreeRoot(full) and a validator signature over either form is valid against the other.
-func WireBlindedFromFull(full *ethpb.ExecutionPayloadEnvelope) (*ethpb.WireBlindedExecutionPayloadEnvelope, error) {
-	if full == nil {
-		return nil, nil
-	}
-	payloadRoot, err := full.Payload.HashTreeRoot()
-	if err != nil {
-		return nil, err
-	}
-	return &ethpb.WireBlindedExecutionPayloadEnvelope{
-		PayloadRoot:           payloadRoot[:],
-		ExecutionRequests:     full.ExecutionRequests,
-		BuilderIndex:          full.BuilderIndex,
-		BeaconBlockRoot:       bytesutil.SafeCopyBytes(full.BeaconBlockRoot),
-		ParentBeaconBlockRoot: bytesutil.SafeCopyBytes(full.ParentBeaconBlockRoot),
-	}, nil
-}
-
-// SignedWireBlindedFromFull lifts a signed envelope to its blinded form, preserving the signature.
-func SignedWireBlindedFromFull(full *ethpb.SignedExecutionPayloadEnvelope) (*ethpb.SignedWireBlindedExecutionPayloadEnvelope, error) {
-	if full == nil {
-		return nil, nil
-	}
-	msg, err := WireBlindedFromFull(full.Message)
-	if err != nil {
-		return nil, err
-	}
-	return &ethpb.SignedWireBlindedExecutionPayloadEnvelope{
-		Message:   msg,
-		Signature: bytesutil.SafeCopyBytes(full.Signature),
-	}, nil
 }
 
 // BlockBuiltOnEnvelope checks if the block's parent hash matches the envelope's execution block hash.

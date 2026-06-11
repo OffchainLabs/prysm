@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
@@ -108,7 +109,7 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 
 	// Return the blinded wire form (payload_root); the signer validates over its HTR, which equals
 	// the full envelope's HTR, and the BN reconstructs the full payload from this cache on publish.
-	blinded, err := consensusblocks.WireBlindedFromFull(contents.Envelope)
+	blinded, err := structs.WireBlindedFromFull(contents.Envelope)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "could not build blinded envelope: %v", err)
 	}

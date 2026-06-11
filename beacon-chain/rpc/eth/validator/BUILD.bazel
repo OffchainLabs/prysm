@@ -89,7 +89,6 @@ go_test(
         "//beacon-chain/sync/initial-sync/testing:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
-        "//consensus-types/blocks:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//crypto/bls:go_default_library",
         "//crypto/bls/common:go_default_library",

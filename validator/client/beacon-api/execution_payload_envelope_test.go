@@ -9,7 +9,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
@@ -78,7 +77,7 @@ func TestGetExecutionPayloadEnvelope_StatefulFetchesBlinded(t *testing.T) {
 	defer ctrl.Finish()
 
 	envelope := testProtoEnvelope()
-	blinded, err := blocks.WireBlindedFromFull(envelope)
+	blinded, err := structs.WireBlindedFromFull(envelope)
 	require.NoError(t, err)
 	body, err := blinded.MarshalSSZ()
 	require.NoError(t, err)
@@ -107,7 +106,7 @@ func TestPublishBlindedExecutionPayloadEnvelope(t *testing.T) {
 	defer ctrl.Finish()
 
 	signed := &ethpb.SignedExecutionPayloadEnvelope{Message: testProtoEnvelope(), Signature: bytesutil.PadTo([]byte("sig"), 96)}
-	signedBlinded, err := blocks.SignedWireBlindedFromFull(signed)
+	signedBlinded, err := structs.SignedWireBlindedFromFull(signed)
 	require.NoError(t, err)
 	expectedBody, err := signedBlinded.MarshalSSZ()
 	require.NoError(t, err)
@@ -135,7 +134,7 @@ func TestPublishBlindedExecutionPayloadEnvelope_JSONFallbackOn406(t *testing.T) 
 	defer ctrl.Finish()
 
 	signed := &ethpb.SignedExecutionPayloadEnvelope{Message: testProtoEnvelope(), Signature: bytesutil.PadTo([]byte("sig"), 96)}
-	signedBlinded, err := blocks.SignedWireBlindedFromFull(signed)
+	signedBlinded, err := structs.SignedWireBlindedFromFull(signed)
 	require.NoError(t, err)
 	msg, err := structs.BlindedExecutionPayloadEnvelopeFromConsensus(signedBlinded.Message)
 	require.NoError(t, err)

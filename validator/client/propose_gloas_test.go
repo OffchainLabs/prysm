@@ -3,6 +3,7 @@ package client
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -102,7 +103,7 @@ func TestProposeSelfBuildEnvelope_Blinded(t *testing.T) {
 	slot := primitives.Slot(100)
 	builderIndex := params.BeaconConfig().BuilderIndexSelfBuild
 
-	blinded, err := consensusblocks.WireBlindedFromFull(testExecutionPayloadEnvelope(slot, builderIndex))
+	blinded, err := structs.WireBlindedFromFull(testExecutionPayloadEnvelope(slot, builderIndex))
 	require.NoError(t, err)
 
 	m.validatorClient.EXPECT().
