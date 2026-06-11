@@ -1048,6 +1048,15 @@ func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Con
 		)
 	}
 
+	// Test only: mark the blobs the GetBlobsV3 simulation will drop as missing so both responses align.
+	if flags.Get().SimulatePartialELBlobs {
+		for i := range hasBlobs {
+			if simulatedBlobDropped(i) {
+				hasBlobs[i] = false
+			}
+		}
+	}
+
 	requests := bitfield.NewBitlist(uint64(len(commitments)))
 	for i, hasBlob := range hasBlobs {
 		if !hasBlob {
@@ -1116,7 +1125,7 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	// first one so the column never ends up empty.
 	if flags.Get().SimulatePartialELBlobs && useGetBlobsV3 {
 		for i := range blobAndProofs {
-			if i%2 == 1 && blobAndProofs[i] != nil {
+			if simulatedBlobDropped(i) {
 				blobAndProofs[i] = nil
 			}
 		}
@@ -1139,6 +1148,12 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	}
 
 	return result, nil
+}
+
+// simulatedBlobDropped reports whether the simulate-partial-el-blobs simulation drops the
+// blob at index i — shared by the GetBlobsV3 and HasBlobs paths so both see the same missing blobs.
+func simulatedBlobDropped(i int) bool {
+	return i%2 == 1
 }
 
 func (s *Service) useGetBlobsV3() bool {
