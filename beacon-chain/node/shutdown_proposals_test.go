@@ -26,7 +26,7 @@ import (
 func deterministicGenesisWithEarliestProposer(t *testing.T) (state.BeaconState, primitives.ValidatorIndex, primitives.Slot) {
 	helpers.ClearCache()
 
-	depChainStart := params.BeaconConfig().MinGenesisActiveValidatorCount
+	depChainStart := params.MinimalSpecConfig().MinGenesisActiveValidatorCount
 	deposits, _, err := util.DeterministicDepositsAndKeys(depChainStart)
 	require.NoError(t, err)
 	eth1Data, err := util.DeterministicEth1Data(len(deposits))
