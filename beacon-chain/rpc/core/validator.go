@@ -1022,7 +1022,7 @@ func (s *Service) buildPayloadAttestationData(slot primitives.Slot) (*ethpb.Payl
 		return nil, &RpcError{Reason: Internal, Err: fmt.Errorf("could not retrieve highest received block root for slot %d", slot)}
 	}
 	if !s.hasCanonicalShuffling(root, slot) {
-		return nil, &RpcError{Reason: Internal, Err: fmt.Errorf("no canonical shuffling block for slot %d", slot)}
+		return nil, &RpcError{Reason: Unavailable, Err: fmt.Errorf("no canonical shuffling block for slot %d", slot)}
 	}
 	payloadEarly, _ := s.ForkchoiceFetcher.PayloadEarly(root)
 	return &ethpb.PayloadAttestationData{
