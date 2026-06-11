@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -519,6 +520,15 @@ func (f *ForkChoice) SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, bl
 	n.node.payloadAttesters.SetBitAt(ptcIdx, true)
 	n.node.payloadAvailabilityVote.SetBitAt(ptcIdx, payloadPresent)
 	n.node.payloadDataAvailabilityVote.SetBitAt(ptcIdx, blobDataAvailable)
+}
+
+// PTCVotes returns the recorded PTC vote bitvectors for the given root. The caller MUST hold the forkchoice lock.
+func (f *ForkChoice) PTCVotes(root [32]byte) (attesters, payloadPresent, blobDataAvailable bitfield.Bitvector512, ok bool) {
+	n := f.store.emptyNodeByRoot[root]
+	if n == nil {
+		return nil, nil, nil, false
+	}
+	return n.node.payloadAttesters, n.node.payloadAvailabilityVote, n.node.payloadDataAvailabilityVote, true
 }
 
 // resolveVoteNode returns the node that should receive the balance of a vote. It returns always a PayloadNode, but the boolean indicates
