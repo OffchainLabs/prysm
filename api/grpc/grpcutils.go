@@ -67,6 +67,9 @@ func LogStream(
 // AppendHeaders parses the provided GRPC headers
 // and attaches them to the provided context.
 func AppendHeaders(parent context.Context, headers []string) context.Context {
+	// Batch key-value pairs to make a single AppendToOutgoingContext call,
+	// avoiding a new context allocation per header.
+	pairs := make([]string, 0, len(headers)*2)
 	for _, h := range headers {
 		if h != "" {
 			keyValue := strings.Split(h, "=")
@@ -74,8 +77,11 @@ func AppendHeaders(parent context.Context, headers []string) context.Context {
 				log.Warnf("Incorrect gRPC header flag format. Skipping %v", keyValue[0])
 				continue
 			}
-			parent = metadata.AppendToOutgoingContext(parent, keyValue[0], strings.Join(keyValue[1:], "=")) // nolint:fatcontext
+			pairs = append(pairs, keyValue[0], strings.Join(keyValue[1:], "="))
 		}
+	}
+	if len(pairs) > 0 {
+		parent = metadata.AppendToOutgoingContext(parent, pairs...) // nolint:fatcontext
 	}
 	return parent
 }

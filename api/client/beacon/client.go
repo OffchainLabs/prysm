@@ -203,8 +203,7 @@ func RenderGetStatePath(id StateOrBlockId) string {
 // for the named identifiers.
 // The return value contains the ssz-encoded bytes.
 func (c *Client) GetState(ctx context.Context, stateId StateOrBlockId) ([]byte, error) {
-	statePath := path.Join(getStatePath, string(stateId))
-	b, err := c.Get(ctx, statePath, client.WithSSZEncoding())
+	b, err := c.Get(ctx, RenderGetStatePath(stateId), client.WithSSZEncoding())
 	if err != nil {
 		return nil, errors.Wrapf(err, "error requesting state by id = %s", stateId)
 	}
