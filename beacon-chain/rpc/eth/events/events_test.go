@@ -32,6 +32,7 @@ import (
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common"
@@ -474,6 +475,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 
 		topics, err := newTopicRequest([]string{
 			HeadTopic,
+			HeadV2Topic,
 			FinalizedCheckpointTopic,
 			ChainReorgTopic,
 			BlockTopic,
@@ -507,6 +509,20 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 					PreviousDutyDependentRoot: make([]byte, 32),
 					CurrentDutyDependentRoot:  make([]byte, 32),
 					ExecutionOptimistic:       false,
+				},
+			},
+			{
+				Type: statefeed.NewHeadV2,
+				Data: &statefeed.HeadV2Data{
+					Slot:                      0,
+					Block:                     [32]byte{},
+					State:                     [32]byte{},
+					EpochTransition:           true,
+					ExecutionOptimistic:       false,
+					CurrentEpochDependentRoot: [32]byte{},
+					NextEpochDependentRoot:    [32]byte{},
+					PayloadStatus:             statefeed.PayloadStatusFull,
+					Version:                   version.Gloas,
 				},
 			},
 			{
