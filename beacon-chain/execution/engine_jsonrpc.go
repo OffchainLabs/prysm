@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
@@ -400,6 +401,33 @@ func (j jsonEngine) GetBlobsV2(ctx context.Context, versionedHashes []common.Has
 	}
 
 	return result, handleRPCError(err)
+}
+
+// PayloadBodyFork keys every block into a single V1 bodies batch, preserving
+// the pre-transport behavior (one engine_getPayloadBodiesByHashV1 call). The
+// fork is irrelevant to JSON-RPC, which is version- not URL-scoped.
+func (j jsonEngine) PayloadBodyFork(int) string {
+	return GetPayloadBodiesByHashV1
+}
+
+// GetPayloadBodiesByHash calls engine_getPayloadBodiesByHashV1. The result is
+// aligned with hashes (nil for unavailable bodies). The error is returned raw,
+// matching the prior reconstruction path.
+func (j jsonEngine) GetPayloadBodiesByHash(ctx context.Context, _ string, hashes []common.Hash) ([]*pb.ExecutionPayloadBody, error) {
+	result := make([]*pb.ExecutionPayloadBody, 0)
+	if err := j.rpc.CallContext(ctx, &result, GetPayloadBodiesByHashV1, hashes); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetPayloadBodiesByRange calls engine_getPayloadBodiesByRangeV1.
+func (j jsonEngine) GetPayloadBodiesByRange(ctx context.Context, _ string, from, count uint64) ([]*pb.ExecutionPayloadBody, error) {
+	result := make([]*pb.ExecutionPayloadBody, 0)
+	if err := j.rpc.CallContext(ctx, &result, GetPayloadBodiesByRangeV1, hexutil.EncodeUint64(from), hexutil.EncodeUint64(count)); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // GetClientVersion calls engine_getClientVersionV1 to retrieve EL client information.

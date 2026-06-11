@@ -429,3 +429,18 @@ func (e *sszEngine) ExchangeCapabilities(ctx context.Context) error {
 func (e *sszEngine) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error) {
 	return e.client.Identity(ctx)
 }
+
+// Payload-bodies reconstruction over SSZ is not wired yet (a follow-up PR fills
+// /{fork}/bodies). PayloadBodyFork returns "" so the reconstructor's subsequent
+// GetPayloadBodiesBy* call surfaces sszNotImplemented.
+func (e *sszEngine) PayloadBodyFork(int) string {
+	return ""
+}
+
+func (e *sszEngine) GetPayloadBodiesByHash(ctx context.Context, fork string, hashes []common.Hash) ([]*pb.ExecutionPayloadBody, error) {
+	return nil, sszNotImplemented("GetPayloadBodiesByHash")
+}
+
+func (e *sszEngine) GetPayloadBodiesByRange(ctx context.Context, fork string, from, count uint64) ([]*pb.ExecutionPayloadBody, error) {
+	return nil, sszNotImplemented("GetPayloadBodiesByRange")
+}

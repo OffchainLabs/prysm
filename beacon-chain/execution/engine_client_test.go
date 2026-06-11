@@ -2481,7 +2481,7 @@ func TestReconstructBlindedBlockBatch(t *testing.T) {
 
 			t.Fatal("http request should not be made")
 		})
-		results, err := reconstructBlindedBlockBatch(ctx, cli, []interfaces.ReadOnlySignedBeaconBlock{})
+		results, err := reconstructBlindedBlockBatch(ctx, jsonEngine{rpc: cli}, []interfaces.ReadOnlySignedBeaconBlock{})
 		require.NoError(t, err)
 		require.Equal(t, 0, len(results))
 	})

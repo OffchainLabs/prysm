@@ -32,6 +32,12 @@ type engineTransport interface {
 	GetBlobsV2(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error)
 	ExchangeCapabilities(ctx context.Context) error
 	GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error)
+	// Payload-bodies reconstruction. PayloadBodyFork returns the batch key for a
+	// block: jsonEngine keys all blocks together (one V1 call, prior behavior),
+	// sszEngine keys by EL fork name (the fork-scoped /{fork}/bodies URL).
+	PayloadBodyFork(version int) string
+	GetPayloadBodiesByHash(ctx context.Context, fork string, hashes []common.Hash) ([]*pb.ExecutionPayloadBody, error)
+	GetPayloadBodiesByRange(ctx context.Context, fork string, from, count uint64) ([]*pb.ExecutionPayloadBody, error)
 }
 
 // engine returns the engine transport selected for the current connection.

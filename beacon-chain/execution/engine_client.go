@@ -79,7 +79,7 @@ func (s *Service) ReconstructFullBlock(
 func (s *Service) ReconstructFullBellatrixBlockBatch(
 	ctx context.Context, blindedBlocks []interfaces.ReadOnlySignedBeaconBlock,
 ) ([]interfaces.SignedBeaconBlock, error) {
-	unb, err := reconstructBlindedBlockBatch(ctx, s.rpcClient, blindedBlocks)
+	unb, err := reconstructBlindedBlockBatch(ctx, s.engine(), blindedBlocks)
 	if err != nil {
 		return nil, err
 	}
