@@ -1200,7 +1200,7 @@ func TestIsSidecarSizeValid(t *testing.T) {
 	const slot = 0
 	maxBlobs := params.BeaconConfig().MaxBlobsPerBlock(slot)
 
-	build := func(cells int) blocks.RODataColumn {
+	build := func(cells int, index uint64) blocks.RODataColumn {
 		column := make([][]byte, cells)
 		commitments := make([][]byte, cells)
 		proofs := make([][]byte, cells)
@@ -1214,6 +1214,7 @@ func TestIsSidecarSizeValid(t *testing.T) {
 			incl[i] = make([]byte, fieldparams.RootLength)
 		}
 		sc, err := blocks.NewRODataColumn(&ethpb.DataColumnSidecar{
+			Index:          index,
 			Column:         column,
 			KzgCommitments: commitments,
 			KzgProofs:      proofs,
@@ -1230,10 +1231,13 @@ func TestIsSidecarSizeValid(t *testing.T) {
 		return sc
 	}
 
-	require.NoError(t, validator(build(maxBlobs)))
+	require.NoError(t, validator(build(maxBlobs, 0)))
 
-	err := validator(build(fieldparams.MaxBlobCommitmentsPerBlock))
-	require.ErrorContains(t, "more cells", err)
+	err := validator(build(fieldparams.MaxBlobCommitmentsPerBlock, 0))
+	require.ErrorIs(t, err, errSidecarTooManyCells)
+
+	err = validator(build(maxBlobs, fieldparams.NumberOfColumns))
+	require.ErrorIs(t, err, errSidecarIndexTooLarge)
 }
 
 func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
