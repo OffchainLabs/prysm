@@ -105,6 +105,16 @@ func (b *SignedBeaconBlock) SetAttestations(atts []eth.Att) error {
 			blockAtts = append(blockAtts, a)
 		}
 		b.block.body.attestations = blockAtts
+	} else if b.version == version.Gloas {
+		blockAtts := make([]*eth.AttestationGloas, 0, len(atts))
+		for _, att := range atts {
+			a, ok := eth.AttestationGloasFromAtt(att)
+			if !ok {
+				return fmt.Errorf("attestation of type %T is not *eth.AttestationGloas or *eth.AttestationElectra", att)
+			}
+			blockAtts = append(blockAtts, a)
+		}
+		b.block.body.attestationsGloas = blockAtts
 	} else {
 		blockAtts := make([]*eth.AttestationElectra, 0, len(atts))
 		for _, att := range atts {

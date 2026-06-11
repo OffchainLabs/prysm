@@ -279,7 +279,7 @@ func buildBody(t *testing.T, atts ...*eth.PayloadAttestation) interfaces.ReadOnl
 		Graffiti:              make([]byte, 32),
 		ProposerSlashings:     []*eth.ProposerSlashing{},
 		AttesterSlashings:     []*eth.AttesterSlashingElectra{},
-		Attestations:          []*eth.AttestationElectra{},
+		Attestations:          []*eth.AttestationGloas{},
 		Deposits:              []*eth.Deposit{},
 		VoluntaryExits:        []*eth.SignedVoluntaryExit{},
 		SyncAggregate:         &eth.SyncAggregate{},
