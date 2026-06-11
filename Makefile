@@ -286,9 +286,7 @@ test:
 	@$(TEST_ENV) $(GO) run ./build/test $(if $(filter race,$(mode)),-race,) $(filter $(POSITIONAL),$(MAKECMDGOALS))
 
 # ---------------------------------------------------------------------------
-# Phase 1+ targets — not migrated off Bazel yet. Stubbed to fail loudly so that
-# `make <target>` makes clear what still needs implementing, and `make help`
-# lists the full surface. See BAZEL_MIGRATION.md.
+# gen / lint / deb
 # ---------------------------------------------------------------------------
 .PHONY: gen lint
 
@@ -300,8 +298,13 @@ gen:
 	  echo "==> gen $$k"; "$$script" || exit 1; \
 	done
 
+# Static analysis (replaces Bazel's nogo): tools/cmd/prysm-vet is a multichecker
+# embedding the same analyzer set (custom + x/tools passes + staticcheck SA*, minus
+# SA1019) and reproducing nogo's per-analyzer file exclusions from nogo_config.json.
+# golangci-lint and gosec remain separate CI steps (see .github/workflows). To lint a
+# subset, call the binary directly: `go run ./tools/cmd/prysm-vet ./beacon-chain/...`.
 lint: ## [Phase 7] Static analysis (nogo → prysm-vet multichecker)
-	@echo "❌ 'lint' is not implemented yet — Phase 7 (static analysis). See BAZEL_MIGRATION.md."; exit 1
+	@$(GO) run ./tools/cmd/prysm-vet ./...
 
 # Build the .deb packages (prysm-beacon-chain, prysm-validator) with nfpm. Replaces the
 # Bazel rules_pkg pkg_deb rules. build/deb cross-builds the linux portable binaries

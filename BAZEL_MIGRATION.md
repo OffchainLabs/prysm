@@ -234,18 +234,34 @@ block, invoked as `go tool nfpm`), driven by `make deb` (the `build/deb` Go comm
   that entry (`nfpm.go:197`); the binary entry uses `${PRYSM_BIN_SRC}` and sets it.
 - The old `*/package/BUILD.bazel` + `rules_pkg` in `WORKSPACE` are left for Phase 10 deletion.
 
-### Phase 7 — Static analysis (nogo → standalone vettool)
-Replace `nogo` with a **single `multichecker` binary** (`tools/cmd/prysm-vet`) built from
-`golang.org/x/tools/go/analysis/multichecker`, embedding:
-- staticcheck analyzers (SA*, honoring the sa1019 exclusion)
-- the golang.org/x/tools passes currently enabled
-- all custom analyzers in `tools/analyzers/` (already standard `analysis.Analyzer`s)
+### Phase 7 — Static analysis (nogo → standalone vettool) — ✅ DONE
+Replaced `nogo` with a **single `multichecker` binary** (`tools/cmd/prysm-vet`, built from
+`golang.org/x/tools/go/analysis/multichecker`), run via `make lint` (`go run ./tools/cmd/prysm-vet ./...`).
 
-Run as `go vet -vettool=$(go run ./tools/cmd/prysm-vet) ./...`, or call multichecker
-directly. Port `nogo_config.json` exclusions into per-analyzer flags or a config the
-runner reads. `golangci-lint` is the alternative, but a hand-rolled multichecker
-preserves the exact analyzer set with least behavioral drift. Keep existing
-`golangci-lint`/`gosec` CI steps as-is.
+- **Faithful analyzer set** (ported from `BUILD.bazel:69-273`): all custom analyzers under
+  `tools/analyzers/` (18 top-level + 17 `modernize/*`; `modernize/newexpr` and `/slicesdelete`
+  stay disabled), the enabled `golang.org/x/tools/go/analysis/passes/*` (the 40 + `composite`/
+  `lostcancel`; `cgocall`/`fieldalignment`/`shadow` omitted), and every `staticcheck.Analyzers`
+  SA\* check **except `SA1019`** (`disabledStaticcheck` map). honnef + x/tools are version-pinned,
+  so the set is deterministic.
+- **Exclusions** reproduced from `nogo_config.json`, read at runtime (cwd-relative, default
+  `nogo_config.json`, override `PRYSM_VET_CONFIG`). Keys are the analyzer `Name` (so
+  `copylock`→`copylocks`, `composite`→`composites`, modernize `any`→`any` all line up). Each
+  analyzer's `Run` is wrapped to filter `pass.Report` by the per-analyzer `only_files`/
+  `exclude_files` regexes (exclude wins, then only restricts — nogo's precedence).
+- **First-party guard:** in the Go-module world nogo's pervasive `external/.*` / `rules_go_work-.*`
+  exclusions never match (deps live in the module cache; `./...` already skips `testdata/`), so the
+  wrapper also drops any diagnostic under `$GOMODCACHE`/`GOROOT`. The load-bearing in-tree entries
+  (e.g. `lostcancel`→`validator/client/runner.go`, `maligned`→`proto/.*`/`.*_mock.go`,
+  `ineffassign`/`gocognit`→`.*\.pb.*.go`/`.*\.ssz\.go`, the `cryptorand`/`properpermissions`
+  `only_files` roots, the `_test\.go` exclusions) stay effective.
+- **Chose a standalone multichecker, not a `-vettool`**: a `-vettool` must be a per-package
+  `unitchecker` that can't read a central exclusion config cleanly; the standalone driver loads
+  packages itself, lets us wrap `Report`, and exits non-zero on any finding.
+- `golangci-lint` + `gosec` remain separate, unchanged CI steps (`.github/workflows/go.yml`).
+- **Phase 10 note:** `nogo_config.json` is now **retained** as prysm-vet's config — do **not**
+  delete it. Only `tools/nogo_config/` (the Bazel `def.bzl` augmentation whose `external/.*`
+  injection is now a no-op) and the `nogo(...)` rule + `WORKSPACE` wiring are deletable.
 
 ### Phase 8 — Tests, spec tests, e2e
 - Unit tests: `go test ./...` (`-race`, `-cover` native). Minimal: `go test -tags=minimal ./...`.
@@ -270,7 +286,8 @@ Once Phases 1–9 are green in CI, remove:
 - all `BUILD.bazel` files (`git ls-files '*BUILD.bazel' | xargs rm`)
 - `tools/ssz.bzl`, `proto/ssz_proto_library.bzl`, `tools/prysm_image.bzl`,
   `tools/cross-toolchain/`, `tools/image_deps.bzl`, `tools/download_spectests.bzl`,
-  `build/bazelrc/`, `tools/nogo_config/`, `nogo_config.json`
+  `build/bazelrc/`, `tools/nogo_config/` (NOT `nogo_config.json` — Phase 7's
+  `tools/cmd/prysm-vet` now reads it as its exclusion config)
 - the `bazelbuild/rules_go` line in `go.mod` if unused after migration
 - gazelle directives are mooted by deleting the BUILD files.
 

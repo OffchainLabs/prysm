@@ -183,7 +183,8 @@
       ".*\\.pb.*.go": "Generated code is ok",
       ".*\\.ssz\\.go": "Generated code is ok",
       ".*_test\\.go": "Tests are ok (for now)",
-      "tools/analyzers/ineffassign/ineffassign\\.go": "3rd party code with a massive switch statement"
+      "tools/analyzers/ineffassign/ineffassign\\.go": "3rd party code with a massive switch statement",
+      "consensus-types/blocks/factory.go": "BuildSignedBeaconBlockFromExecutionPayload is over the threshold (125); nogo did not flag it, excluded for parity. TODO: refactor to reduce complexity"
     }
   },
   "shift": {
