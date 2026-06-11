@@ -2,6 +2,7 @@ package blocks
 
 import (
 	"bytes"
+	"fmt"
 	"iter"
 	"slices"
 
@@ -336,9 +337,10 @@ func (p *PartialDataColumn) recordHeaderSent(peerID peer.ID, includeHeader bool,
 		log.WithFields(logrus.Fields{
 			"peer":            peerID,
 			"index":           p.Index,
+			"group":           fmt.Sprintf("%#x", p.groupID),
 			"includeHeader":   includeHeader,
 			"headerSentCache": headerSentCache[peerID],
-		}).Debug("Header sent cache updated")
+		}).Debug("Partial column header sent cache updated")
 	}
 }
 
@@ -352,8 +354,9 @@ func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerS
 		log.WithFields(logrus.Fields{
 			"peer":          remote,
 			"index":         p.Index,
+			"group":         fmt.Sprintf("%#x", p.groupID),
 			"includeHeader": includeHeader,
-		}).Debug("Eager push")
+		}).Debug("Eager pushing partial data column")
 		var encoded []byte
 		if includeHeader {
 			var err error

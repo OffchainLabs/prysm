@@ -272,7 +272,7 @@ func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofs
 		dataColumns = append(dataColumns, dc)
 	}
 
-	dataColumnComputationTime.Observe(float64(time.Since(start).Milliseconds()))
+	partialDataColumnComputationTime.Observe(float64(time.Since(start).Milliseconds()))
 	return dataColumns, nil
 }
 

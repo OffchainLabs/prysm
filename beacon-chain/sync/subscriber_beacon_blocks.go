@@ -270,8 +270,11 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			count := len(partialColumns)
 
 			if isPartialEnabled && count > 0 {
-				log.WithField("count", count).Debug("Publishing partial columns")
-				// Publish the partial column. This is idempotent if we republish the same data twice.
+				digest, err := s.currentForkDigest()
+				if err != nil {
+					return nil, errors.Wrap(err, "current fork digest")
+				}
+				// Publish the partial column.
 				// Note, the "partial column" may indeed be complete. We still
 				// should publish to help our peers.
 				if err := s.publishPartialColumns(ctx, columnIndicesToSample, partialColumns); err != nil {

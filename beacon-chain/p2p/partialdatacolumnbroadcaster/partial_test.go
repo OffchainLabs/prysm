@@ -1662,6 +1662,44 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 	}
 }
 
+func TestPartialColumnBroadcaster_loopDispatchesIncomingRPCAndCellsValidated(t *testing.T) {
+	const topic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	ps := newMockPubSub(nil, nil)
+	recorder := newCallbackRecorder(8, false, nil, nil)
+	h := newBroadcasterHarness(t, ps)
+	h.broadcaster.topics[topic] = nil
+
+	// Existing column missing only cell 1, so the incoming validated cell completes it.
+	existing := createPartialColumn(t, 2, map[uint64][]byte{0: {0x11}})
+	group := existing.GroupID()
+	h.broadcaster.partialMsgStore[topic] = map[string]*verification.PartialColumnVerifier{
+		string(group): newMarkedVerifier(existing),
+	}
+
+	h.start(recorder)
+	defer h.Stop()
+
+	msg := buildSidecarWithCells(2, map[uint64][]byte{1: {0x22}})
+	req, err := h.broadcaster.enqueue(t.Context(), requestKindHandleIncomingRPC, requestValues{
+		incomingRPC: buildIncomingRPC(topic, group, msg, nil),
+	})
+	require.NoError(t, err)
+	require.NoError(t, recvResponse(t, req))
+
+	// HandleColumn firing proves the loop dispatched the cellsValidated request to completion.
+	select {
+	case call := <-recorder.handleColumnCallCh:
+		require.Equal(t, topic, call.topic)
+	case <-t.Context().Done():
+		t.Fatalf("handle column call not received")
+	}
+
+	assertPartialColumnsEqual(t,
+		createPartialColumn(t, 2, map[uint64][]byte{0: {0x11}, 1: {0x22}}),
+		h.broadcaster.getDataColumn(topic, group))
+}
+
 func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 	const topic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
 	pc := func(nCells uint64, cells map[uint64][]byte) func(t *testing.T) *blocks.PartialDataColumn {

@@ -2,6 +2,7 @@ package logrusadapter
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/sirupsen/logrus"
@@ -43,11 +44,7 @@ func (h Handler) Handle(_ context.Context, r slog.Record) error {
 	entry := h.logEntry().WithTime(r.Time)
 
 	r.Attrs(func(a slog.Attr) bool {
-		if a.Value.Kind() == slog.KindLogValuer {
-			entry = entry.WithField(a.Key, a.Value.LogValuer().LogValue().Any())
-		} else {
-			entry = entry.WithField(a.Key, a.Value.Any())
-		}
+		entry = entry.WithField(a.Key, fieldValue(a.Value))
 		return true
 	})
 
@@ -78,7 +75,26 @@ func (h Handler) WithGroup(_ string) slog.Handler { return h }
 func toFields(attrs []slog.Attr) logrus.Fields {
 	fields := logrus.Fields{}
 	for _, a := range attrs {
-		fields[a.Key] = a.Value.Any()
+		fields[a.Key] = fieldValue(a.Value)
 	}
 	return fields
+}
+
+// fieldValue resolves a slog value, rendering byte slices as hex and recursing into groups.
+func fieldValue(v slog.Value) any {
+	v = v.Resolve()
+	switch v.Kind() {
+	case slog.KindGroup:
+		attrs := v.Group()
+		out := make([]slog.Attr, len(attrs))
+		for i, a := range attrs {
+			out[i] = slog.Any(a.Key, fieldValue(a.Value))
+		}
+		return out
+	case slog.KindAny:
+		if b, ok := v.Any().([]byte); ok {
+			return fmt.Sprintf("%#x", b)
+		}
+	}
+	return v.Any()
 }

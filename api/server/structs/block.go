@@ -614,3 +614,17 @@ type SignedExecutionPayloadEnvelopeContents struct {
 	KzgProofs                      []string                        `json:"kzg_proofs"`
 	Blobs                          []string                        `json:"blobs"`
 }
+
+// BlindedExecutionPayloadEnvelope replaces the full payload with payload_root so its HTR matches the full envelope.
+type BlindedExecutionPayloadEnvelope struct {
+	PayloadRoot           string             `json:"payload_root"`
+	ExecutionRequests     *ExecutionRequests `json:"execution_requests"`
+	BuilderIndex          string             `json:"builder_index"`
+	BeaconBlockRoot       string             `json:"beacon_block_root"`
+	ParentBeaconBlockRoot string             `json:"parent_beacon_block_root"`
+}
+
+type SignedBlindedExecutionPayloadEnvelope struct {
+	Message   *BlindedExecutionPayloadEnvelope `json:"message"`
+	Signature string                           `json:"signature"`
+}
