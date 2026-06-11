@@ -116,7 +116,7 @@ func TestGetValidatorCount(t *testing.T) {
 			defer ctrl.Finish()
 
 			ctx := t.Context()
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 
 			// Expect node version endpoint call.
 			var nodeVersionResponse structs.GetVersionResponse
@@ -177,7 +177,7 @@ func Test_beaconApiBeaconChainClient_GetValidatorPerformance(t *testing.T) {
 		PublicKeys: [][]byte{publicKeys[0][:], publicKeys[2][:], publicKeys[1][:]},
 	})
 	require.NoError(t, err)
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	// Expect node version endpoint call.
 	var nodeVersionResponse structs.GetVersionResponse
 	handler.EXPECT().Get(
