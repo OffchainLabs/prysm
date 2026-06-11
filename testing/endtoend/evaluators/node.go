@@ -178,7 +178,6 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 	return waitForMatchingHeads(ctx, clients...)
 }
 
-
 func waitForMatchingHeads(ctx context.Context, clients ...eth.BeaconChainClient) error {
 	ticker := time.NewTicker(connTimeDelay)
 	defer ticker.Stop()

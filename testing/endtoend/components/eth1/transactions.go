@@ -43,22 +43,22 @@ const (
 )
 
 type TransactionGenerator struct {
-	hasBlobState  bool
-	hasTxState    bool
-	useLargeBlobs bool // Use large blob transactions (6 blobs per tx) for BPO testing
-	paused        bool
-	blobMode      blobTxMode
-	blobFeeCap    *big.Int
-	blobGasPrice  *big.Int
-	blobNonce     uint64
+	hasBlobState     bool
+	hasTxState       bool
+	useLargeBlobs    bool // Use large blob transactions (6 blobs per tx) for BPO testing
+	paused           bool
+	blobMode         blobTxMode
+	blobFeeCap       *big.Int
+	blobGasPrice     *big.Int
+	blobNonce        uint64
 	sidecarAccount   *keystore.Key
 	cellProofAccount *keystore.Key
-	txGasPrice    *big.Int
-	txNonce       uint64
-	cancel        context.CancelFunc
-	started       chan struct{}
-	seed          int64
-	keystore      string
+	txGasPrice       *big.Int
+	txNonce          uint64
+	cancel           context.CancelFunc
+	started          chan struct{}
+	seed             int64
+	keystore         string
 }
 
 func (t *TransactionGenerator) UnderlyingProcess() *os.Process {

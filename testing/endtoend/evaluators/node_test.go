@@ -25,18 +25,18 @@ func TestWaitForMatchingHeadsRetriesUntilConverged(t *testing.T) {
 	client1 := mock.NewMockBeaconChainClient(ctrl)
 
 	matching := &eth.ChainHead{
-		HeadEpoch:                 2,
-		HeadBlockRoot:             []byte{1},
-		JustifiedBlockRoot:        []byte{2},
+		HeadEpoch:                  2,
+		HeadBlockRoot:              []byte{1},
+		JustifiedBlockRoot:         []byte{2},
 		PreviousJustifiedBlockRoot: []byte{3},
-		FinalizedBlockRoot:        []byte{4},
+		FinalizedBlockRoot:         []byte{4},
 	}
 	divergent := &eth.ChainHead{
-		HeadEpoch:                 2,
-		HeadBlockRoot:             []byte{9},
-		JustifiedBlockRoot:        []byte{2},
+		HeadEpoch:                  2,
+		HeadBlockRoot:              []byte{9},
+		JustifiedBlockRoot:         []byte{2},
 		PreviousJustifiedBlockRoot: []byte{3},
-		FinalizedBlockRoot:        []byte{4},
+		FinalizedBlockRoot:         []byte{4},
 	}
 
 	client0.EXPECT().GetChainHead(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
@@ -73,18 +73,18 @@ func TestWaitForMatchingHeadsReturnsLastMismatchOnTimeout(t *testing.T) {
 	client1 := mock.NewMockBeaconChainClient(ctrl)
 
 	matching := &eth.ChainHead{
-		HeadEpoch:                 2,
-		HeadBlockRoot:             []byte{1},
-		JustifiedBlockRoot:        []byte{2},
+		HeadEpoch:                  2,
+		HeadBlockRoot:              []byte{1},
+		JustifiedBlockRoot:         []byte{2},
 		PreviousJustifiedBlockRoot: []byte{3},
-		FinalizedBlockRoot:        []byte{4},
+		FinalizedBlockRoot:         []byte{4},
 	}
 	divergent := &eth.ChainHead{
-		HeadEpoch:                 2,
-		HeadBlockRoot:             []byte{9},
-		JustifiedBlockRoot:        []byte{2},
+		HeadEpoch:                  2,
+		HeadBlockRoot:              []byte{9},
+		JustifiedBlockRoot:         []byte{2},
 		PreviousJustifiedBlockRoot: []byte{3},
-		FinalizedBlockRoot:        []byte{4},
+		FinalizedBlockRoot:         []byte{4},
 	}
 
 	client0.EXPECT().GetChainHead(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(

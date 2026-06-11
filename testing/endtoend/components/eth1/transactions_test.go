@@ -10,10 +10,10 @@ import (
 
 func TestCurrentBlobTxMode(t *testing.T) {
 	cases := []struct {
-		name    string
-		epoch   primitives.Epoch
-		cfg     func() *params.BeaconChainConfig
-		wanted  blobTxMode
+		name   string
+		epoch  primitives.Epoch
+		cfg    func() *params.BeaconChainConfig
+		wanted blobTxMode
 	}{
 		{
 			name:  "pre deneb disables blob txs",
