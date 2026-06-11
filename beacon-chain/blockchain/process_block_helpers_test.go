@@ -128,10 +128,11 @@ func TestSaveHeadIfNeeded_NotSynced_SkipsPayloadAttribute(t *testing.T) {
 	postState, _, err := prepareForkchoiceState(ctx, 3, [32]byte{'c'}, headRoot, [32]byte{}, ojc, ojc)
 	require.NoError(t, err)
 
-	// Sanity: the override conditions hold, so the synced path would skip the save.
+	// Not in regular sync: the attribute is empty even though the proposer is
+	// tracked and the override conditions hold, so the save below must proceed.
 	proposingSlot := service.CurrentSlot() + 1
 	attr := service.getPayloadAttribute(ctx, postState, proposingSlot, headRoot[:], false)
-	require.Equal(t, false, attr.IsEmpty())
+	require.Equal(t, true, attr.IsEmpty())
 	require.Equal(t, true, service.shouldOverrideFCU(headRoot, proposingSlot))
 
 	// Old head and new head block plumbing so saveHead can complete.
