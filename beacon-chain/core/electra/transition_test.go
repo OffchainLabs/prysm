@@ -58,7 +58,7 @@ func TestProcessEpoch_CanProcessElectra(t *testing.T) {
 	amountAvailForProcessing := helpers.ActivationExitChurnLimit(1_000 * 1e9)
 	validators := st.Validators()
 	deps := make([]*ethpb.PendingDeposit, 20)
-	for i := 0; i < len(deps); i += 1 {
+	for i := range deps {
 		deps[i] = &ethpb.PendingDeposit{
 			PublicKey:             validators[i].PublicKey,
 			WithdrawalCredentials: validators[i].WithdrawalCredentials,

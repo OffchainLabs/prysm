@@ -516,7 +516,7 @@ func stateWithPendingDeposits(t *testing.T, balETH uint64, numDeposits, amount u
 	st := stateWithActiveBalanceETH(t, balETH)
 	deps := make([]*eth.PendingDeposit, numDeposits)
 	validators := st.Validators()
-	for i := 0; i < len(deps); i += 1 {
+	for i := range deps {
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
 		wc := make([]byte, 32)

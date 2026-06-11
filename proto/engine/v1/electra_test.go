@@ -1,6 +1,7 @@
 package enginev1_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -79,7 +80,7 @@ func TestGetDecodedExecutionRequests(t *testing.T) {
 			"680000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
 		require.NoError(t, err)
 		ebe := &enginev1.ExecutionBundleElectra{
-			ExecutionRequests: [][]byte{append([]byte{}, []byte{}...), append([]byte{uint8(enginev1.ConsolidationRequestType)}, consolidationRequestBytes...)},
+			ExecutionRequests: [][]byte{slices.Clone([]byte{}), append([]byte{uint8(enginev1.ConsolidationRequestType)}, consolidationRequestBytes...)},
 		}
 		_, err = ebe.GetDecodedExecutionRequests(cfg.ExecutionRequestLimits())
 		require.ErrorContains(t, "invalid execution request, length less than 1", err)

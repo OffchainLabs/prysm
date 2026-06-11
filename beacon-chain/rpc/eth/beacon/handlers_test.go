@@ -4013,7 +4013,7 @@ func TestGetPendingConsolidations(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateElectra(t, 10)
 
 	cs := make([]*eth.PendingConsolidation, 10)
-	for i := 0; i < len(cs); i += 1 {
+	for i := range cs {
 		cs[i] = &eth.PendingConsolidation{
 			SourceIndex: primitives.ValidatorIndex(i),
 			TargetIndex: primitives.ValidatorIndex(i + 1),
@@ -4203,7 +4203,7 @@ func TestGetPendingDeposits(t *testing.T) {
 		dummySig[j] = byte(j)
 	}
 	deps := make([]*eth.PendingDeposit, 10)
-	for i := 0; i < len(deps); i += 1 {
+	for i := range deps {
 		deps[i] = &eth.PendingDeposit{
 			PublicKey:             validators[i].PublicKey,
 			WithdrawalCredentials: validators[i].WithdrawalCredentials,
@@ -4389,7 +4389,7 @@ func TestGetPendingDeposits(t *testing.T) {
 
 func TestGetPendingPartialWithdrawals(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateElectra(t, 10)
-	for i := 0; i < 10; i += 1 {
+	for i := range 10 {
 		err := st.AppendPendingPartialWithdrawal(
 			&eth.PendingPartialWithdrawal{
 				Index:             primitives.ValidatorIndex(i),

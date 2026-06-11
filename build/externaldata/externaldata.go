@@ -271,12 +271,12 @@ func download(url string) ([]byte, error) {
 			continue
 		}
 		if resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			lastErr = fmt.Errorf("GET %s: %s", url, resp.Status)
 			continue
 		}
 		b, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if err != nil {
 			lastErr = err
 			continue
@@ -298,7 +298,7 @@ func extract(targz []byte, target string, strip int, include string) error {
 	if err != nil {
 		return err
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 	tr := tar.NewReader(gz)
 	for {
 		hdr, err := tr.Next()
@@ -334,7 +334,7 @@ func extract(targz []byte, target string, strip int, include string) error {
 				return err
 			}
 			if _, err := io.Copy(f, tr); err != nil {
-				f.Close()
+				_ = f.Close()
 				return err
 			}
 			if err := f.Close(); err != nil {
