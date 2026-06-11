@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	stderrors "errors"
+	"fmt"
 	"iter"
 	"log/slog"
 	"strconv"
@@ -25,6 +26,8 @@ import (
 )
 
 const TTLInSlots = 3
+
+const logPackage = "beacon-chain/p2p/partialdatacolumnbroadcaster"
 
 var errInvalidHeader = errors.New("invalid header")
 
@@ -74,7 +77,7 @@ type Broadcaster interface {
 var _ Broadcaster = (*PartialColumnBroadcaster)(nil)
 
 type PartialColumnBroadcaster struct {
-	logger *logrus.Logger
+	logger *logrus.Entry
 
 	ctx context.Context
 
@@ -216,7 +219,7 @@ func (r incomingPartialRPC) logFields() logrus.Fields {
 	return logrus.Fields{
 		"from":  r.from,
 		"topic": r.GetTopicID(),
-		"group": r.GroupID,
+		"group": fmt.Sprintf("%#x", r.GroupID),
 	}
 }
 
@@ -231,7 +234,7 @@ type cellsValidated struct {
 func (c *cellsValidated) logFields() logrus.Fields {
 	return logrus.Fields{
 		"topic": c.topic,
-		"group": c.group,
+		"group": fmt.Sprintf("%#x", c.group),
 	}
 }
 
@@ -254,7 +257,7 @@ func NewBroadcaster(ctx context.Context, logger *logrus.Logger) *PartialColumnBr
 		// GossipSub sends the messages to this channel. The buffer should be
 		// big enough to avoid dropping messages. We don't want to block the gossipsub event loop for this.
 		incomingReq: make(chan request, 128*16),
-		logger:      logger,
+		logger:      logger.WithField("package", logPackage),
 
 		peerFeedbackSemaphore:            make(chan struct{}, concurrency),
 		concurrentValidatorSemaphore:     make(chan struct{}, concurrency),
@@ -312,7 +315,11 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 		incomingRPC: incomingPartialRPC{rpc, from, message},
 	})
 	if !ok {
-		p.logger.WithField("rpc", rpc).Warn("Dropping incoming partial RPC")
+		p.logger.WithFields(logrus.Fields{
+			"peer":  from,
+			"topic": rpc.GetTopicID(),
+			"group": fmt.Sprintf("%#x", rpc.GetGroupID()),
+		}).Warn("Dropping incoming partial RPC")
 		return errors.New("incomingReq channel is full, dropping RPC")
 	}
 	peerStates[from] = nextPeerState
@@ -341,7 +348,7 @@ func (p *PartialColumnBroadcaster) reportPeerFeedbackAsync(topic string, from pe
 
 // AppendPubSubOpts adds the necessary pubsub options to enable partial messages.
 func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubsub.Option {
-	slogger := slog.New(logrusadapter.Handler{Logger: p.logger})
+	slogger := slog.New(logrusadapter.Handler{Logger: p.logger.Logger}).With("package", logPackage)
 	opts = append(opts,
 		pubsub.WithPartialMessagesExtension(&partialmessages.PartialMessagesExtension[blocks.PartialDataColumnPeerState]{
 			Logger:        slogger,
@@ -678,7 +685,7 @@ func (p *PartialColumnBroadcaster) makeVerifierFromHeader(root [fieldparams.Root
 	}
 	verifier, result, err := p.callbacks.PartialVerifierFromHeader(&newColumn)
 	if err != nil {
-		p.logger.WithError(err).WithField("result", result).Debug("Header validation failed")
+		p.logger.WithError(err).WithFields(rpc.logFields()).WithField("result", result).Debug("Partial column header validation failed")
 		if result == pubsub.ValidationReject {
 			// REJECT case: penalize the peer
 			_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
@@ -781,7 +788,6 @@ func (p *PartialColumnBroadcaster) handlePartialCells(ourDataColumn *blocks.Part
 
 func (p *PartialColumnBroadcaster) handleHeader(rpc incomingPartialRPC, header *ethpb.PartialDataColumnHeader) {
 	groupID := rpc.GroupID
-	p.logger.Debug("Handling header as it was previously not cached for this group")
 	// Cache the valid header.
 	p.validHeaderCache[string(groupID)] = header
 

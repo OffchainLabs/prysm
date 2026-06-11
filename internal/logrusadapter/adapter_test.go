@@ -147,6 +147,39 @@ func TestHandleAttributes(t *testing.T) {
 	}
 }
 
+// rpcValuer mimics the pubsub RPC LogValuer that nests byte slices inside a group.
+type rpcValuer struct{}
+
+func (rpcValuer) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("topic", "t"),
+		slog.Any("groupID", []byte{0x00, 0xb6, 0xdd}),
+	)
+}
+
+func TestHandleByteSlicesAsHex(t *testing.T) {
+	var outBuf bytes.Buffer
+	l := logrus.Logger{
+		Out:       &outBuf,
+		Formatter: &logrus.TextFormatter{},
+		Level:     logrus.DebugLevel,
+	}
+
+	slogger := slog.New(logrusadapter.Handler{Logger: &l})
+	slogger.Info("rpc log",
+		slog.Any("data", []byte{0x01, 0xff}),
+		slog.Any("rpc", rpcValuer{}),
+	)
+
+	output := outBuf.String()
+	if !strings.Contains(output, "data=0x01ff") {
+		t.Errorf("expected top-level byte slice as hex %q not found in output: %s", "data=0x01ff", output)
+	}
+	if !strings.Contains(output, "groupID=0x00b6dd") {
+		t.Errorf("expected nested byte slice as hex %q not found in output: %s", "groupID=0x00b6dd", output)
+	}
+}
+
 func TestEnabledLevels(t *testing.T) {
 	tests := []struct {
 		shouldBeEnabled bool
