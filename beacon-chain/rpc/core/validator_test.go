@@ -376,7 +376,7 @@ func TestPayloadAttestationData(t *testing.T) {
 			assert.Equal(t, true, results[0] == results[i])
 		}
 	})
-	t.Run("non-canonical shuffling → Internal", func(t *testing.T) {
+	t.Run("non-canonical shuffling → Unavailable", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig().Copy()
 		cfg.GloasForkEpoch = 0
@@ -399,7 +399,7 @@ func TestPayloadAttestationData(t *testing.T) {
 
 		_, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 		require.NotNil(t, rpcErr)
-		assert.Equal(t, ErrorReason(Internal), rpcErr.Reason)
+		assert.Equal(t, ErrorReason(Unavailable), rpcErr.Reason)
 		assert.ErrorContains(t, "no canonical shuffling", rpcErr.Err)
 		assert.Equal(t, (*ethpb.PayloadAttestationData)(nil), s.payloadAttestationData.Load())
 	})
