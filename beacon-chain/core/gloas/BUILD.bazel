@@ -21,6 +21,7 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas",
     visibility = ["//visibility:public"],
     deps = [
+        "//beacon-chain/cache:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/requests:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
@@ -65,6 +66,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//beacon-chain/cache:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/time:go_default_library",

@@ -20,7 +20,7 @@ type envelopeContents struct {
 // stateless block production path to carry the execution payload envelope and
 // its associated blob data from the /eth/v4/validator/blocks response to the
 // self-build envelope publisher, avoiding a redundant
-// /eth/v1/validator/execution_payload_envelope fetch.
+// /eth/v1/validator/execution_payload_envelopes fetch.
 type executionPayloadEnvelopeCache struct {
 	mu      sync.Mutex
 	entries map[primitives.Slot]*envelopeContents

@@ -9,6 +9,7 @@ go_library(
         "conversions_blob.go",
         "conversions_block.go",
         "conversions_block_execution.go",
+        "conversions_block_gloas.go",
         "conversions_gloas.go",
         "conversions_lightclient.go",
         "conversions_state.go",
