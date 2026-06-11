@@ -88,7 +88,7 @@ func (node *Node) Start(ctx context.Context) error {
 		return err
 	}
 
-	args := withUnlimitedRPCTxFeeCap([]string{
+	args := []string{
 		"--nat=none", // disable nat traversal in e2e, it is failure prone and not needed
 		fmt.Sprintf("--datadir=%s", eth1Path),
 		fmt.Sprintf("--http.port=%d", e2e.TestParams.Ports.Eth1RPCPort+node.index),
@@ -112,7 +112,7 @@ func (node *Node) Start(ctx context.Context) error {
 		"--syncmode=full",
 		fmt.Sprintf("--miner.gaslimit=%d", params.BeaconConfig().DefaultBuilderGasLimit),
 		fmt.Sprintf("--txpool.locals=%s", EthAddress),
-	})
+	}
 
 	// give the miner start a couple of tries, since the p2p networking check is flaky
 	var retryErr error

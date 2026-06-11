@@ -5,7 +5,6 @@ go_library(
     testonly = True,
     srcs = [
         "depositor.go",
-        "geth_flags.go",
         "helpers.go",
         "miner.go",
         "node.go",
@@ -19,7 +18,6 @@ go_library(
         "//beacon-chain/startup:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
-        "//consensus-types/primitives:go_default_library",
         "//contracts/deposit:go_default_library",
         "//crypto/rand:go_default_library",
         "//encoding/bytesutil:go_default_library",
@@ -50,18 +48,10 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = [
-        "depositor_test.go",
-        "geth_flags_test.go",
-        "transactions_pricing_test.go",
-        "transactions_test.go",
-    ],
+    srcs = ["depositor_test.go"],
     embed = [":go_default_library"],
     deps = [
         "//config/params:go_default_library",
-        "//consensus-types/primitives:go_default_library",
         "//testing/require:go_default_library",
-        "@com_github_ethereum_go_ethereum//accounts/keystore:go_default_library",
-        "@com_github_ethereum_go_ethereum//common:go_default_library",
     ],
 )

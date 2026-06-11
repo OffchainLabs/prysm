@@ -122,7 +122,7 @@ func (m *Miner) initAttempt(ctx context.Context, attempt int) (*os.File, error) 
 	}
 
 	pwFile := m.DataDir("keystore", minerPasswordFile)
-	args := withUnlimitedRPCTxFeeCap([]string{
+	args := []string{
 		"--nat=none", // disable nat traversal in e2e, it is failure prone and not needed
 		fmt.Sprintf("--datadir=%s", m.DataDir()),
 		fmt.Sprintf("--http.port=%d", e2e.TestParams.Ports.Eth1RPCPort),
@@ -149,7 +149,7 @@ func (m *Miner) initAttempt(ctx context.Context, attempt int) (*os.File, error) 
 		fmt.Sprintf("--miner.gaslimit=%d", params.BeaconConfig().DefaultBuilderGasLimit),
 		fmt.Sprintf("--txpool.locals=%s", EthAddress),
 		fmt.Sprintf("--password=%s", pwFile),
-	})
+	}
 
 	keystorePath, err := e2e.TestParams.Paths.MinerKeyPath()
 	if err != nil {
