@@ -36,6 +36,8 @@ import (
 const (
 	consensusSpecVersion = "v1.7.0-alpha.8"
 	blsVersion           = "v0.1.1"
+	lighthouseVersion    = "v7.0.0-beta.0" // testing/endtoend/deps.bzl
+	web3signerVersion    = "25.9.1"        // testing/endtoend/deps.bzl
 )
 
 // Archive names. These are the logical identifiers passed to Fetch and used as
@@ -53,6 +55,11 @@ const (
 	BLSSpecTests              = "bls_spec_tests"
 	EIP3076SpecTests          = "eip3076_spec_tests"
 	EIP4881SpecTests          = "eip4881_spec_tests"
+
+	// e2e external binaries (opt-in: fetched only by build/e2e, never by FetchAll /
+	// `make testdata`). lighthouse ships linux/amd64 only; web3signer needs a JRE.
+	Lighthouse = "lighthouse"
+	Web3signer = "web3signer"
 )
 
 // archive describes one downloadable test-data archive (mirrors a fetch() call in
@@ -84,16 +91,51 @@ var manifest = []archive{
 	{EIP4881SpecTests, "https://github.com/ethereum/EIPs/archive/5480440fe51742ed23342b68cf106cefd427e39d.tar.gz", "89cb659498c0d196fc9f957f8b849b2e1a5c041c3b2b3ae5432ac5c26944297e", "external/eip4881_spec_tests", 1, "*/assets/eip-4881/*"},
 }
 
+// e2eArchives are the external e2e binaries (lighthouse, web3signer), ported from
+// testing/endtoend/deps.bzl. They are intentionally NOT in manifest, so FetchAll /
+// `make testdata` / Names() ignore them — only build/e2e fetches them explicitly via
+// Fetch(Lighthouse)/Fetch(Web3signer). lighthouse extracts a single `lighthouse`
+// binary at the archive root (strip 0); web3signer strips its versioned top dir,
+// leaving bin/web3signer + lib/.
+var e2eArchives = []archive{
+	{Lighthouse, "https://github.com/sigp/lighthouse/releases/download/" + lighthouseVersion + "/lighthouse-" + lighthouseVersion + "-x86_64-unknown-linux-gnu.tar.gz", "sha256-qMPifuh7u0epItu8DzZ8YdZ2fVZNW7WKnbmmAgjh/us=", "external/lighthouse", 0, ""},
+	{Web3signer, "https://github.com/Consensys/web3signer/releases/download/" + web3signerVersion + "/web3signer-" + web3signerVersion + ".tar.gz", "d84498abbe46fcf10ca44f930eafcd80d7339cbf3f7f7f42a77eb1763ab209cf", "external/web3signer", 1, ""},
+}
+
 // archiveByName returns the named archive and its index in the manifest (used for
 // the "count=N/total" log field, so an archive's position is stable regardless of
 // whether it is fetched lazily on its own or as part of FetchAll).
 func archiveByName(name string) (archive, int, bool) {
-	for i, a := range manifest {
+	for i, a := range allArchives() {
 		if a.name == name {
 			return a, i, true
 		}
 	}
 	return archive{}, 0, false
+}
+
+// allArchives is the manifest plus the opt-in e2e binaries, used only for name
+// lookup (Fetch). FetchAll/Names deliberately iterate manifest alone.
+func allArchives() []archive {
+	return append(append([]archive{}, manifest...), e2eArchives...)
+}
+
+// DestDir returns the directory the named archive extracts into (the test-data
+// root joined with the archive's dest sub-dir). Used by build/e2e to locate the
+// lighthouse / web3signer binaries after Fetch. Returns false for unknown names.
+func DestDir(name string) (string, bool) {
+	a, _, ok := archiveByName(name)
+	if !ok {
+		return "", false
+	}
+	root := Root()
+	if root == "" {
+		return "", false
+	}
+	if a.dest == "." {
+		return root, true
+	}
+	return filepath.Join(root, a.dest), true
 }
 
 // Names returns every archive name in the manifest.
@@ -159,7 +201,7 @@ func fetch(name string) (int64, error) {
 	}
 	log := logrus.WithFields(logrus.Fields{
 		"archive": a.name,
-		"count":   fmt.Sprintf("%d/%d", idx+1, len(manifest)),
+		"count":   fmt.Sprintf("%d/%d", idx+1, len(allArchives())),
 	})
 	root := Root()
 	if root == "" {

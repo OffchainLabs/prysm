@@ -263,14 +263,64 @@ Replaced `nogo` with a **single `multichecker` binary** (`tools/cmd/prysm-vet`, 
   delete it. Only `tools/nogo_config/` (the Bazel `def.bzl` augmentation whose `external/.*`
   injection is now a no-op) and the `nogo(...)` rule + `WORKSPACE` wiring are deletable.
 
-### Phase 8 — Tests, spec tests, e2e
-- Unit tests: `go test ./...` (`-race`, `-cover` native). Minimal: `go test -tags=minimal ./...`.
-- Spec tests: replace the `download_spectests.bzl` repo rule with a script that downloads
-  the consensus-spec-tests tarball into a cache dir, then `go test ./testing/spectest/...`
-  with the spec dir via env var (already `SPEC_TEST_REPORT_OUTPUT_DIR`).
-- E2E: the `testing/endtoend` Bazel transitions (minimal/mainnet) become `go test` with
-  the `minimal` tag + binaries built in Phase 2; binary paths injected via env/flags
-  instead of Bazel `data` deps.
+### Phase 8 — Tests, spec tests, e2e — ✅ DONE
+- **Unit tests** (already in place): `make test` runs the mainnet + minimal passes via
+  `build/test` (gotestsum, `-tags=develop` / `develop,minimal`, flake reruns, `mode=race`).
+- **Spec tests** (already in place): `build/externaldata` replaces `download_spectests.bzl`
+  (same `v1.7.0-alpha.8` pins, sha256-verified, lazy + `make testdata` eager), and
+  `build/bazel/non_bazel.go` resolves the vectors (`Runfile`/`ListRunfiles`, fetch-on-miss).
+  Spec tests run inside the normal `make test` passes (`SPEC_TEST_REPORT_OUTPUT_DIR` honored).
+- **E2E** (this phase): made `testing/endtoend` run under `go test` instead of Bazel `data`
+  deps + the `eth_network` transition.
+  - **Import swap (9 files):** `testing/endtoend/{components,params}` now import Prysm's
+    `build/bazel` instead of `rules_go/go/tools/bazel`. Same API (`FindBinary`/`Runfile`/
+    `TestTmpDir`), so `FindBinary` resolves from `$PRYSM_BIN` then `dist/` with no call-site
+    changes. Added the `E2E_LOG_PATH` fallback to `InitMultiClient`.
+  - **`make e2e [kind]` + `build/e2e`** (mirrors `build/test`/`build/deb`): builds the
+    launched binaries (`beacon-chain`, `validator`, `bootnode` with `-tags=minimal` for
+    minimal scenarios) + `geth` (from the pinned go-ethereum dep) into `dist/`, provisions
+    `lighthouse`/`web3signer` when the scenario needs them, then runs
+    `go test -tags=develop[,minimal] -run <Test> ./testing/endtoend` with `PRYSM_BIN=dist`.
+    Default kind `minimal`; full kind set in the Makefile `E2E_KINDS`.
+  - **External binaries** (full scope): `lighthouse` `v7.0.0-beta.0` + `web3signer` `25.9.1`
+    ported from `testing/endtoend/deps.bzl` into `build/externaldata` as an **opt-in** list
+    (kept out of `FetchAll`/`make testdata`); `build/e2e` fetches + symlinks them into `dist/`.
+    Platform-faithful to Bazel: lighthouse is linux/amd64-only, web3signer needs a JRE.
+  - Fixed a latent Makefile bug: the `$(POSITIONAL):` no-op rule was parsed before
+    `TEST_KINDS`/`E2E_KINDS` were defined, so `make test minimal` (and the e2e kinds) errored
+    "No rule to make target"; the rule now sits after those definitions.
+  - `/testing/endtoend` stays excluded from `make test` (heavy; launches a local devnet).
+  - **Devnet teardown safeguard:** the e2e harness only tears the devnet down on graceful
+    completion, so a `go test` `-timeout` (or Ctrl-C) used to orphan the launched
+    beacon/validator/geth/bootnode, leaving them holding the fixed ports and breaking the
+    next run. `build/e2e` now (a) `pkill`s stale devnet binaries by their dist path before
+    starting, and (b) runs each scenario's `go test` in its own process group, killing the
+    group on exit and on SIGINT/SIGTERM. (Bazel avoided this via its sandbox process-wrapper.)
+  - **Phase 10 note:** the now-unused `rules_go/go/tools/bazel` import and
+    `testing/endtoend/{deps.bzl,*.BUILD}` + the `tools/go/def.bzl` transition become deletable.
+
+  **Running the e2e flavors.** Bazel had 6 `go_test` targets grouped into 3 `test_suite`s
+  (all `manual` + `requires-network`, so they're named explicitly, never via wildcards):
+  ```sh
+  # One flavor:
+  bazel test //testing/endtoend:go_default_test --test_output=streamed
+
+  # A whole CI tier (test_suite):
+  bazel test //testing/endtoend:presubmit       # = go_default_test
+  bazel test //testing/endtoend:postsubmit      # = builder + postmerge + mainnet
+  bazel test //testing/endtoend:scenario_tests  # = mainnet_scenario + minimal_scenario
+  ```
+  Without Bazel, `make e2e` mirrors both levels. The three **suites** map 1:1 to the
+  Bazel `test_suite`s (each runs its bundle in sequence, building binaries once per config):
+  ```sh
+  make e2e presubmit       # = go_default_test            (minimal, statediff, slashing, slasher)
+  make e2e postsubmit      # = builder + postmerge + mainnet + multiclient
+  make e2e scenario_tests  # = minimal + mainnet scenario runs
+  ```
+  Or run a single **scenario** (one Go test func each; `make e2e` with no arg → `minimal`):
+  ```sh
+  make e2e minimal builder web3signer slasher slashing scenario postmerge statediff mainnet multiclient
+  ```
 
 ### Phase 9 — CI/CD rewiring
 - Rewrite `.github/workflows/*.yml` and Buildkite to call the Makefile targets

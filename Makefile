@@ -94,6 +94,7 @@ help: ## Show this help
 	@printf "  \033[36m%-14s\033[0m %s\n" "build"       "$(BINARIES)"
 	@printf "  \033[36m%-14s\033[0m %s\n" "gen"         "$(GEN_KINDS)"
 	@printf "  \033[36m%-14s\033[0m %s\n" "test"        "$(TEST_KINDS) [mode=no-race|race] (default: no-race)"
+	@printf "  \033[36m%-14s\033[0m %s\n" "e2e"         "$(E2E_KINDS) (default: minimal)"
 	@echo ""
 	@echo "build flags (make variables, since make can't take --flags; default in parens):"
 	@printf "  \033[36m%-20s\033[0m %s\n" "mode=dev|release"   "(default: dev) optimized/stamped/stripped/PGO'd output"
@@ -195,10 +196,11 @@ CROSS_TARGETS_LINUX := $(filter linux/%,$(CROSS_TARGETS))
 # proto`. These tokens are phony no-op goals so make doesn't error on the extra word; each verb
 # recipe reads $(MAKECMDGOALS) to pick what to do (none named -> all). beacon-chain/, validator/
 # and proto/ are real dirs, so .PHONY is required.
-POSITIONAL = $(sort $(BINARIES) $(CROSS_BINARIES) $(DOCKER_BINARIES) $(GEN_KINDS) $(TEST_KINDS))
-.PHONY: $(POSITIONAL)
-$(POSITIONAL):
-	@:
+POSITIONAL = $(sort $(BINARIES) $(CROSS_BINARIES) $(DOCKER_BINARIES) $(GEN_KINDS) $(TEST_KINDS) $(E2E_KINDS))
+# The no-op rule that makes these tokens valid goals is defined near the bottom, AFTER
+# TEST_KINDS / E2E_KINDS are set — a rule's target list is expanded when parsed, so those
+# `:=` vars must already be defined or their tokens (minimal, mainnet, e2e kinds) would be
+# silently dropped from the rule.
 
 .PHONY: build
 build:
@@ -259,6 +261,20 @@ MINIMAL_TAGFLAG := -tags=$(TEST_TAGS),minimal
 # The two `make test` passes (`make test mainnet` / `minimal` runs just one; none -> both).
 TEST_KINDS := mainnet minimal
 
+# E2E scenarios for `make e2e [kind|suite]` (default: minimal). build/e2e maps each kind to
+# a Go test func, builds the binaries it launches (+ geth, and lighthouse/web3signer where
+# needed), and runs `go test ./testing/endtoend`. The trailing suites (presubmit/postsubmit/
+# scenario_tests) run the same bundles the Bazel test_suites did, in sequence.
+# /testing/endtoend stays excluded from `make test` (it's heavy and launches a local devnet).
+E2E_KINDS := minimal builder web3signer slasher slashing scenario postmerge statediff mainnet multiclient \
+             presubmit postsubmit scenario_tests
+
+# Positional no-op goals (see POSITIONAL above) — defined here so TEST_KINDS/E2E_KINDS are
+# already set when this rule's target list is expanded.
+.PHONY: $(POSITIONAL)
+$(POSITIONAL):
+	@:
+
 # gotestsum (pinned via the go.mod tool directive) wraps `go test`, reformats
 # output, and reruns flaky failures up to 5 times — matching Bazel's
 # --flaky_test_attempts=5. If more than RERUN_MAX distinct tests fail it's a real
@@ -315,6 +331,14 @@ lint: ## [Phase 7] Static analysis (nogo → prysm-vet multichecker)
 deb: ## [Phase 6] Build .deb packages (prysm-beacon-chain, prysm-validator; amd64+arm64)
 	@$(BUILD_CROSS_ENV) DEB_ARCHES="amd64 arm64" \
 	  CROSS_TARGETS_LINUX="$(CROSS_TARGETS_LINUX)" $(GO) run ./build/deb
+
+# End-to-end tests (Phase 8). build/e2e builds the launched binaries (beacon-chain,
+# validator, bootnode) + geth into $(DIST), provisions lighthouse/web3signer when the
+# selected scenario needs them, and runs `go test ./testing/endtoend` with PRYSM_BIN
+# pointed at $(DIST). Name a scenario to pick it; default is the minimal single-client run.
+.PHONY: e2e
+e2e: ## [Phase 8] End-to-end tests (name a scenario; default minimal — see list below)
+	@GO="$(GO)" DIST="$(DIST)" $(GO) run ./build/e2e $(filter $(E2E_KINDS),$(MAKECMDGOALS))
 
 .PHONY: clean
 clean: ## Remove build output
