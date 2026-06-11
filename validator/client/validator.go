@@ -838,6 +838,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		return err
 	}
 
+	v.upgradeProposerSettingsToV2(ctx, slots.ToEpoch(slot))
 	prefs := v.buildProposerPreferences(ctx, km, slot, false)
 	if len(prefs) > 0 {
 		// Delay to mid-slot so the block for this slot is processed first.
@@ -1034,6 +1035,22 @@ func (v *validator) buildProposerSettingsRequests(
 	return prepareProposerReqs
 }
 
+// upgradeProposerSettingsToV2 migrates v1 proposer settings to v2 and persists
+// them. Deferred until gloas-active so the pre-gloas registration path still
+// sees BuilderConfig.
+func (v *validator) upgradeProposerSettingsToV2(ctx context.Context, currentEpoch primitives.Epoch) {
+	if currentEpoch < params.BeaconConfig().GloasForkEpoch {
+		return
+	}
+	ps := v.ProposerSettings()
+	if !ps.UpgradeToV2() {
+		return
+	}
+	if err := v.SetProposerSettings(ctx, ps); err != nil {
+		log.WithError(err).Warn("Failed to persist v1->v2 proposer settings upgrade")
+	}
+}
+
 // buildProposerPreferences creates signed proposer preferences for validators
 // that have proposer slots in the current epoch (future slots) or next epoch. During normal operation it is
 // gated to run once at mid-epoch; pass force=true to bypass that gate (e.g.
@@ -1080,15 +1097,6 @@ func (v *validator) buildProposerPreferences(
 		return nil
 	}
 
-	ps := v.ProposerSettings()
-	// Defer until gloas-active so the pre-gloas registration path still sees BuilderConfig.
-	if currentEpoch >= gloasEpoch {
-		if ps.UpgradeToV2() {
-			if err := v.SetProposerSettings(ctx, ps); err != nil {
-				log.WithError(err).Warn("Failed to persist v1->v2 proposer settings upgrade")
-			}
-		}
-	}
 	var signedPrefs []*ethpb.SignedProposerPreferences
 	var sigFailCount int
 
@@ -1252,6 +1260,7 @@ func (v *validator) submitProposerPreferences(ctx context.Context) {
 		log.WithError(err).Warn("Failed to get keymanager for proposer preference resubmission")
 		return
 	}
+	v.upgradeProposerSettingsToV2(ctx, currentEpoch)
 	prefs := v.buildProposerPreferences(ctx, km, slot, true)
 	if len(prefs) == 0 {
 		return

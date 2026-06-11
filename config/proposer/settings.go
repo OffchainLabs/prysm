@@ -125,9 +125,9 @@ type Settings struct {
 // Pseudocode: conditions for being saved into the database
 // 1. settings are not nil
 // 2. proposeconfig is not nil (this defines specific settings for each validator key), default config can be nil in this case and fall back to beacon node settings
-// 3. defaultconfig is not nil, meaning it has at least fee recipient settings (this defines general settings for all validator keys but keys will use settings from propose config if available), propose config can be nil in this case
+// 3. defaultconfig is not nil, meaning it has at least fee recipient or gas limit settings (this defines general settings for all validator keys but keys will use settings from propose config if available), propose config can be nil in this case
 func (ps *Settings) ShouldBeSaved() bool {
-	return ps != nil && (ps.ProposeConfig != nil || ps.DefaultConfig != nil && ps.DefaultConfig.FeeRecipientConfig != nil)
+	return ps != nil && (ps.ProposeConfig != nil || ps.DefaultConfig != nil && (ps.DefaultConfig.FeeRecipientConfig != nil || ps.DefaultConfig.GasLimit != 0))
 }
 
 // ToConsensus converts struct to ProposerSettingsPayload
@@ -277,6 +277,15 @@ func (ps *Settings) isV2() bool {
 	return ps != nil && ps.Version == SchemaV2
 }
 
+// WarnDeprecatedSchema logs a warning when v1 settings are used on a network
+// with gloas scheduled.
+func (ps *Settings) WarnDeprecatedSchema() {
+	if ps == nil || ps.Version == SchemaV2 || !params.GloasEnabled() {
+		return
+	}
+	log.Warn("Proposer settings use the deprecated v1 schema; they are upgraded automatically at the gloas fork. Please migrate your settings source to v2.")
+}
+
 // UpgradeToV2 migrates v1 settings to v2 in place. Returns true if changed.
 func (ps *Settings) UpgradeToV2() bool {
 	if ps == nil || ps.isV2() {
@@ -315,10 +324,10 @@ func (ps *Settings) GasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) validator
 		}
 		return chainDefault
 	}
-	if opt, ok := ps.ProposeConfig[pubkey]; ok && opt.BuilderConfig != nil {
+	if opt, ok := ps.ProposeConfig[pubkey]; ok && opt.BuilderConfig != nil && opt.BuilderConfig.GasLimit != 0 {
 		return opt.BuilderConfig.GasLimit
 	}
-	if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil {
+	if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil && ps.DefaultConfig.BuilderConfig.GasLimit != 0 {
 		return ps.DefaultConfig.BuilderConfig.GasLimit
 	}
 	return chainDefault

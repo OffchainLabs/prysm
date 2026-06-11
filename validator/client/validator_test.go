@@ -34,6 +34,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	dbTest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
@@ -2142,6 +2143,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		validatorClient: client,
 		domainDataCache: cache,
 		proposerSettings: &proposer.Settings{
+			Version: proposer.SchemaV2,
 			DefaultConfig: &proposer.Option{
 				FeeRecipientConfig: &proposer.FeeRecipientConfig{
 					FeeRecipient: feeRecipient,
@@ -2419,6 +2421,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 
 		customFeeRecipient := feeRecipientFromString(t, "0x2222222222222222222222222222222222222222")
 		v.proposerSettings = &proposer.Settings{
+			Version: proposer.SchemaV2,
 			DefaultConfig: &proposer.Option{
 				FeeRecipientConfig: &proposer.FeeRecipientConfig{
 					FeeRecipient: feeRecipient,
@@ -3010,6 +3013,7 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 			})
 			v.duties.write(data)
 
+			v.upgradeProposerSettingsToV2(t.Context(), slots.ToEpoch(midEpochSlot))
 			prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
 			require.Equal(t, 1, len(prefs))
 			require.Equal(t, tt.wantGasLimit, prefs[0].Message.TargetGasLimit)

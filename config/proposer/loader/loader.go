@@ -179,7 +179,7 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 	if err != nil {
 		return nil, err
 	}
-	warnDeprecatedSchema(ps)
+	ps.WarnDeprecatedSchema()
 	if err := psl.db.SaveProposerSettings(cliCtx.Context, ps); err != nil {
 		return nil, err
 	}
@@ -196,13 +196,6 @@ func hasBuilderShape(p *validatorpb.ProposerSettingsPayload) bool {
 		}
 	}
 	return false
-}
-
-func warnDeprecatedSchema(ps *proposer.Settings) {
-	if ps == nil || ps.Version == proposer.SchemaV2 || !params.GloasEnabled() {
-		return
-	}
-	log.Warn("Proposer settings use the deprecated v1 schema; they are upgraded automatically at the gloas fork. Please migrate your settings source to v2.")
 }
 
 func (psl *SettingsLoader) applyOverrides() {

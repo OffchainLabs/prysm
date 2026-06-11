@@ -7,9 +7,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 )
 
 func Test_Proposer_Setting_Cloning(t *testing.T) {
@@ -166,6 +168,16 @@ func TestProposerSettings_ShouldBeSaved(t *testing.T) {
 		},
 
 		{
+			name: "Should be saved, default gas limit only",
+			fields: fields{
+				ProposeConfig: nil,
+				DefaultConfig: &Option{
+					GasLimit: validator.Uint64(40000000),
+				},
+			},
+			want: true,
+		},
+		{
 			name: "Should not be saved, proposeconfig not populated and default not populated",
 			fields: fields{
 				ProposeConfig: nil,
@@ -250,6 +262,33 @@ func TestSettings_GasLimit(t *testing.T) {
 			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{GasLimit: validator.Uint64(60_000_000)}},
 		}
 		require.Equal(t, validator.Uint64(60_000_000), ps.GasLimit(pk))
+	})
+
+	t.Run("v1 per-validator entry without builder falls back to default", func(t *testing.T) {
+		ps := &Settings{
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				pk: {},
+			},
+			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{GasLimit: validator.Uint64(60_000_000)}},
+		}
+		require.Equal(t, validator.Uint64(60_000_000), ps.GasLimit(pk))
+	})
+
+	t.Run("v1 per-validator zero BuilderConfig.GasLimit falls back to default", func(t *testing.T) {
+		ps := &Settings{
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				pk: {BuilderConfig: &BuilderConfig{Enabled: true}},
+			},
+			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{GasLimit: validator.Uint64(60_000_000)}},
+		}
+		require.Equal(t, validator.Uint64(60_000_000), ps.GasLimit(pk))
+	})
+
+	t.Run("v1 zero default BuilderConfig.GasLimit falls back to chain default", func(t *testing.T) {
+		ps := &Settings{
+			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{Enabled: true}},
+		}
+		require.Equal(t, chainDefault, ps.GasLimit(pk))
 	})
 
 	t.Run("v1 with no builder config returns chain default", func(t *testing.T) {
@@ -400,6 +439,43 @@ func TestSettings_ResetGasLimit(t *testing.T) {
 		}
 		require.Equal(t, true, ps.ResetGasLimit(pk))
 		require.Equal(t, chainDefault, ps.ProposeConfig[pk].BuilderConfig.GasLimit)
+	})
+}
+
+func TestSettings_WarnDeprecatedSchema(t *testing.T) {
+	v1Settings := &Settings{
+		Version: SchemaV1,
+		DefaultConfig: &Option{
+			BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: 30000000},
+		},
+	}
+
+	t.Run("v1 on gloas-scheduled network warns", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 100
+		params.OverrideBeaconConfig(cfg)
+		hook := logtest.NewGlobal()
+		v1Settings.WarnDeprecatedSchema()
+		assert.LogsContain(t, hook, "deprecated v1 schema")
+	})
+	t.Run("v1 without gloas scheduled silent", func(t *testing.T) {
+		hook := logtest.NewGlobal()
+		v1Settings.WarnDeprecatedSchema()
+		assert.LogsDoNotContain(t, hook, "deprecated v1 schema")
+	})
+	t.Run("v2 silent", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 100
+		params.OverrideBeaconConfig(cfg)
+		hook := logtest.NewGlobal()
+		v2 := &Settings{
+			Version:       SchemaV2,
+			DefaultConfig: &Option{GasLimit: 30000000},
+		}
+		v2.WarnDeprecatedSchema()
+		assert.LogsDoNotContain(t, hook, "deprecated v1 schema")
 	})
 }
 

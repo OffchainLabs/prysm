@@ -1155,42 +1155,6 @@ func Test_ProposerSettingsLoader_DoesNotMigrateAtLoad(t *testing.T) {
 	})
 }
 
-func Test_warnDeprecatedSchema(t *testing.T) {
-	v1Settings := &proposer.Settings{
-		Version: proposer.SchemaV1,
-		DefaultConfig: &proposer.Option{
-			BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 30000000},
-		},
-	}
-
-	t.Run("v1 on gloas-scheduled network warns", func(t *testing.T) {
-		params.SetupTestConfigCleanup(t)
-		cfg := params.BeaconConfig().Copy()
-		cfg.GloasForkEpoch = 100
-		params.OverrideBeaconConfig(cfg)
-		hook := logtest.NewGlobal()
-		warnDeprecatedSchema(v1Settings)
-		assert.LogsContain(t, hook, "deprecated v1 schema")
-	})
-	t.Run("v1 without gloas scheduled silent", func(t *testing.T) {
-		hook := logtest.NewGlobal()
-		warnDeprecatedSchema(v1Settings)
-		assert.LogsDoNotContain(t, hook, "deprecated v1 schema")
-	})
-	t.Run("v2 silent", func(t *testing.T) {
-		params.SetupTestConfigCleanup(t)
-		cfg := params.BeaconConfig().Copy()
-		cfg.GloasForkEpoch = 100
-		params.OverrideBeaconConfig(cfg)
-		hook := logtest.NewGlobal()
-		warnDeprecatedSchema(&proposer.Settings{
-			Version:       proposer.SchemaV2,
-			DefaultConfig: &proposer.Option{GasLimit: 30000000},
-		})
-		assert.LogsDoNotContain(t, hook, "deprecated v1 schema")
-	})
-}
-
 func Test_mergeProposerSettings_VersionPrecedence(t *testing.T) {
 	t.Run("loaded.Version wins when non-zero", func(t *testing.T) {
 		merged := mergeProposerSettings(
