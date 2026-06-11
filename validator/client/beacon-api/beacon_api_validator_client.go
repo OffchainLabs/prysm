@@ -387,13 +387,24 @@ func (c *beaconApiValidatorClient) AggregatedSyncSelections(ctx context.Context,
 func wrapInMetrics[Resp any](action string, f func() (Resp, error)) (Resp, error) {
 	now := time.Now()
 	resp, err := f()
+	recordMetrics(action, now, err)
+	return resp, err
+}
+
+func wrapInMetrics2[R1, R2 any](action string, f func() (R1, R2, error)) (R1, R2, error) {
+	now := time.Now()
+	r1, r2, err := f()
+	recordMetrics(action, now, err)
+	return r1, r2, err
+}
+
+func recordMetrics(action string, start time.Time, err error) {
 	httpActionCount.WithLabelValues(action).Inc()
 	if err == nil {
-		httpActionLatency.WithLabelValues(action).Observe(time.Since(now).Seconds())
+		httpActionLatency.WithLabelValues(action).Observe(time.Since(start).Seconds())
 	} else {
 		failedHTTPActionCount.WithLabelValues(action).Inc()
 	}
-	return resp, err
 }
 
 func (c *beaconApiValidatorClient) Host() string {
@@ -406,12 +417,12 @@ func (c *beaconApiValidatorClient) EnsureReady(ctx context.Context) bool {
 
 // Gloas Fork Methods
 
-func (c *beaconApiValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot) (*ethpb.ExecutionPayloadEnvelope, error) {
+func (c *beaconApiValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, beaconBlockRoot [32]byte) (*ethpb.ExecutionPayloadEnvelope, *ethpb.WireBlindedExecutionPayloadEnvelope, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.GetExecutionPayloadEnvelope")
 	defer span.End()
 
-	return wrapInMetrics[*ethpb.ExecutionPayloadEnvelope]("GetExecutionPayloadEnvelope", func() (*ethpb.ExecutionPayloadEnvelope, error) {
-		return c.getExecutionPayloadEnvelope(ctx, slot)
+	return wrapInMetrics2("GetExecutionPayloadEnvelope", func() (*ethpb.ExecutionPayloadEnvelope, *ethpb.WireBlindedExecutionPayloadEnvelope, error) {
+		return c.getExecutionPayloadEnvelope(ctx, slot, beaconBlockRoot)
 	})
 }
 
@@ -424,20 +435,29 @@ func (c *beaconApiValidatorClient) PublishExecutionPayloadEnvelope(ctx context.C
 	})
 }
 
-func (c *beaconApiValidatorClient) PayloadAttestationData(ctx context.Context, _ primitives.Slot) (*ethpb.PayloadAttestationData, error) {
-	_, span := trace.StartSpan(ctx, "beacon-api.PayloadAttestationData")
+func (c *beaconApiValidatorClient) PublishBlindedExecutionPayloadEnvelope(ctx context.Context, in *ethpb.SignedWireBlindedExecutionPayloadEnvelope) (*empty.Empty, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.PublishBlindedExecutionPayloadEnvelope")
 	defer span.End()
 
-	return wrapInMetrics[*ethpb.PayloadAttestationData]("PayloadAttestationData", func() (*ethpb.PayloadAttestationData, error) {
-		return nil, errors.New("PayloadAttestationData not implemented")
+	return wrapInMetrics[*empty.Empty]("PublishBlindedExecutionPayloadEnvelope", func() (*empty.Empty, error) {
+		return c.publishBlindedExecutionPayloadEnvelope(ctx, in)
 	})
 }
 
-func (c *beaconApiValidatorClient) SubmitPayloadAttestation(ctx context.Context, _ *ethpb.PayloadAttestationMessage) (*empty.Empty, error) {
-	_, span := trace.StartSpan(ctx, "beacon-api.SubmitPayloadAttestation")
+func (c *beaconApiValidatorClient) PayloadAttestationData(ctx context.Context, slot primitives.Slot) (*ethpb.PayloadAttestationData, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.PayloadAttestationData")
+	defer span.End()
+
+	return wrapInMetrics[*ethpb.PayloadAttestationData]("PayloadAttestationData", func() (*ethpb.PayloadAttestationData, error) {
+		return c.payloadAttestationData(ctx, slot)
+	})
+}
+
+func (c *beaconApiValidatorClient) SubmitPayloadAttestation(ctx context.Context, msg *ethpb.PayloadAttestationMessage) (*empty.Empty, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.SubmitPayloadAttestation")
 	defer span.End()
 
 	return wrapInMetrics[*empty.Empty]("SubmitPayloadAttestation", func() (*empty.Empty, error) {
-		return nil, errors.New("SubmitPayloadAttestation not implemented")
+		return new(empty.Empty), c.submitPayloadAttestation(ctx, msg)
 	})
 }

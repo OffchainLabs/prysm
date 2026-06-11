@@ -239,7 +239,7 @@ func (m *mockExecutionPayloadEnvelopeVerifier) VerifyExecutionRequestsRoot(_ int
 	return nil
 }
 
-func (m *mockExecutionPayloadEnvelopeVerifier) VerifySignature(_ state.ReadOnlyBeaconState) error {
+func (m *mockExecutionPayloadEnvelopeVerifier) VerifySignature(_ context.Context, _ state.ReadOnlyBeaconState) error {
 	return m.errSignature
 }
 
