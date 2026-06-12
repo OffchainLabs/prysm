@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
@@ -227,6 +228,12 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			"type":          source.Type(),
 		})
 
+		// EVIDENCE (temporary): track when the loop started and the previous
+		// iteration's partial set, so the logs below can show the ~250ms EL
+		// re-fetch / full publish pass repeating with no progress and no backoff.
+		loopStart := time.Now()
+		var prevFingerprint string
+
 		var constructedSidecarCount uint64
 		for iteration := uint64(0); ; /*no stop condition*/ iteration++ {
 			log = log.WithField("iteration", iteration)
@@ -259,11 +266,33 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 
 			count := len(partialColumns)
 
+			// EVIDENCE (temporary): every iteration is a fresh EL round-trip
+			// (ConstructDataColumnSidecars -> fetchCellsAndProofsFromExecution).
+			// partialSetUnchanged==true means this iteration produced the exact
+			// same partial set as the previous one, i.e. no progress was made.
+			fingerprint := partialColumnsFingerprint(partialColumns)
+			partialSetUnchanged := iteration > 0 && fingerprint == prevFingerprint
+			prevFingerprint = fingerprint
+			log.WithFields(logrus.Fields{
+				"sinceLoopStart":      time.Since(loopStart),
+				"partialCount":        count,
+				"constructedCount":    len(constructedSidecars),
+				"partialSetUnchanged": partialSetUnchanged,
+			}).Warn("EVIDENCE: EL reconstruct round-trip completed (re-runs every ~250ms until all sampled columns are seen)")
+
 			if isPartialEnabled && count > 0 {
 				digest, err := s.currentForkDigest()
 				if err != nil {
 					return nil, errors.Wrap(err, "current fork digest")
 				}
+				// EVIDENCE (temporary): the full publish pass (rebuild columns +
+				// per-peer diff over every sampled index) runs every iteration.
+				// When partialSetUnchanged is true this recomputes work that emits
+				// no new RPC (gossipsub dedups per peer) yet still costs CPU/EL.
+				log.WithFields(logrus.Fields{
+					"partialCount":        count,
+					"partialSetUnchanged": partialSetUnchanged,
+				}).Warn("EVIDENCE: running full partial-column publish pass")
 				// Publish the partial column.
 				// Note, the "partial column" may indeed be complete. We still
 				// should publish to help our peers.
@@ -322,6 +351,18 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 	}
 
 	return nil
+}
+
+// partialColumnsFingerprint builds a stable fingerprint of the included-cell
+// bitmaps across all partial columns. EVIDENCE (temporary): used only by the
+// EVIDENCE logs to detect when consecutive iterations republish an identical
+// partial set.
+func partialColumnsFingerprint(partialColumns []blocks.PartialDataColumn) string {
+	var b strings.Builder
+	for i := range partialColumns {
+		fmt.Fprintf(&b, "%d:%x;", i, []byte(partialColumns[i].Included))
+	}
+	return b.String()
 }
 
 // broadcastAndReceiveUnseenDataColumnSidecars broadcasts and receives unseen data column sidecars.
