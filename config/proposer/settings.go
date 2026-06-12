@@ -324,7 +324,7 @@ func (ps *Settings) GasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) validator
 		}
 		return chainDefault
 	}
-	if opt, ok := ps.ProposeConfig[pubkey]; ok && opt.BuilderConfig != nil && opt.BuilderConfig.GasLimit != 0 {
+	if opt, ok := ps.ProposeConfig[pubkey]; ok && opt != nil && opt.BuilderConfig != nil && opt.BuilderConfig.GasLimit != 0 {
 		return opt.BuilderConfig.GasLimit
 	}
 	if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil && ps.DefaultConfig.BuilderConfig.GasLimit != 0 {
