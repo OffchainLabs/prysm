@@ -115,6 +115,18 @@ func New(cfg Config) (*Client, error) {
 		return nil, errors.New("enginehttp: empty JWT secret")
 	}
 
+	// Flow control: the spec asks CLs to advertise INITIAL_WINDOW_SIZE >= 1 MiB
+	// so blob bundles and large getPayload responses don't stall on the 64 KiB
+	// RFC default (execution-apis#793 "Flow-control window", a SHOULD). x/net's
+	// http2.Transport already advertises a 4 MiB stream receive window
+	// (transportDefaultStreamFlow) and a 1 GiB connection window, so the bare
+	// Transport conforms; MAX_FRAME_SIZE / MAX_HEADER_LIST_SIZE stay at HTTP/2
+	// defaults, which the spec leaves unpinned.
+	//
+	// Compression: the only CL MUST is to tolerate uncompressed responses, which
+	// we do; with DisableCompression off the Transport also negotiates gzip
+	// transparently. zstd is optional and would need a new dependency, so it is
+	// not requested.
 	h2 := &http2.Transport{
 		AllowHTTP: true,
 		DialTLSContext: func(ctx context.Context, netw, addr string, _ *tls.Config) (net.Conn, error) {
