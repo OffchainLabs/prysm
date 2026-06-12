@@ -135,7 +135,25 @@ message AttesterSlashingElectra {
   IndexedAttestationElectra attestation_2 = 2;
 }
 
+message AttesterSlashingGloas {
+  // First conflicting attestation.
+  IndexedAttestationGloas attestation_1 = 1;
+
+  // Second conflicting attestation.
+  IndexedAttestationGloas attestation_2 = 2;
+}
+
 message IndexedAttestationElectra {
+  repeated uint64 attesting_indices = 1
+      [ (ethereum.eth.ext.ssz_max) = "max_attesting_indices.size" ];
+
+  AttestationData data = 2;
+
+  // 96 bytes aggregate signature.
+  bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+message IndexedAttestationGloas {
   repeated uint64 attesting_indices = 1
       [ (ethereum.eth.ext.ssz_max) = "max_attesting_indices.size" ];
 
