@@ -272,6 +272,11 @@ func (s *Service) hasPendingGloasColumns(root [fieldparams.RootLength]byte) bool
 
 // prunePendingGloasColumns removes stale entries every slot.
 func (s *Service) prunePendingGloasColumns() {
+	if s.cfg == nil || s.cfg.clock == nil {
+		log.Error("Skipping pending Gloas columns pruning: clock is not set")
+		return
+	}
+
 	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
 	defer slotTicker.Done()
 	for {
