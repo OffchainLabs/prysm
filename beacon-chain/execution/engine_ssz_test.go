@@ -6,9 +6,13 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/enginehttp"
+	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	enginev2 "github.com/OffchainLabs/prysm/v7/proto/engine/v2"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -334,4 +338,61 @@ func TestGetPayloadBodiesByRange_Chunks(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 5, len(result))
 	assert.DeepEqual(t, []call{{"100", "2"}, {"102", "2"}, {"104", "1"}}, calls)
+}
+
+// fcuResponseSSZ is a minimal VALID ForkchoiceUpdateResponse body.
+func fcuResponseSSZ(t *testing.T) []byte {
+	b, err := (&enginev2.ForkchoiceUpdateResponse{
+		PayloadStatus: &enginev2.PayloadStatus{Status: enginev2.StatusByte(enginev2.PayloadStatusValid)},
+	}).MarshalSSZ()
+	require.NoError(t, err)
+	return b
+}
+
+// ForkchoiceUpdated must serialize POST /forkchoice on a connection: only one
+// request in flight, the response awaited before the next is issued.
+// FCUs arrive from independent goroutines (blockchain
+// head update + proposer RPC), so concurrent callers must still produce at most
+// one request at the EL at a time.
+func TestForkchoiceUpdated_SerializesPerConnection(t *testing.T) {
+	var inFlight, maxInFlight atomic.Int32
+	resp := fcuResponseSSZ(t)
+	srv := h2cServer(t, func(w http.ResponseWriter, r *http.Request) {
+		cur := inFlight.Add(1)
+		for { // record the high-water mark of concurrent requests
+			m := maxInFlight.Load()
+			if cur <= m || maxInFlight.CompareAndSwap(m, cur) {
+				break
+			}
+		}
+		time.Sleep(5 * time.Millisecond) // widen the overlap window
+		inFlight.Add(-1)
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write(resp)
+	})
+	e := newTestSSZEngine(t, srv.URL, &enginehttp.Capabilities{})
+
+	// Shared read-only state across goroutines; buildForkchoiceUpdate only reads it.
+	state := &pb.ForkchoiceState{
+		HeadBlockHash:      make([]byte, 32),
+		SafeBlockHash:      make([]byte, 32),
+		FinalizedBlockHash: make([]byte, 32),
+	}
+
+	const goroutines = 16
+	var wg sync.WaitGroup
+	errs := make(chan error, goroutines)
+	for range goroutines {
+		wg.Go(func() {
+			_, _, err := e.ForkchoiceUpdated(context.Background(), state, payloadattribute.EmptyWithVersion(version.Fulu))
+			errs <- err
+		})
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		require.NoError(t, err)
+	}
+	assert.Equal(t, int32(1), maxInFlight.Load()) // never more than one in flight
 }

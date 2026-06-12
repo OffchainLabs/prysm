@@ -32,6 +32,12 @@ type sszEngine struct {
 
 	capsLock sync.RWMutex
 	caps     *enginehttp.Capabilities
+
+	// fcuMu serializes POST /forkchoice on this connection: the spec allows only
+	// one forkchoice request in flight per connection and the CL MUST await the
+	// response before issuing the next, and MUST NOT rely on the EL to reorder
+	// dependent requests.
+	fcuMu sync.Mutex
 }
 
 func sszNotImplemented(op string) error {
@@ -201,6 +207,10 @@ func (e *sszEngine) ForkchoiceUpdated(ctx context.Context, state *pb.ForkchoiceS
 	if err != nil {
 		return nil, nil, err
 	}
+
+	e.fcuMu.Lock()
+	defer e.fcuMu.Unlock()
+
 	observeSSZBody(methodForkchoiceUpdated, directionRequest, update)
 	resp, err := e.client.ForkchoiceUpdated(ctx, ver, update)
 	if err != nil {
