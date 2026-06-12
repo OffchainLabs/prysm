@@ -558,7 +558,7 @@ func (f *ForkChoice) FullBeatsEmpty(root [32]byte) bool {
 		return false
 	}
 	if slots.ToEpoch(en.node.slot) < params.BeaconConfig().GloasForkEpoch {
-		return false
+		return true // pre-gloas blocks always carry their payload
 	}
 	pn := f.store.choosePayloadContent(en.node)
 	return pn != nil && pn.full
