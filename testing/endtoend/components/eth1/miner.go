@@ -104,7 +104,7 @@ func (m *Miner) initAttempt(ctx context.Context, attempt int) (*os.File, error) 
 		return nil, err
 	}
 
-	initCmd := exec.CommandContext(ctx, binaryPath, "init", fmt.Sprintf("--datadir=%s", m.DataDir()), gethJsonPath) // #nosec G204 -- Safe
+	initCmd := exec.CommandContext(ctx, binaryPath, "--pcscdpath=", "init", fmt.Sprintf("--datadir=%s", m.DataDir()), gethJsonPath) // #nosec G204 -- Safe
 
 	// redirect stderr to a log file
 	initFile, err := helpers.DeleteAndCreatePath(e2e.TestParams.Logfile("eth1-init_miner.log"))
@@ -123,6 +123,7 @@ func (m *Miner) initAttempt(ctx context.Context, attempt int) (*os.File, error) 
 
 	pwFile := m.DataDir("keystore", minerPasswordFile)
 	args := []string{
+		"--pcscdpath=",
 		"--nat=none", // disable nat traversal in e2e, it is failure prone and not needed
 		fmt.Sprintf("--datadir=%s", m.DataDir()),
 		fmt.Sprintf("--http.port=%d", e2e.TestParams.Ports.Eth1RPCPort),
