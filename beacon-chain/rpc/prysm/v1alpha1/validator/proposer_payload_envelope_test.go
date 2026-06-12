@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -14,6 +15,9 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func testGloasBlock(t *testing.T) (*consensusblocks.GetPayloadResponse, interfaces.SignedBeaconBlock) {
@@ -48,14 +52,13 @@ func testGloasBlock(t *testing.T) (*consensusblocks.GetPayloadResponse, interfac
 func TestStoreExecutionPayloadEnvelope(t *testing.T) {
 	local, sBlk := testGloasBlock(t)
 
-	vs := &Server{}
+	vs := &Server{ExecutionPayloadEnvelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
 	err := vs.storeExecutionPayloadEnvelope(sBlk, local)
 	require.NoError(t, err)
 
-	envelope, found := vs.getExecutionPayloadEnvelope(sBlk.Block().Slot())
-	require.Equal(t, true, found)
-	require.NotNil(t, envelope.Payload)
-	require.Equal(t, sBlk.Block().Slot(), envelope.Payload.SlotNumber)
+	contents, ok := vs.ExecutionPayloadEnvelopeCache.Contents()
+	require.Equal(t, true, ok)
+	require.Equal(t, sBlk.Block().Slot(), contents.Envelope.Payload.SlotNumber)
 }
 
 func TestExtractExecutionPayloadGloas(t *testing.T) {
@@ -86,63 +89,6 @@ func TestExtractExecutionPayloadGloas(t *testing.T) {
 func TestExtractExecutionPayloadGloas_Nil(t *testing.T) {
 	require.Equal(t, true, extractExecutionPayloadGloas(nil) == nil)
 	require.Equal(t, true, extractExecutionPayloadGloas(&consensusblocks.GetPayloadResponse{}) == nil)
-}
-
-func TestSetGetExecutionPayloadEnvelope(t *testing.T) {
-	slot := primitives.Slot(42)
-
-	envelope := &ethpb.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadGloas{
-			ParentHash:    make([]byte, 32),
-			FeeRecipient:  make([]byte, 20),
-			StateRoot:     make([]byte, 32),
-			ReceiptsRoot:  make([]byte, 32),
-			LogsBloom:     make([]byte, 256),
-			PrevRandao:    make([]byte, 32),
-			BaseFeePerGas: make([]byte, 32),
-			BlockHash:     make([]byte, 32),
-			SlotNumber:    slot,
-		},
-		BuilderIndex:    primitives.BuilderIndex(7),
-		BeaconBlockRoot: make([]byte, 32),
-	}
-
-	vs := &Server{}
-	vs.setExecutionPayloadEnvelope(envelope, nil)
-
-	got, found := vs.getExecutionPayloadEnvelope(slot)
-	require.Equal(t, true, found)
-	require.DeepEqual(t, envelope, got)
-}
-
-func TestGetExecutionPayloadEnvelope_SlotMismatch(t *testing.T) {
-	envelope := &ethpb.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadGloas{
-			ParentHash:    make([]byte, 32),
-			FeeRecipient:  make([]byte, 20),
-			StateRoot:     make([]byte, 32),
-			ReceiptsRoot:  make([]byte, 32),
-			LogsBloom:     make([]byte, 256),
-			PrevRandao:    make([]byte, 32),
-			BaseFeePerGas: make([]byte, 32),
-			BlockHash:     make([]byte, 32),
-			SlotNumber:    42,
-		},
-		BuilderIndex:    primitives.BuilderIndex(7),
-		BeaconBlockRoot: make([]byte, 32),
-	}
-
-	vs := &Server{}
-	vs.setExecutionPayloadEnvelope(envelope, nil)
-
-	_, found := vs.getExecutionPayloadEnvelope(999)
-	require.Equal(t, false, found)
-}
-
-func TestGetExecutionPayloadEnvelope_Nil(t *testing.T) {
-	vs := &Server{}
-	_, found := vs.getExecutionPayloadEnvelope(1)
-	require.Equal(t, false, found)
 }
 
 func TestGetExecutionPayloadEnvelopeRPC_NilRequest(t *testing.T) {
@@ -210,8 +156,8 @@ func TestGetExecutionPayloadEnvelopeRPC_Success(t *testing.T) {
 		BeaconBlockRoot: make([]byte, 32),
 	}
 
-	vs := &Server{}
-	vs.setExecutionPayloadEnvelope(envelope, nil)
+	vs := &Server{ExecutionPayloadEnvelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
+	vs.ExecutionPayloadEnvelopeCache.Set(&cache.ExecutionPayloadContents{Envelope: envelope})
 
 	resp, err := vs.GetExecutionPayloadEnvelope(t.Context(), &ethpb.ExecutionPayloadEnvelopeRequest{
 		Slot: 1,
@@ -248,9 +194,10 @@ func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
 				ExtraData:     make([]byte, 0),
 				SlotNumber:    1,
 			},
-			ExecutionRequests: &enginev1.ExecutionRequests{},
-			BuilderIndex:      0,
-			BeaconBlockRoot:   make([]byte, 32),
+			ExecutionRequests:     &enginev1.ExecutionRequests{},
+			BuilderIndex:          0,
+			BeaconBlockRoot:       make([]byte, 32),
+			ParentBeaconBlockRoot: make([]byte, 32),
 		},
 		Signature: make([]byte, 96),
 	}
@@ -263,11 +210,53 @@ func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
 	require.Equal(t, 1, receiver.calls)
 }
 
+func TestPublishExecutionPayloadEnvelope_ImportFailureIsAborted(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	broadcaster := &mockp2p.MockBroadcaster{}
+	receiver := &mockExecutionPayloadEnvelopeReceiver{err: errors.New("import failed")}
+	vs := &Server{
+		P2P:                              broadcaster,
+		ExecutionPayloadEnvelopeReceiver: receiver,
+	}
+
+	req := &ethpb.SignedExecutionPayloadEnvelope{
+		Message: &ethpb.ExecutionPayloadEnvelope{
+			Payload: &enginev1.ExecutionPayloadGloas{
+				ParentHash:    make([]byte, 32),
+				FeeRecipient:  make([]byte, 20),
+				StateRoot:     make([]byte, 32),
+				ReceiptsRoot:  make([]byte, 32),
+				LogsBloom:     make([]byte, 256),
+				PrevRandao:    make([]byte, 32),
+				BaseFeePerGas: make([]byte, 32),
+				BlockHash:     make([]byte, 32),
+				ExtraData:     make([]byte, 0),
+				SlotNumber:    1,
+			},
+			ExecutionRequests:     &enginev1.ExecutionRequests{},
+			BeaconBlockRoot:       make([]byte, 32),
+			ParentBeaconBlockRoot: make([]byte, 32),
+		},
+		Signature: make([]byte, 96),
+	}
+
+	_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), req)
+	require.NotNil(t, err)
+	// Broadcast must have happened before the import failure (spec 202).
+	require.Equal(t, true, broadcaster.BroadcastCalled.Load())
+	require.Equal(t, codes.Aborted, status.Code(err))
+}
+
 type mockExecutionPayloadEnvelopeReceiver struct {
 	calls int
+	err   error
 }
 
 func (m *mockExecutionPayloadEnvelopeReceiver) ReceiveExecutionPayloadEnvelope(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
 	m.calls++
-	return nil
+	return m.err
 }

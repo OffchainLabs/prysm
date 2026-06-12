@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -14,13 +15,44 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func processDepositRequests(ctx context.Context, beaconState state.BeaconState, requests []*enginev1.DepositRequest) error {
+// prefetchedDepositSigs returns the cached per-request validity slice, or nil
+// on cache miss.
+func prefetchedDepositSigs(rqs *enginev1.ExecutionRequests) []bool {
+	if rqs == nil || len(rqs.Deposits) == 0 {
+		return nil
+	}
+	root, err := rqs.HashTreeRoot()
+	if err != nil {
+		return nil
+	}
+	invalidIdx, ok := cache.DepositSig.Get(root)
+	if !ok {
+		return nil
+	}
+	valid := make([]bool, len(rqs.Deposits))
+	for i := range valid {
+		valid[i] = true
+	}
+	for _, idx := range invalidIdx {
+		if idx < 0 || idx >= len(valid) {
+			return nil
+		}
+		valid[idx] = false
+	}
+	return valid
+}
+
+func ProcessDepositRequests(ctx context.Context, beaconState state.BeaconState, requests []*enginev1.DepositRequest, prefetched []bool) error {
 	if len(requests) == 0 {
 		return nil
 	}
 
-	for _, receipt := range requests {
-		if err := processDepositRequest(beaconState, receipt); err != nil {
+	for i, receipt := range requests {
+		var sigValid *bool
+		if prefetched != nil {
+			sigValid = &prefetched[i]
+		}
+		if err := processDepositRequest(beaconState, receipt, sigValid); err != nil {
 			return errors.Wrap(err, "could not apply deposit request")
 		}
 	}
@@ -29,7 +61,7 @@ func processDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 
 // processDepositRequest processes the specific deposit request
 //
-//	<spec fn="process_deposit_request" fork="gloas" hash="0e8b94ab">
+//	<spec fn="process_deposit_request" fork="gloas" hash="a6fff32f">
 //	def process_deposit_request(state: BeaconState, deposit_request: DepositRequest) -> None:
 //	    # [New in Gloas:EIP7732]
 //	    builder_pubkeys = [b.pubkey for b in state.builders]
@@ -43,7 +75,7 @@ func processDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 //	    if is_builder or (
 //	        is_builder_withdrawal_credential(deposit_request.withdrawal_credentials)
 //	        and not is_validator
-//	        and not is_pending_validator(state, deposit_request.pubkey)
+//	        and not is_pending_validator(state.pending_deposits, deposit_request.pubkey)
 //	    ):
 //	        # Apply builder deposits immediately
 //	        apply_deposit_for_builder(
@@ -67,12 +99,12 @@ func processDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 //	        )
 //	    )
 //	</spec>
-func processDepositRequest(beaconState state.BeaconState, request *enginev1.DepositRequest) error {
+func processDepositRequest(beaconState state.BeaconState, request *enginev1.DepositRequest, prefetchedValid *bool) error {
 	if request == nil {
 		return errors.New("nil deposit request")
 	}
 
-	applied, err := applyBuilderDepositRequest(beaconState, request)
+	applied, err := applyBuilderDepositRequest(beaconState, request, prefetchedValid)
 	if err != nil {
 		return errors.Wrap(err, "could not apply builder deposit")
 	}
@@ -116,7 +148,7 @@ func processDepositRequest(beaconState state.BeaconState, request *enginev1.Depo
 //	    state.builders[builder_index].balance += amount
 //
 // </spec>
-func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1.DepositRequest) (bool, error) {
+func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1.DepositRequest, prefetchedValid *bool) (bool, error) {
 	if beaconState.Version() < version.Gloas {
 		return false, nil
 	}
@@ -150,6 +182,7 @@ func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1
 		request.WithdrawalCredentials,
 		request.Amount,
 		request.Signature,
+		prefetchedValid,
 	); err != nil {
 		return false, err
 	}
@@ -162,16 +195,23 @@ func applyDepositForNewBuilder(
 	withdrawalCredentials []byte,
 	amount uint64,
 	signature []byte,
+	prefetchedValid *bool,
 ) error {
 	pubkeyBytes := bytesutil.ToBytes48(pubkey)
-	valid, err := helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
-		PublicKey:             pubkey,
-		WithdrawalCredentials: withdrawalCredentials,
-		Amount:                amount,
-		Signature:             signature,
-	})
-	if err != nil {
-		return errors.Wrap(err, "could not verify deposit signature")
+	var valid bool
+	if prefetchedValid != nil {
+		valid = *prefetchedValid
+	} else {
+		var err error
+		valid, err = helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
+			PublicKey:             pubkey,
+			WithdrawalCredentials: withdrawalCredentials,
+			Amount:                amount,
+			Signature:             signature,
+		})
+		if err != nil {
+			return errors.Wrap(err, "could not verify deposit signature")
+		}
 	}
 	if !valid {
 		log.WithFields(logrus.Fields{

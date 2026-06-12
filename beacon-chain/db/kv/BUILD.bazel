@@ -118,6 +118,7 @@ go_test(
     data = glob(["testdata/**"]),
     embed = [":go_default_library"],
     deps = [
+        "//beacon-chain/core/gloas:go_default_library",
         "//beacon-chain/db/filters:go_default_library",
         "//beacon-chain/db/iface:go_default_library",
         "//beacon-chain/state:go_default_library",

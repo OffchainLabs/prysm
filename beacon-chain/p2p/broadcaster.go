@@ -2,7 +2,6 @@ package p2p
 
 import (
 	"bytes"
-	"cmp"
 	"context"
 	"fmt"
 	"reflect"
@@ -445,21 +444,11 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 		}
 	}
 
-	// Sort ascending by column index so that the first 64 columns
-	// (which hold the raw field elements) are prioritized.
-	items := make([]*columnBroadcastItem, 0, len(itemsByIndex))
-	for _, item := range itemsByIndex {
-		items = append(items, item)
-	}
-	slices.SortFunc(items, func(a, b *columnBroadcastItem) int {
-		return cmp.Compare(a.index, b.index)
-	})
-
 	// Categorize items by peer availability.
 	var itemsWithPeers []*columnBroadcastItem
 	var itemsWithoutPeers []*columnBroadcastItem
 
-	for _, item := range items {
+	for _, item := range itemsByIndex {
 		mu := s.subnetLocker(item.wrappedSubIdx)
 		mu.RLock()
 		hasPeer := s.hasPeerWithSubnet(item.topic)
@@ -505,11 +494,11 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 	go func() {
 		// Wait for batch to be populated, then publish.
 		batchWg.Wait()
-		if fullSidecarsBatched.Load() > 0 {
+		if batched := fullSidecarsBatched.Load(); batched > 0 {
 			if err := s.pubsub.PublishBatch(&messageBatch); err != nil {
 				log.WithError(err).Error("Cannot publish batch for data column sidecars")
 			} else {
-				dataColumnSidecarBroadcasts.Add(float64(fullSidecarsBatched.Load()))
+				dataColumnSidecarBroadcasts.Add(float64(batched))
 			}
 		}
 		close(batchDone)

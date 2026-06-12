@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/server"
@@ -16,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	beaconState "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -877,45 +877,48 @@ func (s *Service) ValidatorActiveSetChanges(
 		}
 	}
 
-	vs := requestedState.Validators()
-	activatedIndices := validators.ActivatedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
-	exitedIndices, err := validators.ExitedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
-	if err != nil {
-		return nil, &RpcError{
-			Err:    errors.Wrap(err, "could not determine exited validator indices"),
-			Reason: Internal,
+	activatedIndices := make([]primitives.ValidatorIndex, 0)
+	exitedIndices := make([]primitives.ValidatorIndex, 0)
+	slashedIndices := make([]primitives.ValidatorIndex, 0)
+	ejectedIndices := make([]primitives.ValidatorIndex, 0)
+	activatedKeys := make([][]byte, 0)
+	exitedKeys := make([][]byte, 0)
+	slashedKeys := make([][]byte, 0)
+	ejectedKeys := make([][]byte, 0)
+
+	ejectionBalance := params.BeaconConfig().EjectionBalance
+	slashingsVector := params.BeaconConfig().EpochsPerSlashingsVector
+
+	for idx, validator := range requestedState.ValidatorsReadOnlySeq() {
+		if validator.ActivationEpoch() == requestedEpoch {
+			publicKey := validator.PublicKey()
+			activatedIndices = append(activatedIndices, idx)
+			activatedKeys = append(activatedKeys, publicKey[:])
 		}
-	}
-	slashedIndices := validators.SlashedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
-	ejectedIndices, err := validators.EjectedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
-	if err != nil {
-		return nil, &RpcError{
-			Err:    errors.Wrap(err, "could not determine ejected validator indices"),
-			Reason: Internal,
+
+		maxWithdrawableEpoch := primitives.MaxEpoch(validator.WithdrawableEpoch(), requestedEpoch+slashingsVector)
+
+		if validator.Slashed() && validator.WithdrawableEpoch() == maxWithdrawableEpoch {
+			publicKey := validator.PublicKey()
+			slashedIndices = append(slashedIndices, idx)
+			slashedKeys = append(slashedKeys, publicKey[:])
 		}
+
+		if validator.ExitEpoch() != requestedEpoch {
+			continue
+		}
+
+		publicKey := validator.PublicKey()
+		if validator.EffectiveBalance() > ejectionBalance {
+			exitedIndices = append(exitedIndices, idx)
+			exitedKeys = append(exitedKeys, publicKey[:])
+			continue
+		}
+
+		ejectedIndices = append(ejectedIndices, idx)
+		ejectedKeys = append(ejectedKeys, publicKey[:])
 	}
 
-	// Retrieve public keys for the indices.
-	activatedKeys := make([][]byte, len(activatedIndices))
-	exitedKeys := make([][]byte, len(exitedIndices))
-	slashedKeys := make([][]byte, len(slashedIndices))
-	ejectedKeys := make([][]byte, len(ejectedIndices))
-	for i, idx := range activatedIndices {
-		pubkey := requestedState.PubkeyAtIndex(idx)
-		activatedKeys[i] = pubkey[:]
-	}
-	for i, idx := range exitedIndices {
-		pubkey := requestedState.PubkeyAtIndex(idx)
-		exitedKeys[i] = pubkey[:]
-	}
-	for i, idx := range slashedIndices {
-		pubkey := requestedState.PubkeyAtIndex(idx)
-		slashedKeys[i] = pubkey[:]
-	}
-	for i, idx := range ejectedIndices {
-		pubkey := requestedState.PubkeyAtIndex(idx)
-		ejectedKeys[i] = pubkey[:]
-	}
 	return &ethpb.ActiveSetChanges{
 		Epoch:               requestedEpoch,
 		ActivatedPublicKeys: activatedKeys,
@@ -926,5 +929,82 @@ func (s *Service) ValidatorActiveSetChanges(
 		SlashedIndices:      slashedIndices,
 		EjectedPublicKeys:   ejectedKeys,
 		EjectedIndices:      ejectedIndices,
+	}, nil
+}
+
+// PayloadAttestationData produces the PTC attestation data for the given slot.
+// It enforces the gloas-fork gate, slot-equality with the current slot, the PTC
+// deadline, and requires that a block for the requested slot has been received.
+func (s *Service) PayloadAttestationData(
+	ctx context.Context,
+	slot primitives.Slot,
+) (*ethpb.PayloadAttestationData, *RpcError) {
+	_, span := trace.StartSpan(ctx, "coreService.PayloadAttestationData")
+	defer span.End()
+
+	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
+		return nil, &RpcError{Reason: BadRequest, Err: fmt.Errorf("payload attestation data is not supported before Gloas fork (slot %d)", slot)}
+	}
+	currentSlot := s.GenesisTimeFetcher.CurrentSlot()
+	if slot != currentSlot {
+		return nil, &RpcError{Reason: BadRequest, Err: fmt.Errorf("payload attestation data is only available for current slot: requested %d, current %d", slot, currentSlot)}
+	}
+
+	slotStart, err := slots.StartTime(s.GenesisTimeFetcher.GenesisTime(), slot)
+	if err != nil {
+		return nil, &RpcError{Reason: Internal, Err: fmt.Errorf("could not compute slot start time: %w", err)}
+	}
+	cfg := params.BeaconConfig()
+	deadline := slotStart.Add(cfg.SlotComponentDuration(cfg.PayloadAttestationDueBPS))
+
+	if cached := s.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
+		return cached, nil
+	}
+
+	v, sfErr, _ := s.payloadAttestationFlight.Do(strconv.FormatUint(uint64(slot), 10), func() (any, error) {
+		if cached := s.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
+			return cached, nil
+		}
+		data, rpcErr := s.buildPayloadAttestationData(slot)
+		if rpcErr != nil {
+			return rpcErr, nil
+		}
+		// Before the deadline only the final result is safe to return: the payload
+		// arrived timely and the data is available. Otherwise both flags may still
+		// flip, so wait for the deadline.
+		if prysmTime.Now().Before(deadline) && !(data.PayloadPresent && data.BlobDataAvailable) {
+			return &RpcError{Reason: Unavailable, Err: fmt.Errorf("payload attestation data not yet final for slot %d", slot)}, nil
+		}
+		s.payloadAttestationData.Store(data)
+		return data, nil
+	})
+	if sfErr != nil {
+		return nil, &RpcError{Reason: Internal, Err: sfErr}
+	}
+	switch r := v.(type) {
+	case *ethpb.PayloadAttestationData:
+		return r, nil
+	case *RpcError:
+		return nil, r
+	default:
+		return nil, &RpcError{Reason: Internal, Err: fmt.Errorf("unexpected singleflight result type %T", v)}
+	}
+}
+
+func (s *Service) buildPayloadAttestationData(slot primitives.Slot) (*ethpb.PayloadAttestationData, *RpcError) {
+	highestReceivedSlot := s.ForkchoiceFetcher.HighestReceivedBlockSlot()
+	if highestReceivedSlot != slot {
+		return nil, &RpcError{Reason: Unavailable, Err: fmt.Errorf("no valid block root for slot %d, highest received block slot is %d", slot, highestReceivedSlot)}
+	}
+	root := s.ForkchoiceFetcher.HighestReceivedBlockRoot()
+	if root == [32]byte{} {
+		return nil, &RpcError{Reason: Internal, Err: fmt.Errorf("could not retrieve highest received block root for slot %d", slot)}
+	}
+	payloadEarly, _ := s.ForkchoiceFetcher.PayloadEarly(root)
+	return &ethpb.PayloadAttestationData{
+		BeaconBlockRoot:   root[:],
+		Slot:              slot,
+		PayloadPresent:    payloadEarly,
+		BlobDataAvailable: s.ForkchoiceFetcher.HasFullNode(root),
 	}, nil
 }

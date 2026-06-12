@@ -75,8 +75,6 @@ var appHelpFlagGroups = []flagGroup{
 			flags.RPCPort,
 			flags.BatchVerifierLimit,
 			flags.StateDiffExponents,
-			flags.PartialDataColumns,
-			flags.BlockProposalEagerPushCells,
 		},
 	},
 	{
@@ -105,6 +103,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.BlobBatchLimitBurstFactor,
 			flags.DataColumnBatchLimit,
 			flags.DataColumnBatchLimitBurstFactor,
+			flags.PartialDataColumns,
 			flags.BlockBatchLimit,
 			flags.BlockBatchLimitBurstFactor,
 			flags.MaxConcurrentDials,

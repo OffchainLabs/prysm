@@ -21,7 +21,7 @@ import (
 // Actual state mutations are deferred to process_parent_execution_payload in
 // the next block.
 //
-//	<spec fn="verify_execution_payload_envelope" fork="gloas" hash="0261931f">
+//	<spec fn="verify_execution_payload_envelope" fork="gloas" hash="450a2b1c">
 //	def verify_execution_payload_envelope(
 //	    state: BeaconState,
 //	    signed_envelope: SignedExecutionPayloadEnvelope,
@@ -37,6 +37,7 @@ import (
 //	    header = copy(state.latest_block_header)
 //	    header.state_root = hash_tree_root(state)
 //	    assert envelope.beacon_block_root == hash_tree_root(header)
+//	    assert envelope.parent_beacon_block_root == state.latest_block_header.parent_root
 //
 //	    # Verify consistency with the committed bid
 //	    bid = state.latest_execution_payload_bid
@@ -58,7 +59,7 @@ import (
 //	                kzg_commitment_to_versioned_hash(commitment)
 //	                for commitment in bid.blob_kzg_commitments
 //	            ],
-//	            parent_beacon_block_root=state.latest_block_header.parent_root,
+//	            parent_beacon_block_root=envelope.parent_beacon_block_root,
 //	            execution_requests=envelope.execution_requests,
 //	        )
 //	    )
@@ -109,6 +110,15 @@ func VerifyExecutionPayloadEnvelopeWithDeferredSig(
 func validatePayloadConsistency(ctx context.Context, st state.BeaconState, envelope interfaces.ROExecutionPayloadEnvelope) error {
 	if envelope.Slot() != st.Slot() {
 		return errors.Errorf("envelope slot does not match state slot: envelope=%d, state=%d", envelope.Slot(), st.Slot())
+	}
+
+	header := st.LatestBlockHeader()
+	if header == nil {
+		return errors.New("latest block header is nil")
+	}
+	envelopeParent := envelope.ParentBeaconBlockRoot()
+	if !bytes.Equal(envelopeParent[:], header.ParentRoot) {
+		return errors.Errorf("envelope parent beacon block root does not match state latest block header parent root: envelope=%#x, state=%#x", envelopeParent, header.ParentRoot)
 	}
 
 	latestBid, err := st.LatestExecutionPayloadBid()

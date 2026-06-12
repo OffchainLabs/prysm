@@ -293,6 +293,13 @@
     DOMAIN_VOLUNTARY_EXIT: DomainType = '0x04000000'
     </spec>
 
+- name: EMPTY_BLOCK_HASH#bellatrix
+  sources: []
+  spec: |
+    <spec constant_var="EMPTY_BLOCK_HASH" fork="bellatrix" hash="23cdf402">
+    EMPTY_BLOCK_HASH: Hash32 =
+    </spec>
+
 - name: ENDIANNESS#phase0
   sources: []
   spec: |
@@ -470,11 +477,32 @@
     PAYLOAD_STATUS_FULL: PayloadStatus = 1
     </spec>
 
+- name: PAYLOAD_STATUS_INVALIDATED#bellatrix
+  sources: []
+  spec: |
+    <spec constant_var="PAYLOAD_STATUS_INVALIDATED" fork="bellatrix" hash="573428af">
+    PAYLOAD_STATUS_INVALIDATED: PayloadValidationStatus = 1
+    </spec>
+
+- name: PAYLOAD_STATUS_NOT_VALIDATED#bellatrix
+  sources: []
+  spec: |
+    <spec constant_var="PAYLOAD_STATUS_NOT_VALIDATED" fork="bellatrix" hash="d15db48c">
+    PAYLOAD_STATUS_NOT_VALIDATED: PayloadValidationStatus = 2
+    </spec>
+
 - name: PAYLOAD_STATUS_PENDING#gloas
   sources: []
   spec: |
     <spec constant_var="PAYLOAD_STATUS_PENDING" fork="gloas" hash="6a0d6cbf">
     PAYLOAD_STATUS_PENDING: PayloadStatus = 2
+    </spec>
+
+- name: PAYLOAD_STATUS_VALID#bellatrix
+  sources: []
+  spec: |
+    <spec constant_var="PAYLOAD_STATUS_VALID" fork="bellatrix" hash="1e190907">
+    PAYLOAD_STATUS_VALID: PayloadValidationStatus = 0
     </spec>
 
 - name: PRIMITIVE_ROOT_OF_UNITY#deneb

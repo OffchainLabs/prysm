@@ -1,6 +1,7 @@
 package precompute
 
 import (
+	"context"
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
@@ -163,7 +164,7 @@ func TestProcessRewardsAndPenaltiesPrecompute_SlashedInactivePenalty(t *testing.
 
 	finalityDelay := time.PrevEpoch(beaconState) - beaconState.FinalizedCheckpointEpoch()
 	for _, i := range slashedAttestedIndices {
-		base, err := baseReward(beaconState, i)
+		base, err := baseReward(t.Context(), beaconState, i)
 		require.NoError(t, err, "Could not get base reward")
 		penalty := 3 * base
 		proposerReward := base / params.BeaconConfig().ProposerRewardQuotient
@@ -277,8 +278,8 @@ func TestProposerDeltaPrecompute_SlashedCase(t *testing.T) {
 //	  total_balance = get_total_active_balance(state)
 //	  effective_balance = state.validators[index].effective_balance
 //	  return Gwei(effective_balance * BASE_REWARD_FACTOR // integer_squareroot(total_balance) // BASE_REWARDS_PER_EPOCH)
-func baseReward(state state.ReadOnlyBeaconState, index primitives.ValidatorIndex) (uint64, error) {
-	totalBalance, err := helpers.TotalActiveBalance(state)
+func baseReward(ctx context.Context, state state.ReadOnlyBeaconState, index primitives.ValidatorIndex) (uint64, error) {
+	totalBalance, err := helpers.TotalActiveBalance(ctx, state)
 	if err != nil {
 		return 0, errors.Wrap(err, "could not calculate active balance")
 	}

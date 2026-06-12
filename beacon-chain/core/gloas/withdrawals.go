@@ -9,7 +9,7 @@ import (
 
 // ProcessWithdrawals applies withdrawals to the state for Gloas.
 //
-// <spec fn="process_withdrawals" fork="gloas" hash="38b3bb77">
+// <spec fn="process_withdrawals" fork="gloas" hash="24ca56d3">
 // def process_withdrawals(
 //
 //	state: BeaconState,
@@ -20,9 +20,7 @@ import (
 //
 //	# [New in Gloas:EIP7732]
 //	# Return early if the parent block is empty
-//	is_genesis_block = state.latest_block_hash == Hash32()
-//	is_parent_block_empty = state.latest_block_hash != state.latest_execution_payload_bid.block_hash
-//	if is_genesis_block or is_parent_block_empty:
+//	if state.latest_block_hash != state.latest_execution_payload_bid.block_hash:
 //	    return
 //
 //	# Get expected withdrawals

@@ -46,8 +46,9 @@ func validExecutionPayloadEnvelope() *ethpb.ExecutionPayloadEnvelope {
 				},
 			},
 		},
-		BuilderIndex:    10,
-		BeaconBlockRoot: bytes.Repeat([]byte{0xAA}, 32),
+		BuilderIndex:          10,
+		BeaconBlockRoot:       bytes.Repeat([]byte{0xAA}, 32),
+		ParentBeaconBlockRoot: bytes.Repeat([]byte{0xCC}, 32),
 	}
 }
 
@@ -102,6 +103,14 @@ func TestWrappedROSignedExecutionPayloadEnvelope(t *testing.T) {
 
 	t.Run("returns error on nil envelope", func(t *testing.T) {
 		_, err := blocks.WrappedROSignedExecutionPayloadEnvelope(nil)
+		require.Equal(t, consensus_types.ErrNilObjectWrapped, err)
+	})
+
+	t.Run("returns error on nil message", func(t *testing.T) {
+		signed := &ethpb.SignedExecutionPayloadEnvelope{
+			Signature: bytes.Repeat([]byte{0xAA}, 96),
+		}
+		_, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signed)
 		require.Equal(t, consensus_types.ErrNilObjectWrapped, err)
 	})
 

@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
 )
 
@@ -72,7 +73,7 @@ func TestService_PartialVerifierFromTrustedColumn(t *testing.T) {
 				newColumnsVerifier: testNewColumnsVerifier(tc.verifier),
 			}
 			got, err := service.partialVerifierFromTrustedColumn(ctx, tc.col)
-			require.ErrorIs(t, tc.wantErr, err)
+			require.ErrorIs(t, err, tc.wantErr)
 			require.Equal(t, tc.expectResult, got != nil)
 			if tc.verify != nil {
 				tc.verify(t, got)
@@ -110,27 +111,27 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 		chain        *mock.ChainService
 		verifier     verification.MockDataColumnsVerifier
 		wantErr      error
-		wantReject   bool
+		wantResult   pubsub.ValidationResult
 		expectResult bool
 	}{
 		{
 			name:       "nil column",
 			col:        nil,
 			wantErr:    errHeaderNil,
-			wantReject: false,
+			wantResult: pubsub.ValidationIgnore,
 		},
 		{
 			name:       "empty commitments is reject",
 			col:        buildPartialColumn(t, 0, nil),
 			wantErr:    errHeaderEmptyCommitments,
-			wantReject: true,
+			wantResult: pubsub.ValidationReject,
 		},
 		{
 			name:         "not from future slot is ignore",
 			col:          buildPartialColumn(t, 1, nil),
 			verifier:     verification.MockDataColumnsVerifier{ErrNotFromFutureSlot: genericErr},
 			wantErr:      genericErr,
-			wantReject:   false,
+			wantResult:   pubsub.ValidationIgnore,
 			expectResult: true,
 		},
 		{
@@ -138,7 +139,7 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 			col:          buildPartialColumn(t, 1, nil),
 			verifier:     verification.MockDataColumnsVerifier{ErrSlotAboveFinalized: genericErr},
 			wantErr:      genericErr,
-			wantReject:   false,
+			wantResult:   pubsub.ValidationIgnore,
 			expectResult: true,
 		},
 		{
@@ -146,7 +147,7 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 			col:          buildPartialColumn(t, 1, nil),
 			chain:        chainWithoutParent(),
 			wantErr:      errHeaderParentNotSeen,
-			wantReject:   false,
+			wantResult:   pubsub.ValidationIgnore,
 			expectResult: true,
 		},
 		{
@@ -155,7 +156,7 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 			chain:        chainWithParent(),
 			verifier:     verification.MockDataColumnsVerifier{ErrSidecarParentSeen: genericErr},
 			wantErr:      genericErr,
-			wantReject:   false,
+			wantResult:   pubsub.ValidationIgnore,
 			expectResult: true,
 		},
 		{
@@ -164,7 +165,7 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 			chain:        chainWithParent(),
 			verifier:     verification.MockDataColumnsVerifier{ErrSidecarParentValid: genericErr},
 			wantErr:      genericErr,
-			wantReject:   true,
+			wantResult:   pubsub.ValidationReject,
 			expectResult: true,
 		},
 		{
@@ -173,7 +174,7 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 			chain:        chainWithParent(),
 			verifier:     verification.MockDataColumnsVerifier{ErrSidecarParentSlotLower: unavailableParentSlotErr},
 			wantErr:      unavailableParentSlotErr,
-			wantReject:   false,
+			wantResult:   pubsub.ValidationIgnore,
 			expectResult: true,
 		},
 		{
@@ -182,7 +183,7 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 			chain:        chainWithParent(),
 			verifier:     verification.MockDataColumnsVerifier{ErrSidecarParentSlotLower: genericErr},
 			wantErr:      genericErr,
-			wantReject:   true,
+			wantResult:   pubsub.ValidationReject,
 			expectResult: true,
 		},
 		{
@@ -191,7 +192,7 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 			chain:        chainWithParent(),
 			verifier:     verification.MockDataColumnsVerifier{ErrSidecarProposerExpected: invalidVerifierErr},
 			wantErr:      invalidVerifierErr,
-			wantReject:   true,
+			wantResult:   pubsub.ValidationReject,
 			expectResult: true,
 		},
 		{
@@ -200,7 +201,7 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 			chain:        chainWithParent(),
 			verifier:     verification.MockDataColumnsVerifier{ErrSidecarProposerExpected: genericErr},
 			wantErr:      genericErr,
-			wantReject:   true,
+			wantResult:   pubsub.ValidationReject,
 			expectResult: true,
 		},
 		{
@@ -209,7 +210,7 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 			chain:        chainWithParent(),
 			verifier:     verification.MockDataColumnsVerifier{ErrValidProposerSignature: verification.ErrInvalidProposerSignature},
 			wantErr:      verification.ErrInvalidProposerSignature,
-			wantReject:   true,
+			wantResult:   pubsub.ValidationReject,
 			expectResult: true,
 		},
 		{
@@ -218,7 +219,7 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 			chain:        chainWithParent(),
 			verifier:     verification.MockDataColumnsVerifier{ErrValidProposerSignature: genericErr},
 			wantErr:      genericErr,
-			wantReject:   true,
+			wantResult:   pubsub.ValidationReject,
 			expectResult: true,
 		},
 		{
@@ -227,7 +228,7 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 			chain:        chainWithParent(),
 			verifier:     verification.MockDataColumnsVerifier{},
 			wantErr:      nil,
-			wantReject:   false,
+			wantResult:   pubsub.ValidationAccept,
 			expectResult: true,
 		},
 	}
@@ -240,9 +241,9 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 			if tc.chain != nil {
 				service.cfg = &config{chain: tc.chain}
 			}
-			got, reject, err := service.validatePartialDataColumnHeader(ctx, tc.col)
-			require.ErrorIs(t, tc.wantErr, err)
-			require.Equal(t, tc.wantReject, reject)
+			got, result, err := service.validatePartialDataColumnHeader(ctx, tc.col)
+			require.ErrorIs(t, err, tc.wantErr)
+			require.Equal(t, tc.wantResult, result)
 			require.Equal(t, tc.expectResult, got != nil)
 		})
 	}

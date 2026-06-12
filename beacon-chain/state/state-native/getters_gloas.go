@@ -322,12 +322,6 @@ func (b *BeaconState) LatestBlockHashMatchesBidBlockHash() (bool, error) {
 		return false, nil
 	}
 
-	// gloas genesis case
-	zero := params.BeaconConfig().ZeroHash
-	if bytes.Equal(b.latestBlockHash, zero[:]) {
-		return false, nil
-	}
-
 	return bytes.Equal(b.latestExecutionPayloadBid.BlockHash, b.latestBlockHash), nil
 }
 
@@ -373,15 +367,8 @@ func (b *BeaconState) BuilderIndexByPubkey(pubkey [fieldparams.BLSPubkeyLength]b
 }
 
 func (b *BeaconState) builderIndexByPubkey(pubkey [fieldparams.BLSPubkeyLength]byte) (primitives.BuilderIndex, bool) {
-	for i, builder := range b.builders {
-		if builder == nil {
-			continue
-		}
-		if bytes.Equal(builder.Pubkey, pubkey[:]) {
-			return primitives.BuilderIndex(i), true
-		}
-	}
-	return 0, false
+	idx, ok := b.builderIdxMap[pubkey]
+	return idx, ok
 }
 
 // ExpectedWithdrawalsGloas returns the withdrawals that a proposer will need to pack in the next block

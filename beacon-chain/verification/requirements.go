@@ -27,6 +27,7 @@ const (
 	RequireMessageNotSeen
 	RequireValidatorInPTC
 	RequireBlockRootSeen
+	RequireBlockSlotMatches
 	RequireBlockRootValid
 	RequireSignatureValid
 
@@ -43,14 +44,16 @@ const (
 	RequireBidBuilderActive
 	RequireBidExecutionPaymentZero
 	RequireBidFeeRecipientMatches
-	RequireBidGasLimitMatches
+	RequireBidGasLimitCompatible
 	RequireBidParentBlockRootSeen
+	RequireBidSlotHigherThanParent
 	RequireBidParentBlockHashValid
 	RequireBidBuilderCanCover
 	RequireBidSignatureValid
 
 	// Signed proposer preferences specific.
 	RequireProposerPreferencesCurrentOrNextEpoch
+	RequireProposerPreferencesDependentRootSeen
 	RequireProposerPreferencesProposalSlotValid
 	RequireProposerPreferencesSignatureValid
 )

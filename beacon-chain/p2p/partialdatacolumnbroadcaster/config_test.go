@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/sirupsen/logrus"
 )
 
 // TestNewBroadcasterRespectsConfigOverride verifies that NewBroadcaster picks
@@ -28,7 +29,7 @@ func TestNewBroadcasterRespectsConfigOverride(t *testing.T) {
 	cfg.DataColumnSidecarSubnetCount = 42
 	params.OverrideBeaconConfig(cfg)
 
-	b := NewBroadcaster(nil)
+	b := NewBroadcaster(t.Context(), logrus.New())
 
 	// The semaphore capacity should match the overridden config value.
 	gotValidatorCap := cap(b.concurrentValidatorSemaphore)

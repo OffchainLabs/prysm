@@ -594,13 +594,37 @@ type BlockContentsGloas struct {
 }
 
 type ExecutionPayloadEnvelope struct {
-	Payload           *ExecutionPayloadGloas `json:"payload"`
-	ExecutionRequests *ExecutionRequests     `json:"execution_requests"`
-	BuilderIndex      string                 `json:"builder_index"`
-	BeaconBlockRoot   string                 `json:"beacon_block_root"`
+	Payload               *ExecutionPayloadGloas `json:"payload"`
+	ExecutionRequests     *ExecutionRequests     `json:"execution_requests"`
+	BuilderIndex          string                 `json:"builder_index"`
+	BeaconBlockRoot       string                 `json:"beacon_block_root"`
+	ParentBeaconBlockRoot string                 `json:"parent_beacon_block_root"`
 }
 
 type SignedExecutionPayloadEnvelope struct {
 	Message   *ExecutionPayloadEnvelope `json:"message"`
 	Signature string                    `json:"signature"`
+}
+
+// SignedExecutionPayloadEnvelopeContents bundles a signed execution payload
+// envelope with the raw blobs and KZG proofs needed by a beacon node that has
+// not cached them locally. Used by the stateless publish path.
+type SignedExecutionPayloadEnvelopeContents struct {
+	SignedExecutionPayloadEnvelope *SignedExecutionPayloadEnvelope `json:"signed_execution_payload_envelope"`
+	KzgProofs                      []string                        `json:"kzg_proofs"`
+	Blobs                          []string                        `json:"blobs"`
+}
+
+// BlindedExecutionPayloadEnvelope replaces the full payload with payload_root so its HTR matches the full envelope.
+type BlindedExecutionPayloadEnvelope struct {
+	PayloadRoot           string             `json:"payload_root"`
+	ExecutionRequests     *ExecutionRequests `json:"execution_requests"`
+	BuilderIndex          string             `json:"builder_index"`
+	BeaconBlockRoot       string             `json:"beacon_block_root"`
+	ParentBeaconBlockRoot string             `json:"parent_beacon_block_root"`
+}
+
+type SignedBlindedExecutionPayloadEnvelope struct {
+	Message   *BlindedExecutionPayloadEnvelope `json:"message"`
+	Signature string                           `json:"signature"`
 }

@@ -3,11 +3,8 @@ package stategen
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -232,63 +229,4 @@ func TestEnableSaveHotStateToDB_AlreadyDisabled(t *testing.T) {
 	require.NoError(t, service.DisableSaveHotStateToDB(ctx))
 	require.LogsDoNotContain(t, hook, "Exiting mode to save hot states in DB")
 	require.Equal(t, false, service.saveHotStateDB.enabled)
-}
-
-// TestSaveState_StateDiff_SavesAtDiffTreeBoundary verifies that when
-// --enable-state-diff is active, saveStateByRoot persists hot states at
-// diff-tree boundary slots to the DB even when saveHotStateDB is disabled.
-// This caps the worst-case replay on restart to the finest diff-tree
-// granularity (2^5 = 32 slots by default) instead of the entire
-// finalized-to-head gap.
-func TestSaveState_StateDiff_SavesAtDiffTreeBoundary(t *testing.T) {
-	ctx := t.Context()
-	// Use small exponents [6, 5] => level 0 every 64 slots, level 1 every 32 slots.
-	globalFlags := flags.GlobalFlags{StateDiffExponents: []int{6, 5}}
-	flags.Init(&globalFlags)
-
-	beaconDB := testDB.SetupDB(t)
-	require.NoError(t, beaconDB.(*kv.Store).InitStateDiffCacheForTesting(t, 0))
-	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
-	defer resetCfg()
-
-	service := New(beaconDB, doublylinkedtree.New())
-	// Explicitly verify saveHotStateDB is NOT enabled — this is the normal
-	// initial-sync condition. The point is that diff-tree saves should happen
-	// regardless.
-	require.Equal(t, false, service.saveHotStateDB.enabled)
-
-	beaconState, _ := util.DeterministicGenesisState(t, 32)
-	// Slot 64 lands on a level-0 boundary (2^6 = 64). It should be saved.
-	require.NoError(t, beaconState.SetSlot(64))
-	r := [32]byte{'D'}
-	require.NoError(t, service.saveStateByRoot(ctx, r, beaconState))
-
-	assert.Equal(t, true, beaconDB.HasState(ctx, r),
-		"State at diff-tree boundary slot should be persisted to DB when state-diff is enabled")
-}
-
-// TestSaveState_StateDiff_SkipsNonBoundary verifies that when
-// --enable-state-diff is active, saveStateByRoot does NOT persist states
-// at slots that are not on any diff-tree boundary.
-func TestSaveState_StateDiff_SkipsNonBoundary(t *testing.T) {
-	ctx := t.Context()
-	globalFlags := flags.GlobalFlags{StateDiffExponents: []int{6, 5}}
-	flags.Init(&globalFlags)
-
-	beaconDB := testDB.SetupDB(t)
-	require.NoError(t, beaconDB.(*kv.Store).InitStateDiffCacheForTesting(t, 0))
-	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
-	defer resetCfg()
-
-	service := New(beaconDB, doublylinkedtree.New())
-	require.Equal(t, false, service.saveHotStateDB.enabled)
-
-	beaconState, _ := util.DeterministicGenesisState(t, 32)
-	// Slot 50 is NOT on any diff-tree boundary (not divisible by 32 or 64).
-	require.NoError(t, beaconState.SetSlot(50))
-	r := [32]byte{'E'}
-	require.NoError(t, service.saveStateByRoot(ctx, r, beaconState))
-
-	assert.Equal(t, false, beaconDB.HasState(ctx, r),
-		"State at non-boundary slot should NOT be persisted to DB")
 }

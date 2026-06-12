@@ -18,6 +18,7 @@ import (
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
+	grpcretry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -445,34 +446,42 @@ func (c *grpcValidatorClient) EnsureReady(ctx context.Context) bool {
 }
 
 // Gloas Fork Methods
-func (c *grpcValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot) (*ethpb.ExecutionPayloadEnvelope, error) {
+//
+// TODO(#580): the gRPC envelope path is full-typed end-to-end (get full, sign full, publish full).
+// The beacon-APIs blinded flow (GET BlindedExecutionPayloadEnvelope / POST
+// SignedBlindedExecutionPayloadEnvelope) is implemented only over REST. A blinded gRPC variant would
+// need a v1alpha1 service change plus web3signer blinded signing; deferred as gRPC is BN-internal.
+func (c *grpcValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, _ [32]byte) (*ethpb.ExecutionPayloadEnvelope, *ethpb.WireBlindedExecutionPayloadEnvelope, error) {
 	req := &ethpb.ExecutionPayloadEnvelopeRequest{
 		Slot: slot,
 	}
 	resp, err := c.getClient().GetExecutionPayloadEnvelope(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(
+		return nil, nil, errors.Wrap(
 			client.ErrConnectionIssue,
 			errors.Wrap(err, "GetExecutionPayloadEnvelope").Error(),
 		)
 	}
-	return resp.Envelope, nil
+	// TODO(#580): gRPC only returns the full envelope (blinded form is nil). The spec-wire blinded
+	// flow is REST-only; implementing it over gRPC needs a v1alpha1 service change + web3signer support.
+	return resp.Envelope, nil, nil
 }
 
 func (c *grpcValidatorClient) PublishExecutionPayloadEnvelope(ctx context.Context, in *ethpb.SignedExecutionPayloadEnvelope) (*empty.Empty, error) {
 	return c.getClient().PublishExecutionPayloadEnvelope(ctx, in)
 }
 
+func (c *grpcValidatorClient) PublishBlindedExecutionPayloadEnvelope(_ context.Context, _ *ethpb.SignedWireBlindedExecutionPayloadEnvelope) (*empty.Empty, error) {
+	return nil, errors.New("blinded execution payload envelope publishing is not supported over gRPC; use the REST API")
+}
+
 func (c *grpcValidatorClient) PayloadAttestationData(ctx context.Context, slot primitives.Slot) (*ethpb.PayloadAttestationData, error) {
 	req := &ethpb.PayloadAttestationDataRequest{
 		Slot: slot,
 	}
-	resp, err := c.getClient().PayloadAttestationData(ctx, req)
+	resp, err := c.getClient().PayloadAttestationData(ctx, req, grpcretry.WithMax(0))
 	if err != nil {
-		return nil, errors.Wrap(
-			client.ErrConnectionIssue,
-			errors.Wrap(err, "PayloadAttestationData").Error(),
-		)
+		return nil, errors.Wrap(err, "PayloadAttestationData")
 	}
 	return resp, nil
 }

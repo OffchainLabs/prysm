@@ -12,6 +12,7 @@ type Step struct {
 	PowBlock         *string         `json:"pow_block"`
 	Check            *Check          `json:"checks"`
 	DataColumns      []*string       `json:"columns"`
+	ExecutionPayload *string         `json:"execution_payload"`
 }
 
 type Check struct {
@@ -24,6 +25,7 @@ type Check struct {
 	FinalizedCheckPoint     *EpochRoot      `json:"finalized_checkpoint"`
 	GetProposerHead         *string         `json:"get_proposer_head"`
 	ShouldOverrideFCU       *ShouldOverride `json:"should_override_forkchoice_update"`
+	HeadPayloadStatus       *int            `json:"head_payload_status"`
 }
 
 type SlotRoot struct {

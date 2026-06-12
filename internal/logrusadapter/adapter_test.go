@@ -99,6 +99,87 @@ func TestLevelMapping(t *testing.T) {
 	}
 }
 
+func TestEnabledDefaultLevel(t *testing.T) {
+	var outBuf bytes.Buffer
+	l := logrus.Logger{
+		Out:       &outBuf,
+		Formatter: &logrus.TextFormatter{},
+		Level:     logrus.ErrorLevel,
+	}
+
+	handler := logrusadapter.Handler{Logger: &l}
+
+	// A slog level outside the known Debug/Info/Warn/Error set hits the
+	// default branch, which is always enabled.
+	if !handler.Enabled(context.Background(), slog.Level(100)) {
+		t.Errorf("Enabled() = false for unknown level, want true")
+	}
+}
+
+// stringValuer implements slog.LogValuer to exercise the KindLogValuer branch
+// of Handle.
+type stringValuer string
+
+func (s stringValuer) LogValue() slog.Value {
+	return slog.StringValue(string(s))
+}
+
+func TestHandleAttributes(t *testing.T) {
+	var outBuf bytes.Buffer
+	l := logrus.Logger{
+		Out:       &outBuf,
+		Formatter: &logrus.TextFormatter{},
+		Level:     logrus.DebugLevel,
+	}
+
+	slogger := slog.New(logrusadapter.Handler{Logger: &l})
+	slogger.Info("with attrs",
+		slog.String("plain", "value"),
+		slog.Any("valuer", stringValuer("resolved")),
+	)
+
+	output := outBuf.String()
+	if !strings.Contains(output, "plain=value") {
+		t.Errorf("expected plain attribute %q not found in output: %s", "plain=value", output)
+	}
+	if !strings.Contains(output, "valuer=resolved") {
+		t.Errorf("expected resolved LogValuer attribute %q not found in output: %s", "valuer=resolved", output)
+	}
+}
+
+// rpcValuer mimics the pubsub RPC LogValuer that nests byte slices inside a group.
+type rpcValuer struct{}
+
+func (rpcValuer) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("topic", "t"),
+		slog.Any("groupID", []byte{0x00, 0xb6, 0xdd}),
+	)
+}
+
+func TestHandleByteSlicesAsHex(t *testing.T) {
+	var outBuf bytes.Buffer
+	l := logrus.Logger{
+		Out:       &outBuf,
+		Formatter: &logrus.TextFormatter{},
+		Level:     logrus.DebugLevel,
+	}
+
+	slogger := slog.New(logrusadapter.Handler{Logger: &l})
+	slogger.Info("rpc log",
+		slog.Any("data", []byte{0x01, 0xff}),
+		slog.Any("rpc", rpcValuer{}),
+	)
+
+	output := outBuf.String()
+	if !strings.Contains(output, "data=0x01ff") {
+		t.Errorf("expected top-level byte slice as hex %q not found in output: %s", "data=0x01ff", output)
+	}
+	if !strings.Contains(output, "groupID=0x00b6dd") {
+		t.Errorf("expected nested byte slice as hex %q not found in output: %s", "groupID=0x00b6dd", output)
+	}
+}
+
 func TestEnabledLevels(t *testing.T) {
 	tests := []struct {
 		shouldBeEnabled bool

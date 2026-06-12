@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
@@ -101,6 +102,9 @@ func ProcessBlockHeaderNoVerify(
 	slot primitives.Slot, proposerIndex primitives.ValidatorIndex,
 	parentRoot, bodyRoot []byte,
 ) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "blocks.ProcessBlockHeaderNoVerify")
+	defer span.End()
+
 	if beaconState.Slot() != slot {
 		return nil, fmt.Errorf("state slot: %d is different than block slot: %d", beaconState.Slot(), slot)
 	}

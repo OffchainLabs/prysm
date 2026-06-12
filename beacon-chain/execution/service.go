@@ -144,6 +144,7 @@ type Service struct {
 	connectedETH1           bool
 	isRunning               bool
 	depositRequestsStarted  bool
+	hasBlobsLogOnce         sync.Once
 	processingLock          sync.RWMutex
 	latestEth1DataLock      sync.RWMutex
 	cfg                     *config
@@ -332,7 +333,7 @@ func (s *Service) updateGraffitiInfo() {
 	}
 	ctx, cancel := context.WithTimeout(s.ctx, time.Second)
 	defer cancel()
-	versions, err := s.GetClientVersion(ctx)
+	versions, err := s.GetClientVersionV1(ctx)
 	if err != nil {
 		log.WithError(err).Debug("Could not get execution client version for graffiti")
 		return

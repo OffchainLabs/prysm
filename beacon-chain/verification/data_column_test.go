@@ -897,6 +897,18 @@ func TestPartialColumnVerifierComplete(t *testing.T) {
 	}
 }
 
+func TestPartialColumnVerifierCompleteUnexpectedColumnCount(t *testing.T) {
+	// A complete column whose verifier yields a column count != 1 must error.
+	verifier := &MockDataColumnsVerifier{}
+	verifier.AppendRODataColumns(blocks.RODataColumn{}, blocks.RODataColumn{}) // 2 -> not 1
+
+	pv := NewPartialColumnVerifier(verifier, buildTestPartialColumnForVerifier(t, 2, []uint64{0, 1}))
+
+	_, complete, err := pv.Complete()
+	require.Equal(t, false, complete)
+	require.ErrorContains(t, "unexpected number of verified data columns", err)
+}
+
 func TestPartialColumnVerifierExtendFromVerifiedCell(t *testing.T) {
 	testCases := []struct {
 		name            string

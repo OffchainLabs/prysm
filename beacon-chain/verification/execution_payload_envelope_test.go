@@ -126,7 +126,7 @@ func TestEnvelopeVerifier_VerifySignature_Builder(t *testing.T) {
 	require.NoError(t, err)
 
 	verifier := &EnvelopeVerifier{results: newResults(RequireBuilderSignatureValid), e: wrapped}
-	require.NoError(t, verifier.VerifySignature(st))
+	require.NoError(t, verifier.VerifySignature(t.Context(), st))
 
 	sk2, err := bls.RandKey()
 	require.NoError(t, err)
@@ -135,7 +135,7 @@ func TestEnvelopeVerifier_VerifySignature_Builder(t *testing.T) {
 	wrapped, err = blocks.WrappedROSignedExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
 	verifier = &EnvelopeVerifier{results: newResults(RequireBuilderSignatureValid), e: wrapped}
-	require.ErrorIs(t, verifier.VerifySignature(st), signing.ErrSigFailedToVerify)
+	require.ErrorIs(t, verifier.VerifySignature(t.Context(), st), signing.ErrSigFailedToVerify)
 }
 
 func TestEnvelopeVerifier_VerifySignature_SelfBuild(t *testing.T) {
@@ -164,7 +164,7 @@ func TestEnvelopeVerifier_VerifySignature_SelfBuild(t *testing.T) {
 	require.NoError(t, err)
 
 	verifier := &EnvelopeVerifier{results: newResults(RequireBuilderSignatureValid), e: wrapped}
-	require.NoError(t, verifier.VerifySignature(st))
+	require.NoError(t, verifier.VerifySignature(t.Context(), st))
 }
 
 func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, builderIdx primitives.BuilderIndex, root, blockHash [32]byte) *ethpb.SignedExecutionPayloadEnvelope {
@@ -196,8 +196,9 @@ func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, buil
 			ExecutionRequests: &enginev1.ExecutionRequests{
 				Deposits: []*enginev1.DepositRequest{},
 			},
-			BuilderIndex:    builderIdx,
-			BeaconBlockRoot: root[:],
+			BuilderIndex:          builderIdx,
+			BeaconBlockRoot:       root[:],
+			ParentBeaconBlockRoot: make([]byte, 32),
 		},
 		Signature: bytes.Repeat([]byte{0xCC}, 96),
 	}

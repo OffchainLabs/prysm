@@ -10,9 +10,9 @@ import (
 )
 
 // TestCellsToVerifyFromPartialMessage_DoesNotMutateInput verifies that
-// CellsToVerifyFromPartialMessage does not modify the caller's message slices.
-// The current implementation re-slices message.PartialColumn and
-// message.KzgProofs in place, which silently truncates the input.
+// CellsToVerifyFromPartialMessage does not modify the caller's message slices
+// (PartialColumn / KzgProofs). It guards against a regression to an earlier
+// implementation that consumed the input by re-slicing it in place.
 func TestCellsToVerifyFromPartialMessage_DoesNotMutateInput(t *testing.T) {
 	nCommitments := uint64(3)
 	col, err := NewPartialDataColumn(

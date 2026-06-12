@@ -2,8 +2,9 @@ package eth_test
 
 import (
 	"os"
-	"strings"
 	"testing"
+
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 // TestPartialDataColumnsProtoGoPackageVersion verifies that the go_package
@@ -12,13 +13,8 @@ import (
 // code with the wrong import path.
 func TestPartialDataColumnsProtoGoPackageVersion(t *testing.T) {
 	content, err := os.ReadFile("partial_data_columns.proto")
-	if err != nil {
-		t.Fatalf("failed to read proto file: %v", err)
-	}
+	require.NoError(t, err, "failed to read proto file")
 
 	want := `go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth"`
-	if !strings.Contains(string(content), want) {
-		t.Errorf("partial_data_columns.proto has wrong go_package.\nwant line containing: %s\ngot file content:\n%s",
-			want, string(content))
-	}
+	require.StringContains(t, want, string(content), "partial_data_columns.proto has wrong go_package")
 }

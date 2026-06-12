@@ -29,7 +29,7 @@ func TestExitEpochAndUpdateChurn_SpectestCase(t *testing.T) {
 	val, err := s.ValidatorAtIndex(0)
 	require.NoError(t, err)
 
-	ee, err := s.ExitEpochAndUpdateChurn(primitives.Gwei(val.EffectiveBalance))
+	ee, err := s.ExitEpochAndUpdateChurn(t.Context(), primitives.Gwei(val.EffectiveBalance))
 	require.NoError(t, err)
 	require.Equal(t, primitives.Epoch(262), ee)
 
@@ -44,7 +44,7 @@ func TestExitEpochAndUpdateChurn_SpectestCase(t *testing.T) {
 	// Fails for versions older than electra
 	s, err = state_native.InitializeFromProtoDeneb(&eth.BeaconStateDeneb{})
 	require.NoError(t, err)
-	_, err = s.ExitEpochAndUpdateChurn(10)
+	_, err = s.ExitEpochAndUpdateChurn(t.Context(), 10)
 	require.ErrorContains(t, "not supported", err)
 }
 
@@ -64,14 +64,14 @@ func TestExitEpochAndUpdateChurn(t *testing.T) {
 			ExitBalanceToConsume: primitives.Gwei(20_000_000),
 		})
 		require.NoError(t, err)
-		activeBal, err := helpers.TotalActiveBalance(st)
+		activeBal, err := helpers.TotalActiveBalance(t.Context(), st)
 		require.NoError(t, err)
 
 		exitBal := primitives.Gwei(10_000_000)
 
 		wantExitBalToConsume := helpers.ActivationExitChurnLimit(primitives.Gwei(activeBal)) - exitBal
 
-		ee, err := st.ExitEpochAndUpdateChurn(exitBal)
+		ee, err := st.ExitEpochAndUpdateChurn(t.Context(), exitBal)
 		require.NoError(t, err)
 
 		wantExitEpoch := helpers.ActivationExitEpoch(epoch)
@@ -99,7 +99,7 @@ func TestExitEpochAndUpdateChurn(t *testing.T) {
 			ExitBalanceToConsume: primitives.Gwei(20_000_000),
 		})
 		require.NoError(t, err)
-		activeBal, err := helpers.TotalActiveBalance(st)
+		activeBal, err := helpers.TotalActiveBalance(t.Context(), st)
 		require.NoError(t, err)
 
 		activationExitChurnLimit := helpers.ActivationExitChurnLimit(primitives.Gwei(activeBal))
@@ -107,7 +107,7 @@ func TestExitEpochAndUpdateChurn(t *testing.T) {
 
 		wantExitBalToConsume := primitives.Gwei(0)
 
-		ee, err := st.ExitEpochAndUpdateChurn(exitBal)
+		ee, err := st.ExitEpochAndUpdateChurn(t.Context(), exitBal)
 		require.NoError(t, err)
 
 		wantExitEpoch := helpers.ActivationExitEpoch(epoch) + 1
@@ -140,7 +140,7 @@ func TestExitEpochAndUpdateChurn(t *testing.T) {
 
 		wantExitBalToConsume := primitives.Gwei(20_000_000) - exitBal
 
-		ee, err := st.ExitEpochAndUpdateChurn(exitBal)
+		ee, err := st.ExitEpochAndUpdateChurn(t.Context(), exitBal)
 		require.NoError(t, err)
 
 		wantExitEpoch := epoch + 10_000
@@ -170,12 +170,12 @@ func TestExitEpochAndUpdateChurn(t *testing.T) {
 		require.NoError(t, err)
 
 		exitBal := primitives.Gwei(40_000_000)
-		activeBal, err := helpers.TotalActiveBalance(st)
+		activeBal, err := helpers.TotalActiveBalance(t.Context(), st)
 		require.NoError(t, err)
 		activationExitChurnLimit := helpers.ActivationExitChurnLimit(primitives.Gwei(activeBal))
 		wantExitBalToConsume := activationExitChurnLimit - 20_000_000
 
-		ee, err := st.ExitEpochAndUpdateChurn(exitBal)
+		ee, err := st.ExitEpochAndUpdateChurn(t.Context(), exitBal)
 		require.NoError(t, err)
 
 		wantExitEpoch := epoch + 10_000 + 1
@@ -193,7 +193,7 @@ func TestExitEpochAndUpdateChurn(t *testing.T) {
 	t.Run("earlier than electra returns error", func(t *testing.T) {
 		st, err := state_native.InitializeFromProtoDeneb(&eth.BeaconStateDeneb{})
 		require.NoError(t, err)
-		_, err = st.ExitEpochAndUpdateChurn(0)
+		_, err = st.ExitEpochAndUpdateChurn(t.Context(), 0)
 		require.ErrorContains(t, "is not supported", err)
 	})
 }

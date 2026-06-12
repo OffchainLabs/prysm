@@ -3320,101 +3320,25 @@ func (d *PayloadAttestationData) ToConsensus() (*eth.PayloadAttestationData, err
 	}, nil
 }
 
-// ExecutionPayloadEnvelopeFromConsensus converts a proto envelope to the API struct.
-func ExecutionPayloadEnvelopeFromConsensus(e *eth.ExecutionPayloadEnvelope) (*ExecutionPayloadEnvelope, error) {
-	payload, err := ExecutionPayloadGloasFromConsensus(e.Payload)
+func (p *PayloadAttestationMessage) ToConsensus() (*eth.PayloadAttestationMessage, error) {
+	if p == nil {
+		return nil, errNilValue
+	}
+	validatorIndex, err := strconv.ParseUint(p.ValidatorIndex, 10, 64)
 	if err != nil {
-		return nil, err
+		return nil, server.NewDecodeError(err, "ValidatorIndex")
 	}
-	var requests *ExecutionRequests
-	if e.ExecutionRequests != nil {
-		requests = ExecutionRequestsFromConsensus(e.ExecutionRequests)
-	}
-	return &ExecutionPayloadEnvelope{
-		Payload:           payload,
-		ExecutionRequests: requests,
-		BuilderIndex:      fmt.Sprintf("%d", e.BuilderIndex),
-		BeaconBlockRoot:   hexutil.Encode(e.BeaconBlockRoot),
-	}, nil
-}
-
-// SignedExecutionPayloadEnvelopeFromConsensus converts a signed proto envelope to the API struct.
-func SignedExecutionPayloadEnvelopeFromConsensus(e *eth.SignedExecutionPayloadEnvelope) (*SignedExecutionPayloadEnvelope, error) {
-	envelope, err := ExecutionPayloadEnvelopeFromConsensus(e.Message)
+	data, err := p.Data.ToConsensus()
 	if err != nil {
-		return nil, err
+		return nil, server.NewDecodeError(err, "Data")
 	}
-	return &SignedExecutionPayloadEnvelope{
-		Message:   envelope,
-		Signature: hexutil.Encode(e.Signature),
-	}, nil
-}
-
-// BlockContentsGloasFromConsensus converts a proto Gloas block and envelope to the API struct.
-func BlockContentsGloasFromConsensus(block *eth.BeaconBlockGloas, envelope *eth.ExecutionPayloadEnvelope) (*BlockContentsGloas, error) {
-	b, err := BeaconBlockGloasFromConsensus(block)
-	if err != nil {
-		return nil, err
-	}
-	env, err := ExecutionPayloadEnvelopeFromConsensus(envelope)
-	if err != nil {
-		return nil, err
-	}
-	return &BlockContentsGloas{
-		Block:                    b,
-		ExecutionPayloadEnvelope: env,
-		KzgProofs:                []string{}, // TODO: populate from blobs bundle
-		Blobs:                    []string{}, // TODO: populate from blobs bundle
-	}, nil
-}
-
-// ToConsensus converts the API struct to a proto ExecutionPayloadEnvelope.
-func (e *ExecutionPayloadEnvelope) ToConsensus() (*eth.ExecutionPayloadEnvelope, error) {
-	if e == nil {
-		return nil, server.NewDecodeError(errNilValue, "ExecutionPayloadEnvelope")
-	}
-	payload, err := e.Payload.ToConsensus()
-	if err != nil {
-		return nil, server.NewDecodeError(err, "Payload")
-	}
-	var requests *enginev1.ExecutionRequests
-	if e.ExecutionRequests != nil {
-		requests, err = e.ExecutionRequests.ToConsensus()
-		if err != nil {
-			return nil, server.NewDecodeError(err, "ExecutionRequests")
-		}
-	}
-	builderIndex, err := strconv.ParseUint(e.BuilderIndex, 10, 64)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "BuilderIndex")
-	}
-	beaconBlockRoot, err := bytesutil.DecodeHexWithLength(e.BeaconBlockRoot, fieldparams.RootLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "BeaconBlockRoot")
-	}
-	return &eth.ExecutionPayloadEnvelope{
-		Payload:           payload,
-		ExecutionRequests: requests,
-		BuilderIndex:      primitives.BuilderIndex(builderIndex),
-		BeaconBlockRoot:   beaconBlockRoot,
-	}, nil
-}
-
-// ToConsensus converts the API struct to a proto SignedExecutionPayloadEnvelope.
-func (e *SignedExecutionPayloadEnvelope) ToConsensus() (*eth.SignedExecutionPayloadEnvelope, error) {
-	if e == nil {
-		return nil, server.NewDecodeError(errNilValue, "SignedExecutionPayloadEnvelope")
-	}
-	msg, err := e.Message.ToConsensus()
-	if err != nil {
-		return nil, server.NewDecodeError(err, "Message")
-	}
-	sig, err := bytesutil.DecodeHexWithLength(e.Signature, fieldparams.BLSSignatureLength)
+	sig, err := bytesutil.DecodeHexWithLength(p.Signature, fieldparams.BLSSignatureLength)
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Signature")
 	}
-	return &eth.SignedExecutionPayloadEnvelope{
-		Message:   msg,
-		Signature: sig,
+	return &eth.PayloadAttestationMessage{
+		ValidatorIndex: primitives.ValidatorIndex(validatorIndex),
+		Data:           data,
+		Signature:      sig,
 	}, nil
 }

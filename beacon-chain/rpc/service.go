@@ -98,7 +98,6 @@ type Config struct {
 	ExecutionChainInfoFetcher        execution.ChainInfoFetcher
 	GenesisTimeFetcher               blockchain.TimeFetcher
 	GenesisFetcher                   blockchain.GenesisFetcher
-	BlockProposalEagerPushCells      bool
 	MockEth1Votes                    bool
 	EnableDebugRPCEndpoints          bool
 	AttestationCache                 *cache.AttestationCache
@@ -131,6 +130,7 @@ type Config struct {
 	ProposerPreferencesCache         *cache.ProposerPreferencesCache
 	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
 	PayloadIDCache                   *cache.PayloadIDCache
+	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache
 	LCStore                          *lightClient.Store
 	GraffitiInfo                     *execution.GraffitiInfo
 }
@@ -213,6 +213,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		BeaconDB:              s.cfg.BeaconDB,
 		ChainInfoFetcher:      s.cfg.ChainInfoFetcher,
 		HeadFetcher:           s.cfg.HeadFetcher,
+		ForkchoiceFetcher:     s.cfg.ForkchoiceFetcher,
 		GenesisTimeFetcher:    s.cfg.GenesisTimeFetcher,
 		SyncChecker:           s.cfg.SyncService,
 		Broadcaster:           s.cfg.Broadcaster,
@@ -269,9 +270,9 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		ProposerPreferencesCache:         s.cfg.ProposerPreferencesCache,
 		HighestBidCache:                  s.cfg.HighestBidCache,
 		PayloadIDCache:                   s.cfg.PayloadIDCache,
+		ExecutionPayloadEnvelopeCache:    s.cfg.ExecutionPayloadEnvelopeCache,
 		AttestationStateFetcher:          s.cfg.AttestationReceiver,
 		GraffitiInfo:                     s.cfg.GraffitiInfo,
-		BlockProposalEagerPushCells:      s.cfg.BlockProposalEagerPushCells,
 	}
 	s.validatorServer = validatorServer
 	nodeServer := &nodev1alpha1.Server{

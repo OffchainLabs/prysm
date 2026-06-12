@@ -107,6 +107,7 @@ type BeaconNode struct {
 	trackedValidatorsCache   *cache.TrackedValidatorsCache
 	proposerPreferencesCache *cache.ProposerPreferencesCache
 	payloadIDCache           *cache.PayloadIDCache
+	executionPayloadCache    *cache.ExecutionPayloadEnvelopeCache
 	stateFeed                *event.Feed
 	blockFeed                *event.Feed
 	opFeed                   *event.Feed
@@ -175,6 +176,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		// are global and include proposers we do not own.
 		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
 		payloadIDCache:           cache.NewPayloadIDCache(),
+		executionPayloadCache:    cache.NewExecutionPayloadEnvelopeCache(),
 		slasherBlockHeadersFeed:  new(event.Feed),
 		slasherAttestationsFeed:  new(event.Feed),
 		serviceFlagOpts:          &serviceFlagOpts{},
@@ -1038,9 +1040,9 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		ProposerPreferencesCache:         b.proposerPreferencesCache,
 		HighestBidCache:                  regularSyncService.HighestExecutionPayloadBidCache(),
 		PayloadIDCache:                   b.payloadIDCache,
+		ExecutionPayloadEnvelopeCache:    b.executionPayloadCache,
 		LCStore:                          b.lcStore,
 		GraffitiInfo:                     web3Service.GraffitiInfo(),
-		BlockProposalEagerPushCells:      b.cliCtx.Bool(flags.BlockProposalEagerPushCells.Name),
 	})
 
 	return b.services.RegisterService(rpcService)
