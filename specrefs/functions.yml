@@ -5123,7 +5123,7 @@
 
 - name: get_pow_block_at_terminal_total_difficulty#bellatrix
   sources:
-    - file: beacon-chain/execution/engine_client.go
+    - file: beacon-chain/execution/execution_block.go
       search: func (s *Service) GetTerminalBlockHash(
   spec: |
     <spec fn="get_pow_block_at_terminal_total_difficulty" fork="bellatrix" hash="7b6668d2">
