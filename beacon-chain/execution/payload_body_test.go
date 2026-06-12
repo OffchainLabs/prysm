@@ -118,11 +118,16 @@ func TestPayloadBodiesViaUnblinder(t *testing.T) {
 	t.Run("mix of non-empty and empty", func(t *testing.T) {
 		cli, srv := newMockEngine(t)
 		srv.register(GetPayloadBodiesByHashV1, func(msg *jsonrpcMessage, w http.ResponseWriter, r *http.Request) {
-			executionPayloadBodies := []*pb.ExecutionPayloadBody{
-				payloadToBody(t, fx.denebBlock.blinded.header),
-				payloadToBody(t, fx.emptyDenebBlock.blinded.header),
+			byHash := map[string]*pb.ExecutionPayloadBody{
+				string(fx.denebBlock.blinded.header.BlockHash()):      payloadToBody(t, fx.denebBlock.blinded.header),
+				string(fx.emptyDenebBlock.blinded.header.BlockHash()): payloadToBody(t, fx.emptyDenebBlock.blinded.header),
 			}
-			mockWriteResult(t, w, msg, executionPayloadBodies)
+			requested := mockParseHexByteList(t, msg.Params)
+			bodies := make([]*pb.ExecutionPayloadBody, len(requested))
+			for i, h := range requested {
+				bodies[i] = byHash[string(h)]
+			}
+			mockWriteResult(t, w, msg, bodies)
 		})
 		ctx := t.Context()
 
@@ -344,8 +349,17 @@ func TestReconstructBlindedBlockBatchDenebAndBeyond(t *testing.T) {
 		cli, srv := newMockEngine(t)
 		fx := testBlindedBlockFixtures(t)
 		srv.register(GetPayloadBodiesByHashV1, func(msg *jsonrpcMessage, w http.ResponseWriter, r *http.Request) {
-			executionPayloadBodies := []*pb.ExecutionPayloadBody{payloadToBody(t, fx.denebBlock.blinded.header), payloadToBody(t, fx.electra.blinded.header), payloadToBody(t, fx.fulu.blinded.header)}
-			mockWriteResult(t, w, msg, executionPayloadBodies)
+			byHash := map[string]*pb.ExecutionPayloadBody{
+				string(fx.denebBlock.blinded.header.BlockHash()): payloadToBody(t, fx.denebBlock.blinded.header),
+				string(fx.electra.blinded.header.BlockHash()):    payloadToBody(t, fx.electra.blinded.header),
+				string(fx.fulu.blinded.header.BlockHash()):       payloadToBody(t, fx.fulu.blinded.header),
+			}
+			requested := mockParseHexByteList(t, msg.Params)
+			bodies := make([]*pb.ExecutionPayloadBody, len(requested))
+			for i, h := range requested {
+				bodies[i] = byHash[string(h)]
+			}
+			mockWriteResult(t, w, msg, bodies)
 		})
 		blinded := []interfaces.ReadOnlySignedBeaconBlock{
 			fx.denebBlock.blinded.block,

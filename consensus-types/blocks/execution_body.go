@@ -69,3 +69,73 @@ func (e executionPayloadBodyGloas) Withdrawals() ([]*enginev1.Withdrawal, error)
 func (e executionPayloadBodyGloas) BlockAccessList() ([]byte, error) {
 	return e.GetBlockAccessList(), nil
 }
+
+// The proto/engine/v1 ExecutionPayloadBody{,V2} are the JSON-RPC (de)serialization
+// DTOs (no SSZ codec), distinct from the SSZ proto/engine/v2 bodies above. The
+// JSON transport wraps them so it returns the same fork-generic interface.
+
+// executionPayloadBodyV1JSON wraps the V1 JSON body DTO
+// (engine_getPayloadBodiesByHashV1); it has no block access list.
+type executionPayloadBodyV1JSON struct {
+	*enginev1.ExecutionPayloadBody
+}
+
+// WrappedExecutionPayloadBodyV1JSON wraps the V1 JSON body DTO in the interface.
+func WrappedExecutionPayloadBodyV1JSON(p *enginev1.ExecutionPayloadBody) (interfaces.ExecutionPayloadBody, error) {
+	w := executionPayloadBodyV1JSON{p}
+	if w.IsNil() {
+		return nil, consensus_types.ErrNilObjectWrapped
+	}
+	return w, nil
+}
+
+func (e executionPayloadBodyV1JSON) IsNil() bool {
+	return e.ExecutionPayloadBody == nil
+}
+
+func (e executionPayloadBodyV1JSON) Transactions() ([][]byte, error) {
+	return enginev1.RecastHexutilByteSlice(e.ExecutionPayloadBody.Transactions), nil
+}
+
+func (e executionPayloadBodyV1JSON) Withdrawals() ([]*enginev1.Withdrawal, error) {
+	return e.ExecutionPayloadBody.Withdrawals, nil
+}
+
+// BlockAccessList is unsupported on the V1 body (pre-Gloas).
+func (e executionPayloadBodyV1JSON) BlockAccessList() ([]byte, error) {
+	return nil, consensus_types.ErrUnsupportedField
+}
+
+// executionPayloadBodyV2JSON wraps the V2 JSON body DTO
+// (engine_getPayloadBodiesByHashV2), which carries the block access list.
+type executionPayloadBodyV2JSON struct {
+	*enginev1.ExecutionPayloadBodyV2
+}
+
+// WrappedExecutionPayloadBodyV2JSON wraps the V2 JSON body DTO in the interface.
+func WrappedExecutionPayloadBodyV2JSON(p *enginev1.ExecutionPayloadBodyV2) (interfaces.ExecutionPayloadBody, error) {
+	w := executionPayloadBodyV2JSON{p}
+	if w.IsNil() {
+		return nil, consensus_types.ErrNilObjectWrapped
+	}
+	return w, nil
+}
+
+func (e executionPayloadBodyV2JSON) IsNil() bool {
+	return e.ExecutionPayloadBodyV2 == nil
+}
+
+func (e executionPayloadBodyV2JSON) Transactions() ([][]byte, error) {
+	return enginev1.RecastHexutilByteSlice(e.ExecutionPayloadBodyV2.Transactions), nil
+}
+
+func (e executionPayloadBodyV2JSON) Withdrawals() ([]*enginev1.Withdrawal, error) {
+	return e.ExecutionPayloadBodyV2.Withdrawals, nil
+}
+
+func (e executionPayloadBodyV2JSON) BlockAccessList() ([]byte, error) {
+	if e.ExecutionPayloadBodyV2.BlockAccessList == nil {
+		return nil, nil
+	}
+	return []byte(*e.ExecutionPayloadBodyV2.BlockAccessList), nil
+}

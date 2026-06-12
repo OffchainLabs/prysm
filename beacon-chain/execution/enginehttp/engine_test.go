@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	enginev2 "github.com/OffchainLabs/prysm/v7/proto/engine/v2"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
@@ -37,7 +38,7 @@ func TestNewPayload(t *testing.T) {
 		_, _ = w.Write(statusSSZ)
 	})
 
-	status, err := c.NewPayload(context.Background(), ForkAmsterdam, &stubSSZ{data: []byte("envelope")})
+	status, err := c.NewPayload(context.Background(), version.Gloas, &stubSSZ{data: []byte("envelope")})
 	require.NoError(t, err)
 	assert.Equal(t, http.MethodPost, gotMethod)
 	assert.Equal(t, "/engine/v2/amsterdam/payloads", gotPath)
@@ -66,7 +67,7 @@ func TestForkchoiceUpdated(t *testing.T) {
 		_, _ = w.Write(respSSZ)
 	})
 
-	resp, err := c.ForkchoiceUpdated(context.Background(), ForkAmsterdam, &stubSSZ{data: []byte("fcu")})
+	resp, err := c.ForkchoiceUpdated(context.Background(), version.Gloas, &stubSSZ{data: []byte("fcu")})
 	require.NoError(t, err)
 	assert.Equal(t, http.MethodPost, gotMethod)
 	assert.Equal(t, "/engine/v2/amsterdam/forkchoice", gotPath)
@@ -95,7 +96,7 @@ func TestGetPayload(t *testing.T) {
 	})
 
 	out := &stubSSZ{}
-	err := c.GetPayload(context.Background(), ForkAmsterdam, payloadID, out)
+	err := c.GetPayload(context.Background(), version.Gloas, payloadID, out)
 	require.NoError(t, err)
 	assert.Equal(t, http.MethodGet, gotMethod)
 	assert.Equal(t, "/engine/v2/amsterdam/payloads/0x0123456789abcdef", gotPath) // hex-encoded opaque id
@@ -121,7 +122,7 @@ func TestGetPayloadBodiesByHash(t *testing.T) {
 		_, _ = w.Write(respSSZ)
 	})
 
-	err = c.GetPayloadBodiesByHash(context.Background(), ForkAmsterdam, req, &enginev2.BodiesResponseGloas{})
+	err = c.GetPayloadBodiesByHash(context.Background(), version.Gloas, req, &enginev2.BodiesResponseGloas{})
 	require.NoError(t, err)
 	assert.Equal(t, http.MethodPost, gotMethod)
 	assert.Equal(t, "/engine/v2/amsterdam/bodies/hash", gotPath)
@@ -146,7 +147,7 @@ func TestGetPayloadBodiesByRange(t *testing.T) {
 		_, _ = w.Write(respSSZ)
 	})
 
-	err = c.GetPayloadBodiesByRange(context.Background(), ForkOsaka, 1, 2, &enginev2.BodiesResponseFulu{})
+	err = c.GetPayloadBodiesByRange(context.Background(), version.Fulu, 1, 2, &enginev2.BodiesResponseFulu{})
 	require.NoError(t, err)
 	assert.Equal(t, http.MethodGet, gotMethod)
 	assert.Equal(t, "/engine/v2/osaka/bodies", gotPath) // fork-scoped, range in the query

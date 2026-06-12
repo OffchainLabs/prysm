@@ -19,16 +19,10 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	enginev2 "github.com/OffchainLabs/prysm/v7/proto/engine/v2"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
-)
-
-// The {fork} URL segment of a fork-scoped v2 endpoint. The spec keys endpoints
-// by the EL fork name, not the CL fork name;
-// osaka/amsterdam are the current interop targets.
-const (
-	ForkOsaka     = "osaka"     // CL Fulu
-	ForkAmsterdam = "amsterdam" // CL Gloas
 )
 
 // NewPayload submits an execution payload for validation/import.
@@ -37,7 +31,11 @@ const (
 // inside; expected_blob_versioned_hashes is removed (the EL recomputes it). The
 // four validation outcomes all return HTTP 200 with a PayloadStatus body — the
 // caller maps the uint8 status enum back to Prysm's sentinels.
-func (c *Client) NewPayload(ctx context.Context, fork string, envelope ssz.Marshaler) (*enginev2.PayloadStatus, error) {
+func (c *Client) NewPayload(ctx context.Context, v int, envelope ssz.Marshaler) (*enginev2.PayloadStatus, error) {
+	fork, err := version.ELForkName(v)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get EL fork name")
+	}
 	status := &enginev2.PayloadStatus{}
 	if err := c.SSZRequest(ctx, http.MethodPost, "/"+fork+"/payloads", nil, envelope, status); err != nil {
 		return nil, err
@@ -51,7 +49,11 @@ func (c *Client) NewPayload(ctx context.Context, fork string, envelope ssz.Marsh
 // Gloas, an optional custody_columns bitvector). The response carries the
 // payload_status plus an opaque server-assigned payload_id; the caller echoes
 // that token verbatim and never recomputes it.
-func (c *Client) ForkchoiceUpdated(ctx context.Context, fork string, update ssz.Marshaler) (*enginev2.ForkchoiceUpdateResponse, error) {
+func (c *Client) ForkchoiceUpdated(ctx context.Context, v int, update ssz.Marshaler) (*enginev2.ForkchoiceUpdateResponse, error) {
+	fork, err := version.ELForkName(v)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get EL fork name")
+	}
 	resp := &enginev2.ForkchoiceUpdateResponse{}
 	if err := c.SSZRequest(ctx, http.MethodPost, "/"+fork+"/forkchoice", nil, update, resp); err != nil {
 		return nil, err
@@ -65,7 +67,11 @@ func (c *Client) ForkchoiceUpdated(ctx context.Context, fork string, update ssz.
 // keeps optimising the build, so the response is never cacheable (it carries
 // Cache-Control: no-store); each call returns the latest snapshot — Prysm does
 // not cache it.
-func (c *Client) GetPayload(ctx context.Context, fork string, payloadID [8]byte, out ssz.Unmarshaler) error {
+func (c *Client) GetPayload(ctx context.Context, v int, payloadID [8]byte, out ssz.Unmarshaler) error {
+	fork, err := version.ELForkName(v)
+	if err != nil {
+		return errors.Wrap(err, "failed to get EL fork name")
+	}
 	return c.SSZRequest(ctx, http.MethodGet, "/"+fork+"/payloads/"+hexutil.Encode(payloadID[:]), nil, nil, out)
 }
 
@@ -74,7 +80,11 @@ func (c *Client) GetPayload(ctx context.Context, fork string, payloadID [8]byte,
 // The {fork} selects both the response schema and the era of returned blocks;
 // out-of-era or pruned blocks come back as a per-entry available=false. The
 // caller decodes the fork's BodiesResponse into out.
-func (c *Client) GetPayloadBodiesByHash(ctx context.Context, fork string, req *enginev2.BodiesByHashRequest, out ssz.Unmarshaler) error {
+func (c *Client) GetPayloadBodiesByHash(ctx context.Context, v int, req *enginev2.BodiesByHashRequest, out ssz.Unmarshaler) error {
+	fork, err := version.ELForkName(v)
+	if err != nil {
+		return errors.Wrap(err, "failed to get EL fork name")
+	}
 	return c.SSZRequest(ctx, http.MethodPost, "/"+fork+"/bodies/hash", nil, req, out)
 }
 
@@ -83,7 +93,11 @@ func (c *Client) GetPayloadBodiesByHash(ctx context.Context, fork string, req *e
 // The range travels in the query (no SSZ body); a range straddling a fork
 // boundary needs one call per fork URL. The caller decodes the fork's
 // BodiesResponse into out.
-func (c *Client) GetPayloadBodiesByRange(ctx context.Context, fork string, from, count uint64, out ssz.Unmarshaler) error {
+func (c *Client) GetPayloadBodiesByRange(ctx context.Context, v int, from, count uint64, out ssz.Unmarshaler) error {
+	fork, err := version.ELForkName(v)
+	if err != nil {
+		return errors.Wrap(err, "failed to get EL fork name")
+	}
 	query := url.Values{}
 	query.Set("from", strconv.FormatUint(from, 10))
 	query.Set("count", strconv.FormatUint(count, 10))

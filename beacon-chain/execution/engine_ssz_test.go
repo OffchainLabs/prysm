@@ -189,3 +189,37 @@ func TestSupportsBlob(t *testing.T) {
 	// No capability document (defensive): permit the request to surface support.
 	assert.Equal(t, true, (&sszEngine{}).supportsBlob("v1"))
 }
+
+// bodiesEntries must be request-aligned, mapping available=false to a nil body
+// (the reconstructor's missing marker) and dropping block_access_list.
+func TestBodiesEntries(t *testing.T) {
+	tx := []byte{0xde, 0xad}
+	wd := []*pb.Withdrawal{{Index: 7}}
+	resp := &enginev2.BodiesResponseGloas{
+		Entries: []*enginev2.BodyEntryGloas{
+			{Available: true, Body: &enginev2.ExecutionPayloadBodyGloas{
+				Transactions:    [][]byte{tx},
+				Withdrawals:     wd,
+				BlockAccessList: []byte{0x01, 0x02},
+			}},
+			{Available: false, Body: &enginev2.ExecutionPayloadBodyGloas{}},
+		},
+	}
+
+	out, err := bodiesEntries(resp)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(out))
+	require.NotNil(t, out[0])
+
+	transactions, err := out[0].Transactions()
+	require.NoError(t, err)
+	assert.DeepEqual(t, tx, transactions[0])
+
+	withdrawals, err := out[0].Withdrawals()
+	require.NoError(t, err)
+	assert.DeepEqual(t, wd, withdrawals)
+	require.IsNil(t, out[1]) // available=false -> nil body
+
+	_, err = bodiesEntries(&enginev2.PayloadStatus{})
+	require.ErrorContains(t, "unexpected BodiesResponse type", err)
+}
