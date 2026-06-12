@@ -4,8 +4,9 @@ import (
 	"os"
 	"path"
 
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/pkg/errors"
+
+	"github.com/OffchainLabs/prysm/v7/build/bazel"
 )
 
 // BazelDirectoryNonEmpty returns true if directory exists and is not empty.

@@ -2,7 +2,6 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    testonly = True,
     srcs = [
         "bazel.go",
         "data_path.go",
@@ -11,7 +10,6 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/build/bazel",
     visibility = ["//visibility:public"],
     deps = [
-        "//testing/require:go_default_library",
         "@io_bazel_rules_go//go/tools/bazel:go_default_library",
     ],
 )

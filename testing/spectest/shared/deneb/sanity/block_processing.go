@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/build/bazel"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -19,7 +20,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/golang/snappy"
 	"google.golang.org/protobuf/proto"
 )

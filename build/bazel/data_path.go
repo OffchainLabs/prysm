@@ -14,8 +14,6 @@ import (
 	"path"
 	"path/filepath"
 	"testing"
-
-	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 // TestDataPath returns a path to an asset in the testdata directory. It knows
@@ -23,19 +21,28 @@ import (
 //
 // For example, if there is a file testdata/a.txt, you can get a path to that
 // file using TestDataPath(t, "a.txt").
+//
+// It uses testing.TB directly (rather than the testing/require helper) so this
+// package stays non-testonly and can be imported by non-test code (e.g.
+// testing/benchmark, which feeds the benchmark-files-gen binary).
 func TestDataPath(t testing.TB, relative ...string) string {
+	t.Helper()
 	relative = append([]string{"testdata"}, relative...)
 	// dev notifies the library that the test is running in a subdirectory of the
 	// workspace with the environment variable below.
 	if BuiltWithBazel() {
 		runfiles, err := RunfilesPath()
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("get runfiles path: %v", err)
+		}
 		return path.Join(runfiles, RelativeTestTargetPath(), path.Join(relative...))
 	}
 
 	// Otherwise we're in the package directory and can just return a relative path.
 	ret := path.Join(relative...)
 	ret, err := filepath.Abs(ret)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("get absolute path: %v", err)
+	}
 	return ret
 }
