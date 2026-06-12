@@ -31,8 +31,6 @@ const logPackage = "beacon-chain/p2p/partialdatacolumnbroadcaster"
 
 var errInvalidHeader = errors.New("invalid header")
 
-// errUnsolicitedCells is returned when a peer pushes cells before we have
-// advertised our parts metadata (availability/request bitmap) for the column.
 var errUnsolicitedCells = errors.New("peer sent cells before we advertised our parts metadata")
 
 const dataColumnSidecarPrefix = "data_column_sidecar_"
