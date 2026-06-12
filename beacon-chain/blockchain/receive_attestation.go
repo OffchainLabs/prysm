@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -120,7 +121,9 @@ func (s *Service) spawnProcessAttestationsRoutine() {
 func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot) {
 	ctx, span := trace.StartSpan(ctx, "beacon-chain.blockchain.UpdateHead")
 	defer span.End()
-
+	if !s.inRegularSync() {
+		return
+	}
 	start := time.Now()
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()
@@ -140,37 +143,94 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 	}
 	newAttHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
 	if !s.isNewHead(newHeadRoot, full) {
-		return
+		if full && s.ptcForcedReorg(newHeadRoot, proposingSlot) {
+			log.WithField("newHeadRoot", fmt.Sprintf("%#x", newHeadRoot)).Debug("PTC forced reorg to empty payload")
+			headHash = s.cfg.ForkChoiceStore.ParentHash(newHeadRoot)
+			full = false
+		} else {
+			return
+		}
 	}
-	log.WithField("newHeadRoot", fmt.Sprintf("%#x", newHeadRoot)).Debug("Head changed due to attestations")
 	headState, headBlock, err := s.getStateAndBlock(ctx, newHeadRoot)
 	if err != nil {
 		log.WithError(err).Error("Could not get head block and state")
 		return
 	}
-	if s.inRegularSync() {
-		attr := s.getPayloadAttribute(ctx, headState, proposingSlot, newHeadRoot[:], full)
-		if !attr.IsEmpty() && s.shouldOverrideFCU(newHeadRoot, proposingSlot) {
-			return
+	attr := s.getPayloadAttribute(ctx, headState, proposingSlot, newHeadRoot[:], full)
+	if s.keepReorgBet(attr, newHeadRoot, proposingSlot, full) {
+		return
+	}
+	log.WithFields(logrus.Fields{"newHeadRoot": fmt.Sprintf("%#x", newHeadRoot), "full": full}).Debug("Head changed late in slot")
+	postGloas := slots.ToEpoch(proposingSlot) >= params.BeaconConfig().GloasForkEpoch
+	if postGloas {
+		go s.fcuFromReorgData(headBlock, newHeadRoot, headHash, full, attr, proposingSlot)
+	} else {
+		fcuArgs := &fcuConfig{
+			headState:     headState,
+			headRoot:      newHeadRoot,
+			headBlock:     headBlock,
+			proposingSlot: proposingSlot,
+			attributes:    attr,
 		}
-		postGloas := slots.ToEpoch(proposingSlot) >= params.BeaconConfig().GloasForkEpoch
-		if postGloas {
-			go s.fcuFromReorgData(headBlock, newHeadRoot, headHash, full, attr, proposingSlot)
-		} else {
-			fcuArgs := &fcuConfig{
-				headState:     headState,
-				headRoot:      newHeadRoot,
-				headBlock:     headBlock,
-				proposingSlot: proposingSlot,
-				attributes:    attr,
-			}
-			go s.forkchoiceUpdateWithExecution(s.ctx, fcuArgs)
-		}
+		go s.forkchoiceUpdateWithExecution(s.ctx, fcuArgs)
 	}
 	if err := s.saveHead(s.ctx, newHeadRoot, headBlock, headState, full); err != nil {
 		log.WithError(err).Error("Could not save head")
 	}
 	s.pruneAttsFromPool(s.ctx, headState, headBlock)
+}
+
+func (s *Service) ptcForcedReorg(root [32]byte, proposingSlot primitives.Slot) bool {
+	hs, err := s.cfg.ForkChoiceStore.Slot(root)
+	if err != nil {
+		log.WithError(err).Error("Could not get slot for head root")
+		return false
+	}
+	if hs+1 != proposingSlot {
+		return false
+	}
+	return s.cfg.ForkChoiceStore.PTCVotedLate(root)
+}
+
+func (s *Service) shouldReorgPayload(root [32]byte, full bool, proposingSlot primitives.Slot) bool {
+	if !full {
+		// only way of moving from full to empty is on two paths:
+		// 1) because of attestations and this can only happen if the head root is from previous slots, we need to send FCU
+		// 2) because of PTC votes on a previously sent FCU, in this path we need to roll back the chain
+		return false
+	}
+	hs, err := s.cfg.ForkChoiceStore.Slot(root)
+	if err != nil {
+		log.WithError(err).Error("Could not get slot for head root")
+		return false
+	}
+	if hs+1 != proposingSlot {
+		return false
+	}
+	early, ok := s.PayloadEarly(root)
+	if !ok {
+		return true
+	}
+	if early {
+		return s.cfg.ForkChoiceStore.PTCVotedLate(root)
+	}
+	return s.cfg.ForkChoiceStore.PTCVotedEarlyAndAvailable(root)
+}
+
+// the caller of this function must hold a forkchoice lock
+func (s *Service) keepReorgBet(attr payloadattribute.Attributer, newHeadRoot [32]byte, slot primitives.Slot, full bool) bool {
+	if attr.IsEmpty() {
+		return false
+	}
+	hr, err := s.HeadRoot(s.ctx)
+	if err != nil {
+		log.WithError(err).Error("Could not get head root")
+		return false
+	}
+	if bytes.Equal(hr, newHeadRoot[:]) {
+		return s.shouldReorgPayload(newHeadRoot, full, slot)
+	}
+	return s.shouldOverrideFCU(newHeadRoot, slot)
 }
 
 // This processes fork choice attestations from the pool to account for validator votes and fork choice.

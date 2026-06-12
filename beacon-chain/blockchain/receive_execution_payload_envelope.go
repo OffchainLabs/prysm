@@ -186,7 +186,7 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	return nil
 }
 
-func (s *Service) checkPayloadIsHead(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope) bool {
+func (s *Service) checkAndSetPayloadIfHead(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope) bool {
 	if !s.inRegularSync() {
 		return false
 	}
@@ -227,7 +227,7 @@ func (s *Service) reorgingLatePayload(root [32]byte, slot primitives.Slot) bool 
 }
 
 func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope, st state.BeaconState) error {
-	if !s.checkPayloadIsHead(ctx, envelope) {
+	if !s.checkAndSetPayloadIfHead(ctx, envelope) {
 		return nil
 	}
 	payload, err := envelope.Execution()
