@@ -10,6 +10,8 @@ import (
 	"slices"
 	"sync"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
@@ -17,6 +19,7 @@ import (
 	ssz "github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/math"
 	fastssz "github.com/prysmaticlabs/fastssz"
+	"github.com/sirupsen/logrus"
 )
 
 // proofCollector collects sibling hashes and leaves needed for Merkle proofs.
@@ -148,6 +151,45 @@ func (pc *proofCollector) collectSibling(gindex uint64, hash [32]byte) {
 	pc.Lock()
 	pc.siblings[gindex] = hash
 	pc.Unlock()
+}
+
+// hasTargetsInSubtree reports whether any registered proof target (leaf or sibling)
+// is a strict descendant of the given subtree root gindex.
+//
+// Equality (g == subtreeRoot) is intentionally excluded: when only the subtree
+// root itself is needed, callers can still use optimized root computation and
+// collect the root at the current level afterward.
+// Returns false when subtreeRoot is 0 (sentinel used for non-proof paths).
+func (pc *proofCollector) hasTargetsInSubtree(subtreeRoot uint64) bool {
+	if subtreeRoot == 0 {
+		return false
+	}
+	for g := range pc.requiredLeaves {
+		if isDescendant(g, subtreeRoot) {
+			return true
+		}
+	}
+	for g := range pc.requiredSiblings {
+		if isDescendant(g, subtreeRoot) {
+			return true
+		}
+	}
+	return false
+}
+
+// isDescendant returns true if g is strictly below ancestor
+// in the generalized-index tree (i.e. walking g upward by halving reaches ancestor).
+func isDescendant(g, ancestor uint64) bool {
+	if g == ancestor {
+		return false
+	}
+	for g >= ancestor {
+		if g == ancestor {
+			return true
+		}
+		g >>= 1
+	}
+	return false
 }
 
 // Merkleizers and proof collection methods
@@ -340,61 +382,35 @@ func (pc *proofCollector) merkleizeVectorBody(elemInfo *SszInfo, v reflect.Value
 		// Composite elements: compute each element root (no padding here; merkleizeVectorAndCollect pads).
 		chunks = make([][32]byte, length)
 
-		// Fall back to per-element merkleization with proper gindices for proof collection.
-		// Parallel execution
-		workerCount := min(runtime.GOMAXPROCS(0), length)
+		// Fast path: when no proof targets exist inside this subtree and the
+		// elements are containers, use vectorized hashing (OptimizedSliceRoots)
+		// instead of per-element recursive merkleization.
+		if elemInfo.sszType == Container && !pc.hasTargetsInSubtree(subtreeRootGindex) {
+			var err error
+			chunks, err = OptimizedSliceRoots(elemInfo, v, pc)
+			if err != nil {
+				return [32]byte{}, err
+			}
+		} else {
+			// Parallel per-element merkleization with proper gindices for proof collection.
+			var g errgroup.Group
+			g.SetLimit(runtime.GOMAXPROCS(0))
 
-		jobs := make(chan int, workerCount*16)
-		errCh := make(chan error, 1) // only need the first error
-		stopCh := make(chan struct{})
-		var stopOnce sync.Once
-		var wg sync.WaitGroup
-
-		worker := func() {
-			defer wg.Done()
-			for idx := range jobs {
-				select {
-				case <-stopCh:
-					return
-				default:
-				}
-
-				elemGindex := subtreeRootGindex<<depth + uint64(idx)
-				htr, err := pc.merkleize(elemInfo, v.Index(idx), elemGindex)
-				if err != nil {
-					stopOnce.Do(func() { close(stopCh) })
-					select {
-					case errCh <- fmt.Errorf("index %d: %w", idx, err):
-					default:
+			for i := range length {
+				g.Go(func() error {
+					elemGindex := subtreeRootGindex<<depth + uint64(i)
+					htr, err := pc.merkleize(elemInfo, v.Index(i), elemGindex)
+					if err != nil {
+						return fmt.Errorf("index %d: %w", i, err)
 					}
-					return
-				}
-				chunks[idx] = htr
+					chunks[i] = htr
+					return nil
+				})
 			}
-		}
 
-		wg.Add(workerCount)
-		for range workerCount {
-			go worker()
-		}
-
-		// Enqueue jobs; stop early if any worker reports an error.
-	enqueue:
-		for i := range length {
-			select {
-			case <-stopCh:
-				break enqueue
-			case jobs <- i:
+			if err := g.Wait(); err != nil {
+				return [32]byte{}, err
 			}
-		}
-		close(jobs)
-
-		wg.Wait()
-
-		select {
-		case err := <-errCh:
-			return [32]byte{}, err
-		default:
 		}
 	}
 
@@ -669,4 +685,101 @@ func (pc *proofCollector) mixinLengthAndCollect(currentGindex uint64, chunks [][
 	pc.collectLeaf(lengthHashGindex, lengthHash)
 
 	return ssz.MixInLength(dataRoot, lengthHash[:])
+}
+
+// OptimizedSliceRoots uses an optimized routine with gohashtree to derive
+// a list of roots from a slice of SSZ container objects.
+// It works similarly to stateutil.OptimizedValidatorRoots but for any container type.
+//
+// Parameters:
+// - info: SSZ type metadata for the container element type.
+// - v: reflect.Value of the slice of containers.
+// - pc: proofCollector used for merkleizing field values (gindex 0, no proof bookkeeping).
+//
+// Returns:
+// - [][32]byte: one Merkle root per container element.
+// - error: any error encountered during merkleization.
+func OptimizedSliceRoots(info *SszInfo, v reflect.Value, pc *proofCollector) ([][32]byte, error) {
+	ci, err := info.ContainerInfo()
+	if err != nil {
+		return [][32]byte{}, err
+	}
+
+	containerFieldRoots := len(ci.order)
+	depth := ssz.Depth(uint64(containerFieldRoots))
+	paddedFieldCount := 1 << depth // next power of 2 >= containerFieldRoots
+
+	v = dereferencePointer(v)
+
+	// Exit early if no containers are provided.
+	if v.Len() == 0 {
+		return [][32]byte{}, nil
+	}
+
+	wg := sync.WaitGroup{}
+	n := runtime.GOMAXPROCS(0)
+	rootsSize := v.Len() * paddedFieldCount
+	groupSize := v.Len() / n
+	roots := make([][32]byte, rootsSize)
+	// Padding positions are initialized to zero, which matches SSZ zero hashes at depth 0.
+
+	wg.Add(n - 1)
+	for j := 0; j < n-1; j++ {
+		go pc.hashContainerHelper(ci, v, roots, j, groupSize, paddedFieldCount, containerFieldRoots, &wg)
+	}
+	for i := (n - 1) * groupSize; i < v.Len(); i++ {
+		fRoots, err := pc.containerFieldRoots(ci, v.Index(i))
+		if err != nil {
+			return [][32]byte{}, fmt.Errorf("could not compute container merkleization: %w", err)
+		}
+		for k, root := range fRoots {
+			roots[i*paddedFieldCount+k] = root
+		}
+	}
+	wg.Wait()
+
+	// A container's tree is represented with depth = ceil(log2(fieldCount)).
+	// Using this property we can lay out all the individual fields of a
+	// container and hash them in single level using our vectorized routine.
+	for range depth {
+		// Overwrite input lists as we are hashing by level
+		// and only need the highest level to proceed.
+		roots = htr.VectorizedSha256(roots)
+	}
+	return roots, nil
+}
+
+func (pc *proofCollector) hashContainerHelper(ci *containerInfo, v reflect.Value, roots [][32]byte, j int, groupSize, paddedFieldCount, containerFieldRoots int, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for i := range groupSize {
+		fRoots, err := pc.containerFieldRoots(ci, v.Index(j*groupSize+i))
+		if err != nil {
+			logrus.WithError(err).Error("Could not get container field roots")
+			return
+		}
+		for k, root := range fRoots {
+			roots[(j*groupSize+i)*paddedFieldCount+k] = root
+		}
+	}
+}
+
+func (pc *proofCollector) containerFieldRoots(ci *containerInfo, v reflect.Value) ([][32]byte, error) {
+	v = dereferencePointer(v)
+
+	fieldCount := len(ci.order)
+	fieldRoots := make([][32]byte, fieldCount)
+
+	for i, name := range ci.order {
+		fieldInfo := ci.fields[name]
+		fieldVal := v.FieldByName(fieldInfo.goFieldName)
+
+		// Non-proof path: use a constant gindex to avoid proof bookkeeping.
+		root, err := pc.merkleize(fieldInfo.sszInfo, fieldVal, 0)
+		if err != nil {
+			return nil, fmt.Errorf("field %s: %w", name, err)
+		}
+		fieldRoots[i] = root
+	}
+
+	return fieldRoots, nil
 }
