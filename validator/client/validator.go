@@ -1221,11 +1221,13 @@ func (v *validator) releasePrefSlot(proposalSlot primitives.Slot) {
 	delete(v.submittedPrefSlots, proposalSlot)
 }
 
-// proposerConfigForKey returns the fee recipient and gas limit for pk.
+// proposerConfigForKey returns the fee recipient and target gas limit for pk.
+// The target gas limit comes from the top-level v2 fields only; builder gas
+// limits are registration-only.
 func (v *validator) proposerConfigForKey(pk pubkey) (common.Address, uint64) {
 	feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
 	ps := v.ProposerSettings()
-	gasLimit := uint64(ps.GasLimit(pk))
+	gasLimit := uint64(ps.TargetGasLimit(pk))
 	if ps == nil {
 		return feeRecipient, gasLimit
 	}

@@ -286,7 +286,10 @@ func (ps *Settings) WarnDeprecatedSchema() {
 	log.Warn("Proposer settings use the deprecated v1 schema; they are upgraded automatically at the gloas fork. Please migrate your settings source to v2.")
 }
 
-// UpgradeToV2 migrates v1 settings to v2 in place. Returns true if changed.
+// UpgradeToV2 migrates v1 settings to v2 in place: builder gas limits are
+// promoted to the top-level preferences gas limit (unless one is already set)
+// and builder configs are dropped. Settings already on v2 are left untouched.
+// Returns true if changed.
 func (ps *Settings) UpgradeToV2() bool {
 	if ps == nil || ps.isV2() {
 		return false
@@ -308,21 +311,34 @@ func (ps *Settings) UpgradeToV2() bool {
 	return true
 }
 
+// TargetGasLimit returns the proposer preferences gas limit for pubkey from
+// the top-level fields only: the per-pubkey override, else the default config
+// value, else the chain default. Builder gas limits are registration-only and
+// intentionally not consulted.
+func (ps *Settings) TargetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) validator.Uint64 {
+	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+	if ps == nil {
+		return chainDefault
+	}
+	if opt, ok := ps.ProposeConfig[pubkey]; ok && opt != nil && opt.GasLimit != 0 {
+		return opt.GasLimit
+	}
+	if ps.DefaultConfig != nil && ps.DefaultConfig.GasLimit != 0 {
+		return ps.DefaultConfig.GasLimit
+	}
+	return chainDefault
+}
+
 // GasLimit returns the gas limit (gwei) for pubkey: the per-pubkey override,
-// else the default config value, else the chain default.
+// else the default config value, else the chain default. v1 reads the builder
+// gas limit; v2 reads the top-level fields.
 func (ps *Settings) GasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) validator.Uint64 {
 	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
 	if ps == nil {
 		return chainDefault
 	}
 	if ps.isV2() {
-		if opt, ok := ps.ProposeConfig[pubkey]; ok && opt != nil && opt.GasLimit != 0 {
-			return opt.GasLimit
-		}
-		if ps.DefaultConfig != nil && ps.DefaultConfig.GasLimit != 0 {
-			return ps.DefaultConfig.GasLimit
-		}
-		return chainDefault
+		return ps.TargetGasLimit(pubkey)
 	}
 	if opt, ok := ps.ProposeConfig[pubkey]; ok && opt != nil && opt.BuilderConfig != nil && opt.BuilderConfig.GasLimit != 0 {
 		return opt.BuilderConfig.GasLimit
@@ -400,7 +416,7 @@ func (ps *Settings) ResetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) bool
 		return true
 	}
 	opt, found := ps.ProposeConfig[pubkey]
-	if !found || opt.BuilderConfig == nil {
+	if !found || opt == nil || opt.BuilderConfig == nil {
 		return false
 	}
 	if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil {
