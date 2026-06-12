@@ -188,38 +188,34 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set(api.VersionHeader, version.String(signedBlock.Version()))
+	var response ssz.Marshaler
 	if req.IncludeProof {
 		proof, err := getSSZQueryProof(info, path)
 		if err != nil {
 			httputil.HandleError(w, "Could not compute merkle proofs: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-
-		resp := &sszquerypb.SSZQueryResponseWithProof{
+		response = &sszquerypb.SSZQueryResponseWithProof{
 			Root:   blockRoot[:],
 			Result: encodedBlock[offset : offset+length],
-			Proof:  toSSZQueryProof(proof),
+			Proof: &sszquerypb.SSZQueryProof{
+				Leaf:   proof.Leaf,
+				Gindex: uint64(proof.Index),
+				Proofs: proof.Hashes,
+			},
 		}
-		responseSsz, err := resp.MarshalSSZ()
-		if err != nil {
-			httputil.HandleError(w, "Could not marshal response to SSZ: "+err.Error(), http.StatusInternalServerError)
-			return
+	} else {
+		response = &sszquerypb.SSZQueryResponse{
+			Root:   blockRoot[:],
+			Result: encodedBlock[offset : offset+length],
 		}
-		httputil.WriteSsz(w, responseSsz)
-		return
 	}
-
-	resp := &sszquerypb.SSZQueryResponse{
-		Root:   blockRoot[:],
-		Result: encodedBlock[offset : offset+length],
-	}
-	responseSsz, err := resp.MarshalSSZ()
+	responseSsz, err := response.MarshalSSZ()
 	if err != nil {
 		httputil.HandleError(w, "Could not marshal response to SSZ: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-
+	w.Header().Set(api.VersionHeader, version.String(signedBlock.Version()))
 	httputil.WriteSsz(w, responseSsz)
 }
 
