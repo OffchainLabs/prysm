@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
@@ -62,6 +63,70 @@ func newTestOverlay(t *testing.T) (base *FieldTrie, overlay *FieldTrie, overlayR
 	overlay, overlayRoot, err = base.RecomputeTrie([]uint64{0}, blockRoots)
 	require.NoError(t, err)
 	return base, overlay, overlayRoot, blockRoots
+}
+
+// reconstructRoot folds a leaf and its sibling proof back up to the trie root.
+func reconstructRoot(leaf [32]byte, proof [][32]byte, index uint64) [32]byte {
+	hasher := hash.CustomSHA256Hasher()
+	node := leaf
+	idx := index
+	var combined [64]byte
+	for _, sibling := range proof {
+		if idx%2 == 0 {
+			copy(combined[:32], node[:])
+			copy(combined[32:], sibling[:])
+		} else {
+			copy(combined[:32], sibling[:])
+			copy(combined[32:], node[:])
+		}
+
+		node = hasher(combined[:])
+		idx /= 2
+	}
+
+	return node
+}
+
+func TestFieldTrie_ProveField(t *testing.T) {
+	indices := []uint64{0, 1, 42, testBlockRootsSize - 1}
+
+	t.Run("owned mode proof reconstructs root", func(t *testing.T) {
+		blockRoots, _, _ := newTestElements()
+		ft, err := NewFieldTrie(types.BlockRoots, types.BasicArray, blockRoots, testBlockRootsSize, 0)
+		require.NoError(t, err)
+
+		root, err := ft.TrieRoot()
+		require.NoError(t, err)
+
+		for _, idx := range indices {
+			leaf, proof, err := ft.ProveField(idx)
+			require.NoError(t, err)
+			require.Equal(t, blockRoots[idx], leaf)
+			require.Equal(t, root, reconstructRoot(leaf, proof, idx))
+		}
+	})
+
+	t.Run("overlay mode proof reconstructs root", func(t *testing.T) {
+		// newTestOverlay mutates leaf 0; index 0 reads from the override, the
+		// rest fall back to the base buffer.
+		_, overlay, overlayRoot, blockRoots := newTestOverlay(t)
+
+		for _, idx := range indices {
+			leaf, proof, err := overlay.ProveField(idx)
+			require.NoError(t, err)
+			require.Equal(t, blockRoots[idx], leaf)
+			require.Equal(t, overlayRoot, reconstructRoot(leaf, proof, idx))
+		}
+	})
+
+	t.Run("index out of bounds", func(t *testing.T) {
+		blockRoots, _, _ := newTestElements()
+		ft, err := NewFieldTrie(types.BlockRoots, types.BasicArray, blockRoots, testBlockRootsSize, 0)
+		require.NoError(t, err)
+
+		_, _, err = ft.ProveField(testBlockRootsSize)
+		require.ErrorContains(t, "out of bounds", err)
+	})
 }
 
 // requireFreshTrieRoot builds a fresh trie from elements and asserts its root matches expectedRoot.
