@@ -231,12 +231,3 @@ func getSSZQueryProof(info *query.SszInfo, path query.Path) (*ssz.Proof, error) 
 	}
 	return proof, nil
 }
-
-// toSSZQueryProof converts a fastssz.Proof to an sszquerypb.SSZQueryProof for serialization in the response.
-func toSSZQueryProof(proof *ssz.Proof) *sszquerypb.SSZQueryProof {
-	return &sszquerypb.SSZQueryProof{
-		Leaf:   proof.Leaf,
-		Gindex: uint64(proof.Index),
-		Proofs: proof.Hashes,
-	}
-}
