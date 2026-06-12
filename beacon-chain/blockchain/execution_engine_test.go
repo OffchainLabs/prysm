@@ -82,7 +82,7 @@ func Test_NotifyForkchoiceUpdate_GetPayloadAttrErrorCanContinue(t *testing.T) {
 		headBlock: b,
 	}
 
-	service.cfg.PayloadIDCache.Set(1, [32]byte{}, [8]byte{})
+	service.cfg.PayloadIDCache.Set(1, [32]byte{}, true, [8]byte{})
 	got, err := service.notifyForkchoiceUpdate(ctx, arg)
 	require.NoError(t, err)
 	require.IsNil(t, got)
@@ -723,7 +723,7 @@ func Test_GetPayloadAttribute(t *testing.T) {
 	service.cfg.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, Index: 0})
 	// Cache hit, advance state, no fee recipient
 	slot := primitives.Slot(1)
-	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
+	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
 	require.Equal(t, false, attr.IsEmpty())
 	require.Equal(t, params.BeaconConfig().EthBurnAddressHex, common.BytesToAddress(attr.SuggestedFeeRecipient()).String())
@@ -731,7 +731,7 @@ func Test_GetPayloadAttribute(t *testing.T) {
 	// Cache hit, advance state, has fee recipient
 	suggestedAddr := common.HexToAddress("123")
 	service.cfg.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, FeeRecipient: primitives.ExecutionAddress(suggestedAddr), Index: 0})
-	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
+	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
 	require.Equal(t, false, attr.IsEmpty())
 	require.Equal(t, suggestedAddr, common.BytesToAddress(attr.SuggestedFeeRecipient()))
@@ -763,7 +763,7 @@ func Test_GetPayloadAttributeV2(t *testing.T) {
 	// Cache hit, advance state, no fee recipient
 	service.cfg.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, Index: 0})
 	slot := primitives.Slot(1)
-	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
+	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
 	require.Equal(t, false, attr.IsEmpty())
 	require.Equal(t, params.BeaconConfig().EthBurnAddressHex, common.BytesToAddress(attr.SuggestedFeeRecipient()).String())
@@ -774,7 +774,7 @@ func Test_GetPayloadAttributeV2(t *testing.T) {
 	// Cache hit, advance state, has fee recipient
 	suggestedAddr := common.HexToAddress("123")
 	service.cfg.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, FeeRecipient: primitives.ExecutionAddress(suggestedAddr), Index: 0})
-	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
+	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
 	require.Equal(t, false, attr.IsEmpty())
 	require.Equal(t, suggestedAddr, common.BytesToAddress(attr.SuggestedFeeRecipient()))
@@ -815,7 +815,7 @@ func Test_GetPayloadAttributeV3(t *testing.T) {
 			// Cache hit, advance state, no fee recipient
 			slot := primitives.Slot(1)
 			service.cfg.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, Index: 0})
-			service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
+			service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 			attr = service.getPayloadAttribute(ctx, test.st, slot, params.BeaconConfig().ZeroHash[:], true)
 			require.Equal(t, false, attr.IsEmpty())
 			require.Equal(t, params.BeaconConfig().EthBurnAddressHex, common.BytesToAddress(attr.SuggestedFeeRecipient()).String())
@@ -826,7 +826,7 @@ func Test_GetPayloadAttributeV3(t *testing.T) {
 			// Cache hit, advance state, has fee recipient
 			suggestedAddr := common.HexToAddress("123")
 			service.cfg.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, FeeRecipient: primitives.ExecutionAddress(suggestedAddr), Index: 0})
-			service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
+			service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 			attr = service.getPayloadAttribute(ctx, test.st, slot, params.BeaconConfig().ZeroHash[:], true)
 			require.Equal(t, false, attr.IsEmpty())
 			require.Equal(t, suggestedAddr, common.BytesToAddress(attr.SuggestedFeeRecipient()))
