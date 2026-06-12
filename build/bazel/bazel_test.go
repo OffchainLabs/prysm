@@ -1,3 +1,5 @@
+//go:build bazel
+
 package bazel_test
 
 import (
