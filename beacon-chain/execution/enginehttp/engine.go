@@ -1,14 +1,12 @@
-// This file scaffolds the typed REST + SSZ Engine API v2 endpoint operations
+// This file holds the typed REST + SSZ Engine API v2 endpoint operations
 // (ethereum/execution-apis#793) as methods on Client. Each maps one engine_*
-// JSON-RPC method to its v2 endpoint and is currently a stub returning
-// errNotImplemented — filling the bodies is the Phase 4 work (one endpoint
-// group per PR). They build on the generic SSZRequest/JSONGet primitives in
-// client.go and the SSZ wire containers in proto/engine/v2.
+// JSON-RPC method to its v2 endpoint, built on the generic SSZRequest/JSONGet
+// primitives in client.go and the SSZ wire containers in proto/engine/v2.
 //
-// These methods are the transport's lower half. Phase 3 wraps them behind an
-// engineTransport interface in beacon-chain/execution so the Service's
-// EngineCaller/Reconstructor methods can select JSON-RPC vs SSZ-HTTP by the
-// EnableEngineSSZHTTP feature flag; that wiring lives outside this package.
+// These methods are the transport's lower half. An engineTransport interface in
+// beacon-chain/execution wraps them so the Service's EngineCaller/Reconstructor
+// methods can select JSON-RPC vs SSZ-HTTP by the EnableEngineSSZHTTP feature
+// flag; that wiring lives outside this package.
 
 package enginehttp
 
@@ -16,19 +14,18 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	enginev2 "github.com/OffchainLabs/prysm/v7/proto/engine/v2"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 // The {fork} URL segment of a fork-scoped v2 endpoint. The spec keys endpoints
-// by the EL fork name, not the CL fork name.
-//
-// TODO(ssz-over-http): add a Prysm-fork -> EL-fork-name resolver covering
-// paris..amsterdam; these two are the current interop targets.
+// by the EL fork name, not the CL fork name;
+// osaka/amsterdam are the current interop targets.
 const (
 	ForkOsaka     = "osaka"     // CL Fulu
 	ForkAmsterdam = "amsterdam" // CL Gloas
@@ -74,20 +71,23 @@ func (c *Client) GetPayload(ctx context.Context, fork string, payloadID [8]byte,
 
 // GetPayloadBodiesByHash fetches execution bodies by block hash.
 // POST /engine/v2/{fork}/bodies/hash (replaces engine_getPayloadBodiesByHashV1/2).
-//
-// TODO(ssz-over-http): POST req via SSZRequest, decode the fork's BodiesResponse
-// into out; honor the per-entry available flag.
+// The {fork} selects both the response schema and the era of returned blocks;
+// out-of-era or pruned blocks come back as a per-entry available=false. The
+// caller decodes the fork's BodiesResponse into out.
 func (c *Client) GetPayloadBodiesByHash(ctx context.Context, fork string, req *enginev2.BodiesByHashRequest, out ssz.Unmarshaler) error {
-	return errNotImplemented("GetPayloadBodiesByHash")
+	return c.SSZRequest(ctx, http.MethodPost, "/"+fork+"/bodies/hash", nil, req, out)
 }
 
 // GetPayloadBodiesByRange fetches execution bodies by [from, from+count) range.
 // GET /engine/v2/{fork}/bodies?from&count (replaces engine_getPayloadBodiesByRangeV1/2).
-//
-// TODO(ssz-over-http): GET with from/count query params via SSZRequest, decode
-// the fork's BodiesResponse into out. A cross-fork range needs multiple calls.
+// The range travels in the query (no SSZ body); a range straddling a fork
+// boundary needs one call per fork URL. The caller decodes the fork's
+// BodiesResponse into out.
 func (c *Client) GetPayloadBodiesByRange(ctx context.Context, fork string, from, count uint64, out ssz.Unmarshaler) error {
-	return errNotImplemented("GetPayloadBodiesByRange")
+	query := url.Values{}
+	query.Set("from", strconv.FormatUint(from, 10))
+	query.Set("count", strconv.FormatUint(count, 10))
+	return c.SSZRequest(ctx, http.MethodGet, "/"+fork+"/bodies", query, nil, out)
 }
 
 // GetBlobs fetches blobs-and-proofs from the EL blob pool.
@@ -134,9 +134,4 @@ func (c *Client) Identity(ctx context.Context) ([]*structs.ClientVersionV1, erro
 		return nil, err
 	}
 	return versions, nil
-}
-
-// errNotImplemented marks an unimplemented v2 endpoint operation (Phase 4).
-func errNotImplemented(op string) error {
-	return errors.Errorf("enginehttp: %s not implemented", op)
 }

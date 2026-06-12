@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"slices"
 	"testing"
 
@@ -103,17 +104,55 @@ func TestGetPayload(t *testing.T) {
 }
 
 func TestGetPayloadBodiesByHash(t *testing.T) {
-	t.Skip("TODO(ssz-over-http): implement Client.GetPayloadBodiesByHash — POST /engine/v2/{fork}/bodies/hash")
-	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {})
-	err := c.GetPayloadBodiesByHash(context.Background(), ForkAmsterdam, nil, &stubSSZ{})
+	respSSZ, err := (&enginev2.BodiesResponseGloas{}).MarshalSSZ()
 	require.NoError(t, err)
+	req := &enginev2.BodiesByHashRequest{BlockHashes: [][]byte{make([]byte, 32)}}
+	reqSSZ, err := req.MarshalSSZ()
+	require.NoError(t, err)
+
+	var gotMethod, gotPath, gotCT string
+	var gotBody []byte
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		gotCT = r.Header.Get("Content-Type")
+		gotBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", contentTypeSSZ)
+		_, _ = w.Write(respSSZ)
+	})
+
+	err = c.GetPayloadBodiesByHash(context.Background(), ForkAmsterdam, req, &enginev2.BodiesResponseGloas{})
+	require.NoError(t, err)
+	assert.Equal(t, http.MethodPost, gotMethod)
+	assert.Equal(t, "/engine/v2/amsterdam/bodies/hash", gotPath)
+	assert.Equal(t, contentTypeSSZ, gotCT)
+	assert.DeepEqual(t, reqSSZ, gotBody)
 }
 
 func TestGetPayloadBodiesByRange(t *testing.T) {
-	t.Skip("TODO(ssz-over-http): implement Client.GetPayloadBodiesByRange — GET /engine/v2/{fork}/bodies?from&count")
-	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {})
-	err := c.GetPayloadBodiesByRange(context.Background(), ForkAmsterdam, 1, 2, &stubSSZ{})
+	respSSZ, err := (&enginev2.BodiesResponseFulu{}).MarshalSSZ()
 	require.NoError(t, err)
+
+	var gotMethod, gotPath string
+	var gotQuery url.Values
+	var hadBody bool
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		gotQuery = r.URL.Query()
+		b, _ := io.ReadAll(r.Body)
+		hadBody = len(b) > 0
+		w.Header().Set("Content-Type", contentTypeSSZ)
+		_, _ = w.Write(respSSZ)
+	})
+
+	err = c.GetPayloadBodiesByRange(context.Background(), ForkOsaka, 1, 2, &enginev2.BodiesResponseFulu{})
+	require.NoError(t, err)
+	assert.Equal(t, http.MethodGet, gotMethod)
+	assert.Equal(t, "/engine/v2/osaka/bodies", gotPath) // fork-scoped, range in the query
+	assert.Equal(t, "1", gotQuery.Get("from"))
+	assert.Equal(t, "2", gotQuery.Get("count"))
+	assert.Equal(t, false, hadBody)
 }
 
 func TestGetBlobs(t *testing.T) {
