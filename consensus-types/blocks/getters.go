@@ -1213,6 +1213,14 @@ func (b *BeaconBlockBody) Attestations() []eth.Att {
 		for i, a := range b.attestations {
 			atts[i] = a
 		}
+	} else if b.version == version.Gloas {
+		if b.attestationsGloas == nil {
+			return nil
+		}
+		atts = make([]eth.Att, len(b.attestationsGloas))
+		for i, a := range b.attestationsGloas {
+			atts[i] = a
+		}
 	} else {
 		if b.attestationsElectra == nil {
 			return nil

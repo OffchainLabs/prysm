@@ -12,12 +12,12 @@ import (
 )
 
 func blockWithAttestation(attestationSSZ []byte) (interfaces.SignedBeaconBlock, error) {
-	att := &ethpb.AttestationElectra{}
+	att := &ethpb.AttestationGloas{}
 	if err := att.UnmarshalSSZ(attestationSSZ); err != nil {
 		return nil, err
 	}
 	b := &ethpb.BeaconBlockGloas{}
-	b.Body = &ethpb.BeaconBlockBodyGloas{Attestations: []*ethpb.AttestationElectra{att}}
+	b.Body = &ethpb.BeaconBlockBodyGloas{Attestations: []*ethpb.AttestationGloas{att}}
 	return blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{Block: b})
 }
 
