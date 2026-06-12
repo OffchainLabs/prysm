@@ -118,8 +118,20 @@ func genSSZ() error {
 		{"proto/ssz_query/testing", "test_containers.ssz.go", nil, nil, []string{"FixedTestContainer", "FixedNestedContainer", "VariableTestContainer"}, nil},
 	}
 
+	// Minimal SSZ is generated from minimal *.pb.go (different bitvector types +
+	// ssz-size tags), so emit those to a temp tree for sszgen input.
+	minPb, err := os.MkdirTemp("", "gen-minpb-")
+	if err != nil {
+		return fmt.Errorf("mkdirTemp: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(minPb) }()
+
+	if err := emitMinimalPbgo(minPb); err != nil {
+		return fmt.Errorf("emit minimal pb.go: %w", err)
+	}
+
 	for _, target := range targets {
-		if err := genSSZTarget(target); err != nil {
+		if err := genSSZTarget(target, minPb); err != nil {
 			return fmt.Errorf("gen SSZ target: %w", err)
 		}
 	}
@@ -127,24 +139,63 @@ func genSSZ() error {
 	return nil
 }
 
-func genSSZTarget(t sszTarget) error {
+// genSSZTarget generates the mainnet and minimal SSZ for one target. If they are
+// identical it writes a single untagged file. Otherwise it writes a
+// //go:build !minimal mainnet file plus a <name>.minimal.ssz.go twin
+// (//go:build minimal). minPb is the minimal-config *.pb.go tree (from
+// emitMinimalPbgo) used as sszgen input for the minimal pass.
+func genSSZTarget(t sszTarget, minPb string) error {
 	fmt.Printf("generating %s/%s\n", t.pkg, t.out)
 
+	mainnet, err := sszgenOne(t, "")
+	if err != nil {
+		return fmt.Errorf("mainnet: %w", err)
+	}
+
+	minimal, err := sszgenOne(t, minPb)
+	if err != nil {
+		return fmt.Errorf("minimal: %w", err)
+	}
+
+	if mainnet == minimal {
+		if err := os.WriteFile(filepath.Join(t.pkg, t.out), []byte(mainnet), 0o600); err != nil {
+			return fmt.Errorf("writeFile: %w", err)
+		}
+
+		return nil
+	}
+
+	if err := os.WriteFile(filepath.Join(t.pkg, t.out), []byte("//go:build !minimal\n\n"+mainnet), 0o600); err != nil {
+		return fmt.Errorf("writeFile: %w", err)
+	}
+
+	minOut := strings.TrimSuffix(t.out, ".ssz.go") + ".minimal.ssz.go"
+	if err := os.WriteFile(filepath.Join(t.pkg, minOut), []byte("//go:build minimal\n\n"+minimal), 0o600); err != nil {
+		return fmt.Errorf("writeFile: %w", err)
+	}
+
+	return nil
+}
+
+// sszgenOne runs sszgen for one target against the *.pb.go under root ("" for the
+// mainnet repo tree, or the minimal-pb.go temp tree), returning the generated SSZ
+// source with the "// Hash:" line stripped.
+func sszgenOne(t sszTarget, root string) (string, error) {
 	// sszgen must see a package as ONLY its generated *.pb.go (hand-written
 	// files import "reflect" under a different alias than the generated code,
 	// which trips sszgen's loader). Stage --path and proto includes accordingly.
-	stage := filepath.Join(t.pkg, ".sszgen_tmp")
-	if err := stagePbgo(t.pkg, stage); err != nil {
-		return fmt.Errorf("stagePbgo: %w", err)
+	stage := filepath.Join(root, t.pkg, ".sszgen_tmp")
+	if err := stagePbgo(filepath.Join(root, t.pkg), stage); err != nil {
+		return "", fmt.Errorf("stagePbgo: %w", err)
 	}
 
 	defer unstage(stage)
 
 	inc := slices.Clone(t.libInc)
 	for _, p := range t.protoInc {
-		istage := filepath.Join(p, ".sszinc_tmp")
-		if err := stagePbgo(p, istage); err != nil {
-			return err
+		istage := filepath.Join(root, p, ".sszinc_tmp")
+		if err := stagePbgo(filepath.Join(root, p), istage); err != nil {
+			return "", fmt.Errorf("stagePbgo: %w", err)
 		}
 
 		defer unstage(istage)
@@ -153,12 +204,12 @@ func genSSZTarget(t sszTarget) error {
 
 	tmp, err := os.CreateTemp("", "sszgen-*.go")
 	if err != nil {
-		return err
+		return "", fmt.Errorf("createTemp: %w", err)
 	}
 
 	tmpName := tmp.Name()
 	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close: %w", err)
+		return "", fmt.Errorf("close: %w", err)
 	}
 
 	defer func() { _ = os.Remove(tmpName) }()
@@ -173,13 +224,13 @@ func genSSZTarget(t sszTarget) error {
 	}
 
 	if err := sh("go", append([]string{"tool", "sszgen"}, args...)...); err != nil {
-		return fmt.Errorf("sh: %w", err)
+		return "", fmt.Errorf("sh: %w", err)
 	}
 
 	// Strip the `// Hash: ...` line (as the old bazel copy-back did).
 	data, err := os.ReadFile(tmpName) // #nosec G304 -- tmpName is our own os.CreateTemp output
 	if err != nil {
-		return fmt.Errorf("readFile: %w", err)
+		return "", fmt.Errorf("readFile: %w", err)
 	}
 
 	var b strings.Builder
@@ -191,11 +242,7 @@ func genSSZTarget(t sszTarget) error {
 		b.WriteString(line)
 	}
 
-	if err := os.WriteFile(filepath.Join(t.pkg, t.out), []byte(b.String()), 0o600); err != nil {
-		return fmt.Errorf("writeFile: %w", err)
-	}
-
-	return nil
+	return b.String(), nil
 }
 
 // stagePbgo copies only the generated *.pb.go (excluding committed minimal
