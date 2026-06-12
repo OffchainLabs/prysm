@@ -11,9 +11,17 @@ import (
 	"github.com/OffchainLabs/prysm/v7/network/authorization"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	dto "github.com/prometheus/client_model/go"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 )
+
+// fallbackCount reads the current value of the SSZ-over-HTTP fallback counter.
+func fallbackCount(t *testing.T) float64 {
+	m := &dto.Metric{}
+	require.NoError(t, engineSSZHTTPFallbackCount.Write(m))
+	return m.GetCounter().GetValue()
+}
 
 const testCapabilitiesBody = `{"supported_forks":["osaka","amsterdam"],"limits":{"payload.max_bytes":268435456}}`
 
@@ -46,8 +54,9 @@ func TestSelectEngineTransport_FlagOff(t *testing.T) {
 	s.selectEngineTransport(context.Background(), bearerEndpoint(srv.URL))
 
 	require.IsNil(t, s.sszTransport)
-	_, ok := s.engine().(*jsonEngine)
-	assert.Equal(t, true, ok)
+	ie, ok := s.engine().(*instrumentedEngine)
+	require.Equal(t, true, ok)
+	assert.Equal(t, transportJSON, ie.kind)
 }
 
 func TestSelectEngineTransport_Probe(t *testing.T) {
@@ -65,8 +74,9 @@ func TestSelectEngineTransport_Probe(t *testing.T) {
 
 	require.NotNil(t, s.sszTransport)
 	assert.Equal(t, "/engine/v2/capabilities", gotPath)
-	_, ok := s.engine().(*sszEngine)
-	assert.Equal(t, true, ok)
+	ie, ok := s.engine().(*instrumentedEngine)
+	require.Equal(t, true, ok)
+	assert.Equal(t, transportSSZ, ie.kind)
 }
 
 func TestSelectEngineTransport_Fallback(t *testing.T) {
@@ -76,10 +86,13 @@ func TestSelectEngineTransport_Fallback(t *testing.T) {
 	srv := h2cServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound) // EL has no engine v2 surface
 	})
+	before := fallbackCount(t)
 	s := &Service{}
 	s.selectEngineTransport(context.Background(), bearerEndpoint(srv.URL))
 
 	require.IsNil(t, s.sszTransport)
-	_, ok := s.engine().(*jsonEngine)
-	assert.Equal(t, true, ok)
+	ie, ok := s.engine().(*instrumentedEngine)
+	require.Equal(t, true, ok)
+	assert.Equal(t, transportJSON, ie.kind)
+	assert.Equal(t, float64(1), fallbackCount(t)-before)
 }

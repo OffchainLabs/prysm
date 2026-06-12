@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/enginehttp"
@@ -36,19 +37,94 @@ type engineTransport interface {
 	GetPayloadBodiesByRange(ctx context.Context, v int, from, count uint64) ([]interfaces.ExecutionPayloadBody, error)
 }
 
-// engine returns the engine transport selected for the current connection.
-// JSON-RPC is the default; selectEngineTransport sets sszTransport when the
-// feature flag is on and the execution client serves the v2 (REST+SSZ) surface.
-// The jsonEngine is built once per connection and cached so it owns a stable
-// capability cache across calls (selectEngineTransport clears it on reconnect).
+// Transport labels for the engine metrics (metrics.go).
+const (
+	transportJSON = "json-rpc"
+	transportSSZ  = "ssz-http"
+)
+
+// Per-endpoint method labels for the engine metrics, shared by the latency
+// decorator here and the ssz body-size instrumentation in engine_ssz.go so both
+// metrics align on one label set.
+const (
+	methodNewPayload              = "newPayload"
+	methodForkchoiceUpdated       = "forkchoiceUpdated"
+	methodGetPayload              = "getPayload"
+	methodGetBlobs                = "getBlobs"
+	methodGetBlobsV2              = "getBlobsV2"
+	methodGetPayloadBodiesByHash  = "getPayloadBodiesByHash"
+	methodGetPayloadBodiesByRange = "getPayloadBodiesByRange"
+)
+
+// observeEngineLatency records the wall-clock latency of one engine op under its
+// endpoint/transport labels. Called via defer with time.Now() captured at the
+// call site so start reflects op entry.
+func observeEngineLatency(method, transport string, start time.Time) {
+	engineRequestLatency.WithLabelValues(method, transport).Observe(float64(time.Since(start).Milliseconds()))
+}
+
+// instrumentedEngine wraps the selected engineTransport to time each engine op,
+// labeled by transport (json-rpc vs ssz-http). engine() returns the transport
+// wrapped here so every op — including the bodies reconstruction path, which
+// calls the transport directly rather than through the Service dispatchers — is
+// timed at one seam. Body-size histograms live in the ssz path (engine_ssz.go),
+// where the SSZ wire sizes are known; the JSON-RPC client does not expose them.
+// The embedded engineTransport carries the diagnostic ops (capabilities,
+// identity) through unmeasured.
+type instrumentedEngine struct {
+	engineTransport
+	kind string
+}
+
+func (m *instrumentedEngine) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
+	defer observeEngineLatency(methodNewPayload, m.kind, time.Now())
+	return m.engineTransport.NewPayload(ctx, payload, versionedHashes, parentBlockRoot, executionRequests)
+}
+
+func (m *instrumentedEngine) ForkchoiceUpdated(ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer) (*pb.PayloadIDBytes, []byte, error) {
+	defer observeEngineLatency(methodForkchoiceUpdated, m.kind, time.Now())
+	return m.engineTransport.ForkchoiceUpdated(ctx, state, attrs)
+}
+
+func (m *instrumentedEngine) GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error) {
+	defer observeEngineLatency(methodGetPayload, m.kind, time.Now())
+	return m.engineTransport.GetPayload(ctx, payloadId, slot)
+}
+
+func (m *instrumentedEngine) GetBlobs(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProof, error) {
+	defer observeEngineLatency(methodGetBlobs, m.kind, time.Now())
+	return m.engineTransport.GetBlobs(ctx, versionedHashes)
+}
+
+func (m *instrumentedEngine) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
+	defer observeEngineLatency(methodGetBlobsV2, m.kind, time.Now())
+	return m.engineTransport.GetBlobsV2(ctx, versionedHashes)
+}
+
+func (m *instrumentedEngine) GetPayloadBodiesByHash(ctx context.Context, v int, hashes []common.Hash) ([]interfaces.ExecutionPayloadBody, error) {
+	defer observeEngineLatency(methodGetPayloadBodiesByHash, m.kind, time.Now())
+	return m.engineTransport.GetPayloadBodiesByHash(ctx, v, hashes)
+}
+
+func (m *instrumentedEngine) GetPayloadBodiesByRange(ctx context.Context, v int, from, count uint64) ([]interfaces.ExecutionPayloadBody, error) {
+	defer observeEngineLatency(methodGetPayloadBodiesByRange, m.kind, time.Now())
+	return m.engineTransport.GetPayloadBodiesByRange(ctx, v, from, count)
+}
+
+// engine returns the engine transport selected for the current connection,
+// wrapped in instrumentedEngine for per-endpoint latency metrics. JSON-RPC is
+// the default; selectEngineTransport sets sszTransport when the feature flag is
+// on and the execution client serves the v2 (REST+SSZ) surface. The jsonEngine
+// is built once per connection and cached so it owns a stable capability cache
+// across calls (selectEngineTransport clears it on reconnect).
 func (s *Service) engine() engineTransport {
 	if s.sszTransport != nil {
-		return s.sszTransport
+		return &instrumentedEngine{engineTransport: s.sszTransport, kind: transportSSZ}
 	}
 	if s.jsonTransport == nil {
 		s.jsonTransport = &jsonEngine{rpc: s.rpcClient, caps: &capabilityCache{}}
 	}
-	return s.jsonTransport
+	return &instrumentedEngine{engineTransport: s.jsonTransport, kind: transportJSON}
 }
 
 // selectEngineTransport decides whether to drive the engine API over
@@ -73,12 +149,14 @@ func (s *Service) selectEngineTransport(ctx context.Context, endpoint network.En
 		ClientVersion: "Prysm/" + version.SemanticVersion(),
 	})
 	if err != nil {
+		engineSSZHTTPFallbackCount.Inc()
 		log.WithError(err).Warn("SSZ-over-HTTP engine transport unavailable; using JSON-RPC")
 		return
 	}
 
 	caps, err := client.Capabilities(ctx)
 	if err != nil {
+		engineSSZHTTPFallbackCount.Inc()
 		log.WithError(err).Info("Execution client has no engine v2 (REST+SSZ) surface; using JSON-RPC")
 		return
 	}

@@ -78,4 +78,35 @@ var (
 		Name: "execution_payload_bodies_count",
 		Help: "The number of requested payload bodies is too large",
 	})
+	// engineRequestLatency times every engine op at the engineTransport seam,
+	// labeled by endpoint and transport (json-rpc vs ssz-http) so the two wire
+	// transports can be compared for the same logical call.
+	engineRequestLatency = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "engine_request_latency_milliseconds",
+			Help:    "Engine API request latency per endpoint and transport",
+			Buckets: []float64{25, 50, 100, 200, 500, 1000, 2000, 4000},
+		},
+		[]string{"method", "transport"},
+	)
+	// engineBodySize records the SSZ wire size of engine request/response bodies,
+	// labeled by endpoint, transport, and direction. Only the ssz-http transport
+	// populates it — the JSON-RPC client does not expose wire byte sizes — but the
+	// transport label is kept for parity with engineRequestLatency.
+	engineBodySize = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "engine_body_size_bytes",
+			Help:    "Engine API SSZ request/response body size in bytes per endpoint and direction",
+			Buckets: prometheus.ExponentialBuckets(256, 4, 10), // 256 B .. 64 MiB
+		},
+		[]string{"method", "transport", "direction"},
+	)
+	// engineSSZHTTPFallbackCount counts how often SSZ-over-HTTP selection fell
+	// back to JSON-RPC for a connection (flag on but the client could not be built
+	// or the EL served no v2 surface). Selection is sticky per connection, so each
+	// increment is one connection that ran on JSON-RPC despite the flag.
+	engineSSZHTTPFallbackCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "engine_ssz_http_fallback_count",
+		Help: "The number of connections that fell back from SSZ-over-HTTP to JSON-RPC",
+	})
 )

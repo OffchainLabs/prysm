@@ -38,6 +38,20 @@ func sszNotImplemented(op string) error {
 	return errors.Errorf("ssz-http engine transport: %s not implemented", op)
 }
 
+// Body-size directions for the engine_body_size_bytes metric (metrics.go).
+const (
+	directionRequest  = "request"
+	directionResponse = "response"
+)
+
+// observeSSZBody records the SSZ wire size of one request/response body under the
+// endpoint and direction labels; the transport is always ssz-http (the JSON-RPC
+// client does not expose wire sizes). m must be non-nil — a decoded container's
+// SizeSSZ equals its wire byte length.
+func observeSSZBody(method, direction string, m ssz.Marshaler) {
+	engineBodySize.WithLabelValues(method, transportSSZ, direction).Observe(float64(m.SizeSSZ()))
+}
+
 // EL-advertised per-request limits, keys of the GET /engine/v2/capabilities
 // "limits" map (execution-apis#793). They are upper bounds the CL must respect;
 // exceeding one earns a 413 request-too-large from the EL. bodies requests are
@@ -131,10 +145,12 @@ func (e *sszEngine) NewPayload(ctx context.Context, payload interfaces.Execution
 	if err := e.rejectIfOverLimit(limitPayloadMaxBytes, uint64(envelope.SizeSSZ())); err != nil {
 		return nil, err
 	}
+	observeSSZBody(methodNewPayload, directionRequest, envelope)
 	status, err := e.client.NewPayload(ctx, ver, envelope)
 	if err != nil {
 		return nil, err
 	}
+	observeSSZBody(methodNewPayload, directionResponse, status)
 	return payloadStatusResult(status)
 }
 
@@ -185,10 +201,12 @@ func (e *sszEngine) ForkchoiceUpdated(ctx context.Context, state *pb.ForkchoiceS
 	if err != nil {
 		return nil, nil, err
 	}
+	observeSSZBody(methodForkchoiceUpdated, directionRequest, update)
 	resp, err := e.client.ForkchoiceUpdated(ctx, ver, update)
 	if err != nil {
 		return nil, nil, mapEngineError(err)
 	}
+	observeSSZBody(methodForkchoiceUpdated, directionResponse, resp)
 	return forkchoiceResult(resp)
 }
 
@@ -318,6 +336,9 @@ func (e *sszEngine) GetPayload(ctx context.Context, payloadId [8]byte, slot prim
 	if err := e.client.GetPayload(ctx, ver, payloadId, out); err != nil {
 		return nil, mapEngineError(err)
 	}
+	if m, ok := out.(ssz.Marshaler); ok {
+		observeSSZBody(methodGetPayload, directionResponse, m)
+	}
 	bundle, err := builtPayloadToBundle(out)
 	if err != nil {
 		return nil, err
@@ -380,13 +401,16 @@ func (e *sszEngine) GetBlobs(ctx context.Context, versionedHashes []common.Hash)
 	if err := e.rejectIfOverLimit(limitBlobsMaxVersionedHashes, uint64(len(versionedHashes))); err != nil {
 		return nil, err
 	}
+	req := blobsRequest(versionedHashes)
+	observeSSZBody(methodGetBlobs, directionRequest, req)
 	resp := &enginev2.BlobsV1Response{}
-	if err := e.client.GetBlobs(ctx, 1, blobsRequest(versionedHashes), resp); err != nil {
+	if err := e.client.GetBlobs(ctx, 1, req, resp); err != nil {
 		if errors.Is(err, enginehttp.ErrNoContent) {
 			return nil, nil
 		}
 		return nil, mapEngineError(err)
 	}
+	observeSSZBody(methodGetBlobs, directionResponse, resp)
 	result := make([]*pb.BlobAndProof, len(versionedHashes))
 	for i := range result {
 		if i >= len(resp.Entries) {
@@ -415,13 +439,16 @@ func (e *sszEngine) GetBlobsV2(ctx context.Context, versionedHashes []common.Has
 	if err := e.rejectIfOverLimit(limitBlobsMaxVersionedHashes, uint64(len(versionedHashes))); err != nil {
 		return nil, err
 	}
+	req := blobsRequest(versionedHashes)
+	observeSSZBody(methodGetBlobsV2, directionRequest, req)
 	resp := &enginev2.BlobsV2Response{}
-	if err := e.client.GetBlobs(ctx, 2, blobsRequest(versionedHashes), resp); err != nil {
+	if err := e.client.GetBlobs(ctx, 2, req, resp); err != nil {
 		if errors.Is(err, enginehttp.ErrNoContent) {
 			return nil, nil
 		}
 		return nil, mapEngineError(err)
 	}
+	observeSSZBody(methodGetBlobsV2, directionResponse, resp)
 	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
 	for i := range result {
 		if i >= len(resp.Entries) {
@@ -511,8 +538,12 @@ func (e *sszEngine) bodiesByHash(ctx context.Context, v int, hashes []common.Has
 	for i := range hashes {
 		req.BlockHashes[i] = hashes[i][:]
 	}
+	observeSSZBody(methodGetPayloadBodiesByHash, directionRequest, req)
 	if err := e.client.GetPayloadBodiesByHash(ctx, v, req, out); err != nil {
 		return nil, mapEngineError(err)
+	}
+	if m, ok := out.(ssz.Marshaler); ok {
+		observeSSZBody(methodGetPayloadBodiesByHash, directionResponse, m)
 	}
 	return bodiesEntries(out)
 }
@@ -545,6 +576,9 @@ func (e *sszEngine) bodiesByRange(ctx context.Context, v int, from, count uint64
 	}
 	if err := e.client.GetPayloadBodiesByRange(ctx, v, from, count, out); err != nil {
 		return nil, mapEngineError(err)
+	}
+	if m, ok := out.(ssz.Marshaler); ok {
+		observeSSZBody(methodGetPayloadBodiesByRange, directionResponse, m)
 	}
 	return bodiesEntries(out)
 }
