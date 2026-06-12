@@ -232,9 +232,11 @@ func (s *Service) saveHeadIfNeeded(ctx context.Context, cfg *postBlockProcessCon
 		return
 	}
 	proposingSlot := s.CurrentSlot() + 1
-	attr := s.getPayloadAttribute(ctx, cfg.postState, proposingSlot, cfg.headRoot[:], full)
-	if !attr.IsEmpty() && s.shouldOverrideFCU(cfg.headRoot, proposingSlot) {
-		return
+	if s.shouldOverrideFCU(cfg.headRoot, proposingSlot) {
+		attr := s.getPayloadAttribute(ctx, cfg.postState, proposingSlot, cfg.headRoot[:], full)
+		if !attr.IsEmpty() {
+			return
+		}
 	}
 	if err := s.saveHead(ctx, cfg.headRoot, cfg.roblock, cfg.postState, full); err != nil {
 		log.WithError(err).Error("Could not save head")
