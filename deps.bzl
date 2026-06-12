@@ -287,6 +287,12 @@ def prysm_deps():
         version = "v0.1.0",
     )
     go_repository(
+        name = "com_github_bitfield_gotestdox",
+        importpath = "github.com/bitfield/gotestdox",
+        sum = "h1:x6RcPAbBbErKLnapz1QeAlf3ospg8efBsedU93CDsnE=",
+        version = "v0.2.2",
+    )
+    go_repository(
         name = "com_github_bits_and_blooms_bitset",
         importpath = "github.com/bits-and-blooms/bitset",
         sum = "h1:Tquv9S8+SGaS3EhyA+up3FXzmkhxPGjQQCkcs2uw7w4=",
@@ -633,6 +639,12 @@ def prysm_deps():
         version = "v1.7.0",
     )
     go_repository(
+        name = "com_github_dnephin_pflag",
+        importpath = "github.com/dnephin/pflag",
+        sum = "h1:oxONGlWxhmUct0YzKTgrpQv9AUA1wtPBn7zuSjJqptk=",
+        version = "v1.0.7",
+    )
+    go_repository(
         name = "com_github_docker_go_units",
         importpath = "github.com/docker/go-units",
         sum = "h1:69rxXcBk27SvSaaxTtLh/8llcHD8vYHT7WSdRZ/jvr4=",
@@ -789,8 +801,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_fatih_color",
         importpath = "github.com/fatih/color",
-        sum = "h1:zmkK9Ngbjj+K0yRhTVONQh1p/HknKYSlNT+vZCzyokM=",
-        version = "v1.16.0",
+        sum = "h1:S8gINlzdQ840/4pfAwic/ZE0djQEH3wM94VfqLTZcOM=",
+        version = "v1.18.0",
     )
     go_repository(
         name = "com_github_fatih_structs",
@@ -867,8 +879,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_fsnotify_fsnotify",
         importpath = "github.com/fsnotify/fsnotify",
-        sum = "h1:n+5WquG0fcWoWp6xPWfHdbskMCQaFnG6PfBrh1Ky4HY=",
-        version = "v1.6.0",
+        sum = "h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=",
+        version = "v1.9.0",
     )
     go_repository(
         name = "com_github_fxamacker_cbor_v2",
@@ -1225,6 +1237,12 @@ def prysm_deps():
         importpath = "github.com/google/renameio",
         sum = "h1:GOZbcHa3HfsPKPlmyPyN2KEohoMXOhdMbHrvbpl2QaA=",
         version = "v0.1.0",
+    )
+    go_repository(
+        name = "com_github_google_shlex",
+        importpath = "github.com/google/shlex",
+        sum = "h1:El6M4kTTCOh6aBiKaUGG7oYTSPP8MxqL4YI3kZKwcP4=",
+        version = "v0.0.0-20191202100458-e7afc7fbc510",
     )
     go_repository(
         name = "com_github_google_uuid",
@@ -4655,4 +4673,16 @@ def prysm_deps():
         importpath = "go.uber.org/zap",
         sum = "h1:aJMhYGrd5QSmlpLMr2MftRKl7t8J8PTZPA732ud/XR8=",
         version = "v1.27.0",
+    )
+    go_repository(
+        name = "tools_gotest_gotestsum",
+        importpath = "gotest.tools/gotestsum",
+        sum = "h1:+Lh454O9mu9AMG1APV4o0y7oDYKyik/3kBOiCqiEpRo=",
+        version = "v1.13.0",
+    )
+    go_repository(
+        name = "tools_gotest_v3",
+        importpath = "gotest.tools/v3",
+        sum = "h1:7koQfIKdy+I8UTetycgUqXWSDwpgv193Ka+qRsmBY8Q=",
+        version = "v3.5.2",
     )

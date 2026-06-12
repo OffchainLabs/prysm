@@ -48,6 +48,8 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//beacon-chain/cache:go_default_library",
+        "//build/bazel:go_default_library",
+        "//build/externaldata:go_default_library",
         "//config/params:go_default_library",
         "//container/trie:go_default_library",
         "//crypto/hash:go_default_library",
@@ -59,6 +61,5 @@ go_test(
         "//testing/util:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
         "@in_gopkg_yaml_v3//:go_default_library",
-        "@io_bazel_rules_go//go/tools/bazel:go_default_library",
     ],
 )

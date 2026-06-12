@@ -44,3 +44,6 @@ tmp
 
 # spectest coverage reports
 report.txt
+
+# Downloaded external test data (make testdata)
+third_party/testdata

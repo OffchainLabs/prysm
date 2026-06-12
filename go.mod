@@ -16,7 +16,7 @@ require (
 	github.com/emicklei/dot v1.6.2
 	github.com/ethereum/c-kzg-4844/v2 v2.1.6
 	github.com/ethereum/go-ethereum v1.17.3
-	github.com/fsnotify/fsnotify v1.6.0
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-yaml/yaml v2.1.0+incompatible
 	github.com/gogo/protobuf v1.3.2
@@ -113,6 +113,7 @@ require (
 	github.com/VictoriaMetrics/fastcache v1.13.0 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/bitfield/gotestdox v0.2.2 // indirect
 	github.com/bits-and-blooms/bitset v1.22.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/cp v1.1.1 // indirect
@@ -133,6 +134,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0 // indirect
 	github.com/deepmap/oapi-codegen v1.8.2 // indirect
 	github.com/dlclark/regexp2 v1.7.0 // indirect
+	github.com/dnephin/pflag v1.0.7 // indirect
 	github.com/dop251/goja v0.0.0-20230806174421-c933cf95e127 // indirect
 	github.com/dunglas/httpsfv v1.1.0 // indirect
 	github.com/ethereum/go-bigmodexpfix v0.0.0-20250911101455-f9e208c548ab // indirect
@@ -146,6 +148,7 @@ require (
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/gofrs/flock v0.12.1 // indirect
 	github.com/google/pprof v0.0.0-20250202011525-fc3143867406 // indirect
+	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/grafana/pyroscope-go v1.2.7 // indirect
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.9 // indirect
@@ -261,6 +264,7 @@ require (
 	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
+	gotest.tools/gotestsum v1.13.0 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
@@ -269,14 +273,14 @@ require (
 
 require (
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
-	github.com/fatih/color v1.16.0 // indirect
+	github.com/fatih/color v1.18.0 // indirect
 	github.com/gballet/go-libpcsclite v0.0.0-20191108122812-4678299bea08 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-playground/validator/v10 v10.13.0
 	github.com/peterh/liner v1.2.0 // indirect
 	github.com/prysmaticlabs/gohashtree v0.0.5-beta
-	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/sys v0.41.0
 	k8s.io/klog/v2 v2.120.1 // indirect
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b // indirect
 )
@@ -288,4 +292,5 @@ replace github.com/tyler-smith/go-bip39 => ./third_party/go-bip39
 tool (
 	github.com/prysmaticlabs/fastssz/sszgen
 	go.uber.org/mock/mockgen
+	gotest.tools/gotestsum
 )
