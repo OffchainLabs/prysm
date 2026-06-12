@@ -1,14 +1,20 @@
 package execution
 
 import (
+	"context"
 	"errors"
+	"io"
+	"net/http"
+	"strconv"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/enginehttp"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	enginev2 "github.com/OffchainLabs/prysm/v7/proto/engine/v2"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // payloadStatusResult must map the v2 PayloadStatus enum onto the same sentinels
@@ -222,4 +228,110 @@ func TestBodiesEntries(t *testing.T) {
 
 	_, err = bodiesEntries(&enginev2.PayloadStatus{})
 	require.ErrorContains(t, "unexpected BodiesResponse type", err)
+}
+
+// limit/rejectIfOverLimit must read the EL-advertised caps, treat a nil
+// document or absent/zero value as no client-side cap, and reject only a strict
+// excess with the ErrRequestTooLarge sentinel.
+func TestSSZEngineLimit(t *testing.T) {
+	e := &sszEngine{caps: &enginehttp.Capabilities{Limits: map[string]uint64{limitBodiesMaxCount: 32}}}
+
+	got, ok := e.limit(limitBodiesMaxCount)
+	assert.Equal(t, true, ok)
+	assert.Equal(t, uint64(32), got)
+
+	_, ok = e.limit(limitPayloadMaxBytes) // absent key
+	assert.Equal(t, false, ok)
+
+	_, ok = (&sszEngine{caps: &enginehttp.Capabilities{Limits: map[string]uint64{limitBodiesMaxCount: 0}}}).limit(limitBodiesMaxCount)
+	assert.Equal(t, false, ok) // zero == unbounded
+
+	_, ok = (&sszEngine{}).limit(limitBodiesMaxCount) // nil caps
+	assert.Equal(t, false, ok)
+
+	require.NoError(t, e.rejectIfOverLimit(limitBodiesMaxCount, 32)) // at cap
+	require.NoError(t, e.rejectIfOverLimit(limitBodiesMaxCount, 1))
+	require.NoError(t, e.rejectIfOverLimit(limitPayloadMaxBytes, 1<<40)) // uncapped key
+	require.ErrorIs(t, e.rejectIfOverLimit(limitBodiesMaxCount, 33), ErrRequestTooLarge)
+}
+
+// GetBlobs/GetBlobsV2 must reject a request exceeding blobs.max_versioned_hashes
+// before sending (the blob endpoints are atomic and cannot be split).
+func TestGetBlobs_RejectsOverLimit(t *testing.T) {
+	e := &sszEngine{caps: &enginehttp.Capabilities{
+		IndependentlyVersioned: map[string][]string{"blobs": {"v1", "v2"}},
+		Limits:                 map[string]uint64{limitBlobsMaxVersionedHashes: 2},
+	}}
+	hashes := []common.Hash{{1}, {2}, {3}}
+
+	_, err := e.GetBlobs(context.Background(), hashes)
+	require.ErrorIs(t, err, ErrRequestTooLarge)
+
+	_, err = e.GetBlobsV2(context.Background(), hashes)
+	require.ErrorIs(t, err, ErrRequestTooLarge)
+}
+
+// newTestSSZEngine points an sszEngine at an h2c test server with the given caps.
+func newTestSSZEngine(t *testing.T, srvURL string, caps *enginehttp.Capabilities) *sszEngine {
+	c, err := enginehttp.New(enginehttp.Config{
+		BaseURL:   srvURL,
+		JWTSecret: []byte("0123456789abcdef0123456789abcdef"),
+	})
+	require.NoError(t, err)
+	return &sszEngine{client: c, caps: caps}
+}
+
+// sszBodiesGloas marshals a BodiesResponseGloas with n available=false entries —
+// the per-entry payload is irrelevant here; only the count drives alignment.
+func sszBodiesGloas(t *testing.T, n uint64) []byte {
+	resp := &enginev2.BodiesResponseGloas{Entries: make([]*enginev2.BodyEntryGloas, n)}
+	for i := range resp.Entries {
+		resp.Entries[i] = &enginev2.BodyEntryGloas{Body: &enginev2.ExecutionPayloadBodyGloas{}}
+	}
+	b, err := resp.MarshalSSZ()
+	require.NoError(t, err)
+	return b
+}
+
+// A by-hash request over bodies.max_count must be split into in-order
+// sub-batches whose concatenation stays aligned with the requested hashes.
+func TestGetPayloadBodiesByHash_Chunks(t *testing.T) {
+	var sizes []int
+	srv := h2cServer(t, func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		req := &enginev2.BodiesByHashRequest{}
+		require.NoError(t, req.UnmarshalSSZ(body))
+		sizes = append(sizes, len(req.BlockHashes))
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write(sszBodiesGloas(t, uint64(len(req.BlockHashes))))
+	})
+	e := newTestSSZEngine(t, srv.URL, &enginehttp.Capabilities{Limits: map[string]uint64{limitBodiesMaxCount: 2}})
+
+	hashes := []common.Hash{{1}, {2}, {3}, {4}, {5}}
+	result, err := e.GetPayloadBodiesByHash(context.Background(), version.Gloas, hashes)
+	require.NoError(t, err)
+	assert.Equal(t, len(hashes), len(result))  // request-aligned across chunks
+	assert.DeepEqual(t, []int{2, 2, 1}, sizes) // 5 hashes, cap 2 -> 3 calls
+}
+
+// A by-range request wider than bodies.max_count must be split into consecutive
+// windows covering [from, from+count) exactly.
+func TestGetPayloadBodiesByRange_Chunks(t *testing.T) {
+	type call struct{ from, count string }
+	var calls []call
+	srv := h2cServer(t, func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		calls = append(calls, call{from: q.Get("from"), count: q.Get("count")})
+		cnt, err := strconv.ParseUint(q.Get("count"), 10, 64)
+		require.NoError(t, err)
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write(sszBodiesGloas(t, cnt))
+	})
+	e := newTestSSZEngine(t, srv.URL, &enginehttp.Capabilities{Limits: map[string]uint64{limitBodiesMaxCount: 2}})
+
+	result, err := e.GetPayloadBodiesByRange(context.Background(), version.Gloas, 100, 5)
+	require.NoError(t, err)
+	assert.Equal(t, 5, len(result))
+	assert.DeepEqual(t, []call{{"100", "2"}, {"102", "2"}, {"104", "1"}}, calls)
 }

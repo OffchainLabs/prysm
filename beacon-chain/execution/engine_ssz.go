@@ -38,6 +38,46 @@ func sszNotImplemented(op string) error {
 	return errors.Errorf("ssz-http engine transport: %s not implemented", op)
 }
 
+// EL-advertised per-request limits, keys of the GET /engine/v2/capabilities
+// "limits" map (execution-apis#793). They are upper bounds the CL must respect;
+// exceeding one earns a 413 request-too-large from the EL. bodies requests are
+// chunked to stay within the cap (functionality-preserving); blobs and payload
+// requests are atomic and so are rejected client-side with the same
+// ErrRequestTooLarge sentinel the 413 maps to.
+const (
+	limitBodiesMaxCount          = "bodies.max_count"
+	limitBlobsMaxVersionedHashes = "blobs.max_versioned_hashes"
+	limitPayloadMaxBytes         = "payload.max_bytes"
+)
+
+// limit returns the EL-advertised limits.* value for key and whether it imposes
+// a client-side cap. A nil capability document or an absent/zero value means no
+// cap here (the EL's own limits still apply), mirroring supportsBlob's
+// defensive default.
+func (e *sszEngine) limit(key string) (uint64, bool) {
+	e.capsLock.RLock()
+	defer e.capsLock.RUnlock()
+	if e.caps == nil {
+		return 0, false
+	}
+	v, ok := e.caps.Limits[key]
+	if !ok || v == 0 {
+		return 0, false
+	}
+	return v, true
+}
+
+// rejectIfOverLimit returns ErrRequestTooLarge (the sentinel the EL's 413
+// request-too-large maps to) when n exceeds the advertised cap for key. Used for
+// atomic requests that cannot be split — blobs (all-or-nothing) and a single
+// payload envelope.
+func (e *sszEngine) rejectIfOverLimit(key string, n uint64) error {
+	if maxN, ok := e.limit(key); ok && n > maxN {
+		return errors.Wrapf(ErrRequestTooLarge, "request of %d exceeds advertised %s=%d", n, key, maxN)
+	}
+	return nil
+}
+
 // NewPayload submits a payload over POST /engine/v2/{fork}/payloads
 // (replaces engine_newPayloadV*). It folds parent_beacon_block_root and
 // execution_requests into the SSZ envelope; versionedHashes is dropped (the EL
@@ -88,6 +128,9 @@ func (e *sszEngine) NewPayload(ctx context.Context, payload interfaces.Execution
 		return nil, errors.Errorf("ssz-http engine transport: no v2 ExecutionPayloadEnvelope container for payload type %T", p)
 	}
 
+	if err := e.rejectIfOverLimit(limitPayloadMaxBytes, uint64(envelope.SizeSSZ())); err != nil {
+		return nil, err
+	}
 	status, err := e.client.NewPayload(ctx, ver, envelope)
 	if err != nil {
 		return nil, err
@@ -334,6 +377,9 @@ func (e *sszEngine) GetBlobs(ctx context.Context, versionedHashes []common.Hash)
 	if !e.supportsBlob("v1") {
 		return nil, errors.Errorf("%s is not supported", GetBlobsV1)
 	}
+	if err := e.rejectIfOverLimit(limitBlobsMaxVersionedHashes, uint64(len(versionedHashes))); err != nil {
+		return nil, err
+	}
 	resp := &enginev2.BlobsV1Response{}
 	if err := e.client.GetBlobs(ctx, 1, blobsRequest(versionedHashes), resp); err != nil {
 		if errors.Is(err, enginehttp.ErrNoContent) {
@@ -365,6 +411,9 @@ func (e *sszEngine) GetBlobsV2(ctx context.Context, versionedHashes []common.Has
 	}
 	if flags.Get().DisableGetBlobsV2 {
 		return []*pb.BlobAndProofV2{}, nil
+	}
+	if err := e.rejectIfOverLimit(limitBlobsMaxVersionedHashes, uint64(len(versionedHashes))); err != nil {
+		return nil, err
 	}
 	resp := &enginev2.BlobsV2Response{}
 	if err := e.client.GetBlobs(ctx, 2, blobsRequest(versionedHashes), resp); err != nil {
@@ -433,7 +482,27 @@ func (e *sszEngine) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVe
 // GetPayloadBodiesByHash fetches bodies over POST /engine/v2/{fork}/bodies/hash
 // (replaces engine_getPayloadBodiesByHashV1). Entries are request-aligned;
 // available=false maps to a nil body (the reconstructor's missing marker).
+// Requests over the advertised bodies.max_count are split into in-order
+// sub-batches so the concatenated result stays aligned with hashes.
 func (e *sszEngine) GetPayloadBodiesByHash(ctx context.Context, v int, hashes []common.Hash) ([]interfaces.ExecutionPayloadBody, error) {
+	n := uint64(len(hashes))
+	maxCount, capped := e.limit(limitBodiesMaxCount)
+	if !capped || n <= maxCount {
+		return e.bodiesByHash(ctx, v, hashes)
+	}
+	result := make([]interfaces.ExecutionPayloadBody, 0, len(hashes))
+	for start := uint64(0); start < n; start += maxCount {
+		part, err := e.bodiesByHash(ctx, v, hashes[start:min(start+maxCount, n)])
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, part...)
+	}
+	return result, nil
+}
+
+// bodiesByHash performs one /bodies/hash call for hashes within the EL's cap.
+func (e *sszEngine) bodiesByHash(ctx context.Context, v int, hashes []common.Hash) ([]interfaces.ExecutionPayloadBody, error) {
 	out, err := newBodiesResponse(v)
 	if err != nil {
 		return nil, err
@@ -449,8 +518,27 @@ func (e *sszEngine) GetPayloadBodiesByHash(ctx context.Context, v int, hashes []
 }
 
 // GetPayloadBodiesByRange fetches bodies over GET /engine/v2/{fork}/bodies?from&count
-// (replaces engine_getPayloadBodiesByRangeV1).
+// (replaces engine_getPayloadBodiesByRangeV1). A range wider than the advertised
+// bodies.max_count is split into consecutive windows; the in-order concatenation
+// covers [from, from+count) exactly.
 func (e *sszEngine) GetPayloadBodiesByRange(ctx context.Context, v int, from, count uint64) ([]interfaces.ExecutionPayloadBody, error) {
+	maxCount, capped := e.limit(limitBodiesMaxCount)
+	if !capped || count <= maxCount {
+		return e.bodiesByRange(ctx, v, from, count)
+	}
+	result := make([]interfaces.ExecutionPayloadBody, 0, count)
+	for off := uint64(0); off < count; off += maxCount {
+		part, err := e.bodiesByRange(ctx, v, from+off, min(maxCount, count-off))
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, part...)
+	}
+	return result, nil
+}
+
+// bodiesByRange performs one /bodies range call for a window within the EL's cap.
+func (e *sszEngine) bodiesByRange(ctx context.Context, v int, from, count uint64) ([]interfaces.ExecutionPayloadBody, error) {
 	out, err := newBodiesResponse(v)
 	if err != nil {
 		return nil, err
