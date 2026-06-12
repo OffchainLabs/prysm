@@ -135,9 +135,9 @@ func TestPayloadBodiesViaUnblinder(t *testing.T) {
 			fx.denebBlock.blinded.block,
 			fx.emptyDenebBlock.blinded.block,
 		}
-		bbr, err := newBlindedBlockReconstructor(jsonEngine{rpc: cli}, toUnblind)
+		bbr, err := newBlindedBlockReconstructor(&jsonEngine{rpc: cli}, toUnblind)
 		require.NoError(t, err)
-		require.NoError(t, bbr.requestBodies(ctx, jsonEngine{rpc: cli}))
+		require.NoError(t, bbr.requestBodies(ctx, &jsonEngine{rpc: cli}))
 
 		payload, err := bbr.payloadForHeader(fx.denebBlock.blinded.header, fx.denebBlock.blinded.block.Version())
 		require.NoError(t, err)
@@ -275,7 +275,7 @@ func TestReconstructBlindedBlockBatchFallbackToRange(t *testing.T) {
 			fx.denebBlock.blinded.block,
 			fx.emptyDenebBlock.blinded.block,
 		}
-		_, err := reconstructBlindedBlockBatch(ctx, jsonEngine{rpc: cli}, toUnblind)
+		_, err := reconstructBlindedBlockBatch(ctx, &jsonEngine{rpc: cli}, toUnblind)
 		require.ErrorIs(t, err, errNilPayloadBody)
 		require.Equal(t, 1, srv.callCount(GetPayloadBodiesByHashV1))
 		require.Equal(t, 1, srv.callCount(GetPayloadBodiesByRangeV1))
@@ -298,7 +298,7 @@ func TestReconstructBlindedBlockBatchFallbackToRange(t *testing.T) {
 			fx.denebBlock.blinded.block,
 			fx.emptyDenebBlock.blinded.block,
 		}
-		_, err := reconstructBlindedBlockBatch(ctx, jsonEngine{rpc: cli}, unblind)
+		_, err := reconstructBlindedBlockBatch(ctx, &jsonEngine{rpc: cli}, unblind)
 		require.NoError(t, err)
 	})
 	t.Run("separated by block number gap", func(t *testing.T) {
@@ -335,7 +335,7 @@ func TestReconstructBlindedBlockBatchFallbackToRange(t *testing.T) {
 			fx.emptyDenebBlock.blinded.block,
 			fx.afterSkipDeneb.blinded.block,
 		}
-		unblind, err := reconstructBlindedBlockBatch(ctx, jsonEngine{rpc: cli}, blind)
+		unblind, err := reconstructBlindedBlockBatch(ctx, &jsonEngine{rpc: cli}, blind)
 		require.NoError(t, err)
 		for i := range unblind {
 			testAssertReconstructedEquivalent(t, blind[i], unblind[i])
@@ -366,7 +366,7 @@ func TestReconstructBlindedBlockBatchDenebAndBeyond(t *testing.T) {
 			fx.electra.blinded.block,
 			fx.fulu.blinded.block,
 		}
-		unblinded, err := reconstructBlindedBlockBatch(t.Context(), jsonEngine{rpc: cli}, blinded)
+		unblinded, err := reconstructBlindedBlockBatch(t.Context(), &jsonEngine{rpc: cli}, blinded)
 		require.NoError(t, err)
 		require.Equal(t, len(blinded), len(unblinded))
 		for i := range unblinded {

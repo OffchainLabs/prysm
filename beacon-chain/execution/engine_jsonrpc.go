@@ -138,7 +138,7 @@ type jsonEngine struct {
 }
 
 // NewPayload calls the engine_newPayloadVX method via JSON-RPC.
-func (j jsonEngine) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
+func (j *jsonEngine) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.NewPayload")
 	defer span.End()
 	defer func(start time.Time) {
@@ -218,7 +218,7 @@ type ForkchoiceUpdatedResponse struct {
 }
 
 // ForkchoiceUpdated calls the engine_forkchoiceUpdatedV1 method via JSON-RPC.
-func (j jsonEngine) ForkchoiceUpdated(
+func (j *jsonEngine) ForkchoiceUpdated(
 	ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer,
 ) (*pb.PayloadIDBytes, []byte, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ForkchoiceUpdated")
@@ -298,7 +298,7 @@ func (j jsonEngine) ForkchoiceUpdated(
 
 // GetPayload calls the engine_getPayloadVX method via JSON-RPC.
 // It returns the execution data as well as the blobs bundle.
-func (j jsonEngine) GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error) {
+func (j *jsonEngine) GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetPayload")
 	defer span.End()
 	start := time.Now()
@@ -321,7 +321,7 @@ func (j jsonEngine) GetPayload(ctx context.Context, payloadId [8]byte, slot prim
 	return res, nil
 }
 
-func (j jsonEngine) ExchangeCapabilities(ctx context.Context) error {
+func (j *jsonEngine) ExchangeCapabilities(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExchangeCapabilities")
 	defer span.End()
 
@@ -365,7 +365,7 @@ func (j jsonEngine) ExchangeCapabilities(ctx context.Context) error {
 }
 
 // GetBlobs returns the blob and proof from the execution engine for the given versioned hashes.
-func (j jsonEngine) GetBlobs(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProof, error) {
+func (j *jsonEngine) GetBlobs(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProof, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobs")
 	defer span.End()
 
@@ -379,7 +379,7 @@ func (j jsonEngine) GetBlobs(ctx context.Context, versionedHashes []common.Hash)
 	return result, handleRPCError(err)
 }
 
-func (j jsonEngine) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
+func (j *jsonEngine) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsV2")
 	defer span.End()
 
@@ -407,7 +407,7 @@ func (j jsonEngine) GetBlobsV2(ctx context.Context, versionedHashes []common.Has
 // the block's fork: V2 (carries block_access_list) at Gloas, V1 before. Results
 // are request-aligned (nil for unavailable bodies); the error is raw, matching
 // the prior reconstruction path.
-func (j jsonEngine) GetPayloadBodiesByHash(ctx context.Context, v int, hashes []common.Hash) ([]interfaces.ExecutionPayloadBody, error) {
+func (j *jsonEngine) GetPayloadBodiesByHash(ctx context.Context, v int, hashes []common.Hash) ([]interfaces.ExecutionPayloadBody, error) {
 	if v >= version.Gloas {
 		result := make([]*pb.ExecutionPayloadBodyV2, 0)
 		if err := j.rpc.CallContext(ctx, &result, GetPayloadBodiesByHashV2, hashes); err != nil {
@@ -423,7 +423,7 @@ func (j jsonEngine) GetPayloadBodiesByHash(ctx context.Context, v int, hashes []
 }
 
 // GetPayloadBodiesByRange fetches bodies by range, V1/V2 by fork like by-hash.
-func (j jsonEngine) GetPayloadBodiesByRange(ctx context.Context, v int, from, count uint64) ([]interfaces.ExecutionPayloadBody, error) {
+func (j *jsonEngine) GetPayloadBodiesByRange(ctx context.Context, v int, from, count uint64) ([]interfaces.ExecutionPayloadBody, error) {
 	if v >= version.Gloas {
 		result := make([]*pb.ExecutionPayloadBodyV2, 0)
 		if err := j.rpc.CallContext(ctx, &result, GetPayloadBodiesByRangeV2, hexutil.EncodeUint64(from), hexutil.EncodeUint64(count)); err != nil {
@@ -471,7 +471,7 @@ func wrapJSONBodiesV2(in []*pb.ExecutionPayloadBodyV2) ([]interfaces.ExecutionPa
 }
 
 // GetClientVersion calls engine_getClientVersionV1 to retrieve EL client information.
-func (j jsonEngine) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error) {
+func (j *jsonEngine) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetClientVersionV1")
 	defer span.End()
 
