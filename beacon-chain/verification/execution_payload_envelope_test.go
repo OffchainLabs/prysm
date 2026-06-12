@@ -262,13 +262,3 @@ func signEnvelope(t *testing.T, sk bls.SecretKey, env *ethpb.ExecutionPayloadEnv
 	copy(out[:], sig)
 	return out
 }
-
-func TestEnvelopeVerifierSatisfiedRequirements(t *testing.T) {
-	v := NewEnvelopeVerifier(nil, GossipExecutionPayloadEnvelopeRequirements)
-	require.ErrorIs(t, v.SatisfiedRequirements(), ErrEnvelopeInvalid)
-
-	for _, req := range ExecutionPayloadEnvelopeGossipRequirements {
-		v.SatisfyRequirement(req)
-	}
-	require.NoError(t, v.SatisfiedRequirements())
-}

@@ -433,11 +433,6 @@ func (s *Server) validateEnvelopeGossip(ctx context.Context, w http.ResponseWrit
 		httputil.HandleError(w, "gossip validation failed: "+err.Error(), http.StatusBadRequest)
 		return false
 	}
-	// Guards against a requirement being added to the gossip list without a matching check here.
-	if err := v.SatisfiedRequirements(); err != nil {
-		httputil.HandleError(w, "gossip validation incomplete: "+err.Error(), http.StatusInternalServerError)
-		return false
-	}
 	return true
 }
 

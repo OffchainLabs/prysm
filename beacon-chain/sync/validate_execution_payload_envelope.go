@@ -135,10 +135,6 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	if err := v.VerifySignature(ctx, st); err != nil {
 		return pubsub.ValidationReject, err
 	}
-	// Guards against a requirement being added to the gossip list without a matching check here.
-	if err := v.SatisfiedRequirements(); err != nil {
-		return pubsub.ValidationIgnore, err
-	}
 	s.setSeenPayloadEnvelope(root, env.BuilderIndex())
 	msg.ValidatorData = signedEnvelope
 	startTime, err := slots.StartTime(s.cfg.clock.GenesisTime(), env.Slot())

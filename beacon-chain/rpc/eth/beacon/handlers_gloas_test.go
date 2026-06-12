@@ -80,8 +80,6 @@ func (m *mockEnvelopeVerifier) VerifySignature(_ context.Context, _ state.ReadOn
 }
 func (*mockEnvelopeVerifier) SatisfyRequirement(_ verification.Requirement) {}
 
-func (*mockEnvelopeVerifier) SatisfiedRequirements() error { return nil }
-
 func gloasBlockWithBid(t *testing.T, slot primitives.Slot, bid *ethpb.SignedExecutionPayloadBid) interfaces.ReadOnlySignedBeaconBlock {
 	t.Helper()
 	sb := util.NewBeaconBlockGloas()
