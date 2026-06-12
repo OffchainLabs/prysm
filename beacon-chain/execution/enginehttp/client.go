@@ -17,6 +17,8 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/network"
@@ -47,6 +49,17 @@ const (
 	// tighter, semantically-correct per-endpoint limits.* caps layer on top.
 	// Matches api/client's MaxBodySizeState precedent.
 	defaultMaxResponseBytes int64 = 1 << 29 // 512 MiB
+
+	// maxRetriesOn503 bounds how many extra attempts a 503 carrying a usable
+	// Retry-After earns. The spec replaces per-method timeout SHOULDs with
+	// "HTTP-standard request timeouts and Retry-After semantics on 503"
+	// (execution-apis#793); the http.Client.Timeout covers the former.
+	maxRetriesOn503 = 2
+
+	// defaultMaxRetryAfter caps a single Retry-After backoff. A longer
+	// Retry-After is treated as non-retryable and the 503 surfaces, leaving any
+	// longer wait to the caller's own retry cadence.
+	defaultMaxRetryAfter = 2 * time.Second
 )
 
 // Config configures a Client.
@@ -68,6 +81,9 @@ type Config struct {
 	// defaultMaxResponseBytes when <= 0. A transport backstop against an
 	// oversized/crafted body; per-endpoint limits.* caps are enforced above it.
 	MaxResponseBytes int64
+	// MaxRetryAfter caps how long a single 503 Retry-After backoff may be
+	// honored. Defaults to defaultMaxRetryAfter when <= 0.
+	MaxRetryAfter time.Duration
 }
 
 // Client is an HTTP/2 (h2c) client for the REST + SSZ Engine API v2.
@@ -76,6 +92,7 @@ type Client struct {
 	http             *http.Client
 	clientVersion    string
 	maxResponseBytes int64
+	maxRetryAfter    time.Duration
 }
 
 // New builds a Client speaking h2c (HTTP/2 cleartext) to cfg.BaseURL with
@@ -116,12 +133,18 @@ func New(cfg Config) (*Client, error) {
 		maxResp = defaultMaxResponseBytes
 	}
 
+	maxRetryAfter := cfg.MaxRetryAfter
+	if maxRetryAfter <= 0 {
+		maxRetryAfter = defaultMaxRetryAfter
+	}
+
 	rt := otelhttp.NewTransport(network.NewJWTRoundTripper(h2, cfg.JWTSecret, cfg.JWTID))
 	return &Client{
 		base:             base,
 		http:             &http.Client{Timeout: timeout, Transport: rt},
 		clientVersion:    cfg.ClientVersion,
 		maxResponseBytes: maxResp,
+		maxRetryAfter:    maxRetryAfter,
 	}, nil
 }
 
@@ -204,10 +227,31 @@ type request struct {
 	accept      string // Accept header
 }
 
-// roundtrip performs one HTTP request and returns the status code and response
-// body. It returns a non-nil error only for transport/IO failures; non-2xx
-// HTTP statuses are reported via the returned status for the caller to branch on.
+// roundtrip performs one engine call and returns the status code and response
+// body. It returns a non-nil error only for transport/IO failures; non-2xx HTTP
+// statuses are reported via the returned status for the caller to branch on.
+// A 503 carrying a usable Retry-After is retried after the indicated (capped)
+// backoff, up to maxRetriesOn503 times, honoring ctx (execution-apis#793:
+// HTTP-standard timeouts + Retry-After on 503).
 func (c *Client) roundtrip(ctx context.Context, r request) (int, []byte, error) {
+	for attempt := 0; ; attempt++ {
+		status, body, retryAfter, err := c.do(ctx, r)
+		if err != nil || status != http.StatusServiceUnavailable || attempt >= maxRetriesOn503 {
+			return status, body, err
+		}
+		wait, ok := parseRetryAfter(retryAfter, time.Now())
+		if !ok || wait > c.maxRetryAfter {
+			return status, body, nil // no usable Retry-After (or too long): surface the 503
+		}
+		if err := sleepContext(ctx, wait); err != nil {
+			return status, body, nil // ctx ended during backoff: surface the 503
+		}
+	}
+}
+
+// do performs a single HTTP attempt, returning the status, capped response body,
+// and the raw Retry-After header (empty when absent).
+func (c *Client) do(ctx context.Context, r request) (int, []byte, string, error) {
 	u := *c.base
 	// path.Join cleans any accidental trailing slash, matching the spec's
 	// "trailing slashes are forbidden" rule.
@@ -222,7 +266,7 @@ func (c *Client) roundtrip(ctx context.Context, r request) (int, []byte, error) 
 	}
 	req, err := http.NewRequestWithContext(ctx, r.method, u.String(), bodyReader)
 	if err != nil {
-		return 0, nil, errors.Wrap(err, "enginehttp: build request")
+		return 0, nil, "", errors.Wrap(err, "enginehttp: build request")
 	}
 	if r.body != nil {
 		req.Header.Set("Content-Type", r.contentType)
@@ -237,7 +281,7 @@ func (c *Client) roundtrip(ctx context.Context, r request) (int, []byte, error) 
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return 0, nil, errors.Wrap(err, "enginehttp: request failed")
+		return 0, nil, "", errors.Wrap(err, "enginehttp: request failed")
 	}
 	defer func() {
 		_ = resp.Body.Close()
@@ -246,14 +290,52 @@ func (c *Client) roundtrip(ctx context.Context, r request) (int, []byte, error) 
 	// in all cases (handles an absent or lying Content-Length) — a crafted body
 	// must not coerce an unbounded allocation (execution-apis#793 Security).
 	if resp.ContentLength > c.maxResponseBytes {
-		return resp.StatusCode, nil, errors.Errorf("enginehttp: response Content-Length %d exceeds max %d bytes", resp.ContentLength, c.maxResponseBytes)
+		return resp.StatusCode, nil, "", errors.Errorf("enginehttp: response Content-Length %d exceeds max %d bytes", resp.ContentLength, c.maxResponseBytes)
 	}
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, c.maxResponseBytes+1))
 	if err != nil {
-		return resp.StatusCode, nil, errors.Wrap(err, "enginehttp: read response body")
+		return resp.StatusCode, nil, "", errors.Wrap(err, "enginehttp: read response body")
 	}
 	if int64(len(respBody)) > c.maxResponseBytes {
-		return resp.StatusCode, nil, errors.Errorf("enginehttp: response body exceeds max %d bytes", c.maxResponseBytes)
+		return resp.StatusCode, nil, "", errors.Errorf("enginehttp: response body exceeds max %d bytes", c.maxResponseBytes)
 	}
-	return resp.StatusCode, respBody, nil
+	return resp.StatusCode, respBody, resp.Header.Get("Retry-After"), nil
+}
+
+// parseRetryAfter parses an RFC 7231 Retry-After value (delay-seconds or an
+// HTTP-date) into a non-negative delay, reporting whether it was present and
+// understood. now is the reference for the date form.
+func parseRetryAfter(h string, now time.Time) (time.Duration, bool) {
+	h = strings.TrimSpace(h)
+	if h == "" {
+		return 0, false
+	}
+	if secs, err := strconv.Atoi(h); err == nil {
+		if secs < 0 {
+			return 0, false
+		}
+		return time.Duration(secs) * time.Second, true
+	}
+	if t, err := http.ParseTime(h); err == nil {
+		if d := t.Sub(now); d > 0 {
+			return d, true
+		}
+		return 0, true // a past/now date means retry immediately
+	}
+	return 0, false
+}
+
+// sleepContext waits for d or until ctx ends, returning ctx.Err() if ctx ended.
+func sleepContext(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return ctx.Err()
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
 }

@@ -9,7 +9,9 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -253,6 +255,102 @@ func TestRoundtrip_BodyAtMax(t *testing.T) {
 	err := c.SSZRequest(context.Background(), http.MethodGet, "/amsterdam/payloads/0x01", nil, nil, out)
 	require.NoError(t, err)
 	assert.Equal(t, 16, len(out.data))
+}
+
+func TestParseRetryAfter(t *testing.T) {
+	now := time.Unix(1_000_000, 0)
+
+	d, ok := parseRetryAfter("5", now)
+	assert.Equal(t, true, ok)
+	assert.Equal(t, 5*time.Second, d)
+
+	d, ok = parseRetryAfter("0", now) // retry immediately
+	assert.Equal(t, true, ok)
+	assert.Equal(t, time.Duration(0), d)
+
+	d, ok = parseRetryAfter(" 12 ", now) // surrounding space tolerated
+	assert.Equal(t, true, ok)
+	assert.Equal(t, 12*time.Second, d)
+
+	// HTTP-date form 30s in the future.
+	d, ok = parseRetryAfter(now.Add(30*time.Second).UTC().Format(http.TimeFormat), now)
+	assert.Equal(t, true, ok)
+	assert.Equal(t, 30*time.Second, d)
+
+	// A past HTTP-date is understood but means retry now.
+	d, ok = parseRetryAfter(now.Add(-30*time.Second).UTC().Format(http.TimeFormat), now)
+	assert.Equal(t, true, ok)
+	assert.Equal(t, time.Duration(0), d)
+
+	for _, bad := range []string{"", "-3", "soon"} {
+		_, ok := parseRetryAfter(bad, now)
+		assert.Equal(t, false, ok)
+	}
+}
+
+func TestRoundtrip_RetryAfter503ThenOK(t *testing.T) {
+	var calls atomic.Int32
+	respBytes := []byte("recovered-body")
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			w.Header().Set("Retry-After", "0") // immediate retry, keeps the test fast
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", contentTypeSSZ)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(respBytes)
+	})
+
+	out := &stubSSZ{}
+	err := c.SSZRequest(context.Background(), http.MethodGet, "/amsterdam/payloads/0x01", nil, nil, out)
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), calls.Load())
+	assert.DeepEqual(t, respBytes, out.data)
+}
+
+func TestRoundtrip_RetryAfter503Exhausts(t *testing.T) {
+	var calls atomic.Int32
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Retry-After", "0")
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+
+	err := c.SSZRequest(context.Background(), http.MethodGet, "/amsterdam/payloads/0x01", nil, nil, &stubSSZ{})
+	require.NotNil(t, err)
+	var apiErr *Error
+	require.Equal(t, true, errors.As(err, &apiErr))
+	assert.Equal(t, http.StatusServiceUnavailable, apiErr.Status)
+	assert.Equal(t, int32(maxRetriesOn503+1), calls.Load()) // first attempt + retries
+}
+
+func TestRoundtrip_503NoRetryAfter(t *testing.T) {
+	var calls atomic.Int32
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable) // no Retry-After -> no retry
+	})
+
+	err := c.SSZRequest(context.Background(), http.MethodGet, "/amsterdam/payloads/0x01", nil, nil, &stubSSZ{})
+	require.NotNil(t, err)
+	var apiErr *Error
+	require.Equal(t, true, errors.As(err, &apiErr))
+	assert.Equal(t, http.StatusServiceUnavailable, apiErr.Status)
+	assert.Equal(t, int32(1), calls.Load())
+}
+
+func TestRoundtrip_503RetryAfterTooLong(t *testing.T) {
+	var calls atomic.Int32
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Retry-After", "3600") // far beyond the default cap -> no retry
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+
+	err := c.SSZRequest(context.Background(), http.MethodGet, "/amsterdam/payloads/0x01", nil, nil, &stubSSZ{})
+	require.NotNil(t, err)
+	assert.Equal(t, int32(1), calls.Load())
 }
 
 func TestJSONGet(t *testing.T) {
