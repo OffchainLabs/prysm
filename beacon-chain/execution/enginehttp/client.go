@@ -38,6 +38,15 @@ const (
 	// clientVersionHeader carries the CL version on every request, replacing
 	// the engine_getClientVersionV1 mutual handshake.
 	clientVersionHeader = "X-Engine-Client-Version"
+
+	// defaultMaxResponseBytes is the hard ceiling on the response body read
+	// from the EL, guarding against a crafted/oversized Content-Length or body
+	// coercing a large allocation (execution-apis#793 "Security
+	// considerations": cap the bytes read from the body in all cases). It is a
+	// transport backstop set well above any legitimate engine response; the
+	// tighter, semantically-correct per-endpoint limits.* caps layer on top.
+	// Matches api/client's MaxBodySizeState precedent.
+	defaultMaxResponseBytes int64 = 1 << 29 // 512 MiB
 )
 
 // Config configures a Client.
@@ -55,13 +64,18 @@ type Config struct {
 	ClientVersion string
 	// Timeout bounds each request. Defaults to network.DefaultRPCHTTPTimeout.
 	Timeout time.Duration
+	// MaxResponseBytes caps the response body read from the EL. Defaults to
+	// defaultMaxResponseBytes when <= 0. A transport backstop against an
+	// oversized/crafted body; per-endpoint limits.* caps are enforced above it.
+	MaxResponseBytes int64
 }
 
 // Client is an HTTP/2 (h2c) client for the REST + SSZ Engine API v2.
 type Client struct {
-	base          *url.URL
-	http          *http.Client
-	clientVersion string
+	base             *url.URL
+	http             *http.Client
+	clientVersion    string
+	maxResponseBytes int64
 }
 
 // New builds a Client speaking h2c (HTTP/2 cleartext) to cfg.BaseURL with
@@ -97,11 +111,17 @@ func New(cfg Config) (*Client, error) {
 		timeout = network.DefaultRPCHTTPTimeout
 	}
 
+	maxResp := cfg.MaxResponseBytes
+	if maxResp <= 0 {
+		maxResp = defaultMaxResponseBytes
+	}
+
 	rt := otelhttp.NewTransport(network.NewJWTRoundTripper(h2, cfg.JWTSecret, cfg.JWTID))
 	return &Client{
-		base:          base,
-		http:          &http.Client{Timeout: timeout, Transport: rt},
-		clientVersion: cfg.ClientVersion,
+		base:             base,
+		http:             &http.Client{Timeout: timeout, Transport: rt},
+		clientVersion:    cfg.ClientVersion,
+		maxResponseBytes: maxResp,
 	}, nil
 }
 
@@ -222,9 +242,18 @@ func (c *Client) roundtrip(ctx context.Context, r request) (int, []byte, error) 
 	defer func() {
 		_ = resp.Body.Close()
 	}()
-	respBody, err := io.ReadAll(resp.Body)
+	// Cap by Content-Length before reading when present, and cap the bytes read
+	// in all cases (handles an absent or lying Content-Length) — a crafted body
+	// must not coerce an unbounded allocation (execution-apis#793 Security).
+	if resp.ContentLength > c.maxResponseBytes {
+		return resp.StatusCode, nil, errors.Errorf("enginehttp: response Content-Length %d exceeds max %d bytes", resp.ContentLength, c.maxResponseBytes)
+	}
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, c.maxResponseBytes+1))
 	if err != nil {
 		return resp.StatusCode, nil, errors.Wrap(err, "enginehttp: read response body")
+	}
+	if int64(len(respBody)) > c.maxResponseBytes {
+		return resp.StatusCode, nil, errors.Errorf("enginehttp: response body exceeds max %d bytes", c.maxResponseBytes)
 	}
 	return resp.StatusCode, respBody, nil
 }

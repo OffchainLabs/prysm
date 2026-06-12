@@ -47,6 +47,20 @@ func testClient(t *testing.T, handler http.HandlerFunc) *Client {
 	return c
 }
 
+// testClientMax is like testClient but caps response bodies at max bytes.
+func testClientMax(t *testing.T, max int64, handler http.HandlerFunc) *Client {
+	srv := httptest.NewServer(h2c.NewHandler(handler, &http2.Server{}))
+	t.Cleanup(srv.Close)
+	c, err := New(Config{
+		BaseURL:          srv.URL,
+		JWTSecret:        testSecret,
+		ClientVersion:    "Prysm/test",
+		MaxResponseBytes: max,
+	})
+	require.NoError(t, err)
+	return c
+}
+
 // verifyJWT parses and validates the bearer token using the shared secret,
 // exercising the per-request signing path end-to-end.
 func verifyJWT(r *http.Request) bool {
@@ -190,6 +204,55 @@ func TestSSZRequest_NonJSONErrorBody(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, apiErr.Status)
 	assert.Equal(t, "boom", apiErr.RawBody)
 	assert.Equal(t, true, strings.Contains(apiErr.Error(), "500"))
+}
+
+func TestRoundtrip_ContentLengthExceedsMax(t *testing.T) {
+	// EL declares a Content-Length above the cap: reject before reading the body.
+	c := testClientMax(t, 1024, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", contentTypeSSZ)
+		w.Header().Set("Content-Length", "4096")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(make([]byte, 4096))
+	})
+
+	err := c.SSZRequest(context.Background(), http.MethodGet, "/amsterdam/payloads/0x01", nil, nil, &stubSSZ{})
+	require.NotNil(t, err)
+	assert.Equal(t, true, strings.Contains(err.Error(), "Content-Length"))
+}
+
+func TestRoundtrip_BodyExceedsMax(t *testing.T) {
+	// EL streams (flushed) chunks so the client sees no Content-Length; the
+	// bounded read must still reject a body past the cap.
+	c := testClientMax(t, 16, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", contentTypeSSZ)
+		w.WriteHeader(http.StatusOK)
+		fl, _ := w.(http.Flusher)
+		for range 10 {
+			_, _ = w.Write(make([]byte, 8))
+			if fl != nil {
+				fl.Flush()
+			}
+		}
+	})
+
+	err := c.SSZRequest(context.Background(), http.MethodGet, "/amsterdam/payloads/0x01", nil, nil, &stubSSZ{})
+	require.NotNil(t, err)
+	assert.Equal(t, true, strings.Contains(err.Error(), "exceeds max"))
+}
+
+func TestRoundtrip_BodyAtMax(t *testing.T) {
+	// A body exactly at the cap is accepted.
+	respBytes := make([]byte, 16)
+	c := testClientMax(t, 16, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", contentTypeSSZ)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(respBytes)
+	})
+
+	out := &stubSSZ{}
+	err := c.SSZRequest(context.Background(), http.MethodGet, "/amsterdam/payloads/0x01", nil, nil, out)
+	require.NoError(t, err)
+	assert.Equal(t, 16, len(out.data))
 }
 
 func TestJSONGet(t *testing.T) {
