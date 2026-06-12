@@ -26,6 +26,7 @@ type ExecutionPayloadEnvelopeVerifier interface {
 	VerifyExecutionRequestsRoot(interfaces.ROExecutionPayloadBid) error
 	VerifySignature(context.Context, state.ReadOnlyBeaconState) error
 	SatisfyRequirement(Requirement)
+	SatisfiedRequirements() error
 }
 
 // NewExecutionPayloadEnvelopeVerifier is a function signature that can be used by code that needs to be
@@ -49,6 +50,7 @@ var ExecutionPayloadEnvelopeGossipRequirements = []Requirement{
 var GossipExecutionPayloadEnvelopeRequirements = requirementList(ExecutionPayloadEnvelopeGossipRequirements)
 
 var (
+	ErrEnvelopeInvalid                = errors.New("envelope failed verification")
 	ErrEnvelopeBlockRootNotSeen       = errors.New("block root not seen")
 	ErrEnvelopeBlockRootInvalid       = errors.New("block root invalid")
 	ErrEnvelopeSlotBeforeFinalized    = errors.New("envelope slot is before finalized checkpoint")
@@ -59,6 +61,13 @@ var (
 )
 
 var _ ExecutionPayloadEnvelopeVerifier = &EnvelopeVerifier{}
+var _ NewExecutionPayloadEnvelopeVerifier = NewEnvelopeVerifier
+
+// NewEnvelopeVerifier creates an EnvelopeVerifier without an Initializer;
+// envelope verification needs no shared resources.
+func NewEnvelopeVerifier(e interfaces.ROSignedExecutionPayloadEnvelope, reqs []Requirement) ExecutionPayloadEnvelopeVerifier {
+	return &EnvelopeVerifier{results: newResults(reqs...), e: e}
+}
 
 // EnvelopeVerifier is a read-only verifier for execution payload envelopes.
 type EnvelopeVerifier struct {
@@ -187,6 +196,15 @@ func (v *EnvelopeVerifier) VerifySignature(ctx context.Context, st state.ReadOnl
 // SatisfyRequirement allows the caller to manually mark a requirement as satisfied.
 func (v *EnvelopeVerifier) SatisfyRequirement(req Requirement) {
 	v.record(req, nil)
+}
+
+// SatisfiedRequirements errors unless every configured requirement was run (or
+// explicitly satisfied) and passed — catches call sites that miss a check.
+func (v *EnvelopeVerifier) SatisfiedRequirements() error {
+	if v.results.allSatisfied() {
+		return nil
+	}
+	return v.results.errors(ErrEnvelopeInvalid)
 }
 
 // record records the result of a requirement verification.

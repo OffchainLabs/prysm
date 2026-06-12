@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -305,8 +306,8 @@ func (s *Server) processEnvelopeContents(ctx context.Context, w http.ResponseWri
 // envelope publish before it is broadcast to gossip. Spec: beacon-APIs #580.
 // Writes the HTTP error and returns false on failure: 400 for validation
 // failures, 500 for internal errors.
-//   - gossip (default): no extra REST-layer checks — the downstream gossip
-//     pipeline performs validation.
+//   - gossip (default): the REJECT-class gossip checks (slot, bid consistency,
+//     builder signature) against the envelope's beacon block.
 //   - consensus: full envelope consensus checks against the head state. Submission
 //     path requires envRoot to equal head.
 //   - consensus_and_equivocation: consensus + reject if a different beacon
@@ -315,8 +316,7 @@ func (s *Server) validateEnvelopeBroadcast(ctx context.Context, w http.ResponseW
 	level := r.URL.Query().Get(broadcastValidationQueryParam)
 	switch level {
 	case "", broadcastValidationGossip:
-		// TODO: run lightweight gossip checks (sig + bid consistency) here — beacon-APIs #580.
-		return true
+		return s.validateEnvelopeGossip(ctx, w, signed)
 	case broadcastValidationConsensus, broadcastValidationConsensusAndEquivocation:
 	default:
 		httputil.HandleError(w, fmt.Sprintf("invalid %s value: %q", broadcastValidationQueryParam, level), http.StatusBadRequest)
@@ -359,6 +359,83 @@ func (s *Server) validateEnvelopeBroadcast(ctx context.Context, w http.ResponseW
 	}
 	if err := gloas.VerifyExecutionPayloadEnvelope(ctx, st, roSigned); err != nil {
 		httputil.HandleError(w, "consensus validation failed: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
+// validateEnvelopeGossip runs the REJECT-class gossip checks; p2p-only IGNORE checks are skipped.
+// TODO: share orchestration with sync.validateExecutionPayloadEnvelope so check inputs can't drift.
+func (s *Server) validateEnvelopeGossip(ctx context.Context, w http.ResponseWriter, signed *eth.SignedExecutionPayloadEnvelope) bool {
+	roSigned, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(signed)
+	if err != nil {
+		httputil.HandleError(w, "invalid signed envelope: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+	v := s.PayloadEnvelopeVerifier(roSigned, verification.GossipExecutionPayloadEnvelopeRequirements)
+
+	blk, err := s.Blocker.Block(ctx, signed.Message.BeaconBlockRoot)
+	if err != nil || blk == nil {
+		httputil.HandleError(w, "gossip validation failed: envelope beacon block root is unknown", http.StatusBadRequest)
+		return false
+	}
+	v.SatisfyRequirement(verification.RequireBlockRootSeen)
+	// The bad-block cache lives in the sync service; a bad root can't be canonical anyway.
+	v.SatisfyRequirement(verification.RequireBlockRootValid)
+	finalized := s.FinalizationFetcher.FinalizedCheckpt()
+	if finalized == nil {
+		httputil.HandleError(w, "could not get finalized checkpoint", http.StatusInternalServerError)
+		return false
+	}
+	if err := v.VerifySlotAboveFinalized(finalized.Epoch); err != nil {
+		httputil.HandleError(w, "gossip validation failed: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+	if err := v.VerifySlotMatchesBlock(blk.Block().Slot()); err != nil {
+		httputil.HandleError(w, "gossip validation failed: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+
+	signedBid, err := blk.Block().Body().SignedExecutionPayloadBid()
+	if err != nil {
+		httputil.HandleError(w, "gossip validation failed: block has no execution payload bid: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+	wrappedBid, err := consensusblocks.WrappedROSignedExecutionPayloadBid(signedBid)
+	if err != nil {
+		httputil.HandleError(w, "could not wrap signed bid: "+err.Error(), http.StatusInternalServerError)
+		return false
+	}
+	bid, err := wrappedBid.Bid()
+	if err != nil {
+		httputil.HandleError(w, "could not get bid: "+err.Error(), http.StatusInternalServerError)
+		return false
+	}
+	if err := v.VerifyBuilderValid(bid); err != nil {
+		httputil.HandleError(w, "gossip validation failed: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+	if err := v.VerifyPayloadHash(bid); err != nil {
+		httputil.HandleError(w, "gossip validation failed: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+	if err := v.VerifyExecutionRequestsRoot(bid); err != nil {
+		httputil.HandleError(w, "gossip validation failed: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+
+	st, err := s.HeadFetcher.HeadStateReadOnly(ctx)
+	if err != nil {
+		httputil.HandleError(w, "could not get head state: "+err.Error(), http.StatusInternalServerError)
+		return false
+	}
+	if err := v.VerifySignature(ctx, st); err != nil {
+		httputil.HandleError(w, "gossip validation failed: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+	// Guards against a requirement being added to the gossip list without a matching check here.
+	if err := v.SatisfiedRequirements(); err != nil {
+		httputil.HandleError(w, "gossip validation incomplete: "+err.Error(), http.StatusInternalServerError)
 		return false
 	}
 	return true

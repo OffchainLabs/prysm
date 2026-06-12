@@ -245,6 +245,8 @@ func (m *mockExecutionPayloadEnvelopeVerifier) VerifySignature(_ context.Context
 
 func (*mockExecutionPayloadEnvelopeVerifier) SatisfyRequirement(_ verification.Requirement) {}
 
+func (*mockExecutionPayloadEnvelopeVerifier) SatisfiedRequirements() error { return nil }
+
 func testNewExecutionPayloadEnvelopeVerifier(m mockExecutionPayloadEnvelopeVerifier) verification.NewExecutionPayloadEnvelopeVerifier {
 	return func(_ interfaces.ROSignedExecutionPayloadEnvelope, _ []verification.Requirement) verification.ExecutionPayloadEnvelopeVerifier {
 		clone := m
