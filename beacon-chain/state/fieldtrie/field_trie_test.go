@@ -127,6 +127,25 @@ func TestFieldTrie_ProveField(t *testing.T) {
 		_, _, err = ft.ProveField(testBlockRootsSize)
 		require.ErrorContains(t, "out of bounds", err)
 	})
+
+	t.Run("empty trie returns ErrEmptyFieldTrie", func(t *testing.T) {
+		ft := &FieldTrie{}
+		_, _, err := ft.ProveField(0)
+		require.ErrorIs(t, err, ErrEmptyFieldTrie)
+	})
+
+	t.Run("invalid trie with zero root level returns ErrInvalidFieldTrie", func(t *testing.T) {
+		ft := &FieldTrie{
+			nodesData: &nodesData{
+				nodes:   [][32]byte{},
+				offsets: []uint64{0, 0, 0},
+			},
+			dataType:   types.BasicArray,
+			numOfElems: 1,
+		}
+		_, _, err := ft.ProveField(0)
+		require.ErrorIs(t, err, ErrInvalidFieldTrie)
+	})
 }
 
 // requireFreshTrieRoot builds a fresh trie from elements and asserts its root matches expectedRoot.
