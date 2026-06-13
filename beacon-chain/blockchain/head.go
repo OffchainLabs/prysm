@@ -172,7 +172,7 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 	// Forward an event capturing a new chain head over a common event feed
 	// done in a goroutine to avoid blocking the critical runtime main routine.
 	go func() {
-		if err := s.notifyNewHeadEvent(ctx, newHeadSlot, newStateRoot, newHeadRoot); err != nil {
+		if err := s.notifyNewHeadEvent(s.ctx, newHeadSlot, newStateRoot, newHeadRoot); err != nil {
 			log.WithError(err).Error("Could not notify event feed of new chain head")
 		}
 
