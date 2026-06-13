@@ -44,6 +44,3 @@ tmp
 
 # spectest coverage reports
 report.txt
-
-# Local CLAUDE instruction
-CLAUDE.local.md
