@@ -175,6 +175,86 @@ func (f *FieldTrie) TrieRoot() ([32]byte, error) {
 	return f.trieRoot()
 }
 
+// ProveField returns leaf and proof for the given field index.
+func (f *FieldTrie) ProveField(fieldIndex uint64) ([32]byte, [][32]byte, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	if f.empty() {
+		return [32]byte{}, nil, ErrEmptyFieldTrie
+	}
+
+	// Validate field index is within bounds for the field.
+	leafCount, err := f.leafCount()
+	if err != nil {
+		return [32]byte{}, nil, fmt.Errorf("leaf count: %w", err)
+	}
+	if fieldIndex >= leafCount {
+		return [32]byte{}, nil, fmt.Errorf("field index %d out of bounds (field has %d leaves)", fieldIndex, leafCount)
+	}
+
+	// Owned mode: Directly read root from nodes.
+	if f.base == nil {
+		depth := f.depth()
+
+		if f.levelSize(depth) == 0 {
+			return [32]byte{}, nil, ErrInvalidFieldTrie
+		}
+
+		// Read leaf.
+		startIndex := f.nodesData.offsets[0]
+		leaf := f.nodesData.nodes[startIndex+fieldIndex]
+
+		// Collect proof by walking up the trie levels.
+		proof := make([][32]byte, depth)
+		currentIndex := fieldIndex
+
+		// At each level, collect sibling hash.
+		// If sibling index is out of bounds for the level, use zero hash as a fallback.
+		for level := range depth {
+			siblingIdx := currentIndex ^ 1
+
+			neighbor := trie.ZeroHashes[level]
+			if neighborIdx := siblingIdx; neighborIdx < f.levelSize(level) {
+				levelOffset := f.nodesData.offsets[level]
+				neighborIdx := levelOffset + neighborIdx
+
+				neighbor = f.nodesData.nodes[neighborIdx]
+			}
+
+			proof[level] = neighbor
+			currentIndex /= 2
+		}
+
+		return leaf, proof, nil
+	}
+
+	// Overlay mode: Read root from overrides and fallback to base.
+	depth := f.base.depth()
+
+	leaf, err := f.readOverlayNode(0 /* leaf level*/, fieldIndex)
+	if err != nil {
+		return [32]byte{}, nil, fmt.Errorf("read overlay leaf: %w", err)
+	}
+
+	// Collect proof by walking up the trie levels.
+	proof := make([][32]byte, depth)
+	currentIndex := fieldIndex
+	for level := range depth {
+		siblingIdx := currentIndex ^ 1
+
+		neighbor, err := f.readOverlayNode(level, siblingIdx)
+		if err != nil {
+			return [32]byte{}, nil, fmt.Errorf("read overlay sibling at level %d: %w", level, err)
+		}
+
+		proof[level] = neighbor
+		currentIndex /= 2
+	}
+
+	return leaf, proof, nil
+}
+
 // RecomputeTrie recomputes the trie for the given changed indices and returns
 // the new trie and root hash. When indices is nil, the trie is rebuilt from
 // scratch using elements. The caller MUST use the returned *FieldTrie
@@ -251,14 +331,6 @@ func (f *FieldTrie) InsertFieldLayer(nodes [][32]byte, offsets []uint64) {
 	f.nodesData = &nodesData{nodes: nodes, offsets: offsets}
 }
 
-// ProveField returns leaf and proof for the given field index.
-func (f *FieldTrie) ProveField(fieldIndex uint64) (leaf [32]byte, proof [][32]byte, err error) {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-
-	return f.proveField(fieldIndex)
-}
-
 func (f *FieldTrie) trieRoot() ([32]byte, error) {
 	if f.empty() {
 		return [32]byte{}, ErrEmptyFieldTrie
@@ -293,83 +365,6 @@ func (f *FieldTrie) trieRoot() ([32]byte, error) {
 	}
 
 	return rootWithMixin, nil
-}
-
-// proveField returns the leaf at fieldIndex and its Merkle inclusion proof.
-func (f *FieldTrie) proveField(fieldIndex uint64) ([32]byte, [][32]byte, error) {
-	if f.empty() {
-		return [32]byte{}, nil, ErrEmptyFieldTrie
-	}
-
-	// Validate field index is within bounds for the field.
-	leafCount, err := f.leafCount()
-	if err != nil {
-		return [32]byte{}, nil, fmt.Errorf("leaf count: %w", err)
-	}
-	if fieldIndex >= leafCount {
-		return [32]byte{}, nil, fmt.Errorf("field index %d out of bounds (field has %d leaves)", fieldIndex, leafCount)
-	}
-
-	// Owned mode: Directly read root from nodes.
-	if f.base == nil {
-		depth := f.depth()
-
-		if f.levelSize(depth) == 0 {
-			return [32]byte{}, nil, ErrInvalidFieldTrie
-		}
-
-		// Read leaf.
-		startIndex := f.nodesData.offsets[0]
-		leaf := f.nodesData.nodes[startIndex+fieldIndex]
-
-		// Collect proof by walking up the trie levels.
-		proof := make([][32]byte, depth)
-		currentIndex := fieldIndex
-
-		// At each level, collect sibling hash.
-		// If sibling index is out of bounds for the level, use zero hash as a fallback.
-		for level := range depth {
-			siblingIdx := currentIndex ^ 1
-
-			neighbor := trie.ZeroHashes[level]
-			if neighborIdx := siblingIdx; neighborIdx < f.levelSize(level) {
-				levelOffset := f.nodesData.offsets[level]
-				neighborIdx := levelOffset + neighborIdx
-
-				neighbor = f.nodesData.nodes[neighborIdx]
-			}
-
-			proof[level] = neighbor
-			currentIndex /= 2
-		}
-
-		return leaf, proof, nil
-	}
-
-	// Overlay mode: Read root from overrides and fallback to base.
-	depth := f.base.depth()
-
-	leaf, err := f.readOverlayNode(0 /* leaf level*/, fieldIndex)
-	if err != nil {
-		return [32]byte{}, nil, fmt.Errorf("read overlay leaf: %w", err)
-	}
-
-	// Collect proof by walking up the trie levels.
-	proof := make([][32]byte, depth)
-	currentIndex := fieldIndex
-	for level := range depth {
-		siblingIdx := currentIndex ^ 1
-
-		neighbor, err := f.readOverlayNode(level, siblingIdx)
-		if err != nil {
-			return [32]byte{}, nil, fmt.Errorf("read overlay sibling at level %d: %w", level, err)
-		}
-
-		proof[level] = neighbor
-		currentIndex /= 2
-	}
-
-	return leaf, proof, nil
 }
 
 // fork creates a new independent trie from the shared source's data.
