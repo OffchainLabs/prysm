@@ -87,6 +87,17 @@ func (f *ForkChoice) ProcessAttestation(ctx context.Context, validatorIndices []
 	_, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.ProcessAttestation")
 	defer span.End()
 
+	// Same-slot attestations cannot vote payload present (validate_on_attestation).
+	if payloadStatus && slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
+		if en, ok := f.store.emptyNodeByRoot[blockRoot]; ok && en.node != nil && en.node.slot == slot {
+			log.WithFields(logrus.Fields{
+				"slot":            slot,
+				"beaconBlockRoot": fmt.Sprintf("%#x", bytesutil.Trunc(blockRoot[:])),
+			}).Debug("Skipping same-slot payload-present attestation")
+			return
+		}
+	}
+
 	for _, index := range validatorIndices {
 		// Validator indices will grow the vote cache.
 		newVote := false

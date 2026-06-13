@@ -665,7 +665,8 @@ func TestGloasProposerBoostWithParentWeight(t *testing.T) {
 
 	// Attest for fullA so the parent has enough weight for consecutive-slot boost.
 	// committeeWeight=20, threshold=20 → need parent.weight >= 4.
-	f.ProcessAttestation(ctx, []uint64{9}, rootA, slotA, true)
+	// Vote slot must be later than A's slot: same-slot votes cannot be payload-present.
+	f.ProcessAttestation(ctx, []uint64{9}, rootA, slotA+1, true)
 
 	// Move to slot 33. Head() propagates the attestation weight.
 	slotB := slotA + 1
@@ -778,7 +779,7 @@ func TestGloasProposerBoostBlockedByEquivocation(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.InsertPayload(pe))
 
-	f.ProcessAttestation(ctx, []uint64{9}, rootA, slotA, true)
+	f.ProcessAttestation(ctx, []uint64{9}, rootA, slotA+1, true)
 
 	slotB := slotA + 1
 	driftGenesisTime(f, slotB, 0)
@@ -1435,7 +1436,8 @@ func TestGloasDeepForkWeightPropagation(t *testing.T) {
 	// Validators 0,1 vote for C (payloadStatus=false → pending C).
 	f.ProcessAttestation(ctx, []uint64{0, 1}, rootC, slotC, false)
 
-	f.ProcessAttestation(ctx, []uint64{2, 3, 4}, rootD, slotC, true)
+	// Vote slot must be later than D's slot: same-slot votes cannot be payload-present.
+	f.ProcessAttestation(ctx, []uint64{2, 3, 4}, rootD, slotC+1, true)
 	// Validators 5,6 vote for B (payloadStatus=true → fullB).
 	f.ProcessAttestation(ctx, []uint64{5, 6}, rootB, slotC, true)
 
@@ -1892,4 +1894,33 @@ func TestGasLimit_GloasEmptyNodeWalksToFullAncestor(t *testing.T) {
 	got, err = f.GasLimit(rootA)
 	require.NoError(t, err)
 	assert.Equal(t, gl, got)
+}
+
+func TestProcessAttestation_SameSlotPayloadVote(t *testing.T) {
+	f := setupGloas(t, 1, 1)
+	ctx := t.Context()
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	slotA := primitives.Slot(32)
+	rootA := indexToHash(1)
+	driftGenesisTime(f, slotA, 0)
+	st, blk, err := prepareGloasForkchoiceState(ctx, slotA, rootA, zeroHash, indexToHash(100), zeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	// Same-slot payload-present vote is dropped.
+	f.ProcessAttestation(ctx, []uint64{0}, rootA, slotA, true)
+	require.Equal(t, 0, len(f.votes))
+
+	// Same-slot payload-absent vote is recorded.
+	f.ProcessAttestation(ctx, []uint64{0}, rootA, slotA, false)
+	require.Equal(t, 1, len(f.votes))
+	require.Equal(t, rootA, f.votes[0].nextRoot)
+	require.Equal(t, false, f.votes[0].nextPayloadStatus)
+
+	// Later-slot payload-present vote is recorded.
+	f.ProcessAttestation(ctx, []uint64{1}, rootA, slotA+1, true)
+	require.Equal(t, 2, len(f.votes))
+	require.Equal(t, rootA, f.votes[1].nextRoot)
+	require.Equal(t, true, f.votes[1].nextPayloadStatus)
 }

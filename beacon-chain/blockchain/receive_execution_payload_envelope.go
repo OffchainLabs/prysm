@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -190,17 +192,45 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 	}
 	blockHash := bytesutil.ToBytes32(payload.BlockHash())
 
+	var (
+		emitHeadV2    bool
+		headSlot      primitives.Slot
+		headStateRoot [32]byte
+		headVersion   int
+	)
+
 	s.headLock.Lock()
 	if s.head != nil && s.head.root == root {
+		wasFull := s.head.full
 		s.head.full = true
+
+		// Capture head details for head_v2 event.
+		if !wasFull {
+			headBlock := s.head.block.Block()
+			headSlot = headBlock.Slot()
+			headStateRoot = headBlock.StateRoot()
+			headVersion = s.head.block.Version()
+			emitHeadV2 = true
+		}
 	}
 	s.headLock.Unlock()
 
-	proposingSlot := s.CurrentSlot() + 1
-	attr := s.getPayloadAttribute(ctx, st, proposingSlot, headRoot[:], true)
+	// If the imported payload makes the current head's payload status full, emit a
+	// second head_v2 event for the empty->full transition.
+	if emitHeadV2 {
+		if err := s.notifyNewHeadV2Event(
+			ctx, headSlot, headStateRoot, root, headVersion,
+		); err != nil {
+			// Log the error but continue on (not returning error).
+			log.WithError(err).Error("Could not notify event feed of head_v2 payload update")
+		}
+	}
+
 	if !s.inRegularSync() {
 		return nil
 	}
+	proposingSlot := s.CurrentSlot() + 1
+	attr := s.getPayloadAttribute(ctx, st, proposingSlot, headRoot[:], true)
 	go func() {
 		pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)
 		if err != nil {
@@ -213,7 +243,24 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 			s.cfg.PayloadIDCache.Set(proposingSlot, root, pId)
 		}
 	}()
+	if requests := envelope.ExecutionRequests(); requests != nil && len(requests.Deposits) > 0 {
+		s.prefetchDepositSignatures(requests)
+	}
 	return nil
+}
+
+func (s *Service) prefetchDepositSignatures(requests *enginev1.ExecutionRequests) {
+	invalidIdx, err := helpers.BatchVerifyDepositRequestSignatures(s.ctx, requests.Deposits)
+	if err != nil {
+		log.WithError(err).Debug("Could not batch verify deposit signatures for prefetch")
+		return
+	}
+	root, err := requests.HashTreeRoot()
+	if err != nil {
+		log.WithError(err).Debug("Could not hash execution requests for deposit sig prefetch")
+		return
+	}
+	cache.DepositSig.Put(root, invalidIdx)
 }
 
 func (s *Service) getPayloadEnvelopePrestate(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope) (state.BeaconState, error) {

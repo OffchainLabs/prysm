@@ -49,7 +49,7 @@ func RunDepositRequestsTest(t *testing.T, config string) {
 				if err != nil {
 					return nil, err
 				}
-				return s, gloas.ProcessDepositRequests(ctx, s, e.Deposits)
+				return s, gloas.ProcessDepositRequests(ctx, s, e.Deposits, nil)
 			})
 		})
 	}

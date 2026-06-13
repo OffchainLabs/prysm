@@ -25,6 +25,8 @@ const (
 	FinalizedCheckpoint
 	// NewHead of the chain event.
 	NewHead
+	// NewHeadV2 of the chain event, carrying the versioned, Gloas-aware head_v2 payload.
+	NewHeadV2
 	// MissedSlot is sent when we need to notify users that a slot was missed.
 	MissedSlot
 	// LightClientFinalityUpdate event
@@ -102,4 +104,35 @@ type ExecutionPayloadProcessedData struct {
 	BlockRoot    [32]byte
 	// Optimistic is true if the imported payload has not been fully validated by the execution layer.
 	Optimistic bool
+}
+
+type PayloadStatus int
+
+const (
+	PayloadStatusEmpty = iota + 1
+	PayloadStatusFull
+)
+
+func (ps PayloadStatus) String() string {
+	switch ps {
+	case PayloadStatusEmpty:
+		return "empty"
+	case PayloadStatusFull:
+		return "full"
+	default:
+		return "unknown"
+	}
+}
+
+// HeadV2Data is the data sent with NewHeadV2 events.
+type HeadV2Data struct {
+	Slot                      primitives.Slot
+	Block                     [32]byte
+	State                     [32]byte
+	EpochTransition           bool
+	ExecutionOptimistic       bool
+	CurrentEpochDependentRoot [32]byte
+	NextEpochDependentRoot    [32]byte
+	PayloadStatus             PayloadStatus
+	Version                   int
 }

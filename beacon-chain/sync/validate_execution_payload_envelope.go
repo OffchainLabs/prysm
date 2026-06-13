@@ -132,7 +132,7 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	}
 
 	// [REJECT] signed_execution_payload_envelope.signature is valid with respect to the builder's public key.
-	if err := v.VerifySignature(st); err != nil {
+	if err := v.VerifySignature(ctx, st); err != nil {
 		return pubsub.ValidationReject, err
 	}
 	s.setSeenPayloadEnvelope(root, env.BuilderIndex())
@@ -204,7 +204,7 @@ func (s *Service) queuePendingPayloadEnvelope(
 	}
 
 	if !isSelfBuild || proposerInLookahead {
-		if err := v.VerifySignature(st); err != nil {
+		if err := v.VerifySignature(ctx, st); err != nil {
 			if isSelfBuild {
 				s.selfBuildSigFailures++
 				log.WithError(err).Debug("Ignoring self-built payload with invalid signature")

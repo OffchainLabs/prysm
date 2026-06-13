@@ -17,6 +17,7 @@ import (
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethv1 "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
@@ -1539,6 +1540,22 @@ func HeadEventFromHeadData(data *statefeed.HeadData) *HeadEvent {
 		PreviousDutyDependentRoot: hexutil.Encode(data.PreviousDutyDependentRoot[:]),
 		CurrentDutyDependentRoot:  hexutil.Encode(data.CurrentDutyDependentRoot[:]),
 		ExecutionOptimistic:       data.ExecutionOptimistic,
+	}
+}
+
+func HeadEventFromDataV2(data *statefeed.HeadV2Data) *HeadEventV2 {
+	return &HeadEventV2{
+		Version: version.String(data.Version),
+		Data: &HeadEventV2Data{
+			Slot:                      fmt.Sprintf("%d", data.Slot),
+			Block:                     hexutil.Encode(data.Block[:]),
+			State:                     hexutil.Encode(data.State[:]),
+			PayloadStatus:             data.PayloadStatus.String(),
+			CurrentEpochDependentRoot: hexutil.Encode(data.CurrentEpochDependentRoot[:]),
+			NextEpochDependentRoot:    hexutil.Encode(data.NextEpochDependentRoot[:]),
+			EpochTransition:           data.EpochTransition,
+			ExecutionOptimistic:       data.ExecutionOptimistic,
+		},
 	}
 }
 
