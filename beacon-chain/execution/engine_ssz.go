@@ -421,12 +421,13 @@ func (e *sszEngine) GetBlobs(ctx context.Context, versionedHashes []common.Hash)
 		return nil, mapEngineError(err)
 	}
 	observeSSZBody(methodGetBlobs, directionResponse, resp)
+	entries := *resp
 	result := make([]*pb.BlobAndProof, len(versionedHashes))
 	for i := range result {
-		if i >= len(resp.Entries) {
+		if i >= len(entries) {
 			break
 		}
-		entry := resp.Entries[i]
+		entry := entries[i]
 		if entry == nil || !entry.Available || entry.Contents == nil {
 			continue
 		}
@@ -459,12 +460,13 @@ func (e *sszEngine) GetBlobsV2(ctx context.Context, versionedHashes []common.Has
 		return nil, mapEngineError(err)
 	}
 	observeSSZBody(methodGetBlobsV2, directionResponse, resp)
+	entries := *resp
 	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
 	for i := range result {
-		if i >= len(resp.Entries) {
+		if i >= len(entries) {
 			break
 		}
-		entry := resp.Entries[i]
+		entry := entries[i]
 		if entry == nil || !entry.Available || entry.Contents == nil {
 			continue
 		}
@@ -476,11 +478,11 @@ func (e *sszEngine) GetBlobsV2(ctx context.Context, versionedHashes []common.Has
 // blobsRequest builds the SSZ List[VersionedHash] request body shared by the
 // blob-pool endpoints.
 func blobsRequest(versionedHashes []common.Hash) *enginev2.BlobsRequest {
-	req := &enginev2.BlobsRequest{VersionedHashes: make([][]byte, len(versionedHashes))}
+	req := make(enginev2.BlobsRequest, len(versionedHashes))
 	for i := range versionedHashes {
-		req.VersionedHashes[i] = versionedHashes[i][:]
+		req[i] = versionedHashes[i][:]
 	}
-	return req
+	return &req
 }
 
 // supportsBlob reports whether the EL advertised the given /blobs/vN revision in
@@ -544,12 +546,12 @@ func (e *sszEngine) bodiesByHash(ctx context.Context, v int, hashes []common.Has
 	if err != nil {
 		return nil, err
 	}
-	req := &enginev2.BodiesByHashRequest{BlockHashes: make([][]byte, len(hashes))}
+	req := make(enginev2.BodiesByHashRequest, len(hashes))
 	for i := range hashes {
-		req.BlockHashes[i] = hashes[i][:]
+		req[i] = hashes[i][:]
 	}
-	observeSSZBody(methodGetPayloadBodiesByHash, directionRequest, req)
-	if err := e.client.GetPayloadBodiesByHash(ctx, v, req, out); err != nil {
+	observeSSZBody(methodGetPayloadBodiesByHash, directionRequest, &req)
+	if err := e.client.GetPayloadBodiesByHash(ctx, v, &req, out); err != nil {
 		return nil, mapEngineError(err)
 	}
 	if m, ok := out.(ssz.Marshaler); ok {
@@ -612,8 +614,8 @@ func newBodiesResponse(v int) (ssz.Unmarshaler, error) {
 func bodiesEntries(out ssz.Unmarshaler) ([]interfaces.ExecutionPayloadBody, error) {
 	switch resp := out.(type) {
 	case *enginev2.BodiesResponseFulu:
-		bodies := make([]interfaces.ExecutionPayloadBody, len(resp.Entries))
-		for i, entry := range resp.Entries {
+		bodies := make([]interfaces.ExecutionPayloadBody, len(*resp))
+		for i, entry := range *resp {
 			if entry == nil || !entry.Available || entry.Body == nil {
 				continue
 			}
@@ -625,8 +627,8 @@ func bodiesEntries(out ssz.Unmarshaler) ([]interfaces.ExecutionPayloadBody, erro
 		}
 		return bodies, nil
 	case *enginev2.BodiesResponseGloas:
-		bodies := make([]interfaces.ExecutionPayloadBody, len(resp.Entries))
-		for i, entry := range resp.Entries {
+		bodies := make([]interfaces.ExecutionPayloadBody, len(*resp))
+		for i, entry := range *resp {
 			if entry == nil || !entry.Available || entry.Body == nil {
 				continue
 			}
