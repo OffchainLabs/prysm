@@ -220,11 +220,8 @@ func (f *FieldTrie) ProveField(fieldIndex uint64) ([32]byte, [][32]byte, error) 
 			siblingIdx := currentIndex ^ 1
 
 			neighbor := trie.ZeroHashes[level]
-			if neighborIdx := siblingIdx; neighborIdx < f.levelSize(level) {
-				levelOffset := f.nodesData.offsets[level]
-				neighborIdx := levelOffset + neighborIdx
-
-				neighbor = f.nodesData.nodes[neighborIdx]
+			if siblingIdx < f.levelSize(level) {
+				neighbor = f.nodesData.nodes[f.nodesData.offsets[level]+siblingIdx]
 			}
 
 			proof[level] = neighbor
