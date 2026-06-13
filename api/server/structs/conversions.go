@@ -1531,7 +1531,7 @@ func PendingConsolidationsFromConsensus(cs []*eth.PendingConsolidation) []*Pendi
 	return consolidations
 }
 
-func HeadEventFromHeadData(data *statefeed.HeadData) *HeadEvent {
+func HeadEventFromData(data *statefeed.HeadData) *HeadEvent {
 	return &HeadEvent{
 		Slot:                      fmt.Sprintf("%d", data.Slot),
 		Block:                     hexutil.Encode(data.Block[:]),

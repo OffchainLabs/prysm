@@ -41,17 +41,6 @@ const (
 	ExecutionPayloadProcessed
 )
 
-// HeadData is the data sent with NewHead events.
-type HeadData struct {
-	Slot                      primitives.Slot
-	Block                     [32]byte
-	State                     [32]byte
-	EpochTransition           bool
-	PreviousDutyDependentRoot [32]byte
-	CurrentDutyDependentRoot  [32]byte
-	ExecutionOptimistic       bool
-}
-
 // BlockProcessedData is the data sent with BlockProcessed events.
 type BlockProcessedData struct {
 	// Slot is the slot of the processed block.
@@ -122,6 +111,17 @@ func (ps PayloadStatus) String() string {
 	default:
 		return "unknown"
 	}
+}
+
+// HeadData is the data sent with NewHead events.
+type HeadData struct {
+	Slot                      primitives.Slot
+	Block                     [32]byte
+	State                     [32]byte
+	EpochTransition           bool
+	PreviousDutyDependentRoot [32]byte
+	CurrentDutyDependentRoot  [32]byte
+	ExecutionOptimistic       bool
 }
 
 // HeadV2Data is the data sent with NewHeadV2 events.
