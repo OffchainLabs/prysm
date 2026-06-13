@@ -193,8 +193,13 @@ func (f *FieldTrie) ProveField(fieldIndex uint64) ([32]byte, [][32]byte, error) 
 		return [32]byte{}, nil, fmt.Errorf("field index %d out of bounds (field has %d leaves)", fieldIndex, leafCount)
 	}
 
-	// Owned mode: Directly read root from nodes.
+	var (
+		leaf  [32]byte
+		proof [][32]byte
+	)
+
 	if f.base == nil {
+		// Owned mode: read leaf and siblings directly from nodes.
 		depth := f.depth()
 
 		if f.levelSize(depth) == 0 {
@@ -203,10 +208,10 @@ func (f *FieldTrie) ProveField(fieldIndex uint64) ([32]byte, [][32]byte, error) 
 
 		// Read leaf.
 		startIndex := f.nodesData.offsets[0]
-		leaf := f.nodesData.nodes[startIndex+fieldIndex]
+		leaf = f.nodesData.nodes[startIndex+fieldIndex]
 
 		// Collect proof by walking up the trie levels.
-		proof := make([][32]byte, depth)
+		proof = make([][32]byte, depth)
 		currentIndex := fieldIndex
 
 		// At each level, collect sibling hash.
@@ -225,31 +230,38 @@ func (f *FieldTrie) ProveField(fieldIndex uint64) ([32]byte, [][32]byte, error) 
 			proof[level] = neighbor
 			currentIndex /= 2
 		}
+	} else {
+		// Overlay mode: Read root from overrides and fallback to base.
+		depth := f.base.depth()
 
-		return leaf, proof, nil
-	}
-
-	// Overlay mode: Read root from overrides and fallback to base.
-	depth := f.base.depth()
-
-	leaf, err := f.readOverlayNode(0 /* leaf level*/, fieldIndex)
-	if err != nil {
-		return [32]byte{}, nil, fmt.Errorf("read overlay leaf: %w", err)
-	}
-
-	// Collect proof by walking up the trie levels.
-	proof := make([][32]byte, depth)
-	currentIndex := fieldIndex
-	for level := range depth {
-		siblingIdx := currentIndex ^ 1
-
-		neighbor, err := f.readOverlayNode(level, siblingIdx)
+		leaf, err = f.readOverlayNode(0 /* leaf level */, fieldIndex)
 		if err != nil {
-			return [32]byte{}, nil, fmt.Errorf("read overlay sibling at level %d: %w", level, err)
+			return [32]byte{}, nil, fmt.Errorf("read overlay leaf: %w", err)
 		}
 
-		proof[level] = neighbor
-		currentIndex /= 2
+		// Collect proof by walking up the trie levels.
+		proof = make([][32]byte, depth)
+		currentIndex := fieldIndex
+		for level := range depth {
+			siblingIdx := currentIndex ^ 1
+
+			neighbor, err := f.readOverlayNode(level, siblingIdx)
+			if err != nil {
+				return [32]byte{}, nil, fmt.Errorf("read overlay sibling at level %d: %w", level, err)
+			}
+
+			proof[level] = neighbor
+			currentIndex /= 2
+		}
+	}
+
+	// Append the length-mixin leaf.
+	mixin, ok, err := f.lengthMixinLeaf()
+	if err != nil {
+		return [32]byte{}, nil, fmt.Errorf("length mixin leaf: %w", err)
+	}
+	if ok {
+		proof = append(proof, mixin)
 	}
 
 	return leaf, proof, nil
@@ -846,17 +858,31 @@ func (f *FieldTrie) recomputeBranch(idx uint64, hasher func([]byte) [32]byte) [3
 
 // rootWithMixin applies the appropriate length mixin based on data type.
 func (f *FieldTrie) rootWithMixin(root [32]byte) ([32]byte, error) {
+	mixin, ok, err := f.lengthMixinLeaf()
+	if err != nil {
+		return [32]byte{}, err
+	}
+	if !ok {
+		return root, nil
+	}
+
+	return ssz.MixInLength(root, mixin[:]), nil
+}
+
+// lengthMixinLeaf returns the SSZ length-mixin leaf for the field and whether a
+// mixin applies.
+func (f *FieldTrie) lengthMixinLeaf() ([32]byte, bool, error) {
 	switch f.dataType {
 	case types.BasicArray:
-		return root, nil
+		return [32]byte{}, false, nil
 
 	case types.CompositeArray, types.CompressedArray:
 		var lengthBuf [32]byte
 		binary.LittleEndian.PutUint64(lengthBuf[:], f.numOfElems)
-		return ssz.MixInLength(root, lengthBuf[:]), nil
+		return lengthBuf, true, nil
 
 	default:
-		return [32]byte{}, fmt.Errorf("unrecognized data type in field map: %v", reflect.TypeFor[types.DataType]().Name())
+		return [32]byte{}, false, fmt.Errorf("unrecognized data type in field map: %v", reflect.TypeFor[types.DataType]().Name())
 	}
 }
 
