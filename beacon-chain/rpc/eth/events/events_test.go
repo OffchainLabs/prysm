@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
@@ -28,6 +30,7 @@ import (
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common"
@@ -124,6 +127,7 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 		BlockGossipTopic,
 		DataColumnTopic,
 		PayloadAttestationMessageTopic,
+		ProposerPreferencesTopic,
 		ExecutionPayloadGossipTopic,
 	})
 	require.NoError(t, err)
@@ -330,6 +334,21 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 			},
 		},
 		{
+			Type: operation.ProposerPreferencesReceived,
+			Data: &operation.ProposerPreferencesReceivedData{
+				Data: &eth.SignedProposerPreferences{
+					Message: &eth.ProposerPreferences{
+						DependentRoot:  make([]byte, fieldparams.RootLength),
+						ProposalSlot:   32,
+						ValidatorIndex: 7,
+						FeeRecipient:   make([]byte, 20),
+						TargetGasLimit: 30_000_000,
+					},
+					Signature: make([]byte, fieldparams.BLSSignatureLength),
+				},
+			},
+		},
+		{
 			Type: operation.ExecutionPayloadGossipReceived,
 			Data: &operation.ExecutionPayloadGossipReceivedData{
 				Slot:         1,
@@ -379,6 +398,44 @@ func newStreamTestSync(t *testing.T) *streamTestSync {
 	}
 }
 
+func TestStreamEvents_ProposerPreferencesWrappedWithVersion(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	s := &Server{}
+	topics, err := newTopicRequest([]string{ProposerPreferencesTopic})
+	require.NoError(t, err)
+	ev := &feed.Event{
+		Type: operation.ProposerPreferencesReceived,
+		Data: &operation.ProposerPreferencesReceivedData{
+			Data: &eth.SignedProposerPreferences{
+				Message: &eth.ProposerPreferences{
+					DependentRoot:  make([]byte, fieldparams.RootLength),
+					ProposalSlot:   32,
+					ValidatorIndex: 7,
+					FeeRecipient:   make([]byte, 20),
+					TargetGasLimit: 30_000_000,
+				},
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+		},
+	}
+	lr, err := s.lazyReaderForEvent(t.Context(), ev, topics)
+	require.NoError(t, err)
+	out, err := io.ReadAll(lr())
+	require.NoError(t, err)
+
+	_, payload, found := strings.Cut(string(out), "data: ")
+	require.Equal(t, true, found)
+	var got structs.ProposerPreferencesEvent
+	require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(payload)), &got))
+	require.Equal(t, "gloas", got.Version)
+	require.NotNil(t, got.Data)
+	require.Equal(t, "7", got.Data.Message.ValidatorIndex)
+}
+
 func TestStreamEvents_OperationsEvents(t *testing.T) {
 	t.Run("operations", func(t *testing.T) {
 		testSync := newStreamTestSync(t)
@@ -416,6 +473,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 
 		topics, err := newTopicRequest([]string{
 			HeadTopic,
+			HeadV2Topic,
 			FinalizedCheckpointTopic,
 			ChainReorgTopic,
 			BlockTopic,
@@ -449,6 +507,20 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 					PreviousDutyDependentRoot: make([]byte, 32),
 					CurrentDutyDependentRoot:  make([]byte, 32),
 					ExecutionOptimistic:       false,
+				},
+			},
+			{
+				Type: statefeed.NewHeadV2,
+				Data: &statefeed.HeadV2Data{
+					Slot:                      0,
+					Block:                     [32]byte{},
+					State:                     [32]byte{},
+					EpochTransition:           true,
+					ExecutionOptimistic:       false,
+					CurrentEpochDependentRoot: [32]byte{},
+					NextEpochDependentRoot:    [32]byte{},
+					PayloadStatus:             statefeed.PayloadStatusFull,
+					Version:                   version.Gloas,
 				},
 			},
 			{
@@ -766,7 +838,7 @@ func TestStuckReaderScenarios(t *testing.T) {
 
 func wedgedWriterTestCase(t *testing.T, queueDepth func([]*feed.Event) int) {
 	topics, events := operationEventsFixtures(t)
-	require.Equal(t, 14, len(events))
+	require.Equal(t, 15, len(events))
 
 	// set eventFeedDepth to a number lower than the events we intend to send to force the server to drop the reader.
 	stn := mockChain.NewEventFeedWrapper()

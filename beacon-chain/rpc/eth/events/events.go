@@ -42,6 +42,8 @@ const (
 	InvalidTopic = "__invalid__"
 	// HeadTopic represents a new chain head event topic.
 	HeadTopic = "head"
+	// HeadV2Topic represents the versioned, Gloas-aware chain head event topic.
+	HeadV2Topic = "head_v2"
 	// BlockTopic represents a new produced block event topic.
 	BlockTopic = "block"
 	// BlockGossipTopic represents a block received from gossip or API that passes validation rules.
@@ -89,6 +91,8 @@ const (
 	ExecutionPayloadBidTopic = "execution_payload_bid"
 	// PayloadAttestationMessageTopic represents a new payload attestation message event topic.
 	PayloadAttestationMessageTopic = "payload_attestation_message"
+	// ProposerPreferencesTopic represents a new signed proposer preferences event topic.
+	ProposerPreferencesTopic = "proposer_preferences"
 )
 
 var (
@@ -124,11 +128,13 @@ var opsFeedEventTopics = map[feed.EventType]string{
 	operation.BlockGossipReceived:               BlockGossipTopic,
 	operation.DataColumnReceived:                DataColumnTopic,
 	operation.PayloadAttestationMessageReceived: PayloadAttestationMessageTopic,
+	operation.ProposerPreferencesReceived:       ProposerPreferencesTopic,
 	operation.ExecutionPayloadGossipReceived:    ExecutionPayloadGossipTopic,
 }
 
 var stateFeedEventTopics = map[feed.EventType]string{
 	statefeed.NewHead:                     HeadTopic,
+	statefeed.NewHeadV2:                   HeadV2Topic,
 	statefeed.FinalizedCheckpoint:         FinalizedCheckpointTopic,
 	statefeed.LightClientFinalityUpdate:   LightClientFinalityUpdateTopic,
 	statefeed.LightClientOptimisticUpdate: LightClientOptimisticUpdateTopic,
@@ -475,6 +481,8 @@ func topicForEvent(event *feed.Event) string {
 		return BlockGossipTopic
 	case *ethpb.EventHead:
 		return HeadTopic
+	case *statefeed.HeadV2Data:
+		return HeadV2Topic
 	case *ethpb.EventFinalizedCheckpoint:
 		return FinalizedCheckpointTopic
 	case interfaces.LightClientFinalityUpdate:
@@ -491,6 +499,8 @@ func topicForEvent(event *feed.Event) string {
 		return DataColumnTopic
 	case *operation.PayloadAttestationMessageReceivedData:
 		return PayloadAttestationMessageTopic
+	case *operation.ProposerPreferencesReceivedData:
+		return ProposerPreferencesTopic
 	case *statefeed.ExecutionPayloadAvailableData:
 		return ExecutionPayloadAvailableTopic
 	case *statefeed.ExecutionPayloadProcessedData:
@@ -518,6 +528,10 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		// we send two event messages in reaction; the head event and the payload attributes.
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, structs.HeadEventFromV1(v))
+		}, nil
+	case *statefeed.HeadV2Data:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, structs.HeadEventFromDataV2(v))
 		}, nil
 	case *operation.BlockGossipReceivedData:
 		blockRoot, err := v.SignedBlock.Block().HashTreeRoot()
@@ -672,6 +686,14 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 	case *operation.PayloadAttestationMessageReceivedData:
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, structs.PayloadAttestationMessageFromConsensus(v.Message))
+		}, nil
+	case *operation.ProposerPreferencesReceivedData:
+		return func() io.Reader {
+			epoch := slots.ToEpoch(v.Data.Message.ProposalSlot)
+			return jsonMarshalReader(eventName, &structs.ProposerPreferencesEvent{
+				Version: version.String(params.GetNetworkScheduleEntry(epoch).VersionEnum),
+				Data:    structs.SignedProposerPreferencesFromConsensus(v.Data),
+			})
 		}, nil
 	case *statefeed.ExecutionPayloadAvailableData:
 		return func() io.Reader {

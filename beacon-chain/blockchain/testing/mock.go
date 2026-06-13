@@ -78,6 +78,7 @@ type ChainService struct {
 	Blobs                       []blocks.VerifiedROBlob
 	DataColumns                 []blocks.VerifiedRODataColumn
 	TargetRoot                  [32]byte
+	HeadDependentRoot           [32]byte
 	MockHeadSlot                *primitives.Slot
 	DependentRootCB             func([32]byte, primitives.Epoch) ([32]byte, error)
 	MockCanonicalRoots          map[primitives.Slot][32]byte
@@ -400,6 +401,9 @@ func (s *ChainService) HeadBlock(context.Context) (interfaces.ReadOnlySignedBeac
 
 // HeadState mocks HeadState method in chain service.
 func (s *ChainService) HeadState(context.Context) (state.BeaconState, error) {
+	if s.HeadStateErr != nil {
+		return nil, s.HeadStateErr
+	}
 	return s.State, nil
 }
 
@@ -493,8 +497,8 @@ func (s *ChainService) IsCanonical(_ context.Context, r [32]byte) (bool, error) 
 }
 
 // DependentRoot mocks the base method in the chain service.
-func (*ChainService) DependentRoot(_ primitives.Epoch) ([32]byte, error) {
-	return [32]byte{}, nil
+func (s *ChainService) DependentRoot(_ primitives.Epoch) ([32]byte, error) {
+	return s.HeadDependentRoot, nil
 }
 
 // HasBlock mocks the same method in the chain service.

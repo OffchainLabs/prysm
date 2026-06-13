@@ -14,6 +14,23 @@ type HeadEvent struct {
 	CurrentDutyDependentRoot  string `json:"current_duty_dependent_root"`
 }
 
+// HeadEventV2 is the versioned, Gloas-aware head_v2 event.
+type HeadEventV2 struct {
+	Version string           `json:"version"`
+	Data    *HeadEventV2Data `json:"data"`
+}
+
+type HeadEventV2Data struct {
+	Slot                      string `json:"slot"`
+	Block                     string `json:"block"`
+	State                     string `json:"state"`
+	PayloadStatus             string `json:"payload_status"`
+	CurrentEpochDependentRoot string `json:"current_epoch_dependent_root"`
+	NextEpochDependentRoot    string `json:"next_epoch_dependent_root"`
+	EpochTransition           bool   `json:"epoch_transition"`
+	ExecutionOptimistic       bool   `json:"execution_optimistic"`
+}
+
 type BlockEvent struct {
 	Slot                string `json:"slot"`
 	Block               string `json:"block"`
@@ -111,6 +128,11 @@ type LightClientFinalityUpdateEvent struct {
 type LightClientOptimisticUpdateEvent struct {
 	Version string                       `json:"version"`
 	Data    *LightClientOptimisticUpdate `json:"data"`
+}
+
+type ProposerPreferencesEvent struct {
+	Version string                     `json:"version"`
+	Data    *SignedProposerPreferences `json:"data"`
 }
 
 type ExecutionPayloadAvailableEvent struct {

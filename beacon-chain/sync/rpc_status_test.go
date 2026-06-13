@@ -376,7 +376,7 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 		out := &ethpb.Status{}
 		assert.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, out))
 		log.WithField("status", out).Warn("received status")
-		resp := &ethpb.Status{HeadSlot: 100, HeadRoot: make([]byte, 32), ForkDigest: p2.Digest[:],
+		resp := &ethpb.Status{HeadSlot: 0, HeadRoot: make([]byte, 32), ForkDigest: p2.Digest[:],
 			FinalizedRoot: finalizedRoot[:], FinalizedEpoch: 0}
 		_, err := stream.Write([]byte{responseCodeSuccess})
 		assert.NoError(t, err)
@@ -561,7 +561,7 @@ func TestStatusRPCRequest_RequestSent(t *testing.T) {
 					PreviousVersion: params.BeaconConfig().GenesisForkVersion,
 					CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
 				},
-				Genesis:        time.Now(),
+				Genesis:        time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot)*150, 0),
 				ValidatorsRoot: [32]byte{'A'},
 			}
 
@@ -1049,9 +1049,47 @@ func TestStatusRPC_ValidGenesisMessage(t *testing.T) {
 		FinalizedRoot:  params.BeaconConfig().ZeroHash[:],
 		FinalizedEpoch: 0,
 		HeadRoot:       headRoot[:],
-		HeadSlot:       111,
+		HeadSlot:       0,
 	})
 	require.NoError(t, err)
+}
+
+func TestStatusRPC_RejectsFutureHeadSlot(t *testing.T) {
+	ctx := t.Context()
+	chain := &mock.ChainService{
+		FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: 0, Root: params.BeaconConfig().ZeroHash[:]},
+		Fork: &ethpb.Fork{
+			PreviousVersion: params.BeaconConfig().GenesisForkVersion,
+			CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
+		},
+		Genesis:        time.Now(),
+		ValidatorsRoot: [32]byte{'A'},
+	}
+	r := &Service{
+		cfg: &config{
+			chain:         chain,
+			clock:         startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			stateNotifier: chain.StateNotifier(),
+		},
+		ctx: ctx,
+	}
+	digest, err := r.currentForkDigest()
+	require.NoError(t, err)
+
+	status := func(headSlot primitives.Slot) *ethpb.Status {
+		return &ethpb.Status{
+			ForkDigest:     digest[:],
+			FinalizedRoot:  params.BeaconConfig().ZeroHash[:],
+			FinalizedEpoch: 0,
+			HeadRoot:       make([]byte, 32),
+			HeadSlot:       headSlot,
+		}
+	}
+
+	// within the allowance
+	require.NoError(t, r.validateStatusMessage(r.ctx, status(1)))
+	// beyond the allowance
+	require.ErrorContains(t, p2ptypes.ErrInvalidRequest.Error(), r.validateStatusMessage(r.ctx, status(100)))
 }
 
 func TestShouldResync(t *testing.T) {
