@@ -88,36 +88,111 @@ func reconstructRoot(leaf [32]byte, proof [][32]byte, index uint64) [32]byte {
 }
 
 func TestFieldTrie_ProveField(t *testing.T) {
-	indices := []uint64{0, 1, 42, testBlockRootsSize - 1}
+	type proveCase struct {
+		name     string
+		field    types.FieldIndex
+		dataType types.DataType
+		length   uint64
+		indices  []uint64
 
-	t.Run("owned mode proof reconstructs root", func(t *testing.T) {
-		blockRoots, _, _ := newTestElements()
-		ft, err := NewFieldTrie(types.BlockRoots, types.BasicArray, blockRoots, testBlockRootsSize, 0)
-		require.NoError(t, err)
+		// setup builds fresh elements for the case and returns a closure that
+		// mutates leaf 0 in place (used to drive the overlay path).
+		setup func() (elements any, mutateLeaf0 func())
+	}
 
-		root, err := ft.TrieRoot()
-		require.NoError(t, err)
+	cases := []proveCase{
+		{
+			name:     "BasicArray",
+			field:    types.BlockRoots,
+			dataType: types.BasicArray,
+			length:   testBlockRootsSize,
+			indices:  []uint64{0, 1, 42, testBlockRootsSize - 1},
+			setup: func() (any, func()) {
+				blockRoots, _, _ := newTestElements()
+				return blockRoots, func() {
+					binary.LittleEndian.PutUint64(blockRoots[0][:8], 999_999)
+				}
+			},
+		},
+		{
+			name:     "CompositeArray",
+			field:    types.Eth1DataVotes,
+			dataType: types.CompositeArray,
+			length:   testVotesSize,
+			indices:  []uint64{0, 1, 42, testVotesSize - 1},
+			setup: func() (any, func()) {
+				_, votes, _ := newTestElements()
+				return votes, func() {
+					votes[0].DepositCount = 999_999
+				}
+			},
+		},
+		{
+			name:     "CompressedArray",
+			field:    types.Balances,
+			dataType: types.CompressedArray,
+			length:   testNumBalances / 4,
+			indices:  []uint64{0, 1, 31, testNumBalances/4 - 1},
+			setup: func() (any, func()) {
+				_, _, balances := newTestElements()
+				return balances, func() {
+					balances[0] = 999_999
+				}
+			},
+		},
+	}
 
-		for _, idx := range indices {
-			leaf, proof, err := ft.ProveField(idx)
-			require.NoError(t, err)
-			require.Equal(t, blockRoots[idx], leaf)
-			require.Equal(t, root, reconstructRoot(leaf, proof, idx))
-		}
-	})
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("owned mode proof reconstructs root", func(t *testing.T) {
+				elements, _ := tc.setup()
 
-	t.Run("overlay mode proof reconstructs root", func(t *testing.T) {
-		// newTestOverlay mutates leaf 0; index 0 reads from the override, the
-		// rest fall back to the base buffer.
-		_, overlay, overlayRoot, blockRoots := newTestOverlay(t)
+				ft, err := NewFieldTrie(tc.field, tc.dataType, elements, tc.length, 0)
+				require.NoError(t, err)
 
-		for _, idx := range indices {
-			leaf, proof, err := overlay.ProveField(idx)
-			require.NoError(t, err)
-			require.Equal(t, blockRoots[idx], leaf)
-			require.Equal(t, overlayRoot, reconstructRoot(leaf, proof, idx))
-		}
-	})
+				root, err := ft.TrieRoot()
+				require.NoError(t, err)
+
+				for _, idx := range tc.indices {
+					leaf, proof, err := ft.ProveField(idx)
+					require.NoError(t, err)
+					require.Equal(t, root, reconstructRoot(leaf, proof, idx))
+
+					// CompositeArray/CompressedArray append one more leaf
+					// (length-mixin leaf).
+					wantLen := int(ft.depth())
+					if tc.dataType == types.CompressedArray || tc.dataType == types.CompositeArray {
+						wantLen++
+					}
+
+					require.Equal(t, wantLen, len(proof))
+				}
+			})
+
+			t.Run("overlay mode proof reconstructs root", func(t *testing.T) {
+				elements, mutateLeaf0 := tc.setup()
+
+				base, err := NewFieldTrie(tc.field, tc.dataType, elements, tc.length, 0)
+				require.NoError(t, err)
+
+				// Share the trie by copying it, and mutate leaf 0 in place.
+				cp := base.CopyTrie()
+				mutateLeaf0()
+
+				overlay, overlayRoot, err := base.RecomputeTrie([]uint64{0}, elements)
+				require.NoError(t, err)
+
+				// Prevent the GC from collecting cp before ProveField.
+				runtime.KeepAlive(cp)
+
+				for _, idx := range tc.indices {
+					leaf, proof, err := overlay.ProveField(idx)
+					require.NoError(t, err)
+					require.Equal(t, overlayRoot, reconstructRoot(leaf, proof, idx))
+				}
+			})
+		})
+	}
 
 	t.Run("index out of bounds", func(t *testing.T) {
 		blockRoots, _, _ := newTestElements()
