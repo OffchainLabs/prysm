@@ -30,6 +30,7 @@ func TestSubmitSignedProposerPreferences_OK(t *testing.T) {
 	vs := &Server{
 		SyncChecker:              &mockSync.Sync{IsSyncing: false},
 		TimeFetcher:              chain,
+		OperationNotifier:        chain.OperationNotifier(),
 		P2P:                      p2p,
 		ProposerPreferencesCache: cache,
 	}
@@ -72,6 +73,7 @@ func TestSubmitSignedProposerPreferences_Multiple(t *testing.T) {
 	vs := &Server{
 		SyncChecker:              &mockSync.Sync{IsSyncing: false},
 		TimeFetcher:              chain,
+		OperationNotifier:        chain.OperationNotifier(),
 		P2P:                      p2p,
 		ProposerPreferencesCache: c,
 	}
@@ -132,6 +134,7 @@ func TestSubmitSignedProposerPreferences_DuplicateSlot(t *testing.T) {
 	vs := &Server{
 		SyncChecker:              &mockSync.Sync{IsSyncing: false},
 		TimeFetcher:              chain,
+		OperationNotifier:        chain.OperationNotifier(),
 		P2P:                      p2p,
 		ProposerPreferencesCache: c,
 	}
@@ -168,6 +171,7 @@ func TestSubmitSignedProposerPreferences_InvalidEpoch(t *testing.T) {
 	vs := &Server{
 		SyncChecker:              &mockSync.Sync{IsSyncing: false},
 		TimeFetcher:              chain,
+		OperationNotifier:        chain.OperationNotifier(),
 		P2P:                      &p2pmock.MockBroadcaster{},
 		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 	}
@@ -210,6 +214,7 @@ func TestSubmitSignedProposerPreferences_CurrentEpochFutureSlot(t *testing.T) {
 	vs := &Server{
 		SyncChecker:              &mockSync.Sync{IsSyncing: false},
 		TimeFetcher:              chain,
+		OperationNotifier:        chain.OperationNotifier(),
 		P2P:                      p2p,
 		ProposerPreferencesCache: cache,
 	}
@@ -246,6 +251,7 @@ func TestSubmitSignedProposerPreferences_Syncing(t *testing.T) {
 	vs := &Server{
 		SyncChecker:              &mockSync.Sync{IsSyncing: true},
 		TimeFetcher:              chain,
+		OperationNotifier:        chain.OperationNotifier(),
 		P2P:                      &p2pmock.MockBroadcaster{},
 		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 	}
@@ -284,6 +290,7 @@ func TestSubmitSignedProposerPreferences_BroadcastsForProposalEpoch(t *testing.T
 	vs := &Server{
 		SyncChecker:              &mockSync.Sync{IsSyncing: false},
 		TimeFetcher:              chain,
+		OperationNotifier:        chain.OperationNotifier(),
 		P2P:                      p2p,
 		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 	}
