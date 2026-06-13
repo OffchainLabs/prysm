@@ -226,7 +226,7 @@ func (e *sszEngine) ForkchoiceUpdated(ctx context.Context, state *pb.ForkchoiceS
 // PbV3/PbV4 return nil for empty attributes, mirroring the JSON-RPC null param.
 func buildForkchoiceUpdate(state *pb.ForkchoiceState, attrs payloadattribute.Attributer) (int, ssz.Marshaler, error) {
 	switch attrs.Version() {
-	case version.Fulu:
+	case version.Deneb, version.Electra, version.Fulu:
 		a, err := attrs.PbV3()
 		if err != nil {
 			return 0, nil, err
