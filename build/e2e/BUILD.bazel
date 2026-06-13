@@ -1,0 +1,20 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary")
+load("@prysm//tools/go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "main.go",
+        "procgroup_other.go",
+        "procgroup_unix.go",
+    ],
+    importpath = "github.com/OffchainLabs/prysm/v7/build/e2e",
+    visibility = ["//visibility:private"],
+    deps = ["//build/externaldata:go_default_library"],
+)
+
+go_binary(
+    name = "e2e",
+    embed = [":go_default_library"],
+    visibility = ["//visibility:public"],
+)

@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/build/bazel"
 	"github.com/OffchainLabs/prysm/v7/io/file"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -223,11 +223,11 @@ func Init(t *testing.T, beaconNodeCount int) error {
 // InitMultiClient initializes the multiclient E2E config, properly handling test sharding.
 func InitMultiClient(t *testing.T, beaconNodeCount int, lighthouseNodeCount int) error {
 	testPath := bazel.TestTmpDir()
-	logPath, ok := os.LookupEnv("TEST_UNDECLARED_OUTPUTS_DIR")
-	if !ok {
-		return errors.New("expected TEST_UNDECLARED_OUTPUTS_DIR to be defined")
+	d := logDir()
+	if d == "" {
+		return errors.New("unable to determine log directory, no value for E2E_LOG_PATH or TEST_UNDECLARED_OUTPUTS_DIR")
 	}
-	logPath = path.Join(logPath, t.Name())
+	logPath := path.Join(d, t.Name())
 	if err := file.MkdirAll(logPath); err != nil {
 		return err
 	}

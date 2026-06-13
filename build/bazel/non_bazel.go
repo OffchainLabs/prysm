@@ -81,6 +81,26 @@ func searchBases() []string {
 	return bases
 }
 
+// FindBinary looks for a built binary by name, first in $PRYSM_BIN, then in the
+// repo's dist/ directory (populated by `make build`).
+func FindBinary(_, name string) (string, bool) {
+	candidates := []string{}
+	if dir := os.Getenv("PRYSM_BIN"); dir != "" {
+		candidates = append(candidates, filepath.Join(dir, name))
+	}
+
+	if root, err := moduleRoot(); err == nil {
+		candidates = append(candidates, filepath.Join(root, "dist", name))
+	}
+
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			return c, true
+		}
+	}
+	return "", false
+}
+
 // Runfile resolves path against, in order: an absolute path, the current working
 // directory, the module root, and the test-data root. External test data is a
 // lazy fixture: if the path is not on disk but maps to a known external-data

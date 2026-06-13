@@ -7,7 +7,12 @@ DIST ?= dist
 BINARIES := $(notdir $(patsubst %/,%,$(dir $(wildcard cmd/*/main.go))))
 GEN_KINDS := proto ssz mocks
 TEST_KINDS := mainnet minimal
-POSITIONAL := $(sort $(GEN_KINDS) $(TEST_KINDS) $(BINARIES))
+
+E2E_SCENARIOS := minimal builder web3signer slasher slashing scenario postmerge statediff mainnet multiclient
+E2E_SUITES    := presubmit postsubmit scenario_tests
+E2E_KINDS     := $(E2E_SCENARIOS) $(E2E_SUITES)
+
+POSITIONAL := $(sort $(GEN_KINDS) $(TEST_KINDS) $(E2E_KINDS) $(BINARIES))
 
 TAGS ?=
 TAGFLAG := $(if $(TAGS),-tags=$(TAGS),)
@@ -61,6 +66,8 @@ help: ## Show this help
 	@printf "  \033[36m%-14s\033[0m %s\n" "build" "$(BINARIES) [mode=$(subst $(space),|,$(MODES_build))] (default: $(MODE_DEFAULT_build))"
 	@printf "  \033[36m%-14s\033[0m %s\n" "gen" "$(GEN_KINDS)"
 	@printf "  \033[36m%-14s\033[0m %s\n" "test" "$(TEST_KINDS) [mode=$(subst $(space),|,$(MODES_test))] (default: $(MODE_DEFAULT_test))"
+	@printf "  \033[36m%-14s\033[0m %s\n" "e2e" "scenarios: $(E2E_SCENARIOS)"
+	@printf "  \033[36m%-14s\033[0m %s\n" ""    "suites:    $(E2E_SUITES) (default: presubmit)"
 
 # ---------------------------------------------------------------------------
 # Code generation
@@ -97,3 +104,10 @@ test:
 .PHONY: testdata
 testdata: ## Pre-fetch all external spec-test data (tests fetch lazily otherwise)
 	$(GO) run ./tools/cmd/fetch-testdata
+
+# ---------------------------------------------------------------------------
+# End-to-end tests
+# ---------------------------------------------------------------------------
+.PHONY: e2e
+e2e:
+	@GO="$(GO)" DIST="$(DIST)" $(GO) run ./build/e2e $(filter $(E2E_KINDS),$(MAKECMDGOALS))
