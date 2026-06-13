@@ -122,7 +122,10 @@ func (s *Service) engine() engineTransport {
 		return &instrumentedEngine{engineTransport: s.sszTransport, kind: transportSSZ}
 	}
 	if s.jsonTransport == nil {
-		s.jsonTransport = &jsonEngine{rpc: s.rpcClient, caps: &capabilityCache{}}
+		// engineLabelingClient tags engine_* call contexts so engineSizeRoundTripper
+		// can record engine_body_size_bytes{transport="json-rpc"} (comparable to the
+		// ssz-http sizes); eth_* calls go through s.rpcClient directly, untagged.
+		s.jsonTransport = &jsonEngine{rpc: &engineLabelingClient{RPCClient: s.rpcClient}, caps: &capabilityCache{}}
 	}
 	return &instrumentedEngine{engineTransport: s.jsonTransport, kind: transportJSON}
 }

@@ -134,7 +134,13 @@ func (s *Service) newRPCClientWithAuth(ctx context.Context, endpoint network.End
 		}
 		headers.Set(keyValue[0], strings.Join(keyValue[1:], "="))
 	}
-	return network.NewExecutionRPCClient(ctx, endpoint, headers)
+	// Wrap the engine connection's HTTP transport so JSON-RPC engine body sizes are
+	// recorded for comparison against the ssz-http path. The wrapper is engine-domain
+	// (it references the execution metrics), so it lives here and is injected into the
+	// generic dialer; IPC connections receive a nil wrapper.
+	return network.NewExecutionRPCClient(ctx, endpoint, headers, func(rt http.RoundTripper) http.RoundTripper {
+		return &engineSizeRoundTripper{base: rt}
+	})
 }
 
 // Checks the chain ID of the execution client to ensure
