@@ -527,7 +527,7 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		// The head event is a special case because, if the client requested the payload attributes topic,
 		// we send two event messages in reaction; the head event and the payload attributes.
 		return func() io.Reader {
-			return jsonMarshalReader(eventName, structs.HeadEventFromHeadData(v))
+			return jsonMarshalReader(eventName, structs.HeadEventFromData(v))
 		}, nil
 	case *statefeed.HeadV2Data:
 		return func() io.Reader {
