@@ -150,10 +150,10 @@ func TestParseRequest(t *testing.T) {
 					}
 					nr = rang[1]
 				}
-				mockWriteResult(t, w, msg, make([]*pb.ExecutionPayloadBody, nr))
+				mockWriteResult(t, w, msg, make([]*pb.ExecutionPayloadBodyV1, nr))
 			})
 
-			result := make([]*pb.ExecutionPayloadBody, 0)
+			result := make([]*pb.ExecutionPayloadBodyV1, 0)
 			var args []any
 			if len(c.byteArgs) > 0 {
 				args = []any{c.byteArgs}

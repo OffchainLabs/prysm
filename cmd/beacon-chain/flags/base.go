@@ -36,6 +36,14 @@ var (
 		Usage:   "Enables Builder APIs to send and receive in SSZ format",
 	}
 
+	// PostponeShutdownForProposals delays a graceful shutdown while a connected
+	// validator client still has an imminent block-proposal duty.
+	PostponeShutdownForProposals = &cli.BoolFlag{
+		Name: "postpone-shutdown-for-proposals",
+		Usage: "On a graceful shutdown signal (SIGINT/SIGTERM, e.g. Ctrl-C on Linux), postpone shutdown if a connected " +
+			"validator client must propose a block in the next 2 epochs. Send the signal again to force the node to stop immediately.",
+	}
+
 	MaxBuilderConsecutiveMissedSlots = &cli.IntFlag{
 		Name:  "max-builder-consecutive-missed-slots",
 		Usage: "Number of consecutive skip slot to fallback from using relay/builder to local execution engine for block construction",
