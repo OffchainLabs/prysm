@@ -171,6 +171,31 @@ func TestStore_OnBlockBatch(t *testing.T) {
 	require.Equal(t, primitives.Epoch(2), service.cfg.ForkChoiceStore.JustifiedCheckpoint().Epoch)
 }
 
+func TestAreSidecarsAvailable_GloasPayloadAbsent(t *testing.T) {
+	service, tr := minimalTestService(t)
+	ctx := tr.ctx
+
+	// Gloas block whose bid commits to blobs but whose payload was not revealed.
+	blk := util.NewBeaconBlockGloas()
+	blk.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = [][]byte{make([]byte, 48)}
+	signed, err := consensusblocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	ro, err := consensusblocks.NewROBlock(signed)
+	require.NoError(t, err)
+
+	// payloadRevealed=false must short-circuit: a payload-absent slot has no data columns to
+	// wait for, so the availability check must not run (it would otherwise poll forever).
+	require.NoError(t, service.areSidecarsAvailable(ctx, nil, ro, false))
+
+	// A Gloas block with no bid commitments never needs columns regardless of payload status.
+	empty := util.NewBeaconBlockGloas()
+	emptySigned, err := consensusblocks.NewSignedBeaconBlock(empty)
+	require.NoError(t, err)
+	emptyRO, err := consensusblocks.NewROBlock(emptySigned)
+	require.NoError(t, err)
+	require.NoError(t, service.areSidecarsAvailable(ctx, nil, emptyRO, true))
+}
+
 func TestStore_OnBlockBatch_NotifyNewPayload(t *testing.T) {
 	service, tr := minimalTestService(t)
 	ctx := tr.ctx
