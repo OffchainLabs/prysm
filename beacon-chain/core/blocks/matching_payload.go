@@ -1,4 +1,4 @@
-package altair
+package blocks
 
 import (
 	"fmt"

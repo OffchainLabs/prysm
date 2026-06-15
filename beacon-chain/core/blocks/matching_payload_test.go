@@ -1,10 +1,10 @@
-package altair_test
+package blocks_test
 
 import (
 	"bytes"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -37,7 +37,7 @@ func TestMatchingPayload(t *testing.T) {
 		stIface, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
 		require.NoError(t, err)
 
-		ok, err := altair.MatchingPayload(stIface, [32]byte{}, 0, 123)
+		ok, err := blocks.MatchingPayload(stIface, [32]byte{}, 0, 123)
 		require.NoError(t, err)
 		require.Equal(t, true, ok)
 	})
@@ -52,7 +52,7 @@ func TestMatchingPayload(t *testing.T) {
 		var rootArr [32]byte
 		copy(rootArr[:], root)
 
-		ok, err := altair.MatchingPayload(state, rootArr, 4, 1)
+		ok, err := blocks.MatchingPayload(state, rootArr, 4, 1)
 		require.ErrorContains(t, "committee index", err)
 		require.Equal(t, false, ok)
 	})
@@ -67,7 +67,7 @@ func TestMatchingPayload(t *testing.T) {
 		var rootArr [32]byte
 		copy(rootArr[:], root)
 
-		ok, err := altair.MatchingPayload(state, rootArr, 4, 0)
+		ok, err := blocks.MatchingPayload(state, rootArr, 4, 0)
 		require.NoError(t, err)
 		require.Equal(t, true, ok)
 	})
@@ -100,11 +100,11 @@ func TestMatchingPayload(t *testing.T) {
 		var rootArr [32]byte
 		copy(rootArr[:], root)
 
-		ok, err := altair.MatchingPayload(state, rootArr, 4, 1)
+		ok, err := blocks.MatchingPayload(state, rootArr, 4, 1)
 		require.NoError(t, err)
 		require.Equal(t, true, ok)
 
-		ok, err = altair.MatchingPayload(state, rootArr, 4, 0)
+		ok, err = blocks.MatchingPayload(state, rootArr, 4, 0)
 		require.NoError(t, err)
 		require.Equal(t, false, ok)
 	})

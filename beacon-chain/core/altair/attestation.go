@@ -314,7 +314,7 @@ func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, 
 
 	var beaconBlockRoot [32]byte
 	copy(beaconBlockRoot[:], data.BeaconBlockRoot)
-	matchingPayload, err := MatchingPayload(
+	matchingPayload, err := blocks.MatchingPayload(
 		beaconState,
 		beaconBlockRoot,
 		data.Slot,
