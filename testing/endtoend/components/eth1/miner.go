@@ -104,6 +104,8 @@ func (m *Miner) initAttempt(ctx context.Context, attempt int) (*os.File, error) 
 		return nil, err
 	}
 
+	// Disable PCSC smartcard lookup; geth can hang in go-libpcsclite when
+	// pcscd is unavailable in e2e sandboxes.
 	initCmd := exec.CommandContext(ctx, binaryPath, "--pcscdpath=", "init", fmt.Sprintf("--datadir=%s", m.DataDir()), gethJsonPath) // #nosec G204 -- Safe
 
 	// redirect stderr to a log file
@@ -123,8 +125,8 @@ func (m *Miner) initAttempt(ctx context.Context, attempt int) (*os.File, error) 
 
 	pwFile := m.DataDir("keystore", minerPasswordFile)
 	args := []string{
-		"--pcscdpath=",
-		"--nat=none", // disable nat traversal in e2e, it is failure prone and not needed
+		"--pcscdpath=", // keep PCSC disabled after init for the running geth node
+		"--nat=none",   // disable nat traversal in e2e, it is failure prone and not needed
 		fmt.Sprintf("--datadir=%s", m.DataDir()),
 		fmt.Sprintf("--http.port=%d", e2e.TestParams.Ports.Eth1RPCPort),
 		fmt.Sprintf("--ws.port=%d", e2e.TestParams.Ports.Eth1WSPort),

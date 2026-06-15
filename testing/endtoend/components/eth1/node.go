@@ -75,6 +75,8 @@ func (node *Node) Start(ctx context.Context) error {
 		return err
 	}
 
+	// Disable PCSC smartcard lookup; geth can hang in go-libpcsclite when
+	// pcscd is unavailable in e2e sandboxes.
 	initCmd := exec.CommandContext(ctx, binaryPath, "--pcscdpath=", "init", fmt.Sprintf("--datadir=%s", eth1Path), gethJsonPath) // #nosec G204 -- Safe
 	initFile, err := helpers.DeleteAndCreateFile(e2e.TestParams.LogPath, "eth1-init_"+strconv.Itoa(node.index)+".log")
 	if err != nil {
@@ -89,8 +91,8 @@ func (node *Node) Start(ctx context.Context) error {
 	}
 
 	args := []string{
-		"--pcscdpath=",
-		"--nat=none", // disable nat traversal in e2e, it is failure prone and not needed
+		"--pcscdpath=", // keep PCSC disabled after init for the running geth node
+		"--nat=none",   // disable nat traversal in e2e, it is failure prone and not needed
 		fmt.Sprintf("--datadir=%s", eth1Path),
 		fmt.Sprintf("--http.port=%d", e2e.TestParams.Ports.Eth1RPCPort+node.index),
 		fmt.Sprintf("--ws.port=%d", e2e.TestParams.Ports.Eth1WSPort+node.index),
