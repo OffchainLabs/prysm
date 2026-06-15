@@ -894,19 +894,6 @@ func (s *Service) validPowchainData(ctx context.Context) (*ethpb.ETH1ChainData, 
 	return eth1Data, nil
 }
 
-func dedupEndpoints(endpoints []string) []string {
-	selectionMap := make(map[string]bool)
-	newEndpoints := make([]string, 0, len(endpoints))
-	for _, point := range endpoints {
-		if selectionMap[point] {
-			continue
-		}
-		newEndpoints = append(newEndpoints, point)
-		selectionMap[point] = true
-	}
-	return newEndpoints
-}
-
 func (s *Service) migrateOldDepositTree(eth1DataInDB *ethpb.ETH1ChainData) error {
 	oldDepositTrie, err := trie.CreateTrieFromProto(eth1DataInDB.Trie)
 	if err != nil {
