@@ -596,8 +596,8 @@ func (b *BeaconState) DecreaseWithdrawalBalances(withdrawals []*enginev1.Withdra
 	defer b.lock.Unlock()
 
 	var (
-		balanceIndices []uint64
-		builderIndices []uint64
+		balanceIndices  []uint64
+		buildersChanged bool
 	)
 
 	for _, withdrawal := range withdrawals {
@@ -613,7 +613,7 @@ func (b *BeaconState) DecreaseWithdrawalBalances(withdrawals []*enginev1.Withdra
 			if err := b.decreaseBuilderBalanceLockFree(builderIndex, withdrawal.Amount); err != nil {
 				return err
 			}
-			builderIndices = append(builderIndices, uint64(builderIndex))
+			buildersChanged = true
 			continue
 		}
 
@@ -632,9 +632,8 @@ func (b *BeaconState) DecreaseWithdrawalBalances(withdrawals []*enginev1.Withdra
 		b.markFieldAsDirty(types.Balances)
 		b.addDirtyIndices(types.Balances, balanceIndices)
 	}
-	if len(builderIndices) > 0 {
+	if buildersChanged {
 		b.markFieldAsDirty(types.Builders)
-		b.addDirtyIndices(types.Builders, builderIndices)
 	}
 
 	return nil
