@@ -557,9 +557,6 @@ func (f *ForkChoice) FullBeatsEmpty(root [32]byte) bool {
 	if en == nil || en.node == nil {
 		return false
 	}
-	if slots.ToEpoch(en.node.slot) < params.BeaconConfig().GloasForkEpoch {
-		return false
-	}
 	pn := f.store.choosePayloadContent(en.node)
 	return pn != nil && pn.full
 }
