@@ -394,7 +394,7 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 			return emptyAttri
 		}
 		parentGasLimit := helpers.ParentTargetGasLimit(st)
-		return payloadAttributesGloas(uint64(t.Unix()), prevRando, val.FeeRecipient[:], headRoot, withdrawals, slot, val.GasLimitOr(parentGasLimit))
+		return payloadAttributesGloas(uint64(t.Unix()), prevRando, feeRecipient[:], headRoot, withdrawals, slot, val.GasLimitOr(parentGasLimit))
 	case v >= version.Deneb:
 		return payloadAttributesDeneb(st, uint64(t.Unix()), prevRando, feeRecipient[:], headRoot)
 	case v >= version.Capella:

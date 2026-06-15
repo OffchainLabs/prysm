@@ -819,6 +819,12 @@ func Test_GetPayloadAttributeV3(t *testing.T) {
 func Test_GetPayloadAttribute_GloasParentGasLimitFallback(t *testing.T) {
 	const parentGasLimit uint64 = 40_000_000
 
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	defaultFeeRecipient := common.HexToAddress("0x0123456789012345678901234567890123456789")
+	cfg.DefaultFeeRecipient = defaultFeeRecipient
+	params.OverrideBeaconConfig(cfg)
+
 	st, _ := util.DeterministicGenesisStateGloas(t, 64)
 	bid, err := st.LatestExecutionPayloadBid()
 	require.NoError(t, err)
@@ -851,6 +857,7 @@ func Test_GetPayloadAttribute_GloasParentGasLimitFallback(t *testing.T) {
 	v4, err := attr.PbV4()
 	require.NoError(t, err)
 	require.Equal(t, parentGasLimit, v4.TargetGasLimit)
+	require.Equal(t, defaultFeeRecipient, common.BytesToAddress(attr.SuggestedFeeRecipient()))
 }
 
 func Test_UpdateLastValidatedCheckpoint(t *testing.T) {
