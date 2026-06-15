@@ -141,26 +141,3 @@ func inputKeymanagerKind(cliCtx *cli.Context) (keymanager.Kind, error) {
 	}
 	return keymanager.Kind(selection), nil
 }
-
-// CreateAndSaveWalletCli from user input with a desired keymanager. If a
-// wallet already exists in the path, it suggests the user alternatives
-// such as how to edit their existing wallet configuration.
-func CreateAndSaveWalletCli(cliCtx *cli.Context) (*wallet.Wallet, error) {
-	keymanagerKind, err := inputKeymanagerKind(cliCtx)
-	if err != nil {
-		return nil, err
-	}
-	opts, err := ConstructCLIManagerOpts(cliCtx, keymanagerKind)
-	if err != nil {
-		return nil, err
-	}
-	acc, err := accounts.NewCLIManager(opts...)
-	if err != nil {
-		return nil, err
-	}
-	w, err := acc.WalletCreate(cliCtx.Context)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not create wallet")
-	}
-	return w, nil
-}

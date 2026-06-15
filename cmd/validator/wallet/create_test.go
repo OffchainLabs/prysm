@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
-	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/urfave/cli/v2"
@@ -123,80 +122,6 @@ func TestCreateOrOpenWallet(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, createdWallet.KeymanagerKind(), openedWallet.KeymanagerKind())
 	assert.Equal(t, createdWallet.AccountsDir(), openedWallet.AccountsDir())
-}
-
-func TestCreateWallet_Local(t *testing.T) {
-	walletDir, passwordsDir, walletPasswordFile := SetupWalletAndPasswordsDir(t)
-	cliCtx := SetupWalletCtx(t, &TestWalletConfig{
-		walletDir:          walletDir,
-		passwordsDir:       passwordsDir,
-		keymanagerKind:     keymanager.Local,
-		walletPasswordFile: walletPasswordFile,
-	})
-
-	// We attempt to create the wallet.
-	_, err := CreateAndSaveWalletCli(cliCtx)
-	require.NoError(t, err)
-
-	// We attempt to open the newly created wallet.
-	w, err := wallet.OpenWallet(cliCtx.Context, &wallet.Config{
-		WalletDir: walletDir,
-	})
-	assert.NoError(t, err)
-	_, err = w.ReadFileAtPath(cliCtx.Context, local.AccountsPath, local.AccountsKeystoreFileName)
-	require.NoError(t, err)
-}
-
-func TestCreateWallet_Derived(t *testing.T) {
-	walletDir, passwordsDir, passwordFile := SetupWalletAndPasswordsDir(t)
-	cliCtx := SetupWalletCtx(t, &TestWalletConfig{
-		walletDir:          walletDir,
-		passwordsDir:       passwordsDir,
-		walletPasswordFile: passwordFile,
-		keymanagerKind:     keymanager.Derived,
-		numAccounts:        1,
-	})
-
-	// We attempt to create the wallet.
-	_, err := CreateAndSaveWalletCli(cliCtx)
-	require.NoError(t, err)
-
-	// We attempt to open the newly created wallet.
-	_, err = wallet.OpenWallet(cliCtx.Context, &wallet.Config{
-		WalletDir: walletDir,
-	})
-	assert.NoError(t, err)
-}
-
-// TestCreateWallet_WalletAlreadyExists checks for expected error if trying to create a wallet when there is one already.
-func TestCreateWallet_WalletAlreadyExists(t *testing.T) {
-	walletDir, passwordsDir, passwordFile := SetupWalletAndPasswordsDir(t)
-	cliCtx := SetupWalletCtx(t, &TestWalletConfig{
-		walletDir:          walletDir,
-		passwordsDir:       passwordsDir,
-		walletPasswordFile: passwordFile,
-		keymanagerKind:     keymanager.Derived,
-		numAccounts:        1,
-	})
-
-	// We attempt to create the wallet.
-	_, err := CreateAndSaveWalletCli(cliCtx)
-	require.NoError(t, err)
-
-	// We attempt to create another wallet of the same type at the same location. We expect an error.
-	_, err = CreateAndSaveWalletCli(cliCtx)
-	require.ErrorContains(t, "already exists", err)
-
-	cliCtx = SetupWalletCtx(t, &TestWalletConfig{
-		walletDir:          walletDir,
-		passwordsDir:       passwordsDir,
-		walletPasswordFile: passwordFile,
-		keymanagerKind:     keymanager.Local,
-	})
-
-	// We attempt to create another wallet of different type at the same location. We expect an error.
-	_, err = CreateAndSaveWalletCli(cliCtx)
-	require.ErrorContains(t, "already exists", err)
 }
 
 func TestInputKeymanagerKind(t *testing.T) {
