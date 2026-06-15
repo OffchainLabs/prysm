@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	stateTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/state/testing"
@@ -19,17 +18,20 @@ func TestProcessDepositRequests_EmptyAndNil(t *testing.T) {
 	st := newGloasState(t, nil, nil)
 
 	t.Run("empty requests continues", func(t *testing.T) {
-		err := ProcessDepositRequests(t.Context(), st, []*enginev1.DepositRequest{}, nil)
+		err := ProcessDepositRequests(t.Context(), st, []*enginev1.DepositRequest{})
 		require.NoError(t, err)
 	})
 
 	t.Run("nil request errors", func(t *testing.T) {
-		err := ProcessDepositRequests(t.Context(), st, []*enginev1.DepositRequest{nil}, nil)
+		err := ProcessDepositRequests(t.Context(), st, []*enginev1.DepositRequest{nil})
 		require.ErrorContains(t, "nil deposit request", err)
 	})
 }
 
-func TestProcessDepositRequest_BuilderDepositAddsBuilder(t *testing.T) {
+// [Modified in Gloas:EIP8282] All deposit requests, including those with a
+// builder withdrawal credential, are queued as pending deposits; builder
+// onboarding happens only via BuilderDepositRequest.
+func TestProcessDepositRequest_QueuesPendingDeposit(t *testing.T) {
 	sk, err := bls.RandKey()
 	require.NoError(t, err)
 
@@ -38,188 +40,17 @@ func TestProcessDepositRequest_BuilderDepositAddsBuilder(t *testing.T) {
 	req := depositRequestFromPending(pd, 1)
 
 	st := newGloasState(t, nil, nil)
-	err = processDepositRequest(st, req, nil)
-	require.NoError(t, err)
-
-	idx, ok := st.BuilderIndexByPubkey(toBytes48(req.Pubkey))
-	require.Equal(t, true, ok)
-
-	builder, err := st.Builder(idx)
-	require.NoError(t, err)
-	require.NotNil(t, builder)
-	require.DeepEqual(t, req.Pubkey, builder.Pubkey)
-	require.DeepEqual(t, []byte{cred[0]}, builder.Version)
-	require.DeepEqual(t, cred[12:], builder.ExecutionAddress)
-	require.Equal(t, uint64(1234), uint64(builder.Balance))
-	require.Equal(t, params.BeaconConfig().FarFutureEpoch, builder.WithdrawableEpoch)
-
-	pending, err := st.PendingDeposits()
-	require.NoError(t, err)
-	require.Equal(t, 0, len(pending))
-}
-
-func TestProcessDepositRequest_ExistingBuilderIncreasesBalance(t *testing.T) {
-	sk, err := bls.RandKey()
-	require.NoError(t, err)
-
-	pubkey := sk.PublicKey().Marshal()
-	builders := []*ethpb.Builder{
-		{
-			Pubkey:            pubkey,
-			Version:           []byte{0},
-			ExecutionAddress:  bytes.Repeat([]byte{0x11}, 20),
-			Balance:           5,
-			WithdrawableEpoch: params.BeaconConfig().FarFutureEpoch,
-		},
-	}
-	st := newGloasState(t, nil, builders)
-
-	cred := validatorWithdrawalCredentials()
-	pd := stateTesting.GeneratePendingDeposit(t, sk, 200, cred, 0)
-	req := depositRequestFromPending(pd, 9)
-
-	err = processDepositRequest(st, req, nil)
-	require.NoError(t, err)
-
-	idx, ok := st.BuilderIndexByPubkey(toBytes48(pubkey))
-	require.Equal(t, true, ok)
-	builder, err := st.Builder(idx)
-	require.NoError(t, err)
-	require.Equal(t, uint64(205), uint64(builder.Balance))
-
-	pending, err := st.PendingDeposits()
-	require.NoError(t, err)
-	require.Equal(t, 0, len(pending))
-}
-
-func TestProcessDepositRequest_BuilderDepositWithExistingPendingDepositStaysPending(t *testing.T) {
-	sk, err := bls.RandKey()
-	require.NoError(t, err)
-
-	validatorCred := validatorWithdrawalCredentials()
-	builderCred := builderWithdrawalCredentials()
-	existingPending := stateTesting.GeneratePendingDeposit(t, sk, 1234, validatorCred, 0)
-	req := depositRequestFromPending(stateTesting.GeneratePendingDeposit(t, sk, 200, builderCred, 1), 9)
-
-	st := newGloasState(t, nil, nil)
-	require.NoError(t, st.SetPendingDeposits([]*ethpb.PendingDeposit{existingPending}))
-
-	err = processDepositRequest(st, req, nil)
-	require.NoError(t, err)
+	require.NoError(t, processDepositRequest(st, req))
 
 	_, ok := st.BuilderIndexByPubkey(toBytes48(req.Pubkey))
 	require.Equal(t, false, ok)
 
 	pending, err := st.PendingDeposits()
 	require.NoError(t, err)
-	require.Equal(t, 2, len(pending))
-	require.DeepEqual(t, existingPending.PublicKey, pending[0].PublicKey)
-	require.DeepEqual(t, req.Pubkey, pending[1].PublicKey)
-	require.DeepEqual(t, req.WithdrawalCredentials, pending[1].WithdrawalCredentials)
-	require.Equal(t, req.Amount, pending[1].Amount)
-}
-
-func TestApplyDepositForBuilder_InvalidSignatureIgnoresDeposit(t *testing.T) {
-	sk, err := bls.RandKey()
-	require.NoError(t, err)
-
-	cred := builderWithdrawalCredentials()
-	st := newGloasState(t, nil, nil)
-	err = applyDepositForNewBuilder(st, sk.PublicKey().Marshal(), cred[:], 100, make([]byte, 96), nil)
-	require.NoError(t, err)
-
-	_, ok := st.BuilderIndexByPubkey(toBytes48(sk.PublicKey().Marshal()))
-	require.Equal(t, false, ok)
-}
-
-func TestPrefetchedDepositSigs_NilOrEmpty(t *testing.T) {
-	require.Equal(t, true, prefetchedDepositSigs(nil) == nil)
-	require.Equal(t, true, prefetchedDepositSigs(&enginev1.ExecutionRequests{}) == nil)
-}
-
-func TestPrefetchedDepositSigs_CacheMiss(t *testing.T) {
-	rqs := &enginev1.ExecutionRequests{Deposits: []*enginev1.DepositRequest{{
-		Pubkey:                make([]byte, 48),
-		WithdrawalCredentials: make([]byte, 32),
-		Signature:             make([]byte, 96),
-	}}}
-	require.Equal(t, true, prefetchedDepositSigs(rqs) == nil)
-}
-
-func TestPrefetchedDepositSigs_CacheHitAllValid(t *testing.T) {
-	cache.DepositSig = cache.NewDepositSigCache()
-	rqs := &enginev1.ExecutionRequests{Deposits: []*enginev1.DepositRequest{
-		{Pubkey: make([]byte, 48), WithdrawalCredentials: make([]byte, 32), Signature: make([]byte, 96)},
-		{Pubkey: make([]byte, 48), WithdrawalCredentials: make([]byte, 32), Signature: make([]byte, 96), Amount: 1},
-	}}
-	root, err := rqs.HashTreeRoot()
-	require.NoError(t, err)
-	cache.DepositSig.Put(root, []int{})
-
-	got := prefetchedDepositSigs(rqs)
-	require.DeepEqual(t, []bool{true, true}, got)
-}
-
-func TestPrefetchedDepositSigs_CacheHitMarksInvalid(t *testing.T) {
-	cache.DepositSig = cache.NewDepositSigCache()
-	rqs := &enginev1.ExecutionRequests{Deposits: []*enginev1.DepositRequest{
-		{Pubkey: make([]byte, 48), WithdrawalCredentials: make([]byte, 32), Signature: make([]byte, 96)},
-		{Pubkey: make([]byte, 48), WithdrawalCredentials: make([]byte, 32), Signature: make([]byte, 96), Amount: 1},
-		{Pubkey: make([]byte, 48), WithdrawalCredentials: make([]byte, 32), Signature: make([]byte, 96), Amount: 2},
-	}}
-	root, err := rqs.HashTreeRoot()
-	require.NoError(t, err)
-	cache.DepositSig.Put(root, []int{1})
-
-	got := prefetchedDepositSigs(rqs)
-	require.DeepEqual(t, []bool{true, false, true}, got)
-}
-
-func TestPrefetchedDepositSigs_OutOfRangeIndexReturnsNil(t *testing.T) {
-	cache.DepositSig = cache.NewDepositSigCache()
-	rqs := &enginev1.ExecutionRequests{Deposits: []*enginev1.DepositRequest{
-		{Pubkey: make([]byte, 48), WithdrawalCredentials: make([]byte, 32), Signature: make([]byte, 96)},
-	}}
-	root, err := rqs.HashTreeRoot()
-	require.NoError(t, err)
-	cache.DepositSig.Put(root, []int{5})
-
-	require.Equal(t, true, prefetchedDepositSigs(rqs) == nil)
-}
-
-func TestProcessDepositRequests_PrefetchedInvalidSkipsBuilderAdd(t *testing.T) {
-	sk, err := bls.RandKey()
-	require.NoError(t, err)
-	cred := builderWithdrawalCredentials()
-	pd := stateTesting.GeneratePendingDeposit(t, sk, 1234, cred, 0)
-	req := depositRequestFromPending(pd, 1)
-
-	st := newGloasState(t, nil, nil)
-	err = ProcessDepositRequests(t.Context(), st, []*enginev1.DepositRequest{req}, []bool{false})
-	require.NoError(t, err)
-
-	_, ok := st.BuilderIndexByPubkey(toBytes48(req.Pubkey))
-	require.Equal(t, false, ok)
-}
-
-func TestProcessDepositRequests_PrefetchedValidBypassesBLS(t *testing.T) {
-	sk, err := bls.RandKey()
-	require.NoError(t, err)
-	cred := builderWithdrawalCredentials()
-	req := &enginev1.DepositRequest{
-		Pubkey:                sk.PublicKey().Marshal(),
-		WithdrawalCredentials: cred[:],
-		Amount:                1234,
-		Signature:             make([]byte, 96),
-		Index:                 1,
-	}
-
-	st := newGloasState(t, nil, nil)
-	err = ProcessDepositRequests(t.Context(), st, []*enginev1.DepositRequest{req}, []bool{true})
-	require.NoError(t, err)
-
-	_, ok := st.BuilderIndexByPubkey(toBytes48(req.Pubkey))
-	require.Equal(t, true, ok)
+	require.Equal(t, 1, len(pending))
+	require.DeepEqual(t, req.Pubkey, pending[0].PublicKey)
+	require.DeepEqual(t, req.WithdrawalCredentials, pending[0].WithdrawalCredentials)
+	require.Equal(t, req.Amount, pending[0].Amount)
 }
 
 func newGloasState(t *testing.T, validators []*ethpb.Validator, builders []*ethpb.Builder) state.BeaconState {
@@ -231,6 +62,7 @@ func newGloasState(t *testing.T, validators []*ethpb.Validator, builders []*ethp
 		Balances:                  make([]uint64, len(validators)),
 		PendingDeposits:           []*ethpb.PendingDeposit{},
 		Builders:                  builders,
+		FinalizedCheckpoint:       &ethpb.Checkpoint{Epoch: 1, Root: make([]byte, 32)},
 	})
 	require.NoError(t, err)
 

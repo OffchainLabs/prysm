@@ -319,6 +319,199 @@ func (c *ConsolidationRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
+// MarshalSSZ ssz marshals the BuilderDepositRequest object
+func (b *BuilderDepositRequest) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BuilderDepositRequest object to a target array
+func (b *BuilderDepositRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'Pubkey'
+	if size := len(b.Pubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.Pubkey", size, 48)
+		return
+	}
+	dst = append(dst, b.Pubkey...)
+
+	// Field (1) 'WithdrawalCredentials'
+	if size := len(b.WithdrawalCredentials); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.WithdrawalCredentials", size, 32)
+		return
+	}
+	dst = append(dst, b.WithdrawalCredentials...)
+
+	// Field (2) 'Amount'
+	dst = ssz.MarshalUint(dst, b.Amount)
+
+	// Field (3) 'Signature'
+	if size := len(b.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	dst = append(dst, b.Signature...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BuilderDepositRequest object
+func (b *BuilderDepositRequest) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 184 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'Pubkey'
+	if cap(b.Pubkey) == 0 {
+		b.Pubkey = make([]byte, 0, len(buf[0:48]))
+	}
+	b.Pubkey = append(b.Pubkey, buf[0:48]...)
+
+	// Field (1) 'WithdrawalCredentials'
+	if cap(b.WithdrawalCredentials) == 0 {
+		b.WithdrawalCredentials = make([]byte, 0, len(buf[48:80]))
+	}
+	b.WithdrawalCredentials = append(b.WithdrawalCredentials, buf[48:80]...)
+
+	// Field (2) 'Amount'
+	b.Amount = ssz.UnmarshallUint[uint64](buf[80:88])
+
+	// Field (3) 'Signature'
+	if cap(b.Signature) == 0 {
+		b.Signature = make([]byte, 0, len(buf[88:184]))
+	}
+	b.Signature = append(b.Signature, buf[88:184]...)
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BuilderDepositRequest object
+func (b *BuilderDepositRequest) SizeSSZ() (size int) {
+	size = 184
+	return
+}
+
+// HashTreeRoot ssz hashes the BuilderDepositRequest object
+func (b *BuilderDepositRequest) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BuilderDepositRequest object with a hasher
+func (b *BuilderDepositRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Pubkey'
+	if size := len(b.Pubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.Pubkey", size, 48)
+		return
+	}
+	hh.PutBytes(b.Pubkey)
+
+	// Field (1) 'WithdrawalCredentials'
+	if size := len(b.WithdrawalCredentials); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.WithdrawalCredentials", size, 32)
+		return
+	}
+	hh.PutBytes(b.WithdrawalCredentials)
+
+	// Field (2) 'Amount'
+	ssz.PutUint(hh, b.Amount)
+
+	// Field (3) 'Signature'
+	if size := len(b.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	hh.PutBytes(b.Signature)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the BuilderExitRequest object
+func (b *BuilderExitRequest) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BuilderExitRequest object to a target array
+func (b *BuilderExitRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'SourceAddress'
+	if size := len(b.SourceAddress); size != 20 {
+		err = ssz.ErrBytesLengthFn("--.SourceAddress", size, 20)
+		return
+	}
+	dst = append(dst, b.SourceAddress...)
+
+	// Field (1) 'Pubkey'
+	if size := len(b.Pubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.Pubkey", size, 48)
+		return
+	}
+	dst = append(dst, b.Pubkey...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BuilderExitRequest object
+func (b *BuilderExitRequest) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 68 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'SourceAddress'
+	if cap(b.SourceAddress) == 0 {
+		b.SourceAddress = make([]byte, 0, len(buf[0:20]))
+	}
+	b.SourceAddress = append(b.SourceAddress, buf[0:20]...)
+
+	// Field (1) 'Pubkey'
+	if cap(b.Pubkey) == 0 {
+		b.Pubkey = make([]byte, 0, len(buf[20:68]))
+	}
+	b.Pubkey = append(b.Pubkey, buf[20:68]...)
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BuilderExitRequest object
+func (b *BuilderExitRequest) SizeSSZ() (size int) {
+	size = 68
+	return
+}
+
+// HashTreeRoot ssz hashes the BuilderExitRequest object
+func (b *BuilderExitRequest) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BuilderExitRequest object with a hasher
+func (b *BuilderExitRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'SourceAddress'
+	if size := len(b.SourceAddress); size != 20 {
+		err = ssz.ErrBytesLengthFn("--.SourceAddress", size, 20)
+		return
+	}
+	hh.PutBytes(b.SourceAddress)
+
+	// Field (1) 'Pubkey'
+	if size := len(b.Pubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.Pubkey", size, 48)
+		return
+	}
+	hh.PutBytes(b.Pubkey)
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the ExecutionRequests object
 func (e *ExecutionRequests) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(e)
@@ -327,7 +520,7 @@ func (e *ExecutionRequests) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the ExecutionRequests object to a target array
 func (e *ExecutionRequests) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(12)
+	offset := int(20)
 
 	// Offset (0) 'Deposits'
 	dst = ssz.WriteOffset(dst, offset)
@@ -340,6 +533,14 @@ func (e *ExecutionRequests) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	// Offset (2) 'Consolidations'
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(e.Consolidations) * 116
+
+	// Offset (3) 'BuilderDeposits'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.BuilderDeposits) * 184
+
+	// Offset (4) 'BuilderExits'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.BuilderExits) * 68
 
 	// Field (0) 'Deposits'
 	if size := len(e.Deposits); size > 8192 {
@@ -374,6 +575,28 @@ func (e *ExecutionRequests) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		}
 	}
 
+	// Field (3) 'BuilderDeposits'
+	if size := len(e.BuilderDeposits); size > 16 {
+		err = ssz.ErrListTooBigFn("--.BuilderDeposits", size, 16)
+		return
+	}
+	for ii := 0; ii < len(e.BuilderDeposits); ii++ {
+		if dst, err = e.BuilderDeposits[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (4) 'BuilderExits'
+	if size := len(e.BuilderExits); size > 16 {
+		err = ssz.ErrListTooBigFn("--.BuilderExits", size, 16)
+		return
+	}
+	for ii := 0; ii < len(e.BuilderExits); ii++ {
+		if dst, err = e.BuilderExits[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
 	return
 }
 
@@ -381,19 +604,19 @@ func (e *ExecutionRequests) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 func (e *ExecutionRequests) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 12 {
+	if size < 20 {
 		return ssz.ErrSize
 	}
 
 	tail := buf
-	var o0, o1, o2 uint64
+	var o0, o1, o2, o3, o4 uint64
 
 	// Offset (0) 'Deposits'
 	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
 		return ssz.ErrOffset
 	}
 
-	if o0 != 12 {
+	if o0 != 20 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
@@ -404,6 +627,16 @@ func (e *ExecutionRequests) UnmarshalSSZ(buf []byte) error {
 
 	// Offset (2) 'Consolidations'
 	if o2 = ssz.ReadOffset(buf[8:12]); o2 > size || o1 > o2 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (3) 'BuilderDeposits'
+	if o3 = ssz.ReadOffset(buf[12:16]); o3 > size || o2 > o3 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (4) 'BuilderExits'
+	if o4 = ssz.ReadOffset(buf[16:20]); o4 > size || o3 > o4 {
 		return ssz.ErrOffset
 	}
 
@@ -445,7 +678,7 @@ func (e *ExecutionRequests) UnmarshalSSZ(buf []byte) error {
 
 	// Field (2) 'Consolidations'
 	{
-		buf = tail[o2:]
+		buf = tail[o2:o3]
 		num, err := ssz.DivideInt2(len(buf), 116, 2)
 		if err != nil {
 			return err
@@ -460,12 +693,48 @@ func (e *ExecutionRequests) UnmarshalSSZ(buf []byte) error {
 			}
 		}
 	}
+
+	// Field (3) 'BuilderDeposits'
+	{
+		buf = tail[o3:o4]
+		num, err := ssz.DivideInt2(len(buf), 184, 16)
+		if err != nil {
+			return err
+		}
+		e.BuilderDeposits = make([]*BuilderDepositRequest, num)
+		for ii := 0; ii < num; ii++ {
+			if e.BuilderDeposits[ii] == nil {
+				e.BuilderDeposits[ii] = new(BuilderDepositRequest)
+			}
+			if err = e.BuilderDeposits[ii].UnmarshalSSZ(buf[ii*184 : (ii+1)*184]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (4) 'BuilderExits'
+	{
+		buf = tail[o4:]
+		num, err := ssz.DivideInt2(len(buf), 68, 16)
+		if err != nil {
+			return err
+		}
+		e.BuilderExits = make([]*BuilderExitRequest, num)
+		for ii := 0; ii < num; ii++ {
+			if e.BuilderExits[ii] == nil {
+				e.BuilderExits[ii] = new(BuilderExitRequest)
+			}
+			if err = e.BuilderExits[ii].UnmarshalSSZ(buf[ii*68 : (ii+1)*68]); err != nil {
+				return err
+			}
+		}
+	}
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the ExecutionRequests object
 func (e *ExecutionRequests) SizeSSZ() (size int) {
-	size = 12
+	size = 20
 
 	// Field (0) 'Deposits'
 	size += len(e.Deposits) * 192
@@ -475,6 +744,12 @@ func (e *ExecutionRequests) SizeSSZ() (size int) {
 
 	// Field (2) 'Consolidations'
 	size += len(e.Consolidations) * 116
+
+	// Field (3) 'BuilderDeposits'
+	size += len(e.BuilderDeposits) * 184
+
+	// Field (4) 'BuilderExits'
+	size += len(e.BuilderExits) * 68
 
 	return
 }
@@ -534,6 +809,38 @@ func (e *ExecutionRequests) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 			}
 		}
 		hh.MerkleizeWithMixin(subIndx, num, 2)
+	}
+
+	// Field (3) 'BuilderDeposits'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(e.BuilderDeposits))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range e.BuilderDeposits {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	// Field (4) 'BuilderExits'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(e.BuilderExits))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range e.BuilderExits {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
 	}
 
 	hh.Merkleize(indx)

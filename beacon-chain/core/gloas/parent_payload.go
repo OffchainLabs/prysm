@@ -96,7 +96,7 @@ func ApplyParentExecutionPayload(
 }
 
 func processExecutionRequests(ctx context.Context, st state.BeaconState, rqs *enginev1.ExecutionRequests) error {
-	if err := ProcessDepositRequests(ctx, st, rqs.Deposits, prefetchedDepositSigs(rqs)); err != nil {
+	if err := ProcessDepositRequests(ctx, st, rqs.Deposits); err != nil {
 		return errors.Wrap(err, "could not process deposit requests")
 	}
 	var err error
@@ -104,7 +104,13 @@ func processExecutionRequests(ctx context.Context, st state.BeaconState, rqs *en
 	if err != nil {
 		return errors.Wrap(err, "could not process withdrawal requests")
 	}
-	return requests.ProcessConsolidationRequests(ctx, st, rqs.Consolidations)
+	if err := requests.ProcessConsolidationRequests(ctx, st, rqs.Consolidations); err != nil {
+		return errors.Wrap(err, "could not process consolidation requests")
+	}
+	if err := ProcessBuilderDepositRequests(ctx, st, rqs.BuilderDeposits); err != nil {
+		return errors.Wrap(err, "could not process builder deposit requests")
+	}
+	return ProcessBuilderExitRequests(ctx, st, rqs.BuilderExits)
 }
 
 // IsEmptyExecutionRequests returns true if the execution requests contain no entries.
@@ -112,5 +118,6 @@ func IsEmptyExecutionRequests(r *enginev1.ExecutionRequests) bool {
 	if r == nil {
 		return true
 	}
-	return len(r.Deposits) == 0 && len(r.Withdrawals) == 0 && len(r.Consolidations) == 0
+	return len(r.Deposits) == 0 && len(r.Withdrawals) == 0 && len(r.Consolidations) == 0 &&
+		len(r.BuilderDeposits) == 0 && len(r.BuilderExits) == 0
 }

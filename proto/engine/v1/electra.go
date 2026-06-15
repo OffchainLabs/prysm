@@ -9,12 +9,16 @@ import (
 )
 
 var (
-	drExample = &DepositRequest{}
-	drSize    = drExample.SizeSSZ()
-	wrExample = &WithdrawalRequest{}
-	wrSize    = wrExample.SizeSSZ()
-	crExample = &ConsolidationRequest{}
-	crSize    = crExample.SizeSSZ()
+	drExample  = &DepositRequest{}
+	drSize     = drExample.SizeSSZ()
+	wrExample  = &WithdrawalRequest{}
+	wrSize     = wrExample.SizeSSZ()
+	crExample  = &ConsolidationRequest{}
+	crSize     = crExample.SizeSSZ()
+	bdrExample = &BuilderDepositRequest{}
+	bdrSize    = bdrExample.SizeSSZ()
+	berExample = &BuilderExitRequest{}
+	berSize    = berExample.SizeSSZ()
 )
 
 // emptyRequestsRootOnce merkleizes a zero-value ExecutionRequests.
@@ -31,13 +35,17 @@ const (
 	DepositRequestType = iota
 	WithdrawalRequestType
 	ConsolidationRequestType
+	BuilderDepositRequestType
+	BuilderExitRequestType
 )
 
 // ExecutionRequestConfig ensures that we don't mix up the execution request params
 type ExecutionRequestLimits struct {
-	Deposits       uint64
-	Withdrawals    uint64
-	Consolidations uint64
+	Deposits        uint64
+	Withdrawals     uint64
+	Consolidations  uint64
+	BuilderDeposits uint64
+	BuilderExits    uint64
 }
 
 func (ebe *ExecutionBundleElectra) GetDecodedExecutionRequests(limits ExecutionRequestLimits) (*ExecutionRequests, error) {
@@ -75,6 +83,18 @@ func decodeExecutionRequestList(raw [][]byte, limits ExecutionRequestLimits) (*E
 				return nil, err
 			}
 			requests.Consolidations = crs
+		case BuilderDepositRequestType:
+			bds, err := unmarshalBuilderDeposits(requestListInSSZBytes, limits.BuilderDeposits)
+			if err != nil {
+				return nil, err
+			}
+			requests.BuilderDeposits = bds
+		case BuilderExitRequestType:
+			bes, err := unmarshalBuilderExits(requestListInSSZBytes, limits.BuilderExits)
+			if err != nil {
+				return nil, err
+			}
+			requests.BuilderExits = bes
 		default:
 			return nil, errors.Errorf("unsupported request type %d", requestType)
 		}
@@ -113,6 +133,28 @@ func unmarshalConsolidations(requestListInSSZBytes []byte, maxConsolidations uin
 		return nil, fmt.Errorf("invalid consolidation requests SSZ size, requests should not be more than the max per payload, got %d max %d", len(requestListInSSZBytes), maxSSZsize)
 	}
 	return unmarshalItems(requestListInSSZBytes, crSize, func() *ConsolidationRequest { return &ConsolidationRequest{} })
+}
+
+func unmarshalBuilderDeposits(requestListInSSZBytes []byte, maxBuilderDeposits uint64) ([]*BuilderDepositRequest, error) {
+	if len(requestListInSSZBytes) < bdrSize {
+		return nil, fmt.Errorf("invalid builder deposit requests SSZ size, got %d expected at least %d", len(requestListInSSZBytes), bdrSize)
+	}
+	maxSSZsize := uint64(bdrSize) * maxBuilderDeposits
+	if uint64(len(requestListInSSZBytes)) > maxSSZsize {
+		return nil, fmt.Errorf("invalid builder deposit requests SSZ size, requests should not be more than the max per payload, got %d max %d", len(requestListInSSZBytes), maxSSZsize)
+	}
+	return unmarshalItems(requestListInSSZBytes, bdrSize, func() *BuilderDepositRequest { return &BuilderDepositRequest{} })
+}
+
+func unmarshalBuilderExits(requestListInSSZBytes []byte, maxBuilderExits uint64) ([]*BuilderExitRequest, error) {
+	if len(requestListInSSZBytes) < berSize {
+		return nil, fmt.Errorf("invalid builder exit requests SSZ size, got %d expected at least %d", len(requestListInSSZBytes), berSize)
+	}
+	maxSSZsize := uint64(berSize) * maxBuilderExits
+	if uint64(len(requestListInSSZBytes)) > maxSSZsize {
+		return nil, fmt.Errorf("invalid builder exit requests SSZ size, requests should not be more than the max per payload, got %d max %d", len(requestListInSSZBytes), maxSSZsize)
+	}
+	return unmarshalItems(requestListInSSZBytes, berSize, func() *BuilderExitRequest { return &BuilderExitRequest{} })
 }
 
 func decodeExecutionRequest(req []byte) (typ uint8, data []byte, err error) {
@@ -155,6 +197,24 @@ func EncodeExecutionRequests(requests *ExecutionRequests) ([]hexutil.Bytes, erro
 		}
 		requestData := []byte{ConsolidationRequestType}
 		requestData = append(requestData, crBytes...)
+		requestsData = append(requestsData, requestData)
+	}
+	if len(requests.BuilderDeposits) > 0 {
+		bdBytes, err := marshalItems(requests.BuilderDeposits)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to marshal builder deposit requests")
+		}
+		requestData := []byte{BuilderDepositRequestType}
+		requestData = append(requestData, bdBytes...)
+		requestsData = append(requestsData, requestData)
+	}
+	if len(requests.BuilderExits) > 0 {
+		beBytes, err := marshalItems(requests.BuilderExits)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to marshal builder exit requests")
+		}
+		requestData := []byte{BuilderExitRequestType}
+		requestData = append(requestData, beBytes...)
 		requestsData = append(requestsData, requestData)
 	}
 

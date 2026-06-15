@@ -155,6 +155,38 @@ func IsValidDepositSignature(data *ethpb.Deposit_Data) (bool, error) {
 	return true, nil
 }
 
+// IsValidBuilderDepositSignature returns whether a builder deposit request's
+// proof-of-possession signature is valid under DOMAIN_BUILDER_DEPOSIT.
+//
+//	<spec fn="is_valid_builder_deposit_signature" fork="gloas" hash="todo">
+//	def is_valid_builder_deposit_signature(request: BuilderDepositRequest) -> bool:
+//	    deposit_message = DepositMessage(
+//	        pubkey=request.pubkey,
+//	        withdrawal_credentials=request.withdrawal_credentials,
+//	        amount=request.amount,
+//	    )
+//	    domain = compute_domain(DOMAIN_BUILDER_DEPOSIT)
+//	    signing_root = compute_signing_root(deposit_message, domain)
+//	    return bls.Verify(request.pubkey, signing_root, request.signature)
+//	</spec>
+func IsValidBuilderDepositSignature(request *enginev1.BuilderDepositRequest) (bool, error) {
+	domain, err := signing.ComputeDomain(params.BeaconConfig().DomainBuilderDeposit, nil, nil)
+	if err != nil {
+		return false, err
+	}
+	data := &ethpb.Deposit_Data{
+		PublicKey:             request.Pubkey,
+		WithdrawalCredentials: request.WithdrawalCredentials,
+		Amount:                request.Amount,
+		Signature:             request.Signature,
+	}
+	if err := verifyDepositDataSigningRoot(data, domain); err != nil {
+		log.WithError(err).Debug("Skipping builder deposit: could not verify deposit data signature")
+		return false, nil
+	}
+	return true, nil
+}
+
 // VerifyDeposit verifies the deposit data and signature given the beacon state and deposit information
 func VerifyDeposit(beaconState state.ReadOnlyBeaconState, deposit *ethpb.Deposit) error {
 	// Verify Merkle proof of deposit and deposit trie root.
