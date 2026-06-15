@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "attestation.go",
         "attester_slashing.go",
+        "builder.go",
         "error.go",
         "eth1_data.go",
         "exit.go",
@@ -20,7 +21,6 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks",
     visibility = ["//visibility:public"],
     deps = [
-        "//beacon-chain/core/gloas:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/time:go_default_library",
@@ -60,6 +60,7 @@ go_test(
         "attester_slashing_test.go",
         "block_operations_fuzz_test.go",
         "block_regression_test.go",
+        "builder_test.go",
         "eth1_data_test.go",
         "exit_builder_test.go",
         "exit_test.go",

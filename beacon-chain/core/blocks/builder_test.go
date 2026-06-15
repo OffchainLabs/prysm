@@ -1,9 +1,10 @@
-package gloas
+package blocks_test
 
 import (
 	"bytes"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -22,7 +23,7 @@ func TestRemoveBuilderPendingPayment_CurrentEpoch(t *testing.T) {
 
 	setPendingPayment(t, st, paymentIndex, 123)
 
-	err := RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot})
+	err := blocks.RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot})
 	require.NoError(t, err)
 
 	got := getPendingPayment(t, st, paymentIndex)
@@ -41,7 +42,7 @@ func TestRemoveBuilderPendingPayment_PreviousEpoch(t *testing.T) {
 
 	setPendingPayment(t, st, paymentIndex, 456)
 
-	err := RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot})
+	err := blocks.RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot})
 	require.NoError(t, err)
 
 	got := getPendingPayment(t, st, paymentIndex)
@@ -60,7 +61,7 @@ func TestRemoveBuilderPendingPayment_OlderThanTwoEpoch(t *testing.T) {
 
 	original := getPendingPayment(t, st, paymentIndex)
 
-	err := RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot})
+	err := blocks.RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot})
 	require.NoError(t, err)
 
 	after := getPendingPayment(t, st, paymentIndex)

@@ -3,9 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
-        "attestation.go",
         "bid.go",
-        "builder_exit.go",
         "deposit_request.go",
         "log.go",
         "metrics.go",
@@ -14,7 +12,6 @@ go_library(
         "payload_attestation.go",
         "pending_payment.go",
         "proposer_lookahead.go",
-        "proposer_slashing.go",
         "upgrade.go",
         "withdrawals.go",
     ],
@@ -53,14 +50,12 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
-        "attestation_test.go",
         "bid_test.go",
         "deposit_request_test.go",
         "payload_attestation_test.go",
         "payload_test.go",
         "pending_payment_test.go",
         "proposer_lookahead_test.go",
-        "proposer_slashing_test.go",
         "upgrade_test.go",
         "withdrawals_test.go",
     ],

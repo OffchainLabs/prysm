@@ -1,4 +1,4 @@
-package gloas
+package altair
 
 import (
 	"fmt"
