@@ -106,7 +106,7 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, r *fetchRequestRespon
 	}
 
 	// Some blocks need data column sidecars, fetch them.
-	dcsParams := prysmsync.DataColumnSidecarsParams{
+	params := prysmsync.DataColumnSidecarsParams{
 		Ctx:         ctx,
 		Tor:         f.clock,
 		P2P:         f.p2p,
@@ -116,7 +116,7 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, r *fetchRequestRespon
 		NewVerifier: f.cv,
 	}
 
-	verifiedRoDataColumnsByRoot, missingIndicesByRoot, err := prysmsync.FetchDataColumnSidecars(dcsParams, roBlocks, info.CustodyColumns)
+	verifiedRoDataColumnsByRoot, missingIndicesByRoot, err := prysmsync.FetchDataColumnSidecars(params, roBlocks, info.CustodyColumns)
 	if err != nil {
 		r.blobsFrom = ""
 		r.err = errors.Wrap(err, "fetch data column sidecars")
