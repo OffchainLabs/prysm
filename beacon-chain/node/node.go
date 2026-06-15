@@ -501,6 +501,11 @@ func (b *BeaconNode) Start() {
 		defer signal.Stop(sigc)
 		<-sigc
 		log.Info("Got interrupt, shutting down...")
+
+		if flags.Get().PostponeShutdownForProposals {
+			b.waitForPendingProposals(sigc)
+		}
+
 		go b.Close()
 		for i := 10; i > 0; i-- {
 			<-sigc

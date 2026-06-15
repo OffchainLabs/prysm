@@ -324,6 +324,10 @@ func (s *Service) pruneInvalidBlock(ctx context.Context, root, parentRoot, paren
 func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState, slot primitives.Slot, headRoot []byte, headFull bool) payloadattribute.Attributer {
 	emptyAttri := payloadattribute.EmptyWithVersion(st.Version())
 
+	if !s.inRegularSync() {
+		return emptyAttri
+	}
+
 	// If it is an epoch boundary then process slots to get the right
 	// shuffling before checking if the proposer is tracked. Otherwise
 	// perform this check before. This is cheap as the NSC has already been updated.
