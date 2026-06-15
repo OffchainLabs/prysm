@@ -117,8 +117,14 @@ message SignResponse {
 // ProposerOptionPayload is a property of ProposerSettingsPayload
 message ProposerOptionPayload {
   string fee_recipient = 1;
+  // Not honored at schema version 2.
   BuilderConfig builder = 2;
   optional string graffiti = 3;
+  // v2 gas limit. Honored on default_config only.
+  uint64 gas_limit = 4 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
+  ];
 }
 
 // BuilderConfig is a property of ProposerOptionPayload
@@ -132,8 +138,9 @@ message BuilderConfig {
 }
 
 // ProposerSettingsPayload is used to unmarshal files sent from the validator
-// flag as well as safe to bolt db bucket
+// flag as well as safe to bolt db bucket. version: 0/1 = legacy, 2 = post-Gloas.
 message ProposerSettingsPayload {
   map<string, ProposerOptionPayload> proposer_config = 1;
   ProposerOptionPayload default_config = 2;
+  uint32 version = 3;
 }
