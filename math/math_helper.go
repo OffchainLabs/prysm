@@ -117,6 +117,23 @@ func PowerOf2(n uint64) uint64 {
 	return 1 << n
 }
 
+// NextPowerOf2 returns the smallest power of two greater than or equal to n.
+// If n is 0, it returns 1.
+func NextPowerOf2(n uint64) uint64 {
+	if n == 0 {
+		return 1
+	}
+	n--
+	n |= n >> 1
+	n |= n >> 2
+	n |= n >> 4
+	n |= n >> 8
+	n |= n >> 16
+	n |= n >> 32
+	n++
+	return n
+}
+
 // Mul64 multiples 2 64-bit unsigned integers and checks if they
 // lead to an overflow. If they do not, it returns the result
 // without an error.
