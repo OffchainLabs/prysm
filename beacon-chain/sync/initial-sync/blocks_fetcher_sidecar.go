@@ -81,8 +81,7 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, r *fetchRequestRespon
 	currentSlot := f.clock.CurrentSlot()
 	currentEpoch := slots.ToEpoch(currentSlot)
 
-	// resolveBlock loads a block referenced by an envelope but absent from this batch (the
-	// payload the first block builds on).
+	// resolveBlock loads an envelope's block that is not part of this batch.
 	resolveBlock := func(root [32]byte) (blocks.ROBlock, bool) {
 		signed, err := f.db.Block(ctx, root)
 		if err != nil {
@@ -149,14 +148,10 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, r *fetchRequestRespon
 	}
 }
 
-// columnFetchBlocks selects the post-Fulu blocks whose data column sidecars must be fetched:
-//   - pre-Gloas (Fulu) blocks always need columns (the payload is carried in the block);
-//   - Gloas blocks need columns only if their payload was revealed, i.e. there is an execution
-//     payload envelope for the block root. Payload-absent slots have no envelope and need no
-//     columns. An envelope may reference a block outside `postFulu` (the payload the first block
-//     builds on), which is resolved via resolveBlock.
-//
-// Blocks outside the data availability period are skipped.
+// columnFetchBlocks selects the post-Fulu blocks (within the DA period) whose data column
+// sidecars must be fetched: pre-Gloas blocks always, and Gloas blocks only when their payload
+// was revealed (an envelope exists for the block root). An envelope may reference a block outside
+// postFulu, resolved via resolveBlock.
 func columnFetchBlocks(
 	postFulu []blocks.BlockWithROSidecars,
 	envelopes []interfaces.ROSignedExecutionPayloadEnvelope,

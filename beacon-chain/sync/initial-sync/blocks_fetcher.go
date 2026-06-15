@@ -127,9 +127,8 @@ type fetchRequestResponse struct {
 	count        uint64
 	bwb          []blocks.BlockWithROSidecars
 	envelopes    []interfaces.ROSignedExecutionPayloadEnvelope
-	// columnsToSave holds verified data column sidecars for payloads imported in this batch
-	// whose beacon block is not part of bwb (e.g. the payload the first block builds on).
-	// These are persisted by the queue consumer since the per-block save loop only covers bwb.
+	// columnsToSave holds columns for a payload whose block is not in bwb (the one the first
+	// block builds on); persisted separately since the per-block save loop only covers bwb.
 	columnsToSave []blocks.VerifiedRODataColumn
 	err           error
 }
