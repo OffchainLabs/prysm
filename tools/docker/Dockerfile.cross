@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1
+#
+# Cross-compile stage
+
+ARG BUILDER=prysm-cross-builder:latest
+
+FROM ${BUILDER} AS crossbuild
+WORKDIR /src
+
+ARG GIT_TAG
+ARG LDFLAGS
+ARG TAGFLAG
+ARG BUILD_MODE=dev
+ARG PGO_beacon_chain
+ARG CGO_CFLAGS_LINUX_ARM64
+ARG BLST_PORTABLE
+ARG CROSS_BINARIES
+ARG CROSS_TARGETS
+
+COPY . .
+
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache \
+    GIT_TAG="$GIT_TAG" LDFLAGS="$LDFLAGS" TAGFLAG="$TAGFLAG" BUILD_MODE="$BUILD_MODE" \
+    PGO_beacon_chain="$PGO_beacon_chain" CGO_CFLAGS_LINUX_ARM64="$CGO_CFLAGS_LINUX_ARM64" \
+    BLST_PORTABLE="$BLST_PORTABLE" CROSS_BINARIES="$CROSS_BINARIES" CROSS_TARGETS="$CROSS_TARGETS" \
+    DIST=/dist \
+    go run ./build/cross
+
+FROM scratch AS artifacts
+COPY --from=crossbuild /dist/ /
