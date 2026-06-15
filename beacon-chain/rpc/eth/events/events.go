@@ -131,6 +131,7 @@ var opsFeedEventTopics = map[feed.EventType]string{
 	operation.PayloadAttestationMessageReceived: PayloadAttestationMessageTopic,
 	operation.ProposerPreferencesReceived:       ProposerPreferencesTopic,
 	operation.ExecutionPayloadGossipReceived:    ExecutionPayloadGossipTopic,
+	operation.ExecutionPayloadBidReceived:       ExecutionPayloadBidTopic,
 }
 
 var stateFeedEventTopics = map[feed.EventType]string{
@@ -146,11 +147,7 @@ var stateFeedEventTopics = map[feed.EventType]string{
 	statefeed.ExecutionPayloadProcessed:   ExecutionPayloadTopic,
 }
 
-var topicsForStateFeed = func() map[string]bool {
-	m := topicsForFeed(stateFeedEventTopics)
-	m[ExecutionPayloadBidTopic] = true
-	return m
-}()
+var topicsForStateFeed = topicsForFeed(stateFeedEventTopics)
 var topicsForOpsFeed = topicsForFeed(opsFeedEventTopics)
 
 func topicsForFeed(em map[feed.EventType]string) map[string]bool {
@@ -502,6 +499,8 @@ func topicForEvent(event *feed.Event) string {
 		return PayloadAttestationMessageTopic
 	case *operation.ProposerPreferencesReceivedData:
 		return ProposerPreferencesTopic
+	case *operation.ExecutionPayloadBidReceivedData:
+		return ExecutionPayloadBidTopic
 	case *statefeed.ExecutionPayloadAvailableData:
 		return ExecutionPayloadAvailableTopic
 	case *statefeed.ExecutionPayloadProcessedData:
@@ -694,6 +693,14 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 			return jsonMarshalReader(eventName, &structs.ProposerPreferencesEvent{
 				Version: version.String(params.GetNetworkScheduleEntry(epoch).VersionEnum),
 				Data:    structs.SignedProposerPreferencesFromConsensus(v.Data),
+			})
+		}, nil
+	case *operation.ExecutionPayloadBidReceivedData:
+		return func() io.Reader {
+			epoch := slots.ToEpoch(v.Bid.Message.Slot)
+			return jsonMarshalReader(eventName, &structs.ExecutionPayloadBidEvent{
+				Version: version.String(params.GetNetworkScheduleEntry(epoch).VersionEnum),
+				Data:    structs.SignedExecutionPayloadBidFromConsensus(v.Bid),
 			})
 		}, nil
 	case *statefeed.ExecutionPayloadAvailableData:

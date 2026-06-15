@@ -289,6 +289,7 @@ func TestExecutionPayloadBidSubscriber_WrongMessage(t *testing.T) {
 
 func TestExecutionPayloadBidSubscriber_HappyPath(t *testing.T) {
 	s := &Service{
+		cfg:                             &config{operationNotifier: &mock.MockOperationNotifier{}},
 		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
 	}
 	signedBid := util.GenerateTestSignedExecutionPayloadBid(1)
