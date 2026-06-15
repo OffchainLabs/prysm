@@ -79,15 +79,11 @@ func (vs *Server) SubmitSignedProposerPreferences(
 				fieldparams.RootLength, len(msg.Message.DependentRoot),
 			)
 		}
-		// Add first; if it's a duplicate, skip gossip so we don't re-broadcast
-		// the same signed pref every slot.
-		added := vs.ProposerPreferencesCache.Add(cache.ProposerPreference{
-			DependentRoot:  bytesutil.ToBytes32(msg.Message.DependentRoot),
-			ValidatorIndex: valIdx,
-			FeeRecipient:   bytesutil.ToBytes20(msg.Message.FeeRecipient),
-			TargetGasLimit: msg.Message.TargetGasLimit,
-		}, proposalSlot)
-		if !added {
+		// Skip gossip for an already-cached pref so we don't re-broadcast the
+		// same signed pref every slot. Cache only after a successful broadcast
+		// so a failed broadcast is retried rather than masked as a duplicate.
+		dependentRoot := bytesutil.ToBytes32(msg.Message.DependentRoot)
+		if vs.ProposerPreferencesCache.Has(dependentRoot, proposalSlot) {
 			duplicate++
 			continue
 		}
@@ -97,6 +93,12 @@ func (vs *Server) SubmitSignedProposerPreferences(
 				"Could not broadcast signed proposer preferences (broadcast %d/%d): %v",
 				broadcast, len(req.SignedProposerPreferences), err)
 		}
+		vs.ProposerPreferencesCache.Add(cache.ProposerPreference{
+			DependentRoot:  dependentRoot,
+			ValidatorIndex: valIdx,
+			FeeRecipient:   bytesutil.ToBytes20(msg.Message.FeeRecipient),
+			TargetGasLimit: msg.Message.TargetGasLimit,
+		}, proposalSlot)
 		broadcast++
 	}
 

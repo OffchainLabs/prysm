@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"context"
 	"testing"
 
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
@@ -13,6 +14,8 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -118,10 +121,9 @@ func TestSubmitSignedProposerPreferences_DuplicateBroadcasts(t *testing.T) {
 	cfg.GloasForkEpoch = 1
 	params.OverrideBeaconConfig(cfg)
 
-	// SubmitSignedProposerPreferences no longer dedups against the local
-	// cache before broadcasting: gossipsub handles duplicate suppression
-	// on the network. Local Submits always broadcast and refresh the
-	// owned-validator entry.
+	// A pref already cached for (slot, dependent_root) is not re-broadcast:
+	// gossipsub already delivered the first one and re-broadcasting every
+	// slot is wasteful.
 	currentSlot := primitives.Slot(31)
 	proposalSlot := currentSlot + 1
 	chain := &chainMock.ChainService{Slot: &currentSlot}
@@ -152,10 +154,71 @@ func TestSubmitSignedProposerPreferences_DuplicateBroadcasts(t *testing.T) {
 	resp, err := vs.SubmitSignedProposerPreferences(t.Context(), req)
 	require.NoError(t, err)
 	require.DeepEqual(t, &emptypb.Empty{}, resp)
-	assert.Equal(t, true, p2p.BroadcastCalled.Load())
+	require.Equal(t, 1, p2p.NumMessages())
 	pref, ok := c.Get([32]byte{0xcc}, proposalSlot)
 	require.Equal(t, true, ok)
 	require.Equal(t, uint64(30_000_000), pref.TargetGasLimit)
+
+	// Resubmitting the same (slot, dependent_root) is a no-op: no re-broadcast.
+	_, err = vs.SubmitSignedProposerPreferences(t.Context(), req)
+	require.NoError(t, err)
+	require.Equal(t, 1, p2p.NumMessages())
+}
+
+type failingBroadcaster struct {
+	*p2pmock.MockBroadcaster
+	err error
+}
+
+func (f *failingBroadcaster) BroadcastForEpoch(context.Context, proto.Message, primitives.Epoch) error {
+	return f.err
+}
+
+func TestSubmitSignedProposerPreferences_BroadcastFailureNotCached(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	currentSlot := primitives.Slot(31)
+	proposalSlot := currentSlot + 1
+	chain := &chainMock.ChainService{Slot: &currentSlot}
+	c := cache.NewProposerPreferencesCache()
+	vs := &Server{
+		SyncChecker:              &mockSync.Sync{IsSyncing: false},
+		TimeFetcher:              chain,
+		P2P:                      &failingBroadcaster{MockBroadcaster: &p2pmock.MockBroadcaster{}, err: errors.New("broadcast failed")},
+		ProposerPreferencesCache: c,
+	}
+
+	req := &ethpb.SubmitSignedProposerPreferencesRequest{
+		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
+			{
+				Message: &ethpb.ProposerPreferences{
+					DependentRoot:  bytesutil.PadTo([]byte{0xcc}, 32),
+					ProposalSlot:   proposalSlot,
+					ValidatorIndex: 2,
+					FeeRecipient:   make([]byte, 20),
+					TargetGasLimit: 30_000_000,
+				},
+				Signature: make([]byte, 96),
+			},
+		},
+	}
+
+	_, err := vs.SubmitSignedProposerPreferences(t.Context(), req)
+	require.ErrorContains(t, "broadcast failed", err)
+	// A failed broadcast must not leave the pref cached, otherwise the retry
+	// below would be silently dropped as a duplicate and never reach the network.
+	require.Equal(t, false, c.Has([32]byte{0xcc}, proposalSlot))
+
+	// Retry with a working broadcaster: the pref is broadcast and cached.
+	working := &p2pmock.MockBroadcaster{}
+	vs.P2P = working
+	_, err = vs.SubmitSignedProposerPreferences(t.Context(), req)
+	require.NoError(t, err)
+	assert.Equal(t, true, working.BroadcastCalled.Load())
+	require.Equal(t, true, c.Has([32]byte{0xcc}, proposalSlot))
 }
 
 func TestSubmitSignedProposerPreferences_InvalidEpoch(t *testing.T) {
