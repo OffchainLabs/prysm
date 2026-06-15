@@ -413,8 +413,10 @@ func (s *Service) notifyEngineAndSaveData(
 				args.HasPayload = true
 			}
 		}
-		if err := s.areSidecarsAvailable(ctx, avs, b, args.HasPayload); err != nil {
-			return nil, false, errors.Wrapf(err, "could not validate sidecar availability for block %#x at slot %d", b.Root(), b.Block().Slot())
+		if args.HasPayload {
+			if err := s.areSidecarsAvailable(ctx, avs, b); err != nil {
+				return nil, false, errors.Wrapf(err, "could not validate sidecar availability for block %#x at slot %d", b.Root(), b.Block().Slot())
+			}
 		}
 
 		pendingNodes[i] = args
@@ -445,7 +447,7 @@ func (s *Service) notifyEngineAndSaveData(
 	return pendingNodes, isValidPayload, nil
 }
 
-func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.AvailabilityChecker, roBlock consensusblocks.ROBlock, hasPayload bool) error {
+func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.AvailabilityChecker, roBlock consensusblocks.ROBlock) error {
 	blockVersion := roBlock.Version()
 	block := roBlock.Block()
 	slot := block.Slot()
@@ -460,11 +462,6 @@ func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.Availability
 			return errors.Wrap(err, "blob KZG commitments")
 		}
 		if len(kzgCommitments) == 0 {
-			return nil
-		}
-		// In Gloas the kzg commitments come from the bid; the data columns only exist if the
-		// payload was revealed, so skip the check for payload-absent blocks.
-		if blockVersion >= version.Gloas && !hasPayload {
 			return nil
 		}
 		if err := s.areDataColumnsAvailable(ctx, roBlock.Root(), slot); err != nil {
