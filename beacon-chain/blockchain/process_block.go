@@ -398,11 +398,8 @@ func (s *Service) notifyEngineAndSaveData(
 					return nil, false, err
 				}
 			}
-		}
-		// For Gloas blocks the payload (and therefore its data columns) only exists when the
-		// payload envelope was revealed. Pre-Gloas blocks always carry their payload.
-		payloadRevealed := b.Version() < version.Gloas
-		if b.Version() >= version.Gloas {
+			args.HasPayload = true
+		} else {
 			idx, ok := envMap[root]
 			if ok {
 				env, err := envelopes[idx].Envelope()
@@ -414,10 +411,9 @@ func (s *Service) notifyEngineAndSaveData(
 					return nil, false, errors.Wrap(err, "could not notify new envelope from block")
 				}
 				args.HasPayload = true
-				payloadRevealed = true
 			}
 		}
-		if err := s.areSidecarsAvailable(ctx, avs, b, payloadRevealed); err != nil {
+		if err := s.areSidecarsAvailable(ctx, avs, b, args.HasPayload); err != nil {
 			return nil, false, errors.Wrapf(err, "could not validate sidecar availability for block %#x at slot %d", b.Root(), b.Block().Slot())
 		}
 
@@ -449,7 +445,7 @@ func (s *Service) notifyEngineAndSaveData(
 	return pendingNodes, isValidPayload, nil
 }
 
-func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.AvailabilityChecker, roBlock consensusblocks.ROBlock, payloadRevealed bool) error {
+func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.AvailabilityChecker, roBlock consensusblocks.ROBlock, hasPayload bool) error {
 	blockVersion := roBlock.Version()
 	block := roBlock.Block()
 	slot := block.Slot()
@@ -466,10 +462,9 @@ func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.Availability
 		if len(kzgCommitments) == 0 {
 			return nil
 		}
-		// In Gloas the kzg commitments come from the bid (the builder's commitment). The data
-		// columns only exist if the execution payload was actually revealed, so skip the
-		// availability check for payload-absent blocks.
-		if blockVersion >= version.Gloas && !payloadRevealed {
+		// In Gloas the kzg commitments come from the bid; the data columns only exist if the
+		// payload was revealed, so skip the check for payload-absent blocks.
+		if blockVersion >= version.Gloas && !hasPayload {
 			return nil
 		}
 		if err := s.areDataColumnsAvailable(ctx, roBlock.Root(), slot); err != nil {
