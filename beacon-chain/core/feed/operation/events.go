@@ -56,6 +56,9 @@ const (
 
 	// ProposerPreferencesReceived is sent after signed proposer preferences are received from gossip or rpc.
 	ProposerPreferencesReceived = 15
+
+	// ExecutionPayloadBidReceived is sent after a signed execution payload bid is received from gossip that passes validation rules.
+	ExecutionPayloadBidReceived = 16
 )
 
 // UnAggregatedAttReceivedData is the data sent with UnaggregatedAttReceived events.
@@ -141,4 +144,9 @@ type ExecutionPayloadGossipReceivedData struct {
 // ProposerPreferencesReceivedData is the data sent with ProposerPreferencesReceived events.
 type ProposerPreferencesReceivedData struct {
 	Data *ethpb.SignedProposerPreferences
+}
+
+// ExecutionPayloadBidReceivedData is the data sent with ExecutionPayloadBidReceived events.
+type ExecutionPayloadBidReceivedData struct {
+	Bid *ethpb.SignedExecutionPayloadBid
 }
