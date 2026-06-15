@@ -1,0 +1,2 @@
+### Added
+- SSZ-QL: support `len()` queries on the BeaconState and BeaconBlock query endpoints, returning the runtime length of a List (element count) or Bitlist (bit count) as an 8-byte little-endian value.
