@@ -47,5 +47,11 @@ func (s *Service) preferenceForProposer(st state.ReadOnlyBeaconState, slot primi
 	if pref, ok := s.cfg.ProposerPreferencesCache.BestFor(dependentRoot, slot, id); ok {
 		return pref, nil
 	}
+	// Only noteworthy for our own attached proposers; under PrepareAllPayloads
+	// a miss is the norm for the rest of the network's slots.
+	if s.cfg.SubscribedValidatorsCache.Has(id) {
+		log.WithField("proposerIndex", id).WithField("slot", slot).
+			Debug("No signed proposer preference for attached proposer; using suggested-fee-recipient and parent gas limit")
+	}
 	return cache.ProposerPreference{ValidatorIndex: id}, nil
 }

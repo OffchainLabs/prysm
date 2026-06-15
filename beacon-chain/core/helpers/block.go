@@ -41,6 +41,10 @@ func ProposerDependentRootOrGenesis(ctx context.Context, db GenesisBlockRootRead
 func ParentTargetGasLimit(st state.ReadOnlyBeaconState) uint64 {
 	bid, err := st.LatestExecutionPayloadBid()
 	if err != nil || bid == nil {
+		// No cached bid (e.g. the gloas fork boundary): EL ratchets toward this
+		// default, briefly nudging gas limit away from the parent's value.
+		log.WithField("default", params.BeaconConfig().DefaultBuilderGasLimit).
+			Debug("No parent execution payload bid; gas limit falls back to DefaultBuilderGasLimit")
 		return params.BeaconConfig().DefaultBuilderGasLimit
 	}
 	return bid.GasLimit()

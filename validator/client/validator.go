@@ -1101,7 +1101,6 @@ func (v *validator) buildProposerPreferences(
 	}
 
 	var signedPrefs []*ethpb.SignedProposerPreferences
-	var sigFailCount int
 
 	// Per Gloas spec, dependent_root for a proposal in epoch E is the duty
 	// dependent root the beacon node uses to compute proposer duties for E:
@@ -1123,22 +1122,15 @@ func (v *validator) buildProposerPreferences(
 	// Current-epoch: submit after first slot of epoch to avoid stale state.
 	// force bypasses the timing gate for reorg resubmission.
 	if currentEpoch >= gloasEpoch && (force || slot > epochStart) {
-		signed, fails := v.processProposerDuties(ctx, km, currentDuties, slot, prevDepRoot, false)
-		signedPrefs = append(signedPrefs, signed...)
-		sigFailCount += fails
+		signedPrefs = append(signedPrefs, v.processProposerDuties(ctx, km, currentDuties, slot, prevDepRoot, false)...)
 	}
 
 	// Next-epoch: submit at or after mid-epoch. The gate is not bypassed
 	// by force because the beacon node may not have the next-epoch state ready.
 	if slot >= midEpoch {
-		signed, fails := v.processProposerDuties(ctx, km, nextDuties, slot, currDepRoot, true)
-		signedPrefs = append(signedPrefs, signed...)
-		sigFailCount += fails
+		signedPrefs = append(signedPrefs, v.processProposerDuties(ctx, km, nextDuties, slot, currDepRoot, true)...)
 	}
 
-	if sigFailCount > 0 {
-		log.WithField("count", sigFailCount).Warn("Failed to sign proposer preferences")
-	}
 	log.WithFields(logrus.Fields{
 		"slot":                 slot,
 		"epoch":                currentEpoch,
@@ -1153,8 +1145,8 @@ func (v *validator) buildProposerPreferences(
 }
 
 // processProposerDuties signs proposer preferences for the given duties and
-// records the slots submitted, returning the signed preferences and the number
-// of signing failures.
+// records the slots submitted, returning the signed preferences. Signing
+// failures are aggregated into a single warning carrying the first error.
 func (v *validator) processProposerDuties(
 	ctx context.Context,
 	km keymanager.IKeymanager,
@@ -1162,11 +1154,14 @@ func (v *validator) processProposerDuties(
 	slot primitives.Slot,
 	dependentRoot []byte,
 	isNextEpoch bool,
-) (signedPrefs []*ethpb.SignedProposerPreferences, sigFailCount int) {
+) []*ethpb.SignedProposerPreferences {
 	if len(dependentRoot) != fieldparams.RootLength {
-		return nil, 0
+		return nil
 	}
 
+	var signedPrefs []*ethpb.SignedProposerPreferences
+	var sigFailCount int
+	var firstErr error
 	for pk, duty := range duties {
 		if len(duty.ProposerSlots) == 0 {
 			continue
@@ -1196,6 +1191,9 @@ func (v *validator) processProposerDuties(
 			}
 			signedPref, err := v.signProposerPreferences(ctx, km, pk, pref)
 			if err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
 				sigFailCount++
 				v.releasePrefSlot(proposalSlot)
 				continue
@@ -1203,7 +1201,10 @@ func (v *validator) processProposerDuties(
 			signedPrefs = append(signedPrefs, signedPref)
 		}
 	}
-	return signedPrefs, sigFailCount
+	if sigFailCount > 0 {
+		log.WithError(firstErr).WithField("count", sigFailCount).Warn("Failed to sign proposer preferences")
+	}
+	return signedPrefs
 }
 
 // reservePrefSlot marks proposalSlot as submitted, returning false if another
