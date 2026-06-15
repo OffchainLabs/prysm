@@ -48,6 +48,13 @@ func (c *SubscribedValidatorsCache) Validating() bool {
 	return c.entries.ItemCount() > 0
 }
 
+// Clear removes all attached validators.
+func (c *SubscribedValidatorsCache) Clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries.Flush()
+}
+
 // Indices returns the set of currently-attached validator indices.
 func (c *SubscribedValidatorsCache) Indices() map[primitives.ValidatorIndex]bool {
 	c.mu.RLock()
