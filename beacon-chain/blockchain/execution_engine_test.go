@@ -816,7 +816,7 @@ func Test_GetPayloadAttributeV3(t *testing.T) {
 	}
 }
 
-func Test_GetPayloadAttribute_GloasParentGasLimitFallback(t *testing.T) {
+func Test_GetPayloadAttribute_GloasNoPreferenceFallback(t *testing.T) {
 	const parentGasLimit uint64 = 40_000_000
 
 	params.SetupTestConfigCleanup(t)

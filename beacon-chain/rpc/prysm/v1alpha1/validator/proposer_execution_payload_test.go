@@ -82,7 +82,6 @@ func TestServer_getExecutionPayload(t *testing.T) {
 		validatorIndx     primitives.ValidatorIndex
 		override          bool
 		wantedOverride    bool
-		nilDB             bool
 	}{
 		{
 			name:          "transition completed, nil payload id",
@@ -138,15 +137,6 @@ func TestServer_getExecutionPayload(t *testing.T) {
 			payloadID:      &pb.PayloadIDBytes{0x1},
 			wantedOverride: true,
 		},
-		{
-			// Regression: ProposerDependentRootOrGenesis failing must not abort
-			// payload preparation — we fall back to default preferences.
-			name:          "dependent root unavailable, falls back to default",
-			st:            transitionSt,
-			payloadID:     &pb.PayloadIDBytes{0x1},
-			validatorIndx: 1,
-			nilDB:         true,
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -157,15 +147,11 @@ func TestServer_getExecutionPayload(t *testing.T) {
 
 			ed, err := blocks.NewWrappedExecutionData(&pb.ExecutionPayload{})
 			require.NoError(t, err)
-			db := beaconDB
-			if tt.nilDB {
-				db = nil
-			}
 			vs := &Server{
 				ExecutionEngineCaller:    &powtesting.EngineClient{PayloadIDBytes: tt.payloadID, ErrForkchoiceUpdated: tt.forkchoiceErr, GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed, OverrideBuilder: tt.override}},
 				HeadFetcher:              &chainMock.ChainService{State: tt.st},
 				FinalizationFetcher:      &chainMock.ChainService{},
-				BeaconDB:                 db,
+				BeaconDB:                 beaconDB,
 				PayloadIDCache:           cache.NewPayloadIDCache(),
 				ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 			}
@@ -187,6 +173,42 @@ func TestServer_getExecutionPayload(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestServer_getLocalPayloadFromEngine_DepRootErrorUsesDefault(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+
+	// Bellatrix transition-completed state at genesis: epoch < 2, so with a nil
+	// BeaconDB ProposerDependentRootOrGenesis errors and we exercise the
+	// dep-root-error fallback path.
+	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
+	header, err := blocks.WrappedExecutionPayloadHeader(&pb.ExecutionPayloadHeader{BlockNumber: 1})
+	require.NoError(t, err)
+	require.NoError(t, st.SetLatestExecutionPayloadHeader(header))
+
+	const proposerIdx = primitives.ValidatorIndex(1)
+	feeRecipient := common.HexToAddress("0x0123456789012345678901234567890123456789")
+	prefCache := cache.NewProposerPreferencesCache()
+	prefCache.Set(cache.ProposerPreference{ValidatorIndex: proposerIdx, FeeRecipient: primitives.ExecutionAddress(feeRecipient)})
+
+	ed, err := blocks.NewWrappedExecutionData(&pb.ExecutionPayload{})
+	require.NoError(t, err)
+	engine := &powtesting.EngineClient{
+		PayloadIDBytes:     &pb.PayloadIDBytes{0x1},
+		GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed},
+	}
+	vs := &Server{
+		ExecutionEngineCaller:    engine,
+		FinalizationFetcher:      &chainMock.ChainService{},
+		BeaconDB:                 nil,
+		PayloadIDCache:           cache.NewPayloadIDCache(),
+		ProposerPreferencesCache: prefCache,
+	}
+
+	_, err = vs.getLocalPayloadFromEngine(t.Context(), st, [32]byte{'a'}, st.Slot(), proposerIdx, false)
+	require.NoError(t, err)
+	require.NotNil(t, engine.FetchedAttributes)
+	require.DeepEqual(t, feeRecipient.Bytes(), engine.FetchedAttributes.SuggestedFeeRecipient())
 }
 
 func TestServer_getParentBlockHash_Gloas_Full(t *testing.T) {
