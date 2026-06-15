@@ -1,3 +1,3 @@
 ### Ignored
 
-- Remove legacy `--http-modules` flag.
+- Deprecate legacy `--http-modules` flag.

@@ -14,10 +14,17 @@ var (
 		Usage:  deprecatedUsage,
 		Hidden: true,
 	}
+	deprecatedHTTPModules = &cli.StringFlag{
+		Name:   "http-modules",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
 )
 
 // Deprecated flags for both the beacon node and validator client.
-var deprecatedFlags = []cli.Flag{}
+var deprecatedFlags = []cli.Flag{
+	deprecatedHTTPModules,
+}
 
 var upcomingDeprecation = []cli.Flag{
 	enableHistoricalSpaceRepresentation,
