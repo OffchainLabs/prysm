@@ -127,15 +127,20 @@ type fetchRequestResponse struct {
 	count        uint64
 	bwb          []blocks.BlockWithROSidecars
 	envelopes    []interfaces.ROSignedExecutionPayloadEnvelope
-	err          error
+	// columnsToSave holds verified data column sidecars for payloads imported in this batch
+	// whose beacon block is not part of bwb (e.g. the payload the first block builds on).
+	// These are persisted by the queue consumer since the per-block save loop only covers bwb.
+	columnsToSave []blocks.VerifiedRODataColumn
+	err           error
 }
 
 func (r *fetchRequestResponse) blocksQueueFetchedData() *blocksQueueFetchedData {
 	return &blocksQueueFetchedData{
-		blocksFrom: r.blocksFrom,
-		blobsFrom:  r.blobsFrom,
-		bwb:        r.bwb,
-		envelopes:  r.envelopes,
+		blocksFrom:    r.blocksFrom,
+		blobsFrom:     r.blobsFrom,
+		bwb:           r.bwb,
+		envelopes:     r.envelopes,
+		columnsToSave: r.columnsToSave,
 	}
 }
 
@@ -335,14 +340,16 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 		log.WithError(response.err).Debug("Failed to fetch blocks")
 		return response
 	}
-	f.fetchSidecars(ctx, response, peers)
-	if response.err != nil {
-		log.WithError(response.err).Debug("Failed to fetch sidecars")
-		return response
-	}
+	// Payloads must be fetched before sidecars: in Gloas the set of revealed execution payload
+	// envelopes is what determines which blocks need data columns (see fetchSidecars).
 	f.fetchPayloads(ctx, response, peers)
 	if response.err != nil {
 		log.WithError(response.err).Debug("Failed to fetch payloads")
+		return response
+	}
+	f.fetchSidecars(ctx, response, peers)
+	if response.err != nil {
+		log.WithError(response.err).Debug("Failed to fetch sidecars")
 	}
 	return response
 }
