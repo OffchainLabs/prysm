@@ -1,6 +1,7 @@
 package beacon
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -85,7 +86,7 @@ func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, offset, length, err := query.CalculateOffsetAndLength(info, path)
+	finalInfo, offset, length, err := query.CalculateOffsetAndLength(info, path)
 	if err != nil {
 		httputil.HandleError(w, "Could not calculate offset and length for path '"+req.Query+"': "+err.Error(), http.StatusInternalServerError)
 		return
@@ -97,9 +98,21 @@ func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var result []byte
+	if path.Length {
+		n, err := finalInfo.LengthValue()
+		if err != nil {
+			httputil.HandleError(w, "Invalid query '"+req.Query+"': "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		result = binary.LittleEndian.AppendUint64(nil, n)
+	} else {
+		result = encodedState[offset : offset+length]
+	}
+
 	response := &sszquerypb.SSZQueryResponse{
 		Root:   stateRoot,
-		Result: encodedState[offset : offset+length],
+		Result: result,
 	}
 
 	responseSsz, err := response.MarshalSSZ()
@@ -170,7 +183,7 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, offset, length, err := query.CalculateOffsetAndLength(info, path)
+	finalInfo, offset, length, err := query.CalculateOffsetAndLength(info, path)
 	if err != nil {
 		httputil.HandleError(w, "Could not calculate offset and length for path '"+req.Query+"': "+err.Error(), http.StatusInternalServerError)
 		return
@@ -188,6 +201,18 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var result []byte
+	if path.Length {
+		n, err := finalInfo.LengthValue()
+		if err != nil {
+			httputil.HandleError(w, "Invalid query '"+req.Query+"': "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		result = binary.LittleEndian.AppendUint64(nil, n)
+	} else {
+		result = encodedBlock[offset : offset+length]
+	}
+
 	var response ssz.Marshaler
 	if req.IncludeProof {
 		proof, err := getSSZQueryProof(info, path)
@@ -197,7 +222,7 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 		}
 		response = &sszquerypb.SSZQueryResponseWithProof{
 			Root:   blockRoot[:],
-			Result: encodedBlock[offset : offset+length],
+			Result: result,
 			Proof: &sszquerypb.SSZQueryProof{
 				Leaf:   proof.Leaf,
 				Gindex: uint64(proof.Index),
@@ -207,7 +232,7 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 	} else {
 		response = &sszquerypb.SSZQueryResponse{
 			Root:   blockRoot[:],
-			Result: encodedBlock[offset : offset+length],
+			Result: result,
 		}
 	}
 	responseSsz, err := response.MarshalSSZ()
