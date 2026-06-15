@@ -111,6 +111,8 @@ func WaitForTextInFile(src *os.File, match string) error {
 					return
 				}
 				lineScanner := bufio.NewScanner(f)
+				// E2E process logs can include long flag and JSON lines; keep the
+				// scanner from failing before it reaches the startup marker.
 				buf := make([]byte, 0, fileBufferSize)
 				lineScanner.Buffer(buf, maxFileBufferSize)
 				// Scan will return true until it hits EOF or another error.
