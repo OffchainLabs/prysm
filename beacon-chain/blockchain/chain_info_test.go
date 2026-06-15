@@ -614,20 +614,19 @@ func TestService_IsOptimisticForRoot_StateSummaryRecovered(t *testing.T) {
 	beaconDB := c.cfg.BeaconDB
 	c.head = &head{root: params.BeaconConfig().ZeroHash}
 	b := util.NewBeaconBlock()
-	// Use slot 33 (epoch 1) so the function returns early at the
-	// "slots.ToEpoch(ss.Slot) > validatedCheckpoint.Epoch" check (1 > 0),
-	// since this test only verifies that the queried block's state summary is recovered.
-	b.Block.Slot = 33
+	b.Block.Slot = 10
 	br, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
 	util.SaveBlock(t, t.Context(), beaconDB, b)
-	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, [32]byte{}))
+	cpRoot := [32]byte{'v'}
+	require.NoError(t, beaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{Root: cpRoot[:], Slot: 0}))
+	require.NoError(t, beaconDB.SaveLastValidatedCheckpoint(ctx, &ethpb.Checkpoint{Root: cpRoot[:]}))
 	_, err = c.IsOptimisticForRoot(ctx, br)
 	assert.NoError(t, err)
 	summ, err := beaconDB.StateSummary(ctx, br)
 	assert.NoError(t, err)
 	assert.NotNil(t, summ)
-	assert.Equal(t, 33, int(summ.Slot))
+	assert.Equal(t, 10, int(summ.Slot))
 	assert.DeepEqual(t, br[:], summ.Root)
 }
 
