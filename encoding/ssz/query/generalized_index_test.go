@@ -1,6 +1,7 @@
 package query_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -360,5 +361,39 @@ func TestGetIndicesFromPath_FixedTestContainer(t *testing.T) {
 				t.Logf("Path: %s -> Generalized Index: %v", tc.path, actualIndex)
 			}
 		})
+	}
+}
+
+func TestComputeRelativeGindex(t *testing.T) {
+	testCases := []struct {
+		parent         uint64
+		child          uint64
+		expected       uint64
+		expectingError bool
+	}{
+		{parent: 3, child: 14, expected: 6, expectingError: false},
+		{parent: 6, child: 50, expected: 10, expectingError: false},
+		{parent: 1, child: 4, expected: 4, expectingError: false},
+		{parent: 2, child: 5, expected: 3, expectingError: false},
+		{parent: 5, child: 20, expected: 4, expectingError: false},
+		{parent: 4, child: 3, expectingError: true},
+
+		// Cases below: Non-ancestor with longer bit-length
+		{parent: 5, child: 12, expectingError: true}, // 5=101, 12=1100; 12>>1=6 != 5
+		{parent: 3, child: 8, expectingError: true},  // 3=11, 8=1000; 8>>2=2 != 3
+	}
+
+	for _, tc := range testCases {
+		t.Run(
+			fmt.Sprintf("parent_%d_child_%d", tc.parent, tc.child), func(t *testing.T) {
+				relativeGindex, err := query.ComputeRelativeGindex(tc.parent, tc.child)
+				if tc.expectingError {
+					require.NotNil(t, err)
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, tc.expected, relativeGindex)
+				}
+			},
+		)
 	}
 }
