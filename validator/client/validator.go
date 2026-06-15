@@ -841,6 +841,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		}
 	}
 
+	v.upgradeProposerSettingsToV2(ctx, slots.ToEpoch(slot))
 	prefs := v.buildProposerPreferences(ctx, km, slot, false)
 	if len(prefs) > 0 {
 		// Delay to mid-slot so the block for this slot is processed first.
@@ -1037,6 +1038,22 @@ func (v *validator) buildProposerSettingsRequests(
 	return prepareProposerReqs
 }
 
+// upgradeProposerSettingsToV2 migrates v1 proposer settings to v2 and persists
+// them. Deferred until gloas-active so the pre-gloas registration path still
+// sees BuilderConfig.
+func (v *validator) upgradeProposerSettingsToV2(ctx context.Context, currentEpoch primitives.Epoch) {
+	if currentEpoch < params.BeaconConfig().GloasForkEpoch {
+		return
+	}
+	ps := v.ProposerSettings()
+	if !ps.UpgradeToV2() {
+		return
+	}
+	if err := v.SetProposerSettings(ctx, ps); err != nil {
+		log.WithError(err).Warn("Failed to persist v1->v2 proposer settings upgrade")
+	}
+}
+
 // buildProposerPreferences creates signed proposer preferences for validators
 // that have proposer slots in the current epoch (future slots) or next epoch. During normal operation it is
 // gated to run once at mid-epoch; pass force=true to bypass that gate (e.g.
@@ -1207,31 +1224,22 @@ func (v *validator) releasePrefSlot(proposalSlot primitives.Slot) {
 	delete(v.submittedPrefSlots, proposalSlot)
 }
 
-// proposerConfigForKey returns the fee recipient and gas limit for pk, using the
-// per-key proposer config when present and otherwise the defaults.
+// proposerConfigForKey returns the fee recipient and target gas limit for pk.
+// The target gas limit comes from the top-level v2 fields only; builder gas
+// limits are registration-only.
 func (v *validator) proposerConfigForKey(pk pubkey) (common.Address, uint64) {
 	feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
-	gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
 	ps := v.ProposerSettings()
+	gasLimit := uint64(ps.TargetGasLimit(pk))
 	if ps == nil {
 		return feeRecipient, gasLimit
 	}
-	if ps.DefaultConfig != nil {
-		if ps.DefaultConfig.FeeRecipientConfig != nil {
-			feeRecipient = ps.DefaultConfig.FeeRecipientConfig.FeeRecipient
-		}
-		if ps.DefaultConfig.BuilderConfig != nil && ps.DefaultConfig.BuilderConfig.Enabled {
-			gasLimit = uint64(ps.DefaultConfig.BuilderConfig.GasLimit)
-		}
+	if ps.DefaultConfig != nil && ps.DefaultConfig.FeeRecipientConfig != nil {
+		feeRecipient = ps.DefaultConfig.FeeRecipientConfig.FeeRecipient
 	}
 	if ps.ProposeConfig != nil {
-		if config, ok := ps.ProposeConfig[pk]; ok && config != nil {
-			if config.FeeRecipientConfig != nil {
-				feeRecipient = config.FeeRecipientConfig.FeeRecipient
-			}
-			if config.BuilderConfig != nil && config.BuilderConfig.Enabled {
-				gasLimit = uint64(config.BuilderConfig.GasLimit)
-			}
+		if config, ok := ps.ProposeConfig[pk]; ok && config != nil && config.FeeRecipientConfig != nil {
+			feeRecipient = config.FeeRecipientConfig.FeeRecipient
 		}
 	}
 	return feeRecipient, gasLimit
@@ -1257,6 +1265,7 @@ func (v *validator) submitProposerPreferences(ctx context.Context) {
 		log.WithError(err).Warn("Failed to get keymanager for proposer preference resubmission")
 		return
 	}
+	v.upgradeProposerSettingsToV2(ctx, currentEpoch)
 	prefs := v.buildProposerPreferences(ctx, km, slot, true)
 	if len(prefs) == 0 {
 		return
