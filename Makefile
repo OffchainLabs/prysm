@@ -191,7 +191,20 @@ testdata: ## Pre-fetch all external spec-test data (tests fetch lazily otherwise
 .DEFAULT_GOAL := help
 .PHONY: help
 help: ## Show this help
-	@echo "Prysm — Ethereum consensus client"
+	@echo ""
+	@printf '\033[38;5;214m'
+	@echo ' ███████████                                              '
+	@echo '░░███░░░░░███                                             '
+	@echo ' ░███    ░███ ████████  █████ ████  █████  █████████████  '
+	@echo ' ░██████████ ░░███░░███░░███ ░███  ███░░  ░░███░░███░░███ '
+	@echo ' ░███░░░░░░   ░███ ░░░  ░███ ░███ ░░█████  ░███ ░███ ░███ '
+	@echo ' ░███         ░███      ░███ ░███  ░░░░███ ░███ ░███ ░███ '
+	@echo ' █████        █████     ░░███████  ██████  █████░███ █████'
+	@echo '░░░░░        ░░░░░       ░░░░░███ ░░░░░░  ░░░░░ ░░░ ░░░░░ '
+	@echo '                         ███ ░███                         '
+	@echo '                        ░░██████                          '
+	@echo '                         ░░░░░░                           '
+	@printf '\033[0m'
 	@echo ""
 	@echo "Commands:"
 	@printf "  \033[36m%-48s\033[0m %s\n" "make run <bin> [-- <args>]"    "Run a binary"
@@ -212,7 +225,6 @@ help: ## Show this help
 	@$(foreach s,$(E2E_SUITES),printf -- "- %-15s %s\n" "$(s):" "$(E2E_SUITE_$(s))";)
 	@echo ""
 	@printf "%-17s %s\n" "note:" "after '--', pass '--flag value' (not '--flag=value')"
-	@printf "%-17s %s\n" "reproducible:" "make dist SOURCE_DATE_EPOCH=<unix-seconds> pins the build timestamp"
 
 # ---------------------------------------------------------------------------
 # Positional-argument catch-all
