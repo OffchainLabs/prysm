@@ -579,13 +579,45 @@ func TestService_IsOptimisticForRoot_DB_non_canonical(t *testing.T) {
 
 }
 
+func TestService_IsOptimisticForRoot_RecoverLastValidated(t *testing.T) {
+	// Validated checkpoint state summary is missing — recovery must use the
+	// checkpoint root, not the queried root, so the slot comparison is correct.
+	ctx := t.Context()
+	c := testServiceWithDB(t)
+	beaconDB := c.cfg.BeaconDB
+
+	cpBlock := util.NewBeaconBlock()
+	cpBlock.Block.Slot = 1
+	cpRoot, err := cpBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+	util.SaveBlock(t, ctx, beaconDB, cpBlock)
+	st, _ := util.DeterministicGenesisState(t, 1)
+	require.NoError(t, beaconDB.SaveState(ctx, st, cpRoot))
+	require.NoError(t, beaconDB.SaveLastValidatedCheckpoint(ctx, &ethpb.Checkpoint{Root: cpRoot[:]}))
+
+	qBlock := util.NewBeaconBlock()
+	qBlock.Block.Slot = 2
+	qRoot, err := qBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+	util.SaveBlock(t, ctx, beaconDB, qBlock)
+	require.NoError(t, beaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{Root: qRoot[:], Slot: 2}))
+	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, qRoot))
+
+	optimistic, err := c.IsOptimisticForRoot(ctx, qRoot)
+	require.NoError(t, err)
+	require.Equal(t, true, optimistic)
+}
+
 func TestService_IsOptimisticForRoot_StateSummaryRecovered(t *testing.T) {
 	ctx := t.Context()
 	c := testServiceWithDB(t)
 	beaconDB := c.cfg.BeaconDB
 	c.head = &head{root: params.BeaconConfig().ZeroHash}
 	b := util.NewBeaconBlock()
-	b.Block.Slot = 10
+	// Use slot 33 (epoch 1) so the function returns early at the
+	// "slots.ToEpoch(ss.Slot) > validatedCheckpoint.Epoch" check (1 > 0),
+	// since this test only verifies that the queried block's state summary is recovered.
+	b.Block.Slot = 33
 	br, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
 	util.SaveBlock(t, t.Context(), beaconDB, b)
@@ -595,7 +627,7 @@ func TestService_IsOptimisticForRoot_StateSummaryRecovered(t *testing.T) {
 	summ, err := beaconDB.StateSummary(ctx, br)
 	assert.NoError(t, err)
 	assert.NotNil(t, summ)
-	assert.Equal(t, 10, int(summ.Slot))
+	assert.Equal(t, 33, int(summ.Slot))
 	assert.DeepEqual(t, br[:], summ.Root)
 }
 
