@@ -65,7 +65,6 @@ var appHelpFlagGroups = []flagGroup{
 			flags.CertFlag,
 			flags.ChainID,
 			flags.DisableDebugRPCEndpoints,
-			flags.HTTPModules,
 			flags.HTTPServerCorsDomain,
 			flags.HTTPServerHost,
 			flags.HTTPServerPort,

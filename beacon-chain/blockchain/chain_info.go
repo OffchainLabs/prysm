@@ -498,7 +498,7 @@ func (s *Service) IsOptimisticForRoot(ctx context.Context, root [32]byte) (bool,
 		return false, err
 	}
 	if lastValidated == nil {
-		lastValidated, err = s.recoverStateSummary(ctx, root)
+		lastValidated, err = s.recoverStateSummary(ctx, s.ensureRootNotZeros(bytesutil.ToBytes32(validatedCheckpoint.Root)))
 		if err != nil {
 			return false, err
 		}
