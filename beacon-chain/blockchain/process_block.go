@@ -1036,25 +1036,24 @@ func (s *Service) areDataColumnsAvailable(
 				continue
 			}
 
+			// Refresh from storage so any newly stored column counts toward the
+			// reconstruction threshold, even if it is not one of our custody columns.
+			storedDataColumnsCount = s.dataColumnStorage.Summary(root).Count()
+
 			for _, index := range idents.Indices {
-				// This is a data column we are expecting.
-				if _, ok := missing[index]; ok {
-					storedDataColumnsCount++
-				}
-
-				// As soon as we have more than half of the data columns, we can reconstruct the missing ones.
-				// We don't need to wait for the rest of the data columns to declare the block as available.
-				if storedDataColumnsCount >= minimumColumnCountToReconstruct {
-					return nil
-				}
-
 				// Remove the index from the missing map.
 				delete(missing, index)
+			}
 
-				// Return if there is no more missing data columns.
-				if len(missing) == 0 {
-					return nil
-				}
+			// As soon as we have enough data columns, we can reconstruct the missing ones.
+			// We don't need to wait for the rest of the data columns to declare the block as available.
+			if storedDataColumnsCount >= minimumColumnCountToReconstruct {
+				return nil
+			}
+
+			// Return if there is no more missing data columns.
+			if len(missing) == 0 {
+				return nil
 			}
 
 		case <-slotEnd:

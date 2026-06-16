@@ -2984,6 +2984,84 @@ func TestIsDataAvailable(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	// Verifies that non-custody columns count toward the reconstruction threshold
+	// while the wait loop is running.
+	//
+	//   T = MinimumColumnCountToReconstruct  (= NumberOfColumns / 2)
+	//
+	//   columns:  [0][1][2] ... [127]    custody = small subset derived from NodeID
+	//
+	//                       ┌── T-2 ──┐  ┌─ 2 ─┐
+	//   non-custody picks:  [#########]  [#####]
+	//                         initial       delayed (saved after startWaiting fires)
+	//
+	//   after initial save:  stored = T-2,  missing = {all custody}  → enter wait loop
+	//   after delayed save:  stored = T,    missing unchanged         → must return nil
+	//                                                                   via the threshold
+	//                                                                   path (missing
+	//                                                                   never empties).
+	//
+	t.Run("Fulu - non-custody columns can reach reconstruction threshold while waiting", func(t *testing.T) {
+		startWaiting := make(chan bool)
+
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testIsAvailableParams{
+			options:                 []Option{WithStartWaitingDataColumnSidecars(startWaiting)},
+			blobKzgCommitmentsCount: 3,
+		})
+		block := signed.Block()
+		parentRoot := block.ParentRoot()
+		stateRoot := block.StateRoot()
+		bodyRoot, err := block.Body().HashTreeRoot()
+		require.NoError(t, err)
+
+		custodyGroupCount, err := service.cfg.P2P.CustodyGroupCount(ctx)
+		require.NoError(t, err)
+		samplingSize := max(params.BeaconConfig().SamplesPerSlot, custodyGroupCount)
+		peerInfo, _, err := peerdas.Info(service.cfg.P2P.NodeID(), samplingSize)
+		require.NoError(t, err)
+
+		nonCustody := make([]uint64, 0, fieldparams.NumberOfColumns)
+		for i := uint64(0); i < fieldparams.NumberOfColumns; i++ {
+			if peerInfo.CustodyColumns[i] {
+				continue
+			}
+			nonCustody = append(nonCustody, i)
+		}
+		threshold := peerdas.MinimumColumnCountToReconstruct()
+		require.Equal(t, true, uint64(len(nonCustody)) >= threshold)
+
+		sidecarsAt := func(indices []uint64) []consensusblocks.VerifiedRODataColumn {
+			params := make([]util.DataColumnParam, 0, len(indices))
+			for _, index := range indices {
+				params = append(params, util.DataColumnParam{
+					Index:         index,
+					Slot:          block.Slot(),
+					ProposerIndex: block.ProposerIndex(),
+					ParentRoot:    parentRoot[:],
+					StateRoot:     stateRoot[:],
+					BodyRoot:      bodyRoot[:],
+				})
+			}
+			_, sidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, params)
+			return sidecars
+		}
+
+		require.NoError(t, service.dataColumnStorage.Save(sidecarsAt(nonCustody[:threshold-2])))
+
+		go func() {
+			<-startWaiting
+			require.NoError(t, service.dataColumnStorage.Save(sidecarsAt(nonCustody[threshold-2:threshold])))
+		}()
+
+		ctx, cancel := context.WithTimeout(ctx, time.Second*2)
+		defer cancel()
+
+		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
+		require.NoError(t, err)
+		err = service.isDataAvailable(ctx, roBlock)
+		require.NoError(t, err)
+	})
+
 	t.Run("Fulu - some columns are definitively missing", func(t *testing.T) {
 		startWaiting := make(chan bool)
 
