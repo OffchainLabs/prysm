@@ -38,6 +38,13 @@ CROSS_TARGETS := \
 
 CROSS_PLATFORMS := $(foreach t,$(CROSS_TARGETS),$(word 1,$(subst /,$(space),$(t)))/$(word 2,$(subst /,$(space),$(t))))
 
+DOCKER_IMAGES  := beacon-chain validator prysmctl
+DOCKER_REGISTRY ?= gcr.io/offchainlabs/prysm
+DOCKER_TAG      ?= $(GIT_TAG)
+LINUX_ARCHES   := $(foreach t,$(filter linux/%,$(CROSS_TARGETS)),$(word 2,$(subst /,$(space),$(t))))
+DOCKER_PLATFORMS := $(foreach a,$(LINUX_ARCHES),docker/$(a))
+ALL_PLATFORMS  := $(CROSS_PLATFORMS) $(DOCKER_PLATFORMS)
+
 # `mode` selects the race setting and only applies to `make test` (`make test mode=race`).
 TEST_MODES        := no-race race
 MODE_DEFAULT_test := no-race
@@ -148,22 +155,18 @@ DIST_BINS := $(or $(strip $(filter $(CROSS_BINARIES),$(MAKECMDGOALS))),$(CROSS_B
 # that dist can't cross-build). DIST_BIN_BAD makes `make dist xxx` error like build/gen/e2e.
 DIST_BIN_BAD := $(filter-out $(CROSS_BINARIES),$(filter-out dist,$(MAKECMDGOALS)))
 
-# Which run-targets `make dist` builds: empty platform= means all; otherwise platform= is one
-# or a space/comma list of exact <os>/<arch> values from CROSS_PLATFORMS (each maps to its
-# CROSS_TARGETS entry). DIST_PLAT_BAD collects any selector that isn't a known platform.
 platform ?=
 ifeq ($(strip $(platform)),)
-DIST_TARGETS  := $(CROSS_TARGETS)
-DIST_PLAT_BAD :=
+DIST_PLAT_SEL := $(ALL_PLATFORMS)
 else
 DIST_PLAT_SEL := $(subst $(comma),$(space),$(platform))
-DIST_PLAT_BAD := $(filter-out $(CROSS_PLATFORMS),$(DIST_PLAT_SEL))
-DIST_TARGETS  := $(foreach s,$(filter $(CROSS_PLATFORMS),$(DIST_PLAT_SEL)),$(filter $(s)/%,$(CROSS_TARGETS)))
 endif
 
-# Env for the in-container dist build (build/crossdocker -> build/cross). dist is always a
-# release build: stamped + stripped (-s -w) + PGO'd. crossbuild reads PGO_beacon_chain
-# (underscore) and applies it only to beacon-chain.
+DIST_PLAT_BAD := $(filter-out $(ALL_PLATFORMS),$(DIST_PLAT_SEL))
+DIST_DOCKER_ARCHES := $(sort $(foreach s,$(filter $(DOCKER_PLATFORMS),$(DIST_PLAT_SEL)),$(word 2,$(subst /,$(space),$(s)))))
+DIST_BIN_PLATS := $(sort $(filter $(CROSS_PLATFORMS),$(DIST_PLAT_SEL)) $(foreach a,$(DIST_DOCKER_ARCHES),linux/$(a)))
+DIST_TARGETS   := $(foreach s,$(DIST_BIN_PLATS),$(filter $(s)/%,$(CROSS_TARGETS)))
+
 DIST_LDFLAGS := $(LDFLAGS_STAMPED) -s -w
 BUILD_MODE   := release
 BUILD_PGO    := $(PGO_beacon-chain)
@@ -172,11 +175,18 @@ BUILD_CROSS_ENV = GO="$(GO)" DIST="$(DIST)" GIT_TAG="$(GIT_TAG)" \
 	LDFLAGS="$(DIST_LDFLAGS)" TAGFLAG="$(TAGFLAG)" PGO_beacon_chain="$(BUILD_PGO)" \
 	BUILD_MODE="$(BUILD_MODE)"
 
+DIST_DOCKER      := $(strip $(DIST_DOCKER_ARCHES))
+DIST_DOCKER_BINS := $(filter $(DOCKER_IMAGES),$(DIST_BINS))
+DIST_DOCKER_ENV   = GO="$(GO)" DIST="$(DIST)" GIT_TAG="$(GIT_TAG)" \
+	DOCKER_TAG="$(DOCKER_TAG)" DOCKER_REGISTRY="$(DOCKER_REGISTRY)" \
+	DOCKER_BINARIES="$(strip $(DIST_DOCKER_BINS))" DOCKER_ARCHES="$(strip $(DIST_DOCKER_ARCHES))"
+
 .PHONY: dist
 dist:
 	@$(if $(DIST_BIN_BAD),echo "❌ dist: unknown binary(ies): $(DIST_BIN_BAD)  (one of: $(CROSS_BINARIES))" >&2; exit 1;) \
-	$(if $(DIST_PLAT_BAD),echo "❌ dist: unknown platform(s): $(DIST_PLAT_BAD)  (valid: $(CROSS_PLATFORMS))" >&2; exit 1;) \
-	$(BUILD_CROSS_ENV) CROSS_BINARIES="$(DIST_BINS)" CROSS_TARGETS="$(strip $(DIST_TARGETS))" $(GO) run ./build/crossdocker
+	$(if $(DIST_PLAT_BAD),echo "❌ dist: unknown platform(s): $(DIST_PLAT_BAD)  (valid: $(ALL_PLATFORMS))" >&2; exit 1;) \
+	$(BUILD_CROSS_ENV) CROSS_BINARIES="$(DIST_BINS)" CROSS_TARGETS="$(strip $(DIST_TARGETS))" $(GO) run ./build/crossdocker \
+	$(if $(DIST_DOCKER),&& $(DIST_DOCKER_ENV) $(GO) run ./build/docker,)
 
 # ---------------------------------------------------------------------------
 # Pre-fetch external spec-test data
@@ -212,12 +222,12 @@ help: ## Show this help
 	@printf "  \033[36m%-48s\033[0m %s\n" "make build <bin> [-- <flags>]" "Build a binary"
 	@printf "  \033[36m%-48s\033[0m %s\n" "make gen [$(GEN_KINDS)]"                "Create generated code"
 	@printf "  \033[36m%-48s\033[0m %s\n" "make e2e [suite|scenario]"              "Run end-to-end tests (default: presubmit)"
-	@printf "  \033[36m%-48s\033[0m %s\n" "make dist [<bin>...] [platform=<platform>]"  "Build official release binaries (default: all binaries & platforms)"
+	@printf "  \033[36m%-48s\033[0m %s\n" "make dist [<bin>...] [platform=<platform>]"  "Build official release binaries (docker/<arch> also packages an OCI image)"
 	@printf "  \033[36m%-48s\033[0m %s\n" "make testdata"                          "Pre-fetch external spec-test data"
 	@printf "  \033[36m%-48s\033[0m %s\n" "make help"                              "Show this help"
 	@echo ""
 	@printf "%-17s %s\n" "<bin>:" "$(BINARIES)"
-	@printf "%-17s %s\n" "<platform>:" "$(CROSS_PLATFORMS)  (give one, or a space/comma list)"
+	@printf "%-17s %s\n" "<platform>:" "$(ALL_PLATFORMS)  (give one, or a comma-separated list)"
 	@echo ""
 	@echo "E2E:"
 	@printf "%-17s %s\n" "scenarios:" "$(E2E_SCENARIOS)"
