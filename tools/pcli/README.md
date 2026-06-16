@@ -40,6 +40,6 @@ This is a utility to help users perform Ethereum consensus specific commands.
 To use pcli manual state transition:
 
 ```
-bazel run //tools/pcli:pcli -- state-transition --block-path /path/to/block.ssz --pre-state-path /path/to/state.ssz
+go run ./tools/pcli state-transition --block-path /path/to/block.ssz --pre-state-path /path/to/state.ssz
 ```
 

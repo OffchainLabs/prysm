@@ -1,5 +1,3 @@
-//go:build !bazel
-
 package bazel
 
 import (

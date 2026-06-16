@@ -21,21 +21,21 @@ var specDirs = map[string][]string{
 
 To download/update specs:
 ```bash
-bazel run //tools/specs-checker download -- --dir=$PWD/tools/specs-checker/data
+go run ./tools/specs-checker download --dir=$PWD/tools/specs-checker/data
 ```
 
 This will pull the files defined in `specDirs`, parse them (extract Python code snippets, discarding any other text), 
-and save them to the folder from which `bazel run //tools/specs-checker check` will be able to embed.
+and save them to the folder from which `go run ./tools/specs-checker check` will be able to embed.
 
 ### Checking against the reference specs
 
 To check whether reference comments have the matching version of Python specs:
 ```bash
-bazel run //tools/specs-checker check -- --dir $PWD/beacon-chain
-bazel run //tools/specs-checker check -- --dir $PWD/validator
-bazel run //tools/specs-checker check -- --dir $PWD/shared
+go run ./tools/specs-checker check --dir $PWD/beacon-chain
+go run ./tools/specs-checker check --dir $PWD/validator
+go run ./tools/specs-checker check --dir $PWD/shared
 ```
 Or, to check the whole project:
 ```bash
-bazel run //tools/specs-checker check -- --dir $PWD
+go run ./tools/specs-checker check --dir $PWD
 ```

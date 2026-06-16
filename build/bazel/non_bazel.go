@@ -8,11 +8,9 @@
 // by the Apache License, Version 2.0, included in the file
 // licenses/APL.txt.
 
-//go:build !bazel
-
-// Non-Bazel implementations of the runfiles helpers. When built with the Go
-// toolchain (no `bazel` build tag), files are resolved from the source tree and
-// from a local test-data cache instead of a Bazel runfiles directory.
+// Implementations of the runfiles helpers for the Go toolchain: files are
+// resolved from the source tree and from a local test-data cache (Bazel and its
+// runfiles directory were removed in the Bazel->Go-toolchain migration).
 
 package bazel
 

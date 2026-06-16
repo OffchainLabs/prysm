@@ -11,15 +11,17 @@ jobs:
 
     - name: Check version consistency
       run: |
-        WORKSPACE_VERSION=$(grep 'consensus_spec_version = ' WORKSPACE | sed 's/.*"\(.*\)"/\1/')
+        # The consensus-spec version is pinned in build/externaldata (the source of truth
+        # since Bazel/WORKSPACE was removed). Keep it in sync with .ethspecify.yml.
+        SRC_VERSION=$(grep -E 'consensusSpecVersion[[:space:]]*=' build/externaldata/externaldata.go | sed -E 's/.*"(.*)".*/\1/')
         ETHSPECIFY_VERSION=$(grep '^version:' .ethspecify.yml | sed 's/version: //')
-        if [ "$WORKSPACE_VERSION" != "$ETHSPECIFY_VERSION" ]; then
-          echo "Version mismatch between WORKSPACE and ethspecify"
-          echo "  WORKSPACE: $WORKSPACE_VERSION"
+        if [ "$SRC_VERSION" != "$ETHSPECIFY_VERSION" ]; then
+          echo "Version mismatch between build/externaldata and ethspecify"
+          echo "  build/externaldata/externaldata.go: $SRC_VERSION"
           echo "  .ethspecify.yml: $ETHSPECIFY_VERSION"
           exit 1
         else
-          echo "Versions match: $WORKSPACE_VERSION"
+          echo "Versions match: $SRC_VERSION"
         fi
 
     - name: Install ethspecify

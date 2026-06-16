@@ -1,59 +1,25 @@
-# Third Party Package Patching
+# Third Party
 
-This directory includes local patches to third party dependencies we use in Prysm. Sometimes,
-we need to make a small change to some dependency for ease of use in Prysm without wanting
-to maintain our own fork of the dependency ourselves. Our build tool, [Bazel](https://bazel.build)
-allows us to include patches in a seamless manner based on simple diff rules.
+This directory holds local, in-tree third-party material that Prysm vendors directly
+(e.g. `go-bip39`, wired in via a `replace` directive in `go.mod`).
 
-This README outlines how patching works in Prysm and an explanation of previously
-created patches. 
+## Modifying a dependency
 
-**Given maintaining a patch can be difficult and tedious,
-patches are NOT the recommended way of modifying dependencies in Prysm 
-unless really needed**
+Prysm builds with the Go toolchain and standard Go modules. Bazel — and its
+`go_repository`-based patching of dependency sources at build time — has been removed,
+so the old `third_party/*.patch` files are gone.
 
-## Table of Contents
+To change a dependency now, use one of the standard Go approaches:
 
-- [Prerequisites](#prerequisites)
-- [Creating a Patch](#creating-a-patch)
+- **Fork it** and point at the fork with a `replace` directive in `go.mod`:
+  ```
+  replace github.com/someteam/somerepo => github.com/OffchainLabs/somerepo v0.0.0-...
+  ```
+- **Vendor it locally** under `third_party/` and `replace` it with the local path
+  (as done for `go-bip39`):
+  ```
+  replace github.com/tyler-smith/go-bip39 => ./third_party/go-bip39
+  ```
 
-## Prerequisites
-
-**Bazel Installation:**
-  - The latest release of [Bazel](https://docs.bazel.build/versions/master/install.html)
-  - A modern UNIX operating system (MacOS included)
-
-## Creating a Patch
-
-To create a patch, we need an original version of a dependency which we will refer to as `a`
-and the patched version referred to as `b`. 
-
-```
-cd /tmp
-git clone https://github.com/someteam/somerepo a
-git clone https://github.com/someteam/somerepo b && cd b
-```
-Then, make all your changes in `b` and finally create the diff of all your changes as follows:
-```
-cd ..
-diff -ur --exclude=".git" a b > $GOPATH/src/github.com/prysmaticlabs/prysm/third_party/YOURPATCH.patch
-```
-
-Next, we need to tell the Bazel [WORKSPACE](https://github.com/prysmaticlabs/prysm/blob/master/WORKSPACE) to patch the specific dependency.
-Here's an example for a patch we use today for the [Ethereum APIs](https://github.com/prysmaticlabs/ethereumapis)
-dependency:
-
-```
-go_repository(
-    name = "com_github_prysmaticlabs_ethereumapis",
-    commit = "367ca574419a062ae26818f60bdeb5751a6f538",
-    patch_args = ["-p1"],
-    patches = [
-        "//third_party:com_github_prysmaticlabs_ethereumapis-tags.patch",
-    ],
-    importpath = "github.com/prysmaticlabs/ethereumapis",
-)
-```
-
-Now, when used in Prysm, the dependency you patched will have the patched modifications
-when you run your code.
+Either way the change lives in normal Go source that `go build` compiles directly — no
+separate patch step to apply.
