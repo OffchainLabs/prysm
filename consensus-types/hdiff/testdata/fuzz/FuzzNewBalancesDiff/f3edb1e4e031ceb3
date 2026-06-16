@@ -1,0 +1,3 @@
+go test fuzz v1
+byte('Ç')
+[]byte("\x87hU\xb7)\x9d *#\xec\xc2\xec\x02\x10[կ")
