@@ -6,12 +6,19 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	gocache "github.com/patrickmn/go-cache"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 const (
 	subscribedValidatorsTTL             = time.Hour
 	subscribedValidatorsCleanupInterval = 15 * time.Minute
 )
+
+var subscribedValidatorsCacheCount = promauto.NewGauge(prometheus.GaugeOpts{
+	Name: "subscribed_validators_cache_count",
+	Help: "The number of validators currently attached (subscribed) to this beacon node.",
+})
 
 // SubscribedValidatorsCache tracks validator indices the validator client has
 // posted committee subscriptions for.
@@ -31,6 +38,7 @@ func NewSubscribedValidatorsCache() *SubscribedValidatorsCache {
 // Add records the validator as attached. Re-adding extends the TTL.
 func (c *SubscribedValidatorsCache) Add(index primitives.ValidatorIndex) {
 	c.entries.Set(subscribedKey(index), struct{}{}, gocache.DefaultExpiration)
+	subscribedValidatorsCacheCount.Set(float64(c.entries.ItemCount()))
 }
 
 // Has returns true if the validator is currently attached.
@@ -41,17 +49,21 @@ func (c *SubscribedValidatorsCache) Has(index primitives.ValidatorIndex) bool {
 
 // Validating returns true if at least one validator is attached.
 func (c *SubscribedValidatorsCache) Validating() bool {
-	return c.entries.ItemCount() > 0
+	count := c.entries.ItemCount()
+	subscribedValidatorsCacheCount.Set(float64(count))
+	return count > 0
 }
 
 // Clear removes all attached validators.
 func (c *SubscribedValidatorsCache) Clear() {
 	c.entries.Flush()
+	subscribedValidatorsCacheCount.Set(0)
 }
 
 // Indices returns the set of currently-attached validator indices.
 func (c *SubscribedValidatorsCache) Indices() map[primitives.ValidatorIndex]bool {
 	items := c.entries.Items()
+	subscribedValidatorsCacheCount.Set(float64(len(items)))
 	out := make(map[primitives.ValidatorIndex]bool, len(items))
 	for key := range items {
 		idx, err := strconv.ParseUint(key, 10, 64)

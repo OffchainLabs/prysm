@@ -8,11 +8,24 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	gocache "github.com/patrickmn/go-cache"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 const (
 	defaultExpiration = 1 * time.Hour
 	cleanupInterval   = 15 * time.Minute
+)
+
+var (
+	proposerPreferencesCacheHit = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "proposer_preferences_cache_hit",
+		Help: "The number of proposer preference lookups served from the cache.",
+	})
+	proposerPreferencesCacheMiss = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "proposer_preferences_cache_miss",
+		Help: "The number of proposer preference lookups not present in the cache.",
+	})
 )
 
 // ProposerPreference is a proposer fee-recipient / gas-limit preference. When
@@ -97,11 +110,14 @@ func (c *ProposerPreferencesCache) Add(pref ProposerPreference, slot primitives.
 // the per-validator default, else (zero, false).
 func (c *ProposerPreferencesCache) BestFor(dependentRoot [32]byte, slot primitives.Slot, idx primitives.ValidatorIndex) (ProposerPreference, bool) {
 	if pref, ok := c.Get(dependentRoot, slot); ok && pref.ValidatorIndex == idx {
+		proposerPreferencesCacheHit.Inc()
 		return pref, true
 	}
 	if def, ok := c.Default(idx); ok {
+		proposerPreferencesCacheHit.Inc()
 		return def, true
 	}
+	proposerPreferencesCacheMiss.Inc()
 	return ProposerPreference{}, false
 }
 

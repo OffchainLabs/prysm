@@ -75,7 +75,7 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	// [IGNORE] matching SignedProposerPreferences seen, keyed on the proposer
 	// dep root anchored to bid.parent_block_root.
 	parentBlockRoot := bid.ParentBlockRoot()
-	dependentRoot, err := s.proposerDependentRoot(ctx, parentBlockRoot, bid.Slot())
+	dependentRoot, err := s.proposerDependentRoot(parentBlockRoot, bid.Slot())
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
@@ -166,19 +166,14 @@ func (s *Service) setSeenExecutionPayloadBidBuilder(slot primitives.Slot, key st
 }
 
 // proposerDependentRoot returns the post-Fulu spec's proposer dep root for
-// epoch(slot), anchored to parentBlockRoot's chain:
-// state.block_roots[start_slot(epoch-1) - 1]. Pre-Gloas slot underflow falls
-// back to genesis.
-func (s *Service) proposerDependentRoot(ctx context.Context, parentBlockRoot [32]byte, slot primitives.Slot) ([32]byte, error) {
-	epoch := slots.ToEpoch(slot)
-	if epoch < 2 {
-		root, err := s.cfg.beaconDB.GenesisBlockRoot(ctx)
-		if err != nil {
-			return [32]byte{}, errors.Wrap(err, "genesis block root")
-		}
-		return root, nil
+// epoch(slot), anchored to parentBlockRoot's chain. DependentRootForEpoch maps
+// the genesis-era underflow (epoch < 2) to the origin block root.
+func (s *Service) proposerDependentRoot(parentBlockRoot [32]byte, slot primitives.Slot) ([32]byte, error) {
+	previousEpoch := slots.ToEpoch(slot)
+	if previousEpoch > 0 {
+		previousEpoch = previousEpoch.Sub(1)
 	}
-	depRoot, err := s.cfg.chain.DependentRootForEpoch(parentBlockRoot, epoch.Sub(1))
+	depRoot, err := s.cfg.chain.DependentRootForEpoch(parentBlockRoot, previousEpoch)
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "dependent root for epoch")
 	}

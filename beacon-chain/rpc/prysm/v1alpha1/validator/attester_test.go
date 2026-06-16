@@ -736,53 +736,82 @@ func TestGetAttestationData_CommitteeIndexGloas(t *testing.T) {
 	})
 }
 
-func TestServer_SubscribeCommitteeSubnets_NoSlots(t *testing.T) {
-	attesterServer := &Server{
-		HeadFetcher:       &mock.ChainService{},
-		P2P:               &mockp2p.MockBroadcaster{},
-		AttPool:           attestations.NewPool(),
-		OperationNotifier: (&mock.ChainService{}).OperationNotifier(),
+func TestServer_SubscribeCommitteeSubnets_InvalidRequest(t *testing.T) {
+	tests := []struct {
+		name string
+		req  *ethpb.CommitteeSubnetsSubscribeRequest
+		err  string
+	}{
+		{
+			name: "no slots provided",
+			req:  &ethpb.CommitteeSubnetsSubscribeRequest{},
+			err:  "no attester slots provided",
+		},
+		{
+			name: "fields not the same length",
+			req: &ethpb.CommitteeSubnetsSubscribeRequest{
+				Slots:        []primitives.Slot{1, 2},
+				CommitteeIds: []primitives.CommitteeIndex{0},
+				IsAggregator: []bool{false},
+			},
+			err: "request fields are not the same length",
+		},
+		{
+			name: "validator_indices length does not match slots",
+			req: &ethpb.CommitteeSubnetsSubscribeRequest{
+				Slots:            []primitives.Slot{1, 2},
+				CommitteeIds:     []primitives.CommitteeIndex{0, 0},
+				IsAggregator:     []bool{false, false},
+				ValidatorIndices: []primitives.ValidatorIndex{7},
+			},
+			err: "validator_indices length must match slots length when provided",
+		},
 	}
-
-	_, err := attesterServer.SubscribeCommitteeSubnets(t.Context(), &ethpb.CommitteeSubnetsSubscribeRequest{
-		Slots:        nil,
-		CommitteeIds: nil,
-		IsAggregator: nil,
-	})
-	assert.ErrorContains(t, "no attester slots provided", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attesterServer := &Server{
+				HeadFetcher:               &mock.ChainService{},
+				P2P:                       &mockp2p.MockBroadcaster{},
+				AttPool:                   attestations.NewPool(),
+				OperationNotifier:         (&mock.ChainService{}).OperationNotifier(),
+				SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
+			}
+			_, err := attesterServer.SubscribeCommitteeSubnets(t.Context(), tt.req)
+			assert.ErrorContains(t, tt.err, err)
+			assert.Equal(t, false, attesterServer.SubscribedValidatorsCache.Has(7))
+		})
+	}
 }
 
-func TestServer_SubscribeCommitteeSubnets_DifferentLengthSlots(t *testing.T) {
-	// fixed seed
-	s := rand.NewSource(10)
-	randGen := rand.New(s)
+func TestServer_SubscribeCommitteeSubnets_TracksValidatorIndices(t *testing.T) {
+	validators := make([]*ethpb.Validator, 64)
+	for i := range validators {
+		validators[i] = &ethpb.Validator{
+			ExitEpoch:        params.BeaconConfig().FarFutureEpoch,
+			EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance,
+		}
+	}
+	state, err := util.NewBeaconState()
+	require.NoError(t, err)
+	require.NoError(t, state.SetValidators(validators))
 
 	attesterServer := &Server{
-		HeadFetcher:       &mock.ChainService{},
-		P2P:               &mockp2p.MockBroadcaster{},
-		AttPool:           attestations.NewPool(),
-		OperationNotifier: (&mock.ChainService{}).OperationNotifier(),
+		HeadFetcher:               &mock.ChainService{State: state},
+		P2P:                       &mockp2p.MockBroadcaster{},
+		AttPool:                   attestations.NewPool(),
+		OperationNotifier:         (&mock.ChainService{}).OperationNotifier(),
+		SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
 	}
 
-	var ss []primitives.Slot
-	var comIdxs []primitives.CommitteeIndex
-	var isAggregator []bool
-
-	for i := primitives.Slot(100); i < 200; i++ {
-		ss = append(ss, i)
-		comIdxs = append(comIdxs, primitives.CommitteeIndex(randGen.Int63n(64)))
-		boolVal := randGen.Uint64()%2 == 0
-		isAggregator = append(isAggregator, boolVal)
-	}
-
-	ss = append(ss, 321)
-
-	_, err := attesterServer.SubscribeCommitteeSubnets(t.Context(), &ethpb.CommitteeSubnetsSubscribeRequest{
-		Slots:        ss,
-		CommitteeIds: comIdxs,
-		IsAggregator: isAggregator,
+	_, err = attesterServer.SubscribeCommitteeSubnets(t.Context(), &ethpb.CommitteeSubnetsSubscribeRequest{
+		Slots:            []primitives.Slot{9000, 9001},
+		CommitteeIds:     []primitives.CommitteeIndex{0, 1},
+		IsAggregator:     []bool{false, true},
+		ValidatorIndices: []primitives.ValidatorIndex{3, 11},
 	})
-	assert.ErrorContains(t, "request fields are not the same length", err)
+	require.NoError(t, err)
+	assert.Equal(t, true, attesterServer.SubscribedValidatorsCache.Has(3))
+	assert.Equal(t, true, attesterServer.SubscribedValidatorsCache.Has(11))
 }
 
 func TestServer_SubscribeCommitteeSubnets_MultipleSlots(t *testing.T) {

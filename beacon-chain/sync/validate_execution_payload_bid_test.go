@@ -3,6 +3,7 @@ package sync
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -305,9 +306,6 @@ func TestExecutionPayloadBidSubscriber_HappyPath(t *testing.T) {
 // queries the chain's DependentRootForEpoch at epoch-1 anchored to
 // parentBlockRoot, and returns whatever root forkchoice gives back.
 func TestProposerDependentRoot_DelegatesToForkchoice(t *testing.T) {
-	ctx := context.Background()
-	db := dbtest.SetupDB(t)
-
 	parentRoot := [32]byte{0xaa}
 	expectedDepRoot := [32]byte{0xbb}
 	bidSlot := 2*params.BeaconConfig().SlotsPerEpoch + 6
@@ -322,13 +320,39 @@ func TestProposerDependentRoot_DelegatesToForkchoice(t *testing.T) {
 			return expectedDepRoot, nil
 		},
 	}
-	s := &Service{cfg: &config{beaconDB: db, chain: chainService}}
+	s := &Service{cfg: &config{chain: chainService}}
 
-	got, err := s.proposerDependentRoot(ctx, parentRoot, bidSlot)
+	got, err := s.proposerDependentRoot(parentRoot, bidSlot)
 	require.NoError(t, err)
 	require.Equal(t, expectedDepRoot, got)
 	require.Equal(t, parentRoot, gotRoot)
 	require.Equal(t, expectedEpoch, gotEpoch)
+}
+
+// TestProposerDependentRoot_UnderflowClampsToZero asserts that proposal epochs
+// below 2 query DependentRootForEpoch at epoch 0 (which the chain maps to the
+// origin block root) rather than underflowing epoch-1.
+func TestProposerDependentRoot_UnderflowClampsToZero(t *testing.T) {
+	parentRoot := [32]byte{0xaa}
+	originRoot := [32]byte{0xcc}
+
+	for _, slot := range []primitives.Slot{0, 1, params.BeaconConfig().SlotsPerEpoch + 1} {
+		t.Run(fmt.Sprintf("slot %d", slot), func(t *testing.T) {
+			var gotEpoch primitives.Epoch
+			chainService := &mock.ChainService{
+				DependentRootCB: func(_ [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+					gotEpoch = epoch
+					return originRoot, nil
+				},
+			}
+			s := &Service{cfg: &config{chain: chainService}}
+
+			got, err := s.proposerDependentRoot(parentRoot, slot)
+			require.NoError(t, err)
+			require.Equal(t, originRoot, got)
+			require.Equal(t, primitives.Epoch(0), gotEpoch)
+		})
+	}
 }
 
 func TestExecutionPayloadBidSubscriber_NilMessage(t *testing.T) {
@@ -412,20 +436,12 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
-	ctx := context.Background()
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
 
-	// Save a genesis block so beaconDB.GenesisBlockRoot resolves; bids at slot 1
-	// (epoch 0) hit the underflow branch in proposerDependentRoot which falls
-	// back to the genesis block root.
-	gb := util.NewBeaconBlock()
-	signedGenesis, err := blocks.NewSignedBeaconBlock(gb)
-	require.NoError(t, err)
-	require.NoError(t, db.SaveBlock(ctx, signedGenesis))
-	genesisRoot, err := signedGenesis.Block().HashTreeRoot()
-	require.NoError(t, err)
-	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesisRoot))
+	// The bid is at slot 1 (epoch 0); the mock chain maps that to its TargetRoot
+	// via DependentRootForEpoch, so the proposer preference is keyed on it below.
+	genesisRoot := [32]byte{0x01}
 
 	state, err := util.NewBeaconStateGloas()
 	require.NoError(t, err)

@@ -18,20 +18,21 @@ type GenesisBlockRootReader interface {
 }
 
 // ProposerDependentRootOrGenesis wraps state.ProposerDependentRoot with the
-// spec-mandated genesis fallback: when proposal epoch < 2 the dependent root
-// is the genesis block root.
+// spec-mandated genesis fallback: when that underflows (proposal epoch < 2) the
+// dependent root is the genesis block root.
 func ProposerDependentRootOrGenesis(ctx context.Context, db GenesisBlockRootReader, st state.ReadOnlyBeaconState, slot primitives.Slot) ([32]byte, error) {
-	if slots.ToEpoch(slot) < 2 {
-		if db == nil {
-			return [32]byte{}, errors.New("genesis fallback required at epoch < 2 but db is nil")
-		}
-		root, err := db.GenesisBlockRoot(ctx)
-		if err != nil {
-			return [32]byte{}, errors.Wrap(err, "genesis block root")
-		}
-		return root, nil
+	root, err := st.ProposerDependentRoot(slot)
+	if !errors.Is(err, state.ErrProposerDependentRootUnderflow) {
+		return root, err
 	}
-	return st.ProposerDependentRoot(slot)
+	if db == nil {
+		return [32]byte{}, errors.New("genesis fallback required at epoch < 2 but db is nil")
+	}
+	genesisRoot, err := db.GenesisBlockRoot(ctx)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "genesis block root")
+	}
+	return genesisRoot, nil
 }
 
 // ParentTargetGasLimit returns the parent execution payload's gas limit, used
