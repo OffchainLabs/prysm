@@ -112,6 +112,18 @@ gen:
 	$(GO) run ./build/gen $(filter $(GEN_KINDS),$(MAKECMDGOALS))
 
 # ---------------------------------------------------------------------------
+# Static analysis
+# ---------------------------------------------------------------------------
+LINT_GOALS     := $(filter-out lint,$(MAKECMDGOALS))
+LINT_BAD       := $(filter-out fix,$(LINT_GOALS))
+LINT_FIX_FLAGS := $(if $(filter fix,$(MAKECMDGOALS)),-fix)
+
+.PHONY: lint
+lint:
+	@$(if $(LINT_BAD),echo "❌ lint: unknown arg(s): $(LINT_BAD)  (only 'fix' is accepted)" >&2; exit 1;) \
+	$(GO) run ./tools/cmd/prysm-vet $(LINT_FIX_FLAGS) ./...
+
+# ---------------------------------------------------------------------------
 # End-to-end tests
 # ---------------------------------------------------------------------------
 E2E_GOALS := $(filter-out e2e,$(MAKECMDGOALS))
@@ -236,6 +248,7 @@ help: ## Show this help
 	@printf "  \033[36m%-48s\033[0m %s\n" "make test [$(TEST_KINDS)] [mode=no-race|race]" "Run tests (default: $(MODE_DEFAULT_test))"
 	@printf "  \033[36m%-48s\033[0m %s\n" "make build <bin> [-- <flags>]" "Build a binary"
 	@printf "  \033[36m%-48s\033[0m %s\n" "make gen [$(GEN_KINDS)]"                "Create generated code"
+	@printf "  \033[36m%-48s\033[0m %s\n" "make lint [fix]"                        "Run static analysis (prysm-vet); 'fix' auto-fixes findings"
 	@printf "  \033[36m%-48s\033[0m %s\n" "make e2e [suite|scenario]"              "Run end-to-end tests (default: presubmit)"
 	@printf "  \033[36m%-48s\033[0m %s\n" "make dist [<bin>...] [platform=<platform>]"  "Build official release binaries (deb/<arch> also packages .deb, docker/<arch> an OCI image)"
 	@printf "  \033[36m%-48s\033[0m %s\n" "make testdata"                          "Pre-fetch external spec-test data"
