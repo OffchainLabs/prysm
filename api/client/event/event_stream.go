@@ -15,6 +15,7 @@ import (
 
 const (
 	EventHead                      = "head"
+	EventHeadV2                    = "head_v2"
 	EventExecutionPayloadAvailable = "execution_payload_available"
 
 	EventError           = "error"

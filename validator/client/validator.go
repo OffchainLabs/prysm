@@ -901,7 +901,29 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 		}
 		v.setHighestSlot(primitives.Slot(uintSlot))
 		if !v.disableDutiesPolling {
-			if err := v.checkDependentRoots(ctx, head); err != nil {
+			if err := v.checkDependentRoots(ctx, head.PreviousDutyDependentRoot, head.CurrentDutyDependentRoot); err != nil {
+				log.WithError(err).Error("Failed to check dependent roots")
+			}
+		}
+	case eventClient.EventHeadV2:
+		log.Debug("Received head_v2 event")
+		head := &structs.HeadEventV2{}
+		if err := json.Unmarshal(event.Data, head); err != nil {
+			log.WithError(err).Error("Failed to unmarshal head_v2 event into JSON")
+			return
+		}
+		if head.Data == nil {
+			log.Error("Received head_v2 event with no data")
+			return
+		}
+		uintSlot, err := strconv.ParseUint(head.Data.Slot, 10, 64)
+		if err != nil {
+			log.WithError(err).Error("Failed to parse slot")
+			return
+		}
+		v.setHighestSlot(primitives.Slot(uintSlot))
+		if !v.disableDutiesPolling {
+			if err := v.checkDependentRoots(ctx, head.Data.CurrentEpochDependentRoot, head.Data.NextEpochDependentRoot); err != nil {
 				log.WithError(err).Error("Failed to check dependent roots")
 			}
 		}
