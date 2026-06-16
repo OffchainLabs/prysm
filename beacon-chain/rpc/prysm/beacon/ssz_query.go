@@ -92,12 +92,6 @@ func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	encodedState, err := st.MarshalSSZ()
-	if err != nil {
-		httputil.HandleError(w, "Could not marshal state to SSZ: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	var result []byte
 	if path.Length {
 		n, err := finalInfo.LengthValue()
@@ -107,6 +101,11 @@ func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 		}
 		result = binary.LittleEndian.AppendUint64(nil, n)
 	} else {
+		encodedState, err := st.MarshalSSZ()
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal state to SSZ: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 		result = encodedState[offset : offset+length]
 	}
 
@@ -189,12 +188,6 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	encodedBlock, err := signedBlock.Block().MarshalSSZ()
-	if err != nil {
-		httputil.HandleError(w, "Could not marshal block to SSZ: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	blockRoot, err := block.HashTreeRoot()
 	if err != nil {
 		httputil.HandleError(w, "Could not compute block root: "+err.Error(), http.StatusInternalServerError)
@@ -210,6 +203,11 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 		}
 		result = binary.LittleEndian.AppendUint64(nil, n)
 	} else {
+		encodedBlock, err := signedBlock.Block().MarshalSSZ()
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal block to SSZ: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 		result = encodedBlock[offset : offset+length]
 	}
 
