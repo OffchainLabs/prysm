@@ -226,11 +226,11 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 		}
 	}
 
-	proposingSlot := s.CurrentSlot() + 1
-	attr := s.getPayloadAttribute(ctx, st, proposingSlot, headRoot[:], true)
 	if !s.inRegularSync() {
 		return nil
 	}
+	proposingSlot := s.CurrentSlot() + 1
+	attr := s.getPayloadAttribute(ctx, st, proposingSlot, headRoot[:], true)
 	go func() {
 		pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)
 		if err != nil {

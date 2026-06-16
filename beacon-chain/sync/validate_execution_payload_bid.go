@@ -3,6 +3,8 @@ package sync
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -142,6 +144,10 @@ func (s *Service) executionPayloadBidSubscriber(_ context.Context, msg proto.Mes
 		return errNilMessage
 	}
 	s.setHighestExecutionPayloadBid(signedBid)
+	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
+		Type: opfeed.ExecutionPayloadBidReceived,
+		Data: &opfeed.ExecutionPayloadBidReceivedData{Bid: signedBid},
+	})
 	return nil
 }
 

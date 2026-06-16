@@ -978,7 +978,7 @@ func upgradeSidecarsToVerifiedSidecars(roSidecars []blocks.RODataColumn) []block
 }
 
 func fullPayloadFromPayloadBody(
-	header interfaces.ExecutionData, body *pb.ExecutionPayloadBody, bVersion int,
+	header interfaces.ExecutionData, body *pb.ExecutionPayloadBodyV1, bVersion int,
 ) (interfaces.ExecutionData, error) {
 	if header == nil || header.IsNil() || body == nil {
 		return nil, errors.New("execution block and header cannot be nil")
