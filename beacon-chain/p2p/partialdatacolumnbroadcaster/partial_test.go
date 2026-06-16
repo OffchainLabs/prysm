@@ -867,7 +867,6 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 				existing := createPartialColumn(t, 3, map[uint64][]byte{
 					0: {0x11},
 				})
-				// We have published our parts metadata, so the incoming cells are solicited.
 				existing.Published = true
 				group := existing.GroupID()
 				b.partialMsgStore[validTopic] = map[string]*verification.PartialColumnVerifier{
@@ -907,8 +906,6 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 				existing := createPartialColumn(t, 3, map[uint64][]byte{
 					0: {0x33},
 				})
-				// We have published our parts metadata, so the incoming cells are solicited
-				// and reach KZG validation (which fails for this case).
 				existing.Published = true
 				group := existing.GroupID()
 				b.partialMsgStore[validTopic] = map[string]*verification.PartialColumnVerifier{
@@ -1001,34 +998,41 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 			},
 		},
 		{
-			name: "cached header builds verifier via trusted column and processes incoming cells",
+			name: "cached header builds verifier via trusted column",
 			setup: func(t *testing.T, b *PartialColumnBroadcaster) testSetup {
-				// Header already validated for this group, e.g. seen earlier on another column's topic.
+				// Header already validated for this group.
 				col := createPartialColumn(t, 3, nil)
 				group := col.GroupID()
 				b.validHeaderCache[string(group)] = buildHeaderFromColumn(col)
+				// Header-only message: no cells, since we have not published yet.
+				msg := buildSidecarWithCells(3, nil)
+				return testSetup{
+					inputRPC: buildIncomingRPC(validTopic, group, msg, nil),
+				}
+			},
+			expectTrustedColumnCall: true,
+			expectedStoreColumn: func(t *testing.T) *blocks.PartialDataColumn {
+				return createPartialColumn(t, 3, nil)
+			},
+		},
+		{
+			name:                "cells alongside cached header before publish are unsolicited",
+			expectedErrContains: "peer sent cells before we advertised our parts metadata",
+			setup: func(t *testing.T, b *PartialColumnBroadcaster) testSetup {
+				col := createPartialColumn(t, 3, nil)
+				group := col.GroupID()
+				b.validHeaderCache[string(group)] = buildHeaderFromColumn(col)
+				// We have NOT published for this group, so the pushed cell is unsolicited.
 				msg := buildSidecarWithCells(3, map[uint64][]byte{
 					1: {0x22},
 				})
-				cellIndices, cellsToVerify := buildExpectedCellsToVerify(col, map[uint64][]byte{
-					1: {0x22},
-				})
 				return testSetup{
-					inputRPC:                   buildIncomingRPC(validTopic, group, msg, nil),
-					expectedValidateColumnCall: cellsToVerify,
-					expectedCellsValidatedReq: &cellsValidated{
-						topic:       validTopic,
-						group:       slices.Clone(group),
-						cellIndices: cellIndices,
-						cells:       cellsToVerify,
-					},
+					inputRPC: buildIncomingRPC(validTopic, group, msg, nil),
 				}
 			},
-			expectTrustedColumnCall:  true,
-			expectValidateColumnCall: true,
-			expectCellsValidatedReq:  true,
-			expectPeerFeedbackCall:   true,
-			expectPeerFeedback:       pubsub.PeerFeedbackUsefulMessage,
+			expectTrustedColumnCall: true,
+			expectPeerFeedbackCall:  true,
+			expectPeerFeedback:      pubsub.PeerFeedbackInvalidMessage,
 			expectedStoreColumn: func(t *testing.T) *blocks.PartialDataColumn {
 				return createPartialColumn(t, 3, nil)
 			},
@@ -1107,6 +1111,8 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 				existing := createPartialColumn(t, 3, map[uint64][]byte{
 					0: {0x11},
 				})
+				// We have published our parts metadata, so the incoming cells are solicited.
+				existing.Published = true
 				group := existing.GroupID()
 				b.partialMsgStore[validTopic] = map[string]*verification.PartialColumnVerifier{
 					string(group): newMarkedVerifier(existing),
@@ -1721,6 +1727,7 @@ func TestPartialColumnBroadcaster_loopDispatchesIncomingRPCAndCellsValidated(t *
 
 	// Existing column missing only cell 1, so the incoming validated cell completes it.
 	existing := createPartialColumn(t, 2, map[uint64][]byte{0: {0x11}})
+	existing.Published = true
 	group := existing.GroupID()
 	h.broadcaster.partialMsgStore[topic] = map[string]*verification.PartialColumnVerifier{
 		string(group): newMarkedVerifier(existing),
