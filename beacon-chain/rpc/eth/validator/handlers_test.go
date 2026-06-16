@@ -1993,6 +1993,22 @@ func TestProduceSyncCommitteeContribution(t *testing.T) {
 	})
 }
 
+func TestServer_RegisterValidator_PostGloasNoOp(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	body := bytes.NewBufferString(registrations)
+	request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/validator/register_validator", body)
+	writer := httptest.NewRecorder()
+	zero := primitives.Slot(0)
+	// BlockBuilder is nil: post-Gloas the handler no-ops before that check.
+	server := &Server{TimeFetcher: &mockChain.ChainService{Slot: &zero}}
+	server.RegisterValidator(writer, request)
+	require.Equal(t, http.StatusOK, writer.Code)
+}
+
 func TestServer_RegisterValidator(t *testing.T) {
 
 	tests := []struct {
@@ -3664,22 +3680,43 @@ func TestGetPTCDuties_ForkBoundary(t *testing.T) {
 // TestPrepareBeaconProposer verifies pre-(Gloas-1 epoch) writes land in the
 // per-validator defaults store.
 func TestPrepareBeaconProposer(t *testing.T) {
-	body := bytes.NewBufferString(`[{"validator_index":"1","fee_recipient":"0xb698D697092822185bF0311052215d5B5e1F3934"}]`)
-	request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/validator/prepare_beacon_proposer", body)
-	writer := httptest.NewRecorder()
-	zero := primitives.Slot(0)
-	server := &Server{
-		ProposerPreferencesCache:  cache.NewProposerPreferencesCache(),
-		SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
-		TimeFetcher:               &mockChain.ChainService{Slot: &zero},
+	const feeRecipient = "0xb698D697092822185bF0311052215d5B5e1F3934"
+	tests := []struct {
+		name       string
+		gloasEpoch primitives.Epoch
+		wantCached bool
+	}{
+		{"pre-Gloas caches the default", params.BeaconConfig().FarFutureEpoch, true},
+		{"post-Gloas is a no-op", 0, false},
 	}
-	server.PrepareBeaconProposer(writer, request)
-	require.Equal(t, http.StatusOK, writer.Code)
-	got, ok := server.ProposerPreferencesCache.Default(1)
-	require.Equal(t, true, ok)
-	expected, err := hexutil.Decode("0xb698D697092822185bF0311052215d5B5e1F3934")
-	require.NoError(t, err)
-	require.DeepEqual(t, expected, got.FeeRecipient[:])
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			cfg := params.BeaconConfig().Copy()
+			cfg.GloasForkEpoch = tt.gloasEpoch
+			params.OverrideBeaconConfig(cfg)
+
+			body := bytes.NewBufferString(`[{"validator_index":"1","fee_recipient":"` + feeRecipient + `"}]`)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/validator/prepare_beacon_proposer", body)
+			writer := httptest.NewRecorder()
+			zero := primitives.Slot(0)
+			server := &Server{
+				ProposerPreferencesCache:  cache.NewProposerPreferencesCache(),
+				SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
+				TimeFetcher:               &mockChain.ChainService{Slot: &zero},
+			}
+			server.PrepareBeaconProposer(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+
+			got, ok := server.ProposerPreferencesCache.Default(1)
+			require.Equal(t, tt.wantCached, ok)
+			if tt.wantCached {
+				expected, err := hexutil.Decode(feeRecipient)
+				require.NoError(t, err)
+				require.DeepEqual(t, expected, got.FeeRecipient[:])
+			}
+		})
+	}
 }
 
 func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {

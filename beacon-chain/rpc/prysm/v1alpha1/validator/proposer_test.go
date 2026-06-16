@@ -3256,6 +3256,29 @@ func TestProposer_PrepareBeaconProposer(t *testing.T) {
 	}
 }
 
+func TestProposer_PrepareBeaconProposer_PostGloasNoOp(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	zero := primitives.Slot(0)
+	proposerServer := &Server{
+		ProposerPreferencesCache:  cache.NewProposerPreferencesCache(),
+		SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
+		TimeFetcher:               &mock.ChainService{Slot: &zero},
+	}
+	_, err := proposerServer.PrepareBeaconProposer(t.Context(), &ethpb.PrepareBeaconProposerRequest{
+		Recipients: []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer{
+			{FeeRecipient: make([]byte, fieldparams.FeeRecipientLength), ValidatorIndex: 1},
+		},
+	})
+	require.NoError(t, err)
+	// Post-Gloas the request is a no-op: nothing is cached.
+	_, ok := proposerServer.ProposerPreferencesCache.Default(1)
+	require.Equal(t, false, ok)
+}
+
 func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	hook := logTest.NewGlobal()
 	logrus.SetLevel(logrus.DebugLevel)
