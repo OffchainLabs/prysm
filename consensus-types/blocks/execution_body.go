@@ -77,11 +77,11 @@ func (e executionPayloadBodyGloas) BlockAccessList() ([]byte, error) {
 // executionPayloadBodyV1JSON wraps the V1 JSON body DTO
 // (engine_getPayloadBodiesByHashV1); it has no block access list.
 type executionPayloadBodyV1JSON struct {
-	*enginev1.ExecutionPayloadBody
+	*enginev1.ExecutionPayloadBodyV1
 }
 
 // WrappedExecutionPayloadBodyV1JSON wraps the V1 JSON body DTO in the interface.
-func WrappedExecutionPayloadBodyV1JSON(p *enginev1.ExecutionPayloadBody) (interfaces.ExecutionPayloadBody, error) {
+func WrappedExecutionPayloadBodyV1JSON(p *enginev1.ExecutionPayloadBodyV1) (interfaces.ExecutionPayloadBody, error) {
 	w := executionPayloadBodyV1JSON{p}
 	if w.IsNil() {
 		return nil, consensus_types.ErrNilObjectWrapped
@@ -90,15 +90,15 @@ func WrappedExecutionPayloadBodyV1JSON(p *enginev1.ExecutionPayloadBody) (interf
 }
 
 func (e executionPayloadBodyV1JSON) IsNil() bool {
-	return e.ExecutionPayloadBody == nil
+	return e.ExecutionPayloadBodyV1 == nil
 }
 
 func (e executionPayloadBodyV1JSON) Transactions() ([][]byte, error) {
-	return enginev1.RecastHexutilByteSlice(e.ExecutionPayloadBody.Transactions), nil
+	return enginev1.RecastHexutilByteSlice(e.ExecutionPayloadBodyV1.Transactions), nil
 }
 
 func (e executionPayloadBodyV1JSON) Withdrawals() ([]*enginev1.Withdrawal, error) {
-	return e.ExecutionPayloadBody.Withdrawals, nil
+	return e.ExecutionPayloadBodyV1.Withdrawals, nil
 }
 
 // BlockAccessList is unsupported on the V1 body (pre-Gloas).

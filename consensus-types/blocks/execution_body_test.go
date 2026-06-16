@@ -68,7 +68,7 @@ func TestWrappedExecutionPayloadBodyGloas(t *testing.T) {
 func TestWrappedExecutionPayloadBodyV1JSON(t *testing.T) {
 	tx := hexutil.Bytes{0xde, 0xad}
 	wd := []*enginev1.Withdrawal{{Index: 7}}
-	b, err := blocks.WrappedExecutionPayloadBodyV1JSON(&enginev1.ExecutionPayloadBody{
+	b, err := blocks.WrappedExecutionPayloadBodyV1JSON(&enginev1.ExecutionPayloadBodyV1{
 		Transactions: []hexutil.Bytes{tx},
 		Withdrawals:  wd,
 	})

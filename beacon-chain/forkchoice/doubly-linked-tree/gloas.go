@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -521,6 +522,15 @@ func (f *ForkChoice) SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, bl
 	n.node.payloadDataAvailabilityVote.SetBitAt(ptcIdx, blobDataAvailable)
 }
 
+// PTCVotes returns the recorded PTC vote bitvectors for the given root. The caller MUST hold the forkchoice lock.
+func (f *ForkChoice) PTCVotes(root [32]byte) (attesters, payloadPresent, blobDataAvailable bitfield.Bitvector512, ok bool) {
+	n := f.store.emptyNodeByRoot[root]
+	if n == nil {
+		return nil, nil, nil, false
+	}
+	return n.node.payloadAttesters, n.node.payloadAvailabilityVote, n.node.payloadDataAvailabilityVote, true
+}
+
 // resolveVoteNode returns the node that should receive the balance of a vote. It returns always a PayloadNode, but the boolean indicates
 // whether the vote should be applied to the pending node (true) or not.
 func (s *Store) resolveVoteNode(r [32]byte, slot primitives.Slot, payloadStatus bool) (*PayloadNode, bool) {
@@ -545,9 +555,6 @@ func (f *ForkChoice) HasFullNode(root [32]byte) bool {
 func (f *ForkChoice) FullBeatsEmpty(root [32]byte) bool {
 	en := f.store.emptyNodeByRoot[root]
 	if en == nil || en.node == nil {
-		return false
-	}
-	if slots.ToEpoch(en.node.slot) < params.BeaconConfig().GloasForkEpoch {
 		return false
 	}
 	pn := f.store.choosePayloadContent(en.node)

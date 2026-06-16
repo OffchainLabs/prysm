@@ -415,7 +415,7 @@ func (j *jsonEngine) GetPayloadBodiesByHash(ctx context.Context, v int, hashes [
 		}
 		return wrapJSONBodiesV2(result)
 	}
-	result := make([]*pb.ExecutionPayloadBody, 0)
+	result := make([]*pb.ExecutionPayloadBodyV1, 0)
 	if err := j.rpc.CallContext(ctx, &result, GetPayloadBodiesByHashV1, hashes); err != nil {
 		return nil, err
 	}
@@ -431,7 +431,7 @@ func (j *jsonEngine) GetPayloadBodiesByRange(ctx context.Context, v int, from, c
 		}
 		return wrapJSONBodiesV2(result)
 	}
-	result := make([]*pb.ExecutionPayloadBody, 0)
+	result := make([]*pb.ExecutionPayloadBodyV1, 0)
 	if err := j.rpc.CallContext(ctx, &result, GetPayloadBodiesByRangeV1, hexutil.EncodeUint64(from), hexutil.EncodeUint64(count)); err != nil {
 		return nil, err
 	}
@@ -440,7 +440,7 @@ func (j *jsonEngine) GetPayloadBodiesByRange(ctx context.Context, v int, from, c
 
 // wrapJSONBodiesV1 / wrapJSONBodiesV2 wrap the JSON-RPC body DTOs in the
 // fork-generic interface, request-aligned (a nil DTO stays a nil slot).
-func wrapJSONBodiesV1(in []*pb.ExecutionPayloadBody) ([]interfaces.ExecutionPayloadBody, error) {
+func wrapJSONBodiesV1(in []*pb.ExecutionPayloadBodyV1) ([]interfaces.ExecutionPayloadBody, error) {
 	out := make([]interfaces.ExecutionPayloadBody, len(in))
 	for i := range in {
 		if in[i] == nil {

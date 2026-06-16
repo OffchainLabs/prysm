@@ -4033,7 +4033,7 @@ func TestGetPayloadAttestationData(t *testing.T) {
 			HeadFetcher:           chainService,
 			TimeFetcher:           chainService,
 			OptimisticModeFetcher: chainService,
-			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService},
+			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/validator/payload_attestation_data/{slot}", nil)
@@ -4065,7 +4065,7 @@ func TestGetPayloadAttestationData(t *testing.T) {
 			HeadFetcher:           chainService,
 			TimeFetcher:           chainService,
 			OptimisticModeFetcher: chainService,
-			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService},
+			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/validator/payload_attestation_data/{slot}", nil)
@@ -4099,7 +4099,7 @@ func TestGetPayloadAttestationData(t *testing.T) {
 			HeadFetcher:           chainService,
 			TimeFetcher:           chainService,
 			OptimisticModeFetcher: chainService,
-			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService},
+			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/validator/payload_attestation_data/{slot}", nil)
@@ -4569,6 +4569,7 @@ func TestSubmitSignedProposerPreferences_OK(t *testing.T) {
 		TimeFetcher:              &mockChain.ChainService{Slot: &currentSlot},
 		P2P:                      &p2pmock.MockBroadcaster{},
 		ProposerPreferencesCache: c,
+		OperationNotifier:        (&mockChain.ChainService{}).OperationNotifier(),
 	}
 
 	s := &Server{V1Alpha1Server: v1alpha1Server}

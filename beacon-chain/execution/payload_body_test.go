@@ -16,8 +16,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
-func payloadToBody(t *testing.T, ed interfaces.ExecutionData) *pb.ExecutionPayloadBody {
-	body := &pb.ExecutionPayloadBody{}
+func payloadToBody(t *testing.T, ed interfaces.ExecutionData) *pb.ExecutionPayloadBodyV1 {
+	body := &pb.ExecutionPayloadBodyV1{}
 	txs, err := ed.Transactions()
 	require.NoError(t, err)
 	wd, err := ed.Withdrawals()
@@ -118,12 +118,12 @@ func TestPayloadBodiesViaUnblinder(t *testing.T) {
 	t.Run("mix of non-empty and empty", func(t *testing.T) {
 		cli, srv := newMockEngine(t)
 		srv.register(GetPayloadBodiesByHashV1, func(msg *jsonrpcMessage, w http.ResponseWriter, r *http.Request) {
-			byHash := map[string]*pb.ExecutionPayloadBody{
+			byHash := map[string]*pb.ExecutionPayloadBodyV1{
 				string(fx.denebBlock.blinded.header.BlockHash()):      payloadToBody(t, fx.denebBlock.blinded.header),
 				string(fx.emptyDenebBlock.blinded.header.BlockHash()): payloadToBody(t, fx.emptyDenebBlock.blinded.header),
 			}
 			requested := mockParseHexByteList(t, msg.Params)
-			bodies := make([]*pb.ExecutionPayloadBody, len(requested))
+			bodies := make([]*pb.ExecutionPayloadBodyV1, len(requested))
 			for i, h := range requested {
 				bodies[i] = byHash[string(h)]
 			}
@@ -264,11 +264,11 @@ func TestReconstructBlindedBlockBatchFallbackToRange(t *testing.T) {
 		cli, srv := newMockEngine(t)
 		fx := testBlindedBlockFixtures(t)
 		srv.register(GetPayloadBodiesByHashV1, func(msg *jsonrpcMessage, w http.ResponseWriter, r *http.Request) {
-			executionPayloadBodies := []*pb.ExecutionPayloadBody{nil, nil}
+			executionPayloadBodies := []*pb.ExecutionPayloadBodyV1{nil, nil}
 			mockWriteResult(t, w, msg, executionPayloadBodies)
 		})
 		srv.register(GetPayloadBodiesByRangeV1, func(msg *jsonrpcMessage, w http.ResponseWriter, r *http.Request) {
-			executionPayloadBodies := []*pb.ExecutionPayloadBody{nil, nil}
+			executionPayloadBodies := []*pb.ExecutionPayloadBodyV1{nil, nil}
 			mockWriteResult(t, w, msg, executionPayloadBodies)
 		})
 		toUnblind := []interfaces.ReadOnlySignedBeaconBlock{
@@ -284,11 +284,11 @@ func TestReconstructBlindedBlockBatchFallbackToRange(t *testing.T) {
 		cli, srv := newMockEngine(t)
 		fx := testBlindedBlockFixtures(t)
 		srv.register(GetPayloadBodiesByHashV1, func(msg *jsonrpcMessage, w http.ResponseWriter, r *http.Request) {
-			executionPayloadBodies := []*pb.ExecutionPayloadBody{nil, nil}
+			executionPayloadBodies := []*pb.ExecutionPayloadBodyV1{nil, nil}
 			mockWriteResult(t, w, msg, executionPayloadBodies)
 		})
 		srv.register(GetPayloadBodiesByRangeV1, func(msg *jsonrpcMessage, w http.ResponseWriter, r *http.Request) {
-			executionPayloadBodies := []*pb.ExecutionPayloadBody{
+			executionPayloadBodies := []*pb.ExecutionPayloadBodyV1{
 				payloadToBody(t, fx.denebBlock.blinded.header),
 				payloadToBody(t, fx.emptyDenebBlock.blinded.header),
 			}
@@ -305,7 +305,7 @@ func TestReconstructBlindedBlockBatchFallbackToRange(t *testing.T) {
 		cli, srv := newMockEngine(t)
 		fx := testBlindedBlockFixtures(t)
 		srv.register(GetPayloadBodiesByHashV1, func(msg *jsonrpcMessage, w http.ResponseWriter, r *http.Request) {
-			executionPayloadBodies := []*pb.ExecutionPayloadBody{nil, nil, nil}
+			executionPayloadBodies := []*pb.ExecutionPayloadBodyV1{nil, nil, nil}
 			mockWriteResult(t, w, msg, executionPayloadBodies)
 		})
 		srv.register(GetPayloadBodiesByRangeV1, func(msg *jsonrpcMessage, w http.ResponseWriter, r *http.Request) {
@@ -315,7 +315,7 @@ func TestReconstructBlindedBlockBatchFallbackToRange(t *testing.T) {
 			// Return first 2 blocks by number, which are contiguous.
 			if start == fx.denebBlock.blinded.header.BlockNumber() {
 				require.Equal(t, uint64(2), count)
-				executionPayloadBodies := []*pb.ExecutionPayloadBody{
+				executionPayloadBodies := []*pb.ExecutionPayloadBodyV1{
 					payloadToBody(t, fx.denebBlock.blinded.header),
 					payloadToBody(t, fx.emptyDenebBlock.blinded.header),
 				}
@@ -325,7 +325,7 @@ func TestReconstructBlindedBlockBatchFallbackToRange(t *testing.T) {
 			// Assume it's the second request
 			require.Equal(t, fx.afterSkipDeneb.blinded.header.BlockNumber(), start)
 			require.Equal(t, uint64(1), count)
-			executionPayloadBodies := []*pb.ExecutionPayloadBody{
+			executionPayloadBodies := []*pb.ExecutionPayloadBodyV1{
 				payloadToBody(t, fx.afterSkipDeneb.blinded.header),
 			}
 			mockWriteResult(t, w, msg, executionPayloadBodies)
@@ -349,13 +349,13 @@ func TestReconstructBlindedBlockBatchDenebAndBeyond(t *testing.T) {
 		cli, srv := newMockEngine(t)
 		fx := testBlindedBlockFixtures(t)
 		srv.register(GetPayloadBodiesByHashV1, func(msg *jsonrpcMessage, w http.ResponseWriter, r *http.Request) {
-			byHash := map[string]*pb.ExecutionPayloadBody{
+			byHash := map[string]*pb.ExecutionPayloadBodyV1{
 				string(fx.denebBlock.blinded.header.BlockHash()): payloadToBody(t, fx.denebBlock.blinded.header),
 				string(fx.electra.blinded.header.BlockHash()):    payloadToBody(t, fx.electra.blinded.header),
 				string(fx.fulu.blinded.header.BlockHash()):       payloadToBody(t, fx.fulu.blinded.header),
 			}
 			requested := mockParseHexByteList(t, msg.Params)
-			bodies := make([]*pb.ExecutionPayloadBody, len(requested))
+			bodies := make([]*pb.ExecutionPayloadBodyV1, len(requested))
 			for i, h := range requested {
 				bodies[i] = byHash[string(h)]
 			}

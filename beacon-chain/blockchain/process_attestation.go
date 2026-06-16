@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -12,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // OnAttestation is called whenever an attestation is received, verifies the attestation is valid and saves
@@ -97,10 +99,20 @@ func (s *Service) OnAttestation(ctx context.Context, a ethpb.Att, disparity time
 
 	// Update forkchoice store with the new attestation for updating weight.
 	attData := a.GetData()
+	blockRoot := bytesutil.ToBytes32(attData.BeaconBlockRoot)
 	payloadStatus := true
 	if attData.Target.Epoch >= params.BeaconConfig().GloasForkEpoch {
 		payloadStatus = attData.CommitteeIndex == 1
+		if payloadStatus {
+			if blockSlot, err := s.cfg.ForkChoiceStore.Slot(blockRoot); err == nil && blockSlot == attData.Slot {
+				log.WithFields(logrus.Fields{
+					"slot":            attData.Slot,
+					"beaconBlockRoot": fmt.Sprintf("%#x", bytesutil.Trunc(blockRoot[:])),
+				}).Debug("Skipping same-slot payload-present attestation")
+				return nil
+			}
+		}
 	}
-	s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indexedAtt.GetAttestingIndices(), bytesutil.ToBytes32(attData.BeaconBlockRoot), attData.Slot, payloadStatus)
+	s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indexedAtt.GetAttestingIndices(), blockRoot, attData.Slot, payloadStatus)
 	return nil
 }
