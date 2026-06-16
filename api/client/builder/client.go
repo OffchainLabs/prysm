@@ -702,7 +702,7 @@ func unexpectedStatusErr(response *http.Response, expected []int) error {
 	} else {
 		body = "response body:\n" + string(bodyBytes)
 	}
-	msg := fmt.Sprintf("expected=%d, got=%d, url=%s, body=%s", expected, response.StatusCode, response.Request.URL, body)
+	msg := fmt.Sprintf("expected=%v, got=%d, url=%s, body=%s", expected, response.StatusCode, response.Request.URL, body)
 	switch response.StatusCode {
 	case http.StatusUnsupportedMediaType:
 		log.WithError(ErrUnsupportedMediaType).Debug(msg)
