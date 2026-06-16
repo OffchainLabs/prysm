@@ -57,6 +57,26 @@ jobs:
         with:
           version: v2.12
 
+  vet:
+    name: Vet
+    runs-on: ubuntu-4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go 1.26.4
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.4'
+
+      # prysm-vet is the nogo replacement (custom analyzers + x/tools passes + staticcheck;
+      # see tools/cmd/prysm-vet). It compiles the analyzed packages (incl. cgo/blst), so build
+      # with the portable blst tag like the build job.
+      - name: Run prysm-vet
+        run: make lint
+        env:
+          CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
+
   build:
     name: Build
     runs-on: ubuntu-4
@@ -75,7 +95,7 @@ jobs:
           go get -v -t -d ./...
 
       - name: Build
-        # Use blst tag to allow go and bazel builds for blst.
+        # -D__BLST_PORTABLE__ builds the portable (non-ADX) blst, matching what we ship.
         run: go build -v ./...
         env:
            CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
@@ -86,6 +106,5 @@ jobs:
         env:
            CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
 
-# Tests run via Bazel for now...
-#      - name: Test
-#        run: go test -v ./...
+# Unit tests run in Buildkite via the Go toolchain: `make test` (mainnet + minimal passes;
+# `make test ... mode=race` for the race detector). They are intentionally not duplicated here.

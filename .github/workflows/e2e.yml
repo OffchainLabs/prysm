@@ -1,0 +1,50 @@
+name: E2E
+
+# End-to-end tests are heavy (they spin up a local devnet — geth + beacon nodes + validators
+# — per scenario), so they don't run on every PR. Trigger them on demand or nightly.
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: 'make e2e target — a scenario (minimal, builder, web3signer, multiclient, …) or a suite (presubmit, postsubmit, scenario_tests)'
+        type: string
+        default: 'presubmit'
+  schedule:
+    # Nightly at 06:00 UTC.
+    - cron: '0 6 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: E2E (${{ github.event.inputs.scenario || 'presubmit' }})
+    runs-on: ubuntu-4
+    timeout-minutes: 120
+    env:
+      # Build the launched binaries portable so they run on any runner CPU (no ADX assumption).
+      CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      # web3signer is a JVM app; the web3signer / builder-with-signer scenarios need a JRE on
+      # PATH. Harmless for the minimal scenarios that don't use it.
+      - name: Set up Java (for web3signer scenarios)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # build/e2e builds the Prysm binaries + geth (and provisions lighthouse/web3signer when
+      # the scenario needs them — lighthouse is linux/amd64-only, which this runner is), then
+      # runs `go test ./testing/endtoend`. See the Makefile E2E_KINDS for the full list.
+      - name: Run e2e
+        run: make e2e ${{ github.event.inputs.scenario || 'presubmit' }}

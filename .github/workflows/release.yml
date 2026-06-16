@@ -1,0 +1,103 @@
+name: Release
+
+# Builds the release artifacts with the Go/Make toolchain (Phase 9 of the Bazel migration):
+# cross-compiled binaries + .deb packages uploaded to the GitHub Release, and the multi-arch
+# container images pushed to the registry. Triggered by pushing a v* tag, or manually.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build (must already exist, e.g. v7.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write # create the release + upload assets
+
+jobs:
+  # Cross-compiled binaries (all run-targets) + .deb packages → GitHub Release assets.
+  artifacts:
+    name: Binaries & .deb
+    runs-on: ubuntu-4
+    timeout-minutes: 120
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tags drive the version stamp (git describe)
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      # `make dist` cross-builds inside a container (zig handles linux/darwin/windows; no host
+      # toolchain needed). We select every binary platform plus the deb/<arch> packages, but not
+      # docker/<arch> — images are built & pushed separately in the `docker` job below. Output
+      # lands in dist/ (binaries as <bin>-<tag>-<os>-<arch>, packages as <name>_<ver>_<arch>.deb).
+      - name: Build release binaries & .deb packages
+        run: make dist platform=linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64,deb/amd64,deb/arm64
+
+      - name: Upload to GitHub Release
+        run: |
+          # Create the release for this tag if it doesn't exist yet, then upload all artifacts.
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag
+          gh release upload "$TAG" dist/* --clobber
+
+  # Multi-arch container images → registry. Requires the GCR service-account key secret; the
+  # job no-ops (with a notice) when it isn't configured, so forks/manual runs don't fail.
+  docker:
+    name: Docker images
+    runs-on: ubuntu-4
+    timeout-minutes: 120
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      GCR_SA_KEY: ${{ secrets.GCR_SA_KEY }}
+    steps:
+      - name: Skip notice (no registry credentials)
+        if: env.GCR_SA_KEY == ''
+        run: echo "Secret GCR_SA_KEY is not configured — skipping image build/push."
+
+      - name: Checkout
+        if: env.GCR_SA_KEY != ''
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        if: env.GCR_SA_KEY != ''
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      # arm64 image assembly on this amd64 host needs binfmt/QEMU (the Dockerfile's rootfs
+      # stage runs in-image); buildx provides the multi-arch builder build/docker expects.
+      - name: Set up QEMU
+        if: env.GCR_SA_KEY != ''
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: env.GCR_SA_KEY != ''
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GCR
+        if: env.GCR_SA_KEY != ''
+        uses: docker/login-action@v3
+        with:
+          registry: gcr.io
+          username: _json_key
+          password: ${{ secrets.GCR_SA_KEY }}
+
+      # Builds the per-arch image tarballs (make dist platform=docker/...), pushes arch tags, and
+      # assembles a multi-arch manifest per image (beacon-chain as $TAG and $TAG-portable, plus
+      # validator and prysmctl).
+      - name: Build & push images
+        if: env.GCR_SA_KEY != ''
+        run: ./hack/build_and_upload_docker.sh "$TAG"
