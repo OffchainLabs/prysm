@@ -192,6 +192,7 @@ func TestSubmitSignedProposerPreferences_BroadcastFailureNotCached(t *testing.T)
 		TimeFetcher:              chain,
 		P2P:                      &failingBroadcaster{MockBroadcaster: &p2pmock.MockBroadcaster{}, err: errors.New("broadcast failed")},
 		ProposerPreferencesCache: c,
+		OperationNotifier:        chain.OperationNotifier(),
 	}
 
 	req := &ethpb.SubmitSignedProposerPreferencesRequest{
