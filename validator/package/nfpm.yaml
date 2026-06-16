@@ -1,0 +1,25 @@
+name: prysm-validator
+arch: ${ARCH}
+version: ${VERSION}
+version_schema: none
+maintainer: Prysmatic Labs <contact@prysmaticlabs.com>
+description: Prysm Validator Client - Ethereum consensus
+homepage: https://prysmaticlabs.com/
+contents:
+  - src: ${BIN_PATH}
+    dst: /usr/bin/validator
+    expand: true
+    file_info:
+      mode: 0755
+  - src: validator/package/validator.yaml
+    dst: /etc/prysm/validator.yaml
+    type: config
+    file_info:
+      mode: 0640
+  - src: validator/package/prysm-validator.service
+    dst: /usr/lib/systemd/system/prysm-validator.service
+    file_info:
+      mode: 0640
+scripts:
+  preinstall: validator/package/preinst.sh
+  postinstall: validator/package/postinst.sh

@@ -1,0 +1,25 @@
+name: prysm-beacon-chain
+arch: ${ARCH}
+version: ${VERSION}
+version_schema: none
+maintainer: Prysmatic Labs <contact@prysmaticlabs.com>
+description: Prysm Beacon Chain - Ethereum consensus network communications
+homepage: https://prysmaticlabs.com/
+contents:
+  - src: ${BIN_PATH}
+    dst: /usr/bin/beacon-chain
+    expand: true
+    file_info:
+      mode: 0755
+  - src: beacon-chain/package/beacon-chain.yaml
+    dst: /etc/prysm/beacon-chain.yaml
+    type: config
+    file_info:
+      mode: 0640
+  - src: beacon-chain/package/prysm-beacon-chain.service
+    dst: /usr/lib/systemd/system/prysm-beacon-chain.service
+    file_info:
+      mode: 0640
+scripts:
+  preinstall: beacon-chain/package/preinst.sh
+  postinstall: beacon-chain/package/postinst.sh
