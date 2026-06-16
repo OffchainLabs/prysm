@@ -991,6 +991,27 @@ func (s *Service) PayloadAttestationData(
 	}
 }
 
+// hasCanonicalShuffling returns whether the current root at the given slot is in the same shuffling as head.
+func (s *Service) hasCanonicalShuffling(root [32]byte, slot primitives.Slot) bool {
+	epoch := slots.ToEpoch(slot)
+	if epoch > 0 {
+		epoch--
+	}
+	hdr, err := s.ForkchoiceFetcher.DependentRoot(epoch)
+	if err != nil {
+		log.WithError(err).Error("Could not get head dependent root to check canonical shuffle")
+		return false
+	}
+	rdr, err := s.HeadFetcher.DependentRootForEpoch(root, epoch)
+	if err != nil {
+		log.WithError(err).Error("Could not get head dependent root to check canonical shuffle")
+		return false
+	}
+	return hdr == rdr
+}
+
+// buildPayloadAttestationData builds a payload attestation message for the validator to sign. It attempts first
+// to build from the highest received slot but only if it is compatible with the head view.
 func (s *Service) buildPayloadAttestationData(slot primitives.Slot) (*ethpb.PayloadAttestationData, *RpcError) {
 	highestReceivedSlot := s.ForkchoiceFetcher.HighestReceivedBlockSlot()
 	if highestReceivedSlot != slot {
@@ -999,6 +1020,9 @@ func (s *Service) buildPayloadAttestationData(slot primitives.Slot) (*ethpb.Payl
 	root := s.ForkchoiceFetcher.HighestReceivedBlockRoot()
 	if root == [32]byte{} {
 		return nil, &RpcError{Reason: Internal, Err: fmt.Errorf("could not retrieve highest received block root for slot %d", slot)}
+	}
+	if !s.hasCanonicalShuffling(root, slot) {
+		return nil, &RpcError{Reason: Unavailable, Err: fmt.Errorf("no canonical shuffling block for slot %d", slot)}
 	}
 	payloadEarly, _ := s.ForkchoiceFetcher.PayloadEarly(root)
 	return &ethpb.PayloadAttestationData{

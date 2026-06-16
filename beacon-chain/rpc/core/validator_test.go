@@ -217,7 +217,7 @@ func TestPayloadAttestationData(t *testing.T) {
 		slot := primitives.Slot(5)
 		root := bytesutil.PadTo([]byte("head-root"), 32)
 		chain := &mockChain.ChainService{Slot: &slot, Root: root}
-		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
 
 		data, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 		require.IsNil(t, rpcErr)
@@ -241,7 +241,7 @@ func TestPayloadAttestationData(t *testing.T) {
 			MockCanonicalFull:  map[primitives.Slot]bool{slot: true},
 			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 		}
-		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
 
 		data, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 		require.IsNil(t, rpcErr)
@@ -262,7 +262,7 @@ func TestPayloadAttestationData(t *testing.T) {
 			Genesis: time.Now(),
 			Root:    bytesutil.PadTo([]byte{0xAA}, 32),
 		}
-		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
 
 		_, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 		require.NotNil(t, rpcErr)
@@ -286,7 +286,7 @@ func TestPayloadAttestationData(t *testing.T) {
 			MockCanonicalFull:  map[primitives.Slot]bool{slot: true},
 			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 		}
-		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
 
 		data, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 		require.IsNil(t, rpcErr)
@@ -309,7 +309,7 @@ func TestPayloadAttestationData(t *testing.T) {
 			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
 			MockCanonicalFull:  map[primitives.Slot]bool{slot: false},
 		}
-		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
 
 		first, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 		require.IsNil(t, rpcErr)
@@ -355,7 +355,7 @@ func TestPayloadAttestationData(t *testing.T) {
 			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
 			MockCanonicalFull:  map[primitives.Slot]bool{slot: false},
 		}
-		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
 
 		const callers = 16
 		results := make([]*ethpb.PayloadAttestationData, callers)
@@ -375,6 +375,89 @@ func TestPayloadAttestationData(t *testing.T) {
 		for i := 1; i < callers; i++ {
 			assert.Equal(t, true, results[0] == results[i])
 		}
+	})
+	t.Run("non-canonical shuffling → Unavailable", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(5)
+		root := bytesutil.PadTo([]byte("head-root"), 32)
+		chain := &mockChain.ChainService{
+			Slot:               &slot,
+			Root:               root,
+			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
+			MockCanonicalFull:  map[primitives.Slot]bool{slot: true},
+			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
+			HeadDependentRoot:  bytesutil.ToBytes32(bytesutil.PadTo([]byte{0x01}, 32)),
+			DependentRootCB: func(_ [32]byte, _ primitives.Epoch) ([32]byte, error) {
+				return bytesutil.ToBytes32(bytesutil.PadTo([]byte{0x02}, 32)), nil
+			},
+		}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
+
+		_, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, ErrorReason(Unavailable), rpcErr.Reason)
+		assert.ErrorContains(t, "no canonical shuffling", rpcErr.Err)
+		assert.Equal(t, (*ethpb.PayloadAttestationData)(nil), s.payloadAttestationData.Load())
+	})
+	t.Run("canonical shuffling with non-zero roots → ok", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(5)
+		root := bytesutil.PadTo([]byte("head-root"), 32)
+		dependent := bytesutil.ToBytes32(bytesutil.PadTo([]byte{0x07}, 32))
+		chain := &mockChain.ChainService{
+			Slot:               &slot,
+			Root:               root,
+			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
+			MockCanonicalFull:  map[primitives.Slot]bool{slot: true},
+			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
+			HeadDependentRoot:  dependent,
+			DependentRootCB: func(_ [32]byte, _ primitives.Epoch) ([32]byte, error) {
+				return dependent, nil
+			},
+		}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
+
+		data, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.IsNil(t, rpcErr)
+		assert.DeepEqual(t, root, data.BeaconBlockRoot)
+		assert.Equal(t, true, data.PayloadPresent)
+		assert.Equal(t, true, data.BlobDataAvailable)
+	})
+	t.Run("dependent root uses previous epoch", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot, err := slots.EpochStart(primitives.Epoch(3))
+		require.NoError(t, err)
+		root := bytesutil.PadTo([]byte("head-root"), 32)
+		dependent := bytesutil.ToBytes32(bytesutil.PadTo([]byte{0x07}, 32))
+		chain := &mockChain.ChainService{
+			Slot:               &slot,
+			Root:               root,
+			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
+			MockCanonicalFull:  map[primitives.Slot]bool{slot: true},
+			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
+			HeadDependentRoot:  dependent,
+			DependentRootCB: func(_ [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+				assert.Equal(t, slots.ToEpoch(slot)-1, epoch)
+				return dependent, nil
+			},
+		}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
+
+		data, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.IsNil(t, rpcErr)
+		assert.DeepEqual(t, root, data.BeaconBlockRoot)
 	})
 }
 
