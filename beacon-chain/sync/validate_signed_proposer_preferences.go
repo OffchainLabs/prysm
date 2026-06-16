@@ -15,7 +15,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"google.golang.org/protobuf/proto"
 )
 
 func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
@@ -131,12 +130,4 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	}, slot)
 	msg.ValidatorData = signedPreferences
 	return pubsub.ValidationAccept, nil
-}
-
-func (s *Service) signedProposerPreferencesSubscriber(_ context.Context, msg proto.Message) error {
-	_, ok := msg.(*ethpb.SignedProposerPreferences)
-	if !ok {
-		return errWrongMessage
-	}
-	return nil
 }

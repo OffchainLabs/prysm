@@ -398,6 +398,7 @@ func (s *Service) notifyEngineAndSaveData(
 					return nil, false, err
 				}
 			}
+			args.HasPayload = true
 		} else {
 			idx, ok := envMap[root]
 			if ok {
@@ -412,8 +413,10 @@ func (s *Service) notifyEngineAndSaveData(
 				args.HasPayload = true
 			}
 		}
-		if err := s.areSidecarsAvailable(ctx, avs, b); err != nil {
-			return nil, false, errors.Wrapf(err, "could not validate sidecar availability for block %#x at slot %d", b.Root(), b.Block().Slot())
+		if args.HasPayload {
+			if err := s.areSidecarsAvailable(ctx, avs, b); err != nil {
+				return nil, false, errors.Wrapf(err, "could not validate sidecar availability for block %#x at slot %d", b.Root(), b.Block().Slot())
+			}
 		}
 
 		pendingNodes[i] = args
@@ -461,7 +464,12 @@ func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.Availability
 		if len(kzgCommitments) == 0 {
 			return nil
 		}
-		if err := s.areDataColumnsAvailable(ctx, roBlock.Root(), slot); err != nil {
+		// Bound the column-availability wait during batch sync: a block whose columns are not
+		// yet available must not block the sequential import pipeline indefinitely. On timeout
+		// the batch errors and is retried (which re-fetches the columns) instead of dead-ending.
+		daCtx, cancel := context.WithTimeout(ctx, time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second)
+		defer cancel()
+		if err := s.areDataColumnsAvailable(daCtx, roBlock.Root(), slot); err != nil {
 			return errors.Wrapf(err, "are data columns available for block %#x with slot %d", roBlock.Root(), slot)
 		}
 
@@ -1020,22 +1028,12 @@ func (s *Service) areDataColumnsAvailable(
 	}
 
 	// Avoid logging if DA check is called after next slot start.
+	// The log fires from the wait loop itself so `missing` is only ever touched by this goroutine.
+	var slotEnd <-chan time.Time
 	if nextSlot.After(time.Now()) {
-		timer := time.AfterFunc(time.Until(nextSlot), func() {
-			missingCount := uint64(len(missing))
-
-			if missingCount == 0 {
-				return
-			}
-
-			log.WithFields(logrus.Fields{
-				"slot":            slot,
-				"root":            fmt.Sprintf("%#x", root),
-				"columnsExpected": helpers.SortedPrettySliceFromMap(peerInfo.CustodyColumns),
-				"columnsWaiting":  helpers.SortedPrettySliceFromMap(missing),
-			}).Warning("Data columns still missing at slot end")
-		})
+		timer := time.NewTimer(time.Until(nextSlot))
 		defer timer.Stop()
+		slotEnd = timer.C
 	}
 
 	for {
@@ -1066,6 +1064,17 @@ func (s *Service) areDataColumnsAvailable(
 					return nil
 				}
 			}
+
+		case <-slotEnd:
+			if len(missing) > 0 {
+				log.WithFields(logrus.Fields{
+					"slot":            slot,
+					"root":            fmt.Sprintf("%#x", root),
+					"columnsExpected": helpers.SortedPrettySliceFromMap(peerInfo.CustodyColumns),
+					"columnsWaiting":  helpers.SortedPrettySliceFromMap(missing),
+				}).Warning("Data columns still missing at slot end")
+			}
+			slotEnd = nil
 
 		case <-ctx.Done():
 			var missingIndices any = "all"
@@ -1123,20 +1132,12 @@ func (s *Service) areBlobsAvailable(ctx context.Context, root [fieldparams.RootL
 		return fmt.Errorf("unable to determine slot start time: %w", err)
 	}
 	// Avoid logging if DA check is called after next slot start.
+	// The log fires from the wait loop itself so `missing` is only ever touched by this goroutine.
+	var slotEnd <-chan time.Time
 	if nextSlot.After(time.Now()) {
-		nst := time.AfterFunc(time.Until(nextSlot), func() {
-			if len(missing) == 0 {
-				return
-			}
-
-			log.WithFields(logrus.Fields{
-				"slot":          blockSlot,
-				"root":          fmt.Sprintf("%#x", root),
-				"blobsExpected": expected,
-				"blobsWaiting":  len(missing),
-			}).Error("Still waiting for blobs DA check at slot end.")
-		})
-		defer nst.Stop()
+		timer := time.NewTimer(time.Until(nextSlot))
+		defer timer.Stop()
+		slotEnd = timer.C
 	}
 	for {
 		select {
@@ -1150,6 +1151,16 @@ func (s *Service) areBlobsAvailable(ctx context.Context, root [fieldparams.RootL
 			// Once all sidecars have been observed, clean up the notification channel.
 			s.blobNotifiers.delete(root)
 			return nil
+		case <-slotEnd:
+			if len(missing) > 0 {
+				log.WithFields(logrus.Fields{
+					"slot":          blockSlot,
+					"root":          fmt.Sprintf("%#x", root),
+					"blobsExpected": expected,
+					"blobsWaiting":  len(missing),
+				}).Error("Still waiting for blobs DA check at slot end.")
+			}
+			slotEnd = nil
 		case <-ctx.Done():
 			return errors.Wrapf(ctx.Err(), "context deadline waiting for blob sidecars slot: %d, BlockRoot: %#x", block.Slot(), root)
 		}

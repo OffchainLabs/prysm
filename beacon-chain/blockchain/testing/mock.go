@@ -401,6 +401,9 @@ func (s *ChainService) HeadBlock(context.Context) (interfaces.ReadOnlySignedBeac
 
 // HeadState mocks HeadState method in chain service.
 func (s *ChainService) HeadState(context.Context) (state.BeaconState, error) {
+	if s.HeadStateErr != nil {
+		return nil, s.HeadStateErr
+	}
 	return s.State, nil
 }
 

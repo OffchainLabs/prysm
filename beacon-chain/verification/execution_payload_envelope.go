@@ -24,7 +24,7 @@ type ExecutionPayloadEnvelopeVerifier interface {
 	VerifyBuilderValid(interfaces.ROExecutionPayloadBid) error
 	VerifyPayloadHash(interfaces.ROExecutionPayloadBid) error
 	VerifyExecutionRequestsRoot(interfaces.ROExecutionPayloadBid) error
-	VerifySignature(state.ReadOnlyBeaconState) error
+	VerifySignature(context.Context, state.ReadOnlyBeaconState) error
 	SatisfyRequirement(Requirement)
 }
 
@@ -170,10 +170,10 @@ func (v *EnvelopeVerifier) VerifyExecutionRequestsRoot(bid interfaces.ROExecutio
 }
 
 // VerifySignature verifies the signature of the execution payload envelope.
-func (v *EnvelopeVerifier) VerifySignature(st state.ReadOnlyBeaconState) (err error) {
+func (v *EnvelopeVerifier) VerifySignature(ctx context.Context, st state.ReadOnlyBeaconState) (err error) {
 	defer v.record(RequireBuilderSignatureValid, &err)
 
-	err = validatePayloadEnvelopeSignature(st, v.e)
+	err = validatePayloadEnvelopeSignature(ctx, st, v.e)
 	if err != nil {
 		env, envErr := v.e.Envelope()
 		if envErr != nil {
@@ -200,14 +200,14 @@ func (v *EnvelopeVerifier) record(req Requirement, err *error) {
 }
 
 // validatePayloadEnvelopeSignature verifies the signature of a signed execution payload envelope
-func validatePayloadEnvelopeSignature(st state.ReadOnlyBeaconState, e interfaces.ROSignedExecutionPayloadEnvelope) error {
+func validatePayloadEnvelopeSignature(ctx context.Context, st state.ReadOnlyBeaconState, e interfaces.ROSignedExecutionPayloadEnvelope) error {
 	env, err := e.Envelope()
 	if err != nil {
 		return errors.Wrap(err, "failed to get envelope")
 	}
 	var pubkey []byte
 	if env.BuilderIndex() == params.BeaconConfig().BuilderIndexSelfBuild {
-		proposerIdx, err := helpers.BeaconProposerIndexAtSlot(context.TODO(), st, env.Slot())
+		proposerIdx, err := helpers.BeaconProposerIndexAtSlot(ctx, st, env.Slot())
 		if err != nil {
 			return errors.Wrap(err, "failed to get proposer index at slot")
 		}

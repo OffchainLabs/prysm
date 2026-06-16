@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -196,7 +198,8 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 	}
 	s.headLock.Unlock()
 
-	attr := s.getPayloadAttribute(ctx, st, envelope.Slot()+1, headRoot[:], true)
+	proposingSlot := s.CurrentSlot() + 1
+	attr := s.getPayloadAttribute(ctx, st, proposingSlot, headRoot[:], true)
 	if !s.inRegularSync() {
 		return nil
 	}
@@ -209,10 +212,27 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 		if !attr.IsEmpty() && pid != nil {
 			var pId [8]byte
 			copy(pId[:], pid[:])
-			s.cfg.PayloadIDCache.Set(envelope.Slot()+1, root, pId)
+			s.cfg.PayloadIDCache.Set(proposingSlot, root, pId)
 		}
 	}()
+	if requests := envelope.ExecutionRequests(); requests != nil && len(requests.Deposits) > 0 {
+		s.prefetchDepositSignatures(requests)
+	}
 	return nil
+}
+
+func (s *Service) prefetchDepositSignatures(requests *enginev1.ExecutionRequests) {
+	invalidIdx, err := helpers.BatchVerifyDepositRequestSignatures(s.ctx, requests.Deposits)
+	if err != nil {
+		log.WithError(err).Debug("Could not batch verify deposit signatures for prefetch")
+		return
+	}
+	root, err := requests.HashTreeRoot()
+	if err != nil {
+		log.WithError(err).Debug("Could not hash execution requests for deposit sig prefetch")
+		return
+	}
+	cache.DepositSig.Put(root, invalidIdx)
 }
 
 func (s *Service) getPayloadEnvelopePrestate(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope) (state.BeaconState, error) {

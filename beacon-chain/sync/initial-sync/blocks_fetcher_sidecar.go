@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync/verify"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	p2ppb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -80,14 +81,23 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, r *fetchRequestRespon
 	currentSlot := f.clock.CurrentSlot()
 	currentEpoch := slots.ToEpoch(currentSlot)
 
-	roBlocks := make([]blocks.ROBlock, 0, len(postFulu))
-	for _, blockWithSidecars := range postFulu {
-		blockSlot := blockWithSidecars.Block.Block().Slot()
-		blockEpoch := slots.ToEpoch(blockSlot)
-
-		if params.WithinDAPeriod(blockEpoch, currentEpoch) {
-			roBlocks = append(roBlocks, blockWithSidecars.Block)
+	// resolveBlock loads an envelope's block that is not part of this batch.
+	resolveBlock := func(root [32]byte) (blocks.ROBlock, bool) {
+		signed, err := f.db.Block(ctx, root)
+		if err != nil {
+			return blocks.ROBlock{}, false
 		}
+		b, err := blocks.NewROBlockWithRoot(signed, root)
+		if err != nil {
+			return blocks.ROBlock{}, false
+		}
+		return b, true
+	}
+
+	roBlocks, err := columnFetchBlocks(postFulu, r.envelopes, currentEpoch, resolveBlock)
+	if err != nil {
+		r.err = errors.Wrap(err, "select blocks needing data column sidecars")
+		return
 	}
 
 	// Return early if there are no blocks that need data column sidecars.
@@ -123,14 +133,73 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, r *fetchRequestRespon
 		return
 	}
 
-	// Populate the response.
+	// Attach columns to their in-batch block. Columns for an out-of-batch payload (the one the
+	// first block builds on) are carried separately to be persisted by the queue consumer.
 	for i := range r.bwb {
 		bwSc := &r.bwb[i]
 		root := bwSc.Block.Root()
 		if columns, ok := verifiedRoDataColumnsByRoot[root]; ok {
 			bwSc.Columns = columns
+			delete(verifiedRoDataColumnsByRoot, root)
 		}
 	}
+	for _, columns := range verifiedRoDataColumnsByRoot {
+		r.columnsToSave = append(r.columnsToSave, columns...)
+	}
+}
+
+// columnFetchBlocks selects the post-Fulu blocks (within the DA period) whose data column
+// sidecars must be fetched: pre-Gloas blocks always, and Gloas blocks only when their payload
+// was revealed (an envelope exists for the block root). An envelope may reference a block outside
+// postFulu, resolved via resolveBlock.
+func columnFetchBlocks(
+	postFulu []blocks.BlockWithROSidecars,
+	envelopes []interfaces.ROSignedExecutionPayloadEnvelope,
+	currentEpoch primitives.Epoch,
+	resolveBlock func(root [32]byte) (blocks.ROBlock, bool),
+) ([]blocks.ROBlock, error) {
+	blockByRoot := make(map[[32]byte]blocks.ROBlock, len(postFulu))
+	for i := range postFulu {
+		blockByRoot[postFulu[i].Block.Root()] = postFulu[i].Block
+	}
+
+	seen := make(map[[32]byte]bool, len(postFulu))
+	roBlocks := make([]blocks.ROBlock, 0, len(postFulu))
+	add := func(b blocks.ROBlock) {
+		root := b.Root()
+		if seen[root] {
+			return
+		}
+		if !params.WithinDAPeriod(slots.ToEpoch(b.Block().Slot()), currentEpoch) {
+			return
+		}
+		seen[root] = true
+		roBlocks = append(roBlocks, b)
+	}
+
+	for i := range postFulu {
+		if postFulu[i].Block.Version() < version.Gloas {
+			add(postFulu[i].Block)
+		}
+	}
+
+	for _, e := range envelopes {
+		env, err := e.Envelope()
+		if err != nil {
+			return nil, errors.Wrap(err, "envelope")
+		}
+		root := env.BeaconBlockRoot()
+		b, ok := blockByRoot[root]
+		if !ok {
+			b, ok = resolveBlock(root)
+			if !ok {
+				continue
+			}
+		}
+		add(b)
+	}
+
+	return roBlocks, nil
 }
 
 type commitmentCount struct {

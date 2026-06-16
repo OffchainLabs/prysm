@@ -62,6 +62,7 @@ go_test(
     srcs = [
         "blocks_fetcher_payload_test.go",
         "blocks_fetcher_peers_test.go",
+        "blocks_fetcher_sidecar_test.go",
         "blocks_fetcher_test.go",
         "blocks_fetcher_utils_test.go",
         "blocks_queue_test.go",

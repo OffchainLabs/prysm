@@ -127,15 +127,19 @@ type fetchRequestResponse struct {
 	count        uint64
 	bwb          []blocks.BlockWithROSidecars
 	envelopes    []interfaces.ROSignedExecutionPayloadEnvelope
-	err          error
+	// columnsToSave holds columns for a payload whose block is not in bwb (the one the first
+	// block builds on); persisted separately since the per-block save loop only covers bwb.
+	columnsToSave []blocks.VerifiedRODataColumn
+	err           error
 }
 
 func (r *fetchRequestResponse) blocksQueueFetchedData() *blocksQueueFetchedData {
 	return &blocksQueueFetchedData{
-		blocksFrom: r.blocksFrom,
-		blobsFrom:  r.blobsFrom,
-		bwb:        r.bwb,
-		envelopes:  r.envelopes,
+		blocksFrom:    r.blocksFrom,
+		blobsFrom:     r.blobsFrom,
+		bwb:           r.bwb,
+		envelopes:     r.envelopes,
+		columnsToSave: r.columnsToSave,
 	}
 }
 
@@ -335,14 +339,16 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 		log.WithError(response.err).Debug("Failed to fetch blocks")
 		return response
 	}
-	f.fetchSidecars(ctx, response, peers)
-	if response.err != nil {
-		log.WithError(response.err).Debug("Failed to fetch sidecars")
-		return response
-	}
+	// Payloads must be fetched before sidecars: in Gloas the set of revealed execution payload
+	// envelopes is what determines which blocks need data columns (see fetchSidecars).
 	f.fetchPayloads(ctx, response, peers)
 	if response.err != nil {
 		log.WithError(response.err).Debug("Failed to fetch payloads")
+		return response
+	}
+	f.fetchSidecars(ctx, response, peers)
+	if response.err != nil {
+		log.WithError(response.err).Debug("Failed to fetch sidecars")
 	}
 	return response
 }
@@ -489,7 +495,7 @@ func (f *blocksFetcher) waitForBandwidth(pid peer.ID, count uint64) error {
 	if err != nil {
 		return err
 	}
-	toWait := timeToWait(int64(intCount), rem, f.rateLimiter.Capacity(), f.rateLimiter.TillEmpty(pid.String()))
+	toWait := timeToWait(int64(intCount), rem, f.rateLimiter.Capacity(), f.rateLimiter.TillEmpty(pid.String())) / 5
 	timer := time.NewTimer(toWait)
 	defer timer.Stop()
 	select {
