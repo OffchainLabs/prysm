@@ -4,7 +4,6 @@ import (
 	"context"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
@@ -79,7 +78,7 @@ func startChainService(t testing.TB,
 		blockchain.WithAttestationPool(attestations.NewPool()),
 		blockchain.WithDepositCache(depositCache),
 		blockchain.WithProposerPreferencesCache(cache.NewProposerPreferencesCache()),
-		blockchain.WithSubscribedValidatorsCache(cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute)),
+		blockchain.WithSubscribedValidatorsCache(cache.NewSubscribedValidatorsCache()),
 		blockchain.WithPayloadIDCache(cache.NewPayloadIDCache()),
 		blockchain.WithClockSynchronizer(clockSync),
 		blockchain.WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	dbtesting "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -74,9 +73,8 @@ func setupCustodyTest(t *testing.T, withChain bool) *testSetup {
 	}
 
 	service := &Service{
-		ctx:                       ctx,
-		cfg:                       cfg,
-		subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
+		ctx: ctx,
+		cfg: cfg,
 	}
 
 	return &testSetup{
@@ -197,8 +195,7 @@ func TestCustodyGroupCount(t *testing.T) {
 
 	t.Run("No tracked validators returns CustodyRequirement", func(t *testing.T) {
 		service := &Service{
-			ctx:                       context.Background(),
-			subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
+			ctx: context.Background(),
 		}
 
 		result, err := service.custodyGroupCount(ctx)
@@ -209,8 +206,7 @@ func TestCustodyGroupCount(t *testing.T) {
 	t.Run("SemiSupernode enabled returns half of NumberOfCustodyGroups", func(t *testing.T) {
 		withSemiSupernode(t, func() {
 			service := &Service{
-				ctx:                       context.Background(),
-				subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
+				ctx: context.Background(),
 			}
 
 			result, err := service.custodyGroupCount(ctx)
@@ -244,8 +240,7 @@ func TestCustodyGroupCount(t *testing.T) {
 	t.Run("SemiSupernode with no tracked validators returns semi-supernode target", func(t *testing.T) {
 		withSemiSupernode(t, func() {
 			service := &Service{
-				ctx:                       context.Background(),
-				subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
+				ctx: context.Background(),
 			}
 
 			result, err := service.custodyGroupCount(ctx)
@@ -274,8 +269,7 @@ func TestSemiSupernodeValidatorCustodyOverride(t *testing.T) {
 		withSemiSupernode(t, func() {
 			// Setup with validators requiring only 32 groups (less than 64)
 			service := &Service{
-				ctx:                       context.Background(),
-				subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
+				ctx: context.Background(),
 			}
 
 			result, err := service.custodyGroupCount(ctx)
@@ -316,8 +310,7 @@ func TestSemiSupernodeValidatorCustodyOverride(t *testing.T) {
 
 		withSemiSupernode(t, func() {
 			service := &Service{
-				ctx:                       context.Background(),
-				subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
+				ctx: context.Background(),
 			}
 
 			result, err := service.custodyGroupCount(ctx)
@@ -340,8 +333,7 @@ func TestSemiSupernodeValidatorCustodyOverride(t *testing.T) {
 
 		withSemiSupernode(t, func() {
 			service := &Service{
-				ctx:                       context.Background(),
-				subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
+				ctx: context.Background(),
 			}
 
 			result, err := service.custodyGroupCount(ctx)

@@ -93,7 +93,7 @@ func TestWaitForPendingProposalsLoop(t *testing.T) {
 	currentSlotZero := func() primitives.Slot { return 0 }
 
 	newNode := func(tracked ...primitives.ValidatorIndex) *BeaconNode {
-		c := cache.NewSubscribedValidatorsCache(time.Hour, time.Hour)
+		c := cache.NewSubscribedValidatorsCache()
 		for _, idx := range tracked {
 			c.Add(idx)
 		}

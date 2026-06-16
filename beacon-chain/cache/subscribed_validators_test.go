@@ -6,24 +6,25 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	gocache "github.com/patrickmn/go-cache"
 )
 
 func TestSubscribedValidatorsCache_AddHas(t *testing.T) {
-	c := NewSubscribedValidatorsCache(time.Minute, time.Minute)
+	c := NewSubscribedValidatorsCache()
 	require.Equal(t, false, c.Has(7))
 	c.Add(7)
 	require.Equal(t, true, c.Has(7))
 }
 
 func TestSubscribedValidatorsCache_Validating(t *testing.T) {
-	c := NewSubscribedValidatorsCache(time.Minute, time.Minute)
+	c := NewSubscribedValidatorsCache()
 	require.Equal(t, false, c.Validating())
 	c.Add(7)
 	require.Equal(t, true, c.Validating())
 }
 
 func TestSubscribedValidatorsCache_Indices(t *testing.T) {
-	c := NewSubscribedValidatorsCache(time.Minute, time.Minute)
+	c := NewSubscribedValidatorsCache()
 	require.Equal(t, 0, len(c.Indices()))
 	c.Add(3)
 	c.Add(11)
@@ -36,14 +37,14 @@ func TestSubscribedValidatorsCache_Indices(t *testing.T) {
 }
 
 func TestSubscribedValidatorsCache_AddIdempotent(t *testing.T) {
-	c := NewSubscribedValidatorsCache(time.Minute, time.Minute)
+	c := NewSubscribedValidatorsCache()
 	c.Add(7)
 	c.Add(7)
 	require.Equal(t, 1, len(c.Indices()))
 }
 
 func TestSubscribedValidatorsCache_TTLExpiry(t *testing.T) {
-	c := NewSubscribedValidatorsCache(10*time.Millisecond, time.Millisecond)
+	c := &SubscribedValidatorsCache{entries: gocache.New(10*time.Millisecond, time.Millisecond)}
 	c.Add(7)
 	require.Equal(t, true, c.Has(7))
 	time.Sleep(50 * time.Millisecond)

@@ -2,63 +2,55 @@ package cache
 
 import (
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	gocache "github.com/patrickmn/go-cache"
 )
 
+const (
+	subscribedValidatorsTTL             = time.Hour
+	subscribedValidatorsCleanupInterval = 15 * time.Minute
+)
+
 // SubscribedValidatorsCache tracks validator indices the validator client has
 // posted committee subscriptions for.
 type SubscribedValidatorsCache struct {
-	mu      sync.RWMutex
 	entries *gocache.Cache
 }
 
-// NewSubscribedValidatorsCache returns a cache with the given entry TTL.
-// The VC re-posts subscriptions each epoch, so a TTL of a few epochs is
-// enough to ride out a missed post without dropping the validator from
-// custody calculations.
-func NewSubscribedValidatorsCache(ttl, cleanupInterval time.Duration) *SubscribedValidatorsCache {
+// NewSubscribedValidatorsCache returns a cache keyed by validator index. The VC
+// re-posts subscriptions each epoch, so a TTL of a few epochs is enough to ride
+// out a missed post without dropping the validator from custody calculations.
+func NewSubscribedValidatorsCache() *SubscribedValidatorsCache {
 	return &SubscribedValidatorsCache{
-		entries: gocache.New(ttl, cleanupInterval),
+		entries: gocache.New(subscribedValidatorsTTL, subscribedValidatorsCleanupInterval),
 	}
 }
 
 // Add records the validator as attached. Re-adding extends the TTL.
 func (c *SubscribedValidatorsCache) Add(index primitives.ValidatorIndex) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	c.entries.Set(subscribedKey(index), struct{}{}, gocache.DefaultExpiration)
 }
 
 // Has returns true if the validator is currently attached.
 func (c *SubscribedValidatorsCache) Has(index primitives.ValidatorIndex) bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
 	_, ok := c.entries.Get(subscribedKey(index))
 	return ok
 }
 
 // Validating returns true if at least one validator is attached.
 func (c *SubscribedValidatorsCache) Validating() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
 	return c.entries.ItemCount() > 0
 }
 
 // Clear removes all attached validators.
 func (c *SubscribedValidatorsCache) Clear() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	c.entries.Flush()
 }
 
 // Indices returns the set of currently-attached validator indices.
 func (c *SubscribedValidatorsCache) Indices() map[primitives.ValidatorIndex]bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
 	items := c.entries.Items()
 	out := make(map[primitives.ValidatorIndex]bool, len(items))
 	for key := range items {

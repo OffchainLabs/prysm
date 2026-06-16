@@ -331,12 +331,13 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 	// If it is an epoch boundary then process slots to get the right
 	// shuffling before checking if the proposer is tracked. Otherwise
 	// perform this check before. This is cheap as the NSC has already been updated.
-	var val *cache.ProposerPreference
+	var pref *cache.ProposerPreference
 	e := slots.ToEpoch(slot)
 	stateEpoch := slots.ToEpoch(st.Slot())
 	fuluAndNextEpoch := st.Version() >= version.Fulu && e == stateEpoch+1
 	if e == stateEpoch || fuluAndNextEpoch {
-		pref, err := s.trackedProposer(st, slot)
+		var err error
+		pref, err = s.trackedProposer(st, slot)
 		if err != nil {
 			log.WithError(err).Error("Could not resolve tracked proposer")
 			return emptyAttri
@@ -344,7 +345,6 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 		if pref == nil {
 			return emptyAttri
 		}
-		val = pref
 	}
 	if slot > st.Slot() {
 		// At this point either we know we are proposing on a future slot or we need to still compute the
@@ -359,7 +359,8 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 	}
 	if e > stateEpoch && !fuluAndNextEpoch {
 		emptyAttri := payloadattribute.EmptyWithVersion(st.Version())
-		pref, err := s.trackedProposer(st, slot)
+		var err error
+		pref, err = s.trackedProposer(st, slot)
 		if err != nil {
 			log.WithError(err).Error("Could not resolve tracked proposer")
 			return emptyAttri
@@ -367,7 +368,6 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 		if pref == nil {
 			return emptyAttri
 		}
-		val = pref
 	}
 	// Get previous randao.
 	prevRando, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
@@ -383,7 +383,7 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 		return emptyAttri
 	}
 
-	feeRecipient := val.FeeRecipientOrDefault()
+	feeRecipient := pref.FeeRecipientOrDefault()
 
 	v := st.Version()
 	switch {
@@ -394,7 +394,7 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 			return emptyAttri
 		}
 		parentGasLimit := helpers.ParentTargetGasLimit(st)
-		return payloadAttributesGloas(uint64(t.Unix()), prevRando, feeRecipient[:], headRoot, withdrawals, slot, val.GasLimitOr(parentGasLimit))
+		return payloadAttributesGloas(uint64(t.Unix()), prevRando, feeRecipient[:], headRoot, withdrawals, slot, pref.GasLimitOr(parentGasLimit))
 	case v >= version.Deneb:
 		return payloadAttributesDeneb(st, uint64(t.Unix()), prevRando, feeRecipient[:], headRoot)
 	case v >= version.Capella:

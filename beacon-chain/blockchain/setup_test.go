@@ -200,7 +200,7 @@ func minimalTestService(t *testing.T, opts ...Option) (*Service, *testServiceReq
 		WithBLSToExecPool(req.blsPool),
 		WithDepositCache(dc),
 		WithProposerPreferencesCache(cache.NewProposerPreferencesCache()),
-		WithSubscribedValidatorsCache(cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute)),
+		WithSubscribedValidatorsCache(cache.NewSubscribedValidatorsCache()),
 		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
 		WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
 		WithSyncChecker(mock.MockChecker{}),

@@ -3243,7 +3243,7 @@ func TestProposer_PrepareBeaconProposer(t *testing.T) {
 			proposerServer := &Server{
 				BeaconDB:                  db,
 				ProposerPreferencesCache:  cache.NewProposerPreferencesCache(),
-				SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
+				SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
 				TimeFetcher:               &mock.ChainService{Slot: &zero},
 			}
 			_, err := proposerServer.PrepareBeaconProposer(ctx, tt.args.request)
@@ -3265,7 +3265,7 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	proposerServer := &Server{
 		BeaconDB:                  db,
 		ProposerPreferencesCache:  cache.NewProposerPreferencesCache(),
-		SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
+		SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
 		TimeFetcher:               &mock.ChainService{},
 	}
 
@@ -3324,7 +3324,7 @@ func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
 	proposerServer := &Server{
 		BeaconDB:                  db,
 		ProposerPreferencesCache:  cache.NewProposerPreferencesCache(),
-		SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
+		SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
 		TimeFetcher:               &mock.ChainService{},
 	}
 	f := bytesutil.PadTo([]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF}, fieldparams.FeeRecipientLength)

@@ -75,11 +75,6 @@ import (
 
 const testSkipPowFlag = "test-skip-pow"
 
-const (
-	subscribedValidatorsTTL             = time.Hour
-	subscribedValidatorsCleanupInterval = 15 * time.Minute
-)
-
 // Used as a struct to keep cli flag options for configuring services
 // for the beacon node. We keep this as a separate struct to not pollute the actual BeaconNode
 // struct, as it is merely used to pass down configuration options into the appropriate services.
@@ -176,7 +171,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		syncCommitteePool:         synccommittee.NewPool(),
 		blsToExecPool:             blstoexec.NewPool(),
 		proposerPreferencesCache:  cache.NewProposerPreferencesCache(),
-		subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(subscribedValidatorsTTL, subscribedValidatorsCleanupInterval),
+		subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
 		payloadIDCache:            cache.NewPayloadIDCache(),
 		executionPayloadCache:     cache.NewExecutionPayloadEnvelopeCache(),
 		slasherBlockHeadersFeed:   new(event.Feed),

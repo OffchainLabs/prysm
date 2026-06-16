@@ -819,21 +819,23 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		return err
 	}
 
-	proposerReqs := v.buildProposerSettingsRequests(filteredKeys)
-	if len(proposerReqs) == 0 {
-		log.Warnf("Could not locate valid validator indices. Skipping prepare proposer routine")
-		return nil
-	}
-	if len(proposerReqs) != len(pubkeys) {
-		log.WithFields(logrus.Fields{
-			"pubkeysCount":                 len(pubkeys),
-			"proposerSettingsRequestCount": len(proposerReqs),
-		}).Debugln("Request count did not match included validator count. Only keys that have been activated will be included in the request.")
-	}
+	currentEpoch := slots.ToEpoch(slot)
+	isPreGloas := currentEpoch < params.BeaconConfig().GloasForkEpoch
 
 	// Pre-Gloas, PrepareBeaconProposer carries the per-validator fee recipient.
 	// Post-Gloas, SignedProposerPreferences (submitted below) is canonical.
-	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
+	if isPreGloas {
+		proposerReqs := v.buildProposerSettingsRequests(filteredKeys)
+		if len(proposerReqs) == 0 {
+			log.Warnf("Could not locate valid validator indices. Skipping prepare proposer routine")
+			return nil
+		}
+		if len(proposerReqs) != len(pubkeys) {
+			log.WithFields(logrus.Fields{
+				"pubkeysCount":                 len(pubkeys),
+				"proposerSettingsRequestCount": len(proposerReqs),
+			}).Debugln("Request count did not match included validator count. Only keys that have been activated will be included in the request.")
+		}
 		if _, err := v.validatorClient.PrepareBeaconProposer(ctx, &ethpb.PrepareBeaconProposerRequest{
 			Recipients: proposerReqs,
 		}); err != nil {
@@ -841,7 +843,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		}
 	}
 
-	v.upgradeProposerSettingsToV2(ctx, slots.ToEpoch(slot))
+	v.upgradeProposerSettingsToV2(ctx, currentEpoch)
 	prefs := v.buildProposerPreferences(ctx, km, slot, false)
 	if len(prefs) > 0 {
 		// Delay to mid-slot so the block for this slot is processed first.
@@ -857,7 +859,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 	}
 
 	// TODO: figure out what to do post gloas for builder apis
-	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
+	if !isPreGloas {
 		return nil
 	}
 

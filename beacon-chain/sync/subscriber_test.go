@@ -813,7 +813,6 @@ func TestSamplingSize(t *testing.T) {
 				beaconDB: d,
 				p2p:      p2pService,
 			},
-			subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
 		}
 
 		size, err := s.samplingSize()
@@ -838,7 +837,6 @@ func TestSamplingSize(t *testing.T) {
 				beaconDB: d,
 				p2p:      p2pService,
 			},
-			subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
 		}
 
 		size, err := s.samplingSize()
@@ -862,7 +860,6 @@ func TestSamplingSize(t *testing.T) {
 				beaconDB: d,
 				p2p:      p2pService,
 			},
-			subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
 		}
 
 		size, err := s.samplingSize()
@@ -887,7 +884,6 @@ func TestSamplingSize(t *testing.T) {
 				beaconDB: d,
 				p2p:      p2pService,
 			},
-			subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
 		}
 
 		size, err := s.samplingSize()
@@ -912,7 +908,6 @@ func TestSamplingSize(t *testing.T) {
 				beaconDB: d,
 				p2p:      p2pService,
 			},
-			subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
 		}
 
 		// samplingSize() should use custody count regardless of flags

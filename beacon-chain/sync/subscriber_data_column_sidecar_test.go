@@ -2,7 +2,6 @@ package sync
 
 import (
 	"testing"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -19,8 +18,7 @@ func TestAllDataColumnSubnets(t *testing.T) {
 	t.Run("returns nil when no validators tracked", func(t *testing.T) {
 		// Service with no tracked validators
 		svc := &Service{
-			ctx:                       t.Context(),
-			subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
+			ctx: t.Context(),
 		}
 
 		result := svc.allDataColumnSubnets(primitives.Slot(0))
@@ -43,7 +41,7 @@ func TestAllDataColumnSubnets(t *testing.T) {
 		require.NoError(t, err)
 
 		// At least one attached validator.
-		svc := cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute)
+		svc := cache.NewSubscribedValidatorsCache()
 		svc.Add(1)
 
 		s := &Service{
