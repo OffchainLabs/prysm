@@ -172,6 +172,14 @@ func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBloc
 		if _, err := s.notifyNewEnvelope(ctx, blockPreState, env); err != nil {
 			return nil, false, err
 		}
+	} else if !s.HasFullNode(parentRoot) {
+		env, err := envelopes[0].Envelope()
+		if err != nil {
+			return nil, false, err
+		}
+		if err := s.InsertPayload(env); err != nil {
+			return nil, false, errors.Wrap(err, "could not insert payload to fork choice store")
+		}
 	}
 	return blockPreState, true, nil
 }
