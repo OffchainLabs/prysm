@@ -16,20 +16,10 @@ import (
 // empty FeeRecipient and callers fall back to DefaultFeeRecipient.
 func (s *Service) trackedProposer(st state.ReadOnlyBeaconState, slot primitives.Slot) (*cache.ProposerPreference, error) {
 	id, err := helpers.BeaconProposerIndexAtSlot(s.ctx, st, slot)
-	if features.Get().PrepareAllPayloads {
-		if err != nil {
-			return &cache.ProposerPreference{}, nil
-		}
-		pref, err := s.preferenceForProposer(st, slot, id)
-		if err != nil {
-			return nil, err
-		}
-		return &pref, nil
-	}
 	if err != nil {
 		return nil, errors.Wrap(err, "beacon proposer index")
 	}
-	if !s.cfg.SubscribedValidatorsCache.Has(id) {
+	if !features.Get().PrepareAllPayloads && !s.cfg.SubscribedValidatorsCache.Has(id) {
 		return nil, nil
 	}
 	pref, err := s.preferenceForProposer(st, slot, id)
