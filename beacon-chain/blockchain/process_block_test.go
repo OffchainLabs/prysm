@@ -3021,7 +3021,7 @@ func TestIsDataAvailable(t *testing.T) {
 		require.NoError(t, err)
 
 		nonCustody := make([]uint64, 0, fieldparams.NumberOfColumns)
-		for i := uint64(0); i < fieldparams.NumberOfColumns; i++ {
+		for i := range uint64(fieldparams.NumberOfColumns) {
 			if peerInfo.CustodyColumns[i] {
 				continue
 			}
