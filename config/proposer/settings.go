@@ -82,9 +82,10 @@ func verifyOption(key string, option *validatorpb.ProposerOptionPayload) error {
 // BuilderConfig is the struct representation of the JSON config file set in the validator through the CLI.
 // GasLimit is a number set to help the network decide on the maximum gas in each block.
 type BuilderConfig struct {
-	Enabled  bool             `json:"enabled" yaml:"enabled"`
-	GasLimit validator.Uint64 `json:"gas_limit,omitempty" yaml:"gas_limit,omitempty"`
-	Relays   []string         `json:"relays,omitempty" yaml:"relays,omitempty"`
+	Enabled             bool             `json:"enabled" yaml:"enabled"`
+	GasLimit            validator.Uint64 `json:"gas_limit,omitempty" yaml:"gas_limit,omitempty"`
+	Relays              []string         `json:"relays,omitempty" yaml:"relays,omitempty"`
+	MaxExecutionPayment validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"`
 }
 
 // BuilderConfigFromConsensus converts protobuf to a builder config used in in-memory storage
@@ -93,8 +94,9 @@ func BuilderConfigFromConsensus(from *validatorpb.BuilderConfig) *BuilderConfig 
 		return nil
 	}
 	c := &BuilderConfig{
-		Enabled:  from.Enabled,
-		GasLimit: from.GasLimit,
+		Enabled:             from.Enabled,
+		GasLimit:            from.GasLimit,
+		MaxExecutionPayment: from.MaxExecutionPayment,
 	}
 	if from.Relays != nil {
 		relays := make([]string, len(from.Relays))
@@ -239,6 +241,7 @@ func (bc *BuilderConfig) Clone() *BuilderConfig {
 	c := &BuilderConfig{}
 	c.Enabled = bc.Enabled
 	c.GasLimit = bc.GasLimit
+	c.MaxExecutionPayment = bc.MaxExecutionPayment
 	var relays []string
 	if bc.Relays != nil {
 		relays = make([]string, len(bc.Relays))
@@ -270,6 +273,7 @@ func (bc *BuilderConfig) ToConsensus() *validatorpb.BuilderConfig {
 		c.Relays = relays
 	}
 	c.GasLimit = bc.GasLimit
+	c.MaxExecutionPayment = bc.MaxExecutionPayment
 	return c
 }
 

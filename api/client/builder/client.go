@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"text/template"
 
@@ -104,6 +105,9 @@ type BuilderClient interface {
 	RegisterValidator(ctx context.Context, svr []*ethpb.SignedValidatorRegistrationV1) error
 	SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error)
 	SubmitBlindedBlockPostFulu(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) error
+	GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte, auth *ethpb.SignedRequestAuthV1) (*ethpb.SignedExecutionPayloadBid, error)
+	SubmitSignedBeaconBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) error
+	SubmitBuilderPreferences(ctx context.Context, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1) error
 	Status(ctx context.Context) error
 }
 
@@ -156,6 +160,12 @@ type reqOption func(*http.Request)
 // do is a generic, opinionated request function to reduce boilerplate amongst the methods in this package api/client/builder.
 // It validates that the HTTP response status matches the expectedStatus parameter.
 func (c *Client) do(ctx context.Context, method string, path string, body io.Reader, expectedStatus int, opts ...reqOption) (res []byte, header http.Header, err error) {
+	res, _, header, err = c.doWithStatus(ctx, method, path, body, []int{expectedStatus}, opts...)
+	return
+}
+
+// doWithStatus is do for endpoints with more than one acceptable response status; it returns the matched status.
+func (c *Client) doWithStatus(ctx context.Context, method string, path string, body io.Reader, expectedStatuses []int, opts ...reqOption) (res []byte, status int, header http.Header, err error) {
 	ctx, span := trace.StartSpan(ctx, "builder.client.do")
 	defer func() {
 		tracing.AnnotateError(span, err)
@@ -190,10 +200,11 @@ func (c *Client) do(ctx context.Context, method string, path string, body io.Rea
 			log.WithError(closeErr).Error("Failed to close response body")
 		}
 	}()
-	if r.StatusCode != expectedStatus {
-		err = unexpectedStatusErr(r, expectedStatus)
+	if !slices.Contains(expectedStatuses, r.StatusCode) {
+		err = unexpectedStatusErr(r, expectedStatuses)
 		return
 	}
+	status = r.StatusCode
 	res, err = io.ReadAll(io.LimitReader(r.Body, client.MaxBodySize))
 	if err != nil {
 		err = errors.Wrap(err, "error reading http response body from builder server")
@@ -682,7 +693,7 @@ func (c *Client) Status(ctx context.Context) error {
 	return err
 }
 
-func unexpectedStatusErr(response *http.Response, expected int) error {
+func unexpectedStatusErr(response *http.Response, expected []int) error {
 	bodyBytes, err := io.ReadAll(io.LimitReader(response.Body, client.MaxErrBodySize))
 	var errMessage ErrorMessage
 	var body string

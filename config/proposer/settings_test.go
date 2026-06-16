@@ -36,9 +36,10 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 				FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 			},
 			BuilderConfig: &BuilderConfig{
-				Enabled:  false,
-				GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
-				Relays:   []string{"https://example-relay.com"},
+				Enabled:             false,
+				GasLimit:            validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
+				Relays:              []string{"https://example-relay.com"},
+				MaxExecutionPayment: validator.Uint64(1000000),
 			},
 		},
 	}
@@ -67,6 +68,7 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 		require.DeepEqual(t, config.Relays, clone.Relays)
 		require.Equal(t, config.Enabled, clone.Enabled)
 		require.Equal(t, config.GasLimit, clone.GasLimit)
+		require.Equal(t, config.MaxExecutionPayment, clone.MaxExecutionPayment)
 	})
 	t.Run("To Payload and SettingFromConsensus", func(t *testing.T) {
 		payload := settings.ToConsensus()
