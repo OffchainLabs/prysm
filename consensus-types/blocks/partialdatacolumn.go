@@ -262,10 +262,11 @@ func MergeAvailableIntoPartsMetadata(base *ethpb.PartialDataColumnPartsMetadata,
 // PublishActionsFn returns a PublishActionsFn that, for each known peer, computes
 // the next peer state and the publish action to send to that peer. headerSentCache
 // tracks whether the block header has already been sent to a peer so it is only
-// included once; it is updated as actions are produced.
-func (p *PartialDataColumn) PublishActionsFn(headerSentCache map[peer.ID]bool) partialmessages.PublishActionsFn[PartialDataColumnPeerState] {
+// included once; it is updated as actions are produced. onEagerPush, if non-nil,
+// is invoked for each peer that was eager pushed to.
+func (p *PartialDataColumn) PublishActionsFn(headerSentCache map[peer.ID]bool, onEagerPush func(peer.ID)) partialmessages.PublishActionsFn[PartialDataColumnPeerState] {
 	return func(peerStates map[peer.ID]PartialDataColumnPeerState, peerRequestsPartial func(peer.ID) bool) iter.Seq2[peer.ID, partialmessages.PublishAction] {
-		return p.publishActions(peerStates, peerRequestsPartial, headerSentCache)
+		return p.publishActions(peerStates, peerRequestsPartial, headerSentCache, onEagerPush)
 	}
 }
 
@@ -276,12 +277,17 @@ func (p *PartialDataColumn) publishActions(
 	peerStates map[peer.ID]PartialDataColumnPeerState,
 	peerRequestsPartial func(peer.ID) bool,
 	headerSentCache map[peer.ID]bool,
+	onEagerPush func(peer.ID),
 ) iter.Seq2[peer.ID, partialmessages.PublishAction] {
 	return func(yield func(peer.ID, partialmessages.PublishAction) bool) {
 		for peerID, peerState := range peerStates {
-			nextState, action, includeHeader := p.forPeer(peerID, peerRequestsPartial(peerID), peerState, !headerSentCache[peerID])
+			requested := peerRequestsPartial(peerID)
+			nextState, action, includeHeader := p.forPeer(peerID, requested, peerState, !headerSentCache[peerID])
 			// Only update state if there was no error.
 			if action.Err == nil {
+				if onEagerPush != nil && isEagerPush(requested, peerState) {
+					onEagerPush(peerID)
+				}
 				p.recordHeaderSent(peerID, includeHeader, headerSentCache)
 				peerStates[peerID] = nextState
 			}
@@ -308,19 +314,17 @@ func (p *PartialDataColumn) recordHeaderSent(peerID peer.ID, includeHeader bool,
 	}
 }
 
+func isEagerPush(requestedMessage bool, peerState PartialDataColumnPeerState) bool {
+	return requestedMessage && peerState.Recvd == nil
+}
+
 // forPeer returns the next peer state and the publish action for this peer
 func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerState PartialDataColumnPeerState, includeHeader bool) (PartialDataColumnPeerState, partialmessages.PublishAction, bool) {
 	peerState = peerState.Clone()
 
 	// Eager push - we don't know what the peer has and message has been requested.
 	// Set RecvdState so subsequent calls skip the eager push path.
-	if requestedMessage && peerState.Recvd == nil {
-		log.WithFields(logrus.Fields{
-			"peer":          remote,
-			"index":         p.Index,
-			"group":         fmt.Sprintf("%#x", p.groupID),
-			"includeHeader": includeHeader,
-		}).Debug("Eager pushing partial data column")
+	if isEagerPush(requestedMessage, peerState) {
 		var encoded []byte
 		if includeHeader {
 			var err error

@@ -2451,3 +2451,38 @@ func TestPartialColumnBroadcaster_republishColumn_partsMetadataError(t *testing.
 	require.ErrorContains(t, "parts metadata", err)
 	require.Equal(t, 0, ps.publishedColumnCount())
 }
+
+// Verifies eager pushes and skipped republishes are aggregated per group and
+// flushed as one log line with pretty index ranges.
+func TestPartialColumnBroadcaster_flushAggregatedLogs(t *testing.T) {
+	var buf bytes.Buffer
+	logger := &logrus.Logger{
+		Out:       &buf,
+		Formatter: &logrus.TextFormatter{DisableTimestamp: true},
+		Level:     logrus.DebugLevel,
+	}
+	b := NewBroadcaster(t.Context(), logger)
+
+	groupID := []byte{0, 1, 2, 3}
+	for i := range uint64(4) {
+		b.recordEagerPush(groupID, i, "peer-a")
+		b.recordRepublishSkip(groupID, i)
+	}
+	b.recordEagerPush(groupID, 9, "peer-b")
+	b.recordRepublishSkip(groupID, 9)
+
+	b.flushAggregatedLogs()
+
+	out := buf.String()
+	require.StringContains(t, "Eager pushed partial data columns", out)
+	require.StringContains(t, "Columns not published, skipping republish", out)
+	require.StringContains(t, "0-3,9", out)
+	require.StringContains(t, "peers=2", out)
+	require.Equal(t, 0, len(b.eagerPushed))
+	require.Equal(t, 0, len(b.republishSkipped))
+
+	// Nothing accumulated, nothing logged.
+	buf.Reset()
+	b.flushAggregatedLogs()
+	require.Equal(t, "", buf.String())
+}
