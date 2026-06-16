@@ -89,14 +89,14 @@ var (
 		},
 		[]string{"method", "transport"},
 	)
-	// engineBodySize records the SSZ wire size of engine request/response bodies,
-	// labeled by endpoint, transport, and direction. Only the ssz-http transport
-	// populates it — the JSON-RPC client does not expose wire byte sizes — but the
-	// transport label is kept for parity with engineRequestLatency.
+	// engineBodySize records the wire size of engine request/response bodies,
+	// labeled by endpoint, transport, and direction. Both transports populate it:
+	// ssz-http via observeSSZBody (engine_ssz.go), json-rpc via the size
+	// round-tripper (engine_jsonrpc_size.go), so the two are directly comparable.
 	engineBodySize = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "engine_body_size_bytes",
-			Help:    "Engine API SSZ request/response body size in bytes per endpoint and direction",
+			Help:    "Engine API request/response body size in bytes per endpoint, transport and direction",
 			Buckets: prometheus.ExponentialBuckets(256, 4, 10), // 256 B .. 64 MiB
 		},
 		[]string{"method", "transport", "direction"},

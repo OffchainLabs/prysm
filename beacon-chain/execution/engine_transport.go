@@ -67,10 +67,10 @@ func observeEngineLatency(method, transport string, start time.Time) {
 // labeled by transport (json-rpc vs ssz-http). engine() returns the transport
 // wrapped here so every op — including the bodies reconstruction path, which
 // calls the transport directly rather than through the Service dispatchers — is
-// timed at one seam. Body-size histograms live in the ssz path (engine_ssz.go),
-// where the SSZ wire sizes are known; the JSON-RPC client does not expose them.
-// The embedded engineTransport carries the diagnostic ops (capabilities,
-// identity) through unmeasured.
+// timed at one seam. Body sizes are recorded separately, at each transport's wire
+// layer (observeSSZBody for ssz-http, the size round-tripper for json-rpc), since
+// only those layers see the marshaled bytes. The embedded engineTransport carries
+// the diagnostic ops (capabilities, identity) through unmeasured.
 type instrumentedEngine struct {
 	engineTransport
 	kind string

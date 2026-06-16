@@ -25,8 +25,7 @@ import (
 
 // sszEngine drives the engine namespace over the REST + SSZ Engine API v2
 // (ethereum/execution-apis#793) via enginehttp.Client. It implements
-// engineTransport. Only Capabilities is wired so far; the remaining operations
-// land one group per PR (Phase 4) and until then return sszNotImplemented.
+// engineTransport.
 type sszEngine struct {
 	client *enginehttp.Client
 
@@ -40,10 +39,6 @@ type sszEngine struct {
 	fcuMu sync.Mutex
 }
 
-func sszNotImplemented(op string) error {
-	return errors.Errorf("ssz-http engine transport: %s not implemented", op)
-}
-
 // Body-size directions for the engine_body_size_bytes metric (metrics.go).
 const (
 	directionRequest  = "request"
@@ -51,9 +46,9 @@ const (
 )
 
 // observeSSZBody records the SSZ wire size of one request/response body under the
-// endpoint and direction labels; the transport is always ssz-http (the JSON-RPC
-// client does not expose wire sizes). m must be non-nil — a decoded container's
-// SizeSSZ equals its wire byte length.
+// endpoint and direction labels; the transport label is always ssz-http (the
+// json-rpc side is recorded by the size round-tripper in engine_jsonrpc_size.go).
+// m must be non-nil — a decoded container's SizeSSZ equals its wire byte length.
 func observeSSZBody(method, direction string, m ssz.Marshaler) {
 	engineBodySize.WithLabelValues(method, transportSSZ, direction).Observe(float64(m.SizeSSZ()))
 }
@@ -115,6 +110,8 @@ func (e *sszEngine) NewPayload(ctx context.Context, payload interfaces.Execution
 	}
 
 	switch p := payload.Proto().(type) {
+	// Fulu reuses the Deneb payload shape, so a Deneb-typed payload maps to the
+	// Fulu envelope.
 	case *pb.ExecutionPayloadDeneb:
 		envelope = &enginev2.ExecutionPayloadEnvelopeFulu{
 			Payload:               p,
@@ -143,8 +140,8 @@ func (e *sszEngine) NewPayload(ctx context.Context, payload interfaces.Execution
 
 		ver = version.Gloas
 	default:
-		// Currently only support from Fulu (Osaka).
-		// Note that Fulu has same payload shape as Deneb.
+		// Only Fulu (Osaka) and Gloas (Amsterdam) envelopes exist in proto/engine/v2;
+		// pre-Fulu payloads have no v2 container.
 		return nil, errors.Errorf("ssz-http engine transport: no v2 ExecutionPayloadEnvelope container for payload type %T", p)
 	}
 
