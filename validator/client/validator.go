@@ -889,11 +889,18 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 	case eventClient.EventConnectionError:
 		log.WithError(errors.New(string(event.Data))).Error("Event stream interrupted")
 	case eventClient.EventHead:
-		log.Debug("Received head event")
 		head := &structs.HeadEvent{}
 		if err := json.Unmarshal(event.Data, head); err != nil {
 			log.WithError(err).Error("Failed to unmarshal head Event into JSON")
 		}
+
+		log.WithFields(logrus.Fields{
+			"slot":                         head.Slot,
+			"block_root":                   head.Block,
+			"previous_duty_dependent_root": head.PreviousDutyDependentRoot,
+			"current_duty_dependent_root":  head.CurrentDutyDependentRoot,
+		}).Debug("Received head event")
+
 		uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
 		if err != nil {
 			log.WithError(err).Error("Failed to parse slot")
@@ -906,7 +913,6 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 			}
 		}
 	case eventClient.EventHeadV2:
-		log.Debug("Received head_v2 event")
 		head := &structs.HeadEventV2{}
 		if err := json.Unmarshal(event.Data, head); err != nil {
 			log.WithError(err).Error("Failed to unmarshal head_v2 event into JSON")
@@ -916,6 +922,14 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 			log.Error("Received head_v2 event with no data")
 			return
 		}
+
+		log.WithFields(logrus.Fields{
+			"slot":                         head.Data.Slot,
+			"block_root":                   head.Data.Block,
+			"current_epoch_dependent_root": head.Data.CurrentEpochDependentRoot,
+			"next_epoch_dependent_root":    head.Data.NextEpochDependentRoot,
+		}).Debug("Received head_v2 event")
+
 		uintSlot, err := strconv.ParseUint(head.Data.Slot, 10, 64)
 		if err != nil {
 			log.WithError(err).Error("Failed to parse slot")
