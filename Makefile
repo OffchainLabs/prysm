@@ -63,16 +63,20 @@ endif
 #   make run beacon-chain -- --help            -> go run ./cmd/beacon-chain --help
 # Caveat: make eats '='-tokens as variable assignments, so after `--` pass '--flag value'
 # (not '--flag=value'); the catch-all `%` rule at the bottom absorbs those tokens as goals.
+# Build flags go in the `go run [build flags] pkg [args]` slot via goflags= (a command-line
+# variable assignment, so it stays out of the positional goals):
+#   make run beacon-chain goflags=-race -- --datadir /tmp
 RUN_GOALS := $(filter-out run,$(MAKECMDGOALS))
 RUN_BIN   := $(firstword $(RUN_GOALS))
 RUN_ARGS  := $(wordlist 2,$(words $(RUN_GOALS)),$(RUN_GOALS))
+goflags   ?=
 
 .PHONY: run
 run:
 	@bin="$(RUN_BIN)"; \
 	[ -n "$$bin" ] || { echo "❌ run: name a binary, e.g. 'make run beacon-chain -- --help' (one of: $(BINARIES))" >&2; exit 1; }; \
 	case " $(BINARIES) " in *" $$bin "*) ;; *) echo "❌ run: '$$bin' is not a binary (one of: $(BINARIES))" >&2; exit 1;; esac; \
-	exec $(GO) run "./cmd/$$bin" $(RUN_ARGS)
+	exec $(GO) run $(goflags) "./cmd/$$bin" $(RUN_ARGS)
 
 # ---------------------------------------------------------------------------
 # Test
@@ -244,7 +248,7 @@ help: ## Show this help
 	@printf '\033[0m'
 	@echo ""
 	@echo "Commands:"
-	@printf "  \033[36m%-48s\033[0m %s\n" "make run <bin> [-- <args>]"    "Run a binary"
+	@printf "  \033[36m%-48s\033[0m %s\n" "make run <bin> [goflags=<flags>] [-- <args>]"    "Run a binary"
 	@printf "  \033[36m%-48s\033[0m %s\n" "make test [$(TEST_KINDS)] [mode=no-race|race]" "Run tests (default: $(MODE_DEFAULT_test))"
 	@printf "  \033[36m%-48s\033[0m %s\n" "make build <bin> [-- <flags>]" "Build a binary"
 	@printf "  \033[36m%-48s\033[0m %s\n" "make gen [$(GEN_KINDS)]"                "Create generated code"
