@@ -24,9 +24,13 @@ const (
 
 var (
 	_ = EventStreamClient(&EventStream{})
-)
 
-var DefaultEventTopics = []string{EventHead, EventExecutionPayloadAvailable}
+	// LegacyEventTopicMapping maps newer event topics to their legacy equivalents for fallback purposes.
+	LegacyEventTopicMapping = map[string]string{
+		EventHeadV2: EventHead,
+	}
+	DefaultEventTopics = []string{EventHead, EventExecutionPayloadAvailable}
+)
 
 type EventStreamClient interface {
 	Subscribe(eventsChannel chan<- *Event)
