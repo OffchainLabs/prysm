@@ -6,7 +6,7 @@
 # Go
 ##############################################################################
 # gazelle:ignore
-load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
 load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
 load("@rules_proto//proto:defs.bzl", "proto_library")
 load("//proto:ssz_proto_library.bzl", "ssz_proto_files")
@@ -39,20 +39,26 @@ ssz_gen_marshal(
     objs = [
         "PayloadStatus",
         "ForkchoiceUpdateResponse",
+        "BodiesByHashRequest",
+        "BlobsRequest",
         "ExecutionPayloadEnvelopeFulu",
         "ForkchoiceUpdateFulu",
         "BuiltPayloadFulu",
         "ExecutionPayloadBodyFulu",
         "BodyEntryFulu",
+        "BodiesResponseFulu",
         "ExecutionPayloadEnvelopeGloas",
         "ForkchoiceUpdateGloas",
         "BuiltPayloadGloas",
         "ExecutionPayloadBodyGloas",
         "BodyEntryGloas",
+        "BodiesResponseGloas",
         "BlobAndProofV1",
         "BlobV1Entry",
+        "BlobsV1Response",
         "BlobAndProofV2",
         "BlobV2Entry",
+        "BlobsV2Response",
     ],
 )
 
@@ -79,7 +85,6 @@ go_proto_library(
 go_library(
     name = "go_default_library",
     srcs = [
-        "engine_v2_req_resp.go",
         "payload_status.go",
         ":ssz_generated_files",  # keep
     ],
@@ -92,12 +97,6 @@ go_library(
         "//proto/engine/v1:go_default_library",
         "@com_github_prysmaticlabs_fastssz//:go_default_library",
     ],  # keep
-)
-
-go_test(
-    name = "go_default_test",
-    srcs = ["engine_v2_req_resp_test.go"],
-    embed = [":go_default_library"],
 )
 
 ssz_proto_files(

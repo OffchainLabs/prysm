@@ -369,6 +369,226 @@ func (f *ForkchoiceUpdateResponse) HashTreeRootWith(hh *ssz.Hasher) (err error) 
 	return
 }
 
+// MarshalSSZ ssz marshals the BodiesByHashRequest object
+func (b *BodiesByHashRequest) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BodiesByHashRequest object to a target array
+func (b *BodiesByHashRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(4)
+
+	// Offset (0) 'BlockHashes'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.BlockHashes) * 32
+
+	// Field (0) 'BlockHashes'
+	if size := len(b.BlockHashes); size > 32 {
+		err = ssz.ErrListTooBigFn("--.BlockHashes", size, 32)
+		return
+	}
+	for ii := 0; ii < len(b.BlockHashes); ii++ {
+		if size := len(b.BlockHashes[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.BlockHashes[ii]", size, 32)
+			return
+		}
+		dst = append(dst, b.BlockHashes[ii]...)
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BodiesByHashRequest object
+func (b *BodiesByHashRequest) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 4 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'BlockHashes'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 4 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (0) 'BlockHashes'
+	{
+		buf = tail[o0:]
+		num, err := ssz.DivideInt2(len(buf), 32, 32)
+		if err != nil {
+			return err
+		}
+		b.BlockHashes = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(b.BlockHashes[ii]) == 0 {
+				b.BlockHashes[ii] = make([]byte, 0, len(buf[ii*32:(ii+1)*32]))
+			}
+			b.BlockHashes[ii] = append(b.BlockHashes[ii], buf[ii*32:(ii+1)*32]...)
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BodiesByHashRequest object
+func (b *BodiesByHashRequest) SizeSSZ() (size int) {
+	size = 4
+
+	// Field (0) 'BlockHashes'
+	size += len(b.BlockHashes) * 32
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BodiesByHashRequest object
+func (b *BodiesByHashRequest) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BodiesByHashRequest object with a hasher
+func (b *BodiesByHashRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'BlockHashes'
+	{
+		if size := len(b.BlockHashes); size > 32 {
+			err = ssz.ErrListTooBigFn("--.BlockHashes", size, 32)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.BlockHashes {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.Append(i)
+		}
+
+		numItems := uint64(len(b.BlockHashes))
+		hh.MerkleizeWithMixin(subIndx, numItems, 32)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the BlobsRequest object
+func (b *BlobsRequest) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BlobsRequest object to a target array
+func (b *BlobsRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(4)
+
+	// Offset (0) 'VersionedHashes'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.VersionedHashes) * 32
+
+	// Field (0) 'VersionedHashes'
+	if size := len(b.VersionedHashes); size > 128 {
+		err = ssz.ErrListTooBigFn("--.VersionedHashes", size, 128)
+		return
+	}
+	for ii := 0; ii < len(b.VersionedHashes); ii++ {
+		if size := len(b.VersionedHashes[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.VersionedHashes[ii]", size, 32)
+			return
+		}
+		dst = append(dst, b.VersionedHashes[ii]...)
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BlobsRequest object
+func (b *BlobsRequest) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 4 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'VersionedHashes'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 4 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (0) 'VersionedHashes'
+	{
+		buf = tail[o0:]
+		num, err := ssz.DivideInt2(len(buf), 32, 128)
+		if err != nil {
+			return err
+		}
+		b.VersionedHashes = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(b.VersionedHashes[ii]) == 0 {
+				b.VersionedHashes[ii] = make([]byte, 0, len(buf[ii*32:(ii+1)*32]))
+			}
+			b.VersionedHashes[ii] = append(b.VersionedHashes[ii], buf[ii*32:(ii+1)*32]...)
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BlobsRequest object
+func (b *BlobsRequest) SizeSSZ() (size int) {
+	size = 4
+
+	// Field (0) 'VersionedHashes'
+	size += len(b.VersionedHashes) * 32
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BlobsRequest object
+func (b *BlobsRequest) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BlobsRequest object with a hasher
+func (b *BlobsRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'VersionedHashes'
+	{
+		if size := len(b.VersionedHashes); size > 128 {
+			err = ssz.ErrListTooBigFn("--.VersionedHashes", size, 128)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.VersionedHashes {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.Append(i)
+		}
+
+		numItems := uint64(len(b.VersionedHashes))
+		hh.MerkleizeWithMixin(subIndx, numItems, 128)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the ExecutionPayloadEnvelopeFulu object
 func (e *ExecutionPayloadEnvelopeFulu) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(e)
@@ -1237,6 +1457,130 @@ func (b *BodyEntryFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	// Field (1) 'Body'
 	if err = b.Body.HashTreeRootWith(hh); err != nil {
 		return
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the BodiesResponseFulu object
+func (b *BodiesResponseFulu) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BodiesResponseFulu object to a target array
+func (b *BodiesResponseFulu) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(4)
+
+	// Offset (0) 'Entries'
+	dst = ssz.WriteOffset(dst, offset)
+	for ii := 0; ii < len(b.Entries); ii++ {
+		offset += 4
+		offset += b.Entries[ii].SizeSSZ()
+	}
+
+	// Field (0) 'Entries'
+	if size := len(b.Entries); size > 32 {
+		err = ssz.ErrListTooBigFn("--.Entries", size, 32)
+		return
+	}
+	{
+		offset = 4 * len(b.Entries)
+		for ii := 0; ii < len(b.Entries); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += b.Entries[ii].SizeSSZ()
+		}
+	}
+	for ii := 0; ii < len(b.Entries); ii++ {
+		if dst, err = b.Entries[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BodiesResponseFulu object
+func (b *BodiesResponseFulu) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 4 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'Entries'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 4 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (0) 'Entries'
+	{
+		buf = tail[o0:]
+		num, err := ssz.DecodeDynamicLength(buf, 32)
+		if err != nil {
+			return err
+		}
+		b.Entries = make([]*BodyEntryFulu, num)
+		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+			if b.Entries[indx] == nil {
+				b.Entries[indx] = new(BodyEntryFulu)
+			}
+			if err = b.Entries[indx].UnmarshalSSZ(buf); err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BodiesResponseFulu object
+func (b *BodiesResponseFulu) SizeSSZ() (size int) {
+	size = 4
+
+	// Field (0) 'Entries'
+	for ii := 0; ii < len(b.Entries); ii++ {
+		size += 4
+		size += b.Entries[ii].SizeSSZ()
+	}
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BodiesResponseFulu object
+func (b *BodiesResponseFulu) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BodiesResponseFulu object with a hasher
+func (b *BodiesResponseFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Entries'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.Entries))
+		if num > 32 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.Entries {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 32)
 	}
 
 	hh.Merkleize(indx)
@@ -2220,6 +2564,130 @@ func (b *BodyEntryGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
+// MarshalSSZ ssz marshals the BodiesResponseGloas object
+func (b *BodiesResponseGloas) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BodiesResponseGloas object to a target array
+func (b *BodiesResponseGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(4)
+
+	// Offset (0) 'Entries'
+	dst = ssz.WriteOffset(dst, offset)
+	for ii := 0; ii < len(b.Entries); ii++ {
+		offset += 4
+		offset += b.Entries[ii].SizeSSZ()
+	}
+
+	// Field (0) 'Entries'
+	if size := len(b.Entries); size > 32 {
+		err = ssz.ErrListTooBigFn("--.Entries", size, 32)
+		return
+	}
+	{
+		offset = 4 * len(b.Entries)
+		for ii := 0; ii < len(b.Entries); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += b.Entries[ii].SizeSSZ()
+		}
+	}
+	for ii := 0; ii < len(b.Entries); ii++ {
+		if dst, err = b.Entries[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BodiesResponseGloas object
+func (b *BodiesResponseGloas) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 4 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'Entries'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 4 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (0) 'Entries'
+	{
+		buf = tail[o0:]
+		num, err := ssz.DecodeDynamicLength(buf, 32)
+		if err != nil {
+			return err
+		}
+		b.Entries = make([]*BodyEntryGloas, num)
+		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+			if b.Entries[indx] == nil {
+				b.Entries[indx] = new(BodyEntryGloas)
+			}
+			if err = b.Entries[indx].UnmarshalSSZ(buf); err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BodiesResponseGloas object
+func (b *BodiesResponseGloas) SizeSSZ() (size int) {
+	size = 4
+
+	// Field (0) 'Entries'
+	for ii := 0; ii < len(b.Entries); ii++ {
+		size += 4
+		size += b.Entries[ii].SizeSSZ()
+	}
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BodiesResponseGloas object
+func (b *BodiesResponseGloas) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BodiesResponseGloas object with a hasher
+func (b *BodiesResponseGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Entries'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.Entries))
+		if num > 32 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.Entries {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 32)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the BlobAndProofV1 object
 func (b *BlobAndProofV1) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(b)
@@ -2371,6 +2839,113 @@ func (b *BlobV1Entry) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	// Field (1) 'Contents'
 	if err = b.Contents.HashTreeRootWith(hh); err != nil {
 		return
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the BlobsV1Response object
+func (b *BlobsV1Response) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BlobsV1Response object to a target array
+func (b *BlobsV1Response) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(4)
+
+	// Offset (0) 'Entries'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.Entries) * 131121
+
+	// Field (0) 'Entries'
+	if size := len(b.Entries); size > 128 {
+		err = ssz.ErrListTooBigFn("--.Entries", size, 128)
+		return
+	}
+	for ii := 0; ii < len(b.Entries); ii++ {
+		if dst, err = b.Entries[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BlobsV1Response object
+func (b *BlobsV1Response) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 4 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'Entries'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 4 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (0) 'Entries'
+	{
+		buf = tail[o0:]
+		num, err := ssz.DivideInt2(len(buf), 131121, 128)
+		if err != nil {
+			return err
+		}
+		b.Entries = make([]*BlobV1Entry, num)
+		for ii := 0; ii < num; ii++ {
+			if b.Entries[ii] == nil {
+				b.Entries[ii] = new(BlobV1Entry)
+			}
+			if err = b.Entries[ii].UnmarshalSSZ(buf[ii*131121 : (ii+1)*131121]); err != nil {
+				return err
+			}
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BlobsV1Response object
+func (b *BlobsV1Response) SizeSSZ() (size int) {
+	size = 4
+
+	// Field (0) 'Entries'
+	size += len(b.Entries) * 131121
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BlobsV1Response object
+func (b *BlobsV1Response) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BlobsV1Response object with a hasher
+func (b *BlobsV1Response) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Entries'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.Entries))
+		if num > 128 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.Entries {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 128)
 	}
 
 	hh.Merkleize(indx)
@@ -2602,6 +3177,130 @@ func (b *BlobV2Entry) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	// Field (1) 'Contents'
 	if err = b.Contents.HashTreeRootWith(hh); err != nil {
 		return
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the BlobsV2Response object
+func (b *BlobsV2Response) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BlobsV2Response object to a target array
+func (b *BlobsV2Response) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(4)
+
+	// Offset (0) 'Entries'
+	dst = ssz.WriteOffset(dst, offset)
+	for ii := 0; ii < len(b.Entries); ii++ {
+		offset += 4
+		offset += b.Entries[ii].SizeSSZ()
+	}
+
+	// Field (0) 'Entries'
+	if size := len(b.Entries); size > 128 {
+		err = ssz.ErrListTooBigFn("--.Entries", size, 128)
+		return
+	}
+	{
+		offset = 4 * len(b.Entries)
+		for ii := 0; ii < len(b.Entries); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += b.Entries[ii].SizeSSZ()
+		}
+	}
+	for ii := 0; ii < len(b.Entries); ii++ {
+		if dst, err = b.Entries[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BlobsV2Response object
+func (b *BlobsV2Response) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 4 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'Entries'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 4 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (0) 'Entries'
+	{
+		buf = tail[o0:]
+		num, err := ssz.DecodeDynamicLength(buf, 128)
+		if err != nil {
+			return err
+		}
+		b.Entries = make([]*BlobV2Entry, num)
+		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+			if b.Entries[indx] == nil {
+				b.Entries[indx] = new(BlobV2Entry)
+			}
+			if err = b.Entries[indx].UnmarshalSSZ(buf); err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BlobsV2Response object
+func (b *BlobsV2Response) SizeSSZ() (size int) {
+	size = 4
+
+	// Field (0) 'Entries'
+	for ii := 0; ii < len(b.Entries); ii++ {
+		size += 4
+		size += b.Entries[ii].SizeSSZ()
+	}
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BlobsV2Response object
+func (b *BlobsV2Response) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BlobsV2Response object with a hasher
+func (b *BlobsV2Response) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Entries'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.Entries))
+		if num > 128 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.Entries {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 128)
 	}
 
 	hh.Merkleize(indx)

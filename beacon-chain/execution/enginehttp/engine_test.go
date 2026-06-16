@@ -107,7 +107,7 @@ func TestGetPayload(t *testing.T) {
 func TestGetPayloadBodiesByHash(t *testing.T) {
 	respSSZ, err := (&enginev2.BodiesResponseGloas{}).MarshalSSZ()
 	require.NoError(t, err)
-	req := &enginev2.BodiesByHashRequest{make([]byte, 32)}
+	req := &enginev2.BodiesByHashRequest{BlockHashes: [][]byte{make([]byte, 32)}}
 	reqSSZ, err := req.MarshalSSZ()
 	require.NoError(t, err)
 

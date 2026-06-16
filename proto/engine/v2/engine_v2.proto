@@ -72,6 +72,25 @@ message ForkchoiceUpdateResponse {
   ];
 }
 
+// BodiesByHashRequest is the SSZ request body for POST /{fork}/bodies/hash.
+// (The range variant uses ?from&count query params, no SSZ body.)
+message BodiesByHashRequest {
+  // List[Hash32, MAX_BODIES_REQUEST]; MAX_BODIES_REQUEST = 32.
+  repeated bytes block_hashes = 1 [
+    (ethereum.eth.ext.ssz_size) = "?,32",
+    (ethereum.eth.ext.ssz_max) = "32"
+  ];
+}
+
+// BlobsRequest is the SSZ request body for POST /blobs/v{1,2,3}.
+// It includes BlobsV1Request, BlobsV2Request and BlobsV3Request.
+message BlobsRequest {
+  // List[VersionedHash, MAX_BLOBS_REQUEST]; MAX_BLOBS_REQUEST = 128.
+  repeated bytes versioned_hashes = 1 [
+    (ethereum.eth.ext.ssz_size) = "?,32",
+    (ethereum.eth.ext.ssz_max) = "128"
+  ];
+}
 
 //////////////////////////////////////////////////////////////////////////////
 // Fulu (EL "Osaka") containers
@@ -124,6 +143,11 @@ message BodyEntryFulu {
   ExecutionPayloadBodyFulu body = 2;
 }
 
+// BodiesResponseFulu is the response body for /osaka/bodies (hash and range).
+message BodiesResponseFulu {
+  // List[BodyEntry, MAX_BODIES_REQUEST]; MAX_BODIES_REQUEST = 32.
+  repeated BodyEntryFulu entries = 1 [ (ethereum.eth.ext.ssz_max) = "32" ];
+}
 
 //////////////////////////////////////////////////////////////////////////////
 // Gloas (EL "Amsterdam") containers
@@ -182,6 +206,10 @@ message BodyEntryGloas {
   ExecutionPayloadBodyGloas body = 2;
 }
 
+// BodiesResponseGloas is the response body for /amsterdam/bodies.
+message BodiesResponseGloas {
+  repeated BodyEntryGloas entries = 1 [ (ethereum.eth.ext.ssz_max) = "32" ];
+}
 
 //////////////////////////////////////////////////////////////////////////////
 // Blob-pool endpoints (POST /blobs/v{1,2,3}) — version-scoped, not fork-scoped
@@ -200,6 +228,11 @@ message BlobV1Entry {
   BlobAndProofV1 contents = 2;
 }
 
+// BlobsV1Response is the 200 body for POST /blobs/v1 (204 = cannot serve).
+message BlobsV1Response {
+  // List[BlobV1Entry, MAX_BLOBS_REQUEST]; MAX_BLOBS_REQUEST = 128.
+  repeated BlobV1Entry entries = 1 [ (ethereum.eth.ext.ssz_max) = "128" ];
+}
 
 // BlobAndProofV2 is a whole blob with CELLS_PER_EXT_BLOB cell proofs (Osaka,
 // /blobs/v2 and /blobs/v3).
@@ -220,3 +253,8 @@ message BlobV2Entry {
   BlobAndProofV2 contents = 2;
 }
 
+// BlobsV2Response is the 200 body for POST /blobs/v2 (all-or-nothing) and
+// POST /blobs/v3 (per-entry available flag for partial responses).
+message BlobsV2Response {
+  repeated BlobV2Entry entries = 1 [ (ethereum.eth.ext.ssz_max) = "128" ];
+}

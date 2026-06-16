@@ -206,12 +206,14 @@ func TestBodiesEntries(t *testing.T) {
 	tx := []byte{0xde, 0xad}
 	wd := []*pb.Withdrawal{{Index: 7}}
 	resp := &enginev2.BodiesResponseGloas{
-		{Available: true, Body: &enginev2.ExecutionPayloadBodyGloas{
-			Transactions:    [][]byte{tx},
-			Withdrawals:     wd,
-			BlockAccessList: []byte{0x01, 0x02},
-		}},
-		{Available: false, Body: &enginev2.ExecutionPayloadBodyGloas{}},
+		Entries: []*enginev2.BodyEntryGloas{
+			{Available: true, Body: &enginev2.ExecutionPayloadBodyGloas{
+				Transactions:    [][]byte{tx},
+				Withdrawals:     wd,
+				BlockAccessList: []byte{0x01, 0x02},
+			}},
+			{Available: false, Body: &enginev2.ExecutionPayloadBodyGloas{}},
+		},
 	}
 
 	out, err := bodiesEntries(resp)
@@ -286,9 +288,9 @@ func newTestSSZEngine(t *testing.T, srvURL string, caps *enginehttp.Capabilities
 // sszBodiesGloas marshals a BodiesResponseGloas with n available=false entries —
 // the per-entry payload is irrelevant here; only the count drives alignment.
 func sszBodiesGloas(t *testing.T, n uint64) []byte {
-	resp := make(enginev2.BodiesResponseGloas, n)
-	for i := range resp {
-		resp[i] = &enginev2.BodyEntryGloas{Body: &enginev2.ExecutionPayloadBodyGloas{}}
+	resp := &enginev2.BodiesResponseGloas{Entries: make([]*enginev2.BodyEntryGloas, n)}
+	for i := range resp.Entries {
+		resp.Entries[i] = &enginev2.BodyEntryGloas{Body: &enginev2.ExecutionPayloadBodyGloas{}}
 	}
 	b, err := resp.MarshalSSZ()
 	require.NoError(t, err)
@@ -304,9 +306,9 @@ func TestGetPayloadBodiesByHash_Chunks(t *testing.T) {
 		require.NoError(t, err)
 		req := &enginev2.BodiesByHashRequest{}
 		require.NoError(t, req.UnmarshalSSZ(body))
-		sizes = append(sizes, len(*req))
+		sizes = append(sizes, len(req.BlockHashes))
 		w.Header().Set("Content-Type", "application/octet-stream")
-		_, _ = w.Write(sszBodiesGloas(t, uint64(len(*req))))
+		_, _ = w.Write(sszBodiesGloas(t, uint64(len(req.BlockHashes))))
 	})
 	e := newTestSSZEngine(t, srv.URL, &enginehttp.Capabilities{Limits: map[string]uint64{limitBodiesMaxCount: 2}})
 
