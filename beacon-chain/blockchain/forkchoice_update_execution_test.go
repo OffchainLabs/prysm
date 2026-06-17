@@ -84,7 +84,7 @@ func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
 		block: wsb,
 		state: st,
 	}
-	service.cfg.PayloadIDCache.Set(2, [32]byte{2}, [8]byte{1})
+	service.cfg.PayloadIDCache.Set(2, [32]byte{2}, true, [8]byte{1})
 	b = util.NewBeaconBlock()
 	b.Block.Slot = 3
 	util.SaveBlock(t, ctx, service.cfg.BeaconDB, b)
@@ -96,7 +96,7 @@ func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
 		block: wsb,
 		state: st,
 	}
-	service.cfg.PayloadIDCache.Set(2, [32]byte{2}, [8]byte{1})
+	service.cfg.PayloadIDCache.Set(2, [32]byte{2}, true, [8]byte{1})
 	args := &fcuConfig{
 		headState:     st,
 		headRoot:      r1,
@@ -105,7 +105,7 @@ func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
 	}
 	service.forkchoiceUpdateWithExecution(ctx, args)
 
-	payloadID, has := service.cfg.PayloadIDCache.PayloadID(2, [32]byte{2})
+	payloadID, has := service.cfg.PayloadIDCache.PayloadID(2, [32]byte{2}, true)
 	require.Equal(t, true, has)
 	require.Equal(t, primitives.PayloadID{1}, payloadID)
 }
@@ -150,7 +150,7 @@ func TestService_forkchoiceUpdateWithExecution_SameHeadRootNewProposer(t *testin
 	service.head.root = r
 	service.head.block = sb
 	service.head.state = st
-	service.cfg.PayloadIDCache.Set(service.CurrentSlot()+1, [32]byte{} /* root */, [8]byte{})
+	service.cfg.PayloadIDCache.Set(service.CurrentSlot()+1, [32]byte{} /* root */, true, [8]byte{})
 	args := &fcuConfig{
 		headState:     st,
 		headBlock:     sb,

@@ -208,10 +208,10 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 	}
 	var pId [8]byte
 	copy(pId[:], pid[:])
-	s.cfg.PayloadIDCache.Set(currentSlot+1, hr, pId)
+	s.cfg.PayloadIDCache.Set(currentSlot+1, hr, false, pId)
 }
 
-func (s *Service) fcuFromReorgData(hr [32]byte, hash [32]byte, attr payloadattribute.Attributer, proposingSlot primitives.Slot) {
+func (s *Service) fcuFromReorgData(hr [32]byte, hash [32]byte, full bool, attr payloadattribute.Attributer, proposingSlot primitives.Slot) {
 	pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, hash, attr)
 	if err != nil {
 		log.WithError(err).Error("Could not update forkchoice with engine")
@@ -224,7 +224,7 @@ func (s *Service) fcuFromReorgData(hr [32]byte, hash [32]byte, attr payloadattri
 	}
 	var pId [8]byte
 	copy(pId[:], pid[:])
-	s.cfg.PayloadIDCache.Set(proposingSlot, hr, pId)
+	s.cfg.PayloadIDCache.Set(proposingSlot, hr, full, pId)
 }
 
 // This saves head and prunes atts from the pool only if the head is new and if we are either

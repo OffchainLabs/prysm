@@ -73,7 +73,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		"slot":           slot,
 		"headRoot":       fmt.Sprintf("%#x", parentRoot),
 	}
-	payloadId, ok := vs.PayloadIDCache.PayloadID(slot, parentRoot)
+	payloadId, ok := vs.PayloadIDCache.PayloadID(slot, parentRoot, parentFull)
 
 	val := cache.ProposerPreference{ValidatorIndex: proposerId}
 	dependentRoot, err := helpers.ProposerDependentRootOrGenesis(ctx, vs.BeaconDB, st, slot)

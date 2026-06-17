@@ -83,7 +83,7 @@ func Test_NotifyForkchoiceUpdate_GetPayloadAttrErrorCanContinue(t *testing.T) {
 		headBlock: b,
 	}
 
-	service.cfg.PayloadIDCache.Set(1, [32]byte{}, [8]byte{})
+	service.cfg.PayloadIDCache.Set(1, [32]byte{}, true, [8]byte{})
 	got, err := service.notifyForkchoiceUpdate(ctx, arg)
 	require.NoError(t, err)
 	require.IsNil(t, got)
@@ -725,7 +725,7 @@ func Test_GetPayloadAttribute(t *testing.T) {
 	// to --suggested-fee-recipient (burn by default).
 	service.cfg.SubscribedValidatorsCache.Add(0)
 	slot := primitives.Slot(1)
-	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
+	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
 	require.Equal(t, false, attr.IsEmpty())
 	require.Equal(t, params.BeaconConfig().EthBurnAddressHex, common.BytesToAddress(attr.SuggestedFeeRecipient()).String())
@@ -734,7 +734,7 @@ func Test_GetPayloadAttribute(t *testing.T) {
 	// the attribute carries it.
 	suggestedAddr := common.HexToAddress("123")
 	service.cfg.ProposerPreferencesCache.Set(cache.ProposerPreference{ValidatorIndex: 0, FeeRecipient: primitives.ExecutionAddress(suggestedAddr)})
-	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
+	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
 	require.Equal(t, false, attr.IsEmpty())
 	require.Equal(t, suggestedAddr, common.BytesToAddress(attr.SuggestedFeeRecipient()))
@@ -767,7 +767,7 @@ func Test_GetPayloadAttributeV2(t *testing.T) {
 	// to --suggested-fee-recipient (burn by default).
 	service.cfg.SubscribedValidatorsCache.Add(0)
 	slot := primitives.Slot(1)
-	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
+	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
 	require.Equal(t, false, attr.IsEmpty())
 	require.Equal(t, params.BeaconConfig().EthBurnAddressHex, common.BytesToAddress(attr.SuggestedFeeRecipient()).String())
@@ -778,7 +778,7 @@ func Test_GetPayloadAttributeV2(t *testing.T) {
 	// With a per-validator default fee recipient cached, the attribute carries it.
 	suggestedAddr := common.HexToAddress("123")
 	service.cfg.ProposerPreferencesCache.Set(cache.ProposerPreference{ValidatorIndex: 0, FeeRecipient: primitives.ExecutionAddress(suggestedAddr)})
-	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
+	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
 	require.Equal(t, false, attr.IsEmpty())
 	require.Equal(t, suggestedAddr, common.BytesToAddress(attr.SuggestedFeeRecipient()))
@@ -817,7 +817,7 @@ func Test_GetPayloadAttributeV3(t *testing.T) {
 			// back to --suggested-fee-recipient (burn by default).
 			service.cfg.SubscribedValidatorsCache.Add(0)
 			slot := primitives.Slot(1)
-			service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
+			service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 			attr = service.getPayloadAttribute(ctx, test.st, slot, params.BeaconConfig().ZeroHash[:], true)
 			require.Equal(t, false, attr.IsEmpty())
 			require.Equal(t, params.BeaconConfig().EthBurnAddressHex, common.BytesToAddress(attr.SuggestedFeeRecipient()).String())
@@ -833,7 +833,7 @@ func Test_GetPayloadAttributeV3(t *testing.T) {
 			// With a per-validator default fee recipient cached, the attribute carries it.
 			suggestedAddr := common.HexToAddress("123")
 			service.cfg.ProposerPreferencesCache.Set(cache.ProposerPreference{ValidatorIndex: 0, FeeRecipient: primitives.ExecutionAddress(suggestedAddr)})
-			service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
+			service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 			attr = service.getPayloadAttribute(ctx, test.st, slot, params.BeaconConfig().ZeroHash[:], true)
 			require.Equal(t, false, attr.IsEmpty())
 			require.Equal(t, suggestedAddr, common.BytesToAddress(attr.SuggestedFeeRecipient()))
