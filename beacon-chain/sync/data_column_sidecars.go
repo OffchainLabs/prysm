@@ -1011,6 +1011,21 @@ func verifyByRootDataColumnSidecars(
 	blockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
 	roDataColumns []blocks.RODataColumn,
 ) ([]blocks.VerifiedRODataColumn, error) {
+	for i := range roDataColumns {
+		if !roDataColumns[i].IsGloas() {
+			continue
+		}
+		block, ok := blockByRoot[roDataColumns[i].BlockRoot()]
+		if !ok {
+			return nil, fmt.Errorf("no local block for sidecar root %#x: %w", roDataColumns[i].BlockRoot(), ErrSidecarHeaderMismatch)
+		}
+		commitments, err := block.Block().Body().BlobKzgCommitments()
+		if err != nil {
+			return nil, errors.Wrap(err, "get bid blob kzg commitments")
+		}
+		roDataColumns[i].SetBidCommitments(commitments)
+	}
+
 	verifier := newVerifier(roDataColumns, verification.ByRootRequestDataColumnSidecarRequirements)
 
 	if err := verifier.ValidFields(); err != nil {
