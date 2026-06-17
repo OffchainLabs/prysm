@@ -2,7 +2,6 @@ package blocks
 
 import (
 	"bytes"
-	"fmt"
 	"iter"
 	"slices"
 
@@ -339,15 +338,6 @@ func (p *PartialDataColumn) publishActions(
 func (p *PartialDataColumn) recordHeaderSent(peerID peer.ID, includeHeader bool, headerSentCache map[peer.ID]bool) {
 	prev := headerSentCache[peerID]
 	headerSentCache[peerID] = prev || includeHeader
-	if prev != headerSentCache[peerID] {
-		log.WithFields(logrus.Fields{
-			"peer":            peerID,
-			"index":           p.Index,
-			"group":           fmt.Sprintf("%#x", p.groupID),
-			"includeHeader":   includeHeader,
-			"headerSentCache": headerSentCache[peerID],
-		}).Debug("Partial column header sent cache updated")
-	}
 }
 
 func isEagerPush(requestedMessage bool, peerState PartialDataColumnPeerState) bool {
