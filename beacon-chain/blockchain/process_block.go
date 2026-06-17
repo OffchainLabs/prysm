@@ -149,7 +149,7 @@ func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBloc
 		if err != nil {
 			return nil, false, errors.Wrap(err, "could not get block pre state")
 		}
-		return blockPreState, false, nil
+		return blockPreState, false, nil // Returning false here is fine since there are no envelopes pre-Gloas
 	}
 	parentRoot := b.Block().ParentRoot()
 	full, err := consensusblocks.BlockBuiltOnEnvelope(envelopes[0], b)
@@ -171,14 +171,6 @@ func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBloc
 		}
 		if _, err := s.notifyNewEnvelope(ctx, blockPreState, env); err != nil {
 			return nil, false, err
-		}
-	} else if !s.cfg.ForkChoiceStore.HasFullNode(parentRoot) {
-		env, err := envelopes[0].Envelope()
-		if err != nil {
-			return nil, false, err
-		}
-		if err := s.cfg.ForkChoiceStore.InsertPayload(env); err != nil {
-			return nil, false, errors.Wrap(err, "could not insert payload to fork choice store")
 		}
 	}
 	return blockPreState, true, nil
