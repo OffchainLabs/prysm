@@ -20,7 +20,7 @@ func TestGetFork_Nominal(t *testing.T) {
 	defer ctrl.Finish()
 
 	stateForkResponseJson := structs.GetStateForkResponse{}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	expected := structs.GetStateForkResponse{
 		Data: &structs.Fork{
@@ -56,7 +56,7 @@ func TestGetFork_Invalid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	ctx := t.Context()
 
@@ -83,7 +83,7 @@ func TestGetHeaders_Nominal(t *testing.T) {
 	defer ctrl.Finish()
 
 	blockHeadersResponseJson := structs.GetBlockHeadersResponse{}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	expected := structs.GetBlockHeadersResponse{
 		Data: []*structs.SignedBeaconBlockHeaderContainer{
@@ -123,7 +123,7 @@ func TestGetHeaders_Invalid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	ctx := t.Context()
 
@@ -170,7 +170,7 @@ func TestGetLiveness_Nominal(t *testing.T) {
 
 	ctx := t.Context()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		livenessEndpoint,
@@ -197,7 +197,7 @@ func TestGetLiveness_Invalid(t *testing.T) {
 
 	ctx := t.Context()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		livenessEndpoint,
@@ -237,7 +237,7 @@ func TestGetIsSyncing_Nominal(t *testing.T) {
 			defer ctrl.Finish()
 
 			syncingResponseJson := structs.SyncStatusResponse{}
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 
 			expected := structs.SyncStatusResponse{
 				Data: &structs.SyncStatusResponseData{
@@ -274,7 +274,7 @@ func TestGetIsSyncing_Invalid(t *testing.T) {
 	defer ctrl.Finish()
 
 	syncingResponseJson := structs.SyncStatusResponse{}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	ctx := t.Context()
 

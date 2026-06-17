@@ -141,13 +141,6 @@ var (
 		Name:  "tls-key",
 		Usage: "Key for secure gRPC. Pass this and the tls-cert flag in order to use gRPC securely.",
 	}
-	// HTTPModules define the set of enabled HTTP APIs.
-	HTTPModules = &cli.StringFlag{
-		Name:  "http-modules",
-		Usage: "Comma-separated list of API module names. Possible values: `" + PrysmAPIModule + `,` + EthAPIModule + "`.",
-		Value: PrysmAPIModule + `,` + EthAPIModule,
-	}
-
 	// HTTPServerHost specifies a HTTP server host for the validator client.
 	HTTPServerHost = &cli.StringFlag{
 		Name:    "http-host",
