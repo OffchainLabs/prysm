@@ -766,6 +766,16 @@ func TestServer_SubscribeCommitteeSubnets_InvalidRequest(t *testing.T) {
 			},
 			err: "validator_indices length must match slots length when provided",
 		},
+		{
+			name: "committees_at_slot length does not match slots",
+			req: &ethpb.CommitteeSubnetsSubscribeRequest{
+				Slots:            []primitives.Slot{1, 2},
+				CommitteeIds:     []primitives.CommitteeIndex{0, 0},
+				IsAggregator:     []bool{false, false},
+				CommitteesAtSlot: []uint64{1},
+			},
+			err: "committees_at_slot length must match slots length when provided",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -812,6 +822,36 @@ func TestServer_SubscribeCommitteeSubnets_TracksValidatorIndices(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, true, attesterServer.SubscribedValidatorsCache.Has(3))
 	assert.Equal(t, true, attesterServer.SubscribedValidatorsCache.Has(11))
+}
+
+func TestServer_SubscribeCommitteeSubnets_RejectsUnknownValidator(t *testing.T) {
+	validators := make([]*ethpb.Validator, 64)
+	for i := range validators {
+		validators[i] = &ethpb.Validator{
+			ExitEpoch:        params.BeaconConfig().FarFutureEpoch,
+			EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance,
+		}
+	}
+	state, err := util.NewBeaconState()
+	require.NoError(t, err)
+	require.NoError(t, state.SetValidators(validators))
+
+	attesterServer := &Server{
+		HeadFetcher:               &mock.ChainService{State: state},
+		P2P:                       &mockp2p.MockBroadcaster{},
+		AttPool:                   attestations.NewPool(),
+		OperationNotifier:         (&mock.ChainService{}).OperationNotifier(),
+		SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
+	}
+	// Index 100 is out of bounds for the 64-validator head state.
+	_, err = attesterServer.SubscribeCommitteeSubnets(t.Context(), &ethpb.CommitteeSubnetsSubscribeRequest{
+		Slots:            []primitives.Slot{1},
+		CommitteeIds:     []primitives.CommitteeIndex{0},
+		IsAggregator:     []bool{false},
+		ValidatorIndices: []primitives.ValidatorIndex{100},
+	})
+	require.ErrorContains(t, "Could not get validator", err)
+	assert.Equal(t, false, attesterServer.SubscribedValidatorsCache.Has(100))
 }
 
 func TestServer_SubscribeCommitteeSubnets_MultipleSlots(t *testing.T) {

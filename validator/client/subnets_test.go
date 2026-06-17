@@ -83,8 +83,8 @@ func TestSubscribeToSubnets_AggregatorEvaluatedPerValidator(t *testing.T) {
 	}
 
 	var captured *ethpb.CommitteeSubnetsSubscribeRequest
-	client.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, req *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+	client.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, req *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
 			captured = req
 			return &emptypb.Empty{}, nil
 		})
@@ -96,13 +96,15 @@ func TestSubscribeToSubnets_AggregatorEvaluatedPerValidator(t *testing.T) {
 	// both entries collapse to the first validator's outcome. They must not.
 	assert.Equal(t, true, captured.IsAggregator[0], "pkA (sigAgg) should be aggregator")
 	assert.Equal(t, false, captured.IsAggregator[1], "pkB (sigNotAgg) should not be aggregator")
+	// ValidatorIndices are built caller-side, 1-to-1 with slots in duty order.
+	require.DeepEqual(t, []primitives.ValidatorIndex{1, 2}, captured.ValidatorIndices)
 
 	// Reversing the duty order must not flip outcomes either — i.e. neither
 	// the first nor the second call may poison a shared cache.
 	duties.CurrentEpochDuties[0], duties.CurrentEpochDuties[1] = duties.CurrentEpochDuties[1], duties.CurrentEpochDuties[0]
 	captured = nil
-	client.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, req *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+	client.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, req *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
 			captured = req
 			return &emptypb.Empty{}, nil
 		})
@@ -110,6 +112,7 @@ func TestSubscribeToSubnets_AggregatorEvaluatedPerValidator(t *testing.T) {
 	require.NotNil(t, captured)
 	assert.Equal(t, false, captured.IsAggregator[0], "pkB still not aggregator when evaluated first")
 	assert.Equal(t, true, captured.IsAggregator[1], "pkA still aggregator when evaluated second")
+	require.DeepEqual(t, []primitives.ValidatorIndex{2, 1}, captured.ValidatorIndices)
 }
 
 // pickDistinguishingProofs returns two stub selection proofs that map to opposite isAggregator outcomes.

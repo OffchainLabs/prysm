@@ -2,9 +2,9 @@ package validator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -135,46 +136,43 @@ func (vs *Server) SubscribeCommitteeSubnets(ctx context.Context, req *ethpb.Comm
 	if len(req.Slots) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "no attester slots provided")
 	}
-	// validator_indices is 1-to-1 with slots when provided; older VCs may omit
-	// it and the BN treats an empty list as "no attached-set update".
+	// validator_indices and committees_at_slot are 1-to-1 with slots when provided;
+	// older VCs may omit them. An empty validator_indices is "no attached-set update".
 	if len(req.ValidatorIndices) > 0 && len(req.ValidatorIndices) != len(req.Slots) {
 		return nil, status.Error(codes.InvalidArgument, "validator_indices length must match slots length when provided")
 	}
-	for _, idx := range req.ValidatorIndices {
-		vs.SubscribedValidatorsCache.Add(idx)
+	if len(req.CommitteesAtSlot) > 0 && len(req.CommitteesAtSlot) != len(req.Slots) {
+		return nil, status.Error(codes.InvalidArgument, "committees_at_slot length must match slots length when provided")
 	}
-
-	fetchValsLen := func(slot primitives.Slot) (uint64, error) {
-		wantedEpoch := slots.ToEpoch(slot)
-		vals, err := vs.HeadFetcher.HeadValidatorsIndices(ctx, wantedEpoch)
+	if len(req.ValidatorIndices) > 0 {
+		st, err := vs.HeadFetcher.HeadStateReadOnly(ctx)
 		if err != nil {
-			return 0, err
+			return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
 		}
-		return uint64(len(vals)), nil
-	}
-
-	// Request the head validator indices of epoch represented by the first requested
-	// slot.
-	currValsLen, err := fetchValsLen(req.Slots[0])
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not retrieve head validator length: %v", err)
-	}
-	currEpoch := slots.ToEpoch(req.Slots[0])
-
-	for i := 0; i < len(req.Slots); i++ {
-		// If epoch has changed, re-request active validators length
-		if currEpoch != slots.ToEpoch(req.Slots[i]) {
-			currValsLen, err = fetchValsLen(req.Slots[i])
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "Could not retrieve head validator length: %v", err)
+		for _, idx := range req.ValidatorIndices {
+			if _, err := st.ValidatorAtIndexReadOnly(idx); err != nil {
+				if errors.Is(err, mvslice.ErrOutOfBounds) {
+					return nil, status.Errorf(codes.InvalidArgument, "Could not get validator: %v", err)
+				}
+				return nil, status.Errorf(codes.Internal, "Could not get validator: %v", err)
 			}
-			currEpoch = slots.ToEpoch(req.Slots[i])
+			vs.SubscribedValidatorsCache.Add(idx)
 		}
-		subnet := helpers.ComputeSubnetFromCommitteeAndSlot(currValsLen, req.CommitteeIds[i], req.Slots[i])
-		cache.SubnetIDs.AddAttesterSubnetID(req.Slots[i], subnet)
-		if req.IsAggregator[i] {
-			cache.SubnetIDs.AddAggregatorSubnetID(req.Slots[i], subnet)
+	}
+
+	subs := make([]core.SubnetSubscription, len(req.Slots))
+	for i := range req.Slots {
+		subs[i] = core.SubnetSubscription{
+			Slot:           req.Slots[i],
+			CommitteeIndex: req.CommitteeIds[i],
+			IsAggregator:   req.IsAggregator[i],
 		}
+		if len(req.CommitteesAtSlot) == len(req.Slots) {
+			subs[i].CommitteesAtSlot = req.CommitteesAtSlot[i]
+		}
+	}
+	if err := core.ComputeAndCacheCommitteeSubnets(ctx, vs.HeadFetcher, subs); err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not retrieve head validator length: %v", err)
 	}
 
 	return &emptypb.Empty{}, nil

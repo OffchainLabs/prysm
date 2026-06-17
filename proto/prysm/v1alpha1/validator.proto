@@ -1093,6 +1093,8 @@ message CommitteeSubnetsSubscribeRequest {
         "github.com/OffchainLabs/prysm/v7/consensus-types/"
         "primitives.ValidatorIndex"
   ];
+  // Committees-at-slot, 1-to-1 with slots. Optional; empty = BN recomputes from state.
+  repeated uint64 committees_at_slot = 5;
 }
 
 // ValidatorParticipation stores participation metrics during a given epoch.

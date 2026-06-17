@@ -20,7 +20,8 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Valida
 	subscribeSlots := make([]primitives.Slot, 0, total)
 	subscribeCommitteeIndices := make([]primitives.CommitteeIndex, 0, total)
 	subscribeIsAggregator := make([]bool, 0, total)
-	activeDuties := make([]*ethpb.ValidatorDuty, 0, total)
+	subscribeValidatorIndices := make([]primitives.ValidatorIndex, 0, total)
+	subscribeCommitteesAtSlot := make([]uint64, 0, total)
 
 	if err := v.aggSelector.RefreshSelectionProofs(ctx); err != nil {
 		return errors.Wrap(err, "could not prepare aggregated selection proofs")
@@ -39,17 +40,19 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Valida
 			subscribeSlots = append(subscribeSlots, duty.AttesterSlot)
 			subscribeCommitteeIndices = append(subscribeCommitteeIndices, duty.CommitteeIndex)
 			subscribeIsAggregator = append(subscribeIsAggregator, isAgg)
-			activeDuties = append(activeDuties, duty)
+			subscribeValidatorIndices = append(subscribeValidatorIndices, duty.ValidatorIndex)
+			subscribeCommitteesAtSlot = append(subscribeCommitteesAtSlot, duty.CommitteesAtSlot)
 		}
 	}
 
 	_, err := v.validatorClient.SubscribeCommitteeSubnets(ctx,
 		&ethpb.CommitteeSubnetsSubscribeRequest{
-			Slots:        subscribeSlots,
-			CommitteeIds: subscribeCommitteeIndices,
-			IsAggregator: subscribeIsAggregator,
+			Slots:            subscribeSlots,
+			CommitteeIds:     subscribeCommitteeIndices,
+			IsAggregator:     subscribeIsAggregator,
+			ValidatorIndices: subscribeValidatorIndices,
+			CommitteesAtSlot: subscribeCommitteesAtSlot,
 		},
-		activeDuties,
 	)
 
 	return err

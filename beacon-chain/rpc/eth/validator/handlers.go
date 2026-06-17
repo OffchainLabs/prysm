@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	rpchelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
@@ -631,18 +630,16 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Verify validators at the beginning to return early if request is invalid.
-	validators := make([]state.ReadOnlyValidator, len(req.Data))
-	subscriptions := make([]*validator2.BeaconCommitteeSubscription, len(req.Data))
+	// Convert, validate, and track each subscription up front so an invalid item
+	// fails the request before any subnets are computed.
+	subs := make([]core.SubnetSubscription, len(req.Data))
 	for i, item := range req.Data {
 		consensusItem, err := item.ToConsensus()
 		if err != nil {
 			httputil.HandleError(w, "Could not convert request subscription to consensus subscription: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		subscriptions[i] = consensusItem
-		val, err := st.ValidatorAtIndexReadOnly(consensusItem.ValidatorIndex)
-		if err != nil {
+		if _, err := st.ValidatorAtIndexReadOnly(consensusItem.ValidatorIndex); err != nil {
 			if errors.Is(err, mvslice.ErrOutOfBounds) {
 				httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusBadRequest)
 				return
@@ -650,41 +647,17 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 			httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		validators[i] = val
 		s.SubscribedValidatorsCache.Add(consensusItem.ValidatorIndex)
-	}
-
-	fetchValsLen := func(slot primitives.Slot) (uint64, error) {
-		wantedEpoch := slots.ToEpoch(slot)
-		vals, err := s.HeadFetcher.HeadValidatorsIndices(ctx, wantedEpoch)
-		if err != nil {
-			return 0, err
+		subs[i] = core.SubnetSubscription{
+			Slot:             consensusItem.Slot,
+			CommitteeIndex:   consensusItem.CommitteeIndex,
+			IsAggregator:     consensusItem.IsAggregator,
+			CommitteesAtSlot: consensusItem.CommitteesAtSlot,
 		}
-		return uint64(len(vals)), nil
 	}
-
-	// Request the head validator indices of epoch represented by the first requested slot.
-	currValsLen, err := fetchValsLen(subscriptions[0].Slot)
-	if err != nil {
+	if err := core.ComputeAndCacheCommitteeSubnets(ctx, s.HeadFetcher, subs); err != nil {
 		httputil.HandleError(w, "Could not retrieve head validator length: "+err.Error(), http.StatusInternalServerError)
 		return
-	}
-	currEpoch := slots.ToEpoch(subscriptions[0].Slot)
-	for _, sub := range subscriptions {
-		// If epoch has changed, re-request active validators length
-		if currEpoch != slots.ToEpoch(sub.Slot) {
-			currValsLen, err = fetchValsLen(sub.Slot)
-			if err != nil {
-				httputil.HandleError(w, "Could not retrieve head validator length: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
-			currEpoch = slots.ToEpoch(sub.Slot)
-		}
-		subnet := helpers.ComputeSubnetFromCommitteeAndSlot(currValsLen, sub.CommitteeIndex, sub.Slot)
-		cache.SubnetIDs.AddAttesterSubnetID(sub.Slot, subnet)
-		if sub.IsAggregator {
-			cache.SubnetIDs.AddAggregatorSubnetID(sub.Slot, subnet)
-		}
 	}
 }
 

@@ -289,13 +289,7 @@ func (c *grpcValidatorClient) SubmitSignedExecutionPayloadBid(ctx context.Contex
 	return c.getClient().SubmitSignedExecutionPayloadBid(ctx, in)
 }
 
-func (c *grpcValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, duties []*ethpb.ValidatorDuty) (*empty.Empty, error) {
-	if len(duties) == len(in.Slots) && len(in.ValidatorIndices) == 0 {
-		in.ValidatorIndices = make([]primitives.ValidatorIndex, len(duties))
-		for i, d := range duties {
-			in.ValidatorIndices[i] = d.ValidatorIndex
-		}
-	}
+func (c *grpcValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest) (*empty.Empty, error) {
 	return c.getClient().SubscribeCommitteeSubnets(ctx, in)
 }
 

@@ -317,12 +317,12 @@ func (c *beaconApiValidatorClient) SubmitSignedExecutionPayloadBid(_ context.Con
 	return new(empty.Empty), nil
 }
 
-func (c *beaconApiValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, duties []*ethpb.ValidatorDuty) (*empty.Empty, error) {
+func (c *beaconApiValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest) (*empty.Empty, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.SubscribeCommitteeSubnets")
 	defer span.End()
 
 	return wrapInMetrics[*empty.Empty]("SubscribeCommitteeSubnets", func() (*empty.Empty, error) {
-		return new(empty.Empty), c.subscribeCommitteeSubnets(ctx, in, duties)
+		return new(empty.Empty), c.subscribeCommitteeSubnets(ctx, in)
 	})
 }
 

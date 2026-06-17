@@ -994,7 +994,7 @@ func TestSubmitBeaconCommitteeSubscription(t *testing.T) {
 		assert.Equal(t, http.StatusOK, writer.Code)
 		subnets := cache.SubnetIDs.GetAttesterSubnetIDs(1)
 		require.Equal(t, 1, len(subnets))
-		assert.Equal(t, uint64(5), subnets[0])
+		assert.Equal(t, uint64(3), subnets[0])
 	})
 	t.Run("multiple", func(t *testing.T) {
 		cache.SubnetIDs.EmptyAllCaches()
@@ -1010,8 +1010,8 @@ func TestSubmitBeaconCommitteeSubscription(t *testing.T) {
 		assert.Equal(t, http.StatusOK, writer.Code)
 		subnets := cache.SubnetIDs.GetAttesterSubnetIDs(1)
 		require.Equal(t, 2, len(subnets))
-		assert.Equal(t, uint64(5), subnets[0])
-		assert.Equal(t, uint64(4), subnets[1])
+		assert.Equal(t, uint64(3), subnets[0])
+		assert.Equal(t, uint64(2), subnets[1])
 	})
 	t.Run("is aggregator", func(t *testing.T) {
 		cache.SubnetIDs.EmptyAllCaches()
@@ -1027,7 +1027,7 @@ func TestSubmitBeaconCommitteeSubscription(t *testing.T) {
 		assert.Equal(t, http.StatusOK, writer.Code)
 		subnets := cache.SubnetIDs.GetAggregatorSubnetIDs(1)
 		require.Equal(t, 1, len(subnets))
-		assert.Equal(t, uint64(5), subnets[0])
+		assert.Equal(t, uint64(3), subnets[0])
 	})
 	t.Run("no body", func(t *testing.T) {
 		request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
