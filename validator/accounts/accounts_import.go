@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
@@ -21,49 +19,6 @@ import (
 	"github.com/pkg/errors"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
 )
-
-var derivationPathRegex = regexp.MustCompile(`m_12381_3600_(\d+)_(\d+)_(\d+)`)
-
-// byDerivationPath implements sort.Interface based on a
-// derivation path present in a keystore filename, if any. This
-// will allow us to sort filenames such as keystore-m_12381_3600_1_0_0.json
-// in a directory and import them nicely in order of the derivation path.
-type byDerivationPath []string
-
-// Len is the number of elements in the collection.
-func (fileNames byDerivationPath) Len() int { return len(fileNames) }
-
-// Less reports whether the element with index i must sort before the element with index j.
-func (fileNames byDerivationPath) Less(i, j int) bool {
-	// We check if file name at index i has a derivation path
-	// in the filename. If it does not, then it is not less than j, and
-	// we should swap it towards the end of the sorted list.
-	if !derivationPathRegex.MatchString(fileNames[i]) {
-		return false
-	}
-	derivationPathA := derivationPathRegex.FindString(fileNames[i])
-	derivationPathB := derivationPathRegex.FindString(fileNames[j])
-	if derivationPathA == "" {
-		return false
-	}
-	if derivationPathB == "" {
-		return true
-	}
-	a, err := strconv.Atoi(accountIndexFromFileName(derivationPathA))
-	if err != nil {
-		return false
-	}
-	b, err := strconv.Atoi(accountIndexFromFileName(derivationPathB))
-	if err != nil {
-		return false
-	}
-	return a < b
-}
-
-// Swap swaps the elements with indexes i and j.
-func (fileNames byDerivationPath) Swap(i, j int) {
-	fileNames[i], fileNames[j] = fileNames[j], fileNames[i]
-}
 
 // ImportAccountsConfig defines values to run the import accounts function.
 type ImportAccountsConfig struct {
@@ -325,12 +280,4 @@ func createKeystoreFromPrivateKey(privKey bls.SecretKey, walletPassword string) 
 		Pubkey:      fmt.Sprintf("%x", privKey.PublicKey().Marshal()),
 		Description: encryptor.Name(),
 	}, nil
-}
-
-// Extracts the account index, j, from a derivation path in a file name
-// with the format m_12381_3600_j_0_0.
-func accountIndexFromFileName(derivationPath string) string {
-	derivationPath = derivationPath[13:]
-	accIndexEnd := strings.Index(derivationPath, "_")
-	return derivationPath[:accIndexEnd]
 }

@@ -28,7 +28,7 @@ func TestSubmitSignedAggregateSelectionProof_Valid(t *testing.T) {
 
 	ctx := t.Context()
 	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProof.Message.Version())}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v2/validator/aggregate_and_proofs",
@@ -60,7 +60,7 @@ func TestSubmitSignedAggregateSelectionProof_BadRequest(t *testing.T) {
 
 	ctx := t.Context()
 	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProof.Message.Version())}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v2/validator/aggregate_and_proofs",
@@ -93,7 +93,7 @@ func TestSubmitSignedAggregateSelectionProofElectra_Valid(t *testing.T) {
 	ctx := t.Context()
 	expectedVersion := version.String(slots.ToForkVersion(signedAggregateAndProofElectra.Message.Aggregate.Data.Slot))
 	headers := map[string]string{"Eth-Consensus-Version": expectedVersion}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v2/validator/aggregate_and_proofs",
@@ -130,7 +130,7 @@ func TestSubmitSignedAggregateSelectionProofElectra_BadRequest(t *testing.T) {
 	ctx := t.Context()
 	expectedVersion := version.String(slots.ToForkVersion(signedAggregateAndProofElectra.Message.Aggregate.Data.Slot))
 	headers := map[string]string{"Eth-Consensus-Version": expectedVersion}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v2/validator/aggregate_and_proofs",
@@ -163,7 +163,7 @@ func TestSubmitSignedAggregateSelectionProofElectra_FuluVersion(t *testing.T) {
 	ctx := t.Context()
 	expectedVersion := version.String(slots.ToForkVersion(signedAggregateAndProofElectra.Message.Aggregate.Data.Slot))
 	headers := map[string]string{"Eth-Consensus-Version": expectedVersion}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v2/validator/aggregate_and_proofs",

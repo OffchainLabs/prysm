@@ -45,7 +45,7 @@ func TestPrepareBeaconProposer_Valid(t *testing.T) {
 	marshalledJsonRecipients, err := json.Marshal(jsonRecipients)
 	require.NoError(t, err)
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		prepareBeaconProposerTestEndpoint,
@@ -89,7 +89,7 @@ func TestPrepareBeaconProposer_BadRequest(t *testing.T) {
 
 	ctx := t.Context()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		prepareBeaconProposerTestEndpoint,

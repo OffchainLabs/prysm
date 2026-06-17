@@ -148,7 +148,7 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	if contents, ok := vs.ExecutionPayloadEnvelopeCache.Contents(); ok &&
 		contents.Envelope.Payload.SlotNumber == envSlot && len(contents.DataColumns) > 0 {
 		log.WithField("columns", len(contents.DataColumns)).Debug("Broadcasting Gloas data column sidecars")
-		if err := vs.broadcastAndReceiveDataColumns(ctx, contents.DataColumns); err != nil {
+		if err := vs.broadcastAndReceiveDataColumns(ctx, contents.DataColumns, nil); err != nil {
 			log.WithError(err).Error("Failed to broadcast Gloas data column sidecars")
 		}
 	}
