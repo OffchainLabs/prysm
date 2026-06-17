@@ -721,14 +721,23 @@ func Test_GetPayloadAttribute(t *testing.T) {
 	attr := service.getPayloadAttribute(ctx, st, 0, []byte{}, true)
 	require.Equal(t, true, attr.IsEmpty())
 
-	// Subscribe the proposer; with no SignedProposerPreferences cached,
-	// fee recipient falls back to --suggested-fee-recipient (burn by default).
+	// Subscribe the proposer; with no preference cached, fee recipient falls back
+	// to --suggested-fee-recipient (burn by default).
 	service.cfg.SubscribedValidatorsCache.Add(0)
 	slot := primitives.Slot(1)
 	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
 	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
 	require.Equal(t, false, attr.IsEmpty())
 	require.Equal(t, params.BeaconConfig().EthBurnAddressHex, common.BytesToAddress(attr.SuggestedFeeRecipient()).String())
+
+	// With a per-validator default fee recipient cached (pre-Gloas PrepareBeaconProposer),
+	// the attribute carries it.
+	suggestedAddr := common.HexToAddress("123")
+	service.cfg.ProposerPreferencesCache.Set(cache.ProposerPreference{ValidatorIndex: 0, FeeRecipient: primitives.ExecutionAddress(suggestedAddr)})
+	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
+	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
+	require.Equal(t, false, attr.IsEmpty())
+	require.Equal(t, suggestedAddr, common.BytesToAddress(attr.SuggestedFeeRecipient()))
 }
 
 func Test_GetPayloadAttribute_PrepareAllPayloads(t *testing.T) {
@@ -754,8 +763,8 @@ func Test_GetPayloadAttributeV2(t *testing.T) {
 	attr := service.getPayloadAttribute(ctx, st, 0, []byte{}, true)
 	require.Equal(t, true, attr.IsEmpty())
 
-	// Subscribe the proposer; with no SignedProposerPreferences cached,
-	// fee recipient falls back to --suggested-fee-recipient (burn by default).
+	// Subscribe the proposer; with no preference cached, fee recipient falls back
+	// to --suggested-fee-recipient (burn by default).
 	service.cfg.SubscribedValidatorsCache.Add(0)
 	slot := primitives.Slot(1)
 	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
@@ -765,6 +774,14 @@ func Test_GetPayloadAttributeV2(t *testing.T) {
 	a, err := attr.Withdrawals()
 	require.NoError(t, err)
 	require.Equal(t, 0, len(a))
+
+	// With a per-validator default fee recipient cached, the attribute carries it.
+	suggestedAddr := common.HexToAddress("123")
+	service.cfg.ProposerPreferencesCache.Set(cache.ProposerPreference{ValidatorIndex: 0, FeeRecipient: primitives.ExecutionAddress(suggestedAddr)})
+	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
+	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
+	require.Equal(t, false, attr.IsEmpty())
+	require.Equal(t, suggestedAddr, common.BytesToAddress(attr.SuggestedFeeRecipient()))
 }
 
 func Test_GetPayloadAttributeV3(t *testing.T) {
@@ -796,8 +813,8 @@ func Test_GetPayloadAttributeV3(t *testing.T) {
 			attr := service.getPayloadAttribute(ctx, test.st, 0, []byte{}, true)
 			require.Equal(t, true, attr.IsEmpty())
 
-			// Subscribe the proposer; with no SignedProposerPreferences cached,
-			// fee recipient falls back to --suggested-fee-recipient (burn by default).
+			// Subscribe the proposer; with no preference cached, fee recipient falls
+			// back to --suggested-fee-recipient (burn by default).
 			service.cfg.SubscribedValidatorsCache.Add(0)
 			slot := primitives.Slot(1)
 			service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
@@ -812,6 +829,14 @@ func Test_GetPayloadAttributeV3(t *testing.T) {
 			require.NoError(t, err)
 			hr := service.headRoot()
 			require.Equal(t, hr, [32]byte(attrV3.ParentBeaconBlockRoot))
+
+			// With a per-validator default fee recipient cached, the attribute carries it.
+			suggestedAddr := common.HexToAddress("123")
+			service.cfg.ProposerPreferencesCache.Set(cache.ProposerPreference{ValidatorIndex: 0, FeeRecipient: primitives.ExecutionAddress(suggestedAddr)})
+			service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
+			attr = service.getPayloadAttribute(ctx, test.st, slot, params.BeaconConfig().ZeroHash[:], true)
+			require.Equal(t, false, attr.IsEmpty())
+			require.Equal(t, suggestedAddr, common.BytesToAddress(attr.SuggestedFeeRecipient()))
 		})
 	}
 }
