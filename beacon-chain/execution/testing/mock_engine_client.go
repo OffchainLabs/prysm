@@ -174,7 +174,6 @@ func (e *EngineClient) ConstructDataColumnSidecars(context.Context, peerdas.Cons
 }
 
 // ConstructPartialDataColumnSidecarsFromHasBlobs is a mock implementation of the ConstructPartialDataColumnSidecarsFromHasBlobs method.
-// A nil HasBlobsPartialColumns field means "not supported" (returns false). A non-nil slice (even empty) means "supported".
 func (e *EngineClient) ConstructPartialDataColumnSidecarsFromHasBlobs(context.Context, peerdas.ConstructionPopulator) ([]blocks.PartialDataColumn, bool, error) {
 	if e.HasBlobsPartialColumns == nil {
 		return nil, false, nil

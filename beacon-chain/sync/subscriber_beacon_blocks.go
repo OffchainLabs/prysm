@@ -276,14 +276,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				// should publish to help our peers.
 				if err := s.publishPartialColumns(ctx, columnIndicesToSample, partialColumns); err != nil {
 					log.WithError(err).Error("Failed to publish partial columns")
-				} else {
-					log.WithFields(logrus.Fields{
-						"count":                      count,
-						"supersedesHasBlobsRequests": len(hasBlobsColumns) > 0,
-					}).Debug("Published partial data column sidecars from the execution client")
 				}
-				// These columns carry no requests override, so publishing them already
-				// cleared any HasBlobs-derived override on the broadcaster side.
 				hasBlobsColumns = nil
 			} else if isPartialEnabled && len(hasBlobsColumns) > 0 {
 				// GetBlobsV3 answered but yielded no partial columns (the EL returned
@@ -297,7 +290,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				if err := s.publishPartialColumns(ctx, columnIndicesToSample, hasBlobsColumns); err != nil {
 					log.WithError(err).Error("Failed to publish partial columns after clearing HasBlobs parts requests")
 				} else {
-					log.WithField("count", len(hasBlobsColumns)).Debug("Republished header-only partial columns with HasBlobs parts requests cleared")
+					log.WithField("count", len(hasBlobsColumns)).Debug("Republished partial columns with HasBlobs parts requests cleared")
 				}
 				hasBlobsColumns = nil
 			}
@@ -366,7 +359,7 @@ func (s *Service) publishHasBlobsPartialColumns(ctx context.Context, source peer
 		"slot":           source.Slot(),
 		"count":          len(partialColumns),
 		"requestedBlobs": requestedBlobs,
-	}).Debug("Published header-only HasBlobs partial columns ahead of GetBlobsV3")
+	}).Debug("Published HasBlobs partial columns ahead of GetBlobsV3")
 	return partialColumns, nil
 }
 

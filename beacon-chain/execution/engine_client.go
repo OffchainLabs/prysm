@@ -669,10 +669,6 @@ func (s *Service) HasBlobs(ctx context.Context, versionedHashes []common.Hash) (
 	defer span.End()
 	start := time.Now()
 
-	if !s.capabilityCache.has(HasBlobs) {
-		return nil, errors.Errorf("%s is not supported", HasBlobs)
-	}
-
 	hasBlobsRequestsTotal.Inc()
 	var result []bool
 	if err := s.rpcClient.CallContext(ctx, &result, HasBlobs, versionedHashes); err != nil {
@@ -1011,11 +1007,11 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 	return nil, partialColumns, nil
 }
 
-// ConstructPartialDataColumnSidecarsFromHasBlobs constructs header-only partial
-// columns whose parts metadata requests only the blobs missing from the EL.
+// ConstructPartialDataColumnSidecarsFromHasBlobs constructs partial
+// columns without any cells whose parts metadata requests only the blobs missing from the EL.
 //
 // It returns:
-//   - the header-only partial columns carrying the requests override; nil when
+//   - the partial columns carrying the requests override; nil when
 //     the block has no commitments, the EL already has every blob, or an error
 //     occurred.
 //   - whether the HasBlobs flow is supported: false when the engine lacks the
@@ -1060,7 +1056,7 @@ func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Con
 			"blockRoot":   fmt.Sprintf("%#x", root),
 			"slot":        populator.Slot(),
 			"commitments": len(commitments),
-		}).Debug("Execution client has all blobs, skipping header-only partial column construction")
+		}).Debug("Execution client has all blobs, skipping partial column construction with Has Blobs")
 		return nil, true, nil
 	}
 
@@ -1082,7 +1078,7 @@ func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Con
 		"missingBlobs":   requests.Count(),
 		"missingIndices": requests.BitIndices(),
 		"partialColumns": len(partialColumns),
-	}).Debug("Constructed header-only partial data column sidecars requesting missing blobs")
+	}).Debug("Constructed partial data column sidecars using Has Blobs requesting missing blobs")
 	return partialColumns, true, nil
 }
 
@@ -1148,9 +1144,6 @@ func (s *Service) PartialColumnsSupported() bool {
 	return s.partialColumnsSupported
 }
 
-// partialColumnsEnabledForSlot reports whether partial column dissemination is
-// active for the given slot. Partial columns are not yet constructed for Gloas
-// blocks.
 // TODO: Partial Columns for Gloas.
 func (s *Service) partialColumnsEnabledForSlot(slot primitives.Slot) bool {
 	isGloas := slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch

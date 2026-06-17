@@ -361,12 +361,6 @@ func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerS
 	// Eager push - we don't know what the peer has and message has been requested.
 	// Set RecvdState so subsequent calls skip the eager push path.
 	if isEagerPush(requestedMessage, peerState) {
-		log.WithFields(logrus.Fields{
-			"peer":          remote,
-			"index":         p.Index,
-			"group":         fmt.Sprintf("%#x", p.groupID),
-			"includeHeader": includeHeader,
-		}).Debug("Eager pushing partial data column")
 		var encoded []byte
 		if includeHeader {
 			var err error
