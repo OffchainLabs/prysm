@@ -3,6 +3,7 @@ package beacon_api
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/client/event"
@@ -16,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 type ValidatorClientOpt func(*beaconApiValidatorClient)
@@ -349,17 +351,40 @@ func (c *beaconApiValidatorClient) WaitForChainStart(ctx context.Context, _ *emp
 
 func (c *beaconApiValidatorClient) StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *event.Event) {
 	client := &http.Client{} // event stream should not be subject to the same settings as other api calls
-	eventStream, err := event.NewEventStream(ctx, client, c.handler.Host(), topics)
-	if err != nil {
-		eventsChannel <- &event.Event{
-			EventType: event.EventError,
-			Data:      []byte(errors.Wrap(err, "failed to start event stream").Error()),
+
+	c.isEventStreamRunning = true
+	defer func() { c.isEventStreamRunning = false }()
+
+	for {
+		eventStream, err := event.NewEventStream(ctx, client, c.handler.Host(), topics)
+		if err != nil {
+			eventsChannel <- &event.Event{
+				EventType: event.EventError,
+				Data:      []byte(errors.Wrap(err, "failed to start event stream").Error()),
+			}
+			return
+		}
+
+		// Subscribe surfaces any failure on eventsChannel; its return value tells
+		// us whether to recover. Older beacon nodes reject the head_v2 topic with
+		// HTTP 400 (the whole request fails when any topic is unknown), so fallback
+		// with legacy topics.
+		err = eventStream.Subscribe(eventsChannel)
+		var subErr *event.SubscriptionError
+		if fallbackTopics, ok := event.LegacyTopicFallback(topics); ok &&
+			errors.As(err, &subErr) && subErr.StatusCode == http.StatusBadRequest {
+
+			// Log the topics so that users can understand why the fallback is happening.
+			log.WithFields(logrus.Fields{
+				"topics":          strings.Join(topics, ","),
+				"fallback_topics": strings.Join(fallbackTopics, ","),
+			}).WithError(err).Warn("Beacon node does not support the given topics; falling back to the legacy topics")
+
+			topics = fallbackTopics
+			continue
 		}
 		return
 	}
-	c.isEventStreamRunning = true
-	eventStream.Subscribe(eventsChannel)
-	c.isEventStreamRunning = false
 }
 
 func (c *beaconApiValidatorClient) EventStreamIsRunning() bool {
