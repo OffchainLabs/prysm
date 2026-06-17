@@ -517,19 +517,6 @@ func LastActivatedValidatorIndex(ctx context.Context, st state.ReadOnlyBeaconSta
 	return lastActivatedvalidatorIndex, nil
 }
 
-// IsSameWithdrawalCredentials returns true if both validators have the same withdrawal credentials.
-//
-//	return a.withdrawal_credentials[12:] == b.withdrawal_credentials[12:]
-func IsSameWithdrawalCredentials(a, b *ethpb.Validator) bool {
-	if a == nil || b == nil {
-		return false
-	}
-	if len(a.WithdrawalCredentials) <= 12 || len(b.WithdrawalCredentials) <= 12 {
-		return false
-	}
-	return bytes.Equal(a.WithdrawalCredentials[12:], b.WithdrawalCredentials[12:])
-}
-
 // IsFullyWithdrawableValidator returns whether the validator is able to perform a full
 // withdrawal. This function assumes that the caller holds a lock on the state.
 //

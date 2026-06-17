@@ -1099,39 +1099,6 @@ func TestIsPartiallyWithdrawableValidator(t *testing.T) {
 	}
 }
 
-func TestIsSameWithdrawalCredentials(t *testing.T) {
-	makeWithdrawalCredentials := func(address []byte) []byte {
-		b := make([]byte, 12)
-		return append(b, address...)
-	}
-
-	tests := []struct {
-		name string
-		a    *ethpb.Validator
-		b    *ethpb.Validator
-		want bool
-	}{
-		{
-			"Same credentials",
-			&ethpb.Validator{WithdrawalCredentials: makeWithdrawalCredentials([]byte("same"))},
-			&ethpb.Validator{WithdrawalCredentials: makeWithdrawalCredentials([]byte("same"))},
-			true,
-		},
-		{
-			"Different credentials",
-			&ethpb.Validator{WithdrawalCredentials: makeWithdrawalCredentials([]byte("foo"))},
-			&ethpb.Validator{WithdrawalCredentials: makeWithdrawalCredentials([]byte("bar"))},
-			false,
-		},
-		{"Handles nil case", nil, nil, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, helpers.IsSameWithdrawalCredentials(tt.a, tt.b))
-		})
-	}
-}
-
 func TestValidatorMaxEffectiveBalance(t *testing.T) {
 	tests := []struct {
 		name      string

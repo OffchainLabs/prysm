@@ -396,10 +396,10 @@ func TestFcuFromReorgData_CachesPayloadID(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, false, attr.IsEmpty())
 
-	s.fcuFromReorgData(headRoot, headHash, attr, proposingSlot)
+	s.fcuFromReorgData(headRoot, headHash, false, attr, proposingSlot)
 
 	require.LogsDoNotContain(t, logHook, "Could not update forkchoice with engine")
-	cachedPid, has := s.cfg.PayloadIDCache.PayloadID(proposingSlot, headRoot)
+	cachedPid, has := s.cfg.PayloadIDCache.PayloadID(proposingSlot, headRoot, false)
 	require.Equal(t, true, has)
 	require.Equal(t, primitives.PayloadID(pid[:]), cachedPid)
 }
@@ -413,9 +413,9 @@ func TestFcuFromReorgData_NilPayloadID_NoCache(t *testing.T) {
 	proposingSlot := primitives.Slot(2)
 	attr := payloadattribute.EmptyWithVersion(version.Gloas)
 
-	s.fcuFromReorgData(headRoot, headHash, attr, proposingSlot)
+	s.fcuFromReorgData(headRoot, headHash, false, attr, proposingSlot)
 
-	_, has := s.cfg.PayloadIDCache.PayloadID(proposingSlot, headRoot)
+	_, has := s.cfg.PayloadIDCache.PayloadID(proposingSlot, headRoot, false)
 	require.Equal(t, false, has)
 }
 
@@ -431,10 +431,10 @@ func TestFcuFromReorgData_EngineError(t *testing.T) {
 	proposingSlot := primitives.Slot(2)
 	attr := payloadattribute.EmptyWithVersion(version.Gloas)
 
-	s.fcuFromReorgData(headRoot, headHash, attr, proposingSlot)
+	s.fcuFromReorgData(headRoot, headHash, false, attr, proposingSlot)
 
 	require.LogsContain(t, logHook, "Could not update forkchoice with engine")
-	_, has := s.cfg.PayloadIDCache.PayloadID(proposingSlot, headRoot)
+	_, has := s.cfg.PayloadIDCache.PayloadID(proposingSlot, headRoot, false)
 	require.Equal(t, false, has)
 }
 
@@ -561,7 +561,7 @@ func TestLatePayloadTasks_ReturnsEarlyWhenBlockLate(t *testing.T) {
 	service.latePayloadTasks(tr.ctx)
 	require.LogsDoNotContain(t, logHook, "Could not notify forkchoice update")
 	// No payload ID should have been cached.
-	_, has := service.cfg.PayloadIDCache.PayloadID(service.CurrentSlot()+1, headRoot)
+	_, has := service.cfg.PayloadIDCache.PayloadID(service.CurrentSlot()+1, headRoot, false)
 	require.Equal(t, false, has)
 }
 
@@ -600,7 +600,7 @@ func TestLatePayloadTasks_SendsFCU(t *testing.T) {
 	require.LogsDoNotContain(t, logHook, "Could not notify forkchoice update")
 	require.LogsDoNotContain(t, logHook, "Could not get")
 	// Payload ID should have been cached.
-	cachedPid, has := service.cfg.PayloadIDCache.PayloadID(service.CurrentSlot()+1, headRoot)
+	cachedPid, has := service.cfg.PayloadIDCache.PayloadID(service.CurrentSlot()+1, headRoot, false)
 	require.Equal(t, true, has)
 	require.Equal(t, primitives.PayloadID(pid[:]), cachedPid)
 }
@@ -637,7 +637,7 @@ func TestLateBlockTasks_GloasFCU(t *testing.T) {
 	require.LogsDoNotContain(t, logHook, "could not perform late block tasks")
 
 	// Payload ID should have been cached by the Gloas FCU path.
-	cachedPid, has := service.cfg.PayloadIDCache.PayloadID(service.CurrentSlot()+1, headRoot)
+	cachedPid, has := service.cfg.PayloadIDCache.PayloadID(service.CurrentSlot()+1, headRoot, false)
 	require.Equal(t, true, has)
 	require.Equal(t, primitives.PayloadID(pid[:]), cachedPid)
 }

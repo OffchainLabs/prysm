@@ -161,13 +161,13 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "invalid execution payload envelope contents: %v", err)
 		}
-		if err := vs.broadcastAndReceiveDataColumns(ctx, sidecars); err != nil {
+		if err := vs.broadcastAndReceiveDataColumns(ctx, sidecars, nil); err != nil {
 			log.WithError(err).Error("Failed to broadcast Gloas data column sidecars")
 		}
 	} else if cached, ok := vs.ExecutionPayloadEnvelopeCache.Contents(); ok &&
 		cached.Envelope.Payload.SlotNumber == envSlot && len(cached.DataColumns) > 0 {
 		log.WithField("columns", len(cached.DataColumns)).Debug("Broadcasting Gloas data column sidecars")
-		if err := vs.broadcastAndReceiveDataColumns(ctx, cached.DataColumns); err != nil {
+		if err := vs.broadcastAndReceiveDataColumns(ctx, cached.DataColumns, nil); err != nil {
 			log.WithError(err).Error("Failed to broadcast Gloas data column sidecars")
 		}
 	}

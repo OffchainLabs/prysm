@@ -50,7 +50,7 @@ func TestGetExecutionPayloadEnvelope_CachedHit(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	// No Get expectation: cache hit must skip the HTTP call.
 
 	envelope := testProtoEnvelope()
@@ -86,7 +86,7 @@ func TestGetExecutionPayloadEnvelope_StatefulFetchesBlinded(t *testing.T) {
 	respHeader := http.Header{}
 	respHeader.Set("Content-Type", api.OctetStreamMediaType)
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v1/validator/execution_payload_envelopes/100/%s", hexutil.Encode(root[:])),
@@ -115,7 +115,7 @@ func TestPublishBlindedExecutionPayloadEnvelope(t *testing.T) {
 		api.VersionHeader:                 version.String(version.Gloas),
 		api.ExecutionPayloadBlindedHeader: "true",
 	}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		"/eth/v1/beacon/execution_payload_envelopes",
@@ -148,7 +148,7 @@ func TestPublishBlindedExecutionPayloadEnvelope_JSONFallbackOn406(t *testing.T) 
 		api.VersionHeader:                 version.String(version.Gloas),
 		api.ExecutionPayloadBlindedHeader: "true",
 	}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 	).Return(nil, nil, &httputil.DefaultJsonError{Code: http.StatusNotAcceptable, Message: "not acceptable"})
@@ -189,7 +189,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessSendsContents(t *testing.T) {
 		api.VersionHeader:                 version.String(version.Gloas),
 		api.ExecutionPayloadBlindedHeader: "false",
 	}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		"/eth/v1/beacon/execution_payload_envelopes",
@@ -223,7 +223,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessCacheMissErrors(t *testing.T) 
 	}
 
 	// No PostSSZ/Post expectation — must error before any HTTP call.
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	client := &beaconApiValidatorClient{
 		handler:       handler,
 		envelopeCache: cache.NewExecutionPayloadEnvelopeCache(),
@@ -243,7 +243,7 @@ func TestPublishExecutionPayloadEnvelope_Error(t *testing.T) {
 		Signature: bytesutil.PadTo([]byte("sig"), 96),
 	}
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 	).Return(nil, nil, errors.New("server error"))
