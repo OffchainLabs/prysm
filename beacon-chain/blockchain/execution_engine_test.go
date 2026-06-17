@@ -875,7 +875,7 @@ func Test_GetPayloadAttribute_GloasNoPreferenceFallback(t *testing.T) {
 	require.NoError(t, err)
 	service.cfg.SubscribedValidatorsCache.Add(proposerIdx)
 	slot := primitives.Slot(1)
-	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
+	service.cfg.PayloadIDCache.Set(slot, [32]byte{},true, [8]byte{})
 
 	attr := service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], false)
 	require.Equal(t, false, attr.IsEmpty())
