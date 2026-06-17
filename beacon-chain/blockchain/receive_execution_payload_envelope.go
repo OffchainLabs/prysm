@@ -96,7 +96,9 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		if bid == nil || len(bid.BlobKzgCommitments()) == 0 {
 			return nil
 		}
-		if err := s.areDataColumnsAvailable(availCtx, root, envelope.Slot()); err != nil {
+		daCtx, cancel := context.WithTimeout(availCtx, slotDeadline)
+		defer cancel()
+		if err := s.areDataColumnsAvailable(daCtx, root, envelope.Slot()); err != nil {
 			return errors.Wrap(err, "data availability check failed for payload envelope")
 		}
 		return nil
