@@ -241,7 +241,7 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 			var pId [8]byte
 			copy(pId[:], pid[:])
 			s.cfg.PayloadIDCache.Set(proposingSlot, root, true, pId)
-			s.firePayloadAttributesEventForHead(root, proposingSlot)
+			s.firePayloadAttributesEventForHead(root, proposingSlot, attr)
 		}
 	}()
 	if requests := envelope.ExecutionRequests(); requests != nil && len(requests.Deposits) > 0 {
