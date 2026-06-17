@@ -97,34 +97,3 @@ func (m *checkMultiplexer) divideByChecker(blks []blocks.ROBlock) (daGroups, err
 
 	return needs, nil
 }
-
-// safeRange is a helper type that enforces safe slicing.
-type safeRange struct {
-	start uint
-	end   uint
-}
-
-// isZero returns true if the range is zero-length.
-func (r safeRange) isZero() bool {
-	return r.start == r.end
-}
-
-// subSlice returns the subslice of s defined by sub
-// if it can be safely sliced, or an error if the range is invalid
-// with respect to the slice.
-func subSlice[T any](s []T, sub safeRange) ([]T, error) {
-	slen := uint(len(s))
-	if slen == 0 || sub.isZero() {
-		return nil, nil
-	}
-
-	// Check that minimum bound is safe.
-	if sub.end < sub.start {
-		return nil, errUnsafeRange
-	}
-	// Check that upper bound is safe.
-	if sub.start >= slen || sub.end > slen {
-		return nil, errUnsafeRange
-	}
-	return s[sub.start:sub.end], nil
-}

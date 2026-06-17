@@ -1014,38 +1014,6 @@ func TestService_removeInvalidBlockAndState(t *testing.T) {
 	require.Equal(t, false, has)
 }
 
-func TestService_getPayloadHash(t *testing.T) {
-	service, tr := minimalTestService(t)
-	ctx := tr.ctx
-
-	_, err := service.getPayloadHash(ctx, []byte{})
-	require.ErrorIs(t, errBlockNotFoundInCacheOrDB, err)
-
-	b := util.NewBeaconBlock()
-	r, err := b.Block.HashTreeRoot()
-	require.NoError(t, err)
-	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
-	require.NoError(t, err)
-	require.NoError(t, service.saveInitSyncBlock(ctx, r, wsb))
-
-	h, err := service.getPayloadHash(ctx, r[:])
-	require.NoError(t, err)
-	require.DeepEqual(t, params.BeaconConfig().ZeroHash, h)
-
-	bb := util.NewBeaconBlockBellatrix()
-	h = [32]byte{'a'}
-	bb.Block.Body.ExecutionPayload.BlockHash = h[:]
-	r, err = b.Block.HashTreeRoot()
-	require.NoError(t, err)
-	wsb, err = consensusblocks.NewSignedBeaconBlock(bb)
-	require.NoError(t, err)
-	require.NoError(t, service.saveInitSyncBlock(ctx, r, wsb))
-
-	h, err = service.getPayloadHash(ctx, r[:])
-	require.NoError(t, err)
-	require.DeepEqual(t, [32]byte{'a'}, h)
-}
-
 func TestKZGCommitmentToVersionedHashes(t *testing.T) {
 	kzg1 := make([]byte, 96)
 	kzg1[10] = 'a'

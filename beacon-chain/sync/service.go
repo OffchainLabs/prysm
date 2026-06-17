@@ -6,6 +6,7 @@ package sync
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"time"
 
@@ -312,6 +313,11 @@ func (s *Service) Start() {
 	s.newExecutionPayloadEnvelopeVerifier = newPayloadVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
+
+	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
+		go broadcaster.Start(&partialColumnCallbacks{service: s})
+	}
+
 	go s.startDiscoveryAndSubscriptions()
 	go s.processDataColumnLogs()
 
@@ -380,6 +386,7 @@ func (s *Service) Stop() error {
 	for _, t := range s.cfg.p2p.PubSub().GetTopics() {
 		s.unSubscribeFromTopic(t)
 	}
+
 	return nil
 }
 
@@ -459,6 +466,73 @@ func (s *Service) waitForChainStart() {
 	s.markForChainStart()
 }
 
+// partialColumnCallbacks implements the callbacks the partial column broadcaster uses to verify and handle partial messages.
+type partialColumnCallbacks struct {
+	service *Service
+}
+
+// PartialVerifierFromHeader returns a partial column verifier seeded from an untrusted partial data column header.
+func (c *partialColumnCallbacks) PartialVerifierFromHeader(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, pubsub.ValidationResult, error) {
+	return c.service.validatePartialDataColumnHeader(c.service.ctx, col)
+}
+
+// PartialVerifierFromTrustedColumn returns a partial column verifier seeded from a trusted data column.
+func (c *partialColumnCallbacks) PartialVerifierFromTrustedColumn(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
+	return c.service.partialVerifierFromTrustedColumn(c.service.ctx, col)
+}
+
+// ValidateColumn verifies the KZG proofs for the given cells.
+func (c *partialColumnCallbacks) ValidateColumn(cellsToVerify []blocks.CellProofBundle) error {
+	return peerdas.VerifyDataColumnsCellsKZGProofs(cellsToVerify)
+}
+
+// HandleColumn handles a data column completed from a partial message.
+func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedRODataColumn) {
+	ctx, cancel := context.WithTimeout(c.service.ctx, pubsubMessageTimeout)
+	defer cancel()
+
+	slot := col.Slot()
+	proposerIndex, err := col.ProposerIndex()
+	if err != nil {
+		log.WithError(err).Error("Failed to get proposer index from data column")
+		return
+	}
+	commitments, err := col.KzgCommitments()
+	if err != nil {
+		log.WithError(err).Error("Failed to get KZG commitments from data column")
+		return
+	}
+	if c.service.hasSeenDataColumnIndex(slot, proposerIndex, col.Index()) {
+		return
+	}
+
+	c.service.setSeenDataColumnIndex(slot, proposerIndex, col.Index())
+	if len(commitments) == 0 {
+		return
+	}
+	// This column was completed from a partial message.
+	partialMessageColumnCompletionsTotal.WithLabelValues(strconv.FormatUint(col.Index(), 10)).Inc()
+	if err := c.service.verifiedRODataColumnSubscriber(ctx, col); err != nil {
+		log.WithError(err).Error("Failed to handle verified RO data column subscriber")
+	}
+}
+
+// HandleHeader handles a received partial data column header.
+func (c *partialColumnCallbacks) HandleHeader(header *ethpb.PartialDataColumnHeader, groupID string) {
+	ctx, cancel := context.WithTimeout(c.service.ctx, pubsubMessageTimeout)
+	defer cancel()
+	source, err := peerdas.PopulateFromPartialHeader(header)
+	if err != nil {
+		log.WithError(err).Error("Failed to populate from partial data column header")
+		return
+	}
+	log.WithField("slot", source.Slot()).Debug("Received data column header")
+	err = c.service.processDataColumnSidecarsFromExecution(ctx, source)
+	if err != nil {
+		log.WithError(err).Error("Failed to process partial data column header")
+	}
+}
+
 func (s *Service) startDiscoveryAndSubscriptions() {
 	// Wait for the chain to start.
 	s.waitForChainStart()
@@ -505,15 +579,6 @@ func (s *Service) pruneDataColumnCache() {
 
 func (s *Service) chainIsStarted() bool {
 	return s.chainStarted.IsSet()
-}
-
-func (s *Service) waitForInitialSync(ctx context.Context) error {
-	select {
-	case <-s.initialSyncComplete:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
 }
 
 // UpdateCustodyInfoInDB updates the custody information in the database.

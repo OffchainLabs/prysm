@@ -38,6 +38,7 @@ type EngineClient struct {
 	NumReconstructedPayloads    uint64
 	TerminalBlockHash           []byte
 	TerminalBlockHashExists     bool
+	PartialColumnsSupportedFlag bool
 	OverrideValidHash           [32]byte
 	GetPayloadResponse          *blocks.GetPayloadResponse
 	ErrGetPayload               error
@@ -48,6 +49,11 @@ type EngineClient struct {
 	ClientVersion               []*structs.ClientVersionV1
 	ErrorClientVersion          error
 	FetchedAttributes           payloadattribute.Attributer
+}
+
+// PartialColumnsSupported --
+func (e *EngineClient) PartialColumnsSupported() bool {
+	return e.PartialColumnsSupportedFlag
 }
 
 // NewPayload --
@@ -164,8 +170,8 @@ func (e *EngineClient) ReconstructBlobSidecars(context.Context, interfaces.ReadO
 }
 
 // ConstructDataColumnSidecars is a mock implementation of the ConstructDataColumnSidecars method.
-func (e *EngineClient) ConstructDataColumnSidecars(context.Context, peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, error) {
-	return e.DataColumnSidecars, e.ErrorDataColumnSidecars
+func (e *EngineClient) ConstructDataColumnSidecars(context.Context, peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
+	return e.DataColumnSidecars, nil, e.ErrorDataColumnSidecars
 }
 
 // ReconstructExecutionPayloadEnvelope --
