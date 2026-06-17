@@ -657,7 +657,7 @@ func (s *Service) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash)
 	if err := s.rpcClient.CallContext(ctx, &result, GetBlobsV3, versionedHashes); err != nil {
 		return nil, handleRPCError(err)
 	}
-	getBlobsV3Latency.Observe(float64(time.Since(start).Milliseconds()))
+	getBlobsV3Latency.Observe(float64(time.Since(start).Seconds()))
 	return result, nil
 }
 
