@@ -17,6 +17,7 @@ exports_files([
 # gazelle:map_kind go_repository go_repository @prysm//tools/go:def.bzl
 # gazelle:build_tags bazel
 # gazelle:exclude tools/analyzers/**/testdata/**
+# gazelle:exclude third_party/googleapis
 gazelle(
     name = "gazelle",
     prefix = prefix,
