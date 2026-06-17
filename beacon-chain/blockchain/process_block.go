@@ -1181,7 +1181,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	s.refreshCaches(ctx, currentSlot, headRoot, headState)
 	// return early if we already started building a block for the current
 	// head root
-	_, has := s.cfg.PayloadIDCache.PayloadID(s.CurrentSlot()+1, headRoot)
+	_, has := s.cfg.PayloadIDCache.PayloadID(s.CurrentSlot()+1, headRoot, full)
 	if has {
 		return
 	}
@@ -1199,7 +1199,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 			return
 		}
 		bh := bid.ParentBlockHash()
-		if s.HasFullNode(headRoot) {
+		if full {
 			bh = bid.BlockHash()
 		}
 		id, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attribute)
@@ -1207,7 +1207,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 			log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
 		}
 		if id != nil {
-			s.cfg.PayloadIDCache.Set(s.CurrentSlot()+1, headRoot, [8]byte(*id))
+			s.cfg.PayloadIDCache.Set(s.CurrentSlot()+1, headRoot, full, [8]byte(*id))
 		}
 		return
 	}

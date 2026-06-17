@@ -285,7 +285,7 @@ func (s *Server) processEnvelopeContents(ctx context.Context, w http.ResponseWri
 		for _, sc := range roSidecars {
 			verifiedSidecars = append(verifiedSidecars, consensusblocks.NewVerifiedRODataColumn(sc))
 		}
-		if err := s.Broadcaster.BroadcastDataColumnSidecars(ctx, verifiedSidecars); err != nil {
+		if err := s.Broadcaster.BroadcastDataColumnSidecars(ctx, verifiedSidecars, nil); err != nil {
 			httputil.HandleError(w, "could not broadcast data column sidecars: "+err.Error(), http.StatusInternalServerError)
 			return
 		}

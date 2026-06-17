@@ -373,21 +373,6 @@ func (mr *MockValidatorClientMockRecorder) ProposerDuties(ctx, epoch any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposerDuties", reflect.TypeOf((*MockValidatorClient)(nil).ProposerDuties), ctx, epoch)
 }
 
-// PublishExecutionPayloadEnvelope mocks base method.
-func (m *MockValidatorClient) PublishExecutionPayloadEnvelope(ctx context.Context, in *eth.SignedExecutionPayloadEnvelope) (*empty.Empty, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PublishExecutionPayloadEnvelope", ctx, in)
-	ret0, _ := ret[0].(*empty.Empty)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// PublishExecutionPayloadEnvelope indicates an expected call of PublishExecutionPayloadEnvelope.
-func (mr *MockValidatorClientMockRecorder) PublishExecutionPayloadEnvelope(ctx, in any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishExecutionPayloadEnvelope", reflect.TypeOf((*MockValidatorClient)(nil).PublishExecutionPayloadEnvelope), ctx, in)
-}
-
 // PublishBlindedExecutionPayloadEnvelope mocks base method.
 func (m *MockValidatorClient) PublishBlindedExecutionPayloadEnvelope(ctx context.Context, in *eth.SignedWireBlindedExecutionPayloadEnvelope) (*empty.Empty, error) {
 	m.ctrl.T.Helper()
@@ -403,34 +388,19 @@ func (mr *MockValidatorClientMockRecorder) PublishBlindedExecutionPayloadEnvelop
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishBlindedExecutionPayloadEnvelope", reflect.TypeOf((*MockValidatorClient)(nil).PublishBlindedExecutionPayloadEnvelope), ctx, in)
 }
 
-// SubmitSignedProposerPreferences mocks base method.
-func (m *MockValidatorClient) SubmitSignedProposerPreferences(ctx context.Context, in *eth.SubmitSignedProposerPreferencesRequest) (*empty.Empty, error) {
+// PublishExecutionPayloadEnvelope mocks base method.
+func (m *MockValidatorClient) PublishExecutionPayloadEnvelope(ctx context.Context, in *eth.SignedExecutionPayloadEnvelope) (*empty.Empty, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubmitSignedProposerPreferences", ctx, in)
+	ret := m.ctrl.Call(m, "PublishExecutionPayloadEnvelope", ctx, in)
 	ret0, _ := ret[0].(*empty.Empty)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// SubmitSignedProposerPreferences indicates an expected call of SubmitSignedProposerPreferences.
-func (mr *MockValidatorClientMockRecorder) SubmitSignedProposerPreferences(ctx, in any) *gomock.Call {
+// PublishExecutionPayloadEnvelope indicates an expected call of PublishExecutionPayloadEnvelope.
+func (mr *MockValidatorClientMockRecorder) PublishExecutionPayloadEnvelope(ctx, in any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedProposerPreferences", reflect.TypeOf((*MockValidatorClient)(nil).SubmitSignedProposerPreferences), ctx, in)
-}
-
-// SubmitSignedExecutionPayloadBid mocks base method.
-func (m *MockValidatorClient) SubmitSignedExecutionPayloadBid(ctx context.Context, in *eth.SignedExecutionPayloadBid) (*empty.Empty, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubmitSignedExecutionPayloadBid", ctx, in)
-	ret0, _ := ret[0].(*empty.Empty)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// SubmitSignedExecutionPayloadBid indicates an expected call of SubmitSignedExecutionPayloadBid.
-func (mr *MockValidatorClientMockRecorder) SubmitSignedExecutionPayloadBid(ctx, in any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedExecutionPayloadBid", reflect.TypeOf((*MockValidatorClient)(nil).SubmitSignedExecutionPayloadBid), ctx, in)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishExecutionPayloadEnvelope", reflect.TypeOf((*MockValidatorClient)(nil).PublishExecutionPayloadEnvelope), ctx, in)
 }
 
 // StartEventStream mocks base method.
@@ -533,6 +503,36 @@ func (m *MockValidatorClient) SubmitSignedContributionAndProof(ctx context.Conte
 func (mr *MockValidatorClientMockRecorder) SubmitSignedContributionAndProof(ctx, in any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedContributionAndProof", reflect.TypeOf((*MockValidatorClient)(nil).SubmitSignedContributionAndProof), ctx, in)
+}
+
+// SubmitSignedExecutionPayloadBid mocks base method.
+func (m *MockValidatorClient) SubmitSignedExecutionPayloadBid(ctx context.Context, in *eth.SignedExecutionPayloadBid) (*empty.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitSignedExecutionPayloadBid", ctx, in)
+	ret0, _ := ret[0].(*empty.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitSignedExecutionPayloadBid indicates an expected call of SubmitSignedExecutionPayloadBid.
+func (mr *MockValidatorClientMockRecorder) SubmitSignedExecutionPayloadBid(ctx, in any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedExecutionPayloadBid", reflect.TypeOf((*MockValidatorClient)(nil).SubmitSignedExecutionPayloadBid), ctx, in)
+}
+
+// SubmitSignedProposerPreferences mocks base method.
+func (m *MockValidatorClient) SubmitSignedProposerPreferences(ctx context.Context, in *eth.SubmitSignedProposerPreferencesRequest) (*empty.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitSignedProposerPreferences", ctx, in)
+	ret0, _ := ret[0].(*empty.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitSignedProposerPreferences indicates an expected call of SubmitSignedProposerPreferences.
+func (mr *MockValidatorClientMockRecorder) SubmitSignedProposerPreferences(ctx, in any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedProposerPreferences", reflect.TypeOf((*MockValidatorClient)(nil).SubmitSignedProposerPreferences), ctx, in)
 }
 
 // SubmitSyncMessage mocks base method.

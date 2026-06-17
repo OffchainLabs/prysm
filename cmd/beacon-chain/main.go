@@ -52,7 +52,6 @@ var appFlags = []cli.Flag{
 	flags.RPCPort,
 	flags.CertFlag,
 	flags.KeyFlag,
-	flags.HTTPModules,
 	flags.HTTPServerHost,
 	flags.HTTPServerPort,
 	flags.HTTPServerCorsDomain,
@@ -152,6 +151,7 @@ var appFlags = []cli.Flag{
 	flags.SlasherFlag,
 	flags.JwtId,
 	flags.DisableGetBlobsV2,
+	flags.PostponeShutdownForProposals,
 	storage.BlobStoragePathFlag,
 	storage.DataColumnStoragePathFlag,
 	storage.BlobStorageLayout,
@@ -163,6 +163,7 @@ var appFlags = []cli.Flag{
 	flags.BatchVerifierLimit,
 	flags.StateDiffExponents,
 	flags.DisableEphemeralLogFile,
+	flags.PartialDataColumns,
 }
 
 func init() {

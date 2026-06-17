@@ -579,6 +579,35 @@ func TestService_IsOptimisticForRoot_DB_non_canonical(t *testing.T) {
 
 }
 
+func TestService_IsOptimisticForRoot_RecoverLastValidated(t *testing.T) {
+	// Validated checkpoint state summary is missing — recovery must use the
+	// checkpoint root, not the queried root, so the slot comparison is correct.
+	ctx := t.Context()
+	c := testServiceWithDB(t)
+	beaconDB := c.cfg.BeaconDB
+
+	cpBlock := util.NewBeaconBlock()
+	cpBlock.Block.Slot = 1
+	cpRoot, err := cpBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+	util.SaveBlock(t, ctx, beaconDB, cpBlock)
+	st, _ := util.DeterministicGenesisState(t, 1)
+	require.NoError(t, beaconDB.SaveState(ctx, st, cpRoot))
+	require.NoError(t, beaconDB.SaveLastValidatedCheckpoint(ctx, &ethpb.Checkpoint{Root: cpRoot[:]}))
+
+	qBlock := util.NewBeaconBlock()
+	qBlock.Block.Slot = 2
+	qRoot, err := qBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+	util.SaveBlock(t, ctx, beaconDB, qBlock)
+	require.NoError(t, beaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{Root: qRoot[:], Slot: 2}))
+	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, qRoot))
+
+	optimistic, err := c.IsOptimisticForRoot(ctx, qRoot)
+	require.NoError(t, err)
+	require.Equal(t, true, optimistic)
+}
+
 func TestService_IsOptimisticForRoot_StateSummaryRecovered(t *testing.T) {
 	ctx := t.Context()
 	c := testServiceWithDB(t)
@@ -589,7 +618,9 @@ func TestService_IsOptimisticForRoot_StateSummaryRecovered(t *testing.T) {
 	br, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
 	util.SaveBlock(t, t.Context(), beaconDB, b)
-	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, [32]byte{}))
+	cpRoot := [32]byte{'v'}
+	require.NoError(t, beaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{Root: cpRoot[:], Slot: 0}))
+	require.NoError(t, beaconDB.SaveLastValidatedCheckpoint(ctx, &ethpb.Checkpoint{Root: cpRoot[:]}))
 	_, err = c.IsOptimisticForRoot(ctx, br)
 	assert.NoError(t, err)
 	summ, err := beaconDB.StateSummary(ctx, br)
