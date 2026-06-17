@@ -15,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	blocktypes "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
