@@ -16,26 +16,33 @@ import (
 // empty FeeRecipient and callers fall back to DefaultFeeRecipient.
 func (s *Service) trackedProposer(st state.ReadOnlyBeaconState, slot primitives.Slot) (*cache.ProposerPreference, error) {
 	id, err := helpers.BeaconProposerIndexAtSlot(s.ctx, st, slot)
+
+	// PrepareAllPayloads builds a payload for every slot regardless of whether the
+	// proposer is ours; an unresolvable index falls back to default preferences.
+	if features.Get().PrepareAllPayloads {
+		if err != nil {
+			return &cache.ProposerPreference{}, nil
+		}
+		return s.preferenceForProposer(st, slot, id)
+	}
+
+	// Otherwise only build for proposers the BN's VC is attached to.
 	if err != nil {
 		return nil, errors.Wrap(err, "beacon proposer index")
 	}
-	if !features.Get().PrepareAllPayloads && !s.cfg.SubscribedValidatorsCache.Has(id) {
+	if !s.cfg.SubscribedValidatorsCache.Has(id) {
 		return nil, nil
 	}
-	pref, err := s.preferenceForProposer(st, slot, id)
-	if err != nil {
-		return nil, err
-	}
-	return &pref, nil
+	return s.preferenceForProposer(st, slot, id)
 }
 
-func (s *Service) preferenceForProposer(st state.ReadOnlyBeaconState, slot primitives.Slot, id primitives.ValidatorIndex) (cache.ProposerPreference, error) {
+func (s *Service) preferenceForProposer(st state.ReadOnlyBeaconState, slot primitives.Slot, id primitives.ValidatorIndex) (*cache.ProposerPreference, error) {
 	dependentRoot, err := helpers.ProposerDependentRootOrGenesis(s.ctx, s.cfg.BeaconDB, st, slot)
 	if err != nil {
-		return cache.ProposerPreference{ValidatorIndex: id}, errors.Wrap(err, "proposer dependent root")
+		return nil, errors.Wrap(err, "proposer dependent root")
 	}
 	if pref, ok := s.cfg.ProposerPreferencesCache.BestFor(dependentRoot, slot, id); ok {
-		return pref, nil
+		return &pref, nil
 	}
 	// Only noteworthy for our own attached proposers; under PrepareAllPayloads
 	// a miss is the norm for the rest of the network's slots.
@@ -43,5 +50,5 @@ func (s *Service) preferenceForProposer(st state.ReadOnlyBeaconState, slot primi
 		log.WithField("proposerIndex", id).WithField("slot", slot).
 			Debug("No signed proposer preference for attached proposer; using suggested-fee-recipient and parent gas limit")
 	}
-	return cache.ProposerPreference{ValidatorIndex: id}, nil
+	return &cache.ProposerPreference{ValidatorIndex: id}, nil
 }

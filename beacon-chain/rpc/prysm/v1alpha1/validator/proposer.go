@@ -586,7 +586,9 @@ func (vs *Server) PrepareBeaconProposer(
 		// the BN's attached-set up to date for CGC and validating().
 		vs.SubscribedValidatorsCache.Add(r.ValidatorIndex)
 	}
-	log.WithField("validatorCount", len(request.Recipients)).Debug("Updated fee recipient addresses")
+	if len(request.Recipients) > 0 {
+		log.WithField("validatorCount", len(request.Recipients)).Debug("Updated fee recipient addresses")
+	}
 	return &emptypb.Empty{}, nil
 }
 

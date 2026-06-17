@@ -136,8 +136,9 @@ func (vs *Server) SubscribeCommitteeSubnets(ctx context.Context, req *ethpb.Comm
 	if len(req.Slots) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "no attester slots provided")
 	}
-	// validator_indices and committees_at_slot are 1-to-1 with slots when provided;
-	// older VCs may omit them. An empty validator_indices is "no attached-set update".
+	// validator_indices/committees_at_slot are newer optional gRPC fields, so old
+	// VCs omit them (empty = "no attached-set update"). The REST schema has always
+	// required validator_index, so that handler rejects missing values instead.
 	if len(req.ValidatorIndices) > 0 && len(req.ValidatorIndices) != len(req.Slots) {
 		return nil, status.Error(codes.InvalidArgument, "validator_indices length must match slots length when provided")
 	}

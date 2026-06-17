@@ -183,7 +183,6 @@ func (c *ProposerPreferencesCache) Default(index primitives.ValidatorIndex) (Pro
 	}
 	pref, ok := item.(ProposerPreference)
 	if !ok {
-		log.Errorf("Failed to cast default fee recipient from cache, got unexpected item type %T", item)
 		return ProposerPreference{}, false
 	}
 	return pref, true
