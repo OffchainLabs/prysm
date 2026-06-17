@@ -60,7 +60,7 @@ func TestGetExecutionPayloadEnvelope_CachedHit(t *testing.T) {
 	}
 	client.envelopeCache.Add(100, envelope, nil, nil)
 
-	full, blinded, err := client.getExecutionPayloadEnvelope(t.Context(), 100, [32]byte{})
+	full, blinded, err := client.getExecutionPayloadEnvelope(t.Context(), 100, bytesutil.ToBytes32(envelope.BeaconBlockRoot))
 	require.NoError(t, err)
 	require.NotNil(t, full)
 	require.IsNil(t, blinded)
@@ -69,6 +69,27 @@ func TestGetExecutionPayloadEnvelope_CachedHit(t *testing.T) {
 	// Peek must leave the entry in the cache so the publish path can read blob data.
 	cached, _, _ := client.envelopeCache.Peek(100)
 	require.NotNil(t, cached)
+}
+
+// A cached envelope for a different block root must not be returned for the requested block.
+func TestGetExecutionPayloadEnvelope_CachedRootMismatch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	handler := mock.NewMockHandler(ctrl)
+	// No Get expectation: the root mismatch must error before any HTTP call.
+
+	envelope := testProtoEnvelope()
+	client := &beaconApiValidatorClient{
+		handler:       handler,
+		envelopeCache: cache.NewExecutionPayloadEnvelopeCache(),
+	}
+	client.envelopeCache.Add(100, envelope, nil, nil)
+
+	full, blinded, err := client.getExecutionPayloadEnvelope(t.Context(), 100, [32]byte{})
+	require.ErrorContains(t, "does not match requested block", err)
+	require.IsNil(t, full)
+	require.IsNil(t, blinded)
 }
 
 // Stateful: on a local cache miss the VC fetches the blinded envelope from the BN.

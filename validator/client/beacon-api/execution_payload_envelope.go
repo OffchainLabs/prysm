@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -30,6 +31,9 @@ func (c *beaconApiValidatorClient) getExecutionPayloadEnvelope(
 	beaconBlockRoot [32]byte,
 ) (*ethpb.ExecutionPayloadEnvelope, *ethpb.WireBlindedExecutionPayloadEnvelope, error) {
 	if envelope, _, _ := c.envelopeCache.Peek(slot); envelope != nil {
+		if bytesutil.ToBytes32(envelope.BeaconBlockRoot) != beaconBlockRoot {
+			return nil, nil, errors.New("cached execution payload envelope beacon_block_root does not match requested block")
+		}
 		return envelope, nil, nil
 	}
 
