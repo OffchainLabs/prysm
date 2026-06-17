@@ -685,13 +685,6 @@ func TestBeaconApiValidatorClient_StartEventStream_FallsBackToHead(t *testing.T)
 	require.Equal(t, false, strings.Contains(secondTopics, eventClient.EventHeadV2))
 	require.StringContains(t, eventClient.EventHead, secondTopics)
 
-	// The rejected head_v2 attempt surfaces a connection error before the
-	// fallback delivers the head event; skip any connection errors.
-	var e *eventClient.Event
-	for {
-		if e = <-ch; e.EventType != eventClient.EventConnectionError {
-			break
-		}
-	}
+	e := <-ch
 	require.Equal(t, eventClient.EventHead, e.EventType)
 }

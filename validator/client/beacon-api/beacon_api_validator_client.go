@@ -365,10 +365,9 @@ func (c *beaconApiValidatorClient) StartEventStream(ctx context.Context, topics 
 			return
 		}
 
-		// Subscribe surfaces any failure on eventsChannel; its return value tells
-		// us whether to recover. Older beacon nodes reject the head_v2 topic with
-		// HTTP 400 (the whole request fails when any topic is unknown), so fallback
-		// with legacy topics.
+		// Older beacon nodes reject the head_v2 topic with HTTP 400 (the whole
+		// request fails when any topic is unknown), so fallback with legacy topics
+		// before surfacing subscription failures to the validator event loop.
 		err = eventStream.Subscribe(eventsChannel)
 		var subErr *event.SubscriptionError
 		if fallbackTopics, ok := event.LegacyTopicFallback(topics); ok &&
@@ -382,6 +381,15 @@ func (c *beaconApiValidatorClient) StartEventStream(ctx context.Context, topics 
 
 			topics = fallbackTopics
 			continue
+		}
+
+		// If the subscription failed for any other reason,
+		// surface the error to the validator event loop and exit the stream.
+		if errors.As(err, &subErr) {
+			eventsChannel <- &event.Event{
+				EventType: event.EventConnectionError,
+				Data:      []byte(err.Error()),
+			}
 		}
 		return
 	}

@@ -331,7 +331,6 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 
 	t.Run("invalid previous duty dependent root", func(t *testing.T) {
 		head := &structs.HeadEvent{
-			Slot:                      "0",
 			PreviousDutyDependentRoot: "invalid_hex",
 			CurrentDutyDependentRoot:  "0x0405060000000000000000000000000000000000000000000000000000000000",
 		}
@@ -341,7 +340,6 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 
 	t.Run("invalid current duty dependent root", func(t *testing.T) {
 		head := &structs.HeadEvent{
-			Slot:                      "0",
 			PreviousDutyDependentRoot: "0x0102030000000000000000000000000000000000000000000000000000000000",
 			CurrentDutyDependentRoot:  "invalid_hex",
 		}
@@ -351,7 +349,6 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 
 	t.Run("update duties for previous root mismatch", func(t *testing.T) {
 		head := &structs.HeadEvent{
-			Slot:                      "1",
 			PreviousDutyDependentRoot: "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
 			CurrentDutyDependentRoot:  "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
 		}
@@ -369,7 +366,6 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 
 	t.Run("update duties for current root mismatch", func(t *testing.T) {
 		head := &structs.HeadEvent{
-			Slot:                      "1",
 			PreviousDutyDependentRoot: "0x0102030000000000000000000000000000000000000000000000000000000000",
 			CurrentDutyDependentRoot:  "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
 		}
@@ -391,7 +387,6 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 	})
 	t.Run("no updates needed", func(t *testing.T) {
 		head := &structs.HeadEvent{
-			Slot:                      "0",
 			PreviousDutyDependentRoot: "0x0102030000000000000000000000000000000000000000000000000000000000",
 			CurrentDutyDependentRoot:  "0x0405060000000000000000000000000000000000000000000000000000000000",
 		}

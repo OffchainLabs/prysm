@@ -101,22 +101,11 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
 		}
 	}()
 
-	// Check response status code and handle non-200 responses
-	// as connection errors.
-	// e.g., requesting unsupported topics.
+	// Check response status code and let callers decide whether the
+	// subscription failure is recoverable (e.g. fallback for unsupported topics).
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		bodyStr := strings.TrimSpace(string(body))
-		wrapErr := errors.Wrapf(
-			client.ErrConnectionIssue,
-			"received status code %d subscribing to beacon node events: %q",
-			resp.StatusCode,
-			bodyStr,
-		)
-		eventsChannel <- &Event{
-			EventType: EventConnectionError,
-			Data:      []byte(wrapErr.Error()),
-		}
 		return &SubscriptionError{StatusCode: resp.StatusCode, Body: bodyStr}
 	}
 
