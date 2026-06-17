@@ -124,7 +124,7 @@ func ComputeRelativeGindex(parent, child uint64) (uint64, error) {
 
 	// Verify that parent is actually an ancestor: its bits must be a prefix of child's bits.
 	if child>>shift != parent {
-		return 0, fmt.Errorf("parent gindex %d is not an ancestor of child gindex %d", parent, child)
+		return 0, fmt.Errorf("child gindex %d is not deeper than parent gindex %d", parent, child)
 	}
 
 	// Extract the "shift" least significant bits from child
