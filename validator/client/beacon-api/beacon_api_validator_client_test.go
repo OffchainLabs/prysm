@@ -669,7 +669,7 @@ func TestBeaconApiValidatorClient_StartEventStream_FallsBackToHead(t *testing.T)
 	}))
 	defer server.Close()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Host().Return(server.URL).AnyTimes()
 	c := &beaconApiValidatorClient{handler: handler}
 
