@@ -10,23 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-func jsonifyTransactions(transactions [][]byte) []string {
-	jsonTransactions := make([]string, len(transactions))
-	for index, transaction := range transactions {
-		jsonTransaction := hexutil.Encode(transaction)
-		jsonTransactions[index] = jsonTransaction
-	}
-	return jsonTransactions
-}
-
-func jsonifyEth1Data(eth1Data *ethpb.Eth1Data) *structs.Eth1Data {
-	return &structs.Eth1Data{
-		BlockHash:    hexutil.Encode(eth1Data.BlockHash),
-		DepositCount: apiutil.Uint64ToString(eth1Data.DepositCount),
-		DepositRoot:  hexutil.Encode(eth1Data.DepositRoot),
-	}
-}
-
 func jsonifyAttestations(attestations []*ethpb.Attestation) []*structs.Attestation {
 	jsonAttestations := make([]*structs.Attestation, len(attestations))
 	for index, attestation := range attestations {
@@ -57,33 +40,6 @@ func JsonifySignedVoluntaryExits(voluntaryExits []*ethpb.SignedVoluntaryExit) []
 		jsonSignedVoluntaryExits[index] = jsonSignedVoluntaryExit
 	}
 	return jsonSignedVoluntaryExits
-}
-
-func jsonifySignedBeaconBlockHeader(signedBeaconBlockHeader *ethpb.SignedBeaconBlockHeader) *structs.SignedBeaconBlockHeader {
-	return &structs.SignedBeaconBlockHeader{
-		Message: &structs.BeaconBlockHeader{
-			BodyRoot:      hexutil.Encode(signedBeaconBlockHeader.Header.BodyRoot),
-			ParentRoot:    hexutil.Encode(signedBeaconBlockHeader.Header.ParentRoot),
-			ProposerIndex: apiutil.Uint64ToString(signedBeaconBlockHeader.Header.ProposerIndex),
-			Slot:          apiutil.Uint64ToString(signedBeaconBlockHeader.Header.Slot),
-			StateRoot:     hexutil.Encode(signedBeaconBlockHeader.Header.StateRoot),
-		},
-		Signature: hexutil.Encode(signedBeaconBlockHeader.Signature),
-	}
-}
-
-func jsonifyIndexedAttestation(indexedAttestation *ethpb.IndexedAttestation) *structs.IndexedAttestation {
-	attestingIndices := make([]string, len(indexedAttestation.AttestingIndices))
-	for index, attestingIndex := range indexedAttestation.AttestingIndices {
-		attestingIndex := apiutil.Uint64ToString(attestingIndex)
-		attestingIndices[index] = attestingIndex
-	}
-
-	return &structs.IndexedAttestation{
-		AttestingIndices: attestingIndices,
-		Data:             jsonifyAttestationData(indexedAttestation.Data),
-		Signature:        hexutil.Encode(indexedAttestation.Signature),
-	}
 }
 
 func jsonifyAttestationData(attestationData *ethpb.AttestationData) *structs.AttestationData {
