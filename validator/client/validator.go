@@ -896,7 +896,6 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 
 		log.WithFields(logrus.Fields{
 			"slot":                         head.Slot,
-			"block_root":                   head.Block,
 			"previous_duty_dependent_root": head.PreviousDutyDependentRoot,
 			"current_duty_dependent_root":  head.CurrentDutyDependentRoot,
 		}).Debug("Received head event")
