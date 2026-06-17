@@ -50,7 +50,7 @@ func TestValidatorStatus_Nominal(t *testing.T) {
 		nil,
 	).Times(1)
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	validatorClient := beaconApiValidatorClient{
 		stateValidatorsProvider: stateValidatorsProvider,
 		prysmChainClient: prysmChainClient{
@@ -165,7 +165,7 @@ func TestMultipleValidatorStatus_Nominal(t *testing.T) {
 		nil,
 	).Times(1)
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	// Expect node version endpoint call.
 	var nodeVersionResponse structs.GetVersionResponse
@@ -317,7 +317,7 @@ func TestGetValidatorsStatusResponse_Nominal_SomeActiveValidators(t *testing.T) 
 		nil,
 	).Times(1)
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	// Expect node version endpoint call.
 	var nodeVersionResponse structs.GetVersionResponse
@@ -465,7 +465,7 @@ func TestGetValidatorsStatusResponse_Nominal_NoActiveValidators(t *testing.T) {
 		nil,
 	).Times(1)
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	// Expect node version endpoint call.
 	var nodeVersionResponse structs.GetVersionResponse
@@ -704,7 +704,7 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 					testCase.inputGetStateValidatorsInterface.outputErr,
 				).Times(1)
 
-				handler := mock.NewMockJsonRestHandler(ctrl)
+				handler := mock.NewMockHandler(ctrl)
 
 				// Expect node version endpoint call.
 				var nodeVersionResponse structs.GetVersionResponse

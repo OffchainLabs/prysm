@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -1718,7 +1717,7 @@ func fixturesStruct() *payloadFixtures {
 		BlockHash:     foo[:],
 		Transactions:  [][]byte{foo[:]},
 	}
-	executionPayloadBodyFixture := &pb.ExecutionPayloadBody{
+	executionPayloadBodyFixture := &pb.ExecutionPayloadBodyV1{
 		Transactions: []hexutil.Bytes{foo[:]},
 		Withdrawals:  []*pb.Withdrawal{},
 	}
@@ -1775,51 +1774,6 @@ func fixturesStruct() *payloadFixtures {
 		// added on top of the empty payload
 		Transactions: [][]byte{foo[:]},
 		Withdrawals:  []*pb.Withdrawal{},
-	}
-	withdrawalRequests := make([]pb.WithdrawalRequestV1, 3)
-	for i := range withdrawalRequests {
-		amount := hexutil.Uint64(i)
-		address := &common.Address{}
-		address.SetBytes([]byte{0, 0, byte(i)})
-		pubkey := pb.BlsPubkey{}
-		copy(pubkey[:], []byte{0, byte(i)})
-		withdrawalRequests[i] = pb.WithdrawalRequestV1{
-			SourceAddress:   address,
-			ValidatorPubkey: &pubkey,
-			Amount:          &amount,
-		}
-	}
-	depositRequests := make([]pb.DepositRequestV1, 3)
-	for i := range depositRequests {
-		amount := hexutil.Uint64(math.MaxUint16 - i)
-		creds := &common.Hash{}
-		creds.SetBytes([]byte{0, 0, byte(i)})
-		pubkey := pb.BlsPubkey{}
-		copy(pubkey[:], []byte{0, byte(i)})
-		sig := pb.BlsSig{}
-		copy(sig[:], []byte{0, 0, 0, byte(i)})
-		idx := hexutil.Uint64(i)
-		depositRequests[i] = pb.DepositRequestV1{
-			PubKey:                &pubkey,
-			WithdrawalCredentials: creds,
-			Amount:                &amount,
-			Signature:             &sig,
-			Index:                 &idx,
-		}
-	}
-	consolidationRequests := make([]pb.ConsolidationRequestV1, 1)
-	for i := range consolidationRequests {
-		address := &common.Address{}
-		address.SetBytes([]byte{0, 0, byte(i)})
-		sPubkey := pb.BlsPubkey{}
-		copy(sPubkey[:], []byte{0, byte(i)})
-		tPubkey := pb.BlsPubkey{}
-		copy(tPubkey[:], []byte{0, byte(i)})
-		consolidationRequests[i] = pb.ConsolidationRequestV1{
-			SourceAddress: address,
-			SourcePubkey:  &sPubkey,
-			TargetPubkey:  &tPubkey,
-		}
 	}
 	hexUint := hexutil.Uint64(1)
 	executionPayloadWithValueFixtureCapella := &pb.GetPayloadV2ResponseJson{
@@ -2060,7 +2014,7 @@ func fixturesStruct() *payloadFixtures {
 
 type payloadFixtures struct {
 	ExecutionBlock                    *pb.ExecutionBlock
-	ExecutionPayloadBody              *pb.ExecutionPayloadBody
+	ExecutionPayloadBody              *pb.ExecutionPayloadBodyV1
 	ExecutionPayload                  *pb.ExecutionPayload
 	ExecutionPayloadCapella           *pb.ExecutionPayloadCapella
 	EmptyExecutionPayloadDeneb        *pb.ExecutionPayloadDeneb
@@ -2494,7 +2448,7 @@ func TestReconstructBlindedBlockBatch(t *testing.T) {
 		blk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, slot, 0)
 		cli, srv := newMockEngine(t)
 		srv.registerDefault(func(msg *jsonrpcMessage, w http.ResponseWriter, req *http.Request) {
-			executionPayloadBodies := []*pb.ExecutionPayloadBody{nil}
+			executionPayloadBodies := []*pb.ExecutionPayloadBodyV1{nil}
 			mockWriteResult(t, w, msg, executionPayloadBodies)
 		})
 

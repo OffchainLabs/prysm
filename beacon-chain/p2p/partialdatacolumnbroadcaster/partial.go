@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -95,8 +96,15 @@ type PartialColumnBroadcaster struct {
 	// validHeaderCache caches validated headers by group ID (works across topics)
 	validHeaderCache map[string]*ethpb.PartialDataColumnHeader
 	// map groupID -> map[peer.ID]bool
-	headerSentCache map[string]map[peer.ID]bool
-	incomingReq     chan request
+	headerSentCache  map[string]map[peer.ID]bool
+	incomingReq      chan request
+	eagerPushed      map[string]*eagerPushAgg
+	republishSkipped map[string]map[uint64]bool
+}
+
+type eagerPushAgg struct {
+	indices map[uint64]bool
+	peers   map[peer.ID]bool
 }
 
 type requestKind uint8
@@ -253,6 +261,8 @@ func NewBroadcaster(ctx context.Context, logger *logrus.Logger) *PartialColumnBr
 		groupTTL:         make(map[string]int8),
 		validHeaderCache: make(map[string]*ethpb.PartialDataColumnHeader),
 		headerSentCache:  make(map[string]map[peer.ID]bool),
+		eagerPushed:      make(map[string]*eagerPushAgg),
+		republishSkipped: make(map[string]map[uint64]bool),
 
 		// GossipSub sends the messages to this channel. The buffer should be
 		// big enough to avoid dropping messages. We don't want to block the gossipsub event loop for this.
@@ -361,7 +371,10 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 				if _, ok := p.headerSentCache[string(groupID)]; !ok {
 					p.headerSentCache[string(groupID)] = make(map[peer.ID]bool)
 				}
-				return pubsub.PublishPartial(ps, topic, groupID, col.PublishActionsFn(p.headerSentCache[string(groupID)]))
+				onEagerPush := func(remote peer.ID) {
+					p.recordEagerPush(groupID, col.Index, remote)
+				}
+				return pubsub.PublishPartial(ps, topic, groupID, col.PublishActionsFn(p.headerSentCache[string(groupID)], onEagerPush))
 			}
 			return nil
 		},
@@ -428,8 +441,48 @@ func (p *PartialColumnBroadcaster) loop() {
 				}
 			}
 		case <-cleanup.C:
+			p.flushAggregatedLogs()
 			p.evictExpiredGroups()
 		}
+	}
+}
+
+func (p *PartialColumnBroadcaster) recordEagerPush(groupID []byte, columnIndex uint64, remote peer.ID) {
+	agg, ok := p.eagerPushed[string(groupID)]
+	if !ok {
+		agg = &eagerPushAgg{indices: make(map[uint64]bool), peers: make(map[peer.ID]bool)}
+		p.eagerPushed[string(groupID)] = agg
+	}
+	agg.indices[columnIndex] = true
+	agg.peers[remote] = true
+}
+
+func (p *PartialColumnBroadcaster) recordRepublishSkip(groupID []byte, columnIndex uint64) {
+	indices, ok := p.republishSkipped[string(groupID)]
+	if !ok {
+		indices = make(map[uint64]bool)
+		p.republishSkipped[string(groupID)] = indices
+	}
+	indices[columnIndex] = true
+}
+
+func (p *PartialColumnBroadcaster) flushAggregatedLogs() {
+	for groupID, agg := range p.eagerPushed {
+		p.logger.WithFields(logrus.Fields{
+			"group":   fmt.Sprintf("%#x", groupID),
+			"count":   len(agg.indices),
+			"indices": helpers.SortedPrettySliceFromMap(agg.indices),
+			"peers":   len(agg.peers),
+		}).Debug("Eager pushed partial data columns")
+		delete(p.eagerPushed, groupID)
+	}
+	for groupID, indices := range p.republishSkipped {
+		p.logger.WithFields(logrus.Fields{
+			"group":   fmt.Sprintf("%#x", groupID),
+			"count":   len(indices),
+			"indices": helpers.SortedPrettySliceFromMap(indices),
+		}).Debug("Columns not published, skipping republish")
+		delete(p.republishSkipped, groupID)
 	}
 }
 
@@ -713,7 +766,7 @@ func (p *PartialColumnBroadcaster) getHeader(groupID []byte, message *ethpb.Part
 func (p *PartialColumnBroadcaster) republishColumn(ourDataColumn *blocks.PartialDataColumn, rpc incomingPartialRPC,
 	shouldRepublish bool) error {
 	if !ourDataColumn.Published {
-		p.logger.WithFields(rpc.logFields()).Debug("Column not published, skipping republish")
+		p.recordRepublishSkip(rpc.GroupID, ourDataColumn.Index)
 		return nil
 	}
 
@@ -809,15 +862,19 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 	}
 	ourDataColumn := ourVerifier.Column
 	var extended bool
+	var extendedCount int
 	for i, bundle := range cells.cells {
 		if bundle.ColumnIndex != ourDataColumn.Index {
 			return errors.New("cell bundle has wrong column index")
 		}
 		if ourVerifier.ExtendFromVerifiedCell(cells.cellIndices[i], bundle.Cell, bundle.Proof) {
 			extended = true
+			extendedCount++
 		}
 	}
-	p.logger.WithFields(logrus.Fields{"duration": cells.validationTook, "extended": extended}).Debug("Extended partial message")
+	if extended {
+		p.logger.WithFields(logrus.Fields{"duration": cells.validationTook, "extended": extended, "extendedCount": extendedCount}).WithFields(cells.logFields()).Debug("Extended partial message")
+	}
 
 	columnIndexStr := strconv.FormatUint(ourDataColumn.Index, 10)
 	if extended {
@@ -832,12 +889,10 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 		if ok {
 			p.logger.WithFields(cells.logFields()).Info("Completed partial column")
 			go p.callbacks.HandleColumn(cells.topic, col)
-		} else {
-			p.logger.WithFields(cells.logFields()).Info("Extended partial column")
 		}
 
 		if !ourDataColumn.Published {
-			p.logger.WithFields(cells.logFields()).Debug("Column not published, skipping republish")
+			p.recordRepublishSkip(cells.group, ourDataColumn.Index)
 			return nil
 		}
 

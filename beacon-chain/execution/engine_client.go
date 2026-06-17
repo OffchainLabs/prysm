@@ -657,7 +657,7 @@ func (s *Service) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash)
 	if err := s.rpcClient.CallContext(ctx, &result, GetBlobsV3, versionedHashes); err != nil {
 		return nil, handleRPCError(err)
 	}
-	getBlobsV3Latency.Observe(float64(time.Since(start).Seconds()))
+	getBlobsV3Latency.Observe(float64(time.Since(start).Milliseconds()))
 	return result, nil
 }
 
@@ -1177,7 +1177,7 @@ func upgradeSidecarsToVerifiedSidecars(roSidecars []blocks.RODataColumn) []block
 }
 
 func fullPayloadFromPayloadBody(
-	header interfaces.ExecutionData, body *pb.ExecutionPayloadBody, bVersion int,
+	header interfaces.ExecutionData, body *pb.ExecutionPayloadBodyV1, bVersion int,
 ) (interfaces.ExecutionData, error) {
 	if header == nil || header.IsNil() || body == nil {
 		return nil, errors.New("execution block and header cannot be nil")

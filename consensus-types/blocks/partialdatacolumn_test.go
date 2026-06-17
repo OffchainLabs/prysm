@@ -998,7 +998,7 @@ func runPublishActions(
 	headerSentCache map[peer.ID]bool,
 	requests map[peer.ID]bool,
 ) map[peer.ID]partialmessages.PublishAction {
-	seq := p.PublishActionsFn(headerSentCache)(peerStates, func(id peer.ID) bool { return requests[id] })
+	seq := p.PublishActionsFn(headerSentCache, nil)(peerStates, func(id peer.ID) bool { return requests[id] })
 	return maps.Collect(seq)
 }
 
@@ -1043,7 +1043,7 @@ func TestPartialDataColumn_PublishActionsFn(t *testing.T) {
 					"peer-b": {},
 				}
 				headerSentCache := map[peer.ID]bool{}
-				seq := p.PublishActionsFn(headerSentCache)(peerStates, func(peer.ID) bool { return true })
+				seq := p.PublishActionsFn(headerSentCache, nil)(peerStates, func(peer.ID) bool { return true })
 
 				yielded := 0
 				for _, action := range seq {
@@ -1083,6 +1083,27 @@ func TestPartialDataColumn_PublishActionsFn(t *testing.T) {
 				require.NotNil(t, action.EncodedPartsMetadata)
 				require.NotNil(t, peerStates["peer-a"].Recvd)
 				require.Equal(t, true, headerSentCache["peer-a"])
+			},
+		},
+		{
+			name: "onEagerPush fires only for eager pushed peers",
+			run: func(t *testing.T) {
+				p := mustNewPartialColumn(t, 3, 0, 1, 2)
+				peerStates := map[peer.ID]PartialDataColumnPeerState{
+					// Fresh state and requests partial → eager push.
+					"peer-a": {},
+					// Known state → normal path.
+					"peer-b": {Recvd: testPeerMeta(3, nil, allSet(3))},
+					// Fresh state but does not request partial → no eager push.
+					"peer-c": {},
+				}
+				var eagerPushed []peer.ID
+				onEagerPush := func(id peer.ID) { eagerPushed = append(eagerPushed, id) }
+				requests := map[peer.ID]bool{"peer-a": true, "peer-b": true}
+				seq := p.PublishActionsFn(map[peer.ID]bool{}, onEagerPush)(peerStates, func(id peer.ID) bool { return requests[id] })
+				actions := maps.Collect(seq)
+				require.Equal(t, 3, len(actions))
+				require.DeepEqual(t, []peer.ID{"peer-a"}, eagerPushed)
 			},
 		},
 		{
