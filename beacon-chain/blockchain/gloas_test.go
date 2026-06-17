@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
