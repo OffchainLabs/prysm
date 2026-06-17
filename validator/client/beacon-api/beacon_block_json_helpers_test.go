@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
-	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -200,40 +199,5 @@ func TestBeaconBlockJsonHelpers_JsonifyAttestationData(t *testing.T) {
 	}
 
 	result := jsonifyAttestationData(input)
-	assert.DeepEqual(t, expectedResult, result)
-}
-
-func TestBeaconBlockJsonHelpers_JsonifyWithdrawals(t *testing.T) {
-	input := []*enginev1.Withdrawal{
-		{
-			Index:          1,
-			ValidatorIndex: 2,
-			Address:        []byte{3},
-			Amount:         4,
-		},
-		{
-			Index:          5,
-			ValidatorIndex: 6,
-			Address:        []byte{7},
-			Amount:         8,
-		},
-	}
-
-	expectedResult := []*structs.Withdrawal{
-		{
-			WithdrawalIndex:  "1",
-			ValidatorIndex:   "2",
-			ExecutionAddress: hexutil.Encode([]byte{3}),
-			Amount:           "4",
-		},
-		{
-			WithdrawalIndex:  "5",
-			ValidatorIndex:   "6",
-			ExecutionAddress: hexutil.Encode([]byte{7}),
-			Amount:           "8",
-		},
-	}
-
-	result := jsonifyWithdrawals(input)
 	assert.DeepEqual(t, expectedResult, result)
 }

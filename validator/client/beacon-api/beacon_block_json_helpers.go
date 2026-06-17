@@ -1,11 +1,8 @@
 package beacon_api
 
 import (
-	"strconv"
-
 	"github.com/OffchainLabs/prysm/v7/api/apiutil"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
-	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -104,17 +101,4 @@ func jsonifySignedAggregateAndProofElectra(signedAggregateAndProof *ethpb.Signed
 		},
 		Signature: hexutil.Encode(signedAggregateAndProof.Signature),
 	}
-}
-
-func jsonifyWithdrawals(withdrawals []*enginev1.Withdrawal) []*structs.Withdrawal {
-	jsonWithdrawals := make([]*structs.Withdrawal, len(withdrawals))
-	for index, withdrawal := range withdrawals {
-		jsonWithdrawals[index] = &structs.Withdrawal{
-			WithdrawalIndex:  strconv.FormatUint(withdrawal.Index, 10),
-			ValidatorIndex:   strconv.FormatUint(uint64(withdrawal.ValidatorIndex), 10),
-			ExecutionAddress: hexutil.Encode(withdrawal.Address),
-			Amount:           strconv.FormatUint(withdrawal.Amount, 10),
-		}
-	}
-	return jsonWithdrawals
 }
