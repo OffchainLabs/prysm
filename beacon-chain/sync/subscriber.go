@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -860,18 +859,6 @@ func (*Service) addDigestAndIndexToTopic(topic string, digest [4]byte, idx uint6
 
 func (s *Service) currentForkDigest() ([4]byte, error) {
 	return params.ForkDigest(s.cfg.clock.CurrentEpoch()), nil
-}
-
-// Checks if the provided digest matches up with the current supposed digest.
-func isDigestValid(digest [4]byte, clock *startup.Clock) (bool, error) {
-	current := clock.CurrentEpoch()
-	// In the event there is a fork the next epoch,
-	// we skip the check, as we subscribe subnets an
-	// epoch in advance.
-	if params.NextNetworkScheduleEntry(current).Epoch == current+1 {
-		return true, nil
-	}
-	return params.ForkDigest(current) == digest, nil
 }
 
 // computeAllNeededSubnets computes the subnets we want to join
