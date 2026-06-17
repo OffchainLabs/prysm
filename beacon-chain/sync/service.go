@@ -581,15 +581,6 @@ func (s *Service) chainIsStarted() bool {
 	return s.chainStarted.IsSet()
 }
 
-func (s *Service) waitForInitialSync(ctx context.Context) error {
-	select {
-	case <-s.initialSyncComplete:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
 // UpdateCustodyInfoInDB updates the custody information in the database.
 // It returns the (potentially updated) custody group count and the earliest available slot.
 func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, uint64, error) {

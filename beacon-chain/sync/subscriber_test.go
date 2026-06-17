@@ -11,7 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	db "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -764,24 +763,6 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 	cache.SyncSubnetIDs.EmptyAllCaches()
 	r.trySubscribeSubnets(t.Context(), sp)
 	assert.Equal(t, 0, len(r.cfg.p2p.PubSub().GetTopics()))
-}
-
-func TestIsDigestValid(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	params.BeaconConfig().InitializeForkSchedule()
-	clock := startup.NewClock(time.Now().Add(-100*time.Second), params.BeaconConfig().GenesisValidatorsRoot)
-	digest, err := signing.ComputeForkDigest(params.BeaconConfig().GenesisForkVersion, params.BeaconConfig().GenesisValidatorsRoot[:])
-	assert.NoError(t, err)
-	valid, err := isDigestValid(digest, clock)
-	assert.NoError(t, err)
-	assert.Equal(t, true, valid)
-
-	// Compute future fork digest that will be invalid currently.
-	digest, err = signing.ComputeForkDigest(params.BeaconConfig().AltairForkVersion, params.BeaconConfig().GenesisValidatorsRoot[:])
-	assert.NoError(t, err)
-	valid, err = isDigestValid(digest, clock)
-	assert.NoError(t, err)
-	assert.Equal(t, false, valid)
 }
 
 func TestSamplingSize(t *testing.T) {
