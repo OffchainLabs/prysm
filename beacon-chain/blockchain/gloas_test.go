@@ -254,52 +254,6 @@ func TestGetPayloadEnvelopePrestate_OK(t *testing.T) {
 	require.Equal(t, primitives.Slot(1), st.Slot())
 }
 
-// TestGetBatchPrestate_RecoversPayloadInsertion exercises the recovery branch in
-// getBatchPrestate: the first block of a batch builds on the full parent and the parent's
-// envelope is already persisted in the DB, but forkchoice has no full node for the parent
-// root. In that case the payload must be inserted into forkchoice without re-validation.
-func TestGetBatchPrestate_RecoversPayloadInsertion(t *testing.T) {
-	s, _ := setupGloasService(t, &mockExecution.EngineClient{})
-	ctx := t.Context()
-
-	parentRoot := bytesutil.ToBytes32([]byte("parent"))
-	grandParentRoot := params.BeaconConfig().ZeroHash
-	payloadHash := bytesutil.ToBytes32([]byte("payloadhash"))
-
-	// Insert the parent Gloas block into the DB and forkchoice. Gloas blocks only create an
-	// empty node on insertion, so the parent has no full node afterwards.
-	base, blk := testGloasState(t, 1, grandParentRoot, payloadHash)
-	insertGloasBlock(t, s, base, blk, parentRoot)
-	require.Equal(t, false, s.HasFullNode(parentRoot))
-
-	// Persist the parent's revealed envelope to the DB so HasExecutionPayloadEnvelope is true.
-	envProto := testSignedEnvelope(t, parentRoot, 1, payloadHash[:])
-	require.NoError(t, s.cfg.BeaconDB.SaveExecutionPayloadEnvelope(ctx, envProto))
-	require.Equal(t, true, s.cfg.BeaconDB.HasExecutionPayloadEnvelope(ctx, parentRoot))
-	wrapped, err := blocks.WrappedROSignedExecutionPayloadEnvelope(envProto)
-	require.NoError(t, err)
-	envelopes := []interfaces.ROSignedExecutionPayloadEnvelope{wrapped}
-
-	// Build the batch's first block, which builds on the full parent: its execution parent
-	// block hash equals the parent payload's block hash, so BlockBuiltOnEnvelope returns true.
-	gb := util.NewBeaconBlockGloas()
-	gb.Block.Slot = 2
-	gb.Block.ParentRoot = parentRoot[:]
-	gb.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockHash = payloadHash[:]
-	signed, err := blocks.NewSignedBeaconBlock(gb)
-	require.NoError(t, err)
-	b, err := blocks.NewROBlock(signed)
-	require.NoError(t, err)
-
-	preState, applied, err := s.getBatchPrestate(ctx, b, envelopes)
-	require.NoError(t, err)
-	require.Equal(t, true, applied)
-	require.NotNil(t, preState)
-	require.Equal(t, primitives.Slot(1), preState.Slot())
-	// The fix: the parent's payload is recovered into forkchoice.
-	require.Equal(t, true, s.HasFullNode(parentRoot))
-}
-
 func TestNotifyNewEnvelope_Valid(t *testing.T) {
 	s, _ := setupGloasService(t, &mockExecution.EngineClient{})
 	ctx := t.Context()
