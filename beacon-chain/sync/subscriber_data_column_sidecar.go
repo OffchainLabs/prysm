@@ -46,7 +46,7 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 	if err != nil {
 		return errors.Wrap(err, "proposer index")
 	}
-	if !s.hasSeenDataColumnIndex(sidecar.Slot(), proposerIndex, sidecar.Index()) {
+	if !s.hasSeenDataColumnIndex(sidecar.Slot(), proposerIndex, sidecar.Index()) && !sidecar.IsGloas() {
 		usefulFullColumnsReceivedTotal.WithLabelValues(strconv.FormatUint(sidecar.Index(), 10)).Inc()
 		// re-publish the full column on the partial column extension as we don't send full columns to peers
 		// who have explicitly requested for partial columns. This method is idempotent so this is fine.
