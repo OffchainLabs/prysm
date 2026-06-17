@@ -44,7 +44,7 @@ func TestSubscribeCommitteeSubnets_Valid(t *testing.T) {
 
 	ctx := t.Context()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		subscribeCommitteeSubnetsTestEndpoint,
@@ -161,7 +161,7 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 
 			ctx := t.Context()
 
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 			if testCase.expectSubscribeRestCall {
 				handler.EXPECT().Post(
 					gomock.Any(),
