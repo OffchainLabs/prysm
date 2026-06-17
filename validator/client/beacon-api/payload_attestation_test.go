@@ -27,7 +27,7 @@ func TestPayloadAttestationData(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	resp := structs.GetPayloadAttestationDataResponse{}
 	handler.EXPECT().Get(
@@ -58,7 +58,7 @@ func TestPayloadAttestationData_NilData(t *testing.T) {
 	ctx := t.Context()
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	handler.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
@@ -71,7 +71,7 @@ func TestPayloadAttestationData_EndpointError(t *testing.T) {
 	ctx := t.Context()
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	handler.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("boom")).Times(1)
 
@@ -121,7 +121,7 @@ func TestSubmitPayloadAttestation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 
 			var body []byte
 			if tt.msg != nil && tt.msg.Data != nil {
