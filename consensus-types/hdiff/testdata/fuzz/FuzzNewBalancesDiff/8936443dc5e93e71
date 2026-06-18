@@ -1,0 +1,3 @@
+go test fuzz v1
+byte('\x00')
+[]byte("O\xb1\xe5\x15\xefJ\x1bs\\")
