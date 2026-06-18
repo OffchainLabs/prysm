@@ -41,6 +41,7 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 				p.BuilderConfig = BuilderConfigFromConsensus(optionPayload.Builder)
 			}
 			p.GasLimit = optionPayload.GasLimit
+			p.MaxExecutionPayment = optionPayload.MaxExecutionPayment
 			settings.ProposeConfig[bytesutil.ToBytes48(decodedKey)] = p
 		}
 	}
@@ -61,6 +62,7 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 			d.BuilderConfig = BuilderConfigFromConsensus(ps.DefaultConfig.Builder)
 		}
 		d.GasLimit = ps.DefaultConfig.GasLimit
+		d.MaxExecutionPayment = ps.DefaultConfig.MaxExecutionPayment
 		settings.DefaultConfig = d
 	}
 	return settings, nil
@@ -82,10 +84,9 @@ func verifyOption(key string, option *validatorpb.ProposerOptionPayload) error {
 // BuilderConfig is the struct representation of the JSON config file set in the validator through the CLI.
 // GasLimit is a number set to help the network decide on the maximum gas in each block.
 type BuilderConfig struct {
-	Enabled             bool             `json:"enabled" yaml:"enabled"`
-	GasLimit            validator.Uint64 `json:"gas_limit,omitempty" yaml:"gas_limit,omitempty"`
-	Relays              []string         `json:"relays,omitempty" yaml:"relays,omitempty"`
-	MaxExecutionPayment validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"`
+	Enabled  bool             `json:"enabled" yaml:"enabled"`
+	GasLimit validator.Uint64 `json:"gas_limit,omitempty" yaml:"gas_limit,omitempty"`
+	Relays   []string         `json:"relays,omitempty" yaml:"relays,omitempty"`
 }
 
 // BuilderConfigFromConsensus converts protobuf to a builder config used in in-memory storage
@@ -94,9 +95,8 @@ func BuilderConfigFromConsensus(from *validatorpb.BuilderConfig) *BuilderConfig 
 		return nil
 	}
 	c := &BuilderConfig{
-		Enabled:             from.Enabled,
-		GasLimit:            from.GasLimit,
-		MaxExecutionPayment: from.MaxExecutionPayment,
+		Enabled:  from.Enabled,
+		GasLimit: from.GasLimit,
 	}
 	if from.Relays != nil {
 		relays := make([]string, len(from.Relays))
@@ -163,10 +163,11 @@ type GraffitiConfig struct {
 // Option is a Prysm internal representation of the ProposerOptionPayload on the validator client in bytes format instead of hex.
 // GasLimit is the v2 home for the gas-limit signal, per-pubkey or in default_config.
 type Option struct {
-	FeeRecipientConfig *FeeRecipientConfig
-	BuilderConfig      *BuilderConfig
-	GraffitiConfig     *GraffitiConfig
-	GasLimit           validator.Uint64
+	FeeRecipientConfig  *FeeRecipientConfig
+	BuilderConfig       *BuilderConfig
+	GraffitiConfig      *GraffitiConfig
+	GasLimit            validator.Uint64
+	MaxExecutionPayment validator.Uint64
 }
 
 // Clone creates a deep copy of proposer option
@@ -174,7 +175,7 @@ func (po *Option) Clone() *Option {
 	if po == nil {
 		return nil
 	}
-	p := &Option{GasLimit: po.GasLimit}
+	p := &Option{GasLimit: po.GasLimit, MaxExecutionPayment: po.MaxExecutionPayment}
 	if po.FeeRecipientConfig != nil {
 		p.FeeRecipientConfig = po.FeeRecipientConfig.Clone()
 	}
@@ -191,7 +192,7 @@ func (po *Option) ToConsensus() *validatorpb.ProposerOptionPayload {
 	if po == nil {
 		return nil
 	}
-	p := &validatorpb.ProposerOptionPayload{GasLimit: po.GasLimit}
+	p := &validatorpb.ProposerOptionPayload{GasLimit: po.GasLimit, MaxExecutionPayment: po.MaxExecutionPayment}
 	if po.FeeRecipientConfig != nil {
 		p.FeeRecipient = po.FeeRecipientConfig.FeeRecipient.Hex()
 	}
@@ -241,7 +242,6 @@ func (bc *BuilderConfig) Clone() *BuilderConfig {
 	c := &BuilderConfig{}
 	c.Enabled = bc.Enabled
 	c.GasLimit = bc.GasLimit
-	c.MaxExecutionPayment = bc.MaxExecutionPayment
 	var relays []string
 	if bc.Relays != nil {
 		relays = make([]string, len(bc.Relays))
@@ -273,7 +273,6 @@ func (bc *BuilderConfig) ToConsensus() *validatorpb.BuilderConfig {
 		c.Relays = relays
 	}
 	c.GasLimit = bc.GasLimit
-	c.MaxExecutionPayment = bc.MaxExecutionPayment
 	return c
 }
 
