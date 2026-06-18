@@ -52,7 +52,6 @@ var appFlags = []cli.Flag{
 	flags.RPCPort,
 	flags.CertFlag,
 	flags.KeyFlag,
-	flags.HTTPModules,
 	flags.HTTPServerHost,
 	flags.HTTPServerPort,
 	flags.HTTPServerCorsDomain,
@@ -164,6 +163,7 @@ var appFlags = []cli.Flag{
 	flags.BatchVerifierLimit,
 	flags.StateDiffExponents,
 	flags.DisableEphemeralLogFile,
+	flags.PartialDataColumns,
 }
 
 func init() {

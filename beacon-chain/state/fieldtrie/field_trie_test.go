@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
@@ -62,6 +63,164 @@ func newTestOverlay(t *testing.T) (base *FieldTrie, overlay *FieldTrie, overlayR
 	overlay, overlayRoot, err = base.RecomputeTrie([]uint64{0}, blockRoots)
 	require.NoError(t, err)
 	return base, overlay, overlayRoot, blockRoots
+}
+
+// reconstructRoot folds a leaf and its sibling proof back up to the trie root.
+func reconstructRoot(leaf [32]byte, proof [][32]byte, index uint64) [32]byte {
+	hasher := hash.CustomSHA256Hasher()
+	node := leaf
+	idx := index
+	var combined [64]byte
+	for _, sibling := range proof {
+		if idx%2 == 0 {
+			copy(combined[:32], node[:])
+			copy(combined[32:], sibling[:])
+		} else {
+			copy(combined[:32], sibling[:])
+			copy(combined[32:], node[:])
+		}
+
+		node = hasher(combined[:])
+		idx /= 2
+	}
+
+	return node
+}
+
+func TestFieldTrie_ProveField(t *testing.T) {
+	type proveCase struct {
+		name     string
+		field    types.FieldIndex
+		dataType types.DataType
+		length   uint64
+		indices  []uint64
+
+		// setup builds fresh elements for the case and returns a closure that
+		// mutates leaf 0 in place (used to drive the overlay path).
+		setup func() (elements any, mutateLeaf0 func())
+	}
+
+	cases := []proveCase{
+		{
+			name:     "BasicArray",
+			field:    types.BlockRoots,
+			dataType: types.BasicArray,
+			length:   testBlockRootsSize,
+			indices:  []uint64{0, 1, 42, testBlockRootsSize - 1},
+			setup: func() (any, func()) {
+				blockRoots, _, _ := newTestElements()
+				return blockRoots, func() {
+					binary.LittleEndian.PutUint64(blockRoots[0][:8], 999_999)
+				}
+			},
+		},
+		{
+			name:     "CompositeArray",
+			field:    types.Eth1DataVotes,
+			dataType: types.CompositeArray,
+			length:   testVotesSize,
+			indices:  []uint64{0, 1, 42, testVotesSize - 1},
+			setup: func() (any, func()) {
+				_, votes, _ := newTestElements()
+				return votes, func() {
+					votes[0].DepositCount = 999_999
+				}
+			},
+		},
+		{
+			name:     "CompressedArray",
+			field:    types.Balances,
+			dataType: types.CompressedArray,
+			length:   testNumBalances / 4,
+			indices:  []uint64{0, 1, 31, testNumBalances/4 - 1},
+			setup: func() (any, func()) {
+				_, _, balances := newTestElements()
+				return balances, func() {
+					balances[0] = 999_999
+				}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("owned mode proof reconstructs root", func(t *testing.T) {
+				elements, _ := tc.setup()
+
+				ft, err := NewFieldTrie(tc.field, tc.dataType, elements, tc.length, 0)
+				require.NoError(t, err)
+
+				root, err := ft.TrieRoot()
+				require.NoError(t, err)
+
+				for _, idx := range tc.indices {
+					leaf, proof, err := ft.ProveField(idx)
+					require.NoError(t, err)
+					require.Equal(t, root, reconstructRoot(leaf, proof, idx))
+
+					// CompositeArray/CompressedArray append one more leaf
+					// (length-mixin leaf).
+					wantLen := int(ft.depth())
+					if tc.dataType == types.CompressedArray || tc.dataType == types.CompositeArray {
+						wantLen++
+					}
+
+					require.Equal(t, wantLen, len(proof))
+				}
+			})
+
+			t.Run("overlay mode proof reconstructs root", func(t *testing.T) {
+				elements, mutateLeaf0 := tc.setup()
+
+				base, err := NewFieldTrie(tc.field, tc.dataType, elements, tc.length, 0)
+				require.NoError(t, err)
+
+				// Share the trie by copying it, and mutate leaf 0 in place.
+				cp := base.CopyTrie()
+				mutateLeaf0()
+
+				overlay, overlayRoot, err := base.RecomputeTrie([]uint64{0}, elements)
+				require.NoError(t, err)
+
+				// Prevent the GC from collecting cp before ProveField.
+				runtime.KeepAlive(cp)
+
+				for _, idx := range tc.indices {
+					leaf, proof, err := overlay.ProveField(idx)
+					require.NoError(t, err)
+					require.Equal(t, overlayRoot, reconstructRoot(leaf, proof, idx))
+				}
+			})
+		})
+	}
+
+	t.Run("index out of bounds", func(t *testing.T) {
+		blockRoots, _, _ := newTestElements()
+		ft, err := NewFieldTrie(types.BlockRoots, types.BasicArray, blockRoots, testBlockRootsSize, 0)
+		require.NoError(t, err)
+
+		_, _, err = ft.ProveField(testBlockRootsSize)
+		require.ErrorContains(t, "out of bounds", err)
+	})
+
+	t.Run("empty trie returns ErrEmptyFieldTrie", func(t *testing.T) {
+		ft := &FieldTrie{}
+		_, _, err := ft.ProveField(0)
+		require.ErrorIs(t, err, ErrEmptyFieldTrie)
+	})
+
+	t.Run("invalid trie with zero root level returns ErrInvalidFieldTrie", func(t *testing.T) {
+		ft := &FieldTrie{
+			nodesData: &nodesData{
+				nodes:   [][32]byte{},
+				offsets: []uint64{0, 0, 0},
+			},
+			dataType:   types.BasicArray,
+			numOfElems: 1,
+		}
+		_, _, err := ft.ProveField(0)
+		require.ErrorIs(t, err, ErrInvalidFieldTrie)
+	})
 }
 
 // requireFreshTrieRoot builds a fresh trie from elements and asserts its root matches expectedRoot.

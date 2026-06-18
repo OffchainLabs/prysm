@@ -223,6 +223,9 @@ func TestGetSpec(t *testing.T) {
 	var dam [4]byte
 	copy(dam[:], []byte{'1', '0', '0', '0'})
 	config.DomainApplicationMask = dam
+	var dra [4]byte
+	copy(dra[:], []byte{'1', '0', '0', '1'})
+	config.DomainRequestAuth = dra
 	params.OverrideBeaconConfig(config)
 
 	request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/config/spec", nil)
@@ -235,7 +238,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 206, len(data))
+	assert.Equal(t, 207, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -451,6 +454,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "0x30303039", v)
 			case "DOMAIN_APPLICATION_MASK":
 				assert.Equal(t, "0x31303030", v)
+			case "DOMAIN_REQUEST_AUTH":
+				assert.Equal(t, "0x31303031", v)
 			case "DOMAIN_SYNC_COMMITTEE":
 				assert.Equal(t, "0x07000000", v)
 			case "DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF":

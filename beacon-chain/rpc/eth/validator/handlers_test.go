@@ -4569,6 +4569,7 @@ func TestSubmitSignedProposerPreferences_OK(t *testing.T) {
 		TimeFetcher:              &mockChain.ChainService{Slot: &currentSlot},
 		P2P:                      &p2pmock.MockBroadcaster{},
 		ProposerPreferencesCache: c,
+		OperationNotifier:        (&mockChain.ChainService{}).OperationNotifier(),
 	}
 
 	s := &Server{V1Alpha1Server: v1alpha1Server}

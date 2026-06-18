@@ -13,6 +13,7 @@ proto_mocks_v1alpha1=(
       "$mock_path/beacon_service_mock.go BeaconChainClient"
       "$mock_path/beacon_validator_server_mock.go BeaconNodeValidatorServer,BeaconNodeValidator_WaitForActivationServer,BeaconNodeValidator_WaitForChainStartServer,BeaconNodeValidator_StreamSlotsServer"
       "$mock_path/beacon_validator_client_mock.go BeaconNodeValidatorClient,BeaconNodeValidator_WaitForChainStartClient,BeaconNodeValidator_WaitForActivationClient,BeaconNodeValidator_StreamSlotsClient"
+      "$mock_path/beacon_altair_validator_server_mock.go BeaconNodeValidator_StreamBlocksAltairServer"
       "$mock_path/node_service_mock.go NodeClient"
 )
 
