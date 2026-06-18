@@ -1,0 +1,159 @@
+package kurtosis
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"strings"
+	"testing"
+
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
+	"github.com/kurtosis-tech/kurtosis/api/golang/core/lib/enclaves"
+	"github.com/kurtosis-tech/kurtosis/api/golang/core/lib/services"
+	"github.com/kurtosis-tech/kurtosis/api/golang/core/lib/starlark_run_config"
+	"github.com/kurtosis-tech/kurtosis/api/golang/engine/lib/kurtosis_context"
+	"google.golang.org/grpc"
+)
+
+// KurtosisWrapper drives a local Kurtosis engine for Kurtosis-backed E2E tests.
+// It manages enclave lifecycle (creation, destruction).
+type KurtosisWrapper struct {
+	t           *testing.T
+	ctx         context.Context
+	kurtosisCtx *kurtosis_context.KurtosisContext
+	enclaveName string
+	enclaveCtx  *enclaves.EnclaveContext
+}
+
+func NewKurtosisWrapper(t *testing.T, ctx context.Context, name string) (*KurtosisWrapper, error) {
+	kurtosisCtx, err := kurtosis_context.NewKurtosisContextFromLocalEngine()
+	if err != nil {
+		return nil, fmt.Errorf("get kurtosis context from local engine: %w", err)
+	}
+
+	return &KurtosisWrapper{
+		t:           t,
+		ctx:         ctx,
+		kurtosisCtx: kurtosisCtx,
+		enclaveName: name,
+	}, nil
+}
+
+// CreateEnclave creates a new enclave with the wrapper's enclave name.
+// Before creation, destroy any existing enclave with the same name
+// for idempotency
+func (kw *KurtosisWrapper) CreateEnclave() error {
+	enclavesInfo, err := kw.kurtosisCtx.GetEnclaves(kw.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to check for pre-existing Kurtosis enclaves: %s: %w", kw.enclaveName, err)
+	}
+	enclaveInfoMap := enclavesInfo.GetEnclavesByName()
+	if _, exists := enclaveInfoMap[kw.enclaveName]; exists {
+		kw.t.Logf("Enclave with name '%s' already exists; destroying it for idempotency", kw.enclaveName)
+		if err := kw.DestroyEnclave(); err != nil {
+			return fmt.Errorf("failed to destroy pre-existing Kurtosis enclave: %s: %w", kw.enclaveName, err)
+		}
+	}
+
+	enclaveCtx, err := kw.kurtosisCtx.CreateEnclave(kw.ctx, kw.enclaveName)
+	if err != nil {
+		return fmt.Errorf("failed to create Kurtosis enclave: %s: %w", kw.enclaveName, err)
+	}
+
+	kw.enclaveCtx = enclaveCtx
+
+	return nil
+}
+
+// DestroyEnclave destroys the enclave and reset enclave context and name.
+func (kw *KurtosisWrapper) DestroyEnclave() error {
+	err := kw.kurtosisCtx.DestroyEnclave(kw.ctx, kw.enclaveName)
+	if err != nil {
+		return fmt.Errorf("failed to destroy Kurtosis enclave: %s: %w", kw.enclaveName, err)
+	}
+
+	kw.enclaveCtx = nil
+	return nil
+}
+
+// RunPackageWithNetworkConfig runs a Starlark package (mostly ethereum-package) with the given ID
+// in the current enclave using the provided network config YAML file (networkConfigPath).
+func (kw *KurtosisWrapper) RunPackageWithNetworkConfig(packageId string, networkConfigPath string) error {
+	if kw.enclaveCtx == nil {
+		return fmt.Errorf("enclave context is nil")
+	}
+
+	jsonParams, err := readYamlConfigAsJson(networkConfigPath)
+	if err != nil {
+		return fmt.Errorf("failed to process config file: %w", err)
+	}
+
+	kw.t.Logf("Running package '%s' with params: %s", packageId, jsonParams)
+
+	runConfig := starlark_run_config.NewRunStarlarkConfig(
+		starlark_run_config.WithSerializedParams(jsonParams),
+	)
+
+	runResult, err := kw.enclaveCtx.RunStarlarkRemotePackageBlocking(kw.ctx, packageId, runConfig)
+	if err != nil {
+		return fmt.Errorf("failed to run remote package: %w", err)
+	}
+
+	if runResult.InterpretationError != nil {
+		return fmt.Errorf("starlark interpretation error: %v", runResult.InterpretationError)
+	}
+
+	if len(runResult.ValidationErrors) > 0 {
+		return fmt.Errorf("starlark validation errors: %v", runResult.ValidationErrors)
+	}
+
+	kw.t.Logf("Starlark package executed successfully in enclave '%s'", kw.enclaveName)
+	return nil
+}
+
+// NewGRPCConnections discovers the published gRPC ("rpc") port of each
+// Prysm beacon node in the enclave and dials it.
+func (kw *KurtosisWrapper) NewGRPCConnections() ([]*grpc.ClientConn, func(), error) {
+	// Empty map means "all services" in GetServiceContexts.
+	all, err := kw.enclaveCtx.GetServiceContexts(map[string]bool{})
+	if err != nil {
+		return nil, nil, fmt.Errorf("list services: %w", err)
+	}
+
+	// Prysm beacon nodes are the CL services: "cl-<i>-prysm-<el>".
+	var names []string
+	for name := range all {
+		n := string(name)
+		if strings.HasPrefix(n, "cl-") && strings.Contains(n, "prysm") {
+			names = append(names, n)
+		}
+	}
+	sort.Strings(names)
+	if len(names) == 0 {
+		return nil, nil, fmt.Errorf("no prysm CL beacon services found in enclave %q", kw.enclaveName)
+	}
+
+	conns := make([]*grpc.ClientConn, 0, len(names))
+	for _, n := range names {
+		svcCtx, ok := all[services.ServiceName(n)]
+		if !ok {
+			return nil, nil, fmt.Errorf("service %s not found in enclave", n)
+		}
+
+		// Published gRPC port is the "rpc" port in the service's public ports.
+		rpcPort, ok := svcCtx.GetPublicPorts()["rpc"]
+		if !ok {
+			return nil, nil, fmt.Errorf("service %s has no published rpc port", n)
+		}
+		conn, err := helpers.NewLocalConnection(kw.ctx, int(rpcPort.GetNumber())) // lint:ignore uintcast -- a uint16 port never exceeds int.
+		if err != nil {
+			return nil, nil, fmt.Errorf("dial gRPC for %s: %w", n, err)
+		}
+		conns = append(conns, conn)
+	}
+	return conns, func() {
+		for _, c := range conns {
+			_ = c.Close()
+		}
+	}, nil
+}
