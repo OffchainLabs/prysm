@@ -947,6 +947,30 @@ func (s *Service) isDataAvailable(
 	return nil
 }
 
+// dataColumnsAvailableNow reports whether enough data columns for root are already stored, without blocking.
+func (s *Service) dataColumnsAvailableNow(ctx context.Context, root [fieldparams.RootLength]byte, slot primitives.Slot) (bool, error) {
+	if !params.WithinDAPeriod(slots.ToEpoch(slot), slots.ToEpoch(s.CurrentSlot())) {
+		return true, nil
+	}
+	custodyGroupCount, err := s.cfg.P2P.CustodyGroupCount(ctx)
+	if err != nil {
+		return false, errors.Wrap(err, "custody group count")
+	}
+	samplingSize := max(params.BeaconConfig().SamplesPerSlot, custodyGroupCount)
+	peerInfo, _, err := peerdas.Info(s.cfg.P2P.NodeID(), samplingSize)
+	if err != nil {
+		return false, errors.Wrap(err, "peer info")
+	}
+	if s.dataColumnStorage.Summary(root).Count() >= peerdas.MinimumColumnCountToReconstruct() {
+		return true, nil
+	}
+	missing, err := missingDataColumnIndices(s.dataColumnStorage, root, peerInfo.CustodyColumns)
+	if err != nil {
+		return false, errors.Wrap(err, "missing data columns")
+	}
+	return len(missing) == 0, nil
+}
+
 // areDataColumnsAvailable blocks until all data columns committed to in the block are available,
 // or an error or context cancellation occurs. A nil result means that the data availability check is successful.
 func (s *Service) areDataColumnsAvailable(
