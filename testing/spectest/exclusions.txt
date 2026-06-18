@@ -12,3 +12,6 @@ tests/general/phase0/ssz_generic/uints
 
 # Fulu
 tests/general/fulu/kzg/compute_verify_cell_kzg_proof_batch_challenge
+
+# Heze
+*heze*
