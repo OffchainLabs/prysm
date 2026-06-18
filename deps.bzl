@@ -1883,6 +1883,12 @@ def prysm_deps():
     )
     go_repository(
         name = "com_github_kurtosis_tech_kurtosis_portal_api_golang",
+        # Resolve the google.api annotations import to the same @googleapis target
+        # Prysm's own protos use, so a binary linking both (e.g. the Kurtosis E2E
+        # test) doesn't get two copies of genproto/googleapis/api/annotations.
+        build_directives = [
+            "gazelle:resolve go google.golang.org/genproto/googleapis/api/annotations @googleapis//google/api:annotations_go_proto",
+        ],
         importpath = "github.com/kurtosis-tech/kurtosis-portal/api/golang",
         sum = "h1:izciXrFyFR+ihJ7nLTOkoIX5GzBPIp8gVKlw94gIc98=",
         version = "v0.0.0-20230818182330-1a86869414d2",
