@@ -161,9 +161,7 @@ type Service struct {
 	seenDataColumnCache                  *slotAwareCache
 	pendingGloasColumnsLock              sync.RWMutex
 	pendingGloasColumns                  map[[32]byte]*pendingGloasEntry
-	seenAggregatedAttestationLock        sync.RWMutex
 	seenAggregatedAttestationCache       *lru.Cache
-	seenUnAggregatedAttestationLock      sync.RWMutex
 	seenUnAggregatedAttestationCache     *lru.Cache
 	seenExitCache                        *lru.Cache
 	seenProposerSlashingCache            *lru.Cache
