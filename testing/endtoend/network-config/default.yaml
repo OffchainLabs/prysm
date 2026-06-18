@@ -1,0 +1,11 @@
+participants:
+  - el_type: geth
+    cl_type: prysm
+    cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:latest"
+    vc_image: "gcr.io/offchainlabs/prysm/validator:latest"
+    count: 2
+network_params:
+  preset: minimal
+additional_services:
+  # TODO: Dora is added for testing purpose, remove it later
+  - dora
