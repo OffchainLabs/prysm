@@ -143,8 +143,6 @@ func (s *Service) validateBlob(ctx context.Context, pid peer.ID, msg *pubsub.Mes
 
 // Returns true if the blob with the same slot, proposer index, and blob index has been seen before.
 func (s *Service) hasSeenBlobIndex(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) bool {
-	s.seenBlobLock.RLock()
-	defer s.seenBlobLock.RUnlock()
 	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(proposerIndex))...)
 	b = append(b, bytesutil.Bytes32(index)...)
 	_, seen := s.seenBlobCache.Get(string(b))
@@ -153,8 +151,6 @@ func (s *Service) hasSeenBlobIndex(slot primitives.Slot, proposerIndex primitive
 
 // Sets the blob with the same slot, proposer index, and blob index as seen.
 func (s *Service) setSeenBlobIndex(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) {
-	s.seenBlobLock.Lock()
-	defer s.seenBlobLock.Unlock()
 	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(proposerIndex))...)
 	b = append(b, bytesutil.Bytes32(index)...)
 	s.seenBlobCache.Add(string(b), true)
