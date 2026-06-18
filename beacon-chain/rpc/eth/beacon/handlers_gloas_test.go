@@ -94,7 +94,8 @@ func gloasBlockWithBid(t *testing.T, slot primitives.Slot, bid *ethpb.SignedExec
 func wireEnvelopeGossipDeps(t *testing.T, s *Server) {
 	t.Helper()
 	s.Blocker = &testutil.MockBlocker{BlockToReturn: gloasBlockWithBid(t, 100, util.GenerateTestSignedExecutionPayloadBid(100))}
-	chain := &chainMock.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{}}
+	envRoot := bytesutil.ToBytes32(testSignedEnvelope().Message.BeaconBlockRoot)
+	chain := &chainMock.ChainService{Root: envRoot[:], FinalizedCheckPoint: &ethpb.Checkpoint{}}
 	if s.FinalizationFetcher == nil {
 		s.FinalizationFetcher = chain
 	}
@@ -622,8 +623,8 @@ func TestPublishExecutionPayloadEnvelope_BroadcastValidation(t *testing.T) {
 		expectedStatus    int
 		expectedBody      string
 	}{
-		{name: "default (gossip)", query: "", expectPublish: true, expectedStatus: http.StatusOK},
-		{name: "explicit gossip", query: "?broadcast_validation=gossip", expectPublish: true, expectedStatus: http.StatusOK},
+		{name: "default (gossip)", query: "", headRoot: envRoot, expectPublish: true, expectedStatus: http.StatusOK},
+		{name: "explicit gossip", query: "?broadcast_validation=gossip", headRoot: envRoot, expectPublish: true, expectedStatus: http.StatusOK},
 		{
 			name:           "consensus envRoot not head",
 			query:          "?broadcast_validation=consensus",
@@ -737,10 +738,12 @@ func TestPublishExecutionPayloadEnvelope_GossipValidation(t *testing.T) {
 	headState, err := util.NewBeaconStateGloas()
 	require.NoError(t, err)
 
+	envRoot := bytesutil.ToBytes32(signed.Message.BeaconBlockRoot)
+
 	cases := []struct {
 		name         string
 		blocker      *testutil.MockBlocker
-		finalized    *ethpb.Checkpoint
+		headRoot     [32]byte // defaults to envRoot when zero
 		expectedBody string
 	}{
 		{
@@ -749,10 +752,10 @@ func TestPublishExecutionPayloadEnvelope_GossipValidation(t *testing.T) {
 			expectedBody: "envelope beacon block root is unknown",
 		},
 		{
-			name:         "slot below finalized",
-			blocker:      &testutil.MockBlocker{BlockToReturn: gloasBlockWithBid(t, envSlot, util.GenerateTestSignedExecutionPayloadBid(envSlot))},
-			finalized:    &ethpb.Checkpoint{Epoch: 100},
-			expectedBody: "before finalized",
+			name:         "envelope block root not head",
+			blocker:      &testutil.MockBlocker{BlockToReturn: gloasBlockWithBid(t, envSlot, matchingBid())},
+			headRoot:     bytesutil.ToBytes32(bytesutil.PadTo([]byte("other-head"), 32)),
+			expectedBody: "is not canonical head",
 		},
 		{
 			name:         "slot mismatch",
@@ -798,15 +801,14 @@ func TestPublishExecutionPayloadEnvelope_GossipValidation(t *testing.T) {
 			body, err := json.Marshal(contents)
 			require.NoError(t, err)
 
-			finalized := tc.finalized
-			if finalized == nil {
-				finalized = &ethpb.Checkpoint{}
+			headRoot := tc.headRoot
+			if headRoot == ([32]byte{}) {
+				headRoot = envRoot
 			}
-			chainSvc := &chainMock.ChainService{State: headState, FinalizedCheckPoint: finalized}
+			chainSvc := &chainMock.ChainService{Root: headRoot[:], State: headState}
 			s := &Server{
 				Blocker:                 tc.blocker,
 				HeadFetcher:             chainSvc,
-				FinalizationFetcher:     chainSvc,
 				PayloadEnvelopeVerifier: verification.NewEnvelopeVerifier,
 			}
 			req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))

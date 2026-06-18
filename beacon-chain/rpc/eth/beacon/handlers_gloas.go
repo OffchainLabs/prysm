@@ -379,18 +379,7 @@ func (s *Server) validateEnvelopeGossip(ctx context.Context, w http.ResponseWrit
 		httputil.HandleError(w, "gossip validation failed: envelope beacon block root is unknown", http.StatusBadRequest)
 		return false
 	}
-	v.SatisfyRequirement(verification.RequireBlockRootSeen)
-	// The bad-block cache lives in the sync service; a bad root can't be canonical anyway.
-	v.SatisfyRequirement(verification.RequireBlockRootValid)
-	finalized := s.FinalizationFetcher.FinalizedCheckpt()
-	if finalized == nil {
-		httputil.HandleError(w, "could not get finalized checkpoint", http.StatusInternalServerError)
-		return false
-	}
-	if err := v.VerifySlotAboveFinalized(finalized.Epoch); err != nil {
-		httputil.HandleError(w, "gossip validation failed: "+err.Error(), http.StatusBadRequest)
-		return false
-	}
+	// VerifyBlockRootValid is skipped: the bad-block cache is sync-only and a bad root can't be canonical.
 	if err := v.VerifySlotMatchesBlock(blk.Block().Slot()); err != nil {
 		httputil.HandleError(w, "gossip validation failed: "+err.Error(), http.StatusBadRequest)
 		return false
@@ -424,6 +413,17 @@ func (s *Server) validateEnvelopeGossip(ctx context.Context, w http.ResponseWrit
 		return false
 	}
 
+	// VerifySignature needs the state at the envelope's block. We only have head state on
+	// hand, so require the envelope to be for the canonical head rather than replaying state.
+	headRoot, err := s.HeadFetcher.HeadRoot(ctx)
+	if err != nil {
+		httputil.HandleError(w, "could not get head root: "+err.Error(), http.StatusInternalServerError)
+		return false
+	}
+	if !bytes.Equal(headRoot, signed.Message.BeaconBlockRoot) {
+		httputil.HandleError(w, "gossip validation failed: envelope beacon block root is not canonical head", http.StatusBadRequest)
+		return false
+	}
 	st, err := s.HeadFetcher.HeadStateReadOnly(ctx)
 	if err != nil {
 		httputil.HandleError(w, "could not get head state: "+err.Error(), http.StatusInternalServerError)
