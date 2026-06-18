@@ -106,6 +106,9 @@ func (node *Node) Start(ctx context.Context) error {
 		"--http.corsdomain=\"*\"",
 		"--http.vhosts=\"*\"",
 		"--rpc.allow-unprotected-txs",
+		// Deposit txs price 1000 gwei * large deposit gas limit > geth's default
+		// 1 ETH rpc fee cap, so disable the cap to let them through over RPC.
+		"--rpc.txfeecap=0",
 		"--ws",
 		"--ws.api=net,eth,engine",
 		"--ws.addr=127.0.0.1",

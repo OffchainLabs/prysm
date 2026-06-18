@@ -11,6 +11,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api/client/beacon"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	corehelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -452,8 +453,29 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 	if err != nil {
 		return errors.Wrap(err, "could not get state")
 	}
+
+	// Exclude validators that will serve in an upcoming sync committee from being
+	// exited. An exit submitted now is still active when the next sync committee is
+	// sampled (one period ahead), so an exited validator can be selected into a
+	// committee that only begins serving after the validator is no longer active,
+	// leaving it unable to sign and causing a permanent sync-participation deficit
+	// for that whole period. altair.NextSyncCommittee computes that upcoming committee
+	// from the current state; the stored state.NextSyncCommittee field is the already
+	// active next committee and is not the one sampled here.
+	upcomingSyncCommittee, err := altair.NextSyncCommittee(ctx, st)
+	if err != nil {
+		return err
+	}
+	syncCommitteeKeys := make(map[[48]byte]bool)
+	for _, pk := range upcomingSyncCommittee.Pubkeys {
+		syncCommitteeKeys[bytesutil.ToBytes48(pk)] = true
+	}
+
 	var execIndices []primitives.ValidatorIndex
 	for idx, val := range st.ValidatorsReadOnlySeq() {
+		if syncCommitteeKeys[val.PublicKey()] {
+			continue
+		}
 		if val.GetWithdrawalCredentials()[0] == params.BeaconConfig().ETH1AddressWithdrawalPrefixByte {
 			execIndices = append(execIndices, idx)
 		}
@@ -508,7 +530,11 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 	// Send an exit for a non-exited validator.
 	for i := 0; i < numOfExits; {
 		randIndex := primitives.ValidatorIndex(rand.Uint64() % params.BeaconConfig().MinGenesisActiveValidatorCount)
-		if _, alreadyExited := ec.ExitedVals[bytesutil.ToBytes48(privKeys[randIndex].PublicKey().Marshal())]; alreadyExited {
+		randKey := bytesutil.ToBytes48(privKeys[randIndex].PublicKey().Marshal())
+		if _, alreadyExited := ec.ExitedVals[randKey]; alreadyExited {
+			continue
+		}
+		if syncCommitteeKeys[randKey] {
 			continue
 		}
 		if err := sendExit(randIndex); err != nil {
@@ -696,18 +722,12 @@ func submitWithdrawal(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientConn)
 		return err
 	}
 	changes := make([]*structs.SignedBLSToExecutionChange, 0)
-	// Only send half the number of changes each time, to allow us to test
-	// at the fork boundary. When starting from Deneb+ at genesis, there's no
-	// fork boundary to test so we send all changes.
-	wantedChanges := numOfExits / 2
-	if e2etypes.GenesisFork() >= version.Deneb {
-		wantedChanges = numOfExits
-	}
+	// Submit a BLS-to-execution change for every exited validator that still has
+	// BLS withdrawal credentials. This evaluator runs each epoch and the pool dedups
+	// by validator index, so resubmitting is idempotent and self-heals if a change
+	// was not included on a prior attempt (which previously left validators stuck on
+	// 0x00 credentials and never swept by the withdrawal sweep).
 	for _, idx := range exitedIndices {
-		// Exit sending more change messages.
-		if len(changes) >= wantedChanges {
-			break
-		}
 		val, err := st.ValidatorAtIndex(idx)
 		if err != nil {
 			return err
@@ -737,6 +757,10 @@ func submitWithdrawal(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientConn)
 			Message:   structs.BLSChangeFromConsensus(message),
 			Signature: hexutil.Encode(signature),
 		})
+	}
+
+	if len(changes) == 0 {
+		return nil
 	}
 
 	beaconAPIClient, err := beacon.NewClient(fmt.Sprintf("http://localhost:%d/eth/v1", e2e.TestParams.Ports.PrysmBeaconNodeHTTPPort)) // only uses the first node so no updates to port
