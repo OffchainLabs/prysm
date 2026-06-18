@@ -332,6 +332,23 @@ func (ps *Settings) TargetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) val
 	return chainDefault
 }
 
+// MaxExecutionPayment returns the gloas proposer-preferences max execution
+// payment (gwei) for pubkey: the per-pubkey override, else the default config
+// value, else 0 (trustless-only). v2-only — the value takes effect once
+// settings upgrade to v2 at the gloas fork.
+func (ps *Settings) MaxExecutionPayment(pubkey [fieldparams.BLSPubkeyLength]byte) validator.Uint64 {
+	if ps == nil || !ps.isV2() {
+		return 0
+	}
+	if opt, ok := ps.ProposeConfig[pubkey]; ok && opt != nil && opt.MaxExecutionPayment != 0 {
+		return opt.MaxExecutionPayment
+	}
+	if ps.DefaultConfig != nil && ps.DefaultConfig.MaxExecutionPayment != 0 {
+		return ps.DefaultConfig.MaxExecutionPayment
+	}
+	return 0
+}
+
 // GasLimit returns the gas limit (gwei) for pubkey: the per-pubkey override,
 // else the default config value, else the chain default. v1 reads the builder
 // gas limit; v2 reads the top-level fields.
