@@ -499,8 +499,6 @@ func (s *Service) verifyPendingBlockSignature(ctx context.Context, blk interface
 
 // Returns true if the block is not the first block proposed for the proposer for the slot.
 func (s *Service) hasSeenBlockIndexSlot(slot primitives.Slot, proposerIdx primitives.ValidatorIndex) bool {
-	s.seenBlockLock.RLock()
-	defer s.seenBlockLock.RUnlock()
 	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(proposerIdx))...)
 	_, seen := s.seenBlockCache.Get(string(b))
 	return seen
@@ -508,8 +506,6 @@ func (s *Service) hasSeenBlockIndexSlot(slot primitives.Slot, proposerIdx primit
 
 // Set block proposer index and slot as seen for incoming blocks.
 func (s *Service) setSeenBlockIndexSlot(slot primitives.Slot, proposerIdx primitives.ValidatorIndex) {
-	s.seenBlockLock.Lock()
-	defer s.seenBlockLock.Unlock()
 	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(proposerIdx))...)
 	s.seenBlockCache.Add(string(b), true)
 }
@@ -519,24 +515,18 @@ func (s *Service) hasBadBlock(root [32]byte) bool {
 	if features.BlacklistedBlock(root) {
 		return true
 	}
-	s.badBlockLock.RLock()
-	defer s.badBlockLock.RUnlock()
 	_, seen := s.badBlockCache.Get(string(root[:]))
 	return seen
 }
 
 // Returns true if the payload for the given block root is marked as bad.
 func (s *Service) hasBadPayload(root [32]byte) bool {
-	s.badPayloadLock.RLock()
-	defer s.badPayloadLock.RUnlock()
 	_, seen := s.badPayloadCache.Get(string(root[:]))
 	return seen
 }
 
 // Set bad payload in the cache.
 func (s *Service) setBadPayload(ctx context.Context, root [32]byte) {
-	s.badPayloadLock.Lock()
-	defer s.badPayloadLock.Unlock()
 	if ctx.Err() != nil {
 		return
 	}
@@ -546,8 +536,6 @@ func (s *Service) setBadPayload(ctx context.Context, root [32]byte) {
 
 // Set bad block in the cache.
 func (s *Service) setBadBlock(ctx context.Context, root [32]byte) {
-	s.badBlockLock.Lock()
-	defer s.badBlockLock.Unlock()
 	if ctx.Err() != nil { // Do not mark block as bad if it was due to context error.
 		return
 	}
