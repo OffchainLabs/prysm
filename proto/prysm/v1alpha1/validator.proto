@@ -26,6 +26,7 @@ import "proto/prysm/v1alpha1/beacon_core_types.proto";
 import "proto/prysm/v1alpha1/sync_committee.proto";
 import "proto/prysm/v1alpha1/attestation.proto";
 import "proto/prysm/v1alpha1/gloas.proto";
+import "proto/prysm/v1alpha1/gloas_builder_api.proto";
 
 option csharp_namespace = "Ethereum.Eth.V1";
 option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
@@ -222,6 +223,17 @@ service BeaconNodeValidator {
     option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha2/validator/block"
+      body : "*"
+    };
+  }
+
+  // SubmitBuilderPreferences forwards a proposer's builder preferences to the
+  // configured builder ahead of a future proposal slot.
+  rpc SubmitBuilderPreferences(SubmitBuilderPreferencesRequest)
+      returns (google.protobuf.Empty) {
+    option deprecated = true;
+    option (google.api.http) = {
+      post : "/eth/v1alpha1/validator/builder_preferences"
       body : "*"
     };
   }
