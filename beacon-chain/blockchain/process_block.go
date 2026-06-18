@@ -1009,6 +1009,12 @@ func (s *Service) areDataColumnsAvailable(
 		return nil
 	}
 
+	// During catch-up (past slot) columns arrive via range requests, not gossip, so the
+	// subscription wait below would never make progress. Fail fast and let the caller refetch.
+	if slot < currentSlot {
+		return errors.Errorf("data columns unavailable for slot %d root %#x: missing %v", slot, root, helpers.SortedPrettySliceFromMap(missing))
+	}
+
 	if s.startWaitingDataColumnSidecars != nil {
 		s.startWaitingDataColumnSidecars <- true
 	}
