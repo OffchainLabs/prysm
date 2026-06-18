@@ -61,6 +61,15 @@ goimports(
     write = False,
 )
 
+# Write-mode variant used by `make lint fix` (the args are baked into the
+# generated runner at build time, so write mode needs its own target).
+goimports(
+    name = "goimports_fix",
+    display_diffs = False,
+    prefix = prefix,
+    write = True,
+)
+
 workspace_binary(
     name = "golint",
     cmd = "@com_github_golang_lint//golint",
