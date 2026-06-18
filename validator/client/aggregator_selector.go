@@ -44,7 +44,6 @@ type attSelectionKey struct {
 // localSelector computes selection proofs using the local keymanager.
 type localSelector struct {
 	v          *validator
-	dedupLock  sync.Mutex
 	dedupCache *lru.Cache
 	proofLock  sync.Mutex
 	proofCache map[attSelectionKey][]byte
@@ -113,13 +112,8 @@ func (p *localSelector) AttestationSelectionProof(ctx context.Context, slot prim
 
 func (p *localSelector) ClaimAggregateSlot(slot primitives.Slot, committeeIndex primitives.CommitteeIndex) bool {
 	k := validatorSubnetSubscriptionKey(slot, committeeIndex)
-	p.dedupLock.Lock()
-	defer p.dedupLock.Unlock()
-	if p.dedupCache.Contains(k) {
-		return false
-	}
-	p.dedupCache.Add(k, true)
-	return true
+	found, _ := p.dedupCache.ContainsOrAdd(k, true)
+	return !found
 }
 
 type syncSelectionProof struct {
