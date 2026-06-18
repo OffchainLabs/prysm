@@ -4,6 +4,7 @@ load("@prysm//tools/go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = [
+        "bazel.go",
         "main.go",
         "mocks.go",
         "proto.go",
@@ -11,6 +12,7 @@ go_library(
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/build/gen",
     visibility = ["//visibility:private"],
+    deps = ["@com_github_bazelbuild_buildtools//build:go_default_library"],
 )
 
 go_binary(
