@@ -1086,6 +1086,8 @@ func (b *BeaconState) Copy() state.BeaconState {
 		}
 	}
 
+	dst.progressiveMerkleTree = b.progressiveMerkleTree.Copy()
+
 	state.Count.Inc()
 	// Finalizer runs when dst is being destroyed in garbage collection.
 	runtime.SetFinalizer(dst, finalizerCleanup)
@@ -1104,6 +1106,7 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 	if features.ProgressiveSSZEnabled(b.version) {
 		return b.progressiveHashTreeRoot(ctx)
 	}
+	b.progressiveMerkleTree = nil
 
 	if err := b.initializeMerkleLayers(ctx); err != nil {
 		return [32]byte{}, err
@@ -1115,26 +1118,60 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 }
 
 func (b *BeaconState) progressiveHashTreeRoot(ctx context.Context) ([32]byte, error) {
-	fieldRoots, err := ComputeFieldRootsWithHasher(ctx, b)
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "failed to compute state field roots")
+	if err := b.initializeProgressiveMerkleTree(ctx); err != nil {
+		return [32]byte{}, errors.Wrap(err, "failed to initialize progressive merkle tree")
+	}
+	if err := b.recomputeProgressiveDirtyFields(ctx); err != nil {
+		return [32]byte{}, errors.Wrap(err, "failed to recompute progressive dirty fields")
 	}
 
-	progressiveFieldRoots := make([][32]byte, len(fieldRoots))
-	for i, fieldRoot := range fieldRoots {
-		progressiveFieldRoots[i] = bytesutil.ToBytes32(fieldRoot)
-	}
-
-	activeFields := make([]bool, len(fieldRoots))
+	activeFields := make([]bool, params.BeaconConfig().BeaconStateGloasFieldCount)
 	for i := range activeFields {
 		activeFields[i] = true
 	}
 
-	root, err := ssz.ContainerRootProgressive(progressiveFieldRoots, activeFields)
+	root, err := ssz.MixInActiveFields(b.progressiveMerkleTree.Root(), activeFields)
 	if err != nil {
-		return [32]byte{}, fmt.Errorf("could not compute progressive container root: %w", err)
+		return [32]byte{}, fmt.Errorf("could not mix in progressive container active fields: %w", err)
 	}
+	b.merkleLayers = nil
 	return root, nil
+}
+
+// initializeProgressiveMerkleTree computes all field roots once and caches the
+// progressive container tree. Subsequent roots update only dirty fields.
+//
+// WARNING: Caller must acquire the mutex before using.
+func (b *BeaconState) initializeProgressiveMerkleTree(ctx context.Context) error {
+	if b.progressiveMerkleTree != nil {
+		return nil
+	}
+
+	fieldRoots, err := ComputeFieldRootsWithHasher(ctx, b)
+	if err != nil {
+		return errors.Wrap(err, "could not compute field roots for progressive merkle tree")
+	}
+	b.progressiveMerkleTree = stateutil.MerkleizeProgressive(fieldRoots)
+	clear(b.dirtyFields)
+	return nil
+}
+
+// recomputeProgressiveDirtyFields updates dirty field roots in the cached
+// progressive container tree.
+//
+// WARNING: Caller must acquire the mutex before using.
+func (b *BeaconState) recomputeProgressiveDirtyFields(ctx context.Context) error {
+	for field := range b.dirtyFields {
+		root, err := b.rootSelector(ctx, field)
+		if err != nil {
+			return errors.Wrap(err, "could not compute field root")
+		}
+		if err := b.progressiveMerkleTree.RecomputeRoot(field.RealPosition(), root); err != nil {
+			return errors.Wrap(err, fmt.Sprintf("could not recompute progressive merkle tree root for field %s", field.String()))
+		}
+		delete(b.dirtyFields, field)
+	}
+	return nil
 }
 
 // Initializes the Merkle layers for the beacon state if they are empty.
@@ -1588,14 +1625,6 @@ func (b *BeaconState) stateRootsRootSelector(field types.FieldIndex) ([32]byte, 
 }
 
 func (b *BeaconState) validatorsRootSelector(field types.FieldIndex) ([32]byte, error) {
-	if features.ProgressiveSSZEnabled(b.version) {
-		// Field-trie indexing is based on legacy list merkleization.
-		// Use full progressive hashing for this field when enabled.
-		b.dirtyIndices[field] = []uint64{}
-		delete(b.rebuildTrie, field)
-		return stateutil.ValidatorRegistryRoot(b.version, b.validatorsCompactVal())
-	}
-
 	if b.rebuildTrie[field] {
 		err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[stateutil.CompactValidator]{
 			Identifiable:    b,
@@ -1615,14 +1644,6 @@ func (b *BeaconState) validatorsRootSelector(field types.FieldIndex) ([32]byte, 
 }
 
 func (b *BeaconState) balancesRootSelector(field types.FieldIndex) ([32]byte, error) {
-	if features.ProgressiveSSZEnabled(b.version) {
-		// Field-trie indexing is based on legacy list merkleization.
-		// Use full progressive hashing for this field when enabled.
-		b.dirtyIndices[field] = []uint64{}
-		delete(b.rebuildTrie, field)
-		return stateutil.Uint64ListRoot(b.version, b.balancesVal())
-	}
-
 	if b.rebuildTrie[field] {
 		err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[uint64]{
 			Identifiable:    b,
