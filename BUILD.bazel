@@ -1,8 +1,8 @@
 load("@bazel_gazelle//:def.bzl", "gazelle")
-load("@com_github_atlassian_bazel_tools//goimports:def.bzl", "goimports")
-load("@io_kubernetes_build//defs:run_in_workspace.bzl", "workspace_binary")
-load("@io_bazel_rules_go//go:def.bzl", "nogo")
 load("@bazel_skylib//rules:common_settings.bzl", "string_setting")
+load("@com_github_atlassian_bazel_tools//goimports:def.bzl", "goimports")
+load("@io_bazel_rules_go//go:def.bzl", "nogo")
+load("@io_kubernetes_build//defs:run_in_workspace.bzl", "workspace_binary")
 load("@prysm//tools/nogo_config:def.bzl", "nogo_config_exclude")
 
 prefix = "github.com/OffchainLabs/prysm"
