@@ -160,23 +160,3 @@ func ReplayProcessSlots(ctx context.Context, state state.BeaconState, slot primi
 
 	return transition.ProcessSlotsCore(ctx, span, state, slot, nil)
 }
-
-// Given the start slot and the end slot, this returns the finalized beacon blocks in between.
-// Since hot states don't have finalized blocks, this should ONLY be used for replaying cold state.
-func (s *State) loadFinalizedBlocks(ctx context.Context, startSlot, endSlot primitives.Slot) ([]interfaces.ReadOnlySignedBeaconBlock, error) {
-	f := filters.NewFilter().SetStartSlot(startSlot).SetEndSlot(endSlot)
-	bs, bRoots, err := s.beaconDB.Blocks(ctx, f)
-	if err != nil {
-		return nil, err
-	}
-	if len(bs) != len(bRoots) {
-		return nil, errors.New("length of blocks and roots don't match")
-	}
-	fbs := make([]interfaces.ReadOnlySignedBeaconBlock, 0, len(bs))
-	for i := len(bs) - 1; i >= 0; i-- {
-		if s.beaconDB.IsFinalizedBlock(ctx, bRoots[i]) {
-			fbs = append(fbs, bs[i])
-		}
-	}
-	return fbs, nil
-}

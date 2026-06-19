@@ -31,7 +31,7 @@ func TestBeaconApiValidatorClient_GetAttestationDataValid(t *testing.T) {
 
 	ctx := t.Context()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	produceAttestationDataResponseJson := structs.GetAttestationDataResponse{}
 	handler.EXPECT().Get(
 		gomock.Any(),
@@ -65,7 +65,7 @@ func TestBeaconApiValidatorClient_GetAttestationDataError(t *testing.T) {
 
 	ctx := t.Context()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	produceAttestationDataResponseJson := structs.GetAttestationDataResponse{}
 	handler.EXPECT().Get(
 		gomock.Any(),
@@ -139,7 +139,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockValid(t *testing.T) {
 
 	ctx := t.Context()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		"/eth/v2/beacon/blocks",
@@ -166,7 +166,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockError_ThenPass(t *testing.T)
 
 	ctx := t.Context()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		"/eth/v2/beacon/blocks",
@@ -308,7 +308,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockAllTypes(t *testing.T) {
 			defer ctrl.Finish()
 
 			ctx := t.Context()
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 
 			if !tt.wantErr {
 				handler.EXPECT().PostSSZ(
@@ -366,7 +366,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockHTTPErrors(t *testing.T) {
 			defer ctrl.Finish()
 
 			ctx := t.Context()
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 
 			handler.EXPECT().PostSSZ(
 				gomock.Any(),
@@ -507,7 +507,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockJSONFallback(t *testing.T) {
 			defer ctrl.Finish()
 
 			ctx := t.Context()
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 
 			// SSZ call fails with 406 to trigger JSON fallback
 			handler.EXPECT().PostSSZ(
@@ -547,7 +547,7 @@ func TestBeaconApiValidatorClient_Host(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Host().Return("http://localhost:8080").Times(1)
 
 	validatorClient := beaconApiValidatorClient{handler: handler}

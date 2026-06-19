@@ -262,11 +262,7 @@ func (s *Server) GetValidatorBalances(w http.ResponseWriter, r *http.Request) {
 		rawIds = r.URL.Query()["id"]
 	} else {
 		err = json.NewDecoder(r.Body).Decode(&rawIds)
-		switch {
-		case errors.Is(err, io.EOF):
-			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-			return
-		case err != nil:
+		if err != nil && !errors.Is(err, io.EOF) {
 			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -333,11 +329,7 @@ func (s *Server) GetValidatorIdentities(w http.ResponseWriter, r *http.Request) 
 
 	var rawIds []string
 	err = json.NewDecoder(r.Body).Decode(&rawIds)
-	switch {
-	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	case err != nil:
+	if err != nil && !errors.Is(err, io.EOF) {
 		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}

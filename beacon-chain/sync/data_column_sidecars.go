@@ -743,11 +743,8 @@ func fetchDataColumnSidecarsFromPeers(
 	)
 
 	roDataColumnsByPeer := make(map[goPeer.ID][]blocks.RODataColumn)
-	wg.Add(len(indicesByRootByPeer))
 	for peerID, indicesByRoot := range indicesByRootByPeer {
-		go func(peerID goPeer.ID, indicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool) {
-			defer wg.Done()
-
+		wg.Go(func() {
 			requestedCount := 0
 			for _, indices := range indicesByRoot {
 				requestedCount += len(indices)
@@ -769,7 +766,7 @@ func fetchDataColumnSidecarsFromPeers(
 			mut.Lock()
 			defer mut.Unlock()
 			roDataColumnsByPeer[peerID] = roDataColumns
-		}(peerID, indicesByRoot)
+		})
 	}
 
 	wg.Wait()

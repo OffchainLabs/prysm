@@ -849,28 +849,3 @@ func tree4(t *testing.T, beaconDB db.Database, genesisRoot []byte) ([][32]byte, 
 
 	return [][32]byte{r0, r21, r22, r23, r24}, returnedBlocks, nil
 }
-
-func TestLoadFinalizedBlocks(t *testing.T) {
-	beaconDB := testDB.SetupDB(t)
-	ctx := t.Context()
-	s := &State{
-		beaconDB: beaconDB,
-	}
-	gBlock := util.NewBeaconBlock()
-	gRoot, err := gBlock.Block.HashTreeRoot()
-	require.NoError(t, err)
-	util.SaveBlock(t, ctx, beaconDB, gBlock)
-	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, [32]byte{}))
-	roots, _, err := tree1(t, beaconDB, gRoot[:])
-	require.NoError(t, err)
-
-	filteredBlocks, err := s.loadFinalizedBlocks(ctx, 0, 8)
-	require.NoError(t, err)
-	require.Equal(t, 0, len(filteredBlocks))
-	require.NoError(t, beaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{Root: roots[8][:]}))
-
-	require.NoError(t, s.beaconDB.SaveFinalizedCheckpoint(ctx, &ethpb.Checkpoint{Root: roots[8][:]}))
-	filteredBlocks, err = s.loadFinalizedBlocks(ctx, 0, 8)
-	require.NoError(t, err)
-	require.Equal(t, 10, len(filteredBlocks))
-}

@@ -22,6 +22,13 @@ func WithHttpEndpoint(endpointString string) Option {
 	}
 }
 
+func WithPartialColumnsSupported() Option {
+	return func(s *Service) error {
+		s.partialColumnsSupported = true
+		return nil
+	}
+}
+
 // WithHttpEndpointAndJWTSecret for authenticating the execution node JSON-RPC endpoint.
 func WithHttpEndpointAndJWTSecret(endpointString string, secret []byte) Option {
 	return func(s *Service) error {

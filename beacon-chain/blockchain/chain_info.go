@@ -55,6 +55,7 @@ type ForkchoiceFetcher interface {
 	InsertNode(context.Context, state.BeaconState, consensus_blocks.ROBlock) error
 	InsertPayload(interfaces.ROExecutionPayloadEnvelope) error
 	ForkChoiceDump(context.Context) (*forkchoice.Dump, error)
+	ForkChoiceDumpV2(context.Context) (*forkchoice.DumpV2, error)
 	NewSlot(context.Context, primitives.Slot) error
 	ProposerBoost() [32]byte
 	RecentBlockSlot(root [32]byte) (primitives.Slot, error)
@@ -497,7 +498,7 @@ func (s *Service) IsOptimisticForRoot(ctx context.Context, root [32]byte) (bool,
 		return false, err
 	}
 	if lastValidated == nil {
-		lastValidated, err = s.recoverStateSummary(ctx, root)
+		lastValidated, err = s.recoverStateSummary(ctx, s.ensureRootNotZeros(bytesutil.ToBytes32(validatedCheckpoint.Root)))
 		if err != nil {
 			return false, err
 		}
