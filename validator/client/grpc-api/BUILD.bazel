@@ -16,7 +16,6 @@ go_library(
         "//api/client:go_default_library",
         "//api/client/event:go_default_library",
         "//api/fallback:go_default_library",
-        "//api/server/structs:go_default_library",
         "//config/features:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//encoding/bytesutil:go_default_library",
