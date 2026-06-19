@@ -362,10 +362,6 @@ func (vs *Server) validatorStatus(
 		if err != nil {
 			return resp, idx
 		}
-		// Our position in the activation queue is the above index - our validator index.
-		if lastActivatedvalidatorIndex < idx {
-			resp.PositionInActivationQueue = uint64(idx - lastActivatedvalidatorIndex)
-		}
 		return resp, idx
 	default:
 		return resp, idx

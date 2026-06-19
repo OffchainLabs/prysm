@@ -139,14 +139,6 @@ func (c *beaconApiValidatorClient) validatorsStatusResponse(ctx context.Context,
 
 		validatorStatus.ActivationEpoch = primitives.Epoch(activationEpoch)
 
-		// Set PositionInActivationQueue
-		switch status {
-		case ethpb.ValidatorStatus_PENDING, ethpb.ValidatorStatus_PARTIALLY_DEPOSITED, ethpb.ValidatorStatus_DEPOSITED:
-			if lastActivatedValidatorIndex >= 0 {
-				validatorStatus.PositionInActivationQueue = validatorIndex - uint64(lastActivatedValidatorIndex)
-			}
-		}
-
 		outValidatorsStatuses[i] = validatorStatus
 	}
 

@@ -397,14 +397,12 @@ func TestGetValidatorsStatusResponse_Nominal_SomeActiveValidators(t *testing.T) 
 			ActivationEpoch: 56,
 		},
 		{
-			Status:                    ethpb.ValidatorStatus_PENDING,
-			ActivationEpoch:           params.BeaconConfig().FarFutureEpoch,
-			PositionInActivationQueue: 1000,
+			Status:          ethpb.ValidatorStatus_PENDING,
+			ActivationEpoch: params.BeaconConfig().FarFutureEpoch,
 		},
 		{
-			Status:                    ethpb.ValidatorStatus_PENDING,
-			ActivationEpoch:           params.BeaconConfig().FarFutureEpoch,
-			PositionInActivationQueue: 11000,
+			Status:          ethpb.ValidatorStatus_PENDING,
+			ActivationEpoch: params.BeaconConfig().FarFutureEpoch,
 		},
 		{
 			Status:          ethpb.ValidatorStatus_UNKNOWN_STATUS,
