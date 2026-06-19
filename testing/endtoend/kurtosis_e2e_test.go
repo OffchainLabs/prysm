@@ -43,16 +43,6 @@ func TestEndToEnd_Kurtosis(t *testing.T) {
 			enclaveName: "minimal",
 			configPath:  "testing/endtoend/network-config/default.yaml",
 			evaluators: []e2etypes.Evaluator{
-				ev.FinishedSyncing,
-				ev.AllNodesHaveSameHead,
-				ev.FinalizationOccurs(3),
-			},
-		},
-
-		{
-			enclaveName: "minimal-with-peers-check",
-			configPath:  "testing/endtoend/network-config/default.yaml",
-			evaluators: []e2etypes.Evaluator{
 				ev.PeersCheck,
 				ev.FinishedSyncing,
 				ev.AllNodesHaveSameHead,
