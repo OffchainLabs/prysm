@@ -3,6 +3,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -20,6 +21,13 @@ const (
 
 var allKinds = []kind{kindProto, kindSSZ, kindMocks}
 
+type mode string
+
+const (
+	modeNoForce mode = "no-force"
+	modeForce   mode = "force"
+)
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "gen: %v\n", err)
@@ -27,11 +35,33 @@ func main() {
 	}
 }
 
+func parseMode(s string) (mode, error) {
+	switch mode := mode(s); mode {
+	case modeNoForce, modeForce:
+		return mode, nil
+	default:
+		return "", fmt.Errorf("invalid mode %q (want %s|%s)", s, modeNoForce, modeForce)
+	}
+}
+
 func run(args []string) error {
+	fs := flag.NewFlagSet("gen", flag.ContinueOnError)
+	modeFlag := fs.String("mode", string(modeNoForce), "force|no-force: force ignores the cache and regenerates everything")
+	if err := fs.Parse(args); err != nil {
+		return fmt.Errorf("parse flags: %w", err)
+	}
+
+	m, err := parseMode(*modeFlag)
+	if err != nil {
+		return fmt.Errorf("parse mode: %w", err)
+	}
+
+	force := m == modeForce
+
 	kinds := allKinds
-	if len(args) > 0 {
-		kinds = make([]kind, len(args))
-		for i, a := range args {
+	if rest := fs.Args(); len(rest) > 0 {
+		kinds = make([]kind, len(rest))
+		for i, a := range rest {
 			kinds[i] = kind(a)
 		}
 	}
@@ -40,12 +70,43 @@ func run(args []string) error {
 		return fmt.Errorf("chdir repo root: %w", err)
 	}
 
-	for _, kind := range kinds {
-		fmt.Printf("==> gen %s\n", kind)
-		if err := genKind(kind); err != nil {
+	cache := loadCache()
+	for _, find := range kinds {
+		if !force {
+			want, err := manifest(find)
+			if err != nil {
+				return fmt.Errorf("manifest %s: %w", find, err)
+			}
+
+			if cache.Kinds[string(find)] == want {
+				fmt.Printf("==> gen %s (up to date, skipped)\n", find)
+				continue
+			}
+		}
+
+		fmt.Printf("==> gen %s\n", find)
+		if err := genKind(find); err != nil {
 			return fmt.Errorf("gen kind: %w", err)
 		}
+
+		// Recompute after generation: the outputs are part of the manifest.
+		got, err := manifest(find)
+		if err != nil {
+			return fmt.Errorf("manifest %s: %w", find, err)
+		}
+
+		cache.Kinds[string(find)] = got
+		if err := storeCache(cache); err != nil {
+			return fmt.Errorf("store cache: %w", err)
+		}
 	}
+
+	abs, err := filepath.Abs(cacheFile)
+	if err != nil {
+		return fmt.Errorf("abs cache path: %w", err)
+	}
+
+	fmt.Printf("==> cache: %s\n", abs)
 
 	return nil
 }
