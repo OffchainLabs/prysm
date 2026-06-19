@@ -111,9 +111,9 @@ func (kw *KurtosisWrapper) RunPackageWithNetworkConfig(packageId string, network
 	return nil
 }
 
-// NewGRPCConnections discovers the published gRPC ("rpc") port of each
-// Prysm beacon node in the enclave and dials it.
-func (kw *KurtosisWrapper) NewGRPCConnections() ([]*grpc.ClientConn, func(), error) {
+// prysmCLServices returns all Prysm beacon (CL) service contexts in the enclave
+// keyed by name, plus their names sorted ("cl-<i>-prysm-<el>").
+func (kw *KurtosisWrapper) prysmCLServices() (map[services.ServiceName]*services.ServiceContext, []string, error) {
 	// Empty map means "all services" in GetServiceContexts.
 	all, err := kw.enclaveCtx.GetServiceContexts(map[string]bool{})
 	if err != nil {
@@ -132,16 +132,21 @@ func (kw *KurtosisWrapper) NewGRPCConnections() ([]*grpc.ClientConn, func(), err
 	if len(names) == 0 {
 		return nil, nil, fmt.Errorf("no prysm CL beacon services found in enclave %q", kw.enclaveName)
 	}
+	return all, names, nil
+}
+
+// NewGRPCConnections discovers the published gRPC ("rpc") port of each
+// Prysm beacon node in the enclave and dials it.
+func (kw *KurtosisWrapper) NewGRPCConnections() ([]*grpc.ClientConn, func(), error) {
+	all, names, err := kw.prysmCLServices()
+	if err != nil {
+		return nil, nil, err
+	}
 
 	conns := make([]*grpc.ClientConn, 0, len(names))
 	for _, n := range names {
-		svcCtx, ok := all[services.ServiceName(n)]
-		if !ok {
-			return nil, nil, fmt.Errorf("service %s not found in enclave", n)
-		}
-
 		// Published gRPC port is the "rpc" port in the service's public ports.
-		rpcPort, ok := svcCtx.GetPublicPorts()["rpc"]
+		rpcPort, ok := all[services.ServiceName(n)].GetPublicPorts()["rpc"]
 		if !ok {
 			return nil, nil, fmt.Errorf("service %s has no published rpc port", n)
 		}
@@ -156,4 +161,23 @@ func (kw *KurtosisWrapper) NewGRPCConnections() ([]*grpc.ClientConn, func(), err
 			_ = c.Close()
 		}
 	}, nil
+}
+
+// NewBeaconRESTEndpoints discovers the published Beacon REST ("http") port of
+// each Prysm beacon node and returns base URLs like "http://127.0.0.1:<port>".
+func (kw *KurtosisWrapper) NewBeaconRESTEndpoints() ([]string, error) {
+	all, names, err := kw.prysmCLServices()
+	if err != nil {
+		return nil, err
+	}
+
+	urls := make([]string, 0, len(names))
+	for _, n := range names {
+		httpPort, ok := all[services.ServiceName(n)].GetPublicPorts()["http"]
+		if !ok {
+			return nil, fmt.Errorf("service %s has no published http port", n)
+		}
+		urls = append(urls, fmt.Sprintf("http://127.0.0.1:%d", httpPort.GetNumber())) // lint:ignore uintcast -- a uint16 port never exceeds int.
+	}
+	return urls, nil
 }
