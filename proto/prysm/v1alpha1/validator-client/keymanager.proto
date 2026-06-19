@@ -127,6 +127,13 @@ message ProposerOptionPayload {
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
   ];
+  // max_execution_payment is the maximum execution layer payment (in Gwei) the
+  // proposer will accept from a builder for the Gloas builder API. 0 means
+  // trustless-only; 2^64-1 means accept any amount.
+  uint64 max_execution_payment = 5 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
+  ];
 }
 
 // BuilderConfig is a property of ProposerOptionPayload
@@ -137,13 +144,6 @@ message BuilderConfig {
         "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
   ];
   repeated string relays = 3;
-  // max_execution_payment is the maximum execution layer payment (in Gwei) the
-  // proposer will accept from a builder for the Gloas builder API. 0 means
-  // trustless-only; 2^64-1 means accept any amount.
-  uint64 max_execution_payment = 4 [
-    (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
-  ];
 }
 
 // ProposerSettingsPayload is used to unmarshal files sent from the validator

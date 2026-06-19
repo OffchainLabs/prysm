@@ -29,6 +29,7 @@ type BlockBuilder interface {
 	GetHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubKey [48]byte) (builder.SignedBid, error)
 	RegisterValidator(ctx context.Context, reg []*ethpb.SignedValidatorRegistrationV1) error
 	RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error)
+	SubmitBuilderPreferences(ctx context.Context, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1) error
 	Configured() bool
 }
 
@@ -116,6 +117,22 @@ func (s *Service) SubmitBlindedBlockPostFulu(ctx context.Context, b interfaces.R
 	}
 
 	return s.c.SubmitBlindedBlockPostFulu(ctx, b)
+}
+
+// SubmitBuilderPreferences submits a proposer's per-builder preferences ahead of the bid request.
+func (s *Service) SubmitBuilderPreferences(ctx context.Context, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1) error {
+	ctx, span := trace.StartSpan(ctx, "builder.SubmitBuilderPreferences")
+	defer span.End()
+	if s.c == nil {
+		tracing.AnnotateError(span, ErrNoBuilder)
+		return ErrNoBuilder
+	}
+	// Auths are signed per builder URL; skip ones meant for a builder we don't talk to.
+	if url := string(req.GetAuth().GetMessage().GetData()); url != s.c.NodeURL() {
+		log.WithField("authUrl", url).WithField("builderUrl", s.c.NodeURL()).Debug("Skipping builder preferences signed for a different builder")
+		return nil
+	}
+	return s.c.SubmitBuilderPreferences(ctx, validatorPubkey, req)
 }
 
 // GetHeader retrieves the header for a given slot and parent hash from the builder relay network.
