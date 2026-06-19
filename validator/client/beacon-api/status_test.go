@@ -12,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/mock"
-	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/mock/gomock"
 )
@@ -50,25 +49,7 @@ func TestValidatorStatus_Nominal(t *testing.T) {
 		nil,
 	).Times(1)
 
-	handler := mock.NewMockHandler(ctrl)
-	validatorClient := beaconApiValidatorClient{
-		stateValidatorsProvider: stateValidatorsProvider,
-		prysmChainClient: prysmChainClient{
-			nodeClient: &beaconApiNodeClient{
-				handler: handler,
-			},
-		},
-	}
-
-	// Expect node version endpoint call.
-	var nodeVersionResponse structs.GetVersionResponse
-	handler.EXPECT().Get(
-		gomock.Any(),
-		"/eth/v1/node/version",
-		&nodeVersionResponse,
-	).Return(
-		iface.ErrNotSupported,
-	).Times(1)
+	validatorClient := beaconApiValidatorClient{stateValidatorsProvider: stateValidatorsProvider}
 
 	actualValidatorStatusResponse, err := validatorClient.ValidatorStatus(
 		ctx,
@@ -165,26 +146,7 @@ func TestMultipleValidatorStatus_Nominal(t *testing.T) {
 		nil,
 	).Times(1)
 
-	handler := mock.NewMockHandler(ctrl)
-
-	// Expect node version endpoint call.
-	var nodeVersionResponse structs.GetVersionResponse
-	handler.EXPECT().Get(
-		gomock.Any(),
-		"/eth/v1/node/version",
-		&nodeVersionResponse,
-	).Return(
-		iface.ErrNotSupported,
-	).Times(1)
-
-	validatorClient := beaconApiValidatorClient{
-		stateValidatorsProvider: stateValidatorsProvider,
-		prysmChainClient: prysmChainClient{
-			nodeClient: &beaconApiNodeClient{
-				handler: handler,
-			},
-		},
-	}
+	validatorClient := beaconApiValidatorClient{stateValidatorsProvider: stateValidatorsProvider}
 
 	expectedValidatorStatusResponse := ethpb.MultipleValidatorStatusResponse{
 		PublicKeys: validatorsPubKey,
@@ -317,44 +279,6 @@ func TestGetValidatorsStatusResponse_Nominal_SomeActiveValidators(t *testing.T) 
 		nil,
 	).Times(1)
 
-	handler := mock.NewMockHandler(ctrl)
-
-	// Expect node version endpoint call.
-	var nodeVersionResponse structs.GetVersionResponse
-	handler.EXPECT().Get(
-		gomock.Any(),
-		"/eth/v1/node/version",
-		&nodeVersionResponse,
-	).Return(
-		nil,
-	).SetArg(
-		2,
-		structs.GetVersionResponse{Data: &structs.Version{Version: "prysm/v0.0.1"}},
-	).Times(1)
-
-	var validatorCountResponse structs.GetValidatorCountResponse
-	handler.EXPECT().Get(
-		gomock.Any(),
-		"/eth/v1/beacon/states/head/validator_count?",
-		&validatorCountResponse,
-	).Return(
-		nil,
-	).SetArg(
-		2,
-		structs.GetValidatorCountResponse{
-			Data: []*structs.ValidatorCount{
-				{
-					Status: "active",
-					Count:  "50001",
-				},
-				{
-					Status: "pending",
-					Count:  "11000",
-				},
-			},
-		},
-	).Times(1)
-
 	wantedStringValidatorsPubkey := []string{
 		"0x8000091c2ae64ee414a54c1cc1fc67dec663408bc636cb86756e0200e41a75c8f86603f104f02c856983d2783116be13", // existing
 		"0x800010c20716ef4264a6d93b3873a008ece58fb9312ac2cc3b0ccc40aedb050f2038281e6a92242a35476af9903c7919", // existing,
@@ -414,15 +338,7 @@ func TestGetValidatorsStatusResponse_Nominal_SomeActiveValidators(t *testing.T) 
 		},
 	}
 
-	validatorClient := beaconApiValidatorClient{
-		stateValidatorsProvider: stateValidatorsProvider,
-		prysmChainClient: prysmChainClient{
-			nodeClient: &beaconApiNodeClient{
-				handler: handler,
-			},
-			handler: handler,
-		},
-	}
+	validatorClient := beaconApiValidatorClient{stateValidatorsProvider: stateValidatorsProvider}
 	actualValidatorsPubKey, actualValidatorsIndex, actualValidatorsStatusResponse, err := validatorClient.validatorsStatusResponse(ctx, validatorsPubKey, validatorsIndex)
 
 	require.NoError(t, err)
@@ -463,18 +379,6 @@ func TestGetValidatorsStatusResponse_Nominal_NoActiveValidators(t *testing.T) {
 		nil,
 	).Times(1)
 
-	handler := mock.NewMockHandler(ctrl)
-
-	// Expect node version endpoint call.
-	var nodeVersionResponse structs.GetVersionResponse
-	handler.EXPECT().Get(
-		gomock.Any(),
-		"/eth/v1/node/version",
-		&nodeVersionResponse,
-	).Return(
-		iface.ErrNotSupported,
-	).Times(1)
-
 	wantedValidatorsPubKey := [][]byte{validatorPubKey}
 	wantedValidatorsIndex := []primitives.ValidatorIndex{40000}
 	wantedValidatorsStatusResponse := []*ethpb.ValidatorStatusResponse{
@@ -484,15 +388,7 @@ func TestGetValidatorsStatusResponse_Nominal_NoActiveValidators(t *testing.T) {
 		},
 	}
 
-	validatorClient := beaconApiValidatorClient{
-		stateValidatorsProvider: stateValidatorsProvider,
-		prysmChainClient: prysmChainClient{
-			nodeClient: &beaconApiNodeClient{
-				handler: handler,
-			},
-			handler: handler,
-		},
-	}
+	validatorClient := beaconApiValidatorClient{stateValidatorsProvider: stateValidatorsProvider}
 	actualValidatorsPubKey, actualValidatorsIndex, actualValidatorsStatusResponse, err := validatorClient.validatorsStatusResponse(ctx, wantedValidatorsPubKey, nil)
 
 	require.NoError(t, err)
@@ -525,7 +421,6 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 		inputPubKeys                     [][]byte
 		inputIndexes                     []primitives.ValidatorIndex
 		inputGetStateValidatorsInterface getStateValidatorsInterface
-		validatorCountCalled             int
 
 		// Outputs
 		outputErrMessage string
@@ -563,8 +458,7 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 				},
 				outputErr: nil,
 			},
-			validatorCountCalled: 1,
-			outputErrMessage:     "failed to parse validator public key",
+			outputErrMessage: "failed to parse validator public key",
 		},
 		{
 			name: "failed to parse validator index NotAnIndex",
@@ -589,8 +483,7 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 				},
 				outputErr: nil,
 			},
-			validatorCountCalled: 1,
-			outputErrMessage:     "failed to parse validator index",
+			outputErrMessage: "failed to parse validator index",
 		},
 		{
 			name: "invalid validator status",
@@ -615,8 +508,7 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 				},
 				outputErr: nil,
 			},
-			validatorCountCalled: 1,
-			outputErrMessage:     "invalid validator status NotAStatus",
+			outputErrMessage: "invalid validator status NotAStatus",
 		},
 		{
 			name: "failed to parse activation epoch",
@@ -642,8 +534,7 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 				},
 				outputErr: nil,
 			},
-			validatorCountCalled: 1,
-			outputErrMessage:     "failed to parse activation epoch NotAnEpoch",
+			outputErrMessage: "failed to parse activation epoch NotAnEpoch",
 		},
 		{
 			name: "failed to get state validators",
@@ -679,8 +570,7 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 				},
 				outputErr: nil,
 			},
-			validatorCountCalled: 1,
-			outputErrMessage:     "failed to parse validator index NotAnIndex",
+			outputErrMessage: "failed to parse validator index NotAnIndex",
 		},
 	}
 
@@ -702,27 +592,7 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 					testCase.inputGetStateValidatorsInterface.outputErr,
 				).Times(1)
 
-				handler := mock.NewMockHandler(ctrl)
-
-				// Expect node version endpoint call.
-				var nodeVersionResponse structs.GetVersionResponse
-				handler.EXPECT().Get(
-					gomock.Any(),
-					"/eth/v1/node/version",
-					&nodeVersionResponse,
-				).Return(
-					iface.ErrNotSupported,
-				).Times(testCase.validatorCountCalled)
-
-				validatorClient := beaconApiValidatorClient{
-					stateValidatorsProvider: stateValidatorsProvider,
-					prysmChainClient: prysmChainClient{
-						nodeClient: &beaconApiNodeClient{
-							handler: handler,
-						},
-						handler: handler,
-					},
-				}
+				validatorClient := beaconApiValidatorClient{stateValidatorsProvider: stateValidatorsProvider}
 
 				_, _, _, err := validatorClient.validatorsStatusResponse(
 					ctx,
