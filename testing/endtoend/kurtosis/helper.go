@@ -16,7 +16,7 @@ func readYamlConfigAsJson(networkConfigPath string) (string, error) {
 		return "", fmt.Errorf("failed to find runfile '%s': %w", networkConfigPath, err)
 	}
 
-	yamlData, err := os.ReadFile(realPath)
+	yamlData, err := os.ReadFile(realPath) // #nosec G304
 	if err != nil {
 		return "", fmt.Errorf("failed to read file: %w", err)
 	}
