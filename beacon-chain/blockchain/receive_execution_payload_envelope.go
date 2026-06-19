@@ -96,6 +96,17 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		if bid == nil || len(bid.BlobKzgCommitments()) == 0 {
 			return nil
 		}
+		// Initial sync fetches columns via range requests, so check availability synchronously rather than blocking on gossip; fail if missing.
+		if !s.inRegularSync() {
+			available, err := s.dataColumnsAvailableNow(availCtx, root, envelope.Slot())
+			if err != nil {
+				return errors.Wrap(err, "data availability check failed for payload envelope")
+			}
+			if !available {
+				return errors.Errorf("data columns unavailable for payload envelope slot %d root %#x", envelope.Slot(), root)
+			}
+			return nil
+		}
 		if err := s.areDataColumnsAvailable(availCtx, root, envelope.Slot()); err != nil {
 			return errors.Wrap(err, "data availability check failed for payload envelope")
 		}
