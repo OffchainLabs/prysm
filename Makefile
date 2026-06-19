@@ -7,7 +7,7 @@ DIST ?= dist
 BINARIES := $(notdir $(patsubst %/,%,$(dir $(wildcard cmd/*/main.go))))
 GEN_KINDS := proto ssz mocks
 POSITIONAL := $(sort $(GEN_KINDS) $(BINARIES))
-COMMANDS := build gen clean help
+COMMANDS := run build gen clean help
 
 TAGS ?=
 TAGFLAG := $(if $(TAGS),-tags=$(TAGS),)
@@ -22,6 +22,12 @@ endif
 
 GEN_MODE     := $(or $(mode),no-force)
 GEN_MODE_BAD := $(filter-out force no-force,$(GEN_MODE))
+
+# Goals left over after `run` and the binary name are the program's arguments.
+# A leading `--` ends make's option parsing so `--flag value` reaches us as goals
+# (caught as no-ops by the catch-all) rather than being treated as make options.
+RUN_BIN  := $(filter $(BINARIES),$(MAKECMDGOALS))
+RUN_ARGS := $(filter-out run $(COMMANDS) $(RUN_BIN),$(MAKECMDGOALS))
 
 # ---------------------------------------------------------------------------
 # Code generation
@@ -39,6 +45,22 @@ gen:
 clean: 
 	rm -f .gen-cache.json
 	$(GO) clean -cache -testcache -modcache -fuzzcache
+
+# ---------------------------------------------------------------------------
+# Run
+# ---------------------------------------------------------------------------
+.PHONY: run
+run:
+	@$(MAKE) --no-print-directory gen
+
+	@bin="$(strip $(RUN_BIN))"; \
+	case "$$bin" in \
+	  "")    echo "❌ run: specify a binary (one of: $(BINARIES))" >&2; exit 1;; \
+	  *" "*) echo "❌ run: only one binary at a time (got: $$bin)" >&2; exit 1;; \
+	esac; \
+	cmd="$(strip $(GO) run $(TAGFLAG) $(flags) ./cmd/$$bin $(RUN_ARGS))"; \
+	echo "→ $$cmd"; \
+	eval "$$cmd"
 
 # ---------------------------------------------------------------------------
 # Build
@@ -70,6 +92,7 @@ help: ## Show this help
 	@printf '\033[0m'
 	@echo ""
 	@printf '\033[1mCommands:\033[0m\n'
+	@printf "  \033[36m%-50s\033[0m %s\n" "make run <bin> [flags=...] [-- <args>]"     "Run a binary"
 	@printf "  \033[36m%-50s\033[0m %s\n" "make build [<bin>...] [flags=...]"             "Build a binary (default: all)"
 	@printf "  \033[36m%-50s\033[0m %s\n" "make gen [$(GEN_KINDS)] [mode=force|no-force]" "Create generated code (default: all,no-force)"
 	@printf "  \033[36m%-50s\033[0m %s\n" "make clean"                                    "Clean everything"
@@ -77,6 +100,9 @@ help: ## Show this help
 	@echo ""
 	@printf '\033[1mOptions:\033[0m\n'
 	@printf "  \033[36m%-16s\033[0m %s\n" "<bin>:" "$(BINARIES)"
+	@echo ""
+	@printf '\033[1mNotes:\033[0m\n'
+	@echo "  After '--', pass '--flag value' (not '--flag=value')"
 	@echo ""
 
 # ---------------------------------------------------------------------------
