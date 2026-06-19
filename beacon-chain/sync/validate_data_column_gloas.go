@@ -218,17 +218,17 @@ func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, 
 
 		if err := verifier.VerifyDataColumnSidecarSlotMatchesBlockGloas(); err != nil {
 			skipped++
-			s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(pe.peer)
+			s.downscorePeer(pe.peer, "pendingGloasColumnSlotMismatch", logrus.Fields{"error": err})
 			continue
 		}
 		if err := verifier.VerifyDataColumnSidecarGloas(); err != nil {
 			skipped++
-			s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(pe.peer)
+			s.downscorePeer(pe.peer, "pendingGloasColumnInvalidSidecar", logrus.Fields{"error": err})
 			continue
 		}
 		if err := verifier.VerifyDataColumnSidecarKzgProofsGloas(); err != nil {
 			skipped++
-			s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(pe.peer)
+			s.downscorePeer(pe.peer, "pendingGloasColumnInvalidKzgProof", logrus.Fields{"error": err})
 			continue
 		}
 
@@ -291,16 +291,17 @@ func (s *Service) pruneStaleGloasColumns(currentSlot primitives.Slot) {
 	var pruned []prunedRoot
 	s.pendingGloasColumnsLock.Lock()
 	for r, e := range s.pendingGloasColumns {
-		if e.slot+1 < currentSlot {
-			peers := make([]peer.ID, 0, fieldparams.NumberOfColumns)
-			for _, pe := range e.columns {
-				if pe != nil {
-					peers = append(peers, pe.peer)
-				}
-			}
-			pruned = append(pruned, prunedRoot{root: r, peers: peers})
-			delete(s.pendingGloasColumns, r)
+		if e.slot+1 >= currentSlot {
+			continue
 		}
+		peers := make([]peer.ID, 0, fieldparams.NumberOfColumns)
+		for _, pe := range e.columns {
+			if pe != nil {
+				peers = append(peers, pe.peer)
+			}
+		}
+		pruned = append(pruned, prunedRoot{root: r, peers: peers})
+		delete(s.pendingGloasColumns, r)
 	}
 	s.pendingGloasColumnsLock.Unlock()
 
@@ -310,7 +311,7 @@ func (s *Service) pruneStaleGloasColumns(currentSlot primitives.Slot) {
 			continue
 		}
 		for _, pid := range p.peers {
-			s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(pid)
+			s.downscorePeer(pid, "pendingGloasColumnUnknownRoot", logrus.Fields{"root": fmt.Sprintf("%#x", p.root)})
 		}
 	}
 }
