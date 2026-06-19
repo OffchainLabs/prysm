@@ -365,6 +365,11 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 		return emptyAttri
 	}
 
+	if pref == nil {
+		// Unreachable unless a caller requests a slot in an earlier epoch than the head state.
+		log.WithFields(logrus.Fields{"slot": slot, "stateSlot": st.Slot()}).Debug("No tracked proposer preference for payload attribute")
+		return emptyAttri
+	}
 	feeRecipient := pref.FeeRecipientOrDefault()
 
 	v := st.Version()
