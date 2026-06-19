@@ -309,9 +309,9 @@ go_test(
         "requires-network",
     ],
     deps = [
+        "//api/client/beacon:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
-        "//proto/prysm/v1alpha1:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/endtoend/evaluators:go_default_library",
         "//testing/endtoend/helpers:go_default_library",
@@ -319,7 +319,5 @@ go_test(
         "//testing/endtoend/types:go_default_library",
         "//testing/require:go_default_library",
         "@io_bazel_rules_go//go/tools/bazel:go_default_library",
-        "@org_golang_google_grpc//:go_default_library",
-        "@org_golang_google_protobuf//types/known/emptypb:go_default_library",
     ],
 )
