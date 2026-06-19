@@ -81,20 +81,9 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, r *fetchRequestRespon
 	currentSlot := f.clock.CurrentSlot()
 	currentEpoch := slots.ToEpoch(currentSlot)
 
-	// resolveBlock loads an envelope's block that is not part of this batch.
-	resolveBlock := func(root [32]byte) (blocks.ROBlock, bool) {
-		signed, err := f.db.Block(ctx, root)
-		if err != nil {
-			return blocks.ROBlock{}, false
-		}
-		b, err := blocks.NewROBlockWithRoot(signed, root)
-		if err != nil {
-			return blocks.ROBlock{}, false
-		}
-		return b, true
-	}
-
-	roBlocks, err := columnFetchBlocks(postFulu, r.envelopes, currentEpoch, resolveBlock)
+	roBlocks, err := columnFetchBlocks(postFulu, r.envelopes, currentEpoch, func(root [32]byte) (blocks.ROBlock, bool) {
+		return f.resolveBlock(ctx, root)
+	})
 	if err != nil {
 		r.err = errors.Wrap(err, "select blocks needing data column sidecars")
 		return
@@ -146,6 +135,16 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, r *fetchRequestRespon
 	for _, columns := range verifiedRoDataColumnsByRoot {
 		r.columnsToSave = append(r.columnsToSave, columns...)
 	}
+}
+
+// resolveBlock loads an envelope's block that is not part of the current batch.
+func (f *blocksFetcher) resolveBlock(ctx context.Context, root [32]byte) (blocks.ROBlock, bool) {
+	signed, err := f.db.Block(ctx, root)
+	if err != nil {
+		return blocks.ROBlock{}, false
+	}
+	b, err := blocks.NewROBlockWithRoot(signed, root)
+	return b, err == nil
 }
 
 // columnFetchBlocks selects the post-Fulu blocks (within the DA period) whose data column

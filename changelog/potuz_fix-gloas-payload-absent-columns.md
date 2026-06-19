@@ -1,3 +1,3 @@
 ### Fixed
 
-- Initial sync no longer requests data column sidecars for payload-absent Gloas slots. The "needs columns" decision is now driven by the revealed execution payload envelopes instead of the bid's `blob_kzg_commitments` (the builder's promise), so a slot whose payload was never revealed is not requested — previously the node looped forever on `respondedSidecars=0` and never synced past it. Payloads are now fetched before sidecars, columns are requested by the payload's beacon block root (including the out-of-batch payload the first block builds on), and the import-side data-availability check is skipped for payload-absent Gloas blocks. Pre-Gloas (Fulu) blocks are unchanged.
+- Initial sync no longer requests data column sidecars for payload-absent Gloas slots, which previously wedged sync on `respondedSidecars=0`. Columns are now requested by revealed payload envelopes instead of the bid's `blob_kzg_commitments`.
