@@ -673,7 +673,7 @@ func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei 
 // OnboardBuildersFromPendingDeposits applies any pending builder deposits at the fork.
 // It mutates the state and prunes pending deposits accordingly.
 //
-//	<spec fn="onboard_builders_from_pending_deposits" fork="gloas" hash="6bb266a4">
+//	<spec fn="onboard_builders_from_pending_deposits" fork="gloas" hash="2f9926a6">
 //	def onboard_builders_from_pending_deposits(state: BeaconState) -> None:
 //	    """
 //	    Applies any pending deposit for builders, effectively
@@ -688,9 +688,9 @@ func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei 
 //	            pending_deposits.append(deposit)
 //	            continue
 //
-//	        # Note that the function apply_deposit_for_builder can mutate the
-//	        # state and may add a builder to the registry. For this reason, the
-//	        # list of builder pubkeys must be recomputed each iteration.
+//	        # Note that applying a deposit below can mutate the state and
+//	        # may add a builder to the registry. For this reason, the list
+//	        # of builder pubkeys must be recomputed each iteration.
 //	        builder_pubkeys = [b.pubkey for b in state.builders]
 //
 //	        # Deposits for non-builders stay in the pending queue. If there is a
@@ -703,15 +703,25 @@ func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei 
 //	            if is_pending_validator(pending_deposits, deposit.pubkey):
 //	                pending_deposits.append(deposit)
 //	                continue
+//	            if not is_valid_deposit_signature(
+//	                deposit.pubkey,
+//	                deposit.withdrawal_credentials,
+//	                deposit.amount,
+//	                deposit.signature,
+//	            ):
+//	                continue
 //
-//	        apply_deposit_for_builder(
-//	            state,
-//	            deposit.pubkey,
-//	            deposit.withdrawal_credentials,
-//	            deposit.amount,
-//	            deposit.signature,
-//	            deposit.slot,
-//	        )
+//	            add_builder_to_registry(
+//	                state,
+//	                deposit.pubkey,
+//	                PAYLOAD_BUILDER_VERSION,
+//	                ExecutionAddress(deposit.withdrawal_credentials[12:]),
+//	                deposit.amount,
+//	                deposit.slot,
+//	            )
+//	        else:
+//	            builder_index = BuilderIndex(builder_pubkeys.index(deposit.pubkey))
+//	            state.builders[builder_index].balance += deposit.amount
 //
 //	    state.pending_deposits = pending_deposits
 //	</spec>
@@ -767,29 +777,7 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 	return nil
 }
 
-// <spec fn="apply_deposit_for_builder" fork="gloas" hash="e4bc98c7">
-// def apply_deposit_for_builder(
-//
-//	state: BeaconState,
-//	pubkey: BLSPubkey,
-//	withdrawal_credentials: Bytes32,
-//	amount: uint64,
-//	signature: BLSSignature,
-//	slot: Slot,
-//
-// ) -> None:
-//
-//	builder_pubkeys = [b.pubkey for b in state.builders]
-//	if pubkey not in builder_pubkeys:
-//	    # Verify the deposit signature (proof of possession) which is not checked by the deposit contract
-//	    if is_valid_deposit_signature(pubkey, withdrawal_credentials, amount, signature):
-//	        add_builder_to_registry(state, pubkey, withdrawal_credentials, amount, slot)
-//	else:
-//	    # Increase balance by deposit amount
-//	    builder_index = builder_pubkeys.index(pubkey)
-//	    state.builders[builder_index].balance += amount
-//
-// </spec>
+// applyDepositForNewBuilder onboards a single pending deposit as a new builder, used by onboard_builders_from_pending_deposits.
 func (b *BeaconState) applyDepositForNewBuilder(deposit *ethpb.PendingDeposit) error {
 	valid, err := helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
 		PublicKey:             deposit.PublicKey,

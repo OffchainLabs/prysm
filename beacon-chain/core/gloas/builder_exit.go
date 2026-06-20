@@ -55,19 +55,22 @@ func ProcessBuilderExitRequests(ctx context.Context, s state.BeaconState, reques
 // processBuilderExitRequest initiates a builder exit when the request originates
 // from the builder's execution address and the builder has no pending withdrawals.
 //
-//	<spec fn="process_builder_exit_request" fork="gloas" hash="todo">
+//	<spec fn="process_builder_exit_request" fork="gloas" hash="144e9faf">
 //	def process_builder_exit_request(state: BeaconState, request: BuilderExitRequest) -> None:
 //	    builder_pubkeys = [b.pubkey for b in state.builders]
 //	    if request.pubkey not in builder_pubkeys:
 //	        return
+//
 //	    builder_index = BuilderIndex(builder_pubkeys.index(request.pubkey))
 //	    builder = state.builders[builder_index]
+//
 //	    if not is_active_builder(state, builder_index):
 //	        return
 //	    if builder.execution_address != request.source_address:
 //	        return
 //	    if get_pending_balance_to_withdraw_for_builder(state, builder_index) != 0:
 //	        return
+//
 //	    initiate_builder_exit(state, builder_index)
 //	</spec>
 func processBuilderExitRequest(s state.BeaconState, request *enginev1.BuilderExitRequest) error {

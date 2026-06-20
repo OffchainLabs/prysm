@@ -22,9 +22,10 @@ const payloadBuilderVersion = 0
 
 // ProcessExecutionPayloadBid processes a signed execution payload bid in the Gloas fork.
 //
-//	<spec fn="process_execution_payload_bid" fork="gloas" hash="823c9f3a">
-//	def process_execution_payload_bid(state: BeaconState, block: BeaconBlock) -> None:
-//	    signed_bid = block.body.signed_execution_payload_bid
+//	<spec fn="process_execution_payload_bid" fork="gloas" hash="ba18a784">
+//	def process_execution_payload_bid(
+//	    state: BeaconState, signed_bid: SignedExecutionPayloadBid
+//	) -> None:
 //	    bid = signed_bid.message
 //	    builder_index = bid.builder_index
 //	    amount = bid.value
@@ -36,6 +37,8 @@ const payloadBuilderVersion = 0
 //	    else:
 //	        # Verify that the builder is active
 //	        assert is_active_builder(state, builder_index)
+//	        # Verify that the builder is a payload builder
+//	        assert state.builders[builder_index].version == PAYLOAD_BUILDER_VERSION
 //	        # Verify that the builder has funds to cover the bid
 //	        assert can_builder_cover_bid(state, builder_index, amount)
 //	        # Verify that the bid signature is valid
@@ -48,10 +51,11 @@ const payloadBuilderVersion = 0
 //	    )
 //
 //	    # Verify that the bid is for the current slot
-//	    assert bid.slot == block.slot
+//	    assert bid.slot == state.slot
+//	    assert state.slot > GENESIS_SLOT
 //	    # Verify that the bid is for the right parent block
 //	    assert bid.parent_block_hash == state.latest_block_hash
-//	    assert bid.parent_block_root == block.parent_root
+//	    assert bid.parent_block_root == get_block_root_at_slot(state, Slot(state.slot - 1))
 //	    assert bid.prev_randao == get_randao_mix(state, get_current_epoch(state))
 //
 //	    # Record the pending payment if there is some payment
@@ -163,7 +167,6 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 }
 
 // validateBidConsistency checks that the bid is consistent with the current beacon state.
-//
 func validateBidConsistency(st state.BeaconState, bid interfaces.ROExecutionPayloadBid) error {
 	if bid.Slot() != st.Slot() {
 		return fmt.Errorf("bid slot %d does not match state slot %d", bid.Slot(), st.Slot())

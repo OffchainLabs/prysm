@@ -17,7 +17,7 @@ import (
 
 // UpgradeToGloas updates inputs a generic state to return the version Gloas state.
 //
-//	<spec fn="upgrade_to_gloas" fork="gloas" hash="d9a22a92">
+//	<spec fn="upgrade_to_gloas" fork="gloas" hash="c769e40a">
 //	def upgrade_to_gloas(pre: fulu.BeaconState) -> BeaconState:
 //	    epoch = fulu.get_current_epoch(pre)
 //
@@ -27,7 +27,7 @@ import (
 //	        slot=pre.slot,
 //	        fork=Fork(
 //	            previous_version=pre.fork.current_version,
-//	            # [Modified in Gloas:EIP7732]
+//	            # [Modified in Gloas]
 //	            current_version=GLOAS_FORK_VERSION,
 //	            epoch=epoch,
 //	        ),
@@ -96,9 +96,10 @@ import (
 //	    return post
 //	</spec>
 //
-//	<spec fn="process_execution_payload_bid" fork="gloas" hash="823c9f3a">
-//	def process_execution_payload_bid(state: BeaconState, block: BeaconBlock) -> None:
-//	    signed_bid = block.body.signed_execution_payload_bid
+//	<spec fn="process_execution_payload_bid" fork="gloas" hash="ba18a784">
+//	def process_execution_payload_bid(
+//	    state: BeaconState, signed_bid: SignedExecutionPayloadBid
+//	) -> None:
 //	    bid = signed_bid.message
 //	    builder_index = bid.builder_index
 //	    amount = bid.value
@@ -110,6 +111,8 @@ import (
 //	    else:
 //	        # Verify that the builder is active
 //	        assert is_active_builder(state, builder_index)
+//	        # Verify that the builder is a payload builder
+//	        assert state.builders[builder_index].version == PAYLOAD_BUILDER_VERSION
 //	        # Verify that the builder has funds to cover the bid
 //	        assert can_builder_cover_bid(state, builder_index, amount)
 //	        # Verify that the bid signature is valid
@@ -122,10 +125,11 @@ import (
 //	    )
 //
 //	    # Verify that the bid is for the current slot
-//	    assert bid.slot == block.slot
+//	    assert bid.slot == state.slot
+//	    assert state.slot > GENESIS_SLOT
 //	    # Verify that the bid is for the right parent block
 //	    assert bid.parent_block_hash == state.latest_block_hash
-//	    assert bid.parent_block_root == block.parent_root
+//	    assert bid.parent_block_root == get_block_root_at_slot(state, Slot(state.slot - 1))
 //	    assert bid.prev_randao == get_randao_mix(state, get_current_epoch(state))
 //
 //	    # Record the pending payment if there is some payment
@@ -137,6 +141,7 @@ import (
 //	                amount=amount,
 //	                builder_index=builder_index,
 //	            ),
+//	            proposer_index=get_beacon_proposer_index(state),
 //	        )
 //	        state.builder_pending_payments[SLOTS_PER_EPOCH + bid.slot % SLOTS_PER_EPOCH] = (
 //	            pending_payment

@@ -24,7 +24,7 @@ func ProcessBuilderDepositRequests(ctx context.Context, st state.BeaconState, re
 
 // processBuilderDepositRequest registers a new builder or tops up an existing one.
 //
-//	<spec fn="process_builder_deposit_request" fork="gloas" hash="todo">
+//	<spec fn="process_builder_deposit_request" fork="gloas" hash="c3ba5adf">
 //	def process_builder_deposit_request(state: BeaconState, request: BuilderDepositRequest) -> None:
 //	    builder_pubkeys = [b.pubkey for b in state.builders]
 //	    if request.pubkey not in builder_pubkeys:
@@ -40,8 +40,10 @@ func ProcessBuilderDepositRequests(ctx context.Context, st state.BeaconState, re
 //	    else:
 //	        builder_index = BuilderIndex(builder_pubkeys.index(request.pubkey))
 //	        builder = state.builders[builder_index]
+//
 //	        # Increase balance by deposit amount
 //	        builder.balance += request.amount
+//
 //	        # If exited, reset the withdrawable epoch
 //	        if builder.withdrawable_epoch != FAR_FUTURE_EPOCH:
 //	            epoch = get_current_epoch(state)

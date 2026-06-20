@@ -158,7 +158,7 @@ func IsValidDepositSignature(data *ethpb.Deposit_Data) (bool, error) {
 // IsValidBuilderDepositSignature returns whether a builder deposit request's
 // proof-of-possession signature is valid under DOMAIN_BUILDER_DEPOSIT.
 //
-//	<spec fn="is_valid_builder_deposit_signature" fork="gloas" hash="todo">
+//	<spec fn="is_valid_builder_deposit_signature" fork="gloas" hash="a4b72f03">
 //	def is_valid_builder_deposit_signature(request: BuilderDepositRequest) -> bool:
 //	    deposit_message = DepositMessage(
 //	        pubkey=request.pubkey,
