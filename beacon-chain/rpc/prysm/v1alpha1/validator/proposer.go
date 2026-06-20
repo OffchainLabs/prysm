@@ -285,11 +285,10 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 		} else {
 			selfBuildOnly := local.OverrideBuilder || skipMevBoost
 			var builderBid *ethpb.SignedExecutionPayloadBid
-			var maxExecutionPayment uint64
 			if !selfBuildOnly {
-				builderBid, maxExecutionPayment = vs.getBuilderExecutionPayloadBid(ctx, sBlk, head, local, builderRequestAuths)
+				builderBid = vs.getBuilderExecutionPayloadBid(ctx, sBlk, head, local, builderRequestAuths)
 			}
-			src, bidErr := vs.setExecutionPayloadBid(ctx, sBlk, local, builderBid, maxExecutionPayment, selfBuildOnly)
+			src, bidErr := vs.setExecutionPayloadBid(ctx, sBlk, local, builderBid, selfBuildOnly)
 			if bidErr != nil {
 				return nil, status.Errorf(codes.Internal, "Could not set execution data for Gloas: %v", bidErr)
 			}
