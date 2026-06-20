@@ -252,16 +252,23 @@ func TestBidVerifier_VerifyBuilderVersion(t *testing.T) {
 
 func TestBidVerifier_VerifyBlobKzgCommitmentsLimit(t *testing.T) {
 	maxBlobs := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(slots.ToEpoch(1))
+	commitments := func(n int) [][]byte {
+		c := make([][]byte, n)
+		for i := range c {
+			c[i] = bytes.Repeat([]byte{0x01}, 48)
+		}
+		return c
+	}
 
 	atLimit := testSignedExecutionPayloadBid(t, 1)
-	atLimit.Message.BlobKzgCommitments = make([][]byte, maxBlobs)
+	atLimit.Message.BlobKzgCommitments = commitments(maxBlobs)
 	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(atLimit)
 	require.NoError(t, err)
 	verifier := &BidVerifier{results: newResults(RequireBidBlobKzgCommitmentsLimit), b: wrapped}
 	require.NoError(t, verifier.VerifyBlobKzgCommitmentsLimit())
 
 	overLimit := testSignedExecutionPayloadBid(t, 1)
-	overLimit.Message.BlobKzgCommitments = make([][]byte, maxBlobs+1)
+	overLimit.Message.BlobKzgCommitments = commitments(maxBlobs + 1)
 	wrapped, err = blocks.WrappedROSignedExecutionPayloadBid(overLimit)
 	require.NoError(t, err)
 	verifier = &BidVerifier{results: newResults(RequireBidBlobKzgCommitmentsLimit), b: wrapped}
