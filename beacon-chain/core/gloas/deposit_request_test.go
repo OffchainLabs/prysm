@@ -86,13 +86,6 @@ func builderWithdrawalCredentials() [32]byte {
 	return cred
 }
 
-func validatorWithdrawalCredentials() [32]byte {
-	var cred [32]byte
-	cred[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
-	copy(cred[12:], bytes.Repeat([]byte{0x33}, 20))
-	return cred
-}
-
 func toBytes48(b []byte) [48]byte {
 	var out [48]byte
 	copy(out[:], b)

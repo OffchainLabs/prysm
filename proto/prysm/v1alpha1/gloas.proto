@@ -3,7 +3,7 @@ syntax = "proto3";
 package ethereum.eth.v1alpha1;
 
 import "proto/engine/v1/execution_engine.proto";
-import "proto/engine/v1/electra.proto";
+import "proto/engine/v1/gloas.proto";
 import "proto/eth/ext/options.proto";
 import "proto/prysm/v1alpha1/attestation.proto";
 import "proto/prysm/v1alpha1/withdrawals.proto";

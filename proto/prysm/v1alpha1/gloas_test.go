@@ -139,6 +139,7 @@ func TestBuilderPendingPayment_Copy(t *testing.T) {
 					Amount:       primitives.Gwei(10000),
 					BuilderIndex: primitives.BuilderIndex(789),
 				},
+				ProposerIndex: primitives.ValidatorIndex(456),
 			},
 		},
 	}

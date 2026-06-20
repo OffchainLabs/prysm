@@ -30,7 +30,7 @@ func RunBuilderDepositRequestTest(t *testing.T, config string) {
 			require.NoError(t, err, "Failed to decompress")
 			req := &enginev1.BuilderDepositRequest{}
 			require.NoError(t, req.UnmarshalSSZ(ssz))
-			blk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockElectra())
+			blk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockGloas())
 			require.NoError(t, err)
 			common.RunBlockOperationTest(t, folderPath, blk, sszToState, func(ctx context.Context, s state.BeaconState, _ interfaces.ReadOnlySignedBeaconBlock) (state.BeaconState, error) {
 				return s, gloas.ProcessBuilderDepositRequests(ctx, s, []*enginev1.BuilderDepositRequest{req})

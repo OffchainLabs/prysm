@@ -132,28 +132,6 @@ type ExecutionRequests struct {
 	Consolidations []*ConsolidationRequest `json:"consolidations"`
 }
 
-// ExecutionRequestsGloas extends ExecutionRequests with builder deposit and exit
-// requests, new in Gloas (EIP-8282).
-type ExecutionRequestsGloas struct {
-	Deposits        []*DepositRequest        `json:"deposits"`
-	Withdrawals     []*WithdrawalRequest     `json:"withdrawals"`
-	Consolidations  []*ConsolidationRequest  `json:"consolidations"`
-	BuilderDeposits []*BuilderDepositRequest `json:"builder_deposits"`
-	BuilderExits    []*BuilderExitRequest    `json:"builder_exits"`
-}
-
-type BuilderDepositRequest struct {
-	Pubkey                string `json:"pubkey"`
-	WithdrawalCredentials string `json:"withdrawal_credentials"`
-	Amount                string `json:"amount"`
-	Signature             string `json:"signature"`
-}
-
-type BuilderExitRequest struct {
-	SourceAddress string `json:"source_address"`
-	Pubkey        string `json:"pubkey"`
-}
-
 type DepositRequest struct {
 	Pubkey                string `json:"pubkey"`
 	WithdrawalCredentials string `json:"withdrawal_credentials"`
@@ -177,6 +155,28 @@ type ConsolidationRequest struct {
 // ----------------------------------------------------------------------------
 // Gloas
 // ----------------------------------------------------------------------------
+
+// ExecutionRequestsGloas extends ExecutionRequests with builder deposit and exit
+// requests, new in Gloas (EIP-8282).
+type ExecutionRequestsGloas struct {
+	Deposits        []*DepositRequest        `json:"deposits"`
+	Withdrawals     []*WithdrawalRequest     `json:"withdrawals"`
+	Consolidations  []*ConsolidationRequest  `json:"consolidations"`
+	BuilderDeposits []*BuilderDepositRequest `json:"builder_deposits"`
+	BuilderExits    []*BuilderExitRequest    `json:"builder_exits"`
+}
+
+type BuilderDepositRequest struct {
+	Pubkey                string `json:"pubkey"`
+	WithdrawalCredentials string `json:"withdrawal_credentials"`
+	Amount                string `json:"amount"`
+	Signature             string `json:"signature"`
+}
+
+type BuilderExitRequest struct {
+	SourceAddress string `json:"source_address"`
+	Pubkey        string `json:"pubkey"`
+}
 
 type ExecutionPayloadGloas struct {
 	ParentHash      string        `json:"parent_hash"`
