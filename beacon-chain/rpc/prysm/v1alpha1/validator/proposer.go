@@ -111,7 +111,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 		builderBoostFactor = primitives.Gwei(req.BuilderBoostFactor.Value)
 	}
 
-	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor, full)
+	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor, full, req.BuilderRequestAuths)
 	l := log.WithFields(logrus.Fields{
 		"sinceSlotStartTime": time.Since(t),
 		"validator":          sBlk.Block().ProposerIndex(),
@@ -191,7 +191,7 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 	return head, parentRoot, vs.ForkchoiceFetcher.FullBeatsEmpty(parentRoot), err
 }
 
-func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull bool) (*ethpb.GenericBeaconBlock, error) {
+func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull bool, builderRequestAuths []*ethpb.SignedRequestAuthV1) (*ethpb.GenericBeaconBlock, error) {
 	if sBlk.Version() >= version.Gloas && parentFull {
 		if err := vs.applyParentExecutionPayloadToHead(ctx, head, sBlk.Block().ParentRoot()); err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not apply parent execution payload: %v", err)
@@ -284,10 +284,17 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 			}
 		} else {
 			selfBuildOnly := local.OverrideBuilder || skipMevBoost
-			selfBuildEnvelope, err = vs.setExecutionPayloadBid(ctx, sBlk, local, selfBuildOnly)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "Could not set execution data for Gloas: %v", err)
+			var builderBid *ethpb.SignedExecutionPayloadBid
+			var maxExecutionPayment uint64
+			if !selfBuildOnly {
+				builderBid, maxExecutionPayment = vs.getBuilderExecutionPayloadBid(ctx, sBlk, head, local, builderRequestAuths)
 			}
+			src, bidErr := vs.setExecutionPayloadBid(ctx, sBlk, local, builderBid, maxExecutionPayment, selfBuildOnly)
+			if bidErr != nil {
+				return nil, status.Errorf(codes.Internal, "Could not set execution data for Gloas: %v", bidErr)
+			}
+			vs.recordBidSource(sBlk.Block().Slot(), src)
+			selfBuildEnvelope = src == bidSourceSelfBuild
 		}
 	}
 
@@ -379,6 +386,11 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	}
 	if err := <-errChan; err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive block: %v", err)
+	}
+
+	// Submit to the builder so it reveals the envelope when its bid won.
+	if block.Version() >= version.Gloas && vs.bidSourceForSlot(block.Block().Slot()) == bidSourceBuilderAPI {
+		go vs.submitBlockToBuilder(block)
 	}
 
 	return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
