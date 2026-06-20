@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -172,33 +173,55 @@ func (vs *Server) getBuilderExecutionPayloadBid(
 		log.WithError(err).Warn("Discarding invalid builder execution payload bid")
 		return nil
 	}
-	if err := validateBuilderCanCoverBid(head, bid); err != nil {
+	// Reuse the gossip bid verifier for the active-builder and can-cover-bid spec
+	// checks so the proposer never commits to a bid that would fail
+	// processExecutionPayloadBid and drop the whole proposal.
+	if err := vs.validateBuilderCanCoverBid(head, bid); err != nil {
 		log.WithError(err).Warn("Discarding builder execution payload bid the builder cannot back")
 		return nil
 	}
 	return bid
 }
 
-// validateBuilderCanCoverBid mirrors the state-transition checks (active builder
-// and sufficient balance) so the proposer never commits to a bid that would fail
-// processExecutionPayloadBid and cause the whole proposal to be dropped.
-func validateBuilderCanCoverBid(head state.BeaconState, signed *ethpb.SignedExecutionPayloadBid) error {
-	builderIndex := signed.Message.BuilderIndex
-	active, err := head.IsActiveBuilder(builderIndex)
+// validateBuilderCanCoverBid runs the verifier's active-builder and can-cover-bid
+// checks against head, the same checks gossip bid validation applies.
+func (vs *Server) validateBuilderCanCoverBid(head state.BeaconState, signed *ethpb.SignedExecutionPayloadBid) error {
+	roBid, err := consensusblocks.WrappedROSignedExecutionPayloadBid(signed)
 	if err != nil {
-		return errors.Wrap(err, "builder active check failed")
+		return errors.Wrap(err, "could not wrap builder bid")
 	}
-	if !active {
-		return errors.Errorf("builder %d is not active", builderIndex)
-	}
-	ok, err := head.CanBuilderCoverBid(builderIndex, primitives.Gwei(signed.Message.Value))
+	verifier, err := vs.bidVerifierFor(roBid)
 	if err != nil {
-		return errors.Wrap(err, "builder balance check failed")
+		return err
 	}
-	if !ok {
-		return errors.Errorf("builder %d cannot cover bid amount %d", builderIndex, signed.Message.Value)
+	if err := verifier.VerifyBuilderActive(head); err != nil {
+		return err
 	}
-	return nil
+	return verifier.VerifyBuilderCanCoverBid(head)
+}
+
+// bidVerifierFor lazily resolves the execution payload bid verifier constructor
+// from the post-genesis initializer (cached after the first resolve) and returns
+// a verifier for the given bid.
+func (vs *Server) bidVerifierFor(b interfaces.ROSignedExecutionPayloadBid) (verification.ExecutionPayloadBidVerifier, error) {
+	vs.bidVerifierLock.Lock()
+	if vs.bidVerifier == nil {
+		if vs.BidVerifierWaiter == nil {
+			vs.bidVerifierLock.Unlock()
+			return nil, errors.New("execution payload bid verifier unavailable")
+		}
+		ini, err := vs.BidVerifierWaiter.WaitForInitializer(vs.Ctx)
+		if err != nil {
+			vs.bidVerifierLock.Unlock()
+			return nil, errors.Wrap(err, "could not initialize execution payload bid verifier")
+		}
+		vs.bidVerifier = func(b interfaces.ROSignedExecutionPayloadBid, reqs []verification.Requirement) verification.ExecutionPayloadBidVerifier {
+			return ini.NewExecutionPayloadBidVerifier(b, reqs)
+		}
+	}
+	ctor := vs.bidVerifier
+	vs.bidVerifierLock.Unlock()
+	return ctor(b, []verification.Requirement{verification.RequireBidBuilderActive, verification.RequireBidBuilderCanCover}), nil
 }
 
 // validateBuilderBid pre-filters a Builder-API bid on slot, parent linkage, and payment cap.

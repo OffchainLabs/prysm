@@ -37,6 +37,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	chainSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/io/logs"
@@ -73,66 +74,67 @@ type Service struct {
 
 // Config options for the beacon node RPC server.
 type Config struct {
-	ExecutionReconstructor           execution.Reconstructor
-	Host                             string
-	Port                             string
-	CertFlag                         string
-	KeyFlag                          string
-	BeaconMonitoringHost             string
-	BeaconMonitoringPort             int
-	BeaconDB                         db.HeadAccessDatabase
-	ChainInfoFetcher                 blockchain.ChainInfoFetcher
-	HeadFetcher                      blockchain.HeadFetcher
-	CanonicalFetcher                 blockchain.CanonicalFetcher
-	ForkFetcher                      blockchain.ForkFetcher
-	ForkchoiceFetcher                blockchain.ForkchoiceFetcher
-	FinalizationFetcher              blockchain.FinalizationFetcher
-	AttestationReceiver              blockchain.AttestationReceiver
-	BlockReceiver                    blockchain.BlockReceiver
-	PayloadAttestationReceiver       blockchain.PayloadAttestationReceiver
-	ExecutionPayloadEnvelopeReceiver blockchain.ExecutionPayloadEnvelopeReceiver
-	BlobReceiver                     blockchain.BlobReceiver
-	DataColumnReceiver               blockchain.DataColumnReceiver
-	ExecutionChainService            execution.Chain
-	ChainStartFetcher                execution.ChainStartFetcher
-	ExecutionChainInfoFetcher        execution.ChainInfoFetcher
-	GenesisTimeFetcher               blockchain.TimeFetcher
-	GenesisFetcher                   blockchain.GenesisFetcher
-	MockEth1Votes                    bool
-	EnableDebugRPCEndpoints          bool
-	AttestationCache                 *cache.AttestationCache
-	AttestationsPool                 attestations.Pool
-	PayloadAttestationPool           payloadattestation.PoolManager
-	ExitPool                         voluntaryexits.PoolManager
-	SlashingsPool                    slashings.PoolManager
-	SyncCommitteeObjectPool          synccommittee.Pool
-	BLSChangesPool                   blstoexec.PoolManager
-	SyncService                      chainSync.Checker
-	Broadcaster                      p2p.Broadcaster
-	PeersFetcher                     p2p.PeersProvider
-	PeerManager                      p2p.PeerManager
-	MetadataProvider                 p2p.MetadataProvider
-	DepositFetcher                   cache.DepositFetcher
-	PendingDepositFetcher            depositsnapshot.PendingDepositsFetcher
-	StateNotifier                    statefeed.Notifier
-	BlockNotifier                    blockfeed.Notifier
-	OperationNotifier                opfeed.Notifier
-	StateGen                         *stategen.State
-	MaxMsgSize                       int
-	ExecutionEngineCaller            execution.EngineCaller
-	OptimisticModeFetcher            blockchain.OptimisticModeFetcher
-	BlockBuilder                     builder.BlockBuilder
-	Router                           *http.ServeMux
-	ClockWaiter                      startup.ClockWaiter
-	BlobStorage                      *filesystem.BlobStorage
-	DataColumnStorage                *filesystem.DataColumnStorage
-	TrackedValidatorsCache           *cache.TrackedValidatorsCache
-	ProposerPreferencesCache         *cache.ProposerPreferencesCache
-	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
-	PayloadIDCache                   *cache.PayloadIDCache
-	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache
-	LCStore                          *lightClient.Store
-	GraffitiInfo                     *execution.GraffitiInfo
+	ExecutionReconstructor            execution.Reconstructor
+	Host                              string
+	Port                              string
+	CertFlag                          string
+	KeyFlag                           string
+	BeaconMonitoringHost              string
+	BeaconMonitoringPort              int
+	BeaconDB                          db.HeadAccessDatabase
+	ChainInfoFetcher                  blockchain.ChainInfoFetcher
+	HeadFetcher                       blockchain.HeadFetcher
+	CanonicalFetcher                  blockchain.CanonicalFetcher
+	ForkFetcher                       blockchain.ForkFetcher
+	ForkchoiceFetcher                 blockchain.ForkchoiceFetcher
+	FinalizationFetcher               blockchain.FinalizationFetcher
+	AttestationReceiver               blockchain.AttestationReceiver
+	BlockReceiver                     blockchain.BlockReceiver
+	PayloadAttestationReceiver        blockchain.PayloadAttestationReceiver
+	ExecutionPayloadEnvelopeReceiver  blockchain.ExecutionPayloadEnvelopeReceiver
+	BlobReceiver                      blockchain.BlobReceiver
+	DataColumnReceiver                blockchain.DataColumnReceiver
+	ExecutionChainService             execution.Chain
+	ChainStartFetcher                 execution.ChainStartFetcher
+	ExecutionChainInfoFetcher         execution.ChainInfoFetcher
+	GenesisTimeFetcher                blockchain.TimeFetcher
+	GenesisFetcher                    blockchain.GenesisFetcher
+	MockEth1Votes                     bool
+	EnableDebugRPCEndpoints           bool
+	AttestationCache                  *cache.AttestationCache
+	AttestationsPool                  attestations.Pool
+	PayloadAttestationPool            payloadattestation.PoolManager
+	ExitPool                          voluntaryexits.PoolManager
+	SlashingsPool                     slashings.PoolManager
+	SyncCommitteeObjectPool           synccommittee.Pool
+	BLSChangesPool                    blstoexec.PoolManager
+	SyncService                       chainSync.Checker
+	Broadcaster                       p2p.Broadcaster
+	PeersFetcher                      p2p.PeersProvider
+	PeerManager                       p2p.PeerManager
+	MetadataProvider                  p2p.MetadataProvider
+	DepositFetcher                    cache.DepositFetcher
+	PendingDepositFetcher             depositsnapshot.PendingDepositsFetcher
+	StateNotifier                     statefeed.Notifier
+	BlockNotifier                     blockfeed.Notifier
+	OperationNotifier                 opfeed.Notifier
+	StateGen                          *stategen.State
+	MaxMsgSize                        int
+	ExecutionEngineCaller             execution.EngineCaller
+	OptimisticModeFetcher             blockchain.OptimisticModeFetcher
+	BlockBuilder                      builder.BlockBuilder
+	Router                            *http.ServeMux
+	ClockWaiter                       startup.ClockWaiter
+	BlobStorage                       *filesystem.BlobStorage
+	DataColumnStorage                 *filesystem.DataColumnStorage
+	TrackedValidatorsCache            *cache.TrackedValidatorsCache
+	ProposerPreferencesCache          *cache.ProposerPreferencesCache
+	HighestBidCache                   *cache.HighestExecutionPayloadBidCache
+	PayloadIDCache                    *cache.PayloadIDCache
+	ExecutionPayloadEnvelopeCache     *cache.ExecutionPayloadEnvelopeCache
+	LCStore                           *lightClient.Store
+	GraffitiInfo                      *execution.GraffitiInfo
+	ExecutionPayloadBidVerifierWaiter *verification.InitializerWaiter
 }
 
 // NewService instantiates a new RPC service instance that will
@@ -273,6 +275,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		ExecutionPayloadEnvelopeCache:    s.cfg.ExecutionPayloadEnvelopeCache,
 		AttestationStateFetcher:          s.cfg.AttestationReceiver,
 		GraffitiInfo:                     s.cfg.GraffitiInfo,
+		BidVerifierWaiter:                s.cfg.ExecutionPayloadBidVerifierWaiter,
 	}
 	s.validatorServer = validatorServer
 	nodeServer := &nodev1alpha1.Server{
