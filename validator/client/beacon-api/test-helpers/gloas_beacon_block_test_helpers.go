@@ -159,7 +159,7 @@ func GenerateProtoExecutionPayloadEnvelope() *ethpb.ExecutionPayloadEnvelope {
 			ExtraData:     make([]byte, 0),
 			SlotNumber:    1,
 		},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 		BuilderIndex:          121,
 		BeaconBlockRoot:       FillByteSlice(32, 210),
 		ParentBeaconBlockRoot: FillByteSlice(32, 211),

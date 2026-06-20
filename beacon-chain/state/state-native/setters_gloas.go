@@ -362,10 +362,11 @@ func (b *BeaconState) AddBuilderFromDeposit(pubkey [fieldparams.BLSPubkeyLength]
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	return b.addBuilderFromDepositAtEpoch(pubkey, withdrawalCredentials, amount, slots.ToEpoch(b.slot))
+	// process_builder_deposit_request sets version to withdrawal_credentials[0].
+	return b.addBuilderFromDepositAtEpoch(pubkey, withdrawalCredentials[0], withdrawalCredentials, amount, slots.ToEpoch(b.slot))
 }
 
-func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkeyLength]byte, withdrawalCredentials [fieldparams.RootLength]byte, amount uint64, depositEpoch primitives.Epoch) error {
+func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkeyLength]byte, builderVersion byte, withdrawalCredentials [fieldparams.RootLength]byte, amount uint64, depositEpoch primitives.Epoch) error {
 	if b.version < version.Gloas {
 		return errNotSupported("AddBuilderFromDeposit", b.version)
 	}
@@ -375,7 +376,7 @@ func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkey
 
 	builder := &ethpb.Builder{
 		Pubkey:            bytesutil.SafeCopyBytes(pubkey[:]),
-		Version:           []byte{withdrawalCredentials[0]},
+		Version:           []byte{builderVersion},
 		ExecutionAddress:  bytesutil.SafeCopyBytes(withdrawalCredentials[12:]),
 		Balance:           primitives.Gwei(amount),
 		DepositEpoch:      depositEpoch,
@@ -806,7 +807,8 @@ func (b *BeaconState) applyDepositForNewBuilder(deposit *ethpb.PendingDeposit) e
 	}
 	pubkey := bytesutil.ToBytes48(deposit.PublicKey)
 	depositEpoch := slots.ToEpoch(deposit.Slot)
-	if err := b.addBuilderFromDepositAtEpoch(pubkey, bytesutil.ToBytes32(deposit.WithdrawalCredentials), deposit.Amount, depositEpoch); err != nil {
+	// onboard_builders_from_pending_deposits sets version to PAYLOAD_BUILDER_VERSION (0).
+	if err := b.addBuilderFromDepositAtEpoch(pubkey, 0, bytesutil.ToBytes32(deposit.WithdrawalCredentials), deposit.Amount, depositEpoch); err != nil {
 		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Failed to apply builder deposit")
 	}
 	return nil

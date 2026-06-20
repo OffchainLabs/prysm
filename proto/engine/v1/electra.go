@@ -21,12 +21,12 @@ var (
 	berSize    = berExample.SizeSSZ()
 )
 
-// emptyRequestsRootOnce merkleizes a zero-value ExecutionRequests.
+// emptyRequestsRootOnce merkleizes a zero-value gloas ExecutionRequests.
 var emptyRequestsRootOnce = sync.OnceValues(func() ([32]byte, error) {
-	return (&ExecutionRequests{}).HashTreeRoot()
+	return (&ExecutionRequestsGloas{}).HashTreeRoot()
 })
 
-// EmptyExecutionRequestsHashTreeRoot returns the merkle root of an empty ExecutionRequests.
+// EmptyExecutionRequestsHashTreeRoot returns the merkle root of an empty gloas ExecutionRequests.
 func EmptyExecutionRequestsHashTreeRoot() ([32]byte, error) {
 	return emptyRequestsRootOnce()
 }
@@ -54,6 +54,46 @@ func (ebe *ExecutionBundleElectra) GetDecodedExecutionRequests(limits ExecutionR
 
 func decodeExecutionRequestList(raw [][]byte, limits ExecutionRequestLimits) (*ExecutionRequests, error) {
 	requests := &ExecutionRequests{}
+	var prevTypeNum *uint8
+	for i := range raw {
+		requestType, requestListInSSZBytes, err := decodeExecutionRequest(raw[i])
+		if err != nil {
+			return nil, err
+		}
+		if prevTypeNum != nil && *prevTypeNum >= requestType {
+			return nil, errors.New("invalid execution request type order or duplicate requests, requests should be in sorted order and unique")
+		}
+		prevTypeNum = &requestType
+		switch requestType {
+		case DepositRequestType:
+			drs, err := unmarshalDeposits(requestListInSSZBytes, limits.Deposits)
+			if err != nil {
+				return nil, err
+			}
+			requests.Deposits = drs
+		case WithdrawalRequestType:
+			wrs, err := unmarshalWithdrawals(requestListInSSZBytes, limits.Withdrawals)
+			if err != nil {
+				return nil, err
+			}
+			requests.Withdrawals = wrs
+		case ConsolidationRequestType:
+			crs, err := unmarshalConsolidations(requestListInSSZBytes, limits.Consolidations)
+			if err != nil {
+				return nil, err
+			}
+			requests.Consolidations = crs
+		default:
+			return nil, errors.Errorf("unsupported request type %d", requestType)
+		}
+	}
+	return requests, nil
+}
+
+// decodeExecutionRequestListGloas decodes the EIP-7685 flat request list into a
+// gloas ExecutionRequests, including builder deposit/exit requests (EIP-8282).
+func decodeExecutionRequestListGloas(raw [][]byte, limits ExecutionRequestLimits) (*ExecutionRequestsGloas, error) {
+	requests := &ExecutionRequestsGloas{}
 	var prevTypeNum *uint8
 	for i := range raw {
 		requestType, requestListInSSZBytes, err := decodeExecutionRequest(raw[i])
@@ -199,6 +239,47 @@ func EncodeExecutionRequests(requests *ExecutionRequests) ([]hexutil.Bytes, erro
 		requestData = append(requestData, crBytes...)
 		requestsData = append(requestsData, requestData)
 	}
+
+	return requestsData, nil
+}
+
+// EncodeExecutionRequestsGloas encodes a gloas ExecutionRequests into the
+// EIP-7685 flat request list, including builder deposit/exit requests (EIP-8282).
+func EncodeExecutionRequestsGloas(requests *ExecutionRequestsGloas) ([]hexutil.Bytes, error) {
+	if requests == nil {
+		return nil, errors.New("invalid execution requests")
+	}
+
+	requestsData := make([]hexutil.Bytes, 0)
+
+	// request types MUST be in sorted order starting from 0
+	if len(requests.Deposits) > 0 {
+		drBytes, err := marshalItems(requests.Deposits)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to marshal deposit requests")
+		}
+		requestData := []byte{DepositRequestType}
+		requestData = append(requestData, drBytes...)
+		requestsData = append(requestsData, requestData)
+	}
+	if len(requests.Withdrawals) > 0 {
+		wrBytes, err := marshalItems(requests.Withdrawals)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to marshal withdrawal requests")
+		}
+		requestData := []byte{WithdrawalRequestType}
+		requestData = append(requestData, wrBytes...)
+		requestsData = append(requestsData, requestData)
+	}
+	if len(requests.Consolidations) > 0 {
+		crBytes, err := marshalItems(requests.Consolidations)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to marshal consolidation requests")
+		}
+		requestData := []byte{ConsolidationRequestType}
+		requestData = append(requestData, crBytes...)
+		requestsData = append(requestsData, requestData)
+	}
 	if len(requests.BuilderDeposits) > 0 {
 		bdBytes, err := marshalItems(requests.BuilderDeposits)
 		if err != nil {
@@ -219,6 +300,23 @@ func EncodeExecutionRequests(requests *ExecutionRequests) ([]hexutil.Bytes, erro
 	}
 
 	return requestsData, nil
+}
+
+// ExecutionRequester is implemented by the fork-specific ExecutionRequests
+// containers that can be flattened into the EIP-7685 engine-API request list.
+type ExecutionRequester interface {
+	FlattenRequests() ([]hexutil.Bytes, error)
+}
+
+// FlattenRequests encodes the Electra/Fulu execution requests for the engine API.
+func (e *ExecutionRequests) FlattenRequests() ([]hexutil.Bytes, error) {
+	return EncodeExecutionRequests(e)
+}
+
+// FlattenRequests encodes the Gloas execution requests (including builder
+// requests) for the engine API.
+func (e *ExecutionRequestsGloas) FlattenRequests() ([]hexutil.Bytes, error) {
+	return EncodeExecutionRequestsGloas(e)
 }
 
 type sszUnmarshaler interface {

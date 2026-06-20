@@ -339,14 +339,12 @@ func (x *BuilderExitRequest) GetPubkey() []byte {
 }
 
 type ExecutionRequests struct {
-	state           protoimpl.MessageState   `protogen:"open.v1"`
-	Deposits        []*DepositRequest        `protobuf:"bytes,1,rep,name=deposits,proto3" json:"deposits,omitempty" ssz-max:"8192"`
-	Withdrawals     []*WithdrawalRequest     `protobuf:"bytes,2,rep,name=withdrawals,proto3" json:"withdrawals,omitempty" ssz-max:"16"`
-	Consolidations  []*ConsolidationRequest  `protobuf:"bytes,3,rep,name=consolidations,proto3" json:"consolidations,omitempty" ssz-max:"2"`
-	BuilderDeposits []*BuilderDepositRequest `protobuf:"bytes,4,rep,name=builder_deposits,json=builderDeposits,proto3" json:"builder_deposits,omitempty" ssz-max:"16"`
-	BuilderExits    []*BuilderExitRequest    `protobuf:"bytes,5,rep,name=builder_exits,json=builderExits,proto3" json:"builder_exits,omitempty" ssz-max:"16"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state          protoimpl.MessageState  `protogen:"open.v1"`
+	Deposits       []*DepositRequest       `protobuf:"bytes,1,rep,name=deposits,proto3" json:"deposits,omitempty" ssz-max:"8192"`
+	Withdrawals    []*WithdrawalRequest    `protobuf:"bytes,2,rep,name=withdrawals,proto3" json:"withdrawals,omitempty" ssz-max:"16"`
+	Consolidations []*ConsolidationRequest `protobuf:"bytes,3,rep,name=consolidations,proto3" json:"consolidations,omitempty" ssz-max:"2"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ExecutionRequests) Reset() {
@@ -400,14 +398,76 @@ func (x *ExecutionRequests) GetConsolidations() []*ConsolidationRequest {
 	return nil
 }
 
-func (x *ExecutionRequests) GetBuilderDeposits() []*BuilderDepositRequest {
+type ExecutionRequestsGloas struct {
+	state           protoimpl.MessageState   `protogen:"open.v1"`
+	Deposits        []*DepositRequest        `protobuf:"bytes,1,rep,name=deposits,proto3" json:"deposits,omitempty" ssz-max:"8192"`
+	Withdrawals     []*WithdrawalRequest     `protobuf:"bytes,2,rep,name=withdrawals,proto3" json:"withdrawals,omitempty" ssz-max:"16"`
+	Consolidations  []*ConsolidationRequest  `protobuf:"bytes,3,rep,name=consolidations,proto3" json:"consolidations,omitempty" ssz-max:"2"`
+	BuilderDeposits []*BuilderDepositRequest `protobuf:"bytes,4,rep,name=builder_deposits,json=builderDeposits,proto3" json:"builder_deposits,omitempty" ssz-max:"256"`
+	BuilderExits    []*BuilderExitRequest    `protobuf:"bytes,5,rep,name=builder_exits,json=builderExits,proto3" json:"builder_exits,omitempty" ssz-max:"16"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ExecutionRequestsGloas) Reset() {
+	*x = ExecutionRequestsGloas{}
+	mi := &file_proto_engine_v1_electra_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExecutionRequestsGloas) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecutionRequestsGloas) ProtoMessage() {}
+
+func (x *ExecutionRequestsGloas) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_engine_v1_electra_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecutionRequestsGloas.ProtoReflect.Descriptor instead.
+func (*ExecutionRequestsGloas) Descriptor() ([]byte, []int) {
+	return file_proto_engine_v1_electra_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ExecutionRequestsGloas) GetDeposits() []*DepositRequest {
+	if x != nil {
+		return x.Deposits
+	}
+	return nil
+}
+
+func (x *ExecutionRequestsGloas) GetWithdrawals() []*WithdrawalRequest {
+	if x != nil {
+		return x.Withdrawals
+	}
+	return nil
+}
+
+func (x *ExecutionRequestsGloas) GetConsolidations() []*ConsolidationRequest {
+	if x != nil {
+		return x.Consolidations
+	}
+	return nil
+}
+
+func (x *ExecutionRequestsGloas) GetBuilderDeposits() []*BuilderDepositRequest {
 	if x != nil {
 		return x.BuilderDeposits
 	}
 	return nil
 }
 
-func (x *ExecutionRequests) GetBuilderExits() []*BuilderExitRequest {
+func (x *ExecutionRequestsGloas) GetBuilderExits() []*BuilderExitRequest {
 	if x != nil {
 		return x.BuilderExits
 	}
@@ -427,7 +487,7 @@ type ExecutionBundleElectra struct {
 
 func (x *ExecutionBundleElectra) Reset() {
 	*x = ExecutionBundleElectra{}
-	mi := &file_proto_engine_v1_electra_proto_msgTypes[6]
+	mi := &file_proto_engine_v1_electra_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -439,7 +499,7 @@ func (x *ExecutionBundleElectra) String() string {
 func (*ExecutionBundleElectra) ProtoMessage() {}
 
 func (x *ExecutionBundleElectra) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_engine_v1_electra_proto_msgTypes[6]
+	mi := &file_proto_engine_v1_electra_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -452,7 +512,7 @@ func (x *ExecutionBundleElectra) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecutionBundleElectra.ProtoReflect.Descriptor instead.
 func (*ExecutionBundleElectra) Descriptor() ([]byte, []int) {
-	return file_proto_engine_v1_electra_proto_rawDescGZIP(), []int{6}
+	return file_proto_engine_v1_electra_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ExecutionBundleElectra) GetPayload() *ExecutionPayloadDeneb {
@@ -549,7 +609,7 @@ var file_proto_engine_v1_electra_proto_rawDesc = []byte{
 	0x01, 0x20, 0x01, 0x28, 0x0c, 0x42, 0x06, 0x8a, 0xb5, 0x18, 0x02, 0x32, 0x30, 0x52, 0x0d, 0x73,
 	0x6f, 0x75, 0x72, 0x63, 0x65, 0x41, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x12, 0x1e, 0x0a, 0x06,
 	0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0c, 0x42, 0x06, 0x8a, 0xb5,
-	0x18, 0x02, 0x34, 0x38, 0x52, 0x06, 0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x22, 0xba, 0x03, 0x0a,
+	0x18, 0x02, 0x34, 0x38, 0x52, 0x06, 0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x22, 0x87, 0x02, 0x0a,
 	0x11, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
 	0x74, 0x73, 0x12, 0x48, 0x0a, 0x08, 0x64, 0x65, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x73, 0x18, 0x01,
 	0x20, 0x03, 0x28, 0x0b, 0x32, 0x22, 0x2e, 0x65, 0x74, 0x68, 0x65, 0x72, 0x65, 0x75, 0x6d, 0x2e,
@@ -566,12 +626,29 @@ var file_proto_engine_v1_electra_proto_rawDesc = []byte{
 	0x2e, 0x65, 0x6e, 0x67, 0x69, 0x6e, 0x65, 0x2e, 0x76, 0x31, 0x2e, 0x43, 0x6f, 0x6e, 0x73, 0x6f,
 	0x6c, 0x69, 0x64, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x42,
 	0x05, 0x92, 0xb5, 0x18, 0x01, 0x32, 0x52, 0x0e, 0x63, 0x6f, 0x6e, 0x73, 0x6f, 0x6c, 0x69, 0x64,
-	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x12, 0x5c, 0x0a, 0x10, 0x62, 0x75, 0x69, 0x6c, 0x64, 0x65,
-	0x72, 0x5f, 0x64, 0x65, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x0b,
-	0x32, 0x29, 0x2e, 0x65, 0x74, 0x68, 0x65, 0x72, 0x65, 0x75, 0x6d, 0x2e, 0x65, 0x6e, 0x67, 0x69,
-	0x6e, 0x65, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x75, 0x69, 0x6c, 0x64, 0x65, 0x72, 0x44, 0x65, 0x70,
-	0x6f, 0x73, 0x69, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x42, 0x06, 0x92, 0xb5, 0x18,
-	0x02, 0x31, 0x36, 0x52, 0x0f, 0x62, 0x75, 0x69, 0x6c, 0x64, 0x65, 0x72, 0x44, 0x65, 0x70, 0x6f,
+	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x22, 0xc0, 0x03, 0x0a, 0x16, 0x45, 0x78, 0x65, 0x63, 0x75,
+	0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x73, 0x47, 0x6c, 0x6f, 0x61,
+	0x73, 0x12, 0x48, 0x0a, 0x08, 0x64, 0x65, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x73, 0x18, 0x01, 0x20,
+	0x03, 0x28, 0x0b, 0x32, 0x22, 0x2e, 0x65, 0x74, 0x68, 0x65, 0x72, 0x65, 0x75, 0x6d, 0x2e, 0x65,
+	0x6e, 0x67, 0x69, 0x6e, 0x65, 0x2e, 0x76, 0x31, 0x2e, 0x44, 0x65, 0x70, 0x6f, 0x73, 0x69, 0x74,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x42, 0x08, 0x92, 0xb5, 0x18, 0x04, 0x38, 0x31, 0x39,
+	0x32, 0x52, 0x08, 0x64, 0x65, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x73, 0x12, 0x4f, 0x0a, 0x0b, 0x77,
+	0x69, 0x74, 0x68, 0x64, 0x72, 0x61, 0x77, 0x61, 0x6c, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b,
+	0x32, 0x25, 0x2e, 0x65, 0x74, 0x68, 0x65, 0x72, 0x65, 0x75, 0x6d, 0x2e, 0x65, 0x6e, 0x67, 0x69,
+	0x6e, 0x65, 0x2e, 0x76, 0x31, 0x2e, 0x57, 0x69, 0x74, 0x68, 0x64, 0x72, 0x61, 0x77, 0x61, 0x6c,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x42, 0x06, 0x92, 0xb5, 0x18, 0x02, 0x31, 0x36, 0x52,
+	0x0b, 0x77, 0x69, 0x74, 0x68, 0x64, 0x72, 0x61, 0x77, 0x61, 0x6c, 0x73, 0x12, 0x57, 0x0a, 0x0e,
+	0x63, 0x6f, 0x6e, 0x73, 0x6f, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x18, 0x03,
+	0x20, 0x03, 0x28, 0x0b, 0x32, 0x28, 0x2e, 0x65, 0x74, 0x68, 0x65, 0x72, 0x65, 0x75, 0x6d, 0x2e,
+	0x65, 0x6e, 0x67, 0x69, 0x6e, 0x65, 0x2e, 0x76, 0x31, 0x2e, 0x43, 0x6f, 0x6e, 0x73, 0x6f, 0x6c,
+	0x69, 0x64, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x42, 0x05,
+	0x92, 0xb5, 0x18, 0x01, 0x32, 0x52, 0x0e, 0x63, 0x6f, 0x6e, 0x73, 0x6f, 0x6c, 0x69, 0x64, 0x61,
+	0x74, 0x69, 0x6f, 0x6e, 0x73, 0x12, 0x5d, 0x0a, 0x10, 0x62, 0x75, 0x69, 0x6c, 0x64, 0x65, 0x72,
+	0x5f, 0x64, 0x65, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x0b, 0x32,
+	0x29, 0x2e, 0x65, 0x74, 0x68, 0x65, 0x72, 0x65, 0x75, 0x6d, 0x2e, 0x65, 0x6e, 0x67, 0x69, 0x6e,
+	0x65, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x75, 0x69, 0x6c, 0x64, 0x65, 0x72, 0x44, 0x65, 0x70, 0x6f,
+	0x73, 0x69, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x42, 0x07, 0x92, 0xb5, 0x18, 0x03,
+	0x32, 0x35, 0x36, 0x52, 0x0f, 0x62, 0x75, 0x69, 0x6c, 0x64, 0x65, 0x72, 0x44, 0x65, 0x70, 0x6f,
 	0x73, 0x69, 0x74, 0x73, 0x12, 0x53, 0x0a, 0x0d, 0x62, 0x75, 0x69, 0x6c, 0x64, 0x65, 0x72, 0x5f,
 	0x65, 0x78, 0x69, 0x74, 0x73, 0x18, 0x05, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x26, 0x2e, 0x65, 0x74,
 	0x68, 0x65, 0x72, 0x65, 0x75, 0x6d, 0x2e, 0x65, 0x6e, 0x67, 0x69, 0x6e, 0x65, 0x2e, 0x76, 0x31,
@@ -620,7 +697,7 @@ func file_proto_engine_v1_electra_proto_rawDescGZIP() []byte {
 	return file_proto_engine_v1_electra_proto_rawDescData
 }
 
-var file_proto_engine_v1_electra_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_proto_engine_v1_electra_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_proto_engine_v1_electra_proto_goTypes = []any{
 	(*WithdrawalRequest)(nil),      // 0: ethereum.engine.v1.WithdrawalRequest
 	(*DepositRequest)(nil),         // 1: ethereum.engine.v1.DepositRequest
@@ -628,23 +705,27 @@ var file_proto_engine_v1_electra_proto_goTypes = []any{
 	(*BuilderDepositRequest)(nil),  // 3: ethereum.engine.v1.BuilderDepositRequest
 	(*BuilderExitRequest)(nil),     // 4: ethereum.engine.v1.BuilderExitRequest
 	(*ExecutionRequests)(nil),      // 5: ethereum.engine.v1.ExecutionRequests
-	(*ExecutionBundleElectra)(nil), // 6: ethereum.engine.v1.ExecutionBundleElectra
-	(*ExecutionPayloadDeneb)(nil),  // 7: ethereum.engine.v1.ExecutionPayloadDeneb
-	(*BlobsBundle)(nil),            // 8: ethereum.engine.v1.BlobsBundle
+	(*ExecutionRequestsGloas)(nil), // 6: ethereum.engine.v1.ExecutionRequestsGloas
+	(*ExecutionBundleElectra)(nil), // 7: ethereum.engine.v1.ExecutionBundleElectra
+	(*ExecutionPayloadDeneb)(nil),  // 8: ethereum.engine.v1.ExecutionPayloadDeneb
+	(*BlobsBundle)(nil),            // 9: ethereum.engine.v1.BlobsBundle
 }
 var file_proto_engine_v1_electra_proto_depIdxs = []int32{
-	1, // 0: ethereum.engine.v1.ExecutionRequests.deposits:type_name -> ethereum.engine.v1.DepositRequest
-	0, // 1: ethereum.engine.v1.ExecutionRequests.withdrawals:type_name -> ethereum.engine.v1.WithdrawalRequest
-	2, // 2: ethereum.engine.v1.ExecutionRequests.consolidations:type_name -> ethereum.engine.v1.ConsolidationRequest
-	3, // 3: ethereum.engine.v1.ExecutionRequests.builder_deposits:type_name -> ethereum.engine.v1.BuilderDepositRequest
-	4, // 4: ethereum.engine.v1.ExecutionRequests.builder_exits:type_name -> ethereum.engine.v1.BuilderExitRequest
-	7, // 5: ethereum.engine.v1.ExecutionBundleElectra.payload:type_name -> ethereum.engine.v1.ExecutionPayloadDeneb
-	8, // 6: ethereum.engine.v1.ExecutionBundleElectra.blobs_bundle:type_name -> ethereum.engine.v1.BlobsBundle
-	7, // [7:7] is the sub-list for method output_type
-	7, // [7:7] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	1,  // 0: ethereum.engine.v1.ExecutionRequests.deposits:type_name -> ethereum.engine.v1.DepositRequest
+	0,  // 1: ethereum.engine.v1.ExecutionRequests.withdrawals:type_name -> ethereum.engine.v1.WithdrawalRequest
+	2,  // 2: ethereum.engine.v1.ExecutionRequests.consolidations:type_name -> ethereum.engine.v1.ConsolidationRequest
+	1,  // 3: ethereum.engine.v1.ExecutionRequestsGloas.deposits:type_name -> ethereum.engine.v1.DepositRequest
+	0,  // 4: ethereum.engine.v1.ExecutionRequestsGloas.withdrawals:type_name -> ethereum.engine.v1.WithdrawalRequest
+	2,  // 5: ethereum.engine.v1.ExecutionRequestsGloas.consolidations:type_name -> ethereum.engine.v1.ConsolidationRequest
+	3,  // 6: ethereum.engine.v1.ExecutionRequestsGloas.builder_deposits:type_name -> ethereum.engine.v1.BuilderDepositRequest
+	4,  // 7: ethereum.engine.v1.ExecutionRequestsGloas.builder_exits:type_name -> ethereum.engine.v1.BuilderExitRequest
+	8,  // 8: ethereum.engine.v1.ExecutionBundleElectra.payload:type_name -> ethereum.engine.v1.ExecutionPayloadDeneb
+	9,  // 9: ethereum.engine.v1.ExecutionBundleElectra.blobs_bundle:type_name -> ethereum.engine.v1.BlobsBundle
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_proto_engine_v1_electra_proto_init() }
@@ -659,7 +740,7 @@ func file_proto_engine_v1_electra_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_proto_engine_v1_electra_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

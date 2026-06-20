@@ -78,7 +78,7 @@ message BuilderExitRequest {
 }
 
 // ExecutionRequests is a container that contains all the requests from the
-// execution layer to be included in a block
+// execution layer to be included in a block (Electra/Fulu).
 message ExecutionRequests {
   repeated DepositRequest deposits = 1
       [ (ethereum.eth.ext.ssz_max) = "max_deposit_requests_per_payload.size" ];
@@ -88,11 +88,22 @@ message ExecutionRequests {
   repeated ConsolidationRequest consolidations = 3
       [ (ethereum.eth.ext.ssz_max) =
             "max_consolidation_requests_per_payload.size" ];
-  // [New in Gloas:EIP8282]
+}
+
+// ExecutionRequestsGloas extends ExecutionRequests with builder deposit and exit
+// requests, new in Gloas (EIP-8282).
+message ExecutionRequestsGloas {
+  repeated DepositRequest deposits = 1
+      [ (ethereum.eth.ext.ssz_max) = "max_deposit_requests_per_payload.size" ];
+  repeated WithdrawalRequest withdrawals = 2
+      [ (ethereum.eth.ext.ssz_max) =
+            "max_withdrawal_requests_per_payload.size" ];
+  repeated ConsolidationRequest consolidations = 3
+      [ (ethereum.eth.ext.ssz_max) =
+            "max_consolidation_requests_per_payload.size" ];
   repeated BuilderDepositRequest builder_deposits = 4
       [ (ethereum.eth.ext.ssz_max) =
             "max_builder_deposit_requests_per_payload.size" ];
-  // [New in Gloas:EIP8282]
   repeated BuilderExitRequest builder_exits = 5
       [ (ethereum.eth.ext.ssz_max) =
             "max_builder_exit_requests_per_payload.size" ];

@@ -5,8 +5,10 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
@@ -36,8 +38,14 @@ func ProcessBuilderDepositRequests(ctx context.Context, st state.BeaconState, re
 //	                state.slot,
 //	            )
 //	    else:
-//	        builder_index = builder_pubkeys.index(request.pubkey)
-//	        state.builders[builder_index].balance += request.amount
+//	        builder_index = BuilderIndex(builder_pubkeys.index(request.pubkey))
+//	        builder = state.builders[builder_index]
+//	        # Increase balance by deposit amount
+//	        builder.balance += request.amount
+//	        # If exited, reset the withdrawable epoch
+//	        if builder.withdrawable_epoch != FAR_FUTURE_EPOCH:
+//	            epoch = get_current_epoch(state)
+//	            builder.withdrawable_epoch = epoch + MIN_BUILDER_WITHDRAWABILITY_DELAY
 //	</spec>
 func processBuilderDepositRequest(st state.BeaconState, request *enginev1.BuilderDepositRequest) error {
 	if request == nil {
@@ -48,6 +56,16 @@ func processBuilderDepositRequest(st state.BeaconState, request *enginev1.Builde
 	if idx, isBuilder := st.BuilderIndexByPubkey(pubkey); isBuilder {
 		if err := st.IncreaseBuilderBalance(idx, request.Amount); err != nil {
 			return err
+		}
+		builder, err := st.Builder(idx)
+		if err != nil {
+			return err
+		}
+		if builder.WithdrawableEpoch != params.BeaconConfig().FarFutureEpoch {
+			builder.WithdrawableEpoch = slots.ToEpoch(st.Slot()) + params.BeaconConfig().MinBuilderWithdrawabilityDelay
+			if err := st.UpdateBuilderAtIndex(idx, builder); err != nil {
+				return err
+			}
 		}
 		builderDepositsProcessedTotal.Inc()
 		return nil

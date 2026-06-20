@@ -67,7 +67,7 @@ func ProcessParentExecutionPayload(ctx context.Context, st state.BeaconState, bl
 func ApplyParentExecutionPayload(
 	ctx context.Context,
 	st state.BeaconState,
-	reqs *enginev1.ExecutionRequests,
+	reqs *enginev1.ExecutionRequestsGloas,
 ) error {
 	parentBid, err := st.LatestExecutionPayloadBid()
 	if err != nil {
@@ -95,7 +95,7 @@ func ApplyParentExecutionPayload(
 	return nil
 }
 
-func processExecutionRequests(ctx context.Context, st state.BeaconState, rqs *enginev1.ExecutionRequests) error {
+func processExecutionRequests(ctx context.Context, st state.BeaconState, rqs *enginev1.ExecutionRequestsGloas) error {
 	if err := ProcessDepositRequests(ctx, st, rqs.Deposits); err != nil {
 		return errors.Wrap(err, "could not process deposit requests")
 	}
@@ -114,7 +114,7 @@ func processExecutionRequests(ctx context.Context, st state.BeaconState, rqs *en
 }
 
 // IsEmptyExecutionRequests returns true if the execution requests contain no entries.
-func IsEmptyExecutionRequests(r *enginev1.ExecutionRequests) bool {
+func IsEmptyExecutionRequests(r *enginev1.ExecutionRequestsGloas) bool {
 	if r == nil {
 		return true
 	}

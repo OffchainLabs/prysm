@@ -356,8 +356,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	ChurnLimitQuotientGloas:              32_768,
 	ConsolidationChurnLimitQuotient:      65_536,
 	MaxPerEpochActivationChurnLimitGloas: 256_000_000_000,
-	MaxBuilderDepositRequestsPerPayload:  16, // 2**4 (= 16)
-	MaxBuilderExitRequestsPerPayload:     16, // 2**4 (= 16)
+	MaxBuilderDepositRequestsPerPayload:  256, // 2**8 (= 256)
+	MaxBuilderExitRequestsPerPayload:     16,  // 2**4 (= 16)
 
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB
