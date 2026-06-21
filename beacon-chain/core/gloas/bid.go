@@ -16,10 +16,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// payloadBuilderVersion is PAYLOAD_BUILDER_VERSION: the builder version byte
-// required for an execution payload builder (EIP-7732).
-const payloadBuilderVersion = 0
-
 // ProcessExecutionPayloadBid processes a signed execution payload bid in the Gloas fork.
 //
 //	<spec fn="process_execution_payload_bid" fork="gloas" hash="ba18a784">
@@ -115,7 +111,7 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 		if err != nil {
 			return errors.Wrap(err, "could not get builder")
 		}
-		if len(builder.Version) == 0 || builder.Version[0] != payloadBuilderVersion {
+		if len(builder.Version) == 0 || builder.Version[0] != params.BeaconConfig().PayloadBuilderVersion {
 			return fmt.Errorf("builder %d is not a payload builder", builderIndex)
 		}
 

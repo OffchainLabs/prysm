@@ -60,6 +60,7 @@ type BeaconChainConfig struct {
 	ETH1AddressWithdrawalPrefixByte byte                    `yaml:"ETH1_ADDRESS_WITHDRAWAL_PREFIX" spec:"true"` // ETH1AddressWithdrawalPrefixByte is used for withdrawals and it's the first byte.
 	CompoundingWithdrawalPrefixByte byte                    `yaml:"COMPOUNDING_WITHDRAWAL_PREFIX" spec:"true"`  // CompoundingWithdrawalPrefixByteByte is used for compounding withdrawals and it's the first byte.
 	BuilderWithdrawalPrefixByte     byte                    `yaml:"BUILDER_WITHDRAWAL_PREFIX" spec:"true"`      // BuilderWithdrawalPrefixByte is used for builder withdrawals and it's the first byte.
+	PayloadBuilderVersion           byte                    `yaml:"PAYLOAD_BUILDER_VERSION" spec:"true"`        // PayloadBuilderVersion is the builder version required to submit execution payload bids (EIP-7732).
 	BuilderIndexSelfBuild           primitives.BuilderIndex `yaml:"BUILDER_INDEX_SELF_BUILD" spec:"true"`       // BuilderIndexSelfBuild indicates proposer self-built payloads.
 	ZeroHash                        [32]byte                // ZeroHash is used to represent a zeroed out 32 byte array.
 

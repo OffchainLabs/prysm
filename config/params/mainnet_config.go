@@ -97,6 +97,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	ETH1AddressWithdrawalPrefixByte: byte(1),
 	CompoundingWithdrawalPrefixByte: byte(2),
 	BuilderWithdrawalPrefixByte:     byte(3),
+	PayloadBuilderVersion:           byte(0),
 	BuilderIndexSelfBuild:           primitives.BuilderIndex(math.MaxUint64),
 	ZeroHash:                        [32]byte{},
 

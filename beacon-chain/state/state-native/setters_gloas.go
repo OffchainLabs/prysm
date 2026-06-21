@@ -795,8 +795,8 @@ func (b *BeaconState) applyDepositForNewBuilder(deposit *ethpb.PendingDeposit) e
 	}
 	pubkey := bytesutil.ToBytes48(deposit.PublicKey)
 	depositEpoch := slots.ToEpoch(deposit.Slot)
-	// onboard_builders_from_pending_deposits sets version to PAYLOAD_BUILDER_VERSION (0).
-	if err := b.addBuilderFromDepositAtEpoch(pubkey, 0, bytesutil.ToBytes32(deposit.WithdrawalCredentials), deposit.Amount, depositEpoch); err != nil {
+	// onboard_builders_from_pending_deposits sets version to PAYLOAD_BUILDER_VERSION.
+	if err := b.addBuilderFromDepositAtEpoch(pubkey, params.BeaconConfig().PayloadBuilderVersion, bytesutil.ToBytes32(deposit.WithdrawalCredentials), deposit.Amount, depositEpoch); err != nil {
 		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Failed to apply builder deposit")
 	}
 	return nil
