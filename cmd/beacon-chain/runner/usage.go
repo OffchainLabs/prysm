@@ -1,5 +1,5 @@
 // This code was adapted from https://github.com/ethereum/go-ethereum/blob/master/cmd/geth/usage.go
-package main
+package runner
 
 import (
 	"io"
