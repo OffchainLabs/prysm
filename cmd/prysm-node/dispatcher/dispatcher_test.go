@@ -69,6 +69,23 @@ func TestRunBeaconChain(t *testing.T) {
 	}
 }
 
+func TestRunGeth(t *testing.T) {
+	var gotArgs []string
+	err := Run(context.Background(), []string{"prysm-node", "geth", "--help"}, Config{
+		Geth: func(_ context.Context, args []string) error {
+			gotArgs = append([]string(nil), args...)
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"geth", "--help"}
+	if strings.Join(gotArgs, "\x00") != strings.Join(want, "\x00") {
+		t.Fatalf("args = %v, want %v", gotArgs, want)
+	}
+}
+
 func TestRunUnknownSubcommand(t *testing.T) {
 	err := Run(context.Background(), []string{"prysm-node", "wat"}, Config{})
 	if err == nil {

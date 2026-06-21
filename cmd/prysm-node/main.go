@@ -10,6 +10,7 @@ import (
 
 	beaconrunner "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/runner"
 	"github.com/OffchainLabs/prysm/v7/cmd/prysm-node/dispatcher"
+	"github.com/OffchainLabs/prysm/v7/cmd/prysm-node/gethrunner"
 )
 
 func main() {
@@ -18,6 +19,7 @@ func main() {
 
 	err := dispatcher.Run(ctx, os.Args, dispatcher.Config{
 		BeaconChain: beaconrunner.Run,
+		Geth:        gethrunner.Run,
 		Stdout:      os.Stdout,
 		Stderr:      os.Stderr,
 	})
