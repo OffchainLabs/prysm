@@ -95,3 +95,17 @@ func TestRunUnknownSubcommand(t *testing.T) {
 		t.Fatalf("error = %q, want unknown subcommand", err)
 	}
 }
+
+func TestRunReservedCombinedSubcommands(t *testing.T) {
+	for _, subcommand := range []string{"node", "all"} {
+		t.Run(subcommand, func(t *testing.T) {
+			err := Run(context.Background(), []string{"prysm-node", subcommand}, Config{})
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if !strings.Contains(err.Error(), "reserved for Phase 1") {
+				t.Fatalf("error = %q, want Phase 1 reservation", err)
+			}
+		})
+	}
+}

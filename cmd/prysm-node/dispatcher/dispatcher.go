@@ -31,6 +31,8 @@ func Run(ctx context.Context, args []string, cfg Config) error {
 			return fmt.Errorf("geth runner is not configured")
 		}
 		return cfg.Geth(ctx, append([]string{"geth"}, rest...))
+	case "node", "all":
+		return fmt.Errorf("prysm-node %s is reserved for Phase 1 and is not implemented in Phase 0", subcommand)
 	default:
 		return fmt.Errorf("unknown prysm-node subcommand %q\n\nRun 'prysm-node --help' for usage", subcommand)
 	}
@@ -49,6 +51,8 @@ func PrintUsage(w io.Writer) {
 Commands:
   beacon-chain  Run the Prysm beacon node
   geth          Run a standalone Geth execution node
+  node          Reserved for Phase 1 combined BN+EL lifecycle
+  all           Reserved for Phase 1 combined BN+EL lifecycle
   help          Show this help
 `)
 }
