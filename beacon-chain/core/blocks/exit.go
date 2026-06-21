@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	v "github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
@@ -74,7 +73,7 @@ func ProcessVoluntaryExits(
 			if err := verifyBuilderExitAndSignature(beaconState, exit); err != nil {
 				return nil, errors.Wrapf(err, "could not verify builder exit %d", idx)
 			}
-			if err := gloas.InitiateBuilderExit(beaconState, exit.Exit.ValidatorIndex.ToBuilderIndex()); err != nil {
+			if err := InitiateBuilderExit(beaconState, exit.Exit.ValidatorIndex.ToBuilderIndex()); err != nil {
 				return nil, err
 			}
 			continue

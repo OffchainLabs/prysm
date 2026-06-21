@@ -5,14 +5,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	prysmMath "github.com/OffchainLabs/prysm/v7/math"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -120,13 +119,13 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 			return fmt.Errorf("cannot process consolidation requests: %w", ctx.Err())
 		}
 
-		if isValidSwitchToCompoundingRequest(st, cr) {
+		if electra.IsValidSwitchToCompoundingRequest(st, cr) {
 			srcIdx, ok := st.ValidatorIndexByPubkey(bytesutil.ToBytes48(cr.SourcePubkey))
 			if !ok {
 				log.Error("Failed to find source validator index")
 				continue
 			}
-			if err := switchToCompoundingValidator(st, srcIdx); err != nil {
+			if err := electra.SwitchToCompoundingValidator(st, srcIdx); err != nil {
 				log.WithError(err).Error("Failed to switch to compounding validator")
 			}
 			continue
@@ -218,7 +217,7 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 			continue
 		}
 
-		exitEpoch, err := computeConsolidationEpochAndUpdateChurn(ctx, st, primitives.Gwei(srcV.EffectiveBalance))
+		exitEpoch, err := electra.ComputeConsolidationEpochAndUpdateChurn(ctx, st, primitives.Gwei(srcV.EffectiveBalance))
 		if err != nil {
 			log.WithError(err).Error("Failed to compute consolidation epoch")
 			continue
@@ -235,131 +234,4 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 	}
 
 	return nil
-}
-
-func isValidSwitchToCompoundingRequest(st state.BeaconState, req *enginev1.ConsolidationRequest) bool {
-	if req.SourcePubkey == nil || req.TargetPubkey == nil {
-		return false
-	}
-
-	if !bytes.Equal(req.SourcePubkey, req.TargetPubkey) {
-		return false
-	}
-
-	srcIdx, ok := st.ValidatorIndexByPubkey(bytesutil.ToBytes48(req.SourcePubkey))
-	if !ok {
-		return false
-	}
-	srcV, err := st.ValidatorAtIndexReadOnly(srcIdx)
-	if err != nil {
-		return false
-	}
-
-	sourceAddress := req.SourceAddress
-	withdrawalCreds := srcV.GetWithdrawalCredentials()
-	if len(withdrawalCreds) != 32 || len(sourceAddress) != 20 || !bytes.HasSuffix(withdrawalCreds, sourceAddress) {
-		return false
-	}
-
-	if !srcV.HasETH1WithdrawalCredentials() {
-		return false
-	}
-
-	curEpoch := slots.ToEpoch(st.Slot())
-	if !helpers.IsActiveValidatorUsingTrie(srcV, curEpoch) {
-		return false
-	}
-
-	if srcV.ExitEpoch() != params.BeaconConfig().FarFutureEpoch {
-		return false
-	}
-
-	return true
-}
-
-func switchToCompoundingValidator(st state.BeaconState, idx primitives.ValidatorIndex) error {
-	v, err := st.ValidatorAtIndex(idx)
-	if err != nil {
-		return err
-	}
-	if len(v.WithdrawalCredentials) == 0 {
-		return errors.New("validator has no withdrawal credentials")
-	}
-
-	v.WithdrawalCredentials[0] = params.BeaconConfig().CompoundingWithdrawalPrefixByte
-	if err := st.UpdateValidatorAtIndex(idx, v); err != nil {
-		return err
-	}
-	return queueExcessActiveBalance(st, idx)
-}
-
-func queueExcessActiveBalance(st state.BeaconState, idx primitives.ValidatorIndex) error {
-	bal, err := st.BalanceAtIndex(idx)
-	if err != nil {
-		return err
-	}
-
-	if bal > params.BeaconConfig().MinActivationBalance {
-		if err := st.UpdateBalancesAtIndex(idx, params.BeaconConfig().MinActivationBalance); err != nil {
-			return err
-		}
-		excessBalance := bal - params.BeaconConfig().MinActivationBalance
-		val, err := st.ValidatorAtIndexReadOnly(idx)
-		if err != nil {
-			return err
-		}
-		pk := val.PublicKey()
-		return st.AppendPendingDeposit(&eth.PendingDeposit{
-			PublicKey:             pk[:],
-			WithdrawalCredentials: val.GetWithdrawalCredentials(),
-			Amount:                excessBalance,
-			Signature:             common.InfiniteSignature[:],
-			Slot:                  params.BeaconConfig().GenesisSlot,
-		})
-	}
-	return nil
-}
-
-func computeConsolidationEpochAndUpdateChurn(ctx context.Context, st state.BeaconState, consolidationBalance primitives.Gwei) (primitives.Epoch, error) {
-	earliestEpoch, err := st.EarliestConsolidationEpoch()
-	if err != nil {
-		return 0, err
-	}
-	earliestConsolidationEpoch := max(earliestEpoch, helpers.ActivationExitEpoch(slots.ToEpoch(st.Slot())))
-
-	activeBal, err := helpers.TotalActiveBalance(ctx, st)
-	if err != nil {
-		return 0, err
-	}
-	perEpochConsolidationChurn := helpers.ConsolidationChurnLimitForVersion(st.Version(), primitives.Gwei(activeBal))
-
-	var consolidationBalanceToConsume primitives.Gwei
-	if earliestEpoch < earliestConsolidationEpoch {
-		consolidationBalanceToConsume = perEpochConsolidationChurn
-	} else {
-		consolidationBalanceToConsume, err = st.ConsolidationBalanceToConsume()
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	if consolidationBalance > consolidationBalanceToConsume {
-		balanceToProcess := consolidationBalance - consolidationBalanceToConsume
-		additionalEpochs, err := prysmMath.Div64(uint64(balanceToProcess-1), uint64(perEpochConsolidationChurn))
-		if err != nil {
-			return 0, err
-		}
-		additionalEpochs++
-		earliestConsolidationEpoch += primitives.Epoch(additionalEpochs)
-		consolidationBalanceToConsume += primitives.Gwei(additionalEpochs) * perEpochConsolidationChurn
-	}
-
-	if err := st.SetConsolidationBalanceToConsume(consolidationBalanceToConsume - consolidationBalance); err != nil {
-		return 0, err
-	}
-	if err := st.SetEarliestConsolidationEpoch(earliestConsolidationEpoch); err != nil {
-		return 0, err
-	}
-
-	return earliestConsolidationEpoch, nil
 }
