@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"iter"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
@@ -47,7 +47,7 @@ func testForkWatcherService(t *testing.T, current primitives.Epoch) *Service {
 			clock:       defaultClockWithTimeAtEpoch(current),
 			initialSync: &mockSync.Sync{IsSyncing: false},
 		},
-		chainStarted:        abool.New(),
+		chainStarted:        &atomic.Bool{},
 		subHandler:          newSubTopicHandler(),
 		initialSyncComplete: closedChan,
 	}

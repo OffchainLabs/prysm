@@ -396,7 +396,7 @@ func TestFcuFromReorgData_CachesPayloadID(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, false, attr.IsEmpty())
 
-	s.fcuFromReorgData(headRoot, headHash, false, attr, proposingSlot)
+	s.fcuFromReorgData(nil, headRoot, headHash, false, attr, proposingSlot)
 
 	require.LogsDoNotContain(t, logHook, "Could not update forkchoice with engine")
 	cachedPid, has := s.cfg.PayloadIDCache.PayloadID(proposingSlot, headRoot, false)
@@ -413,7 +413,7 @@ func TestFcuFromReorgData_NilPayloadID_NoCache(t *testing.T) {
 	proposingSlot := primitives.Slot(2)
 	attr := payloadattribute.EmptyWithVersion(version.Gloas)
 
-	s.fcuFromReorgData(headRoot, headHash, false, attr, proposingSlot)
+	s.fcuFromReorgData(nil, headRoot, headHash, false, attr, proposingSlot)
 
 	_, has := s.cfg.PayloadIDCache.PayloadID(proposingSlot, headRoot, false)
 	require.Equal(t, false, has)
@@ -431,7 +431,7 @@ func TestFcuFromReorgData_EngineError(t *testing.T) {
 	proposingSlot := primitives.Slot(2)
 	attr := payloadattribute.EmptyWithVersion(version.Gloas)
 
-	s.fcuFromReorgData(headRoot, headHash, false, attr, proposingSlot)
+	s.fcuFromReorgData(nil, headRoot, headHash, false, attr, proposingSlot)
 
 	require.LogsContain(t, logHook, "Could not update forkchoice with engine")
 	_, has := s.cfg.PayloadIDCache.PayloadID(proposingSlot, headRoot, false)

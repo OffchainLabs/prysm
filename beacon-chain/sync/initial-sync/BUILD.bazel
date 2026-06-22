@@ -18,7 +18,6 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync",
     visibility = ["//beacon-chain:__subpackages__"],
     deps = [
-        "//async/abool:go_default_library",
         "//beacon-chain/blockchain:go_default_library",
         "//beacon-chain/core/feed/block:go_default_library",
         "//beacon-chain/core/feed/state:go_default_library",
@@ -75,7 +74,6 @@ go_test(
     embed = [":go_default_library"],
     tags = ["CI_race_detection"],
     deps = [
-        "//async/abool:go_default_library",
         "//beacon-chain/blockchain:go_default_library",
         "//beacon-chain/blockchain/kzg:go_default_library",
         "//beacon-chain/blockchain/testing:go_default_library",

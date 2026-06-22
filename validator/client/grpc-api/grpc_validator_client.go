@@ -8,7 +8,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/client"
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
 	"github.com/OffchainLabs/prysm/v7/api/fallback"
-	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -442,7 +441,12 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 			if res == nil {
 				continue
 			}
-			b, err := json.Marshal(structs.HeadEvent{
+			// Consumer unmarshals into structs.HeadEvent but only reads these fields, so we only emit them.
+			b, err := json.Marshal(struct {
+				Slot                      string `json:"slot"`
+				PreviousDutyDependentRoot string `json:"previous_duty_dependent_root"`
+				CurrentDutyDependentRoot  string `json:"current_duty_dependent_root"`
+			}{
 				Slot:                      strconv.FormatUint(uint64(res.Slot), 10),
 				PreviousDutyDependentRoot: hexutil.Encode(res.PreviousDutyDependentRoot),
 				CurrentDutyDependentRoot:  hexutil.Encode(res.CurrentDutyDependentRoot),
