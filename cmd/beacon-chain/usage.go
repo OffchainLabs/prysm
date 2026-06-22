@@ -145,7 +145,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.MinBuilderBid,
 			flags.MinBuilderDiff,
 			flags.SuggestedFeeRecipient,
-			flags.EnableBuilderSSZ,
+			flags.DisableBuilderSSZ,
 		},
 	},
 	{ // Flags relevant to syncing the beacon chain.
