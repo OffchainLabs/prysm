@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
@@ -23,6 +24,10 @@ func (s *Service) queuePendingPayloadAttestation(ctx context.Context, v verifica
 	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
 	if err != nil || st == nil {
 		return pubsub.ValidationIgnore, err
+	}
+	// Drop (don't reject) when the head state can't resolve the slot's PTC.
+	if !helpers.PayloadCommitteeAvailable(st.Slot(), att.Data.Slot) {
+		return pubsub.ValidationIgnore, nil
 	}
 
 	s.pendingPayloadAttestationLock.Lock()

@@ -12,6 +12,7 @@ go_library(
         "legacy.go",
         "log.go",
         "metrics.go",
+        "payload_committee.go",
         "randao.go",
         "ranges.go",
         "rewards_penalties.go",
@@ -61,6 +62,7 @@ go_test(
         "block_test.go",
         "deposit_test.go",
         "legacy_test.go",
+        "payload_committee_test.go",
         "private_access_fuzz_noop_test.go",  # keep
         "private_access_test.go",
         "randao_test.go",
