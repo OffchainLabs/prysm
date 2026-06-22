@@ -38,7 +38,7 @@ func TestSubmitSignedProposerPreferences_Valid(t *testing.T) {
 	body, err := json.Marshal(expected)
 	require.NoError(t, err)
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		proposerPreferencesEndpoint,
@@ -65,7 +65,7 @@ func TestSubmitSignedProposerPreferences_HandlerError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		proposerPreferencesEndpoint,

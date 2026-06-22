@@ -485,8 +485,7 @@ func TestCheckAndLogValidatorStatus_OK(t *testing.T) {
 				publicKey: pubKeys[0],
 				index:     30,
 				status: &ethpb.ValidatorStatusResponse{
-					Status:                    ethpb.ValidatorStatus_DEPOSITED,
-					PositionInActivationQueue: 30,
+					Status: ethpb.ValidatorStatus_DEPOSITED,
 				},
 			},
 			log:    "Validator deposited, entering activation queue after finalization\" package=validator/client pubkey=0x000000000000 status=DEPOSITED validatorIndex=30",
@@ -498,9 +497,8 @@ func TestCheckAndLogValidatorStatus_OK(t *testing.T) {
 				publicKey: pubKeys[0],
 				index:     50,
 				status: &ethpb.ValidatorStatusResponse{
-					Status:                    ethpb.ValidatorStatus_PENDING,
-					ActivationEpoch:           params.BeaconConfig().FarFutureEpoch,
-					PositionInActivationQueue: 6,
+					Status:          ethpb.ValidatorStatus_PENDING,
+					ActivationEpoch: params.BeaconConfig().FarFutureEpoch,
 				},
 			},
 			log:    "Waiting for activation... Check validator queue status in a block explorer\" package=validator/client pubkey=0x000000000000 status=PENDING validatorIndex=50",

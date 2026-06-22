@@ -103,7 +103,7 @@ func TestProposeBeaconBlock_SSZ_Error(t *testing.T) {
 				defer ctrl.Finish()
 
 				ctx := t.Context()
-				handler := mock.NewMockJsonRestHandler(ctrl)
+				handler := mock.NewMockHandler(ctrl)
 
 				// Expect PostSSZ to be called first with SSZ data
 				headers := map[string]string{
@@ -165,7 +165,7 @@ func TestProposeBeaconBlock_SSZSuccess_NoFallback(t *testing.T) {
 			defer ctrl.Finish()
 
 			ctx := t.Context()
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 
 			// Expect PostSSZ to be called and succeed
 			headers := map[string]string{
@@ -200,7 +200,7 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 	t.Run("deneb", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		handler := mock.NewMockJsonRestHandler(ctrl)
+		handler := mock.NewMockHandler(ctrl)
 
 		var blockContents structs.SignedBeaconBlockContentsDeneb
 		err := json.Unmarshal([]byte(rpctesting.DenebBlockContents), &blockContents)
@@ -231,7 +231,7 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 	t.Run("blinded_deneb", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		handler := mock.NewMockJsonRestHandler(ctrl)
+		handler := mock.NewMockHandler(ctrl)
 
 		var blindedBlock structs.SignedBlindedBeaconBlockDeneb
 		err := json.Unmarshal([]byte(rpctesting.BlindedDenebBlock), &blindedBlock)
@@ -262,7 +262,7 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 	t.Run("electra", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		handler := mock.NewMockJsonRestHandler(ctrl)
+		handler := mock.NewMockHandler(ctrl)
 
 		var blockContents structs.SignedBeaconBlockContentsElectra
 		err := json.Unmarshal([]byte(rpctesting.ElectraBlockContents), &blockContents)
@@ -293,7 +293,7 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 	t.Run("blinded_electra", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		handler := mock.NewMockJsonRestHandler(ctrl)
+		handler := mock.NewMockHandler(ctrl)
 
 		var blindedBlock structs.SignedBlindedBeaconBlockElectra
 		err := json.Unmarshal([]byte(rpctesting.BlindedElectraBlock), &blindedBlock)
@@ -324,7 +324,7 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 	t.Run("fulu", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		handler := mock.NewMockJsonRestHandler(ctrl)
+		handler := mock.NewMockHandler(ctrl)
 
 		var blockContents structs.SignedBeaconBlockContentsFulu
 		err := json.Unmarshal([]byte(rpctesting.FuluBlockContents), &blockContents)
@@ -355,7 +355,7 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 	t.Run("blinded_fulu", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		handler := mock.NewMockJsonRestHandler(ctrl)
+		handler := mock.NewMockHandler(ctrl)
 
 		var blindedBlock structs.SignedBlindedBeaconBlockFulu
 		err := json.Unmarshal([]byte(rpctesting.BlindedFuluBlock), &blindedBlock)
@@ -588,7 +588,7 @@ func TestProposeBeaconBlock_SSZFails_406_FallbackToJSON(t *testing.T) {
 			defer ctrl.Finish()
 
 			ctx := t.Context()
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 
 			// Expect PostSSZ to be called first and fail
 			handler.EXPECT().PostSSZ(
@@ -679,7 +679,7 @@ func TestProposeBeaconBlock_SSZFails_Non406_NoFallback(t *testing.T) {
 			defer ctrl.Finish()
 
 			ctx := t.Context()
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 
 			// Expect PostSSZ to be called first and fail with non-406 error
 			sszHeaders := map[string]string{
