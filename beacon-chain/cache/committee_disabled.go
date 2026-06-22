@@ -13,7 +13,7 @@ import (
 
 // FakeCommitteeCache is a struct with 1 queue for looking up shuffled indices list by seed.
 type FakeCommitteeCache struct {
-	Wg  sync.WaitGroup
+	Wg sync.WaitGroup
 	Sf singleflight.Group
 }
 

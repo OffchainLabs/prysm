@@ -732,19 +732,15 @@ func (b *BeaconState) PayloadCommitteeReadOnly(slot primitives.Slot) ([]primitiv
 }
 
 func ptcWindowOffset(stateSlot, slot primitives.Slot) (primitives.Slot, error) {
+	if !helpers.PayloadCommitteeAvailable(stateSlot, slot) {
+		return 0, fmt.Errorf("ptc window lookup out of range: state_slot=%d slot=%d", stateSlot, slot)
+	}
+
 	epoch := slots.ToEpoch(slot)
 	stateEpoch := slots.ToEpoch(stateSlot)
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
-
 	if epoch < stateEpoch {
-		if epoch+1 != stateEpoch {
-			return 0, fmt.Errorf("ptc window only supports previous epoch lookups: state_epoch=%d slot_epoch=%d", stateEpoch, epoch)
-		}
 		return slot % slotsPerEpoch, nil
-	}
-
-	if epoch > stateEpoch+params.BeaconConfig().MinSeedLookahead {
-		return 0, fmt.Errorf("ptc window lookup out of range: state_epoch=%d slot_epoch=%d", stateEpoch, epoch)
 	}
 
 	offset := slotsPerEpoch.Mul(uint64(epoch-stateEpoch+1)) + (slot % slotsPerEpoch)

@@ -87,7 +87,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 		if full {
 			payloadStr = "full"
 		}
-		parentSlot, err :=vs.CoreService.ChainInfoFetcher.RecentBlockSlot(parentRoot)
+		parentSlot, err := vs.CoreService.ChainInfoFetcher.RecentBlockSlot(parentRoot)
 		if err != nil {
 			return nil, err
 		}
