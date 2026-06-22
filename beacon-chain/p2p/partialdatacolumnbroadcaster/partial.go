@@ -994,7 +994,7 @@ func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, bl
 					p.logger.WithFields(logrus.Fields{
 						"topic":   topic,
 						"groupID": fmt.Sprintf("%#x", groupIDBytes),
-					}).Info("Completed partial column")
+					}).Debug("Completed partial column")
 					go p.callbacks.HandleColumn(topic, col)
 				}
 			}
