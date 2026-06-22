@@ -60,7 +60,6 @@ var appHelpFlagGroups = []flagGroup{
 			flags.WalletPasswordFileFlag,
 			cmd.ClearDB,
 			cmd.ForceClearDB,
-			cmd.EnableBackupWebhookFlag,
 			cmd.EnableTracingFlag,
 			cmd.TracingProcessNameFlag,
 			cmd.TracingEndpointFlag,
@@ -129,13 +128,6 @@ var appHelpFlagGroups = []flagGroup{
 			flags.Web3SignerURLFlag,
 			flags.Web3SignerPublicValidatorKeysFlag,
 			flags.Web3SignerKeyFileFlag,
-		},
-	},
-	{
-		Name: "slasher",
-		Flags: []cli.Flag{
-			flags.SlasherRPCProviderFlag,
-			flags.SlasherCertFlag,
 		},
 	},
 	{
