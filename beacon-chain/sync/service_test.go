@@ -3,10 +3,10 @@ package sync
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
@@ -47,9 +47,9 @@ func TestService_StatusZeroEpoch(t *testing.T) {
 			chain:       chain,
 			clock:       startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 		},
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 	}
-	r.chainStarted.Set()
+	r.chainStarted.Store(true)
 
 	assert.NoError(t, r.Status(), "Wanted non failing status")
 }
@@ -68,7 +68,7 @@ func TestSyncHandlers_WaitToSync(t *testing.T) {
 			chain:       chainService,
 			initialSync: &mockSync.Sync{IsSyncing: false},
 		},
-		chainStarted:                    abool.New(),
+		chainStarted:                    &atomic.Bool{},
 		subHandler:                      newSubTopicHandler(),
 		clockWaiter:                     gs,
 		proposerPreferencesCache:        cache.NewProposerPreferencesCache(),
@@ -92,7 +92,7 @@ func TestSyncHandlers_WaitToSync(t *testing.T) {
 
 	// Wait for chainstart event to be processed
 	require.Eventually(t, func() bool {
-		return r.chainStarted.IsSet()
+		return r.chainStarted.Load()
 	}, 5*time.Second, 50*time.Millisecond, "Did not receive chain start event.")
 }
 
@@ -110,7 +110,7 @@ func TestSyncHandlers_WaitForChainStart(t *testing.T) {
 			chain:       chainService,
 			initialSync: &mockSync.Sync{IsSyncing: false},
 		},
-		chainStarted:        abool.New(),
+		chainStarted:        &atomic.Bool{},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
 		clockWaiter:         gs,
 	}
@@ -119,7 +119,7 @@ func TestSyncHandlers_WaitForChainStart(t *testing.T) {
 	require.NoError(t, gs.SetClock(startup.NewClock(time.Now(), vr)))
 	r.waitForChainStart()
 
-	require.Equal(t, true, r.chainStarted.IsSet(), "Did not receive chain start event.")
+	require.Equal(t, true, r.chainStarted.Load(), "Did not receive chain start event.")
 }
 
 func TestSyncHandlers_WaitTillSynced(t *testing.T) {
@@ -140,7 +140,7 @@ func TestSyncHandlers_WaitTillSynced(t *testing.T) {
 			blockNotifier: chainService.BlockNotifier(),
 			initialSync:   &mockSync.Sync{IsSyncing: false},
 		},
-		chainStarted:                    abool.New(),
+		chainStarted:                    &atomic.Bool{},
 		subHandler:                      newSubTopicHandler(),
 		clockWaiter:                     gs,
 		initialSyncComplete:             make(chan struct{}),
@@ -152,7 +152,7 @@ func TestSyncHandlers_WaitTillSynced(t *testing.T) {
 	var vr [32]byte
 	require.NoError(t, gs.SetClock(startup.NewClock(time.Now(), vr)))
 	r.waitForChainStart()
-	require.Equal(t, true, r.chainStarted.IsSet(), "Did not receive chain start event.")
+	require.Equal(t, true, r.chainStarted.Load(), "Did not receive chain start event.")
 
 	var err error
 	p2p.Digest, err = r.currentForkDigest()
@@ -211,7 +211,7 @@ func TestSyncService_StopCleanly(t *testing.T) {
 			chain:       chainService,
 			initialSync: &mockSync.Sync{IsSyncing: false},
 		},
-		chainStarted:                    abool.New(),
+		chainStarted:                    &atomic.Bool{},
 		subHandler:                      newSubTopicHandler(),
 		clockWaiter:                     gs,
 		initialSyncComplete:             make(chan struct{}),
@@ -231,7 +231,7 @@ func TestSyncService_StopCleanly(t *testing.T) {
 
 	// Wait for chainstart and topics to be registered
 	require.Eventually(t, func() bool {
-		return r.chainStarted.IsSet() && len(r.cfg.p2p.PubSub().GetTopics()) > 0 && len(r.cfg.p2p.Host().Mux().Protocols()) > 0
+		return r.chainStarted.Load() && len(r.cfg.p2p.PubSub().GetTopics()) > 0 && len(r.cfg.p2p.Host().Mux().Protocols()) > 0
 	}, 5*time.Second, 50*time.Millisecond, "Did not receive chain start event or topics not registered.")
 
 	// Both pubsub and rpc topics should be unsubscribed.

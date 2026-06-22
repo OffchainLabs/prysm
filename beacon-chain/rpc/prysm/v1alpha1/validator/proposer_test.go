@@ -10,7 +10,6 @@ import (
 	builderapi "github.com/OffchainLabs/prysm/v7/api/client/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	builderTest "github.com/OffchainLabs/prysm/v7/beacon-chain/builder/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
@@ -3409,10 +3408,10 @@ func TestProposer_SubmitValidatorRegistrations(t *testing.T) {
 	proposerServer := &Server{}
 	reg := &ethpb.SignedValidatorRegistrationsV1{}
 	_, err := proposerServer.SubmitValidatorRegistrations(ctx, reg)
-	require.ErrorContains(t, builder.ErrNoBuilder.Error(), err)
+	require.ErrorContains(t, "Could not register block builder: not configured", err)
 	proposerServer = &Server{BlockBuilder: &builderTest.MockBuilderService{}}
 	_, err = proposerServer.SubmitValidatorRegistrations(ctx, reg)
-	require.ErrorContains(t, builder.ErrNoBuilder.Error(), err)
+	require.ErrorContains(t, "Could not register block builder: not configured", err)
 	proposerServer = &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true}}
 	_, err = proposerServer.SubmitValidatorRegistrations(ctx, reg)
 	require.NoError(t, err)

@@ -8,10 +8,10 @@ import (
 	"context"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/async"
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
@@ -150,7 +150,7 @@ type Service struct {
 	subHandler                           *subTopicHandler
 	pendingAttsLock                      sync.RWMutex
 	pendingQueueLock                     sync.RWMutex
-	chainStarted                         *abool.AtomicBool
+	chainStarted                         *atomic.Bool
 	validateBlockLock                    sync.RWMutex
 	rateLimiter                          *limiter
 	seenBlockLock                        sync.RWMutex
@@ -218,7 +218,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	r := &Service{
 		ctx:                      ctx,
 		cancel:                   cancel,
-		chainStarted:             abool.New(),
+		chainStarted:             &atomic.Bool{},
 		cfg:                      &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
 		slotToPendingBlocks:      gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
 		seenPendingBlocks:        make(map[[32]byte]bool),
@@ -556,7 +556,7 @@ func (s *Service) setRateCollector(topic string, c *leakybucket.Collector) {
 
 // marks the chain as having started.
 func (s *Service) markForChainStart() {
-	s.chainStarted.Set()
+	s.chainStarted.Store(true)
 }
 
 // pruneDataColumnCache removes entries from the data column cache that are older than the finalized slot.
@@ -578,7 +578,7 @@ func (s *Service) pruneDataColumnCache() {
 }
 
 func (s *Service) chainIsStarted() bool {
-	return s.chainStarted.IsSet()
+	return s.chainStarted.Load()
 }
 
 // UpdateCustodyInfoInDB updates the custody information in the database.
