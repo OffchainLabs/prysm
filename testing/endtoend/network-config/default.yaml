@@ -1,0 +1,60 @@
+participants:
+  - el_type: geth
+    cl_type: prysm
+    cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:latest"
+    cl_extra_params:
+      - "--slots-per-archive-point=128" # slots_per_epoch * 16 = 128
+      - "--blob-batch-limit=256"
+      - "--blob-batch-limit-burst-factor=16"
+      - "--block-batch-limit-burst-factor=8"
+
+      # Tracing params
+      - "--enable-tracing"
+      - "--tracing-endpoint=127.0.0.1:9150"
+      - "--trace-sample-fraction=1.0"
+    vc_image: "gcr.io/offchainlabs/prysm/validator:latest"
+    vc_extra_params:
+      - "--enable-doppelganger"
+    count: 2
+
+network_params:
+  preset: minimal
+
+  # Following params are overrides for existing `e2e_config.yaml` values.
+  # https://github.com/OffchainLabs/prysm/blob/bf4a3d6c349e69fec5aa0e707bf0eef84faa7707/config/params/testdata/e2e_config.yaml
+
+  # Forking & BPO parameters
+  electra_fork_epoch: 0
+  fulu_fork_epoch: 2
+  gloas_fork_epoch: 18446744073709551615
+
+  # Time parameters
+  seconds_per_slot: 10
+  slot_duration_ms: 10000
+  # faster time for withdrawals
+  min_validator_withdrawability_delay: 1
+  # higher frequency of committee turnover and faster time to acceptable voluntary exit
+  shard_committee_period: 4
+  # process deposits more quickly, but insecure
+  eth1_follow_distance: 8
+
+  # Validator cycle parameters
+  # scale queue churn at much lower validator counts for testing
+  churn_limit_quotient: 65536
+
+  # Deposit contract parameters
+  network_id: "1337"
+  deposit_contract_address: "0x4242424242424242424242424242424242424242"
+
+  # Blob schedule parameters
+  bpo_1_epoch: 3
+  bpo_1_max_blobs: 15
+  bpo_2_epoch: 4
+  bpo_2_max_blobs: 21
+
+additional_services:
+  - dora
+
+ethereum_genesis_generator_params:
+  extra_env:  
+    SECONDS_PER_ETH1_BLOCK: "2"
