@@ -184,6 +184,7 @@ func TestGetSpec(t *testing.T) {
 	config.BlobsidecarSubnetCountElectra = 102
 	config.SyncMessageDueBPS = 103
 	config.BuilderWithdrawalPrefixByte = byte('b')
+	config.PayloadBuilderVersion = byte(1)
 	config.BuilderIndexSelfBuild = primitives.BuilderIndex(125)
 	config.BuilderPaymentThresholdNumerator = 104
 	config.BuilderPaymentThresholdDenominator = 105
@@ -243,7 +244,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 210, len(data))
+	assert.Equal(t, 211, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -483,6 +484,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "0x00000000", v)
 			case "BUILDER_WITHDRAWAL_PREFIX":
 				assert.Equal(t, "0x62", v)
+			case "PAYLOAD_BUILDER_VERSION":
+				assert.Equal(t, "0x01", v)
 			case "BUILDER_INDEX_SELF_BUILD":
 				assert.Equal(t, "125", v)
 			case "TRANSITION_TOTAL_DIFFICULTY":
