@@ -158,6 +158,10 @@ func TestBuilderPendingPayment_Copy(t *testing.T) {
 				t.Errorf("Copy() = %v, want %v", copied, tt.payment)
 			}
 
+			if copied.ProposerIndex != tt.payment.ProposerIndex {
+				t.Errorf("Copy() ProposerIndex = %d, want %d", copied.ProposerIndex, tt.payment.ProposerIndex)
+			}
+
 			if tt.payment.Withdrawal != nil && len(tt.payment.Withdrawal.FeeRecipient) > 0 {
 				tt.payment.Withdrawal.FeeRecipient[0] = 0xFF
 				if copied.Withdrawal != nil && len(copied.Withdrawal.FeeRecipient) > 0 && copied.Withdrawal.FeeRecipient[0] == 0xFF {

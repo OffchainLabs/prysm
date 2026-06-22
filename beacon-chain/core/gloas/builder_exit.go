@@ -107,9 +107,6 @@ func processBuilderExitRequest(s state.BeaconState, request *enginev1.BuilderExi
 		return nil
 	}
 
-	if err := InitiateBuilderExit(s, idx); err != nil {
-		return err
-	}
-	builderExitsProcessedTotal.Inc()
-	return nil
+	// InitiateBuilderExit increments builderExitsProcessedTotal on success.
+	return InitiateBuilderExit(s, idx)
 }

@@ -786,18 +786,18 @@ func (b *BeaconState) applyDepositForNewBuilder(deposit *ethpb.PendingDeposit) e
 		Signature:             deposit.Signature,
 	})
 	if err != nil {
-		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Could not verify builder deposit signature")
+		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Skipping builder deposit: could not verify signature")
 		return nil
 	}
 	if !valid {
-		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).Debug("Invalid signature for builder deposit")
+		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).Debug("Skipping builder deposit with invalid signature")
 		return nil
 	}
 	pubkey := bytesutil.ToBytes48(deposit.PublicKey)
 	depositEpoch := slots.ToEpoch(deposit.Slot)
-	// onboard_builders_from_pending_deposits sets version to PAYLOAD_BUILDER_VERSION.
 	if err := b.addBuilderFromDepositAtEpoch(pubkey, params.BeaconConfig().PayloadBuilderVersion, bytesutil.ToBytes32(deposit.WithdrawalCredentials), deposit.Amount, depositEpoch); err != nil {
-		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Failed to apply builder deposit")
+		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Skipping builder deposit: could not add builder")
+		return nil
 	}
 	return nil
 }
