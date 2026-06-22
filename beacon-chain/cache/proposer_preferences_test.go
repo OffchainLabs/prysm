@@ -23,7 +23,7 @@ func TestProposerPreferencesCache_AddGetHas(t *testing.T) {
 		DependentRoot:  rootA,
 		ValidatorIndex: 7,
 		FeeRecipient:   primitives.ExecutionAddress{1, 2, 3, 4},
-		GasLimit:       42,
+		TargetGasLimit: 42,
 	}
 
 	require.Equal(t, false, c.Has(rootA, slot))
@@ -34,28 +34,28 @@ func TestProposerPreferencesCache_AddGetHas(t *testing.T) {
 	require.Equal(t, true, ok)
 	require.Equal(t, pref.ValidatorIndex, got.ValidatorIndex)
 	require.Equal(t, pref.FeeRecipient, got.FeeRecipient)
-	require.Equal(t, pref.GasLimit, got.GasLimit)
+	require.Equal(t, pref.TargetGasLimit, got.TargetGasLimit)
 }
 
 func TestProposerPreferencesCache_AddDuplicate(t *testing.T) {
 	c := NewProposerPreferencesCache()
 	slot := primitives.Slot(456)
 
-	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 3, FeeRecipient: feeA, GasLimit: 10}, slot))
-	require.Equal(t, false, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 3, FeeRecipient: feeB, GasLimit: 20}, slot))
+	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 3, FeeRecipient: feeA, TargetGasLimit: 10}, slot))
+	require.Equal(t, false, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 3, FeeRecipient: feeB, TargetGasLimit: 20}, slot))
 
 	pref, ok := c.Get(rootA, slot)
 	require.Equal(t, true, ok)
 	require.Equal(t, feeA, pref.FeeRecipient)
-	require.Equal(t, uint64(10), pref.GasLimit)
+	require.Equal(t, uint64(10), pref.TargetGasLimit)
 }
 
 func TestProposerPreferencesCache_DifferentBranchesSameSlot(t *testing.T) {
 	c := NewProposerPreferencesCache()
 	slot := primitives.Slot(456)
 
-	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 3, FeeRecipient: feeA, GasLimit: 10}, slot))
-	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootB, ValidatorIndex: 5, FeeRecipient: feeB, GasLimit: 20}, slot))
+	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 3, FeeRecipient: feeA, TargetGasLimit: 10}, slot))
+	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootB, ValidatorIndex: 5, FeeRecipient: feeB, TargetGasLimit: 20}, slot))
 
 	prefA, ok := c.Get(rootA, slot)
 	require.Equal(t, true, ok)
@@ -72,7 +72,7 @@ func TestProposerPreferencesCache_Clear(t *testing.T) {
 	c := NewProposerPreferencesCache()
 	slot := primitives.Slot(789)
 
-	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 1, FeeRecipient: feeA, GasLimit: 10}, slot))
+	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 1, FeeRecipient: feeA, TargetGasLimit: 10}, slot))
 	c.Clear()
 
 	require.Equal(t, false, c.Has(rootA, slot))
@@ -83,9 +83,9 @@ func TestProposerPreferencesCache_Clear(t *testing.T) {
 func TestProposerPreferencesCache_PruneBefore(t *testing.T) {
 	c := NewProposerPreferencesCache()
 
-	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 1, FeeRecipient: feeA, GasLimit: 10}, 10))
-	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 2, FeeRecipient: feeB, GasLimit: 11}, 11))
-	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 3, FeeRecipient: feeC, GasLimit: 12}, 12))
+	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 1, FeeRecipient: feeA, TargetGasLimit: 10}, 10))
+	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 2, FeeRecipient: feeB, TargetGasLimit: 11}, 11))
+	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 3, FeeRecipient: feeC, TargetGasLimit: 12}, 12))
 
 	c.PruneBefore(11)
 

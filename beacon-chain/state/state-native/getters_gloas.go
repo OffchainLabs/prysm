@@ -367,15 +367,8 @@ func (b *BeaconState) BuilderIndexByPubkey(pubkey [fieldparams.BLSPubkeyLength]b
 }
 
 func (b *BeaconState) builderIndexByPubkey(pubkey [fieldparams.BLSPubkeyLength]byte) (primitives.BuilderIndex, bool) {
-	for i, builder := range b.builders {
-		if builder == nil {
-			continue
-		}
-		if bytes.Equal(builder.Pubkey, pubkey[:]) {
-			return primitives.BuilderIndex(i), true
-		}
-	}
-	return 0, false
+	idx, ok := b.builderIdxMap[pubkey]
+	return idx, ok
 }
 
 // ExpectedWithdrawalsGloas returns the withdrawals that a proposer will need to pack in the next block
@@ -745,13 +738,13 @@ func ptcWindowOffset(stateSlot, slot primitives.Slot) (primitives.Slot, error) {
 
 	if epoch < stateEpoch {
 		if epoch+1 != stateEpoch {
-			return 0, fmt.Errorf("ptc window only supports previous epoch lookups: state_epoch=%d slot_epoch=%d", stateEpoch, epoch)
+			return 0, fmt.Errorf("%w: ptc window only supports previous epoch lookups: state_epoch=%d slot_epoch=%d", state.ErrNoPayloadCommitteeAvailable, stateEpoch, epoch)
 		}
 		return slot % slotsPerEpoch, nil
 	}
 
 	if epoch > stateEpoch+params.BeaconConfig().MinSeedLookahead {
-		return 0, fmt.Errorf("ptc window lookup out of range: state_epoch=%d slot_epoch=%d", stateEpoch, epoch)
+		return 0, fmt.Errorf("%w: ptc window lookup out of range: state_epoch=%d slot_epoch=%d", state.ErrNoPayloadCommitteeAvailable, stateEpoch, epoch)
 	}
 
 	offset := slotsPerEpoch.Mul(uint64(epoch-stateEpoch+1)) + (slot % slotsPerEpoch)

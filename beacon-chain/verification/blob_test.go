@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"iter"
 	"testing"
 	"time"
 
@@ -846,18 +847,18 @@ func (v *validxStateOverride) SetLatestBlockHeader(val *ethpb.BeaconBlockHeader)
 	return nil
 }
 
-func (v *validxStateOverride) ReadFromEveryValidator(f func(idx int, val state.ReadOnlyValidator) error) error {
-	validators := v.Validators()
-	for i, val := range validators {
-		rov, err := state_native.NewValidator(val)
-		if err != nil {
-			return err
-		}
-		if err := f(i, rov); err != nil {
-			return err
+func (v *validxStateOverride) ValidatorsReadOnlySeq() iter.Seq2[primitives.ValidatorIndex, state.ReadOnlyValidator] {
+	return func(yield func(primitives.ValidatorIndex, state.ReadOnlyValidator) bool) {
+		for i, val := range v.Validators() {
+			rov, err := state_native.NewValidator(val)
+			if err != nil {
+				return
+			}
+			if !yield(primitives.ValidatorIndex(i), rov) {
+				return
+			}
 		}
 	}
-	return nil
 }
 
 type mockProposerCache struct {

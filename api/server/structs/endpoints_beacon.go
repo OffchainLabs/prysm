@@ -188,6 +188,11 @@ type BLSToExecutionChangesPoolResponse struct {
 	Data []*SignedBLSToExecutionChange `json:"data"`
 }
 
+type GetPoolPayloadAttestationsResponse struct {
+	Version string                `json:"version"`
+	Data    []*PayloadAttestation `json:"data"`
+}
+
 type GetAttesterSlashingsResponse struct {
 	Version string          `json:"version,omitempty"`
 	Data    json.RawMessage `json:"data"` // Accepts both `[]*AttesterSlashing` and `[]*AttesterSlashingElectra` types

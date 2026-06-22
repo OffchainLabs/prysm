@@ -62,18 +62,19 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 		if len(testFolders) == 0 {
 			t.Fatalf("No test folders found for %s/%s/%s", config, version.String(fork), folderPath)
 		}
-		var skipTests = map[string]bool{
-			// Skipping because of #4807 backporting issues
-			"voting_source_beyond_two_epoch":         true,
-			"justified_update_always_if_better":      true,
-			"justified_update_not_realized_finality": true,
-			// TODO(gloas): shouldApplyProposerBoost needs implementation, these are equivocation tests
-			"include_votes_another_empty_chain_with_enough_ffg_votes_previous_epoch": true,
-			"simple_attempted_reorg_without_enough_ffg_votes":                        true,
+		var skipTests = map[string]string{
+			"voting_source_beyond_two_epoch":                                         "#4807 backporting issues",
+			"justified_update_always_if_better":                                      "#4807 backporting issues",
+			"justified_update_not_realized_finality":                                 "#4807 backporting issues",
+			"on_payload_attestation_message_valid":                                   "PTC votes not recorded at duplicate committee seats (specs#5222)",
+			"on_payload_attestation_message_multiple_ptc_members_vote_independently": "PTC votes not recorded at duplicate committee seats (specs#5222)",
+			"on_payload_attestation_message_current_slot_and_signature":              "signature and current-slot checks live in gossip validation",
+			"on_payload_attestation_message_unknown_block_root":                      "unknown block root check lives in gossip validation",
+			"on_payload_attestation_message_slot_mismatch":                           "block slot match check lives in gossip validation",
 		}
 		for _, folder := range testFolders {
-			if skipTests[folder.Name()] {
-				t.Logf("Skipping test %s due to known issues", folder.Name())
+			if reason, ok := skipTests[folder.Name()]; ok {
+				t.Logf("Skipping test %s: %s", folder.Name(), reason)
 				continue
 			}
 			t.Run(folder.Name(), func(t *testing.T) {
@@ -215,6 +216,7 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 						expectValid := step.Valid == nil || *step.Valid
 						builder.ExecutionPayloadEnvelope(t, signed, expectValid)
 					}
+					runPayloadAttestationStep(t, step, folder, testsFolderPath, builder)
 					if step.PowBlock != nil {
 						powBlockFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), fmt.Sprint(*step.PowBlock, ".ssz_snappy"))
 						require.NoError(t, err)
@@ -229,6 +231,20 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 			})
 		}
 	}
+}
+
+func runPayloadAttestationStep(t *testing.T, step Step, folder os.DirEntry, testsFolderPath string, builder *Builder) {
+	if step.PayloadAttestationMessage == nil {
+		return
+	}
+	paFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), fmt.Sprint(*step.PayloadAttestationMessage, ".ssz_snappy"))
+	require.NoError(t, err)
+	paSSZ, err := snappy.Decode(nil /* dst */, paFile)
+	require.NoError(t, err)
+	msg := &ethpb.PayloadAttestationMessage{}
+	require.NoError(t, msg.UnmarshalSSZ(paSSZ), "Failed to unmarshal")
+	expectValid := step.Valid == nil || *step.Valid
+	builder.PayloadAttestationMessage(t, msg, expectValid)
 }
 
 func runBlobStep(t *testing.T,

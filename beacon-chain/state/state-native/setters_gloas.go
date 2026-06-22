@@ -49,6 +49,17 @@ var emptyBuilderPendingPayment = &ethpb.BuilderPendingPayment{
 	},
 }
 
+func newBuilderIdxMap(builders []*ethpb.Builder) map[[fieldparams.BLSPubkeyLength]byte]primitives.BuilderIndex {
+	m := make(map[[fieldparams.BLSPubkeyLength]byte]primitives.BuilderIndex, len(builders))
+	for i, builder := range builders {
+		if builder == nil {
+			continue
+		}
+		m[bytesutil.ToBytes48(builder.Pubkey)] = primitives.BuilderIndex(i)
+	}
+	return m
+}
+
 // AppendBuilderPendingWithdrawals appends builder pending withdrawals to the beacon state.
 // If the withdrawals slice is shared, it copies the slice first to preserve references.
 func (b *BeaconState) AppendBuilderPendingWithdrawals(withdrawals []*ethpb.BuilderPendingWithdrawal) error {
@@ -294,7 +305,11 @@ func (b *BeaconState) UpdateBuilderAtIndex(index primitives.BuilderIndex, builde
 		b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)
 	}
 
+	if old := builders[idx]; old != nil {
+		delete(b.builderIdxMap, bytesutil.ToBytes48(old.Pubkey))
+	}
 	builders[idx] = ethpb.CopyBuilder(builder)
+	b.builderIdxMap[bytesutil.ToBytes48(builder.Pubkey)] = index
 	b.builders = builders
 
 	b.markFieldAsDirty(types.Builders)
@@ -376,12 +391,16 @@ func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkey
 	}
 
 	if index < primitives.BuilderIndex(len(builders)) {
+		if old := builders[index]; old != nil {
+			delete(b.builderIdxMap, bytesutil.ToBytes48(old.Pubkey))
+		}
 		builders[index] = builder
 	} else {
 		gap := index - primitives.BuilderIndex(len(builders)) + 1
 		builders = append(builders, make([]*ethpb.Builder, gap)...)
 		builders[index] = builder
 	}
+	b.builderIdxMap[pubkey] = index
 	b.builders = builders
 
 	b.markFieldAsDirty(types.Builders)
@@ -805,6 +824,7 @@ func (b *BeaconState) SetBuilders(val []*ethpb.Builder) error {
 	b.sharedFieldReferences[types.Builders].MinusRef()
 	b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)
 	b.builders = val
+	b.builderIdxMap = newBuilderIdxMap(val)
 	b.markFieldAsDirty(types.Builders)
 	b.rebuildTrie[types.Builders] = true
 	return nil

@@ -6,6 +6,7 @@ package state
 import (
 	"context"
 	"encoding/json"
+	"iter"
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
@@ -136,6 +137,7 @@ type ReadOnlyValidator interface {
 type ReadOnlyValidators interface {
 	Validators() []*ethpb.Validator
 	ValidatorsReadOnly() []ReadOnlyValidator
+	ValidatorsReadOnlySeq() iter.Seq2[primitives.ValidatorIndex, ReadOnlyValidator]
 	ValidatorAtIndex(idx primitives.ValidatorIndex) (*ethpb.Validator, error)
 	ValidatorAtIndexReadOnly(idx primitives.ValidatorIndex) (ReadOnlyValidator, error)
 	ValidatorIndexByPubkey(key [fieldparams.BLSPubkeyLength]byte) (primitives.ValidatorIndex, bool)
@@ -143,7 +145,6 @@ type ReadOnlyValidators interface {
 	PubkeyAtIndex(idx primitives.ValidatorIndex) [fieldparams.BLSPubkeyLength]byte
 	AggregateKeyFromIndices(idxs []uint64) (bls.PublicKey, error)
 	NumValidators() int
-	ReadFromEveryValidator(f func(idx int, val ReadOnlyValidator) error) error
 }
 
 // ReadOnlyBalances defines a struct which only has read access to balances methods.

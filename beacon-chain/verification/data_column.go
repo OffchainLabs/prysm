@@ -40,6 +40,8 @@ var (
 		RequireSidecarProposerExpected,
 	}
 
+	PartialColumnRequirements = requirementList(GossipDataColumnSidecarRequirements).excluding(RequireCorrectSubnet)
+
 	// ByRangeRequestDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received
 	// via the by range request must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
 	// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#datacolumnsidecarsbyrange-v1
@@ -72,6 +74,50 @@ type LazyHeadStateProvider struct {
 }
 
 var _ HeadStateProvider = &LazyHeadStateProvider{}
+
+// PartialColumnVerifier is used to verify a partial data column before it can be used as a fully verified data column
+// Note: It is not thread safe and the caller is responsible for thread-safety
+type PartialColumnVerifier struct {
+	DataColumnsVerifier
+	Column *blocks.PartialDataColumn
+}
+
+// NewPartialColumnVerifier creates a PartialColumnVerifier that wraps the given DataColumnsVerifier and partial column.
+func NewPartialColumnVerifier(dv DataColumnsVerifier, col *blocks.PartialDataColumn) *PartialColumnVerifier {
+	return &PartialColumnVerifier{
+		DataColumnsVerifier: dv,
+		Column:              col,
+	}
+}
+
+// Complete returns the fully VerifiedRODataColumn once every cell has been collected and the column passes
+// verification. The boolean is false (with a nil error) while the column is still incomplete.
+func (pv *PartialColumnVerifier) Complete() (blocks.VerifiedRODataColumn, bool, error) {
+	if !pv.Column.IsComplete() {
+		return blocks.VerifiedRODataColumn{}, false, nil
+	}
+
+	// now that we have all the cells and proofs, the valid fields check should pass
+	if err := pv.ValidFields(); err != nil {
+		return blocks.VerifiedRODataColumn{}, false, err
+	}
+
+	pv.SatisfyRequirement(RequireSidecarKzgProofVerified)
+
+	cols, err := pv.VerifiedRODataColumns()
+	if err != nil {
+		return blocks.VerifiedRODataColumn{}, false, err
+	}
+	if len(cols) != 1 {
+		return blocks.VerifiedRODataColumn{}, false, errors.New("unexpected number of verified data columns")
+	}
+	return cols[0], true, nil
+}
+
+// ExtendFromVerifiedCell adds an already-verified cell and proof at the given index, returning true if it was newly added.
+func (pv *PartialColumnVerifier) ExtendFromVerifiedCell(cellIndex uint64, cell, proof []byte) bool {
+	return pv.Column.ExtendFromVerifiedCell(cellIndex, cell, proof)
+}
 
 type (
 	RODataColumnsVerifier struct {
@@ -412,7 +458,9 @@ func (dv *RODataColumnsVerifier) SidecarParentSlotLower() (err error) {
 		}
 		parentSlot, err := dv.fc.Slot(parentRoot)
 		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "slot"))
+			// Wrap ErrSidecarParentUnknown (rather than err) so callers can match it with errors.Is;
+			// see sync/validate_partial_header.go which special-cases this sentinel.
+			return columnErrBuilder(errors.Wrap(ErrSidecarParentUnknown, err.Error()))
 		}
 
 		// Check if the data column slot is after the parent slot.

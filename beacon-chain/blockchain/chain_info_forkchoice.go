@@ -56,6 +56,13 @@ func (s *Service) BlockHash(root [32]byte) ([32]byte, error) {
 	return s.cfg.ForkChoiceStore.BlockHash(root)
 }
 
+// GasLimit returns the gas limit of the latest full payload at or before the given beacon block root from forkchoice.
+func (s *Service) GasLimit(root [32]byte) (uint64, error) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.GasLimit(root)
+}
+
 // HasFullNode returns the corresponding value from forkchoice
 func (s *Service) HasFullNode(root [32]byte) bool {
 	s.cfg.ForkChoiceStore.RLock()
@@ -96,6 +103,13 @@ func (s *Service) ForkChoiceDump(ctx context.Context) (*forkchoice.Dump, error) 
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.ForkChoiceDump(ctx)
+}
+
+// ForkChoiceDumpV2 returns the corresponding value from forkchoice
+func (s *Service) ForkChoiceDumpV2(ctx context.Context) (*forkchoice.DumpV2, error) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.ForkChoiceDumpV2(ctx)
 }
 
 // NewSlot returns the corresponding value from forkchoice

@@ -6,7 +6,7 @@ package validator
 import (
 	"bytes"
 	"context"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
@@ -36,7 +36,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/genesis"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -93,8 +92,7 @@ type Server struct {
 	CoreService                      *core.Service
 	AttestationStateFetcher          blockchain.AttestationStateFetcher
 	GraffitiInfo                     *execution.GraffitiInfo
-	payloadAttestationData           atomic.Pointer[ethpb.PayloadAttestationData]
-	payloadAttestationFlight         singleflight.Group
+	maxExecutionPayments             sync.Map // validator pubkey [48]byte -> max execution payment (Gwei uint64).
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.

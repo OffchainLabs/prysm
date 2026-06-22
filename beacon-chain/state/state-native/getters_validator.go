@@ -1,6 +1,8 @@
 package state_native
 
 import (
+	"iter"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -41,9 +43,11 @@ func (b *BeaconState) validatorsReadOnlyVal() []state.ReadOnlyValidator {
 	}
 	v := b.validatorsMultiValue.Value(b)
 
+	backing := make([]readOnlyValidator, len(v))
 	res := make([]state.ReadOnlyValidator, len(v))
-	for i := range res {
-		res[i] = NewValidatorFromCompact(v[i])
+	for i := range v {
+		backing[i].validator = v[i]
+		res[i] = &backing[i]
 	}
 	return res
 }
@@ -179,12 +183,15 @@ func (b *BeaconState) AggregateKeyFromIndices(idxs []uint64) (bls.PublicKey, err
 	defer b.lock.RUnlock()
 
 	pubKeys := make([][]byte, len(idxs))
+	backing := make([]byte, len(idxs)*fieldparams.BLSPubkeyLength)
 	for i, idx := range idxs {
 		v, err := b.validatorsMultiValue.At(b, idx)
 		if err != nil {
 			return nil, err
 		}
-		pubKeys[i] = v.PublicKey[:]
+		buf := backing[i*fieldparams.BLSPubkeyLength : (i+1)*fieldparams.BLSPubkeyLength]
+		copy(buf, v.PublicKey[:])
+		pubKeys[i] = buf
 	}
 	return bls.AggregatePublicKeys(pubKeys)
 }
@@ -214,28 +221,32 @@ func (b *BeaconState) NumValidators() int {
 	return b.validatorsLen()
 }
 
-// ReadFromEveryValidator reads values from every validator and applies it to the provided function.
-//
-// WARNING: This method is potentially unsafe, as it exposes the actual validator registry.
-func (b *BeaconState) ReadFromEveryValidator(f func(idx int, val state.ReadOnlyValidator) error) error {
-	b.lock.RLock()
-	defer b.lock.RUnlock()
+// ValidatorsReadOnlySeq returns an iterator over every (index, read-only validator) pair in
+// the registry. The state's read lock is held for the entire duration of iteration, so callers
+// must not call mutating state methods from inside the loop.
+func (b *BeaconState) ValidatorsReadOnlySeq() iter.Seq2[primitives.ValidatorIndex, state.ReadOnlyValidator] {
+	return func(yield func(primitives.ValidatorIndex, state.ReadOnlyValidator) bool) {
+		b.lock.RLock()
+		defer b.lock.RUnlock()
 
-	if b.validatorsMultiValue == nil {
-		return state.ErrNilValidatorsInState
-	}
-	l := b.validatorsMultiValue.Len(b)
-	for i := range l {
-		v, err := b.validatorsMultiValue.At(b, uint64(i))
-		if err != nil {
-			return err
+		if b.validatorsMultiValue == nil {
+			return
 		}
-		rov := NewValidatorFromCompact(v)
-		if err = f(i, rov); err != nil {
-			return err
+
+		rov := new(readOnlyValidator)
+		for i := range b.validatorsMultiValue.Len(b) {
+			v, err := b.validatorsMultiValue.At(b, uint64(i))
+			if err != nil {
+				log.WithError(err).WithField("index", i).Error("Failed to get validator, should never happen")
+				return
+			}
+
+			rov.validator = v
+			if !yield(primitives.ValidatorIndex(i), rov) {
+				return
+			}
 		}
 	}
-	return nil
 }
 
 // Balances of validators participating in consensus on the beacon chain.

@@ -47,12 +47,6 @@ var (
 		Usage: "Data directory for the databases.",
 		Value: DefaultDataDir(),
 	}
-	// EnableBackupWebhookFlag for users to trigger db backups via an HTTP webhook.
-	EnableBackupWebhookFlag = &cli.BoolFlag{
-		Name: "enable-db-backup-webhook",
-		Usage: `Serves HTTP handler to initiate database backups.
-		The handler is served on the monitoring port at path /db/backup.`,
-	}
 	// EnableTracingFlag defines a flag to enable OpenTelemetry tracing.
 	EnableTracingFlag = &cli.BoolFlag{
 		Name:  "enable-tracing",
@@ -217,11 +211,12 @@ var (
 		Name:  "disable-log-colors",
 		Usage: "Disable color formatting for terminal logs.",
 	}
-	// MaxGoroutines specifies the maximum amount of goroutines tolerated, before a status check fails.
+	// MaxGoroutines specifies the maximum amount of goroutines tolerated on average, before a status check fails.
 	MaxGoroutines = &cli.IntFlag{
-		Name:  "max-goroutines",
-		Usage: "Specifies the upper limit of goroutines running before a status check fails",
-		Value: 5000,
+		Name:    "healthz-max-goroutines",
+		Aliases: []string{"max-goroutines"},
+		Usage:   "The /healthz endpoint reports the node as unhealthy if the average goroutine count during a 10 slots window exceeds this threshold.",
+		Value:   5000,
 	}
 	// LogFileName specifies the log output file name.
 	LogFileName = &cli.StringFlag{

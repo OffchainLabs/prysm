@@ -13,6 +13,7 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/server"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	builderTest "github.com/OffchainLabs/prysm/v7/beacon-chain/builder/testing"
@@ -26,6 +27,7 @@ import (
 	p2pmock "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
+	validatorv1alpha1 "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/v1alpha1/validator"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
@@ -40,6 +42,7 @@ import (
 	ethpbalpha "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	mock2 "github.com/OffchainLabs/prysm/v7/testing/mock"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -47,6 +50,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
+	"go.uber.org/mock/gomock"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestGetAggregateAttestationV2(t *testing.T) {
@@ -4013,6 +4019,106 @@ func TestGetLiveness(t *testing.T) {
 	})
 }
 
+func TestGetPayloadAttestationData(t *testing.T) {
+	t.Run("core error translates to BadRequest", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 100
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(0)
+		chainService := &mockChain.ChainService{Slot: &slot}
+		s := &Server{
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			HeadFetcher:           chainService,
+			TimeFetcher:           chainService,
+			OptimisticModeFetcher: chainService,
+			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService},
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/validator/payload_attestation_data/{slot}", nil)
+		request.SetPathValue("slot", "0")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPayloadAttestationData(writer, request)
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		assert.StringContains(t, "Gloas fork", writer.Body.String())
+	})
+	t.Run("ok json", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(5)
+		root := bytesutil.PadTo([]byte("head-root"), 32)
+		chainService := &mockChain.ChainService{
+			Slot:               &slot,
+			Root:               root,
+			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
+			MockCanonicalFull:  map[primitives.Slot]bool{slot: true},
+			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
+		}
+		s := &Server{
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			HeadFetcher:           chainService,
+			TimeFetcher:           chainService,
+			OptimisticModeFetcher: chainService,
+			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService},
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/validator/payload_attestation_data/{slot}", nil)
+		request.SetPathValue("slot", "5")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPayloadAttestationData(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+
+		resp := &structs.GetPayloadAttestationDataResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		assert.Equal(t, "gloas", resp.Version)
+		assert.Equal(t, "5", resp.Data.Slot)
+		assert.Equal(t, hexutil.Encode(root), resp.Data.BeaconBlockRoot)
+		assert.Equal(t, true, resp.Data.PayloadPresent)
+		assert.Equal(t, true, resp.Data.BlobDataAvailable)
+		assert.Equal(t, version.String(version.Gloas), writer.Header().Get(api.VersionHeader))
+	})
+	t.Run("ok ssz", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(5)
+		root := bytesutil.PadTo([]byte("head-root"), 32)
+		chainService := &mockChain.ChainService{Slot: &slot, Root: root}
+		s := &Server{
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			HeadFetcher:           chainService,
+			TimeFetcher:           chainService,
+			OptimisticModeFetcher: chainService,
+			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService},
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/validator/payload_attestation_data/{slot}", nil)
+		request.SetPathValue("slot", "5")
+		request.Header.Set("Accept", "application/octet-stream")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPayloadAttestationData(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		assert.Equal(t, version.String(version.Gloas), writer.Header().Get(api.VersionHeader))
+
+		data := &ethpbalpha.PayloadAttestationData{}
+		require.NoError(t, data.UnmarshalSSZ(writer.Body.Bytes()))
+		assert.Equal(t, primitives.Slot(5), data.Slot)
+		assert.DeepEqual(t, root, data.BeaconBlockRoot)
+	})
+}
+
 var (
 	singleContribution = `[
   {
@@ -4435,3 +4541,159 @@ var (
     "signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"
   }]`
 )
+
+func validProposerPreferencesBody() string {
+	return `[{
+		"message": {
+			"dependent_root": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+			"proposal_slot": "32",
+			"validator_index": "2",
+			"fee_recipient": "0x0000000000000000000000000000000000000000",
+			"target_gas_limit": "30000000"
+		},
+		"signature": "0x` + strings.Repeat("00", 96) + `"
+	}]`
+}
+
+func TestSubmitSignedProposerPreferences_OK(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	currentSlot := primitives.Slot(31)
+	proposalSlot := primitives.Slot(32)
+	c := cache.NewProposerPreferencesCache()
+	v1alpha1Server := &validatorv1alpha1.Server{
+		SyncChecker:              &mockSync.Sync{IsSyncing: false},
+		TimeFetcher:              &mockChain.ChainService{Slot: &currentSlot},
+		P2P:                      &p2pmock.MockBroadcaster{},
+		ProposerPreferencesCache: c,
+		OperationNotifier:        (&mockChain.ChainService{}).OperationNotifier(),
+	}
+
+	s := &Server{V1Alpha1Server: v1alpha1Server}
+	req := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/validator/proposer_preferences", bytes.NewBufferString(validProposerPreferencesBody()))
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.SubmitSignedProposerPreferences(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	pref, ok := c.Get(bytesutil.ToBytes32(bytes.Repeat([]byte{0xcc}, 32)), proposalSlot)
+	require.Equal(t, true, ok)
+	require.Equal(t, primitives.ValidatorIndex(2), pref.ValidatorIndex)
+	require.Equal(t, uint64(30_000_000), pref.TargetGasLimit)
+}
+
+func TestSubmitSignedProposerPreferences_NoBody(t *testing.T) {
+	s := &Server{}
+	req := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.SubmitSignedProposerPreferences(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	e := &httputil.DefaultJsonError{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), e))
+	assert.Equal(t, true, strings.Contains(e.Message, "No data submitted"))
+}
+
+func TestSubmitSignedProposerPreferences_Empty(t *testing.T) {
+	s := &Server{}
+	req := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewBufferString("[]"))
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.SubmitSignedProposerPreferences(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestSubmitSignedProposerPreferences_InvalidJSON(t *testing.T) {
+	s := &Server{}
+	req := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewBufferString(`[{"message": null, "signature": "0x00"}]`))
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.SubmitSignedProposerPreferences(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	e := &server.IndexedErrorContainer{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), e))
+	require.Equal(t, 1, len(e.Failures))
+	assert.Equal(t, 0, e.Failures[0].Index)
+}
+
+func runWithGRPCError(t *testing.T, code codes.Code) int {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+	v1alpha1Server.EXPECT().
+		SubmitSignedProposerPreferences(gomock.Any(), gomock.Any()).
+		Return(nil, status.Error(code, "boom"))
+
+	s := &Server{V1Alpha1Server: v1alpha1Server}
+	req := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewBufferString(validProposerPreferencesBody()))
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.SubmitSignedProposerPreferences(w, req)
+	return w.Code
+}
+
+func TestSubmitSignedProposerPreferences_InvalidArgumentMapsTo400(t *testing.T) {
+	assert.Equal(t, http.StatusBadRequest, runWithGRPCError(t, codes.InvalidArgument))
+}
+
+func TestSubmitSignedProposerPreferences_UnavailableMapsTo503(t *testing.T) {
+	assert.Equal(t, http.StatusServiceUnavailable, runWithGRPCError(t, codes.Unavailable))
+}
+
+func TestSubmitSignedProposerPreferences_InternalMapsTo500(t *testing.T) {
+	assert.Equal(t, http.StatusInternalServerError, runWithGRPCError(t, codes.Internal))
+}
+
+func TestSubmitSignedProposerPreferences_MissingVersionHeader(t *testing.T) {
+	s := &Server{}
+	req := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewBufferString(validProposerPreferencesBody()))
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.SubmitSignedProposerPreferences(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	e := &httputil.DefaultJsonError{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), e))
+	assert.Equal(t, true, strings.Contains(e.Message, api.VersionHeader+" header is required"))
+}
+
+func TestSubmitSignedProposerPreferences_InvalidVersionHeader(t *testing.T) {
+	s := &Server{}
+	req := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewBufferString(validProposerPreferencesBody()))
+	req.Header.Set(api.VersionHeader, "notaversion")
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.SubmitSignedProposerPreferences(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	e := &httputil.DefaultJsonError{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), e))
+	assert.Equal(t, true, strings.Contains(e.Message, "Invalid version"))
+}
+
+func TestSubmitSignedProposerPreferences_PreGloasVersion(t *testing.T) {
+	s := &Server{}
+	req := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewBufferString(validProposerPreferencesBody()))
+	req.Header.Set(api.VersionHeader, version.String(version.Fulu))
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.SubmitSignedProposerPreferences(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	e := &httputil.DefaultJsonError{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), e))
+	assert.Equal(t, true, strings.Contains(e.Message, "only supported from the gloas fork"))
+}

@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -95,8 +97,13 @@ func (vs *Server) SubmitSignedProposerPreferences(
 			DependentRoot:  dependentRoot,
 			ValidatorIndex: msg.Message.ValidatorIndex,
 			FeeRecipient:   bytesutil.ToBytes20(msg.Message.FeeRecipient),
-			GasLimit:       msg.Message.GasLimit,
+			TargetGasLimit: msg.Message.TargetGasLimit,
 		}, proposalSlot)
+
+		vs.OperationNotifier.OperationFeed().Send(&feed.Event{
+			Type: opfeed.ProposerPreferencesReceived,
+			Data: &opfeed.ProposerPreferencesReceivedData{Data: msg},
+		})
 		broadcast++
 	}
 

@@ -95,12 +95,10 @@ func TestLocalSelector_AttestationSelectionProof_ConcurrentDedup(t *testing.T) {
 	results := make([][]byte, goroutines)
 	errs := make([]error, goroutines)
 
-	wg.Add(goroutines)
-	for i := range goroutines {
-		go func(idx int) {
-			defer wg.Done()
+	for idx := range goroutines {
+		wg.Go(func() {
 			results[idx], errs[idx] = s.AttestationSelectionProof(t.Context(), slot, pubKey)
-		}(i)
+		})
 	}
 	wg.Wait()
 
@@ -170,14 +168,18 @@ func TestDistributedSelector_EpochGuard(t *testing.T) {
 	ds := v.aggSelector.(*distributedSelector)
 
 	slot := primitives.Slot(2) * params.BeaconConfig().SlotsPerEpoch
-	ds.v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-		CurrentEpochDuties: []*ethpb.ValidatorDuty{{
-			AttesterSlot:   slot,
-			ValidatorIndex: 200,
-			PublicKey:      keys.pub[:],
-			Status:         ethpb.ValidatorStatus_ACTIVE,
-		}},
-	})
+	{
+		var data dutyStoreData
+		data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{{
+				AttesterSlot:   slot,
+				ValidatorIndex: 200,
+				PublicKey:      keys.pub[:],
+				Status:         ethpb.ValidatorStatus_ACTIVE,
+			}},
+		})
+		ds.v.duties.write(data)
+	}
 
 	sigDomain := make([]byte, 32)
 	client.EXPECT().DomainData(gomock.Any(), gomock.Any()).
@@ -199,14 +201,18 @@ func TestDistributedSelector_ReadyCh_BlocksUntilRefresh(t *testing.T) {
 	ds := v.aggSelector.(*distributedSelector)
 
 	slot := primitives.Slot(3) * params.BeaconConfig().SlotsPerEpoch
-	ds.v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-		CurrentEpochDuties: []*ethpb.ValidatorDuty{{
-			AttesterSlot:   slot,
-			ValidatorIndex: 200,
-			PublicKey:      keys.pub[:],
-			Status:         ethpb.ValidatorStatus_ACTIVE,
-		}},
-	})
+	{
+		var data dutyStoreData
+		data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{{
+				AttesterSlot:   slot,
+				ValidatorIndex: 200,
+				PublicKey:      keys.pub[:],
+				Status:         ethpb.ValidatorStatus_ACTIVE,
+			}},
+		})
+		ds.v.duties.write(data)
+	}
 
 	proof := make([]byte, 96)
 	proof[0] = 0xAB
@@ -256,14 +262,18 @@ func TestDistributedSelector_ErrorIsStickyWithinEpoch(t *testing.T) {
 	ds := v.aggSelector.(*distributedSelector)
 
 	slot := primitives.Slot(4) * params.BeaconConfig().SlotsPerEpoch
-	ds.v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-		CurrentEpochDuties: []*ethpb.ValidatorDuty{{
-			AttesterSlot:   slot,
-			ValidatorIndex: 200,
-			PublicKey:      keys.pub[:],
-			Status:         ethpb.ValidatorStatus_ACTIVE,
-		}},
-	})
+	{
+		var data dutyStoreData
+		data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{{
+				AttesterSlot:   slot,
+				ValidatorIndex: 200,
+				PublicKey:      keys.pub[:],
+				Status:         ethpb.ValidatorStatus_ACTIVE,
+			}},
+		})
+		ds.v.duties.write(data)
+	}
 
 	sigDomain := make([]byte, 32)
 	client.EXPECT().DomainData(gomock.Any(), gomock.Any()).

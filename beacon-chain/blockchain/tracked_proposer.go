@@ -24,7 +24,7 @@ func (s *Service) proposerPreference(st state.ReadOnlyBeaconState, slot primitiv
 	if pref.ValidatorIndex != valIdx {
 		return cache.TrackedValidator{}, false
 	}
-	return cache.TrackedValidator{Active: true, FeeRecipient: pref.FeeRecipient, GasLimit: pref.GasLimit}, true
+	return cache.TrackedValidator{Active: true, FeeRecipient: pref.FeeRecipient, GasLimit: pref.TargetGasLimit}, true
 }
 
 // trackedProposer returns whether the beacon node was informed, via the
