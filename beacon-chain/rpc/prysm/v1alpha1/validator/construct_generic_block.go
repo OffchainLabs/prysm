@@ -3,7 +3,6 @@ package validator
 import (
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -18,8 +17,6 @@ func (vs *Server) constructGenericBeaconBlock(
 	sBlk interfaces.SignedBeaconBlock,
 	blobsBundler enginev1.BlobsBundler,
 	winningBid primitives.Wei,
-	eagerPayloadStateRoot bool,
-	local *blocks.GetPayloadResponse,
 ) (*ethpb.GenericBeaconBlock, error) {
 	if sBlk == nil || sBlk.Block() == nil {
 		return nil, errors.New("block cannot be nil")
@@ -62,41 +59,12 @@ func (vs *Server) constructGenericBeaconBlock(
 		return vs.constructFuluBlock(blockProto, isBlinded, bidStr, bundle), nil
 	case version.Gloas:
 		// Gloas blocks do not carry a separate payload value — the bid is part of the block body.
-		gloasBlock := blockProto.(*ethpb.BeaconBlockGloas)
-		// Stateless (eager) self-build: bundle the cached envelope + blobs/proofs so the validator
-		// client has everything to publish Contents without a second round-trip.
-		if eagerPayloadStateRoot {
-			contents := vs.gloasBlockContents(gloasBlock, local)
-			if contents != nil {
-				return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_GloasContents{GloasContents: contents}}, nil
-			}
-		}
+		// Stateless self-build bundling into GloasContents happens in BuildBlockParallel.
 		return &ethpb.GenericBeaconBlock{
-			Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: gloasBlock},
+			Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: blockProto.(*ethpb.BeaconBlockGloas)},
 		}, nil
 	default:
 		return nil, fmt.Errorf("unknown block version: %d", sBlk.Version())
-	}
-}
-
-// gloasBlockContents bundles the cached self-build envelope with the raw blobs and KZG proofs
-// from the local payload. Returns nil when there is no cached self-build envelope (e.g. the block
-// used an external builder bid), in which case the caller returns the block-only form.
-func (vs *Server) gloasBlockContents(block *ethpb.BeaconBlockGloas, local *blocks.GetPayloadResponse) *ethpb.BeaconBlockContentsGloas {
-	cached, ok := vs.ExecutionPayloadEnvelopeCache.Contents()
-	if !ok || cached.Envelope == nil {
-		return nil
-	}
-	var blobs, kzgProofs [][]byte
-	if local != nil && local.BlobsBundler != nil {
-		blobs = local.BlobsBundler.GetBlobs()
-		kzgProofs = local.BlobsBundler.GetProofs()
-	}
-	return &ethpb.BeaconBlockContentsGloas{
-		Block:                    block,
-		ExecutionPayloadEnvelope: cached.Envelope,
-		KzgProofs:                kzgProofs,
-		Blobs:                    blobs,
 	}
 }
 

@@ -98,7 +98,7 @@ func TestGetExecutionPayloadEnvelope_StatefulFetchesBlinded(t *testing.T) {
 	defer ctrl.Finish()
 
 	envelope := testProtoEnvelope()
-	blinded, err := structs.WireBlindedFromFull(envelope)
+	blinded, err := ethpb.WireBlindedFromFull(envelope)
 	require.NoError(t, err)
 	body, err := blinded.MarshalSSZ()
 	require.NoError(t, err)
@@ -127,7 +127,7 @@ func TestPublishBlindedExecutionPayloadEnvelope(t *testing.T) {
 	defer ctrl.Finish()
 
 	signed := &ethpb.SignedExecutionPayloadEnvelope{Message: testProtoEnvelope(), Signature: bytesutil.PadTo([]byte("sig"), 96)}
-	signedBlinded, err := structs.SignedWireBlindedFromFull(signed)
+	signedBlinded, err := ethpb.SignedWireBlindedFromFull(signed)
 	require.NoError(t, err)
 	expectedBody, err := signedBlinded.MarshalSSZ()
 	require.NoError(t, err)
@@ -155,7 +155,7 @@ func TestPublishBlindedExecutionPayloadEnvelope_JSONFallbackOn406(t *testing.T) 
 	defer ctrl.Finish()
 
 	signed := &ethpb.SignedExecutionPayloadEnvelope{Message: testProtoEnvelope(), Signature: bytesutil.PadTo([]byte("sig"), 96)}
-	signedBlinded, err := structs.SignedWireBlindedFromFull(signed)
+	signedBlinded, err := ethpb.SignedWireBlindedFromFull(signed)
 	require.NoError(t, err)
 	msg, err := structs.BlindedExecutionPayloadEnvelopeFromConsensus(signedBlinded.Message)
 	require.NoError(t, err)

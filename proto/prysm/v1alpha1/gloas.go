@@ -47,3 +47,38 @@ func (payment *BuilderPendingPayment) Copy() *BuilderPendingPayment {
 		Withdrawal: payment.Withdrawal.Copy(),
 	}
 }
+
+// WireBlindedFromFull derives the spec-wire blinded envelope from a full one: payload_root is
+// HashTreeRoot(payload), so HashTreeRoot(blinded) == HashTreeRoot(full) and a validator signature
+// over either form is valid against the other.
+func WireBlindedFromFull(full *ExecutionPayloadEnvelope) (*WireBlindedExecutionPayloadEnvelope, error) {
+	if full == nil {
+		return nil, nil
+	}
+	payloadRoot, err := full.Payload.HashTreeRoot()
+	if err != nil {
+		return nil, err
+	}
+	return &WireBlindedExecutionPayloadEnvelope{
+		PayloadRoot:           payloadRoot[:],
+		ExecutionRequests:     full.ExecutionRequests,
+		BuilderIndex:          full.BuilderIndex,
+		BeaconBlockRoot:       bytesutil.SafeCopyBytes(full.BeaconBlockRoot),
+		ParentBeaconBlockRoot: bytesutil.SafeCopyBytes(full.ParentBeaconBlockRoot),
+	}, nil
+}
+
+// SignedWireBlindedFromFull lifts a signed envelope to its blinded form, preserving the signature.
+func SignedWireBlindedFromFull(full *SignedExecutionPayloadEnvelope) (*SignedWireBlindedExecutionPayloadEnvelope, error) {
+	if full == nil {
+		return nil, nil
+	}
+	msg, err := WireBlindedFromFull(full.Message)
+	if err != nil {
+		return nil, err
+	}
+	return &SignedWireBlindedExecutionPayloadEnvelope{
+		Message:   msg,
+		Signature: bytesutil.SafeCopyBytes(full.Signature),
+	}, nil
+}

@@ -17,7 +17,6 @@ import (
 	executiontesting "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
-	validatorv1alpha1 "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/v1alpha1/validator"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -46,7 +45,7 @@ func envelopeCacheFor(signed *ethpb.SignedExecutionPayloadEnvelope) *cache.Execu
 
 func blindedJSONBody(t *testing.T, signed *ethpb.SignedExecutionPayloadEnvelope) []byte {
 	t.Helper()
-	blinded, err := structs.SignedWireBlindedFromFull(signed)
+	blinded, err := ethpb.SignedWireBlindedFromFull(signed)
 	require.NoError(t, err)
 	msg, err := structs.BlindedExecutionPayloadEnvelopeFromConsensus(blinded.Message)
 	require.NoError(t, err)
@@ -283,9 +282,8 @@ func TestPublishExecutionPayloadEnvelope_ImportFailureReturns202(t *testing.T) {
 
 // statelessContentsBody builds a SignedExecutionPayloadEnvelopeContents JSON
 // body with real blobs+proofs, returning the body bytes and the signed
-// envelope used to construct it. blobMutator runs against the flat proofs
-// after they're built so callers can inject corruption.
-func statelessContentsBody(t *testing.T, blobCount int, mutateProofs func([][]byte)) ([]byte, *ethpb.SignedExecutionPayloadEnvelope) {
+// envelope used to construct it.
+func statelessContentsBody(t *testing.T, blobCount int) ([]byte, *ethpb.SignedExecutionPayloadEnvelope) {
 	t.Helper()
 	require.NoError(t, kzg.Start())
 
@@ -305,9 +303,6 @@ func statelessContentsBody(t *testing.T, blobCount int, mutateProofs func([][]by
 			flatProofs = append(flatProofs, p[:])
 		}
 	}
-	if mutateProofs != nil {
-		mutateProofs(flatProofs)
-	}
 
 	signed := testSignedEnvelope()
 	contents, err := structs.SignedExecutionPayloadEnvelopeContentsFromConsensus(signed, flatProofs, flatBlobs)
@@ -323,7 +318,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_WithBlobs(t *testing.
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
-	body, _ := statelessContentsBody(t, 2, nil)
+	body, _ := statelessContentsBody(t, 2)
 
 	ctrl := gomock.NewController(t)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
@@ -344,31 +339,6 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_WithBlobs(t *testing.
 
 	s.PublishExecutionPayloadEnvelope(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestPublishExecutionPayloadEnvelope_StatelessContents_RejectsBadProofs(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
-
-	body, _ := statelessContentsBody(t, 2, func(flatProofs [][]byte) {
-		// Corrupt the first proof — verification must reject.
-		flatProofs[0] = bytes.Repeat([]byte{0xff}, 48)
-	})
-
-	// A real (empty) v1alpha1 server is enough: bad proofs are rejected in verifyCellProofs before
-	// any P2P/cache/receiver dependency is touched.
-	s := &Server{V1Alpha1ValidatorServer: &validatorv1alpha1.Server{}}
-	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
-	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
-	req.Header.Set(api.ExecutionPayloadBlindedHeader, "false")
-	w := httptest.NewRecorder()
-	w.Body = &bytes.Buffer{}
-
-	s.PublishExecutionPayloadEnvelope(w, req)
-	require.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Equal(t, true, bytes.Contains(w.Body.Bytes(), []byte("kzg verification failed")))
 }
 
 func TestPublishExecutionPayloadEnvelope_ServerError(t *testing.T) {
@@ -410,7 +380,7 @@ func TestPublishExecutionPayloadEnvelope_SSZ_StatefulBlinded(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	signed := testSignedEnvelope()
-	blinded, err := structs.SignedWireBlindedFromFull(signed)
+	blinded, err := ethpb.SignedWireBlindedFromFull(signed)
 	require.NoError(t, err)
 	sszBody, err := blinded.MarshalSSZ()
 	require.NoError(t, err)
@@ -443,7 +413,7 @@ func TestPublishExecutionPayloadEnvelope_SSZ_StatefulBlinded_CacheMiss(t *testin
 	params.OverrideBeaconConfig(cfg)
 
 	signed := testSignedEnvelope()
-	blinded, err := structs.SignedWireBlindedFromFull(signed)
+	blinded, err := ethpb.SignedWireBlindedFromFull(signed)
 	require.NoError(t, err)
 	sszBody, err := blinded.MarshalSSZ()
 	require.NoError(t, err)

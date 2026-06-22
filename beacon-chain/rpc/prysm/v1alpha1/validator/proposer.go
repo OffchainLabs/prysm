@@ -299,13 +299,34 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	sBlk.SetStateRoot(sr)
 
 	// For Gloas self-build, cache the execution payload envelope now that the block is fully built.
+	var envelope *ethpb.ExecutionPayloadEnvelope
 	if sBlk.Version() >= version.Gloas && selfBuildEnvelope {
-		if err := vs.storeExecutionPayloadEnvelope(sBlk, local); err != nil {
+		envelope, err = vs.storeExecutionPayloadEnvelope(sBlk, local)
+		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not build execution payload envelope: %v", err)
 		}
 	}
 
-	return vs.constructGenericBeaconBlock(sBlk, bundle, winningBid, eagerPayloadStateRoot, local)
+	blk, err := vs.constructGenericBeaconBlock(sBlk, bundle, winningBid)
+	if err != nil {
+		return nil, err
+	}
+
+	// Eager (stateless) self-build: bundle envelope + blobs inline; stateful publishes from the cache.
+	if eagerPayloadStateRoot && envelope != nil {
+		var blobs, kzgProofs [][]byte
+		if local.BlobsBundler != nil {
+			blobs = local.BlobsBundler.GetBlobs()
+			kzgProofs = local.BlobsBundler.GetProofs()
+		}
+		blk.Block = &ethpb.GenericBeaconBlock_GloasContents{GloasContents: &ethpb.BeaconBlockContentsGloas{
+			Block:                    blk.GetGloas(),
+			ExecutionPayloadEnvelope: envelope,
+			KzgProofs:                kzgProofs,
+			Blobs:                    blobs,
+		}}
+	}
+	return blk, nil
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.

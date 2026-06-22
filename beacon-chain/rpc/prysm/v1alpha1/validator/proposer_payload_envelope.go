@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
@@ -29,14 +28,14 @@ import (
 )
 
 // storeExecutionPayloadEnvelope creates and caches the execution payload envelope
-// after the block is fully built (state root set). If postBlockState is non-nil,
+// after the block is fully built (state root set), returning the envelope for the caller to bundle.
 func (vs *Server) storeExecutionPayloadEnvelope(
 	sBlk interfaces.SignedBeaconBlock,
 	local *consensusblocks.GetPayloadResponse,
-) error {
+) (*ethpb.ExecutionPayloadEnvelope, error) {
 	blockRoot, err := sBlk.Block().HashTreeRoot()
 	if err != nil {
-		return errors.Wrap(err, "could not compute block hash tree root")
+		return nil, errors.Wrap(err, "could not compute block hash tree root")
 	}
 
 	payload := extractExecutionPayloadGloas(local)
@@ -55,11 +54,11 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 	if bundle := local.BlobsBundler; bundle != nil && len(bundle.GetBlobs()) > 0 {
 		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(bundle.GetBlobs(), bundle.GetProofs())
 		if err != nil {
-			return errors.Wrap(err, "compute cells and proofs from blobs bundle")
+			return nil, errors.Wrap(err, "compute cells and proofs from blobs bundle")
 		}
 		roSidecars, err = peerdas.DataColumnSidecarsGloas(cellsPerBlob, proofsPerBlob, sBlk.Block().Slot(), blockRoot)
 		if err != nil {
-			return errors.Wrap(err, "build gloas data column sidecars")
+			return nil, errors.Wrap(err, "build gloas data column sidecars")
 		}
 	}
 
@@ -67,7 +66,7 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 		Envelope:    envelope,
 		DataColumns: roSidecars,
 	})
-	return nil
+	return envelope, nil
 }
 
 func extractExecutionPayloadGloas(local *consensusblocks.GetPayloadResponse) *enginev1.ExecutionPayloadGloas {
@@ -109,7 +108,7 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 
 	// Return the blinded wire form (payload_root); the signer validates over its HTR, which equals
 	// the full envelope's HTR, and the BN reconstructs the full payload from this cache on publish.
-	blinded, err := structs.WireBlindedFromFull(contents.Envelope)
+	blinded, err := ethpb.WireBlindedFromFull(contents.Envelope)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "could not build blinded envelope: %v", err)
 	}
@@ -156,18 +155,17 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 
 	// Broadcast sidecars BEFORE receiving the envelope so the DA check sees them. Stateless publishes
 	// carry blobs+proofs (this node may not have them cached); stateful publishes rely on the cache.
+	var sidecars []consensusblocks.RODataColumn
 	if len(blobs) > 0 {
-		sidecars, err := vs.sidecarsFromContents(blobs, kzgProofs, envSlot, beaconBlockRoot)
+		sidecars, err = vs.sidecarsFromContents(blobs, kzgProofs, envSlot, beaconBlockRoot)
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "invalid execution payload envelope contents: %v", err)
 		}
+	} else if cached, ok := vs.ExecutionPayloadEnvelopeCache.Contents(); ok && cached.Envelope.Payload.SlotNumber == envSlot {
+		sidecars = cached.DataColumns
+	}
+	if len(sidecars) > 0 {
 		if err := vs.broadcastAndReceiveDataColumns(ctx, sidecars, nil); err != nil {
-			log.WithError(err).Error("Failed to broadcast Gloas data column sidecars")
-		}
-	} else if cached, ok := vs.ExecutionPayloadEnvelopeCache.Contents(); ok &&
-		cached.Envelope.Payload.SlotNumber == envSlot && len(cached.DataColumns) > 0 {
-		log.WithField("columns", len(cached.DataColumns)).Debug("Broadcasting Gloas data column sidecars")
-		if err := vs.broadcastAndReceiveDataColumns(ctx, cached.DataColumns, nil); err != nil {
 			log.WithError(err).Error("Failed to broadcast Gloas data column sidecars")
 		}
 	}
@@ -238,7 +236,7 @@ func (vs *Server) sidecarsFromContents(blobs, kzgProofs [][]byte, slot primitive
 func verifyCellProofs(blobs [][]byte, flatProofs [][]byte) error {
 	commitments := make([][]byte, len(blobs))
 	for i, blob := range blobs {
-		if len(blob) != len(kzg.Blob{}) {
+		if len(blob) != kzg.BytesPerBlob {
 			return errors.Errorf("blob %d has wrong size %d", i, len(blob))
 		}
 		var b kzg.Blob

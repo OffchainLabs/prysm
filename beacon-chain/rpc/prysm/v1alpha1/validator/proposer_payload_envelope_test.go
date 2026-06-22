@@ -1,12 +1,15 @@
 package validator
 
 import (
+	"bytes"
 	"context"
 	"math/big"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -53,8 +56,9 @@ func TestStoreExecutionPayloadEnvelope(t *testing.T) {
 	local, sBlk := testGloasBlock(t)
 
 	vs := &Server{ExecutionPayloadEnvelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
-	err := vs.storeExecutionPayloadEnvelope(sBlk, local)
+	envelope, err := vs.storeExecutionPayloadEnvelope(sBlk, local)
 	require.NoError(t, err)
+	require.Equal(t, sBlk.Block().Slot(), envelope.Payload.SlotNumber)
 
 	contents, ok := vs.ExecutionPayloadEnvelopeCache.Contents()
 	require.Equal(t, true, ok)
@@ -142,6 +146,56 @@ func TestPublishExecutionPayloadEnvelope_PreFork(t *testing.T) {
 		},
 	})
 	require.ErrorContains(t, "not supported before Gloas fork", err)
+}
+
+func TestPublishExecutionPayloadEnvelope_StatelessContents_RejectsBadProofs(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	require.NoError(t, kzg.Start())
+
+	blobCount := 2
+	rawBlobs := make([]kzg.Blob, blobCount)
+	for i := range rawBlobs {
+		rawBlobs[i] = kzg.Blob{uint8(i + 1)}
+	}
+	_, proofsPerBlob := util.GenerateCellsAndProofs(t, rawBlobs)
+
+	flatBlobs := make([][]byte, blobCount)
+	for i, b := range rawBlobs {
+		flatBlobs[i] = b[:]
+	}
+	flatProofs := make([][]byte, 0, blobCount*fieldparams.NumberOfColumns)
+	for _, proofs := range proofsPerBlob {
+		for _, p := range proofs {
+			flatProofs = append(flatProofs, p[:])
+		}
+	}
+	// Corrupt the first proof — verifyCellProofs must reject before any P2P/cache/receiver is touched.
+	flatProofs[0] = bytes.Repeat([]byte{0xff}, 48)
+
+	signed := &ethpb.SignedExecutionPayloadEnvelope{
+		Message: &ethpb.ExecutionPayloadEnvelope{
+			Payload:               &enginev1.ExecutionPayloadGloas{SlotNumber: 1},
+			ExecutionRequests:     &enginev1.ExecutionRequests{},
+			BeaconBlockRoot:       make([]byte, 32),
+			ParentBeaconBlockRoot: make([]byte, 32),
+		},
+		Signature: make([]byte, 96),
+	}
+
+	vs := &Server{}
+	_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
+		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Contents{
+			Contents: &ethpb.SignedExecutionPayloadEnvelopeContents{
+				SignedExecutionPayloadEnvelope: signed,
+				Blobs:                          flatBlobs,
+				KzgProofs:                      flatProofs,
+			},
+		},
+	})
+	require.ErrorContains(t, "kzg verification failed", err)
 }
 
 func TestGetExecutionPayloadEnvelopeRPC_Success(t *testing.T) {

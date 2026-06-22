@@ -110,7 +110,6 @@ go_test(
         "//beacon-chain/rpc/core:go_default_library",
         "//beacon-chain/rpc/eth/shared/testing:go_default_library",
         "//beacon-chain/rpc/lookup:go_default_library",
-        "//beacon-chain/rpc/prysm/v1alpha1/validator:go_default_library",
         "//beacon-chain/rpc/testutil:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
