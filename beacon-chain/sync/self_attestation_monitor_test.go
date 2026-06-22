@@ -73,7 +73,7 @@ func TestMatchSelfSubmittedAttestation_MarksSeenAndPruneLogsMiss(t *testing.T) {
 
 	// A gossiped aggregate covering entry A's data that includes validators 12 and 2.
 	aggregate := &ethpb.Attestation{Data: selfAttData(root), AggregationBits: bitfield.Bitlist{0b11, 0b1}}
-	s.matchSelfSubmittedAttestation(aggregate)
+	s.matchSelfSubmittedAttestation(t.Context(), aggregate)
 
 	dataRoot, err := aggregate.Data.HashTreeRoot()
 	require.NoError(t, err)
@@ -101,12 +101,12 @@ func TestMatchSelfSubmittedAttestation_LogsAtMostOncePerRoot(t *testing.T) {
 
 	// Validator 2 submits and is fully matched: this logs once.
 	s.recordSelfSubmittedAttestation(&ethpb.SingleAttestation{CommitteeId: 0, AttesterIndex: 2, Data: selfAttData(root)})
-	s.matchSelfSubmittedAttestation(aggregate)
+	s.matchSelfSubmittedAttestation(t.Context(), aggregate)
 
 	// Validator 12 (also in the aggregate) submits for the same root after it already completed. The
 	// entry completes again, but it must not be logged a second time.
 	s.recordSelfSubmittedAttestation(&ethpb.SingleAttestation{CommitteeId: 0, AttesterIndex: 12, Data: selfAttData(root)})
-	s.matchSelfSubmittedAttestation(aggregate)
+	s.matchSelfSubmittedAttestation(t.Context(), aggregate)
 
 	dataRoot, err := aggregate.Data.HashTreeRoot()
 	require.NoError(t, err)

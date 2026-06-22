@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -12,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
 	"github.com/sirupsen/logrus"
@@ -31,8 +33,9 @@ var errSelfAttStateNotCached = errors.New("state not found in cache")
 type (
 	// selfAttRecord records a single attestation we submitted for a given validator.
 	selfAttRecord struct {
-		submittedAt time.Time //wall-clock time at which we broadcast the attestation.
-		seen        bool      //true once the validator's vote has been observed in a gossiped aggregate.
+		submittedAt time.Time                 //wall-clock time at which we broadcast the attestation.
+		committee   primitives.CommitteeIndex //committee the validator attested in (AttestationData index is 0 post-Electra).
+		seen        bool                      //true once the validator's vote has been observed in a gossiped aggregate.
 	}
 
 	// selfAttEntry groups all of our validators that submitted an attestation for the same AttestationData.
@@ -93,10 +96,11 @@ func (s *Service) recordSelfSubmittedAttestation(att ethpb.Att) {
 		return
 	}
 
-	idx, ok := s.unaggregatedValidatorIndex(att)
+	idx, ok := s.unaggregatedValidatorIndex(s.ctx, att)
 	if !ok {
 		return
 	}
+	committee := att.GetCommitteeIndex()
 
 	s.selfSubmittedAttsLock.Lock()
 	defer s.selfSubmittedAttsLock.Unlock()
@@ -105,7 +109,7 @@ func (s *Service) recordSelfSubmittedAttestation(att ethpb.Att) {
 	if !ok {
 		s.selfSubmittedAtts[root] = &selfAttEntry{
 			slot:       data.Slot,
-			validators: map[primitives.ValidatorIndex]*selfAttRecord{idx: {submittedAt: time.Now()}},
+			validators: map[primitives.ValidatorIndex]*selfAttRecord{idx: {submittedAt: time.Now(), committee: committee}},
 		}
 
 		return
@@ -115,13 +119,16 @@ func (s *Service) recordSelfSubmittedAttestation(att ethpb.Att) {
 		return
 	}
 
-	e.validators[idx] = &selfAttRecord{submittedAt: time.Now()}
+	e.validators[idx] = &selfAttRecord{submittedAt: time.Now(), committee: committee}
 }
 
 // matchSelfSubmittedAttestation marks our validators whose vote the given aggregate includes. Once
 // every validator that submitted for the aggregate's data has been seen, it emits a single log line
 // reporting them.
-func (s *Service) matchSelfSubmittedAttestation(aggregate ethpb.Att) {
+func (s *Service) matchSelfSubmittedAttestation(ctx context.Context, aggregate ethpb.Att) {
+	ctx, span := trace.StartSpan(ctx, "sync.matchSelfSubmittedAttestation")
+	defer span.End()
+
 	if aggregate == nil || aggregate.GetData() == nil {
 		return
 	}
@@ -146,7 +153,7 @@ func (s *Service) matchSelfSubmittedAttestation(aggregate ethpb.Att) {
 		return
 	}
 
-	indices, err := s.attestingIndices(aggregate)
+	indices, err := s.attestingIndices(ctx, aggregate)
 	if err != nil {
 		if !errors.Is(err, errSelfAttStateNotCached) {
 			log.WithError(err).Debug("Could not get attesting indices for received aggregate")
@@ -182,11 +189,17 @@ func (s *Service) matchSelfSubmittedAttestation(aggregate ethpb.Att) {
 	for idx := range e.validators {
 		validators = append(validators, idx)
 	}
-
 	slices.Sort(validators)
+
+	// committees is aligned 1:1 with validators: committees[i] is the committee validators[i] attested in.
+	committees := make([]primitives.CommitteeIndex, len(validators))
+	for i, idx := range validators {
+		committees[i] = e.validators[idx].committee
+	}
+
 	log.WithFields(logrus.Fields{
 		"slot":             aggregate.GetData().Slot,
-		"committees":       aggregate.CommitteeBitsVal().BitIndices(),
+		"committees":       committees,
 		"attDataRoot":      fmt.Sprintf("%#x", bytesutil.Trunc(root[:])),
 		"validatorCount":   len(validators),
 		"validatorIndices": validators,
@@ -252,12 +265,12 @@ func (e *selfAttEntry) allSeen() bool {
 
 // unaggregatedValidatorIndex extracts the index of the validator whose vote an unaggregated
 // attestation carries.
-func (s *Service) unaggregatedValidatorIndex(att ethpb.Att) (primitives.ValidatorIndex, bool) {
+func (s *Service) unaggregatedValidatorIndex(ctx context.Context, att ethpb.Att) (primitives.ValidatorIndex, bool) {
 	if single, ok := att.(*ethpb.SingleAttestation); ok {
 		return single.AttesterIndex, true
 	}
 
-	indices, err := s.attestingIndices(att)
+	indices, err := s.attestingIndices(ctx, att)
 	if err != nil {
 		if !errors.Is(err, errSelfAttStateNotCached) {
 			log.WithError(err).Debug("Could not determine attesting index for submitted attestation")
@@ -275,7 +288,7 @@ func (s *Service) unaggregatedValidatorIndex(att ethpb.Att) (primitives.Validato
 
 // attestingIndices returns the validator indices that participated in the given attestation,
 // resolving its committee(s) from the cached state referenced by the attestation's head block root.
-func (s *Service) attestingIndices(att ethpb.Att) ([]uint64, error) {
+func (s *Service) attestingIndices(ctx context.Context, att ethpb.Att) ([]uint64, error) {
 	root := bytesutil.ToBytes32(att.GetData().BeaconBlockRoot)
 	st := s.cfg.stateGen.StateByRootIfCachedNoCopy(root)
 	if st == nil {
@@ -285,7 +298,7 @@ func (s *Service) attestingIndices(att ethpb.Att) ([]uint64, error) {
 	committeeBits := att.CommitteeBitsVal().BitIndices()
 	committees := make([][]primitives.ValidatorIndex, len(committeeBits))
 	for i, ci := range committeeBits {
-		committee, err := helpers.BeaconCommitteeFromState(s.ctx, st, att.GetData().Slot, primitives.CommitteeIndex(ci))
+		committee, err := helpers.BeaconCommitteeFromState(ctx, st, att.GetData().Slot, primitives.CommitteeIndex(ci))
 		if err != nil {
 			return nil, fmt.Errorf("beacon committee from state: %w", err)
 		}

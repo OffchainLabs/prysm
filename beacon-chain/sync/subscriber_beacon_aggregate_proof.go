@@ -6,13 +6,17 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"google.golang.org/protobuf/proto"
 )
 
 // beaconAggregateProofSubscriber forwards the incoming validated aggregated attestation and proof to the
 // attestation pool for processing.
-func (s *Service) beaconAggregateProofSubscriber(_ context.Context, msg proto.Message) error {
+func (s *Service) beaconAggregateProofSubscriber(ctx context.Context, msg proto.Message) error {
+	ctx, span := trace.StartSpan(ctx, "sync.beaconAggregateProofSubscriber")
+	defer span.End()
+
 	a, ok := msg.(ethpb.SignedAggregateAttAndProof)
 	if !ok {
 		return fmt.Errorf("message was not type ethpb.SignedAggregateAttAndProof, type=%T", msg)
@@ -24,15 +28,16 @@ func (s *Service) beaconAggregateProofSubscriber(_ context.Context, msg proto.Me
 		return errors.New("nil aggregate")
 	}
 
-	s.matchSelfSubmittedAttestation(aggregate)
+	s.matchSelfSubmittedAttestation(ctx, aggregate)
 
 	if features.Get().EnableExperimentalAttestationPool {
 		return s.cfg.attestationCache.Add(aggregate)
-	} else {
-		// An unaggregated attestation can make it here. It’s valid, the aggregator it just itself, although it means poor performance for the subnet.
-		if !aggregate.IsAggregated() {
-			return s.cfg.attPool.SaveUnaggregatedAttestation(aggregate)
-		}
-		return s.cfg.attPool.SaveAggregatedAttestation(aggregate)
 	}
+
+	// An unaggregated attestation can make it here. It’s valid, the aggregator it just itself, although it means poor performance for the subnet.
+	if !aggregate.IsAggregated() {
+		return s.cfg.attPool.SaveUnaggregatedAttestation(aggregate)
+	}
+
+	return s.cfg.attPool.SaveAggregatedAttestation(aggregate)
 }
