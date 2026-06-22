@@ -56,6 +56,10 @@ const (
 
 	// ProposerPreferencesReceived is sent after signed proposer preferences are received from gossip or rpc.
 	ProposerPreferencesReceived = 15
+
+	// LocalAttestationSubmitted is sent after an unaggregated attestation submitted by one of our own
+	// validator clients has been successfully broadcast to the network.
+	LocalAttestationSubmitted = 16
 )
 
 // UnAggregatedAttReceivedData is the data sent with UnaggregatedAttReceived events.
@@ -141,4 +145,9 @@ type ExecutionPayloadGossipReceivedData struct {
 // ProposerPreferencesReceivedData is the data sent with ProposerPreferencesReceived events.
 type ProposerPreferencesReceivedData struct {
 	Data *ethpb.SignedProposerPreferences
+}
+
+// LocalAttestationSubmittedData is the data sent with LocalAttestationSubmitted events.
+type LocalAttestationSubmittedData struct {
+	Attestation ethpb.Att
 }

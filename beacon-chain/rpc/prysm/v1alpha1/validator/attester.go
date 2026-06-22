@@ -247,6 +247,15 @@ func (vs *Server) proposeAtt(
 		return nil, status.Errorf(codes.Internal, "Could not broadcast attestation: %v", err)
 	}
 
+	if !att.IsAggregated() {
+		vs.OperationNotifier.OperationFeed().Send(&feed.Event{
+			Type: operation.LocalAttestationSubmitted,
+			Data: &operation.LocalAttestationSubmittedData{
+				Attestation: att,
+			},
+		})
+	}
+
 	return &ethpb.AttestResponse{
 		AttestationDataRoot: root[:],
 	}, nil

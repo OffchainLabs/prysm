@@ -24,6 +24,8 @@ func (s *Service) beaconAggregateProofSubscriber(_ context.Context, msg proto.Me
 		return errors.New("nil aggregate")
 	}
 
+	s.matchSelfSubmittedAttestation(aggregate)
+
 	if features.Get().EnableExperimentalAttestationPool {
 		return s.cfg.attestationCache.Add(aggregate)
 	} else {

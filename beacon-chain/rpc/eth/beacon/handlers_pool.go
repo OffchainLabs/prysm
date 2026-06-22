@@ -298,6 +298,13 @@ func (s *Server) handleAttestationsPostElectra(
 			}
 			continue
 		}
+
+		s.OperationNotifier.OperationFeed().Send(&feed.Event{
+			Type: operation.LocalAttestationSubmitted,
+			Data: &operation.LocalAttestationSubmittedData{
+				Attestation: singleAtt,
+			},
+		})
 	}
 
 	// Save to pool after broadcast (slow path - requires state fetching)
@@ -422,6 +429,15 @@ func (s *Server) handleAttestations(
 				broadcastErr = err
 			}
 			continue
+		}
+
+		if !att.IsAggregated() {
+			s.OperationNotifier.OperationFeed().Send(&feed.Event{
+				Type: operation.LocalAttestationSubmitted,
+				Data: &operation.LocalAttestationSubmittedData{
+					Attestation: att,
+				},
+			})
 		}
 
 		if features.Get().EnableExperimentalAttestationPool {

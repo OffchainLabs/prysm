@@ -209,6 +209,8 @@ type Service struct {
 	pendingPayloadEnvelopes              map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope
 	pendingEnvelopeLock                  sync.RWMutex
 	selfBuildSigFailures                 int
+	selfSubmittedAtts                    map[[32]byte]*selfAttEntry
+	selfSubmittedAttsLock                sync.Mutex
 }
 
 // NewService initializes new regular sync service.
@@ -228,6 +230,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		payloadAttestationCache:  &cache.PayloadAttestationCache{},
 		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
 		pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+		selfSubmittedAtts:        make(map[[32]byte]*selfAttEntry),
 	}
 
 	for _, opt := range opts {
@@ -314,6 +317,7 @@ func (s *Service) Start() {
 	go s.verifierRoutine()
 	go s.startDiscoveryAndSubscriptions()
 	go s.processDataColumnLogs()
+	go s.monitorSelfSubmittedAttestations()
 
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
 	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, id peer.ID) error {
