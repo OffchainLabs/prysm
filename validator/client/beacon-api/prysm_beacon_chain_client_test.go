@@ -134,7 +134,7 @@ func TestGetValidatorCount(t *testing.T) {
 			var validatorCountResponse structs.GetValidatorCountResponse
 			handler.EXPECT().Get(
 				gomock.Any(),
-				"/eth/v1/beacon/states/head/validator_count?status=active",
+				"/prysm/v1/beacon/states/head/validator_count?status=active",
 				&validatorCountResponse,
 			).Return(
 				test.validatorCountEndpointError,
