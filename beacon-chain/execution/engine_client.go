@@ -1131,11 +1131,6 @@ func (s *Service) useGetBlobsV3() bool {
 
 func (s *Service) useHasBlobs() bool {
 	supported := s.useGetBlobsV3() && s.capabilityCache.has(HasBlobs)
-	if supported {
-		s.hasBlobsLogOnce.Do(func() {
-			log.WithField("method", HasBlobs).Info("Execution client supports blob availability checks, missing blobs will be requested via partial columns")
-		})
-	}
 	return supported
 }
 
