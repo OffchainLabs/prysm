@@ -878,17 +878,29 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 
 	ev.ProposerIndex = proposerIndex
 
+	if ev.HeadBlock.Version() >= version.Gloas {
+		h, err := rost.LatestBlockHash()
+		if err != nil {
+			return ev, errors.Wrap(err, "could not get latest block hash from head state")
+		}
+		ev.ParentBlockHash = h[:]
+	} else {
+		payload, err := ev.HeadBlock.Block().Body().Execution()
+		if err != nil {
+			return ev, errors.Wrap(err, "could not get execution payload for head block")
+		}
+		ev.ParentBlockHash = payload.BlockHash()
+		ev.ParentBlockNumber = payload.BlockNumber()
+	}
+
+	if ev.Attributer != nil && !ev.Attributer.IsEmpty() {
+		return ev, nil
+	}
+
 	randao, err := helpers.RandaoMix(rost, pse)
 	if err != nil {
 		return ev, errors.Wrap(err, "could not get head state randado")
 	}
-
-	payload, err := ev.HeadBlock.Block().Body().Execution()
-	if err != nil {
-		return ev, errors.Wrap(err, "could not get execution payload for head block")
-	}
-	ev.ParentBlockHash = payload.BlockHash()
-	ev.ParentBlockNumber = payload.BlockNumber()
 
 	t, err := slots.StartTime(rost.GenesisTime(), ev.ProposalSlot)
 	if err != nil {

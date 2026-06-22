@@ -788,9 +788,6 @@ message ValidatorStatusResponse {
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
   ];
-
-  // The position in the activation queue of pending validators.
-  uint64 position_in_activation_queue = 5;
 }
 
 message MultipleValidatorStatusRequest {

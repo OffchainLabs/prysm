@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	db "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -52,7 +52,7 @@ func TestSubscribe_ReceivesValidMessage(t *testing.T) {
 			clock: startup.NewClock(gt, vr),
 		},
 		subHandler:   newSubTopicHandler(),
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 	}
 	markInitSyncComplete(t, &r)
 	var err error
@@ -100,7 +100,7 @@ func TestSubscribe_DoesNotWaitForInitialSyncToRegisterTopic(t *testing.T) {
 			clock: startup.NewClock(gt, vr),
 		},
 		subHandler:          newSubTopicHandler(),
-		chainStarted:        abool.New(),
+		chainStarted:        &atomic.Bool{},
 		initialSyncComplete: make(chan struct{}),
 	}
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
@@ -146,7 +146,7 @@ func TestSubscribe_UnsubscribeTopic(t *testing.T) {
 			},
 			clock: startup.NewClock(gt, vr),
 		},
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 		subHandler:   newSubTopicHandler(),
 	}
 	markInitSyncComplete(t, &r)
@@ -197,7 +197,7 @@ func TestSubscribe_ReceivesAttesterSlashing(t *testing.T) {
 			beaconDB:     d,
 		},
 		seenAttesterSlashingCache: make(map[uint64]bool),
-		chainStarted:              abool.New(),
+		chainStarted:              &atomic.Bool{},
 		subHandler:                newSubTopicHandler(),
 	}
 	markInitSyncComplete(t, &r)
@@ -250,7 +250,7 @@ func TestSubscribe_ReceivesProposerSlashing(t *testing.T) {
 			clock:        startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
 		},
 		seenProposerSlashingCache: lruwrpr.New(10),
-		chainStarted:              abool.New(),
+		chainStarted:              &atomic.Bool{},
 		subHandler:                newSubTopicHandler(),
 	}
 	markInitSyncComplete(t, &r)
@@ -299,7 +299,7 @@ func TestSubscribe_HandlesPanic(t *testing.T) {
 			p2p:   p,
 		},
 		subHandler:   newSubTopicHandler(),
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 	}
 	markInitSyncComplete(t, &r)
 
@@ -336,7 +336,7 @@ func TestRevalidateSubscription_CorrectlyFormatsTopic(t *testing.T) {
 			clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 			p2p:   p,
 		},
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 		subHandler:   newSubTopicHandler(),
 	}
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
@@ -465,8 +465,8 @@ func Test_wrapAndReportValidation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			chainStarted := abool.New()
-			chainStarted.SetTo(tt.args.chainstarted)
+			chainStarted := &atomic.Bool{}
+			chainStarted.Store(tt.args.chainstarted)
 			s := &Service{
 				chainStarted: chainStarted,
 				cfg: &config{
@@ -505,8 +505,8 @@ func Test_wrapAndReportValidation_NextEpochDigest(t *testing.T) {
 
 	t.Run("proposer preferences next epoch fork digest accepted", func(t *testing.T) {
 		nextTopic := fmt.Sprintf(p2p.SignedProposerPreferencesTopicFormat, nextDigest) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
-		chainStarted := abool.New()
-		chainStarted.SetTo(true)
+		chainStarted := &atomic.Bool{}
+		chainStarted.Store(true)
 		s := &Service{
 			chainStarted: chainStarted,
 			cfg: &config{
@@ -524,8 +524,8 @@ func Test_wrapAndReportValidation_NextEpochDigest(t *testing.T) {
 
 	t.Run("non proposer preferences next epoch fork digest rejected", func(t *testing.T) {
 		nextTopic := fmt.Sprintf(p2p.BlockSubnetTopicFormat, nextDigest) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
-		chainStarted := abool.New()
-		chainStarted.SetTo(true)
+		chainStarted := &atomic.Bool{}
+		chainStarted.Store(true)
 		s := &Service{
 			chainStarted: chainStarted,
 			cfg: &config{
@@ -544,8 +544,8 @@ func Test_wrapAndReportValidation_NextEpochDigest(t *testing.T) {
 	t.Run("wrong fork digest rejected", func(t *testing.T) {
 		badDigest := [4]byte{0xde, 0xad, 0xbe, 0xef}
 		badTopic := fmt.Sprintf(p2p.BlockSubnetTopicFormat, badDigest) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
-		chainStarted := abool.New()
-		chainStarted.SetTo(true)
+		chainStarted := &atomic.Bool{}
+		chainStarted.Store(true)
 		s := &Service{
 			chainStarted: chainStarted,
 			cfg: &config{
@@ -602,7 +602,7 @@ func TestFilterSubnetPeers(t *testing.T) {
 			clock: clock,
 			p2p:   p,
 		},
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 		subHandler:   newSubTopicHandler(),
 	}
 	markInitSyncComplete(t, &r)
@@ -674,7 +674,7 @@ func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {
 			p2p:   p,
 			clock: startup.NewClock(gt, vr),
 		},
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 		subHandler:   newSubTopicHandler(),
 	}
 	markInitSyncComplete(t, &r)
@@ -722,7 +722,7 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 			clock: clock,
 			p2p:   p,
 		},
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 		subHandler:   newSubTopicHandler(),
 	}
 	markInitSyncComplete(t, &r)

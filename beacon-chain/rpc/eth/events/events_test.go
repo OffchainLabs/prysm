@@ -725,69 +725,70 @@ func TestFillEventData(t *testing.T) {
 		require.NoError(t, err)
 		require.DeepEqual(t, alreadyFilled, result)
 	})
-	t.Run("Electra PartialData_ShouldFetchHeadStateAndBlock", func(t *testing.T) {
-		st, err := util.NewBeaconStateElectra()
-		require.NoError(t, err)
-		valCount := 10
-		setActiveValidators(t, st, valCount)
-		inactivityScores := make([]uint64, valCount)
-		for i := range inactivityScores {
-			inactivityScores[i] = 10
-		}
-		require.NoError(t, st.SetInactivityScores(inactivityScores))
-		b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockElectra(&eth.SignedBeaconBlockElectra{}))
-		require.NoError(t, err)
-		attributor, err := payloadattribute.New(&enginev1.PayloadAttributes{
-			Timestamp: uint64(time.Now().Unix()),
-		})
-		require.NoError(t, err)
-		headRoot, err := b.Block().HashTreeRoot()
-		require.NoError(t, err)
-		// Create an event data object missing certain fields:
-		partial := payloadattribute.EventData{
-			ProposalSlot: 42,         // different epoch from current slot
-			Attributer:   attributor, // Must be Bellatrix or later
-			HeadBlock:    b,
-			HeadRoot:     headRoot,
-		}
-		currentSlot := primitives.Slot(0)
-		// to avoid slot processing
-		require.NoError(t, st.SetSlot(currentSlot+1))
-		mockChainService := &mockChain.ChainService{
-			Root:  make([]byte, 32),
-			State: st,
-			Block: b,
-			Slot:  &currentSlot,
-		}
-
-		stategen := mock.NewService()
-		stategen.AddStateForRoot(st, headRoot)
-		stn := mockChain.NewEventFeedWrapper()
-		opn := mockChain.NewEventFeedWrapper()
-		srv := &Server{
-			StateNotifier:            &mockChain.SimpleNotifier{Feed: stn},
-			OperationNotifier:        &mockChain.SimpleNotifier{Feed: opn},
-			HeadFetcher:              mockChainService,
-			ChainInfoFetcher:         mockChainService,
-			ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
-			BeaconDB:                 dbtest.SetupDB(t),
-			EventWriteTimeout:        testEventWriteTimeout,
-			StateGen:                 stategen,
-		}
-
+	t.Run("Electra PartialData_RecomputesAttributerWhenAbsent", func(t *testing.T) {
+		srv, partial := newPartialFillTestServer(t)
 		filled, err := srv.fillEventData(ctx, partial)
 		require.NoError(t, err, "expected successful fill of partial event data")
 
-		// Verify that fields have been updated from the mock data:
 		require.NotNil(t, filled.HeadBlock, "HeadBlock should be assigned")
 		require.NotEqual(t, [32]byte{}, filled.HeadRoot, "HeadRoot should no longer be zero")
 		require.NotEmpty(t, filled.ParentBlockHash, "ParentBlockHash should be filled")
 		require.Equal(t, uint64(0), filled.ParentBlockNumber, "ParentBlockNumber must match mock block")
-
-		// Check that a valid Attributer was set:
 		require.NotNil(t, filled.Attributer, "Should have a valid payload attributes object")
 		require.Equal(t, false, filled.Attributer.IsEmpty(), "Attributer should not be empty after fill")
+		require.NotEqual(t, version.Bellatrix, filled.Attributer.Version(), "recomputed Attributer should match the head state version")
 	})
+	t.Run("Electra PartialData_PreservesProvidedAttributer", func(t *testing.T) {
+		srv, partial := newPartialFillTestServer(t)
+		// The blockchain package now supplies the attribute it already sent to the engine; fillEventData
+		// must keep it verbatim and only fill the scalar fields, never recompute it.
+		attributor, err := payloadattribute.New(&enginev1.PayloadAttributes{Timestamp: uint64(time.Now().Unix())})
+		require.NoError(t, err)
+		partial.Attributer = attributor
+
+		filled, err := srv.fillEventData(ctx, partial)
+		require.NoError(t, err)
+		require.NotEmpty(t, filled.ParentBlockHash, "ParentBlockHash should still be filled")
+		require.Equal(t, attributor, filled.Attributer, "provided Attributer should be preserved")
+		require.Equal(t, version.Bellatrix, filled.Attributer.Version(), "preserved Attributer keeps its version; a recompute on Electra state would be Deneb-versioned")
+	})
+}
+
+func newPartialFillTestServer(t *testing.T) (*Server, payloadattribute.EventData) {
+	st, err := util.NewBeaconStateElectra()
+	require.NoError(t, err)
+	valCount := 10
+	setActiveValidators(t, st, valCount)
+	inactivityScores := make([]uint64, valCount)
+	for i := range inactivityScores {
+		inactivityScores[i] = 10
+	}
+	require.NoError(t, st.SetInactivityScores(inactivityScores))
+	b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockElectra(&eth.SignedBeaconBlockElectra{}))
+	require.NoError(t, err)
+	headRoot, err := b.Block().HashTreeRoot()
+	require.NoError(t, err)
+	currentSlot := primitives.Slot(0)
+	require.NoError(t, st.SetSlot(currentSlot+1)) // avoid slot processing on the source state
+	mockChainService := &mockChain.ChainService{
+		Root:  make([]byte, 32),
+		State: st,
+		Block: b,
+		Slot:  &currentSlot,
+	}
+	stategen := mock.NewService()
+	stategen.AddStateForRoot(st, headRoot)
+	srv := &Server{
+		StateNotifier:            &mockChain.SimpleNotifier{Feed: mockChain.NewEventFeedWrapper()},
+		OperationNotifier:        &mockChain.SimpleNotifier{Feed: mockChain.NewEventFeedWrapper()},
+		HeadFetcher:              mockChainService,
+		ChainInfoFetcher:         mockChainService,
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		EventWriteTimeout:        testEventWriteTimeout,
+		StateGen:                 stategen,
+	}
+	// ProposalSlot sits in a later epoch than the head to exercise slot processing.
+	return srv, payloadattribute.EventData{ProposalSlot: 42, HeadBlock: b, HeadRoot: headRoot}
 }
 
 func TestComputePayloadAttributes_CacheMissEmitsDefaults(t *testing.T) {

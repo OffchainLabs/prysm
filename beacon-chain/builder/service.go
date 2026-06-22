@@ -27,6 +27,8 @@ type BlockBuilder interface {
 	SubmitBlindedBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error)
 	SubmitBlindedBlockPostFulu(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) error
 	GetHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubKey [48]byte) (builder.SignedBid, error)
+	GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte, auths []*ethpb.SignedRequestAuthV1) (*ethpb.SignedExecutionPayloadBid, error)
+	SubmitSignedBeaconBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) error
 	RegisterValidator(ctx context.Context, reg []*ethpb.SignedValidatorRegistrationV1) error
 	RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error)
 	SubmitBuilderPreferences(ctx context.Context, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1) error
@@ -117,6 +119,45 @@ func (s *Service) SubmitBlindedBlockPostFulu(ctx context.Context, b interfaces.R
 	}
 
 	return s.c.SubmitBlindedBlockPostFulu(ctx, b)
+}
+
+// GetExecutionPayloadBid requests a SignedExecutionPayloadBid from the builder for the given slot.
+func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte, auths []*ethpb.SignedRequestAuthV1) (*ethpb.SignedExecutionPayloadBid, error) {
+	ctx, span := trace.StartSpan(ctx, "builder.GetExecutionPayloadBid")
+	defer span.End()
+	if s.c == nil {
+		tracing.AnnotateError(span, ErrNoBuilder)
+		return nil, ErrNoBuilder
+	}
+	auth := authForBuilder(auths, s.c.NodeURL())
+	if auth == nil {
+		log.WithField("builderUrl", s.c.NodeURL()).WithField("authCount", len(auths)).
+			Warn("No request auth signed for this builder; sending bid request without auth")
+	}
+	bid, err := s.c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, proposerPubkey, auth)
+	tracing.AnnotateError(span, err)
+	return bid, err
+}
+
+// authForBuilder returns the request auth signed for the given builder URL, or nil if none match.
+func authForBuilder(auths []*ethpb.SignedRequestAuthV1, url string) *ethpb.SignedRequestAuthV1 {
+	for _, a := range auths {
+		if string(a.GetMessage().GetData()) == url {
+			return a
+		}
+	}
+	return nil
+}
+
+// SubmitSignedBeaconBlock sends a signed Gloas beacon block to the builder so it can reveal the envelope.
+func (s *Service) SubmitSignedBeaconBlock(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock) error {
+	ctx, span := trace.StartSpan(ctx, "builder.SubmitSignedBeaconBlock")
+	defer span.End()
+	if s.c == nil {
+		tracing.AnnotateError(span, ErrNoBuilder)
+		return ErrNoBuilder
+	}
+	return s.c.SubmitSignedBeaconBlock(ctx, b)
 }
 
 // SubmitBuilderPreferences submits a proposer's per-builder preferences ahead of the bid request.

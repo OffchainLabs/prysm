@@ -155,7 +155,7 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 		}
 		postGloas := slots.ToEpoch(proposingSlot) >= params.BeaconConfig().GloasForkEpoch
 		if postGloas {
-			go s.fcuFromReorgData(newHeadRoot, headHash, full, attr, proposingSlot)
+			go s.fcuFromReorgData(headBlock, newHeadRoot, headHash, full, attr, proposingSlot)
 		} else {
 			fcuArgs := &fcuConfig{
 				headState:     headState,

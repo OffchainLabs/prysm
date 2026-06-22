@@ -9,7 +9,6 @@ import (
 
 	builderapi "github.com/OffchainLabs/prysm/v7/api/client/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	blockfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/block"
@@ -751,7 +750,7 @@ func (vs *Server) handlePostBlockStateError(ctx context.Context, block interface
 // SubmitValidatorRegistrations submits validator registrations.
 func (vs *Server) SubmitValidatorRegistrations(ctx context.Context, reg *ethpb.SignedValidatorRegistrationsV1) (*emptypb.Empty, error) {
 	if vs.BlockBuilder == nil || !vs.BlockBuilder.Configured() {
-		return &emptypb.Empty{}, status.Errorf(codes.InvalidArgument, "Could not register block builder: %v", builder.ErrNoBuilder)
+		return &emptypb.Empty{}, status.Errorf(codes.FailedPrecondition, "Could not register block builder: not configured")
 	}
 
 	if err := vs.BlockBuilder.RegisterValidator(ctx, reg.Messages); err != nil {
