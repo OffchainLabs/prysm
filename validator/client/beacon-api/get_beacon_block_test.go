@@ -1511,7 +1511,7 @@ func TestGetBeaconBlock_GloasRejectsJSONWithPayload(t *testing.T) {
 	).Return(
 		[]byte("{}"),
 		http.Header{
-			"Content-Type":                       []string{"application/json"},
+			"Content-Type":                     []string{"application/json"},
 			api.ExecutionPayloadIncludedHeader: []string{"true"},
 		},
 		nil,
