@@ -157,7 +157,7 @@ func TestServer_getExecutionPayload(t *testing.T) {
 			}
 			vs.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, Index: tt.validatorIndx})
 			if tt.payloadID != nil {
-				vs.PayloadIDCache.Set(tt.st.Slot(), [32]byte{'a'}, [8]byte(*tt.payloadID))
+				vs.PayloadIDCache.Set(tt.st.Slot(), [32]byte{'a'}, true, [8]byte(*tt.payloadID))
 			}
 			blk := util.NewBeaconBlockBellatrix()
 			blk.Block.Slot = tt.st.Slot()
@@ -165,7 +165,7 @@ func TestServer_getExecutionPayload(t *testing.T) {
 			blk.Block.ParentRoot = bytesutil.PadTo([]byte{'a'}, 32)
 			b, err := blocks.NewSignedBeaconBlock(blk)
 			require.NoError(t, err)
-			res, err := vs.getLocalPayload(t.Context(), b.Block(), tt.st, false)
+			res, err := vs.getLocalPayload(t.Context(), b.Block(), tt.st, true)
 			if tt.errString != "" {
 				require.ErrorContains(t, tt.errString, err)
 			} else {
@@ -269,7 +269,7 @@ func TestServer_getExecutionPayloadContextTimeout(t *testing.T) {
 		PayloadIDCache:         cache.NewPayloadIDCache(),
 		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 	}
-	vs.PayloadIDCache.Set(nonTransitionSt.Slot(), [32]byte{'a'}, [8]byte{100})
+	vs.PayloadIDCache.Set(nonTransitionSt.Slot(), [32]byte{'a'}, true, [8]byte{100})
 
 	blk := util.NewBeaconBlockBellatrix()
 	blk.Block.Slot = nonTransitionSt.Slot()
@@ -277,7 +277,7 @@ func TestServer_getExecutionPayloadContextTimeout(t *testing.T) {
 	blk.Block.ParentRoot = bytesutil.PadTo([]byte{'a'}, 32)
 	b, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	_, err = vs.getLocalPayload(t.Context(), b.Block(), nonTransitionSt, false)
+	_, err = vs.getLocalPayload(t.Context(), b.Block(), nonTransitionSt, true)
 	require.NoError(t, err)
 }
 

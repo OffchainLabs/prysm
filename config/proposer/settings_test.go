@@ -35,6 +35,7 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 			FeeRecipientConfig: &FeeRecipientConfig{
 				FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 			},
+			MaxExecutionPayment: validator.Uint64(1000000),
 			BuilderConfig: &BuilderConfig{
 				Enabled:  false,
 				GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
@@ -78,9 +79,11 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 		require.Equal(t, option.FeeRecipientConfig.FeeRecipient.Hex(), potion.FeeRecipient)
 		require.Equal(t, settings.DefaultConfig.FeeRecipientConfig.FeeRecipient.Hex(), payload.DefaultConfig.FeeRecipient)
 		require.Equal(t, settings.DefaultConfig.BuilderConfig.Enabled, payload.DefaultConfig.Builder.Enabled)
+		require.Equal(t, settings.DefaultConfig.MaxExecutionPayment, payload.DefaultConfig.MaxExecutionPayment)
 		potion.FeeRecipient = fee
 		newSettings, err := SettingFromConsensus(payload)
 		require.NoError(t, err)
+		require.Equal(t, settings.DefaultConfig.MaxExecutionPayment, newSettings.DefaultConfig.MaxExecutionPayment)
 		noption, ok := newSettings.ProposeConfig[bytesutil.ToBytes48(key1)]
 		require.Equal(t, true, ok)
 		require.Equal(t, option.FeeRecipientConfig.FeeRecipient.Hex(), noption.FeeRecipientConfig.FeeRecipient.Hex())
@@ -606,5 +609,43 @@ func TestSettings_TargetGasLimit(t *testing.T) {
 			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(40_000_000)}},
 		}
 		require.Equal(t, chainDefault, ps.TargetGasLimit(pk))
+	})
+}
+
+func TestSettings_MaxExecutionPayment(t *testing.T) {
+	pubkey, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+	require.NoError(t, err)
+	pk := bytesutil.ToBytes48(pubkey)
+
+	t.Run("nil settings returns zero", func(t *testing.T) {
+		var ps *Settings
+		require.Equal(t, validator.Uint64(0), ps.MaxExecutionPayment(pk))
+	})
+
+	t.Run("v1 settings return zero even when set", func(t *testing.T) {
+		ps := &Settings{
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				pk: {MaxExecutionPayment: validator.Uint64(1_000_000)},
+			},
+			DefaultConfig: &Option{MaxExecutionPayment: validator.Uint64(2_000_000)},
+		}
+		require.Equal(t, validator.Uint64(0), ps.MaxExecutionPayment(pk))
+	})
+
+	t.Run("per-validator wins over default", func(t *testing.T) {
+		ps := &Settings{
+			Version: SchemaV2,
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				pk: {MaxExecutionPayment: validator.Uint64(1_000_000)},
+			},
+			DefaultConfig: &Option{MaxExecutionPayment: validator.Uint64(2_000_000)},
+		}
+		require.Equal(t, validator.Uint64(1_000_000), ps.MaxExecutionPayment(pk))
+	})
+
+	t.Run("falls back to default then zero", func(t *testing.T) {
+		ps := &Settings{Version: SchemaV2, DefaultConfig: &Option{MaxExecutionPayment: validator.Uint64(2_000_000)}}
+		require.Equal(t, validator.Uint64(2_000_000), ps.MaxExecutionPayment(pk))
+		require.Equal(t, validator.Uint64(0), (&Settings{Version: SchemaV2}).MaxExecutionPayment(pk))
 	})
 }
