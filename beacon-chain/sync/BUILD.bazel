@@ -84,7 +84,6 @@ go_library(
     ],
     deps = [
         "//async:go_default_library",
-        "//async/abool:go_default_library",
         "//async/event:go_default_library",
         "//beacon-chain/blockchain:go_default_library",
         "//beacon-chain/cache:go_default_library",
@@ -250,7 +249,6 @@ go_test(
     embed = [":go_default_library"],
     shard_count = 4,
     deps = [
-        "//async/abool:go_default_library",
         "//async/event:go_default_library",
         "//beacon-chain/blockchain:go_default_library",
         "//beacon-chain/blockchain/kzg:go_default_library",

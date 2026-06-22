@@ -79,7 +79,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		"slot":           slot,
 		"headRoot":       fmt.Sprintf("%#x", parentRoot),
 	}
-	payloadId, ok := vs.PayloadIDCache.PayloadID(slot, parentRoot)
+	payloadId, ok := vs.PayloadIDCache.PayloadID(slot, parentRoot, parentFull)
 
 	val, tracked := vs.TrackedValidatorsCache.Validator(proposerId)
 	if !tracked {

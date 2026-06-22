@@ -13,9 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	validator "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	iface "github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -41,21 +39,6 @@ func NewMockPrysmChainClient(ctrl *gomock.Controller) *MockPrysmChainClient {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockPrysmChainClient) EXPECT() *MockPrysmChainClientMockRecorder {
 	return m.recorder
-}
-
-// ValidatorCount mocks base method.
-func (m *MockPrysmChainClient) ValidatorCount(arg0 context.Context, arg1 string, arg2 []validator.Status) ([]iface.ValidatorCount, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidatorCount", arg0, arg1, arg2)
-	ret0, _ := ret[0].([]iface.ValidatorCount)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ValidatorCount indicates an expected call of ValidatorCount.
-func (mr *MockPrysmChainClientMockRecorder) ValidatorCount(arg0, arg1, arg2 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidatorCount", reflect.TypeOf((*MockPrysmChainClient)(nil).ValidatorCount), arg0, arg1, arg2)
 }
 
 // ValidatorPerformance mocks base method.
