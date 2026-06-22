@@ -205,7 +205,7 @@ prysm_image_deps()
 
 load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_dependencies")
 
-# Override golang.org/x/tools to use v0.38.0 instead of v0.30.0
+# Override golang.org/x/tools to use v0.44.0 instead of v0.30.0
 # This is necessary as this dependency is required by rules_go and they do not accept dependency
 # update PRs. Instead, they ask downstream projects to override the dependency. To generate the
 # patches or update this dependency again, check out the rules_go repo then run the releaser tool.
@@ -218,10 +218,10 @@ http_archive(
         "//third_party:org_golang_x_tools-deletegopls.patch",
         "//third_party:org_golang_x_tools-gazelle.patch",
     ],
-    sha256 = "8509908cd7fc35aa09ff49d8494e4fd25bab9e6239fbf57e0d8344f6bec5802b",
-    strip_prefix = "tools-0.38.0",
+    sha256 = "5bbb5095f55570d9a0cb19c28143d7eadd7c65d2ab2a70dc89f37ee51660969c",
+    strip_prefix = "tools-0.44.0",
     urls = [
-        "https://github.com/golang/tools/archive/refs/tags/v0.38.0.zip",
+        "https://github.com/golang/tools/archive/refs/tags/v0.44.0.zip",
     ],
 )
 
