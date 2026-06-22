@@ -157,7 +157,6 @@ func (vs *Server) SubscribeCommitteeSubnets(ctx context.Context, req *ethpb.Comm
 				}
 				return nil, status.Errorf(codes.Internal, "Could not get validator: %v", err)
 			}
-			vs.SubscribedValidatorsCache.Add(idx)
 		}
 	}
 
@@ -174,6 +173,9 @@ func (vs *Server) SubscribeCommitteeSubnets(ctx context.Context, req *ethpb.Comm
 	}
 	if err := core.ComputeAndCacheCommitteeSubnets(ctx, vs.HeadFetcher, subs); err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not retrieve head validator length: %v", err)
+	}
+	for _, idx := range req.ValidatorIndices {
+		vs.SubscribedValidatorsCache.Add(idx)
 	}
 
 	return &emptypb.Empty{}, nil

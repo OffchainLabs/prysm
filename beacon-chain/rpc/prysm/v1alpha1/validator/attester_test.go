@@ -845,13 +845,15 @@ func TestServer_SubscribeCommitteeSubnets_RejectsUnknownValidator(t *testing.T) 
 	}
 	// Index 100 is out of bounds for the 64-validator head state.
 	_, err = attesterServer.SubscribeCommitteeSubnets(t.Context(), &ethpb.CommitteeSubnetsSubscribeRequest{
-		Slots:            []primitives.Slot{1},
-		CommitteeIds:     []primitives.CommitteeIndex{0},
-		IsAggregator:     []bool{false},
-		ValidatorIndices: []primitives.ValidatorIndex{100},
+		Slots:            []primitives.Slot{1, 2},
+		CommitteeIds:     []primitives.CommitteeIndex{0, 0},
+		IsAggregator:     []bool{false, false},
+		ValidatorIndices: []primitives.ValidatorIndex{3, 100},
 	})
 	require.ErrorContains(t, "Could not get validator", err)
 	assert.Equal(t, false, attesterServer.SubscribedValidatorsCache.Has(100))
+	// The valid index preceding the out-of-bounds one must not survive either.
+	assert.Equal(t, false, attesterServer.SubscribedValidatorsCache.Has(3))
 }
 
 func TestServer_SubscribeCommitteeSubnets_MultipleSlots(t *testing.T) {

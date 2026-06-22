@@ -630,9 +630,10 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Convert, validate, and track each subscription up front so an invalid item
-	// fails the request before any subnets are computed.
+	// Convert and validate each subscription up front so an invalid item fails
+	// the request before any subnets are computed.
 	subs := make([]core.SubnetSubscription, len(req.Data))
+	indices := make([]primitives.ValidatorIndex, len(req.Data))
 	for i, item := range req.Data {
 		consensusItem, err := item.ToConsensus()
 		if err != nil {
@@ -647,7 +648,7 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 			httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		s.SubscribedValidatorsCache.Add(consensusItem.ValidatorIndex)
+		indices[i] = consensusItem.ValidatorIndex
 		subs[i] = core.SubnetSubscription{
 			Slot:             consensusItem.Slot,
 			CommitteeIndex:   consensusItem.CommitteeIndex,
@@ -658,6 +659,9 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 	if err := core.ComputeAndCacheCommitteeSubnets(ctx, s.HeadFetcher, subs); err != nil {
 		httputil.HandleError(w, "Could not retrieve head validator length: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+	for _, idx := range indices {
+		s.SubscribedValidatorsCache.Add(idx)
 	}
 }
 

@@ -1070,6 +1070,23 @@ func TestSubmitBeaconCommitteeSubscription(t *testing.T) {
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusBadRequest, e.Code)
 	})
+	t.Run("out of bounds index does not leak earlier indices into cache", func(t *testing.T) {
+		s := &Server{
+			HeadFetcher:               chain,
+			SyncChecker:               &mockSync.Sync{IsSyncing: false},
+			SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
+		}
+		var body bytes.Buffer
+		_, err := body.WriteString(outOfBoundsBeaconCommitteeContribution)
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.SubmitBeaconCommitteeSubscription(writer, request)
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		assert.Equal(t, false, s.SubscribedValidatorsCache.Has(1))
+	})
 	t.Run("sync not ready", func(t *testing.T) {
 		st, err := util.NewBeaconState()
 		require.NoError(t, err)
@@ -4510,6 +4527,23 @@ var (
   {
     "validator_index": "2",
     "committee_index": "1",
+    "committees_at_slot": "2",
+    "slot": "1",
+    "is_aggregator": false
+  }
+]`
+	// First index is valid, second is out of bounds for the head state.
+	outOfBoundsBeaconCommitteeContribution = `[
+  {
+    "validator_index": "1",
+    "committee_index": "1",
+    "committees_at_slot": "2",
+    "slot": "1",
+    "is_aggregator": false
+  },
+  {
+    "validator_index": "9999999999",
+    "committee_index": "0",
     "committees_at_slot": "2",
     "slot": "1",
     "is_aggregator": false
