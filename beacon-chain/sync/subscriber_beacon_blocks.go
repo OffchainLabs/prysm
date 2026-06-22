@@ -279,11 +279,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				}
 				hasBlobsColumns = nil
 			} else if isPartialEnabled && len(hasBlobsColumns) > 0 {
-				// GetBlobsV3 answered but yielded no partial columns (the EL returned
-				// no blobs). The HasBlobs-derived requests override may now be stale
-				// and would under-request cells from peers, so republish the
-				// header-only columns with the override cleared: parts metadata then
-				// falls back to requesting all missing cells.
+				// clear parts requests to request everything because `GetBlobsV3` failed to return any cells.
 				for i := range hasBlobsColumns {
 					hasBlobsColumns[i].ClearPartsRequests()
 				}
