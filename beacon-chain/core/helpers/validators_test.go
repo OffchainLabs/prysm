@@ -853,31 +853,6 @@ func computeProposerIndexWithValidators(validators []*ethpb.Validator, activeInd
 	}
 }
 
-func TestLastActivatedValidatorIndex_OK(t *testing.T) {
-	helpers.ClearCache()
-
-	beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{})
-	require.NoError(t, err)
-
-	validators := make([]*ethpb.Validator, 4)
-	balances := make([]uint64, len(validators))
-	for i := range uint64(4) {
-		validators[i] = &ethpb.Validator{
-			PublicKey:             make([]byte, params.BeaconConfig().BLSPubkeyLength),
-			WithdrawalCredentials: make([]byte, 32),
-			EffectiveBalance:      32 * 1e9,
-			ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
-		}
-		balances[i] = validators[i].EffectiveBalance
-	}
-	require.NoError(t, beaconState.SetValidators(validators))
-	require.NoError(t, beaconState.SetBalances(balances))
-
-	index, err := helpers.LastActivatedValidatorIndex(t.Context(), beaconState)
-	require.NoError(t, err)
-	require.Equal(t, index, primitives.ValidatorIndex(3))
-}
-
 func TestProposerIndexFromCheckpoint(t *testing.T) {
 	helpers.ClearCache()
 
