@@ -265,7 +265,7 @@ func (p *PartialDataColumn) buildPartialColumnHeader() (encoded []byte, err erro
 func (p *PartialDataColumn) PartsMetadata() (partialmessages.PartsMetadata, error) {
 	meta, err := p.newPartsMetadata()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "new parts metadata")
 	}
 	return marshalPartsMetadata(meta)
 }
