@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	db "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -53,7 +52,7 @@ func TestSubscribe_ReceivesValidMessage(t *testing.T) {
 			clock: startup.NewClock(gt, vr),
 		},
 		subHandler:   newSubTopicHandler(),
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 	}
 	markInitSyncComplete(t, &r)
 	var err error
@@ -101,7 +100,7 @@ func TestSubscribe_DoesNotWaitForInitialSyncToRegisterTopic(t *testing.T) {
 			clock: startup.NewClock(gt, vr),
 		},
 		subHandler:          newSubTopicHandler(),
-		chainStarted:        abool.New(),
+		chainStarted:        &atomic.Bool{},
 		initialSyncComplete: make(chan struct{}),
 	}
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
@@ -147,7 +146,7 @@ func TestSubscribe_UnsubscribeTopic(t *testing.T) {
 			},
 			clock: startup.NewClock(gt, vr),
 		},
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 		subHandler:   newSubTopicHandler(),
 	}
 	markInitSyncComplete(t, &r)
@@ -198,7 +197,7 @@ func TestSubscribe_ReceivesAttesterSlashing(t *testing.T) {
 			beaconDB:     d,
 		},
 		seenAttesterSlashingCache: make(map[uint64]bool),
-		chainStarted:              abool.New(),
+		chainStarted:              &atomic.Bool{},
 		subHandler:                newSubTopicHandler(),
 	}
 	markInitSyncComplete(t, &r)
@@ -251,7 +250,7 @@ func TestSubscribe_ReceivesProposerSlashing(t *testing.T) {
 			clock:        startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
 		},
 		seenProposerSlashingCache: lruwrpr.New(10),
-		chainStarted:              abool.New(),
+		chainStarted:              &atomic.Bool{},
 		subHandler:                newSubTopicHandler(),
 	}
 	markInitSyncComplete(t, &r)
@@ -300,7 +299,7 @@ func TestSubscribe_HandlesPanic(t *testing.T) {
 			p2p:   p,
 		},
 		subHandler:   newSubTopicHandler(),
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 	}
 	markInitSyncComplete(t, &r)
 
@@ -337,7 +336,7 @@ func TestRevalidateSubscription_CorrectlyFormatsTopic(t *testing.T) {
 			clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 			p2p:   p,
 		},
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 		subHandler:   newSubTopicHandler(),
 	}
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
@@ -466,8 +465,8 @@ func Test_wrapAndReportValidation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			chainStarted := abool.New()
-			chainStarted.SetTo(tt.args.chainstarted)
+			chainStarted := &atomic.Bool{}
+			chainStarted.Store(tt.args.chainstarted)
 			s := &Service{
 				chainStarted: chainStarted,
 				cfg: &config{
@@ -506,8 +505,8 @@ func Test_wrapAndReportValidation_NextEpochDigest(t *testing.T) {
 
 	t.Run("proposer preferences next epoch fork digest accepted", func(t *testing.T) {
 		nextTopic := fmt.Sprintf(p2p.SignedProposerPreferencesTopicFormat, nextDigest) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
-		chainStarted := abool.New()
-		chainStarted.SetTo(true)
+		chainStarted := &atomic.Bool{}
+		chainStarted.Store(true)
 		s := &Service{
 			chainStarted: chainStarted,
 			cfg: &config{
@@ -525,8 +524,8 @@ func Test_wrapAndReportValidation_NextEpochDigest(t *testing.T) {
 
 	t.Run("non proposer preferences next epoch fork digest rejected", func(t *testing.T) {
 		nextTopic := fmt.Sprintf(p2p.BlockSubnetTopicFormat, nextDigest) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
-		chainStarted := abool.New()
-		chainStarted.SetTo(true)
+		chainStarted := &atomic.Bool{}
+		chainStarted.Store(true)
 		s := &Service{
 			chainStarted: chainStarted,
 			cfg: &config{
@@ -545,8 +544,8 @@ func Test_wrapAndReportValidation_NextEpochDigest(t *testing.T) {
 	t.Run("wrong fork digest rejected", func(t *testing.T) {
 		badDigest := [4]byte{0xde, 0xad, 0xbe, 0xef}
 		badTopic := fmt.Sprintf(p2p.BlockSubnetTopicFormat, badDigest) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
-		chainStarted := abool.New()
-		chainStarted.SetTo(true)
+		chainStarted := &atomic.Bool{}
+		chainStarted.Store(true)
 		s := &Service{
 			chainStarted: chainStarted,
 			cfg: &config{
@@ -603,7 +602,7 @@ func TestFilterSubnetPeers(t *testing.T) {
 			clock: clock,
 			p2p:   p,
 		},
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 		subHandler:   newSubTopicHandler(),
 	}
 	markInitSyncComplete(t, &r)
@@ -675,7 +674,7 @@ func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {
 			p2p:   p,
 			clock: startup.NewClock(gt, vr),
 		},
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 		subHandler:   newSubTopicHandler(),
 	}
 	markInitSyncComplete(t, &r)
@@ -723,7 +722,7 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 			clock: clock,
 			p2p:   p,
 		},
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 		subHandler:   newSubTopicHandler(),
 	}
 	markInitSyncComplete(t, &r)
@@ -739,7 +738,7 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 		nse:              nse,
 		getSubnetsToJoin: r.activeSyncSubnetIndices,
 	})
-	r.trySubscribeSubnets(sp)
+	r.trySubscribeSubnets(t.Context(), sp)
 	assert.Equal(t, 2, len(r.cfg.p2p.PubSub().GetTopics()))
 	topicMap := map[string]bool{}
 	for _, t := range r.cfg.p2p.PubSub().GetTopics() {
@@ -762,26 +761,8 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 	// clear the cache and re-subscribe to subnets.
 	// this should result in the subscriptions being removed
 	cache.SyncSubnetIDs.EmptyAllCaches()
-	r.trySubscribeSubnets(sp)
+	r.trySubscribeSubnets(t.Context(), sp)
 	assert.Equal(t, 0, len(r.cfg.p2p.PubSub().GetTopics()))
-}
-
-func TestIsDigestValid(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	params.BeaconConfig().InitializeForkSchedule()
-	clock := startup.NewClock(time.Now().Add(-100*time.Second), params.BeaconConfig().GenesisValidatorsRoot)
-	digest, err := signing.ComputeForkDigest(params.BeaconConfig().GenesisForkVersion, params.BeaconConfig().GenesisValidatorsRoot[:])
-	assert.NoError(t, err)
-	valid, err := isDigestValid(digest, clock)
-	assert.NoError(t, err)
-	assert.Equal(t, true, valid)
-
-	// Compute future fork digest that will be invalid currently.
-	digest, err = signing.ComputeForkDigest(params.BeaconConfig().AltairForkVersion, params.BeaconConfig().GenesisValidatorsRoot[:])
-	assert.NoError(t, err)
-	valid, err = isDigestValid(digest, clock)
-	assert.NoError(t, err)
-	assert.Equal(t, false, valid)
 }
 
 func TestSamplingSize(t *testing.T) {

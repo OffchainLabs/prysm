@@ -53,6 +53,11 @@ func (s *Service) JoinTopic(topic string, opts ...pubsub.TopicOpt) (*pubsub.Topi
 	defer s.joinedTopicsLock.Unlock()
 
 	if _, ok := s.joinedTopics[topic]; !ok {
+		if strings.Contains(topic, GossipDataColumnSidecarMessage) && s.partialColumnBroadcaster != nil {
+			opts = append(opts, pubsub.RequestPartialMessages())
+			log.WithField("topic", topic).Debug("Joining data column sidecar topic with partial messages")
+		}
+
 		topicHandle, err := s.pubsub.Join(topic, opts...)
 		if err != nil {
 			return nil, err
@@ -170,7 +175,7 @@ func (s *Service) pubsubOptions() []pubsub.Option {
 		pubsub.WithPeerScore(peerScoringParams(s.cfg.IPColocationWhitelist)),
 		pubsub.WithPeerScoreInspect(s.peerInspector, time.Minute),
 		pubsub.WithGossipSubParams(pubsubGossipParam()),
-		pubsub.WithRawTracer(gossipTracer{host: s.host}),
+		pubsub.WithRawTracer(&gossipTracer{host: s.host, allowedTopics: filt}),
 	}
 
 	if len(s.cfg.StaticPeers) > 0 {
@@ -180,6 +185,9 @@ func (s *Service) pubsubOptions() []pubsub.Option {
 			return psOpts
 		}
 		psOpts = append(psOpts, pubsub.WithDirectPeers(directPeersAddrInfos))
+	}
+	if s.partialColumnBroadcaster != nil {
+		psOpts = s.partialColumnBroadcaster.AppendPubSubOpts(psOpts)
 	}
 
 	return psOpts

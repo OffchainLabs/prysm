@@ -1,2 +1,0 @@
-### Fixed
-- Removed unneeded parameter. 
