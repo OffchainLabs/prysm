@@ -108,12 +108,13 @@ func (s *Service) validatePayloadAttestationWithBlock(ctx context.Context, v ver
 }
 
 func (s *Service) validatePayloadAttestationAgainstState(ctx context.Context, v verification.PayloadAttestationMsgVerifier, st state.ReadOnlyBeaconState) (pubsub.ValidationResult, error) {
-	// [REJECT] The message's validator index is within the payload committee in get_ptc(state, data.slot).
 	if err := v.VerifyValidatorInPTC(ctx, st); err != nil {
+		if errors.Is(err, state.ErrNoPayloadCommitteeAvailable) {
+			return pubsub.ValidationIgnore, err
+		}
 		return pubsub.ValidationReject, err
 	}
 
-	// [REJECT] payload_attestation_message.signature is valid with respect to the validator's public key.
 	if err := v.VerifySignature(st); err != nil {
 		return pubsub.ValidationReject, err
 	}
