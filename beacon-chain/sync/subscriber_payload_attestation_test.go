@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"errors"
 	"testing"
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
@@ -56,15 +55,13 @@ func TestPayloadAttestationSubscriber_NoPool(t *testing.T) {
 	require.NoError(t, s.payloadAttestationSubscriber(t.Context(), msg))
 }
 
-func TestPayloadAttestationSubscriber_HeadStateError(t *testing.T) {
-	headErr := errors.New("head state unavailable")
+func TestPayloadAttestationSubscriber_NoCoveringState(t *testing.T) {
+	pool := payloadattestation.NewPool()
 	s := &Service{
 		payloadAttestationCache: &cache.PayloadAttestationCache{},
 		cfg: &config{
-			chain: &mock.ChainService{
-				HeadStateErr: headErr,
-			},
-			payloadAttestationPool: payloadattestation.NewPool(),
+			chain:                  &mock.ChainService{},
+			payloadAttestationPool: pool,
 			operationNotifier:      &mock.MockOperationNotifier{},
 		},
 	}
@@ -76,7 +73,8 @@ func TestPayloadAttestationSubscriber_HeadStateError(t *testing.T) {
 		},
 		Signature: make([]byte, 96),
 	}
-	require.ErrorIs(t, s.payloadAttestationSubscriber(t.Context(), msg), headErr)
+	require.NoError(t, s.payloadAttestationSubscriber(t.Context(), msg))
+	require.Equal(t, 0, len(pool.PendingPayloadAttestations(0)))
 }
 
 func TestPayloadAttestationSubscriber_ValidatorInPTC(t *testing.T) {
