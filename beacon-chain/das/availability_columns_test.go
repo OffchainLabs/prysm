@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -177,6 +178,69 @@ func TestIsDataAvailable(t *testing.T) {
 		//require.Equal(t, uint64(len(indices)), summary.Count())
 		//require.DeepSSZEqual(t, verifiedRoDataColumns, actual)
 	})
+}
+
+// Asserts IsDataAvailable seeds Gloas columns with the bid's commitments before verification.
+func TestIsDataAvailableGloasBidCommitments(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.FuluForkEpoch = cfg.ElectraForkEpoch + 4096*2
+	cfg.GloasForkEpoch = cfg.FuluForkEpoch + 4096*2
+
+	ctx := t.Context()
+
+	slot, err := slots.EpochStart(cfg.GloasForkEpoch)
+	require.NoError(t, err)
+
+	signedBlockGloas := util.NewBeaconBlockGloas()
+	signedBlockGloas.Block.Slot = slot
+	signedBlockGloas.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = commitments
+	signedRoBlock := newSignedRoBlock(t, signedBlockGloas)
+	root := signedRoBlock.Root()
+
+	storage := filesystem.NewEphemeralDataColumnStorage(t)
+
+	// Capture the columns handed to the verifier to assert bid commitments were applied.
+	var verified []blocks.RODataColumn
+	newDataColumnsVerifier := func(cols []blocks.RODataColumn, _ []verification.Requirement) verification.DataColumnsVerifier {
+		verified = cols
+		return &mockDataColumnsVerifier{t: t, dataColumnSidecars: cols}
+	}
+
+	avs := NewLazilyPersistentStoreColumn(storage, newDataColumnsVerifier, enode.ID{}, 8, nil, mockShouldRetain(slots.ToEpoch(slot)))
+
+	indices, err := avs.required(signedRoBlock)
+	require.NoError(t, err)
+	require.NotEqual(t, 0, indices.Count())
+
+	key := keyFromBlock(signedRoBlock)
+	entry := avs.cache.entry(key)
+	for index := range indices.ToMap() {
+		dataColumnSidecar := &ethpb.DataColumnSidecarGloas{
+			Index:           index,
+			Column:          [][]byte{make([]byte, 2048)},
+			KzgProofs:       [][]byte{make([]byte, 48)},
+			Slot:            slot,
+			BeaconBlockRoot: root[:],
+		}
+		roDataColumn, err := blocks.NewRODataColumnGloasWithRoot(dataColumnSidecar, root)
+		require.NoError(t, err)
+		require.NoError(t, entry.stash(roDataColumn))
+	}
+
+	require.NoError(t, avs.IsDataAvailable(ctx, slot, signedRoBlock))
+
+	require.Equal(t, indices.Count(), len(verified))
+	for _, column := range verified {
+		require.Equal(t, true, column.IsGloas())
+		kzgCommitments, err := column.KzgCommitments()
+		require.NoError(t, err)
+		require.DeepEqual(t, commitments, kzgCommitments)
+	}
+
+	stored, err := storage.Get(root, nil)
+	require.NoError(t, err)
+	require.Equal(t, indices.Count(), len(stored))
 }
 
 func TestRetentionWindow(t *testing.T) {

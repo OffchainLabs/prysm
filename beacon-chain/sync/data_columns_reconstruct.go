@@ -77,6 +77,13 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 
 			duration := time.Since(startTime)
 			dataColumnReconstructionHistogram.Observe(float64(duration.Milliseconds()))
+			if len(reconstructedSidecars) < len(verifiedSidecars) {
+				log.WithFields(logrus.Fields{
+					"reconstructedSidecars": len(reconstructedSidecars),
+					"verifiedSidecars":      len(verifiedSidecars),
+				}).Error("More verified sidecars than reconstructed sidecars")
+				return
+			}
 			dataColumnReconstructionCounter.Add(float64(len(reconstructedSidecars) - len(verifiedSidecars)))
 
 			// Retrieve indices of data column sidecars to sample.
@@ -86,22 +93,25 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 				return
 			}
 
-			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, slot, proposerIndex, columnIndicesToSample, reconstructedSidecars)
+			isPartialEnabled := s.cfg.p2p.PartialColumnBroadcaster() != nil
+			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, slot, proposerIndex, columnIndicesToSample, reconstructedSidecars, isPartialEnabled)
 			if err != nil {
 				log.WithError(err).Error("Failed to broadcast and receive unseen data column sidecars")
 				return
 			}
 
-			if len(unseenIndices) > 0 {
-				log.WithFields(logrus.Fields{
-					"root":          fmt.Sprintf("%#x", root),
-					"slot":          slot,
-					"proposerIndex": proposerIndex,
-					"count":         len(unseenIndices),
-					"indices":       helpers.SortedPrettySliceFromMap(unseenIndices),
-					"duration":      duration,
-				}).Debug("Reconstructed data column sidecars")
+			if len(unseenIndices) == 0 {
+				return
 			}
+
+			log.WithFields(logrus.Fields{
+				"root":          fmt.Sprintf("%#x", root),
+				"slot":          slot,
+				"proposerIndex": proposerIndex,
+				"count":         len(unseenIndices),
+				"indices":       helpers.SortedPrettySliceFromMap(unseenIndices),
+				"duration":      duration,
+			}).Debug("Reconstructed data column sidecars")
 		})
 
 		wg.Wait()

@@ -373,21 +373,6 @@ func (*Service) Status() error {
 	return nil
 }
 
-// syncEpochOffset subtracts a number of epochs as slots from the current slot, with underflow checks.
-// It returns slot 1 if the result would be 0 or underflow. It doesn't return slot 0 because the
-// genesis block needs to be specially synced (it doesn't have a valid signature).
-func syncEpochOffset(current primitives.Slot, subtract primitives.Epoch) primitives.Slot {
-	minEpoch := min(subtract, slots.MaxSafeEpoch())
-	// compute slot offset - offset is a number of slots to go back from current (not an absolute slot).
-	offset := slots.UnsafeEpochStart(minEpoch)
-	// Undeflow protection: slot 0 is the genesis block, therefore the signature in it is invalid.
-	// To prevent us from rejecting a batch, we restrict the minimum backfill batch till only slot 1
-	if offset >= current {
-		return 1
-	}
-	return current - offset
-}
-
 func newBlobVerifierFromInitializer(ini *verification.Initializer) verification.NewBlobVerifier {
 	return func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
 		return ini.NewBlobVerifier(b, reqs)

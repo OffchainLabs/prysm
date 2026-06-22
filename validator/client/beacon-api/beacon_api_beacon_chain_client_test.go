@@ -115,7 +115,7 @@ func TestListValidators(t *testing.T) {
 			nil,
 		)
 
-		handler := mock.NewMockJsonRestHandler(ctrl)
+		handler := mock.NewMockHandler(ctrl)
 		handler.EXPECT().Get(gomock.Any(), blockHeaderEndpoint, gomock.Any()).Return(errors.New("bar error"))
 
 		beaconChainClient := beaconApiChainClient{
@@ -188,7 +188,7 @@ func TestListValidators(t *testing.T) {
 					nil,
 				)
 
-				handler := mock.NewMockJsonRestHandler(ctrl)
+				handler := mock.NewMockHandler(ctrl)
 				handler.EXPECT().Get(gomock.Any(), blockHeaderEndpoint, gomock.Any()).Return(
 					nil,
 				).SetArg(
@@ -740,7 +740,7 @@ func TestGetChainHead(t *testing.T) {
 				ctx := t.Context()
 
 				finalityCheckpointsResponse := structs.GetFinalityCheckpointsResponse{}
-				handler := mock.NewMockJsonRestHandler(ctrl)
+				handler := mock.NewMockHandler(ctrl)
 				handler.EXPECT().Get(gomock.Any(), finalityCheckpointsEndpoint, &finalityCheckpointsResponse).Return(
 					testCase.finalityCheckpointsError,
 				).SetArg(
@@ -837,7 +837,7 @@ func TestGetChainHead(t *testing.T) {
 				defer ctrl.Finish()
 				ctx := t.Context()
 
-				handler := mock.NewMockJsonRestHandler(ctrl)
+				handler := mock.NewMockHandler(ctrl)
 
 				finalityCheckpointsResponse := structs.GetFinalityCheckpointsResponse{}
 				handler.EXPECT().Get(gomock.Any(), finalityCheckpointsEndpoint, &finalityCheckpointsResponse).Return(
@@ -867,7 +867,7 @@ func TestGetChainHead(t *testing.T) {
 		defer ctrl.Finish()
 		ctx := t.Context()
 
-		handler := mock.NewMockJsonRestHandler(ctrl)
+		handler := mock.NewMockHandler(ctrl)
 
 		finalityCheckpointsResponse := structs.GetFinalityCheckpointsResponse{}
 		handler.EXPECT().Get(gomock.Any(), finalityCheckpointsEndpoint, &finalityCheckpointsResponse).Return(

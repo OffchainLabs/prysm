@@ -158,6 +158,10 @@ func (dc *RODataColumn) KzgCommitments() ([][]byte, error) {
 
 // SetBidCommitments sets the KZG commitments from the block's bid to be used for gloas.
 func (dc *RODataColumn) SetBidCommitments(c [][]byte) {
+	if dc.fulu != nil {
+		dc.fulu.KzgCommitments = c
+		return
+	}
 	dc.bidCommitmentsGloas = c
 }
 
@@ -220,4 +224,36 @@ func NewRODataColumnNoVerify(dc *ethpb.DataColumnSidecar) RODataColumn {
 // NewVerifiedRODataColumn "upgrades" an RODataColumn to a VerifiedRODataColumn. This method should only be used by the verification package.
 func NewVerifiedRODataColumn(roDataColumn RODataColumn) VerifiedRODataColumn {
 	return VerifiedRODataColumn{RODataColumn: roDataColumn}
+}
+
+// RODataColumnsToCellProofBundles flattens the cells, commitments and proofs of the given data column sidecars into CellProofBundles.
+func RODataColumnsToCellProofBundles(sidecars []RODataColumn) ([]CellProofBundle, error) {
+	if len(sidecars) == 0 {
+		return nil, nil
+	}
+	// Assuming all sidecars have the same number of cells.
+	out := make([]CellProofBundle, 0, len(sidecars)*len(sidecars[0].Column()))
+	for _, sidecar := range sidecars {
+		cells := sidecar.Column()
+		kcs, err := sidecar.KzgCommitments()
+		if err != nil {
+			return nil, errors.Wrapf(err, "kzg commitments not present on data column sidecar at index %d", sidecar.Index())
+		}
+		kps := sidecar.KzgProofs()
+		if len(kcs) != len(cells) || len(kps) != len(cells) {
+			return nil, errors.Errorf(
+				"mismatched cell/commitment/proof counts in data column sidecar at index %d: cells=%d commitments=%d proofs=%d",
+				sidecar.Index(), len(cells), len(kcs), len(kps),
+			)
+		}
+		for i := range cells {
+			out = append(out, CellProofBundle{
+				ColumnIndex: sidecar.Index(),
+				Commitment:  kcs[i],
+				Cell:        cells[i],
+				Proof:       kps[i],
+			})
+		}
+	}
+	return out, nil
 }
