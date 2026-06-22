@@ -114,11 +114,11 @@ func (p *PartialDataColumn) GroupID() []byte {
 
 func (p *PartialDataColumn) newPartsMetadata() (*ethpb.PartialDataColumnPartsMetadata, error) {
 	available := slices.Clone(p.Included)
-	missing := slices.Clone(p.Included).Not()
+	missing := p.Included.Not()
 	requests := missing
 	if p.partsRequests != nil {
 		var err error
-		requests, err = slices.Clone(p.partsRequests).And(missing)
+		requests, err = p.partsRequests.And(missing)
 		if err != nil {
 			return nil, errors.Wrap(err, "intersect parts requests with missing cells")
 		}
