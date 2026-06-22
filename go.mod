@@ -63,7 +63,6 @@ require (
 	github.com/prometheus/prom2json v1.3.0
 	github.com/prysmaticlabs/fastssz v0.0.0-20260421202104-7a6eb71e6e45
 	github.com/prysmaticlabs/prombbolt v0.0.0-20210126082820-9b7adba6db7c
-	github.com/prysmaticlabs/protoc-gen-go-cast v0.0.0-20230228205207-28762a7b9294
 	github.com/r3labs/sse/v2 v2.10.0
 	github.com/rs/cors v1.7.0
 	github.com/schollz/progressbar/v3 v3.3.4
@@ -247,6 +246,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/common v0.64.0 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
+	github.com/prysmaticlabs/protoc-gen-go-cast v0.0.0-20230228205207-28762a7b9294 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.59.0 // indirect
 	github.com/quic-go/webtransport-go v0.10.0 // indirect
@@ -308,3 +308,5 @@ require (
 replace github.com/json-iterator/go => github.com/prestonvanloon/go v1.1.7-0.20190722034630-4f2e55fcf87b
 
 replace github.com/tyler-smith/go-bip39 => ./third_party/go-bip39
+
+tool github.com/prysmaticlabs/protoc-gen-go-cast
