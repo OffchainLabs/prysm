@@ -461,7 +461,10 @@ func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.Availability
 		if len(kzgCommitments) == 0 {
 			return nil
 		}
-		if err := s.areDataColumnsAvailable(ctx, roBlock.Root(), slot); err != nil {
+		// Bound the wait so unavailable columns error and retry instead of stalling import.
+		daCtx, cancel := context.WithTimeout(ctx, time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second)
+		defer cancel()
+		if err := s.areDataColumnsAvailable(daCtx, roBlock.Root(), slot); err != nil {
 			return errors.Wrapf(err, "are data columns available for block %#x with slot %d", roBlock.Root(), slot)
 		}
 
