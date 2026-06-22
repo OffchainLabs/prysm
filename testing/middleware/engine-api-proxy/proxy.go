@@ -249,6 +249,10 @@ func (p *Proxy) sendHttpRequest(req *http.Request, requestBytes []byte) (*http.R
 	client := &http.Client{}
 	if p.cfg.secret != "" {
 		client = network.NewHttpClientWithSecret(p.cfg.secret, "")
+	} else if auth := req.Header.Get("Authorization"); auth != "" {
+		// No configured secret: forward the caller's JWT so the proxy can run as
+		// a transparent passthrough (e.g. a Kurtosis snooper replacement).
+		proxyReq.Header.Set("Authorization", auth)
 	}
 	proxyRes, err := client.Do(proxyReq)
 	if err != nil {
