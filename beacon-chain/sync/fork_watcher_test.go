@@ -3,21 +3,25 @@ package sync
 import (
 	"context"
 	"fmt"
+	"iter"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/genesis"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
 func defaultClockWithTimeAtEpoch(epoch primitives.Epoch) *startup.Clock {
@@ -43,7 +47,7 @@ func testForkWatcherService(t *testing.T, current primitives.Epoch) *Service {
 			clock:       defaultClockWithTimeAtEpoch(current),
 			initialSync: &mockSync.Sync{IsSyncing: false},
 		},
-		chainStarted:        abool.New(),
+		chainStarted:        &atomic.Bool{},
 		subHandler:          newSubTopicHandler(),
 		initialSyncComplete: closedChan,
 	}
@@ -245,4 +249,71 @@ func attachSpawner(s *Service) *sync.WaitGroup {
 // oneEpoch returns the duration of one epoch.
 func oneEpoch() time.Duration {
 	return time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second
+}
+
+type fakePartialBroadcaster struct {
+	mu           sync.Mutex
+	unsubscribed []string
+}
+
+func (f *fakePartialBroadcaster) Unsubscribe(_ context.Context, topic string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.unsubscribed = append(f.unsubscribed, topic)
+	return nil
+}
+
+func (*fakePartialBroadcaster) Start(partialdatacolumnbroadcaster.ColumnCallbacks) {}
+func (*fakePartialBroadcaster) Publish(context.Context, iter.Seq2[string, blocks.PartialDataColumn]) error {
+	return nil
+}
+func (*fakePartialBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubsub.Option { return opts }
+func (*fakePartialBroadcaster) Subscribe(context.Context, *pubsub.Topic) error        { return nil }
+
+type p2pWithPartialBroadcaster struct {
+	p2p.P2P
+	broadcaster partialdatacolumnbroadcaster.Broadcaster
+}
+
+func (p *p2pWithPartialBroadcaster) PartialColumnBroadcaster() partialdatacolumnbroadcaster.Broadcaster {
+	return p.broadcaster
+}
+
+// TestEnsureDeregistration_UnsubscribesPartialColumns verifies that on a fork transition,
+// ensureDeregistrationForEpoch unsubscribes the partial-column broadcaster from previous-fork-digest
+// data column topics (and only those), in addition to removing the full gossip subscriptions.
+func TestEnsureDeregistration_UnsubscribesPartialColumns(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
+	// Place forks at epochs 1 and 2 so that, one epoch later, there is a "previous" fork digest
+	// (altair) distinct from the "current" one (bellatrix) for the deregistration logic to act on.
+	params.BeaconConfig().AltairForkEpoch = 1
+	params.BeaconConfig().BellatrixForkEpoch = 2
+	params.BeaconConfig().InitializeForkSchedule()
+
+	const currentEpoch = 3
+	current := params.GetNetworkScheduleEntry(currentEpoch)
+	previous := params.GetNetworkScheduleEntry(current.Epoch - 1)
+	require.NotEqual(t, previous.ForkDigest, current.ForkDigest)
+
+	s := testForkWatcherService(t, currentEpoch)
+	fake := &fakePartialBroadcaster{}
+	s.cfg.p2p = &p2pWithPartialBroadcaster{P2P: s.cfg.p2p, broadcaster: fake}
+	suffix := s.cfg.p2p.Encoding().ProtocolSuffix()
+
+	prevDataCol := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, previous.ForkDigest, 7) + suffix
+	prevBlock := fmt.Sprintf(p2p.BlockSubnetTopicFormat, previous.ForkDigest) + suffix
+	currDataCol := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, current.ForkDigest, 7) + suffix
+	for _, topic := range []string{prevDataCol, prevBlock, currDataCol} {
+		s.subHandler.addTopic(topic, nil)
+	}
+
+	require.NoError(t, s.ensureDeregistrationForEpoch(currentEpoch))
+
+	require.DeepEqual(t, []string{prevDataCol}, fake.unsubscribed)
+
+	// Both previous-digest topics are removed from the subHandler; the current-digest topic remains.
+	assert.Equal(t, false, s.subHandler.topicExists(prevDataCol))
+	assert.Equal(t, false, s.subHandler.topicExists(prevBlock))
+	assert.Equal(t, true, s.subHandler.topicExists(currDataCol))
 }

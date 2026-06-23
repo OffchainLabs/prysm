@@ -29,5 +29,9 @@ func InitiateBuilderExit(s state.BeaconState, builderIndex primitives.BuilderInd
 	}
 	currentEpoch := slots.ToEpoch(s.Slot())
 	builder.WithdrawableEpoch = currentEpoch + params.BeaconConfig().MinBuilderWithdrawabilityDelay
-	return s.UpdateBuilderAtIndex(builderIndex, builder)
+	if err := s.UpdateBuilderAtIndex(builderIndex, builder); err != nil {
+		return err
+	}
+	builderExitsProcessedTotal.Inc()
+	return nil
 }

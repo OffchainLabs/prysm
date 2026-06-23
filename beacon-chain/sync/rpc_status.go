@@ -27,17 +27,16 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const maxFutureStatusHeadSlot = 1
+
 // maintainPeerStatuses maintains peer statuses by polling peers for their latest status twice per epoch.
 func (s *Service) maintainPeerStatuses() {
 	// Run twice per epoch.
 	interval := time.Duration(params.BeaconConfig().SlotsPerEpoch.Div(2).Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second
 	async.RunEvery(s.ctx, interval, func() {
 		wg := new(sync.WaitGroup)
-		for _, pid := range s.cfg.p2p.Peers().Connected() {
-			wg.Add(1)
-			go func(id peer.ID) {
-				defer wg.Done()
-
+		for _, id := range s.cfg.p2p.Peers().Connected() {
+			wg.Go(func() {
 				log := log.WithFields(logrus.Fields{
 					"peer":  id,
 					"agent": agentString(id, s.cfg.p2p.Host()),
@@ -73,7 +72,7 @@ func (s *Service) maintainPeerStatuses() {
 						log.WithError(err).Debug("Cannot re-validate peer")
 					}
 				}
-			}(pid)
+			})
 		}
 		// Wait for all status checks to finish and then proceed onwards to
 		// pruning excess peers.
@@ -428,6 +427,10 @@ func (s *Service) validateStatusMessage(ctx context.Context, genericMsg any) err
 	msg, err := statusV2(genericMsg)
 	if err != nil {
 		return errors.Wrap(err, "status data")
+	}
+
+	if msg.HeadSlot > s.cfg.clock.CurrentSlot()+maxFutureStatusHeadSlot {
+		return errors.Wrap(p2ptypes.ErrInvalidRequest, "head slot too far in the future")
 	}
 
 	forkDigest, err := s.currentForkDigest()

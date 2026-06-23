@@ -21,6 +21,7 @@ type GlobalFlags struct {
 	DisableGetBlobsV2               bool
 	SemiSupernode                   bool
 	SubscribeToAllSubnets           bool
+	PostponeShutdownForProposals    bool
 	BlobBatchLimitBurstFactor       int
 	DataColumnBatchLimit            int
 	BlockBatchLimit                 int
@@ -79,6 +80,11 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 	if ctx.Bool(DisableGetBlobsV2.Name) {
 		log.Warning("Disabling `engine_getBlobsV2` API")
 		cfg.DisableGetBlobsV2 = true
+	}
+
+	if ctx.Bool(PostponeShutdownForProposals.Name) {
+		log.Info("Graceful shutdown will be postponed while a connected validator client has a block proposal in the next 2 epochs")
+		cfg.PostponeShutdownForProposals = true
 	}
 
 	// State-diff-exponents

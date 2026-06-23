@@ -42,6 +42,8 @@ const (
 	InvalidTopic = "__invalid__"
 	// HeadTopic represents a new chain head event topic.
 	HeadTopic = "head"
+	// HeadV2Topic represents the versioned, Gloas-aware chain head event topic.
+	HeadV2Topic = "head_v2"
 	// BlockTopic represents a new produced block event topic.
 	BlockTopic = "block"
 	// BlockGossipTopic represents a block received from gossip or API that passes validation rules.
@@ -74,8 +76,13 @@ const (
 	LightClientOptimisticUpdateTopic = "light_client_optimistic_update"
 	// DataColumnTopic represents a data column sidecar event topic
 	DataColumnTopic = "data_column_sidecar"
-	// ExecutionPayloadTopic represents a new execution payload envelope event topic
-	ExecutionPayloadTopic = "execution_payload_available"
+	// ExecutionPayloadAvailableTopic represents the event topic fired when an execution payload envelope
+	// and its custody data are available (for PTC voting). It does not require EL validity.
+	// TODO: Decouple emitting this event from EL validation.
+	ExecutionPayloadAvailableTopic = "execution_payload_available"
+	// ExecutionPayloadTopic represents the event topic fired after an execution payload envelope is
+	// successfully imported into fork choice (post EL execution).
+	ExecutionPayloadTopic = "execution_payload"
 	// ExecutionPayloadGossipTopic represents an execution payload envelope received from gossip or API
 	// that passes validation rules.
 	ExecutionPayloadGossipTopic = "execution_payload_gossip"
@@ -84,6 +91,8 @@ const (
 	ExecutionPayloadBidTopic = "execution_payload_bid"
 	// PayloadAttestationMessageTopic represents a new payload attestation message event topic.
 	PayloadAttestationMessageTopic = "payload_attestation_message"
+	// ProposerPreferencesTopic represents a new signed proposer preferences event topic.
+	ProposerPreferencesTopic = "proposer_preferences"
 )
 
 var (
@@ -119,25 +128,25 @@ var opsFeedEventTopics = map[feed.EventType]string{
 	operation.BlockGossipReceived:               BlockGossipTopic,
 	operation.DataColumnReceived:                DataColumnTopic,
 	operation.PayloadAttestationMessageReceived: PayloadAttestationMessageTopic,
+	operation.ProposerPreferencesReceived:       ProposerPreferencesTopic,
 	operation.ExecutionPayloadGossipReceived:    ExecutionPayloadGossipTopic,
+	operation.ExecutionPayloadBidReceived:       ExecutionPayloadBidTopic,
 }
 
 var stateFeedEventTopics = map[feed.EventType]string{
 	statefeed.NewHead:                     HeadTopic,
+	statefeed.NewHeadV2:                   HeadV2Topic,
 	statefeed.FinalizedCheckpoint:         FinalizedCheckpointTopic,
 	statefeed.LightClientFinalityUpdate:   LightClientFinalityUpdateTopic,
 	statefeed.LightClientOptimisticUpdate: LightClientOptimisticUpdateTopic,
 	statefeed.Reorg:                       ChainReorgTopic,
 	statefeed.BlockProcessed:              BlockTopic,
 	statefeed.PayloadAttributes:           PayloadAttributesTopic,
-	statefeed.PayloadProcessed:            ExecutionPayloadTopic,
+	statefeed.ExecutionPayloadAvailable:   ExecutionPayloadAvailableTopic,
+	statefeed.ExecutionPayloadProcessed:   ExecutionPayloadTopic,
 }
 
-var topicsForStateFeed = func() map[string]bool {
-	m := topicsForFeed(stateFeedEventTopics)
-	m[ExecutionPayloadBidTopic] = true
-	return m
-}()
+var topicsForStateFeed = topicsForFeed(stateFeedEventTopics)
 var topicsForOpsFeed = topicsForFeed(opsFeedEventTopics)
 
 func topicsForFeed(em map[feed.EventType]string) map[string]bool {
@@ -469,6 +478,8 @@ func topicForEvent(event *feed.Event) string {
 		return BlockGossipTopic
 	case *ethpb.EventHead:
 		return HeadTopic
+	case *statefeed.HeadV2Data:
+		return HeadV2Topic
 	case *ethpb.EventFinalizedCheckpoint:
 		return FinalizedCheckpointTopic
 	case interfaces.LightClientFinalityUpdate:
@@ -485,7 +496,13 @@ func topicForEvent(event *feed.Event) string {
 		return DataColumnTopic
 	case *operation.PayloadAttestationMessageReceivedData:
 		return PayloadAttestationMessageTopic
-	case *statefeed.PayloadProcessedData:
+	case *operation.ProposerPreferencesReceivedData:
+		return ProposerPreferencesTopic
+	case *operation.ExecutionPayloadBidReceivedData:
+		return ExecutionPayloadBidTopic
+	case *statefeed.ExecutionPayloadAvailableData:
+		return ExecutionPayloadAvailableTopic
+	case *statefeed.ExecutionPayloadProcessedData:
 		return ExecutionPayloadTopic
 	case *operation.ExecutionPayloadGossipReceivedData:
 		return ExecutionPayloadGossipTopic
@@ -510,6 +527,10 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		// we send two event messages in reaction; the head event and the payload attributes.
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, structs.HeadEventFromV1(v))
+		}, nil
+	case *statefeed.HeadV2Data:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, structs.HeadEventFromDataV2(v))
 		}, nil
 	case *operation.BlockGossipReceivedData:
 		blockRoot, err := v.SignedBlock.Block().HashTreeRoot()
@@ -665,11 +686,37 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, structs.PayloadAttestationMessageFromConsensus(v.Message))
 		}, nil
-	case *statefeed.PayloadProcessedData:
+	case *operation.ProposerPreferencesReceivedData:
 		return func() io.Reader {
-			return jsonMarshalReader(eventName, &structs.PayloadEvent{
+			epoch := slots.ToEpoch(v.Data.Message.ProposalSlot)
+			return jsonMarshalReader(eventName, &structs.ProposerPreferencesEvent{
+				Version: version.String(params.GetNetworkScheduleEntry(epoch).VersionEnum),
+				Data:    structs.SignedProposerPreferencesFromConsensus(v.Data),
+			})
+		}, nil
+	case *operation.ExecutionPayloadBidReceivedData:
+		return func() io.Reader {
+			epoch := slots.ToEpoch(v.Bid.Message.Slot)
+			return jsonMarshalReader(eventName, &structs.ExecutionPayloadBidEvent{
+				Version: version.String(params.GetNetworkScheduleEntry(epoch).VersionEnum),
+				Data:    structs.SignedExecutionPayloadBidFromConsensus(v.Bid),
+			})
+		}, nil
+	case *statefeed.ExecutionPayloadAvailableData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, &structs.ExecutionPayloadAvailableEvent{
 				Slot:      fmt.Sprintf("%d", v.Slot),
 				BlockRoot: hexutil.Encode(v.BlockRoot[:]),
+			})
+		}, nil
+	case *statefeed.ExecutionPayloadProcessedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, &structs.ExecutionPayloadEvent{
+				Slot:                fmt.Sprintf("%d", v.Slot),
+				BuilderIndex:        fmt.Sprintf("%d", v.BuilderIndex),
+				BlockHash:           hexutil.Encode(v.BlockHash[:]),
+				BlockRoot:           hexutil.Encode(v.BlockRoot[:]),
+				ExecutionOptimistic: v.Optimistic,
 			})
 		}, nil
 	case *operation.ExecutionPayloadGossipReceivedData:
@@ -817,17 +864,29 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 
 	ev.ProposerIndex = proposerIndex
 
+	if ev.HeadBlock.Version() >= version.Gloas {
+		h, err := rost.LatestBlockHash()
+		if err != nil {
+			return ev, errors.Wrap(err, "could not get latest block hash from head state")
+		}
+		ev.ParentBlockHash = h[:]
+	} else {
+		payload, err := ev.HeadBlock.Block().Body().Execution()
+		if err != nil {
+			return ev, errors.Wrap(err, "could not get execution payload for head block")
+		}
+		ev.ParentBlockHash = payload.BlockHash()
+		ev.ParentBlockNumber = payload.BlockNumber()
+	}
+
+	if ev.Attributer != nil && !ev.Attributer.IsEmpty() {
+		return ev, nil
+	}
+
 	randao, err := helpers.RandaoMix(rost, pse)
 	if err != nil {
 		return ev, errors.Wrap(err, "could not get head state randado")
 	}
-
-	payload, err := ev.HeadBlock.Block().Body().Execution()
-	if err != nil {
-		return ev, errors.Wrap(err, "could not get execution payload for head block")
-	}
-	ev.ParentBlockHash = payload.BlockHash()
-	ev.ParentBlockNumber = payload.BlockNumber()
 
 	t, err := slots.StartTime(rost.GenesisTime(), ev.ProposalSlot)
 	if err != nil {

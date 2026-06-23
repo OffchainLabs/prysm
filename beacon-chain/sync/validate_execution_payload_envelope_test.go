@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
@@ -189,7 +189,7 @@ func TestExecutionPayloadEnvelopeSubscriber_WrongMessage(t *testing.T) {
 func TestExecutionPayloadEnvelopeSubscriber_HappyPath(t *testing.T) {
 	s := &Service{
 		cfg:          &config{chain: &mock.ChainService{}},
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 	}
 	root := [32]byte{0x01}
 	blockHash := [32]byte{0x02}
@@ -239,7 +239,7 @@ func (m *mockExecutionPayloadEnvelopeVerifier) VerifyExecutionRequestsRoot(_ int
 	return nil
 }
 
-func (m *mockExecutionPayloadEnvelopeVerifier) VerifySignature(_ state.ReadOnlyBeaconState) error {
+func (m *mockExecutionPayloadEnvelopeVerifier) VerifySignature(_ context.Context, _ state.ReadOnlyBeaconState) error {
 	return m.errSignature
 }
 

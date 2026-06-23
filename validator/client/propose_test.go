@@ -95,6 +95,7 @@ func setupWithKey(t *testing.T, validatorKey bls.SecretKey, isSlashingProtection
 		validatorClient:     m.validatorClient,
 		graffiti:            []byte{},
 		duties:              &dutyStore{},
+		payloadAvailability: newPayloadAvailability(),
 		submittedAtts:       make(map[submittedAttKey]*submittedAtt),
 		submittedAggregates: make(map[submittedAttKey]*submittedAtt),
 		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{

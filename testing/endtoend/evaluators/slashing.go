@@ -3,6 +3,7 @@ package evaluators
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -197,7 +198,7 @@ func proposeDoubleBlock(_ *e2eTypes.EvaluationContext, conns ...*grpc.ClientConn
 
 	var proposerIndex primitives.ValidatorIndex
 	for i, duty := range duties.CurrentEpochDuties {
-		if slice.IsInSlots(chainHead.HeadSlot-1, duty.ProposerSlots) {
+		if slices.Contains(duty.ProposerSlots, chainHead.HeadSlot-1) {
 			proposerIndex = primitives.ValidatorIndex(i)
 			break
 		}

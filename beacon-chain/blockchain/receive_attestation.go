@@ -138,6 +138,7 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 		log.WithError(err).Error("Could not compute head from new attestations")
 		return
 	}
+	newAttHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
 	if !s.isNewHead(newHeadRoot, full) {
 		return
 	}
@@ -147,7 +148,6 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 		log.WithError(err).Error("Could not get head block and state")
 		return
 	}
-	newAttHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
 	if s.inRegularSync() {
 		attr := s.getPayloadAttribute(ctx, headState, proposingSlot, newHeadRoot[:], full)
 		if !attr.IsEmpty() && s.shouldOverrideFCU(newHeadRoot, proposingSlot) {
@@ -155,7 +155,7 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 		}
 		postGloas := slots.ToEpoch(proposingSlot) >= params.BeaconConfig().GloasForkEpoch
 		if postGloas {
-			go s.fcuFromReorgData(newHeadRoot, headHash, attr, proposingSlot)
+			go s.fcuFromReorgData(headBlock, newHeadRoot, headHash, full, attr, proposingSlot)
 		} else {
 			fcuArgs := &fcuConfig{
 				headState:     headState,
