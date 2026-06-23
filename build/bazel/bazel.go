@@ -96,7 +96,11 @@ func RelativeTestTargetPath() string {
 	}
 
 	// Drop target name.
-	if last := strings.LastIndex(target, ":"); last > 0 {
+	if last := strings.LastIndex(target, ":"); last >= 0 {
+		if last == 0 {
+			// Target starts with ':', return empty string for current package
+			return ""
+		}
 		target = target[:last]
 	}
 	return strings.TrimPrefix(target, "//")
