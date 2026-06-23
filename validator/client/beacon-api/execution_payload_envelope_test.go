@@ -38,7 +38,7 @@ func testProtoEnvelope() *ethpb.ExecutionPayloadEnvelope {
 			Withdrawals:   []*enginev1.Withdrawal{},
 			SlotNumber:    primitives.Slot(100),
 		},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 		BuilderIndex:          primitives.BuilderIndex(42),
 		BeaconBlockRoot:       bytesutil.PadTo([]byte("beacon-root"), 32),
 		ParentBeaconBlockRoot: bytesutil.PadTo([]byte("parent-beacon-root"), 32),

@@ -1304,7 +1304,7 @@ func (b *BeaconBlockBody) SignedExecutionPayloadBid() (*eth.SignedExecutionPaylo
 }
 
 // ParentExecutionRequests returns the parent's deferred execution requests.
-func (b *BeaconBlockBody) ParentExecutionRequests() (*enginev1.ExecutionRequests, error) {
+func (b *BeaconBlockBody) ParentExecutionRequests() (interfaces.ExecutionRequests, error) {
 	if b.version >= version.Gloas {
 		return b.parentExecutionRequests, nil
 	}

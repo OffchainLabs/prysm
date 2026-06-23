@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -17,8 +18,8 @@ import (
 
 // prefetchedDepositSigs returns the cached per-request validity slice, or nil
 // on cache miss.
-func prefetchedDepositSigs(rqs *enginev1.ExecutionRequests) []bool {
-	if rqs == nil || len(rqs.Deposits) == 0 {
+func prefetchedDepositSigs(rqs interfaces.ExecutionRequests) []bool {
+	if rqs == nil || len(rqs.GetDeposits()) == 0 {
 		return nil
 	}
 	root, err := rqs.HashTreeRoot()
@@ -29,7 +30,7 @@ func prefetchedDepositSigs(rqs *enginev1.ExecutionRequests) []bool {
 	if !ok {
 		return nil
 	}
-	valid := make([]bool, len(rqs.Deposits))
+	valid := make([]bool, len(rqs.GetDeposits()))
 	for i := range valid {
 		valid[i] = true
 	}

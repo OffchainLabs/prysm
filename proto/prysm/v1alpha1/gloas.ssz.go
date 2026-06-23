@@ -1104,7 +1104,7 @@ func (b *BeaconBlockBodyGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) 
 	// Offset (12) 'ParentExecutionRequests'
 	dst = ssz.WriteOffset(dst, offset)
 	if b.ParentExecutionRequests == nil {
-		b.ParentExecutionRequests = new(v1.ExecutionRequests)
+		b.ParentExecutionRequests = new(v1.ExecutionRequestsGloas)
 	}
 	offset += b.ParentExecutionRequests.SizeSSZ()
 
@@ -1449,7 +1449,7 @@ func (b *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 	{
 		buf = tail[o12:]
 		if b.ParentExecutionRequests == nil {
-			b.ParentExecutionRequests = new(v1.ExecutionRequests)
+			b.ParentExecutionRequests = new(v1.ExecutionRequestsGloas)
 		}
 		if err = b.ParentExecutionRequests.UnmarshalSSZ(buf); err != nil {
 			return err
@@ -1497,7 +1497,7 @@ func (b *BeaconBlockBodyGloas) SizeSSZ() (size int) {
 
 	// Field (12) 'ParentExecutionRequests'
 	if b.ParentExecutionRequests == nil {
-		b.ParentExecutionRequests = new(v1.ExecutionRequests)
+		b.ParentExecutionRequests = new(v1.ExecutionRequestsGloas)
 	}
 	size += b.ParentExecutionRequests.SizeSSZ()
 
@@ -4122,7 +4122,7 @@ func (e *ExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err err
 	// Offset (1) 'ExecutionRequests'
 	dst = ssz.WriteOffset(dst, offset)
 	if e.ExecutionRequests == nil {
-		e.ExecutionRequests = new(v1.ExecutionRequests)
+		e.ExecutionRequests = new(v1.ExecutionRequestsGloas)
 	}
 	offset += e.ExecutionRequests.SizeSSZ()
 
@@ -4211,7 +4211,7 @@ func (e *ExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 	{
 		buf = tail[o1:]
 		if e.ExecutionRequests == nil {
-			e.ExecutionRequests = new(v1.ExecutionRequests)
+			e.ExecutionRequests = new(v1.ExecutionRequestsGloas)
 		}
 		if err = e.ExecutionRequests.UnmarshalSSZ(buf); err != nil {
 			return err
@@ -4232,7 +4232,7 @@ func (e *ExecutionPayloadEnvelope) SizeSSZ() (size int) {
 
 	// Field (1) 'ExecutionRequests'
 	if e.ExecutionRequests == nil {
-		e.ExecutionRequests = new(v1.ExecutionRequests)
+		e.ExecutionRequests = new(v1.ExecutionRequestsGloas)
 	}
 	size += e.ExecutionRequests.SizeSSZ()
 
@@ -4408,7 +4408,7 @@ func (b *BlindedExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, 
 	// Offset (1) 'ExecutionRequests'
 	dst = ssz.WriteOffset(dst, offset)
 	if b.ExecutionRequests == nil {
-		b.ExecutionRequests = new(v1.ExecutionRequests)
+		b.ExecutionRequests = new(v1.ExecutionRequestsGloas)
 	}
 	offset += b.ExecutionRequests.SizeSSZ()
 
@@ -4501,7 +4501,7 @@ func (b *BlindedExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 	{
 		buf = tail[o1:]
 		if b.ExecutionRequests == nil {
-			b.ExecutionRequests = new(v1.ExecutionRequests)
+			b.ExecutionRequests = new(v1.ExecutionRequestsGloas)
 		}
 		if err = b.ExecutionRequests.UnmarshalSSZ(buf); err != nil {
 			return err
@@ -4516,7 +4516,7 @@ func (b *BlindedExecutionPayloadEnvelope) SizeSSZ() (size int) {
 
 	// Field (1) 'ExecutionRequests'
 	if b.ExecutionRequests == nil {
-		b.ExecutionRequests = new(v1.ExecutionRequests)
+		b.ExecutionRequests = new(v1.ExecutionRequestsGloas)
 	}
 	size += b.ExecutionRequests.SizeSSZ()
 

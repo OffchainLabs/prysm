@@ -255,14 +255,14 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 			s.firePayloadAttributesEventForHead(root, proposingSlot, attr)
 		}
 	}()
-	if requests := envelope.ExecutionRequests(); requests != nil && len(requests.Deposits) > 0 {
+	if requests := envelope.ExecutionRequests(); requests != nil && len(requests.GetDeposits()) > 0 {
 		s.prefetchDepositSignatures(requests)
 	}
 	return nil
 }
 
-func (s *Service) prefetchDepositSignatures(requests *enginev1.ExecutionRequests) {
-	invalidIdx, err := helpers.BatchVerifyDepositRequestSignatures(s.ctx, requests.Deposits)
+func (s *Service) prefetchDepositSignatures(requests interfaces.ExecutionRequests) {
+	invalidIdx, err := helpers.BatchVerifyDepositRequestSignatures(s.ctx, requests.GetDeposits())
 	if err != nil {
 		log.WithError(err).Debug("Could not batch verify deposit signatures for prefetch")
 		return
@@ -337,7 +337,7 @@ func (s *Service) notifyNewEnvelopeFromBlock(ctx context.Context, b blocks.ROBlo
 	for i, c := range sbid.Message.BlobKzgCommitments {
 		versionedHashes[i] = primitives.ConvertKzgCommitmentToVersionedHash(c)
 	}
-	return s.callNewPayload(ctx, payload, versionedHashes, common.Hash(envelope.ParentBeaconBlockRoot()), envelope.ExecutionRequests(), envelope.Slot())
+	return s.callNewPayload(ctx, payload, versionedHashes, common.Hash(envelope.ParentBeaconBlockRoot()), enginev1.CopyExecutionRequests(envelope.ExecutionRequests()), envelope.Slot())
 }
 
 // The returned boolean indicates whether the payload was valid or if it was accepted as syncing (optimistic).
@@ -361,7 +361,7 @@ func (s *Service) notifyNewEnvelope(ctx context.Context, st state.BeaconState, e
 			versionedHashes[i] = primitives.ConvertKzgCommitmentToVersionedHash(c)
 		}
 	}
-	return s.callNewPayload(ctx, payload, versionedHashes, common.Hash(envelope.ParentBeaconBlockRoot()), envelope.ExecutionRequests(), envelope.Slot())
+	return s.callNewPayload(ctx, payload, versionedHashes, common.Hash(envelope.ParentBeaconBlockRoot()), enginev1.CopyExecutionRequests(envelope.ExecutionRequests()), envelope.Slot())
 }
 
 func (s *Service) validateExecutionOnEnvelope(ctx context.Context, st state.BeaconState, envelope interfaces.ROExecutionPayloadEnvelope) (bool, error) {

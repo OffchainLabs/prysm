@@ -636,24 +636,15 @@ func CopyExecutionRequests(e *enginev1.ExecutionRequests) *enginev1.ExecutionReq
 	if e == nil {
 		return nil
 	}
-	dr := make([]*enginev1.DepositRequest, len(e.Deposits))
-	for i, d := range e.Deposits {
-		dr[i] = d.Copy()
-	}
-	wr := make([]*enginev1.WithdrawalRequest, len(e.Withdrawals))
-	for i, w := range e.Withdrawals {
-		wr[i] = w.Copy()
-	}
-	cr := make([]*enginev1.ConsolidationRequest, len(e.Consolidations))
-	for i, c := range e.Consolidations {
-		cr[i] = c.Copy()
-	}
+	return enginev1.CopyExecutionRequests(e)
+}
 
-	return &enginev1.ExecutionRequests{
-		Deposits:       dr,
-		Withdrawals:    wr,
-		Consolidations: cr,
+// CopyExecutionRequestsGloas copies the provided Gloas execution requests.
+func CopyExecutionRequestsGloas(e *enginev1.ExecutionRequestsGloas) *enginev1.ExecutionRequestsGloas {
+	if e == nil {
+		return nil
 	}
+	return enginev1.CopyExecutionRequestsGloas(e)
 }
 
 // ----------------------------------------------------------------------------

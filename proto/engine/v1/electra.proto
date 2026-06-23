@@ -72,6 +72,20 @@ message ExecutionRequests {
             "max_consolidation_requests_per_payload.size" ];
 }
 
+// ExecutionRequestsGloas is the Gloas/progressive equivalent of
+// ExecutionRequests. It intentionally has the same fields, but uses a distinct
+// proto type so fastssz can generate progressive merkleization for Gloas.
+message ExecutionRequestsGloas {
+  repeated DepositRequest deposits = 1
+      [ (ethereum.eth.ext.ssz_max) = "max_deposit_requests_per_payload.size" ];
+  repeated WithdrawalRequest withdrawals = 2
+      [ (ethereum.eth.ext.ssz_max) =
+            "max_withdrawal_requests_per_payload.size" ];
+  repeated ConsolidationRequest consolidations = 3
+      [ (ethereum.eth.ext.ssz_max) =
+            "max_consolidation_requests_per_payload.size" ];
+}
+
 // ExecutionBundleElectra is a container that builds on Payload V4 and includes
 // execution requests sidecar needed post Electra
 message ExecutionBundleElectra {
