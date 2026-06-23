@@ -373,7 +373,7 @@ func (b *BeaconChainConfig) VersionToForkEpochMap() map[int]primitives.Epoch {
 func (b *BeaconChainConfig) ExecutionRequestLimits() enginev1.ExecutionRequestLimits {
 	return enginev1.ExecutionRequestLimits{
 		Deposits:        b.MaxDepositRequestsPerPayload,
-		Withdrawals:     b.MaxWithdrawalsPerPayload,
+		Withdrawals:     b.MaxWithdrawalRequestsPerPayload,
 		Consolidations:  b.MaxConsolidationsRequestsPerPayload,
 		BuilderDeposits: b.MaxBuilderDepositRequestsPerPayload,
 		BuilderExits:    b.MaxBuilderExitRequestsPerPayload,
