@@ -2,9 +2,11 @@ package state_native
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/fieldtrie"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
@@ -323,6 +325,57 @@ func TestHashTreeRoot_ProgressiveSSZFieldTrieRebuild(t *testing.T) {
 	require.Equal(t, false, st.rebuildTrie[types.Balances])
 	require.Equal(t, fieldtrie.MerkleModeProgressive, st.stateFieldLeaves[types.Validators].MerkleMode())
 	require.Equal(t, fieldtrie.MerkleModeProgressive, st.stateFieldLeaves[types.Balances].MerkleMode())
+}
+
+func TestHashTreeRoot_ProgressiveSSZApplyToEveryValidatorMarksDirtyOnError(t *testing.T) {
+	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	defer reset()
+
+	st := newGloasStateForProgressiveSSZTests(t)
+	initialRoot, err := st.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+
+	expectedErr := errors.New("stop after partial validator update")
+	err = st.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
+		if idx == 0 {
+			updated := val.Copy()
+			updated.EffectiveBalance++
+			return updated, nil
+		}
+		return nil, expectedErr
+	})
+	require.ErrorIs(t, err, expectedErr)
+	require.Equal(t, true, st.dirtyFields[types.Validators])
+	require.DeepEqual(t, []uint64{0}, st.dirtyIndices[types.Validators])
+
+	root, err := st.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+	require.DeepNotSSZEqual(t, initialRoot, root)
+	require.Equal(t, progressiveRootFromScratch(t, st), root)
+	require.Equal(t, 0, len(st.dirtyIndices[types.Validators]))
+}
+
+func TestHashTreeRoot_ProgressiveSSZDecreaseWithdrawalBalancesMarksDirtyOnError(t *testing.T) {
+	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	defer reset()
+
+	st := newGloasStateForProgressiveSSZTests(t)
+	initialRoot, err := st.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+
+	err = st.DecreaseWithdrawalBalances([]*enginev1.Withdrawal{
+		{ValidatorIndex: primitives.ValidatorIndex(1), Amount: 5},
+		nil,
+	})
+	require.ErrorContains(t, "withdrawal is nil", err)
+	require.Equal(t, true, st.dirtyFields[types.Balances])
+	require.DeepEqual(t, []uint64{1}, st.dirtyIndices[types.Balances])
+
+	root, err := st.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+	require.DeepNotSSZEqual(t, initialRoot, root)
+	require.Equal(t, progressiveRootFromScratch(t, st), root)
+	require.Equal(t, 0, len(st.dirtyIndices[types.Balances]))
 }
 
 func TestHashTreeRoot_ProgressiveSSZCopy(t *testing.T) {

@@ -599,6 +599,16 @@ func (b *BeaconState) DecreaseWithdrawalBalances(withdrawals []*enginev1.Withdra
 		balanceIndices []uint64
 		builderIndices []uint64
 	)
+	defer func() {
+		if len(balanceIndices) > 0 {
+			b.markFieldAsDirty(types.Balances)
+			b.addDirtyIndices(types.Balances, balanceIndices)
+		}
+		if len(builderIndices) > 0 {
+			b.markFieldAsDirty(types.Builders)
+			b.addDirtyIndices(types.Builders, builderIndices)
+		}
+	}()
 
 	for _, withdrawal := range withdrawals {
 		if withdrawal == nil {
@@ -626,15 +636,6 @@ func (b *BeaconState) DecreaseWithdrawalBalances(withdrawals []*enginev1.Withdra
 			return pkgerrors.Wrap(err, "could not update balances")
 		}
 		balanceIndices = append(balanceIndices, uint64(withdrawal.ValidatorIndex))
-	}
-
-	if len(balanceIndices) > 0 {
-		b.markFieldAsDirty(types.Balances)
-		b.addDirtyIndices(types.Balances, balanceIndices)
-	}
-	if len(builderIndices) > 0 {
-		b.markFieldAsDirty(types.Builders)
-		b.addDirtyIndices(types.Builders, builderIndices)
 	}
 
 	return nil

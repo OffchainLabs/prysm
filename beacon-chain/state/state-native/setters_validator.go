@@ -32,6 +32,16 @@ func (b *BeaconState) SetValidators(val []*ethpb.Validator) error {
 // validator registry.
 func (b *BeaconState) ApplyToEveryValidator(f func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error)) error {
 	var changedVals []uint64
+	defer func() {
+		if len(changedVals) == 0 {
+			return
+		}
+		b.lock.Lock()
+		defer b.lock.Unlock()
+		b.markFieldAsDirty(types.Validators)
+		b.addDirtyIndices(types.Validators, changedVals)
+	}()
+
 	l := b.validatorsMultiValue.Len(b)
 	for i := range l {
 		v, err := b.validatorsMultiValue.At(b, uint64(i))
@@ -44,21 +54,14 @@ func (b *BeaconState) ApplyToEveryValidator(f func(idx int, val state.ReadOnlyVa
 			return err
 		}
 		if newVal != nil {
-			changedVals = append(changedVals, uint64(i))
 			compactValidator := stateutil.CompactValidatorFromProto(newVal)
 			if err := b.validatorsMultiValue.UpdateAt(b, uint64(i), compactValidator); err != nil {
 				return errors.Wrapf(err, "could not update validator at index %d", i)
 			}
+			changedVals = append(changedVals, uint64(i))
 		}
 	}
 
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
-	if len(changedVals) > 0 {
-		b.markFieldAsDirty(types.Validators)
-		b.addDirtyIndices(types.Validators, changedVals)
-	}
 	return nil
 }
 
