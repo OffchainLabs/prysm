@@ -1,0 +1,1 @@
+- Enabled `--blob-retention-epochs` flag value to be 0 to disable blob pruning and retain all blobs indefinitely (useful for archival nodes).
