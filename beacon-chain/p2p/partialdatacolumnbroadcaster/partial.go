@@ -862,18 +862,13 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 	}
 	ourDataColumn := ourVerifier.Column
 	var extended bool
-	var extendedCount int
 	for i, bundle := range cells.cells {
 		if bundle.ColumnIndex != ourDataColumn.Index {
 			return errors.New("cell bundle has wrong column index")
 		}
 		if ourVerifier.ExtendFromVerifiedCell(cells.cellIndices[i], bundle.Cell, bundle.Proof) {
 			extended = true
-			extendedCount++
 		}
-	}
-	if extended {
-		p.logger.WithFields(logrus.Fields{"duration": cells.validationTook, "extended": extended, "extendedCount": extendedCount}).WithFields(cells.logFields()).Debug("Extended partial message")
 	}
 
 	columnIndexStr := strconv.FormatUint(ourDataColumn.Index, 10)
