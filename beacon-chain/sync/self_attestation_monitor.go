@@ -203,12 +203,12 @@ func (s *Service) matchSelfSubmittedAttestation(ctx context.Context, aggregate e
 		"attDataRoot":      fmt.Sprintf("%#x", bytesutil.Trunc(root[:])),
 		"validatorCount":   len(validators),
 		"validatorIndices": validators,
-	}).Debug("Submitted attestations seen in gossiped aggregate")
+	}).Debug("All submitted attestations seen in gossiped aggregate")
 }
 
-// pruneSelfSubmittedAttestations removes entries older than the retention window. It emits a single
-// warning summarizing how many of the pruned attestations were seen in an aggregate versus never
-// seen, listing the indices of the validators whose attestations were never seen.
+// pruneSelfSubmittedAttestations removes entries older than the retention window. For each pruned
+// data root that had at least one validator whose attestation was never seen in a gossiped
+// aggregate, it emits a single warning identifying the root/slot and the missing validators.
 func (s *Service) pruneSelfSubmittedAttestations(slot primitives.Slot) {
 	retention := primitives.Slot(selfAttRetentionEpochs) * params.BeaconConfig().SlotsPerEpoch
 	if slot < retention {
@@ -219,23 +219,28 @@ func (s *Service) pruneSelfSubmittedAttestations(slot primitives.Slot) {
 	s.selfSubmittedAttsLock.Lock()
 	defer s.selfSubmittedAttsLock.Unlock()
 
-	seenCount := 0
-	notSeen := make([]primitives.ValidatorIndex, 0, len(s.selfSubmittedAtts))
 	for root, e := range s.selfSubmittedAtts {
 		if e.slot >= threshold {
 			continue
 		}
 
-		for idx, sub := range e.validators {
-			if sub.seen {
-				seenCount++
-				continue
-			}
+		s.logPrunedSelfSubmittedAttestation(root, e)
+		delete(s.selfSubmittedAtts, root)
+	}
+}
 
-			notSeen = append(notSeen, idx)
+// logPrunedSelfSubmittedAttestation emits a warning for a pruned entry if any of its validators were
+// never seen in a gossiped aggregate.
+func (s *Service) logPrunedSelfSubmittedAttestation(root [32]byte, e *selfAttEntry) {
+	seenCount := 0
+	notSeen := make([]primitives.ValidatorIndex, 0, len(e.validators))
+	for idx, sub := range e.validators {
+		if sub.seen {
+			seenCount++
+			continue
 		}
 
-		delete(s.selfSubmittedAtts, root)
+		notSeen = append(notSeen, idx)
 	}
 
 	if len(notSeen) == 0 {
@@ -243,12 +248,21 @@ func (s *Service) pruneSelfSubmittedAttestations(slot primitives.Slot) {
 	}
 
 	slices.Sort(notSeen)
+
+	// committees is aligned 1:1 with notSeen: committees[i] is the committee notSeen[i] attested in.
+	committees := make([]primitives.CommitteeIndex, len(notSeen))
+	for i, idx := range notSeen {
+		committees[i] = e.validators[idx].committee
+	}
+
 	log.WithFields(logrus.Fields{
+		"slot":              e.slot,
+		"slotInEpoch":       e.slot % params.BeaconConfig().SlotsPerEpoch,
+		"attDataRoot":       fmt.Sprintf("%#x", bytesutil.Trunc(root[:])),
 		"seenCount":         seenCount,
 		"notSeenCount":      len(notSeen),
 		"notSeenValidators": notSeen,
-		"prunedBeforeSlot":  threshold,
-		"slotInEpoch":       threshold % params.BeaconConfig().SlotsPerEpoch,
+		"notSeenCommittees": committees,
 	}).Warning("Submitted attestations never seen in a gossiped aggregate")
 }
 

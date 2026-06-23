@@ -80,7 +80,7 @@ func TestMatchSelfSubmittedAttestation_MarksSeenAndPruneLogsMiss(t *testing.T) {
 	e := s.selfSubmittedAtts[dataRoot]
 	require.Equal(t, true, e.validators[2].seen)
 	require.Equal(t, true, e.validators[12].seen)
-	require.LogsContain(t, hook, "Submitted attestations seen in gossiped aggregate")
+	require.LogsContain(t, hook, "All submitted attestations seen in gossiped aggregate")
 
 	// Pruning past the retention window logs a miss for the never-seen validator 99 and drops both entries.
 	retention := primitives.Slot(selfAttRetentionEpochs) * params.BeaconConfig().SlotsPerEpoch
@@ -116,7 +116,7 @@ func TestMatchSelfSubmittedAttestation_LogsAtMostOncePerRoot(t *testing.T) {
 	// ...but the log was emitted exactly once.
 	count := 0
 	for _, entry := range hook.AllEntries() {
-		if entry.Message == "Submitted attestations seen in gossiped aggregate" {
+		if entry.Message == "All submitted attestations seen in gossiped aggregate" {
 			count++
 		}
 	}
