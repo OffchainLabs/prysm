@@ -64,6 +64,13 @@ func (s *Service) runLatePayloadTasks() {
 	}
 }
 
+// checkIfProposing does not advance st and only resolves the proposer correctly when st is
+// already advanced to at least slot's epoch. Its sole caller, getLatePayloadAttribute, satisfies
+// this by passing the head state for current slot + 1.
+//
+// WARNING: if called with a head lagging further behind (e.g. several empty epochs), the epoch
+// checks below fall through and it returns (nil, nil) — reported as "not proposing" — even when
+// we actually are. Advance st before calling if that can happen.
 func (s *Service) checkIfProposing(st state.ReadOnlyBeaconState, slot primitives.Slot) (*cache.ProposerPreference, error) {
 	e := slots.ToEpoch(slot)
 	stateEpoch := slots.ToEpoch(st.Slot())

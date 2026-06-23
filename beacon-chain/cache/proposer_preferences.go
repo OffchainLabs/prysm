@@ -40,9 +40,8 @@ type ProposerPreference struct {
 	TargetGasLimit uint64
 }
 
-// FeeRecipientOrDefault returns the preference's FeeRecipient, substituting
-// --suggested-fee-recipient when empty so the EL never sees the burn address
-// unless that's explicitly configured.
+// FeeRecipientOrDefault returns the preference's FeeRecipient, or the
+// --suggested-fee-recipient default when it is unset.
 func (p *ProposerPreference) FeeRecipientOrDefault() primitives.ExecutionAddress {
 	if p.FeeRecipient == (primitives.ExecutionAddress{}) {
 		return primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
@@ -50,10 +49,7 @@ func (p *ProposerPreference) FeeRecipientOrDefault() primitives.ExecutionAddress
 	return p.FeeRecipient
 }
 
-// GasLimitOr returns the preference's TargetGasLimit, substituting fallback
-// when zero. Callers pass the parent payload's gas limit so a cache miss
-// signals "no change" to the EL rather than nudging toward a configured
-// network default.
+// GasLimitOr returns the preference's TargetGasLimit, or fallback when it is unset.
 func (p *ProposerPreference) GasLimitOr(fallback uint64) uint64 {
 	if p.TargetGasLimit == 0 {
 		return fallback

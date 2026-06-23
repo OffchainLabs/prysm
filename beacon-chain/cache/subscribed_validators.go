@@ -30,9 +30,14 @@ type SubscribedValidatorsCache struct {
 // re-posts subscriptions each epoch, so a TTL of a few epochs is enough to ride
 // out a missed post without dropping the validator from custody calculations.
 func NewSubscribedValidatorsCache() *SubscribedValidatorsCache {
-	return &SubscribedValidatorsCache{
+	c := &SubscribedValidatorsCache{
 		entries: gocache.New(subscribedValidatorsTTL, subscribedValidatorsCleanupInterval),
 	}
+	// Refresh the gauge on TTL eviction, the only path that removes entries without a caller write.
+	c.entries.OnEvicted(func(string, any) {
+		subscribedValidatorsCacheCount.Set(float64(c.entries.ItemCount()))
+	})
+	return c
 }
 
 // Add records the validator as attached. Re-adding extends the TTL.
@@ -49,9 +54,7 @@ func (c *SubscribedValidatorsCache) Has(index primitives.ValidatorIndex) bool {
 
 // Validating returns true if at least one validator is attached.
 func (c *SubscribedValidatorsCache) Validating() bool {
-	count := c.entries.ItemCount()
-	subscribedValidatorsCacheCount.Set(float64(count))
-	return count > 0
+	return c.entries.ItemCount() > 0
 }
 
 // Clear removes all attached validators.
@@ -63,7 +66,6 @@ func (c *SubscribedValidatorsCache) Clear() {
 // Indices returns the set of currently-attached validator indices.
 func (c *SubscribedValidatorsCache) Indices() map[primitives.ValidatorIndex]bool {
 	items := c.entries.Items()
-	subscribedValidatorsCacheCount.Set(float64(len(items)))
 	out := make(map[primitives.ValidatorIndex]bool, len(items))
 	for key := range items {
 		idx, err := strconv.ParseUint(key, 10, 64)

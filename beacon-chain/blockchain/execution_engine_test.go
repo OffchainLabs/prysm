@@ -782,6 +782,9 @@ func Test_GetPayloadAttributeV2(t *testing.T) {
 	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
 	require.Equal(t, false, attr.IsEmpty())
 	require.Equal(t, suggestedAddr, common.BytesToAddress(attr.SuggestedFeeRecipient()))
+	a, err = attr.Withdrawals()
+	require.NoError(t, err)
+	require.Equal(t, 0, len(a))
 }
 
 func Test_GetPayloadAttributeV3(t *testing.T) {

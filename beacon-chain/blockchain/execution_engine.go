@@ -320,9 +320,9 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 		pref, err = s.trackedProposer(st, slot)
 		if err != nil {
 			log.WithError(err).Error("Could not resolve tracked proposer")
-			return emptyAttri
 		}
 		if pref == nil {
+			// Not our proposer; skip the state copy and slot processing below.
 			return emptyAttri
 		}
 	}
@@ -338,16 +338,15 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 		}
 	}
 	if e > stateEpoch && !fuluAndNextEpoch {
-		emptyAttri := payloadattribute.EmptyWithVersion(st.Version())
 		var err error
 		pref, err = s.trackedProposer(st, slot)
 		if err != nil {
 			log.WithError(err).Error("Could not resolve tracked proposer")
-			return emptyAttri
 		}
-		if pref == nil {
-			return emptyAttri
-		}
+	}
+	if pref == nil {
+		// The slot's proposer is not ours, or a caller requested a slot in an earlier epoch than the head state.
+		return emptyAttri
 	}
 	// Get previous randao.
 	prevRando, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
@@ -363,11 +362,6 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 		return emptyAttri
 	}
 
-	if pref == nil {
-		// Unreachable unless a caller requests a slot in an earlier epoch than the head state.
-		log.WithFields(logrus.Fields{"slot": slot, "stateSlot": st.Slot()}).Debug("No tracked proposer preference for payload attribute")
-		return emptyAttri
-	}
 	feeRecipient := pref.FeeRecipientOrDefault()
 
 	v := st.Version()
