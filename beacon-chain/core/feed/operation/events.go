@@ -60,6 +60,10 @@ const (
 	// LocalAttestationSubmitted is sent after an unaggregated attestation submitted by one of our own
 	// validator clients has been successfully broadcast to the network.
 	LocalAttestationSubmitted = 16
+
+	// LocalAggregateSubmitted is sent after an aggregate submitted by one of our own validator clients
+	// (acting as aggregator) has been successfully broadcast to the network.
+	LocalAggregateSubmitted = 17
 )
 
 // UnAggregatedAttReceivedData is the data sent with UnaggregatedAttReceived events.
@@ -150,4 +154,9 @@ type ProposerPreferencesReceivedData struct {
 // LocalAttestationSubmittedData is the data sent with LocalAttestationSubmitted events.
 type LocalAttestationSubmittedData struct {
 	Attestation ethpb.Att
+}
+
+// LocalAggregateSubmittedData is the data sent with LocalAggregateSubmitted events.
+type LocalAggregateSubmittedData struct {
+	Aggregate ethpb.Att
 }

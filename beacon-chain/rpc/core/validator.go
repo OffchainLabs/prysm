@@ -396,6 +396,13 @@ func (s *Service) SubmitSignedAggregateSelectionProof(
 		return &RpcError{Err: server.NewBroadcastFailedError("SignedAggregateAttAndProof", err), Reason: Internal}
 	}
 
+	s.OperationNotifier.OperationFeed().Send(&feed.Event{
+		Type: opfeed.LocalAggregateSubmitted,
+		Data: &opfeed.LocalAggregateSubmittedData{
+			Aggregate: att,
+		},
+	})
+
 	if logrus.GetLevel() >= logrus.DebugLevel {
 		var fields logrus.Fields
 		if agg.Version() >= version.Electra {

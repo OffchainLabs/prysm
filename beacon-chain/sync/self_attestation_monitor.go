@@ -59,17 +59,27 @@ func (s *Service) monitorSelfSubmittedAttestations() {
 	for {
 		select {
 		case e := <-channel:
-			if e.Type != operation.LocalAttestationSubmitted {
+			switch e.Type {
+			case operation.LocalAttestationSubmitted:
+				data, ok := e.Data.(*operation.LocalAttestationSubmittedData)
+				if !ok {
+					log.Error("Event feed data is not of type *operation.LocalAttestationSubmittedData")
+					continue
+				}
+
+				s.recordSelfSubmittedAttestation(data.Attestation)
+			case operation.LocalAggregateSubmitted:
+				data, ok := e.Data.(*operation.LocalAggregateSubmittedData)
+				if !ok {
+					log.Error("Event feed data is not of type *operation.LocalAggregateSubmittedData")
+					continue
+				}
+
+				// Aggregates we build ourselves never come back over gossip, so match them here too.
+				s.matchSelfSubmittedAttestation(s.ctx, data.Aggregate)
+			default:
 				continue
 			}
-
-			data, ok := e.Data.(*operation.LocalAttestationSubmittedData)
-			if !ok {
-				log.Error("Event feed data is not of type *operation.LocalAttestationSubmittedData")
-				continue
-			}
-
-			s.recordSelfSubmittedAttestation(data.Attestation)
 		case <-ticker.C:
 			s.pruneSelfSubmittedAttestations(s.cfg.clock.CurrentSlot())
 		case <-s.ctx.Done():
@@ -255,9 +265,12 @@ func (s *Service) logPrunedSelfSubmittedAttestation(root [32]byte, e *selfAttEnt
 		committees[i] = e.validators[idx].committee
 	}
 
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+
 	log.WithFields(logrus.Fields{
 		"slot":              e.slot,
-		"slotInEpoch":       e.slot % params.BeaconConfig().SlotsPerEpoch,
+		"epoch":             e.slot / slotsPerEpoch,
+		"slotInEpoch":       e.slot % slotsPerEpoch,
 		"attDataRoot":       fmt.Sprintf("%#x", bytesutil.Trunc(root[:])),
 		"seenCount":         seenCount,
 		"notSeenCount":      len(notSeen),
