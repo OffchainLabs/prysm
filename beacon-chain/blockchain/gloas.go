@@ -3,6 +3,7 @@ package blockchain
 import (
 	"context"
 	"math"
+	stdtime "time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	coregloas "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
@@ -53,10 +54,16 @@ func (s *Service) runLatePayloadTasks() {
 	offset := cfg.SlotComponentDuration(cfg.PayloadAttestationDueBPS)
 	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, offset, cfg.SecondsPerSlot)
 	defer ticker.Done()
+	// A slot-boundary ticker drives the per-slot reveal-outcome classification for
+	// the slot that just ended (see recordPayloadRevealOutcome).
+	boundaryTicker := slots.NewSlotTicker(s.genesisTime, cfg.SecondsPerSlot)
+	defer boundaryTicker.Done()
 	for {
 		select {
 		case <-ticker.C():
 			s.latePayloadTasks(s.ctx)
+		case slot := <-boundaryTicker.C():
+			s.recordPayloadRevealOutcome(s.ctx, slot)
 		case <-s.ctx.Done():
 			log.Debug("Context closed, exiting late payload tasks routine")
 			return
@@ -205,6 +212,102 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 	copy(pId[:], pid[:])
 	s.cfg.PayloadIDCache.Set(currentSlot+1, hr, false, pId)
 	s.firePayloadAttributesEventForHead(hr, currentSlot+1, attr)
+}
+
+// payload reveal outcome labels for gloasPayloadRevealOutcomeTotal.
+const (
+	payloadRevealOnTime   = "on_time"
+	payloadRevealLate     = "late"
+	payloadRevealWithheld = "withheld"
+)
+
+const payloadRevealSyncPollInterval = 50 * stdtime.Millisecond
+
+// recordPayloadRevealOutcome classifies the execution payload reveal outcome for
+// the slot before boundarySlot and records it on gloasPayloadRevealOutcomeTotal.
+// It inspects the canonical block for the slot that just closed:
+//   - a payload was imported and arrived before the payload-due time  -> on_time
+//   - a payload was imported but arrived at/after the payload-due time -> late
+//   - no payload was ever imported                                    -> withheld
+func (s *Service) recordPayloadRevealOutcome(ctx context.Context, boundarySlot primitives.Slot) {
+	if boundarySlot == 0 {
+		return
+	}
+	revealSlot := boundarySlot - 1
+	// Pre-Gloas slots carry the payload inside the block, so there is no separate
+	// reveal to classify.
+	if slots.ToEpoch(revealSlot) < params.BeaconConfig().GloasForkEpoch {
+		return
+	}
+	// During initial sync the head and forkchoice reflect historical replay rather
+	// than live builder behavior, so the timing signal would be meaningless.
+	if !s.inRegularSync() {
+		return
+	}
+	root, ok := s.payloadRevealRoot(ctx, revealSlot)
+	if !ok {
+		return
+	}
+	if s.payloadBeingSynced.isSyncing(root) {
+		timeout := stdtime.Duration(params.BeaconConfig().SecondsPerSlot) * stdtime.Second
+		go s.recordPayloadRevealOutcomeAfterSync(ctx, root, timeout)
+		return
+	}
+	s.recordPayloadRevealOutcomeForRoot(root)
+}
+
+func (s *Service) payloadRevealRoot(ctx context.Context, revealSlot primitives.Slot) ([32]byte, bool) {
+	if s.HeadSlot() == revealSlot {
+		root, err := s.HeadRoot(ctx)
+		if err != nil {
+			log.WithError(err).Error("Could not get head root for payload reveal outcome")
+			return [32]byte{}, false
+		}
+		return [32]byte(root), true
+	}
+	
+	root, _ := s.CanonicalNodeAtSlot(revealSlot)
+	slot, err := s.RecentBlockSlot(root)
+	if err != nil {
+		return [32]byte{}, false
+	}
+	return root, slot == revealSlot
+}
+
+func (s *Service) recordPayloadRevealOutcomeAfterSync(ctx context.Context, root [32]byte, timeout stdtime.Duration) {
+	ticker := stdtime.NewTicker(payloadRevealSyncPollInterval)
+	defer ticker.Stop()
+	timer := stdtime.NewTimer(timeout)
+	defer timer.Stop()
+	for {
+		if !s.payloadBeingSynced.isSyncing(root) {
+			s.recordPayloadRevealOutcomeForRoot(root)
+			return
+		}
+		select {
+		case <-ticker.C:
+		case <-timer.C:
+			return
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *Service) recordPayloadRevealOutcomeForRoot(root [32]byte) {
+	outcome := payloadRevealWithheld
+	if s.HasFullNode(root) {
+		early, known := s.PayloadEarly(root)
+		if !known {
+			return
+		}
+		if early {
+			outcome = payloadRevealOnTime
+		} else {
+			outcome = payloadRevealLate
+		}
+	}
+	gloasPayloadRevealOutcomeTotal.WithLabelValues(outcome).Inc()
 }
 
 func (s *Service) fcuFromReorgData(headBlock interfaces.ReadOnlySignedBeaconBlock, hr [32]byte, hash [32]byte, full bool, attr payloadattribute.Attributer, proposingSlot primitives.Slot) {
