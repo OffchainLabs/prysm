@@ -121,7 +121,6 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 		select {
 		case <-h.ctx.Done():
 			log.Info("Context canceled, stopping event stream")
-			close(eventsChannel)
 			return
 		default:
 			line := scanner.Text()
