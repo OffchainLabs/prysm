@@ -135,6 +135,11 @@ type ProposerPreferencesEvent struct {
 	Data    *SignedProposerPreferences `json:"data"`
 }
 
+type ExecutionPayloadBidEvent struct {
+	Version string                     `json:"version"`
+	Data    *SignedExecutionPayloadBid `json:"data"`
+}
+
 type ExecutionPayloadAvailableEvent struct {
 	Slot      string `json:"slot"`
 	BlockRoot string `json:"block_root"`

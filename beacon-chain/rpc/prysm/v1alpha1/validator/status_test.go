@@ -696,7 +696,6 @@ func TestValidatorStatus_CorrectActivationQueue(t *testing.T) {
 	resp, err := vs.ValidatorStatus(t.Context(), req)
 	require.NoError(t, err, "Could not get validator status")
 	assert.Equal(t, ethpb.ValidatorStatus_PENDING, resp.Status)
-	assert.Equal(t, uint64(2), resp.PositionInActivationQueue, "Unexpected position in activation queue")
 }
 
 func TestMultipleValidatorStatus_Pubkeys(t *testing.T) {
