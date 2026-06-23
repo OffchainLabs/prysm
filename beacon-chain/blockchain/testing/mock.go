@@ -54,6 +54,7 @@ type ChainService struct {
 	DB                          db.Database
 	State                       state.BeaconState
 	HeadStateErr                error
+	PtcLookupStateErr           error
 	Block                       interfaces.ReadOnlySignedBeaconBlock
 	VerifyBlkDescendantErr      error
 	stateNotifier               statefeed.Notifier
@@ -916,6 +917,9 @@ func (c *ChainService) ReceivePayloadAttestationMessage(_ context.Context, _ *et
 
 // PtcLookupState implements the same method in the chain service.
 func (c *ChainService) PtcLookupState(_ context.Context, _ [32]byte, _ primitives.Slot) (state.ReadOnlyBeaconState, error) {
+	if c.PtcLookupStateErr != nil {
+		return nil, c.PtcLookupStateErr
+	}
 	if c.State == nil {
 		return nil, nil
 	}
