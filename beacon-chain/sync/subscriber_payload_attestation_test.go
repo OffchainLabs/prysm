@@ -56,13 +56,13 @@ func TestPayloadAttestationSubscriber_NoPool(t *testing.T) {
 	require.NoError(t, s.payloadAttestationSubscriber(t.Context(), msg))
 }
 
-func TestPayloadAttestationSubscriber_HeadStateError(t *testing.T) {
-	headErr := errors.New("head state unavailable")
+func TestPayloadAttestationSubscriber_StateLookupError(t *testing.T) {
+	lookupErr := errors.New("state lookup failed")
 	s := &Service{
 		payloadAttestationCache: &cache.PayloadAttestationCache{},
 		cfg: &config{
 			chain: &mock.ChainService{
-				HeadStateErr: headErr,
+				PtcLookupStateErr: lookupErr,
 			},
 			payloadAttestationPool: payloadattestation.NewPool(),
 			operationNotifier:      &mock.MockOperationNotifier{},
@@ -76,7 +76,29 @@ func TestPayloadAttestationSubscriber_HeadStateError(t *testing.T) {
 		},
 		Signature: make([]byte, 96),
 	}
-	require.ErrorIs(t, s.payloadAttestationSubscriber(t.Context(), msg), headErr)
+	require.ErrorIs(t, s.payloadAttestationSubscriber(t.Context(), msg), lookupErr)
+}
+
+func TestPayloadAttestationSubscriber_NoCoveringState(t *testing.T) {
+	pool := payloadattestation.NewPool()
+	s := &Service{
+		payloadAttestationCache: &cache.PayloadAttestationCache{},
+		cfg: &config{
+			chain:                  &mock.ChainService{},
+			payloadAttestationPool: pool,
+			operationNotifier:      &mock.MockOperationNotifier{},
+		},
+	}
+	msg := &ethpb.PayloadAttestationMessage{
+		ValidatorIndex: 0,
+		Data: &ethpb.PayloadAttestationData{
+			BeaconBlockRoot: make([]byte, 32),
+			Slot:            0,
+		},
+		Signature: make([]byte, 96),
+	}
+	require.NoError(t, s.payloadAttestationSubscriber(t.Context(), msg))
+	require.Equal(t, 0, len(pool.PendingPayloadAttestations(0)))
 }
 
 func TestPayloadAttestationSubscriber_ValidatorInPTC(t *testing.T) {
