@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
+	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -74,7 +75,7 @@ func newClient(beaconEndpoints []string, tcpPort, quicPort uint) (*client, error
 	if len(beaconEndpoints) == 0 {
 		return nil, errors.New("no specified beacon API endpoints")
 	}
-	conn, err := grpc.Dial(beaconEndpoints[0], grpc.WithInsecure())
+	conn, err := grpc.Dial(grpcutil.NormalizeGRPCEndpoint(beaconEndpoints[0]), grpc.WithInsecure())
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +156,7 @@ func (c *client) retrievePeerAddressesViaRPC(ctx context.Context, beaconEndpoint
 	}
 	peers := make([]string, 0)
 	for i := range beaconEndpoints {
-		conn, err := grpc.Dial(beaconEndpoints[i], grpc.WithInsecure())
+		conn, err := grpc.Dial(grpcutil.NormalizeGRPCEndpoint(beaconEndpoints[i]), grpc.WithInsecure())
 		if err != nil {
 			return nil, err
 		}

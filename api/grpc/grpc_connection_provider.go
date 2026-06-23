@@ -2,7 +2,6 @@ package grpc
 
 import (
 	"context"
-	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -74,18 +73,9 @@ func NewGrpcConnectionProvider(
 	}, nil
 }
 
-// parseEndpoints splits a comma-separated endpoint string into individual endpoints.
+// parseEndpoints splits a comma-separated endpoint string into normalized gRPC targets.
 func parseEndpoints(endpoint string) []string {
-	if endpoint == "" {
-		return nil
-	}
-	endpoints := make([]string, 0, 1)
-	for p := range strings.SplitSeq(endpoint, ",") {
-		if p = strings.TrimSpace(p); p != "" {
-			endpoints = append(endpoints, p)
-		}
-	}
-	return endpoints
+	return ParseGRPCEndpoints(endpoint)
 }
 
 func (p *grpcConnectionProvider) CurrentConn() *grpc.ClientConn {

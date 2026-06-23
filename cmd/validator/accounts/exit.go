@@ -32,6 +32,10 @@ func Exit(c *cli.Context, r io.Reader) error {
 	)
 	grpcHeaders := strings.Split(c.String(flags.GRPCHeadersFlag.Name), ",")
 	beaconRPCProvider := c.String(flags.BeaconRPCProviderFlag.Name)
+	initialBeaconRPCEndpoint := beaconRPCProvider
+	if endpoints := grpcutil.ParseGRPCEndpoints(beaconRPCProvider); len(endpoints) > 0 {
+		initialBeaconRPCEndpoint = endpoints[0]
+	}
 	if !c.IsSet(flags.Web3SignerURLFlag.Name) && !c.IsSet(flags.WalletDirFlag.Name) && !c.IsSet(flags.InteropNumValidators.Name) {
 		return errors.Errorf("No validators found, please provide a prysm wallet directory via flag --%s "+
 			"or a remote signer location with corresponding public keys via flags --%s and --%s ",
@@ -48,9 +52,9 @@ func Exit(c *cli.Context, r io.Reader) error {
 		w = &wallet.Wallet{}
 	} else if c.IsSet(flags.Web3SignerURLFlag.Name) {
 		ctx := grpcutil.AppendHeaders(c.Context, grpcHeaders)
-		conn, err := grpc.DialContext(ctx, beaconRPCProvider, dialOpts...)
+		conn, err := grpc.DialContext(ctx, initialBeaconRPCEndpoint, dialOpts...)
 		if err != nil {
-			return errors.Wrapf(err, "could not dial endpoint %s", beaconRPCProvider)
+			return errors.Wrapf(err, "could not dial endpoint %s", initialBeaconRPCEndpoint)
 		}
 		nodeClient := ethpb.NewNodeClient(conn)
 		resp, err := nodeClient.GetGenesis(c.Context, &empty.Empty{})

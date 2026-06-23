@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -26,6 +27,10 @@ func TestParseEndpoints(t *testing.T) {
 		{"only commas", ",,,", []string{}},
 		{"trailing comma", "host1:4000,host2:4000,", []string{"host1:4000", "host2:4000"}},
 		{"leading comma", ",host1:4000,host2:4000", []string{"host1:4000", "host2:4000"}},
+		{"http scheme stripped", "http://localhost:4000", []string{"localhost:4000"}},
+		{"https scheme stripped", "https://localhost:4000", []string{"localhost:4000"}},
+		{"mixed schemes and bare", "http://host1:4000,https://host2:4000,host3:4000", []string{"host1:4000", "host2:4000", "host3:4000"}},
+		{"full url normalized", "https://user:pass@localhost:4000/path?query=1#fragment", []string{"localhost:4000"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -33,6 +38,25 @@ func TestParseEndpoints(t *testing.T) {
 			if !reflect.DeepEqual(tt.expected, got) {
 				t.Errorf("parseEndpoints(%q) = %v, want %v", tt.input, got, tt.expected)
 			}
+		})
+	}
+}
+
+func TestNormalizeGRPCEndpoint(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"bare host unchanged", "localhost:4000", "localhost:4000"},
+		{"http url normalized", "http://localhost:4000", "localhost:4000"},
+		{"https url normalized", "https://localhost:4000/", "localhost:4000"},
+		{"userinfo and path removed", "https://user:pass@localhost:4000/path?query=1#fragment", "localhost:4000"},
+		{"unix socket unchanged", "unix:///tmp/prysm.sock", "unix:///tmp/prysm.sock"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, NormalizeGRPCEndpoint(tt.input))
 		})
 	}
 }
@@ -67,6 +91,28 @@ func TestGrpcConnectionProvider_LazyConnection(t *testing.T) {
 	// First endpoint should work
 	conn := provider.CurrentConn()
 	assert.NotNil(t, conn, "First connection should be created lazily")
+}
+
+func TestGrpcConnectionProvider_URLStyleEndpoint(t *testing.T) {
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	server := grpc.NewServer()
+	go func() { _ = server.Serve(lis) }()
+	defer server.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	dialOpts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	}
+	provider, err := NewGrpcConnectionProvider(ctx, "http://"+lis.Addr().String(), dialOpts)
+	require.NoError(t, err)
+	defer func() { provider.Close() }()
+
+	assert.Equal(t, lis.Addr().String(), provider.CurrentHost())
+	assert.NotNil(t, provider.CurrentConn(), "Provider should connect after normalizing a URL-style gRPC target")
 }
 
 func TestGrpcConnectionProvider_SingleConnectionModel(t *testing.T) {
