@@ -887,7 +887,6 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 			return errors.Wrap(err, "complete partial column verifier")
 		}
 		if ok {
-			p.logger.WithFields(cells.logFields()).Info("Completed partial column")
 			go p.callbacks.HandleColumn(cells.topic, col)
 		}
 
@@ -991,10 +990,6 @@ func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, bl
 					continue
 				}
 				if ok {
-					p.logger.WithFields(logrus.Fields{
-						"topic":   topic,
-						"groupID": fmt.Sprintf("%#x", groupIDBytes),
-					}).Debug("Completed partial column")
 					go p.callbacks.HandleColumn(topic, col)
 				}
 			}
