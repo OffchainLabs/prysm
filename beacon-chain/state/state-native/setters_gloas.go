@@ -632,6 +632,9 @@ func (b *BeaconState) DecreaseWithdrawalBalances(withdrawals []*enginev1.Withdra
 		b.markFieldAsDirty(types.Balances)
 		b.addDirtyIndices(types.Balances, balanceIndices)
 	}
+
+	// NOTE: Field "Builders" is not in fieldMap so per-index dirty tracking with addDirtyIndices is a no-op.
+	// Only mark the entire field as dirty if any builder balances were changed.
 	if buildersChanged {
 		b.markFieldAsDirty(types.Builders)
 	}
