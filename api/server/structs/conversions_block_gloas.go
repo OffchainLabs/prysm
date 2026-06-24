@@ -19,9 +19,9 @@ func ExecutionPayloadEnvelopeFromConsensus(e *eth.ExecutionPayloadEnvelope) (*Ex
 	if err != nil {
 		return nil, err
 	}
-	var requests *ExecutionRequests
+	var requests *ExecutionRequestsGloas
 	if e.ExecutionRequests != nil {
-		requests = ExecutionRequestsFromConsensus(e.ExecutionRequests)
+		requests = ExecutionRequestsGloasFromConsensus(e.ExecutionRequests)
 	}
 	return &ExecutionPayloadEnvelope{
 		Payload:               payload,
@@ -80,7 +80,7 @@ func (e *ExecutionPayloadEnvelope) ToConsensus() (*eth.ExecutionPayloadEnvelope,
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Payload")
 	}
-	var requests *enginev1.ExecutionRequests
+	var requests *enginev1.ExecutionRequestsGloas
 	if e.ExecutionRequests != nil {
 		requests, err = e.ExecutionRequests.ToConsensus()
 		if err != nil {
@@ -131,9 +131,9 @@ func BlindedExecutionPayloadEnvelopeFromConsensus(b *eth.WireBlindedExecutionPay
 	if b == nil {
 		return nil, errNilValue
 	}
-	var requests *ExecutionRequests
+	var requests *ExecutionRequestsGloas
 	if b.ExecutionRequests != nil {
-		requests = ExecutionRequestsFromConsensus(b.ExecutionRequests)
+		requests = ExecutionRequestsGloasFromConsensus(b.ExecutionRequests)
 	}
 	return &BlindedExecutionPayloadEnvelope{
 		PayloadRoot:           hexutil.Encode(b.PayloadRoot),
@@ -152,7 +152,7 @@ func (b *BlindedExecutionPayloadEnvelope) ToConsensus() (*eth.WireBlindedExecuti
 	if err != nil {
 		return nil, server.NewDecodeError(err, "PayloadRoot")
 	}
-	var requests *enginev1.ExecutionRequests
+	var requests *enginev1.ExecutionRequestsGloas
 	if b.ExecutionRequests != nil {
 		requests, err = b.ExecutionRequests.ToConsensus()
 		if err != nil {

@@ -261,7 +261,7 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 	return nil
 }
 
-func (s *Service) prefetchDepositSignatures(requests *enginev1.ExecutionRequests) {
+func (s *Service) prefetchDepositSignatures(requests *enginev1.ExecutionRequestsGloas) {
 	invalidIdx, err := helpers.BatchVerifyDepositRequestSignatures(s.ctx, requests.Deposits)
 	if err != nil {
 		log.WithError(err).Debug("Could not batch verify deposit signatures for prefetch")
@@ -301,7 +301,7 @@ func (s *Service) callNewPayload(
 	payload interfaces.ExecutionData,
 	versionedHashes []common.Hash,
 	parentRoot common.Hash,
-	requests *enginev1.ExecutionRequests,
+	requests *enginev1.ExecutionRequestsGloas,
 	slot primitives.Slot,
 ) (bool, error) {
 	_, err := s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests)
