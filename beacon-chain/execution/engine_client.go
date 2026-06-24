@@ -970,6 +970,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 	haveAllBlobs := cp.Included.Count() == uint64(len(commitments))
 
 	var partialColumns []blocks.PartialDataColumn
+	slot := populator.Slot()
 	if haveAllBlobs {
 		// Construct data column sidecars from the signed block and cells and proofs.
 		roSidecars, err := peerdas.DataColumnSidecars(cp.CellsPerBlob, cp.ProofsPerBlob, populator)
@@ -982,7 +983,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
 		verifiedROSidecars := upgradeSidecarsToVerifiedSidecars(roSidecars)
 
-		if s.partialColumnsEnabledForSlot(populator.Slot()) {
+		if s.partialColumnsEnabledForSlot(slot) {
 			for _, sidecar := range verifiedROSidecars {
 				pc, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar)
 				if err != nil {
@@ -993,13 +994,14 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 			log.WithFields(logrus.Fields{
 				"haveAllBlobs": haveAllBlobs,
 				"blockRoot":    fmt.Sprintf("%#x", root),
+				"slot":         slot,
 			}).Debug("Constructed partial data column sidecars")
 		}
 
 		return verifiedROSidecars, partialColumns, nil
 	}
 
-	if s.partialColumnsEnabledForSlot(populator.Slot()) {
+	if s.partialColumnsEnabledForSlot(slot) {
 		partialColumns, err = peerdas.PartialColumns(cp.Included, cp.CellsPerBlob, cp.ProofsPerBlob, populator)
 		if err != nil {
 			return nil, nil, wrapWithBlockRoot(err, root, "construct partial columns")
@@ -1007,6 +1009,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		log.WithFields(logrus.Fields{
 			"haveAllBlobs": haveAllBlobs,
 			"blockRoot":    fmt.Sprintf("%#x", root),
+			"slot":         slot,
 		}).Debug("Constructed partial data column sidecars")
 	}
 
