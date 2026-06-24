@@ -882,6 +882,7 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 			return errors.Wrap(err, "complete partial column verifier")
 		}
 		if ok {
+			p.logger.WithFields(cells.logFields()).Info("Completed partial column")
 			go p.callbacks.HandleColumn(cells.topic, col)
 		}
 
