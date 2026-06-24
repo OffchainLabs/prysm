@@ -1532,7 +1532,7 @@ func HydrateBeaconBlockBodyGloas(b *ethpb.BeaconBlockBodyGloas) *ethpb.BeaconBlo
 		b.PayloadAttestations = make([]*ethpb.PayloadAttestation, 0)
 	}
 	if b.ParentExecutionRequests == nil {
-		b.ParentExecutionRequests = &enginev1.ExecutionRequests{}
+		b.ParentExecutionRequests = &enginev1.ExecutionRequestsGloas{}
 	}
 	return b
 }

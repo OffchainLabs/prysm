@@ -240,7 +240,7 @@ func gloasGenesisBlock(root [fieldparams.RootLength]byte, latestBid *ethpb.Execu
 				Signature: make([]byte, fieldparams.BLSSignatureLength),
 			},
 			PayloadAttestations: make([]*ethpb.PayloadAttestation, 0),
-			ParentExecutionRequests: &enginev1.ExecutionRequests{
+			ParentExecutionRequests: &enginev1.ExecutionRequestsGloas{
 				Withdrawals:    make([]*enginev1.WithdrawalRequest, 0),
 				Deposits:       make([]*enginev1.DepositRequest, 0),
 				Consolidations: make([]*enginev1.ConsolidationRequest, 0),

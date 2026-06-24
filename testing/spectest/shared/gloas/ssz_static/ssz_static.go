@@ -173,8 +173,12 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &enginev1.DepositRequest{}
 	case "ConsolidationRequest":
 		obj = &enginev1.ConsolidationRequest{}
+	case "BuilderDepositRequest":
+		obj = &enginev1.BuilderDepositRequest{}
+	case "BuilderExitRequest":
+		obj = &enginev1.BuilderExitRequest{}
 	case "ExecutionRequests":
-		obj = &enginev1.ExecutionRequests{}
+		obj = &enginev1.ExecutionRequestsGloas{}
 	case "DataColumnsByRootIdentifier":
 		obj = &ethpb.DataColumnsByRootIdentifier{}
 	case "MatrixEntry":

@@ -17,7 +17,7 @@ import (
 
 // UpgradeToGloas updates inputs a generic state to return the version Gloas state.
 //
-//	<spec fn="upgrade_to_gloas" fork="gloas" hash="d9a22a92">
+//	<spec fn="upgrade_to_gloas" fork="gloas" hash="c769e40a">
 //	def upgrade_to_gloas(pre: fulu.BeaconState) -> BeaconState:
 //	    epoch = fulu.get_current_epoch(pre)
 //
@@ -27,7 +27,7 @@ import (
 //	        slot=pre.slot,
 //	        fork=Fork(
 //	            previous_version=pre.fork.current_version,
-//	            # [Modified in Gloas:EIP7732]
+//	            # [Modified in Gloas]
 //	            current_version=GLOAS_FORK_VERSION,
 //	            epoch=epoch,
 //	        ),
@@ -94,56 +94,6 @@ import (
 //	    onboard_builders_from_pending_deposits(post)
 //
 //	    return post
-//	</spec>
-//
-//	<spec fn="process_execution_payload_bid" fork="gloas" hash="823c9f3a">
-//	def process_execution_payload_bid(state: BeaconState, block: BeaconBlock) -> None:
-//	    signed_bid = block.body.signed_execution_payload_bid
-//	    bid = signed_bid.message
-//	    builder_index = bid.builder_index
-//	    amount = bid.value
-//
-//	    # For self-builds, amount must be zero regardless of withdrawal credential prefix
-//	    if builder_index == BUILDER_INDEX_SELF_BUILD:
-//	        assert amount == 0
-//	        assert signed_bid.signature == bls.G2_POINT_AT_INFINITY
-//	    else:
-//	        # Verify that the builder is active
-//	        assert is_active_builder(state, builder_index)
-//	        # Verify that the builder has funds to cover the bid
-//	        assert can_builder_cover_bid(state, builder_index, amount)
-//	        # Verify that the bid signature is valid
-//	        assert verify_execution_payload_bid_signature(state, signed_bid)
-//
-//	    # Verify commitments are under limit
-//	    assert (
-//	        len(bid.blob_kzg_commitments)
-//	        <= get_blob_parameters(get_current_epoch(state)).max_blobs_per_block
-//	    )
-//
-//	    # Verify that the bid is for the current slot
-//	    assert bid.slot == block.slot
-//	    # Verify that the bid is for the right parent block
-//	    assert bid.parent_block_hash == state.latest_block_hash
-//	    assert bid.parent_block_root == block.parent_root
-//	    assert bid.prev_randao == get_randao_mix(state, get_current_epoch(state))
-//
-//	    # Record the pending payment if there is some payment
-//	    if amount > 0:
-//	        pending_payment = BuilderPendingPayment(
-//	            weight=0,
-//	            withdrawal=BuilderPendingWithdrawal(
-//	                fee_recipient=bid.fee_recipient,
-//	                amount=amount,
-//	                builder_index=builder_index,
-//	            ),
-//	        )
-//	        state.builder_pending_payments[SLOTS_PER_EPOCH + bid.slot % SLOTS_PER_EPOCH] = (
-//	            pending_payment
-//	        )
-//
-//	    # Cache the signed execution payload bid
-//	    state.latest_execution_payload_bid = bid
 //	</spec>
 func UpgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 	s, err := upgradeToGloas(beaconState)

@@ -1159,3 +1159,156 @@ func (e *ExecutionPayloadGloas) ToConsensus() (*enginev1.ExecutionPayloadGloas, 
 		SlotNumber:      primitives.Slot(payloadSlotNumber),
 	}, nil
 }
+
+// ----------------------------------------------------------------------------
+// Gloas
+// ----------------------------------------------------------------------------
+
+func BuilderDepositRequestsFromConsensus(bs []*enginev1.BuilderDepositRequest) []*BuilderDepositRequest {
+	result := make([]*BuilderDepositRequest, len(bs))
+	for i, b := range bs {
+		result[i] = &BuilderDepositRequest{
+			Pubkey:                hexutil.Encode(b.Pubkey),
+			WithdrawalCredentials: hexutil.Encode(b.WithdrawalCredentials),
+			Amount:                fmt.Sprintf("%d", b.Amount),
+			Signature:             hexutil.Encode(b.Signature),
+		}
+	}
+	return result
+}
+
+func (b *BuilderDepositRequest) ToConsensus() (*enginev1.BuilderDepositRequest, error) {
+	if b == nil {
+		return nil, server.NewDecodeError(errNilValue, "BuilderDepositRequest")
+	}
+	pubkey, err := bytesutil.DecodeHexWithLength(b.Pubkey, fieldparams.BLSPubkeyLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Pubkey")
+	}
+	wc, err := bytesutil.DecodeHexWithLength(b.WithdrawalCredentials, fieldparams.RootLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "WithdrawalCredentials")
+	}
+	amount, err := strconv.ParseUint(b.Amount, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Amount")
+	}
+	sig, err := bytesutil.DecodeHexWithLength(b.Signature, fieldparams.BLSSignatureLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Signature")
+	}
+	return &enginev1.BuilderDepositRequest{
+		Pubkey:                pubkey,
+		WithdrawalCredentials: wc,
+		Amount:                amount,
+		Signature:             sig,
+	}, nil
+}
+
+func BuilderExitRequestsFromConsensus(bs []*enginev1.BuilderExitRequest) []*BuilderExitRequest {
+	result := make([]*BuilderExitRequest, len(bs))
+	for i, b := range bs {
+		result[i] = &BuilderExitRequest{
+			SourceAddress: hexutil.Encode(b.SourceAddress),
+			Pubkey:        hexutil.Encode(b.Pubkey),
+		}
+	}
+	return result
+}
+
+func (b *BuilderExitRequest) ToConsensus() (*enginev1.BuilderExitRequest, error) {
+	if b == nil {
+		return nil, server.NewDecodeError(errNilValue, "BuilderExitRequest")
+	}
+	srcAddress, err := bytesutil.DecodeHexWithLength(b.SourceAddress, common.AddressLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "SourceAddress")
+	}
+	pubkey, err := bytesutil.DecodeHexWithLength(b.Pubkey, fieldparams.BLSPubkeyLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Pubkey")
+	}
+	return &enginev1.BuilderExitRequest{
+		SourceAddress: srcAddress,
+		Pubkey:        pubkey,
+	}, nil
+}
+
+func ExecutionRequestsGloasFromConsensus(er *enginev1.ExecutionRequestsGloas) *ExecutionRequestsGloas {
+	return &ExecutionRequestsGloas{
+		Deposits:        DepositRequestsFromConsensus(er.Deposits),
+		Withdrawals:     WithdrawalRequestsFromConsensus(er.Withdrawals),
+		Consolidations:  ConsolidationRequestsFromConsensus(er.Consolidations),
+		BuilderDeposits: BuilderDepositRequestsFromConsensus(er.BuilderDeposits),
+		BuilderExits:    BuilderExitRequestsFromConsensus(er.BuilderExits),
+	}
+}
+
+func (e *ExecutionRequestsGloas) ToConsensus() (*enginev1.ExecutionRequestsGloas, error) {
+	if e == nil {
+		return nil, server.NewDecodeError(errNilValue, "ExecutionRequestsGloas")
+	}
+	var err error
+	if err = slice.VerifyMaxLength(e.Deposits, params.BeaconConfig().MaxDepositRequestsPerPayload); err != nil {
+		return nil, err
+	}
+	depositRequests := make([]*enginev1.DepositRequest, len(e.Deposits))
+	for i, d := range e.Deposits {
+		depositRequests[i], err = d.ToConsensus()
+		if err != nil {
+			return nil, server.NewDecodeError(err, fmt.Sprintf("ExecutionRequests.Deposits[%d]", i))
+		}
+	}
+
+	if err = slice.VerifyMaxLength(e.Withdrawals, params.BeaconConfig().MaxWithdrawalRequestsPerPayload); err != nil {
+		return nil, err
+	}
+	withdrawalRequests := make([]*enginev1.WithdrawalRequest, len(e.Withdrawals))
+	for i, w := range e.Withdrawals {
+		withdrawalRequests[i], err = w.ToConsensus()
+		if err != nil {
+			return nil, server.NewDecodeError(err, fmt.Sprintf("ExecutionRequests.Withdrawals[%d]", i))
+		}
+	}
+
+	if err = slice.VerifyMaxLength(e.Consolidations, params.BeaconConfig().MaxConsolidationsRequestsPerPayload); err != nil {
+		return nil, err
+	}
+	consolidationRequests := make([]*enginev1.ConsolidationRequest, len(e.Consolidations))
+	for i, c := range e.Consolidations {
+		consolidationRequests[i], err = c.ToConsensus()
+		if err != nil {
+			return nil, server.NewDecodeError(err, fmt.Sprintf("ExecutionRequests.Consolidations[%d]", i))
+		}
+	}
+
+	if err = slice.VerifyMaxLength(e.BuilderDeposits, params.BeaconConfig().MaxBuilderDepositRequestsPerPayload); err != nil {
+		return nil, err
+	}
+	builderDeposits := make([]*enginev1.BuilderDepositRequest, len(e.BuilderDeposits))
+	for i, b := range e.BuilderDeposits {
+		builderDeposits[i], err = b.ToConsensus()
+		if err != nil {
+			return nil, server.NewDecodeError(err, fmt.Sprintf("ExecutionRequests.BuilderDeposits[%d]", i))
+		}
+	}
+
+	if err = slice.VerifyMaxLength(e.BuilderExits, params.BeaconConfig().MaxBuilderExitRequestsPerPayload); err != nil {
+		return nil, err
+	}
+	builderExits := make([]*enginev1.BuilderExitRequest, len(e.BuilderExits))
+	for i, b := range e.BuilderExits {
+		builderExits[i], err = b.ToConsensus()
+		if err != nil {
+			return nil, server.NewDecodeError(err, fmt.Sprintf("ExecutionRequests.BuilderExits[%d]", i))
+		}
+	}
+
+	return &enginev1.ExecutionRequestsGloas{
+		Deposits:        depositRequests,
+		Withdrawals:     withdrawalRequests,
+		Consolidations:  consolidationRequests,
+		BuilderDeposits: builderDeposits,
+		BuilderExits:    builderExits,
+	}, nil
+}

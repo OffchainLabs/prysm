@@ -43,7 +43,8 @@ func (payment *BuilderPendingPayment) Copy() *BuilderPendingPayment {
 		return nil
 	}
 	return &BuilderPendingPayment{
-		Weight:     payment.Weight,
-		Withdrawal: payment.Withdrawal.Copy(),
+		Weight:        payment.Weight,
+		Withdrawal:    payment.Withdrawal.Copy(),
+		ProposerIndex: payment.ProposerIndex,
 	}
 }
