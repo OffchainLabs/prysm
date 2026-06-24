@@ -57,7 +57,7 @@ const (
 	// ProposerPreferencesReceived is sent after signed proposer preferences are received from gossip or rpc.
 	ProposerPreferencesReceived = 15
 
-	// ExecutionPayloadBidReceived is sent after a signed execution payload bid is received from gossip that passes validation rules.
+	// ExecutionPayloadBidReceived is sent after a signed execution payload bid is received from gossip or rpc.
 	ExecutionPayloadBidReceived = 16
 )
 

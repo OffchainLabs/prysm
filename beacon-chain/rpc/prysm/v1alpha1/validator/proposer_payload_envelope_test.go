@@ -38,9 +38,9 @@ func testGloasBlock(t *testing.T) (*consensusblocks.GetPayloadResponse, interfac
 	require.NoError(t, err)
 
 	local := &consensusblocks.GetPayloadResponse{
-		ExecutionData:     ed,
-		Bid:               big.NewInt(0),
-		ExecutionRequests: &enginev1.ExecutionRequests{},
+		ExecutionData:          ed,
+		Bid:                    big.NewInt(0),
+		ExecutionRequestsGloas: &enginev1.ExecutionRequestsGloas{},
 	}
 
 	sBlk, err := consensusblocks.NewSignedBeaconBlock(util.NewBeaconBlockGloas())
@@ -194,7 +194,7 @@ func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
 				ExtraData:     make([]byte, 0),
 				SlotNumber:    1,
 			},
-			ExecutionRequests:     &enginev1.ExecutionRequests{},
+			ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 			BuilderIndex:          0,
 			BeaconBlockRoot:       make([]byte, 32),
 			ParentBeaconBlockRoot: make([]byte, 32),
@@ -237,7 +237,7 @@ func TestPublishExecutionPayloadEnvelope_ImportFailureIsAborted(t *testing.T) {
 				ExtraData:     make([]byte, 0),
 				SlotNumber:    1,
 			},
-			ExecutionRequests:     &enginev1.ExecutionRequests{},
+			ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 			BeaconBlockRoot:       make([]byte, 32),
 			ParentBeaconBlockRoot: make([]byte, 32),
 		},

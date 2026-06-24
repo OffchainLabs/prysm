@@ -273,8 +273,9 @@ type Builder struct {
 }
 
 type BuilderPendingPayment struct {
-	Weight     string                    `json:"weight"`
-	Withdrawal *BuilderPendingWithdrawal `json:"withdrawal"`
+	Weight        string                    `json:"weight"`
+	Withdrawal    *BuilderPendingWithdrawal `json:"withdrawal"`
+	ProposerIndex string                    `json:"proposer_index"`
 }
 
 type BuilderPendingWithdrawal struct {

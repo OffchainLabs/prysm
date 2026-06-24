@@ -114,8 +114,8 @@ func (p *executionPayloadEnvelope) Execution() (interfaces.ExecutionData, error)
 }
 
 // ExecutionRequests returns the execution requests attached to the envelope.
-func (p *executionPayloadEnvelope) ExecutionRequests() *enginev1.ExecutionRequests {
-	return ethpb.CopyExecutionRequests(p.p.ExecutionRequests)
+func (p *executionPayloadEnvelope) ExecutionRequests() *enginev1.ExecutionRequestsGloas {
+	return ethpb.CopyExecutionRequestsGloas(p.p.ExecutionRequests)
 }
 
 // BuilderIndex returns the proposer/builder index for the envelope.
@@ -176,8 +176,8 @@ func (p *blindedExecutionPayloadEnvelope) IsBlinded() bool {
 	return true
 }
 
-func (p *blindedExecutionPayloadEnvelope) ExecutionRequests() *enginev1.ExecutionRequests {
-	return ethpb.CopyExecutionRequests(p.p.ExecutionRequests)
+func (p *blindedExecutionPayloadEnvelope) ExecutionRequests() *enginev1.ExecutionRequestsGloas {
+	return ethpb.CopyExecutionRequestsGloas(p.p.ExecutionRequests)
 }
 
 func (p *blindedExecutionPayloadEnvelope) BuilderIndex() primitives.BuilderIndex {
