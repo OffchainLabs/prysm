@@ -46,10 +46,10 @@ func TestSetSelfBuildExecutionPayloadBid(t *testing.T) {
 	// 5 Gwei = 5,000,000,000 Wei
 	bidValue := big.NewInt(5_000_000_000)
 	local := &consensusblocks.GetPayloadResponse{
-		ExecutionData:     ed,
-		Bid:               bidValue,
-		BlobsBundler:      &enginev1.BlobsBundle{},
-		ExecutionRequests: &enginev1.ExecutionRequests{},
+		ExecutionData:          ed,
+		Bid:                    bidValue,
+		BlobsBundler:           &enginev1.BlobsBundle{},
+		ExecutionRequestsGloas: &enginev1.ExecutionRequestsGloas{},
 	}
 
 	vs := &Server{}
@@ -119,7 +119,7 @@ func TestSetSelfBuildExecutionPayloadBid_BlobCommitments(t *testing.T) {
 		BlobsBundler: &enginev1.BlobsBundle{
 			KzgCommitments: commitments,
 		},
-		ExecutionRequests: &enginev1.ExecutionRequests{},
+		ExecutionRequestsGloas: &enginev1.ExecutionRequestsGloas{},
 	}
 
 	vs := &Server{}
@@ -183,10 +183,10 @@ func TestSetExecutionPayloadBid_PrefersP2PBid(t *testing.T) {
 	require.NoError(t, err)
 
 	local := &consensusblocks.GetPayloadResponse{
-		ExecutionData:     ed,
-		Bid:               big.NewInt(0),
-		BlobsBundler:      &enginev1.BlobsBundle{},
-		ExecutionRequests: &enginev1.ExecutionRequests{},
+		ExecutionData:          ed,
+		Bid:                    big.NewInt(0),
+		BlobsBundler:           &enginev1.BlobsBundle{},
+		ExecutionRequestsGloas: &enginev1.ExecutionRequestsGloas{},
 	}
 
 	// Populate the highest bid cache with a P2P bid.
@@ -257,10 +257,10 @@ func TestSetExecutionPayloadBid_PrefersLocalWhenHigherValue(t *testing.T) {
 
 	// Local bid is 2000 Gwei (in Wei: 2000 * 1e9).
 	local := &consensusblocks.GetPayloadResponse{
-		ExecutionData:     ed,
-		Bid:               big.NewInt(2000_000_000_000),
-		BlobsBundler:      &enginev1.BlobsBundle{},
-		ExecutionRequests: &enginev1.ExecutionRequests{},
+		ExecutionData:          ed,
+		Bid:                    big.NewInt(2000_000_000_000),
+		BlobsBundler:           &enginev1.BlobsBundle{},
+		ExecutionRequestsGloas: &enginev1.ExecutionRequestsGloas{},
 	}
 
 	// P2P bid is only 1000 Gwei — local should win.
@@ -330,10 +330,10 @@ func TestSetExecutionPayloadBid_SelfBuildOnlyIgnoresCache(t *testing.T) {
 	require.NoError(t, err)
 
 	local := &consensusblocks.GetPayloadResponse{
-		ExecutionData:     ed,
-		Bid:               big.NewInt(0),
-		BlobsBundler:      &enginev1.BlobsBundle{},
-		ExecutionRequests: &enginev1.ExecutionRequests{},
+		ExecutionData:          ed,
+		Bid:                    big.NewInt(0),
+		BlobsBundler:           &enginev1.BlobsBundle{},
+		ExecutionRequestsGloas: &enginev1.ExecutionRequestsGloas{},
 	}
 
 	// P2P bid has higher value, but selfBuildOnly=true should force self-build.
@@ -402,10 +402,10 @@ func TestSetExecutionPayloadBid_FallsBackToSelfBuildWhenNoCachedBid(t *testing.T
 	require.NoError(t, err)
 
 	local := &consensusblocks.GetPayloadResponse{
-		ExecutionData:     ed,
-		Bid:               big.NewInt(0),
-		BlobsBundler:      &enginev1.BlobsBundle{},
-		ExecutionRequests: &enginev1.ExecutionRequests{},
+		ExecutionData:          ed,
+		Bid:                    big.NewInt(0),
+		BlobsBundler:           &enginev1.BlobsBundle{},
+		ExecutionRequestsGloas: &enginev1.ExecutionRequestsGloas{},
 	}
 
 	// Empty cache — no P2P bids.

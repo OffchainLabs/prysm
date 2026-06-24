@@ -87,12 +87,24 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyBuilderActive(st); err != nil {
 		return pubsub.ValidationReject, err
 	}
+	// [REJECT] the builder version is PAYLOAD_BUILDER_VERSION.
+	if err := v.VerifyBuilderVersion(st); err != nil {
+		return pubsub.ValidationReject, err
+	}
 	// [REJECT] bid.execution_payment is zero.
 	if err := v.VerifyExecutionPaymentZero(); err != nil {
 		return pubsub.ValidationReject, err
 	}
 	// [REJECT] bid.fee_recipient matches the fee_recipient from the proposer's SignedProposerPreferences associated with bid.slot.
 	if err := v.VerifyFeeRecipientMatches(pref.FeeRecipient[:]); err != nil {
+		return pubsub.ValidationReject, err
+	}
+	// [REJECT] len(bid.blob_kzg_commitments) <= get_blob_parameters(compute_epoch_at_slot(bid.slot)).max_blobs_per_block.
+	if err := v.VerifyBlobKzgCommitmentsLimit(); err != nil {
+		return pubsub.ValidationReject, err
+	}
+	// [REJECT] bid.prev_randao == get_randao_mix(parent_state, get_current_epoch(parent_state)).
+	if err := v.VerifyPrevRandao(st); err != nil {
 		return pubsub.ValidationReject, err
 	}
 	if err := v.VerifySignature(st); err != nil {

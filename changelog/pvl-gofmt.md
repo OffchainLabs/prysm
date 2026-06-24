@@ -1,3 +1,0 @@
-### Ignored
-
-- Ran gofmt
