@@ -82,6 +82,17 @@ func (s *Service) monitorSelfSubmittedAttestations() {
 
 				// Aggregates we build ourselves never come back over gossip, so match them here too.
 				s.matchSelfSubmittedAttestation(s.ctx, data.Aggregate)
+			case operation.AggregatedAttReceived:
+				data, ok := e.Data.(*operation.AggregatedAttReceivedData)
+				if !ok {
+					log.Error("Event feed data is not of type *operation.AggregatedAttReceivedData")
+					continue
+				}
+				if data.Attestation == nil {
+					continue
+				}
+
+				s.matchSelfSubmittedAttestation(s.ctx, data.Attestation.AggregateVal())
 			default:
 				continue
 			}

@@ -14,7 +14,7 @@ import (
 // beaconAggregateProofSubscriber forwards the incoming validated aggregated attestation and proof to the
 // attestation pool for processing.
 func (s *Service) beaconAggregateProofSubscriber(ctx context.Context, msg proto.Message) error {
-	ctx, span := trace.StartSpan(ctx, "sync.beaconAggregateProofSubscriber")
+	_, span := trace.StartSpan(ctx, "sync.beaconAggregateProofSubscriber")
 	defer span.End()
 
 	a, ok := msg.(ethpb.SignedAggregateAttAndProof)
@@ -27,9 +27,6 @@ func (s *Service) beaconAggregateProofSubscriber(ctx context.Context, msg proto.
 	if aggregate == nil || aggregate.GetData() == nil {
 		return errors.New("nil aggregate")
 	}
-
-	s.matchSelfSubmittedAttestation(ctx, aggregate)
-	s.matchWatchedDuties(ctx, aggregate)
 
 	if features.Get().EnableExperimentalAttestationPool {
 		return s.cfg.attestationCache.Add(aggregate)

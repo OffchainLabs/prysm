@@ -6,6 +6,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -59,16 +61,59 @@ func (s *Service) monitorWatchedValidatorDuties() {
 	ticker := time.NewTicker(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
 	defer ticker.Stop()
 
+	// Subscribe to the operation feed to observe received aggregates. Matching is driven from this
+	// feed rather than beaconAggregateProofSubscriber because that subscriber is skipped for
+	// aggregates already covered in the pool (e.g. on subnets this node is subscribed to); the
+	// AggregatedAttReceived event fires before that dedup, so it sees every received aggregate.
+	var aggregateChannel chan *feed.Event
+	if s.cfg.attestationNotifier != nil {
+		aggregateChannel = make(chan *feed.Event, selfAttChannelBuffer)
+		subscription := s.cfg.attestationNotifier.OperationFeed().Subscribe(aggregateChannel)
+		defer subscription.Unsubscribe()
+	} else {
+		log.Debug("Attestation notifier not configured, watched validators monitor will not observe aggregates")
+	}
+
 	for {
 		select {
 		case <-ticker.C:
 			slot := s.cfg.clock.CurrentSlot()
 			s.seedWatchedDuties(s.ctx, slot, indices)
 			s.reportWatchedDuties(slot)
+		case e := <-aggregateChannel:
+			s.handleWatchedAggregateEvent(e)
 		case <-s.ctx.Done():
 			log.Debug("Context closed, exiting watched validators monitor")
 			return
 		}
+	}
+}
+
+// handleWatchedAggregateEvent matches watched validators against an aggregate delivered over the
+// operation feed, for both aggregates received over gossip and aggregates this node builds itself.
+func (s *Service) handleWatchedAggregateEvent(e *feed.Event) {
+	switch e.Type {
+	case operation.AggregatedAttReceived:
+		data, ok := e.Data.(*operation.AggregatedAttReceivedData)
+		if !ok {
+			log.Error("Event feed data is not of type *operation.AggregatedAttReceivedData")
+			return
+		}
+		if data.Attestation == nil {
+			return
+		}
+
+		s.matchWatchedDuties(s.ctx, data.Attestation.AggregateVal())
+	case operation.LocalAggregateSubmitted:
+		data, ok := e.Data.(*operation.LocalAggregateSubmittedData)
+		if !ok {
+			log.Error("Event feed data is not of type *operation.LocalAggregateSubmittedData")
+			return
+		}
+
+		// Aggregates we build ourselves never come back over gossip, so match them here too.
+		s.matchWatchedDuties(s.ctx, data.Aggregate)
+	default:
 	}
 }
 
