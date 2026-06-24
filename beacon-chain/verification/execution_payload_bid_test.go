@@ -232,6 +232,67 @@ func TestBidVerifier_VerifySignature(t *testing.T) {
 	require.ErrorIs(t, verifier.VerifySignature(st), signing.ErrSigFailedToVerify)
 }
 
+func TestBidVerifier_VerifyBuilderVersion(t *testing.T) {
+	signed := testSignedExecutionPayloadBid(t, 1)
+	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
+	require.NoError(t, err)
+
+	payloadBuilder := newBidState(t, 1, func(s *ethpb.BeaconStateGloas) {
+		s.Builders = []*ethpb.Builder{{Version: []byte{0}, WithdrawableEpoch: params.BeaconConfig().FarFutureEpoch}}
+	})
+	verifier := &BidVerifier{results: newResults(RequireBidBuilderVersionValid), b: wrapped}
+	require.NoError(t, verifier.VerifyBuilderVersion(payloadBuilder))
+
+	nonPayloadBuilder := newBidState(t, 1, func(s *ethpb.BeaconStateGloas) {
+		s.Builders = []*ethpb.Builder{{Version: []byte{params.BeaconConfig().BuilderWithdrawalPrefixByte}, WithdrawableEpoch: params.BeaconConfig().FarFutureEpoch}}
+	})
+	verifier = &BidVerifier{results: newResults(RequireBidBuilderVersionValid), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyBuilderVersion(nonPayloadBuilder), ErrBidBuilderVersionInvalid)
+}
+
+func TestBidVerifier_VerifyBlobKzgCommitmentsLimit(t *testing.T) {
+	maxBlobs := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(slots.ToEpoch(1))
+	commitments := func(n int) [][]byte {
+		c := make([][]byte, n)
+		for i := range c {
+			c[i] = bytes.Repeat([]byte{0x01}, 48)
+		}
+		return c
+	}
+
+	atLimit := testSignedExecutionPayloadBid(t, 1)
+	atLimit.Message.BlobKzgCommitments = commitments(maxBlobs)
+	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(atLimit)
+	require.NoError(t, err)
+	verifier := &BidVerifier{results: newResults(RequireBidBlobKzgCommitmentsLimit), b: wrapped}
+	require.NoError(t, verifier.VerifyBlobKzgCommitmentsLimit())
+
+	overLimit := testSignedExecutionPayloadBid(t, 1)
+	overLimit.Message.BlobKzgCommitments = commitments(maxBlobs + 1)
+	wrapped, err = blocks.WrappedROSignedExecutionPayloadBid(overLimit)
+	require.NoError(t, err)
+	verifier = &BidVerifier{results: newResults(RequireBidBlobKzgCommitmentsLimit), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyBlobKzgCommitmentsLimit(), ErrBidTooManyBlobKzgCommitments)
+}
+
+func TestBidVerifier_VerifyPrevRandao(t *testing.T) {
+	signed := testSignedExecutionPayloadBid(t, 1)
+	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
+	require.NoError(t, err)
+
+	matching := newBidState(t, 1, func(s *ethpb.BeaconStateGloas) {
+		s.RandaoMixes[0] = bytes.Repeat([]byte{0x04}, 32)
+	})
+	verifier := &BidVerifier{results: newResults(RequireBidPrevRandaoValid), b: wrapped}
+	require.NoError(t, verifier.VerifyPrevRandao(matching))
+
+	mismatching := newBidState(t, 1, func(s *ethpb.BeaconStateGloas) {
+		s.RandaoMixes[0] = bytes.Repeat([]byte{0x09}, 32)
+	})
+	verifier = &BidVerifier{results: newResults(RequireBidPrevRandaoValid), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyPrevRandao(mismatching), ErrBidPrevRandaoMismatch)
+}
+
 func testSignedExecutionPayloadBid(t *testing.T, slot primitives.Slot) *ethpb.SignedExecutionPayloadBid {
 	t.Helper()
 

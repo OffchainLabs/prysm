@@ -223,6 +223,8 @@ go_test(
         "gloas__operations__attester_slashing_test.go",
         "gloas__operations__block_header_test.go",
         "gloas__operations__bls_to_execution_change_test.go",
+        "gloas__operations__builder_deposit_request_test.go",
+        "gloas__operations__builder_exit_request_test.go",
         "gloas__operations__consolidation_test.go",
         "gloas__operations__deposit_requests_test.go",
         "gloas__operations__execution_payload_header_test.go",
