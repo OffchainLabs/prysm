@@ -329,10 +329,8 @@ func (s *Server) handleAttestationsPostElectra(
 				if err = s.AttestationCache.Add(att); err != nil {
 					log.WithError(err).Error("Could not save attestation")
 				}
-			} else {
-				if err = s.AttestationsPool.SaveUnaggregatedAttestation(att); err != nil {
-					log.WithError(err).Error("Could not save attestation")
-				}
+			} else if err = s.AttestationsPool.SaveUnaggregatedAttestation(att); err != nil {
+				log.WithError(err).Error("Could not save attestation")
 			}
 		}
 	}()
@@ -431,10 +429,8 @@ func (s *Server) handleAttestations(
 			if err = s.AttestationsPool.SaveAggregatedAttestation(att); err != nil {
 				log.WithError(err).Error("Could not save aggregated attestation")
 			}
-		} else {
-			if err = s.AttestationsPool.SaveUnaggregatedAttestation(att); err != nil {
-				log.WithError(err).Error("Could not save unaggregated attestation")
-			}
+		} else if err = s.AttestationsPool.SaveUnaggregatedAttestation(att); err != nil {
+			log.WithError(err).Error("Could not save unaggregated attestation")
 		}
 	}
 

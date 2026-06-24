@@ -151,6 +151,32 @@ func TestAdd(t *testing.T) {
 		require.Equal(t, 1, len(group.atts))
 		assert.DeepEqual(t, []int{0, 1}, group.atts[0].GetAggregationBits().BitIndices())
 	})
+	t.Run("added attestation is copied", func(t *testing.T) {
+		// We want to make sure that the running aggregate is based on a copy of the original attestation,
+		// to avoid mutating the original attestation.
+
+		c := NewAttestationCache()
+		ab := bitfield.NewBitlist(8)
+		ab.SetBitAt(0, true)
+		original := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 123, BeaconBlockRoot: make([]byte, 32), Source: &ethpb.Checkpoint{Root: make([]byte, 32)}, Target: &ethpb.Checkpoint{Root: make([]byte, 32)}},
+			AggregationBits: ab,
+			Signature:       sig.Marshal(),
+		}
+		require.NoError(t, c.Add(original))
+
+		ab = bitfield.NewBitlist(8)
+		ab.SetBitAt(1, true)
+		a := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 123, BeaconBlockRoot: make([]byte, 32), Source: &ethpb.Checkpoint{Root: make([]byte, 32)}, Target: &ethpb.Checkpoint{Root: make([]byte, 32)}},
+			AggregationBits: ab,
+			Signature:       sig.Marshal(),
+		}
+		require.NoError(t, c.Add(a))
+
+		// Assert that the bit of the second attestation was not added to the original attestation.
+		assert.Equal(t, uint64(1), original.AggregationBits.Count())
+	})
 }
 
 func TestGetAll(t *testing.T) {

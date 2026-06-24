@@ -26,11 +26,10 @@ func (s *Service) beaconAggregateProofSubscriber(_ context.Context, msg proto.Me
 
 	if features.Get().EnableExperimentalAttestationPool {
 		return s.cfg.attestationCache.Add(aggregate)
-	} else {
-		// An unaggregated attestation can make it here. It’s valid, the aggregator it just itself, although it means poor performance for the subnet.
-		if !aggregate.IsAggregated() {
-			return s.cfg.attPool.SaveUnaggregatedAttestation(aggregate)
-		}
+	}
+	if aggregate.IsAggregated() {
 		return s.cfg.attPool.SaveAggregatedAttestation(aggregate)
 	}
+	// An unaggregated attestation can make it here. It’s valid, the aggregator it just itself, although it means poor performance for the subnet.
+	return s.cfg.attPool.SaveUnaggregatedAttestation(aggregate)
 }
