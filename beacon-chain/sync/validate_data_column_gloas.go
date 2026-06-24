@@ -294,11 +294,18 @@ func (s *Service) pruneStaleGloasColumns(currentSlot primitives.Slot) {
 		if e.slot+1 >= currentSlot {
 			continue
 		}
+		// Dedupe forwarders: a peer that relayed many columns for one root is downscored once, not per column.
+		seen := make(map[peer.ID]struct{})
 		peers := make([]peer.ID, 0, fieldparams.NumberOfColumns)
 		for _, pe := range e.columns {
-			if pe != nil {
-				peers = append(peers, pe.peer)
+			if pe == nil {
+				continue
 			}
+			if _, ok := seen[pe.peer]; ok {
+				continue
+			}
+			seen[pe.peer] = struct{}{}
+			peers = append(peers, pe.peer)
 		}
 		pruned = append(pruned, prunedRoot{root: r, peers: peers})
 		delete(s.pendingGloasColumns, r)
