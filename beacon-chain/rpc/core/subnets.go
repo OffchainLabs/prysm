@@ -32,19 +32,18 @@ type SubnetSubscription struct {
 func ComputeAndCacheCommitteeSubnets(ctx context.Context, headFetcher HeadValidatorIndicesFetcher, subs []SubnetSubscription) error {
 	var currValsLen uint64
 	var currEpoch primitives.Epoch
-	haveValsLen := false
 	for _, sub := range subs {
 		var subnet uint64
 		if sub.CommitteesAtSlot > 0 {
 			subnet = helpers.ComputeSubnetForCommitteesPerSlot(sub.CommitteesAtSlot, sub.CommitteeIndex, sub.Slot)
 		} else {
 			epoch := slots.ToEpoch(sub.Slot)
-			if !haveValsLen || currEpoch != epoch {
+			if currValsLen == 0 || currEpoch != epoch {
 				vals, err := headFetcher.HeadValidatorsIndices(ctx, epoch)
 				if err != nil {
 					return err
 				}
-				currValsLen, currEpoch, haveValsLen = uint64(len(vals)), epoch, true
+				currValsLen, currEpoch = uint64(len(vals)), epoch
 			}
 			subnet = helpers.ComputeSubnetFromCommitteeAndSlot(currValsLen, sub.CommitteeIndex, sub.Slot)
 		}

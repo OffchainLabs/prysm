@@ -850,7 +850,7 @@ func TestServer_SubscribeCommitteeSubnets_RejectsUnknownValidator(t *testing.T) 
 		IsAggregator:     []bool{false, false},
 		ValidatorIndices: []primitives.ValidatorIndex{3, 100},
 	})
-	require.ErrorContains(t, "Could not get validator", err)
+	require.ErrorContains(t, "validator index 100 does not exist", err)
 	assert.Equal(t, false, attesterServer.SubscribedValidatorsCache.Has(100))
 	// The valid index preceding the out-of-bounds one must not survive either.
 	assert.Equal(t, false, attesterServer.SubscribedValidatorsCache.Has(3))

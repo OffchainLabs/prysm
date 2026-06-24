@@ -3076,7 +3076,9 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 			})
 			v.duties.write(data)
 
-			v.upgradeProposerSettingsToV2(t.Context(), slots.ToEpoch(midEpochSlot))
+			if slots.ToEpoch(midEpochSlot) >= params.BeaconConfig().GloasForkEpoch {
+				v.upgradeProposerSettingsToV2(t.Context())
+			}
 			prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
 			require.Equal(t, 1, len(prefs))
 			require.Equal(t, tt.wantGasLimit, prefs[0].Message.TargetGasLimit)

@@ -64,7 +64,6 @@ func (vs *Server) SubmitSignedProposerPreferences(
 			)
 		}
 
-		valIdx := msg.Message.ValidatorIndex
 		currentSlot := vs.TimeFetcher.CurrentSlot()
 		if proposalSlot <= currentSlot {
 			return nil, status.Errorf(
@@ -81,10 +80,8 @@ func (vs *Server) SubmitSignedProposerPreferences(
 				fieldparams.RootLength, len(msg.Message.DependentRoot),
 			)
 		}
-		// Skip gossip for an already-cached pref so we don't re-broadcast the
-		// same signed pref every slot. Cache only after a successful broadcast
-		// so a failed broadcast is retried rather than masked as a duplicate.
 		dependentRoot := bytesutil.ToBytes32(msg.Message.DependentRoot)
+
 		if vs.ProposerPreferencesCache.Has(dependentRoot, proposalSlot) {
 			duplicate++
 			continue
@@ -95,9 +92,10 @@ func (vs *Server) SubmitSignedProposerPreferences(
 				"Could not broadcast signed proposer preferences (broadcast %d/%d): %v",
 				broadcast, len(req.SignedProposerPreferences), err)
 		}
+
 		vs.ProposerPreferencesCache.Add(cache.ProposerPreference{
 			DependentRoot:  dependentRoot,
-			ValidatorIndex: valIdx,
+			ValidatorIndex: msg.Message.ValidatorIndex,
 			FeeRecipient:   bytesutil.ToBytes20(msg.Message.FeeRecipient),
 			TargetGasLimit: msg.Message.TargetGasLimit,
 		}, proposalSlot)

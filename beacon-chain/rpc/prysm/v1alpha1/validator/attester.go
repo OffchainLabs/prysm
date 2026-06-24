@@ -2,7 +2,6 @@ package validator
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
@@ -12,7 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -150,12 +148,10 @@ func (vs *Server) SubscribeCommitteeSubnets(ctx context.Context, req *ethpb.Comm
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
 		}
+		numVals := uint64(st.NumValidators())
 		for _, idx := range req.ValidatorIndices {
-			if _, err := st.ValidatorAtIndexReadOnly(idx); err != nil {
-				if errors.Is(err, mvslice.ErrOutOfBounds) {
-					return nil, status.Errorf(codes.InvalidArgument, "Could not get validator: %v", err)
-				}
-				return nil, status.Errorf(codes.Internal, "Could not get validator: %v", err)
+			if uint64(idx) >= numVals {
+				return nil, status.Errorf(codes.InvalidArgument, "validator index %d does not exist (validator count %d)", idx, numVals)
 			}
 		}
 	}

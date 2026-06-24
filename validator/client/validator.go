@@ -841,9 +841,10 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		}); err != nil {
 			return err
 		}
+	} else {
+		v.upgradeProposerSettingsToV2(ctx)
 	}
 
-	v.upgradeProposerSettingsToV2(ctx, currentEpoch)
 	prefs := v.buildProposerPreferences(ctx, km, slot, false)
 	if len(prefs) > 0 {
 		// Delay to mid-slot so the block for this slot is processed first.
@@ -1041,12 +1042,9 @@ func (v *validator) buildProposerSettingsRequests(
 }
 
 // upgradeProposerSettingsToV2 migrates v1 proposer settings to v2 and persists
-// them. Deferred until gloas-active so the pre-gloas registration path still
-// sees BuilderConfig.
-func (v *validator) upgradeProposerSettingsToV2(ctx context.Context, currentEpoch primitives.Epoch) {
-	if currentEpoch < params.BeaconConfig().GloasForkEpoch {
-		return
-	}
+// them. Callers must gate this on gloas-active so the pre-gloas registration
+// path still sees BuilderConfig.
+func (v *validator) upgradeProposerSettingsToV2(ctx context.Context) {
 	ps := v.ProposerSettings()
 	if !ps.UpgradeToV2() {
 		return
@@ -1268,7 +1266,9 @@ func (v *validator) submitProposerPreferences(ctx context.Context) {
 		log.WithError(err).Warn("Failed to get keymanager for proposer preference resubmission")
 		return
 	}
-	v.upgradeProposerSettingsToV2(ctx, currentEpoch)
+	if currentEpoch >= params.BeaconConfig().GloasForkEpoch {
+		v.upgradeProposerSettingsToV2(ctx)
+	}
 	prefs := v.buildProposerPreferences(ctx, km, slot, true)
 	if len(prefs) == 0 {
 		return
