@@ -79,7 +79,9 @@ func FindStateFile(dir string) (GenesisData, error) {
 		if err != nil {
 			continue
 		}
-		return gd, nil
+		if gd.ValidatorsRoot == params.BeaconConfig().GenesisValidatorsRoot {
+			return gd, nil
+		}
 	}
 	return GenesisData{}, ErrGenesisFileNotFound
 }
