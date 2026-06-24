@@ -3,6 +3,8 @@ package sync
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -121,6 +123,14 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyParentBlockRootSeen(s.cfg.chain.InForkchoice); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
+	// [REJECT] bid.slot is greater than the slot of the block with root bid.parent_block_root.
+	parentSlot, err := s.cfg.chain.RecentBlockSlot(parentBlockRoot)
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	if err := v.VerifyBidSlotHigherThanParent(parentSlot); err != nil {
+		return pubsub.ValidationReject, err
+	}
 	msg.ValidatorData = signedBid
 	return pubsub.ValidationAccept, nil
 }
@@ -134,6 +144,10 @@ func (s *Service) executionPayloadBidSubscriber(_ context.Context, msg proto.Mes
 		return errNilMessage
 	}
 	s.setHighestExecutionPayloadBid(signedBid)
+	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
+		Type: opfeed.ExecutionPayloadBidReceived,
+		Data: &opfeed.ExecutionPayloadBidReceivedData{Bid: signedBid},
+	})
 	return nil
 }
 

@@ -6,11 +6,12 @@ package sync
 
 import (
 	"context"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/async"
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
@@ -149,7 +150,7 @@ type Service struct {
 	subHandler                           *subTopicHandler
 	pendingAttsLock                      sync.RWMutex
 	pendingQueueLock                     sync.RWMutex
-	chainStarted                         *abool.AtomicBool
+	chainStarted                         *atomic.Bool
 	validateBlockLock                    sync.RWMutex
 	rateLimiter                          *limiter
 	seenBlockLock                        sync.RWMutex
@@ -222,7 +223,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	r := &Service{
 		ctx:                      ctx,
 		cancel:                   cancel,
-		chainStarted:             abool.New(),
+		chainStarted:             &atomic.Bool{},
 		cfg:                      &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
 		slotToPendingBlocks:      gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
 		seenPendingBlocks:        make(map[[32]byte]bool),
@@ -317,12 +318,17 @@ func (s *Service) Start() {
 	s.newExecutionPayloadEnvelopeVerifier = newPayloadVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
+
+	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
+		go broadcaster.Start(&partialColumnCallbacks{service: s})
+	}
+
 	go s.startDiscoveryAndSubscriptions()
 	go s.processDataColumnLogs()
 
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
-	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, _ peer.ID) error {
-		// no-op
+	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, id peer.ID) error {
+		s.rateLimiter.removePeer(id)
 		return nil
 	})
 	s.cfg.p2p.AddPingMethod(s.sendPingRequest)
@@ -366,15 +372,13 @@ func (s *Service) Stop() error {
 
 	// Use WaitGroup to ensure all goodbye messages complete
 	var wg sync.WaitGroup
-	for _, peerID := range s.cfg.p2p.Peers().Connected() {
-		if s.cfg.p2p.Host().Network().Connectedness(peerID) == network.Connected {
-			wg.Add(1)
-			go func(pid peer.ID) {
-				defer wg.Done()
+	for _, pid := range s.cfg.p2p.Peers().Connected() {
+		if s.cfg.p2p.Host().Network().Connectedness(pid) == network.Connected {
+			wg.Go(func() {
 				if err := s.sendGoodByeAndDisconnect(goodbyeCtx, p2ptypes.GoodbyeCodeClientShutdown, pid); err != nil {
 					log.WithError(err).WithField("peerID", pid).Error("Failed to send goodbye message")
 				}
-			}(peerID)
+			})
 		}
 	}
 	wg.Wait()
@@ -387,6 +391,7 @@ func (s *Service) Stop() error {
 	for _, t := range s.cfg.p2p.PubSub().GetTopics() {
 		s.unSubscribeFromTopic(t)
 	}
+
 	return nil
 }
 
@@ -469,6 +474,73 @@ func (s *Service) waitForChainStart() {
 	s.markForChainStart()
 }
 
+// partialColumnCallbacks implements the callbacks the partial column broadcaster uses to verify and handle partial messages.
+type partialColumnCallbacks struct {
+	service *Service
+}
+
+// PartialVerifierFromHeader returns a partial column verifier seeded from an untrusted partial data column header.
+func (c *partialColumnCallbacks) PartialVerifierFromHeader(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, pubsub.ValidationResult, error) {
+	return c.service.validatePartialDataColumnHeader(c.service.ctx, col)
+}
+
+// PartialVerifierFromTrustedColumn returns a partial column verifier seeded from a trusted data column.
+func (c *partialColumnCallbacks) PartialVerifierFromTrustedColumn(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
+	return c.service.partialVerifierFromTrustedColumn(c.service.ctx, col)
+}
+
+// ValidateColumn verifies the KZG proofs for the given cells.
+func (c *partialColumnCallbacks) ValidateColumn(cellsToVerify []blocks.CellProofBundle) error {
+	return peerdas.VerifyDataColumnsCellsKZGProofs(cellsToVerify)
+}
+
+// HandleColumn handles a data column completed from a partial message.
+func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedRODataColumn) {
+	ctx, cancel := context.WithTimeout(c.service.ctx, pubsubMessageTimeout)
+	defer cancel()
+
+	slot := col.Slot()
+	proposerIndex, err := col.ProposerIndex()
+	if err != nil {
+		log.WithError(err).Error("Failed to get proposer index from data column")
+		return
+	}
+	commitments, err := col.KzgCommitments()
+	if err != nil {
+		log.WithError(err).Error("Failed to get KZG commitments from data column")
+		return
+	}
+	if c.service.hasSeenDataColumnIndex(slot, proposerIndex, col.Index()) {
+		return
+	}
+
+	c.service.setSeenDataColumnIndex(slot, proposerIndex, col.Index())
+	if len(commitments) == 0 {
+		return
+	}
+	// This column was completed from a partial message.
+	partialMessageColumnCompletionsTotal.WithLabelValues(strconv.FormatUint(col.Index(), 10)).Inc()
+	if err := c.service.verifiedRODataColumnSubscriber(ctx, col); err != nil {
+		log.WithError(err).Error("Failed to handle verified RO data column subscriber")
+	}
+}
+
+// HandleHeader handles a received partial data column header.
+func (c *partialColumnCallbacks) HandleHeader(header *ethpb.PartialDataColumnHeader, groupID string) {
+	ctx, cancel := context.WithTimeout(c.service.ctx, pubsubMessageTimeout)
+	defer cancel()
+	source, err := peerdas.PopulateFromPartialHeader(header)
+	if err != nil {
+		log.WithError(err).Error("Failed to populate from partial data column header")
+		return
+	}
+	log.WithField("slot", source.Slot()).Debug("Received data column header")
+	err = c.service.processDataColumnSidecarsFromExecution(ctx, source)
+	if err != nil {
+		log.WithError(err).Error("Failed to process partial data column header")
+	}
+}
+
 func (s *Service) startDiscoveryAndSubscriptions() {
 	// Wait for the chain to start.
 	s.waitForChainStart()
@@ -492,7 +564,7 @@ func (s *Service) setRateCollector(topic string, c *leakybucket.Collector) {
 
 // marks the chain as having started.
 func (s *Service) markForChainStart() {
-	s.chainStarted.Set()
+	s.chainStarted.Store(true)
 }
 
 // pruneDataColumnCache removes entries from the data column cache that are older than the finalized slot.
@@ -514,16 +586,7 @@ func (s *Service) pruneDataColumnCache() {
 }
 
 func (s *Service) chainIsStarted() bool {
-	return s.chainStarted.IsSet()
-}
-
-func (s *Service) waitForInitialSync(ctx context.Context) error {
-	select {
-	case <-s.initialSyncComplete:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	return s.chainStarted.Load()
 }
 
 // UpdateCustodyInfoInDB updates the custody information in the database.

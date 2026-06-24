@@ -13,6 +13,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	p2pMock "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -101,6 +103,7 @@ func TestPublishSignedExecutionPayloadBid_JSON(t *testing.T) {
 		TimeFetcher:           &chainMock.ChainService{},
 		OptimisticModeFetcher: &chainMock.ChainService{},
 		Broadcaster:           broadcaster,
+		OperationNotifier:     &chainMock.MockOperationNotifier{},
 	}
 
 	bid := testJSONSignedBid()
@@ -162,6 +165,7 @@ func TestPublishSignedExecutionPayloadBid_SSZ(t *testing.T) {
 		TimeFetcher:           &chainMock.ChainService{},
 		OptimisticModeFetcher: &chainMock.ChainService{},
 		Broadcaster:           broadcaster,
+		OperationNotifier:     &chainMock.MockOperationNotifier{},
 	}
 
 	bid := &ethpb.SignedExecutionPayloadBid{
@@ -192,6 +196,42 @@ func TestPublishSignedExecutionPayloadBid_SSZ(t *testing.T) {
 	s.PublishSignedExecutionPayloadBid(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 	require.Equal(t, 1, len(broadcaster.BroadcastMessages))
+}
+
+func TestPublishSignedExecutionPayloadBid_FiresEvent(t *testing.T) {
+	notifier := &chainMock.MockOperationNotifier{}
+	s := &Server{
+		SyncChecker:           &mockSync.Sync{IsSyncing: false},
+		HeadFetcher:           &chainMock.ChainService{},
+		TimeFetcher:           &chainMock.ChainService{},
+		OptimisticModeFetcher: &chainMock.ChainService{},
+		Broadcaster:           &p2pMock.MockBroadcaster{},
+		OperationNotifier:     notifier,
+	}
+
+	events := make(chan *feed.Event, 1)
+	sub := notifier.OperationFeed().Subscribe(events)
+	defer sub.Unsubscribe()
+
+	body, err := json.Marshal(testJSONSignedBid())
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_bids", bytes.NewReader(body))
+	req.Header.Set(api.VersionHeader, "gloas")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.PublishSignedExecutionPayloadBid(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	require.Equal(t, 1, len(events))
+
+	ev := <-events
+	require.Equal(t, feed.EventType(opfeed.ExecutionPayloadBidReceived), ev.Type)
+
+	data, ok := ev.Data.(*opfeed.ExecutionPayloadBidReceivedData)
+	require.Equal(t, true, ok)
+	require.Equal(t, uint64(100), uint64(data.Bid.Message.Slot))
 }
 
 // errorBroadcaster is a test broadcaster that always returns an error.

@@ -11,6 +11,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -586,7 +587,7 @@ func TestGloasHeadComputation(t *testing.T) {
 
 	// Set full PTC votes for C's payload. Head is still D
 	for i := range uint64(fieldparams.PTCSize) {
-		emptyC.node.setPayloadAvailabilityVote(i)
+		emptyC.node.payloadAvailabilityVote.SetBitAt(i, true)
 	}
 
 	headRoot, err = f.Head(ctx)
@@ -595,7 +596,7 @@ func TestGloasHeadComputation(t *testing.T) {
 
 	// Set data availability votes now for C, head should become C full
 	for i := range uint64(fieldparams.PTCSize) {
-		emptyC.node.setPayloadDataAvailabilityVote(i)
+		emptyC.node.payloadDataAvailabilityVote.SetBitAt(i, true)
 	}
 	headRoot, err = f.Head(ctx)
 	require.NoError(t, err)
@@ -664,7 +665,8 @@ func TestGloasProposerBoostWithParentWeight(t *testing.T) {
 
 	// Attest for fullA so the parent has enough weight for consecutive-slot boost.
 	// committeeWeight=20, threshold=20 → need parent.weight >= 4.
-	f.ProcessAttestation(ctx, []uint64{9}, rootA, slotA, true)
+	// Vote slot must be later than A's slot: same-slot votes cannot be payload-present.
+	f.ProcessAttestation(ctx, []uint64{9}, rootA, slotA+1, true)
 
 	// Move to slot 33. Head() propagates the attestation weight.
 	slotB := slotA + 1
@@ -777,7 +779,7 @@ func TestGloasProposerBoostBlockedByEquivocation(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.InsertPayload(pe))
 
-	f.ProcessAttestation(ctx, []uint64{9}, rootA, slotA, true)
+	f.ProcessAttestation(ctx, []uint64{9}, rootA, slotA+1, true)
 
 	slotB := slotA + 1
 	driftGenesisTime(f, slotB, 0)
@@ -845,8 +847,8 @@ func TestShouldExtendPayload(t *testing.T) {
 
 	t.Run("quorum met returns true", func(t *testing.T) {
 		for i := uint64(0); i <= fieldparams.PTCSize/2; i++ {
-			n.setPayloadAvailabilityVote(i)
-			n.setPayloadDataAvailabilityVote(i)
+			n.payloadAvailabilityVote.SetBitAt(i, true)
+			n.payloadDataAvailabilityVote.SetBitAt(i, true)
 		}
 		assert.Equal(t, true, f.store.shouldExtendPayload(fn))
 		n.payloadAvailabilityVote = bitfield.NewBitvector512()
@@ -855,7 +857,7 @@ func TestShouldExtendPayload(t *testing.T) {
 
 	t.Run("only availability quorum not enough", func(t *testing.T) {
 		for i := uint64(0); i <= fieldparams.PTCSize/2; i++ {
-			n.setPayloadAvailabilityVote(i)
+			n.payloadAvailabilityVote.SetBitAt(i, true)
 		}
 		// Set a proposer boost so we don't short-circuit on empty boost root.
 		rootB := indexToHash(2)
@@ -1129,8 +1131,8 @@ func TestGloasPTCOverridesProposerBoost(t *testing.T) {
 	// PTC quorum for A's payload.
 	emptyA := s.emptyNodeByRoot[rootA]
 	for i := range uint64(fieldparams.PTCSize) {
-		emptyA.node.setPayloadAvailabilityVote(i)
-		emptyA.node.setPayloadDataAvailabilityVote(i)
+		emptyA.node.payloadAvailabilityVote.SetBitAt(i, true)
+		emptyA.node.payloadDataAvailabilityVote.SetBitAt(i, true)
 	}
 
 	slotB := slotA + 1
@@ -1180,7 +1182,6 @@ func TestGloasPTCOverridesProposerBoost(t *testing.T) {
 	assert.Equal(t, uint64(20), emptyA.weight)
 	assert.Equal(t, uint64(20), fullA.weight)
 
-
 	f.ProcessAttestation(ctx, []uint64{4}, rootB, slotB, false)
 
 	headRoot, err = f.Head(ctx)
@@ -1205,6 +1206,9 @@ func TestSetPTCVote(t *testing.T) {
 
 	t.Run("unknown root is no-op", func(t *testing.T) {
 		f.SetPTCVote(indexToHash(999), 0, true, true)
+		en := f.store.emptyNodeByRoot[root]
+		require.NotNil(t, en)
+		assert.Equal(t, uint64(0), en.node.payloadAttesters.Count())
 	})
 
 	t.Run("payload present only", func(t *testing.T) {
@@ -1213,6 +1217,7 @@ func TestSetPTCVote(t *testing.T) {
 		require.NotNil(t, en)
 		assert.Equal(t, true, en.node.payloadAvailabilityVote.BitAt(5))
 		assert.Equal(t, false, en.node.payloadDataAvailabilityVote.BitAt(5))
+		assert.Equal(t, true, en.node.payloadAttesters.BitAt(5))
 	})
 
 	t.Run("blob data available only", func(t *testing.T) {
@@ -1221,6 +1226,7 @@ func TestSetPTCVote(t *testing.T) {
 		require.NotNil(t, en)
 		assert.Equal(t, false, en.node.payloadAvailabilityVote.BitAt(7))
 		assert.Equal(t, true, en.node.payloadDataAvailabilityVote.BitAt(7))
+		assert.Equal(t, true, en.node.payloadAttesters.BitAt(7))
 	})
 
 	t.Run("both flags", func(t *testing.T) {
@@ -1229,6 +1235,7 @@ func TestSetPTCVote(t *testing.T) {
 		require.NotNil(t, en)
 		assert.Equal(t, true, en.node.payloadAvailabilityVote.BitAt(10))
 		assert.Equal(t, true, en.node.payloadDataAvailabilityVote.BitAt(10))
+		assert.Equal(t, true, en.node.payloadAttesters.BitAt(10))
 	})
 
 	t.Run("neither flag", func(t *testing.T) {
@@ -1237,6 +1244,98 @@ func TestSetPTCVote(t *testing.T) {
 		require.NotNil(t, en)
 		assert.Equal(t, false, en.node.payloadAvailabilityVote.BitAt(15))
 		assert.Equal(t, false, en.node.payloadDataAvailabilityVote.BitAt(15))
+		assert.Equal(t, true, en.node.payloadAttesters.BitAt(15))
+	})
+
+	t.Run("later vote overwrites earlier", func(t *testing.T) {
+		f.SetPTCVote(root, 5, false, true)
+		en := f.store.emptyNodeByRoot[root]
+		require.NotNil(t, en)
+		assert.Equal(t, false, en.node.payloadAvailabilityVote.BitAt(5))
+		assert.Equal(t, true, en.node.payloadDataAvailabilityVote.BitAt(5))
+		assert.Equal(t, true, en.node.payloadAttesters.BitAt(5))
+	})
+
+	t.Run("attester count reflects distinct voters", func(t *testing.T) {
+		en := f.store.emptyNodeByRoot[root]
+		require.NotNil(t, en)
+		assert.Equal(t, uint64(4), en.node.payloadAttesters.Count())
+	})
+}
+
+func TestForkChoiceDumpV2(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	st, blk, err := prepareGloasForkchoiceState(ctx, 1, rootA, zeroHash, blockHashA, zeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	rootB := indexToHash(2)
+	blockHashB := indexToHash(200)
+	st, blk, err = prepareGloasForkchoiceState(ctx, 2, rootB, zeroHash, blockHashB, zeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	f.SetPTCVote(rootA, 1, true, true)
+	f.SetPTCVote(rootA, 2, true, false)
+	f.SetPTCVote(rootA, 3, false, true)
+
+	dump, err := f.ForkChoiceDumpV2(ctx)
+	require.NoError(t, err)
+
+	byRoot := make(map[[32]byte]map[forkchoice2.PayloadStatus]*forkchoice2.NodeV2)
+	for _, n := range dump.ForkChoiceNodes {
+		var r [32]byte
+		copy(r[:], n.BlockRoot)
+		if byRoot[r] == nil {
+			byRoot[r] = make(map[forkchoice2.PayloadStatus]*forkchoice2.NodeV2)
+		}
+		byRoot[r][n.PayloadStatus] = n
+	}
+
+	t.Run("rootA has PENDING+EMPTY+FULL", func(t *testing.T) {
+		entries := byRoot[rootA]
+		require.NotNil(t, entries[forkchoice2.PayloadStatusPending])
+		require.NotNil(t, entries[forkchoice2.PayloadStatusEmpty])
+		require.NotNil(t, entries[forkchoice2.PayloadStatusFull])
+	})
+
+	t.Run("rootB has only PENDING+EMPTY", func(t *testing.T) {
+		entries := byRoot[rootB]
+		require.NotNil(t, entries[forkchoice2.PayloadStatusPending])
+		require.NotNil(t, entries[forkchoice2.PayloadStatusEmpty])
+		assert.Equal(t, true, entries[forkchoice2.PayloadStatusFull] == nil)
+	})
+
+	t.Run("PTC counts on PENDING only", func(t *testing.T) {
+		pending := byRoot[rootA][forkchoice2.PayloadStatusPending]
+		assert.Equal(t, uint64(3), pending.PayloadAttesterCount)
+		assert.Equal(t, uint64(2), pending.PayloadAvailabilityYesCount)
+		assert.Equal(t, uint64(2), pending.PayloadDataAvailabilityYesCount)
+
+		empty := byRoot[rootA][forkchoice2.PayloadStatusEmpty]
+		assert.Equal(t, uint64(0), empty.PayloadAttesterCount)
+		assert.Equal(t, uint64(0), empty.PayloadAvailabilityYesCount)
+		assert.Equal(t, uint64(0), empty.PayloadDataAvailabilityYesCount)
+
+		full := byRoot[rootA][forkchoice2.PayloadStatusFull]
+		assert.Equal(t, uint64(0), full.PayloadAttesterCount)
+	})
+
+	t.Run("parent root is consensus parent regardless of status", func(t *testing.T) {
+		for _, status := range []forkchoice2.PayloadStatus{forkchoice2.PayloadStatusPending, forkchoice2.PayloadStatusEmpty, forkchoice2.PayloadStatusFull} {
+			entry := byRoot[rootA][status]
+			require.NotNil(t, entry)
+			assert.DeepEqual(t, zeroHash[:], entry.ParentRoot)
+		}
 	})
 }
 
@@ -1337,7 +1436,8 @@ func TestGloasDeepForkWeightPropagation(t *testing.T) {
 	// Validators 0,1 vote for C (payloadStatus=false → pending C).
 	f.ProcessAttestation(ctx, []uint64{0, 1}, rootC, slotC, false)
 
-	f.ProcessAttestation(ctx, []uint64{2, 3, 4}, rootD, slotC, true)
+	// Vote slot must be later than D's slot: same-slot votes cannot be payload-present.
+	f.ProcessAttestation(ctx, []uint64{2, 3, 4}, rootD, slotC+1, true)
 	// Validators 5,6 vote for B (payloadStatus=true → fullB).
 	f.ProcessAttestation(ctx, []uint64{5, 6}, rootB, slotC, true)
 
@@ -1794,4 +1894,33 @@ func TestGasLimit_GloasEmptyNodeWalksToFullAncestor(t *testing.T) {
 	got, err = f.GasLimit(rootA)
 	require.NoError(t, err)
 	assert.Equal(t, gl, got)
+}
+
+func TestProcessAttestation_SameSlotPayloadVote(t *testing.T) {
+	f := setupGloas(t, 1, 1)
+	ctx := t.Context()
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	slotA := primitives.Slot(32)
+	rootA := indexToHash(1)
+	driftGenesisTime(f, slotA, 0)
+	st, blk, err := prepareGloasForkchoiceState(ctx, slotA, rootA, zeroHash, indexToHash(100), zeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	// Same-slot payload-present vote is dropped.
+	f.ProcessAttestation(ctx, []uint64{0}, rootA, slotA, true)
+	require.Equal(t, 0, len(f.votes))
+
+	// Same-slot payload-absent vote is recorded.
+	f.ProcessAttestation(ctx, []uint64{0}, rootA, slotA, false)
+	require.Equal(t, 1, len(f.votes))
+	require.Equal(t, rootA, f.votes[0].nextRoot)
+	require.Equal(t, false, f.votes[0].nextPayloadStatus)
+
+	// Later-slot payload-present vote is recorded.
+	f.ProcessAttestation(ctx, []uint64{1}, rootA, slotA+1, true)
+	require.Equal(t, 2, len(f.votes))
+	require.Equal(t, rootA, f.votes[1].nextRoot)
+	require.Equal(t, true, f.votes[1].nextPayloadStatus)
 }

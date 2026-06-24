@@ -280,7 +280,7 @@ func selectByBalanceFill(
 
 // validIndexedPayloadAttestation verifies the signature of an indexed payload attestation.
 //
-//	<spec fn="is_valid_indexed_payload_attestation" fork="gloas" hash="d76e0f89">
+//	<spec fn="is_valid_indexed_payload_attestation" fork="gloas" hash="745c04a1">
 //	def is_valid_indexed_payload_attestation(
 //	    state: BeaconState, attestation: IndexedPayloadAttestation
 //	) -> bool:
@@ -290,7 +290,7 @@ func selectByBalanceFill(
 //	    """
 //	    # Verify indices are non-empty and sorted
 //	    indices = attestation.attesting_indices
-//	    if len(indices) == 0 or not indices == sorted(indices):
+//	    if len(indices) == 0 or indices != sorted(indices):
 //	        return False
 //
 //	    # Verify aggregate signature

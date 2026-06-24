@@ -55,6 +55,7 @@ type ForkchoiceFetcher interface {
 	InsertNode(context.Context, state.BeaconState, consensus_blocks.ROBlock) error
 	InsertPayload(interfaces.ROExecutionPayloadEnvelope) error
 	ForkChoiceDump(context.Context) (*forkchoice.Dump, error)
+	ForkChoiceDumpV2(context.Context) (*forkchoice.DumpV2, error)
 	NewSlot(context.Context, primitives.Slot) error
 	ProposerBoost() [32]byte
 	RecentBlockSlot(root [32]byte) (primitives.Slot, error)
@@ -414,10 +415,23 @@ func (s *Service) InForkchoice(root [32]byte) bool {
 	return s.cfg.ForkChoiceStore.HasNode(root)
 }
 
-// ParentPayloadReady returns true if the block's parent payload is available
-// in forkchoice. For pre-Gloas blocks or blocks building on empty, this always
-// returns true. For blocks building on full, it checks that the full node
-// exists.
+// builtOnFullParentInForkchoice assumes the parent node is already in forkchoice.
+func (s *Service) builtOnFullParentInForkchoice(blk interfaces.ReadOnlyBeaconBlock) bool {
+	if blk.Version() < version.Gloas {
+		return true
+	}
+	bid, err := blk.Body().SignedExecutionPayloadBid()
+	if err != nil || bid == nil || bid.Message == nil {
+		return false
+	}
+	blockHash, err := s.cfg.ForkChoiceStore.BlockHash(blk.ParentRoot())
+	if err != nil {
+		return false
+	}
+	return [32]byte(bid.Message.ParentBlockHash) == blockHash
+}
+
+// ParentPayloadReady returns true if the block's parent payload is available in forkchoice.
 func (s *Service) ParentPayloadReady(blk interfaces.ReadOnlyBeaconBlock) bool {
 	if blk.Version() < version.Gloas {
 		return true
@@ -425,17 +439,11 @@ func (s *Service) ParentPayloadReady(blk interfaces.ReadOnlyBeaconBlock) bool {
 	parentRoot := blk.ParentRoot()
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
-	blockHash, err := s.cfg.ForkChoiceStore.BlockHash(parentRoot)
-	if err != nil {
+	if !s.cfg.ForkChoiceStore.HasNode(parentRoot) {
 		return false
 	}
-	bid, err := blk.Body().SignedExecutionPayloadBid()
-	if err != nil || bid == nil || bid.Message == nil {
-		return false
-	}
-	parentBlockHash := [32]byte(bid.Message.ParentBlockHash)
-	if parentBlockHash != blockHash {
-		return true // builds on empty, no full node needed
+	if !s.builtOnFullParentInForkchoice(blk) {
+		return true
 	}
 	return s.cfg.ForkChoiceStore.HasFullNode(parentRoot)
 }
@@ -497,7 +505,7 @@ func (s *Service) IsOptimisticForRoot(ctx context.Context, root [32]byte) (bool,
 		return false, err
 	}
 	if lastValidated == nil {
-		lastValidated, err = s.recoverStateSummary(ctx, root)
+		lastValidated, err = s.recoverStateSummary(ctx, s.ensureRootNotZeros(bytesutil.ToBytes32(validatedCheckpoint.Root)))
 		if err != nil {
 			return false, err
 		}

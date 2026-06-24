@@ -2,12 +2,15 @@ package structs
 
 import (
 	"bytes"
+	"encoding/json"
 	"testing"
 
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -18,6 +21,71 @@ func TestSignedBLSToExecutionChange_ToConsensus(t *testing.T) {
 	s := &SignedBLSToExecutionChange{Message: nil, Signature: ""}
 	_, err := s.ToConsensus()
 	require.ErrorContains(t, errNilValue.Error(), err)
+}
+
+func TestHeadEventFromDataV2(t *testing.T) {
+	block := [32]byte{0x1f}
+	state := [32]byte{0xf6}
+	dep := [32]byte{0xfc}
+
+	tests := []struct {
+		name              string
+		payloadStatus     statefeed.PayloadStatus
+		headVersion       int
+		wantVersion       string
+		wantPayloadStatus string
+	}{
+		{
+			name:              "gloas head with full payload",
+			payloadStatus:     statefeed.PayloadStatusFull,
+			headVersion:       version.Gloas,
+			wantVersion:       "gloas",
+			wantPayloadStatus: "full",
+		},
+		{
+			name:              "gloas head with empty payload",
+			payloadStatus:     statefeed.PayloadStatusEmpty,
+			headVersion:       version.Gloas,
+			wantVersion:       "gloas",
+			wantPayloadStatus: "empty",
+		},
+		{
+			name:              "pre-gloas head reports full",
+			payloadStatus:     statefeed.PayloadStatusFull,
+			headVersion:       version.Fulu,
+			wantVersion:       "fulu",
+			wantPayloadStatus: "full",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := HeadEventFromDataV2(&statefeed.HeadV2Data{
+				Slot:                      2,
+				Block:                     block,
+				State:                     state,
+				EpochTransition:           false,
+				ExecutionOptimistic:       false,
+				CurrentEpochDependentRoot: dep,
+				NextEpochDependentRoot:    dep,
+				PayloadStatus:             tt.payloadStatus,
+				Version:                   tt.headVersion,
+			})
+
+			require.Equal(t, tt.wantVersion, got.Version)
+			require.NotNil(t, got.Data)
+			require.Equal(t, "2", got.Data.Slot)
+			require.Equal(t, hexutil.Encode(block[:]), got.Data.Block)
+			require.Equal(t, hexutil.Encode(state[:]), got.Data.State)
+			require.Equal(t, hexutil.Encode(dep[:]), got.Data.CurrentEpochDependentRoot)
+			require.Equal(t, hexutil.Encode(dep[:]), got.Data.NextEpochDependentRoot)
+			require.Equal(t, tt.wantPayloadStatus, got.Data.PayloadStatus)
+
+			b, err := json.Marshal(got)
+			require.NoError(t, err)
+			require.Equal(t, true, bytes.Contains(b, []byte(`"payload_status":"`+tt.wantPayloadStatus+`"`)))
+		})
+	}
 }
 
 func TestSignedValidatorRegistration_ToConsensus(t *testing.T) {

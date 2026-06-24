@@ -189,6 +189,8 @@ ssz_fulu_objs = [
     "DataColumnIdentifier",
     "DataColumnsByRootIdentifier",
     "DataColumnSidecar",
+    "PartialDataColumnPartsMetadata",
+    "PartialDataColumnSidecar",
     "StatusV2",
     "SignedBeaconBlockContentsFulu",
     "SignedBeaconBlockFulu",
@@ -211,10 +213,20 @@ ssz_gloas_objs = [
     "SignedExecutionPayloadBid",
     "SignedBlindedExecutionPayloadEnvelope",
     "SignedExecutionPayloadEnvelope",
+    "SignedExecutionPayloadEnvelopeContents",
+    "SignedWireBlindedExecutionPayloadEnvelope",
+    "WireBlindedExecutionPayloadEnvelope",
     "BeaconBlockGloas",
     "BeaconBlockContentsGloas",
     "SignedBeaconBlockGloas",
     "BeaconStateGloas",
+]
+
+ssz_gloas_builder_api_objs = [
+    "RequestAuthV1",
+    "SignedRequestAuthV1",
+    "BuilderPreferencesV1",
+    "BuilderPreferencesRequestV1",
 ]
 
 ssz_gen_marshal(
@@ -340,6 +352,19 @@ ssz_gen_marshal(
 )
 
 ssz_gen_marshal(
+    name = "ssz_generated_gloas_builder_api",
+    out = "gloas_builder_api.ssz.go",
+    exclude_objs = ssz_phase0_objs + ssz_altair_objs + ssz_bellatrix_objs + ssz_capella_objs + ssz_deneb_objs + ssz_electra_objs + ssz_fulu_objs + ssz_gloas_objs,
+    go_proto = ":go_proto",
+    includes = [
+        "//consensus-types/primitives:go_default_library",
+        "//math:go_default_library",
+        "//proto/engine/v1:go_default_library",
+    ],
+    objs = ssz_gloas_builder_api_objs,
+)
+
+ssz_gen_marshal(
     name = "ssz_generated_non_core",
     out = "non-core.ssz.go",
     go_proto = ":go_proto",
@@ -415,6 +440,7 @@ go_library(
         ":ssz_generated_electra",  # keep
         ":ssz_generated_fulu",  # keep
         ":ssz_generated_gloas",  # keep
+        ":ssz_generated_gloas_builder_api",  # keep
         ":ssz_generated_non_core",  # keep
         ":ssz_generated_phase0",  # keep
     ],
@@ -460,7 +486,9 @@ ssz_proto_files(
         "blobs.proto",
         "data_columns.proto",
         "gloas.proto",
+        "gloas_builder_api.proto",
         "light_client.proto",
+        "partial_data_columns.proto",
         "sync_committee.proto",
         "withdrawals.proto",
     ],

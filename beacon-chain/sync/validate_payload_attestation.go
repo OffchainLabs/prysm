@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -66,6 +67,15 @@ func (s *Service) validatePayloadAttestation(ctx context.Context, pid peer.ID, m
 		return pubsub.ValidationIgnore, err
 	}
 
+	// [IGNORE] The block referenced by data.beacon_block_root is at slot data.slot.
+	blockSlot, err := s.cfg.chain.RecentBlockSlot(pa.BeaconBlockRoot())
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	if err := v.VerifyBlockSlotMatches(blockSlot); err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+
 	// [REJECT] The message's block data.beacon_block_root passes validation.
 	if err := v.VerifyBlockRootValid(s.hasBadBlock); err != nil {
 		return pubsub.ValidationReject, err
@@ -82,6 +92,9 @@ func (s *Service) validatePayloadAttestation(ctx context.Context, pid peer.ID, m
 	// [REJECT] The message's validator index is within the payload committee in get_ptc(state, data.slot).
 	// The state is the head state corresponding to processing the block up to the current slot.
 	if err := v.VerifyValidatorInPTC(ctx, st); err != nil {
+		if errors.Is(err, state.ErrNoPayloadCommitteeAvailable) {
+			return pubsub.ValidationIgnore, err
+		}
 		return pubsub.ValidationReject, err
 	}
 

@@ -198,7 +198,6 @@ func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, 
 
 	verified := make([]blocks.VerifiedRODataColumn, 0, count)
 	var skipped int
-	badPeers := make(map[peer.ID]bool)
 	for _, pe := range entry.columns {
 		if pe == nil {
 			continue
@@ -219,17 +218,17 @@ func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, 
 
 		if err := verifier.VerifyDataColumnSidecarSlotMatchesBlockGloas(); err != nil {
 			skipped++
-			badPeers[pe.peer] = true
+			s.downscorePeer(pe.peer, "pendingGloasColumnSlotMismatch", logrus.Fields{"error": err})
 			continue
 		}
 		if err := verifier.VerifyDataColumnSidecarGloas(); err != nil {
 			skipped++
-			badPeers[pe.peer] = true
+			s.downscorePeer(pe.peer, "pendingGloasColumnInvalidSidecar", logrus.Fields{"error": err})
 			continue
 		}
 		if err := verifier.VerifyDataColumnSidecarKzgProofsGloas(); err != nil {
 			skipped++
-			badPeers[pe.peer] = true
+			s.downscorePeer(pe.peer, "pendingGloasColumnInvalidKzgProof", logrus.Fields{"error": err})
 			continue
 		}
 
@@ -243,10 +242,6 @@ func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, 
 
 		s.setSeenDataColumnRootIndex(root, v.Index(), v.Slot())
 		verified = append(verified, v)
-	}
-
-	for pid := range badPeers {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(pid)
 	}
 
 	if len(verified) > 0 {
@@ -278,15 +273,45 @@ func (s *Service) prunePendingGloasColumns() {
 	for {
 		select {
 		case currentSlot := <-slotTicker.C():
-			s.pendingGloasColumnsLock.Lock()
-			for r, e := range s.pendingGloasColumns {
-				if e.slot+1 < currentSlot {
-					delete(s.pendingGloasColumns, r)
-				}
-			}
-			s.pendingGloasColumnsLock.Unlock()
+			s.pruneStaleGloasColumns(currentSlot)
 		case <-s.ctx.Done():
 			return
+		}
+	}
+}
+
+// pruneStaleGloasColumns drops entries whose slot has passed. A column queued for
+// a block root that never became known is treated as fabricated and its forwarding
+// peer is downscored; known-but-orphaned roots (honest reorgs) are spared.
+func (s *Service) pruneStaleGloasColumns(currentSlot primitives.Slot) {
+	type prunedRoot struct {
+		root  [fieldparams.RootLength]byte
+		peers []peer.ID
+	}
+	var pruned []prunedRoot
+	s.pendingGloasColumnsLock.Lock()
+	for r, e := range s.pendingGloasColumns {
+		if e.slot+1 >= currentSlot {
+			continue
+		}
+		peers := make([]peer.ID, 0, fieldparams.NumberOfColumns)
+		for _, pe := range e.columns {
+			if pe != nil {
+				peers = append(peers, pe.peer)
+			}
+		}
+		pruned = append(pruned, prunedRoot{root: r, peers: peers})
+		delete(s.pendingGloasColumns, r)
+	}
+	s.pendingGloasColumnsLock.Unlock()
+
+	// HasBlock + downscore outside the lock; a root we never learned of was fabricated.
+	for _, p := range pruned {
+		if s.cfg.chain == nil || s.cfg.chain.HasBlock(s.ctx, p.root) {
+			continue
+		}
+		for _, pid := range p.peers {
+			s.downscorePeer(pid, "pendingGloasColumnUnknownRoot", logrus.Fields{"root": fmt.Sprintf("%#x", p.root)})
 		}
 	}
 }

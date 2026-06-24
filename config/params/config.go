@@ -157,6 +157,7 @@ type BeaconChainConfig struct {
 	DomainProposerPreferences         [4]byte `yaml:"DOMAIN_PROPOSER_PREFERENCES" spec:"true"`           // DomainProposerPreferences defines the BLS signature domain for proposer preferences.
 	DomainBatchAttester               [4]byte `yaml:"DOMAIN_BATCH_ATTESTER" spec:"true"`                 // DomainBatchAttester defines the BLS signature domain for EIP-8243 batch seal signatures.
 	DomainBatcher                     [4]byte `yaml:"DOMAIN_BATCHER" spec:"true"`                        // DomainBatcher defines the BLS signature domain for EIP-8243 batcher composition signatures.
+	DomainRequestAuth                 [4]byte `yaml:"DOMAIN_REQUEST_AUTH" spec:"true"`                   // DomainRequestAuth defines the BLS signature domain for builder bid request authentication.
 
 	// Prysm constants.
 	GenesisValidatorsRoot          [32]byte        // GenesisValidatorsRoot is the root hash of the genesis validators.

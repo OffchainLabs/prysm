@@ -138,6 +138,21 @@ func TestBidVerifier_VerifyParentBlockRootSeen(t *testing.T) {
 	require.ErrorIs(t, verifier.VerifyParentBlockRootSeen(func([32]byte) bool { return false }), ErrBidParentBlockRootNotSeen)
 }
 
+func TestBidVerifier_VerifyBidSlotHigherThanParent(t *testing.T) {
+	signed := testSignedExecutionPayloadBid(t, 10)
+	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
+	require.NoError(t, err)
+
+	verifier := &BidVerifier{results: newResults(RequireBidSlotHigherThanParent), b: wrapped}
+	require.NoError(t, verifier.VerifyBidSlotHigherThanParent(9))
+
+	verifier = &BidVerifier{results: newResults(RequireBidSlotHigherThanParent), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyBidSlotHigherThanParent(10), ErrBidSlotNotHigherThanParent)
+
+	verifier = &BidVerifier{results: newResults(RequireBidSlotHigherThanParent), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyBidSlotHigherThanParent(11), ErrBidSlotNotHigherThanParent)
+}
+
 func TestBidVerifier_VerifyParentBlockHash(t *testing.T) {
 	signed := testSignedExecutionPayloadBid(t, 1)
 	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)

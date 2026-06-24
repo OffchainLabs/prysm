@@ -10,7 +10,7 @@ bazel query 'kind(ssz_gen_marshal, //proto/...)' | xargs bazel build $@
 file_list=()
 while IFS= read -d $'\0' -r file; do
     file_list=("${file_list[@]}" "$file")
-done < <($findutil -L "$(bazel info bazel-bin)"/ -type f -regextype sed -regex ".*ssz\.go$" -print0)
+done < <($findutil "$(bazel info bazel-bin)"/proto -type f -name "*.ssz.go" -print0)
 
 arraylength=${#file_list[@]}
 searchstring="/bin/"

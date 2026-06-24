@@ -107,7 +107,7 @@ func TestProposeAttestation(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 
 			var marshalledAttestations []byte
 			if helpers.ValidateNilAttestation(test.attestation) == nil {
@@ -254,7 +254,7 @@ func TestProposeAttestationElectra(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 
 			var marshalledAttestations []byte
 			if helpers.ValidateNilAttestation(test.attestation) == nil {
@@ -387,7 +387,7 @@ func TestProposeBatchAttestation(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 
 			var marshalledAttestation []byte
 			if helpers.ValidateNilAttestation(test.attestation) == nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -202,5 +203,62 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 	}
 	var pId [8]byte
 	copy(pId[:], pid[:])
-	s.cfg.PayloadIDCache.Set(currentSlot+1, hr, pId)
+	s.cfg.PayloadIDCache.Set(currentSlot+1, hr, false, pId)
+	s.firePayloadAttributesEventForHead(hr, currentSlot+1, attr)
+}
+
+func (s *Service) fcuFromReorgData(headBlock interfaces.ReadOnlySignedBeaconBlock, hr [32]byte, hash [32]byte, full bool, attr payloadattribute.Attributer, proposingSlot primitives.Slot) {
+	pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, hash, attr)
+	if err != nil {
+		log.WithError(err).Error("Could not update forkchoice with engine")
+	}
+	if pid == nil {
+		if !attr.IsEmpty() {
+			log.Warn("Engine did not return a payload ID for the fork choice update with attributes")
+		}
+		return
+	}
+	var pId [8]byte
+	copy(pId[:], pid[:])
+	s.cfg.PayloadIDCache.Set(proposingSlot, hr, full, pId)
+
+	if !attr.IsEmpty() {
+		s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, hr, proposingSlot, attr)
+	}
+}
+
+func (s *Service) firePayloadAttributesEventForHead(headRoot [32]byte, proposingSlot primitives.Slot, attr payloadattribute.Attributer) {
+	s.headLock.RLock()
+	var headBlock interfaces.ReadOnlySignedBeaconBlock
+	if s.head != nil && s.head.root == headRoot {
+		headBlock = s.head.block
+	}
+	s.headLock.RUnlock()
+	if headBlock == nil {
+		return
+	}
+	s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, headRoot, proposingSlot, attr)
+}
+
+// This saves head and prunes atts from the pool only if the head is new and if we are either
+// 1. Not proposing next slot or, if we are,
+// 2. The incoming head block is not late.
+// If we are going to attempt to reorg the block we do not save head in the blockchain package
+// and continue treating the previous head as the tip of the chain.
+func (s *Service) saveHeadIfNeeded(ctx context.Context, cfg *postBlockProcessConfig) {
+	full := false
+	if !s.isNewHead(cfg.headRoot, full) {
+		return
+	}
+	proposingSlot := s.CurrentSlot() + 1
+	if s.shouldOverrideFCU(cfg.headRoot, proposingSlot) {
+		attr := s.getPayloadAttribute(ctx, cfg.postState, proposingSlot, cfg.headRoot[:], full)
+		if !attr.IsEmpty() {
+			return
+		}
+	}
+	if err := s.saveHead(ctx, cfg.headRoot, cfg.roblock, cfg.postState, full); err != nil {
+		log.WithError(err).Error("Could not save head")
+	}
+	s.pruneAttsFromPool(ctx, cfg.postState, cfg.roblock)
 }

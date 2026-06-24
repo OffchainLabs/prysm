@@ -23,14 +23,13 @@ func (v *validator) batchCoordinator() *batchAttestationCoordinator {
 }
 
 func (v *validator) localBatchAttesterDuties(slot primitives.Slot, committeeIndex primitives.CommitteeIndex) []localBatchAttesterDuty {
-	v.dutiesLock.RLock()
-	defer v.dutiesLock.RUnlock()
-	if v.duties == nil || !v.duties.IsInitialized() {
+	snap := v.duties.snapshot()
+	if !snap.isInitialized() {
 		return nil
 	}
 
 	duties := make([]localBatchAttesterDuty, 0)
-	for pk, duty := range v.duties.CurrentEpochDuties() {
+	for pk, duty := range snap.currentDuties() {
 		if duty == nil ||
 			duty.AttesterSlot != slot ||
 			duty.CommitteeIndex != committeeIndex ||
