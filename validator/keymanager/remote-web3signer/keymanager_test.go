@@ -218,7 +218,8 @@ func TestNewKeyManager_ChangingFileCreated(t *testing.T) {
 		require.Equal(t, slices.Contains(wantSlice, keys[i]), true)
 	}
 	// sleep needs to be at the front because of how watching the file works
-	time.Sleep(1 * time.Second)
+	// Wait for debounce interval plus processing time
+	time.Sleep(fileChangeDebounce + 500*time.Millisecond)
 
 	// Open the file for writing, create it if it does not exist, and truncate it if it does.
 	f, err := os.OpenFile(keyFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
@@ -234,6 +235,9 @@ func TestNewKeyManager_ChangingFileCreated(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(ks))
 	require.Equal(t, "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055", hexutil.Encode(ks[0][:]))
+
+	// Wait for debounce and processing to update providedPublicKeys
+	time.Sleep(fileChangeDebounce + 500*time.Millisecond)
 
 	require.Equal(t, 1, len(km.providedPublicKeys))
 	require.Equal(t, "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055", hexutil.Encode(km.providedPublicKeys[0][:]))
@@ -267,15 +271,15 @@ func TestNewKeyManager_FileAndFlagsWithDifferentKeys(t *testing.T) {
 	for _, key := range keys {
 		require.Equal(t, slices.Contains(wantSlice, hexutil.Encode(key[:])), true)
 	}
-	// wait for reading to be done
-	time.Sleep(2 * time.Second)
+	// wait for watcher to initialize
+	time.Sleep(500 * time.Millisecond)
 	// test fall back by clearing file
 	go func() {
 		err = file.WriteFile(keyFilePath, []byte(" "))
 		require.NoError(t, err)
 	}()
-	// waiting for writing to be done
-	time.Sleep(2 * time.Second)
+	// waiting for debounce and processing to complete
+	time.Sleep(fileChangeDebounce + 500*time.Millisecond)
 	require.LogsContain(t, logHook, "Remote signer key file no longer has keys, defaulting to flag provided keys")
 
 	// fall back to flag provided keys
@@ -319,6 +323,60 @@ func TestRefreshRemoteKeysFromFileChangesWithRetry(t *testing.T) {
 	keys, err := km.FetchValidatingPublicKeys(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(keys))
+}
+
+func TestRefreshRemoteKeysFromFileChanges_SameSizeDifferentKeys(t *testing.T) {
+	// This test verifies that key changes are detected even when the file size stays the same
+	// (e.g., swapping one key for another of equal length).
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	logHook := logTest.NewGlobal()
+	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
+	require.NoError(t, err)
+	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+
+	// Two keys of the same length (96 hex chars each = 48 bytes)
+	key1 := "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055"
+	key2 := "0x800077e04f8d7496099b3d30ac5430aea64873a45e5bcfe004d2095babcbf55e21138ff0d5691abc29da190aa32755c6"
+
+	// Create initial file with key1
+	err = file.WriteFile(keyFilePath, []byte(key1))
+	require.NoError(t, err)
+
+	km, err := NewKeymanager(ctx, &SetupConfig{
+		BaseEndpoint:          "http://example.com",
+		GenesisValidatorsRoot: root,
+		KeyFilePath:           keyFilePath,
+	})
+	require.NoError(t, err)
+
+	// Verify initial key loaded
+	keys, err := km.FetchValidatingPublicKeys(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(keys))
+	require.Equal(t, key1, hexutil.Encode(keys[0][:]))
+
+	// Start the file watcher
+	go func() {
+		_ = km.refreshRemoteKeysFromFileChanges(ctx)
+	}()
+	// Wait for watcher to initialize
+	time.Sleep(100 * time.Millisecond)
+	require.LogsContain(t, logHook, "Successfully initialized file watcher")
+
+	// Write key2 to the file (same size as key1)
+	err = file.WriteFile(keyFilePath, []byte(key2))
+	require.NoError(t, err)
+
+	// Wait for file change to be detected (debounce interval is 3s + processing time)
+	time.Sleep(fileChangeDebounce + 500*time.Millisecond)
+
+	// Verify key was updated despite same file size
+	keys, err = km.FetchValidatingPublicKeys(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(keys))
+	require.Equal(t, key2, hexutil.Encode(keys[0][:]), "Key should have been updated even though file size is the same")
+	require.LogsContain(t, logHook, "Remote signer key file updated")
 }
 
 func TestReadKeyFile_PathMissing(t *testing.T) {

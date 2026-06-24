@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
@@ -34,8 +35,9 @@ import (
 )
 
 const (
-	maxRetries = 60
-	retryDelay = 10 * time.Second
+	maxRetries            = 60
+	retryDelay            = 10 * time.Second
+	fileChangeDebounce    = 3 * time.Second // Debounce interval for file change events to handle manual editing
 )
 
 // SetupConfig includes configuration values for initializing.
@@ -286,11 +288,6 @@ func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context) erro
 			log.WithError(err).Error("Could not close file watcher")
 		}
 	}()
-	initialFileInfo, err := os.Stat(km.keyFilePath)
-	if err != nil {
-		return errors.Wrap(err, "could not stat remote signer public key file")
-	}
-	initialFileSize := initialFileInfo.Size()
 	if err := watcher.Add(km.keyFilePath); err != nil {
 		return errors.Wrap(err, "could not add file to file watcher")
 	}
@@ -308,6 +305,26 @@ func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context) erro
 		}
 		km.updatePublicKeys(slices.Collect(maps.Values(fk)))
 	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	fileChangesChan := make(chan any, 100)
+	defer close(fileChangesChan)
+
+	// We debounce events sent over the file changes channel by an interval
+	// to ensure we are not overwhelmed by a ton of events fired over the channel in
+	// a short span of time (e.g., during manual file editing).
+	go async.Debounce(ctx, fileChangeDebounce, fileChangesChan, func(event any) {
+		e, ok := event.(fsnotify.Event)
+		if !ok {
+			log.Errorf("Type %T is not a valid file system event", event)
+			return
+		}
+		if e.Has(fsnotify.Write) || e.Has(fsnotify.Create) {
+			km.handleFileChange(ctx)
+		}
+	})
+
 	for {
 		select {
 		case e, ok := <-watcher.Events:
@@ -322,30 +339,8 @@ func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context) erro
 			if e.Has(fsnotify.Remove) {
 				return errors.New("remote signer key file was removed")
 			}
-			currentFileInfo, err := os.Stat(km.keyFilePath)
-			if err != nil {
-				return errors.Wrap(err, "could not stat remote signer public key file")
-			}
-			if currentFileInfo.Size() != initialFileSize {
-				log.Info("Remote signer key file updated")
-				fileKeys, _, err := km.readKeyFile()
-				if err != nil {
-					return errors.New("could not read key file")
-				}
-				// prioritize file keys over flag keys
-				if len(fileKeys) == 0 {
-					log.Warnln("Remote signer key file no longer has keys, defaulting to flag provided keys")
-					fileKeys = slices.Collect(maps.Values(km.flagLoadedKeysMap))
-				}
-				currentKeys, err := km.FetchValidatingPublicKeys(ctx)
-				if err != nil {
-					return errors.Wrap(err, "could not fetch current keys")
-				}
-				if !slices.Equal(currentKeys, fileKeys) {
-					km.updatePublicKeys(fileKeys)
-				}
-				initialFileSize = currentFileInfo.Size()
-			}
+			// Send event to debounce channel for processing
+			fileChangesChan <- e
 		case err, ok := <-watcher.Errors:
 			if !ok { // Channel was closed (i.e. Watcher.Close() was called).
 				log.Info("Closing file watcher")
@@ -356,6 +351,29 @@ func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context) erro
 			log.Info("Closing file watcher")
 			return nil
 		}
+	}
+}
+
+// handleFileChange processes a file change event after debouncing.
+func (km *Keymanager) handleFileChange(ctx context.Context) {
+	log.Info("Remote signer key file updated")
+	fileKeys, _, err := km.readKeyFile()
+	if err != nil {
+		log.WithError(err).Error("Could not read key file")
+		return
+	}
+	// prioritize file keys over flag keys
+	if len(fileKeys) == 0 {
+		log.Warnln("Remote signer key file no longer has keys, defaulting to flag provided keys")
+		fileKeys = slices.Collect(maps.Values(km.flagLoadedKeysMap))
+	}
+	currentKeys, err := km.FetchValidatingPublicKeys(ctx)
+	if err != nil {
+		log.WithError(err).Error("Could not fetch current keys")
+		return
+	}
+	if !slices.Equal(currentKeys, fileKeys) {
+		km.updatePublicKeys(fileKeys)
 	}
 }
 
