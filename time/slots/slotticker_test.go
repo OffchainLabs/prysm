@@ -181,15 +181,17 @@ func TestSlotTickerWithIntervalsInputValidation(t *testing.T) {
 	panicCall := func() {
 		NewSlotTickerWithIntervals(genesisTime, intervals)
 	}
-	require.Panics(t, panicCall, "zero genesis time")
+	require.PanicsWithValue(t, "zero genesis time", panicCall)
 	genesisTime = time.Now()
-	require.Panics(t, panicCall, "at least one interval has to be entered")
+	require.PanicsWithValue(t, "at least one interval has to be entered", panicCall)
+	intervals = []time.Duration{offset, -offset}
+	require.PanicsWithValue(t, "invalid negative offset", panicCall)
 	intervals = []time.Duration{2 * offset, offset}
-	require.Panics(t, panicCall, "invalid decreasing offsets")
+	require.PanicsWithValue(t, "invalid decreasing offsets", panicCall)
 	intervals = []time.Duration{offset, 4 * offset}
-	require.Panics(t, panicCall, "invalid ticker offset")
+	require.PanicsWithValue(t, "invalid ticker offset", panicCall)
 	intervals = []time.Duration{4 * offset, offset}
-	require.Panics(t, panicCall, "invalid ticker offset")
+	require.PanicsWithValue(t, "invalid ticker offset", panicCall)
 	intervals = []time.Duration{offset, 2 * offset}
 	require.NotPanics(t, panicCall)
 }

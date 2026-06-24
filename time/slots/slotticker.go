@@ -183,7 +183,7 @@ func (s *SlotIntervalTicker) startWithIntervals(
 // This method will panic if genesis time is zero, intervals is 0 length, or offsets are invalid.
 // lint:nopanic -- Communicated panic in godoc commentary.
 func NewSlotTickerWithIntervals(genesisTime time.Time, intervals []time.Duration) *SlotIntervalTicker {
-	if genesisTime.Unix() == 0 {
+	if genesisTime.Unix() <= 0 {
 		panic("zero genesis time")
 	}
 	if len(intervals) == 0 {
@@ -192,6 +192,9 @@ func NewSlotTickerWithIntervals(genesisTime time.Time, intervals []time.Duration
 	slotDuration := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
 	lastOffset := time.Duration(0)
 	for _, offset := range intervals {
+		if offset.Seconds() < 0 {
+			panic("invalid negative offset")
+		}
 		if offset < lastOffset {
 			panic("invalid decreasing offsets")
 		}
