@@ -46,6 +46,7 @@ type EngineClient struct {
 	ErrorBlobSidecars           error
 	DataColumnSidecars          []blocks.VerifiedRODataColumn
 	ErrorDataColumnSidecars     error
+	HasBlobsPartialColumns      []blocks.PartialDataColumn
 	ClientVersion               []*structs.ClientVersionV1
 	ErrorClientVersion          error
 }
@@ -170,6 +171,14 @@ func (e *EngineClient) ReconstructBlobSidecars(context.Context, interfaces.ReadO
 // ConstructDataColumnSidecars is a mock implementation of the ConstructDataColumnSidecars method.
 func (e *EngineClient) ConstructDataColumnSidecars(context.Context, peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
 	return e.DataColumnSidecars, nil, e.ErrorDataColumnSidecars
+}
+
+// ConstructPartialDataColumnSidecarsFromHasBlobs is a mock implementation of the ConstructPartialDataColumnSidecarsFromHasBlobs method.
+func (e *EngineClient) ConstructPartialDataColumnSidecarsFromHasBlobs(context.Context, peerdas.ConstructionPopulator) ([]blocks.PartialDataColumn, bool, error) {
+	if e.HasBlobsPartialColumns == nil {
+		return nil, false, nil
+	}
+	return e.HasBlobsPartialColumns, true, nil
 }
 
 // ReconstructExecutionPayloadEnvelope --

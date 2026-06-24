@@ -1844,6 +1844,164 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 	}
 }
 
+func TestPartialColumnBroadcaster_Publish_PartsRequestsOverride(t *testing.T) {
+	const topic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	requests := bitfield.NewBitlist(3)
+	requests.SetBitAt(0, true)
+	requests.SetBitAt(2, true)
+
+	t.Run("override survives first publish and is cleared by a cell-bearing publish", func(t *testing.T) {
+		ps := newMockPubSub(nil, nil)
+		recorder := newCallbackRecorder(1, false, nil, nil)
+		h := newBroadcasterHarness(t, ps)
+		h.start(recorder)
+		defer h.Stop()
+
+		// Phase 1 (HasBlobs): header-only column carrying a requests override.
+		phase1 := createPartialColumn(t, 3, nil)
+		require.NoError(t, phase1.SetPartsRequests(requests))
+		require.NoError(t, h.broadcaster.Publish(t.Context(), func(yield func(string, blocks.PartialDataColumn) bool) {
+			yield(topic, *phase1)
+		}))
+
+		stored := h.broadcaster.getDataColumn(topic, phase1.GroupID())
+		require.NotNil(t, stored)
+		storedRequests, ok := stored.PartsRequests()
+		require.Equal(t, true, ok)
+		require.DeepEqual(t, []byte(requests), []byte(storedRequests))
+
+		// Phase 2 (GetBlobsV3): the same group published with cells and no
+		// override must clear the stored override and extend the column.
+		phase2 := createPartialColumn(t, 3, map[uint64][]byte{1: {0xA0}})
+		require.NoError(t, h.broadcaster.Publish(t.Context(), func(yield func(string, blocks.PartialDataColumn) bool) {
+			yield(topic, *phase2)
+		}))
+
+		stored = h.broadcaster.getDataColumn(topic, phase1.GroupID())
+		require.NotNil(t, stored)
+		_, ok = stored.PartsRequests()
+		require.Equal(t, false, ok)
+		require.Equal(t, true, stored.Included.BitAt(1))
+	})
+
+	t.Run("override publish onto an existing verifier sets the override", func(t *testing.T) {
+		ps := newMockPubSub(nil, nil)
+		recorder := newCallbackRecorder(1, false, nil, nil)
+		h := newBroadcasterHarness(t, ps)
+		h.start(recorder)
+		defer h.Stop()
+
+		// A column for the group already exists with no override (e.g. published
+		// before the HasBlobs response arrived).
+		first := createPartialColumn(t, 3, nil)
+		require.NoError(t, h.broadcaster.Publish(t.Context(), func(yield func(string, blocks.PartialDataColumn) bool) {
+			yield(topic, *first)
+		}))
+
+		// The late HasBlobs publish applies its override to the stored column.
+		second := createPartialColumn(t, 3, nil)
+		require.NoError(t, second.SetPartsRequests(requests))
+		require.NoError(t, h.broadcaster.Publish(t.Context(), func(yield func(string, blocks.PartialDataColumn) bool) {
+			yield(topic, *second)
+		}))
+
+		stored := h.broadcaster.getDataColumn(topic, first.GroupID())
+		require.NotNil(t, stored)
+		storedRequests, ok := stored.PartsRequests()
+		require.Equal(t, true, ok)
+		require.DeepEqual(t, []byte(requests), []byte(storedRequests))
+	})
+}
+
+func TestPartialColumnBroadcaster_Publish_CompletesColumnFromTrustedCells(t *testing.T) {
+	const topic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	publish := func(t *testing.T, h *broadcasterHarness, col *blocks.PartialDataColumn) {
+		t.Helper()
+		require.NoError(t, h.broadcaster.Publish(t.Context(), func(yield func(string, blocks.PartialDataColumn) bool) {
+			yield(topic, *col)
+		}))
+	}
+
+	assertNoHandleColumnCall := func(t *testing.T, recorder *callbackRecorder) {
+		t.Helper()
+		select {
+		case <-recorder.handleColumnCallCh:
+			t.Fatal("HandleColumn called for incomplete column")
+		default:
+		}
+	}
+
+	t.Run("merge completing the column calls HandleColumn", func(t *testing.T) {
+		ps := newMockPubSub(nil, nil)
+		recorder := newCallbackRecorder(1, false, nil, nil)
+		h := newBroadcasterHarness(t, ps)
+		h.start(recorder)
+		defer h.Stop()
+
+		// First publish stores a column missing cell 1; nothing is complete yet.
+		first := createPartialColumn(t, 2, map[uint64][]byte{0: {0x11}})
+		publish(t, h, first)
+		assertNoHandleColumnCall(t, recorder)
+
+		// Second publish merges the missing trusted cell into the stored verifier.
+		second := createPartialColumn(t, 2, map[uint64][]byte{1: {0x22}})
+		publish(t, h, second)
+
+		select {
+		case call := <-recorder.handleColumnCallCh:
+			require.Equal(t, topic, call.topic)
+			require.Equal(t, true, len(call.column.Column()) > 0)
+		case <-t.Context().Done():
+			t.Fatal("handle column call not received")
+		}
+
+		assertPartialColumnsEqual(t,
+			createPartialColumn(t, 2, map[uint64][]byte{0: {0x11}, 1: {0x22}}),
+			h.broadcaster.getDataColumn(topic, first.GroupID()))
+	})
+
+	t.Run("merge leaving the column incomplete does not call HandleColumn", func(t *testing.T) {
+		ps := newMockPubSub(nil, nil)
+		recorder := newCallbackRecorder(1, false, nil, nil)
+		h := newBroadcasterHarness(t, ps)
+		h.start(recorder)
+		defer h.Stop()
+
+		first := createPartialColumn(t, 3, map[uint64][]byte{0: {0x11}})
+		publish(t, h, first)
+
+		// Merging cell 1 still leaves cell 2 missing.
+		second := createPartialColumn(t, 3, map[uint64][]byte{1: {0x22}})
+		publish(t, h, second)
+		assertNoHandleColumnCall(t, recorder)
+	})
+
+	t.Run("redundant merge after completion does not call HandleColumn again", func(t *testing.T) {
+		ps := newMockPubSub(nil, nil)
+		recorder := newCallbackRecorder(2, false, nil, nil)
+		h := newBroadcasterHarness(t, ps)
+		h.start(recorder)
+		defer h.Stop()
+
+		first := createPartialColumn(t, 2, map[uint64][]byte{0: {0x11}})
+		publish(t, h, first)
+		second := createPartialColumn(t, 2, map[uint64][]byte{1: {0x22}})
+		publish(t, h, second)
+
+		select {
+		case <-recorder.handleColumnCallCh:
+		case <-t.Context().Done():
+			t.Fatal("handle column call not received")
+		}
+
+		// Republishing already-merged cells extends nothing and must not hand the column over again.
+		publish(t, h, second)
+		assertNoHandleColumnCall(t, recorder)
+	})
+}
+
 func newTestTopic(t *testing.T, name string) *pubsub.Topic {
 	t.Helper()
 	h, err := libp2p.New(libp2p.NoListenAddrs)

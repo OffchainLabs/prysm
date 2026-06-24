@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 )
@@ -46,7 +45,7 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 	if err != nil {
 		return errors.Wrap(err, "proposer index")
 	}
-	if !s.hasSeenDataColumnIndex(sidecar.Slot(), proposerIndex, sidecar.Index()) {
+	if !s.hasSeenDataColumnIndex(sidecar.Slot(), proposerIndex, sidecar.Index()) && !sidecar.IsGloas() {
 		usefulFullColumnsReceivedTotal.WithLabelValues(strconv.FormatUint(sidecar.Index(), 10)).Inc()
 		// re-publish the full column on the partial column extension as we don't send full columns to peers
 		// who have explicitly requested for partial columns. This method is idempotent so this is fine.
@@ -108,11 +107,6 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 }
 
 func (s *Service) verifiedRODataColumnSubscriber(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
-	log.WithFields(logrus.Fields{
-		"slot":   sidecar.Slot(),
-		"column": sidecar.Index,
-	}).Debug("Received data column sidecar")
-
 	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
 		return errors.Wrap(err, "receive data column sidecar")
 	}
