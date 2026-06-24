@@ -42,6 +42,10 @@ type PartialDataColumn struct {
 	// ourselves, as that is the point we know what cells we have or are
 	// missing.
 	Published bool
+
+	// partsRequests overrides the request bitmap in parts metadata. This is used
+	// when we know which parts to request from other peers before we actually fetch cells from the EL.
+	partsRequests bitfield.Bitlist
 }
 
 // NewPartialDataColumnFromVerifiedRODataColumn builds a PartialDataColumn from
@@ -108,15 +112,44 @@ func (p *PartialDataColumn) GroupID() []byte {
 	return slices.Clone(p.groupID)
 }
 
-func (p *PartialDataColumn) newPartsMetadata() *ethpb.PartialDataColumnPartsMetadata {
-	n := uint64(len(p.KzgCommitments))
+func (p *PartialDataColumn) newPartsMetadata() (*ethpb.PartialDataColumnPartsMetadata, error) {
 	available := slices.Clone(p.Included)
-	requests := bitfield.NewBitlist(n)
-	requests = requests.Not()
+	missing := p.Included.Not()
+	requests := missing
+	if p.partsRequests != nil {
+		var err error
+		requests, err = p.partsRequests.And(missing)
+		if err != nil {
+			return nil, errors.Wrap(err, "intersect parts requests with missing cells")
+		}
+	}
+
 	return &ethpb.PartialDataColumnPartsMetadata{
 		Available: available,
 		Requests:  requests,
+	}, nil
+}
+
+// SetPartsRequests overrides the request bitmap emitted in parts metadata.
+func (p *PartialDataColumn) SetPartsRequests(requests bitfield.Bitlist) error {
+	if requests.Len() != uint64(len(p.KzgCommitments)) {
+		return errors.Errorf("parts requests length mismatch: got %d, want %d", requests.Len(), len(p.KzgCommitments))
 	}
+	p.partsRequests = slices.Clone(requests)
+	return nil
+}
+
+// ClearPartsRequests removes any request bitmap override.
+func (p *PartialDataColumn) ClearPartsRequests() {
+	p.partsRequests = nil
+}
+
+// PartsRequests returns a cloned request bitmap override, if one is set.
+func (p *PartialDataColumn) PartsRequests() (bitfield.Bitlist, bool) {
+	if p.partsRequests == nil {
+		return nil, false
+	}
+	return slices.Clone(p.partsRequests), true
 }
 
 // NewPartsMetaWithNoAvailableAndNoRequests creates metadata for n parts where
@@ -230,7 +263,10 @@ func (p *PartialDataColumn) buildPartialColumnHeader() (encoded []byte, err erro
 
 // PartsMetadata returns SSZ-encoded PartialDataColumnPartsMetadata.
 func (p *PartialDataColumn) PartsMetadata() (partialmessages.PartsMetadata, error) {
-	meta := p.newPartsMetadata()
+	meta, err := p.newPartsMetadata()
+	if err != nil {
+		return nil, errors.Wrap(err, "new parts metadata")
+	}
 	return marshalPartsMetadata(meta)
 }
 
@@ -323,7 +359,10 @@ func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerS
 				return peerState, partialmessages.PublishAction{Err: err}, false
 			}
 		}
-		myPartsMeta := p.newPartsMetadata()
+		myPartsMeta, err := p.newPartsMetadata()
+		if err != nil {
+			return peerState, partialmessages.PublishAction{Err: err}, false
+		}
 		peerState.Recvd = NewPartsMetaWithNoAvailableAndNoRequests(p.KzgCommitmentCount())
 		// We're sending our parts metadata so update the sent state i.e. the peer's view of what we have.
 		peerState.Sent = myPartsMeta
@@ -360,7 +399,10 @@ func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerS
 
 	//  Check if we need to send partsMetadata.
 	var partsMetadataToSend partialmessages.PartsMetadata
-	myPartsMeta := p.newPartsMetadata()
+	myPartsMeta, err := p.newPartsMetadata()
+	if err != nil {
+		return peerState, partialmessages.PublishAction{Err: err}, false
+	}
 	var shouldSendPartsMetadata bool
 
 	if sentMeta != nil {
