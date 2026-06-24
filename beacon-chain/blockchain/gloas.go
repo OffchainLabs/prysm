@@ -265,7 +265,7 @@ func (s *Service) payloadRevealRoot(ctx context.Context, revealSlot primitives.S
 		}
 		return [32]byte(root), true
 	}
-	
+
 	root, _ := s.CanonicalNodeAtSlot(revealSlot)
 	slot, err := s.RecentBlockSlot(root)
 	if err != nil {
