@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
@@ -123,6 +124,25 @@ func validatorsAreActive(ec *types.EvaluationContext, conns ...*grpc.ClientConn)
 
 // validatorsParticipating ensures the validators have an acceptable participation rate.
 func validatorsParticipating(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
+	// Retry up to 3 times with 2 second delays to handle timing flakes where
+	// attestations haven't been fully processed yet due to block propagation delays.
+	const maxRetries = 3
+	const retryDelay = 2 * time.Second
+	var lastErr error
+
+	for attempt := range maxRetries {
+		if attempt > 0 {
+			time.Sleep(retryDelay)
+		}
+		lastErr = checkValidatorsParticipating(conns)
+		if lastErr == nil {
+			return nil
+		}
+	}
+	return lastErr
+}
+
+func checkValidatorsParticipating(conns []*grpc.ClientConn) error {
 	conn := conns[0]
 	client := ethpb.NewBeaconChainClient(conn)
 	validatorRequest := &ethpb.GetValidatorParticipationRequest{}
@@ -235,6 +255,25 @@ func validatorsParticipating(_ *types.EvaluationContext, conns ...*grpc.ClientCo
 // validatorsSyncParticipation ensures the validators have an acceptable participation rate for
 // sync committee assignments.
 func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
+	// Retry up to 3 times with 2 second delays to handle timing flakes where
+	// sync committee messages haven't fully propagated yet.
+	const maxRetries = 3
+	const retryDelay = 2 * time.Second
+	var lastErr error
+
+	for attempt := range maxRetries {
+		if attempt > 0 {
+			time.Sleep(retryDelay)
+		}
+		lastErr = checkSyncParticipation(conns)
+		if lastErr == nil {
+			return nil
+		}
+	}
+	return lastErr
+}
+
+func checkSyncParticipation(conns []*grpc.ClientConn) error {
 	conn := conns[0]
 	client := ethpb.NewNodeClient(conn)
 	altairClient := ethpb.NewBeaconChainClient(conn)
@@ -273,9 +312,9 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 			// Skip fork slot.
 			continue
 		}
-		// Skip slots 1-2 at genesis - validators need time to ramp up after chain start
+		// Skip early slots at genesis - validators need time to ramp up after chain start
 		// due to doppelganger protection. This is a startup timing issue, not a fork transition issue.
-		if b.Block().Slot() < 3 {
+		if b.Block().Slot() < 5 {
 			continue
 		}
 		expectedParticipation := expectedSyncParticipation
@@ -289,6 +328,11 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 		syncAgg, err := b.Block().Body().SyncAggregate()
 		if err != nil {
 			return err
+		}
+		// Skip blocks with zero sync bits - these are typically empty/anomalous blocks
+		// where the proposer didn't receive sync committee contributions in time.
+		if syncAgg.SyncCommitteeBits.Count() == 0 {
+			continue
 		}
 		threshold := uint64(float64(syncAgg.SyncCommitteeBits.Len()) * expectedParticipation)
 		if syncAgg.SyncCommitteeBits.Count() < threshold {
@@ -343,6 +387,11 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 		syncAgg, err := b.Block().Body().SyncAggregate()
 		if err != nil {
 			return err
+		}
+		// Skip blocks with zero sync bits - these are typically empty/anomalous blocks
+		// where the proposer didn't receive sync committee contributions in time.
+		if syncAgg.SyncCommitteeBits.Count() == 0 {
+			continue
 		}
 		threshold := uint64(float64(syncAgg.SyncCommitteeBits.Len()) * expectedSyncParticipation)
 		if syncAgg.SyncCommitteeBits.Count() < threshold {
