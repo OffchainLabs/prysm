@@ -34,6 +34,12 @@ var (
 		Usage:  deprecatedUsage,
 		Hidden: true,
 	}
+	deprecatedEnableBuilderSSZ = &cli.BoolFlag{
+		Name:    "enable-builder-ssz",
+		Aliases: []string{"builder-ssz"},
+		Usage:   deprecatedUsage,
+		Hidden:  true,
+	}
 )
 
 // Deprecated flags for both the beacon node and validator client.
@@ -52,4 +58,5 @@ var upcomingDeprecation = []cli.Flag{
 // and therefore cannot be added to deprecatedFlags
 var deprecatedBeaconFlags = []cli.Flag{
 	deprecatedDisableLastEpochTargets,
+	deprecatedEnableBuilderSSZ,
 }
