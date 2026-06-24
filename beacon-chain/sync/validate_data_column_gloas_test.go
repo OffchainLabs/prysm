@@ -581,10 +581,10 @@ func TestPendingGloasColumns(t *testing.T) {
 
 		scorer := p.Peers().Scorers().BadResponsesScorer()
 
-		// One increment per fabricated column.
+		// One increment for the fabricated root even though the peer forwarded three columns.
 		evilCount, err := scorer.Count("evilpeer")
 		require.NoError(t, err)
-		require.Equal(t, 3, evilCount)
+		require.Equal(t, 1, evilCount)
 
 		// The peer on the known (orphaned) root is untouched.
 		_, err = scorer.Count("honestpeer")
