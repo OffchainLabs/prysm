@@ -146,10 +146,23 @@ func (s *Service) processBlobSidecarsFromExecution(ctx context.Context, block in
 		log.WithError(err).Error("Failed to read commitments from block")
 		return
 	}
+	// Exit early if there are no commitments in block.
+	if len(cmts) == 0 {
+		return
+	}
+
+	var blobUnseen bool
 	for i := range cmts {
 		if summary.HasIndex(uint64(i)) {
 			blobExistedInDBTotal.Inc()
+		} else {
+			blobUnseen = true
 		}
+	}
+	// If all blobs have been seen via gossip, we can exit the reconstruction
+	// routine early as there is nothing to fetch from the EL.
+	if !blobUnseen {
+		return
 	}
 
 	// Reconstruct blob sidecars from the EL
