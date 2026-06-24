@@ -1005,7 +1005,7 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 			continue
 		}
 
-		idx, err := gloas.PayloadCommitteeIndex(ctx, st, consensusMsg.Data.Slot, consensusMsg.ValidatorIndex)
+		indices, err := gloas.PayloadCommitteeIndices(ctx, st, consensusMsg.Data.Slot, consensusMsg.ValidatorIndex)
 		if err != nil {
 			failures = append(failures, &server.IndexedError{
 				Index:   i,
@@ -1022,7 +1022,7 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 			continue
 		}
 
-		if err := s.PayloadAttestationPool.InsertPayloadAttestation(consensusMsg, idx); err != nil {
+		if err := s.PayloadAttestationPool.InsertPayloadAttestation(consensusMsg, indices); err != nil {
 			failures = append(failures, &server.IndexedError{
 				Index:   i,
 				Message: "Could not insert payload attestation: " + err.Error(),

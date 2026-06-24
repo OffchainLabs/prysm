@@ -50,8 +50,8 @@ func TestPool_PendingPayloadAttestations(t *testing.T) {
 			},
 			Signature: sig,
 		}
-		require.NoError(t, pool.InsertPayloadAttestation(msg1, 0))
-		require.NoError(t, pool.InsertPayloadAttestation(msg2, 1))
+		require.NoError(t, pool.InsertPayloadAttestation(msg1, []uint64{0}))
+		require.NoError(t, pool.InsertPayloadAttestation(msg2, []uint64{1}))
 		atts := pool.PendingPayloadAttestations(primitives.Slot(2))
 		assert.Equal(t, 1, len(atts))
 		assert.Equal(t, primitives.Slot(2), atts[0].Data.Slot)
@@ -71,7 +71,7 @@ func TestPool_PendingPayloadAttestations(t *testing.T) {
 			},
 			Signature: sig,
 		}
-		require.NoError(t, pool.InsertPayloadAttestation(msg2, 1))
+		require.NoError(t, pool.InsertPayloadAttestation(msg2, []uint64{1}))
 
 		atts := pool.PendingPayloadAttestations(primitives.Slot(1))
 		assert.Equal(t, 0, len(atts))
@@ -110,8 +110,8 @@ func TestPool_PendingPayloadAttestations(t *testing.T) {
 			},
 			Signature: sig,
 		}
-		require.NoError(t, pool.InsertPayloadAttestation(msg1, 0))
-		require.NoError(t, pool.InsertPayloadAttestation(msg2, 1))
+		require.NoError(t, pool.InsertPayloadAttestation(msg1, []uint64{0}))
+		require.NoError(t, pool.InsertPayloadAttestation(msg2, []uint64{1}))
 
 		atts := pool.PendingPayloadAttestations(primitives.Slot(10))
 		assert.Equal(t, 0, len(atts))
@@ -122,13 +122,13 @@ func TestPool_PendingPayloadAttestations(t *testing.T) {
 func TestPool_InsertPayloadAttestation(t *testing.T) {
 	t.Run("nil message", func(t *testing.T) {
 		pool := NewPool()
-		err := pool.InsertPayloadAttestation(nil, 0)
+		err := pool.InsertPayloadAttestation(nil, []uint64{0})
 		require.ErrorContains(t, "nil payload attestation message", err)
 	})
 
 	t.Run("nil data", func(t *testing.T) {
 		pool := NewPool()
-		err := pool.InsertPayloadAttestation(&ethpb.PayloadAttestationMessage{}, 0)
+		err := pool.InsertPayloadAttestation(&ethpb.PayloadAttestationMessage{}, []uint64{0})
 		require.ErrorContains(t, "nil payload attestation message", err)
 	})
 
@@ -144,7 +144,7 @@ func TestPool_InsertPayloadAttestation(t *testing.T) {
 			},
 			Signature: bls.NewAggregateSignature().Marshal(),
 		}
-		err := pool.InsertPayloadAttestation(msg, 0)
+		err := pool.InsertPayloadAttestation(msg, []uint64{0})
 		require.ErrorContains(t, "invalid beacon block root length", err)
 		assert.Equal(t, 0, pendingCount(pool))
 	})
@@ -163,7 +163,7 @@ func TestPool_InsertPayloadAttestation(t *testing.T) {
 			},
 			Signature: sig,
 		}
-		require.NoError(t, pool.InsertPayloadAttestation(msg, idx))
+		require.NoError(t, pool.InsertPayloadAttestation(msg, []uint64{idx}))
 		atts := pool.PendingPayloadAttestations(primitives.Slot(1))
 		require.Equal(t, 1, len(atts))
 		assert.Equal(t, true, atts[0].AggregationBits.BitAt(idx))
@@ -183,7 +183,7 @@ func TestPool_InsertPayloadAttestation(t *testing.T) {
 			},
 			Signature: sig,
 		}
-		err := pool.InsertPayloadAttestation(msg, uint64(fieldparams.PTCSize))
+		err := pool.InsertPayloadAttestation(msg, []uint64{uint64(fieldparams.PTCSize)})
 		require.ErrorContains(t, "invalid payload attestation committee index", err)
 		assert.Equal(t, 0, pendingCount(pool))
 	})
@@ -202,12 +202,12 @@ func TestPool_InsertPayloadAttestation(t *testing.T) {
 			},
 			Signature: sig,
 		}
-		require.NoError(t, pool.InsertPayloadAttestation(msg, idx))
+		require.NoError(t, pool.InsertPayloadAttestation(msg, []uint64{idx}))
 		key, err := dataKey(msg.Data)
 		require.NoError(t, err)
 		firstSig := bytesutil.SafeCopyBytes(pool.pending[key].Signature)
 
-		require.NoError(t, pool.InsertPayloadAttestation(msg, idx))
+		require.NoError(t, pool.InsertPayloadAttestation(msg, []uint64{idx}))
 		atts := pool.PendingPayloadAttestations(primitives.Slot(1))
 		require.Equal(t, 1, len(atts))
 		assert.DeepEqual(t, firstSig, atts[0].Signature)
@@ -235,8 +235,8 @@ func TestPool_InsertPayloadAttestation(t *testing.T) {
 			Signature:      sig,
 		}
 
-		require.NoError(t, pool.InsertPayloadAttestation(msg1, 5))
-		require.NoError(t, pool.InsertPayloadAttestation(msg2, 7))
+		require.NoError(t, pool.InsertPayloadAttestation(msg1, []uint64{5}))
+		require.NoError(t, pool.InsertPayloadAttestation(msg2, []uint64{7}))
 
 		atts := pool.PendingPayloadAttestations(primitives.Slot(1))
 		require.Equal(t, 1, len(atts))
@@ -268,8 +268,8 @@ func TestPool_InsertPayloadAttestation(t *testing.T) {
 			},
 			Signature: sig,
 		}
-		require.NoError(t, pool.InsertPayloadAttestation(msg1, 0))
-		require.NoError(t, pool.InsertPayloadAttestation(msg2, 1))
+		require.NoError(t, pool.InsertPayloadAttestation(msg1, []uint64{0}))
+		require.NoError(t, pool.InsertPayloadAttestation(msg2, []uint64{1}))
 		atts := pool.PendingPayloadAttestations(primitives.Slot(1))
 		assert.Equal(t, 2, len(atts))
 	})
@@ -298,8 +298,8 @@ func TestPool_InsertPayloadAttestation(t *testing.T) {
 			Signature: sig,
 		}
 
-		require.NoError(t, pool.InsertPayloadAttestation(msg1, 0))
-		require.NoError(t, pool.InsertPayloadAttestation(msg2, 1))
+		require.NoError(t, pool.InsertPayloadAttestation(msg1, []uint64{0}))
+		require.NoError(t, pool.InsertPayloadAttestation(msg2, []uint64{1}))
 		assert.Equal(t, 1, pendingCount(pool))
 
 		atts := pool.PendingPayloadAttestations(primitives.Slot(1))
@@ -326,7 +326,7 @@ func TestPool_Seen(t *testing.T) {
 		Data:           data,
 		Signature:      sig,
 	}
-	require.NoError(t, pool.InsertPayloadAttestation(msg, 5))
+	require.NoError(t, pool.InsertPayloadAttestation(msg, []uint64{5}))
 
 	assert.Equal(t, true, pool.Seen(data, 5))
 	assert.Equal(t, false, pool.Seen(data, 6))
@@ -336,6 +336,60 @@ func TestPool_Seen(t *testing.T) {
 		BeaconBlockRoot: []byte{0x01}, // invalid
 		Slot:            1,
 	}, 5))
+}
+
+// TestPool_InsertPayloadAttestation_DuplicateValidatorPositions verifies that a validator sampled into
+// multiple PTC positions gets a bit set at every position, and that the produced aggregate signature
+// verifies against the pubkeys with the same multiplicity that is_valid_indexed_payload_attestation
+// derives from the set bits (one pubkey per set bit).
+func TestPool_InsertPayloadAttestation_DuplicateValidatorPositions(t *testing.T) {
+	pool := NewPool()
+
+	var root [32]byte
+	copy(root[:], "payload-attestation-signing-root")
+
+	sk1, err := bls.RandKey()
+	require.NoError(t, err)
+	sk2, err := bls.RandKey()
+	require.NoError(t, err)
+
+	// Both validators sign the same PayloadAttestationData.
+	data := &ethpb.PayloadAttestationData{
+		BeaconBlockRoot:   bytesutil.PadTo([]byte("block-root"), 32),
+		Slot:              1,
+		PayloadPresent:    true,
+		BlobDataAvailable: true,
+	}
+	msg1 := &ethpb.PayloadAttestationMessage{ValidatorIndex: 0, Data: data, Signature: sk1.Sign(root[:]).Marshal()}
+	msg2 := &ethpb.PayloadAttestationMessage{ValidatorIndex: 1, Data: data, Signature: sk2.Sign(root[:]).Marshal()}
+
+	// Validator 1 occupies positions 2, 5, 9; validator 2 occupies position 3.
+	require.NoError(t, pool.InsertPayloadAttestation(msg1, []uint64{2, 5, 9}))
+	require.NoError(t, pool.InsertPayloadAttestation(msg2, []uint64{3}))
+
+	atts := pool.PendingPayloadAttestations(primitives.Slot(1))
+	require.Equal(t, 1, len(atts))
+	agg := atts[0]
+
+	for _, i := range []uint64{2, 3, 5, 9} {
+		assert.Equal(t, true, agg.AggregationBits.BitAt(i), "expected bit %d set", i)
+	}
+	for _, i := range []uint64{0, 1, 4, 6, 7, 8, 10} {
+		assert.Equal(t, false, agg.AggregationBits.BitAt(i), "unexpected bit %d set", i)
+	}
+
+	aggSig, err := bls.SignatureFromBytes(agg.Signature)
+	require.NoError(t, err)
+
+	// is_valid_indexed_payload_attestation builds one pubkey per set bit: validator 1 three times
+	// (positions 2,5,9), validator 2 once (position 3). The aggregate must verify against those.
+	pubkeys := []bls.PublicKey{sk1.PublicKey(), sk1.PublicKey(), sk1.PublicKey(), sk2.PublicKey()}
+	assert.Equal(t, true, aggSig.FastAggregateVerify(pubkeys, root), "aggregate must verify against duplicated pubkeys")
+
+	// Negative control: it must NOT verify against deduplicated pubkeys, proving the signature was
+	// aggregated once per position (not once per validator).
+	dedup := []bls.PublicKey{sk1.PublicKey(), sk2.PublicKey()}
+	assert.Equal(t, false, aggSig.FastAggregateVerify(dedup, root), "must not verify against deduplicated pubkeys")
 }
 
 func pendingCount(pool *Pool) int {
