@@ -64,7 +64,7 @@ func fromSnapshot(snapshot DepositTreeSnapshot) (*DepositTree, error) {
 	if snapshot.depositRoot != root {
 		return nil, ErrInvalidSnapshotRoot
 	}
-	if snapshot.depositCount >= math.PowerOf2(uint64(DepositContractDepth)) {
+	if snapshot.depositCount > math.PowerOf2(uint64(DepositContractDepth)) {
 		return nil, ErrTooManyDeposits
 	}
 	tree, err := fromSnapshotParts(snapshot.finalized, snapshot.depositCount, DepositContractDepth)
