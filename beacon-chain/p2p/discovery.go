@@ -181,9 +181,16 @@ func (s *Service) RefreshPersistentSubnets() {
 
 	// Get the current attestation subnet bitfield.
 	bitV := bitfield.NewBitvector64()
-	attestationCommittees := cache.SubnetIDs.GetAllSubnets()
-	for _, idx := range attestationCommittees {
-		bitV.SetBitAt(idx, true)
+	if flags.Get().SubscribeToAllSubnets {
+		// Set all 64 bits for all attestation subnets
+		for i := uint64(0); i < params.BeaconConfig().AttestationSubnetCount; i++ {
+			bitV.SetBitAt(i, true)
+		}
+	} else {
+		attestationCommittees := cache.SubnetIDs.GetAllSubnets()
+		for _, idx := range attestationCommittees {
+			bitV.SetBitAt(idx, true)
+		}
 	}
 
 	// Get the attestation subnet bitfield we store in our record.
