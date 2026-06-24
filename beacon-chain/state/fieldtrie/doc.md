@@ -22,6 +22,13 @@ million entries). To avoid this, the SSZ spec defines the hash-tree-root as the 
 binary Merkle trie built over the field's elements. By maintaining the full trie in memory,
 we can perform incremental updates rather than full rebuilds.
 
+Field tries support two Merkle topologies. `NewFieldTrie` keeps the original fixed-depth
+legacy topology. `NewFieldTrieWithMode` can also build `MerkleModeProgressive` tries for
+progressive SSZ fields, where leaves are split into progressively larger subtrees
+(`1, 4, 16, 64, ...`) joined by a spine. The current state-native progressive path uses
+progressive field tries for validators and balances; smaller fields can continue to use
+direct root computation until they need the same optimization.
+
 ## 4. Incremental Recomputation
 
 When only a few elements in a field change between state transitions, we do not need to
@@ -60,11 +67,16 @@ Only the nodes on the path from the changed leaf to the root need recomputing (m
   In general: O(log n) instead of O(n).
 ```
 
+Progressive tries use the same branch-only recomputation inside the affected progressive
+subtree, then recompute the spine from that subtree back to the progressive root. Passing
+`nil` dirty indices still means "rebuild from scratch" for both legacy and progressive
+tries.
+
 ## 5. Flat Buffer Storage
 
-Trie nodes are stored in a single contiguous flat buffer (`[][32]byte`) rather than as a
-pointer-based tree structure. Each level of the trie is packed contiguously in the buffer,
-from leaves (level 0) up to the root (level `depth`).
+For legacy tries, trie nodes are stored in a single contiguous flat buffer (`[][32]byte`)
+rather than as a pointer-based tree structure. Each level of the trie is packed contiguously
+in the buffer, from leaves (level 0) up to the root (level `depth`).
 
 An offsets table (`[]uint64`) maps each level to its starting index in the buffer:
 `offsets[level]` is the start of that level's nodes, and `offsets[level+1] - offsets[level]`
@@ -88,6 +100,10 @@ and branch recomputation (known offsets for each level).
 When the buffer needs to grow (e.g., new validators are added), it is reallocated with 10%
 headroom to amortize repeated growth.
 
+Progressive tries use the same flat-buffer layout per subtree. `progressiveData` stores
+the subtree buffers plus the progressive spine. Overlay mode stores sparse node overrides
+keyed by `(subtree, level, index)` and sparse spine overrides.
+
 ## 6. Copy-on-Write: Base + Overlay + Promotion
 
 Multiple beacon state instances often share the same field data (e.g., forked states during
@@ -96,8 +112,9 @@ wasteful. Instead, the implementation uses a **copy-on-write overlay** system.
 
 ### Owned Mode
 
-A trie in **owned mode** holds its own flat buffer (`nodesData`). This is the default mode
-when a trie is first built. It can serve as a read-only base for overlays.
+A trie in **owned mode** holds its own flat buffer (`nodesData` for legacy tries, or
+`progressiveData` for progressive tries). This is the default mode when a trie is first
+built. It can serve as a read-only base for overlays.
 
 ### Overlay Mode
 
@@ -105,8 +122,9 @@ When a shared trie needs to be mutated, a **fork** creates a new trie in **overl
 An overlay does not copy the flat buffer. Instead, it holds:
 
 - A pointer to the immutable **base** trie (the original owned trie).
-- A sparse **overrides** structure: one `map[uint64][32]byte` per trie level, storing only
-  the nodes that differ from the base.
+- A sparse **overrides** structure. Legacy tries store one `map[uint64][32]byte` per trie
+  level. Progressive tries store node overrides keyed by `(subtree, level, index)`, plus
+  sparse spine overrides and a dirty leaf set used for promotion accounting.
 
 Reading a node in overlay mode first checks the overrides map for that level; if absent, it
 falls back to the base buffer. Writing only touches the overrides maps.
@@ -133,9 +151,9 @@ already an overlay, the fork deep-copies the overrides maps while sharing the sa
 
 As an overlay accumulates changes, the per-lookup map overhead grows. When the number of
 dirty leaf overrides exceeds a threshold (default: 20,000, or a configurable fraction of
-total leaves), the overlay is **promoted** back to owned mode: a fresh flat buffer is
-allocated, the base data is copied in, all overrides are applied on top, the full trie is
-recomputed from leaves, and the base reference is released.
+total leaves), the overlay is **promoted** back to owned mode: fresh owned storage is
+allocated, the complete element set is rebuilt into that storage, and the base reference is
+released.
 
 This ensures that overlays remain efficient for the common case (few changes per slot) while
 gracefully degrading to a full rebuild when accumulated drift becomes too large.
@@ -159,8 +177,8 @@ import (
 	"fmt"
 	"runtime"
 
-	fieldtrie "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/fieldtrie"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/types"
+	fieldtrie "github.com/OffchainLabs/prysm/v7/beacon-chain/state/fieldtrie"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 )
 
 func main() {
@@ -183,6 +201,9 @@ func main() {
 		panic(err)
 	}
 
+	// NewFieldTrie builds the legacy topology. Progressive callers use
+	// NewFieldTrieWithMode(..., fieldtrie.MerkleModeProgressive, ...).
+	//
 	// trieA is in owned mode with its own flat buffer.
 	//   trieA.Ref     = 1   (one handle: trieA)
 	//   trieA.DataRef = 0   (no overlay is using trieA as a base)
