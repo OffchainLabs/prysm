@@ -2,7 +2,10 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["fdlimits.go"],
+    srcs = [
+        "fdlimits.go",
+        "log.go",
+    ],
     importpath = "github.com/OffchainLabs/prysm/v7/runtime/fdlimits",
     visibility = ["//visibility:public"],
     deps = [

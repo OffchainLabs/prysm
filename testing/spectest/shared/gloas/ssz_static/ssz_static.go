@@ -1,11 +1,15 @@
 package ssz_static
 
 import (
+	"context"
 	"errors"
 	"testing"
 
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	// enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	common "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/common/ssz_static"
 	fssz "github.com/prysmaticlabs/fastssz"
 )
@@ -16,8 +20,18 @@ func RunSSZStaticTests(t *testing.T, config string) {
 }
 
 func customHtr(t *testing.T, htrs []common.HTR, object any) []common.HTR {
-	// TODO: Add custom HTR for BeaconStateGloas when state-native support is implemented
-	// For now, only use the default fastssz HTR methods
+	_, ok := object.(*ethpb.BeaconStateGloas)
+	if !ok {
+		return htrs
+	}
+
+	htrs = append(htrs, func(s any) ([32]byte, error) {
+		beaconState, err := state_native.InitializeFromProtoUnsafeGloas(s.(*ethpb.BeaconStateGloas))
+		require.NoError(t, err)
+
+		return beaconState.HashTreeRoot(context.Background())
+	})
+
 	return htrs
 }
 
@@ -43,6 +57,8 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.BeaconBlockBodyGloas{}
 	case "BeaconState":
 		obj = &ethpb.BeaconStateGloas{}
+	case "Builder":
+		obj = &ethpb.Builder{}
 	case "BuilderPendingPayment":
 		obj = &ethpb.BuilderPendingPayment{}
 	case "BuilderPendingWithdrawal":
@@ -57,10 +73,12 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		t.Skip("Not a consensus type")
 	case "DataColumnSidecar":
 		obj = &ethpb.DataColumnSidecarGloas{}
+	case "SignedProposerPreferences", "ProposerPreferences":
+		t.Skip("p2p-only type; not part of the consensus state transition")
 
 	// Standard types that also exist in gloas
 	case "ExecutionPayload":
-		obj = &enginev1.ExecutionPayloadDeneb{}
+		obj = &enginev1.ExecutionPayloadGloas{}
 	case "ExecutionPayloadHeader":
 		obj = &enginev1.ExecutionPayloadHeaderDeneb{}
 	case "Attestation":
@@ -127,16 +145,8 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.SyncAggregatorSelectionData{}
 	case "SyncCommittee":
 		obj = &ethpb.SyncCommittee{}
-	case "LightClientOptimisticUpdate":
-		obj = &ethpb.LightClientOptimisticUpdateDeneb{}
-	case "LightClientFinalityUpdate":
-		obj = &ethpb.LightClientFinalityUpdateElectra{}
-	case "LightClientBootstrap":
-		obj = &ethpb.LightClientBootstrapElectra{}
-	case "LightClientUpdate":
-		obj = &ethpb.LightClientUpdateElectra{}
-	case "LightClientHeader":
-		obj = &ethpb.LightClientHeaderDeneb{}
+	case "LightClientOptimisticUpdate", "LightClientFinalityUpdate", "LightClientBootstrap", "LightClientUpdate", "LightClientHeader":
+		t.Skip("Gloas light client types not yet implemented")
 	case "BlobIdentifier":
 		obj = &ethpb.BlobIdentifier{}
 	case "BlobSidecar":
@@ -163,12 +173,18 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &enginev1.DepositRequest{}
 	case "ConsolidationRequest":
 		obj = &enginev1.ConsolidationRequest{}
+	case "BuilderDepositRequest":
+		obj = &enginev1.BuilderDepositRequest{}
+	case "BuilderExitRequest":
+		obj = &enginev1.BuilderExitRequest{}
 	case "ExecutionRequests":
-		obj = &enginev1.ExecutionRequests{}
+		obj = &enginev1.ExecutionRequestsGloas{}
 	case "DataColumnsByRootIdentifier":
 		obj = &ethpb.DataColumnsByRootIdentifier{}
 	case "MatrixEntry":
 		t.Skip("Unused type")
+	case "PartialDataColumnHeader", "PartialDataColumnPartsMetadata", "PartialDataColumnSidecar", "PartialDataColumnGroupID":
+		t.Skip("Not yet implemented")
 	default:
 		return nil, errors.New("type not found")
 	}

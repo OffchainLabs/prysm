@@ -1,6 +1,8 @@
 package sync
 
 import (
+	"strings"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -24,7 +26,9 @@ func (s *Service) p2pHandlerControlLoop() {
 		// In the event of a node restart, we will still end up subscribing to the correct
 		// topics during/after the fork epoch. This routine is to ensure correct
 		// subscriptions for nodes running before a fork epoch.
-		case <-slotTicker.C():
+		case currentSlot := <-slotTicker.C():
+			s.proposerPreferencesCache.PruneBefore(currentSlot)
+			s.highestExecutionPayloadBidCache.PruneBefore(currentSlot)
 			current := s.cfg.clock.CurrentEpoch()
 			if err := s.ensureRegistrationsForEpoch(current); err != nil {
 				log.WithError(err).Error("Unable to check for fork in the next epoch")
@@ -119,15 +123,23 @@ func (s *Service) ensureDeregistrationForEpoch(currentEpoch primitives.Epoch) er
 	if s.digestActionDone(previous.ForkDigest, unregisterGossipOnce) {
 		return nil
 	}
+	partialBroadcaster := s.cfg.p2p.PartialColumnBroadcaster()
 	for _, t := range s.subHandler.allTopics() {
 		retDigest, err := p2p.ExtractGossipDigest(t)
 		if err != nil {
 			log.WithError(err).Error("Could not retrieve digest")
 			continue
 		}
-		if retDigest == previous.ForkDigest {
-			s.unSubscribeFromTopic(t)
+		if retDigest != previous.ForkDigest {
+			continue
 		}
+		// Also unsubscribe from partial topics
+		if partialBroadcaster != nil && strings.Contains(t, p2p.GossipDataColumnSidecarMessage) {
+			if err := partialBroadcaster.Unsubscribe(s.ctx, t); err != nil {
+				log.WithError(err).WithField("topic", t).Error("Could not unsubscribe partial column broadcaster")
+			}
+		}
+		s.unSubscribeFromTopic(t)
 	}
 
 	return nil

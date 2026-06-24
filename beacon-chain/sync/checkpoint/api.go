@@ -44,7 +44,7 @@ func NewAPIInitializer(beaconNodeHost string) (*APIInitializer, error) {
 func (dl *APIInitializer) Initialize(ctx context.Context, d db.Database) error {
 	origin, err := d.OriginCheckpointBlockRoot(ctx)
 	if err == nil && origin != params.BeaconConfig().ZeroHash {
-		log.Warnf("Origin checkpoint root %#x found in db, ignoring checkpoint sync flags", origin)
+		log.WithField("root", fmt.Sprintf("%#x", origin)).Info("Origin checkpoint found in the database, ignoring checkpoint sync flags")
 		return nil
 	}
 	if err != nil && !errors.Is(err, db.ErrNotFound) {
@@ -152,6 +152,11 @@ func DownloadFinalizedData(ctx context.Context, client *beacon.Client) (*OriginD
 		WithField("stateRoot", hexutil.Encode(sr[:])).
 		WithField("blockRoot", hexutil.Encode(br[:])).
 		Info("Downloaded checkpoint sync state and block.")
+	if s.Version() >= version.Gloas {
+		if full, err := s.LatestBlockHashMatchesBidBlockHash(); err == nil && full {
+			log.Warn("Checkpoint sync state has payload already applied")
+		}
+	}
 	return &OriginData{
 		st: s,
 		b:  b,

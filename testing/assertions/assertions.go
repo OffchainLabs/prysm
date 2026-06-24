@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz/equality"
 	"github.com/d4l3k/messagediff"
@@ -54,9 +55,11 @@ func DeepEqual(loggerFn assertionLoggerFn, expected, actual any, msg ...any) {
 	if !isDeepEqual(expected, actual) {
 		errMsg := parseMsg("Values are not equal", msg...)
 		_, file, line, _ := runtime.Caller(2)
-		opts := cmp.Options{cmp.AllowUnexported(expected), cmp.AllowUnexported(actual)}
+		var opts cmp.Options
 		if _, isProto := expected.(proto.Message); isProto {
-			opts = append(opts, protocmp.Transform())
+			opts = cmp.Options{protocmp.Transform()}
+		} else {
+			opts = cmp.Options{cmp.AllowUnexported(expected), cmp.AllowUnexported(actual)}
 		}
 		diff := cmp.Diff(expected, actual, opts...)
 		loggerFn("%s:%d %s, expected != actual, diff: %s", filepath.Base(file), line, errMsg, diff)
@@ -138,12 +141,21 @@ func StringContains(loggerFn assertionLoggerFn, expected, actual string, flag bo
 
 // NoError asserts that error is nil.
 func NoError(loggerFn assertionLoggerFn, err error, msg ...any) {
-	// reflect.ValueOf is needed for nil instances of custom types implementing Error
-	if err != nil && !reflect.ValueOf(err).IsNil() {
-		errMsg := parseMsg("Unexpected error", msg...)
-		_, file, line, _ := runtime.Caller(2)
-		loggerFn("%s:%d %s: %v", filepath.Base(file), line, errMsg, err)
+	if err == nil {
+		return
 	}
+	// reflect.ValueOf is needed for nil instances of custom types implementing Error.
+	// Only check IsNil for types that support it to avoid panics on struct types.
+	v := reflect.ValueOf(err)
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
+		if v.IsNil() {
+			return
+		}
+	}
+	errMsg := parseMsg("Unexpected error", msg...)
+	_, file, line, _ := runtime.Caller(2)
+	loggerFn("%s:%d %s: %v", filepath.Base(file), line, errMsg, err)
 }
 
 // ErrorIs uses Errors.Is to recursively unwrap err looking for target in the chain.
@@ -193,7 +205,7 @@ func deepNil(got any) bool {
 	}
 	value := reflect.ValueOf(got)
 	switch value.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice, reflect.UnsafePointer:
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
 		return value.IsNil()
 	}
 	return false
@@ -308,7 +320,7 @@ func notEmpty(loggerFn assertionLoggerFn, obj any, ignoreFieldsWithoutTags bool,
 		fields := append(fields, fieldName)
 
 		switch k := v.Field(i).Kind(); k {
-		case reflect.Ptr:
+		case reflect.Pointer:
 			notEmpty(loggerFn, v.Field(i), ignoreFieldsWithoutTags, fields, stackSize+1, msg...)
 		case reflect.Slice:
 			f := v.Field(i)
@@ -340,4 +352,19 @@ func (tb *TBMock) Errorf(format string, args ...any) {
 // Fatalf writes testing logs to FatalfMsg.
 func (tb *TBMock) Fatalf(format string, args ...any) {
 	tb.FatalfMsg = fmt.Sprintf(format, args...)
+}
+
+// Eventually asserts that given condition will be met within waitFor time,
+// periodically checking target function each tick.
+func Eventually(loggerFn assertionLoggerFn, condition func() bool, waitFor, tick time.Duration, msg ...any) {
+	deadline := time.Now().Add(waitFor)
+	for time.Now().Before(deadline) {
+		if condition() {
+			return
+		}
+		time.Sleep(tick)
+	}
+	errMsg := parseMsg("Condition never satisfied", msg...)
+	_, file, line, _ := runtime.Caller(2)
+	loggerFn("%s:%d %s (waited %v)", filepath.Base(file), line, errMsg, waitFor)
 }

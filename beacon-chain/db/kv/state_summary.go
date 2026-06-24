@@ -2,6 +2,7 @@ package kv
 
 import (
 	"context"
+	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -47,7 +48,11 @@ func (s *Store) StateSummary(ctx context.Context, blockRoot [32]byte) (*ethpb.St
 	}
 	var enc []byte
 	if err := s.db.View(func(tx *bolt.Tx) error {
-		enc = tx.Bucket(stateSummaryBucket).Get(blockRoot[:])
+		rawEnc := tx.Bucket(stateSummaryBucket).Get(blockRoot[:])
+		if len(rawEnc) == 0 {
+			return nil
+		}
+		enc = slices.Clone(rawEnc)
 		return nil
 	}); err != nil {
 		return nil, err

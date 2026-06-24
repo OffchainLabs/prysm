@@ -157,41 +157,57 @@ func (s *Service) validateRangeAvailability(rp rangeParams) bool {
 	return s.availableBlocker.AvailableBlock(startBlock)
 }
 
+// writeBlockBatchToStream writes one canonical block batch to the RPC stream in slot order, while handling mixed blinded and full blocks safely.
+// It first scans the canonical batch and reconstructs all blinded blocks in one pass via the execution reconstructor, indexes reconstructed results by slot,
+// and then performs a second pass over the same canonical sequence to stream each block in ascending order: full blocks are written directly,
+// and blinded blocks are replaced with their reconstructed full counterpart when available.
 func (s *Service) writeBlockBatchToStream(ctx context.Context, batch blockBatch, stream libp2pcore.Stream) error {
 	ctx, span := trace.StartSpan(ctx, "sync.WriteBlockRangeToStream")
 	defer span.End()
 
+	canonical := batch.canonical()
+
 	blinded := make([]interfaces.ReadOnlySignedBeaconBlock, 0)
-	for _, b := range batch.canonical() {
+	for _, b := range canonical {
 		if err := blocks.BeaconBlockIsNil(b); err != nil {
 			continue
 		}
 		if b.IsBlinded() {
 			blinded = append(blinded, b.ReadOnlySignedBeaconBlock)
-			continue
 		}
-		if chunkErr := s.chunkBlockWriter(stream, b); chunkErr != nil {
-			log.WithError(chunkErr).Debug("Could not send a chunked response")
-			return chunkErr
-		}
-	}
-	if len(blinded) == 0 {
-		return nil
 	}
 
-	reconstructed, err := s.cfg.executionReconstructor.ReconstructFullBellatrixBlockBatch(ctx, blinded)
-	if err != nil {
-		log.WithError(err).Error("Could not reconstruct full bellatrix block batch from blinded bodies")
-		return err
+	reconstructedBySlot := make(map[primitives.Slot]interfaces.SignedBeaconBlock)
+	if len(blinded) > 0 {
+		reconstructed, err := s.cfg.executionReconstructor.ReconstructFullBellatrixBlockBatch(ctx, blinded)
+		if err != nil {
+			log.WithError(err).Error("Could not reconstruct full bellatrix block batch from blinded bodies")
+			return err
+		}
+		for _, b := range reconstructed {
+			if b.IsBlinded() {
+				continue
+			}
+			reconstructedBySlot[b.Block().Slot()] = b
+		}
 	}
-	for _, b := range reconstructed {
+
+	for _, b := range canonical {
 		if err := blocks.BeaconBlockIsNil(b); err != nil {
 			continue
 		}
+
+		var toWrite interfaces.ReadOnlySignedBeaconBlock
 		if b.IsBlinded() {
-			continue
+			full, ok := reconstructedBySlot[b.Block().Slot()]
+			if !ok {
+				continue
+			}
+			toWrite = full
+		} else {
+			toWrite = b
 		}
-		if chunkErr := s.chunkBlockWriter(stream, b); chunkErr != nil {
+		if chunkErr := s.chunkBlockWriter(stream, toWrite); chunkErr != nil {
 			log.WithError(chunkErr).Debug("Could not send a chunked response")
 			return chunkErr
 		}

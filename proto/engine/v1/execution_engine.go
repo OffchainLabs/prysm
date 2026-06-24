@@ -67,6 +67,30 @@ func (cr *ConsolidationRequest) Copy() *ConsolidationRequest {
 	}
 }
 
+// Copy --
+func (bdr *BuilderDepositRequest) Copy() *BuilderDepositRequest {
+	if bdr == nil {
+		return nil
+	}
+	return &BuilderDepositRequest{
+		Pubkey:                bytesutil.SafeCopyBytes(bdr.Pubkey),
+		WithdrawalCredentials: bytesutil.SafeCopyBytes(bdr.WithdrawalCredentials),
+		Amount:                bdr.Amount,
+		Signature:             bytesutil.SafeCopyBytes(bdr.Signature),
+	}
+}
+
+// Copy --
+func (ber *BuilderExitRequest) Copy() *BuilderExitRequest {
+	if ber == nil {
+		return nil
+	}
+	return &BuilderExitRequest{
+		SourceAddress: bytesutil.SafeCopyBytes(ber.SourceAddress),
+		Pubkey:        bytesutil.SafeCopyBytes(ber.Pubkey),
+	}
+}
+
 // Copy -- Deneb
 func (payload *ExecutionPayloadDeneb) Copy() *ExecutionPayloadDeneb {
 	if payload == nil {

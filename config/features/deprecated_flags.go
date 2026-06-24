@@ -14,10 +14,41 @@ var (
 		Usage:  deprecatedUsage,
 		Hidden: true,
 	}
+	deprecatedHTTPModules = &cli.StringFlag{
+		Name:   "http-modules",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
+	deprecatedEnableDBBackupWebhook = &cli.BoolFlag{
+		Name:   "enable-db-backup-webhook",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
+	deprecatedSlasherRPCProvider = &cli.StringFlag{
+		Name:   "slasher-rpc-provider",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
+	deprecatedSlasherTLSCert = &cli.StringFlag{
+		Name:   "slasher-tls-cert",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
+	deprecatedEnableBuilderSSZ = &cli.BoolFlag{
+		Name:    "enable-builder-ssz",
+		Aliases: []string{"builder-ssz"},
+		Usage:   deprecatedUsage,
+		Hidden:  true,
+	}
 )
 
 // Deprecated flags for both the beacon node and validator client.
-var deprecatedFlags = []cli.Flag{}
+var deprecatedFlags = []cli.Flag{
+	deprecatedHTTPModules,
+	deprecatedEnableDBBackupWebhook,
+	deprecatedSlasherRPCProvider,
+	deprecatedSlasherTLSCert,
+}
 
 var upcomingDeprecation = []cli.Flag{
 	enableHistoricalSpaceRepresentation,
@@ -25,4 +56,7 @@ var upcomingDeprecation = []cli.Flag{
 
 // deprecatedBeaconFlags contains flags that are still used by other components
 // and therefore cannot be added to deprecatedFlags
-var deprecatedBeaconFlags = []cli.Flag{}
+var deprecatedBeaconFlags = []cli.Flag{
+	deprecatedDisableLastEpochTargets,
+	deprecatedEnableBuilderSSZ,
+}

@@ -25,3 +25,10 @@ func TestInfo(t *testing.T) {
 		require.DeepEqual(t, expectedDataColumnsSubnets, actual.DataColumnsSubnets)
 	}
 }
+
+func TestNewColumnIndicesFromMap(t *testing.T) {
+	t.Run("nil map", func(t *testing.T) {
+		ci := peerdas.NewColumnIndicesFromMap(nil)
+		require.Equal(t, 0, ci.Count())
+	})
+}

@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "doc.go",
+        "log.go",
         "pool.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec",

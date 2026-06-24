@@ -8,12 +8,12 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	coreblocks "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	corehelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
@@ -25,7 +25,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -39,6 +38,7 @@ import (
 
 const (
 	broadcastValidationQueryParam               = "broadcast_validation"
+	broadcastValidationGossip                   = "gossip"
 	broadcastValidationConsensus                = "consensus"
 	broadcastValidationConsensusAndEquivocation = "consensus_and_equivocation"
 )
@@ -644,6 +644,7 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 }
 
 var sszDecoders = map[string]blockDecoder{
+	version.String(version.Gloas):     decodeGloasSSZ,
 	version.String(version.Fulu):      decodeFuluSSZ,
 	version.String(version.Electra):   decodeElectraSSZ,
 	version.String(version.Deneb):     decodeDenebSSZ,
@@ -659,6 +660,18 @@ func decodeSSZToGenericBlock(versionHeader string, body []byte) (*eth.GenericSig
 		return decoder(body)
 	}
 	return nil, errors.New("body does not represent a valid block type")
+}
+
+func decodeGloasSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	gloasBlock := &eth.SignedBeaconBlockGloas{}
+	if err := gloasBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(
+			version.String(version.Gloas), err,
+		)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Gloas{Gloas: gloasBlock},
+	}, nil
 }
 
 func decodeFuluSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
@@ -799,6 +812,7 @@ func (s *Server) publishBlock(ctx context.Context, w http.ResponseWriter, r *htt
 }
 
 var jsonDecoders = map[string]blockDecoder{
+	version.String(version.Gloas):     decodeGloasJSON,
 	version.String(version.Fulu):      decodeFuluJSON,
 	version.String(version.Electra):   decodeElectraJSON,
 	version.String(version.Deneb):     decodeDenebJSON,
@@ -814,6 +828,13 @@ func decodeJSONToGenericBlock(versionHeader string, body []byte) (*eth.GenericSi
 		return decoder(body)
 	}
 	return nil, fmt.Errorf("body does not represent a valid block type")
+}
+
+func decodeGloasJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBeaconBlockGloas](
+		body,
+		version.String(version.Gloas),
+	)
 }
 
 func decodeFuluJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
@@ -957,6 +978,13 @@ func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeac
 			}
 		}
 	}
+	blockRoot, err := blk.Block().HashTreeRoot()
+	if err != nil {
+		return errors.Wrap(err, "could not hash block")
+	}
+	if err := coreblocks.VerifyBlockSignatureUsingCurrentFork(parentState, blk, blockRoot); err != nil {
+		return errors.Wrap(err, "could not verify block signature")
+	}
 	_, err = transition.ExecuteStateTransition(ctx, parentState, blk)
 	if err != nil {
 		return errors.Wrap(err, "could not execute state transition")
@@ -993,10 +1021,11 @@ func (s *Server) validateEquivocation(blk interfaces.ReadOnlyBeaconBlock) error 
 }
 
 func (s *Server) validateBlobs(blk interfaces.SignedBeaconBlock, blobs [][]byte, proofs [][]byte) error {
+	const numberOfColumns = fieldparams.NumberOfColumns
+
 	if blk.Version() < version.Deneb {
 		return nil
 	}
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
 	commitments, err := blk.Block().Body().BlobKzgCommitments()
 	if err != nil {
 		return errors.Wrap(err, "could not get blob kzg commitments")
@@ -1035,112 +1064,27 @@ func (s *Server) GetBlockRoot(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetBlockRoot")
 	defer span.End()
 
-	var err error
-	var root []byte
 	blockID := r.PathValue("block_id")
 	if blockID == "" {
 		httputil.HandleError(w, "block_id is required in URL params", http.StatusBadRequest)
 		return
 	}
-	switch blockID {
-	case "head":
-		root, err = s.ChainInfoFetcher.HeadRoot(ctx)
-		if err != nil {
-			httputil.HandleError(w, "Could not retrieve head root: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if root == nil {
-			httputil.HandleError(w, "No head root was found", http.StatusNotFound)
-			return
-		}
-	case "finalized":
-		finalized := s.ChainInfoFetcher.FinalizedCheckpt()
-		root = finalized.Root
-	case "genesis":
-		blk, err := s.BeaconDB.GenesisBlock(ctx)
-		if err != nil {
-			httputil.HandleError(w, "Could not retrieve genesis block: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if err := blocks.BeaconBlockIsNil(blk); err != nil {
-			httputil.HandleError(w, "Could not find genesis block: "+err.Error(), http.StatusNotFound)
-			return
-		}
-		blkRoot, err := blk.Block().HashTreeRoot()
-		if err != nil {
-			httputil.HandleError(w, "Could not hash genesis block: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		root = blkRoot[:]
-	default:
-		isHex := strings.HasPrefix(blockID, "0x")
-		if isHex {
-			blockIDBytes, err := hexutil.Decode(blockID)
-			if err != nil {
-				httputil.HandleError(w, "Could not decode block ID into bytes: "+err.Error(), http.StatusBadRequest)
-				return
-			}
-			if len(blockIDBytes) != fieldparams.RootLength {
-				httputil.HandleError(w, fmt.Sprintf("Block ID has length %d instead of %d", len(blockIDBytes), fieldparams.RootLength), http.StatusBadRequest)
-				return
-			}
-			blockID32 := bytesutil.ToBytes32(blockIDBytes)
-			blk, err := s.BeaconDB.Block(ctx, blockID32)
-			if err != nil {
-				httputil.HandleError(w, fmt.Sprintf("Could not retrieve block for block root %#x: %v", blockID, err), http.StatusInternalServerError)
-				return
-			}
-			if err := blocks.BeaconBlockIsNil(blk); err != nil {
-				httputil.HandleError(w, "Could not find block: "+err.Error(), http.StatusNotFound)
-				return
-			}
-			root = blockIDBytes
-		} else {
-			slot, err := strconv.ParseUint(blockID, 10, 64)
-			if err != nil {
-				httputil.HandleError(w, "Could not parse block ID: "+err.Error(), http.StatusBadRequest)
-				return
-			}
-			hasRoots, roots, err := s.BeaconDB.BlockRootsBySlot(ctx, primitives.Slot(slot))
-			if err != nil {
-				httputil.HandleError(w, fmt.Sprintf("Could not retrieve blocks for slot %d: %v", slot, err), http.StatusInternalServerError)
-				return
-			}
-
-			if !hasRoots {
-				httputil.HandleError(w, "Could not find any blocks with given slot", http.StatusNotFound)
-				return
-			}
-			root = roots[0][:]
-			if len(roots) == 1 {
-				break
-			}
-			for _, blockRoot := range roots {
-				canonical, err := s.ChainInfoFetcher.IsCanonical(ctx, blockRoot)
-				if err != nil {
-					httputil.HandleError(w, "Could not determine if block root is canonical: "+err.Error(), http.StatusInternalServerError)
-					return
-				}
-				if canonical {
-					root = blockRoot[:]
-					break
-				}
-			}
-		}
+	root, err := s.Blocker.BlockRoot(ctx, []byte(blockID))
+	if !shared.WriteBlockRootFetchError(w, err) {
+		return
 	}
 
-	b32Root := bytesutil.ToBytes32(root)
-	isOptimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, b32Root)
+	isOptimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, root)
 	if err != nil {
 		httputil.HandleError(w, "Could not check if block is optimistic: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	response := &structs.BlockRootResponse{
 		Data: &structs.BlockRoot{
-			Root: hexutil.Encode(root),
+			Root: hexutil.Encode(root[:]),
 		},
 		ExecutionOptimistic: isOptimistic,
-		Finalized:           s.FinalizationFetcher.IsFinalized(ctx, b32Root),
+		Finalized:           s.FinalizationFetcher.IsFinalized(ctx, root),
 	}
 	httputil.WriteJson(w, response)
 }
@@ -1396,27 +1340,27 @@ func (s *Server) GetBlockHeader(w http.ResponseWriter, r *http.Request) {
 	}
 	blockHeader, err := blk.Header()
 	if err != nil {
-		httputil.HandleError(w, "Could not get block header: %s"+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, "Could not get block header: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	headerRoot, err := blockHeader.Header.HashTreeRoot()
 	if err != nil {
-		httputil.HandleError(w, "Could not hash block header: %s"+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, "Could not hash block header: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	blkRoot, err := blk.Block().HashTreeRoot()
 	if err != nil {
-		httputil.HandleError(w, "Could not hash block: %s"+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, "Could not hash block: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	canonical, err := s.ChainInfoFetcher.IsCanonical(ctx, blkRoot)
 	if err != nil {
-		httputil.HandleError(w, "Could not determine if block root is canonical: %s"+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, "Could not determine if block root is canonical: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, blkRoot)
 	if err != nil {
-		httputil.HandleError(w, "Could not check if block is optimistic: %s"+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, "Could not check if block is optimistic: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 

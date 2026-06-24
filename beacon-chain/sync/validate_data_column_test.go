@@ -2,13 +2,13 @@ package sync
 
 import (
 	"bytes"
-	"errors"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
@@ -22,12 +22,18 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 func TestValidateDataColumn(t *testing.T) {
 	err := kzg.Start()
 	require.NoError(t, err)
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 
 	ctx := t.Context()
 
@@ -71,10 +77,7 @@ func TestValidateDataColumn(t *testing.T) {
 			ctx:                 ctx,
 			newColumnsVerifier:  newDataColumnsVerifier,
 			seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
-			kzgChan:             make(chan *kzgVerifier, 100),
 		}
-		// Start the KZG verifier routine for batch verification
-		go service.kzgVerifierRoutine()
 
 		// Encode a `beaconBlock` message instead of expected.
 		buf := new(bytes.Buffer)
@@ -85,7 +88,12 @@ func TestValidateDataColumn(t *testing.T) {
 		digest, err := service.currentForkDigest()
 		require.NoError(t, err)
 
-		topic = service.addDigestToTopic(topic, digest)
+		if dc, ok := msg.(*ethpb.DataColumnSidecar); ok {
+			subnet := peerdas.ComputeSubnetForDataColumnSidecar(dc.Index)
+			topic = service.addDigestAndIndexToTopic(topic, digest, subnet)
+		} else {
+			topic = service.addDigestToTopic(topic, digest)
+		}
 
 		message := &pubsub.Message{Message: &pb.Message{Data: buf.Bytes(), Topic: &topic}}
 
@@ -94,7 +102,7 @@ func TestValidateDataColumn(t *testing.T) {
 
 	t.Run("invalid message type", func(t *testing.T) {
 		// Encode a `beaconBlock` message instead of expected.
-		service, message := serviceAndMessage(t, nil, util.NewBeaconBlock())
+		service, message := serviceAndMessage(t, nil, util.NewBeaconBlockFulu())
 		result, err := service.validateDataColumn(ctx, "", message)
 		require.ErrorIs(t, errWrongMessage, err)
 		require.Equal(t, pubsub.ValidationReject, result)
@@ -193,7 +201,7 @@ func TestValidateDataColumn(t *testing.T) {
 		},
 		{
 			name:           "nominal",
-			verifier:       testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{}),
+			verifier:       testVerifierReturnsAll(&verification.MockDataColumnsVerifier{}),
 			expectedResult: pubsub.ValidationAccept,
 		},
 	}
@@ -202,7 +210,7 @@ func TestValidateDataColumn(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			service, message := serviceAndMessage(t, tc.verifier, dataColumnSidecarMsg)
 			result, err := service.validateDataColumn(ctx, "aDummyPID", message)
-			require.ErrorIs(t, tc.expectedError, err)
+			require.ErrorIs(t, err, tc.expectedError)
 			require.Equal(t, tc.expectedResult, result)
 		})
 	}
@@ -214,11 +222,19 @@ func TestValidateDataColumn(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, result)
 	})
-
 }
 
 func testNewDataColumnSidecarsVerifier(verifier verification.MockDataColumnsVerifier) verification.NewDataColumnsVerifier {
 	return func([]blocks.RODataColumn, []verification.Requirement) verification.DataColumnsVerifier {
 		return &verifier
+	}
+}
+
+func testVerifierReturnsAll(v *verification.MockDataColumnsVerifier) verification.NewDataColumnsVerifier {
+	return func(cols []blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnsVerifier {
+		for _, col := range cols {
+			v.AppendRODataColumns(col)
+		}
+		return v
 	}
 }

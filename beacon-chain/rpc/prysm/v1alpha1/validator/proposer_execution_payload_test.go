@@ -157,7 +157,7 @@ func TestServer_getExecutionPayload(t *testing.T) {
 			}
 			vs.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, Index: tt.validatorIndx})
 			if tt.payloadID != nil {
-				vs.PayloadIDCache.Set(tt.st.Slot(), [32]byte{'a'}, [8]byte(*tt.payloadID))
+				vs.PayloadIDCache.Set(tt.st.Slot(), [32]byte{'a'}, true, [8]byte(*tt.payloadID))
 			}
 			blk := util.NewBeaconBlockBellatrix()
 			blk.Block.Slot = tt.st.Slot()
@@ -165,7 +165,7 @@ func TestServer_getExecutionPayload(t *testing.T) {
 			blk.Block.ParentRoot = bytesutil.PadTo([]byte{'a'}, 32)
 			b, err := blocks.NewSignedBeaconBlock(blk)
 			require.NoError(t, err)
-			res, err := vs.getLocalPayload(t.Context(), b.Block(), tt.st)
+			res, err := vs.getLocalPayload(t.Context(), b.Block(), tt.st, true)
 			if tt.errString != "" {
 				require.ErrorContains(t, tt.errString, err)
 			} else {
@@ -174,6 +174,72 @@ func TestServer_getExecutionPayload(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestServer_getParentBlockHash_Gloas_Full(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	blockHash := bytesutil.ToBytes32([]byte("block-hash"))
+	parentBlockHash := bytesutil.ToBytes32([]byte("parent-block-hash"))
+	headRoot := bytesutil.ToBytes32([]byte("head-root"))
+	st, err := util.NewBeaconStateGloas(func(state *ethpb.BeaconStateGloas) error {
+		state.LatestExecutionPayloadBid.BlockHash = blockHash[:]
+		state.LatestExecutionPayloadBid.ParentBlockHash = parentBlockHash[:]
+		return nil
+	})
+	require.NoError(t, err)
+
+	chain := &chainMock.ChainService{ForkchoiceRoots: map[[32]byte]bool{headRoot: true}}
+	vs := &Server{
+		ForkchoiceFetcher: chain,
+		HeadFetcher:       chain,
+	}
+	got, err := vs.getParentBlockHash(context.Background(), st, 0, headRoot, true)
+	require.NoError(t, err)
+	require.DeepEqual(t, blockHash[:], got)
+}
+
+func TestServer_getParentBlockHash_Gloas_Empty(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	blockHash := bytesutil.ToBytes32([]byte("block-hash"))
+	parentBlockHash := bytesutil.ToBytes32([]byte("parent-block-hash"))
+	headRoot := bytesutil.ToBytes32([]byte("head-root"))
+	st, err := util.NewBeaconStateGloas(func(state *ethpb.BeaconStateGloas) error {
+		state.LatestExecutionPayloadBid.BlockHash = blockHash[:]
+		state.LatestExecutionPayloadBid.ParentBlockHash = parentBlockHash[:]
+		return nil
+	})
+	require.NoError(t, err)
+
+	chain := &chainMock.ChainService{}
+	vs := &Server{
+		ForkchoiceFetcher: chain,
+		HeadFetcher:       chain,
+	}
+	got, err := vs.getParentBlockHash(context.Background(), st, 0, headRoot, false)
+	require.NoError(t, err)
+	require.DeepEqual(t, parentBlockHash[:], got)
+}
+
+func TestServer_applyParentExecutionPayloadToHead_PreGloas(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	st, err := util.NewBeaconStateGloas()
+	require.NoError(t, err)
+
+	chain := &chainMock.ChainService{BlockSlot: 0}
+	vs := &Server{ForkchoiceFetcher: chain}
+	require.NoError(t, vs.applyParentExecutionPayloadToHead(context.Background(), st, [32]byte{}))
 }
 
 func TestServer_getExecutionPayloadContextTimeout(t *testing.T) {
@@ -203,7 +269,7 @@ func TestServer_getExecutionPayloadContextTimeout(t *testing.T) {
 		PayloadIDCache:         cache.NewPayloadIDCache(),
 		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 	}
-	vs.PayloadIDCache.Set(nonTransitionSt.Slot(), [32]byte{'a'}, [8]byte{100})
+	vs.PayloadIDCache.Set(nonTransitionSt.Slot(), [32]byte{'a'}, true, [8]byte{100})
 
 	blk := util.NewBeaconBlockBellatrix()
 	blk.Block.Slot = nonTransitionSt.Slot()
@@ -211,7 +277,7 @@ func TestServer_getExecutionPayloadContextTimeout(t *testing.T) {
 	blk.Block.ParentRoot = bytesutil.PadTo([]byte{'a'}, 32)
 	b, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	_, err = vs.getLocalPayload(t.Context(), b.Block(), nonTransitionSt)
+	_, err = vs.getLocalPayload(t.Context(), b.Block(), nonTransitionSt, true)
 	require.NoError(t, err)
 }
 
@@ -268,7 +334,7 @@ func TestServer_getExecutionPayload_UnexpectedFeeRecipient(t *testing.T) {
 	blk.Block.ParentRoot = bytesutil.PadTo([]byte{}, 32)
 	b, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	res, err := vs.getLocalPayload(t.Context(), b.Block(), transitionSt)
+	res, err := vs.getLocalPayload(t.Context(), b.Block(), transitionSt, false)
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	require.Equal(t, common.Address(res.ExecutionData.FeeRecipient()), feeRecipient)
@@ -281,7 +347,7 @@ func TestServer_getExecutionPayload_UnexpectedFeeRecipient(t *testing.T) {
 	payload.FeeRecipient = evilRecipientAddress[:]
 	vs.PayloadIDCache = cache.NewPayloadIDCache()
 
-	res, err = vs.getLocalPayload(t.Context(), b.Block(), transitionSt)
+	res, err = vs.getLocalPayload(t.Context(), b.Block(), transitionSt, false)
 	require.NoError(t, err)
 	require.NotNil(t, res)
 

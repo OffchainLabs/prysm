@@ -2,7 +2,10 @@ load("@prysm//tools/go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = ["maxprocs.go"],
+    srcs = [
+        "log.go",
+        "maxprocs.go",
+    ],
     importpath = "github.com/OffchainLabs/prysm/v7/runtime/maxprocs",
     visibility = ["//visibility:public"],
     deps = [

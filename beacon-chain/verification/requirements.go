@@ -1,0 +1,62 @@
+package verification
+
+const (
+	RequireBlobIndexInBounds Requirement = iota
+	RequireNotFromFutureSlot
+	RequireSlotAboveFinalized
+	RequireValidProposerSignature
+	RequireSidecarParentSeen
+	RequireSidecarParentValid
+	RequireSidecarParentSlotLower
+	RequireSidecarDescendsFromFinalized
+	RequireSidecarInclusionProven
+	RequireSidecarKzgProofVerified
+	RequireSidecarProposerExpected
+
+	// Data columns specific.
+	RequireValidFields
+	RequireCorrectSubnet
+	RequireBlockSeenGloas
+	RequireSlotMatchesBlockGloas
+	RequireValidFieldsGloas
+	RequireSidecarKzgProofVerifiedGloas
+	RequireNotSeenGloas
+
+	// Payload attestation specific.
+	RequireCurrentSlot
+	RequireMessageNotSeen
+	RequireValidatorInPTC
+	RequireBlockRootSeen
+	RequireBlockSlotMatches
+	RequireBlockRootValid
+	RequireSignatureValid
+
+	// Execution payload envelope specific.
+	RequireBuilderValid
+	RequirePayloadHashValid
+	RequireExecutionRequestsRootValid
+	RequireEnvelopeSlotAboveFinalized
+	RequireEnvelopeSlotMatchesBlock
+	RequireBuilderSignatureValid
+
+	// Execution payload bid specific.
+	RequireBidCurrentOrNextSlot
+	RequireBidBuilderActive
+	RequireBidBuilderVersionValid
+	RequireBidExecutionPaymentZero
+	RequireBidFeeRecipientMatches
+	RequireBidBlobKzgCommitmentsLimit
+	RequireBidPrevRandaoValid
+	RequireBidGasLimitCompatible
+	RequireBidParentBlockRootSeen
+	RequireBidSlotHigherThanParent
+	RequireBidParentBlockHashValid
+	RequireBidBuilderCanCover
+	RequireBidSignatureValid
+
+	// Signed proposer preferences specific.
+	RequireProposerPreferencesCurrentOrNextEpoch
+	RequireProposerPreferencesDependentRootSeen
+	RequireProposerPreferencesProposalSlotValid
+	RequireProposerPreferencesSignatureValid
+)

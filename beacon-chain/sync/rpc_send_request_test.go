@@ -1033,7 +1033,9 @@ func TestSendDataColumnSidecarsByRangeRequest(t *testing.T) {
 				assert.DeepSSZEqual(t, requestSent, requestReceived)
 
 				for _, sidecar := range expected {
-					err := WriteDataColumnSidecarChunk(stream, clock, p2.Encoding(), sidecar)
+					ro, err := blocks.NewRODataColumn(sidecar)
+					assert.NoError(t, err)
+					err = WriteDataColumnSidecarChunk(stream, clock, p2.Encoding(), ro)
 					assert.NoError(t, err)
 				}
 
@@ -1060,7 +1062,7 @@ func TestSendDataColumnSidecarsByRangeRequest(t *testing.T) {
 
 			require.Equal(t, len(expected), len(actual))
 			for i := range expected {
-				require.DeepSSZEqual(t, expected[i], actual[i].DataColumnSidecar)
+				require.DeepSSZEqual(t, expected[i], actual[i].DataColumnSidecar())
 			}
 		})
 	}
@@ -1072,7 +1074,7 @@ func TestIsSidecarSlotWithinBounds(t *testing.T) {
 		Count:     10,
 	}
 
-	validator, err := isSidecarSlotWithinBounds(request)
+	validator, err := isSidecarSlotRequested(request)
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -1190,6 +1192,52 @@ func TestIsSidecarIndexRequested(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+func TestIsSidecarSizeValid(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	validator := isSidecarSizeValid()
+	const slot = 0
+	maxBlobs := params.BeaconConfig().MaxBlobsPerBlock(slot)
+
+	build := func(cells int, index uint64) blocks.RODataColumn {
+		column := make([][]byte, cells)
+		commitments := make([][]byte, cells)
+		proofs := make([][]byte, cells)
+		for i := range cells {
+			column[i] = make([]byte, 2048)
+			commitments[i] = make([]byte, 48)
+			proofs[i] = make([]byte, 48)
+		}
+		incl := make([][]byte, 4)
+		for i := range incl {
+			incl[i] = make([]byte, fieldparams.RootLength)
+		}
+		sc, err := blocks.NewRODataColumn(&ethpb.DataColumnSidecar{
+			Index:          index,
+			Column:         column,
+			KzgCommitments: commitments,
+			KzgProofs:      proofs,
+			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					Slot: slot, ParentRoot: make([]byte, fieldparams.RootLength),
+					StateRoot: make([]byte, fieldparams.RootLength), BodyRoot: make([]byte, fieldparams.RootLength),
+				},
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+			KzgCommitmentsInclusionProof: incl,
+		})
+		require.NoError(t, err)
+		return sc
+	}
+
+	require.NoError(t, validator(build(maxBlobs, 0)))
+
+	err := validator(build(fieldparams.MaxBlobCommitmentsPerBlock, 0))
+	require.ErrorIs(t, err, errSidecarTooManyCells)
+
+	err = validator(build(maxBlobs, fieldparams.NumberOfColumns))
+	require.ErrorIs(t, err, errSidecarIndexTooLarge)
 }
 
 func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
@@ -1346,7 +1394,7 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 				}
 
 				for _, sidecar := range expected {
-					err := WriteDataColumnSidecarChunk(stream, clock, p2.Encoding(), sidecar.DataColumnSidecar)
+					err := WriteDataColumnSidecarChunk(stream, clock, p2.Encoding(), sidecar)
 					assert.NoError(t, err)
 				}
 
@@ -1372,7 +1420,7 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 
 			require.Equal(t, len(expected), len(actual))
 			for i := range expected {
-				require.DeepSSZEqual(t, expected[i], actual[i])
+				require.DeepSSZEqual(t, expected[i].DataColumnSidecar(), actual[i].DataColumnSidecar())
 			}
 		})
 	}
@@ -1625,7 +1673,7 @@ func TestReadChunkedDataColumnSidecar(t *testing.T) {
 
 			actual, err := readChunkedDataColumnSidecar(stream, p2, ContextByteVersions{[4]byte{1, 2, 3, 4}: version.Fulu})
 			require.NoError(t, err)
-			require.DeepSSZEqual(t, expected, actual.DataColumnSidecar)
+			require.DeepSSZEqual(t, expected, actual.DataColumnSidecar())
 		})
 
 		p1.Connect(p2)
@@ -1642,6 +1690,46 @@ func TestReadChunkedDataColumnSidecar(t *testing.T) {
 		require.NoError(t, err)
 
 		// Sidecar.
+		_, err = p1.Encoding().EncodeWithMaxLength(stream, expected)
+		require.NoError(t, err)
+
+		if util.WaitTimeout(&wg, time.Minute) {
+			t.Fatal("Did not receive stream within 1 sec")
+		}
+	})
+
+	t.Run("nominal gloas", func(t *testing.T) {
+		p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+
+		expected := &ethpb.DataColumnSidecarGloas{
+			Index:           7,
+			Column:          [][]byte{make([]byte, 2048)},
+			KzgProofs:       [][]byte{make([]byte, 48)},
+			BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		p2.SetStreamHandler(p2p.RPCDataColumnSidecarsByRootTopicV1, func(stream network.Stream) {
+			defer wg.Done()
+
+			actual, err := readChunkedDataColumnSidecar(stream, p2, ContextByteVersions{[4]byte{1, 2, 3, 4}: version.Gloas})
+			require.NoError(t, err)
+			require.Equal(t, true, actual.IsGloas())
+			require.Equal(t, uint64(7), actual.Index())
+		})
+
+		p1.Connect(p2)
+
+		stream, err := p1.BHost.NewStream(t.Context(), p2.PeerID(), p2p.RPCDataColumnSidecarsByRootTopicV1)
+		require.NoError(t, err)
+
+		_, err = stream.Write([]byte{responseCodeSuccess})
+		require.NoError(t, err)
+
+		err = writeContextToStream([]byte{1, 2, 3, 4}, stream)
+		require.NoError(t, err)
+
 		_, err = p1.Encoding().EncodeWithMaxLength(stream, expected)
 		require.NoError(t, err)
 

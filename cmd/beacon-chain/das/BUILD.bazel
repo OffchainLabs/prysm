@@ -1,0 +1,16 @@
+load("@prysm//tools/go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["options.go"],
+    importpath = "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/das",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//beacon-chain/das:go_default_library",
+        "//beacon-chain/node:go_default_library",
+        "//cmd/beacon-chain/das/flags:go_default_library",
+        "//consensus-types/primitives:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
+        "@com_github_urfave_cli_v2//:go_default_library",
+    ],
+)

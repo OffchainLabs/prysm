@@ -384,7 +384,7 @@ func benchmarkHash(sszPath string, sszType string) {
 		}
 		deserializeDuration := time.Since(startDeserialize)
 
-		stateTrieState, err := state_native.InitializeFromProtoCapella(st)
+		stateTrieState, err := state_native.InitializeFromProtoUnsafeCapella(st)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -424,7 +424,8 @@ func debugStateTransition(
 		return st, errors.Wrap(err, "could not process block")
 	}
 	var valid bool
-	valid, err = set.VerifyVerbosely()
+	sigSet := set.Batch()
+	valid, err = sigSet.VerifyVerbosely()
 	if err != nil {
 		return st, errors.Wrap(err, "could not batch verify signature")
 	}

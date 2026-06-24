@@ -22,6 +22,13 @@ func WithHttpEndpoint(endpointString string) Option {
 	}
 }
 
+func WithPartialColumnsSupported() Option {
+	return func(s *Service) error {
+		s.partialColumnsSupported = true
+		return nil
+	}
+}
+
 // WithHttpEndpointAndJWTSecret for authenticating the execution node JSON-RPC endpoint.
 func WithHttpEndpointAndJWTSecret(endpointString string, secret []byte) Option {
 	return func(s *Service) error {
@@ -121,6 +128,14 @@ func WithJwtId(jwtId string) Option {
 func WithVerifierWaiter(v *verification.InitializerWaiter) Option {
 	return func(s *Service) error {
 		s.verifierWaiter = v
+		return nil
+	}
+}
+
+// WithGraffitiInfo sets the GraffitiInfo for client version tracking.
+func WithGraffitiInfo(g *GraffitiInfo) Option {
+	return func(s *Service) error {
+		s.graffitiInfo = g
 		return nil
 	}
 }

@@ -163,3 +163,18 @@ func Uint256ToSSZBytes(num string) ([]byte, error) {
 	}
 	return PadTo(ReverseByteOrder(uint256.Bytes()), 32), nil
 }
+
+// PutLittleEndian writes an unsigned integer value in little-endian format.
+// Supports sizes 1, 2, 4, or 8 bytes for uint8/16/32/64 respectively.
+func PutLittleEndian(dst []byte, val uint64, size int) {
+	switch size {
+	case 1:
+		dst[0] = byte(val)
+	case 2:
+		binary.LittleEndian.PutUint16(dst, uint16(val))
+	case 4:
+		binary.LittleEndian.PutUint32(dst, uint32(val))
+	case 8:
+		binary.LittleEndian.PutUint64(dst, val)
+	}
+}

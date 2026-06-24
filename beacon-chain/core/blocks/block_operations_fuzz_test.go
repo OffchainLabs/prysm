@@ -3,6 +3,7 @@ package blocks
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	v "github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -318,7 +319,7 @@ func TestFuzzverifyDeposit_10000(t *testing.T) {
 		fuzzer.Fuzz(deposit)
 		s, err := state_native.InitializeFromProtoUnsafePhase0(state)
 		require.NoError(t, err)
-		err = VerifyDeposit(s, deposit)
+		err = helpers.VerifyDeposit(s, deposit)
 		_ = err
 		fuzz.FreeMemory(i)
 	}

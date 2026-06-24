@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/cmd/prysmctl/testnet"
 	"github.com/OffchainLabs/prysm/v7/cmd/prysmctl/validator"
 	"github.com/OffchainLabs/prysm/v7/cmd/prysmctl/weaksubjectivity"
-	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 

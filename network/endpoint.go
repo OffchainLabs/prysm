@@ -11,7 +11,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/network/authorization"
 	gethRPC "github.com/ethereum/go-ethereum/rpc"
-	log "github.com/sirupsen/logrus"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 

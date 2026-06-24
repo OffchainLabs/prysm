@@ -30,7 +30,7 @@ func (w *WithdrawalRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = append(dst, w.ValidatorPubkey...)
 
 	// Field (2) 'Amount'
-	dst = ssz.MarshalUint64(dst, w.Amount)
+	dst = ssz.MarshalUint(dst, w.Amount)
 
 	return
 }
@@ -56,7 +56,7 @@ func (w *WithdrawalRequest) UnmarshalSSZ(buf []byte) error {
 	w.ValidatorPubkey = append(w.ValidatorPubkey, buf[20:68]...)
 
 	// Field (2) 'Amount'
-	w.Amount = ssz.UnmarshallUint64(buf[68:76])
+	w.Amount = ssz.UnmarshallUint[uint64](buf[68:76])
 
 	return err
 }
@@ -91,7 +91,7 @@ func (w *WithdrawalRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(w.ValidatorPubkey)
 
 	// Field (2) 'Amount'
-	hh.PutUint64(w.Amount)
+	ssz.PutUint(hh, w.Amount)
 
 	hh.Merkleize(indx)
 	return
@@ -121,7 +121,7 @@ func (d *DepositRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = append(dst, d.WithdrawalCredentials...)
 
 	// Field (2) 'Amount'
-	dst = ssz.MarshalUint64(dst, d.Amount)
+	dst = ssz.MarshalUint(dst, d.Amount)
 
 	// Field (3) 'Signature'
 	if size := len(d.Signature); size != 96 {
@@ -131,7 +131,7 @@ func (d *DepositRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = append(dst, d.Signature...)
 
 	// Field (4) 'Index'
-	dst = ssz.MarshalUint64(dst, d.Index)
+	dst = ssz.MarshalUint(dst, d.Index)
 
 	return
 }
@@ -157,7 +157,7 @@ func (d *DepositRequest) UnmarshalSSZ(buf []byte) error {
 	d.WithdrawalCredentials = append(d.WithdrawalCredentials, buf[48:80]...)
 
 	// Field (2) 'Amount'
-	d.Amount = ssz.UnmarshallUint64(buf[80:88])
+	d.Amount = ssz.UnmarshallUint[uint64](buf[80:88])
 
 	// Field (3) 'Signature'
 	if cap(d.Signature) == 0 {
@@ -166,7 +166,7 @@ func (d *DepositRequest) UnmarshalSSZ(buf []byte) error {
 	d.Signature = append(d.Signature, buf[88:184]...)
 
 	// Field (4) 'Index'
-	d.Index = ssz.UnmarshallUint64(buf[184:192])
+	d.Index = ssz.UnmarshallUint[uint64](buf[184:192])
 
 	return err
 }
@@ -201,7 +201,7 @@ func (d *DepositRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(d.WithdrawalCredentials)
 
 	// Field (2) 'Amount'
-	hh.PutUint64(d.Amount)
+	ssz.PutUint(hh, d.Amount)
 
 	// Field (3) 'Signature'
 	if size := len(d.Signature); size != 96 {
@@ -211,7 +211,7 @@ func (d *DepositRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(d.Signature)
 
 	// Field (4) 'Index'
-	hh.PutUint64(d.Index)
+	ssz.PutUint(hh, d.Index)
 
 	hh.Merkleize(indx)
 	return
@@ -593,16 +593,16 @@ func (e *ExecutionPayload) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = append(dst, e.PrevRandao...)
 
 	// Field (6) 'BlockNumber'
-	dst = ssz.MarshalUint64(dst, e.BlockNumber)
+	dst = ssz.MarshalUint(dst, e.BlockNumber)
 
 	// Field (7) 'GasLimit'
-	dst = ssz.MarshalUint64(dst, e.GasLimit)
+	dst = ssz.MarshalUint(dst, e.GasLimit)
 
 	// Field (8) 'GasUsed'
-	dst = ssz.MarshalUint64(dst, e.GasUsed)
+	dst = ssz.MarshalUint(dst, e.GasUsed)
 
 	// Field (9) 'Timestamp'
-	dst = ssz.MarshalUint64(dst, e.Timestamp)
+	dst = ssz.MarshalUint(dst, e.Timestamp)
 
 	// Offset (10) 'ExtraData'
 	dst = ssz.WriteOffset(dst, offset)
@@ -707,16 +707,16 @@ func (e *ExecutionPayload) UnmarshalSSZ(buf []byte) error {
 	e.PrevRandao = append(e.PrevRandao, buf[372:404]...)
 
 	// Field (6) 'BlockNumber'
-	e.BlockNumber = ssz.UnmarshallUint64(buf[404:412])
+	e.BlockNumber = ssz.UnmarshallUint[uint64](buf[404:412])
 
 	// Field (7) 'GasLimit'
-	e.GasLimit = ssz.UnmarshallUint64(buf[412:420])
+	e.GasLimit = ssz.UnmarshallUint[uint64](buf[412:420])
 
 	// Field (8) 'GasUsed'
-	e.GasUsed = ssz.UnmarshallUint64(buf[420:428])
+	e.GasUsed = ssz.UnmarshallUint[uint64](buf[420:428])
 
 	// Field (9) 'Timestamp'
-	e.Timestamp = ssz.UnmarshallUint64(buf[428:436])
+	e.Timestamp = ssz.UnmarshallUint[uint64](buf[428:436])
 
 	// Offset (10) 'ExtraData'
 	if o10 = ssz.ReadOffset(buf[436:440]); o10 > size {
@@ -849,16 +849,16 @@ func (e *ExecutionPayload) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(e.PrevRandao)
 
 	// Field (6) 'BlockNumber'
-	hh.PutUint64(e.BlockNumber)
+	ssz.PutUint(hh, e.BlockNumber)
 
 	// Field (7) 'GasLimit'
-	hh.PutUint64(e.GasLimit)
+	ssz.PutUint(hh, e.GasLimit)
 
 	// Field (8) 'GasUsed'
-	hh.PutUint64(e.GasUsed)
+	ssz.PutUint(hh, e.GasUsed)
 
 	// Field (9) 'Timestamp'
-	hh.PutUint64(e.Timestamp)
+	ssz.PutUint(hh, e.Timestamp)
 
 	// Field (10) 'ExtraData'
 	{
@@ -868,7 +868,7 @@ func (e *ExecutionPayload) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 			err = ssz.ErrIncorrectListSize
 			return
 		}
-		hh.PutBytes(e.ExtraData)
+		hh.AppendBytes32(e.ExtraData)
 		hh.MerkleizeWithMixin(elemIndx, byteLen, (32+31)/32)
 	}
 
@@ -966,16 +966,16 @@ func (e *ExecutionPayloadCapella) MarshalSSZTo(buf []byte) (dst []byte, err erro
 	dst = append(dst, e.PrevRandao...)
 
 	// Field (6) 'BlockNumber'
-	dst = ssz.MarshalUint64(dst, e.BlockNumber)
+	dst = ssz.MarshalUint(dst, e.BlockNumber)
 
 	// Field (7) 'GasLimit'
-	dst = ssz.MarshalUint64(dst, e.GasLimit)
+	dst = ssz.MarshalUint(dst, e.GasLimit)
 
 	// Field (8) 'GasUsed'
-	dst = ssz.MarshalUint64(dst, e.GasUsed)
+	dst = ssz.MarshalUint(dst, e.GasUsed)
 
 	// Field (9) 'Timestamp'
-	dst = ssz.MarshalUint64(dst, e.Timestamp)
+	dst = ssz.MarshalUint(dst, e.Timestamp)
 
 	// Offset (10) 'ExtraData'
 	dst = ssz.WriteOffset(dst, offset)
@@ -1095,16 +1095,16 @@ func (e *ExecutionPayloadCapella) UnmarshalSSZ(buf []byte) error {
 	e.PrevRandao = append(e.PrevRandao, buf[372:404]...)
 
 	// Field (6) 'BlockNumber'
-	e.BlockNumber = ssz.UnmarshallUint64(buf[404:412])
+	e.BlockNumber = ssz.UnmarshallUint[uint64](buf[404:412])
 
 	// Field (7) 'GasLimit'
-	e.GasLimit = ssz.UnmarshallUint64(buf[412:420])
+	e.GasLimit = ssz.UnmarshallUint[uint64](buf[412:420])
 
 	// Field (8) 'GasUsed'
-	e.GasUsed = ssz.UnmarshallUint64(buf[420:428])
+	e.GasUsed = ssz.UnmarshallUint[uint64](buf[420:428])
 
 	// Field (9) 'Timestamp'
-	e.Timestamp = ssz.UnmarshallUint64(buf[428:436])
+	e.Timestamp = ssz.UnmarshallUint[uint64](buf[428:436])
 
 	// Offset (10) 'ExtraData'
 	if o10 = ssz.ReadOffset(buf[436:440]); o10 > size {
@@ -1263,16 +1263,16 @@ func (e *ExecutionPayloadCapella) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(e.PrevRandao)
 
 	// Field (6) 'BlockNumber'
-	hh.PutUint64(e.BlockNumber)
+	ssz.PutUint(hh, e.BlockNumber)
 
 	// Field (7) 'GasLimit'
-	hh.PutUint64(e.GasLimit)
+	ssz.PutUint(hh, e.GasLimit)
 
 	// Field (8) 'GasUsed'
-	hh.PutUint64(e.GasUsed)
+	ssz.PutUint(hh, e.GasUsed)
 
 	// Field (9) 'Timestamp'
-	hh.PutUint64(e.Timestamp)
+	ssz.PutUint(hh, e.Timestamp)
 
 	// Field (10) 'ExtraData'
 	{
@@ -1282,7 +1282,7 @@ func (e *ExecutionPayloadCapella) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 			err = ssz.ErrIncorrectListSize
 			return
 		}
-		hh.PutBytes(e.ExtraData)
+		hh.AppendBytes32(e.ExtraData)
 		hh.MerkleizeWithMixin(elemIndx, byteLen, (32+31)/32)
 	}
 
@@ -1396,16 +1396,16 @@ func (e *ExecutionPayloadDeneb) MarshalSSZTo(buf []byte) (dst []byte, err error)
 	dst = append(dst, e.PrevRandao...)
 
 	// Field (6) 'BlockNumber'
-	dst = ssz.MarshalUint64(dst, e.BlockNumber)
+	dst = ssz.MarshalUint(dst, e.BlockNumber)
 
 	// Field (7) 'GasLimit'
-	dst = ssz.MarshalUint64(dst, e.GasLimit)
+	dst = ssz.MarshalUint(dst, e.GasLimit)
 
 	// Field (8) 'GasUsed'
-	dst = ssz.MarshalUint64(dst, e.GasUsed)
+	dst = ssz.MarshalUint(dst, e.GasUsed)
 
 	// Field (9) 'Timestamp'
-	dst = ssz.MarshalUint64(dst, e.Timestamp)
+	dst = ssz.MarshalUint(dst, e.Timestamp)
 
 	// Offset (10) 'ExtraData'
 	dst = ssz.WriteOffset(dst, offset)
@@ -1437,10 +1437,10 @@ func (e *ExecutionPayloadDeneb) MarshalSSZTo(buf []byte) (dst []byte, err error)
 	offset += len(e.Withdrawals) * 44
 
 	// Field (15) 'BlobGasUsed'
-	dst = ssz.MarshalUint64(dst, e.BlobGasUsed)
+	dst = ssz.MarshalUint(dst, e.BlobGasUsed)
 
 	// Field (16) 'ExcessBlobGas'
-	dst = ssz.MarshalUint64(dst, e.ExcessBlobGas)
+	dst = ssz.MarshalUint(dst, e.ExcessBlobGas)
 
 	// Field (10) 'ExtraData'
 	if size := len(e.ExtraData); size > 32 {
@@ -1531,16 +1531,16 @@ func (e *ExecutionPayloadDeneb) UnmarshalSSZ(buf []byte) error {
 	e.PrevRandao = append(e.PrevRandao, buf[372:404]...)
 
 	// Field (6) 'BlockNumber'
-	e.BlockNumber = ssz.UnmarshallUint64(buf[404:412])
+	e.BlockNumber = ssz.UnmarshallUint[uint64](buf[404:412])
 
 	// Field (7) 'GasLimit'
-	e.GasLimit = ssz.UnmarshallUint64(buf[412:420])
+	e.GasLimit = ssz.UnmarshallUint[uint64](buf[412:420])
 
 	// Field (8) 'GasUsed'
-	e.GasUsed = ssz.UnmarshallUint64(buf[420:428])
+	e.GasUsed = ssz.UnmarshallUint[uint64](buf[420:428])
 
 	// Field (9) 'Timestamp'
-	e.Timestamp = ssz.UnmarshallUint64(buf[428:436])
+	e.Timestamp = ssz.UnmarshallUint[uint64](buf[428:436])
 
 	// Offset (10) 'ExtraData'
 	if o10 = ssz.ReadOffset(buf[436:440]); o10 > size {
@@ -1574,10 +1574,10 @@ func (e *ExecutionPayloadDeneb) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (15) 'BlobGasUsed'
-	e.BlobGasUsed = ssz.UnmarshallUint64(buf[512:520])
+	e.BlobGasUsed = ssz.UnmarshallUint[uint64](buf[512:520])
 
 	// Field (16) 'ExcessBlobGas'
-	e.ExcessBlobGas = ssz.UnmarshallUint64(buf[520:528])
+	e.ExcessBlobGas = ssz.UnmarshallUint[uint64](buf[520:528])
 
 	// Field (10) 'ExtraData'
 	{
@@ -1705,16 +1705,16 @@ func (e *ExecutionPayloadDeneb) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(e.PrevRandao)
 
 	// Field (6) 'BlockNumber'
-	hh.PutUint64(e.BlockNumber)
+	ssz.PutUint(hh, e.BlockNumber)
 
 	// Field (7) 'GasLimit'
-	hh.PutUint64(e.GasLimit)
+	ssz.PutUint(hh, e.GasLimit)
 
 	// Field (8) 'GasUsed'
-	hh.PutUint64(e.GasUsed)
+	ssz.PutUint(hh, e.GasUsed)
 
 	// Field (9) 'Timestamp'
-	hh.PutUint64(e.Timestamp)
+	ssz.PutUint(hh, e.Timestamp)
 
 	// Field (10) 'ExtraData'
 	{
@@ -1724,7 +1724,7 @@ func (e *ExecutionPayloadDeneb) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 			err = ssz.ErrIncorrectListSize
 			return
 		}
-		hh.PutBytes(e.ExtraData)
+		hh.AppendBytes32(e.ExtraData)
 		hh.MerkleizeWithMixin(elemIndx, byteLen, (32+31)/32)
 	}
 
@@ -1782,10 +1782,510 @@ func (e *ExecutionPayloadDeneb) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	}
 
 	// Field (15) 'BlobGasUsed'
-	hh.PutUint64(e.BlobGasUsed)
+	ssz.PutUint(hh, e.BlobGasUsed)
 
 	// Field (16) 'ExcessBlobGas'
-	hh.PutUint64(e.ExcessBlobGas)
+	ssz.PutUint(hh, e.ExcessBlobGas)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the ExecutionPayloadGloas object
+func (e *ExecutionPayloadGloas) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(e)
+}
+
+// MarshalSSZTo ssz marshals the ExecutionPayloadGloas object to a target array
+func (e *ExecutionPayloadGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(540)
+
+	// Field (0) 'ParentHash'
+	if size := len(e.ParentHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentHash", size, 32)
+		return
+	}
+	dst = append(dst, e.ParentHash...)
+
+	// Field (1) 'FeeRecipient'
+	if size := len(e.FeeRecipient); size != 20 {
+		err = ssz.ErrBytesLengthFn("--.FeeRecipient", size, 20)
+		return
+	}
+	dst = append(dst, e.FeeRecipient...)
+
+	// Field (2) 'StateRoot'
+	if size := len(e.StateRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
+		return
+	}
+	dst = append(dst, e.StateRoot...)
+
+	// Field (3) 'ReceiptsRoot'
+	if size := len(e.ReceiptsRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ReceiptsRoot", size, 32)
+		return
+	}
+	dst = append(dst, e.ReceiptsRoot...)
+
+	// Field (4) 'LogsBloom'
+	if size := len(e.LogsBloom); size != 256 {
+		err = ssz.ErrBytesLengthFn("--.LogsBloom", size, 256)
+		return
+	}
+	dst = append(dst, e.LogsBloom...)
+
+	// Field (5) 'PrevRandao'
+	if size := len(e.PrevRandao); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.PrevRandao", size, 32)
+		return
+	}
+	dst = append(dst, e.PrevRandao...)
+
+	// Field (6) 'BlockNumber'
+	dst = ssz.MarshalUint(dst, e.BlockNumber)
+
+	// Field (7) 'GasLimit'
+	dst = ssz.MarshalUint(dst, e.GasLimit)
+
+	// Field (8) 'GasUsed'
+	dst = ssz.MarshalUint(dst, e.GasUsed)
+
+	// Field (9) 'Timestamp'
+	dst = ssz.MarshalUint(dst, e.Timestamp)
+
+	// Offset (10) 'ExtraData'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.ExtraData)
+
+	// Field (11) 'BaseFeePerGas'
+	if size := len(e.BaseFeePerGas); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BaseFeePerGas", size, 32)
+		return
+	}
+	dst = append(dst, e.BaseFeePerGas...)
+
+	// Field (12) 'BlockHash'
+	if size := len(e.BlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockHash", size, 32)
+		return
+	}
+	dst = append(dst, e.BlockHash...)
+
+	// Offset (13) 'Transactions'
+	dst = ssz.WriteOffset(dst, offset)
+	for ii := 0; ii < len(e.Transactions); ii++ {
+		offset += 4
+		offset += len(e.Transactions[ii])
+	}
+
+	// Offset (14) 'Withdrawals'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.Withdrawals) * 44
+
+	// Field (15) 'BlobGasUsed'
+	dst = ssz.MarshalUint(dst, e.BlobGasUsed)
+
+	// Field (16) 'ExcessBlobGas'
+	dst = ssz.MarshalUint(dst, e.ExcessBlobGas)
+
+	// Offset (17) 'BlockAccessList'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.BlockAccessList)
+
+	// Field (18) 'SlotNumber'
+	dst = ssz.MarshalUint(dst, e.SlotNumber)
+
+	// Field (10) 'ExtraData'
+	if size := len(e.ExtraData); size > 32 {
+		err = ssz.ErrBytesLengthFn("--.ExtraData", size, 32)
+		return
+	}
+	dst = append(dst, e.ExtraData...)
+
+	// Field (13) 'Transactions'
+	if size := len(e.Transactions); size > 1048576 {
+		err = ssz.ErrListTooBigFn("--.Transactions", size, 1048576)
+		return
+	}
+	{
+		offset = 4 * len(e.Transactions)
+		for ii := 0; ii < len(e.Transactions); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += len(e.Transactions[ii])
+		}
+	}
+	for ii := 0; ii < len(e.Transactions); ii++ {
+		if size := len(e.Transactions[ii]); size > 1073741824 {
+			err = ssz.ErrBytesLengthFn("--.Transactions[ii]", size, 1073741824)
+			return
+		}
+		dst = append(dst, e.Transactions[ii]...)
+	}
+
+	// Field (14) 'Withdrawals'
+	if size := len(e.Withdrawals); size > 16 {
+		err = ssz.ErrListTooBigFn("--.Withdrawals", size, 16)
+		return
+	}
+	for ii := 0; ii < len(e.Withdrawals); ii++ {
+		if dst, err = e.Withdrawals[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (17) 'BlockAccessList'
+	if size := len(e.BlockAccessList); size > 1073741824 {
+		err = ssz.ErrBytesLengthFn("--.BlockAccessList", size, 1073741824)
+		return
+	}
+	dst = append(dst, e.BlockAccessList...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the ExecutionPayloadGloas object
+func (e *ExecutionPayloadGloas) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 540 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o10, o13, o14, o17 uint64
+
+	// Field (0) 'ParentHash'
+	if cap(e.ParentHash) == 0 {
+		e.ParentHash = make([]byte, 0, len(buf[0:32]))
+	}
+	e.ParentHash = append(e.ParentHash, buf[0:32]...)
+
+	// Field (1) 'FeeRecipient'
+	if cap(e.FeeRecipient) == 0 {
+		e.FeeRecipient = make([]byte, 0, len(buf[32:52]))
+	}
+	e.FeeRecipient = append(e.FeeRecipient, buf[32:52]...)
+
+	// Field (2) 'StateRoot'
+	if cap(e.StateRoot) == 0 {
+		e.StateRoot = make([]byte, 0, len(buf[52:84]))
+	}
+	e.StateRoot = append(e.StateRoot, buf[52:84]...)
+
+	// Field (3) 'ReceiptsRoot'
+	if cap(e.ReceiptsRoot) == 0 {
+		e.ReceiptsRoot = make([]byte, 0, len(buf[84:116]))
+	}
+	e.ReceiptsRoot = append(e.ReceiptsRoot, buf[84:116]...)
+
+	// Field (4) 'LogsBloom'
+	if cap(e.LogsBloom) == 0 {
+		e.LogsBloom = make([]byte, 0, len(buf[116:372]))
+	}
+	e.LogsBloom = append(e.LogsBloom, buf[116:372]...)
+
+	// Field (5) 'PrevRandao'
+	if cap(e.PrevRandao) == 0 {
+		e.PrevRandao = make([]byte, 0, len(buf[372:404]))
+	}
+	e.PrevRandao = append(e.PrevRandao, buf[372:404]...)
+
+	// Field (6) 'BlockNumber'
+	e.BlockNumber = ssz.UnmarshallUint[uint64](buf[404:412])
+
+	// Field (7) 'GasLimit'
+	e.GasLimit = ssz.UnmarshallUint[uint64](buf[412:420])
+
+	// Field (8) 'GasUsed'
+	e.GasUsed = ssz.UnmarshallUint[uint64](buf[420:428])
+
+	// Field (9) 'Timestamp'
+	e.Timestamp = ssz.UnmarshallUint[uint64](buf[428:436])
+
+	// Offset (10) 'ExtraData'
+	if o10 = ssz.ReadOffset(buf[436:440]); o10 > size {
+		return ssz.ErrOffset
+	}
+
+	if o10 != 540 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (11) 'BaseFeePerGas'
+	if cap(e.BaseFeePerGas) == 0 {
+		e.BaseFeePerGas = make([]byte, 0, len(buf[440:472]))
+	}
+	e.BaseFeePerGas = append(e.BaseFeePerGas, buf[440:472]...)
+
+	// Field (12) 'BlockHash'
+	if cap(e.BlockHash) == 0 {
+		e.BlockHash = make([]byte, 0, len(buf[472:504]))
+	}
+	e.BlockHash = append(e.BlockHash, buf[472:504]...)
+
+	// Offset (13) 'Transactions'
+	if o13 = ssz.ReadOffset(buf[504:508]); o13 > size || o10 > o13 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (14) 'Withdrawals'
+	if o14 = ssz.ReadOffset(buf[508:512]); o14 > size || o13 > o14 {
+		return ssz.ErrOffset
+	}
+
+	// Field (15) 'BlobGasUsed'
+	e.BlobGasUsed = ssz.UnmarshallUint[uint64](buf[512:520])
+
+	// Field (16) 'ExcessBlobGas'
+	e.ExcessBlobGas = ssz.UnmarshallUint[uint64](buf[520:528])
+
+	// Offset (17) 'BlockAccessList'
+	if o17 = ssz.ReadOffset(buf[528:532]); o17 > size || o14 > o17 {
+		return ssz.ErrOffset
+	}
+
+	// Field (18) 'SlotNumber'
+	e.SlotNumber = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[532:540])
+
+	// Field (10) 'ExtraData'
+	{
+		buf = tail[o10:o13]
+		if len(buf) > 32 {
+			return ssz.ErrBytesLength
+		}
+		if cap(e.ExtraData) == 0 {
+			e.ExtraData = make([]byte, 0, len(buf))
+		}
+		e.ExtraData = append(e.ExtraData, buf...)
+	}
+
+	// Field (13) 'Transactions'
+	{
+		buf = tail[o13:o14]
+		num, err := ssz.DecodeDynamicLength(buf, 1048576)
+		if err != nil {
+			return err
+		}
+		e.Transactions = make([][]byte, num)
+		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+			if len(buf) > 1073741824 {
+				return ssz.ErrBytesLength
+			}
+			if cap(e.Transactions[indx]) == 0 {
+				e.Transactions[indx] = make([]byte, 0, len(buf))
+			}
+			e.Transactions[indx] = append(e.Transactions[indx], buf...)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	// Field (14) 'Withdrawals'
+	{
+		buf = tail[o14:o17]
+		num, err := ssz.DivideInt2(len(buf), 44, 16)
+		if err != nil {
+			return err
+		}
+		e.Withdrawals = make([]*Withdrawal, num)
+		for ii := 0; ii < num; ii++ {
+			if e.Withdrawals[ii] == nil {
+				e.Withdrawals[ii] = new(Withdrawal)
+			}
+			if err = e.Withdrawals[ii].UnmarshalSSZ(buf[ii*44 : (ii+1)*44]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (17) 'BlockAccessList'
+	{
+		buf = tail[o17:]
+		if len(buf) > 1073741824 {
+			return ssz.ErrBytesLength
+		}
+		if cap(e.BlockAccessList) == 0 {
+			e.BlockAccessList = make([]byte, 0, len(buf))
+		}
+		e.BlockAccessList = append(e.BlockAccessList, buf...)
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ExecutionPayloadGloas object
+func (e *ExecutionPayloadGloas) SizeSSZ() (size int) {
+	size = 540
+
+	// Field (10) 'ExtraData'
+	size += len(e.ExtraData)
+
+	// Field (13) 'Transactions'
+	for ii := 0; ii < len(e.Transactions); ii++ {
+		size += 4
+		size += len(e.Transactions[ii])
+	}
+
+	// Field (14) 'Withdrawals'
+	size += len(e.Withdrawals) * 44
+
+	// Field (17) 'BlockAccessList'
+	size += len(e.BlockAccessList)
+
+	return
+}
+
+// HashTreeRoot ssz hashes the ExecutionPayloadGloas object
+func (e *ExecutionPayloadGloas) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(e)
+}
+
+// HashTreeRootWith ssz hashes the ExecutionPayloadGloas object with a hasher
+func (e *ExecutionPayloadGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'ParentHash'
+	if size := len(e.ParentHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentHash", size, 32)
+		return
+	}
+	hh.PutBytes(e.ParentHash)
+
+	// Field (1) 'FeeRecipient'
+	if size := len(e.FeeRecipient); size != 20 {
+		err = ssz.ErrBytesLengthFn("--.FeeRecipient", size, 20)
+		return
+	}
+	hh.PutBytes(e.FeeRecipient)
+
+	// Field (2) 'StateRoot'
+	if size := len(e.StateRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
+		return
+	}
+	hh.PutBytes(e.StateRoot)
+
+	// Field (3) 'ReceiptsRoot'
+	if size := len(e.ReceiptsRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ReceiptsRoot", size, 32)
+		return
+	}
+	hh.PutBytes(e.ReceiptsRoot)
+
+	// Field (4) 'LogsBloom'
+	if size := len(e.LogsBloom); size != 256 {
+		err = ssz.ErrBytesLengthFn("--.LogsBloom", size, 256)
+		return
+	}
+	hh.PutBytes(e.LogsBloom)
+
+	// Field (5) 'PrevRandao'
+	if size := len(e.PrevRandao); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.PrevRandao", size, 32)
+		return
+	}
+	hh.PutBytes(e.PrevRandao)
+
+	// Field (6) 'BlockNumber'
+	ssz.PutUint(hh, e.BlockNumber)
+
+	// Field (7) 'GasLimit'
+	ssz.PutUint(hh, e.GasLimit)
+
+	// Field (8) 'GasUsed'
+	ssz.PutUint(hh, e.GasUsed)
+
+	// Field (9) 'Timestamp'
+	ssz.PutUint(hh, e.Timestamp)
+
+	// Field (10) 'ExtraData'
+	{
+		elemIndx := hh.Index()
+		byteLen := uint64(len(e.ExtraData))
+		if byteLen > 32 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		hh.AppendBytes32(e.ExtraData)
+		hh.MerkleizeWithMixin(elemIndx, byteLen, (32+31)/32)
+	}
+
+	// Field (11) 'BaseFeePerGas'
+	if size := len(e.BaseFeePerGas); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BaseFeePerGas", size, 32)
+		return
+	}
+	hh.PutBytes(e.BaseFeePerGas)
+
+	// Field (12) 'BlockHash'
+	if size := len(e.BlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockHash", size, 32)
+		return
+	}
+	hh.PutBytes(e.BlockHash)
+
+	// Field (13) 'Transactions'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(e.Transactions))
+		if num > 1048576 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range e.Transactions {
+			{
+				elemIndx := hh.Index()
+				byteLen := uint64(len(elem))
+				if byteLen > 1073741824 {
+					err = ssz.ErrIncorrectListSize
+					return
+				}
+				hh.AppendBytes32(elem)
+				hh.MerkleizeWithMixin(elemIndx, byteLen, (1073741824+31)/32)
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 1048576)
+	}
+
+	// Field (14) 'Withdrawals'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(e.Withdrawals))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range e.Withdrawals {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	// Field (15) 'BlobGasUsed'
+	ssz.PutUint(hh, e.BlobGasUsed)
+
+	// Field (16) 'ExcessBlobGas'
+	ssz.PutUint(hh, e.ExcessBlobGas)
+
+	// Field (17) 'BlockAccessList'
+	{
+		elemIndx := hh.Index()
+		byteLen := uint64(len(e.BlockAccessList))
+		if byteLen > 1073741824 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		hh.AppendBytes32(e.BlockAccessList)
+		hh.MerkleizeWithMixin(elemIndx, byteLen, (1073741824+31)/32)
+	}
+
+	// Field (18) 'SlotNumber'
+	ssz.PutUint(hh, e.SlotNumber)
 
 	hh.Merkleize(indx)
 	return
@@ -2100,16 +2600,16 @@ func (e *ExecutionPayloadHeader) MarshalSSZTo(buf []byte) (dst []byte, err error
 	dst = append(dst, e.PrevRandao...)
 
 	// Field (6) 'BlockNumber'
-	dst = ssz.MarshalUint64(dst, e.BlockNumber)
+	dst = ssz.MarshalUint(dst, e.BlockNumber)
 
 	// Field (7) 'GasLimit'
-	dst = ssz.MarshalUint64(dst, e.GasLimit)
+	dst = ssz.MarshalUint(dst, e.GasLimit)
 
 	// Field (8) 'GasUsed'
-	dst = ssz.MarshalUint64(dst, e.GasUsed)
+	dst = ssz.MarshalUint(dst, e.GasUsed)
 
 	// Field (9) 'Timestamp'
-	dst = ssz.MarshalUint64(dst, e.Timestamp)
+	dst = ssz.MarshalUint(dst, e.Timestamp)
 
 	// Offset (10) 'ExtraData'
 	dst = ssz.WriteOffset(dst, offset)
@@ -2194,16 +2694,16 @@ func (e *ExecutionPayloadHeader) UnmarshalSSZ(buf []byte) error {
 	e.PrevRandao = append(e.PrevRandao, buf[372:404]...)
 
 	// Field (6) 'BlockNumber'
-	e.BlockNumber = ssz.UnmarshallUint64(buf[404:412])
+	e.BlockNumber = ssz.UnmarshallUint[uint64](buf[404:412])
 
 	// Field (7) 'GasLimit'
-	e.GasLimit = ssz.UnmarshallUint64(buf[412:420])
+	e.GasLimit = ssz.UnmarshallUint[uint64](buf[412:420])
 
 	// Field (8) 'GasUsed'
-	e.GasUsed = ssz.UnmarshallUint64(buf[420:428])
+	e.GasUsed = ssz.UnmarshallUint[uint64](buf[420:428])
 
 	// Field (9) 'Timestamp'
-	e.Timestamp = ssz.UnmarshallUint64(buf[428:436])
+	e.Timestamp = ssz.UnmarshallUint[uint64](buf[428:436])
 
 	// Offset (10) 'ExtraData'
 	if o10 = ssz.ReadOffset(buf[436:440]); o10 > size {
@@ -2308,16 +2808,16 @@ func (e *ExecutionPayloadHeader) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(e.PrevRandao)
 
 	// Field (6) 'BlockNumber'
-	hh.PutUint64(e.BlockNumber)
+	ssz.PutUint(hh, e.BlockNumber)
 
 	// Field (7) 'GasLimit'
-	hh.PutUint64(e.GasLimit)
+	ssz.PutUint(hh, e.GasLimit)
 
 	// Field (8) 'GasUsed'
-	hh.PutUint64(e.GasUsed)
+	ssz.PutUint(hh, e.GasUsed)
 
 	// Field (9) 'Timestamp'
-	hh.PutUint64(e.Timestamp)
+	ssz.PutUint(hh, e.Timestamp)
 
 	// Field (10) 'ExtraData'
 	{
@@ -2327,7 +2827,7 @@ func (e *ExecutionPayloadHeader) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 			err = ssz.ErrIncorrectListSize
 			return
 		}
-		hh.PutBytes(e.ExtraData)
+		hh.AppendBytes32(e.ExtraData)
 		hh.MerkleizeWithMixin(elemIndx, byteLen, (32+31)/32)
 	}
 
@@ -2409,16 +2909,16 @@ func (e *ExecutionPayloadHeaderCapella) MarshalSSZTo(buf []byte) (dst []byte, er
 	dst = append(dst, e.PrevRandao...)
 
 	// Field (6) 'BlockNumber'
-	dst = ssz.MarshalUint64(dst, e.BlockNumber)
+	dst = ssz.MarshalUint(dst, e.BlockNumber)
 
 	// Field (7) 'GasLimit'
-	dst = ssz.MarshalUint64(dst, e.GasLimit)
+	dst = ssz.MarshalUint(dst, e.GasLimit)
 
 	// Field (8) 'GasUsed'
-	dst = ssz.MarshalUint64(dst, e.GasUsed)
+	dst = ssz.MarshalUint(dst, e.GasUsed)
 
 	// Field (9) 'Timestamp'
-	dst = ssz.MarshalUint64(dst, e.Timestamp)
+	dst = ssz.MarshalUint(dst, e.Timestamp)
 
 	// Offset (10) 'ExtraData'
 	dst = ssz.WriteOffset(dst, offset)
@@ -2510,16 +3010,16 @@ func (e *ExecutionPayloadHeaderCapella) UnmarshalSSZ(buf []byte) error {
 	e.PrevRandao = append(e.PrevRandao, buf[372:404]...)
 
 	// Field (6) 'BlockNumber'
-	e.BlockNumber = ssz.UnmarshallUint64(buf[404:412])
+	e.BlockNumber = ssz.UnmarshallUint[uint64](buf[404:412])
 
 	// Field (7) 'GasLimit'
-	e.GasLimit = ssz.UnmarshallUint64(buf[412:420])
+	e.GasLimit = ssz.UnmarshallUint[uint64](buf[412:420])
 
 	// Field (8) 'GasUsed'
-	e.GasUsed = ssz.UnmarshallUint64(buf[420:428])
+	e.GasUsed = ssz.UnmarshallUint[uint64](buf[420:428])
 
 	// Field (9) 'Timestamp'
-	e.Timestamp = ssz.UnmarshallUint64(buf[428:436])
+	e.Timestamp = ssz.UnmarshallUint[uint64](buf[428:436])
 
 	// Offset (10) 'ExtraData'
 	if o10 = ssz.ReadOffset(buf[436:440]); o10 > size {
@@ -2630,16 +3130,16 @@ func (e *ExecutionPayloadHeaderCapella) HashTreeRootWith(hh *ssz.Hasher) (err er
 	hh.PutBytes(e.PrevRandao)
 
 	// Field (6) 'BlockNumber'
-	hh.PutUint64(e.BlockNumber)
+	ssz.PutUint(hh, e.BlockNumber)
 
 	// Field (7) 'GasLimit'
-	hh.PutUint64(e.GasLimit)
+	ssz.PutUint(hh, e.GasLimit)
 
 	// Field (8) 'GasUsed'
-	hh.PutUint64(e.GasUsed)
+	ssz.PutUint(hh, e.GasUsed)
 
 	// Field (9) 'Timestamp'
-	hh.PutUint64(e.Timestamp)
+	ssz.PutUint(hh, e.Timestamp)
 
 	// Field (10) 'ExtraData'
 	{
@@ -2649,7 +3149,7 @@ func (e *ExecutionPayloadHeaderCapella) HashTreeRootWith(hh *ssz.Hasher) (err er
 			err = ssz.ErrIncorrectListSize
 			return
 		}
-		hh.PutBytes(e.ExtraData)
+		hh.AppendBytes32(e.ExtraData)
 		hh.MerkleizeWithMixin(elemIndx, byteLen, (32+31)/32)
 	}
 
@@ -2738,16 +3238,16 @@ func (e *ExecutionPayloadHeaderDeneb) MarshalSSZTo(buf []byte) (dst []byte, err 
 	dst = append(dst, e.PrevRandao...)
 
 	// Field (6) 'BlockNumber'
-	dst = ssz.MarshalUint64(dst, e.BlockNumber)
+	dst = ssz.MarshalUint(dst, e.BlockNumber)
 
 	// Field (7) 'GasLimit'
-	dst = ssz.MarshalUint64(dst, e.GasLimit)
+	dst = ssz.MarshalUint(dst, e.GasLimit)
 
 	// Field (8) 'GasUsed'
-	dst = ssz.MarshalUint64(dst, e.GasUsed)
+	dst = ssz.MarshalUint(dst, e.GasUsed)
 
 	// Field (9) 'Timestamp'
-	dst = ssz.MarshalUint64(dst, e.Timestamp)
+	dst = ssz.MarshalUint(dst, e.Timestamp)
 
 	// Offset (10) 'ExtraData'
 	dst = ssz.WriteOffset(dst, offset)
@@ -2782,10 +3282,10 @@ func (e *ExecutionPayloadHeaderDeneb) MarshalSSZTo(buf []byte) (dst []byte, err 
 	dst = append(dst, e.WithdrawalsRoot...)
 
 	// Field (15) 'BlobGasUsed'
-	dst = ssz.MarshalUint64(dst, e.BlobGasUsed)
+	dst = ssz.MarshalUint(dst, e.BlobGasUsed)
 
 	// Field (16) 'ExcessBlobGas'
-	dst = ssz.MarshalUint64(dst, e.ExcessBlobGas)
+	dst = ssz.MarshalUint(dst, e.ExcessBlobGas)
 
 	// Field (10) 'ExtraData'
 	if size := len(e.ExtraData); size > 32 {
@@ -2845,16 +3345,16 @@ func (e *ExecutionPayloadHeaderDeneb) UnmarshalSSZ(buf []byte) error {
 	e.PrevRandao = append(e.PrevRandao, buf[372:404]...)
 
 	// Field (6) 'BlockNumber'
-	e.BlockNumber = ssz.UnmarshallUint64(buf[404:412])
+	e.BlockNumber = ssz.UnmarshallUint[uint64](buf[404:412])
 
 	// Field (7) 'GasLimit'
-	e.GasLimit = ssz.UnmarshallUint64(buf[412:420])
+	e.GasLimit = ssz.UnmarshallUint[uint64](buf[412:420])
 
 	// Field (8) 'GasUsed'
-	e.GasUsed = ssz.UnmarshallUint64(buf[420:428])
+	e.GasUsed = ssz.UnmarshallUint[uint64](buf[420:428])
 
 	// Field (9) 'Timestamp'
-	e.Timestamp = ssz.UnmarshallUint64(buf[428:436])
+	e.Timestamp = ssz.UnmarshallUint[uint64](buf[428:436])
 
 	// Offset (10) 'ExtraData'
 	if o10 = ssz.ReadOffset(buf[436:440]); o10 > size {
@@ -2890,10 +3390,10 @@ func (e *ExecutionPayloadHeaderDeneb) UnmarshalSSZ(buf []byte) error {
 	e.WithdrawalsRoot = append(e.WithdrawalsRoot, buf[536:568]...)
 
 	// Field (15) 'BlobGasUsed'
-	e.BlobGasUsed = ssz.UnmarshallUint64(buf[568:576])
+	e.BlobGasUsed = ssz.UnmarshallUint[uint64](buf[568:576])
 
 	// Field (16) 'ExcessBlobGas'
-	e.ExcessBlobGas = ssz.UnmarshallUint64(buf[576:584])
+	e.ExcessBlobGas = ssz.UnmarshallUint[uint64](buf[576:584])
 
 	// Field (10) 'ExtraData'
 	{
@@ -2971,16 +3471,16 @@ func (e *ExecutionPayloadHeaderDeneb) HashTreeRootWith(hh *ssz.Hasher) (err erro
 	hh.PutBytes(e.PrevRandao)
 
 	// Field (6) 'BlockNumber'
-	hh.PutUint64(e.BlockNumber)
+	ssz.PutUint(hh, e.BlockNumber)
 
 	// Field (7) 'GasLimit'
-	hh.PutUint64(e.GasLimit)
+	ssz.PutUint(hh, e.GasLimit)
 
 	// Field (8) 'GasUsed'
-	hh.PutUint64(e.GasUsed)
+	ssz.PutUint(hh, e.GasUsed)
 
 	// Field (9) 'Timestamp'
-	hh.PutUint64(e.Timestamp)
+	ssz.PutUint(hh, e.Timestamp)
 
 	// Field (10) 'ExtraData'
 	{
@@ -2990,7 +3490,7 @@ func (e *ExecutionPayloadHeaderDeneb) HashTreeRootWith(hh *ssz.Hasher) (err erro
 			err = ssz.ErrIncorrectListSize
 			return
 		}
-		hh.PutBytes(e.ExtraData)
+		hh.AppendBytes32(e.ExtraData)
 		hh.MerkleizeWithMixin(elemIndx, byteLen, (32+31)/32)
 	}
 
@@ -3023,10 +3523,10 @@ func (e *ExecutionPayloadHeaderDeneb) HashTreeRootWith(hh *ssz.Hasher) (err erro
 	hh.PutBytes(e.WithdrawalsRoot)
 
 	// Field (15) 'BlobGasUsed'
-	hh.PutUint64(e.BlobGasUsed)
+	ssz.PutUint(hh, e.BlobGasUsed)
 
 	// Field (16) 'ExcessBlobGas'
-	hh.PutUint64(e.ExcessBlobGas)
+	ssz.PutUint(hh, e.ExcessBlobGas)
 
 	hh.Merkleize(indx)
 	return
@@ -3042,10 +3542,10 @@ func (w *Withdrawal) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 
 	// Field (0) 'Index'
-	dst = ssz.MarshalUint64(dst, w.Index)
+	dst = ssz.MarshalUint(dst, w.Index)
 
 	// Field (1) 'ValidatorIndex'
-	dst = ssz.MarshalUint64(dst, uint64(w.ValidatorIndex))
+	dst = ssz.MarshalUint(dst, w.ValidatorIndex)
 
 	// Field (2) 'Address'
 	if size := len(w.Address); size != 20 {
@@ -3055,7 +3555,7 @@ func (w *Withdrawal) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = append(dst, w.Address...)
 
 	// Field (3) 'Amount'
-	dst = ssz.MarshalUint64(dst, w.Amount)
+	dst = ssz.MarshalUint(dst, w.Amount)
 
 	return
 }
@@ -3069,10 +3569,10 @@ func (w *Withdrawal) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'Index'
-	w.Index = ssz.UnmarshallUint64(buf[0:8])
+	w.Index = ssz.UnmarshallUint[uint64](buf[0:8])
 
 	// Field (1) 'ValidatorIndex'
-	w.ValidatorIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+	w.ValidatorIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[8:16])
 
 	// Field (2) 'Address'
 	if cap(w.Address) == 0 {
@@ -3081,7 +3581,7 @@ func (w *Withdrawal) UnmarshalSSZ(buf []byte) error {
 	w.Address = append(w.Address, buf[16:36]...)
 
 	// Field (3) 'Amount'
-	w.Amount = ssz.UnmarshallUint64(buf[36:44])
+	w.Amount = ssz.UnmarshallUint[uint64](buf[36:44])
 
 	return err
 }
@@ -3102,10 +3602,10 @@ func (w *Withdrawal) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'Index'
-	hh.PutUint64(w.Index)
+	ssz.PutUint(hh, w.Index)
 
 	// Field (1) 'ValidatorIndex'
-	hh.PutUint64(uint64(w.ValidatorIndex))
+	ssz.PutUint(hh, w.ValidatorIndex)
 
 	// Field (2) 'Address'
 	if size := len(w.Address); size != 20 {
@@ -3115,7 +3615,7 @@ func (w *Withdrawal) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(w.Address)
 
 	// Field (3) 'Amount'
-	hh.PutUint64(w.Amount)
+	ssz.PutUint(hh, w.Amount)
 
 	hh.Merkleize(indx)
 	return
@@ -3575,6 +4075,534 @@ func (b *BlobsBundleV2) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 
 		numItems := uint64(len(b.Blobs))
 		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the BuilderDepositRequest object
+func (b *BuilderDepositRequest) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BuilderDepositRequest object to a target array
+func (b *BuilderDepositRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'Pubkey'
+	if size := len(b.Pubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.Pubkey", size, 48)
+		return
+	}
+	dst = append(dst, b.Pubkey...)
+
+	// Field (1) 'WithdrawalCredentials'
+	if size := len(b.WithdrawalCredentials); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.WithdrawalCredentials", size, 32)
+		return
+	}
+	dst = append(dst, b.WithdrawalCredentials...)
+
+	// Field (2) 'Amount'
+	dst = ssz.MarshalUint(dst, b.Amount)
+
+	// Field (3) 'Signature'
+	if size := len(b.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	dst = append(dst, b.Signature...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BuilderDepositRequest object
+func (b *BuilderDepositRequest) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 184 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'Pubkey'
+	if cap(b.Pubkey) == 0 {
+		b.Pubkey = make([]byte, 0, len(buf[0:48]))
+	}
+	b.Pubkey = append(b.Pubkey, buf[0:48]...)
+
+	// Field (1) 'WithdrawalCredentials'
+	if cap(b.WithdrawalCredentials) == 0 {
+		b.WithdrawalCredentials = make([]byte, 0, len(buf[48:80]))
+	}
+	b.WithdrawalCredentials = append(b.WithdrawalCredentials, buf[48:80]...)
+
+	// Field (2) 'Amount'
+	b.Amount = ssz.UnmarshallUint[uint64](buf[80:88])
+
+	// Field (3) 'Signature'
+	if cap(b.Signature) == 0 {
+		b.Signature = make([]byte, 0, len(buf[88:184]))
+	}
+	b.Signature = append(b.Signature, buf[88:184]...)
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BuilderDepositRequest object
+func (b *BuilderDepositRequest) SizeSSZ() (size int) {
+	size = 184
+	return
+}
+
+// HashTreeRoot ssz hashes the BuilderDepositRequest object
+func (b *BuilderDepositRequest) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BuilderDepositRequest object with a hasher
+func (b *BuilderDepositRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Pubkey'
+	if size := len(b.Pubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.Pubkey", size, 48)
+		return
+	}
+	hh.PutBytes(b.Pubkey)
+
+	// Field (1) 'WithdrawalCredentials'
+	if size := len(b.WithdrawalCredentials); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.WithdrawalCredentials", size, 32)
+		return
+	}
+	hh.PutBytes(b.WithdrawalCredentials)
+
+	// Field (2) 'Amount'
+	ssz.PutUint(hh, b.Amount)
+
+	// Field (3) 'Signature'
+	if size := len(b.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	hh.PutBytes(b.Signature)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the BuilderExitRequest object
+func (b *BuilderExitRequest) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BuilderExitRequest object to a target array
+func (b *BuilderExitRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'SourceAddress'
+	if size := len(b.SourceAddress); size != 20 {
+		err = ssz.ErrBytesLengthFn("--.SourceAddress", size, 20)
+		return
+	}
+	dst = append(dst, b.SourceAddress...)
+
+	// Field (1) 'Pubkey'
+	if size := len(b.Pubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.Pubkey", size, 48)
+		return
+	}
+	dst = append(dst, b.Pubkey...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BuilderExitRequest object
+func (b *BuilderExitRequest) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 68 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'SourceAddress'
+	if cap(b.SourceAddress) == 0 {
+		b.SourceAddress = make([]byte, 0, len(buf[0:20]))
+	}
+	b.SourceAddress = append(b.SourceAddress, buf[0:20]...)
+
+	// Field (1) 'Pubkey'
+	if cap(b.Pubkey) == 0 {
+		b.Pubkey = make([]byte, 0, len(buf[20:68]))
+	}
+	b.Pubkey = append(b.Pubkey, buf[20:68]...)
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BuilderExitRequest object
+func (b *BuilderExitRequest) SizeSSZ() (size int) {
+	size = 68
+	return
+}
+
+// HashTreeRoot ssz hashes the BuilderExitRequest object
+func (b *BuilderExitRequest) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BuilderExitRequest object with a hasher
+func (b *BuilderExitRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'SourceAddress'
+	if size := len(b.SourceAddress); size != 20 {
+		err = ssz.ErrBytesLengthFn("--.SourceAddress", size, 20)
+		return
+	}
+	hh.PutBytes(b.SourceAddress)
+
+	// Field (1) 'Pubkey'
+	if size := len(b.Pubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.Pubkey", size, 48)
+		return
+	}
+	hh.PutBytes(b.Pubkey)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the ExecutionRequestsGloas object
+func (e *ExecutionRequestsGloas) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(e)
+}
+
+// MarshalSSZTo ssz marshals the ExecutionRequestsGloas object to a target array
+func (e *ExecutionRequestsGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(20)
+
+	// Offset (0) 'Deposits'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.Deposits) * 192
+
+	// Offset (1) 'Withdrawals'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.Withdrawals) * 76
+
+	// Offset (2) 'Consolidations'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.Consolidations) * 116
+
+	// Offset (3) 'BuilderDeposits'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.BuilderDeposits) * 184
+
+	// Offset (4) 'BuilderExits'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.BuilderExits) * 68
+
+	// Field (0) 'Deposits'
+	if size := len(e.Deposits); size > 8192 {
+		err = ssz.ErrListTooBigFn("--.Deposits", size, 8192)
+		return
+	}
+	for ii := 0; ii < len(e.Deposits); ii++ {
+		if dst, err = e.Deposits[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (1) 'Withdrawals'
+	if size := len(e.Withdrawals); size > 16 {
+		err = ssz.ErrListTooBigFn("--.Withdrawals", size, 16)
+		return
+	}
+	for ii := 0; ii < len(e.Withdrawals); ii++ {
+		if dst, err = e.Withdrawals[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (2) 'Consolidations'
+	if size := len(e.Consolidations); size > 2 {
+		err = ssz.ErrListTooBigFn("--.Consolidations", size, 2)
+		return
+	}
+	for ii := 0; ii < len(e.Consolidations); ii++ {
+		if dst, err = e.Consolidations[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (3) 'BuilderDeposits'
+	if size := len(e.BuilderDeposits); size > 256 {
+		err = ssz.ErrListTooBigFn("--.BuilderDeposits", size, 256)
+		return
+	}
+	for ii := 0; ii < len(e.BuilderDeposits); ii++ {
+		if dst, err = e.BuilderDeposits[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (4) 'BuilderExits'
+	if size := len(e.BuilderExits); size > 16 {
+		err = ssz.ErrListTooBigFn("--.BuilderExits", size, 16)
+		return
+	}
+	for ii := 0; ii < len(e.BuilderExits); ii++ {
+		if dst, err = e.BuilderExits[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the ExecutionRequestsGloas object
+func (e *ExecutionRequestsGloas) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 20 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1, o2, o3, o4 uint64
+
+	// Offset (0) 'Deposits'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 20 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (1) 'Withdrawals'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (2) 'Consolidations'
+	if o2 = ssz.ReadOffset(buf[8:12]); o2 > size || o1 > o2 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (3) 'BuilderDeposits'
+	if o3 = ssz.ReadOffset(buf[12:16]); o3 > size || o2 > o3 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (4) 'BuilderExits'
+	if o4 = ssz.ReadOffset(buf[16:20]); o4 > size || o3 > o4 {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'Deposits'
+	{
+		buf = tail[o0:o1]
+		num, err := ssz.DivideInt2(len(buf), 192, 8192)
+		if err != nil {
+			return err
+		}
+		e.Deposits = make([]*DepositRequest, num)
+		for ii := 0; ii < num; ii++ {
+			if e.Deposits[ii] == nil {
+				e.Deposits[ii] = new(DepositRequest)
+			}
+			if err = e.Deposits[ii].UnmarshalSSZ(buf[ii*192 : (ii+1)*192]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (1) 'Withdrawals'
+	{
+		buf = tail[o1:o2]
+		num, err := ssz.DivideInt2(len(buf), 76, 16)
+		if err != nil {
+			return err
+		}
+		e.Withdrawals = make([]*WithdrawalRequest, num)
+		for ii := 0; ii < num; ii++ {
+			if e.Withdrawals[ii] == nil {
+				e.Withdrawals[ii] = new(WithdrawalRequest)
+			}
+			if err = e.Withdrawals[ii].UnmarshalSSZ(buf[ii*76 : (ii+1)*76]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (2) 'Consolidations'
+	{
+		buf = tail[o2:o3]
+		num, err := ssz.DivideInt2(len(buf), 116, 2)
+		if err != nil {
+			return err
+		}
+		e.Consolidations = make([]*ConsolidationRequest, num)
+		for ii := 0; ii < num; ii++ {
+			if e.Consolidations[ii] == nil {
+				e.Consolidations[ii] = new(ConsolidationRequest)
+			}
+			if err = e.Consolidations[ii].UnmarshalSSZ(buf[ii*116 : (ii+1)*116]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (3) 'BuilderDeposits'
+	{
+		buf = tail[o3:o4]
+		num, err := ssz.DivideInt2(len(buf), 184, 256)
+		if err != nil {
+			return err
+		}
+		e.BuilderDeposits = make([]*BuilderDepositRequest, num)
+		for ii := 0; ii < num; ii++ {
+			if e.BuilderDeposits[ii] == nil {
+				e.BuilderDeposits[ii] = new(BuilderDepositRequest)
+			}
+			if err = e.BuilderDeposits[ii].UnmarshalSSZ(buf[ii*184 : (ii+1)*184]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (4) 'BuilderExits'
+	{
+		buf = tail[o4:]
+		num, err := ssz.DivideInt2(len(buf), 68, 16)
+		if err != nil {
+			return err
+		}
+		e.BuilderExits = make([]*BuilderExitRequest, num)
+		for ii := 0; ii < num; ii++ {
+			if e.BuilderExits[ii] == nil {
+				e.BuilderExits[ii] = new(BuilderExitRequest)
+			}
+			if err = e.BuilderExits[ii].UnmarshalSSZ(buf[ii*68 : (ii+1)*68]); err != nil {
+				return err
+			}
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ExecutionRequestsGloas object
+func (e *ExecutionRequestsGloas) SizeSSZ() (size int) {
+	size = 20
+
+	// Field (0) 'Deposits'
+	size += len(e.Deposits) * 192
+
+	// Field (1) 'Withdrawals'
+	size += len(e.Withdrawals) * 76
+
+	// Field (2) 'Consolidations'
+	size += len(e.Consolidations) * 116
+
+	// Field (3) 'BuilderDeposits'
+	size += len(e.BuilderDeposits) * 184
+
+	// Field (4) 'BuilderExits'
+	size += len(e.BuilderExits) * 68
+
+	return
+}
+
+// HashTreeRoot ssz hashes the ExecutionRequestsGloas object
+func (e *ExecutionRequestsGloas) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(e)
+}
+
+// HashTreeRootWith ssz hashes the ExecutionRequestsGloas object with a hasher
+func (e *ExecutionRequestsGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Deposits'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(e.Deposits))
+		if num > 8192 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range e.Deposits {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 8192)
+	}
+
+	// Field (1) 'Withdrawals'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(e.Withdrawals))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range e.Withdrawals {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	// Field (2) 'Consolidations'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(e.Consolidations))
+		if num > 2 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range e.Consolidations {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 2)
+	}
+
+	// Field (3) 'BuilderDeposits'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(e.BuilderDeposits))
+		if num > 256 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range e.BuilderDeposits {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 256)
+	}
+
+	// Field (4) 'BuilderExits'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(e.BuilderExits))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range e.BuilderExits {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
 	}
 
 	hh.Merkleize(indx)

@@ -73,9 +73,6 @@ type (
 // Ensure the filesystem store implements the interface.
 var _ = iface.ValidatorDB(&Store{})
 
-// Logging.
-var log = logrus.WithField("prefix", "db")
-
 // NewStore creates a new filesystem store.
 func NewStore(databaseParentPath string, config *Config) (*Store, error) {
 	s := &Store{

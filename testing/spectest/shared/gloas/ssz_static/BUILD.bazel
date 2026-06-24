@@ -7,8 +7,10 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/gloas/ssz_static",
     visibility = ["//testing/spectest:__subpackages__"],
     deps = [
+        "//beacon-chain/state/state-native:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
+        "//testing/require:go_default_library",
         "//testing/spectest/shared/common/ssz_static:go_default_library",
         "@com_github_prysmaticlabs_fastssz//:go_default_library",
     ],

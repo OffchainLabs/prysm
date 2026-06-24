@@ -13,6 +13,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -58,6 +59,8 @@ type TestP2P struct {
 	pubsub                *pubsub.PubSub
 	joinedTopics          map[string]*pubsub.Topic
 	BroadcastCalled       atomic.Bool
+	broadcastedPartials   []blocks.PartialDataColumn
+	partialBroadcaster    partialdatacolumnbroadcaster.Broadcaster
 	DelaySend             bool
 	Digest                [4]byte
 	peers                 *peers.Status
@@ -70,6 +73,11 @@ type TestP2P struct {
 
 // NewTestP2P initializes a new p2p test service.
 func NewTestP2P(t *testing.T, userOptions ...config.Option) *TestP2P {
+	return NewTestP2PWithPubsubOptions(t, nil, userOptions...)
+}
+
+// NewTestP2PWithPubsubOptions initializes a new p2p test service with custom pubsub options.
+func NewTestP2PWithPubsubOptions(t *testing.T, pubsubOpts []pubsub.Option, userOptions ...config.Option) *TestP2P {
 	ctx := context.Background()
 	options := []config.Option{
 		libp2p.ResourceManager(&network.NullResourceManager{}),
@@ -84,10 +92,14 @@ func NewTestP2P(t *testing.T, userOptions ...config.Option) *TestP2P {
 
 	h, err := libp2p.New(options...)
 	require.NoError(t, err)
-	ps, err := pubsub.NewFloodSub(ctx, h,
+
+	defaultPubsubOpts := []pubsub.Option{
 		pubsub.WithMessageSigning(false),
 		pubsub.WithStrictSignatureVerification(false),
-	)
+	}
+	allPubsubOpts := append(defaultPubsubOpts, pubsubOpts...)
+
+	ps, err := pubsub.NewGossipSub(ctx, h, allPubsubOpts...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,6 +141,9 @@ func connect(a, b host.Host) error {
 func (p *TestP2P) ReceiveRPC(topic string, msg proto.Message) {
 	h, err := libp2p.New(libp2p.ResourceManager(&network.NullResourceManager{}))
 	require.NoError(p.t, err)
+	p.t.Cleanup(func() {
+		require.NoError(p.t, h.Close())
+	})
 	if err := connect(h, p.BHost); err != nil {
 		p.t.Fatalf("Failed to connect two peers for RPC: %v", err)
 	}
@@ -160,6 +175,9 @@ func (p *TestP2P) ReceiveRPC(topic string, msg proto.Message) {
 func (p *TestP2P) ReceivePubSub(topic string, msg proto.Message) {
 	h, err := libp2p.New(libp2p.ResourceManager(&network.NullResourceManager{}))
 	require.NoError(p.t, err)
+	p.t.Cleanup(func() {
+		require.NoError(p.t, h.Close())
+	})
 	ps, err := pubsub.NewFloodSub(context.Background(), h,
 		pubsub.WithMessageSigning(false),
 		pubsub.WithStrictSignatureVerification(false),
@@ -194,6 +212,12 @@ func (p *TestP2P) ReceivePubSub(topic string, msg proto.Message) {
 	if err := topicHandle.Publish(context.TODO(), buf.Bytes()); err != nil {
 		p.t.Fatalf("Failed to publish message; %v", err)
 	}
+}
+
+// BroadcastForEpoch mocks broadcasting for a specific epoch.
+func (p *TestP2P) BroadcastForEpoch(_ context.Context, _ proto.Message, _ primitives.Epoch) error {
+	p.BroadcastCalled.Store(true)
+	return nil
 }
 
 // Broadcast a message.
@@ -233,9 +257,25 @@ func (p *TestP2P) BroadcastLightClientFinalityUpdate(_ context.Context, _ interf
 }
 
 // BroadcastDataColumnSidecar broadcasts a data column for mock.
-func (p *TestP2P) BroadcastDataColumnSidecars(context.Context, []blocks.VerifiedRODataColumn) error {
+func (p *TestP2P) BroadcastDataColumnSidecars(_ context.Context, _ []blocks.VerifiedRODataColumn, partialColumns []blocks.PartialDataColumn) error {
 	p.BroadcastCalled.Store(true)
+	p.mu.Lock()
+	p.broadcastedPartials = partialColumns
+	p.mu.Unlock()
 	return nil
+}
+
+// BroadcastedPartialColumns returns the partial data columns passed to the most recent
+// BroadcastDataColumnSidecars call.
+func (p *TestP2P) BroadcastedPartialColumns() []blocks.PartialDataColumn {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.broadcastedPartials
+}
+
+// EnablePartialColumnBroadcaster sets a non-nil partial column broadcaster.
+func (p *TestP2P) EnablePartialColumnBroadcaster() {
+	p.partialBroadcaster = partialdatacolumnbroadcaster.NewBroadcaster(context.Background(), logrus.StandardLogger())
 }
 
 // SetStreamHandler for RPC.
@@ -297,6 +337,10 @@ func (*TestP2P) Encoding() encoder.NetworkEncoding {
 // to ensure all connected peers receive the message.
 func (p *TestP2P) PubSub() *pubsub.PubSub {
 	return p.pubsub
+}
+
+func (p *TestP2P) PartialColumnBroadcaster() partialdatacolumnbroadcaster.Broadcaster {
+	return p.partialBroadcaster
 }
 
 // Disconnect from a peer.

@@ -1,0 +1,94 @@
+diff -urN a/BUILD.bazel b/BUILD.bazel
+--- a/BUILD.bazel	1969-12-31 18:00:00.000000000 -0600
++++ b/BUILD.bazel	2025-01-05 12:00:00.000000000 -0600
+@@ -0,0 +1,90 @@
++load("@io_bazel_rules_go//go:def.bzl", "go_library")
++
++go_library(
++    name = "go_default_library",
++    srcs = [
++        "bindings.go",
++        "sha256_1_generic.go",
++    ] + select({
++        "@io_bazel_rules_go//go/platform:linux_amd64": [
++            "bindings_amd64.go",
++            "wrapper_linux_amd64.s",
++            ":hashtree_amd64_syso",
++        ],
++        "@io_bazel_rules_go//go/platform:windows_amd64": [
++            "bindings_amd64.go",
++            "wrapper_windows_amd64.s",
++            ":hashtree_amd64_syso",
++        ],
++        "@io_bazel_rules_go//go/platform:linux_arm64": [
++            "bindings_arm64.go",
++            "wrapper_arm64.s",
++            ":hashtree_arm64_syso",
++        ],
++        "@io_bazel_rules_go//go/platform:darwin_arm64": [
++            "bindings_arm64.go",
++            "wrapper_arm64.s",
++            ":hashtree_arm64_syso",
++        ],
++        "@io_bazel_rules_go//go/platform:darwin_amd64": [
++            "bindings_darwin_amd64.go",
++            "wrapper_darwin_amd64.s",
++        ],
++        "//conditions:default": [],
++    }),
++    importpath = "github.com/OffchainLabs/hashtree",
++    visibility = ["//visibility:public"],
++    deps = ["@com_github_klauspost_cpuid_v2//:go_default_library"],
++)
++
++genrule(
++    name = "hashtree_arm64_syso",
++    srcs = [":hashtree_arm64"],
++    outs = ["hashtree_arm64.syso"],
++    cmd = "cp $$(echo $(locations :hashtree_arm64) | tr ' ' '\\n' | grep -v '\\.pic\\.' | head -1) $@",
++)
++
++genrule(
++    name = "hashtree_amd64_syso",
++    srcs = [":hashtree_amd64"],
++    outs = ["hashtree_amd64.syso"],
++    cmd = "cp $$(echo $(locations :hashtree_amd64) | tr ' ' '\\n' | grep -v '\\.pic\\.' | head -1) $@",
++)
++
++cc_library(
++    name = "hashtree_arm64",
++    srcs = [
++        "src/hashtree.c",
++        "src/sha256_generic.c",
++        "src/sha256_armv8_crypto.S",
++        "src/sha256_armv8_neon_x1.S",
++        "src/sha256_armv8_neon_x4.S",
++    ],
++    hdrs = ["src/hashtree.h"],
++    copts = ["-O3", "-Wall"],
++    linkstatic = True,
++    strip_include_prefix = "src",
++    visibility = ["//visibility:public"],
++)
++
++cc_library(
++    name = "hashtree_amd64",
++    srcs = [
++        "src/hashtree.c",
++        "src/sha256_generic.c",
++        "src/sha256_avx_x1.S",
++        "src/sha256_avx_x4.S",
++        "src/sha256_avx_x8.S",
++        "src/sha256_avx_x16.S",
++        "src/sha256_shani.S",
++        "src/sha256_sse_x1.S",
++    ],
++    hdrs = ["src/hashtree.h"],
++    copts = ["-O3", "-Wall"] + select({
++        "@platforms//os:windows": [],
++        "//conditions:default": ["-fno-integrated-as"],
++    }),
++    linkstatic = True,
++    strip_include_prefix = "src",
++    visibility = ["//visibility:public"],
++)

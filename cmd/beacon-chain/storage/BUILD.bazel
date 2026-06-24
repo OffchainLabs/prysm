@@ -2,13 +2,17 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["options.go"],
+    srcs = [
+        "log.go",
+        "options.go",
+    ],
     importpath = "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/storage",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/db/filesystem:go_default_library",
         "//beacon-chain/node:go_default_library",
         "//cmd:go_default_library",
+        "//cmd/beacon-chain/das/flags:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
@@ -25,6 +29,7 @@ go_test(
     deps = [
         "//beacon-chain/db/filesystem:go_default_library",
         "//cmd:go_default_library",
+        "//cmd/beacon-chain/das/flags:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//testing/assert:go_default_library",

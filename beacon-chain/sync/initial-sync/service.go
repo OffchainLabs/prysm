@@ -6,9 +6,9 @@ package initialsync
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	blockfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/block"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
@@ -42,6 +42,7 @@ var _ runtime.Service = (*Service)(nil)
 // blockchainService defines the interface for interaction with block chain service.
 type blockchainService interface {
 	blockchain.BlockReceiver
+	blockchain.ExecutionPayloadEnvelopeReceiver
 	blockchain.ChainInfoFetcher
 }
 
@@ -53,6 +54,7 @@ type Config struct {
 	StateNotifier       statefeed.Notifier
 	BlockNotifier       blockfeed.Notifier
 	ClockWaiter         startup.ClockWaiter
+	SyncNeedsWaiter     func() (das.SyncNeeds, error)
 	InitialSyncComplete chan struct{}
 	BlobStorage         *filesystem.BlobStorage
 	DataColumnStorage   *filesystem.DataColumnStorage
@@ -63,8 +65,8 @@ type Service struct {
 	cfg                    *Config
 	ctx                    context.Context
 	cancel                 context.CancelFunc
-	synced                 *abool.AtomicBool
-	chainStarted           *abool.AtomicBool
+	synced                 *atomic.Bool
+	chainStarted           *atomic.Bool
 	counter                *ratecounter.RateCounter
 	genesisChan            chan time.Time
 	clock                  *startup.Clock
@@ -73,6 +75,7 @@ type Service struct {
 	newDataColumnsVerifier verification.NewDataColumnsVerifier
 	ctxMap                 sync.ContextByteVersions
 	genesisTime            time.Time
+	blobRetentionChecker   das.RetentionChecker
 }
 
 // Option is a functional option for the initial-sync Service.
@@ -117,8 +120,8 @@ func NewService(ctx context.Context, cfg *Config, opts ...Option) *Service {
 		cfg:          cfg,
 		ctx:          ctx,
 		cancel:       cancel,
-		synced:       abool.New(),
-		chainStarted: abool.New(),
+		synced:       &atomic.Bool{},
+		chainStarted: &atomic.Bool{},
 		counter:      ratecounter.NewRateCounter(counterSeconds * time.Second),
 		genesisChan:  make(chan time.Time),
 		clock:        startup.NewClock(time.Unix(0, 0), [32]byte{}), // default clock to prevent panic
@@ -138,6 +141,20 @@ func (s *Service) Start() {
 		return
 	}
 	s.clock = clock
+
+	if s.blobRetentionChecker == nil {
+		if s.cfg.SyncNeedsWaiter == nil {
+			log.Error("Initial-sync service missing sync needs waiter; cannot start")
+			return
+		}
+		syncNeeds, err := s.cfg.SyncNeedsWaiter()
+		if err != nil {
+			log.WithError(err).Error("Initial-sync failed to receive sync needs")
+			return
+		}
+		s.blobRetentionChecker = syncNeeds.BlobRetentionChecker()
+	}
+
 	log.Info("Received state initialized event")
 	ctxMap, err := sync.ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
 	if err != nil {
@@ -178,11 +195,12 @@ func (s *Service) Start() {
 		s.markSynced()
 		return
 	}
-	s.chainStarted.Set()
+	s.chainStarted.Store(true)
 	log.Info("Starting initial chain sync...")
 
-	// Are we already in sync, or close to it?
-	if slots.ToEpoch(s.cfg.Chain.HeadSlot()) == slots.ToEpoch(currentSlot) {
+	// Initial sync completion must be slot-precise. Being in the same epoch can still
+	// leave the node several slots behind the current head.
+	if s.cfg.Chain.HeadSlot() >= currentSlot {
 		log.Info("Already synced to the current chain head")
 		s.markSynced()
 		return
@@ -210,8 +228,6 @@ func (s *Service) Start() {
 
 // fetchOriginSidecars fetches origin sidecars
 func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
-	const delay = 10 * time.Second // The delay between each attempt to fetch origin data column sidecars
-
 	blockRoot, err := s.cfg.DB.OriginCheckpointBlockRoot(s.ctx)
 	if errors.Is(err, db.ErrNotFoundOriginBlockRoot) {
 		return nil
@@ -225,7 +241,7 @@ func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
 	if err != nil {
 		return errors.Wrap(err, "block")
 	}
-	if block.IsNil() {
+	if block == nil || block.IsNil() {
 		return errors.Errorf("origin block for root %#x not found in database", blockRoot)
 	}
 
@@ -244,7 +260,7 @@ func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
 	blockVersion := roBlock.Version()
 
 	if blockVersion >= version.Fulu {
-		if err := s.fetchOriginDataColumnSidecars(roBlock, delay); err != nil {
+		if err := s.fetchOriginDataColumnSidecars(roBlock); err != nil {
 			return errors.Wrap(err, "fetch origin columns")
 		}
 		return nil
@@ -267,7 +283,7 @@ func (s *Service) Stop() error {
 
 // Status of initial sync.
 func (s *Service) Status() error {
-	if s.synced.IsNotSet() && s.chainStarted.IsSet() {
+	if !s.synced.Load() && s.chainStarted.Load() {
 		return errors.New("syncing")
 	}
 	return nil
@@ -275,17 +291,17 @@ func (s *Service) Status() error {
 
 // Syncing returns true if initial sync is still running.
 func (s *Service) Syncing() bool {
-	return s.synced.IsNotSet()
+	return !s.synced.Load()
 }
 
 // Initialized returns true if initial sync has been started.
 func (s *Service) Initialized() bool {
-	return s.chainStarted.IsSet()
+	return s.chainStarted.Load()
 }
 
 // Synced returns true if initial sync has been completed.
 func (s *Service) Synced() bool {
-	return s.synced.IsSet()
+	return s.synced.Load()
 }
 
 // Resync allows a node to start syncing again if it has fallen
@@ -297,17 +313,18 @@ func (s *Service) Resync() error {
 	}
 
 	// Set it to false since we are syncing again.
-	s.synced.UnSet()
-	defer func() { s.synced.Set() }() // Reset it at the end of the method.
+	s.synced.Store(false)
+	defer func() { s.synced.Store(true) }() // Reset it at the end of the method.
 
 	_, err = s.waitForMinimumPeers()
 	if err != nil {
 		return err
 	}
+	l := log
 	if err = s.roundRobinSync(); err != nil {
-		log = log.WithError(err)
+		l = log.WithError(err)
 	}
-	log.WithField("slot", s.cfg.Chain.HeadSlot()).Info("Resync attempt complete")
+	l.WithField("slot", s.cfg.Chain.HeadSlot()).Info("Resync attempt complete")
 	return nil
 }
 
@@ -332,7 +349,7 @@ func (s *Service) waitForMinimumPeers() ([]peer.ID, error) {
 
 // markSynced marks node as synced and notifies feed listeners.
 func (s *Service) markSynced() {
-	s.synced.Set()
+	s.synced.Store(true)
 	close(s.cfg.InitialSyncComplete)
 }
 
@@ -382,7 +399,7 @@ func (s *Service) fetchOriginBlobSidecars(pids []peer.ID, rob blocks.ROBlock) er
 			continue
 		}
 		bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncBlobSidecarRequirements)
-		avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, bv)
+		avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, bv, s.blobRetentionChecker)
 		current := s.clock.CurrentSlot()
 		if err := avs.Persist(current, blobSidecars...); err != nil {
 			return err
@@ -398,7 +415,7 @@ func (s *Service) fetchOriginBlobSidecars(pids []peer.ID, rob blocks.ROBlock) er
 	return fmt.Errorf("no connected peer able to provide blobs for checkpoint sync block %#x", r)
 }
 
-func (s *Service) fetchOriginDataColumnSidecars(roBlock blocks.ROBlock, delay time.Duration) error {
+func (s *Service) fetchOriginDataColumnSidecars(roBlock blocks.ROBlock) error {
 	const (
 		errorMessage     = "Failed to fetch origin data column sidecars"
 		warningIteration = 10
@@ -485,7 +502,6 @@ func (s *Service) fetchOriginDataColumnSidecars(roBlock blocks.ROBlock, delay ti
 		log := log.WithFields(logrus.Fields{
 			"attempt":        attempt,
 			"missingIndices": helpers.SortedPrettySliceFromMap(missingIndicesByRoot[root]),
-			"delay":          delay,
 		})
 
 		logFunc := log.Debug

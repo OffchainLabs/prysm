@@ -3,15 +3,17 @@ package sync
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	beaconState "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
+	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	testingDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
@@ -324,10 +326,12 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 			stateNotifier: chain.StateNotifier(),
 			initialSync:   &mockSync.Sync{IsSyncing: false},
 		},
-		rateLimiter:  newRateLimiter(p1),
-		clockWaiter:  cw,
-		chainStarted: abool.New(),
-		subHandler:   newSubTopicHandler(),
+		rateLimiter:                     newRateLimiter(p1),
+		clockWaiter:                     cw,
+		chainStarted:                    &atomic.Bool{},
+		subHandler:                      newSubTopicHandler(),
+		proposerPreferencesCache:        cache.NewProposerPreferencesCache(),
+		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
 	}
 	markInitSyncComplete(t, r)
 	clock := startup.NewClockSynchronizer()
@@ -372,7 +376,7 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 		out := &ethpb.Status{}
 		assert.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, out))
 		log.WithField("status", out).Warn("received status")
-		resp := &ethpb.Status{HeadSlot: 100, HeadRoot: make([]byte, 32), ForkDigest: p2.Digest[:],
+		resp := &ethpb.Status{HeadSlot: 0, HeadRoot: make([]byte, 32), ForkDigest: p2.Digest[:],
 			FinalizedRoot: finalizedRoot[:], FinalizedEpoch: 0}
 		_, err := stream.Write([]byte{responseCodeSuccess})
 		assert.NoError(t, err)
@@ -557,7 +561,7 @@ func TestStatusRPCRequest_RequestSent(t *testing.T) {
 					PreviousVersion: params.BeaconConfig().GenesisForkVersion,
 					CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
 				},
-				Genesis:        time.Now(),
+				Genesis:        time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot)*150, 0),
 				ValidatorsRoot: [32]byte{'A'},
 			}
 
@@ -934,16 +938,19 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 	r := &Service{
 		cfg: &config{
 			p2p:           p1,
+			beaconDB:      dbTest.SetupDB(t),
 			chain:         chain,
 			stateNotifier: chain.StateNotifier(),
 			initialSync:   &mockSync.Sync{IsSyncing: false},
 		},
 
-		ctx:          ctx,
-		rateLimiter:  newRateLimiter(p1),
-		clockWaiter:  cw,
-		chainStarted: abool.New(),
-		subHandler:   newSubTopicHandler(),
+		ctx:                             ctx,
+		rateLimiter:                     newRateLimiter(p1),
+		clockWaiter:                     cw,
+		chainStarted:                    &atomic.Bool{},
+		subHandler:                      newSubTopicHandler(),
+		proposerPreferencesCache:        cache.NewProposerPreferencesCache(),
+		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
 	}
 	markInitSyncComplete(t, r)
 	clock := startup.NewClockSynchronizer()
@@ -1042,9 +1049,47 @@ func TestStatusRPC_ValidGenesisMessage(t *testing.T) {
 		FinalizedRoot:  params.BeaconConfig().ZeroHash[:],
 		FinalizedEpoch: 0,
 		HeadRoot:       headRoot[:],
-		HeadSlot:       111,
+		HeadSlot:       0,
 	})
 	require.NoError(t, err)
+}
+
+func TestStatusRPC_RejectsFutureHeadSlot(t *testing.T) {
+	ctx := t.Context()
+	chain := &mock.ChainService{
+		FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: 0, Root: params.BeaconConfig().ZeroHash[:]},
+		Fork: &ethpb.Fork{
+			PreviousVersion: params.BeaconConfig().GenesisForkVersion,
+			CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
+		},
+		Genesis:        time.Now(),
+		ValidatorsRoot: [32]byte{'A'},
+	}
+	r := &Service{
+		cfg: &config{
+			chain:         chain,
+			clock:         startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			stateNotifier: chain.StateNotifier(),
+		},
+		ctx: ctx,
+	}
+	digest, err := r.currentForkDigest()
+	require.NoError(t, err)
+
+	status := func(headSlot primitives.Slot) *ethpb.Status {
+		return &ethpb.Status{
+			ForkDigest:     digest[:],
+			FinalizedRoot:  params.BeaconConfig().ZeroHash[:],
+			FinalizedEpoch: 0,
+			HeadRoot:       make([]byte, 32),
+			HeadSlot:       headSlot,
+		}
+	}
+
+	// within the allowance
+	require.NoError(t, r.validateStatusMessage(r.ctx, status(1)))
+	// beyond the allowance
+	require.ErrorContains(t, p2ptypes.ErrInvalidRequest.Error(), r.validateStatusMessage(r.ctx, status(100)))
 }
 
 func TestShouldResync(t *testing.T) {

@@ -127,7 +127,7 @@ func TestDataColumn_Slot(t *testing.T) {
 	slot := primitives.Slot(1)
 
 	dataColumn := &RODataColumn{
-		DataColumnSidecar: &ethpb.DataColumnSidecar{
+		fulu: &ethpb.DataColumnSidecar{
 			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
 				Header: &ethpb.BeaconBlockHeader{
 					Slot: slot,
@@ -142,7 +142,7 @@ func TestDataColumn_Slot(t *testing.T) {
 func TestDataColumn_ParentRoot(t *testing.T) {
 	root := [fieldparams.RootLength]byte{1}
 	dataColumn := &RODataColumn{
-		DataColumnSidecar: &ethpb.DataColumnSidecar{
+		fulu: &ethpb.DataColumnSidecar{
 			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
 				Header: &ethpb.BeaconBlockHeader{
 					ParentRoot: root[:],
@@ -151,13 +151,15 @@ func TestDataColumn_ParentRoot(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, root, dataColumn.ParentRoot())
+	parentRoot, err := dataColumn.ParentRoot()
+	assert.NoError(t, err)
+	assert.Equal(t, root, parentRoot)
 }
 
 func TestDataColumn_ProposerIndex(t *testing.T) {
 	proposerIndex := primitives.ValidatorIndex(1)
 	dataColumn := &RODataColumn{
-		DataColumnSidecar: &ethpb.DataColumnSidecar{
+		fulu: &ethpb.DataColumnSidecar{
 			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
 				Header: &ethpb.BeaconBlockHeader{
 					ProposerIndex: proposerIndex,
@@ -166,5 +168,70 @@ func TestDataColumn_ProposerIndex(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, proposerIndex, dataColumn.ProposerIndex())
+	pi, err := dataColumn.ProposerIndex()
+	assert.NoError(t, err)
+	assert.Equal(t, proposerIndex, pi)
+}
+
+func TestRODataColumnsToCellProofBundles(t *testing.T) {
+	sidecars := []RODataColumn{
+		{fulu: &ethpb.DataColumnSidecar{
+			Index:          1,
+			Column:         sizedSlices(2, 2048, 1),
+			KzgCommitments: sizedSlices(2, 48, 10),
+			KzgProofs:      sizedSlices(2, 48, 20),
+		}},
+		{fulu: &ethpb.DataColumnSidecar{
+			Index:          2,
+			Column:         sizedSlices(3, 2048, 30),
+			KzgCommitments: sizedSlices(3, 48, 40),
+			KzgProofs:      sizedSlices(3, 48, 50),
+		}},
+	}
+
+	got, err := RODataColumnsToCellProofBundles(sidecars)
+	require.NoError(t, err)
+	require.Equal(t, 5, len(got))
+
+	// First bundle pairs the first sidecar's first cell/commitment/proof.
+	require.Equal(t, uint64(1), got[0].ColumnIndex)
+	require.DeepEqual(t, sidecars[0].Column()[0], got[0].Cell)
+	require.DeepEqual(t, sidecars[0].fulu.KzgCommitments[0], got[0].Commitment)
+	require.DeepEqual(t, sidecars[0].KzgProofs()[0], got[0].Proof)
+
+	// Bundles for the second sidecar carry its own column index.
+	require.Equal(t, uint64(2), got[2].ColumnIndex)
+}
+
+func TestRODataColumnsToCellProofBundlesLengthMismatch(t *testing.T) {
+	cases := []struct {
+		name string
+		dc   *ethpb.DataColumnSidecar
+	}{
+		{
+			name: "fewer commitments than cells",
+			dc: &ethpb.DataColumnSidecar{
+				Column:         sizedSlices(3, 2048, 1),
+				KzgCommitments: sizedSlices(2, 48, 10),
+				KzgProofs:      sizedSlices(3, 48, 20),
+			},
+		},
+		{
+			name: "fewer proofs than cells",
+			dc: &ethpb.DataColumnSidecar{
+				Column:         sizedSlices(3, 2048, 1),
+				KzgCommitments: sizedSlices(3, 48, 10),
+				KzgProofs:      sizedSlices(2, 48, 20),
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// A mismatched sidecar must surface an error rather than silently
+			// returning a partial/empty result.
+			got, err := RODataColumnsToCellProofBundles([]RODataColumn{{fulu: tc.dc}})
+			require.NotNil(t, err)
+			require.Equal(t, 0, len(got))
+		})
+	}
 }

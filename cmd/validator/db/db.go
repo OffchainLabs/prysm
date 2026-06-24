@@ -4,11 +4,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/runtime/tos"
 	validatordb "github.com/OffchainLabs/prysm/v7/validator/db"
-	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
-
-var log = logrus.WithField("prefix", "db")
 
 var (
 	// SourceDataDirFlag defines a path on disk where source Prysm databases are stored. Used for conversion.

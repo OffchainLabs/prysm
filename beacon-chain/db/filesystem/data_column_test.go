@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -88,22 +87,6 @@ func TestWarmCache(t *testing.T) {
 }
 
 func TestSaveDataColumnsSidecars(t *testing.T) {
-	t.Run("wrong numbers of columns", func(t *testing.T) {
-		cfg := params.BeaconConfig().Copy()
-		cfg.NumberOfColumns = 0
-		params.OverrideBeaconConfig(cfg)
-		params.SetupTestConfigCleanup(t)
-
-		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
-			t,
-			[]util.DataColumnParam{{Index: 12}, {Index: 1_000_000}, {Index: 48}},
-		)
-
-		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
-		err := dataColumnStorage.Save(verifiedRoDataColumnSidecars)
-		require.ErrorIs(t, err, errWrongNumberOfColumns)
-	})
-
 	t.Run("one of the column index is too large", func(t *testing.T) {
 		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
@@ -129,7 +112,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 		alteredVerifiedRoDataColumnSidecars = append(alteredVerifiedRoDataColumnSidecars, verifiedRoDataColumnSidecars[0])
 
 		altered, err := blocks.NewRODataColumnWithRoot(
-			verifiedRoDataColumnSidecars[1].RODataColumn.DataColumnSidecar,
+			verifiedRoDataColumnSidecars[1].RODataColumn.DataColumnSidecar(),
 			verifiedRoDataColumnSidecars[0].BlockRoot(),
 		)
 		require.NoError(t, err)
@@ -280,7 +263,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 			)
 
 			// Build expected bytes.
-			firstSszEncodedDataColumnSidecar, err := expectedDataColumnSidecars[0].MarshalSSZ()
+			firstSszEncodedDataColumnSidecar, err := expectedDataColumnSidecars[0].RODataColumn.DataColumnSidecar().MarshalSSZ()
 			require.NoError(t, err)
 
 			dataColumnSidecarsCount := len(expectedDataColumnSidecars)
@@ -289,7 +272,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 			sszEncodedDataColumnSidecars := make([]byte, 0, dataColumnSidecarsCount*sszEncodedDataColumnSidecarSize)
 			sszEncodedDataColumnSidecars = append(sszEncodedDataColumnSidecars, firstSszEncodedDataColumnSidecar...)
 			for _, dataColumnSidecar := range expectedDataColumnSidecars[1:] {
-				sszEncodedDataColumnSidecar, err := dataColumnSidecar.MarshalSSZ()
+				sszEncodedDataColumnSidecar, err := dataColumnSidecar.RODataColumn.DataColumnSidecar().MarshalSSZ()
 				require.NoError(t, err)
 				sszEncodedDataColumnSidecars = append(sszEncodedDataColumnSidecars, sszEncodedDataColumnSidecar...)
 			}
@@ -379,11 +362,17 @@ func TestGetDataColumnSidecars(t *testing.T) {
 
 		verifiedRODataColumnSidecars, err := dataColumnStorage.Get(root, nil)
 		require.NoError(t, err)
-		require.DeepSSZEqual(t, expectedVerifiedRoDataColumnSidecars, verifiedRODataColumnSidecars)
+		require.Equal(t, len(expectedVerifiedRoDataColumnSidecars), len(verifiedRODataColumnSidecars))
+		for i := range expectedVerifiedRoDataColumnSidecars {
+			require.DeepSSZEqual(t, expectedVerifiedRoDataColumnSidecars[i].DataColumnSidecar(), verifiedRODataColumnSidecars[i].DataColumnSidecar())
+		}
 
 		verifiedRODataColumnSidecars, err = dataColumnStorage.Get(root, []uint64{12, 13, 14})
 		require.NoError(t, err)
-		require.DeepSSZEqual(t, expectedVerifiedRoDataColumnSidecars, verifiedRODataColumnSidecars)
+		require.Equal(t, len(expectedVerifiedRoDataColumnSidecars), len(verifiedRODataColumnSidecars))
+		for i := range expectedVerifiedRoDataColumnSidecars {
+			require.DeepSSZEqual(t, expectedVerifiedRoDataColumnSidecars[i].DataColumnSidecar(), verifiedRODataColumnSidecars[i].DataColumnSidecar())
+		}
 	})
 }
 

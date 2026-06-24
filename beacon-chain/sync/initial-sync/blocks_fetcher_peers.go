@@ -44,22 +44,6 @@ func (f *blocksFetcher) removeStalePeerLocks(age time.Duration) {
 	}
 }
 
-// selectFailOverPeer randomly selects fail over peer from the list of available peers.
-func (f *blocksFetcher) selectFailOverPeer(excludedPID peer.ID, peers []peer.ID) (peer.ID, error) {
-	if len(peers) == 0 {
-		return "", errNoPeersAvailable
-	}
-	if len(peers) == 1 && peers[0] == excludedPID {
-		return "", errNoPeersAvailable
-	}
-
-	ind := f.rand.Int() % len(peers)
-	if peers[ind] == excludedPID {
-		return f.selectFailOverPeer(excludedPID, append(peers[:ind], peers[ind+1:]...))
-	}
-	return peers[ind], nil
-}
-
 // waitForMinimumPeers spins and waits up until enough peers are available.
 func (f *blocksFetcher) waitForMinimumPeers(ctx context.Context) ([]peer.ID, error) {
 	required := min(flags.Get().MinimumSyncPeers, params.BeaconConfig().MaxPeersToSync)
@@ -69,9 +53,10 @@ func (f *blocksFetcher) waitForMinimumPeers(ctx context.Context) ([]peer.ID, err
 		}
 		var peers []peer.ID
 		if f.mode == modeStopOnFinalizedEpoch {
-			cp := f.chain.FinalizedCheckpt()
-			headEpoch := cp.Epoch
-			_, peers = f.p2p.Peers().BestFinalized(params.BeaconConfig().MaxPeersToSync, headEpoch)
+			_, peers = f.p2p.Peers().BestFinalized(f.chain.FinalizedCheckpt().Epoch)
+			if len(peers) > params.BeaconConfig().MaxPeersToSync {
+				peers = peers[:params.BeaconConfig().MaxPeersToSync]
+			}
 		} else {
 			headEpoch := slots.ToEpoch(f.chain.HeadSlot())
 			_, peers = f.p2p.Peers().BestNonFinalized(flags.Get().MinimumSyncPeers, headEpoch)

@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
@@ -109,7 +110,7 @@ func (m *engineMock) ForkchoiceUpdated(context.Context, *pb.ForkchoiceState, pay
 	return nil, m.latestValidHash, m.payloadStatus
 }
 
-func (m *engineMock) NewPayload(context.Context, interfaces.ExecutionData, []common.Hash, *common.Hash, *pb.ExecutionRequests) ([]byte, error) {
+func (m *engineMock) NewPayload(context.Context, interfaces.ExecutionData, []common.Hash, *common.Hash, pb.ExecutionRequester) ([]byte, error) {
 	return m.latestValidHash, m.payloadStatus
 }
 
@@ -140,4 +141,12 @@ func (m *engineMock) ExecutionBlockByHash(_ context.Context, hash common.Hash, _
 
 func (m *engineMock) GetTerminalBlockHash(context.Context, uint64) ([]byte, bool, error) {
 	return nil, false, nil
+}
+
+func (m *engineMock) GetClientVersionV1(context.Context) ([]*structs.ClientVersionV1, error) {
+	return nil, nil
+}
+
+func (*engineMock) PartialColumnsSupported() bool {
+	return false
 }

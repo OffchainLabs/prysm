@@ -853,31 +853,6 @@ func computeProposerIndexWithValidators(validators []*ethpb.Validator, activeInd
 	}
 }
 
-func TestLastActivatedValidatorIndex_OK(t *testing.T) {
-	helpers.ClearCache()
-
-	beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{})
-	require.NoError(t, err)
-
-	validators := make([]*ethpb.Validator, 4)
-	balances := make([]uint64, len(validators))
-	for i := range uint64(4) {
-		validators[i] = &ethpb.Validator{
-			PublicKey:             make([]byte, params.BeaconConfig().BLSPubkeyLength),
-			WithdrawalCredentials: make([]byte, 32),
-			EffectiveBalance:      32 * 1e9,
-			ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
-		}
-		balances[i] = validators[i].EffectiveBalance
-	}
-	require.NoError(t, beaconState.SetValidators(validators))
-	require.NoError(t, beaconState.SetBalances(balances))
-
-	index, err := helpers.LastActivatedValidatorIndex(t.Context(), beaconState)
-	require.NoError(t, err)
-	require.Equal(t, index, primitives.ValidatorIndex(3))
-}
-
 func TestProposerIndexFromCheckpoint(t *testing.T) {
 	helpers.ClearCache()
 
@@ -1099,39 +1074,6 @@ func TestIsPartiallyWithdrawableValidator(t *testing.T) {
 	}
 }
 
-func TestIsSameWithdrawalCredentials(t *testing.T) {
-	makeWithdrawalCredentials := func(address []byte) []byte {
-		b := make([]byte, 12)
-		return append(b, address...)
-	}
-
-	tests := []struct {
-		name string
-		a    *ethpb.Validator
-		b    *ethpb.Validator
-		want bool
-	}{
-		{
-			"Same credentials",
-			&ethpb.Validator{WithdrawalCredentials: makeWithdrawalCredentials([]byte("same"))},
-			&ethpb.Validator{WithdrawalCredentials: makeWithdrawalCredentials([]byte("same"))},
-			true,
-		},
-		{
-			"Different credentials",
-			&ethpb.Validator{WithdrawalCredentials: makeWithdrawalCredentials([]byte("foo"))},
-			&ethpb.Validator{WithdrawalCredentials: makeWithdrawalCredentials([]byte("bar"))},
-			false,
-		},
-		{"Handles nil case", nil, nil, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, helpers.IsSameWithdrawalCredentials(tt.a, tt.b))
-		})
-	}
-}
-
 func TestValidatorMaxEffectiveBalance(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -1165,7 +1107,7 @@ func TestBeaconProposerIndexAtSlotFulu(t *testing.T) {
 	cfg := params.BeaconConfig().Copy()
 	cfg.FuluForkEpoch = 1
 	params.OverrideBeaconConfig(cfg)
-	lookahead := make([]uint64, 64)
+	lookahead := make([]primitives.ValidatorIndex, 64)
 	lookahead[0] = 15
 	lookahead[1] = 16
 	lookahead[34] = 42

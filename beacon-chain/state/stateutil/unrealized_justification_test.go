@@ -5,18 +5,17 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	multi_value_slice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestState_UnrealizedCheckpointBalances(t *testing.T) {
-	validators := make([]*ethpb.Validator, params.BeaconConfig().MinGenesisActiveValidatorCount)
+	validators := make([]CompactValidator, params.BeaconConfig().MinGenesisActiveValidatorCount)
 	targetFlag := params.BeaconConfig().TimelyTargetFlagIndex
 	expectedActive := params.BeaconConfig().MinGenesisActiveValidatorCount * params.BeaconConfig().MaxEffectiveBalance
 
 	balances := make([]uint64, params.BeaconConfig().MinGenesisActiveValidatorCount)
 	for i := range validators {
-		validators[i] = &ethpb.Validator{
+		validators[i] = CompactValidator{
 			ExitEpoch:        params.BeaconConfig().FarFutureEpoch,
 			EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance,
 		}
@@ -95,20 +94,20 @@ func TestState_UnrealizedCheckpointBalances(t *testing.T) {
 }
 
 func TestState_MVSlice_UnrealizedCheckpointBalances(t *testing.T) {
-	validators := make([]*ethpb.Validator, params.BeaconConfig().MinGenesisActiveValidatorCount)
+	validators := make([]CompactValidator, params.BeaconConfig().MinGenesisActiveValidatorCount)
 	targetFlag := params.BeaconConfig().TimelyTargetFlagIndex
 	expectedActive := params.BeaconConfig().MinGenesisActiveValidatorCount * params.BeaconConfig().MaxEffectiveBalance
 
 	balances := make([]uint64, params.BeaconConfig().MinGenesisActiveValidatorCount)
 	for i := range validators {
-		validators[i] = &ethpb.Validator{
+		validators[i] = CompactValidator{
 			ExitEpoch:        params.BeaconConfig().FarFutureEpoch,
 			EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance,
 		}
 		balances[i] = params.BeaconConfig().MaxEffectiveBalance
 	}
 
-	mv := &multi_value_slice.Slice[*ethpb.Validator]{}
+	mv := &multi_value_slice.Slice[CompactValidator]{}
 	mv.Init(validators)
 
 	cp := make([]byte, len(validators))
@@ -154,6 +153,7 @@ func TestState_MVSlice_UnrealizedCheckpointBalances(t *testing.T) {
 
 	t.Run("votes in both epochs, decreased balance in first validator", func(tt *testing.T) {
 		validators[0].EffectiveBalance = params.BeaconConfig().MaxEffectiveBalance - params.BeaconConfig().MinDepositAmount
+		_ = mv.UpdateAt(&testObject{id: 0}, 0, validators[0])
 		copy(cp, []byte{0xFF, 0xFF, 0x00, 0x00, 0xFF ^ (1 << targetFlag), 0})
 		copy(pp, []byte{0xFF ^ (1 << targetFlag), 0xFF ^ (1 << targetFlag), 0xFF ^ (1 << targetFlag), 0x00, 0xFF, 0xFF})
 		active, previous, current, err := UnrealizedCheckpointBalances(cp, pp, NewValMultiValueSliceReader(mv, &testObject{id: 0}), 1)
@@ -166,6 +166,7 @@ func TestState_MVSlice_UnrealizedCheckpointBalances(t *testing.T) {
 
 	t.Run("slash a validator", func(tt *testing.T) {
 		validators[1].Slashed = true
+		_ = mv.UpdateAt(&testObject{id: 0}, 1, validators[1])
 		active, previous, current, err := UnrealizedCheckpointBalances(cp, pp, NewValMultiValueSliceReader(mv, &testObject{id: 0}), 1)
 		require.NoError(tt, err)
 		require.Equal(tt, expectedActive, active)
@@ -174,6 +175,7 @@ func TestState_MVSlice_UnrealizedCheckpointBalances(t *testing.T) {
 	})
 	t.Run("Exit a validator", func(tt *testing.T) {
 		validators[4].ExitEpoch = 1
+		_ = mv.UpdateAt(&testObject{id: 0}, 4, validators[4])
 		active, previous, current, err := UnrealizedCheckpointBalances(cp, pp, NewValMultiValueSliceReader(mv, &testObject{id: 0}), 2)
 		require.NoError(tt, err)
 		expectedActive -= params.BeaconConfig().MaxEffectiveBalance

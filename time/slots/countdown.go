@@ -10,8 +10,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var log = logrus.WithField("prefix", "slotutil")
-
 // CountdownToGenesis starts a ticker at the specified duration
 // logging the remaining minutes until the genesis chainstart event
 // along with important genesis state metadata such as number

@@ -3,6 +3,7 @@ package kv
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/ethereum/go-ethereum/common"
@@ -17,7 +18,10 @@ func (s *Store) DepositContractAddress(ctx context.Context) ([]byte, error) {
 	var addr []byte
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		chainInfo := tx.Bucket(chainMetadataBucket)
-		addr = chainInfo.Get(depositContractAddressKey)
+		stored := chainInfo.Get(depositContractAddressKey)
+		if len(stored) > 0 {
+			addr = slices.Clone(stored)
+		}
 		return nil
 	}); err != nil { // This view never returns an error, but we'll handle anyway for sanity.
 		panic(err) // lint:nopanic -- View never returns an error.

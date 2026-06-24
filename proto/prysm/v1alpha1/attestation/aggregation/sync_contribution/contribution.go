@@ -4,7 +4,6 @@ import (
 	v2 "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation/aggregation"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -17,8 +16,6 @@ const (
 
 // SyncContributionAggregationStrategy defines SyncContribution aggregation strategy.
 type SyncContributionAggregationStrategy string
-
-var _ = logrus.WithField("prefix", "aggregation.sync_contribution")
 
 // Aggregate aggregates sync contributions. The minimal number of sync contributions is returned.
 // Aggregation occurs in-place i.e. contents of input array will be modified. Should you need to

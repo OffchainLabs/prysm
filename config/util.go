@@ -12,7 +12,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 

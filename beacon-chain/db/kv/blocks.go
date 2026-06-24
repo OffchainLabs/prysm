@@ -477,14 +477,10 @@ func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot p
 		return 0, err
 	}
 
-	// Return early if there's nothing to delete.
-	if len(slotRoots) == 0 {
-		return 0, nil
-	}
-
 	// Perform all deletions in a single transaction for atomicity
 	var numSlotsDeleted int
 	err = s.db.Update(func(tx *bolt.Tx) error {
+		blocksBkt := tx.Bucket(blocksBucket)
 		for _, sr := range slotRoots {
 			// Return if context is cancelled or deadline is exceeded.
 			if ctx.Err() != nil {
@@ -517,6 +513,10 @@ func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot p
 				return errors.Wrap(err, "could not delete validators")
 			}
 
+			// TODO: execution payload envelopes (Gloas+) are keyed by execution payload
+			// block hash, not beacon block root, so they cannot be pruned in this loop.
+			// A separate pruning mechanism is needed (e.g. secondary index or cursor scan).
+
 			numSlotsDeleted++
 		}
 
@@ -537,6 +537,13 @@ func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot p
 			s.blockCache.Del(string(sr.root[:]))
 			// Delete state summary from cache
 			s.stateSummaryCache.delete(sr.root)
+		}
+
+		originRoot := blocksBkt.Get(originCheckpointBlockRootKey)
+		if originRoot != nil && blocksBkt.Get(originRoot) == nil {
+			if err = blocksBkt.Delete(originCheckpointBlockRootKey); err != nil {
+				return errors.Wrap(err, "could not delete origin checkpoint block root")
+			}
 		}
 
 		return nil
@@ -676,12 +683,12 @@ func (s *Store) SaveHeadBlockRoot(ctx context.Context, blockRoot [32]byte) error
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveHeadBlockRoot")
 	defer span.End()
 	hasStateSummary := s.HasStateSummary(ctx, blockRoot)
-	return s.db.Update(func(tx *bolt.Tx) error {
-		hasStateInDB := tx.Bucket(stateBucket).Get(blockRoot[:]) != nil
-		if !(hasStateInDB || hasStateSummary) {
-			return errors.New("no state or state summary found with head block root")
-		}
+	hasStateInDB := s.HasState(ctx, blockRoot)
+	if !(hasStateInDB || hasStateSummary) {
+		return errors.New("no state or state summary found with head block root")
+	}
 
+	return s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(blocksBucket)
 		return bucket.Put(headBlockRootKey, blockRoot[:])
 	})
@@ -804,6 +811,44 @@ func (s *Store) HighestRootsBelowSlot(ctx context.Context, slot primitives.Slot)
 	return fs, roots, nil
 }
 
+// LowestRootsAtOrAboveSlot returns roots from the database slot index at or above the input slot.
+// The returned slot is the slot where the roots were found. This is the mirror of HighestRootsBelowSlot.
+// If no block exists at or above the given slot, an empty root slice is returned.
+func (s *Store) LowestRootsAtOrAboveSlot(ctx context.Context, slot primitives.Slot) (fs primitives.Slot, roots [][32]byte, err error) {
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.LowestRootsAtOrAboveSlot")
+	defer span.End()
+
+	sk := bytesutil.Uint64ToBytesBigEndian(uint64(slot))
+	err = s.db.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(blockSlotIndicesBucket)
+		c := bkt.Cursor()
+		// Seek positions the cursor at the smallest key >= sk.
+		// If no key >= sk exists, sl is nil and we return empty.
+		for sl, r := c.Seek(sk); sl != nil; sl, r = c.Next() {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if r == nil {
+				continue
+			}
+			fs = bytesutil.BytesToSlotBigEndian(sl)
+			roots, err = splitRoots(r)
+			if err != nil {
+				return errors.Wrapf(err, "error parsing packed roots %#x", r)
+			}
+			return nil
+		}
+		// No block found at or above slot — fall back to the head block root.
+		headRoot := tx.Bucket(blocksBucket).Get(headBlockRootKey)
+		if headRoot == nil {
+			return nil
+		}
+		roots = [][32]byte{bytesutil.ToBytes32(headRoot)}
+		return nil
+	})
+	return fs, roots, err
+}
+
 // FeeRecipientByValidatorID returns the fee recipient for a validator id.
 // `ErrNotFoundFeeRecipient` is returned if the validator id is not found.
 func (s *Store) FeeRecipientByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (common.Address, error) {
@@ -812,7 +857,10 @@ func (s *Store) FeeRecipientByValidatorID(ctx context.Context, id primitives.Val
 	var addr []byte
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(feeRecipientBucket)
-		addr = bkt.Get(bytesutil.Uint64ToBytesBigEndian(uint64(id)))
+		stored := bkt.Get(bytesutil.Uint64ToBytesBigEndian(uint64(id)))
+		if len(stored) > 0 {
+			addr = slices.Clone(stored)
+		}
 		// IF the fee recipient is not found in the standard fee recipient bucket, then
 		// check the registration bucket. The fee recipient may be there.
 		// This is to resolve imcompatility until we fully migrate to the registration bucket.
@@ -826,7 +874,7 @@ func (s *Store) FeeRecipientByValidatorID(ctx context.Context, id primitives.Val
 			if err := decode(ctx, enc, reg); err != nil {
 				return err
 			}
-			addr = reg.FeeRecipient
+			addr = slices.Clone(reg.FeeRecipient)
 		}
 		return nil
 	})
@@ -1247,6 +1295,12 @@ func unmarshalBlock(_ context.Context, enc []byte) (interfaces.ReadOnlySignedBea
 		if err := rawBlock.UnmarshalSSZ(enc[len(fuluBlindKey):]); err != nil {
 			return nil, errors.Wrap(err, "could not unmarshal blinded Fulu block")
 		}
+	case hasGloasKey(enc):
+		// post Gloas we save the full beacon block as EIP-7732 separates beacon block and payload
+		rawBlock = &ethpb.SignedBeaconBlockGloas{}
+		if err := rawBlock.UnmarshalSSZ(enc[len(gloasKey):]); err != nil {
+			return nil, errors.Wrap(err, "could not unmarshal Gloas block")
+		}
 	default:
 		// Marshal block bytes to phase 0 beacon block.
 		rawBlock = &ethpb.SignedBeaconBlock{}
@@ -1276,6 +1330,11 @@ func encodeBlock(blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
 
 func keyForBlock(blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
 	v := blk.Version()
+
+	if v >= version.Gloas {
+		// Gloas blocks are never blinded (no execution payload in block body).
+		return gloasKey, nil
+	}
 
 	if v >= version.Fulu {
 		if blk.IsBlinded() {

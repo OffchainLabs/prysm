@@ -6,10 +6,12 @@ package state
 import (
 	"context"
 	"encoding/json"
+	"iter"
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -23,8 +25,6 @@ type BeaconState interface {
 	SpecParametersProvider
 	ReadOnlyBeaconState
 	WriteOnlyBeaconState
-	Copy() BeaconState
-	CopyAllTries()
 	Defragment()
 	HashTreeRoot(ctx context.Context) ([32]byte, error)
 	Prover
@@ -43,6 +43,8 @@ type Prover interface {
 	FinalizedRootProof(ctx context.Context) ([][]byte, error)
 	CurrentSyncCommitteeProof(ctx context.Context) ([][]byte, error)
 	NextSyncCommitteeProof(ctx context.Context) ([][]byte, error)
+
+	ProofByFieldIndex(ctx context.Context, f types.FieldIndex) ([][]byte, error)
 }
 
 // ReadOnlyBeaconState defines a struct which only has read access to beacon state methods.
@@ -63,8 +65,10 @@ type ReadOnlyBeaconState interface {
 	ReadOnlyDeposits
 	ReadOnlyConsolidations
 	ReadOnlyProposerLookahead
+	readOnlyGloasFields
 	ToProtoUnsafe() any
 	ToProto() any
+	Copy() BeaconState
 	GenesisTime() time.Time
 	GenesisValidatorsRoot() []byte
 	Slot() primitives.Slot
@@ -79,6 +83,7 @@ type ReadOnlyBeaconState interface {
 	IsNil() bool
 	Version() int
 	LatestExecutionPayloadHeader() (interfaces.ExecutionData, error)
+	ProposerDependentRoot(slot primitives.Slot) ([32]byte, error)
 }
 
 // WriteOnlyBeaconState defines a struct which only has write access to beacon state methods.
@@ -98,6 +103,7 @@ type WriteOnlyBeaconState interface {
 	WriteOnlyWithdrawals
 	WriteOnlyDeposits
 	WriteOnlyProposerLookahead
+	writeOnlyGloasFields
 	SetGenesisTime(val time.Time) error
 	SetGenesisValidatorsRoot(val []byte) error
 	SetSlot(val primitives.Slot) error
@@ -122,7 +128,6 @@ type ReadOnlyValidator interface {
 	GetWithdrawalCredentials() []byte
 	Copy() *ethpb.Validator
 	Slashed() bool
-	IsNil() bool
 	HasETH1WithdrawalCredentials() bool
 	HasCompoundingWithdrawalCredentials() bool
 	HasExecutionWithdrawalCredentials() bool
@@ -132,6 +137,7 @@ type ReadOnlyValidator interface {
 type ReadOnlyValidators interface {
 	Validators() []*ethpb.Validator
 	ValidatorsReadOnly() []ReadOnlyValidator
+	ValidatorsReadOnlySeq() iter.Seq2[primitives.ValidatorIndex, ReadOnlyValidator]
 	ValidatorAtIndex(idx primitives.ValidatorIndex) (*ethpb.Validator, error)
 	ValidatorAtIndexReadOnly(idx primitives.ValidatorIndex) (ReadOnlyValidator, error)
 	ValidatorIndexByPubkey(key [fieldparams.BLSPubkeyLength]byte) (primitives.ValidatorIndex, bool)
@@ -139,7 +145,6 @@ type ReadOnlyValidators interface {
 	PubkeyAtIndex(idx primitives.ValidatorIndex) [fieldparams.BLSPubkeyLength]byte
 	AggregateKeyFromIndices(idxs []uint64) (bls.PublicKey, error)
 	NumValidators() int
-	ReadFromEveryValidator(f func(idx int, val ReadOnlyValidator) error) error
 }
 
 // ReadOnlyBalances defines a struct which only has read access to balances methods.
@@ -147,6 +152,8 @@ type ReadOnlyBalances interface {
 	Balances() []uint64
 	BalanceAtIndex(idx primitives.ValidatorIndex) (uint64, error)
 	BalancesLength() int
+	EffectiveBalanceSum([]primitives.ValidatorIndex) (uint64, error)
+	EffectiveBalanceAtIndex(idx primitives.ValidatorIndex) (uint64, error)
 }
 
 // ReadOnlyCheckpoint defines a struct which only has read access to checkpoint methods.
@@ -233,6 +240,7 @@ type ReadOnlyDeposits interface {
 	DepositBalanceToConsume() (primitives.Gwei, error)
 	DepositRequestsStartIndex() (uint64, error)
 	PendingDeposits() ([]*ethpb.PendingDeposit, error)
+	IsPendingValidator(pubkey []byte) (bool, error)
 }
 
 type ReadOnlyConsolidations interface {
@@ -264,7 +272,7 @@ type WriteOnlyEth1Data interface {
 	SetEth1DataVotes(val []*ethpb.Eth1Data) error
 	AppendEth1DataVotes(val *ethpb.Eth1Data) error
 	SetEth1DepositIndex(val uint64) error
-	ExitEpochAndUpdateChurn(exitBalance primitives.Gwei) (primitives.Epoch, error)
+	ExitEpochAndUpdateChurn(ctx context.Context, exitBalance primitives.Gwei) (primitives.Epoch, error)
 	ExitEpochAndUpdateChurnForTotalBal(totalActiveBalance primitives.Gwei, exitBalance primitives.Gwei) (primitives.Epoch, error)
 	SetExitBalanceToConsume(val primitives.Gwei) error
 	SetEarliestExitEpoch(val primitives.Epoch) error

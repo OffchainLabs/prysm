@@ -9,6 +9,7 @@ go_library(
         "exit.go",
         "import.go",
         "list.go",
+        "log.go",
         "wallet_utils.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/cmd/validator/accounts",

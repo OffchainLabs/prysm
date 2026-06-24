@@ -12,11 +12,11 @@ jobs:
     - name: Check version consistency
       run: |
         WORKSPACE_VERSION=$(grep 'consensus_spec_version = ' WORKSPACE | sed 's/.*"\(.*\)"/\1/')
-        ETHSPECIFY_VERSION=$(grep '^version:' specrefs/.ethspecify.yml | sed 's/version: //')
+        ETHSPECIFY_VERSION=$(grep '^version:' .ethspecify.yml | sed 's/version: //')
         if [ "$WORKSPACE_VERSION" != "$ETHSPECIFY_VERSION" ]; then
           echo "Version mismatch between WORKSPACE and ethspecify"
           echo "  WORKSPACE: $WORKSPACE_VERSION"
-          echo "  specrefs/.ethspecify.yml: $ETHSPECIFY_VERSION"
+          echo "  .ethspecify.yml: $ETHSPECIFY_VERSION"
           exit 1
         else
           echo "Versions match: $WORKSPACE_VERSION"
@@ -26,7 +26,7 @@ jobs:
       run: python3 -mpip install ethspecify
 
     - name: Update spec references
-      run: ethspecify process --path=specrefs
+      run: ethspecify
 
     - name: Check for differences
       run: |
@@ -40,4 +40,4 @@ jobs:
         fi
 
     - name: Check spec references
-      run: ethspecify check --path=specrefs
+      run: ethspecify check

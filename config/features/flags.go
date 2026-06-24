@@ -133,9 +133,18 @@ var (
 		Name:  "enable-beacon-rest-api",
 		Usage: "(Experimental): Enables of the beacon REST API when querying a beacon node.",
 	}
+	enableHashtree = &cli.BoolFlag{
+		Name:  "enable-hashtree",
+		Usage: "(Experimental): Enables the hashtree hashing library.",
+	}
 	disableVerboseSigVerification = &cli.BoolFlag{
 		Name:  "disable-verbose-sig-verification",
 		Usage: "Disables identifying invalid signatures if batch verification fails when processing block.",
+	}
+	enableProposerPreprocessing = &cli.BoolFlag{
+		Name:  "enable-proposer-preprocessing",
+		Usage: "Enables proposer pre-processing of blocks before proposing.",
+		Value: false,
 	}
 	prepareAllPayloads = &cli.BoolFlag{
 		Name:  "prepare-all-payloads",
@@ -172,6 +181,10 @@ var (
 		Name:  "enable-experimental-attestation-pool",
 		Usage: "Enables an experimental attestation pool design.",
 	}
+	EnableStateDiff = &cli.BoolFlag{
+		Name:  "enable-state-diff",
+		Usage: "Enables the experimental state diff feature.",
+	}
 	// forceHeadFlag is a flag to force the head of the beacon chain to a specific block.
 	forceHeadFlag = &cli.StringFlag{
 		Name: "sync-from",
@@ -197,10 +210,19 @@ var (
 		Usage: "(Work in progress): Enables the web portal for the validator client.",
 		Value: false,
 	}
-	// disableLastEpochTargets is a flag to disable processing of attestations for old blocks.
-	disableLastEpochTargets = &cli.BoolFlag{
+	// deprecatedDisableLastEpochTargets is a flag to disable processing of attestations for old blocks.
+	deprecatedDisableLastEpochTargets = &cli.BoolFlag{
 		Name:  "disable-last-epoch-targets",
-		Usage: "Disables processing of last epoch targets.",
+		Usage: "Deprecated: disables processing of last epoch targets.",
+	}
+	// ignoreUnviableAttestations flag to skip attestations whose target state is not viable with respect to head (from lagging nodes).
+	ignoreUnviableAttestations = &cli.BoolFlag{
+		Name:  "ignore-unviable-attestations",
+		Usage: "Ignores attestations whose target state is not viable with respect to the current head (avoid expensive state replay from lagging attesters).",
+	}
+	trackEquivocations = &cli.BoolFlag{
+		Name:  "track-equivocations",
+		Usage: "Records proposer equivocations observed on gossip and marks the slot in forkchoice if the equivocation arrives before the configured early deadline.",
 	}
 )
 
@@ -247,8 +269,11 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	disableStakinContractCheck,
 	SaveFullExecutionPayloads,
 	enableStartupOptimistic,
+	ignoreUnviableAttestations,
+	trackEquivocations,
 	enableFullSSZDataLogging,
 	disableVerboseSigVerification,
+	enableProposerPreprocessing,
 	prepareAllPayloads,
 	aggregateFirstInterval,
 	aggregateSecondInterval,
@@ -260,9 +285,10 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	DisableQUIC,
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
+	EnableStateDiff,
 	forceHeadFlag,
 	blacklistRoots,
-	disableLastEpochTargets,
+	enableHashtree,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {

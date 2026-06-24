@@ -1,7 +1,6 @@
 package client
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -37,7 +36,7 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 	defer span.End()
 	span.SetAttributes(trace.StringAttribute("validator", fmt.Sprintf("%#x", pubKey)))
 
-	v.waitOneThirdOrValidBlock(ctx, slot)
+	v.waitUntilAttestationDueOrValidBlock(ctx, slot)
 
 	var b strings.Builder
 	if err := b.WriteByte(byte(iface.RoleAttester)); err != nil {
@@ -71,17 +70,9 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		return
 	}
 
-	committeeIndex := duty.CommitteeIndex
 	postElectra := slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch
-	if postElectra {
-		committeeIndex = 0
-	}
 
-	req := &ethpb.AttestationDataRequest{
-		Slot:           slot,
-		CommitteeIndex: committeeIndex,
-	}
-	data, err := v.validatorClient.AttestationData(ctx, req)
+	data, err := v.getAttestationData(ctx, slot, duty.CommitteeIndex)
 	if err != nil {
 		log.WithError(err).Error("Could not request attestation to sign at slot")
 		if v.emitAccountMetrics {
@@ -200,19 +191,15 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 
 // Given the validator public key, this gets the validator assignment.
 func (v *validator) duty(pubKey [fieldparams.BLSPubkeyLength]byte) (*ethpb.ValidatorDuty, error) {
-	v.dutiesLock.RLock()
-	defer v.dutiesLock.RUnlock()
-	if v.duties == nil {
+	snap := v.duties.snapshot()
+	if !snap.isInitialized() {
 		return nil, errors.New("no duties for validators")
 	}
-
-	for _, duty := range v.duties.CurrentEpochDuties {
-		if bytes.Equal(pubKey[:], duty.PublicKey) {
-			return duty, nil
-		}
+	d, ok := snap.currentDuty(pubKey)
+	if !ok {
+		return nil, fmt.Errorf("pubkey %#x not in duties", bytesutil.Trunc(pubKey[:]))
 	}
-
-	return nil, fmt.Errorf("pubkey %#x not in duties", bytesutil.Trunc(pubKey[:]))
+	return d, nil
 }
 
 // Given validator's public key, this function returns the signature of an attestation data and its signing root.
@@ -267,12 +254,12 @@ func (v *validator) setHighestSlot(slot primitives.Slot) {
 	}
 }
 
-// waitOneThirdOrValidBlock waits until (a) or (b) whichever comes first:
+// waitUntilAttestationDueOrValidBlock waits until (a) or (b) whichever comes first:
 //
 //	(a) the validator has received a valid block that is the same slot as input slot
-//	(b) one-third of the slot has transpired (SECONDS_PER_SLOT / 3 seconds after the start of slot)
-func (v *validator) waitOneThirdOrValidBlock(ctx context.Context, slot primitives.Slot) {
-	ctx, span := trace.StartSpan(ctx, "validator.waitOneThirdOrValidBlock")
+//	(b) the configured attestation due time has transpired (as basis points of the slot duration)
+func (v *validator) waitUntilAttestationDueOrValidBlock(ctx context.Context, slot primitives.Slot) {
+	ctx, span := trace.StartSpan(ctx, "validator.waitUntilAttestationDueOrValidBlock")
 	defer span.End()
 
 	// Don't need to wait if requested slot is the same as highest valid slot.
@@ -280,7 +267,12 @@ func (v *validator) waitOneThirdOrValidBlock(ctx context.Context, slot primitive
 		return
 	}
 
-	finalTime, err := v.slotComponentDeadline(slot, params.BeaconConfig().AttestationDueBPS)
+	cfg := params.BeaconConfig()
+	component := cfg.AttestationDueBPS
+	if slots.ToEpoch(slot) >= cfg.GloasForkEpoch {
+		component = cfg.AttestationDueBPSGloas
+	}
+	finalTime, err := v.slotComponentDeadline(slot, component)
 	if err != nil {
 		log.WithError(err).WithField("slot", slot).Error("Slot overflows, unable to wait for attestation deadline")
 		return

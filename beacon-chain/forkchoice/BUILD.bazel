@@ -20,6 +20,7 @@ go_library(
         "//config/fieldparams:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/forkchoice:go_default_library",
+        "//consensus-types/interfaces:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
     ],

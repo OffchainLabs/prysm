@@ -80,8 +80,9 @@ func TestService_Start_OnlyStartsOnce(t *testing.T) {
 	}()
 	var vr [32]byte
 	require.NoError(t, cs.SetClock(startup.NewClock(time.Now(), vr)))
-	time.Sleep(time.Second * 2)
-	assert.Equal(t, true, s.started, "Expected service to be started")
+	require.Eventually(t, func() bool {
+		return s.started
+	}, 5*time.Second, 100*time.Millisecond, "Expected service to be started")
 	s.Start()
 	require.LogsContain(t, hook, "Attempted to start p2p service when it was already started")
 	require.NoError(t, s.Stop())
@@ -260,17 +261,9 @@ func TestListenForNewNodes(t *testing.T) {
 	err = cs.SetClock(startup.NewClock(genesisTime, gvr))
 	require.NoError(t, err, "Could not set clock in service")
 
-	actualPeerCount := len(s.host.Network().Peers())
-	for range 40 {
-		if actualPeerCount == peerCount {
-			break
-		}
-
-		time.Sleep(100 * time.Millisecond)
-		actualPeerCount = len(s.host.Network().Peers())
-	}
-
-	assert.Equal(t, peerCount, actualPeerCount, "Not all peers added to peerstore")
+	require.Eventually(t, func() bool {
+		return len(s.host.Network().Peers()) == peerCount
+	}, 5*time.Second, 100*time.Millisecond, "Not all peers added to peerstore")
 
 	err = s.Stop()
 	require.NoError(t, err, "Failed to stop service")

@@ -2,6 +2,7 @@ package kv
 
 import (
 	"context"
+	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -33,6 +34,9 @@ func (s *Store) LastArchivedRoot(ctx context.Context) [32]byte {
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(stateSlotIndicesBucket)
 		_, blockRoot = bkt.Cursor().Last()
+		if len(blockRoot) > 0 {
+			blockRoot = slices.Clone(blockRoot)
+		}
 		return nil
 	}); err != nil { // This view never returns an error, but we'll handle anyway for sanity.
 		panic(err) // lint:nopanic -- View never returns an error.
@@ -51,6 +55,9 @@ func (s *Store) ArchivedPointRoot(ctx context.Context, slot primitives.Slot) [32
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(stateSlotIndicesBucket)
 		blockRoot = bucket.Get(bytesutil.SlotToBytesBigEndian(slot))
+		if len(blockRoot) > 0 {
+			blockRoot = slices.Clone(blockRoot)
+		}
 		return nil
 	}); err != nil { // This view never returns an error, but we'll handle anyway for sanity.
 		panic(err) // lint:nopanic -- View never returns an error.

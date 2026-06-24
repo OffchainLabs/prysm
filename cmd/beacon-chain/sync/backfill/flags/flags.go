@@ -35,9 +35,4 @@ var (
 			"This has a multiplicative effect with " + backfillBatchSizeName + ".",
 		Value: 2,
 	}
-	BackfillOldestSlot = &cli.Uint64Flag{
-		Name: "backfill-oldest-slot",
-		Usage: "Specifies the oldest slot that backfill should download. " +
-			"If this value is greater than current_slot - MIN_EPOCHS_FOR_BLOCK_REQUESTS, it will be ignored with a warning log.",
-	}
 )

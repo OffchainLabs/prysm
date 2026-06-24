@@ -128,18 +128,18 @@ func (mr *MockValidatorMockRecorder) EventsChan() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EventsChan", reflect.TypeOf((*MockValidator)(nil).EventsChan))
 }
 
-// FindHealthyHost mocks base method.
-func (m *MockValidator) FindHealthyHost(arg0 context.Context) bool {
+// EnsureReady mocks base method.
+func (m *MockValidator) EnsureReady(arg0 context.Context) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindHealthyHost", arg0)
+	ret := m.ctrl.Call(m, "EnsureReady", arg0)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
-// FindHealthyHost indicates an expected call of FindHealthyHost.
-func (mr *MockValidatorMockRecorder) FindHealthyHost(arg0 any) *gomock.Call {
+// EnsureReady indicates an expected call of EnsureReady.
+func (mr *MockValidatorMockRecorder) EnsureReady(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindHealthyHost", reflect.TypeOf((*MockValidator)(nil).FindHealthyHost), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureReady", reflect.TypeOf((*MockValidator)(nil).EnsureReady), arg0)
 }
 
 // GenesisTime mocks base method.
@@ -462,6 +462,18 @@ func (m *MockValidator) SubmitSyncCommitteeMessage(arg0 context.Context, arg1 pr
 func (mr *MockValidatorMockRecorder) SubmitSyncCommitteeMessage(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSyncCommitteeMessage", reflect.TypeOf((*MockValidator)(nil).SubmitSyncCommitteeMessage), arg0, arg1, arg2)
+}
+
+// SubmitPayloadAttestation mocks base method.
+func (m *MockValidator) SubmitPayloadAttestation(arg0 context.Context, arg1 primitives.Slot, arg2 [48]byte) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SubmitPayloadAttestation", arg0, arg1, arg2)
+}
+
+// SubmitPayloadAttestation indicates an expected call of SubmitPayloadAttestation.
+func (mr *MockValidatorMockRecorder) SubmitPayloadAttestation(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitPayloadAttestation", reflect.TypeOf((*MockValidator)(nil).SubmitPayloadAttestation), arg0, arg1, arg2)
 }
 
 // UpdateDomainDataCaches mocks base method.

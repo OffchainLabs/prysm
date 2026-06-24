@@ -91,12 +91,24 @@ type MockDataColumnsVerifier struct {
 	ErrSidecarInclusionProven       error
 	ErrSidecarKzgProofVerified      error
 	ErrSidecarProposerExpected      error
+	verifiedColumns                 []blocks.RODataColumn
 }
 
 var _ DataColumnsVerifier = &MockDataColumnsVerifier{}
 
+func (m *MockDataColumnsVerifier) AppendRODataColumns(columns ...blocks.RODataColumn) {
+	m.verifiedColumns = append(m.verifiedColumns, columns...)
+}
+
 func (m *MockDataColumnsVerifier) VerifiedRODataColumns() ([]blocks.VerifiedRODataColumn, error) {
-	return []blocks.VerifiedRODataColumn{{}}, nil
+	if len(m.verifiedColumns) > 0 {
+		result := make([]blocks.VerifiedRODataColumn, len(m.verifiedColumns))
+		for i, col := range m.verifiedColumns {
+			result[i] = blocks.VerifiedRODataColumn{RODataColumn: col}
+		}
+		return result, nil
+	}
+	return []blocks.VerifiedRODataColumn{}, nil
 }
 
 func (m *MockDataColumnsVerifier) SatisfyRequirement(_ Requirement) {}

@@ -3,7 +3,9 @@ package peerdas
 import (
 	"sort"
 	"sync"
+	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -26,7 +28,40 @@ var (
 func MinimumColumnCountToReconstruct() uint64 {
 	// If the number of columns is odd, then we need total / 2 + 1 columns to reconstruct.
 	// If the number of columns is even, then we need total / 2 columns to reconstruct.
-	return (params.BeaconConfig().NumberOfColumns + 1) / 2
+	return (fieldparams.NumberOfColumns + 1) / 2
+}
+
+// MinimumCustodyGroupCountToReconstruct returns the minimum number of custody groups needed to
+// custody enough data columns for reconstruction. This accounts for the relationship between
+// custody groups and columns, making it future-proof if these values change.
+// Returns an error if the configuration values are invalid (zero or would cause division by zero).
+func MinimumCustodyGroupCountToReconstruct() (uint64, error) {
+	const numberOfColumns = fieldparams.NumberOfColumns
+	cfg := params.BeaconConfig()
+
+	// Validate configuration values
+	if numberOfColumns == 0 {
+		return 0, errors.New("NumberOfColumns cannot be zero")
+	}
+	if cfg.NumberOfCustodyGroups == 0 {
+		return 0, errors.New("NumberOfCustodyGroups cannot be zero")
+	}
+
+	minimumColumnCount := MinimumColumnCountToReconstruct()
+
+	// Calculate how many columns each custody group represents
+	columnsPerGroup := numberOfColumns / cfg.NumberOfCustodyGroups
+
+	// If there are more groups than columns (columnsPerGroup = 0), this is an invalid configuration
+	// for reconstruction purposes as we cannot determine a meaningful custody group count
+	if columnsPerGroup == 0 {
+		return 0, errors.Errorf("invalid configuration: NumberOfCustodyGroups (%d) exceeds NumberOfColumns (%d)",
+			cfg.NumberOfCustodyGroups, numberOfColumns)
+	}
+
+	// Use ceiling division to ensure we have enough groups to cover the minimum columns
+	// ceiling(a/b) = (a + b - 1) / b
+	return (minimumColumnCount + columnsPerGroup - 1) / columnsPerGroup, nil
 }
 
 // recoverCellsForBlobs reconstructs cells for specified blobs from the given data column sidecars.
@@ -45,9 +80,9 @@ func recoverCellsForBlobs(verifiedRoSidecars []blocks.VerifiedRODataColumn, blob
 			cells := make([]kzg.Cell, 0, sidecarCount)
 
 			for _, sidecar := range verifiedRoSidecars {
-				cell := sidecar.Column[blobIndex]
+				cell := sidecar.Column()[blobIndex]
 				cells = append(cells, kzg.Cell(cell))
-				cellsIndices = append(cellsIndices, sidecar.Index)
+				cellsIndices = append(cellsIndices, sidecar.Index())
 			}
 
 			recoveredCells, err := kzg.RecoverCells(cellsIndices, cells)
@@ -82,9 +117,9 @@ func recoverCellsAndProofsForBlobs(verifiedRoSidecars []blocks.VerifiedRODataCol
 			cells := make([]kzg.Cell, 0, sidecarCount)
 
 			for _, sidecar := range verifiedRoSidecars {
-				cell := sidecar.Column[blobIndex]
+				cell := sidecar.Column()[blobIndex]
 				cells = append(cells, kzg.Cell(cell))
-				cellsIndices = append(cellsIndices, sidecar.Index)
+				cellsIndices = append(cellsIndices, sidecar.Index())
 			}
 
 			recoveredCells, recoveredProofs, err := kzg.RecoverCellsAndKZGProofs(cellsIndices, cells)
@@ -117,10 +152,10 @@ func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataCol
 	referenceSidecar := verifiedRoSidecars[0]
 
 	// Check if all columns have the same length and are commmitted to the same block.
-	blobCount := len(referenceSidecar.Column)
+	blobCount := len(referenceSidecar.Column())
 	blockRoot := referenceSidecar.BlockRoot()
 	for _, sidecar := range verifiedRoSidecars[1:] {
-		if len(sidecar.Column) != blobCount {
+		if len(sidecar.Column()) != blobCount {
 			return nil, ErrColumnLengthsDiffer
 		}
 
@@ -137,7 +172,7 @@ func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataCol
 
 	// Sort the input sidecars by index.
 	sort.Slice(verifiedRoSidecars, func(i, j int) bool {
-		return verifiedRoSidecars[i].Index < verifiedRoSidecars[j].Index
+		return verifiedRoSidecars[i].Index() < verifiedRoSidecars[j].Index()
 	})
 
 	// Recover cells and compute proofs in parallel.
@@ -175,9 +210,9 @@ func reconstructIfNeeded(verifiedDataColumnSidecars []blocks.VerifiedRODataColum
 	}
 
 	// Check if the sidecars are sorted by index and do not contain duplicates.
-	previousColumnIndex := verifiedDataColumnSidecars[0].Index
+	previousColumnIndex := verifiedDataColumnSidecars[0].Index()
 	for _, dataColumnSidecar := range verifiedDataColumnSidecars[1:] {
-		columnIndex := dataColumnSidecar.Index
+		columnIndex := dataColumnSidecar.Index()
 		if columnIndex <= previousColumnIndex {
 			return nil, ErrDataColumnSidecarsNotSortedByIndex
 		}
@@ -192,7 +227,7 @@ func reconstructIfNeeded(verifiedDataColumnSidecars []blocks.VerifiedRODataColum
 	}
 
 	// If all column sidecars corresponding to (non-extended) blobs are present, no need to reconstruct.
-	if verifiedDataColumnSidecars[cellsPerBlob-1].Index == uint64(cellsPerBlob-1) {
+	if verifiedDataColumnSidecars[cellsPerBlob-1].Index() == uint64(cellsPerBlob-1) {
 		return verifiedDataColumnSidecars, nil
 	}
 
@@ -253,7 +288,8 @@ func ReconstructBlobSidecars(block blocks.ROBlock, verifiedDataColumnSidecars []
 
 // ComputeCellsAndProofsFromFlat computes the cells and proofs from blobs and cell flat proofs.
 func ComputeCellsAndProofsFromFlat(blobs [][]byte, cellProofs [][]byte) ([][]kzg.Cell, [][]kzg.Proof, error) {
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	const numberOfColumns = fieldparams.NumberOfColumns
+
 	blobCount := uint64(len(blobs))
 	cellProofsCount := uint64(len(cellProofs))
 
@@ -262,78 +298,131 @@ func ComputeCellsAndProofsFromFlat(blobs [][]byte, cellProofs [][]byte) ([][]kzg
 		return nil, nil, ErrBlobsCellsProofsMismatch
 	}
 
-	cellsPerBlob := make([][]kzg.Cell, 0, blobCount)
-	proofsPerBlob := make([][]kzg.Proof, 0, blobCount)
+	var wg errgroup.Group
+
+	cellsPerBlob := make([][]kzg.Cell, blobCount)
+	proofsPerBlob := make([][]kzg.Proof, blobCount)
+
 	for i, blob := range blobs {
-		var kzgBlob kzg.Blob
-		if copy(kzgBlob[:], blob) != len(kzgBlob) {
-			return nil, nil, errors.New("wrong blob size - should never happen")
-		}
-
-		// Compute the extended cells from the (non-extended) blob.
-		cells, err := kzg.ComputeCells(&kzgBlob)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "compute cells")
-		}
-
-		var proofs []kzg.Proof
-		for idx := uint64(i) * numberOfColumns; idx < (uint64(i)+1)*numberOfColumns; idx++ {
-			var kzgProof kzg.Proof
-			if copy(kzgProof[:], cellProofs[idx]) != len(kzgProof) {
-				return nil, nil, errors.New("wrong KZG proof size - should never happen")
+		wg.Go(func() error {
+			var kzgBlob kzg.Blob
+			if copy(kzgBlob[:], blob) != len(kzgBlob) {
+				return errors.New("wrong blob size - should never happen")
 			}
 
-			proofs = append(proofs, kzgProof)
-		}
+			// Compute the extended cells from the (non-extended) blob.
+			cells, err := kzg.ComputeCells(&kzgBlob)
+			if err != nil {
+				return errors.Wrap(err, "compute cells")
+			}
 
-		cellsPerBlob = append(cellsPerBlob, cells)
-		proofsPerBlob = append(proofsPerBlob, proofs)
+			proofs := make([]kzg.Proof, 0, numberOfColumns)
+			for idx := uint64(i) * numberOfColumns; idx < (uint64(i)+1)*numberOfColumns; idx++ {
+				var kzgProof kzg.Proof
+				if copy(kzgProof[:], cellProofs[idx]) != len(kzgProof) {
+					return errors.New("wrong KZG proof size - should never happen")
+				}
+
+				proofs = append(proofs, kzgProof)
+			}
+
+			cellsPerBlob[i] = cells
+			proofsPerBlob[i] = proofs
+			return nil
+		})
+	}
+
+	if err := wg.Wait(); err != nil {
+		return nil, nil, err
 	}
 
 	return cellsPerBlob, proofsPerBlob, nil
 }
 
+// StructuredCellsAndProofs packages the results of computing cells and proofs from structured blobs.
+type StructuredCellsAndProofs struct {
+	Included      bitfield.Bitlist
+	CellsPerBlob  [][]kzg.Cell
+	ProofsPerBlob [][]kzg.Proof
+}
+
 // ComputeCellsAndProofsFromStructured computes the cells and proofs from blobs and cell proofs.
-func ComputeCellsAndProofsFromStructured(blobsAndProofs []*pb.BlobAndProofV2) ([][]kzg.Cell, [][]kzg.Proof, error) {
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-
-	cellsPerBlob := make([][]kzg.Cell, 0, len(blobsAndProofs))
-	proofsPerBlob := make([][]kzg.Proof, 0, len(blobsAndProofs))
-	for _, blobAndProof := range blobsAndProofs {
-		if blobAndProof == nil {
-			return nil, nil, ErrNilBlobAndProof
+// commitmentCount is required to return the correct sized bitlist even if we see a nil slice of blobsAndProofs.
+func ComputeCellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs []*pb.BlobAndProofV2) (_ StructuredCellsAndProofs, err error) {
+	start := time.Now()
+	defer func() {
+		// Only record the computation time on success, so error returns don't pollute the metric.
+		if err == nil {
+			cellsAndProofsFromStructuredComputationTime.Observe(float64(time.Since(start).Milliseconds()))
 		}
+	}()
 
-		var kzgBlob kzg.Blob
-		if copy(kzgBlob[:], blobAndProof.Blob) != len(kzgBlob) {
-			return nil, nil, errors.New("wrong blob size - should never happen")
-		}
-
-		// Compute the extended cells from the (non-extended) blob.
-		cells, err := kzg.ComputeCells(&kzgBlob)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "compute cells")
-		}
-
-		kzgProofs := make([]kzg.Proof, 0, numberOfColumns)
-		for _, kzgProofBytes := range blobAndProof.KzgProofs {
-			if len(kzgProofBytes) != kzg.BytesPerProof {
-				return nil, nil, errors.New("wrong KZG proof size - should never happen")
-			}
-
-			var kzgProof kzg.Proof
-			if copy(kzgProof[:], kzgProofBytes) != len(kzgProof) {
-				return nil, nil, errors.New("wrong copied KZG proof size - should never happen")
-			}
-
-			kzgProofs = append(kzgProofs, kzgProof)
-		}
-
-		cellsPerBlob = append(cellsPerBlob, cells)
-		proofsPerBlob = append(proofsPerBlob, kzgProofs)
+	if uint64(len(blobsAndProofs)) > commitmentCount {
+		return StructuredCellsAndProofs{}, errors.Errorf("blobs and proofs length (%d) exceeds commitment count (%d)", len(blobsAndProofs), commitmentCount)
 	}
 
-	return cellsPerBlob, proofsPerBlob, nil
+	var wg errgroup.Group
+
+	var blobsPresent int
+	for _, blobAndProof := range blobsAndProofs {
+		if blobAndProof != nil {
+			blobsPresent++
+		}
+	}
+	cellsPerBlob := make([][]kzg.Cell, blobsPresent)
+	proofsPerBlob := make([][]kzg.Proof, blobsPresent)
+	included := bitfield.NewBitlist(commitmentCount)
+
+	var j int
+	for i, blobAndProof := range blobsAndProofs {
+		if blobAndProof == nil {
+			continue
+		}
+		included.SetBitAt(uint64(i), true)
+
+		compactIndex := j
+		wg.Go(func() error {
+			var kzgBlob kzg.Blob
+			if copy(kzgBlob[:], blobAndProof.Blob) != len(kzgBlob) {
+				return errors.New("wrong blob size - should never happen")
+			}
+
+			// Compute the extended cells from the (non-extended) blob.
+			cells, err := kzg.ComputeCells(&kzgBlob)
+			if err != nil {
+				return errors.Wrap(err, "compute cells")
+			}
+
+			kzgProofs := make([]kzg.Proof, 0, fieldparams.NumberOfColumns)
+			for _, kzgProofBytes := range blobAndProof.KzgProofs {
+				if len(kzgProofBytes) != kzg.BytesPerProof {
+					return errors.New("wrong KZG proof size - should never happen")
+				}
+
+				var kzgProof kzg.Proof
+				if copy(kzgProof[:], kzgProofBytes) != len(kzgProof) {
+					return errors.New("wrong copied KZG proof size - should never happen")
+				}
+
+				kzgProofs = append(kzgProofs, kzgProof)
+			}
+
+			cellsPerBlob[compactIndex] = cells
+			proofsPerBlob[compactIndex] = kzgProofs
+			return nil
+		})
+		j++
+	}
+
+	if err = wg.Wait(); err != nil {
+		return StructuredCellsAndProofs{}, errors.Wrap(err, "wait for ComputeCells")
+	}
+
+	return StructuredCellsAndProofs{
+		Included:      included,
+		CellsPerBlob:  cellsPerBlob,
+		ProofsPerBlob: proofsPerBlob,
+	}, nil
 }
 
 // ReconstructBlobs reconstructs blobs from data column sidecars without computing KZG proofs or creating sidecars.
@@ -357,9 +446,9 @@ func ReconstructBlobs(verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, 
 	}
 
 	// Check if the sidecars are sorted by index and do not contain duplicates.
-	previousColumnIndex := verifiedDataColumnSidecars[0].Index
+	previousColumnIndex := verifiedDataColumnSidecars[0].Index()
 	for _, dataColumnSidecar := range verifiedDataColumnSidecars[1:] {
-		columnIndex := dataColumnSidecar.Index
+		columnIndex := dataColumnSidecar.Index()
 		if columnIndex <= previousColumnIndex {
 			return nil, ErrDataColumnSidecarsNotSortedByIndex
 		}
@@ -375,7 +464,7 @@ func ReconstructBlobs(verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, 
 
 	// Verify that the actual blob count from the first sidecar matches the expected count
 	referenceSidecar := verifiedDataColumnSidecars[0]
-	actualBlobCount := len(referenceSidecar.Column)
+	actualBlobCount := len(referenceSidecar.Column())
 	if actualBlobCount != blobCount {
 		return nil, errors.Errorf("blob count mismatch: expected %d, got %d", blobCount, actualBlobCount)
 	}
@@ -390,7 +479,7 @@ func ReconstructBlobs(verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, 
 	// Check if all columns have the same length and are committed to the same block.
 	blockRoot := referenceSidecar.BlockRoot()
 	for _, sidecar := range verifiedDataColumnSidecars[1:] {
-		if len(sidecar.Column) != blobCount {
+		if len(sidecar.Column()) != blobCount {
 			return nil, ErrColumnLengthsDiffer
 		}
 
@@ -400,7 +489,7 @@ func ReconstructBlobs(verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, 
 	}
 
 	// Check if we have all non-extended columns (0..63) - if so, no reconstruction needed.
-	hasAllNonExtendedColumns := verifiedDataColumnSidecars[cellsPerBlob-1].Index == uint64(cellsPerBlob-1)
+	hasAllNonExtendedColumns := verifiedDataColumnSidecars[cellsPerBlob-1].Index() == uint64(cellsPerBlob-1)
 
 	var reconstructedCells map[int][]kzg.Cell
 	if !hasAllNonExtendedColumns {
@@ -422,7 +511,7 @@ func ReconstructBlobs(verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, 
 			var cell []byte
 			if hasAllNonExtendedColumns {
 				// Use existing cells from sidecars
-				cell = verifiedDataColumnSidecars[columnIndex].Column[blobIndex]
+				cell = verifiedDataColumnSidecars[columnIndex].Column()[blobIndex]
 			} else {
 				// Use reconstructed cells
 				cell = reconstructedCells[blobIndex][columnIndex][:]
@@ -443,8 +532,14 @@ func ReconstructBlobs(verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, 
 func blobSidecarsFromDataColumnSidecars(roBlock blocks.ROBlock, dataColumnSidecars []blocks.VerifiedRODataColumn, indices []int) ([]*blocks.VerifiedROBlob, error) {
 	referenceSidecar := dataColumnSidecars[0]
 
-	kzgCommitments := referenceSidecar.KzgCommitments
-	signedBlockHeader := referenceSidecar.SignedBlockHeader
+	kzgCommitments, err := referenceSidecar.KzgCommitments()
+	if err != nil {
+		return nil, errors.Wrap(err, "kzg commitments")
+	}
+	signedBlockHeader, err := referenceSidecar.SignedBlockHeader()
+	if err != nil {
+		return nil, errors.Wrap(err, "signed block header")
+	}
 
 	verifiedROBlobs := make([]*blocks.VerifiedROBlob, 0, len(indices))
 	for _, blobIndex := range indices {
@@ -453,7 +548,7 @@ func blobSidecarsFromDataColumnSidecars(roBlock blocks.ROBlock, dataColumnSideca
 		// Compute the content of the blob.
 		for columnIndex := range fieldparams.CellsPerBlob {
 			dataColumnSidecar := dataColumnSidecars[columnIndex]
-			cell := dataColumnSidecar.Column[blobIndex]
+			cell := dataColumnSidecar.Column()[blobIndex]
 			if copy(blob[kzg.BytesPerCell*columnIndex:], cell) != kzg.BytesPerCell {
 				return nil, errors.New("wrong cell size - should never happen")
 			}

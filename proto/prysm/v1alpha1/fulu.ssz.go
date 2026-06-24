@@ -654,10 +654,10 @@ func (b *BlindedBeaconBlockFulu) MarshalSSZTo(buf []byte) (dst []byte, err error
 	offset := int(84)
 
 	// Field (0) 'Slot'
-	dst = ssz.MarshalUint64(dst, uint64(b.Slot))
+	dst = ssz.MarshalUint(dst, b.Slot)
 
 	// Field (1) 'ProposerIndex'
-	dst = ssz.MarshalUint64(dst, uint64(b.ProposerIndex))
+	dst = ssz.MarshalUint(dst, b.ProposerIndex)
 
 	// Field (2) 'ParentRoot'
 	if size := len(b.ParentRoot); size != 32 {
@@ -700,10 +700,10 @@ func (b *BlindedBeaconBlockFulu) UnmarshalSSZ(buf []byte) error {
 	var o4 uint64
 
 	// Field (0) 'Slot'
-	b.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	b.Slot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[0:8])
 
 	// Field (1) 'ProposerIndex'
-	b.ProposerIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+	b.ProposerIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[8:16])
 
 	// Field (2) 'ParentRoot'
 	if cap(b.ParentRoot) == 0 {
@@ -762,10 +762,10 @@ func (b *BlindedBeaconBlockFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'Slot'
-	hh.PutUint64(uint64(b.Slot))
+	ssz.PutUint(hh, b.Slot)
 
 	// Field (1) 'ProposerIndex'
-	hh.PutUint64(uint64(b.ProposerIndex))
+	ssz.PutUint(hh, b.ProposerIndex)
 
 	// Field (2) 'ParentRoot'
 	if size := len(b.ParentRoot); size != 32 {
@@ -801,7 +801,7 @@ func (b *BeaconStateFulu) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	offset := int(2737225)
 
 	// Field (0) 'GenesisTime'
-	dst = ssz.MarshalUint64(dst, b.GenesisTime)
+	dst = ssz.MarshalUint(dst, b.GenesisTime)
 
 	// Field (1) 'GenesisValidatorsRoot'
 	if size := len(b.GenesisValidatorsRoot); size != 32 {
@@ -811,7 +811,7 @@ func (b *BeaconStateFulu) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = append(dst, b.GenesisValidatorsRoot...)
 
 	// Field (2) 'Slot'
-	dst = ssz.MarshalUint64(dst, uint64(b.Slot))
+	dst = ssz.MarshalUint(dst, b.Slot)
 
 	// Field (3) 'Fork'
 	if b.Fork == nil {
@@ -872,7 +872,7 @@ func (b *BeaconStateFulu) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	offset += len(b.Eth1DataVotes) * 72
 
 	// Field (10) 'Eth1DepositIndex'
-	dst = ssz.MarshalUint64(dst, b.Eth1DepositIndex)
+	dst = ssz.MarshalUint(dst, b.Eth1DepositIndex)
 
 	// Offset (11) 'Validators'
 	dst = ssz.WriteOffset(dst, offset)
@@ -901,7 +901,7 @@ func (b *BeaconStateFulu) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		return
 	}
 	for ii := 0; ii < 8192; ii++ {
-		dst = ssz.MarshalUint64(dst, b.Slashings[ii])
+		dst = ssz.MarshalUint(dst, b.Slashings[ii])
 	}
 
 	// Offset (15) 'PreviousEpochParticipation'
@@ -971,32 +971,32 @@ func (b *BeaconStateFulu) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	offset += b.LatestExecutionPayloadHeader.SizeSSZ()
 
 	// Field (25) 'NextWithdrawalIndex'
-	dst = ssz.MarshalUint64(dst, b.NextWithdrawalIndex)
+	dst = ssz.MarshalUint(dst, b.NextWithdrawalIndex)
 
 	// Field (26) 'NextWithdrawalValidatorIndex'
-	dst = ssz.MarshalUint64(dst, uint64(b.NextWithdrawalValidatorIndex))
+	dst = ssz.MarshalUint(dst, b.NextWithdrawalValidatorIndex)
 
 	// Offset (27) 'HistoricalSummaries'
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(b.HistoricalSummaries) * 64
 
 	// Field (28) 'DepositRequestsStartIndex'
-	dst = ssz.MarshalUint64(dst, b.DepositRequestsStartIndex)
+	dst = ssz.MarshalUint(dst, b.DepositRequestsStartIndex)
 
 	// Field (29) 'DepositBalanceToConsume'
-	dst = ssz.MarshalUint64(dst, uint64(b.DepositBalanceToConsume))
+	dst = ssz.MarshalUint(dst, b.DepositBalanceToConsume)
 
 	// Field (30) 'ExitBalanceToConsume'
-	dst = ssz.MarshalUint64(dst, uint64(b.ExitBalanceToConsume))
+	dst = ssz.MarshalUint(dst, b.ExitBalanceToConsume)
 
 	// Field (31) 'EarliestExitEpoch'
-	dst = ssz.MarshalUint64(dst, uint64(b.EarliestExitEpoch))
+	dst = ssz.MarshalUint(dst, b.EarliestExitEpoch)
 
 	// Field (32) 'ConsolidationBalanceToConsume'
-	dst = ssz.MarshalUint64(dst, uint64(b.ConsolidationBalanceToConsume))
+	dst = ssz.MarshalUint(dst, b.ConsolidationBalanceToConsume)
 
 	// Field (33) 'EarliestConsolidationEpoch'
-	dst = ssz.MarshalUint64(dst, uint64(b.EarliestConsolidationEpoch))
+	dst = ssz.MarshalUint(dst, b.EarliestConsolidationEpoch)
 
 	// Offset (34) 'PendingDeposits'
 	dst = ssz.WriteOffset(dst, offset)
@@ -1016,7 +1016,7 @@ func (b *BeaconStateFulu) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		return
 	}
 	for ii := 0; ii < 64; ii++ {
-		dst = ssz.MarshalUint64(dst, b.ProposerLookahead[ii])
+		dst = ssz.MarshalUint(dst, b.ProposerLookahead[ii])
 	}
 
 	// Field (7) 'HistoricalRoots'
@@ -1060,7 +1060,7 @@ func (b *BeaconStateFulu) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		return
 	}
 	for ii := 0; ii < len(b.Balances); ii++ {
-		dst = ssz.MarshalUint64(dst, b.Balances[ii])
+		dst = ssz.MarshalUint(dst, b.Balances[ii])
 	}
 
 	// Field (15) 'PreviousEpochParticipation'
@@ -1083,7 +1083,7 @@ func (b *BeaconStateFulu) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		return
 	}
 	for ii := 0; ii < len(b.InactivityScores); ii++ {
-		dst = ssz.MarshalUint64(dst, b.InactivityScores[ii])
+		dst = ssz.MarshalUint(dst, b.InactivityScores[ii])
 	}
 
 	// Field (24) 'LatestExecutionPayloadHeader'
@@ -1150,7 +1150,7 @@ func (b *BeaconStateFulu) UnmarshalSSZ(buf []byte) error {
 	var o7, o9, o11, o12, o15, o16, o21, o24, o27, o34, o35, o36 uint64
 
 	// Field (0) 'GenesisTime'
-	b.GenesisTime = ssz.UnmarshallUint64(buf[0:8])
+	b.GenesisTime = ssz.UnmarshallUint[uint64](buf[0:8])
 
 	// Field (1) 'GenesisValidatorsRoot'
 	if cap(b.GenesisValidatorsRoot) == 0 {
@@ -1159,7 +1159,7 @@ func (b *BeaconStateFulu) UnmarshalSSZ(buf []byte) error {
 	b.GenesisValidatorsRoot = append(b.GenesisValidatorsRoot, buf[8:40]...)
 
 	// Field (2) 'Slot'
-	b.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[40:48]))
+	b.Slot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[40:48])
 
 	// Field (3) 'Fork'
 	if b.Fork == nil {
@@ -1218,7 +1218,7 @@ func (b *BeaconStateFulu) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (10) 'Eth1DepositIndex'
-	b.Eth1DepositIndex = ssz.UnmarshallUint64(buf[524544:524552])
+	b.Eth1DepositIndex = ssz.UnmarshallUint[uint64](buf[524544:524552])
 
 	// Offset (11) 'Validators'
 	if o11 = ssz.ReadOffset(buf[524552:524556]); o11 > size || o9 > o11 {
@@ -1240,9 +1240,9 @@ func (b *BeaconStateFulu) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (14) 'Slashings'
-	b.Slashings = ssz.ExtendUint64(b.Slashings, 8192)
+	b.Slashings = ssz.ExtendUint(b.Slashings, 8192)
 	for ii := 0; ii < 8192; ii++ {
-		b.Slashings[ii] = ssz.UnmarshallUint64(buf[2621712:2687248][ii*8 : (ii+1)*8])
+		b.Slashings[ii] = ssz.UnmarshallUint[uint64](buf[2621712:2687248][ii*8 : (ii+1)*8])
 	}
 
 	// Offset (15) 'PreviousEpochParticipation'
@@ -1312,10 +1312,10 @@ func (b *BeaconStateFulu) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (25) 'NextWithdrawalIndex'
-	b.NextWithdrawalIndex = ssz.UnmarshallUint64(buf[2736633:2736641])
+	b.NextWithdrawalIndex = ssz.UnmarshallUint[uint64](buf[2736633:2736641])
 
 	// Field (26) 'NextWithdrawalValidatorIndex'
-	b.NextWithdrawalValidatorIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[2736641:2736649]))
+	b.NextWithdrawalValidatorIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[2736641:2736649])
 
 	// Offset (27) 'HistoricalSummaries'
 	if o27 = ssz.ReadOffset(buf[2736649:2736653]); o27 > size || o24 > o27 {
@@ -1323,22 +1323,22 @@ func (b *BeaconStateFulu) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (28) 'DepositRequestsStartIndex'
-	b.DepositRequestsStartIndex = ssz.UnmarshallUint64(buf[2736653:2736661])
+	b.DepositRequestsStartIndex = ssz.UnmarshallUint[uint64](buf[2736653:2736661])
 
 	// Field (29) 'DepositBalanceToConsume'
-	b.DepositBalanceToConsume = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736661:2736669]))
+	b.DepositBalanceToConsume = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei](buf[2736661:2736669])
 
 	// Field (30) 'ExitBalanceToConsume'
-	b.ExitBalanceToConsume = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736669:2736677]))
+	b.ExitBalanceToConsume = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei](buf[2736669:2736677])
 
 	// Field (31) 'EarliestExitEpoch'
-	b.EarliestExitEpoch = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[2736677:2736685]))
+	b.EarliestExitEpoch = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch](buf[2736677:2736685])
 
 	// Field (32) 'ConsolidationBalanceToConsume'
-	b.ConsolidationBalanceToConsume = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736685:2736693]))
+	b.ConsolidationBalanceToConsume = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei](buf[2736685:2736693])
 
 	// Field (33) 'EarliestConsolidationEpoch'
-	b.EarliestConsolidationEpoch = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[2736693:2736701]))
+	b.EarliestConsolidationEpoch = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch](buf[2736693:2736701])
 
 	// Offset (34) 'PendingDeposits'
 	if o34 = ssz.ReadOffset(buf[2736701:2736705]); o34 > size || o27 > o34 {
@@ -1356,9 +1356,9 @@ func (b *BeaconStateFulu) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (37) 'ProposerLookahead'
-	b.ProposerLookahead = ssz.ExtendUint64(b.ProposerLookahead, 64)
+	b.ProposerLookahead = ssz.ExtendUint(b.ProposerLookahead, 64)
 	for ii := 0; ii < 64; ii++ {
-		b.ProposerLookahead[ii] = ssz.UnmarshallUint64(buf[2736713:2737225][ii*8 : (ii+1)*8])
+		b.ProposerLookahead[ii] = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[2736713:2737225][ii*8 : (ii+1)*8])
 	}
 
 	// Field (7) 'HistoricalRoots'
@@ -1420,9 +1420,9 @@ func (b *BeaconStateFulu) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		b.Balances = ssz.ExtendUint64(b.Balances, num)
+		b.Balances = ssz.ExtendUint(b.Balances, num)
 		for ii := 0; ii < num; ii++ {
-			b.Balances[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+			b.Balances[ii] = ssz.UnmarshallUint[uint64](buf[ii*8 : (ii+1)*8])
 		}
 	}
 
@@ -1457,9 +1457,9 @@ func (b *BeaconStateFulu) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		b.InactivityScores = ssz.ExtendUint64(b.InactivityScores, num)
+		b.InactivityScores = ssz.ExtendUint(b.InactivityScores, num)
 		for ii := 0; ii < num; ii++ {
-			b.InactivityScores[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+			b.InactivityScores[ii] = ssz.UnmarshallUint[uint64](buf[ii*8 : (ii+1)*8])
 		}
 	}
 
@@ -1604,7 +1604,7 @@ func (b *BeaconStateFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'GenesisTime'
-	hh.PutUint64(b.GenesisTime)
+	ssz.PutUint(hh, b.GenesisTime)
 
 	// Field (1) 'GenesisValidatorsRoot'
 	if size := len(b.GenesisValidatorsRoot); size != 32 {
@@ -1614,7 +1614,7 @@ func (b *BeaconStateFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(b.GenesisValidatorsRoot)
 
 	// Field (2) 'Slot'
-	hh.PutUint64(uint64(b.Slot))
+	ssz.PutUint(hh, b.Slot)
 
 	// Field (3) 'Fork'
 	if err = b.Fork.HashTreeRootWith(hh); err != nil {
@@ -1701,7 +1701,7 @@ func (b *BeaconStateFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	}
 
 	// Field (10) 'Eth1DepositIndex'
-	hh.PutUint64(b.Eth1DepositIndex)
+	ssz.PutUint(hh, b.Eth1DepositIndex)
 
 	// Field (11) 'Validators'
 	{
@@ -1727,7 +1727,7 @@ func (b *BeaconStateFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 		subIndx := hh.Index()
 		for _, i := range b.Balances {
-			hh.AppendUint64(i)
+			ssz.AppendUint(hh, i)
 		}
 		hh.FillUpTo32()
 
@@ -1760,7 +1760,7 @@ func (b *BeaconStateFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 		subIndx := hh.Index()
 		for _, i := range b.Slashings {
-			hh.AppendUint64(i)
+			ssz.AppendUint(hh, i)
 		}
 		hh.Merkleize(subIndx)
 	}
@@ -1773,7 +1773,7 @@ func (b *BeaconStateFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 			err = ssz.ErrIncorrectListSize
 			return
 		}
-		hh.PutBytes(b.PreviousEpochParticipation)
+		hh.AppendBytes32(b.PreviousEpochParticipation)
 		hh.MerkleizeWithMixin(elemIndx, byteLen, (1099511627776+31)/32)
 	}
 
@@ -1785,7 +1785,7 @@ func (b *BeaconStateFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 			err = ssz.ErrIncorrectListSize
 			return
 		}
-		hh.PutBytes(b.CurrentEpochParticipation)
+		hh.AppendBytes32(b.CurrentEpochParticipation)
 		hh.MerkleizeWithMixin(elemIndx, byteLen, (1099511627776+31)/32)
 	}
 
@@ -1819,7 +1819,7 @@ func (b *BeaconStateFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 		subIndx := hh.Index()
 		for _, i := range b.InactivityScores {
-			hh.AppendUint64(i)
+			ssz.AppendUint(hh, i)
 		}
 		hh.FillUpTo32()
 
@@ -1843,10 +1843,10 @@ func (b *BeaconStateFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	}
 
 	// Field (25) 'NextWithdrawalIndex'
-	hh.PutUint64(b.NextWithdrawalIndex)
+	ssz.PutUint(hh, b.NextWithdrawalIndex)
 
 	// Field (26) 'NextWithdrawalValidatorIndex'
-	hh.PutUint64(uint64(b.NextWithdrawalValidatorIndex))
+	ssz.PutUint(hh, b.NextWithdrawalValidatorIndex)
 
 	// Field (27) 'HistoricalSummaries'
 	{
@@ -1865,22 +1865,22 @@ func (b *BeaconStateFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	}
 
 	// Field (28) 'DepositRequestsStartIndex'
-	hh.PutUint64(b.DepositRequestsStartIndex)
+	ssz.PutUint(hh, b.DepositRequestsStartIndex)
 
 	// Field (29) 'DepositBalanceToConsume'
-	hh.PutUint64(uint64(b.DepositBalanceToConsume))
+	ssz.PutUint(hh, b.DepositBalanceToConsume)
 
 	// Field (30) 'ExitBalanceToConsume'
-	hh.PutUint64(uint64(b.ExitBalanceToConsume))
+	ssz.PutUint(hh, b.ExitBalanceToConsume)
 
 	// Field (31) 'EarliestExitEpoch'
-	hh.PutUint64(uint64(b.EarliestExitEpoch))
+	ssz.PutUint(hh, b.EarliestExitEpoch)
 
 	// Field (32) 'ConsolidationBalanceToConsume'
-	hh.PutUint64(uint64(b.ConsolidationBalanceToConsume))
+	ssz.PutUint(hh, b.ConsolidationBalanceToConsume)
 
 	// Field (33) 'EarliestConsolidationEpoch'
-	hh.PutUint64(uint64(b.EarliestConsolidationEpoch))
+	ssz.PutUint(hh, b.EarliestConsolidationEpoch)
 
 	// Field (34) 'PendingDeposits'
 	{
@@ -1938,7 +1938,7 @@ func (b *BeaconStateFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 		subIndx := hh.Index()
 		for _, i := range b.ProposerLookahead {
-			hh.AppendUint64(i)
+			ssz.AppendUint(hh, i)
 		}
 		hh.Merkleize(subIndx)
 	}
@@ -1958,7 +1958,7 @@ func (d *DataColumnSidecar) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	offset := int(356)
 
 	// Field (0) 'Index'
-	dst = ssz.MarshalUint64(dst, d.Index)
+	dst = ssz.MarshalUint(dst, d.Index)
 
 	// Offset (1) 'Column'
 	dst = ssz.WriteOffset(dst, offset)
@@ -2047,7 +2047,7 @@ func (d *DataColumnSidecar) UnmarshalSSZ(buf []byte) error {
 	var o1, o2, o3 uint64
 
 	// Field (0) 'Index'
-	d.Index = ssz.UnmarshallUint64(buf[0:8])
+	d.Index = ssz.UnmarshallUint[uint64](buf[0:8])
 
 	// Offset (1) 'Column'
 	if o1 = ssz.ReadOffset(buf[8:12]); o1 > size {
@@ -2161,7 +2161,7 @@ func (d *DataColumnSidecar) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'Index'
-	hh.PutUint64(d.Index)
+	ssz.PutUint(hh, d.Index)
 
 	// Field (1) 'Column'
 	{
@@ -2273,7 +2273,7 @@ func (d *DataColumnsByRootIdentifier) MarshalSSZTo(buf []byte) (dst []byte, err 
 		return
 	}
 	for ii := 0; ii < len(d.Columns); ii++ {
-		dst = ssz.MarshalUint64(dst, d.Columns[ii])
+		dst = ssz.MarshalUint(dst, d.Columns[ii])
 	}
 
 	return
@@ -2312,9 +2312,9 @@ func (d *DataColumnsByRootIdentifier) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		d.Columns = ssz.ExtendUint64(d.Columns, num)
+		d.Columns = ssz.ExtendUint(d.Columns, num)
 		for ii := 0; ii < num; ii++ {
-			d.Columns[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+			d.Columns[ii] = ssz.UnmarshallUint[uint64](buf[ii*8 : (ii+1)*8])
 		}
 	}
 	return err
@@ -2354,7 +2354,7 @@ func (d *DataColumnsByRootIdentifier) HashTreeRootWith(hh *ssz.Hasher) (err erro
 		}
 		subIndx := hh.Index()
 		for _, i := range d.Columns {
-			hh.AppendUint64(i)
+			ssz.AppendUint(hh, i)
 		}
 		hh.FillUpTo32()
 
@@ -2390,7 +2390,7 @@ func (s *StatusV2) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = append(dst, s.FinalizedRoot...)
 
 	// Field (2) 'FinalizedEpoch'
-	dst = ssz.MarshalUint64(dst, uint64(s.FinalizedEpoch))
+	dst = ssz.MarshalUint(dst, s.FinalizedEpoch)
 
 	// Field (3) 'HeadRoot'
 	if size := len(s.HeadRoot); size != 32 {
@@ -2400,10 +2400,10 @@ func (s *StatusV2) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = append(dst, s.HeadRoot...)
 
 	// Field (4) 'HeadSlot'
-	dst = ssz.MarshalUint64(dst, uint64(s.HeadSlot))
+	dst = ssz.MarshalUint(dst, s.HeadSlot)
 
 	// Field (5) 'EarliestAvailableSlot'
-	dst = ssz.MarshalUint64(dst, uint64(s.EarliestAvailableSlot))
+	dst = ssz.MarshalUint(dst, s.EarliestAvailableSlot)
 
 	return
 }
@@ -2429,7 +2429,7 @@ func (s *StatusV2) UnmarshalSSZ(buf []byte) error {
 	s.FinalizedRoot = append(s.FinalizedRoot, buf[4:36]...)
 
 	// Field (2) 'FinalizedEpoch'
-	s.FinalizedEpoch = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[36:44]))
+	s.FinalizedEpoch = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch](buf[36:44])
 
 	// Field (3) 'HeadRoot'
 	if cap(s.HeadRoot) == 0 {
@@ -2438,10 +2438,10 @@ func (s *StatusV2) UnmarshalSSZ(buf []byte) error {
 	s.HeadRoot = append(s.HeadRoot, buf[44:76]...)
 
 	// Field (4) 'HeadSlot'
-	s.HeadSlot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[76:84]))
+	s.HeadSlot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[76:84])
 
 	// Field (5) 'EarliestAvailableSlot'
-	s.EarliestAvailableSlot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[84:92]))
+	s.EarliestAvailableSlot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[84:92])
 
 	return err
 }
@@ -2476,7 +2476,7 @@ func (s *StatusV2) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(s.FinalizedRoot)
 
 	// Field (2) 'FinalizedEpoch'
-	hh.PutUint64(uint64(s.FinalizedEpoch))
+	ssz.PutUint(hh, s.FinalizedEpoch)
 
 	// Field (3) 'HeadRoot'
 	if size := len(s.HeadRoot); size != 32 {
@@ -2486,10 +2486,588 @@ func (s *StatusV2) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(s.HeadRoot)
 
 	// Field (4) 'HeadSlot'
-	hh.PutUint64(uint64(s.HeadSlot))
+	ssz.PutUint(hh, s.HeadSlot)
 
 	// Field (5) 'EarliestAvailableSlot'
-	hh.PutUint64(uint64(s.EarliestAvailableSlot))
+	ssz.PutUint(hh, s.EarliestAvailableSlot)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the PartialDataColumnSidecar object
+func (p *PartialDataColumnSidecar) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the PartialDataColumnSidecar object to a target array
+func (p *PartialDataColumnSidecar) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(16)
+
+	// Offset (0) 'CellsPresentBitmap'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.CellsPresentBitmap)
+
+	// Offset (1) 'PartialColumn'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.PartialColumn) * 2048
+
+	// Offset (2) 'KzgProofs'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.KzgProofs) * 48
+
+	// Offset (3) 'Header'
+	dst = ssz.WriteOffset(dst, offset)
+	for ii := 0; ii < len(p.Header); ii++ {
+		offset += 4
+		offset += p.Header[ii].SizeSSZ()
+	}
+
+	// Field (0) 'CellsPresentBitmap'
+	if size := len(p.CellsPresentBitmap); size > 4096 {
+		err = ssz.ErrBytesLengthFn("--.CellsPresentBitmap", size, 4096)
+		return
+	}
+	dst = append(dst, p.CellsPresentBitmap...)
+
+	// Field (1) 'PartialColumn'
+	if size := len(p.PartialColumn); size > 4096 {
+		err = ssz.ErrListTooBigFn("--.PartialColumn", size, 4096)
+		return
+	}
+	for ii := 0; ii < len(p.PartialColumn); ii++ {
+		if size := len(p.PartialColumn[ii]); size != 2048 {
+			err = ssz.ErrBytesLengthFn("--.PartialColumn[ii]", size, 2048)
+			return
+		}
+		dst = append(dst, p.PartialColumn[ii]...)
+	}
+
+	// Field (2) 'KzgProofs'
+	if size := len(p.KzgProofs); size > 4096 {
+		err = ssz.ErrListTooBigFn("--.KzgProofs", size, 4096)
+		return
+	}
+	for ii := 0; ii < len(p.KzgProofs); ii++ {
+		if size := len(p.KzgProofs[ii]); size != 48 {
+			err = ssz.ErrBytesLengthFn("--.KzgProofs[ii]", size, 48)
+			return
+		}
+		dst = append(dst, p.KzgProofs[ii]...)
+	}
+
+	// Field (3) 'Header'
+	if size := len(p.Header); size > 1 {
+		err = ssz.ErrListTooBigFn("--.Header", size, 1)
+		return
+	}
+	{
+		offset = 4 * len(p.Header)
+		for ii := 0; ii < len(p.Header); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += p.Header[ii].SizeSSZ()
+		}
+	}
+	for ii := 0; ii < len(p.Header); ii++ {
+		if dst, err = p.Header[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the PartialDataColumnSidecar object
+func (p *PartialDataColumnSidecar) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 16 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1, o2, o3 uint64
+
+	// Offset (0) 'CellsPresentBitmap'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 16 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (1) 'PartialColumn'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (2) 'KzgProofs'
+	if o2 = ssz.ReadOffset(buf[8:12]); o2 > size || o1 > o2 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (3) 'Header'
+	if o3 = ssz.ReadOffset(buf[12:16]); o3 > size || o2 > o3 {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'CellsPresentBitmap'
+	{
+		buf = tail[o0:o1]
+		if err = ssz.ValidateBitlist(buf, 4096); err != nil {
+			return err
+		}
+		if cap(p.CellsPresentBitmap) == 0 {
+			p.CellsPresentBitmap = make([]byte, 0, len(buf))
+		}
+		p.CellsPresentBitmap = append(p.CellsPresentBitmap, buf...)
+	}
+
+	// Field (1) 'PartialColumn'
+	{
+		buf = tail[o1:o2]
+		num, err := ssz.DivideInt2(len(buf), 2048, 4096)
+		if err != nil {
+			return err
+		}
+		p.PartialColumn = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(p.PartialColumn[ii]) == 0 {
+				p.PartialColumn[ii] = make([]byte, 0, len(buf[ii*2048:(ii+1)*2048]))
+			}
+			p.PartialColumn[ii] = append(p.PartialColumn[ii], buf[ii*2048:(ii+1)*2048]...)
+		}
+	}
+
+	// Field (2) 'KzgProofs'
+	{
+		buf = tail[o2:o3]
+		num, err := ssz.DivideInt2(len(buf), 48, 4096)
+		if err != nil {
+			return err
+		}
+		p.KzgProofs = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(p.KzgProofs[ii]) == 0 {
+				p.KzgProofs[ii] = make([]byte, 0, len(buf[ii*48:(ii+1)*48]))
+			}
+			p.KzgProofs[ii] = append(p.KzgProofs[ii], buf[ii*48:(ii+1)*48]...)
+		}
+	}
+
+	// Field (3) 'Header'
+	{
+		buf = tail[o3:]
+		num, err := ssz.DecodeDynamicLength(buf, 1)
+		if err != nil {
+			return err
+		}
+		p.Header = make([]*PartialDataColumnHeader, num)
+		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+			if p.Header[indx] == nil {
+				p.Header[indx] = new(PartialDataColumnHeader)
+			}
+			if err = p.Header[indx].UnmarshalSSZ(buf); err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the PartialDataColumnSidecar object
+func (p *PartialDataColumnSidecar) SizeSSZ() (size int) {
+	size = 16
+
+	// Field (0) 'CellsPresentBitmap'
+	size += len(p.CellsPresentBitmap)
+
+	// Field (1) 'PartialColumn'
+	size += len(p.PartialColumn) * 2048
+
+	// Field (2) 'KzgProofs'
+	size += len(p.KzgProofs) * 48
+
+	// Field (3) 'Header'
+	for ii := 0; ii < len(p.Header); ii++ {
+		size += 4
+		size += p.Header[ii].SizeSSZ()
+	}
+
+	return
+}
+
+// HashTreeRoot ssz hashes the PartialDataColumnSidecar object
+func (p *PartialDataColumnSidecar) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(p)
+}
+
+// HashTreeRootWith ssz hashes the PartialDataColumnSidecar object with a hasher
+func (p *PartialDataColumnSidecar) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'CellsPresentBitmap'
+	if len(p.CellsPresentBitmap) == 0 {
+		err = ssz.ErrEmptyBitlist
+		return
+	}
+	hh.PutBitlist(p.CellsPresentBitmap, 4096)
+
+	// Field (1) 'PartialColumn'
+	{
+		if size := len(p.PartialColumn); size > 4096 {
+			err = ssz.ErrListTooBigFn("--.PartialColumn", size, 4096)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range p.PartialColumn {
+			if len(i) != 2048 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.PutBytes(i)
+		}
+
+		numItems := uint64(len(p.PartialColumn))
+		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	// Field (2) 'KzgProofs'
+	{
+		if size := len(p.KzgProofs); size > 4096 {
+			err = ssz.ErrListTooBigFn("--.KzgProofs", size, 4096)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range p.KzgProofs {
+			if len(i) != 48 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.PutBytes(i)
+		}
+
+		numItems := uint64(len(p.KzgProofs))
+		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	// Field (3) 'Header'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(p.Header))
+		if num > 1 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range p.Header {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 1)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the PartialDataColumnHeader object
+func (p *PartialDataColumnHeader) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the PartialDataColumnHeader object to a target array
+func (p *PartialDataColumnHeader) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(340)
+
+	// Offset (0) 'KzgCommitments'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.KzgCommitments) * 48
+
+	// Field (1) 'SignedBlockHeader'
+	if p.SignedBlockHeader == nil {
+		p.SignedBlockHeader = new(SignedBeaconBlockHeader)
+	}
+	if dst, err = p.SignedBlockHeader.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (2) 'KzgCommitmentsInclusionProof'
+	if size := len(p.KzgCommitmentsInclusionProof); size != 4 {
+		err = ssz.ErrVectorLengthFn("--.KzgCommitmentsInclusionProof", size, 4)
+		return
+	}
+	for ii := 0; ii < 4; ii++ {
+		if size := len(p.KzgCommitmentsInclusionProof[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.KzgCommitmentsInclusionProof[ii]", size, 32)
+			return
+		}
+		dst = append(dst, p.KzgCommitmentsInclusionProof[ii]...)
+	}
+
+	// Field (0) 'KzgCommitments'
+	if size := len(p.KzgCommitments); size > 4096 {
+		err = ssz.ErrListTooBigFn("--.KzgCommitments", size, 4096)
+		return
+	}
+	for ii := 0; ii < len(p.KzgCommitments); ii++ {
+		if size := len(p.KzgCommitments[ii]); size != 48 {
+			err = ssz.ErrBytesLengthFn("--.KzgCommitments[ii]", size, 48)
+			return
+		}
+		dst = append(dst, p.KzgCommitments[ii]...)
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the PartialDataColumnHeader object
+func (p *PartialDataColumnHeader) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 340 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'KzgCommitments'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 340 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (1) 'SignedBlockHeader'
+	if p.SignedBlockHeader == nil {
+		p.SignedBlockHeader = new(SignedBeaconBlockHeader)
+	}
+	if err = p.SignedBlockHeader.UnmarshalSSZ(buf[4:212]); err != nil {
+		return err
+	}
+
+	// Field (2) 'KzgCommitmentsInclusionProof'
+	p.KzgCommitmentsInclusionProof = make([][]byte, 4)
+	for ii := 0; ii < 4; ii++ {
+		if cap(p.KzgCommitmentsInclusionProof[ii]) == 0 {
+			p.KzgCommitmentsInclusionProof[ii] = make([]byte, 0, len(buf[212:340][ii*32:(ii+1)*32]))
+		}
+		p.KzgCommitmentsInclusionProof[ii] = append(p.KzgCommitmentsInclusionProof[ii], buf[212:340][ii*32:(ii+1)*32]...)
+	}
+
+	// Field (0) 'KzgCommitments'
+	{
+		buf = tail[o0:]
+		num, err := ssz.DivideInt2(len(buf), 48, 4096)
+		if err != nil {
+			return err
+		}
+		p.KzgCommitments = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(p.KzgCommitments[ii]) == 0 {
+				p.KzgCommitments[ii] = make([]byte, 0, len(buf[ii*48:(ii+1)*48]))
+			}
+			p.KzgCommitments[ii] = append(p.KzgCommitments[ii], buf[ii*48:(ii+1)*48]...)
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the PartialDataColumnHeader object
+func (p *PartialDataColumnHeader) SizeSSZ() (size int) {
+	size = 340
+
+	// Field (0) 'KzgCommitments'
+	size += len(p.KzgCommitments) * 48
+
+	return
+}
+
+// HashTreeRoot ssz hashes the PartialDataColumnHeader object
+func (p *PartialDataColumnHeader) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(p)
+}
+
+// HashTreeRootWith ssz hashes the PartialDataColumnHeader object with a hasher
+func (p *PartialDataColumnHeader) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'KzgCommitments'
+	{
+		if size := len(p.KzgCommitments); size > 4096 {
+			err = ssz.ErrListTooBigFn("--.KzgCommitments", size, 4096)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range p.KzgCommitments {
+			if len(i) != 48 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.PutBytes(i)
+		}
+
+		numItems := uint64(len(p.KzgCommitments))
+		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	// Field (1) 'SignedBlockHeader'
+	if err = p.SignedBlockHeader.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (2) 'KzgCommitmentsInclusionProof'
+	{
+		if size := len(p.KzgCommitmentsInclusionProof); size != 4 {
+			err = ssz.ErrVectorLengthFn("--.KzgCommitmentsInclusionProof", size, 4)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range p.KzgCommitmentsInclusionProof {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.Append(i)
+		}
+		hh.Merkleize(subIndx)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the PartialDataColumnPartsMetadata object
+func (p *PartialDataColumnPartsMetadata) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the PartialDataColumnPartsMetadata object to a target array
+func (p *PartialDataColumnPartsMetadata) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(8)
+
+	// Offset (0) 'Available'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.Available)
+
+	// Offset (1) 'Requests'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.Requests)
+
+	// Field (0) 'Available'
+	if size := len(p.Available); size > 4096 {
+		err = ssz.ErrBytesLengthFn("--.Available", size, 4096)
+		return
+	}
+	dst = append(dst, p.Available...)
+
+	// Field (1) 'Requests'
+	if size := len(p.Requests); size > 4096 {
+		err = ssz.ErrBytesLengthFn("--.Requests", size, 4096)
+		return
+	}
+	dst = append(dst, p.Requests...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the PartialDataColumnPartsMetadata object
+func (p *PartialDataColumnPartsMetadata) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 8 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1 uint64
+
+	// Offset (0) 'Available'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 8 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (1) 'Requests'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'Available'
+	{
+		buf = tail[o0:o1]
+		if err = ssz.ValidateBitlist(buf, 4096); err != nil {
+			return err
+		}
+		if cap(p.Available) == 0 {
+			p.Available = make([]byte, 0, len(buf))
+		}
+		p.Available = append(p.Available, buf...)
+	}
+
+	// Field (1) 'Requests'
+	{
+		buf = tail[o1:]
+		if err = ssz.ValidateBitlist(buf, 4096); err != nil {
+			return err
+		}
+		if cap(p.Requests) == 0 {
+			p.Requests = make([]byte, 0, len(buf))
+		}
+		p.Requests = append(p.Requests, buf...)
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the PartialDataColumnPartsMetadata object
+func (p *PartialDataColumnPartsMetadata) SizeSSZ() (size int) {
+	size = 8
+
+	// Field (0) 'Available'
+	size += len(p.Available)
+
+	// Field (1) 'Requests'
+	size += len(p.Requests)
+
+	return
+}
+
+// HashTreeRoot ssz hashes the PartialDataColumnPartsMetadata object
+func (p *PartialDataColumnPartsMetadata) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(p)
+}
+
+// HashTreeRootWith ssz hashes the PartialDataColumnPartsMetadata object with a hasher
+func (p *PartialDataColumnPartsMetadata) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Available'
+	if len(p.Available) == 0 {
+		err = ssz.ErrEmptyBitlist
+		return
+	}
+	hh.PutBitlist(p.Available, 4096)
+
+	// Field (1) 'Requests'
+	if len(p.Requests) == 0 {
+		err = ssz.ErrEmptyBitlist
+		return
+	}
+	hh.PutBitlist(p.Requests, 4096)
 
 	hh.Merkleize(indx)
 	return

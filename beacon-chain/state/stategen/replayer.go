@@ -107,10 +107,12 @@ func (rs *stateReplayer) ReplayBlocks(ctx context.Context) (state.BeaconState, e
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
+
 		s, err = executeStateTransitionStateGen(ctx, s, b)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "could not execute state transition")
 		}
+
 	}
 	if rs.target > s.Slot() {
 		s, err = ReplayProcessSlots(ctx, s, rs.target)

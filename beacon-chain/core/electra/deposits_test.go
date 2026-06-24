@@ -6,7 +6,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	stateTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/state/testing"
@@ -15,44 +14,52 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func TestProcessPendingDepositsMultiplesSameDeposits(t *testing.T) {
-	st := stateWithActiveBalanceETH(t, 1000)
-	deps := make([]*eth.PendingDeposit, 2) // Make same deposit twice
-	validators := st.Validators()
-	sk, err := bls.RandKey()
-	require.NoError(t, err)
-	for i := 0; i < len(deps); i += 1 {
-		wc := make([]byte, 32)
-		wc[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
-		wc[31] = byte(i)
-		validators[i].PublicKey = sk.PublicKey().Marshal()
-		validators[i].WithdrawalCredentials = wc
-		deps[i] = stateTesting.GeneratePendingDeposit(t, sk, 32, bytesutil.ToBytes32(wc), 0)
-	}
-	require.NoError(t, st.SetPendingDeposits(deps))
+	const (
+		depositCount      = uint64(2)
+		amountETH         = uint64(32)
+		slot              = 0
+		activeBalanceGwei = 10_000
+	)
 
-	err = electra.ProcessPendingDeposits(context.TODO(), st, 10000)
+	state := stateWithActiveBalanceETH(t, 0)
+
+	secretKey, err := bls.RandKey()
 	require.NoError(t, err)
 
-	val := st.Validators()
-	seenPubkeys := make(map[string]struct{})
-	for i := 0; i < len(val); i += 1 {
-		if len(val[i].PublicKey) == 0 {
-			continue
-		}
-		_, ok := seenPubkeys[string(val[i].PublicKey)]
-		if ok {
-			t.Fatalf("duplicated pubkeys")
-		} else {
-			seenPubkeys[string(val[i].PublicKey)] = struct{}{}
-		}
+	withdrawalCredentialsBytes := make([]byte, 32)
+	withdrawalCredentialsBytes[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
+	withdrawalCredentials := bytesutil.ToBytes32(withdrawalCredentialsBytes)
+
+	validators := state.Validators()
+	require.Equal(t, 0, len(validators))
+
+	deposits := make([]*eth.PendingDeposit, 0, depositCount)
+	for range depositCount {
+		deposit := stateTesting.GeneratePendingDeposit(t, secretKey, amountETH, withdrawalCredentials, slot)
+		deposits = append(deposits, deposit)
 	}
+
+	err = state.SetPendingDeposits(deposits)
+	require.NoError(t, err)
+
+	err = electra.ProcessPendingDeposits(t.Context(), state, activeBalanceGwei)
+	require.NoError(t, err)
+
+	// The first deposit should create a new validator,
+	// and the second deposit should top up the same validator
+	// We should have 1 validator with balance of 64 ETH.
+	validators = state.Validators()
+	require.Equal(t, 1, len(validators))
+
+	balance, err := state.BalanceAtIndex(0)
+	require.NoError(t, err)
+	require.Equal(t, depositCount*amountETH, balance)
 }
 
 func TestProcessPendingDeposits(t *testing.T) {
@@ -294,7 +301,7 @@ func TestProcessPendingDeposits(t *testing.T) {
 				// The caller of this method would normally have the precompute balance values for total
 				// active balance for this epoch. For ease of test setup, we will compute total active
 				// balance from the given state.
-				tab, err = helpers.TotalActiveBalance(tt.state)
+				tab, err = helpers.TotalActiveBalance(t.Context(), tt.state)
 			}
 			require.NoError(t, err)
 			err = electra.ProcessPendingDeposits(context.TODO(), tt.state, primitives.Gwei(tab))
@@ -359,60 +366,6 @@ func TestBatchProcessNewPendingDeposits(t *testing.T) {
 		require.Equal(t, 1, len(st.Balances()))
 		require.Equal(t, 2*params.BeaconConfig().MinActivationBalance, st.Balances()[0])
 	})
-}
-
-func TestProcessDepositRequests(t *testing.T) {
-	st, _ := util.DeterministicGenesisStateElectra(t, 1)
-	sk, err := bls.RandKey()
-	require.NoError(t, err)
-	require.NoError(t, st.SetDepositRequestsStartIndex(1))
-
-	t.Run("empty requests continues", func(t *testing.T) {
-		newSt, err := electra.ProcessDepositRequests(t.Context(), st, []*enginev1.DepositRequest{})
-		require.NoError(t, err)
-		require.DeepEqual(t, newSt, st)
-	})
-	t.Run("nil request errors", func(t *testing.T) {
-		_, err = electra.ProcessDepositRequests(t.Context(), st, []*enginev1.DepositRequest{nil})
-		require.ErrorContains(t, "nil deposit request", err)
-	})
-
-	vals := st.Validators()
-	vals[0].PublicKey = sk.PublicKey().Marshal()
-	vals[0].WithdrawalCredentials[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
-	require.NoError(t, st.SetValidators(vals))
-	bals := st.Balances()
-	bals[0] = params.BeaconConfig().MinActivationBalance + 2000
-	require.NoError(t, st.SetBalances(bals))
-	require.NoError(t, st.SetPendingDeposits(make([]*eth.PendingDeposit, 0))) // reset pbd as the determinitstic state populates this already
-	withdrawalCred := make([]byte, 32)
-	withdrawalCred[0] = params.BeaconConfig().CompoundingWithdrawalPrefixByte
-	depositMessage := &eth.DepositMessage{
-		PublicKey:             sk.PublicKey().Marshal(),
-		Amount:                1000,
-		WithdrawalCredentials: withdrawalCred,
-	}
-	domain, err := signing.ComputeDomain(params.BeaconConfig().DomainDeposit, nil, nil)
-	require.NoError(t, err)
-	sr, err := signing.ComputeSigningRoot(depositMessage, domain)
-	require.NoError(t, err)
-	sig := sk.Sign(sr[:])
-	requests := []*enginev1.DepositRequest{
-		{
-			Pubkey:                depositMessage.PublicKey,
-			Index:                 0,
-			WithdrawalCredentials: depositMessage.WithdrawalCredentials,
-			Amount:                depositMessage.Amount,
-			Signature:             sig.Marshal(),
-		},
-	}
-	st, err = electra.ProcessDepositRequests(t.Context(), st, requests)
-	require.NoError(t, err)
-
-	pbd, err := st.PendingDeposits()
-	require.NoError(t, err)
-	require.Equal(t, 1, len(pbd))
-	require.Equal(t, uint64(1000), pbd[0].Amount)
 }
 
 func TestProcessDeposit_Electra_Simple(t *testing.T) {

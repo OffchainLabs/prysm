@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "cmd.go",
         "download.go",
+        "log.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/cmd/prysmctl/checkpointsync",
     visibility = ["//visibility:public"],

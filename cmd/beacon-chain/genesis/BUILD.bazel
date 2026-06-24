@@ -2,7 +2,10 @@ load("@prysm//tools/go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = ["options.go"],
+    srcs = [
+        "log.go",
+        "options.go",
+    ],
     importpath = "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/genesis",
     visibility = ["//visibility:public"],
     deps = [

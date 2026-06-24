@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"iter"
 	"testing"
 	"time"
 
@@ -588,6 +589,12 @@ func fcReturnsTargetRoot(root [32]byte) func([32]byte, primitives.Epoch) ([32]by
 	}
 }
 
+func fcReturnsDependentRoot() func([32]byte, primitives.Epoch) ([32]byte, error) {
+	return func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+		return root, nil
+	}
+}
+
 type mockSignatureCache struct {
 	svCalledForSig map[signatureData]bool
 	svcb           func(sig signatureData) (bool, error)
@@ -620,6 +627,10 @@ type sbrfunc func(context.Context, [32]byte) (state.BeaconState, error)
 type mockStateByRooter struct {
 	sbr           sbrfunc
 	calledForRoot map[[32]byte]bool
+}
+
+func (sbr *mockStateByRooter) StateByRootIfCachedNoCopy(_ [32]byte) state.ReadOnlyBeaconState {
+	return nil
 }
 
 func (sbr *mockStateByRooter) StateByRoot(ctx context.Context, root [32]byte) (state.BeaconState, error) {
@@ -684,6 +695,12 @@ func sbrNotFound(t *testing.T, expectedRoot [32]byte) *mockStateByRooter {
 			t.Errorf("did not receive expected root in StateByRootCall, want %#x got %#x", expectedRoot, parent)
 		}
 		return nil, db.ErrNotFound
+	}}
+}
+
+func sbrReturnsState(st state.BeaconState) *mockStateByRooter {
+	return &mockStateByRooter{sbr: func(_ context.Context, _ [32]byte) (state.BeaconState, error) {
+		return st, nil
 	}}
 }
 
@@ -830,18 +847,18 @@ func (v *validxStateOverride) SetLatestBlockHeader(val *ethpb.BeaconBlockHeader)
 	return nil
 }
 
-func (v *validxStateOverride) ReadFromEveryValidator(f func(idx int, val state.ReadOnlyValidator) error) error {
-	validators := v.Validators()
-	for i, val := range validators {
-		rov, err := state_native.NewValidator(val)
-		if err != nil {
-			return err
-		}
-		if err := f(i, rov); err != nil {
-			return err
+func (v *validxStateOverride) ValidatorsReadOnlySeq() iter.Seq2[primitives.ValidatorIndex, state.ReadOnlyValidator] {
+	return func(yield func(primitives.ValidatorIndex, state.ReadOnlyValidator) bool) {
+		for i, val := range v.Validators() {
+			rov, err := state_native.NewValidator(val)
+			if err != nil {
+				return
+			}
+			if !yield(primitives.ValidatorIndex(i), rov) {
+				return
+			}
 		}
 	}
-	return nil
 }
 
 type mockProposerCache struct {

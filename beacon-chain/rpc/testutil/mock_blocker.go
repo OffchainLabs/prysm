@@ -15,6 +15,7 @@ import (
 // MockBlocker is a fake implementation of lookup.Blocker.
 type MockBlocker struct {
 	BlockToReturn            interfaces.ReadOnlySignedBeaconBlock
+	RootToReturn             [32]byte
 	ErrorToReturn            error
 	SlotBlockMap             map[primitives.Slot]interfaces.ReadOnlySignedBeaconBlock
 	RootBlockMap             map[[32]byte]interfaces.ReadOnlySignedBeaconBlock
@@ -37,6 +38,14 @@ func (m *MockBlocker) Block(_ context.Context, b []byte) (interfaces.ReadOnlySig
 		return m.RootBlockMap[bytesutil.ToBytes32(b)], nil
 	}
 	return m.SlotBlockMap[primitives.Slot(slotNumber)], nil
+}
+
+// BlockRoot --
+func (m *MockBlocker) BlockRoot(_ context.Context, _ []byte) ([32]byte, error) {
+	if m.ErrorToReturn != nil {
+		return [32]byte{}, m.ErrorToReturn
+	}
+	return m.RootToReturn, nil
 }
 
 // BlobSidecars --

@@ -9,6 +9,7 @@ import (
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -70,6 +71,18 @@ type BeaconState struct {
 	pendingConsolidations         []*ethpb.PendingConsolidation     // pending_consolidations: List[PendingConsolidation, PENDING_CONSOLIDATIONS_LIMIT]
 	proposerLookahead             []primitives.ValidatorIndex       // proposer_look_ahead: List[uint64, (MIN_LOOKAHEAD + 1)*SLOTS_PER_EPOCH]
 
+	// Gloas fields
+	latestExecutionPayloadBid    *ethpb.ExecutionPayloadBid
+	builders                     []*ethpb.Builder
+	builderIdxMap                map[[fieldparams.BLSPubkeyLength]byte]primitives.BuilderIndex
+	nextWithdrawalBuilderIndex   primitives.BuilderIndex
+	executionPayloadAvailability []byte
+	builderPendingPayments       []*ethpb.BuilderPendingPayment
+	builderPendingWithdrawals    []*ethpb.BuilderPendingWithdrawal
+	latestBlockHash              []byte
+	payloadExpectedWithdrawals   []*enginev1.Withdrawal
+	ptcWindow                    []*ethpb.PTCs
+
 	id                    uint64
 	lock                  sync.RWMutex
 	dirtyFields           map[types.FieldIndex]bool
@@ -125,6 +138,15 @@ type beaconStateMarshalable struct {
 	PendingPartialWithdrawals           []*ethpb.PendingPartialWithdrawal       `json:"pending_partial_withdrawals" yaml:"pending_partial_withdrawals"`
 	PendingConsolidations               []*ethpb.PendingConsolidation           `json:"pending_consolidations" yaml:"pending_consolidations"`
 	ProposerLookahead                   []primitives.ValidatorIndex             `json:"proposer_look_ahead" yaml:"proposer_look_ahead"`
+	LatestExecutionPayloadBid           *ethpb.ExecutionPayloadBid              `json:"latest_execution_payload_bid" yaml:"latest_execution_payload_bid"`
+	Builders                            []*ethpb.Builder                        `json:"builders" yaml:"builders"`
+	NextWithdrawalBuilderIndex          primitives.BuilderIndex                 `json:"next_withdrawal_builder_index" yaml:"next_withdrawal_builder_index"`
+	ExecutionPayloadAvailability        []byte                                  `json:"execution_payload_availability" yaml:"execution_payload_availability"`
+	BuilderPendingPayments              []*ethpb.BuilderPendingPayment          `json:"builder_pending_payments" yaml:"builder_pending_payments"`
+	BuilderPendingWithdrawals           []*ethpb.BuilderPendingWithdrawal       `json:"builder_pending_withdrawals" yaml:"builder_pending_withdrawals"`
+	LatestBlockHash                     []byte                                  `json:"latest_block_hash" yaml:"latest_block_hash"`
+	PayloadExpectedWithdrawals          []*enginev1.Withdrawal                  `json:"payload_expected_withdrawals" yaml:"payload_expected_withdrawals"`
+	PtcWindow                           []*ethpb.PTCs                           `json:"ptc_window" yaml:"ptc_window"`
 }
 
 func (b *BeaconState) MarshalJSON() ([]byte, error) {
@@ -148,7 +170,7 @@ func (b *BeaconState) MarshalJSON() ([]byte, error) {
 		Eth1Data:                            b.eth1Data,
 		Eth1DataVotes:                       b.eth1DataVotes,
 		Eth1DepositIndex:                    b.eth1DepositIndex,
-		Validators:                          vals,
+		Validators:                          stateutil.CompactValidatorsToProto(vals),
 		Balances:                            balances,
 		RandaoMixes:                         mixes,
 		Slashings:                           b.slashings,
@@ -179,6 +201,15 @@ func (b *BeaconState) MarshalJSON() ([]byte, error) {
 		PendingPartialWithdrawals:           b.pendingPartialWithdrawals,
 		PendingConsolidations:               b.pendingConsolidations,
 		ProposerLookahead:                   b.proposerLookahead,
+		LatestExecutionPayloadBid:           b.latestExecutionPayloadBid,
+		Builders:                            b.builders,
+		NextWithdrawalBuilderIndex:          b.nextWithdrawalBuilderIndex,
+		ExecutionPayloadAvailability:        b.executionPayloadAvailability,
+		BuilderPendingPayments:              b.builderPendingPayments,
+		BuilderPendingWithdrawals:           b.builderPendingWithdrawals,
+		LatestBlockHash:                     b.latestBlockHash,
+		PayloadExpectedWithdrawals:          b.payloadExpectedWithdrawals,
+		PtcWindow:                           b.ptcWindow,
 	}
 	return json.Marshal(marshalable)
 }

@@ -29,11 +29,18 @@ var (
 		Value: "",
 	}
 
-	// EnableBuilderSSZ enables Builder APIs to send and receive in SSZ format
-	EnableBuilderSSZ = &cli.BoolFlag{
-		Name:    "enable-builder-ssz",
-		Aliases: []string{"builder-ssz"},
-		Usage:   "Enables Builder APIs to send and receive in SSZ format",
+	// DisableBuilderSSZ turns off SSZ encoding for Builder APIs, falling back to JSON.
+	DisableBuilderSSZ = &cli.BoolFlag{
+		Name:  "disable-builder-ssz",
+		Usage: "Disables SSZ encoding for Builder API requests and responses, using JSON instead.",
+	}
+
+	// PostponeShutdownForProposals delays a graceful shutdown while a connected
+	// validator client still has an imminent block-proposal duty.
+	PostponeShutdownForProposals = &cli.BoolFlag{
+		Name: "postpone-shutdown-for-proposals",
+		Usage: "On a graceful shutdown signal (SIGINT/SIGTERM, e.g. Ctrl-C on Linux), postpone shutdown if a connected " +
+			"validator client must propose a block in the next 2 epochs. Send the signal again to force the node to stop immediately.",
 	}
 
 	MaxBuilderConsecutiveMissedSlots = &cli.IntFlag{
@@ -133,13 +140,6 @@ var (
 		Name:  "tls-key",
 		Usage: "Key for secure gRPC. Pass this and the tls-cert flag in order to use gRPC securely.",
 	}
-	// HTTPModules define the set of enabled HTTP APIs.
-	HTTPModules = &cli.StringFlag{
-		Name:  "http-modules",
-		Usage: "Comma-separated list of API module names. Possible values: `" + PrysmAPIModule + `,` + EthAPIModule + "`.",
-		Value: PrysmAPIModule + `,` + EthAPIModule,
-	}
-
 	// HTTPServerHost specifies a HTTP server host for the validator client.
 	HTTPServerHost = &cli.StringFlag{
 		Name:    "http-host",
@@ -333,16 +333,44 @@ var (
 		Usage: "Specifies the retention period for the pruner service in terms of epochs. " +
 			"If this value is less than MIN_EPOCHS_FOR_BLOCK_REQUESTS, it will be ignored.",
 	}
-	// SubscribeAllDataSubnets enables subscription to all data subnets.
-	SubscribeAllDataSubnets = &cli.BoolFlag{
+	// Supernode custodies all data.
+	Supernode = &cli.BoolFlag{
 		Name:    "supernode",
 		Aliases: []string{"subscribe-all-data-subnets"},
-		Usage:   "Enable subscription to all data subnets and store all blob columns, serving them over RPC. Required post-Fusaka for full blob reconstruction. This is effectively one-way: once enabled, the node keeps storing and serving all columns even if the flag is later unset.",
+		Usage:   "Custodies all data. Cannot be used with --semi-supernode.",
+	}
+	// SemiSupernode custodies just enough data to serve the blobs and blob sidecars beacon API.
+	SemiSupernode = &cli.BoolFlag{
+		Name:  "semi-supernode",
+		Usage: "Custodies just enough data to serve the blobs and blob sidecars beacon API. Cannot be used with --supernode.",
 	}
 	// BatchVerifierLimit sets the maximum number of signatures to batch verify at once.
 	BatchVerifierLimit = &cli.IntFlag{
 		Name:  "batch-verifier-limit",
 		Usage: "Maximum number of signatures to batch verify at once for beacon attestation p2p gossip.",
 		Value: 1000,
+	}
+	// StateDiffExponents defines the state diff tree hierarchy levels.
+	StateDiffExponents = &cli.IntSliceFlag{
+		Name:  "state-diff-exponents",
+		Usage: "A comma-separated list of exponents (of 2) in decreasing order, defining the state diff hierarchy levels. The last exponent must be greater than or equal to 5.",
+		Value: cli.NewIntSlice(21, 18, 16, 13, 11, 9, 5),
+	}
+	// DisableEphemeralLogFile disables the 24 hour debug log file.
+	DisableEphemeralLogFile = &cli.BoolFlag{
+		Name:  "disable-ephemeral-log-file",
+		Usage: "Disables the creation of a debug log file that keeps 24 hours of logs.",
+		Value: false,
+	}
+	// DisableGetBlobsV2 disables the engine_getBlobsV2 usage.
+	DisableGetBlobsV2 = &cli.BoolFlag{
+		Name:   "disable-get-blobs-v2",
+		Usage:  "Disables the engine_getBlobsV2 usage.",
+		Hidden: true,
+	}
+	// PartialDataColumns specifies the regex for enabling partial messages on datacolumns
+	PartialDataColumns = &cli.BoolFlag{
+		Name:  "partial-data-columns",
+		Usage: "Enable cell-level dissemination for PeerDAS data columns",
 	}
 )

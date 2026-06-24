@@ -7,6 +7,7 @@ import (
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	"github.com/sirupsen/logrus"
 )
 
@@ -25,6 +26,7 @@ const (
 // Config for the p2p service. These parameters are set from application level flags
 // to initialize the p2p service.
 type Config struct {
+	PartialDataColumns    bool
 	NoDiscovery           bool
 	EnableUPnP            bool
 	StaticPeerID          bool
@@ -49,6 +51,7 @@ type Config struct {
 	IPColocationWhitelist []*net.IPNet
 	StateNotifier         statefeed.Notifier
 	DB                    db.ReadOnlyDatabaseWithSeqNum
+	StateGen              stategen.StateManager
 	ClockWaiter           startup.ClockWaiter
 }
 

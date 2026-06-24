@@ -107,10 +107,10 @@ func (v *ValidatorRegistrationV1) MarshalSSZTo(buf []byte) (dst []byte, err erro
 	dst = append(dst, v.FeeRecipient...)
 
 	// Field (1) 'GasLimit'
-	dst = ssz.MarshalUint64(dst, v.GasLimit)
+	dst = ssz.MarshalUint(dst, v.GasLimit)
 
 	// Field (2) 'Timestamp'
-	dst = ssz.MarshalUint64(dst, v.Timestamp)
+	dst = ssz.MarshalUint(dst, v.Timestamp)
 
 	// Field (3) 'Pubkey'
 	if size := len(v.Pubkey); size != 48 {
@@ -137,10 +137,10 @@ func (v *ValidatorRegistrationV1) UnmarshalSSZ(buf []byte) error {
 	v.FeeRecipient = append(v.FeeRecipient, buf[0:20]...)
 
 	// Field (1) 'GasLimit'
-	v.GasLimit = ssz.UnmarshallUint64(buf[20:28])
+	v.GasLimit = ssz.UnmarshallUint[uint64](buf[20:28])
 
 	// Field (2) 'Timestamp'
-	v.Timestamp = ssz.UnmarshallUint64(buf[28:36])
+	v.Timestamp = ssz.UnmarshallUint[uint64](buf[28:36])
 
 	// Field (3) 'Pubkey'
 	if cap(v.Pubkey) == 0 {
@@ -174,10 +174,10 @@ func (v *ValidatorRegistrationV1) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(v.FeeRecipient)
 
 	// Field (1) 'GasLimit'
-	hh.PutUint64(v.GasLimit)
+	ssz.PutUint(hh, v.GasLimit)
 
 	// Field (2) 'Timestamp'
-	hh.PutUint64(v.Timestamp)
+	ssz.PutUint(hh, v.Timestamp)
 
 	// Field (3) 'Pubkey'
 	if size := len(v.Pubkey); size != 48 {
@@ -438,13 +438,13 @@ func (b *BeaconBlocksByRangeRequest) MarshalSSZTo(buf []byte) (dst []byte, err e
 	dst = buf
 
 	// Field (0) 'StartSlot'
-	dst = ssz.MarshalUint64(dst, uint64(b.StartSlot))
+	dst = ssz.MarshalUint(dst, b.StartSlot)
 
 	// Field (1) 'Count'
-	dst = ssz.MarshalUint64(dst, b.Count)
+	dst = ssz.MarshalUint(dst, b.Count)
 
 	// Field (2) 'Step'
-	dst = ssz.MarshalUint64(dst, b.Step)
+	dst = ssz.MarshalUint(dst, b.Step)
 
 	return
 }
@@ -458,13 +458,13 @@ func (b *BeaconBlocksByRangeRequest) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'StartSlot'
-	b.StartSlot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	b.StartSlot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[0:8])
 
 	// Field (1) 'Count'
-	b.Count = ssz.UnmarshallUint64(buf[8:16])
+	b.Count = ssz.UnmarshallUint[uint64](buf[8:16])
 
 	// Field (2) 'Step'
-	b.Step = ssz.UnmarshallUint64(buf[16:24])
+	b.Step = ssz.UnmarshallUint[uint64](buf[16:24])
 
 	return err
 }
@@ -485,13 +485,13 @@ func (b *BeaconBlocksByRangeRequest) HashTreeRootWith(hh *ssz.Hasher) (err error
 	indx := hh.Index()
 
 	// Field (0) 'StartSlot'
-	hh.PutUint64(uint64(b.StartSlot))
+	ssz.PutUint(hh, b.StartSlot)
 
 	// Field (1) 'Count'
-	hh.PutUint64(b.Count)
+	ssz.PutUint(hh, b.Count)
 
 	// Field (2) 'Step'
-	hh.PutUint64(b.Step)
+	ssz.PutUint(hh, b.Step)
 
 	hh.Merkleize(indx)
 	return
@@ -507,7 +507,7 @@ func (m *MetaDataV0) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 
 	// Field (0) 'SeqNumber'
-	dst = ssz.MarshalUint64(dst, m.SeqNumber)
+	dst = ssz.MarshalUint(dst, m.SeqNumber)
 
 	// Field (1) 'Attnets'
 	if size := len(m.Attnets); size != 8 {
@@ -528,7 +528,7 @@ func (m *MetaDataV0) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'SeqNumber'
-	m.SeqNumber = ssz.UnmarshallUint64(buf[0:8])
+	m.SeqNumber = ssz.UnmarshallUint[uint64](buf[0:8])
 
 	// Field (1) 'Attnets'
 	if cap(m.Attnets) == 0 {
@@ -555,7 +555,7 @@ func (m *MetaDataV0) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'SeqNumber'
-	hh.PutUint64(m.SeqNumber)
+	ssz.PutUint(hh, m.SeqNumber)
 
 	// Field (1) 'Attnets'
 	if size := len(m.Attnets); size != 8 {
@@ -578,7 +578,7 @@ func (m *MetaDataV1) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 
 	// Field (0) 'SeqNumber'
-	dst = ssz.MarshalUint64(dst, m.SeqNumber)
+	dst = ssz.MarshalUint(dst, m.SeqNumber)
 
 	// Field (1) 'Attnets'
 	if size := len(m.Attnets); size != 8 {
@@ -606,7 +606,7 @@ func (m *MetaDataV1) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'SeqNumber'
-	m.SeqNumber = ssz.UnmarshallUint64(buf[0:8])
+	m.SeqNumber = ssz.UnmarshallUint[uint64](buf[0:8])
 
 	// Field (1) 'Attnets'
 	if cap(m.Attnets) == 0 {
@@ -639,7 +639,7 @@ func (m *MetaDataV1) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'SeqNumber'
-	hh.PutUint64(m.SeqNumber)
+	ssz.PutUint(hh, m.SeqNumber)
 
 	// Field (1) 'Attnets'
 	if size := len(m.Attnets); size != 8 {
@@ -669,7 +669,7 @@ func (m *MetaDataV2) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 
 	// Field (0) 'SeqNumber'
-	dst = ssz.MarshalUint64(dst, m.SeqNumber)
+	dst = ssz.MarshalUint(dst, m.SeqNumber)
 
 	// Field (1) 'Attnets'
 	if size := len(m.Attnets); size != 8 {
@@ -686,7 +686,7 @@ func (m *MetaDataV2) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = append(dst, m.Syncnets...)
 
 	// Field (3) 'CustodyGroupCount'
-	dst = ssz.MarshalUint64(dst, m.CustodyGroupCount)
+	dst = ssz.MarshalUint(dst, m.CustodyGroupCount)
 
 	return
 }
@@ -700,7 +700,7 @@ func (m *MetaDataV2) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'SeqNumber'
-	m.SeqNumber = ssz.UnmarshallUint64(buf[0:8])
+	m.SeqNumber = ssz.UnmarshallUint[uint64](buf[0:8])
 
 	// Field (1) 'Attnets'
 	if cap(m.Attnets) == 0 {
@@ -715,7 +715,7 @@ func (m *MetaDataV2) UnmarshalSSZ(buf []byte) error {
 	m.Syncnets = append(m.Syncnets, buf[16:17]...)
 
 	// Field (3) 'CustodyGroupCount'
-	m.CustodyGroupCount = ssz.UnmarshallUint64(buf[17:25])
+	m.CustodyGroupCount = ssz.UnmarshallUint[uint64](buf[17:25])
 
 	return err
 }
@@ -736,7 +736,7 @@ func (m *MetaDataV2) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'SeqNumber'
-	hh.PutUint64(m.SeqNumber)
+	ssz.PutUint(hh, m.SeqNumber)
 
 	// Field (1) 'Attnets'
 	if size := len(m.Attnets); size != 8 {
@@ -753,7 +753,7 @@ func (m *MetaDataV2) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(m.Syncnets)
 
 	// Field (3) 'CustodyGroupCount'
-	hh.PutUint64(m.CustodyGroupCount)
+	ssz.PutUint(hh, m.CustodyGroupCount)
 
 	hh.Merkleize(indx)
 	return
@@ -769,10 +769,10 @@ func (b *BlobSidecarsByRangeRequest) MarshalSSZTo(buf []byte) (dst []byte, err e
 	dst = buf
 
 	// Field (0) 'StartSlot'
-	dst = ssz.MarshalUint64(dst, uint64(b.StartSlot))
+	dst = ssz.MarshalUint(dst, b.StartSlot)
 
 	// Field (1) 'Count'
-	dst = ssz.MarshalUint64(dst, b.Count)
+	dst = ssz.MarshalUint(dst, b.Count)
 
 	return
 }
@@ -786,10 +786,10 @@ func (b *BlobSidecarsByRangeRequest) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'StartSlot'
-	b.StartSlot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	b.StartSlot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[0:8])
 
 	// Field (1) 'Count'
-	b.Count = ssz.UnmarshallUint64(buf[8:16])
+	b.Count = ssz.UnmarshallUint[uint64](buf[8:16])
 
 	return err
 }
@@ -810,10 +810,10 @@ func (b *BlobSidecarsByRangeRequest) HashTreeRootWith(hh *ssz.Hasher) (err error
 	indx := hh.Index()
 
 	// Field (0) 'StartSlot'
-	hh.PutUint64(uint64(b.StartSlot))
+	ssz.PutUint(hh, b.StartSlot)
 
 	// Field (1) 'Count'
-	hh.PutUint64(b.Count)
+	ssz.PutUint(hh, b.Count)
 
 	hh.Merkleize(indx)
 	return
@@ -830,10 +830,10 @@ func (d *DataColumnSidecarsByRangeRequest) MarshalSSZTo(buf []byte) (dst []byte,
 	offset := int(20)
 
 	// Field (0) 'StartSlot'
-	dst = ssz.MarshalUint64(dst, uint64(d.StartSlot))
+	dst = ssz.MarshalUint(dst, d.StartSlot)
 
 	// Field (1) 'Count'
-	dst = ssz.MarshalUint64(dst, d.Count)
+	dst = ssz.MarshalUint(dst, d.Count)
 
 	// Offset (2) 'Columns'
 	dst = ssz.WriteOffset(dst, offset)
@@ -845,7 +845,7 @@ func (d *DataColumnSidecarsByRangeRequest) MarshalSSZTo(buf []byte) (dst []byte,
 		return
 	}
 	for ii := 0; ii < len(d.Columns); ii++ {
-		dst = ssz.MarshalUint64(dst, d.Columns[ii])
+		dst = ssz.MarshalUint(dst, d.Columns[ii])
 	}
 
 	return
@@ -863,10 +863,10 @@ func (d *DataColumnSidecarsByRangeRequest) UnmarshalSSZ(buf []byte) error {
 	var o2 uint64
 
 	// Field (0) 'StartSlot'
-	d.StartSlot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	d.StartSlot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[0:8])
 
 	// Field (1) 'Count'
-	d.Count = ssz.UnmarshallUint64(buf[8:16])
+	d.Count = ssz.UnmarshallUint[uint64](buf[8:16])
 
 	// Offset (2) 'Columns'
 	if o2 = ssz.ReadOffset(buf[16:20]); o2 > size {
@@ -884,9 +884,9 @@ func (d *DataColumnSidecarsByRangeRequest) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		d.Columns = ssz.ExtendUint64(d.Columns, num)
+		d.Columns = ssz.ExtendUint(d.Columns, num)
 		for ii := 0; ii < num; ii++ {
-			d.Columns[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+			d.Columns[ii] = ssz.UnmarshallUint[uint64](buf[ii*8 : (ii+1)*8])
 		}
 	}
 	return err
@@ -912,10 +912,10 @@ func (d *DataColumnSidecarsByRangeRequest) HashTreeRootWith(hh *ssz.Hasher) (err
 	indx := hh.Index()
 
 	// Field (0) 'StartSlot'
-	hh.PutUint64(uint64(d.StartSlot))
+	ssz.PutUint(hh, d.StartSlot)
 
 	// Field (1) 'Count'
-	hh.PutUint64(d.Count)
+	ssz.PutUint(hh, d.Count)
 
 	// Field (2) 'Columns'
 	{
@@ -925,13 +925,73 @@ func (d *DataColumnSidecarsByRangeRequest) HashTreeRootWith(hh *ssz.Hasher) (err
 		}
 		subIndx := hh.Index()
 		for _, i := range d.Columns {
-			hh.AppendUint64(i)
+			ssz.AppendUint(hh, i)
 		}
 		hh.FillUpTo32()
 
 		numItems := uint64(len(d.Columns))
 		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(128, numItems, 8))
 	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the ExecutionPayloadEnvelopesByRangeRequest object
+func (e *ExecutionPayloadEnvelopesByRangeRequest) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(e)
+}
+
+// MarshalSSZTo ssz marshals the ExecutionPayloadEnvelopesByRangeRequest object to a target array
+func (e *ExecutionPayloadEnvelopesByRangeRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'StartSlot'
+	dst = ssz.MarshalUint(dst, e.StartSlot)
+
+	// Field (1) 'Count'
+	dst = ssz.MarshalUint(dst, e.Count)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the ExecutionPayloadEnvelopesByRangeRequest object
+func (e *ExecutionPayloadEnvelopesByRangeRequest) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 16 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'StartSlot'
+	e.StartSlot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[0:8])
+
+	// Field (1) 'Count'
+	e.Count = ssz.UnmarshallUint[uint64](buf[8:16])
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ExecutionPayloadEnvelopesByRangeRequest object
+func (e *ExecutionPayloadEnvelopesByRangeRequest) SizeSSZ() (size int) {
+	size = 16
+	return
+}
+
+// HashTreeRoot ssz hashes the ExecutionPayloadEnvelopesByRangeRequest object
+func (e *ExecutionPayloadEnvelopesByRangeRequest) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(e)
+}
+
+// HashTreeRootWith ssz hashes the ExecutionPayloadEnvelopesByRangeRequest object with a hasher
+func (e *ExecutionPayloadEnvelopesByRangeRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'StartSlot'
+	ssz.PutUint(hh, e.StartSlot)
+
+	// Field (1) 'Count'
+	ssz.PutUint(hh, e.Count)
 
 	hh.Merkleize(indx)
 	return
@@ -959,7 +1019,7 @@ func (d *DepositSnapshot) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = append(dst, d.DepositRoot...)
 
 	// Field (2) 'DepositCount'
-	dst = ssz.MarshalUint64(dst, d.DepositCount)
+	dst = ssz.MarshalUint(dst, d.DepositCount)
 
 	// Field (3) 'ExecutionHash'
 	if size := len(d.ExecutionHash); size != 32 {
@@ -969,7 +1029,7 @@ func (d *DepositSnapshot) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = append(dst, d.ExecutionHash...)
 
 	// Field (4) 'ExecutionDepth'
-	dst = ssz.MarshalUint64(dst, d.ExecutionDepth)
+	dst = ssz.MarshalUint(dst, d.ExecutionDepth)
 
 	// Field (0) 'Finalized'
 	if size := len(d.Finalized); size > 32 {
@@ -1014,7 +1074,7 @@ func (d *DepositSnapshot) UnmarshalSSZ(buf []byte) error {
 	d.DepositRoot = append(d.DepositRoot, buf[4:36]...)
 
 	// Field (2) 'DepositCount'
-	d.DepositCount = ssz.UnmarshallUint64(buf[36:44])
+	d.DepositCount = ssz.UnmarshallUint[uint64](buf[36:44])
 
 	// Field (3) 'ExecutionHash'
 	if cap(d.ExecutionHash) == 0 {
@@ -1023,7 +1083,7 @@ func (d *DepositSnapshot) UnmarshalSSZ(buf []byte) error {
 	d.ExecutionHash = append(d.ExecutionHash, buf[44:76]...)
 
 	// Field (4) 'ExecutionDepth'
-	d.ExecutionDepth = ssz.UnmarshallUint64(buf[76:84])
+	d.ExecutionDepth = ssz.UnmarshallUint[uint64](buf[76:84])
 
 	// Field (0) 'Finalized'
 	{
@@ -1089,7 +1149,7 @@ func (d *DepositSnapshot) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(d.DepositRoot)
 
 	// Field (2) 'DepositCount'
-	hh.PutUint64(d.DepositCount)
+	ssz.PutUint(hh, d.DepositCount)
 
 	// Field (3) 'ExecutionHash'
 	if size := len(d.ExecutionHash); size != 32 {
@@ -1099,7 +1159,7 @@ func (d *DepositSnapshot) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(d.ExecutionHash)
 
 	// Field (4) 'ExecutionDepth'
-	hh.PutUint64(d.ExecutionDepth)
+	ssz.PutUint(hh, d.ExecutionDepth)
 
 	hh.Merkleize(indx)
 	return

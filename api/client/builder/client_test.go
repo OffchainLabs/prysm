@@ -23,7 +23,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	log "github.com/sirupsen/logrus"
 )
 
 type roundtrip func(*http.Request) (*http.Response, error)

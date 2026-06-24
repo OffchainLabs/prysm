@@ -30,7 +30,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/runtime"
 	"github.com/OffchainLabs/prysm/v7/runtime/prereqs"
-	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
 	"github.com/OffchainLabs/prysm/v7/validator/client"
 	"github.com/OffchainLabs/prysm/v7/validator/db"
@@ -74,13 +73,6 @@ func NewValidatorClient(cliCtx *cli.Context) (*ValidatorClient, error) {
 	); err != nil {
 		return nil, err
 	}
-
-	verbosity := cliCtx.String(cmd.VerbosityFlag.Name)
-	level, err := logrus.ParseLevel(verbosity)
-	if err != nil {
-		return nil, err
-	}
-	logrus.SetLevel(level)
 
 	// Warn if user's platform is not supported
 	prereqs.WarnIfPlatformNotSupported(cliCtx.Context)
@@ -130,10 +122,6 @@ func NewValidatorClient(cliCtx *cli.Context) (*ValidatorClient, error) {
 // Start every service in the validator client.
 func (c *ValidatorClient) Start() {
 	c.lock.Lock()
-
-	log.WithFields(logrus.Fields{
-		"version": version.Version(),
-	}).Info("Starting validator node")
 
 	c.services.StartAll()
 
@@ -422,6 +410,11 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		return err
 	}
 
+	stateless := cliCtx.Bool(flags.EnableStatelessFlag.Name)
+	if stateless && !features.Get().EnableBeaconRESTApi {
+		log.Warnf("--%s requires --%s; the flag will be ignored.", flags.EnableStatelessFlag.Name, features.EnableBeaconRESTApi.Name)
+	}
+
 	validatorService, err := client.NewValidatorService(cliCtx.Context, &client.Config{
 		DB:                      c.db,
 		Wallet:                  c.wallet,
@@ -445,6 +438,7 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		LogValidatorPerformance: !cliCtx.Bool(flags.DisablePenaltyRewardLogFlag.Name),
 		EmitAccountMetrics:      !cliCtx.Bool(flags.DisableAccountMetricsFlag.Name),
 		Distributed:             cliCtx.Bool(flags.EnableDistributed.Name),
+		Stateless:               stateless,
 		CloseClientFunc:         c.Close,
 		MaxHealthChecks:         cliCtx.Int(flags.MaxHealthChecksFlag.Name),
 	})

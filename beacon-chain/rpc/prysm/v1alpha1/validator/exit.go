@@ -30,6 +30,11 @@ func (vs *Server) ProposeExit(ctx context.Context, req *ethpb.SignedVoluntaryExi
 		return nil, status.Error(codes.InvalidArgument, "invalid signature provided")
 	}
 
+	// [Modified in Gloas:EIP8282] Builder exits are no longer carried as voluntary
+	// exits; builders exit via BuilderExitRequest on the execution layer.
+	if req.Exit.ValidatorIndex.IsBuilderIndex() {
+		return nil, status.Error(codes.InvalidArgument, "builder voluntary exits are not supported")
+	}
 	// Confirm the validator is eligible to exit with the parameters provided.
 	val, err := s.ValidatorAtIndexReadOnly(req.Exit.ValidatorIndex)
 	if err != nil {

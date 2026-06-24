@@ -164,6 +164,7 @@ func (r *testRunner) waitForChainStart() {
 	time.Sleep(time.Duration(params.BeaconConfig().GenesisDelay) * time.Second)
 	beaconLogFile, err := os.Open(path.Join(e2e.TestParams.LogPath, fmt.Sprintf(e2e.BeaconNodeLogFileName, 0)))
 	require.NoError(r.t, err)
+	defer func() { _ = beaconLogFile.Close() }()
 
 	r.t.Run("chain started", func(t *testing.T) {
 		require.NoError(t, helpers.WaitForTextInFile(beaconLogFile, "Chain started in sync service"), "Chain did not start")
@@ -239,7 +240,10 @@ func (r *testRunner) testDepositsAndTx(ctx context.Context, g *errgroup.Group,
 					}
 				}
 			}
-			r.testTxGeneration(ctx, g, keystorePath, []e2etypes.ComponentRunner{})
+			// Only generate background transactions when relevant for the test.
+			if r.config.TestDeposits || r.config.TestFeature || r.config.UseBuilder {
+				r.testTxGeneration(ctx, g, keystorePath, []e2etypes.ComponentRunner{})
+			}
 		}()
 		if r.config.TestDeposits {
 			return depositCheckValidator.Start(ctx)
@@ -249,7 +253,7 @@ func (r *testRunner) testDepositsAndTx(ctx context.Context, g *errgroup.Group,
 }
 
 func (r *testRunner) testTxGeneration(ctx context.Context, g *errgroup.Group, keystorePath string, requiredNodes []e2etypes.ComponentRunner) {
-	txGenerator := eth1.NewTransactionGenerator(keystorePath, r.config.Seed)
+	txGenerator := eth1.NewTransactionGenerator(keystorePath, r.config.Seed, r.config.UseLargeBlobs)
 	r.comHandler.txGen = txGenerator
 	g.Go(func() error {
 		if err := helpers.ComponentsStarted(ctx, requiredNodes); err != nil {
@@ -293,7 +297,7 @@ func (r *testRunner) waitForMatchingHead(ctx context.Context, timeout time.Durat
 }
 
 func (r *testRunner) testCheckpointSync(ctx context.Context, g *errgroup.Group, i int, conns []*grpc.ClientConn, bnAPI, enr, minerEnr string) error {
-	matchTimeout := 3 * time.Minute
+	matchTimeout := 5 * time.Minute
 	ethNode := eth1.NewNode(i, minerEnr)
 	g.Go(func() error {
 		return ethNode.Start(ctx)
@@ -394,6 +398,7 @@ func (r *testRunner) testBeaconChainSync(ctx context.Context, g *errgroup.Group,
 
 	syncLogFile, err := os.Open(path.Join(e2e.TestParams.LogPath, fmt.Sprintf(e2e.BeaconNodeLogFileName, index)))
 	require.NoError(t, err)
+	defer func() { _ = syncLogFile.Close() }()
 	defer helpers.LogErrorOutput(t, syncLogFile, "beacon chain node", index)
 	t.Run("sync completed", func(t *testing.T) {
 		assert.NoError(t, helpers.WaitForTextInFile(syncLogFile, "Synced up to"), "Failed to sync")
@@ -444,6 +449,7 @@ func (r *testRunner) testDoppelGangerProtection(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("unable to open log file: %w", err)
 	}
+	defer func() { _ = logFile.Close() }()
 	r.t.Run("doppelganger found", func(t *testing.T) {
 		assert.NoError(t, helpers.WaitForTextInFile(logFile, "Duplicate instances exists in the network for validator keys"), "Failed to carry out doppelganger check correctly")
 	})

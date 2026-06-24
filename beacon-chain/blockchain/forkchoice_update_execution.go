@@ -12,21 +12,24 @@ import (
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
-func (s *Service) isNewHead(r [32]byte) bool {
+func (s *Service) isNewHead(r [32]byte, full bool) bool {
 	s.headLock.RLock()
 	defer s.headLock.RUnlock()
 
 	currentHeadRoot := s.originBlockRoot
+	currentFull := false
 	if s.head != nil {
 		currentHeadRoot = s.headRoot()
+		currentFull = s.head.full
 	}
 
-	return r != currentHeadRoot || r == [32]byte{}
+	return r != currentHeadRoot || full != currentFull || r == [32]byte{}
 }
 
 func (s *Service) getStateAndBlock(ctx context.Context, r [32]byte) (state.BeaconState, interfaces.ReadOnlySignedBeaconBlock, error) {
@@ -53,58 +56,54 @@ type fcuConfig struct {
 }
 
 // sendFCU handles the logic to notify the engine of a forckhoice update
-// for the first time when processing an incoming block during regular sync. It
-// always updates the shuffling caches and handles epoch transitions when the
-// incoming block is late, preparing payload attributes in this case while it
-// only sends a message with empty attributes for early blocks.
-func (s *Service) sendFCU(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) error {
-	if !s.isNewHead(cfg.headRoot) {
-		return nil
+// when processing an incoming block during regular sync. It
+// always updates the shuffling caches and handles epoch transitions .
+func (s *Service) sendFCU(cfg *postBlockProcessConfig) {
+	if cfg.postState.Version() < version.Fulu {
+		// update the caches to compute the right proposer index
+		// this function is called under a forkchoice lock which we need to release.
+		s.ForkChoicer().Unlock()
+		s.updateCachesPostBlockProcessing(cfg)
+		s.ForkChoicer().Lock()
 	}
+	fcuArgs, err := s.getFCUArgs(cfg)
+	if err != nil {
+		log.WithError(err).Error("Could not get forkchoice update argument")
+		return
+	}
+	// If head has not been updated and attributes are nil, we can skip the FCU.
+	if !s.isNewHead(cfg.headRoot, true) && (fcuArgs.attributes == nil || fcuArgs.attributes.IsEmpty()) {
+		return
+	}
+	// If we are proposing and we aim to reorg the block, we have already sent FCU with attributes on lateBlockTasks
 	if fcuArgs.attributes != nil && !fcuArgs.attributes.IsEmpty() && s.shouldOverrideFCU(cfg.headRoot, s.CurrentSlot()+1) {
-		return nil
+		return
 	}
-	return s.forkchoiceUpdateWithExecution(cfg.ctx, fcuArgs)
-}
+	if s.inRegularSync() {
+		go s.forkchoiceUpdateWithExecution(cfg.ctx, fcuArgs)
+	}
 
-// sendFCUWithAttributes computes the payload attributes and sends an FCU message
-// to the engine if needed
-func (s *Service) sendFCUWithAttributes(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) {
-	slotCtx, cancel := context.WithTimeout(context.Background(), slotDeadline)
-	defer cancel()
-	cfg.ctx = slotCtx
-	s.cfg.ForkChoiceStore.RLock()
-	defer s.cfg.ForkChoiceStore.RUnlock()
-	if err := s.computePayloadAttributes(cfg, fcuArgs); err != nil {
-		log.WithError(err).Error("Could not compute payload attributes")
-		return
-	}
-	if fcuArgs.attributes.IsEmpty() {
-		return
-	}
-	if _, err := s.notifyForkchoiceUpdate(cfg.ctx, fcuArgs); err != nil {
-		log.WithError(err).Error("Could not update forkchoice with payload attributes for proposal")
+	if s.isNewHead(fcuArgs.headRoot, true) {
+		if err := s.saveHead(cfg.ctx, fcuArgs.headRoot, fcuArgs.headBlock, fcuArgs.headState, true); err != nil {
+			log.WithError(err).Error("Could not save head")
+		}
+		s.pruneAttsFromPool(s.ctx, fcuArgs.headState, fcuArgs.headBlock)
 	}
 }
 
-// fockchoiceUpdateWithExecution is a wrapper around notifyForkchoiceUpdate. It decides whether a new call to FCU should be made.
-func (s *Service) forkchoiceUpdateWithExecution(ctx context.Context, args *fcuConfig) error {
+// fockchoiceUpdateWithExecution is a wrapper around notifyForkchoiceUpdate. It gets a forkchoice lock and calls the engine.
+// The caller of this function should NOT have a lock in forkchoice store.
+func (s *Service) forkchoiceUpdateWithExecution(ctx context.Context, args *fcuConfig) {
 	_, span := trace.StartSpan(ctx, "beacon-chain.blockchain.forkchoiceUpdateWithExecution")
 	defer span.End()
 	// Note: Use the service context here to avoid the parent context being ended during a forkchoice update.
 	ctx = trace.NewContext(s.ctx, span)
+	s.ForkChoicer().Lock()
+	defer s.ForkChoicer().Unlock()
 	_, err := s.notifyForkchoiceUpdate(ctx, args)
 	if err != nil {
-		return errors.Wrap(err, "could not notify forkchoice update")
+		log.WithError(err).Error("Could not notify forkchoice update")
 	}
-
-	if err := s.saveHead(ctx, args.headRoot, args.headBlock, args.headState); err != nil {
-		log.WithError(err).Error("Could not save head")
-	}
-
-	// Only need to prune attestations from pool if the head has changed.
-	s.pruneAttsFromPool(s.ctx, args.headState, args.headBlock)
-	return nil
 }
 
 // shouldOverrideFCU checks whether the incoming block is still subject to being

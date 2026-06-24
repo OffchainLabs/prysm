@@ -47,6 +47,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//beacon-chain/forkchoice/types:go_default_library",
         "//beacon-chain/p2p/peers/peerdata:go_default_library",
         "//beacon-chain/p2p/peers/scorers:go_default_library",
         "//cmd/beacon-chain/flags:go_default_library",

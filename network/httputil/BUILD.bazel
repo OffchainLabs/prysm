@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "errors.go",
+        "log.go",
         "reader.go",
         "writer.go",
     ],

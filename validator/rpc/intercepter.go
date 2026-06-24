@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"crypto/subtle"
 	"net/http"
 	"strings"
 
@@ -13,6 +14,8 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
+
+const bearerPrefix = "Bearer "
 
 // AuthTokenInterceptor is a gRPC unary interceptor to authorize incoming requests.
 func (s *Server) AuthTokenInterceptor() grpc.UnaryServerInterceptor {
@@ -37,22 +40,34 @@ func (s *Server) AuthTokenInterceptor() grpc.UnaryServerInterceptor {
 // AuthTokenHandler is an HTTP handler to authorize a route.
 func (s *Server) AuthTokenHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// if it's not initialize or has a web prefix
-		if (strings.Contains(r.URL.Path, api.WebApiUrlPrefix) || strings.Contains(r.URL.Path, api.KeymanagerApiPrefix)) && !strings.Contains(r.URL.Path, api.SystemLogsPrefix) {
+		path := r.URL.Path
+		needsAuth := strings.Contains(path, api.WebApiUrlPrefix) || strings.Contains(path, api.KeymanagerApiPrefix)
+		// Protect direct (non-/api) web endpoints too; otherwise callers can bypass auth by hitting /v2/validator/*.
+		if strings.HasPrefix(path, api.WebUrlPrefix) &&
+			!strings.HasPrefix(path, api.WebUrlPrefix+"initialize") &&
+			!strings.HasPrefix(path, api.WebUrlPrefix+"health/") {
+			needsAuth = true
+		}
+
+		if needsAuth && !strings.Contains(path, api.SystemLogsPrefix) {
 			// ignore some routes
 			reqToken := r.Header.Get("Authorization")
 			if reqToken == "" {
 				httputil.HandleError(w, "Unauthorized: no Authorization header passed. Please use an Authorization header with the jwt created in the prysm wallet", http.StatusUnauthorized)
 				return
 			}
-			tokenParts := strings.Split(reqToken, "Bearer ")
-			if len(tokenParts) != 2 {
+
+			token, ok := strings.CutPrefix(reqToken, bearerPrefix)
+			if !ok {
 				httputil.HandleError(w, "Invalid token format", http.StatusBadRequest)
 				return
 			}
 
-			token := tokenParts[1]
-			if strings.TrimSpace(token) != s.authToken || strings.TrimSpace(s.authToken) == "" {
+			token = strings.TrimSpace(token)
+			if token == "" ||
+				len(s.authToken) == 0 ||
+				len(token) != len(s.authToken) ||
+				subtle.ConstantTimeCompare([]byte(token), []byte(s.authToken)) != 1 {
 				httputil.HandleError(w, "Forbidden: token value is invalid", http.StatusForbidden)
 				return
 			}
@@ -69,15 +84,22 @@ func (s *Server) authorize(ctx context.Context) error {
 	}
 
 	authHeader, ok := md["authorization"]
-	if !ok {
-		return status.Errorf(codes.Unauthenticated, "Authorization token could not be found")
+	if !ok || len(authHeader) == 0 {
+		return status.Error(codes.Unauthenticated, "Authorization token could not be found")
 	}
-	if len(authHeader) < 1 || !strings.Contains(authHeader[0], "Bearer ") {
+
+	token, ok := strings.CutPrefix(authHeader[0], bearerPrefix)
+	if !ok {
 		return status.Error(codes.Unauthenticated, "Invalid auth header, needs Bearer {token}")
 	}
-	token := strings.Split(authHeader[0], "Bearer ")[1]
-	if strings.TrimSpace(token) != s.authToken || strings.TrimSpace(s.authToken) == "" {
-		return status.Errorf(codes.Unauthenticated, "Forbidden: token value is invalid")
+
+	token = strings.TrimSpace(token)
+	if token == "" ||
+		len(s.authToken) == 0 ||
+		len(token) != len(s.authToken) ||
+		subtle.ConstantTimeCompare([]byte(token), []byte(s.authToken)) != 1 {
+		return status.Error(codes.Unauthenticated, "Forbidden: token value is invalid")
 	}
+
 	return nil
 }

@@ -3,11 +3,9 @@ package monitor
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/sirupsen/logrus"
 )
 
 var (
-	log = logrus.WithField("prefix", "monitor")
 	// TODO: The Prometheus gauge vectors and counters in this package deprecate the
 	// corresponding gauge vectors and counters in the validator client.
 

@@ -692,14 +692,25 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
 }
 
 func (p *Builder) handleBlindedBlock(w http.ResponseWriter, req *http.Request) {
-	// TODO update for fork specific
-	sb := &builderAPI.SignedBlindedBeaconBlockBellatrix{
-		SignedBlindedBeaconBlockBellatrix: &eth.SignedBlindedBeaconBlockBellatrix{},
+	// Decode blinded block based on the current fork version.
+	// The beacon node sends JSON using api/server/structs types.
+	var err error
+	switch p.currVersion {
+	case version.Electra:
+		var sb structs.SignedBlindedBeaconBlockElectra
+		err = json.NewDecoder(req.Body).Decode(&sb)
+	case version.Deneb:
+		var sb structs.SignedBlindedBeaconBlockDeneb
+		err = json.NewDecoder(req.Body).Decode(&sb)
+	case version.Capella:
+		var sb structs.SignedBlindedBeaconBlockCapella
+		err = json.NewDecoder(req.Body).Decode(&sb)
+	default:
+		var sb structs.SignedBlindedBeaconBlockBellatrix
+		err = json.NewDecoder(req.Body).Decode(&sb)
 	}
-	err := json.NewDecoder(req.Body).Decode(sb)
 	if err != nil {
-		p.cfg.logger.WithError(err).Error("Could not decode blinded block")
-		// TODO: Allow the method to unmarshal blinded blocks correctly
+		p.cfg.logger.WithError(err).WithField("version", version.String(p.currVersion)).Error("Could not decode blinded block")
 	}
 	if p.currPayload == nil {
 		p.cfg.logger.Error("No payload is cached")

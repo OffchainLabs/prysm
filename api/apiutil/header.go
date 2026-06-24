@@ -5,8 +5,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-
-	log "github.com/sirupsen/logrus"
 )
 
 type mediaRange struct {

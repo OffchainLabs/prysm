@@ -8,6 +8,7 @@ go_library(
         "deposit_pruner.go",
         "deposit_tree.go",
         "deposit_tree_snapshot.go",
+        "log.go",
         "merkle_tree.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot",
@@ -15,7 +16,6 @@ go_library(
     deps = [
         "//beacon-chain/cache:go_default_library",
         "//config/fieldparams:go_default_library",
-        "//container/slice:go_default_library",
         "//container/trie:go_default_library",
         "//crypto/hash:go_default_library",
         "//encoding/bytesutil:go_default_library",

@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -122,7 +121,7 @@ func IsNextPeriodSyncCommittee(
 // CurrentPeriodSyncSubcommitteeIndices returns the subcommittee indices of the
 // current period sync committee for input validator.
 func CurrentPeriodSyncSubcommitteeIndices(
-	st state.BeaconState, valIdx primitives.ValidatorIndex,
+	st state.ReadOnlyBeaconState, valIdx primitives.ValidatorIndex,
 ) ([]primitives.CommitteeIndex, error) {
 	root, err := SyncPeriodBoundaryRoot(st)
 	if err != nil {

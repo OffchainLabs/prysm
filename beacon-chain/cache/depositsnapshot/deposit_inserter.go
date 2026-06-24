@@ -20,7 +20,6 @@ var (
 		Name: "beacondb_all_deposits_eip4881",
 		Help: "The number of total deposits in memory",
 	})
-	log = logrus.WithField("prefix", "cache")
 )
 
 // InsertDeposit into the database. If deposit or block number are nil

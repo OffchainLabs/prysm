@@ -2,15 +2,18 @@ package sync
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
-	"math"
+	"slices"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
@@ -51,179 +54,213 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	// Decode the message, reject if it fails.
 	m, err := s.decodePubsubMessage(msg)
 	if err != nil {
-		log.WithError(err).Error("Failed to decode message")
 		return pubsub.ValidationReject, err
 	}
 
 	// Reject messages that are not of the expected type.
-	dcsc, ok := m.(*eth.DataColumnSidecar)
-	if !ok {
-		log.WithField("message", m).Error("Message is not of type *eth.DataColumnSidecar")
+	var roDataColumn blocks.RODataColumn
+	switch dc := m.(type) {
+	case *eth.DataColumnSidecar:
+		roDataColumn, err = blocks.NewRODataColumn(dc)
+	case *eth.DataColumnSidecarGloas:
+		roDataColumn, err = blocks.NewRODataColumnGloas(dc)
+	default:
 		return pubsub.ValidationReject, errWrongMessage
 	}
-
-	// Convert to a read-only data column sidecar.
-	roDataColumn, err := blocks.NewRODataColumn(dcsc)
 	if err != nil {
 		return pubsub.ValidationReject, errors.Wrap(err, "roDataColumn conversion failure")
 	}
 
-	// Compute a batch of only one data column sidecar.
-	roDataColumns := []blocks.RODataColumn{roDataColumn}
-
-	// Create the verifier.
-	verifier := s.newColumnsVerifier(roDataColumns, verification.GossipDataColumnSidecarRequirements)
-
-	// Start the verification process.
-	// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#data_column_sidecar_subnet_id
-
-	// [REJECT] The sidecar is valid as verified by `verify_data_column_sidecar(sidecar)`.
-	if err := verifier.ValidFields(); err != nil {
-		return pubsub.ValidationReject, err
+	// Gloas sidecars don't carry a parent root, so skip the ShouldIgnoreData check.
+	if !roDataColumn.IsGloas() {
+		parentRoot, err := roDataColumn.ParentRoot()
+		if err != nil {
+			return pubsub.ValidationReject, err
+		}
+		if s.cfg.chain.ShouldIgnoreData(parentRoot, roDataColumn.Slot()) {
+			log.WithFields(logging.DataColumnFields(roDataColumn)).Debug("Ignoring data column with canonical parent before justified checkpoint")
+			ignoredPreJustifiedDataColumnCount.Inc()
+			return pubsub.ValidationIgnore, nil
+		}
 	}
 
-	// [REJECT] The sidecar is for the correct subnet -- i.e. `compute_subnet_for_data_column_sidecar(sidecar.index) == subnet_id`.
-	if err := verifier.CorrectSubnet(dataColumnSidecarSubTopic, []string{*msg.Topic}); err != nil {
-		return pubsub.ValidationReject, err
+	var verifiedRODataColumn blocks.VerifiedRODataColumn
+	if slots.ToEpoch(roDataColumn.Slot()) >= params.BeaconConfig().GloasForkEpoch {
+		verifiedRODataColumn, err = s.validateDataColumnGloas(ctx, pid, msg, roDataColumn, dataColumnSidecarSubTopic)
+		if err != nil {
+			return validationResultFromError(err), baseValidationErr(err)
+		}
+	} else {
+		verifiedRODataColumn, err = s.validateDataColumnFulu(ctx, msg, roDataColumn, dataColumnSidecarSubTopic)
+		if err != nil {
+			return validationResultFromError(err), baseValidationErr(err)
+		}
 	}
 
-	// [IGNORE] The sidecar is not from a future slot (with a `MAXIMUM_GOSSIP_CLOCK_DISPARITY` allowance)
-	//  -- i.e. validate that `block_header.slot <= current_slot` (a client MAY queue future sidecars for processing at the appropriate slot).
-	if err := verifier.NotFromFutureSlot(); err != nil {
-		return pubsub.ValidationIgnore, err
+	if verifiedRODataColumn.IsGloas() {
+		msg.ValidatorData = verifiedRODataColumn.DataColumnSidecarGloas()
+	} else {
+		msg.ValidatorData = verifiedRODataColumn.DataColumnSidecar()
 	}
-
-	// [IGNORE] The sidecar is from a slot greater than the latest finalized slot
-	// -- i.e. validate that `block_header.slot > compute_start_slot_at_epoch(state.finalized_checkpoint.epoch)`
-	if err := verifier.SlotAboveFinalized(); err != nil {
-		return pubsub.ValidationIgnore, err
-	}
-
-	// [IGNORE] The sidecar's block's parent (defined by `block_header.parent_root`) has been seen (via gossip or non-gossip sources
-	// (a client MAY queue sidecars for processing once the parent block is retrieved).
-	if err := verifier.SidecarParentSeen(s.hasBadBlock); err != nil {
-		// If we haven't seen the parent, request it asynchronously.
-		go func() {
-			customCtx := context.Background()
-			parentRoot := roDataColumn.ParentRoot()
-			roots := [][fieldparams.RootLength]byte{parentRoot}
-			randGenerator := rand.NewGenerator()
-			if err := s.sendBatchRootRequest(customCtx, roots, randGenerator); err != nil {
-				log.WithError(err).WithFields(logging.DataColumnFields(roDataColumn)).Debug("Failed to send batch root request")
-			}
-		}()
-
-		return pubsub.ValidationIgnore, err
-	}
-
-	// [REJECT] The sidecar's block's parent (defined by `block_header.parent_root`) passes validation.
-	if err := verifier.SidecarParentValid(s.hasBadBlock); err != nil {
-		return pubsub.ValidationReject, err
-	}
-
-	// [REJECT] The proposer signature of `sidecar.signed_block_header`, is valid with respect to the `block_header.proposer_index` pubkey.
-	//          We do not strictly respect the spec ordering here. This is necessary because signature verification depends on the parent root,
-	//          which is only available if the parent block is known.
-	if err := verifier.ValidProposerSignature(ctx); err != nil {
-		return pubsub.ValidationReject, err
-	}
-
-	// [REJECT] The sidecar is from a higher slot than the sidecar's block's parent (defined by `block_header.parent_root`).
-	if err := verifier.SidecarParentSlotLower(); err != nil {
-		return pubsub.ValidationReject, err
-	}
-
-	// [REJECT] The current `finalized_checkpoint` is an ancestor of the sidecar's block
-	// -- i.e. `get_checkpoint_block(store, block_header.parent_root, store.finalized_checkpoint.epoch) == store.finalized_checkpoint.root`.
-	if err := verifier.SidecarDescendsFromFinalized(); err != nil {
-		return pubsub.ValidationReject, err
-	}
-
-	// [REJECT] The sidecar's `kzg_commitments` field inclusion proof is valid as verified by `verify_data_column_sidecar_inclusion_proof(sidecar)`.
-	if err := verifier.SidecarInclusionProven(); err != nil {
-		return pubsub.ValidationReject, err
-	}
-
-	// [REJECT] The sidecar's column data is valid as verified by `verify_data_column_sidecar_kzg_proofs(sidecar)`.
-	validationResult, err := s.validateWithKzgBatchVerifier(ctx, roDataColumns)
-	if validationResult != pubsub.ValidationAccept {
-		return validationResult, err
-	}
-	// Mark KZG verification as satisfied since we did it via batch verifier
-	verifier.SatisfyRequirement(verification.RequireSidecarKzgProofVerified)
-
-	// [IGNORE] The sidecar is the first sidecar for the tuple `(block_header.slot, block_header.proposer_index, sidecar.index)`
-	// with valid header signature, sidecar inclusion proof, and kzg proof.
-	if s.hasSeenDataColumnIndex(roDataColumn.Slot(), roDataColumn.ProposerIndex(), roDataColumn.DataColumnSidecar.Index) {
-		return pubsub.ValidationIgnore, nil
-	}
-
-	// [REJECT] The sidecar is proposed by the expected `proposer_index` for the block's slot in the context of the current shuffling (defined by `block_header.parent_root`/`block_header.slot`).
-	// If the `proposer_index` cannot immediately be verified against the expected shuffling, the sidecar MAY be queued for later processing while proposers for the block's branch are calculated
-	// -- in such a case do not REJECT, instead IGNORE this message.
-	if err := verifier.SidecarProposerExpected(ctx); err != nil {
-		return pubsub.ValidationReject, err
-	}
-
-	verifiedRODataColumns, err := verifier.VerifiedRODataColumns()
-	if err != nil {
-		// This should never happen.
-		log.WithError(err).WithFields(logging.DataColumnFields(roDataColumn)).Error("Failed to get verified data columns")
-		return pubsub.ValidationIgnore, err
-	}
-
-	verifiedRODataColumnsCount := len(verifiedRODataColumns)
-
-	if verifiedRODataColumnsCount != 1 {
-		// This should never happen.
-		log.WithField("verifiedRODataColumnsCount", verifiedRODataColumnsCount).Error("Verified data columns count is not 1")
-		return pubsub.ValidationIgnore, errors.New("Wrong number of verified data columns")
-	}
-
-	msg.ValidatorData = verifiedRODataColumns[0]
 	dataColumnSidecarVerificationSuccessesCounter.Inc()
 
 	// Get the time at slot start.
-	startTime, err := slots.StartTime(s.cfg.clock.GenesisTime(), roDataColumn.SignedBlockHeader.Header.Slot)
+	startTime, err := slots.StartTime(s.cfg.clock.GenesisTime(), verifiedRODataColumn.Slot())
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
 
 	sinceSlotStartTime := receivedTime.Sub(startTime)
 	validationTime := s.cfg.clock.Now().Sub(receivedTime)
+	dataColumnSidecarArrivalGossipSummary.Observe(float64(sinceSlotStartTime.Milliseconds()))
 	dataColumnSidecarVerificationGossipHistogram.Observe(float64(validationTime.Milliseconds()))
-
-	peerGossipScore := s.cfg.p2p.Peers().Scorers().GossipScorer().Score(pid)
 
 	select {
 	case s.dataColumnLogCh <- dataColumnLogEntry{
-		Slot:            roDataColumn.Slot(),
-		ColIdx:          roDataColumn.Index,
-		PropIdx:         roDataColumn.ProposerIndex(),
-		BlockRoot:       roDataColumn.BlockRoot(),
-		ParentRoot:      roDataColumn.ParentRoot(),
-		PeerSuffix:      pid.String()[len(pid.String())-6:],
-		PeerGossipScore: peerGossipScore,
-		validationTime:  validationTime,
-		sinceStartTime:  sinceSlotStartTime,
+		slot:           verifiedRODataColumn.Slot(),
+		index:          verifiedRODataColumn.Index(),
+		root:           verifiedRODataColumn.BlockRoot(),
+		validationTime: validationTime,
+		sinceStartTime: sinceSlotStartTime,
 	}:
 	default:
-		log.WithField("slot", roDataColumn.Slot()).Warn("Failed to send data column log entry")
+		log.WithField("slot", verifiedRODataColumn.Slot()).Warn("Failed to send data column log entry")
 	}
 
 	if s.cfg.operationNotifier != nil {
 		s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
 			Type: operation.DataColumnReceived,
 			Data: &operation.DataColumnReceivedData{
-				Slot:           roDataColumn.Slot(),
-				Index:          roDataColumn.Index,
-				BlockRoot:      roDataColumn.BlockRoot(),
-				KzgCommitments: bytesutil.SafeCopy2dBytes(roDataColumn.KzgCommitments),
+				Slot:      verifiedRODataColumn.Slot(),
+				Index:     verifiedRODataColumn.Index(),
+				BlockRoot: verifiedRODataColumn.BlockRoot(),
+				KzgCommitments: func() [][]byte {
+					comms, err := verifiedRODataColumn.KzgCommitments()
+					if err != nil {
+						log.WithError(err).Warn("Failed to get KZG commitments for operation feed")
+						return nil
+					}
+					return bytesutil.SafeCopy2dBytes(comms)
+				}(),
 			},
 		})
 	}
 
 	return pubsub.ValidationAccept, nil
+}
+
+func (s *Service) validateDataColumnFulu(
+	ctx context.Context,
+	msg *pubsub.Message,
+	roDataColumn blocks.RODataColumn,
+	dataColumnSidecarSubTopic string,
+) (blocks.VerifiedRODataColumn, error) {
+	roDataColumns := []blocks.RODataColumn{roDataColumn}
+	verifier := s.newColumnsVerifier(roDataColumns, verification.GossipDataColumnSidecarRequirements)
+
+	// [REJECT] The sidecar is valid as verified by `verify_data_column_sidecar(sidecar)`.
+	if err := verifier.ValidFields(); err != nil {
+		return blocks.VerifiedRODataColumn{}, errors.Wrap(err, "fulu data column validation")
+	}
+
+	// [REJECT] The sidecar is for the correct subnet -- i.e. `compute_subnet_for_data_column_sidecar(sidecar.index) == subnet_id`.
+	if err := verifier.CorrectSubnet(dataColumnSidecarSubTopic, []string{*msg.Topic}); err != nil {
+		return blocks.VerifiedRODataColumn{}, errors.Wrap(err, "fulu data column validation")
+	}
+
+	// [IGNORE] The sidecar is not from a future slot (with a `MAXIMUM_GOSSIP_CLOCK_DISPARITY` allowance)
+	//  -- i.e. validate that `block_header.slot <= current_slot` (a client MAY queue future sidecars for processing at the appropriate slot).
+	if err := verifier.NotFromFutureSlot(); err != nil {
+		return blocks.VerifiedRODataColumn{}, ignoreValidation(err)
+	}
+
+	// [IGNORE] The sidecar is from a slot greater than the latest finalized slot
+	// -- i.e. validate that `block_header.slot > compute_start_slot_at_epoch(state.finalized_checkpoint.epoch)`
+	if err := verifier.SlotAboveFinalized(); err != nil {
+		return blocks.VerifiedRODataColumn{}, ignoreValidation(err)
+	}
+
+	// [IGNORE] The sidecar's block's parent (defined by `block_header.parent_root`) has been seen (via gossip or non-gossip sources
+	// (a client MAY queue sidecars for processing once the parent block is retrieved).
+	if err := verifier.SidecarParentSeen(s.hasBadBlock); err != nil {
+		go func() {
+			customCtx := context.Background()
+			parentRoot, err := roDataColumn.ParentRoot()
+			if err != nil {
+				log.WithError(err).WithFields(logging.DataColumnFields(roDataColumn)).Debug("Failed to get parent root for batch root request")
+				return
+			}
+			roots := [][fieldparams.RootLength]byte{parentRoot}
+			randGenerator := rand.NewGenerator()
+			if reqErr := s.sendBatchRootRequest(customCtx, roots, randGenerator); reqErr != nil {
+				log.WithError(reqErr).WithFields(logging.DataColumnFields(roDataColumn)).Debug("Failed to send batch root request")
+			}
+		}()
+
+		return blocks.VerifiedRODataColumn{}, ignoreValidation(err)
+	}
+
+	// [REJECT] The sidecar's block's parent (defined by `block_header.parent_root`) passes validation.
+	if err := verifier.SidecarParentValid(s.hasBadBlock); err != nil {
+		return blocks.VerifiedRODataColumn{}, errors.Wrap(err, "fulu data column validation")
+	}
+
+	// [REJECT] The proposer signature of `sidecar.signed_block_header`, is valid with respect to the `block_header.proposer_index` pubkey.
+	//          We do not strictly respect the spec ordering here. This is necessary because signature verification depends on the parent root,
+	//          which is only available if the parent block is known.
+	if err := verifier.ValidProposerSignature(ctx); err != nil {
+		return blocks.VerifiedRODataColumn{}, errors.Wrap(err, "fulu data column validation")
+	}
+
+	// [REJECT] The sidecar is from a higher slot than the sidecar's block's parent (defined by `block_header.parent_root`).
+	if err := verifier.SidecarParentSlotLower(); err != nil {
+		return blocks.VerifiedRODataColumn{}, errors.Wrap(err, "fulu data column validation")
+	}
+
+	// [REJECT] The current `finalized_checkpoint` is an ancestor of the sidecar's block
+	// -- i.e. `get_checkpoint_block(store, block_header.parent_root, store.finalized_checkpoint.epoch) == store.finalized_checkpoint.root`.
+	if err := verifier.SidecarDescendsFromFinalized(); err != nil {
+		return blocks.VerifiedRODataColumn{}, errors.Wrap(err, "fulu data column validation")
+	}
+
+	// [REJECT] The sidecar's `kzg_commitments` field inclusion proof is valid as verified by `verify_data_column_sidecar_inclusion_proof(sidecar)`.
+	if err := verifier.SidecarInclusionProven(); err != nil {
+		return blocks.VerifiedRODataColumn{}, errors.Wrap(err, "fulu data column validation")
+	}
+
+	// [REJECT] The sidecar's column data is valid as verified by `verify_data_column_sidecar_kzg_proofs(sidecar)`.
+	if err := verifier.SidecarKzgProofVerified(); err != nil {
+		return blocks.VerifiedRODataColumn{}, errors.Wrap(err, "fulu data column validation")
+	}
+
+	// [IGNORE] The sidecar is the first sidecar for the tuple `(block_header.slot, block_header.proposer_index, sidecar.index)`
+	// with valid header signature, sidecar inclusion proof, and kzg proof.
+	proposerIndex, err := roDataColumn.ProposerIndex()
+	if err != nil {
+		return blocks.VerifiedRODataColumn{}, errors.Wrap(err, "fulu data column validation")
+	}
+	if s.hasSeenDataColumnIndex(roDataColumn.Slot(), proposerIndex, roDataColumn.Index()) {
+		return blocks.VerifiedRODataColumn{}, ignoreValidation(nil)
+	}
+
+	// [REJECT] The sidecar is proposed by the expected `proposer_index` for the block's slot in the context of the current shuffling (defined by `block_header.parent_root`/`block_header.slot`).
+	// If the `proposer_index` cannot immediately be verified against the expected shuffling, the sidecar MAY be queued for later processing while proposers for the block's branch are calculated
+	// -- in such a case do not REJECT, instead IGNORE this message.
+	if err := verifier.SidecarProposerExpected(ctx); err != nil {
+		return blocks.VerifiedRODataColumn{}, errors.Wrap(err, "fulu data column validation")
+	}
+
+	verifiedRODataColumns, err := verifier.VerifiedRODataColumns()
+	if err != nil {
+		log.WithError(err).WithFields(logging.DataColumnFields(roDataColumn)).Error("Failed to get verified data columns")
+		return blocks.VerifiedRODataColumn{}, ignoreValidation(err)
+	}
+	if len(verifiedRODataColumns) != 1 {
+		log.WithField("verifiedRODataColumnsCount", len(verifiedRODataColumns)).Error("Verified data columns count is not 1")
+		return blocks.VerifiedRODataColumn{}, ignoreValidation(errors.New("wrong number of verified data columns"))
+	}
+
+	return verifiedRODataColumns[0], nil
 }
 
 // Returns true if the column with the same slot, proposer index, and column index has been seen before.
@@ -248,70 +285,106 @@ func computeCacheKey(slot primitives.Slot, proposerIndex primitives.ValidatorInd
 
 	return string(key)
 }
+func validationResultFromError(err error) pubsub.ValidationResult {
+	var vErr validationError
+	if stderrors.As(err, &vErr) {
+		return vErr.result
+	}
+	return pubsub.ValidationReject
+}
+
+func baseValidationErr(err error) error {
+	var vErr validationError
+	if stderrors.As(err, &vErr) {
+		return vErr.err
+	}
+	return err
+}
+
+type validationError struct {
+	result pubsub.ValidationResult
+	err    error
+}
+
+func (e validationError) Error() string {
+	if e.err == nil {
+		return ""
+	}
+	return e.err.Error()
+}
+
+func (e validationError) Unwrap() error {
+	return e.err
+}
+
+func ignoreValidation(err error) error {
+	return validationError{result: pubsub.ValidationIgnore, err: err}
+}
 
 type dataColumnLogEntry struct {
-	Slot            primitives.Slot
-	ColIdx          uint64
-	PropIdx         primitives.ValidatorIndex
-	BlockRoot       [32]byte
-	ParentRoot      [32]byte
-	PeerSuffix      string
-	PeerGossipScore float64
-	validationTime  time.Duration
-	sinceStartTime  time.Duration
+	slot           primitives.Slot
+	index          uint64
+	root           [32]byte
+	validationTime time.Duration
+	sinceStartTime time.Duration
 }
 
 func (s *Service) processDataColumnLogs() {
 	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	slotStats := make(map[primitives.Slot][fieldparams.NumberOfColumns]dataColumnLogEntry)
+	slotStats := make(map[[fieldparams.RootLength]byte][]dataColumnLogEntry)
 
 	for {
 		select {
-		case entry := <-s.dataColumnLogCh:
-			cols := slotStats[entry.Slot]
-			cols[entry.ColIdx] = entry
-			slotStats[entry.Slot] = cols
+		case col := <-s.dataColumnLogCh:
+			cols := slotStats[col.root]
+			cols = append(cols, col)
+			slotStats[col.root] = cols
 		case <-ticker.C:
-			for slot, columns := range slotStats {
-				var (
-					colIndices      = make([]uint64, 0, fieldparams.NumberOfColumns)
-					peers           = make([]string, 0, fieldparams.NumberOfColumns)
-					gossipScores    = make([]float64, 0, fieldparams.NumberOfColumns)
-					validationTimes = make([]string, 0, fieldparams.NumberOfColumns)
-					sinceStartTimes = make([]string, 0, fieldparams.NumberOfColumns)
-				)
+			for root, columns := range slotStats {
+				indices := make([]uint64, 0, fieldparams.NumberOfColumns)
+				minValidationTime, maxValidationTime, sumValidationTime := time.Duration(0), time.Duration(0), time.Duration(0)
+				minSinceStartTime, maxSinceStartTime, sumSinceStartTime := time.Duration(0), time.Duration(0), time.Duration(0)
 
 				totalReceived := 0
-				for _, entry := range columns {
-					if entry.PeerSuffix == "" {
+				for _, column := range columns {
+					indices = append(indices, column.index)
+
+					sumValidationTime += column.validationTime
+					sumSinceStartTime += column.sinceStartTime
+
+					if totalReceived == 0 {
+						minValidationTime, maxValidationTime = column.validationTime, column.validationTime
+						minSinceStartTime, maxSinceStartTime = column.sinceStartTime, column.sinceStartTime
+						totalReceived++
 						continue
 					}
-					colIndices = append(colIndices, entry.ColIdx)
-					peers = append(peers, entry.PeerSuffix)
-					gossipScores = append(gossipScores, roundFloat(entry.PeerGossipScore, 2))
-					validationTimes = append(validationTimes, fmt.Sprintf("%.2fms", float64(entry.validationTime.Milliseconds())))
-					sinceStartTimes = append(sinceStartTimes, fmt.Sprintf("%.2fms", float64(entry.sinceStartTime.Milliseconds())))
+
+					minValidationTime, maxValidationTime = min(minValidationTime, column.validationTime), max(maxValidationTime, column.validationTime)
+					minSinceStartTime, maxSinceStartTime = min(minSinceStartTime, column.sinceStartTime), max(maxSinceStartTime, column.sinceStartTime)
 					totalReceived++
 				}
 
-				log.WithFields(logrus.Fields{
-					"slot":            slot,
-					"receivedCount":   totalReceived,
-					"columnIndices":   colIndices,
-					"peers":           peers,
-					"gossipScores":    gossipScores,
-					"validationTimes": validationTimes,
-					"sinceStartTimes": sinceStartTimes,
-				}).Debug("Accepted data column sidecars summary")
+				if totalReceived > 0 {
+					slices.Sort(indices)
+					avgValidationTime := sumValidationTime / time.Duration(totalReceived)
+					avgSinceStartTime := sumSinceStartTime / time.Duration(totalReceived)
+
+					log.WithFields(logrus.Fields{
+						"slot":           columns[0].slot,
+						"root":           fmt.Sprintf("%#x", root),
+						"count":          totalReceived,
+						"indices":        helpers.PrettySlice(indices),
+						"validationTime": prettyMinMaxAverage(minValidationTime, maxValidationTime, avgValidationTime),
+						"sinceStartTime": prettyMinMaxAverage(minSinceStartTime, maxSinceStartTime, avgSinceStartTime),
+					}).Debug("Accepted data column sidecars summary")
+				}
 			}
-			slotStats = make(map[primitives.Slot][fieldparams.NumberOfColumns]dataColumnLogEntry)
+
+			slotStats = make(map[[fieldparams.RootLength]byte][]dataColumnLogEntry)
 		}
 	}
 }
 
-func roundFloat(f float64, decimals int) float64 {
-	mult := math.Pow(10, float64(decimals))
-	return math.Round(f*mult) / mult
+func prettyMinMaxAverage(min, max, average time.Duration) string {
+	return fmt.Sprintf("[min: %v, avg: %v, max: %v]", min, average, max)
 }

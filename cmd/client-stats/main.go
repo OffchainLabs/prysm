@@ -77,7 +77,7 @@ func main() {
 				TimestampFormat: "2006-01-02 15:04:05.00",
 			})
 		case "journald":
-			if err := journald.Enable(); err != nil {
+			if err := journald.Enable(level); err != nil {
 				return err
 			}
 		default:
@@ -86,7 +86,7 @@ func main() {
 
 		logFileName := ctx.String(cmd.LogFileName.Name)
 		if logFileName != "" {
-			if err := logs.ConfigurePersistentLogging(logFileName); err != nil {
+			if err := logs.ConfigurePersistentLogging(logFileName, format, level, map[string]logrus.Level{}); err != nil {
 				log.WithError(err).Error("Failed to configuring logging to disk.")
 			}
 		}

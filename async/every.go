@@ -6,8 +6,6 @@ import (
 	"reflect"
 	"runtime"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // RunEvery runs the provided command periodically.

@@ -303,7 +303,7 @@ var (
 			}())),
 		"/validator/duties/sync/{param1}": newMetadata[structs.GetSyncCommitteeDutiesResponse](
 			v1PathTemplate,
-			withStart(params.AltairE2EForkEpoch),
+			withStart(params.E2ETestConfig().AltairForkEpoch),
 			withParams(func(currentEpoch primitives.Epoch) []string {
 				return []string{fmt.Sprintf("%v", currentEpoch)}
 			}),

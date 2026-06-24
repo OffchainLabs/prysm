@@ -29,6 +29,8 @@ mainnet = {
     "kzg_commitment_inclusion_proof_depth.size": "17",
     "max_withdrawal_requests_per_payload.size": "16",
     "max_deposit_requests_per_payload.size": "8192",
+    "max_builder_deposit_requests_per_payload.size": "256",  # MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD (2**8)
+    "max_builder_exit_requests_per_payload.size": "16",  # MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD (2**4)
     "max_attesting_indices.size": "131072",
     "max_committees_per_slot.size": "64",
     "committee_bits.size": "8",
@@ -43,11 +45,14 @@ mainnet = {
     "cells_per_blob.size": "128",
     "kzg_commitments_inclusion_proof_depth.size": "4",
     "proposer_lookahead_size": "64",  # (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH
+    "ptc_window.size": "96",  # (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH
+    "ptc_committee_indices.size": "512",  # PTC_SIZE
     "ptc.size": "64",  # Gloas: Payload Timeliness Committee aggregation bits (PTC_SIZE = 512)
     "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector512",
     "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
     "execution_payload_availability.size": "1024",  # Gloas: SLOTS_PER_HISTORICAL_ROOT
     "builder_pending_payments.size": "64",  # Gloas: vector length (2 * SLOTS_PER_EPOCH)
+    "builder_registry_limit": "1099511627776",  # Gloas: BUILDER_REGISTRY_LIMIT (same for mainnet/minimal)
 }
 
 minimal = {
@@ -73,6 +78,8 @@ minimal = {
     "kzg_commitment_inclusion_proof_depth.size": "17",
     "max_withdrawal_requests_per_payload.size": "16",
     "max_deposit_requests_per_payload.size": "8192",
+    "max_builder_deposit_requests_per_payload.size": "256",  # MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD (2**8)
+    "max_builder_exit_requests_per_payload.size": "16",  # MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD (2**4)
     "max_attesting_indices.size": "8192",
     "max_committees_per_slot.size": "4",
     "committee_bits.size": "1",
@@ -87,11 +94,14 @@ minimal = {
     "cells_per_blob.size": "128",
     "kzg_commitments_inclusion_proof_depth.size": "4",
     "proposer_lookahead_size": "16",  # (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH
-    "ptc.size": "1",  # Gloas: Payload Timeliness Committee aggregation bits
-    "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector2",
+    "ptc_window.size": "24",  # (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH
+    "ptc_committee_indices.size": "16",  # PTC_SIZE
+    "ptc.size": "2",  # Gloas: Payload Timeliness Committee aggregation bits (PTC_SIZE = 16)
+    "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector16",
     "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
     "execution_payload_availability.size": "8",  # Gloas: SLOTS_PER_HISTORICAL_ROOT
-    "builder_pending_payments.size": "16"  # Gloas: vector length (2 * SLOTS_PER_EPOCH)
+    "builder_pending_payments.size": "16",  # Gloas: vector length (2 * SLOTS_PER_EPOCH)
+    "builder_registry_limit": "1099511627776",  # Gloas: BUILDER_REGISTRY_LIMIT (same for mainnet/minimal)
 }
 
 ###### Rules definitions #######

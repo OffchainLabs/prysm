@@ -44,7 +44,7 @@ type FileInitializer struct {
 func (fi *FileInitializer) Initialize(ctx context.Context, d db.Database) error {
 	origin, err := d.OriginCheckpointBlockRoot(ctx)
 	if err == nil && origin != params.BeaconConfig().ZeroHash {
-		log.Warnf("Origin checkpoint root %#x found in db, ignoring checkpoint sync flags", origin)
+		log.WithField("root", fmt.Sprintf("%#x", origin)).Info("Origin checkpoint found in the database, ignoring checkpoint sync flags")
 		return nil
 	} else {
 		if !errors.Is(err, db.ErrNotFound) {

@@ -2,7 +2,10 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["jwt.go"],
+    srcs = [
+        "jwt.go",
+        "log.go",
+    ],
     importpath = "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/jwt",
     visibility = ["//visibility:public"],
     deps = [

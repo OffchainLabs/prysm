@@ -28,11 +28,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
-
-var log = logrus.WithField("prefix", "flags")
 
 const enabledFeatureFlag = "Enabled feature flag"
 const disabledFeatureFlag = "Disabled feature flag"
@@ -51,6 +48,8 @@ type Flags struct {
 	EnableExperimentalAttestationPool   bool // EnableExperimentalAttestationPool enables an experimental attestation pool design.
 	DisableDutiesV2                     bool // DisableDutiesV2 sets validator client to use the get Duties endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
+	EnableStateDiff                     bool // EnableStateDiff enables the experimental state diff feature for the beacon node.
+
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
 	EnableFullSSZDataLogging  bool // Enables logging for full ssz data on rejected gossip messages
@@ -69,9 +68,12 @@ type Flags struct {
 
 	DisableResourceManager     bool // Disables running the node with libp2p's resource manager.
 	DisableStakinContractCheck bool // Disables check for deposit contract when proposing blocks
-	DisableLastEpochTargets    bool // Disables processing of states for attestations to old blocks.
+	IgnoreUnviableAttestations bool // Ignore attestations whose target state is not viable (avoids lagging-node DoS).
+	TrackEquivocations         bool // Record proposer equivocations seen on gossip into forkchoice.
 
+	EnableHashtree               bool // Enables usage of the hashtree library for hashing
 	EnableVerboseSigVerification bool // EnableVerboseSigVerification specifies whether to verify individual signature if batch verification fails
+	EnableProposerPreprocessing  bool // EnableProposerPreprocessing enables proposer pre-processing of blocks before proposing.
 
 	PrepareAllPayloads bool // PrepareAllPayloads informs the engine to prepare a block on every slot.
 	// BlobSaveFsync requires blob saving to block on fsync to ensure blobs are durably persisted before passing DA.
@@ -237,10 +239,18 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(enableFullSSZDataLogging)
 		cfg.EnableFullSSZDataLogging = true
 	}
+	if ctx.IsSet(enableHashtree.Name) {
+		logEnabled(enableHashtree)
+		cfg.EnableHashtree = true
+	}
 	cfg.EnableVerboseSigVerification = true
 	if ctx.IsSet(disableVerboseSigVerification.Name) {
 		logEnabled(disableVerboseSigVerification)
 		cfg.EnableVerboseSigVerification = false
+	}
+	cfg.EnableProposerPreprocessing = ctx.Bool(enableProposerPreprocessing.Name)
+	if cfg.EnableProposerPreprocessing {
+		logEnabled(enableProposerPreprocessing)
 	}
 	if ctx.IsSet(prepareAllPayloads.Name) {
 		logEnabled(prepareAllPayloads)
@@ -279,9 +289,25 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(blacklistRoots)
 		cfg.BlacklistedRoots = parseBlacklistedRoots(ctx.StringSlice(blacklistRoots.Name))
 	}
-	if ctx.IsSet(disableLastEpochTargets.Name) {
-		logEnabled(disableLastEpochTargets)
-		cfg.DisableLastEpochTargets = true
+
+	cfg.IgnoreUnviableAttestations = false
+	if ctx.IsSet(ignoreUnviableAttestations.Name) && ctx.Bool(ignoreUnviableAttestations.Name) {
+		logEnabled(ignoreUnviableAttestations)
+		cfg.IgnoreUnviableAttestations = true
+	}
+	cfg.TrackEquivocations = false
+	if ctx.IsSet(trackEquivocations.Name) && ctx.Bool(trackEquivocations.Name) {
+		logEnabled(trackEquivocations)
+		cfg.TrackEquivocations = true
+	}
+	if ctx.IsSet(EnableStateDiff.Name) {
+		logEnabled(EnableStateDiff)
+		cfg.EnableStateDiff = true
+
+		if ctx.IsSet(enableHistoricalSpaceRepresentation.Name) {
+			log.Warn("--enable-state-diff is enabled, ignoring --enable-historical-space-representation flag.")
+			cfg.EnableHistoricalSpaceRepresentation = false
+		}
 	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}

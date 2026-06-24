@@ -73,7 +73,7 @@ func (e *endpoint) handlerWithMiddleware() http.HandlerFunc {
 		handler.ServeHTTP(rw, r)
 
 		if rw.statusCode >= 400 {
-			httpErrorCount.WithLabelValues(r.URL.Path, http.StatusText(rw.statusCode), r.Method).Inc()
+			httpErrorCount.WithLabelValues(e.name, http.StatusText(rw.statusCode), r.Method).Inc()
 		}
 	}
 }
@@ -200,25 +200,27 @@ func (s *Service) validatorEndpoints(
 	rewardFetcher rewards.BlockRewardsFetcher,
 ) []endpoint {
 	server := &validator.Server{
-		HeadFetcher:            s.cfg.HeadFetcher,
-		TimeFetcher:            s.cfg.GenesisTimeFetcher,
-		SyncChecker:            s.cfg.SyncService,
-		OptimisticModeFetcher:  s.cfg.OptimisticModeFetcher,
-		AttestationCache:       s.cfg.AttestationCache,
-		AttestationsPool:       s.cfg.AttestationsPool,
-		PeerManager:            s.cfg.PeerManager,
-		Broadcaster:            s.cfg.Broadcaster,
-		V1Alpha1Server:         validatorServer,
-		Stater:                 stater,
-		SyncCommitteePool:      s.cfg.SyncCommitteeObjectPool,
-		ChainInfoFetcher:       s.cfg.ChainInfoFetcher,
-		BeaconDB:               s.cfg.BeaconDB,
-		BlockBuilder:           s.cfg.BlockBuilder,
-		OperationNotifier:      s.cfg.OperationNotifier,
-		TrackedValidatorsCache: s.cfg.TrackedValidatorsCache,
-		PayloadIDCache:         s.cfg.PayloadIDCache,
-		CoreService:            coreService,
-		BlockRewardFetcher:     rewardFetcher,
+		HeadFetcher:                   s.cfg.HeadFetcher,
+		TimeFetcher:                   s.cfg.GenesisTimeFetcher,
+		SyncChecker:                   s.cfg.SyncService,
+		OptimisticModeFetcher:         s.cfg.OptimisticModeFetcher,
+		AttestationCache:              s.cfg.AttestationCache,
+		AttestationsPool:              s.cfg.AttestationsPool,
+		PeerManager:                   s.cfg.PeerManager,
+		Broadcaster:                   s.cfg.Broadcaster,
+		V1Alpha1Server:                validatorServer,
+		ExecutionPayloadEnvelopeCache: s.cfg.ExecutionPayloadEnvelopeCache,
+		Stater:                        stater,
+		SyncCommitteePool:             s.cfg.SyncCommitteeObjectPool,
+		ChainInfoFetcher:              s.cfg.ChainInfoFetcher,
+		BeaconDB:                      s.cfg.BeaconDB,
+		BlockBuilder:                  s.cfg.BlockBuilder,
+		OperationNotifier:             s.cfg.OperationNotifier,
+		TrackedValidatorsCache:        s.cfg.TrackedValidatorsCache,
+		PayloadIDCache:                s.cfg.PayloadIDCache,
+		PayloadAttestationPool:        s.cfg.PayloadAttestationPool,
+		CoreService:                   coreService,
+		BlockRewardFetcher:            rewardFetcher,
 	}
 
 	const namespace = "validator"
@@ -320,13 +322,23 @@ func (s *Service) validatorEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
-			template: "/eth/v1/validator/duties/proposer/{epoch}",
+			template: "/eth/v1/validator/duties/proposer/{epoch}", // Deprecated: use /eth/v2/validator/duties/proposer/{epoch}
 			name:     namespace + ".GetProposerDuties",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetProposerDuties,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v2/validator/duties/proposer/{epoch}",
+			name:     namespace + ".GetProposerDutiesV2",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetProposerDutiesV2,
 			methods: []string{http.MethodGet},
 		},
 		{
@@ -341,6 +353,17 @@ func (s *Service) validatorEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
+			template: "/eth/v1/validator/duties/ptc/{epoch}",
+			name:     namespace + ".GetPTCDuties",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetPTCDuties,
+			methods: []string{http.MethodPost},
+		},
+		{
 			template: "/eth/v1/validator/prepare_beacon_proposer",
 			name:     namespace + ".PrepareBeaconProposer",
 			middleware: []middleware.Middleware{
@@ -349,6 +372,17 @@ func (s *Service) validatorEndpoints(
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.PrepareBeaconProposer,
+			methods: []string{http.MethodPost},
+		},
+		{
+			template: "/eth/v1/validator/proposer_preferences",
+			name:     namespace + ".SubmitSignedProposerPreferences",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.SubmitSignedProposerPreferences,
 			methods: []string{http.MethodPost},
 		},
 		{
@@ -373,6 +407,16 @@ func (s *Service) validatorEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+			template: "/eth/v4/validator/blocks/{slot}",
+			name:     namespace + ".ProduceBlockV4",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.ProduceBlockV4,
+			methods: []string{http.MethodGet},
+		},
+		{
 			template: "/eth/v1/validator/beacon_committee_selections",
 			name:     namespace + ".BeaconCommitteeSelections",
 			middleware: []middleware.Middleware{
@@ -390,6 +434,25 @@ func (s *Service) validatorEndpoints(
 			handler: server.SyncCommitteeSelections,
 			methods: []string{http.MethodPost},
 		},
+		{
+			template: "/eth/v1/validator/payload_attestation_data/{slot}",
+			name:     namespace + ".GetPayloadAttestationData",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetPayloadAttestationData,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/validator/execution_payload_envelopes/{slot}/{beacon_block_root}",
+			name:     namespace + ".ExecutionPayloadEnvelope",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+			},
+			handler: server.ExecutionPayloadEnvelope,
+			methods: []string{http.MethodGet},
+		},
 	}
 }
 
@@ -405,6 +468,7 @@ func (s *Service) nodeEndpoints() []endpoint {
 		MetadataProvider:          s.cfg.MetadataProvider,
 		HeadFetcher:               s.cfg.HeadFetcher,
 		ExecutionChainInfoFetcher: s.cfg.ExecutionChainInfoFetcher,
+		ExecutionEngineCaller:     s.cfg.ExecutionEngineCaller,
 	}
 
 	const namespace = "node"
@@ -470,6 +534,16 @@ func (s *Service) nodeEndpoints() []endpoint {
 			methods: []string{http.MethodGet},
 		},
 		{
+			template: "/eth/v2/node/version",
+			name:     namespace + ".GetVersionV2",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetVersionV2,
+			methods: []string{http.MethodGet},
+		},
+		{
 			template: "/eth/v1/node/health",
 			name:     namespace + ".GetHealth",
 			middleware: []middleware.Middleware{
@@ -490,32 +564,35 @@ func (s *Service) beaconEndpoints(
 	coreService *core.Service,
 ) []endpoint {
 	server := &beacon.Server{
-		CanonicalHistory:        ch,
-		BeaconDB:                s.cfg.BeaconDB,
-		AttestationCache:        s.cfg.AttestationCache,
-		AttestationsPool:        s.cfg.AttestationsPool,
-		SlashingsPool:           s.cfg.SlashingsPool,
-		ChainInfoFetcher:        s.cfg.ChainInfoFetcher,
-		GenesisTimeFetcher:      s.cfg.GenesisTimeFetcher,
-		BlockNotifier:           s.cfg.BlockNotifier,
-		OperationNotifier:       s.cfg.OperationNotifier,
-		Broadcaster:             s.cfg.Broadcaster,
-		BlockReceiver:           s.cfg.BlockReceiver,
-		StateGenService:         s.cfg.StateGen,
-		Stater:                  stater,
-		Blocker:                 blocker,
-		OptimisticModeFetcher:   s.cfg.OptimisticModeFetcher,
-		HeadFetcher:             s.cfg.HeadFetcher,
-		TimeFetcher:             s.cfg.GenesisTimeFetcher,
-		VoluntaryExitsPool:      s.cfg.ExitPool,
-		V1Alpha1ValidatorServer: validatorServer,
-		SyncChecker:             s.cfg.SyncService,
-		ExecutionReconstructor:  s.cfg.ExecutionReconstructor,
-		BLSChangesPool:          s.cfg.BLSChangesPool,
-		FinalizationFetcher:     s.cfg.FinalizationFetcher,
-		ForkchoiceFetcher:       s.cfg.ForkchoiceFetcher,
-		CoreService:             coreService,
-		AttestationStateFetcher: s.cfg.AttestationReceiver,
+		CanonicalHistory:              ch,
+		BeaconDB:                      s.cfg.BeaconDB,
+		AttestationCache:              s.cfg.AttestationCache,
+		AttestationsPool:              s.cfg.AttestationsPool,
+		SlashingsPool:                 s.cfg.SlashingsPool,
+		ChainInfoFetcher:              s.cfg.ChainInfoFetcher,
+		GenesisTimeFetcher:            s.cfg.GenesisTimeFetcher,
+		BlockNotifier:                 s.cfg.BlockNotifier,
+		OperationNotifier:             s.cfg.OperationNotifier,
+		Broadcaster:                   s.cfg.Broadcaster,
+		BlockReceiver:                 s.cfg.BlockReceiver,
+		StateGenService:               s.cfg.StateGen,
+		Stater:                        stater,
+		Blocker:                       blocker,
+		OptimisticModeFetcher:         s.cfg.OptimisticModeFetcher,
+		HeadFetcher:                   s.cfg.HeadFetcher,
+		TimeFetcher:                   s.cfg.GenesisTimeFetcher,
+		VoluntaryExitsPool:            s.cfg.ExitPool,
+		V1Alpha1ValidatorServer:       validatorServer,
+		DataColumnReceiver:            s.cfg.DataColumnReceiver,
+		SyncChecker:                   s.cfg.SyncService,
+		ExecutionReconstructor:        s.cfg.ExecutionReconstructor,
+		BLSChangesPool:                s.cfg.BLSChangesPool,
+		PayloadAttestationPool:        s.cfg.PayloadAttestationPool,
+		FinalizationFetcher:           s.cfg.FinalizationFetcher,
+		ForkchoiceFetcher:             s.cfg.ForkchoiceFetcher,
+		CoreService:                   coreService,
+		AttestationStateFetcher:       s.cfg.AttestationReceiver,
+		ExecutionPayloadEnvelopeCache: s.cfg.ExecutionPayloadEnvelopeCache,
 	}
 
 	const namespace = "beacon"
@@ -869,6 +946,56 @@ func (s *Service) beaconEndpoints(
 			handler: server.GetProposerLookahead,
 			methods: []string{http.MethodGet},
 		},
+		{
+			template: "/eth/v1/beacon/pool/payload_attestations",
+			name:     namespace + ".ListPayloadAttestations",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.ListPayloadAttestations,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/beacon/pool/payload_attestations",
+			name:     namespace + ".SubmitPayloadAttestations",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.SubmitPayloadAttestations,
+			methods: []string{http.MethodPost},
+		},
+		{
+			template: "/eth/v1/beacon/execution_payload_envelopes/{block_id}",
+			name:     namespace + ".GetExecutionPayloadEnvelope",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+			},
+			handler: server.GetExecutionPayloadEnvelope,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/beacon/execution_payload_envelopes",
+			name:     namespace + ".PublishExecutionPayloadEnvelope",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.PublishExecutionPayloadEnvelope,
+			methods: []string{http.MethodPost},
+		},
+		{
+			template: "/eth/v1/beacon/execution_payload_bids",
+			name:     namespace + ".PublishSignedExecutionPayloadBid",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.PublishSignedExecutionPayloadBid,
+			methods: []string{http.MethodPost},
+		},
 	}
 }
 
@@ -1003,6 +1130,16 @@ func (s *Service) debugEndpoints(stater lookup.Stater, blocker lookup.Blocker) [
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetForkChoice,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v2/debug/fork_choice",
+			name:     namespace + ".GetForkChoiceV2",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetForkChoiceV2,
 			methods: []string{http.MethodGet},
 		},
 		{

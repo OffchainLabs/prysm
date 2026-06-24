@@ -2,7 +2,6 @@ package sync
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"slices"
 	"sync"
@@ -21,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz/equality"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	prysmTrace "github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
@@ -44,11 +44,13 @@ func (s *Service) processPendingBlocksQueue() {
 		if !s.chainIsStarted() {
 			return
 		}
+
 		locker.Lock()
+		defer locker.Unlock()
+
 		if err := s.processPendingBlocks(s.ctx); err != nil {
 			log.WithError(err).Debug("Could not process pending blocks")
 		}
-		locker.Unlock()
 	})
 }
 
@@ -59,6 +61,7 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 
 	// Remove old blocks from our expiration cache.
 	s.deleteExpiredBlocksFromCache()
+	s.prunePendingPayloadEnvelopes()
 
 	// Validate pending slots before processing.
 	if err := s.validatePendingSlots(); err != nil {
@@ -73,8 +76,10 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 	randGen := rand.NewGenerator()
 	var parentRoots [][32]byte
 
+	blkRoots := make([][32]byte, 0, len(sortedSlots)*maxBlocksPerSlot)
+
 	// Iterate through sorted slots.
-	for _, slot := range sortedSlots {
+	for i, slot := range sortedSlots {
 		// Skip processing if slot is in the future.
 		if slot > s.cfg.clock.CurrentSlot() {
 			continue
@@ -91,6 +96,9 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 
 		// Process each block in the queue.
 		for _, b := range blocksInCache {
+			start := time.Now()
+			totalDuration := time.Duration(0)
+
 			if err := blocks.BeaconBlockIsNil(b); err != nil {
 				continue
 			}
@@ -134,6 +142,10 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 			if !isParentBlockInDB {
 				continue
 			}
+			if !s.cfg.chain.ParentPayloadReady(b.Block()) {
+				go s.requestPayloadEnvelope(parentRoot)
+				continue
+			}
 
 			// Calculate the deadline time by adding three slots duration to the current time
 			secondsPerSlot := params.BeaconConfig().SecondsPerSlot
@@ -147,19 +159,37 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 			}
 			cancelFunction()
 
-			// Process pending attestations for this block.
-			if err := s.processPendingAttsForBlock(ctx, blkRoot); err != nil {
-				log.WithError(err).Debug("Failed to process pending attestations for block")
-			}
+			// Process synchronously because it's likely that the next pending block depends on it.
+			s.processPendingPayloadEnvelope(ctx, blkRoot)
+			s.processPendingGloasColumns(blkRoot, b)
+			blkRoots = append(blkRoots, blkRoot)
 
 			// Remove the processed block from the queue.
 			if err := s.removeBlockFromQueue(b, blkRoot); err != nil {
 				return err
 			}
-			log.WithFields(logrus.Fields{"slot": slot, "blockRoot": hex.EncodeToString(bytesutil.Trunc(blkRoot[:]))}).Debug("Processed pending block and cleared it in cache")
+
+			duration := time.Since(start)
+			totalDuration += duration
+			log.WithFields(logrus.Fields{
+				"slotIndex":     fmt.Sprintf("%d/%d", i+1, len(sortedSlots)),
+				"slot":          slot,
+				"root":          fmt.Sprintf("%#x", blkRoot),
+				"duration":      duration,
+				"totalDuration": totalDuration,
+			}).Debug("Processed pending block and cleared it in cache")
 		}
+
 		span.End()
 	}
+
+	for _, blkRoot := range blkRoots {
+		// Process pending attestations for this block.
+		if err := s.processPendingAttsForBlock(ctx, blkRoot); err != nil {
+			log.WithError(err).Debug("Failed to process pending attestations for block")
+		}
+	}
+
 	return s.sendBatchRootRequest(ctx, parentRoots, randGen)
 }
 
@@ -220,7 +250,7 @@ func (s *Service) processBlock(ctx context.Context, b interfaces.ReadOnlySignedB
 	blockSlot := b.Block().Slot()
 
 	if err := s.validateBeaconBlock(ctx, b, blkRoot); err != nil {
-		if !errors.Is(ErrOptimisticParent, err) {
+		if !errors.Is(err, ErrOptimisticParent) {
 			log.WithError(err).WithField("slot", blockSlot).Debug("Could not validate block")
 			return err
 		}
@@ -297,7 +327,10 @@ func (s *Service) handleBlockProcessingError(ctx context.Context, err error, b i
 
 // getBestPeers returns the list of best peers based on finalized checkpoint epoch.
 func (s *Service) getBestPeers() []core.PeerID {
-	_, bestPeers := s.cfg.p2p.Peers().BestFinalized(maxPeerRequest, s.cfg.chain.FinalizedCheckpt().Epoch)
+	_, bestPeers := s.cfg.p2p.Peers().BestFinalized(s.cfg.chain.FinalizedCheckpt().Epoch)
+	if len(bestPeers) > maxPeerRequest {
+		bestPeers = bestPeers[:maxPeerRequest]
+	}
 	return bestPeers
 }
 
@@ -376,11 +409,33 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 			req = roots[:maxReqBlock]
 		}
 
+		if logrus.GetLevel() >= logrus.DebugLevel {
+			rootsStr := make([]string, 0, len(roots))
+			for _, req := range roots {
+				rootsStr = append(rootsStr, fmt.Sprintf("%#x", req))
+			}
+
+			log.WithFields(logrus.Fields{
+				"peer":  pid,
+				"count": len(req),
+				"roots": rootsStr,
+			}).Debug("Requesting blocks by root")
+		}
+
+		// Optimistically request parent payload envelopes in parallel with the parent blocks.
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func(pid core.PeerID, roots p2ptypes.BeaconBlockByRootsReq) {
+			defer wg.Done()
+			s.fetchAndQueuePayloadEnvelopesForRoots(ctx, pid, roots)
+		}(pid, req)
+
 		// Send the request to the peer.
 		if err := s.sendBeaconBlocksRequest(ctx, &req, pid); err != nil {
 			tracing.AnnotateError(span, err)
 			log.WithError(err).Debug("Could not send recent block request")
 		}
+		wg.Wait()
 
 		// Filter out roots that are already seen in pending blocks.
 		newRoots := make([][32]byte, 0, rootCount)
@@ -420,6 +475,66 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 	return nil
 }
 
+func (s *Service) fetchAndQueuePayloadEnvelopesForRoots(
+	ctx context.Context,
+	pid core.PeerID,
+	roots p2ptypes.BeaconBlockByRootsReq,
+) {
+	gloasStartSlot, err := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
+	if err != nil {
+		log.WithError(err).Debug("Could not compute Gloas start slot")
+		return
+	}
+	// Nothing post-Gloas exists yet, so there are no envelopes to request.
+	if s.cfg.clock.CurrentSlot() < gloasStartSlot {
+		return
+	}
+
+	var envelopeRoots p2ptypes.ExecutionPayloadEnvelopesByRootReq
+	for _, root := range roots {
+		if s.cfg.beaconDB.HasExecutionPayloadEnvelope(ctx, root) {
+			continue
+		}
+		envelopeRoots = append(envelopeRoots, root)
+	}
+
+	if len(envelopeRoots) == 0 {
+		return
+	}
+
+	envelopes, err := SendExecutionPayloadEnvelopesByRootRequest(ctx, s.cfg.clock, s.cfg.p2p, pid, s.ctxMap, &envelopeRoots)
+	if err != nil {
+		log.WithError(err).Debug("Could not request execution payload envelopes by root")
+		return
+	}
+
+	for _, env := range envelopes {
+		if env == nil || env.Message == nil {
+			continue
+		}
+		s.queuePendingPayloadEnvelopeFromRootRequest(env)
+	}
+}
+
+func (s *Service) queuePendingPayloadEnvelopeFromRootRequest(signedEnvelope *ethpb.SignedExecutionPayloadEnvelope) {
+	if signedEnvelope == nil || signedEnvelope.Message == nil {
+		return
+	}
+
+	root := bytesutil.ToBytes32(signedEnvelope.Message.BeaconBlockRoot)
+	builderIdx := uint64(signedEnvelope.Message.BuilderIndex)
+
+	s.pendingEnvelopeLock.Lock()
+	defer s.pendingEnvelopeLock.Unlock()
+
+	inner, ok := s.pendingPayloadEnvelopes[root]
+	if !ok {
+		inner = make(map[uint64]*ethpb.SignedExecutionPayloadEnvelope)
+		s.pendingPayloadEnvelopes[root] = inner
+	}
+	inner[builderIdx] = signedEnvelope
+}
+
 // filterOutPendingAndSynced filters out roots that are already seen in pending blocks or being synced.
 func (s *Service) filterOutPendingAndSynced(roots [][fieldparams.RootLength]byte) [][fieldparams.RootLength]byte {
 	// Remove duplicates (if any) from the list of roots.
@@ -435,8 +550,6 @@ func (s *Service) filterOutPendingAndSynced(roots [][fieldparams.RootLength]byte
 			roots = append(roots[:i], roots[i+1:]...)
 			continue
 		}
-
-		log.WithField("blockRoot", fmt.Sprintf("%#x", r)).Debug("Requesting block by root")
 	}
 	return roots
 }

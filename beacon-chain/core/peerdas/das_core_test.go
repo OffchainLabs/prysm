@@ -27,41 +27,6 @@ func TestComputeColumnsForCustodyGroup(t *testing.T) {
 	require.ErrorIs(t, err, peerdas.ErrCustodyGroupTooLarge)
 }
 
-func TestComputeCustodyGroupForColumn(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
-	config.NumberOfColumns = 128
-	config.NumberOfCustodyGroups = 64
-	params.OverrideBeaconConfig(config)
-
-	t.Run("index too large", func(t *testing.T) {
-		_, err := peerdas.ComputeCustodyGroupForColumn(1_000_000)
-		require.ErrorIs(t, err, peerdas.ErrIndexTooLarge)
-	})
-
-	t.Run("nominal", func(t *testing.T) {
-		expected := uint64(2)
-		actual, err := peerdas.ComputeCustodyGroupForColumn(2)
-		require.NoError(t, err)
-		require.Equal(t, expected, actual)
-
-		expected = uint64(3)
-		actual, err = peerdas.ComputeCustodyGroupForColumn(3)
-		require.NoError(t, err)
-		require.Equal(t, expected, actual)
-
-		expected = uint64(2)
-		actual, err = peerdas.ComputeCustodyGroupForColumn(66)
-		require.NoError(t, err)
-		require.Equal(t, expected, actual)
-
-		expected = uint64(3)
-		actual, err = peerdas.ComputeCustodyGroupForColumn(67)
-		require.NoError(t, err)
-		require.Equal(t, expected, actual)
-	})
-}
-
 func TestCustodyColumns(t *testing.T) {
 	t.Run("group too large", func(t *testing.T) {
 		_, err := peerdas.CustodyColumns([]uint64{1_000_000})

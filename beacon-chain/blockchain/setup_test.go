@@ -89,7 +89,12 @@ func (mb *mockBroadcaster) BroadcastLightClientFinalityUpdate(_ context.Context,
 	return nil
 }
 
-func (mb *mockBroadcaster) BroadcastDataColumnSidecars(_ context.Context, _ []blocks.VerifiedRODataColumn) error {
+func (mb *mockBroadcaster) BroadcastDataColumnSidecars(_ context.Context, _ []blocks.VerifiedRODataColumn, _ []blocks.PartialDataColumn) error {
+	mb.broadcastCalled = true
+	return nil
+}
+
+func (mb *mockBroadcaster) BroadcastForEpoch(_ context.Context, _ proto.Message, _ primitives.Epoch) error {
 	mb.broadcastCalled = true
 	return nil
 }

@@ -61,3 +61,16 @@ func TestAllBlobRequirementsHaveStrings(t *testing.T) {
 		require.NotEqual(t, unknownRequirementName, allBlobSidecarRequirements[i].String())
 	}
 }
+
+func TestPayloadAttestationRequirementsHaveStrings(t *testing.T) {
+	blobReqs := make(map[Requirement]struct{}, len(allBlobSidecarRequirements))
+	for i := range allBlobSidecarRequirements {
+		blobReqs[allBlobSidecarRequirements[i]] = struct{}{}
+	}
+	for i := range PayloadAttGossipRequirements {
+		req := PayloadAttGossipRequirements[i]
+		require.NotEqual(t, unknownRequirementName, req.String())
+		_, overlaps := blobReqs[req]
+		require.Equal(t, false, overlaps)
+	}
+}

@@ -72,7 +72,7 @@ Do NOT add new `go_repository` to the WORKSPACE file. All dependencies should li
 
 To enable conditional compilation and custom configuration for tests (where compiled code has more 
 debug info, while not being completely optimized), we rely on Go's build tags/constraints mechanism 
-(see official docs on [build constraints](https://golang.org/pkg/go/build/#hdr-Build_Constraints)). 
+(see official docs on [build constraints](https://pkg.go.dev/go/build#hdr-Build_Constraints)). 
 Therefore, whenever using `go test`, do not forget to pass in extra build tag, eg:
 
 ```bash

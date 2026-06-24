@@ -35,7 +35,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/minio/sha256-simd"
 	"github.com/pborman/uuid"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/scrypt"
 )

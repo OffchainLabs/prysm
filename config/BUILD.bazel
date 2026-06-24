@@ -16,7 +16,10 @@ config_setting(
 
 go_library(
     name = "go_default_library",
-    srcs = ["util.go"],
+    srcs = [
+        "log.go",
+        "util.go",
+    ],
     importpath = "github.com/OffchainLabs/prysm/v7/config",
     visibility = ["//visibility:public"],
     deps = [

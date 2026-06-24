@@ -1,6 +1,8 @@
 package require
 
 import (
+	"time"
+
 	"github.com/OffchainLabs/prysm/v7/testing/assertions"
 	"github.com/sirupsen/logrus/hooks/test"
 )
@@ -86,4 +88,10 @@ func ErrorIs(tb assertions.AssertionTestingTB, err, target error, msg ...any) {
 // StringContains asserts that actual string contains expected message.
 func StringContains(tb assertions.AssertionTestingTB, expected, actual string, msg ...any) {
 	assertions.StringContains(tb.Fatalf, expected, actual, true, msg)
+}
+
+// Eventually asserts that given condition will be met within waitFor time,
+// periodically checking target function each tick.
+func Eventually(tb assertions.AssertionTestingTB, condition func() bool, waitFor, tick time.Duration, msg ...any) {
+	assertions.Eventually(tb.Fatalf, condition, waitFor, tick, msg...)
 }

@@ -9,7 +9,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -22,6 +21,7 @@ type (
 		Active       bool
 		FeeRecipient primitives.ExecutionAddress
 		Index        primitives.ValidatorIndex
+		GasLimit     uint64
 	}
 
 	TrackedValidatorsCache struct {
@@ -67,7 +67,7 @@ func (t *TrackedValidatorsCache) Validator(index primitives.ValidatorIndex) (Tra
 
 	val, ok := item.(TrackedValidator)
 	if !ok {
-		logrus.Errorf("Failed to cast tracked validator from cache, got unexpected item type %T", item)
+		log.Errorf("Failed to cast tracked validator from cache, got unexpected item type %T", item)
 		return TrackedValidator{}, false
 	}
 
@@ -113,7 +113,7 @@ func (t *TrackedValidatorsCache) Indices() map[primitives.ValidatorIndex]bool {
 	for cacheKey := range items {
 		index, err := fromCacheKey(cacheKey)
 		if err != nil {
-			logrus.WithError(err).Error("Failed to get validator index from cache key")
+			log.WithError(err).Error("Failed to get validator index from cache key")
 			continue
 		}
 

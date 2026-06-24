@@ -6,6 +6,8 @@ import "proto/prysm/v1alpha1/attestation.proto";
 import "proto/prysm/v1alpha1/beacon_block.proto";
 import "proto/prysm/v1alpha1/beacon_core_types.proto";
 import "proto/prysm/v1alpha1/beacon_state.proto";
+import "proto/prysm/v1alpha1/gloas.proto";
+import "proto/prysm/v1alpha1/gloas_builder_api.proto";
 import "proto/prysm/v1alpha1/sync_committee.proto";
 
 option csharp_namespace = "Ethereum.Validator.Accounts.V2";
@@ -80,6 +82,13 @@ message SignRequest {
     // Fulu objects.
     ethereum.eth.v1alpha1.BeaconBlockElectra block_fulu = 121;
     ethereum.eth.v1alpha1.BlindedBeaconBlockFulu blinded_block_fulu = 122;
+
+    // Gloas objects.
+    ethereum.eth.v1alpha1.BeaconBlockGloas block_gloas = 123;
+    ethereum.eth.v1alpha1.ExecutionPayloadEnvelope execution_payload_envelope = 124;
+    ethereum.eth.v1alpha1.PayloadAttestationData payload_attestation_data = 125;
+    ethereum.eth.v1alpha1.ProposerPreferences proposer_preference = 126;
+    ethereum.eth.v1alpha1.RequestAuthV1 request_auth = 127;
   }
 
   reserved 4, 5; // Reserving old, deleted fields.
@@ -110,8 +119,21 @@ message SignResponse {
 // ProposerOptionPayload is a property of ProposerSettingsPayload
 message ProposerOptionPayload {
   string fee_recipient = 1;
+  // Not honored at schema version 2.
   BuilderConfig builder = 2;
   optional string graffiti = 3;
+  // v2 gas limit. Honored on default_config only.
+  uint64 gas_limit = 4 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
+  ];
+  // max_execution_payment is the maximum execution layer payment (in Gwei) the
+  // proposer will accept from a builder for the Gloas builder API. 0 means
+  // trustless-only; 2^64-1 means accept any amount.
+  uint64 max_execution_payment = 5 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
+  ];
 }
 
 // BuilderConfig is a property of ProposerOptionPayload
@@ -125,8 +147,9 @@ message BuilderConfig {
 }
 
 // ProposerSettingsPayload is used to unmarshal files sent from the validator
-// flag as well as safe to bolt db bucket
+// flag as well as safe to bolt db bucket. version: 0/1 = legacy, 2 = post-Gloas.
 message ProposerSettingsPayload {
   map<string, ProposerOptionPayload> proposer_config = 1;
   ProposerOptionPayload default_config = 2;
+  uint32 version = 3;
 }

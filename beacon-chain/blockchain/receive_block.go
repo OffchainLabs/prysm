@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/slasher/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -39,11 +40,13 @@ var epochsSinceFinalityExpandCache = primitives.Epoch(4)
 
 // BlockReceiver interface defines the methods of chain service for receiving and processing new blocks.
 type BlockReceiver interface {
-	ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, avs das.AvailabilityStore) error
-	ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock, avs das.AvailabilityStore) error
+	ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, avs das.AvailabilityChecker) error
+	ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock, envelopes []interfaces.ROSignedExecutionPayloadEnvelope, avs das.AvailabilityChecker) error
 	HasBlock(ctx context.Context, root [32]byte) bool
 	RecentBlockSlot(root [32]byte) (primitives.Slot, error)
 	BlockBeingSynced([32]byte) bool
+	GetBlockPreState(ctx context.Context, b blocks.ROBlock) (state.BeaconState, error)
+	GetPrestateToPropose(ctx context.Context, b blocks.ROBlock) (state.BeaconState, error)
 }
 
 // BlobReceiver interface defines the methods of chain service for receiving new
@@ -69,7 +72,7 @@ type SlashingReceiver interface {
 //  1. Validate block, apply state transition and update checkpoints
 //  2. Apply fork choice to the processed block
 //  3. Save latest head info
-func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, avs das.AvailabilityStore) error {
+func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, avs das.AvailabilityChecker) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.ReceiveBlock")
 	defer span.End()
 	// Return early if the block is blacklisted
@@ -94,18 +97,17 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	if err != nil {
 		return errors.Wrap(err, "block copy")
 	}
-
-	preState, err := s.getBlockPreState(ctx, blockCopy.Block())
-	if err != nil {
-		return errors.Wrap(err, "could not get block's prestate")
-	}
-
-	currentCheckpoints := s.saveCurrentCheckpoints(preState)
 	roblock, err := blocks.NewROBlockWithRoot(blockCopy, blockRoot)
 	if err != nil {
 		return errors.Wrap(err, "new ro block with root")
 	}
 
+	preState, err := s.GetBlockPreState(ctx, roblock)
+	if err != nil {
+		return errors.Wrap(err, "could not get block's prestate")
+	}
+
+	currentCheckpoints := s.saveCurrentCheckpoints(preState)
 	postState, isValidPayload, err := s.validateExecutionAndConsensus(ctx, preState, roblock)
 	if err != nil {
 		return errors.Wrap(err, "validator execution and consensus")
@@ -151,7 +153,7 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 
 	// Have we been finalizing? Should we start saving hot states to db?
 	if err := s.checkSaveHotStateDB(ctx); err != nil {
-		return errors.Wrap(err, "check save hot state db")
+		log.WithError(err).Error("Could not check save hot state DB")
 	}
 
 	// We apply the same heuristic to some of our more important caches.
@@ -180,15 +182,8 @@ func (s *Service) updateCheckpoints(
 	preState, postState state.BeaconState,
 	blockRoot [32]byte,
 ) error {
-	if coreTime.CurrentEpoch(postState) > cp.c && s.cfg.ForkChoiceStore.IsCanonical(blockRoot) {
-		headSt, err := s.HeadState(ctx)
-		if err != nil {
-			return errors.Wrap(err, "could not get head state")
-		}
-		if err := reportEpochMetrics(ctx, postState, headSt); err != nil {
-			log.WithError(err).Error("Could not report epoch metrics")
-		}
-	}
+	s.reportEpochMetrics(postState, cp.c, blockRoot)
+
 	if err := s.updateJustificationOnBlock(ctx, preState, postState, cp.j); err != nil {
 		return errors.Wrap(err, "could not update justified checkpoint")
 	}
@@ -205,11 +200,39 @@ func (s *Service) updateCheckpoints(
 	return nil
 }
 
+func (s *Service) reportEpochMetrics(postState state.BeaconState, prevEpoch primitives.Epoch, blockRoot [32]byte) {
+	if coreTime.CurrentEpoch(postState) <= prevEpoch || !s.cfg.ForkChoiceStore.IsCanonical(blockRoot) {
+		return
+	}
+
+	go func() {
+		headSt, err := s.HeadState(s.ctx)
+		if err != nil {
+			log.WithError(err).Error("Could not get head state for epoch metrics")
+			return
+		}
+
+		if err := reportEpochMetrics(s.ctx, postState, headSt); err != nil {
+			log.WithError(err).Error("Could not report epoch metrics")
+		}
+	}()
+}
+
 func (s *Service) validateExecutionAndConsensus(
 	ctx context.Context,
 	preState state.BeaconState,
 	block blocks.ROBlock,
 ) (state.BeaconState, bool, error) {
+	if block.Version() >= version.Gloas {
+		postState, err := s.validateStateTransition(ctx, preState, block)
+		if errors.Is(err, ErrNotDescendantOfFinalized) {
+			return nil, false, invalidBlock{error: err, root: block.Root()}
+		}
+		if err != nil {
+			return nil, false, errors.Wrap(err, "failed to validate consensus state transition function")
+		}
+		return postState, false, nil
+	}
 	preStateVersion, preStateHeader, err := getStateVersionAndPayload(preState)
 	if err != nil {
 		return nil, false, err
@@ -242,7 +265,11 @@ func (s *Service) validateExecutionAndConsensus(
 	return postState, isValidPayload, nil
 }
 
-func (s *Service) handleDA(ctx context.Context, avs das.AvailabilityStore, block blocks.ROBlock) (time.Duration, error) {
+func (s *Service) handleDA(ctx context.Context, avs das.AvailabilityChecker, block blocks.ROBlock) (time.Duration, error) {
+	// Gloas DA is handled on the payload enevelope.
+	if block.Version() >= version.Gloas {
+		return 0, nil
+	}
 	var err error
 	start := time.Now()
 	if avs != nil {
@@ -258,32 +285,55 @@ func (s *Service) handleDA(ctx context.Context, avs das.AvailabilityStore, block
 }
 
 func (s *Service) reportPostBlockProcessing(
-	block interfaces.SignedBeaconBlock,
+	signedBlock interfaces.SignedBeaconBlock,
 	blockRoot [32]byte,
 	receivedTime time.Time,
 	daWaitedTime time.Duration,
 ) {
+	block := signedBlock.Block()
+	if block == nil {
+		log.WithField("blockRoot", blockRoot).Error("Nil block")
+		return
+	}
+
 	// Reports on block and fork choice metrics.
 	cp := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
 	finalized := &ethpb.Checkpoint{Epoch: cp.Epoch, Root: bytesutil.SafeCopyBytes(cp.Root[:])}
-	reportSlotMetrics(block.Block().Slot(), s.HeadSlot(), s.CurrentSlot(), finalized)
+	reportSlotMetrics(block.Slot(), s.HeadSlot(), s.CurrentSlot(), finalized)
 
 	// Log block sync status.
 	cp = s.cfg.ForkChoiceStore.JustifiedCheckpoint()
 	justified := &ethpb.Checkpoint{Epoch: cp.Epoch, Root: bytesutil.SafeCopyBytes(cp.Root[:])}
-	if err := logBlockSyncStatus(block.Block(), blockRoot, justified, finalized, receivedTime, s.genesisTime, daWaitedTime); err != nil {
+	if err := logBlockSyncStatus(block, blockRoot, justified, finalized, receivedTime, s.genesisTime, daWaitedTime); err != nil {
 		log.WithError(err).Error("Unable to log block sync status")
 	}
+
 	// Log payload data
-	if err := logPayload(block.Block()); err != nil {
+	if err := logPayload(block); err != nil {
 		log.WithError(err).Error("Unable to log debug block payload data")
 	}
+
 	// Log state transition data.
-	if err := logStateTransitionData(block.Block()); err != nil {
+	if err := logStateTransitionData(block); err != nil {
 		log.WithError(err).Error("Unable to log state transition data")
 	}
+
 	timeWithoutDaWait := time.Since(receivedTime) - daWaitedTime
 	chainServiceProcessingTime.Observe(float64(timeWithoutDaWait.Milliseconds()))
+
+	body := block.Body()
+	if body == nil {
+		log.WithField("blockRoot", blockRoot).Error("Nil block body")
+		return
+	}
+
+	commitments, err := body.BlobKzgCommitments()
+	if err != nil {
+		log.WithError(err).Error("Unable to get blob KZG commitments")
+	}
+
+	commitmentCount.Observe(float64(len(commitments)))
+	maxBlobsPerBlock.Set(float64(params.BeaconConfig().MaxBlobsPerBlock(block.Slot())))
 }
 
 func (s *Service) executePostFinalizationTasks(ctx context.Context, finalizedState state.BeaconState) {
@@ -327,12 +377,14 @@ func (s *Service) executePostFinalizationTasks(ctx context.Context, finalizedSta
 			}
 		}()
 	}
+
+	go s.checkpointStateCache.EvictUpTo(finalized.Epoch)
 }
 
 // ReceiveBlockBatch processes the whole block batch at once, assuming the block batch is linear ,transitioning
 // the state, performing batch verification of all collected signatures and then performing the appropriate
 // actions for a block post-transition.
-func (s *Service) ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock, avs das.AvailabilityStore) error {
+func (s *Service) ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock, envelopes []interfaces.ROSignedExecutionPayloadEnvelope, avs das.AvailabilityChecker) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.ReceiveBlockBatch")
 	defer span.End()
 
@@ -340,7 +392,7 @@ func (s *Service) ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock
 	defer s.cfg.ForkChoiceStore.Unlock()
 
 	// Apply state transition on the incoming newly received block batches, one by one.
-	if err := s.onBlockBatch(ctx, blocks, avs); err != nil {
+	if err := s.onBlockBatch(ctx, blocks, envelopes, avs); err != nil {
 		err := errors.Wrap(err, "could not process block in batch")
 		tracing.AnnotateError(span, err)
 		return err
@@ -379,6 +431,15 @@ func (s *Service) ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock
 
 	if err := s.cfg.BeaconDB.SaveBlocks(ctx, s.getInitSyncBlocks()); err != nil {
 		return err
+	}
+	for _, e := range envelopes {
+		protoEnv, ok := e.Proto().(*ethpb.SignedExecutionPayloadEnvelope)
+		if !ok {
+			return errors.New("could not type assert signed envelope to proto")
+		}
+		if err := s.cfg.BeaconDB.SaveExecutionPayloadEnvelope(ctx, protoEnv); err != nil {
+			return errors.Wrap(err, "could not save execution payload envelope")
+		}
 	}
 	finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
 	if finalized == nil {
@@ -458,8 +519,14 @@ func (s *Service) markIncludedBlockBLSToExecChanges(headBlock interfaces.ReadOnl
 
 // This checks whether it's time to start saving hot state to DB.
 // It's time when there's `epochsSinceFinalitySaveHotStateDB` epochs of non-finality.
+//
+//	If state-diff is enabled, we will not save hot states to DB regardless of finality status.
+//
 // Requires a read lock on forkchoice
 func (s *Service) checkSaveHotStateDB(ctx context.Context) error {
+	if features.Get().EnableStateDiff {
+		return s.cfg.StateGen.DisableSaveHotStateToDB(ctx)
+	}
 	currentEpoch := slots.ToEpoch(s.CurrentSlot())
 	// Prevent `sinceFinality` going underflow.
 	var sinceFinality primitives.Epoch
@@ -609,7 +676,7 @@ func (s *Service) validateExecutionOnBlock(ctx context.Context, ver int, header 
 	isValidPayload, err := s.notifyNewPayload(ctx, ver, header, block)
 	if err != nil {
 		s.cfg.ForkChoiceStore.Lock()
-		err = s.handleInvalidExecutionError(ctx, err, block.Root(), block.Block().ParentRoot())
+		err = s.handleInvalidExecutionError(ctx, err, block.Root(), block.Block().ParentRoot(), [32]byte(header.BlockHash()))
 		s.cfg.ForkChoiceStore.Unlock()
 		return false, err
 	}

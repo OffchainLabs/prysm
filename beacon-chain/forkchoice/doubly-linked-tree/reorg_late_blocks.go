@@ -34,22 +34,23 @@ const orphanLateBlockProposingEarly = 2
 func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 	override = false
 
-	// We only need to override FCU if our current head is from the current
+	// We only need to override FCU if our current consensusHead is from the current
 	// slot. This differs from the spec implementation in that we assume
 	// that we will call this function in the previous slot to proposing.
-	head := f.store.headNode
-	if head == nil {
+	consensusHead := f.store.headNode
+	if consensusHead == nil {
 		return
 	}
 
-	if head.slot != slots.CurrentSlot(f.store.genesisTime) {
+	if consensusHead.slot != slots.CurrentSlot(f.store.genesisTime) {
 		return
 	}
 
 	// Do not reorg on epoch boundaries
-	if (head.slot+1)%params.BeaconConfig().SlotsPerEpoch == 0 {
+	if (consensusHead.slot+1)%params.BeaconConfig().SlotsPerEpoch == 0 {
 		return
 	}
+	head := f.store.choosePayloadContent(consensusHead)
 	// Only reorg blocks that arrive late
 	early, err := head.arrivedEarly(f.store.genesisTime)
 	if err != nil {
@@ -61,15 +62,15 @@ func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 	}
 	// Only reorg if we have been finalizing
 	finalizedEpoch := f.store.finalizedCheckpoint.Epoch
-	if slots.ToEpoch(head.slot+1) > finalizedEpoch+params.BeaconConfig().ReorgMaxEpochsSinceFinalization {
+	if slots.ToEpoch(consensusHead.slot+1) > finalizedEpoch+params.BeaconConfig().ReorgMaxEpochsSinceFinalization {
 		return
 	}
 	// Only orphan a single block
-	parent := head.parent
+	parent := consensusHead.parent
 	if parent == nil {
 		return
 	}
-	if head.slot > parent.slot+1 {
+	if consensusHead.slot > parent.node.slot+1 {
 		return
 	}
 	// Do not orphan a block that has higher justification than the parent
@@ -78,12 +79,12 @@ func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 	// }
 
 	// Only orphan a block if the head LMD vote is weak
-	if head.weight*100 > f.store.committeeWeight*params.BeaconConfig().ReorgHeadWeightThreshold {
+	if consensusHead.weight*100 > f.store.committeeWeight*params.BeaconConfig().ReorgHeadWeightThreshold {
 		return
 	}
 
 	// Return early if we are checking before 10 seconds into the slot
-	sss, err := slots.SinceSlotStart(head.slot, f.store.genesisTime, time.Now())
+	sss, err := slots.SinceSlotStart(consensusHead.slot, f.store.genesisTime, time.Now())
 	if err != nil {
 		log.WithError(err).Error("could not check current slot")
 		return true
@@ -92,7 +93,7 @@ func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 		return true
 	}
 	// Only orphan a block if the parent LMD vote is strong
-	if parent.weight*100 < f.store.committeeWeight*params.BeaconConfig().ReorgParentWeightThreshold {
+	if parent.node.weight*100 < f.store.committeeWeight*params.BeaconConfig().ReorgParentWeightThreshold {
 		return
 	}
 	return true
@@ -106,60 +107,67 @@ func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 // This function needs to be called only when proposing a block and all
 // attestation processing has already happened.
 func (f *ForkChoice) GetProposerHead() [32]byte {
-	head := f.store.headNode
-	if head == nil {
+	consensusHead := f.store.headNode
+	if consensusHead == nil {
 		return [32]byte{}
 	}
 	// Only reorg blocks from the previous slot.
 	currentSlot := slots.CurrentSlot(f.store.genesisTime)
-	if head.slot+1 != currentSlot {
-		return head.root
+	if consensusHead.slot+1 != currentSlot {
+		return consensusHead.root
 	}
 	// Do not reorg on epoch boundaries
-	if (head.slot+1)%params.BeaconConfig().SlotsPerEpoch == 0 {
-		return head.root
+	if (consensusHead.slot+1)%params.BeaconConfig().SlotsPerEpoch == 0 {
+		return consensusHead.root
 	}
 	// Only reorg blocks that arrive late
+	head := f.store.choosePayloadContent(consensusHead)
+	if slots.ToEpoch(consensusHead.slot) >= params.BeaconConfig().GloasForkEpoch {
+		head = f.store.emptyNodeByRoot[consensusHead.root]
+	}
+	if head == nil {
+		return consensusHead.root
+	}
 	early, err := head.arrivedEarly(f.store.genesisTime)
 	if err != nil {
 		log.WithError(err).Error("could not check if block arrived early")
-		return head.root
+		return consensusHead.root
 	}
 	if early {
-		return head.root
+		return consensusHead.root
 	}
 	// Only reorg if we have been finalizing
 	finalizedEpoch := f.store.finalizedCheckpoint.Epoch
-	if slots.ToEpoch(head.slot+1) > finalizedEpoch+params.BeaconConfig().ReorgMaxEpochsSinceFinalization {
-		return head.root
+	if slots.ToEpoch(consensusHead.slot+1) > finalizedEpoch+params.BeaconConfig().ReorgMaxEpochsSinceFinalization {
+		return consensusHead.root
 	}
 	// Only orphan a single block
-	parent := head.parent
+	parent := consensusHead.parent
 	if parent == nil {
-		return head.root
+		return consensusHead.root
 	}
-	if head.slot > parent.slot+1 {
-		return head.root
+	if consensusHead.slot > parent.node.slot+1 {
+		return consensusHead.root
 	}
 
 	// Only orphan a block if the head LMD vote is weak
-	if head.weight*100 > f.store.committeeWeight*params.BeaconConfig().ReorgHeadWeightThreshold {
-		return head.root
+	if consensusHead.weight*100 > f.store.committeeWeight*params.BeaconConfig().ReorgHeadWeightThreshold {
+		return consensusHead.root
 	}
 
 	// Only orphan a block if the parent LMD vote is strong
-	if parent.weight*100 < f.store.committeeWeight*params.BeaconConfig().ReorgParentWeightThreshold {
-		return head.root
+	if parent.node.weight*100 < f.store.committeeWeight*params.BeaconConfig().ReorgParentWeightThreshold {
+		return consensusHead.root
 	}
 
 	// Only reorg if we are proposing early
 	sss, err := slots.SinceSlotStart(currentSlot, f.store.genesisTime, time.Now())
 	if err != nil {
 		log.WithError(err).Error("could not check if proposing early")
-		return head.root
+		return consensusHead.root
 	}
 	if sss >= orphanLateBlockProposingEarly*time.Second {
-		return head.root
+		return consensusHead.root
 	}
-	return parent.root
+	return parent.node.root
 }

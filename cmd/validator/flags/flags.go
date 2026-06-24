@@ -75,17 +75,6 @@ var (
 		Usage: "RPC port exposed by a validator client.",
 		Value: 7000,
 	}
-	// SlasherRPCProviderFlag defines a slasher node RPC endpoint.
-	SlasherRPCProviderFlag = &cli.StringFlag{
-		Name:  "slasher-rpc-provider",
-		Usage: "Slasher node RPC provider endpoint.",
-		Value: "127.0.0.1:4002",
-	}
-	// SlasherCertFlag defines a flag for the slasher node's TLS certificate.
-	SlasherCertFlag = &cli.StringFlag{
-		Name:  "slasher-tls-cert",
-		Usage: "Certificate for secure slasher gRPC. Pass this and the tls-key flag in order to use gRPC securely.",
-	}
 	// DisablePenaltyRewardLogFlag defines the ability to not log reward/penalty information during deployment
 	DisablePenaltyRewardLogFlag = &cli.BoolFlag{
 		Name:  "disable-rewards-penalties-logging",
@@ -397,6 +386,13 @@ var (
 		Usage: "To enable the use of prysm validator client in Distributed Validator Cluster",
 		Value: false,
 	}
+	// EnableStatelessFlag enables the stateless block production path for Gloas: the validator requests the
+	// block and execution payload envelope in a single v4 call instead of fetching them in two separate calls.
+	EnableStatelessFlag = &cli.BoolFlag{
+		Name:  "stateless",
+		Usage: fmt.Sprintf("Enables stateless block production for Gloas. The validator requests block and execution payload envelope in a single /eth/v4/validator/blocks call. Only works with `--%s`", BeaconRESTApiProviderFlag.Name),
+		Value: false,
+	}
 	// DisableDutiesPolling disables the polling of duties on dependent root changes.
 	DisableDutiesPolling = &cli.BoolFlag{
 		Name:  "disable-duties-polling",
@@ -409,6 +405,12 @@ var (
 		Name:  "max-health-checks",
 		Usage: "Maximum number of health checks to perform before exiting if not healthy. Set to 0 or a negative number for indefinite checks.",
 		Value: DefaultMaxHealthChecks,
+	}
+	// DisableEphemeralLogFile disables the 24 hour debug log file.
+	DisableEphemeralLogFile = &cli.BoolFlag{
+		Name:  "disable-ephemeral-log-file",
+		Usage: "Disables the creation of a debug log file that keeps 24 hours of logs.",
+		Value: false,
 	}
 )
 

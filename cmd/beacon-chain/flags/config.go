@@ -1,24 +1,37 @@
 package flags
 
 import (
+	"fmt"
+
 	"github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
+)
+
+const (
+	MinStateDiffExponent = 2
+	MaxStateDiffExponent = 30
 )
 
 // GlobalFlags specifies all the global flags for the
 // beacon node.
 type GlobalFlags struct {
+	Supernode                       bool
+	DisableGetBlobsV2               bool
+	SemiSupernode                   bool
 	SubscribeToAllSubnets           bool
-	SubscribeAllDataSubnets         bool
-	MinimumSyncPeers                int
-	MinimumPeersPerSubnet           int
-	MaxConcurrentDials              int
-	BlockBatchLimit                 int
-	BlockBatchLimitBurstFactor      int
-	BlobBatchLimit                  int
+	PostponeShutdownForProposals    bool
 	BlobBatchLimitBurstFactor       int
 	DataColumnBatchLimit            int
+	BlockBatchLimit                 int
+	MaxConcurrentDials              int
+	MinimumPeersPerSubnet           int
+	MinimumSyncPeers                int
 	DataColumnBatchLimitBurstFactor int
+	BlockBatchLimitBurstFactor      int
+	BlobBatchLimit                  int
+	StateDiffExponents              []int
 }
 
 var globalConfig *GlobalFlags
@@ -38,7 +51,7 @@ func Init(c *GlobalFlags) {
 
 // ConfigureGlobalFlags initializes the global config.
 // based on the provided cli context.
-func ConfigureGlobalFlags(ctx *cli.Context) {
+func ConfigureGlobalFlags(ctx *cli.Context) error {
 	cfg := &GlobalFlags{}
 
 	if ctx.Bool(SubscribeToAllSubnets.Name) {
@@ -46,9 +59,44 @@ func ConfigureGlobalFlags(ctx *cli.Context) {
 		cfg.SubscribeToAllSubnets = true
 	}
 
-	if ctx.Bool(SubscribeAllDataSubnets.Name) {
-		log.Warning("Subscribing to all data subnets")
-		cfg.SubscribeAllDataSubnets = true
+	supernodeSet := ctx.Bool(Supernode.Name)
+	semiSupernodeSet := ctx.Bool(SemiSupernode.Name)
+
+	// Ensure mutual exclusivity between supernode and semi-supernode modes
+	if supernodeSet && semiSupernodeSet {
+		return fmt.Errorf("cannot set both --%s and --%s flags; choose one mode", Supernode.Name, SemiSupernode.Name)
+	}
+
+	if supernodeSet {
+		log.Info("Operating in supernode mode")
+		cfg.Supernode = true
+	}
+
+	if semiSupernodeSet {
+		log.Info("Operating in semi-supernode mode (custody just enough data to serve the blobs and blob sidecars beacon API)")
+		cfg.SemiSupernode = true
+	}
+
+	if ctx.Bool(DisableGetBlobsV2.Name) {
+		log.Warning("Disabling `engine_getBlobsV2` API")
+		cfg.DisableGetBlobsV2 = true
+	}
+
+	if ctx.Bool(PostponeShutdownForProposals.Name) {
+		log.Info("Graceful shutdown will be postponed while a connected validator client has a block proposal in the next 2 epochs")
+		cfg.PostponeShutdownForProposals = true
+	}
+
+	// State-diff-exponents
+	cfg.StateDiffExponents = ctx.IntSlice(StateDiffExponents.Name)
+	if features.Get().EnableStateDiff {
+		if err := validateStateDiffExponents(cfg.StateDiffExponents); err != nil {
+			return err
+		}
+	} else {
+		if ctx.IsSet(StateDiffExponents.Name) {
+			log.Warn("--state-diff-exponents is set but --enable-state-diff is not; the value will be ignored.")
+		}
 	}
 
 	cfg.BlockBatchLimit = ctx.Int(BlockBatchLimit.Name)
@@ -63,6 +111,7 @@ func ConfigureGlobalFlags(ctx *cli.Context) {
 	configureMinimumPeers(ctx, cfg)
 
 	Init(cfg)
+	return nil
 }
 
 // MaxDialIsActive checks if the user has enabled the max dial flag.
@@ -77,4 +126,27 @@ func configureMinimumPeers(ctx *cli.Context, cfg *GlobalFlags) {
 		log.Warnf("Changing Minimum Sync Peers to %d", maxPeers)
 		cfg.MinimumSyncPeers = maxPeers
 	}
+}
+
+// validateStateDiffExponents validates the provided exponents for state diffs with these constraints in mind:
+//   - Must contain between 1 and 15 values.
+//   - Exponents must be in strictly decreasing order.
+//   - Every exponent must be <= 30. (2^30 slots is more than 300 years at 12s slots)
+//   - The last (smallest) exponent must be >= 5. (This ensures diffs are at least 1 epoch apart)
+func validateStateDiffExponents(exponents []int) error {
+	length := len(exponents)
+	if length == 0 || length > 15 {
+		return errors.New("state diff exponents must contain between 1 and 15 values")
+	}
+	if exponents[length-1] < 5 {
+		return errors.New("the last state diff exponent must be at least 5")
+	}
+	prev := MaxStateDiffExponent + 1
+	for _, exp := range exponents {
+		if exp >= prev {
+			return fmt.Errorf("state diff exponents must be in strictly decreasing order, and each exponent must be <= %d", MaxStateDiffExponent)
+		}
+		prev = exp
+	}
+	return nil
 }

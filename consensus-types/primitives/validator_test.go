@@ -33,3 +33,32 @@ func TestValidatorIndex_Casting(t *testing.T) {
 		}
 	})
 }
+
+func TestValidatorIndex_BuilderIndexFlagConversions(t *testing.T) {
+	base := uint64(42)
+
+	unflagged := ValidatorIndex(base)
+	if unflagged.IsBuilderIndex() {
+		t.Fatalf("expected unflagged validator index to not be a builder index")
+	}
+	if got, want := unflagged.ToBuilderIndex(), BuilderIndex(base); got != want {
+		t.Fatalf("unexpected builder index: got %d want %d", got, want)
+	}
+
+	flagged := ValidatorIndex(base | BuilderIndexFlag)
+	if !flagged.IsBuilderIndex() {
+		t.Fatalf("expected flagged validator index to be a builder index")
+	}
+	if got, want := flagged.ToBuilderIndex(), BuilderIndex(base); got != want {
+		t.Fatalf("unexpected builder index: got %d want %d", got, want)
+	}
+
+	builder := BuilderIndex(base)
+	roundTrip := builder.ToValidatorIndex()
+	if !roundTrip.IsBuilderIndex() {
+		t.Fatalf("expected round-tripped validator index to be a builder index")
+	}
+	if got, want := roundTrip.ToBuilderIndex(), builder; got != want {
+		t.Fatalf("unexpected round-trip builder index: got %d want %d", got, want)
+	}
+}

@@ -63,7 +63,19 @@ func Test_parseJWTSecretFromFile(t *testing.T) {
 		set.String(flags.ExecutionJWTSecretFlag.Name, fullPath, "")
 		ctx := cli.NewContext(&app, set, nil)
 		_, err := parseJWTSecretFromFile(ctx)
-		require.ErrorContains(t, "should be a hex string of at least 32 bytes", err)
+		require.ErrorContains(t, "should be a hex string of 32 bytes", err)
+	})
+	t.Run("more than 32 bytes", func(t *testing.T) {
+		app := cli.App{}
+		set := flag.NewFlagSet("test", 0)
+		fullPath := filepath.Join(t.TempDir(), "foohex")
+		secret := bytesutil.PadTo([]byte("foo"), 33)
+		hexData := fmt.Sprintf("%#x", secret)
+		require.NoError(t, file.WriteFile(fullPath, []byte(hexData)))
+		set.String(flags.ExecutionJWTSecretFlag.Name, fullPath, "")
+		ctx := cli.NewContext(&app, set, nil)
+		_, err := parseJWTSecretFromFile(ctx)
+		require.ErrorContains(t, "should be a hex string of 32 bytes", err)
 	})
 	t.Run("bad data", func(t *testing.T) {
 		app := cli.App{}

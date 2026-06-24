@@ -140,6 +140,7 @@ type config struct {
 // Validator Registration Contract on the eth1 chain to kick off the beacon
 // chain's validator registration process.
 type Service struct {
+	partialColumnsSupported bool
 	connectedETH1           bool
 	isRunning               bool
 	depositRequestsStarted  bool
@@ -162,6 +163,7 @@ type Service struct {
 	verifierWaiter          *verification.InitializerWaiter
 	blobVerifier            verification.NewBlobVerifier
 	capabilityCache         *capabilityCache
+	graffitiInfo            *GraffitiInfo
 }
 
 // NewService sets up a new instance with an ethclient when given a web3 endpoint as a string in the config.
@@ -316,6 +318,28 @@ func (s *Service) updateBeaconNodeStats() {
 func (s *Service) updateConnectedETH1(state bool) {
 	s.connectedETH1 = state
 	s.updateBeaconNodeStats()
+}
+
+// GraffitiInfo returns the GraffitiInfo struct for graffiti generation.
+func (s *Service) GraffitiInfo() *GraffitiInfo {
+	return s.graffitiInfo
+}
+
+// updateGraffitiInfo fetches EL client version and updates the graffiti info.
+func (s *Service) updateGraffitiInfo() {
+	if s.graffitiInfo == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(s.ctx, time.Second)
+	defer cancel()
+	versions, err := s.GetClientVersionV1(ctx)
+	if err != nil {
+		log.WithError(err).Debug("Could not get execution client version for graffiti")
+		return
+	}
+	if len(versions) >= 1 {
+		s.graffitiInfo.UpdateFromEngine(versions[0].Code, versions[0].Commit)
+	}
 }
 
 // refers to the latest eth1 block which follows the condition: eth1_timestamp +
@@ -598,6 +622,12 @@ func (s *Service) run(done <-chan struct{}) {
 	chainstartTicker := time.NewTicker(logPeriod)
 	defer chainstartTicker.Stop()
 
+	// Update graffiti info 4 times per epoch (~96 seconds with 12s slots and 32 slots/epoch)
+	graffitiTicker := time.NewTicker(96 * time.Second)
+	defer graffitiTicker.Stop()
+	// Initial update
+	s.updateGraffitiInfo()
+
 	for {
 		select {
 		case <-done:
@@ -622,6 +652,8 @@ func (s *Service) run(done <-chan struct{}) {
 				continue
 			}
 			s.logTillChainStart(context.Background())
+		case <-graffitiTicker.C:
+			s.updateGraffitiInfo()
 		}
 	}
 }
@@ -861,19 +893,6 @@ func (s *Service) validPowchainData(ctx context.Context) (*ethpb.ETH1ChainData, 
 		}
 	}
 	return eth1Data, nil
-}
-
-func dedupEndpoints(endpoints []string) []string {
-	selectionMap := make(map[string]bool)
-	newEndpoints := make([]string, 0, len(endpoints))
-	for _, point := range endpoints {
-		if selectionMap[point] {
-			continue
-		}
-		newEndpoints = append(newEndpoints, point)
-		selectionMap[point] = true
-	}
-	return newEndpoints
 }
 
 func (s *Service) migrateOldDepositTree(eth1DataInDB *ethpb.ETH1ChainData) error {

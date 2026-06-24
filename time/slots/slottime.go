@@ -14,6 +14,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// errOverflow is returned when a slot calculation would overflow.
+var errOverflow = errors.New("slot calculation overflows")
+
 // MaxSlotBuffer specifies the max buffer given to slots from
 // incoming objects. (24 mins with mainnet spec)
 const MaxSlotBuffer = uint64(1 << 7)
@@ -108,7 +111,7 @@ func ToForkVersion(slot primitives.Slot) int {
 func EpochStart(epoch primitives.Epoch) (primitives.Slot, error) {
 	slot, err := params.BeaconConfig().SlotsPerEpoch.SafeMul(uint64(epoch))
 	if err != nil {
-		return slot, errors.Errorf("start slot calculation overflows: %v", err)
+		return slot, errors.Wrap(errOverflow, "epoch start")
 	}
 	return slot, nil
 }
@@ -127,7 +130,7 @@ func UnsafeEpochStart(epoch primitives.Epoch) primitives.Slot {
 // current epoch.
 func EpochEnd(epoch primitives.Epoch) (primitives.Slot, error) {
 	if epoch == math.MaxUint64 {
-		return 0, errors.New("start slot calculation overflows")
+		return 0, errors.Wrap(errOverflow, "epoch end")
 	}
 	slot, err := EpochStart(epoch + 1)
 	if err != nil {
@@ -284,8 +287,26 @@ func WithinVotingWindow(genesis time.Time, slot primitives.Slot) bool {
 }
 
 // MaxSafeEpoch gives the largest epoch value that can be safely converted to a slot.
+// Note that just dividing max uint64 by slots per epoch is not sufficient,
+// because the resulting slot could still be the start of an epoch that would overflow
+// in the end slot computation. So we subtract 1 to ensure that the final epoch can always
+// have 32 slots.
 func MaxSafeEpoch() primitives.Epoch {
-	return primitives.Epoch(math.MaxUint64 / uint64(params.BeaconConfig().SlotsPerEpoch))
+	return primitives.Epoch(math.MaxUint64/uint64(params.BeaconConfig().SlotsPerEpoch)) - 1
+}
+
+// SafeEpochStartOrMax returns the start slot of the given epoch if it will not overflow,
+// otherwise it takes the highest epoch that won't overflow,
+// and to introduce a little margin for error, returns the slot beginning the prior epoch.
+func SafeEpochStartOrMax(e primitives.Epoch) primitives.Slot {
+	// The max value converted to a slot can't be the start of a conceptual epoch,
+	// because the first slot of that epoch would be overflow
+	// so use the start slot of the epoch right before that value.
+	me := MaxSafeEpoch()
+	if e > me {
+		return UnsafeEpochStart(me)
+	}
+	return UnsafeEpochStart(e)
 }
 
 // SecondsUntilNextEpochStart returns how many seconds until the next Epoch start from the current time and slot

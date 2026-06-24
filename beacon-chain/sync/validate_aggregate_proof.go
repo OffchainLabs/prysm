@@ -137,7 +137,9 @@ func (s *Service) validateAggregateAndProof(ctx context.Context, pid peer.ID, ms
 		return validationRes, err
 	}
 
-	s.setAggregatorIndexEpochSeen(data.Target.Epoch, m.AggregateAttestationAndProof().GetAggregatorIndex())
+	if first := s.setAggregatorIndexEpochSeen(data.Target.Epoch, m.AggregateAttestationAndProof().GetAggregatorIndex()); !first {
+		return pubsub.ValidationIgnore, nil
+	}
 
 	msg.ValidatorData = m
 
@@ -265,13 +267,19 @@ func (s *Service) hasSeenAggregatorIndexEpoch(epoch primitives.Epoch, aggregator
 }
 
 // Set aggregate's aggregator index target epoch as seen.
-func (s *Service) setAggregatorIndexEpochSeen(epoch primitives.Epoch, aggregatorIndex primitives.ValidatorIndex) {
+// Returns true if this is the first time seeing this aggregator index and epoch.
+func (s *Service) setAggregatorIndexEpochSeen(epoch primitives.Epoch, aggregatorIndex primitives.ValidatorIndex) bool {
 	b := append(bytesutil.Bytes32(uint64(epoch)), bytesutil.Bytes32(uint64(aggregatorIndex))...)
 
 	s.seenAggregatedAttestationLock.Lock()
 	defer s.seenAggregatedAttestationLock.Unlock()
 
+	_, seen := s.seenAggregatedAttestationCache.Get(string(b))
+	if seen {
+		return false
+	}
 	s.seenAggregatedAttestationCache.Add(string(b), true)
+	return true
 }
 
 // This validates the bitfield is correct and aggregator's index in state is within the beacon committee.

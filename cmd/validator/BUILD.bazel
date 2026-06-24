@@ -5,6 +5,7 @@ load("//tools:prysm_image.bzl", "prysm_image_upload")
 go_library(
     name = "go_default_library",
     srcs = [
+        "log.go",
         "main.go",
         "usage.go",
     ],

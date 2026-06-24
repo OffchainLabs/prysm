@@ -4,13 +4,16 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -51,6 +54,11 @@ func ProcessProposerSlashings(
 	slashings []*ethpb.ProposerSlashing,
 	exitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "blocks.ProcessProposerSlashings")
+	defer span.End()
+
+	span.SetAttributes(trace.Int64Attribute("count", int64(len(slashings))))
+
 	if exitInfo == nil && len(slashings) > 0 {
 		return nil, errors.New("exit info required to process proposer slashings")
 	}
@@ -126,7 +134,16 @@ func processProposerSlashing(
 	if exitInfo == nil {
 		return nil, errors.New("exit info is required to process proposer slashing")
 	}
+
 	var err error
+	// [New in Gloas:EIP7732]: remove the BuilderPendingPayment corresponding to the slashed proposer within 2 epoch window
+	if beaconState.Version() >= version.Gloas {
+		err = gloas.RemoveBuilderPendingPayment(beaconState, slashing.Header_1.Header)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	beaconState, err = validators.SlashValidator(ctx, beaconState, slashing.Header_1.Header.ProposerIndex, exitInfo)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not slash proposer index %d", slashing.Header_1.Header.ProposerIndex)

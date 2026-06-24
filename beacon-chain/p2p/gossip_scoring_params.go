@@ -52,7 +52,9 @@ const (
 	// lightClientFinalityUpdateWeight specifies the scoring weight that we apply to
 	// our light client finality update topic.
 	lightClientFinalityUpdateWeight = 0.05
-
+	// signedProposerPreferencesWeight specifies the scoring weight that we apply to
+	// our signed proposer preferences topic.
+	signedProposerPreferencesWeight = 0.05
 	// maxInMeshScore describes the max score a peer can attain from being in the mesh.
 	maxInMeshScore = 10
 	// maxFirstDeliveryScore describes the max score a peer can obtain from first deliveries.
@@ -145,6 +147,15 @@ func (s *Service) topicScoreParams(topic string) (*pubsub.TopicScoreParams, erro
 		return defaultLightClientOptimisticUpdateTopicParams(), nil
 	case strings.Contains(topic, GossipLightClientFinalityUpdateMessage):
 		return defaultLightClientFinalityUpdateTopicParams(), nil
+	case strings.Contains(topic, GossipPayloadAttestationMessageMessage):
+		// TODO: Revisit scoring params for payload attestation gossip.
+		return defaultBlockTopicParams(), nil
+	case strings.Contains(topic, GossipExecutionPayloadEnvelopeMessage):
+		// TODO: Revisit scoring params for execution payload envelope gossip.
+		return defaultBlockTopicParams(), nil
+	case strings.Contains(topic, GossipSignedProposerPreferencesMessage):
+		// TODO: Revisit scoring params for signed proposer preferences gossip.
+		return defaultBlockTopicParams(), nil
 	default:
 		return nil, errors.Errorf("unrecognized topic provided for parameter registration: %s", topic)
 	}
@@ -156,33 +167,29 @@ func (s *Service) retrieveActiveValidators() (uint64, error) {
 	if s.activeValidatorCount != 0 {
 		return s.activeValidatorCount, nil
 	}
-	rt := s.cfg.DB.LastArchivedRoot(s.ctx)
-	if rt == params.BeaconConfig().ZeroHash {
-		genState, err := s.cfg.DB.GenesisState(s.ctx)
-		if err != nil {
-			return 0, err
-		}
-		if genState == nil || genState.IsNil() {
-			return 0, errors.New("no genesis state exists")
-		}
-		activeVals, err := helpers.ActiveValidatorCount(context.Background(), genState, coreTime.CurrentEpoch(genState))
-		if err != nil {
-			return 0, err
-		}
-		// Cache active validator count
-		s.activeValidatorCount = activeVals
-		return activeVals, nil
-	}
-	bState, err := s.cfg.DB.State(s.ctx, rt)
+	finalizedCheckpoint, err := s.cfg.DB.FinalizedCheckpoint(s.ctx)
 	if err != nil {
 		return 0, err
 	}
-	if bState == nil || bState.IsNil() {
-		return 0, errors.Errorf("no state with root %#x exists", rt)
+	bState, err := s.cfg.StateGen.StateByRootNoCopy(s.ctx, [32]byte(finalizedCheckpoint.Root))
+	if err != nil {
+		return 0, err
 	}
 	activeVals, err := helpers.ActiveValidatorCount(context.Background(), bState, coreTime.CurrentEpoch(bState))
 	if err != nil {
 		return 0, err
+	}
+	if minAtt := minActiveValidatorsForAttSubnetScoring(); activeVals < minAtt {
+		log.WithFields(logrus.Fields{
+			"activeValidators": activeVals,
+			"required":         minAtt,
+		}).Debug("Network too small to score attestation subnet topics, they will be unscored")
+	}
+	if minSync := minActiveValidatorsForSyncSubnetScoring(); activeVals < minSync {
+		log.WithFields(logrus.Fields{
+			"activeValidators": activeVals,
+			"required":         minSync,
+		}).Debug("Network too small to score sync committee subnet topics, they will be unscored")
 	}
 	// Cache active validator count
 	s.activeValidatorCount = activeVals
@@ -306,21 +313,29 @@ func defaultSyncContributionTopicParams() *pubsub.TopicScoreParams {
 	}
 }
 
+// minActiveValidatorsForAttSubnetScoring is the count below which the expected
+// per-subnet message rate truncates to zero and attestation subnet topics cannot be scored.
+func minActiveValidatorsForAttSubnetScoring() uint64 {
+	cfg := params.BeaconConfig()
+	return cfg.AttestationSubnetCount * uint64(cfg.SlotsPerEpoch) * gossipSubD / 2
+}
+
+// minActiveValidatorsForSyncSubnetScoring is the sync committee subnet equivalent.
+func minActiveValidatorsForSyncSubnetScoring() uint64 {
+	return params.BeaconConfig().SyncCommitteeSubnetCount * gossipSubD / 2
+}
+
 func defaultAggregateSubnetTopicParams(activeValidators uint64) *pubsub.TopicScoreParams {
+	// Logged once in retrieveActiveValidators.
+	if activeValidators < minActiveValidatorsForAttSubnetScoring() {
+		return nil
+	}
 	subnetCount := params.BeaconConfig().AttestationSubnetCount
 	// Get weight for each specific subnet.
 	topicWeight := attestationTotalWeight / float64(subnetCount)
 	subnetWeight := activeValidators / subnetCount
-	if subnetWeight == 0 {
-		log.Warn("Subnet weight is 0, skipping initializing topic scoring")
-		return nil
-	}
 	// Determine the amount of validators expected in a subnet in a single slot.
 	numPerSlot := time.Duration(subnetWeight / uint64(params.BeaconConfig().SlotsPerEpoch))
-	if numPerSlot == 0 {
-		log.Warn("Number per slot is 0, skipping initializing topic scoring")
-		return nil
-	}
 	comsPerSlot := committeeCountPerSlot(activeValidators)
 	exceedsThreshold := comsPerSlot >= 2*subnetCount/uint64(params.BeaconConfig().SlotsPerEpoch)
 	firstDecay := time.Duration(1)
@@ -330,10 +345,6 @@ func defaultAggregateSubnetTopicParams(activeValidators uint64) *pubsub.TopicSco
 		meshDecay = 16
 	}
 	rate := numPerSlot * 2 / gossipSubD
-	if rate == 0 {
-		log.Warn("Skipping initializing topic scoring because rate is 0")
-		return nil
-	}
 	// Determine expected first deliveries based on the message rate.
 	firstMessageCap, err := decayLimit(scoreDecay(firstDecay*oneEpochDuration()), float64(rate))
 	if err != nil {
@@ -376,6 +387,10 @@ func defaultAggregateSubnetTopicParams(activeValidators uint64) *pubsub.TopicSco
 }
 
 func defaultSyncSubnetTopicParams(activeValidators uint64) *pubsub.TopicScoreParams {
+	// Logged once in retrieveActiveValidators.
+	if activeValidators < minActiveValidatorsForSyncSubnetScoring() {
+		return nil
+	}
 	subnetCount := params.BeaconConfig().SyncCommitteeSubnetCount
 	// Get weight for each specific subnet.
 	topicWeight := syncCommitteesTotalWeight / float64(subnetCount)
@@ -385,18 +400,10 @@ func defaultSyncSubnetTopicParams(activeValidators uint64) *pubsub.TopicScorePar
 		activeValidators = syncComSize
 	}
 	subnetWeight := activeValidators / subnetCount
-	if subnetWeight == 0 {
-		log.Warn("Subnet weight is 0, skipping initializing topic scoring")
-		return nil
-	}
 	firstDecay := time.Duration(1)
 	meshDecay := time.Duration(4)
 
 	rate := subnetWeight * 2 / gossipSubD
-	if rate == 0 {
-		log.Warn("Skipping initializing topic scoring because rate is 0")
-		return nil
-	}
 	// Determine expected first deliveries based on the message rate.
 	firstMessageCap, err := decayLimit(scoreDecay(firstDecay*oneEpochDuration()), float64(rate))
 	if err != nil {

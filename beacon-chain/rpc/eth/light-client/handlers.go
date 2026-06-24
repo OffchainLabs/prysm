@@ -116,6 +116,7 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 		for _, update := range updates {
 			if ctx.Err() != nil {
 				httputil.HandleError(w, "Context error: "+ctx.Err().Error(), http.StatusInternalServerError)
+				return
 			}
 
 			updateSlot := update.AttestedHeader().Beacon().Slot
@@ -131,12 +132,15 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 			chunkLength = ssz.MarshalUint64(chunkLength, uint64(len(updateSSZ)+4))
 			if _, err := w.Write(chunkLength); err != nil {
 				httputil.HandleError(w, "Could not write chunk length: "+err.Error(), http.StatusInternalServerError)
+				return
 			}
 			if _, err := w.Write(updateEntry.ForkDigest[:]); err != nil {
 				httputil.HandleError(w, "Could not write fork digest: "+err.Error(), http.StatusInternalServerError)
+				return
 			}
 			if _, err := w.Write(updateSSZ); err != nil {
 				httputil.HandleError(w, "Could not write update SSZ: "+err.Error(), http.StatusInternalServerError)
+				return
 			}
 		}
 	} else {
@@ -145,6 +149,7 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 		for _, update := range updates {
 			if ctx.Err() != nil {
 				httputil.HandleError(w, "Context error: "+ctx.Err().Error(), http.StatusInternalServerError)
+				return
 			}
 
 			updateJson, err := structs.LightClientUpdateFromConsensus(update)

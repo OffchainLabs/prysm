@@ -1,6 +1,7 @@
 package eth
 
 import (
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 )
 
@@ -35,6 +36,21 @@ func CopyValidator(val *Validator) *Validator {
 	}
 }
 
+// CopyBuilder copies the provided builder.
+func CopyBuilder(builder *Builder) *Builder {
+	if builder == nil {
+		return nil
+	}
+	return &Builder{
+		Pubkey:            bytesutil.SafeCopyBytes(builder.Pubkey),
+		Version:           bytesutil.SafeCopyBytes(builder.Version),
+		ExecutionAddress:  bytesutil.SafeCopyBytes(builder.ExecutionAddress),
+		Balance:           builder.Balance,
+		DepositEpoch:      builder.DepositEpoch,
+		WithdrawableEpoch: builder.WithdrawableEpoch,
+	}
+}
+
 // CopySyncCommitteeMessage copies the provided sync committee message object.
 func CopySyncCommitteeMessage(s *SyncCommitteeMessage) *SyncCommitteeMessage {
 	if s == nil {
@@ -59,5 +75,222 @@ func CopySyncCommitteeContribution(c *SyncCommitteeContribution) *SyncCommitteeC
 		SubcommitteeIndex: c.SubcommitteeIndex,
 		AggregationBits:   bytesutil.SafeCopyBytes(c.AggregationBits),
 		Signature:         bytesutil.SafeCopyBytes(c.Signature),
+	}
+}
+
+// CopySignedBeaconBlockGloas copies the provided signed beacon block Gloas object.
+func CopySignedBeaconBlockGloas(sb *SignedBeaconBlockGloas) *SignedBeaconBlockGloas {
+	if sb == nil {
+		return nil
+	}
+	return &SignedBeaconBlockGloas{
+		Block:     copyBeaconBlockGloas(sb.Block),
+		Signature: bytesutil.SafeCopyBytes(sb.Signature),
+	}
+}
+
+// copyBeaconBlockGloas copies the provided beacon block Gloas object.
+func copyBeaconBlockGloas(b *BeaconBlockGloas) *BeaconBlockGloas {
+	if b == nil {
+		return nil
+	}
+	return &BeaconBlockGloas{
+		Slot:          b.Slot,
+		ProposerIndex: b.ProposerIndex,
+		ParentRoot:    bytesutil.SafeCopyBytes(b.ParentRoot),
+		StateRoot:     bytesutil.SafeCopyBytes(b.StateRoot),
+		Body:          copyBeaconBlockBodyGloas(b.Body),
+	}
+}
+
+// copyPayloadAttestation copies the provided payload attestation object.
+func copyPayloadAttestation(pa *PayloadAttestation) *PayloadAttestation {
+	if pa == nil {
+		return nil
+	}
+	copied := &PayloadAttestation{
+		AggregationBits: pa.AggregationBits,
+		Signature:       bytesutil.SafeCopyBytes(pa.Signature),
+	}
+	if pa.Data != nil {
+		copied.Data = &PayloadAttestationData{
+			BeaconBlockRoot:   bytesutil.SafeCopyBytes(pa.Data.BeaconBlockRoot),
+			Slot:              pa.Data.Slot,
+			PayloadPresent:    pa.Data.PayloadPresent,
+			BlobDataAvailable: pa.Data.BlobDataAvailable,
+		}
+	}
+	return copied
+}
+
+// copyPayloadAttestations copies a slice of payload attestations.
+func copyPayloadAttestations(pas []*PayloadAttestation) []*PayloadAttestation {
+	if len(pas) == 0 {
+		return nil
+	}
+	copied := make([]*PayloadAttestation, len(pas))
+	for i, pa := range pas {
+		copied[i] = copyPayloadAttestation(pa)
+	}
+	return copied
+}
+
+// copySignedExecutionPayloadBid copies the provided signed execution payload header.
+func copySignedExecutionPayloadBid(header *SignedExecutionPayloadBid) *SignedExecutionPayloadBid {
+	if header == nil {
+		return nil
+	}
+	copied := &SignedExecutionPayloadBid{
+		Signature: bytesutil.SafeCopyBytes(header.Signature),
+	}
+	if header.Message != nil {
+		copied.Message = &ExecutionPayloadBid{
+			ParentBlockHash:       bytesutil.SafeCopyBytes(header.Message.ParentBlockHash),
+			ParentBlockRoot:       bytesutil.SafeCopyBytes(header.Message.ParentBlockRoot),
+			BlockHash:             bytesutil.SafeCopyBytes(header.Message.BlockHash),
+			PrevRandao:            bytesutil.SafeCopyBytes(header.Message.PrevRandao),
+			FeeRecipient:          bytesutil.SafeCopyBytes(header.Message.FeeRecipient),
+			GasLimit:              header.Message.GasLimit,
+			BuilderIndex:          header.Message.BuilderIndex,
+			Slot:                  header.Message.Slot,
+			Value:                 header.Message.Value,
+			ExecutionPayment:      header.Message.ExecutionPayment,
+			BlobKzgCommitments:    bytesutil.SafeCopy2dBytes(header.Message.BlobKzgCommitments),
+			ExecutionRequestsRoot: bytesutil.SafeCopyBytes(header.Message.ExecutionRequestsRoot),
+		}
+	}
+	return copied
+}
+
+// copyBeaconBlockBodyGloas copies the provided beacon block body Gloas object.
+func copyBeaconBlockBodyGloas(body *BeaconBlockBodyGloas) *BeaconBlockBodyGloas {
+	if body == nil {
+		return nil
+	}
+
+	copied := &BeaconBlockBodyGloas{
+		RandaoReveal: bytesutil.SafeCopyBytes(body.RandaoReveal),
+		Graffiti:     bytesutil.SafeCopyBytes(body.Graffiti),
+	}
+
+	if body.Eth1Data != nil {
+		copied.Eth1Data = body.Eth1Data.Copy()
+	}
+
+	if body.SyncAggregate != nil {
+		copied.SyncAggregate = body.SyncAggregate.Copy()
+	}
+
+	copied.ProposerSlashings = CopySlice(body.ProposerSlashings)
+	copied.AttesterSlashings = CopySlice(body.AttesterSlashings)
+	copied.Attestations = CopySlice(body.Attestations)
+	copied.Deposits = CopySlice(body.Deposits)
+	copied.VoluntaryExits = CopySlice(body.VoluntaryExits)
+	copied.BlsToExecutionChanges = CopySlice(body.BlsToExecutionChanges)
+
+	copied.SignedExecutionPayloadBid = copySignedExecutionPayloadBid(body.SignedExecutionPayloadBid)
+	copied.PayloadAttestations = copyPayloadAttestations(body.PayloadAttestations)
+	copied.ParentExecutionRequests = CopyExecutionRequestsGloas(body.ParentExecutionRequests)
+
+	return copied
+}
+
+// CopySignedExecutionPayloadEnvelope copies the provided signed execution payload envelope.
+func CopySignedExecutionPayloadEnvelope(env *SignedExecutionPayloadEnvelope) *SignedExecutionPayloadEnvelope {
+	if env == nil {
+		return nil
+	}
+	return &SignedExecutionPayloadEnvelope{
+		Message:   copyExecutionPayloadEnvelope(env.Message),
+		Signature: bytesutil.SafeCopyBytes(env.Signature),
+	}
+}
+
+// copyExecutionPayloadEnvelope copies the provided execution payload envelope.
+func copyExecutionPayloadEnvelope(env *ExecutionPayloadEnvelope) *ExecutionPayloadEnvelope {
+	if env == nil {
+		return nil
+	}
+	return &ExecutionPayloadEnvelope{
+		Payload:               env.Payload, // engine proto, not deep copied here
+		ExecutionRequests:     env.ExecutionRequests,
+		BuilderIndex:          env.BuilderIndex,
+		BeaconBlockRoot:       bytesutil.SafeCopyBytes(env.BeaconBlockRoot),
+		ParentBeaconBlockRoot: bytesutil.SafeCopyBytes(env.ParentBeaconBlockRoot),
+	}
+}
+
+// CopySignedBlindedExecutionPayloadEnvelope copies the provided signed blinded execution payload envelope.
+func CopySignedBlindedExecutionPayloadEnvelope(env *SignedBlindedExecutionPayloadEnvelope) *SignedBlindedExecutionPayloadEnvelope {
+	if env == nil {
+		return nil
+	}
+	return &SignedBlindedExecutionPayloadEnvelope{
+		Message:   copyBlindedExecutionPayloadEnvelope(env.Message),
+		Signature: bytesutil.SafeCopyBytes(env.Signature),
+	}
+}
+
+// copyBlindedExecutionPayloadEnvelope copies the provided blinded execution payload envelope.
+func copyBlindedExecutionPayloadEnvelope(env *BlindedExecutionPayloadEnvelope) *BlindedExecutionPayloadEnvelope {
+	if env == nil {
+		return nil
+	}
+	return &BlindedExecutionPayloadEnvelope{
+		BlockHash:             bytesutil.SafeCopyBytes(env.BlockHash),
+		ExecutionRequests:     env.ExecutionRequests,
+		BuilderIndex:          env.BuilderIndex,
+		BeaconBlockRoot:       bytesutil.SafeCopyBytes(env.BeaconBlockRoot),
+		Slot:                  env.Slot,
+		ParentBlockHash:       bytesutil.SafeCopyBytes(env.ParentBlockHash),
+		ParentBeaconBlockRoot: bytesutil.SafeCopyBytes(env.ParentBeaconBlockRoot),
+	}
+}
+
+// CopyPTCs creates a deep copy of a PTC slot.
+func CopyPTCs(slot *PTCs) *PTCs {
+	if slot == nil {
+		return nil
+	}
+	indices := make([]primitives.ValidatorIndex, len(slot.ValidatorIndices))
+	copy(indices, slot.ValidatorIndices)
+	return &PTCs{ValidatorIndices: indices}
+}
+
+// CopyPTCWindow creates a deep copy of a PTC window.
+func CopyPTCWindow(window []*PTCs) []*PTCs {
+	if window == nil {
+		return nil
+	}
+	copied := make([]*PTCs, len(window))
+	for i, slot := range window {
+		copied[i] = CopyPTCs(slot)
+	}
+	return copied
+}
+
+// CopyBuilderPendingPayment creates a deep copy of a builder pending payment.
+func CopyBuilderPendingPayment(original *BuilderPendingPayment) *BuilderPendingPayment {
+	if original == nil {
+		return nil
+	}
+
+	return &BuilderPendingPayment{
+		Weight:        original.Weight,
+		Withdrawal:    CopyBuilderPendingWithdrawal(original.Withdrawal),
+		ProposerIndex: original.ProposerIndex,
+	}
+}
+
+// CopyBuilderPendingWithdrawal creates a deep copy of a builder pending withdrawal.
+func CopyBuilderPendingWithdrawal(original *BuilderPendingWithdrawal) *BuilderPendingWithdrawal {
+	if original == nil {
+		return nil
+	}
+
+	return &BuilderPendingWithdrawal{
+		FeeRecipient: bytesutil.SafeCopyBytes(original.FeeRecipient),
+		Amount:       original.Amount,
+		BuilderIndex: original.BuilderIndex,
 	}
 }

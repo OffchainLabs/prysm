@@ -5,12 +5,14 @@ go_library(
     srcs = [
         "error.go",
         "interfaces.go",
+        "interfaces_gloas.go",
         "prometheus.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/state",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/state/state-native/custom-types:go_default_library",
+        "//beacon-chain/state/state-native/types:go_default_library",
         "//config/fieldparams:go_default_library",
         "//consensus-types/interfaces:go_default_library",
         "//consensus-types/primitives:go_default_library",

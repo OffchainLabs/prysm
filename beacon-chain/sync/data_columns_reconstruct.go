@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
@@ -26,7 +25,10 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 
 		root := sidecar.BlockRoot()
 		slot := sidecar.Slot()
-		proposerIndex := sidecar.ProposerIndex()
+		proposerIndex, err := sidecar.ProposerIndex()
+		if err != nil {
+			return nil, err
+		}
 
 		// Return early if reconstruction is not needed.
 		if !s.shouldReconstruct(root) {
@@ -75,6 +77,13 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 
 			duration := time.Since(startTime)
 			dataColumnReconstructionHistogram.Observe(float64(duration.Milliseconds()))
+			if len(reconstructedSidecars) < len(verifiedSidecars) {
+				log.WithFields(logrus.Fields{
+					"reconstructedSidecars": len(reconstructedSidecars),
+					"verifiedSidecars":      len(verifiedSidecars),
+				}).Error("More verified sidecars than reconstructed sidecars")
+				return
+			}
 			dataColumnReconstructionCounter.Add(float64(len(reconstructedSidecars) - len(verifiedSidecars)))
 
 			// Retrieve indices of data column sidecars to sample.
@@ -84,22 +93,25 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 				return
 			}
 
-			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, slot, proposerIndex, columnIndicesToSample, reconstructedSidecars)
+			isPartialEnabled := s.cfg.p2p.PartialColumnBroadcaster() != nil
+			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, slot, proposerIndex, columnIndicesToSample, reconstructedSidecars, isPartialEnabled)
 			if err != nil {
 				log.WithError(err).Error("Failed to broadcast and receive unseen data column sidecars")
 				return
 			}
 
-			if len(unseenIndices) > 0 {
-				log.WithFields(logrus.Fields{
-					"root":          fmt.Sprintf("%#x", root),
-					"slot":          slot,
-					"proposerIndex": proposerIndex,
-					"count":         len(unseenIndices),
-					"indices":       helpers.SortedPrettySliceFromMap(unseenIndices),
-					"duration":      duration,
-				}).Debug("Reconstructed data column sidecars")
+			if len(unseenIndices) == 0 {
+				return
 			}
+
+			log.WithFields(logrus.Fields{
+				"root":          fmt.Sprintf("%#x", root),
+				"slot":          slot,
+				"proposerIndex": proposerIndex,
+				"count":         len(unseenIndices),
+				"indices":       helpers.SortedPrettySliceFromMap(unseenIndices),
+				"duration":      duration,
+			}).Debug("Reconstructed data column sidecars")
 		})
 
 		wg.Wait()
@@ -113,15 +125,13 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 
 // shouldReconstruct returns true if we should attempt to reconstruct the data columns for the given block root.
 func (s *Service) shouldReconstruct(root [fieldparams.RootLength]byte) bool {
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-
 	// Get the columns we store.
 	storedDataColumns := s.cfg.dataColumnStorage.Summary(root)
 	storedColumnsCount := storedDataColumns.Count()
 
 	// Reconstruct only if we have at least the minimum number of columns to reconstruct, but not all the columns.
 	// (If we have not enough columns, reconstruction is impossible. If we have all the columns, reconstruction is unnecessary.)
-	return storedColumnsCount >= peerdas.MinimumColumnCountToReconstruct() && storedColumnsCount != numberOfColumns
+	return storedColumnsCount >= peerdas.MinimumColumnCountToReconstruct() && storedColumnsCount != fieldparams.NumberOfColumns
 }
 
 // computeRandomDelay computes a random delay duration to wait before reconstructing data column sidecars.

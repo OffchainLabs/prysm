@@ -31,13 +31,13 @@ func (c *beaconApiValidatorClient) submitSyncMessage(ctx context.Context, syncMe
 		return errors.Wrap(err, "failed to marshal sync committee message")
 	}
 
-	return c.jsonRestHandler.Post(ctx, endpoint, nil, bytes.NewBuffer(marshalledJsonSyncCommitteeMessage), nil)
+	return c.handler.Post(ctx, endpoint, nil, bytes.NewBuffer(marshalledJsonSyncCommitteeMessage), nil)
 }
 
 func (c *beaconApiValidatorClient) syncMessageBlockRoot(ctx context.Context) (*ethpb.SyncMessageBlockRootResponse, error) {
 	// Get head beacon block root.
 	var resp structs.BlockRootResponse
-	if err := c.jsonRestHandler.Get(ctx, "/eth/v1/beacon/blocks/head/root", &resp); err != nil {
+	if err := c.handler.Get(ctx, "/eth/v1/beacon/blocks/head/root", &resp); err != nil {
 		return nil, err
 	}
 
@@ -82,7 +82,7 @@ func (c *beaconApiValidatorClient) syncCommitteeContribution(
 	params.Add("beacon_block_root", blockRoot)
 
 	var resp structs.ProduceSyncCommitteeContributionResponse
-	if err = c.jsonRestHandler.Get(ctx, apiutil.BuildURL("/eth/v1/validator/sync_committee_contribution", params), &resp); err != nil {
+	if err = c.handler.Get(ctx, apiutil.BuildURL("/eth/v1/validator/sync_committee_contribution", params), &resp); err != nil {
 		return nil, err
 	}
 

@@ -2,7 +2,10 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["formatter.go"],
+    srcs = [
+        "formatter.go",
+        "prefix-replacements.go",
+    ],
     importpath = "github.com/OffchainLabs/prysm/v7/runtime/logging/logrus-prefixed-formatter",
     visibility = ["//visibility:public"],
     deps = [

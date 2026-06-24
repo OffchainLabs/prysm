@@ -64,7 +64,7 @@ func (s *Service) processBlock(ctx context.Context, b interfaces.ReadOnlySignedB
 }
 
 // processProposedBlock logs when the beacon node observes a beacon block from a tracked validator.
-func (s *Service) processProposedBlock(state state.BeaconState, root [32]byte, blk interfaces.ReadOnlyBeaconBlock) {
+func (s *Service) processProposedBlock(state state.ReadOnlyBeaconState, root [32]byte, blk interfaces.ReadOnlyBeaconBlock) {
 	s.Lock()
 	defer s.Unlock()
 	if s.trackedIndex(blk.ProposerIndex()) {

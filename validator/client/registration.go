@@ -2,18 +2,21 @@ package client
 
 import (
 	"context"
-	"strings"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // SubmitValidatorRegistrations signs validator registration objects and submits it to the beacon node by batch of validatorRegsBatchSize size maximum.
@@ -42,7 +45,7 @@ func SubmitValidatorRegistrations(
 		if _, err := validatorClient.SubmitValidatorRegistrations(ctx, &innerSignerRegs); err != nil {
 			lastErr = errors.Wrap(err, "could not submit signed registrations to beacon node")
 
-			if strings.Contains(err.Error(), builder.ErrNoBuilder.Error()) {
+			if statusErr, ok := status.FromError(err); ok && statusErr.Code() == codes.FailedPrecondition {
 				log.Warnln("Beacon node does not utilize a custom builder via the --http-mev-relay flag. Validator registration skipped.")
 
 				// We stop early the loop here, since if the builder endpoint is not configured for this chunk, it is useless to check the following chunks
@@ -90,6 +93,43 @@ func signValidatorRegistration(ctx context.Context, signer iface.SigningFunc, re
 		return nil, errors.Wrap(err, "could not sign validator registration")
 	}
 	return sig.Marshal(), nil
+}
+
+func (v *validator) signProposerPreferences(
+	ctx context.Context,
+	km keymanager.IKeymanager,
+	pubkey [fieldparams.BLSPubkeyLength]byte,
+	pref *ethpb.ProposerPreferences,
+) (*ethpb.SignedProposerPreferences, error) {
+	ctx, span := trace.StartSpan(ctx, "validator.signProposerPreferences")
+	defer span.End()
+
+	epoch := slots.ToEpoch(pref.ProposalSlot)
+	resp, err := v.domainData(ctx, epoch, params.BeaconConfig().DomainProposerPreferences[:])
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get proposer preferences domain data")
+	}
+	domain := resp.SignatureDomain
+
+	r, err := signing.ComputeSigningRoot(pref, domain)
+	if err != nil {
+		return nil, errors.Wrap(err, signingRootErr)
+	}
+
+	sig, err := km.Sign(ctx, &validatorpb.SignRequest{
+		PublicKey:       pubkey[:],
+		SigningRoot:     r[:],
+		SignatureDomain: domain,
+		Object:          &validatorpb.SignRequest_ProposerPreference{ProposerPreference: pref},
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "could not sign proposer preferences")
+	}
+
+	return &ethpb.SignedProposerPreferences{
+		Message:   pref,
+		Signature: sig.Marshal(),
+	}, nil
 }
 
 // SignValidatorRegistrationRequest compares and returns either the cached validator registration request or signs a new one.

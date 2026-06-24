@@ -11,7 +11,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition/interop"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -47,7 +49,14 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return errors.Wrap(err, "new ro block with root")
 	}
 
-	go s.processSidecarsFromExecutionFromBlock(ctx, roBlock)
+	go func() {
+		if err := s.processSidecarsFromExecutionFromBlock(ctx, roBlock); err != nil {
+			log.WithError(err).WithFields(logrus.Fields{
+				"root": fmt.Sprintf("%#x", root),
+				"slot": block.Slot(),
+			}).Error("Failed to process sidecars from execution from block")
+		}
+	}()
 
 	if err := s.cfg.chain.ReceiveBlock(ctx, signed, root, nil); err != nil {
 		if blockchain.IsInvalidBlock(err) {
@@ -68,28 +77,50 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		}
 		return err
 	}
+
 	if err := s.processPendingAttsForBlock(ctx, root); err != nil {
 		return errors.Wrap(err, "process pending atts for block")
 	}
+
+	go s.processPendingPayloadEnvelope(s.ctx, root)
+
+	s.processPendingGloasColumns(root, signed)
+
 	return nil
 }
 
 // processSidecarsFromExecutionFromBlock retrieves (if available) sidecars data from the execution client,
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
-func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, roBlock blocks.ROBlock) {
+func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, roBlock blocks.ROBlock) error {
+	if roBlock.Version() >= version.Gloas {
+		if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromBid(roBlock)); err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
+			return errors.Wrap(err, "process data column sidecars from execution (bid)")
+		}
+		return nil
+	}
 	if roBlock.Version() >= version.Fulu {
 		if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromBlock(roBlock)); err != nil {
-			log.WithError(err).Error("Failed to process data column sidecars from execution")
-			return
+			// Do not log if the context was cancelled on purpose.
+			// (Still log other context errors such as deadlines exceeded).
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
+
+			return errors.Wrap(err, "process data column sidecars from execution")
 		}
 
-		return
+		return nil
 	}
 
 	if roBlock.Version() >= version.Deneb {
 		s.processBlobSidecarsFromExecution(ctx, roBlock)
-		return
+		return nil
 	}
+
+	return nil
 }
 
 // processBlobSidecarsFromExecution retrieves (if available) blob sidecars data from the execution client,
@@ -167,9 +198,6 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 	key := fmt.Sprintf("%#x", source.Root())
 	if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (any, error) {
 		const delay = 250 * time.Millisecond
-		secondsPerHalfSlot := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
-
-		numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 		commitments, err := source.Commitments()
 		if err != nil {
@@ -187,63 +215,174 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			return nil, errors.Wrap(err, "column indices to sample")
 		}
 
-		ctx, cancel := context.WithTimeout(ctx, secondsPerHalfSlot)
-		defer cancel()
+		proposerIndex, err := source.ProposerIndex()
+		if err != nil {
+			return nil, errors.Wrap(err, "proposer index")
+		}
 
+		log := log.WithFields(logrus.Fields{
+			"root":          fmt.Sprintf("%#x", source.Root()),
+			"slot":          source.Slot(),
+			"proposerIndex": proposerIndex,
+			"type":          source.Type(),
+		})
+
+		isPartialEnabled := s.cfg.p2p.PartialColumnBroadcaster() != nil
+
+		var constructedSidecarCount uint64
+
+		var hasBlobsColumns []blocks.PartialDataColumn
 		for iteration := uint64(0); ; /*no stop condition*/ iteration++ {
+			log = log.WithField("iteration", iteration)
+
 			// Exit early if all sidecars to sample have been seen.
-			if s.haveAllSidecarsBeenSeen(source.Slot(), source.ProposerIndex(), columnIndicesToSample) {
+			if s.haveAllSidecarsBeenSeen(source.Slot(), proposerIndex, columnIndicesToSample) {
+				if iteration > 0 && constructedSidecarCount == 0 {
+					log.Debug("No data column sidecars constructed from the execution client")
+				}
+
 				return nil, nil
 			}
 
+			// Return if the context is done.
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+
+			if iteration == 0 {
+				dataColumnsRecoveredFromELAttempts.Inc()
+				if isPartialEnabled {
+					hasBlobsColumns, err = s.publishHasBlobsPartialColumns(ctx, source, columnIndicesToSample)
+					if err != nil {
+						log.WithError(err).WithField("hasBlobsColumns", len(hasBlobsColumns)).Error("Failed to publish HasBlobs partial columns")
+					}
+					if ctx.Err() != nil {
+						return nil, ctx.Err()
+					}
+				}
+			}
+
 			// Try to reconstruct data column constructedSidecars from the execution client.
-			constructedSidecars, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, source)
+			constructedSidecars, partialColumns, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, source)
 			if err != nil {
 				return nil, errors.Wrap(err, "reconstruct data column sidecars")
 			}
 
-			// No sidecars are retrieved from the EL, retry later
-			sidecarCount := uint64(len(constructedSidecars))
-			if sidecarCount == 0 {
-				if ctx.Err() != nil {
-					return nil, ctx.Err()
-				}
+			count := len(partialColumns)
 
-				time.Sleep(delay)
-				continue
+			if isPartialEnabled && count > 0 {
+				// Publish the partial column.
+				// Note, the "partial column" may indeed be complete. We still
+				// should publish to help our peers.
+				if err := s.publishPartialColumns(ctx, columnIndicesToSample, partialColumns); err != nil {
+					log.WithError(err).Error("Failed to publish partial columns")
+				}
+				hasBlobsColumns = nil
+			} else if isPartialEnabled && len(hasBlobsColumns) > 0 {
+				// clear parts requests to request everything because `GetBlobsV3` failed to return any cells.
+				for i := range hasBlobsColumns {
+					hasBlobsColumns[i].ClearPartsRequests()
+				}
+				if err := s.publishPartialColumns(ctx, columnIndicesToSample, hasBlobsColumns); err != nil {
+					log.WithError(err).Error("Failed to publish partial columns after clearing HasBlobs parts requests")
+				} else {
+					log.WithField("count", len(hasBlobsColumns)).Debug("Republished partial columns with HasBlobs parts requests cleared")
+				}
+				hasBlobsColumns = nil
 			}
+
+			// No sidecars are retrieved from the EL, retry later
+			constructedCount := uint64(len(constructedSidecars))
 
 			// Boundary check.
-			if sidecarCount != numberOfColumns {
-				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", sidecarCount, numberOfColumns)
+			if constructedSidecarCount > 0 && constructedSidecarCount != fieldparams.NumberOfColumns {
+				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", constructedSidecarCount, fieldparams.NumberOfColumns)
 			}
 
-			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, source.Slot(), source.ProposerIndex(), columnIndicesToSample, constructedSidecars)
+			// Partial columns are published separately above (for all sampled indices), so do not
+			// re-broadcast them here.
+			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, source.Slot(), proposerIndex, columnIndicesToSample, constructedSidecars, false)
 			if err != nil {
 				return nil, errors.Wrap(err, "broadcast and receive unseen data column sidecars")
 			}
 
-			if len(unseenIndices) > 0 {
+			if constructedCount > 0 {
 				dataColumnsRecoveredFromELTotal.Inc()
 
 				log.WithFields(logrus.Fields{
 					"root":          fmt.Sprintf("%#x", source.Root()),
 					"slot":          source.Slot(),
-					"proposerIndex": source.ProposerIndex(),
+					"proposerIndex": proposerIndex,
 					"iteration":     iteration,
 					"type":          source.Type(),
 					"count":         len(unseenIndices),
 					"indices":       helpers.SortedPrettySliceFromMap(unseenIndices),
 				}).Debug("Constructed data column sidecars from the execution client")
+
+				return nil, nil
 			}
 
-			return nil, nil
+			// Wait before retrying.
+			time.Sleep(delay)
 		}
 	}); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (s *Service) publishHasBlobsPartialColumns(ctx context.Context, source peerdas.ConstructionPopulator, indices map[uint64]bool) ([]blocks.PartialDataColumn, error) {
+	partialColumns, supported, err := s.cfg.executionReconstructor.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
+	if err != nil {
+		return nil, errors.Wrap(err, "construct partial data column sidecars from has blobs")
+	}
+	if !supported || len(partialColumns) == 0 {
+		return nil, nil
+	}
+
+	var requestedBlobs []int
+	if requests, ok := partialColumns[0].PartsRequests(); ok {
+		requestedBlobs = requests.BitIndices()
+	}
+
+	if err := s.publishPartialColumns(ctx, indices, partialColumns); err != nil {
+		return partialColumns, errors.Wrap(err, "publish partial columns")
+	}
+
+	log.WithFields(logrus.Fields{
+		"root":           fmt.Sprintf("%#x", source.Root()),
+		"slot":           source.Slot(),
+		"count":          len(partialColumns),
+		"requestedBlobs": requestedBlobs,
+	}).Debug("Published HasBlobs partial columns ahead of GetBlobsV3")
+	return partialColumns, nil
+}
+
+func (s *Service) publishPartialColumns(ctx context.Context, indices map[uint64]bool, partialColumns []blocks.PartialDataColumn) error {
+	partialBroadcaster := s.cfg.p2p.PartialColumnBroadcaster()
+	if partialBroadcaster == nil || len(partialColumns) == 0 {
+		return nil
+	}
+
+	digest, err := s.currentForkDigest()
+	if err != nil {
+		return errors.Wrap(err, "current fork digest")
+	}
+
+	err = partialBroadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
+		for i := range uint64(len(partialColumns)) {
+			if !indices[i] {
+				continue
+			}
+			subnet := peerdas.ComputeSubnetForDataColumnSidecar(i)
+			topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
+			if !yield(topic, partialColumns[i]) {
+				return
+			}
+		}
+	})
+	return errors.Wrap(err, "publish partial columns")
 }
 
 // broadcastAndReceiveUnseenDataColumnSidecars broadcasts and receives unseen data column sidecars.
@@ -253,27 +392,48 @@ func (s *Service) broadcastAndReceiveUnseenDataColumnSidecars(
 	proposerIndex primitives.ValidatorIndex,
 	neededIndices map[uint64]bool,
 	sidecars []blocks.VerifiedRODataColumn,
+	broadcastPartialColumns bool,
 ) (map[uint64]bool, error) {
 	// Compute sidecars we need to broadcast and receive.
 	unseenSidecars := make([]blocks.VerifiedRODataColumn, 0, len(sidecars))
 	unseenIndices := make(map[uint64]bool, len(sidecars))
 	for _, sidecar := range sidecars {
 		// Skip data column sidecars we don't need.
-		if !neededIndices[sidecar.Index] {
+		if !neededIndices[sidecar.Index()] {
 			continue
 		}
 
 		// Skip already seen data column sidecars.
-		if s.hasSeenDataColumnIndex(slot, proposerIndex, sidecar.Index) {
+		if s.hasSeenDataColumnIndex(slot, proposerIndex, sidecar.Index()) {
 			continue
 		}
 
 		unseenSidecars = append(unseenSidecars, sidecar)
-		unseenIndices[sidecar.Index] = true
+		unseenIndices[sidecar.Index()] = true
+	}
+
+	// Exit early if there are no nothing to broadcast or receive.
+	if len(unseenSidecars) == 0 {
+		return nil, nil
+	}
+
+	var partialColumns []blocks.PartialDataColumn
+	if broadcastPartialColumns {
+		partialColumns = make([]blocks.PartialDataColumn, 0, len(unseenSidecars))
+		for i := range unseenSidecars {
+			partialColumn, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(unseenSidecars[i])
+			if err != nil {
+				// Skip a single bad column; do not abort broadcasting the rest.
+				log.WithError(err).WithField("index", unseenSidecars[i].Index()).Error("Failed to create partial data column from verified RO data column")
+				continue
+			}
+
+			partialColumns = append(partialColumns, partialColumn)
+		}
 	}
 
 	// Broadcast all the data column sidecars we reconstructed but did not see via gossip (non blocking).
-	if err := s.cfg.p2p.BroadcastDataColumnSidecars(ctx, unseenSidecars); err != nil {
+	if err := s.cfg.p2p.BroadcastDataColumnSidecars(ctx, unseenSidecars, partialColumns); err != nil {
 		return nil, errors.Wrap(err, "broadcast data column sidecars")
 	}
 

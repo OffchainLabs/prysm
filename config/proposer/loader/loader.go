@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/db/iface"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 
@@ -180,10 +179,23 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 	if err != nil {
 		return nil, err
 	}
+	ps.WarnDeprecatedSchema()
 	if err := psl.db.SaveProposerSettings(cliCtx.Context, ps); err != nil {
 		return nil, err
 	}
 	return ps, nil
+}
+
+func hasBuilderShape(p *validatorpb.ProposerSettingsPayload) bool {
+	if p.DefaultConfig != nil && p.DefaultConfig.Builder != nil {
+		return true
+	}
+	for _, o := range p.ProposerConfig {
+		if o != nil && o.Builder != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func (psl *SettingsLoader) applyOverrides() {
@@ -251,28 +263,40 @@ func (psl *SettingsLoader) processProposerSettings(loadedSettings, dbSettings *v
 	return newSettings
 }
 
-// mergeProposerSettings merges database settings with loaded settings, giving precedence to loadedSettings
+// mergeProposerSettings merges database settings with loaded settings, giving
+// precedence to loadedSettings. Dispatches by schema version: v1 still flows
+// through Builder; v2 lives on Option directly.
 func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, options *flagOptions) *validatorpb.ProposerSettingsPayload {
 	merged := &validatorpb.ProposerSettingsPayload{}
+	if db != nil {
+		merged.Version = db.Version
+	}
+	// v1-shaped source content must not inherit DB's v2, else the runtime upgrade is skipped.
+	if loaded != nil && (loaded.Version != 0 || hasBuilderShape(loaded)) {
+		merged.Version = loaded.Version
+	}
 
-	// Apply builder config overrides
 	var builderConfig *validatorpb.BuilderConfig
 	var gasLimitOnly *validator.Uint64
-
 	if options != nil {
 		if options.builderConfig != nil {
 			builderConfig = options.builderConfig.ToConsensus()
 		}
-		if options.gasLimit != nil {
-			gasLimitOnly = options.gasLimit
-		}
+		gasLimitOnly = options.gasLimit
 	}
 
-	// Merge DefaultConfig
+	if merged.Version == proposer.SchemaV2 {
+		return mergeProposerSettingsV2(merged, loaded, db, gasLimitOnly)
+	}
+	return mergeProposerSettingsV1(merged, loaded, db, builderConfig, gasLimitOnly)
+}
+
+func mergeProposerSettingsV1(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.ProposerSettingsPayload {
+	stripDBBuilder := builderConfig == nil
+
 	if db != nil && db.DefaultConfig != nil {
 		merged.DefaultConfig = db.DefaultConfig
-		// db always falls back to local building if no builder settings are provided
-		if builderConfig == nil {
+		if stripDBBuilder {
 			db.DefaultConfig.Builder = nil
 		}
 	}
@@ -280,12 +304,10 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 		merged.DefaultConfig = loaded.DefaultConfig
 	}
 
-	// Merge ProposerConfig
 	if db != nil && len(db.ProposerConfig) > 0 {
 		merged.ProposerConfig = db.ProposerConfig
-		for _, option := range db.ProposerConfig {
-			// db always falls back to local building if no builder settings are provided
-			if builderConfig == nil {
+		if stripDBBuilder {
+			for _, option := range db.ProposerConfig {
 				option.Builder = nil
 			}
 		}
@@ -303,10 +325,46 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 		}
 	}
 
-	if merged.DefaultConfig == nil && builderConfig != nil {
-		merged.DefaultConfig = &validatorpb.ProposerOptionPayload{Builder: builderConfig}
+	if merged.DefaultConfig == nil {
+		switch {
+		case builderConfig != nil:
+			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{Builder: builderConfig}
+		case gasLimitOnly != nil:
+			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{
+				Builder: &validatorpb.BuilderConfig{Enabled: false, GasLimit: *gasLimitOnly},
+			}
+		}
+	}
+	return merged
+}
+
+func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPayload, gasLimitOnly *validator.Uint64) *validatorpb.ProposerSettingsPayload {
+	if db != nil && db.DefaultConfig != nil {
+		merged.DefaultConfig = db.DefaultConfig
+	}
+	if loaded != nil && loaded.DefaultConfig != nil {
+		merged.DefaultConfig = loaded.DefaultConfig
+	}
+	if db != nil && len(db.ProposerConfig) > 0 {
+		merged.ProposerConfig = db.ProposerConfig
+	}
+	if loaded != nil && len(loaded.ProposerConfig) > 0 {
+		merged.ProposerConfig = loaded.ProposerConfig
 	}
 
+	if gasLimitOnly == nil {
+		return merged
+	}
+	if merged.DefaultConfig == nil {
+		merged.DefaultConfig = &validatorpb.ProposerOptionPayload{GasLimit: *gasLimitOnly}
+	} else {
+		merged.DefaultConfig.GasLimit = *gasLimitOnly
+	}
+	for _, option := range merged.ProposerConfig {
+		if option != nil {
+			option.GasLimit = *gasLimitOnly
+		}
+	}
 	return merged
 }
 
@@ -321,7 +379,13 @@ func processBuilderConfig(current *validatorpb.BuilderConfig, override *validato
 		}
 		return current
 	}
-	return override
+	if override != nil {
+		return override
+	}
+	if gasLimitOnly != nil {
+		return &validatorpb.BuilderConfig{Enabled: false, GasLimit: *gasLimitOnly}
+	}
+	return nil
 }
 
 func reviewGasLimit(gasLimit validator.Uint64) validator.Uint64 {

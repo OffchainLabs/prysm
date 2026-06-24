@@ -8,7 +8,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/client"
 	"github.com/OffchainLabs/prysm/v7/api/client/beacon"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync/checkpoint"
-	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 

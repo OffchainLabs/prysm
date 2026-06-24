@@ -9,16 +9,20 @@ import (
 
 // MockAvailabilityStore is an implementation of AvailabilityStore that can be used by other packages in tests.
 type MockAvailabilityStore struct {
-	VerifyAvailabilityCallback func(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error
+	VerifyAvailabilityCallback func(ctx context.Context, current primitives.Slot, b ...blocks.ROBlock) error
+	ErrIsDataAvailable         error
 	PersistBlobsCallback       func(current primitives.Slot, blobSidecar ...blocks.ROBlob) error
 }
 
-var _ AvailabilityStore = &MockAvailabilityStore{}
+var _ AvailabilityChecker = &MockAvailabilityStore{}
 
 // IsDataAvailable satisfies the corresponding method of the AvailabilityStore interface in a way that is useful for tests.
-func (m *MockAvailabilityStore) IsDataAvailable(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error {
+func (m *MockAvailabilityStore) IsDataAvailable(ctx context.Context, current primitives.Slot, b ...blocks.ROBlock) error {
+	if m.ErrIsDataAvailable != nil {
+		return m.ErrIsDataAvailable
+	}
 	if m.VerifyAvailabilityCallback != nil {
-		return m.VerifyAvailabilityCallback(ctx, current, b)
+		return m.VerifyAvailabilityCallback(ctx, current, b...)
 	}
 	return nil
 }

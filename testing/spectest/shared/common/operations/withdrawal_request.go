@@ -5,7 +5,7 @@ import (
 	"path"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/requests"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -33,7 +33,7 @@ func RunWithdrawalRequestTest(t *testing.T, config string, fork string, block bl
 				bod := b.Block().Body()
 				e, err := bod.ExecutionRequests()
 				require.NoError(t, err)
-				return electra.ProcessWithdrawalRequests(ctx, s, e.Withdrawals)
+				return requests.ProcessWithdrawalRequests(ctx, s, e.Withdrawals)
 			})
 		})
 	}

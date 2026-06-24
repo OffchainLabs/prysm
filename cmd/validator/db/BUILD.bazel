@@ -2,7 +2,10 @@ load("@prysm//tools/go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = ["db.go"],
+    srcs = [
+        "db.go",
+        "log.go",
+    ],
     importpath = "github.com/OffchainLabs/prysm/v7/cmd/validator/db",
     visibility = ["//visibility:public"],
     deps = [

@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "cmd.go",
         "error.go",
+        "log.go",
         "proposer_settings.go",
         "withdraw.go",
     ],

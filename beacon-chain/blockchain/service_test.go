@@ -9,9 +9,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
@@ -23,11 +20,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
-	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -185,50 +180,6 @@ func TestChainStartStop_GenesisZeroHashes(t *testing.T) {
 	// The context should have been canceled.
 	assert.Equal(t, context.Canceled, chainService.ctx.Err(), "Context was not canceled")
 	require.LogsContain(t, hook, "data already exists")
-}
-
-func TestChainService_InitializeBeaconChain(t *testing.T) {
-	helpers.ClearCache()
-	beaconDB := testDB.SetupDB(t)
-	ctx := t.Context()
-
-	bc := setupBeaconChain(t, beaconDB)
-	var err error
-
-	// Set up 10 deposits pre chain start for validators to register
-	count := uint64(10)
-	deposits, _, err := util.DeterministicDepositsAndKeys(count)
-	require.NoError(t, err)
-	dt, _, err := util.DepositTrieFromDeposits(deposits)
-	require.NoError(t, err)
-	hashTreeRoot, err := dt.HashTreeRoot()
-	require.NoError(t, err)
-	genState, err := transition.EmptyGenesisState()
-	require.NoError(t, err)
-	err = genState.SetEth1Data(&ethpb.Eth1Data{
-		DepositRoot:  hashTreeRoot[:],
-		DepositCount: uint64(len(deposits)),
-		BlockHash:    make([]byte, 32),
-	})
-	require.NoError(t, err)
-	genState, err = altair.ProcessPreGenesisDeposits(ctx, genState, deposits)
-	require.NoError(t, err)
-
-	_, err = bc.initializeBeaconChain(ctx, time.Unix(0, 0), genState, &ethpb.Eth1Data{DepositRoot: hashTreeRoot[:], BlockHash: make([]byte, 32)})
-	require.NoError(t, err)
-
-	_, err = bc.HeadState(ctx)
-	assert.NoError(t, err)
-	headBlk, err := bc.HeadBlock(ctx)
-	require.NoError(t, err)
-	if headBlk == nil {
-		t.Error("Head state can't be nil after initialize beacon chain")
-	}
-	r, err := bc.HeadRoot(ctx)
-	require.NoError(t, err)
-	if bytesutil.ToBytes32(r) == params.BeaconConfig().ZeroHash {
-		t.Error("Canonical root for slot 0 can't be zeros after initialize beacon chain")
-	}
 }
 
 func TestChainService_CorrectGenesisRoots(t *testing.T) {
@@ -595,104 +546,4 @@ func TestNotifyIndex(t *testing.T) {
 	default:
 		t.Errorf("Notifier channel did not receive the index")
 	}
-}
-
-func TestUpdateCustodyInfoInDB(t *testing.T) {
-	const (
-		fuluForkEpoch         = 10
-		custodyRequirement    = uint64(4)
-		earliestStoredSlot    = primitives.Slot(12)
-		numberOfCustodyGroups = uint64(64)
-		numberOfColumns       = uint64(128)
-	)
-
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig()
-	cfg.FuluForkEpoch = fuluForkEpoch
-	cfg.CustodyRequirement = custodyRequirement
-	cfg.NumberOfCustodyGroups = numberOfCustodyGroups
-	cfg.NumberOfColumns = numberOfColumns
-	params.OverrideBeaconConfig(cfg)
-
-	ctx := t.Context()
-	pbBlock := util.NewBeaconBlock()
-	pbBlock.Block.Slot = 12
-	signedBeaconBlock, err := blocks.NewSignedBeaconBlock(pbBlock)
-	require.NoError(t, err)
-
-	roBlock, err := blocks.NewROBlock(signedBeaconBlock)
-	require.NoError(t, err)
-
-	t.Run("CGC increases before fulu", func(t *testing.T) {
-		service, requirements := minimalTestService(t)
-		err = requirements.db.SaveBlock(ctx, roBlock)
-		require.NoError(t, err)
-
-		// Before Fulu
-		// -----------
-		actualEas, actualCgc, err := service.updateCustodyInfoInDB(15)
-		require.NoError(t, err)
-		require.Equal(t, earliestStoredSlot, actualEas)
-		require.Equal(t, custodyRequirement, actualCgc)
-
-		actualEas, actualCgc, err = service.updateCustodyInfoInDB(17)
-		require.NoError(t, err)
-		require.Equal(t, earliestStoredSlot, actualEas)
-		require.Equal(t, custodyRequirement, actualCgc)
-
-		resetFlags := flags.Get()
-		gFlags := new(flags.GlobalFlags)
-		gFlags.SubscribeAllDataSubnets = true
-		flags.Init(gFlags)
-		defer flags.Init(resetFlags)
-
-		actualEas, actualCgc, err = service.updateCustodyInfoInDB(19)
-		require.NoError(t, err)
-		require.Equal(t, earliestStoredSlot, actualEas)
-		require.Equal(t, numberOfCustodyGroups, actualCgc)
-
-		// After Fulu
-		// ----------
-		actualEas, actualCgc, err = service.updateCustodyInfoInDB(fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1)
-		require.NoError(t, err)
-		require.Equal(t, earliestStoredSlot, actualEas)
-		require.Equal(t, numberOfCustodyGroups, actualCgc)
-	})
-
-	t.Run("CGC increases after fulu", func(t *testing.T) {
-		service, requirements := minimalTestService(t)
-		err = requirements.db.SaveBlock(ctx, roBlock)
-		require.NoError(t, err)
-
-		// Before Fulu
-		// -----------
-		actualEas, actualCgc, err := service.updateCustodyInfoInDB(15)
-		require.NoError(t, err)
-		require.Equal(t, earliestStoredSlot, actualEas)
-		require.Equal(t, custodyRequirement, actualCgc)
-
-		actualEas, actualCgc, err = service.updateCustodyInfoInDB(17)
-		require.NoError(t, err)
-		require.Equal(t, earliestStoredSlot, actualEas)
-		require.Equal(t, custodyRequirement, actualCgc)
-
-		// After Fulu
-		// ----------
-		resetFlags := flags.Get()
-		gFlags := new(flags.GlobalFlags)
-		gFlags.SubscribeAllDataSubnets = true
-		flags.Init(gFlags)
-		defer flags.Init(resetFlags)
-
-		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
-		actualEas, actualCgc, err = service.updateCustodyInfoInDB(slot)
-		require.NoError(t, err)
-		require.Equal(t, slot, actualEas)
-		require.Equal(t, numberOfCustodyGroups, actualCgc)
-
-		actualEas, actualCgc, err = service.updateCustodyInfoInDB(slot + 2)
-		require.NoError(t, err)
-		require.Equal(t, slot, actualEas)
-		require.Equal(t, numberOfCustodyGroups, actualCgc)
-	})
 }

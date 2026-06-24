@@ -503,3 +503,128 @@ func (s *SignedBlindedBeaconBlockFulu) MessageRawJson() ([]byte, error) {
 func (s *SignedBlindedBeaconBlockFulu) SigString() string {
 	return s.Signature
 }
+
+// ----------------------------------------------------------------------------
+// Gloas
+// ----------------------------------------------------------------------------
+
+type ExecutionPayloadBid struct {
+	ParentBlockHash       string   `json:"parent_block_hash"`
+	ParentBlockRoot       string   `json:"parent_block_root"`
+	BlockHash             string   `json:"block_hash"`
+	PrevRandao            string   `json:"prev_randao"`
+	FeeRecipient          string   `json:"fee_recipient"`
+	GasLimit              string   `json:"gas_limit"`
+	BuilderIndex          string   `json:"builder_index"`
+	Slot                  string   `json:"slot"`
+	Value                 string   `json:"value"`
+	ExecutionPayment      string   `json:"execution_payment"`
+	BlobKzgCommitments    []string `json:"blob_kzg_commitments"`
+	ExecutionRequestsRoot string   `json:"execution_requests_root"`
+}
+
+type SignedExecutionPayloadBid struct {
+	Message   *ExecutionPayloadBid `json:"message"`
+	Signature string               `json:"signature"`
+}
+
+type PayloadAttestationData struct {
+	BeaconBlockRoot   string `json:"beacon_block_root"`
+	Slot              string `json:"slot"`
+	PayloadPresent    bool   `json:"payload_present"`
+	BlobDataAvailable bool   `json:"blob_data_available"`
+}
+
+type PayloadAttestation struct {
+	AggregationBits string                  `json:"aggregation_bits"`
+	Data            *PayloadAttestationData `json:"data"`
+	Signature       string                  `json:"signature"`
+}
+
+type PayloadAttestationMessage struct {
+	ValidatorIndex string                  `json:"validator_index"`
+	Data           *PayloadAttestationData `json:"data"`
+	Signature      string                  `json:"signature"`
+}
+
+type BeaconBlockBodyGloas struct {
+	RandaoReveal              string                        `json:"randao_reveal"`
+	Eth1Data                  *Eth1Data                     `json:"eth1_data"`
+	Graffiti                  string                        `json:"graffiti"`
+	ProposerSlashings         []*ProposerSlashing           `json:"proposer_slashings"`
+	AttesterSlashings         []*AttesterSlashingElectra    `json:"attester_slashings"`
+	Attestations              []*AttestationElectra         `json:"attestations"`
+	Deposits                  []*Deposit                    `json:"deposits"`
+	VoluntaryExits            []*SignedVoluntaryExit        `json:"voluntary_exits"`
+	SyncAggregate             *SyncAggregate                `json:"sync_aggregate"`
+	BLSToExecutionChanges     []*SignedBLSToExecutionChange `json:"bls_to_execution_changes"`
+	SignedExecutionPayloadBid *SignedExecutionPayloadBid    `json:"signed_execution_payload_bid"`
+	PayloadAttestations       []*PayloadAttestation         `json:"payload_attestations"`
+	ParentExecutionRequests   *ExecutionRequestsGloas       `json:"parent_execution_requests"`
+}
+
+type BeaconBlockGloas struct {
+	Slot          string                `json:"slot"`
+	ProposerIndex string                `json:"proposer_index"`
+	ParentRoot    string                `json:"parent_root"`
+	StateRoot     string                `json:"state_root"`
+	Body          *BeaconBlockBodyGloas `json:"body"`
+}
+
+type SignedBeaconBlockGloas struct {
+	Message   *BeaconBlockGloas `json:"message"`
+	Signature string            `json:"signature"`
+}
+
+var _ SignedMessageJsoner = &SignedBeaconBlockGloas{}
+
+func (s *SignedBeaconBlockGloas) MessageRawJson() ([]byte, error) {
+	return json.Marshal(s.Message)
+}
+
+func (s *SignedBeaconBlockGloas) SigString() string {
+	return s.Signature
+}
+
+type BlockContentsGloas struct {
+	Block                    *BeaconBlockGloas         `json:"block"`
+	ExecutionPayloadEnvelope *ExecutionPayloadEnvelope `json:"execution_payload_envelope"`
+	KzgProofs                []string                  `json:"kzg_proofs"`
+	Blobs                    []string                  `json:"blobs"`
+}
+
+type ExecutionPayloadEnvelope struct {
+	Payload               *ExecutionPayloadGloas  `json:"payload"`
+	ExecutionRequests     *ExecutionRequestsGloas `json:"execution_requests"`
+	BuilderIndex          string                  `json:"builder_index"`
+	BeaconBlockRoot       string                  `json:"beacon_block_root"`
+	ParentBeaconBlockRoot string                  `json:"parent_beacon_block_root"`
+}
+
+type SignedExecutionPayloadEnvelope struct {
+	Message   *ExecutionPayloadEnvelope `json:"message"`
+	Signature string                    `json:"signature"`
+}
+
+// SignedExecutionPayloadEnvelopeContents bundles a signed execution payload
+// envelope with the raw blobs and KZG proofs needed by a beacon node that has
+// not cached them locally. Used by the stateless publish path.
+type SignedExecutionPayloadEnvelopeContents struct {
+	SignedExecutionPayloadEnvelope *SignedExecutionPayloadEnvelope `json:"signed_execution_payload_envelope"`
+	KzgProofs                      []string                        `json:"kzg_proofs"`
+	Blobs                          []string                        `json:"blobs"`
+}
+
+// BlindedExecutionPayloadEnvelope replaces the full payload with payload_root so its HTR matches the full envelope.
+type BlindedExecutionPayloadEnvelope struct {
+	PayloadRoot           string                  `json:"payload_root"`
+	ExecutionRequests     *ExecutionRequestsGloas `json:"execution_requests"`
+	BuilderIndex          string                  `json:"builder_index"`
+	BeaconBlockRoot       string                  `json:"beacon_block_root"`
+	ParentBeaconBlockRoot string                  `json:"parent_beacon_block_root"`
+}
+
+type SignedBlindedExecutionPayloadEnvelope struct {
+	Message   *BlindedExecutionPayloadEnvelope `json:"message"`
+	Signature string                           `json:"signature"`
+}

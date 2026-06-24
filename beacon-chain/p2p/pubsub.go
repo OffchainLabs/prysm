@@ -53,6 +53,11 @@ func (s *Service) JoinTopic(topic string, opts ...pubsub.TopicOpt) (*pubsub.Topi
 	defer s.joinedTopicsLock.Unlock()
 
 	if _, ok := s.joinedTopics[topic]; !ok {
+		if strings.Contains(topic, GossipDataColumnSidecarMessage) && s.partialColumnBroadcaster != nil {
+			opts = append(opts, pubsub.RequestPartialMessages())
+			log.WithField("topic", topic).Debug("Joining data column sidecar topic with partial messages")
+		}
+
 		topicHandle, err := s.pubsub.Join(topic, opts...)
 		if err != nil {
 			return nil, err
@@ -95,6 +100,27 @@ func (s *Service) PublishToTopic(ctx context.Context, topic string, data []byte,
 			return errors.Wrapf(ctx.Err(), "unable to find requisite number of peers for topic %s, 0 peers found to publish to", topic)
 		default:
 			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
+// addToBatch joins (if necessary) a topic and adds the message to a message batch.
+func (s *Service) addToBatch(ctx context.Context, batch *pubsub.MessageBatch, topic string, data []byte, opts ...pubsub.PubOpt) error {
+	topicHandle, err := s.JoinTopic(topic)
+	if err != nil {
+		return fmt.Errorf("joining topic: %w", err)
+	}
+
+	// Wait for at least 1 peer to be available to receive the published message.
+	for {
+		if flags.Get().MinimumSyncPeers == 0 || len(topicHandle.ListPeers()) > 0 {
+			return topicHandle.AddToBatch(ctx, batch, data, opts...)
+		}
+		select {
+		case <-ctx.Done():
+			return errors.Wrapf(ctx.Err(), "unable to find requisite number of peers for topic %s, 0 peers found to publish to", topic)
+		case <-time.After(100 * time.Millisecond):
+			// reenter the for loop after 100ms
 		}
 	}
 }
@@ -149,7 +175,7 @@ func (s *Service) pubsubOptions() []pubsub.Option {
 		pubsub.WithPeerScore(peerScoringParams(s.cfg.IPColocationWhitelist)),
 		pubsub.WithPeerScoreInspect(s.peerInspector, time.Minute),
 		pubsub.WithGossipSubParams(pubsubGossipParam()),
-		pubsub.WithRawTracer(gossipTracer{host: s.host}),
+		pubsub.WithRawTracer(&gossipTracer{host: s.host, allowedTopics: filt}),
 	}
 
 	if len(s.cfg.StaticPeers) > 0 {
@@ -159,6 +185,9 @@ func (s *Service) pubsubOptions() []pubsub.Option {
 			return psOpts
 		}
 		psOpts = append(psOpts, pubsub.WithDirectPeers(directPeersAddrInfos))
+	}
+	if s.partialColumnBroadcaster != nil {
+		psOpts = s.partialColumnBroadcaster.AppendPubSubOpts(psOpts)
 	}
 
 	return psOpts

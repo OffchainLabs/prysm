@@ -10,8 +10,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
@@ -20,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // BeaconChainConfig contains constant configs for node to participate in beacon chain.
@@ -57,10 +56,13 @@ type BeaconChainConfig struct {
 	EffectiveBalanceIncrement uint64 `yaml:"EFFECTIVE_BALANCE_INCREMENT" spec:"true"` // EffectiveBalanceIncrement is used for converting the high balance into the low balance for validators.
 
 	// Initial value constants.
-	BLSWithdrawalPrefixByte         byte     `yaml:"BLS_WITHDRAWAL_PREFIX" spec:"true"`          // BLSWithdrawalPrefixByte is used for BLS withdrawal and it's the first byte.
-	ETH1AddressWithdrawalPrefixByte byte     `yaml:"ETH1_ADDRESS_WITHDRAWAL_PREFIX" spec:"true"` // ETH1AddressWithdrawalPrefixByte is used for withdrawals and it's the first byte.
-	CompoundingWithdrawalPrefixByte byte     `yaml:"COMPOUNDING_WITHDRAWAL_PREFIX" spec:"true"`  // CompoundingWithdrawalPrefixByteByte is used for compounding withdrawals and it's the first byte.
-	ZeroHash                        [32]byte // ZeroHash is used to represent a zeroed out 32 byte array.
+	BLSWithdrawalPrefixByte         byte                    `yaml:"BLS_WITHDRAWAL_PREFIX" spec:"true"`          // BLSWithdrawalPrefixByte is used for BLS withdrawal and it's the first byte.
+	ETH1AddressWithdrawalPrefixByte byte                    `yaml:"ETH1_ADDRESS_WITHDRAWAL_PREFIX" spec:"true"` // ETH1AddressWithdrawalPrefixByte is used for withdrawals and it's the first byte.
+	CompoundingWithdrawalPrefixByte byte                    `yaml:"COMPOUNDING_WITHDRAWAL_PREFIX" spec:"true"`  // CompoundingWithdrawalPrefixByteByte is used for compounding withdrawals and it's the first byte.
+	BuilderWithdrawalPrefixByte     byte                    `yaml:"BUILDER_WITHDRAWAL_PREFIX" spec:"true"`      // BuilderWithdrawalPrefixByte is used for builder withdrawals and it's the first byte.
+	PayloadBuilderVersion           byte                    `yaml:"PAYLOAD_BUILDER_VERSION" spec:"true"`        // PayloadBuilderVersion is the builder version required to submit execution payload bids (EIP-7732).
+	BuilderIndexSelfBuild           primitives.BuilderIndex `yaml:"BUILDER_INDEX_SELF_BUILD" spec:"true"`       // BuilderIndexSelfBuild indicates proposer self-built payloads.
+	ZeroHash                        [32]byte                // ZeroHash is used to represent a zeroed out 32 byte array.
 
 	// Time parameters constants.
 	GenesisDelay                     uint64           `yaml:"GENESIS_DELAY" spec:"true"`                   // GenesisDelay is the minimum number of seconds to delay starting the Ethereum Beacon Chain genesis. Must be at least 1 second.
@@ -74,6 +76,7 @@ type BeaconChainConfig struct {
 	EpochsPerEth1VotingPeriod        primitives.Epoch `yaml:"EPOCHS_PER_ETH1_VOTING_PERIOD" spec:"true"`       // EpochsPerEth1VotingPeriod defines how often the merkle root of deposit receipts get updated in beacon node on per epoch basis.
 	SlotsPerHistoricalRoot           primitives.Slot  `yaml:"SLOTS_PER_HISTORICAL_ROOT" spec:"true"`           // SlotsPerHistoricalRoot defines how often the historical root is saved.
 	MinValidatorWithdrawabilityDelay primitives.Epoch `yaml:"MIN_VALIDATOR_WITHDRAWABILITY_DELAY" spec:"true"` // MinValidatorWithdrawabilityDelay is the shortest amount of time a validator has to wait to withdraw.
+	MinBuilderWithdrawabilityDelay   primitives.Epoch `yaml:"MIN_BUILDER_WITHDRAWABILITY_DELAY" spec:"true"`   // MinBuilderWithdrawabilityDelay is the shortest amount of time a builder has to wait to withdraw after exit.
 	ShardCommitteePeriod             primitives.Epoch `yaml:"SHARD_COMMITTEE_PERIOD" spec:"true"`              // ShardCommitteePeriod is the minimum amount of epochs a validator must participate before exiting.
 	MinEpochsToInactivityPenalty     primitives.Epoch `yaml:"MIN_EPOCHS_TO_INACTIVITY_PENALTY" spec:"true"`    // MinEpochsToInactivityPenalty defines the minimum amount of epochs since finality to begin penalizing inactivity.
 	Eth1FollowDistance               uint64           `yaml:"ETH1_FOLLOW_DISTANCE" spec:"true"`                // Eth1FollowDistance is the number of eth1.0 blocks to wait before considering a new deposit for voting. This only applies after the chain as been started.
@@ -87,9 +90,18 @@ type BeaconChainConfig struct {
 	IntervalsPerSlot                uint64           `yaml:"INTERVALS_PER_SLOT"`                              // IntervalsPerSlot defines the number of fork choice intervals in a slot defined in the fork choice spec.
 	ProposerReorgCutoffBPS          primitives.BP    `yaml:"PROPOSER_REORG_CUTOFF_BPS" spec:"true"`           // ProposerReorgCutoffBPS defines the proposer reorg deadline in basis points of the slot.
 	AttestationDueBPS               primitives.BP    `yaml:"ATTESTATION_DUE_BPS" spec:"true"`                 // AttestationDueBPS defines the attestation due time in basis points of the slot.
-	AggregrateDueBPS                primitives.BP    `yaml:"AGGREGRATE_DUE_BPS" spec:"true"`                  // AggregrateDueBPS defines the aggregate due time in basis points of the slot.
+	AggregateDueBPS                 primitives.BP    `yaml:"AGGREGATE_DUE_BPS" spec:"true"`                   // AggregateDueBPS defines the aggregate due time in basis points of the slot.
 	SyncMessageDueBPS               primitives.BP    `yaml:"SYNC_MESSAGE_DUE_BPS" spec:"true"`                // SyncMessageDueBPS defines the sync message due time in basis points of the slot.
 	ContributionDueBPS              primitives.BP    `yaml:"CONTRIBUTION_DUE_BPS" spec:"true"`                // ContributionDueBPS defines the contribution due time in basis points of the slot.
+	AttestationDueBPSGloas          primitives.BP    `yaml:"ATTESTATION_DUE_BPS_GLOAS" spec:"true"`           // AttestationDueBPSGloas defines the attestation due time in basis points of the slot (Gloas).
+	AggregateDueBPSGloas            primitives.BP    `yaml:"AGGREGATE_DUE_BPS_GLOAS" spec:"true"`             // AggregateDueBPSGloas defines the aggregate due time in basis points of the slot (Gloas).
+	SyncMessageDueBPSGloas          primitives.BP    `yaml:"SYNC_MESSAGE_DUE_BPS_GLOAS" spec:"true"`          // SyncMessageDueBPSGloas defines the sync message due time in basis points of the slot (Gloas).
+	ContributionDueBPSGloas         primitives.BP    `yaml:"CONTRIBUTION_DUE_BPS_GLOAS" spec:"true"`          // ContributionDueBPSGloas defines the contribution due time in basis points of the slot (Gloas).
+	PayloadAttestationDueBPS        primitives.BP    `yaml:"PAYLOAD_ATTESTATION_DUE_BPS" spec:"true"`         // PayloadAttestationDueBPS defines the payload attestation due time in basis points of the slot.
+	PayloadDueBPS                   primitives.BP    `yaml:"PAYLOAD_DUE_BPS" spec:"true"`                     // PayloadDueBPS defines the cutoff for an execution payload to be considered timely, in basis points of the slot.
+
+	// Prysm-internal (non-spec) parameters.
+	EquivocationEarlyDueBPS primitives.BP `yaml:"-"` // Cutoff for an "early" proposer equivocation, in basis points of the slot.
 
 	// Ethereum PoW parameters.
 	DepositChainID         uint64 `yaml:"DEPOSIT_CHAIN_ID" spec:"true"`         // DepositChainID of the eth1 network. This used for replay protection.
@@ -125,6 +137,7 @@ type BeaconChainConfig struct {
 	MaxWithdrawalsPerPayload         uint64 `yaml:"MAX_WITHDRAWALS_PER_PAYLOAD" spec:"true"`          // MaxWithdrawalsPerPayload defines the maximum number of withdrawals in a block.
 	MaxBlsToExecutionChanges         uint64 `yaml:"MAX_BLS_TO_EXECUTION_CHANGES" spec:"true"`         // MaxBlsToExecutionChanges defines the maximum number of BLS-to-execution-change objects in a block.
 	MaxValidatorsPerWithdrawalsSweep uint64 `yaml:"MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP" spec:"true"` // MaxValidatorsPerWithdrawalsSweep bounds the size of the sweep searching for withdrawals per slot.
+	MaxBuildersPerWithdrawalsSweep   uint64 `yaml:"MAX_BUILDERS_PER_WITHDRAWALS_SWEEP" spec:"true"`   // MaxBuildersPerWithdrawalsSweep bounds the size of the builder withdrawals sweep per slot.
 
 	// BLS domain values.
 	DomainBeaconProposer              [4]byte `yaml:"DOMAIN_BEACON_PROPOSER" spec:"true"`                // DomainBeaconProposer defines the BLS signature domain for beacon proposal verification.
@@ -140,6 +153,11 @@ type BeaconChainConfig struct {
 	DomainApplicationMask             [4]byte `yaml:"DOMAIN_APPLICATION_MASK" spec:"true"`               // DomainApplicationMask defines the BLS signature domain for application mask.
 	DomainApplicationBuilder          [4]byte `yaml:"DOMAIN_APPLICATION_BUILDER" spec:"true"`            // DomainApplicationBuilder defines the BLS signature domain for application builder.
 	DomainBLSToExecutionChange        [4]byte `yaml:"DOMAIN_BLS_TO_EXECUTION_CHANGE" spec:"true"`        // DomainBLSToExecutionChange defines the BLS signature domain to change withdrawal addresses to ETH1 prefix
+	DomainBeaconBuilder               [4]byte `yaml:"DOMAIN_BEACON_BUILDER" spec:"true"`                 // DomainBeaconBuilder defines the BLS signature domain for beacon block builder.
+	DomainPTCAttester                 [4]byte `yaml:"DOMAIN_PTC_ATTESTER" spec:"true"`                   // DomainPTCAttester defines the BLS signature domain for payload transaction committee attester.
+	DomainProposerPreferences         [4]byte `yaml:"DOMAIN_PROPOSER_PREFERENCES" spec:"true"`           // DomainProposerPreferences defines the BLS signature domain for proposer preferences.
+	DomainRequestAuth                 [4]byte `yaml:"DOMAIN_REQUEST_AUTH" spec:"true"`                   // DomainRequestAuth defines the BLS signature domain for builder bid request authentication.
+	DomainBuilderDeposit              [4]byte `yaml:"DOMAIN_BUILDER_DEPOSIT" spec:"true"`                // DomainBuilderDeposit defines the BLS signature domain for builder deposit requests (EIP-8282).
 
 	// Prysm constants.
 	GenesisValidatorsRoot          [32]byte        // GenesisValidatorsRoot is the root hash of the genesis validators.
@@ -162,6 +180,7 @@ type BeaconChainConfig struct {
 	BeaconStateDenebFieldCount     int             // BeaconStateDenebFieldCount defines how many fields are in beacon state post upgrade to Deneb.
 	BeaconStateElectraFieldCount   int             // BeaconStateElectraFieldCount defines how many fields are in beacon state post upgrade to Electra.
 	BeaconStateFuluFieldCount      int             // BeaconStateFuluFieldCount defines how many fields are in beacon state post upgrade to Fulu.
+	BeaconStateGloasFieldCount     int             // BeaconStateGloasFieldCount defines how many fields are in beacon state post upgrade to Gloas.
 
 	// Slasher constants.
 	WeakSubjectivityPeriod    primitives.Epoch // WeakSubjectivityPeriod defines the time period expressed in number of epochs were proof of stake network should validate block headers and attestations for slashable events.
@@ -184,6 +203,8 @@ type BeaconChainConfig struct {
 	ElectraForkEpoch     primitives.Epoch `yaml:"ELECTRA_FORK_EPOCH" spec:"true"`     // ElectraForkEpoch is used to represent the assigned fork epoch for electra.
 	FuluForkVersion      []byte           `yaml:"FULU_FORK_VERSION" spec:"true"`      // FuluForkVersion is used to represent the fork version for fulu.
 	FuluForkEpoch        primitives.Epoch `yaml:"FULU_FORK_EPOCH" spec:"true"`        // FuluForkEpoch is used to represent the assigned fork epoch for fulu.
+	GloasForkVersion     []byte           `yaml:"GLOAS_FORK_VERSION" spec:"true"`     // GloasForkVersion is used to represent the fork version for gloas.
+	GloasForkEpoch       primitives.Epoch `yaml:"GLOAS_FORK_EPOCH" spec:"true"`       // GloasForkEpoch is used to represent the assigned fork epoch for gloas.
 
 	ForkVersionSchedule map[[fieldparams.VersionLength]byte]primitives.Epoch // Schedule of fork epochs by version.
 	ForkVersionNames    map[[fieldparams.VersionLength]byte]string           // Human-readable names of fork versions.
@@ -281,16 +302,24 @@ type BeaconChainConfig struct {
 	UnsetDepositRequestsStartIndex        uint64 `yaml:"UNSET_DEPOSIT_REQUESTS_START_INDEX" spec:"true"`         // UnsetDepositRequestsStartIndex is used to check the start index for eip6110
 
 	// Values introduced in Fulu upgrade
-	NumberOfColumns                       uint64           `yaml:"NUMBER_OF_COLUMNS" spec:"true"`                            // NumberOfColumns in the extended data matrix.
 	SamplesPerSlot                        uint64           `yaml:"SAMPLES_PER_SLOT" spec:"true"`                             // SamplesPerSlot is the minimum number of samples for an honest node.
 	NumberOfCustodyGroups                 uint64           `yaml:"NUMBER_OF_CUSTODY_GROUPS" spec:"true"`                     // NumberOfCustodyGroups available for nodes to custody.
 	CustodyRequirement                    uint64           `yaml:"CUSTODY_REQUIREMENT" spec:"true"`                          // CustodyRequirement is minimum number of custody groups an honest node custodies and serves samples from.
 	MinEpochsForDataColumnSidecarsRequest primitives.Epoch `yaml:"MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS" spec:"true"` // MinEpochsForDataColumnSidecarsRequest is the minimum number of epochs the node will keep the data columns for.
-	MaxCellsInExtendedMatrix              uint64           `yaml:"MAX_CELLS_IN_EXTENDED_MATRIX"`                             // MaxCellsInExtendedMatrix is the full data of one-dimensional erasure coding extended blobs (in row major format).
 	DataColumnSidecarSubnetCount          uint64           `yaml:"DATA_COLUMN_SIDECAR_SUBNET_COUNT" spec:"true"`             // DataColumnSidecarSubnetCount is the number of data column sidecar subnets used in the gossipsub protocol
 	MaxRequestDataColumnSidecars          uint64           `yaml:"MAX_REQUEST_DATA_COLUMN_SIDECARS" spec:"true"`             // MaxRequestDataColumnSidecars is the maximum number of data column sidecars in a single request
 	ValidatorCustodyRequirement           uint64           `yaml:"VALIDATOR_CUSTODY_REQUIREMENT" spec:"true"`                // ValidatorCustodyRequirement is the minimum number of custody groups an honest node with validators attached custodies and serves samples from
 	BalancePerAdditionalCustodyGroup      uint64           `yaml:"BALANCE_PER_ADDITIONAL_CUSTODY_GROUP" spec:"true"`         // BalancePerAdditionalCustodyGroup is the balance increment corresponding to one additional group to custody.
+
+	// Values introduced in Gloas upgrade
+	BuilderPaymentThresholdNumerator     uint64 `yaml:"BUILDER_PAYMENT_THRESHOLD_NUMERATOR" spec:"true"`        // BuilderPaymentThresholdNumerator is the numerator for builder payment quorum threshold calculation.
+	BuilderPaymentThresholdDenominator   uint64 `yaml:"BUILDER_PAYMENT_THRESHOLD_DENOMINATOR" spec:"true"`      // BuilderPaymentThresholdDenominator is the denominator for builder payment quorum threshold calculation.
+	MaxRequestPayloads                   uint64 `yaml:"MAX_REQUEST_PAYLOADS" spec:"true"`                       // MaxRequestPayloads is the maximum number of execution payload envelopes in a single request.
+	ChurnLimitQuotientGloas              uint64 `yaml:"CHURN_LIMIT_QUOTIENT_GLOAS" spec:"true"`                 // ChurnLimitQuotientGloas is the divisor used to compute per-epoch churn from total active balance in Gloas (EIP-8061).
+	ConsolidationChurnLimitQuotient      uint64 `yaml:"CONSOLIDATION_CHURN_LIMIT_QUOTIENT" spec:"true"`         // ConsolidationChurnLimitQuotient is the divisor used to compute the per-epoch consolidation churn limit in Gloas (EIP-8061).
+	MaxPerEpochActivationChurnLimitGloas uint64 `yaml:"MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT_GLOAS" spec:"true"` // MaxPerEpochActivationChurnLimitGloas is the per-epoch cap on activation churn in Gloas (EIP-8061).
+	MaxBuilderDepositRequestsPerPayload  uint64 `yaml:"MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD" spec:"true"`   // MaxBuilderDepositRequestsPerPayload is the maximum number of builder deposit requests in each payload (EIP-8282).
+	MaxBuilderExitRequestsPerPayload     uint64 `yaml:"MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD" spec:"true"`      // MaxBuilderExitRequestsPerPayload is the maximum number of builder exit requests in each payload (EIP-8282).
 
 	// Networking Specific Parameters
 	MaxPayloadSize                  uint64          `yaml:"MAX_PAYLOAD_SIZE" spec:"true"`                   // MAX_PAYLOAD_SIZE is the maximum allowed size of uncompressed payload in gossip messages and rpc chunks.
@@ -337,14 +366,17 @@ func (b *BeaconChainConfig) VersionToForkEpochMap() map[int]primitives.Epoch {
 		version.Deneb:     b.DenebForkEpoch,
 		version.Electra:   b.ElectraForkEpoch,
 		version.Fulu:      b.FuluForkEpoch,
+		version.Gloas:     b.GloasForkEpoch,
 	}
 }
 
 func (b *BeaconChainConfig) ExecutionRequestLimits() enginev1.ExecutionRequestLimits {
 	return enginev1.ExecutionRequestLimits{
-		Deposits:       b.MaxDepositRequestsPerPayload,
-		Withdrawals:    b.MaxWithdrawalsPerPayload,
-		Consolidations: b.MaxConsolidationsRequestsPerPayload,
+		Deposits:        b.MaxDepositRequestsPerPayload,
+		Withdrawals:     b.MaxWithdrawalRequestsPerPayload,
+		Consolidations:  b.MaxConsolidationsRequestsPerPayload,
+		BuilderDeposits: b.MaxBuilderDepositRequestsPerPayload,
+		BuilderExits:    b.MaxBuilderExitRequestsPerPayload,
 	}
 }
 
@@ -358,7 +390,7 @@ type NetworkScheduleEntry struct {
 	isFork           bool                            `yaml:"-" json:"-"`
 }
 
-func (e NetworkScheduleEntry) LogFields() log.Fields {
+func (e NetworkScheduleEntry) LogFields() logrus.Fields {
 	gvr := BeaconConfig().GenesisValidatorsRoot
 	root, err := computeForkDataRoot(e.ForkVersion, gvr)
 	if err != nil {
@@ -366,7 +398,7 @@ func (e NetworkScheduleEntry) LogFields() log.Fields {
 			WithField("genesisValidatorsRoot", fmt.Sprintf("%#x", gvr)).
 			WithError(err).Error("Failed to compute fork data root")
 	}
-	fields := log.Fields{
+	fields := logrus.Fields{
 		"forkVersion":      fmt.Sprintf("%#x", e.ForkVersion),
 		"forkDigest":       fmt.Sprintf("%#x", e.ForkDigest),
 		"maxBlobsPerBlock": e.MaxBlobsPerBlock,
@@ -600,6 +632,7 @@ func initForkSchedule(b *BeaconChainConfig) *NetworkSchedule {
 		{Epoch: b.DenebForkEpoch, isFork: true, ForkVersion: to4(b.DenebForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlock), VersionEnum: version.Deneb},
 		{Epoch: b.ElectraForkEpoch, isFork: true, ForkVersion: to4(b.ElectraForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlockElectra), VersionEnum: version.Electra},
 		{Epoch: b.FuluForkEpoch, isFork: true, ForkVersion: to4(b.FuluForkVersion), VersionEnum: version.Fulu},
+		{Epoch: b.GloasForkEpoch, isFork: true, ForkVersion: to4(b.GloasForkVersion), VersionEnum: version.Gloas},
 	})
 }
 
@@ -624,6 +657,7 @@ func configForkSchedule(b *BeaconChainConfig) map[[fieldparams.VersionLength]byt
 	fvs[bytesutil.ToBytes4(b.DenebForkVersion)] = b.DenebForkEpoch
 	fvs[bytesutil.ToBytes4(b.ElectraForkVersion)] = b.ElectraForkEpoch
 	fvs[bytesutil.ToBytes4(b.FuluForkVersion)] = b.FuluForkEpoch
+	fvs[bytesutil.ToBytes4(b.GloasForkVersion)] = b.GloasForkEpoch
 	return fvs
 }
 
@@ -647,6 +681,7 @@ func ConfigForkVersions(b *BeaconChainConfig) map[[fieldparams.VersionLength]byt
 		bytesutil.ToBytes4(b.DenebForkVersion):     version.Deneb,
 		bytesutil.ToBytes4(b.ElectraForkVersion):   version.Electra,
 		bytesutil.ToBytes4(b.FuluForkVersion):      version.Fulu,
+		bytesutil.ToBytes4(b.GloasForkVersion):     version.Gloas,
 	}
 }
 
@@ -723,6 +758,11 @@ func ElectraEnabled() bool {
 // This will make it easier to find call sites that do this kind of check and remove them post-fulu.
 func FuluEnabled() bool {
 	return BeaconConfig().FuluForkEpoch < math.MaxUint64
+}
+
+// GloasEnabled centralizes the check to determine if code paths that are specific to Gloas should be allowed to execute.
+func GloasEnabled() bool {
+	return BeaconConfig().GloasForkEpoch < math.MaxUint64
 }
 
 // WithinDAPeriod checks if the block epoch is within the data availability retention period.

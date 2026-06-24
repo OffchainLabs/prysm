@@ -5,10 +5,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/gohashtree"
 )
 
 const (
@@ -45,7 +45,7 @@ func VerifyKZGInclusionProof(blob ROBlob) error {
 		return errInvalidBodyRoot
 	}
 	chunks := makeChunk(blob.KzgCommitment)
-	gohashtree.HashChunks(chunks, chunks)
+	htr.HashChunks(chunks, chunks)
 	verified := trie.VerifyMerkleProof(root, chunks[0][:], blob.Index+KZGOffset, blob.CommitmentInclusionProof)
 	if !verified {
 		return errInvalidInclusionProof
@@ -182,7 +182,7 @@ func LeavesFromCommitments(commitments [][]byte) [][]byte {
 	leaves := make([][]byte, len(commitments))
 	for i, kzg := range commitments {
 		chunk := makeChunk(kzg)
-		gohashtree.HashChunks(chunk, chunk)
+		htr.HashChunks(chunk, chunk)
 		leaves[i] = chunk[0][:]
 	}
 	return leaves

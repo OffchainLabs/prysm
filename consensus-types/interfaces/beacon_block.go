@@ -69,6 +69,9 @@ type ReadOnlyBeaconBlockBody interface {
 	BLSToExecutionChanges() ([]*ethpb.SignedBLSToExecutionChange, error)
 	BlobKzgCommitments() ([][]byte, error)
 	ExecutionRequests() (*enginev1.ExecutionRequests, error)
+	PayloadAttestations() ([]*ethpb.PayloadAttestation, error)
+	SignedExecutionPayloadBid() (*ethpb.SignedExecutionPayloadBid, error)
+	ParentExecutionRequests() (*enginev1.ExecutionRequestsGloas, error)
 }
 
 type SignedBeaconBlock interface {
@@ -91,6 +94,9 @@ type SignedBeaconBlock interface {
 	SetSlot(slot primitives.Slot)
 	SetSignature(sig []byte)
 	SetExecutionRequests(er *enginev1.ExecutionRequests) error
+	SetPayloadAttestations(pa []*ethpb.PayloadAttestation) error
+	SetSignedExecutionPayloadBid(header *ethpb.SignedExecutionPayloadBid) error
+	SetParentExecutionRequests(r *enginev1.ExecutionRequestsGloas) error
 	Unblind(e ExecutionData) error
 }
 
@@ -122,4 +128,5 @@ type ExecutionData interface {
 	TransactionsRoot() ([]byte, error)
 	Withdrawals() ([]*enginev1.Withdrawal, error)
 	WithdrawalsRoot() ([]byte, error)
+	BlockAccessList() ([]byte, error)
 }

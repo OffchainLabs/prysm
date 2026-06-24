@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -17,13 +18,13 @@ import (
 
 type beaconApiChainClient struct {
 	fallbackClient          iface.ChainClient
-	jsonRestHandler         RestHandler
+	handler                 rest.Handler
 	stateValidatorsProvider StateValidatorsProvider
 }
 
 func (c beaconApiChainClient) headBlockHeaders(ctx context.Context) (*structs.GetBlockHeaderResponse, error) {
 	blockHeader := structs.GetBlockHeaderResponse{}
-	err := c.jsonRestHandler.Get(ctx, "/eth/v1/beacon/headers/head", &blockHeader)
+	err := c.handler.Get(ctx, "/eth/v1/beacon/headers/head", &blockHeader)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +44,7 @@ func (c beaconApiChainClient) ChainHead(ctx context.Context, _ *empty.Empty) (*e
 	const endpoint = "/eth/v1/beacon/states/head/finality_checkpoints"
 
 	finalityCheckpoints := structs.GetFinalityCheckpointsResponse{}
-	if err := c.jsonRestHandler.Get(ctx, endpoint, &finalityCheckpoints); err != nil {
+	if err := c.handler.Get(ctx, endpoint, &finalityCheckpoints); err != nil {
 		return nil, err
 	}
 
@@ -327,10 +328,10 @@ func (c beaconApiChainClient) ValidatorParticipation(ctx context.Context, in *et
 	return nil, errors.New("beaconApiChainClient.ValidatorParticipation is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiChainClientWithFallback.")
 }
 
-func NewBeaconApiChainClientWithFallback(jsonRestHandler RestHandler, fallbackClient iface.ChainClient) iface.ChainClient {
+func NewBeaconApiChainClientWithFallback(handler rest.Handler, fallbackClient iface.ChainClient) iface.ChainClient {
 	return &beaconApiChainClient{
-		jsonRestHandler:         jsonRestHandler,
+		handler:                 handler,
 		fallbackClient:          fallbackClient,
-		stateValidatorsProvider: beaconApiStateValidatorsProvider{jsonRestHandler: jsonRestHandler},
+		stateValidatorsProvider: beaconApiStateValidatorsProvider{handler: handler},
 	}
 }

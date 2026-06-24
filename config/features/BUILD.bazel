@@ -7,6 +7,7 @@ go_library(
         "deprecated_flags.go",
         "filter_flags.go",
         "flags.go",
+        "log.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/config/features",
     visibility = ["//visibility:public"],

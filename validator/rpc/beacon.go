@@ -1,13 +1,10 @@
 package rpc
 
 import (
-	"net/http"
-
-	api "github.com/OffchainLabs/prysm/v7/api/client"
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/client"
-	beaconApi "github.com/OffchainLabs/prysm/v7/validator/client/beacon-api"
 	beaconChainClientFactory "github.com/OffchainLabs/prysm/v7/validator/client/beacon-chain-client-factory"
 	nodeClientFactory "github.com/OffchainLabs/prysm/v7/validator/client/node-client-factory"
 	validatorClientFactory "github.com/OffchainLabs/prysm/v7/validator/client/validator-client-factory"
@@ -17,7 +14,6 @@ import (
 	grpcopentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/pkg/errors"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"google.golang.org/grpc"
 )
 
@@ -41,30 +37,26 @@ func (s *Server) registerBeaconClient() error {
 
 	s.ctx = grpcutil.AppendHeaders(s.ctx, s.grpcHeaders)
 
-	grpcConn, err := grpc.DialContext(s.ctx, s.beaconNodeEndpoint, dialOpts...)
+	conn, err := validatorHelpers.NewNodeConnection(
+		validatorHelpers.WithGRPC(s.ctx, s.beaconNodeEndpoint, dialOpts),
+		validatorHelpers.WithREST(s.beaconApiEndpoint,
+			rest.WithHttpHeaders(s.beaconApiHeaders),
+			rest.WithHttpTimeout(s.beaconApiTimeout),
+			rest.WithTracing(),
+		),
+	)
 	if err != nil {
-		return errors.Wrapf(err, "could not dial endpoint: %s", s.beaconNodeEndpoint)
+		return err
 	}
-	if s.beaconNodeCert != "" {
+	if s.beaconNodeCert != "" && s.beaconNodeEndpoint != "" {
 		log.Info("Established secure gRPC connection")
 	}
-	s.healthClient = ethpb.NewHealthClient(grpcConn)
+	if grpcConn := conn.GetGrpcClientConn(); grpcConn != nil {
+		s.healthClient = ethpb.NewHealthClient(grpcConn)
+	}
 
-	conn := validatorHelpers.NewNodeConnection(
-		grpcConn,
-		s.beaconApiEndpoint,
-		validatorHelpers.WithBeaconApiHeaders(s.beaconApiHeaders),
-		validatorHelpers.WithBeaconApiTimeout(s.beaconApiTimeout),
-	)
-
-	headersTransport := api.NewCustomHeadersTransport(http.DefaultTransport, conn.GetBeaconApiHeaders())
-	restHandler := beaconApi.NewBeaconApiRestHandler(
-		http.Client{Timeout: s.beaconApiTimeout, Transport: otelhttp.NewTransport(headersTransport)},
-		s.beaconApiEndpoint,
-	)
-
-	s.chainClient = beaconChainClientFactory.NewChainClient(conn, restHandler)
-	s.nodeClient = nodeClientFactory.NewNodeClient(conn, restHandler)
-	s.beaconNodeValidatorClient = validatorClientFactory.NewValidatorClient(conn, restHandler)
+	s.chainClient = beaconChainClientFactory.NewChainClient(conn)
+	s.nodeClient = nodeClientFactory.NewNodeClient(conn)
+	s.beaconNodeValidatorClient = validatorClientFactory.NewValidatorClient(conn)
 	return nil
 }

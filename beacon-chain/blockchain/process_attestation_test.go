@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -18,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
 func TestStore_OnAttestation_ErrorConditions(t *testing.T) {
@@ -159,6 +162,57 @@ func TestStore_OnAttestation_Ok_DoublyLinkedTree(t *testing.T) {
 	})
 }
 
+func TestOnAttestation_GloasSameSlotPayloadVote(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	service, tr := minimalTestService(t)
+	ctx := tr.ctx
+
+	genesisState, _ := util.DeterministicGenesisStateGloas(t, 64)
+	service.SetGenesisTime(time.Unix(time.Now().Unix()-int64(2*params.BeaconConfig().SecondsPerSlot), 0))
+	require.NoError(t, service.saveGenesisData(ctx, genesisState))
+	genesisRoot := service.originBlockRoot
+
+	// payloadVote builds a committee-index-1 (payload-present) attestation for the
+	// genesis block (slot 0), dated attSlot.
+	payloadVote := func(attSlot primitives.Slot) ethpb.Att {
+		committee, err := helpers.BeaconCommitteeFromState(ctx, genesisState, attSlot, 0)
+		require.NoError(t, err)
+		require.NotEqual(t, 0, len(committee))
+		aggBits := bitfield.NewBitlist(uint64(len(committee)))
+		aggBits.SetBitAt(0, true)
+		cb := primitives.NewAttestationCommitteeBits()
+		cb.SetBitAt(0, true)
+		return &ethpb.AttestationElectra{
+			AggregationBits: aggBits,
+			CommitteeBits:   cb,
+			Data: &ethpb.AttestationData{
+				Slot:            attSlot,
+				CommitteeIndex:  1,
+				BeaconBlockRoot: genesisRoot[:],
+				Source:          &ethpb.Checkpoint{Epoch: 0, Root: genesisRoot[:]},
+				Target:          &ethpb.Checkpoint{Epoch: 0, Root: genesisRoot[:]},
+			},
+			Signature: make([]byte, 96),
+		}
+	}
+
+	t.Run("same-slot payload vote is skipped", func(t *testing.T) {
+		logHook := logTest.NewGlobal()
+		require.NoError(t, service.OnAttestation(ctx, payloadVote(0), 0))
+		require.LogsContain(t, logHook, "Skipping same-slot payload-present attestation")
+	})
+
+	t.Run("prior-slot payload vote is processed", func(t *testing.T) {
+		logHook := logTest.NewGlobal()
+		require.NoError(t, service.OnAttestation(ctx, payloadVote(1), 0))
+		require.LogsDoNotContain(t, logHook, "Skipping same-slot payload-present attestation")
+	})
+}
+
 func TestService_GetRecentPreState(t *testing.T) {
 	service, _ := minimalTestService(t)
 	ctx := t.Context()
@@ -170,15 +224,139 @@ func TestService_GetRecentPreState(t *testing.T) {
 	err = s.SetFinalizedCheckpoint(cp0)
 	require.NoError(t, err)
 
-	st, root, err := prepareForkchoiceState(ctx, 31, [32]byte(ckRoot), [32]byte{}, [32]byte{'R'}, cp0, cp0)
+	st, blk, err := prepareForkchoiceState(ctx, 31, [32]byte(ckRoot), [32]byte{}, [32]byte{'R'}, cp0, cp0)
 	require.NoError(t, err)
-	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, root))
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
 	service.head = &head{
 		root:  [32]byte(ckRoot),
 		state: s,
+		block: blk,
 		slot:  31,
 	}
 	require.NotNil(t, service.getRecentPreState(ctx, &ethpb.Checkpoint{Epoch: 1, Root: ckRoot}))
+}
+
+func TestService_GetRecentPreState_Epoch_0(t *testing.T) {
+	service, _ := minimalTestService(t)
+	ctx := t.Context()
+	require.IsNil(t, service.getRecentPreState(ctx, &ethpb.Checkpoint{}))
+}
+
+func TestService_GetRecentPreState_Old_Checkpoint(t *testing.T) {
+	service, _ := minimalTestService(t)
+	ctx := t.Context()
+	s, err := util.NewBeaconState()
+	require.NoError(t, err)
+	ckRoot := bytesutil.PadTo([]byte{'A'}, fieldparams.RootLength)
+	cp0 := &ethpb.Checkpoint{Epoch: 0, Root: ckRoot}
+	err = s.SetFinalizedCheckpoint(cp0)
+	require.NoError(t, err)
+
+	st, blk, err := prepareForkchoiceState(ctx, 33, [32]byte(ckRoot), [32]byte{}, [32]byte{'R'}, cp0, cp0)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+	service.head = &head{
+		root:  [32]byte(ckRoot),
+		state: s,
+		block: blk,
+		slot:  33,
+	}
+	require.IsNil(t, service.getRecentPreState(ctx, &ethpb.Checkpoint{}))
+}
+
+func TestService_GetRecentPreState_Same_DependentRoots(t *testing.T) {
+	service, _ := minimalTestService(t)
+	ctx := t.Context()
+	s, err := util.NewBeaconState()
+	require.NoError(t, err)
+	ckRoot := bytesutil.PadTo([]byte{'A'}, fieldparams.RootLength)
+	cp0 := &ethpb.Checkpoint{Epoch: 0, Root: ckRoot}
+
+	// Create a fork 31 <-- 32 <--- 64
+	//                 \---------33
+	// With the same dependent root at epoch 0 for a checkpoint at epoch 2
+	st, blk, err := prepareForkchoiceState(ctx, 31, [32]byte(ckRoot), [32]byte{}, [32]byte{}, cp0, cp0)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+	st, blk, err = prepareForkchoiceState(ctx, 32, [32]byte{'S'}, blk.Root(), [32]byte{}, cp0, cp0)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+	st, blk, err = prepareForkchoiceState(ctx, 64, [32]byte{'T'}, blk.Root(), [32]byte{}, cp0, cp0)
+	require.NoError(t, err)
+	headBlock := blk
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+	st, blk, err = prepareForkchoiceState(ctx, 33, [32]byte{'U'}, [32]byte(ckRoot), [32]byte{}, cp0, cp0)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+	cpRoot := blk.Root()
+
+	service.head = &head{
+		root:  [32]byte{'T'},
+		block: headBlock,
+		slot:  64,
+		state: s,
+	}
+	require.NotNil(t, service.getRecentPreState(ctx, &ethpb.Checkpoint{Epoch: 2, Root: cpRoot[:]}))
+}
+
+func TestService_GetRecentPreState_Different_DependentRoots(t *testing.T) {
+	service, _ := minimalTestService(t)
+	ctx := t.Context()
+	s, err := util.NewBeaconState()
+	require.NoError(t, err)
+	ckRoot := bytesutil.PadTo([]byte{'A'}, fieldparams.RootLength)
+	cp0 := &ethpb.Checkpoint{Epoch: 0, Root: ckRoot}
+
+	// Create a fork 30 <-- 31 <-- 32 <--- 64
+	//                 \---------33
+	// With the same dependent root at epoch 0 for a checkpoint at epoch 2
+	st, blk, err := prepareForkchoiceState(ctx, 30, [32]byte(ckRoot), [32]byte{}, [32]byte{}, cp0, cp0)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+	st, blk, err = prepareForkchoiceState(ctx, 31, [32]byte{'S'}, blk.Root(), [32]byte{}, cp0, cp0)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+	st, blk, err = prepareForkchoiceState(ctx, 32, [32]byte{'T'}, blk.Root(), [32]byte{}, cp0, cp0)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+	st, blk, err = prepareForkchoiceState(ctx, 64, [32]byte{'U'}, blk.Root(), [32]byte{}, cp0, cp0)
+	require.NoError(t, err)
+	headBlock := blk
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+	st, blk, err = prepareForkchoiceState(ctx, 33, [32]byte{'V'}, [32]byte(ckRoot), [32]byte{}, cp0, cp0)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+	cpRoot := blk.Root()
+
+	service.head = &head{
+		root:  [32]byte{'U'},
+		block: headBlock,
+		state: s,
+		slot:  64,
+	}
+	require.IsNil(t, service.getRecentPreState(ctx, &ethpb.Checkpoint{Epoch: 2, Root: cpRoot[:]}))
+}
+
+func TestService_GetRecentPreState_Different(t *testing.T) {
+	service, _ := minimalTestService(t)
+	ctx := t.Context()
+	s, err := util.NewBeaconState()
+	require.NoError(t, err)
+	ckRoot := bytesutil.PadTo([]byte{'A'}, fieldparams.RootLength)
+	cp0 := &ethpb.Checkpoint{Epoch: 0, Root: ckRoot}
+	err = s.SetFinalizedCheckpoint(cp0)
+	require.NoError(t, err)
+
+	st, blk, err := prepareForkchoiceState(ctx, 33, [32]byte(ckRoot), [32]byte{}, [32]byte{'R'}, cp0, cp0)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
+	service.head = &head{
+		root:  [32]byte(ckRoot),
+		state: s,
+		block: blk,
+		slot:  33,
+	}
+	require.IsNil(t, service.getRecentPreState(ctx, &ethpb.Checkpoint{}))
 }
 
 func TestService_GetAttPreState_Concurrency(t *testing.T) {

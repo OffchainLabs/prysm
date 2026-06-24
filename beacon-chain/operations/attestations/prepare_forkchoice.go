@@ -49,6 +49,7 @@ func (s *Service) prepareForkChoiceAtts() {
 			}
 		case <-s.ctx.Done():
 			log.Debug("Context closed, exiting routine")
+			ticker.Done()
 			return
 		}
 	}

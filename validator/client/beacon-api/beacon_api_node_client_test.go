@@ -2,6 +2,7 @@ package beacon_api
 
 import (
 	"errors"
+	"net/http"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -119,10 +120,10 @@ func TestGetGenesis(t *testing.T) {
 			)
 
 			depositContractJson := structs.GetDepositContractResponse{}
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 
 			if testCase.queriesDepositContract {
-				jsonRestHandler.EXPECT().Get(
+				handler.EXPECT().Get(
 					gomock.Any(),
 					"/eth/v1/config/deposit_contract",
 					&depositContractJson,
@@ -136,7 +137,7 @@ func TestGetGenesis(t *testing.T) {
 
 			nodeClient := &beaconApiNodeClient{
 				genesisProvider: genesisProvider,
-				jsonRestHandler: jsonRestHandler,
+				handler:         handler,
 			}
 			response, err := nodeClient.Genesis(ctx, &emptypb.Empty{})
 
@@ -200,8 +201,8 @@ func TestGetSyncStatus(t *testing.T) {
 			ctx := t.Context()
 
 			syncingResponse := structs.SyncStatusResponse{}
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-			jsonRestHandler.EXPECT().Get(
+			handler := mock.NewMockHandler(ctrl)
+			handler.EXPECT().Get(
 				gomock.Any(),
 				syncingEndpoint,
 				&syncingResponse,
@@ -212,7 +213,7 @@ func TestGetSyncStatus(t *testing.T) {
 				testCase.restEndpointResponse,
 			)
 
-			nodeClient := &beaconApiNodeClient{jsonRestHandler: jsonRestHandler}
+			nodeClient := &beaconApiNodeClient{handler: handler}
 			syncStatus, err := nodeClient.SyncStatus(ctx, &emptypb.Empty{})
 
 			if testCase.expectedResponse == nil {
@@ -264,8 +265,8 @@ func TestGetVersion(t *testing.T) {
 			ctx := t.Context()
 
 			var versionResponse structs.GetVersionResponse
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-			jsonRestHandler.EXPECT().Get(
+			handler := mock.NewMockHandler(ctrl)
+			handler.EXPECT().Get(
 				gomock.Any(),
 				versionEndpoint,
 				&versionResponse,
@@ -276,7 +277,7 @@ func TestGetVersion(t *testing.T) {
 				testCase.restEndpointResponse,
 			)
 
-			nodeClient := &beaconApiNodeClient{jsonRestHandler: jsonRestHandler}
+			nodeClient := &beaconApiNodeClient{handler: handler}
 			version, err := nodeClient.Version(ctx, &emptypb.Empty{})
 
 			if testCase.expectedResponse == nil {
@@ -284,6 +285,63 @@ func TestGetVersion(t *testing.T) {
 			} else {
 				assert.DeepEqual(t, testCase.expectedResponse, version)
 			}
+		})
+	}
+}
+
+func TestIsReady(t *testing.T) {
+	const healthEndpoint = "/eth/v1/node/health"
+
+	testCases := []struct {
+		name           string
+		statusCode     int
+		err            error
+		expectedResult bool
+	}{
+		{
+			name:           "returns true for 200 OK (fully synced)",
+			statusCode:     http.StatusOK,
+			expectedResult: true,
+		},
+		{
+			name:           "returns false for 206 Partial Content (syncing)",
+			statusCode:     http.StatusPartialContent,
+			expectedResult: false,
+		},
+		{
+			name:           "returns false for 503 Service Unavailable",
+			statusCode:     http.StatusServiceUnavailable,
+			expectedResult: false,
+		},
+		{
+			name:           "returns false for 500 Internal Server Error",
+			statusCode:     http.StatusInternalServerError,
+			expectedResult: false,
+		},
+		{
+			name:           "returns false on error",
+			err:            errors.New("request failed"),
+			expectedResult: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			ctx := t.Context()
+
+			handler := mock.NewMockHandler(ctrl)
+			handler.EXPECT().GetStatusCode(
+				gomock.Any(),
+				healthEndpoint,
+			).Return(tc.statusCode, tc.err)
+			handler.EXPECT().Host().Return("http://localhost:3500").AnyTimes()
+
+			nodeClient := &beaconApiNodeClient{handler: handler}
+			result := nodeClient.IsReady(ctx)
+
+			assert.Equal(t, tc.expectedResult, result)
 		})
 	}
 }
