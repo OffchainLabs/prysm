@@ -31,6 +31,7 @@ var Commands = &cli.Command{
 				features.SepoliaTestnet,
 				features.HoleskyTestnet,
 				features.HoodiTestnet,
+				features.EphemeryTestnet,
 				cmd.AcceptTosFlag,
 			}),
 			Before: func(cliCtx *cli.Context) error {
@@ -63,6 +64,7 @@ var Commands = &cli.Command{
 				features.SepoliaTestnet,
 				features.HoleskyTestnet,
 				features.HoodiTestnet,
+				features.EphemeryTestnet,
 				cmd.AcceptTosFlag,
 			}),
 			Before: func(cliCtx *cli.Context) error {

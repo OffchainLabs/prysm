@@ -385,6 +385,22 @@ filegroup(
 )
 
 http_archive(
+    name = "ephemery_testnet",
+    build_file_content = """
+filegroup(
+    name = "configs",
+    srcs = [
+        "cl-config-genesis-zero.yaml",
+    ],
+    visibility = ["//visibility:public"],
+)
+""",
+    sha256 = "d6d61967f66be648bfceddd9ba128a2d3083d7383bc3ab7d7e845ecc96f92cd6",
+    strip_prefix = "ephemery-genesis-ephemery-153",
+    url = "https://github.com/ephemery-testnet/ephemery-genesis/archive/refs/tags/ephemery-153.tar.gz",
+)
+
+http_archive(
     name = "com_google_protobuf",
     sha256 = "7c3ebd7aaedd86fa5dc479a0fda803f602caaf78d8aff7ce83b89e1b8ae7442a",
     strip_prefix = "protobuf-28.3",
