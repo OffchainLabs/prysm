@@ -29,6 +29,7 @@ func (s *Service) beaconAggregateProofSubscriber(ctx context.Context, msg proto.
 	}
 
 	s.matchSelfSubmittedAttestation(ctx, aggregate)
+	s.matchWatchedDuties(ctx, aggregate)
 
 	if features.Get().EnableExperimentalAttestationPool {
 		return s.cfg.attestationCache.Add(aggregate)

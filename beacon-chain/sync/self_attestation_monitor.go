@@ -49,6 +49,11 @@ type (
 // monitorSelfSubmittedAttestations consumes LocalAttestationSubmitted events and periodically prunes
 // stale entries. It runs until the service context is closed.
 func (s *Service) monitorSelfSubmittedAttestations() {
+	if s.cfg.attestationNotifier == nil {
+		log.Debug("Attestation notifier not configured, skipping self attestation monitor")
+		return
+	}
+
 	channel := make(chan *feed.Event, selfAttChannelBuffer)
 	subscription := s.cfg.attestationNotifier.OperationFeed().Subscribe(channel)
 	defer subscription.Unsubscribe()

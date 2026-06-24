@@ -21,12 +21,14 @@ package features
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/urfave/cli/v2"
 )
@@ -94,6 +96,9 @@ type Flags struct {
 	// Feature related flags (alignment forced in the end)
 	ForceHead        string                // ForceHead forces the head block to be a specific block root, the last head block, or the last finalized block.
 	BlacklistedRoots map[[32]byte]struct{} // BlacklistedRoots is a list of roots that are blacklisted from processing.
+
+	// WatchedAttestationValidators is the set of validator indices to watch for attestation-aggregate inclusion.
+	WatchedAttestationValidators map[primitives.ValidatorIndex]bool
 }
 
 var featureConfig *Flags
@@ -289,6 +294,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(blacklistRoots)
 		cfg.BlacklistedRoots = parseBlacklistedRoots(ctx.StringSlice(blacklistRoots.Name))
 	}
+	if ctx.IsSet(monitorAttestationInclusionValidators.Name) {
+		logEnabled(monitorAttestationInclusionValidators)
+		cfg.WatchedAttestationValidators = parseWatchedValidators(ctx.StringSlice(monitorAttestationInclusionValidators.Name))
+	}
 
 	cfg.IgnoreUnviableAttestations = false
 	if ctx.IsSet(ignoreUnviableAttestations.Name) && ctx.Bool(ignoreUnviableAttestations.Name) {
@@ -326,6 +335,19 @@ func parseBlacklistedRoots(blacklistedRoots []string) map[[32]byte]struct{} {
 		roots[[32]byte(r)] = struct{}{}
 	}
 	return roots
+}
+
+func parseWatchedValidators(indices []string) map[primitives.ValidatorIndex]bool {
+	validators := make(map[primitives.ValidatorIndex]bool, len(indices))
+	for _, index := range indices {
+		i, err := strconv.ParseUint(strings.TrimSpace(index), 10, 64)
+		if err != nil {
+			log.WithError(err).WithField("index", index).Warn("Failed to parse watched validator index")
+			continue
+		}
+		validators[primitives.ValidatorIndex(i)] = true
+	}
+	return validators
 }
 
 // ConfigureValidator sets the global config based

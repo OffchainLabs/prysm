@@ -211,6 +211,9 @@ type Service struct {
 	selfBuildSigFailures                 int
 	selfSubmittedAtts                    map[[32]byte]*selfAttEntry
 	selfSubmittedAttsLock                sync.Mutex
+	watchedDuties                        map[primitives.Slot]*watchedSlotEntry
+	watchedSeededEpochs                  map[primitives.Epoch]bool
+	watchedDutiesLock                    sync.Mutex
 }
 
 // NewService initializes new regular sync service.
@@ -231,6 +234,8 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
 		pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
 		selfSubmittedAtts:        make(map[[32]byte]*selfAttEntry),
+		watchedDuties:            make(map[primitives.Slot]*watchedSlotEntry),
+		watchedSeededEpochs:      make(map[primitives.Epoch]bool),
 	}
 
 	for _, opt := range opts {
@@ -318,6 +323,7 @@ func (s *Service) Start() {
 	go s.startDiscoveryAndSubscriptions()
 	go s.processDataColumnLogs()
 	go s.monitorSelfSubmittedAttestations()
+	go s.monitorWatchedValidatorDuties()
 
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
 	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, id peer.ID) error {

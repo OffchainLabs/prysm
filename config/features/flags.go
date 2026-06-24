@@ -197,6 +197,14 @@ var (
 		Name:  "blacklist-roots",
 		Usage: "A comma-separatted list of 0x-prefixed hexstrings. Declares blocks with the given blockroots to be invalid. It downscores peers that send these blocks.",
 	}
+	// monitorAttestationInclusionValidators watches the given validator indices for attestation-aggregate inclusion.
+	monitorAttestationInclusionValidators = &cli.StringSliceFlag{
+		Name: "monitor-attestation-inclusion-validators",
+		Usage: "Comma-separated list of validator indices to watch for attestation-aggregate inclusion. " +
+			"Seeds each validator's expected attestation duty (slot/committee) from the beacon state and " +
+			"logs whether their vote is later seen in a gossiped aggregate. The validators need not be local " +
+			"to this node, allowing a second node in a different region to independently confirm inclusion.",
+	}
 
 	// DisableDutiesV2 sets the validator client to use the get duties grpc endpoint
 	DisableDutiesV2 = &cli.BoolFlag{
@@ -288,6 +296,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	EnableStateDiff,
 	forceHeadFlag,
 	blacklistRoots,
+	monitorAttestationInclusionValidators,
 	enableHashtree,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
