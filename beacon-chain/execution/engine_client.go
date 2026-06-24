@@ -990,7 +990,10 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 				}
 				partialColumns = append(partialColumns, pc)
 			}
-			log.WithField("haveAllBlobs", haveAllBlobs).Debug("Constructed partial data column sidecars")
+			log.WithFields(logrus.Fields{
+				"haveAllBlobs": haveAllBlobs,
+				"blockRoot":    fmt.Sprintf("%#x", root),
+			}).Debug("Constructed partial data column sidecars")
 		}
 
 		return verifiedROSidecars, partialColumns, nil
@@ -1001,7 +1004,10 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		if err != nil {
 			return nil, nil, wrapWithBlockRoot(err, root, "construct partial columns")
 		}
-		log.WithField("haveAllBlobs", haveAllBlobs).Debug("Constructed partial data column sidecars")
+		log.WithFields(logrus.Fields{
+			"haveAllBlobs": haveAllBlobs,
+			"blockRoot":    fmt.Sprintf("%#x", root),
+		}).Debug("Constructed partial data column sidecars")
 	}
 
 	return nil, partialColumns, nil
