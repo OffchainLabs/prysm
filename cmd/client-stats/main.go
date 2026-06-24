@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	runtimeDebug "runtime/debug"
+	"syscall"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
@@ -100,7 +103,10 @@ func main() {
 		}
 	}()
 
-	if err := app.Run(os.Args); err != nil {
+	rctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := app.RunContext(rctx, os.Args); err != nil {
 		log.Error(err.Error())
 	}
 }
