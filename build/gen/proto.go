@@ -1,8 +1,10 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,7 +25,9 @@ import (
 const (
 	castPin       = "v0.0.0-20230228205207-28762a7b9294"
 	protobufGoVer = "v1.36.3"
-	googleapisPin = "64926d52febbf298cb82a8f472ade4a3969ba922"
+
+	googleapisPin    = "64926d52febbf298cb82a8f472ade4a3969ba922"
+	googleapisSHA256 = "9d1a930e767c93c825398b8f8692eca3fe353b9aaadedfbcf1fca2282c85df88"
 )
 
 var googleapisProtos = []string{
@@ -197,32 +201,88 @@ func emitMinimalPbgo(dir string) error {
 }
 
 func fetchGoogleapis(dest string) (string, error) {
+	url := fmt.Sprintf("https://github.com/googleapis/googleapis/archive/%s.zip", googleapisPin)
+
+	data, err := downloadVerified(url, googleapisSHA256)
+	if err != nil {
+		return "", fmt.Errorf("download googleapis archive: %w", err)
+	}
+
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return "", fmt.Errorf("open zip: %w", err)
+	}
+
+	stripPrefix := fmt.Sprintf("googleapis-%s/", googleapisPin)
+
+	want := make(map[string]bool, len(googleapisProtos))
 	for _, p := range googleapisProtos {
-		url := fmt.Sprintf("https://raw.githubusercontent.com/googleapis/googleapis/%s/%s", googleapisPin, p)
-		if err := download(url, filepath.Join(dest, filepath.FromSlash(p))); err != nil {
-			return "", fmt.Errorf("fetch %s: %w", p, err)
+		want[p] = true
+	}
+
+	found := make(map[string]bool, len(want))
+	for _, f := range zr.File {
+		rel := strings.TrimPrefix(f.Name, stripPrefix)
+		if !want[rel] {
+			continue
+		}
+
+		if err := extractZipFile(f, dest, rel); err != nil {
+			return "", fmt.Errorf("extract %s: %w", rel, err)
+		}
+
+		found[rel] = true
+	}
+
+	for _, p := range googleapisProtos {
+		if !found[p] {
+			return "", fmt.Errorf("googleapis archive missing %s", p)
 		}
 	}
 
 	return dest, nil
 }
 
-func download(url, dst string) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
-		return fmt.Errorf("mkdirAll: %w", err)
-	}
-
+func downloadVerified(url, wantSHA256 string) ([]byte, error) {
 	resp, err := http.Get(url) // #nosec G107 -- url is built from the pinned googleapis commit constant
 	if err != nil {
-		return fmt.Errorf("http get: %w", err)
+		return nil, fmt.Errorf("http get: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("http get %s: %s", url, resp.Status)
+		return nil, fmt.Errorf("http get %s: %s", url, resp.Status)
 	}
 
 	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("readAll: %w", err)
+	}
+
+	if sum := fmt.Sprintf("%x", sha256.Sum256(data)); sum != wantSHA256 {
+		return nil, fmt.Errorf("sha256 mismatch for %s: got %s, want %s", url, sum, wantSHA256)
+	}
+
+	return data, nil
+}
+
+func extractZipFile(f *zip.File, destDir, rel string) error {
+	dst := filepath.Join(destDir, filepath.FromSlash(rel))
+	if !strings.HasPrefix(dst, filepath.Clean(destDir)+string(os.PathSeparator)) {
+		return fmt.Errorf("archive entry %q escapes destination directory", rel)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
+		return fmt.Errorf("mkdirAll: %w", err)
+	}
+
+	rc, err := f.Open()
+	if err != nil {
+		return fmt.Errorf("open: %w", err)
+	}
+	defer func() { _ = rc.Close() }()
+
+	data, err := io.ReadAll(rc) // #nosec G110 -- archive is SHA-256 verified above
 	if err != nil {
 		return fmt.Errorf("readAll: %w", err)
 	}
