@@ -69,6 +69,23 @@ func TestParticipationBitsRootProgressive(t *testing.T) {
 	require.Equal(t, expected, got)
 }
 
+func TestBuildersRootProgressive(t *testing.T) {
+	builders := []*ethpb.Builder{{
+		Pubkey:           make([]byte, fieldparams.BLSPubkeyLength),
+		Version:          []byte{1},
+		ExecutionAddress: make([]byte, fieldparams.FeeRecipientLength),
+		Balance:          2,
+		DepositEpoch:     3,
+	}}
+
+	got, err := stateutil.BuildersRootProgressive(builders)
+	require.NoError(t, err)
+
+	expected, err := ssz.SliceRootProgressive(builders)
+	require.NoError(t, err)
+	require.Equal(t, expected, got)
+}
+
 func TestPendingRootsProgressive(t *testing.T) {
 	pendingDeposits := []*ethpb.PendingDeposit{{
 		PublicKey:             make([]byte, fieldparams.BLSPubkeyLength),

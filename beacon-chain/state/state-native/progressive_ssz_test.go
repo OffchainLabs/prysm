@@ -30,7 +30,7 @@ func TestProgressiveSSZEnabled(t *testing.T) {
 	require.Equal(t, false, progressiveSSZEnabled(version.Fulu))
 }
 
-func TestRootSelector_ProgressiveSSZGate_ValidatorsBalancesAndGloasWithdrawalLists(t *testing.T) {
+func TestRootSelector_ProgressiveSSZGate(t *testing.T) {
 	st := newGloasStateForProgressiveSSZTests(t)
 
 	reset := features.InitWithReset(&features.Flags{})
@@ -59,6 +59,12 @@ func TestRootSelector_ProgressiveSSZGate_ValidatorsBalancesAndGloasWithdrawalLis
 	expectedLegacyBuilderPendingWithdrawalsRoot, err := stateutil.BuilderPendingWithdrawalsRoot(st.builderPendingWithdrawals)
 	require.NoError(t, err)
 	require.Equal(t, expectedLegacyBuilderPendingWithdrawalsRoot, legacyBuilderPendingWithdrawalsRoot)
+
+	legacyBuildersRoot, err := st.rootSelector(context.Background(), types.Builders)
+	require.NoError(t, err)
+	expectedLegacyBuildersRoot, err := stateutil.BuildersRoot(st.builders)
+	require.NoError(t, err)
+	require.Equal(t, expectedLegacyBuildersRoot, legacyBuildersRoot)
 
 	reset = features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
 	defer reset()
@@ -90,9 +96,16 @@ func TestRootSelector_ProgressiveSSZGate_ValidatorsBalancesAndGloasWithdrawalLis
 	require.NoError(t, err)
 	require.Equal(t, expectedProgressiveBuilderPendingWithdrawalsRoot, progressiveBuilderPendingWithdrawalsRoot)
 	require.DeepNotSSZEqual(t, legacyBuilderPendingWithdrawalsRoot, progressiveBuilderPendingWithdrawalsRoot)
+
+	progressiveBuildersRoot, err := st.rootSelector(context.Background(), types.Builders)
+	require.NoError(t, err)
+	expectedProgressiveBuildersRoot, err := stateutil.BuildersRootProgressive(st.builders)
+	require.NoError(t, err)
+	require.Equal(t, expectedProgressiveBuildersRoot, progressiveBuildersRoot)
+	require.DeepNotSSZEqual(t, legacyBuildersRoot, progressiveBuildersRoot)
 }
 
-func TestComputeFieldRootsWithHasher_ProgressiveSSZGate_PendingDepositsAndGloasWithdrawalLists(t *testing.T) {
+func TestComputeFieldRootsWithHasher_ProgressiveSSZGate(t *testing.T) {
 	st := newGloasStateForProgressiveSSZTests(t)
 
 	reset := features.InitWithReset(&features.Flags{})
@@ -109,6 +122,9 @@ func TestComputeFieldRootsWithHasher_ProgressiveSSZGate_PendingDepositsAndGloasW
 	expectedLegacyBuilderPendingWithdrawalsRoot, err := stateutil.BuilderPendingWithdrawalsRoot(st.builderPendingWithdrawals)
 	require.NoError(t, err)
 	require.DeepEqual(t, expectedLegacyBuilderPendingWithdrawalsRoot[:], legacyRoots[types.BuilderPendingWithdrawals.RealPosition()])
+	expectedLegacyBuildersRoot, err := stateutil.BuildersRoot(st.builders)
+	require.NoError(t, err)
+	require.DeepEqual(t, expectedLegacyBuildersRoot[:], legacyRoots[types.Builders.RealPosition()])
 
 	reset = features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
 	defer reset()
@@ -127,6 +143,10 @@ func TestComputeFieldRootsWithHasher_ProgressiveSSZGate_PendingDepositsAndGloasW
 	require.NoError(t, err)
 	require.DeepEqual(t, expectedProgressiveBuilderPendingWithdrawalsRoot[:], progressiveRoots[types.BuilderPendingWithdrawals.RealPosition()])
 	require.DeepNotSSZEqual(t, legacyRoots[types.BuilderPendingWithdrawals.RealPosition()], progressiveRoots[types.BuilderPendingWithdrawals.RealPosition()])
+	expectedProgressiveBuildersRoot, err := stateutil.BuildersRootProgressive(st.builders)
+	require.NoError(t, err)
+	require.DeepEqual(t, expectedProgressiveBuildersRoot[:], progressiveRoots[types.Builders.RealPosition()])
+	require.DeepNotSSZEqual(t, legacyRoots[types.Builders.RealPosition()], progressiveRoots[types.Builders.RealPosition()])
 }
 
 func TestHashTreeRoot_ProgressiveSSZGate(t *testing.T) {
@@ -282,7 +302,14 @@ func newGloasStateForProgressiveSSZTests(t *testing.T) *BeaconState {
 			BlobKzgCommitments:    [][]byte{make([]byte, fieldparams.BLSPubkeyLength)},
 			ExecutionRequestsRoot: make([]byte, fieldparams.RootLength),
 		},
-		Builders:                     make([]*ethpb.Builder, 0),
+		Builders: []*ethpb.Builder{{
+			Pubkey:            pubkey1,
+			Version:           []byte{1},
+			ExecutionAddress:  make([]byte, fieldparams.FeeRecipientLength),
+			Balance:           11,
+			DepositEpoch:      12,
+			WithdrawableEpoch: 13,
+		}},
 		ExecutionPayloadAvailability: make([]byte, 1024),
 		BuilderPendingPayments:       builderPendingPayments,
 		BuilderPendingWithdrawals:    builderPendingWithdrawals,
