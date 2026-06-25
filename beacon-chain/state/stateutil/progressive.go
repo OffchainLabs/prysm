@@ -11,9 +11,20 @@ import (
 // ProgressiveTree caches the balanced subtrees and connecting spine of a
 // progressive Merkle tree. It supports updating an existing leaf without
 // rebuilding unrelated subtrees.
+//
+//		                    root
+//		                     /\
+//	                        /  \
+//	subtree1(1): chunks[0:1]   /\
+//	                          /  \
+//	  subtree2(4): chunks[1:5]   /\
+//	                            /  \
+//	  subtree3(16): chunks[5:21]   /\
+//	                              /  \
+//	   subtree4(64): chunks[21:85]    0
 type ProgressiveTree struct {
-	subtreeLayers [][][][32]byte
-	spine         [][32]byte
+	subtreeLayers [][][][32]byte // subtreeLayers[i] is the merkle tree stored at subtree i. [subtree][layers][index]
+	spine         [][32]byte     // the nodes between root and 0. corresponding to the root of each subtree.
 }
 
 // MerkleizeProgressive builds a progressive Merkle tree from 32-byte leaves.
@@ -149,7 +160,7 @@ func merkleizeProgressiveSubtree(leaves [][32]byte) [][][32]byte {
 }
 
 func progressiveSubtreeCapacity(level int) int {
-	return 1 << (2 * level)
+	return 1 << (2 * level) // equivalent to 4^level
 }
 
 func progressiveSubtreeStart(level int) int {
@@ -170,6 +181,7 @@ func progressiveNumLevels(numLeaves int) int {
 	return levels
 }
 
+// returns the subtree index and the local index for a leaf index in the progressive tree.
 func progressiveSubtreeForIndex(globalIndex int) (int, int) {
 	if globalIndex < 0 {
 		return -1, -1
