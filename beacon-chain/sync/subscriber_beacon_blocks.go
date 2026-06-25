@@ -140,56 +140,79 @@ func (s *Service) processBlobSidecarsFromExecution(ctx context.Context, block in
 	if s.cfg.blobStorage == nil {
 		return
 	}
-	summary := s.cfg.blobStorage.Summary(blockRoot)
 	cmts, err := block.Block().Body().BlobKzgCommitments()
 	if err != nil {
 		log.WithError(err).Error("Failed to read commitments from block")
 		return
 	}
+	summary := s.cfg.blobStorage.Summary(blockRoot)
 	for i := range cmts {
 		if summary.HasIndex(uint64(i)) {
 			blobExistedInDBTotal.Inc()
 		}
 	}
 
-	// Reconstruct blob sidecars from the EL
-	blobSidecars, err := s.cfg.executionReconstructor.ReconstructBlobSidecars(ctx, block, blockRoot, summary.HasIndex)
-	if err != nil {
-		log.WithError(err).Error("Failed to reconstruct blob sidecars")
+	const delay = 250 * time.Millisecond
+	const maxIterations = uint64(120) // ~30s safety cap; should never be reached with reasonable context deadlines.
+	for iteration := range maxIterations {
+		if ctx.Err() != nil {
+			if !errors.Is(ctx.Err(), context.Canceled) {
+				log.WithError(ctx.Err()).Error("Failed to reconstruct blob sidecars")
+			}
+			return
+		}
+
+		// Re-fetch summary inside loop (blobs may arrive via gossip between retries).
+		summary = s.cfg.blobStorage.Summary(blockRoot)
+		blobSidecars, err := s.cfg.executionReconstructor.ReconstructBlobSidecars(ctx, block, blockRoot, summary.HasIndex)
+		if err != nil {
+			log.WithError(err).WithFields(logrus.Fields{
+				"root":      fmt.Sprintf("%#x", blockRoot),
+				"slot":      block.Block().Slot(),
+				"iteration": iteration,
+			}).Debug("Failed to reconstruct blob sidecars, retrying")
+			time.Sleep(delay)
+			continue
+		}
+		if len(blobSidecars) == 0 {
+			// Unlike data columns, blobs are all-or-nothing from GetBlobs.
+			// A zero-length response means the EL blob pool lacks the data;
+			// retrying the same call is unlikely to help.
+			return
+		}
+
+		// Refresh indices as new blobs may have been added to the db.
+		summary = s.cfg.blobStorage.Summary(blockRoot)
+
+		// Broadcast blob sidecars first then save them to the db.
+		for _, sidecar := range blobSidecars {
+			// Don't broadcast the blob if it has appeared on disk.
+			if summary.HasIndex(sidecar.Index) {
+				continue
+			}
+			if err := s.cfg.p2p.BroadcastBlob(ctx, sidecar.Index, sidecar.BlobSidecar); err != nil {
+				log.WithFields(blobFields(sidecar.ROBlob)).WithError(err).Error("Failed to broadcast blob sidecar")
+			}
+		}
+
+		for _, sidecar := range blobSidecars {
+			if summary.HasIndex(sidecar.Index) {
+				continue
+			}
+			if err := s.subscribeBlob(ctx, sidecar); err != nil {
+				log.WithFields(blobFields(sidecar.ROBlob)).WithError(err).Error("Failed to receive blob")
+				continue
+			}
+
+			blobRecoveredFromELTotal.Inc()
+			fields := blobFields(sidecar.ROBlob)
+			fields["sinceSlotStartTime"] = s.cfg.clock.Now().Sub(startTime)
+			log.WithFields(fields).Debug("Processed blob sidecar from EL")
+		}
+
 		return
 	}
-	if len(blobSidecars) == 0 {
-		return
-	}
-
-	// Refresh indices as new blobs may have been added to the db
-	summary = s.cfg.blobStorage.Summary(blockRoot)
-
-	// Broadcast blob sidecars first than save them to the db
-	for _, sidecar := range blobSidecars {
-		// Don't broadcast the blob if it has appeared on disk.
-		if summary.HasIndex(sidecar.Index) {
-			continue
-		}
-		if err := s.cfg.p2p.BroadcastBlob(ctx, sidecar.Index, sidecar.BlobSidecar); err != nil {
-			log.WithFields(blobFields(sidecar.ROBlob)).WithError(err).Error("Failed to broadcast blob sidecar")
-		}
-	}
-
-	for _, sidecar := range blobSidecars {
-		if summary.HasIndex(sidecar.Index) {
-			continue
-		}
-		if err := s.subscribeBlob(ctx, sidecar); err != nil {
-			log.WithFields(blobFields(sidecar.ROBlob)).WithError(err).Error("Failed to receive blob")
-			continue
-		}
-
-		blobRecoveredFromELTotal.Inc()
-		fields := blobFields(sidecar.ROBlob)
-		fields["sinceSlotStartTime"] = s.cfg.clock.Now().Sub(startTime)
-		log.WithFields(fields).Debug("Processed blob sidecar from EL")
-	}
+	log.Errorf("Failed to reconstruct blob sidecars after %d attempts", maxIterations)
 }
 
 // processDataColumnSidecarsFromExecution retrieves (if available) data column sidecars data from the execution client,
