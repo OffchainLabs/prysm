@@ -14,13 +14,26 @@ import (
 
 // ProcessBuilderDepositRequests applies each builder deposit request in order.
 func ProcessBuilderDepositRequests(ctx context.Context, st state.BeaconState, requests []*enginev1.BuilderDepositRequest) error {
-	invalid, err := helpers.BatchVerifyBuilderDepositRequestSignatures(ctx, requests)
+	// Topups to an existing builder skip signature verification per spec, so only batch-verify
+	// deposits that would register a new builder.
+	newDeposits := make([]*enginev1.BuilderDepositRequest, 0, len(requests))
+	newIdx := make([]int, 0, len(requests))
+	for i, request := range requests {
+		if request == nil {
+			continue
+		}
+		if _, isBuilder := st.BuilderIndexByPubkey(bytesutil.ToBytes48(request.Pubkey)); !isBuilder {
+			newDeposits = append(newDeposits, request)
+			newIdx = append(newIdx, i)
+		}
+	}
+	invalid, err := helpers.BatchVerifyBuilderDepositRequestSignatures(ctx, newDeposits)
 	if err != nil {
 		return err
 	}
 	badSig := make([]bool, len(requests))
-	for _, i := range invalid {
-		badSig[i] = true
+	for _, j := range invalid {
+		badSig[newIdx[j]] = true
 	}
 	for i, request := range requests {
 		if err := processBuilderDepositRequest(st, request, !badSig[i]); err != nil {
