@@ -93,10 +93,6 @@ func (b *BeaconState) proofByFieldIndex(ctx context.Context, f types.FieldIndex)
 	if err := b.recomputeDirtyFields(ctx); err != nil {
 		return nil, err
 	}
-	// Proof generation still uses the legacy balanced container tree. If it
-	// consumed dirty fields, force the progressive cache to rebuild before it
-	// is used again.
-	b.progressiveMerkleTree = nil
 	return trie.ProofFromMerkleLayers(b.merkleLayers, f.RealPosition()), nil
 }
 

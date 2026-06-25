@@ -91,7 +91,6 @@ type BeaconState struct {
 	rebuildTrie           map[types.FieldIndex]bool
 	valMapHandler         *stateutil.ValidatorMapHandler
 	merkleLayers          [][][]byte
-	progressiveMerkleTree *stateutil.ProgressiveTree
 	sharedFieldReferences map[types.FieldIndex]*stateutil.Reference
 }
 
