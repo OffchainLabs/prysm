@@ -12,7 +12,15 @@ go_library(
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/build/gen",
     visibility = ["//visibility:private"],
-    deps = ["@com_github_bazelbuild_buildtools//build:go_default_library"],
+    deps = [
+        "@com_github_bazelbuild_buildtools//build:go_default_library",
+        "@com_github_bufbuild_protocompile//:go_default_library",
+        "@com_github_bufbuild_protocompile//protoutil:go_default_library",
+        "@org_golang_google_protobuf//proto:go_default_library",
+        "@org_golang_google_protobuf//reflect/protoreflect:go_default_library",
+        "@org_golang_google_protobuf//types/descriptorpb:go_default_library",
+        "@org_golang_google_protobuf//types/pluginpb:go_default_library",
+    ],
 )
 
 go_binary(
