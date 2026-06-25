@@ -556,7 +556,8 @@ func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot p
 func (s *Store) SaveBlock(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock) error {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveBlock")
 	defer span.End()
-	blockRoot, err := signed.Block().HashTreeRoot()
+
+	blockRoot, err := blocks.BlockRoot(signed)
 	if err != nil {
 		return err
 	}
@@ -589,11 +590,17 @@ func (s *Store) SaveBlocks(ctx context.Context, blks []interfaces.ReadOnlySigned
 
 	robs := make([]blocks.ROBlock, len(blks))
 	for i := range blks {
-		rb, err := blocks.NewROBlock(blks[i])
-		if err != nil {
-			return errors.Wrapf(err, "failed to make an ROBlock for a block in SaveBlocks")
+		// Try to reuse existing ROBlock to avoid HTR recomputation.
+		if rob, ok := blks[i].(blocks.ROBlock); ok {
+			robs[i] = rob
+		} else {
+			// Fallback: compute root (maintains backward compatibility).
+			var err error
+			robs[i], err = blocks.NewROBlock(blks[i])
+			if err != nil {
+				return errors.Wrapf(err, "failed to make an ROBlock for a block in SaveBlocks")
+			}
 		}
-		robs[i] = rb
 	}
 	return s.SaveROBlocks(ctx, robs, true)
 }
