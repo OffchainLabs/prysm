@@ -708,6 +708,104 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 	})
 }
 
+// TestPayloadAttributesReader_ParentBlockNumber verifies beacon-APIs #621: the
+// parent_block_number field is present in the payload_attributes event pre-gloas and
+// omitted from gloas onwards.
+func TestPayloadAttributesReader_ParentBlockNumber(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1 // keep deneb at epoch 0 so both forks are reachable.
+	params.OverrideBeaconConfig(cfg)
+
+	cases := []struct {
+		name        string
+		getState    func() state.BeaconState
+		getBlock    func() interfaces.SignedBeaconBlock
+		wantPresent bool
+	}{
+		{
+			name: "deneb includes parent_block_number",
+			getState: func() state.BeaconState {
+				st, err := util.NewBeaconStateDeneb()
+				require.NoError(t, err)
+				return st
+			},
+			getBlock: func() interfaces.SignedBeaconBlock {
+				b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockDeneb(&eth.SignedBeaconBlockDeneb{}))
+				require.NoError(t, err)
+				return b
+			},
+			wantPresent: true,
+		},
+		{
+			name: "gloas omits parent_block_number",
+			getState: func() state.BeaconState {
+				st, err := util.NewBeaconStateGloas()
+				require.NoError(t, err)
+				return st
+			},
+			getBlock: func() interfaces.SignedBeaconBlock {
+				b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockGloas(&eth.SignedBeaconBlockGloas{}))
+				require.NoError(t, err)
+				return b
+			},
+			wantPresent: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			st := tc.getState()
+			v := &eth.Validator{ExitEpoch: math.MaxUint64, EffectiveBalance: params.BeaconConfig().MinActivationBalance, WithdrawalCredentials: make([]byte, 32)}
+			require.NoError(t, st.SetValidators([]*eth.Validator{v}))
+			require.NoError(t, st.SetBalances([]uint64{0}))
+			currentSlot := primitives.Slot(0)
+			require.NoError(t, st.SetSlot(currentSlot+1)) // avoid slot processing.
+			genesis := time.Now()
+			require.NoError(t, st.SetGenesisTime(genesis))
+			b := tc.getBlock()
+			headRoot, err := b.Block().HashTreeRoot()
+			require.NoError(t, err)
+			stategen := mock.NewService()
+			stategen.AddStateForRoot(st, headRoot)
+			mockChainService := &mockChain.ChainService{Root: make([]byte, 32), State: st, Slot: &currentSlot, Genesis: genesis}
+			s := &Server{
+				HeadFetcher:            mockChainService,
+				ChainInfoFetcher:       mockChainService,
+				TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+				EventWriteTimeout:      testEventWriteTimeout,
+				StateGen:               stategen,
+			}
+
+			ev := payloadattribute.EventData{
+				ProposalSlot: currentSlot + 1,
+				HeadBlock:    b,
+				HeadRoot:     headRoot,
+			}
+			lr, err := s.payloadAttributesReader(t.Context(), ev)
+			require.NoError(t, err)
+			out, err := io.ReadAll(lr())
+			require.NoError(t, err)
+
+			_, payload, found := strings.Cut(string(out), "data: ")
+			require.Equal(t, true, found)
+			var got structs.PayloadAttributesEvent
+			require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(payload)), &got))
+			var data structs.PayloadAttributesEventData
+			require.NoError(t, json.Unmarshal(got.Data, &data))
+
+			_, present := keys(t, got.Data)["parent_block_number"]
+			require.Equal(t, tc.wantPresent, present, "parent_block_number presence mismatch")
+		})
+	}
+}
+
+// keys decodes a JSON object into the set of its top-level field names.
+func keys(t *testing.T, raw json.RawMessage) map[string]json.RawMessage {
+	m := make(map[string]json.RawMessage)
+	require.NoError(t, json.Unmarshal(raw, &m))
+	return m
+}
+
 func TestFillEventData(t *testing.T) {
 	ctx := t.Context()
 	t.Run("AlreadyFilledData_ShouldShortCircuitWithoutError", func(t *testing.T) {

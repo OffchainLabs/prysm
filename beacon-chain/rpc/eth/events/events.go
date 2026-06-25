@@ -925,14 +925,18 @@ func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribut
 			d.err = errors.Wrap(err, "errors marshaling payload attributes to json")
 			return
 		}
-		d.data, d.err = json.Marshal(structs.PayloadAttributesEventData{
+		attrData := structs.PayloadAttributesEventData{
 			ProposerIndex:     strconv.FormatUint(uint64(ev.ProposerIndex), 10),
 			ProposalSlot:      strconv.FormatUint(uint64(ev.ProposalSlot), 10),
-			ParentBlockNumber: strconv.FormatUint(ev.ParentBlockNumber, 10),
 			ParentBlockRoot:   hexutil.Encode(ev.HeadRoot[:]),
 			ParentBlockHash:   hexutil.Encode(ev.ParentBlockHash),
 			PayloadAttributes: attributesBytes,
-		})
+		}
+		// parent_block_number was removed from the payload_attributes event from gloas onwards.
+		if ev.HeadBlock.Version() < version.Gloas {
+			attrData.ParentBlockNumber = strconv.FormatUint(ev.ParentBlockNumber, 10)
+		}
+		d.data, d.err = json.Marshal(attrData)
 		if d.err != nil {
 			d.err = errors.Wrap(d.err, "errors marshaling payload attributes event data to json")
 		}
