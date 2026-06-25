@@ -575,9 +575,28 @@ func (v *validator) fetchNextEpochDuties(ctx context.Context, nextEpoch primitiv
 	return att, prop, syncResp, ptc
 }
 
-// RetryMissingNextDuties re-fetches the next epoch when a prior fetch left any
-// type missing, replacing the next-epoch duties wholesale so promotion can
-// resume — without re-pulling the current epoch. No-op when nothing is missing.
+// MaybeRetryMissingNextDuties runs RetryMissingNextDuties in its own goroutine,
+// but only when there is missing next-epoch work and no retry is already in
+// flight — so the current slot's duties aren't blocked and goroutines aren't
+// spawned for nothing. The work is bounded by the slot deadline.
+func (v *validator) MaybeRetryMissingNextDuties(ctx context.Context, slot primitives.Slot) {
+	if !v.duties.needsNextRetry() || !v.retryInFlight.CompareAndSwap(false, true) {
+		return
+	}
+	retryCtx, cancel := context.WithDeadline(ctx, v.SlotDeadline(slot))
+	go func() {
+		defer cancel()
+		defer v.retryInFlight.Store(false)
+		if err := v.RetryMissingNextDuties(retryCtx); err != nil {
+			log.WithError(err).Debug("Could not retry missing next-epoch duties")
+		}
+	}()
+}
+
+// RetryMissingNextDuties re-fetches only the next-epoch duty types a prior fetch
+// left missing and merges them in, so promotion can resume — without re-pulling
+// the current epoch or the types that already succeeded. No-op when nothing is
+// missing.
 func (v *validator) RetryMissingNextDuties(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "validator.RetryMissingNextDuties")
 	defer span.End()
@@ -587,24 +606,134 @@ func (v *validator) RetryMissingNextDuties(ctx context.Context) error {
 	if !snap.isInitialized() || missing == 0 {
 		return nil
 	}
+	// Per-type missing duties are only produced by the split duties path, which is
+	// also the only path that records indices (the combined pre-Gloas path leaves
+	// them empty). So the indices guard alone scopes this to split duties — no fork
+	// check needed.
 	indices := snap.indices()
-	nextEpoch := snap.epoch() + 1
-	// Only the split path (post-Gloas) tracks per-type missing duties.
-	if len(indices) == 0 || nextEpoch < params.BeaconConfig().GloasForkEpoch {
+	if len(indices) == 0 {
 		return nil
 	}
+	nextEpoch := snap.epoch().AddEpoch(1)
 
-	att, prop, sync, ptc := v.fetchNextEpochDuties(ctx, nextEpoch, indices)
-	if att == nil { // attester spine still unavailable; never wipe duties on a transient failure
-		return nil
+	var (
+		next        []*ethpb.ValidatorDuty
+		newMissing  missingNextDuties
+		currDepRoot []byte
+	)
+	if missing&missingNextAttester != 0 {
+		// Attester is the spine of the next-duty set; without it there are no
+		// entries to overlay onto, so re-fetch the whole epoch.
+		att, prop, sync, ptc := v.fetchNextEpochDuties(ctx, nextEpoch, indices)
+		if att == nil { // spine still unavailable; never wipe duties on a transient failure
+			return nil
+		}
+		next = v.assembleDuties(att, prop, sync, ptc)
+		newMissing = missingNextMask(nextEpoch, att, prop, sync, ptc)
+		currDepRoot = att.DependentRoot // refresh: the spine was re-fetched
+	} else {
+		// Spine intact: re-fetch only the still-missing types and overlay them onto
+		// the existing next duties, leaving the attester duties and root untouched.
+		prop, sync, ptc := v.fetchMissingNextDuties(ctx, nextEpoch, indices, missing)
+		existing := make([]*ethpb.ValidatorDuty, 0, snap.nextDutyCount())
+		for _, d := range snap.nextDuties() {
+			existing = append(existing, d)
+		}
+		next = overlayNextDuties(existing, prop, sync, ptc)
+		newMissing = missing
+		if prop != nil {
+			newMissing &^= missingNextProposer
+		}
+		if sync != nil {
+			newMissing &^= missingNextSync
+		}
+		if ptc != nil {
+			newMissing &^= missingNextPtc
+		}
 	}
-	newMissing := missingNextMask(nextEpoch, att, prop, sync, ptc)
 	if newMissing == missing { // no progress; avoid needless re-subscribe / proof re-sign
 		return nil
 	}
-	next := v.assembleDuties(att, prop, sync, ptc)
-	v.duties.replaceNextDuties(next, newMissing, att.DependentRoot)
+	// Drop the write (and skip re-subscribe) if the store advanced under us — e.g.
+	// an epoch boundary or head-event update landed while this retry was fetching.
+	if !v.duties.replaceNextDuties(snap.revision, next, newMissing, currDepRoot) {
+		return nil
+	}
 	return v.onDutiesUpdated(ctx)
+}
+
+// fetchMissingNextDuties re-fetches only the next-epoch proposer/sync/PTC types
+// flagged in missing (attester is handled separately). A nil return for a type
+// means it wasn't requested or its fetch failed; callers leave those untouched.
+func (v *validator) fetchMissingNextDuties(ctx context.Context, nextEpoch primitives.Epoch, indices []primitives.ValidatorIndex, missing missingNextDuties) (
+	prop *ethpb.ProposerDutiesResponse,
+	syncResp *ethpb.SyncCommitteeDutiesResponse,
+	ptc *ethpb.PTCDutiesResponse,
+) {
+	var propErr, syncErr, ptcErr error
+	var wg sync.WaitGroup
+	if missing&missingNextProposer != 0 {
+		wg.Go(func() { prop, propErr = v.validatorClient.ProposerDuties(ctx, nextEpoch) })
+	}
+	if missing&missingNextSync != 0 {
+		wg.Go(func() { syncResp, syncErr = v.validatorClient.SyncCommitteeDuties(ctx, nextEpoch, indices) })
+	}
+	if missing&missingNextPtc != 0 {
+		wg.Go(func() { ptc, ptcErr = v.validatorClient.PTCDuties(ctx, nextEpoch, indices) })
+	}
+	wg.Wait()
+	for _, e := range []error{propErr, syncErr, ptcErr} {
+		if e != nil {
+			log.WithError(e).Debug("Could not get a missing next epoch duty")
+		}
+	}
+	return prop, syncResp, ptc
+}
+
+// overlayNextDuties clones existing next-epoch duties, overlaying re-fetched
+// proposer/sync/PTC responses; a nil response leaves that field untouched.
+func overlayNextDuties(
+	existing []*ethpb.ValidatorDuty,
+	prop *ethpb.ProposerDutiesResponse,
+	sync *ethpb.SyncCommitteeDutiesResponse,
+	ptc *ethpb.PTCDutiesResponse,
+) []*ethpb.ValidatorDuty {
+	var proposerSlots map[primitives.ValidatorIndex][]primitives.Slot
+	if prop != nil {
+		proposerSlots = make(map[primitives.ValidatorIndex][]primitives.Slot)
+		for _, d := range prop.Duties {
+			proposerSlots[d.ValidatorIndex] = append(proposerSlots[d.ValidatorIndex], d.Slot)
+		}
+	}
+	var ptcSlots map[primitives.ValidatorIndex][]primitives.Slot
+	if ptc != nil {
+		ptcSlots = make(map[primitives.ValidatorIndex][]primitives.Slot)
+		for _, d := range ptc.Duties {
+			ptcSlots[d.ValidatorIndex] = append(ptcSlots[d.ValidatorIndex], d.Slot)
+		}
+	}
+	var syncSet map[primitives.ValidatorIndex]bool
+	if sync != nil {
+		syncSet = make(map[primitives.ValidatorIndex]bool)
+		for _, d := range sync.Duties {
+			syncSet[d.ValidatorIndex] = true
+		}
+	}
+	out := make([]*ethpb.ValidatorDuty, 0, len(existing))
+	for _, d := range existing {
+		nd := cloneValidatorDuty(d)
+		if prop != nil {
+			nd.ProposerSlots = proposerSlots[d.ValidatorIndex]
+		}
+		if sync != nil {
+			nd.IsSyncCommittee = syncSet[d.ValidatorIndex]
+		}
+		if ptc != nil {
+			nd.PtcSlots = ptcSlots[d.ValidatorIndex]
+		}
+		out = append(out, nd)
+	}
+	return out
 }
 
 // onDutiesUpdated kicks off subnet subscriptions for the current duty set.

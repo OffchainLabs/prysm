@@ -66,7 +66,6 @@ type FakeValidator struct {
 	graffiti                          string
 	PublicKey                         string
 	UpdateDutiesRet                   error
-	RetryMissingNextDutiesRet         error
 	RolesAtRet                        []iface.ValidatorRole
 }
 
@@ -153,10 +152,9 @@ func (fv *FakeValidator) UpdateDuties(_ context.Context) error {
 	return fv.UpdateDutiesRet
 }
 
-// RetryMissingNextDuties for mocking.
-func (fv *FakeValidator) RetryMissingNextDuties(_ context.Context) error {
+// MaybeRetryMissingNextDuties for mocking.
+func (fv *FakeValidator) MaybeRetryMissingNextDuties(_ context.Context, _ primitives.Slot) {
 	fv.RetryMissingNextDutiesCalled = true
-	return fv.RetryMissingNextDutiesRet
 }
 
 // UpdateProtections for mocking.

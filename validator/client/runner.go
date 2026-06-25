@@ -120,13 +120,8 @@ func (r *runner) run(ctx context.Context) {
 				}
 				dutiesCancel()
 			} else {
-				// Mid-epoch: retry any failed next-epoch duties (current epoch
-				// untouched). Self-gates: no-op pre-Gloas or when nothing is missing.
-				retryCtx, retryCancel := context.WithDeadline(ctx, deadline)
-				if err := v.RetryMissingNextDuties(retryCtx); err != nil {
-					log.WithError(err).Debug("Could not retry missing next-epoch duties")
-				}
-				retryCancel()
+				// Mid-epoch: retry any failed next-epoch duties
+				v.MaybeRetryMissingNextDuties(ctx, slot)
 			}
 
 			// call push proposer settings often to account for the following edge cases:

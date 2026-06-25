@@ -180,12 +180,16 @@ func (d *dutyStoreData) setFromContainer(container *ethpb.ValidatorDutiesContain
 type dutyStore struct {
 	mu   sync.RWMutex
 	data dutyStoreData
+	// revision bumps on every mutation. snapshot captures it so an async retry can
+	// detect that the store changed under it and drop its now-stale write.
+	revision uint64
 }
 
 // roDutySnapshot is a read-only view of dutyStore. Getters return copies; the
 // duty iterators yield aliases that callers must not mutate.
 type roDutySnapshot struct {
-	d dutyStoreData
+	d        dutyStoreData
+	revision uint64
 }
 
 func (s roDutySnapshot) isInitialized() bool { return s.d.isInitialized() }
@@ -299,13 +303,25 @@ func (ds *dutyStore) snapshot() roDutySnapshot {
 	}
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
-	return roDutySnapshot{d: ds.data}
+	return roDutySnapshot{d: ds.data, revision: ds.revision}
+}
+
+// needsNextRetry reports whether a per-type next-epoch retry has work to do —
+// a cheap check so callers can avoid spawning a retry that would just no-op.
+func (ds *dutyStore) needsNextRetry() bool {
+	if ds == nil {
+		return false
+	}
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	return ds.data.initialized && ds.data.missingNext != 0 && len(ds.data.indices) > 0
 }
 
 func (ds *dutyStore) reset() {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.data.reset()
+	ds.revision++
 }
 
 func (ds *dutyStore) isInitialized() bool {
@@ -403,17 +419,21 @@ func (ds *dutyStore) write(data dutyStoreData) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.data = data
+	ds.revision++
 }
 
 // replaceNextDuties atomically swaps the next-epoch duties and missing mask,
 // leaving current-epoch duties, epoch and indices intact. A non-nil currDepRoot
 // also refreshes the current dependent root (the rebuilt next-epoch attester
-// root); nil keeps the existing one.
-func (ds *dutyStore) replaceNextDuties(next []*ethpb.ValidatorDuty, missing missingNextDuties, currDepRoot []byte) {
+// root); nil keeps the existing one. It applies only if the store hasn't changed
+// since wantRevision (the revision the caller's fetch was based on), so a stale async
+// retry whose epoch/duties advanced underneath it is dropped. Reports whether it
+// applied.
+func (ds *dutyStore) replaceNextDuties(wantRevision uint64, next []*ethpb.ValidatorDuty, missing missingNextDuties, currDepRoot []byte) bool {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
-	if !ds.data.initialized {
-		return
+	if !ds.data.initialized || ds.revision != wantRevision {
+		return false
 	}
 	container := ds.data.toContainer()
 	container.NextEpochDuties = next
@@ -425,4 +445,6 @@ func (ds *dutyStore) replaceNextDuties(next []*ethpb.ValidatorDuty, missing miss
 	ds.data.epoch = epoch
 	ds.data.indices = indices
 	ds.data.missingNext = missing
+	ds.revision++
+	return true
 }

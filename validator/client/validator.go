@@ -92,6 +92,7 @@ type validator struct {
 	submittedAtts                map[submittedAttKey]*submittedAtt
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
+	retryInFlight                atomic.Bool
 	interopKeysConfig            *local.InteropKeymanagerConfig
 	domainDataCache              *ristretto.Cache[string, proto.Message]
 	slotFeed                     *event.Feed
