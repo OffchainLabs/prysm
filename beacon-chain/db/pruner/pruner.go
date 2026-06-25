@@ -169,13 +169,13 @@ func (p *Service) prune(slot primitives.Slot) error {
 
 	earliestAvailableSlot := pruneUpto + 1
 
-	// Update pruning checkpoint.
-	p.prunedUpto = pruneUpto
-
 	// Update the earliest available slot after pruning
 	if err := p.updateEarliestAvailableSlot(earliestAvailableSlot); err != nil {
 		return errors.Wrap(err, "update earliest available slot")
 	}
+
+	// Update pruning checkpoint only after earliest available slot is successfully updated.
+	p.prunedUpto = pruneUpto
 
 	log.WithFields(logrus.Fields{
 		"prunedUpto":            pruneUpto,
