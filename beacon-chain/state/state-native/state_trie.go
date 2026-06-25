@@ -1145,9 +1145,13 @@ func (b *BeaconState) initializeProgressiveMerkleTree(ctx context.Context) error
 		return nil
 	}
 
-	fieldRoots, err := ComputeFieldRootsWithHasher(ctx, b)
-	if err != nil {
-		return err
+	fieldRoots := make([][]byte, params.BeaconConfig().BeaconStateGloasFieldCount)
+	for _, field := range gloasFields {
+		root, err := b.rootSelector(ctx, field)
+		if err != nil {
+			return fmt.Errorf("could not compute progressive field %s: %w", field.String(), err)
+		}
+		fieldRoots[field.RealPosition()] = bytesutil.SafeCopyBytes(root[:])
 	}
 	b.progressiveMerkleTree = stateutil.MerkleizeProgressive(fieldRoots)
 	clear(b.dirtyFields)
@@ -1413,23 +1417,9 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 		}
 		return b.recomputeFieldTrie(field, b.eth1DataVotes)
 	case types.Validators:
-		if progressiveSSZ {
-			// Field-trie indexing is based on legacy list merkleization.
-			// Use full progressive hashing for this field when enabled.
-			b.dirtyIndices[field] = []uint64{}
-			delete(b.rebuildTrie, field)
-			return stateutil.ValidatorRegistryRootProgressive(b.validatorsCompactVal())
-		}
-		return b.validatorsRootSelector(field)
+		return b.validatorsRootSelector(field, progressiveSSZ)
 	case types.Balances:
-		if progressiveSSZ {
-			// Field-trie indexing is based on legacy list merkleization.
-			// Use full progressive hashing for this field when enabled.
-			b.dirtyIndices[field] = []uint64{}
-			delete(b.rebuildTrie, field)
-			return stateutil.Uint64ListRootProgressive(b.balancesVal())
-		}
-		return b.balancesRootSelector(field)
+		return b.balancesRootSelector(field, progressiveSSZ)
 	case types.RandaoMixes:
 		return b.randaoMixesRootSelector(field)
 	case types.Slashings:
@@ -1567,7 +1557,23 @@ func (b *BeaconState) recomputeFieldTrie(index types.FieldIndex, elements any) (
 }
 
 func (b *BeaconState) resetFieldTrie(index types.FieldIndex, elements any, length uint64) error {
-	fTrie, err := fieldtrie.NewFieldTrie(index, fieldMap[index], elements, length, promotionThresholdByField[index])
+	return b.resetFieldTrieWithMode(index, elements, length, fieldtrie.MerkleModeLegacy)
+}
+
+func (b *BeaconState) resetFieldTrieWithMode(
+	index types.FieldIndex,
+	elements any,
+	length uint64,
+	merkleMode fieldtrie.MerkleMode,
+) error {
+	fTrie, err := fieldtrie.NewFieldTrieWithMode(
+		index,
+		fieldMap[index],
+		merkleMode,
+		elements,
+		length,
+		promotionThresholdByField[index],
+	)
 	if err != nil {
 		return err
 	}
@@ -1658,12 +1664,16 @@ func (b *BeaconState) stateRootsRootSelector(field types.FieldIndex) ([32]byte, 
 	})
 }
 
-func (b *BeaconState) validatorsRootSelector(field types.FieldIndex) ([32]byte, error) {
-	if b.rebuildTrie[field] {
-		err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[stateutil.CompactValidator]{
+func (b *BeaconState) validatorsRootSelector(field types.FieldIndex, progressive bool) ([32]byte, error) {
+	merkleMode := fieldtrie.MerkleModeLegacy
+	if progressive {
+		merkleMode = fieldtrie.MerkleModeProgressive
+	}
+	if b.rebuildTrie[field] || b.stateFieldLeaves[field].MerkleMode() != merkleMode {
+		err := b.resetFieldTrieWithMode(field, mvslice.MultiValueSliceComposite[stateutil.CompactValidator]{
 			Identifiable:    b,
 			MultiValueSlice: b.validatorsMultiValue,
-		}, fieldparams.ValidatorRegistryLimit)
+		}, fieldparams.ValidatorRegistryLimit, merkleMode)
 		if err != nil {
 			return [32]byte{}, err
 		}
@@ -1677,12 +1687,16 @@ func (b *BeaconState) validatorsRootSelector(field types.FieldIndex) ([32]byte, 
 	})
 }
 
-func (b *BeaconState) balancesRootSelector(field types.FieldIndex) ([32]byte, error) {
-	if b.rebuildTrie[field] {
-		err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[uint64]{
+func (b *BeaconState) balancesRootSelector(field types.FieldIndex, progressive bool) ([32]byte, error) {
+	merkleMode := fieldtrie.MerkleModeLegacy
+	if progressive {
+		merkleMode = fieldtrie.MerkleModeProgressive
+	}
+	if b.rebuildTrie[field] || b.stateFieldLeaves[field].MerkleMode() != merkleMode {
+		err := b.resetFieldTrieWithMode(field, mvslice.MultiValueSliceComposite[uint64]{
 			Identifiable:    b,
 			MultiValueSlice: b.balancesMultiValue,
-		}, stateutil.ValidatorLimitForBalancesChunks())
+		}, stateutil.ValidatorLimitForBalancesChunks(), merkleMode)
 		if err != nil {
 			return [32]byte{}, err
 		}

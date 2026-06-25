@@ -36,6 +36,21 @@ var (
 // ~2M leaves.
 const defaultPromotionThreshold = 20_000
 
+// MerkleMode identifies the Merkle tree topology used by a field trie.
+type MerkleMode uint8
+
+// Supported field trie Merkle tree topologies.
+//
+// MerkleModeLegacy uses a fixed-depth balanced SSZ tree.
+// MerkleModeProgressive uses progressively sized balanced subtrees joined
+// by a spine.
+//
+// Keep MerkleModeLegacy as the zero value for backwards compatibility.
+const (
+	MerkleModeLegacy MerkleMode = iota
+	MerkleModeProgressive
+)
+
 type (
 	// FieldTrie is the representation of the representative
 	// trie of the particular field.
@@ -48,15 +63,18 @@ type (
 		dataRefCleanup runtime.Cleanup      // cleanup callback for dataRef
 
 		// Owned mode (nil in overlay mode):
-		nodesData *nodesData // data relative to the nodes of the trie
+		nodesData       *nodesData            // legacy tree nodes
+		progressiveData *progressiveNodesData // progressive subtree and spine nodes
 
 		// Overlay mode (nil in owned mode):
-		base          *FieldTrie     // immutable base trie
-		overridesData *overridesData // per-level sparse diffs
+		base                     *FieldTrie                // immutable base trie
+		overridesData            *overridesData            // legacy per-level sparse diffs
+		progressiveOverridesData *progressiveOverridesData // progressive sparse diffs
 
 		// Field metadata:
 		field              types.FieldIndex // which beacon state field this trie represents
 		dataType           types.DataType   // encoding: BasicArray, CompositeArray, or CompressedArray
+		merkleMode         MerkleMode       // balanced legacy or progressive topology
 		length             uint64           // maximum capacity
 		numOfElems         uint64           // current number of elems in the field
 		promotionThreshold int              // resolved promotion threshold
@@ -94,12 +112,28 @@ type (
 // promotionThreshold, when > 0, overrides the defaultPromotionThreshold with an absolute count.
 // When 0, defaultPromotionThreshold is used.
 func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any, length uint64, promotionThreshold int) (*FieldTrie, error) {
+	return NewFieldTrieWithMode(field, fieldInfo, MerkleModeLegacy, elements, length, promotionThreshold)
+}
+
+// NewFieldTrieWithMode creates a field trie using the requested Merkle tree
+// topology.
+func NewFieldTrieWithMode(
+	field types.FieldIndex,
+	fieldInfo types.DataType,
+	merkleMode MerkleMode,
+	elements any,
+	length uint64,
+	promotionThreshold int,
+) (*FieldTrie, error) {
 	if !map[types.DataType]bool{
 		types.BasicArray:      true,
 		types.CompositeArray:  true,
 		types.CompressedArray: true,
 	}[fieldInfo] {
 		return nil, errors.Errorf("unrecognized data type in field map: %v", reflect.TypeFor[types.DataType]().Name())
+	}
+	if merkleMode != MerkleModeLegacy && merkleMode != MerkleModeProgressive {
+		return nil, fmt.Errorf("unrecognized Merkle mode %d", merkleMode)
 	}
 
 	if promotionThreshold <= 0 {
@@ -110,16 +144,12 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 		return nil, fmt.Errorf("validate elements: %w", err)
 	}
 
-	nodes, offsets, err := buildTrie(field, elements, length)
-	if err != nil {
-		return nil, fmt.Errorf("build trie: %w", err)
-	}
-
 	fieldTrie := &FieldTrie{
 		ref:                stateutil.NewRef(1),
 		dataRef:            stateutil.NewRef(0),
 		field:              field,
 		dataType:           fieldInfo,
+		merkleMode:         merkleMode,
 		length:             length,
 		numOfElems:         elemCount(elements),
 		promotionThreshold: promotionThreshold,
@@ -127,6 +157,21 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 
 	runtime.AddCleanup(fieldTrie, cleanupRef, fieldTrie.ref)
 
+	if merkleMode == MerkleModeProgressive {
+		progressiveData, err := buildProgressiveTrie(field, elements)
+		if err != nil {
+			return nil, fmt.Errorf("build progressive trie: %w", err)
+		}
+		if progressiveData != nil {
+			fieldTrie.progressiveData = newProgressiveNodesData(field, progressiveData)
+		}
+		return fieldTrie, nil
+	}
+
+	nodes, offsets, err := buildTrie(field, elements, length)
+	if err != nil {
+		return nil, fmt.Errorf("build trie: %w", err)
+	}
 	if nodes != nil {
 		fieldTrie.nodesData = newNodesData(field, nodes, offsets)
 	}
@@ -145,16 +190,19 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 	f.ref.AddRef()
 
 	copiedTrie := &FieldTrie{
-		ref:                f.ref,
-		dataRef:            f.dataRef,
-		nodesData:          f.nodesData,
-		base:               f.base,
-		overridesData:      f.overridesData,
-		field:              f.field,
-		dataType:           f.dataType,
-		length:             f.length,
-		numOfElems:         f.numOfElems,
-		promotionThreshold: f.promotionThreshold,
+		ref:                      f.ref,
+		dataRef:                  f.dataRef,
+		nodesData:                f.nodesData,
+		progressiveData:          f.progressiveData,
+		base:                     f.base,
+		overridesData:            f.overridesData,
+		progressiveOverridesData: f.progressiveOverridesData,
+		field:                    f.field,
+		dataType:                 f.dataType,
+		merkleMode:               f.merkleMode,
+		length:                   f.length,
+		numOfElems:               f.numOfElems,
+		promotionThreshold:       f.promotionThreshold,
 	}
 
 	if f.base != nil {
@@ -165,6 +213,13 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 	runtime.AddCleanup(copiedTrie, cleanupRef, f.ref)
 
 	return copiedTrie
+}
+
+// MerkleMode returns the tree topology used by this field trie.
+func (f *FieldTrie) MerkleMode() MerkleMode {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.merkleMode
 }
 
 // TrieRoot returns the root of the trie with the appropriate length mixin applied.
@@ -255,6 +310,9 @@ func (f *FieldTrie) trieRoot() ([32]byte, error) {
 	if f.empty() {
 		return [32]byte{}, ErrEmptyFieldTrie
 	}
+	if f.merkleMode == MerkleModeProgressive {
+		return f.progressiveTrieRoot()
+	}
 
 	// Owned mode: Directly read root from nodes.
 	if f.base == nil {
@@ -296,6 +354,7 @@ func (f *FieldTrie) fork() *FieldTrie {
 		dataRef:            stateutil.NewRef(0),
 		field:              f.field,
 		dataType:           f.dataType,
+		merkleMode:         f.merkleMode,
 		length:             f.length,
 		numOfElems:         f.numOfElems,
 		promotionThreshold: f.promotionThreshold,
@@ -313,7 +372,11 @@ func (f *FieldTrie) fork() *FieldTrie {
 		forked.base = f
 
 		forked.dataRefCleanup = runtime.AddCleanup(forked, cleanupRef, f.dataRef)
-		forked.overridesData = newOverridesData(f.field, make([]map[uint64][32]byte, f.depth()+1))
+		if f.merkleMode == MerkleModeProgressive {
+			forked.progressiveOverridesData = newProgressiveOverridesData(f.field)
+		} else {
+			forked.overridesData = newOverridesData(f.field, make([]map[uint64][32]byte, f.depth()+1))
+		}
 
 		return forked
 	}
@@ -322,6 +385,11 @@ func (f *FieldTrie) fork() *FieldTrie {
 	forked.base = f.base
 	f.base.dataRef.AddRef()
 	forked.dataRefCleanup = runtime.AddCleanup(forked, cleanupRef, f.base.dataRef)
+
+	if f.merkleMode == MerkleModeProgressive {
+		forked.progressiveOverridesData = f.progressiveOverridesData.copy(f.field)
+		return forked
+	}
 
 	levels := make([]map[uint64][32]byte, len(f.overridesData.levels))
 	for i, valueByIdx := range f.overridesData.levels {
@@ -340,6 +408,10 @@ func (f *FieldTrie) fork() *FieldTrie {
 
 // recomputeInPlace performs the trie recomputation on the current trie.
 func (f *FieldTrie) recomputeInPlace(indices []uint64, elements any) ([32]byte, error) {
+	if f.merkleMode == MerkleModeProgressive {
+		return f.recomputeProgressiveInPlace(indices, elements)
+	}
+
 	indiceCount := len(indices)
 	promote := f.base != nil && indiceCount > f.promotionThreshold
 	if promote {
@@ -405,6 +477,10 @@ func (f *FieldTrie) recomputeInPlace(indices []uint64, elements any) ([32]byte, 
 
 // rebuild replaces the trie contents by building a fresh trie from elements.
 func (f *FieldTrie) rebuildFromScratch(elements any) ([32]byte, error) {
+	if f.merkleMode == MerkleModeProgressive {
+		return f.rebuildProgressiveFromScratch(elements)
+	}
+
 	nodes, offsets, err := buildTrie(f.field, elements, f.length)
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("build trie: %w", err)
@@ -414,9 +490,11 @@ func (f *FieldTrie) rebuildFromScratch(elements any) ([32]byte, error) {
 
 	f.base = nil
 	f.overridesData = nil
+	f.progressiveOverridesData = nil
 	f.numOfElems = elemCount(elements)
 
 	f.nodesData = nil
+	f.progressiveData = nil
 	if nodes != nil {
 		f.nodesData = newNodesData(f.field, nodes, offsets)
 	}
@@ -448,7 +526,7 @@ func (f *FieldTrie) isShared() bool {
 }
 
 func (f *FieldTrie) empty() bool {
-	return f.nodesData == nil && f.base == nil
+	return f.nodesData == nil && f.progressiveData == nil && f.base == nil
 }
 
 // recomputeBranches recomputes the trie branches for the given changed indices

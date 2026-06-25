@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/fieldtrie"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -41,12 +42,14 @@ func TestRootSelector_ProgressiveSSZGate(t *testing.T) {
 	expectedLegacyValidatorsRoot, err := stateutil.ValidatorRegistryRoot(st.validatorsCompactVal())
 	require.NoError(t, err)
 	require.Equal(t, expectedLegacyValidatorsRoot, legacyValidatorsRoot)
+	require.Equal(t, fieldtrie.MerkleModeLegacy, st.stateFieldLeaves[types.Validators].MerkleMode())
 
 	legacyBalancesRoot, err := st.rootSelector(context.Background(), types.Balances)
 	require.NoError(t, err)
 	expectedLegacyBalancesRoot, err := stateutil.Uint64ListRootWithRegistryLimit(st.balancesVal())
 	require.NoError(t, err)
 	require.Equal(t, expectedLegacyBalancesRoot, legacyBalancesRoot)
+	require.Equal(t, fieldtrie.MerkleModeLegacy, st.stateFieldLeaves[types.Balances].MerkleMode())
 
 	legacyExpectedWithdrawalsRoot, err := st.rootSelector(context.Background(), types.PayloadExpectedWithdrawals)
 	require.NoError(t, err)
@@ -75,6 +78,7 @@ func TestRootSelector_ProgressiveSSZGate(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expectedProgressiveValidatorsRoot, progressiveValidatorsRoot)
 	require.DeepNotSSZEqual(t, legacyValidatorsRoot, progressiveValidatorsRoot)
+	require.Equal(t, fieldtrie.MerkleModeProgressive, st.stateFieldLeaves[types.Validators].MerkleMode())
 
 	progressiveBalancesRoot, err := st.rootSelector(context.Background(), types.Balances)
 	require.NoError(t, err)
@@ -82,6 +86,7 @@ func TestRootSelector_ProgressiveSSZGate(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expectedProgressiveBalancesRoot, progressiveBalancesRoot)
 	require.DeepNotSSZEqual(t, legacyBalancesRoot, progressiveBalancesRoot)
+	require.Equal(t, fieldtrie.MerkleModeProgressive, st.stateFieldLeaves[types.Balances].MerkleMode())
 
 	progressiveExpectedWithdrawalsRoot, err := st.rootSelector(context.Background(), types.PayloadExpectedWithdrawals)
 	require.NoError(t, err)
@@ -205,9 +210,12 @@ func TestHashTreeRoot_ProgressiveSSZIncremental(t *testing.T) {
 	}
 	cachedTree := st.progressiveMerkleTree
 
-	// Validators still require a field-trie rebuild. Updating only the slot
-	// must not touch that unrelated field while recomputing the state root.
-	require.Equal(t, true, st.rebuildTrie[types.Validators])
+	// Initial progressive merkleization warms the progressive field tries.
+	require.Equal(t, false, st.rebuildTrie[types.Validators])
+	require.Equal(t, false, st.rebuildTrie[types.Balances])
+	require.Equal(t, fieldtrie.MerkleModeProgressive, st.stateFieldLeaves[types.Validators].MerkleMode())
+	require.Equal(t, fieldtrie.MerkleModeProgressive, st.stateFieldLeaves[types.Balances].MerkleMode())
+	validatorsTrie := st.stateFieldLeaves[types.Validators]
 	require.NoError(t, st.SetSlot(st.slot+1))
 	require.Equal(t, true, st.dirtyFields[types.Slot])
 
@@ -216,7 +224,7 @@ func TestHashTreeRoot_ProgressiveSSZIncremental(t *testing.T) {
 	require.DeepNotSSZEqual(t, initialRoot, updatedRoot)
 	require.Equal(t, progressiveRootFromScratch(t, st), updatedRoot)
 	require.Equal(t, 0, len(st.dirtyFields))
-	require.Equal(t, true, st.rebuildTrie[types.Validators])
+	require.Equal(t, validatorsTrie, st.stateFieldLeaves[types.Validators])
 	if cachedTree != st.progressiveMerkleTree {
 		t.Fatal("progressive Merkle tree was rebuilt instead of updated in place")
 	}
@@ -229,6 +237,93 @@ func TestHashTreeRoot_ProgressiveSSZIncremental(t *testing.T) {
 	}
 }
 
+func TestHashTreeRoot_ProgressiveSSZFieldTrieUpdates(t *testing.T) {
+	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	defer reset()
+
+	st := newGloasStateForProgressiveSSZTests(t)
+	initialRoot, err := st.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+	validatorsTrie := st.stateFieldLeaves[types.Validators]
+	balancesTrie := st.stateFieldLeaves[types.Balances]
+
+	validator, err := st.ValidatorAtIndex(1)
+	require.NoError(t, err)
+	validator.EffectiveBalance++
+	require.NoError(t, st.UpdateValidatorAtIndex(1, validator))
+	require.NoError(t, st.UpdateBalancesAtIndex(1, st.balancesVal()[1]+1))
+	require.DeepEqual(t, []uint64{1}, st.dirtyIndices[types.Validators])
+	require.DeepEqual(t, []uint64{1}, st.dirtyIndices[types.Balances])
+	require.Equal(t, false, st.rebuildTrie[types.Validators])
+	require.Equal(t, false, st.rebuildTrie[types.Balances])
+
+	updatedRoot, err := st.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+	require.DeepNotSSZEqual(t, initialRoot, updatedRoot)
+	require.Equal(t, progressiveRootFromScratch(t, st), updatedRoot)
+	require.Equal(t, validatorsTrie, st.stateFieldLeaves[types.Validators])
+	require.Equal(t, balancesTrie, st.stateFieldLeaves[types.Balances])
+	require.Equal(t, 0, len(st.dirtyIndices[types.Validators]))
+	require.Equal(t, 0, len(st.dirtyIndices[types.Balances]))
+}
+
+func TestHashTreeRoot_ProgressiveSSZFieldTrieCopyOnWrite(t *testing.T) {
+	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	defer reset()
+
+	st := newGloasStateForProgressiveSSZTests(t)
+	originalRoot, err := st.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+
+	copied, ok := st.Copy().(*BeaconState)
+	require.Equal(t, true, ok)
+	sharedTrie := st.stateFieldLeaves[types.Validators]
+	copiedTrie := copied.stateFieldLeaves[types.Validators]
+	require.Equal(t, uint(2), sharedTrie.RefCount())
+	require.Equal(t, uint(2), copiedTrie.RefCount())
+
+	validator, err := st.ValidatorAtIndex(0)
+	require.NoError(t, err)
+	validator.EffectiveBalance++
+	require.NoError(t, st.UpdateValidatorAtIndex(0, validator))
+	updatedRoot, err := st.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+	require.DeepNotSSZEqual(t, originalRoot, updatedRoot)
+	require.Equal(t, progressiveRootFromScratch(t, st), updatedRoot)
+	if st.stateFieldLeaves[types.Validators] == sharedTrie {
+		t.Fatal("shared progressive field trie was mutated instead of forked")
+	}
+
+	copiedRoot, err := copied.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, originalRoot, copiedRoot)
+}
+
+func TestHashTreeRoot_ProgressiveSSZFieldTrieRebuild(t *testing.T) {
+	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	defer reset()
+
+	st := newGloasStateForProgressiveSSZTests(t)
+	_, err := st.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+
+	validators := st.validatorsVal()
+	validators[0].EffectiveBalance++
+	require.NoError(t, st.SetValidators(validators))
+	balances := st.balancesVal()
+	balances[0]++
+	require.NoError(t, st.SetBalances(balances))
+	require.Equal(t, true, st.rebuildTrie[types.Validators])
+	require.Equal(t, true, st.rebuildTrie[types.Balances])
+
+	root, err := st.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, progressiveRootFromScratch(t, st), root)
+	require.Equal(t, false, st.rebuildTrie[types.Validators])
+	require.Equal(t, false, st.rebuildTrie[types.Balances])
+	require.Equal(t, fieldtrie.MerkleModeProgressive, st.stateFieldLeaves[types.Validators].MerkleMode())
+	require.Equal(t, fieldtrie.MerkleModeProgressive, st.stateFieldLeaves[types.Balances].MerkleMode())
+}
 func TestHashTreeRoot_ProgressiveSSZCopy(t *testing.T) {
 	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
 	defer reset()
