@@ -324,7 +324,6 @@ func TestHashTreeRoot_ProgressiveSSZFieldTrieRebuild(t *testing.T) {
 	require.Equal(t, fieldtrie.MerkleModeProgressive, st.stateFieldLeaves[types.Validators].MerkleMode())
 	require.Equal(t, fieldtrie.MerkleModeProgressive, st.stateFieldLeaves[types.Balances].MerkleMode())
 }
-
 func TestHashTreeRoot_ProgressiveSSZCopy(t *testing.T) {
 	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
 	defer reset()
