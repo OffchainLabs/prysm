@@ -23,6 +23,8 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/sirupsen/logrus"
@@ -179,10 +181,58 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 		return
 	}
 
+	// When broadcasting an attestation for the first slot of an epoch, log the peers (and their
+	// client/user-agent) subscribed to the target subnet. Combined with later knowledge of whether
+	// the attestation was missed, this reveals which peers/clients the attestation was propagated to.
+	if slots.IsEpochStart(att.GetData().Slot) {
+		s.logEpochStartAttestationPeers(att, subnet, attestationToTopic(subnet, forkDigest))
+	}
+
 	if err := s.broadcastObject(ctx, att, attestationToTopic(subnet, forkDigest)); err != nil {
 		log.WithError(err).Error("Failed to broadcast attestation")
 		tracing.AnnotateError(span, err)
 	}
+}
+
+// logEpochStartAttestationPeers logs the peers subscribed to the given attestation subnet topic,
+// along with each peer's client/user-agent. This is the gossipsub fanout pool the attestation is
+// propagated to (the publish reaches up to gossipSubD of these peers). It is intended as a debugging
+// aid: when an epoch-start attestation is later found to have been missed, this log tells us which
+// peers — and which client implementations — were in a position to receive it.
+func (s *Service) logEpochStartAttestationPeers(att ethpb.Att, subnet uint64, topic string) {
+	fullTopic := topic + s.Encoding().ProtocolSuffix()
+	peers := s.pubsub.ListPeers(fullTopic)
+	store := s.host.Peerstore()
+
+	clientCounts := make(map[string]int, len(peers))
+	peerAgents := make([]string, 0, len(peers))
+	for _, pid := range peers {
+		client := agentFromPid(pid, store)
+		clientCounts[client]++
+		peerAgents = append(peerAgents, fmt.Sprintf("%s(%s)", pid.String(), rawAgentVersion(pid, store)))
+	}
+
+	log.WithFields(logrus.Fields{
+		"slot":           att.GetData().Slot,
+		"committeeIndex": att.GetCommitteeIndex(),
+		"subnet":         subnet,
+		"peerCount":      len(peers),
+		"clientCounts":   clientCounts,
+		"peers":          peerAgents,
+	}).Info("Broadcasting epoch-start attestation to subnet peers")
+}
+
+// rawAgentVersion returns the full, unsanitized libp2p AgentVersion string for a peer, or
+// "unknown" if it is unavailable.
+func rawAgentVersion(pid peer.ID, store peerstore.Peerstore) string {
+	rawAgent, err := store.Get(pid, "AgentVersion")
+	if err != nil {
+		return "unknown"
+	}
+	if agent, ok := rawAgent.(string); ok {
+		return agent
+	}
+	return "unknown"
 }
 
 func (s *Service) broadcastSyncCommittee(ctx context.Context, subnet uint64, sMsg *ethpb.SyncCommitteeMessage, forkDigest [fieldparams.VersionLength]byte) {
