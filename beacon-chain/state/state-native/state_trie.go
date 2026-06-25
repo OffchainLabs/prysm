@@ -1084,6 +1084,7 @@ func (b *BeaconState) Copy() state.BeaconState {
 			}
 		}
 	}
+	dst.progressiveMerkleTree = b.progressiveMerkleTree.Copy()
 
 	state.Count.Inc()
 	// Finalizer runs when dst is being destroyed in garbage collection.
@@ -1103,6 +1104,7 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 	if progressiveSSZEnabled(b.version) {
 		return b.progressiveHashTreeRoot(ctx)
 	}
+	b.progressiveMerkleTree = nil
 
 	if err := b.initializeMerkleLayers(ctx); err != nil {
 		return [32]byte{}, err
@@ -1114,26 +1116,60 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 }
 
 func (b *BeaconState) progressiveHashTreeRoot(ctx context.Context) ([32]byte, error) {
-	fieldRoots, err := ComputeFieldRootsWithHasher(ctx, b)
-	if err != nil {
+	if err := b.initializeProgressiveMerkleTree(ctx); err != nil {
+		return [32]byte{}, err
+	}
+	if err := b.recomputeProgressiveDirtyFields(ctx); err != nil {
 		return [32]byte{}, err
 	}
 
-	progressiveFieldRoots := make([][32]byte, len(fieldRoots))
-	for i, fieldRoot := range fieldRoots {
-		progressiveFieldRoots[i] = bytesutil.ToBytes32(fieldRoot)
-	}
-
-	activeFields := make([]bool, len(fieldRoots))
+	activeFields := make([]bool, params.BeaconConfig().BeaconStateGloasFieldCount)
 	for i := range activeFields {
 		activeFields[i] = true
 	}
 
-	root, err := ssz.ContainerRootProgressive(progressiveFieldRoots, activeFields)
+	root, err := ssz.MixInActiveFields(b.progressiveMerkleTree.Root(), activeFields)
 	if err != nil {
-		return [32]byte{}, fmt.Errorf("could not compute progressive container root: %w", err)
+		return [32]byte{}, fmt.Errorf("could not mix in progressive container active fields: %w", err)
 	}
+	b.merkleLayers = nil
 	return root, nil
+}
+
+// initializeProgressiveMerkleTree computes all field roots once and caches the
+// progressive container tree. Subsequent roots update only dirty fields.
+//
+// WARNING: Caller must acquire the mutex before using.
+func (b *BeaconState) initializeProgressiveMerkleTree(ctx context.Context) error {
+	if b.progressiveMerkleTree != nil {
+		return nil
+	}
+
+	fieldRoots, err := ComputeFieldRootsWithHasher(ctx, b)
+	if err != nil {
+		return err
+	}
+	b.progressiveMerkleTree = stateutil.MerkleizeProgressive(fieldRoots)
+	clear(b.dirtyFields)
+	return nil
+}
+
+// recomputeProgressiveDirtyFields updates dirty field roots in the cached
+// progressive container tree.
+//
+// WARNING: Caller must acquire the mutex before using.
+func (b *BeaconState) recomputeProgressiveDirtyFields(ctx context.Context) error {
+	for field := range b.dirtyFields {
+		root, err := b.rootSelector(ctx, field)
+		if err != nil {
+			return err
+		}
+		if err := b.progressiveMerkleTree.RecomputeRoot(field.RealPosition(), root); err != nil {
+			return fmt.Errorf("could not recompute progressive field %s: %w", field.String(), err)
+		}
+		delete(b.dirtyFields, field)
+	}
+	return nil
 }
 
 // Initializes the Merkle layers for the beacon state if they are empty.
