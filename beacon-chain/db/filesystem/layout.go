@@ -105,6 +105,8 @@ func warmCache(l fsLayout, cache *blobStorageSummaryCache) error {
 	if err != nil {
 		return errors.Wrap(errCacheWarmFailed, err.Error())
 	}
+	count := 0
+	lastLog := time.Now()
 	for ident, err := iter.next(); !errors.Is(err, io.EOF); ident, err = iter.next() {
 		if errors.Is(err, errIdentFailure) {
 			idf := &identificationError{}
@@ -118,6 +120,11 @@ func warmCache(l fsLayout, cache *blobStorageSummaryCache) error {
 		}
 		if err := cache.ensure(ident); err != nil {
 			return fmt.Errorf("%w: failed to write cache entry for %s: %w", errCacheWarmFailed, l.sszPath(ident), err)
+		}
+		count++
+		if time.Since(lastLog) > 30*time.Second {
+			log.WithField("entries", count).Info("Blob filesystem cache warm-up in progress")
+			lastLog = time.Now()
 		}
 	}
 	return nil
