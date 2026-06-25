@@ -37,6 +37,7 @@ type FakeValidator struct {
 	ProposeBlockCalled                bool
 	UpdateProtectionsCalled           bool
 	UpdateDutiesCalled                bool
+	RetryMissingNextDutiesCalled      bool
 	WaitForWalletInitializationCalled bool
 	NextSlotCalled                    bool
 	WaitForActivationCalled           int
@@ -65,6 +66,7 @@ type FakeValidator struct {
 	graffiti                          string
 	PublicKey                         string
 	UpdateDutiesRet                   error
+	RetryMissingNextDutiesRet         error
 	RolesAtRet                        []iface.ValidatorRole
 }
 
@@ -149,6 +151,12 @@ func (fv *FakeValidator) NextSlot() <-chan primitives.Slot {
 func (fv *FakeValidator) UpdateDuties(_ context.Context) error {
 	fv.UpdateDutiesCalled = true
 	return fv.UpdateDutiesRet
+}
+
+// RetryMissingNextDuties for mocking.
+func (fv *FakeValidator) RetryMissingNextDuties(_ context.Context) error {
+	fv.RetryMissingNextDutiesCalled = true
+	return fv.RetryMissingNextDutiesRet
 }
 
 // UpdateProtections for mocking.

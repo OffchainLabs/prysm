@@ -258,6 +258,24 @@ func (s roDutySnapshot) nextDuties() iter.Seq2[pubkey, *ethpb.ValidatorDuty] {
 	}
 }
 
+func (s roDutySnapshot) missingNext() missingNextDuties {
+	if !s.d.initialized {
+		return 0
+	}
+	return s.d.missingNext
+}
+
+func (s roDutySnapshot) epoch() primitives.Epoch {
+	return s.d.epoch
+}
+
+func (s roDutySnapshot) indices() []primitives.ValidatorIndex {
+	if !s.d.initialized {
+		return nil
+	}
+	return slices.Clone(s.d.indices)
+}
+
 func (s roDutySnapshot) currentDutyCount() int {
 	if !s.d.initialized {
 		return 0
@@ -385,4 +403,26 @@ func (ds *dutyStore) write(data dutyStoreData) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.data = data
+}
+
+// replaceNextDuties atomically swaps the next-epoch duties and missing mask,
+// leaving current-epoch duties, epoch and indices intact. A non-nil currDepRoot
+// also refreshes the current dependent root (the rebuilt next-epoch attester
+// root); nil keeps the existing one.
+func (ds *dutyStore) replaceNextDuties(next []*ethpb.ValidatorDuty, missing missingNextDuties, currDepRoot []byte) {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	if !ds.data.initialized {
+		return
+	}
+	container := ds.data.toContainer()
+	container.NextEpochDuties = next
+	if currDepRoot != nil {
+		container.CurrDependentRoot = currDepRoot
+	}
+	epoch, indices := ds.data.epoch, ds.data.indices
+	ds.data.setFromContainer(container)
+	ds.data.epoch = epoch
+	ds.data.indices = indices
+	ds.data.missingNext = missing
 }
