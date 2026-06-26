@@ -243,7 +243,7 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 }
 
 // getSSZQueryProof retrieves Merkle proof for a given SSZInfo object and query path
-func getSSZQueryProof(info *query.SszInfo, path query.Path) (*ssz.Proof, error) {
+func getSSZQueryProof(info *query.SszInfo, path query.Path) (*query.Proof, error) {
 	gi, err := query.GetGeneralizedIndexFromPath(info, path)
 	if err != nil {
 		return nil, fmt.Errorf("get generalized index: %w", err)
