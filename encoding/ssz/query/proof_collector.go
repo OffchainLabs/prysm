@@ -18,7 +18,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ssz "github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/math"
-	fastssz "github.com/prysmaticlabs/fastssz"
 )
 
 // proofCollector collects sibling hashes and leaves needed for Merkle proofs.
@@ -81,13 +80,13 @@ func (pc *proofCollector) addTarget(gindex uint64) {
 	}
 }
 
-// toProof converts the collected siblings and leaves into a fastssz.Proof structure.
+// toProof converts the collected siblings and leaves into a Proof structure.
 // Current behavior expects a single target leaf (single proof).
-func (pc *proofCollector) toProof() (*fastssz.Proof, error) {
+func (pc *proofCollector) toProof() (*Proof, error) {
 	pc.Lock()
 	defer pc.Unlock()
 
-	proof := &fastssz.Proof{}
+	proof := &Proof{}
 	if len(pc.leaves) == 0 {
 		return nil, errors.New("no leaves collected: add target leaves before merkleization")
 	}
@@ -100,11 +99,7 @@ func (pc *proofCollector) toProof() (*fastssz.Proof, error) {
 
 	// single proof resides in leafGindices[0]
 	targetGindex := leafGindices[0]
-	proofIndex, err := math.Int(targetGindex)
-	if err != nil {
-		return nil, fmt.Errorf("gindex %d overflows int: %w", targetGindex, err)
-	}
-	proof.Index = proofIndex
+	proof.Index = targetGindex
 
 	// store the leaf
 	leaf := pc.leaves[targetGindex]

@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/query"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	sszquerypb "github.com/OffchainLabs/prysm/v7/proto/ssz_query"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -26,7 +27,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 func TestQueryBeaconState(t *testing.T) {
@@ -463,14 +463,13 @@ func TestQueryBeaconBlock(t *testing.T) {
 			// Verify root matches block root
 			require.DeepEqual(t, blockRoot[:], response.Root)
 
-			// Verify the merkle proof using VerifyProof
-			merkleProof := &ssz.Proof{
-				Index:  int(response.Proof.Gindex),
+			// Verify the merkle proof
+			merkleProof := &query.Proof{
+				Index:  response.Proof.Gindex,
 				Leaf:   response.Proof.Leaf,
 				Hashes: response.Proof.Proofs,
 			}
-			isValid, err := ssz.VerifyProof(response.Root, merkleProof)
-			require.NoError(t, err)
+			isValid := merkleProof.Verify(blockRoot[:])
 			require.Equal(t, true, isValid, "merkle proof verification failed")
 		})
 	}
