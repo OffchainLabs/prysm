@@ -276,3 +276,11 @@ func TestEmptyExecutionRequestsHashTreeRoot(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, want, got)
 }
+
+func TestEmptyExecutionRequestsGloasHashTreeRoot(t *testing.T) {
+	want, err := (&enginev1.ExecutionRequestsGloas{}).HashTreeRoot()
+	require.NoError(t, err)
+	got, err := enginev1.EmptyExecutionRequestsGloasHashTreeRoot()
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+}
