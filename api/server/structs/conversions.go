@@ -1531,15 +1531,15 @@ func PendingConsolidationsFromConsensus(cs []*eth.PendingConsolidation) []*Pendi
 	return consolidations
 }
 
-func HeadEventFromV1(event *ethv1.EventHead) *HeadEvent {
+func HeadEventFromData(data *statefeed.HeadData) *HeadEvent {
 	return &HeadEvent{
-		Slot:                      fmt.Sprintf("%d", event.Slot),
-		Block:                     hexutil.Encode(event.Block),
-		State:                     hexutil.Encode(event.State),
-		EpochTransition:           event.EpochTransition,
-		ExecutionOptimistic:       event.ExecutionOptimistic,
-		PreviousDutyDependentRoot: hexutil.Encode(event.PreviousDutyDependentRoot),
-		CurrentDutyDependentRoot:  hexutil.Encode(event.CurrentDutyDependentRoot),
+		Slot:                      fmt.Sprintf("%d", data.Slot),
+		Block:                     hexutil.Encode(data.Block[:]),
+		State:                     hexutil.Encode(data.State[:]),
+		EpochTransition:           data.EpochTransition,
+		PreviousDutyDependentRoot: hexutil.Encode(data.PreviousDutyDependentRoot[:]),
+		CurrentDutyDependentRoot:  hexutil.Encode(data.CurrentDutyDependentRoot[:]),
+		ExecutionOptimistic:       data.ExecutionOptimistic,
 	}
 }
 
