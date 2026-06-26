@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -496,25 +495,6 @@ func IsEligibleForActivationUsingROVal(state state.ReadOnlyCheckpoint, validator
 func isEligibleForActivation(activationEligibilityEpoch, activationEpoch, finalizedEpoch primitives.Epoch) bool {
 	return activationEligibilityEpoch <= finalizedEpoch &&
 		activationEpoch == params.BeaconConfig().FarFutureEpoch
-}
-
-// LastActivatedValidatorIndex provides the last activated validator given a state
-func LastActivatedValidatorIndex(ctx context.Context, st state.ReadOnlyBeaconState) (primitives.ValidatorIndex, error) {
-	_, span := trace.StartSpan(ctx, "helpers.LastActivatedValidatorIndex")
-	defer span.End()
-	var lastActivatedvalidatorIndex primitives.ValidatorIndex
-	// linear search because status are not sorted
-	for j := st.NumValidators() - 1; j >= 0; j-- {
-		val, err := st.ValidatorAtIndexReadOnly(primitives.ValidatorIndex(j))
-		if err != nil {
-			return 0, err
-		}
-		if IsActiveValidatorUsingTrie(val, time.CurrentEpoch(st)) {
-			lastActivatedvalidatorIndex = primitives.ValidatorIndex(j)
-			break
-		}
-	}
-	return lastActivatedvalidatorIndex, nil
 }
 
 // IsFullyWithdrawableValidator returns whether the validator is able to perform a full

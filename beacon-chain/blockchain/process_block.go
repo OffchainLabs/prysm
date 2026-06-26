@@ -149,7 +149,7 @@ func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBloc
 		if err != nil {
 			return nil, false, errors.Wrap(err, "could not get block pre state")
 		}
-		return blockPreState, false, nil
+		return blockPreState, false, nil // Returning false here is fine since there are no envelopes pre-Gloas
 	}
 	parentRoot := b.Block().ParentRoot()
 	full, err := consensusblocks.BlockBuiltOnEnvelope(envelopes[0], b)
@@ -398,6 +398,7 @@ func (s *Service) notifyEngineAndSaveData(
 					return nil, false, err
 				}
 			}
+			args.HasPayload = true
 		} else {
 			idx, ok := envMap[root]
 			if ok {
@@ -412,8 +413,10 @@ func (s *Service) notifyEngineAndSaveData(
 				args.HasPayload = true
 			}
 		}
-		if err := s.areSidecarsAvailable(ctx, avs, b); err != nil {
-			return nil, false, errors.Wrapf(err, "could not validate sidecar availability for block %#x at slot %d", b.Root(), b.Block().Slot())
+		if args.HasPayload {
+			if err := s.areSidecarsAvailable(ctx, avs, b); err != nil {
+				return nil, false, errors.Wrapf(err, "could not validate sidecar availability for block %#x at slot %d", b.Root(), b.Block().Slot())
+			}
 		}
 
 		pendingNodes[i] = args
@@ -461,7 +464,10 @@ func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.Availability
 		if len(kzgCommitments) == 0 {
 			return nil
 		}
-		if err := s.areDataColumnsAvailable(ctx, roBlock.Root(), slot); err != nil {
+		// Bound the wait so unavailable columns error and retry instead of stalling import.
+		daCtx, cancel := context.WithTimeout(ctx, time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second)
+		defer cancel()
+		if err := s.areDataColumnsAvailable(daCtx, roBlock.Root(), slot); err != nil {
 			return errors.Wrapf(err, "are data columns available for block %#x with slot %d", roBlock.Root(), slot)
 		}
 
@@ -945,6 +951,30 @@ func (s *Service) isDataAvailable(
 	}
 
 	return nil
+}
+
+// dataColumnsAvailableNow reports whether enough data columns for root are already stored, without blocking.
+func (s *Service) dataColumnsAvailableNow(ctx context.Context, root [fieldparams.RootLength]byte, slot primitives.Slot) (bool, error) {
+	if !params.WithinDAPeriod(slots.ToEpoch(slot), slots.ToEpoch(s.CurrentSlot())) {
+		return true, nil
+	}
+	custodyGroupCount, err := s.cfg.P2P.CustodyGroupCount(ctx)
+	if err != nil {
+		return false, errors.Wrap(err, "custody group count")
+	}
+	samplingSize := max(params.BeaconConfig().SamplesPerSlot, custodyGroupCount)
+	peerInfo, _, err := peerdas.Info(s.cfg.P2P.NodeID(), samplingSize)
+	if err != nil {
+		return false, errors.Wrap(err, "peer info")
+	}
+	if s.dataColumnStorage.Summary(root).Count() >= peerdas.MinimumColumnCountToReconstruct() {
+		return true, nil
+	}
+	missing, err := missingDataColumnIndices(s.dataColumnStorage, root, peerInfo.CustodyColumns)
+	if err != nil {
+		return false, errors.Wrap(err, "missing data columns")
+	}
+	return len(missing) == 0, nil
 }
 
 // areDataColumnsAvailable blocks until all data columns committed to in the block are available,

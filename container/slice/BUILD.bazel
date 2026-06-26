@@ -18,6 +18,5 @@ go_test(
     deps = [
         ":go_default_library",
         "//consensus-types/primitives:go_default_library",
-        "//testing/require:go_default_library",
     ],
 )

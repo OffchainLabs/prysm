@@ -183,7 +183,7 @@ func testSignedEnvelope(t *testing.T, blockRoot [32]byte, slot primitives.Slot, 
 				Transactions:  [][]byte{},
 				Withdrawals:   []*enginev1.Withdrawal{},
 			},
-			ExecutionRequests:     &enginev1.ExecutionRequests{},
+			ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 			BuilderIndex:          0,
 			BeaconBlockRoot:       blockRoot[:],
 			ParentBeaconBlockRoot: make([]byte, 32),
@@ -269,7 +269,7 @@ func TestNotifyNewEnvelope_Valid(t *testing.T) {
 		BeaconBlockRoot:       blockRoot[:],
 		ParentBeaconBlockRoot: make([]byte, 32),
 		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:]},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
@@ -297,7 +297,7 @@ func TestNotifyNewEnvelope_Syncing(t *testing.T) {
 		BeaconBlockRoot:       blockRoot[:],
 		ParentBeaconBlockRoot: make([]byte, 32),
 		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:]},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
@@ -325,7 +325,7 @@ func TestNotifyNewEnvelope_Invalid(t *testing.T) {
 		BeaconBlockRoot:       blockRoot[:],
 		ParentBeaconBlockRoot: make([]byte, 32),
 		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:]},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
@@ -396,7 +396,7 @@ func TestFcuFromReorgData_CachesPayloadID(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, false, attr.IsEmpty())
 
-	s.fcuFromReorgData(headRoot, headHash, false, attr, proposingSlot)
+	s.fcuFromReorgData(nil, headRoot, headHash, false, attr, proposingSlot)
 
 	require.LogsDoNotContain(t, logHook, "Could not update forkchoice with engine")
 	cachedPid, has := s.cfg.PayloadIDCache.PayloadID(proposingSlot, headRoot, false)
@@ -413,7 +413,7 @@ func TestFcuFromReorgData_NilPayloadID_NoCache(t *testing.T) {
 	proposingSlot := primitives.Slot(2)
 	attr := payloadattribute.EmptyWithVersion(version.Gloas)
 
-	s.fcuFromReorgData(headRoot, headHash, false, attr, proposingSlot)
+	s.fcuFromReorgData(nil, headRoot, headHash, false, attr, proposingSlot)
 
 	_, has := s.cfg.PayloadIDCache.PayloadID(proposingSlot, headRoot, false)
 	require.Equal(t, false, has)
@@ -431,7 +431,7 @@ func TestFcuFromReorgData_EngineError(t *testing.T) {
 	proposingSlot := primitives.Slot(2)
 	attr := payloadattribute.EmptyWithVersion(version.Gloas)
 
-	s.fcuFromReorgData(headRoot, headHash, false, attr, proposingSlot)
+	s.fcuFromReorgData(nil, headRoot, headHash, false, attr, proposingSlot)
 
 	require.LogsContain(t, logHook, "Could not update forkchoice with engine")
 	_, has := s.cfg.PayloadIDCache.PayloadID(proposingSlot, headRoot, false)
@@ -471,7 +471,7 @@ func TestValidateExecutionOnEnvelope_Valid(t *testing.T) {
 		BeaconBlockRoot:       blockRoot[:],
 		ParentBeaconBlockRoot: make([]byte, 32),
 		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:], ParentHash: make([]byte, 32)},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)

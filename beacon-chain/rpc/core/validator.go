@@ -896,7 +896,7 @@ func (s *Service) ValidatorActiveSetChanges(
 			activatedKeys = append(activatedKeys, publicKey[:])
 		}
 
-		maxWithdrawableEpoch := primitives.MaxEpoch(validator.WithdrawableEpoch(), requestedEpoch+slashingsVector)
+		maxWithdrawableEpoch := max(validator.WithdrawableEpoch(), requestedEpoch+slashingsVector)
 
 		if validator.Slashed() && validator.WithdrawableEpoch() == maxWithdrawableEpoch {
 			publicKey := validator.PublicKey()

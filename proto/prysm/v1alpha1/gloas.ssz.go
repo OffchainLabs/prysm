@@ -1106,7 +1106,7 @@ func (b *BeaconBlockBodyGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) 
 	// Offset (12) 'ParentExecutionRequests'
 	dst = ssz.WriteOffset(dst, offset)
 	if b.ParentExecutionRequests == nil {
-		b.ParentExecutionRequests = new(v1.ExecutionRequests)
+		b.ParentExecutionRequests = new(v1.ExecutionRequestsGloas)
 	}
 	offset += b.ParentExecutionRequests.SizeSSZ()
 
@@ -1451,7 +1451,7 @@ func (b *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 	{
 		buf = tail[o12:]
 		if b.ParentExecutionRequests == nil {
-			b.ParentExecutionRequests = new(v1.ExecutionRequests)
+			b.ParentExecutionRequests = new(v1.ExecutionRequestsGloas)
 		}
 		if err = b.ParentExecutionRequests.UnmarshalSSZ(buf); err != nil {
 			return err
@@ -1499,7 +1499,7 @@ func (b *BeaconBlockBodyGloas) SizeSSZ() (size int) {
 
 	// Field (12) 'ParentExecutionRequests'
 	if b.ParentExecutionRequests == nil {
-		b.ParentExecutionRequests = new(v1.ExecutionRequests)
+		b.ParentExecutionRequests = new(v1.ExecutionRequestsGloas)
 	}
 	size += b.ParentExecutionRequests.SizeSSZ()
 
@@ -1782,7 +1782,7 @@ func (b *BeaconStateGloas) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the BeaconStateGloas object to a target array
 func (b *BeaconStateGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(3134333)
+	offset := int(3134845)
 
 	// Field (0) 'GenesisTime'
 	dst = ssz.MarshalUint(dst, b.GenesisTime)
@@ -2210,7 +2210,7 @@ func (b *BeaconStateGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 3134333 {
+	if size < 3134845 {
 		return ssz.ErrSize
 	}
 
@@ -2268,7 +2268,7 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	if o7 != 3134333 {
+	if o7 != 3134845 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
@@ -2450,23 +2450,23 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 		if b.BuilderPendingPayments[ii] == nil {
 			b.BuilderPendingPayments[ii] = new(BuilderPendingPayment)
 		}
-		if err = b.BuilderPendingPayments[ii].UnmarshalSSZ(buf[2738289:2741105][ii*44 : (ii+1)*44]); err != nil {
+		if err = b.BuilderPendingPayments[ii].UnmarshalSSZ(buf[2738289:2741617][ii*52 : (ii+1)*52]); err != nil {
 			return err
 		}
 	}
 
 	// Offset (42) 'BuilderPendingWithdrawals'
-	if o42 = ssz.ReadOffset(buf[2741105:2741109]); o42 > size || o38 > o42 {
+	if o42 = ssz.ReadOffset(buf[2741617:2741621]); o42 > size || o38 > o42 {
 		return ssz.ErrOffset
 	}
 
 	// Offset (43) 'LatestExecutionPayloadBid'
-	if o43 = ssz.ReadOffset(buf[2741109:2741113]); o43 > size || o42 > o43 {
+	if o43 = ssz.ReadOffset(buf[2741621:2741625]); o43 > size || o42 > o43 {
 		return ssz.ErrOffset
 	}
 
 	// Offset (44) 'PayloadExpectedWithdrawals'
-	if o44 = ssz.ReadOffset(buf[2741113:2741117]); o44 > size || o43 > o44 {
+	if o44 = ssz.ReadOffset(buf[2741625:2741629]); o44 > size || o43 > o44 {
 		return ssz.ErrOffset
 	}
 
@@ -2476,7 +2476,7 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 		if b.PtcWindow[ii] == nil {
 			b.PtcWindow[ii] = new(PTCs)
 		}
-		if err = b.PtcWindow[ii].UnmarshalSSZ(buf[2741117:3134333][ii*4096 : (ii+1)*4096]); err != nil {
+		if err = b.PtcWindow[ii].UnmarshalSSZ(buf[2741629:3134845][ii*4096 : (ii+1)*4096]); err != nil {
 			return err
 		}
 	}
@@ -2724,7 +2724,7 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 
 // SizeSSZ returns the ssz encoded size in bytes for the BeaconStateGloas object
 func (b *BeaconStateGloas) SizeSSZ() (size int) {
-	size = 3134333
+	size = 3134845
 
 	// Field (7) 'HistoricalRoots'
 	size += len(b.HistoricalRoots) * 32
@@ -3764,6 +3764,9 @@ func (b *BuilderPendingPayment) MarshalSSZTo(buf []byte) (dst []byte, err error)
 		return
 	}
 
+	// Field (2) 'ProposerIndex'
+	dst = ssz.MarshalUint(dst, b.ProposerIndex)
+
 	return
 }
 
@@ -3771,7 +3774,7 @@ func (b *BuilderPendingPayment) MarshalSSZTo(buf []byte) (dst []byte, err error)
 func (b *BuilderPendingPayment) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size != 44 {
+	if size != 52 {
 		return ssz.ErrSize
 	}
 
@@ -3786,12 +3789,15 @@ func (b *BuilderPendingPayment) UnmarshalSSZ(buf []byte) error {
 		return err
 	}
 
+	// Field (2) 'ProposerIndex'
+	b.ProposerIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[44:52])
+
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the BuilderPendingPayment object
 func (b *BuilderPendingPayment) SizeSSZ() (size int) {
-	size = 44
+	size = 52
 	return
 }
 
@@ -3811,6 +3817,9 @@ func (b *BuilderPendingPayment) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	if err = b.Withdrawal.HashTreeRootWith(hh); err != nil {
 		return
 	}
+
+	// Field (2) 'ProposerIndex'
+	ssz.PutUint(hh, b.ProposerIndex)
 
 	hh.Merkleize(indx)
 	return
@@ -4124,7 +4133,7 @@ func (e *ExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err err
 	// Offset (1) 'ExecutionRequests'
 	dst = ssz.WriteOffset(dst, offset)
 	if e.ExecutionRequests == nil {
-		e.ExecutionRequests = new(v1.ExecutionRequests)
+		e.ExecutionRequests = new(v1.ExecutionRequestsGloas)
 	}
 	offset += e.ExecutionRequests.SizeSSZ()
 
@@ -4213,7 +4222,7 @@ func (e *ExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 	{
 		buf = tail[o1:]
 		if e.ExecutionRequests == nil {
-			e.ExecutionRequests = new(v1.ExecutionRequests)
+			e.ExecutionRequests = new(v1.ExecutionRequestsGloas)
 		}
 		if err = e.ExecutionRequests.UnmarshalSSZ(buf); err != nil {
 			return err
@@ -4234,7 +4243,7 @@ func (e *ExecutionPayloadEnvelope) SizeSSZ() (size int) {
 
 	// Field (1) 'ExecutionRequests'
 	if e.ExecutionRequests == nil {
-		e.ExecutionRequests = new(v1.ExecutionRequests)
+		e.ExecutionRequests = new(v1.ExecutionRequestsGloas)
 	}
 	size += e.ExecutionRequests.SizeSSZ()
 
@@ -4410,7 +4419,7 @@ func (b *BlindedExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, 
 	// Offset (1) 'ExecutionRequests'
 	dst = ssz.WriteOffset(dst, offset)
 	if b.ExecutionRequests == nil {
-		b.ExecutionRequests = new(v1.ExecutionRequests)
+		b.ExecutionRequests = new(v1.ExecutionRequestsGloas)
 	}
 	offset += b.ExecutionRequests.SizeSSZ()
 
@@ -4503,7 +4512,7 @@ func (b *BlindedExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 	{
 		buf = tail[o1:]
 		if b.ExecutionRequests == nil {
-			b.ExecutionRequests = new(v1.ExecutionRequests)
+			b.ExecutionRequests = new(v1.ExecutionRequestsGloas)
 		}
 		if err = b.ExecutionRequests.UnmarshalSSZ(buf); err != nil {
 			return err
@@ -4518,7 +4527,7 @@ func (b *BlindedExecutionPayloadEnvelope) SizeSSZ() (size int) {
 
 	// Field (1) 'ExecutionRequests'
 	if b.ExecutionRequests == nil {
-		b.ExecutionRequests = new(v1.ExecutionRequests)
+		b.ExecutionRequests = new(v1.ExecutionRequestsGloas)
 	}
 	size += b.ExecutionRequests.SizeSSZ()
 
@@ -4706,7 +4715,7 @@ func (w *WireBlindedExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []by
 	// Offset (1) 'ExecutionRequests'
 	dst = ssz.WriteOffset(dst, offset)
 	if w.ExecutionRequests == nil {
-		w.ExecutionRequests = new(v1.ExecutionRequests)
+		w.ExecutionRequests = new(v1.ExecutionRequestsGloas)
 	}
 	offset += w.ExecutionRequests.SizeSSZ()
 
@@ -4780,7 +4789,7 @@ func (w *WireBlindedExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 	{
 		buf = tail[o1:]
 		if w.ExecutionRequests == nil {
-			w.ExecutionRequests = new(v1.ExecutionRequests)
+			w.ExecutionRequests = new(v1.ExecutionRequestsGloas)
 		}
 		if err = w.ExecutionRequests.UnmarshalSSZ(buf); err != nil {
 			return err
@@ -4795,7 +4804,7 @@ func (w *WireBlindedExecutionPayloadEnvelope) SizeSSZ() (size int) {
 
 	// Field (1) 'ExecutionRequests'
 	if w.ExecutionRequests == nil {
-		w.ExecutionRequests = new(v1.ExecutionRequests)
+		w.ExecutionRequests = new(v1.ExecutionRequestsGloas)
 	}
 	size += w.ExecutionRequests.SizeSSZ()
 

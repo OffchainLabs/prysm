@@ -2,7 +2,6 @@ package slice
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -107,19 +106,6 @@ func SetUint64(a []uint64) []uint64 {
 	return cleanedIndices
 }
 
-// IsUint64Sorted verifies if a uint64 slice is sorted in ascending order.
-func IsUint64Sorted(a []uint64) bool {
-	if len(a) == 0 || len(a) == 1 {
-		return true
-	}
-	for i := 1; i < len(a); i++ {
-		if a[i-1] > a[i] {
-			return false
-		}
-	}
-	return true
-}
-
 // NotUint64 returns the uint64 in slice b that are
 // not in slice a with time complexity of approximately
 // O(n) leveraging a map to check for element existence
@@ -137,11 +123,6 @@ func NotUint64(a, b []uint64) []uint64 {
 		}
 	}
 	return set
-}
-
-// IsInUint64 returns true if a is in b and False otherwise.
-func IsInUint64(a uint64, b []uint64) bool {
-	return slices.Contains(b, a)
 }
 
 // IntersectionInt64 of any number of int64 slices with time
@@ -218,11 +199,6 @@ func NotInt64(a, b []int64) []int64 {
 		}
 	}
 	return set
-}
-
-// IsInInt64 returns true if a is in b and False otherwise.
-func IsInInt64(a int64, b []int64) bool {
-	return slices.Contains(b, a)
 }
 
 // UnionByteSlices returns the all elements between sets of byte slices.
@@ -345,38 +321,6 @@ func NotSlot(a, b []primitives.Slot) []primitives.Slot {
 		}
 	}
 	return set
-}
-
-// IsInSlots returns true if a is in b and False otherwise.
-func IsInSlots(a primitives.Slot, b []primitives.Slot) bool {
-	return slices.Contains(b, a)
-}
-
-// Unique returns an array with duplicates filtered based on the type given
-func Unique[T comparable](a []T) []T {
-	if len(a) <= 1 {
-		return a
-	}
-	found := map[T]bool{}
-	result := make([]T, len(a))
-	end := 0
-	for i := range a {
-		if !found[a[i]] {
-			found[a[i]] = true
-			result[end] = a[i]
-			end += 1
-		}
-	}
-	return result[:end]
-}
-
-// Reverse reverses any slice in place
-// Taken from https://github.com/faiface/generics/blob/8cf65f0b43803410724d8c671cb4d328543ba07d/examples/sliceutils/sliceutils.go
-func Reverse[E any](s []E) []E {
-	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
-		s[i], s[j] = s[j], s[i]
-	}
-	return s
 }
 
 // VerifyMaxLength takes a slice and a maximum length and validates the length.

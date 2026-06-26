@@ -524,7 +524,7 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 			return pubsub.ValidationReject
 		}
 		// Ignore any messages received before chainstart.
-		if s.chainStarted.IsNotSet() {
+		if !s.chainStarted.Load() {
 			messageIgnoredValidationCounter.WithLabelValues(topic).Inc()
 			return pubsub.ValidationIgnore
 		}

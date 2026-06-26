@@ -2,10 +2,10 @@ package sync
 
 import (
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	db "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -56,7 +56,7 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 			clock:         startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 		lcStore:      lcStore,
 		subHandler:   newSubTopicHandler(),
 		rateLimiter:  newRateLimiter(p1),
@@ -174,7 +174,7 @@ func TestRPC_LightClientOptimisticUpdate(t *testing.T) {
 			clock:         startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 		lcStore:      lcStore,
 		subHandler:   newSubTopicHandler(),
 		rateLimiter:  newRateLimiter(p1),
@@ -291,7 +291,7 @@ func TestRPC_LightClientFinalityUpdate(t *testing.T) {
 			clock:         startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 		lcStore:      lcStore,
 		subHandler:   newSubTopicHandler(),
 		rateLimiter:  newRateLimiter(p1),
@@ -414,7 +414,7 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 			clock:         startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 		lcStore:      lcStore,
 		subHandler:   newSubTopicHandler(),
 		rateLimiter:  newRateLimiter(p1),

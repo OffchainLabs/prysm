@@ -27,7 +27,7 @@ func testEnvelopeProto() *eth.ExecutionPayloadEnvelope {
 			BlockHash:     fillByteSlice(common.HashLength, 0x22),
 			SlotNumber:    42,
 		},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 		BuilderIndex:          7,
 		BeaconBlockRoot:       fillByteSlice(32, 0x33),
 		ParentBeaconBlockRoot: fillByteSlice(32, 0x44),
@@ -52,13 +52,13 @@ func TestExecutionPayloadEnvelopeFromConsensus_NilRequests(t *testing.T) {
 	env.ExecutionRequests = nil
 	result, err := ExecutionPayloadEnvelopeFromConsensus(env)
 	require.NoError(t, err)
-	require.Equal(t, (*ExecutionRequests)(nil), result.ExecutionRequests)
+	require.Equal(t, (*ExecutionRequestsGloas)(nil), result.ExecutionRequests)
 }
 
 func testWireBlindedProto() *eth.WireBlindedExecutionPayloadEnvelope {
 	return &eth.WireBlindedExecutionPayloadEnvelope{
 		PayloadRoot:           fillByteSlice(32, 0x55),
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 		BuilderIndex:          7,
 		BeaconBlockRoot:       fillByteSlice(32, 0x33),
 		ParentBeaconBlockRoot: fillByteSlice(32, 0x44),
@@ -81,7 +81,7 @@ func TestWireBlindedHTRMatchesFull(t *testing.T) {
 			Withdrawals:   []*enginev1.Withdrawal{},
 			SlotNumber:    primitives.Slot(100),
 		},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 		BuilderIndex:          primitives.BuilderIndex(42),
 		BeaconBlockRoot:       fillByteSlice(32, 0x09),
 		ParentBeaconBlockRoot: fillByteSlice(32, 0x0a),
