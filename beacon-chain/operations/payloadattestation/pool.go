@@ -92,6 +92,7 @@ func (p *Pool) InsertPayloadAttestation(msg *ethpb.PayloadAttestationMessage, id
 	if !ok {
 		p.pending[key] = messageToPayloadAttestation(msg, idx)
 		payloadAttestationPoolSize.Set(float64(len(p.pending)))
+		observeInsertedPayloadAttestation(msg.Data)
 		return nil
 	}
 
@@ -106,6 +107,7 @@ func (p *Pool) InsertPayloadAttestation(msg *ethpb.PayloadAttestationMessage, id
 	existing.Signature = sig
 	existing.AggregationBits.SetBitAt(idx, true)
 	payloadAttestationPoolSize.Set(float64(len(p.pending)))
+	observeInsertedPayloadAttestation(msg.Data)
 	return nil
 }
 
