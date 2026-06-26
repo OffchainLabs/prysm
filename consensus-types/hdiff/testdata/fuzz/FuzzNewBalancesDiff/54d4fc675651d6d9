@@ -1,0 +1,3 @@
+go test fuzz v1
+byte('\x00')
+[]byte("2\x9c\x9c\x9c282a\x9c\x9c\x9c\x9c\x9c\x9cB71")
