@@ -66,7 +66,7 @@ func evalStringList(e build.Expr, env map[string]build.Expr) ([]string, error) {
 		for _, item := range v.List {
 			sub, err := evalStringList(item, env)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("list item: %w", err)
 			}
 
 			out = append(out, sub...)
@@ -87,12 +87,12 @@ func evalStringList(e build.Expr, env map[string]build.Expr) ([]string, error) {
 
 		left, err := evalStringList(v.X, env)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("left side of +: %w", err)
 		}
 
 		right, err := evalStringList(v.Y, env)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("right side of +: %w", err)
 		}
 
 		return append(left, right...), nil
@@ -112,12 +112,12 @@ func loadSSZDicts() (mainnet, minimal map[string]string, err error) {
 
 	mainnet, err = stringDict(env, "mainnet")
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("string dict: %w", err)
 	}
 
 	minimal, err = stringDict(env, "minimal")
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("string dict: %w", err)
 	}
 
 	return mainnet, minimal, nil
@@ -158,7 +158,7 @@ func buildBazelFiles() ([]string, error) {
 	var paths []string
 	err := filepath.WalkDir("proto", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			return fmt.Errorf("walk dir: %w", err)
 		}
 
 		if !d.IsDir() && d.Name() == "BUILD.bazel" {
@@ -182,14 +182,14 @@ func buildBazelFiles() ([]string, error) {
 func loadProtoPkgs() (map[string]string, error) {
 	files, err := buildBazelFiles()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("build bazel files: %w", err)
 	}
 
 	pkgs := make(map[string]string)
 	for _, path := range files {
 		f, err := parseBazel(path)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("parse bazel: %w", err)
 		}
 
 		rules := f.Rules("go_proto_library")
@@ -233,14 +233,14 @@ func compilerMode(r *build.Rule) string {
 func loadSSZTargets() ([]sszTarget, error) {
 	files, err := buildBazelFiles()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("build bazel files: %w", err)
 	}
 
 	var targets []sszTarget
 	for _, path := range files {
 		f, err := parseBazel(path)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("parse bazel: %w", err)
 		}
 
 		rules := f.Rules("ssz_gen_marshal")
@@ -272,17 +272,17 @@ func sszTargetFromRule(r *build.Rule, env map[string]build.Expr, pkg string) (ss
 
 	objs, err := attrStringList(r, env, "objs")
 	if err != nil {
-		return sszTarget{}, err
+		return sszTarget{}, fmt.Errorf("objs: %w", err)
 	}
 
 	exclude, err := attrStringList(r, env, "exclude_objs")
 	if err != nil {
-		return sszTarget{}, err
+		return sszTarget{}, fmt.Errorf("exclude_objs: %w", err)
 	}
 
 	includes, err := attrStringList(r, env, "includes")
 	if err != nil {
-		return sszTarget{}, err
+		return sszTarget{}, fmt.Errorf("includes: %w", err)
 	}
 
 	libInc, protoInc := splitIncludes(includes)
@@ -319,9 +319,10 @@ func splitIncludes(labels []string) (libInc, protoInc []string) {
 
 		if strings.HasPrefix(path, "proto/") {
 			protoInc = append(protoInc, path)
-		} else {
-			libInc = append(libInc, path)
+			continue
 		}
+
+		libInc = append(libInc, path)
 	}
 
 	return libInc, protoInc
