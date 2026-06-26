@@ -90,6 +90,22 @@ jobs:
         env:
            CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
 
+  gofix:
+    runs-on: ubuntu-4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '>=1.26'
+          go-version-file: go.mod
+      - name: Check for modernization opportunities
+        run: |
+          if [ -n "$(go fix -diff ./...)" ]; then
+            echo "Modernization fixes available. Run 'go fix ./...' locally."
+            go fix -diff ./...
+            exit 1
+          fi
+
 # Tests run via Bazel for now...
 #      - name: Test
 #        run: go test -v ./...
