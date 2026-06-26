@@ -191,102 +191,78 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 }
 
 func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull, eagerPayloadStateRoot bool) (*ethpb.GenericBeaconBlock, error) {
-	if sBlk.Version() >= version.Gloas && parentFull {
-		if err := vs.applyParentExecutionPayloadToHead(ctx, head, sBlk.Block().ParentRoot()); err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not apply parent execution payload: %v", err)
+	if sBlk.Version() >= version.Gloas {
+		return vs.buildBlockGloas(ctx, sBlk, head, skipMevBoost, parentFull, eagerPayloadStateRoot)
+	}
+	return vs.buildBlockFulu(ctx, sBlk, head, skipMevBoost, builderBoostFactor, parentFull)
+}
+
+// setPreGloasConsensusFields fills the consensus body fields introduced before Gloas, shared by both build paths.
+func (vs *Server) setPreGloasConsensusFields(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState) {
+	eth1Data, err := vs.eth1DataMajorityVote(ctx, head)
+	if err != nil {
+		eth1Data = &ethpb.Eth1Data{DepositRoot: params.BeaconConfig().ZeroHash[:], BlockHash: params.BeaconConfig().ZeroHash[:]}
+		log.WithError(err).Error("Could not get eth1data")
+	}
+	sBlk.SetEth1Data(eth1Data)
+
+	deposits, atts, err := vs.packDepositsAndAttestations(ctx, head, sBlk.Block().Slot(), eth1Data) // TODO: split attestations and deposits
+	if err != nil {
+		sBlk.SetDeposits([]*ethpb.Deposit{})
+		if err := sBlk.SetAttestations([]ethpb.Att{}); err != nil {
+			log.WithError(err).Error("Could not set attestations on block")
+		}
+		log.WithError(err).Error("Could not pack deposits and attestations")
+	} else {
+		sBlk.SetDeposits(deposits)
+		if err := sBlk.SetAttestations(atts); err != nil {
+			log.WithError(err).Error("Could not set attestations on block")
 		}
 	}
 
-	// Build consensus fields in background
+	validProposerSlashings, validAttSlashings := vs.getSlashings(ctx, head)
+	sBlk.SetProposerSlashings(validProposerSlashings)
+	if err := sBlk.SetAttesterSlashings(validAttSlashings); err != nil {
+		log.WithError(err).Error("Could not set attester slashings on block")
+	}
+
+	sBlk.SetVoluntaryExits(vs.getExits(head, sBlk.Block().Slot()))
+	vs.setSyncAggregate(ctx, sBlk, head) // no-op pre-Altair
+	vs.setBlsToExecData(sBlk, head)      // no-op pre-Capella
+}
+
+// buildBlockFulu builds a pre-Gloas block (phase0 through Fulu), whose body embeds the
+// execution payload itself or a blinded builder header.
+func (vs *Server) buildBlockFulu(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull bool) (*ethpb.GenericBeaconBlock, error) {
 	var wg sync.WaitGroup
-	wg.Go(func() {
-		// Set eth1 data.
-		eth1Data, err := vs.eth1DataMajorityVote(ctx, head)
-		if err != nil {
-			eth1Data = &ethpb.Eth1Data{DepositRoot: params.BeaconConfig().ZeroHash[:], BlockHash: params.BeaconConfig().ZeroHash[:]}
-			log.WithError(err).Error("Could not get eth1data")
-		}
-		sBlk.SetEth1Data(eth1Data)
-
-		// Set deposit and attestation.
-		deposits, atts, err := vs.packDepositsAndAttestations(ctx, head, sBlk.Block().Slot(), eth1Data) // TODO: split attestations and deposits
-		if err != nil {
-			sBlk.SetDeposits([]*ethpb.Deposit{})
-			if err := sBlk.SetAttestations([]ethpb.Att{}); err != nil {
-				log.WithError(err).Error("Could not set attestations on block")
-			}
-			log.WithError(err).Error("Could not pack deposits and attestations")
-		} else {
-			sBlk.SetDeposits(deposits)
-			if err := sBlk.SetAttestations(atts); err != nil {
-				log.WithError(err).Error("Could not set attestations on block")
-			}
-		}
-
-		// Set slashings.
-		validProposerSlashings, validAttSlashings := vs.getSlashings(ctx, head)
-		sBlk.SetProposerSlashings(validProposerSlashings)
-		if err := sBlk.SetAttesterSlashings(validAttSlashings); err != nil {
-			log.WithError(err).Error("Could not set attester slashings on block")
-		}
-
-		// Set exits.
-		sBlk.SetVoluntaryExits(vs.getExits(head, sBlk.Block().Slot()))
-
-		// Set sync aggregate. New in Altair.
-		vs.setSyncAggregate(ctx, sBlk, head)
-
-		// Set bls to execution change. New in Capella.
-		vs.setBlsToExecData(sBlk, head)
-
-		// Set payload attestations. New in Gloas.
-		if sBlk.Version() >= version.Gloas {
-			if err := sBlk.SetPayloadAttestations(vs.getPayloadAttestations(ctx, head, sBlk.Block().ParentRoot())); err != nil {
-				log.WithError(err).Error("Could not set payload attestations")
-			}
-			if err := vs.setParentExecutionRequests(ctx, sBlk, head, parentFull); err != nil {
-				log.WithError(err).Error("Could not set parent execution requests")
-			}
-		}
-	})
+	wg.Go(func() { vs.setPreGloasConsensusFields(ctx, sBlk, head) })
 
 	winningBid := primitives.ZeroWei()
-	selfBuildEnvelope := true
 	var bundle enginev1.BlobsBundler
-	var local *blocks.GetPayloadResponse
 	if sBlk.Version() >= version.Bellatrix {
-		var err error
-		local, err = vs.getLocalPayload(ctx, sBlk.Block(), head, parentFull)
+		local, err := vs.getLocalPayload(ctx, sBlk.Block(), head, parentFull)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not get local payload: %v", err)
 		}
 
-		if sBlk.Version() < version.Gloas {
-			// There's no reason to try to get a builder bid if local override is true.
-			var builderBid builderapi.Bid
-			if !(local.OverrideBuilder || skipMevBoost) {
-				latestHeader, err := head.LatestExecutionPayloadHeader()
-				if err != nil {
-					return nil, status.Errorf(codes.Internal, "Could not get latest execution payload header: %v", err)
-				}
-				parentGasLimit := latestHeader.GasLimit()
-				builderBid, err = vs.getBuilderPayloadAndBlobs(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex(), parentGasLimit)
-				if err != nil {
-					builderGetPayloadMissCount.Inc()
-					log.WithError(err).Error("Could not get builder payload")
-				}
+		// There's no reason to try to get a builder bid if local override is true.
+		var builderBid builderapi.Bid
+		if !(local.OverrideBuilder || skipMevBoost) {
+			latestHeader, err := head.LatestExecutionPayloadHeader()
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "Could not get latest execution payload header: %v", err)
 			}
+			parentGasLimit := latestHeader.GasLimit()
+			builderBid, err = vs.getBuilderPayloadAndBlobs(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex(), parentGasLimit)
+			if err != nil {
+				builderGetPayloadMissCount.Inc()
+				log.WithError(err).Error("Could not get builder payload")
+			}
+		}
 
-			winningBid, bundle, err = setExecutionData(ctx, sBlk, local, builderBid, builderBoostFactor)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "Could not set execution data: %v", err)
-			}
-		} else {
-			selfBuildOnly := local.OverrideBuilder || skipMevBoost
-			selfBuildEnvelope, err = vs.setExecutionPayloadBid(ctx, sBlk, local, selfBuildOnly)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "Could not set execution data for Gloas: %v", err)
-			}
+		winningBid, bundle, err = setExecutionData(ctx, sBlk, local, builderBid, builderBoostFactor)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not set execution data: %v", err)
 		}
 	}
 
@@ -298,35 +274,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	}
 	sBlk.SetStateRoot(sr)
 
-	// For Gloas self-build, cache the execution payload envelope now that the block is fully built.
-	var envelope *ethpb.ExecutionPayloadEnvelope
-	if sBlk.Version() >= version.Gloas && selfBuildEnvelope {
-		envelope, err = vs.storeExecutionPayloadEnvelope(sBlk, local)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not build execution payload envelope: %v", err)
-		}
-	}
-
-	blk, err := vs.constructGenericBeaconBlock(sBlk, bundle, winningBid)
-	if err != nil {
-		return nil, err
-	}
-
-	// Eager (stateless) self-build: bundle envelope + blobs inline; stateful publishes from the cache.
-	if eagerPayloadStateRoot && envelope != nil {
-		var blobs, kzgProofs [][]byte
-		if local.BlobsBundler != nil {
-			blobs = local.BlobsBundler.GetBlobs()
-			kzgProofs = local.BlobsBundler.GetProofs()
-		}
-		blk.Block = &ethpb.GenericBeaconBlock_GloasContents{GloasContents: &ethpb.BeaconBlockContentsGloas{
-			Block:                    blk.GetGloas(),
-			ExecutionPayloadEnvelope: envelope,
-			KzgProofs:                kzgProofs,
-			Blobs:                    blobs,
-		}}
-	}
-	return blk, nil
+	return vs.constructGenericBeaconBlock(sBlk, bundle, winningBid)
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
