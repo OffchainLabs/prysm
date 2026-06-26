@@ -75,8 +75,9 @@ func BuilderPendingPaymentsFromConsensus(payments []*ethpb.BuilderPendingPayment
 
 func BuilderPendingPaymentFromConsensus(p *ethpb.BuilderPendingPayment) *BuilderPendingPayment {
 	return &BuilderPendingPayment{
-		Weight:     fmt.Sprintf("%d", p.Weight),
-		Withdrawal: BuilderPendingWithdrawalFromConsensus(p.Withdrawal),
+		Weight:        fmt.Sprintf("%d", p.Weight),
+		Withdrawal:    BuilderPendingWithdrawalFromConsensus(p.Withdrawal),
+		ProposerIndex: fmt.Sprintf("%d", p.ProposerIndex),
 	}
 }
 

@@ -560,7 +560,7 @@ type BeaconBlockBodyGloas struct {
 	BLSToExecutionChanges     []*SignedBLSToExecutionChange `json:"bls_to_execution_changes"`
 	SignedExecutionPayloadBid *SignedExecutionPayloadBid    `json:"signed_execution_payload_bid"`
 	PayloadAttestations       []*PayloadAttestation         `json:"payload_attestations"`
-	ParentExecutionRequests   *ExecutionRequests            `json:"parent_execution_requests"`
+	ParentExecutionRequests   *ExecutionRequestsGloas       `json:"parent_execution_requests"`
 }
 
 type BeaconBlockGloas struct {
@@ -594,11 +594,11 @@ type BlockContentsGloas struct {
 }
 
 type ExecutionPayloadEnvelope struct {
-	Payload               *ExecutionPayloadGloas `json:"payload"`
-	ExecutionRequests     *ExecutionRequests     `json:"execution_requests"`
-	BuilderIndex          string                 `json:"builder_index"`
-	BeaconBlockRoot       string                 `json:"beacon_block_root"`
-	ParentBeaconBlockRoot string                 `json:"parent_beacon_block_root"`
+	Payload               *ExecutionPayloadGloas  `json:"payload"`
+	ExecutionRequests     *ExecutionRequestsGloas `json:"execution_requests"`
+	BuilderIndex          string                  `json:"builder_index"`
+	BeaconBlockRoot       string                  `json:"beacon_block_root"`
+	ParentBeaconBlockRoot string                  `json:"parent_beacon_block_root"`
 }
 
 type SignedExecutionPayloadEnvelope struct {
@@ -617,11 +617,11 @@ type SignedExecutionPayloadEnvelopeContents struct {
 
 // BlindedExecutionPayloadEnvelope replaces the full payload with payload_root so its HTR matches the full envelope.
 type BlindedExecutionPayloadEnvelope struct {
-	PayloadRoot           string             `json:"payload_root"`
-	ExecutionRequests     *ExecutionRequests `json:"execution_requests"`
-	BuilderIndex          string             `json:"builder_index"`
-	BeaconBlockRoot       string             `json:"beacon_block_root"`
-	ParentBeaconBlockRoot string             `json:"parent_beacon_block_root"`
+	PayloadRoot           string                  `json:"payload_root"`
+	ExecutionRequests     *ExecutionRequestsGloas `json:"execution_requests"`
+	BuilderIndex          string                  `json:"builder_index"`
+	BeaconBlockRoot       string                  `json:"beacon_block_root"`
+	ParentBeaconBlockRoot string                  `json:"parent_beacon_block_root"`
 }
 
 type SignedBlindedExecutionPayloadEnvelope struct {

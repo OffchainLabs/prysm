@@ -209,6 +209,10 @@ func (v *validatingColumnRequest) countedValidation(cd blocks.RODataColumn) erro
 	if !expected.remaining.Has(cd.Index()) {
 		return nil
 	}
+	// Gloas sidecars carry no commitments on the wire; seed them from the block's bid before reading them.
+	if cd.IsGloas() {
+		cd.SetBidCommitments(expected.commitments)
+	}
 	comms, err := cd.KzgCommitments()
 	if err != nil {
 		return err

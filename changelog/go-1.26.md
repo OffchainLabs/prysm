@@ -1,3 +1,0 @@
-### Changed
-
-- Updated go to 1.26.4

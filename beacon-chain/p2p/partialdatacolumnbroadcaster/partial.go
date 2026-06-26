@@ -862,18 +862,13 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 	}
 	ourDataColumn := ourVerifier.Column
 	var extended bool
-	var extendedCount int
 	for i, bundle := range cells.cells {
 		if bundle.ColumnIndex != ourDataColumn.Index {
 			return errors.New("cell bundle has wrong column index")
 		}
 		if ourVerifier.ExtendFromVerifiedCell(cells.cellIndices[i], bundle.Cell, bundle.Proof) {
 			extended = true
-			extendedCount++
 		}
-	}
-	if extended {
-		p.logger.WithFields(logrus.Fields{"duration": cells.validationTook, "extended": extended, "extendedCount": extendedCount}).WithFields(cells.logFields()).Debug("Extended partial message")
 	}
 
 	columnIndexStr := strconv.FormatUint(ourDataColumn.Index, 10)
@@ -887,7 +882,6 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 			return errors.Wrap(err, "complete partial column verifier")
 		}
 		if ok {
-			p.logger.WithFields(cells.logFields()).Info("Completed partial column")
 			go p.callbacks.HandleColumn(cells.topic, col)
 		}
 
@@ -967,9 +961,31 @@ func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, bl
 			}
 			topicStore[string(groupIDBytes)] = verifier
 		} else {
+			if requests, ok := partialCol.PartsRequests(); ok {
+				if err := verifier.Column.SetPartsRequests(requests); err != nil {
+					aggErr = stderrors.Join(aggErr, errors.Wrap(err, "set parts requests"))
+					continue
+				}
+			} else {
+				verifier.Column.ClearPartsRequests()
+			}
+			var extended bool
 			for i := range partialCol.Included.Len() {
 				if partialCol.Included.BitAt(i) {
-					verifier.ExtendFromVerifiedCell(uint64(i), partialCol.Column[i], partialCol.KzgProofs[i])
+					if verifier.ExtendFromVerifiedCell(uint64(i), partialCol.Column[i], partialCol.KzgProofs[i]) {
+						extended = true
+					}
+				}
+			}
+			if extended {
+				// A column completed by this merge never reaches handleCellsValidated, so hand it to the callback here.
+				col, ok, err := verifier.Complete()
+				if err != nil {
+					aggErr = stderrors.Join(aggErr, errors.Wrap(err, "complete partial column verifier"))
+					continue
+				}
+				if ok {
+					go p.callbacks.HandleColumn(topic, col)
 				}
 			}
 		}
