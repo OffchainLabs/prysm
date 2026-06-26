@@ -287,6 +287,9 @@ func TestDutyStore_needsNextRetry(t *testing.T) {
 
 	ds.write(build(missingNextPtc, []primitives.ValidatorIndex{7}))
 	assert.Equal(t, true, ds.needsNextRetry()) // missing + indices
+
+	ds.write(build(missingNextAttester, []primitives.ValidatorIndex{7}))
+	assert.Equal(t, true, ds.needsNextRetry()) // attester is retried like any other missing type
 }
 
 func TestDutyStore_replaceNextDuties_revisionGuard(t *testing.T) {

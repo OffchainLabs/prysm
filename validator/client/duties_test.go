@@ -1100,9 +1100,11 @@ func TestRetryMissingNextDuties(t *testing.T) {
 		assert.Equal(t, true, v.duties.canPromote(epoch+1, []primitives.ValidatorIndex{42}))
 	})
 
-	t.Run("attester spine fetch failing preserves existing duties", func(t *testing.T) {
+	t.Run("missing attester spine is rebuilt; failure retries next slot", func(t *testing.T) {
 		v, client, keys := setup(t)
-		// missingNextAttester takes the rebuild path (re-fetch the whole epoch).
+		// Spine missing -> rebuild path (re-fetch the whole epoch). The fetch fails,
+		// so existing duties are left intact and promotion stays blocked; the bit
+		// stays set so MaybeRetry will try again next slot.
 		seed(v, keys, missingNextAttester)
 
 		client.EXPECT().AttesterDuties(gomock.Any(), epoch+1, gomock.Any()).Return(nil, errors.New("att down"))
@@ -1110,9 +1112,9 @@ func TestRetryMissingNextDuties(t *testing.T) {
 		client.EXPECT().SyncCommitteeDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil).AnyTimes()
 		client.EXPECT().PTCDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.PTCDutiesResponse{}, nil).AnyTimes()
 
+		assert.Equal(t, true, v.duties.needsNextRetry()) // attester is retried like any other type
 		require.NoError(t, v.RetryMissingNextDuties(t.Context()))
 
-		// Spine fetch failed: existing next duties are left intact, promotion blocked.
 		snap := v.duties.snapshot()
 		require.Equal(t, 1, snap.nextDutyCount())
 		for _, d := range snap.nextDuties() {

@@ -608,8 +608,7 @@ func (v *validator) RetryMissingNextDuties(ctx context.Context) error {
 	}
 	// Per-type missing duties are only produced by the split duties path, which is
 	// also the only path that records indices (the combined pre-Gloas path leaves
-	// them empty). So the indices guard alone scopes this to split duties — no fork
-	// check needed.
+	// them empty). So the indices guard alone scopes this to split duties.
 	indices := snap.indices()
 	if len(indices) == 0 {
 		return nil
@@ -622,10 +621,12 @@ func (v *validator) RetryMissingNextDuties(ctx context.Context) error {
 		currDepRoot []byte
 	)
 	if missing&missingNextAttester != 0 {
-		// Attester is the spine of the next-duty set; without it there are no
-		// entries to overlay onto, so re-fetch the whole epoch.
+		// Attester is the spine of the next-duty set; without it there are no entries
+		// to overlay onto, so re-fetch the whole epoch. Retried each slot like the
+		// other types — a transient spine failure recovers without waiting for the
+		// epoch boundary.
 		att, prop, sync, ptc := v.fetchNextEpochDuties(ctx, nextEpoch, indices)
-		if att == nil { // spine still unavailable; never wipe duties on a transient failure
+		if att == nil { // spine still unavailable; try again next slot
 			return nil
 		}
 		next = v.assembleDuties(att, prop, sync, ptc)
@@ -654,8 +655,8 @@ func (v *validator) RetryMissingNextDuties(ctx context.Context) error {
 	if newMissing == missing { // no progress; avoid needless re-subscribe / proof re-sign
 		return nil
 	}
-	// Drop the write (and skip re-subscribe) if the store advanced under us — e.g.
-	// an epoch boundary or head-event update landed while this retry was fetching.
+	// Drop the write (and skip re-subscribe) if the store advanced under us — e.g. an
+	// epoch boundary or head-event update landed while this retry was fetching.
 	if !v.duties.replaceNextDuties(snap.revision, next, newMissing, currDepRoot) {
 		return nil
 	}
