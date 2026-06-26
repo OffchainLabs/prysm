@@ -145,7 +145,7 @@ func proveAndVerify(t *testing.T, obj query.SSZObject, pathStr string) {
 
 	proof, err := info.Prove(gi)
 	require.NoError(t, err)
-	require.Equal(t, int(gi), proof.Index)
+	require.Equal(t, gi, proof.Index)
 
 	root, err := obj.HashTreeRoot()
 	require.NoError(t, err)
