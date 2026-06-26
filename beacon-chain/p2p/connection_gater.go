@@ -24,8 +24,9 @@ const (
 )
 
 // InterceptPeerDial tests whether we're permitted to Dial the specified peer.
-func (*Service) InterceptPeerDial(_ peer.ID) (allow bool) {
-	return true
+func (s *Service) InterceptPeerDial(pid peer.ID) (allow bool) {
+	// Never dial peers running a blocked client (e.g. Lodestar).
+	return !s.isBlockedClientPeer(pid)
 }
 
 // InterceptAddrDial tests whether we're permitted to dial the specified
@@ -33,6 +34,10 @@ func (*Service) InterceptPeerDial(_ peer.ID) (allow bool) {
 func (s *Service) InterceptAddrDial(pid peer.ID, m multiaddr.Multiaddr) (allow bool) {
 	// Disallow bad peers from dialing in.
 	if s.peers.IsBad(pid) != nil {
+		return false
+	}
+	// Disallow peers running a blocked client (e.g. Lodestar).
+	if s.isBlockedClientPeer(pid) {
 		return false
 	}
 	return filterConnections(s.addrFilter, m)
@@ -62,8 +67,12 @@ func (s *Service) InterceptAccept(n network.ConnMultiaddrs) (allow bool) {
 
 // InterceptSecured tests whether a given connection, now authenticated,
 // is allowed.
-func (*Service) InterceptSecured(_ network.Direction, _ peer.ID, _ network.ConnMultiaddrs) (allow bool) {
-	return true
+func (s *Service) InterceptSecured(_ network.Direction, pid peer.ID, _ network.ConnMultiaddrs) (allow bool) {
+	// Reject already-known peers running a blocked client (e.g. Lodestar).
+	// Note: a peer's client is only known after the identify round, so the
+	// first inbound connection from a fresh Lodestar peer is closed later by
+	// watchForBlockedClients; this prevents subsequent reconnections.
+	return !s.isBlockedClientPeer(pid)
 }
 
 // InterceptUpgraded tests whether a fully capable connection is allowed.

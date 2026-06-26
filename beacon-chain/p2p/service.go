@@ -95,6 +95,11 @@ type Service struct {
 	custodyInfoLock          sync.RWMutex // Lock access to custodyInfo
 	custodyInfoSet           chan struct{}
 	allForkDigests           map[[4]byte]struct{}
+	// blockedClientPeers holds the IDs of peers that ran a disallowed client
+	// (e.g. Lodestar) and must not be (re)connected to. It is a set used as
+	// map[peer.ID]bool; presence with value true means the peer is blocked.
+	blockedClientPeers     map[peer.ID]bool
+	blockedClientPeersLock sync.RWMutex
 }
 
 type custodyInfo struct {
@@ -145,6 +150,7 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		peerDisconnectionTime: cache.New(1*time.Second, 1*time.Minute),
 		custodyInfoSet:        make(chan struct{}),
+		blockedClientPeers:    make(map[peer.ID]bool),
 	}
 
 	ipAddr := prysmnetwork.IPAddr()
@@ -305,6 +311,7 @@ func (s *Service) Start() {
 		logExternalDNSAddr(s.host.ID(), p2pHostDNS, p2pTCPPort)
 	}
 	go s.forkWatcher()
+	go s.watchForBlockedClients()
 }
 
 // Stop the p2p service and terminate all peer connections.
