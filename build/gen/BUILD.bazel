@@ -34,6 +34,7 @@ go_test(
     srcs = [
         "bazel_test.go",
         "proto_test.go",
+        "ssz_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
