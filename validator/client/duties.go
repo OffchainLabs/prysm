@@ -575,10 +575,9 @@ func (v *validator) fetchNextEpochDuties(ctx context.Context, nextEpoch primitiv
 	return att, prop, syncResp, ptc
 }
 
-// MaybeRetryMissingNextDuties runs RetryMissingNextDuties in its own goroutine,
-// but only when there is missing next-epoch work and no retry is already in
-// flight — so the current slot's duties aren't blocked and goroutines aren't
-// spawned for nothing. The work is bounded by the slot deadline.
+// MaybeRetryMissingNextDuties runs RetryMissingNextDuties in a goroutine, but
+// only when there's missing work and none is in flight — so the current slot
+// isn't blocked and goroutines aren't spawned for nothing. Bounded by the slot deadline.
 func (v *validator) MaybeRetryMissingNextDuties(ctx context.Context, slot primitives.Slot) {
 	if !v.duties.needsNextRetry() || !v.retryInFlight.CompareAndSwap(false, true) {
 		return
@@ -594,9 +593,8 @@ func (v *validator) MaybeRetryMissingNextDuties(ctx context.Context, slot primit
 }
 
 // RetryMissingNextDuties re-fetches only the next-epoch duty types a prior fetch
-// left missing and merges them in, so promotion can resume — without re-pulling
-// the current epoch or the types that already succeeded. No-op when nothing is
-// missing.
+// left missing and merges them in, so promotion can resume without re-pulling the
+// current epoch. No-op when nothing is missing.
 func (v *validator) RetryMissingNextDuties(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "validator.RetryMissingNextDuties")
 	defer span.End()
@@ -606,9 +604,8 @@ func (v *validator) RetryMissingNextDuties(ctx context.Context) error {
 	if !snap.isInitialized() || missing == 0 {
 		return nil
 	}
-	// Per-type missing duties are only produced by the split duties path, which is
-	// also the only path that records indices (the combined pre-Gloas path leaves
-	// them empty). So the indices guard alone scopes this to split duties.
+	// Only the split duties path records indices; the combined pre-Gloas path
+	// leaves them empty, so this guard alone scopes the retry to split duties.
 	indices := snap.indices()
 	if len(indices) == 0 {
 		return nil
@@ -621,20 +618,18 @@ func (v *validator) RetryMissingNextDuties(ctx context.Context) error {
 		currDepRoot []byte
 	)
 	if missing&missingNextAttester != 0 {
-		// Attester is the spine of the next-duty set; without it there are no entries
-		// to overlay onto, so re-fetch the whole epoch. Retried each slot like the
-		// other types — a transient spine failure recovers without waiting for the
-		// epoch boundary.
+		// Attester is the spine: without it there are no rows to overlay onto, so
+		// rebuild the whole epoch. Retried each slot until the fetch succeeds.
 		att, prop, sync, ptc := v.fetchNextEpochDuties(ctx, nextEpoch, indices)
 		if att == nil { // spine still unavailable; try again next slot
 			return nil
 		}
 		next = v.assembleDuties(att, prop, sync, ptc)
 		newMissing = missingNextMask(nextEpoch, att, prop, sync, ptc)
-		currDepRoot = att.DependentRoot // refresh: the spine was re-fetched
+		currDepRoot = att.DependentRoot
 	} else {
-		// Spine intact: re-fetch only the still-missing types and overlay them onto
-		// the existing next duties, leaving the attester duties and root untouched.
+		// Spine intact: re-fetch only the missing types and overlay them, leaving
+		// the attester duties and dependent root untouched.
 		prop, sync, ptc := v.fetchMissingNextDuties(ctx, nextEpoch, indices, missing)
 		existing := make([]*ethpb.ValidatorDuty, 0, snap.nextDutyCount())
 		for _, d := range snap.nextDuties() {
@@ -655,17 +650,15 @@ func (v *validator) RetryMissingNextDuties(ctx context.Context) error {
 	if newMissing == missing { // no progress; avoid needless re-subscribe / proof re-sign
 		return nil
 	}
-	// Drop the write (and skip re-subscribe) if the store advanced under us — e.g. an
-	// epoch boundary or head-event update landed while this retry was fetching.
+	// Drop if the store advanced under us (a boundary/head-event update mid-fetch).
 	if !v.duties.replaceNextDuties(snap.revision, next, newMissing, currDepRoot) {
 		return nil
 	}
 	return v.onDutiesUpdated(ctx)
 }
 
-// fetchMissingNextDuties re-fetches only the next-epoch proposer/sync/PTC types
-// flagged in missing (attester is handled separately). A nil return for a type
-// means it wasn't requested or its fetch failed; callers leave those untouched.
+// fetchMissingNextDuties re-fetches only the flagged next-epoch proposer/sync/PTC
+// types (attester handled separately). A nil return means not requested or failed.
 func (v *validator) fetchMissingNextDuties(ctx context.Context, nextEpoch primitives.Epoch, indices []primitives.ValidatorIndex, missing missingNextDuties) (
 	prop *ethpb.ProposerDutiesResponse,
 	syncResp *ethpb.SyncCommitteeDutiesResponse,

@@ -180,8 +180,8 @@ func (d *dutyStoreData) setFromContainer(container *ethpb.ValidatorDutiesContain
 type dutyStore struct {
 	mu   sync.RWMutex
 	data dutyStoreData
-	// revision bumps on every mutation. snapshot captures it so an async retry can
-	// detect that the store changed under it and drop its now-stale write.
+	// revision bumps on every mutation; snapshot captures it so a stale async
+	// retry can detect the store moved and drop its write.
 	revision uint64
 }
 
@@ -306,8 +306,8 @@ func (ds *dutyStore) snapshot() roDutySnapshot {
 	return roDutySnapshot{d: ds.data, revision: ds.revision}
 }
 
-// needsNextRetry reports whether a per-type next-epoch retry has work to do —
-// a cheap check so callers can avoid spawning a retry that would just no-op.
+// needsNextRetry reports whether a next-epoch retry has work to do — a cheap
+// pre-check so callers don't spawn a retry that would no-op.
 func (ds *dutyStore) needsNextRetry() bool {
 	if ds == nil {
 		return false
@@ -422,13 +422,10 @@ func (ds *dutyStore) write(data dutyStoreData) {
 	ds.revision++
 }
 
-// replaceNextDuties atomically swaps the next-epoch duties and missing mask,
-// leaving current-epoch duties, epoch and indices intact. A non-nil currDepRoot
-// also refreshes the current dependent root (the rebuilt next-epoch attester
-// root); nil keeps the existing one. It applies only if the store hasn't changed
-// since wantRevision (the revision the caller's fetch was based on), so a stale async
-// retry whose epoch/duties advanced underneath it is dropped. Reports whether it
-// applied.
+// replaceNextDuties swaps in next-epoch duties and the missing mask, keeping
+// current-epoch duties/epoch/indices. A non-nil currDepRoot refreshes the current
+// dependent root; nil keeps it. Applies (and reports true) only if the store is
+// still at wantRevision, so a stale async retry is dropped.
 func (ds *dutyStore) replaceNextDuties(wantRevision uint64, next []*ethpb.ValidatorDuty, missing missingNextDuties, currDepRoot []byte) bool {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
