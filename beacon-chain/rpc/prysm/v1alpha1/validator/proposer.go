@@ -601,9 +601,10 @@ func (vs *Server) PrepareBeaconProposer(
 			ValidatorIndex: r.ValidatorIndex,
 			FeeRecipient:   bytesutil.ToBytes20(feeRecipient),
 		})
-		// Backward-compat: track the validator here too so old VCs that don't
-		// populate validator_indices in SubscribeCommitteeSubnets still keep
-		// the BN's attached-set up to date for CGC and validating().
+		// Pre-Gloas only (we return early above otherwise): track the validator
+		// here so old VCs that don't populate validator_indices in
+		// SubscribeCommitteeSubnets still keep the BN's attached-set up to date
+		// for CGC and validating(). Old VCs are unsupported post-Gloas.
 		vs.SubscribedValidatorsCache.Add(r.ValidatorIndex)
 	}
 	if len(request.Recipients) > 0 {
