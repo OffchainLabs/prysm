@@ -309,7 +309,12 @@ func generateNetwork(dict map[string]string, outDir, binDir, googleapisInc strin
 
 	var allProtos []string
 	for _, dir := range protoPkgDirs(pkgs) {
-		allProtos = append(allProtos, pkgProtos(dir)...)
+		protos, err := pkgProtos(dir)
+		if err != nil {
+			return fmt.Errorf("pkgProtos: %w", err)
+		}
+
+		allProtos = append(allProtos, protos...)
 	}
 
 	protoFiles, err := compileDescriptors(stage, googleapisInc, allProtos)
@@ -323,7 +328,11 @@ func generateNetwork(dict map[string]string, outDir, binDir, googleapisInc strin
 
 	for _, dir := range protoPkgDirs(pkgs) {
 		mode := pkgs[dir]
-		protos := pkgProtos(dir)
+		protos, err := pkgProtos(dir)
+		if err != nil {
+			return fmt.Errorf("pkgProtos: %w", err)
+		}
+
 		fmt.Printf("  %s (%s): %d files\n", dir, mode, len(protos))
 		opt := "paths=source_relative" + mmap
 		plugin, param, err := pluginForMode(mode, binDir, opt)
@@ -557,10 +566,10 @@ func buildMMAP(stage string) (string, error) {
 	return b.String(), nil
 }
 
-func pkgProtos(dir string) []string {
+func pkgProtos(dir string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("readDir %s: %w", dir, err)
 	}
 
 	var out []string
@@ -575,5 +584,5 @@ func pkgProtos(dir string) []string {
 
 	sort.Strings(out)
 
-	return out
+	return out, nil
 }
