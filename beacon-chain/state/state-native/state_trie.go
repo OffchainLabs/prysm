@@ -1099,6 +1099,11 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 
 	b.lock.Lock()
 	defer b.lock.Unlock()
+
+	if progressiveSSZEnabled(b.version) {
+		return b.progressiveHashTreeRoot(ctx)
+	}
+
 	if err := b.initializeMerkleLayers(ctx); err != nil {
 		return [32]byte{}, err
 	}
@@ -1106,6 +1111,29 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 		return [32]byte{}, err
 	}
 	return bytesutil.ToBytes32(b.merkleLayers[len(b.merkleLayers)-1][0]), nil
+}
+
+func (b *BeaconState) progressiveHashTreeRoot(ctx context.Context) ([32]byte, error) {
+	fieldRoots, err := ComputeFieldRootsWithHasher(ctx, b)
+	if err != nil {
+		return [32]byte{}, err
+	}
+
+	progressiveFieldRoots := make([][32]byte, len(fieldRoots))
+	for i, fieldRoot := range fieldRoots {
+		progressiveFieldRoots[i] = bytesutil.ToBytes32(fieldRoot)
+	}
+
+	activeFields := make([]bool, len(fieldRoots))
+	for i := range activeFields {
+		activeFields[i] = true
+	}
+
+	root, err := ssz.ContainerRootProgressive(progressiveFieldRoots, activeFields)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("could not compute progressive container root: %w", err)
+	}
+	return root, nil
 }
 
 // Initializes the Merkle layers for the beacon state if they are empty.
@@ -1307,6 +1335,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	_, span := trace.StartSpan(ctx, "beaconState.rootSelector")
 	defer span.End()
 	span.SetAttributes(trace.StringAttribute("field", field.String()))
+	progressiveSSZ := progressiveSSZEnabled(b.version)
 
 	switch field {
 	case types.GenesisTime:
@@ -1348,8 +1377,22 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 		}
 		return b.recomputeFieldTrie(field, b.eth1DataVotes)
 	case types.Validators:
+		if progressiveSSZ {
+			// Field-trie indexing is based on legacy list merkleization.
+			// Use full progressive hashing for this field when enabled.
+			b.dirtyIndices[field] = []uint64{}
+			delete(b.rebuildTrie, field)
+			return stateutil.ValidatorRegistryRootProgressive(b.validatorsCompactVal())
+		}
 		return b.validatorsRootSelector(field)
 	case types.Balances:
+		if progressiveSSZ {
+			// Field-trie indexing is based on legacy list merkleization.
+			// Use full progressive hashing for this field when enabled.
+			b.dirtyIndices[field] = []uint64{}
+			delete(b.rebuildTrie, field)
+			return stateutil.Uint64ListRootProgressive(b.balancesVal())
+		}
 		return b.balancesRootSelector(field)
 	case types.RandaoMixes:
 		return b.randaoMixesRootSelector(field)
@@ -1384,8 +1427,14 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 		}
 		return b.recomputeFieldTrie(field, b.currentEpochAttestations)
 	case types.PreviousEpochParticipationBits:
+		if progressiveSSZ {
+			return stateutil.ParticipationBitsRootProgressive(b.previousEpochParticipation)
+		}
 		return stateutil.ParticipationBitsRoot(b.previousEpochParticipation)
 	case types.CurrentEpochParticipationBits:
+		if progressiveSSZ {
+			return stateutil.ParticipationBitsRootProgressive(b.currentEpochParticipation)
+		}
 		return stateutil.ParticipationBitsRoot(b.currentEpochParticipation)
 	case types.JustificationBits:
 		return bytesutil.ToBytes32(b.justificationBits), nil
@@ -1396,6 +1445,9 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.FinalizedCheckpoint:
 		return ssz.CheckpointRoot(b.finalizedCheckpoint)
 	case types.InactivityScores:
+		if progressiveSSZ {
+			return stateutil.Uint64ListRootProgressive(b.inactivityScoresVal())
+		}
 		return stateutil.Uint64ListRootWithRegistryLimit(b.inactivityScoresMultiValue.Value(b))
 	case types.CurrentSyncCommittee:
 		return stateutil.SyncCommitteeRoot(b.currentSyncCommittee)
@@ -1426,17 +1478,26 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.EarliestConsolidationEpoch:
 		return ssz.Uint64Root(uint64(b.earliestConsolidationEpoch)), nil
 	case types.PendingDeposits:
+		if progressiveSSZ {
+			return stateutil.PendingDepositsRootProgressive(b.pendingDeposits)
+		}
 		return stateutil.PendingDepositsRoot(b.pendingDeposits)
 	case types.PendingPartialWithdrawals:
+		if progressiveSSZ {
+			return stateutil.PendingPartialWithdrawalsRootProgressive(b.pendingPartialWithdrawals)
+		}
 		return stateutil.PendingPartialWithdrawalsRoot(b.pendingPartialWithdrawals)
 	case types.PendingConsolidations:
+		if progressiveSSZ {
+			return stateutil.PendingConsolidationsRootProgressive(b.pendingConsolidations)
+		}
 		return stateutil.PendingConsolidationsRoot(b.pendingConsolidations)
 	case types.ProposerLookahead:
 		return stateutil.ProposerLookaheadRoot(b.proposerLookahead)
 	case types.LatestExecutionPayloadBid:
 		return b.latestExecutionPayloadBid.HashTreeRoot()
 	case types.Builders:
-		return stateutil.BuildersRoot(b.builders)
+		return b.buildersRoot()
 	case types.NextWithdrawalBuilderIndex:
 		return ssz.Uint64Root(uint64(b.nextWithdrawalBuilderIndex)), nil
 	case types.ExecutionPayloadAvailability:
@@ -1445,10 +1506,13 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.BuilderPendingPayments:
 		return stateutil.BuilderPendingPaymentsRoot(b.builderPendingPayments)
 	case types.BuilderPendingWithdrawals:
-		return stateutil.BuilderPendingWithdrawalsRoot(b.builderPendingWithdrawals)
+		return b.builderPendingWithdrawalsRoot()
 	case types.LatestBlockHash:
 		return bytesutil.ToBytes32(b.latestBlockHash), nil
 	case types.PayloadExpectedWithdrawals:
+		if progressiveSSZ {
+			return ssz.WithdrawalSliceRootProgressive(b.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+		}
 		return ssz.WithdrawalSliceRoot(b.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
 	case types.PTCWindow:
 		return stateutil.PTCWindowRoot(b.ptcWindow)
