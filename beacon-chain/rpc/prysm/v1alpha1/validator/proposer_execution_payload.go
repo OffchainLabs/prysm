@@ -79,7 +79,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 	dependentRoot, err := helpers.ProposerDependentRootOrGenesis(ctx, vs.BeaconDB, st, slot)
 	if err != nil {
 		log.WithFields(logFields).WithError(err).Debug("Could not get proposer dependent root, falling back to default preferences")
-		if def, ok := vs.ProposerPreferencesCache.Default(proposerId); ok {
+		if def, ok := vs.ProposerPreferencesCache.DefaultFor(proposerId); ok {
 			val = def
 		}
 	} else if pref, ok := vs.ProposerPreferencesCache.BestFor(dependentRoot, slot, proposerId); ok {

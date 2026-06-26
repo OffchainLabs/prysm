@@ -109,7 +109,7 @@ func (c *ProposerPreferencesCache) BestFor(dependentRoot [32]byte, slot primitiv
 		proposerPreferencesCacheHit.Inc()
 		return pref, true
 	}
-	if def, ok := c.Default(idx); ok {
+	if def, ok := c.DefaultFor(idx); ok {
 		proposerPreferencesCacheHit.Inc()
 		return def, true
 	}
@@ -163,16 +163,16 @@ func (c *ProposerPreferencesCache) Clear() {
 	c.preferences = make(map[primitives.Slot][]ProposerPreference)
 }
 
-// Set records a per-validator fee-recipient default, keyed by ValidatorIndex.
+// SetDefault records a per-validator fee-recipient default, keyed by ValidatorIndex.
 // Populated by the pre-Gloas PrepareBeaconProposer endpoint. DependentRoot on
 // the supplied preference is ignored.
-func (c *ProposerPreferencesCache) Set(pref ProposerPreference) {
+func (c *ProposerPreferencesCache) SetDefault(pref ProposerPreference) {
 	c.defaults.Set(defaultKey(pref.ValidatorIndex), pref, gocache.DefaultExpiration)
 }
 
-// Default returns the per-validator fee-recipient default for the given
+// DefaultFor returns the per-validator fee-recipient default for the given
 // validator index, if one was set via PrepareBeaconProposer.
-func (c *ProposerPreferencesCache) Default(index primitives.ValidatorIndex) (ProposerPreference, bool) {
+func (c *ProposerPreferencesCache) DefaultFor(index primitives.ValidatorIndex) (ProposerPreference, bool) {
 	item, ok := c.defaults.Get(defaultKey(index))
 	if !ok {
 		return ProposerPreference{}, false

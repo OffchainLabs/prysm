@@ -754,7 +754,7 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 			pref = &p
 			feeRecpt = p.FeeRecipientOrDefault()
 		}
-	} else if p, ok := s.ProposerPreferencesCache.Default(proposer); ok {
+	} else if p, ok := s.ProposerPreferencesCache.DefaultFor(proposer); ok {
 		pref = &p
 		feeRecpt = p.FeeRecipientOrDefault()
 	}

@@ -883,7 +883,7 @@ func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
 		if common.BytesToAddress(feeRecipient) == (common.Address{}) {
 			feeRecipient = params.BeaconConfig().DefaultFeeRecipient.Bytes()
 		}
-		s.ProposerPreferencesCache.Set(cache.ProposerPreference{
+		s.ProposerPreferencesCache.SetDefault(cache.ProposerPreference{
 			ValidatorIndex: primitives.ValidatorIndex(validatorIndex),
 			FeeRecipient:   bytesutil.ToBytes20(feeRecipient),
 		})

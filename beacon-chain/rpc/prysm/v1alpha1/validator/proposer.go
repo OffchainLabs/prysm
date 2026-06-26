@@ -597,7 +597,7 @@ func (vs *Server) PrepareBeaconProposer(
 		if common.BytesToAddress(feeRecipient) == (common.Address{}) {
 			feeRecipient = params.BeaconConfig().DefaultFeeRecipient.Bytes()
 		}
-		vs.ProposerPreferencesCache.Set(cache.ProposerPreference{
+		vs.ProposerPreferencesCache.SetDefault(cache.ProposerPreference{
 			ValidatorIndex: r.ValidatorIndex,
 			FeeRecipient:   bytesutil.ToBytes20(feeRecipient),
 		})
