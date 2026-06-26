@@ -189,7 +189,7 @@ func TestServer_getLocalPayloadFromEngine_DepRootErrorUsesDefault(t *testing.T) 
 	const proposerIdx = primitives.ValidatorIndex(1)
 	feeRecipient := common.HexToAddress("0x0123456789012345678901234567890123456789")
 	prefCache := cache.NewProposerPreferencesCache()
-	prefCache.Set(cache.ProposerPreference{ValidatorIndex: proposerIdx, FeeRecipient: primitives.ExecutionAddress(feeRecipient)})
+	prefCache.SetDefault(cache.ProposerPreference{ValidatorIndex: proposerIdx, FeeRecipient: primitives.ExecutionAddress(feeRecipient)})
 
 	ed, err := blocks.NewWrappedExecutionData(&pb.ExecutionPayload{})
 	require.NoError(t, err)

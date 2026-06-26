@@ -733,7 +733,7 @@ func Test_GetPayloadAttribute(t *testing.T) {
 	// With a per-validator default fee recipient cached (pre-Gloas PrepareBeaconProposer),
 	// the attribute carries it.
 	suggestedAddr := common.HexToAddress("123")
-	service.cfg.ProposerPreferencesCache.Set(cache.ProposerPreference{ValidatorIndex: 0, FeeRecipient: primitives.ExecutionAddress(suggestedAddr)})
+	service.cfg.ProposerPreferencesCache.SetDefault(cache.ProposerPreference{ValidatorIndex: 0, FeeRecipient: primitives.ExecutionAddress(suggestedAddr)})
 	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
 	require.Equal(t, false, attr.IsEmpty())
@@ -777,7 +777,7 @@ func Test_GetPayloadAttributeV2(t *testing.T) {
 
 	// With a per-validator default fee recipient cached, the attribute carries it.
 	suggestedAddr := common.HexToAddress("123")
-	service.cfg.ProposerPreferencesCache.Set(cache.ProposerPreference{ValidatorIndex: 0, FeeRecipient: primitives.ExecutionAddress(suggestedAddr)})
+	service.cfg.ProposerPreferencesCache.SetDefault(cache.ProposerPreference{ValidatorIndex: 0, FeeRecipient: primitives.ExecutionAddress(suggestedAddr)})
 	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
 	require.Equal(t, false, attr.IsEmpty())
@@ -835,7 +835,7 @@ func Test_GetPayloadAttributeV3(t *testing.T) {
 
 			// With a per-validator default fee recipient cached, the attribute carries it.
 			suggestedAddr := common.HexToAddress("123")
-			service.cfg.ProposerPreferencesCache.Set(cache.ProposerPreference{ValidatorIndex: 0, FeeRecipient: primitives.ExecutionAddress(suggestedAddr)})
+			service.cfg.ProposerPreferencesCache.SetDefault(cache.ProposerPreference{ValidatorIndex: 0, FeeRecipient: primitives.ExecutionAddress(suggestedAddr)})
 			service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 			attr = service.getPayloadAttribute(ctx, test.st, slot, params.BeaconConfig().ZeroHash[:], true)
 			require.Equal(t, false, attr.IsEmpty())

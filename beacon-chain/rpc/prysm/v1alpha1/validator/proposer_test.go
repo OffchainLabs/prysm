@@ -3333,7 +3333,7 @@ func TestProposer_PrepareBeaconProposer_PostGloasNoOp(t *testing.T) {
 	})
 	require.NoError(t, err)
 	// Post-Gloas the request is a no-op: nothing is cached.
-	_, ok := proposerServer.ProposerPreferencesCache.Default(1)
+	_, ok := proposerServer.ProposerPreferencesCache.DefaultFor(1)
 	require.Equal(t, false, ok)
 }
 

@@ -3725,7 +3725,7 @@ func TestPrepareBeaconProposer(t *testing.T) {
 			server.PrepareBeaconProposer(writer, request)
 			require.Equal(t, http.StatusOK, writer.Code)
 
-			got, ok := server.ProposerPreferencesCache.Default(1)
+			got, ok := server.ProposerPreferencesCache.DefaultFor(1)
 			require.Equal(t, tt.wantCached, ok)
 			if tt.wantCached {
 				expected, err := hexutil.Decode(feeRecipient)
