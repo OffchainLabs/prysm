@@ -71,7 +71,7 @@ func TestProofCollector_ToProof(t *testing.T) {
 	proof, err := pc.toProof()
 	require.NoError(t, err)
 
-	require.Equal(t, 5, proof.Index)
+	require.Equal(t, uint64(5), proof.Index)
 	require.DeepEqual(t, leaf[:], proof.Leaf)
 	require.Equal(t, 2, len(proof.Hashes))
 	require.DeepEqual(t, sibling4[:], proof.Hashes[0])
