@@ -80,8 +80,8 @@ func TestGloasOperations_ProcessingErrors(t *testing.T) {
 		{
 			name: "ErrProcessAttesterSlashingsFailed – out-of-bounds attesting index",
 			modifyBlk: func(b *ethpb.BeaconBlockBodyGloas) {
-				makeIndexed := func(root []byte) *ethpb.IndexedAttestationElectra {
-					return &ethpb.IndexedAttestationElectra{
+				makeIndexed := func(root []byte) *ethpb.IndexedAttestationGloas {
+					return &ethpb.IndexedAttestationGloas{
 						AttestingIndices: []uint64{999999},
 						Data: &ethpb.AttestationData{
 							Slot:            1,
@@ -96,7 +96,7 @@ func TestGloasOperations_ProcessingErrors(t *testing.T) {
 				root1 := make([]byte, 32)
 				root2 := make([]byte, 32)
 				root2[0] = 0xff // different roots → slashable
-				b.AttesterSlashings = []*ethpb.AttesterSlashingElectra{
+				b.AttesterSlashings = []*ethpb.AttesterSlashingGloas{
 					{
 						Attestation_1: makeIndexed(root1),
 						Attestation_2: makeIndexed(root2),
@@ -110,7 +110,7 @@ func TestGloasOperations_ProcessingErrors(t *testing.T) {
 		{
 			name: "ErrProcessAttestationsFailed – invalid committee index",
 			modifyBlk: func(b *ethpb.BeaconBlockBodyGloas) {
-				b.Attestations = []*ethpb.AttestationElectra{
+				b.Attestations = []*ethpb.AttestationGloas{
 					{
 						AggregationBits: []byte{0b00000001},
 						Data: &ethpb.AttestationData{

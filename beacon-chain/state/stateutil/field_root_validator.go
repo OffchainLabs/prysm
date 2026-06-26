@@ -31,6 +31,20 @@ func ValidatorRegistryRoot(vals []CompactValidator) ([32]byte, error) {
 	return validatorRegistryRoot(vals)
 }
 
+// ValidatorRegistryRootProgressive computes the HashTreeRoot Merkleization of
+// a progressive list of CompactValidator structs.
+func ValidatorRegistryRootProgressive(vals []CompactValidator) ([32]byte, error) {
+	roots, err := OptimizedValidatorRoots(vals)
+	if err != nil {
+		return [32]byte{}, err
+	}
+
+	body := ssz.MerkleizeProgressiveChunks(roots)
+	var length [32]byte
+	binary.LittleEndian.PutUint64(length[:8], uint64(len(vals)))
+	return ssz.MixInLength(body, length[:]), nil
+}
+
 func validatorRegistryRoot(validators []CompactValidator) ([32]byte, error) {
 	roots, err := OptimizedValidatorRoots(validators)
 	if err != nil {

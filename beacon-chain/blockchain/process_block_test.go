@@ -3714,7 +3714,7 @@ func TestHandleBlockAttestations_GloasSameSlotPayloadVote(t *testing.T) {
 			Block: &ethpb.BeaconBlockGloas{
 				Slot: 2,
 				Body: &ethpb.BeaconBlockBodyGloas{
-					Attestations: []*ethpb.AttestationElectra{
+					Attestations: []*ethpb.AttestationGloas{
 						{
 							AggregationBits: aggBits,
 							CommitteeBits:   cb,

@@ -78,9 +78,9 @@ func TestWrappedROExecutionPayloadEnvelope(t *testing.T) {
 
 		reqs := wrapped.ExecutionRequests()
 		require.NotNil(t, reqs)
-		if len(reqs.Deposits) > 0 {
-			reqs.Deposits[0].Pubkey[0] = 0xFF
-			require.NotEqual(t, reqs.Deposits[0].Pubkey[0], env.ExecutionRequests.Deposits[0].Pubkey[0])
+		if len(reqs.GetDeposits()) > 0 {
+			reqs.GetDeposits()[0].Pubkey[0] = 0xFF
+			require.NotEqual(t, reqs.GetDeposits()[0].Pubkey[0], env.ExecutionRequests.Deposits[0].Pubkey[0])
 		}
 
 		exec, err := wrapped.Execution()

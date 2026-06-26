@@ -282,7 +282,7 @@ func (s *Service) callNewPayload(
 	payload interfaces.ExecutionData,
 	versionedHashes []common.Hash,
 	parentRoot common.Hash,
-	requests *enginev1.ExecutionRequestsGloas,
+	requests interfaces.ExecutionRequests,
 	slot primitives.Slot,
 ) (bool, error) {
 	_, err := s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests)

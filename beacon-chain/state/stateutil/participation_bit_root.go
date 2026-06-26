@@ -28,6 +28,12 @@ func ParticipationBitsRoot(bits []byte) ([32]byte, error) {
 	return ssz.MixInLength(bytesRoot, bytesRootBufRoot), nil
 }
 
+// ParticipationBitsRootProgressive computes the HashTreeRoot merkleization of
+// participation roots as a progressive byte list.
+func ParticipationBitsRootProgressive(bits []byte) ([32]byte, error) {
+	return ssz.ByteSliceRootProgressive(bits)
+}
+
 // packParticipationBits into chunks. It'll pad the last chunk with zero bytes if
 // it does not have length bytes per chunk.
 func packParticipationBits(bytes []byte) ([][32]byte, error) {

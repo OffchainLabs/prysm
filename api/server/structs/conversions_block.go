@@ -2919,8 +2919,8 @@ func BeaconBlockGloasFromConsensus(b *eth.BeaconBlockGloas) (*BeaconBlockGloas, 
 			Eth1Data:                  Eth1DataFromConsensus(b.Body.Eth1Data),
 			Graffiti:                  hexutil.Encode(b.Body.Graffiti),
 			ProposerSlashings:         ProposerSlashingsFromConsensus(b.Body.ProposerSlashings),
-			AttesterSlashings:         AttesterSlashingsElectraFromConsensus(b.Body.AttesterSlashings),
-			Attestations:              AttsElectraFromConsensus(b.Body.Attestations),
+			AttesterSlashings:         AttesterSlashingsGloasFromConsensus(b.Body.AttesterSlashings),
+			Attestations:              AttsGloasFromConsensus(b.Body.Attestations),
 			Deposits:                  DepositsFromConsensus(b.Body.Deposits),
 			VoluntaryExits:            SignedExitsFromConsensus(b.Body.VoluntaryExits),
 			SyncAggregate:             SyncAggregateFromConsensus(b.Body.SyncAggregate),
@@ -3092,11 +3092,11 @@ func (b *BeaconBlockBodyGloas) ToConsensus() (*eth.BeaconBlockBodyGloas, error) 
 	if err != nil {
 		return nil, server.NewDecodeError(err, "ProposerSlashings")
 	}
-	attesterSlashings, err := AttesterSlashingsElectraToConsensus(b.AttesterSlashings)
+	attesterSlashings, err := AttesterSlashingsGloasToConsensus(b.AttesterSlashings)
 	if err != nil {
 		return nil, server.NewDecodeError(err, "AttesterSlashings")
 	}
-	atts, err := AttsElectraToConsensus(b.Attestations)
+	atts, err := AttsGloasToConsensus(b.Attestations)
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Attestations")
 	}
@@ -3130,10 +3130,11 @@ func (b *BeaconBlockBodyGloas) ToConsensus() (*eth.BeaconBlockBodyGloas, error) 
 	}
 	var parentExecutionRequests *enginev1.ExecutionRequestsGloas
 	if b.ParentExecutionRequests != nil {
-		parentExecutionRequests, err = b.ParentExecutionRequests.ToConsensus()
+		legacyParentExecutionRequests, err := b.ParentExecutionRequests.ToConsensus()
 		if err != nil {
 			return nil, server.NewDecodeError(err, "ParentExecutionRequests")
 		}
+		parentExecutionRequests = enginev1.CopyExecutionRequestsGloas(legacyParentExecutionRequests)
 	}
 
 	return &eth.BeaconBlockBodyGloas{
