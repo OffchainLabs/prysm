@@ -13,6 +13,22 @@ import (
 
 var ErrIncompatibleFork = errors.New("Can't convert to fork-specific interface")
 
+// ExecutionRequests represents either legacy or Gloas execution request
+// containers. Gloas callers must preserve the concrete type for SSZ roots and
+// engine-API flattening, but request processing only needs generated getters.
+type ExecutionRequests interface {
+	enginev1.ExecutionRequestsData
+	enginev1.ExecutionRequester
+	HashTreeRoot() ([field_params.RootLength]byte, error)
+}
+
+// GloasExecutionRequests includes the Gloas-only request lists.
+type GloasExecutionRequests interface {
+	ExecutionRequests
+	GetBuilderDeposits() []*enginev1.BuilderDepositRequest
+	GetBuilderExits() []*enginev1.BuilderExitRequest
+}
+
 // ReadOnlySignedBeaconBlock is an interface describing the method set of
 // a signed beacon block.
 type ReadOnlySignedBeaconBlock interface {
@@ -71,7 +87,7 @@ type ReadOnlyBeaconBlockBody interface {
 	ExecutionRequests() (*enginev1.ExecutionRequests, error)
 	PayloadAttestations() ([]*ethpb.PayloadAttestation, error)
 	SignedExecutionPayloadBid() (*ethpb.SignedExecutionPayloadBid, error)
-	ParentExecutionRequests() (*enginev1.ExecutionRequestsGloas, error)
+	ParentExecutionRequests() (ExecutionRequests, error)
 }
 
 type SignedBeaconBlock interface {
@@ -96,7 +112,7 @@ type SignedBeaconBlock interface {
 	SetExecutionRequests(er *enginev1.ExecutionRequests) error
 	SetPayloadAttestations(pa []*ethpb.PayloadAttestation) error
 	SetSignedExecutionPayloadBid(header *ethpb.SignedExecutionPayloadBid) error
-	SetParentExecutionRequests(r *enginev1.ExecutionRequestsGloas) error
+	SetParentExecutionRequests(r ExecutionRequests) error
 	Unblind(e ExecutionData) error
 }
 

@@ -711,7 +711,7 @@ func (b *BeaconBlockBody) Proto() (proto.Message, error) {
 			BlsToExecutionChanges:     b.blsToExecutionChanges,
 			SignedExecutionPayloadBid: b.signedExecutionPayloadBid,
 			PayloadAttestations:       b.payloadAttestations,
-			ParentExecutionRequests:   b.parentExecutionRequests,
+			ParentExecutionRequests:   enginev1.CopyExecutionRequestsGloas(b.parentExecutionRequests),
 		}, nil
 	default:
 		return nil, errors.New("unsupported beacon block body version")

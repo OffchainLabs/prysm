@@ -8,7 +8,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
-	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/pkg/errors"
 )
 
@@ -67,7 +66,7 @@ func ProcessParentExecutionPayload(ctx context.Context, st state.BeaconState, bl
 func ApplyParentExecutionPayload(
 	ctx context.Context,
 	st state.BeaconState,
-	reqs *enginev1.ExecutionRequestsGloas,
+	reqs interfaces.ExecutionRequests,
 ) error {
 	parentBid, err := st.LatestExecutionPayloadBid()
 	if err != nil {
@@ -95,29 +94,37 @@ func ApplyParentExecutionPayload(
 	return nil
 }
 
-func processExecutionRequests(ctx context.Context, st state.BeaconState, rqs *enginev1.ExecutionRequestsGloas) error {
-	if err := ProcessDepositRequests(ctx, st, rqs.Deposits); err != nil {
+func processExecutionRequests(ctx context.Context, st state.BeaconState, rqs interfaces.ExecutionRequests) error {
+	if err := ProcessDepositRequests(ctx, st, rqs.GetDeposits()); err != nil {
 		return errors.Wrap(err, "could not process deposit requests")
 	}
 	var err error
-	st, err = requests.ProcessWithdrawalRequests(ctx, st, rqs.Withdrawals)
+	st, err = requests.ProcessWithdrawalRequests(ctx, st, rqs.GetWithdrawals())
 	if err != nil {
 		return errors.Wrap(err, "could not process withdrawal requests")
 	}
-	if err := requests.ProcessConsolidationRequests(ctx, st, rqs.Consolidations); err != nil {
+	if err := requests.ProcessConsolidationRequests(ctx, st, rqs.GetConsolidations()); err != nil {
 		return errors.Wrap(err, "could not process consolidation requests")
 	}
-	if err := ProcessBuilderDepositRequests(ctx, st, rqs.BuilderDeposits); err != nil {
-		return errors.Wrap(err, "could not process builder deposit requests")
+	if gloasRequests, ok := rqs.(interfaces.GloasExecutionRequests); ok {
+		if err := ProcessBuilderDepositRequests(ctx, st, gloasRequests.GetBuilderDeposits()); err != nil {
+			return errors.Wrap(err, "could not process builder deposit requests")
+		}
+		return ProcessBuilderExitRequests(ctx, st, gloasRequests.GetBuilderExits())
 	}
-	return ProcessBuilderExitRequests(ctx, st, rqs.BuilderExits)
+	return nil
 }
 
 // IsEmptyExecutionRequests returns true if the execution requests contain no entries.
-func IsEmptyExecutionRequests(r *enginev1.ExecutionRequestsGloas) bool {
+func IsEmptyExecutionRequests(r interfaces.ExecutionRequests) bool {
 	if r == nil {
 		return true
 	}
-	return len(r.Deposits) == 0 && len(r.Withdrawals) == 0 && len(r.Consolidations) == 0 &&
-		len(r.BuilderDeposits) == 0 && len(r.BuilderExits) == 0
+	if len(r.GetDeposits()) > 0 || len(r.GetWithdrawals()) > 0 || len(r.GetConsolidations()) > 0 {
+		return false
+	}
+	if gloasRequests, ok := r.(interfaces.GloasExecutionRequests); ok {
+		return len(gloasRequests.GetBuilderDeposits()) == 0 && len(gloasRequests.GetBuilderExits()) == 0
+	}
+	return true
 }

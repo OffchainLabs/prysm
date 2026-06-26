@@ -21,6 +21,20 @@ var (
 	berSize    = berExample.SizeSSZ()
 )
 
+// ExecutionRequestsData is the common field-level view shared by the legacy
+// and Gloas execution request containers.
+type ExecutionRequestsData interface {
+	GetDeposits() []*DepositRequest
+	GetWithdrawals() []*WithdrawalRequest
+	GetConsolidations() []*ConsolidationRequest
+}
+
+type executionRequestsGloasData interface {
+	ExecutionRequestsData
+	GetBuilderDeposits() []*BuilderDepositRequest
+	GetBuilderExits() []*BuilderExitRequest
+}
+
 // emptyRequestsRootOnce merkleizes a zero-value gloas ExecutionRequests.
 var emptyRequestsRootOnce = sync.OnceValues(func() ([32]byte, error) {
 	return (&ExecutionRequestsGloas{}).HashTreeRoot()
@@ -29,6 +43,125 @@ var emptyRequestsRootOnce = sync.OnceValues(func() ([32]byte, error) {
 // EmptyExecutionRequestsHashTreeRoot returns the merkle root of an empty gloas ExecutionRequests.
 func EmptyExecutionRequestsHashTreeRoot() ([32]byte, error) {
 	return emptyRequestsRootOnce()
+}
+
+// EmptyExecutionRequestsGloasHashTreeRoot returns the merkle root of an empty ExecutionRequestsGloas.
+func EmptyExecutionRequestsGloasHashTreeRoot() ([32]byte, error) {
+	return emptyRequestsRootOnce()
+}
+
+// CopyExecutionRequests copies any execution request container into the legacy
+// ExecutionRequests type used by Electra/Fulu and the Engine API encoding path.
+func CopyExecutionRequests(requests ExecutionRequestsData) *ExecutionRequests {
+	if isNilExecutionRequestsData(requests) {
+		return nil
+	}
+	return &ExecutionRequests{
+		Deposits:       CopyDepositRequests(requests.GetDeposits()),
+		Withdrawals:    CopyWithdrawalRequests(requests.GetWithdrawals()),
+		Consolidations: CopyConsolidationRequests(requests.GetConsolidations()),
+	}
+}
+
+// CopyExecutionRequestsGloas copies any execution request container into the
+// Gloas/progressive execution request type.
+func CopyExecutionRequestsGloas(requests ExecutionRequestsData) *ExecutionRequestsGloas {
+	if isNilExecutionRequestsData(requests) {
+		return nil
+	}
+	copied := &ExecutionRequestsGloas{
+		Deposits:       CopyDepositRequests(requests.GetDeposits()),
+		Withdrawals:    CopyWithdrawalRequests(requests.GetWithdrawals()),
+		Consolidations: CopyConsolidationRequests(requests.GetConsolidations()),
+	}
+	if gloasRequests, ok := requests.(executionRequestsGloasData); ok {
+		copied.BuilderDeposits = CopyBuilderDepositRequests(gloasRequests.GetBuilderDeposits())
+		copied.BuilderExits = CopyBuilderExitRequests(gloasRequests.GetBuilderExits())
+	}
+	return copied
+}
+
+func isNilExecutionRequestsData(requests ExecutionRequestsData) bool {
+	switch r := requests.(type) {
+	case nil:
+		return true
+	case *ExecutionRequests:
+		return r == nil
+	case *ExecutionRequestsGloas:
+		return r == nil
+	default:
+		return false
+	}
+}
+
+// CopyDepositRequests copies a list of deposit requests.
+func CopyDepositRequests(requests []*DepositRequest) []*DepositRequest {
+	if requests == nil {
+		return nil
+	}
+	copied := make([]*DepositRequest, len(requests))
+	for i, request := range requests {
+		if request != nil {
+			copied[i] = request.Copy()
+		}
+	}
+	return copied
+}
+
+// CopyWithdrawalRequests copies a list of withdrawal requests.
+func CopyWithdrawalRequests(requests []*WithdrawalRequest) []*WithdrawalRequest {
+	if requests == nil {
+		return nil
+	}
+	copied := make([]*WithdrawalRequest, len(requests))
+	for i, request := range requests {
+		if request != nil {
+			copied[i] = request.Copy()
+		}
+	}
+	return copied
+}
+
+// CopyConsolidationRequests copies a list of consolidation requests.
+func CopyConsolidationRequests(requests []*ConsolidationRequest) []*ConsolidationRequest {
+	if requests == nil {
+		return nil
+	}
+	copied := make([]*ConsolidationRequest, len(requests))
+	for i, request := range requests {
+		if request != nil {
+			copied[i] = request.Copy()
+		}
+	}
+	return copied
+}
+
+// CopyBuilderDepositRequests copies a list of builder deposit requests.
+func CopyBuilderDepositRequests(requests []*BuilderDepositRequest) []*BuilderDepositRequest {
+	if requests == nil {
+		return nil
+	}
+	copied := make([]*BuilderDepositRequest, len(requests))
+	for i, request := range requests {
+		if request != nil {
+			copied[i] = request.Copy()
+		}
+	}
+	return copied
+}
+
+// CopyBuilderExitRequests copies a list of builder exit requests.
+func CopyBuilderExitRequests(requests []*BuilderExitRequest) []*BuilderExitRequest {
+	if requests == nil {
+		return nil
+	}
+	copied := make([]*BuilderExitRequest, len(requests))
+	for i, request := range requests {
+		if request != nil {
+			copied[i] = request.Copy()
+		}
+	}
+	return copied
 }
 
 const (

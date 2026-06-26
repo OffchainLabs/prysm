@@ -3130,10 +3130,11 @@ func (b *BeaconBlockBodyGloas) ToConsensus() (*eth.BeaconBlockBodyGloas, error) 
 	}
 	var parentExecutionRequests *enginev1.ExecutionRequestsGloas
 	if b.ParentExecutionRequests != nil {
-		parentExecutionRequests, err = b.ParentExecutionRequests.ToConsensus()
+		legacyParentExecutionRequests, err := b.ParentExecutionRequests.ToConsensus()
 		if err != nil {
 			return nil, server.NewDecodeError(err, "ParentExecutionRequests")
 		}
+		parentExecutionRequests = enginev1.CopyExecutionRequestsGloas(legacyParentExecutionRequests)
 	}
 
 	return &eth.BeaconBlockBodyGloas{
