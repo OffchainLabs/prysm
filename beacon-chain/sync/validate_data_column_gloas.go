@@ -168,7 +168,7 @@ func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID
 	return nil
 }
 
-func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, blk interfaces.ReadOnlySignedBeaconBlock) {
+func (s *Service) processPendingGloasColumns(ctx context.Context, root [fieldparams.RootLength]byte, blk interfaces.ReadOnlySignedBeaconBlock) {
 	if blk == nil || blk.IsNil() {
 		return
 	}
@@ -250,6 +250,10 @@ func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, 
 			return
 		}
 
+		if err := s.cfg.p2p.BroadcastDataColumnSidecars(ctx, verified, nil); err != nil {
+			log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Warn("Failed to broadcast pending Gloas columns")
+		}
+
 		log.WithFields(logrus.Fields{
 			"root":    fmt.Sprintf("%#x", root),
 			"count":   len(verified),
@@ -294,11 +298,18 @@ func (s *Service) pruneStaleGloasColumns(currentSlot primitives.Slot) {
 		if e.slot+1 >= currentSlot {
 			continue
 		}
+		// Dedupe forwarders: a peer that relayed many columns for one root is downscored once, not per column.
+		seen := make(map[peer.ID]struct{})
 		peers := make([]peer.ID, 0, fieldparams.NumberOfColumns)
 		for _, pe := range e.columns {
-			if pe != nil {
-				peers = append(peers, pe.peer)
+			if pe == nil {
+				continue
 			}
+			if _, ok := seen[pe.peer]; ok {
+				continue
+			}
+			seen[pe.peer] = struct{}{}
+			peers = append(peers, pe.peer)
 		}
 		pruned = append(pruned, prunedRoot{root: r, peers: peers})
 		delete(s.pendingGloasColumns, r)
