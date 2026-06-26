@@ -4,6 +4,7 @@ import (
 	"math"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
@@ -910,7 +911,6 @@ func TestAlreadySyncingBlock(t *testing.T) {
 }
 
 func TestExpirationCache_PruneOldBlocksCorrectly(t *testing.T) {
-	ctx := t.Context()
 	db := dbtest.SetupDB(t)
 
 	mockChain := &mock.ChainService{
@@ -927,42 +927,46 @@ func TestExpirationCache_PruneOldBlocksCorrectly(t *testing.T) {
 	}()
 	pendingBlockExpTime = 500 * time.Millisecond
 
-	r := NewService(ctx,
-		WithStateGen(stategen.New(db, doublylinkedtree.New())),
-		WithDatabase(db),
-		WithChainService(mockChain),
-		WithP2P(p1),
-	)
-	b1 := util.NewBeaconBlock()
-	b1.Block.Slot = 1
-	b1.Block.ProposerIndex = 10
-	b1Root, err := b1.Block.HashTreeRoot()
-	require.NoError(t, err)
-	wsb, err := blocks.NewSignedBeaconBlock(b1)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(1, wsb, b1Root))
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+		r := NewService(ctx,
+			WithStateGen(stategen.New(db, doublylinkedtree.New())),
+			WithDatabase(db),
+			WithChainService(mockChain),
+			WithP2P(p1),
+		)
+		b1 := util.NewBeaconBlock()
+		b1.Block.Slot = 1
+		b1.Block.ProposerIndex = 10
+		b1Root, err := b1.Block.HashTreeRoot()
+		require.NoError(t, err)
+		wsb, err := blocks.NewSignedBeaconBlock(b1)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(1, wsb, b1Root))
 
-	// Add new block with the same slot.
-	b2 := util.NewBeaconBlock()
-	b2.Block.Slot = 1
-	b2.Block.ProposerIndex = 11
-	b2Root, err := b2.Block.HashTreeRoot()
-	require.NoError(t, err)
-	wsb, err = blocks.NewSignedBeaconBlock(b2)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(1, wsb, b2Root))
+		// Add new block with the same slot.
+		b2 := util.NewBeaconBlock()
+		b2.Block.Slot = 1
+		b2.Block.ProposerIndex = 11
+		b2Root, err := b2.Block.HashTreeRoot()
+		require.NoError(t, err)
+		wsb, err = blocks.NewSignedBeaconBlock(b2)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(1, wsb, b2Root))
 
-	require.Equal(t, true, r.seenPendingBlocks[b1Root])
-	require.Equal(t, true, r.seenPendingBlocks[b2Root])
-	require.Equal(t, 2, len(r.pendingBlocksInCache(1)))
+		require.Equal(t, true, r.seenPendingBlocks[b1Root])
+		require.Equal(t, true, r.seenPendingBlocks[b2Root])
+		require.Equal(t, 2, len(r.pendingBlocksInCache(1)))
 
-	// Wait for expiration cache to cleanup and remove old block.
-	time.Sleep(2 * pendingBlockExpTime)
+		// Advance fake time so the expiration cache prunes both blocks.
+		time.Sleep(2 * pendingBlockExpTime)
+		synctest.Wait()
 
-	// Run pending queue with expired blocks.
-	require.NoError(t, r.processPendingBlocks(ctx))
+		// Run pending queue with expired blocks.
+		require.NoError(t, r.processPendingBlocks(ctx))
 
-	assert.Equal(t, false, r.seenPendingBlocks[b1Root])
-	assert.Equal(t, false, r.seenPendingBlocks[b2Root])
-	assert.Equal(t, 0, len(r.pendingBlocksInCache(1)))
+		assert.Equal(t, false, r.seenPendingBlocks[b1Root])
+		assert.Equal(t, false, r.seenPendingBlocks[b2Root])
+		assert.Equal(t, 0, len(r.pendingBlocksInCache(1)))
+	})
 }
