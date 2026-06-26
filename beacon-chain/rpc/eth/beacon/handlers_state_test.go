@@ -72,6 +72,7 @@ func TestGetStateRoot(t *testing.T) {
 				BeaconStateRoot: stateRoot[:],
 				BeaconState:     fakeState,
 			},
+			Blocker:               &testutil.MockBlocker{RootToReturn: root},
 			HeadFetcher:           chainService,
 			OptimisticModeFetcher: chainService,
 			FinalizationFetcher:   chainService,
@@ -102,6 +103,7 @@ func TestGetStateRoot(t *testing.T) {
 			Stater: &testutil.MockStater{
 				BeaconStateRoot: stateRoot[:],
 				BeaconState:     fakeState,
+				BeaconBlockRoot: headerRoot,
 			},
 			HeadFetcher:           chainService,
 			OptimisticModeFetcher: chainService,
@@ -656,6 +658,10 @@ func (m *futureSyncMockFetcher) StateBySlot(context.Context, primitives.Slot) (s
 
 func (m *futureSyncMockFetcher) StateByEpoch(context.Context, primitives.Epoch) (state.BeaconState, error) {
 	return m.BeaconState, nil
+}
+
+func (m *futureSyncMockFetcher) BlockRoot(context.Context, []byte) ([32]byte, error) {
+	return [32]byte{}, nil
 }
 
 func TestGetSyncCommittees_Future(t *testing.T) {
