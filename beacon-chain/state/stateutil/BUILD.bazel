@@ -57,6 +57,7 @@ go_test(
         "compact_validator_test.go",
         "field_root_test.go",
         "field_root_validator_test.go",
+        "progressive_root_test.go",
         "proposer_lookahead_root_test.go",
         "reference_bench_test.go",
         "state_root_test.go",

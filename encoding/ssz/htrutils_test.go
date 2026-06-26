@@ -157,6 +157,23 @@ func TestTransactionsRoot(t *testing.T) {
 	}
 }
 
+func TestTransactionsRootProgressive(t *testing.T) {
+	txs := [][]byte{{0x01, 0x02, 0x03}}
+
+	got, err := ssz.TransactionsRootProgressive(txs)
+	require.NoError(t, err)
+
+	want, err := ssz.SliceRootProgressive([]ssz.ProgressiveTransaction{
+		ssz.ProgressiveTransaction(txs[0]),
+	})
+	require.NoError(t, err)
+	require.DeepSSZEqual(t, want, got)
+
+	legacy, err := ssz.TransactionsRoot(txs)
+	require.NoError(t, err)
+	require.DeepNotSSZEqual(t, legacy, got)
+}
+
 func TestByteSliceRoot(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -313,6 +330,24 @@ func TestWithrawalSliceRoot(t *testing.T) {
 			require.DeepSSZEqual(t, tt.want, got)
 		})
 	}
+}
+
+func TestWithdrawalSliceRootProgressive(t *testing.T) {
+	withdrawals := []*enginev1.Withdrawal{{
+		Index:          123,
+		ValidatorIndex: 123123,
+		Address:        []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0},
+		Amount:         50,
+	}}
+	got, err := ssz.WithdrawalSliceRootProgressive(withdrawals, 16)
+	require.NoError(t, err)
+
+	want, err := ssz.SliceRootProgressive(withdrawals)
+	require.NoError(t, err)
+	require.DeepSSZEqual(t, want, got)
+
+	_, err = ssz.WithdrawalSliceRootProgressive(withdrawals, 0)
+	require.ErrorContains(t, "slice exceeds max length", err)
 }
 
 func TestDepositRequestsSliceRoot(t *testing.T) {

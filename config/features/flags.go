@@ -185,6 +185,11 @@ var (
 		Name:  "enable-state-diff",
 		Usage: "Enables the experimental state diff feature.",
 	}
+	EnableProgressiveSSZ = &cli.BoolFlag{
+		Name:   "enable-progressive-ssz",
+		Usage:  "Enables experimental progressive SSZ merkleization for converted consensus types.",
+		Hidden: true,
+	}
 	// forceHeadFlag is a flag to force the head of the beacon chain to a specific block.
 	forceHeadFlag = &cli.StringFlag{
 		Name: "sync-from",
@@ -286,6 +291,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
 	EnableStateDiff,
+	EnableProgressiveSSZ,
 	forceHeadFlag,
 	blacklistRoots,
 	enableHashtree,

@@ -76,6 +76,20 @@ func Uint64ListRootWithRegistryLimit(balances []uint64) ([32]byte, error) {
 	return ssz.MixInLength(balancesRootsRoot, balancesLengthRoot), nil
 }
 
+// Uint64ListRootProgressive computes the HashTreeRoot Merkleization of
+// a progressive list of uint64 values.
+func Uint64ListRootProgressive(vals []uint64) ([32]byte, error) {
+	chunks, err := PackUint64IntoChunks(vals)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "could not pack uint64 values into chunks")
+	}
+
+	body := ssz.MerkleizeProgressiveChunks(chunks)
+	var length [32]byte
+	binary.LittleEndian.PutUint64(length[:8], uint64(len(vals)))
+	return ssz.MixInLength(body, length[:]), nil
+}
+
 // ValidatorLimitForBalancesChunks returns the limit of validators after going through the chunking process.
 func ValidatorLimitForBalancesChunks() uint64 {
 	maxValidatorLimit := uint64(fieldparams.ValidatorRegistryLimit)
