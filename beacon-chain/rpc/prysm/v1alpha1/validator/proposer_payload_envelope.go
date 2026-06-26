@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
@@ -108,7 +107,7 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 
 	// Return the blinded wire form (payload_root); the signer validates over its HTR, which equals
 	// the full envelope's HTR, and the BN reconstructs the full payload from this cache on publish.
-	blinded, err := ethpb.WireBlindedFromFull(contents.Envelope)
+	blinded, err := contents.Envelope.WireBlinded()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "could not build blinded envelope: %v", err)
 	}
@@ -209,8 +208,20 @@ func (vs *Server) resolveEnvelopeToPublish(req *ethpb.GenericSignedExecutionPayl
 		if !ok || cached.Envelope == nil {
 			return nil, nil, nil, status.Error(codes.FailedPrecondition, "no cached execution payload envelope to reconstruct from")
 		}
-		if !bytes.Equal(cached.Envelope.BeaconBlockRoot, b.Message.BeaconBlockRoot) {
-			return nil, nil, nil, status.Error(codes.InvalidArgument, "cached envelope beacon_block_root does not match blinded envelope")
+		cachedBlinded, err := cached.Envelope.WireBlinded()
+		if err != nil {
+			return nil, nil, nil, status.Errorf(codes.Internal, "could not derive blinded envelope from cache: %v", err)
+		}
+		cachedRoot, err := cachedBlinded.HashTreeRoot()
+		if err != nil {
+			return nil, nil, nil, status.Errorf(codes.Internal, "could not hash cached blinded envelope: %v", err)
+		}
+		blindedRoot, err := b.Message.HashTreeRoot()
+		if err != nil {
+			return nil, nil, nil, status.Errorf(codes.Internal, "could not hash blinded envelope: %v", err)
+		}
+		if cachedRoot != blindedRoot {
+			return nil, nil, nil, status.Error(codes.InvalidArgument, "cached envelope does not match blinded envelope")
 		}
 		return &ethpb.SignedExecutionPayloadEnvelope{Message: cached.Envelope, Signature: b.Signature}, nil, nil, nil
 	default:

@@ -178,7 +178,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_RejectsBadProofs(t *t
 	signed := &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
 			Payload:               &enginev1.ExecutionPayloadGloas{SlotNumber: 1},
-			ExecutionRequests:     &enginev1.ExecutionRequests{},
+			ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 			BeaconBlockRoot:       make([]byte, 32),
 			ParentBeaconBlockRoot: make([]byte, 32),
 		},
@@ -216,7 +216,7 @@ func TestGetExecutionPayloadEnvelopeRPC_Success(t *testing.T) {
 			BlockHash:     make([]byte, 32),
 			SlotNumber:    1,
 		},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 		BuilderIndex:          primitives.BuilderIndex(0),
 		BeaconBlockRoot:       make([]byte, 32),
 		ParentBeaconBlockRoot: make([]byte, 32),

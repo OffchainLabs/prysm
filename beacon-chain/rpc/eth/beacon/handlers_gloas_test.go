@@ -45,7 +45,7 @@ func envelopeCacheFor(signed *ethpb.SignedExecutionPayloadEnvelope) *cache.Execu
 
 func blindedJSONBody(t *testing.T, signed *ethpb.SignedExecutionPayloadEnvelope) []byte {
 	t.Helper()
-	blinded, err := ethpb.SignedWireBlindedFromFull(signed)
+	blinded, err := signed.WireBlinded()
 	require.NoError(t, err)
 	msg, err := structs.BlindedExecutionPayloadEnvelopeFromConsensus(blinded.Message)
 	require.NoError(t, err)
@@ -380,7 +380,7 @@ func TestPublishExecutionPayloadEnvelope_SSZ_StatefulBlinded(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	signed := testSignedEnvelope()
-	blinded, err := ethpb.SignedWireBlindedFromFull(signed)
+	blinded, err := signed.WireBlinded()
 	require.NoError(t, err)
 	sszBody, err := blinded.MarshalSSZ()
 	require.NoError(t, err)
@@ -413,7 +413,7 @@ func TestPublishExecutionPayloadEnvelope_SSZ_StatefulBlinded_CacheMiss(t *testin
 	params.OverrideBeaconConfig(cfg)
 
 	signed := testSignedEnvelope()
-	blinded, err := ethpb.SignedWireBlindedFromFull(signed)
+	blinded, err := signed.WireBlinded()
 	require.NoError(t, err)
 	sszBody, err := blinded.MarshalSSZ()
 	require.NoError(t, err)

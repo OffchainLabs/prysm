@@ -49,37 +49,37 @@ func (payment *BuilderPendingPayment) Copy() *BuilderPendingPayment {
 	}
 }
 
-// WireBlindedFromFull derives the spec-wire blinded envelope from a full one: payload_root is
+// WireBlinded derives the spec-wire blinded envelope from a full one: payload_root is
 // HashTreeRoot(payload), so HashTreeRoot(blinded) == HashTreeRoot(full) and a validator signature
 // over either form is valid against the other.
-func WireBlindedFromFull(full *ExecutionPayloadEnvelope) (*WireBlindedExecutionPayloadEnvelope, error) {
-	if full == nil {
+func (e *ExecutionPayloadEnvelope) WireBlinded() (*WireBlindedExecutionPayloadEnvelope, error) {
+	if e == nil {
 		return nil, nil
 	}
-	payloadRoot, err := full.Payload.HashTreeRoot()
+	payloadRoot, err := e.Payload.HashTreeRoot()
 	if err != nil {
 		return nil, err
 	}
 	return &WireBlindedExecutionPayloadEnvelope{
 		PayloadRoot:           payloadRoot[:],
-		ExecutionRequests:     full.ExecutionRequests,
-		BuilderIndex:          full.BuilderIndex,
-		BeaconBlockRoot:       bytesutil.SafeCopyBytes(full.BeaconBlockRoot),
-		ParentBeaconBlockRoot: bytesutil.SafeCopyBytes(full.ParentBeaconBlockRoot),
+		ExecutionRequests:     e.ExecutionRequests,
+		BuilderIndex:          e.BuilderIndex,
+		BeaconBlockRoot:       bytesutil.SafeCopyBytes(e.BeaconBlockRoot),
+		ParentBeaconBlockRoot: bytesutil.SafeCopyBytes(e.ParentBeaconBlockRoot),
 	}, nil
 }
 
-// SignedWireBlindedFromFull lifts a signed envelope to its blinded form, preserving the signature.
-func SignedWireBlindedFromFull(full *SignedExecutionPayloadEnvelope) (*SignedWireBlindedExecutionPayloadEnvelope, error) {
-	if full == nil {
+// WireBlinded lifts a signed envelope to its blinded form, preserving the signature.
+func (e *SignedExecutionPayloadEnvelope) WireBlinded() (*SignedWireBlindedExecutionPayloadEnvelope, error) {
+	if e == nil {
 		return nil, nil
 	}
-	msg, err := WireBlindedFromFull(full.Message)
+	msg, err := e.Message.WireBlinded()
 	if err != nil {
 		return nil, err
 	}
 	return &SignedWireBlindedExecutionPayloadEnvelope{
 		Message:   msg,
-		Signature: bytesutil.SafeCopyBytes(full.Signature),
+		Signature: bytesutil.SafeCopyBytes(e.Signature),
 	}, nil
 }

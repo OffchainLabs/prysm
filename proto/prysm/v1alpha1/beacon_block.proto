@@ -122,9 +122,8 @@ message GenericBeaconBlock {
 
     BeaconBlockGloas gloas = 13;
 
-    // Gloas block bundled with its execution payload envelope, blobs, and KZG
-    // proofs. Returned when eager_payload_state_root (stateless) is requested so
-    // the validator client has the envelope + blob data without a second fetch.
+    // Returned when eager_payload_state_root (stateless) is requested so the
+    // validator client has the envelope + blob data without a second fetch.
     BeaconBlockContentsGloas gloas_contents = 14;
   }
   bool is_blinded = 100;

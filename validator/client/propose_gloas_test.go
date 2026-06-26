@@ -102,7 +102,7 @@ func TestProposeSelfBuildEnvelope_Blinded(t *testing.T) {
 	slot := primitives.Slot(100)
 	builderIndex := params.BeaconConfig().BuilderIndexSelfBuild
 
-	blinded, err := ethpb.WireBlindedFromFull(testExecutionPayloadEnvelope(slot, builderIndex))
+	blinded, err := testExecutionPayloadEnvelope(slot, builderIndex).WireBlinded()
 	require.NoError(t, err)
 
 	m.validatorClient.EXPECT().

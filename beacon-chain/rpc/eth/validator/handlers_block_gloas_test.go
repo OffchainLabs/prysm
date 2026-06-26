@@ -316,7 +316,7 @@ func TestExecutionPayloadEnvelope_SSZ(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	envelope := testEnvelope()
-	wireBlinded, err := eth.WireBlindedFromFull(envelope)
+	wireBlinded, err := envelope.WireBlinded()
 	require.NoError(t, err)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 	v1alpha1Server.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).Return(
@@ -353,7 +353,7 @@ func TestExecutionPayloadEnvelope_BeaconBlockRootMismatch(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	envelope := testEnvelope()
-	wireBlinded, err := eth.WireBlindedFromFull(envelope)
+	wireBlinded, err := envelope.WireBlinded()
 	require.NoError(t, err)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 	v1alpha1Server.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).Return(
