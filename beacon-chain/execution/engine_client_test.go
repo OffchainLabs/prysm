@@ -3046,6 +3046,14 @@ func testNewBlobVerifier() verification.NewBlobVerifier {
 	}
 }
 
+// A zero-Hash block (EL replied `null`) must surface as the sentinel so
+// the handler can return 425 instead of a 500 Header-decode error.
+func TestGloasPayloadFromExecutionBlock_NotYetAvailable(t *testing.T) {
+	requested := common.BytesToHash([]byte("not-yet-on-el"))
+	_, err := gloasPayloadFromExecutionBlock(requested, &pb.ExecutionBlock{})
+	require.ErrorIs(t, err, ErrExecutionBlockNotYetAvailable)
+}
+
 func TestGloasPayloadFromExecutionBlock_PropagatesBlockAccessList(t *testing.T) {
 	hash := common.BytesToHash([]byte("block-hash"))
 	blobGasUsed := uint64(123)

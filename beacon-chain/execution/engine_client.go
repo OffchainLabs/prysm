@@ -174,6 +174,10 @@ type EngineCaller interface {
 
 var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
 
+// ErrExecutionBlockNotYetAvailable signals a benign race: the CL has a
+// blinded envelope but the EL has not yet executed the payload. Retry.
+var ErrExecutionBlockNotYetAvailable = errors.New("execution block not yet available on EL")
+
 // NewPayload request calls the engine_newPayloadVX method via JSON-RPC.
 func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester) ([]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.NewPayload")
@@ -821,7 +825,11 @@ func gloasPayloadFromExecutionBlock(
 	if blk == nil {
 		return nil, errors.New("execution block not found")
 	}
-	if blk.Hash == (common.Hash{}) || blk.Hash != requestedHash {
+	// Zero Hash = EL returned `null`, i.e. payload not yet executed.
+	if blk.Hash == (common.Hash{}) {
+		return nil, errors.Wrapf(ErrExecutionBlockNotYetAvailable, "hash %#x", requestedHash)
+	}
+	if blk.Hash != requestedHash {
 		return nil, errors.New("execution block hash mismatch")
 	}
 	if blk.Number == nil {

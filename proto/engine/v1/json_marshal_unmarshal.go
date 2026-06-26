@@ -1,6 +1,7 @@
 package enginev1
 
 import (
+	"bytes"
 	"encoding/json"
 	"math/big"
 	"reflect"
@@ -109,6 +110,12 @@ func (e *ExecutionBlock) UnmarshalJSON(enc []byte) error {
 	}
 	type withdrawalsJson struct {
 		Withdrawals []*withdrawalJSON `json:"withdrawals"`
+	}
+
+	// `null` is the spec response for an unknown block; leave Hash zero so
+	// callers can tell "not found" apart from a decode error.
+	if bytes.Equal(bytes.TrimSpace(enc), []byte("null")) {
+		return nil
 	}
 
 	if err := e.Header.UnmarshalJSON(enc); err != nil {
