@@ -43,7 +43,7 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 	parentRoot := sBlk.Block().ParentRoot()
 	envelope := &ethpb.ExecutionPayloadEnvelope{
 		Payload:               payload,
-		ExecutionRequests:     local.ExecutionRequests,
+		ExecutionRequests:     local.ExecutionRequestsGloas,
 		BuilderIndex:          params.BeaconConfig().BuilderIndexSelfBuild,
 		BeaconBlockRoot:       blockRoot[:],
 		ParentBeaconBlockRoot: parentRoot[:],
@@ -254,7 +254,7 @@ func verifyCellProofs(blobs [][]byte, flatProofs [][]byte) error {
 // in the block body based on the parent's execution payload envelope.
 func (vs *Server) setParentExecutionRequests(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, parentFull bool) error {
 	if head.Version() < version.Gloas {
-		return sBlk.SetParentExecutionRequests(&enginev1.ExecutionRequests{})
+		return sBlk.SetParentExecutionRequests(&enginev1.ExecutionRequestsGloas{})
 	}
 
 	parentRoot := sBlk.Block().ParentRoot()
@@ -263,7 +263,7 @@ func (vs *Server) setParentExecutionRequests(ctx context.Context, sBlk interface
 		return errors.Wrap(err, "could not get parent block slot")
 	}
 	if slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch || !parentFull {
-		return sBlk.SetParentExecutionRequests(&enginev1.ExecutionRequests{})
+		return sBlk.SetParentExecutionRequests(&enginev1.ExecutionRequestsGloas{})
 	}
 
 	// TODO: replace DB lookup with a single-entry cache (blockroot → envelope).

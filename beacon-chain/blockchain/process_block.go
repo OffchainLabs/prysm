@@ -398,6 +398,7 @@ func (s *Service) notifyEngineAndSaveData(
 					return nil, false, err
 				}
 			}
+			args.HasPayload = true
 		} else {
 			idx, ok := envMap[root]
 			if ok {
@@ -412,8 +413,10 @@ func (s *Service) notifyEngineAndSaveData(
 				args.HasPayload = true
 			}
 		}
-		if err := s.areSidecarsAvailable(ctx, avs, b); err != nil {
-			return nil, false, errors.Wrapf(err, "could not validate sidecar availability for block %#x at slot %d", b.Root(), b.Block().Slot())
+		if args.HasPayload {
+			if err := s.areSidecarsAvailable(ctx, avs, b); err != nil {
+				return nil, false, errors.Wrapf(err, "could not validate sidecar availability for block %#x at slot %d", b.Root(), b.Block().Slot())
+			}
 		}
 
 		pendingNodes[i] = args

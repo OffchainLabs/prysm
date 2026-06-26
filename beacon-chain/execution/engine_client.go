@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
@@ -60,6 +61,7 @@ var (
 		GetPayloadMethodV5,
 		GetBlobsV2,
 		GetBlobsV3,
+		HasBlobs,
 	}
 
 	gloasEngineEndpoints = []string{
@@ -121,6 +123,8 @@ const (
 	GetBlobsV2 = "engine_getBlobsV2"
 	// GetBlobsV3 request string for JSON-RPC.
 	GetBlobsV3 = "engine_getBlobsV3"
+	// HasBlobs request string for JSON-RPC.
+	HasBlobs = "engine_hasBlobs"
 	// GetClientVersionV1 is the JSON-RPC method that identifies the execution client.
 	GetClientVersionV1 = "engine_getClientVersionV1"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
@@ -150,13 +154,14 @@ type Reconstructor interface {
 	) (map[[32]byte]*pb.ExecutionPayloadGloas, error)
 	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
 	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error)
+	ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.PartialDataColumn, bool, error)
 	ReconstructExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedBlindedExecutionPayloadEnvelope) (*ethpb.SignedExecutionPayloadEnvelope, error)
 }
 
 // EngineCaller defines a client that can interact with an Ethereum
 // execution node's engine service via JSON-RPC.
 type EngineCaller interface {
-	NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error)
+	NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester) ([]byte, error)
 	ForkchoiceUpdated(
 		ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer,
 	) (*pb.PayloadIDBytes, []byte, error)
@@ -170,7 +175,7 @@ type EngineCaller interface {
 var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
 
 // NewPayload request calls the engine_newPayloadVX method via JSON-RPC.
-func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
+func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester) ([]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.NewPayload")
 	defer span.End()
 	defer func(start time.Time) {
@@ -200,7 +205,7 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 				return nil, handleRPCError(err)
 			}
 		} else {
-			flattenedRequests, err := pb.EncodeExecutionRequests(executionRequests)
+			flattenedRequests, err := executionRequests.FlattenRequests()
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to encode execution requests")
 			}
@@ -210,7 +215,7 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 			}
 		}
 	case *pb.ExecutionPayloadGloas:
-		flattenedRequests, err := pb.EncodeExecutionRequests(executionRequests)
+		flattenedRequests, err := executionRequests.FlattenRequests()
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to encode execution requests")
 		}
@@ -652,7 +657,24 @@ func (s *Service) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash)
 	if err := s.rpcClient.CallContext(ctx, &result, GetBlobsV3, versionedHashes); err != nil {
 		return nil, handleRPCError(err)
 	}
-	getBlobsV3Latency.Observe(float64(time.Since(start).Milliseconds()))
+	getBlobsV3Latency.Observe(float64(time.Since(start).Seconds()))
+	return result, nil
+}
+
+// HasBlobs checks whether the given versioned hashes are available in the
+// execution client's blob pool without fetching the actual blob data.
+// It returns a boolean slice parallel to the input hashes.
+func (s *Service) HasBlobs(ctx context.Context, versionedHashes []common.Hash) ([]bool, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.HasBlobs")
+	defer span.End()
+	start := time.Now()
+
+	hasBlobsRequestsTotal.Inc()
+	var result []bool
+	if err := s.rpcClient.CallContext(ctx, &result, HasBlobs, versionedHashes); err != nil {
+		return nil, handleRPCError(err)
+	}
+	hasBlobsLatency.Observe(float64(time.Since(start).Seconds()))
 	return result, nil
 }
 
@@ -948,7 +970,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 	haveAllBlobs := cp.Included.Count() == uint64(len(commitments))
 
 	var partialColumns []blocks.PartialDataColumn
-	isGloas := slots.ToEpoch(populator.Slot()) >= params.BeaconConfig().GloasForkEpoch
+	slot := populator.Slot()
 	if haveAllBlobs {
 		// Construct data column sidecars from the signed block and cells and proofs.
 		roSidecars, err := peerdas.DataColumnSidecars(cp.CellsPerBlob, cp.ProofsPerBlob, populator)
@@ -961,8 +983,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
 		verifiedROSidecars := upgradeSidecarsToVerifiedSidecars(roSidecars)
 
-		// TODO: Partial Columns for Gloas
-		if !isGloas && s.partialColumnsSupported {
+		if s.partialColumnsEnabledForSlot(slot) {
 			for _, sidecar := range verifiedROSidecars {
 				pc, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar)
 				if err != nil {
@@ -970,32 +991,109 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 				}
 				partialColumns = append(partialColumns, pc)
 			}
-			log.WithField("haveAllBlobs", haveAllBlobs).Debug("Constructed partial data column sidecars")
+			log.WithFields(logrus.Fields{
+				"haveAllBlobs": haveAllBlobs,
+				"blockRoot":    fmt.Sprintf("%#x", root),
+				"slot":         slot,
+			}).Debug("Constructed partial data column sidecars")
 		}
 
 		return verifiedROSidecars, partialColumns, nil
 	}
 
-	// TODO: Partial Columns for Gloas
-	if !isGloas && s.partialColumnsSupported {
+	if s.partialColumnsEnabledForSlot(slot) {
 		partialColumns, err = peerdas.PartialColumns(cp.Included, cp.CellsPerBlob, cp.ProofsPerBlob, populator)
 		if err != nil {
 			return nil, nil, wrapWithBlockRoot(err, root, "construct partial columns")
 		}
-		log.WithField("haveAllBlobs", haveAllBlobs).Debug("Constructed partial data column sidecars")
+		log.WithFields(logrus.Fields{
+			"haveAllBlobs": haveAllBlobs,
+			"blockRoot":    fmt.Sprintf("%#x", root),
+			"slot":         slot,
+		}).Debug("Constructed partial data column sidecars")
 	}
 
 	return nil, partialColumns, nil
 }
 
+// ConstructPartialDataColumnSidecarsFromHasBlobs constructs partial
+// columns without any cells whose parts metadata requests only the blobs missing from the EL.
+//
+// It returns:
+//   - the partial columns carrying the requests override; nil when
+//     the block has no commitments, the EL already has every blob, or an error
+//     occurred.
+//   - whether the HasBlobs flow is supported: false when the engine lacks the
+//     HasBlobs capability or partial columns are disabled for the block's slot,
+//     in which case the other return values are always nil.
+//   - any error from querying the EL or building the partial columns.
+func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.PartialDataColumn, bool, error) {
+	if !s.useHasBlobs() || !s.partialColumnsEnabledForSlot(populator.Slot()) {
+		return nil, false, nil
+	}
+
+	root := populator.Root()
+	commitments, err := populator.Commitments()
+	if err != nil {
+		return nil, true, wrapWithBlockRoot(err, root, "commitments")
+	}
+	if len(commitments) == 0 {
+		return nil, true, nil
+	}
+
+	hasBlobs, err := s.HasBlobs(ctx, versionedHashesFromCommitments(commitments))
+	if err != nil {
+		return nil, true, wrapWithBlockRoot(err, root, "has blobs")
+	}
+	if len(hasBlobs) != len(commitments) {
+		return nil, true, wrapWithBlockRoot(
+			errors.Errorf("got %d results for %d commitments", len(hasBlobs), len(commitments)),
+			root,
+			"has blobs result length",
+		)
+	}
+
+	requests := bitfield.NewBitlist(uint64(len(commitments)))
+	for i, hasBlob := range hasBlobs {
+		if !hasBlob {
+			requests.SetBitAt(uint64(i), true)
+		}
+	}
+	if requests.Count() == 0 {
+		// EL has all blobs; GetBlobsV3 will succeed immediately, no need for an early publish.
+		log.WithFields(logrus.Fields{
+			"blockRoot":   fmt.Sprintf("%#x", root),
+			"slot":        populator.Slot(),
+			"commitments": len(commitments),
+		}).Debug("Execution client has all blobs, skipping partial column construction with Has Blobs")
+		return nil, true, nil
+	}
+
+	included := bitfield.NewBitlist(uint64(len(commitments)))
+	partialColumns, err := peerdas.PartialColumns(included, nil, nil, populator)
+	if err != nil {
+		return nil, true, wrapWithBlockRoot(err, root, "construct partial columns from has blobs")
+	}
+
+	for i := range partialColumns {
+		if err := partialColumns[i].SetPartsRequests(requests); err != nil {
+			return nil, true, wrapWithBlockRoot(err, root, "set parts requests")
+		}
+	}
+	log.WithFields(logrus.Fields{
+		"blockRoot":      fmt.Sprintf("%#x", root),
+		"slot":           populator.Slot(),
+		"commitments":    len(commitments),
+		"missingBlobs":   requests.Count(),
+		"missingIndices": requests.BitIndices(),
+		"partialColumns": len(partialColumns),
+	}).Debug("Constructed partial data column sidecars using Has Blobs requesting missing blobs")
+	return partialColumns, true, nil
+}
+
 // fetchCellsAndProofsFromExecution fetches cells and proofs from the execution client (using engine_getBlobsV2 execution API method)
 func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommitments [][]byte) (peerdas.StructuredCellsAndProofs, error) {
-	// Collect KZG hashes for all blobs.
-	versionedHashes := make([]common.Hash, 0, len(kzgCommitments))
-	for _, commitment := range kzgCommitments {
-		versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(commitment)
-		versionedHashes = append(versionedHashes, versionedHash)
-	}
+	versionedHashes := versionedHashesFromCommitments(kzgCommitments)
 
 	var blobAndProofs []*pb.BlobAndProofV2
 
@@ -1040,9 +1138,28 @@ func (s *Service) useGetBlobsV3() bool {
 	return s.capabilityCache.has(GetBlobsV3) && s.partialColumnsSupported
 }
 
+func (s *Service) useHasBlobs() bool {
+	supported := s.useGetBlobsV3() && s.capabilityCache.has(HasBlobs)
+	return supported
+}
+
 // PartialColumnsSupported reports whether cell-level (partial) column dissemination is enabled.
 func (s *Service) PartialColumnsSupported() bool {
 	return s.partialColumnsSupported
+}
+
+// TODO: Partial Columns for Gloas.
+func (s *Service) partialColumnsEnabledForSlot(slot primitives.Slot) bool {
+	isGloas := slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch
+	return !isGloas && s.partialColumnsSupported
+}
+
+func versionedHashesFromCommitments(kzgCommitments [][]byte) []common.Hash {
+	versionedHashes := make([]common.Hash, 0, len(kzgCommitments))
+	for _, commitment := range kzgCommitments {
+		versionedHashes = append(versionedHashes, primitives.ConvertKzgCommitmentToVersionedHash(commitment))
+	}
+	return versionedHashes
 }
 
 // upgradeSidecarsToVerifiedSidecars upgrades a list of data column sidecars into verified data column sidecars.

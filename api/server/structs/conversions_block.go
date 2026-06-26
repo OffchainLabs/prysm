@@ -2927,7 +2927,7 @@ func BeaconBlockGloasFromConsensus(b *eth.BeaconBlockGloas) (*BeaconBlockGloas, 
 			BLSToExecutionChanges:     SignedBLSChangesFromConsensus(b.Body.BlsToExecutionChanges),
 			SignedExecutionPayloadBid: SignedExecutionPayloadBidFromConsensus(b.Body.SignedExecutionPayloadBid),
 			PayloadAttestations:       payloadAttestations,
-			ParentExecutionRequests:   ExecutionRequestsFromConsensus(b.Body.ParentExecutionRequests),
+			ParentExecutionRequests:   ExecutionRequestsGloasFromConsensus(b.Body.ParentExecutionRequests),
 		},
 	}, nil
 }
@@ -3128,7 +3128,7 @@ func (b *BeaconBlockBodyGloas) ToConsensus() (*eth.BeaconBlockBodyGloas, error) 
 	if err != nil {
 		return nil, server.NewDecodeError(err, "PayloadAttestations")
 	}
-	var parentExecutionRequests *enginev1.ExecutionRequests
+	var parentExecutionRequests *enginev1.ExecutionRequestsGloas
 	if b.ParentExecutionRequests != nil {
 		parentExecutionRequests, err = b.ParentExecutionRequests.ToConsensus()
 		if err != nil {

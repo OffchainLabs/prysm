@@ -252,7 +252,11 @@ func (s *Service) notifyNewPayload(ctx context.Context, stVersion int, header in
 		}
 	}
 
-	lastValidHash, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, parentRoot, requests)
+	var requester enginev1.ExecutionRequester
+	if requests != nil {
+		requester = requests
+	}
+	lastValidHash, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, parentRoot, requester)
 	if err == nil {
 		newPayloadValidNodeCount.Inc()
 		return true, nil

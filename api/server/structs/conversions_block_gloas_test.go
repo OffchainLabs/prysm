@@ -26,7 +26,7 @@ func testEnvelopeProto() *eth.ExecutionPayloadEnvelope {
 			BlockHash:     fillByteSlice(common.HashLength, 0x22),
 			SlotNumber:    42,
 		},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 		BuilderIndex:          7,
 		BeaconBlockRoot:       fillByteSlice(32, 0x33),
 		ParentBeaconBlockRoot: fillByteSlice(32, 0x44),
@@ -51,17 +51,71 @@ func TestExecutionPayloadEnvelopeFromConsensus_NilRequests(t *testing.T) {
 	env.ExecutionRequests = nil
 	result, err := ExecutionPayloadEnvelopeFromConsensus(env)
 	require.NoError(t, err)
-	require.Equal(t, (*ExecutionRequests)(nil), result.ExecutionRequests)
+	require.Equal(t, (*ExecutionRequestsGloas)(nil), result.ExecutionRequests)
 }
 
 func testWireBlindedProto() *eth.WireBlindedExecutionPayloadEnvelope {
 	return &eth.WireBlindedExecutionPayloadEnvelope{
 		PayloadRoot:           fillByteSlice(32, 0x55),
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 		BuilderIndex:          7,
 		BeaconBlockRoot:       fillByteSlice(32, 0x33),
 		ParentBeaconBlockRoot: fillByteSlice(32, 0x44),
 	}
+}
+
+// HTR(blinded) must equal HTR(full) so the validator signature stays valid against either form.
+func TestWireBlindedHTRMatchesFull(t *testing.T) {
+	full := &eth.ExecutionPayloadEnvelope{
+		Payload: &enginev1.ExecutionPayloadGloas{
+			ParentHash:    fillByteSlice(32, 0x01),
+			FeeRecipient:  fillByteSlice(20, 0x02),
+			StateRoot:     fillByteSlice(32, 0x03),
+			ReceiptsRoot:  fillByteSlice(32, 0x04),
+			LogsBloom:     fillByteSlice(256, 0x05),
+			PrevRandao:    fillByteSlice(32, 0x06),
+			BaseFeePerGas: fillByteSlice(32, 0x07),
+			BlockHash:     fillByteSlice(32, 0x08),
+			Transactions:  [][]byte{[]byte("tx1"), []byte("tx2")},
+			Withdrawals:   []*enginev1.Withdrawal{},
+			SlotNumber:    primitives.Slot(100),
+		},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
+		BuilderIndex:          primitives.BuilderIndex(42),
+		BeaconBlockRoot:       fillByteSlice(32, 0x09),
+		ParentBeaconBlockRoot: fillByteSlice(32, 0x0a),
+	}
+
+	blinded, err := WireBlindedFromFull(full)
+	require.NoError(t, err)
+	fullHTR, err := full.HashTreeRoot()
+	require.NoError(t, err)
+	blindedHTR, err := blinded.HashTreeRoot()
+	require.NoError(t, err)
+	require.Equal(t, fullHTR, blindedHTR)
+
+	// SSZ roundtrip.
+	enc, err := blinded.MarshalSSZ()
+	require.NoError(t, err)
+	decoded := &eth.WireBlindedExecutionPayloadEnvelope{}
+	require.NoError(t, decoded.UnmarshalSSZ(enc))
+	rtHTR, err := decoded.HashTreeRoot()
+	require.NoError(t, err)
+	require.Equal(t, fullHTR, rtHTR)
+
+	// Signed wrapper SSZ roundtrip.
+	signedBlinded, err := SignedWireBlindedFromFull(&eth.SignedExecutionPayloadEnvelope{
+		Message:   full,
+		Signature: fillByteSlice(96, 0x0b),
+	})
+	require.NoError(t, err)
+	signedEnc, err := signedBlinded.MarshalSSZ()
+	require.NoError(t, err)
+	decodedSigned := &eth.SignedWireBlindedExecutionPayloadEnvelope{}
+	require.NoError(t, decodedSigned.UnmarshalSSZ(signedEnc))
+	rtBlindedHTR, err := decodedSigned.Message.HashTreeRoot()
+	require.NoError(t, err)
+	require.Equal(t, fullHTR, rtBlindedHTR)
 }
 
 func TestBlindedExecutionPayloadEnvelopeFromConsensus(t *testing.T) {

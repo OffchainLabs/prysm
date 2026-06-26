@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/client"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -99,7 +100,7 @@ func NewRestConnectionProvider(endpoint string, opts ...RestConnectionProviderOp
 	p.restHandler = newHandler(*p.httpClient, endpoints[0])
 
 	log.WithFields(logrus.Fields{
-		"endpoints": endpoints,
+		"endpoints": api.RedactEndpoints(endpoints),
 		"count":     len(endpoints),
 	}).Info("Initialized REST connection provider")
 
@@ -151,8 +152,8 @@ func (p *restConnectionProvider) SwitchHost(index int) error {
 	p.restHandler.SwitchHost(p.endpoints[index])
 
 	log.WithFields(logrus.Fields{
-		"previousHost": p.endpoints[oldIdx],
-		"newHost":      p.endpoints[index],
+		"previousHost": api.RedactEndpoint(p.endpoints[oldIdx]),
+		"newHost":      api.RedactEndpoint(p.endpoints[index]),
 	}).Debug("Switched REST endpoint")
 	return nil
 }

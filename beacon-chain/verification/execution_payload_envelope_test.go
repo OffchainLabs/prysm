@@ -193,7 +193,7 @@ func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, buil
 	return &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
 			Payload: payload,
-			ExecutionRequests: &enginev1.ExecutionRequests{
+			ExecutionRequests: &enginev1.ExecutionRequestsGloas{
 				Deposits: []*enginev1.DepositRequest{},
 			},
 			BuilderIndex:          builderIdx,
