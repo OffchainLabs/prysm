@@ -49,6 +49,7 @@ type BeaconBlockBody struct {
 	attesterSlashingsElectra  []*eth.AttesterSlashingElectra
 	attestations              []*eth.Attestation
 	attestationsElectra       []*eth.AttestationElectra
+	attestationsGloas         []*eth.AttestationGloas
 	deposits                  []*eth.Deposit
 	voluntaryExits            []*eth.SignedVoluntaryExit
 	syncAggregate             *eth.SyncAggregate

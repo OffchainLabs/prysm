@@ -298,6 +298,98 @@ func (a *AttestationElectra) GetCommitteeIndex() primitives.CommitteeIndex {
 }
 
 // Version --
+func (a *AttestationGloas) Version() int {
+	return version.Gloas
+}
+
+// IsNil --
+func (a *AttestationGloas) IsNil() bool {
+	return a == nil || a.Data == nil
+}
+
+// IsSingle returns true when the attestation can have only a single attester index.
+func (*AttestationGloas) IsSingle() bool {
+	return false
+}
+
+// IsAggregated --
+func (a *AttestationGloas) IsAggregated() bool {
+	return a.AggregationBits.Count() > 1
+}
+
+// Clone --
+func (a *AttestationGloas) Clone() Att {
+	return a.Copy()
+}
+
+// Copy --
+func (a *AttestationGloas) Copy() *AttestationGloas {
+	if a == nil {
+		return nil
+	}
+	return &AttestationGloas{
+		AggregationBits: bytesutil.SafeCopyBytes(a.AggregationBits),
+		CommitteeBits:   bytesutil.SafeCopyBytes(a.CommitteeBits),
+		Data:            a.Data.Copy(),
+		Signature:       bytesutil.SafeCopyBytes(a.Signature),
+	}
+}
+
+// AttestationElectraToGloas copies an Electra attestation into the Gloas wire-compatible type.
+func AttestationElectraToGloas(a *AttestationElectra) *AttestationGloas {
+	if a == nil {
+		return nil
+	}
+	return &AttestationGloas{
+		AggregationBits: bytesutil.SafeCopyBytes(a.AggregationBits),
+		CommitteeBits:   bytesutil.SafeCopyBytes(a.CommitteeBits),
+		Data:            a.Data.Copy(),
+		Signature:       bytesutil.SafeCopyBytes(a.Signature),
+	}
+}
+
+// AttestationGloasFromAtt converts supported post-Electra attestations into the Gloas concrete type.
+func AttestationGloasFromAtt(att Att) (*AttestationGloas, bool) {
+	switch a := att.(type) {
+	case *AttestationGloas:
+		return a, true
+	case *AttestationElectra:
+		return AttestationElectraToGloas(a), true
+	default:
+		return nil, false
+	}
+}
+
+// GetAttestingIndex --
+func (*AttestationGloas) GetAttestingIndex() primitives.ValidatorIndex {
+	return 0
+}
+
+// CommitteeBitsVal --
+func (a *AttestationGloas) CommitteeBitsVal() bitfield.Bitfield {
+	return a.CommitteeBits
+}
+
+// SetSignature --
+func (a *AttestationGloas) SetSignature(sig []byte) {
+	a.Signature = sig
+}
+
+// GetCommitteeIndex --
+func (a *AttestationGloas) GetCommitteeIndex() primitives.CommitteeIndex {
+	if len(a.CommitteeBits) == 0 {
+		return 0
+	}
+	indices := a.CommitteeBits.BitIndices()
+	if len(indices) == 0 {
+		return 0
+	} else if len(indices) != 1 {
+		log.WithField("indices", a.CommitteeBits).Debugf("expected 1 committee bit indice got %d", len(indices))
+	}
+	return primitives.CommitteeIndex(uint64(indices[0]))
+}
+
+// Version --
 func (a *SingleAttestation) Version() int {
 	return version.Electra
 }

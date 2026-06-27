@@ -153,6 +153,28 @@ message AttestationElectra {
   ];
 }
 
+// AttestationGloas has the same wire shape as AttestationElectra, but is a
+// distinct type so fastssz can generate Gloas progressive merkleization.
+message AttestationGloas {
+  // A bitfield representation of validator indices that have voted exactly
+  // the same vote and have been aggregated into this attestation.
+  bytes aggregation_bits = 1 [
+    (ethereum.eth.ext.ssz_max) = "max_attesting_indices.size",
+    (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
+  ];
+
+  AttestationData data = 2;
+
+  // 96 byte BLS aggregate signature.
+  bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
+
+  // Represents the committee which aggregated attestation belong.
+  bytes committee_bits = 4 [
+    (ethereum.eth.ext.ssz_size) = "committee_bits.size",
+    (ethereum.eth.ext.cast_type) = "committee_bits.type"
+  ];
+}
+
 message SingleAttestation {
   uint64 committee_id = 1 [ (ethereum.eth.ext.cast_type) =
                                 "github.com/OffchainLabs/prysm/v7/"
