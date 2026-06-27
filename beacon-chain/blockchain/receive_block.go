@@ -118,9 +118,6 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 		return errors.Wrap(err, "handle da")
 	}
 
-	// Defragment the state before continuing block processing.
-	s.defragmentState(postState)
-
 	// The rest of block processing takes a lock on forkchoice.
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()
@@ -161,6 +158,17 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 		return errors.Wrap(err, "handle caches")
 	}
 	s.reportPostBlockProcessing(blockCopy, blockRoot, receivedTime, daWaitedTime)
+
+	// Queue the imported state for background defragmentation. Running it inline
+	// before forkchoice walked the whole state tree and added directly to
+	// block-import latency. The send is non-blocking so it never delays import;
+	// if the worker is still busy (e.g. during sync) we skip this round, since
+	// defragmentation is a best-effort optimization.
+	select {
+	case s.defragmentRequests <- postState:
+	default:
+	}
+
 	return nil
 }
 

@@ -66,6 +66,7 @@ type Service struct {
 	syncCommitteeHeadState         *cache.SyncCommitteeHeadStateCache
 	payloadArrivals                *payloadArrivals
 	goroutineCounter               *goroutineCounter
+	defragmentRequests             chan state.BeaconState
 }
 
 // config options for the service.
@@ -189,6 +190,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		syncCommitteeHeadState: cache.NewSyncCommitteeHeadState(),
 		payloadArrivals:        newPayloadArrivals(),
 		goroutineCounter:       &goroutineCounter{},
+		defragmentRequests:     make(chan state.BeaconState, 1),
 	}
 	for _, opt := range opts {
 		if err := opt(srv); err != nil {
@@ -215,6 +217,7 @@ func (s *Service) Start() {
 	s.spawnProcessAttestationsRoutine()
 	go s.runLateBlockTasks()
 	go s.runLatePayloadTasks()
+	go s.defragmentRoutine()
 }
 
 // Stop the blockchain service's main event loop and associated goroutines.
