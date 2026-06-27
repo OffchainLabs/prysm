@@ -10,7 +10,6 @@ import (
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 func TestProve_FixedTestContainer(t *testing.T) {
@@ -146,14 +145,12 @@ func proveAndVerify(t *testing.T, obj query.SSZObject, pathStr string) {
 
 	proof, err := info.Prove(gi)
 	require.NoError(t, err)
-	require.Equal(t, int(gi), proof.Index)
+	require.Equal(t, gi, proof.Index)
 
 	root, err := obj.HashTreeRoot()
 	require.NoError(t, err)
 
-	ok, err := ssz.VerifyProof(root[:], proof)
-	require.NoError(t, err)
-	require.Equal(t, true, ok, "merkle proof verification failed")
+	require.Equal(t, true, proof.Verify(root[:]))
 
 	require.Equal(t, 32, len(proof.Leaf))
 	for i, h := range proof.Hashes {
