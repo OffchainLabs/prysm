@@ -454,3 +454,15 @@ func HydrateIndexedAttestationElectra(a *ethpb.IndexedAttestationElectra) *ethpb
 	a.Data = HydrateAttestationData(a.Data)
 	return a
 }
+
+// HydrateIndexedAttestationGloas hydrates a Gloas indexed attestation with correct field length sizes.
+func HydrateIndexedAttestationGloas(a *ethpb.IndexedAttestationGloas) *ethpb.IndexedAttestationGloas {
+	if a.Signature == nil {
+		a.Signature = make([]byte, 96)
+	}
+	if a.Data == nil {
+		a.Data = &ethpb.AttestationData{}
+	}
+	a.Data = HydrateAttestationData(a.Data)
+	return a
+}
