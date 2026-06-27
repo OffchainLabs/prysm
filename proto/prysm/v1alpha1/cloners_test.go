@@ -1013,6 +1013,15 @@ func genAttestationElectra() *v1alpha1.AttestationElectra {
 	}
 }
 
+func genAttestationGloas() *v1alpha1.AttestationGloas {
+	return &v1alpha1.AttestationGloas{
+		AggregationBits: bytes(32),
+		CommitteeBits:   bytes(8),
+		Data:            genAttData(),
+		Signature:       bytes(96),
+	}
+}
+
 func genAttesterSlashingsElectra(num int) []*v1alpha1.AttesterSlashingElectra {
 	as := make([]*v1alpha1.AttesterSlashingElectra, num)
 	for i := range num {
@@ -1040,6 +1049,14 @@ func genAttestationsElectra(num int) []*v1alpha1.AttestationElectra {
 	atts := make([]*v1alpha1.AttestationElectra, num)
 	for i := range num {
 		atts[i] = genAttestationElectra()
+	}
+	return atts
+}
+
+func genAttestationsGloas(num int) []*v1alpha1.AttestationGloas {
+	atts := make([]*v1alpha1.AttestationGloas, num)
+	for i := range num {
+		atts[i] = genAttestationGloas()
 	}
 	return atts
 }
@@ -1196,7 +1213,7 @@ func genBeaconBlockBodyGloas() *v1alpha1.BeaconBlockBodyGloas {
 		Graffiti:                  bytes(32),
 		ProposerSlashings:         genProposerSlashings(3),
 		AttesterSlashings:         genAttesterSlashingsElectra(3),
-		Attestations:              genAttestationsElectra(3),
+		Attestations:              genAttestationsGloas(3),
 		Deposits:                  genDeposits(3),
 		VoluntaryExits:            genSignedVoluntaryExits(3),
 		SyncAggregate:             genSyncAggregate(),

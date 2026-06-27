@@ -110,7 +110,7 @@ func TestGloasOperations_ProcessingErrors(t *testing.T) {
 		{
 			name: "ErrProcessAttestationsFailed – invalid committee index",
 			modifyBlk: func(b *ethpb.BeaconBlockBodyGloas) {
-				b.Attestations = []*ethpb.AttestationElectra{
+				b.Attestations = []*ethpb.AttestationGloas{
 					{
 						AggregationBits: []byte{0b00000001},
 						Data: &ethpb.AttestationData{
