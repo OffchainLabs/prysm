@@ -86,7 +86,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 	case "AttestationData":
 		obj = &ethpb.AttestationData{}
 	case "AttesterSlashing":
-		obj = &ethpb.AttesterSlashingElectra{}
+		obj = &ethpb.AttesterSlashingGloas{}
 	case "AggregateAndProof":
 		obj = &ethpb.AggregateAttestationAndProofElectra{}
 	case "BeaconBlockHeader":
@@ -110,7 +110,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 	case "HistoricalBatch":
 		obj = &ethpb.HistoricalBatch{}
 	case "IndexedAttestation":
-		obj = &ethpb.IndexedAttestationElectra{}
+		obj = &ethpb.IndexedAttestationGloas{}
 	case "PendingAttestation":
 		obj = &ethpb.PendingAttestation{}
 	case "ProposerSlashing":

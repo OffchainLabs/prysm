@@ -2919,7 +2919,7 @@ func BeaconBlockGloasFromConsensus(b *eth.BeaconBlockGloas) (*BeaconBlockGloas, 
 			Eth1Data:                  Eth1DataFromConsensus(b.Body.Eth1Data),
 			Graffiti:                  hexutil.Encode(b.Body.Graffiti),
 			ProposerSlashings:         ProposerSlashingsFromConsensus(b.Body.ProposerSlashings),
-			AttesterSlashings:         AttesterSlashingsElectraFromConsensus(b.Body.AttesterSlashings),
+			AttesterSlashings:         AttesterSlashingsGloasFromConsensus(b.Body.AttesterSlashings),
 			Attestations:              AttsGloasFromConsensus(b.Body.Attestations),
 			Deposits:                  DepositsFromConsensus(b.Body.Deposits),
 			VoluntaryExits:            SignedExitsFromConsensus(b.Body.VoluntaryExits),
@@ -3092,7 +3092,7 @@ func (b *BeaconBlockBodyGloas) ToConsensus() (*eth.BeaconBlockBodyGloas, error) 
 	if err != nil {
 		return nil, server.NewDecodeError(err, "ProposerSlashings")
 	}
-	attesterSlashings, err := AttesterSlashingsElectraToConsensus(b.AttesterSlashings)
+	attesterSlashings, err := AttesterSlashingsGloasToConsensus(b.AttesterSlashings)
 	if err != nil {
 		return nil, server.NewDecodeError(err, "AttesterSlashings")
 	}
