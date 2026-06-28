@@ -10,6 +10,7 @@ import (
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
@@ -274,6 +275,24 @@ func TestValidateExecutionPayloadBidGossip_HappyPath(t *testing.T) {
 	require.DeepEqual(t, signedBid, got)
 }
 
+func TestValidateExecutionPayloadBidGossip_NextSlotStateMissIgnored(t *testing.T) {
+	ctx := context.Background()
+	s, msg, _ := setupExecutionPayloadBidService(t)
+	// errPrevRandao would reject if reached, but a next-slot-cache miss for the bid's parent must ignore first.
+	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{
+		errPrevRandao: errors.New("wrong prev randao"),
+	})
+	// Evict the bid's parent (0x02) from the next-slot cache.
+	other, err := util.NewBeaconStateGloas()
+	require.NoError(t, err)
+	require.NoError(t, transition.UpdateNextSlotCache(ctx, bytesutil.PadTo([]byte{0x07}, 32), other))
+	require.NoError(t, transition.UpdateNextSlotCache(ctx, bytesutil.PadTo([]byte{0x08}, 32), other))
+
+	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+}
+
 func TestValidateExecutionPayloadBidGossip_FeeRecipientMismatch(t *testing.T) {
 	ctx := context.Background()
 	s, msg, _ := setupExecutionPayloadBidService(t)
@@ -484,12 +503,14 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 		Genesis:    time.Now(),
 		State:      state,
 		TargetRoot: genesisRoot,
+		Root:       bytesutil.PadTo([]byte{0x02}, 32),
 		ForkchoiceRoots: map[[32]byte]bool{
 			[32]byte{0x02}: true,
 		},
 		ForkchoiceBlockHashes: map[[32]byte][32]byte{[32]byte{0x02}: [32]byte{0x01}},
 		ForkchoiceGasLimits:   map[[32]byte]uint64{[32]byte{0x02}: 1},
 	}
+	require.NoError(t, transition.UpdateNextSlotCache(ctx, chainService.Root, state))
 	s := &Service{
 		seenExecutionPayloadBidCache:    newSlotAwareCache(10),
 		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),

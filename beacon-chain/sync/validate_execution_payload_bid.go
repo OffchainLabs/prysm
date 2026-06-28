@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -31,7 +32,7 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 		return pubsub.ValidationIgnore, nil
 	}
 
-	ctx, span := trace.StartSpan(ctx, "sync.validateExecutionPayloadBidGossip")
+	_, span := trace.StartSpan(ctx, "sync.validateExecutionPayloadBidGossip")
 	defer span.End()
 
 	if msg.Topic == nil {
@@ -68,13 +69,13 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyCurrentOrNextSlot(); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
-	if err != nil {
-		return pubsub.ValidationIgnore, err
+	parentBlockRoot := bid.ParentBlockRoot()
+	st := transition.NextSlotStateReadOnly(parentBlockRoot[:], bid.Slot())
+	if st == nil {
+		return pubsub.ValidationIgnore, nil
 	}
 	// [IGNORE] matching SignedProposerPreferences seen, keyed on the proposer
 	// dep root anchored to bid.parent_block_root.
-	parentBlockRoot := bid.ParentBlockRoot()
 	dependentRoot, err := s.proposerDependentRoot(parentBlockRoot, bid.Slot())
 	if err != nil {
 		return pubsub.ValidationIgnore, err
