@@ -6,6 +6,8 @@ on:
       - 'proto/**/*.proto'
       - 'proto/**/*.pb.go'
       - 'proto/**/*.ssz.go'
+      - 'proto/**/BUILD.bazel'
+      - 'proto/ssz_proto_library.bzl'
       - 'build/gen/**'
       - 'Makefile'
       - 'go.mod'
