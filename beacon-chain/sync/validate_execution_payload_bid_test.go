@@ -275,18 +275,30 @@ func TestValidateExecutionPayloadBidGossip_HappyPath(t *testing.T) {
 	require.DeepEqual(t, signedBid, got)
 }
 
-func TestValidateExecutionPayloadBidGossip_NextSlotStateMissIgnored(t *testing.T) {
+func TestValidateExecutionPayloadBidGossip_HeadNotParentIgnored(t *testing.T) {
 	ctx := context.Background()
 	s, msg, _ := setupExecutionPayloadBidService(t)
-	// errPrevRandao would reject if reached, but a next-slot-cache miss for the bid's parent must ignore first.
+	// errPrevRandao would reject if reached, but the head != parent guard ignores first.
 	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{
 		errPrevRandao: errors.New("wrong prev randao"),
 	})
-	// Evict the bid's parent (0x02) from the next-slot cache.
-	other, err := util.NewBeaconStateGloas()
+	// Point head at a block that is not the bid's parent (0x02).
+	s.cfg.chain.(*mock.ChainService).Root = bytesutil.PadTo([]byte{0x09}, 32)
+
+	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NoError(t, err)
-	require.NoError(t, transition.UpdateNextSlotCache(ctx, bytesutil.PadTo([]byte{0x07}, 32), other))
-	require.NoError(t, transition.UpdateNextSlotCache(ctx, bytesutil.PadTo([]byte{0x08}, 32), other))
+	require.Equal(t, pubsub.ValidationIgnore, result)
+}
+
+func TestValidateExecutionPayloadBidGossip_BidEpochMismatchIgnored(t *testing.T) {
+	ctx := context.Background()
+	s, msg, _ := setupExecutionPayloadBidService(t)
+	// errPrevRandao would reject if reached, but the epoch mismatch guard ignores first.
+	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{
+		errPrevRandao: errors.New("wrong prev randao"),
+	})
+	// Head is the bid's parent, but its state is in a later epoch than the bid's slot.
+	require.NoError(t, s.cfg.chain.(*mock.ChainService).State.SetSlot(params.BeaconConfig().SlotsPerEpoch))
 
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NoError(t, err)
@@ -508,7 +520,8 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 		Genesis:    time.Now(),
 		State:      state,
 		TargetRoot: genesisRoot,
-		Root:       bytesutil.PadTo([]byte{0x02}, 32),
+		// Head is the bid's parent (bid.ParentBlockRoot == 0x02) so head state verifies the bid.
+		Root: bytesutil.PadTo([]byte{0x02}, 32),
 		ForkchoiceRoots: map[[32]byte]bool{
 			[32]byte{0x02}: true,
 		},
