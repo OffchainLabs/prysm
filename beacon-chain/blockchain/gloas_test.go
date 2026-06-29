@@ -21,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	dto "github.com/prometheus/client_model/go"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -640,6 +641,189 @@ func TestLateBlockTasks_GloasFCU(t *testing.T) {
 	cachedPid, has := service.cfg.PayloadIDCache.PayloadID(service.CurrentSlot()+1, headRoot, false)
 	require.Equal(t, true, has)
 	require.Equal(t, primitives.PayloadID(pid[:]), cachedPid)
+}
+
+func TestRecordPayloadRevealOutcome(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	cfg.InitializeForkSchedule()
+	params.OverrideBeaconConfig(cfg)
+
+	const headSlot = primitives.Slot(1)
+	sps := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	ctx := context.Background()
+
+	// newServiceAtHead builds a service whose canonical head is a Gloas block at
+	// headSlot, with the clock placed in the following slot (so the slot just
+	// ended is headSlot and recordPayloadRevealOutcome classifies it).
+	newServiceAtHead := func(t *testing.T) (*Service, [32]byte) {
+		t.Helper()
+		service, _ := setupGloasService(t, &mockExecution.EngineClient{})
+		headRoot := bytesutil.ToBytes32([]byte("headroot"))
+		blockHash := bytesutil.ToBytes32([]byte("hash1"))
+		base, blk := testGloasState(t, headSlot, params.BeaconConfig().ZeroHash, blockHash)
+		base.LatestBlockHash = blockHash[:]
+		st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+		require.NoError(t, err)
+		signed, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		insertGloasBlock(t, service, base, blk, headRoot)
+		service.head = &head{root: headRoot, block: signed, state: st, slot: headSlot}
+		// Genesis 2.5 slots ago => CurrentSlot == headSlot+1, so the slot that just
+		// ended (CurrentSlot-1) is headSlot.
+		service.SetGenesisTime(time.Now().Add(-sps*time.Duration(headSlot+1) - sps/2))
+		service.SetForkChoiceGenesisTime(service.genesisTime)
+		service.cfg.ForkChoiceStore.Lock()
+		_, err = service.cfg.ForkChoiceStore.Head(t.Context())
+		service.cfg.ForkChoiceStore.Unlock()
+		require.NoError(t, err)
+		return service, headRoot
+	}
+
+	// insertFullNode marks the head's payload as revealed in forkchoice.
+	insertFullNode := func(t *testing.T, s *Service, root [32]byte) {
+		t.Helper()
+		protoEnv := testSignedEnvelope(t, root, headSlot, make([]byte, 32))
+		signedEnv, err := blocks.WrappedROSignedExecutionPayloadEnvelope(protoEnv)
+		require.NoError(t, err)
+		envelope, err := signedEnv.Envelope()
+		require.NoError(t, err)
+		require.NoError(t, s.InsertPayload(envelope))
+	}
+
+	val := func(outcome string) float64 {
+		var m dto.Metric
+		require.NoError(t, gloasPayloadRevealOutcomeTotal.WithLabelValues(outcome).Write(&m))
+		return m.GetCounter().GetValue()
+	}
+	total := func() float64 {
+		return val(payloadRevealOnTime) + val(payloadRevealLate) + val(payloadRevealWithheld)
+	}
+	record := func(service *Service) {
+		service.recordPayloadRevealOutcome(ctx, headSlot+1)
+	}
+
+	t.Run("on_time when payload revealed before the due time", func(t *testing.T) {
+		service, headRoot := newServiceAtHead(t)
+		insertFullNode(t, service, headRoot)
+		service.payloadArrivals.record(headRoot, headSlot, true /* early */)
+
+		before := val(payloadRevealOnTime)
+		record(service)
+		require.Equal(t, before+1, val(payloadRevealOnTime))
+	})
+
+	t.Run("late when payload revealed at or after the due time", func(t *testing.T) {
+		service, headRoot := newServiceAtHead(t)
+		insertFullNode(t, service, headRoot)
+		service.payloadArrivals.record(headRoot, headSlot, false /* not early */)
+
+		before := val(payloadRevealLate)
+		record(service)
+		require.Equal(t, before+1, val(payloadRevealLate))
+	})
+
+	t.Run("uses canonical slot root after head advances", func(t *testing.T) {
+		service, headRoot := newServiceAtHead(t)
+		insertFullNode(t, service, headRoot)
+		service.payloadArrivals.record(headRoot, headSlot, true)
+
+		nextSlot := headSlot + 1
+		nextRoot := bytesutil.ToBytes32([]byte("nextroot"))
+		nextHash := bytesutil.ToBytes32([]byte("hash2"))
+		base, blk := testGloasState(t, nextSlot, headRoot, nextHash)
+		base.LatestBlockHash = nextHash[:]
+		st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+		require.NoError(t, err)
+		signed, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		insertGloasBlock(t, service, base, blk, nextRoot)
+		service.head = &head{root: nextRoot, block: signed, state: st, slot: nextSlot}
+		service.cfg.ForkChoiceStore.Lock()
+		_, err = service.cfg.ForkChoiceStore.Head(t.Context())
+		service.cfg.ForkChoiceStore.Unlock()
+		require.NoError(t, err)
+
+		before := val(payloadRevealOnTime)
+		record(service)
+		require.Equal(t, before+1, val(payloadRevealOnTime))
+	})
+
+	t.Run("skipped when payload arrival timing is unknown", func(t *testing.T) {
+		service, headRoot := newServiceAtHead(t)
+		insertFullNode(t, service, headRoot)
+		// No payloadArrivals record: a full node exists but timing is unknown.
+
+		before := total()
+		record(service)
+		require.Equal(t, before, total())
+	})
+
+	t.Run("withheld when no payload ever arrived", func(t *testing.T) {
+		service, _ := newServiceAtHead(t)
+		// No full node inserted.
+
+		before := val(payloadRevealWithheld)
+		record(service)
+		require.Equal(t, before+1, val(payloadRevealWithheld))
+	})
+
+	t.Run("skipped when head is not the slot that just ended", func(t *testing.T) {
+		service, headRoot := newServiceAtHead(t)
+		insertFullNode(t, service, headRoot)
+		service.payloadArrivals.record(headRoot, headSlot, true)
+
+		before := total()
+		service.recordPayloadRevealOutcome(ctx, headSlot+10)
+		require.Equal(t, before, total())
+	})
+
+	t.Run("recorded after a payload import crosses the slot boundary", func(t *testing.T) {
+		service, headRoot := newServiceAtHead(t)
+		insertFullNode(t, service, headRoot)
+		service.payloadArrivals.record(headRoot, headSlot, true)
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		require.NoError(t, service.payloadBeingSynced.set(headRoot))
+
+		before := val(payloadRevealOnTime)
+		service.recordPayloadRevealOutcome(ctx, headSlot+1)
+		require.Equal(t, before, val(payloadRevealOnTime))
+		service.payloadBeingSynced.unset(headRoot)
+		require.Eventually(t, func() bool {
+			return val(payloadRevealOnTime) == before+1
+		}, time.Second, 10*time.Millisecond)
+	})
+
+	t.Run("stops waiting when payload import remains stuck", func(t *testing.T) {
+		service, headRoot := newServiceAtHead(t)
+		insertFullNode(t, service, headRoot)
+		service.payloadArrivals.record(headRoot, headSlot, true)
+		require.NoError(t, service.payloadBeingSynced.set(headRoot))
+
+		before := total()
+		service.recordPayloadRevealOutcomeAfterSync(ctx, headRoot, 20*time.Millisecond)
+		require.Equal(t, before, total())
+	})
+
+	t.Run("skipped before the Gloas fork", func(t *testing.T) {
+		preforkCfg := params.BeaconConfig().Copy()
+		preforkCfg.GloasForkEpoch = preforkCfg.FarFutureEpoch
+		preforkCfg.InitializeForkSchedule()
+		params.OverrideBeaconConfig(preforkCfg)
+		defer func() {
+			params.OverrideBeaconConfig(cfg)
+		}()
+
+		service, headRoot := newServiceAtHead(t)
+		insertFullNode(t, service, headRoot)
+		service.payloadArrivals.record(headRoot, headSlot, true)
+
+		before := total()
+		record(service)
+		require.Equal(t, before, total())
+	})
 }
 
 // TestLateBlockTasks_GloasForkBoundary_PreforkBidUsesHeadRoot verifies that lateBlockTasks
