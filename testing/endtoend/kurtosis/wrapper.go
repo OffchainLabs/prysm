@@ -181,3 +181,17 @@ func (kw *KurtosisWrapper) NewBeaconRESTEndpoints() ([]string, error) {
 	}
 	return urls, nil
 }
+
+// NewAssertoorEndpoint discovers the published HTTP port of the "assertoor"
+// service and returns its base URL like "http://127.0.0.1:<port>".
+func (kw *KurtosisWrapper) NewAssertoorEndpoint() (string, error) {
+	svc, err := kw.enclaveCtx.GetServiceContext("assertoor")
+	if err != nil {
+		return "", fmt.Errorf("get assertoor service: %w", err)
+	}
+	httpPort, ok := svc.GetPublicPorts()["http"]
+	if !ok {
+		return "", fmt.Errorf("assertoor service has no published http port")
+	}
+	return fmt.Sprintf("http://127.0.0.1:%d", httpPort.GetNumber()), nil // lint:ignore uintcast -- a uint16 port never exceeds int.
+}

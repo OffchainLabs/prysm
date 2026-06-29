@@ -1,0 +1,68 @@
+# Basic stability and health monitoring of the network.
+# This playbook is intended to be run continuously in the background while other tests are running.
+
+# Replaces those evaluators from legacy E2E:
+# - HealthzCheck
+# - FinishedSyncing
+# - AllNodesHaveSameHead
+# - ValidatorsParticipatingAtEpoch
+# - FinalizationOccurs
+
+id: network-health-monitor
+name: "Network health monitoring"
+timeout: 30m
+
+tasks:
+- name: run_tasks_concurrent
+  title: "Monitor network health"
+  config:
+    tasks:
+      - name: check_clients_are_healthy
+        title: "Client health"
+        timeout: 30m
+        config:
+          continueOnPass: true
+          failOnCheckMiss: true
+      
+      - name: check_consensus_sync_status
+        title: "CL Sync status"
+        timeout: 30m
+        config:
+          continueOnPass: true
+
+      - name: check_execution_sync_status
+        title: "EL Sync status"
+        timeout: 30m
+        config:
+          continueOnPass: true
+
+      - name: check_consensus_finality
+        title: "Finality check"
+        timeout: 30m
+        config:
+          maxUnfinalizedEpochs: 4
+          failOnCheckMiss: true
+          continueOnPass: true
+
+      - name: check_consensus_attestation_stats
+        title: "Attestation quality"
+        timeout: 30m
+        config:
+          minTargetPercent: 98
+          minHeadPercent: 80
+          failOnCheckMiss: true
+          continueOnPass: true
+
+      - name: check_consensus_forks
+        title: "Fork monitoring"
+        timeout: 30m
+        config:
+          maxForkDistance: 2
+          continueOnPass: true
+
+      - name: check_consensus_reorgs
+        title: "Reorg monitoring"
+        timeout: 30m
+        config:
+          maxReorgsPerEpoch: 2
+          continueOnPass: true

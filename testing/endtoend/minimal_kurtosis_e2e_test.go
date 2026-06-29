@@ -6,29 +6,23 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/client/beacon"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/testing/assert"
-	ev "github.com/OffchainLabs/prysm/v7/testing/endtoend/evaluators"
-	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/kurtosis"
-	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 )
 
 const (
 	// ETHEREUM_PACKAGE is the identifier of the ethereum-package Starlark package used in these tests.
-	ETHEREUM_PACKAGE      = "github.com/ethpandaops/ethereum-package"
-	MINIMAL_EPOCHS_TO_RUN = 6 // enough to observe finalization
+	ETHEREUM_PACKAGE = "github.com/ethpandaops/ethereum-package"
 )
 
-func TestEndToEnd_Kurtosis(t *testing.T) {
+// TestEndToEnd_Kurtosis_MinimalConfig mirrors TestEndToEnd_MinimalConfig, but runs the test in a Kurtosis enclave instead of locally.
+func TestEndToEnd_Kurtosis_MinimalConfig(t *testing.T) {
 	ctx := t.Context()
 
 	// Prerequisite for Kurtosis: Load images needed.
@@ -37,17 +31,12 @@ func TestEndToEnd_Kurtosis(t *testing.T) {
 	tests := []struct {
 		enclaveName string
 		configPath  string
-		evaluators  []e2etypes.Evaluator
+		epochsToRun uint64
 	}{
 		{
 			enclaveName: "minimal",
-			configPath:  "testing/endtoend/network-config/default.yaml",
-			evaluators: []e2etypes.Evaluator{
-				ev.PeersCheck,
-				ev.FinishedSyncing,
-				ev.AllNodesHaveSameHead,
-				ev.FinalizationOccurs(3),
-			},
+			configPath:  "testing/endtoend/network-config/minimal.yaml",
+			epochsToRun: 15,
 		},
 	}
 
@@ -61,6 +50,10 @@ func TestEndToEnd_Kurtosis(t *testing.T) {
 
 			require.NoError(t, kw.CreateEnclave(), "Failed to create Kurtosis enclave")
 			t.Cleanup(func() {
+				if t.Failed() {
+					// Dump logs so that we can see what went wrong before the enclave is destroyed.
+					kw.DumpFailedAssertoorLogs()
+				}
 				if err := kw.DestroyEnclave(); err != nil {
 					t.Logf("Failed to cleanup enclave: %v", err)
 				}
@@ -71,11 +64,6 @@ func TestEndToEnd_Kurtosis(t *testing.T) {
 				tt.configPath,
 			), "Failed to run ethereum package")
 
-			// conns are used by evaluators (gRPC).
-			conns, closeConns, err := kw.NewGRPCConnections()
-			require.NoError(t, err, "Failed to dial Prysm beacon gRPC")
-			t.Cleanup(closeConns)
-
 			restURLs, err := kw.NewBeaconRESTEndpoints()
 			require.NoError(t, err, "Failed to resolve beacon REST endpoints")
 
@@ -85,64 +73,44 @@ func TestEndToEnd_Kurtosis(t *testing.T) {
 			client, err := beacon.NewClient(restURLs[0])
 			require.NoError(t, err, "Failed to create beacon API client")
 
+			// Gate on node readiness once, then every API call below is a single request.
+			waitForNodeReady(t, ctx, client)
+
 			// Hydrate params with the config the enclave is actually running, so
-			// evaluators compute expectations against the real network config.
+			// the timeout below is computed against the real network config.
 			cfg := fetchConfig(t, ctx, client)
 			params.SetActiveTestCleanup(t, cfg)
 
-			// Fetch genesis time and set up an epoch ticker to drive epoch-based evaluations.
+			// Set deadline for assertoor.
 			genesisTime := fetchGenesisTime(t, ctx, client)
 			secondsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
-			ticker := helpers.NewEpochTicker(helpers.EpochTickerStartTime(genesisTime), secondsPerEpoch)
+			deadline := genesisTime.Add(time.Duration(tt.epochsToRun*secondsPerEpoch) * time.Second)
 
-			// TODO: NewEvaluationContext receives deposit balancer.
-			ec := e2etypes.NewEvaluationContext(nil)
-
-			// In every epoch, run all evaluators whose policy matches the current epoch.
-			for currentEpoch := range ticker.C() {
-				var wg sync.WaitGroup
-
-				for _, eval := range tt.evaluators {
-					if !eval.Policy(primitives.Epoch(currentEpoch)) {
-						continue
-					}
-					wg.Go(func() {
-						t.Run(fmt.Sprintf(eval.Name, currentEpoch), func(t *testing.T) {
-							err := eval.Evaluation(ec, conns...)
-							assert.NoError(t, err, "Evaluation failed for epoch %d: %v", currentEpoch, err)
-						})
-					})
-				}
-
-				wg.Wait()
-
-				// Notify the ticker when test has failed or we've reached the desired number of epochs.
-				if t.Failed() || currentEpoch >= MINIMAL_EPOCHS_TO_RUN-1 {
-					ticker.Done()
-					break
-				}
-			}
+			require.NoError(t, kw.RegisterPlaybooks(ctx), "Failed to register Assertoor playbooks")
+			require.NoError(t, kw.WaitForAssertoor(ctx, deadline), "Assertoor checks failed")
 		})
 	}
 }
 
-// fetchConfig fetches the chain config the enclave is actually running.
-func fetchConfig(t *testing.T, ctx context.Context, client *beacon.Client) *params.BeaconChainConfig {
-	// Poll the spec endpoint until the node serves it (readiness gate).
-	var specData any
+// waitForNodeReady blocks until the beacon node reports healthy (200 from
+// /eth/v1/node/health) or ctx is done.
+func waitForNodeReady(t *testing.T, ctx context.Context, client *beacon.Client) {
 	var err error
 	for range 30 {
-		spec, e := client.GetConfigSpec(ctx)
-		if e == nil {
-			specData, err = spec.Data, nil
-			break
+		if _, err = client.Get(ctx, "/eth/v1/node/health"); err == nil {
+			return
 		}
-		err = e
 		time.Sleep(2 * time.Second)
 	}
+	require.NoError(t, err, "Beacon node never became healthy")
+}
+
+// fetchConfig fetches the chain config the enclave is actually running.
+func fetchConfig(t *testing.T, ctx context.Context, client *beacon.Client) *params.BeaconChainConfig {
+	spec, err := client.GetConfigSpec(ctx)
 	require.NoError(t, err, "Failed to fetch config spec")
 
-	data, ok := specData.(map[string]any)
+	data, ok := spec.Data.(map[string]any)
 	require.Equal(t, true, ok, "Config spec has unexpected structure")
 
 	var b strings.Builder

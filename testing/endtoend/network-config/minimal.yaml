@@ -15,7 +15,18 @@ participants:
     vc_image: "gcr.io/offchainlabs/prysm/validator:latest"
     vc_extra_params:
       - "--enable-doppelganger"
+      - "--graffiti-file=/config/graffiti.yaml"
+    vc_extra_mounts:
+      "/config": "graffiti.yaml"
     count: 2
+
+extra_files:
+  graffiti.yaml: |
+    default: "Rice"
+    random:
+      - "Sushi"
+      - "Ramen"
+      - "Takoyaki"
 
 network_params:
   preset: minimal
@@ -53,7 +64,11 @@ network_params:
   bpo_2_max_blobs: 21
 
 additional_services:
+  - assertoor
   - dora
+  - spamoor
+
+assertoor_params:
 
 ethereum_genesis_generator_params:
   extra_env:  

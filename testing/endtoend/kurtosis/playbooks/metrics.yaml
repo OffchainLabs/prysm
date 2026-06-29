@@ -1,0 +1,223 @@
+# Check Prysm-specific metrics
+
+# Replaces those evaluators from legacy E2E:
+# - MetricsCheck
+
+id: metrics
+name: "Prysm metrics sanity check"
+timeout: 30m
+
+tasks:
+  - name: check_clients_are_healthy
+    id: clients
+    title: "Client health"
+    timeout: 5m
+    config:
+      minClientCount: 1
+      # Scope to Prysm beacon nodes, as we're checking Prysm-specific metrics below.
+      clientPattern: ".*prysm.*"
+
+  - name: check_consensus_slot_range
+    title: "Wait until metrics sample size is past genesis epoch"
+    timeout: 5m
+    config:
+      # Warm the caches before sampling. Cold-start cache misses are one-time, so
+      # the cumulative miss ratio (asserted below) is worst right after genesis.
+      minEpochNumber: 2
+
+  - name: get_consensus_specs
+    id: specs
+    title: "Get consensus specs"
+
+  - name: run_task_matrix
+    title: "Check each Prysm beacon node metrics endpoint"
+    timeout: 15m
+    configVars:
+      # Note that `check_clients_are_healthy` above returns with a list of healthy clients.
+      # Concatenate the metrics default port (8080) to each healthy client RPC URL to get the metrics endpoint.
+      matrixValues: '| [.tasks.clients.outputs.goodClients[].clRpcUrl | sub(":[0-9]+(/.*)?$"; ":8080/metrics")]'
+    config:
+      runConcurrent: true
+      matrixVar: "metricsUrl"
+      task:
+        name: run_tasks_concurrent
+        title: "Metrics checks for ${metricsUrl}"
+        timeout: 15m
+        config:
+          newVariableScope: false
+          tasks:
+            - name: check_http_metrics
+              title: "Check memory usage for ${metricsUrl}"
+              timeout: 14m
+              configVars:
+                url: "metricsUrl"
+              config:
+                pollInterval: 5s
+                requestTimeout: 5s
+                failOnCheckMiss: true
+                continueOnPass: true
+                missingMetric: fail
+                missingSeries: fail
+                assertions:
+                  - name: memory_usage_under_2gib
+                    metric: go_memstats_alloc_bytes
+                    operator: lt
+                    value: 2000000000 # 2 GiB
+
+            # This JavaScript tasks following for every epoch that:
+            # 1. Committee cache miss ratio is under 10%.
+            # 2. Hot state cache miss ratio is under 10%.
+            # 3. Failed aggregate-and-proof validations are under 80% of received messages.
+            # 4. Failed attestation validations are under 15% of received messages.
+            - name: run_javascript
+              title: "Check metric ratios each epoch for ${metricsUrl}"
+              timeout: 15m
+              config:
+                envVars:
+                  METRICS_URL: "metricsUrl"
+                  SECONDS_PER_SLOT: "tasks.specs.outputs.specs.SECONDS_PER_SLOT"
+                  SLOTS_PER_EPOCH: "tasks.specs.outputs.specs.SLOTS_PER_EPOCH"
+                  MONITOR_EPOCHS: "| 10"
+                script: |
+                  const metricsUrl = env.METRICS_URL;
+                  const epochMs = specNumber(env.SECONDS_PER_SLOT, "SECONDS_PER_SLOT") * specNumber(env.SLOTS_PER_EPOCH, "SLOTS_PER_EPOCH") * 1000;
+                  const monitorEpochs = Number(env.MONITOR_EPOCHS);
+                  const monitorMs = epochMs * monitorEpochs;
+                  const maxRatio = 0.1;
+
+                  if (!Number.isFinite(epochMs) || epochMs <= 0) {
+                    throw new Error(`invalid epoch duration: ${JSON.stringify({ secondsPerSlot: env.SECONDS_PER_SLOT, slotsPerEpoch: env.SLOTS_PER_EPOCH })}`);
+                  }
+                  if (!Number.isInteger(monitorEpochs) || monitorEpochs <= 0) {
+                    throw new Error(`invalid monitor epoch count: ${env.MONITOR_EPOCHS}`);
+                  }
+
+                  // run_javascript is one-shot; loop per epoch and throw on failed ratios.
+                  const deadline = Date.now() + monitorMs;
+                  let sample = 0;
+
+                  while (true) {
+                    sample++;
+
+                    const series = await scrapeMetrics(metricsUrl);
+                    const failures = [];
+
+                    // Cache misses must stay a small fraction of cache hits.
+                    checkMetricRatio(failures, series, "committee_cache", "committee_cache_miss", "committee_cache_hit", maxRatio);
+                    checkMetricRatio(failures, series, "hot_state_cache", "hot_state_cache_miss", "hot_state_cache_hit", maxRatio);
+
+                    // Failed validations must stay a small fraction of received messages.
+                    // Thresholds match the legacy MetricsCheck intent.
+                    checkP2PRatio(failures, series, "aggregate_and_proof", "beacon_aggregate_and_proof", 0.8);
+                    checkP2PRatio(failures, series, "attestation", "beacon_attestation_[0-9]+", 0.15);
+
+                    if (failures.length > 0) {
+                      throw new Error(`sample ${sample}: ${failures.join("\n")}`);
+                    }
+
+                    console.log(`sample ${sample}: all metric ratios passed`);
+
+                    const sleepMs = Math.min(epochMs, deadline - Date.now());
+                    if (sleepMs <= 0) break;
+
+                    await sleep(sleepMs);
+                  }
+
+                  async function scrapeMetrics(url) {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                      throw new Error(`metrics scrape failed: HTTP ${response.status}`);
+                    }
+                    return parsePrometheusText(await response.text());
+                  }
+
+                  function checkMetricRatio(failures, series, name, missKey, hitKey, maxRatio) {
+                    const miss = sumSeries(series, missKey).value;
+                    const hit = sumSeries(series, hitKey).value;
+                    if (hit === 0) return; // no lookups yet: nothing to assert
+
+                    const ratio = miss / hit;
+                    if (ratio >= maxRatio) {
+                      failures.push(`${name}_miss_rate: ratio ${ratio} >= ${maxRatio} (${miss}/${hit})`);
+                    }
+                  }
+
+                  function checkP2PRatio(failures, series, name, topicPart, maxRatio) {
+                    const topic = `^/eth2/[0-9a-fA-F]{8}/${topicPart}/ssz_snappy$`;
+                    const received = sumSeries(series, "p2p_message_received_total", topic);
+                    if (received.value === 0) {
+                      return; // no traffic yet: nothing to assert
+                    }
+                    // Missing failure series -> 0 (no failures recorded).
+                    const failed = sumSeries(series, "p2p_message_failed_validation_total", topic);
+                    const ratio = failed.value / received.value;
+                    if (ratio >= maxRatio) {
+                      failures.push(`${name}_failed_validation_rate: ratio ${ratio} >= ${maxRatio} (${failed.value}/${received.value})`);
+                    }
+                  }
+
+                  function sumSeries(series, metric, topicRegex) {
+                    const re = topicRegex ? new RegExp(topicRegex) : null;
+                    let value = 0;
+                    for (const s of series) {
+                      if (s.metric === metric && (!re || re.test(s.labels.topic || ""))) {
+                        value += s.value;
+                      }
+                    }
+                    return { value };
+                  }
+
+                  function parsePrometheusText(input) {
+                    const parsed = [];
+                    const samplePattern = /^([a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{([^}]*)\})?\s+([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?|NaN|\+Inf|-Inf)\b/;
+                    for (const line of input.split(/\r?\n/)) {
+                      if (!line || line.startsWith("#")) continue;
+                      const match = line.match(samplePattern);
+                      if (!match) continue;
+                      const value = Number(match[3]);
+                      if (!Number.isFinite(value)) continue;
+                      parsed.push({ metric: match[1], labels: parseLabels(match[2] || ""), value });
+                    }
+                    return parsed;
+                  }
+
+                  function parseLabels(input) {
+                    const labels = {};
+                    const labelPattern = /([a-zA-Z_][a-zA-Z0-9_]*)="((?:\\.|[^"\\])*)"/g;
+                    let match;
+                    while ((match = labelPattern.exec(input)) !== null) {
+                      labels[match[1]] = match[2].replace(/\\"/g, '"').replace(/\\\\/g, "\\").replace(/\\n/g, "\n");
+                    }
+                    return labels;
+                  }
+
+                  function sleep(ms) {
+                    return new Promise(resolve => setTimeout(resolve, ms));
+                  }
+
+                  function specNumber(value, name) {
+                    if (typeof value === "number") return normalizeSpecNumber(value, name);
+                    if (typeof value === "string") {
+                      const parsed = Number(value);
+                      if (Number.isFinite(parsed)) return normalizeSpecNumber(parsed, name);
+                      const duration = parseDurationSeconds(value);
+                      if (Number.isFinite(duration)) return duration;
+                    }
+                    if (value && typeof value === "object" && "value" in value) {
+                      return specNumber(value.value, name);
+                    }
+                    throw new Error(`invalid ${name}: ${JSON.stringify(value)}`);
+                  }
+
+                  function normalizeSpecNumber(value, name) {
+                    if (name === "SECONDS_PER_SLOT" && value > 1000) return value / 1e9;
+                    return value;
+                  }
+
+                  function parseDurationSeconds(value) {
+                    const match = value.match(/^([0-9]+(?:\.[0-9]+)?)(ns|us|µs|ms|s|m|h)$/);
+                    if (!match) return NaN;
+                    const amount = Number(match[1]);
+                    const unitSeconds = { ns: 1e-9, us: 1e-6, "µs": 1e-6, ms: 1e-3, s: 1, m: 60, h: 3600 };
+                    return amount * unitSeconds[match[2]];
+                  }

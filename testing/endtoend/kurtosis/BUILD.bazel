@@ -4,8 +4,17 @@ go_library(
     name = "go_default_library",
     testonly = True,
     srcs = [
+        "assertoor.go",
+        "assertoor_playbook.go",
+        "assertoor_types.go",
         "helper.go",
         "wrapper.go",
+    ],
+    embedsrcs = [
+        "playbooks/metrics.yaml",
+        "playbooks/network-health-monitor.yaml",
+        "playbooks/validators-active.yaml",
+        "playbooks/validators-sync-participation.yaml",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/testing/endtoend/kurtosis",
     visibility = ["//visibility:public"],
@@ -23,6 +32,10 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["helper_test.go"],
+    srcs = [
+        "assertoor_playbook_test.go",
+        "assertoor_test.go",
+        "helper_test.go",
+    ],
     embed = [":go_default_library"],
 )

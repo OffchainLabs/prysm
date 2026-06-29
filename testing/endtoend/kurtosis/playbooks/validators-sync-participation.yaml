@@ -1,0 +1,51 @@
+# Check whether the sync committee participation of the head block is above a threshold (95%) on every epoch.
+
+# Replaces those evaluators from legacy E2E:
+# - ValidatorSyncParticipation
+
+id: validator-sync-participation
+name: "Validator sync committee participation check"
+timeout: 30m
+
+tasks:
+  - name: check_clients_are_healthy
+    id: clients
+    title: "Wait for a ready consensus client"
+    timeout: 5m
+    config:
+      minClientCount: 1
+  
+  - name: get_consensus_specs
+    id: specs
+    title: "Get consensus specs"
+
+  - name: check_consensus_slot_range
+    title: "Wait until altair fork epoch is reached"
+    timeout: 5m
+    configVars:
+      minEpochNumber: "| (.tasks.specs.outputs.specs.ALTAIR_FORK_EPOCH | tonumber)"
+
+  - name: check_consensus_slot_range
+    title: "Wait past validator ramp-up"
+    timeout: 10m
+    config:
+      minEpochNumber: 2
+
+  - name: check_http_json
+    title: "Sync participation >= 95%"
+    timeout: 30m
+    configVars:
+      url: '| .tasks.clients.outputs.goodClients[0].clRpcUrl + "/eth/v2/beacon/blocks/head"'
+    config:
+      failOnCheckMiss: true
+      continueOnPass: true
+      assertions:
+        # query: strip 0x, convert each hex char to its nibble value, popcount
+        # each nibble with bit tests, then divide by the bitvector width.
+        - name: sync_committee_participation
+          query: |
+            def bits: .data.message.body.sync_aggregate.sync_committee_bits | ltrimstr("0x");
+            def pc: explode | map(if . >= 97 then .-87 elif . >= 65 then .-55 else .-48 end) | map((.%2)+((./2|floor)%2)+((./4|floor)%2)+((./8|floor)%2)) | add;
+            (bits | pc) / ((bits | length) * 4)
+          operator: gte
+          value: 0.95
