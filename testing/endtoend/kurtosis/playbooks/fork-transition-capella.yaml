@@ -1,0 +1,52 @@
+# Check whether the Capella fork transition produces post-fork beacon blocks.
+
+# Replaces this evaluator from legacy E2E:
+# - CapellaForkTransition
+
+id: fork-transition-capella
+name: "Capella fork transition check"
+timeout: 20m
+
+tasks:
+  - name: get_consensus_specs
+    id: specs
+    title: "Get consensus specs"
+
+  - name: check_clients_are_healthy
+    id: clients
+    title: "Wait for healthy clients"
+    timeout: 5m
+    if: '| (.tasks.specs.outputs.specs.CAPELLA_FORK_EPOCH | tonumber) as $epoch | ($epoch > 0 and $epoch < 18446744073709551615)'
+    config:
+      minClientCount: 1
+
+  - name: check_consensus_slot_range
+    title: "Wait for Capella fork epoch"
+    timeout: 10m
+    if: '| (.tasks.specs.outputs.specs.CAPELLA_FORK_EPOCH | tonumber) as $epoch | ($epoch > 0 and $epoch < 18446744073709551615)'
+    configVars:
+      minEpochNumber: "| (.tasks.specs.outputs.specs.CAPELLA_FORK_EPOCH | tonumber)"
+
+  - name: check_http_json
+    title: "Check Capella head block version"
+    timeout: 10m
+    if: '| (.tasks.specs.outputs.specs.CAPELLA_FORK_EPOCH | tonumber) as $epoch | ($epoch > 0 and $epoch < 18446744073709551615)'
+    configVars:
+      url: '| .tasks.clients.outputs.goodClients[0].clRpcUrl + "/eth/v2/beacon/blocks/head"'
+      assertions: |
+        | (.tasks.specs.outputs.specs.CAPELLA_FORK_EPOCH | tonumber) as $forkEpoch
+        | (.tasks.specs.outputs.specs.SLOTS_PER_EPOCH | tonumber) as $slotsPerEpoch
+        | [
+            {
+              "name": "block_version",
+              "query": ".version",
+              "operator": "eq",
+              "value": "capella"
+            },
+            {
+              "name": "post_fork_slot",
+              "query": ".data.message.slot | tonumber",
+              "operator": "gte",
+              "value": ($forkEpoch * $slotsPerEpoch)
+            }
+          ]
