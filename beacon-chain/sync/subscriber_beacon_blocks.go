@@ -263,7 +263,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			}
 
 			// Try to reconstruct data column constructedSidecars from the execution client.
-			constructedSidecars, partialColumns, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, source)
+			constructedSidecars, partialColumns, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, source, columnIndicesToSample)
 			if err != nil {
 				return nil, errors.Wrap(err, "reconstruct data column sidecars")
 			}
