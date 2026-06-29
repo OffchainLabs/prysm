@@ -3,7 +3,7 @@ syntax = "proto3";
 package ethereum.eth.v1alpha1;
 
 import "proto/engine/v1/execution_engine.proto";
-import "proto/engine/v1/electra.proto";
+import "proto/engine/v1/gloas.proto";
 import "proto/eth/ext/options.proto";
 import "proto/prysm/v1alpha1/attestation.proto";
 import "proto/prysm/v1alpha1/withdrawals.proto";
@@ -225,7 +225,7 @@ message BeaconBlockBodyGloas {
   SignedExecutionPayloadBid signed_execution_payload_bid = 11;
   repeated PayloadAttestation payload_attestations = 12
       [ (ethereum.eth.ext.ssz_max) = "payload_attestation.size" ];
-  ethereum.engine.v1.ExecutionRequests parent_execution_requests = 13;
+  ethereum.engine.v1.ExecutionRequestsGloas parent_execution_requests = 13;
 }
 
 // SignedBeaconBlockGloas represents a signed beacon block in the Gloas fork.
@@ -441,12 +441,16 @@ message SignedExecutionPayloadEnvelopeContents {
 // class BuilderPendingPayment(Container):
 //     weight: Gwei
 //     withdrawal: BuilderPendingWithdrawal
+//     proposer_index: ValidatorIndex
 message BuilderPendingPayment {
   uint64 weight = 1 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
   ];
   BuilderPendingWithdrawal withdrawal = 2;
+  uint64 proposer_index = 3 [ (ethereum.eth.ext.cast_type) =
+                                  "github.com/OffchainLabs/prysm/v7/"
+                                  "consensus-types/primitives.ValidatorIndex" ];
 }
 
 // BuilderPendingWithdrawal represents a pending withdrawal for a builder.
@@ -509,7 +513,7 @@ message DataColumnSidecarGloas {
 //     parent_beacon_block_root: Root
 message ExecutionPayloadEnvelope {
   ethereum.engine.v1.ExecutionPayloadGloas payload = 1;
-  ethereum.engine.v1.ExecutionRequests execution_requests = 2;
+  ethereum.engine.v1.ExecutionRequestsGloas execution_requests = 2;
   uint64 builder_index = 3 [ (ethereum.eth.ext.cast_type) =
                                  "github.com/OffchainLabs/prysm/v7/"
                                  "consensus-types/primitives.BuilderIndex" ];
@@ -536,7 +540,7 @@ message SignedExecutionPayloadEnvelope {
 // the block_hash.
 message BlindedExecutionPayloadEnvelope {
   bytes block_hash = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
-  ethereum.engine.v1.ExecutionRequests execution_requests = 2;
+  ethereum.engine.v1.ExecutionRequestsGloas execution_requests = 2;
   uint64 builder_index = 3 [ (ethereum.eth.ext.cast_type) =
                                  "github.com/OffchainLabs/prysm/v7/"
                                  "consensus-types/primitives.BuilderIndex" ];
@@ -560,7 +564,7 @@ message SignedBlindedExecutionPayloadEnvelope {
 // payload_root so HTR matches the full envelope. Distinct from the storage-form BlindedExecutionPayloadEnvelope above.
 message WireBlindedExecutionPayloadEnvelope {
   bytes payload_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
-  ethereum.engine.v1.ExecutionRequests execution_requests = 2;
+  ethereum.engine.v1.ExecutionRequestsGloas execution_requests = 2;
   uint64 builder_index = 3 [ (ethereum.eth.ext.cast_type) =
                                  "github.com/OffchainLabs/prysm/v7/"
                                  "consensus-types/primitives.BuilderIndex" ];

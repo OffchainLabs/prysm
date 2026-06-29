@@ -190,7 +190,7 @@ func copyBeaconBlockBodyGloas(body *BeaconBlockBodyGloas) *BeaconBlockBodyGloas 
 
 	copied.SignedExecutionPayloadBid = copySignedExecutionPayloadBid(body.SignedExecutionPayloadBid)
 	copied.PayloadAttestations = copyPayloadAttestations(body.PayloadAttestations)
-	copied.ParentExecutionRequests = CopyExecutionRequests(body.ParentExecutionRequests)
+	copied.ParentExecutionRequests = CopyExecutionRequestsGloas(body.ParentExecutionRequests)
 
 	return copied
 }
@@ -276,8 +276,9 @@ func CopyBuilderPendingPayment(original *BuilderPendingPayment) *BuilderPendingP
 	}
 
 	return &BuilderPendingPayment{
-		Weight:     original.Weight,
-		Withdrawal: CopyBuilderPendingWithdrawal(original.Withdrawal),
+		Weight:        original.Weight,
+		Withdrawal:    CopyBuilderPendingWithdrawal(original.Withdrawal),
+		ProposerIndex: original.ProposerIndex,
 	}
 }
 

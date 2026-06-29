@@ -36,7 +36,7 @@ func makeEnvelope(t *testing.T, slot primitives.Slot, blockHash [32]byte, parent
 		Message: &ethpb.ExecutionPayloadEnvelope{
 			BeaconBlockRoot:       make([]byte, fieldparams.RootLength),
 			ParentBeaconBlockRoot: make([]byte, fieldparams.RootLength),
-			ExecutionRequests:     &enginev1.ExecutionRequests{},
+			ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 			Payload: &enginev1.ExecutionPayloadGloas{
 				ParentHash:    parentHash[:],
 				FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),

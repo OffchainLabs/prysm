@@ -12,6 +12,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
@@ -510,4 +512,9 @@ func (s *Server) PublishSignedExecutionPayloadBid(w http.ResponseWriter, r *http
 		httputil.HandleError(w, "Could not broadcast execution payload bid: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	s.OperationNotifier.OperationFeed().Send(&feed.Event{
+		Type: opfeed.ExecutionPayloadBidReceived,
+		Data: &opfeed.ExecutionPayloadBidReceivedData{Bid: signedBid},
+	})
 }

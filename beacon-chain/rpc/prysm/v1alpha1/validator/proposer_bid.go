@@ -109,7 +109,7 @@ func (vs *Server) createSelfBuildExecutionPayloadBid(
 	}
 
 	parentBlockRoot := block.ParentRoot()
-	executionRequestsRoot, err := local.ExecutionRequests.HashTreeRoot()
+	executionRequestsRoot, err := local.ExecutionRequestsGloas.HashTreeRoot()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute execution requests root")
 	}

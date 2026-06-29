@@ -89,6 +89,8 @@ func TestGetSpec(t *testing.T) {
 	config.GloasForkEpoch = 110
 	config.MinBuilderWithdrawabilityDelay = 111
 	config.MaxBuildersPerWithdrawalsSweep = 112
+	config.MaxBuilderDepositRequestsPerPayload = 113
+	config.MaxBuilderExitRequestsPerPayload = 114
 	config.BLSWithdrawalPrefixByte = byte('b')
 	config.ETH1AddressWithdrawalPrefixByte = byte('c')
 	config.BuilderWithdrawalPrefixByte = byte('e')
@@ -182,6 +184,7 @@ func TestGetSpec(t *testing.T) {
 	config.BlobsidecarSubnetCountElectra = 102
 	config.SyncMessageDueBPS = 103
 	config.BuilderWithdrawalPrefixByte = byte('b')
+	config.PayloadBuilderVersion = byte(1)
 	config.BuilderIndexSelfBuild = primitives.BuilderIndex(125)
 	config.BuilderPaymentThresholdNumerator = 104
 	config.BuilderPaymentThresholdDenominator = 105
@@ -226,6 +229,9 @@ func TestGetSpec(t *testing.T) {
 	var dra [4]byte
 	copy(dra[:], []byte{'1', '0', '0', '1'})
 	config.DomainRequestAuth = dra
+	var dbd [4]byte
+	copy(dbd[:], []byte{'1', '0', '0', '2'})
+	config.DomainBuilderDeposit = dbd
 	params.OverrideBeaconConfig(config)
 
 	request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/config/spec", nil)
@@ -238,7 +244,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 207, len(data))
+	assert.Equal(t, 211, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -326,6 +332,10 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "111", v)
 			case "MAX_BUILDERS_PER_WITHDRAWALS_SWEEP":
 				assert.Equal(t, "112", v)
+			case "MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD":
+				assert.Equal(t, "113", v)
+			case "MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD":
+				assert.Equal(t, "114", v)
 			case "MIN_ANCHOR_POW_BLOCK_DIFFICULTY":
 				assert.Equal(t, "1000", v)
 			case "BLS_WITHDRAWAL_PREFIX":
@@ -456,6 +466,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "0x31303030", v)
 			case "DOMAIN_REQUEST_AUTH":
 				assert.Equal(t, "0x31303031", v)
+			case "DOMAIN_BUILDER_DEPOSIT":
+				assert.Equal(t, "0x31303032", v)
 			case "DOMAIN_SYNC_COMMITTEE":
 				assert.Equal(t, "0x07000000", v)
 			case "DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF":
@@ -472,6 +484,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "0x00000000", v)
 			case "BUILDER_WITHDRAWAL_PREFIX":
 				assert.Equal(t, "0x62", v)
+			case "PAYLOAD_BUILDER_VERSION":
+				assert.Equal(t, "0x01", v)
 			case "BUILDER_INDEX_SELF_BUILD":
 				assert.Equal(t, "125", v)
 			case "TRANSITION_TOTAL_DIFFICULTY":

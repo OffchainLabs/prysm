@@ -21,7 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
-func setupGloas(t *testing.T, justified, finalized primitives.Epoch) *ForkChoice {
+func setupGloas(t testing.TB, justified, finalized primitives.Epoch) *ForkChoice {
 	t.Helper()
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
@@ -1923,4 +1923,48 @@ func TestProcessAttestation_SameSlotPayloadVote(t *testing.T) {
 	require.Equal(t, 2, len(f.votes))
 	require.Equal(t, rootA, f.votes[1].nextRoot)
 	require.Equal(t, true, f.votes[1].nextPayloadStatus)
+}
+
+// BenchmarkConsensusChildrenLen compares the older length-only use of
+// allConsensusChildren (which clones+appends a slice) against hasConsensusChildren
+// on a node that has both an empty child and a full child.
+//
+// goos: darwin, goarch: arm64, cpu: Apple M4 Pro
+// BenchmarkConsensusChildrenLen/allConsensusChildren-14   39.17 ns/op   24 B/op   2 allocs/op
+// BenchmarkConsensusChildrenLen/hasConsensusChildren-14   12.09 ns/op    0 B/op   0 allocs/op
+func BenchmarkConsensusChildrenLen(b *testing.B) {
+	f := setupGloas(b, 0, 0)
+	ctx := b.Context()
+
+	rootA, blockHashA := indexToHash(1), indexToHash(100)
+	st, blk, err := prepareGloasForkchoiceState(ctx, 1, rootA, params.BeaconConfig().ZeroHash, blockHashA, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(b, err)
+	require.NoError(b, f.InsertNode(ctx, st, blk))
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(b, err)
+	require.NoError(b, f.InsertPayload(pe))
+
+	// Block B builds on (A, empty); block C builds on (A, full).
+	st, blk, err = prepareGloasForkchoiceState(ctx, 2, indexToHash(2), rootA, indexToHash(200), indexToHash(999), 0, 0)
+	require.NoError(b, err)
+	require.NoError(b, f.InsertNode(ctx, st, blk))
+	st, blk, err = prepareGloasForkchoiceState(ctx, 3, indexToHash(3), rootA, indexToHash(201), blockHashA, 0, 0)
+	require.NoError(b, err)
+	require.NoError(b, f.InsertNode(ctx, st, blk))
+
+	s := f.store
+	n := s.emptyNodeByRoot[rootA].node
+
+	b.Run("allConsensusChildren", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_ = len(s.allConsensusChildren(n)) == 0
+		}
+	})
+	b.Run("hasConsensusChildren", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_ = !s.hasConsensusChildren(n)
+		}
+	})
 }
