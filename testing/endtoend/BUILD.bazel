@@ -298,6 +298,7 @@ go_test(
     args = ["-test.v"],
     data = [
         "network-config/minimal.yaml",
+        "network-config/minimal-statediff.yaml",
         "//cmd/beacon-chain:oci_image_tarball_e2e",
         "//cmd/validator:oci_image_tarball_e2e",
     ],

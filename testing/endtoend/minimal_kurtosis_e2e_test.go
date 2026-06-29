@@ -43,6 +43,11 @@ func TestEndToEnd_Kurtosis_MinimalConfig(t *testing.T) {
 			configPath:  "testing/endtoend/network-config/minimal.yaml",
 			epochsToRun: 15,
 		},
+		{
+			enclaveName: "minimal-statediff",
+			configPath:  "testing/endtoend/network-config/minimal-statediff.yaml",
+			epochsToRun: 18,
+		},
 	}
 
 	for _, tt := range tests {
