@@ -66,6 +66,10 @@ func (c *testColumnCallbacks) HandleColumn(_ string, col blocks.VerifiedRODataCo
 
 func (c *testColumnCallbacks) HandleHeader(_ *ethpb.PartialDataColumnHeader, _ string) {}
 
+func (c *testColumnCallbacks) ValidatePartialColumnGroupID(_ []byte) pubsub.ValidationResult {
+	return pubsub.ValidationAccept
+}
+
 // TestTwoNodePartialColumnExchange tests that two nodes can exchange partial columns
 // and reconstruct the complete column. Node 1 has cells 0-2, Node 2 has cells 3-5.
 // After exchange, both should have all cells.

@@ -481,6 +481,33 @@ func (c *partialColumnCallbacks) PartialVerifierFromTrustedColumn(col *blocks.Pa
 	return c.service.partialVerifierFromTrustedColumn(c.service.ctx, col)
 }
 
+// ValidatePartialColumnGroupID validates an incoming Gloas partial-column group id against local
+// block state, mirroring the full-column gossip rules: [IGNORE] until a valid block for the group's
+// beacon block root has been seen, and [REJECT] when that block's slot does not match the group's
+// slot. Fulu group ids carry no slot and always pass.
+func (c *partialColumnCallbacks) ValidatePartialColumnGroupID(groupID []byte) pubsub.ValidationResult {
+	isGloas, slot, root, err := blocks.ParsePartialColumnGroupID(groupID)
+	if err != nil {
+		return pubsub.ValidationReject
+	}
+	if !isGloas {
+		return pubsub.ValidationAccept
+	}
+	// [IGNORE] A valid block for the group's slot has not been seen yet.
+	if c.service.cfg.chain == nil || !c.service.cfg.chain.HasBlock(c.service.ctx, root) {
+		return pubsub.ValidationIgnore
+	}
+	block, err := c.service.cfg.beaconDB.Block(c.service.ctx, root)
+	if err != nil || block == nil || block.IsNil() {
+		return pubsub.ValidationIgnore
+	}
+	// [REJECT] The group's slot must match the slot of the block at beacon_block_root.
+	if block.Block().Slot() != slot {
+		return pubsub.ValidationReject
+	}
+	return pubsub.ValidationAccept
+}
+
 // ValidateColumn verifies the KZG proofs for the given cells.
 func (c *partialColumnCallbacks) ValidateColumn(cellsToVerify []blocks.CellProofBundle) error {
 	return peerdas.VerifyDataColumnsCellsKZGProofs(cellsToVerify)

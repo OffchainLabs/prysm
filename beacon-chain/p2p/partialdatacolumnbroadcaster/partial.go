@@ -64,6 +64,11 @@ type ColumnCallbacks interface {
 	HandleColumn(topic string, col blocks.VerifiedRODataColumn)
 	// HandleHeader is called when a new partial data column header is first validated.
 	HandleHeader(header *ethpb.PartialDataColumnHeader, groupID string)
+	// ValidatePartialColumnGroupID validates an incoming Gloas partial-column group id against local
+	// block state: ValidationReject when a seen block at the group's beacon block root has a different
+	// slot (penalize the peer), ValidationIgnore when no block for the root has been seen, else
+	// ValidationAccept. Fulu group ids carry no slot and always pass.
+	ValidatePartialColumnGroupID(groupID []byte) pubsub.ValidationResult
 }
 
 // Broadcaster is the behaviour of the partial data column broadcaster used by the rest of the node.
@@ -631,13 +636,18 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 	ourVerifier := p.getPartialVerifier(topicID, groupID)
 	var shouldRepublish bool
 
-	if ourVerifier == nil && hasMessage {
-		if rpc.isGloas {
-			// Gloas has no header to seed a verifier from; we can only verify incoming cells once
-			// we have published locally (block + bid commitments). Never buffer unsolicited cells.
-			p.logger.WithFields(rpc.logFields()).Debug("Dropping Gloas partial cells: no local verifier")
-			return nil
+	// Gloas has no header to seed a verifier from, so we only ever verify Gloas cells against a
+	// verifier we created when publishing post-block. Unsolicited cells are dropped, never buffered.
+	// [REJECT] downscore if a seen block at the group's root has a mismatched slot; [IGNORE] otherwise.
+	if ourVerifier == nil && rpc.isGloas {
+		if p.callbacks.ValidatePartialColumnGroupID(rpc.GroupID) == pubsub.ValidationReject {
+			p.logger.WithFields(rpc.logFields()).Debug("Rejecting Gloas partial message: group slot does not match block slot")
+			_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
 		}
+		return nil
+	}
+
+	if ourVerifier == nil && hasMessage {
 		header, headerWasCached := p.getHeader(groupID, message)
 		if header == nil {
 			return nil

@@ -48,6 +48,10 @@ type callbackRecorder struct {
 	partialVerifierFromHeaderErr     error
 	partialVerifierFromHeaderReject  bool
 	partialVerifierFromTrustedColErr error
+
+	// validatePartialColumnGroupResult is returned from ValidatePartialColumnGroupID; the zero value
+	// (pubsub.ValidationAccept) means the group is accepted.
+	validatePartialColumnGroupResult pubsub.ValidationResult
 }
 
 func newCallbackRecorder(callBuffer int, validateHeaderReject bool, validateColumnErr, validateHeaderErr error) *callbackRecorder {
@@ -91,6 +95,10 @@ func (r *callbackRecorder) HandleColumn(topic string, col blocks.VerifiedRODataC
 
 func (r *callbackRecorder) HandleHeader(header *ethpb.PartialDataColumnHeader, groupID string) {
 	r.handleHeaderCallCh <- headerHandlerCall{header: header, groupID: groupID}
+}
+
+func (r *callbackRecorder) ValidatePartialColumnGroupID(_ []byte) pubsub.ValidationResult {
+	return r.validatePartialColumnGroupResult
 }
 
 type peerFeedbackCall struct {
@@ -2801,4 +2809,28 @@ func TestPartialColumnBroadcaster_Publish_Gloas(t *testing.T) {
 		yield(topic, *column)
 	}))
 	require.Equal(t, 0, len(recorder.partialVerifierFromTrustedColumnCallCh))
+}
+
+func TestPartialColumnBroadcaster_handleIncomingRPC_GloasSlotMismatchRejected(t *testing.T) {
+	const validTopic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	ps := newMockPubSub(nil, nil)
+	recorder := newCallbackRecorder(8, false, nil, nil)
+	// The callback reports a slot/root inconsistency for the group id ([REJECT]).
+	recorder.validatePartialColumnGroupResult = pubsub.ValidationReject
+	h := newBroadcasterHarness(t, ps)
+	h.broadcaster.callbacks = recorder
+	h.broadcaster.topics[validTopic] = nil
+
+	col := createGloasPartialColumn(t, 3, nil)
+	group := col.GroupID()
+	msg := buildSidecarWithCells(3, map[uint64][]byte{1: {0x22}})
+	rpc := buildIncomingGloasRPC(validTopic, group, msg, nil)
+
+	require.NoError(t, h.broadcaster.handleIncomingRPC(rpc))
+
+	// Slot mismatch -> peer downscored, cells dropped (no verifier created).
+	require.Equal(t, 1, ps.peerFeedbackCallCount())
+	require.Equal(t, pubsub.PeerFeedbackInvalidMessage, ps.peerFeedbackCallsSnapshot()[0].kind)
+	require.IsNil(t, h.broadcaster.getDataColumn(validTopic, group))
 }
