@@ -323,3 +323,38 @@ go_test(
         "@io_bazel_rules_go//go/tools/bazel:go_default_library",
     ],
 )
+
+go_test(
+    name = "go_doppelganger_kurtosis_test",
+    size = "large",
+    testonly = True,
+    srcs = [
+        "doppelganger_kurtosis_e2e_test.go",
+        "kurtosis_e2e_helper.go",
+    ],
+    args = ["-test.v"],
+    data = [
+        "network-config/doppelganger.yaml",
+        "//cmd/beacon-chain:oci_image_tarball_e2e",
+        "//cmd/validator:oci_image_tarball_e2e",
+    ],
+    eth_network = "minimal",
+    tags = [
+        "e2e",
+        "manual",
+        "minimal",
+        "requires-network",
+    ],
+    deps = [
+        "//api/client/beacon:go_default_library",
+        "//config/params:go_default_library",
+        "//consensus-types/primitives:go_default_library",
+        "//testing/assert:go_default_library",
+        "//testing/endtoend/evaluators:go_default_library",
+        "//testing/endtoend/helpers:go_default_library",
+        "//testing/endtoend/kurtosis:go_default_library",
+        "//testing/endtoend/types:go_default_library",
+        "//testing/require:go_default_library",
+        "@io_bazel_rules_go//go/tools/bazel:go_default_library",
+    ],
+)

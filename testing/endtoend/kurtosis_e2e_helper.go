@@ -72,21 +72,6 @@ func fetchGenesisTime(t *testing.T, ctx context.Context, client *beacon.Client) 
 	return time.Unix(secs, 0)
 }
 
-func waitUntil(t *testing.T, ctx context.Context, when time.Time) {
-	delay := time.Until(when)
-	if delay <= 0 {
-		return
-	}
-
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		require.NoError(t, ctx.Err())
-	case <-timer.C:
-	}
-}
-
 // LoadPrysmDockerImages loads the Prysm beacon-chain and validator Docker images
 // into the local Docker daemon with verification.
 func LoadPrysmDockerImages(t *testing.T) {
