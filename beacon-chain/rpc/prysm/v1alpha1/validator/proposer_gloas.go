@@ -33,13 +33,18 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 	})
 
 	// local is our self-build candidate and the baseline for comparing incoming bids.
+	var selfBuilt bool
 	local, err := vs.getLocalPayload(ctx, sBlk.Block(), head, parentFull)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get local payload: %v", err)
-	}
-	selfBuilt, err := vs.setExecutionPayloadBid(ctx, sBlk, local, local.OverrideBuilder || skipBuilder)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not set execution payload bid: %v", err)
+		log.WithError(err).Warn("Could not get local payload, falling back to P2P bid")
+		if fbErr := vs.setP2PBidFallback(ctx, sBlk, head, parentFull); fbErr != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get local payload and no P2P bid fallback: %v", fbErr)
+		}
+	} else {
+		selfBuilt, err = vs.setExecutionPayloadBid(ctx, sBlk, local, local.OverrideBuilder || skipBuilder)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not set execution payload bid: %v", err)
+		}
 	}
 
 	wg.Wait()
