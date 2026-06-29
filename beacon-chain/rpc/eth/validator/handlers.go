@@ -237,31 +237,21 @@ func (s *Server) SubmitSignedProposerPreferences(w http.ResponseWriter, r *http.
 		return
 	}
 
-	var data []*structs.SignedProposerPreferences
-	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
-		if errors.Is(err, io.EOF) {
+	var prefs []*ethpbalpha.SignedProposerPreferences
+	var failures []*server.IndexedError
+	var decodeErr error
+	if httputil.IsRequestSsz(r) {
+		prefs, failures, decodeErr = decodeSignedProposerPreferencesSSZ(r.Body)
+	} else {
+		prefs, failures, decodeErr = decodeSignedProposerPreferencesJSON(r.Body)
+	}
+	if decodeErr != nil {
+		if errors.Is(decodeErr, io.EOF) {
 			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		} else {
-			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+			httputil.HandleError(w, "Could not decode request body: "+decodeErr.Error(), http.StatusBadRequest)
 		}
 		return
-	}
-	if len(data) == 0 {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	}
-
-	req := &ethpbalpha.SubmitSignedProposerPreferencesRequest{
-		SignedProposerPreferences: make([]*ethpbalpha.SignedProposerPreferences, len(data)),
-	}
-	var failures []*server.IndexedError
-	for i, item := range data {
-		consensusItem, err := item.ToConsensus()
-		if err != nil {
-			failures = append(failures, &server.IndexedError{Index: i, Message: err.Error()})
-			continue
-		}
-		req.SignedProposerPreferences[i] = consensusItem
 	}
 	if len(failures) > 0 {
 		httputil.WriteError(w, &server.IndexedErrorContainer{
@@ -271,7 +261,12 @@ func (s *Server) SubmitSignedProposerPreferences(w http.ResponseWriter, r *http.
 		})
 		return
 	}
+	if len(prefs) == 0 {
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return
+	}
 
+	req := &ethpbalpha.SubmitSignedProposerPreferencesRequest{SignedProposerPreferences: prefs}
 	if _, err := s.V1Alpha1Server.SubmitSignedProposerPreferences(ctx, req); err != nil {
 		if st, ok := status.FromError(err); ok {
 			switch st.Code() {
@@ -287,6 +282,49 @@ func (s *Server) SubmitSignedProposerPreferences(w http.ResponseWriter, r *http.
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+// decodeSignedProposerPreferencesJSON decodes a JSON array of SignedProposerPreferences.
+func decodeSignedProposerPreferencesJSON(r io.Reader) ([]*ethpbalpha.SignedProposerPreferences, []*server.IndexedError, error) {
+	var data []*structs.SignedProposerPreferences
+	if err := json.NewDecoder(r).Decode(&data); err != nil {
+		return nil, nil, err
+	}
+	prefs := make([]*ethpbalpha.SignedProposerPreferences, len(data))
+	var failures []*server.IndexedError
+	for i, item := range data {
+		consensusItem, err := item.ToConsensus()
+		if err != nil {
+			failures = append(failures, &server.IndexedError{Index: i, Message: err.Error()})
+			continue
+		}
+		prefs[i] = consensusItem
+	}
+	return prefs, failures, nil
+}
+
+// decodeSignedProposerPreferencesSSZ decodes the SSZ encoding
+func decodeSignedProposerPreferencesSSZ(r io.Reader) ([]*ethpbalpha.SignedProposerPreferences, []*server.IndexedError, error) {
+	body, err := io.ReadAll(r)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "could not read request body")
+	}
+	sszSize := (&ethpbalpha.SignedProposerPreferences{}).SizeSSZ()
+	if len(body) == 0 || len(body)%sszSize != 0 {
+		return nil, nil, errors.New("invalid SSZ signed proposer preferences list size")
+	}
+	n := len(body) / sszSize
+	prefs := make([]*ethpbalpha.SignedProposerPreferences, n)
+	var failures []*server.IndexedError
+	for i := range n {
+		m := &ethpbalpha.SignedProposerPreferences{}
+		if err := m.UnmarshalSSZ(body[i*sszSize : (i+1)*sszSize]); err != nil {
+			failures = append(failures, &server.IndexedError{Index: i, Message: "Could not decode SSZ message: " + err.Error()})
+			continue
+		}
+		prefs[i] = m
+	}
+	return prefs, failures, nil
 }
 
 // SubmitContributionAndProofs publishes multiple signed sync committee contribution and proofs.
