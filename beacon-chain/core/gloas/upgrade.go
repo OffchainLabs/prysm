@@ -259,7 +259,7 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 		}
 	}
 
-	emptyExecutionRequestsRoot, err := enginev1.EmptyExecutionRequestsHashTreeRoot()
+	emptyExecutionRequestsRoot, err := enginev1.EmptyExecutionRequestsGloasHashTreeRoot()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute empty execution requests root")
 	}

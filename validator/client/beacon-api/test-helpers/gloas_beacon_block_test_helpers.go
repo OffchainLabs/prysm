@@ -45,8 +45,8 @@ func GenerateProtoGloasBeaconBlock() *ethpb.BeaconBlockGloas {
 					},
 				},
 			},
-			AttesterSlashings: []*ethpb.AttesterSlashingElectra{},
-			Attestations:      []*ethpb.AttestationElectra{},
+			AttesterSlashings: []*ethpb.AttesterSlashingGloas{},
+			Attestations:      []*ethpb.AttestationGloas{},
 			Deposits:          []*ethpb.Deposit{},
 			VoluntaryExits:    []*ethpb.SignedVoluntaryExit{},
 			SyncAggregate: &ethpb.SyncAggregate{

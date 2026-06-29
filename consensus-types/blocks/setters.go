@@ -78,6 +78,16 @@ func (b *SignedBeaconBlock) SetAttesterSlashings(slashings []eth.AttSlashing) er
 			blockSlashings = append(blockSlashings, s)
 		}
 		b.block.body.attesterSlashings = blockSlashings
+	} else if b.version == version.Gloas {
+		blockSlashings := make([]*eth.AttesterSlashingGloas, 0, len(slashings))
+		for _, slashing := range slashings {
+			s, ok := eth.AttesterSlashingGloasFromAttSlashing(slashing)
+			if !ok {
+				return fmt.Errorf("slashing of type %T is not *eth.AttesterSlashingGloas or *eth.AttesterSlashingElectra", slashing)
+			}
+			blockSlashings = append(blockSlashings, s)
+		}
+		b.block.body.attesterSlashingsGloas = blockSlashings
 	} else {
 		blockSlashings := make([]*eth.AttesterSlashingElectra, 0, len(slashings))
 		for _, slashing := range slashings {
@@ -105,6 +115,16 @@ func (b *SignedBeaconBlock) SetAttestations(atts []eth.Att) error {
 			blockAtts = append(blockAtts, a)
 		}
 		b.block.body.attestations = blockAtts
+	} else if b.version == version.Gloas {
+		blockAtts := make([]*eth.AttestationGloas, 0, len(atts))
+		for _, att := range atts {
+			a, ok := eth.AttestationGloasFromAtt(att)
+			if !ok {
+				return fmt.Errorf("attestation of type %T is not *eth.AttestationGloas or *eth.AttestationElectra", att)
+			}
+			blockAtts = append(blockAtts, a)
+		}
+		b.block.body.attestationsGloas = blockAtts
 	} else {
 		blockAtts := make([]*eth.AttestationElectra, 0, len(atts))
 		for _, att := range atts {
@@ -193,7 +213,7 @@ func (b *SignedBeaconBlock) SetPayloadAttestations(pa []*eth.PayloadAttestation)
 }
 
 // SetParentExecutionRequests sets the parent execution requests in the block.
-func (b *SignedBeaconBlock) SetParentExecutionRequests(r *enginev1.ExecutionRequestsGloas) error {
+func (b *SignedBeaconBlock) SetParentExecutionRequests(r interfaces.ExecutionRequests) error {
 	if b.version < version.Gloas {
 		return consensus_types.ErrNotSupported("SetParentExecutionRequests", b.version)
 	}

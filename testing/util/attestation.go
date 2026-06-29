@@ -60,6 +60,26 @@ func NewAttestationElectra() *ethpb.AttestationElectra {
 	}
 }
 
+// NewAttestationGloas creates a Gloas block attestation with minimum marshalable fields.
+func NewAttestationGloas() *ethpb.AttestationGloas {
+	cb := primitives.NewAttestationCommitteeBits()
+	cb.SetBitAt(0, true)
+	return &ethpb.AttestationGloas{
+		AggregationBits: bitfield.Bitlist{0b1101},
+		CommitteeBits:   cb,
+		Data: &ethpb.AttestationData{
+			BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+			Source: &ethpb.Checkpoint{
+				Root: make([]byte, fieldparams.RootLength),
+			},
+			Target: &ethpb.Checkpoint{
+				Root: make([]byte, fieldparams.RootLength),
+			},
+		},
+		Signature: make([]byte, 96),
+	}
+}
+
 // GenerateAttestations creates attestations that are entirely valid, for all
 // the committees of the current state slot. This function expects attestations
 // requested to be cleanly divisible by committees per slot. If there is 1 committee
@@ -321,6 +341,25 @@ func HydrateAttestationElectra(a *ethpb.AttestationElectra) *ethpb.AttestationEl
 	return a
 }
 
+// HydrateAttestationGloas hydrates a Gloas attestation object with correct field length sizes
+// to comply with fssz marshalling and unmarshalling rules.
+func HydrateAttestationGloas(a *ethpb.AttestationGloas) *ethpb.AttestationGloas {
+	if a.Signature == nil {
+		a.Signature = make([]byte, 96)
+	}
+	if a.AggregationBits == nil {
+		a.AggregationBits = make([]byte, 1)
+	}
+	if a.CommitteeBits == nil {
+		a.CommitteeBits = primitives.NewAttestationCommitteeBits()
+	}
+	if a.Data == nil {
+		a.Data = &ethpb.AttestationData{}
+	}
+	a.Data = HydrateAttestationData(a.Data)
+	return a
+}
+
 func HydrateSingleAttestation(a *ethpb.SingleAttestation) *ethpb.SingleAttestation {
 	if a.Signature == nil {
 		a.Signature = make([]byte, 96)
@@ -406,6 +445,18 @@ func HydrateIndexedAttestation(a *ethpb.IndexedAttestation) *ethpb.IndexedAttest
 // HydrateIndexedAttestationElectra hydrates an indexed attestation with correct field length sizes
 // to comply with fssz marshalling and unmarshalling rules.
 func HydrateIndexedAttestationElectra(a *ethpb.IndexedAttestationElectra) *ethpb.IndexedAttestationElectra {
+	if a.Signature == nil {
+		a.Signature = make([]byte, 96)
+	}
+	if a.Data == nil {
+		a.Data = &ethpb.AttestationData{}
+	}
+	a.Data = HydrateAttestationData(a.Data)
+	return a
+}
+
+// HydrateIndexedAttestationGloas hydrates a Gloas indexed attestation with correct field length sizes.
+func HydrateIndexedAttestationGloas(a *ethpb.IndexedAttestationGloas) *ethpb.IndexedAttestationGloas {
 	if a.Signature == nil {
 		a.Signature = make([]byte, 96)
 	}

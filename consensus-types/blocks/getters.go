@@ -1190,6 +1190,14 @@ func (b *BeaconBlockBody) AttesterSlashings() []eth.AttSlashing {
 		for i, s := range b.attesterSlashings {
 			slashings[i] = s
 		}
+	} else if b.version == version.Gloas {
+		if b.attesterSlashingsGloas == nil {
+			return nil
+		}
+		slashings = make([]eth.AttSlashing, len(b.attesterSlashingsGloas))
+		for i, s := range b.attesterSlashingsGloas {
+			slashings[i] = s
+		}
 	} else {
 		if b.attesterSlashingsElectra == nil {
 			return nil
@@ -1211,6 +1219,14 @@ func (b *BeaconBlockBody) Attestations() []eth.Att {
 		}
 		atts = make([]eth.Att, len(b.attestations))
 		for i, a := range b.attestations {
+			atts[i] = a
+		}
+	} else if b.version == version.Gloas {
+		if b.attestationsGloas == nil {
+			return nil
+		}
+		atts = make([]eth.Att, len(b.attestationsGloas))
+		for i, a := range b.attestationsGloas {
 			atts[i] = a
 		}
 	} else {
@@ -1304,7 +1320,7 @@ func (b *BeaconBlockBody) SignedExecutionPayloadBid() (*eth.SignedExecutionPaylo
 }
 
 // ParentExecutionRequests returns the parent's deferred execution requests.
-func (b *BeaconBlockBody) ParentExecutionRequests() (*enginev1.ExecutionRequestsGloas, error) {
+func (b *BeaconBlockBody) ParentExecutionRequests() (interfaces.ExecutionRequests, error) {
 	if b.version >= version.Gloas {
 		return b.parentExecutionRequests, nil
 	}

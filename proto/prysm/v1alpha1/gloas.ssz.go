@@ -7,6 +7,424 @@ import (
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
+// MarshalSSZ ssz marshals the AttestationGloas object
+func (a *AttestationGloas) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(a)
+}
+
+// MarshalSSZTo ssz marshals the AttestationGloas object to a target array
+func (a *AttestationGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(236)
+
+	// Offset (0) 'AggregationBits'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(a.AggregationBits)
+
+	// Field (1) 'Data'
+	if a.Data == nil {
+		a.Data = new(AttestationData)
+	}
+	if dst, err = a.Data.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (2) 'Signature'
+	if size := len(a.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	dst = append(dst, a.Signature...)
+
+	// Field (3) 'CommitteeBits'
+	if size := len(a.CommitteeBits); size != 8 {
+		err = ssz.ErrBytesLengthFn("--.CommitteeBits", size, 8)
+		return
+	}
+	dst = append(dst, a.CommitteeBits...)
+
+	// Field (0) 'AggregationBits'
+	if size := len(a.AggregationBits); size > 131072 {
+		err = ssz.ErrBytesLengthFn("--.AggregationBits", size, 131072)
+		return
+	}
+	dst = append(dst, a.AggregationBits...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the AttestationGloas object
+func (a *AttestationGloas) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 236 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'AggregationBits'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 236 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (1) 'Data'
+	if a.Data == nil {
+		a.Data = new(AttestationData)
+	}
+	if err = a.Data.UnmarshalSSZ(buf[4:132]); err != nil {
+		return err
+	}
+
+	// Field (2) 'Signature'
+	if cap(a.Signature) == 0 {
+		a.Signature = make([]byte, 0, len(buf[132:228]))
+	}
+	a.Signature = append(a.Signature, buf[132:228]...)
+
+	// Field (3) 'CommitteeBits'
+	if cap(a.CommitteeBits) == 0 {
+		a.CommitteeBits = make([]byte, 0, len(buf[228:236]))
+	}
+	a.CommitteeBits = append(a.CommitteeBits, buf[228:236]...)
+
+	// Field (0) 'AggregationBits'
+	{
+		buf = tail[o0:]
+		if err = ssz.ValidateBitlist(buf, 131072); err != nil {
+			return err
+		}
+		if cap(a.AggregationBits) == 0 {
+			a.AggregationBits = make([]byte, 0, len(buf))
+		}
+		a.AggregationBits = append(a.AggregationBits, buf...)
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the AttestationGloas object
+func (a *AttestationGloas) SizeSSZ() (size int) {
+	size = 236
+
+	// Field (0) 'AggregationBits'
+	size += len(a.AggregationBits)
+
+	return
+}
+
+// HashTreeRoot ssz hashes the AttestationGloas object
+func (a *AttestationGloas) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(a)
+}
+
+// HashTreeRootWith ssz hashes the AttestationGloas object with a hasher
+func (a *AttestationGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'AggregationBits'
+	if len(a.AggregationBits) == 0 {
+		err = ssz.ErrEmptyBitlist
+		return
+	}
+	hh.PutBitlist(a.AggregationBits, 131072)
+
+	// Field (1) 'Data'
+	if err = a.Data.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (2) 'Signature'
+	if size := len(a.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	hh.PutBytes(a.Signature)
+
+	// Field (3) 'CommitteeBits'
+	if size := len(a.CommitteeBits); size != 8 {
+		err = ssz.ErrBytesLengthFn("--.CommitteeBits", size, 8)
+		return
+	}
+	hh.PutBytes(a.CommitteeBits)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the AttesterSlashingGloas object
+func (a *AttesterSlashingGloas) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(a)
+}
+
+// MarshalSSZTo ssz marshals the AttesterSlashingGloas object to a target array
+func (a *AttesterSlashingGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(8)
+
+	// Offset (0) 'Attestation_1'
+	dst = ssz.WriteOffset(dst, offset)
+	if a.Attestation_1 == nil {
+		a.Attestation_1 = new(IndexedAttestationGloas)
+	}
+	offset += a.Attestation_1.SizeSSZ()
+
+	// Offset (1) 'Attestation_2'
+	dst = ssz.WriteOffset(dst, offset)
+	if a.Attestation_2 == nil {
+		a.Attestation_2 = new(IndexedAttestationGloas)
+	}
+	offset += a.Attestation_2.SizeSSZ()
+
+	// Field (0) 'Attestation_1'
+	if dst, err = a.Attestation_1.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (1) 'Attestation_2'
+	if dst, err = a.Attestation_2.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the AttesterSlashingGloas object
+func (a *AttesterSlashingGloas) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 8 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1 uint64
+
+	// Offset (0) 'Attestation_1'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 8 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (1) 'Attestation_2'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'Attestation_1'
+	{
+		buf = tail[o0:o1]
+		if a.Attestation_1 == nil {
+			a.Attestation_1 = new(IndexedAttestationGloas)
+		}
+		if err = a.Attestation_1.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+
+	// Field (1) 'Attestation_2'
+	{
+		buf = tail[o1:]
+		if a.Attestation_2 == nil {
+			a.Attestation_2 = new(IndexedAttestationGloas)
+		}
+		if err = a.Attestation_2.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the AttesterSlashingGloas object
+func (a *AttesterSlashingGloas) SizeSSZ() (size int) {
+	size = 8
+
+	// Field (0) 'Attestation_1'
+	if a.Attestation_1 == nil {
+		a.Attestation_1 = new(IndexedAttestationGloas)
+	}
+	size += a.Attestation_1.SizeSSZ()
+
+	// Field (1) 'Attestation_2'
+	if a.Attestation_2 == nil {
+		a.Attestation_2 = new(IndexedAttestationGloas)
+	}
+	size += a.Attestation_2.SizeSSZ()
+
+	return
+}
+
+// HashTreeRoot ssz hashes the AttesterSlashingGloas object
+func (a *AttesterSlashingGloas) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(a)
+}
+
+// HashTreeRootWith ssz hashes the AttesterSlashingGloas object with a hasher
+func (a *AttesterSlashingGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Attestation_1'
+	if err = a.Attestation_1.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'Attestation_2'
+	if err = a.Attestation_2.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the IndexedAttestationGloas object
+func (i *IndexedAttestationGloas) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(i)
+}
+
+// MarshalSSZTo ssz marshals the IndexedAttestationGloas object to a target array
+func (i *IndexedAttestationGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(228)
+
+	// Offset (0) 'AttestingIndices'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(i.AttestingIndices) * 8
+
+	// Field (1) 'Data'
+	if i.Data == nil {
+		i.Data = new(AttestationData)
+	}
+	if dst, err = i.Data.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (2) 'Signature'
+	if size := len(i.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	dst = append(dst, i.Signature...)
+
+	// Field (0) 'AttestingIndices'
+	if size := len(i.AttestingIndices); size > 131072 {
+		err = ssz.ErrListTooBigFn("--.AttestingIndices", size, 131072)
+		return
+	}
+	for ii := 0; ii < len(i.AttestingIndices); ii++ {
+		dst = ssz.MarshalUint(dst, i.AttestingIndices[ii])
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the IndexedAttestationGloas object
+func (i *IndexedAttestationGloas) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 228 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'AttestingIndices'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 228 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (1) 'Data'
+	if i.Data == nil {
+		i.Data = new(AttestationData)
+	}
+	if err = i.Data.UnmarshalSSZ(buf[4:132]); err != nil {
+		return err
+	}
+
+	// Field (2) 'Signature'
+	if cap(i.Signature) == 0 {
+		i.Signature = make([]byte, 0, len(buf[132:228]))
+	}
+	i.Signature = append(i.Signature, buf[132:228]...)
+
+	// Field (0) 'AttestingIndices'
+	{
+		buf = tail[o0:]
+		num, err := ssz.DivideInt2(len(buf), 8, 131072)
+		if err != nil {
+			return err
+		}
+		i.AttestingIndices = ssz.ExtendUint(i.AttestingIndices, num)
+		for ii := 0; ii < num; ii++ {
+			i.AttestingIndices[ii] = ssz.UnmarshallUint[uint64](buf[ii*8 : (ii+1)*8])
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the IndexedAttestationGloas object
+func (i *IndexedAttestationGloas) SizeSSZ() (size int) {
+	size = 228
+
+	// Field (0) 'AttestingIndices'
+	size += len(i.AttestingIndices) * 8
+
+	return
+}
+
+// HashTreeRoot ssz hashes the IndexedAttestationGloas object
+func (i *IndexedAttestationGloas) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(i)
+}
+
+// HashTreeRootWith ssz hashes the IndexedAttestationGloas object with a hasher
+func (i *IndexedAttestationGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'AttestingIndices'
+	{
+		if size := len(i.AttestingIndices); size > 131072 {
+			err = ssz.ErrListTooBigFn("--.AttestingIndices", size, 131072)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range i.AttestingIndices {
+			ssz.AppendUint(hh, i)
+		}
+		hh.FillUpTo32()
+
+		numItems := uint64(len(i.AttestingIndices))
+		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(131072, numItems, 8))
+	}
+
+	// Field (1) 'Data'
+	if err = i.Data.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (2) 'Signature'
+	if size := len(i.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	hh.PutBytes(i.Signature)
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the ExecutionPayloadBid object
 func (e *ExecutionPayloadBid) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(e)
@@ -1325,10 +1743,10 @@ func (b *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		b.AttesterSlashings = make([]*AttesterSlashingElectra, num)
+		b.AttesterSlashings = make([]*AttesterSlashingGloas, num)
 		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
 			if b.AttesterSlashings[indx] == nil {
-				b.AttesterSlashings[indx] = new(AttesterSlashingElectra)
+				b.AttesterSlashings[indx] = new(AttesterSlashingGloas)
 			}
 			if err = b.AttesterSlashings[indx].UnmarshalSSZ(buf); err != nil {
 				return err
@@ -1347,10 +1765,10 @@ func (b *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		b.Attestations = make([]*AttestationElectra, num)
+		b.Attestations = make([]*AttestationGloas, num)
 		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
 			if b.Attestations[indx] == nil {
-				b.Attestations[indx] = new(AttestationElectra)
+				b.Attestations[indx] = new(AttestationGloas)
 			}
 			if err = b.Attestations[indx].UnmarshalSSZ(buf); err != nil {
 				return err
