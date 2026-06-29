@@ -294,6 +294,7 @@ go_test(
     timeout = "eternal", # 3600s
     testonly = True,
     srcs = [
+        "kurtosis_e2e_helper.go",
         "minimal_kurtosis_e2e_test.go",
     ],
     args = ["-test.v"],

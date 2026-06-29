@@ -8,6 +8,7 @@ go_library(
         "assertoor_playbook.go",
         "assertoor_types.go",
         "helper.go",
+        "starlark.go",
         "wrapper.go",
     ],
     embedsrcs = [

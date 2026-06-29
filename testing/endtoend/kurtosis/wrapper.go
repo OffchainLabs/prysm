@@ -118,10 +118,7 @@ func (kw *KurtosisWrapper) StartService(name string) error {
 		return fmt.Errorf("enclave context is nil")
 	}
 	script := fmt.Sprintf("def run(plan):\n    plan.start_service(%q)\n", name)
-	if _, err := kw.enclaveCtx.RunStarlarkScriptBlocking(kw.ctx, script, starlark_run_config.NewRunStarlarkConfig()); err != nil {
-		return fmt.Errorf("start service %q: %w", name, err)
-	}
-	return nil
+	return kw.runStarlarkScript(fmt.Sprintf("start service %q", name), script)
 }
 
 // prysmCLServices returns all Prysm beacon (CL) service contexts in the enclave
