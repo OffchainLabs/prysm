@@ -28,6 +28,7 @@ const (
 	getForkForStatePath      = "/eth/v1/beacon/states/{{.Id}}/fork"
 	getForkSchedulePath      = "/eth/v1/config/fork_schedule"
 	getConfigSpecPath        = "/eth/v1/config/spec"
+	getGenesisPath           = "/eth/v1/beacon/genesis"
 	getStatePath             = "/eth/v2/debug/beacon/states"
 	changeBLStoExecutionPath = "/eth/v1/beacon/pool/bls_to_execution_changes"
 
@@ -147,6 +148,20 @@ func (c *Client) GetConfigSpec(ctx context.Context) (*structs.GetSpecResponse, e
 		return nil, err
 	}
 	return fsr, nil
+}
+
+// GetGenesis retrieves the genesis details (time, validators root, fork version)
+// used by the beacon node.
+func (c *Client) GetGenesis(ctx context.Context) (*structs.Genesis, error) {
+	body, err := c.Get(ctx, getGenesisPath)
+	if err != nil {
+		return nil, errors.Wrap(err, "error requesting genesis")
+	}
+	ggr := &structs.GetGenesisResponse{}
+	if err := json.Unmarshal(body, ggr); err != nil {
+		return nil, err
+	}
+	return ggr.Data, nil
 }
 
 type NodeVersion struct {
