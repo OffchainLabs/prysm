@@ -89,7 +89,7 @@ func loadDockerImage(t *testing.T, runfilePath string) {
 	filePath, err := bazel.Runfile(runfilePath)
 	require.NoError(t, err, "Failed to find runfile: %s", runfilePath)
 
-	cmd := exec.Command("docker", "load", "-i", filePath)
+	cmd := exec.Command("docker", "load", "-i", filePath) // #nosec G204
 	require.NoError(t, cmd.Run(), "Failed to load docker image from file: %s", filePath)
 }
 
