@@ -11,6 +11,10 @@ go_library(
         "wrapper.go",
     ],
     embedsrcs = [
+        "playbooks/blob-limits.yaml",
+        "playbooks/blobs-included.yaml",
+        "playbooks/block-graffiti.yaml",
+        "playbooks/fee-recipient.yaml",
         "playbooks/metrics.yaml",
         "playbooks/network-health-monitor.yaml",
         "playbooks/validators-active.yaml",

@@ -1,0 +1,29 @@
+# Check whether proposed blocks use the expected Prysm E2E graffiti prefix.
+
+# Replaces those evaluators from legacy E2E:
+# - VerifyBlockGraffiti
+
+id: block-graffiti
+name: "Block graffiti check"
+timeout: 20m
+
+tasks:
+  - name: check_clients_are_healthy
+    title: "Wait for a healthy client"
+    timeout: 5m
+    config:
+      minClientCount: 1
+
+  - name: check_consensus_slot_range
+    title: "Wait until blocks after genesis are available"
+    timeout: 10m
+    config:
+      minEpochNumber: 1
+
+  - name: check_consensus_block_proposals
+    title: "Check block graffiti"
+    timeout: 10m
+    config:
+      checkLookback: 32
+      blockCount: 8
+      graffitiPattern: "^(Sushi|Ramen|Takoyaki)"

@@ -1,0 +1,205 @@
+# Check whether post-merge blocks set a real fee recipient and credit it when gas is used.
+
+# Replaces those evaluators from legacy E2E:
+# - FeeRecipientIsPresent
+#
+# The legacy deterministic pubkey -> fee-recipient assertion is intentionally
+# not migrated because Kurtosis configures validator clients with their own
+# suggested fee recipient.
+
+id: fee-recipient
+name: "Fee recipient check"
+timeout: 20m
+
+tasks:
+  - name: check_clients_are_healthy
+    id: clients
+    title: "Wait for a healthy client"
+    timeout: 5m
+    config:
+      minClientCount: 1
+
+  - name: get_consensus_specs
+    id: specs
+    title: "Get consensus specs"
+
+  - name: check_consensus_slot_range
+    title: "Wait until a full post-Bellatrix epoch is available"
+    timeout: 10m
+    configVars:
+      minEpochNumber: "| [1, ((.tasks.specs.outputs.specs.BELLATRIX_FORK_EPOCH | tonumber) + 1)] | max"
+
+  # CL side check: fee recipient is present in the head block
+  - name: check_http_json
+    id: head_block
+    title: "Fetch head block fee recipient"
+    timeout: 5m
+    configVars:
+      url: '| .tasks.clients.outputs.goodClients[0].clRpcUrl + "/eth/v2/beacon/blocks/head"'
+    config:
+      failOnCheckMiss: true
+      assertions:
+        - name: block_hash
+          query: |
+            (
+              .data.message.body.execution_payload
+              // .data.message.body.execution_payload_header
+              // .data.message.body.signed_execution_payload_bid.message
+              // .data.message.body.execution_payload_bid.message
+              // .data.message.body.execution_payload_bid
+              // {}
+            ) | (.block_hash // "" | ascii_downcase) | select(startswith("0x") and length == 66)
+          exists: true
+
+        - name: block_hash_nonzero
+          query: |
+            (
+              .data.message.body.execution_payload
+              // .data.message.body.execution_payload_header
+              // .data.message.body.signed_execution_payload_bid.message
+              // .data.message.body.execution_payload_bid.message
+              // .data.message.body.execution_payload_bid
+              // {}
+            ) | (.block_hash // "" | ascii_downcase) | select(startswith("0x") and length == 66)
+          operator: neq
+          value: "0x0000000000000000000000000000000000000000000000000000000000000000"
+
+        - name: fee_recipient
+          query: |
+            (
+              .data.message.body.execution_payload
+              // .data.message.body.execution_payload_header
+              // .data.message.body.signed_execution_payload_bid.message
+              // .data.message.body.execution_payload_bid.message
+              // .data.message.body.execution_payload_bid
+              // {}
+            ) | (.fee_recipient // "" | ascii_downcase) | select(startswith("0x") and length == 42)
+          exists: true
+
+        - name: fee_recipient_nonzero
+          query: |
+            (
+              .data.message.body.execution_payload
+              // .data.message.body.execution_payload_header
+              // .data.message.body.signed_execution_payload_bid.message
+              // .data.message.body.execution_payload_bid.message
+              // .data.message.body.execution_payload_bid
+              // {}
+            ) | (.fee_recipient // "" | ascii_downcase) | select(startswith("0x") and length == 42)
+          operator: neq
+          value: "0x0000000000000000000000000000000000000000"
+
+  # Below are the EL side checks: Compare the fee recipient balance in the head block vs. its parent block, and assert that it increased when gas was used.
+  - name: check_http_json
+    id: execution_block
+    title: "Fetch execution block for head payload"
+    timeout: 5m
+    configVars:
+      url: "tasks.clients.outputs.goodClients[0].elRpcUrl"
+      body: |
+        | {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "eth_getBlockByHash",
+            "params": [.tasks.head_block.outputs.values.block_hash, false]
+          }
+    config:
+      method: POST
+      failOnCheckMiss: true
+      assertions:
+        - name: block_number
+          query: ".result.number"
+          exists: true
+
+        - name: parent_hash
+          query: ".result.parentHash"
+          exists: true
+
+        - name: gas_used
+          query: ".result.gasUsed"
+          exists: true
+
+  - name: check_http_json
+    id: parent_execution_block
+    title: "Fetch parent execution block"
+    timeout: 5m
+    configVars:
+      url: "tasks.clients.outputs.goodClients[0].elRpcUrl"
+      body: |
+        | {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "eth_getBlockByHash",
+            "params": [.tasks.execution_block.outputs.values.parent_hash, false]
+          }
+    config:
+      method: POST
+      failOnCheckMiss: true
+      assertions:
+        - name: block_number
+          query: ".result.number"
+          exists: true
+
+  - name: check_http_json
+    id: parent_fee_recipient_balance
+    title: "Fetch parent fee recipient balance"
+    timeout: 5m
+    configVars:
+      url: "tasks.clients.outputs.goodClients[0].elRpcUrl"
+      body: |
+        | {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "eth_getBalance",
+            "params": [
+              .tasks.head_block.outputs.values.fee_recipient,
+              .tasks.parent_execution_block.outputs.values.block_number
+            ]
+          }
+    config:
+      method: POST
+      failOnCheckMiss: true
+      assertions:
+        - name: balance
+          query: ".result"
+          exists: true
+
+  - name: check_http_json
+    id: current_fee_recipient_balance
+    title: "Check fee recipient balance increased when gas was used"
+    timeout: 5m
+    configVars:
+      url: "tasks.clients.outputs.goodClients[0].elRpcUrl"
+      body: |
+        | {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "eth_getBalance",
+            "params": [
+              .tasks.head_block.outputs.values.fee_recipient,
+              .tasks.execution_block.outputs.values.block_number
+            ]
+          }
+      assertions: |
+        .tasks.parent_fee_recipient_balance.outputs.values.balance as $parentBalance
+        | (.tasks.execution_block.outputs.values.gas_used | tostring | ascii_downcase | sub("^0x"; "") | sub("^0+"; "")) as $gasUsed
+        | [{
+            "name": "balance",
+            "query": ".result",
+            "exists": true
+          }, {
+            "name": "balance_increased_when_gas_used",
+            "query": (
+              "def trimhex: ascii_downcase | sub(\"^0x\"; \"\") | sub(\"^0+\"; \"\"); " +
+              "def hexgt($want): (.result | trimhex) as $got | ($want | trimhex) as $prev | " +
+              "if (($got | length) > ($prev | length)) then true " +
+              "elif (($got | length) < ($prev | length)) then false " +
+              "else $got > $prev end; " +
+              "if \"" + $gasUsed + "\" == \"\" then true else hexgt(\"" + ($parentBalance | tostring | ascii_downcase) + "\") end"
+            ),
+            "operator": "eq",
+            "value": true
+          }]
+    config:
+      method: POST
+      failOnCheckMiss: true
