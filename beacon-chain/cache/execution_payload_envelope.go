@@ -11,8 +11,9 @@ import (
 // data column sidecars; raw blobs/proofs are derived from the columns at read
 // time so the publish hot path skips the KZG cell extension.
 type ExecutionPayloadContents struct {
-	Envelope    *ethpb.ExecutionPayloadEnvelope
-	DataColumns []consensusblocks.RODataColumn
+	Envelope       *ethpb.ExecutionPayloadEnvelope
+	DataColumns    []consensusblocks.RODataColumn
+	PartialColumns []consensusblocks.PartialDataColumn
 }
 
 // ExecutionPayloadEnvelopeCache holds the most recent ExecutionPayloadContents

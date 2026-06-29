@@ -19,6 +19,13 @@ import (
 // broadcast and receive missing data column sidecars for the given block root.
 // https:github.com/ethereum/consensus-specs/blob/master/specs/fulu/das-core.md#reconstruction-and-cross-seeding
 func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
+	// Gloas full-column reconstruction-from-subset is a separate, unimplemented feature. This
+	// path reads the proposer index and uses the proposer-keyed seen cache, neither of which
+	// applies to Gloas columns. Callers already gate this off for Gloas; guard here too.
+	if sidecar.IsGloas() {
+		return nil
+	}
+
 	key := fmt.Sprintf("%#x", sidecar.BlockRoot())
 	if _, err, _ := s.reconstructionSingleFlight.Do(key, func() (any, error) {
 		var wg sync.WaitGroup

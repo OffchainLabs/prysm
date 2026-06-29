@@ -40,6 +40,7 @@ type Flags struct {
 	WriteSSZStateTransitions            bool // WriteSSZStateTransitions to tmp directory.
 	EnablePeerScorer                    bool // EnablePeerScorer enables experimental peer scoring in p2p.
 	EnableLightClient                   bool // EnableLightClient enables light client APIs.
+	EnableGloasPartialColumns           bool // EnableGloasPartialColumns enables partial data column construction and gossip for Gloas blocks.
 	EnableQUIC                          bool // EnableQUIC specifies whether to enable QUIC transport for libp2p.
 	WriteWalletPasswordOnWebOnboarding  bool // WriteWalletPasswordOnWebOnboarding writes the password to disk after Prysm web signup.
 	EnableDoppelGanger                  bool // EnableDoppelGanger enables doppelganger protection on startup for the validator.
@@ -263,6 +264,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.IsSet(EnableLightClient.Name) {
 		logEnabled(EnableLightClient)
 		cfg.EnableLightClient = true
+	}
+	if ctx.IsSet(EnableGloasPartialColumns.Name) {
+		logEnabled(EnableGloasPartialColumns)
+		cfg.EnableGloasPartialColumns = true
 	}
 	if ctx.IsSet(BlobSaveFsync.Name) {
 		logEnabled(BlobSaveFsync)

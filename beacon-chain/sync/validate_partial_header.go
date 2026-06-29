@@ -14,22 +14,30 @@ import (
 var errHeaderEmptyCommitments = errors.New("header has no kzg commitments")
 var errHeaderParentNotSeen = errors.New("header parent not seen")
 var errHeaderNil = errors.New("nil header")
+var errColumnNotFulu = errors.New("partial column is not a fulu type")
 
-func (s *Service) partialVerifierFromTrustedColumn(ctx context.Context, col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
-	if col == nil || col.SignedBlockHeader == nil || col.SignedBlockHeader.Header == nil {
+func (s *Service) partialVerifierFromTrustedColumn(_ context.Context, col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
+	if col == nil {
+		return nil, errHeaderNil
+	}
+	// Gloas partial columns carry no signed block header or inclusion proof, so the Fulu
+	// header path does not apply. Seed a verifier from the bid commitments instead.
+	if col.IsGloas() {
+		return s.partialVerifierFromTrustedGloasColumn(col)
+	}
+	sbh, err := col.SignedBlockHeader()
+	if err != nil {
+		return nil, errColumnNotFulu
+	}
+	if sbh == nil || sbh.Header == nil {
 		return nil, errHeaderNil
 	}
 
-	if len(col.KzgCommitments) == 0 {
+	if col.KzgCommitmentCount() == 0 {
 		return nil, errHeaderEmptyCommitments
 	}
 
-	roDataColumn, err := blocks.NewRODataColumn(col.DataColumnSidecar)
-	if err != nil {
-		return nil, errors.Wrap(err, "roDataColumn conversion failure")
-	}
-
-	dcv := s.newColumnsVerifier([]blocks.RODataColumn{roDataColumn}, verification.PartialColumnRequirements)
+	dcv := s.newColumnsVerifier([]blocks.RODataColumn{col.RODataColumn}, verification.PartialColumnRequirements)
 	verifier := verification.NewPartialColumnVerifier(dcv, col)
 
 	// mark all header checks as completed
@@ -46,23 +54,37 @@ func (s *Service) partialVerifierFromTrustedColumn(ctx context.Context, col *blo
 	return verifier, nil
 }
 
+// partialVerifierFromTrustedGloasColumn builds a partial column verifier for a trusted Gloas
+// partial data column. Gloas columns have no header to check; the column's bid commitments must
+// already be set, and only the fork-neutral field/KZG requirements are used (satisfied as the
+// column completes). The Fulu header-check requirements do not apply.
+func (s *Service) partialVerifierFromTrustedGloasColumn(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
+	if col.KzgCommitmentCount() == 0 {
+		return nil, errHeaderEmptyCommitments
+	}
+	dcv := s.newColumnsVerifier([]blocks.RODataColumn{col.RODataColumn}, verification.GloasPartialColumnRequirements)
+	return verification.NewPartialColumnVerifier(dcv, col), nil
+}
+
 // validatePartialDataColumn validates only the header-applicable checks for a partial data column.
 func (s *Service) validatePartialDataColumnHeader(ctx context.Context, col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, pubsub.ValidationResult, error) {
-	if col == nil || col.SignedBlockHeader == nil || col.SignedBlockHeader.Header == nil {
+	if col == nil {
+		return nil, pubsub.ValidationIgnore, errHeaderNil
+	}
+	sbh, err := col.SignedBlockHeader()
+	if err != nil {
+		return nil, pubsub.ValidationIgnore, errColumnNotFulu
+	}
+	if sbh == nil || sbh.Header == nil {
 		return nil, pubsub.ValidationIgnore, errHeaderNil
 	}
 
 	// [REJECT] kzg_commitments list is non-empty
-	if len(col.KzgCommitments) == 0 {
+	if col.KzgCommitmentCount() == 0 {
 		return nil, pubsub.ValidationReject, errHeaderEmptyCommitments
 	}
 
-	roDataColumn, err := blocks.NewRODataColumn(col.DataColumnSidecar)
-	if err != nil {
-		return nil, pubsub.ValidationIgnore, errors.Wrap(err, "roDataColumn conversion failure")
-	}
-
-	dcv := s.newColumnsVerifier([]blocks.RODataColumn{roDataColumn}, verification.PartialColumnRequirements)
+	dcv := s.newColumnsVerifier([]blocks.RODataColumn{col.RODataColumn}, verification.PartialColumnRequirements)
 	verifier := verification.NewPartialColumnVerifier(dcv, col)
 
 	// [IGNORE] Not from future slot (with MAXIMUM_GOSSIP_CLOCK_DISPARITY allowance)
@@ -76,7 +98,7 @@ func (s *Service) validatePartialDataColumnHeader(ctx context.Context, col *bloc
 	}
 
 	// [IGNORE] Parent has been seen
-	parentRoot := bytesutil.ToBytes32(col.SignedBlockHeader.Header.ParentRoot)
+	parentRoot := bytesutil.ToBytes32(sbh.Header.ParentRoot)
 	if !s.cfg.chain.HasBlock(ctx, parentRoot) {
 		return verifier, pubsub.ValidationIgnore, errHeaderParentNotSeen
 	}

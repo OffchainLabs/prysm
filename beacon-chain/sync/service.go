@@ -491,22 +491,31 @@ func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedR
 	ctx, cancel := context.WithTimeout(c.service.ctx, pubsubMessageTimeout)
 	defer cancel()
 
-	slot := col.Slot()
-	proposerIndex, err := col.ProposerIndex()
-	if err != nil {
-		log.WithError(err).Error("Failed to get proposer index from data column")
-		return
-	}
 	commitments, err := col.KzgCommitments()
 	if err != nil {
 		log.WithError(err).Error("Failed to get KZG commitments from data column")
 		return
 	}
-	if c.service.hasSeenDataColumnIndex(slot, proposerIndex, col.Index()) {
-		return
+
+	// Gloas columns carry no proposer index, so de-dup on (block root, index); Fulu keys on
+	// (slot, proposer index, index).
+	if col.IsGloas() {
+		if c.service.hasSeenDataColumnRootIndex(col.BlockRoot(), col.Index()) {
+			return
+		}
+		c.service.setSeenDataColumnRootIndex(col.BlockRoot(), col.Index(), col.Slot())
+	} else {
+		proposerIndex, err := col.ProposerIndex()
+		if err != nil {
+			log.WithError(err).Error("Failed to get proposer index from data column")
+			return
+		}
+		if c.service.hasSeenDataColumnIndex(col.Slot(), proposerIndex, col.Index()) {
+			return
+		}
+		c.service.setSeenDataColumnIndex(col.Slot(), proposerIndex, col.Index())
 	}
 
-	c.service.setSeenDataColumnIndex(slot, proposerIndex, col.Index())
 	if len(commitments) == 0 {
 		return
 	}

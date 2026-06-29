@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	mocks "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -2793,6 +2794,37 @@ func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, false, supported)
 		require.Equal(t, 0, len(cols))
+	})
+}
+
+func TestPartialColumnsEnabledForSlot(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 10
+	params.OverrideBeaconConfig(cfg)
+
+	gloasSlot, err := slots.EpochStart(cfg.GloasForkEpoch)
+	require.NoError(t, err)
+	preGloasSlot := gloasSlot - 1
+
+	t.Run("not supported is always false", func(t *testing.T) {
+		s := &Service{partialColumnsSupported: false}
+		require.Equal(t, false, s.PartialColumnsEnabledForSlot(preGloasSlot))
+		require.Equal(t, false, s.PartialColumnsEnabledForSlot(gloasSlot))
+	})
+
+	t.Run("pre-gloas enabled when supported", func(t *testing.T) {
+		s := &Service{partialColumnsSupported: true}
+		require.Equal(t, true, s.PartialColumnsEnabledForSlot(preGloasSlot))
+	})
+
+	t.Run("gloas gated on flag", func(t *testing.T) {
+		s := &Service{partialColumnsSupported: true}
+		require.Equal(t, false, s.PartialColumnsEnabledForSlot(gloasSlot))
+
+		resetCfg := features.InitWithReset(&features.Flags{EnableGloasPartialColumns: true})
+		defer resetCfg()
+		require.Equal(t, true, s.PartialColumnsEnabledForSlot(gloasSlot))
 	})
 }
 

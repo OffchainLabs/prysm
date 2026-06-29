@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -272,8 +273,10 @@ func (s *Server) processEnvelopeContents(ctx context.Context, w http.ResponseWri
 			httputil.HandleError(w, "could not compute cells and proofs: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		// External trust boundary — verify before broadcasting/storing.
-		if err := verifyCellProofs(blobs, kzgProofs); err != nil {
+		// External trust boundary — verify before broadcasting/storing. The derived
+		// commitments double as the bid commitments for building partial columns.
+		commitments, err := verifyCellProofs(blobs, kzgProofs)
+		if err != nil {
 			httputil.HandleError(w, "kzg verification failed: "+err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -282,11 +285,29 @@ func (s *Server) processEnvelopeContents(ctx context.Context, w http.ResponseWri
 			httputil.HandleError(w, "could not build data column sidecars: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+		buildPartials := features.Get().EnableGloasPartialColumns
 		verifiedSidecars := make([]consensusblocks.VerifiedRODataColumn, 0, len(roSidecars))
-		for _, sc := range roSidecars {
-			verifiedSidecars = append(verifiedSidecars, consensusblocks.NewVerifiedRODataColumn(sc))
+		var partialColumns []consensusblocks.PartialDataColumn
+		if buildPartials {
+			partialColumns = make([]consensusblocks.PartialDataColumn, 0, len(roSidecars))
 		}
-		if err := s.Broadcaster.BroadcastDataColumnSidecars(ctx, verifiedSidecars, nil); err != nil {
+		for i := range roSidecars {
+			if buildPartials {
+				// Gloas sidecars carry no inline commitments; seed from the verified blobs.
+				roSidecars[i].SetBidCommitments(commitments)
+			}
+			verified := consensusblocks.NewVerifiedRODataColumn(roSidecars[i])
+			verifiedSidecars = append(verifiedSidecars, verified)
+			if buildPartials {
+				pc, err := consensusblocks.NewPartialDataColumnFromVerifiedRODataColumn(verified)
+				if err != nil {
+					httputil.HandleError(w, "could not build partial data columns: "+err.Error(), http.StatusInternalServerError)
+					return
+				}
+				partialColumns = append(partialColumns, pc)
+			}
+		}
+		if err := s.Broadcaster.BroadcastDataColumnSidecars(ctx, verifiedSidecars, partialColumns); err != nil {
 			httputil.HandleError(w, "could not broadcast data column sidecars: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -367,23 +388,27 @@ func (s *Server) validateEnvelopeBroadcast(ctx context.Context, w http.ResponseW
 }
 
 // verifyCellProofs batch-verifies cell proofs against commitments derived
-// from the supplied blobs. Does not tie data to a specific block — that needs
-// the block's BlobKzgCommitments which a stateless receiver may not have.
-func verifyCellProofs(blobs [][]byte, flatProofs [][]byte) error {
+// from the supplied blobs and returns those commitments. Does not tie data to a
+// specific block — that needs the block's BlobKzgCommitments which a stateless
+// receiver may not have.
+func verifyCellProofs(blobs [][]byte, flatProofs [][]byte) ([][]byte, error) {
 	commitments := make([][]byte, len(blobs))
 	for i, blob := range blobs {
 		if len(blob) != len(kzg.Blob{}) {
-			return errors.Errorf("blob %d has wrong size %d", i, len(blob))
+			return nil, errors.Errorf("blob %d has wrong size %d", i, len(blob))
 		}
 		var b kzg.Blob
 		copy(b[:], blob)
 		c, err := kzg.BlobToKZGCommitment(&b)
 		if err != nil {
-			return errors.Wrapf(err, "compute kzg commitment for blob %d", i)
+			return nil, errors.Wrapf(err, "compute kzg commitment for blob %d", i)
 		}
 		commitments[i] = c[:]
 	}
-	return kzg.VerifyCellKZGProofBatchFromBlobData(blobs, commitments, flatProofs, fieldparams.NumberOfColumns)
+	if err := kzg.VerifyCellKZGProofBatchFromBlobData(blobs, commitments, flatProofs, fieldparams.NumberOfColumns); err != nil {
+		return nil, err
+	}
+	return commitments, nil
 }
 
 // PublishSignedExecutionPayloadBid broadcasts a signed execution payload bid to the P2P network.

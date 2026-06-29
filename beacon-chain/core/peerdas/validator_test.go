@@ -3,6 +3,7 @@ package peerdas_test
 import (
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
@@ -388,5 +389,73 @@ func TestPopulateFromBid_DataColumnSidecars(t *testing.T) {
 		require.Equal(t, uint64(i), sidecar.Index())
 		require.Equal(t, 2, len(sidecar.Column()))
 		require.Equal(t, 2, len(sidecar.KzgProofs()))
+	}
+}
+
+func TestPartialColumns_NoCommitmentsReturnsNil(t *testing.T) {
+	// A block with no blob commitments would yield only inert, cell-less partial
+	// columns, so PartialColumns must return nothing rather than build 128 of them.
+	blockPb := util.NewBeaconBlockFulu()
+	blockPb.Block.Body.BlobKzgCommitments = nil
+
+	signedBlock, err := blocks.NewSignedBeaconBlock(blockPb)
+	require.NoError(t, err)
+	rob, err := blocks.NewROBlock(signedBlock)
+	require.NoError(t, err)
+
+	cols, err := peerdas.PartialColumns(bitfield.NewBitlist(0), nil, nil, peerdas.PopulateFromBlock(rob))
+	require.NoError(t, err)
+	require.Equal(t, 0, len(cols))
+}
+
+func TestPartialColumns_Gloas(t *testing.T) {
+	const numberOfColumns = fieldparams.NumberOfColumns
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	bidCommitment1 := make([]byte, 48)
+	bidCommitment2 := make([]byte, 48)
+	bidCommitment1[0] = 0xAA
+	bidCommitment2[0] = 0xBB
+
+	gloasBlockPb := util.NewBeaconBlockGloas()
+	gloasBlockPb.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = [][]byte{bidCommitment1, bidCommitment2}
+	signedGloasBlock, err := blocks.NewSignedBeaconBlock(gloasBlockPb)
+	require.NoError(t, err)
+	gloasRob, err := blocks.NewROBlock(signedGloasBlock)
+	require.NoError(t, err)
+
+	cellsPerBlob := [][]kzg.Cell{
+		make([]kzg.Cell, numberOfColumns),
+		make([]kzg.Cell, numberOfColumns),
+	}
+	proofsPerBlob := [][]kzg.Proof{
+		make([]kzg.Proof, numberOfColumns),
+		make([]kzg.Proof, numberOfColumns),
+	}
+	for i := range numberOfColumns {
+		cellsPerBlob[0][i][0] = byte(i)
+		proofsPerBlob[0][i][0] = byte(i)
+		cellsPerBlob[1][i][0] = byte(i + 128)
+		proofsPerBlob[1][i][0] = byte(i + 128)
+	}
+
+	// Mark both blobs as included so every partial column is complete.
+	included := bitfield.NewBitlist(2)
+	included.SetBitAt(0, true)
+	included.SetBitAt(1, true)
+
+	cols, err := peerdas.PartialColumns(included, cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBid(gloasRob))
+	require.NoError(t, err)
+	require.Equal(t, int(numberOfColumns), len(cols))
+
+	for i := range cols {
+		require.Equal(t, true, cols[i].IsGloas())
+		require.Equal(t, uint64(i), cols[i].Index())
+		require.Equal(t, uint64(2), cols[i].KzgCommitmentCount())
+		require.Equal(t, true, cols[i].IsComplete())
 	}
 }

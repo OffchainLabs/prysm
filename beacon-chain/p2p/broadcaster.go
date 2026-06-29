@@ -429,16 +429,16 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 	if s.partialColumnBroadcaster != nil {
 		for i := range partialColumns {
 			pc := &partialColumns[i]
-			topic, wrappedSubIdx, subnet := columnToTopic(pc.Index, forkDigest)
-			item, ok := itemsByIndex[pc.Index]
+			topic, wrappedSubIdx, subnet := columnToTopic(pc.Index(), forkDigest)
+			item, ok := itemsByIndex[pc.Index()]
 			if !ok {
 				item = &columnBroadcastItem{
-					index:         pc.Index,
+					index:         pc.Index(),
 					topic:         topic,
 					wrappedSubIdx: wrappedSubIdx,
 					subnet:        subnet,
 				}
-				itemsByIndex[pc.Index] = item
+				itemsByIndex[pc.Index()] = item
 			}
 			item.partialColumn = pc
 		}

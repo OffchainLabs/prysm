@@ -202,6 +202,8 @@ ssz_gloas_objs = [
     "BuilderPendingPayment",
     "BuilderPendingWithdrawal",
     "DataColumnSidecarGloas",
+    "PartialDataColumnGroupID",
+    "PartialDataColumnSidecarGloas",
     "ExecutionPayloadEnvelope",
     "PTCs",
     "ProposerPreferences",

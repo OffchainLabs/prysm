@@ -249,9 +249,25 @@ func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofs
 	if err != nil {
 		return nil, errors.Wrap(err, "rotate cells and proofs")
 	}
+
+	// Gloas partial columns carry no signed block header or inclusion proof; build them from
+	// the bid commitments instead of the Fulu header path.
+	if slots.ToEpoch(src.Slot()) >= params.BeaconConfig().GloasForkEpoch {
+		dataColumns, err := partialColumnsGloas(included, cells, proofs, src)
+		if err != nil {
+			return nil, err
+		}
+		partialDataColumnComputationTime.Observe(float64(time.Since(start).Milliseconds()))
+		return dataColumns, nil
+	}
+
 	info, err := src.extract()
 	if err != nil {
 		return nil, errors.Wrap(err, "extract block info")
+	}
+
+	if len(info.kzgCommitments) == 0 {
+		return nil, nil
 	}
 
 	dataColumns := make([]blocks.PartialDataColumn, 0, numberOfColumns)
@@ -273,6 +289,42 @@ func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofs
 	}
 
 	partialDataColumnComputationTime.Observe(float64(time.Since(start).Milliseconds()))
+	return dataColumns, nil
+}
+
+// partialColumnsGloas builds Gloas partial data columns from the bid commitments and the
+// included cells. Gloas columns have no signed block header or inclusion proof, so each column
+// is created via NewPartialDataColumnGloas. cells/proofs may be empty (e.g. the HasBlobs flow),
+// in which case no cells are extended; the caller sets the requests metadata afterwards.
+func partialColumnsGloas(included bitfield.Bitlist, cells, proofs [][][]byte, src ConstructionPopulator) ([]blocks.PartialDataColumn, error) {
+	commitments, err := src.Commitments()
+	if err != nil {
+		return nil, errors.Wrap(err, "commitments")
+	}
+	if len(commitments) == 0 {
+		return nil, nil
+	}
+
+	const numberOfColumns = uint64(fieldparams.NumberOfColumns)
+	root := src.Root()
+	slot := src.Slot()
+	dataColumns := make([]blocks.PartialDataColumn, 0, numberOfColumns)
+	for idx := range numberOfColumns {
+		dc, err := blocks.NewPartialDataColumnGloas(root, slot, idx, commitments)
+		if err != nil {
+			return nil, errors.Wrap(err, "new gloas partial data column")
+		}
+
+		for i := range len(commitments) {
+			if !included.BitAt(uint64(i)) {
+				continue
+			}
+			dc.ExtendFromVerifiedCell(uint64(i), cells[idx][0], proofs[idx][0])
+			cells[idx] = cells[idx][1:]
+			proofs[idx] = proofs[idx][1:]
+		}
+		dataColumns = append(dataColumns, dc)
+	}
 	return dataColumns, nil
 }
 

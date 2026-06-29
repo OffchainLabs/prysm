@@ -7,11 +7,17 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/libp2p/go-libp2p-pubsub/partialmessages"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+)
+
+const (
+	partialColumnGroupIDVersionFulu  byte = 0x00
+	partialColumnGroupIDVersionGloas byte = 0x01
 )
 
 // CellProofBundle contains a cell, its proof, and the corresponding
@@ -28,11 +34,11 @@ type PartialDataColumnPeerState struct {
 	Recvd *ethpb.PartialDataColumnPartsMetadata
 }
 
-// PartialDataColumn is a partially populated DataColumnSidecar used for
+// PartialDataColumn is a partially populated data column sidecar used for
 // exchanging cells with peers.
 type PartialDataColumn struct {
-	*ethpb.DataColumnSidecar
-	root    [fieldparams.RootLength]byte
+	RODataColumn
+
 	groupID []byte
 
 	Included bitfield.Bitlist
@@ -55,28 +61,81 @@ func NewPartialDataColumnFromVerifiedRODataColumn(c VerifiedRODataColumn) (Parti
 	if err != nil {
 		return PartialDataColumn{}, errors.Wrap(err, "get KZG commitments")
 	}
+	if len(commitments) == 0 {
+		return PartialDataColumn{}, errors.New("no KZG commitments")
+	}
+
 	included := bitfield.NewBitlist(uint64(len(commitments)))
 	included = included.Not()
 
+	groupID, err := partialColumnGroupID(c.RODataColumn)
+	if err != nil {
+		return PartialDataColumn{}, errors.Wrap(err, "compute group id")
+	}
+
 	return PartialDataColumn{
-		DataColumnSidecar: c.DataColumnSidecar(),
-		root:              c.root,
-		Included:          included,
-		groupID:           groupIdFromRoot(c.root),
+		RODataColumn: c.RODataColumn,
+		Included:     included,
+		groupID:      groupID,
 	}, nil
 }
 
-func groupIdFromRoot(root [fieldparams.RootLength]byte) []byte {
-	groupID := make([]byte, len(root)+1)
-	copy(groupID[1:], root[:])
-	// Version 0
-	groupID[0] = 0
+func partialColumnGroupID(c RODataColumn) ([]byte, error) {
+	if c.IsGloas() {
+		return gloasGroupID(c.Slot(), c.BlockRoot())
+	}
+	return groupIDFromRoot(c.BlockRoot()), nil
+}
+
+func groupIDFromRoot(root [fieldparams.RootLength]byte) []byte {
+	groupID := make([]byte, 0, len(root)+1)
+	groupID = append(groupID, partialColumnGroupIDVersionFulu)
+	groupID = append(groupID, root[:]...)
 	return groupID
 }
 
-// NewPartialDataColumn creates a new Partial Data Column for the given block.
-// It does not validate the inputs. The caller is responsible for validating the
-// block header and KZG Commitment Inclusion proof.
+func gloasGroupID(slot primitives.Slot, root [fieldparams.RootLength]byte) ([]byte, error) {
+	encoded, err := (&ethpb.PartialDataColumnGroupID{
+		Slot:            slot,
+		BeaconBlockRoot: root[:],
+	}).MarshalSSZ()
+	if err != nil {
+		return nil, errors.Wrap(err, "marshal gloas partial column group id")
+	}
+	groupID := make([]byte, 0, len(encoded)+1)
+	groupID = append(groupID, partialColumnGroupIDVersionGloas)
+	groupID = append(groupID, encoded...)
+	return groupID, nil
+}
+
+// ParsePartialColumnGroupID decodes a partial-column group id into its fork,
+// slot, and block root. Fulu group ids (0x00 || root) carry no slot, so slot is
+// returned as 0 for them.
+func ParsePartialColumnGroupID(b []byte) (isGloas bool, slot primitives.Slot, root [fieldparams.RootLength]byte, err error) {
+	if len(b) == 0 {
+		return false, 0, root, errors.New("empty partial column group id")
+	}
+	switch b[0] {
+	case partialColumnGroupIDVersionFulu:
+		if len(b) != fieldparams.RootLength+1 {
+			return false, 0, root, errors.Errorf("invalid fulu group id length: got %d, want %d", len(b), fieldparams.RootLength+1)
+		}
+		copy(root[:], b[1:])
+		return false, 0, root, nil
+	case partialColumnGroupIDVersionGloas:
+		id := &ethpb.PartialDataColumnGroupID{}
+		if err := id.UnmarshalSSZ(b[1:]); err != nil {
+			return false, 0, root, errors.Wrap(err, "unmarshal gloas group id")
+		}
+		copy(root[:], id.BeaconBlockRoot)
+		return true, id.Slot, root, nil
+	default:
+		return false, 0, root, errors.Errorf("unknown partial column group id version: %d", b[0])
+	}
+}
+
+// NewPartialDataColumn creates a new Fulu Partial Data Column for the given
+// block.
 func NewPartialDataColumn(
 	root [fieldparams.RootLength]byte,
 	signedBlockHeader *ethpb.SignedBeaconBlockHeader,
@@ -97,13 +156,54 @@ func NewPartialDataColumn(
 		KzgCommitmentsInclusionProof: kzgInclusionProof,
 	}
 
-	c := PartialDataColumn{
-		DataColumnSidecar: sidecar,
-		root:              root,
-		groupID:           groupIdFromRoot(root),
-		Included:          bitfield.NewBitlist(uint64(len(sidecar.KzgCommitments))),
+	ro, err := NewRODataColumnWithRoot(sidecar, root)
+	if err != nil {
+		return PartialDataColumn{}, errors.Wrap(err, "new ro data column")
 	}
-	return c, nil
+
+	return PartialDataColumn{
+		RODataColumn: ro,
+		groupID:      groupIDFromRoot(root),
+		Included:     bitfield.NewBitlist(uint64(len(kzgCommitments))),
+	}, nil
+}
+
+// NewPartialDataColumnGloas creates a new Gloas Partial Data Column for the given
+// block.
+func NewPartialDataColumnGloas(
+	root [fieldparams.RootLength]byte,
+	slot primitives.Slot,
+	columnIndex uint64,
+	kzgCommitments [][]byte,
+) (PartialDataColumn, error) {
+	if len(kzgCommitments) == 0 {
+		return PartialDataColumn{}, errors.New("kzgCommitments is empty")
+	}
+
+	sidecar := &ethpb.DataColumnSidecarGloas{
+		Index:           columnIndex,
+		Slot:            slot,
+		BeaconBlockRoot: root[:],
+		Column:          make([][]byte, len(kzgCommitments)),
+		KzgProofs:       make([][]byte, len(kzgCommitments)),
+	}
+
+	ro, err := NewRODataColumnGloasWithRoot(sidecar, root)
+	if err != nil {
+		return PartialDataColumn{}, errors.Wrap(err, "new gloas ro data column")
+	}
+	ro.SetBidCommitments(kzgCommitments)
+
+	groupID, err := gloasGroupID(slot, root)
+	if err != nil {
+		return PartialDataColumn{}, errors.Wrap(err, "compute group id")
+	}
+
+	return PartialDataColumn{
+		RODataColumn: ro,
+		groupID:      groupID,
+		Included:     bitfield.NewBitlist(uint64(len(kzgCommitments))),
+	}, nil
 }
 
 // GroupID returns the libp2p partial-messages group identifier. It returns a
@@ -132,8 +232,8 @@ func (p *PartialDataColumn) newPartsMetadata() (*ethpb.PartialDataColumnPartsMet
 
 // SetPartsRequests overrides the request bitmap emitted in parts metadata.
 func (p *PartialDataColumn) SetPartsRequests(requests bitfield.Bitlist) error {
-	if requests.Len() != uint64(len(p.KzgCommitments)) {
-		return errors.Errorf("parts requests length mismatch: got %d, want %d", requests.Len(), len(p.KzgCommitments))
+	if requests.Len() != p.Included.Len() {
+		return errors.Errorf("parts requests length mismatch: got %d, want %d", requests.Len(), p.Included.Len())
 	}
 	p.partsRequests = slices.Clone(requests)
 	return nil
@@ -189,15 +289,16 @@ func (peerState PartialDataColumnPeerState) Clone() PartialDataColumnPeerState {
 	return nextPeerState
 }
 
-// KzgCommitmentCount returns the number of KZG commitments in the block header
-// for this column, which in turn is equal to the number of cells in this column.
+// KzgCommitmentCount returns the number of cells in this column, which equals the
+// number of KZG commitments.
 func (p *PartialDataColumn) KzgCommitmentCount() uint64 {
-	return uint64(len(p.KzgCommitments))
+	return p.Included.Len()
 }
 
 // cellsToSendToPeer computes the cells to send to a peer based on its parts
-// metadata and returns them as an SSZ-encoded PartialDataColumnSidecar along
-// with the bitmap of the cells actually sent.
+// metadata and returns them as an SSZ-encoded cell message along with the bitmap
+// of the cells actually sent. The wire message is fork-specific: Gloas columns
+// emit a PartialDataColumnSidecarGloas, Fulu columns a PartialDataColumnSidecar.
 //
 // A cell is sent only if all of the following hold:
 //   - the peer requested it (peerMeta.Requests),
@@ -226,33 +327,93 @@ func (p *PartialDataColumn) cellsToSendToPeer(peerMeta *ethpb.PartialDataColumnP
 	}
 
 	size := meetsNeeds.Len()
-	out := ethpb.PartialDataColumnSidecar{
-		PartialColumn:      make([][]byte, 0, nCells),
-		KzgProofs:          make([][]byte, 0, nCells),
-		CellsPresentBitmap: meetsNeeds,
-	}
+	column := p.Column()
+	kzgProofs := p.KzgProofs()
+	cells := make([][]byte, 0, nCells)
+	proofs := make([][]byte, 0, nCells)
 	for i := range size {
 		if meetsNeeds.BitAt(i) {
-			out.PartialColumn = append(out.PartialColumn, p.Column[i])
-			out.KzgProofs = append(out.KzgProofs, p.KzgProofs[i])
+			cells = append(cells, column[i])
+			proofs = append(proofs, kzgProofs[i])
 		}
 	}
 
-	marshalled, err := out.MarshalSSZ()
+	marshalled, err := p.marshalCellsMessage(cells, proofs, meetsNeeds)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "marshal partial data column sidecar")
+		return nil, nil, errors.Wrap(err, "marshal cells message")
 	}
 	return marshalled, meetsNeeds, nil
 }
 
+func (p *PartialDataColumn) marshalCellsMessage(cells, proofs [][]byte, present bitfield.Bitlist) ([]byte, error) {
+	if p.IsGloas() {
+		out := &ethpb.PartialDataColumnSidecarGloas{
+			PartialColumn:      cells,
+			KzgProofs:          proofs,
+			CellsPresentBitmap: present,
+		}
+		encoded, err := out.MarshalSSZ()
+		if err != nil {
+			return nil, errors.Wrap(err, "marshal gloas partial data column sidecar")
+		}
+		return encoded, nil
+	}
+
+	out := &ethpb.PartialDataColumnSidecar{
+		PartialColumn:      cells,
+		KzgProofs:          proofs,
+		CellsPresentBitmap: present,
+	}
+	encoded, err := out.MarshalSSZ()
+	if err != nil {
+		return nil, errors.Wrap(err, "marshal partial data column sidecar")
+	}
+	return encoded, nil
+}
+
+// DecodePartialColumnSidecar SSZ-decodes an incoming partial-message body into the in-memory
+// PartialDataColumnSidecar. It is the inverse of marshalCellsMessage: the Gloas wire is the 3-field
+// PartialDataColumnSidecarGloas (no header), normalized into the 4-field struct with Header left nil
+// so the receive path stays fork-neutral.
+func DecodePartialColumnSidecar(raw []byte, isGloas bool) (*ethpb.PartialDataColumnSidecar, error) {
+	if isGloas {
+		gloas := &ethpb.PartialDataColumnSidecarGloas{}
+		if err := gloas.UnmarshalSSZ(raw); err != nil {
+			return nil, errors.Wrap(err, "unmarshal gloas partial data column sidecar")
+		}
+		return &ethpb.PartialDataColumnSidecar{
+			CellsPresentBitmap: gloas.CellsPresentBitmap,
+			PartialColumn:      gloas.PartialColumn,
+			KzgProofs:          gloas.KzgProofs,
+		}, nil
+	}
+	sidecar := &ethpb.PartialDataColumnSidecar{}
+	if err := sidecar.UnmarshalSSZ(raw); err != nil {
+		return nil, errors.Wrap(err, "unmarshal partial data column sidecar")
+	}
+	return sidecar, nil
+}
+
 func (p *PartialDataColumn) buildPartialColumnHeader() (encoded []byte, err error) {
+	signedBlockHeader, err := p.SignedBlockHeader()
+	if err != nil {
+		return nil, errors.Wrap(err, "signed block header")
+	}
+	inclusionProof, err := p.KzgCommitmentsInclusionProof()
+	if err != nil {
+		return nil, errors.Wrap(err, "kzg commitments inclusion proof")
+	}
+	commitments, err := p.KzgCommitments()
+	if err != nil {
+		return nil, errors.Wrap(err, "kzg commitments")
+	}
 	outMessage := &ethpb.PartialDataColumnSidecar{
 		Header: []*ethpb.PartialDataColumnHeader{{
-			KzgCommitments:               p.KzgCommitments,
-			SignedBlockHeader:            p.SignedBlockHeader,
-			KzgCommitmentsInclusionProof: p.KzgCommitmentsInclusionProof,
+			KzgCommitments:               commitments,
+			SignedBlockHeader:            signedBlockHeader,
+			KzgCommitmentsInclusionProof: inclusionProof,
 		}},
-		CellsPresentBitmap: bitfield.NewBitlist(uint64(len(p.KzgCommitments))),
+		CellsPresentBitmap: bitfield.NewBitlist(uint64(len(commitments))),
 	}
 	encoded, err = outMessage.MarshalSSZ()
 	if err != nil {
@@ -351,6 +512,9 @@ func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerS
 	// Eager push - we don't know what the peer has and message has been requested.
 	// Set RecvdState so subsequent calls skip the eager push path.
 	if isEagerPush(requestedMessage, peerState) {
+		// Gloas columns have no header to exchange, so we never eager-push one;
+		// the eager push then carries parts metadata only.
+		includeHeader = includeHeader && !p.IsGloas()
 		var encoded []byte
 		if includeHeader {
 			var err error
@@ -462,6 +626,11 @@ func (p *PartialDataColumn) CellsToVerifyFromPartialMessage(message *ethpb.Parti
 		return nil, nil, errors.New("invalid message: wrong bitmap length")
 	}
 
+	commitments, err := p.KzgCommitments()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "kzg commitments")
+	}
+	index := p.Index()
 	cellIndices := make([]uint64, 0, includedCells)
 	cellsToVerify := make([]CellProofBundle, 0, includedCells)
 	// Filter out cells we already have.
@@ -478,12 +647,12 @@ func (p *PartialDataColumn) CellsToVerifyFromPartialMessage(message *ethpb.Parti
 		if !ourIncludedList.BitAt(i) {
 			cellIndices = append(cellIndices, i)
 			cellsToVerify = append(cellsToVerify, CellProofBundle{
-				ColumnIndex: p.Index,
+				ColumnIndex: index,
 				Cell:        message.PartialColumn[j],
 				Proof:       message.KzgProofs[j],
 				// Use the commitment from our datacolumn, indexed by i since we
 				// have all commitments.
-				Commitment: p.KzgCommitments[i],
+				Commitment: commitments[i],
 			})
 		}
 		j++
@@ -495,12 +664,14 @@ func (p *PartialDataColumn) CellsToVerifyFromPartialMessage(message *ethpb.Parti
 // returns false without modifying the column if the cell is already present or
 // if cellIndex is out of range.
 func (p *PartialDataColumn) ExtendFromVerifiedCell(cellIndex uint64, cell, proof []byte) bool {
-	if cellIndex >= uint64(len(p.Column)) || cellIndex >= uint64(len(p.KzgProofs)) {
+	column := p.Column()
+	kzgProofs := p.KzgProofs()
+	if cellIndex >= uint64(len(column)) || cellIndex >= uint64(len(kzgProofs)) {
 		log.WithFields(logrus.Fields{
-			"index":        p.Index,
+			"index":        p.Index(),
 			"cellIndex":    cellIndex,
-			"columnLen":    len(p.Column),
-			"kzgProofsLen": len(p.KzgProofs),
+			"columnLen":    len(column),
+			"kzgProofsLen": len(kzgProofs),
 		}).Error("Cell index out of range for partial data column")
 		return false
 	}
@@ -510,12 +681,12 @@ func (p *PartialDataColumn) ExtendFromVerifiedCell(cellIndex uint64, cell, proof
 	}
 
 	p.Included.SetBitAt(cellIndex, true)
-	p.Column[cellIndex] = cell
-	p.KzgProofs[cellIndex] = proof
+	column[cellIndex] = cell
+	kzgProofs[cellIndex] = proof
 	return true
 }
 
 // IsComplete returns true if all cells are now present in this column.
 func (p *PartialDataColumn) IsComplete() bool {
-	return uint64(len(p.KzgCommitments)) == p.Included.Count()
+	return p.Included.Len() == p.Included.Count()
 }

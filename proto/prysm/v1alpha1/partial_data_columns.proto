@@ -55,3 +55,30 @@ message PartialDataColumnPartsMetadata {
     (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
   ];
 }
+
+// PartialDataColumnGroupID is the SSZ payload of the Gloas partial-column libp2p
+// group id. The wire group id is 0x01 || SSZ(PartialDataColumnGroupID).
+message PartialDataColumnGroupID {
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  bytes beacon_block_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+// PartialDataColumnSidecarGloas is the Gloas cells wire message. It mirrors
+// PartialDataColumnSidecar without the header field, which Gloas removed.
+message PartialDataColumnSidecarGloas {
+  bytes cells_present_bitmap = 1 [
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size",
+    (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
+  ];
+  repeated bytes partial_column = 2 [
+    (ethereum.eth.ext.ssz_size) = "?,bytes_per_cell.size",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+  repeated bytes kzg_proofs = 3 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+}

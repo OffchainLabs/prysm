@@ -59,9 +59,30 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 		}
 	}
 
+	// Precompute partial columns too, when enabled for this (Gloas) slot, so partial-column
+	// peers can fill in cells. Gloas sidecars carry no inline commitments, so seed them from
+	// the bid before building the partials.
+	var partialColumns []consensusblocks.PartialDataColumn
+	if len(roSidecars) > 0 && vs.ExecutionEngineCaller.PartialColumnsEnabledForSlot(sBlk.Block().Slot()) {
+		commitments, err := sBlk.Block().Body().BlobKzgCommitments()
+		if err != nil {
+			return errors.Wrap(err, "blob kzg commitments")
+		}
+		partialColumns = make([]consensusblocks.PartialDataColumn, 0, len(roSidecars))
+		for i := range roSidecars {
+			roSidecars[i].SetBidCommitments(commitments)
+			pc, err := consensusblocks.NewPartialDataColumnFromVerifiedRODataColumn(consensusblocks.NewVerifiedRODataColumn(roSidecars[i]))
+			if err != nil {
+				return errors.Wrap(err, "partial column from verified ro data column")
+			}
+			partialColumns = append(partialColumns, pc)
+		}
+	}
+
 	vs.ExecutionPayloadEnvelopeCache.Set(&cache.ExecutionPayloadContents{
-		Envelope:    envelope,
-		DataColumns: roSidecars,
+		Envelope:       envelope,
+		DataColumns:    roSidecars,
+		PartialColumns: partialColumns,
 	})
 	return nil
 }
@@ -147,8 +168,11 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	// Slot guard avoids broadcasting cached sidecars from an unrelated slot.
 	if contents, ok := vs.ExecutionPayloadEnvelopeCache.Contents(); ok &&
 		contents.Envelope.Payload.SlotNumber == envSlot && len(contents.DataColumns) > 0 {
-		log.WithField("columns", len(contents.DataColumns)).Debug("Broadcasting Gloas data column sidecars")
-		if err := vs.broadcastAndReceiveDataColumns(ctx, contents.DataColumns, nil); err != nil {
+		log.WithFields(logrus.Fields{
+			"columns":  len(contents.DataColumns),
+			"partials": len(contents.PartialColumns),
+		}).Debug("Broadcasting Gloas data column sidecars")
+		if err := vs.broadcastAndReceiveDataColumns(ctx, contents.DataColumns, contents.PartialColumns); err != nil {
 			log.WithError(err).Error("Failed to broadcast Gloas data column sidecars")
 		}
 	}

@@ -221,6 +221,7 @@ type incomingPartialRPC struct {
 	*pubsub_pb.PartialMessagesExtension
 	from    peer.ID
 	message *ethpb.PartialDataColumnSidecar
+	isGloas bool
 }
 
 func (r incomingPartialRPC) logFields() logrus.Fields {
@@ -293,16 +294,17 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 		return nil
 	}
 
-	expectedGroupIDLen := fieldparams.RootLength + 1
-	if len(rpc.GetGroupID()) != expectedGroupIDLen {
-		p.logger.WithFields(logrus.Fields{
-			"peer":     from,
-			"topic":    rpc.GetTopicID(),
-			"got":      len(rpc.GetGroupID()),
-			"expected": expectedGroupIDLen,
-		}).Debug("Invalid group ID length")
+	// Parse the group ID to detect the fork (Fulu 0x00||root, 33B; Gloas 0x01||SSZ(groupID), 41B).
+	// This validates the version byte, length, and (for Gloas) the SSZ encoding in one place.
+	isGloas, _, _, err := blocks.ParsePartialColumnGroupID(rpc.GetGroupID())
+	if err != nil {
+		p.logger.WithError(err).WithFields(logrus.Fields{
+			"peer":  from,
+			"topic": rpc.GetTopicID(),
+			"got":   len(rpc.GetGroupID()),
+		}).Debug("Invalid group ID")
 		p.reportPeerFeedbackAsync(rpc.GetTopicID(), from, pubsub.PeerFeedbackInvalidMessage)
-		return errors.Errorf("invalid group ID length: got %d, expected %d", len(rpc.GetGroupID()), expectedGroupIDLen)
+		return errors.Wrap(err, "parse partial column group id")
 	}
 
 	columnIndex, err := extractColumnIndexFromTopic(rpc.GetTopicID())
@@ -317,12 +319,12 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 		return errors.Errorf("invalid topic ID %q: column index missing or out of bounds", rpc.GetTopicID())
 	}
 
-	nextPeerState, message, err := updatePeerStateFromIncomingRPC(peerStates[from], rpc)
+	nextPeerState, message, err := updatePeerStateFromIncomingRPC(peerStates[from], rpc, isGloas)
 	if err != nil {
 		return errors.Wrap(err, "update peer state from incoming rpc")
 	}
 	_, ok := p.tryEnqueue(requestKindHandleIncomingRPC, requestValues{
-		incomingRPC: incomingPartialRPC{rpc, from, message},
+		incomingRPC: incomingPartialRPC{rpc, from, message, isGloas},
 	})
 	if !ok {
 		p.logger.WithFields(logrus.Fields{
@@ -372,7 +374,7 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 					p.headerSentCache[string(groupID)] = make(map[peer.ID]bool)
 				}
 				onEagerPush := func(remote peer.ID) {
-					p.recordEagerPush(groupID, col.Index, remote)
+					p.recordEagerPush(groupID, col.Index(), remote)
 				}
 				return pubsub.PublishPartial(ps, topic, groupID, col.PublishActionsFn(p.headerSentCache[string(groupID)], onEagerPush))
 			}
@@ -532,7 +534,7 @@ func decodePartsMetadataFromPeerState(state *ethpb.PartialDataColumnPartsMetadat
 	return state, nil
 }
 
-func updatePeerStateFromIncomingRPC(peerState blocks.PartialDataColumnPeerState, rpc *pubsub_pb.PartialMessagesExtension) (blocks.PartialDataColumnPeerState,
+func updatePeerStateFromIncomingRPC(peerState blocks.PartialDataColumnPeerState, rpc *pubsub_pb.PartialMessagesExtension, isGloas bool) (blocks.PartialDataColumnPeerState,
 	*ethpb.PartialDataColumnSidecar, error) {
 	peerState = peerState.Clone()
 	hasIncomingPartsMetadata := len(rpc.PartsMetadata) > 0
@@ -568,12 +570,12 @@ func updatePeerStateFromIncomingRPC(peerState blocks.PartialDataColumnPeerState,
 		return peerState, nil, nil
 	}
 
-	var message ethpb.PartialDataColumnSidecar
-	if err := message.UnmarshalSSZ(rpc.PartialMessage); err != nil {
+	message, err := blocks.DecodePartialColumnSidecar(rpc.PartialMessage, isGloas)
+	if err != nil {
 		return peerState, nil, errors.Wrap(err, "failed to unmarshal partial message data")
 	}
 	if len(message.CellsPresentBitmap) == 0 {
-		return peerState, &message, nil
+		return peerState, message, nil
 	}
 
 	nKzgCommitments := message.CellsPresentBitmap.Len()
@@ -605,7 +607,7 @@ func updatePeerStateFromIncomingRPC(peerState blocks.PartialDataColumnPeerState,
 	}
 	peerState.Sent = sentState
 
-	return peerState, &message, nil
+	return peerState, message, nil
 }
 
 func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) error {
@@ -630,6 +632,12 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 	var shouldRepublish bool
 
 	if ourVerifier == nil && hasMessage {
+		if rpc.isGloas {
+			// Gloas has no header to seed a verifier from; we can only verify incoming cells once
+			// we have published locally (block + bid commitments). Never buffer unsolicited cells.
+			p.logger.WithFields(rpc.logFields()).Debug("Dropping Gloas partial cells: no local verifier")
+			return nil
+		}
 		header, headerWasCached := p.getHeader(groupID, message)
 		if header == nil {
 			return nil
@@ -701,6 +709,12 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 func (p *PartialColumnBroadcaster) makeVerifierFromHeader(root [fieldparams.RootLength]byte, header *ethpb.PartialDataColumnHeader, columnIndex uint64,
 	headerWasCached bool, rpc incomingPartialRPC) (*verification.PartialColumnVerifier, error) {
 	topicID := rpc.GetTopicID()
+
+	if len(header.KzgCommitments) == 0 {
+		p.logger.WithFields(rpc.logFields()).Debug("Ignoring partial column header with no KZG commitments")
+		return nil, errInvalidHeader
+	}
+
 	newColumn, err := blocks.NewPartialDataColumn(
 		root,
 		header.SignedBlockHeader,
@@ -766,7 +780,7 @@ func (p *PartialColumnBroadcaster) getHeader(groupID []byte, message *ethpb.Part
 func (p *PartialColumnBroadcaster) republishColumn(ourDataColumn *blocks.PartialDataColumn, rpc incomingPartialRPC,
 	shouldRepublish bool) error {
 	if !ourDataColumn.Published {
-		p.recordRepublishSkip(rpc.GroupID, ourDataColumn.Index)
+		p.recordRepublishSkip(rpc.GroupID, ourDataColumn.Index())
 		return nil
 	}
 
@@ -801,7 +815,7 @@ func (p *PartialColumnBroadcaster) handlePartialCells(ourDataColumn *blocks.Part
 	}
 	// Track cells received via partial message
 	if len(cellIndices) > 0 {
-		columnIndexStr := strconv.FormatUint(ourDataColumn.Index, 10)
+		columnIndexStr := strconv.FormatUint(ourDataColumn.Index(), 10)
 		partialMessageCellsReceivedTotal.WithLabelValues(columnIndexStr).Add(float64(len(cellIndices)))
 	}
 	if len(cellsToVerify) > 0 {
@@ -830,7 +844,7 @@ func (p *PartialColumnBroadcaster) handlePartialCells(ourDataColumn *blocks.Part
 				})
 			}()
 		default:
-			columnIndexStr := strconv.FormatUint(ourDataColumn.Index, 10)
+			columnIndexStr := strconv.FormatUint(ourDataColumn.Index(), 10)
 			partialMessageValidationsDroppedTotal.WithLabelValues(columnIndexStr).Add(float64(len(cellsToVerify)))
 			p.logger.WithFields(rpc.logFields()).Warn("Validator semaphore saturated, dropping cell validation")
 		}
@@ -863,7 +877,7 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 	ourDataColumn := ourVerifier.Column
 	var extended bool
 	for i, bundle := range cells.cells {
-		if bundle.ColumnIndex != ourDataColumn.Index {
+		if bundle.ColumnIndex != ourDataColumn.Index() {
 			return errors.New("cell bundle has wrong column index")
 		}
 		if ourVerifier.ExtendFromVerifiedCell(cells.cellIndices[i], bundle.Cell, bundle.Proof) {
@@ -871,7 +885,7 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 		}
 	}
 
-	columnIndexStr := strconv.FormatUint(ourDataColumn.Index, 10)
+	columnIndexStr := strconv.FormatUint(ourDataColumn.Index(), 10)
 	if extended {
 		// Track useful cells (cells that extended our data)
 		partialMessageUsefulCellsTotal.WithLabelValues(columnIndexStr).Add(float64(len(cells.cells)))
@@ -886,7 +900,7 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 		}
 
 		if !ourDataColumn.Published {
-			p.recordRepublishSkip(cells.group, ourDataColumn.Index)
+			p.recordRepublishSkip(cells.group, ourDataColumn.Index())
 			return nil
 		}
 
@@ -939,7 +953,7 @@ func (p *PartialColumnBroadcaster) gossip(topic string, groupID []byte) {
 func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, blocks.PartialDataColumn]) error {
 	var aggErr error
 	for topic, partialCol := range topicsAndColumns {
-		if len(partialCol.KzgCommitments) == 0 {
+		if partialCol.KzgCommitmentCount() == 0 {
 			p.logger.WithFields(logrus.Fields{
 				"topic": topic,
 			}).Debug("Skipping publish for column with no KZG commitments")
@@ -972,7 +986,7 @@ func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, bl
 			var extended bool
 			for i := range partialCol.Included.Len() {
 				if partialCol.Included.BitAt(i) {
-					if verifier.ExtendFromVerifiedCell(uint64(i), partialCol.Column[i], partialCol.KzgProofs[i]) {
+					if verifier.ExtendFromVerifiedCell(uint64(i), partialCol.Column()[i], partialCol.KzgProofs()[i]) {
 						extended = true
 					}
 				}
