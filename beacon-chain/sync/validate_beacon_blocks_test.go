@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -22,7 +23,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	slashingsmock "github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings/mock"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
@@ -38,8 +41,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	gcache "github.com/patrickmn/go-cache"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
@@ -1419,6 +1425,96 @@ func TestValidateBeaconBlockPubSub_InsertValidPendingBlock(t *testing.T) {
 		assert.NotEqual(t, opfeed.BlockGossipReceived, event.Type, "BlockGossipReceived event should not be sent")
 	default:
 		// this case is needed, otherwise the test will never finish
+	}
+}
+
+func TestValidateBeaconBlockPubSub_RequestsUnknownParentBlock(t *testing.T) {
+	db := dbtest.SetupDB(t)
+	p1 := p2ptest.NewTestP2P(t)
+	p2 := p2ptest.NewTestP2P(t)
+	p1.Connect(p2)
+	assert.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
+	ctx := t.Context()
+
+	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
+	parentBlock := util.NewBeaconBlock()
+	util.SaveBlock(t, ctx, db, parentBlock)
+	parentRoot, err := parentBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, db.SaveState(ctx, beaconState, parentRoot))
+	require.NoError(t, db.SaveStateSummary(ctx, &ethpb.StateSummary{Root: parentRoot[:]}))
+
+	copied := beaconState.Copy()
+	require.NoError(t, copied.SetSlot(1))
+	proposerIdx, err := helpers.BeaconProposerIndex(ctx, copied)
+	require.NoError(t, err)
+	msg := util.NewBeaconBlock()
+	msg.Block.ProposerIndex = proposerIdx
+	msg.Block.Slot = 1
+	msg.Block.ParentRoot = parentRoot[:]
+	msg.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, msg.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
+	require.NoError(t, err)
+
+	chainService := &mock.ChainService{
+		Genesis:             time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+		State:               beaconState,
+		FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, 32)},
+	}
+	r := &Service{
+		ctx: ctx,
+		cfg: &config{
+			beaconDB:    db,
+			p2p:         p1,
+			initialSync: &mockSync.Sync{IsSyncing: false},
+			chain:       chainService,
+			clock:       startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+			stateGen:    stategen.New(db, doublylinkedtree.New()),
+		},
+		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
+		seenPendingBlocks:   make(map[[32]byte]bool),
+	}
+	r.initCaches()
+
+	p1.Peers().Add(new(enr.Record), p2.PeerID(), nil, network.DirOutbound)
+	p1.Peers().SetConnectionState(p2.PeerID(), peers.Connected)
+	p1.Peers().SetChainState(p2.PeerID(), &ethpb.StatusV2{FinalizedEpoch: 2})
+
+	pcl := protocol.ID("/eth2/beacon_chain/req/beacon_blocks_by_root/1/ssz_snappy")
+	var wg sync.WaitGroup
+	wg.Add(1)
+	var once sync.Once
+	p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
+		defer once.Do(wg.Done)
+		var out p2ptypes.BeaconBlockByRootsReq
+		assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, &out))
+		assert.DeepEqual(t, p2ptypes.BeaconBlockByRootsReq{parentRoot}, out, "Expected a by-root request for the unknown parent")
+		_, err := stream.Write([]byte{responseCodeSuccess})
+		assert.NoError(t, err)
+		_, err = p2.Encoding().EncodeWithMaxLength(stream, parentBlock)
+		assert.NoError(t, err)
+		assert.NoError(t, stream.Close())
+	})
+
+	buf := new(bytes.Buffer)
+	_, err = p1.Encoding().EncodeGossip(buf, msg)
+	require.NoError(t, err)
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlock]()]
+	digest, err := r.currentForkDigest()
+	require.NoError(t, err)
+	topic = r.addDigestToTopic(topic, digest)
+	m := &pubsub.Message{
+		Message: &pubsubpb.Message{
+			Data:  buf.Bytes(),
+			Topic: &topic,
+		},
+	}
+
+	res, err := r.validateBeaconBlockPubSub(ctx, "", m)
+	require.ErrorContains(t, "unknown parent for block", err)
+	require.Equal(t, pubsub.ValidationIgnore, res)
+
+	if util.WaitTimeout(&wg, 1*time.Second) {
+		t.Fatal("Did not receive by-root request for unknown parent within 1 sec")
 	}
 }
 
