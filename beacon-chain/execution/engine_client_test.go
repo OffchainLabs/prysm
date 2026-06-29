@@ -108,7 +108,7 @@ func TestClient_IPC(t *testing.T) {
 		require.Equal(t, true, ok)
 		p, err := payloadattribute.New(&pb.PayloadAttributes{})
 		require.NoError(t, err)
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, &pb.ForkchoiceState{}, p)
+		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, &pb.ForkchoiceState{}, p, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
 		require.DeepEqual(t, want.PayloadId, payloadID)
@@ -118,7 +118,7 @@ func TestClient_IPC(t *testing.T) {
 		require.Equal(t, true, ok)
 		p, err := payloadattribute.New(&pb.PayloadAttributesV2{})
 		require.NoError(t, err)
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, &pb.ForkchoiceState{}, p)
+		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, &pb.ForkchoiceState{}, p, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
 		require.DeepEqual(t, want.PayloadId, payloadID)
@@ -474,7 +474,7 @@ func TestClient_HTTP(t *testing.T) {
 		srv := forkchoiceUpdateSetup(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
 		require.DeepEqual(t, want.PayloadId, payloadID)
@@ -498,7 +498,7 @@ func TestClient_HTTP(t *testing.T) {
 		srv := forkchoiceUpdateSetupV2(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
 		require.DeepEqual(t, want.PayloadId, payloadID)
@@ -521,7 +521,7 @@ func TestClient_HTTP(t *testing.T) {
 		client := forkchoiceUpdateSetup(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p, nil)
 		require.ErrorIs(t, err, ErrAcceptedSyncingPayloadStatus)
 		require.DeepEqual(t, (*pb.PayloadIDBytes)(nil), payloadID)
 		require.DeepEqual(t, []byte(nil), validHash)
@@ -545,7 +545,7 @@ func TestClient_HTTP(t *testing.T) {
 		srv := forkchoiceUpdateSetupV2(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, err := srv.ForkchoiceUpdated(ctx, forkChoiceState, p, nil)
 		require.ErrorIs(t, err, ErrAcceptedSyncingPayloadStatus)
 		require.DeepEqual(t, (*pb.PayloadIDBytes)(nil), payloadID)
 		require.DeepEqual(t, []byte(nil), validHash)
@@ -568,7 +568,7 @@ func TestClient_HTTP(t *testing.T) {
 		client := forkchoiceUpdateSetup(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p, nil)
 		require.ErrorIs(t, err, ErrInvalidPayloadStatus)
 		require.DeepEqual(t, (*pb.PayloadIDBytes)(nil), payloadID)
 		require.DeepEqual(t, want.Status.LatestValidHash, validHash)
@@ -591,7 +591,7 @@ func TestClient_HTTP(t *testing.T) {
 		client := forkchoiceUpdateSetup(t, forkChoiceState, payloadAttributes, want)
 
 		// We call the RPC method via HTTP and expect a proper result.
-		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p)
+		payloadID, validHash, err := client.ForkchoiceUpdated(ctx, forkChoiceState, p, nil)
 		require.ErrorIs(t, err, ErrUnknownPayloadStatus)
 		require.DeepEqual(t, (*pb.PayloadIDBytes)(nil), payloadID)
 		require.DeepEqual(t, []byte(nil), validHash)
@@ -2700,7 +2700,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("GetBlobsV2 is not supported", func(t *testing.T) {
-		_, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		_, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), nil)
 		require.ErrorContains(t, "engine_getBlobsV2 is not supported", err)
 	})
 
@@ -2711,7 +2711,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		dataColumns, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), nil)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(dataColumns))
 	})
@@ -2724,7 +2724,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		dataColumns, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), nil)
 		require.NoError(t, err)
 		require.Equal(t, 128, len(dataColumns))
 	})
@@ -2737,7 +2737,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 	// 	rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 	// 	defer rpcClient.Close()
 
-	// 	_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+	// 	_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), nil)
 	// 	require.ErrorContains(t, "fetch cells and proofs from execution client", err)
 	// })
 }
@@ -2941,7 +2941,7 @@ func TestConstructDataColumnSidecars_PartialColumns(t *testing.T) {
 			completeBefore := counterValue(t, getBlobsV3CompleteResponsesTotal)
 			partialBefore := counterValue(t, getBlobsV3PartialResponsesTotal)
 
-			sidecars, partials, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+			sidecars, partials, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), nil)
 			require.NoError(t, err)
 			require.Equal(t, tt.wantSidecars, len(sidecars))
 
@@ -2979,7 +2979,7 @@ func TestConstructDataColumnSidecars_PartialColumns(t *testing.T) {
 		completeBefore := counterValue(t, getBlobsV3CompleteResponsesTotal)
 		partialBefore := counterValue(t, getBlobsV3PartialResponsesTotal)
 
-		_, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		_, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), nil)
 		require.ErrorContains(t, "fetch cells and proofs from execution client", err)
 
 		// The request is counted, but latency and the complete/partial response metrics are not.

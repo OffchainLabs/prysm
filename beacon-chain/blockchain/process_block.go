@@ -1264,6 +1264,59 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	}
 }
 
+// custodyColumnsForFCU builds the custody column set sent to the execution client via fcuV4.
+// The result is Union(finalized custody, upcoming custody), plus the first-half data columns
+// while we are an upcoming proposer.
+func (s *Service) custodyColumnsForFCU(ctx context.Context) map[uint64]bool {
+	currentCustody, err := s.cfg.P2P.CustodyGroupCount(ctx)
+	if err != nil {
+		log.WithError(err).Debug("Could not get custody group count for FCU")
+		return nil
+	}
+
+	headState, err := s.HeadStateReadOnly(ctx)
+	if err != nil || headState == nil {
+		log.WithError(err).Debug("Could not read head state for custody columns")
+	}
+
+	// Increase upcoming custody from the head state.
+	if s.cfg.TrackedValidatorsCache != nil {
+		if indices := s.cfg.TrackedValidatorsCache.Indices(); len(indices) > 0 {
+			if headReq, err := peerdas.ValidatorsCustodyRequirement(headState, indices); err != nil {
+				log.WithError(err).Debug("Could not compute head custody requirement")
+			} else if headReq > currentCustody {
+				currentCustody = headReq
+			}
+		}
+	}
+
+	peerInfo, _, err := peerdas.Info(s.cfg.P2P.NodeID(), currentCustody)
+	if err != nil {
+		log.WithError(err).Error("Could not compute custody columns")
+		return nil
+	}
+
+	cols := make(map[uint64]bool, len(peerInfo.CustodyColumns))
+	for col := range peerInfo.CustodyColumns {
+		cols[col] = true
+	}
+
+	// If we are the upcoming proposer (this slot or the next two), add the first-half columns
+	// to the custody set. This allow the execution client to get enough full-blob data
+	// to include in the proposal.
+	currentSlot := s.CurrentSlot()
+	for i := primitives.Slot(0); i <= 2; i++ {
+		if _, isProposer := s.trackedProposer(headState, currentSlot+i); isProposer {
+			for j := range uint64(fieldparams.CellsPerBlob) {
+				cols[j] = true
+			}
+			break
+		}
+	}
+
+	return cols
+}
+
 // waitForSync blocks until the node is synced to the head.
 func (s *Service) waitForSync() error {
 	select {

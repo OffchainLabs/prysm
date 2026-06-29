@@ -9,6 +9,7 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
@@ -62,6 +63,7 @@ var (
 		GetBlobsV2,
 		GetBlobsV3,
 		HasBlobs,
+		GetBlobsV4,
 	}
 
 	gloasEngineEndpoints = []string{
@@ -125,6 +127,8 @@ const (
 	GetBlobsV3 = "engine_getBlobsV3"
 	// HasBlobs request string for JSON-RPC.
 	HasBlobs = "engine_hasBlobs"
+	// GetBlobsV4 request string for JSON-RPC.
+	GetBlobsV4 = "engine_getBlobsV4"
 	// GetClientVersionV1 is the JSON-RPC method that identifies the execution client.
 	GetClientVersionV1 = "engine_getClientVersionV1"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
@@ -153,7 +157,7 @@ type Reconstructor interface {
 		ctx context.Context, blockHashes [][32]byte,
 	) (map[[32]byte]*pb.ExecutionPayloadGloas, error)
 	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
-	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error)
+	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator, custodyColumns map[uint64]bool) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error)
 	ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.PartialDataColumn, bool, error)
 	ReconstructExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedBlindedExecutionPayloadEnvelope) (*ethpb.SignedExecutionPayloadEnvelope, error)
 }
@@ -163,7 +167,7 @@ type Reconstructor interface {
 type EngineCaller interface {
 	NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester) ([]byte, error)
 	ForkchoiceUpdated(
-		ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer,
+		ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer, custodyColumns map[uint64]bool,
 	) (*pb.PayloadIDBytes, []byte, error)
 	GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error)
 	ExecutionBlockByHash(ctx context.Context, hash common.Hash, withTxs bool) (*pb.ExecutionBlock, error)
@@ -248,7 +252,7 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 
 // ForkchoiceUpdated calls the engine_forkchoiceUpdatedV1 method via JSON-RPC.
 func (s *Service) ForkchoiceUpdated(
-	ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer,
+	ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer, custodyColumns map[uint64]bool,
 ) (*pb.PayloadIDBytes, []byte, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ForkchoiceUpdated")
 	defer span.End()
@@ -298,7 +302,7 @@ func (s *Service) ForkchoiceUpdated(
 		if err != nil {
 			return nil, nil, err
 		}
-		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethodV4, state, a)
+		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethodV4, state, a, hexutil.Bytes(custodyColumnsBitmask(custodyColumns)))
 		if err != nil {
 			return nil, nil, handleRPCError(err)
 		}
@@ -955,7 +959,7 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 	return verifiedBlobs, nil
 }
 
-func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
+func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator, custodyColumns map[uint64]bool) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
 	root := populator.Root()
 
 	// Fetch cells and proofs from the execution client using the KZG commitments from the sidecar.
@@ -963,7 +967,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 	if err != nil {
 		return nil, nil, wrapWithBlockRoot(err, root, "commitments")
 	}
-	cp, err := s.fetchCellsAndProofsFromExecution(ctx, commitments)
+	cp, err := s.fetchCellsAndProofsFromExecution(ctx, commitments, custodyColumns)
 	if err != nil {
 		return nil, nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
 	}
@@ -1102,9 +1106,14 @@ func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Con
 	return partialColumns, true, nil
 }
 
-// fetchCellsAndProofsFromExecution fetches cells and proofs from the execution client (using engine_getBlobsV2 execution API method)
-func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommitments [][]byte) (peerdas.StructuredCellsAndProofs, error) {
+// fetchCellsAndProofsFromExecution fetches cells and proofs from the execution client
+// (prefers engine_getBlobsV4, falling back to engine_getBlobsV3/V2).
+func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommitments [][]byte, custodyColumns map[uint64]bool) (peerdas.StructuredCellsAndProofs, error) {
 	versionedHashes := versionedHashesFromCommitments(kzgCommitments)
+
+	if s.capabilityCache.has(GetBlobsV4) {
+		return s.fetchCellsAndProofsV4(ctx, uint64(len(kzgCommitments)), versionedHashes, custodyColumns)
+	}
 
 	var blobAndProofs []*pb.BlobAndProofV2
 
@@ -1143,6 +1152,59 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	}
 
 	return result, nil
+}
+
+// fetchCellsAndProofsV4 fetches cells and proofs from the execution client via engine_getBlobsV4
+func (s *Service) fetchCellsAndProofsV4(ctx context.Context, commitmentCount uint64, versionedHashes []common.Hash, custodyColumns map[uint64]bool) (peerdas.StructuredCellsAndProofs, error) {
+	numberOfColumns := uint64(fieldparams.NumberOfColumns)
+
+	// Build a 16-byte little-endian uint128 bitarray of the custody columns to request.
+	// Column i maps to bit (i%8) of byte (i/8) (LSB = column 0).
+	indicesBitarray := make([]byte, 16)
+	for colIdx := range custodyColumns {
+		if colIdx < numberOfColumns {
+			indicesBitarray[colIdx/8] |= 1 << (colIdx % 8)
+		}
+	}
+
+	result, err := s.GetBlobsV4(ctx, versionedHashes, indicesBitarray)
+	if err != nil {
+		return peerdas.StructuredCellsAndProofs{}, errors.Wrap(err, "get blobs V4")
+	}
+	if len(result) == 0 {
+		return peerdas.StructuredCellsAndProofs{}, nil
+	}
+
+	included := bitfield.NewBitlist(commitmentCount)
+	cellsPerBlob := make([][]kzg.Cell, 0, len(result))
+	proofsPerBlob := make([][]kzg.Proof, 0, len(result))
+	for i, blobCells := range result {
+		// A nil entry means the EL did not have that blob. Leave it out of the
+		// included set so the caller can treat the response as partial.
+		if blobCells == nil {
+			continue
+		}
+		included.SetBitAt(uint64(i), true)
+
+		cells := make([]kzg.Cell, numberOfColumns)
+		proofs := make([]kzg.Proof, numberOfColumns)
+		for j := range numberOfColumns {
+			if j < uint64(len(blobCells.BlobCells)) && blobCells.BlobCells[j] != nil {
+				copy(cells[j][:], *blobCells.BlobCells[j])
+			}
+			if j < uint64(len(blobCells.Proofs)) && blobCells.Proofs[j] != nil {
+				copy(proofs[j][:], *blobCells.Proofs[j])
+			}
+		}
+		cellsPerBlob = append(cellsPerBlob, cells)
+		proofsPerBlob = append(proofsPerBlob, proofs)
+	}
+
+	return peerdas.StructuredCellsAndProofs{
+		Included:      included,
+		CellsPerBlob:  cellsPerBlob,
+		ProofsPerBlob: proofsPerBlob,
+	}, nil
 }
 
 func (s *Service) useGetBlobsV3() bool {
@@ -1487,6 +1549,35 @@ func toBlockNumArg(number *big.Int) string {
 		return "safe"
 	}
 	return hexutil.EncodeBig(number)
+}
+
+// custodyColumnsBitmask encodes a custody column set as a 16-byte little-endian uint128 bitarray
+// (bit i of byte (i/8), LSB-first within byte), as expected by engine_forkchoiceUpdatedV4.
+func custodyColumnsBitmask(custodyColumns map[uint64]bool) []byte {
+	numberOfColumns := uint64(fieldparams.NumberOfColumns)
+	mask := make([]byte, 16)
+	for colIdx := range custodyColumns {
+		if colIdx < numberOfColumns {
+			mask[colIdx/8] |= 1 << (colIdx % 8)
+		}
+	}
+	return mask
+}
+
+// GetBlobsV4 calls the engine_getBlobsV4 method via JSON-RPC.
+// It fetches blob cells and KZG proofs for the given versioned hashes
+// and the bitarray of custody bitmap
+func (s *Service) GetBlobsV4(ctx context.Context, versionedHashes []common.Hash, indicesBitarray []byte) ([]*pb.BlobCellsAndProofsV1, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsV4")
+	defer span.End()
+
+	if !s.capabilityCache.has(GetBlobsV4) {
+		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV4))
+	}
+
+	result := make([]*pb.BlobCellsAndProofsV1, len(versionedHashes))
+	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV4, versionedHashes, hexutil.Bytes(indicesBitarray))
+	return result, handleRPCError(err)
 }
 
 // wrapWithBlockRoot returns a new error with the given block root.

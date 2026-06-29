@@ -63,7 +63,7 @@ func (e *EngineClient) NewPayload(_ context.Context, _ interfaces.ExecutionData,
 
 // ForkchoiceUpdated --
 func (e *EngineClient) ForkchoiceUpdated(
-	_ context.Context, fcs *pb.ForkchoiceState, _ payloadattribute.Attributer,
+	_ context.Context, fcs *pb.ForkchoiceState, _ payloadattribute.Attributer, _ map[uint64]bool,
 ) (*pb.PayloadIDBytes, []byte, error) {
 	if e.OverrideValidHash != [32]byte{} && bytesutil.ToBytes32(fcs.HeadBlockHash) == e.OverrideValidHash {
 		return e.PayloadIDBytes, e.ForkChoiceUpdatedResp, nil
@@ -169,7 +169,7 @@ func (e *EngineClient) ReconstructBlobSidecars(context.Context, interfaces.ReadO
 }
 
 // ConstructDataColumnSidecars is a mock implementation of the ConstructDataColumnSidecars method.
-func (e *EngineClient) ConstructDataColumnSidecars(context.Context, peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
+func (e *EngineClient) ConstructDataColumnSidecars(context.Context, peerdas.ConstructionPopulator, map[uint64]bool) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
 	return e.DataColumnSidecars, nil, e.ErrorDataColumnSidecars
 }
 

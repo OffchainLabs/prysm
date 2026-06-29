@@ -78,6 +78,7 @@ go_proto_library(
 go_library(
     name = "go_default_library",
     srcs = [
+        "blob_cells.go",
         "blobs_bundle.go",
         "electra.go",
         "execution_engine.go",

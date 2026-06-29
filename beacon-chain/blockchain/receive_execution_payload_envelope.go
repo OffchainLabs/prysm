@@ -409,7 +409,8 @@ func (s *Service) notifyForkchoiceUpdateGloas(ctx context.Context, blockHash [32
 		attributes = payloadattribute.EmptyWithVersion(version.Gloas)
 	}
 
-	payloadID, lastValidHash, err := s.cfg.ExecutionEngineCaller.ForkchoiceUpdated(ctx, fcs, attributes)
+	custodyColumns := s.custodyColumnsForFCU(ctx)
+	payloadID, lastValidHash, err := s.cfg.ExecutionEngineCaller.ForkchoiceUpdated(ctx, fcs, attributes, custodyColumns)
 	if err == nil {
 		return payloadID, nil
 	}
