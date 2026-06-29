@@ -297,9 +297,6 @@ func (s *Service) rejectInvalidSyncAggregateSignature(m *ethpb.SignedContributio
 
 // Returns true if the node has received sync contribution for the aggregator with index, slot and subcommittee index.
 func (s *Service) hasSeenSyncContributionIndexSlot(slot primitives.Slot, aggregatorIndex primitives.ValidatorIndex, subComIdx primitives.CommitteeIndex) bool {
-	s.seenSyncContributionLock.RLock()
-	defer s.seenSyncContributionLock.RUnlock()
-
 	b := append(bytesutil.Bytes32(uint64(aggregatorIndex)), bytesutil.Bytes32(uint64(slot))...)
 	b = append(b, bytesutil.Bytes32(uint64(subComIdx))...)
 	_, seen := s.seenSyncContributionCache.Get(string(b))
@@ -308,8 +305,6 @@ func (s *Service) hasSeenSyncContributionIndexSlot(slot primitives.Slot, aggrega
 
 // Set sync contributor's aggregate index, slot and subcommittee index as seen.
 func (s *Service) setSyncContributionIndexSlotSeen(slot primitives.Slot, aggregatorIndex primitives.ValidatorIndex, subComIdx primitives.CommitteeIndex) {
-	s.seenSyncContributionLock.Lock()
-	defer s.seenSyncContributionLock.Unlock()
 	b := append(bytesutil.Bytes32(uint64(aggregatorIndex)), bytesutil.Bytes32(uint64(slot))...)
 	b = append(b, bytesutil.Bytes32(uint64(subComIdx))...)
 	s.seenSyncContributionCache.Add(string(b), true)

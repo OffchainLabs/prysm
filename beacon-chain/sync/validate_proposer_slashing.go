@@ -79,15 +79,11 @@ func (s *Service) validateProposerSlashing(ctx context.Context, pid peer.ID, msg
 
 // Returns true if the node has already received a valid proposer slashing received for the proposer with index
 func (s *Service) hasSeenProposerSlashingIndex(i primitives.ValidatorIndex) bool {
-	s.seenProposerSlashingLock.RLock()
-	defer s.seenProposerSlashingLock.RUnlock()
 	_, seen := s.seenProposerSlashingCache.Get(i)
 	return seen
 }
 
 // Set proposer slashing index in proposer slashing cache.
 func (s *Service) setProposerSlashingIndexSeen(i primitives.ValidatorIndex) {
-	s.seenProposerSlashingLock.Lock()
-	defer s.seenProposerSlashingLock.Unlock()
 	s.seenProposerSlashingCache.Add(i, true)
 }

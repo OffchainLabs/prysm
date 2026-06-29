@@ -258,10 +258,6 @@ func (s *Service) validateBlockInAttestation(ctx context.Context, satt ethpb.Sig
 // Returns true if the node has received aggregate for the aggregator with index and target epoch.
 func (s *Service) hasSeenAggregatorIndexEpoch(epoch primitives.Epoch, aggregatorIndex primitives.ValidatorIndex) bool {
 	b := append(bytesutil.Bytes32(uint64(epoch)), bytesutil.Bytes32(uint64(aggregatorIndex))...)
-
-	s.seenAggregatedAttestationLock.RLock()
-	defer s.seenAggregatedAttestationLock.RUnlock()
-
 	_, seen := s.seenAggregatedAttestationCache.Get(string(b))
 	return seen
 }
@@ -270,16 +266,8 @@ func (s *Service) hasSeenAggregatorIndexEpoch(epoch primitives.Epoch, aggregator
 // Returns true if this is the first time seeing this aggregator index and epoch.
 func (s *Service) setAggregatorIndexEpochSeen(epoch primitives.Epoch, aggregatorIndex primitives.ValidatorIndex) bool {
 	b := append(bytesutil.Bytes32(uint64(epoch)), bytesutil.Bytes32(uint64(aggregatorIndex))...)
-
-	s.seenAggregatedAttestationLock.Lock()
-	defer s.seenAggregatedAttestationLock.Unlock()
-
-	_, seen := s.seenAggregatedAttestationCache.Get(string(b))
-	if seen {
-		return false
-	}
-	s.seenAggregatedAttestationCache.Add(string(b), true)
-	return true
+	found, _ := s.seenAggregatedAttestationCache.ContainsOrAdd(string(b), true)
+	return !found
 }
 
 // This validates the bitfield is correct and aggregator's index in state is within the beacon committee.

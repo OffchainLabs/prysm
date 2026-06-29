@@ -18,7 +18,6 @@ type subnetIDs struct {
 	aggregator        *lru.Cache
 	aggregatorLock    sync.RWMutex
 	persistentSubnets *cache.Cache
-	subnetsLock       sync.RWMutex
 }
 
 // SubnetIDs for attester and aggregator.
@@ -94,9 +93,6 @@ func (s *subnetIDs) GetAggregatorSubnetIDs(slot primitives.Slot) []uint64 {
 // GetPersistentSubnets retrieves the persistent subnet and expiration time of that validator's
 // subscription.
 func (s *subnetIDs) GetPersistentSubnets() ([]uint64, bool, time.Time) {
-	s.subnetsLock.RLock()
-	defer s.subnetsLock.RUnlock()
-
 	id, duration, ok := s.persistentSubnets.GetWithExpiration(subnetKey)
 	if !ok {
 		return []uint64{}, ok, time.Time{}
@@ -107,9 +103,6 @@ func (s *subnetIDs) GetPersistentSubnets() ([]uint64, bool, time.Time) {
 // GetAllSubnets retrieves all the non-expired subscribed subnets of all the validators
 // in the cache.
 func (s *subnetIDs) GetAllSubnets() []uint64 {
-	s.subnetsLock.RLock()
-	defer s.subnetsLock.RUnlock()
-
 	itemsMap := s.persistentSubnets.Items()
 	var committees []uint64
 
@@ -125,9 +118,6 @@ func (s *subnetIDs) GetAllSubnets() []uint64 {
 // AddPersistentCommittee adds the relevant committee for that particular validator along with its
 // expiration period.
 func (s *subnetIDs) AddPersistentCommittee(comIndex []uint64, duration time.Duration) {
-	s.subnetsLock.Lock()
-	defer s.subnetsLock.Unlock()
-
 	s.persistentSubnets.Set(subnetKey, comIndex, duration)
 }
 
@@ -145,7 +135,5 @@ func (s *subnetIDs) EmptyAllCaches() {
 	s.aggregator.Purge()
 	s.aggregatorLock.Unlock()
 
-	s.subnetsLock.Lock()
 	s.persistentSubnets.Flush()
-	s.subnetsLock.Unlock()
 }

@@ -153,34 +153,24 @@ type Service struct {
 	chainStarted                         *atomic.Bool
 	validateBlockLock                    sync.RWMutex
 	rateLimiter                          *limiter
-	seenBlockLock                        sync.RWMutex
 	seenBlockCache                       *lru.Cache
 	seenPayloadEnvelopeCache             *lru.Cache
 	seenExecutionPayloadBidCache         *slotAwareCache
 	highestExecutionPayloadBidCache      *cache.HighestExecutionPayloadBidCache
-	seenBlobLock                         sync.RWMutex
 	seenBlobCache                        *lru.Cache
 	seenDataColumnCache                  *slotAwareCache
 	pendingGloasColumnsLock              sync.RWMutex
 	pendingGloasColumns                  map[[32]byte]*pendingGloasEntry
-	seenAggregatedAttestationLock        sync.RWMutex
 	seenAggregatedAttestationCache       *lru.Cache
-	seenUnAggregatedAttestationLock      sync.RWMutex
 	seenUnAggregatedAttestationCache     *lru.Cache
-	seenExitLock                         sync.RWMutex
 	seenExitCache                        *lru.Cache
-	seenProposerSlashingLock             sync.RWMutex
 	seenProposerSlashingCache            *lru.Cache
 	seenAttesterSlashingLock             sync.RWMutex
 	seenAttesterSlashingCache            map[uint64]bool
-	seenSyncMessageLock                  sync.RWMutex
 	seenSyncMessageCache                 *lru.Cache
-	seenSyncContributionLock             sync.RWMutex
 	seenSyncContributionCache            *lru.Cache
 	badBlockCache                        *lru.Cache
-	badBlockLock                         sync.RWMutex
 	badPayloadCache                      *lru.Cache
-	badPayloadLock                       sync.RWMutex
 	syncContributionBitsOverlapLock      sync.RWMutex
 	syncContributionBitsOverlapCache     *lru.Cache
 	signatureChan                        chan *signatureVerifier
