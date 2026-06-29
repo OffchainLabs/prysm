@@ -77,35 +77,58 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		return wrapDataColumnError(sidecar, "receive data column sidecar", err)
 	}
 
-	// Reconstruction and execution processing require Fulu-specific fields
-	// (SignedBlockHeader, KzgCommitments) that Gloas sidecars don't carry.
-	if !sidecar.IsGloas() {
-		wg.Go(func() error {
-			if err := s.processDataColumnSidecarsFromReconstruction(ctx, sidecar); err != nil {
-				return wrapDataColumnError(sidecar, "process data column sidecars from reconstruction", err)
+	wg.Go(func() error {
+		if err := s.processDataColumnSidecarsFromReconstruction(ctx, sidecar); err != nil {
+			return wrapDataColumnError(sidecar, "process data column sidecars from reconstruction", err)
+		}
+
+		return nil
+	})
+
+	wg.Go(func() error {
+		source, err := s.constructionPopulatorForSidecar(ctx, sidecar)
+		if err != nil {
+			return wrapDataColumnError(sidecar, "construction populator for sidecar", err)
+		}
+
+		if err := s.processDataColumnSidecarsFromExecution(ctx, source); err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil
 			}
 
-			return nil
-		})
+			return wrapDataColumnError(sidecar, "process data column sidecars from execution", err)
+		}
 
-		wg.Go(func() error {
-			if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromSidecar(sidecar)); err != nil {
-				if errors.Is(err, context.Canceled) {
-					return nil
-				}
-
-				return wrapDataColumnError(sidecar, "process data column sidecars from execution", err)
-			}
-
-			return nil
-		})
-	}
+		return nil
+	})
 
 	if err := wg.Wait(); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (s *Service) constructionPopulatorForSidecar(ctx context.Context, sidecar blocks.VerifiedRODataColumn) (peerdas.ConstructionPopulator, error) {
+	if !sidecar.IsGloas() {
+		return peerdas.PopulateFromSidecar(sidecar), nil
+	}
+
+	root := sidecar.BlockRoot()
+	block, err := s.cfg.beaconDB.Block(ctx, root)
+	if err != nil {
+		return nil, errors.Wrap(err, "get block for gloas data column")
+	}
+	if err := blocks.BeaconBlockIsNil(block); err != nil {
+		return nil, errors.Wrap(err, "block for gloas data column not available")
+	}
+
+	roBlock, err := blocks.NewROBlockWithRoot(block, root)
+	if err != nil {
+		return nil, errors.Wrap(err, "new ro block with root")
+	}
+
+	return peerdas.PopulateFromBid(roBlock), nil
 }
 
 func (s *Service) verifiedRODataColumnSubscriber(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
