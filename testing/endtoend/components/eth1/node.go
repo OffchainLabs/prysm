@@ -75,7 +75,9 @@ func (node *Node) Start(ctx context.Context) error {
 		return err
 	}
 
-	initCmd := exec.CommandContext(ctx, binaryPath, "init", fmt.Sprintf("--datadir=%s", eth1Path), gethJsonPath) // #nosec G204 -- Safe
+	// Disable PCSC smartcard lookup; geth can hang in go-libpcsclite when
+	// pcscd is unavailable in e2e sandboxes.
+	initCmd := exec.CommandContext(ctx, binaryPath, "--pcscdpath=", "init", fmt.Sprintf("--datadir=%s", eth1Path), gethJsonPath) // #nosec G204 -- Safe
 	initFile, err := helpers.DeleteAndCreateFile(e2e.TestParams.LogPath, "eth1-init_"+strconv.Itoa(node.index)+".log")
 	if err != nil {
 		return err
@@ -89,7 +91,8 @@ func (node *Node) Start(ctx context.Context) error {
 	}
 
 	args := []string{
-		"--nat=none", // disable nat traversal in e2e, it is failure prone and not needed
+		"--pcscdpath=", // keep PCSC disabled after init for the running geth node
+		"--nat=none",   // disable nat traversal in e2e, it is failure prone and not needed
 		fmt.Sprintf("--datadir=%s", eth1Path),
 		fmt.Sprintf("--http.port=%d", e2e.TestParams.Ports.Eth1RPCPort+node.index),
 		fmt.Sprintf("--ws.port=%d", e2e.TestParams.Ports.Eth1WSPort+node.index),
@@ -103,6 +106,9 @@ func (node *Node) Start(ctx context.Context) error {
 		"--http.corsdomain=\"*\"",
 		"--http.vhosts=\"*\"",
 		"--rpc.allow-unprotected-txs",
+		// Deposit txs price 1000 gwei * large deposit gas limit > geth's default
+		// 1 ETH rpc fee cap, so disable the cap to let them through over RPC.
+		"--rpc.txfeecap=0",
 		"--ws",
 		"--ws.api=net,eth,engine",
 		"--ws.addr=127.0.0.1",

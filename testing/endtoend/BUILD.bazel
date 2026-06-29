@@ -112,10 +112,10 @@ go_test(
         "@web3signer",
     ],
     eth_network = "minimal",
-    flaky = True,
     shard_count = 2,
     tags = [
         "e2e",
+        "exclusive",
         "manual",
         "minimal",
         "requires-network",

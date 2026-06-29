@@ -69,7 +69,7 @@ func (vs *Server) eth1DataMajorityVote(ctx context.Context, beaconState state.Be
 	lastBlockByLatestValidTime, err := vs.Eth1BlockFetcher.BlockByTimestamp(ctx, latestValidTime)
 	if err != nil {
 		log.WithError(err).Error("Could not get last block by latest valid time")
-		return vs.randomETH1DataVote(ctx)
+		return vs.HeadFetcher.HeadETH1Data(), nil
 	}
 	if lastBlockByLatestValidTime.Time < earliestValidTime {
 		return vs.HeadFetcher.HeadETH1Data(), nil

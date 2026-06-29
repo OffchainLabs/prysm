@@ -167,42 +167,9 @@ func validatorsParticipating(_ *types.EvaluationContext, conns ...*grpc.ClientCo
 			return err
 		}
 
-		var respPrevEpochParticipation []string
-		switch resp.Version {
-		case version.String(version.Phase0):
-		// Do Nothing
-		case version.String(version.Altair):
-			st := &structs.BeaconStateAltair{}
-			if err = json.Unmarshal(resp.Data, st); err != nil {
-				return err
-			}
-			respPrevEpochParticipation = st.PreviousEpochParticipation
-		case version.String(version.Bellatrix):
-			st := &structs.BeaconStateBellatrix{}
-			if err = json.Unmarshal(resp.Data, st); err != nil {
-				return err
-			}
-			respPrevEpochParticipation = st.PreviousEpochParticipation
-		case version.String(version.Capella):
-			st := &structs.BeaconStateCapella{}
-			if err = json.Unmarshal(resp.Data, st); err != nil {
-				return err
-			}
-			respPrevEpochParticipation = st.PreviousEpochParticipation
-		case version.String(version.Deneb):
-			st := &structs.BeaconStateDeneb{}
-			if err = json.Unmarshal(resp.Data, st); err != nil {
-				return err
-			}
-			respPrevEpochParticipation = st.PreviousEpochParticipation
-		case version.String(version.Electra):
-			st := &structs.BeaconStateElectra{}
-			if err = json.Unmarshal(resp.Data, st); err != nil {
-				return err
-			}
-			respPrevEpochParticipation = st.PreviousEpochParticipation
-		default:
-			return fmt.Errorf("unrecognized version %s", resp.Version)
+		respPrevEpochParticipation, err := previousEpochParticipation(resp.Version, resp.Data)
+		if err != nil {
+			return err
 		}
 
 		prevEpochParticipation := make([]byte, len(respPrevEpochParticipation))
@@ -230,6 +197,51 @@ func validatorsParticipating(_ *types.EvaluationContext, conns ...*grpc.ClientCo
 		)
 	}
 	return nil
+}
+
+func previousEpochParticipation(v string, data json.RawMessage) ([]string, error) {
+	switch v {
+	case version.String(version.Phase0):
+		return nil, nil
+	case version.String(version.Altair):
+		st := &structs.BeaconStateAltair{}
+		if err := json.Unmarshal(data, st); err != nil {
+			return nil, err
+		}
+		return st.PreviousEpochParticipation, nil
+	case version.String(version.Bellatrix):
+		st := &structs.BeaconStateBellatrix{}
+		if err := json.Unmarshal(data, st); err != nil {
+			return nil, err
+		}
+		return st.PreviousEpochParticipation, nil
+	case version.String(version.Capella):
+		st := &structs.BeaconStateCapella{}
+		if err := json.Unmarshal(data, st); err != nil {
+			return nil, err
+		}
+		return st.PreviousEpochParticipation, nil
+	case version.String(version.Deneb):
+		st := &structs.BeaconStateDeneb{}
+		if err := json.Unmarshal(data, st); err != nil {
+			return nil, err
+		}
+		return st.PreviousEpochParticipation, nil
+	case version.String(version.Electra):
+		st := &structs.BeaconStateElectra{}
+		if err := json.Unmarshal(data, st); err != nil {
+			return nil, err
+		}
+		return st.PreviousEpochParticipation, nil
+	case version.String(version.Fulu):
+		st := &structs.BeaconStateFulu{}
+		if err := json.Unmarshal(data, st); err != nil {
+			return nil, err
+		}
+		return st.PreviousEpochParticipation, nil
+	default:
+		return nil, fmt.Errorf("unrecognized version %s", v)
+	}
 }
 
 // validatorsSyncParticipation ensures the validators have an acceptable participation rate for
@@ -273,9 +285,9 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 			// Skip fork slot.
 			continue
 		}
-		// Skip slots 1-2 at genesis - validators need time to ramp up after chain start
+		// Skip slots 0-3 at genesis - validators need time to ramp up after chain start
 		// due to doppelganger protection. This is a startup timing issue, not a fork transition issue.
-		if b.Block().Slot() < 3 {
+		if skipStartupSyncParticipationSlot(b.Block().Slot()) {
 			continue
 		}
 		expectedParticipation := expectedSyncParticipation
@@ -350,6 +362,10 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 		}
 	}
 	return nil
+}
+
+func skipStartupSyncParticipationSlot(slot primitives.Slot) bool {
+	return slot <= 3
 }
 
 func syncCompatibleBlockFromCtr(container *ethpb.BeaconBlockContainer) (interfaces.ReadOnlySignedBeaconBlock, error) {

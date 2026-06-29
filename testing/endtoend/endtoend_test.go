@@ -48,6 +48,9 @@ const (
 	// allNodesStartTimeout defines period after which nodes are considered
 	// stalled (safety measure for nodes stuck at startup, shouldn't normally happen).
 	allNodesStartTimeout = 5 * time.Minute
+	// syncMatchTimeout is the longest checkpoint/beacon sync helpers should wait for a new node
+	// to match a known-good head. A matching head usually happens quickly, but CI can be slow.
+	syncMatchTimeout = 5 * time.Minute
 
 	// errGeneralCode is used to represent the string value for all general process errors.
 	errGeneralCode = "exit status 1"
@@ -227,6 +230,7 @@ func (r *testRunner) testDepositsAndTx(ctx context.Context, g *errgroup.Group,
 			return errors.Wrap(err, "testDepositsAndTx unable to run, depositor did not Start")
 		}
 		go func() {
+			shouldStartTxGen := r.config.TestDeposits || r.config.TestFeature || r.config.UseBuilder
 			if r.config.TestDeposits {
 				log.Info("Running deposit tests")
 				// The validators with an index < minGenesisActiveCount all have deposits already from the chain start.
@@ -238,10 +242,13 @@ func (r *testRunner) testDepositsAndTx(ctx context.Context, g *errgroup.Group,
 					if r.t.Context().Err() == nil {
 						r.t.Error(errors.Wrap(err, "depositor.SendAndMine failed"))
 					}
+					return
 				}
 			}
 			// Only generate background transactions when relevant for the test.
-			if r.config.TestDeposits || r.config.TestFeature || r.config.UseBuilder {
+			// When deposit testing is enabled, start after post-genesis deposit mining
+			// to avoid nonce contention on the shared miner account.
+			if shouldStartTxGen {
 				r.testTxGeneration(ctx, g, keystorePath, []e2etypes.ComponentRunner{})
 			}
 		}()
@@ -297,7 +304,6 @@ func (r *testRunner) waitForMatchingHead(ctx context.Context, timeout time.Durat
 }
 
 func (r *testRunner) testCheckpointSync(ctx context.Context, g *errgroup.Group, i int, conns []*grpc.ClientConn, bnAPI, enr, minerEnr string) error {
-	matchTimeout := 5 * time.Minute
 	ethNode := eth1.NewNode(i, minerEnr)
 	g.Go(func() error {
 		return ethNode.Start(ctx)
@@ -346,7 +352,7 @@ func (r *testRunner) testCheckpointSync(ctx context.Context, g *errgroup.Group, 
 
 	// this is so that the syncEvaluators checks can run on the checkpoint sync'd node
 	conns = append(conns, c)
-	err = r.waitForMatchingHead(ctx, matchTimeout, c, conns[0])
+	err = r.waitForMatchingHead(ctx, syncMatchTimeout, c, conns[0])
 	if err != nil {
 		return err
 	}
@@ -390,25 +396,15 @@ func (r *testRunner) testBeaconChainSync(ctx context.Context, g *errgroup.Group,
 	require.NoError(t, err, "Failed to dial")
 	conns = append(conns, syncConn)
 
-	// Sleep a second for every 4 blocks that need to be synced for the newly started node.
-	secondsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
-	extraSecondsToSync := (config.EpochsToRun)*secondsPerEpoch + uint64(params.BeaconConfig().SlotsPerEpoch.Div(4).Mul(config.EpochsToRun))
-	waitForSync := tickingStartTime.Add(time.Duration(extraSecondsToSync) * time.Second)
-	time.Sleep(time.Until(waitForSync))
-
 	syncLogFile, err := os.Open(path.Join(e2e.TestParams.LogPath, fmt.Sprintf(e2e.BeaconNodeLogFileName, index)))
 	require.NoError(t, err)
 	defer func() { _ = syncLogFile.Close() }()
 	defer helpers.LogErrorOutput(t, syncLogFile, "beacon chain node", index)
-	t.Run("sync completed", func(t *testing.T) {
-		assert.NoError(t, helpers.WaitForTextInFile(syncLogFile, "Synced up to"), "Failed to sync")
-	})
-	if t.Failed() {
-		return errors.New("cannot sync beacon node")
+	if err := r.waitForMatchingHead(ctx, syncMatchTimeout, syncConn, conns[0]); err != nil {
+		return errors.Wrap(err, "cannot sync beacon node")
 	}
 
-	// Sleep a slot to make sure the synced state is made.
-	time.Sleep(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	secondsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
 	syncEvaluators := []e2etypes.Evaluator{ev.FinishedSyncing, ev.AllNodesHaveSameHead}
 	// Only execute in the middle of an epoch to prevent race conditions around slot 0.
 	ticker := helpers.NewEpochTicker(tickingStartTime, secondsPerEpoch)
@@ -445,16 +441,13 @@ func (r *testRunner) testDoppelGangerProtection(ctx context.Context) error {
 	if err := helpers.ComponentsStarted(ctx, []e2etypes.ComponentRunner{valNode}); err != nil {
 		return fmt.Errorf("validator not ready: %w", err)
 	}
-	logFile, err := os.Create(path.Join(e2e.TestParams.LogPath, fmt.Sprintf(e2e.ValidatorLogFileName, valIndex)))
+	logFile, err := os.Open(path.Join(e2e.TestParams.LogPath, fmt.Sprintf(e2e.ValidatorLogFileName, valIndex)))
 	if err != nil {
 		return fmt.Errorf("unable to open log file: %w", err)
 	}
 	defer func() { _ = logFile.Close() }()
-	r.t.Run("doppelganger found", func(t *testing.T) {
-		assert.NoError(t, helpers.WaitForTextInFile(logFile, "Duplicate instances exists in the network for validator keys"), "Failed to carry out doppelganger check correctly")
-	})
-	if r.t.Failed() {
-		return errors.New("doppelganger was unable to be found")
+	if err := helpers.WaitForTextInFile(logFile, "Duplicate instances exists in the network for validator keys"); err != nil {
+		return errors.Wrap(err, "doppelganger was unable to be found")
 	}
 	require.NoError(r.t, g.Wait())
 	return nil

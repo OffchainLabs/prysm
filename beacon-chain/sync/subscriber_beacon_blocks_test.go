@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
@@ -15,9 +16,12 @@ import (
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -68,6 +72,7 @@ func TestService_beaconBlockSubscriber(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db := dbtest.SetupDB(t)
 			s := &Service{
+				ctx: t.Context(),
 				cfg: &config{
 					chain: &chainMock.ChainService{
 						DB:   db,
@@ -103,6 +108,7 @@ func TestService_beaconBlockSubscriber(t *testing.T) {
 
 func TestService_BeaconBlockSubscribe_ExecutionEngineTimesOut(t *testing.T) {
 	s := &Service{
+		ctx: t.Context(),
 		cfg: &config{
 			chain: &chainMock.ChainService{
 				ReceiveBlockMockErr: execution.ErrHTTPTimeout,
@@ -121,6 +127,7 @@ func TestService_BeaconBlockSubscribe_UndefinedEeError(t *testing.T) {
 	err := errors.WithMessage(blockchain.ErrUndefinedExecutionEngineError, msg)
 
 	s := &Service{
+		ctx: t.Context(),
 		cfg: &config{
 			chain: &chainMock.ChainService{
 				ReceiveBlockMockErr: err,
@@ -471,4 +478,70 @@ func TestColumnIndicesToSample(t *testing.T) {
 			}
 		})
 	}
+}
+
+// blockingReconstructor records whether the context passed to ReconstructBlobSidecars
+// is cancelled after the parent handler context is cancelled, so a test can verify the
+// reconstruction goroutine is detached from the handler's context lifetime.
+type blockingReconstructor struct {
+	*mockExecution.EngineClient
+	parentCancelled chan struct{}
+	ownCtxCancelled chan bool
+}
+
+func (b *blockingReconstructor) ReconstructBlobSidecars(ctx context.Context, _ interfaces.ReadOnlySignedBeaconBlock, _ [fieldparams.RootLength]byte, _ func(uint64) bool) ([]blocks.VerifiedROBlob, error) {
+	// Wait until the test has cancelled the parent handler context. A goroutine that
+	// (incorrectly) used the handler context would observe its own ctx cancelled here.
+	<-b.parentCancelled
+	select {
+	case <-ctx.Done():
+		b.ownCtxCancelled <- true
+	default:
+		b.ownCtxCancelled <- false
+	}
+	return nil, nil
+}
+
+// TestService_beaconBlockSubscriber_sidecarContextDetached verifies that the
+// sidecar-reconstruction goroutine survives the pubsub handler returning: its
+// context must not be cancelled when the handler's context is cancelled.
+func TestService_beaconBlockSubscriber_sidecarContextDetached(t *testing.T) {
+	db := dbtest.SetupDB(t)
+	rec := &blockingReconstructor{
+		EngineClient:    &mockExecution.EngineClient{},
+		parentCancelled: make(chan struct{}),
+		ownCtxCancelled: make(chan bool, 1),
+	}
+	s := &Service{
+		ctx: context.Background(),
+		cfg: &config{
+			p2p: mockp2p.NewTestP2P(t),
+			chain: &chainMock.ChainService{
+				DB:      db,
+				Root:    make([]byte, 32),
+				Genesis: time.Now(),
+			},
+			clock:                  startup.NewClock(time.Now(), [32]byte{}),
+			attPool:                attestations.NewPool(),
+			blobStorage:            filesystem.NewEphemeralBlobStorage(t),
+			executionReconstructor: rec,
+			operationNotifier:      &chainMock.MockOperationNotifier{},
+		},
+		seenBlobCache: lruwrpr.New(1),
+	}
+	s.initCaches()
+
+	b := util.NewBeaconBlockDeneb()
+	b.Block.Body.BlobKzgCommitments = [][]byte{bytesutil.PadTo([]byte{0x01}, 48)}
+
+	parentCtx, cancel := context.WithCancel(context.Background())
+	// The handler spawns the reconstruction goroutine then returns (ReceiveBlock may
+	// error on the mock's nil state, which is fine: the goroutine is spawned first).
+	_ = s.beaconBlockSubscriber(parentCtx, b)
+	// Cancelling the parent context is the moment that previously aborted the in-flight
+	// reconstruction goroutine. Signal the mock to make its observation afterwards.
+	cancel()
+	close(rec.parentCancelled)
+
+	require.Equal(t, false, <-rec.ownCtxCancelled)
 }
