@@ -1,0 +1,64 @@
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    testonly = True,
+    srcs = [
+        "assertoor.go",
+        "assertoor_playbook.go",
+        "assertoor_types.go",
+        "doppelganger.go",
+        "helper.go",
+        "logs.go",
+        "starlark.go",
+        "wrapper.go",
+    ],
+    embedsrcs = [
+        "playbooks/blob-limits.yaml",
+        "playbooks/blobs-included.yaml",
+        "playbooks/block-graffiti.yaml",
+        "playbooks/deposits.yaml",
+        "playbooks/fee-recipient.yaml",
+        "playbooks/fork-transition-altair.yaml",
+        "playbooks/fork-transition-bellatrix.yaml",
+        "playbooks/fork-transition-capella.yaml",
+        "playbooks/fork-transition-deneb.yaml",
+        "playbooks/fork-transition-electra.yaml",
+        "playbooks/fork-transition-fulu.yaml",
+        "playbooks/fork-transition-gloas.yaml",
+        "playbooks/metrics.yaml",
+        "playbooks/network-health-monitor.yaml",
+        "playbooks/slashings.yaml",
+        "playbooks/validators-active.yaml",
+        "playbooks/validators-sync-participation.yaml",
+        "playbooks/voluntary-exits.yaml",
+        "playbooks/withdrawals.yaml",
+
+        # Playbooks for late-joining nodes
+        "playbooks/beacon-chain-sync.yaml",
+        "playbooks/checkpoint-sync.yaml",
+    ],
+    importpath = "github.com/OffchainLabs/prysm/v7/testing/endtoend/kurtosis",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//build/bazel:go_default_library",
+        "//testing/endtoend/helpers:go_default_library",
+        "@com_github_ghodss_yaml//:go_default_library",
+        "@com_github_kurtosis_tech_kurtosis_api_golang//core/lib/enclaves:go_default_library",
+        "@com_github_kurtosis_tech_kurtosis_api_golang//core/lib/services:go_default_library",
+        "@com_github_kurtosis_tech_kurtosis_api_golang//core/lib/starlark_run_config:go_default_library",
+        "@com_github_kurtosis_tech_kurtosis_api_golang//engine/lib/kurtosis_context:go_default_library",
+        "@org_golang_google_grpc//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "assertoor_playbook_test.go",
+        "assertoor_test.go",
+        "doppelganger_test.go",
+        "helper_test.go",
+    ],
+    embed = [":go_default_library"],
+)

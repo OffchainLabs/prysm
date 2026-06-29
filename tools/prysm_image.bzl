@@ -33,30 +33,30 @@ def prysm_image_upload(
         tars = [
             "//tools:passwd_tar",
         ] + select({
-          "@platforms//cpu:x86_64": [
-            "@amd64_debian11_bash",
-            "@amd64_debian11_libtinfo6",
-            "@amd64_debian11_coreutils",
-            "@amd64_debian11_libacl1",
-            "@amd64_debian11_libattr1",
-            "@amd64_debian11_libselinux",
-            "@amd64_debian11_libpcre2",
-          ],
-          "@platforms//cpu:arm64": [
-            "@arm64_debian11_bash",
-            "@arm64_debian11_libtinfo6",
-            "@arm64_debian11_coreutils",
-            "@arm64_debian11_libacl1",
-            "@arm64_debian11_libattr1",
-            "@arm64_debian11_libselinux",
-            "@arm64_debian11_libpcre2",
-          ],
+            "@platforms//cpu:x86_64": [
+                "@amd64_debian11_bash",
+                "@amd64_debian11_libtinfo6",
+                "@amd64_debian11_coreutils",
+                "@amd64_debian11_libacl1",
+                "@amd64_debian11_libattr1",
+                "@amd64_debian11_libselinux",
+                "@amd64_debian11_libpcre2",
+            ],
+            "@platforms//cpu:arm64": [
+                "@arm64_debian11_bash",
+                "@arm64_debian11_libtinfo6",
+                "@arm64_debian11_coreutils",
+                "@arm64_debian11_libacl1",
+                "@arm64_debian11_libattr1",
+                "@arm64_debian11_libselinux",
+                "@arm64_debian11_libpcre2",
+            ],
         }) + [
             ":sh_symlink_tar",
             ":binary_tar",
         ],
         labels = {
-          "org.opencontainers.image.source": "https://github.com/prysmaticlabs/prysm",
+            "org.opencontainers.image.source": "https://github.com/prysmaticlabs/prysm",
         },
         tags = tags,
     )
@@ -90,4 +90,22 @@ def prysm_image_upload(
         name = "oci_image_tarball",
         image = ":oci_image",
         repo_tags = [repository+":latest"],
+    )
+
+    # Single-arch linux image for the Kurtosis e2e harness.
+    multi_arch(
+        name = "oci_multiarch_e2e",
+        image = ":oci_image",
+        platforms = select({
+            "@platforms//cpu:x86_64": ["@io_bazel_rules_go//go/toolchain:linux_amd64_cgo"],
+            "@platforms//cpu:arm64": ["@io_bazel_rules_go//go/toolchain:linux_arm64_cgo"],
+        }),
+        tags = tags,
+    )
+
+    oci_tarball(
+        name = "oci_image_tarball_e2e",
+        image = ":oci_multiarch_e2e",
+        repo_tags = [repository+":latest"],
+        visibility = ["//visibility:public"],
     )

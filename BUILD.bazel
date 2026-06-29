@@ -238,7 +238,8 @@ nogo(
         "@org_golang_x_tools//go/analysis/passes/httpresponse:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/ifaceassert:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/inspect:go_default_library",
-        "@org_golang_x_tools//go/analysis/passes/loopclosure:go_default_library",
+        # loopclosure disabled: obsolete since Go 1.22 made loop variables per-iteration.
+        #"@org_golang_x_tools//go/analysis/passes/loopclosure:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/nilfunc:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/nilness:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/pkgfact:go_default_library",

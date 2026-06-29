@@ -1,0 +1,107 @@
+# Check post-genesis deposits from transaction submission through activation.
+#
+# Replaces those evaluators from legacy E2E & legacy testDepositsAndTx:
+# - ProcessesDepositsInBlocks
+# - ActivatesDepositedValidators
+# - DepositedValidatorsAreActive
+
+id: deposits
+name: "Deposits are included and activated"
+timeout: 30m
+
+config:
+  walletPrivkey: ""
+  # TODO: Hard-coded deposit contract address. Can we do better?
+  depositContract: "0x4242424242424242424242424242424242424242"
+  depositCount: 2
+  depositAmount: 32
+  depositPerSlot: 2
+  depositPendingLimit: 2
+  depositWalletSeed: "prysm-kurtosis-deposits"
+
+tasks:
+  - name: check_clients_are_healthy
+    title: "Check if at least one client is ready"
+    timeout: 5m
+    config:
+      minClientCount: 1
+
+  - name: get_random_mnemonic
+    id: deposit_mnemonic
+    title: "Generate mnemonic for deposited validators"
+
+  - name: generate_child_wallet
+    id: deposit_wallet
+    title: "Generate wallet for deposits"
+    timeout: 2m
+    configVars:
+      privateKey: "walletPrivkey"
+      walletSeed: "depositWalletSeed"
+      prefundAmount: "| (((.depositCount * .depositAmount + 1) * 1000000000000000000) | tostring)"
+      prefundMinBalance: "| (((.depositCount * .depositAmount + 1) * 1000000000000000000) | tostring)"
+
+  # Let the genesis validator snapshot checks start before new validators exist.
+  - name: check_consensus_slot_range
+    title: "Wait before submitting deposits"
+    timeout: 3m
+    config:
+      minEpochNumber: 1
+
+  - name: generate_deposits
+    id: deposit_batch
+    title: "Generate deposits and wait for inclusion"
+    timeout: 5m
+    configVars:
+      mnemonic: "tasks.deposit_mnemonic.outputs.mnemonic"
+      walletPrivkey: "tasks.deposit_wallet.outputs.childWallet.privkey"
+      depositContract: "depositContract"
+      depositAmount: "depositAmount"
+      limitTotal: "depositCount"
+      limitPerSlot: "depositPerSlot"
+      limitPending: "depositPendingLimit"
+    config:
+      awaitReceipt: true
+      failOnReject: true
+      awaitInclusion: true
+
+  - name: run_task_matrix
+    title: "Wait for deposited validators to enter the registry"
+    timeout: 10m
+    configVars:
+      matrixValues: "tasks.deposit_batch.outputs.validatorPubkeys"
+    config:
+      runConcurrent: true
+      matrixVar: "validatorPubkey"
+      task:
+        name: check_consensus_validator_status
+        title: "Deposited validator ${validatorPubkey} registered"
+        configVars:
+          validatorPubKey: "validatorPubkey"
+        config:
+          validatorStatus:
+            - pending_initialized
+            - pending_queued
+            - active_ongoing
+          # 32 ETH.
+          minValidatorBalance: 32000000000
+          withdrawalCredsPrefix: "0x00"
+
+  - name: run_task_matrix
+    title: "Wait for deposited validators to become active"
+    timeout: 20m
+    configVars:
+      matrixValues: "tasks.deposit_batch.outputs.validatorPubkeys"
+    config:
+      runConcurrent: true
+      matrixVar: "validatorPubkey"
+      task:
+        name: check_consensus_validator_status
+        title: "Deposited validator ${validatorPubkey} active"
+        configVars:
+          validatorPubKey: "validatorPubkey"
+        config:
+          validatorStatus:
+            - active_ongoing
+          # 32 ETH.
+          minValidatorBalance: 32000000000
+          withdrawalCredsPrefix: "0x00"

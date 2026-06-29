@@ -1,0 +1,83 @@
+# Check voluntary exits from submission through processing, including validator status checks.
+#
+# Replaces those evaluators from legacy E2E:
+# - ProposeVoluntaryExit
+# - ValidatorsHaveExited
+
+id: voluntary-exits
+name: "Voluntary exits are scheduled and processed"
+timeout: 30m
+
+config:
+  # NOTE: This is a default Kurtosis wallet mnemonic as "preregistered_validator_keys_mnemonic".
+  validatorMnemonic: "giant issue aisle success illegal bike spike question tent bar rely arctic volcano long crawl hungry vocal artwork sniff fantasy very lucky have athlete"
+  exitValidatorStartIndex: 0
+  exitValidatorCount: 2
+
+tasks:
+  - name: check_clients_are_healthy
+    title: "Check if at least one client is ready"
+    timeout: 5m
+    config:
+      minClientCount: 1
+
+  - name: get_consensus_specs
+    id: specs
+    title: "Get consensus specs"
+
+  - name: check_consensus_slot_range
+    title: "Wait until genesis validators are exitable"
+    timeout: 10m
+    configVars:
+      minEpochNumber: "| (.tasks.specs.outputs.specs.SHARD_COMMITTEE_PERIOD | tonumber) + 1"
+
+  - name: generate_exits
+    id: exit_batch
+    title: "Generate voluntary exits"
+    timeout: 10m
+    configVars:
+      mnemonic: "validatorMnemonic"
+      startIndex: "exitValidatorStartIndex"
+      indexCount: "exitValidatorCount"
+      limitTotal: "exitValidatorCount"
+    config:
+      exitEpoch: -1
+
+  - name: run_task_matrix
+    title: "Wait for exited validators to be scheduled"
+    timeout: 20m
+    configVars:
+      matrixValues: "tasks.exit_batch.outputs.exitedValidators"
+    config:
+      runConcurrent: true
+      matrixVar: "validatorIndex"
+      task:
+        name: check_consensus_validator_status
+        title: "Validator ${validatorIndex} exiting"
+        configVars:
+          validatorIndex: "validatorIndex"
+        config:
+          validatorStatus:
+            - active_exiting
+            - exited_unslashed
+            - withdrawal_possible
+            - withdrawal_done
+  
+  - name: run_task_matrix
+    title: "Wait for exited validators"
+    timeout: 20m
+    configVars:
+      matrixValues: "tasks.exit_batch.outputs.exitedValidators"
+    config:
+      runConcurrent: true
+      matrixVar: "validatorIndex"
+      task:
+        name: check_consensus_validator_status
+        title: "Validator ${validatorIndex} exited"
+        configVars:
+          validatorIndex: "validatorIndex"
+        config:
+          validatorStatus:
+            - exited_unslashed
+            - withdrawal_possible
+            - withdrawal_done

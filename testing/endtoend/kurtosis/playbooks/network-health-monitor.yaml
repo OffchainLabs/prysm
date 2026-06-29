@@ -1,0 +1,79 @@
+# Basic stability and health monitoring of the network.
+# This playbook is intended to be run continuously in the background while other tests are running.
+
+# Replaces those evaluators from legacy E2E:
+# - HealthzCheck
+# - FinishedSyncing
+# - AllNodesHaveSameHead
+# - ValidatorsParticipatingAtEpoch
+# - FinalizationOccurs
+
+id: network-health-monitor
+name: "Network health monitoring"
+timeout: 30m
+
+config:
+  # NOTE: This assumes the main nodes are the 1st and 2nd participants in Kurtosis network config file.
+  mainNodePattern: "^[12]-geth-prysm$"
+
+tasks:
+- name: run_tasks_concurrent
+  title: "Monitor network health"
+  config:
+    tasks:
+      - name: check_clients_are_healthy
+        title: "Client health"
+        timeout: 30m
+        config:
+          clientPattern: "mainNodePattern"
+          continueOnPass: true
+          failOnCheckMiss: true
+      
+      - name: check_consensus_sync_status
+        title: "CL Sync status"
+        timeout: 30m
+        config:
+          clientPattern: "mainNodePattern"
+          continueOnPass: true
+
+      - name: check_execution_sync_status
+        title: "EL Sync status"
+        timeout: 30m
+        config:
+          clientPattern: "mainNodePattern"
+          continueOnPass: true
+
+      - name: check_consensus_finality
+        title: "Finality check"
+        timeout: 30m
+        config:
+          maxUnfinalizedEpochs: 4
+          failOnCheckMiss: true
+          continueOnPass: true
+
+      - name: check_consensus_attestation_stats
+        title: "Attestation quality"
+        timeout: 30m
+        config:
+          minTargetPercent: 98
+          minHeadPercent: 80
+          failOnCheckMiss: true
+          continueOnPass: true
+
+      - name: check_consensus_forks
+        title: "Fork monitoring"
+        timeout: 30m
+        config:
+          maxForkDistance: 2
+          # NOTE: This is intentional because of late-joining nodes.
+          # If we DO NOT allow for 1 extra fork group, the monitoring test fails
+          # because the late-joining nodes will still report their head as zero root.
+          maxForkCount: 1
+          continueOnPass: true
+
+      - name: check_consensus_reorgs
+        title: "Reorg monitoring"
+        timeout: 30m
+        config:
+          maxReorgsPerEpoch: 2
+          continueOnPass: true

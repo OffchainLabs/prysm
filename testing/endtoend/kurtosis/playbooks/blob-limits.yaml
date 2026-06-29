@@ -1,0 +1,73 @@
+# Check that blocks exercise the increased BPO blob capacity after Fulu.
+
+# Replaces those evaluators from legacy E2E:
+# - BlobLimitsRespected
+
+id: blob-limits
+name: "Blob BPO limits respected"
+timeout: 30m
+
+config:
+  walletPrivkey: ""
+  blobWalletSeed: "prysm-kurtosis-blob-limits"
+
+tasks:
+  - name: check_clients_are_healthy
+    title: "Wait for a healthy client"
+    timeout: 5m
+    config:
+      minClientCount: 1
+
+  - name: get_consensus_specs
+    id: specs
+    title: "Get consensus specs"
+
+  - name: check_consensus_slot_range
+    title: "Wait until the highest BPO blob tier is active"
+    # Skip the whole check on networks without a blob-schedule increase.
+    if: &has_bpo "| ([(.tasks.specs.outputs.specs.BLOB_SCHEDULE // [])[].MAX_BLOBS_PER_BLOCK | tonumber] | unique | length) > 1"
+    timeout: 15m
+    configVars:
+      minEpochNumber: "| [.tasks.specs.outputs.specs.BLOB_SCHEDULE[]] | max_by(.MAX_BLOBS_PER_BLOCK | tonumber) | .EPOCH | tonumber"
+
+  - name: generate_child_wallet
+    id: blob_wallet
+    title: "Generate funded wallet for blob transactions"
+    if: *has_bpo
+    timeout: 2m
+    configVars:
+      privateKey: "walletPrivkey"
+      walletSeed: "blobWalletSeed"
+      prefundAmount: "| ((1000 * 1000000000000000000) | tostring)"
+      prefundMinBalance: "| ((100 * 1000000000000000000) | tostring)"
+
+  - name: run_task_background
+    title: "Drive large blobs, then verify BPO capacity is exercised"
+    if: *has_bpo
+    config:
+      onBackgroundComplete: fail
+      backgroundTask:
+        name: generate_blob_transactions
+        title: "Generate large blob transactions"
+        configVars:
+          privateKey: "tasks.blob_wallet.outputs.childWallet.privkey"
+        config:
+          childWallets: 50
+          limitPending: 10
+          limitPerBlock: 5
+          limitTotal: 0
+          blobSidecars: 6
+          randomTarget: true
+          # Outbid the spamoor blob spammer (blob_fee 20 gwei).
+          blobFeeCap: 1000000000000 # 1000 gwei
+          feeCap: 1000000000000 # 1000 gwei
+      foregroundTask:
+        name: check_consensus_block_proposals
+        title: "A block exceeds the previous BPO tier's blob limit"
+        timeout: 25m
+        configVars:
+          # second-highest distinct BLOB_SCHEDULE limit + 1
+          minBlobCount: "| [.tasks.specs.outputs.specs.BLOB_SCHEDULE[].MAX_BLOBS_PER_BLOCK | tonumber] | unique | (.[-2] // .[-1]) + 1"
+        config:
+          checkLookback: 32
+          blockCount: 1
