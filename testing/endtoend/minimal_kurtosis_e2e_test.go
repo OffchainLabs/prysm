@@ -26,7 +26,7 @@ const (
 	CHECKPOINT_SYNC_NODE_SERVICE = "cl-4-prysm-geth"
 )
 
-// TestEndToEnd_Kurtosis_MinimalConfig mirrors TestEndToEnd_MinimalConfig, but runs the test in a Kurtosis enclave instead of locally.
+// TestEndToEnd_Kurtosis_MinimalConfig runs the e2e test with the minimal config in a Kurtosis enclave.
 func TestEndToEnd_Kurtosis_MinimalConfig(t *testing.T) {
 	ctx := t.Context()
 
