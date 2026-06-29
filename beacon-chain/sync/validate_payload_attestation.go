@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
@@ -63,7 +64,13 @@ func (s *Service) validatePayloadAttestation(ctx context.Context, pid peer.ID, m
 	// [IGNORE] The message's block data.beacon_block_root has been seen (via gossip or non-gossip sources)
 	// (a client MAY queue attestation for processing once the block is retrieved. Note a client might want to request payload after).
 	if err := v.VerifyBlockRootSeen(s.cfg.chain.InForkchoice); err != nil {
-		// TODO: queue attestation
+		// Request the referenced block on demand so a missed block is recovered instead of dropped.
+		root := pa.BeaconBlockRoot()
+		go func() {
+			if reqErr := s.sendBatchRootRequest(context.Background(), [][32]byte{root}, rand.NewGenerator()); reqErr != nil {
+				log.WithError(reqErr).Debug("Failed to request block for pending payload attestation")
+			}
+		}()
 		return pubsub.ValidationIgnore, err
 	}
 

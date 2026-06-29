@@ -71,9 +71,17 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
+	// Verify against head state only when it is the bid's parent and in the bid's epoch, otherwise ignore rather than reject.
+	parentBlockRoot := bid.ParentBlockRoot()
+	headRoot, err := s.cfg.chain.HeadRoot(ctx)
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	if bytesutil.ToBytes32(headRoot) != parentBlockRoot || slots.ToEpoch(st.Slot()) != slots.ToEpoch(bid.Slot()) {
+		return pubsub.ValidationIgnore, nil
+	}
 	// [IGNORE] matching SignedProposerPreferences seen, keyed on the proposer
 	// dep root anchored to bid.parent_block_root.
-	parentBlockRoot := bid.ParentBlockRoot()
 	priorEpoch, _ := slots.ToEpoch(bid.Slot()).SafeSub(1)
 	dependentRoot, err := s.cfg.chain.DependentRootForEpoch(parentBlockRoot, priorEpoch)
 	if err != nil {

@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/logging"
@@ -54,8 +55,19 @@ func (s *Service) validateDataColumnGloas(
 		if msg.Topic == nil || !strings.Contains(*msg.Topic+"/", expectedSubTopic) {
 			return blocks.VerifiedRODataColumn{}, errors.New("gloas data column on wrong subnet")
 		}
-		if err := s.queuePendingGloasColumn(roDataColumn, pid); err != nil {
+		created, err := s.queuePendingGloasColumn(roDataColumn, pid)
+		if err != nil {
 			return blocks.VerifiedRODataColumn{}, err
+		}
+		// Request the missing block once per root (on the first queued column) so the
+		// queued columns can be processed instead of orphaned and the forwarder penalized.
+		if created {
+			root := roDataColumn.BlockRoot()
+			go func() {
+				if reqErr := s.sendBatchRootRequest(context.Background(), [][fieldparams.RootLength]byte{root}, rand.NewGenerator()); reqErr != nil {
+					log.WithError(reqErr).WithFields(logging.DataColumnFields(roDataColumn)).Debug("Failed to request block for pending gloas data column")
+				}
+			}()
 		}
 		return blocks.VerifiedRODataColumn{}, ignoreValidation(errors.New("gloas data column block not yet seen"))
 	}
@@ -127,23 +139,24 @@ func (s *Service) setSeenDataColumnRootIndex(root [fieldparams.RootLength]byte, 
 }
 
 // queuePendingGloasColumn returns a non-nil error for malformed sidecars (the caller propagates it as ValidationReject).
-func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID) error {
+// The bool is true when this is the first column queued for the block root, signalling the caller to request the block.
+func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID) (bool, error) {
 	dc := roCol.DataColumnSidecarGloas()
 	if dc == nil {
-		return errors.New("nil gloas data column sidecar")
+		return false, errors.New("nil gloas data column sidecar")
 	}
 	cells := len(dc.Column)
 	if cells == 0 || len(dc.KzgProofs) != cells {
-		return errors.Errorf("gloas data column length mismatch: cells=%d proofs=%d", cells, len(dc.KzgProofs))
+		return false, errors.Errorf("gloas data column length mismatch: cells=%d proofs=%d", cells, len(dc.KzgProofs))
 	}
 	cfg := params.BeaconConfig()
 	currentEpoch := slots.ToEpoch(s.cfg.clock.CurrentSlot())
 	if cells > max(cfg.MaxBlobsPerBlockAtEpoch(currentEpoch), cfg.MaxBlobsPerBlockAtEpoch(currentEpoch+1)) {
-		return errors.Errorf("gloas data column cell count %d exceeds network blob limit", cells)
+		return false, errors.Errorf("gloas data column cell count %d exceeds network blob limit", cells)
 	}
 	idx := roCol.Index()
 	if idx >= fieldparams.NumberOfColumns {
-		return errors.Errorf("gloas data column index %d out of range", idx)
+		return false, errors.Errorf("gloas data column index %d out of range", idx)
 	}
 
 	root := roCol.BlockRoot()
@@ -153,19 +166,21 @@ func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID
 	defer s.pendingGloasColumnsLock.Unlock()
 
 	entry := s.pendingGloasColumns[root]
+	created := false
 	if entry == nil {
 		if len(s.pendingGloasColumns) >= maxPendingGloasRoots {
-			return nil
+			return false, nil
 		}
 		entry = &pendingGloasEntry{slot: slot}
 		s.pendingGloasColumns[root] = entry
+		created = true
 	}
 
 	if entry.columns[idx] != nil {
-		return nil
+		return created, nil
 	}
 	entry.columns[idx] = &pendingColumnEntry{sidecar: dc, peer: pid}
-	return nil
+	return created, nil
 }
 
 func (s *Service) processPendingGloasColumns(ctx context.Context, root [fieldparams.RootLength]byte, blk interfaces.ReadOnlySignedBeaconBlock) {
