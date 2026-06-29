@@ -802,7 +802,19 @@ func (s *Store) dependentRoot(epoch primitives.Epoch) ([32]byte, error) {
 	if s.headNode != nil {
 		headRoot = s.headNode.root
 	}
-	return s.dependentRootForEpoch(headRoot, epoch)
+	root, err := s.dependentRootForEpoch(headRoot, epoch)
+	if errors.Is(err, ErrNilNode) {
+		// The head, or an ancestor on the way back to the requested epoch, is no
+		// longer in forkchoice because it was pruned past the finalized checkpoint.
+		// This happens when DependentRoot is queried for an epoch at/before
+		// finalization -- e.g. the ePBS head_v2 payload-update event firing across
+		// a finalization boundary, where the head slot comes from a separately
+		// cached head. The dependent root for a finalized epoch is fixed, so fall
+		// back to the finalized dependent root instead of returning ErrNilNode,
+		// which would otherwise silently drop the caller's head event.
+		return s.finalizedDependentRoot, nil
+	}
+	return root, err
 }
 
 func (s *Store) dependentRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {

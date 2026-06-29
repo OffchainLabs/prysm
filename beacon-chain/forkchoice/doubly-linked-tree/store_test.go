@@ -602,6 +602,28 @@ func TestStore_TargetRootForEpoch(t *testing.T) {
 	require.Equal(t, blk1.Root(), dependent)
 }
 
+func TestStore_DependentRoot_PrunedHeadFallsBackToFinalized(t *testing.T) {
+	ctx := t.Context()
+	f := setup(1, 1)
+	// Insert one block so the store is initialised with a real node.
+	state, blk, err := prepareForkchoiceState(ctx, params.BeaconConfig().SlotsPerEpoch, [32]byte{'a'}, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, state, blk))
+
+	s := f.store
+	s.finalizedDependentRoot = [32]byte{'x'}
+	// Reproduce the prune / stale-head race: the head references a node that is no
+	// longer in forkchoice (pruned past the finalized checkpoint). Before the fix,
+	// dependentRoot returned ErrNilNode here, which the ePBS head_v2 payload-update
+	// path surfaced as "Could not notify event feed of head_v2 payload update" and
+	// silently dropped the event. It must instead fall back to the finalized
+	// dependent root.
+	s.headNode = &Node{root: [32]byte{'z'}, slot: 5 * params.BeaconConfig().SlotsPerEpoch}
+	dependent, err := f.DependentRoot(5)
+	require.NoError(t, err)
+	require.Equal(t, [32]byte{'x'}, dependent)
+}
+
 func TestStore_DependentRootForEpoch(t *testing.T) {
 	ctx := t.Context()
 	f := setup(1, 1)
