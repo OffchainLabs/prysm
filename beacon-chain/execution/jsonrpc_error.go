@@ -8,6 +8,29 @@ import (
 	"github.com/pkg/errors"
 )
 
+var (
+	// ErrParse corresponds to JSON-RPC code -32700.
+	ErrParse = errors.New("invalid JSON was received by the server")
+	// ErrInvalidRequest corresponds to JSON-RPC code -32600.
+	ErrInvalidRequest = errors.New("JSON sent is not valid request object")
+	// ErrMethodNotFound corresponds to JSON-RPC code -32601.
+	ErrMethodNotFound = errors.New("method not found")
+	// ErrInvalidParams corresponds to JSON-RPC code -32602.
+	ErrInvalidParams = errors.New("invalid method parameter(s)")
+	// ErrInternal corresponds to JSON-RPC code -32603.
+	ErrInternal = errors.New("internal JSON-RPC error")
+	// ErrServer corresponds to JSON-RPC code -32000.
+	ErrServer = errors.New("client error while processing request")
+	// ErrUnknownPayload corresponds to JSON-RPC code -38001.
+	ErrUnknownPayload = errors.New("payload does not exist or is not available")
+	// ErrInvalidForkchoiceState corresponds to JSON-RPC code -38002.
+	ErrInvalidForkchoiceState = errors.New("invalid forkchoice state")
+	// ErrInvalidPayloadAttributes corresponds to JSON-RPC code -38003.
+	ErrInvalidPayloadAttributes = errors.New("payload attributes are invalid / inconsistent")
+	// ErrRequestTooLarge when the request is too large
+	ErrRequestTooLarge = errors.New("request too large")
+)
+
 // Handles errors received from the RPC server according to the specification.
 func handleRPCError(err error) error {
 	if err == nil {
