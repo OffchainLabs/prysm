@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strings"
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -723,6 +724,51 @@ func TestExecutionPayloadBody_MarshalUnmarshalJSON(t *testing.T) {
 	err = json.Unmarshal(enc, res)
 	require.NoError(t, err)
 	require.DeepEqual(t, pBody, res)
+}
+
+func TestExecutionBundleGloas_UnmarshalJSONRejectsEmptyBlockAccessList(t *testing.T) {
+	hash := common.BytesToHash([]byte("hash"))
+	addr := common.BytesToAddress([]byte("feeRecipient"))
+	logsBloom := hexutil.Bytes(bytesutil.PadTo([]byte("logs"), fieldparams.LogsBloomLength))
+	slotNumber := hexutil.Uint64(1)
+	payload := &enginev1.GetPayloadV6ResponseJson{
+		ExecutionPayload: &enginev1.ExecutionPayloadGloasJSON{
+			ParentHash:      &hash,
+			FeeRecipient:    &addr,
+			StateRoot:       &hash,
+			ReceiptsRoot:    &hash,
+			LogsBloom:       &logsBloom,
+			PrevRandao:      &hash,
+			BlockNumber:     (*hexutil.Uint64)(&slotNumber),
+			GasLimit:        (*hexutil.Uint64)(&slotNumber),
+			GasUsed:         (*hexutil.Uint64)(&slotNumber),
+			Timestamp:       (*hexutil.Uint64)(&slotNumber),
+			ExtraData:       hexutil.Bytes{},
+			BaseFeePerGas:   "0x1",
+			BlobGasUsed:     (*hexutil.Uint64)(&slotNumber),
+			ExcessBlobGas:   (*hexutil.Uint64)(&slotNumber),
+			BlockHash:       &hash,
+			Transactions:    []hexutil.Bytes{},
+			Withdrawals:     []*enginev1.Withdrawal{},
+			BlockAccessList: new(hexutil.Bytes),
+			SlotNumber:      (*hexutil.Uint64)(&slotNumber),
+		},
+		BlockValue:        "0x0",
+		ExecutionRequests: []hexutil.Bytes{},
+	}
+	enc, err := json.Marshal(payload)
+	require.NoError(t, err)
+
+	res := &enginev1.ExecutionBundleGloas{}
+	err = json.Unmarshal(enc, res)
+	require.ErrorContains(t, "blockAccessList cannot be empty", err)
+}
+
+func TestExecutionBlock_UnmarshalJSONRejectsEmptyBlockAccessList(t *testing.T) {
+	block := strings.Replace(blockNoTxJson, `,"transactionsRoot"`, `,"blockAccessList":"0x","transactionsRoot"`, 1)
+	res := &enginev1.ExecutionBlock{}
+	err := json.Unmarshal([]byte(block), res)
+	require.ErrorContains(t, "blockAccessList cannot be empty", err)
 }
 
 func TestExecutionBlock_MarshalUnmarshalJSON_MainnetBlock(t *testing.T) {

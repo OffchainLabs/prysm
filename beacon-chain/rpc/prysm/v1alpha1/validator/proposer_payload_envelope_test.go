@@ -24,15 +24,16 @@ func testGloasBlock(t *testing.T) (*consensusblocks.GetPayloadResponse, interfac
 	t.Helper()
 
 	payload := &enginev1.ExecutionPayloadGloas{
-		ParentHash:    make([]byte, 32),
-		FeeRecipient:  make([]byte, 20),
-		StateRoot:     make([]byte, 32),
-		ReceiptsRoot:  make([]byte, 32),
-		LogsBloom:     make([]byte, 256),
-		PrevRandao:    make([]byte, 32),
-		BaseFeePerGas: make([]byte, 32),
-		BlockHash:     make([]byte, 32),
-		ExtraData:     make([]byte, 0),
+		ParentHash:      make([]byte, 32),
+		FeeRecipient:    make([]byte, 20),
+		StateRoot:       make([]byte, 32),
+		ReceiptsRoot:    make([]byte, 32),
+		LogsBloom:       make([]byte, 256),
+		PrevRandao:      make([]byte, 32),
+		BaseFeePerGas:   make([]byte, 32),
+		BlockHash:       make([]byte, 32),
+		ExtraData:       make([]byte, 0),
+		BlockAccessList: []byte{0xc0},
 	}
 	ed, err := consensusblocks.WrappedExecutionPayloadGloas(payload)
 	require.NoError(t, err)
@@ -61,17 +62,27 @@ func TestStoreExecutionPayloadEnvelope(t *testing.T) {
 	require.Equal(t, sBlk.Block().Slot(), contents.Envelope.Payload.SlotNumber)
 }
 
+func TestStoreExecutionPayloadEnvelope_RejectsEmptyBlockAccessList(t *testing.T) {
+	local, sBlk := testGloasBlock(t)
+	local.ExecutionData.Proto().(*enginev1.ExecutionPayloadGloas).BlockAccessList = nil
+
+	vs := &Server{ExecutionPayloadEnvelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
+	err := vs.storeExecutionPayloadEnvelope(sBlk, local)
+	require.ErrorContains(t, "block access list cannot be empty", err)
+}
+
 func TestExtractExecutionPayloadGloas(t *testing.T) {
 	payload := &enginev1.ExecutionPayloadGloas{
-		ParentHash:    make([]byte, 32),
-		FeeRecipient:  make([]byte, 20),
-		StateRoot:     make([]byte, 32),
-		ReceiptsRoot:  make([]byte, 32),
-		LogsBloom:     make([]byte, 256),
-		PrevRandao:    make([]byte, 32),
-		BaseFeePerGas: make([]byte, 32),
-		BlockHash:     make([]byte, 32),
-		ExtraData:     make([]byte, 0),
+		ParentHash:      make([]byte, 32),
+		FeeRecipient:    make([]byte, 20),
+		StateRoot:       make([]byte, 32),
+		ReceiptsRoot:    make([]byte, 32),
+		LogsBloom:       make([]byte, 256),
+		PrevRandao:      make([]byte, 32),
+		BaseFeePerGas:   make([]byte, 32),
+		BlockHash:       make([]byte, 32),
+		ExtraData:       make([]byte, 0),
+		BlockAccessList: []byte{0xc0},
 	}
 	ed, err := consensusblocks.WrappedExecutionPayloadGloas(payload)
 	require.NoError(t, err)
@@ -183,16 +194,17 @@ func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
 	req := &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
 			Payload: &enginev1.ExecutionPayloadGloas{
-				ParentHash:    make([]byte, 32),
-				FeeRecipient:  make([]byte, 20),
-				StateRoot:     make([]byte, 32),
-				ReceiptsRoot:  make([]byte, 32),
-				LogsBloom:     make([]byte, 256),
-				PrevRandao:    make([]byte, 32),
-				BaseFeePerGas: make([]byte, 32),
-				BlockHash:     make([]byte, 32),
-				ExtraData:     make([]byte, 0),
-				SlotNumber:    1,
+				ParentHash:      make([]byte, 32),
+				FeeRecipient:    make([]byte, 20),
+				StateRoot:       make([]byte, 32),
+				ReceiptsRoot:    make([]byte, 32),
+				LogsBloom:       make([]byte, 256),
+				PrevRandao:      make([]byte, 32),
+				BaseFeePerGas:   make([]byte, 32),
+				BlockHash:       make([]byte, 32),
+				ExtraData:       make([]byte, 0),
+				BlockAccessList: []byte{0xc0},
+				SlotNumber:      1,
 			},
 			ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 			BuilderIndex:          0,
@@ -208,6 +220,21 @@ func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
 	require.Equal(t, true, broadcaster.BroadcastCalled.Load())
 	require.Equal(t, 1, len(broadcaster.BroadcastMessages))
 	require.Equal(t, 1, receiver.calls)
+}
+
+func TestPublishExecutionPayloadEnvelope_RejectsEmptyBlockAccessList(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	vs := &Server{}
+	_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.SignedExecutionPayloadEnvelope{
+		Message: &ethpb.ExecutionPayloadEnvelope{
+			Payload: &enginev1.ExecutionPayloadGloas{SlotNumber: 1},
+		},
+	})
+	require.ErrorContains(t, "block access list cannot be empty", err)
 }
 
 func TestPublishExecutionPayloadEnvelope_ImportFailureIsAborted(t *testing.T) {
@@ -226,16 +253,17 @@ func TestPublishExecutionPayloadEnvelope_ImportFailureIsAborted(t *testing.T) {
 	req := &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
 			Payload: &enginev1.ExecutionPayloadGloas{
-				ParentHash:    make([]byte, 32),
-				FeeRecipient:  make([]byte, 20),
-				StateRoot:     make([]byte, 32),
-				ReceiptsRoot:  make([]byte, 32),
-				LogsBloom:     make([]byte, 256),
-				PrevRandao:    make([]byte, 32),
-				BaseFeePerGas: make([]byte, 32),
-				BlockHash:     make([]byte, 32),
-				ExtraData:     make([]byte, 0),
-				SlotNumber:    1,
+				ParentHash:      make([]byte, 32),
+				FeeRecipient:    make([]byte, 20),
+				StateRoot:       make([]byte, 32),
+				ReceiptsRoot:    make([]byte, 32),
+				LogsBloom:       make([]byte, 256),
+				PrevRandao:      make([]byte, 32),
+				BaseFeePerGas:   make([]byte, 32),
+				BlockHash:       make([]byte, 32),
+				ExtraData:       make([]byte, 0),
+				BlockAccessList: []byte{0xc0},
+				SlotNumber:      1,
 			},
 			ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 			BeaconBlockRoot:       make([]byte, 32),

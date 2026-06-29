@@ -36,6 +36,9 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 	}
 
 	payload := extractExecutionPayloadGloas(local)
+	if err := validateExecutionPayloadGloas(payload); err != nil {
+		return err
+	}
 
 	parentRoot := sBlk.Block().ParentRoot()
 	envelope := &ethpb.ExecutionPayloadEnvelope{
@@ -63,6 +66,16 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 		Envelope:    envelope,
 		DataColumns: roSidecars,
 	})
+	return nil
+}
+
+func validateExecutionPayloadGloas(payload *enginev1.ExecutionPayloadGloas) error {
+	if payload == nil {
+		return errors.New("execution payload is nil")
+	}
+	if len(payload.BlockAccessList) == 0 {
+		return errors.New("execution payload block access list cannot be empty")
+	}
 	return nil
 }
 
@@ -127,6 +140,9 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	if slots.ToEpoch(envSlot) < params.BeaconConfig().GloasForkEpoch {
 		return nil, status.Errorf(codes.InvalidArgument,
 			"execution payload envelopes are not supported before Gloas fork (slot %d)", envSlot)
+	}
+	if err := validateExecutionPayloadGloas(req.Message.Payload); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
 	beaconBlockRoot := bytesutil.ToBytes32(req.Message.BeaconBlockRoot)
