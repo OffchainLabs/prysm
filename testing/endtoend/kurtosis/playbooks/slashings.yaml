@@ -1,0 +1,80 @@
+# Check attester and proposer slashings are gossiped, included, and that the
+# offending validators are marked slashed.
+#
+# Replaces those evaluators from legacy E2E:
+# - InjectDoubleVoteOnEpoch  -> generate_slashings (attester)
+# - InjectDoubleBlockOnEpoch -> generate_slashings (proposer)
+# - ValidatorsSlashedAfterEpoch -> check_consensus_validator_status (*_slashed)
+
+id: slashings
+name: "Slashings are included and validators are slashed"
+timeout: 30m
+
+config:
+  # NOTE: This is a default Kurtosis wallet mnemonic as "preregistered_validator_keys_mnemonic".
+  validatorMnemonic: "giant issue aisle success illegal bike spike question tent bar rely arctic volcano long crawl hungry vocal artwork sniff fantasy very lucky have athlete"
+  # Indices 0-3 are claimed by voluntary-exits.yaml and withdrawals.yaml.
+  attesterSlashingStartIndex: 4
+  attesterSlashingCount: 2
+  proposerSlashingStartIndex: 6
+  proposerSlashingCount: 1
+
+tasks:
+  - name: check_clients_are_healthy
+    title: "Check if at least one client is ready"
+    timeout: 5m
+    config:
+      minClientCount: 1
+
+  # Surround-vote attester slashings require epoch >= 4 (need prior source/target epochs).
+  - name: check_consensus_slot_range
+    title: "Wait until attester slashings are valid"
+    timeout: 10m
+    config:
+      minEpochNumber: 4
+
+  - name: generate_slashings
+    id: attester_slashings
+    title: "Generate attester slashings and wait for inclusion"
+    timeout: 10m
+    configVars:
+      mnemonic: "validatorMnemonic"
+      startIndex: "attesterSlashingStartIndex"
+      indexCount: "attesterSlashingCount"
+      limitTotal: "attesterSlashingCount"
+    config:
+      slashingType: "attester"
+      awaitInclusion: true
+
+  - name: generate_slashings
+    id: proposer_slashings
+    title: "Generate proposer slashing and wait for inclusion"
+    timeout: 10m
+    configVars:
+      mnemonic: "validatorMnemonic"
+      startIndex: "proposerSlashingStartIndex"
+      indexCount: "proposerSlashingCount"
+      limitTotal: "proposerSlashingCount"
+    config:
+      slashingType: "proposer"
+      awaitInclusion: true
+
+  - name: run_task_matrix
+    title: "Assert slashed validators are marked slashed"
+    timeout: 10m
+    configVars:
+      matrixValues: "| .tasks.attester_slashings.outputs.slashedValidators + .tasks.proposer_slashings.outputs.slashedValidators"
+    config:
+      runConcurrent: true
+      matrixVar: "validatorIndex"
+      task:
+        name: check_consensus_validator_status
+        title: "Validator ${validatorIndex} slashed"
+        configVars:
+          validatorIndex: "validatorIndex"
+        config:
+          validatorStatus:
+            - active_slashed
+            - exited_slashed
+            - withdrawal_possible
+            - withdrawal_done
