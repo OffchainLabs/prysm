@@ -424,6 +424,11 @@ func (s *Server) validateEnvelopeGossip(ctx context.Context, w http.ResponseWrit
 		httputil.HandleError(w, "gossip validation failed: envelope beacon block root is not canonical head", http.StatusBadRequest)
 		return false
 	}
+	// Read-only head state is the cheapest option (no copy). It only goes wrong on a long fork
+	// where head diverges from the envelope's validator index position — an edge case we don't
+	// support. Replaying the block's state would be correct but expensive; this endpoint is
+	// trusted (attackers can't reach it, worst case is a self-inflicted DoS), so the cheap path
+	// is fine for now. Worth revisiting — replay could also return a read-only state to skip the copy.
 	st, err := s.HeadFetcher.HeadStateReadOnly(ctx)
 	if err != nil {
 		httputil.HandleError(w, "could not get head state: "+err.Error(), http.StatusInternalServerError)
