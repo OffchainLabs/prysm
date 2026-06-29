@@ -40,7 +40,7 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 	parentRoot := sBlk.Block().ParentRoot()
 	envelope := &ethpb.ExecutionPayloadEnvelope{
 		Payload:               payload,
-		ExecutionRequests:     local.ExecutionRequests,
+		ExecutionRequests:     local.ExecutionRequestsGloas,
 		BuilderIndex:          params.BeaconConfig().BuilderIndexSelfBuild,
 		BeaconBlockRoot:       blockRoot[:],
 		ParentBeaconBlockRoot: parentRoot[:],
@@ -90,7 +90,7 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request cannot be nil")
 	}
-	span.SetAttributes(trace.Int64Attribute("slot", int64(req.Slot)))
+	span.SetAttributes(trace.StringAttribute("slot", fmt.Sprintf("%d", req.Slot)))
 
 	if slots.ToEpoch(req.Slot) < params.BeaconConfig().GloasForkEpoch {
 		return nil, status.Errorf(codes.InvalidArgument,
@@ -131,8 +131,8 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 
 	beaconBlockRoot := bytesutil.ToBytes32(req.Message.BeaconBlockRoot)
 	span.SetAttributes(
-		trace.Int64Attribute("slot", int64(envSlot)), // lint:ignore uintcast -- safe for tracing.
-		trace.Int64Attribute("builderIndex", int64(req.Message.BuilderIndex)),
+		trace.StringAttribute("slot", fmt.Sprintf("%d", envSlot)),
+		trace.StringAttribute("builderIndex", fmt.Sprintf("%d", req.Message.BuilderIndex)),
 		trace.StringAttribute("beaconBlockRoot", fmt.Sprintf("%#x", beaconBlockRoot[:8])),
 	)
 
@@ -148,7 +148,7 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	if contents, ok := vs.ExecutionPayloadEnvelopeCache.Contents(); ok &&
 		contents.Envelope.Payload.SlotNumber == envSlot && len(contents.DataColumns) > 0 {
 		log.WithField("columns", len(contents.DataColumns)).Debug("Broadcasting Gloas data column sidecars")
-		if err := vs.broadcastAndReceiveDataColumns(ctx, contents.DataColumns); err != nil {
+		if err := vs.broadcastAndReceiveDataColumns(ctx, contents.DataColumns, nil); err != nil {
 			log.WithError(err).Error("Failed to broadcast Gloas data column sidecars")
 		}
 	}
@@ -162,7 +162,8 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 		return nil, status.Errorf(codes.Internal, "could not wrap signed envelope: %v", err)
 	}
 	if err := vs.ExecutionPayloadEnvelopeReceiver.ReceiveExecutionPayloadEnvelope(ctx, roSigned); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to receive execution payload envelope: %v", err)
+		// Broadcast already succeeded; import failed. REST maps Aborted -> 202 (beacon-APIs #580).
+		return nil, status.Errorf(codes.Aborted, "failed to receive execution payload envelope: %v", err)
 	}
 
 	log.Info("Successfully published execution payload envelope")
@@ -174,7 +175,7 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 // in the block body based on the parent's execution payload envelope.
 func (vs *Server) setParentExecutionRequests(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, parentFull bool) error {
 	if head.Version() < version.Gloas {
-		return sBlk.SetParentExecutionRequests(&enginev1.ExecutionRequests{})
+		return sBlk.SetParentExecutionRequests(&enginev1.ExecutionRequestsGloas{})
 	}
 
 	parentRoot := sBlk.Block().ParentRoot()
@@ -183,7 +184,7 @@ func (vs *Server) setParentExecutionRequests(ctx context.Context, sBlk interface
 		return errors.Wrap(err, "could not get parent block slot")
 	}
 	if slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch || !parentFull {
-		return sBlk.SetParentExecutionRequests(&enginev1.ExecutionRequests{})
+		return sBlk.SetParentExecutionRequests(&enginev1.ExecutionRequestsGloas{})
 	}
 
 	// TODO: replace DB lookup with a single-entry cache (blockroot → envelope).

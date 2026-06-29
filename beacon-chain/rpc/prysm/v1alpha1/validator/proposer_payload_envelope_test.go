@@ -15,6 +15,9 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func testGloasBlock(t *testing.T) (*consensusblocks.GetPayloadResponse, interfaces.SignedBeaconBlock) {
@@ -35,9 +38,9 @@ func testGloasBlock(t *testing.T) (*consensusblocks.GetPayloadResponse, interfac
 	require.NoError(t, err)
 
 	local := &consensusblocks.GetPayloadResponse{
-		ExecutionData:     ed,
-		Bid:               big.NewInt(0),
-		ExecutionRequests: &enginev1.ExecutionRequests{},
+		ExecutionData:          ed,
+		Bid:                    big.NewInt(0),
+		ExecutionRequestsGloas: &enginev1.ExecutionRequestsGloas{},
 	}
 
 	sBlk, err := consensusblocks.NewSignedBeaconBlock(util.NewBeaconBlockGloas())
@@ -191,7 +194,7 @@ func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
 				ExtraData:     make([]byte, 0),
 				SlotNumber:    1,
 			},
-			ExecutionRequests:     &enginev1.ExecutionRequests{},
+			ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 			BuilderIndex:          0,
 			BeaconBlockRoot:       make([]byte, 32),
 			ParentBeaconBlockRoot: make([]byte, 32),
@@ -207,11 +210,53 @@ func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
 	require.Equal(t, 1, receiver.calls)
 }
 
+func TestPublishExecutionPayloadEnvelope_ImportFailureIsAborted(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	broadcaster := &mockp2p.MockBroadcaster{}
+	receiver := &mockExecutionPayloadEnvelopeReceiver{err: errors.New("import failed")}
+	vs := &Server{
+		P2P:                              broadcaster,
+		ExecutionPayloadEnvelopeReceiver: receiver,
+	}
+
+	req := &ethpb.SignedExecutionPayloadEnvelope{
+		Message: &ethpb.ExecutionPayloadEnvelope{
+			Payload: &enginev1.ExecutionPayloadGloas{
+				ParentHash:    make([]byte, 32),
+				FeeRecipient:  make([]byte, 20),
+				StateRoot:     make([]byte, 32),
+				ReceiptsRoot:  make([]byte, 32),
+				LogsBloom:     make([]byte, 256),
+				PrevRandao:    make([]byte, 32),
+				BaseFeePerGas: make([]byte, 32),
+				BlockHash:     make([]byte, 32),
+				ExtraData:     make([]byte, 0),
+				SlotNumber:    1,
+			},
+			ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
+			BeaconBlockRoot:       make([]byte, 32),
+			ParentBeaconBlockRoot: make([]byte, 32),
+		},
+		Signature: make([]byte, 96),
+	}
+
+	_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), req)
+	require.NotNil(t, err)
+	// Broadcast must have happened before the import failure (spec 202).
+	require.Equal(t, true, broadcaster.BroadcastCalled.Load())
+	require.Equal(t, codes.Aborted, status.Code(err))
+}
+
 type mockExecutionPayloadEnvelopeReceiver struct {
 	calls int
+	err   error
 }
 
 func (m *mockExecutionPayloadEnvelopeReceiver) ReceiveExecutionPayloadEnvelope(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
 	m.calls++
-	return nil
+	return m.err
 }

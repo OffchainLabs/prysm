@@ -47,10 +47,6 @@ func (s *Service) getFCUArgs(cfg *postBlockProcessConfig) (*fcuConfig, error) {
 		return nil, err
 	}
 
-	if !s.inRegularSync() {
-		return fcuArgs, nil
-	}
-
 	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:], true)
 	return fcuArgs, nil
 }
@@ -434,14 +430,31 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 		}
 		pendingNodes = append(pendingNodes, args)
 	}
+
+	// Handle the first payload insertion.
 	if len(pendingNodes) == 0 {
+		// even without pending blocks, the first payload may be pending.
+		s.insertFirstPayloadIfNeeded(signed.Block())
 		return nil
+	} else {
+		s.insertFirstPayloadIfNeeded(pendingNodes[len(pendingNodes)-1].Block.Block())
 	}
 	if root != s.ensureRootNotZeros(finalized.Root) && !s.cfg.ForkChoiceStore.HasNode(root) {
 		return ErrNotDescendantOfFinalized
 	}
+
 	slices.Reverse(pendingNodes)
 	return s.cfg.ForkChoiceStore.InsertChain(ctx, pendingNodes)
+}
+
+func (s *Service) insertFirstPayloadIfNeeded(b interfaces.ReadOnlyBeaconBlock) {
+	if b.Version() < version.Gloas {
+		return
+	}
+	parentRoot := b.ParentRoot()
+	if s.builtOnFullParentInForkchoice(b) && !s.cfg.ForkChoiceStore.HasFullNode(parentRoot) {
+		s.cfg.ForkChoiceStore.MarkFullNode(parentRoot)
+	}
 }
 
 // inserts finalized deposits into our finalized deposit trie, needs to be

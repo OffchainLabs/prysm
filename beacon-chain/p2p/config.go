@@ -26,6 +26,7 @@ const (
 // Config for the p2p service. These parameters are set from application level flags
 // to initialize the p2p service.
 type Config struct {
+	PartialDataColumns    bool
 	NoDiscovery           bool
 	EnableUPnP            bool
 	StaticPeerID          bool

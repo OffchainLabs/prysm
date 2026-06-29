@@ -143,6 +143,24 @@ func TestValidateExecutionPayloadBidGossip_ErrorPathsWithMock(t *testing.T) {
 			wantError: true,
 		},
 		{
+			name:      "builder wrong version",
+			verifier:  mockExecutionPayloadBidVerifier{errBuilderVersion: errors.New("not a payload builder")},
+			result:    pubsub.ValidationReject,
+			wantError: true,
+		},
+		{
+			name:      "too many blob commitments",
+			verifier:  mockExecutionPayloadBidVerifier{errBlobKzgCommitments: errors.New("too many commitments")},
+			result:    pubsub.ValidationReject,
+			wantError: true,
+		},
+		{
+			name:      "wrong prev randao",
+			verifier:  mockExecutionPayloadBidVerifier{errPrevRandao: errors.New("wrong prev randao")},
+			result:    pubsub.ValidationReject,
+			wantError: true,
+		},
+		{
 			name:      "slot not higher than parent",
 			verifier:  mockExecutionPayloadBidVerifier{errSlotHigherThanParent: errors.New("slot not higher than parent")},
 			result:    pubsub.ValidationReject,
@@ -288,6 +306,7 @@ func TestExecutionPayloadBidSubscriber_WrongMessage(t *testing.T) {
 
 func TestExecutionPayloadBidSubscriber_HappyPath(t *testing.T) {
 	s := &Service{
+		cfg:                             &config{operationNotifier: &mock.MockOperationNotifier{}},
 		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
 	}
 	signedBid := util.GenerateTestSignedExecutionPayloadBid(1)
@@ -310,8 +329,11 @@ func TestExecutionPayloadBidSubscriber_NilMessage(t *testing.T) {
 type mockExecutionPayloadBidVerifier struct {
 	errCurrentOrNextSlot    error
 	errBuilderActive        error
+	errBuilderVersion       error
 	errExecutionPayment     error
 	errFeeRecipientMismatch error
+	errBlobKzgCommitments   error
+	errPrevRandao           error
 	errGasLimitIncompatible error
 	errParentBlockRootSeen  error
 	errSlotHigherThanParent error
@@ -330,12 +352,24 @@ func (m *mockExecutionPayloadBidVerifier) VerifyBuilderActive(state.ReadOnlyBeac
 	return m.errBuilderActive
 }
 
+func (m *mockExecutionPayloadBidVerifier) VerifyBuilderVersion(state.ReadOnlyBeaconState) error {
+	return m.errBuilderVersion
+}
+
 func (m *mockExecutionPayloadBidVerifier) VerifyExecutionPaymentZero() error {
 	return m.errExecutionPayment
 }
 
 func (m *mockExecutionPayloadBidVerifier) VerifyFeeRecipientMatches([]byte) error {
 	return m.errFeeRecipientMismatch
+}
+
+func (m *mockExecutionPayloadBidVerifier) VerifyBlobKzgCommitmentsLimit() error {
+	return m.errBlobKzgCommitments
+}
+
+func (m *mockExecutionPayloadBidVerifier) VerifyPrevRandao(state.ReadOnlyBeaconState) error {
+	return m.errPrevRandao
 }
 
 func (m *mockExecutionPayloadBidVerifier) VerifyGasLimitTargetCompatible(uint64, uint64) error {

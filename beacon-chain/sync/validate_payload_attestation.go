@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -91,6 +92,9 @@ func (s *Service) validatePayloadAttestation(ctx context.Context, pid peer.ID, m
 	// [REJECT] The message's validator index is within the payload committee in get_ptc(state, data.slot).
 	// The state is the head state corresponding to processing the block up to the current slot.
 	if err := v.VerifyValidatorInPTC(ctx, st); err != nil {
+		if errors.Is(err, state.ErrNoPayloadCommitteeAvailable) {
+			return pubsub.ValidationIgnore, err
+		}
 		return pubsub.ValidationReject, err
 	}
 

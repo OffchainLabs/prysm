@@ -94,6 +94,17 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		if bid == nil || len(bid.BlobKzgCommitments()) == 0 {
 			return nil
 		}
+		// Initial sync fetches columns via range requests, so check availability synchronously rather than blocking on gossip; fail if missing.
+		if !s.inRegularSync() {
+			available, err := s.dataColumnsAvailableNow(availCtx, root, envelope.Slot())
+			if err != nil {
+				return errors.Wrap(err, "data availability check failed for payload envelope")
+			}
+			if !available {
+				return errors.Errorf("data columns unavailable for payload envelope slot %d root %#x", envelope.Slot(), root)
+			}
+			return nil
+		}
 		if err := s.areDataColumnsAvailable(availCtx, root, envelope.Slot()); err != nil {
 			return errors.Wrap(err, "data availability check failed for payload envelope")
 		}
@@ -190,17 +201,45 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 	}
 	blockHash := bytesutil.ToBytes32(payload.BlockHash())
 
+	var (
+		emitHeadV2    bool
+		headSlot      primitives.Slot
+		headStateRoot [32]byte
+		headVersion   int
+	)
+
 	s.headLock.Lock()
 	if s.head != nil && s.head.root == root {
+		wasFull := s.head.full
 		s.head.full = true
+
+		// Capture head details for head_v2 event.
+		if !wasFull {
+			headBlock := s.head.block.Block()
+			headSlot = headBlock.Slot()
+			headStateRoot = headBlock.StateRoot()
+			headVersion = s.head.block.Version()
+			emitHeadV2 = true
+		}
 	}
 	s.headLock.Unlock()
 
-	proposingSlot := s.CurrentSlot() + 1
-	attr := s.getPayloadAttribute(ctx, st, proposingSlot, headRoot[:], true)
+	// If the imported payload makes the current head's payload status full, emit a
+	// second head_v2 event for the empty->full transition.
+	if emitHeadV2 {
+		if err := s.notifyNewHeadV2Event(
+			ctx, headSlot, headStateRoot, root, headVersion,
+		); err != nil {
+			// Log the error but continue on (not returning error).
+			log.WithError(err).Error("Could not notify event feed of head_v2 payload update")
+		}
+	}
+
 	if !s.inRegularSync() {
 		return nil
 	}
+	proposingSlot := s.CurrentSlot() + 1
+	attr := s.getPayloadAttribute(ctx, st, proposingSlot, headRoot[:], true)
 	go func() {
 		pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)
 		if err != nil {
@@ -210,7 +249,8 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 		if !attr.IsEmpty() && pid != nil {
 			var pId [8]byte
 			copy(pId[:], pid[:])
-			s.cfg.PayloadIDCache.Set(proposingSlot, root, pId)
+			s.cfg.PayloadIDCache.Set(proposingSlot, root, true, pId)
+			s.firePayloadAttributesEventForHead(root, proposingSlot, attr)
 		}
 	}()
 	return nil
@@ -242,7 +282,7 @@ func (s *Service) callNewPayload(
 	payload interfaces.ExecutionData,
 	versionedHashes []common.Hash,
 	parentRoot common.Hash,
-	requests *enginev1.ExecutionRequests,
+	requests *enginev1.ExecutionRequestsGloas,
 	slot primitives.Slot,
 ) (bool, error) {
 	_, err := s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests)

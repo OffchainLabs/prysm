@@ -178,8 +178,8 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 			"nextSlot":  nextSlot,
 			"payloadID": fmt.Sprintf("%#x", bytesutil.Trunc(payloadID[:])),
 		}).Info("Forkchoice updated with payload attributes for proposal")
-		s.cfg.PayloadIDCache.Set(nextSlot, arg.headRoot, pId)
-		go s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), arg.headBlock, arg.headRoot, nextSlot)
+		s.cfg.PayloadIDCache.Set(nextSlot, arg.headRoot, true, pId)
+		go s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), arg.headBlock, arg.headRoot, nextSlot, arg.attributes)
 	} else if hasAttr && payloadID == nil && !features.Get().PrepareAllPayloads {
 		log.WithFields(logrus.Fields{
 			"blockHash": fmt.Sprintf("%#x", headPayload.BlockHash()),
@@ -190,35 +190,16 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 	return payloadID, nil
 }
 
-func (s *Service) firePayloadAttributesEvent(f event.SubscriberSender, block interfaces.ReadOnlySignedBeaconBlock, root [32]byte, nextSlot primitives.Slot) {
+func (s *Service) firePayloadAttributesEvent(f event.SubscriberSender, block interfaces.ReadOnlySignedBeaconBlock, root [32]byte, nextSlot primitives.Slot, attr payloadattribute.Attributer) {
 	// If we're syncing a block in the past and init-sync is still running, we shouldn't fire this event.
 	if !s.cfg.SyncChecker.Synced() {
 		return
 	}
-	// the fcu args have differing amounts of completeness based on the code path,
-	// and there is work we only want to do if a client is actually listening to the events beacon api endpoint.
-	// temporary solution: just fire a blank event and fill in the details in the api handler.
+	// Carry the attribute already sent to the engine so the SSE value matches it exactly; the handler fills the remaining scalar fields lazily.
 	f.Send(&feed.Event{
 		Type: statefeed.PayloadAttributes,
-		Data: payloadattribute.EventData{HeadBlock: block, HeadRoot: root, ProposalSlot: nextSlot},
+		Data: payloadattribute.EventData{HeadBlock: block, HeadRoot: root, ProposalSlot: nextSlot, Attributer: attr},
 	})
-}
-
-// getPayloadHash returns the payload hash given the block root.
-// if the block is before bellatrix fork epoch, it returns the zero hash.
-func (s *Service) getPayloadHash(ctx context.Context, root []byte) ([32]byte, error) {
-	blk, err := s.getBlock(ctx, s.ensureRootNotZeros(bytesutil.ToBytes32(root)))
-	if err != nil {
-		return [32]byte{}, err
-	}
-	if blocks.IsPreBellatrixVersion(blk.Block().Version()) {
-		return params.BeaconConfig().ZeroHash, nil
-	}
-	payload, err := blk.Block().Body().Execution()
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "could not get execution payload")
-	}
-	return bytesutil.ToBytes32(payload.BlockHash()), nil
 }
 
 // notifyNewPayload signals execution engine on a new payload.
@@ -271,7 +252,11 @@ func (s *Service) notifyNewPayload(ctx context.Context, stVersion int, header in
 		}
 	}
 
-	lastValidHash, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, parentRoot, requests)
+	var requester enginev1.ExecutionRequester
+	if requests != nil {
+		requester = requests
+	}
+	lastValidHash, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, parentRoot, requester)
 	if err == nil {
 		newPayloadValidNodeCount.Inc()
 		return true, nil
@@ -323,6 +308,10 @@ func (s *Service) pruneInvalidBlock(ctx context.Context, root, parentRoot, paren
 // The attribute is required to initiate a payload build process in the context of an `engine_forkchoiceUpdated` call.
 func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState, slot primitives.Slot, headRoot []byte, headFull bool) payloadattribute.Attributer {
 	emptyAttri := payloadattribute.EmptyWithVersion(st.Version())
+
+	if !s.inRegularSync() {
+		return emptyAttri
+	}
 
 	// If it is an epoch boundary then process slots to get the right
 	// shuffling before checking if the proposer is tracked. Otherwise

@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 // When the current head is unchanged, saveHeadIfNeeded must return immediately
@@ -90,4 +91,65 @@ func TestSaveHeadIfNeeded_ProposingAndOverride_SkipsSave(t *testing.T) {
 	cfg := &postBlockProcessConfig{ctx: ctx, headRoot: headRoot, postState: postState}
 	service.saveHeadIfNeeded(ctx, cfg)
 	require.Equal(t, true, service.head == nil)
+}
+
+type notSyncedChecker struct{}
+
+func (notSyncedChecker) Synced() bool { return false }
+
+func TestSaveHeadIfNeeded_NotSynced_SkipsPayloadAttribute(t *testing.T) {
+	resetCfg := features.InitWithReset(&features.Flags{PrepareAllPayloads: true})
+	defer resetCfg()
+
+	service, tr := minimalTestService(t)
+	ctx, fcs := tr.ctx, tr.fcs
+	service.cfg.SyncChecker = notSyncedChecker{}
+
+	// Service clock: current slot == 2, so the proposing slot is 3.
+	service.SetGenesisTime(time.Now().Add(-time.Duration(2*params.BeaconConfig().SecondsPerSlot) * time.Second))
+
+	parentRoot := [32]byte{'a'}
+	headRoot := [32]byte{'b'}
+	ojc := &ethpb.Checkpoint{}
+	st, ro, err := prepareForkchoiceState(ctx, 1, parentRoot, [32]byte{}, [32]byte{}, ojc, ojc)
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, st, ro))
+	st, ro, err = prepareForkchoiceState(ctx, 2, headRoot, parentRoot, [32]byte{}, ojc, ojc)
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, st, ro))
+
+	// Forkchoice clock: the head node (slot 2) is from the current slot and arrived
+	// late, so ForkChoiceStore.ShouldOverrideFCU() returns true.
+	fcs.SetGenesisTime(time.Now().Add(-29 * time.Second))
+	fcHead, err := fcs.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, headRoot, fcHead)
+
+	postState, _, err := prepareForkchoiceState(ctx, 3, [32]byte{'c'}, headRoot, [32]byte{}, ojc, ojc)
+	require.NoError(t, err)
+
+	// Not in regular sync: the attribute is empty even though the proposer is
+	// tracked and the override conditions hold, so the save below must proceed.
+	proposingSlot := service.CurrentSlot() + 1
+	attr := service.getPayloadAttribute(ctx, postState, proposingSlot, headRoot[:], false)
+	require.Equal(t, true, attr.IsEmpty())
+	require.Equal(t, true, service.shouldOverrideFCU(headRoot, proposingSlot))
+
+	// Old head and new head block plumbing so saveHead can complete.
+	oldBlock := util.SaveBlock(t, ctx, service.cfg.BeaconDB, util.NewBeaconBlock())
+	oldRoot, err := oldBlock.Block().HashTreeRoot()
+	require.NoError(t, err)
+	service.head = &head{root: oldRoot, block: oldBlock, state: postState}
+
+	newHeadSignedBlock := util.NewBeaconBlock()
+	newHeadSignedBlock.Block.Slot = 2
+	newHeadSignedBlock.Block.ParentRoot = oldRoot[:]
+	wsb := util.SaveBlock(t, ctx, service.cfg.BeaconDB, newHeadSignedBlock)
+	roblock, err := blocks.NewROBlockWithRoot(wsb, headRoot)
+	require.NoError(t, err)
+	require.NoError(t, service.cfg.BeaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{Slot: 2, Root: headRoot[:]}))
+
+	cfg := &postBlockProcessConfig{ctx: ctx, roblock: roblock, headRoot: headRoot, postState: postState}
+	service.saveHeadIfNeeded(ctx, cfg)
+	require.Equal(t, headRoot, service.head.root)
 }
