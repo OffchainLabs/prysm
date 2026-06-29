@@ -7,6 +7,7 @@ go_library(
         "block_reader.go",
         "deposit.go",
         "engine_client.go",
+        "engine_jsonrpc.go",
         "errors.go",
         "execution_block.go",
         "graffiti_info.go",
