@@ -30,6 +30,10 @@ go_library(
         "playbooks/validators-sync-participation.yaml",
         "playbooks/voluntary-exits.yaml",
         "playbooks/withdrawals.yaml",
+
+        # Playbooks for late-joining nodes
+        "playbooks/beacon-chain-sync.yaml",
+        "playbooks/checkpoint-sync.yaml",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/testing/endtoend/kurtosis",
     visibility = ["//visibility:public"],

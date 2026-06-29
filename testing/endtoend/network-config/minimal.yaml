@@ -20,6 +20,26 @@ participants:
       "/config": "graffiti.yaml"
     count: 2
 
+  # Late-joining beacon node for the P2P normal sync test.
+  # Asserted by beacon-chain-sync.yaml.
+  - el_type: geth
+    cl_type: prysm
+    cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:latest"
+    validator_count: 0
+    skip_start: true
+    count: 1
+
+  # Late-joining beacon node for the checkpoint sync test: syncs from a finalized
+  # checkpoint (served by the checkpointz additional service) instead of genesis.
+  # Asserted by checkpoint-sync.yaml.
+  - el_type: geth
+    cl_type: prysm
+    cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:latest"
+    validator_count: 0
+    skip_start: true
+    checkpoint_sync_enabled: true
+    count: 1
+
 extra_files:
   graffiti.yaml: |
     default: "Rice"
@@ -67,6 +87,7 @@ additional_services:
   - assertoor
   - dora
   - spamoor
+  - checkpointz
 
 assertoor_params:
 

@@ -1,0 +1,31 @@
+# Verify a late-joining beacon node syncs via CHECKPOINT sync — from a finalized
+# state served by the checkpointz service, not from genesis.
+
+# Replaces this legacy E2E test (testCheckpointSync).
+
+id: checkpoint-sync
+name: "Late beacon node syncs from a finalized checkpoint"
+timeout: 30m
+
+config:
+  # NOTE: This assumes the late-joining node (w. checkpoint) is the 4th participant in Kurtosis network config file.
+  syncNodePattern: "^4-geth-prysm$"
+
+tasks:
+  # Gate on the node first: this fails loudly if it never starts or the pattern
+  # matches nothing, instead of the sync check passing vacuously.
+  - name: check_clients_are_healthy
+    title: "Wait for the checkpoint-sync node to start and report healthy"
+    timeout: 25m
+    configVars:
+      clientPattern: "syncNodePattern"
+    config:
+      minClientCount: 1
+
+  - name: check_consensus_sync_status
+    title: "Checkpoint-sync node is synced and following the chain head"
+    timeout: 25m
+    configVars:
+      clientPattern: "syncNodePattern"
+    config:
+      waitForChainProgression: true

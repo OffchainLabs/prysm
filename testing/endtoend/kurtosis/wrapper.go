@@ -111,6 +111,19 @@ func (kw *KurtosisWrapper) RunPackageWithNetworkConfig(packageId string, network
 	return nil
 }
 
+// StartService starts a previously-stopped service (e.g. a skip_start beacon
+// node) by running a one-line Starlark script in the enclave.
+func (kw *KurtosisWrapper) StartService(name string) error {
+	if kw.enclaveCtx == nil {
+		return fmt.Errorf("enclave context is nil")
+	}
+	script := fmt.Sprintf("def run(plan):\n    plan.start_service(%q)\n", name)
+	if _, err := kw.enclaveCtx.RunStarlarkScriptBlocking(kw.ctx, script, starlark_run_config.NewRunStarlarkConfig()); err != nil {
+		return fmt.Errorf("start service %q: %w", name, err)
+	}
+	return nil
+}
+
 // prysmCLServices returns all Prysm beacon (CL) service contexts in the enclave
 // keyed by name, plus their names sorted ("cl-<i>-prysm-<el>").
 func (kw *KurtosisWrapper) prysmCLServices() (map[services.ServiceName]*services.ServiceContext, []string, error) {
@@ -122,9 +135,12 @@ func (kw *KurtosisWrapper) prysmCLServices() (map[services.ServiceName]*services
 
 	// Prysm beacon nodes are the CL services: "cl-<i>-prysm-<el>".
 	var names []string
-	for name := range all {
+	for name, sc := range all {
 		n := string(name)
 		if strings.HasPrefix(n, "cl-") && strings.Contains(n, "prysm") {
+			if isStoppedService(sc) {
+				continue
+			}
 			names = append(names, n)
 		}
 	}
@@ -133,6 +149,27 @@ func (kw *KurtosisWrapper) prysmCLServices() (map[services.ServiceName]*services
 		return nil, nil, fmt.Errorf("no prysm CL beacon services found in enclave %q", kw.enclaveName)
 	}
 	return all, names, nil
+}
+
+// StoppedPrysmCLName returns the name of the stopped Prysm beacon (CL) service in the enclave, which is the skip_start sync node.
+func (kw *KurtosisWrapper) StoppedPrysmCLName() ([]string, error) {
+	all, err := kw.enclaveCtx.GetServiceContexts(map[string]bool{})
+	if err != nil {
+		return nil, fmt.Errorf("list services: %w", err)
+	}
+	var stopped []string
+	for name, sc := range all {
+		n := string(name)
+		if strings.HasPrefix(n, "cl-") && strings.Contains(n, "prysm") && isStoppedService(sc) {
+			stopped = append(stopped, n)
+		}
+	}
+
+	// NOTE: One for sync node, other for checkpoint sync node.
+	if len(stopped) > 2 {
+		return nil, fmt.Errorf("expected at most two stopped prysm CL nodes, found %v", stopped)
+	}
+	return stopped, nil
 }
 
 // NewGRPCConnections discovers the published gRPC ("rpc") port of each
@@ -194,4 +231,10 @@ func (kw *KurtosisWrapper) NewAssertoorEndpoint() (string, error) {
 		return "", fmt.Errorf("assertoor service has no published http port")
 	}
 	return fmt.Sprintf("http://127.0.0.1:%d", httpPort.GetNumber()), nil // lint:ignore uintcast -- a uint16 port never exceeds int.
+}
+
+// isStoppedService returns true if the service has no published ports, which
+// is how we identify the skip_start sync node in the enclave.
+func isStoppedService(sc *services.ServiceContext) bool {
+	return len(sc.GetPublicPorts()) == 0
 }

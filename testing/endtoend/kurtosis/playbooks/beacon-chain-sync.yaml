@@ -1,0 +1,30 @@
+# Verify that a late-joining beacon node syncs the chain from genesis over P2P.
+
+# Replaces this legacy E2E test and its evaluators (testBeaconChainSync):
+# - FinishedSyncing (for the late node)
+# - AllNodesHaveSameHead
+
+id: beacon-chain-sync
+name: "Late beacon node syncs from genesis"
+timeout: 30m
+
+config:
+  # NOTE: This assumes the late-joining node is the 3rd participant in Kurtosis network config file.
+  syncNodePattern: "^3-geth-prysm$"
+
+tasks:
+  - name: check_clients_are_healthy
+    title: "Wait for the late beacon node to start and report healthy"
+    timeout: 25m
+    configVars:
+      clientPattern: "syncNodePattern"
+    config:
+      minClientCount: 1
+
+  - name: check_consensus_sync_status
+    title: "Late beacon node is synced and following the chain head"
+    timeout: 25m
+    configVars:
+      clientPattern: "syncNodePattern"
+    config:
+      waitForChainProgression: true

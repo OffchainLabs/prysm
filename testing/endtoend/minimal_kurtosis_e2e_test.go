@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -19,6 +20,18 @@ import (
 const (
 	// ETHEREUM_PACKAGE is the identifier of the ethereum-package Starlark package used in these tests.
 	ETHEREUM_PACKAGE = "github.com/ethpandaops/ethereum-package"
+
+	// LATE_SYNC_NODE_DELAY is how long after genesis the skip_start sync nodes are
+	// started, so the chain has advanced and finalized: the normal-sync node then
+	// has history to catch up over P2P, and the checkpoint-sync node has a
+	// finalized checkpoint to sync from.
+	LATE_SYNC_NODE_DELAY = 6 * time.Minute
+
+	// SYNC_NODE_SERVICE is the skip_start node for the P2P (genesis) sync test.
+	SYNC_NODE_SERVICE = "cl-3-prysm-geth"
+
+	// CHECKPOINT_SYNC_NODE_SERVICE is the skip_start node for the checkpoint sync test.
+	CHECKPOINT_SYNC_NODE_SERVICE = "cl-4-prysm-geth"
 )
 
 // TestEndToEnd_Kurtosis_MinimalConfig mirrors TestEndToEnd_MinimalConfig, but runs the test in a Kurtosis enclave instead of locally.
@@ -87,6 +100,17 @@ func TestEndToEnd_Kurtosis_MinimalConfig(t *testing.T) {
 			deadline := genesisTime.Add(time.Duration(tt.epochsToRun*secondsPerEpoch) * time.Second)
 
 			require.NoError(t, kw.RegisterPlaybooks(ctx), "Failed to register Assertoor playbooks")
+
+			// Resume late-joining beacon node for normal sync and checkpoint sync test.
+			stoppedNodes, err := kw.StoppedPrysmCLName()
+			require.NoError(t, err, "Failed to locate the skip_start sync node")
+			require.Equal(t, 2, len(stoppedNodes))
+			require.Equal(t, true, slices.Contains(stoppedNodes, SYNC_NODE_SERVICE), "Expected stopped nodes to contain %s", SYNC_NODE_SERVICE)
+			require.Equal(t, true, slices.Contains(stoppedNodes, CHECKPOINT_SYNC_NODE_SERVICE), "Expected stopped nodes to contain %s", CHECKPOINT_SYNC_NODE_SERVICE)
+
+			delay := time.Until(genesisTime.Add(LATE_SYNC_NODE_DELAY))
+			scheduleLateSyncNodeStart(t, ctx, kw, delay, SYNC_NODE_SERVICE, CHECKPOINT_SYNC_NODE_SERVICE)
+
 			require.NoError(t, kw.WaitForAssertoor(ctx, deadline), "Assertoor checks failed")
 		})
 	}
@@ -136,6 +160,37 @@ func fetchGenesisTime(t *testing.T, ctx context.Context, client *beacon.Client) 
 	require.NoError(t, err, "Failed to parse genesis time")
 
 	return time.Unix(secs, 0)
+}
+
+// scheduleLateSyncNodeStart starts the given skip_start beacon nodes after delay.
+func scheduleLateSyncNodeStart(t *testing.T, ctx context.Context, kw *kurtosis.KurtosisWrapper, delay time.Duration, names ...string) {
+	t.Logf("Will start late sync nodes %v after %s", names, delay)
+
+	done := make(chan error, len(names))
+	go func() {
+		select {
+		case <-ctx.Done():
+			return // run ended before the nodes were due to start
+		case <-time.After(delay):
+		}
+		for _, name := range names {
+			t.Logf("Starting late sync node %q", name)
+			done <- kw.StartService(name)
+		}
+	}()
+
+	t.Cleanup(func() {
+		// Non-blocking: report any start that actually ran and failed.
+		for range names {
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Errorf("Failed to start late sync node: %v", err)
+				}
+			default:
+			}
+		}
+	})
 }
 
 const (

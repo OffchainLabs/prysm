@@ -12,6 +12,10 @@ id: network-health-monitor
 name: "Network health monitoring"
 timeout: 30m
 
+config:
+  # NOTE: This assumes the main nodes are the 1st and 2nd participants in Kurtosis network config file.
+  mainNodePattern: "^[12]-geth-prysm$"
+
 tasks:
 - name: run_tasks_concurrent
   title: "Monitor network health"
@@ -21,6 +25,7 @@ tasks:
         title: "Client health"
         timeout: 30m
         config:
+          clientPattern: "mainNodePattern"
           continueOnPass: true
           failOnCheckMiss: true
       
@@ -28,12 +33,14 @@ tasks:
         title: "CL Sync status"
         timeout: 30m
         config:
+          clientPattern: "mainNodePattern"
           continueOnPass: true
 
       - name: check_execution_sync_status
         title: "EL Sync status"
         timeout: 30m
         config:
+          clientPattern: "mainNodePattern"
           continueOnPass: true
 
       - name: check_consensus_finality
@@ -58,6 +65,10 @@ tasks:
         timeout: 30m
         config:
           maxForkDistance: 2
+          # NOTE: This is intentional because of late-joining nodes.
+          # If we DO NOT allow for 1 extra fork group, the monitoring test fails
+          # because the late-joining nodes will still report their head as zero root.
+          maxForkCount: 1
           continueOnPass: true
 
       - name: check_consensus_reorgs
