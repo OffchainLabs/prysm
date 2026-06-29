@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -56,6 +57,27 @@ func (vs *Server) setExecutionPayloadBid(
 	}
 
 	return true, nil
+}
+
+// setP2PBidFallback uses a cached P2P bid when the local EL self-build is unavailable.
+func (vs *Server) setP2PBidFallback(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, parentFull bool) error {
+	if vs.HighestBidCache == nil {
+		return errors.New("highest bid cache is nil")
+	}
+	slot := sBlk.Block().Slot()
+	parentRoot := sBlk.Block().ParentRoot()
+	parentHash, err := vs.getParentBlockHash(ctx, head, slot, parentRoot, parentFull)
+	if err != nil {
+		return errors.Wrap(err, "could not get parent block hash")
+	}
+	cached, ok := vs.HighestBidCache.Get(slot, bytesutil.ToBytes32(parentHash), parentRoot)
+	if !ok {
+		return errors.New("no cached P2P bid available")
+	}
+	if err := sBlk.SetSignedExecutionPayloadBid(cached); err != nil {
+		return errors.Wrap(err, "could not set cached P2P execution payload bid")
+	}
+	return nil
 }
 
 // winningP2PBid returns a cached P2P bid if one exists and exceeds the local EL value.
