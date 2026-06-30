@@ -111,6 +111,7 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 	var attesterDutiesContainer *structs.GetAttesterDutiesResponse
 	var err error
 	wg.Go(func() error {
+		var err error
 		attesterDutiesContainer, err = c.dutiesProvider.AttesterDuties(ctx, epoch, indices)
 		if err != nil {
 			return errors.Wrapf(err, "failed to get attester duties for epoch `%d`", epoch)
@@ -171,6 +172,7 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 
 	var proposerDutiesContainer *structs.GetProposerDutiesResponse
 	wg.Go(func() error {
+		var err error
 		proposerDutiesContainer, err = c.dutiesProvider.ProposerDuties(ctx, epoch)
 		if err != nil {
 			return errors.Wrapf(err, "failed to get proposer duties for epoch `%d`", epoch)

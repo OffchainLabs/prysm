@@ -2,6 +2,7 @@ package beacon_api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1405,4 +1406,51 @@ func reverseSlice[T any](slice []T) []T {
 		reversedSlice[len(reversedSlice)-1-i] = slice[i]
 	}
 	return reversedSlice
+}
+
+// TestDutiesForEpoch_NoDataRaceOnSharedErr forces the attester and proposer goroutines
+// inside dutiesForEpoch to return concurrently so that any unsynchronized write to a
+// shared outer error variable is observable under `go test -race`.
+func TestDutiesForEpoch_NoDataRaceOnSharedErr(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := t.Context()
+	const epoch = primitives.Epoch(1)
+	const dependentRoot = "0xdeadbeef000000000000000000000000000000000000000000000000"
+
+	arrived := make(chan struct{}, 2)
+	release := make(chan struct{})
+	go func() {
+		<-arrived
+		<-arrived
+		close(release)
+	}()
+	barrier := func() {
+		arrived <- struct{}{}
+		<-release
+	}
+
+	dutiesProvider := mock.NewMockdutiesProvider(ctrl)
+	dutiesProvider.EXPECT().AttesterDuties(ctx, epoch, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ primitives.Epoch, _ []primitives.ValidatorIndex) (*structs.GetAttesterDutiesResponse, error) {
+			barrier()
+			return &structs.GetAttesterDutiesResponse{DependentRoot: dependentRoot}, nil
+		},
+	)
+	dutiesProvider.EXPECT().ProposerDuties(ctx, epoch).DoAndReturn(
+		func(_ context.Context, _ primitives.Epoch) (*structs.GetProposerDutiesResponse, error) {
+			barrier()
+			return &structs.GetProposerDutiesResponse{DependentRoot: dependentRoot}, nil
+		},
+	)
+
+	validatorClient := &beaconApiValidatorClient{dutiesProvider: dutiesProvider}
+	require.NoError(t, validatorClient.dutiesForEpoch(
+		ctx,
+		&ethpb.ValidatorDutiesContainer{},
+		epoch,
+		nil,
+		false,
+	))
 }
