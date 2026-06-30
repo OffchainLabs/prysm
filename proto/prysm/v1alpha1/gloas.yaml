@@ -4,6 +4,8 @@ types:
     progressive: {}
     fields:
       AggregationBits: {type: "ProgressiveBitlist"}
+  - name: "AggregateAttestationAndProofGloas"
+  - name: "SignedAggregateAttestationAndProofGloas"
   - name: "AttesterSlashingGloas"
   - name: "BeaconBlockBodyGloas"
     progressive: {}
@@ -42,14 +44,17 @@ types:
       Column:    {type: "ProgressiveList"}
       KzgProofs: {type: "ProgressiveList"}
   - name: "ExecutionPayloadBid"
+    progressive: {}
     fields:
       BlobKzgCommitments: {type: "ProgressiveList"}
   - name: "ExecutionPayloadEnvelope"
+    progressive: {}
   - name: "IndexedAttestationGloas"
     progressive: {}
     fields:
       AttestingIndices: {type: "ProgressiveList"}
   - name: "PayloadAttestation"
+    progressive: {}
   - name: "PayloadAttestationData"
   - name: "PayloadAttestationMessage"
   - name: "ProposerPreferences"

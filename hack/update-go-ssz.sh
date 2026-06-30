@@ -4,7 +4,19 @@
 # Script to copy ssz.go files from bazel build folder to appropriate location.
 # Bazel builds to bazel-bin/... folder, script copies them back to original folder where target is.
 
-bazel query 'kind(ssz_methodical, //proto/...)' | xargs bazel build $@
+# Optional first positional arg `progressive` regenerates with SSZ progressive
+# merkleization ON, overriding the .bazelrc default that gates it off
+# (--//tools:disable_progressive_merkleization). Without it, generation matches
+# the current non-progressive spectest fixtures. Any remaining args pass through
+# to `bazel build`.
+progressive_flag=""
+if [[ "${1:-}" == "progressive" ]]; then
+    progressive_flag="--//tools:disable_progressive_merkleization=false"
+    shift
+    color "32" "regenerating with progressive merkleization ON"
+fi
+
+bazel query 'kind(ssz_methodical, //proto/...)' | xargs bazel build $progressive_flag "$@"
 
 # Get locations of proto ssz.go files.
 file_list=()

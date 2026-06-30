@@ -5,7 +5,7 @@ go 1.26.4
 require (
 	github.com/OffchainLabs/go-bitfield v0.0.0-20260504143531-5cbb6d0f5f2e
 	github.com/OffchainLabs/hashtree v0.2.3
-	github.com/OffchainLabs/methodical-ssz v0.0.0-20260630010625-e04c1ac909a1
+	github.com/OffchainLabs/methodical-ssz v0.0.0-20260702045436-4612ae87cb43
 	github.com/aristanetworks/goarista v0.0.0-20200805130819-fd197cf57d96
 	github.com/bazelbuild/rules_go v0.23.2
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
@@ -288,6 +288,7 @@ replace github.com/json-iterator/go => github.com/prestonvanloon/go v1.1.7-0.201
 
 replace github.com/tyler-smith/go-bip39 => ./third_party/go-bip39
 
-replace github.com/OffchainLabs/methodical-ssz => /home/kasey/src/OffchainLabs/methodical-ssz
+//replace github.com/OffchainLabs/methodical-ssz => /home/kasey/src/OffchainLabs/methodical-ssz
+replace github.com/OffchainLabs/methodical-ssz => github.com/kasey/methodical-ssz v0.0.0-20260702141131-1533b71892f2
 
 tool github.com/prysmaticlabs/protoc-gen-go-cast
