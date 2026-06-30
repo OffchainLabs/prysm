@@ -2,6 +2,7 @@ package endtoend
 
 import (
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -16,5 +17,32 @@ func TestEndToEnd_MainnetConfig_ValidatorAtCurrentRelease(t *testing.T) {
 }
 
 func TestEndToEnd_MainnetConfig_MultiClient(t *testing.T) {
-	e2eMainnet(t, true, types.InitForkCfg(version.Bellatrix, version.Electra, params.E2EMainnetTestConfig())).run()
+	// Prerequisite for Kurtosis: Load images needed.
+	LoadPrysmDockerImages(t)
+
+	tests := []KurtosisTestSuites{
+		{
+			enclaveName: "mainnet-multiclient",
+			configPath:  "testing/endtoend/network-config/mainnet-multiclient.yaml",
+			// Total test duration = 10 epochs * 6 seconds/slot * 32 slots/epoch = 1920 seconds = 32 minutes
+			epochsToRun:       10,
+			runSyncTest:       true,
+			lateSyncNodeDelay: 10 * time.Minute,
+			skipPlaybooks: []string{
+				"block-graffiti.yaml",
+
+				// Skip all validator lifecycle tests.
+				"deposits.yaml",
+				"slashings.yaml",
+				"voluntary-exits.yaml",
+				"withdrawals.yaml",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.enclaveName, func(t *testing.T) {
+			tt.Run(t)
+		})
+	}
 }
