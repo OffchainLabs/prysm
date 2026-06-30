@@ -229,15 +229,16 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 
 		isPartialEnabled := s.cfg.p2p.PartialColumnBroadcaster() != nil
 
-		var constructedSidecarCount uint64
+		isGloas := slots.ToEpoch(source.Slot()) >= params.BeaconConfig().GloasForkEpoch
+		root := source.Root()
 
 		var hasBlobsColumns []blocks.PartialDataColumn
 		for iteration := uint64(0); ; /*no stop condition*/ iteration++ {
 			log = log.WithField("iteration", iteration)
 
 			// Exit early if all sidecars to sample have been seen.
-			if s.haveAllSidecarsBeenSeen(source.Slot(), proposerIndex, columnIndicesToSample) {
-				if iteration > 0 && constructedSidecarCount == 0 {
+			if s.haveAllSidecarsBeenSeen(isGloas, root, source.Slot(), proposerIndex, columnIndicesToSample) {
+				if iteration > 0 {
 					log.Debug("No data column sidecars constructed from the execution client")
 				}
 
@@ -294,9 +295,9 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			// No sidecars are retrieved from the EL, retry later
 			constructedCount := uint64(len(constructedSidecars))
 
-			// Boundary check.
-			if constructedSidecarCount > 0 && constructedSidecarCount != fieldparams.NumberOfColumns {
-				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", constructedSidecarCount, fieldparams.NumberOfColumns)
+			// Boundary check: the EL returns either no sidecars or the full set.
+			if constructedCount > 0 && constructedCount != fieldparams.NumberOfColumns {
+				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", constructedCount, fieldparams.NumberOfColumns)
 			}
 
 			// Partial columns are published separately above (for all sampled indices), so do not
@@ -404,7 +405,7 @@ func (s *Service) broadcastAndReceiveUnseenDataColumnSidecars(
 		}
 
 		// Skip already seen data column sidecars.
-		if s.hasSeenDataColumnIndex(slot, proposerIndex, sidecar.Index()) {
+		if s.hasSeenDataColumn(sidecar.IsGloas(), sidecar.BlockRoot(), slot, proposerIndex, sidecar.Index()) {
 			continue
 		}
 
@@ -445,10 +446,10 @@ func (s *Service) broadcastAndReceiveUnseenDataColumnSidecars(
 	return unseenIndices, nil
 }
 
-// haveAllSidecarsBeenSeen checks if all sidecars for the given slot, proposer index, and data column indices have been seen.
-func (s *Service) haveAllSidecarsBeenSeen(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, indices map[uint64]bool) bool {
+// haveAllSidecarsBeenSeen checks if all sidecars for the given identity and data column indices have been seen.
+func (s *Service) haveAllSidecarsBeenSeen(isGloas bool, root [fieldparams.RootLength]byte, slot primitives.Slot, proposerIndex primitives.ValidatorIndex, indices map[uint64]bool) bool {
 	for index := range indices {
-		if !s.hasSeenDataColumnIndex(slot, proposerIndex, index) {
+		if !s.hasSeenDataColumn(isGloas, root, slot, proposerIndex, index) {
 			return false
 		}
 	}

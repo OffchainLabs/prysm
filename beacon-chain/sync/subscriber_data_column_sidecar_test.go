@@ -4,14 +4,21 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time"
 )
 
 func TestAllDataColumnSubnets(t *testing.T) {
@@ -29,14 +36,14 @@ func TestAllDataColumnSubnets(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		ctx := t.Context()
 
-		db := dbtest.SetupDB(t)
+		beaconDB := dbtest.SetupDB(t)
 
 		// Create and save genesis state
 		genesisState, _ := util.DeterministicGenesisState(t, 64)
-		require.NoError(t, db.SaveGenesisData(ctx, genesisState))
+		require.NoError(t, beaconDB.SaveGenesisData(ctx, genesisState))
 
 		// Create stategen and initialize with genesis state
-		stateGen := stategen.New(db, doublylinkedtree.New())
+		stateGen := stategen.New(beaconDB, doublylinkedtree.New())
 		_, err := stateGen.Resume(ctx, genesisState)
 		require.NoError(t, err)
 
@@ -49,7 +56,7 @@ func TestAllDataColumnSubnets(t *testing.T) {
 			subscribedValidatorsCache: svc,
 			cfg: &config{
 				stateGen: stateGen,
-				beaconDB: db,
+				beaconDB: beaconDB,
 			},
 		}
 
@@ -61,4 +68,37 @@ func TestAllDataColumnSubnets(t *testing.T) {
 			assert.Equal(t, true, result[i])
 		}
 	})
+}
+
+// TestProcessDataColumnSidecarsFromReconstruction_GloasSkipsProposerIndex is a regression test:
+// Gloas sidecars don't expose a proposer index, so reconstruction must not call ProposerIndex().
+// With no stored columns, reconstruction is unnecessary and the call returns nil instead of erroring.
+func TestProcessDataColumnSidecarsFromReconstruction_GloasSkipsProposerIndex(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	s := &Service{
+		ctx: t.Context(),
+		cfg: &config{
+			p2p:               mockp2p.NewTestP2P(t),
+			clock:             startup.NewClock(time.Now(), [32]byte{}),
+			dataColumnStorage: filesystem.NewEphemeralDataColumnStorage(t),
+		},
+		seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
+	}
+
+	var root [fieldparams.RootLength]byte
+	root[0] = 0xEE
+	gdc, err := blocks.NewRODataColumnGloasWithRoot(&ethpb.DataColumnSidecarGloas{
+		Index:           0,
+		Slot:            1,
+		BeaconBlockRoot: root[:],
+	}, root)
+	require.NoError(t, err)
+	v := blocks.NewVerifiedRODataColumn(gdc)
+
+	require.NoError(t, s.processDataColumnSidecarsFromReconstruction(t.Context(), v))
 }
