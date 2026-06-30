@@ -21,12 +21,20 @@ func TestEndToEnd_Kurtosis_MinimalConfig(t *testing.T) {
 			configPath:  "testing/endtoend/network-config/minimal-statediff.yaml",
 			epochsToRun: 20,
 			runSyncTest: true,
+			// minimal-statediff reaches Electra at epoch 10. Current assertoor generates slashings only for Electra and later.
+			skipPlaybooks: []string{
+				"slashings.yaml",
+			},
 		},
 		{
 			enclaveName: "minimal-postmerge",
 			configPath:  "testing/endtoend/network-config/minimal-postmerge.yaml",
 			epochsToRun: 20,
 			runSyncTest: true,
+			// minimal-postmerge reaches Electra at epoch 10. Current assertoor generates slashings only for Electra and later.
+			skipPlaybooks: []string{
+				"slashings.yaml",
+			},
 		},
 	}
 
