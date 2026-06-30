@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte(")C09\tO\xf3\x80\x00\x00\x00\xa0cF0\x8d\\9")
