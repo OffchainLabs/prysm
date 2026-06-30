@@ -19,7 +19,13 @@ func TestEndToEnd_Kurtosis_MinimalConfig(t *testing.T) {
 		{
 			enclaveName: "minimal-statediff",
 			configPath:  "testing/endtoend/network-config/minimal-statediff.yaml",
-			epochsToRun: 18,
+			epochsToRun: 20,
+			runSyncTest: true,
+		},
+		{
+			enclaveName: "minimal-postmerge",
+			configPath:  "testing/endtoend/network-config/minimal-postmerge.yaml",
+			epochsToRun: 20,
 			runSyncTest: true,
 		},
 	}
