@@ -502,6 +502,18 @@ func (mr *MockValidatorMockRecorder) UpdateDuties(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDuties", reflect.TypeOf((*MockValidator)(nil).UpdateDuties), arg0)
 }
 
+// MaybeRetryMissingNextDuties mocks base method.
+func (m *MockValidator) MaybeRetryMissingNextDuties(arg0 context.Context, arg1 primitives.Slot) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "MaybeRetryMissingNextDuties", arg0, arg1)
+}
+
+// MaybeRetryMissingNextDuties indicates an expected call of MaybeRetryMissingNextDuties.
+func (mr *MockValidatorMockRecorder) MaybeRetryMissingNextDuties(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaybeRetryMissingNextDuties", reflect.TypeOf((*MockValidator)(nil).MaybeRetryMissingNextDuties), arg0, arg1)
+}
+
 // WaitForActivation mocks base method.
 func (m *MockValidator) WaitForActivation(arg0 context.Context) error {
 	m.ctrl.T.Helper()

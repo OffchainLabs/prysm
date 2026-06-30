@@ -260,3 +260,70 @@ func TestDutyStoreData_CanPromote(t *testing.T) {
 		assert.Equal(t, true, d.canPromote(10, nil))
 	})
 }
+
+func TestDutyStore_needsNextRetry(t *testing.T) {
+	var nilStore *dutyStore
+	assert.Equal(t, false, nilStore.needsNextRetry())
+
+	ds := &dutyStore{}
+	assert.Equal(t, false, ds.needsNextRetry()) // uninitialized
+
+	pk := pubkey{0x1}
+	build := func(missing missingNextDuties, indices []primitives.ValidatorIndex) dutyStoreData {
+		var d dutyStoreData
+		d.setFromContainer(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{{PublicKey: pk[:], ValidatorIndex: 7}},
+		})
+		d.missingNext = missing
+		d.indices = indices
+		return d
+	}
+
+	ds.write(build(0, []primitives.ValidatorIndex{7}))
+	assert.Equal(t, false, ds.needsNextRetry()) // nothing missing
+
+	ds.write(build(missingNextPtc, nil))
+	assert.Equal(t, false, ds.needsNextRetry()) // missing but no indices (combined path)
+
+	ds.write(build(missingNextPtc, []primitives.ValidatorIndex{7}))
+	assert.Equal(t, true, ds.needsNextRetry()) // missing + indices
+
+	ds.write(build(missingNextAttester, []primitives.ValidatorIndex{7}))
+	assert.Equal(t, true, ds.needsNextRetry()) // attester is retried like any other missing type
+}
+
+func TestDutyStore_replaceNextDuties_revisionGuard(t *testing.T) {
+	pk := pubkey{0x2}
+	ds := &dutyStore{}
+
+	// Uninitialized store: nothing to replace.
+	assert.Equal(t, false, ds.replaceNextDuties(0, nil, 0, nil))
+
+	var d dutyStoreData
+	d.setFromContainer(&ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{{PublicKey: pk[:], ValidatorIndex: 7}},
+		NextEpochDuties:    []*ethpb.ValidatorDuty{{PublicKey: pk[:], ValidatorIndex: 7, AttesterSlot: 100}},
+	})
+	d.epoch = 5
+	d.indices = []primitives.ValidatorIndex{7}
+	d.missingNext = missingNextPtc
+	ds.write(d)
+
+	staleRev := ds.snapshot().revision
+	ds.write(d) // a concurrent write advances the revision under the stale reader
+
+	newNext := []*ethpb.ValidatorDuty{{PublicKey: pk[:], ValidatorIndex: 7, AttesterSlot: 200}}
+
+	// Stale revision -> dropped, store left unchanged.
+	assert.Equal(t, false, ds.replaceNextDuties(staleRev, newNext, 0, nil))
+	for _, nd := range ds.snapshot().nextDuties() {
+		assert.Equal(t, primitives.Slot(100), nd.AttesterSlot)
+	}
+
+	// Current revision -> applied.
+	assert.Equal(t, true, ds.replaceNextDuties(ds.snapshot().revision, newNext, 0, nil))
+	for _, nd := range ds.snapshot().nextDuties() {
+		assert.Equal(t, primitives.Slot(200), nd.AttesterSlot)
+	}
+	assert.Equal(t, true, ds.snapshot().missingNext() == 0)
+}

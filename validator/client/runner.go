@@ -119,6 +119,9 @@ func (r *runner) run(ctx context.Context) {
 					continue
 				}
 				dutiesCancel()
+			} else {
+				// Mid-epoch: retry any failed next-epoch duties
+				v.MaybeRetryMissingNextDuties(ctx, slot)
 			}
 
 			// call push proposer settings often to account for the following edge cases:

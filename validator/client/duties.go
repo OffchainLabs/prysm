@@ -196,6 +196,7 @@ const (
 	missingNextProposer missingNextDuties = 1 << iota
 	missingNextSync
 	missingNextPtc
+	missingNextAttester
 )
 
 // updateDutiesSplit fetches duties from the split V3 endpoints and
@@ -288,45 +289,8 @@ func (v *validator) promoteDuties(ctx context.Context, epoch primitives.Epoch, i
 		prevDepRoot: snap.currDependentRoot(),
 	}
 
-	var (
-		attErr, propErr error
-		syncErr, ptcErr error
-		wg              sync.WaitGroup
-	)
-	wg.Go(func() {
-		res.attNext, attErr = v.validatorClient.AttesterDuties(ctx, epoch.Add(1), indices)
-	})
-	wg.Go(func() {
-		res.propNext, propErr = v.validatorClient.ProposerDuties(ctx, epoch.Add(1))
-	})
-	wg.Go(func() {
-		if epoch.Add(1) < params.BeaconConfig().AltairForkEpoch {
-			return
-		}
-		res.syncNext, syncErr = v.validatorClient.SyncCommitteeDuties(ctx, epoch.Add(1), indices)
-	})
-	wg.Go(func() {
-		if epoch.Add(1) < params.BeaconConfig().GloasForkEpoch {
-			return
-		}
-		res.ptcNext, ptcErr = v.validatorClient.PTCDuties(ctx, epoch.Add(1), indices)
-	})
-	wg.Wait()
-
-	if attErr != nil {
-		return res, attErr
-	}
-	if propErr != nil {
-		log.WithError(propErr).Debug("Could not get next epoch proposer duties")
-	}
-	if syncErr != nil {
-		log.WithError(syncErr).Debug("Could not get next epoch sync committee duties")
-	}
-	if ptcErr != nil {
-		log.WithError(ptcErr).Debug("Could not get next epoch PTC duties")
-	}
-
-	res.missingNext = missingNextMask(epoch.Add(1), res.propNext, res.syncNext, res.ptcNext)
+	res.attNext, res.propNext, res.syncNext, res.ptcNext = v.fetchNextEpochDuties(ctx, epoch.Add(1), indices)
+	res.missingNext = missingNextMask(epoch.Add(1), res.attNext, res.propNext, res.syncNext, res.ptcNext)
 
 	// currDepRoot comes from the newly fetched next-epoch attester root,
 	// which matches the head event's CurrentDutyDependentRoot.
@@ -336,10 +300,12 @@ func (v *validator) promoteDuties(ctx context.Context, epoch primitives.Epoch, i
 	return res, nil
 }
 
-// missingNextMask reports which next-epoch duty types are missing post-fetch.
-// Only types that were expected at nextEpoch (per fork gating) are flagged.
-func missingNextMask(nextEpoch primitives.Epoch, prop *ethpb.ProposerDutiesResponse, sync *ethpb.SyncCommitteeDutiesResponse, ptc *ethpb.PTCDutiesResponse) missingNextDuties {
+// missingNextMask flags next-epoch duty types missing post-fetch (fork-gated).
+func missingNextMask(nextEpoch primitives.Epoch, att *ethpb.AttesterDutiesResponse, prop *ethpb.ProposerDutiesResponse, sync *ethpb.SyncCommitteeDutiesResponse, ptc *ethpb.PTCDutiesResponse) missingNextDuties {
 	var m missingNextDuties
+	if att == nil {
+		m |= missingNextAttester
+	}
 	if prop == nil && nextEpoch >= params.BeaconConfig().FuluForkEpoch {
 		m |= missingNextProposer
 	}
@@ -391,7 +357,7 @@ func (v *validator) fetchAllDuties(ctx context.Context, epoch primitives.Epoch, 
 		log.WithError(ptcErr).Warn("Error getting PTC duties")
 	}
 
-	res.missingNext = missingNextMask(epoch.Add(1), res.propNext, res.syncNext, res.ptcNext)
+	res.missingNext = missingNextMask(epoch.Add(1), res.attNext, res.propNext, res.syncNext, res.ptcNext)
 
 	if attCurr != nil {
 		res.prevDepRoot = attCurr.DependentRoot
@@ -474,7 +440,7 @@ func (v *validator) statusForPubkey(pk []byte) ethpb.ValidatorStatus {
 	return st.status.Status
 }
 
-// fetchAttesterDuties fetches attester duties for current and next epoch in parallel.
+// fetchAttesterDuties fetches current (required) and next (optional) epoch attester duties.
 func (v *validator) fetchAttesterDuties(
 	ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex,
 ) (current, next *ethpb.AttesterDutiesResponse, err error) {
@@ -494,7 +460,8 @@ func (v *validator) fetchAttesterDuties(
 		return nil, nil, currErr
 	}
 	if nextErr != nil {
-		return nil, nil, nextErr
+		log.WithError(nextErr).Debug("Could not get next epoch attester duties")
+		return current, nil, nil
 	}
 	return current, next, nil
 }
@@ -582,6 +549,185 @@ func (v *validator) fetchPtcDuties(
 		log.WithError(nextErr).Debug("Could not get next epoch PTC duties")
 	}
 	return current, next, nil
+}
+
+// fetchNextEpochDuties fetches all next-epoch duty types in parallel, soft-
+// logging failures (a nil response marks that type missing). Shared by
+// promotion and retry; both run only post-Gloas, where every type applies.
+func (v *validator) fetchNextEpochDuties(ctx context.Context, nextEpoch primitives.Epoch, indices []primitives.ValidatorIndex) (
+	att *ethpb.AttesterDutiesResponse,
+	prop *ethpb.ProposerDutiesResponse,
+	syncResp *ethpb.SyncCommitteeDutiesResponse,
+	ptc *ethpb.PTCDutiesResponse,
+) {
+	var attErr, propErr, syncErr, ptcErr error
+	var wg sync.WaitGroup
+	wg.Go(func() { att, attErr = v.validatorClient.AttesterDuties(ctx, nextEpoch, indices) })
+	wg.Go(func() { prop, propErr = v.validatorClient.ProposerDuties(ctx, nextEpoch) })
+	wg.Go(func() { syncResp, syncErr = v.validatorClient.SyncCommitteeDuties(ctx, nextEpoch, indices) })
+	wg.Go(func() { ptc, ptcErr = v.validatorClient.PTCDuties(ctx, nextEpoch, indices) })
+	wg.Wait()
+	for _, e := range []error{attErr, propErr, syncErr, ptcErr} {
+		if e != nil {
+			log.WithError(e).Debug("Could not get a next epoch duty")
+		}
+	}
+	return att, prop, syncResp, ptc
+}
+
+// MaybeRetryMissingNextDuties runs RetryMissingNextDuties in a goroutine, but
+// only when there's missing work and none is in flight — so the current slot
+// isn't blocked and goroutines aren't spawned for nothing. Bounded by the slot deadline.
+func (v *validator) MaybeRetryMissingNextDuties(ctx context.Context, slot primitives.Slot) {
+	if !v.duties.needsNextRetry() || !v.retryInFlight.CompareAndSwap(false, true) {
+		return
+	}
+	retryCtx, cancel := context.WithDeadline(ctx, v.SlotDeadline(slot))
+	go func() {
+		defer cancel()
+		defer v.retryInFlight.Store(false)
+		if err := v.RetryMissingNextDuties(retryCtx); err != nil {
+			log.WithError(err).Debug("Could not retry missing next-epoch duties")
+		}
+	}()
+}
+
+// RetryMissingNextDuties re-fetches only the next-epoch duty types a prior fetch
+// left missing and merges them in, so promotion can resume without re-pulling the
+// current epoch. No-op when nothing is missing.
+func (v *validator) RetryMissingNextDuties(ctx context.Context) error {
+	ctx, span := trace.StartSpan(ctx, "validator.RetryMissingNextDuties")
+	defer span.End()
+
+	snap := v.duties.snapshot()
+	missing := snap.missingNext()
+	if !snap.isInitialized() || missing == 0 {
+		return nil
+	}
+	// Only the split duties path records indices; the combined pre-Gloas path
+	// leaves them empty, so this guard alone scopes the retry to split duties.
+	indices := snap.indices()
+	if len(indices) == 0 {
+		return nil
+	}
+	nextEpoch := snap.epoch().AddEpoch(1)
+
+	var (
+		next        []*ethpb.ValidatorDuty
+		newMissing  missingNextDuties
+		currDepRoot []byte
+	)
+	if missing&missingNextAttester != 0 {
+		// Attester is the spine: without it there are no rows to overlay onto, so
+		// rebuild the whole epoch. Retried each slot until the fetch succeeds.
+		att, prop, sync, ptc := v.fetchNextEpochDuties(ctx, nextEpoch, indices)
+		if att == nil { // spine still unavailable; try again next slot
+			return nil
+		}
+		next = v.assembleDuties(att, prop, sync, ptc)
+		newMissing = missingNextMask(nextEpoch, att, prop, sync, ptc)
+		currDepRoot = att.DependentRoot
+	} else {
+		// Spine intact: re-fetch only the missing types and overlay them, leaving
+		// the attester duties and dependent root untouched.
+		prop, sync, ptc := v.fetchMissingNextDuties(ctx, nextEpoch, indices, missing)
+		existing := make([]*ethpb.ValidatorDuty, 0, snap.nextDutyCount())
+		for _, d := range snap.nextDuties() {
+			existing = append(existing, d)
+		}
+		next = overlayNextDuties(existing, prop, sync, ptc)
+		newMissing = missing
+		if prop != nil {
+			newMissing &^= missingNextProposer
+		}
+		if sync != nil {
+			newMissing &^= missingNextSync
+		}
+		if ptc != nil {
+			newMissing &^= missingNextPtc
+		}
+	}
+	if newMissing == missing { // no progress; avoid needless re-subscribe / proof re-sign
+		return nil
+	}
+	// Drop if the store advanced under us (a boundary/head-event update mid-fetch).
+	if !v.duties.replaceNextDuties(snap.revision, next, newMissing, currDepRoot) {
+		return nil
+	}
+	return v.onDutiesUpdated(ctx)
+}
+
+// fetchMissingNextDuties re-fetches only the flagged next-epoch proposer/sync/PTC
+// types (attester handled separately). A nil return means not requested or failed.
+func (v *validator) fetchMissingNextDuties(ctx context.Context, nextEpoch primitives.Epoch, indices []primitives.ValidatorIndex, missing missingNextDuties) (
+	prop *ethpb.ProposerDutiesResponse,
+	syncResp *ethpb.SyncCommitteeDutiesResponse,
+	ptc *ethpb.PTCDutiesResponse,
+) {
+	var propErr, syncErr, ptcErr error
+	var wg sync.WaitGroup
+	if missing&missingNextProposer != 0 {
+		wg.Go(func() { prop, propErr = v.validatorClient.ProposerDuties(ctx, nextEpoch) })
+	}
+	if missing&missingNextSync != 0 {
+		wg.Go(func() { syncResp, syncErr = v.validatorClient.SyncCommitteeDuties(ctx, nextEpoch, indices) })
+	}
+	if missing&missingNextPtc != 0 {
+		wg.Go(func() { ptc, ptcErr = v.validatorClient.PTCDuties(ctx, nextEpoch, indices) })
+	}
+	wg.Wait()
+	for _, e := range []error{propErr, syncErr, ptcErr} {
+		if e != nil {
+			log.WithError(e).Debug("Could not get a missing next epoch duty")
+		}
+	}
+	return prop, syncResp, ptc
+}
+
+// overlayNextDuties clones existing next-epoch duties, overlaying re-fetched
+// proposer/sync/PTC responses; a nil response leaves that field untouched.
+func overlayNextDuties(
+	existing []*ethpb.ValidatorDuty,
+	prop *ethpb.ProposerDutiesResponse,
+	sync *ethpb.SyncCommitteeDutiesResponse,
+	ptc *ethpb.PTCDutiesResponse,
+) []*ethpb.ValidatorDuty {
+	var proposerSlots map[primitives.ValidatorIndex][]primitives.Slot
+	if prop != nil {
+		proposerSlots = make(map[primitives.ValidatorIndex][]primitives.Slot)
+		for _, d := range prop.Duties {
+			proposerSlots[d.ValidatorIndex] = append(proposerSlots[d.ValidatorIndex], d.Slot)
+		}
+	}
+	var ptcSlots map[primitives.ValidatorIndex][]primitives.Slot
+	if ptc != nil {
+		ptcSlots = make(map[primitives.ValidatorIndex][]primitives.Slot)
+		for _, d := range ptc.Duties {
+			ptcSlots[d.ValidatorIndex] = append(ptcSlots[d.ValidatorIndex], d.Slot)
+		}
+	}
+	var syncSet map[primitives.ValidatorIndex]bool
+	if sync != nil {
+		syncSet = make(map[primitives.ValidatorIndex]bool)
+		for _, d := range sync.Duties {
+			syncSet[d.ValidatorIndex] = true
+		}
+	}
+	out := make([]*ethpb.ValidatorDuty, 0, len(existing))
+	for _, d := range existing {
+		nd := cloneValidatorDuty(d)
+		if prop != nil {
+			nd.ProposerSlots = proposerSlots[d.ValidatorIndex]
+		}
+		if sync != nil {
+			nd.IsSyncCommittee = syncSet[d.ValidatorIndex]
+		}
+		if ptc != nil {
+			nd.PtcSlots = ptcSlots[d.ValidatorIndex]
+		}
+		out = append(out, nd)
+	}
+	return out
 }
 
 // onDutiesUpdated kicks off subnet subscriptions for the current duty set.
@@ -762,8 +908,13 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	if bytes.Equal(currDependentRoot, params.BeaconConfig().ZeroHash[:]) {
 		return nil
 	}
+	// Only act as a correction layer over an already-known next-epoch root. An
+	// unknown (nil) root — e.g. after a soft next-epoch attester failure — is left
+	// to the epoch boundary and per-slot RetryMissingNextDuties to refetch, rather
+	// than triggering a full UpdateDuties on every head event. Matches Lodestar's
+	// onNewHead, which skips epochs with no cached dependent root.
 	storedCurr := v.duties.currDependentRoot()
-	needsCurrUpdate := storedCurr == nil || !bytes.Equal(currDependentRoot, storedCurr)
+	needsCurrUpdate := storedCurr != nil && !bytes.Equal(currDependentRoot, storedCurr)
 	if !needsCurrUpdate {
 		return nil
 	}
