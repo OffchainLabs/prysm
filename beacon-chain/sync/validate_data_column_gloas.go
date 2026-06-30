@@ -300,7 +300,7 @@ func (s *Service) processPendingGloasColumnsRoutine() {
 			if s.cfg.initialSync != nil && s.cfg.initialSync.Syncing() {
 				continue
 			}
-			s.processPendingGloasColumns(s.ctx, data.BlockRoot, data.SignedBlock)
+			go s.processPendingGloasColumns(s.ctx, data.BlockRoot, data.SignedBlock)
 		case <-sub.Err():
 			return
 		case <-s.ctx.Done():
