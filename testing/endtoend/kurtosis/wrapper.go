@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
 	"github.com/kurtosis-tech/kurtosis/api/golang/core/lib/enclaves"
@@ -67,7 +68,10 @@ func (kw *KurtosisWrapper) CreateEnclave() error {
 
 // DestroyEnclave destroys the enclave and reset enclave context and name.
 func (kw *KurtosisWrapper) DestroyEnclave() error {
-	err := kw.kurtosisCtx.DestroyEnclave(kw.ctx, kw.enclaveName)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+
+	err := kw.kurtosisCtx.DestroyEnclave(ctx, kw.enclaveName)
 	if err != nil {
 		return fmt.Errorf("failed to destroy Kurtosis enclave: %s: %w", kw.enclaveName, err)
 	}

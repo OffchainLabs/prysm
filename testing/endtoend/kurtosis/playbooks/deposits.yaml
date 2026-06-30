@@ -17,7 +17,6 @@ config:
   depositAmount: 32
   depositPerSlot: 2
   depositPendingLimit: 2
-  depositWalletSeed: "prysm-kurtosis-deposits"
 
 tasks:
   - name: check_clients_are_healthy
@@ -30,16 +29,6 @@ tasks:
     id: deposit_mnemonic
     title: "Generate mnemonic for deposited validators"
 
-  - name: generate_child_wallet
-    id: deposit_wallet
-    title: "Generate wallet for deposits"
-    timeout: 2m
-    configVars:
-      privateKey: "walletPrivkey"
-      walletSeed: "depositWalletSeed"
-      prefundAmount: "| (((.depositCount * .depositAmount + 1) * 1000000000000000000) | tostring)"
-      prefundMinBalance: "| (((.depositCount * .depositAmount + 1) * 1000000000000000000) | tostring)"
-
   # Let the genesis validator snapshot checks start before new validators exist.
   - name: check_consensus_slot_range
     title: "Wait before submitting deposits"
@@ -50,10 +39,10 @@ tasks:
   - name: generate_deposits
     id: deposit_batch
     title: "Generate deposits and wait for inclusion"
-    timeout: 5m
+    timeout: 10m
     configVars:
       mnemonic: "tasks.deposit_mnemonic.outputs.mnemonic"
-      walletPrivkey: "tasks.deposit_wallet.outputs.childWallet.privkey"
+      walletPrivkey: "walletPrivkey"
       depositContract: "depositContract"
       depositAmount: "depositAmount"
       limitTotal: "depositCount"

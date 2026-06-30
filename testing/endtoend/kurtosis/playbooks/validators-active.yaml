@@ -30,7 +30,7 @@ tasks:
     title: "Wait until the first slot"
     timeout: 3m
     config:
-      minSlotNumber: 1
+      minSlotNumber: 2
 
   - name: get_consensus_validators
     id: all_validators

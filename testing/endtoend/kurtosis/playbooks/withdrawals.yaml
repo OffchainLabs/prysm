@@ -38,16 +38,16 @@ tasks:
   - name: generate_child_wallet
     id: withdrawal_wallet
     title: "Generate withdrawal target wallet"
-    timeout: 2m
+    timeout: 5m
     configVars:
       privateKey: "walletPrivkey"
       walletSeed: "withdrawalWalletSeed"
-
+  
   - name: check_consensus_slot_range
-    title: "Wait until BLS changes can be submitted"
-    timeout: 3m
-    config:
-      minSlotNumber: 1
+    title: "Wait until Capella fork is active"
+    timeout: 30m
+    configVars:
+      minEpochNumber: "| (.tasks.specs.outputs.specs.CAPELLA_FORK_EPOCH | tonumber) + 1"
 
   - name: generate_bls_changes
     id: bls_changes

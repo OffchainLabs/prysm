@@ -24,6 +24,12 @@ tasks:
   - name: get_consensus_specs
     id: specs
     title: "Get consensus specs"
+  
+  - name: check_consensus_slot_range
+    title: "Wait until Capella fork is active"
+    timeout: 30m
+    configVars:
+      minEpochNumber: "| (.tasks.specs.outputs.specs.CAPELLA_FORK_EPOCH | tonumber) + 1"
 
   - name: check_consensus_slot_range
     title: "Wait until genesis validators are exitable"

@@ -93,6 +93,9 @@ additional_services:
   - spamoor
   - checkpointz
 
+spamoor_params:
+  min_cpu: 10
+
 assertoor_params:
 
 ethereum_genesis_generator_params:

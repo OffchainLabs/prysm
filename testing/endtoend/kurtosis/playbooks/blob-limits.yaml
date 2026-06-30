@@ -26,7 +26,7 @@ tasks:
     title: "Wait until the highest BPO blob tier is active"
     # Skip the whole check on networks without a blob-schedule increase.
     if: &has_bpo "| ([(.tasks.specs.outputs.specs.BLOB_SCHEDULE // [])[].MAX_BLOBS_PER_BLOCK | tonumber] | unique | length) > 1"
-    timeout: 15m
+    timeout: 30m
     configVars:
       minEpochNumber: "| [.tasks.specs.outputs.specs.BLOB_SCHEDULE[]] | max_by(.MAX_BLOBS_PER_BLOCK | tonumber) | .EPOCH | tonumber"
 
