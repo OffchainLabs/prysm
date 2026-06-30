@@ -87,7 +87,7 @@ func (m *instrumentedEngine) GetBlobsV2(ctx context.Context, versionedHashes []c
 }
 
 func (m *instrumentedEngine) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
-	defer observeEngineLatency(methodGetBlobs, m.kind, time.Now())
+	defer observeEngineLatency(methodGetBlobsV3, m.kind, time.Now())
 	return m.engineTransport.GetBlobsV3(ctx, versionedHashes)
 }
 

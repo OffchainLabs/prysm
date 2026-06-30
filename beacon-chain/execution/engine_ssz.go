@@ -127,7 +127,7 @@ func (e *sszEngine) NewPayload(ctx context.Context, payload interfaces.Execution
 	observeSSZBody(methodNewPayload, directionRequest, envelope)
 	status, err := e.client.NewPayload(ctx, ver, envelope)
 	if err != nil {
-		return nil, err
+		return nil, mapEngineError(err)
 	}
 	observeSSZBody(methodNewPayload, directionResponse, status)
 	return payloadStatusResult(status)
