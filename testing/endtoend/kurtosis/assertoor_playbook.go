@@ -11,8 +11,15 @@ import (
 //go:embed playbooks/*.yaml
 var assertoorPlaybooksFS embed.FS
 
-// RegisterPlaybooks registers and schedules every embedded custom Assertoor playbook.
-func (kw *KurtosisWrapper) RegisterPlaybooks(ctx context.Context) error {
+// optionalPlaybooks are config-specific playbooks that only register when a
+// suite explicitly opts in.
+var optionalPlaybooks = map[string]bool{
+	"builder.yaml": true,
+}
+
+// RegisterPlaybooks registers and schedules the common Assertoor playbooks, plus
+// any optional playbooks named in optIn minus any common playbooks named in skip.
+func (kw *KurtosisWrapper) RegisterPlaybooks(ctx context.Context, optIn, skip []string) error {
 	baseURL, err := kw.NewAssertoorEndpoint()
 	if err != nil {
 		return err
@@ -23,21 +30,39 @@ func (kw *KurtosisWrapper) RegisterPlaybooks(ctx context.Context) error {
 		return err
 	}
 
+	optedIn := toSet(optIn)
+	skipped := toSet(skip)
+
 	entries, err := assertoorPlaybooksFS.ReadDir("playbooks")
 	if err != nil {
 		return err
 	}
 
 	for _, entry := range entries {
-		data, err := assertoorPlaybooksFS.ReadFile("playbooks/" + entry.Name())
+		name := entry.Name()
+		if optionalPlaybooks[name] && !optedIn[name] {
+			continue
+		}
+		if skipped[name] {
+			continue
+		}
+		data, err := assertoorPlaybooksFS.ReadFile("playbooks/" + name)
 		if err != nil {
 			return err
 		}
 		if err := registerAndScheduleTest(ctx, baseURL, data); err != nil {
-			return fmt.Errorf("%s: %w", entry.Name(), err)
+			return fmt.Errorf("%s: %w", name, err)
 		}
 	}
 	return nil
+}
+
+func toSet(names []string) map[string]bool {
+	set := make(map[string]bool, len(names))
+	for _, name := range names {
+		set[name] = true
+	}
+	return set
 }
 
 // waitForAssertoorReady blocks until the Assertoor API responds

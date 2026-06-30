@@ -41,10 +41,12 @@ const (
 )
 
 type KurtosisTestSuites struct {
-	enclaveName string
-	configPath  string
-	epochsToRun uint64
-	runSyncTest bool
+	enclaveName    string
+	configPath     string
+	epochsToRun    uint64
+	runSyncTest    bool
+	extraPlaybooks []string
+	skipPlaybooks  []string
 }
 
 func (k *KurtosisTestSuites) Run(t *testing.T) {
@@ -94,7 +96,7 @@ func (k *KurtosisTestSuites) Run(t *testing.T) {
 	secondsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
 	deadline := genesisTime.Add(time.Duration(k.epochsToRun*secondsPerEpoch) * time.Second)
 
-	require.NoError(t, kw.RegisterPlaybooks(ctx), "Failed to register Assertoor playbooks")
+	require.NoError(t, kw.RegisterPlaybooks(ctx, k.extraPlaybooks, k.skipPlaybooks), "Failed to register Assertoor playbooks")
 
 	if k.runSyncTest {
 		// Resume late-joining beacon node for normal sync and checkpoint sync test.
