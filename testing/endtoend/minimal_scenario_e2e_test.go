@@ -26,8 +26,22 @@ func TestEndToEnd_MinimalConfig_Web3Signer_PersistentKeys(t *testing.T) {
 }
 
 func TestEndToEnd_MinimalConfig_CurrentFork(t *testing.T) {
-	r := e2eMinimal(t, types.InitForkCfg(version.Electra, version.Electra, params.E2ETestConfig()), types.WithCheckpointSync())
-	r.run()
+	LoadPrysmDockerImages(t)
+
+	tests := []KurtosisTestSuites{
+		{
+			enclaveName: "minimal-current-fork",
+			configPath:  "testing/endtoend/network-config/minimal-current-fork.yaml",
+			epochsToRun: 15,
+			runSyncTest: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.enclaveName, func(t *testing.T) {
+			tt.Run(t)
+		})
+	}
 }
 
 // TestEndToEnd_Kurtosis_MinimalConfig_REST_SSZ runs the minimal e2e with validating VCs

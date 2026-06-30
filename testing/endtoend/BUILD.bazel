@@ -271,6 +271,7 @@ go_test(
     ],
     args = ["-test.v"],
     data = [
+"network-config/minimal-current-fork.yaml",
         "network-config/minimal-restapi.yaml",
         "//:prysm_sh",
         "//cmd/beacon-chain",
