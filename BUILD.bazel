@@ -287,9 +287,3 @@ common_files = {
     "//:LICENSE.md": "LICENSE.md",
     "//:README.md": "README.md",
 }
-
-sh_binary(
-    name = "prysm_sh",
-    srcs = ["prysm.sh"],
-    visibility = ["//visibility:public"],
-)

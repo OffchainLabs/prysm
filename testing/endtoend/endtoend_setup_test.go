@@ -83,7 +83,6 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 		TestSync:            true,
 		TestFeature:         true,
 		TestDeposits:        true,
-		UsePrysmShValidator: false,
 		UsePprof:            true,
 		TracingSinkEndpoint: tracingEndpoint,
 		Evaluators:          evals,
@@ -108,7 +107,7 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 	return newTestRunner(t, testConfig)
 }
 
-func e2eMainnet(t *testing.T, usePrysmSh, useMultiClient bool, cfg *params.BeaconChainConfig, cfgo ...types.E2EConfigOpt) *testRunner {
+func e2eMainnet(t *testing.T, useMultiClient bool, cfg *params.BeaconChainConfig, cfgo ...types.E2EConfigOpt) *testRunner {
 	params.SetupTestConfigCleanup(t)
 	require.NoError(t, params.SetActive(cfg))
 	if useMultiClient {
@@ -173,7 +172,6 @@ func e2eMainnet(t *testing.T, usePrysmSh, useMultiClient bool, cfg *params.Beaco
 		TestFeature:         true,
 		TestDeposits:        true,
 		UseFixedPeerIDs:     true,
-		UsePrysmShValidator: usePrysmSh,
 		UsePprof:            true,
 		TracingSinkEndpoint: tracingEndpoint,
 		Evaluators:          evals,

@@ -99,7 +99,6 @@ go_test(
     ],
     args = ["-test.v"],
     data = [
-        "//:prysm_sh",
         "//cmd/beacon-chain",
         "//cmd/validator",
         "//config/params:custom_configs",
@@ -202,7 +201,6 @@ go_test(
     ],
     args = ["-test.v"],
     data = [
-        "//:prysm_sh",
         "//cmd/beacon-chain",
         "//cmd/validator",
         "//config/params:custom_configs",
@@ -234,7 +232,6 @@ go_test(
     ],
     args = ["-test.v"],
     data = [
-        "//:prysm_sh",
         "//cmd/beacon-chain",
         "//cmd/validator",
         "//config/params:custom_configs",
@@ -271,7 +268,6 @@ go_test(
 "network-config/minimal-current-fork.yaml",
         "network-config/minimal-restapi.yaml",
         "network-config/minimal-web3signer.yaml",
-        "//:prysm_sh",
         "//cmd/beacon-chain",
         "//cmd/beacon-chain:oci_image_tarball_e2e",
         "//cmd/validator",

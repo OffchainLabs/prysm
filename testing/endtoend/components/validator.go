@@ -178,14 +178,9 @@ func (node *ValidatorNode) saveConfig() (string, error) {
 // Start starts a validator client.
 func (v *ValidatorNode) Start(ctx context.Context) error {
 	validatorHexPubKeys := make([]string, 0)
-	var pkg, target string
-	if v.config.UsePrysmShValidator {
-		pkg = ""
-		target = "prysm_sh"
-	} else {
-		pkg = "cmd/validator"
-		target = "validator"
-	}
+	pkg := "cmd/validator"
+	target := "validator"
+
 	binaryPath, found := bazel.FindBinary(pkg, target)
 	if !found {
 		return errors.New("validator binary not found")
@@ -250,20 +245,12 @@ func (v *ValidatorNode) Start(ctx context.Context) error {
 			fmt.Sprintf("--%s", features.EnableBeaconRESTApi.Name))
 	}
 
-	// Only apply e2e flags to the current branch. New flags may not exist in previous release.
-	if !v.config.UsePrysmShValidator {
-		args = append(args, features.E2EValidatorFlags...)
-	}
+	args = append(args, features.E2EValidatorFlags...)
 	args = append(args,
 		fmt.Sprintf("--%s=%d", flags.InteropNumValidators.Name, validatorNum),
 		fmt.Sprintf("--%s=%d", flags.InteropStartIndex.Name, offset),
 	)
 	args = append(args, config.ValidatorFlags...)
-
-	if v.config.UsePrysmShValidator {
-		args = append([]string{"validator"}, args...)
-		log.Warning("Using latest release validator via prysm.sh")
-	}
 
 	cmd := exec.CommandContext(ctx, binaryPath, args...) // #nosec G204 -- Safe
 

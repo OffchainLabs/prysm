@@ -54,7 +54,6 @@ type E2EConfig struct {
 	TestCheckpointSync      bool
 	TestSync                bool
 	TestFeature             bool
-	UsePrysmShValidator     bool
 	UsePprof                bool
 	TestDeposits            bool
 	UseFixedPeerIDs         bool
