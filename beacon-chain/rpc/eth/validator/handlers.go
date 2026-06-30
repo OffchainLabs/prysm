@@ -237,9 +237,11 @@ func (s *Server) SubmitSignedProposerPreferences(w http.ResponseWriter, r *http.
 		return
 	}
 
-	var prefs []*ethpbalpha.SignedProposerPreferences
-	var failures []*server.IndexedError
-	var decodeErr error
+	var (
+		prefs     []*ethpbalpha.SignedProposerPreferences
+		failures  []*server.IndexedError
+		decodeErr error
+	)
 	if httputil.IsRequestSsz(r) {
 		prefs, failures, decodeErr = decodeSignedProposerPreferencesSSZ(r.Body)
 	} else {
