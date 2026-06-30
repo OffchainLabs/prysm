@@ -30,12 +30,30 @@ func TestEndToEnd_MinimalConfig_CurrentFork(t *testing.T) {
 	r.run()
 }
 
-func TestEndToEnd_MinimalConfig_ValidatorRESTApi_SSZ(t *testing.T) {
-	e2eMinimal(t, types.InitForkCfg(version.Bellatrix, version.Electra, params.E2ETestConfig()), types.WithCheckpointSync(), types.WithValidatorRESTApi(), types.WithSSZOnly()).run()
-}
+// TestEndToEnd_Kurtosis_MinimalConfig_REST_SSZ runs the minimal e2e with validating VCs
+// Replaces the legacy ValidatorRESTApi and ValidatorRESTApi_SSZ tests.
+func TestEndToEnd_Kurtosis_MinimalConfig_REST_SSZ(t *testing.T) {
+	// Prerequisite for Kurtosis: Load images needed.
+	LoadPrysmDockerImages(t)
 
-func TestEndToEnd_MinimalConfig_ValidatorRESTApi(t *testing.T) {
-	e2eMinimal(t, types.InitForkCfg(version.Bellatrix, version.Electra, params.E2ETestConfig()), types.WithCheckpointSync(), types.WithValidatorRESTApi()).run()
+	tests := []KurtosisTestSuites{
+		{
+			enclaveName: "minimal-restapi",
+			configPath:  "testing/endtoend/network-config/minimal-restapi.yaml",
+			epochsToRun: 20,
+			runSyncTest: true,
+			// minimal-restapi reaches Electra at epoch 16. Current assertoor generates slashings only for Electra and later.
+			skipPlaybooks: []string{
+				"slashings.yaml",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.enclaveName, func(t *testing.T) {
+			tt.Run(t)
+		})
+	}
 }
 
 func TestEndToEnd_ScenarioRun_EEOffline(t *testing.T) {

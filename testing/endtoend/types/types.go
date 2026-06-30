@@ -6,11 +6,9 @@ import (
 	"context"
 	"os"
 
-	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
@@ -47,26 +45,12 @@ func WithValidatorCrossClient() E2EConfigOpt {
 	}
 }
 
-func WithValidatorRESTApi() E2EConfigOpt {
-	return func(cfg *E2EConfig) {
-		cfg.UseBeaconRestApi = true
-	}
-}
-
 // WithLargeBlobs configures the transaction generator to use large blob
 // transactions (6 blobs per tx) for testing BPO limits. Without this option,
 // small blob transactions (1 blob per tx) are used by default.
 func WithLargeBlobs() E2EConfigOpt {
 	return func(cfg *E2EConfig) {
 		cfg.UseLargeBlobs = true
-	}
-}
-
-func WithSSZOnly() E2EConfigOpt {
-	return func(cfg *E2EConfig) {
-		if err := os.Setenv(params.EnvNameOverrideAccept, api.OctetStreamMediaType); err != nil {
-			logrus.Fatal(err)
-		}
 	}
 }
 

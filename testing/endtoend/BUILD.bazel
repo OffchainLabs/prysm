@@ -260,18 +260,23 @@ go_test(
 go_test(
     name = "go_minimal_scenario_test",
     size = "large",
+    timeout = "eternal", # 3600s
     testonly = True,
     srcs = [
         "component_handler_test.go",
         "endtoend_setup_test.go",
         "endtoend_test.go",
+        "kurtosis_e2e_helper.go",
         "minimal_scenario_e2e_test.go",
     ],
     args = ["-test.v"],
     data = [
+        "network-config/minimal-restapi.yaml",
         "//:prysm_sh",
         "//cmd/beacon-chain",
+        "//cmd/beacon-chain:oci_image_tarball_e2e",
         "//cmd/validator",
+        "//cmd/validator:oci_image_tarball_e2e",
         "//config/params:custom_configs",
         "//tools/bootnode",
         "@com_github_ethereum_go_ethereum//cmd/geth",
@@ -281,13 +286,17 @@ go_test(
     flaky = True,
     shard_count = 2,
     tags = [
+        "e2e",
         "exclusive",
         "manual",
         "minimal",
         "requires-network",
         "scenario",
     ],
-    deps = common_deps,
+    deps = common_deps + [
+        "//testing/endtoend/kurtosis:go_default_library",
+        "@io_bazel_rules_go//go/tools/bazel:go_default_library",
+    ],
 )
 
 go_test(
