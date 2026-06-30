@@ -25,7 +25,6 @@ type componentHandler struct {
 	group                    *errgroup.Group
 	keygen                   e2etypes.ComponentRunner
 	tracingSink              e2etypes.ComponentRunner
-	web3Signer               e2etypes.ComponentRunner
 	bootnode                 e2etypes.ComponentRunner
 	eth1Miner                e2etypes.ComponentRunner
 	txGen                    e2etypes.ComponentRunner
@@ -78,19 +77,6 @@ func (c *componentHandler) setup() {
 			return keyGen.Start(ctx)
 		})
 		c.keygen = keyGen
-	}
-
-	var web3RemoteSigner *components.Web3RemoteSigner
-	if config.UseWeb3RemoteSigner {
-		web3RemoteSigner = components.NewWeb3RemoteSigner()
-		g.Go(func() error {
-			if err := web3RemoteSigner.Start(ctx); err != nil {
-				return errors.Wrap(err, "failed to start web3 remote signer")
-			}
-			return nil
-		})
-		c.web3Signer = web3RemoteSigner
-
 	}
 
 	// Boot node.
@@ -183,9 +169,6 @@ func (c *componentHandler) setup() {
 	validatorNodes := components.NewValidatorNodeSet(config)
 	g.Go(func() error {
 		comps := []e2etypes.ComponentRunner{beaconNodes}
-		if config.UseWeb3RemoteSigner {
-			comps = append(comps, web3RemoteSigner)
-		}
 		if err := helpers.ComponentsStarted(ctx, comps); err != nil {
 			return errors.Wrap(err, "validator nodes require components to run")
 		}

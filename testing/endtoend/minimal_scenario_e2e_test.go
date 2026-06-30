@@ -17,12 +17,27 @@ func TestEndToEnd_MultiScenarioRun(t *testing.T) {
 	runner.scenarioRunner()
 }
 
+// Note: Legacy UsePersistentKeyFile cannot be mimicked in Kurtosis-backed e2e tests
+// unless we submit a PR for ethereum-package that supports `--remote-signer-keys-file` flag.
+// Currently, ethereum-package ALWAYS starts Prysm remote signer with `--remote-signer-url`
+// and `--remote-signer-keys`.
 func TestEndToEnd_MinimalConfig_Web3Signer(t *testing.T) {
-	e2eMinimal(t, types.InitForkCfg(version.Bellatrix, version.Electra, params.E2ETestConfig()), types.WithRemoteSigner()).run()
-}
+	LoadPrysmDockerImages(t)
 
-func TestEndToEnd_MinimalConfig_Web3Signer_PersistentKeys(t *testing.T) {
-	e2eMinimal(t, types.InitForkCfg(version.Bellatrix, version.Electra, params.E2ETestConfig()), types.WithRemoteSignerAndPersistentKeysFile()).run()
+	tests := []KurtosisTestSuites{
+		{
+			enclaveName: "minimal-web3signer",
+			configPath:  "testing/endtoend/network-config/minimal-web3signer.yaml",
+			epochsToRun: 20,
+			runSyncTest: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.enclaveName, func(t *testing.T) {
+			tt.Run(t)
+		})
+	}
 }
 
 func TestEndToEnd_MinimalConfig_CurrentFork(t *testing.T) {
