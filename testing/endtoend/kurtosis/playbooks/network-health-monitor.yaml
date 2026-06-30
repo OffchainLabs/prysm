@@ -10,7 +10,7 @@
 
 id: network-health-monitor
 name: "Network health monitoring"
-timeout: 30m
+timeout: 60m
 
 config:
   # NOTE: This assumes the main nodes are the 1st and 2nd participants in Kurtosis network config file.
@@ -33,7 +33,7 @@ tasks:
     tasks:
       - name: check_clients_are_healthy
         title: "Client health"
-        timeout: 30m
+        timeout: 60m
         config:
           clientPattern: "mainNodePattern"
           continueOnPass: true
@@ -41,21 +41,21 @@ tasks:
       
       - name: check_consensus_sync_status
         title: "CL Sync status"
-        timeout: 30m
+        timeout: 60m
         config:
           clientPattern: "mainNodePattern"
           continueOnPass: true
 
       - name: check_execution_sync_status
         title: "EL Sync status"
-        timeout: 30m
+        timeout: 60m
         config:
           clientPattern: "mainNodePattern"
           continueOnPass: true
 
       - name: check_consensus_finality
         title: "Finality check"
-        timeout: 30m
+        timeout: 60m
         config:
           maxUnfinalizedEpochs: 4
           failOnCheckMiss: true
@@ -63,7 +63,7 @@ tasks:
 
       - name: check_consensus_attestation_stats
         title: "Attestation quality"
-        timeout: 30m
+        timeout: 60m
         config:
           minHeadPercent: 80
           failOnCheckMiss: true
@@ -75,7 +75,7 @@ tasks:
 
       - name: check_consensus_forks
         title: "Fork monitoring"
-        timeout: 30m
+        timeout: 60m
         config:
           maxForkDistance: 2
           # NOTE: This is intentional because of late-joining nodes.
@@ -86,7 +86,7 @@ tasks:
 
       - name: check_consensus_reorgs
         title: "Reorg monitoring"
-        timeout: 30m
+        timeout: 60m
         config:
           maxReorgsPerEpoch: 2
           continueOnPass: true

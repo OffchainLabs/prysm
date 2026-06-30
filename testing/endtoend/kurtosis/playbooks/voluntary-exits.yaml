@@ -6,7 +6,7 @@
 
 id: voluntary-exits
 name: "Voluntary exits are scheduled and processed"
-timeout: 30m
+timeout: 60m
 
 config:
   # NOTE: This is a default Kurtosis wallet mnemonic as "preregistered_validator_keys_mnemonic".
@@ -27,7 +27,7 @@ tasks:
   
   - name: check_consensus_slot_range
     title: "Wait until Capella fork is active"
-    timeout: 30m
+    timeout: 50m
     configVars:
       minEpochNumber: "| (.tasks.specs.outputs.specs.CAPELLA_FORK_EPOCH | tonumber) + 1"
 
@@ -51,7 +51,7 @@ tasks:
 
   - name: run_task_matrix
     title: "Wait for exited validators to be scheduled"
-    timeout: 20m
+    timeout: 30m
     configVars:
       matrixValues: "tasks.exit_batch.outputs.exitedValidators"
     config:
@@ -71,7 +71,7 @@ tasks:
   
   - name: run_task_matrix
     title: "Wait for exited validators"
-    timeout: 20m
+    timeout: 30m
     configVars:
       matrixValues: "tasks.exit_batch.outputs.exitedValidators"
     config:

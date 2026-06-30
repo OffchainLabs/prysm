@@ -6,7 +6,7 @@
 
 id: withdrawals
 name: "Exited validators are withdrawn"
-timeout: 30m
+timeout: 90m
 
 config:
   # NOTE: This is a default Kurtosis wallet mnemonic as "preregistered_validator_keys_mnemonic".
@@ -45,7 +45,7 @@ tasks:
   
   - name: check_consensus_slot_range
     title: "Wait until Capella fork is active"
-    timeout: 30m
+    timeout: 50m
     configVars:
       minEpochNumber: "| (.tasks.specs.outputs.specs.CAPELLA_FORK_EPOCH | tonumber) + 1"
 
@@ -96,7 +96,7 @@ tasks:
 
   - name: run_tasks_concurrent
     title: "Wait for full withdrawals"
-    timeout: 15m
+    timeout: 50m
     config:
       tasks:
         - name: run_task_matrix

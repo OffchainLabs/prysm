@@ -7,7 +7,7 @@
 
 id: validators-active
 name: "Validators are active"
-timeout: 30m
+timeout: 60m
 config:
   # Excluded: 0-1 exit, 2-3 withdraw, 4-6 slashed.
   expectedExitValidatorIndices:

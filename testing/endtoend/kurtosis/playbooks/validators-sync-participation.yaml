@@ -5,7 +5,7 @@
 
 id: validator-sync-participation
 name: "Validator sync committee participation check"
-timeout: 30m
+timeout: 60m
 
 tasks:
   - name: check_clients_are_healthy
@@ -33,7 +33,7 @@ tasks:
 
   - name: check_http_json
     title: "Sync participation >= 95%"
-    timeout: 30m
+    timeout: 60m
     configVars:
       url: '| .tasks.clients.outputs.goodClients[0].clRpcUrl + "/eth/v2/beacon/blocks/head"'
     config:

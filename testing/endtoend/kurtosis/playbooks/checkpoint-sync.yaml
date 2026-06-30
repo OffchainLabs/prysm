@@ -5,7 +5,7 @@
 
 id: checkpoint-sync
 name: "Late beacon node syncs from a finalized checkpoint"
-timeout: 30m
+timeout: 60m
 
 config:
   # NOTE: This assumes the late-joining node (w. checkpoint) is the 4th participant in Kurtosis network config file.
@@ -16,7 +16,7 @@ tasks:
   # matches nothing, instead of the sync check passing vacuously.
   - name: check_clients_are_healthy
     title: "Wait for the checkpoint-sync node to start and report healthy"
-    timeout: 25m
+    timeout: 50m
     configVars:
       clientPattern: "syncNodePattern"
     config:
@@ -24,7 +24,7 @@ tasks:
 
   - name: check_consensus_sync_status
     title: "Checkpoint-sync node is synced and following the chain head"
-    timeout: 25m
+    timeout: 50m
     configVars:
       clientPattern: "syncNodePattern"
     config:

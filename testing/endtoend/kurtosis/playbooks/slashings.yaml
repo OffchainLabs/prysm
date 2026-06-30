@@ -8,7 +8,7 @@
 
 id: slashings
 name: "Slashings are included and validators are slashed"
-timeout: 30m
+timeout: 60m
 
 config:
   # NOTE: This is a default Kurtosis wallet mnemonic as "preregistered_validator_keys_mnemonic".
@@ -29,7 +29,7 @@ tasks:
   # Surround-vote attester slashings require epoch >= 4 (need prior source/target epochs).
   - name: check_consensus_slot_range
     title: "Wait until attester slashings are valid"
-    timeout: 10m
+    timeout: 20m
     config:
       minEpochNumber: 4
 

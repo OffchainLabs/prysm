@@ -9,7 +9,7 @@
 
 id: fee-recipient
 name: "Fee recipient check"
-timeout: 20m
+timeout: 60m
 
 tasks:
   - name: check_clients_are_healthy

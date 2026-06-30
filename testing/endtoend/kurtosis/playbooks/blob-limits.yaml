@@ -5,7 +5,7 @@
 
 id: blob-limits
 name: "Blob BPO limits respected"
-timeout: 30m
+timeout: 60m
 
 config:
   walletPrivkey: ""

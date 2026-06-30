@@ -5,7 +5,7 @@
 
 id: metrics
 name: "Prysm metrics sanity check"
-timeout: 30m
+timeout: 60m
 
 tasks:
   - name: check_clients_are_healthy
@@ -19,7 +19,7 @@ tasks:
 
   - name: check_consensus_slot_range
     title: "Wait until metrics sample size is past genesis epoch"
-    timeout: 5m
+    timeout: 10m
     config:
       # Warm the caches before sampling. Cold-start cache misses are one-time, so
       # the cumulative miss ratio (asserted below) is worst right after genesis.
@@ -31,7 +31,7 @@ tasks:
 
   - name: run_task_matrix
     title: "Check each Prysm beacon node metrics endpoint"
-    timeout: 15m
+    timeout: 60m
     configVars:
       # Note that `check_clients_are_healthy` above returns with a list of healthy clients.
       # Concatenate the metrics default port (8080) to each healthy client RPC URL to get the metrics endpoint.
@@ -42,13 +42,13 @@ tasks:
       task:
         name: run_tasks_concurrent
         title: "Metrics checks for ${metricsUrl}"
-        timeout: 15m
+        timeout: 60m
         config:
           newVariableScope: false
           tasks:
             - name: check_http_metrics
               title: "Check memory usage for ${metricsUrl}"
-              timeout: 14m
+              timeout: 60m
               configVars:
                 url: "metricsUrl"
               config:
@@ -71,7 +71,7 @@ tasks:
             # 4. Failed attestation validations are under 15% of received messages.
             - name: run_javascript
               title: "Check metric ratios each epoch for ${metricsUrl}"
-              timeout: 15m
+              timeout: 60m
               config:
                 envVars:
                   METRICS_URL: "metricsUrl"

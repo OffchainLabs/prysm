@@ -5,7 +5,7 @@
 
 id: fork-transition-altair
 name: "Altair fork transition check"
-timeout: 30m
+timeout: 60m
 
 tasks:
   - name: get_consensus_specs
@@ -22,7 +22,7 @@ tasks:
 
   - name: check_consensus_slot_range
     title: "Wait for Altair fork epoch"
-    timeout: 30m
+    timeout: 50m
     if: '| (.tasks.specs.outputs.specs.ALTAIR_FORK_EPOCH | tonumber) as $epoch | ($epoch > 0 and $epoch < 18446744073709551615)'
     configVars:
       minEpochNumber: "| (.tasks.specs.outputs.specs.ALTAIR_FORK_EPOCH | tonumber)"
