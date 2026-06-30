@@ -15,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	blocktypes "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
@@ -316,14 +315,18 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 	// If it is an epoch boundary then process slots to get the right
 	// shuffling before checking if the proposer is tracked. Otherwise
 	// perform this check before. This is cheap as the NSC has already been updated.
-	var val cache.TrackedValidator
-	var ok bool
+	var pref *cache.ProposerPreference
 	e := slots.ToEpoch(slot)
 	stateEpoch := slots.ToEpoch(st.Slot())
 	fuluAndNextEpoch := st.Version() >= version.Fulu && e == stateEpoch+1
 	if e == stateEpoch || fuluAndNextEpoch {
-		val, ok = s.trackedProposer(st, slot)
-		if !ok {
+		var err error
+		pref, err = s.trackedProposer(st, slot)
+		if err != nil {
+			log.WithError(err).Error("Could not resolve tracked proposer")
+		}
+		if pref == nil {
+			// Not our proposer; skip the state copy and slot processing below.
 			return emptyAttri
 		}
 	}
@@ -339,11 +342,15 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 		}
 	}
 	if e > stateEpoch && !fuluAndNextEpoch {
-		emptyAttri := payloadattribute.EmptyWithVersion(st.Version())
-		val, ok = s.trackedProposer(st, slot)
-		if !ok {
-			return emptyAttri
+		var err error
+		pref, err = s.trackedProposer(st, slot)
+		if err != nil {
+			log.WithError(err).Error("Could not resolve tracked proposer")
 		}
+	}
+	if pref == nil {
+		// The slot's proposer is not ours, or a caller requested a slot in an earlier epoch than the head state.
+		return emptyAttri
 	}
 	// Get previous randao.
 	prevRando, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
@@ -359,6 +366,8 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 		return emptyAttri
 	}
 
+	feeRecipient := pref.FeeRecipientOrDefault()
+
 	v := st.Version()
 	switch {
 	case v >= version.Gloas:
@@ -367,17 +376,14 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 			log.WithError(err).Error("Could not get withdrawals for payload attribute")
 			return emptyAttri
 		}
-		targetGasLimit := val.GasLimit
-		if targetGasLimit == 0 {
-			targetGasLimit = params.BeaconConfig().DefaultBuilderGasLimit
-		}
-		return payloadAttributesGloas(uint64(t.Unix()), prevRando, val.FeeRecipient[:], headRoot, withdrawals, slot, targetGasLimit)
+		parentGasLimit := helpers.ParentTargetGasLimit(st)
+		return payloadAttributesGloas(uint64(t.Unix()), prevRando, feeRecipient[:], headRoot, withdrawals, slot, pref.GasLimitOr(parentGasLimit))
 	case v >= version.Deneb:
-		return payloadAttributesDeneb(st, uint64(t.Unix()), prevRando, val.FeeRecipient[:], headRoot)
+		return payloadAttributesDeneb(st, uint64(t.Unix()), prevRando, feeRecipient[:], headRoot)
 	case v >= version.Capella:
-		return payloadAttributesCapella(st, uint64(t.Unix()), prevRando, val.FeeRecipient[:])
+		return payloadAttributesCapella(st, uint64(t.Unix()), prevRando, feeRecipient[:])
 	case v >= version.Bellatrix:
-		return payloadAttributesBellatrix(uint64(t.Unix()), prevRando, val.FeeRecipient[:])
+		return payloadAttributesBellatrix(uint64(t.Unix()), prevRando, feeRecipient[:])
 	default:
 		log.WithField("version", version.String(v)).Error("Could not get payload attribute due to unknown state version")
 		return payloadattribute.EmptyWithVersion(v)

@@ -15,6 +15,7 @@ import (
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -399,35 +400,175 @@ func TestHaveAllSidecarsBeenSeen(t *testing.T) {
 		slot          = 42
 		proposerIndex = 1664
 	)
+	gloasRoot := [fieldparams.RootLength]byte{0xaa}
 	service := NewService(t.Context(), WithP2P(mockp2p.NewTestP2P(t)))
 	service.initCaches()
 
+	// Pre-Gloas sidecars are keyed by (slot, proposer index, index).
 	service.setSeenDataColumnIndex(slot, proposerIndex, 1)
 	service.setSeenDataColumnIndex(slot, proposerIndex, 3)
 
+	// Gloas sidecars are keyed by (block root, index).
+	service.setSeenDataColumnRootIndex(gloasRoot, 1, slot)
+	service.setSeenDataColumnRootIndex(gloasRoot, 3, slot)
+
 	testCases := []struct {
-		name     string
-		toSample map[uint64]bool
 		expected bool
+		isGloas  bool
+		root     [fieldparams.RootLength]byte
+		toSample map[uint64]bool
+		name     string
 	}{
 		{
-			name:     "all sidecars seen",
+			name:     "fulu all sidecars seen",
 			toSample: map[uint64]bool{1: true, 3: true},
 			expected: true,
 		},
 		{
-			name:     "not all sidecars seen",
+			name:     "fulu not all sidecars seen",
 			toSample: map[uint64]bool{1: true, 2: true, 3: true},
+			expected: false,
+		},
+		{
+			name:     "gloas all sidecars seen",
+			isGloas:  true,
+			root:     gloasRoot,
+			toSample: map[uint64]bool{1: true, 3: true},
+			expected: true,
+		},
+		{
+			name:     "gloas not all sidecars seen",
+			isGloas:  true,
+			root:     gloasRoot,
+			toSample: map[uint64]bool{1: true, 2: true, 3: true},
+			expected: false,
+		},
+		{
+			// Regression: Gloas columns must be read via the (root, index) key. Columns marked
+			// seen only under the Fulu (slot, proposer, index) key must not satisfy a Gloas check.
+			name:     "gloas does not read fulu key",
+			isGloas:  true,
+			root:     [fieldparams.RootLength]byte{0xbb},
+			toSample: map[uint64]bool{1: true, 3: true},
 			expected: false,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := service.haveAllSidecarsBeenSeen(slot, proposerIndex, tc.toSample)
+			actual := service.haveAllSidecarsBeenSeen(tc.isGloas, tc.root, slot, proposerIndex, tc.toSample)
 			require.Equal(t, tc.expected, actual)
 		})
 	}
+}
+
+// TestBroadcastAndReceiveUnseenDataColumnSidecars_GloasUsesRootKey verifies the unseen filter keys
+// Gloas sidecars by (block root, index): a column already seen under that key is skipped, the rest pass.
+func TestBroadcastAndReceiveUnseenDataColumnSidecars_GloasUsesRootKey(t *testing.T) {
+	chainService := &chainMock.ChainService{}
+	s := Service{
+		cfg: &config{
+			p2p:               mockp2p.NewTestP2P(t),
+			chain:             chainService,
+			clock:             startup.NewClock(time.Now(), [32]byte{}),
+			dataColumnStorage: filesystem.NewEphemeralDataColumnStorage(t),
+			operationNotifier: &chainMock.MockOperationNotifier{},
+		},
+		seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
+	}
+
+	slot := primitives.Slot(7)
+	root := [fieldparams.RootLength]byte{0xab}
+	needed := map[uint64]bool{0: true, 1: true, 2: true}
+
+	sidecars := make([]blocks.VerifiedRODataColumn, 0, 3)
+	for i := range uint64(3) {
+		gdc, err := blocks.NewRODataColumnGloasWithRoot(&ethpb.DataColumnSidecarGloas{
+			Index:           i,
+			Slot:            slot,
+			BeaconBlockRoot: root[:],
+		}, root)
+		require.NoError(t, err)
+		sidecars = append(sidecars, blocks.VerifiedRODataColumn{RODataColumn: gdc})
+	}
+
+	// Mark index 1 already seen via the Gloas (root, index) key.
+	s.setSeenDataColumnRootIndex(root, 1, slot)
+
+	unseen, err := s.broadcastAndReceiveUnseenDataColumnSidecars(t.Context(), slot, 0, needed, sidecars, false)
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(unseen))
+	require.Equal(t, true, unseen[0])
+	_, seen1 := unseen[1]
+	require.Equal(t, false, seen1)
+	require.Equal(t, true, unseen[2])
+}
+
+// TestProcessDataColumnSidecarsFromExecution_GloasEarlyExitWhenAllSeen verifies that when every
+// sampled Gloas column is already marked seen (e.g. delivered via gossip), the EL reconstruction
+// path exits early instead of reconstructing and re-broadcasting. Gloas columns are tracked under
+// the (block root, index) key, so the early-exit must consult that key, not the Fulu one.
+func TestProcessDataColumnSidecarsFromExecution_GloasEarlyExitWhenAllSeen(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.CapellaForkEpoch = 0
+	cfg.DenebForkEpoch = 0
+	cfg.ElectraForkEpoch = 0
+	cfg.FuluForkEpoch = 0
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	chainService := &chainMock.ChainService{Genesis: time.Now()}
+
+	// The EL would return a full set of columns if it were ever consulted.
+	elColumns := make([]blocks.VerifiedRODataColumn, fieldparams.NumberOfColumns)
+	for i := range elColumns {
+		gdc, err := blocks.NewRODataColumnGloas(&ethpb.DataColumnSidecarGloas{
+			Index:           uint64(i),
+			Slot:            primitives.Slot(1),
+			BeaconBlockRoot: make([]byte, 32),
+		})
+		require.NoError(t, err)
+		elColumns[i] = blocks.VerifiedRODataColumn{RODataColumn: gdc}
+	}
+
+	s := Service{
+		cfg: &config{
+			p2p:               mockp2p.NewTestP2P(t),
+			chain:             chainService,
+			clock:             startup.NewClock(time.Now(), [32]byte{}),
+			dataColumnStorage: filesystem.NewEphemeralDataColumnStorage(t),
+			executionReconstructor: &mockExecution.EngineClient{
+				DataColumnSidecars: elColumns,
+			},
+			operationNotifier: &chainMock.MockOperationNotifier{},
+		},
+		seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
+	}
+
+	_, _, err := s.cfg.p2p.UpdateCustodyInfo(0, params.BeaconConfig().CustodyRequirement)
+	require.NoError(t, err)
+
+	b := util.NewBeaconBlockGloas()
+	b.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = [][]byte{make([]byte, 48)}
+	b.Block.Slot = 1
+
+	sb, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	roBlock, err := blocks.NewROBlock(sb)
+	require.NoError(t, err)
+
+	// Simulate every column already received via gossip: mark seen under the Gloas (root, index) key.
+	root := roBlock.Root()
+	for i := range uint64(fieldparams.NumberOfColumns) {
+		s.setSeenDataColumnRootIndex(root, i, primitives.Slot(1))
+	}
+
+	require.NoError(t, s.processSidecarsFromExecutionFromBlock(t.Context(), roBlock))
+
+	// Early-exit must skip EL reconstruction entirely, so nothing is reconstructed/received.
+	require.Equal(t, 0, len(chainService.DataColumns))
 }
 
 func TestColumnIndicesToSample(t *testing.T) {

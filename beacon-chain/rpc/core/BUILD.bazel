@@ -8,6 +8,7 @@ go_library(
         "errors.go",
         "log.go",
         "service.go",
+        "subnets.go",
         "validator.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core",
@@ -56,6 +57,7 @@ go_test(
     name = "go_default_test",
     srcs = [
         "duties_test.go",
+        "subnets_test.go",
         "validator_test.go",
     ],
     embed = [":go_default_library"],
@@ -76,5 +78,6 @@ go_test(
         "//testing/util:go_default_library",
         "//time/slots:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
     ],
 )

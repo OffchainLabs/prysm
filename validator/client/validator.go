@@ -819,26 +819,32 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		return err
 	}
 
-	proposerReqs := v.buildProposerSettingsRequests(filteredKeys)
-	if len(proposerReqs) == 0 {
-		log.Warnf("Could not locate valid validator indices. Skipping prepare proposer routine")
-		return nil
-	}
-	if len(proposerReqs) != len(pubkeys) {
-		log.WithFields(logrus.Fields{
-			"pubkeysCount":                 len(pubkeys),
-			"proposerSettingsRequestCount": len(proposerReqs),
-		}).Debugln("Request count did not match included validator count. Only keys that have been activated will be included in the request.")
+	currentEpoch := slots.ToEpoch(slot)
+	isPreGloas := currentEpoch < params.BeaconConfig().GloasForkEpoch
+
+	// Pre-Gloas, PrepareBeaconProposer carries the per-validator fee recipient.
+	// Post-Gloas, SignedProposerPreferences (submitted below) is canonical.
+	if isPreGloas {
+		proposerReqs := v.buildProposerSettingsRequests(filteredKeys)
+		if len(proposerReqs) == 0 {
+			log.Warnf("Could not locate valid validator indices. Skipping prepare proposer routine")
+			return nil
+		}
+		if len(proposerReqs) != len(pubkeys) {
+			log.WithFields(logrus.Fields{
+				"pubkeysCount":                 len(pubkeys),
+				"proposerSettingsRequestCount": len(proposerReqs),
+			}).Debugln("Request count did not match included validator count. Only keys that have been activated will be included in the request.")
+		}
+		if _, err := v.validatorClient.PrepareBeaconProposer(ctx, &ethpb.PrepareBeaconProposerRequest{
+			Recipients: proposerReqs,
+		}); err != nil {
+			return err
+		}
+	} else {
+		v.upgradeProposerSettingsToV2(ctx)
 	}
 
-	// TODO(gloas): add gloas flag to stop needing prepare beacon proposer post gloas
-	if _, err := v.validatorClient.PrepareBeaconProposer(ctx, &ethpb.PrepareBeaconProposerRequest{
-		Recipients: proposerReqs,
-	}); err != nil {
-		return err
-	}
-
-	v.upgradeProposerSettingsToV2(ctx, slots.ToEpoch(slot))
 	prefs := v.buildProposerPreferences(ctx, km, slot, false)
 	if len(prefs) > 0 {
 		// Delay to mid-slot so the block for this slot is processed first.
@@ -854,7 +860,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 	}
 
 	// TODO: figure out what to do post gloas for builder apis
-	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
+	if !isPreGloas {
 		return nil
 	}
 
@@ -1036,12 +1042,9 @@ func (v *validator) buildProposerSettingsRequests(
 }
 
 // upgradeProposerSettingsToV2 migrates v1 proposer settings to v2 and persists
-// them. Deferred until gloas-active so the pre-gloas registration path still
-// sees BuilderConfig.
-func (v *validator) upgradeProposerSettingsToV2(ctx context.Context, currentEpoch primitives.Epoch) {
-	if currentEpoch < params.BeaconConfig().GloasForkEpoch {
-		return
-	}
+// them. Callers must gate this on gloas-active so the pre-gloas registration
+// path still sees BuilderConfig.
+func (v *validator) upgradeProposerSettingsToV2(ctx context.Context) {
 	ps := v.ProposerSettings()
 	if !ps.UpgradeToV2() {
 		return
@@ -1098,7 +1101,6 @@ func (v *validator) buildProposerPreferences(
 	}
 
 	var signedPrefs []*ethpb.SignedProposerPreferences
-	var sigFailCount int
 
 	// Per Gloas spec, dependent_root for a proposal in epoch E is the duty
 	// dependent root the beacon node uses to compute proposer duties for E:
@@ -1120,22 +1122,15 @@ func (v *validator) buildProposerPreferences(
 	// Current-epoch: submit after first slot of epoch to avoid stale state.
 	// force bypasses the timing gate for reorg resubmission.
 	if currentEpoch >= gloasEpoch && (force || slot > epochStart) {
-		signed, fails := v.processProposerDuties(ctx, km, currentDuties, slot, prevDepRoot, false)
-		signedPrefs = append(signedPrefs, signed...)
-		sigFailCount += fails
+		signedPrefs = append(signedPrefs, v.processProposerDuties(ctx, km, currentDuties, slot, prevDepRoot, false)...)
 	}
 
 	// Next-epoch: submit at or after mid-epoch. The gate is not bypassed
 	// by force because the beacon node may not have the next-epoch state ready.
 	if slot >= midEpoch {
-		signed, fails := v.processProposerDuties(ctx, km, nextDuties, slot, currDepRoot, true)
-		signedPrefs = append(signedPrefs, signed...)
-		sigFailCount += fails
+		signedPrefs = append(signedPrefs, v.processProposerDuties(ctx, km, nextDuties, slot, currDepRoot, true)...)
 	}
 
-	if sigFailCount > 0 {
-		log.WithField("count", sigFailCount).Warn("Failed to sign proposer preferences")
-	}
 	log.WithFields(logrus.Fields{
 		"slot":                 slot,
 		"epoch":                currentEpoch,
@@ -1150,8 +1145,8 @@ func (v *validator) buildProposerPreferences(
 }
 
 // processProposerDuties signs proposer preferences for the given duties and
-// records the slots submitted, returning the signed preferences and the number
-// of signing failures.
+// records the slots submitted, returning the signed preferences. Signing
+// failures are aggregated into a single warning carrying the first error.
 func (v *validator) processProposerDuties(
 	ctx context.Context,
 	km keymanager.IKeymanager,
@@ -1159,11 +1154,14 @@ func (v *validator) processProposerDuties(
 	slot primitives.Slot,
 	dependentRoot []byte,
 	isNextEpoch bool,
-) (signedPrefs []*ethpb.SignedProposerPreferences, sigFailCount int) {
+) []*ethpb.SignedProposerPreferences {
 	if len(dependentRoot) != fieldparams.RootLength {
-		return nil, 0
+		return nil
 	}
 
+	var signedPrefs []*ethpb.SignedProposerPreferences
+	var sigFailCount int
+	var firstErr error
 	for pk, duty := range duties {
 		if len(duty.ProposerSlots) == 0 {
 			continue
@@ -1193,6 +1191,9 @@ func (v *validator) processProposerDuties(
 			}
 			signedPref, err := v.signProposerPreferences(ctx, km, pk, pref)
 			if err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
 				sigFailCount++
 				v.releasePrefSlot(proposalSlot)
 				continue
@@ -1200,7 +1201,10 @@ func (v *validator) processProposerDuties(
 			signedPrefs = append(signedPrefs, signedPref)
 		}
 	}
-	return signedPrefs, sigFailCount
+	if sigFailCount > 0 {
+		log.WithError(firstErr).WithField("count", sigFailCount).Warn("Failed to sign proposer preferences")
+	}
+	return signedPrefs
 }
 
 // reservePrefSlot marks proposalSlot as submitted, returning false if another
@@ -1262,7 +1266,9 @@ func (v *validator) submitProposerPreferences(ctx context.Context) {
 		log.WithError(err).Warn("Failed to get keymanager for proposer preference resubmission")
 		return
 	}
-	v.upgradeProposerSettingsToV2(ctx, currentEpoch)
+	if currentEpoch >= params.BeaconConfig().GloasForkEpoch {
+		v.upgradeProposerSettingsToV2(ctx)
+	}
 	prefs := v.buildProposerPreferences(ctx, km, slot, true)
 	if len(prefs) == 0 {
 		return

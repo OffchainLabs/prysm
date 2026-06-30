@@ -88,6 +88,7 @@ go_library(
         "//consensus-types/interfaces:go_default_library",
         "//consensus-types/payload-attribute:go_default_library",
         "//consensus-types/primitives:go_default_library",
+        "//container/multi-value-slice:go_default_library",
         "//container/trie:go_default_library",
         "//contracts/deposit:go_default_library",
         "//crypto/bls:go_default_library",
