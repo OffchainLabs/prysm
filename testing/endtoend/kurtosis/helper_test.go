@@ -25,6 +25,12 @@ func TestYamlToJSON(t *testing.T) {
 			want: `{"enabled":true,"ratio":1.5}`,
 		},
 		{
+			// FAR_FUTURE_EPOCH (2^64-1) must survive without float rounding.
+			name: "large uint64 keeps precision",
+			yaml: "fulu_fork_epoch: 18446744073709551615\n",
+			want: `{"fulu_fork_epoch":18446744073709551615}`,
+		},
+		{
 			name:    "malformed yaml errors",
 			yaml:    "foo: [unclosed\n",
 			wantErr: true,

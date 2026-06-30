@@ -1,7 +1,6 @@
 package kurtosis
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -26,14 +25,9 @@ func readYamlConfigAsJson(networkConfigPath string) (string, error) {
 
 // yamlToJSON converts a YAML document to its JSON encoding.
 func yamlToJSON(yamlData []byte) (string, error) {
-	var body any
-	if err := yaml.Unmarshal(yamlData, &body); err != nil {
-		return "", fmt.Errorf("failed to unmarshal yaml: %w", err)
-	}
-
-	jsonData, err := json.Marshal(body)
+	jsonData, err := yaml.YAMLToJSON(yamlData)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal to json: %w", err)
+		return "", fmt.Errorf("failed to convert yaml to json: %w", err)
 	}
 
 	return string(jsonData), nil
