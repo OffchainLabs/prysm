@@ -6,6 +6,7 @@ go_library(
     srcs = [
         "bazel.go",
         "data_path.go",
+        "runfile_entry.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/build/bazel",
     visibility = ["//visibility:public"],
@@ -19,5 +20,6 @@ go_test(
     name = "go_default_test",
     size = "small",
     srcs = ["bazel_test.go"],
-    deps = [":go_default_library"],
+    embed = [":go_default_library"],
+    deps = ["@io_bazel_rules_go//go/tools/bazel:go_default_library"],
 )
