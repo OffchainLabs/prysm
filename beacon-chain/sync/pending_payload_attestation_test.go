@@ -152,9 +152,6 @@ func TestQueuePendingPayloadAttestation_DrainsWhenBlockInForkchoice(t *testing.T
 			operationNotifier:      &mock.MockOperationNotifier{},
 		},
 	}
-	s.newPayloadAttestationVerifier = func(pa payloadatt.ROMessage, reqs []verification.Requirement) verification.PayloadAttestationMsgVerifier {
-		return &verification.MockPayloadAttestation{}
-	}
 
 	att, _ := pendingPayloadAtt(t, []byte{'a'}, ptc[0], 0)
 	res, err := s.queuePendingPayloadAttestation(t.Context(), validSigVerifier(), att)
@@ -210,9 +207,6 @@ func TestProcessPendingPayloadAttestation_DrainsAndProcesses(t *testing.T) {
 			payloadAttestationPool: pool,
 			operationNotifier:      &mock.MockOperationNotifier{},
 		},
-	}
-	s.newPayloadAttestationVerifier = func(pa payloadatt.ROMessage, reqs []verification.Requirement) verification.PayloadAttestationMsgVerifier {
-		return &verification.MockPayloadAttestation{}
 	}
 
 	root := []byte{'a'}
