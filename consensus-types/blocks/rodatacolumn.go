@@ -9,10 +9,9 @@ import (
 )
 
 var (
-	errNilGloasDataColumn        = errors.New("received nil gloas data column sidecar")
-	errNotFuluDataColumn         = errors.New("data column sidecar is not a fulu type")
-	errNotGloasDataColumn        = errors.New("data column sidecar is not a gloas type")
-	errGloasBidCommitmentsNotSet = errors.New("gloas data column bid commitments not set")
+	errNilGloasDataColumn = errors.New("received nil gloas data column sidecar")
+	errNotFuluDataColumn  = errors.New("data column sidecar is not a fulu type")
+	errNotGloasDataColumn = errors.New("data column sidecar is not a gloas type")
 )
 
 // RODataColumn represents a read-only data column sidecar with its block root.
@@ -150,7 +149,7 @@ func (dc *RODataColumn) SignedBlockHeader() (*ethpb.SignedBeaconBlockHeader, err
 func (dc *RODataColumn) KzgCommitments() ([][]byte, error) {
 	if dc.gloas != nil {
 		if dc.bidCommitmentsGloas == nil {
-			return nil, errGloasBidCommitmentsNotSet
+			return nil, errNotFuluDataColumn
 		}
 		return dc.bidCommitmentsGloas, nil
 	}

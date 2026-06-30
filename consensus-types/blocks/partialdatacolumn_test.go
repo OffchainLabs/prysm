@@ -210,7 +210,7 @@ func TestNewPartialDataColumnFromVerifiedRODataColumn(t *testing.T) {
 				verified := NewVerifiedRODataColumn(RODataColumn{gloas: &ethpb.DataColumnSidecarGloas{}})
 				_, err := NewPartialDataColumnFromVerifiedRODataColumn(verified)
 				require.ErrorContains(t, "get KZG commitments", err)
-				require.ErrorIs(t, err, errGloasBidCommitmentsNotSet)
+				require.ErrorIs(t, err, errNotFuluDataColumn)
 			},
 		},
 	}
