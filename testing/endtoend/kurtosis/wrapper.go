@@ -129,6 +129,83 @@ func (kw *KurtosisWrapper) StartService(name string) error {
 	return nil
 }
 
+// StopService stops a running service by running a one-line Starlark script in
+// the enclave.
+func (kw *KurtosisWrapper) StopService(name string) error {
+	if kw.enclaveCtx == nil {
+		return fmt.Errorf("enclave context is nil")
+	}
+	script := fmt.Sprintf("def run(plan):\n    plan.stop_service(%q)\n", name)
+	err := kw.runStarlarkScript(script)
+	if err != nil {
+		return fmt.Errorf("failed to stop service %q: %w", name, err)
+	}
+	return nil
+}
+
+// ServiceAction surfaces orchestration actions (start/stop) for services in the enclave.
+type ServiceAction string
+
+const (
+	ServiceStart ServiceAction = "start"
+	ServiceStop  ServiceAction = "stop"
+)
+
+// EpochServiceEvent represents a service action (start/stop) to be scheduled at a specific epoch boundary.
+type EpochServiceEvent struct {
+	Epoch    uint64
+	Action   ServiceAction
+	Services []string
+}
+
+// ScheduleServiceEvents schedules Kurtosis service start/stop actions at epoch
+// boundaries computed from the enclave genesis time.
+func (kw *KurtosisWrapper) ScheduleServiceEvents(genesisTime time.Time, secondsPerEpoch uint64, events ...EpochServiceEvent) {
+	for _, event := range events {
+		runAt := genesisTime.Add(time.Duration(event.Epoch*secondsPerEpoch) * time.Second)
+		kw.ScheduleServiceAction(time.Until(runAt), event.Action, event.Services...)
+	}
+}
+
+// runStarlarkScript runs a Starlark script in the enclave and returns any error.
+func (kw *KurtosisWrapper) ScheduleServiceAction(delay time.Duration, action ServiceAction, services ...string) {
+	kw.t.Logf("Will %s services %v after %s", action, services, delay)
+
+	done := make(chan error, len(services))
+	go func() {
+		select {
+		case <-kw.ctx.Done():
+			return // run ended before the services were due to change state
+		case <-time.After(delay):
+		}
+		for _, name := range services {
+			kw.t.Logf("%s service %q", action, name)
+
+			switch action {
+			case ServiceStart:
+				done <- kw.StartService(name)
+			case ServiceStop:
+				done <- kw.StopService(name)
+			default:
+				done <- fmt.Errorf("unknown Kurtosis service action %q", action)
+			}
+		}
+	}()
+
+	kw.t.Cleanup(func() {
+		// Non-blocking: report any action that actually ran and failed.
+		for range services {
+			select {
+			case err := <-done:
+				if err != nil {
+					kw.t.Errorf("Failed to %s service: %v", action, err)
+				}
+			default:
+			}
+		}
+	})
+}
+
 // prysmCLServices returns all Prysm beacon (CL) service contexts in the enclave
 // keyed by name, plus their names sorted ("cl-<i>-prysm-<el>").
 func (kw *KurtosisWrapper) prysmCLServices() (map[services.ServiceName]*services.ServiceContext, []string, error) {

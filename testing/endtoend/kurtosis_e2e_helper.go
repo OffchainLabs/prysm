@@ -46,6 +46,7 @@ type KurtosisTestSuites struct {
 	lateSyncNodeDelay time.Duration
 	extraPlaybooks    []string
 	skipPlaybooks     []string
+	serviceEvents     []kurtosis.EpochServiceEvent
 }
 
 func (k *KurtosisTestSuites) Run(t *testing.T) {
@@ -101,6 +102,12 @@ func (k *KurtosisTestSuites) Run(t *testing.T) {
 
 	require.NoError(t, kw.RegisterPlaybooks(ctx, k.extraPlaybooks, k.skipPlaybooks), "Failed to register Assertoor playbooks")
 
+	k.scheduleServiceEvents(t, kw, genesisTime, secondsPerEpoch)
+
+	require.NoError(t, kw.WaitForAssertoor(ctx, deadline), "Assertoor checks failed")
+}
+
+func (k *KurtosisTestSuites) scheduleServiceEvents(t *testing.T, kw *kurtosis.KurtosisWrapper, genesisTime time.Time, secondsPerEpoch uint64) {
 	if k.runSyncTest {
 		// Resume late-joining beacon node for normal sync and checkpoint sync test.
 		stoppedNodes, err := kw.StoppedPrysmCLName()
@@ -110,10 +117,12 @@ func (k *KurtosisTestSuites) Run(t *testing.T) {
 		require.Equal(t, true, slices.Contains(stoppedNodes, CHECKPOINT_SYNC_NODE_SERVICE), "Expected stopped nodes to contain %s", CHECKPOINT_SYNC_NODE_SERVICE)
 
 		delay := time.Until(genesisTime.Add(k.lateSyncNodeDelay))
-		scheduleLateSyncNodeStart(t, ctx, kw, delay, SYNC_NODE_SERVICE, CHECKPOINT_SYNC_NODE_SERVICE)
+		kw.ScheduleServiceAction(delay, kurtosis.ServiceStart, SYNC_NODE_SERVICE, CHECKPOINT_SYNC_NODE_SERVICE)
 	}
 
-	require.NoError(t, kw.WaitForAssertoor(ctx, deadline), "Assertoor checks failed")
+	if len(k.serviceEvents) > 0 {
+		kw.ScheduleServiceEvents(genesisTime, secondsPerEpoch, k.serviceEvents...)
+	}
 }
 
 // waitForNodeReady blocks until the beacon node reports healthy (200 from
@@ -160,37 +169,6 @@ func fetchGenesisTime(t *testing.T, ctx context.Context, client *beacon.Client) 
 	require.NoError(t, err, "Failed to parse genesis time")
 
 	return time.Unix(secs, 0)
-}
-
-// scheduleLateSyncNodeStart starts the given skip_start beacon nodes after delay.
-func scheduleLateSyncNodeStart(t *testing.T, ctx context.Context, kw *kurtosis.KurtosisWrapper, delay time.Duration, names ...string) {
-	t.Logf("Will start late sync nodes %v after %s", names, delay)
-
-	done := make(chan error, len(names))
-	go func() {
-		select {
-		case <-ctx.Done():
-			return // run ended before the nodes were due to start
-		case <-time.After(delay):
-		}
-		for _, name := range names {
-			t.Logf("Starting late sync node %q", name)
-			done <- kw.StartService(name)
-		}
-	}()
-
-	t.Cleanup(func() {
-		// Non-blocking: report any start that actually ran and failed.
-		for range names {
-			select {
-			case err := <-done:
-				if err != nil {
-					t.Errorf("Failed to start late sync node: %v", err)
-				}
-			default:
-			}
-		}
-	})
 }
 
 // LoadPrysmDockerImages loads the Prysm beacon-chain and validator Docker images
