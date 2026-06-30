@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -74,8 +75,7 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	// [IGNORE] matching SignedProposerPreferences seen, keyed on the proposer
 	// dep root anchored to bid.parent_block_root.
 	parentBlockRoot := bid.ParentBlockRoot()
-	priorEpoch, _ := slots.ToEpoch(bid.Slot()).SafeSub(1)
-	dependentRoot, err := s.cfg.chain.DependentRootForEpoch(parentBlockRoot, priorEpoch)
+	dependentRoot, err := s.proposerDependentRoot(parentBlockRoot, bid.Slot())
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
@@ -175,6 +175,21 @@ func (s *Service) hasSeenExecutionPayloadBidBuilder(key string) bool {
 
 func (s *Service) setSeenExecutionPayloadBidBuilder(slot primitives.Slot, key string) {
 	s.seenExecutionPayloadBidCache.Add(slot, key, true)
+}
+
+// proposerDependentRoot returns the post-Fulu spec's proposer dep root for
+// epoch(slot), anchored to parentBlockRoot's chain. DependentRootForEpoch maps
+// the genesis-era underflow (epoch < 2) to the origin block root.
+func (s *Service) proposerDependentRoot(parentBlockRoot [32]byte, slot primitives.Slot) ([32]byte, error) {
+	previousEpoch := slots.ToEpoch(slot)
+	if previousEpoch > 0 {
+		previousEpoch = previousEpoch.Sub(1)
+	}
+	depRoot, err := s.cfg.chain.DependentRootForEpoch(parentBlockRoot, previousEpoch)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "dependent root for epoch")
+	}
+	return depRoot, nil
 }
 
 func (s *Service) isHighestExecutionPayloadBid(bid interfaces.ROExecutionPayloadBid) bool {

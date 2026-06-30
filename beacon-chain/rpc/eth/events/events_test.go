@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen/mock"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -27,6 +28,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -573,10 +575,10 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 	})
 	t.Run("payload attributes", func(t *testing.T) {
 		type testCase struct {
-			name                      string
-			getState                  func() state.BeaconState
-			getBlock                  func() interfaces.SignedBeaconBlock
-			SetTrackedValidatorsCache func(*cache.TrackedValidatorsCache)
+			name                        string
+			getState                    func() state.BeaconState
+			getBlock                    func() interfaces.SignedBeaconBlock
+			SetProposerPreferencesCache func(*cache.ProposerPreferencesCache)
 		}
 		testCases := []testCase{
 			{
@@ -630,13 +632,6 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 					require.NoError(t, err)
 					return b
 				},
-				SetTrackedValidatorsCache: func(c *cache.TrackedValidatorsCache) {
-					c.Set(cache.TrackedValidator{
-						Active:       true,
-						Index:        0,
-						FeeRecipient: primitives.ExecutionAddress(common.HexToAddress("0xd2DBd02e4efe087d7d195de828b9Dd25f19A89C9").Bytes()),
-					})
-				},
 			},
 		}
 		for _, tc := range testCases {
@@ -668,17 +663,19 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 				opn := mockChain.NewEventFeedWrapper()
 				stategen := mock.NewService()
 				stategen.AddStateForRoot(st, headRoot)
+				beaconDB := dbtest.SetupDB(t)
 				s := &Server{
-					StateNotifier:          &mockChain.SimpleNotifier{Feed: stn},
-					OperationNotifier:      &mockChain.SimpleNotifier{Feed: opn},
-					HeadFetcher:            mockChainService,
-					ChainInfoFetcher:       mockChainService,
-					TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-					EventWriteTimeout:      testEventWriteTimeout,
-					StateGen:               stategen,
+					StateNotifier:            &mockChain.SimpleNotifier{Feed: stn},
+					OperationNotifier:        &mockChain.SimpleNotifier{Feed: opn},
+					HeadFetcher:              mockChainService,
+					ChainInfoFetcher:         mockChainService,
+					ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+					BeaconDB:                 beaconDB,
+					EventWriteTimeout:        testEventWriteTimeout,
+					StateGen:                 stategen,
 				}
-				if tc.SetTrackedValidatorsCache != nil {
-					tc.SetTrackedValidatorsCache(s.TrackedValidatorsCache)
+				if tc.SetProposerPreferencesCache != nil {
+					tc.SetProposerPreferencesCache(s.ProposerPreferencesCache)
 				}
 				topics, err := newTopicRequest([]string{PayloadAttributesTopic})
 				require.NoError(t, err)
@@ -782,16 +779,48 @@ func newPartialFillTestServer(t *testing.T) (*Server, payloadattribute.EventData
 	stategen := mock.NewService()
 	stategen.AddStateForRoot(st, headRoot)
 	srv := &Server{
-		StateNotifier:          &mockChain.SimpleNotifier{Feed: mockChain.NewEventFeedWrapper()},
-		OperationNotifier:      &mockChain.SimpleNotifier{Feed: mockChain.NewEventFeedWrapper()},
-		HeadFetcher:            mockChainService,
-		ChainInfoFetcher:       mockChainService,
-		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-		EventWriteTimeout:      testEventWriteTimeout,
-		StateGen:               stategen,
+		StateNotifier:            &mockChain.SimpleNotifier{Feed: mockChain.NewEventFeedWrapper()},
+		OperationNotifier:        &mockChain.SimpleNotifier{Feed: mockChain.NewEventFeedWrapper()},
+		HeadFetcher:              mockChainService,
+		ChainInfoFetcher:         mockChainService,
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		EventWriteTimeout:        testEventWriteTimeout,
+		StateGen:                 stategen,
 	}
 	// ProposalSlot sits in a later epoch than the head to exercise slot processing.
 	return srv, payloadattribute.EventData{ProposalSlot: 42, HeadBlock: b, HeadRoot: headRoot}
+}
+
+func TestComputePayloadAttributes_CacheMissEmitsDefaults(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.DefaultFeeRecipient = common.Address([20]byte{'a'})
+	cfg.DefaultBuilderGasLimit = 36_000_000
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := t.Context()
+	const parentGasLimit uint64 = 40_000_000
+	st, err := util.NewBeaconStateGloas(func(s *eth.BeaconStateGloas) error {
+		s.LatestExecutionPayloadBid.BlockHash = bytesutil.PadTo([]byte{0x01}, 32)
+		s.LatestExecutionPayloadBid.GasLimit = parentGasLimit
+		return nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, st.SetSlot(1))
+
+	srv := &Server{
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		BeaconDB:                 dbtest.SetupDB(t),
+	}
+
+	attr, err := srv.computePayloadAttributes(ctx, st, [32]byte{}, 0, uint64(time.Now().Unix()), make([]byte, 32), 1)
+	require.NoError(t, err)
+
+	require.DeepEqual(t, cfg.DefaultFeeRecipient.Bytes(), attr.SuggestedFeeRecipient())
+
+	v4, err := attr.PbV4()
+	require.NoError(t, err)
+	require.Equal(t, parentGasLimit, v4.TargetGasLimit)
 }
 
 func setActiveValidators(t *testing.T, st state.BeaconState, count int) {

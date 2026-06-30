@@ -376,20 +376,31 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExchangeCapabilities")
 	defer span.End()
 
+	capacity := len(supportedEngineEndpoints)
 	if params.ElectraEnabled() {
-		supportedEngineEndpoints = append(supportedEngineEndpoints, electraEngineEndpoints...)
+		capacity += len(electraEngineEndpoints)
 	}
-
 	if params.FuluEnabled() {
-		supportedEngineEndpoints = append(supportedEngineEndpoints, fuluEngineEndpoints...)
+		capacity += len(fuluEngineEndpoints)
 	}
-
 	if params.GloasEnabled() {
-		supportedEngineEndpoints = append(supportedEngineEndpoints, gloasEngineEndpoints...)
+		capacity += len(gloasEngineEndpoints)
 	}
 
-	elSupportedEndpointsSlice := make([]string, len(supportedEngineEndpoints))
-	if err := s.rpcClient.CallContext(ctx, &elSupportedEndpointsSlice, ExchangeCapabilities, supportedEngineEndpoints); err != nil {
+	endpoints := make([]string, 0, capacity)
+	endpoints = append(endpoints, supportedEngineEndpoints...)
+	if params.ElectraEnabled() {
+		endpoints = append(endpoints, electraEngineEndpoints...)
+	}
+	if params.FuluEnabled() {
+		endpoints = append(endpoints, fuluEngineEndpoints...)
+	}
+	if params.GloasEnabled() {
+		endpoints = append(endpoints, gloasEngineEndpoints...)
+	}
+
+	elSupportedEndpointsSlice := make([]string, 0, len(endpoints))
+	if err := s.rpcClient.CallContext(ctx, &elSupportedEndpointsSlice, ExchangeCapabilities, endpoints); err != nil {
 		return nil, handleRPCError(err)
 	}
 
@@ -399,7 +410,7 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	}
 
 	unsupported := make([]string, 0)
-	for _, method := range supportedEngineEndpoints {
+	for _, method := range endpoints {
 		if !elSupportedEndpoints[method] {
 			unsupported = append(unsupported, method)
 		}

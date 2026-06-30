@@ -82,17 +82,16 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		return wrapDataColumnError(sidecar, "receive data column sidecar", err)
 	}
 
-	// Reconstruction and execution processing require Fulu-specific fields
-	// (SignedBlockHeader, KzgCommitments) that Gloas sidecars don't carry.
+	// CL reconstruction (from >=50% seen columns) runs for both Fulu and Gloas.
+	wg.Go(func() error {
+		if err := s.processDataColumnSidecarsFromReconstruction(ctx, sidecar); err != nil {
+			return wrapDataColumnError(sidecar, "process data column sidecars from reconstruction", err)
+		}
+
+		return nil
+	})
+
 	if !sidecar.IsGloas() {
-		wg.Go(func() error {
-			if err := s.processDataColumnSidecarsFromReconstruction(ctx, sidecar); err != nil {
-				return wrapDataColumnError(sidecar, "process data column sidecars from reconstruction", err)
-			}
-
-			return nil
-		})
-
 		wg.Go(func() error {
 			if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromSidecar(sidecar)); err != nil {
 				if errors.Is(err, context.Canceled) {
@@ -184,13 +183,8 @@ func (s *Service) verifiedRODataColumnSubscriber(ctx context.Context, sidecar bl
 		return nil
 	})
 
-	// Gloas full-column reconstruction-from-subset is a separate, unimplemented feature, and
-	// processDataColumnSidecarsFromReconstruction reads the proposer index, which Gloas columns
-	// do not carry. Skip it for Gloas.
-	if !sidecar.IsGloas() {
-		if err := s.processDataColumnSidecarsFromReconstruction(ctx, sidecar); err != nil {
-			return errors.Wrap(err, "process data column sidecars from reconstruction")
-		}
+	if err := s.processDataColumnSidecarsFromReconstruction(ctx, sidecar); err != nil {
+		return errors.Wrap(err, "process data column sidecars from reconstruction")
 	}
 
 	return wg.Wait()

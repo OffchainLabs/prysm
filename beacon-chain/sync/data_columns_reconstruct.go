@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -19,22 +20,22 @@ import (
 // broadcast and receive missing data column sidecars for the given block root.
 // https:github.com/ethereum/consensus-specs/blob/master/specs/fulu/das-core.md#reconstruction-and-cross-seeding
 func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
-	// Gloas full-column reconstruction-from-subset is a separate, unimplemented feature. This
-	// path reads the proposer index and uses the proposer-keyed seen cache, neither of which
-	// applies to Gloas columns. Callers already gate this off for Gloas; guard here too.
-	if sidecar.IsGloas() {
-		return nil
-	}
-
 	key := fmt.Sprintf("%#x", sidecar.BlockRoot())
 	if _, err, _ := s.reconstructionSingleFlight.Do(key, func() (any, error) {
 		var wg sync.WaitGroup
 
 		root := sidecar.BlockRoot()
 		slot := sidecar.Slot()
-		proposerIndex, err := sidecar.ProposerIndex()
-		if err != nil {
-			return nil, err
+		isGloas := sidecar.IsGloas()
+
+		// Gloas sidecars don't carry a proposer index. It is only used downstream for the
+		// pre-Gloas seen-cache key and for logging.
+		var proposerIndex primitives.ValidatorIndex
+		if !isGloas {
+			var err error
+			if proposerIndex, err = sidecar.ProposerIndex(); err != nil {
+				return nil, err
+			}
 		}
 
 		// Return early if reconstruction is not needed.
@@ -111,14 +112,18 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 				return
 			}
 
-			log.WithFields(logrus.Fields{
-				"root":          fmt.Sprintf("%#x", root),
-				"slot":          slot,
-				"proposerIndex": proposerIndex,
-				"count":         len(unseenIndices),
-				"indices":       helpers.SortedPrettySliceFromMap(unseenIndices),
-				"duration":      duration,
-			}).Debug("Reconstructed data column sidecars")
+			fields := logrus.Fields{
+				"root":     fmt.Sprintf("%#x", root),
+				"slot":     slot,
+				"count":    len(unseenIndices),
+				"indices":  helpers.SortedPrettySliceFromMap(unseenIndices),
+				"duration": duration,
+			}
+			// Gloas sidecars have no proposer index; only log it for pre-Gloas.
+			if !isGloas {
+				fields["proposerIndex"] = proposerIndex
+			}
+			log.WithFields(fields).Debug("Reconstructed data column sidecars")
 		})
 
 		wg.Wait()

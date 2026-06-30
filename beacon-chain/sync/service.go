@@ -197,13 +197,13 @@ type Service struct {
 	payloadEnvelopeRequestSingleFlight   singleflight.Group
 	availableBlocker                     coverage.AvailableBlocker
 	reconstructionRandGen                *rand.Rand
-	trackedValidatorsCache               *cache.TrackedValidatorsCache
 	ctxMap                               ContextByteVersions
 	slasherEnabled                       bool
 	lcStore                              *lightClient.Store
 	dataColumnLogCh                      chan dataColumnLogEntry
 	payloadAttestationCache              *cache.PayloadAttestationCache
 	proposerPreferencesCache             *cache.ProposerPreferencesCache
+	subscribedValidatorsCache            *cache.SubscribedValidatorsCache
 	digestActions                        perDigestSet
 	subscriptionSpawner                  func(func()) // see Service.spawn for details
 	newExecutionPayloadEnvelopeVerifier  verification.NewExecutionPayloadEnvelopeVerifier

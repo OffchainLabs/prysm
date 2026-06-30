@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	rpchelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
@@ -28,15 +27,16 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	validator2 "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpbalpha "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation/aggregation/attestations"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -630,18 +630,17 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Verify validators at the beginning to return early if request is invalid.
-	validators := make([]state.ReadOnlyValidator, len(req.Data))
-	subscriptions := make([]*validator2.BeaconCommitteeSubscription, len(req.Data))
+	// Convert and validate each subscription up front so an invalid item fails
+	// the request before any subnets are computed.
+	subs := make([]core.SubnetSubscription, len(req.Data))
+	indices := make([]primitives.ValidatorIndex, len(req.Data))
 	for i, item := range req.Data {
 		consensusItem, err := item.ToConsensus()
 		if err != nil {
 			httputil.HandleError(w, "Could not convert request subscription to consensus subscription: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		subscriptions[i] = consensusItem
-		val, err := st.ValidatorAtIndexReadOnly(consensusItem.ValidatorIndex)
-		if err != nil {
+		if _, err := st.ValidatorAtIndexReadOnly(consensusItem.ValidatorIndex); err != nil {
 			if errors.Is(err, mvslice.ErrOutOfBounds) {
 				httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusBadRequest)
 				return
@@ -649,40 +648,20 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 			httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		validators[i] = val
-	}
-
-	fetchValsLen := func(slot primitives.Slot) (uint64, error) {
-		wantedEpoch := slots.ToEpoch(slot)
-		vals, err := s.HeadFetcher.HeadValidatorsIndices(ctx, wantedEpoch)
-		if err != nil {
-			return 0, err
+		indices[i] = consensusItem.ValidatorIndex
+		subs[i] = core.SubnetSubscription{
+			Slot:             consensusItem.Slot,
+			CommitteeIndex:   consensusItem.CommitteeIndex,
+			IsAggregator:     consensusItem.IsAggregator,
+			CommitteesAtSlot: consensusItem.CommitteesAtSlot,
 		}
-		return uint64(len(vals)), nil
 	}
-
-	// Request the head validator indices of epoch represented by the first requested slot.
-	currValsLen, err := fetchValsLen(subscriptions[0].Slot)
-	if err != nil {
+	if err := core.ComputeAndCacheCommitteeSubnets(ctx, s.HeadFetcher, subs); err != nil {
 		httputil.HandleError(w, "Could not retrieve head validator length: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	currEpoch := slots.ToEpoch(subscriptions[0].Slot)
-	for _, sub := range subscriptions {
-		// If epoch has changed, re-request active validators length
-		if currEpoch != slots.ToEpoch(sub.Slot) {
-			currValsLen, err = fetchValsLen(sub.Slot)
-			if err != nil {
-				httputil.HandleError(w, "Could not retrieve head validator length: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
-			currEpoch = slots.ToEpoch(sub.Slot)
-		}
-		subnet := helpers.ComputeSubnetFromCommitteeAndSlot(currValsLen, sub.CommitteeIndex, sub.Slot)
-		cache.SubnetIDs.AddAttesterSubnetID(sub.Slot, subnet)
-		if sub.IsAggregator {
-			cache.SubnetIDs.AddAggregatorSubnetID(sub.Slot, subnet)
-		}
+	for _, idx := range indices {
+		s.SubscribedValidatorsCache.Add(idx)
 	}
 }
 
@@ -833,6 +812,11 @@ func (s *Server) RegisterValidator(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.RegisterValidators")
 	defer span.End()
 
+	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
+		log.Warn("/eth/v1/validator/register_validator is deprecated post-Gloas; validator clients should use SignedProposerPreferences instead. Request accepted as a no-op.")
+		return
+	}
+
 	if s.BlockBuilder == nil || !s.BlockBuilder.Configured() {
 		httputil.HandleError(w, fmt.Sprintf("Could not register block builder: %v", builder.ErrNoBuilder), http.StatusBadRequest)
 		return
@@ -869,8 +853,13 @@ func (s *Server) RegisterValidator(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// PrepareBeaconProposer endpoint saves the fee recipient given a validator index, this is used when proposing a block.
+// PrepareBeaconProposer saves the per-validator fee recipient default. Post-Gloas
+// SignedProposerPreferences replaces this endpoint; requests are accepted as a no-op.
 func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
+	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
+		log.Warn("/eth/v1/validator/prepare_beacon_proposer is deprecated post-Gloas; use SignedProposerPreferences. Request accepted as a no-op.")
+		return
+	}
 	var jsonFeeRecipients []*structs.FeeRecipient
 	err := json.NewDecoder(r.Body).Decode(&jsonFeeRecipients)
 	switch {
@@ -881,8 +870,6 @@ func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	var validatorIndices []primitives.ValidatorIndex
-	// filter for found fee recipients
 	for _, r := range jsonFeeRecipients {
 		validatorIndex, valid := shared.ValidateUint(w, "validator_index", r.ValidatorIndex)
 		if !valid {
@@ -892,33 +879,17 @@ func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
 		if !valid {
 			return
 		}
-		// Use default address if the burn address is return
-		feeRecipient := primitives.ExecutionAddress(feeRecipientBytes)
-		if feeRecipient == primitives.ExecutionAddress([20]byte{}) {
-			feeRecipient = primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
-			if feeRecipient == primitives.ExecutionAddress([20]byte{}) {
-				log.WithField("validatorIndex", validatorIndex).Warn("Fee recipient is the burn address")
-			}
+		feeRecipient := feeRecipientBytes
+		if common.BytesToAddress(feeRecipient) == (common.Address{}) {
+			feeRecipient = params.BeaconConfig().DefaultFeeRecipient.Bytes()
 		}
-		val := cache.TrackedValidator{
-			Active:       true, // TODO: either check or add the field in the request
-			Index:        primitives.ValidatorIndex(validatorIndex),
-			FeeRecipient: feeRecipient,
-		}
-		s.TrackedValidatorsCache.Set(val)
-		validatorIndices = append(validatorIndices, primitives.ValidatorIndex(validatorIndex))
+		s.ProposerPreferencesCache.SetDefault(cache.ProposerPreference{
+			ValidatorIndex: primitives.ValidatorIndex(validatorIndex),
+			FeeRecipient:   bytesutil.ToBytes20(feeRecipient),
+		})
+		s.SubscribedValidatorsCache.Add(primitives.ValidatorIndex(validatorIndex))
 	}
-
-	if len(validatorIndices) == 0 {
-		return
-	}
-
-	log := log.WithField("validatorCount", len(validatorIndices))
-	if logrus.GetLevel() >= logrus.TraceLevel {
-		log = log.WithField("validatorIndices", validatorIndices)
-	}
-
-	log.Debug("Updated fee recipient addresses")
+	log.WithField("validatorCount", len(jsonFeeRecipients)).Debug("Updated fee recipient addresses")
 }
 
 // GetAttesterDuties requests the beacon node to provide a set of attestation duties,

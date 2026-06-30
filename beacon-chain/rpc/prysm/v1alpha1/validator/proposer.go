@@ -23,6 +23,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -110,7 +111,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 		builderBoostFactor = primitives.Gwei(req.BuilderBoostFactor.Value)
 	}
 
-	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor, full)
+	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor, full, req.EagerPayloadStateRoot)
 	l := log.WithFields(logrus.Fields{
 		"sinceSlotStartTime": time.Since(t),
 		"validator":          sBlk.Block().ProposerIndex(),
@@ -190,103 +191,79 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 	return head, parentRoot, vs.ForkchoiceFetcher.FullBeatsEmpty(parentRoot), err
 }
 
-func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull bool) (*ethpb.GenericBeaconBlock, error) {
-	if sBlk.Version() >= version.Gloas && parentFull {
-		if err := vs.applyParentExecutionPayloadToHead(ctx, head, sBlk.Block().ParentRoot()); err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not apply parent execution payload: %v", err)
+func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull, eagerPayloadStateRoot bool) (*ethpb.GenericBeaconBlock, error) {
+	if sBlk.Version() >= version.Gloas {
+		return vs.buildBlockGloas(ctx, sBlk, head, skipMevBoost, parentFull, eagerPayloadStateRoot)
+	}
+	return vs.buildBlockFulu(ctx, sBlk, head, skipMevBoost, builderBoostFactor, parentFull)
+}
+
+// setPreGloasConsensusFields fills the consensus body fields introduced before Gloas, shared by both build paths.
+func (vs *Server) setPreGloasConsensusFields(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState) {
+	eth1Data, err := vs.eth1DataMajorityVote(ctx, head)
+	if err != nil {
+		eth1Data = &ethpb.Eth1Data{DepositRoot: params.BeaconConfig().ZeroHash[:], BlockHash: params.BeaconConfig().ZeroHash[:]}
+		log.WithError(err).Error("Could not get eth1data")
+	}
+	sBlk.SetEth1Data(eth1Data)
+
+	deposits, atts, err := vs.packDepositsAndAttestations(ctx, head, sBlk.Block().Slot(), eth1Data) // TODO: split attestations and deposits
+	if err != nil {
+		sBlk.SetDeposits([]*ethpb.Deposit{})
+		if err := sBlk.SetAttestations([]ethpb.Att{}); err != nil {
+			log.WithError(err).Error("Could not set attestations on block")
+		}
+		log.WithError(err).Error("Could not pack deposits and attestations")
+	} else {
+		sBlk.SetDeposits(deposits)
+		if err := sBlk.SetAttestations(atts); err != nil {
+			log.WithError(err).Error("Could not set attestations on block")
 		}
 	}
 
-	// Build consensus fields in background
+	validProposerSlashings, validAttSlashings := vs.getSlashings(ctx, head)
+	sBlk.SetProposerSlashings(validProposerSlashings)
+	if err := sBlk.SetAttesterSlashings(validAttSlashings); err != nil {
+		log.WithError(err).Error("Could not set attester slashings on block")
+	}
+
+	sBlk.SetVoluntaryExits(vs.getExits(head, sBlk.Block().Slot()))
+	vs.setSyncAggregate(ctx, sBlk, head) // no-op pre-Altair
+	vs.setBlsToExecData(sBlk, head)      // no-op pre-Capella
+}
+
+// buildBlockFulu builds a pre-Gloas block (phase0 through Fulu), whose body embeds the
+// execution payload itself or a blinded builder header.
+func (vs *Server) buildBlockFulu(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull bool) (*ethpb.GenericBeaconBlock, error) {
 	var wg sync.WaitGroup
-	wg.Go(func() {
-		// Set eth1 data.
-		eth1Data, err := vs.eth1DataMajorityVote(ctx, head)
-		if err != nil {
-			eth1Data = &ethpb.Eth1Data{DepositRoot: params.BeaconConfig().ZeroHash[:], BlockHash: params.BeaconConfig().ZeroHash[:]}
-			log.WithError(err).Error("Could not get eth1data")
-		}
-		sBlk.SetEth1Data(eth1Data)
-
-		// Set deposit and attestation.
-		deposits, atts, err := vs.packDepositsAndAttestations(ctx, head, sBlk.Block().Slot(), eth1Data) // TODO: split attestations and deposits
-		if err != nil {
-			sBlk.SetDeposits([]*ethpb.Deposit{})
-			if err := sBlk.SetAttestations([]ethpb.Att{}); err != nil {
-				log.WithError(err).Error("Could not set attestations on block")
-			}
-			log.WithError(err).Error("Could not pack deposits and attestations")
-		} else {
-			sBlk.SetDeposits(deposits)
-			if err := sBlk.SetAttestations(atts); err != nil {
-				log.WithError(err).Error("Could not set attestations on block")
-			}
-		}
-
-		// Set slashings.
-		validProposerSlashings, validAttSlashings := vs.getSlashings(ctx, head)
-		sBlk.SetProposerSlashings(validProposerSlashings)
-		if err := sBlk.SetAttesterSlashings(validAttSlashings); err != nil {
-			log.WithError(err).Error("Could not set attester slashings on block")
-		}
-
-		// Set exits.
-		sBlk.SetVoluntaryExits(vs.getExits(head, sBlk.Block().Slot()))
-
-		// Set sync aggregate. New in Altair.
-		vs.setSyncAggregate(ctx, sBlk, head)
-
-		// Set bls to execution change. New in Capella.
-		vs.setBlsToExecData(sBlk, head)
-
-		// Set payload attestations. New in Gloas.
-		if sBlk.Version() >= version.Gloas {
-			if err := sBlk.SetPayloadAttestations(vs.getPayloadAttestations(ctx, head, sBlk.Block().ParentRoot())); err != nil {
-				log.WithError(err).Error("Could not set payload attestations")
-			}
-			if err := vs.setParentExecutionRequests(ctx, sBlk, head, parentFull); err != nil {
-				log.WithError(err).Error("Could not set parent execution requests")
-			}
-		}
-	})
+	wg.Go(func() { vs.setPreGloasConsensusFields(ctx, sBlk, head) })
 
 	winningBid := primitives.ZeroWei()
-	selfBuildEnvelope := true
 	var bundle enginev1.BlobsBundler
-	var local *blocks.GetPayloadResponse
 	if sBlk.Version() >= version.Bellatrix {
-		var err error
-		local, err = vs.getLocalPayload(ctx, sBlk.Block(), head, parentFull)
+		local, err := vs.getLocalPayload(ctx, sBlk.Block(), head, parentFull)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not get local payload: %v", err)
 		}
 
-		if sBlk.Version() < version.Gloas {
-			// There's no reason to try to get a builder bid if local override is true.
-			var builderBid builderapi.Bid
-			if !(local.OverrideBuilder || skipMevBoost) {
-				latestHeader, err := head.LatestExecutionPayloadHeader()
-				if err != nil {
-					return nil, status.Errorf(codes.Internal, "Could not get latest execution payload header: %v", err)
-				}
-				parentGasLimit := latestHeader.GasLimit()
-				builderBid, err = vs.getBuilderPayloadAndBlobs(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex(), parentGasLimit)
-				if err != nil {
-					builderGetPayloadMissCount.Inc()
-					log.WithError(err).Error("Could not get builder payload")
-				}
+		// There's no reason to try to get a builder bid if local override is true.
+		var builderBid builderapi.Bid
+		if !(local.OverrideBuilder || skipMevBoost) {
+			latestHeader, err := head.LatestExecutionPayloadHeader()
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "Could not get latest execution payload header: %v", err)
 			}
+			parentGasLimit := latestHeader.GasLimit()
+			builderBid, err = vs.getBuilderPayloadAndBlobs(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex(), parentGasLimit)
+			if err != nil {
+				builderGetPayloadMissCount.Inc()
+				log.WithError(err).Error("Could not get builder payload")
+			}
+		}
 
-			winningBid, bundle, err = setExecutionData(ctx, sBlk, local, builderBid, builderBoostFactor)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "Could not set execution data: %v", err)
-			}
-		} else {
-			selfBuildOnly := local.OverrideBuilder || skipMevBoost
-			selfBuildEnvelope, err = vs.setExecutionPayloadBid(ctx, sBlk, local, selfBuildOnly)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "Could not set execution data for Gloas: %v", err)
-			}
+		winningBid, bundle, err = setExecutionData(ctx, sBlk, local, builderBid, builderBoostFactor)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not set execution data: %v", err)
 		}
 	}
 
@@ -297,13 +274,6 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 		return nil, status.Errorf(codes.Internal, "Could not compute state root: %v", err)
 	}
 	sBlk.SetStateRoot(sr)
-
-	// For Gloas self-build, cache the execution payload envelope now that the block is fully built.
-	if sBlk.Version() >= version.Gloas && selfBuildEnvelope {
-		if err := vs.storeExecutionPayloadEnvelope(sBlk, local); err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not build execution payload envelope: %v", err)
-		}
-	}
 
 	return vs.constructGenericBeaconBlock(sBlk, bundle, winningBid)
 }
@@ -578,45 +548,37 @@ func (vs *Server) broadcastAndReceiveDataColumns(ctx context.Context, roSidecars
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
-// PrepareBeaconProposer caches and updates the fee recipient for the given proposer.
+// PrepareBeaconProposer caches a per-validator fee-recipient default. Post-Gloas
+// SignedProposerPreferences replaces this endpoint; requests are accepted as a no-op.
 func (vs *Server) PrepareBeaconProposer(
 	_ context.Context, request *ethpb.PrepareBeaconProposerRequest,
 ) (*emptypb.Empty, error) {
-	var validatorIndices []primitives.ValidatorIndex
-
+	if slots.ToEpoch(vs.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
+		log.Warn("PrepareBeaconProposer is deprecated post-Gloas; use SignedProposerPreferences. Request accepted as a no-op.")
+		return &emptypb.Empty{}, nil
+	}
 	for _, r := range request.Recipients {
 		recipient := hexutil.Encode(r.FeeRecipient)
 		if !common.IsHexAddress(recipient) {
 			return nil, status.Errorf(codes.InvalidArgument, "Invalid fee recipient address: %v", recipient)
 		}
-		// Use default address if the burn address is return
-		feeRecipient := primitives.ExecutionAddress(r.FeeRecipient)
-		if feeRecipient == primitives.ExecutionAddress([20]byte{}) {
-			feeRecipient = primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
-			if feeRecipient == primitives.ExecutionAddress([20]byte{}) {
-				log.WithField("validatorIndex", r.ValidatorIndex).Warn("Fee recipient is the burn address")
-			}
+		feeRecipient := r.FeeRecipient
+		if common.BytesToAddress(feeRecipient) == (common.Address{}) {
+			feeRecipient = params.BeaconConfig().DefaultFeeRecipient.Bytes()
 		}
-		val := cache.TrackedValidator{
-			Active:       true, // TODO: either check or add the field in the request
-			Index:        r.ValidatorIndex,
-			FeeRecipient: feeRecipient,
-		}
-		vs.TrackedValidatorsCache.Set(val)
-		validatorIndices = append(validatorIndices, r.ValidatorIndex)
+		vs.ProposerPreferencesCache.SetDefault(cache.ProposerPreference{
+			ValidatorIndex: r.ValidatorIndex,
+			FeeRecipient:   bytesutil.ToBytes20(feeRecipient),
+		})
+		// Pre-Gloas only (we return early above otherwise): track the validator
+		// here so old VCs that don't populate validator_indices in
+		// SubscribeCommitteeSubnets still keep the BN's attached-set up to date
+		// for CGC and validating(). Old VCs are unsupported post-Gloas.
+		vs.SubscribedValidatorsCache.Add(r.ValidatorIndex)
 	}
-
-	if len(validatorIndices) == 0 {
-		return &emptypb.Empty{}, nil
+	if len(request.Recipients) > 0 {
+		log.WithField("validatorCount", len(request.Recipients)).Debug("Updated fee recipient addresses")
 	}
-
-	log := log.WithField("validatorCount", len(validatorIndices))
-	if logrus.GetLevel() >= logrus.TraceLevel {
-		log = log.WithField("validatorIndices", validatorIndices)
-	}
-
-	log.Debug("Updated fee recipient addresses")
-
 	return &emptypb.Empty{}, nil
 }
 

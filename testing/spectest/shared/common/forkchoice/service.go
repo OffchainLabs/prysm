@@ -77,7 +77,8 @@ func startChainService(t testing.TB,
 		blockchain.WithStateNotifier(&mock.MockStateNotifier{}),
 		blockchain.WithAttestationPool(attestations.NewPool()),
 		blockchain.WithDepositCache(depositCache),
-		blockchain.WithTrackedValidatorsCache(cache.NewTrackedValidatorsCache()),
+		blockchain.WithProposerPreferencesCache(cache.NewProposerPreferencesCache()),
+		blockchain.WithSubscribedValidatorsCache(cache.NewSubscribedValidatorsCache()),
 		blockchain.WithPayloadIDCache(cache.NewPayloadIDCache()),
 		blockchain.WithClockSynchronizer(clockSync),
 		blockchain.WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
@@ -148,5 +149,9 @@ func (m *engineMock) GetClientVersionV1(context.Context) ([]*structs.ClientVersi
 }
 
 func (*engineMock) PartialColumnsSupported() bool {
+	return false
+}
+
+func (*engineMock) PartialColumnsEnabledForSlot(primitives.Slot) bool {
 	return false
 }

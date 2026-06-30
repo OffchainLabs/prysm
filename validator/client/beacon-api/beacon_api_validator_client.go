@@ -12,13 +12,12 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/validator/client/cache"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
 )
-
-type ValidatorClientOpt func(*beaconApiValidatorClient)
 
 type beaconApiValidatorClient struct {
 	genesisProvider         GenesisProvider
@@ -31,22 +30,14 @@ type beaconApiValidatorClient struct {
 	prysmChainClient        iface.PrysmChainClient
 	isEventStreamRunning    bool
 	stateless               bool
-	envelopeCache           *executionPayloadEnvelopeCache
+	envelopeCache           *cache.ExecutionPayloadEnvelopeCache
 }
 
-// WithStateless configures the validator client to use the Gloas stateless block production path,
-// retrieving the block and execution payload envelope in a single v4 call and caching the envelope
-// for reuse by the self-build publisher.
-func WithStateless(enabled bool) ValidatorClientOpt {
-	return func(c *beaconApiValidatorClient) {
-		c.stateless = enabled
-		if enabled {
-			c.envelopeCache = newExecutionPayloadEnvelopeCache()
-		}
+func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...iface.Option) iface.ValidatorClient {
+	var cfg iface.ClientConfig
+	for _, o := range opts {
+		o(&cfg)
 	}
-}
-
-func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...ValidatorClientOpt) iface.ValidatorClient {
 	handler := provider.Handler()
 	nc := &beaconApiNodeClient{handler: handler}
 	c := &beaconApiValidatorClient{
@@ -62,9 +53,10 @@ func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...V
 			handler:    handler,
 		},
 		isEventStreamRunning: false,
+		stateless:            cfg.Stateless,
 	}
-	for _, o := range opts {
-		o(c)
+	if cfg.Stateless {
+		c.envelopeCache = cache.NewExecutionPayloadEnvelopeCache()
 	}
 	return c
 }
@@ -317,12 +309,12 @@ func (c *beaconApiValidatorClient) SubmitSignedExecutionPayloadBid(_ context.Con
 	return new(empty.Empty), nil
 }
 
-func (c *beaconApiValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, duties []*ethpb.ValidatorDuty) (*empty.Empty, error) {
+func (c *beaconApiValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest) (*empty.Empty, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.SubscribeCommitteeSubnets")
 	defer span.End()
 
 	return wrapInMetrics[*empty.Empty]("SubscribeCommitteeSubnets", func() (*empty.Empty, error) {
-		return new(empty.Empty), c.subscribeCommitteeSubnets(ctx, in, duties)
+		return new(empty.Empty), c.subscribeCommitteeSubnets(ctx, in)
 	})
 }
 

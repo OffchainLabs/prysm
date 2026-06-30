@@ -87,7 +87,7 @@ func TestWireBlindedHTRMatchesFull(t *testing.T) {
 		ParentBeaconBlockRoot: fillByteSlice(32, 0x0a),
 	}
 
-	blinded, err := WireBlindedFromFull(full)
+	blinded, err := full.WireBlinded()
 	require.NoError(t, err)
 	fullHTR, err := full.HashTreeRoot()
 	require.NoError(t, err)
@@ -105,10 +105,10 @@ func TestWireBlindedHTRMatchesFull(t *testing.T) {
 	require.Equal(t, fullHTR, rtHTR)
 
 	// Signed wrapper SSZ roundtrip.
-	signedBlinded, err := SignedWireBlindedFromFull(&eth.SignedExecutionPayloadEnvelope{
+	signedBlinded, err := (&eth.SignedExecutionPayloadEnvelope{
 		Message:   full,
 		Signature: fillByteSlice(96, 0x0b),
-	})
+	}).WireBlinded()
 	require.NoError(t, err)
 	signedEnc, err := signedBlinded.MarshalSSZ()
 	require.NoError(t, err)

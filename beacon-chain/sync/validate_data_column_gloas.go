@@ -127,6 +127,15 @@ func (s *Service) setSeenDataColumnRootIndex(root [fieldparams.RootLength]byte, 
 	s.seenDataColumnCache.Add(slot, key, true)
 }
 
+// hasSeenDataColumn reports whether the sidecar identity has been seen. Gloas sidecars are keyed
+// by (block root, index); pre-Gloas sidecars by (slot, proposer index, index).
+func (s *Service) hasSeenDataColumn(isGloas bool, root [fieldparams.RootLength]byte, slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) bool {
+	if isGloas {
+		return s.hasSeenDataColumnRootIndex(root, index)
+	}
+	return s.hasSeenDataColumnIndex(slot, proposerIndex, index)
+}
+
 // queuePendingGloasColumn returns a non-nil error for malformed sidecars (the caller propagates it as ValidationReject).
 func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID) error {
 	dc := roCol.DataColumnSidecarGloas()
