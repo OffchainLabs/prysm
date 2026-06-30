@@ -72,7 +72,7 @@ func TestGetPayloadAttestations_FromPoolFiltersByParentAndPreviousSlot(t *testin
 			},
 			Signature: bytesutil.PadTo([]byte{byte(idx + 1)}, 96),
 		}
-		require.NoError(t, pool.InsertPayloadAttestation(msg, idx))
+		require.NoError(t, pool.InsertPayloadAttestation(msg, []uint64{idx}))
 	}
 
 	// Matching entries: slot 9 and block root == parent_root.

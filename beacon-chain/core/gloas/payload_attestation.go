@@ -185,6 +185,29 @@ func PayloadCommitteeIndex(
 	return uint64(idx), nil
 }
 
+// PayloadCommitteeIndices returns all positions the validator occupies in the payload committee for a slot.
+func PayloadCommitteeIndices(
+	ctx context.Context,
+	st state.ReadOnlyBeaconState,
+	slot primitives.Slot,
+	validatorIndex primitives.ValidatorIndex,
+) ([]uint64, error) {
+	ptc, err := st.PayloadCommitteeReadOnly(slot)
+	if err != nil {
+		return nil, err
+	}
+	var indices []uint64
+	for i, v := range ptc {
+		if v == validatorIndex {
+			indices = append(indices, uint64(i))
+		}
+	}
+	if len(indices) == 0 {
+		return nil, fmt.Errorf("%w: validator=%d slot=%d", ErrValidatorNotInPTC, validatorIndex, slot)
+	}
+	return indices, nil
+}
+
 // ptcSeed computes the seed for the payload timeliness committee.
 func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitives.Slot) ([32]byte, error) {
 	seed, err := helpers.Seed(st, epoch, params.BeaconConfig().DomainPTCAttester)

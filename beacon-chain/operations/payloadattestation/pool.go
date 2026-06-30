@@ -26,9 +26,9 @@ type PoolManager interface {
 	// PendingPayloadAttestations returns pending attestations for the requested slot.
 	PendingPayloadAttestations(slot primitives.Slot) []*ethpb.PayloadAttestation
 	// InsertPayloadAttestation inserts or aggregates a payload attestation
-	// message into the pool. The idx parameter is the PTC committee index
-	// of the validator (position in the bitvector).
-	InsertPayloadAttestation(msg *ethpb.PayloadAttestationMessage, idx uint64) error
+	// message into the pool, setting a bit for each of the validator's PTC
+	// positions. indices are the validator's positions in the bitvector.
+	InsertPayloadAttestation(msg *ethpb.PayloadAttestationMessage, indices []uint64) error
 	// Seen returns true if the PTC committee index has already been seen
 	// for the given PayloadAttestationData.
 	Seen(data *ethpb.PayloadAttestationData, idx uint64) bool
@@ -67,15 +67,19 @@ func (p *Pool) PendingPayloadAttestations(slot primitives.Slot) []*ethpb.Payload
 
 // InsertPayloadAttestation inserts a payload attestation message into the pool.
 // If an attestation with matching data already exists, it aggregates the BLS
-// signature and sets the aggregation bit for idx.
-// idx is the validator's position in the PTC committee bitfield. It also prunes
-// stale entries with slot lower than msg.Data.Slot.
-func (p *Pool) InsertPayloadAttestation(msg *ethpb.PayloadAttestationMessage, idx uint64) error {
+// signature and sets the aggregation bits for the validator's PTC positions.
+// It also prunes stale entries with slot lower than msg.Data.Slot.
+func (p *Pool) InsertPayloadAttestation(msg *ethpb.PayloadAttestationMessage, indices []uint64) error {
 	if msg == nil || msg.Data == nil {
 		return errNilPayloadAttestationMessage
 	}
-	if idx >= uint64(fieldparams.PTCSize) {
-		return errors.Errorf("invalid payload attestation committee index: %d", idx)
+	if len(indices) == 0 {
+		return errors.New("no payload attestation committee indices")
+	}
+	for _, idx := range indices {
+		if idx >= uint64(fieldparams.PTCSize) {
+			return errors.Errorf("invalid payload attestation committee index: %d", idx)
+		}
 	}
 
 	key, err := dataKey(msg.Data)
@@ -90,21 +94,28 @@ func (p *Pool) InsertPayloadAttestation(msg *ethpb.PayloadAttestationMessage, id
 
 	existing, ok := p.pending[key]
 	if !ok {
-		p.pending[key] = messageToPayloadAttestation(msg, idx)
+		att, err := messageToPayloadAttestation(msg, indices)
+		if err != nil {
+			return errors.Wrap(err, "could not build payload attestation")
+		}
+		p.pending[key] = att
 		payloadAttestationPoolSize.Set(float64(len(p.pending)))
 		return nil
 	}
 
-	if existing.AggregationBits.BitAt(idx) {
+	// All of a validator's positions are set together, so the first index is representative.
+	if existing.AggregationBits.BitAt(indices[0]) {
 		return nil
 	}
 
-	sig, err := aggregateSigFromMessage(existing, msg)
+	sig, err := aggregateSigFromMessage(existing, msg, len(indices))
 	if err != nil {
 		return errors.Wrap(err, "could not aggregate signatures")
 	}
 	existing.Signature = sig
-	existing.AggregationBits.SetBitAt(idx, true)
+	for _, idx := range indices {
+		existing.AggregationBits.SetBitAt(idx, true)
+	}
 	payloadAttestationPoolSize.Set(float64(len(p.pending)))
 	return nil
 }
@@ -141,10 +152,19 @@ func (p *Pool) Seen(data *ethpb.PayloadAttestationData, idx uint64) bool {
 }
 
 // messageToPayloadAttestation creates an aggregated PayloadAttestation with a
-// single bit set at idx from msg.
-func messageToPayloadAttestation(msg *ethpb.PayloadAttestationMessage, idx uint64) *ethpb.PayloadAttestation {
+// bit set at each of the validator's PTC positions from msg.
+func messageToPayloadAttestation(msg *ethpb.PayloadAttestationMessage, indices []uint64) (*ethpb.PayloadAttestation, error) {
 	bits := ethpb.NewPayloadAttestationAggregationBits()
-	bits.SetBitAt(idx, true)
+	for _, idx := range indices {
+		bits.SetBitAt(idx, true)
+	}
+	// The validator signed once but occupies len(indices) PTC positions. Verification aggregates the
+	// pubkey once per set bit (see indexedPayloadAttestation), so the signature must be aggregated the
+	// same number of times for the BLS check to balance.
+	sig, err := aggregateSelfN(msg.Signature, len(indices))
+	if err != nil {
+		return nil, err
+	}
 	data := &ethpb.PayloadAttestationData{
 		BeaconBlockRoot:   bytesutil.SafeCopyBytes(msg.Data.BeaconBlockRoot),
 		Slot:              msg.Data.Slot,
@@ -154,13 +174,13 @@ func messageToPayloadAttestation(msg *ethpb.PayloadAttestationMessage, idx uint6
 	return &ethpb.PayloadAttestation{
 		AggregationBits: bits,
 		Data:            data,
-		Signature:       bytesutil.SafeCopyBytes(msg.Signature),
-	}
+		Signature:       sig,
+	}, nil
 }
 
 // aggregateSigFromMessage aggregates the existing signature with the new
 // message signature.
-func aggregateSigFromMessage(aggregated *ethpb.PayloadAttestation, message *ethpb.PayloadAttestationMessage) ([]byte, error) {
+func aggregateSigFromMessage(aggregated *ethpb.PayloadAttestation, message *ethpb.PayloadAttestationMessage, count int) ([]byte, error) {
 	aggSig, err := bls.SignatureFromBytesNoValidation(aggregated.Signature)
 	if err != nil {
 		return nil, err
@@ -169,7 +189,30 @@ func aggregateSigFromMessage(aggregated *ethpb.PayloadAttestation, message *ethp
 	if err != nil {
 		return nil, err
 	}
-	return bls.AggregateSignatures([]bls.Signature{aggSig, sig}).Marshal(), nil
+	sigs := make([]bls.Signature, 0, count+1)
+	sigs = append(sigs, aggSig)
+	for i := 0; i < count; i++ {
+		sigs = append(sigs, sig)
+	}
+	return bls.AggregateSignatures(sigs).Marshal(), nil
+}
+
+// aggregateSelfN aggregates a single signature with itself count times (count >= 1), matching the
+// per-position pubkey aggregation done during verification when a validator occupies multiple PTC
+// positions.
+func aggregateSelfN(sigBytes []byte, count int) ([]byte, error) {
+	if count <= 1 {
+		return bytesutil.SafeCopyBytes(sigBytes), nil
+	}
+	sig, err := bls.SignatureFromBytesNoValidation(sigBytes)
+	if err != nil {
+		return nil, err
+	}
+	sigs := make([]bls.Signature, count)
+	for i := range sigs {
+		sigs[i] = sig
+	}
+	return bls.AggregateSignatures(sigs).Marshal(), nil
 }
 
 // dataKey derives the map key directly from PayloadAttestationData fields.
