@@ -13,9 +13,9 @@ import (
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -824,7 +824,7 @@ func Test_PayloadToHeader(t *testing.T) {
 	require.NoError(t, err)
 	h, err := consensusblocks.PayloadToHeader(wrappedPayload)
 	require.NoError(t, err)
-	txRoot, err := ssz.TransactionsRoot(p.Transactions)
+	txRoot, err := wrappers.TransactionsRoot(p.Transactions)
 	require.NoError(t, err)
 	require.DeepSSZEqual(t, txRoot, bytesutil.ToBytes32(h.TransactionsRoot))
 

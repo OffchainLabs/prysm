@@ -5,6 +5,7 @@ go 1.26.4
 require (
 	github.com/OffchainLabs/go-bitfield v0.0.0-20260504143531-5cbb6d0f5f2e
 	github.com/OffchainLabs/hashtree v0.2.3
+	github.com/OffchainLabs/methodical-ssz v0.0.0-20260630010625-e04c1ac909a1
 	github.com/aristanetworks/goarista v0.0.0-20200805130819-fd197cf57d96
 	github.com/bazelbuild/buildtools v0.0.0-20260528135316-84fa6c32aee6
 	github.com/bazelbuild/rules_go v0.23.2
@@ -94,7 +95,7 @@ require (
 	golang.org/x/sync v0.19.0
 	golang.org/x/tools v0.41.0
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1
-	google.golang.org/grpc v1.78.0
+	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/d4l3k/messagediff.v1 v1.2.1
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
@@ -113,6 +114,7 @@ require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20251001021608-1fe7b43fc4d6 // indirect
 	github.com/VictoriaMetrics/fastcache v1.13.0 // indirect
+	github.com/allegro/bigcache v1.2.1 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.22.0 // indirect
@@ -293,3 +295,4 @@ tool (
 	github.com/prysmaticlabs/protoc-gen-go-cast
 	go.uber.org/mock/mockgen
 )
+replace github.com/OffchainLabs/methodical-ssz => /home/kasey/src/OffchainLabs/methodical-ssz

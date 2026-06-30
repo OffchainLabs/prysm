@@ -1,0 +1,36 @@
+package:  "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+types:
+  - name: "BlobsBundle"
+  - name: "BlobsBundleV2"
+  - name: "BuilderDepositRequest"
+  - name: "BuilderExitRequest"
+  - name: "ConsolidationRequest"
+  - name: "DepositRequest"
+  - name: "ExecutionPayload"
+  - name: "ExecutionPayloadCapella"
+  - name: "ExecutionPayloadDeneb"
+  - name: "ExecutionPayloadGloas"
+    progressive: {}
+    fields:
+      Transactions:    {type: "ProgressiveList", element: {type: "ProgressiveByteList"}}
+      Withdrawals:     {type: "ProgressiveList"}
+      BlockAccessList: {type: "ProgressiveList"}
+  - name: "ExecutionPayloadDenebAndBlobsBundle"
+  - name: "ExecutionPayloadDenebAndBlobsBundleV2"
+  - name: "ExecutionPayloadHeader"
+  - name: "ExecutionPayloadHeaderCapella"
+  - name: "ExecutionPayloadHeaderDeneb"
+  - name: "ExecutionRequests"
+    progressive: {}
+    fields:
+      Deposits: {type: "ProgressiveList"}
+      Withdrawals: {type: "ProgressiveList"}
+      Consolidations: {type: "ProgressiveList"}
+  - name: "ExecutionRequestsGloas"
+    progressive: {}
+    fields:
+      Deposits: {type: "ProgressiveList"}
+      Withdrawals: {type: "ProgressiveList"}
+      Consolidations: {type: "ProgressiveList"}
+  - name: "Withdrawal"
+  - name: "WithdrawalRequest"

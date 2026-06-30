@@ -6,11 +6,13 @@ import (
 	"path"
 	"testing"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+	"github.com/golang/snappy"
+
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/golang/snappy"
-	fssz "github.com/prysmaticlabs/fastssz"
 )
 
 // RunSSZStaticTests executes "ssz_static" tests for the given fork of phase using the provided
@@ -54,10 +56,10 @@ func RunSSZStaticTests(t *testing.T, config, forkOrPhase string, unmarshaller Un
 					rootsYaml := &SSZRoots{}
 					require.NoError(t, utils.UnmarshalYaml(rootsYamlFile, rootsYaml), "Failed to Unmarshal")
 
-					// All types support fastssz generated code, but may also include a custom HTR method.
+					// All types support generated code, but may also include a custom HTR method.
 					var htrs []HTR
 					htrs = append(htrs, func(s any) ([32]byte, error) {
-						sszObj, ok := s.(fssz.HashRoot)
+						sszObj, ok := s.(ssz.HashRoot)
 						if !ok {
 							return [32]byte{}, errors.New("could not get hash root, not compatible object")
 						}
@@ -75,8 +77,8 @@ func RunSSZStaticTests(t *testing.T, config, forkOrPhase string, unmarshaller Un
 
 					for i, htr := range htrs {
 						var testName string
-						if i == 0 { // First HTR test is fastssz generated code.
-							testName = "fastssz"
+						if i == 0 { // First HTR test is generated code.
+							testName = "generated"
 						} else {
 							testName = "custom"
 						}
@@ -85,17 +87,18 @@ func RunSSZStaticTests(t *testing.T, config, forkOrPhase string, unmarshaller Un
 							require.NoError(t, err)
 							rootBytes, err := hex.DecodeString(rootsYaml.Root[2:])
 							require.NoError(t, err)
-							require.DeepEqual(t, rootBytes, root[:], "Did not receive expected hash tree root")
+							expected := bytesutil.ToBytes32(rootBytes)
+							require.Equal(t, expected, root, "Did not receive expected hash tree root")
 
 							if rootsYaml.SigningRoot == "" {
 								return
 							}
 
 							var signingRoot [32]byte
-							if v, ok := object.(fssz.HashRoot); ok {
+							if v, ok := object.(ssz.HashRoot); ok {
 								signingRoot, err = v.HashTreeRoot()
 							} else {
-								t.Fatal("object does not meet fssz.HashRoot")
+								t.Fatal("object does not meet ssz.HashRoot")
 							}
 
 							require.NoError(t, err)

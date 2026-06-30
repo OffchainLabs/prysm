@@ -22,9 +22,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -192,7 +192,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
-		wr, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+		wr, err := wrappers.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 		require.NoError(t, err)
 		builderValue := bytesutil.ReverseByteOrder(big.NewInt(1e9).Bytes())
 		bid := &ethpb.BuilderBidCapella{
@@ -264,7 +264,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
-		wr, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+		wr, err := wrappers.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 		require.NoError(t, err)
 		builderValue := bytesutil.ReverseByteOrder(big.NewInt(1e9).Bytes())
 		bid := &ethpb.BuilderBidCapella{
@@ -335,7 +335,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
-		wr, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+		wr, err := wrappers.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 		require.NoError(t, err)
 		builderValue := bytesutil.ReverseByteOrder(big.NewInt(1e9).Bytes())
 		bid := &ethpb.BuilderBidCapella{
@@ -542,7 +542,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
-		wr, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+		wr, err := wrappers.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 		require.NoError(t, err)
 		builderValue := bytesutil.ReverseByteOrder(big.NewInt(1e9).Bytes())
 
@@ -640,7 +640,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
-		wr, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+		wr, err := wrappers.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 		require.NoError(t, err)
 		builderValue := bytesutil.ReverseByteOrder(big.NewInt(1e9).Bytes())
 
@@ -771,7 +771,7 @@ func TestServer_getPayloadHeader(t *testing.T) {
 	cfg.CapellaForkEpoch = fakeCapellaEpoch
 	cfg.InitializeForkSchedule()
 	params.OverrideBeaconConfig(cfg)
-	emptyRoot, err := ssz.TransactionsRoot([][]byte{})
+	emptyRoot, err := wrappers.TransactionsRoot([][]byte{})
 	require.NoError(t, err)
 	ti, err := slots.StartTime(time.Now(), 0)
 	require.NoError(t, err)
@@ -812,7 +812,7 @@ func TestServer_getPayloadHeader(t *testing.T) {
 		Address:        make([]byte, fieldparams.FeeRecipientLength),
 		Amount:         3,
 	}}
-	wr, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+	wr, err := wrappers.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 	require.NoError(t, err)
 
 	tiCapella, err := slots.StartTime(genesis, primitives.Slot(fakeCapellaEpoch)*params.BeaconConfig().SlotsPerEpoch)
@@ -1215,7 +1215,7 @@ func Test_matchingWithdrawalsRoot(t *testing.T) {
 		p, err := blocks.WrappedExecutionPayloadCapella(local)
 		require.NoError(t, err)
 		header := &v1.ExecutionPayloadHeaderCapella{}
-		wr, err := ssz.WithdrawalSliceRoot(wds, fieldparams.MaxWithdrawalsPerPayload)
+		wr, err := wrappers.WithdrawalSliceRoot(wds, fieldparams.MaxWithdrawalsPerPayload)
 		require.NoError(t, err)
 		header.WithdrawalsRoot = wr[:]
 		h, err := blocks.WrappedExecutionPayloadHeaderCapella(header)
@@ -1227,7 +1227,7 @@ func Test_matchingWithdrawalsRoot(t *testing.T) {
 }
 
 func TestEmptyTransactionsRoot(t *testing.T) {
-	r, err := ssz.TransactionsRoot([][]byte{})
+	r, err := wrappers.TransactionsRoot([][]byte{})
 	require.NoError(t, err)
 	require.DeepEqual(t, r, emptyTransactionsRoot)
 }
