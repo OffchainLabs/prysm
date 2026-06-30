@@ -84,7 +84,7 @@ func TestSelectEngineTransport_Fallback(t *testing.T) {
 	features.Init(&features.Flags{EnableEngineSSZHTTP: true})
 
 	srv := h2cServer(t, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound) // EL has no engine v2 surface
+		w.WriteHeader(http.StatusNotFound)
 	})
 	before := fallbackCount(t)
 	s := &Service{}

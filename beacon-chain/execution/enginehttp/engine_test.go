@@ -15,13 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
-// The tests below are scaffolds for the Phase 4 endpoint implementations. Each
-// is skipped with a TODO until the matching Client method in engine.go is
-// filled in; the body shows the intended call shape against the h2c test
-// harness in client_test.go (testClient/stubSSZ). When implementing an
-// endpoint, drop the t.Skip and assert method/path/headers + decoded response,
-// mirroring TestSSZRequest_* in client_test.go.
-
 func TestNewPayload(t *testing.T) {
 	statusSSZ, err := (&enginev2.PayloadStatus{Status: enginev2.StatusByte(enginev2.PayloadStatusValid)}).MarshalSSZ()
 	require.NoError(t, err)
@@ -232,8 +225,6 @@ func TestCapabilities(t *testing.T) {
 	require.Equal(t, 4, len(caps.IndependentlyVersioned["blobs"]))
 }
 
-// A 404 surfaces as an *Error; the connection-setup probe maps this to a
-// JSON-RPC fallback (the EL has no engine v2 surface).
 func TestCapabilities_NotFound(t *testing.T) {
 	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)

@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// SSZ wire containers for the REST + SSZ Engine API v2
-// (ethereum/execution-apis#793). These are the request/response bodies for
-// the POST/GET /engine/v2/{fork}/... endpoints. The inner ExecutionPayload,
-// PayloadAttributes, ForkchoiceState, Withdrawal and BlobsBundle types are
-// reused from proto/engine/v1.
+// SSZ wire containers for the REST + SSZ Engine API. Fork-scoped endpoints use
+// stable /engine/v1 paths and select these containers with Eth-Execution-Version.
+// The inner ExecutionPayload, PayloadAttributes, ForkchoiceState, Withdrawal
+// and BlobsBundle types are reused from proto/engine/v1.
 //
 // Encoding conventions (refactor-ssz.md):
 //   - Optional[T] == List[T, 1] (0 elements = absent, 1 = present).
@@ -42,10 +41,8 @@ option java_outer_classname = "EngineV2Proto";
 option java_package = "org.ethereum.engine.v2";
 option php_namespace = "Ethereum\\Engine\\v2";
 
-// PayloadStatus is the result of submitting a payload (POST /{fork}/payloads)
-// and the embedded status of a forkchoice update. The status byte is a uint8
-// enum: VALID=0, INVALID=1, SYNCING=2, ACCEPTED=3 (ACCEPTED only on /payloads).
-// INVALID_BLOCK_HASH is removed (supplanted by INVALID).
+// PayloadStatus is returned by /payloads and embedded in /forkchoice responses.
+// ACCEPTED is only valid for /payloads.
 message PayloadStatus {
   // uint8 enum, one byte on the wire.
   bytes status = 1 [ (ethereum.eth.ext.ssz_size) = "1" ];
@@ -59,10 +56,7 @@ message PayloadStatus {
       [ (ethereum.eth.ext.ssz_max) = "1,1024" ];
 }
 
-// ForkchoiceUpdateResponse is the response body for POST /{fork}/forkchoice.
-// payload_status uses the restricted enum (VALID | INVALID | SYNCING); CLs MUST
-// treat ACCEPTED here as a protocol error. payload_id is the opaque,
-// server-assigned token, present iff a build was started.
+// ForkchoiceUpdateResponse is the response body for POST /forkchoice.
 message ForkchoiceUpdateResponse {
   PayloadStatus payload_status = 1;
   // Optional[Bytes8] == List[Bytes8, 1].
@@ -72,8 +66,7 @@ message ForkchoiceUpdateResponse {
   ];
 }
 
-// BodiesByHashRequest is the SSZ request body for POST /{fork}/bodies/hash.
-// (The range variant uses ?from&count query params, no SSZ body.)
+// BodiesByHashRequest is the request body for POST /bodies/hash.
 message BodiesByHashRequest {
   // List[Hash32, MAX_BODIES_REQUEST]; MAX_BODIES_REQUEST = 32.
   repeated bytes block_hashes = 1 [
@@ -96,8 +89,7 @@ message BlobsRequest {
 // Fulu (EL "Osaka") containers
 //////////////////////////////////////////////////////////////////////////////
 
-// ExecutionPayloadEnvelopeFulu is the request body for POST
-// /osaka/payloads.
+// ExecutionPayloadEnvelopeFulu is the osaka request body for POST /payloads.
 message ExecutionPayloadEnvelopeFulu {
   ethereum.engine.v1.ExecutionPayloadDeneb payload = 1;
   bytes parent_beacon_block_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
@@ -105,8 +97,7 @@ message ExecutionPayloadEnvelopeFulu {
       [ (ethereum.eth.ext.ssz_max) = "256,1073741824" ];
 }
 
-// ForkchoiceUpdateFulu is the request body for POST /osaka/forkchoice. Fulu is
-// pre-Amsterdam, so no custody_columns field.
+// ForkchoiceUpdateFulu is the osaka request body for POST /forkchoice.
 message ForkchoiceUpdateFulu {
   ethereum.engine.v1.ForkchoiceState forkchoice_state = 1;
   // Optional[PayloadAttributes] == List[PayloadAttributesV3, 1].
@@ -114,8 +105,7 @@ message ForkchoiceUpdateFulu {
       [ (ethereum.eth.ext.ssz_max) = "1" ];
 }
 
-// BuiltPayloadFulu is the response body for GET /osaka/payloads/{id} (replaces
-// engine_getPayload). Field order matches the spec's BuiltPayload.
+// BuiltPayloadFulu is the osaka response body for GET /payloads/{id}.
 message BuiltPayloadFulu {
   ethereum.engine.v1.ExecutionPayloadDeneb payload = 1;
   bytes block_value = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
@@ -125,8 +115,7 @@ message BuiltPayloadFulu {
   bool should_override_builder = 5;
 }
 
-// ExecutionPayloadBodyFulu is the inner body for /osaka/bodies entries
-// (Shanghai shape: transactions + withdrawals).
+// ExecutionPayloadBodyFulu is the osaka body entry payload.
 message ExecutionPayloadBodyFulu {
   repeated bytes transactions = 1 [
     (ethereum.eth.ext.ssz_size) = "?,?",
@@ -136,14 +125,13 @@ message ExecutionPayloadBodyFulu {
       [ (ethereum.eth.ext.ssz_max) = "withdrawal.size" ];
 }
 
-// BodyEntryFulu wraps a single body in a /osaka/bodies response. When
-// available=false, body is zero-valued and MUST be ignored.
+// BodyEntryFulu wraps one osaka body response entry.
 message BodyEntryFulu {
   bool available = 1;
   ExecutionPayloadBodyFulu body = 2;
 }
 
-// BodiesResponseFulu is the response body for /osaka/bodies (hash and range).
+// BodiesResponseFulu is the osaka response body for /bodies.
 message BodiesResponseFulu {
   // List[BodyEntry, MAX_BODIES_REQUEST]; MAX_BODIES_REQUEST = 32.
   repeated BodyEntryFulu entries = 1 [ (ethereum.eth.ext.ssz_max) = "32" ];
@@ -153,8 +141,7 @@ message BodiesResponseFulu {
 // Gloas (EL "Amsterdam") containers
 //////////////////////////////////////////////////////////////////////////////
 
-// ExecutionPayloadEnvelopeGloas is the request body for POST
-// /amsterdam/payloads.
+// ExecutionPayloadEnvelopeGloas is the amsterdam request body for POST /payloads.
 message ExecutionPayloadEnvelopeGloas {
   ethereum.engine.v1.ExecutionPayloadGloas payload = 1;
   bytes parent_beacon_block_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
@@ -162,9 +149,7 @@ message ExecutionPayloadEnvelopeGloas {
       [ (ethereum.eth.ext.ssz_max) = "256,1073741824" ];
 }
 
-// ForkchoiceUpdateGloas is the request body for POST /amsterdam/forkchoice.
-// Adds the Amsterdam custody_columns bitvector (Bitvector[CELLS_PER_EXT_BLOB]
-// = Bitvector[128] = 16 bytes), wrapped in Optional.
+// ForkchoiceUpdateGloas is the amsterdam request body for POST /forkchoice.
 message ForkchoiceUpdateGloas {
   ethereum.engine.v1.ForkchoiceState forkchoice_state = 1;
   // Optional[PayloadAttributes] == List[PayloadAttributesV4, 1].
@@ -177,7 +162,7 @@ message ForkchoiceUpdateGloas {
   ];
 }
 
-// BuiltPayloadGloas is the response body for GET /amsterdam/payloads/{id}.
+// BuiltPayloadGloas is the amsterdam response body for GET /payloads/{id}.
 message BuiltPayloadGloas {
   ethereum.engine.v1.ExecutionPayloadGloas payload = 1;
   bytes block_value = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
@@ -187,8 +172,7 @@ message BuiltPayloadGloas {
   bool should_override_builder = 5;
 }
 
-// ExecutionPayloadBodyGloas is the inner body for /amsterdam/bodies entries
-// (Shanghai shape + block_access_list).
+// ExecutionPayloadBodyGloas is the amsterdam body entry payload.
 message ExecutionPayloadBodyGloas {
   repeated bytes transactions = 1 [
     (ethereum.eth.ext.ssz_size) = "?,?",
@@ -200,13 +184,13 @@ message ExecutionPayloadBodyGloas {
   bytes block_access_list = 3 [ (ethereum.eth.ext.ssz_max) = "1073741824" ];
 }
 
-// BodyEntryGloas wraps a single body in a /amsterdam/bodies response.
+// BodyEntryGloas wraps one amsterdam body response entry.
 message BodyEntryGloas {
   bool available = 1;
   ExecutionPayloadBodyGloas body = 2;
 }
 
-// BodiesResponseGloas is the response body for /amsterdam/bodies.
+// BodiesResponseGloas is the amsterdam response body for /bodies.
 message BodiesResponseGloas {
   repeated BodyEntryGloas entries = 1 [ (ethereum.eth.ext.ssz_max) = "32" ];
 }

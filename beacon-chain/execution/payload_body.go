@@ -27,9 +27,7 @@ type reconstructionBatch map[[32]byte]uint64
 type blindedBlockReconstructor struct {
 	orderedBlocks []*blockWithHeader
 	bodies        map[[32]byte]interfaces.ExecutionPayloadBody
-	// batches groups blocks by CL fork version; each version is one bodies
-	// request (the transport translates the version to its wire form — a JSON-RPC
-	// method version, or the fork-scoped SSZ /{fork}/bodies URL).
+	// batches groups blocks by CL fork version.
 	batches map[int]reconstructionBatch
 }
 

@@ -1,12 +1,4 @@
-// This file holds the typed REST + SSZ Engine API endpoint operations
-// (ethereum/execution-apis#793) as methods on Client. Each maps one engine_*
-// JSON-RPC method to its REST endpoint, built on the generic SSZRequest/JSONGet
-// primitives in client.go and the SSZ wire containers in proto/engine/v2.
-//
-// These methods are the transport's lower half. An engineTransport interface in
-// beacon-chain/execution wraps them so the Service's EngineCaller/Reconstructor
-// methods can select JSON-RPC vs SSZ-HTTP by the EnableEngineSSZHTTP feature
-// flag; that wiring lives outside this package.
+// Typed REST + SSZ Engine API endpoint operations.
 
 package enginehttp
 
@@ -25,12 +17,7 @@ import (
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
-// NewPayload submits an execution payload for validation/import.
-// POST /engine/v1/payloads (replaces engine_newPayloadV1..5). The fork's
-// ExecutionPayloadEnvelope folds parent_beacon_block_root and execution_requests
-// inside; expected_blob_versioned_hashes is removed (the EL recomputes it). The
-// four validation outcomes all return HTTP 200 with a PayloadStatus body — the
-// caller maps the uint8 status enum back to Prysm's sentinels.
+// NewPayload submits POST /engine/v1/payloads.
 func (c *Client) NewPayload(ctx context.Context, v int, envelope ssz.Marshaler) (*enginev2.PayloadStatus, error) {
 	fork, err := version.ELForkName(v)
 	if err != nil {
@@ -43,12 +30,7 @@ func (c *Client) NewPayload(ctx context.Context, v int, envelope ssz.Marshaler) 
 	return status, nil
 }
 
-// ForkchoiceUpdated updates fork choice and optionally starts a build.
-// POST /engine/v1/forkchoice (replaces engine_forkchoiceUpdatedV1..4).
-// The fork's ForkchoiceUpdate carries the optional payload_attributes (and, for
-// Gloas, an optional custody_columns bitvector). The response carries the
-// payload_status plus an opaque server-assigned payload_id; the caller echoes
-// that token verbatim and never recomputes it.
+// ForkchoiceUpdated submits POST /engine/v1/forkchoice.
 func (c *Client) ForkchoiceUpdated(ctx context.Context, v int, update ssz.Marshaler) (*enginev2.ForkchoiceUpdateResponse, error) {
 	fork, err := version.ELForkName(v)
 	if err != nil {
@@ -61,12 +43,7 @@ func (c *Client) ForkchoiceUpdated(ctx context.Context, v int, update ssz.Marsha
 	return resp, nil
 }
 
-// GetPayload retrieves a previously started build by its opaque id.
-// GET /engine/v1/payloads/{id} (replaces engine_getPayloadV1..6). The
-// opaque payload id is hex-encoded (0x-prefixed Bytes8) into the path. The EL
-// keeps optimising the build, so the response is never cacheable (it carries
-// Cache-Control: no-store); each call returns the latest snapshot — Prysm does
-// not cache it.
+// GetPayload submits GET /engine/v1/payloads/{id}.
 func (c *Client) GetPayload(ctx context.Context, v int, payloadID [8]byte, out ssz.Unmarshaler) error {
 	fork, err := version.ELForkName(v)
 	if err != nil {
@@ -75,11 +52,7 @@ func (c *Client) GetPayload(ctx context.Context, v int, payloadID [8]byte, out s
 	return c.ForkSSZRequest(ctx, http.MethodGet, fork, "/payloads/"+hexutil.Encode(payloadID[:]), nil, nil, out)
 }
 
-// GetPayloadBodiesByHash fetches execution bodies by block hash.
-// POST /engine/v1/bodies/hash (replaces engine_getPayloadBodiesByHashV1/2).
-// Eth-Execution-Version selects both the response schema and the era of returned
-// blocks; out-of-era or pruned blocks come back as a per-entry available=false.
-// The caller decodes the fork's BodiesResponse into out.
+// GetPayloadBodiesByHash submits POST /engine/v1/bodies/hash.
 func (c *Client) GetPayloadBodiesByHash(ctx context.Context, v int, req *enginev2.BodiesByHashRequest, out ssz.Unmarshaler) error {
 	fork, err := version.ELForkName(v)
 	if err != nil {
@@ -88,11 +61,7 @@ func (c *Client) GetPayloadBodiesByHash(ctx context.Context, v int, req *enginev
 	return c.ForkSSZRequest(ctx, http.MethodPost, fork, "/bodies/hash", nil, req, out)
 }
 
-// GetPayloadBodiesByRange fetches execution bodies by [from, from+count) range.
-// GET /engine/v1/bodies?from&count (replaces engine_getPayloadBodiesByRangeV1/2).
-// The range travels in the query (no SSZ body); a range straddling a fork
-// boundary needs one call per fork header. The caller decodes the fork's
-// BodiesResponse into out.
+// GetPayloadBodiesByRange submits GET /engine/v1/bodies?from&count.
 func (c *Client) GetPayloadBodiesByRange(ctx context.Context, v int, from, count uint64, out ssz.Unmarshaler) error {
 	fork, err := version.ELForkName(v)
 	if err != nil {
@@ -104,20 +73,13 @@ func (c *Client) GetPayloadBodiesByRange(ctx context.Context, v int, from, count
 	return c.ForkSSZRequest(ctx, http.MethodGet, fork, "/bodies", query, nil, out)
 }
 
-// GetBlobs fetches blobs-and-proofs from the EL blob pool.
-// POST /engine/v1/blobs/v{version} (replaces engine_getBlobsV1..4). The blob
-// endpoints are version-scoped, not fork-scoped. The caller decodes the
-// matching response (BlobsV1Response for v1, BlobsV2Response for v2/v3). HTTP
-// 204 surfaces as ErrNoContent and means "the EL cannot serve this request"
-// (syncing, or a V2 all-or-nothing miss) — distinct from a per-entry
-// available=false within a 200 body. The v4 cell-range request container is not
-// yet defined in proto/engine/v2, so v4 is not wired here.
+// GetBlobs submits POST /engine/v1/blobs/v{version}. Blob endpoints do not use
+// Eth-Execution-Version.
 func (c *Client) GetBlobs(ctx context.Context, version int, req ssz.Marshaler, out ssz.Unmarshaler) error {
 	return c.SSZRequest(ctx, http.MethodPost, fmt.Sprintf("/blobs/v%d", version), nil, req, out)
 }
 
-// Capabilities is the JSON body of GET /engine/v1/capabilities. Field shape
-// matches the EL ground truth in docs/fixtures/*-capabilities.json.
+// Capabilities is the JSON body of GET /engine/v1/capabilities.
 type Capabilities struct {
 	SupportedForks         []string            `json:"supported_forks"`
 	ForkScopedEndpoints    []string            `json:"fork_scoped_endpoints"`
@@ -126,10 +88,7 @@ type Capabilities struct {
 	Limits                 map[string]uint64   `json:"limits"`
 }
 
-// Capabilities probes the EL's REST capabilities (replaces
-// engine_exchangeCapabilities). GET /engine/v1/capabilities (JSON). A 404
-// (returned as an *Error) means the EL has no REST surface and the caller should
-// fall back to JSON-RPC for the connection's lifetime.
+// Capabilities probes GET /engine/v1/capabilities.
 func (c *Client) Capabilities(ctx context.Context) (*Capabilities, error) {
 	var caps Capabilities
 	if err := c.JSONGet(ctx, "/capabilities", &caps); err != nil {
@@ -138,10 +97,7 @@ func (c *Client) Capabilities(ctx context.Context) (*Capabilities, error) {
 	return &caps, nil
 }
 
-// Identity fetches the EL client versions (replaces engine_getClientVersionV1).
-// GET /engine/v1/identity (JSON array). Prysm identifies itself via the
-// X-Engine-Client-Version header sent on every request, so this is a one-way
-// GET with no body — the mutual-exchange handshake is gone.
+// Identity fetches GET /engine/v1/identity.
 func (c *Client) Identity(ctx context.Context) ([]*structs.ClientVersionV1, error) {
 	var versions []*structs.ClientVersionV1
 	if err := c.JSONGet(ctx, "/identity", &versions); err != nil {

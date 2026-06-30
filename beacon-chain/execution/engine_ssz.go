@@ -23,19 +23,14 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// sszEngine drives the engine namespace over the REST + SSZ Engine API v2
-// (ethereum/execution-apis#793) via enginehttp.Client. It implements
-// engineTransport.
+// sszEngine implements engineTransport over REST + SSZ.
 type sszEngine struct {
 	client *enginehttp.Client
 
 	capsLock sync.RWMutex
 	caps     *enginehttp.Capabilities
 
-	// fcuMu serializes POST /forkchoice on this connection: the spec allows only
-	// one forkchoice request in flight per connection and the CL MUST await the
-	// response before issuing the next, and MUST NOT rely on the EL to reorder
-	// dependent requests.
+	// fcuMu serializes forkchoice requests on a connection.
 	fcuMu sync.Mutex
 }
 
@@ -45,30 +40,19 @@ const (
 	directionResponse = "response"
 )
 
-// observeSSZBody records the SSZ wire size of one request/response body under the
-// endpoint and direction labels; the transport label is always ssz-http (the
-// json-rpc side is recorded by the size round-tripper in engine_jsonrpc_size.go).
-// m must be non-nil — a decoded container's SizeSSZ equals its wire byte length.
+// observeSSZBody records the SSZ wire size for one request or response body.
 func observeSSZBody(method, direction string, m ssz.Marshaler) {
 	engineBodySize.WithLabelValues(method, transportSSZ, direction).Observe(float64(m.SizeSSZ()))
 }
 
-// EL-advertised per-request limits, keys of the GET /engine/v2/capabilities
-// "limits" map (execution-apis#793). They are upper bounds the CL must respect;
-// exceeding one earns a 413 request-too-large from the EL. bodies requests are
-// chunked to stay within the cap (functionality-preserving); blobs and payload
-// requests are atomic and so are rejected client-side with the same
-// ErrRequestTooLarge sentinel the 413 maps to.
+// Keys in GET /engine/v1/capabilities "limits".
 const (
 	limitBodiesMaxCount          = "bodies.max_count"
 	limitBlobsMaxVersionedHashes = "blobs.max_versioned_hashes"
 	limitPayloadMaxBytes         = "payload.max_bytes"
 )
 
-// limit returns the EL-advertised limits.* value for key and whether it imposes
-// a client-side cap. A nil capability document or an absent/zero value means no
-// cap here (the EL's own limits still apply), mirroring supportsBlob's
-// defensive default.
+// limit returns the advertised non-zero limit for key.
 func (e *sszEngine) limit(key string) (uint64, bool) {
 	e.capsLock.RLock()
 	defer e.capsLock.RUnlock()
@@ -82,10 +66,7 @@ func (e *sszEngine) limit(key string) (uint64, bool) {
 	return v, true
 }
 
-// rejectIfOverLimit returns ErrRequestTooLarge (the sentinel the EL's 413
-// request-too-large maps to) when n exceeds the advertised cap for key. Used for
-// atomic requests that cannot be split — blobs (all-or-nothing) and a single
-// payload envelope.
+// rejectIfOverLimit applies a client-side capability limit.
 func (e *sszEngine) rejectIfOverLimit(key string, n uint64) error {
 	if maxN, ok := e.limit(key); ok && n > maxN {
 		return errors.Wrapf(ErrRequestTooLarge, "request of %d exceeds advertised %s=%d", n, key, maxN)
@@ -93,11 +74,7 @@ func (e *sszEngine) rejectIfOverLimit(key string, n uint64) error {
 	return nil
 }
 
-// NewPayload submits a payload over POST /engine/v2/{fork}/payloads
-// (replaces engine_newPayloadV*). It folds parent_beacon_block_root and
-// execution_requests into the SSZ envelope; versionedHashes is dropped (the EL
-// recomputes it from payload.transactions). The result maps onto the same
-// (latestValidHash, sentinel) contract as jsonEngine.NewPayload.
+// NewPayload submits a payload over POST /engine/v1/payloads.
 func (e *sszEngine) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester) ([]byte, error) {
 	var (
 		ver        int
@@ -110,8 +87,6 @@ func (e *sszEngine) NewPayload(ctx context.Context, payload interfaces.Execution
 	}
 
 	switch p := payload.Proto().(type) {
-	// Fulu reuses the Deneb payload shape, so a Deneb-typed payload maps to the
-	// Fulu envelope.
 	case *pb.ExecutionPayloadDeneb:
 		envelope = &enginev2.ExecutionPayloadEnvelopeFulu{
 			Payload:               p,
@@ -140,9 +115,7 @@ func (e *sszEngine) NewPayload(ctx context.Context, payload interfaces.Execution
 
 		ver = version.Gloas
 	default:
-		// Only Fulu (Osaka) and Gloas (Amsterdam) envelopes exist in proto/engine/v2;
-		// pre-Fulu payloads have no v2 container.
-		return nil, errors.Errorf("ssz-http engine transport: no v2 ExecutionPayloadEnvelope container for payload type %T", p)
+		return nil, errors.Errorf("ssz-http engine transport: no ExecutionPayloadEnvelope container for payload type %T", p)
 	}
 
 	if err := e.rejectIfUnsupportedFork(ver); err != nil {
@@ -160,10 +133,7 @@ func (e *sszEngine) NewPayload(ctx context.Context, payload interfaces.Execution
 	return payloadStatusResult(status)
 }
 
-// payloadStatusResult maps a v2 PayloadStatus onto the (latestValidHash, error)
-// contract EngineCaller consumers expect, identical to jsonEngine.NewPayload.
-// The removed INVALID_BLOCK_HASH folds into INVALID; ACCEPTED/SYNCING, INVALID
-// and VALID map to the same sentinels as JSON-RPC.
+// payloadStatusResult maps SSZ PayloadStatus onto the JSON-RPC transport contract.
 func payloadStatusResult(s *enginev2.PayloadStatus) ([]byte, error) {
 	lvh, _ := enginev2.OptionalBytes(s.LatestValidHash)
 	if valErr, ok := enginev2.OptionalBytes(s.ValidationError); ok && len(valErr) > 0 {
@@ -181,8 +151,7 @@ func payloadStatusResult(s *enginev2.PayloadStatus) ([]byte, error) {
 	}
 }
 
-// encodeExecutionRequests flattens execution requests into the SSZ envelope's
-// List[ByteList, MAX_REQUESTS] field, matching the JSON-RPC flattening.
+// encodeExecutionRequests flattens execution requests for the SSZ envelope.
 func encodeExecutionRequests(requests pb.ExecutionRequester) ([][]byte, error) {
 	encoded, err := requests.FlattenRequests()
 	if err != nil {
@@ -195,10 +164,7 @@ func encodeExecutionRequests(requests pb.ExecutionRequester) ([][]byte, error) {
 	return reqs, nil
 }
 
-// ForkchoiceUpdated updates fork choice (and optionally starts a build) over
-// POST /engine/v2/{fork}/forkchoice (replaces engine_forkchoiceUpdatedV*). The
-// returned payload_id is the EL's opaque token, echoed verbatim. Results and
-// errors map onto the same returns/sentinels as jsonEngine.ForkchoiceUpdated.
+// ForkchoiceUpdated updates fork choice over POST /engine/v1/forkchoice.
 func (e *sszEngine) ForkchoiceUpdated(ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer) (*pb.PayloadIDBytes, []byte, error) {
 	if attrs == nil {
 		return nil, nil, errors.New("nil payload attributer")
@@ -223,10 +189,7 @@ func (e *sszEngine) ForkchoiceUpdated(ctx context.Context, state *pb.ForkchoiceS
 	return forkchoiceResult(resp)
 }
 
-// buildForkchoiceUpdate selects the EL fork URL and builds the fork's
-// ForkchoiceUpdate container. payload_attributes is an Optional (List[T,1]):
-// absent (empty list) for a pure head update, present when a build is wanted —
-// PbV3/PbV4 return nil for empty attributes, mirroring the JSON-RPC null param.
+// buildForkchoiceUpdate builds the fork-specific SSZ request body.
 func buildForkchoiceUpdate(state *pb.ForkchoiceState, attrs payloadattribute.Attributer) (int, ssz.Marshaler, error) {
 	switch attrs.Version() {
 	case version.Deneb, version.Electra, version.Fulu:
@@ -251,21 +214,16 @@ func buildForkchoiceUpdate(state *pb.ForkchoiceState, attrs payloadattribute.Att
 		if a != nil {
 			list = []*pb.PayloadAttributesV4{a}
 		}
-		// custody_columns is left absent: Prysm's forkchoice path does not yet
-		// manage the EL custody set, matching the JSON-RPC V4 path. An omitted
-		// field leaves the EL's custody set unchanged (execution-apis#793).
 		return version.Gloas, &enginev2.ForkchoiceUpdateGloas{
 			ForkchoiceState:   state,
 			PayloadAttributes: list,
 		}, nil
 	default:
-		return 0, nil, errors.Errorf("ssz-http engine transport: no v2 ForkchoiceUpdate container for attribute version %s", version.String(attrs.Version()))
+		return 0, nil, errors.Errorf("ssz-http engine transport: no ForkchoiceUpdate container for attribute version %s", version.String(attrs.Version()))
 	}
 }
 
-// forkchoiceResult maps a v2 ForkchoiceUpdateResponse onto the same returns and
-// sentinels as jsonEngine.ForkchoiceUpdated. forkchoice returns the restricted
-// enum (VALID|INVALID|SYNCING); an out-of-range value is a protocol error.
+// forkchoiceResult maps SSZ forkchoice status onto the JSON-RPC transport contract.
 func forkchoiceResult(resp *enginev2.ForkchoiceUpdateResponse) (*pb.PayloadIDBytes, []byte, error) {
 	if resp.PayloadStatus == nil {
 		return nil, nil, ErrNilResponse
@@ -287,9 +245,7 @@ func forkchoiceResult(resp *enginev2.ForkchoiceUpdateResponse) (*pb.PayloadIDByt
 	}
 }
 
-// optionalPayloadID reads the opaque server-assigned payload_id from its
-// Optional[Bytes8] list, copying the bytes verbatim (never recomputed). Absent
-// (no build started) yields nil.
+// optionalPayloadID decodes Optional[Bytes8].
 func optionalPayloadID(list [][]byte) *pb.PayloadIDBytes {
 	idBytes, ok := enginev2.OptionalBytes(list)
 	if !ok {
@@ -300,10 +256,7 @@ func optionalPayloadID(list [][]byte) *pb.PayloadIDBytes {
 	return &id
 }
 
-// mapEngineError converts an enginehttp transport error (RFC 7807 problem+json,
-// execution-apis#793) into the JSON-RPC sentinels consumers already branch on,
-// keyed on the stable `type` URI. Non-*Error errors (timeouts, ErrNoContent,
-// IO) pass through unchanged.
+// mapEngineError maps problem+json errors to the existing engine sentinels.
 func mapEngineError(err error) error {
 	if err == nil {
 		return nil
@@ -338,11 +291,7 @@ func mapEngineError(err error) error {
 	}
 }
 
-// GetPayload retrieves a built payload over GET /engine/v2/{fork}/payloads/{id}
-// (replaces engine_getPayloadV*). The fork is selected by the slot; the opaque
-// id is echoed into the path. The v2 BuiltPayload is converted into the existing
-// ExecutionBundle proto and run through blocks.NewGetPayloadResponse so the
-// result is identical to the JSON-RPC path. The response is never cached.
+// GetPayload retrieves a built payload over GET /engine/v1/payloads/{id}.
 func (e *sszEngine) GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error) {
 	ver, out, err := builtPayloadForSlot(slot)
 	if err != nil {
@@ -368,8 +317,7 @@ func (e *sszEngine) GetPayload(ctx context.Context, payloadId [8]byte, slot prim
 	return res, nil
 }
 
-// builtPayloadForSlot selects the EL fork URL and a fresh BuiltPayload container
-// to decode into, by the slot's fork (mirrors getPayloadMethodAndMessage).
+// builtPayloadForSlot selects the response container for a slot.
 func builtPayloadForSlot(slot primitives.Slot) (int, ssz.Unmarshaler, error) {
 	epoch := slots.ToEpoch(slot)
 	if epoch >= params.BeaconConfig().GloasForkEpoch {
@@ -378,13 +326,10 @@ func builtPayloadForSlot(slot primitives.Slot) (int, ssz.Unmarshaler, error) {
 	if epoch >= params.BeaconConfig().FuluForkEpoch {
 		return version.Fulu, &enginev2.BuiltPayloadFulu{}, nil
 	}
-	return 0, nil, errors.Errorf("ssz-http engine transport: no v2 BuiltPayload container for slot %d (pre-Fulu)", slot)
+	return 0, nil, errors.Errorf("ssz-http engine transport: no BuiltPayload container for slot %d (pre-Fulu)", slot)
 }
 
-// builtPayloadToBundle maps a decoded v2 BuiltPayload onto the existing
-// ExecutionBundle proto (a flat field copy — both reuse the same v1 inner
-// payload/blobs types) so blocks.NewGetPayloadResponse builds the response the
-// same way it does for the JSON-RPC path.
+// builtPayloadToBundle maps the SSZ response onto the existing proto bundle.
 func builtPayloadToBundle(out ssz.Unmarshaler) (proto.Message, error) {
 	switch p := out.(type) {
 	case *enginev2.BuiltPayloadFulu:
@@ -408,10 +353,7 @@ func builtPayloadToBundle(out ssz.Unmarshaler) (proto.Message, error) {
 	}
 }
 
-// GetBlobs fetches blobs-and-proofs over POST /engine/v2/blobs/v1 (replaces
-// engine_getBlobsV1). The result is request-aligned: one slot per requested
-// hash, nil where the EL reported available=false. A 204 (ErrNoContent) means
-// the EL cannot serve the request, returned as an empty result.
+// GetBlobs fetches blobs-and-proofs over POST /engine/v1/blobs/v1.
 func (e *sszEngine) GetBlobs(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProof, error) {
 	if !e.supportsBlob("v1") {
 		return nil, errors.Errorf("%s is not supported", GetBlobsV1)
@@ -443,10 +385,7 @@ func (e *sszEngine) GetBlobs(ctx context.Context, versionedHashes []common.Hash)
 	return result, nil
 }
 
-// GetBlobsV2 fetches blobs-and-cell-proofs over POST /engine/v2/blobs/v2
-// (replaces engine_getBlobsV2, all-or-nothing). A 204 (ErrNoContent) means the
-// EL cannot serve the request or at least one blob is missing — returned as an
-// empty result, matching the JSON-RPC "nothing returned" path.
+// GetBlobsV2 fetches blobs-and-cell-proofs over POST /engine/v1/blobs/v2.
 func (e *sszEngine) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
 	if !e.supportsBlob("v2") {
 		return nil, errors.Errorf("%s is not supported", GetBlobsV2)
@@ -481,8 +420,7 @@ func (e *sszEngine) GetBlobsV2(ctx context.Context, versionedHashes []common.Has
 	return result, nil
 }
 
-// GetBlobsV3 fetches blobs-and-cell-proofs over POST /engine/v2/blobs/v3
-// (replaces engine_getBlobsV3, all-or-nothing).
+// GetBlobsV3 fetches blobs-and-cell-proofs over POST /engine/v1/blobs/v3.
 func (e *sszEngine) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
 	if !e.supportsBlob("v3") {
 		return nil, errors.Errorf("%s is not supported", GetBlobsV3)
@@ -514,8 +452,7 @@ func (e *sszEngine) GetBlobsV3(ctx context.Context, versionedHashes []common.Has
 	return result, nil
 }
 
-// blobsRequest builds the SSZ List[VersionedHash] request body shared by the
-// blob-pool endpoints.
+// blobsRequest builds the blob-pool request body.
 func blobsRequest(versionedHashes []common.Hash) *enginev2.BlobsRequest {
 	req := &enginev2.BlobsRequest{VersionedHashes: make([][]byte, len(versionedHashes))}
 	for i := range versionedHashes {
@@ -524,8 +461,7 @@ func blobsRequest(versionedHashes []common.Hash) *enginev2.BlobsRequest {
 	return req
 }
 
-// supportsBlob reports whether the EL advertised the given /blobs/vN revision in
-// its capabilities (the SSZ-native equivalent of jsonEngine's caps.has check).
+// supportsBlob checks the advertised /blobs/vN revisions.
 func (e *sszEngine) supportsBlob(version string) bool {
 	e.capsLock.RLock()
 	defer e.capsLock.RUnlock()
@@ -535,10 +471,7 @@ func (e *sszEngine) supportsBlob(version string) bool {
 	return slices.Contains(e.caps.IndependentlyVersioned["blobs"], version)
 }
 
-// rejectIfUnsupportedFork returns ErrUnsupportedFork when the EL capability
-// document does not advertise the execution fork selected for a fork-scoped SSZ
-// request. A nil capability document is treated defensively as unknown support,
-// matching supportsBlob.
+// rejectIfUnsupportedFork checks supported_forks for fork-scoped endpoints.
 func (e *sszEngine) rejectIfUnsupportedFork(v int) error {
 	fork, err := version.ELForkName(v)
 	if err != nil {
@@ -556,8 +489,7 @@ func (e *sszEngine) rejectIfUnsupportedFork(v int) error {
 	return errors.Wrapf(ErrUnsupportedFork, "execution fork %q not advertised by EL capabilities", fork)
 }
 
-// ExchangeCapabilities probes the EL's v2 capabilities over GET /engine/v2/capabilities
-// and saves them in the engine's capability.
+// ExchangeCapabilities refreshes GET /engine/v1/capabilities.
 func (e *sszEngine) ExchangeCapabilities(ctx context.Context) error {
 	e.capsLock.Lock()
 	defer e.capsLock.Unlock()
@@ -571,18 +503,12 @@ func (e *sszEngine) ExchangeCapabilities(ctx context.Context) error {
 	return nil
 }
 
-// GetClientVersionV1 fetches the EL client versions over GET /engine/v2/identity
-// (replaces engine_getClientVersionV1). Prysm's own version travels in the
-// X-Engine-Client-Version header on every request, so there is no handshake.
+// GetClientVersionV1 fetches GET /engine/v1/identity.
 func (e *sszEngine) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error) {
 	return e.client.Identity(ctx)
 }
 
-// GetPayloadBodiesByHash fetches bodies over POST /engine/v2/{fork}/bodies/hash
-// (replaces engine_getPayloadBodiesByHashV1). Entries are request-aligned;
-// available=false maps to a nil body (the reconstructor's missing marker).
-// Requests over the advertised bodies.max_count are split into in-order
-// sub-batches so the concatenated result stays aligned with hashes.
+// GetPayloadBodiesByHash fetches bodies over POST /engine/v1/bodies/hash.
 func (e *sszEngine) GetPayloadBodiesByHash(ctx context.Context, v int, hashes []common.Hash) ([]interfaces.ExecutionPayloadBody, error) {
 	if err := e.rejectIfUnsupportedFork(v); err != nil {
 		return nil, err
@@ -603,7 +529,7 @@ func (e *sszEngine) GetPayloadBodiesByHash(ctx context.Context, v int, hashes []
 	return result, nil
 }
 
-// bodiesByHash performs one /bodies/hash call for hashes within the EL's cap.
+// bodiesByHash performs one /bodies/hash request.
 func (e *sszEngine) bodiesByHash(ctx context.Context, v int, hashes []common.Hash) ([]interfaces.ExecutionPayloadBody, error) {
 	out, err := newBodiesResponse(v)
 	if err != nil {
@@ -623,10 +549,7 @@ func (e *sszEngine) bodiesByHash(ctx context.Context, v int, hashes []common.Has
 	return bodiesEntries(out)
 }
 
-// GetPayloadBodiesByRange fetches bodies over GET /engine/v2/{fork}/bodies?from&count
-// (replaces engine_getPayloadBodiesByRangeV1). A range wider than the advertised
-// bodies.max_count is split into consecutive windows; the in-order concatenation
-// covers [from, from+count) exactly.
+// GetPayloadBodiesByRange fetches bodies over GET /engine/v1/bodies.
 func (e *sszEngine) GetPayloadBodiesByRange(ctx context.Context, v int, from, count uint64) ([]interfaces.ExecutionPayloadBody, error) {
 	if err := e.rejectIfUnsupportedFork(v); err != nil {
 		return nil, err
@@ -646,7 +569,7 @@ func (e *sszEngine) GetPayloadBodiesByRange(ctx context.Context, v int, from, co
 	return result, nil
 }
 
-// bodiesByRange performs one /bodies range call for a window within the EL's cap.
+// bodiesByRange performs one /bodies range request.
 func (e *sszEngine) bodiesByRange(ctx context.Context, v int, from, count uint64) ([]interfaces.ExecutionPayloadBody, error) {
 	out, err := newBodiesResponse(v)
 	if err != nil {
@@ -661,9 +584,7 @@ func (e *sszEngine) bodiesByRange(ctx context.Context, v int, from, count uint64
 	return bodiesEntries(out)
 }
 
-// newBodiesResponse returns an empty fork-scoped BodiesResponse to decode into.
-// Only the Fulu (osaka) and Gloas (amsterdam) body containers exist in
-// proto/engine/v2; pre-osaka forks have no v2 bodies container.
+// newBodiesResponse returns an empty fork-scoped BodiesResponse.
 func newBodiesResponse(v int) (ssz.Unmarshaler, error) {
 	switch v {
 	case version.Fulu:
@@ -671,12 +592,11 @@ func newBodiesResponse(v int) (ssz.Unmarshaler, error) {
 	case version.Gloas:
 		return &enginev2.BodiesResponseGloas{}, nil
 	default:
-		return nil, errors.Errorf("ssz-http engine transport: no v2 bodies container for version %s", version.String(v))
+		return nil, errors.Errorf("ssz-http engine transport: no bodies container for version %s", version.String(v))
 	}
 }
 
-// bodiesEntries converts a fork-scoped BodiesResponse into the transport-neutral
-// []interfaces.ExecutionPayloadBody the reconstructors consume.
+// bodiesEntries converts a BodiesResponse into execution payload bodies.
 func bodiesEntries(out ssz.Unmarshaler) ([]interfaces.ExecutionPayloadBody, error) {
 	switch resp := out.(type) {
 	case *enginev2.BodiesResponseFulu:

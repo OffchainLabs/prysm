@@ -1,10 +1,4 @@
-// Package enginehttp implements an HTTP/2 (h2c) client for the REST + SSZ
-// Engine API REST surface (ethereum/execution-apis#793), the transport that
-// replaces the JSON-RPC engine_* namespace under /engine/v1/...
-//
-// The package is transport-only: it round-trips arbitrary SSZ bodies and is
-// generic over the fastssz Marshaler/Unmarshaler interfaces, so it carries no
-// dependency on any concrete engine container type.
+// Package enginehttp implements the REST + SSZ Engine API client.
 package enginehttp
 
 import (
@@ -29,63 +23,36 @@ import (
 )
 
 const (
-	// apiBase is the major-version-scoped base path for the REST engine API.
 	apiBase = "/engine/v1"
 
-	// contentTypeSSZ is the hot-path body encoding (SSZ).
-	contentTypeSSZ = "application/octet-stream"
-	// contentTypeJSON is used by the diagnostic endpoints (/capabilities, /identity).
+	contentTypeSSZ  = "application/octet-stream"
 	contentTypeJSON = "application/json"
 
-	// clientVersionHeader carries the CL version on every request, replacing
-	// the engine_getClientVersionV1 mutual handshake.
-	clientVersionHeader = "X-Engine-Client-Version"
-	// executionVersionHeader selects the fork-scoped SSZ body schema on hot-path
-	// endpoints.
+	clientVersionHeader    = "X-Engine-Client-Version"
 	executionVersionHeader = "Eth-Execution-Version"
 
-	// defaultMaxResponseBytes is the hard ceiling on the response body read
-	// from the EL, guarding against a crafted/oversized Content-Length or body
-	// coercing a large allocation (execution-apis#793 "Security
-	// considerations": cap the bytes read from the body in all cases). It is a
-	// transport backstop set well above any legitimate engine response; the
-	// tighter, semantically-correct per-endpoint limits.* caps layer on top.
-	// Matches api/client's MaxBodySizeState precedent.
 	defaultMaxResponseBytes int64 = 1 << 29 // 512 MiB
 
-	// maxRetriesOn503 bounds how many extra attempts a 503 carrying a usable
-	// Retry-After earns. The spec replaces per-method timeout SHOULDs with
-	// "HTTP-standard request timeouts and Retry-After semantics on 503"
-	// (execution-apis#793); the http.Client.Timeout covers the former.
 	maxRetriesOn503 = 2
 
-	// defaultMaxRetryAfter caps a single Retry-After backoff. A longer
-	// Retry-After is treated as non-retryable and the 503 surfaces, leaving any
-	// longer wait to the caller's own retry cadence.
 	defaultMaxRetryAfter = 2 * time.Second
 )
 
 // Config configures a Client.
 type Config struct {
 	// BaseURL is the EL engine endpoint root, e.g. "http://localhost:8551".
-	// The /engine/v1/... path is appended by the client. Required; must be http
-	// (the spec mandates h2c, leaving TLS to a reverse proxy).
 	BaseURL string
 	// JWTSecret is the raw HS256 shared secret bytes. Required.
 	JWTSecret []byte
 	// JWTID is the optional "id" JWT claim.
 	JWTID string
-	// ClientVersion is sent as the X-Engine-Client-Version header on every
-	// request (e.g. "Prysm/v7.0.0/..."). Optional.
+	// ClientVersion is sent as X-Engine-Client-Version when set.
 	ClientVersion string
 	// Timeout bounds each request. Defaults to network.DefaultRPCHTTPTimeout.
 	Timeout time.Duration
-	// MaxResponseBytes caps the response body read from the EL. Defaults to
-	// defaultMaxResponseBytes when <= 0. A transport backstop against an
-	// oversized/crafted body; per-endpoint limits.* caps are enforced above it.
+	// MaxResponseBytes caps response bodies. Defaults when <= 0.
 	MaxResponseBytes int64
-	// MaxRetryAfter caps how long a single 503 Retry-After backoff may be
-	// honored. Defaults to defaultMaxRetryAfter when <= 0.
+	// MaxRetryAfter caps one 503 Retry-After backoff. Defaults when <= 0.
 	MaxRetryAfter time.Duration
 }
 
@@ -98,8 +65,7 @@ type Client struct {
 	maxRetryAfter    time.Duration
 }
 
-// New builds a Client speaking h2c (HTTP/2 cleartext) to cfg.BaseURL with
-// per-request JWT bearer auth.
+// New builds an h2c client with per-request JWT bearer auth.
 func New(cfg Config) (*Client, error) {
 	if cfg.BaseURL == "" {
 		return nil, errors.New("enginehttp: empty BaseURL")
@@ -108,8 +74,6 @@ func New(cfg Config) (*Client, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "enginehttp: invalid BaseURL")
 	}
-	// The spec uses h2c (cleartext) on both TCP and IPC; TLS is a reverse-proxy
-	// concern. Only http is supported here.
 	// TODO: IPC/UNIX-socket support
 	if base.Scheme != "http" {
 		return nil, errors.Errorf("enginehttp: unsupported URL scheme %q (want http)", base.Scheme)
@@ -118,18 +82,6 @@ func New(cfg Config) (*Client, error) {
 		return nil, errors.New("enginehttp: empty JWT secret")
 	}
 
-	// Flow control: the spec asks CLs to advertise INITIAL_WINDOW_SIZE >= 1 MiB
-	// so blob bundles and large getPayload responses don't stall on the 64 KiB
-	// RFC default (execution-apis#793 "Flow-control window", a SHOULD). x/net's
-	// http2.Transport already advertises a 4 MiB stream receive window
-	// (transportDefaultStreamFlow) and a 1 GiB connection window, so the bare
-	// Transport conforms; MAX_FRAME_SIZE / MAX_HEADER_LIST_SIZE stay at HTTP/2
-	// defaults, which the spec leaves unpinned.
-	//
-	// Compression: the only CL MUST is to tolerate uncompressed responses, which
-	// we do; with DisableCompression off the Transport also negotiates gzip
-	// transparently. zstd is optional and would need a new dependency, so it is
-	// not requested.
 	h2 := &http2.Transport{
 		AllowHTTP: true,
 		DialTLSContext: func(ctx context.Context, netw, addr string, _ *tls.Config) (net.Conn, error) {
@@ -163,24 +115,12 @@ func New(cfg Config) (*Client, error) {
 	}, nil
 }
 
-// SSZRequest performs one unscoped SSZ engine call: it marshals req as the SSZ
-// request body (when non-nil), sends it to /engine/v1{p}, and on HTTP 200
-// decodes the SSZ response into resp.
-//
-//   - method: http.MethodPost or http.MethodGet.
-//   - p:      path under /engine/v1, e.g. "/blobs/v1" (no trailing slash).
-//   - query:  optional URL query (nil for none).
-//   - req:    SSZ request body; pass nil for no body (e.g. GET endpoints).
-//   - resp:   destination for a 200 SSZ body; pass nil to discard it.
-//
-// It returns ErrNoContent on HTTP 204, and an *Error (carrying the status and
-// decoded problem+json) on any other non-200 status.
+// SSZRequest performs one unscoped SSZ call.
 func (c *Client) SSZRequest(ctx context.Context, method, p string, query url.Values, req ssz.Marshaler, resp ssz.Unmarshaler) error {
 	return c.sszRequest(ctx, method, p, query, "", req, resp)
 }
 
-// ForkSSZRequest performs one fork-scoped SSZ engine call. The fork argument is
-// sent as Eth-Execution-Version and selects the request/response container shape.
+// ForkSSZRequest performs one SSZ call with Eth-Execution-Version.
 func (c *Client) ForkSSZRequest(ctx context.Context, method, fork, p string, query url.Values, req ssz.Marshaler, resp ssz.Unmarshaler) error {
 	if fork == "" {
 		return errors.New("enginehttp: empty execution version")
@@ -225,9 +165,7 @@ func (c *Client) sszRequest(ctx context.Context, method, p string, query url.Val
 	}
 }
 
-// JSONGet performs a GET against a diagnostic endpoint (/capabilities,
-// /identity) and decodes the JSON response into out. p is the path under
-// /engine/v1, e.g. "/capabilities". A non-200 status yields an *Error.
+// JSONGet performs one JSON diagnostic GET.
 func (c *Client) JSONGet(ctx context.Context, p string, out any) error {
 	status, body, err := c.roundtrip(ctx, request{
 		method: http.MethodGet,
@@ -246,7 +184,6 @@ func (c *Client) JSONGet(ctx context.Context, p string, out any) error {
 	return nil
 }
 
-// request describes a single HTTP call to the engine API.
 type request struct {
 	method           string
 	path             string // path under apiBase, e.g. "/payloads" or "/blobs/v1"
@@ -257,12 +194,7 @@ type request struct {
 	executionVersion string // Eth-Execution-Version header, fork-scoped endpoints only
 }
 
-// roundtrip performs one engine call and returns the status code and response
-// body. It returns a non-nil error only for transport/IO failures; non-2xx HTTP
-// statuses are reported via the returned status for the caller to branch on.
-// A 503 carrying a usable Retry-After is retried after the indicated (capped)
-// backoff, up to maxRetriesOn503 times, honoring ctx (execution-apis#793:
-// HTTP-standard timeouts + Retry-After on 503).
+// roundtrip performs one engine call, retrying bounded 503 Retry-After responses.
 func (c *Client) roundtrip(ctx context.Context, r request) (int, []byte, error) {
 	for attempt := 0; ; attempt++ {
 		status, body, retryAfter, err := c.do(ctx, r)
@@ -279,12 +211,9 @@ func (c *Client) roundtrip(ctx context.Context, r request) (int, []byte, error) 
 	}
 }
 
-// do performs a single HTTP attempt, returning the status, capped response body,
-// and the raw Retry-After header (empty when absent).
+// do performs one HTTP attempt.
 func (c *Client) do(ctx context.Context, r request) (int, []byte, string, error) {
 	u := *c.base
-	// path.Join cleans any accidental trailing slash, matching the spec's
-	// "trailing slashes are forbidden" rule.
 	u.Path = path.Join(c.base.Path, apiBase, r.path)
 	if r.query != nil {
 		u.RawQuery = r.query.Encode()
@@ -319,9 +248,6 @@ func (c *Client) do(ctx context.Context, r request) (int, []byte, string, error)
 	defer func() {
 		_ = resp.Body.Close()
 	}()
-	// Cap by Content-Length before reading when present, and cap the bytes read
-	// in all cases (handles an absent or lying Content-Length) — a crafted body
-	// must not coerce an unbounded allocation (execution-apis#793 Security).
 	if resp.ContentLength > c.maxResponseBytes {
 		return resp.StatusCode, nil, "", errors.Errorf("enginehttp: response Content-Length %d exceeds max %d bytes", resp.ContentLength, c.maxResponseBytes)
 	}

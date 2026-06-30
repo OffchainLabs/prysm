@@ -2,8 +2,7 @@ package enginev2
 
 // PayloadStatus.status enum values. Encoded as a single uint8 byte on the wire
 // (see engine_v2.proto). Numbering starts at 0 so a zero-valued PayloadStatus
-// deserialises as VALID. ACCEPTED is only valid on POST /{fork}/payloads;
-// /{fork}/forkchoice MUST return VALID/INVALID/SYNCING only.
+// deserialises as VALID. ACCEPTED is only valid on POST /payloads.
 const (
 	PayloadStatusValid    uint8 = 0
 	PayloadStatusInvalid  uint8 = 1

@@ -135,10 +135,7 @@ var (
 		},
 		[]string{"method", "transport", "direction"},
 	)
-	// engineSSZHTTPFallbackCount counts how often SSZ-over-HTTP selection fell
-	// back to JSON-RPC for a connection (flag on but the client could not be built
-	// or the EL served no v2 surface). Selection is sticky per connection, so each
-	// increment is one connection that ran on JSON-RPC despite the flag.
+	// engineSSZHTTPFallbackCount counts REST+SSZ probe failures.
 	engineSSZHTTPFallbackCount = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "engine_ssz_http_fallback_count",
 		Help: "The number of connections that fell back from SSZ-over-HTTP to JSON-RPC",
