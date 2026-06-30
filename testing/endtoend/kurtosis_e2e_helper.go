@@ -21,11 +21,9 @@ const (
 	// ETHEREUM_PACKAGE is the identifier of the ethereum-package Starlark package used in these tests.
 	ETHEREUM_PACKAGE = "github.com/ethpandaops/ethereum-package"
 
-	// LATE_SYNC_NODE_DELAY is how long after genesis the skip_start sync nodes are
-	// started, so the chain has advanced and finalized: the normal-sync node then
-	// has history to catch up over P2P, and the checkpoint-sync node has a
-	// finalized checkpoint to sync from.
-	LATE_SYNC_NODE_DELAY = 6 * time.Minute
+	// DEFAULT_LATE_SYNC_NODE_DELAY is how long after genesis the skip_start sync nodes are
+	// started, so the chain has advanced and finalized.
+	DEFAULT_LATE_SYNC_NODE_DELAY = 6 * time.Minute
 
 	// SYNC_NODE_SERVICE is the skip_start node for the P2P (genesis) sync test.
 	SYNC_NODE_SERVICE = "cl-3-prysm-geth"
@@ -41,17 +39,22 @@ const (
 )
 
 type KurtosisTestSuites struct {
-	enclaveName    string
-	configPath     string
-	epochsToRun    uint64
-	runSyncTest    bool
-	extraPlaybooks []string
-	skipPlaybooks  []string
+	enclaveName       string
+	configPath        string
+	epochsToRun       uint64
+	runSyncTest       bool
+	lateSyncNodeDelay time.Duration
+	extraPlaybooks    []string
+	skipPlaybooks     []string
 }
 
 func (k *KurtosisTestSuites) Run(t *testing.T) {
 	// Note: Subtests can be run in parallel as they use separate enclaves.
 	t.Parallel()
+
+	if k.runSyncTest && k.lateSyncNodeDelay <= 0 {
+		k.lateSyncNodeDelay = DEFAULT_LATE_SYNC_NODE_DELAY
+	}
 
 	ctx := t.Context()
 
@@ -106,7 +109,7 @@ func (k *KurtosisTestSuites) Run(t *testing.T) {
 		require.Equal(t, true, slices.Contains(stoppedNodes, SYNC_NODE_SERVICE), "Expected stopped nodes to contain %s", SYNC_NODE_SERVICE)
 		require.Equal(t, true, slices.Contains(stoppedNodes, CHECKPOINT_SYNC_NODE_SERVICE), "Expected stopped nodes to contain %s", CHECKPOINT_SYNC_NODE_SERVICE)
 
-		delay := time.Until(genesisTime.Add(LATE_SYNC_NODE_DELAY))
+		delay := time.Until(genesisTime.Add(k.lateSyncNodeDelay))
 		scheduleLateSyncNodeStart(t, ctx, kw, delay, SYNC_NODE_SERVICE, CHECKPOINT_SYNC_NODE_SERVICE)
 	}
 
