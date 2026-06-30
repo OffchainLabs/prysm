@@ -1,6 +1,6 @@
 // Package enginehttp implements an HTTP/2 (h2c) client for the REST + SSZ
-// Engine API v2 (ethereum/execution-apis#793), the transport that replaces the
-// JSON-RPC engine_* namespace under /engine/v2/{fork}/...
+// Engine API REST surface (ethereum/execution-apis#793), the transport that
+// replaces the JSON-RPC engine_* namespace under /engine/v1/...
 //
 // The package is transport-only: it round-trips arbitrary SSZ bodies and is
 // generic over the fastssz Marshaler/Unmarshaler interfaces, so it carries no
@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	// apiBase is the major-version-scoped base path for the v2 engine API.
-	apiBase = "/engine/v2"
+	// apiBase is the major-version-scoped base path for the REST engine API.
+	apiBase = "/engine/v1"
 
 	// contentTypeSSZ is the hot-path body encoding (SSZ).
 	contentTypeSSZ = "application/octet-stream"
@@ -40,6 +40,9 @@ const (
 	// clientVersionHeader carries the CL version on every request, replacing
 	// the engine_getClientVersionV1 mutual handshake.
 	clientVersionHeader = "X-Engine-Client-Version"
+	// executionVersionHeader selects the fork-scoped SSZ body schema on hot-path
+	// endpoints.
+	executionVersionHeader = "Eth-Execution-Version"
 
 	// defaultMaxResponseBytes is the hard ceiling on the response body read
 	// from the EL, guarding against a crafted/oversized Content-Length or body
@@ -65,7 +68,7 @@ const (
 // Config configures a Client.
 type Config struct {
 	// BaseURL is the EL engine endpoint root, e.g. "http://localhost:8551".
-	// The /engine/v2/... path is appended by the client. Required; must be http
+	// The /engine/v1/... path is appended by the client. Required; must be http
 	// (the spec mandates h2c, leaving TLS to a reverse proxy).
 	BaseURL string
 	// JWTSecret is the raw HS256 shared secret bytes. Required.
@@ -86,7 +89,7 @@ type Config struct {
 	MaxRetryAfter time.Duration
 }
 
-// Client is an HTTP/2 (h2c) client for the REST + SSZ Engine API v2.
+// Client is an HTTP/2 (h2c) client for the REST + SSZ Engine API.
 type Client struct {
 	base             *url.URL
 	http             *http.Client
@@ -160,12 +163,12 @@ func New(cfg Config) (*Client, error) {
 	}, nil
 }
 
-// SSZRequest performs one hot-path engine call: it marshals req as the SSZ
-// request body (when non-nil), sends it to /engine/v2{p}, and on HTTP 200
+// SSZRequest performs one unscoped SSZ engine call: it marshals req as the SSZ
+// request body (when non-nil), sends it to /engine/v1{p}, and on HTTP 200
 // decodes the SSZ response into resp.
 //
 //   - method: http.MethodPost or http.MethodGet.
-//   - p:      path under /engine/v2, e.g. "/amsterdam/payloads" (no trailing slash).
+//   - p:      path under /engine/v1, e.g. "/blobs/v1" (no trailing slash).
 //   - query:  optional URL query (nil for none).
 //   - req:    SSZ request body; pass nil for no body (e.g. GET endpoints).
 //   - resp:   destination for a 200 SSZ body; pass nil to discard it.
@@ -173,6 +176,19 @@ func New(cfg Config) (*Client, error) {
 // It returns ErrNoContent on HTTP 204, and an *Error (carrying the status and
 // decoded problem+json) on any other non-200 status.
 func (c *Client) SSZRequest(ctx context.Context, method, p string, query url.Values, req ssz.Marshaler, resp ssz.Unmarshaler) error {
+	return c.sszRequest(ctx, method, p, query, "", req, resp)
+}
+
+// ForkSSZRequest performs one fork-scoped SSZ engine call. The fork argument is
+// sent as Eth-Execution-Version and selects the request/response container shape.
+func (c *Client) ForkSSZRequest(ctx context.Context, method, fork, p string, query url.Values, req ssz.Marshaler, resp ssz.Unmarshaler) error {
+	if fork == "" {
+		return errors.New("enginehttp: empty execution version")
+	}
+	return c.sszRequest(ctx, method, p, query, fork, req, resp)
+}
+
+func (c *Client) sszRequest(ctx context.Context, method, p string, query url.Values, executionVersion string, req ssz.Marshaler, resp ssz.Unmarshaler) error {
 	var body []byte
 	if req != nil {
 		b, err := req.MarshalSSZ()
@@ -182,12 +198,13 @@ func (c *Client) SSZRequest(ctx context.Context, method, p string, query url.Val
 		body = b
 	}
 	status, respBody, err := c.roundtrip(ctx, request{
-		method:      method,
-		path:        p,
-		query:       query,
-		body:        body,
-		contentType: contentTypeSSZ,
-		accept:      contentTypeSSZ,
+		method:           method,
+		path:             p,
+		query:            query,
+		body:             body,
+		contentType:      contentTypeSSZ,
+		accept:           contentTypeSSZ,
+		executionVersion: executionVersion,
 	})
 	if err != nil {
 		return err
@@ -210,7 +227,7 @@ func (c *Client) SSZRequest(ctx context.Context, method, p string, query url.Val
 
 // JSONGet performs a GET against a diagnostic endpoint (/capabilities,
 // /identity) and decodes the JSON response into out. p is the path under
-// /engine/v2, e.g. "/capabilities". A non-200 status yields an *Error.
+// /engine/v1, e.g. "/capabilities". A non-200 status yields an *Error.
 func (c *Client) JSONGet(ctx context.Context, p string, out any) error {
 	status, body, err := c.roundtrip(ctx, request{
 		method: http.MethodGet,
@@ -231,12 +248,13 @@ func (c *Client) JSONGet(ctx context.Context, p string, out any) error {
 
 // request describes a single HTTP call to the engine API.
 type request struct {
-	method      string
-	path        string // path under apiBase, e.g. "/amsterdam/payloads"
-	query       url.Values
-	body        []byte // nil for no body
-	contentType string // set on the request when body != nil
-	accept      string // Accept header
+	method           string
+	path             string // path under apiBase, e.g. "/payloads" or "/blobs/v1"
+	query            url.Values
+	body             []byte // nil for no body
+	contentType      string // set on the request when body != nil
+	accept           string // Accept header
+	executionVersion string // Eth-Execution-Version header, fork-scoped endpoints only
 }
 
 // roundtrip performs one engine call and returns the status code and response
@@ -289,6 +307,9 @@ func (c *Client) do(ctx context.Context, r request) (int, []byte, string, error)
 	}
 	if c.clientVersion != "" {
 		req.Header.Set(clientVersionHeader, c.clientVersion)
+	}
+	if r.executionVersion != "" {
+		req.Header.Set(executionVersionHeader, r.executionVersion)
 	}
 
 	resp, err := c.http.Do(req)

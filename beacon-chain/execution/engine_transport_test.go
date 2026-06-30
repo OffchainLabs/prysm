@@ -73,7 +73,7 @@ func TestSelectEngineTransport_Probe(t *testing.T) {
 	s.selectEngineTransport(context.Background(), bearerEndpoint(srv.URL))
 
 	require.NotNil(t, s.sszTransport)
-	assert.Equal(t, "/engine/v2/capabilities", gotPath)
+	assert.Equal(t, "/engine/v1/capabilities", gotPath)
 	ie, ok := s.engine().(*instrumentedEngine)
 	require.Equal(t, true, ok)
 	assert.Equal(t, transportSSZ, ie.kind)

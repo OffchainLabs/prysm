@@ -26,13 +26,14 @@ func TestNewPayload(t *testing.T) {
 	statusSSZ, err := (&enginev2.PayloadStatus{Status: enginev2.StatusByte(enginev2.PayloadStatusValid)}).MarshalSSZ()
 	require.NoError(t, err)
 
-	var gotMethod, gotPath, gotCT, gotAccept string
+	var gotMethod, gotPath, gotCT, gotAccept, gotFork string
 	var gotBody []byte
 	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
 		gotMethod = r.Method
 		gotPath = r.URL.Path
 		gotCT = r.Header.Get("Content-Type")
 		gotAccept = r.Header.Get("Accept")
+		gotFork = r.Header.Get(executionVersionHeader)
 		gotBody, _ = io.ReadAll(r.Body)
 		w.Header().Set("Content-Type", contentTypeSSZ)
 		_, _ = w.Write(statusSSZ)
@@ -41,9 +42,10 @@ func TestNewPayload(t *testing.T) {
 	status, err := c.NewPayload(context.Background(), version.Gloas, &stubSSZ{data: []byte("envelope")})
 	require.NoError(t, err)
 	assert.Equal(t, http.MethodPost, gotMethod)
-	assert.Equal(t, "/engine/v2/amsterdam/payloads", gotPath)
+	assert.Equal(t, "/engine/v1/payloads", gotPath)
 	assert.Equal(t, contentTypeSSZ, gotCT)
 	assert.Equal(t, contentTypeSSZ, gotAccept)
+	assert.Equal(t, "amsterdam", gotFork)
 	assert.DeepEqual(t, []byte("envelope"), gotBody)
 	assert.Equal(t, enginev2.PayloadStatusValid, status.Enum())
 }
@@ -56,12 +58,13 @@ func TestForkchoiceUpdated(t *testing.T) {
 	}).MarshalSSZ()
 	require.NoError(t, err)
 
-	var gotMethod, gotPath, gotCT string
+	var gotMethod, gotPath, gotCT, gotFork string
 	var gotBody []byte
 	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
 		gotMethod = r.Method
 		gotPath = r.URL.Path
 		gotCT = r.Header.Get("Content-Type")
+		gotFork = r.Header.Get(executionVersionHeader)
 		gotBody, _ = io.ReadAll(r.Body)
 		w.Header().Set("Content-Type", contentTypeSSZ)
 		_, _ = w.Write(respSSZ)
@@ -70,8 +73,9 @@ func TestForkchoiceUpdated(t *testing.T) {
 	resp, err := c.ForkchoiceUpdated(context.Background(), version.Gloas, &stubSSZ{data: []byte("fcu")})
 	require.NoError(t, err)
 	assert.Equal(t, http.MethodPost, gotMethod)
-	assert.Equal(t, "/engine/v2/amsterdam/forkchoice", gotPath)
+	assert.Equal(t, "/engine/v1/forkchoice", gotPath)
 	assert.Equal(t, contentTypeSSZ, gotCT)
+	assert.Equal(t, "amsterdam", gotFork)
 	assert.DeepEqual(t, []byte("fcu"), gotBody)
 	assert.Equal(t, enginev2.PayloadStatusValid, resp.PayloadStatus.Enum())
 	gotID, present := enginev2.OptionalBytes(resp.PayloadId)
@@ -83,11 +87,12 @@ func TestGetPayload(t *testing.T) {
 	payloadID := [8]byte{0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef}
 	respBytes := []byte("built-payload-ssz")
 
-	var gotMethod, gotPath string
+	var gotMethod, gotPath, gotFork string
 	var hadBody bool
 	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
 		gotMethod = r.Method
 		gotPath = r.URL.Path
+		gotFork = r.Header.Get(executionVersionHeader)
 		b, _ := io.ReadAll(r.Body)
 		hadBody = len(b) > 0
 		w.Header().Set("Cache-Control", "no-store")
@@ -99,7 +104,8 @@ func TestGetPayload(t *testing.T) {
 	err := c.GetPayload(context.Background(), version.Gloas, payloadID, out)
 	require.NoError(t, err)
 	assert.Equal(t, http.MethodGet, gotMethod)
-	assert.Equal(t, "/engine/v2/amsterdam/payloads/0x0123456789abcdef", gotPath) // hex-encoded opaque id
+	assert.Equal(t, "/engine/v1/payloads/0x0123456789abcdef", gotPath) // hex-encoded opaque id
+	assert.Equal(t, "amsterdam", gotFork)
 	assert.Equal(t, false, hadBody)
 	assert.DeepEqual(t, respBytes, out.data)
 }
@@ -111,12 +117,13 @@ func TestGetPayloadBodiesByHash(t *testing.T) {
 	reqSSZ, err := req.MarshalSSZ()
 	require.NoError(t, err)
 
-	var gotMethod, gotPath, gotCT string
+	var gotMethod, gotPath, gotCT, gotFork string
 	var gotBody []byte
 	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
 		gotMethod = r.Method
 		gotPath = r.URL.Path
 		gotCT = r.Header.Get("Content-Type")
+		gotFork = r.Header.Get(executionVersionHeader)
 		gotBody, _ = io.ReadAll(r.Body)
 		w.Header().Set("Content-Type", contentTypeSSZ)
 		_, _ = w.Write(respSSZ)
@@ -125,8 +132,9 @@ func TestGetPayloadBodiesByHash(t *testing.T) {
 	err = c.GetPayloadBodiesByHash(context.Background(), version.Gloas, req, &enginev2.BodiesResponseGloas{})
 	require.NoError(t, err)
 	assert.Equal(t, http.MethodPost, gotMethod)
-	assert.Equal(t, "/engine/v2/amsterdam/bodies/hash", gotPath)
+	assert.Equal(t, "/engine/v1/bodies/hash", gotPath)
 	assert.Equal(t, contentTypeSSZ, gotCT)
+	assert.Equal(t, "amsterdam", gotFork)
 	assert.DeepEqual(t, reqSSZ, gotBody)
 }
 
@@ -134,12 +142,13 @@ func TestGetPayloadBodiesByRange(t *testing.T) {
 	respSSZ, err := (&enginev2.BodiesResponseFulu{}).MarshalSSZ()
 	require.NoError(t, err)
 
-	var gotMethod, gotPath string
+	var gotMethod, gotPath, gotFork string
 	var gotQuery url.Values
 	var hadBody bool
 	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
 		gotMethod = r.Method
 		gotPath = r.URL.Path
+		gotFork = r.Header.Get(executionVersionHeader)
 		gotQuery = r.URL.Query()
 		b, _ := io.ReadAll(r.Body)
 		hadBody = len(b) > 0
@@ -150,7 +159,8 @@ func TestGetPayloadBodiesByRange(t *testing.T) {
 	err = c.GetPayloadBodiesByRange(context.Background(), version.Fulu, 1, 2, &enginev2.BodiesResponseFulu{})
 	require.NoError(t, err)
 	assert.Equal(t, http.MethodGet, gotMethod)
-	assert.Equal(t, "/engine/v2/osaka/bodies", gotPath) // fork-scoped, range in the query
+	assert.Equal(t, "/engine/v1/bodies", gotPath) // fork-scoped, range in the query
+	assert.Equal(t, "osaka", gotFork)
 	assert.Equal(t, "1", gotQuery.Get("from"))
 	assert.Equal(t, "2", gotQuery.Get("count"))
 	assert.Equal(t, false, hadBody)
@@ -160,12 +170,13 @@ func TestGetBlobs(t *testing.T) {
 	respSSZ, err := (&enginev2.BlobsV1Response{}).MarshalSSZ()
 	require.NoError(t, err)
 
-	var gotMethod, gotPath, gotCT string
+	var gotMethod, gotPath, gotCT, gotFork string
 	var gotBody []byte
 	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
 		gotMethod = r.Method
 		gotPath = r.URL.Path
 		gotCT = r.Header.Get("Content-Type")
+		gotFork = r.Header.Get(executionVersionHeader)
 		gotBody, _ = io.ReadAll(r.Body)
 		w.Header().Set("Content-Type", contentTypeSSZ)
 		_, _ = w.Write(respSSZ)
@@ -174,8 +185,10 @@ func TestGetBlobs(t *testing.T) {
 	err = c.GetBlobs(context.Background(), 1, &stubSSZ{data: []byte("blobreq")}, &enginev2.BlobsV1Response{})
 	require.NoError(t, err)
 	assert.Equal(t, http.MethodPost, gotMethod)
-	assert.Equal(t, "/engine/v2/blobs/v1", gotPath) // version-scoped, not fork-scoped
+	assert.Equal(t, "/engine/v1/blobs/v1", gotPath) // version-scoped, not fork-scoped
 	assert.Equal(t, contentTypeSSZ, gotCT)
+	// GetBlobs calls are independently versioned.
+	assert.Equal(t, "", gotFork)
 	assert.DeepEqual(t, []byte("blobreq"), gotBody)
 }
 
@@ -212,7 +225,7 @@ func TestCapabilities(t *testing.T) {
 	caps, err := c.Capabilities(context.Background())
 	require.NoError(t, err)
 	require.NotNil(t, caps)
-	assert.Equal(t, "/engine/v2/capabilities", gotPath)
+	assert.Equal(t, "/engine/v1/capabilities", gotPath)
 	assert.Equal(t, contentTypeJSON, gotAccept)
 	assert.Equal(t, true, slices.Contains(caps.SupportedForks, "amsterdam"))
 	assert.Equal(t, uint64(268435456), caps.Limits["payload.max_bytes"])
@@ -249,7 +262,7 @@ func TestIdentity(t *testing.T) {
 	versions, err := c.Identity(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, 1, len(versions))
-	assert.Equal(t, "/engine/v2/identity", gotPath)
+	assert.Equal(t, "/engine/v1/identity", gotPath)
 	assert.Equal(t, contentTypeJSON, gotAccept)
 	assert.Equal(t, "Prysm/test", gotCV) // CL identifies itself via the header
 	assert.Equal(t, "EX", versions[0].Code)

@@ -91,7 +91,7 @@ func TestSSZRequest_Post(t *testing.T) {
 	reqBytes := []byte("ssz-request-body")
 	respBytes := []byte("ssz-response-body")
 
-	var gotMethod, gotPath, gotCT, gotAccept, gotCV string
+	var gotMethod, gotPath, gotCT, gotAccept, gotCV, gotFork string
 	var gotProtoMajor int
 	var gotBody []byte
 	var jwtOK bool
@@ -101,6 +101,7 @@ func TestSSZRequest_Post(t *testing.T) {
 		gotCT = r.Header.Get("Content-Type")
 		gotAccept = r.Header.Get("Accept")
 		gotCV = r.Header.Get(clientVersionHeader)
+		gotFork = r.Header.Get(executionVersionHeader)
 		gotProtoMajor = r.ProtoMajor
 		gotBody, _ = io.ReadAll(r.Body)
 		jwtOK = verifyJWT(r)
@@ -110,28 +111,57 @@ func TestSSZRequest_Post(t *testing.T) {
 	})
 
 	out := &stubSSZ{}
-	err := c.SSZRequest(context.Background(), http.MethodPost, "/amsterdam/payloads", nil, &stubSSZ{data: reqBytes}, out)
+	err := c.SSZRequest(context.Background(), http.MethodPost, "/blobs/v1", nil, &stubSSZ{data: reqBytes}, out)
 	require.NoError(t, err)
 
 	assert.Equal(t, http.MethodPost, gotMethod)
-	assert.Equal(t, "/engine/v2/amsterdam/payloads", gotPath)
+	assert.Equal(t, "/engine/v1/blobs/v1", gotPath)
 	assert.Equal(t, contentTypeSSZ, gotCT)
 	assert.Equal(t, contentTypeSSZ, gotAccept)
 	assert.Equal(t, "Prysm/test", gotCV)
+	assert.Equal(t, "", gotFork)
 	assert.Equal(t, 2, gotProtoMajor) // h2c negotiated HTTP/2
 	assert.Equal(t, true, jwtOK)
 	assert.DeepEqual(t, reqBytes, gotBody)
 	assert.DeepEqual(t, respBytes, out.data)
 }
 
-func TestSSZRequest_GetNoBody(t *testing.T) {
+func TestForkSSZRequest_Post(t *testing.T) {
+	reqBytes := []byte("ssz-request-body")
+	respBytes := []byte("ssz-response-body")
+
+	var gotMethod, gotPath, gotFork string
+	var gotBody []byte
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		gotFork = r.Header.Get(executionVersionHeader)
+		gotBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", contentTypeSSZ)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(respBytes)
+	})
+
+	out := &stubSSZ{}
+	err := c.ForkSSZRequest(context.Background(), http.MethodPost, "amsterdam", "/payloads", nil, &stubSSZ{data: reqBytes}, out)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.MethodPost, gotMethod)
+	assert.Equal(t, "/engine/v1/payloads", gotPath)
+	assert.Equal(t, "amsterdam", gotFork)
+	assert.DeepEqual(t, reqBytes, gotBody)
+	assert.DeepEqual(t, respBytes, out.data)
+}
+
+func TestForkSSZRequest_GetNoBody(t *testing.T) {
 	respBytes := []byte("built-payload-bytes")
 
-	var gotMethod, gotCT string
+	var gotMethod, gotCT, gotFork string
 	var hadBody bool
 	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
 		gotMethod = r.Method
 		gotCT = r.Header.Get("Content-Type")
+		gotFork = r.Header.Get(executionVersionHeader)
 		b, _ := io.ReadAll(r.Body)
 		hadBody = len(b) > 0
 		w.WriteHeader(http.StatusOK)
@@ -139,30 +169,34 @@ func TestSSZRequest_GetNoBody(t *testing.T) {
 	})
 
 	out := &stubSSZ{}
-	err := c.SSZRequest(context.Background(), http.MethodGet, "/amsterdam/payloads/0x0123456789abcdef", nil, nil, out)
+	err := c.ForkSSZRequest(context.Background(), http.MethodGet, "amsterdam", "/payloads/0x0123456789abcdef", nil, nil, out)
 	require.NoError(t, err)
 
 	assert.Equal(t, http.MethodGet, gotMethod)
 	assert.Equal(t, "", gotCT) // no Content-Type when there is no request body
+	assert.Equal(t, "amsterdam", gotFork)
 	assert.Equal(t, false, hadBody)
 	assert.DeepEqual(t, respBytes, out.data)
 }
 
-func TestSSZRequest_Query(t *testing.T) {
+func TestForkSSZRequest_Query(t *testing.T) {
 	var gotQuery url.Values
+	var gotFork string
 	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
 		gotQuery = r.URL.Query()
+		gotFork = r.Header.Get(executionVersionHeader)
 		w.WriteHeader(http.StatusOK)
 	})
 
 	q := url.Values{}
 	q.Set("from", "1")
 	q.Set("count", "2")
-	err := c.SSZRequest(context.Background(), http.MethodGet, "/amsterdam/bodies", q, nil, &stubSSZ{})
+	err := c.ForkSSZRequest(context.Background(), http.MethodGet, "amsterdam", "/bodies", q, nil, &stubSSZ{})
 	require.NoError(t, err)
 
 	assert.Equal(t, "1", gotQuery.Get("from"))
 	assert.Equal(t, "2", gotQuery.Get("count"))
+	assert.Equal(t, "amsterdam", gotFork)
 }
 
 func TestSSZRequest_NoContent(t *testing.T) {
@@ -182,7 +216,7 @@ func TestSSZRequest_ProblemJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`{"type":"/engine-api/errors/invalid-forkchoice","detail":"finalized not ancestor of head"}`))
 	})
 
-	err := c.SSZRequest(context.Background(), http.MethodPost, "/amsterdam/forkchoice", nil, &stubSSZ{data: []byte("x")}, &stubSSZ{})
+	err := c.ForkSSZRequest(context.Background(), http.MethodPost, "amsterdam", "/forkchoice", nil, &stubSSZ{data: []byte("x")}, &stubSSZ{})
 	require.NotNil(t, err)
 
 	var apiErr *Error
@@ -198,7 +232,7 @@ func TestSSZRequest_NonJSONErrorBody(t *testing.T) {
 		_, _ = w.Write([]byte("boom"))
 	})
 
-	err := c.SSZRequest(context.Background(), http.MethodPost, "/amsterdam/payloads", nil, &stubSSZ{data: []byte("x")}, &stubSSZ{})
+	err := c.ForkSSZRequest(context.Background(), http.MethodPost, "amsterdam", "/payloads", nil, &stubSSZ{data: []byte("x")}, &stubSSZ{})
 	require.NotNil(t, err)
 
 	var apiErr *Error
@@ -217,7 +251,7 @@ func TestRoundtrip_ContentLengthExceedsMax(t *testing.T) {
 		_, _ = w.Write(make([]byte, 4096))
 	})
 
-	err := c.SSZRequest(context.Background(), http.MethodGet, "/amsterdam/payloads/0x01", nil, nil, &stubSSZ{})
+	err := c.ForkSSZRequest(context.Background(), http.MethodGet, "amsterdam", "/payloads/0x01", nil, nil, &stubSSZ{})
 	require.NotNil(t, err)
 	assert.Equal(t, true, strings.Contains(err.Error(), "Content-Length"))
 }
@@ -237,7 +271,7 @@ func TestRoundtrip_BodyExceedsMax(t *testing.T) {
 		}
 	})
 
-	err := c.SSZRequest(context.Background(), http.MethodGet, "/amsterdam/payloads/0x01", nil, nil, &stubSSZ{})
+	err := c.ForkSSZRequest(context.Background(), http.MethodGet, "amsterdam", "/payloads/0x01", nil, nil, &stubSSZ{})
 	require.NotNil(t, err)
 	assert.Equal(t, true, strings.Contains(err.Error(), "exceeds max"))
 }
@@ -252,7 +286,7 @@ func TestRoundtrip_BodyAtMax(t *testing.T) {
 	})
 
 	out := &stubSSZ{}
-	err := c.SSZRequest(context.Background(), http.MethodGet, "/amsterdam/payloads/0x01", nil, nil, out)
+	err := c.ForkSSZRequest(context.Background(), http.MethodGet, "amsterdam", "/payloads/0x01", nil, nil, out)
 	require.NoError(t, err)
 	assert.Equal(t, 16, len(out.data))
 }
@@ -303,7 +337,7 @@ func TestRoundtrip_RetryAfter503ThenOK(t *testing.T) {
 	})
 
 	out := &stubSSZ{}
-	err := c.SSZRequest(context.Background(), http.MethodGet, "/amsterdam/payloads/0x01", nil, nil, out)
+	err := c.ForkSSZRequest(context.Background(), http.MethodGet, "amsterdam", "/payloads/0x01", nil, nil, out)
 	require.NoError(t, err)
 	assert.Equal(t, int32(2), calls.Load())
 	assert.DeepEqual(t, respBytes, out.data)
@@ -317,7 +351,7 @@ func TestRoundtrip_RetryAfter503Exhausts(t *testing.T) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	})
 
-	err := c.SSZRequest(context.Background(), http.MethodGet, "/amsterdam/payloads/0x01", nil, nil, &stubSSZ{})
+	err := c.ForkSSZRequest(context.Background(), http.MethodGet, "amsterdam", "/payloads/0x01", nil, nil, &stubSSZ{})
 	require.NotNil(t, err)
 	var apiErr *Error
 	require.Equal(t, true, errors.As(err, &apiErr))
@@ -332,7 +366,7 @@ func TestRoundtrip_503NoRetryAfter(t *testing.T) {
 		w.WriteHeader(http.StatusServiceUnavailable) // no Retry-After -> no retry
 	})
 
-	err := c.SSZRequest(context.Background(), http.MethodGet, "/amsterdam/payloads/0x01", nil, nil, &stubSSZ{})
+	err := c.ForkSSZRequest(context.Background(), http.MethodGet, "amsterdam", "/payloads/0x01", nil, nil, &stubSSZ{})
 	require.NotNil(t, err)
 	var apiErr *Error
 	require.Equal(t, true, errors.As(err, &apiErr))
@@ -348,7 +382,7 @@ func TestRoundtrip_503RetryAfterTooLong(t *testing.T) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	})
 
-	err := c.SSZRequest(context.Background(), http.MethodGet, "/amsterdam/payloads/0x01", nil, nil, &stubSSZ{})
+	err := c.ForkSSZRequest(context.Background(), http.MethodGet, "amsterdam", "/payloads/0x01", nil, nil, &stubSSZ{})
 	require.NotNil(t, err)
 	assert.Equal(t, int32(1), calls.Load())
 }
@@ -370,7 +404,7 @@ func TestJSONGet(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, contentTypeJSON, gotAccept)
-	assert.Equal(t, "/engine/v2/capabilities", gotPath)
+	assert.Equal(t, "/engine/v1/capabilities", gotPath)
 	require.Equal(t, 1, len(caps.SupportedForks))
 	assert.Equal(t, "amsterdam", caps.SupportedForks[0])
 	assert.Equal(t, int64(268435456), caps.Limits["payload.max_bytes"])
