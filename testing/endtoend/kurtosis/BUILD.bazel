@@ -17,6 +17,7 @@ go_library(
         "playbooks/blob-limits.yaml",
         "playbooks/blobs-included.yaml",
         "playbooks/block-graffiti.yaml",
+        "playbooks/builder.yaml",
         "playbooks/deposits.yaml",
         "playbooks/fee-recipient.yaml",
         "playbooks/fork-transition-altair.yaml",

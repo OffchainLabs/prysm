@@ -36,6 +36,16 @@ func TestEndToEnd_Kurtosis_MinimalConfig(t *testing.T) {
 				"slashings.yaml",
 			},
 		},
+		{
+			enclaveName:    "minimal-builder",
+			configPath:     "testing/endtoend/network-config/minimal-builder.yaml",
+			epochsToRun:    15,
+			runSyncTest:    false,
+			extraPlaybooks: []string{"builder.yaml"},
+			skipPlaybooks: []string{
+				"fee-recipient.yaml",
+			},
+		},
 	}
 
 	for _, suite := range testSuites {

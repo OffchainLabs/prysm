@@ -303,6 +303,7 @@ go_test(
         "network-config/minimal.yaml",
         "network-config/minimal-statediff.yaml",
         "network-config/minimal-postmerge.yaml",
+        "network-config/minimal-builder.yaml",
         "//cmd/beacon-chain:oci_image_tarball_e2e",
         "//cmd/validator:oci_image_tarball_e2e",
     ],

@@ -1,0 +1,35 @@
+# Check that the external builder (buildoor) is actively producing payloads.
+#
+# Replaces those evaluators from legacy E2E:
+# - BuilderIsActive
+
+id: builder-active
+name: "Builder is producing payloads"
+timeout: 30m
+
+tasks:
+  - name: check_clients_are_healthy
+    title: "Wait for a healthy client"
+    timeout: 5m
+    config:
+      minClientCount: 1
+
+  - name: get_consensus_specs
+    id: specs
+    title: "Get consensus specs"
+  - name: check_consensus_slot_range
+    title: "Wait until the builder has warmed up post-Deneb"
+    timeout: 20m
+    configVars:
+      minEpochNumber: "| [2, ((.tasks.specs.outputs.specs.DENEB_FORK_EPOCH | tonumber) + 1)] | max"
+
+  # Over a one-epoch window, all but at most 2 blocks must be builder blocks. 
+  # Note: Buildoor stamps its blocks with extraData "buildoor-<cl>-<el>-<n>".
+  - name: check_consensus_block_proposals
+    title: "Check most blocks in the last epoch are builder blocks"
+    timeout: 15m
+    configVars:
+      checkLookback: "| .tasks.specs.outputs.specs.SLOTS_PER_EPOCH | tonumber"
+      blockCount: "| (.tasks.specs.outputs.specs.SLOTS_PER_EPOCH | tonumber) - 2"
+    config:
+      extraDataPattern: "^buildoor"
