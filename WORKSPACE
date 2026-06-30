@@ -423,7 +423,11 @@ load("@prysm//testing/endtoend:deps.bzl", "e2e_deps")
 
 e2e_deps()
 
-load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies")
+load("@com_github_atlassian_bazel_tools//gometalinter:deps.bzl", "gometalinter_dependencies")
+
+gometalinter_dependencies()
+
+load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies", "go_repository")
 
 gazelle_dependencies(go_sdk = "go_sdk")
 

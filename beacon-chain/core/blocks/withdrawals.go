@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -17,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
@@ -157,7 +157,6 @@ func ProcessWithdrawals(st state.BeaconState, executionData interfaces.Execution
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get expected withdrawals")
 	}
-	progressiveSSZ := st.Version() >= version.Gloas && features.Get().EnableProgressiveSSZ
 
 	var wdRoot [32]byte
 	if executionData.IsBlinded() {
@@ -176,22 +175,13 @@ func ProcessWithdrawals(st state.BeaconState, executionData interfaces.Execution
 			return nil, fmt.Errorf("execution payload header has %d withdrawals when %d were expected", len(wds), len(expectedWithdrawals))
 		}
 
-		if progressiveSSZ {
-			wdRoot, err = ssz.WithdrawalSliceRootProgressive(wds, fieldparams.MaxWithdrawalsPerPayload)
-		} else {
-			wdRoot, err = ssz.WithdrawalSliceRoot(wds, fieldparams.MaxWithdrawalsPerPayload)
-		}
+		wdRoot, err = wrappers.WithdrawalSliceRoot(wds, fieldparams.MaxWithdrawalsPerPayload)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get withdrawals root")
 		}
 	}
 
-	var expectedRoot [32]byte
-	if progressiveSSZ {
-		expectedRoot, err = ssz.WithdrawalSliceRootProgressive(expectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
-	} else {
-		expectedRoot, err = ssz.WithdrawalSliceRoot(expectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
-	}
+	expectedRoot, err := wrappers.WithdrawalSliceRoot(expectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get expected withdrawals root")
 	}

@@ -7,11 +7,11 @@ import (
 
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	// enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	common "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/common/ssz_static"
-	fssz "github.com/prysmaticlabs/fastssz"
 )
 
 // RunSSZStaticTests executes "ssz_static" tests.
@@ -37,6 +37,9 @@ func customHtr(t *testing.T, htrs []common.HTR, object any) []common.HTR {
 
 // unmarshalledSSZ unmarshalls serialized input.
 func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (any, error) {
+	//if folderName != "BeaconBlockBody" {
+	//t.Skip("fixme: just testing beacon block body for now")
+	//}
 	var obj any
 
 	switch folderName {
@@ -190,7 +193,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 	}
 
 	var err error
-	if o, ok := obj.(fssz.Unmarshaler); ok {
+	if o, ok := obj.(ssz.Unmarshaler); ok {
 		err = o.UnmarshalSSZ(serializedBytes)
 	} else {
 		err = errors.New("could not unmarshal object, not a fastssz compatible object")

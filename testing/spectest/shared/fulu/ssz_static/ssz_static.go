@@ -10,7 +10,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	common "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/common/ssz_static"
-	fssz "github.com/prysmaticlabs/fastssz"
+	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
 )
 
 // RunSSZStaticTests executes "ssz_static" tests.
@@ -161,7 +161,7 @@ func UnmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		return nil, errors.New("type not found")
 	}
 	var err error
-	if o, ok := obj.(fssz.Unmarshaler); ok {
+	if o, ok := obj.(ssz.Unmarshaler); ok {
 		err = o.UnmarshalSSZ(serializedBytes)
 	} else {
 		err = errors.New("could not unmarshal object, not a fastssz compatible object")

@@ -38,7 +38,7 @@ mainnet = {
     "pending_deposits_limit": "134217728",
     "pending_partial_withdrawals_limit": "134217728",
     "pending_consolidations_limit": "262144",
-    "max_consolidation_requests_per_payload.size": "2",
+    "max_consolidation_requests_per_payload.size": "256",
     "field_elements_per_cell.size": "64",
     "field_elements_per_ext_blob.size": "8192",
     "bytes_per_cell.size": "2048",  # FIELD_ELEMENTS_PER_CELL * BYTES_PER_FIELD_ELEMENT
@@ -49,7 +49,7 @@ mainnet = {
     "ptc_committee_indices.size": "512",  # PTC_SIZE
     "ptc.size": "64",  # Gloas: Payload Timeliness Committee aggregation bits (PTC_SIZE = 512)
     "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector512",
-    "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
+    "payload_attestation.size": "256",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
     "execution_payload_availability.size": "1024",  # Gloas: SLOTS_PER_HISTORICAL_ROOT
     "builder_pending_payments.size": "64",  # Gloas: vector length (2 * SLOTS_PER_EPOCH)
     "builder_registry_limit": "1099511627776",  # Gloas: BUILDER_REGISTRY_LIMIT (same for mainnet/minimal)
@@ -86,8 +86,8 @@ minimal = {
     "committee_bits.type": "github.com/OffchainLabs/go-bitfield.Bitvector4",
     "pending_deposits_limit": "134217728",
     "pending_partial_withdrawals_limit": "64",
-    "pending_consolidations_limit": "64",
-    "max_consolidation_requests_per_payload.size": "2",
+    "pending_consolidations_limit": "256",
+    "max_consolidation_requests_per_payload.size": "256",
     "field_elements_per_cell.size": "64",
     "field_elements_per_ext_blob.size": "8192",
     "bytes_per_cell.size": "2048",  # FIELD_ELEMENTS_PER_CELL * BYTES_PER_FIELD_ELEMENT
@@ -98,7 +98,7 @@ minimal = {
     "ptc_committee_indices.size": "16",  # PTC_SIZE
     "ptc.size": "2",  # Gloas: Payload Timeliness Committee aggregation bits (PTC_SIZE = 16)
     "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector16",
-    "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
+    "payload_attestation.size": "256",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
     "execution_payload_availability.size": "8",  # Gloas: SLOTS_PER_HISTORICAL_ROOT
     "builder_pending_payments.size": "16",  # Gloas: vector length (2 * SLOTS_PER_EPOCH)
     "builder_registry_limit": "1099511627776",  # Gloas: BUILDER_REGISTRY_LIMIT (same for mainnet/minimal)

@@ -2,7 +2,10 @@ package validator
 
 import (
 	"context"
+	"encoding/binary"
 	"math/big"
+
+	"github.com/pkg/errors"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -15,8 +18,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/pkg/errors"
-	fastssz "github.com/prysmaticlabs/fastssz"
 )
 
 // eth1DataMajorityVote determines the appropriate eth1data for a block proposal using
@@ -152,8 +153,7 @@ func (vs *Server) mockETH1DataVote(ctx context.Context, slot primitives.Slot) (*
 	if err != nil {
 		return nil, err
 	}
-	var enc []byte
-	enc = fastssz.MarshalUint64(enc, uint64(slots.ToEpoch(slot))+uint64(slotInVotingPeriod))
+	enc := binary.LittleEndian.AppendUint64(make([]byte, 0), uint64(slots.ToEpoch(slot))+uint64(slotInVotingPeriod))
 	depRoot := hash.Hash(enc)
 	blockHash := hash.Hash(depRoot[:])
 	return &ethpb.Eth1Data{
