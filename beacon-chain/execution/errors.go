@@ -33,6 +33,8 @@ var (
 	ErrNilResponse = errors.New("nil response")
 	// ErrRequestTooLarge when the request is too large
 	ErrRequestTooLarge = errors.New("request too large")
+	// ErrUnsupportedFork when the execution client does not support the requested execution fork.
+	ErrUnsupportedFork = errors.New("execution fork is not supported")
 	// ErrUnsupportedVersion represents a case where a payload is requested for a block type that doesn't have a known mapping.
 	ErrUnsupportedVersion = errors.New("unknown ExecutionPayload schema for block version")
 )

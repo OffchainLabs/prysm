@@ -145,6 +145,9 @@ func (e *sszEngine) NewPayload(ctx context.Context, payload interfaces.Execution
 		return nil, errors.Errorf("ssz-http engine transport: no v2 ExecutionPayloadEnvelope container for payload type %T", p)
 	}
 
+	if err := e.rejectIfUnsupportedFork(ver); err != nil {
+		return nil, err
+	}
 	if err := e.rejectIfOverLimit(limitPayloadMaxBytes, uint64(envelope.SizeSSZ())); err != nil {
 		return nil, err
 	}
@@ -202,6 +205,9 @@ func (e *sszEngine) ForkchoiceUpdated(ctx context.Context, state *pb.ForkchoiceS
 	}
 	ver, update, err := buildForkchoiceUpdate(state, attrs)
 	if err != nil {
+		return nil, nil, err
+	}
+	if err := e.rejectIfUnsupportedFork(ver); err != nil {
 		return nil, nil, err
 	}
 
@@ -315,6 +321,8 @@ func mapEngineError(err error) error {
 		return ErrUnknownPayload
 	case enginehttp.ProblemRequestTooLarge:
 		return ErrRequestTooLarge
+	case enginehttp.ProblemUnsupportedFork:
+		return ErrUnsupportedFork
 	case enginehttp.ProblemParseError:
 		return ErrParse
 	case enginehttp.ProblemInvalidRequest:
@@ -338,6 +346,9 @@ func mapEngineError(err error) error {
 func (e *sszEngine) GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error) {
 	ver, out, err := builtPayloadForSlot(slot)
 	if err != nil {
+		return nil, err
+	}
+	if err := e.rejectIfUnsupportedFork(ver); err != nil {
 		return nil, err
 	}
 	if err := e.client.GetPayload(ctx, ver, payloadId, out); err != nil {
@@ -524,6 +535,27 @@ func (e *sszEngine) supportsBlob(version string) bool {
 	return slices.Contains(e.caps.IndependentlyVersioned["blobs"], version)
 }
 
+// rejectIfUnsupportedFork returns ErrUnsupportedFork when the EL capability
+// document does not advertise the execution fork selected for a fork-scoped SSZ
+// request. A nil capability document is treated defensively as unknown support,
+// matching supportsBlob.
+func (e *sszEngine) rejectIfUnsupportedFork(v int) error {
+	fork, err := version.ELForkName(v)
+	if err != nil {
+		return errors.Wrap(err, "failed to get EL fork name")
+	}
+
+	e.capsLock.RLock()
+	defer e.capsLock.RUnlock()
+	if e.caps == nil {
+		return nil
+	}
+	if slices.Contains(e.caps.SupportedForks, fork) {
+		return nil
+	}
+	return errors.Wrapf(ErrUnsupportedFork, "execution fork %q not advertised by EL capabilities", fork)
+}
+
 // ExchangeCapabilities probes the EL's v2 capabilities over GET /engine/v2/capabilities
 // and saves them in the engine's capability.
 func (e *sszEngine) ExchangeCapabilities(ctx context.Context) error {
@@ -552,6 +584,9 @@ func (e *sszEngine) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVe
 // Requests over the advertised bodies.max_count are split into in-order
 // sub-batches so the concatenated result stays aligned with hashes.
 func (e *sszEngine) GetPayloadBodiesByHash(ctx context.Context, v int, hashes []common.Hash) ([]interfaces.ExecutionPayloadBody, error) {
+	if err := e.rejectIfUnsupportedFork(v); err != nil {
+		return nil, err
+	}
 	n := uint64(len(hashes))
 	maxCount, capped := e.limit(limitBodiesMaxCount)
 	if !capped || n <= maxCount {
@@ -593,6 +628,9 @@ func (e *sszEngine) bodiesByHash(ctx context.Context, v int, hashes []common.Has
 // bodies.max_count is split into consecutive windows; the in-order concatenation
 // covers [from, from+count) exactly.
 func (e *sszEngine) GetPayloadBodiesByRange(ctx context.Context, v int, from, count uint64) ([]interfaces.ExecutionPayloadBody, error) {
+	if err := e.rejectIfUnsupportedFork(v); err != nil {
+		return nil, err
+	}
 	maxCount, capped := e.limit(limitBodiesMaxCount)
 	if !capped || count <= maxCount {
 		return e.bodiesByRange(ctx, v, from, count)

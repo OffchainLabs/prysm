@@ -128,6 +128,7 @@ func TestMapEngineError(t *testing.T) {
 		{enginehttp.ProblemInvalidAttributes, ErrInvalidPayloadAttributes},
 		{enginehttp.ProblemUnknownPayload, ErrUnknownPayload},
 		{enginehttp.ProblemRequestTooLarge, ErrRequestTooLarge},
+		{enginehttp.ProblemUnsupportedFork, ErrUnsupportedFork},
 		{enginehttp.ProblemInvalidBody, ErrInvalidParams},
 	}
 	for _, tc := range cases {
@@ -198,6 +199,25 @@ func TestSupportsBlob(t *testing.T) {
 
 	// No capability document (defensive): permit the request to surface support.
 	assert.Equal(t, true, (&sszEngine{}).supportsBlob("v1"))
+}
+
+// rejectIfUnsupportedFork gates fork-scoped SSZ endpoints on the probed
+// supported_forks capability before the request reaches the EL.
+func TestRejectIfUnsupportedFork(t *testing.T) {
+	e := &sszEngine{caps: &enginehttp.Capabilities{SupportedForks: []string{"osaka", "amsterdam"}}}
+	require.NoError(t, e.rejectIfUnsupportedFork(version.Fulu))
+	require.NoError(t, e.rejectIfUnsupportedFork(version.Gloas))
+
+	unsupported := &sszEngine{caps: &enginehttp.Capabilities{SupportedForks: []string{"amsterdam"}}}
+	err := unsupported.rejectIfUnsupportedFork(version.Fulu)
+	require.ErrorIs(t, err, ErrUnsupportedFork)
+	require.ErrorContains(t, "osaka", err)
+
+	none := &sszEngine{caps: &enginehttp.Capabilities{}}
+	require.ErrorIs(t, none.rejectIfUnsupportedFork(version.Fulu), ErrUnsupportedFork)
+
+	// No capability document (defensive): permit the request to surface support.
+	require.NoError(t, (&sszEngine{}).rejectIfUnsupportedFork(version.Fulu))
 }
 
 // bodiesEntries must be request-aligned, mapping available=false to a nil body
@@ -310,7 +330,10 @@ func TestGetPayloadBodiesByHash_Chunks(t *testing.T) {
 		w.Header().Set("Content-Type", "application/octet-stream")
 		_, _ = w.Write(sszBodiesGloas(t, uint64(len(req.BlockHashes))))
 	})
-	e := newTestSSZEngine(t, srv.URL, &enginehttp.Capabilities{Limits: map[string]uint64{limitBodiesMaxCount: 2}})
+	e := newTestSSZEngine(t, srv.URL, &enginehttp.Capabilities{
+		SupportedForks: []string{"amsterdam"},
+		Limits:         map[string]uint64{limitBodiesMaxCount: 2},
+	})
 
 	hashes := []common.Hash{{1}, {2}, {3}, {4}, {5}}
 	result, err := e.GetPayloadBodiesByHash(context.Background(), version.Gloas, hashes)
@@ -332,7 +355,10 @@ func TestGetPayloadBodiesByRange_Chunks(t *testing.T) {
 		w.Header().Set("Content-Type", "application/octet-stream")
 		_, _ = w.Write(sszBodiesGloas(t, cnt))
 	})
-	e := newTestSSZEngine(t, srv.URL, &enginehttp.Capabilities{Limits: map[string]uint64{limitBodiesMaxCount: 2}})
+	e := newTestSSZEngine(t, srv.URL, &enginehttp.Capabilities{
+		SupportedForks: []string{"amsterdam"},
+		Limits:         map[string]uint64{limitBodiesMaxCount: 2},
+	})
 
 	result, err := e.GetPayloadBodiesByRange(context.Background(), version.Gloas, 100, 5)
 	require.NoError(t, err)
@@ -370,7 +396,7 @@ func TestForkchoiceUpdated_SerializesPerConnection(t *testing.T) {
 		w.Header().Set("Content-Type", "application/octet-stream")
 		_, _ = w.Write(resp)
 	})
-	e := newTestSSZEngine(t, srv.URL, &enginehttp.Capabilities{})
+	e := newTestSSZEngine(t, srv.URL, &enginehttp.Capabilities{SupportedForks: []string{"osaka"}})
 
 	// Shared read-only state across goroutines; buildForkchoiceUpdate only reads it.
 	state := &pb.ForkchoiceState{
@@ -395,4 +421,22 @@ func TestForkchoiceUpdated_SerializesPerConnection(t *testing.T) {
 		require.NoError(t, err)
 	}
 	assert.Equal(t, int32(1), maxInFlight.Load()) // never more than one in flight
+}
+
+func TestForkchoiceUpdated_RejectsUnadvertisedForkBeforeRequest(t *testing.T) {
+	var requests atomic.Int32
+	srv := h2cServer(t, func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	e := newTestSSZEngine(t, srv.URL, &enginehttp.Capabilities{SupportedForks: []string{"amsterdam"}})
+	state := &pb.ForkchoiceState{
+		HeadBlockHash:      make([]byte, 32),
+		SafeBlockHash:      make([]byte, 32),
+		FinalizedBlockHash: make([]byte, 32),
+	}
+
+	_, _, err := e.ForkchoiceUpdated(context.Background(), state, payloadattribute.EmptyWithVersion(version.Fulu))
+	require.ErrorIs(t, err, ErrUnsupportedFork)
+	assert.Equal(t, int32(0), requests.Load())
 }
