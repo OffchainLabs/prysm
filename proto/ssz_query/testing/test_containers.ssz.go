@@ -114,7 +114,7 @@ func (c *FixedTestContainer) MarshalSSZTo(dst []byte) ([]byte, error) {
 		c.Nested = new(FixedNestedContainer)
 	}
 	if dst, err = c.Nested.MarshalSSZTo(dst); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Nested: %w", err)
 	}
 
 	// Field 5: VectorField
@@ -198,7 +198,7 @@ func (c *FixedTestContainer) UnmarshalSSZ(buf []byte) error {
 	// Field 4: Nested
 	c.Nested = new(FixedNestedContainer)
 	if err = c.Nested.UnmarshalSSZ(sszSlice4); err != nil {
-		return err
+		return fmt.Errorf("Nested: %w", err)
 	}
 
 	// Field 5: VectorField
@@ -266,7 +266,7 @@ func (c *FixedTestContainer) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(c.FieldBytes32)
 	// Field 4: Nested
 	if err := c.Nested.HashTreeRootWith(hh); err != nil {
-		return err
+		return fmt.Errorf("Nested: %w", err)
 	}
 	// Field 5: VectorField
 	{
@@ -559,12 +559,12 @@ func (c *VariableOuterContainer) MarshalSSZTo(dst []byte) ([]byte, error) {
 
 	// Field 0: Inner_1
 	if dst, err = c.Inner_1.MarshalSSZTo(dst); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Inner_1: %w", err)
 	}
 
 	// Field 1: Inner_2
 	if dst, err = c.Inner_2.MarshalSSZTo(dst); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Inner_2: %w", err)
 	}
 	return dst, err
 }
@@ -593,13 +593,13 @@ func (c *VariableOuterContainer) UnmarshalSSZ(buf []byte) error {
 	// Field 0: Inner_1
 	c.Inner_1 = new(VariableNestedContainer)
 	if err = c.Inner_1.UnmarshalSSZ(sszSlice0); err != nil {
-		return err
+		return fmt.Errorf("Inner_1: %w", err)
 	}
 
 	// Field 1: Inner_2
 	c.Inner_2 = new(VariableNestedContainer)
 	if err = c.Inner_2.UnmarshalSSZ(sszSlice1); err != nil {
-		return err
+		return fmt.Errorf("Inner_2: %w", err)
 	}
 	return err
 }
@@ -619,11 +619,11 @@ func (c *VariableOuterContainer) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 	// Field 0: Inner_1
 	if err := c.Inner_1.HashTreeRootWith(hh); err != nil {
-		return err
+		return fmt.Errorf("Inner_1: %w", err)
 	}
 	// Field 1: Inner_2
 	if err := c.Inner_2.HashTreeRootWith(hh); err != nil {
-		return err
+		return fmt.Errorf("Inner_2: %w", err)
 	}
 	hh.Merkleize(indx)
 	return nil
@@ -722,7 +722,7 @@ func (c *VariableTestContainer) MarshalSSZTo(dst []byte) ([]byte, error) {
 	}
 	for _, o := range c.FieldListContainer {
 		if dst, err = o.MarshalSSZTo(dst); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("FieldListContainer: %w", err)
 		}
 	}
 
@@ -739,7 +739,7 @@ func (c *VariableTestContainer) MarshalSSZTo(dst []byte) ([]byte, error) {
 
 	// Field 4: Nested
 	if dst, err = c.Nested.MarshalSSZTo(dst); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Nested: %w", err)
 	}
 
 	// Field 5: VariableContainerList
@@ -755,7 +755,7 @@ func (c *VariableTestContainer) MarshalSSZTo(dst []byte) ([]byte, error) {
 	}
 	for _, o := range c.VariableContainerList {
 		if dst, err = o.MarshalSSZTo(dst); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("VariableContainerList: %w", err)
 		}
 	}
 
@@ -872,7 +872,7 @@ func (c *VariableTestContainer) UnmarshalSSZ(buf []byte) error {
 			tmp = new(FixedNestedContainer)
 			tmpSlice := sszSlice2[i*40 : (1+i)*40]
 			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
-				return err
+				return fmt.Errorf("FieldListContainer: %w", err)
 			}
 			c.FieldListContainer[i] = tmp
 		}
@@ -901,7 +901,7 @@ func (c *VariableTestContainer) UnmarshalSSZ(buf []byte) error {
 	// Field 4: Nested
 	c.Nested = new(VariableNestedContainer)
 	if err = c.Nested.UnmarshalSSZ(sszSlice4); err != nil {
-		return err
+		return fmt.Errorf("Nested: %w", err)
 	}
 
 	// Field 5: VariableContainerList
@@ -941,7 +941,7 @@ func (c *VariableTestContainer) UnmarshalSSZ(buf []byte) error {
 				}
 				tmpSlice = sszSlice5[startOffset:endOffset]
 				if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
-					return err
+					return fmt.Errorf("VariableContainerList: %w", err)
 				}
 				c.VariableContainerList[i] = tmp
 				startOffset = endOffset
@@ -956,7 +956,7 @@ func (c *VariableTestContainer) UnmarshalSSZ(buf []byte) error {
 
 	// Field 6: BitlistField
 	if err = ssz.ValidateBitlist(sszSlice6, 2048); err != nil {
-		return err
+		return fmt.Errorf("BitlistField: %w", err)
 	}
 	c.BitlistField = append([]byte{}, go_bitfield.Bitlist(sszSlice6)...)
 
@@ -1053,7 +1053,7 @@ func (c *VariableTestContainer) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		subIndx := hh.Index()
 		for _, o := range c.FieldListContainer {
 			if err := o.HashTreeRootWith(hh); err != nil {
-				return err
+				return fmt.Errorf("FieldListContainer: %w", err)
 			}
 		}
 		hh.MerkleizeWithMixin(subIndx, uint64(len(c.FieldListContainer)), 128)
@@ -1074,7 +1074,7 @@ func (c *VariableTestContainer) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	}
 	// Field 4: Nested
 	if err := c.Nested.HashTreeRootWith(hh); err != nil {
-		return err
+		return fmt.Errorf("Nested: %w", err)
 	}
 	// Field 5: VariableContainerList
 	{
@@ -1084,7 +1084,7 @@ func (c *VariableTestContainer) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		subIndx := hh.Index()
 		for _, o := range c.VariableContainerList {
 			if err := o.HashTreeRootWith(hh); err != nil {
-				return err
+				return fmt.Errorf("VariableContainerList: %w", err)
 			}
 		}
 		hh.MerkleizeWithMixin(subIndx, uint64(len(c.VariableContainerList)), 10)

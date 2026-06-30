@@ -105,11 +105,7 @@ func (fp *flatPackage) isStdlib() bool {
 	return fp.Standard
 }
 
-// resolveStdlib will resolve the stdlib packages for the package.
-// This needs to be done because these are not explicitly provided to bazel build files,
-// so they are not included in the json representation that flatPackage is built from.
-// so this funcs main job is to reconstruct those imports that that the lookup function is able to understand
-// what they are at query time.
+// resolveStdlib reconstructs stdlib imports, which bazel omits from the package JSON, so they can be resolved at query time.
 func (fp *flatPackage) resolveStdlib(stdlibId func(string) string) error {
 	// Stdlib packages are already complete import wise
 	if fp.isStdlib() {

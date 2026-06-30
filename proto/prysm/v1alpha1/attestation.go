@@ -749,3 +749,33 @@ func (a *SignedAggregateAttestationAndProofElectra) IsNil() bool {
 func (a *SignedAggregateAttestationAndProofElectra) AggregateAttestationAndProof() AggregateAttAndProof {
 	return a.Message
 }
+
+// Version --
+func (a *AggregateAttestationAndProofGloas) Version() int {
+	return version.Gloas
+}
+
+// IsNil --
+func (a *AggregateAttestationAndProofGloas) IsNil() bool {
+	return a == nil || a.Aggregate == nil || a.Aggregate.IsNil()
+}
+
+// AggregateVal --
+func (a *AggregateAttestationAndProofGloas) AggregateVal() Att {
+	return a.Aggregate
+}
+
+// Version --
+func (a *SignedAggregateAttestationAndProofGloas) Version() int {
+	return version.Gloas
+}
+
+// IsNil --
+func (a *SignedAggregateAttestationAndProofGloas) IsNil() bool {
+	return a == nil || a.Message == nil || a.Message.IsNil()
+}
+
+// AggregateAttestationAndProof --
+func (a *SignedAggregateAttestationAndProofGloas) AggregateAttestationAndProof() AggregateAttAndProof {
+	return a.Message
+}

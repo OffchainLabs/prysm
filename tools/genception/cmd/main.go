@@ -14,9 +14,7 @@ import (
 var log = driver.Logger
 
 func run(_ context.Context, in io.Reader, out io.Writer, args []string) error {
-	// NewJSONDriver loads the environment, configures logging, and builds the package
-	// registry. It is the single, one-shot construction of the (IO-heavy) registry per
-	// process invocation.
+	// NewJSONDriver builds the (IO-heavy) package registry once per invocation.
 	pd, err := driver.NewJSONDriver()
 	if err != nil {
 		return fmt.Errorf("unable to load JSON files: %w", err)

@@ -2037,14 +2037,21 @@ def prysm_deps():
         sum = "h1:j7+1HpAFS1zy5+Q4qx1fWh90gTKwiN4QCGoY9TWyyO4=",
         version = "v0.0.0-20170206155736-9520e82c474b",
     )
+    #go_repository(
+    #    name = "com_github_offchainlabs_methodical_ssz",
+    #    importpath = "github.com/OffchainLabs/methodical-ssz",
+    #    build_file_generation = "on",
+    #    build_file_name = "BUILD.bazel",
+    #    remote = "file:///home/kasey/src/OffchainLabs/methodical-ssz",
+    #    vcs = "git",
+    #    commit = "4612ae87cb43f8eff50250ad60ec94ffcfd5186d",
+    #)
     go_repository(
         name = "com_github_offchainlabs_methodical_ssz",
         importpath = "github.com/OffchainLabs/methodical-ssz",
-        build_file_generation = "on",
-        build_file_name = "BUILD.bazel",
-        remote = "file:///home/kasey/src/OffchainLabs/methodical-ssz",
-        vcs = "git",
-        commit = "e04c1ac909a17157f0ad655080f06066b64aa983",
+        replace = "github.com/kasey/methodical-ssz",
+        sum = "h1:Pi5NVhn/mxoRYCRz6MSbVVh36zlvmWqM/jbODHUptHg=",
+        version = "v0.0.0-20260702141131-1533b71892f2",
     )
     go_repository(
         name = "com_github_microcosm_cc_bluemonday",

@@ -172,7 +172,7 @@ func InitializeDataMaps() {
 			return &ethpb.SignedAggregateAttestationAndProofElectra{}, nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().GloasForkVersion): func() (ethpb.SignedAggregateAttAndProof, error) {
-			return &ethpb.SignedAggregateAttestationAndProofElectra{}, nil
+			return &ethpb.SignedAggregateAttestationAndProofGloas{}, nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (ethpb.SignedAggregateAttAndProof, error) {
 			return &ethpb.SignedAggregateAttestationAndProofElectra{}, nil

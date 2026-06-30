@@ -271,7 +271,7 @@ func (c *SSZQueryResponseWithProof) MarshalSSZTo(dst []byte) ([]byte, error) {
 
 	// Field 2: Proof
 	if dst, err = c.Proof.MarshalSSZTo(dst); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Proof: %w", err)
 	}
 	return dst, err
 }
@@ -309,7 +309,7 @@ func (c *SSZQueryResponseWithProof) UnmarshalSSZ(buf []byte) error {
 	// Field 2: Proof
 	c.Proof = new(SSZQueryProof)
 	if err = c.Proof.UnmarshalSSZ(sszSlice2); err != nil {
-		return err
+		return fmt.Errorf("Proof: %w", err)
 	}
 	return err
 }
@@ -346,7 +346,7 @@ func (c *SSZQueryResponseWithProof) HashTreeRootWith(hh *ssz.Hasher) (err error)
 
 	// Field 2: Proof
 	if err := c.Proof.HashTreeRootWith(hh); err != nil {
-		return err
+		return fmt.Errorf("Proof: %w", err)
 	}
 	hh.Merkleize(indx)
 	return nil
