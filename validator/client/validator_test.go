@@ -2896,7 +2896,9 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 			require.Equal(t, 1, submitted[s], "slot must be submitted exactly once")
 		}
 		require.Equal(t, len(proposalSlots), len(submitted))
-		require.Equal(t, len(proposalSlots), v.submittedPrefSlotsCount())
+		v.submittedPrefSlotsLock.RLock()
+		require.Equal(t, len(proposalSlots), len(v.submittedPrefSlots))
+		v.submittedPrefSlotsLock.RUnlock()
 	})
 }
 

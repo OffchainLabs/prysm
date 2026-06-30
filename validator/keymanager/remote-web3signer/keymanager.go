@@ -441,6 +441,9 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 	case *validatorpb.SignRequest_ProposerPreference:
 		// TODO: Implement proposer preferences signing for web3signer.
 		return nil, fmt.Errorf("web3signer proposer preferences signing not yet implemented")
+	case *validatorpb.SignRequest_RequestAuth:
+		// TODO: Implement builder request auth signing for web3signer.
+		return nil, fmt.Errorf("web3signer request auth signing not yet implemented")
 
 	// We do not support "DEPOSIT" type.
 	/*
