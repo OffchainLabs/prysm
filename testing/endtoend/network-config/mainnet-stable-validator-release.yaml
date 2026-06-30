@@ -1,0 +1,76 @@
+# Mainnet-preset config which uses stable VC image with the local BN.
+
+participants:
+  - el_type: geth
+    cl_type: prysm
+    cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:latest"
+    # Use the stable VC image for the validator nodes.
+    vc_image: "gcr.io/offchainlabs/prysm/validator:stable"
+    count: 2
+
+  # Late-joining beacon node for the P2P normal sync test.
+  # Asserted by beacon-chain-sync.yaml.
+  - el_type: geth
+    cl_type: prysm
+    cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:latest"
+    validator_count: 0
+    skip_start: true
+    count: 1
+
+  # Late-joining beacon node for the checkpoint sync test: syncs from a finalized
+  # checkpoint (served by the checkpointz additional service) instead of genesis.
+  # Asserted by checkpoint-sync.yaml.
+  - el_type: geth
+    cl_type: prysm
+    cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:latest"
+    validator_count: 0
+    skip_start: true
+    checkpoint_sync_enabled: true
+    count: 1
+
+network_params:
+  preset: mainnet
+
+  altair_fork_epoch: 0
+  bellatrix_fork_epoch: 0
+  capella_fork_epoch: 0
+  deneb_fork_epoch: 0
+  electra_fork_epoch: 0
+  fulu_fork_epoch: 0
+  gloas_fork_epoch: 18446744073709551615
+
+  # Time parameters
+  seconds_per_slot: 6
+  slot_duration_ms: 6000
+
+  # Parameters below are for faster deposit & exit.
+  # TODO: But if we don't run validator lifecycle test, do we really need to set these?
+
+  # faster time for withdrawals
+  min_validator_withdrawability_delay: 1
+  # higher frequency of committee turnover and faster time to acceptable voluntary exit
+  shard_committee_period: 4
+  # process deposits more quickly, but insecure
+  eth1_follow_distance: 8
+
+  # Validator cycle parameters
+  churn_limit_quotient: 65536
+
+  # Deposit contract parameters
+  network_id: "1337"
+  deposit_contract_address: "0x4242424242424242424242424242424242424242"
+
+additional_services:
+  - assertoor
+  - dora
+  - spamoor
+  - checkpointz
+
+spamoor_params:
+  min_cpu: 10
+
+assertoor_params:
+
+ethereum_genesis_generator_params:
+  extra_env:
+    SECONDS_PER_ETH1_BLOCK: "2"
