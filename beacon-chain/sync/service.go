@@ -340,6 +340,7 @@ func (s *Service) Start() {
 	async.RunEvery(s.ctx, 30*time.Second, s.pruneDataColumnCache)
 
 	go s.prunePendingGloasColumns()
+	go s.processPendingGloasColumnsRoutine()
 
 	if !params.FuluEnabled() {
 		return

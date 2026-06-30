@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -15,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/logging"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -268,6 +271,42 @@ func (s *Service) hasPendingGloasColumns(root [fieldparams.RootLength]byte) bool
 	defer s.pendingGloasColumnsLock.RUnlock()
 	_, ok := s.pendingGloasColumns[root]
 	return ok
+}
+
+// processPendingGloasColumnsRoutine drains pending Gloas columns once their block
+// is processed. Blocks we propose ourselves are imported via the RPC path and never
+// re-enter the gossip/by-root ingest paths that drain the queue, so the columns peers
+// gossip back to us (queued while the block was not yet seen) would otherwise be lost.
+func (s *Service) processPendingGloasColumnsRoutine() {
+	ch := make(chan *feed.Event, 1)
+	sub := s.cfg.stateNotifier.StateFeed().Subscribe(ch)
+	defer sub.Unsubscribe()
+
+	for {
+		select {
+		case ev := <-ch:
+			if ev.Type != statefeed.BlockProcessed {
+				continue
+			}
+			data, ok := ev.Data.(*statefeed.BlockProcessedData)
+			if !ok || data == nil || data.SignedBlock == nil || data.SignedBlock.IsNil() {
+				continue
+			}
+			if data.SignedBlock.Version() < version.Gloas {
+				continue
+			}
+			// Initial sync imports via the batch path (which also emits this event) and has
+			// no gossip-queued columns; draining there would needlessly re-broadcast.
+			if s.cfg.initialSync != nil && s.cfg.initialSync.Syncing() {
+				continue
+			}
+			s.processPendingGloasColumns(s.ctx, data.BlockRoot, data.SignedBlock)
+		case <-sub.Err():
+			return
+		case <-s.ctx.Done():
+			return
+		}
+	}
 }
 
 // prunePendingGloasColumns removes stale entries every slot.
