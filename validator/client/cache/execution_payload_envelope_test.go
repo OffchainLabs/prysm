@@ -1,4 +1,4 @@
-package beacon_api
+package cache
 
 import (
 	"testing"
@@ -18,7 +18,7 @@ func envelopeForSlot(slot primitives.Slot) *ethpb.ExecutionPayloadEnvelope {
 
 func TestExecutionPayloadEnvelopeCache_Add(t *testing.T) {
 	t.Run("evicts older slots", func(t *testing.T) {
-		cache := newExecutionPayloadEnvelopeCache()
+		cache := NewExecutionPayloadEnvelopeCache()
 		cache.Add(10, envelopeForSlot(10), nil, nil)
 		cache.Add(11, envelopeForSlot(11), nil, nil)
 
@@ -30,7 +30,7 @@ func TestExecutionPayloadEnvelopeCache_Add(t *testing.T) {
 	})
 
 	t.Run("keeps newer slot when adding for older slot", func(t *testing.T) {
-		cache := newExecutionPayloadEnvelopeCache()
+		cache := NewExecutionPayloadEnvelopeCache()
 		cache.Add(11, envelopeForSlot(11), nil, nil)
 		cache.Add(10, envelopeForSlot(10), nil, nil)
 
@@ -41,14 +41,32 @@ func TestExecutionPayloadEnvelopeCache_Add(t *testing.T) {
 	})
 
 	t.Run("nil receiver is a no-op", func(t *testing.T) {
-		var cache *executionPayloadEnvelopeCache
+		var cache *ExecutionPayloadEnvelopeCache
 		cache.Add(1, &ethpb.ExecutionPayloadEnvelope{}, nil, nil)
+	})
+}
+
+func TestExecutionPayloadEnvelopeCache_Peek(t *testing.T) {
+	t.Run("returns stored envelope without evicting", func(t *testing.T) {
+		cache := NewExecutionPayloadEnvelopeCache()
+		cache.Add(10, envelopeForSlot(10), nil, nil)
+
+		got, _, _ := cache.Peek(10)
+		require.NotNil(t, got)
+		got, _, _ = cache.Peek(10)
+		require.NotNil(t, got)
+	})
+
+	t.Run("nil receiver returns nils", func(t *testing.T) {
+		var cache *ExecutionPayloadEnvelopeCache
+		got, _, _ := cache.Peek(1)
+		assert.Equal(t, (*ethpb.ExecutionPayloadEnvelope)(nil), got)
 	})
 }
 
 func TestExecutionPayloadEnvelopeCache_Take(t *testing.T) {
 	t.Run("returns stored envelope and evicts entry", func(t *testing.T) {
-		cache := newExecutionPayloadEnvelopeCache()
+		cache := NewExecutionPayloadEnvelopeCache()
 		envelope := envelopeForSlot(10)
 		blobs := [][]byte{{0xaa}}
 		proofs := [][]byte{{0xbb}}
@@ -65,13 +83,13 @@ func TestExecutionPayloadEnvelopeCache_Take(t *testing.T) {
 	})
 
 	t.Run("missing slot returns nils", func(t *testing.T) {
-		cache := newExecutionPayloadEnvelopeCache()
+		cache := NewExecutionPayloadEnvelopeCache()
 		got, _, _ := cache.Take(42)
 		assert.Equal(t, (*ethpb.ExecutionPayloadEnvelope)(nil), got)
 	})
 
 	t.Run("nil receiver returns nils", func(t *testing.T) {
-		var cache *executionPayloadEnvelopeCache
+		var cache *ExecutionPayloadEnvelopeCache
 		got, _, _ := cache.Take(1)
 		assert.Equal(t, (*ethpb.ExecutionPayloadEnvelope)(nil), got)
 	})
