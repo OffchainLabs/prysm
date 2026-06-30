@@ -156,9 +156,6 @@ type Service struct {
 	// Engine Transports.
 	sszTransport  *sszEngine // non-nil when the engine API is driven over SSZ-over-HTTP for this connection.
 	jsonTransport *jsonEngine
-	// capabilityCache holds the EL's supported engine methods for this connection.
-	// Shared with the JSON transport (which populates it); read by the partial-data-column helpers.
-	capabilityCache *capabilityCache
 
 	headerCache             *headerCache // cache to store block hash/block height.
 	latestEth1Data          *ethpb.LatestETH1Data
@@ -199,9 +196,8 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 			BlockHash:          []byte{},
 			LastRequestedBlock: 0,
 		},
-		headerCache:     newHeaderCache(),
-		capabilityCache: &capabilityCache{},
-		depositTrie:     depositTrie,
+		headerCache: newHeaderCache(),
+		depositTrie: depositTrie,
 		chainStartData: &ethpb.ChainStartData{
 			Eth1Data:           &ethpb.Eth1Data{},
 			ChainstartDeposits: make([]*ethpb.Deposit, 0),

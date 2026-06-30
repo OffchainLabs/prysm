@@ -470,6 +470,39 @@ func (e *sszEngine) GetBlobsV2(ctx context.Context, versionedHashes []common.Has
 	return result, nil
 }
 
+// GetBlobsV3 fetches blobs-and-cell-proofs over POST /engine/v2/blobs/v3
+// (replaces engine_getBlobsV3, all-or-nothing).
+func (e *sszEngine) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
+	if !e.supportsBlob("v3") {
+		return nil, errors.Errorf("%s is not supported", GetBlobsV3)
+	}
+	if err := e.rejectIfOverLimit(limitBlobsMaxVersionedHashes, uint64(len(versionedHashes))); err != nil {
+		return nil, err
+	}
+	req := blobsRequest(versionedHashes)
+	observeSSZBody(methodGetBlobsV3, directionRequest, req)
+	resp := &enginev2.BlobsV2Response{}
+	if err := e.client.GetBlobs(ctx, 3, req, resp); err != nil {
+		if errors.Is(err, enginehttp.ErrNoContent) {
+			return nil, nil
+		}
+		return nil, mapEngineError(err)
+	}
+	observeSSZBody(methodGetBlobsV3, directionResponse, resp)
+	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
+	for i := range result {
+		if i >= len(resp.Entries) {
+			break
+		}
+		entry := resp.Entries[i]
+		if entry == nil || !entry.Available || entry.Contents == nil {
+			continue
+		}
+		result[i] = &pb.BlobAndProofV2{Blob: entry.Contents.Blob, KzgProofs: entry.Contents.Proofs}
+	}
+	return result, nil
+}
+
 // blobsRequest builds the SSZ List[VersionedHash] request body shared by the
 // blob-pool endpoints.
 func blobsRequest(versionedHashes []common.Hash) *enginev2.BlobsRequest {

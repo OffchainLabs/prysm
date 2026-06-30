@@ -422,6 +422,20 @@ func (j *jsonEngine) GetBlobsV2(ctx context.Context, versionedHashes []common.Ha
 	return result, handleRPCError(err)
 }
 
+func (j *jsonEngine) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsV3")
+	defer span.End()
+	start := time.Now()
+
+	getBlobsV3RequestsTotal.Inc()
+	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
+	if err := j.rpc.CallContext(ctx, &result, GetBlobsV3, versionedHashes); err != nil {
+		return nil, handleRPCError(err)
+	}
+	getBlobsV3Latency.Observe(float64(time.Since(start).Seconds()))
+	return result, nil
+}
+
 // GetPayloadBodiesByHash fetches bodies by hash, picking the JSON-RPC method by
 // the block's fork: V2 (carries block_access_list) at Gloas, V1 before. Results
 // are request-aligned (nil for unavailable bodies); the error is raw, matching

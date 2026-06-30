@@ -2676,7 +2676,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 	cfg.FuluForkEpoch = 4
 	params.OverrideBeaconConfig(cfg)
 
-	client := &Service{capabilityCache: &capabilityCache{}}
+	client := &Service{}
 	b := util.NewBeaconBlockFulu()
 	b.Block.Slot = 4 * params.BeaconConfig().SlotsPerEpoch
 	kzgCommitments := createRandomKzgCommitments(t, 6)
@@ -2758,7 +2758,6 @@ func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
 
 	t.Run("HasBlobs capability absent returns (nil, false, nil)", func(t *testing.T) {
 		client := &Service{
-			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil}},
 			partialColumnsSupported: true,
 		}
 		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
@@ -2775,7 +2774,7 @@ func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
 		})
 		client := &Service{
 			rpcClient:               cli,
-			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}},
+			jsonTransport:           &jsonEngine{rpc: cli, caps: &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}}},
 			partialColumnsSupported: true,
 		}
 		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
@@ -2792,7 +2791,7 @@ func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
 		})
 		client := &Service{
 			rpcClient:               cli,
-			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}},
+			jsonTransport:           &jsonEngine{rpc: cli, caps: &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}}},
 			partialColumnsSupported: true,
 		}
 		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
@@ -2817,7 +2816,7 @@ func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
 		})
 		client := &Service{
 			rpcClient:               cli,
-			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}},
+			jsonTransport:           &jsonEngine{rpc: cli, caps: &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}}},
 			partialColumnsSupported: true,
 		}
 		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
@@ -2841,7 +2840,7 @@ func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
 		params.OverrideBeaconConfig(gloasCfg)
 
 		client := &Service{
-			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}},
+			jsonTransport:           &jsonEngine{caps: &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}}},
 			partialColumnsSupported: true,
 		}
 		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
@@ -3072,7 +3071,7 @@ func setupRpcClientV2(t *testing.T, url string, client *Service) (*rpc.Client, *
 
 func setupRpcClientV3(t *testing.T, url string, client *Service) (*rpc.Client, *Service) {
 	rpcClient, client := setupRpcClient(t, url, client)
-	client.capabilityCache = &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil}}
+	client.jsonTransport = &jsonEngine{rpc: rpcClient, caps: &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil}}}
 	client.partialColumnsSupported = true
 	return rpcClient, client
 }

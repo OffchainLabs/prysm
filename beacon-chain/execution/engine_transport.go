@@ -31,6 +31,7 @@ type engineTransport interface {
 	GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error)
 	GetBlobs(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProof, error)
 	GetBlobsV2(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error)
+	GetBlobsV3(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error)
 	ExchangeCapabilities(ctx context.Context) error
 	GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error)
 	GetPayloadBodiesByHash(ctx context.Context, v int, hashes []common.Hash) ([]interfaces.ExecutionPayloadBody, error)
@@ -52,6 +53,7 @@ const (
 	methodGetPayload              = "getPayload"
 	methodGetBlobs                = "getBlobs"
 	methodGetBlobsV2              = "getBlobsV2"
+	methodGetBlobsV3              = "getBlobsV3"
 	methodGetPayloadBodiesByHash  = "getPayloadBodiesByHash"
 	methodGetPayloadBodiesByRange = "getPayloadBodiesByRange"
 )
@@ -101,6 +103,11 @@ func (m *instrumentedEngine) GetBlobsV2(ctx context.Context, versionedHashes []c
 	return m.engineTransport.GetBlobsV2(ctx, versionedHashes)
 }
 
+func (m *instrumentedEngine) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
+	defer observeEngineLatency(methodGetBlobs, m.kind, time.Now())
+	return m.engineTransport.GetBlobsV3(ctx, versionedHashes)
+}
+
 func (m *instrumentedEngine) GetPayloadBodiesByHash(ctx context.Context, v int, hashes []common.Hash) ([]interfaces.ExecutionPayloadBody, error) {
 	defer observeEngineLatency(methodGetPayloadBodiesByHash, m.kind, time.Now())
 	return m.engineTransport.GetPayloadBodiesByHash(ctx, v, hashes)
@@ -125,13 +132,7 @@ func (s *Service) engine() engineTransport {
 		// engineLabelingClient tags engine_* call contexts so engineSizeRoundTripper
 		// can record engine_body_size_bytes{transport="json-rpc"} (comparable to the
 		// ssz-http sizes); eth_* calls go through s.rpcClient directly, untagged.
-		// Share the Service-level capability cache so partial-data-column helpers
-		// (s.capabilityCache.has(GetBlobsV3/HasBlobs)) see the same populated set
-		// the JSON transport fills in ExchangeCapabilities.
-		if s.capabilityCache == nil {
-			s.capabilityCache = &capabilityCache{}
-		}
-		s.jsonTransport = &jsonEngine{rpc: &engineLabelingClient{RPCClient: s.rpcClient}, caps: s.capabilityCache}
+		s.jsonTransport = &jsonEngine{rpc: &engineLabelingClient{RPCClient: s.rpcClient}, caps: &capabilityCache{}}
 	}
 	return &instrumentedEngine{engineTransport: s.jsonTransport, kind: transportJSON}
 }
@@ -146,7 +147,6 @@ func (s *Service) selectEngineTransport(ctx context.Context, endpoint network.En
 	// Reset the transport and its capability cache (repopulated on ExchangeCapabilities).
 	s.sszTransport = nil
 	s.jsonTransport = nil
-	s.capabilityCache = &capabilityCache{}
 
 	if !features.Get().EnableEngineSSZHTTP {
 		return
@@ -203,6 +203,10 @@ func (s *Service) GetBlobs(ctx context.Context, versionedHashes []common.Hash) (
 
 func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
 	return s.engine().GetBlobsV2(ctx, versionedHashes)
+}
+
+func (s *Service) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
+	return s.engine().GetBlobsV3(ctx, versionedHashes)
 }
 
 func (s *Service) ExchangeCapabilities(ctx context.Context) error {

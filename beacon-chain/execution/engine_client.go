@@ -544,20 +544,6 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	return result, nil
 }
 
-func (s *Service) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
-	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsV3")
-	defer span.End()
-	start := time.Now()
-
-	getBlobsV3RequestsTotal.Inc()
-	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
-	if err := s.rpcClient.CallContext(ctx, &result, GetBlobsV3, versionedHashes); err != nil {
-		return nil, handleRPCError(err)
-	}
-	getBlobsV3Latency.Observe(float64(time.Since(start).Seconds()))
-	return result, nil
-}
-
 // HasBlobs checks whether the given versioned hashes are available in the
 // execution client's blob pool without fetching the actual blob data.
 // It returns a boolean slice parallel to the input hashes.
@@ -576,11 +562,29 @@ func (s *Service) HasBlobs(ctx context.Context, versionedHashes []common.Hash) (
 }
 
 func (s *Service) useGetBlobsV3() bool {
-	return s.capabilityCache.has(GetBlobsV3) && s.partialColumnsSupported
+	if !s.partialColumnsSupported {
+		return false
+	}
+
+	if s.sszTransport != nil {
+		return s.sszTransport.supportsBlob("v3")
+	}
+
+	if s.jsonTransport != nil {
+		return s.jsonTransport.caps.has(GetBlobsV3)
+	}
+
+	return false
 }
 
 func (s *Service) useHasBlobs() bool {
-	supported := s.useGetBlobsV3() && s.capabilityCache.has(HasBlobs)
+	// TODO: Support HasBlobs for SSZ transport.
+	if s.jsonTransport == nil {
+		return false
+	}
+
+	supportHasBlobs := s.jsonTransport.caps.has(HasBlobs)
+	supported := s.useGetBlobsV3() && supportHasBlobs
 	return supported
 }
 
