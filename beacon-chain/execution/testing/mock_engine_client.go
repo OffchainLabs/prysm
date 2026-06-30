@@ -23,44 +23,38 @@ import (
 
 // EngineClient --
 type EngineClient struct {
-	NewPayloadResp                     []byte
-	PayloadIDBytes                     *pb.PayloadIDBytes
-	ForkChoiceUpdatedResp              []byte
-	ExecutionBlock                     *pb.ExecutionBlock
-	Err                                error
-	ErrLatestExecBlock                 error
-	ErrExecBlockByHash                 error
-	ErrForkchoiceUpdated               error
-	ErrNewPayload                      error
-	ExecutionPayloadByBlockHash        map[[32]byte]*pb.ExecutionPayload
-	SlotByBlockHash                    map[[32]byte]primitives.Slot
-	BlockByHashMap                     map[[32]byte]*pb.ExecutionBlock
-	NumReconstructedPayloads           uint64
-	TerminalBlockHash                  []byte
-	TerminalBlockHashExists            bool
-	PartialColumnsSupportedFlag        bool
-	PartialColumnsEnabledForSlotResult bool
-	OverrideValidHash                  [32]byte
-	GetPayloadResponse                 *blocks.GetPayloadResponse
-	ErrGetPayload                      error
-	BlobSidecars                       []blocks.VerifiedROBlob
-	ErrorBlobSidecars                  error
-	DataColumnSidecars                 []blocks.VerifiedRODataColumn
-	ErrorDataColumnSidecars            error
-	HasBlobsPartialColumns             []blocks.PartialDataColumn
-	ClientVersion                      []*structs.ClientVersionV1
-	ErrorClientVersion                 error
-	FetchedAttributes                  payloadattribute.Attributer
+	NewPayloadResp              []byte
+	PayloadIDBytes              *pb.PayloadIDBytes
+	ForkChoiceUpdatedResp       []byte
+	ExecutionBlock              *pb.ExecutionBlock
+	Err                         error
+	ErrLatestExecBlock          error
+	ErrExecBlockByHash          error
+	ErrForkchoiceUpdated        error
+	ErrNewPayload               error
+	ExecutionPayloadByBlockHash map[[32]byte]*pb.ExecutionPayload
+	SlotByBlockHash             map[[32]byte]primitives.Slot
+	BlockByHashMap              map[[32]byte]*pb.ExecutionBlock
+	NumReconstructedPayloads    uint64
+	TerminalBlockHash           []byte
+	TerminalBlockHashExists     bool
+	PartialColumnsSupportedFlag bool
+	OverrideValidHash           [32]byte
+	GetPayloadResponse          *blocks.GetPayloadResponse
+	ErrGetPayload               error
+	BlobSidecars                []blocks.VerifiedROBlob
+	ErrorBlobSidecars           error
+	DataColumnSidecars          []blocks.VerifiedRODataColumn
+	ErrorDataColumnSidecars     error
+	HasBlobsPartialColumns      []blocks.PartialDataColumn
+	ClientVersion               []*structs.ClientVersionV1
+	ErrorClientVersion          error
+	FetchedAttributes           payloadattribute.Attributer
 }
 
 // PartialColumnsSupported --
 func (e *EngineClient) PartialColumnsSupported() bool {
 	return e.PartialColumnsSupportedFlag
-}
-
-// PartialColumnsEnabledForSlot --
-func (e *EngineClient) PartialColumnsEnabledForSlot(primitives.Slot) bool {
-	return e.PartialColumnsEnabledForSlotResult
 }
 
 // NewPayload --

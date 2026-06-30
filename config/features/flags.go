@@ -154,10 +154,6 @@ var (
 		Name:  "enable-light-client",
 		Usage: "Enables the light client support in the beacon node",
 	}
-	EnableGloasPartialColumns = &cli.BoolFlag{
-		Name:  "enable-gloas-partial-columns",
-		Usage: "Enables construction and gossip of partial data columns for Gloas (ePBS) blocks.",
-	}
 	disableResourceManager = &cli.BoolFlag{
 		Name:  "disable-resource-manager",
 		Usage: "Disables running the libp2p resource manager.",
@@ -285,7 +281,6 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	disableResourceManager,
 	DisableRegistrationCache,
 	EnableLightClient,
-	EnableGloasPartialColumns,
 	BlobSaveFsync,
 	DisableQUIC,
 	EnableDiscoveryReboot,

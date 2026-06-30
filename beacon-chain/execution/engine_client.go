@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -171,7 +170,6 @@ type EngineCaller interface {
 	GetTerminalBlockHash(ctx context.Context, transitionTime uint64) ([]byte, bool, error)
 	GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error)
 	PartialColumnsSupported() bool
-	PartialColumnsEnabledForSlot(slot primitives.Slot) bool
 }
 
 var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
@@ -996,7 +994,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
 		verifiedROSidecars := upgradeSidecarsToVerifiedSidecars(roSidecars)
 
-		if s.PartialColumnsEnabledForSlot(slot) {
+		if s.partialColumnsSupported {
 			isGloas := slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch
 			for i := range verifiedROSidecars {
 				// Gloas sidecars carry no inline KZG commitments; seed them from the bid
@@ -1020,7 +1018,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		return verifiedROSidecars, partialColumns, nil
 	}
 
-	if s.PartialColumnsEnabledForSlot(slot) {
+	if s.partialColumnsSupported {
 		partialColumns, err = peerdas.PartialColumns(cp.Included, cp.CellsPerBlob, cp.ProofsPerBlob, populator)
 		if err != nil {
 			return nil, nil, wrapWithBlockRoot(err, root, "construct partial columns")
@@ -1043,11 +1041,11 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 //     the block has no commitments, the EL already has every blob, or an error
 //     occurred.
 //   - whether the HasBlobs flow is supported: false when the engine lacks the
-//     HasBlobs capability or partial columns are disabled for the block's slot,
+//     HasBlobs capability or partial columns are disabled,
 //     in which case the other return values are always nil.
 //   - any error from querying the EL or building the partial columns.
 func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.PartialDataColumn, bool, error) {
-	if !s.useHasBlobs() || !s.PartialColumnsEnabledForSlot(populator.Slot()) {
+	if !s.useHasBlobs() || !s.partialColumnsSupported {
 		return nil, false, nil
 	}
 
@@ -1165,19 +1163,6 @@ func (s *Service) useHasBlobs() bool {
 // PartialColumnsSupported reports whether cell-level (partial) column dissemination is enabled.
 func (s *Service) PartialColumnsSupported() bool {
 	return s.partialColumnsSupported
-}
-
-// PartialColumnsEnabledForSlot reports whether partial data columns should be constructed and
-// gossiped for the given slot. For Gloas slots this additionally requires the dedicated
-// EnableGloasPartialColumns feature flag (independent opt-in kill-switch).
-func (s *Service) PartialColumnsEnabledForSlot(slot primitives.Slot) bool {
-	if !s.partialColumnsSupported {
-		return false
-	}
-	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
-		return features.Get().EnableGloasPartialColumns
-	}
-	return true
 }
 
 func versionedHashesFromCommitments(kzgCommitments [][]byte) []common.Hash {

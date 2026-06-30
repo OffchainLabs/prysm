@@ -151,7 +151,3 @@ func (m *engineMock) GetClientVersionV1(context.Context) ([]*structs.ClientVersi
 func (*engineMock) PartialColumnsSupported() bool {
 	return false
 }
-
-func (*engineMock) PartialColumnsEnabledForSlot(primitives.Slot) bool {
-	return false
-}

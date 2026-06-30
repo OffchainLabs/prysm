@@ -292,10 +292,6 @@ func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofs
 	return dataColumns, nil
 }
 
-// partialColumnsGloas builds Gloas partial data columns from the bid commitments and the
-// included cells. Gloas columns have no signed block header or inclusion proof, so each column
-// is created via NewPartialDataColumnGloas. cells/proofs may be empty (e.g. the HasBlobs flow),
-// in which case no cells are extended; the caller sets the requests metadata afterwards.
 func partialColumnsGloas(included bitfield.Bitlist, cells, proofs [][][]byte, src ConstructionPopulator) ([]blocks.PartialDataColumn, error) {
 	commitments, err := src.Commitments()
 	if err != nil {
@@ -456,6 +452,9 @@ func (s *BidReconstructionSource) Commitments() ([][]byte, error) {
 	bid, err := s.Block().Body().SignedExecutionPayloadBid()
 	if err != nil {
 		return nil, errors.Wrap(err, "signed execution payload bid")
+	}
+	if bid == nil || bid.Message == nil {
+		return nil, errors.New("nil execution payload bid or bid message")
 	}
 	return bid.Message.BlobKzgCommitments, nil
 }

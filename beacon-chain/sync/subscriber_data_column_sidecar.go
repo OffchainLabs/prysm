@@ -9,7 +9,6 @@ import (
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -120,7 +119,7 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 // the broadcaster is idempotent per group id.
 func (s *Service) republishGloasColumnAsPartial(ctx context.Context, sidecar blocks.VerifiedRODataColumn) {
 	broadcaster := s.cfg.p2p.PartialColumnBroadcaster()
-	if broadcaster == nil || !features.Get().EnableGloasPartialColumns {
+	if broadcaster == nil {
 		return
 	}
 

@@ -61,11 +61,11 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 		}
 	}
 
-	// Precompute partial columns too, when enabled for this (Gloas) slot, so partial-column
-	// peers can fill in cells. Gloas sidecars carry no inline commitments, so seed them from
-	// the bid before building the partials.
+	// Precompute partial columns too, when enabled, so partial-column peers can fill in
+	// cells. Gloas sidecars carry no inline commitments, so seed them from the bid before
+	// building the partials.
 	var partialColumns []consensusblocks.PartialDataColumn
-	if len(roSidecars) > 0 && vs.ExecutionEngineCaller.PartialColumnsEnabledForSlot(sBlk.Block().Slot()) {
+	if len(roSidecars) > 0 && vs.ExecutionEngineCaller.PartialColumnsSupported() {
 		commitments, err := sBlk.Block().Body().BlobKzgCommitments()
 		if err != nil {
 			return nil, errors.Wrap(err, "blob kzg commitments")

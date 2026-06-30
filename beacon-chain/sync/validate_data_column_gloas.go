@@ -7,7 +7,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -263,7 +262,7 @@ func (s *Service) processPendingGloasColumns(ctx context.Context, root [fieldpar
 		// Build partial columns for partial-column peers when enabled. The verified columns
 		// already have their bid commitments set above.
 		var partials []blocks.PartialDataColumn
-		if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil && features.Get().EnableGloasPartialColumns {
+		if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
 			partials = make([]blocks.PartialDataColumn, 0, len(verified))
 			for _, v := range verified {
 				pc, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(v)

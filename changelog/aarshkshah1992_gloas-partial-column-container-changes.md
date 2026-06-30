@@ -1,7 +1,7 @@
 ### Added
 
 - Added the `PartialDataColumnGroupID` and `PartialDataColumnSidecarGloas` SSZ containers and a Gloas partial data column constructor. `PartialDataColumn` now embeds the fork-abstracted `RODataColumn`, so Gloas partial columns source their KZG commitments from the block's execution payload bid and never eager-push a header (Gloas has none).
-- Construct and gossip partial data columns for Gloas blocks at every site Fulu does: the execution payload envelope (self-build and builder REST), EL reconstruction, the gossip-receipt republish, and the pending-column queue. Gated behind the new opt-in `--enable-gloas-partial-columns` flag.
+- Construct and gossip partial data columns for Gloas blocks at every site Fulu does: the execution payload envelope (self-build and builder REST), EL reconstruction, the gossip-receipt republish, and the pending-column queue. Gated behind the existing `--partial-data-columns` flag, the same flag that enables cell-level dissemination for Fulu.
 
 ### Changed
 

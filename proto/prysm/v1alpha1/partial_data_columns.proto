@@ -66,8 +66,7 @@ message PartialDataColumnGroupID {
   bytes beacon_block_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
-// PartialDataColumnSidecarGloas is the Gloas cells wire message. It mirrors
-// PartialDataColumnSidecar without the header field, which Gloas removed.
+// PartialDataColumnSidecarGloas is the Gloas cells wire message.
 message PartialDataColumnSidecarGloas {
   bytes cells_present_bitmap = 1 [
     (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size",
