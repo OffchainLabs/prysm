@@ -3093,7 +3093,7 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 			}
 			require.Equal(t, proposer.SchemaV2, ps.Version)
 			require.Equal(t, tt.upgradedGasLimit, ps.DefaultConfig.GasLimit)
-			require.Equal(t, true, ps.DefaultConfig.BuilderConfig == nil)
+			require.NotNil(t, ps.DefaultConfig.BuilderConfig)
 
 			dbps, err := v.db.ProposerSettings(t.Context())
 			require.NoError(t, err)
