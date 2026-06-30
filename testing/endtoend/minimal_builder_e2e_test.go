@@ -2,18 +2,28 @@ package endtoend
 
 import (
 	"testing"
-
-	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/runtime/version"
-	"github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 )
 
-func TestEndToEnd_MinimalConfig_WithBuilder(t *testing.T) {
-	r := e2eMinimal(t, types.InitForkCfg(version.Bellatrix, version.Electra, params.E2ETestConfig()), types.WithCheckpointSync(), types.WithBuilder())
-	r.run()
-}
+func TestEndToEnd_Kurtosis_MinimalConfig_Builder(t *testing.T) {
+	// Prerequisite for Kurtosis: Load images needed.
+	LoadPrysmDockerImages(t)
 
-func TestEndToEnd_MinimalConfig_WithBuilder_ValidatorRESTApi(t *testing.T) {
-	r := e2eMinimal(t, types.InitForkCfg(version.Bellatrix, version.Electra, params.E2ETestConfig()), types.WithCheckpointSync(), types.WithBuilder(), types.WithValidatorRESTApi())
-	r.run()
+	tests := []KurtosisTestSuites{
+		{
+			enclaveName:    "minimal-builder",
+			configPath:     "testing/endtoend/network-config/minimal-builder.yaml",
+			epochsToRun:    15,
+			runSyncTest:    false,
+			extraPlaybooks: []string{"builder.yaml"},
+			skipPlaybooks: []string{
+				"fee-recipient.yaml",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.enclaveName, func(t *testing.T) {
+			tt.Run(t)
+		})
+	}
 }
