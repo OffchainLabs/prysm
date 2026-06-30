@@ -190,10 +190,6 @@ func (v *LighthouseValidatorNode) Start(ctx context.Context) error {
 		"--suggested-fee-recipient=0x878705ba3f8bc32fcf7f4caa1a35e72af65cf766",
 	}
 
-	if v.config.UseBuilder {
-		args = append(args, "--builder-proposals")
-	}
-
 	cmd := exec.CommandContext(ctx, binaryPath, args...) // #nosec G204 -- Safe
 
 	// Write stderr to log files.

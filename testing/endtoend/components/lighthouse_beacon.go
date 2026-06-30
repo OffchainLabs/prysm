@@ -198,9 +198,6 @@ func (node *LighthouseBeaconNode) Start(ctx context.Context) error {
 		args = append(args,
 			fmt.Sprintf("--trusted-peers=%s", flagVal))
 	}
-	if node.config.UseBuilder {
-		args = append(args, fmt.Sprintf("--builder=%s:%d", "http://127.0.0.1", e2e.TestParams.Ports.Eth1ProxyPort+prysmNodeCount+index))
-	}
 	cmd := exec.CommandContext(ctx, binaryPath, args...) /* #nosec G204 */
 	// Write stderr to log files.
 	stderr, err := os.Create(path.Join(e2e.TestParams.LogPath, fmt.Sprintf("lighthouse_beacon_node_%d_stderr.log", index)))

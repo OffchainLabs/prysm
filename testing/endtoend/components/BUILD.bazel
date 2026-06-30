@@ -6,7 +6,6 @@ go_library(
     srcs = [
         "beacon_node.go",
         "boot_node.go",
-        "builder.go",
         "lighthouse_beacon.go",
         "lighthouse_validator.go",
         "log.go",
@@ -36,7 +35,6 @@ go_library(
         "//testing/endtoend/helpers:go_default_library",
         "//testing/endtoend/params:go_default_library",
         "//testing/endtoend/types:go_default_library",
-        "//testing/middleware/builder:go_default_library",
         "//validator/keymanager:go_default_library",
         "@com_github_ethereum_go_ethereum//common:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",

@@ -241,7 +241,7 @@ func (r *testRunner) testDepositsAndTx(ctx context.Context, g *errgroup.Group,
 				}
 			}
 			// Only generate background transactions when relevant for the test.
-			if r.config.TestDeposits || r.config.TestFeature || r.config.UseBuilder {
+			if r.config.TestDeposits || r.config.TestFeature {
 				r.testTxGeneration(ctx, g, keystorePath, []e2etypes.ComponentRunner{})
 			}
 		}()

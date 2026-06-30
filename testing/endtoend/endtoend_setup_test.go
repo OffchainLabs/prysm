@@ -105,10 +105,6 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 		ev.ValidatorsHaveWithdrawnAfterExitAtEpoch(exitEpoch),
 	)
 
-	if testConfig.UseBuilder {
-		testConfig.Evaluators = append(testConfig.Evaluators, ev.BuilderIsActive)
-	}
-
 	return newTestRunner(t, testConfig)
 }
 
@@ -192,9 +188,6 @@ func e2eMainnet(t *testing.T, usePrysmSh, useMultiClient bool, cfg *params.Beaco
 	// evaluator for multiclient runs to verify the beacon api conformance.
 	if testConfig.UseValidatorCrossClient {
 		testConfig.Evaluators = append(testConfig.Evaluators, beaconapi.MultiClientVerifyIntegrity)
-	}
-	if testConfig.UseBuilder {
-		testConfig.Evaluators = append(testConfig.Evaluators, ev.BuilderIsActive)
 	}
 	return newTestRunner(t, testConfig)
 }
