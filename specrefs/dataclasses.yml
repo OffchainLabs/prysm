@@ -278,7 +278,7 @@
 - name: NewPayloadRequest#electra
   sources:
     - file: beacon-chain/execution/engine_jsonrpc.go
-      search: func (j *jsonEngine) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests
+      search: func (j *jsonEngine) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester
   spec: |
     <spec dataclass="NewPayloadRequest" fork="electra" hash="366a2e72">
     class NewPayloadRequest:
