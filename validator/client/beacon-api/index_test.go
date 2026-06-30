@@ -41,7 +41,7 @@ func TestIndex_Nominal(t *testing.T) {
 	ctx := t.Context()
 
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	handler.EXPECT().Post(
 		gomock.Any(),
@@ -91,7 +91,7 @@ func TestIndex_UnexistingValidator(t *testing.T) {
 	ctx := t.Context()
 
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	handler.EXPECT().Post(
 		gomock.Any(),
@@ -133,7 +133,7 @@ func TestIndex_BadIndexError(t *testing.T) {
 	ctx := t.Context()
 
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	handler.EXPECT().Post(
 		gomock.Any(),
@@ -182,7 +182,7 @@ func TestIndex_JsonResponseError(t *testing.T) {
 	ctx := t.Context()
 
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	handler.EXPECT().Post(
 		gomock.Any(),

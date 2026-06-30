@@ -97,6 +97,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	ETH1AddressWithdrawalPrefixByte: byte(1),
 	CompoundingWithdrawalPrefixByte: byte(2),
 	BuilderWithdrawalPrefixByte:     byte(3),
+	PayloadBuilderVersion:           byte(0),
 	BuilderIndexSelfBuild:           primitives.BuilderIndex(math.MaxUint64),
 	ZeroHash:                        [32]byte{},
 
@@ -198,6 +199,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	DomainBeaconBuilder:               bytesutil.Uint32ToBytes4(0x0B000000),
 	DomainPTCAttester:                 bytesutil.Uint32ToBytes4(0x0C000000),
 	DomainProposerPreferences:         bytesutil.Uint32ToBytes4(0x0D000000),
+	DomainRequestAuth:                 bytesutil.Uint32ToBytes4(0x0B000001),
+	DomainBuilderDeposit:              bytesutil.Uint32ToBytes4(0x0E000000),
 
 	// Prysm constants.
 	GenesisValidatorsRoot:          [32]byte{75, 54, 61, 185, 78, 40, 97, 32, 215, 110, 185, 5, 52, 15, 221, 78, 84, 191, 233, 240, 107, 243, 63, 246, 207, 90, 210, 127, 81, 27, 254, 149},
@@ -354,6 +357,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	ChurnLimitQuotientGloas:              32_768,
 	ConsolidationChurnLimitQuotient:      65_536,
 	MaxPerEpochActivationChurnLimitGloas: 256_000_000_000,
+	MaxBuilderDepositRequestsPerPayload:  256, // 2**8 (= 256)
+	MaxBuilderExitRequestsPerPayload:     16,  // 2**4 (= 16)
 
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB

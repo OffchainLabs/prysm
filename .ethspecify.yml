@@ -1,4 +1,4 @@
-version: v1.7.0-alpha.10
+version: v1.7.0-alpha.11
 style: full
 
 specrefs:
@@ -71,6 +71,11 @@ exceptions:
     - NUM_BLOCK_TIMELINESS_DEADLINES#gloas
     - PTC_TIMELINESS_INDEX#gloas
 
+    # gloas (EIP-8282)
+    - BUILDER_DEPOSIT_REQUEST_TYPE#gloas
+    - BUILDER_EXIT_REQUEST_TYPE#gloas
+    - DOMAIN_BUILDER_DEPOSIT#gloas
+    - PAYLOAD_BUILDER_VERSION#gloas
   configs:
     # phase0
     - CONFIRMATION_BYZANTINE_THRESHOLD#phase0
@@ -135,6 +140,10 @@ exceptions:
     - SignedExecutionPayloadEnvelope#gloas
     - SignedProposerPreferences#gloas
 
+    # gloas (EIP-8282)
+    - BuilderDepositRequest#gloas
+    - BuilderExitRequest#gloas
+    - ExecutionRequests#gloas
   dataclasses:
     # phase0
     - FastConfirmationStore#phase0
@@ -316,7 +325,6 @@ exceptions:
     - is_parent_strong#phase0
     - is_proposer#phase0
     - is_proposing_on_time#phase0
-    - is_shuffling_stable#phase0
     - is_valid_merkle_branch#phase0
     - on_tick#phase0
     - on_tick_per_slot#phase0
@@ -518,7 +526,6 @@ exceptions:
     - verify_execution_payload_envelope_signature#gloas
     - verify_execution_payload_bid_signature#gloas
     - add_builder_to_registry#gloas
-    - apply_deposit_for_builder#gloas
     - apply_withdrawals#gloas
     - can_builder_cover_bid#gloas
     - convert_builder_index_to_validator_index#gloas
@@ -569,13 +576,11 @@ exceptions:
     - on_execution_payload_envelope#heze
     - compute_fork_version#heze
     - get_forkchoice_store#heze
-    - get_inclusion_list_bits#heze
     - get_inclusion_list_committee_assignment#heze
     - get_inclusion_list_committee#heze
     - get_inclusion_list_signature#heze
     - get_inclusion_list_store#heze
     - get_inclusion_list_transactions#heze
-    - is_inclusion_list_bits_inclusive#heze
     - is_payload_inclusion_list_satisfied#heze
     - is_valid_inclusion_list_signature#heze
     - on_inclusion_list#heze
@@ -586,6 +591,15 @@ exceptions:
     - upgrade_to_heze#heze
     - get_inclusion_list_due_ms#heze
 
+    # gloas (EIP-8282)
+    - get_execution_requests#gloas
+    - get_execution_requests_list#gloas
+    - get_proposer_head#gloas
+    - is_valid_builder_deposit_signature#gloas
+    - process_builder_deposit_request#gloas
+    - process_builder_exit_request#gloas
+    # phase0
+    - is_epoch_boundary#phase0
   presets:
     # gloas
     - BUILDER_PENDING_WITHDRAWALS_LIMIT#gloas
@@ -595,3 +609,6 @@ exceptions:
     - PTC_SIZE#gloas
     # heze
     - INCLUSION_LIST_COMMITTEE_SIZE#heze
+    # gloas (EIP-8282)
+    - MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD#gloas
+    - MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD#gloas

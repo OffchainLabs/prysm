@@ -44,7 +44,7 @@ func TestSubscribeCommitteeSubnets_Valid(t *testing.T) {
 
 	ctx := t.Context()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		subscribeCommitteeSubnetsTestEndpoint,
@@ -55,51 +55,28 @@ func TestSubscribeCommitteeSubnets_Valid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	duties := make([]*structs.AttesterDuty, len(subscribeSlots))
-	for index := range duties {
-		duties[index] = &structs.AttesterDuty{
-			ValidatorIndex:   strconv.FormatUint(uint64(validatorIndices[index]), 10),
-			CommitteeIndex:   strconv.FormatUint(uint64(committeeIndices[index]), 10),
-			CommitteesAtSlot: strconv.FormatUint(committeesAtSlot[index], 10),
-			Slot:             strconv.FormatUint(uint64(subscribeSlots[index]), 10),
-		}
-	}
-
 	validatorClient := &beaconApiValidatorClient{
 		handler: handler,
 	}
 	err = validatorClient.subscribeCommitteeSubnets(
 		ctx,
 		&ethpb.CommitteeSubnetsSubscribeRequest{
-			Slots:        subscribeSlots,
-			CommitteeIds: committeeIndices,
-			IsAggregator: isAggregator,
-		},
-		[]*ethpb.ValidatorDuty{
-			{
-				ValidatorIndex:   validatorIndices[0],
-				CommitteesAtSlot: committeesAtSlot[0],
-			},
-			{
-				ValidatorIndex:   validatorIndices[1],
-				CommitteesAtSlot: committeesAtSlot[1],
-			},
-			{
-				ValidatorIndex:   validatorIndices[2],
-				CommitteesAtSlot: committeesAtSlot[2],
-			},
+			Slots:            subscribeSlots,
+			CommitteeIds:     committeeIndices,
+			IsAggregator:     isAggregator,
+			ValidatorIndices: validatorIndices,
+			CommitteesAtSlot: committeesAtSlot,
 		},
 	)
 	require.NoError(t, err)
 }
 
 func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
-	const arraySizeMismatchErrorMessage = "arrays `in.CommitteeIds`, `in.Slots`, `in.IsAggregator` and `duties` don't have the same length"
+	const arraySizeMismatchErrorMessage = "arrays `in.CommitteeIds`, `in.Slots`, `in.IsAggregator`, `in.CommitteesAtSlot` and `in.ValidatorIndices` don't have the same length"
 
 	testCases := []struct {
 		name                    string
 		subscribeRequest        *ethpb.CommitteeSubnetsSubscribeRequest
-		duties                  []*ethpb.ValidatorDuty
 		expectSubscribeRestCall bool
 		expectedErrorMessage    string
 	}{
@@ -111,87 +88,66 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 		{
 			name: "CommitteeIds size mismatch",
 			subscribeRequest: &ethpb.CommitteeSubnetsSubscribeRequest{
-				CommitteeIds: []primitives.CommitteeIndex{1},
-				Slots:        []primitives.Slot{1, 2},
-				IsAggregator: []bool{false, true},
-			},
-			duties: []*ethpb.ValidatorDuty{
-				{
-					ValidatorIndex:   1,
-					CommitteesAtSlot: 1,
-				},
-				{
-					ValidatorIndex:   2,
-					CommitteesAtSlot: 2,
-				},
+				CommitteeIds:     []primitives.CommitteeIndex{1},
+				Slots:            []primitives.Slot{1, 2},
+				IsAggregator:     []bool{false, true},
+				CommitteesAtSlot: []uint64{1, 2},
+				ValidatorIndices: []primitives.ValidatorIndex{1, 2},
 			},
 			expectedErrorMessage: arraySizeMismatchErrorMessage,
 		},
 		{
 			name: "Slots size mismatch",
 			subscribeRequest: &ethpb.CommitteeSubnetsSubscribeRequest{
-				CommitteeIds: []primitives.CommitteeIndex{1, 2},
-				Slots:        []primitives.Slot{1},
-				IsAggregator: []bool{false, true},
-			},
-			duties: []*ethpb.ValidatorDuty{
-				{
-					ValidatorIndex:   1,
-					CommitteesAtSlot: 1,
-				},
-				{
-					ValidatorIndex:   2,
-					CommitteesAtSlot: 2,
-				},
+				CommitteeIds:     []primitives.CommitteeIndex{1, 2},
+				Slots:            []primitives.Slot{1},
+				IsAggregator:     []bool{false, true},
+				CommitteesAtSlot: []uint64{1, 2},
+				ValidatorIndices: []primitives.ValidatorIndex{1, 2},
 			},
 			expectedErrorMessage: arraySizeMismatchErrorMessage,
 		},
 		{
 			name: "IsAggregator size mismatch",
 			subscribeRequest: &ethpb.CommitteeSubnetsSubscribeRequest{
-				CommitteeIds: []primitives.CommitteeIndex{1, 2},
-				Slots:        []primitives.Slot{1, 2},
-				IsAggregator: []bool{false},
-			},
-			duties: []*ethpb.ValidatorDuty{
-				{
-					ValidatorIndex:   1,
-					CommitteesAtSlot: 1,
-				},
-				{
-					ValidatorIndex:   2,
-					CommitteesAtSlot: 2,
-				},
+				CommitteeIds:     []primitives.CommitteeIndex{1, 2},
+				Slots:            []primitives.Slot{1, 2},
+				IsAggregator:     []bool{false},
+				CommitteesAtSlot: []uint64{1, 2},
+				ValidatorIndices: []primitives.ValidatorIndex{1, 2},
 			},
 			expectedErrorMessage: arraySizeMismatchErrorMessage,
 		},
 		{
-			name: "duties size mismatch",
+			name: "CommitteesAtSlot size mismatch",
 			subscribeRequest: &ethpb.CommitteeSubnetsSubscribeRequest{
-				CommitteeIds: []primitives.CommitteeIndex{1, 2},
-				Slots:        []primitives.Slot{1, 2},
-				IsAggregator: []bool{false, true},
+				CommitteeIds:     []primitives.CommitteeIndex{1, 2},
+				Slots:            []primitives.Slot{1, 2},
+				IsAggregator:     []bool{false, true},
+				CommitteesAtSlot: []uint64{1},
+				ValidatorIndices: []primitives.ValidatorIndex{1, 2},
 			},
-			duties: []*ethpb.ValidatorDuty{
-				{
-					ValidatorIndex:   1,
-					CommitteesAtSlot: 1,
-				},
+			expectedErrorMessage: arraySizeMismatchErrorMessage,
+		},
+		{
+			name: "ValidatorIndices size mismatch",
+			subscribeRequest: &ethpb.CommitteeSubnetsSubscribeRequest{
+				CommitteeIds:     []primitives.CommitteeIndex{1, 2},
+				Slots:            []primitives.Slot{1, 2},
+				IsAggregator:     []bool{false, true},
+				CommitteesAtSlot: []uint64{1, 2},
+				ValidatorIndices: []primitives.ValidatorIndex{1},
 			},
 			expectedErrorMessage: arraySizeMismatchErrorMessage,
 		},
 		{
 			name: "bad POST request",
 			subscribeRequest: &ethpb.CommitteeSubnetsSubscribeRequest{
-				Slots:        []primitives.Slot{1},
-				CommitteeIds: []primitives.CommitteeIndex{2},
-				IsAggregator: []bool{false},
-			},
-			duties: []*ethpb.ValidatorDuty{
-				{
-					ValidatorIndex:   1,
-					CommitteesAtSlot: 1,
-				},
+				Slots:            []primitives.Slot{1},
+				CommitteeIds:     []primitives.CommitteeIndex{2},
+				IsAggregator:     []bool{false},
+				CommitteesAtSlot: []uint64{1},
+				ValidatorIndices: []primitives.ValidatorIndex{1},
 			},
 			expectSubscribeRestCall: true,
 			expectedErrorMessage:    "foo error",
@@ -205,7 +161,7 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 
 			ctx := t.Context()
 
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 			if testCase.expectSubscribeRestCall {
 				handler.EXPECT().Post(
 					gomock.Any(),
@@ -221,7 +177,7 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 			validatorClient := &beaconApiValidatorClient{
 				handler: handler,
 			}
-			err := validatorClient.subscribeCommitteeSubnets(ctx, testCase.subscribeRequest, testCase.duties)
+			err := validatorClient.subscribeCommitteeSubnets(ctx, testCase.subscribeRequest)
 			assert.ErrorContains(t, testCase.expectedErrorMessage, err)
 		})
 	}

@@ -5,9 +5,12 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
@@ -15,8 +18,11 @@ import (
 var ExecutionPayloadBidGossipRequirements = []Requirement{
 	RequireBidCurrentOrNextSlot,
 	RequireBidBuilderActive,
+	RequireBidBuilderVersionValid,
 	RequireBidExecutionPaymentZero,
 	RequireBidFeeRecipientMatches,
+	RequireBidBlobKzgCommitmentsLimit,
+	RequireBidPrevRandaoValid,
 	RequireBidParentBlockRootSeen,
 	RequireBidSlotHigherThanParent,
 	RequireBidParentBlockHashValid,
@@ -29,16 +35,23 @@ var ExecutionPayloadBidGossipRequirements = []Requirement{
 var GossipExecutionPayloadBidRequirements = requirementList(ExecutionPayloadBidGossipRequirements)
 
 var (
-	ErrBidSlotNotCurrentOrNext    = errors.New("bid slot is not current or next")
-	ErrBidBuilderNotActive        = errors.New("builder is not active")
-	ErrBidExecutionPaymentNonZero = errors.New("execution payment is non-zero")
-	ErrBidFeeRecipientMismatch    = errors.New("fee recipient does not match proposer preferences")
-	ErrBidGasLimitIncompatible    = errors.New("bid gas limit is incompatible with parent and target")
-	ErrBidParentBlockRootNotSeen  = errors.New("parent block root not seen")
-	ErrBidSlotNotHigherThanParent = errors.New("bid slot is not higher than parent block slot")
-	ErrBidParentBlockHashMismatch = errors.New("parent block hash does not match forkchoice")
-	ErrBidBuilderCannotCover      = errors.New("builder cannot cover bid")
+	ErrBidSlotNotCurrentOrNext      = errors.New("bid slot is not current or next")
+	ErrBidBuilderNotActive          = errors.New("builder is not active")
+	ErrBidBuilderVersionInvalid     = errors.New("builder is not a payload builder")
+	ErrBidExecutionPaymentNonZero   = errors.New("execution payment is non-zero")
+	ErrBidFeeRecipientMismatch      = errors.New("fee recipient does not match proposer preferences")
+	ErrBidTooManyBlobKzgCommitments = errors.New("bid has too many blob KZG commitments")
+	ErrBidPrevRandaoMismatch        = errors.New("bid prev randao does not match state randao mix")
+	ErrBidGasLimitIncompatible      = errors.New("bid gas limit is incompatible with parent and target")
+	ErrBidParentBlockRootNotSeen    = errors.New("parent block root not seen")
+	ErrBidSlotNotHigherThanParent   = errors.New("bid slot is not higher than parent block slot")
+	ErrBidParentBlockHashMismatch   = errors.New("parent block hash does not match forkchoice")
+	ErrBidBuilderCannotCover        = errors.New("builder cannot cover bid")
 )
+
+// payloadBuilderVersion is PAYLOAD_BUILDER_VERSION: the builder version byte
+// required for an execution payload builder (EIP-7732).
+const payloadBuilderVersion = 0
 
 var _ ExecutionPayloadBidVerifier = &BidVerifier{}
 
@@ -78,6 +91,60 @@ func (v *BidVerifier) VerifyBuilderActive(st state.ReadOnlyBeaconState) (err err
 	}
 	if !active {
 		return fmt.Errorf("%w: builder=%d", ErrBidBuilderNotActive, bid.BuilderIndex())
+	}
+	return nil
+}
+
+// VerifyBuilderVersion verifies the bid builder's version is PAYLOAD_BUILDER_VERSION.
+func (v *BidVerifier) VerifyBuilderVersion(st state.ReadOnlyBeaconState) (err error) {
+	defer v.record(RequireBidBuilderVersionValid, &err)
+
+	bid, err := v.b.Bid()
+	if err != nil {
+		return errors.Wrap(err, "failed to get bid")
+	}
+	builder, err := st.Builder(bid.BuilderIndex())
+	if err != nil {
+		return errors.Wrap(err, "failed to get builder")
+	}
+	if len(builder.Version) == 0 || builder.Version[0] != payloadBuilderVersion {
+		return fmt.Errorf("%w: builder=%d version=%x", ErrBidBuilderVersionInvalid, bid.BuilderIndex(), builder.Version)
+	}
+	return nil
+}
+
+// VerifyBlobKzgCommitmentsLimit verifies the bid blob KZG commitment count does
+// not exceed the per-block limit for the bid's slot.
+func (v *BidVerifier) VerifyBlobKzgCommitmentsLimit() (err error) {
+	defer v.record(RequireBidBlobKzgCommitmentsLimit, &err)
+
+	bid, err := v.b.Bid()
+	if err != nil {
+		return errors.Wrap(err, "failed to get bid")
+	}
+	maxBlobs := uint64(params.BeaconConfig().MaxBlobsPerBlockAtEpoch(slots.ToEpoch(bid.Slot())))
+	if count := bid.BlobKzgCommitmentCount(); count > maxBlobs {
+		return fmt.Errorf("%w: got %d max %d", ErrBidTooManyBlobKzgCommitments, count, maxBlobs)
+	}
+	return nil
+}
+
+// VerifyPrevRandao verifies the bid prev_randao matches the state's RANDAO mix
+// for the current epoch.
+func (v *BidVerifier) VerifyPrevRandao(st state.ReadOnlyBeaconState) (err error) {
+	defer v.record(RequireBidPrevRandaoValid, &err)
+
+	bid, err := v.b.Bid()
+	if err != nil {
+		return errors.Wrap(err, "failed to get bid")
+	}
+	mix, err := helpers.RandaoMix(st, slots.ToEpoch(st.Slot()))
+	if err != nil {
+		return errors.Wrap(err, "failed to get randao mix")
+	}
+	prevRandao := bid.PrevRandao()
+	if !bytes.Equal(prevRandao[:], mix) {
+		return fmt.Errorf("%w: bid=%#x state=%#x", ErrBidPrevRandaoMismatch, prevRandao, mix)
 	}
 	return nil
 }

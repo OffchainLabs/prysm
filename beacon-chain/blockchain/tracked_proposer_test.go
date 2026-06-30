@@ -12,21 +12,29 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-func TestTrackedProposer_NotTracked(t *testing.T) {
+// trackedProposer now anchors preferences on dependent_root derived from the
+// passed state (state.block_roots lookup). At slot 0 the lookup underflows so
+// proposerPreference falls back to the no-cache path; cached-preference
+// behavior is exercised end-to-end by the gossip and bid validation tests
+// under beacon-chain/sync.
+
+func TestTrackedProposer_NotSubscribed(t *testing.T) {
 	service, _ := minimalTestService(t, WithPayloadIDCache(cache.NewPayloadIDCache()))
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
-	_, ok := service.trackedProposer(st, 0)
-	require.Equal(t, false, ok)
+	pref, err := service.trackedProposer(st, 0)
+	require.NoError(t, err)
+	require.IsNil(t, pref)
 }
 
-func TestTrackedProposer_Tracked(t *testing.T) {
+func TestTrackedProposer_Subscribed(t *testing.T) {
 	service, _ := minimalTestService(t, WithPayloadIDCache(cache.NewPayloadIDCache()))
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
-	addr := common.HexToAddress("0x1234")
-	service.cfg.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, FeeRecipient: primitives.ExecutionAddress(addr), Index: 0})
-	val, ok := service.trackedProposer(st, 0)
-	require.Equal(t, true, ok)
-	require.Equal(t, primitives.ExecutionAddress(addr), val.FeeRecipient)
+	service.cfg.SubscribedValidatorsCache.Add(0)
+	pref, err := service.trackedProposer(st, 0)
+	require.NoError(t, err)
+	require.NotNil(t, pref)
+	// No SignedProposerPreferences cached → zero FeeRecipient (caller falls back to default).
+	require.Equal(t, primitives.ExecutionAddress{}, pref.FeeRecipient)
 }
 
 func TestTrackedProposer_PrepareAllPayloads_Default(t *testing.T) {
@@ -35,8 +43,8 @@ func TestTrackedProposer_PrepareAllPayloads_Default(t *testing.T) {
 
 	service, _ := minimalTestService(t, WithPayloadIDCache(cache.NewPayloadIDCache()))
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
-	val, ok := service.trackedProposer(st, 0)
-	require.Equal(t, true, ok)
-	require.Equal(t, true, val.Active)
-	require.Equal(t, params.BeaconConfig().EthBurnAddressHex, common.BytesToAddress(val.FeeRecipient[:]).String())
+	pref, err := service.trackedProposer(st, 0)
+	require.NoError(t, err)
+	require.NotNil(t, pref)
+	require.Equal(t, params.BeaconConfig().EthBurnAddressHex, common.BytesToAddress(pref.FeeRecipient[:]).String())
 }

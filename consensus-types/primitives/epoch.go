@@ -14,14 +14,6 @@ var _ fssz.Unmarshaler = (*Epoch)(nil)
 // Epoch represents a single epoch.
 type Epoch uint64
 
-// MaxEpoch compares two epochs and returns the greater one.
-func MaxEpoch(a, b Epoch) Epoch {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 // Mul multiplies epoch by x.
 // In case of arithmetic issues (overflow/underflow/div by zero) panic is thrown.
 func (e Epoch) Mul(x uint64) Epoch {

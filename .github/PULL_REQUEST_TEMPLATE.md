@@ -24,7 +24,7 @@
 
 **What does this PR do? Why is it needed?**
 
-**Which issues(s) does this PR fix?**
+**Which issue(s) does this PR fix?**
 
 Fixes #
 

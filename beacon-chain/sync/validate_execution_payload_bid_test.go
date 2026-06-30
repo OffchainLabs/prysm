@@ -3,6 +3,7 @@ package sync
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -24,6 +25,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/pkg/errors"
@@ -139,6 +141,24 @@ func TestValidateExecutionPayloadBidGossip_ErrorPathsWithMock(t *testing.T) {
 		{
 			name:      "inactive builder",
 			verifier:  mockExecutionPayloadBidVerifier{errBuilderActive: errors.New("inactive builder")},
+			result:    pubsub.ValidationReject,
+			wantError: true,
+		},
+		{
+			name:      "builder wrong version",
+			verifier:  mockExecutionPayloadBidVerifier{errBuilderVersion: errors.New("not a payload builder")},
+			result:    pubsub.ValidationReject,
+			wantError: true,
+		},
+		{
+			name:      "too many blob commitments",
+			verifier:  mockExecutionPayloadBidVerifier{errBlobKzgCommitments: errors.New("too many commitments")},
+			result:    pubsub.ValidationReject,
+			wantError: true,
+		},
+		{
+			name:      "wrong prev randao",
+			verifier:  mockExecutionPayloadBidVerifier{errPrevRandao: errors.New("wrong prev randao")},
 			result:    pubsub.ValidationReject,
 			wantError: true,
 		},
@@ -300,6 +320,59 @@ func TestExecutionPayloadBidSubscriber_HappyPath(t *testing.T) {
 	require.DeepEqual(t, signedBid, got)
 }
 
+// TestProposerDependentRoot_DelegatesToForkchoice asserts that the helper
+// queries the chain's DependentRootForEpoch at epoch-1 anchored to
+// parentBlockRoot, and returns whatever root forkchoice gives back.
+func TestProposerDependentRoot_DelegatesToForkchoice(t *testing.T) {
+	parentRoot := [32]byte{0xaa}
+	expectedDepRoot := [32]byte{0xbb}
+	bidSlot := 2*params.BeaconConfig().SlotsPerEpoch + 6
+	expectedEpoch := slots.ToEpoch(bidSlot).Sub(1)
+
+	var gotRoot [32]byte
+	var gotEpoch primitives.Epoch
+	chainService := &mock.ChainService{
+		DependentRootCB: func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+			gotRoot = root
+			gotEpoch = epoch
+			return expectedDepRoot, nil
+		},
+	}
+	s := &Service{cfg: &config{chain: chainService}}
+
+	got, err := s.proposerDependentRoot(parentRoot, bidSlot)
+	require.NoError(t, err)
+	require.Equal(t, expectedDepRoot, got)
+	require.Equal(t, parentRoot, gotRoot)
+	require.Equal(t, expectedEpoch, gotEpoch)
+}
+
+// TestProposerDependentRoot_UnderflowClampsToZero asserts that proposal epochs
+// below 2 query DependentRootForEpoch at epoch 0 (which the chain maps to the
+// origin block root) rather than underflowing epoch-1.
+func TestProposerDependentRoot_UnderflowClampsToZero(t *testing.T) {
+	parentRoot := [32]byte{0xaa}
+	originRoot := [32]byte{0xcc}
+
+	for _, slot := range []primitives.Slot{0, 1, params.BeaconConfig().SlotsPerEpoch + 1} {
+		t.Run(fmt.Sprintf("slot %d", slot), func(t *testing.T) {
+			var gotEpoch primitives.Epoch
+			chainService := &mock.ChainService{
+				DependentRootCB: func(_ [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+					gotEpoch = epoch
+					return originRoot, nil
+				},
+			}
+			s := &Service{cfg: &config{chain: chainService}}
+
+			got, err := s.proposerDependentRoot(parentRoot, slot)
+			require.NoError(t, err)
+			require.Equal(t, originRoot, got)
+			require.Equal(t, primitives.Epoch(0), gotEpoch)
+		})
+	}
+}
+
 func TestExecutionPayloadBidSubscriber_NilMessage(t *testing.T) {
 	s := &Service{
 		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
@@ -311,8 +384,11 @@ func TestExecutionPayloadBidSubscriber_NilMessage(t *testing.T) {
 type mockExecutionPayloadBidVerifier struct {
 	errCurrentOrNextSlot    error
 	errBuilderActive        error
+	errBuilderVersion       error
 	errExecutionPayment     error
 	errFeeRecipientMismatch error
+	errBlobKzgCommitments   error
+	errPrevRandao           error
 	errGasLimitIncompatible error
 	errParentBlockRootSeen  error
 	errSlotHigherThanParent error
@@ -331,12 +407,24 @@ func (m *mockExecutionPayloadBidVerifier) VerifyBuilderActive(state.ReadOnlyBeac
 	return m.errBuilderActive
 }
 
+func (m *mockExecutionPayloadBidVerifier) VerifyBuilderVersion(state.ReadOnlyBeaconState) error {
+	return m.errBuilderVersion
+}
+
 func (m *mockExecutionPayloadBidVerifier) VerifyExecutionPaymentZero() error {
 	return m.errExecutionPayment
 }
 
 func (m *mockExecutionPayloadBidVerifier) VerifyFeeRecipientMatches([]byte) error {
 	return m.errFeeRecipientMismatch
+}
+
+func (m *mockExecutionPayloadBidVerifier) VerifyBlobKzgCommitmentsLimit() error {
+	return m.errBlobKzgCommitments
+}
+
+func (m *mockExecutionPayloadBidVerifier) VerifyPrevRandao(state.ReadOnlyBeaconState) error {
+	return m.errPrevRandao
 }
 
 func (m *mockExecutionPayloadBidVerifier) VerifyGasLimitTargetCompatible(uint64, uint64) error {
@@ -381,20 +469,12 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
-	ctx := context.Background()
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
 
-	// Save a genesis block so beaconDB.GenesisBlockRoot resolves; bids at slot 1
-	// (epoch 0) hit the underflow branch in chain.DependentRootForEpoch which
-	// falls back to the genesis block root.
-	gb := util.NewBeaconBlock()
-	signedGenesis, err := blocks.NewSignedBeaconBlock(gb)
-	require.NoError(t, err)
-	require.NoError(t, db.SaveBlock(ctx, signedGenesis))
-	genesisRoot, err := signedGenesis.Block().HashTreeRoot()
-	require.NoError(t, err)
-	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesisRoot))
+	// The bid is at slot 1 (epoch 0); the mock chain maps that to its TargetRoot
+	// via DependentRootForEpoch, so the proposer preference is keyed on it below.
+	genesisRoot := [32]byte{0x01}
 
 	state, err := util.NewBeaconStateGloas()
 	require.NoError(t, err)

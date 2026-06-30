@@ -98,7 +98,7 @@ func (e *sszEngine) rejectIfOverLimit(key string, n uint64) error {
 // execution_requests into the SSZ envelope; versionedHashes is dropped (the EL
 // recomputes it from payload.transactions). The result maps onto the same
 // (latestValidHash, sentinel) contract as jsonEngine.NewPayload.
-func (e *sszEngine) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
+func (e *sszEngine) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester) ([]byte, error) {
 	var (
 		ver        int
 		envelope   ssz.Marshaler
@@ -180,8 +180,8 @@ func payloadStatusResult(s *enginev2.PayloadStatus) ([]byte, error) {
 
 // encodeExecutionRequests flattens execution requests into the SSZ envelope's
 // List[ByteList, MAX_REQUESTS] field, matching the JSON-RPC flattening.
-func encodeExecutionRequests(requests *pb.ExecutionRequests) ([][]byte, error) {
-	encoded, err := pb.EncodeExecutionRequests(requests)
+func encodeExecutionRequests(requests pb.ExecutionRequester) ([][]byte, error) {
+	encoded, err := requests.FlattenRequests()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to encode execution requests")
 	}

@@ -26,7 +26,7 @@ import (
 // namespace (ExecutionBlockByHash, GetTerminalBlockHash, HeaderBy*, ...) is not
 // part of this interface — the proposal leaves it on JSON-RPC.
 type engineTransport interface {
-	NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error)
+	NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester) ([]byte, error)
 	ForkchoiceUpdated(ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer) (*pb.PayloadIDBytes, []byte, error)
 	GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error)
 	GetBlobs(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProof, error)
@@ -76,7 +76,7 @@ type instrumentedEngine struct {
 	kind string
 }
 
-func (m *instrumentedEngine) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
+func (m *instrumentedEngine) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester) ([]byte, error) {
 	defer observeEngineLatency(methodNewPayload, m.kind, time.Now())
 	return m.engineTransport.NewPayload(ctx, payload, versionedHashes, parentBlockRoot, executionRequests)
 }
@@ -125,7 +125,13 @@ func (s *Service) engine() engineTransport {
 		// engineLabelingClient tags engine_* call contexts so engineSizeRoundTripper
 		// can record engine_body_size_bytes{transport="json-rpc"} (comparable to the
 		// ssz-http sizes); eth_* calls go through s.rpcClient directly, untagged.
-		s.jsonTransport = &jsonEngine{rpc: &engineLabelingClient{RPCClient: s.rpcClient}, caps: &capabilityCache{}}
+		// Share the Service-level capability cache so partial-data-column helpers
+		// (s.capabilityCache.has(GetBlobsV3/HasBlobs)) see the same populated set
+		// the JSON transport fills in ExchangeCapabilities.
+		if s.capabilityCache == nil {
+			s.capabilityCache = &capabilityCache{}
+		}
+		s.jsonTransport = &jsonEngine{rpc: &engineLabelingClient{RPCClient: s.rpcClient}, caps: s.capabilityCache}
 	}
 	return &instrumentedEngine{engineTransport: s.jsonTransport, kind: transportJSON}
 }
@@ -137,9 +143,10 @@ func (s *Service) engine() engineTransport {
 // error) it falls back to JSON-RPC for the connection's lifetime — per spec
 // there is no per-method fallback ladder. Called on every (re)connection.
 func (s *Service) selectEngineTransport(ctx context.Context, endpoint network.Endpoint) {
-	// Reset the transport.
+	// Reset the transport and its capability cache (repopulated on ExchangeCapabilities).
 	s.sszTransport = nil
 	s.jsonTransport = nil
+	s.capabilityCache = &capabilityCache{}
 
 	if !features.Get().EnableEngineSSZHTTP {
 		return
@@ -178,7 +185,7 @@ func (s *Service) selectEngineTransport(ctx context.Context, endpoint network.En
 // transport so callers (block import, fork choice, proposer, reconstruction)
 // are unaware of which wire transport is in use.
 
-func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
+func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester) ([]byte, error) {
 	return s.engine().NewPayload(ctx, payload, versionedHashes, parentBlockRoot, executionRequests)
 }
 

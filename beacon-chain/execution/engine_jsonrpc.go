@@ -47,6 +47,8 @@ var (
 	fuluEngineEndpoints = []string{
 		GetPayloadMethodV5,
 		GetBlobsV2,
+		GetBlobsV3,
+		HasBlobs,
 	}
 
 	gloasEngineEndpoints = []string{
@@ -102,6 +104,10 @@ const (
 	GetBlobsV1 = "engine_getBlobsV1"
 	// GetBlobsV2 request string for JSON-RPC.
 	GetBlobsV2 = "engine_getBlobsV2"
+	// GetBlobsV3 request string for JSON-RPC.
+	GetBlobsV3 = "engine_getBlobsV3"
+	// HasBlobs request string for JSON-RPC.
+	HasBlobs = "engine_hasBlobs"
 	// GetClientVersionV1 is the JSON-RPC method that identifies the execution client.
 	GetClientVersionV1 = "engine_getClientVersionV1"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
@@ -138,7 +144,7 @@ type jsonEngine struct {
 }
 
 // NewPayload calls the engine_newPayloadVX method via JSON-RPC.
-func (j *jsonEngine) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
+func (j *jsonEngine) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester) ([]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.NewPayload")
 	defer span.End()
 	defer func(start time.Time) {
@@ -168,7 +174,7 @@ func (j *jsonEngine) NewPayload(ctx context.Context, payload interfaces.Executio
 				return nil, handleRPCError(err)
 			}
 		} else {
-			flattenedRequests, err := pb.EncodeExecutionRequests(executionRequests)
+			flattenedRequests, err := executionRequests.FlattenRequests()
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to encode execution requests")
 			}
@@ -178,7 +184,7 @@ func (j *jsonEngine) NewPayload(ctx context.Context, payload interfaces.Executio
 			}
 		}
 	case *pb.ExecutionPayloadGloas:
-		flattenedRequests, err := pb.EncodeExecutionRequests(executionRequests)
+		flattenedRequests, err := executionRequests.FlattenRequests()
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to encode execution requests")
 		}
@@ -325,20 +331,33 @@ func (j *jsonEngine) ExchangeCapabilities(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExchangeCapabilities")
 	defer span.End()
 
+	// Build the requested method list in a local slice; appending to the package-level
+	// supportedEngineEndpoints would grow/duplicate it on every (re)connection.
+	capacity := len(supportedEngineEndpoints)
 	if params.ElectraEnabled() {
-		supportedEngineEndpoints = append(supportedEngineEndpoints, electraEngineEndpoints...)
+		capacity += len(electraEngineEndpoints)
 	}
-
 	if params.FuluEnabled() {
-		supportedEngineEndpoints = append(supportedEngineEndpoints, fuluEngineEndpoints...)
+		capacity += len(fuluEngineEndpoints)
 	}
-
 	if params.GloasEnabled() {
-		supportedEngineEndpoints = append(supportedEngineEndpoints, gloasEngineEndpoints...)
+		capacity += len(gloasEngineEndpoints)
 	}
 
-	elSupportedEndpointsSlice := make([]string, len(supportedEngineEndpoints))
-	if err := j.rpc.CallContext(ctx, &elSupportedEndpointsSlice, ExchangeCapabilities, supportedEngineEndpoints); err != nil {
+	endpoints := make([]string, 0, capacity)
+	endpoints = append(endpoints, supportedEngineEndpoints...)
+	if params.ElectraEnabled() {
+		endpoints = append(endpoints, electraEngineEndpoints...)
+	}
+	if params.FuluEnabled() {
+		endpoints = append(endpoints, fuluEngineEndpoints...)
+	}
+	if params.GloasEnabled() {
+		endpoints = append(endpoints, gloasEngineEndpoints...)
+	}
+
+	elSupportedEndpointsSlice := make([]string, 0, len(endpoints))
+	if err := j.rpc.CallContext(ctx, &elSupportedEndpointsSlice, ExchangeCapabilities, endpoints); err != nil {
 		return handleRPCError(err)
 	}
 
@@ -348,7 +367,7 @@ func (j *jsonEngine) ExchangeCapabilities(ctx context.Context) error {
 	}
 
 	unsupported := make([]string, 0)
-	for _, method := range supportedEngineEndpoints {
+	for _, method := range endpoints {
 		if !elSupportedEndpoints[method] {
 			unsupported = append(unsupported, method)
 		}

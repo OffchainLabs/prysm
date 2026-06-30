@@ -55,6 +55,7 @@ ssz_gen_marshal(
         "DepositRequest",
         "ConsolidationRequest",
         "ExecutionRequests",
+        "ExecutionRequestsGloas",
     ],
 )
 
@@ -121,6 +122,7 @@ ssz_proto_files(
         "electra.proto",
         "execution_engine.proto",
         "fulu.proto",
+        "gloas.proto",
     ],
     config = select({
         "//conditions:default": "mainnet",

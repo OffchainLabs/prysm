@@ -18,9 +18,10 @@ import (
 
 // ProcessExecutionPayloadBid processes a signed execution payload bid in the Gloas fork.
 //
-//	<spec fn="process_execution_payload_bid" fork="gloas" hash="823c9f3a">
-//	def process_execution_payload_bid(state: BeaconState, block: BeaconBlock) -> None:
-//	    signed_bid = block.body.signed_execution_payload_bid
+//	<spec fn="process_execution_payload_bid" fork="gloas" hash="ba18a784">
+//	def process_execution_payload_bid(
+//	    state: BeaconState, signed_bid: SignedExecutionPayloadBid
+//	) -> None:
 //	    bid = signed_bid.message
 //	    builder_index = bid.builder_index
 //	    amount = bid.value
@@ -32,6 +33,8 @@ import (
 //	    else:
 //	        # Verify that the builder is active
 //	        assert is_active_builder(state, builder_index)
+//	        # Verify that the builder is a payload builder
+//	        assert state.builders[builder_index].version == PAYLOAD_BUILDER_VERSION
 //	        # Verify that the builder has funds to cover the bid
 //	        assert can_builder_cover_bid(state, builder_index, amount)
 //	        # Verify that the bid signature is valid
@@ -44,10 +47,11 @@ import (
 //	    )
 //
 //	    # Verify that the bid is for the current slot
-//	    assert bid.slot == block.slot
+//	    assert bid.slot == state.slot
+//	    assert state.slot > GENESIS_SLOT
 //	    # Verify that the bid is for the right parent block
 //	    assert bid.parent_block_hash == state.latest_block_hash
-//	    assert bid.parent_block_root == block.parent_root
+//	    assert bid.parent_block_root == get_block_root_at_slot(state, Slot(state.slot - 1))
 //	    assert bid.prev_randao == get_randao_mix(state, get_current_epoch(state))
 //
 //	    # Record the pending payment if there is some payment
@@ -59,6 +63,7 @@ import (
 //	                amount=amount,
 //	                builder_index=builder_index,
 //	            ),
+//	            proposer_index=get_beacon_proposer_index(state),
 //	        )
 //	        state.builder_pending_payments[SLOTS_PER_EPOCH + bid.slot % SLOTS_PER_EPOCH] = (
 //	            pending_payment
@@ -102,6 +107,14 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 			return fmt.Errorf("builder %d is not active", builderIndex)
 		}
 
+		builder, err := st.Builder(builderIndex)
+		if err != nil {
+			return errors.Wrap(err, "could not get builder")
+		}
+		if len(builder.Version) == 0 || builder.Version[0] != params.BeaconConfig().PayloadBuilderVersion {
+			return fmt.Errorf("builder %d is not a payload builder", builderIndex)
+		}
+
 		ok, err = st.CanBuilderCoverBid(builderIndex, amount)
 		if err != nil {
 			return errors.Wrap(err, "builder balance check failed")
@@ -115,13 +128,13 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 		}
 	}
 
-	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(slots.ToEpoch(block.Slot()))
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(slots.ToEpoch(st.Slot()))
 	commitmentCount := bid.BlobKzgCommitmentCount()
 	if commitmentCount > uint64(maxBlobsPerBlock) {
 		return fmt.Errorf("bid has %d blob KZG commitments over max %d", commitmentCount, maxBlobsPerBlock)
 	}
 
-	if err := validateBidConsistency(st, bid, block); err != nil {
+	if err := validateBidConsistency(st, bid); err != nil {
 		return errors.Wrap(err, "bid consistency validation failed")
 	}
 
@@ -134,6 +147,7 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 				Amount:       amount,
 				BuilderIndex: builderIndex,
 			},
+			ProposerIndex: block.ProposerIndex(),
 		}
 		slotIndex := params.BeaconConfig().SlotsPerEpoch + (bid.Slot() % params.BeaconConfig().SlotsPerEpoch)
 		if err := st.SetBuilderPendingPayment(slotIndex, pendingPayment); err != nil {
@@ -149,9 +163,12 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 }
 
 // validateBidConsistency checks that the bid is consistent with the current beacon state.
-func validateBidConsistency(st state.BeaconState, bid interfaces.ROExecutionPayloadBid, block interfaces.ReadOnlyBeaconBlock) error {
-	if bid.Slot() != block.Slot() {
-		return fmt.Errorf("bid slot %d does not match block slot %d", bid.Slot(), block.Slot())
+func validateBidConsistency(st state.BeaconState, bid interfaces.ROExecutionPayloadBid) error {
+	if bid.Slot() != st.Slot() {
+		return fmt.Errorf("bid slot %d does not match state slot %d", bid.Slot(), st.Slot())
+	}
+	if st.Slot() <= params.BeaconConfig().GenesisSlot {
+		return fmt.Errorf("bid is not valid at or before genesis slot %d", st.Slot())
 	}
 
 	latestBlockHash, err := st.LatestBlockHash()
@@ -163,9 +180,13 @@ func validateBidConsistency(st state.BeaconState, bid interfaces.ROExecutionPayl
 			bid.ParentBlockHash(), latestBlockHash)
 	}
 
-	if bid.ParentBlockRoot() != block.ParentRoot() {
+	parentBlockRoot, err := helpers.BlockRootAtSlot(st, st.Slot()-1)
+	if err != nil {
+		return errors.Wrap(err, "failed to get block root at previous slot")
+	}
+	if bid.ParentBlockRoot() != [32]byte(parentBlockRoot) {
 		return fmt.Errorf("bid parent block root mismatch: got %x, expected %x",
-			bid.ParentBlockRoot(), block.ParentRoot())
+			bid.ParentBlockRoot(), parentBlockRoot)
 	}
 
 	randaoMix, err := helpers.RandaoMix(st, slots.ToEpoch(st.Slot()))

@@ -26,6 +26,7 @@ import "proto/prysm/v1alpha1/beacon_core_types.proto";
 import "proto/prysm/v1alpha1/sync_committee.proto";
 import "proto/prysm/v1alpha1/attestation.proto";
 import "proto/prysm/v1alpha1/gloas.proto";
+import "proto/prysm/v1alpha1/gloas_builder_api.proto";
 
 option csharp_namespace = "Ethereum.Eth.V1";
 option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
@@ -222,6 +223,17 @@ service BeaconNodeValidator {
     option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha2/validator/block"
+      body : "*"
+    };
+  }
+
+  // SubmitBuilderPreferences forwards a proposer's builder preferences to the
+  // configured builder ahead of a future proposal slot.
+  rpc SubmitBuilderPreferences(SubmitBuilderPreferencesRequest)
+      returns (google.protobuf.Empty) {
+    option deprecated = true;
+    option (google.api.http) = {
+      post : "/eth/v1alpha1/validator/builder_preferences"
       body : "*"
     };
   }
@@ -498,9 +510,11 @@ service BeaconNodeValidator {
   // to the P2P network. This is called by validators after signing the envelope
   // retrieved from GetExecutionPayloadEnvelope.
   //
-  // The beacon node validates the envelope signature and broadcasts it to peers
-  // via the execution_payload_envelope gossip topic.
-  rpc PublishExecutionPayloadEnvelope(SignedExecutionPayloadEnvelope)
+  // The body is GenericSignedExecutionPayloadEnvelope: the contents arm (full
+  // envelope + blobs + proofs) for stateless publishing, or the blinded arm
+  // (payload_root) for stateful publishing where the beacon node reconstructs the
+  // full payload and data column sidecars from its own cache from block production.
+  rpc PublishExecutionPayloadEnvelope(GenericSignedExecutionPayloadEnvelope)
       returns (google.protobuf.Empty) {
     option deprecated = true;
     option (google.api.http) = {
@@ -776,9 +790,6 @@ message ValidatorStatusResponse {
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
   ];
-
-  // The position in the activation queue of pending validators.
-  uint64 position_in_activation_queue = 5;
 }
 
 message MultipleValidatorStatusRequest {
@@ -1084,6 +1095,17 @@ message CommitteeSubnetsSubscribeRequest {
   // Subscribe as an attester means finding persistent peers on the subnet to be
   // able to publish attestations.
   repeated bool is_aggregator = 3;
+  // Validator index of the attester at (slots[i], committee_ids[i]). Optional;
+  // when populated the beacon node records the validator as attached for
+  // custody-group-count and validating() purposes. Older clients omit this; the
+  // beacon node treats an empty list as "no attached-set update."
+  repeated uint64 validator_indices = 4 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/"
+        "primitives.ValidatorIndex"
+  ];
+  // Committees-at-slot, 1-to-1 with slots. Optional; empty = BN recomputes from state.
+  repeated uint64 committees_at_slot = 5;
 }
 
 // ValidatorParticipation stores participation metrics during a given epoch.
@@ -1476,12 +1498,13 @@ message ExecutionPayloadEnvelopeRequest {
 }
 
 // ExecutionPayloadEnvelopeResponse is the response containing the cached
-// execution payload envelope.
+// execution payload envelope in blinded wire form (payload_root). The signer
+// validates over the blinded HTR, which equals the full envelope's HTR.
 message ExecutionPayloadEnvelopeResponse {
   option deprecated = true;
 
-  // The execution payload envelope for the requested slot and builder.
-  ExecutionPayloadEnvelope envelope = 1;
+  // The blinded execution payload envelope for the requested slot.
+  WireBlindedExecutionPayloadEnvelope blinded = 1;
 }
 
 // PayloadAttestationDataRequest is the request for retrieving payload

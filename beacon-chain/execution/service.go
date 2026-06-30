@@ -140,21 +140,25 @@ type config struct {
 // Validator Registration Contract on the eth1 chain to kick off the beacon
 // chain's validator registration process.
 type Service struct {
-	connectedETH1          bool
-	isRunning              bool
-	depositRequestsStarted bool
-	processingLock         sync.RWMutex
-	latestEth1DataLock     sync.RWMutex
-	cfg                    *config
-	ctx                    context.Context
-	cancel                 context.CancelFunc
-	eth1HeadTicker         *time.Ticker
-	httpLogger             bind.ContractFilterer
-	rpcClient              RPCClient
+	partialColumnsSupported bool
+	connectedETH1           bool
+	isRunning               bool
+	depositRequestsStarted  bool
+	processingLock          sync.RWMutex
+	latestEth1DataLock      sync.RWMutex
+	cfg                     *config
+	ctx                     context.Context
+	cancel                  context.CancelFunc
+	eth1HeadTicker          *time.Ticker
+	httpLogger              bind.ContractFilterer
+	rpcClient               RPCClient
 
 	// Engine Transports.
 	sszTransport  *sszEngine // non-nil when the engine API is driven over SSZ-over-HTTP for this connection.
 	jsonTransport *jsonEngine
+	// capabilityCache holds the EL's supported engine methods for this connection.
+	// Shared with the JSON transport (which populates it); read by the partial-data-column helpers.
+	capabilityCache *capabilityCache
 
 	headerCache             *headerCache // cache to store block hash/block height.
 	latestEth1Data          *ethpb.LatestETH1Data
@@ -195,8 +199,9 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 			BlockHash:          []byte{},
 			LastRequestedBlock: 0,
 		},
-		headerCache: newHeaderCache(),
-		depositTrie: depositTrie,
+		headerCache:     newHeaderCache(),
+		capabilityCache: &capabilityCache{},
+		depositTrie:     depositTrie,
 		chainStartData: &ethpb.ChainStartData{
 			Eth1Data:           &ethpb.Eth1Data{},
 			ChainstartDeposits: make([]*ethpb.Deposit, 0),
@@ -895,19 +900,6 @@ func (s *Service) validPowchainData(ctx context.Context) (*ethpb.ETH1ChainData, 
 		}
 	}
 	return eth1Data, nil
-}
-
-func dedupEndpoints(endpoints []string) []string {
-	selectionMap := make(map[string]bool)
-	newEndpoints := make([]string, 0, len(endpoints))
-	for _, point := range endpoints {
-		if selectionMap[point] {
-			continue
-		}
-		newEndpoints = append(newEndpoints, point)
-		selectionMap[point] = true
-	}
-	return newEndpoints
 }
 
 func (s *Service) migrateOldDepositTree(eth1DataInDB *ethpb.ETH1ChainData) error {
