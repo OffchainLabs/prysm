@@ -334,11 +334,6 @@ func (s *Service) notifyNewHeadEvent(
 	newHeadStateRoot,
 	newHeadRoot []byte,
 ) error {
-	// No-op: Return early if there's no parent block.
-	if newHeadSlot <= 0 {
-		return nil
-	}
-
 	currEpoch := slots.ToEpoch(newHeadSlot)
 	previousDutyDependentRoot, currentDutyDependentRoot, err := s.headEventDependentRoots(currEpoch)
 	if err != nil {
@@ -380,11 +375,6 @@ func (s *Service) notifyNewHeadV2Event(
 	newHeadStateRoot, newHeadRoot [32]byte,
 	headVersion int,
 ) error {
-	// No-op: Return early if there's no parent block.
-	if newHeadSlot <= 0 {
-		return nil
-	}
-
 	currEpoch := slots.ToEpoch(newHeadSlot)
 	currentEpochDependentRoot, nextEpochDependentRoot, err := s.headEventDependentRoots(currEpoch)
 	if err != nil {
@@ -458,6 +448,11 @@ func (s *Service) headEventDependentRoots(currEpoch primitives.Epoch) (previousD
 // headEpochTransition reports whether the head at newHeadSlot crossed an epoch boundary
 // relative to its parent block.
 func (s *Service) headEpochTransition(newHeadSlot primitives.Slot, newHeadRoot [32]byte) (bool, error) {
+	// Consider the head to be an epoch transition if it is the genesis block.
+	if newHeadSlot == 0 {
+		return true, nil
+	}
+
 	parentRoot, err := s.ParentRoot(newHeadRoot)
 	if err != nil {
 		return false, errors.Wrap(err, "could not obtain parent root in forkchoice")
