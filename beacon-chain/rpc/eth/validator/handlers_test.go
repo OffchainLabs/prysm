@@ -4623,6 +4623,64 @@ func TestSubmitSignedProposerPreferences_OK(t *testing.T) {
 	require.Equal(t, uint64(30_000_000), pref.TargetGasLimit)
 }
 
+func TestSubmitSignedProposerPreferences_SSZ_OK(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	currentSlot := primitives.Slot(31)
+	proposalSlot := primitives.Slot(32)
+	c := cache.NewProposerPreferencesCache()
+	v1alpha1Server := &validatorv1alpha1.Server{
+		SyncChecker:              &mockSync.Sync{IsSyncing: false},
+		TimeFetcher:              &mockChain.ChainService{Slot: &currentSlot},
+		P2P:                      &p2pmock.MockBroadcaster{},
+		ProposerPreferencesCache: c,
+		OperationNotifier:        (&mockChain.ChainService{}).OperationNotifier(),
+	}
+
+	pref := &ethpbalpha.SignedProposerPreferences{
+		Message: &ethpbalpha.ProposerPreferences{
+			DependentRoot:  bytes.Repeat([]byte{0xcc}, 32),
+			ProposalSlot:   proposalSlot,
+			ValidatorIndex: 2,
+			FeeRecipient:   make([]byte, 20),
+			TargetGasLimit: 30_000_000,
+		},
+		Signature: make([]byte, 96),
+	}
+	body, err := pref.MarshalSSZ()
+	require.NoError(t, err)
+
+	s := &Server{V1Alpha1Server: v1alpha1Server}
+	req := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/validator/proposer_preferences", bytes.NewBuffer(body))
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	req.Header.Set("Content-Type", api.OctetStreamMediaType)
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.SubmitSignedProposerPreferences(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	got, ok := c.Get(bytesutil.ToBytes32(bytes.Repeat([]byte{0xcc}, 32)), proposalSlot)
+	require.Equal(t, true, ok)
+	require.Equal(t, primitives.ValidatorIndex(2), got.ValidatorIndex)
+	require.Equal(t, uint64(30_000_000), got.TargetGasLimit)
+}
+
+func TestSubmitSignedProposerPreferences_SSZ_InvalidSize(t *testing.T) {
+	s := &Server{}
+	req := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewBuffer([]byte{0x01, 0x02, 0x03}))
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	req.Header.Set("Content-Type", api.OctetStreamMediaType)
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.SubmitSignedProposerPreferences(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
 func TestSubmitSignedProposerPreferences_NoBody(t *testing.T) {
 	s := &Server{}
 	req := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
