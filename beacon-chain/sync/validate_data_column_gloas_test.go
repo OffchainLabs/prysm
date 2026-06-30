@@ -10,6 +10,8 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -538,6 +540,67 @@ func TestPendingGloasColumns(t *testing.T) {
 		require.Equal(t, false, s.hasSeenDataColumnRootIndex(blockRoot, sidecar.Index))
 		// Nothing valid was processed, so nothing is re-broadcast.
 		require.Equal(t, false, p.BroadcastCalled.Load())
+	})
+
+	t.Run("routine drains pending columns on BlockProcessed", func(t *testing.T) {
+		err := kzg.Start()
+		require.NoError(t, err)
+
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.FuluForkEpoch = 0
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		ctx := t.Context()
+
+		p := p2ptest.NewTestP2P(t)
+		dcs := filesystem.NewEphemeralDataColumnStorage(t)
+		notifier := mock.NewSimpleStateNotifier()
+
+		sidecar, signedBlock := gloasFixture(t)
+		blockRoot, err := signedBlock.Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		s := &Service{
+			cfg: &config{
+				p2p:               p,
+				clock:             clock,
+				dataColumnStorage: dcs,
+				stateNotifier:     notifier,
+			},
+			ctx:                 ctx,
+			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+			seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
+		}
+
+		roCol, err := blocks.NewRODataColumnGloasWithRoot(sidecar, blockRoot)
+		require.NoError(t, err)
+		require.NoError(t, s.queuePendingGloasColumn(roCol, "peer1"))
+		require.Equal(t, true, s.hasPendingGloasColumns(blockRoot))
+
+		go s.processPendingGloasColumnsRoutine()
+
+		// Resend until the subscription is live and the routine drains the queue.
+		ev := &feed.Event{
+			Type: statefeed.BlockProcessed,
+			Data: &statefeed.BlockProcessedData{
+				Slot:        signedBlock.Block().Slot(),
+				BlockRoot:   blockRoot,
+				SignedBlock: signedBlock,
+			},
+		}
+		drained := false
+		for range 200 {
+			notifier.StateFeed().Send(ev)
+			if !s.hasPendingGloasColumns(blockRoot) {
+				drained = true
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		require.Equal(t, true, drained)
+		require.Equal(t, true, s.hasSeenDataColumnRootIndex(blockRoot, sidecar.Index))
 	})
 
 	t.Run("no entry is no-op", func(t *testing.T) {
