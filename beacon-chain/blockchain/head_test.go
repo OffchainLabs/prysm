@@ -183,6 +183,18 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		}
 		require.DeepSSZEqual(t, wanted, eventHead)
 	})
+
+	t.Run("no-op when head slot is zero", func(t *testing.T) {
+		srv := testServiceWithDB(t)
+		newHeadStateRoot, newHeadRoot := [32]byte{}, [32]byte{}
+		notifier := srv.cfg.StateNotifier.(*mock.MockStateNotifier)
+
+		require.NoError(t, srv.notifyNewHeadEvent(t.Context(), 0, newHeadStateRoot[:], newHeadRoot[:]))
+
+		events := notifier.ReceivedEvents()
+		require.Equal(t, 0, len(events))
+	})
+
 	t.Run("non_genesis_values", func(t *testing.T) {
 		bState, _ := util.DeterministicGenesisState(t, 10)
 		genesisRoot := [32]byte{1}
@@ -325,6 +337,18 @@ func Test_notifyNewHeadV2Event(t *testing.T) {
 		require.NotNil(t, headV2)
 		return headV2
 	}
+
+	t.Run("no-op when head slot is zero", func(t *testing.T) {
+		srv, events, newHeadStateRoot, newHeadRoot := setupHeadV2Service(t, 1)
+		require.NoError(t, srv.notifyNewHeadV2Event(t.Context(), 0, newHeadStateRoot, newHeadRoot, version.Gloas))
+
+		// Ensure no events were emitted
+		select {
+		case e := <-events:
+			t.Fatalf("unexpected event: %v", e)
+		default:
+		}
+	})
 
 	t.Run("dependent roots fall back to genesis block root on underflow", func(t *testing.T) {
 		srv, events, newHeadStateRoot, newHeadRoot := setupHeadV2Service(t, 1)

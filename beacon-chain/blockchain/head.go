@@ -334,6 +334,11 @@ func (s *Service) notifyNewHeadEvent(
 	newHeadStateRoot,
 	newHeadRoot []byte,
 ) error {
+	// No-op: Return early if there's no parent block.
+	if newHeadSlot <= 0 {
+		return nil
+	}
+
 	currEpoch := slots.ToEpoch(newHeadSlot)
 	previousDutyDependentRoot, currentDutyDependentRoot, err := s.headEventDependentRoots(currEpoch)
 	if err != nil {
@@ -375,6 +380,11 @@ func (s *Service) notifyNewHeadV2Event(
 	newHeadStateRoot, newHeadRoot [32]byte,
 	headVersion int,
 ) error {
+	// No-op: Return early if there's no parent block.
+	if newHeadSlot <= 0 {
+		return nil
+	}
+
 	currEpoch := slots.ToEpoch(newHeadSlot)
 	currentEpochDependentRoot, nextEpochDependentRoot, err := s.headEventDependentRoots(currEpoch)
 	if err != nil {
