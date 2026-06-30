@@ -84,13 +84,3 @@ func TestEndToEnd_Kurtosis_MinimalConfig_REST_SSZ(t *testing.T) {
 		})
 	}
 }
-
-func TestEndToEnd_ScenarioRun_EEOffline(t *testing.T) {
-	t.Skip("TODO(#10242) Prysm is current unable to handle an offline e2e")
-	cfg := types.InitForkCfg(version.Bellatrix, version.Deneb, params.E2ETestConfig())
-	runner := e2eMinimal(t, cfg)
-	// override for scenario tests
-	runner.config.Evaluators = scenarioEvals(cfg)
-	runner.config.EvalInterceptor = runner.eeOffline
-	runner.scenarioRunner()
-}

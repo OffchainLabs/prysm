@@ -751,21 +751,6 @@ func (r *testRunner) multiScenarioMulticlient(ec *e2etypes.EvaluationContext, ep
 	return false
 }
 
-func (r *testRunner) eeOffline(_ *e2etypes.EvaluationContext, epoch uint64, _ []*grpc.ClientConn) bool {
-	switch epoch {
-	case 9:
-		require.NoError(r.t, r.comHandler.eth1Miner.Pause())
-		return true
-	case 10:
-		require.NoError(r.t, r.comHandler.eth1Miner.Resume())
-		return true
-	case 11, 12:
-		// Allow 2 epochs for the network to finalize again.
-		return true
-	}
-	return false
-}
-
 // This interceptor will define the multi scenario run for our minimal tests.
 // 1) In the first scenario we will be taking a single node and its validator offline.
 // After 1 epoch we will then attempt to bring it online again.
