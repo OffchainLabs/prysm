@@ -481,17 +481,17 @@ func (c *partialColumnCallbacks) PartialVerifierFromTrustedColumn(col *blocks.Pa
 	return c.service.partialVerifierFromTrustedColumn(c.service.ctx, col)
 }
 
-// ValidatePartialColumnGroupID validates an incoming Gloas partial-column group id against local
-// block state, mirroring the full-column gossip rules: [IGNORE] until a valid block for the group's
-// beacon block root has been seen, and [REJECT] when that block's slot does not match the group's
-// slot. Fulu group ids carry no slot and always pass.
-func (c *partialColumnCallbacks) ValidatePartialColumnGroupID(groupID []byte) pubsub.ValidationResult {
+// ValidateGloasGroupID validates a Gloas partial-column group id against local block state, mirroring
+// the full-column gossip rules: [IGNORE] until a valid block for the group's root has been seen,
+// [REJECT] when that block's slot does not match the group's slot, else [ACCEPT].
+func (c *partialColumnCallbacks) ValidateGloasGroupID(groupID []byte) pubsub.ValidationResult {
 	isGloas, slot, root, err := blocks.ParsePartialColumnGroupID(groupID)
 	if err != nil {
 		return pubsub.ValidationReject
 	}
 	if !isGloas {
-		return pubsub.ValidationAccept
+		log.Error("ValidateGloasGroupID called with non-Gloas groupID")
+		return pubsub.ValidationReject
 	}
 	// [IGNORE] A valid block for the group's slot has not been seen yet.
 	if c.service.cfg.chain == nil || !c.service.cfg.chain.HasBlock(c.service.ctx, root) {

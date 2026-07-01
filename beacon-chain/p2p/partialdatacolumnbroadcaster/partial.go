@@ -64,11 +64,10 @@ type ColumnCallbacks interface {
 	HandleColumn(topic string, col blocks.VerifiedRODataColumn)
 	// HandleHeader is called when a new partial data column header is first validated.
 	HandleHeader(header *ethpb.PartialDataColumnHeader, groupID string)
-	// ValidatePartialColumnGroupID validates an incoming Gloas partial-column group id against local
-	// block state: ValidationReject when a seen block at the group's beacon block root has a different
-	// slot (penalize the peer), ValidationIgnore when no block for the root has been seen, else
-	// ValidationAccept. Fulu group ids carry no slot and always pass.
-	ValidatePartialColumnGroupID(groupID []byte) pubsub.ValidationResult
+	// ValidateGloasGroupID validates a Gloas partial-column group id against local block state:
+	// [REJECT] when a seen block at the group's root has a different slot, [IGNORE] when no block for
+	// the root has been seen, else [ACCEPT].
+	ValidateGloasGroupID(groupID []byte) pubsub.ValidationResult
 }
 
 // Broadcaster is the behaviour of the partial data column broadcaster used by the rest of the node.
@@ -579,6 +578,9 @@ func updatePeerStateFromIncomingRPC(peerState blocks.PartialDataColumnPeerState,
 	if err != nil {
 		return peerState, nil, errors.Wrap(err, "failed to unmarshal partial message data")
 	}
+	if isGloas && message.Header != nil {
+		return peerState, nil, errors.New("Gloas sidecar has non-nil header")
+	}
 	if len(message.CellsPresentBitmap) == 0 {
 		return peerState, message, nil
 	}
@@ -636,12 +638,18 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 	ourVerifier := p.getPartialVerifier(topicID, groupID)
 	var shouldRepublish bool
 
-	// Gloas has no header to seed a verifier from, so we only ever verify Gloas cells against a
-	// verifier we created when publishing post-block. Unsolicited cells are dropped, never buffered.
-	// [REJECT] downscore if a seen block at the group's root has a mismatched slot; [IGNORE] otherwise.
+	// In Gloas, a nil verifier means we have not published this
+	// column, so any cells the peer sends are unsolicited and dropped, never buffered.
+	// [REJECT] downscore if a seen block at the group's root has a mismatched slot, or if the peer
+	// pushed cells before we published; [IGNORE] otherwise.
 	if ourVerifier == nil && rpc.isGloas {
-		if p.callbacks.ValidatePartialColumnGroupID(rpc.GroupID) == pubsub.ValidationReject {
+		if p.callbacks.ValidateGloasGroupID(rpc.GroupID) == pubsub.ValidationReject {
 			p.logger.WithFields(rpc.logFields()).Debug("Rejecting Gloas partial message: group slot does not match block slot")
+			_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
+			return nil
+		}
+		if hasMessage && message.CellsPresentBitmap.Count() > 0 {
+			p.logger.WithFields(rpc.logFields()).Debug("Peer pushed Gloas cells before we published our column; downscoring")
 			_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
 		}
 		return nil

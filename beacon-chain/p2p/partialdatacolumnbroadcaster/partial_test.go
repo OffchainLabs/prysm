@@ -49,9 +49,9 @@ type callbackRecorder struct {
 	partialVerifierFromHeaderReject  bool
 	partialVerifierFromTrustedColErr error
 
-	// validatePartialColumnGroupResult is returned from ValidatePartialColumnGroupID; the zero value
+	// validateGloasGroupResult is returned from ValidateGloasGroupID; the zero value
 	// (pubsub.ValidationAccept) means the group is accepted.
-	validatePartialColumnGroupResult pubsub.ValidationResult
+	validateGloasGroupResult pubsub.ValidationResult
 }
 
 func newCallbackRecorder(callBuffer int, validateHeaderReject bool, validateColumnErr, validateHeaderErr error) *callbackRecorder {
@@ -97,8 +97,8 @@ func (r *callbackRecorder) HandleHeader(header *ethpb.PartialDataColumnHeader, g
 	r.handleHeaderCallCh <- headerHandlerCall{header: header, groupID: groupID}
 }
 
-func (r *callbackRecorder) ValidatePartialColumnGroupID(_ []byte) pubsub.ValidationResult {
-	return r.validatePartialColumnGroupResult
+func (r *callbackRecorder) ValidateGloasGroupID(_ []byte) pubsub.ValidationResult {
+	return r.validateGloasGroupResult
 }
 
 type peerFeedbackCall struct {
@@ -2719,7 +2719,7 @@ func TestPartialColumnBroadcaster_flushAggregatedLogs(t *testing.T) {
 func TestPartialColumnBroadcaster_handleIncomingRPC_Gloas(t *testing.T) {
 	const validTopic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
 
-	t.Run("cells without a local verifier are dropped, not buffered", func(t *testing.T) {
+	t.Run("cells without a local verifier are dropped and the peer is downscored", func(t *testing.T) {
 		ps := newMockPubSub(nil, nil)
 		recorder := newCallbackRecorder(8, false, nil, nil)
 		h := newBroadcasterHarness(t, ps)
@@ -2734,6 +2734,30 @@ func TestPartialColumnBroadcaster_handleIncomingRPC_Gloas(t *testing.T) {
 		require.NoError(t, h.broadcaster.handleIncomingRPC(rpc))
 
 		// Gloas has no header to seed from, so nothing is created, validated, completed or republished.
+		require.IsNil(t, h.broadcaster.getDataColumn(validTopic, group))
+		require.Equal(t, 0, ps.publishedColumnCount())
+		require.Equal(t, 0, len(recorder.validateColumnCallCh))
+		require.Equal(t, 0, len(recorder.handleColumnCallCh))
+		// The peer pushed cells before we published, so it is downscored.
+		require.Equal(t, 1, ps.peerFeedbackCallCount())
+		require.Equal(t, pubsub.PeerFeedbackInvalidMessage, ps.peerFeedbackCallsSnapshot()[0].kind)
+	})
+
+	t.Run("an advertisement without cells is not penalized", func(t *testing.T) {
+		ps := newMockPubSub(nil, nil)
+		recorder := newCallbackRecorder(8, false, nil, nil)
+		h := newBroadcasterHarness(t, ps)
+		h.broadcaster.callbacks = recorder
+		h.broadcaster.topics[validTopic] = nil
+
+		col := createGloasPartialColumn(t, 3, nil)
+		group := col.GroupID()
+		// No partial message, only a parts-metadata advertisement: the peer is telling us what it
+		// has, not pushing unsolicited cells, so it must not be downscored.
+		rpc := buildIncomingGloasRPC(validTopic, group, nil, []byte{0x01})
+
+		require.NoError(t, h.broadcaster.handleIncomingRPC(rpc))
+
 		require.IsNil(t, h.broadcaster.getDataColumn(validTopic, group))
 		require.Equal(t, 0, ps.publishedColumnCount())
 		require.Equal(t, 0, ps.peerFeedbackCallCount())
@@ -2817,7 +2841,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC_GloasSlotMismatchRejected(t 
 	ps := newMockPubSub(nil, nil)
 	recorder := newCallbackRecorder(8, false, nil, nil)
 	// The callback reports a slot/root inconsistency for the group id ([REJECT]).
-	recorder.validatePartialColumnGroupResult = pubsub.ValidationReject
+	recorder.validateGloasGroupResult = pubsub.ValidationReject
 	h := newBroadcasterHarness(t, ps)
 	h.broadcaster.callbacks = recorder
 	h.broadcaster.topics[validTopic] = nil

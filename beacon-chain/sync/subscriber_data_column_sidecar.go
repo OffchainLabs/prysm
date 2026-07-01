@@ -46,30 +46,9 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		if err != nil {
 			return errors.Wrap(err, "proposer index")
 		}
-		if !s.hasSeenDataColumnIndex(sidecar.Slot(), proposerIndex, sidecar.Index()) && !sidecar.IsGloas() {
+		if !s.hasSeenDataColumnIndex(sidecar.Slot(), proposerIndex, sidecar.Index()) {
 			usefulFullColumnsReceivedTotal.WithLabelValues(strconv.FormatUint(sidecar.Index(), 10)).Inc()
-			// re-publish the full column on the partial column extension as we don't send full columns to peers
-			// who have explicitly requested for partial columns. This method is idempotent so this is fine.
-			if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
-				digest, err := s.currentForkDigest()
-				if err != nil {
-					log.Error("Failed to get current fork digest")
-				} else {
-					err := broadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
-						subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index())
-						topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
-						partialColumn, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar)
-						if err != nil {
-							log.WithError(err).Error("Failed to create partial data column from verified RO data column")
-							return
-						}
-						yield(topic, partialColumn)
-					})
-					if err != nil {
-						log.WithError(err).Error("Failed to publish partial column on getting data column sidecar")
-					}
-				}
-			}
+			s.publishColumnAsPartial(ctx, sidecar)
 		}
 	}
 
@@ -111,24 +90,11 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 	return nil
 }
 
-// republishGloasColumnAsPartial republishes a verified Gloas full column received via gossip as
-// a partial column so partial-column peers (who don't receive full columns) can fill in cells.
-// The column was re-wrapped from the raw proto and carries no commitments, so they are seeded
-// from the block's bid (the block is in the DB — Gloas validation required it). De-dup is not
-// needed here: the Gloas validator delivers only the first valid receipt per (root, index), and
-// the broadcaster is idempotent per group id.
-func (s *Service) republishGloasColumnAsPartial(ctx context.Context, sidecar blocks.VerifiedRODataColumn) {
+func (s *Service) publishColumnAsPartial(ctx context.Context, sidecar blocks.VerifiedRODataColumn) {
 	broadcaster := s.cfg.p2p.PartialColumnBroadcaster()
 	if broadcaster == nil {
 		return
 	}
-
-	commitments, err := s.bidCommitmentsForRoot(ctx, sidecar.BlockRoot())
-	if err != nil {
-		log.WithError(err).Error("Failed to get bid commitments for gloas partial column republish")
-		return
-	}
-	sidecar.SetBidCommitments(commitments)
 
 	digest, err := s.currentForkDigest()
 	if err != nil {
@@ -141,13 +107,28 @@ func (s *Service) republishGloasColumnAsPartial(ctx context.Context, sidecar blo
 		topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
 		partialColumn, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar)
 		if err != nil {
-			log.WithError(err).Error("Failed to create gloas partial data column from verified RO data column")
+			log.WithError(err).Error("Failed to create partial data column from verified RO data column")
 			return
 		}
 		yield(topic, partialColumn)
 	}); err != nil {
-		log.WithError(err).Error("Failed to publish gloas partial column on getting data column sidecar")
+		log.WithError(err).Error("Failed to publish partial column on getting data column sidecar")
 	}
+}
+
+func (s *Service) republishGloasColumnAsPartial(ctx context.Context, sidecar blocks.VerifiedRODataColumn) {
+	if s.cfg.p2p.PartialColumnBroadcaster() == nil {
+		return
+	}
+
+	commitments, err := s.bidCommitmentsForRoot(ctx, sidecar.BlockRoot())
+	if err != nil {
+		log.WithError(err).Error("Failed to get bid commitments for gloas partial column republish")
+		return
+	}
+	sidecar.SetBidCommitments(commitments)
+
+	s.publishColumnAsPartial(ctx, sidecar)
 }
 
 // bidCommitmentsForRoot returns the bid KZG commitments for the block with the given root,

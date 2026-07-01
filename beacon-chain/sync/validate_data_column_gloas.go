@@ -259,11 +259,10 @@ func (s *Service) processPendingGloasColumns(ctx context.Context, root [fieldpar
 			return
 		}
 
-		// Build partial columns for partial-column peers when enabled. The verified columns
-		// already have their bid commitments set above.
 		var partials []blocks.PartialDataColumn
 		if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
 			partials = make([]blocks.PartialDataColumn, 0, len(verified))
+			// bit commitments are already set above
 			for _, v := range verified {
 				pc, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(v)
 				if err != nil {

@@ -61,9 +61,6 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 		}
 	}
 
-	// Precompute partial columns too, when enabled, so partial-column peers can fill in
-	// cells. Gloas sidecars carry no inline commitments, so seed them from the bid before
-	// building the partials.
 	var partialColumns []consensusblocks.PartialDataColumn
 	if len(roSidecars) > 0 && vs.ExecutionEngineCaller.PartialColumnsSupported() {
 		commitments, err := sBlk.Block().Body().BlobKzgCommitments()
@@ -252,8 +249,8 @@ func (vs *Server) resolveEnvelopeToPublish(req *ethpb.GenericSignedExecutionPayl
 }
 
 // sidecarsFromContents verifies caller-supplied blobs+KZG proofs (stateless publish) and builds the
-// data column sidecars for the slot, plus partial columns when partial-column support is enabled so
-// partial-column peers can fill in cells. Verification matters because broadcastAndReceiveDataColumns
+// data column sidecars for the slot, plus partial columns when partial-column support is enabled.
+// Verification matters because broadcastAndReceiveDataColumns
 // upgrades the sidecars to "verified" without re-checking.
 func (vs *Server) sidecarsFromContents(blobs, kzgProofs [][]byte, slot primitives.Slot, blockRoot [32]byte) ([]consensusblocks.RODataColumn, []consensusblocks.PartialDataColumn, error) {
 	commitments, err := verifyCellProofs(blobs, kzgProofs)
@@ -266,16 +263,14 @@ func (vs *Server) sidecarsFromContents(blobs, kzgProofs [][]byte, slot primitive
 	}
 	sidecars, err := peerdas.DataColumnSidecarsGloas(cellsPerBlob, proofsPerBlob, slot, blockRoot)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Wrap(err, "DataColumnSidecarsGloas")
 	}
 
-	// Gloas sidecars carry no inline commitments; seed them from the commitments derived from the
-	// supplied blobs so partial-column peers can request cells against them.
 	var partialColumns []consensusblocks.PartialDataColumn
 	if vs.ExecutionEngineCaller.PartialColumnsSupported() {
 		partialColumns, err = partialColumnsFromSidecars(sidecars, commitments)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, errors.Wrap(err, "partialColumnsFromSidecars")
 		}
 	}
 	return sidecars, partialColumns, nil
@@ -298,15 +293,11 @@ func verifyCellProofs(blobs, flatProofs [][]byte) ([][]byte, error) {
 		commitments[i] = c[:]
 	}
 	if err := kzg.VerifyCellKZGProofBatchFromBlobData(blobs, commitments, flatProofs, fieldparams.NumberOfColumns); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "VerifyCellKZGProofBatchFromBlobData")
 	}
 	return commitments, nil
 }
 
-// partialColumnsFromSidecars seeds each sidecar with the bid commitments and wraps it into a
-// fully-included partial column so partial-column peers can request individual cells. It is the
-// single construction path shared by the self-build and stateless publish flows so both compute
-// identical (deterministic) group ids.
 func partialColumnsFromSidecars(sidecars []consensusblocks.RODataColumn, commitments [][]byte) ([]consensusblocks.PartialDataColumn, error) {
 	partialColumns := make([]consensusblocks.PartialDataColumn, 0, len(sidecars))
 	for i := range sidecars {

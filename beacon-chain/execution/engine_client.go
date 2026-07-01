@@ -958,10 +958,13 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
 	root := populator.Root()
 
-	// Fetch cells and proofs from the execution client using the KZG commitments from the sidecar.
 	commitments, err := populator.Commitments()
 	if err != nil {
-		return nil, nil, wrapWithBlockRoot(err, root, "commitments")
+		return nil, nil, errors.Wrap(err, "populator has no KZG commitments")
+	}
+	// A populator carrying zero commitments (e.g. a block with no blobs) has nothing to reconstruct.
+	if len(commitments) == 0 {
+		return nil, nil, nil
 	}
 	cp, err := s.fetchCellsAndProofsFromExecution(ctx, commitments)
 	if err != nil {
@@ -997,8 +1000,6 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		if s.partialColumnsSupported {
 			isGloas := slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch
 			for i := range verifiedROSidecars {
-				// Gloas sidecars carry no inline KZG commitments; seed them from the bid
-				// (by index so the returned full columns carry them too) before building partials.
 				if isGloas {
 					verifiedROSidecars[i].SetBidCommitments(commitments)
 				}

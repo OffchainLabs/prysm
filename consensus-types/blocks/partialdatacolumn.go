@@ -372,9 +372,7 @@ func (p *PartialDataColumn) marshalCellsMessage(cells, proofs [][]byte, present 
 }
 
 // DecodePartialColumnSidecar SSZ-decodes an incoming partial-message body into the in-memory
-// PartialDataColumnSidecar. It is the inverse of marshalCellsMessage: the Gloas wire is the 3-field
-// PartialDataColumnSidecarGloas (no header), normalized into the 4-field struct with Header left nil
-// so the receive path stays fork-neutral.
+// PartialDataColumnSidecar.
 func DecodePartialColumnSidecar(raw []byte, isGloas bool) (*ethpb.PartialDataColumnSidecar, error) {
 	if isGloas {
 		gloas := &ethpb.PartialDataColumnSidecarGloas{}
