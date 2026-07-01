@@ -80,6 +80,21 @@ type ExecutionBlock struct {
 	BlockAccessList hexutil.Bytes            `json:"blockAccessList"`
 }
 
+func decodeBlockAccessList(raw any) ([]byte, error) {
+	balStr, ok := raw.(string)
+	if !ok {
+		return nil, errors.New("expected `blockAccessList` field to be a string")
+	}
+	balBytes, err := hexutil.Decode(balStr)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not decode blockAccessList hex")
+	}
+	if len(balBytes) == 0 {
+		return nil, errors.New("blockAccessList cannot be empty")
+	}
+	return balBytes, nil
+}
+
 func (e *ExecutionBlock) MarshalJSON() ([]byte, error) {
 	decoded := make(map[string]any)
 	encodedHeader, err := e.Header.MarshalJSON()
@@ -130,13 +145,9 @@ func (e *ExecutionBlock) UnmarshalJSON(enc []byte) error {
 	e.TotalDifficulty, _ = decoded["totalDifficulty"].(string)
 
 	if raw, exists := decoded["blockAccessList"]; exists && raw != nil {
-		balStr, ok := raw.(string)
-		if !ok {
-			return errors.New("expected `blockAccessList` field to be a string")
-		}
-		balBytes, err := hexutil.Decode(balStr)
+		balBytes, err := decodeBlockAccessList(raw)
 		if err != nil {
-			return errors.Wrap(err, "could not decode blockAccessList hex")
+			return err
 		}
 		e.BlockAccessList = balBytes
 	}
@@ -1506,6 +1517,9 @@ func (e *ExecutionBundleGloas) UnmarshalJSON(enc []byte) error {
 
 	if dec.ExecutionPayload.BlockAccessList == nil {
 		return errors.New("missing required field 'blockAccessList' for ExecutionPayload")
+	}
+	if len(*dec.ExecutionPayload.BlockAccessList) == 0 {
+		return errors.New("blockAccessList cannot be empty")
 	}
 	e.Payload.BlockAccessList = *dec.ExecutionPayload.BlockAccessList
 	e.Payload.SlotNumber = primitives.Slot(*dec.ExecutionPayload.SlotNumber)
