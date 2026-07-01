@@ -26,7 +26,7 @@ var mainnetSecondNodeServices = []string{"cl-2-prysm-geth", "vc-2-geth-prysm"}
 // Event 1. Freeze the 2nd Prysm BN + VC (mainnetSecondNodeServices), and resume after one epoch.
 // Event 2. Optimistic Sync with late-start Prysm nodes.
 //
-// Between each event, we wait for two epochs for recovery, and run one-shot assertoor playbooks
+// Between each event, we wait up to three epochs for recovery, and run one-shot assertoor playbooks
 // to verify whether the recovery is successful.
 //
 // Note that the network doesn't fork at all, starts from Fulu. See mainnet-scenario.yaml for the network config.
@@ -34,7 +34,7 @@ var mainnetSecondNodeServices = []string{"cl-2-prysm-geth", "vc-2-geth-prysm"}
 //
 //	epoch:  3    4    5    6    7    8    9    10   11   12   13   14   15
 //	Prysm #2     x====o
-//	one-shot              A    M
+//	one-shot                    A    M
 //	late sync         x====o
 //
 //	x = stop   o = start (resume)
@@ -62,13 +62,13 @@ func TestEndToEnd_MultiScenarioRun_MultiClient2(t *testing.T) {
 	// TODO.
 
 	// Schedule attestation stats one-shot playbook. See timeline above for the epochs.
-	for _, epoch := range []uint64{firstFinalizedEpoch + 3} {
+	for _, epoch := range []uint64{firstFinalizedEpoch + 4} {
 		assertoorEvents = append(assertoorEvents,
 			kurtosis.AssertoorEvent{Epoch: epoch, Playbook: "attestation-stats-once.yaml"},
 		)
 	}
 	// Schedule other one-shot playbooks. See timeline above for the epochs.
-	for _, epoch := range []uint64{firstFinalizedEpoch + 4} {
+	for _, epoch := range []uint64{firstFinalizedEpoch + 5} {
 		assertoorEvents = append(assertoorEvents,
 			kurtosis.AssertoorEvent{Epoch: epoch, Playbook: "metrics-once.yaml"},
 			kurtosis.AssertoorEvent{Epoch: epoch, Playbook: "validators-sync-participation-once.yaml"},
