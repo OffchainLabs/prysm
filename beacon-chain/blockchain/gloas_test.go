@@ -645,20 +645,20 @@ func TestShouldReorgPayload(t *testing.T) {
 		require.Equal(t, true, service.shouldReorgPayload(root, true, blockSlot+1))
 	})
 
-	t.Run("late payload requires PTC early and available vote", func(t *testing.T) {
+	t.Run("late payload keeps reorg bet until PTC votes early and available", func(t *testing.T) {
 		service, root, blockSlot := setup(t, "late-early-available")
 		recordPayloadArrival(t, service, root, blockSlot, false)
-		require.Equal(t, false, service.shouldReorgPayload(root, true, blockSlot+1))
+		require.Equal(t, true, service.shouldReorgPayload(root, true, blockSlot+1))
 
 		setPTCVotes(service, root, true, true)
-		require.Equal(t, true, service.shouldReorgPayload(root, true, blockSlot+1))
+		require.Equal(t, false, service.shouldReorgPayload(root, true, blockSlot+1))
 	})
 
-	t.Run("late payload without data availability does not keep the reorg bet", func(t *testing.T) {
+	t.Run("late payload without data availability keeps the reorg bet", func(t *testing.T) {
 		service, root, blockSlot := setup(t, "late-unavailable")
 		recordPayloadArrival(t, service, root, blockSlot, false)
 		setPTCVotes(service, root, true, false)
-		require.Equal(t, false, service.shouldReorgPayload(root, true, blockSlot+1))
+		require.Equal(t, true, service.shouldReorgPayload(root, true, blockSlot+1))
 	})
 }
 
