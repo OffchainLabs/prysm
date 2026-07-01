@@ -404,7 +404,7 @@ func (mr *MockBeaconNodeValidatorServerMockRecorder) ProposeExit(arg0, arg1 any)
 }
 
 // PublishExecutionPayloadEnvelope mocks base method.
-func (m *MockBeaconNodeValidatorServer) PublishExecutionPayloadEnvelope(arg0 context.Context, arg1 *eth.SignedExecutionPayloadEnvelope) (*emptypb.Empty, error) {
+func (m *MockBeaconNodeValidatorServer) PublishExecutionPayloadEnvelope(arg0 context.Context, arg1 *eth.GenericSignedExecutionPayloadEnvelope) (*emptypb.Empty, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PublishExecutionPayloadEnvelope", arg0, arg1)
 	ret0, _ := ret[0].(*emptypb.Empty)
@@ -474,6 +474,21 @@ func (m *MockBeaconNodeValidatorServer) SubmitAggregateSelectionProofElectra(arg
 func (mr *MockBeaconNodeValidatorServerMockRecorder) SubmitAggregateSelectionProofElectra(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAggregateSelectionProofElectra", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).SubmitAggregateSelectionProofElectra), arg0, arg1)
+}
+
+// SubmitBuilderPreferences mocks base method.
+func (m *MockBeaconNodeValidatorServer) SubmitBuilderPreferences(arg0 context.Context, arg1 *eth.SubmitBuilderPreferencesRequest) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitBuilderPreferences", arg0, arg1)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitBuilderPreferences indicates an expected call of SubmitBuilderPreferences.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) SubmitBuilderPreferences(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitBuilderPreferences", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).SubmitBuilderPreferences), arg0, arg1)
 }
 
 // SubmitPayloadAttestation mocks base method.

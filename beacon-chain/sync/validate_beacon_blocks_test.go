@@ -6,10 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
@@ -125,9 +125,10 @@ func TestValidateBeaconBlockPubSub_InvalidSignature(t *testing.T) {
 	}
 }
 
-func TestValidateBeaconBlockPubSub_InvalidSignature_MarksBlockAsBad(t *testing.T) {
+func TestValidateBeaconBlockPubSub_InvalidSignature_DownscoresPeer(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
+	attacker := p2ptest.NewTestP2P(t)
 	ctx := t.Context()
 	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
 	parentBlock := util.NewBeaconBlock()
@@ -144,7 +145,7 @@ func TestValidateBeaconBlockPubSub_InvalidSignature_MarksBlockAsBad(t *testing.T
 	msg.Block.ParentRoot = bRoot[:]
 	msg.Block.Slot = 1
 	msg.Block.ProposerIndex = proposerIdx
-	badPrivKeyIdx := proposerIdx + 1 // We generate a valid signature from a wrong private key which fails to verify
+	badPrivKeyIdx := proposerIdx + 1
 	msg.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, msg.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[badPrivKeyIdx])
 	require.NoError(t, err)
 
@@ -176,12 +177,6 @@ func TestValidateBeaconBlockPubSub_InvalidSignature_MarksBlockAsBad(t *testing.T
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
 	defer opSub.Unsubscribe()
 
-	blockRoot, err := msg.Block.HashTreeRoot()
-	require.NoError(t, err)
-
-	// Verify block is not marked as bad initially
-	assert.Equal(t, false, r.hasBadBlock(blockRoot), "block should not be marked as bad initially")
-
 	buf := new(bytes.Buffer)
 	_, err = p.Encoding().EncodeGossip(buf, msg)
 	require.NoError(t, err)
@@ -195,19 +190,18 @@ func TestValidateBeaconBlockPubSub_InvalidSignature_MarksBlockAsBad(t *testing.T
 			Topic: &topic,
 		},
 	}
-	res, err := r.validateBeaconBlockPubSub(ctx, "", m)
+	res, err := r.validateBeaconBlockPubSub(ctx, attacker.PeerID(), m)
 	require.ErrorContains(t, "invalid signature", err)
-	result := res == pubsub.ValidationReject
-	assert.Equal(t, true, result)
+	assert.Equal(t, pubsub.ValidationReject, res)
 
-	// Verify block is now marked as bad after invalid signature
-	assert.Equal(t, true, r.hasBadBlock(blockRoot), "block should be marked as bad after invalid signature")
+	count, err := p.Peers().Scorers().BadResponsesScorer().Count(attacker.PeerID())
+	require.NoError(t, err)
+	assert.Equal(t, 1, count, "peer should be downscored on invalid signature")
 
 	select {
 	case event := <-opChannel:
 		assert.NotEqual(t, opfeed.BlockGossipReceived, event.Type, "BlockGossipReceived event should not be sent")
 	default:
-		// this case is needed, otherwise the test will never finish
 	}
 }
 
@@ -828,7 +822,7 @@ func TestValidateBeaconBlockPubSub_IgnoreAndQueueBlocksFromNearFuture(t *testing
 			operationNotifier: chainService.OperationNotifier(),
 			stateGen:          stateGen,
 		},
-		chainStarted:        abool.New(),
+		chainStarted:        &atomic.Bool{},
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
@@ -890,7 +884,7 @@ func TestValidateBeaconBlockPubSub_RejectBlocksFromFuture(t *testing.T) {
 			blockNotifier:     chainService.BlockNotifier(),
 			operationNotifier: chainService.OperationNotifier(),
 		},
-		chainStarted:        abool.New(),
+		chainStarted:        &atomic.Bool{},
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
@@ -1341,9 +1335,8 @@ func TestValidateBeaconBlockPubSub_InvalidParentBlock(t *testing.T) {
 	r.cfg.clock = startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)
 
 	res, err = r.validateBeaconBlockPubSub(ctx, "", m)
-	require.ErrorContains(t, "has an invalid parent", err)
-	// Expect block with bad parent to fail too
-	assert.Equal(t, res, pubsub.ValidationReject, "block with invalid parent should be ignored")
+	require.ErrorContains(t, "unknown parent for block", err)
+	assert.Equal(t, res, pubsub.ValidationIgnore, "block with unknown parent should be ignored")
 
 	select {
 	case event := <-opChannel:

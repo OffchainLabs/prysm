@@ -96,8 +96,8 @@ func (v *validator) proposeSelfBuildEnvelope(
 		return errors.Wrap(err, "failed to get execution payload envelope for self-build")
 	}
 
-	// Stateful REST returns only the blinded envelope (BN reconstructs the full from its cache);
-	// gRPC and stateless REST return the full envelope.
+	// Stateful self-build (REST or gRPC) returns only the blinded envelope — the BN reconstructs the
+	// full payload from its cache. Stateless self-build returns the full envelope.
 	if full == nil {
 		if err := v.publishSelfBuildBlinded(ctx, pubKey, slot, blinded); err != nil {
 			validatorSelfBuildEnvelopeSubmissionTotal.WithLabelValues("failed").Inc()

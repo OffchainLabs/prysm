@@ -103,6 +103,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.BlobBatchLimitBurstFactor,
 			flags.DataColumnBatchLimit,
 			flags.DataColumnBatchLimitBurstFactor,
+			flags.PartialDataColumns,
 			flags.BlockBatchLimit,
 			flags.BlockBatchLimitBurstFactor,
 			flags.MaxConcurrentDials,
@@ -144,7 +145,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.MinBuilderBid,
 			flags.MinBuilderDiff,
 			flags.SuggestedFeeRecipient,
-			flags.EnableBuilderSSZ,
+			flags.DisableBuilderSSZ,
 		},
 	},
 	{ // Flags relevant to syncing the beacon chain.

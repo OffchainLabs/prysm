@@ -13,6 +13,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
@@ -233,7 +234,7 @@ func (s *Server) StreamEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	cleanupStart := time.Now()
 	es.waitForExit()
-	log.WithField("cleanup_wait", time.Since(cleanupStart)).Debug("streamEvents shutdown complete")
+	log.WithField("cleanup_wait", time.Since(cleanupStart)).Debug("StreamEvents shutdown complete")
 }
 
 func newEventStreamer(buffSize int, ka time.Duration) *eventStreamer {
@@ -742,19 +743,27 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		return nil, errors.Wrapf(errUnsupportedPayloadAttribute, "%s is not supported", version.String(v))
 	}
 
-	feeRecpt := params.BeaconConfig().DefaultFeeRecipient.Bytes()
-	gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
-	tValidator, exists := s.TrackedValidatorsCache.Validator(proposer)
-	if exists {
-		feeRecpt = tValidator.FeeRecipient[:]
-		gasLimit = tValidator.GasLimit
+	// Try signed pref first (post-Gloas, keyed by slot+dep_root). Fall back to
+	// the per-validator default if dep root is unavailable or the signed pref
+	// isn't cached. On total miss emit the BN's configured defaults so SSE
+	// matches what FCU will actually send to the EL.
+	feeRecpt := primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
+	var pref *cache.ProposerPreference
+	if dependentRoot, err := helpers.ProposerDependentRootOrGenesis(ctx, s.BeaconDB, st, slot); err == nil {
+		if p, ok := s.ProposerPreferencesCache.BestFor(dependentRoot, slot, proposer); ok {
+			pref = &p
+			feeRecpt = p.FeeRecipientOrDefault()
+		}
+	} else if p, ok := s.ProposerPreferencesCache.DefaultFor(proposer); ok {
+		pref = &p
+		feeRecpt = p.FeeRecipientOrDefault()
 	}
 
 	if v == version.Bellatrix {
 		return payloadattribute.New(&engine.PayloadAttributes{
 			Timestamp:             timestamp,
 			PrevRandao:            randao,
-			SuggestedFeeRecipient: feeRecpt,
+			SuggestedFeeRecipient: feeRecpt[:],
 		})
 	}
 
@@ -774,7 +783,7 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		return payloadattribute.New(&engine.PayloadAttributesV2{
 			Timestamp:             timestamp,
 			PrevRandao:            randao,
-			SuggestedFeeRecipient: feeRecpt,
+			SuggestedFeeRecipient: feeRecpt[:],
 			Withdrawals:           w,
 		})
 	}
@@ -783,16 +792,21 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		return payloadattribute.New(&engine.PayloadAttributesV3{
 			Timestamp:             timestamp,
 			PrevRandao:            randao,
-			SuggestedFeeRecipient: feeRecpt,
+			SuggestedFeeRecipient: feeRecpt[:],
 			Withdrawals:           w,
 			ParentBeaconBlockRoot: root[:],
 		})
 	}
 
+	parentGasLimit := helpers.ParentTargetGasLimit(st)
+	gasLimit := parentGasLimit
+	if pref != nil {
+		gasLimit = pref.GasLimitOr(parentGasLimit)
+	}
 	return payloadattribute.New(&engine.PayloadAttributesV4{
 		Timestamp:             timestamp,
 		PrevRandao:            randao,
-		SuggestedFeeRecipient: feeRecpt,
+		SuggestedFeeRecipient: feeRecpt[:],
 		Withdrawals:           w,
 		ParentBeaconBlockRoot: root[:],
 		SlotNumber:            uint64(slot),
@@ -864,17 +878,29 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 
 	ev.ProposerIndex = proposerIndex
 
+	if ev.HeadBlock.Version() >= version.Gloas {
+		h, err := rost.LatestBlockHash()
+		if err != nil {
+			return ev, errors.Wrap(err, "could not get latest block hash from head state")
+		}
+		ev.ParentBlockHash = h[:]
+	} else {
+		payload, err := ev.HeadBlock.Block().Body().Execution()
+		if err != nil {
+			return ev, errors.Wrap(err, "could not get execution payload for head block")
+		}
+		ev.ParentBlockHash = payload.BlockHash()
+		ev.ParentBlockNumber = payload.BlockNumber()
+	}
+
+	if ev.Attributer != nil && !ev.Attributer.IsEmpty() {
+		return ev, nil
+	}
+
 	randao, err := helpers.RandaoMix(rost, pse)
 	if err != nil {
 		return ev, errors.Wrap(err, "could not get head state randado")
 	}
-
-	payload, err := ev.HeadBlock.Block().Body().Execution()
-	if err != nil {
-		return ev, errors.Wrap(err, "could not get execution payload for head block")
-	}
-	ev.ParentBlockHash = payload.BlockHash()
-	ev.ParentBlockNumber = payload.BlockNumber()
 
 	t, err := slots.StartTime(rost.GenesisTime(), ev.ProposalSlot)
 	if err != nil {

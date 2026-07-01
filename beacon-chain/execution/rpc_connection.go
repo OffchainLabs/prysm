@@ -84,6 +84,13 @@ func (s *Service) pollConnectionStatus(ctx context.Context) {
 				errorLogger(err, "Could not exchange capabilities with execution client")
 			}
 			s.capabilityCache.save(c)
+			if !s.capabilityCache.has(GetBlobsV3) && s.partialColumnsSupported {
+				log.Warn("Execution client does not support blobs v3, but partial data columns are enabled")
+			}
+
+			if s.capabilityCache.has(HasBlobs) && s.partialColumnsSupported {
+				log.WithField("method", HasBlobs).Info("Execution client supports blob availability checks, missing blobs will be requested via partial columns")
+			}
 
 			return
 		case <-s.ctx.Done():

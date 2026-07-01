@@ -29,11 +29,10 @@ var (
 		Value: "",
 	}
 
-	// EnableBuilderSSZ enables Builder APIs to send and receive in SSZ format
-	EnableBuilderSSZ = &cli.BoolFlag{
-		Name:    "enable-builder-ssz",
-		Aliases: []string{"builder-ssz"},
-		Usage:   "Enables Builder APIs to send and receive in SSZ format",
+	// DisableBuilderSSZ turns off SSZ encoding for Builder APIs, falling back to JSON.
+	DisableBuilderSSZ = &cli.BoolFlag{
+		Name:  "disable-builder-ssz",
+		Usage: "Disables SSZ encoding for Builder API requests and responses, using JSON instead.",
 	}
 
 	// PostponeShutdownForProposals delays a graceful shutdown while a connected
@@ -368,5 +367,10 @@ var (
 		Name:   "disable-get-blobs-v2",
 		Usage:  "Disables the engine_getBlobsV2 usage.",
 		Hidden: true,
+	}
+	// PartialDataColumns specifies the regex for enabling partial messages on datacolumns
+	PartialDataColumns = &cli.BoolFlag{
+		Name:  "partial-data-columns",
+		Usage: "Enable cell-level dissemination for PeerDAS data columns",
 	}
 )

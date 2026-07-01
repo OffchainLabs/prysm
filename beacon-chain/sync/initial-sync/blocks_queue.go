@@ -97,10 +97,11 @@ type blocksQueue struct {
 
 // blocksQueueFetchedData is a data container that is returned from a queue on each step.
 type blocksQueueFetchedData struct {
-	blocksFrom peer.ID
-	blobsFrom  peer.ID
-	bwb        []blocks.BlockWithROSidecars
-	envelopes  []interfaces.ROSignedExecutionPayloadEnvelope
+	blocksFrom    peer.ID
+	blobsFrom     peer.ID
+	bwb           []blocks.BlockWithROSidecars
+	envelopes     []interfaces.ROSignedExecutionPayloadEnvelope
+	columnsToSave []blocks.VerifiedRODataColumn
 }
 
 // newBlocksQueue creates initialized priority queue.

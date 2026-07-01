@@ -82,8 +82,7 @@ func TestUpdateDuties_OK(t *testing.T) {
 	client.EXPECT().SubscribeCommitteeSubnets(
 		gomock.Any(),
 		gomock.Any(),
-		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
 		wg.Done()
 		return nil, nil
 	})
@@ -137,8 +136,7 @@ func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
 	client.EXPECT().SubscribeCommitteeSubnets(
 		gomock.Any(),
 		gomock.Any(),
-		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
 		wg.Done()
 		return nil, nil
 	})
@@ -277,8 +275,7 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 	client.EXPECT().SubscribeCommitteeSubnets(
 		gomock.Any(),
 		gomock.Any(),
-		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
 		wg.Done()
 		return nil, nil
 	})
@@ -355,8 +352,7 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 		client.EXPECT().SubscribeCommitteeSubnets(
 			gomock.Any(),
 			gomock.Any(),
-			gomock.Any(),
-		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
 			return nil, nil
 		}).AnyTimes()
 		client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(dutiesContainer, nil)
@@ -376,8 +372,7 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 		client.EXPECT().SubscribeCommitteeSubnets(
 			gomock.Any(),
 			gomock.Any(),
-			gomock.Any(),
-		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
 			wg.Done()
 			return nil, nil
 		}).AnyTimes()
@@ -519,7 +514,7 @@ func TestValidator_CheckDependentRoots_NoEmptyWindowDuringRefetch(t *testing.T) 
 		},
 	)
 	client.EXPECT().SubscribeCommitteeSubnets(
-		gomock.Any(), gomock.Any(), gomock.Any(),
+		gomock.Any(), gomock.Any(),
 	).Return(&emptypb.Empty{}, nil).AnyTimes()
 
 	// Head event with a prev root that differs from stored — triggers

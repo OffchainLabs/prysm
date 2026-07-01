@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
@@ -189,7 +189,7 @@ func TestExecutionPayloadEnvelopeSubscriber_WrongMessage(t *testing.T) {
 func TestExecutionPayloadEnvelopeSubscriber_HappyPath(t *testing.T) {
 	s := &Service{
 		cfg:          &config{chain: &mock.ChainService{}},
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 	}
 	root := [32]byte{0x01}
 	blockHash := [32]byte{0x02}
@@ -244,6 +244,74 @@ func (m *mockExecutionPayloadEnvelopeVerifier) VerifySignature(_ context.Context
 }
 
 func (*mockExecutionPayloadEnvelopeVerifier) SatisfyRequirement(_ verification.Requirement) {}
+
+// recordingEnvelopeVerifier tracks which requirements the validator exercises.
+type recordingEnvelopeVerifier struct {
+	mockExecutionPayloadEnvelopeVerifier
+	recorded map[verification.Requirement]bool
+}
+
+func (r *recordingEnvelopeVerifier) VerifyBlockRootSeen(_ func([32]byte) bool) error {
+	r.recorded[verification.RequireBlockRootSeen] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) VerifyBlockRootValid(_ func([32]byte) bool) error {
+	r.recorded[verification.RequireBlockRootValid] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) VerifySlotAboveFinalized(_ primitives.Epoch) error {
+	r.recorded[verification.RequireEnvelopeSlotAboveFinalized] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) VerifySlotMatchesBlock(_ primitives.Slot) error {
+	r.recorded[verification.RequireEnvelopeSlotMatchesBlock] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) VerifyBuilderValid(_ interfaces.ROExecutionPayloadBid) error {
+	r.recorded[verification.RequireBuilderValid] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) VerifyPayloadHash(_ interfaces.ROExecutionPayloadBid) error {
+	r.recorded[verification.RequirePayloadHashValid] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) VerifyExecutionRequestsRoot(_ interfaces.ROExecutionPayloadBid) error {
+	r.recorded[verification.RequireExecutionRequestsRootValid] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) VerifySignature(_ context.Context, _ state.ReadOnlyBeaconState) error {
+	r.recorded[verification.RequireBuilderSignatureValid] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) SatisfyRequirement(req verification.Requirement) {
+	r.recorded[req] = true
+}
+
+// A successful gossip validation must exercise every requirement in the gossip
+// list — catches a requirement being added without a matching check.
+func TestValidateExecutionPayloadEnvelope_CoversAllGossipRequirements(t *testing.T) {
+	ctx := context.Background()
+	s, msg, _, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	rec := &recordingEnvelopeVerifier{recorded: map[verification.Requirement]bool{}}
+	s.newExecutionPayloadEnvelopeVerifier = func(_ interfaces.ROSignedExecutionPayloadEnvelope, _ []verification.Requirement) verification.ExecutionPayloadEnvelopeVerifier {
+		return rec
+	}
+
+	result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, result)
+	for _, req := range verification.ExecutionPayloadEnvelopeGossipRequirements {
+		require.Equal(t, true, rec.recorded[req], "requirement %s is in the gossip list but never checked", req)
+	}
+}
 
 func testNewExecutionPayloadEnvelopeVerifier(m mockExecutionPayloadEnvelopeVerifier) verification.NewExecutionPayloadEnvelopeVerifier {
 	return func(_ interfaces.ROSignedExecutionPayloadEnvelope, _ []verification.Requirement) verification.ExecutionPayloadEnvelopeVerifier {
@@ -408,7 +476,7 @@ func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, buil
 	return &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
 			Payload: payload,
-			ExecutionRequests: &enginev1.ExecutionRequests{
+			ExecutionRequests: &enginev1.ExecutionRequestsGloas{
 				Deposits: []*enginev1.DepositRequest{},
 			},
 			BuilderIndex:          builderIdx,

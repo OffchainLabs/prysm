@@ -84,12 +84,12 @@ func (c *handler) Get(ctx context.Context, endpoint string, resp any) error {
 	url := c.host + endpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return errors.Wrapf(err, "failed to create request for endpoint %s", url)
+		return errors.Wrapf(err, "failed to create request for endpoint %s", api.RedactEndpoint(url))
 	}
 	req.Header.Set("User-Agent", version.BuildData())
 	httpResp, err := c.client.Do(req)
 	if err != nil {
-		return errors.Wrapf(err, "failed to perform request for endpoint %s", url)
+		return errors.Wrapf(err, "failed to perform request for endpoint %s", api.RedactEndpoint(url))
 	}
 	defer func() {
 		if err := httpResp.Body.Close(); err != nil {
@@ -107,12 +107,12 @@ func (c *handler) GetStatusCode(ctx context.Context, endpoint string) (int, erro
 	url := c.host + endpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return 0, errors.Wrapf(err, "failed to create request for endpoint %s", url)
+		return 0, errors.Wrapf(err, "failed to create request for endpoint %s", api.RedactEndpoint(url))
 	}
 	req.Header.Set("User-Agent", version.BuildData())
 	httpResp, err := c.client.Do(req)
 	if err != nil {
-		return 0, errors.Wrapf(err, "failed to perform request for endpoint %s", url)
+		return 0, errors.Wrapf(err, "failed to perform request for endpoint %s", api.RedactEndpoint(url))
 	}
 	defer func() {
 		if err := httpResp.Body.Close(); err != nil {
@@ -126,7 +126,7 @@ func (c *handler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Hea
 	url := c.host + endpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "failed to create request for endpoint %s", url)
+		return nil, nil, errors.Wrapf(err, "failed to create request for endpoint %s", api.RedactEndpoint(url))
 	}
 
 	primaryAcceptType := fmt.Sprintf("%s;q=%s", api.OctetStreamMediaType, "0.95")
@@ -141,7 +141,7 @@ func (c *handler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Hea
 	req.Header.Set("User-Agent", version.BuildData())
 	httpResp, err := c.client.Do(req)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "failed to perform request for endpoint %s", url)
+		return nil, nil, errors.Wrapf(err, "failed to perform request for endpoint %s", api.RedactEndpoint(url))
 	}
 	defer func() {
 		if err := httpResp.Body.Close(); err != nil {
@@ -152,7 +152,7 @@ func (c *handler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Hea
 	contentType := httpResp.Header.Get("Content-Type")
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL)
+		return nil, nil, errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL.Redacted())
 	}
 
 	if !apiutil.PrimaryAcceptMatches(accept, contentType) {
@@ -164,10 +164,12 @@ func (c *handler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Hea
 
 	// non-2XX codes are a failure
 	if !strings.HasPrefix(httpResp.Status, "2") {
-		decoder := json.NewDecoder(bytes.NewBuffer(body))
+		if !strings.Contains(contentType, api.JsonMediaType) {
+			return nil, nil, &httputil.DefaultJsonError{Code: httpResp.StatusCode, Message: string(body)}
+		}
 		errorJson := &httputil.DefaultJsonError{}
-		if err = decoder.Decode(errorJson); err != nil {
-			return nil, nil, fmt.Errorf("HTTP request for %s unsuccessful (%d: %s)", httpResp.Request.URL, httpResp.StatusCode, string(body))
+		if err = json.NewDecoder(bytes.NewBuffer(body)).Decode(errorJson); err != nil {
+			return nil, nil, errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL.Redacted())
 		}
 		return nil, nil, errorJson
 	}
@@ -191,7 +193,7 @@ func (c *handler) Post(
 	url := c.host + apiEndpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, data)
 	if err != nil {
-		return errors.Wrapf(err, "failed to create request for endpoint %s", url)
+		return errors.Wrapf(err, "failed to create request for endpoint %s", api.RedactEndpoint(url))
 	}
 
 	for headerKey, headerValue := range headers {
@@ -201,7 +203,7 @@ func (c *handler) Post(
 	req.Header.Set("User-Agent", version.BuildData())
 	httpResp, err := c.client.Do(req)
 	if err != nil {
-		return errors.Wrapf(err, "failed to perform request for endpoint %s", url)
+		return errors.Wrapf(err, "failed to perform request for endpoint %s", api.RedactEndpoint(url))
 	}
 	defer func() {
 		if err = httpResp.Body.Close(); err != nil {
@@ -225,7 +227,7 @@ func (c *handler) PostSSZ(
 	url := c.host + apiEndpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, data)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "failed to create request for endpoint %s", url)
+		return nil, nil, errors.Wrapf(err, "failed to create request for endpoint %s", api.RedactEndpoint(url))
 	}
 
 	// Accept header: prefer octet-stream (SSZ), fall back to JSON
@@ -246,7 +248,7 @@ func (c *handler) PostSSZ(
 	req.Header.Set("User-Agent", version.BuildData())
 	httpResp, err := c.client.Do(req)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "failed to perform request for endpoint %s", url)
+		return nil, nil, errors.Wrapf(err, "failed to perform request for endpoint %s", api.RedactEndpoint(url))
 	}
 	defer func() {
 		if err := httpResp.Body.Close(); err != nil {
@@ -258,7 +260,7 @@ func (c *handler) PostSSZ(
 	contentType := httpResp.Header.Get("Content-Type")
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL)
+		return nil, nil, errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL.Redacted())
 	}
 
 	if !apiutil.PrimaryAcceptMatches(accept, contentType) {
@@ -270,10 +272,12 @@ func (c *handler) PostSSZ(
 
 	// non-2XX codes are a failure
 	if !strings.HasPrefix(httpResp.Status, "2") {
-		decoder := json.NewDecoder(bytes.NewBuffer(body))
+		if !strings.Contains(contentType, api.JsonMediaType) {
+			return nil, nil, &httputil.DefaultJsonError{Code: httpResp.StatusCode, Message: string(body)}
+		}
 		errorJson := &httputil.DefaultJsonError{}
-		if err = decoder.Decode(errorJson); err != nil {
-			return nil, nil, fmt.Errorf("HTTP request for %s unsuccessful (%d: %s)", httpResp.Request.URL, httpResp.StatusCode, string(body))
+		if err = json.NewDecoder(bytes.NewBuffer(body)).Decode(errorJson); err != nil {
+			return nil, nil, errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL.Redacted())
 		}
 		return nil, nil, errorJson
 	}
@@ -284,7 +288,7 @@ func (c *handler) PostSSZ(
 func decodeResp(httpResp *http.Response, resp any) error {
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
-		return errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL)
+		return errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL.Redacted())
 	}
 
 	if !strings.Contains(httpResp.Header.Get("Content-Type"), api.JsonMediaType) {
@@ -300,14 +304,14 @@ func decodeResp(httpResp *http.Response, resp any) error {
 	if !strings.HasPrefix(httpResp.Status, "2") {
 		errorJson := &httputil.DefaultJsonError{}
 		if err = decoder.Decode(errorJson); err != nil {
-			return errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL)
+			return errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL.Redacted())
 		}
 		return errorJson
 	}
 	// resp is nil for requests that do not return anything.
 	if resp != nil {
 		if err = decoder.Decode(resp); err != nil {
-			return errors.Wrapf(err, "failed to decode response body into json for %s", httpResp.Request.URL)
+			return errors.Wrapf(err, "failed to decode response body into json for %s", httpResp.Request.URL.Redacted())
 		}
 	}
 

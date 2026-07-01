@@ -183,6 +183,34 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		}
 		require.DeepSSZEqual(t, wanted, eventHead)
 	})
+
+	t.Run("zero head slot", func(t *testing.T) {
+		srv := testServiceWithDB(t)
+		srv.SetGenesisTime(time.Now())
+		notifier := srv.cfg.StateNotifier.(*mock.MockStateNotifier)
+		srv.originBlockRoot = [32]byte{1}
+		st, blk, err := prepareForkchoiceState(t.Context(), 0, [32]byte{}, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		require.NoError(t, err)
+		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
+		newHeadStateRoot := [32]byte{2}
+		newHeadRoot := [32]byte{3}
+		require.NoError(t, srv.notifyNewHeadEvent(t.Context(), 0, newHeadStateRoot[:], newHeadRoot[:]))
+		events := notifier.ReceivedEvents()
+		require.Equal(t, 1, len(events))
+
+		eventHead, ok := events[0].Data.(*ethpbv1.EventHead)
+		require.Equal(t, true, ok)
+		wanted := &ethpbv1.EventHead{
+			Slot:                      0,
+			Block:                     newHeadRoot[:],
+			State:                     newHeadStateRoot[:],
+			EpochTransition:           true,
+			PreviousDutyDependentRoot: srv.originBlockRoot[:],
+			CurrentDutyDependentRoot:  srv.originBlockRoot[:],
+		}
+		require.DeepSSZEqual(t, wanted, eventHead)
+	})
+
 	t.Run("non_genesis_values", func(t *testing.T) {
 		bState, _ := util.DeterministicGenesisState(t, 10)
 		genesisRoot := [32]byte{1}
@@ -325,6 +353,22 @@ func Test_notifyNewHeadV2Event(t *testing.T) {
 		require.NotNil(t, headV2)
 		return headV2
 	}
+
+	t.Run("zero head slot", func(t *testing.T) {
+		srv, events, newHeadStateRoot, newHeadRoot := setupHeadV2Service(t, 0)
+		require.NoError(t, srv.notifyNewHeadV2Event(t.Context(), 0, newHeadStateRoot, newHeadRoot, version.Gloas))
+		wantedV2 := &statefeed.HeadV2Data{
+			Slot:                      0,
+			Block:                     newHeadRoot,
+			State:                     newHeadStateRoot,
+			EpochTransition:           true,
+			CurrentEpochDependentRoot: srv.originBlockRoot,
+			NextEpochDependentRoot:    srv.originBlockRoot,
+			PayloadStatus:             statefeed.PayloadStatusFull,
+			Version:                   version.Gloas,
+		}
+		require.DeepEqual(t, wantedV2, requireSingleHeadV2(t, events))
+	})
 
 	t.Run("dependent roots fall back to genesis block root on underflow", func(t *testing.T) {
 		srv, events, newHeadStateRoot, newHeadRoot := setupHeadV2Service(t, 1)

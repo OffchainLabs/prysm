@@ -54,7 +54,7 @@ func testExecutionPayloadEnvelope(slot primitives.Slot, builderIndex primitives.
 			ExtraData:     make([]byte, 0),
 			SlotNumber:    slot,
 		},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 		BuilderIndex:          builderIndex,
 		BeaconBlockRoot:       make([]byte, 32),
 		ParentBeaconBlockRoot: make([]byte, 32),
@@ -90,6 +90,41 @@ func TestProposeSelfBuildEnvelope(t *testing.T) {
 	copy(pubKey[:], validatorKey.PublicKey().Marshal())
 
 	err := validator.proposeSelfBuildEnvelope(t.Context(), slot, pubKey, signedBlock)
+	require.NoError(t, err)
+}
+
+// Stateful self-build: the client returns the blinded envelope (full is nil), so the VC signs the
+// blinded root and publishes it via PublishBlindedExecutionPayloadEnvelope.
+func TestProposeSelfBuildEnvelope_Blinded(t *testing.T) {
+	validator, m, validatorKey, finish := setup(t, false)
+	defer finish()
+
+	slot := primitives.Slot(100)
+	builderIndex := params.BeaconConfig().BuilderIndexSelfBuild
+
+	blinded, err := testExecutionPayloadEnvelope(slot, builderIndex).WireBlinded()
+	require.NoError(t, err)
+
+	m.validatorClient.EXPECT().
+		GetExecutionPayloadEnvelope(gomock.Any(), slot, gomock.Any()).
+		Return(nil, blinded, nil)
+
+	builderDomain := make([]byte, 32)
+	copy(builderDomain, params.BeaconConfig().DomainBeaconBuilder[:])
+	m.validatorClient.EXPECT().
+		DomainData(gomock.Any(), gomock.Any()).
+		Return(&ethpb.DomainResponse{SignatureDomain: builderDomain}, nil)
+
+	m.validatorClient.EXPECT().
+		PublishBlindedExecutionPayloadEnvelope(gomock.Any(), gomock.AssignableToTypeOf(&ethpb.SignedWireBlindedExecutionPayloadEnvelope{})).
+		Return(&emptypb.Empty{}, nil)
+
+	signedBlock := signedGloasBlock(t, slot, builderIndex)
+
+	var pubKey [fieldparams.BLSPubkeyLength]byte
+	copy(pubKey[:], validatorKey.PublicKey().Marshal())
+
+	err = validator.proposeSelfBuildEnvelope(t.Context(), slot, pubKey, signedBlock)
 	require.NoError(t, err)
 }
 
