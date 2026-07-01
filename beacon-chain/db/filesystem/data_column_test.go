@@ -112,7 +112,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 		alteredVerifiedRoDataColumnSidecars = append(alteredVerifiedRoDataColumnSidecars, verifiedRoDataColumnSidecars[0])
 
 		altered, err := blocks.NewRODataColumnWithRoot(
-			verifiedRoDataColumnSidecars[1].RODataColumn.DataColumnSidecar,
+			verifiedRoDataColumnSidecars[1].RODataColumn.DataColumnSidecar(),
 			verifiedRoDataColumnSidecars[0].BlockRoot(),
 		)
 		require.NoError(t, err)
@@ -263,7 +263,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 			)
 
 			// Build expected bytes.
-			firstSszEncodedDataColumnSidecar, err := expectedDataColumnSidecars[0].MarshalSSZ()
+			firstSszEncodedDataColumnSidecar, err := expectedDataColumnSidecars[0].RODataColumn.DataColumnSidecar().MarshalSSZ()
 			require.NoError(t, err)
 
 			dataColumnSidecarsCount := len(expectedDataColumnSidecars)
@@ -272,7 +272,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 			sszEncodedDataColumnSidecars := make([]byte, 0, dataColumnSidecarsCount*sszEncodedDataColumnSidecarSize)
 			sszEncodedDataColumnSidecars = append(sszEncodedDataColumnSidecars, firstSszEncodedDataColumnSidecar...)
 			for _, dataColumnSidecar := range expectedDataColumnSidecars[1:] {
-				sszEncodedDataColumnSidecar, err := dataColumnSidecar.MarshalSSZ()
+				sszEncodedDataColumnSidecar, err := dataColumnSidecar.RODataColumn.DataColumnSidecar().MarshalSSZ()
 				require.NoError(t, err)
 				sszEncodedDataColumnSidecars = append(sszEncodedDataColumnSidecars, sszEncodedDataColumnSidecar...)
 			}
@@ -362,11 +362,17 @@ func TestGetDataColumnSidecars(t *testing.T) {
 
 		verifiedRODataColumnSidecars, err := dataColumnStorage.Get(root, nil)
 		require.NoError(t, err)
-		require.DeepSSZEqual(t, expectedVerifiedRoDataColumnSidecars, verifiedRODataColumnSidecars)
+		require.Equal(t, len(expectedVerifiedRoDataColumnSidecars), len(verifiedRODataColumnSidecars))
+		for i := range expectedVerifiedRoDataColumnSidecars {
+			require.DeepSSZEqual(t, expectedVerifiedRoDataColumnSidecars[i].DataColumnSidecar(), verifiedRODataColumnSidecars[i].DataColumnSidecar())
+		}
 
 		verifiedRODataColumnSidecars, err = dataColumnStorage.Get(root, []uint64{12, 13, 14})
 		require.NoError(t, err)
-		require.DeepSSZEqual(t, expectedVerifiedRoDataColumnSidecars, verifiedRODataColumnSidecars)
+		require.Equal(t, len(expectedVerifiedRoDataColumnSidecars), len(verifiedRODataColumnSidecars))
+		for i := range expectedVerifiedRoDataColumnSidecars {
+			require.DeepSSZEqual(t, expectedVerifiedRoDataColumnSidecars[i].DataColumnSidecar(), verifiedRODataColumnSidecars[i].DataColumnSidecar())
+		}
 	})
 }
 

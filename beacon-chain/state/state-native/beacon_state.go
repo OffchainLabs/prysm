@@ -9,6 +9,7 @@ import (
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -73,12 +74,14 @@ type BeaconState struct {
 	// Gloas fields
 	latestExecutionPayloadBid    *ethpb.ExecutionPayloadBid
 	builders                     []*ethpb.Builder
+	builderIdxMap                map[[fieldparams.BLSPubkeyLength]byte]primitives.BuilderIndex
 	nextWithdrawalBuilderIndex   primitives.BuilderIndex
 	executionPayloadAvailability []byte
 	builderPendingPayments       []*ethpb.BuilderPendingPayment
 	builderPendingWithdrawals    []*ethpb.BuilderPendingWithdrawal
 	latestBlockHash              []byte
 	payloadExpectedWithdrawals   []*enginev1.Withdrawal
+	ptcWindow                    []*ethpb.PTCs
 
 	id                    uint64
 	lock                  sync.RWMutex
@@ -143,6 +146,7 @@ type beaconStateMarshalable struct {
 	BuilderPendingWithdrawals           []*ethpb.BuilderPendingWithdrawal       `json:"builder_pending_withdrawals" yaml:"builder_pending_withdrawals"`
 	LatestBlockHash                     []byte                                  `json:"latest_block_hash" yaml:"latest_block_hash"`
 	PayloadExpectedWithdrawals          []*enginev1.Withdrawal                  `json:"payload_expected_withdrawals" yaml:"payload_expected_withdrawals"`
+	PtcWindow                           []*ethpb.PTCs                           `json:"ptc_window" yaml:"ptc_window"`
 }
 
 func (b *BeaconState) MarshalJSON() ([]byte, error) {
@@ -166,7 +170,7 @@ func (b *BeaconState) MarshalJSON() ([]byte, error) {
 		Eth1Data:                            b.eth1Data,
 		Eth1DataVotes:                       b.eth1DataVotes,
 		Eth1DepositIndex:                    b.eth1DepositIndex,
-		Validators:                          vals,
+		Validators:                          stateutil.CompactValidatorsToProto(vals),
 		Balances:                            balances,
 		RandaoMixes:                         mixes,
 		Slashings:                           b.slashings,
@@ -205,6 +209,7 @@ func (b *BeaconState) MarshalJSON() ([]byte, error) {
 		BuilderPendingWithdrawals:           b.builderPendingWithdrawals,
 		LatestBlockHash:                     b.latestBlockHash,
 		PayloadExpectedWithdrawals:          b.payloadExpectedWithdrawals,
+		PtcWindow:                           b.ptcWindow,
 	}
 	return json.Marshal(marshalable)
 }

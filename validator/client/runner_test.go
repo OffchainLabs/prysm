@@ -12,7 +12,6 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/async/event"
-	"github.com/OffchainLabs/prysm/v7/cache/lru"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
@@ -448,7 +447,7 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 	}).MinTimes(1)
 	// DomainData calls are really fast, no delay needed.
 	vcm.EXPECT().DomainData(liveCtx, gomock.Any()).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).AnyTimes()
-	vcm.EXPECT().SubscribeCommitteeSubnets(liveCtx, gomock.Any(), gomock.Any()).AnyTimes().Do(func(_, _, _ any) { delay(t) })
+	vcm.EXPECT().SubscribeCommitteeSubnets(liveCtx, gomock.Any()).AnyTimes().Do(func(_, _ any) { delay(t) })
 	vcm.EXPECT().AttestationData(liveCtx, gomock.Any()).DoAndReturn(func(ctx context.Context, req *ethpb.AttestationDataRequest) (*ethpb.AttestationData, error) {
 		defer assertValidContext(t, timedCtx, ctx)
 		delay(t)
@@ -552,12 +551,13 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 				},
 			},
 		},
-		signedValidatorRegistrations:   make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
-		slotFeed:                       &event.Feed{},
-		aggregatedSlotCommitteeIDCache: lru.New(100),
-		submittedAtts:                  make(map[submittedAttKey]*submittedAtt),
-		submittedAggregates:            make(map[submittedAttKey]*submittedAtt),
+		signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
+		duties:                       &dutyStore{},
+		slotFeed:                     &event.Feed{},
+		submittedAtts:                make(map[submittedAttKey]*submittedAtt),
+		submittedAggregates:          make(map[submittedAttKey]*submittedAtt),
 	}
+	v.aggSelector = testLocalSelector(t, v)
 
 	runTest(t, timedCtx, v)
 }

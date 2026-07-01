@@ -30,8 +30,7 @@ message Attestation {
   // the same vote and have been aggregated into this attestation.
   bytes aggregation_bits = 1 [
     (ethereum.eth.ext.ssz_max) = "2048",
-    (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/go-bitfield.Bitlist"
+    (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
   ];
 
   AttestationData data = 2;

@@ -869,52 +869,6 @@ func TestBeaconCommitteesFromCache(t *testing.T) {
 	}
 }
 
-func TestPrecomputeCommittees_HappyPath(t *testing.T) {
-	cfg := params.BeaconConfig()
-	start := primitives.Slot(100)
-	ctx := t.Context()
-	st, _ := util.DeterministicGenesisState(t, 256)
-
-	got, err := helpers.PrecomputeCommittees(ctx, st, start)
-
-	require.NoError(t, err)
-	require.Equal(t, len(got), int(cfg.SlotsPerEpoch), "outer slice length mismatch")
-
-	for i := range got {
-		expSlot := start + primitives.Slot(i)
-		comms, err := helpers.BeaconCommittees(ctx, st, expSlot)
-		require.NoError(t, err)
-		require.DeepEqual(t, comms, got[i])
-	}
-}
-
-func TestAssignmentForValidator(t *testing.T) {
-	start := primitives.Slot(200)
-	bySlot := [][][]primitives.ValidatorIndex{
-		{{1, 2, 3}},
-		{{7, 8, 9}},
-	}
-	vIdx := primitives.ValidatorIndex(8)
-
-	got := helpers.AssignmentForValidator(bySlot, start, vIdx)
-
-	require.NotNil(t, got)
-	require.Equal(t, start+1, got.AttesterSlot)
-	require.Equal(t, primitives.CommitteeIndex(0), got.CommitteeIndex)
-	require.Equal(t, uint64(3), got.CommitteeLength)
-	require.Equal(t, uint64(1), got.ValidatorCommitteeIndex)
-
-	t.Run("Not Found", func(t *testing.T) {
-		start = primitives.Slot(300)
-		bySlot = [][][]primitives.ValidatorIndex{
-			{{4, 5, 6}},
-		}
-		got = helpers.AssignmentForValidator(bySlot, start, primitives.ValidatorIndex(99))
-		// should be empty to be safe
-		require.DeepEqual(t, &helpers.LiteAssignment{}, got)
-	})
-}
-
 // Regression for #15450
 func TestInitializeProposerLookahead_RegressionTest(t *testing.T) {
 	ctx := t.Context()
@@ -945,13 +899,8 @@ func TestInitializeProposerLookahead_RegressionTest(t *testing.T) {
 		endIdx := startIdx + slotsPerEpoch
 		actualProposers := proposerLookahead[startIdx:endIdx]
 
-		expectedUint64 := make([]uint64, len(expectedProposers))
-		for i, proposer := range expectedProposers {
-			expectedUint64[i] = uint64(proposer)
-		}
-
 		// This assertion would fail with the original bug:
-		for i, expected := range expectedUint64 {
+		for i, expected := range expectedProposers {
 			require.Equal(t, expected, actualProposers[i],
 				"Proposer index mismatch at slot %d in epoch %d", i, targetEpoch)
 		}

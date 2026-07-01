@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	errors "github.com/pkg/errors"
 )
@@ -83,9 +84,22 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(ctx context.Context, _ pri
 
 		key := keyFromBlock(block)
 		entry := s.cache.entry(key)
+		appendedFrom := len(toVerify)
 		toVerify, err = entry.append(toVerify, IndicesNotStored(s.store.Summary(block.Root()), indices))
 		if err != nil {
 			return errors.Wrap(err, "entry filter")
+		}
+
+		// Gloas data column sidecars carry no KZG commitments; supply them from the block's bid
+		// so the verifier's verify_data_column_sidecar check can run.
+		if block.Version() >= version.Gloas {
+			commitments, err := block.Block().Body().BlobKzgCommitments()
+			if err != nil {
+				return errors.Wrap(err, "blob kzg commitments")
+			}
+			for i := appendedFrom; i < len(toVerify); i++ {
+				toVerify[i].SetBidCommitments(commitments)
+			}
 		}
 	}
 
@@ -204,7 +218,7 @@ func (s *LazilyPersistentStoreColumn) columnsNotStored(sidecars []blocks.RODataC
 			sum = s.store.Summary(sc.BlockRoot())
 			lastRoot = sc.BlockRoot()
 		}
-		if sum.HasIndex(sc.Index) {
+		if sum.HasIndex(sc.Index()) {
 			stored[i] = struct{}{}
 		}
 	}

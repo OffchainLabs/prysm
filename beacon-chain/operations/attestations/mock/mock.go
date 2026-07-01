@@ -68,6 +68,16 @@ func (*PoolMock) AggregatedAttestationCount() int {
 	panic("implement me")
 }
 
+// DeleteSeenAggregatedAttestationsBefore --
+func (*PoolMock) DeleteSeenAggregatedAttestationsBefore(_ primitives.Slot) {
+	panic("implement me")
+}
+
+// SeenAggregatedAttestationCount --
+func (*PoolMock) SeenAggregatedAttestationCount() int {
+	panic("implement me")
+}
+
 // SaveUnaggregatedAttestation --
 func (*PoolMock) SaveUnaggregatedAttestation(_ ethpb.Att) error {
 	panic("implement me")

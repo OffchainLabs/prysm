@@ -157,7 +157,8 @@ func TestService_ReceiveBlock(t *testing.T) {
 				WithFinalizedStateAtStartUp(genesis),
 				WithExitPool(voluntaryexits.NewPool()),
 				WithStateNotifier(&blockchainTesting.MockStateNotifier{RecordEvents: true}),
-				WithTrackedValidatorsCache(cache.NewTrackedValidatorsCache()),
+				WithProposerPreferencesCache(cache.NewProposerPreferencesCache()),
+				WithSubscribedValidatorsCache(cache.NewSubscribedValidatorsCache()),
 			)
 
 			beaconDB := tr.db
@@ -281,7 +282,7 @@ func TestService_ReceiveBlockBatch(t *testing.T) {
 			require.NoError(t, err)
 			rwsb, err := blocks.NewROBlock(wsb)
 			require.NoError(t, err)
-			err = s.ReceiveBlockBatch(ctx, []blocks.ROBlock{rwsb}, &das.MockAvailabilityStore{})
+			err = s.ReceiveBlockBatch(ctx, []blocks.ROBlock{rwsb}, nil, &das.MockAvailabilityStore{})
 			if tt.wantedErr != "" {
 				assert.ErrorContains(t, tt.wantedErr, err)
 			} else {

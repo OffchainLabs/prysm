@@ -45,5 +45,10 @@ tmp
 # spectest coverage reports
 report.txt
 
-# execution client data
-execution/
+# Agent instructions (devs opt in locally; canonical copy lives in .agents/)
+AGENTS.md
+!.agents/AGENTS.md
+CLAUDE.md
+
+# Local CLAUDE instruction
+CLAUDE.local.md

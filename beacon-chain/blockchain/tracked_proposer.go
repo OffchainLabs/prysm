@@ -6,22 +6,49 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/pkg/errors"
 )
 
-// trackedProposer returns whether the beacon node was informed, via the
-// validators/prepare_proposer endpoint, of the proposer at the given slot.
-// It only returns true if the tracked proposer is present and active.
-func (s *Service) trackedProposer(st state.ReadOnlyBeaconState, slot primitives.Slot) (cache.TrackedValidator, bool) {
-	if features.Get().PrepareAllPayloads {
-		return cache.TrackedValidator{Active: true}, true
-	}
+// trackedProposer returns the preference for the slot's proposer if the BN's
+// VC is attached to that validator (per beacon_committee_subscriptions). A nil
+// return with no error means the slot's proposer is not ours (caller should
+// skip the payload build). On preference-cache miss the returned pref has an
+// empty FeeRecipient and callers fall back to DefaultFeeRecipient.
+func (s *Service) trackedProposer(st state.ReadOnlyBeaconState, slot primitives.Slot) (*cache.ProposerPreference, error) {
 	id, err := helpers.BeaconProposerIndexAtSlot(s.ctx, st, slot)
+
+	// PrepareAllPayloads builds a payload for every slot regardless of whether the
+	// proposer is ours; an unresolvable index falls back to default preferences.
+	if features.Get().PrepareAllPayloads {
+		if err != nil {
+			return &cache.ProposerPreference{}, nil
+		}
+		return s.preferenceForProposer(st, slot, id)
+	}
+
+	// Otherwise only build for proposers the BN's VC is attached to.
 	if err != nil {
-		return cache.TrackedValidator{}, false
+		return nil, errors.Wrap(err, "beacon proposer index")
 	}
-	val, ok := s.cfg.TrackedValidatorsCache.Validator(id)
-	if !ok {
-		return cache.TrackedValidator{}, false
+	if !s.cfg.SubscribedValidatorsCache.Has(id) {
+		return nil, nil
 	}
-	return val, val.Active
+	return s.preferenceForProposer(st, slot, id)
+}
+
+func (s *Service) preferenceForProposer(st state.ReadOnlyBeaconState, slot primitives.Slot, id primitives.ValidatorIndex) (*cache.ProposerPreference, error) {
+	dependentRoot, err := helpers.ProposerDependentRootOrGenesis(s.ctx, s.cfg.BeaconDB, st, slot)
+	if err != nil {
+		return nil, errors.Wrap(err, "proposer dependent root")
+	}
+	if pref, ok := s.cfg.ProposerPreferencesCache.BestFor(dependentRoot, slot, id); ok {
+		return &pref, nil
+	}
+	// Only noteworthy for our own attached proposers; under PrepareAllPayloads
+	// a miss is the norm for the rest of the network's slots.
+	if s.cfg.SubscribedValidatorsCache.Has(id) {
+		log.WithField("proposerIndex", id).WithField("slot", slot).
+			Debug("No signed proposer preference for attached proposer; using suggested-fee-recipient and parent gas limit")
+	}
+	return &cache.ProposerPreference{ValidatorIndex: id}, nil
 }

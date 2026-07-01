@@ -9,24 +9,28 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-const maxStateDiffExponents = 30
+const (
+	MinStateDiffExponent = 2
+	MaxStateDiffExponent = 30
+)
 
 // GlobalFlags specifies all the global flags for the
 // beacon node.
 type GlobalFlags struct {
-	SubscribeToAllSubnets           bool
 	Supernode                       bool
-	SemiSupernode                   bool
 	DisableGetBlobsV2               bool
-	MinimumSyncPeers                int
-	MinimumPeersPerSubnet           int
-	MaxConcurrentDials              int
-	BlockBatchLimit                 int
-	BlockBatchLimitBurstFactor      int
-	BlobBatchLimit                  int
+	SemiSupernode                   bool
+	SubscribeToAllSubnets           bool
+	PostponeShutdownForProposals    bool
 	BlobBatchLimitBurstFactor       int
 	DataColumnBatchLimit            int
+	BlockBatchLimit                 int
+	MaxConcurrentDials              int
+	MinimumPeersPerSubnet           int
+	MinimumSyncPeers                int
 	DataColumnBatchLimitBurstFactor int
+	BlockBatchLimitBurstFactor      int
+	BlobBatchLimit                  int
 	StateDiffExponents              []int
 }
 
@@ -76,6 +80,11 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 	if ctx.Bool(DisableGetBlobsV2.Name) {
 		log.Warning("Disabling `engine_getBlobsV2` API")
 		cfg.DisableGetBlobsV2 = true
+	}
+
+	if ctx.Bool(PostponeShutdownForProposals.Name) {
+		log.Info("Graceful shutdown will be postponed while a connected validator client has a block proposal in the next 2 epochs")
+		cfg.PostponeShutdownForProposals = true
 	}
 
 	// State-diff-exponents
@@ -132,10 +141,10 @@ func validateStateDiffExponents(exponents []int) error {
 	if exponents[length-1] < 5 {
 		return errors.New("the last state diff exponent must be at least 5")
 	}
-	prev := maxStateDiffExponents + 1
+	prev := MaxStateDiffExponent + 1
 	for _, exp := range exponents {
 		if exp >= prev {
-			return errors.New("state diff exponents must be in strictly decreasing order, and each exponent must be <= 30")
+			return fmt.Errorf("state diff exponents must be in strictly decreasing order, and each exponent must be <= %d", MaxStateDiffExponent)
 		}
 		prev = exp
 	}

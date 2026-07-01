@@ -2,6 +2,7 @@ package verification
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -294,11 +295,14 @@ func TestValidProposerSignature(t *testing.T) {
 	firstColumn := columns[0]
 
 	// The signature data does not depend on the data column itself, so we can use the first one.
-	expectedSignatureData := columnToSignatureData(firstColumn)
+	expectedSignatureData, err := columnToSignatureData(firstColumn)
+	require.NoError(t, err)
 
 	// Create a proper Fulu state for verification.
 	// We need enough validators to cover the proposer index.
-	numValidators := max(uint64(firstColumn.ProposerIndex()+1), 64)
+	firstColumnPI, err := firstColumn.ProposerIndex()
+	require.NoError(t, err)
+	numValidators := max(uint64(firstColumnPI+1), 64)
 	fuluState, _ := util.DeterministicGenesisStateFulu(t, numValidators)
 
 	// Head state provider that returns the fuluState via HeadStateReadOnly path.
@@ -350,7 +354,7 @@ func TestValidProposerSignature(t *testing.T) {
 			svcbError:         nil,
 			vscbShouldError:   false,
 			vscbError:         nil,
-			stateByRooter:     sbrForValOverrideWithT(t, firstColumn.ProposerIndex(), validator),
+			stateByRooter:     sbrForValOverrideWithT(t, firstColumnPI, validator),
 			headStateProvider: headStateWithState,
 			isError:           false,
 		},
@@ -370,7 +374,7 @@ func TestValidProposerSignature(t *testing.T) {
 			svcbError:         nil,
 			vscbShouldError:   false,
 			vscbError:         errors.New("signature, not so good!"),
-			stateByRooter:     sbrForValOverrideWithT(t, firstColumn.ProposerIndex(), validator),
+			stateByRooter:     sbrForValOverrideWithT(t, firstColumnPI, validator),
 			headStateProvider: headStateWithState,
 			isError:           true,
 		},
@@ -441,9 +445,12 @@ func TestDataColumnsSidecarParentSeen(t *testing.T) {
 	columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
 	firstColumn := columns[0]
 
+	firstColumnParent, err := firstColumn.ParentRoot()
+	require.NoError(t, err)
+
 	fcHas := &mockForkchoicer{
 		HasNodeCB: func(parent [fieldparams.RootLength]byte) bool {
-			if parent != firstColumn.ParentRoot() {
+			if parent != firstColumnParent {
 				t.Error("forkchoice.HasNode called with unexpected parent root")
 			}
 
@@ -453,7 +460,7 @@ func TestDataColumnsSidecarParentSeen(t *testing.T) {
 
 	fcLacks := &mockForkchoicer{
 		HasNodeCB: func(parent [fieldparams.RootLength]byte) bool {
-			if parent != firstColumn.ParentRoot() {
+			if parent != firstColumnParent {
 				t.Error("forkchoice.HasNode called with unexpected parent root")
 			}
 
@@ -482,13 +489,13 @@ func TestDataColumnsSidecarParentSeen(t *testing.T) {
 		{
 			name:        "HasNode false, badParent true",
 			forkChoicer: fcLacks,
-			parentSeen:  badParentCb(t, firstColumn.ParentRoot(), true),
+			parentSeen:  badParentCb(t, firstColumnParent, true),
 			isError:     false,
 		},
 		{
 			name:        "HasNode false, badParent false",
 			forkChoicer: fcLacks,
-			parentSeen:  badParentCb(t, firstColumn.ParentRoot(), false),
+			parentSeen:  badParentCb(t, firstColumnParent, false),
 			isError:     true,
 		},
 	}
@@ -545,9 +552,12 @@ func TestDataColumnsSidecarParentValid(t *testing.T) {
 			columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
 			firstColumn := columns[0]
 
+			firstColumnParent, err := firstColumn.ParentRoot()
+			require.NoError(t, err)
+
 			initializer := Initializer{shared: &sharedResources{}}
 			verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
-			err := verifier.SidecarParentValid(badParentCb(t, firstColumn.ParentRoot(), tc.badParentCbReturn))
+			err = verifier.SidecarParentValid(badParentCb(t, firstColumnParent, tc.badParentCbReturn))
 			require.Equal(t, true, verifier.results.executed(RequireSidecarParentValid))
 
 			if tc.isError {
@@ -559,7 +569,7 @@ func TestDataColumnsSidecarParentValid(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, verifier.results.result(RequireSidecarParentValid))
 
-			err = verifier.SidecarParentValid(badParentCb(t, firstColumn.ParentRoot(), tc.badParentCbReturn))
+			err = verifier.SidecarParentValid(badParentCb(t, firstColumnParent, tc.badParentCbReturn))
 			require.NoError(t, err)
 		})
 	}
@@ -568,6 +578,9 @@ func TestDataColumnsSidecarParentValid(t *testing.T) {
 func TestColumnSidecarParentSlotLower(t *testing.T) {
 	columns := GenerateTestDataColumns(t, [32]byte{}, 1, 1)
 	firstColumn := columns[0]
+
+	firstColumnParent, err := firstColumn.ParentRoot()
+	require.NoError(t, err)
 
 	cases := []struct {
 		name                 string
@@ -603,7 +616,7 @@ func TestColumnSidecarParentSlotLower(t *testing.T) {
 			initializer := Initializer{
 				shared: &sharedResources{fc: &mockForkchoicer{
 					SlotCB: func(r [32]byte) (primitives.Slot, error) {
-						if firstColumn.ParentRoot() != r {
+						if firstColumnParent != r {
 							t.Error("forkchoice.Slot called with unexpected parent root")
 						}
 
@@ -666,11 +679,14 @@ func TestDataColumnsSidecarDescendsFromFinalized(t *testing.T) {
 			columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
 			firstColumn := columns[0]
 
+			firstColumnParent, err := firstColumn.ParentRoot()
+			require.NoError(t, err)
+
 			initializer := Initializer{
 				shared: &sharedResources{
 					fc: &mockForkchoicer{
 						HasNodeCB: func(r [fieldparams.RootLength]byte) bool {
-							if firstColumn.ParentRoot() != r {
+							if firstColumnParent != r {
 								t.Error("forkchoice.Slot called with unexpected parent root")
 							}
 
@@ -681,7 +697,7 @@ func TestDataColumnsSidecarDescendsFromFinalized(t *testing.T) {
 			}
 
 			verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
-			err := verifier.SidecarDescendsFromFinalized()
+			err = verifier.SidecarDescendsFromFinalized()
 			require.Equal(t, true, verifier.results.executed(RequireSidecarDescendsFromFinalized))
 
 			if tc.isError {
@@ -728,8 +744,10 @@ func TestDataColumnsSidecarInclusionProven(t *testing.T) {
 			columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
 			if tc.alterate {
 				firstColumn := columns[0]
-				byte0 := firstColumn.SignedBlockHeader.Header.BodyRoot[0]
-				firstColumn.SignedBlockHeader.Header.BodyRoot[0] = byte0 ^ 255
+				sbh, err := firstColumn.SignedBlockHeader()
+				require.NoError(t, err)
+				byte0 := sbh.Header.BodyRoot[0]
+				sbh.Header.BodyRoot[0] = byte0 ^ 255
 			}
 
 			initializer := Initializer{
@@ -783,9 +801,14 @@ func TestDataColumnsSidecarKzgProofVerified(t *testing.T) {
 			columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
 			firstColumn := columns[0]
 
+			firstColumnCommitments, err := firstColumn.KzgCommitments()
+			require.NoError(t, err)
+
 			verifyDataColumnsCommitment := func(roDataColumns []blocks.RODataColumn) error {
 				for _, roDataColumn := range roDataColumns {
-					require.Equal(t, true, reflect.DeepEqual(firstColumn.KzgCommitments, roDataColumn.KzgCommitments))
+					roCommitments, err := roDataColumn.KzgCommitments()
+					require.NoError(t, err)
+					require.Equal(t, true, reflect.DeepEqual(firstColumnCommitments, roCommitments))
 				}
 
 				return tc.verifyDataColumnsCommitmentError
@@ -797,7 +820,7 @@ func TestDataColumnsSidecarKzgProofVerified(t *testing.T) {
 				verifyDataColumnsCommitment: verifyDataColumnsCommitment,
 			}
 
-			err := verifier.SidecarKzgProofVerified()
+			err = verifier.SidecarKzgProofVerified()
 			require.Equal(t, true, verifier.results.executed(RequireSidecarKzgProofVerified))
 
 			if tc.isError {
@@ -811,6 +834,127 @@ func TestDataColumnsSidecarKzgProofVerified(t *testing.T) {
 
 			err = verifier.SidecarKzgProofVerified()
 			require.NoError(t, err)
+		})
+	}
+}
+
+func TestPartialColumnVerifierComplete(t *testing.T) {
+	validFieldsErr := errors.New("invalid fields")
+	testCases := []struct {
+		wantComplete   bool
+		wantErr        error
+		validFieldsErr error
+		name           string
+		verifiedCols   []blocks.RODataColumn
+		included       []uint64
+	}{
+		{
+			name:         "incomplete column",
+			included:     []uint64{0},
+			wantComplete: false,
+		},
+		{
+			name:     "complete happy path",
+			included: []uint64{0, 1},
+			verifiedCols: []blocks.RODataColumn{
+				{},
+			},
+			wantComplete: true,
+		},
+		{
+			name:           "valid fields failure",
+			included:       []uint64{0, 1},
+			validFieldsErr: validFieldsErr,
+			wantComplete:   false,
+			wantErr:        validFieldsErr,
+		},
+		{
+			name:         "missing verified cell",
+			included:     []uint64{0},
+			verifiedCols: []blocks.RODataColumn{{}},
+			wantComplete: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			verifier := &MockDataColumnsVerifier{
+				ErrValidFields: tc.validFieldsErr,
+			}
+			verifier.AppendRODataColumns(tc.verifiedCols...)
+
+			pv := NewPartialColumnVerifier(verifier, buildTestPartialColumnForVerifier(t, 2, tc.included))
+
+			_, complete, err := pv.Complete()
+			require.Equal(t, tc.wantComplete, complete)
+			if tc.wantErr != nil {
+				fmt.Println("error is", err)
+				require.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestPartialColumnVerifierCompleteUnexpectedColumnCount(t *testing.T) {
+	// A complete column whose verifier yields a column count != 1 must error.
+	verifier := &MockDataColumnsVerifier{}
+	verifier.AppendRODataColumns(blocks.RODataColumn{}, blocks.RODataColumn{}) // 2 -> not 1
+
+	pv := NewPartialColumnVerifier(verifier, buildTestPartialColumnForVerifier(t, 2, []uint64{0, 1}))
+
+	_, complete, err := pv.Complete()
+	require.Equal(t, false, complete)
+	require.ErrorContains(t, "unexpected number of verified data columns", err)
+}
+
+func TestPartialColumnVerifierExtendFromVerifiedCell(t *testing.T) {
+	testCases := []struct {
+		name            string
+		initialIncluded []uint64
+		cellIndex       uint64
+		cell            []byte
+		proof           []byte
+		wantExtended    bool
+		wantMarked      bool
+		wantCell        []byte
+		wantProof       []byte
+	}{
+		{
+			name:            "happy path",
+			initialIncluded: nil,
+			cellIndex:       1,
+			cell:            []byte{9},
+			proof:           []byte{8},
+			wantExtended:    true,
+			wantMarked:      true,
+			wantCell:        []byte{9},
+			wantProof:       []byte{8},
+		},
+		{
+			name:            "already included cell",
+			initialIncluded: []uint64{1},
+			cellIndex:       1,
+			cell:            []byte{9},
+			proof:           []byte{8},
+			wantExtended:    false,
+			wantMarked:      true,
+			wantCell:        []byte{2},
+			wantProof:       []byte{3},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pv := NewPartialColumnVerifier(&MockDataColumnsVerifier{}, buildTestPartialColumnForVerifier(t, 2, tc.initialIncluded))
+
+			extended := pv.ExtendFromVerifiedCell(tc.cellIndex, tc.cell, tc.proof)
+			require.Equal(t, tc.wantExtended, extended)
+			require.Equal(t, tc.wantMarked, pv.Column.Included.BitAt(tc.cellIndex))
+
+			require.Equal(t, true, reflect.DeepEqual(tc.wantCell, pv.Column.Column[tc.cellIndex]))
+			require.Equal(t, true, reflect.DeepEqual(tc.wantProof, pv.Column.KzgProofs[tc.cellIndex]))
 		})
 	}
 }
@@ -877,16 +1021,18 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 
 	t.Run("State lookup failure", func(t *testing.T) {
 		columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
+		col0Parent, err := columns[0].ParentRoot()
+		require.NoError(t, err)
 		initializer := Initializer{
 			shared: &sharedResources{
-				sr:  sbrNotFound(t, columns[0].ParentRoot()),
+				sr:  sbrNotFound(t, col0Parent),
 				hsp: &mockHeadStateProvider{},
 				fc:  &mockForkchoicer{},
 			},
 		}
 
 		verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
-		err := verifier.SidecarProposerExpected(ctx)
+		err = verifier.SidecarProposerExpected(ctx)
 		require.ErrorContains(t, "verifying state", err)
 		require.Equal(t, true, verifier.results.executed(RequireSidecarProposerExpected))
 		require.NotNil(t, verifier.results.result(RequireSidecarProposerExpected))
@@ -905,6 +1051,46 @@ func generateTestDataColumnsWithProposer(t *testing.T, parent [fieldparams.RootL
 	require.NoError(t, err)
 
 	return roDataColumnSidecars
+}
+
+func buildTestPartialColumnForVerifier(t *testing.T, nCommitments int, included []uint64) *blocks.PartialDataColumn {
+	t.Helper()
+
+	commitments := make([][]byte, nCommitments)
+	for i := range nCommitments {
+		commitments[i] = make([]byte, fieldparams.KzgCommitmentSize)
+		commitments[i][0] = byte(i + 1)
+	}
+
+	inclusionProof := [][]byte{
+		make([]byte, fieldparams.RootLength),
+		make([]byte, fieldparams.RootLength),
+		make([]byte, fieldparams.RootLength),
+		make([]byte, fieldparams.RootLength),
+	}
+
+	col, err := blocks.NewPartialDataColumn(
+		[fieldparams.RootLength]byte{},
+		&ethpb.SignedBeaconBlockHeader{
+			Header: &ethpb.BeaconBlockHeader{
+				ParentRoot: make([]byte, fieldparams.RootLength),
+				StateRoot:  make([]byte, fieldparams.RootLength),
+				BodyRoot:   make([]byte, fieldparams.RootLength),
+			},
+			Signature: make([]byte, fieldparams.BLSSignatureLength),
+		},
+		0,
+		commitments,
+		inclusionProof,
+	)
+	require.NoError(t, err)
+
+	for _, idx := range included {
+		extended := col.ExtendFromVerifiedCell(idx, []byte{byte(idx + 1)}, []byte{byte(idx + 2)})
+		require.Equal(t, true, extended)
+	}
+
+	return &col
 }
 
 func TestColumnRequirementSatisfaction(t *testing.T) {
@@ -961,7 +1147,9 @@ func TestGetVerifyingStateEdgeCases(t *testing.T) {
 	columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
 
 	// Create a proper Fulu state for verification.
-	numValidators := max(uint64(columns[0].ProposerIndex()+1), 64)
+	col0PI, err := columns[0].ProposerIndex()
+	require.NoError(t, err)
+	numValidators := max(uint64(col0PI+1), 64)
 	fuluState, _ := util.DeterministicGenesisStateFulu(t, numValidators)
 
 	t.Run("different dependent roots - uses StateByRoot path", func(t *testing.T) {

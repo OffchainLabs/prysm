@@ -41,6 +41,7 @@ ssz_gen_marshal(
         "ExecutionPayloadHeaderCapella",
         "ExecutionPayloadHeaderDeneb",
         "ExecutionPayloadDeneb",
+        "ExecutionPayloadGloas",
         "ExecutionPayloadDenebAndBlobsBundle",
         "ExecutionPayloadDenebAndBlobsBundleV2",
         "BlindedBlobsBundle",
@@ -51,6 +52,7 @@ ssz_gen_marshal(
         "DepositRequest",
         "ConsolidationRequest",
         "ExecutionRequests",
+        "ExecutionRequestsGloas",
     ],
 )
 
@@ -80,6 +82,7 @@ go_library(
         "electra.go",
         "execution_engine.go",
         "fulu.go",
+        "gloas.go",
         "json_marshal_unmarshal.go",
         ":ssz_generated_files",  # keep
     ],
@@ -116,6 +119,7 @@ ssz_proto_files(
         "electra.proto",
         "execution_engine.proto",
         "fulu.proto",
+        "gloas.proto",
     ],
     config = select({
         "//conditions:default": "mainnet",

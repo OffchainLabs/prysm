@@ -1,6 +1,7 @@
 package stategen
 
 import (
+	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -10,6 +11,16 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
+
+type envelopeCountingHistory struct {
+	*mockHistory
+	envelopeCalls int
+}
+
+func (h *envelopeCountingHistory) ExecutionPayloadEnvelope(_ context.Context, _ [32]byte) (*ethpb.SignedBlindedExecutionPayloadEnvelope, error) {
+	h.envelopeCalls++
+	return nil, nil
+}
 
 func headerFromBlock(b interfaces.ReadOnlySignedBeaconBlock) (*ethpb.BeaconBlockHeader, error) {
 	bodyRoot, err := b.Block().Body().HashTreeRoot()
@@ -85,6 +96,20 @@ func TestReplayBlocks(t *testing.T) {
 	require.Equal(t, expected.Slot(), st.Slot())
 	// NOTE: HTR is not compared, because process_block is not called for non-canonical blocks,
 	// so there are multiple differences compared to the "db" state that applies all blocks
+}
+
+func TestReplayerBlocks_SkipsExecutionPayloadEnvelopeLookup_PreGloas(t *testing.T) {
+	ctx := t.Context()
+	specs := []mockHistorySpec{
+		{slot: 1, canonicalBlock: true},
+	}
+
+	base := newMockHistory(t, specs, 2)
+	hist := &envelopeCountingHistory{mockHistory: base}
+	ch := NewCanonicalHistory(hist, hist, hist)
+	_, err := ch.ReplayerForSlot(1).ReplayBlocks(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 0, hist.envelopeCalls)
 }
 
 func TestReplayToSlot(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -85,6 +86,7 @@ func (s *Store) insert(ctx context.Context,
 	slot := block.Slot()
 	var parent *PayloadNode
 	blockHash := &[32]byte{}
+	var gasLimit uint64
 	if block.Version() >= version.Gloas {
 		if err := s.resolveParentPayloadStatus(block, &parent, blockHash); err != nil {
 			return nil, err
@@ -96,6 +98,7 @@ func (s *Store) insert(ctx context.Context,
 				return nil, err
 			}
 			copy(blockHash[:], execution.BlockHash())
+			gasLimit = execution.GasLimit()
 		}
 		parentRoot := block.ParentRoot()
 		en := s.emptyNodeByRoot[parentRoot]
@@ -107,14 +110,18 @@ func (s *Store) insert(ctx context.Context,
 	}
 
 	n := &Node{
-		slot:                     slot,
-		root:                     root,
-		parent:                   parent,
-		justifiedEpoch:           justifiedEpoch,
-		unrealizedJustifiedEpoch: justifiedEpoch,
-		finalizedEpoch:           finalizedEpoch,
-		unrealizedFinalizedEpoch: finalizedEpoch,
-		blockHash:                *blockHash,
+		slot:                        slot,
+		proposerIndex:               block.ProposerIndex(),
+		root:                        root,
+		parent:                      parent,
+		justifiedEpoch:              justifiedEpoch,
+		unrealizedJustifiedEpoch:    justifiedEpoch,
+		finalizedEpoch:              finalizedEpoch,
+		unrealizedFinalizedEpoch:    finalizedEpoch,
+		blockHash:                   *blockHash,
+		payloadAvailabilityVote:     bitfield.NewBitvector512(),
+		payloadDataAvailabilityVote: bitfield.NewBitvector512(),
+		payloadAttesters:            bitfield.NewBitvector512(),
 	}
 	// Set the node's target checkpoint
 	if slot%params.BeaconConfig().SlotsPerEpoch == 0 {
@@ -136,6 +143,7 @@ func (s *Store) insert(ctx context.Context,
 		node:       n,
 		optimistic: optimistic,
 		timestamp:  time.Now(),
+		children:   make([]*Node, 0),
 	}
 	s.emptyNodeByRoot[root] = pn
 	ret = pn
@@ -146,6 +154,7 @@ func (s *Store) insert(ctx context.Context,
 			optimistic: true,
 			timestamp:  time.Now(),
 			full:       true,
+			gasLimit:   gasLimit,
 		}
 		ret = fn
 		s.fullNodeByRoot[root] = fn
@@ -159,6 +168,7 @@ func (s *Store) insert(ctx context.Context,
 		} else {
 			delete(s.emptyNodeByRoot, root)
 			delete(s.fullNodeByRoot, root)
+			updatePayloadNodeMetrics(s)
 			return nil, errInvalidParentRoot
 		}
 	} else {
@@ -173,10 +183,28 @@ func (s *Store) insert(ctx context.Context,
 		if err != nil {
 			return nil, fmt.Errorf("could not determine time since current slot started: %w", err)
 		}
-		boostThreshold := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().AttestationDueBPS)
+		bps := params.BeaconConfig().AttestationDueBPS
+		if block.Version() >= version.Gloas {
+			bps = params.BeaconConfig().AttestationDueBPSGloas
+		}
+		boostThreshold := params.BeaconConfig().SlotComponentDuration(bps)
 		isFirstBlock := s.proposerBoostRoot == [32]byte{}
 		if currentSlot == slot && sss < boostThreshold && isFirstBlock {
-			s.proposerBoostRoot = root
+			depEpoch := slots.ToEpoch(currentSlot)
+			if depEpoch > 0 {
+				depEpoch--
+			}
+			depRoot, err := s.dependentRootForEpoch(root, depEpoch)
+			if err != nil {
+				return nil, errors.Wrap(err, "could not get block dependent root.")
+			}
+			headDepRoot, err := s.dependentRoot(depEpoch)
+			if err != nil {
+				return nil, errors.Wrap(err, "could not get head dependent root.")
+			}
+			if depRoot == headDepRoot {
+				s.proposerBoostRoot = root
+			}
 		}
 
 		// Update best descendants
@@ -192,6 +220,7 @@ func (s *Store) insert(ctx context.Context,
 	// Update metrics.
 	processedBlockCount.Inc()
 	nodeCount.Set(float64(len(s.emptyNodeByRoot)))
+	updatePayloadNodeMetrics(s)
 
 	// Only update received block slot if it's within epoch from current time.
 	if slot+params.BeaconConfig().SlotsPerEpoch > slots.CurrentSlot(s.genesisTime) {
@@ -231,12 +260,13 @@ func (s *Store) pruneFinalizedNodeByRootMap(ctx context.Context, node, finalized
 		fn.children = nil
 		delete(s.fullNodeByRoot, node.root)
 	}
+	updatePayloadNodeMetrics(s)
 	return nil
 }
 
 // prune prunes the fork choice store. It removes all nodes that compete with the finalized root.
 // This function does not prune for invalid optimistically synced nodes, it deals only with pruning upon finalization
-// TODO: GLOAS, to ensure that chains up to a full node are found, we may want to consider pruning only up to the latest full block that was finalized
+// TODO: Gloas, to ensure that chains up to a full node are found, we may want to consider pruning only up to the latest full block that was finalized
 func (s *Store) prune(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.Prune")
 	defer span.End()
@@ -252,6 +282,7 @@ func (s *Store) prune(ctx context.Context) error {
 	if fn.parent == nil {
 		return nil
 	}
+	s.finalizedPayloadBlockHash = s.checkpointPayloadHashForRoot(finalizedRoot)
 
 	// Save the new finalized dependent root because it will be pruned
 	s.finalizedDependentRoot = fn.parent.node.root
@@ -274,13 +305,32 @@ func (s *Store) prune(ctx context.Context) error {
 		return nil
 	}
 
+	remaining := fen.children[:0]
 	for _, child := range fen.children {
 		if child != nil && child.slot <= checkpointMaxSlot {
 			if err := s.pruneFinalizedNodeByRootMap(ctx, child, fn); err != nil {
 				return errors.Wrap(err, "could not prune incompatible finalized child")
 			}
+			continue
 		}
+		remaining = append(remaining, child)
 	}
+	fen.children = remaining
+	ffn := s.fullNodeByRoot[finalizedRoot]
+	if ffn == nil {
+		return nil
+	}
+	remaining = ffn.children[:0]
+	for _, child := range ffn.children {
+		if child != nil && child.slot <= checkpointMaxSlot {
+			if err := s.pruneFinalizedNodeByRootMap(ctx, child, fn); err != nil {
+				return errors.Wrap(err, "could not prune incompatible finalized child")
+			}
+			continue
+		}
+		remaining = append(remaining, child)
+	}
+	ffn.children = remaining
 	return nil
 }
 
@@ -291,7 +341,7 @@ func (s *Store) tips() ([][32]byte, []primitives.Slot) {
 	var slots []primitives.Slot
 
 	for root, n := range s.emptyNodeByRoot {
-		if len(s.allConsensusChildren(n.node)) == 0 {
+		if !s.hasConsensusChildren(n.node) {
 			roots = append(roots, root)
 			slots = append(slots, n.node.slot)
 		}

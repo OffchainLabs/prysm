@@ -144,11 +144,11 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 			continue
 		}
 
-		activeBal, err := helpers.TotalActiveBalance(st)
+		activeBal, err := helpers.TotalActiveBalance(ctx, st)
 		if err != nil {
 			return err
 		}
-		churnLimit := helpers.ConsolidationChurnLimit(primitives.Gwei(activeBal))
+		churnLimit := helpers.ConsolidationChurnLimitForVersion(st.Version(), primitives.Gwei(activeBal))
 		if churnLimit <= primitives.Gwei(params.BeaconConfig().MinActivationBalance) {
 			continue
 		}
@@ -218,7 +218,7 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 			continue
 		}
 
-		exitEpoch, err := computeConsolidationEpochAndUpdateChurn(st, primitives.Gwei(srcV.EffectiveBalance))
+		exitEpoch, err := computeConsolidationEpochAndUpdateChurn(ctx, st, primitives.Gwei(srcV.EffectiveBalance))
 		if err != nil {
 			log.WithError(err).Error("Failed to compute consolidation epoch")
 			continue
@@ -320,18 +320,18 @@ func queueExcessActiveBalance(st state.BeaconState, idx primitives.ValidatorInde
 	return nil
 }
 
-func computeConsolidationEpochAndUpdateChurn(st state.BeaconState, consolidationBalance primitives.Gwei) (primitives.Epoch, error) {
+func computeConsolidationEpochAndUpdateChurn(ctx context.Context, st state.BeaconState, consolidationBalance primitives.Gwei) (primitives.Epoch, error) {
 	earliestEpoch, err := st.EarliestConsolidationEpoch()
 	if err != nil {
 		return 0, err
 	}
 	earliestConsolidationEpoch := max(earliestEpoch, helpers.ActivationExitEpoch(slots.ToEpoch(st.Slot())))
 
-	activeBal, err := helpers.TotalActiveBalance(st)
+	activeBal, err := helpers.TotalActiveBalance(ctx, st)
 	if err != nil {
 		return 0, err
 	}
-	perEpochConsolidationChurn := helpers.ConsolidationChurnLimit(primitives.Gwei(activeBal))
+	perEpochConsolidationChurn := helpers.ConsolidationChurnLimitForVersion(st.Version(), primitives.Gwei(activeBal))
 
 	var consolidationBalanceToConsume primitives.Gwei
 	if earliestEpoch < earliestConsolidationEpoch {

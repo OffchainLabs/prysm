@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/pkg/errors"
@@ -30,6 +31,11 @@ func TestWriteStateFetchError(t *testing.T) {
 			err:             &lookup.StateIdParseError{},
 			expectedMessage: "Invalid state ID",
 			expectedCode:    http.StatusBadRequest,
+		},
+		{
+			err:             errors.Wrap(stategen.ErrNoDataForSlot, "no data for slot"),
+			expectedMessage: "State not found",
+			expectedCode:    http.StatusNotFound,
 		},
 		{
 			err:             errors.New("state not found"),

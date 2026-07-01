@@ -399,9 +399,11 @@ func BenchmarkOptimizedValidatorRoots(b *testing.B) {
 		validators[i] = makeTestValidator(i)
 	}
 
+	compactValidators := stateutil.CompactValidatorsFromProto(validators)
+
 	b.ResetTimer()
 	for b.Loop() {
-		_, err := stateutil.OptimizedValidatorRoots(validators)
+		_, err := stateutil.OptimizedValidatorRoots(compactValidators)
 		if err != nil {
 			b.Fatal(err)
 		}

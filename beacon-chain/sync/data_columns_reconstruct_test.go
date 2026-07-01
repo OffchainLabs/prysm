@@ -63,6 +63,8 @@ func TestProcessDataColumnSidecarsFromReconstruction(t *testing.T) {
 
 		chainService := &mockChain.ChainService{}
 		p2p := p2ptest.NewTestP2P(t)
+		// Enable the partial column broadcaster.
+		p2p.EnablePartialColumnBroadcaster()
 		storage := filesystem.NewEphemeralDataColumnStorage(t)
 
 		service := NewService(
@@ -87,7 +89,7 @@ func TestProcessDataColumnSidecarsFromReconstruction(t *testing.T) {
 		// Check received indices before reconstruction.
 		require.Equal(t, minimumCount, uint64(len(chainService.DataColumns)))
 		for i, actual := range chainService.DataColumns {
-			require.Equal(t, uint64(i), actual.Index)
+			require.Equal(t, uint64(i), actual.Index())
 		}
 
 		// Run the reconstruction.
@@ -110,11 +112,18 @@ func TestProcessDataColumnSidecarsFromReconstruction(t *testing.T) {
 
 		require.Equal(t, len(expected), len(chainService.DataColumns))
 		for _, actual := range chainService.DataColumns {
-			require.Equal(t, true, expected[actual.Index])
-			require.Equal(t, true, service.hasSeenDataColumnIndex(slot, proposerIndex, actual.Index))
+			require.Equal(t, true, expected[actual.Index()])
+			require.Equal(t, true, service.hasSeenDataColumnIndex(slot, proposerIndex, actual.Index()))
 		}
 
 		require.Equal(t, true, p2p.BroadcastCalled.Load())
+
+		unseenExpected := map[uint64]bool{75: true, 87: true, 102: true, 117: true}
+		broadcastedPartials := p2p.BroadcastedPartialColumns()
+		require.Equal(t, len(unseenExpected), len(broadcastedPartials))
+		for _, partial := range broadcastedPartials {
+			require.Equal(t, true, unseenExpected[partial.Index])
+		}
 	})
 }
 
@@ -185,7 +194,7 @@ func TestSemiSupernodeReconstruction(t *testing.T) {
 		// Check received indices before reconstruction.
 		require.Equal(t, minimumCount, uint64(len(chainService.DataColumns)))
 		for i, actual := range chainService.DataColumns {
-			require.Equal(t, uint64(i), actual.Index)
+			require.Equal(t, uint64(i), actual.Index())
 		}
 
 		// Run the reconstruction.

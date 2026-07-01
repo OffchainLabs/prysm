@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -101,7 +100,7 @@ func checkValidatorSlashable(activationEpoch, withdrawableEpoch primitives.Epoch
 //	  """
 //	  return [ValidatorIndex(i) for i, v in enumerate(state.validators) if is_active_validator(v, epoch)]
 func ActiveValidatorIndices(ctx context.Context, s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]primitives.ValidatorIndex, error) {
-	ctx, span := trace.StartSpan(ctx, "helpers.ActiveValidatorIndices")
+	_, span := trace.StartSpan(ctx, "helpers.ActiveValidatorIndices")
 	defer span.End()
 
 	seed, err := Seed(s, epoch, params.BeaconConfig().DomainBeaconAttester)
@@ -116,44 +115,34 @@ func ActiveValidatorIndices(ctx context.Context, s state.ReadOnlyBeaconState, ep
 		return activeIndices, nil
 	}
 
-	if err := committeeCache.MarkInProgress(seed); err != nil {
-		if errors.Is(err, cache.ErrAlreadyInProgress) {
-			activeIndices, err := committeeCache.ActiveIndices(ctx, seed)
-			if err != nil {
-				return nil, err
-			}
-			if activeIndices == nil {
-				return nil, errors.New("nil active indices")
-			}
-			CommitteeCacheInProgressHit.Inc()
-			return activeIndices, nil
-		}
-		return nil, errors.Wrap(err, "could not mark committee cache as in progress")
-	}
-	defer func() {
-		if err := committeeCache.MarkNotInProgress(seed); err != nil {
-			log.WithError(err).Error("Could not mark cache not in progress")
-		}
-	}()
-
-	var indices []primitives.ValidatorIndex
-	if err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
-		if IsActiveValidatorUsingTrie(val, epoch) {
-			indices = append(indices, primitives.ValidatorIndex(idx))
-		}
-		return nil
-	}); err != nil {
+	indices, err := scanActiveValidatorIndices(s, epoch, seed)
+	if err != nil {
 		return nil, err
 	}
-
 	if len(indices) == 0 {
 		return nil, errors.New("no active validator indices")
 	}
+	return indices, nil
+}
 
-	if err := UpdateCommitteeCache(ctx, s, epoch); err != nil {
-		log.WithError(err).Error("Could not update committee cache")
+// ActiveNonSlashedValidatorIndices returns the indices of validators that are
+// both active at “epoch“ and not slashed. It is used to build the
+// EIP-8045 proposer lookahead.
+//
+// Spec pseudocode definition (EIP-8045):
+//
+//	indices = [i for i in get_active_validator_indices(state, epoch)
+//	           if not state.validators[i].slashed]
+func ActiveNonSlashedValidatorIndices(ctx context.Context, s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]primitives.ValidatorIndex, error) {
+	_, span := trace.StartSpan(ctx, "helpers.ActiveNonSlashedValidatorIndices")
+	defer span.End()
+
+	var indices []primitives.ValidatorIndex
+	for idx, val := range s.ValidatorsReadOnlySeq() {
+		if IsActiveNonSlashedValidatorUsingTrie(val, epoch) {
+			indices = append(indices, idx)
+		}
 	}
-
 	return indices, nil
 }
 
@@ -164,7 +153,7 @@ func ActiveValidatorCount(ctx context.Context, s state.ReadOnlyBeaconState, epoc
 	if err != nil {
 		return 0, errors.Wrap(err, "could not get seed")
 	}
-	activeCount, err := committeeCache.ActiveIndicesCount(ctx, seed)
+	activeCount, err := committeeCache.ActiveIndicesCount(seed)
 	if err != nil {
 		return 0, errors.Wrap(err, "could not interface with committee cache")
 	}
@@ -172,35 +161,20 @@ func ActiveValidatorCount(ctx context.Context, s state.ReadOnlyBeaconState, epoc
 		return uint64(activeCount), nil
 	}
 
-	if err := committeeCache.MarkInProgress(seed); err != nil {
-		if errors.Is(err, cache.ErrAlreadyInProgress) {
-			activeCount, err := committeeCache.ActiveIndicesCount(ctx, seed)
-			if err != nil {
-				return 0, err
-			}
-			CommitteeCacheInProgressHit.Inc()
-			return uint64(activeCount), nil
+	if !committeeCache.HasEntry(string(seed[:])) {
+		indices, err := scanActiveValidatorIndices(s, epoch, seed)
+		if err != nil {
+			return 0, fmt.Errorf("scan active validator indices: %w", err)
 		}
-		return 0, errors.Wrap(err, "could not mark committee cache as in progress")
+
+		return uint64(len(indices)), nil
 	}
-	defer func() {
-		if err := committeeCache.MarkNotInProgress(seed); err != nil {
-			log.WithError(err).Error("Could not mark cache not in progress")
-		}
-	}()
 
 	count := uint64(0)
-	if err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	for _, val := range s.ValidatorsReadOnlySeq() {
 		if IsActiveValidatorUsingTrie(val, epoch) {
 			count++
 		}
-		return nil
-	}); err != nil {
-		return 0, err
-	}
-
-	if err := UpdateCommitteeCache(ctx, s, epoch); err != nil {
-		return 0, errors.Wrap(err, "could not update committee cache")
 	}
 
 	return count, nil
@@ -521,38 +495,6 @@ func IsEligibleForActivationUsingROVal(state state.ReadOnlyCheckpoint, validator
 func isEligibleForActivation(activationEligibilityEpoch, activationEpoch, finalizedEpoch primitives.Epoch) bool {
 	return activationEligibilityEpoch <= finalizedEpoch &&
 		activationEpoch == params.BeaconConfig().FarFutureEpoch
-}
-
-// LastActivatedValidatorIndex provides the last activated validator given a state
-func LastActivatedValidatorIndex(ctx context.Context, st state.ReadOnlyBeaconState) (primitives.ValidatorIndex, error) {
-	_, span := trace.StartSpan(ctx, "helpers.LastActivatedValidatorIndex")
-	defer span.End()
-	var lastActivatedvalidatorIndex primitives.ValidatorIndex
-	// linear search because status are not sorted
-	for j := st.NumValidators() - 1; j >= 0; j-- {
-		val, err := st.ValidatorAtIndexReadOnly(primitives.ValidatorIndex(j))
-		if err != nil {
-			return 0, err
-		}
-		if IsActiveValidatorUsingTrie(val, time.CurrentEpoch(st)) {
-			lastActivatedvalidatorIndex = primitives.ValidatorIndex(j)
-			break
-		}
-	}
-	return lastActivatedvalidatorIndex, nil
-}
-
-// IsSameWithdrawalCredentials returns true if both validators have the same withdrawal credentials.
-//
-//	return a.withdrawal_credentials[12:] == b.withdrawal_credentials[12:]
-func IsSameWithdrawalCredentials(a, b *ethpb.Validator) bool {
-	if a == nil || b == nil {
-		return false
-	}
-	if len(a.WithdrawalCredentials) <= 12 || len(b.WithdrawalCredentials) <= 12 {
-		return false
-	}
-	return bytes.Equal(a.WithdrawalCredentials[12:], b.WithdrawalCredentials[12:])
 }
 
 // IsFullyWithdrawableValidator returns whether the validator is able to perform a full

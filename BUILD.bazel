@@ -1,8 +1,8 @@
 load("@bazel_gazelle//:def.bzl", "gazelle")
-load("@com_github_atlassian_bazel_tools//goimports:def.bzl", "goimports")
-load("@io_kubernetes_build//defs:run_in_workspace.bzl", "workspace_binary")
-load("@io_bazel_rules_go//go:def.bzl", "nogo")
 load("@bazel_skylib//rules:common_settings.bzl", "string_setting")
+load("@com_github_atlassian_bazel_tools//goimports:def.bzl", "goimports")
+load("@io_bazel_rules_go//go:def.bzl", "nogo")
+load("@io_kubernetes_build//defs:run_in_workspace.bzl", "workspace_binary")
 load("@prysm//tools/nogo_config:def.bzl", "nogo_config_exclude")
 
 prefix = "github.com/OffchainLabs/prysm"
@@ -195,7 +195,7 @@ nogo(
         "//tools/analyzers/modernize/forvar:go_default_library",
         "//tools/analyzers/modernize/mapsloop:go_default_library",
         "//tools/analyzers/modernize/minmax:go_default_library",
-        #"//tools/analyzers/modernize/newexpr:go_default_library", # Disabled until go 1.26.
+        "//tools/analyzers/modernize/newexpr:go_default_library",
         "//tools/analyzers/modernize/omitzero:go_default_library",
         "//tools/analyzers/modernize/rangeint:go_default_library",
         "//tools/analyzers/modernize/reflecttypefor:go_default_library",

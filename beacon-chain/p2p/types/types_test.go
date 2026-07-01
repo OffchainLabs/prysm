@@ -205,6 +205,41 @@ func hexDecodeOrDie(t *testing.T, str string) []byte {
 	return decoded
 }
 
+func TestExecutionPayloadEnvelopesByRootReq_RoundTrip(t *testing.T) {
+	roots := make([][32]byte, 10)
+	for i := range roots {
+		roots[i] = [32]byte{byte(i)}
+	}
+	req := ExecutionPayloadEnvelopesByRootReq(roots)
+
+	marshalled, err := req.MarshalSSZ()
+	require.NoError(t, err)
+	require.Equal(t, len(roots)*fieldparams.RootLength, len(marshalled))
+
+	got := &ExecutionPayloadEnvelopesByRootReq{}
+	require.NoError(t, got.UnmarshalSSZ(marshalled))
+	assert.DeepEqual(t, roots, [][32]byte(*got))
+}
+
+func TestExecutionPayloadEnvelopesByRootReq_Limit(t *testing.T) {
+	roots := make([][32]byte, params.BeaconConfig().MaxRequestPayloads+1)
+	req := ExecutionPayloadEnvelopesByRootReq(roots)
+
+	_, err := req.MarshalSSZ()
+	require.ErrorContains(t, "exceeds max size", err)
+
+	buf := make([]byte, (params.BeaconConfig().MaxRequestPayloads+1)*fieldparams.RootLength)
+	got := &ExecutionPayloadEnvelopesByRootReq{}
+	require.ErrorContains(t, "expected buffer with length of up to", got.UnmarshalSSZ(buf))
+}
+
+func TestExecutionPayloadEnvelopesByRootReq_UnmarshalBadSize(t *testing.T) {
+	// Buffer not a multiple of RootLength should fail.
+	buf := make([]byte, fieldparams.RootLength+1)
+	got := &ExecutionPayloadEnvelopesByRootReq{}
+	require.ErrorIs(t, got.UnmarshalSSZ(buf), ssz.ErrIncorrectByteSize)
+}
+
 // ====================================
 // DataColumnsByRootIdentifiers section
 // ====================================

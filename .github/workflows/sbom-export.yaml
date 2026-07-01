@@ -1,0 +1,67 @@
+name: SBOM Export & Centralize
+
+on:
+  push:
+    branches: [ "develop" ]
+  schedule:
+    - cron: '50 21 * * 2'
+
+permissions:
+  contents: read
+
+jobs:
+  generate-and-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v6
+
+      - name: Check for recent changes
+        id: check
+        run: |
+          if [ -z "$(git log --since='7 days ago' --oneline | head -1)" ]; then
+            echo "No commits in the last 7 days, skipping SBOM generation."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate CycloneDX SBOM via cdxgen
+        if: steps.check.outputs.skip != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v /tmp:/tmp \
+            -v "${{ github.workspace }}:/app:rw" \
+            -e FETCH_LICENSE=true \
+            -e GITHUB_TOKEN \
+            ghcr.io/cdxgen/cdxgen:v12.1.1 \
+            -r /app \
+            -o /app/sbom.cdx.json \
+            --no-install-deps \
+            --spec-version 1.6
+
+          if [ ! -s sbom.cdx.json ]; then
+            echo "::error::cdxgen SBOM generation failed or returned empty."
+            exit 1
+          fi
+
+          echo "SBOM generated successfully:"
+          ls -lh sbom.cdx.json
+
+      - name: Upload SBOM to Dependency Track
+        if: steps.check.outputs.skip != 'true'
+        env:
+          DT_API_KEY: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
+          DT_URL: ${{ secrets.DEPENDENCY_TRACK_URL }}
+        run: |
+          REPO_NAME=${GITHUB_REPOSITORY##*/}
+
+          curl -sf -X POST "${DT_URL}/api/v1/bom" \
+            -H "X-Api-Key: ${DT_API_KEY}" \
+            -F "autoCreate=true" \
+            -F "projectName=${REPO_NAME}" \
+            -F "projectVersion=${{ github.ref_name }}" \
+            -F "bom=@sbom.cdx.json"
+
+          echo "SBOM uploaded to Dependency Track for ${REPO_NAME}@${{ github.ref_name }}"

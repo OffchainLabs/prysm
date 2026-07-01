@@ -24,7 +24,7 @@ func TestBuilderQuorumThreshold(t *testing.T) {
 	st, err := state_native.InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{Validators: validators})
 	require.NoError(t, err)
 
-	got, err := builderQuorumThreshold(st)
+	got, err := builderQuorumThreshold(t.Context(), st)
 	require.NoError(t, err)
 
 	total := uint64(len(validators)) * cfg.MaxEffectiveBalance
@@ -67,7 +67,7 @@ func TestProcessBuilderPendingPayments(t *testing.T) {
 		payments := buildPayments(primitives.Gwei(quorum+1), primitives.Gwei(quorum+2))
 		st := &testProcessState{BeaconState: pbSt, payments: payments}
 
-		require.NoError(t, ProcessBuilderPendingPayments(st))
+		require.NoError(t, ProcessBuilderPendingPayments(t.Context(), st))
 		require.Equal(t, 2, len(st.withdrawals))
 		require.Equal(t, payments[0].Withdrawal, st.withdrawals[0])
 		require.Equal(t, payments[1].Withdrawal, st.withdrawals[1])
@@ -84,7 +84,7 @@ func TestProcessBuilderPendingPayments(t *testing.T) {
 		payments := buildPayments(primitives.Gwei(quorum - 1))
 		st := &testProcessState{BeaconState: pbSt, payments: payments}
 
-		require.NoError(t, ProcessBuilderPendingPayments(st))
+		require.NoError(t, ProcessBuilderPendingPayments(t.Context(), st))
 		require.Equal(t, 0, len(st.withdrawals))
 	})
 }

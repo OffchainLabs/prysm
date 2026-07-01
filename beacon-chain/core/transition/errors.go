@@ -15,5 +15,6 @@ var (
 	ErrProcessDepositsFailed                 = errors.New("process deposits failed")
 	ErrProcessVoluntaryExitsFailed           = errors.New("process voluntary exits failed")
 	ErrProcessBLSChangesFailed               = errors.New("process BLS to execution changes failed")
+	ErrProcessPayloadAttestationsFailed      = errors.New("process payload attestations failed")
 	ErrProcessSyncAggregateFailed            = errors.New("process sync aggregate failed")
 )

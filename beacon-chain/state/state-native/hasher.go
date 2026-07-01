@@ -122,7 +122,7 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 	fieldRoots[types.Eth1DepositIndex.RealPosition()] = eth1DepositBuf[:]
 
 	// Validators slice root.
-	validatorsRoot, err := stateutil.ValidatorRegistryRoot(state.validatorsVal())
+	validatorsRoot, err := stateutil.ValidatorRegistryRoot(state.validatorsCompactVal())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute validator registry merkleization")
 	}
@@ -381,6 +381,13 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		}
 
 		fieldRoots[types.PayloadExpectedWithdrawals.RealPosition()] = expectedWithdrawalsRoot[:]
+
+		ptcWindowRoot, err := stateutil.PTCWindowRoot(state.ptcWindow)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute ptc window merkleization")
+		}
+
+		fieldRoots[types.PTCWindow.RealPosition()] = ptcWindowRoot[:]
 	}
 	return fieldRoots, nil
 }

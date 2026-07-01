@@ -1350,3 +1350,49 @@ func TestBlocksQueue_stuckWhenHeadIsSetToOrphanedBlock(t *testing.T) {
 		require.Equal(t, true, beaconDB.HasBlock(ctx, blkRoot) || mc.HasBlock(ctx, blkRoot), "slot %d", blk.Block.Slot)
 	}
 }
+
+// TestBlocksQueue_waitHighestExpectedSlot_ExtendsTargetWithinCurrentEpoch verifies the queue extends its target when peers are ahead in the same epoch.
+func TestBlocksQueue_waitHighestExpectedSlot_ExtendsTargetWithinCurrentEpoch(t *testing.T) {
+	useMinimalInitialSyncConfig(t)
+
+	const (
+		ourHeadSlot    = primitives.Slot(90)
+		initialTarget  = primitives.Slot(90)
+		latestPeerHead = primitives.Slot(92)
+	)
+
+	mc, p2p, _ := initializeTestServices(t, []primitives.Slot{}, []*peerData{
+		{blocks: makeSequence(1, latestPeerHead), finalizedEpoch: 8, headSlot: latestPeerHead},
+		{blocks: makeSequence(1, latestPeerHead), finalizedEpoch: 8, headSlot: latestPeerHead},
+	})
+	require.NoError(t, mc.State.SetSlot(ourHeadSlot))
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
+		chain: mc,
+		p2p:   p2p,
+	})
+	fetcher.mode = modeNonConstrained
+
+	queueCtx, queueCancel := context.WithCancel(ctx)
+	q := &blocksQueue{
+		ctx:                 queueCtx,
+		cancel:              queueCancel,
+		blocksFetcher:       fetcher,
+		chain:               mc,
+		highestExpectedSlot: initialTarget,
+		mode:                modeNonConstrained,
+	}
+
+	extended := waitHighestExpectedSlot(q)
+
+	require.Equal(t, true, extended, "queue should extend the target when peers are ahead within the same epoch")
+	require.Equal(t, latestPeerHead, q.highestExpectedSlot, "queue should extend to the peer head slot, not the epoch start slot")
+	select {
+	case <-queueCtx.Done():
+		t.Fatal("queue canceled even though peers were still ahead within the same epoch")
+	default:
+	}
+}

@@ -172,9 +172,8 @@ func TestWaitForActivation_MultipleStatuses(t *testing.T) {
 				{
 					PublicKey: pubKey2,
 					Status: &ethpb.ValidatorStatusResponse{
-						Status:                    ethpb.ValidatorStatus_PENDING,
-						ActivationEpoch:           params.BeaconConfig().FarFutureEpoch,
-						PositionInActivationQueue: 1,
+						Status:          ethpb.ValidatorStatus_PENDING,
+						ActivationEpoch: params.BeaconConfig().FarFutureEpoch,
 					},
 					Index: 1,
 				},

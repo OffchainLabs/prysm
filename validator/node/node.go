@@ -410,6 +410,8 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		return err
 	}
 
+	stateless := cliCtx.Bool(flags.EnableStatelessFlag.Name)
+
 	validatorService, err := client.NewValidatorService(cliCtx.Context, &client.Config{
 		DB:                      c.db,
 		Wallet:                  c.wallet,
@@ -433,6 +435,7 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		LogValidatorPerformance: !cliCtx.Bool(flags.DisablePenaltyRewardLogFlag.Name),
 		EmitAccountMetrics:      !cliCtx.Bool(flags.DisableAccountMetricsFlag.Name),
 		Distributed:             cliCtx.Bool(flags.EnableDistributed.Name),
+		Stateless:               stateless,
 		CloseClientFunc:         c.Close,
 		MaxHealthChecks:         cliCtx.Int(flags.MaxHealthChecksFlag.Name),
 	})

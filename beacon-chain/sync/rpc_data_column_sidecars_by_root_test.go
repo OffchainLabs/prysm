@@ -178,11 +178,11 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 			assert.Equal(t, root5, sidecars[3].BlockRoot())
 			assert.Equal(t, root5, sidecars[4].BlockRoot())
 
-			assert.Equal(t, uint64(4), sidecars[0].Index)
-			assert.Equal(t, uint64(6), sidecars[1].Index)
-			assert.Equal(t, uint64(7), sidecars[2].Index)
-			assert.Equal(t, uint64(8), sidecars[3].Index)
-			assert.Equal(t, uint64(9), sidecars[4].Index)
+			assert.Equal(t, uint64(4), sidecars[0].Index())
+			assert.Equal(t, uint64(6), sidecars[1].Index())
+			assert.Equal(t, uint64(7), sidecars[2].Index())
+			assert.Equal(t, uint64(8), sidecars[3].Index())
+			assert.Equal(t, uint64(9), sidecars[4].Index())
 		})
 
 		localP2P.Connect(remoteP2P)

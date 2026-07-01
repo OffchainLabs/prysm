@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package ethereum.eth.v1alpha1;
+
+import "proto/eth/ext/options.proto";
+
+option csharp_namespace = "Ethereum.Eth.V1alpha1";
+option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
+option java_multiple_files = true;
+option java_outer_classname = "GloasP2PMessagesProto";
+option java_package = "org.ethereum.eth.v1alpha1";
+option php_namespace = "Ethereum\\Eth\\v1alpha1";
+
+// =============================================================================
+// Gloas Fork P2P RPC Messages
+// =============================================================================
+// This file defines the P2P RPC request/response message types introduced in
+// the Gloas fork.
+// Reference:
+// https://github.com/ethereum/consensus-specs/blob/master/specs/gloas/p2p-interface.md
+
+/*
+ Spec Definition:
+ ExecutionPayloadEnvelopesByRange v1
+ (
+   start_slot: Slot
+   count: uint64
+ )
+*/
+message ExecutionPayloadEnvelopesByRangeRequest {
+  uint64 start_slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  uint64 count = 2;
+}

@@ -643,3 +643,31 @@ func TestBlocksFetcher_currentHeadAndTargetEpochs(t *testing.T) {
 		})
 	}
 }
+
+// TestBlocksFetcher_bestNonFinalizedSlot_PreservesPeerHeadWithinEpoch verifies non-finalized targets keep intra-epoch slot precision.
+func TestBlocksFetcher_bestNonFinalizedSlot_PreservesPeerHeadWithinEpoch(t *testing.T) {
+	useMinimalInitialSyncConfig(t)
+
+	const (
+		ourHeadSlot  = primitives.Slot(90)
+		peerHeadSlot = primitives.Slot(92)
+	)
+
+	mc, p2p, _ := initializeTestServices(t, []primitives.Slot{}, []*peerData{
+		{blocks: makeSequence(1, peerHeadSlot), finalizedEpoch: 8, headSlot: peerHeadSlot},
+		{blocks: makeSequence(1, peerHeadSlot), finalizedEpoch: 8, headSlot: peerHeadSlot},
+	})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
+		chain: mc,
+		p2p:   p2p,
+	})
+	fetcher.mode = modeNonConstrained
+	require.NoError(t, mc.State.SetSlot(ourHeadSlot))
+
+	got := fetcher.bestNonFinalizedSlot()
+	require.Equal(t, peerHeadSlot, got, "bestNonFinalizedSlot should keep slot precision within the current epoch")
+}

@@ -48,4 +48,33 @@ var (
 			Help: "The number of times pruning happened.",
 		},
 	)
+	payloadInsertedCount = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "forkchoice_payload_inserted_count",
+			Help: "The number of payloads inserted into forkchoice.",
+		},
+	)
+	payloadEmptyNodeCount = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "forkchoice_payload_empty_node_count",
+			Help: "The number of empty payload nodes currently tracked in forkchoice.",
+		},
+	)
+	payloadFullNodeCount = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "forkchoice_payload_full_node_count",
+			Help: "The number of full payload nodes currently tracked in forkchoice.",
+		},
+	)
+	ptcVoteCount = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "forkchoice_ptc_vote_count",
+			Help: "The number of PTC votes recorded by forkchoice.",
+		},
+	)
 )
+
+func updatePayloadNodeMetrics(s *Store) {
+	payloadEmptyNodeCount.Set(float64(len(s.emptyNodeByRoot)))
+	payloadFullNodeCount.Set(float64(len(s.fullNodeByRoot)))
+}

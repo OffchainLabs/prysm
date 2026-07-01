@@ -15,7 +15,7 @@ func (f *FixedNestedContainer) MarshalSSZTo(buf []byte) (dst []byte, err error) 
 	dst = buf
 
 	// Field (0) 'Value1'
-	dst = ssz.MarshalUint64(dst, f.Value1)
+	dst = ssz.MarshalUint(dst, f.Value1)
 
 	// Field (1) 'Value2'
 	if size := len(f.Value2); size != 32 {
@@ -36,7 +36,7 @@ func (f *FixedNestedContainer) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'Value1'
-	f.Value1 = ssz.UnmarshallUint64(buf[0:8])
+	f.Value1 = ssz.UnmarshallUint[uint64](buf[0:8])
 
 	// Field (1) 'Value2'
 	if cap(f.Value2) == 0 {
@@ -63,7 +63,7 @@ func (f *FixedNestedContainer) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'Value1'
-	hh.PutUint64(f.Value1)
+	ssz.PutUint(hh, f.Value1)
 
 	// Field (1) 'Value2'
 	if size := len(f.Value2); size != 32 {
@@ -86,10 +86,10 @@ func (f *FixedTestContainer) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 
 	// Field (0) 'FieldUint32'
-	dst = ssz.MarshalUint32(dst, f.FieldUint32)
+	dst = ssz.MarshalUint(dst, f.FieldUint32)
 
 	// Field (1) 'FieldUint64'
-	dst = ssz.MarshalUint64(dst, f.FieldUint64)
+	dst = ssz.MarshalUint(dst, f.FieldUint64)
 
 	// Field (2) 'FieldBool'
 	dst = ssz.MarshalBool(dst, f.FieldBool)
@@ -115,7 +115,7 @@ func (f *FixedTestContainer) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		return
 	}
 	for ii := 0; ii < 24; ii++ {
-		dst = ssz.MarshalUint64(dst, f.VectorField[ii])
+		dst = ssz.MarshalUint(dst, f.VectorField[ii])
 	}
 
 	// Field (6) 'TwoDimensionBytesField'
@@ -164,10 +164,10 @@ func (f *FixedTestContainer) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'FieldUint32'
-	f.FieldUint32 = ssz.UnmarshallUint32(buf[0:4])
+	f.FieldUint32 = ssz.UnmarshallUint[uint32](buf[0:4])
 
 	// Field (1) 'FieldUint64'
-	f.FieldUint64 = ssz.UnmarshallUint64(buf[4:12])
+	f.FieldUint64 = ssz.UnmarshallUint[uint64](buf[4:12])
 
 	// Field (2) 'FieldBool'
 	f.FieldBool, err = ssz.DecodeBool(buf[12:13])
@@ -190,9 +190,9 @@ func (f *FixedTestContainer) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (5) 'VectorField'
-	f.VectorField = ssz.ExtendUint64(f.VectorField, 24)
+	f.VectorField = ssz.ExtendUint(f.VectorField, 24)
 	for ii := 0; ii < 24; ii++ {
-		f.VectorField[ii] = ssz.UnmarshallUint64(buf[85:277][ii*8 : (ii+1)*8])
+		f.VectorField[ii] = ssz.UnmarshallUint[uint64](buf[85:277][ii*8 : (ii+1)*8])
 	}
 
 	// Field (6) 'TwoDimensionBytesField'
@@ -241,10 +241,10 @@ func (f *FixedTestContainer) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'FieldUint32'
-	hh.PutUint32(f.FieldUint32)
+	ssz.PutUint(hh, f.FieldUint32)
 
 	// Field (1) 'FieldUint64'
-	hh.PutUint64(f.FieldUint64)
+	ssz.PutUint(hh, f.FieldUint64)
 
 	// Field (2) 'FieldBool'
 	hh.PutBool(f.FieldBool)
@@ -269,7 +269,7 @@ func (f *FixedTestContainer) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 		subIndx := hh.Index()
 		for _, i := range f.VectorField {
-			hh.AppendUint64(i)
+			ssz.AppendUint(hh, i)
 		}
 		hh.Merkleize(subIndx)
 	}
@@ -327,7 +327,7 @@ func (v *VariableNestedContainer) MarshalSSZTo(buf []byte) (dst []byte, err erro
 	offset := int(16)
 
 	// Field (0) 'Value1'
-	dst = ssz.MarshalUint64(dst, v.Value1)
+	dst = ssz.MarshalUint(dst, v.Value1)
 
 	// Offset (1) 'FieldListUint64'
 	dst = ssz.WriteOffset(dst, offset)
@@ -346,7 +346,7 @@ func (v *VariableNestedContainer) MarshalSSZTo(buf []byte) (dst []byte, err erro
 		return
 	}
 	for ii := 0; ii < len(v.FieldListUint64); ii++ {
-		dst = ssz.MarshalUint64(dst, v.FieldListUint64[ii])
+		dst = ssz.MarshalUint(dst, v.FieldListUint64[ii])
 	}
 
 	// Field (2) 'NestedListField'
@@ -384,7 +384,7 @@ func (v *VariableNestedContainer) UnmarshalSSZ(buf []byte) error {
 	var o1, o2 uint64
 
 	// Field (0) 'Value1'
-	v.Value1 = ssz.UnmarshallUint64(buf[0:8])
+	v.Value1 = ssz.UnmarshallUint[uint64](buf[0:8])
 
 	// Offset (1) 'FieldListUint64'
 	if o1 = ssz.ReadOffset(buf[8:12]); o1 > size {
@@ -407,9 +407,9 @@ func (v *VariableNestedContainer) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		v.FieldListUint64 = ssz.ExtendUint64(v.FieldListUint64, num)
+		v.FieldListUint64 = ssz.ExtendUint(v.FieldListUint64, num)
 		for ii := 0; ii < num; ii++ {
-			v.FieldListUint64[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+			v.FieldListUint64[ii] = ssz.UnmarshallUint[uint64](buf[ii*8 : (ii+1)*8])
 		}
 	}
 
@@ -464,7 +464,7 @@ func (v *VariableNestedContainer) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'Value1'
-	hh.PutUint64(v.Value1)
+	ssz.PutUint(hh, v.Value1)
 
 	// Field (1) 'FieldListUint64'
 	{
@@ -474,7 +474,7 @@ func (v *VariableNestedContainer) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 		subIndx := hh.Index()
 		for _, i := range v.FieldListUint64 {
-			hh.AppendUint64(i)
+			ssz.AppendUint(hh, i)
 		}
 		hh.FillUpTo32()
 
@@ -704,7 +704,7 @@ func (v *VariableTestContainer) MarshalSSZTo(buf []byte) (dst []byte, err error)
 		return
 	}
 	for ii := 0; ii < len(v.FieldListUint64); ii++ {
-		dst = ssz.MarshalUint64(dst, v.FieldListUint64[ii])
+		dst = ssz.MarshalUint(dst, v.FieldListUint64[ii])
 	}
 
 	// Field (2) 'FieldListContainer'
@@ -853,9 +853,9 @@ func (v *VariableTestContainer) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		v.FieldListUint64 = ssz.ExtendUint64(v.FieldListUint64, num)
+		v.FieldListUint64 = ssz.ExtendUint(v.FieldListUint64, num)
 		for ii := 0; ii < num; ii++ {
-			v.FieldListUint64[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+			v.FieldListUint64[ii] = ssz.UnmarshallUint[uint64](buf[ii*8 : (ii+1)*8])
 		}
 	}
 
@@ -1024,7 +1024,7 @@ func (v *VariableTestContainer) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 		subIndx := hh.Index()
 		for _, i := range v.FieldListUint64 {
-			hh.AppendUint64(i)
+			ssz.AppendUint(hh, i)
 		}
 		hh.FillUpTo32()
 

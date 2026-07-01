@@ -29,7 +29,7 @@ var errBisectInconsistent = errors.New("state of bisector inconsistent with colu
 
 func (c *columnBisector) addPeerColumns(pid peer.ID, columns ...blocks.RODataColumn) {
 	for _, col := range columns {
-		c.setColumnSource(c.rootKey(col.BlockRoot()), col.Index, pid)
+		c.setColumnSource(c.rootKey(col.BlockRoot()), col.Index(), pid)
 	}
 }
 
@@ -84,7 +84,7 @@ func (c *columnBisector) peerFor(col blocks.RODataColumn) (peer.ID, error) {
 	if len(r) == 0 {
 		return "", errors.Wrap(errBisectInconsistent, "root not tracked")
 	}
-	if pid, ok := r[col.Index]; ok {
+	if pid, ok := r[col.Index()]; ok {
 		return pid, nil
 	}
 	return "", errors.Wrap(errBisectInconsistent, "index not tracked for root")
@@ -157,7 +157,7 @@ func (c *columnBisector) OnError(err error) {
 		if c.failures[rk] == nil {
 			c.failures[rk] = make(peerdas.ColumnIndices)
 		}
-		c.failures[rk][col.Index] = struct{}{}
+		c.failures[rk][col.Index()] = struct{}{}
 	}
 }
 

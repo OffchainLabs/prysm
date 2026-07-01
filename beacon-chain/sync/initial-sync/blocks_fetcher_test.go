@@ -27,6 +27,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -954,8 +955,9 @@ func TestBlocksFetcher_requestBlocksDownscoreOnInvalidData(t *testing.T) {
 	assert.Equal(t, -1, scoreBeforeRequest)
 
 	// Use fetchBlocksFromPeer which includes the downscoring logic
-	_, _, err = fetcher.fetchBlocksFromPeer(ctx, 100, 64, []peer.ID{p2.PeerID()})
-	assert.ErrorContains(t, errNoPeersAvailable.Error(), err)
+	r := &fetchRequestResponse{start: 100, count: 64}
+	fetcher.fetchBlocksFromPeer(ctx, r, []peer.ID{p2.PeerID()})
+	assert.ErrorContains(t, errNoPeersAvailable.Error(), r.err)
 
 	// Verify the peer was downscored
 	scoreAfterRequest, err := p1.Peers().Scorers().BadResponsesScorer().Count(p2.PeerID())
@@ -1363,9 +1365,10 @@ func TestFetchSidecars(t *testing.T) {
 	t.Run("No blocks", func(t *testing.T) {
 		fetcher := new(blocksFetcher)
 
-		pid, err := fetcher.fetchSidecars(ctx, "", nil, []blocks.BlockWithROSidecars{})
-		assert.NoError(t, err)
-		assert.Equal(t, peer.ID(""), pid)
+		r := &fetchRequestResponse{bwb: []blocks.BlockWithROSidecars{}}
+		fetcher.fetchSidecars(ctx, r, nil)
+		assert.NoError(t, r.err)
+		assert.Equal(t, peer.ID(""), r.blobsFrom)
 	})
 
 	t.Run("Nominal", func(t *testing.T) {
@@ -1460,9 +1463,10 @@ func TestFetchSidecars(t *testing.T) {
 			{Block: roFuluBlock1},
 			{Block: roFuluBlock2},
 		}
-		pid, err := fetcher.fetchSidecars(ctx, "", nil, blocksWithSidecars)
-		require.NoError(t, err)
-		require.Equal(t, peer.ID(""), pid)
+		r := &fetchRequestResponse{bwb: blocksWithSidecars}
+		fetcher.fetchSidecars(ctx, r, nil)
+		require.NoError(t, r.err)
+		require.Equal(t, peer.ID(""), r.blobsFrom)
 
 		// Verify that block with sidecars were modified correctly.
 		require.Equal(t, 0, len(blocksWithSidecars[0].Blobs))
@@ -1565,7 +1569,7 @@ func TestFirstFuluIndex(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			blocks := tt.setupBlocks(t)
-			index, err := findFirstFuluIndex(blocks)
+			index, err := findFirstForkIndex(blocks, version.Fulu)
 
 			if tt.expectError {
 				require.NotNil(t, err)

@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -35,8 +34,7 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	segments := strings.Split(r.URL.Path, "/")
-	blockId := segments[len(segments)-1]
+	blockId := r.PathValue("block_id")
 
 	verifiedBlobs, rpcErr := s.Blocker.BlobSidecars(ctx, blockId, options.WithIndices(indices))
 	if rpcErr != nil {
@@ -131,8 +129,7 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetBlobs")
 	defer span.End()
 
-	segments := strings.Split(r.URL.Path, "/")
-	blockId := segments[len(segments)-1]
+	blockId := r.PathValue("block_id")
 
 	// Check if versioned_hashes parameter is provided
 	versionedHashesStr := r.URL.Query()["versioned_hashes"]

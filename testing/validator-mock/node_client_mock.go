@@ -14,14 +14,15 @@ import (
 	reflect "reflect"
 
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	empty "github.com/golang/protobuf/ptypes/empty"
 	gomock "go.uber.org/mock/gomock"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // MockNodeClient is a mock of NodeClient interface.
 type MockNodeClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockNodeClientMockRecorder
+	isgomock struct{}
 }
 
 // MockNodeClientMockRecorder is the mock recorder for MockNodeClient.
@@ -42,75 +43,75 @@ func (m *MockNodeClient) EXPECT() *MockNodeClientMockRecorder {
 }
 
 // Genesis mocks base method.
-func (m *MockNodeClient) Genesis(arg0 context.Context, arg1 *emptypb.Empty) (*eth.Genesis, error) {
+func (m *MockNodeClient) Genesis(ctx context.Context, in *empty.Empty) (*eth.Genesis, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Genesis", arg0, arg1)
+	ret := m.ctrl.Call(m, "Genesis", ctx, in)
 	ret0, _ := ret[0].(*eth.Genesis)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Genesis indicates an expected call of Genesis.
-func (mr *MockNodeClientMockRecorder) Genesis(arg0, arg1 any) *gomock.Call {
+func (mr *MockNodeClientMockRecorder) Genesis(ctx, in any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Genesis", reflect.TypeOf((*MockNodeClient)(nil).Genesis), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Genesis", reflect.TypeOf((*MockNodeClient)(nil).Genesis), ctx, in)
 }
 
 // IsReady mocks base method.
-func (m *MockNodeClient) IsReady(arg0 context.Context) bool {
+func (m *MockNodeClient) IsReady(ctx context.Context) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsReady", arg0)
+	ret := m.ctrl.Call(m, "IsReady", ctx)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
 // IsReady indicates an expected call of IsReady.
-func (mr *MockNodeClientMockRecorder) IsReady(arg0 any) *gomock.Call {
+func (mr *MockNodeClientMockRecorder) IsReady(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsReady", reflect.TypeOf((*MockNodeClient)(nil).IsReady), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsReady", reflect.TypeOf((*MockNodeClient)(nil).IsReady), ctx)
 }
 
 // Peers mocks base method.
-func (m *MockNodeClient) Peers(arg0 context.Context, arg1 *emptypb.Empty) (*eth.Peers, error) {
+func (m *MockNodeClient) Peers(ctx context.Context, in *empty.Empty) (*eth.Peers, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Peers", arg0, arg1)
+	ret := m.ctrl.Call(m, "Peers", ctx, in)
 	ret0, _ := ret[0].(*eth.Peers)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Peers indicates an expected call of Peers.
-func (mr *MockNodeClientMockRecorder) Peers(arg0, arg1 any) *gomock.Call {
+func (mr *MockNodeClientMockRecorder) Peers(ctx, in any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Peers", reflect.TypeOf((*MockNodeClient)(nil).Peers), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Peers", reflect.TypeOf((*MockNodeClient)(nil).Peers), ctx, in)
 }
 
 // SyncStatus mocks base method.
-func (m *MockNodeClient) SyncStatus(arg0 context.Context, arg1 *emptypb.Empty) (*eth.SyncStatus, error) {
+func (m *MockNodeClient) SyncStatus(ctx context.Context, in *empty.Empty) (*eth.SyncStatus, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SyncStatus", arg0, arg1)
+	ret := m.ctrl.Call(m, "SyncStatus", ctx, in)
 	ret0, _ := ret[0].(*eth.SyncStatus)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SyncStatus indicates an expected call of SyncStatus.
-func (mr *MockNodeClientMockRecorder) SyncStatus(arg0, arg1 any) *gomock.Call {
+func (mr *MockNodeClientMockRecorder) SyncStatus(ctx, in any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncStatus", reflect.TypeOf((*MockNodeClient)(nil).SyncStatus), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncStatus", reflect.TypeOf((*MockNodeClient)(nil).SyncStatus), ctx, in)
 }
 
 // Version mocks base method.
-func (m *MockNodeClient) Version(arg0 context.Context, arg1 *emptypb.Empty) (*eth.Version, error) {
+func (m *MockNodeClient) Version(ctx context.Context, in *empty.Empty) (*eth.Version, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Version", arg0, arg1)
+	ret := m.ctrl.Call(m, "Version", ctx, in)
 	ret0, _ := ret[0].(*eth.Version)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Version indicates an expected call of Version.
-func (mr *MockNodeClientMockRecorder) Version(arg0, arg1 any) *gomock.Call {
+func (mr *MockNodeClientMockRecorder) Version(ctx, in any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Version", reflect.TypeOf((*MockNodeClient)(nil).Version), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Version", reflect.TypeOf((*MockNodeClient)(nil).Version), ctx, in)
 }

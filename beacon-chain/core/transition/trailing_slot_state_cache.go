@@ -34,6 +34,25 @@ var (
 	})
 )
 
+// NextSlotStateReadOnly returns the saved state for the given blockroot.
+// It returns the last updated state if it matches. Otherwise it returns the previously
+// updated state if it matches its root. If no root matches it returns nil.
+// This version returns a ReadoOnlyBeaconState without making a copy.
+func NextSlotStateReadOnly(root []byte, wantedSlot types.Slot) state.ReadOnlyBeaconState {
+	nsc.Lock()
+	defer nsc.Unlock()
+	if bytes.Equal(root, nsc.lastRoot) && nsc.lastState.Slot() <= wantedSlot {
+		nextSlotCacheHit.Inc()
+		return nsc.lastState
+	}
+	if bytes.Equal(root, nsc.prevRoot) && nsc.prevState.Slot() <= wantedSlot {
+		nextSlotCacheHit.Inc()
+		return nsc.prevState
+	}
+	nextSlotCacheMiss.Inc()
+	return nil
+}
+
 // NextSlotState returns the saved state for the given blockroot.
 // It returns the last updated state if it matches. Otherwise it returns the previously
 // updated state if it matches its root. If no root matches it returns nil
@@ -55,7 +74,7 @@ func NextSlotState(root []byte, wantedSlot types.Slot) state.BeaconState {
 // UpdateNextSlotCache updates the `nextSlotCache`. It saves the input state after advancing the state slot by 1
 // by calling `ProcessSlots`, it also saves the input root for later look up.
 // This is useful to call after successfully processing a block.
-func UpdateNextSlotCache(ctx context.Context, root []byte, state state.BeaconState) error {
+func UpdateNextSlotCache(ctx context.Context, root []byte, state state.ReadOnlyBeaconState) error {
 	// Advancing one slot by using a copied state.
 	copied := state.Copy()
 	copied, err := ProcessSlots(ctx, copied, copied.Slot()+1)

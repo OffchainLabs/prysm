@@ -277,7 +277,7 @@ func (s *Service) trackedIndex(idx primitives.ValidatorIndex) bool {
 
 // updateSyncCommitteeTrackedVals updates the sync committee assignments of our
 // tracked validators. It gets called when we sync a block after the Sync Period changes.
-func (s *Service) updateSyncCommitteeTrackedVals(state state.BeaconState) {
+func (s *Service) updateSyncCommitteeTrackedVals(state state.ReadOnlyBeaconState) {
 	s.Lock()
 	defer s.Unlock()
 	for idx := range s.TrackedValidators {

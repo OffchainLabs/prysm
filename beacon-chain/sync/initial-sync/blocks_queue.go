@@ -12,6 +12,7 @@ import (
 	beaconsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -96,9 +97,11 @@ type blocksQueue struct {
 
 // blocksQueueFetchedData is a data container that is returned from a queue on each step.
 type blocksQueueFetchedData struct {
-	blocksFrom peer.ID
-	blobsFrom  peer.ID
-	bwb        []blocks.BlockWithROSidecars
+	blocksFrom    peer.ID
+	blobsFrom     peer.ID
+	bwb           []blocks.BlockWithROSidecars
+	envelopes     []interfaces.ROSignedExecutionPayloadEnvelope
+	columnsToSave []blocks.VerifiedRODataColumn
 }
 
 // newBlocksQueue creates initialized priority queue.

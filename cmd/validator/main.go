@@ -68,8 +68,6 @@ var appFlags = []cli.Flag{
 	flags.HTTPServerCorsDomain,
 	flags.DisableAccountMetricsFlag,
 	flags.MonitoringPortFlag,
-	flags.SlasherRPCProviderFlag,
-	flags.SlasherCertFlag,
 	flags.WalletPasswordFileFlag,
 	flags.WalletDirFlag,
 	flags.GraffitiFileFlag,
@@ -87,10 +85,10 @@ var appFlags = []cli.Flag{
 	flags.EnableBuilderFlag,
 	flags.BuilderGasLimitFlag,
 	flags.ValidatorsRegistrationBatchSizeFlag,
+	flags.EnableStatelessFlag,
 	////////////////////
 	cmd.DisableMonitoringFlag,
 	cmd.MonitoringHostFlag,
-	cmd.EnableBackupWebhookFlag,
 	cmd.MinimalConfigFlag,
 	cmd.E2EConfigFlag,
 	cmd.VerbosityFlag,
@@ -103,6 +101,7 @@ var appFlags = []cli.Flag{
 	cmd.TracingEndpointFlag,
 	cmd.TraceSampleFractionFlag,
 	cmd.LogFormat,
+	cmd.DisableLogColor,
 	cmd.LogFileName,
 	cmd.ConfigFileFlag,
 	cmd.ChainConfigFileFlag,
@@ -181,6 +180,7 @@ func main() {
 				formatter.FullTimestamp = true
 				formatter.ForceFormatting = true
 				formatter.ForceColors = true
+				formatter.DisableColors = ctx.Bool(cmd.DisableLogColor.Name)
 				formatter.VModule = vmodule
 				formatter.BaseVerbosity = verbosityLevel
 
@@ -191,17 +191,33 @@ func main() {
 					Identifier:    logs.LogTargetUser,
 				})
 			case "fluentd":
+				// disabling logrus default output so we can control it via hooks
+				logrus.SetOutput(io.Discard)
+
 				f := joonix.NewFormatter()
 				if err := joonix.DisableTimestampFormat(f); err != nil {
 					panic(err) // lint:nopanic -- This shouldn't happen, but crashing immediately at startup is OK.
 				}
-				logrus.SetFormatter(f)
+
+				logrus.AddHook(&logs.WriterHook{
+					Formatter:     f,
+					Writer:        os.Stderr,
+					AllowedLevels: logrus.AllLevels[:verbosityLevel+1],
+					Identifier:    logs.LogTargetUser,
+				})
 			case "json":
-				logrus.SetFormatter(&logrus.JSONFormatter{
-					TimestampFormat: "2006-01-02 15:04:05.00",
+				// disabling logrus default output so we can control it via hooks
+				logrus.SetOutput(io.Discard)
+				logrus.AddHook(&logs.WriterHook{
+					Formatter: &logrus.JSONFormatter{
+						TimestampFormat: "2006-01-02 15:04:05.00",
+					},
+					Writer:        os.Stderr,
+					AllowedLevels: logrus.AllLevels[:verbosityLevel+1],
+					Identifier:    logs.LogTargetUser,
 				})
 			case "journald":
-				if err := journald.Enable(); err != nil {
+				if err := journald.Enable(verbosityLevel); err != nil {
 					return err
 				}
 			default:

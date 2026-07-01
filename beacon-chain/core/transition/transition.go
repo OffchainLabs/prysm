@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/fulu"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -156,6 +157,20 @@ func ProcessSlot(ctx context.Context, state state.BeaconState) (state.BeaconStat
 	}
 
 	return state, nil
+}
+
+// ProcessSlotsIfNeeded advances st to slot with at most one Copy; NextSlotState returns its own.
+func ProcessSlotsIfNeeded(ctx context.Context, st state.ReadOnlyBeaconState, parentRoot []byte, slot primitives.Slot) (state.ReadOnlyBeaconState, error) {
+	if slot <= st.Slot() {
+		return st, nil
+	}
+	if cached := NextSlotStateReadOnly(parentRoot, slot); cached != nil {
+		if cached.Slot() >= slot {
+			return cached, nil
+		}
+		return ProcessSlots(ctx, cached.Copy(), slot)
+	}
+	return ProcessSlots(ctx, st.Copy(), slot)
 }
 
 // ProcessSlotsUsingNextSlotCache processes slots by using next slot cache for higher efficiency.
@@ -314,9 +329,16 @@ func ProcessSlotsCore(ctx context.Context, span trace.Span, state state.BeaconSt
 
 // ProcessEpoch is a wrapper on fork specific epoch processing
 func ProcessEpoch(ctx context.Context, state state.BeaconState) (state.BeaconState, error) {
+	ctx, span := prysmTrace.StartSpan(ctx, "core.state.ProcessEpoch")
+	defer span.End()
+
 	var err error
 	if time.CanProcessEpoch(state) {
-		if state.Version() >= version.Fulu {
+		if state.Version() >= version.Gloas {
+			if err = processEpochGloas(ctx, state); err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("could not process %s epoch", version.String(state.Version())))
+			}
+		} else if state.Version() >= version.Fulu {
 			if err = fulu.ProcessEpoch(ctx, state); err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("could not process %s epoch", version.String(state.Version())))
 			}
@@ -385,7 +407,7 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 	}
 
 	if time.CanUpgradeToElectra(slot) {
-		state, err = electra.UpgradeToElectra(state)
+		state, err = electra.UpgradeToElectra(ctx, state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
 			return nil, err
@@ -395,6 +417,15 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 
 	if time.CanUpgradeToFulu(slot) {
 		state, err = fulu.UpgradeToFulu(ctx, state)
+		if err != nil {
+			tracing.AnnotateError(span, err)
+			return nil, err
+		}
+		upgraded = true
+	}
+
+	if time.CanUpgradeToGloas(slot) {
+		state, err = gloas.UpgradeToGloas(state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
 			return nil, err

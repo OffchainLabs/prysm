@@ -5,6 +5,8 @@ go_library(
     testonly = True,
     srcs = [
         "fuzz_p2p.go",
+        "gossiptracer.go",
+        "log.go",
         "mock_broadcaster.go",
         "mock_host.go",
         "mock_listener.go",
@@ -21,6 +23,7 @@ go_library(
     deps = [
         "//beacon-chain/core/peerdas:go_default_library",
         "//beacon-chain/p2p/encoder:go_default_library",
+        "//beacon-chain/p2p/partialdatacolumnbroadcaster:go_default_library",
         "//beacon-chain/p2p/peers:go_default_library",
         "//beacon-chain/p2p/peers/scorers:go_default_library",
         "//config/fieldparams:go_default_library",

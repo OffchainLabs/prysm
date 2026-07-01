@@ -55,6 +55,11 @@ func (s *Service) validateVoluntaryExit(ctx context.Context, pid peer.ID, msg *p
 		return pubsub.ValidationIgnore, err
 	}
 
+	// [Modified in Gloas:EIP8282] Builder exits are no longer carried as voluntary
+	// exits; builders exit via BuilderExitRequest on the execution layer.
+	if exit.Exit.ValidatorIndex.IsBuilderIndex() {
+		return pubsub.ValidationReject, errors.New("builder voluntary exits are not supported")
+	}
 	if uint64(exit.Exit.ValidatorIndex) >= uint64(headState.NumValidators()) {
 		return pubsub.ValidationReject, errors.New("validator index is invalid")
 	}

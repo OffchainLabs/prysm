@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
-	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
@@ -28,8 +27,7 @@ import (
 func (s *Server) BlockRewards(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.BlockRewards")
 	defer span.End()
-	segments := strings.Split(r.URL.Path, "/")
-	blockId := segments[len(segments)-1]
+	blockId := r.PathValue("block_id")
 
 	blk, err := s.Blocker.Block(r.Context(), []byte(blockId))
 	if !shared.WriteBlockFetchError(w, blk, err) {
@@ -46,14 +44,14 @@ func (s *Server) BlockRewards(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	optimistic, err := s.OptimisticModeFetcher.IsOptimistic(r.Context())
-	if err != nil {
-		httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
 	blkRoot, err := blk.Block().HashTreeRoot()
 	if err != nil {
 		httputil.HandleError(w, "Could not get block root: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	optimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, blkRoot)
+	if err != nil {
+		httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	blockRewards, httpError := s.BlockRewardFetcher.GetBlockRewardsData(ctx, blk.Block())
@@ -72,6 +70,9 @@ func (s *Server) BlockRewards(w http.ResponseWriter, r *http.Request) {
 // AttestationRewards retrieves attestation reward info for validators specified by array of public keys or validator index.
 // If no array is provided, return reward info for every validator.
 func (s *Server) AttestationRewards(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.AttestationRewards")
+	defer span.End()
+
 	st, ok := s.attRewardsState(w, r)
 	if !ok {
 		return
@@ -89,14 +90,14 @@ func (s *Server) AttestationRewards(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	optimistic, err := s.OptimisticModeFetcher.IsOptimistic(r.Context())
-	if err != nil {
-		httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
 	blkRoot, err := st.LatestBlockHeader().HashTreeRoot()
 	if err != nil {
 		httputil.HandleError(w, "Could not get block root: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	optimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, blkRoot)
+	if err != nil {
+		httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -116,8 +117,7 @@ func (s *Server) AttestationRewards(w http.ResponseWriter, r *http.Request) {
 func (s *Server) SyncCommitteeRewards(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.SyncCommitteeRewards")
 	defer span.End()
-	segments := strings.Split(r.URL.Path, "/")
-	blockId := segments[len(segments)-1]
+	blockId := r.PathValue("block_id")
 
 	blk, err := s.Blocker.Block(r.Context(), []byte(blockId))
 	if !shared.WriteBlockFetchError(w, blk, err) {
@@ -172,14 +172,14 @@ func (s *Server) SyncCommitteeRewards(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	optimistic, err := s.OptimisticModeFetcher.IsOptimistic(r.Context())
-	if err != nil {
-		httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
 	blkRoot, err := blk.Block().HashTreeRoot()
 	if err != nil {
 		httputil.HandleError(w, "Could not get block root: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	optimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, blkRoot)
+	if err != nil {
+		httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -199,8 +199,7 @@ func (s *Server) SyncCommitteeRewards(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) attRewardsState(w http.ResponseWriter, r *http.Request) (state.BeaconState, bool) {
-	segments := strings.Split(r.URL.Path, "/")
-	requestedEpoch, err := strconv.ParseUint(segments[len(segments)-1], 10, 64)
+	requestedEpoch, err := strconv.ParseUint(r.PathValue("epoch"), 10, 64)
 	if err != nil {
 		httputil.HandleError(w, "Could not decode epoch: "+err.Error(), http.StatusBadRequest)
 		return nil, false

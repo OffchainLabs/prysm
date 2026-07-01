@@ -9,6 +9,7 @@ import (
 	v "github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -51,6 +52,11 @@ func ProcessVoluntaryExits(
 	exits []*ethpb.SignedVoluntaryExit,
 	exitInfo *v.ExitInfo,
 ) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "blocks.ProcessVoluntaryExits")
+	defer span.End()
+
+	span.SetAttributes(trace.Int64Attribute("count", int64(len(exits))))
+
 	// Avoid calculating the epoch churn if no exits exist.
 	if len(exits) == 0 {
 		return beaconState, nil
@@ -102,19 +108,19 @@ func ProcessVoluntaryExits(
 //	 initiate_validator_exit(state, voluntary_exit.validator_index)
 func VerifyExitAndSignature(
 	validator state.ReadOnlyValidator,
-	state state.ReadOnlyBeaconState,
+	st state.ReadOnlyBeaconState,
 	signed *ethpb.SignedVoluntaryExit,
 ) error {
 	if signed == nil || signed.Exit == nil {
 		return errors.New("nil exit")
 	}
 
-	fork := state.Fork()
-	genesisRoot := state.GenesisValidatorsRoot()
+	fork := st.Fork()
+	genesisRoot := st.GenesisValidatorsRoot()
 
 	// EIP-7044: Beginning in Deneb, fix the fork version to Capella.
 	// This allows for signed validator exits to be valid forever.
-	if state.Version() >= version.Deneb {
+	if st.Version() >= version.Deneb {
 		fork = &ethpb.Fork{
 			PreviousVersion: params.BeaconConfig().CapellaForkVersion,
 			CurrentVersion:  params.BeaconConfig().CapellaForkVersion,
@@ -123,7 +129,7 @@ func VerifyExitAndSignature(
 	}
 
 	exit := signed.Exit
-	if err := verifyExitConditions(state, validator, exit); err != nil {
+	if err := verifyExitConditions(st, validator, exit); err != nil {
 		return err
 	}
 	domain, err := signing.Domain(fork, exit.Epoch, params.BeaconConfig().DomainVoluntaryExit, genesisRoot)

@@ -104,7 +104,7 @@ func (s *PremineGenesisConfig) empty() (state.BeaconState, error) {
 
 	switch s.Version {
 	case version.Phase0:
-		e, err = state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		e, err = state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{
 			BlockRoots:  bRoots,
 			StateRoots:  sRoots,
 			RandaoMixes: mixes,
@@ -115,7 +115,7 @@ func (s *PremineGenesisConfig) empty() (state.BeaconState, error) {
 			return nil, err
 		}
 	case version.Altair:
-		e, err = state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+		e, err = state_native.InitializeFromProtoUnsafeAltair(&ethpb.BeaconStateAltair{
 			BlockRoots:       bRoots,
 			StateRoots:       sRoots,
 			RandaoMixes:      mixes,
@@ -127,7 +127,7 @@ func (s *PremineGenesisConfig) empty() (state.BeaconState, error) {
 			return nil, err
 		}
 	case version.Bellatrix:
-		e, err = state_native.InitializeFromProtoBellatrix(&ethpb.BeaconStateBellatrix{
+		e, err = state_native.InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{
 			BlockRoots:       bRoots,
 			StateRoots:       sRoots,
 			RandaoMixes:      mixes,
@@ -139,7 +139,7 @@ func (s *PremineGenesisConfig) empty() (state.BeaconState, error) {
 			return nil, err
 		}
 	case version.Capella:
-		e, err = state_native.InitializeFromProtoCapella(&ethpb.BeaconStateCapella{
+		e, err = state_native.InitializeFromProtoUnsafeCapella(&ethpb.BeaconStateCapella{
 			BlockRoots:       bRoots,
 			StateRoots:       sRoots,
 			RandaoMixes:      mixes,
@@ -151,19 +151,19 @@ func (s *PremineGenesisConfig) empty() (state.BeaconState, error) {
 			return nil, err
 		}
 	case version.Deneb:
-		e, err = state_native.InitializeFromProtoDeneb(&ethpb.BeaconStateDeneb{})
+		e, err = state_native.InitializeFromProtoUnsafeDeneb(&ethpb.BeaconStateDeneb{})
 		if err != nil {
 			return nil, err
 		}
 	case version.Electra:
-		e, err = state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{
+		e, err = state_native.InitializeFromProtoUnsafeElectra(&ethpb.BeaconStateElectra{
 			DepositRequestsStartIndex: params.BeaconConfig().UnsetDepositRequestsStartIndex,
 		})
 		if err != nil {
 			return nil, err
 		}
 	case version.Fulu:
-		e, err = state_native.InitializeFromProtoFulu(&ethpb.BeaconStateFulu{
+		e, err = state_native.InitializeFromProtoUnsafeFulu(&ethpb.BeaconStateFulu{
 			DepositRequestsStartIndex: params.BeaconConfig().UnsetDepositRequestsStartIndex,
 		})
 		if err != nil {
@@ -330,7 +330,8 @@ func (s *PremineGenesisConfig) populate(g state.BeaconState) error {
 }
 
 func (s *PremineGenesisConfig) setGenesisValidatorsRoot(g state.BeaconState) error {
-	vroot, err := stateutil.ValidatorRegistryRoot(g.Validators())
+	compactValidators := stateutil.CompactValidatorsFromProto(g.Validators())
+	vroot, err := stateutil.ValidatorRegistryRoot(compactValidators)
 	if err != nil {
 		return err
 	}

@@ -34,11 +34,17 @@ func Setup(ctx context.Context, serviceName, processName, endpoint string, sampl
 		return errors.New("tracing service name cannot be empty")
 	}
 
-	log.Infof("Starting otel exporter endpoint at address = %s", endpoint)
+	log.WithField("endpoint", endpoint).Info("Starting otel exporter endpoint")
 	exporter, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(endpoint))
 	if err != nil {
 		return err
 	}
+
+	res, err := buildResource(ctx, serviceName, processName)
+	if err != nil {
+		return err
+	}
+
 	tp := trace.NewTracerProvider(
 		trace.WithSampler(trace.TraceIDRatioBased(sampleFraction)),
 		trace.WithBatcher(
@@ -46,18 +52,30 @@ func Setup(ctx context.Context, serviceName, processName, endpoint string, sampl
 			trace.WithMaxExportBatchSize(trace.DefaultMaxExportBatchSize),
 			trace.WithBatchTimeout(trace.DefaultScheduleDelay*time.Millisecond),
 		),
-		trace.WithResource(
-			resource.NewWithAttributes(
-				semconv.SchemaURL,
-				semconv.ServiceNameKey.String(serviceName),
-				attribute.String("process_name", processName),
-				attribute.String("build", version.BuildData()),
-			),
-		),
+		trace.WithResource(res),
 	)
 
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 
 	return nil
+}
+
+func buildResource(ctx context.Context, serviceName, processName string) (*resource.Resource, error) {
+	attrs := []attribute.KeyValue{
+		semconv.ServiceNameKey.String(serviceName),
+		attribute.String("build", version.BuildData()),
+	}
+	if processName != "" {
+		attrs = append(attrs,
+			semconv.ServiceInstanceIDKey.String(processName),
+			attribute.String("process_name", processName),
+		)
+	}
+
+	return resource.New(ctx,
+		resource.WithSchemaURL(semconv.SchemaURL),
+		resource.WithAttributes(attrs...),
+		resource.WithFromEnv(),
+	)
 }

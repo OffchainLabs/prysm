@@ -25,4 +25,10 @@ var (
 			Help: "Time it took to replay to slot",
 		},
 	)
+	saveStateToColdSummary = promauto.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "save_state_to_cold_milliseconds",
+			Help: "Time it took to save a state to the DB during migration to cold",
+		},
+	)
 )

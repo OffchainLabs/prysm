@@ -192,6 +192,13 @@
     INACTIVITY_PENALTY_QUOTIENT_BELLATRIX: uint64 = 16777216
     </spec>
 
+- name: INCLUSION_LIST_COMMITTEE_SIZE#heze
+  sources: []
+  spec: |
+    <spec preset_var="INCLUSION_LIST_COMMITTEE_SIZE" fork="heze" hash="780fb63c">
+    INCLUSION_LIST_COMMITTEE_SIZE: uint64 = 16
+    </spec>
+
 - name: KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH#fulu
   sources:
     - file: proto/ssz_proto_library.bzl
@@ -277,6 +284,20 @@
   spec: |
     <spec preset_var="MAX_BUILDERS_PER_WITHDRAWALS_SWEEP" fork="gloas" hash="1556b314">
     MAX_BUILDERS_PER_WITHDRAWALS_SWEEP = 16384
+    </spec>
+
+- name: MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD#gloas
+  sources: []
+  spec: |
+    <spec preset_var="MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD" fork="gloas" hash="81a08140">
+    MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD: uint64 = 256
+    </spec>
+
+- name: MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD#gloas
+  sources: []
+  spec: |
+    <spec preset_var="MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD" fork="gloas" hash="d461f12d">
+    MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD: uint64 = 16
     </spec>
 
 - name: MAX_BYTES_PER_TRANSACTION#bellatrix

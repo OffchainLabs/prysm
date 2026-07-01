@@ -17,7 +17,7 @@ import (
 // This pool is used by proposers to insert voluntary exits into new blocks.
 type PoolManager interface {
 	PendingExits() ([]*ethpb.SignedVoluntaryExit, error)
-	ExitsForInclusion(state state.ReadOnlyBeaconState, slot types.Slot) ([]*ethpb.SignedVoluntaryExit, error)
+	ExitsForInclusion(st state.ReadOnlyBeaconState, slot types.Slot) ([]*ethpb.SignedVoluntaryExit, error)
 	InsertVoluntaryExit(exit *ethpb.SignedVoluntaryExit)
 	MarkIncluded(exit *ethpb.SignedVoluntaryExit)
 }
@@ -60,7 +60,7 @@ func (p *Pool) PendingExits() ([]*ethpb.SignedVoluntaryExit, error) {
 
 // ExitsForInclusion returns objects that are ready for inclusion at the given slot. This method will not
 // return more than the block enforced MaxVoluntaryExits.
-func (p *Pool) ExitsForInclusion(state state.ReadOnlyBeaconState, slot types.Slot) ([]*ethpb.SignedVoluntaryExit, error) {
+func (p *Pool) ExitsForInclusion(st state.ReadOnlyBeaconState, slot types.Slot) ([]*ethpb.SignedVoluntaryExit, error) {
 	p.lock.RLock()
 	length := int(min(float64(params.BeaconConfig().MaxVoluntaryExits), float64(p.pending.Len())))
 	result := make([]*ethpb.SignedVoluntaryExit, 0, length)
@@ -79,9 +79,9 @@ func (p *Pool) ExitsForInclusion(state state.ReadOnlyBeaconState, slot types.Slo
 			}
 			continue
 		}
-		validator, err := state.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
-		if err != nil {
-			logrus.WithError(err).Warningf("could not get validator at index %d", exit.Exit.ValidatorIndex)
+		// [Modified in Gloas:EIP8282] Builder exits are no longer carried as voluntary
+		// exits; builders exit via BuilderExitRequest on the execution layer.
+		if exit.Exit.ValidatorIndex.IsBuilderIndex() {
 			node, err = node.Next()
 			if err != nil {
 				p.lock.RUnlock()
@@ -89,7 +89,17 @@ func (p *Pool) ExitsForInclusion(state state.ReadOnlyBeaconState, slot types.Slo
 			}
 			continue
 		}
-		if err = blocks.VerifyExitAndSignature(validator, state, exit); err != nil {
+		validator, vErr := st.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
+		if vErr != nil {
+			logrus.WithError(vErr).Warningf("could not get validator at index %d", exit.Exit.ValidatorIndex)
+			node, err = node.Next()
+			if err != nil {
+				p.lock.RUnlock()
+				return nil, err
+			}
+			continue
+		}
+		if err = blocks.VerifyExitAndSignature(validator, st, exit); err != nil {
 			logrus.WithError(err).Warning("removing invalid exit from pool")
 			p.lock.RUnlock()
 			// MarkIncluded removes the invalid exit from the pool

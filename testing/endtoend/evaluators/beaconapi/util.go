@@ -45,6 +45,7 @@ func doJSONGETRequest(template, requestPath string, beaconNodeIdx int, resp any,
 	if err != nil {
 		return errors.Wrap(err, "request failed")
 	}
+	defer closeBody(httpResp.Body)
 
 	var body any
 	if httpResp.StatusCode != http.StatusOK {
@@ -53,7 +54,6 @@ func doJSONGETRequest(template, requestPath string, beaconNodeIdx int, resp any,
 				return errors.Wrap(err, "failed to decode response body")
 			}
 		} else {
-			defer closeBody(httpResp.Body)
 			body, err = io.ReadAll(httpResp.Body)
 			if err != nil {
 				return errors.Wrap(err, "failed to read response body")
@@ -94,6 +94,7 @@ func doSSZGETRequest(template, requestPath string, beaconNodeIdx int, bnType ...
 	if err != nil {
 		return nil, errors.Wrap(err, "request failed")
 	}
+	defer closeBody(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		var body any
 		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
@@ -101,7 +102,6 @@ func doSSZGETRequest(template, requestPath string, beaconNodeIdx int, bnType ...
 		}
 		return nil, fmt.Errorf(msgRequestFailed, bnType[0], resp.StatusCode, body)
 	}
-	defer closeBody(resp.Body)
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to read response body")
@@ -138,6 +138,7 @@ func doJSONPOSTRequest(template, requestPath string, beaconNodeIdx int, postObj,
 	if err != nil {
 		return errors.Wrap(err, "request failed")
 	}
+	defer closeBody(httpResp.Body)
 
 	var body any
 	if httpResp.StatusCode != http.StatusOK {
@@ -146,7 +147,6 @@ func doJSONPOSTRequest(template, requestPath string, beaconNodeIdx int, postObj,
 				return errors.Wrap(err, "failed to decode response body")
 			}
 		} else {
-			defer closeBody(httpResp.Body)
 			body, err = io.ReadAll(httpResp.Body)
 			if err != nil {
 				return errors.Wrap(err, "failed to read response body")
@@ -192,6 +192,7 @@ func doSSZPOSTRequest(template, requestPath string, beaconNodeIdx int, postObj a
 	if err != nil {
 		return nil, errors.Wrap(err, "request failed")
 	}
+	defer closeBody(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		var body any
 		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
@@ -199,7 +200,6 @@ func doSSZPOSTRequest(template, requestPath string, beaconNodeIdx int, postObj a
 		}
 		return nil, fmt.Errorf(msgRequestFailed, bnType[0], resp.StatusCode, body)
 	}
-	defer closeBody(resp.Body)
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to read response body")

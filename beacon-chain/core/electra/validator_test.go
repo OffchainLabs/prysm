@@ -17,9 +17,6 @@ func TestSwitchToCompoundingValidator(t *testing.T) {
 	s, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{
 		Validators: []*eth.Validator{
 			{
-				WithdrawalCredentials: []byte{}, // No withdrawal credentials
-			},
-			{
 				WithdrawalCredentials: []byte{0x01, 0xFF}, // Has withdrawal credentials
 			},
 			{
@@ -28,21 +25,18 @@ func TestSwitchToCompoundingValidator(t *testing.T) {
 		},
 		Balances: []uint64{
 			params.BeaconConfig().MinActivationBalance,
-			params.BeaconConfig().MinActivationBalance,
 			params.BeaconConfig().MinActivationBalance + 100_000, // Has excess balance
 		},
 	})
-	// Test that a validator with no withdrawal credentials cannot be switched to compounding.
 	require.NoError(t, err)
-	require.ErrorContains(t, "validator has no withdrawal credentials", electra.SwitchToCompoundingValidator(s, 0))
 
 	// Test that a validator with withdrawal credentials can be switched to compounding.
-	require.NoError(t, electra.SwitchToCompoundingValidator(s, 1))
-	v, err := s.ValidatorAtIndex(1)
+	require.NoError(t, electra.SwitchToCompoundingValidator(s, 0))
+	v, err := s.ValidatorAtIndex(0)
 	require.NoError(t, err)
 	require.Equal(t, true, bytes.HasPrefix(v.WithdrawalCredentials, []byte{params.BeaconConfig().CompoundingWithdrawalPrefixByte}), "withdrawal credentials were not updated")
-	// val_1 Balance is not changed
-	b, err := s.BalanceAtIndex(1)
+	// val_0 Balance is not changed
+	b, err := s.BalanceAtIndex(0)
 	require.NoError(t, err)
 	require.Equal(t, params.BeaconConfig().MinActivationBalance, b, "balance was changed")
 	pbd, err := s.PendingDeposits()
@@ -50,8 +44,8 @@ func TestSwitchToCompoundingValidator(t *testing.T) {
 	require.Equal(t, 0, len(pbd), "pending balance deposits should be empty")
 
 	// Test that a validator with excess balance can be switched to compounding, excess balance is queued.
-	require.NoError(t, electra.SwitchToCompoundingValidator(s, 2))
-	b, err = s.BalanceAtIndex(2)
+	require.NoError(t, electra.SwitchToCompoundingValidator(s, 1))
+	b, err = s.BalanceAtIndex(1)
 	require.NoError(t, err)
 	require.Equal(t, params.BeaconConfig().MinActivationBalance, b, "balance was not changed")
 	pbd, err = s.PendingDeposits()

@@ -58,7 +58,7 @@ func (s *Service) validateWithBatchVerifier(ctx context.Context, message string,
 	defer span.End()
 
 	resChan := make(chan error)
-	verificationSet := &signatureVerifier{set: set.Copy(), resChan: resChan}
+	verificationSet := &signatureVerifier{set: set, resChan: resChan}
 	s.signatureChan <- verificationSet
 
 	resErr := <-resChan
@@ -85,10 +85,9 @@ func verifyBatch(verifierBatch []*signatureVerifier) {
 	if len(verifierBatch) == 0 {
 		return
 	}
-	aggSet := verifierBatch[0].set
-
-	for i := 1; i < len(verifierBatch); i++ {
-		aggSet = aggSet.Join(verifierBatch[i].set)
+	aggSet := bls.NewSet()
+	for _, v := range verifierBatch {
+		aggSet = aggSet.Join(v.set)
 	}
 	var verificationErr error
 

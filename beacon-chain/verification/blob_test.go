@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"iter"
 	"testing"
 	"time"
 
@@ -628,6 +629,10 @@ type mockStateByRooter struct {
 	calledForRoot map[[32]byte]bool
 }
 
+func (sbr *mockStateByRooter) StateByRootIfCachedNoCopy(_ [32]byte) state.ReadOnlyBeaconState {
+	return nil
+}
+
 func (sbr *mockStateByRooter) StateByRoot(ctx context.Context, root [32]byte) (state.BeaconState, error) {
 	if sbr.calledForRoot == nil {
 		sbr.calledForRoot = make(map[[32]byte]bool)
@@ -842,18 +847,18 @@ func (v *validxStateOverride) SetLatestBlockHeader(val *ethpb.BeaconBlockHeader)
 	return nil
 }
 
-func (v *validxStateOverride) ReadFromEveryValidator(f func(idx int, val state.ReadOnlyValidator) error) error {
-	validators := v.Validators()
-	for i, val := range validators {
-		rov, err := state_native.NewValidator(val)
-		if err != nil {
-			return err
-		}
-		if err := f(i, rov); err != nil {
-			return err
+func (v *validxStateOverride) ValidatorsReadOnlySeq() iter.Seq2[primitives.ValidatorIndex, state.ReadOnlyValidator] {
+	return func(yield func(primitives.ValidatorIndex, state.ReadOnlyValidator) bool) {
+		for i, val := range v.Validators() {
+			rov, err := state_native.NewValidator(val)
+			if err != nil {
+				return
+			}
+			if !yield(primitives.ValidatorIndex(i), rov) {
+				return
+			}
 		}
 	}
-	return nil
 }
 
 type mockProposerCache struct {

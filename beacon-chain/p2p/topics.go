@@ -49,7 +49,11 @@ const (
 	// GossipPayloadAttestationMessageMessage is the name for the payload attestation message type.
 	GossipPayloadAttestationMessageMessage = "payload_attestation_message"
 	// GossipExecutionPayloadEnvelopeMessage is the name for the execution payload envelope message type.
-	GossipExecutionPayloadEnvelopeMessage = "execution_payload_envelope"
+	GossipExecutionPayloadEnvelopeMessage = "execution_payload"
+	// GossipExecutionPayloadBidMessage is the name for the execution payload bid message type.
+	GossipExecutionPayloadBidMessage = "execution_payload_bid"
+	// GossipSignedProposerPreferencesMessage is the name for the proposer preferences message type.
+	GossipSignedProposerPreferencesMessage = "proposer_preferences"
 
 	// Topic Formats
 	//
@@ -83,6 +87,10 @@ const (
 	PayloadAttestationMessageTopicFormat = GossipProtocolAndDigest + GossipPayloadAttestationMessageMessage
 	// ExecutionPayloadEnvelopeTopicFormat is the topic format for execution payload envelopes.
 	ExecutionPayloadEnvelopeTopicFormat = GossipProtocolAndDigest + GossipExecutionPayloadEnvelopeMessage
+	// ExecutionPayloadBidTopicFormat is the topic format for execution payload bids.
+	ExecutionPayloadBidTopicFormat = GossipProtocolAndDigest + GossipExecutionPayloadBidMessage
+	// SignedProposerPreferencesTopicFormat is the topic format for signed proposer preferences.
+	SignedProposerPreferencesTopicFormat = GossipProtocolAndDigest + GossipSignedProposerPreferencesMessage
 )
 
 // topic is a struct representing a single gossipsub topic.
@@ -168,6 +176,8 @@ func (s *Service) allTopics() []topic {
 		newTopic(capella, future, empty, GossipBlsToExecutionChangeMessage),
 		newTopic(gloas, future, empty, GossipPayloadAttestationMessageMessage),
 		newTopic(gloas, future, empty, GossipExecutionPayloadEnvelopeMessage),
+		newTopic(gloas, future, empty, GossipExecutionPayloadBidMessage),
+		newTopic(gloas, future, empty, GossipSignedProposerPreferencesMessage),
 	}
 	last := params.GetNetworkScheduleEntry(genesis)
 	schedule := []params.NetworkScheduleEntry{last}

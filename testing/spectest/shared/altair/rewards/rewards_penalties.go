@@ -69,7 +69,7 @@ func runPrecomputeRewardsAndPenaltiesTest(t *testing.T, testFolderPath string) {
 	require.NoError(t, err, "Failed to decompress")
 	preBeaconStateBase := &ethpb.BeaconStateAltair{}
 	require.NoError(t, preBeaconStateBase.UnmarshalSSZ(preBeaconStateSSZ), "Failed to unmarshal")
-	preBeaconState, err := state_native.InitializeFromProtoAltair(preBeaconStateBase)
+	preBeaconState, err := state_native.InitializeFromProtoUnsafeAltair(preBeaconStateBase)
 	require.NoError(t, err)
 
 	vp, bp, err := altair.InitializePrecomputeValidators(ctx, preBeaconState)

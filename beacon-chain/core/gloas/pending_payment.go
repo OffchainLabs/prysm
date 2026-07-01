@@ -1,6 +1,8 @@
 package gloas
 
 import (
+	"context"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -25,8 +27,8 @@ import (
 //	    new_payments = [BuilderPendingPayment() for _ in range(SLOTS_PER_EPOCH)]
 //	    state.builder_pending_payments = old_payments + new_payments
 //	</spec>
-func ProcessBuilderPendingPayments(state state.BeaconState) error {
-	quorum, err := builderQuorumThreshold(state)
+func ProcessBuilderPendingPayments(ctx context.Context, state state.BeaconState) error {
+	quorum, err := builderQuorumThreshold(ctx, state)
 	if err != nil {
 		return errors.Wrap(err, "could not compute builder payment quorum threshold")
 	}
@@ -52,6 +54,7 @@ func ProcessBuilderPendingPayments(state state.BeaconState) error {
 	if err := state.RotateBuilderPendingPayments(); err != nil {
 		return errors.Wrap(err, "could not rotate builder pending payments")
 	}
+	builderPendingPaymentsProcessedTotal.Add(float64(len(withdrawals)))
 
 	return nil
 }
@@ -67,8 +70,8 @@ func ProcessBuilderPendingPayments(state state.BeaconState) error {
 //	    quorum = per_slot_balance * BUILDER_PAYMENT_THRESHOLD_NUMERATOR
 //	    return uint64(quorum // BUILDER_PAYMENT_THRESHOLD_DENOMINATOR)
 //	</spec>
-func builderQuorumThreshold(state state.ReadOnlyBeaconState) (primitives.Gwei, error) {
-	activeBalance, err := helpers.TotalActiveBalance(state)
+func builderQuorumThreshold(ctx context.Context, state state.ReadOnlyBeaconState) (primitives.Gwei, error) {
+	activeBalance, err := helpers.TotalActiveBalance(ctx, state)
 	if err != nil {
 		return 0, errors.Wrap(err, "could not get total active balance")
 	}

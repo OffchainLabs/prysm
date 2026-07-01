@@ -173,6 +173,20 @@ func Test_NewSignedBeaconBlock(t *testing.T) {
 		assert.Equal(t, version.Gloas, b.Version())
 		assert.Equal(t, false, b.IsBlinded())
 	})
+	t.Run("GenericSignedBeaconBlock_Gloas", func(t *testing.T) {
+		pb := &eth.GenericSignedBeaconBlock_Gloas{
+			Gloas: &eth.SignedBeaconBlockGloas{
+				Block: &eth.BeaconBlockGloas{
+					Body: &eth.BeaconBlockBodyGloas{},
+				},
+				Signature: []byte("sig"),
+			},
+		}
+		b, err := NewSignedBeaconBlock(pb)
+		require.NoError(t, err)
+		assert.Equal(t, version.Gloas, b.Version())
+		assert.Equal(t, false, b.IsBlinded())
+	})
 	t.Run("nil", func(t *testing.T) {
 		_, err := NewSignedBeaconBlock(nil)
 		assert.ErrorContains(t, "received nil object", err)

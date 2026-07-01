@@ -36,7 +36,7 @@ func RunUpgradeToDeneb(t *testing.T, config string) {
 			if err := preStateBase.UnmarshalSSZ(preStateSSZ); err != nil {
 				t.Fatalf("Failed to unmarshal: %v", err)
 			}
-			preState, err := state_native.InitializeFromProtoCapella(preStateBase)
+			preState, err := state_native.InitializeFromProtoUnsafeCapella(preStateBase)
 			require.NoError(t, err)
 			postState, err := deneb.UpgradeToDeneb(preState)
 			require.NoError(t, err)

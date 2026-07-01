@@ -143,5 +143,6 @@ func (s *Store) removeNodeAndChildren(ctx context.Context, pn *PayloadNode, inva
 		}
 		delete(s.emptyNodeByRoot, pn.node.root)
 	}
+	updatePayloadNodeMetrics(s)
 	return invalidRoots, nil
 }

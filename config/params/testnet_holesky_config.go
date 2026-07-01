@@ -41,6 +41,7 @@ func HoleskyConfig() *BeaconChainConfig {
 	cfg.ElectraForkVersion = []byte{0x06, 0x1, 0x70, 0x0}
 	cfg.FuluForkEpoch = 165120 // 2025-10-01 08:48:00 UTC
 	cfg.FuluForkVersion = []byte{0x07, 0x1, 0x70, 0x0}
+	cfg.GloasForkVersion = []byte{0x08, 0x1, 0x70, 0x0}
 	cfg.TerminalTotalDifficulty = "0"
 	cfg.DepositContractAddress = "0x4242424242424242424242424242424242424242"
 	cfg.EjectionBalance = 28000000000

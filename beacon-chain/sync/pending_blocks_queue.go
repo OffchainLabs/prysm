@@ -20,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz/equality"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	prysmTrace "github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
@@ -60,6 +61,8 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 
 	// Remove old blocks from our expiration cache.
 	s.deleteExpiredBlocksFromCache()
+	s.prunePendingPayloadEnvelopes()
+	s.prunePendingPayloadAttestations()
 
 	// Validate pending slots before processing.
 	if err := s.validatePendingSlots(); err != nil {
@@ -140,6 +143,10 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 			if !isParentBlockInDB {
 				continue
 			}
+			if !s.cfg.chain.ParentPayloadReady(b.Block()) {
+				go s.requestPayloadEnvelope(parentRoot)
+				continue
+			}
 
 			// Calculate the deadline time by adding three slots duration to the current time
 			secondsPerSlot := params.BeaconConfig().SecondsPerSlot
@@ -153,6 +160,10 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 			}
 			cancelFunction()
 
+			// Process synchronously because it's likely that the next pending block depends on it.
+			s.processPendingPayloadEnvelope(ctx, blkRoot)
+			s.processPendingGloasColumns(s.ctx, blkRoot, b)
+			s.processPendingPayloadAttestation(ctx, blkRoot)
 			blkRoots = append(blkRoots, blkRoot)
 
 			// Remove the processed block from the queue.
@@ -241,7 +252,7 @@ func (s *Service) processBlock(ctx context.Context, b interfaces.ReadOnlySignedB
 	blockSlot := b.Block().Slot()
 
 	if err := s.validateBeaconBlock(ctx, b, blkRoot); err != nil {
-		if !errors.Is(ErrOptimisticParent, err) {
+		if !errors.Is(err, ErrOptimisticParent) {
 			log.WithError(err).WithField("slot", blockSlot).Debug("Could not validate block")
 			return err
 		}
@@ -413,11 +424,20 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 			}).Debug("Requesting blocks by root")
 		}
 
+		// Optimistically request parent payload envelopes in parallel with the parent blocks.
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func(pid core.PeerID, roots p2ptypes.BeaconBlockByRootsReq) {
+			defer wg.Done()
+			s.fetchAndQueuePayloadEnvelopesForRoots(ctx, pid, roots)
+		}(pid, req)
+
 		// Send the request to the peer.
 		if err := s.sendBeaconBlocksRequest(ctx, &req, pid); err != nil {
 			tracing.AnnotateError(span, err)
 			log.WithError(err).Debug("Could not send recent block request")
 		}
+		wg.Wait()
 
 		// Filter out roots that are already seen in pending blocks.
 		newRoots := make([][32]byte, 0, rootCount)
@@ -455,6 +475,66 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 	}).Debug("Send batch root request: Some roots are still missing after all allowed tries")
 
 	return nil
+}
+
+func (s *Service) fetchAndQueuePayloadEnvelopesForRoots(
+	ctx context.Context,
+	pid core.PeerID,
+	roots p2ptypes.BeaconBlockByRootsReq,
+) {
+	gloasStartSlot, err := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
+	if err != nil {
+		log.WithError(err).Debug("Could not compute Gloas start slot")
+		return
+	}
+	// Nothing post-Gloas exists yet, so there are no envelopes to request.
+	if s.cfg.clock.CurrentSlot() < gloasStartSlot {
+		return
+	}
+
+	var envelopeRoots p2ptypes.ExecutionPayloadEnvelopesByRootReq
+	for _, root := range roots {
+		if s.cfg.beaconDB.HasExecutionPayloadEnvelope(ctx, root) {
+			continue
+		}
+		envelopeRoots = append(envelopeRoots, root)
+	}
+
+	if len(envelopeRoots) == 0 {
+		return
+	}
+
+	envelopes, err := SendExecutionPayloadEnvelopesByRootRequest(ctx, s.cfg.clock, s.cfg.p2p, pid, s.ctxMap, &envelopeRoots)
+	if err != nil {
+		log.WithError(err).Debug("Could not request execution payload envelopes by root")
+		return
+	}
+
+	for _, env := range envelopes {
+		if env == nil || env.Message == nil {
+			continue
+		}
+		s.queuePendingPayloadEnvelopeFromRootRequest(env)
+	}
+}
+
+func (s *Service) queuePendingPayloadEnvelopeFromRootRequest(signedEnvelope *ethpb.SignedExecutionPayloadEnvelope) {
+	if signedEnvelope == nil || signedEnvelope.Message == nil {
+		return
+	}
+
+	root := bytesutil.ToBytes32(signedEnvelope.Message.BeaconBlockRoot)
+	builderIdx := uint64(signedEnvelope.Message.BuilderIndex)
+
+	s.pendingEnvelopeLock.Lock()
+	defer s.pendingEnvelopeLock.Unlock()
+
+	inner, ok := s.pendingPayloadEnvelopes[root]
+	if !ok {
+		inner = make(map[uint64]*ethpb.SignedExecutionPayloadEnvelope)
+		s.pendingPayloadEnvelopes[root] = inner
+	}
+	inner[builderIdx] = signedEnvelope
 }
 
 // filterOutPendingAndSynced filters out roots that are already seen in pending blocks or being synced.

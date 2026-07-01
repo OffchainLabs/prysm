@@ -1,6 +1,10 @@
 package prefixed
 
 var prefixReplacements = map[string]string{
+	"runtime":                                         "registry",
+	"runtime/debug":                                   "runtime",
+	"runtime/messagehandler":                          "message-handler",
+	"runtime/prereqs":                                 "runtime-prereqs",
 	"cmd/beacon-chain":                                "main",
 	"cmd/client-stats":                                "main",
 	"cmd/prysmctl/p2p":                                "prysmctl-p2p",
@@ -13,6 +17,7 @@ var prefixReplacements = map[string]string{
 	"beacon-chain/db/kv":                              "db",
 	"beacon-chain/db/slasherkv":                       "slasherdb",
 	"beacon-chain/db/pruner":                          "db-pruner",
+	"beacon-chain/p2p/partialdatacolumnbroadcaster":   "partial-columns",
 	"beacon-chain/rpc/core":                           "rpc/core",
 	"beacon-chain/rpc/eth/beacon":                     "rpc/beacon",
 	"beacon-chain/rpc/eth/validator":                  "beacon-api",

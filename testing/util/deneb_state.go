@@ -82,7 +82,7 @@ func emptyGenesisStateDeneb() (state.BeaconState, error) {
 
 		LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeaderDeneb{},
 	}
-	return state_native.InitializeFromProtoDeneb(st)
+	return state_native.InitializeFromProtoUnsafeDeneb(st)
 }
 
 func buildGenesisBeaconStateDeneb(genesisTime uint64, preState state.BeaconState, eth1Data *ethpb.Eth1Data) (state.BeaconState, error) {
@@ -116,7 +116,8 @@ func buildGenesisBeaconStateDeneb(genesisTime uint64, preState state.BeaconState
 
 	slashings := make([]uint64, params.BeaconConfig().EpochsPerSlashingsVector)
 
-	genesisValidatorsRoot, err := stateutil.ValidatorRegistryRoot(preState.Validators())
+	compactValidators := stateutil.CompactValidatorsFromProto(preState.Validators())
+	genesisValidatorsRoot, err := stateutil.ValidatorRegistryRoot(compactValidators)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not hash tree root genesis validators %v", err)
 	}
@@ -250,5 +251,5 @@ func buildGenesisBeaconStateDeneb(genesisTime uint64, preState state.BeaconState
 		WithdrawalsRoot:  make([]byte, 32),
 	}
 
-	return state_native.InitializeFromProtoDeneb(st)
+	return state_native.InitializeFromProtoUnsafeDeneb(st)
 }

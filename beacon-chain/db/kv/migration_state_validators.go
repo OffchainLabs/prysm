@@ -209,7 +209,7 @@ func stateBucketKeys(stateBucket *bolt.Bucket) ([][]byte, error) {
 
 func insertValidatorHashes(ctx context.Context, validators []*v1alpha1.Validator, valBkt *bolt.Bucket) ([]byte, error) {
 	// move all the validators in this state registry out to a new bucket.
-	var validatorKeys []byte
+	validatorKeys := make([]byte, 0, len(validators)*32)
 	for _, val := range validators {
 		valBytes, encodeErr := encode(ctx, val)
 		if encodeErr != nil {

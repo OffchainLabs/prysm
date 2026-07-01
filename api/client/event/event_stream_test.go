@@ -78,6 +78,29 @@ func TestEventStream(t *testing.T) {
 	}
 }
 
+func TestEventStream_InvalidTopic(t *testing.T) {
+	const invalidTopic = "bogus"
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/eth/v1/events", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, err := w.Write([]byte(`{"message":"invalid topic name: ` + invalidTopic + `","code":400}`))
+		require.NoError(t, err)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	eventsChannel := make(chan *Event, 1)
+	stream, err := NewEventStream(t.Context(), http.DefaultClient, server.URL, []string{invalidTopic})
+	require.NoError(t, err)
+	go stream.Subscribe(eventsChannel)
+
+	event := <-eventsChannel
+	require.Equal(t, EventConnectionError, event.EventType)
+	require.StringContains(t, "400", string(event.Data))
+	require.StringContains(t, "invalid topic name: "+invalidTopic, string(event.Data))
+}
+
 func TestEventStreamRequestError(t *testing.T) {
 	topics := []string{"head"}
 	eventsChannel := make(chan *Event, 1)

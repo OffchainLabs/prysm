@@ -22,6 +22,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//api/server/structs:go_default_library",
+        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//testing/assert:go_default_library",

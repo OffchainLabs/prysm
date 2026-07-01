@@ -43,11 +43,11 @@ func ComputeConsolidationEpochAndUpdateChurn(ctx context.Context, s state.Beacon
 		return 0, err
 	}
 	earliestConsolidationEpoch := max(earliestEpoch, helpers.ActivationExitEpoch(slots.ToEpoch(s.Slot())))
-	activeBal, err := helpers.TotalActiveBalance(s)
+	activeBal, err := helpers.TotalActiveBalance(ctx, s)
 	if err != nil {
 		return 0, err
 	}
-	perEpochConsolidationChurn := helpers.ConsolidationChurnLimit(primitives.Gwei(activeBal))
+	perEpochConsolidationChurn := helpers.ConsolidationChurnLimitForVersion(s.Version(), primitives.Gwei(activeBal))
 
 	// New epoch for consolidations.
 	var consolidationBalanceToConsume primitives.Gwei

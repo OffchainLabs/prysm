@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -19,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
@@ -32,6 +34,7 @@ type Server struct {
 	BlockNotifier           blockfeed.Notifier
 	OperationNotifier       operation.Notifier
 	Broadcaster             p2p.Broadcaster
+	DataColumnReceiver      blockchain.DataColumnReceiver
 	AttestationCache        *cache.AttestationCache
 	AttestationsPool        attestations.Pool
 	SlashingsPool           slashings.PoolManager
@@ -48,7 +51,12 @@ type Server struct {
 	ExecutionReconstructor  execution.Reconstructor
 	FinalizationFetcher     blockchain.FinalizationFetcher
 	BLSChangesPool          blstoexec.PoolManager
+	PayloadAttestationPool  payloadattestation.PoolManager
 	ForkchoiceFetcher       blockchain.ForkchoiceFetcher
 	CoreService             *core.Service
 	AttestationStateFetcher blockchain.AttestationStateFetcher
+	// PayloadEnvelopeVerifier runs gossip-level checks on published envelopes.
+	PayloadEnvelopeVerifier verification.NewExecutionPayloadEnvelopeVerifier
+	// ExecutionPayloadEnvelopeCache reconstructs the full envelope in the blinded publish flow.
+	ExecutionPayloadEnvelopeCache *cache.ExecutionPayloadEnvelopeCache
 }

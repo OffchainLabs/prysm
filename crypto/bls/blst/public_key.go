@@ -4,16 +4,37 @@ package blst
 
 import (
 	"fmt"
+	"sync"
 
-	"github.com/OffchainLabs/prysm/v7/cache/nonblocking"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	"github.com/pkg/errors"
 )
 
-var maxKeys = 2_000_000
-var pubkeyCache *nonblocking.LRU[[48]byte, common.PublicKey]
+var pubkeyCache = &pubkeyCacheMap{
+	items: make(map[[fieldparams.BLSPubkeyLength]byte]common.PublicKey),
+}
+
+type pubkeyCacheMap struct {
+	mu    sync.RWMutex
+	items map[[fieldparams.BLSPubkeyLength]byte]common.PublicKey
+}
+
+func (c *pubkeyCacheMap) pubkey(key [fieldparams.BLSPubkeyLength]byte) (common.PublicKey, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	v, ok := c.items[key]
+	return v, ok
+}
+
+func (c *pubkeyCacheMap) setPubkey(key [fieldparams.BLSPubkeyLength]byte, value common.PublicKey) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.items[key] = value
+}
 
 // PublicKey used in the BLS signature scheme.
 type PublicKey struct {
@@ -30,7 +51,7 @@ func publicKeyFromBytes(pubKey []byte, cacheCopy bool) (common.PublicKey, error)
 		return nil, fmt.Errorf("public key must be %d bytes", params.BeaconConfig().BLSPubkeyLength)
 	}
 	newKey := (*[fieldparams.BLSPubkeyLength]byte)(pubKey)
-	if cv, ok := pubkeyCache.Get(*newKey); ok {
+	if cv, ok := pubkeyCache.pubkey(*newKey); ok {
 		if cacheCopy {
 			return cv.Copy(), nil
 		}
@@ -48,8 +69,7 @@ func publicKeyFromBytes(pubKey []byte, cacheCopy bool) (common.PublicKey, error)
 	}
 	pubKeyObj := &PublicKey{p: p}
 	copiedKey := pubKeyObj.Copy()
-	cacheKey := *newKey
-	pubkeyCache.Add(cacheKey, copiedKey)
+	pubkeyCache.setPubkey(*newKey, copiedKey)
 	return pubKeyObj, nil
 }
 

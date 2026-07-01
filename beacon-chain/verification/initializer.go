@@ -34,6 +34,7 @@ type Forkchoicer interface {
 // StateByRooter describes a stategen-ish type that can produce arbitrary states by their root
 type StateByRooter interface {
 	StateByRoot(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
+	StateByRootIfCachedNoCopy(blockRoot [32]byte) state.ReadOnlyBeaconState
 }
 
 // HeadStateProvider describes a type that can provide access to the current head state and related methods.
@@ -80,11 +81,20 @@ func (ini *Initializer) NewBlobVerifier(b blocks.ROBlob, reqs []Requirement) *RO
 // WARNING: The returned verifier is not thread-safe, and should not be used concurrently.
 func (ini *Initializer) NewDataColumnsVerifier(roDataColumns []blocks.RODataColumn, reqs []Requirement) *RODataColumnsVerifier {
 	return &RODataColumnsVerifier{
-		sharedResources:             ini.shared,
-		dataColumns:                 roDataColumns,
-		results:                     newResults(reqs...),
-		verifyDataColumnsCommitment: peerdas.VerifyDataColumnsSidecarKZGProofs,
-		stateByRoot:                 make(map[[fieldparams.RootLength]byte]state.BeaconState),
+		sharedResources: ini.shared,
+		dataColumns:     roDataColumns,
+		results:         newResults(reqs...),
+		verifyDataColumnsCommitment: func(rc []blocks.RODataColumn) error {
+			if len(rc) == 0 {
+				return nil
+			}
+			bundles, err := blocks.RODataColumnsToCellProofBundles(rc)
+			if err != nil {
+				return err
+			}
+			return peerdas.VerifyDataColumnsCellsKZGProofs(bundles)
+		},
+		stateByRoot: make(map[[fieldparams.RootLength]byte]state.BeaconState),
 	}
 }
 
@@ -95,6 +105,26 @@ func (ini *Initializer) NewPayloadAttestationMsgVerifier(pa payloadattestation.R
 		sharedResources: ini.shared,
 		results:         newResults(reqs...),
 		pa:              pa,
+	}
+}
+
+// NewSignedProposerPreferencesVerifier creates a SignedProposerPreferencesVerifier for a single signed proposer preferences
+// message, with the given set of requirements.
+func (ini *Initializer) NewSignedProposerPreferencesVerifier(p *ethpb.SignedProposerPreferences, reqs []Requirement) *ProposerPreferencesVerifier {
+	return &ProposerPreferencesVerifier{
+		sharedResources: ini.shared,
+		results:         newResults(reqs...),
+		p:               p,
+	}
+}
+
+// NewExecutionPayloadBidVerifier creates an ExecutionPayloadBidVerifier for a single signed execution payload bid
+// with the given set of requirements.
+func (ini *Initializer) NewExecutionPayloadBidVerifier(b interfaces.ROSignedExecutionPayloadBid, reqs []Requirement) *BidVerifier {
+	return &BidVerifier{
+		sharedResources: ini.shared,
+		results:         newResults(reqs...),
+		b:               b,
 	}
 }
 

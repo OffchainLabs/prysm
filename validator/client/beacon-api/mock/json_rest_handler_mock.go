@@ -18,19 +18,11 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// Backward compatibility aliases for the renamed mock type.
-type MockJsonRestHandler = MockHandler
-type MockJsonRestHandlerMockRecorder = MockHandlerMockRecorder
-type MockRestHandler = MockHandler
-type MockRestHandlerMockRecorder = MockHandlerMockRecorder
-
-var NewMockJsonRestHandler = NewMockHandler
-var NewMockRestHandler = NewMockHandler
-
 // MockHandler is a mock of Handler interface.
 type MockHandler struct {
 	ctrl     *gomock.Controller
 	recorder *MockHandlerMockRecorder
+	isgomock struct{}
 }
 
 // MockHandlerMockRecorder is the mock recorder for MockHandler.

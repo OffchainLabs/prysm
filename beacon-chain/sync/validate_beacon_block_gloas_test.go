@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -72,4 +74,127 @@ func TestValidateExecutionPayloadBid_RejectTooManyCommitments(t *testing.T) {
 	res, err := s.validateExecutionPayloadBid(ctx, wsb.Block())
 	require.Error(t, err)
 	require.Equal(t, pubsub.ValidationReject, res)
+}
+
+func TestValidateExecutionPayloadBidParentSeen_PreGloas(t *testing.T) {
+	ctx := context.Background()
+	blk := util.HydrateSignedBeaconBlockDeneb(nil)
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	s := &Service{}
+	res, err := s.validateExecutionPayloadBidParentSeen(ctx, wsb.Block())
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, res)
+}
+
+func TestValidateExecutionPayloadBidParentSeen_Accept(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	ctx := context.Background()
+
+	ready := true
+	s := &Service{cfg: &config{chain: &mock.ChainService{ParentPayloadReadyVal: &ready}}}
+
+	blk := util.NewBeaconBlockGloas()
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	res, err := s.validateExecutionPayloadBidParentSeen(ctx, wsb.Block())
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, res)
+}
+
+func TestValidateExecutionPayloadBidParentSeen_Ignore(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	ctx := context.Background()
+
+	notReady := false
+	s := &Service{cfg: &config{chain: &mock.ChainService{ParentPayloadReadyVal: &notReady}}}
+
+	blk := util.NewBeaconBlockGloas()
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	res, err := s.validateExecutionPayloadBidParentSeen(ctx, wsb.Block())
+	require.Error(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, res)
+}
+
+func TestValidateExecutionPayloadBidParentValid_PreGloas(t *testing.T) {
+	ctx := context.Background()
+	blk := util.HydrateSignedBeaconBlockDeneb(nil)
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	s := &Service{}
+	res, err := s.validateExecutionPayloadBidParentValid(ctx, wsb.Block())
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, res)
+}
+
+func TestValidateExecutionPayloadBidParentValid_Accept(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	ctx := context.Background()
+
+	s := &Service{badPayloadCache: lruwrpr.New(10)}
+
+	blk := util.NewBeaconBlockGloas()
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	res, err := s.validateExecutionPayloadBidParentValid(ctx, wsb.Block())
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, res)
+}
+
+func TestValidateExecutionPayloadBidParentValid_Reject(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	ctx := context.Background()
+
+	s := &Service{badPayloadCache: lruwrpr.New(10)}
+
+	blk := util.NewBeaconBlockGloas()
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	parentRoot := wsb.Block().ParentRoot()
+	s.badPayloadCache.Add(string(parentRoot[:]), true)
+
+	res, err := s.validateExecutionPayloadBidParentValid(ctx, wsb.Block())
+	require.Error(t, err)
+	require.Equal(t, pubsub.ValidationReject, res)
+}
+
+func TestRequestPayloadEnvelope_SkipsWhenAlreadyResolved(t *testing.T) {
+	root := [32]byte{0x42}
+
+	tests := []struct {
+		name  string
+		setup func(*Service)
+	}{
+		{
+			name: "already have full node",
+			setup: func(s *Service) {
+				s.cfg.chain = &mock.ChainService{ForkchoiceRoots: map[[32]byte]bool{root: true}}
+			},
+		},
+		{
+			name: "payload marked bad",
+			setup: func(s *Service) {
+				s.cfg.chain = &mock.ChainService{}
+				s.badPayloadCache.Add(string(root[:]), true)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// p2p is nil — getBestPeers would panic if the guards don't short-circuit.
+			s := &Service{
+				cfg:             &config{},
+				badPayloadCache: lruwrpr.New(10),
+			}
+			tt.setup(s)
+			require.NotPanics(t, func() { s.requestPayloadEnvelope(root) })
+		})
+	}
 }

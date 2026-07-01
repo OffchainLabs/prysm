@@ -92,7 +92,11 @@ func AcceptEncodingHeaderHandler() Middleware {
 				return
 			}
 
-			gz := gzip.NewWriter(w)
+			gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
+			if err != nil {
+				next.ServeHTTP(w, r)
+				return
+			}
 			gzipRW := &gzipResponseWriter{gz: gz, ResponseWriter: w}
 			defer func() {
 				if !gzipRW.zip {

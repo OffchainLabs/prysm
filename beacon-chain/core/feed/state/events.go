@@ -25,6 +25,8 @@ const (
 	FinalizedCheckpoint
 	// NewHead of the chain event.
 	NewHead
+	// NewHeadV2 of the chain event, carrying the versioned, Gloas-aware head_v2 payload.
+	NewHeadV2
 	// MissedSlot is sent when we need to notify users that a slot was missed.
 	MissedSlot
 	// LightClientFinalityUpdate event
@@ -33,6 +35,10 @@ const (
 	LightClientOptimisticUpdate
 	// PayloadAttributes events are fired upon a missed slot or new head.
 	PayloadAttributes
+	// ExecutionPayloadAvailable is sent when a new execution payload is available (without EL validation results).
+	ExecutionPayloadAvailable
+	// ExecutionPayloadProcessed is sent after a payload envelope has been processed.
+	ExecutionPayloadProcessed
 )
 
 // BlockProcessedData is the data sent with BlockProcessed events.
@@ -71,4 +77,51 @@ type InitializedData struct {
 	StartTime time.Time
 	// GenesisValidatorsRoot represents state.validators.HashTreeRoot().
 	GenesisValidatorsRoot []byte
+}
+
+// ExecutionPayloadAvailableData is the data sent with ExecutionPayloadAvailable events.
+type ExecutionPayloadAvailableData struct {
+	Slot      primitives.Slot
+	BlockRoot [32]byte
+}
+
+// ExecutionPayloadProcessedData is the data sent with ExecutionPayloadProcessed events.
+type ExecutionPayloadProcessedData struct {
+	Slot         primitives.Slot
+	BuilderIndex primitives.BuilderIndex
+	BlockHash    [32]byte
+	BlockRoot    [32]byte
+	// Optimistic is true if the imported payload has not been fully validated by the execution layer.
+	Optimistic bool
+}
+
+type PayloadStatus int
+
+const (
+	PayloadStatusEmpty = iota + 1
+	PayloadStatusFull
+)
+
+func (ps PayloadStatus) String() string {
+	switch ps {
+	case PayloadStatusEmpty:
+		return "empty"
+	case PayloadStatusFull:
+		return "full"
+	default:
+		return "unknown"
+	}
+}
+
+// HeadV2Data is the data sent with NewHeadV2 events.
+type HeadV2Data struct {
+	Slot                      primitives.Slot
+	Block                     [32]byte
+	State                     [32]byte
+	EpochTransition           bool
+	ExecutionOptimistic       bool
+	CurrentEpochDependentRoot [32]byte
+	NextEpochDependentRoot    [32]byte
+	PayloadStatus             PayloadStatus
+	Version                   int
 }

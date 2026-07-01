@@ -63,32 +63,32 @@ func runLightClientSingleMerkleProofTestBeaconState(t *testing.T, testFolderPath
 	case version.Altair:
 		beaconStateBase := &ethpb.BeaconStateAltair{}
 		require.NoError(t, beaconStateBase.UnmarshalSSZ(beaconStateSSZ), "Failed to unmarshal")
-		beaconState, err = state_native.InitializeFromProtoAltair(beaconStateBase)
+		beaconState, err = state_native.InitializeFromProtoUnsafeAltair(beaconStateBase)
 		require.NoError(t, err)
 	case version.Bellatrix:
 		beaconStateBase := &ethpb.BeaconStateBellatrix{}
 		require.NoError(t, beaconStateBase.UnmarshalSSZ(beaconStateSSZ), "Failed to unmarshal")
-		beaconState, err = state_native.InitializeFromProtoBellatrix(beaconStateBase)
+		beaconState, err = state_native.InitializeFromProtoUnsafeBellatrix(beaconStateBase)
 		require.NoError(t, err)
 	case version.Capella:
 		beaconStateBase := &ethpb.BeaconStateCapella{}
 		require.NoError(t, beaconStateBase.UnmarshalSSZ(beaconStateSSZ), "Failed to unmarshal")
-		beaconState, err = state_native.InitializeFromProtoCapella(beaconStateBase)
+		beaconState, err = state_native.InitializeFromProtoUnsafeCapella(beaconStateBase)
 		require.NoError(t, err)
 	case version.Deneb:
 		beaconStateBase := &ethpb.BeaconStateDeneb{}
 		require.NoError(t, beaconStateBase.UnmarshalSSZ(beaconStateSSZ), "Failed to unmarshal")
-		beaconState, err = state_native.InitializeFromProtoDeneb(beaconStateBase)
+		beaconState, err = state_native.InitializeFromProtoUnsafeDeneb(beaconStateBase)
 		require.NoError(t, err)
 	case version.Electra:
 		beaconStateBase := &ethpb.BeaconStateElectra{}
 		require.NoError(t, beaconStateBase.UnmarshalSSZ(beaconStateSSZ), "Failed to unmarshal")
-		beaconState, err = state_native.InitializeFromProtoElectra(beaconStateBase)
+		beaconState, err = state_native.InitializeFromProtoUnsafeElectra(beaconStateBase)
 		require.NoError(t, err)
 	case version.Fulu:
 		beaconStateBase := &ethpb.BeaconStateFulu{}
 		require.NoError(t, beaconStateBase.UnmarshalSSZ(beaconStateSSZ), "Failed to unmarshal")
-		beaconState, err = state_native.InitializeFromProtoFulu(beaconStateBase)
+		beaconState, err = state_native.InitializeFromProtoUnsafeFulu(beaconStateBase)
 		require.NoError(t, err)
 	default:
 		t.Fatalf("Unsupported version: %d", v)

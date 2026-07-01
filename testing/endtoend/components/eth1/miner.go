@@ -263,7 +263,7 @@ func (m *Miner) Resume() error {
 
 // Stop kills the component and its underlying process.
 func (m *Miner) Stop() error {
-	return m.cmd.Process.Kill()
+	return helpers.GracefulStop(m.cmd.Process)
 }
 
 func enodeFromLogFile(name string) (string, error) {

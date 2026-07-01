@@ -30,6 +30,12 @@ var (
 		Name: "expired_block_atts_total",
 		Help: "The number of expired and deleted block attestations in the pool.",
 	})
+	seenAggregatedAttsCount = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "seen_aggregated_attestations_in_pool_total",
+			Help: "The number of aggregated attestations in the seen cache.",
+		},
+	)
 	attCount = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "attestations_in_pool_total",
@@ -59,6 +65,7 @@ var (
 func (s *Service) updateMetrics() {
 	aggregatedAttsCount.Set(float64(s.cfg.Pool.AggregatedAttestationCount()))
 	unaggregatedAttsCount.Set(float64(s.cfg.Pool.UnaggregatedAttestationCount()))
+	seenAggregatedAttsCount.Set(float64(s.cfg.Pool.SeenAggregatedAttestationCount()))
 }
 
 func (s *Service) updateMetricsExperimental(numExpired uint64) {

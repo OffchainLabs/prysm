@@ -246,7 +246,7 @@ func (node *LighthouseBeaconNode) Resume() error {
 
 // Stop stops the component and its underlying process.
 func (node *LighthouseBeaconNode) Stop() error {
-	return node.cmd.Process.Kill()
+	return helpers.GracefulStop(node.cmd.Process)
 }
 
 func (node *LighthouseBeaconNode) UnderlyingProcess() *os.Process {
