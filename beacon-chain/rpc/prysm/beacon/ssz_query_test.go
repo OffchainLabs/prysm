@@ -145,6 +145,14 @@ func TestQueryBeaconState(t *testing.T) {
 				return b
 			},
 		},
+		{
+			path: "len(validators)",
+			expectedValue: func() []byte {
+				b := make([]byte, 8)
+				binary.LittleEndian.PutUint64(b, uint64(len(st.Validators())))
+				return b
+			},
+		},
 	}
 
 	chainService := &chainMock.ChainService{Optimistic: false, FinalizedRoots: make(map[[32]byte]bool)}
@@ -154,14 +162,6 @@ func TestQueryBeaconState(t *testing.T) {
 		Stater: &testutil.MockStater{
 			BeaconStateRoot: stateRoot[:],
 			BeaconState:     st,
-		},
-		{
-			path: "len(validators)",
-			expectedValue: func() []byte {
-				b := make([]byte, 8)
-				binary.LittleEndian.PutUint64(b, uint64(len(st.Validators())))
-				return b
-			}(),
 		},
 	}
 
