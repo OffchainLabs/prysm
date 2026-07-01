@@ -71,7 +71,7 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	}
 	parentBlockRoot := bid.ParentBlockRoot()
 	st := transition.NextSlotStateReadOnly(parentBlockRoot[:], bid.Slot())
-	if st == nil {
+	if st == nil || st.Slot() != bid.Slot() {
 		return pubsub.ValidationIgnore, nil
 	}
 	// [IGNORE] matching SignedProposerPreferences seen, keyed on the proposer
