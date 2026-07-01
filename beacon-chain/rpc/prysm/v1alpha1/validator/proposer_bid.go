@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -21,16 +23,15 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// builderBidTimeout times out the builder bid request
 const builderBidTimeout = 300 * time.Millisecond
 
 // bidSource indicates where the winning execution payload bid came from.
 type bidSource int
 
 const (
-	bidSourceSelfBuild  bidSource = iota // local self-build; caller caches the envelope
-	bidSourceP2P                         // P2P gossip bid; the builder reveals the envelope
-	bidSourceBuilderAPI                  // Builder-API bid; caller submits the signed block to the builder
+	bidSourceSelfBuild  bidSource = iota // local self-build, caller caches the envelope
+	bidSourceP2P                         // P2P gossip bid, the builder reveals the envelope
+	bidSourceBuilderAPI                  // Builder-API bid, caller submits the signed block to the builder
 )
 
 func (s bidSource) String() string {
@@ -44,8 +45,6 @@ func (s bidSource) String() string {
 	}
 }
 
-// setExecutionPayloadBid picks the best of the local, P2P, and Builder-API bids and
-// returns where the winning bid came from.
 func (vs *Server) setExecutionPayloadBid(
 	ctx context.Context,
 	sBlk interfaces.SignedBeaconBlock,
@@ -62,7 +61,7 @@ func (vs *Server) setExecutionPayloadBid(
 	}
 
 	if !selfBuildOnly {
-		p2pBid := vs.bestP2PBid(sBlk, local, false)
+		p2pBid := vs.cachedP2PBid(sBlk, local)
 		if bestBid, src := bestBid(local, p2pBid, builderBid, maxExecutionPayment); bestBid != nil {
 			if err := sBlk.SetSignedExecutionPayloadBid(bestBid); err != nil {
 				return bidSourceSelfBuild, errors.Wrap(err, "could not set remote execution payload bid")
@@ -97,8 +96,7 @@ func (vs *Server) setExecutionPayloadBid(
 	return bidSourceSelfBuild, nil
 }
 
-// bestBid returns the highest-value bid among the local self-build, P2P, and Builder-API
-// candidates, with its source. Returns nil when the local self-build wins.
+// Returns a nil bid when the local self-build wins.
 func bestBid(
 	local *consensusblocks.GetPayloadResponse,
 	p2pBid *ethpb.SignedExecutionPayloadBid,
@@ -124,8 +122,7 @@ func bestBid(
 	return bestBid, src
 }
 
-// effectiveBidValue is the proposer's total take from a bid: the bid value plus the
-// execution payment capped at the proposer's max preference (zero for P2P bids).
+// The proposer's total take, the execution payment counts only up to the proposer's max preference.
 func effectiveBidValue(bid *ethpb.SignedExecutionPayloadBid, maxExecutionPayment uint64) primitives.Gwei {
 	payment := bid.Message.ExecutionPayment
 	if uint64(payment) > maxExecutionPayment {
@@ -134,25 +131,26 @@ func effectiveBidValue(bid *ethpb.SignedExecutionPayloadBid, maxExecutionPayment
 	return bid.Message.Value + payment
 }
 
-// getBuilderExecutionPayloadBid queries every builder the proposer signed an auth
-// for and returns the highest-value valid bid and the URL it came from, or a nil
-// bid if none are valid.
-func (vs *Server) getBuilderExecutionPayloadBid(
-	ctx context.Context,
-	head state.BeaconState,
-	slot primitives.Slot,
-	parentRoot [32]byte,
-	parentHash [32]byte,
-	pubkey [fieldparams.BLSPubkeyLength]byte,
-	maxPayment uint64,
-	auths []*ethpb.SignedRequestAuthV1,
-) (*ethpb.SignedExecutionPayloadBid, string) {
-	if vs.BlockBuilder == nil || len(auths) == 0 {
+// builderBidQuery carries the proposal context builder bids are requested and validated against.
+type builderBidQuery struct {
+	slot           primitives.Slot
+	parentRoot     [32]byte
+	parentHash     [32]byte
+	pubkey         [fieldparams.BLSPubkeyLength]byte
+	maxPayment     uint64
+	feeRecipient   []byte
+	parentGasLimit uint64
+	targetGasLimit uint64
+	auths          []*ethpb.SignedRequestAuthV1
+}
+
+func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.BeaconState, q *builderBidQuery) (*ethpb.SignedExecutionPayloadBid, string) {
+	if vs.BlockBuilder == nil || len(q.auths) == 0 {
 		return nil, ""
 	}
 	ctx, cancel := context.WithTimeout(ctx, builderBidTimeout)
 	defer cancel()
-	bids, err := vs.BlockBuilder.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, auths)
+	bids, err := vs.BlockBuilder.GetExecutionPayloadBid(ctx, q.slot, q.parentHash, q.parentRoot, q.pubkey, q.auths)
 	if err != nil {
 		builderGetPayloadMissCount.Inc()
 		log.WithError(err).Error("Could not get builder execution payload bid")
@@ -169,11 +167,11 @@ func (vs *Server) getBuilderExecutionPayloadBid(
 		if pb.Bid == nil {
 			continue
 		}
-		if err := vs.validateBuilderBid(head, pb.Bid, slot, parentRoot, parentHash, maxPayment); err != nil {
+		if err := vs.validateBuilderBid(head, pb.Bid, q); err != nil {
 			bidLog = append(bidLog, fmt.Sprintf("%s(builder=%d discarded: %v)", pb.BuilderURL, pb.Bid.Message.BuilderIndex, err))
 			continue
 		}
-		value := effectiveBidValue(pb.Bid, maxPayment)
+		value := effectiveBidValue(pb.Bid, q.maxPayment)
 		bidLog = append(bidLog, fmt.Sprintf("%s(builder=%d value=%d payment=%d effective=%d)",
 			pb.BuilderURL, pb.Bid.Message.BuilderIndex, pb.Bid.Message.Value, pb.Bid.Message.ExecutionPayment, value))
 		if best == nil || value > bestValue {
@@ -181,11 +179,13 @@ func (vs *Server) getBuilderExecutionPayloadBid(
 		}
 	}
 
-	log.WithFields(logrus.Fields{
-		"slot":            slot,
-		"bestBuilder":     bestURL,
-		"bestBuilderGwei": uint64(bestValue),
-	}).Infof("Received builder bids: [%s]", strings.Join(bidLog, " | "))
+	if len(bidLog) > 0 {
+		log.WithFields(logrus.Fields{
+			"slot":            q.slot,
+			"bestBuilder":     bestURL,
+			"bestBuilderGwei": uint64(bestValue),
+		}).Infof("Received builder bids: [%s]", strings.Join(bidLog, " | "))
+	}
 
 	if best == nil {
 		builderGetPayloadMissCount.Inc()
@@ -195,13 +195,13 @@ func (vs *Server) getBuilderExecutionPayloadBid(
 }
 
 // validateBuilderBid mirrors process_execution_payload_bid so a chosen bid never invalidates the proposer's own block.
-func (vs *Server) validateBuilderBid(head state.BeaconState, signed *ethpb.SignedExecutionPayloadBid, slot primitives.Slot, parentRoot [32]byte, parentHash [32]byte, maxExecutionPayment uint64) error {
+func (vs *Server) validateBuilderBid(head state.BeaconState, signed *ethpb.SignedExecutionPayloadBid, q *builderBidQuery) error {
 	if signed == nil || signed.Message == nil {
 		return errors.New("nil builder bid")
 	}
 	bid := signed.Message
-	if uint64(bid.ExecutionPayment) > maxExecutionPayment {
-		return errors.Errorf("bid execution payment %d exceeds max %d", bid.ExecutionPayment, maxExecutionPayment)
+	if uint64(bid.ExecutionPayment) > q.maxPayment {
+		return errors.Errorf("bid execution payment %d exceeds max %d", bid.ExecutionPayment, q.maxPayment)
 	}
 
 	if vs.NewExecutionPayloadBidVerifier == nil {
@@ -212,13 +212,13 @@ func (vs *Server) validateBuilderBid(head state.BeaconState, signed *ethpb.Signe
 		return errors.Wrap(err, "could not wrap builder bid")
 	}
 	v := vs.NewExecutionPayloadBidVerifier(ro, verification.BuilderAPIBidRequirements)
-	if err := v.VerifyBidSlotMatches(slot); err != nil {
+	if err := v.VerifyBidSlotMatches(q.slot); err != nil {
 		return err
 	}
-	if err := v.VerifyParentBlockRootSeen(func(root [32]byte) bool { return root == parentRoot }); err != nil {
+	if err := v.VerifyParentBlockRootSeen(func(root [32]byte) bool { return root == q.parentRoot }); err != nil {
 		return err
 	}
-	if err := v.VerifyParentBlockHash(func([32]byte) ([32]byte, error) { return parentHash, nil }); err != nil {
+	if err := v.VerifyParentBlockHash(func([32]byte) ([32]byte, error) { return q.parentHash, nil }); err != nil {
 		return err
 	}
 	if err := v.VerifyBuilderActive(head); err != nil {
@@ -230,6 +230,12 @@ func (vs *Server) validateBuilderBid(head state.BeaconState, signed *ethpb.Signe
 	if err := v.VerifyBuilderCanCoverBid(head); err != nil {
 		return err
 	}
+	if err := v.VerifyFeeRecipientMatches(q.feeRecipient); err != nil {
+		return err
+	}
+	if err := v.VerifyGasLimitTargetCompatible(q.parentGasLimit, q.targetGasLimit); err != nil {
+		return err
+	}
 	if err := v.VerifyBlobKzgCommitmentsLimit(); err != nil {
 		return err
 	}
@@ -239,16 +245,29 @@ func (vs *Server) validateBuilderBid(head state.BeaconState, signed *ethpb.Signe
 	return v.VerifySignature(head)
 }
 
-// recordBidSource remembers where the winning bid for slot came from, and for a
-// Builder-API win, which builder URL it came from so the block can be revealed to it.
+// Mirrors the preference lookup in getLocalPayloadFromEngine so builder bids are held to the same preferences the EL payload was built with.
+func (vs *Server) proposerPreferenceForProposal(ctx context.Context, st state.BeaconState, slot primitives.Slot, idx primitives.ValidatorIndex) cache.ProposerPreference {
+	pref := cache.ProposerPreference{ValidatorIndex: idx}
+	dependentRoot, err := helpers.ProposerDependentRootOrGenesis(ctx, vs.BeaconDB, st, slot)
+	if err != nil {
+		if def, ok := vs.ProposerPreferencesCache.DefaultFor(idx); ok {
+			pref = def
+		}
+		return pref
+	}
+	if p, ok := vs.ProposerPreferencesCache.BestFor(dependentRoot, slot, idx); ok {
+		pref = p
+	}
+	return pref
+}
+
 func (vs *Server) recordBidSource(slot primitives.Slot, src bidSource, builderURL string) {
 	vs.lastBidLock.Lock()
 	defer vs.lastBidLock.Unlock()
 	vs.lastBidSlot, vs.lastBidSource, vs.lastBidBuilderURL = slot, src, builderURL
 }
 
-// bidSourceForSlot returns the recorded bid source and winning builder URL for slot,
-// or self-build if the record is for another slot.
+// Falls back to self-build when the record is for another slot.
 func (vs *Server) bidSourceForSlot(slot primitives.Slot) (bidSource, string) {
 	vs.lastBidLock.Lock()
 	defer vs.lastBidLock.Unlock()
@@ -258,8 +277,7 @@ func (vs *Server) bidSourceForSlot(slot primitives.Slot) (bidSource, string) {
 	return vs.lastBidSource, vs.lastBidBuilderURL
 }
 
-// submitBlockToBuilder sends the signed block to the winning builder so it can reveal the envelope.
-// Best-effort and detached from the propose RPC; the builder also learns of the block via P2P.
+// Best-effort and detached from the propose RPC, the builder also learns of the block via P2P.
 func (vs *Server) submitBlockToBuilder(block interfaces.ReadOnlySignedBeaconBlock, builderURL string) {
 	if vs.BlockBuilder == nil || builderURL == "" {
 		return
@@ -292,25 +310,14 @@ func (vs *Server) setP2PBidFallback(ctx context.Context, sBlk interfaces.SignedB
 	return nil
 }
 
-// bestP2PBid returns a cached P2P bid if one exists and exceeds the local EL value.
-func (vs *Server) bestP2PBid(
-	sBlk interfaces.SignedBeaconBlock,
-	local *consensusblocks.GetPayloadResponse,
-	selfBuildOnly bool,
-) *ethpb.SignedExecutionPayloadBid {
-	if selfBuildOnly || vs.HighestBidCache == nil {
+func (vs *Server) cachedP2PBid(sBlk interfaces.SignedBeaconBlock, local *consensusblocks.GetPayloadResponse) *ethpb.SignedExecutionPayloadBid {
+	if vs.HighestBidCache == nil {
 		return nil
 	}
-
-	ed := local.ExecutionData
 	var parentHash [32]byte
-	copy(parentHash[:], ed.ParentHash())
+	copy(parentHash[:], local.ExecutionData.ParentHash())
 	cached, ok := vs.HighestBidCache.Get(sBlk.Block().Slot(), parentHash, sBlk.Block().ParentRoot())
 	if !ok {
-		return nil
-	}
-
-	if cached.Message.Value <= primitives.WeiToGwei(local.Bid) {
 		return nil
 	}
 	return cached

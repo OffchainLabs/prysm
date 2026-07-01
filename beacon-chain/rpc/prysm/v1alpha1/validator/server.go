@@ -96,8 +96,8 @@ type Server struct {
 	GraffitiInfo                     *execution.GraffitiInfo
 	lastBidLock                      sync.Mutex
 	lastBidSlot                      primitives.Slot
-	lastBidSource                    bidSource // Guarded by lastBidLock; set during Gloas block build, read when proposing.
-	lastBidBuilderURL                string    // Guarded by lastBidLock; winning Builder-API URL for lastBidSlot.
+	lastBidSource                    bidSource // Guarded by lastBidLock, set during Gloas block build, read when proposing.
+	lastBidBuilderURL                string    // Guarded by lastBidLock, winning Builder-API URL for lastBidSlot.
 	maxExecutionPayments             sync.Map  // validator pubkey [48]byte -> max execution payment (Gwei uint64).
 }
 

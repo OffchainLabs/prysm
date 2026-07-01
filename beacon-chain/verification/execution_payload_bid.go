@@ -42,6 +42,8 @@ var ExecutionPayloadBidBuilderAPIRequirements = []Requirement{
 	RequireBidBuilderActive,
 	RequireBidBuilderVersionValid,
 	RequireBidBuilderCanCover,
+	RequireBidFeeRecipientMatches,
+	RequireBidGasLimitCompatible,
 	RequireBidBlobKzgCommitmentsLimit,
 	RequireBidPrevRandaoValid,
 	RequireBidSignatureValid,

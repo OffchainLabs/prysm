@@ -17,11 +17,13 @@ func FlagOptions(c *cli.Context) ([]Option, error) {
 	sszDisabled := c.Bool(flags.DisableBuilderSSZ.Name)
 	var clientOpts []builder.ClientOpt
 	if !sszDisabled {
-		log.Info("Using APIs with SSZ enabled")
 		clientOpts = append(clientOpts, builder.WithSSZ())
 	}
 	var client *builder.Client
 	if endpoint != "" {
+		if !sszDisabled {
+			log.Info("Using Builder APIs with SSZ enabled")
+		}
 		var err error
 		client, err = builder.NewClient(endpoint, clientOpts...)
 		if err != nil {
@@ -43,8 +45,7 @@ func WithBuilderClient(client builder.BuilderClient) Option {
 	}
 }
 
-// WithBuilderClientOpts records the client options used to dial builders lazily
-// per URL, so VC-driven Gloas builders match the flag client's configuration.
+// Recorded so lazily dialed per-URL Gloas builder clients match the flag client's configuration.
 func WithBuilderClientOpts(opts ...builder.ClientOpt) Option {
 	return func(s *Service) error {
 		s.clientOpts = opts

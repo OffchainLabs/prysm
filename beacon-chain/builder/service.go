@@ -36,8 +36,7 @@ type BlockBuilder interface {
 	Configured() bool
 }
 
-// PayloadBid pairs a builder's signed execution payload bid with the URL it came
-// from, so the proposer can route the revealed block back to the winning builder.
+// PayloadBid carries the builder URL so the proposer can route the signed block back to the winning builder.
 type PayloadBid struct {
 	BuilderURL string
 	Bid        *ethpb.SignedExecutionPayloadBid
@@ -58,11 +57,9 @@ type Service struct {
 	cancel            context.CancelFunc
 	registrationCache *cache.RegistrationCache
 	clientOpts        []builder.ClientOpt
-	// dial builds a per-URL builder client; overridable in tests.
+	// Overridable in tests.
 	dial func(url string) (builder.BuilderClient, error)
-	// clients maps a builder URL to its client. For Gloas the builder set is
-	// driven by the validator-signed request auths, so clients are dialed lazily
-	// per URL rather than from a single endpoint flag.
+	// Keyed by URL because the Gloas builder set is driven by validator-signed request auths, not a single endpoint flag.
 	clients   map[string]builder.BuilderClient
 	clientsMu sync.RWMutex
 }
@@ -102,8 +99,6 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 	return s, nil
 }
 
-// clientFor returns the builder client for url, lazily dialing and caching one
-// (matching the configured client options) if not already present.
 func (s *Service) clientFor(url string) (builder.BuilderClient, error) {
 	s.clientsMu.RLock()
 	c, ok := s.clients[url]
@@ -119,9 +114,6 @@ func (s *Service) clientFor(url string) (builder.BuilderClient, error) {
 	c, err := s.dial(url)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not create builder client for %s", url)
-	}
-	if s.clients == nil {
-		s.clients = make(map[string]builder.BuilderClient)
 	}
 	s.clients[url] = c
 	return c, nil
@@ -169,9 +161,7 @@ func (s *Service) SubmitBlindedBlockPostFulu(ctx context.Context, b interfaces.R
 	return s.c.SubmitBlindedBlockPostFulu(ctx, b)
 }
 
-// GetExecutionPayloadBid requests a bid from every builder the proposer signed a
-// request auth for, querying them concurrently and returning each non-empty bid
-// tagged with the builder it came from.
+// Builders are queried concurrently, a failing builder drops only its own bid.
 func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte, auths []*ethpb.SignedRequestAuthV1) ([]PayloadBid, error) {
 	ctx, span := trace.StartSpan(ctx, "builder.GetExecutionPayloadBid")
 	defer span.End()
@@ -239,8 +229,7 @@ func (s *Service) SubmitSignedBeaconBlock(ctx context.Context, builderURL string
 	return c.SubmitSignedBeaconBlock(ctx, b)
 }
 
-// SubmitBuilderPreferences submits a proposer's preferences to the builder named
-// in the signed request auth, dialing a client for it if not already known.
+// Routed to the builder named in the signed request auth.
 func (s *Service) SubmitBuilderPreferences(ctx context.Context, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1) error {
 	ctx, span := trace.StartSpan(ctx, "builder.SubmitBuilderPreferences")
 	defer span.End()
