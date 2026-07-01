@@ -186,24 +186,28 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	return nil
 }
 
-func (s *Service) checkAndSetPayloadIfHead(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope) bool {
+// checkAndSetPayloadIfHead reports whether the envelope's payload becomes the
+// head's content, marking the head full. wasFull is the head's status before
+// this call, so callers can detect the empty->full transition.
+func (s *Service) checkAndSetPayloadIfHead(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope) (isHead, wasFull bool) {
 	if !s.inRegularSync() {
-		return false
+		return false, false
 	}
 	s.headLock.Lock()
 	defer s.headLock.Unlock()
 	if s.head == nil || len(s.head.root) == 0 {
-		return false
+		return false, false
 	}
 	root := envelope.BeaconBlockRoot()
 	if s.head.root != root {
-		return false
+		return false, false
 	}
 	if !s.FullBeatsEmpty(root) {
-		return false
+		return false, false
 	}
+	wasFull = s.head.full
 	s.head.full = true
-	return true
+	return true, wasFull
 }
 
 func (s *Service) reorgingLatePayload(root [32]byte, slot primitives.Slot) bool {
@@ -227,7 +231,8 @@ func (s *Service) reorgingLatePayload(root [32]byte, slot primitives.Slot) bool 
 }
 
 func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope, st state.BeaconState) error {
-	if !s.checkAndSetPayloadIfHead(ctx, envelope) {
+	isHead, wasFull := s.checkAndSetPayloadIfHead(ctx, envelope)
+	if !isHead {
 		return nil
 	}
 	payload, err := envelope.Execution()
@@ -237,23 +242,25 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 	blockHash := bytesutil.ToBytes32(payload.BlockHash())
 	root := envelope.BeaconBlockRoot()
 
-	// checkPayloadIsHead returned true, so the payload made the head's status
-	// transition empty->full. Emit a second head_v2 event for the transition.
+	// The payload made the head's status transition empty->full, so emit a
+	// second head_v2 event for the transition. Skip it on re-import (already full).
 	var (
 		emitHeadV2    bool
 		headSlot      primitives.Slot
 		headStateRoot [32]byte
 		headVersion   int
 	)
-	s.headLock.Lock()
-	if s.head != nil && s.head.root == root {
-		headBlock := s.head.block.Block()
-		headSlot = headBlock.Slot()
-		headStateRoot = headBlock.StateRoot()
-		headVersion = s.head.block.Version()
-		emitHeadV2 = true
+	if !wasFull {
+		s.headLock.Lock()
+		if s.head != nil && s.head.root == root {
+			headBlock := s.head.block.Block()
+			headSlot = headBlock.Slot()
+			headStateRoot = headBlock.StateRoot()
+			headVersion = s.head.block.Version()
+			emitHeadV2 = true
+		}
+		s.headLock.Unlock()
 	}
-	s.headLock.Unlock()
 
 	if emitHeadV2 {
 		if err := s.notifyNewHeadV2Event(ctx, headSlot, headStateRoot, root, headVersion); err != nil {

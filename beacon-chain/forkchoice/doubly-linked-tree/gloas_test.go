@@ -1433,7 +1433,7 @@ func TestPTCVotedEarlyAndAvailableAndLate(t *testing.T) {
 	t.Run("early requires payload and blob data majorities", func(t *testing.T) {
 		f, root := setupForkchoice(t)
 		majority := uint64(fieldparams.PTCSize/2) + 1
-		for i := uint64(0); i < majority; i++ {
+		for i := range majority {
 			f.SetPTCVote(root, i, true, true)
 		}
 		assert.Equal(t, true, f.PTCVotedEarlyAndAvailable(root))
@@ -1443,7 +1443,7 @@ func TestPTCVotedEarlyAndAvailableAndLate(t *testing.T) {
 	t.Run("early false without blob data majority", func(t *testing.T) {
 		f, root := setupForkchoice(t)
 		majority := uint64(fieldparams.PTCSize/2) + 1
-		for i := uint64(0); i < majority; i++ {
+		for i := range majority {
 			f.SetPTCVote(root, i, true, false)
 		}
 		assert.Equal(t, false, f.PTCVotedEarlyAndAvailable(root))
@@ -1453,7 +1453,7 @@ func TestPTCVotedEarlyAndAvailableAndLate(t *testing.T) {
 	t.Run("late requires payload not present majority", func(t *testing.T) {
 		f, root := setupForkchoice(t)
 		majority := uint64(fieldparams.PTCSize/2) + 1
-		for i := uint64(0); i < majority; i++ {
+		for i := range majority {
 			f.SetPTCVote(root, i, false, false)
 		}
 		assert.Equal(t, false, f.PTCVotedEarlyAndAvailable(root))
@@ -1463,7 +1463,7 @@ func TestPTCVotedEarlyAndAvailableAndLate(t *testing.T) {
 	t.Run("half is not a majority", func(t *testing.T) {
 		f, root := setupForkchoice(t)
 		half := uint64(fieldparams.PTCSize / 2)
-		for i := uint64(0); i < half; i++ {
+		for i := range half {
 			f.SetPTCVote(root, i, false, false)
 		}
 		assert.Equal(t, false, f.PTCVotedEarlyAndAvailable(root))
