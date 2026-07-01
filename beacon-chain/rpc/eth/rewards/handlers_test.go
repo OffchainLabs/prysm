@@ -497,6 +497,7 @@ func TestBlockRewards(t *testing.T) {
 
 		url := "http://only.the.slot.number.at.the.end.is.important/2"
 		request := httptest.NewRequest("GET", url, nil)
+		request.SetPathValue("block_id", "2")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -838,6 +839,7 @@ func TestAttestationRewards(t *testing.T) {
 
 		url := "http://only.the.epoch.number.at.the.end.is.important/1"
 		request := httptest.NewRequest("POST", url, nil)
+		request.SetPathValue("epoch", "1")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -1180,6 +1182,7 @@ func TestSyncCommitteeRewards(t *testing.T) {
 
 		url := "http://only.the.slot.number.at.the.end.is.important/32"
 		request := httptest.NewRequest("POST", url, nil)
+		request.SetPathValue("block_id", "32")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
