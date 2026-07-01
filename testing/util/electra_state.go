@@ -77,7 +77,7 @@ func genesisBeaconStateElectra(ctx context.Context, deposits []*ethpb.Deposit, g
 		return nil, errors.Wrap(err, "could not process validator deposits")
 	}
 
-	return buildGenesisBeaconStateElectra(genesisTime, st, st.Eth1Data(), opts...)
+	return buildGenesisBeaconStateElectra(ctx, genesisTime, st, st.Eth1Data(), opts...)
 }
 
 // emptyGenesisStateElectra returns an empty genesis state in Electra format.
@@ -114,7 +114,7 @@ func emptyGenesisStateElectra() (state.BeaconState, error) {
 	return state_native.InitializeFromProtoUnsafeElectra(st)
 }
 
-func buildGenesisBeaconStateElectra(genesisTime uint64, preState state.BeaconState, eth1Data *ethpb.Eth1Data, opts ...ElectraStateOption) (state.BeaconState, error) {
+func buildGenesisBeaconStateElectra(ctx context.Context, genesisTime uint64, preState state.BeaconState, eth1Data *ethpb.Eth1Data, opts ...ElectraStateOption) (state.BeaconState, error) {
 	if eth1Data == nil {
 		return nil, errors.New("no eth1data provided for genesis state")
 	}
@@ -163,7 +163,7 @@ func buildGenesisBeaconStateElectra(genesisTime uint64, preState state.BeaconSta
 	if err != nil {
 		return nil, err
 	}
-	tab, err := helpers.TotalActiveBalance(preState)
+	tab, err := helpers.TotalActiveBalance(ctx, preState)
 	if err != nil {
 		return nil, err
 	}

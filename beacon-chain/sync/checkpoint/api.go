@@ -153,7 +153,7 @@ func DownloadFinalizedData(ctx context.Context, client *beacon.Client) (*OriginD
 		WithField("blockRoot", hexutil.Encode(br[:])).
 		Info("Downloaded checkpoint sync state and block.")
 	if s.Version() >= version.Gloas {
-		if full, err := s.IsParentBlockFull(); err == nil && full {
+		if full, err := s.LatestBlockHashMatchesBidBlockHash(); err == nil && full {
 			log.Warn("Checkpoint sync state has payload already applied")
 		}
 	}

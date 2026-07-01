@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -38,13 +39,6 @@ func (f *ForkChoice) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) 
 	}
 	pn := s.choosePayloadContent(n)
 	return pn.node.root, pn.full
-}
-
-// PayloadContentLookup returns the preferred lookup key for a given beacon block root.
-// If full payload content wins, it returns the block hash and true.
-// If empty payload content wins, it returns the beacon block root and false.
-func (f *ForkChoice) PayloadContentLookup(root [32]byte) ([32]byte, bool) {
-	return f.store.payloadContentLookup(root)
 }
 
 func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock, parent **PayloadNode, blockHash *[32]byte) error {
@@ -100,6 +94,10 @@ func (s *Store) applyWeightChangesConsensusNode(ctx context.Context, n *Node) er
 // applyWeightChangesPayloadNode recomputes the weight of the node passed as an argument and all of its descendants,
 // using the current balance stored in each node.
 func (s *Store) applyWeightChangesPayloadNode(ctx context.Context, n *PayloadNode) error {
+	if n == nil {
+		log.Error("tried to apply weight changes to a nil payload node")
+		return nil
+	}
 	// Recursively calling the children to sum their weights.
 	childrenWeight := uint64(0)
 	for _, child := range n.children {
@@ -123,6 +121,14 @@ func (s *Store) allConsensusChildren(n *Node) []*Node {
 		return append(slices.Clone(en.children), fn.children...)
 	}
 	return en.children
+}
+
+// hasConsensusChildren reports whether any consensus block builds on the given node.
+// It avoids the allocation allConsensusChildren makes when only the count is needed.
+func (s *Store) hasConsensusChildren(n *Node) bool {
+	en := s.emptyNodeByRoot[n.root]
+	fn, ok := s.fullNodeByRoot[n.root]
+	return len(en.children) > 0 || (ok && len(fn.children) > 0)
 }
 
 // setNodeAndParentValidated sets the current node and all the ancestors as validated (i.e. non-optimistic).
@@ -232,7 +238,7 @@ func (s *Store) updateBestDescendantConsensusNode(ctx context.Context, n *Node, 
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if len(s.allConsensusChildren(n)) == 0 {
+	if !s.hasConsensusChildren(n) {
 		n.bestDescendant = nil
 		return nil
 	}
@@ -300,21 +306,6 @@ func (s *Store) choosePayloadContent(n *Node) *PayloadNode {
 	return en
 }
 
-func (s *Store) payloadContentLookup(root [32]byte) ([32]byte, bool) {
-	en := s.emptyNodeByRoot[root]
-	if en == nil || en.node == nil {
-		return [32]byte{}, false
-	}
-	pn := s.choosePayloadContent(en.node)
-	if pn == nil || pn.node == nil {
-		return [32]byte{}, false
-	}
-	if pn.full {
-		return pn.node.blockHash, true
-	}
-	return pn.node.root, false
-}
-
 // nodeTreeDump appends to the given list all the nodes descending from this one
 func (s *Store) nodeTreeDump(ctx context.Context, n *Node, nodes []*forkchoice2.Node) ([]*forkchoice2.Node, error) {
 	if ctx.Err() != nil {
@@ -372,6 +363,96 @@ func (s *Store) nodeTreeDump(ctx context.Context, n *Node, nodes []*forkchoice2.
 	return nodes, nil
 }
 
+// nodeTreeDumpV2 appends to the given list one entry per (root, payload_status) tuple descending from n.
+func (s *Store) nodeTreeDumpV2(ctx context.Context, n *Node, nodes []*forkchoice2.NodeV2) ([]*forkchoice2.NodeV2, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	var parentRoot [32]byte
+	if n.parent != nil {
+		parentRoot = n.parent.node.root
+	}
+	target := [32]byte{}
+	if n.target != nil {
+		target = n.target.root
+	}
+	en := s.emptyNodeByRoot[n.root]
+	fn := s.fullNodeByRoot[n.root]
+	optimistic := false
+	if n.parent != nil {
+		optimistic = n.parent.optimistic
+	}
+	if fn != nil {
+		optimistic = fn.optimistic
+	}
+
+	pending := &forkchoice2.NodeV2{
+		PayloadStatus:                   forkchoice2.PayloadStatusPending,
+		BlockRoot:                       n.root[:],
+		ParentRoot:                      parentRoot[:],
+		Slot:                            n.slot,
+		Weight:                          n.weight,
+		Balance:                         n.balance,
+		ExecutionOptimistic:             optimistic,
+		Timestamp:                       en.timestamp,
+		ExecutionBlockHash:              n.blockHash[:],
+		Target:                          target[:],
+		JustifiedEpoch:                  n.justifiedEpoch,
+		FinalizedEpoch:                  n.finalizedEpoch,
+		UnrealizedJustifiedEpoch:        n.unrealizedJustifiedEpoch,
+		UnrealizedFinalizedEpoch:        n.unrealizedFinalizedEpoch,
+		PayloadAttesterCount:            n.payloadAttesters.Count(),
+		PayloadAvailabilityYesCount:     n.payloadAvailabilityVote.Count(),
+		PayloadDataAvailabilityYesCount: n.payloadDataAvailabilityVote.Count(),
+	}
+	if optimistic {
+		pending.Validity = forkchoice2.Optimistic
+	} else {
+		pending.Validity = forkchoice2.Valid
+	}
+	nodes = append(nodes, pending)
+
+	emptyEntry := &forkchoice2.NodeV2{
+		PayloadStatus:       forkchoice2.PayloadStatusEmpty,
+		BlockRoot:           n.root[:],
+		ParentRoot:          parentRoot[:],
+		Slot:                n.slot,
+		Weight:              en.weight,
+		Balance:             en.balance,
+		Validity:            pending.Validity,
+		ExecutionOptimistic: en.optimistic,
+		Timestamp:           en.timestamp,
+		ExecutionBlockHash:  n.blockHash[:],
+	}
+	nodes = append(nodes, emptyEntry)
+
+	if fn != nil {
+		fullEntry := &forkchoice2.NodeV2{
+			PayloadStatus:       forkchoice2.PayloadStatusFull,
+			BlockRoot:           n.root[:],
+			ParentRoot:          parentRoot[:],
+			Slot:                n.slot,
+			Weight:              fn.weight,
+			Balance:             fn.balance,
+			Validity:            pending.Validity,
+			ExecutionOptimistic: fn.optimistic,
+			Timestamp:           fn.timestamp,
+			ExecutionBlockHash:  n.blockHash[:],
+			GasLimit:            fn.gasLimit,
+		}
+		nodes = append(nodes, fullEntry)
+	}
+
+	var err error
+	for _, child := range s.allConsensusChildren(n) {
+		nodes, err = s.nodeTreeDumpV2(ctx, child, nodes)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return nodes, nil
+}
+
 // MarkFullNode creates a full payload node for an existing empty node at the
 // given beacon block root. This is used during forkchoice tree reconstruction on
 // startup to mark blocks whose execution payload was delivered. The caller must
@@ -409,11 +490,16 @@ func (f *ForkChoice) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) err
 		// We don't import two payloads for the same root
 		return nil
 	}
+	exec, err := pe.Execution()
+	if err != nil {
+		return errors.Wrap(err, "could not get execution from payload envelope")
+	}
 	fn := &PayloadNode{
 		node:       en.node,
 		optimistic: true,
 		timestamp:  time.Now(),
 		full:       true,
+		gasLimit:   exec.GasLimit(),
 		children:   make([]*Node, 0),
 	}
 	s.fullNodeByRoot[root] = fn
@@ -432,35 +518,25 @@ func (f *ForkChoice) updateNewFullNodeWeight(fn *PayloadNode) {
 	fn.weight = fn.balance
 }
 
-// SetPTCVote sets the PTC vote bits on the consensus node identified by root.
+// SetPTCVote records ptcIdx's vote on root, overwriting any previous vote from the same index.
 func (f *ForkChoice) SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, blobDataAvailable bool) {
 	n := f.store.emptyNodeByRoot[root]
 	if n == nil {
 		return
 	}
 	ptcVoteCount.Inc()
-	if payloadPresent {
-		n.node.setPayloadAvailabilityVote(ptcIdx)
+	n.node.payloadAttesters.SetBitAt(ptcIdx, true)
+	n.node.payloadAvailabilityVote.SetBitAt(ptcIdx, payloadPresent)
+	n.node.payloadDataAvailabilityVote.SetBitAt(ptcIdx, blobDataAvailable)
+}
+
+// PTCVotes returns the recorded PTC vote bitvectors for the given root. The caller MUST hold the forkchoice lock.
+func (f *ForkChoice) PTCVotes(root [32]byte) (attesters, payloadPresent, blobDataAvailable bitfield.Bitvector512, ok bool) {
+	n := f.store.emptyNodeByRoot[root]
+	if n == nil {
+		return nil, nil, nil, false
 	}
-	if blobDataAvailable {
-		n.node.setPayloadDataAvailabilityVote(ptcIdx)
-	}
-}
-
-func (n *Node) setPayloadAvailabilityVote(idx uint64) {
-	n.payloadAvailabilityVote.SetBitAt(idx, true)
-}
-
-func (n *Node) setPayloadDataAvailabilityVote(idx uint64) {
-	n.payloadDataAvailabilityVote.SetBitAt(idx, true)
-}
-
-func (n *Node) payloadAvailabilityVoteCount() uint64 {
-	return n.payloadAvailabilityVote.Count()
-}
-
-func (n *Node) payloadDataAvailabilityVoteCount() uint64 {
-	return n.payloadDataAvailabilityVote.Count()
+	return n.node.payloadAttesters, n.node.payloadAvailabilityVote, n.node.payloadDataAvailabilityVote, true
 }
 
 // resolveVoteNode returns the node that should receive the balance of a vote. It returns always a PayloadNode, but the boolean indicates
@@ -482,6 +558,17 @@ func (f *ForkChoice) HasFullNode(root [32]byte) bool {
 	return ok
 }
 
+// FullBeatsEmpty returns whether fork choice would select the full payload variant
+// for the given beacon block root. The caller MUST hold the forkchoice lock.
+func (f *ForkChoice) FullBeatsEmpty(root [32]byte) bool {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return false
+	}
+	pn := f.store.choosePayloadContent(en.node)
+	return pn != nil && pn.full
+}
+
 // BlockHash returns the hash committed in the given block
 func (f *ForkChoice) BlockHash(root [32]byte) ([32]byte, error) {
 	s := f.store
@@ -490,6 +577,23 @@ func (f *ForkChoice) BlockHash(root [32]byte) ([32]byte, error) {
 		return [32]byte{}, errors.Wrap(ErrNilNode, "could not get block hash for root")
 	}
 	return en.node.blockHash, nil
+}
+
+// GasLimit returns the gas limit of the latest full payload at or before root.
+func (f *ForkChoice) GasLimit(root [32]byte) (uint64, error) {
+	s := f.store
+	if fn := s.fullNodeByRoot[root]; fn != nil {
+		return fn.gasLimit, nil
+	}
+	en := s.emptyNodeByRoot[root]
+	if en == nil {
+		return 0, errors.Wrap(ErrNilNode, "could not get gas limit for root")
+	}
+	fp := s.fullParent(en)
+	if fp == nil {
+		return 0, errors.New("no full ancestor with gas limit")
+	}
+	return fp.gasLimit, nil
 }
 
 func (s *Store) shouldApplyProposerBoost() bool {
@@ -512,7 +616,17 @@ func (s *Store) shouldApplyProposerBoost() bool {
 	if p.node.slot+1 != n.slot {
 		return true
 	}
-	return p.weight*100 >= s.committeeWeight*params.BeaconConfig().ReorgHeadWeightThreshold
+	if p.node.weight*100 >= s.committeeWeight*params.BeaconConfig().ReorgHeadWeightThreshold {
+		return true
+	}
+	// Weak parent: boost unless an equivocation was recorded for (parent slot, proposer).
+	roots := s.blockRootsBySlotProposer[proposerSlotKey{slot: p.node.slot, proposer: p.node.proposerIndex}]
+	for _, r := range roots {
+		if r != p.node.root {
+			return false
+		}
+	}
+	return true
 }
 
 // removeProposerBoostFromParent removes the proposer boost that must have been applied to the parent of the current proposer boost node
@@ -547,8 +661,17 @@ func (f *ForkChoice) FullHead(ctx context.Context) ([32]byte, [32]byte, bool, er
 		return [32]byte{}, [32]byte{}, false, err
 	}
 	n := f.store.headNode
+	if n == nil {
+		return hr, [32]byte{}, false, nil
+	}
+	if slots.ToEpoch(n.slot) < params.BeaconConfig().GloasForkEpoch {
+		return hr, n.blockHash, true, nil
+	}
 	pn := f.store.choosePayloadContent(n)
-	if pn.full && slots.ToEpoch(n.slot) >= params.BeaconConfig().GloasForkEpoch {
+	if pn == nil {
+		return hr, [32]byte{}, false, nil
+	}
+	if pn.full {
 		return hr, pn.node.blockHash, true, nil
 	}
 	fullAncestor := f.store.fullParent(pn)

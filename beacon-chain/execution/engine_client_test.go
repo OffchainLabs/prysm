@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -39,6 +38,8 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -129,7 +130,7 @@ func TestClient_IPC(t *testing.T) {
 		require.Equal(t, true, ok)
 		wrappedPayload, err := blocks.WrappedExecutionPayload(req)
 		require.NoError(t, err)
-		latestValidHash, err := srv.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil, 0)
+		latestValidHash, err := srv.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, bytesutil.ToBytes32(want.LatestValidHash), bytesutil.ToBytes32(latestValidHash))
 	})
@@ -140,7 +141,7 @@ func TestClient_IPC(t *testing.T) {
 		require.Equal(t, true, ok)
 		wrappedPayload, err := blocks.WrappedExecutionPayloadCapella(req)
 		require.NoError(t, err)
-		latestValidHash, err := srv.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil, 0)
+		latestValidHash, err := srv.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, bytesutil.ToBytes32(want.LatestValidHash), bytesutil.ToBytes32(latestValidHash))
 	})
@@ -605,7 +606,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayload(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil, 0)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.LatestValidHash, resp)
 	})
@@ -619,7 +620,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayloadCapella(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil, 0)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.LatestValidHash, resp)
 	})
@@ -633,7 +634,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayloadDeneb(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, nil, 0)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, nil)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.LatestValidHash, resp)
 	})
@@ -672,7 +673,7 @@ func TestClient_HTTP(t *testing.T) {
 			},
 		}
 		client := newPayloadV4Setup(t, want, execPayload, requests)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, requests, 0)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, requests)
 		require.NoError(t, err)
 		require.DeepEqual(t, want.LatestValidHash, resp)
 	})
@@ -686,7 +687,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayload(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil, 0)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.ErrorIs(t, ErrAcceptedSyncingPayloadStatus, err)
 		require.DeepEqual(t, []uint8(nil), resp)
 	})
@@ -700,7 +701,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayloadCapella(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil, 0)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.ErrorIs(t, ErrAcceptedSyncingPayloadStatus, err)
 		require.DeepEqual(t, []uint8(nil), resp)
 	})
@@ -714,7 +715,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayloadDeneb(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, nil, 0)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, nil)
 		require.ErrorIs(t, ErrAcceptedSyncingPayloadStatus, err)
 		require.DeepEqual(t, []uint8(nil), resp)
 	})
@@ -753,7 +754,7 @@ func TestClient_HTTP(t *testing.T) {
 			},
 		}
 		client := newPayloadV4Setup(t, want, execPayload, requests)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, requests, 0)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, requests)
 		require.ErrorIs(t, ErrAcceptedSyncingPayloadStatus, err)
 		require.DeepEqual(t, []uint8(nil), resp)
 	})
@@ -767,7 +768,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayload(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil, 0)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.ErrorIs(t, ErrInvalidBlockHashPayloadStatus, err)
 		require.DeepEqual(t, []uint8(nil), resp)
 	})
@@ -781,7 +782,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayloadCapella(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil, 0)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.ErrorIs(t, ErrInvalidBlockHashPayloadStatus, err)
 		require.DeepEqual(t, []uint8(nil), resp)
 	})
@@ -795,7 +796,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayloadDeneb(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, nil, 0)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, nil)
 		require.ErrorIs(t, ErrInvalidBlockHashPayloadStatus, err)
 		require.DeepEqual(t, []uint8(nil), resp)
 	})
@@ -833,7 +834,7 @@ func TestClient_HTTP(t *testing.T) {
 			},
 		}
 		client := newPayloadV4Setup(t, want, execPayload, requests)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, requests, 0)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, requests)
 		require.ErrorIs(t, ErrInvalidBlockHashPayloadStatus, err)
 		require.DeepEqual(t, []uint8(nil), resp)
 	})
@@ -847,7 +848,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayload(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil, 0)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.ErrorIs(t, ErrInvalidPayloadStatus, err)
 		require.DeepEqual(t, want.LatestValidHash, resp)
 	})
@@ -861,7 +862,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayloadCapella(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil, 0)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.ErrorIs(t, ErrInvalidPayloadStatus, err)
 		require.DeepEqual(t, want.LatestValidHash, resp)
 	})
@@ -875,7 +876,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayloadDeneb(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, nil, 0)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, nil)
 		require.ErrorIs(t, ErrInvalidPayloadStatus, err)
 		require.DeepEqual(t, want.LatestValidHash, resp)
 	})
@@ -914,7 +915,7 @@ func TestClient_HTTP(t *testing.T) {
 			},
 		}
 		client := newPayloadV4Setup(t, want, execPayload, requests)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, requests, 0)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{'a'}, requests)
 		require.ErrorIs(t, ErrInvalidPayloadStatus, err)
 		require.DeepEqual(t, want.LatestValidHash, resp)
 	})
@@ -928,7 +929,7 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		wrappedPayload, err := blocks.WrappedExecutionPayload(execPayload)
 		require.NoError(t, err)
-		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil, 0)
+		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
 		require.ErrorIs(t, err, ErrUnknownPayloadStatus)
 		require.DeepEqual(t, []uint8(nil), resp)
 	})
@@ -1716,7 +1717,7 @@ func fixturesStruct() *payloadFixtures {
 		BlockHash:     foo[:],
 		Transactions:  [][]byte{foo[:]},
 	}
-	executionPayloadBodyFixture := &pb.ExecutionPayloadBody{
+	executionPayloadBodyFixture := &pb.ExecutionPayloadBodyV1{
 		Transactions: []hexutil.Bytes{foo[:]},
 		Withdrawals:  []*pb.Withdrawal{},
 	}
@@ -1773,51 +1774,6 @@ func fixturesStruct() *payloadFixtures {
 		// added on top of the empty payload
 		Transactions: [][]byte{foo[:]},
 		Withdrawals:  []*pb.Withdrawal{},
-	}
-	withdrawalRequests := make([]pb.WithdrawalRequestV1, 3)
-	for i := range withdrawalRequests {
-		amount := hexutil.Uint64(i)
-		address := &common.Address{}
-		address.SetBytes([]byte{0, 0, byte(i)})
-		pubkey := pb.BlsPubkey{}
-		copy(pubkey[:], []byte{0, byte(i)})
-		withdrawalRequests[i] = pb.WithdrawalRequestV1{
-			SourceAddress:   address,
-			ValidatorPubkey: &pubkey,
-			Amount:          &amount,
-		}
-	}
-	depositRequests := make([]pb.DepositRequestV1, 3)
-	for i := range depositRequests {
-		amount := hexutil.Uint64(math.MaxUint16 - i)
-		creds := &common.Hash{}
-		creds.SetBytes([]byte{0, 0, byte(i)})
-		pubkey := pb.BlsPubkey{}
-		copy(pubkey[:], []byte{0, byte(i)})
-		sig := pb.BlsSig{}
-		copy(sig[:], []byte{0, 0, 0, byte(i)})
-		idx := hexutil.Uint64(i)
-		depositRequests[i] = pb.DepositRequestV1{
-			PubKey:                &pubkey,
-			WithdrawalCredentials: creds,
-			Amount:                &amount,
-			Signature:             &sig,
-			Index:                 &idx,
-		}
-	}
-	consolidationRequests := make([]pb.ConsolidationRequestV1, 1)
-	for i := range consolidationRequests {
-		address := &common.Address{}
-		address.SetBytes([]byte{0, 0, byte(i)})
-		sPubkey := pb.BlsPubkey{}
-		copy(sPubkey[:], []byte{0, byte(i)})
-		tPubkey := pb.BlsPubkey{}
-		copy(tPubkey[:], []byte{0, byte(i)})
-		consolidationRequests[i] = pb.ConsolidationRequestV1{
-			SourceAddress: address,
-			SourcePubkey:  &sPubkey,
-			TargetPubkey:  &tPubkey,
-		}
 	}
 	hexUint := hexutil.Uint64(1)
 	executionPayloadWithValueFixtureCapella := &pb.GetPayloadV2ResponseJson{
@@ -2058,7 +2014,7 @@ func fixturesStruct() *payloadFixtures {
 
 type payloadFixtures struct {
 	ExecutionBlock                    *pb.ExecutionBlock
-	ExecutionPayloadBody              *pb.ExecutionPayloadBody
+	ExecutionPayloadBody              *pb.ExecutionPayloadBodyV1
 	ExecutionPayload                  *pb.ExecutionPayload
 	ExecutionPayloadCapella           *pb.ExecutionPayloadCapella
 	EmptyExecutionPayloadDeneb        *pb.ExecutionPayloadDeneb
@@ -2492,7 +2448,7 @@ func TestReconstructBlindedBlockBatch(t *testing.T) {
 		blk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, slot, 0)
 		cli, srv := newMockEngine(t)
 		srv.registerDefault(func(msg *jsonrpcMessage, w http.ResponseWriter, req *http.Request) {
-			executionPayloadBodies := []*pb.ExecutionPayloadBody{nil}
+			executionPayloadBodies := []*pb.ExecutionPayloadBodyV1{nil}
 			mockWriteResult(t, w, msg, executionPayloadBodies)
 		})
 
@@ -2569,6 +2525,69 @@ func Test_ExchangeCapabilities(t *testing.T) {
 			require.NotNil(t, item)
 		}
 	})
+}
+
+func Test_ExchangeCapabilities_StableAcrossCalls(t *testing.T) {
+	// Enable all forks so the fork-specific endpoint branches in
+	// ExchangeCapabilities are exercised on every call.
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.ElectraForkEpoch = 0
+	cfg.FuluForkEpoch = 0
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	// Capture the engine method list the EL receives on each call.
+	var requested [][]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		defer func() {
+			require.NoError(t, r.Body.Close())
+		}()
+
+		var req struct {
+			Params [][]string `json:"params"`
+		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		require.Equal(t, 1, len(req.Params))
+		requested = append(requested, req.Params[0])
+
+		resp := map[string]any{
+			"jsonrpc": "2.0",
+			"id":      1,
+			"result":  []string{},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	}))
+	defer srv.Close()
+
+	ctx := t.Context()
+	rpcClient, err := rpc.DialHTTP(srv.URL)
+	require.NoError(t, err)
+	defer rpcClient.Close()
+
+	service := &Service{}
+	service.rpcClient = rpcClient
+
+	_, err = service.ExchangeCapabilities(ctx)
+	require.NoError(t, err)
+	_, err = service.ExchangeCapabilities(ctx)
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(requested))
+	// The requested method list must be identical between calls: the set of
+	// engine methods Prysm supports does not change at runtime.
+	require.Equal(t, len(requested[0]), len(requested[1]), "engine method list grew between calls")
+	for i := range requested[0] {
+		require.Equal(t, requested[0][i], requested[1][i])
+	}
+
+	// And the list must contain no duplicate method names.
+	seen := make(map[string]bool, len(requested[1]))
+	for _, m := range requested[1] {
+		require.Equal(t, false, seen[m], "duplicate engine method requested: %s", m)
+		seen[m] = true
+	}
 }
 
 func mockSummary(t *testing.T, exists []bool) func(uint64) bool {
@@ -2681,7 +2700,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("GetBlobsV2 is not supported", func(t *testing.T) {
-		_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		_, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
 		require.ErrorContains(t, "engine_getBlobsV2 is not supported", err)
 	})
 
@@ -2692,7 +2711,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		dataColumns, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
 		require.NoError(t, err)
 		require.Equal(t, 0, len(dataColumns))
 	})
@@ -2705,7 +2724,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		dataColumns, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
 		require.NoError(t, err)
 		require.Equal(t, 128, len(dataColumns))
 	})
@@ -2721,6 +2740,254 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 	// 	_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
 	// 	require.ErrorContains(t, "fetch cells and proofs from execution client", err)
 	// })
+}
+
+func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	const numBlobs = 3
+	b := util.NewBeaconBlockFulu()
+	b.Block.Body.BlobKzgCommitments = createRandomKzgCommitments(t, numBlobs)
+	r, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	sb, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	roBlock, err := blocks.NewROBlockWithRoot(sb, r)
+	require.NoError(t, err)
+
+	source := peerdas.PopulateFromBlock(roBlock)
+	ctx := context.Background()
+
+	t.Run("HasBlobs capability absent returns (nil, false, nil)", func(t *testing.T) {
+		client := &Service{
+			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil}},
+			partialColumnsSupported: true,
+		}
+		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
+		require.NoError(t, err)
+		require.Equal(t, false, supported)
+		require.Equal(t, 0, len(cols))
+	})
+
+	t.Run("EL has all blobs returns early with no partial columns", func(t *testing.T) {
+		cli, engine := newMockEngine(t)
+		defer cli.Close()
+		engine.register(HasBlobs, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+			mockWriteResult(t, w, msg, []bool{true, true, true})
+		})
+		client := &Service{
+			rpcClient:               cli,
+			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}},
+			partialColumnsSupported: true,
+		}
+		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
+		require.NoError(t, err)
+		require.Equal(t, true, supported)
+		require.Equal(t, 0, len(cols))
+	})
+
+	t.Run("EL missing first blob sets request bit 0 only", func(t *testing.T) {
+		cli, engine := newMockEngine(t)
+		defer cli.Close()
+		engine.register(HasBlobs, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+			mockWriteResult(t, w, msg, []bool{false, true, true}) // blob 0 missing
+		})
+		client := &Service{
+			rpcClient:               cli,
+			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}},
+			partialColumnsSupported: true,
+		}
+		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
+		require.NoError(t, err)
+		require.Equal(t, true, supported)
+		require.Equal(t, fieldparams.NumberOfColumns, len(cols))
+		for _, col := range cols {
+			requests, ok := col.PartsRequests()
+			require.Equal(t, true, ok)
+			require.Equal(t, uint64(numBlobs), requests.Len())
+			require.Equal(t, true, requests.BitAt(0))  // blob 0 missing: requested
+			require.Equal(t, false, requests.BitAt(1)) // blob 1 present: not requested
+			require.Equal(t, false, requests.BitAt(2)) // blob 2 present: not requested
+		}
+	})
+
+	t.Run("EL missing all blobs sets all request bits", func(t *testing.T) {
+		cli, engine := newMockEngine(t)
+		defer cli.Close()
+		engine.register(HasBlobs, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+			mockWriteResult(t, w, msg, []bool{false, false, false})
+		})
+		client := &Service{
+			rpcClient:               cli,
+			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}},
+			partialColumnsSupported: true,
+		}
+		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
+		require.NoError(t, err)
+		require.Equal(t, true, supported)
+		require.Equal(t, fieldparams.NumberOfColumns, len(cols))
+		for _, col := range cols {
+			requests, ok := col.PartsRequests()
+			require.Equal(t, true, ok)
+			require.Equal(t, true, requests.BitAt(0))
+			require.Equal(t, true, requests.BitAt(1))
+			require.Equal(t, true, requests.BitAt(2))
+		}
+	})
+
+	// Keep this subtest last: it overrides the Gloas fork epoch and relies on
+	// SetupTestConfigCleanup to restore the config after the test.
+	t.Run("Gloas-epoch block is gated off and reports unsupported", func(t *testing.T) {
+		gloasCfg := params.BeaconConfig().Copy()
+		gloasCfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(gloasCfg)
+
+		client := &Service{
+			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}},
+			partialColumnsSupported: true,
+		}
+		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
+		require.NoError(t, err)
+		require.Equal(t, false, supported)
+		require.Equal(t, 0, len(cols))
+	})
+}
+
+func TestConstructDataColumnSidecars_PartialColumns(t *testing.T) {
+	require.NoError(t, kzg.Start())
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.CapellaForkEpoch = 1
+	cfg.DenebForkEpoch = 2
+	cfg.ElectraForkEpoch = 3
+	cfg.FuluForkEpoch = 4
+	params.OverrideBeaconConfig(cfg)
+
+	b := util.NewBeaconBlockFulu()
+	b.Block.Slot = 4 * params.BeaconConfig().SlotsPerEpoch
+	b.Block.Body.BlobKzgCommitments = createRandomKzgCommitments(t, 6)
+	r, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	sb, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	roBlock, err := blocks.NewROBlockWithRoot(sb, r)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	tests := []struct {
+		name              string
+		blobMasks         []bool
+		wantSidecars      int     // verified sidecars are only returned when every blob is present
+		wantPartials      int     // partial columns returned (0 when the EL returns nothing)
+		wantIncluded      uint64  // cells included per partial column
+		wantCompleteDelta float64 // expected increment of the complete-response metric
+		wantPartialDelta  float64 // expected increment of the partial-response metric
+	}{
+		{
+			name:              "complete response returns sidecars and full partial columns",
+			blobMasks:         []bool{true, true, true, true, true, true},
+			wantSidecars:      fieldparams.NumberOfColumns,
+			wantPartials:      fieldparams.NumberOfColumns,
+			wantIncluded:      6,
+			wantCompleteDelta: 1,
+			wantPartialDelta:  0,
+		},
+		{
+			name:              "partial response returns only partial columns",
+			blobMasks:         []bool{true, false, true, false, true, false},
+			wantSidecars:      0,
+			wantPartials:      fieldparams.NumberOfColumns,
+			wantIncluded:      3,
+			wantCompleteDelta: 0,
+			wantPartialDelta:  1,
+		},
+		{
+			name:              "null response returns no sidecars or partial columns",
+			blobMasks:         []bool{false, false, false, false, false, false},
+			wantSidecars:      0,
+			wantPartials:      0,
+			wantIncluded:      0,
+			wantCompleteDelta: 0,
+			wantPartialDelta:  0,
+		},
+		{
+			name:              "empty response returns no sidecars or partial columns",
+			blobMasks:         []bool{},
+			wantSidecars:      0,
+			wantPartials:      0,
+			wantIncluded:      0,
+			wantCompleteDelta: 0,
+			wantPartialDelta:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := createBlobServerV2(t, len(tt.blobMasks), tt.blobMasks)
+			defer srv.Close()
+
+			rpcClient, client := setupRpcClientV3(t, srv.URL, &Service{})
+			defer rpcClient.Close()
+
+			requestsBefore := counterValue(t, getBlobsV3RequestsTotal)
+			completeBefore := counterValue(t, getBlobsV3CompleteResponsesTotal)
+			partialBefore := counterValue(t, getBlobsV3PartialResponsesTotal)
+
+			sidecars, partials, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+			require.NoError(t, err)
+			require.Equal(t, tt.wantSidecars, len(sidecars))
+
+			require.Equal(t, tt.wantPartials, len(partials))
+			for _, p := range partials {
+				require.Equal(t, tt.wantIncluded, p.Included.Count())
+			}
+
+			// engine_getBlobsV3 is always called on this path.
+			require.Equal(t, float64(1), counterValue(t, getBlobsV3RequestsTotal)-requestsBefore)
+			require.Equal(t, tt.wantCompleteDelta, counterValue(t, getBlobsV3CompleteResponsesTotal)-completeBefore)
+			require.Equal(t, tt.wantPartialDelta, counterValue(t, getBlobsV3PartialResponsesTotal)-partialBefore)
+		})
+	}
+
+	t.Run("error response is counted but latency is not observed", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			defer func() {
+				require.NoError(t, r.Body.Close())
+			}()
+			require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      1,
+				"error":   map[string]any{"code": -32000, "message": "boom"},
+			}))
+		}))
+		defer srv.Close()
+
+		rpcClient, client := setupRpcClientV3(t, srv.URL, &Service{})
+		defer rpcClient.Close()
+
+		requestsBefore := counterValue(t, getBlobsV3RequestsTotal)
+		latencyBefore := histogramSampleCount(t, getBlobsV3Latency)
+		completeBefore := counterValue(t, getBlobsV3CompleteResponsesTotal)
+		partialBefore := counterValue(t, getBlobsV3PartialResponsesTotal)
+
+		_, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		require.ErrorContains(t, "fetch cells and proofs from execution client", err)
+
+		// The request is counted, but latency and the complete/partial response metrics are not.
+		require.Equal(t, float64(1), counterValue(t, getBlobsV3RequestsTotal)-requestsBefore)
+		require.Equal(t, uint64(0), histogramSampleCount(t, getBlobsV3Latency)-latencyBefore)
+		require.Equal(t, float64(0), counterValue(t, getBlobsV3CompleteResponsesTotal)-completeBefore)
+		require.Equal(t, float64(0), counterValue(t, getBlobsV3PartialResponsesTotal)-partialBefore)
+	})
 }
 
 func createRandomKzgCommitments(t *testing.T, num int) [][]byte {
@@ -2811,6 +3078,27 @@ func setupRpcClientV2(t *testing.T, url string, client *Service) (*rpc.Client, *
 	return rpcClient, client
 }
 
+func setupRpcClientV3(t *testing.T, url string, client *Service) (*rpc.Client, *Service) {
+	rpcClient, client := setupRpcClient(t, url, client)
+	client.capabilityCache = &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil}}
+	client.partialColumnsSupported = true
+	return rpcClient, client
+}
+
+// counterValue reads the current value of a prometheus counter.
+func counterValue(t *testing.T, c prometheus.Counter) float64 {
+	var m dto.Metric
+	require.NoError(t, c.Write(&m))
+	return m.GetCounter().GetValue()
+}
+
+// histogramSampleCount reads the number of observations recorded by a prometheus histogram.
+func histogramSampleCount(t *testing.T, h prometheus.Histogram) uint64 {
+	var m dto.Metric
+	require.NoError(t, h.Write(&m))
+	return m.GetHistogram().GetSampleCount()
+}
+
 func testNewBlobVerifier() verification.NewBlobVerifier {
 	return func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
 		return &verification.MockBlobVerifier{
@@ -2819,4 +3107,54 @@ func testNewBlobVerifier() verification.NewBlobVerifier {
 			},
 		}
 	}
+}
+
+func TestGloasPayloadFromExecutionBlock_PropagatesBlockAccessList(t *testing.T) {
+	hash := common.BytesToHash([]byte("block-hash"))
+	blobGasUsed := uint64(123)
+	excessBlobGas := uint64(456)
+	slotNumber := uint64(789)
+	bal := []byte{0x01, 0x02, 0x03, 0x04}
+
+	blk := &pb.ExecutionBlock{
+		Hash: hash,
+		Header: gethtypes.Header{
+			ParentHash:    common.BytesToHash([]byte("parent")),
+			Coinbase:      common.BytesToAddress([]byte("coinbase")),
+			Root:          common.BytesToHash([]byte("state")),
+			ReceiptHash:   common.BytesToHash([]byte("receipts")),
+			Number:        big.NewInt(1),
+			BaseFee:       big.NewInt(1),
+			BlobGasUsed:   &blobGasUsed,
+			ExcessBlobGas: &excessBlobGas,
+			SlotNumber:    &slotNumber,
+		},
+		BlockAccessList: bal,
+	}
+
+	payload, err := gloasPayloadFromExecutionBlock(hash, blk)
+	require.NoError(t, err)
+	require.DeepEqual(t, bal, payload.BlockAccessList)
+}
+
+func TestExecutionBlock_MarshalUnmarshalJSON_BlockAccessList(t *testing.T) {
+	bal := hexutil.Bytes{0xde, 0xad, 0xbe, 0xef}
+	original := &pb.ExecutionBlock{
+		Version: version.Gloas,
+		Hash:    common.BytesToHash([]byte("block-hash")),
+		Header: gethtypes.Header{
+			ParentHash: common.BytesToHash([]byte("parent")),
+			Number:     big.NewInt(1),
+			Difficulty: big.NewInt(0),
+		},
+		BlockAccessList: bal,
+	}
+
+	enc, err := original.MarshalJSON()
+	require.NoError(t, err)
+	require.Equal(t, true, strings.Contains(string(enc), "blockAccessList"))
+
+	decoded := &pb.ExecutionBlock{}
+	require.NoError(t, decoded.UnmarshalJSON(enc))
+	require.DeepEqual(t, []byte(bal), []byte(decoded.BlockAccessList))
 }

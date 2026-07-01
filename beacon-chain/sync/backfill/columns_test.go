@@ -11,9 +11,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -729,6 +731,45 @@ func TestValidatingColumnRequest_CountedValidation(t *testing.T) {
 		require.ErrorIs(t, err, errCommitmentLengthMismatch)
 	})
 
+	t.Run("sidecar signed block header signature mismatch returns error", func(t *testing.T) {
+		blockRoot := [32]byte{0x01}
+		commitment := make([]byte, 48)
+		commitment[0] = 0xaa
+		params := []util.DataColumnParam{
+			{
+				Index:          0,
+				Slot:           100,
+				ProposerIndex:  1,
+				ParentRoot:     blockRoot[:],
+				KzgCommitments: [][]byte{commitment},
+			},
+		}
+		roCols, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, params)
+
+		var localBlockSig [fieldparams.BLSSignatureLength]byte
+		localBlockSig[0] = 0xff
+
+		vcr := &validatingColumnRequest{
+			columnSync: &columnSync{
+				columnBatch: &columnBatch{
+					toDownload: map[[32]byte]*toDownload{
+						roCols[0].BlockRoot(): {
+							remaining:      peerdas.NewColumnIndicesFromSlice([]uint64{0}),
+							commitments:    [][]byte{commitment},
+							blockSignature: localBlockSig,
+						},
+					},
+				},
+				peer: mockPeer,
+			},
+			bisector: newColumnBisector(func(peer.ID, string, error) {}),
+		}
+
+		err := vcr.countedValidation(roCols[0])
+		require.ErrorIs(t, err, errSidecarSignatureMismatch)
+		require.ErrorIs(t, err, errInvalidDataColumnResponse, "must trigger shouldDownscore")
+	})
+
 	t.Run("commitment value mismatch returns error", func(t *testing.T) {
 		blockRoot := [32]byte{0x01}
 		params := []util.DataColumnParam{
@@ -826,6 +867,46 @@ func TestValidatingColumnRequest_CountedValidation(t *testing.T) {
 		// Verify that remaining.Unset was called (column 0 should be removed)
 		require.Equal(t, false, remaining.Has(0), "column 0 should be removed from remaining after validation")
 		require.Equal(t, 0, remaining.Count(), "remaining should be empty")
+	})
+
+	t.Run("gloas sidecar seeds bid commitments from block", func(t *testing.T) {
+		blockRoot := [32]byte{0x02}
+		commitment := make([]byte, 48)
+		commitment[0] = 0xaa
+
+		roCol, err := blocks.NewRODataColumnGloas(&ethpb.DataColumnSidecarGloas{
+			Index:           0,
+			Slot:            100,
+			BeaconBlockRoot: blockRoot[:],
+		})
+		require.NoError(t, err)
+
+		colStore := filesystem.NewEphemeralDataColumnStorage(t)
+		p2p := p2ptest.NewTestP2P(t)
+		remaining := peerdas.NewColumnIndicesFromSlice([]uint64{0})
+		bisector := newColumnBisector(func(peer.ID, string, error) {})
+		sr := func(primitives.Slot) bool { return true }
+		vcr := &validatingColumnRequest{
+			columnSync: &columnSync{
+				columnBatch: &columnBatch{
+					toDownload: map[[32]byte]*toDownload{
+						roCol.BlockRoot(): {
+							remaining:   remaining,
+							commitments: [][]byte{commitment},
+						},
+					},
+				},
+				store:   das.NewLazilyPersistentStoreColumn(colStore, testNewDataColumnsVerifier(), p2p.NodeID(), 1, bisector, sr),
+				current: primitives.Slot(200),
+				peer:    mockPeer,
+			},
+			bisector: bisector,
+		}
+
+		// Without seeding the bid commitments, KzgCommitments() would error for gloas.
+		err = vcr.countedValidation(roCol)
+		require.NoError(t, err)
+		require.Equal(t, false, remaining.Has(0), "column 0 should be removed from remaining after validation")
 	})
 }
 

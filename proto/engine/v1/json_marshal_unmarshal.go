@@ -77,6 +77,7 @@ type ExecutionBlock struct {
 	Transactions    []*gethtypes.Transaction `json:"transactions"`
 	TotalDifficulty string                   `json:"totalDifficulty"`
 	Withdrawals     []*Withdrawal            `json:"withdrawals"`
+	BlockAccessList hexutil.Bytes            `json:"blockAccessList"`
 }
 
 func (e *ExecutionBlock) MarshalJSON() ([]byte, error) {
@@ -94,6 +95,9 @@ func (e *ExecutionBlock) MarshalJSON() ([]byte, error) {
 
 	if e.Version == version.Capella {
 		decoded["withdrawals"] = e.Withdrawals
+	}
+	if e.Version >= version.Gloas {
+		decoded["blockAccessList"] = e.BlockAccessList
 	}
 
 	return json.Marshal(decoded)
@@ -125,6 +129,18 @@ func (e *ExecutionBlock) UnmarshalJSON(enc []byte) error {
 	e.Hash = common.BytesToHash(decodedHash)
 	e.TotalDifficulty, _ = decoded["totalDifficulty"].(string)
 
+	if raw, exists := decoded["blockAccessList"]; exists && raw != nil {
+		balStr, ok := raw.(string)
+		if !ok {
+			return errors.New("expected `blockAccessList` field to be a string")
+		}
+		balBytes, err := hexutil.Decode(balStr)
+		if err != nil {
+			return errors.Wrap(err, "could not decode blockAccessList hex")
+		}
+		e.BlockAccessList = balBytes
+	}
+
 	rawWithdrawals, ok := decoded["withdrawals"]
 	if !ok || rawWithdrawals == nil {
 		e.Version = version.Bellatrix
@@ -152,6 +168,9 @@ func (e *ExecutionBlock) UnmarshalJSON(enc []byte) error {
 		if has && dgu != nil {
 			e.Version = version.Deneb
 		}
+	}
+	if len(e.BlockAccessList) > 0 {
+		e.Version = version.Gloas
 	}
 
 	rawTxList, ok := decoded["transactions"]
@@ -310,13 +329,48 @@ type GetPayloadV5ResponseJson struct {
 	ExecutionRequests     []hexutil.Bytes            `json:"executionRequests"`
 }
 
-// ExecutionPayloadBody represents the engine API ExecutionPayloadV1 or ExecutionPayloadV2 type.
-type ExecutionPayloadBody struct {
-	Transactions          []hexutil.Bytes          `json:"transactions"`
-	Withdrawals           []*Withdrawal            `json:"withdrawals"`
-	WithdrawalRequests    []WithdrawalRequestV1    `json:"withdrawalRequests"`
-	DepositRequests       []DepositRequestV1       `json:"depositRequests"`
-	ConsolidationRequests []ConsolidationRequestV1 `json:"consolidationRequests"`
+// ExecutionPayloadGloasJSON is the JSON representation of ExecutionPayloadV4 (Amsterdam).
+type ExecutionPayloadGloasJSON struct {
+	ParentHash      *common.Hash    `json:"parentHash"`
+	FeeRecipient    *common.Address `json:"feeRecipient"`
+	StateRoot       *common.Hash    `json:"stateRoot"`
+	ReceiptsRoot    *common.Hash    `json:"receiptsRoot"`
+	LogsBloom       *hexutil.Bytes  `json:"logsBloom"`
+	PrevRandao      *common.Hash    `json:"prevRandao"`
+	BlockNumber     *hexutil.Uint64 `json:"blockNumber"`
+	GasLimit        *hexutil.Uint64 `json:"gasLimit"`
+	GasUsed         *hexutil.Uint64 `json:"gasUsed"`
+	Timestamp       *hexutil.Uint64 `json:"timestamp"`
+	ExtraData       hexutil.Bytes   `json:"extraData"`
+	BaseFeePerGas   string          `json:"baseFeePerGas"`
+	BlobGasUsed     *hexutil.Uint64 `json:"blobGasUsed"`
+	ExcessBlobGas   *hexutil.Uint64 `json:"excessBlobGas"`
+	BlockHash       *common.Hash    `json:"blockHash"`
+	Transactions    []hexutil.Bytes `json:"transactions"`
+	Withdrawals     []*Withdrawal   `json:"withdrawals"`
+	BlockAccessList *hexutil.Bytes  `json:"blockAccessList"`
+	SlotNumber      *hexutil.Uint64 `json:"slotNumber"`
+}
+
+type GetPayloadV6ResponseJson struct {
+	ExecutionPayload      *ExecutionPayloadGloasJSON `json:"executionPayload"`
+	BlockValue            string                     `json:"blockValue"`
+	BlobsBundle           *BlobBundleV2JSON          `json:"blobsBundle"`
+	ShouldOverrideBuilder bool                       `json:"shouldOverrideBuilder"`
+	ExecutionRequests     []hexutil.Bytes            `json:"executionRequests"`
+}
+
+// ExecutionPayloadBodyV1 represents the engine API ExecutionPayloadV1 type.
+type ExecutionPayloadBodyV1 struct {
+	Transactions []hexutil.Bytes `json:"transactions"`
+	Withdrawals  []*Withdrawal   `json:"withdrawals"`
+}
+
+// ExecutionPayloadBodyV2 represents the engine API ExecutionPayloadBodyV2 type (Amsterdam).
+type ExecutionPayloadBodyV2 struct {
+	Transactions    []hexutil.Bytes `json:"transactions"`
+	Withdrawals     []*Withdrawal   `json:"withdrawals"`
+	BlockAccessList *hexutil.Bytes  `json:"blockAccessList"`
 }
 
 type ExecutionPayloadDenebJSON struct {
@@ -337,85 +391,6 @@ type ExecutionPayloadDenebJSON struct {
 	BlockHash     *common.Hash    `json:"blockHash"`
 	Transactions  []hexutil.Bytes `json:"transactions"`
 	Withdrawals   []*Withdrawal   `json:"withdrawals"`
-}
-
-// WithdrawalRequestV1 represents an execution engine WithdrawalRequestV1 value
-// https://github.com/ethereum/execution-apis/blob/main/src/engine/prague.md#withdrawalrequestv1
-type WithdrawalRequestV1 struct {
-	SourceAddress   *common.Address `json:"sourceAddress"`
-	ValidatorPubkey *BlsPubkey      `json:"validatorPubkey"`
-	Amount          *hexutil.Uint64 `json:"amount"`
-}
-
-func (r WithdrawalRequestV1) Validate() error {
-	if r.SourceAddress == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'sourceAddress' for WithdrawalRequestV1")
-	}
-	if r.ValidatorPubkey == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'validatorPubkey' for WithdrawalRequestV1")
-	}
-	if r.Amount == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'amount' for WithdrawalRequestV1")
-	}
-	return nil
-}
-
-// DepositRequestV1 represents an execution engine DepositRequestV1 value
-// https://github.com/ethereum/execution-apis/blob/main/src/engine/prague.md#depositrequestv1
-type DepositRequestV1 struct {
-	// pubkey: DATA, 48 Bytes
-	PubKey *BlsPubkey `json:"pubkey"`
-	// withdrawalCredentials: DATA, 32 Bytes
-	WithdrawalCredentials *common.Hash `json:"withdrawalCredentials"`
-	// amount: QUANTITY, 64 Bits
-	Amount *hexutil.Uint64 `json:"amount"`
-	// signature: DATA, 96 Bytes
-	Signature *BlsSig `json:"signature"`
-	// index: QUANTITY, 64 Bits
-	Index *hexutil.Uint64 `json:"index"`
-}
-
-func (r DepositRequestV1) Validate() error {
-	if r.PubKey == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'pubkey' for DepositRequestV1")
-	}
-	if r.WithdrawalCredentials == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'withdrawalCredentials' for DepositRequestV1")
-	}
-	if r.Amount == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'amount' for DepositRequestV1")
-	}
-	if r.Signature == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'signature' for DepositRequestV1")
-	}
-	if r.Index == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'index' for DepositRequestV1")
-	}
-	return nil
-}
-
-// ConsolidationRequestV1 represents an execution engine ConsolidationRequestV1 value
-// https://github.com/ethereum/execution-apis/blob/main/src/engine/prague.md#consolidationrequestv1
-type ConsolidationRequestV1 struct {
-	// sourceAddress: DATA, 20 Bytes
-	SourceAddress *common.Address `json:"sourceAddress"`
-	// sourcePubkey: DATA, 48 Bytes
-	SourcePubkey *BlsPubkey `json:"sourcePubkey"`
-	// targetPubkey: DATA, 48 Bytes
-	TargetPubkey *BlsPubkey `json:"targetPubkey"`
-}
-
-func (r ConsolidationRequestV1) Validate() error {
-	if r.SourceAddress == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'sourceAddress' for ConsolidationRequestV1")
-	}
-	if r.SourcePubkey == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'sourcePubkey' for ConsolidationRequestV1")
-	}
-	if r.TargetPubkey == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'targetPubkey' for ConsolidationRequestV1")
-	}
-	return nil
 }
 
 // MarshalJSON --
@@ -764,6 +739,53 @@ func (p *PayloadAttributesV3) UnmarshalJSON(enc []byte) error {
 	return nil
 }
 
+type payloadAttributesV4JSON struct {
+	Timestamp             hexutil.Uint64 `json:"timestamp"`
+	PrevRandao            hexutil.Bytes  `json:"prevRandao"`
+	SuggestedFeeRecipient hexutil.Bytes  `json:"suggestedFeeRecipient"`
+	Withdrawals           []*Withdrawal  `json:"withdrawals"`
+	ParentBeaconBlockRoot hexutil.Bytes  `json:"parentBeaconBlockRoot"`
+	SlotNumber            hexutil.Uint64 `json:"slotNumber"`
+	TargetGasLimit        hexutil.Uint64 `json:"targetGasLimit"`
+}
+
+func (p *PayloadAttributesV4) MarshalJSON() ([]byte, error) {
+	withdrawals := p.Withdrawals
+	if withdrawals == nil {
+		withdrawals = make([]*Withdrawal, 0)
+	}
+
+	return json.Marshal(payloadAttributesV4JSON{
+		Timestamp:             hexutil.Uint64(p.Timestamp),
+		PrevRandao:            p.PrevRandao,
+		SuggestedFeeRecipient: p.SuggestedFeeRecipient,
+		Withdrawals:           withdrawals,
+		ParentBeaconBlockRoot: p.ParentBeaconBlockRoot,
+		SlotNumber:            hexutil.Uint64(p.SlotNumber),
+		TargetGasLimit:        hexutil.Uint64(p.TargetGasLimit),
+	})
+}
+
+func (p *PayloadAttributesV4) UnmarshalJSON(enc []byte) error {
+	dec := payloadAttributesV4JSON{}
+	if err := json.Unmarshal(enc, &dec); err != nil {
+		return err
+	}
+	*p = PayloadAttributesV4{}
+	p.Timestamp = uint64(dec.Timestamp)
+	p.PrevRandao = dec.PrevRandao
+	p.SuggestedFeeRecipient = dec.SuggestedFeeRecipient
+	withdrawals := dec.Withdrawals
+	if withdrawals == nil {
+		withdrawals = make([]*Withdrawal, 0)
+	}
+	p.Withdrawals = withdrawals
+	p.ParentBeaconBlockRoot = dec.ParentBeaconBlockRoot
+	p.SlotNumber = uint64(dec.SlotNumber)
+	p.TargetGasLimit = uint64(dec.TargetGasLimit)
+	return nil
+}
+
 type payloadStatusJSON struct {
 	LatestValidHash *common.Hash `json:"latestValidHash"`
 	Status          string       `json:"status"`
@@ -907,119 +929,6 @@ func (e *ExecutionPayloadDeneb) MarshalJSON() ([]byte, error) {
 		BlobGasUsed:   &blobGasUsed,
 		ExcessBlobGas: &excessBlobGas,
 	})
-}
-
-func JsonDepositRequestsToProto(j []DepositRequestV1) ([]*DepositRequest, error) {
-	reqs := make([]*DepositRequest, len(j))
-
-	for i := range j {
-		req := j[i]
-		if err := req.Validate(); err != nil {
-			return nil, err
-		}
-		reqs[i] = &DepositRequest{
-			Pubkey:                req.PubKey.Bytes(),
-			WithdrawalCredentials: req.WithdrawalCredentials.Bytes(),
-			Amount:                uint64(*req.Amount),
-			Signature:             req.Signature.Bytes(),
-			Index:                 uint64(*req.Index),
-		}
-	}
-
-	return reqs, nil
-}
-
-func ProtoDepositRequestsToJson(reqs []*DepositRequest) []DepositRequestV1 {
-	j := make([]DepositRequestV1, len(reqs))
-	for i := range reqs {
-		r := reqs[i]
-		pk := BlsPubkey{}
-		copy(pk[:], r.Pubkey)
-		creds := common.BytesToHash(r.WithdrawalCredentials)
-		amt := hexutil.Uint64(r.Amount)
-		sig := BlsSig{}
-		copy(sig[:], r.Signature)
-		idx := hexutil.Uint64(r.Index)
-		j[i] = DepositRequestV1{
-			PubKey:                &pk,
-			WithdrawalCredentials: &creds,
-			Amount:                &amt,
-			Signature:             &sig,
-			Index:                 &idx,
-		}
-	}
-	return j
-}
-
-func JsonWithdrawalRequestsToProto(j []WithdrawalRequestV1) ([]*WithdrawalRequest, error) {
-	reqs := make([]*WithdrawalRequest, len(j))
-
-	for i := range j {
-		req := j[i]
-		if err := req.Validate(); err != nil {
-			return nil, err
-		}
-		reqs[i] = &WithdrawalRequest{
-			SourceAddress:   req.SourceAddress.Bytes(),
-			ValidatorPubkey: req.ValidatorPubkey.Bytes(),
-			Amount:          uint64(*req.Amount),
-		}
-	}
-
-	return reqs, nil
-}
-
-func ProtoWithdrawalRequestsToJson(reqs []*WithdrawalRequest) []WithdrawalRequestV1 {
-	j := make([]WithdrawalRequestV1, len(reqs))
-	for i := range reqs {
-		r := reqs[i]
-		pk := BlsPubkey{}
-		amt := hexutil.Uint64(r.Amount)
-		copy(pk[:], r.ValidatorPubkey)
-		address := common.BytesToAddress(r.SourceAddress)
-		j[i] = WithdrawalRequestV1{
-			SourceAddress:   &address,
-			ValidatorPubkey: &pk,
-			Amount:          &amt,
-		}
-	}
-	return j
-}
-
-func JsonConsolidationRequestsToProto(j []ConsolidationRequestV1) ([]*ConsolidationRequest, error) {
-	reqs := make([]*ConsolidationRequest, len(j))
-
-	for i := range j {
-		req := j[i]
-		if err := req.Validate(); err != nil {
-			return nil, err
-		}
-		reqs[i] = &ConsolidationRequest{
-			SourceAddress: req.SourceAddress.Bytes(),
-			SourcePubkey:  req.SourcePubkey.Bytes(),
-			TargetPubkey:  req.TargetPubkey.Bytes(),
-		}
-	}
-
-	return reqs, nil
-}
-
-func ProtoConsolidationRequestsToJson(reqs []*ConsolidationRequest) []ConsolidationRequestV1 {
-	j := make([]ConsolidationRequestV1, len(reqs))
-	for i := range reqs {
-		r := reqs[i]
-		spk := BlsPubkey{}
-		copy(spk[:], r.SourcePubkey)
-		tpk := BlsPubkey{}
-		copy(tpk[:], r.TargetPubkey)
-		address := common.BytesToAddress(r.SourceAddress)
-		j[i] = ConsolidationRequestV1{
-			SourceAddress: &address,
-			SourcePubkey:  &spk,
-			TargetPubkey:  &tpk,
-		}
-	}
-	return j
 }
 
 func (e *ExecutionPayloadDenebWithValueAndBlobsBundle) UnmarshalJSON(enc []byte) error {
@@ -1454,6 +1363,195 @@ func (b *BlobAndProofV2) UnmarshalJSON(enc []byte) error {
 		proofs[i] = bytesutil.PadTo(p[:], fieldparams.BLSPubkeyLength)
 	}
 	b.KzgProofs = proofs
+
+	return nil
+}
+
+func (e *ExecutionPayloadGloas) MarshalJSON() ([]byte, error) {
+	transactions := make([]hexutil.Bytes, len(e.Transactions))
+	for i, tx := range e.Transactions {
+		transactions[i] = tx
+	}
+	baseFee := new(big.Int).SetBytes(bytesutil.ReverseByteOrder(e.BaseFeePerGas))
+	baseFeeHex := hexutil.EncodeBig(baseFee)
+	pHash := common.BytesToHash(e.ParentHash)
+	sRoot := common.BytesToHash(e.StateRoot)
+	recRoot := common.BytesToHash(e.ReceiptsRoot)
+	prevRan := common.BytesToHash(e.PrevRandao)
+	bHash := common.BytesToHash(e.BlockHash)
+	blockNum := hexutil.Uint64(e.BlockNumber)
+	gasLimit := hexutil.Uint64(e.GasLimit)
+	gasUsed := hexutil.Uint64(e.GasUsed)
+	timeStamp := hexutil.Uint64(e.Timestamp)
+	recipient := common.BytesToAddress(e.FeeRecipient)
+	logsBloom := hexutil.Bytes(e.LogsBloom)
+	withdrawals := e.Withdrawals
+	if withdrawals == nil {
+		withdrawals = make([]*Withdrawal, 0)
+	}
+	blobGasUsed := hexutil.Uint64(e.BlobGasUsed)
+	excessBlobGas := hexutil.Uint64(e.ExcessBlobGas)
+	bal := hexutil.Bytes(e.BlockAccessList)
+	slotNumber := hexutil.Uint64(e.SlotNumber)
+
+	return json.Marshal(ExecutionPayloadGloasJSON{
+		ParentHash:      &pHash,
+		FeeRecipient:    &recipient,
+		StateRoot:       &sRoot,
+		ReceiptsRoot:    &recRoot,
+		LogsBloom:       &logsBloom,
+		PrevRandao:      &prevRan,
+		BlockNumber:     &blockNum,
+		GasLimit:        &gasLimit,
+		GasUsed:         &gasUsed,
+		Timestamp:       &timeStamp,
+		ExtraData:       e.ExtraData,
+		BaseFeePerGas:   baseFeeHex,
+		BlockHash:       &bHash,
+		Transactions:    transactions,
+		Withdrawals:     withdrawals,
+		BlobGasUsed:     &blobGasUsed,
+		ExcessBlobGas:   &excessBlobGas,
+		BlockAccessList: &bal,
+		SlotNumber:      &slotNumber,
+	})
+}
+
+func (e *ExecutionBundleGloas) UnmarshalJSON(enc []byte) error {
+	dec := GetPayloadV6ResponseJson{}
+	if err := json.Unmarshal(enc, &dec); err != nil {
+		return err
+	}
+
+	if dec.ExecutionPayload.ParentHash == nil {
+		return errors.New("missing required field 'parentHash' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.FeeRecipient == nil {
+		return errors.New("missing required field 'feeRecipient' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.StateRoot == nil {
+		return errors.New("missing required field 'stateRoot' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.ReceiptsRoot == nil {
+		return errors.New("missing required field 'receiptsRoot' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.LogsBloom == nil {
+		return errors.New("missing required field 'logsBloom' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.PrevRandao == nil {
+		return errors.New("missing required field 'prevRandao' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.ExtraData == nil {
+		return errors.New("missing required field 'extraData' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.BlockHash == nil {
+		return errors.New("missing required field 'blockHash' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.Transactions == nil {
+		return errors.New("missing required field 'transactions' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.BlockNumber == nil {
+		return errors.New("missing required field 'blockNumber' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.Timestamp == nil {
+		return errors.New("missing required field 'timestamp' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.GasUsed == nil {
+		return errors.New("missing required field 'gasUsed' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.GasLimit == nil {
+		return errors.New("missing required field 'gasLimit' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.BlobGasUsed == nil {
+		return errors.New("missing required field 'blobGasUsed' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.ExcessBlobGas == nil {
+		return errors.New("missing required field 'excessBlobGas' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.SlotNumber == nil {
+		return errors.New("missing required field 'slotNumber' for ExecutionPayload")
+	}
+
+	*e = ExecutionBundleGloas{Payload: &ExecutionPayloadGloas{}}
+	e.Payload.ParentHash = dec.ExecutionPayload.ParentHash.Bytes()
+	e.Payload.FeeRecipient = dec.ExecutionPayload.FeeRecipient.Bytes()
+	e.Payload.StateRoot = dec.ExecutionPayload.StateRoot.Bytes()
+	e.Payload.ReceiptsRoot = dec.ExecutionPayload.ReceiptsRoot.Bytes()
+	e.Payload.LogsBloom = *dec.ExecutionPayload.LogsBloom
+	e.Payload.PrevRandao = dec.ExecutionPayload.PrevRandao.Bytes()
+	e.Payload.BlockNumber = uint64(*dec.ExecutionPayload.BlockNumber)
+	e.Payload.GasLimit = uint64(*dec.ExecutionPayload.GasLimit)
+	e.Payload.GasUsed = uint64(*dec.ExecutionPayload.GasUsed)
+	e.Payload.Timestamp = uint64(*dec.ExecutionPayload.Timestamp)
+	e.Payload.ExtraData = dec.ExecutionPayload.ExtraData
+	baseFee, err := hexutil.DecodeBig(dec.ExecutionPayload.BaseFeePerGas)
+	if err != nil {
+		return err
+	}
+	e.Payload.BaseFeePerGas = bytesutil.PadTo(bytesutil.ReverseByteOrder(baseFee.Bytes()), fieldparams.RootLength)
+
+	e.Payload.ExcessBlobGas = uint64(*dec.ExecutionPayload.ExcessBlobGas)
+	e.Payload.BlobGasUsed = uint64(*dec.ExecutionPayload.BlobGasUsed)
+
+	e.Payload.BlockHash = dec.ExecutionPayload.BlockHash.Bytes()
+	transactions := make([][]byte, len(dec.ExecutionPayload.Transactions))
+	for i, tx := range dec.ExecutionPayload.Transactions {
+		transactions[i] = tx
+	}
+	e.Payload.Transactions = transactions
+	if dec.ExecutionPayload.Withdrawals == nil {
+		dec.ExecutionPayload.Withdrawals = make([]*Withdrawal, 0)
+	}
+	e.Payload.Withdrawals = dec.ExecutionPayload.Withdrawals
+
+	if dec.ExecutionPayload.BlockAccessList == nil {
+		return errors.New("missing required field 'blockAccessList' for ExecutionPayload")
+	}
+	e.Payload.BlockAccessList = *dec.ExecutionPayload.BlockAccessList
+	e.Payload.SlotNumber = primitives.Slot(*dec.ExecutionPayload.SlotNumber)
+
+	v, err := hexutil.DecodeBig(dec.BlockValue)
+	if err != nil {
+		return err
+	}
+	e.Value = bytesutil.PadTo(bytesutil.ReverseByteOrder(v.Bytes()), fieldparams.RootLength)
+
+	if dec.BlobsBundle == nil {
+		return nil
+	}
+	e.BlobsBundle = &BlobsBundleV2{}
+
+	commitments := make([][]byte, len(dec.BlobsBundle.Commitments))
+	for i, kzg := range dec.BlobsBundle.Commitments {
+		k := kzg
+		commitments[i] = bytesutil.PadTo(k[:], fieldparams.BLSPubkeyLength)
+	}
+	e.BlobsBundle.KzgCommitments = commitments
+
+	proofs := make([][]byte, len(dec.BlobsBundle.Proofs))
+	for i, proof := range dec.BlobsBundle.Proofs {
+		p := proof
+		proofs[i] = bytesutil.PadTo(p[:], fieldparams.BLSPubkeyLength)
+	}
+	e.BlobsBundle.Proofs = proofs
+
+	blobs := make([][]byte, len(dec.BlobsBundle.Blobs))
+	for i, blob := range dec.BlobsBundle.Blobs {
+		b := make([]byte, fieldparams.BlobLength)
+		copy(b, blob)
+		blobs[i] = b
+	}
+	e.BlobsBundle.Blobs = blobs
+
+	e.ShouldOverrideBuilder = dec.ShouldOverrideBuilder
+
+	requests := make([][]byte, len(dec.ExecutionRequests))
+	for i, request := range dec.ExecutionRequests {
+		r := make([]byte, len(request))
+		copy(r, request)
+		requests[i] = r
+	}
+	e.ExecutionRequests = requests
 
 	return nil
 }

@@ -23,7 +23,8 @@ type ExecutionPayloadEnvelopeVerifier interface {
 	VerifySlotMatchesBlock(primitives.Slot) error
 	VerifyBuilderValid(interfaces.ROExecutionPayloadBid) error
 	VerifyPayloadHash(interfaces.ROExecutionPayloadBid) error
-	VerifySignature(state.ReadOnlyBeaconState) error
+	VerifyExecutionRequestsRoot(interfaces.ROExecutionPayloadBid) error
+	VerifySignature(context.Context, state.ReadOnlyBeaconState) error
 	SatisfyRequirement(Requirement)
 }
 
@@ -40,6 +41,7 @@ var ExecutionPayloadEnvelopeGossipRequirements = []Requirement{
 	RequireEnvelopeSlotMatchesBlock,
 	RequireBuilderValid,
 	RequirePayloadHashValid,
+	RequireExecutionRequestsRootValid,
 	RequireBuilderSignatureValid,
 }
 
@@ -47,15 +49,23 @@ var ExecutionPayloadEnvelopeGossipRequirements = []Requirement{
 var GossipExecutionPayloadEnvelopeRequirements = requirementList(ExecutionPayloadEnvelopeGossipRequirements)
 
 var (
-	ErrEnvelopeBlockRootNotSeen    = errors.New("block root not seen")
-	ErrEnvelopeBlockRootInvalid    = errors.New("block root invalid")
-	ErrEnvelopeSlotBeforeFinalized = errors.New("envelope slot is before finalized checkpoint")
-	ErrEnvelopeSlotMismatch        = errors.New("envelope slot does not match block slot")
-	ErrIncorrectEnvelopeBuilder    = errors.New("builder index does not match committed header")
-	ErrIncorrectEnvelopeBlockHash  = errors.New("block hash does not match committed header")
+	ErrEnvelopeBlockRootNotSeen       = errors.New("block root not seen")
+	ErrEnvelopeBlockRootInvalid       = errors.New("block root invalid")
+	ErrEnvelopeSlotBeforeFinalized    = errors.New("envelope slot is before finalized checkpoint")
+	ErrEnvelopeSlotMismatch           = errors.New("envelope slot does not match block slot")
+	ErrIncorrectEnvelopeBuilder       = errors.New("builder index does not match committed header")
+	ErrIncorrectEnvelopeBlockHash     = errors.New("block hash does not match committed header")
+	ErrIncorrectExecutionRequestsRoot = errors.New("execution requests root does not match committed bid")
 )
 
 var _ ExecutionPayloadEnvelopeVerifier = &EnvelopeVerifier{}
+var _ NewExecutionPayloadEnvelopeVerifier = NewEnvelopeVerifier
+
+// NewEnvelopeVerifier creates an EnvelopeVerifier without an Initializer;
+// envelope verification needs no shared resources.
+func NewEnvelopeVerifier(e interfaces.ROSignedExecutionPayloadEnvelope, reqs []Requirement) ExecutionPayloadEnvelopeVerifier {
+	return &EnvelopeVerifier{results: newResults(reqs...), e: e}
+}
 
 // EnvelopeVerifier is a read-only verifier for execution payload envelopes.
 type EnvelopeVerifier struct {
@@ -148,11 +158,29 @@ func (v *EnvelopeVerifier) VerifyPayloadHash(bid interfaces.ROExecutionPayloadBi
 	return nil
 }
 
+// VerifyExecutionRequestsRoot checks that hash_tree_root(envelope.execution_requests) == bid.execution_requests_root.
+func (v *EnvelopeVerifier) VerifyExecutionRequestsRoot(bid interfaces.ROExecutionPayloadBid) (err error) {
+	defer v.record(RequireExecutionRequestsRootValid, &err)
+	env, err := v.e.Envelope()
+	if err != nil {
+		return errors.Wrap(err, "failed to get envelope")
+	}
+	requestsRoot, err := env.ExecutionRequests().HashTreeRoot()
+	if err != nil {
+		return errors.Wrap(err, "could not compute execution requests root")
+	}
+	bidRoot := bid.ExecutionRequestsRoot()
+	if requestsRoot != bidRoot {
+		return fmt.Errorf("%w: envelope=%#x bid=%#x", ErrIncorrectExecutionRequestsRoot, requestsRoot, bidRoot)
+	}
+	return nil
+}
+
 // VerifySignature verifies the signature of the execution payload envelope.
-func (v *EnvelopeVerifier) VerifySignature(st state.ReadOnlyBeaconState) (err error) {
+func (v *EnvelopeVerifier) VerifySignature(ctx context.Context, st state.ReadOnlyBeaconState) (err error) {
 	defer v.record(RequireBuilderSignatureValid, &err)
 
-	err = validatePayloadEnvelopeSignature(st, v.e)
+	err = validatePayloadEnvelopeSignature(ctx, st, v.e)
 	if err != nil {
 		env, envErr := v.e.Envelope()
 		if envErr != nil {
@@ -179,14 +207,14 @@ func (v *EnvelopeVerifier) record(req Requirement, err *error) {
 }
 
 // validatePayloadEnvelopeSignature verifies the signature of a signed execution payload envelope
-func validatePayloadEnvelopeSignature(st state.ReadOnlyBeaconState, e interfaces.ROSignedExecutionPayloadEnvelope) error {
+func validatePayloadEnvelopeSignature(ctx context.Context, st state.ReadOnlyBeaconState, e interfaces.ROSignedExecutionPayloadEnvelope) error {
 	env, err := e.Envelope()
 	if err != nil {
 		return errors.Wrap(err, "failed to get envelope")
 	}
 	var pubkey []byte
 	if env.BuilderIndex() == params.BeaconConfig().BuilderIndexSelfBuild {
-		proposerIdx, err := helpers.BeaconProposerIndexAtSlot(context.TODO(), st, env.Slot())
+		proposerIdx, err := helpers.BeaconProposerIndexAtSlot(ctx, st, env.Slot())
 		if err != nil {
 			return errors.Wrap(err, "failed to get proposer index at slot")
 		}

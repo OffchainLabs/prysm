@@ -6,6 +6,7 @@ go_library(
         "constants.go",
         "headers.go",
         "jwt.go",
+        "redact.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/api",
     visibility = ["//visibility:public"],
@@ -18,7 +19,10 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["jwt_test.go"],
+    srcs = [
+        "jwt_test.go",
+        "redact_test.go",
+    ],
     embed = [":go_default_library"],
     deps = ["//testing/require:go_default_library"],
 )

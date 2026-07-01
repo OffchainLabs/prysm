@@ -249,7 +249,7 @@ func (s *SSZQueryResponse) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 			err = ssz.ErrIncorrectListSize
 			return
 		}
-		hh.PutBytes(s.Result)
+		hh.AppendBytes32(s.Result)
 		hh.MerkleizeWithMixin(elemIndx, byteLen, (1073741824+31)/32)
 	}
 
@@ -396,7 +396,7 @@ func (s *SSZQueryResponseWithProof) HashTreeRootWith(hh *ssz.Hasher) (err error)
 			err = ssz.ErrIncorrectListSize
 			return
 		}
-		hh.PutBytes(s.Result)
+		hh.AppendBytes32(s.Result)
 		hh.MerkleizeWithMixin(elemIndx, byteLen, (1073741824+31)/32)
 	}
 

@@ -33,10 +33,12 @@ type EngineClient struct {
 	ErrForkchoiceUpdated        error
 	ErrNewPayload               error
 	ExecutionPayloadByBlockHash map[[32]byte]*pb.ExecutionPayload
+	SlotByBlockHash             map[[32]byte]primitives.Slot
 	BlockByHashMap              map[[32]byte]*pb.ExecutionBlock
 	NumReconstructedPayloads    uint64
 	TerminalBlockHash           []byte
 	TerminalBlockHashExists     bool
+	PartialColumnsSupportedFlag bool
 	OverrideValidHash           [32]byte
 	GetPayloadResponse          *blocks.GetPayloadResponse
 	ErrGetPayload               error
@@ -44,19 +46,27 @@ type EngineClient struct {
 	ErrorBlobSidecars           error
 	DataColumnSidecars          []blocks.VerifiedRODataColumn
 	ErrorDataColumnSidecars     error
+	HasBlobsPartialColumns      []blocks.PartialDataColumn
 	ClientVersion               []*structs.ClientVersionV1
 	ErrorClientVersion          error
+	FetchedAttributes           payloadattribute.Attributer
+}
+
+// PartialColumnsSupported --
+func (e *EngineClient) PartialColumnsSupported() bool {
+	return e.PartialColumnsSupportedFlag
 }
 
 // NewPayload --
-func (e *EngineClient) NewPayload(_ context.Context, _ interfaces.ExecutionData, _ []common.Hash, _ *common.Hash, _ *pb.ExecutionRequests, _ primitives.Slot) ([]byte, error) {
+func (e *EngineClient) NewPayload(_ context.Context, _ interfaces.ExecutionData, _ []common.Hash, _ *common.Hash, _ pb.ExecutionRequester) ([]byte, error) {
 	return e.NewPayloadResp, e.ErrNewPayload
 }
 
 // ForkchoiceUpdated --
 func (e *EngineClient) ForkchoiceUpdated(
-	_ context.Context, fcs *pb.ForkchoiceState, _ payloadattribute.Attributer,
+	_ context.Context, fcs *pb.ForkchoiceState, attr payloadattribute.Attributer,
 ) (*pb.PayloadIDBytes, []byte, error) {
+	e.FetchedAttributes = attr
 	if e.OverrideValidHash != [32]byte{} && bytesutil.ToBytes32(fcs.HeadBlockHash) == e.OverrideValidHash {
 		return e.PayloadIDBytes, e.ForkChoiceUpdatedResp, nil
 	}
@@ -116,48 +126,41 @@ func (e *EngineClient) ReconstructFullBellatrixBlockBatch(
 	return fullBlocks, nil
 }
 
-// ReconstructFullExecutionPayloadByHash --
-func (e *EngineClient) ReconstructFullExecutionPayloadByHash(
-	_ context.Context, blockHash [32]byte,
-) (*pb.ExecutionPayloadDeneb, error) {
-	if p, ok := e.ExecutionPayloadByBlockHash[blockHash]; ok {
-		return &pb.ExecutionPayloadDeneb{
-			ParentHash:    p.ParentHash,
-			FeeRecipient:  p.FeeRecipient,
-			StateRoot:     p.StateRoot,
-			ReceiptsRoot:  p.ReceiptsRoot,
-			LogsBloom:     p.LogsBloom,
-			PrevRandao:    p.PrevRandao,
-			BlockNumber:   p.BlockNumber,
-			GasLimit:      p.GasLimit,
-			GasUsed:       p.GasUsed,
-			Timestamp:     p.Timestamp,
-			ExtraData:     p.ExtraData,
-			BaseFeePerGas: p.BaseFeePerGas,
-			BlockHash:     p.BlockHash,
-			Transactions:  p.Transactions,
-			Withdrawals:   []*pb.Withdrawal{},
-		}, nil
-	}
-	if e.GetPayloadResponse != nil && e.GetPayloadResponse.ExecutionData != nil {
-		if p, ok := e.GetPayloadResponse.ExecutionData.Proto().(*pb.ExecutionPayloadDeneb); ok {
-			return p, nil
-		}
-	}
-	return nil, errors.New("payload not found")
-}
-
-// ReconstructFullExecutionPayloadsByHash --
-func (e *EngineClient) ReconstructFullExecutionPayloadsByHash(
+// ReconstructFullGloasExecutionPayloadsByHash --
+func (e *EngineClient) ReconstructFullGloasExecutionPayloadsByHash(
 	_ context.Context, blockHashes [][32]byte,
-) (map[[32]byte]*pb.ExecutionPayloadDeneb, error) {
-	payloads := make(map[[32]byte]*pb.ExecutionPayloadDeneb, len(blockHashes))
+) (map[[32]byte]*pb.ExecutionPayloadGloas, error) {
+	payloads := make(map[[32]byte]*pb.ExecutionPayloadGloas, len(blockHashes))
 	for i := range blockHashes {
-		p, err := e.ReconstructFullExecutionPayloadByHash(context.Background(), blockHashes[i])
-		if err != nil {
-			return nil, err
+		blockHash := blockHashes[i]
+		if p, ok := e.ExecutionPayloadByBlockHash[blockHash]; ok {
+			payloads[blockHash] = &pb.ExecutionPayloadGloas{
+				ParentHash:    p.ParentHash,
+				FeeRecipient:  p.FeeRecipient,
+				StateRoot:     p.StateRoot,
+				ReceiptsRoot:  p.ReceiptsRoot,
+				LogsBloom:     p.LogsBloom,
+				PrevRandao:    p.PrevRandao,
+				BlockNumber:   p.BlockNumber,
+				GasLimit:      p.GasLimit,
+				GasUsed:       p.GasUsed,
+				Timestamp:     p.Timestamp,
+				ExtraData:     p.ExtraData,
+				BaseFeePerGas: p.BaseFeePerGas,
+				BlockHash:     p.BlockHash,
+				Transactions:  p.Transactions,
+				Withdrawals:   []*pb.Withdrawal{},
+				SlotNumber:    e.SlotByBlockHash[blockHash],
+			}
+			continue
 		}
-		payloads[blockHashes[i]] = p
+		if e.GetPayloadResponse != nil && e.GetPayloadResponse.ExecutionData != nil {
+			if p, ok := e.GetPayloadResponse.ExecutionData.Proto().(*pb.ExecutionPayloadGloas); ok {
+				payloads[blockHash] = p
+				continue
+			}
+		}
+		return nil, errors.New("payload not found")
 	}
 	return payloads, nil
 }
@@ -168,8 +171,16 @@ func (e *EngineClient) ReconstructBlobSidecars(context.Context, interfaces.ReadO
 }
 
 // ConstructDataColumnSidecars is a mock implementation of the ConstructDataColumnSidecars method.
-func (e *EngineClient) ConstructDataColumnSidecars(context.Context, peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, error) {
-	return e.DataColumnSidecars, e.ErrorDataColumnSidecars
+func (e *EngineClient) ConstructDataColumnSidecars(context.Context, peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
+	return e.DataColumnSidecars, nil, e.ErrorDataColumnSidecars
+}
+
+// ConstructPartialDataColumnSidecarsFromHasBlobs is a mock implementation of the ConstructPartialDataColumnSidecarsFromHasBlobs method.
+func (e *EngineClient) ConstructPartialDataColumnSidecarsFromHasBlobs(context.Context, peerdas.ConstructionPopulator) ([]blocks.PartialDataColumn, bool, error) {
+	if e.HasBlobsPartialColumns == nil {
+		return nil, false, nil
+	}
+	return e.HasBlobsPartialColumns, true, nil
 }
 
 // ReconstructExecutionPayloadEnvelope --
@@ -183,21 +194,21 @@ func (e *EngineClient) ReconstructExecutionPayloadEnvelope(
 	if !ok {
 		return nil, errors.New("execution payload not found for block hash")
 	}
+	p := payloadToPayloadGloas(payload)
+	p.SlotNumber = envelope.Message.Slot
 	return &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
-			Payload:           payloadToPayloadDeneb(payload),
+			Payload:           p,
 			ExecutionRequests: envelope.Message.ExecutionRequests,
 			BuilderIndex:      envelope.Message.BuilderIndex,
 			BeaconBlockRoot:   envelope.Message.BeaconBlockRoot,
-			Slot:              envelope.Message.Slot,
-			StateRoot:         envelope.Message.StateRoot,
 		},
 		Signature: envelope.Signature,
 	}, nil
 }
 
-func payloadToPayloadDeneb(p *pb.ExecutionPayload) *pb.ExecutionPayloadDeneb {
-	return &pb.ExecutionPayloadDeneb{
+func payloadToPayloadGloas(p *pb.ExecutionPayload) *pb.ExecutionPayloadGloas {
+	return &pb.ExecutionPayloadGloas{
 		ParentHash:    p.ParentHash,
 		FeeRecipient:  p.FeeRecipient,
 		StateRoot:     p.StateRoot,

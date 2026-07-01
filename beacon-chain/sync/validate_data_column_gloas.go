@@ -2,19 +2,42 @@ package sync
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/logging"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
+
+// maxPendingGloasRoots caps the number of distinct block roots in the pending queue.
+const maxPendingGloasRoots = 8
+
+type pendingColumnEntry struct {
+	sidecar *ethpb.DataColumnSidecarGloas
+	peer    peer.ID
+}
+
+type pendingGloasEntry struct {
+	slot    primitives.Slot
+	columns [fieldparams.NumberOfColumns]*pendingColumnEntry
+}
 
 func (s *Service) validateDataColumnGloas(
 	ctx context.Context,
+	pid peer.ID,
 	msg *pubsub.Message,
 	roDataColumn blocks.RODataColumn,
 	dataColumnSidecarSubTopic string,
@@ -26,8 +49,14 @@ func (s *Service) validateDataColumnGloas(
 	// If not yet seen, a client MUST queue the sidecar for deferred validation and possible processing once
 	// the block is received or retrieved.
 	if s.cfg.chain == nil || !s.cfg.chain.HasBlock(ctx, roDataColumn.BlockRoot()) {
-		// TODO: Queue the sidecar for deferred validation and possible processing once the
-		// block is received or retrieved
+		actualSubnet := peerdas.ComputeSubnetForDataColumnSidecar(roDataColumn.Index())
+		expectedSubTopic := fmt.Sprintf(dataColumnSidecarSubTopic, actualSubnet)
+		if msg.Topic == nil || !strings.Contains(*msg.Topic+"/", expectedSubTopic) {
+			return blocks.VerifiedRODataColumn{}, errors.New("gloas data column on wrong subnet")
+		}
+		if err := s.queuePendingGloasColumn(roDataColumn, pid); err != nil {
+			return blocks.VerifiedRODataColumn{}, err
+		}
 		return blocks.VerifiedRODataColumn{}, ignoreValidation(errors.New("gloas data column block not yet seen"))
 	}
 
@@ -95,6 +124,216 @@ func (s *Service) hasSeenDataColumnRootIndex(root [fieldparams.RootLength]byte, 
 func (s *Service) setSeenDataColumnRootIndex(root [fieldparams.RootLength]byte, index uint64, slot primitives.Slot) {
 	key := computeRootIndexCacheKey(root, index)
 	s.seenDataColumnCache.Add(slot, key, true)
+}
+
+// hasSeenDataColumn reports whether the sidecar identity has been seen. Gloas sidecars are keyed
+// by (block root, index); pre-Gloas sidecars by (slot, proposer index, index).
+func (s *Service) hasSeenDataColumn(isGloas bool, root [fieldparams.RootLength]byte, slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) bool {
+	if isGloas {
+		return s.hasSeenDataColumnRootIndex(root, index)
+	}
+	return s.hasSeenDataColumnIndex(slot, proposerIndex, index)
+}
+
+// queuePendingGloasColumn returns a non-nil error for malformed sidecars (the caller propagates it as ValidationReject).
+func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID) error {
+	dc := roCol.DataColumnSidecarGloas()
+	if dc == nil {
+		return errors.New("nil gloas data column sidecar")
+	}
+	cells := len(dc.Column)
+	if cells == 0 || len(dc.KzgProofs) != cells {
+		return errors.Errorf("gloas data column length mismatch: cells=%d proofs=%d", cells, len(dc.KzgProofs))
+	}
+	cfg := params.BeaconConfig()
+	currentEpoch := slots.ToEpoch(s.cfg.clock.CurrentSlot())
+	if cells > max(cfg.MaxBlobsPerBlockAtEpoch(currentEpoch), cfg.MaxBlobsPerBlockAtEpoch(currentEpoch+1)) {
+		return errors.Errorf("gloas data column cell count %d exceeds network blob limit", cells)
+	}
+	idx := roCol.Index()
+	if idx >= fieldparams.NumberOfColumns {
+		return errors.Errorf("gloas data column index %d out of range", idx)
+	}
+
+	root := roCol.BlockRoot()
+	slot := roCol.Slot()
+
+	s.pendingGloasColumnsLock.Lock()
+	defer s.pendingGloasColumnsLock.Unlock()
+
+	entry := s.pendingGloasColumns[root]
+	if entry == nil {
+		if len(s.pendingGloasColumns) >= maxPendingGloasRoots {
+			return nil
+		}
+		entry = &pendingGloasEntry{slot: slot}
+		s.pendingGloasColumns[root] = entry
+	}
+
+	if entry.columns[idx] != nil {
+		return nil
+	}
+	entry.columns[idx] = &pendingColumnEntry{sidecar: dc, peer: pid}
+	return nil
+}
+
+func (s *Service) processPendingGloasColumns(ctx context.Context, root [fieldparams.RootLength]byte, blk interfaces.ReadOnlySignedBeaconBlock) {
+	if blk == nil || blk.IsNil() {
+		return
+	}
+
+	s.pendingGloasColumnsLock.Lock()
+	entry := s.pendingGloasColumns[root]
+	delete(s.pendingGloasColumns, root)
+	s.pendingGloasColumnsLock.Unlock()
+
+	if entry == nil {
+		return
+	}
+
+	commitments, err := blk.Block().Body().BlobKzgCommitments()
+	if err != nil {
+		log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Warn("Failed to get bid commitments for pending Gloas columns")
+		return
+	}
+
+	// Count pending sidecars for pre-allocation.
+	count := 0
+	for _, pe := range entry.columns {
+		if pe != nil {
+			count++
+		}
+	}
+
+	verified := make([]blocks.VerifiedRODataColumn, 0, count)
+	var skipped int
+	for _, pe := range entry.columns {
+		if pe == nil {
+			continue
+		}
+		roCol, err := blocks.NewRODataColumnGloasWithRoot(pe.sidecar, root)
+		if err != nil {
+			log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Error("Failed to wrap pending Gloas column")
+			skipped++
+			continue
+		}
+		roCol.SetBidCommitments(commitments)
+
+		if s.hasSeenDataColumnRootIndex(root, roCol.Index()) {
+			continue
+		}
+
+		verifier := verification.NewGloasDataColumnVerifier(roCol, blk.Block(), verification.PendingGloasColumnRequirements)
+
+		if err := verifier.VerifyDataColumnSidecarSlotMatchesBlockGloas(); err != nil {
+			skipped++
+			s.downscorePeer(pe.peer, "pendingGloasColumnSlotMismatch", logrus.Fields{"error": err})
+			continue
+		}
+		if err := verifier.VerifyDataColumnSidecarGloas(); err != nil {
+			skipped++
+			s.downscorePeer(pe.peer, "pendingGloasColumnInvalidSidecar", logrus.Fields{"error": err})
+			continue
+		}
+		if err := verifier.VerifyDataColumnSidecarKzgProofsGloas(); err != nil {
+			skipped++
+			s.downscorePeer(pe.peer, "pendingGloasColumnInvalidKzgProof", logrus.Fields{"error": err})
+			continue
+		}
+
+		v, err := verifier.VerifiedRODataColumn()
+		if err != nil {
+			log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Error("Failed to get verified pending Gloas column")
+			skipped++
+			continue
+		}
+		v.SetBidCommitments(commitments)
+
+		s.setSeenDataColumnRootIndex(root, v.Index(), v.Slot())
+		verified = append(verified, v)
+	}
+
+	if len(verified) > 0 {
+		if err := s.cfg.dataColumnStorage.Save(verified); err != nil {
+			log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Warn("Failed to save pending Gloas columns")
+			return
+		}
+
+		if err := s.cfg.p2p.BroadcastDataColumnSidecars(ctx, verified, nil); err != nil {
+			log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Warn("Failed to broadcast pending Gloas columns")
+		}
+
+		log.WithFields(logrus.Fields{
+			"root":    fmt.Sprintf("%#x", root),
+			"count":   len(verified),
+			"skipped": skipped,
+			"slot":    entry.slot,
+		}).Debug("Processed pending Gloas data columns")
+	}
+}
+
+func (s *Service) hasPendingGloasColumns(root [fieldparams.RootLength]byte) bool {
+	s.pendingGloasColumnsLock.RLock()
+	defer s.pendingGloasColumnsLock.RUnlock()
+	_, ok := s.pendingGloasColumns[root]
+	return ok
+}
+
+// prunePendingGloasColumns removes stale entries every slot.
+func (s *Service) prunePendingGloasColumns() {
+	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
+	defer slotTicker.Done()
+	for {
+		select {
+		case currentSlot := <-slotTicker.C():
+			s.pruneStaleGloasColumns(currentSlot)
+		case <-s.ctx.Done():
+			return
+		}
+	}
+}
+
+// pruneStaleGloasColumns drops entries whose slot has passed. A column queued for
+// a block root that never became known is treated as fabricated and its forwarding
+// peer is downscored; known-but-orphaned roots (honest reorgs) are spared.
+func (s *Service) pruneStaleGloasColumns(currentSlot primitives.Slot) {
+	type prunedRoot struct {
+		root  [fieldparams.RootLength]byte
+		peers []peer.ID
+	}
+	var pruned []prunedRoot
+	s.pendingGloasColumnsLock.Lock()
+	for r, e := range s.pendingGloasColumns {
+		if e.slot+1 >= currentSlot {
+			continue
+		}
+		// Dedupe forwarders: a peer that relayed many columns for one root is downscored once, not per column.
+		seen := make(map[peer.ID]struct{})
+		peers := make([]peer.ID, 0, fieldparams.NumberOfColumns)
+		for _, pe := range e.columns {
+			if pe == nil {
+				continue
+			}
+			if _, ok := seen[pe.peer]; ok {
+				continue
+			}
+			seen[pe.peer] = struct{}{}
+			peers = append(peers, pe.peer)
+		}
+		pruned = append(pruned, prunedRoot{root: r, peers: peers})
+		delete(s.pendingGloasColumns, r)
+	}
+	s.pendingGloasColumnsLock.Unlock()
+
+	// HasBlock + downscore outside the lock; a root we never learned of was fabricated.
+	for _, p := range pruned {
+		if s.cfg.chain == nil || s.cfg.chain.HasBlock(s.ctx, p.root) {
+			continue
+		}
+		for _, pid := range p.peers {
+			s.downscorePeer(pid, "pendingGloasColumnUnknownRoot", logrus.Fields{"root": fmt.Sprintf("%#x", p.root)})
+		}
+	}
 }
 
 func computeRootIndexCacheKey(root [fieldparams.RootLength]byte, index uint64) string {

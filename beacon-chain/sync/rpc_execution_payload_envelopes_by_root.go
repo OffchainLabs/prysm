@@ -135,7 +135,7 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 			continue
 		}
 
-		payloadByHash, batchErr := s.cfg.executionReconstructor.ReconstructFullExecutionPayloadsByHash(ctx, batchHashes)
+		payloadByHash, batchErr := s.cfg.executionReconstructor.ReconstructFullGloasExecutionPayloadsByHash(ctx, batchHashes)
 		if batchErr != nil {
 			recordResult(executionPayloadEnvelopeRPCResultError)
 			log.WithError(batchErr).Debug("Could not batch reconstruct full execution payload envelopes")
@@ -153,12 +153,11 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 			}
 			envelope := &ethpb.SignedExecutionPayloadEnvelope{
 				Message: &ethpb.ExecutionPayloadEnvelope{
-					Payload:           payload,
-					ExecutionRequests: req.env.Message.ExecutionRequests,
-					BuilderIndex:      req.env.Message.BuilderIndex,
-					BeaconBlockRoot:   req.env.Message.BeaconBlockRoot,
-					Slot:              req.env.Message.Slot,
-					StateRoot:         req.env.Message.StateRoot,
+					Payload:               payload,
+					ExecutionRequests:     req.env.Message.ExecutionRequests,
+					BuilderIndex:          req.env.Message.BuilderIndex,
+					BeaconBlockRoot:       req.env.Message.BeaconBlockRoot,
+					ParentBeaconBlockRoot: req.env.Message.ParentBeaconBlockRoot,
 				},
 				Signature: req.env.Signature,
 			}

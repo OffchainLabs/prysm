@@ -40,13 +40,14 @@ func (s *Service) CurrentSlot() primitives.Slot {
 }
 
 // getFCUArgs returns the arguments to call forkchoice update
+// this function is only called pre-gloas hence we pass in full to getPayloadAttribute
 func (s *Service) getFCUArgs(cfg *postBlockProcessConfig) (*fcuConfig, error) {
-
 	fcuArgs, err := s.getFCUArgsEarlyBlock(cfg)
 	if err != nil {
 		return nil, err
 	}
-	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:], cfg.headRoot[:])
+
+	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:], true)
 	return fcuArgs, nil
 }
 
@@ -91,7 +92,7 @@ func (s *Service) logNonCanonicalBlockReceived(blockRoot [32]byte, headRoot [32]
 // fcuArgsNonCanonicalBlock returns the arguments to the FCU call when the
 // incoming block is non-canonical, that is, based on the head root.
 func (s *Service) fcuArgsNonCanonicalBlock(cfg *postBlockProcessConfig) (*fcuConfig, error) {
-	headState, headBlock, err := s.getStateAndBlock(cfg.ctx, cfg.headRoot, cfg.headRoot)
+	headState, headBlock, err := s.getStateAndBlock(cfg.ctx, cfg.headRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -181,39 +182,31 @@ func (s *Service) processLightClientUpdates(cfg *postBlockProcessConfig) {
 // boundary in order to compute the right proposer indices after processing
 // state transition. The caller of this function must not hold a lock in forkchoice store.
 func (s *Service) updateCachesPostBlockProcessing(cfg *postBlockProcessConfig) {
+	ctx, span := trace.StartSpan(cfg.ctx, "blockChain.updateCachesPostBlockProcessing")
+	defer span.End()
+
 	slot := cfg.postState.Slot()
 	root := cfg.roblock.Root()
-	if err := transition.UpdateNextSlotCache(cfg.ctx, root[:], cfg.postState); err != nil {
+	if err := transition.UpdateNextSlotCache(ctx, root[:], cfg.postState); err != nil {
 		log.WithError(err).Error("Could not update next slot state cache")
 		return
 	}
 	if !slots.IsEpochEnd(slot) {
 		return
 	}
-	if err := s.handleEpochBoundary(cfg.ctx, slot, cfg.postState, root[:]); err != nil {
+	if err := s.handleEpochBoundary(ctx, slot, cfg.postState, root[:]); err != nil {
 		log.WithError(err).Error("Could not handle epoch boundary")
 	}
 }
 
-// reportProcessingTime reports the metric of how long it took to process the
-// current block
-func reportProcessingTime(startTime time.Time) {
-	onBlockProcessingTime.Observe(float64(time.Since(startTime).Milliseconds()))
-}
-
 // GetPrestateToPropose returns the pre-state for a proposer to base its block on.
-// It is similar to GetBlockPreState but it lacks unnecessary verifications.
 func (s *Service) GetPrestateToPropose(ctx context.Context, b consensus_blocks.ROBlock) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.GetPreStateToPropose")
 	defer span.End()
 
-	accessRoot, err := s.getLookupParentRoot(b)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get lookup parent root")
-	}
-
+	parentRoot := b.Block().ParentRoot()
 	bl := b.Block()
-	preState, err := s.cfg.StateGen.StateByRoot(ctx, accessRoot)
+	preState, err := s.cfg.StateGen.StateByRoot(ctx, parentRoot)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not get pre state for slot %d", bl.Slot())
 	}
@@ -223,6 +216,12 @@ func (s *Service) GetPrestateToPropose(ctx context.Context, b consensus_blocks.R
 	return preState, nil
 }
 
+// reportProcessingTime reports the metric of how long it took to process the
+// current block
+func reportProcessingTime(startTime time.Time) {
+	onBlockProcessingTime.Observe(float64(time.Since(startTime).Milliseconds()))
+}
+
 // GetBlockPreState returns the pre state of an incoming block. It uses the parent root of the block
 // to retrieve the state in DB. It verifies the pre state's validity and the incoming block
 // is in the correct time window.
@@ -230,17 +229,14 @@ func (s *Service) GetBlockPreState(ctx context.Context, b consensus_blocks.ROBlo
 	ctx, span := trace.StartSpan(ctx, "blockChain.getBlockPreState")
 	defer span.End()
 
-	accessRoot, err := s.getLookupParentRoot(b)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get lookup parent root")
-	}
+	parentRoot := b.Block().ParentRoot()
 	// Verify incoming block has a valid pre state.
-	if err := s.verifyBlkPreState(ctx, accessRoot); err != nil {
+	if err := s.verifyBlkPreState(ctx, parentRoot); err != nil {
 		return nil, err
 	}
 
 	bl := b.Block()
-	preState, err := s.cfg.StateGen.StateByRoot(ctx, accessRoot)
+	preState, err := s.cfg.StateGen.StateByRoot(ctx, parentRoot)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not get pre state for slot %d", bl.Slot())
 	}
@@ -376,7 +372,8 @@ func (s *Service) ancestorByDB(ctx context.Context, r [32]byte, slot primitives.
 // This retrieves missing blocks from DB (ie. the blocks that couldn't be received over sync) and inserts them to fork choice store.
 // This is useful for block tree visualizer and additional vote accounting.
 func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock,
-	fCheckpoint, jCheckpoint *ethpb.Checkpoint) error {
+	fCheckpoint, jCheckpoint *ethpb.Checkpoint,
+) error {
 	if fCheckpoint.Epoch > jCheckpoint.Epoch {
 		return ErrInvalidCheckpointArgs
 	}
@@ -425,21 +422,39 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 		}
 		root = b.Block().ParentRoot()
 		child = b
-		args := &forkchoicetypes.BlockAndCheckpoints{Block: roblock,
+		args := &forkchoicetypes.BlockAndCheckpoints{
+			Block:               roblock,
 			JustifiedCheckpoint: jCheckpoint,
 			FinalizedCheckpoint: fCheckpoint,
 			HasPayload:          hasPayload,
 		}
 		pendingNodes = append(pendingNodes, args)
 	}
+
+	// Handle the first payload insertion.
 	if len(pendingNodes) == 0 {
+		// even without pending blocks, the first payload may be pending.
+		s.insertFirstPayloadIfNeeded(signed.Block())
 		return nil
+	} else {
+		s.insertFirstPayloadIfNeeded(pendingNodes[len(pendingNodes)-1].Block.Block())
 	}
 	if root != s.ensureRootNotZeros(finalized.Root) && !s.cfg.ForkChoiceStore.HasNode(root) {
 		return ErrNotDescendantOfFinalized
 	}
+
 	slices.Reverse(pendingNodes)
 	return s.cfg.ForkChoiceStore.InsertChain(ctx, pendingNodes)
+}
+
+func (s *Service) insertFirstPayloadIfNeeded(b interfaces.ReadOnlyBeaconBlock) {
+	if b.Version() < version.Gloas {
+		return
+	}
+	parentRoot := b.ParentRoot()
+	if s.builtOnFullParentInForkchoice(b) && !s.cfg.ForkChoiceStore.HasFullNode(parentRoot) {
+		s.cfg.ForkChoiceStore.MarkFullNode(parentRoot)
+	}
 }
 
 // inserts finalized deposits into our finalized deposit trie, needs to be

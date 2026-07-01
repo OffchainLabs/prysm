@@ -220,6 +220,20 @@ func TestAddTrustedPeer_BadAddress(t *testing.T) {
 	assert.StringContains(t, "Could not derive peer info from multiaddress", e.Message)
 }
 
+func TestAddTrustedPeer_NoTransportAddress(t *testing.T) {
+	peerFetcher := &mockp2p.MockPeersProvider{}
+	peerFetcher.ClearPeers()
+	s := Server{PeersFetcher: peerFetcher}
+
+	body := bytes.NewBufferString(`{"addr":"/p2p/16Uiu2HAm1n583t4huDMMqEUUBuQs6bLts21mxCfX3tiqu9JfHvRJ"}`)
+	request := httptest.NewRequest("POST", "http://anything.is.fine", body)
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+
+	s.AddTrustedPeer(writer, request)
+	assert.Equal(t, http.StatusBadRequest, writer.Code)
+}
+
 func TestRemoveTrustedPeer(t *testing.T) {
 	peerFetcher := &mockp2p.MockPeersProvider{}
 	peerFetcher.ClearPeers()
@@ -227,6 +241,7 @@ func TestRemoveTrustedPeer(t *testing.T) {
 
 	url := "http://anything.is.fine.but.last.is.important/16Uiu2HAm1n583t4huDMMqEUUBuQs6bLts21mxCfX3tiqu9JfHvRJ"
 	request := httptest.NewRequest("DELETE", url, nil)
+	request.SetPathValue("peer_id", "16Uiu2HAm1n583t4huDMMqEUUBuQs6bLts21mxCfX3tiqu9JfHvRJ")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 	s.RemoveTrustedPeer(writer, request)

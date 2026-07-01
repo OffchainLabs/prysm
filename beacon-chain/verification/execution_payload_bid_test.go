@@ -108,16 +108,20 @@ func TestBidVerifier_VerifyFeeRecipientMatches(t *testing.T) {
 	require.ErrorIs(t, verifier.VerifyFeeRecipientMatches(bytes.Repeat([]byte{0xff}, 20)), ErrBidFeeRecipientMismatch)
 }
 
-func TestBidVerifier_VerifyGasLimitMatches(t *testing.T) {
+func TestBidVerifier_VerifyGasLimitTargetCompatible(t *testing.T) {
 	signed := testSignedExecutionPayloadBid(t, 1)
 	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
 	require.NoError(t, err)
 
-	verifier := &BidVerifier{results: newResults(RequireBidGasLimitMatches), b: wrapped}
-	require.NoError(t, verifier.VerifyGasLimitMatches(signed.Message.GasLimit))
+	// bid.gas_limit is 1 (from testSignedExecutionPayloadBid). With parent=1 the
+	// elasticity rule allows only gas_limit=1, so compatible target is 1.
+	parentGasLimit := signed.Message.GasLimit
 
-	verifier = &BidVerifier{results: newResults(RequireBidGasLimitMatches), b: wrapped}
-	require.ErrorIs(t, verifier.VerifyGasLimitMatches(signed.Message.GasLimit+1), ErrBidGasLimitMismatch)
+	verifier := &BidVerifier{results: newResults(RequireBidGasLimitCompatible), b: wrapped}
+	require.NoError(t, verifier.VerifyGasLimitTargetCompatible(parentGasLimit, signed.Message.GasLimit))
+
+	verifier = &BidVerifier{results: newResults(RequireBidGasLimitCompatible), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyGasLimitTargetCompatible(parentGasLimit, signed.Message.GasLimit+1), ErrBidGasLimitIncompatible)
 }
 
 func TestBidVerifier_VerifyParentBlockRootSeen(t *testing.T) {
@@ -132,6 +136,21 @@ func TestBidVerifier_VerifyParentBlockRootSeen(t *testing.T) {
 
 	verifier = &BidVerifier{results: newResults(RequireBidParentBlockRootSeen), b: wrapped}
 	require.ErrorIs(t, verifier.VerifyParentBlockRootSeen(func([32]byte) bool { return false }), ErrBidParentBlockRootNotSeen)
+}
+
+func TestBidVerifier_VerifyBidSlotHigherThanParent(t *testing.T) {
+	signed := testSignedExecutionPayloadBid(t, 10)
+	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
+	require.NoError(t, err)
+
+	verifier := &BidVerifier{results: newResults(RequireBidSlotHigherThanParent), b: wrapped}
+	require.NoError(t, verifier.VerifyBidSlotHigherThanParent(9))
+
+	verifier = &BidVerifier{results: newResults(RequireBidSlotHigherThanParent), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyBidSlotHigherThanParent(10), ErrBidSlotNotHigherThanParent)
+
+	verifier = &BidVerifier{results: newResults(RequireBidSlotHigherThanParent), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyBidSlotHigherThanParent(11), ErrBidSlotNotHigherThanParent)
 }
 
 func TestBidVerifier_VerifyParentBlockHash(t *testing.T) {
@@ -213,21 +232,83 @@ func TestBidVerifier_VerifySignature(t *testing.T) {
 	require.ErrorIs(t, verifier.VerifySignature(st), signing.ErrSigFailedToVerify)
 }
 
+func TestBidVerifier_VerifyBuilderVersion(t *testing.T) {
+	signed := testSignedExecutionPayloadBid(t, 1)
+	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
+	require.NoError(t, err)
+
+	payloadBuilder := newBidState(t, 1, func(s *ethpb.BeaconStateGloas) {
+		s.Builders = []*ethpb.Builder{{Version: []byte{0}, WithdrawableEpoch: params.BeaconConfig().FarFutureEpoch}}
+	})
+	verifier := &BidVerifier{results: newResults(RequireBidBuilderVersionValid), b: wrapped}
+	require.NoError(t, verifier.VerifyBuilderVersion(payloadBuilder))
+
+	nonPayloadBuilder := newBidState(t, 1, func(s *ethpb.BeaconStateGloas) {
+		s.Builders = []*ethpb.Builder{{Version: []byte{params.BeaconConfig().BuilderWithdrawalPrefixByte}, WithdrawableEpoch: params.BeaconConfig().FarFutureEpoch}}
+	})
+	verifier = &BidVerifier{results: newResults(RequireBidBuilderVersionValid), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyBuilderVersion(nonPayloadBuilder), ErrBidBuilderVersionInvalid)
+}
+
+func TestBidVerifier_VerifyBlobKzgCommitmentsLimit(t *testing.T) {
+	maxBlobs := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(slots.ToEpoch(1))
+	commitments := func(n int) [][]byte {
+		c := make([][]byte, n)
+		for i := range c {
+			c[i] = bytes.Repeat([]byte{0x01}, 48)
+		}
+		return c
+	}
+
+	atLimit := testSignedExecutionPayloadBid(t, 1)
+	atLimit.Message.BlobKzgCommitments = commitments(maxBlobs)
+	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(atLimit)
+	require.NoError(t, err)
+	verifier := &BidVerifier{results: newResults(RequireBidBlobKzgCommitmentsLimit), b: wrapped}
+	require.NoError(t, verifier.VerifyBlobKzgCommitmentsLimit())
+
+	overLimit := testSignedExecutionPayloadBid(t, 1)
+	overLimit.Message.BlobKzgCommitments = commitments(maxBlobs + 1)
+	wrapped, err = blocks.WrappedROSignedExecutionPayloadBid(overLimit)
+	require.NoError(t, err)
+	verifier = &BidVerifier{results: newResults(RequireBidBlobKzgCommitmentsLimit), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyBlobKzgCommitmentsLimit(), ErrBidTooManyBlobKzgCommitments)
+}
+
+func TestBidVerifier_VerifyPrevRandao(t *testing.T) {
+	signed := testSignedExecutionPayloadBid(t, 1)
+	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
+	require.NoError(t, err)
+
+	matching := newBidState(t, 1, func(s *ethpb.BeaconStateGloas) {
+		s.RandaoMixes[0] = bytes.Repeat([]byte{0x04}, 32)
+	})
+	verifier := &BidVerifier{results: newResults(RequireBidPrevRandaoValid), b: wrapped}
+	require.NoError(t, verifier.VerifyPrevRandao(matching))
+
+	mismatching := newBidState(t, 1, func(s *ethpb.BeaconStateGloas) {
+		s.RandaoMixes[0] = bytes.Repeat([]byte{0x09}, 32)
+	})
+	verifier = &BidVerifier{results: newResults(RequireBidPrevRandaoValid), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyPrevRandao(mismatching), ErrBidPrevRandaoMismatch)
+}
+
 func testSignedExecutionPayloadBid(t *testing.T, slot primitives.Slot) *ethpb.SignedExecutionPayloadBid {
 	t.Helper()
 
 	return &ethpb.SignedExecutionPayloadBid{
 		Message: &ethpb.ExecutionPayloadBid{
-			Slot:             slot,
-			BuilderIndex:     0,
-			ParentBlockHash:  bytes.Repeat([]byte{0x01}, 32),
-			ParentBlockRoot:  bytes.Repeat([]byte{0x02}, 32),
-			BlockHash:        bytes.Repeat([]byte{0x03}, 32),
-			PrevRandao:       bytes.Repeat([]byte{0x04}, 32),
-			FeeRecipient:     bytes.Repeat([]byte{0x05}, 20),
-			GasLimit:         30_000_000,
-			Value:            100,
-			ExecutionPayment: 0,
+			Slot:                  slot,
+			BuilderIndex:          0,
+			ParentBlockHash:       bytes.Repeat([]byte{0x01}, 32),
+			ParentBlockRoot:       bytes.Repeat([]byte{0x02}, 32),
+			BlockHash:             bytes.Repeat([]byte{0x03}, 32),
+			PrevRandao:            bytes.Repeat([]byte{0x04}, 32),
+			FeeRecipient:          bytes.Repeat([]byte{0x05}, 20),
+			GasLimit:              30_000_000,
+			Value:                 100,
+			ExecutionPayment:      0,
+			ExecutionRequestsRoot: make([]byte, 32),
 		},
 		Signature: bytes.Repeat([]byte{0x06}, 96),
 	}

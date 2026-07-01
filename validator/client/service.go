@@ -57,6 +57,7 @@ type ValidatorService struct {
 	logValidatorPerformance bool
 	distributed             bool
 	disableDutiesPolling    bool
+	stateless               bool
 	closeClientFunc         func() // validator client stop function is used here
 }
 
@@ -88,6 +89,7 @@ type Config struct {
 	EmitAccountMetrics      bool
 	Distributed             bool
 	DisableDutiesPolling    bool
+	Stateless               bool
 	CloseClientFunc         func()
 }
 
@@ -113,6 +115,7 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 		logValidatorPerformance: cfg.LogValidatorPerformance,
 		distributed:             cfg.Distributed,
 		disableDutiesPolling:    cfg.DisableDutiesPolling,
+		stateless:               cfg.Stateless,
 		closeClientFunc:         cfg.CloseClientFunc,
 		maxHealthChecks:         cfg.MaxHealthChecks,
 	}
@@ -188,7 +191,7 @@ func (v *ValidatorService) Start() {
 		return
 	}
 
-	validatorClient := validatorclientfactory.NewValidatorClient(v.conn)
+	validatorClient := validatorclientfactory.NewValidatorClient(v.conn, iface.WithStateless(v.stateless))
 
 	v.validator = &validator{
 		slotFeed:                     new(event.Feed),
@@ -223,10 +226,12 @@ func (v *ValidatorService) Start() {
 		emitAccountMetrics:           v.emitAccountMetrics,
 		enableAPI:                    v.enableAPI,
 		duties:                       &dutyStore{},
+		submittedPrefSlots:           make(map[primitives.Slot]bool),
 		distributed:                  v.distributed,
 		disableDutiesPolling:         v.disableDutiesPolling,
 		accountsChangedChannel:       make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
 		eventsChannel:                make(chan *eventClient.Event, 1),
+		payloadAvailability:          newPayloadAvailability(),
 	}
 
 	val := v.validator.(*validator)

@@ -3006,6 +3006,48 @@ func TestIsDataAvailable(t *testing.T) {
 	})
 }
 
+func TestDataColumnsAvailableNow(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.AltairForkEpoch, cfg.BellatrixForkEpoch, cfg.CapellaForkEpoch, cfg.DenebForkEpoch, cfg.ElectraForkEpoch, cfg.FuluForkEpoch = 0, 0, 0, 0, 0, 0
+	params.OverrideBeaconConfig(cfg)
+
+	t.Run("all custody columns present", func(t *testing.T) {
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testIsAvailableParams{
+			columnsToSave:           []uint64{1, 17, 19, 42, 75, 87, 102, 117, 119},
+			blobKzgCommitmentsCount: 3,
+		})
+		available, err := service.dataColumnsAvailableNow(ctx, root, signed.Block().Slot())
+		require.NoError(t, err)
+		require.Equal(t, true, available)
+	})
+
+	t.Run("enough columns to reconstruct", func(t *testing.T) {
+		minimum := peerdas.MinimumColumnCountToReconstruct()
+		indices := make([]uint64, 0, minimum)
+		for i := range minimum {
+			indices = append(indices, i)
+		}
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testIsAvailableParams{
+			columnsToSave:           indices,
+			blobKzgCommitmentsCount: 3,
+		})
+		available, err := service.dataColumnsAvailableNow(ctx, root, signed.Block().Slot())
+		require.NoError(t, err)
+		require.Equal(t, true, available)
+	})
+
+	t.Run("missing columns returns false", func(t *testing.T) {
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testIsAvailableParams{
+			columnsToSave:           []uint64{1},
+			blobKzgCommitmentsCount: 3,
+		})
+		available, err := service.dataColumnsAvailableNow(ctx, root, signed.Block().Slot())
+		require.NoError(t, err)
+		require.Equal(t, false, available)
+	})
+}
+
 // Test_postBlockProcess_EventSending tests that block processed events are only sent
 // when block processing succeeds according to the decision tree:
 //
@@ -3639,14 +3681,82 @@ func TestHandleBlockPayloadAttestations(t *testing.T) {
 	})
 }
 
+func TestHandleBlockAttestations_GloasSameSlotPayloadVote(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+	ctx := t.Context()
+
+	// Insert an empty node at slot 1 into forkchoice.
+	blockRoot := bytesutil.ToBytes32([]byte("root1"))
+	parentRoot := params.BeaconConfig().ZeroHash
+	blockHash := bytesutil.ToBytes32([]byte("hash1"))
+	base, insertBlk := testGloasState(t, 1, parentRoot, blockHash)
+	insertGloasBlock(t, s, base, insertBlk, blockRoot)
+	require.Equal(t, true, s.cfg.ForkChoiceStore.HasNode(blockRoot))
+
+	headState := gloasStateWithValidators(t, 1, 2048)
+
+	// blockWithPayloadVote returns a slot-2 block carrying a committee-index-1
+	// (payload-present) attestation for blockRoot, dated attSlot.
+	blockWithPayloadVote := func(attSlot primitives.Slot) interfaces.ReadOnlyBeaconBlock {
+		committee, err := helpers.BeaconCommitteeFromState(ctx, headState, attSlot, 0)
+		require.NoError(t, err)
+		require.NotEqual(t, 0, len(committee))
+		aggBits := bitfield.NewBitlist(uint64(len(committee)))
+		aggBits.SetBitAt(0, true)
+		cb := primitives.NewAttestationCommitteeBits()
+		cb.SetBitAt(0, true)
+		blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+			Block: &ethpb.BeaconBlockGloas{
+				Slot: 2,
+				Body: &ethpb.BeaconBlockBodyGloas{
+					Attestations: []*ethpb.AttestationElectra{
+						{
+							AggregationBits: aggBits,
+							CommitteeBits:   cb,
+							Data: &ethpb.AttestationData{
+								Slot:            attSlot,
+								CommitteeIndex:  1,
+								BeaconBlockRoot: blockRoot[:],
+								Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+								Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+							},
+							Signature: make([]byte, 96),
+						},
+					},
+				},
+			},
+		})
+		wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		return wsb.Block()
+	}
+
+	t.Run("same-slot payload vote is skipped", func(t *testing.T) {
+		logHook := logTest.NewGlobal()
+		require.NoError(t, s.handleBlockAttestations(ctx, blockWithPayloadVote(1), headState))
+		require.LogsContain(t, logHook, "Skipping same-slot payload-present attestation")
+	})
+
+	t.Run("prior-slot payload vote is processed", func(t *testing.T) {
+		logHook := logTest.NewGlobal()
+		require.NoError(t, s.handleBlockAttestations(ctx, blockWithPayloadVote(2), headState))
+		require.LogsDoNotContain(t, logHook, "Skipping same-slot payload-present attestation")
+	})
+}
+
 func TestUpdateCachesAndEpochBoundary_MatchingRoots(t *testing.T) {
 	service := testServiceNoDB(t)
 	st, _ := util.DeterministicGenesisState(t, 1)
-	accessRoot := [32]byte{'a'}
+	headRoot := [32]byte{'a'}
 
-	service.updateCachesAndEpochBoundary(t.Context(), 1, st, accessRoot, accessRoot[:], st)
+	service.updateCachesAndEpochBoundary(t.Context(), 1, st, headRoot, headRoot[:], st)
 
-	cached := transition.NextSlotState(accessRoot[:], 1)
+	cached := transition.NextSlotState(headRoot[:], 1)
 	require.NotNil(t, cached)
 	require.Equal(t, primitives.Slot(1), cached.Slot())
 }
@@ -3655,13 +3765,12 @@ func TestUpdateCachesAndEpochBoundary_DifferentRoots(t *testing.T) {
 	service := testServiceNoDB(t)
 	headState, _ := util.DeterministicGenesisState(t, 1)
 	lastState, _ := util.DeterministicGenesisState(t, 1)
-	accessRoot := [32]byte{'a'}
+	headRoot := [32]byte{'a'}
 	lastRoot := [32]byte{'b'}
 
-	service.updateCachesAndEpochBoundary(t.Context(), 1, headState, accessRoot, lastRoot[:], lastState)
+	service.updateCachesAndEpochBoundary(t.Context(), 1, headState, headRoot, lastRoot[:], lastState)
 
-	// Cache should be keyed by accessRoot, not lastRoot.
-	cached := transition.NextSlotState(accessRoot[:], 1)
+	cached := transition.NextSlotState(headRoot[:], 1)
 	require.NotNil(t, cached)
 	require.Equal(t, primitives.Slot(1), cached.Slot())
 
@@ -3674,25 +3783,24 @@ func TestRefreshCaches_NoCachedState(t *testing.T) {
 	st, _ := util.DeterministicGenesisState(t, 1)
 	headRoot := [32]byte{'h'}
 
-	service.refreshCaches(t.Context(), 1, headRoot, st, headRoot)
+	service.refreshCaches(t.Context(), 1, headRoot, st)
 
 	cached := transition.NextSlotState(headRoot[:], 1)
 	require.NotNil(t, cached)
 	require.Equal(t, primitives.Slot(1), cached.Slot())
 }
 
-func TestRefreshCaches_CachedStateMatchesAccessRoot(t *testing.T) {
+func TestRefreshCaches_CachedStateMatchesHeadRoot(t *testing.T) {
 	service := testServiceNoDB(t)
 	st, _ := util.DeterministicGenesisState(t, 1)
-	accessRoot := [32]byte{'a'}
 	headRoot := [32]byte{'h'}
 
-	// Pre-populate the cache with accessRoot.
-	require.NoError(t, transition.UpdateNextSlotCache(t.Context(), accessRoot[:], st))
+	// Pre-populate the cache with headRoot.
+	require.NoError(t, transition.UpdateNextSlotCache(t.Context(), headRoot[:], st))
 
-	service.refreshCaches(t.Context(), 1, headRoot, st, accessRoot)
+	service.refreshCaches(t.Context(), 1, headRoot, st)
 
-	cached := transition.NextSlotState(accessRoot[:], 1)
+	cached := transition.NextSlotState(headRoot[:], 1)
 	require.NotNil(t, cached)
 	require.Equal(t, primitives.Slot(1), cached.Slot())
 }

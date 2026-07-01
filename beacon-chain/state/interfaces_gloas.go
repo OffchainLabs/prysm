@@ -17,7 +17,7 @@ type writeOnlyGloasFields interface {
 	// Builder pending payments / withdrawals.
 	SetBuilderPendingPayment(index primitives.Slot, payment *ethpb.BuilderPendingPayment) error
 	ClearBuilderPendingPayment(index primitives.Slot) error
-	QueueBuilderPayment() error
+	QueueBuilderPaymentForSlot(parentSlot primitives.Slot) error
 	RotateBuilderPendingPayments() error
 	AppendBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal) error
 
@@ -33,6 +33,12 @@ type writeOnlyGloasFields interface {
 	AddBuilderFromDeposit(pubkey [fieldparams.BLSPubkeyLength]byte, withdrawalCredentials [fieldparams.RootLength]byte, amount uint64) error
 	UpdatePendingPaymentWeight(att ethpb.Att, indices []uint64, participatedFlags map[uint8]bool) error
 	UpdateBuilderAtIndex(index primitives.BuilderIndex, builder *ethpb.Builder) error
+
+	// Bulk setters (used by hdiff).
+	SetBuilders([]*ethpb.Builder) error
+	SetBuilderPendingPayments([]*ethpb.BuilderPendingPayment) error
+	SetBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal) error
+	SetExecutionPayloadAvailabilityVector([]byte) error
 
 	// Withdrawals.
 	SetPayloadExpectedWithdrawals(withdrawals []*enginev1.Withdrawal) error
@@ -71,7 +77,7 @@ type readOnlyGloasFields interface {
 	NextWithdrawalBuilderIndex() (primitives.BuilderIndex, error)
 
 	// Withdrawals
-	IsParentBlockFull() (bool, error)
+	LatestBlockHashMatchesBidBlockHash() (bool, error)
 	ExpectedWithdrawalsGloas() (ExpectedWithdrawalsGloasResult, error)
 	PayloadExpectedWithdrawals() ([]*enginev1.Withdrawal, error)
 	WithdrawalsForPayload() ([]*enginev1.Withdrawal, error)

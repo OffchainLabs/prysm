@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
@@ -229,7 +228,7 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 	return nil
 }
 
-func (c *beaconApiValidatorClient) AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.AttesterDutiesResponse, error) {
+func (c *beaconApiValidatorClient) attesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.AttesterDutiesResponse, error) {
 	resp, err := c.dutiesProvider.AttesterDuties(ctx, epoch, validatorIndices)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get attester duties")
@@ -285,7 +284,7 @@ func (c *beaconApiValidatorClient) AttesterDuties(ctx context.Context, epoch pri
 	}, nil
 }
 
-func (c *beaconApiValidatorClient) ProposerDuties(ctx context.Context, epoch primitives.Epoch) (*ethpb.ProposerDutiesResponse, error) {
+func (c *beaconApiValidatorClient) proposerDuties(ctx context.Context, epoch primitives.Epoch) (*ethpb.ProposerDutiesResponse, error) {
 	resp, err := c.dutiesProvider.ProposerDuties(ctx, epoch)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get proposer duties")
@@ -321,7 +320,7 @@ func (c *beaconApiValidatorClient) ProposerDuties(ctx context.Context, epoch pri
 	}, nil
 }
 
-func (c *beaconApiValidatorClient) SyncCommitteeDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.SyncCommitteeDutiesResponse, error) {
+func (c *beaconApiValidatorClient) syncCommitteeDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.SyncCommitteeDutiesResponse, error) {
 	syncDuties, err := c.dutiesProvider.SyncDuties(ctx, epoch, validatorIndices)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get sync committee duties")
@@ -366,8 +365,7 @@ func (c *beaconApiValidatorClient) validatorsForDuties(ctx context.Context, pubk
 		stringPubkeys[i] = stringPk
 	}
 
-	statusesWithDuties := []string{validator.ActiveOngoing.String(), validator.ActiveExiting.String()}
-	stateValidatorsResponse, err := c.stateValidatorsProvider.StateValidators(ctx, stringPubkeys, nil, statusesWithDuties)
+	stateValidatorsResponse, err := c.stateValidatorsProvider.StateValidators(ctx, stringPubkeys, nil, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get state validators")
 	}
@@ -537,7 +535,7 @@ func (c beaconApiDutiesProvider) PTCDuties(ctx context.Context, epoch primitives
 	return &ptcDuties, nil
 }
 
-func (c *beaconApiValidatorClient) PTCDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.PTCDutiesResponse, error) {
+func (c *beaconApiValidatorClient) ptcDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.PTCDutiesResponse, error) {
 	resp, err := c.dutiesProvider.PTCDuties(ctx, epoch, validatorIndices)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get PTC duties")

@@ -38,6 +38,9 @@ func BlobAlignsWithBlock(blob blocks.ROBlob, block blocks.ROBlock) error {
 	if err != nil {
 		return err
 	}
+	if blob.Index >= uint64(len(commits)) {
+		return errors.Wrapf(ErrIncorrectBlobIndex, "index %d out of range for %d commitments", blob.Index, len(commits))
+	}
 	blockCommitment := bytesutil.ToBytes48(commits[blob.Index])
 	blobCommitment := bytesutil.ToBytes48(blob.KzgCommitment)
 	if blobCommitment != blockCommitment {

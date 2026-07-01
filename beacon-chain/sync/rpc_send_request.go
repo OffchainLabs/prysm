@@ -54,6 +54,8 @@ var (
 	errSidecarIndicesUnordered  = errors.Wrap(errSidecarRPCValidation, "sidecar indices not in ascending order")
 	errSidecarSlotNotRequested  = errors.Wrap(errSidecarRPCValidation, "sidecar slot not in range")
 	errSidecarIndexNotRequested = errors.Wrap(errSidecarRPCValidation, "sidecar index not requested")
+	errSidecarIndexTooLarge     = errors.Wrap(errSidecarRPCValidation, "sidecar index out of range")
+	errSidecarTooManyCells      = errors.Wrap(errSidecarRPCValidation, "sidecar carries more cells/commitments/proofs than allowed for the slot")
 )
 
 // ------
@@ -532,6 +534,7 @@ func SendDataColumnSidecarsByRangeRequest(
 		areSidecarsOrdered(),
 		isSidecarIndexRequested(request),
 		requestedSlot,
+		isSidecarSizeValid(),
 	}, vfs...)
 
 	// Read the data column sidecars from the stream.
@@ -621,6 +624,26 @@ func areSidecarsOrdered() DataColumnResponseValidation {
 	}
 }
 
+// isSidecarSizeValid checks that a sidecar's column, commitment, and proof counts do not exceed the
+// per-slot blob limit (a column holds one cell per blob).
+func isSidecarSizeValid() DataColumnResponseValidation {
+	return func(sidecar blocks.RODataColumn) error {
+		if sidecar.Index() >= fieldparams.NumberOfColumns {
+			return errors.Wrapf(errSidecarIndexTooLarge, "got=%d, max=%d", sidecar.Index(), fieldparams.NumberOfColumns)
+		}
+		maxBlobs := params.BeaconConfig().MaxBlobsPerBlock(sidecar.Slot())
+		// column and proofs are present for both forks
+		if len(sidecar.Column()) > maxBlobs || len(sidecar.KzgProofs()) > maxBlobs {
+			return errors.Wrapf(errSidecarTooManyCells, "cells=%d proofs=%d max=%d", len(sidecar.Column()), len(sidecar.KzgProofs()), maxBlobs)
+		}
+		// gloas takes commitments from the block bid, not the sidecar
+		if !sidecar.IsGloas() && len(sidecar.DataColumnSidecar().KzgCommitments) > maxBlobs {
+			return errors.Wrapf(errSidecarTooManyCells, "commitments=%d max=%d", len(sidecar.DataColumnSidecar().KzgCommitments), maxBlobs)
+		}
+		return nil
+	}
+}
+
 // isSidecarIndexRequested verifies that the index of the data column sidecar is found in the requested indices.
 func isSidecarIndexRequested(request *ethpb.DataColumnSidecarsByRangeRequest) DataColumnResponseValidation {
 	requestedIndices := make(map[uint64]bool)
@@ -683,7 +706,7 @@ func SendDataColumnSidecarsByRootRequest(p DataColumnSidecarsParams, peer goPeer
 
 	// Read the data column sidecars from the stream.
 	for range count {
-		roDataColumn, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap, isSidecarIndexRootRequested(identifiers))
+		roDataColumn, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap, isSidecarIndexRootRequested(identifiers), isSidecarSizeValid())
 		if errors.Is(err, io.EOF) {
 			if p.DownscorePeerOnRPCFault && len(roDataColumns) == 0 {
 				downscorePeer(p.P2P, peer, "noReturnedSidecar")
@@ -968,26 +991,39 @@ func SendExecutionPayloadEnvelopesByRangeRequest(
 		if i == max {
 			return nil, errMaxRequestEnvelopesExceeded
 		}
-		// Validate slot is within requested range.
-		envSlot := env.Message.Slot
-		endSlot := req.StartSlot.Add(req.Count)
-		if envSlot < req.StartSlot || envSlot >= endSlot {
-			return nil, errors.Wrapf(ErrInvalidFetchedData, "envelope slot %d outside requested range [%d, %d)", envSlot, req.StartSlot, endSlot)
+		envSlot, blockHash, err := validateExecutionPayloadEnvelopeByRangeResponse(env, req, prevSlot, prevHash, i > 0)
+		if err != nil {
+			return nil, err
 		}
-		// Validate slots are strictly increasing.
-		if i > 0 && envSlot <= prevSlot {
-			return nil, errors.Wrapf(ErrInvalidFetchedData, "envelope slot %d not greater than previous slot %d", envSlot, prevSlot)
-		}
-		// Validate the hash chain
-		if len(prevHash) != 0 {
-			if !bytes.Equal(env.Message.Payload.ParentHash, prevHash) {
-				return nil, errors.Wrapf(ErrInvalidFetchedData, "envelope parent hash %x does not match previous hash %x", env.Message.Payload.ParentHash, prevHash)
-			}
-		}
-		prevHash = env.Message.Payload.BlockHash
+		prevHash = blockHash
 		prevSlot = envSlot
 		envelopes = append(envelopes, env)
 	}
 
 	return envelopes, nil
+}
+
+func validateExecutionPayloadEnvelopeByRangeResponse(
+	env *ethpb.SignedExecutionPayloadEnvelope,
+	req *ethpb.ExecutionPayloadEnvelopesByRangeRequest,
+	prevSlot primitives.Slot,
+	prevHash []byte,
+	hasPrevious bool,
+) (primitives.Slot, []byte, error) {
+	if _, err := blocks.WrappedROSignedExecutionPayloadEnvelope(env); err != nil {
+		return 0, nil, errors.Wrap(ErrInvalidFetchedData, "invalid execution payload envelope")
+	}
+
+	envSlot := primitives.Slot(env.Message.Payload.SlotNumber)
+	endSlot := req.StartSlot.Add(req.Count)
+	if envSlot < req.StartSlot || envSlot >= endSlot {
+		return 0, nil, errors.Wrapf(ErrInvalidFetchedData, "envelope slot %d outside requested range [%d, %d)", envSlot, req.StartSlot, endSlot)
+	}
+	if hasPrevious && envSlot <= prevSlot {
+		return 0, nil, errors.Wrapf(ErrInvalidFetchedData, "envelope slot %d not greater than previous slot %d", envSlot, prevSlot)
+	}
+	if len(prevHash) != 0 && !bytes.Equal(env.Message.Payload.ParentHash, prevHash) {
+		return 0, nil, errors.Wrapf(ErrInvalidFetchedData, "envelope parent hash %x does not match previous hash %x", env.Message.Payload.ParentHash, prevHash)
+	}
+	return envSlot, env.Message.Payload.BlockHash, nil
 }

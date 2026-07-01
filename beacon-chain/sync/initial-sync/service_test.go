@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
@@ -201,6 +201,102 @@ func TestService_InitStartStop(t *testing.T) {
 	}
 }
 
+func useMinimalInitialSyncConfig(t *testing.T) {
+	t.Helper()
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.MinimalSpecConfig().Copy()
+	params.OverrideBeaconConfig(cfg)
+
+	prev := *flags.Get()
+	next := prev
+	next.MinimumSyncPeers = 1
+	if next.BlockBatchLimit == 0 {
+		next.BlockBatchLimit = 64
+	}
+	if next.BlockBatchLimitBurstFactor == 0 {
+		next.BlockBatchLimitBurstFactor = 10
+	}
+	flags.Init(&next)
+	t.Cleanup(func() {
+		prevCopy := prev
+		flags.Init(&prevCopy)
+	})
+}
+
+func newClockAtSlot(slot primitives.Slot) (*startup.Clock, time.Time) {
+	genesisTime := time.Unix(1_700_000_000, 0)
+	var validatorsRoot [32]byte
+	return startup.NewClock(genesisTime, validatorsRoot, startup.WithSlotAsNow(slot)), genesisTime
+}
+
+// TestService_Start_DoesNotMarkSyncedWhenStillBehindInSameEpoch verifies startup does not skip sync when head and current slot share an epoch but differ by slots.
+func TestService_Start_DoesNotMarkSyncedWhenStillBehindInSameEpoch(t *testing.T) {
+	useMinimalInitialSyncConfig(t)
+
+	headSlot := primitives.Slot(88)
+	currentSlot := primitives.Slot(95)
+
+	st, err := util.NewBeaconState()
+	require.NoError(t, err)
+	require.NoError(t, st.SetSlot(headSlot))
+
+	clock, genesisTime := newClockAtSlot(currentSlot)
+	gs := startup.NewClockSynchronizer()
+	require.NoError(t, gs.SetClock(clock))
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	initialSyncComplete := make(chan struct{})
+	mc := &mock.ChainService{
+		State: st,
+		FinalizedCheckPoint: &ethpb.Checkpoint{
+			Epoch: 0,
+		},
+		Genesis:        genesisTime,
+		ValidatorsRoot: [32]byte{},
+	}
+
+	s := NewService(ctx, &Config{
+		P2P:                 p2ptest.NewTestP2P(t),
+		Chain:               mc,
+		ClockWaiter:         gs,
+		StateNotifier:       &mock.MockStateNotifier{},
+		InitialSyncComplete: initialSyncComplete,
+	})
+	s.verifierWaiter = verification.NewInitializerWaiter(gs, nil, nil, nil)
+	s.blobRetentionChecker = func(primitives.Slot) bool { return true }
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.Start()
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+
+	select {
+	case <-done:
+		t.Fatal("initial sync exited early while the node was still seven slots behind in the current epoch")
+	default:
+	}
+	require.Equal(t, true, s.Syncing(), "service should still be syncing while behind in the current epoch")
+	require.Equal(t, false, s.Synced(), "service should not report synced while behind in the current epoch")
+	select {
+	case <-initialSyncComplete:
+		t.Fatal("service closed InitialSyncComplete while still behind in the current epoch")
+	default:
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(6 * time.Second):
+		t.Fatal("initial sync did not stop after context cancellation")
+	}
+}
+
 func TestService_waitForStateInitialization(t *testing.T) {
 	hook := logTest.NewGlobal()
 	newService := func(ctx context.Context, mc *mock.ChainService) (*Service, *startup.ClockSynchronizer) {
@@ -210,8 +306,8 @@ func TestService_waitForStateInitialization(t *testing.T) {
 			cfg:                  &Config{Chain: mc, StateNotifier: mc.StateNotifier(), ClockWaiter: cs, InitialSyncComplete: make(chan struct{})},
 			ctx:                  ctx,
 			cancel:               cancel,
-			synced:               abool.New(),
-			chainStarted:         abool.New(),
+			synced:               &atomic.Bool{},
+			chainStarted:         &atomic.Bool{},
 			counter:              ratecounter.NewRateCounter(counterSeconds * time.Second),
 			genesisChan:          make(chan time.Time),
 			blobRetentionChecker: func(primitives.Slot) bool { return true },
@@ -320,11 +416,11 @@ func TestService_markSynced(t *testing.T) {
 		InitialSyncComplete: make(chan struct{}),
 	})
 	require.NotNil(t, s)
-	assert.Equal(t, false, s.chainStarted.IsSet())
-	assert.Equal(t, false, s.synced.IsSet())
+	assert.Equal(t, false, s.chainStarted.Load())
+	assert.Equal(t, false, s.synced.Load())
 	assert.Equal(t, true, s.Syncing())
 	assert.NoError(t, s.Status())
-	s.chainStarted.Set()
+	s.chainStarted.Store(true)
 	assert.ErrorContains(t, "syncing", s.Status())
 
 	go func() {
@@ -425,17 +521,17 @@ func TestService_Initialized(t *testing.T) {
 	s := NewService(t.Context(), &Config{
 		StateNotifier: &mock.MockStateNotifier{},
 	})
-	s.chainStarted.Set()
+	s.chainStarted.Store(true)
 	assert.Equal(t, true, s.Initialized())
-	s.chainStarted.UnSet()
+	s.chainStarted.Store(false)
 	assert.Equal(t, false, s.Initialized())
 }
 
 func TestService_Synced(t *testing.T) {
 	s := NewService(t.Context(), &Config{})
-	s.synced.UnSet()
+	s.synced.Store(false)
 	assert.Equal(t, false, s.Synced())
-	s.synced.Set()
+	s.synced.Store(true)
 	assert.Equal(t, true, s.Synced())
 }
 

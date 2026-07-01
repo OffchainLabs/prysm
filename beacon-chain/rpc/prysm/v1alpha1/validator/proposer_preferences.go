@@ -3,7 +3,12 @@ package validator
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -49,16 +54,35 @@ func (vs *Server) SubmitSignedProposerPreferences(
 			)
 		}
 
-		if slots.ToEpoch(proposalSlot) != currentEpoch+1 {
+		proposalEpoch := slots.ToEpoch(proposalSlot)
+		if proposalEpoch < currentEpoch || proposalEpoch > currentEpoch.Add(1) {
 			return nil, status.Errorf(
 				codes.InvalidArgument,
-				"signed proposer preferences proposal slot must be in the next epoch: slot %d currentEpoch %d",
+				"signed proposer preferences proposal slot must be in the current or next epoch: slot %d currentEpoch %d",
 				proposalSlot,
 				currentEpoch,
 			)
 		}
 
-		if vs.ProposerPreferencesCache.Has(proposalSlot) {
+		currentSlot := vs.TimeFetcher.CurrentSlot()
+		if proposalSlot <= currentSlot {
+			return nil, status.Errorf(
+				codes.InvalidArgument,
+				"signed proposer preferences proposal slot has already passed: proposalSlot %d currentSlot %d",
+				proposalSlot,
+				currentSlot,
+			)
+		}
+
+		if len(msg.Message.DependentRoot) != fieldparams.RootLength {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"signed proposer preferences dependent_root must be %d bytes (got %d)",
+				fieldparams.RootLength, len(msg.Message.DependentRoot),
+			)
+		}
+		dependentRoot := bytesutil.ToBytes32(msg.Message.DependentRoot)
+
+		if vs.ProposerPreferencesCache.Has(dependentRoot, proposalSlot) {
 			duplicate++
 			continue
 		}
@@ -69,7 +93,17 @@ func (vs *Server) SubmitSignedProposerPreferences(
 				broadcast, len(req.SignedProposerPreferences), err)
 		}
 
-		vs.ProposerPreferencesCache.Add(proposalSlot, msg.Message.FeeRecipient, msg.Message.GasLimit)
+		vs.ProposerPreferencesCache.Add(cache.ProposerPreference{
+			DependentRoot:  dependentRoot,
+			ValidatorIndex: msg.Message.ValidatorIndex,
+			FeeRecipient:   bytesutil.ToBytes20(msg.Message.FeeRecipient),
+			TargetGasLimit: msg.Message.TargetGasLimit,
+		}, proposalSlot)
+
+		vs.OperationNotifier.OperationFeed().Send(&feed.Event{
+			Type: opfeed.ProposerPreferencesReceived,
+			Data: &opfeed.ProposerPreferencesReceivedData{Data: msg},
+		})
 		broadcast++
 	}
 

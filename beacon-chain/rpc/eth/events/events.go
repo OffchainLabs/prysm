@@ -13,6 +13,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
@@ -42,6 +43,8 @@ const (
 	InvalidTopic = "__invalid__"
 	// HeadTopic represents a new chain head event topic.
 	HeadTopic = "head"
+	// HeadV2Topic represents the versioned, Gloas-aware chain head event topic.
+	HeadV2Topic = "head_v2"
 	// BlockTopic represents a new produced block event topic.
 	BlockTopic = "block"
 	// BlockGossipTopic represents a block received from gossip or API that passes validation rules.
@@ -74,13 +77,23 @@ const (
 	LightClientOptimisticUpdateTopic = "light_client_optimistic_update"
 	// DataColumnTopic represents a data column sidecar event topic
 	DataColumnTopic = "data_column_sidecar"
-	// ExecutionPayloadTopic represents a new execution payload envelope event topic
-	ExecutionPayloadTopic = "execution_payload_available"
+	// ExecutionPayloadAvailableTopic represents the event topic fired when an execution payload envelope
+	// and its custody data are available (for PTC voting). It does not require EL validity.
+	// TODO: Decouple emitting this event from EL validation.
+	ExecutionPayloadAvailableTopic = "execution_payload_available"
+	// ExecutionPayloadTopic represents the event topic fired after an execution payload envelope is
+	// successfully imported into fork choice (post EL execution).
+	ExecutionPayloadTopic = "execution_payload"
+	// ExecutionPayloadGossipTopic represents an execution payload envelope received from gossip or API
+	// that passes validation rules.
+	ExecutionPayloadGossipTopic = "execution_payload_gossip"
 	// ExecutionPayloadBidTopic represents a new execution payload bid event topic.
 	// This topic is currently not triggered but is recognized to avoid client subscription errors.
 	ExecutionPayloadBidTopic = "execution_payload_bid"
 	// PayloadAttestationMessageTopic represents a new payload attestation message event topic.
 	PayloadAttestationMessageTopic = "payload_attestation_message"
+	// ProposerPreferencesTopic represents a new signed proposer preferences event topic.
+	ProposerPreferencesTopic = "proposer_preferences"
 )
 
 var (
@@ -116,24 +129,25 @@ var opsFeedEventTopics = map[feed.EventType]string{
 	operation.BlockGossipReceived:               BlockGossipTopic,
 	operation.DataColumnReceived:                DataColumnTopic,
 	operation.PayloadAttestationMessageReceived: PayloadAttestationMessageTopic,
+	operation.ProposerPreferencesReceived:       ProposerPreferencesTopic,
+	operation.ExecutionPayloadGossipReceived:    ExecutionPayloadGossipTopic,
+	operation.ExecutionPayloadBidReceived:       ExecutionPayloadBidTopic,
 }
 
 var stateFeedEventTopics = map[feed.EventType]string{
 	statefeed.NewHead:                     HeadTopic,
+	statefeed.NewHeadV2:                   HeadV2Topic,
 	statefeed.FinalizedCheckpoint:         FinalizedCheckpointTopic,
 	statefeed.LightClientFinalityUpdate:   LightClientFinalityUpdateTopic,
 	statefeed.LightClientOptimisticUpdate: LightClientOptimisticUpdateTopic,
 	statefeed.Reorg:                       ChainReorgTopic,
 	statefeed.BlockProcessed:              BlockTopic,
 	statefeed.PayloadAttributes:           PayloadAttributesTopic,
-	statefeed.PayloadProcessed:            ExecutionPayloadTopic,
+	statefeed.ExecutionPayloadAvailable:   ExecutionPayloadAvailableTopic,
+	statefeed.ExecutionPayloadProcessed:   ExecutionPayloadTopic,
 }
 
-var topicsForStateFeed = func() map[string]bool {
-	m := topicsForFeed(stateFeedEventTopics)
-	m[ExecutionPayloadBidTopic] = true
-	return m
-}()
+var topicsForStateFeed = topicsForFeed(stateFeedEventTopics)
 var topicsForOpsFeed = topicsForFeed(opsFeedEventTopics)
 
 func topicsForFeed(em map[feed.EventType]string) map[string]bool {
@@ -220,7 +234,7 @@ func (s *Server) StreamEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	cleanupStart := time.Now()
 	es.waitForExit()
-	log.WithField("cleanup_wait", time.Since(cleanupStart)).Debug("streamEvents shutdown complete")
+	log.WithField("cleanup_wait", time.Since(cleanupStart)).Debug("StreamEvents shutdown complete")
 }
 
 func newEventStreamer(buffSize int, ka time.Duration) *eventStreamer {
@@ -465,6 +479,8 @@ func topicForEvent(event *feed.Event) string {
 		return BlockGossipTopic
 	case *ethpb.EventHead:
 		return HeadTopic
+	case *statefeed.HeadV2Data:
+		return HeadV2Topic
 	case *ethpb.EventFinalizedCheckpoint:
 		return FinalizedCheckpointTopic
 	case interfaces.LightClientFinalityUpdate:
@@ -481,8 +497,16 @@ func topicForEvent(event *feed.Event) string {
 		return DataColumnTopic
 	case *operation.PayloadAttestationMessageReceivedData:
 		return PayloadAttestationMessageTopic
-	case *statefeed.PayloadProcessedData:
+	case *operation.ProposerPreferencesReceivedData:
+		return ProposerPreferencesTopic
+	case *operation.ExecutionPayloadBidReceivedData:
+		return ExecutionPayloadBidTopic
+	case *statefeed.ExecutionPayloadAvailableData:
+		return ExecutionPayloadAvailableTopic
+	case *statefeed.ExecutionPayloadProcessedData:
 		return ExecutionPayloadTopic
+	case *operation.ExecutionPayloadGossipReceivedData:
+		return ExecutionPayloadGossipTopic
 	default:
 		return InvalidTopic
 	}
@@ -504,6 +528,10 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		// we send two event messages in reaction; the head event and the payload attributes.
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, structs.HeadEventFromV1(v))
+		}, nil
+	case *statefeed.HeadV2Data:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, structs.HeadEventFromDataV2(v))
 		}, nil
 	case *operation.BlockGossipReceivedData:
 		blockRoot, err := v.SignedBlock.Block().HashTreeRoot()
@@ -659,11 +687,46 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, structs.PayloadAttestationMessageFromConsensus(v.Message))
 		}, nil
-	case *statefeed.PayloadProcessedData:
+	case *operation.ProposerPreferencesReceivedData:
 		return func() io.Reader {
-			return jsonMarshalReader(eventName, &structs.PayloadEvent{
+			epoch := slots.ToEpoch(v.Data.Message.ProposalSlot)
+			return jsonMarshalReader(eventName, &structs.ProposerPreferencesEvent{
+				Version: version.String(params.GetNetworkScheduleEntry(epoch).VersionEnum),
+				Data:    structs.SignedProposerPreferencesFromConsensus(v.Data),
+			})
+		}, nil
+	case *operation.ExecutionPayloadBidReceivedData:
+		return func() io.Reader {
+			epoch := slots.ToEpoch(v.Bid.Message.Slot)
+			return jsonMarshalReader(eventName, &structs.ExecutionPayloadBidEvent{
+				Version: version.String(params.GetNetworkScheduleEntry(epoch).VersionEnum),
+				Data:    structs.SignedExecutionPayloadBidFromConsensus(v.Bid),
+			})
+		}, nil
+	case *statefeed.ExecutionPayloadAvailableData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, &structs.ExecutionPayloadAvailableEvent{
 				Slot:      fmt.Sprintf("%d", v.Slot),
 				BlockRoot: hexutil.Encode(v.BlockRoot[:]),
+			})
+		}, nil
+	case *statefeed.ExecutionPayloadProcessedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, &structs.ExecutionPayloadEvent{
+				Slot:                fmt.Sprintf("%d", v.Slot),
+				BuilderIndex:        fmt.Sprintf("%d", v.BuilderIndex),
+				BlockHash:           hexutil.Encode(v.BlockHash[:]),
+				BlockRoot:           hexutil.Encode(v.BlockRoot[:]),
+				ExecutionOptimistic: v.Optimistic,
+			})
+		}, nil
+	case *operation.ExecutionPayloadGossipReceivedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, &structs.ExecutionPayloadGossipEvent{
+				Slot:         fmt.Sprintf("%d", v.Slot),
+				BuilderIndex: fmt.Sprintf("%d", v.BuilderIndex),
+				BlockHash:    hexutil.Encode(v.BlockHash[:]),
+				BlockRoot:    hexutil.Encode(v.BlockRoot[:]),
 			})
 		}, nil
 	default:
@@ -674,23 +737,33 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 var errUnsupportedPayloadAttribute = errors.New("cannot compute payload attributes pre-Bellatrix")
 var errPayloadAttributeExpired = errors.New("skipping payload attribute event for past slot")
 
-func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnlyBeaconState, root [32]byte, proposer primitives.ValidatorIndex, timestamp uint64, randao []byte) (payloadattribute.Attributer, error) {
+func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnlyBeaconState, root [32]byte, proposer primitives.ValidatorIndex, timestamp uint64, randao []byte, slot primitives.Slot) (payloadattribute.Attributer, error) {
 	v := st.Version()
 	if v < version.Bellatrix {
 		return nil, errors.Wrapf(errUnsupportedPayloadAttribute, "%s is not supported", version.String(v))
 	}
 
-	feeRecpt := params.BeaconConfig().DefaultFeeRecipient.Bytes()
-	tValidator, exists := s.TrackedValidatorsCache.Validator(proposer)
-	if exists {
-		feeRecpt = tValidator.FeeRecipient[:]
+	// Try signed pref first (post-Gloas, keyed by slot+dep_root). Fall back to
+	// the per-validator default if dep root is unavailable or the signed pref
+	// isn't cached. On total miss emit the BN's configured defaults so SSE
+	// matches what FCU will actually send to the EL.
+	feeRecpt := primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
+	var pref *cache.ProposerPreference
+	if dependentRoot, err := helpers.ProposerDependentRootOrGenesis(ctx, s.BeaconDB, st, slot); err == nil {
+		if p, ok := s.ProposerPreferencesCache.BestFor(dependentRoot, slot, proposer); ok {
+			pref = &p
+			feeRecpt = p.FeeRecipientOrDefault()
+		}
+	} else if p, ok := s.ProposerPreferencesCache.DefaultFor(proposer); ok {
+		pref = &p
+		feeRecpt = p.FeeRecipientOrDefault()
 	}
 
 	if v == version.Bellatrix {
 		return payloadattribute.New(&engine.PayloadAttributes{
 			Timestamp:             timestamp,
 			PrevRandao:            randao,
-			SuggestedFeeRecipient: feeRecpt,
+			SuggestedFeeRecipient: feeRecpt[:],
 		})
 	}
 
@@ -710,17 +783,34 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		return payloadattribute.New(&engine.PayloadAttributesV2{
 			Timestamp:             timestamp,
 			PrevRandao:            randao,
-			SuggestedFeeRecipient: feeRecpt,
+			SuggestedFeeRecipient: feeRecpt[:],
 			Withdrawals:           w,
 		})
 	}
 
-	return payloadattribute.New(&engine.PayloadAttributesV3{
+	if v < version.Gloas {
+		return payloadattribute.New(&engine.PayloadAttributesV3{
+			Timestamp:             timestamp,
+			PrevRandao:            randao,
+			SuggestedFeeRecipient: feeRecpt[:],
+			Withdrawals:           w,
+			ParentBeaconBlockRoot: root[:],
+		})
+	}
+
+	parentGasLimit := helpers.ParentTargetGasLimit(st)
+	gasLimit := parentGasLimit
+	if pref != nil {
+		gasLimit = pref.GasLimitOr(parentGasLimit)
+	}
+	return payloadattribute.New(&engine.PayloadAttributesV4{
 		Timestamp:             timestamp,
 		PrevRandao:            randao,
-		SuggestedFeeRecipient: feeRecpt,
+		SuggestedFeeRecipient: feeRecpt[:],
 		Withdrawals:           w,
 		ParentBeaconBlockRoot: root[:],
+		SlotNumber:            uint64(slot),
+		TargetGasLimit:        gasLimit,
 	})
 }
 
@@ -788,24 +878,36 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 
 	ev.ProposerIndex = proposerIndex
 
+	if ev.HeadBlock.Version() >= version.Gloas {
+		h, err := rost.LatestBlockHash()
+		if err != nil {
+			return ev, errors.Wrap(err, "could not get latest block hash from head state")
+		}
+		ev.ParentBlockHash = h[:]
+	} else {
+		payload, err := ev.HeadBlock.Block().Body().Execution()
+		if err != nil {
+			return ev, errors.Wrap(err, "could not get execution payload for head block")
+		}
+		ev.ParentBlockHash = payload.BlockHash()
+		ev.ParentBlockNumber = payload.BlockNumber()
+	}
+
+	if ev.Attributer != nil && !ev.Attributer.IsEmpty() {
+		return ev, nil
+	}
+
 	randao, err := helpers.RandaoMix(rost, pse)
 	if err != nil {
 		return ev, errors.Wrap(err, "could not get head state randado")
 	}
-
-	payload, err := ev.HeadBlock.Block().Body().Execution()
-	if err != nil {
-		return ev, errors.Wrap(err, "could not get execution payload for head block")
-	}
-	ev.ParentBlockHash = payload.BlockHash()
-	ev.ParentBlockNumber = payload.BlockNumber()
 
 	t, err := slots.StartTime(rost.GenesisTime(), ev.ProposalSlot)
 	if err != nil {
 		return ev, errors.Wrap(err, "could not get head state slot time")
 	}
 
-	ev.Attributer, err = s.computePayloadAttributes(ctx, rost, ev.HeadRoot, ev.ProposerIndex, uint64(t.Unix()), randao)
+	ev.Attributer, err = s.computePayloadAttributes(ctx, rost, ev.HeadRoot, ev.ProposerIndex, uint64(t.Unix()), randao, ev.ProposalSlot)
 	return ev, err
 }
 

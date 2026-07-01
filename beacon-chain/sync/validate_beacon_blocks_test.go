@@ -6,10 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
@@ -27,6 +27,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -36,6 +37,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	gcache "github.com/patrickmn/go-cache"
@@ -123,9 +125,10 @@ func TestValidateBeaconBlockPubSub_InvalidSignature(t *testing.T) {
 	}
 }
 
-func TestValidateBeaconBlockPubSub_InvalidSignature_MarksBlockAsBad(t *testing.T) {
+func TestValidateBeaconBlockPubSub_InvalidSignature_DownscoresPeer(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
+	attacker := p2ptest.NewTestP2P(t)
 	ctx := t.Context()
 	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
 	parentBlock := util.NewBeaconBlock()
@@ -142,7 +145,7 @@ func TestValidateBeaconBlockPubSub_InvalidSignature_MarksBlockAsBad(t *testing.T
 	msg.Block.ParentRoot = bRoot[:]
 	msg.Block.Slot = 1
 	msg.Block.ProposerIndex = proposerIdx
-	badPrivKeyIdx := proposerIdx + 1 // We generate a valid signature from a wrong private key which fails to verify
+	badPrivKeyIdx := proposerIdx + 1
 	msg.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, msg.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[badPrivKeyIdx])
 	require.NoError(t, err)
 
@@ -174,12 +177,6 @@ func TestValidateBeaconBlockPubSub_InvalidSignature_MarksBlockAsBad(t *testing.T
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
 	defer opSub.Unsubscribe()
 
-	blockRoot, err := msg.Block.HashTreeRoot()
-	require.NoError(t, err)
-
-	// Verify block is not marked as bad initially
-	assert.Equal(t, false, r.hasBadBlock(blockRoot), "block should not be marked as bad initially")
-
 	buf := new(bytes.Buffer)
 	_, err = p.Encoding().EncodeGossip(buf, msg)
 	require.NoError(t, err)
@@ -193,20 +190,74 @@ func TestValidateBeaconBlockPubSub_InvalidSignature_MarksBlockAsBad(t *testing.T
 			Topic: &topic,
 		},
 	}
-	res, err := r.validateBeaconBlockPubSub(ctx, "", m)
+	res, err := r.validateBeaconBlockPubSub(ctx, attacker.PeerID(), m)
 	require.ErrorContains(t, "invalid signature", err)
-	result := res == pubsub.ValidationReject
-	assert.Equal(t, true, result)
+	assert.Equal(t, pubsub.ValidationReject, res)
 
-	// Verify block is now marked as bad after invalid signature
-	assert.Equal(t, true, r.hasBadBlock(blockRoot), "block should be marked as bad after invalid signature")
+	count, err := p.Peers().Scorers().BadResponsesScorer().Count(attacker.PeerID())
+	require.NoError(t, err)
+	assert.Equal(t, 1, count, "peer should be downscored on invalid signature")
 
 	select {
 	case event := <-opChannel:
 		assert.NotEqual(t, opfeed.BlockGossipReceived, event.Type, "BlockGossipReceived event should not be sent")
 	default:
-		// this case is needed, otherwise the test will never finish
 	}
+}
+
+func TestValidateBeaconBlockPubSub_OutOfRangeProposerIndex(t *testing.T) {
+	db := dbtest.SetupDB(t)
+	p := p2ptest.NewTestP2P(t)
+	ctx := t.Context()
+	beaconState, _ := util.DeterministicGenesisState(t, 100)
+	parentBlock := util.NewBeaconBlock()
+	util.SaveBlock(t, ctx, db, parentBlock)
+	bRoot, err := parentBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, db.SaveState(ctx, beaconState, bRoot))
+	require.NoError(t, db.SaveStateSummary(ctx, &ethpb.StateSummary{Root: bRoot[:]}))
+
+	msg := util.NewBeaconBlock()
+	msg.Block.ParentRoot = bRoot[:]
+	msg.Block.Slot = 1
+	msg.Block.ProposerIndex = 1 << 40 // out of range for the 100-validator registry
+	blockRoot, err := msg.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+		FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, 32)},
+		DB:                  db,
+		State:               beaconState,
+		Root:                bRoot[:],
+	}
+	r := &Service{
+		cfg: &config{
+			beaconDB:          db,
+			p2p:               p,
+			initialSync:       &mockSync.Sync{IsSyncing: false},
+			chain:             chainService,
+			clock:             startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+			blockNotifier:     chainService.BlockNotifier(),
+			operationNotifier: chainService.OperationNotifier(),
+			stateGen:          stategen.New(db, doublylinkedtree.New()),
+		},
+		seenBlockCache: lruwrpr.New(10),
+		badBlockCache:  lruwrpr.New(10),
+	}
+
+	buf := new(bytes.Buffer)
+	_, err = p.Encoding().EncodeGossip(buf, msg)
+	require.NoError(t, err)
+	digest, err := r.currentForkDigest()
+	require.NoError(t, err)
+	topic := r.addDigestToTopic(p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlock]()], digest)
+	m := &pubsub.Message{Message: &pubsubpb.Message{Data: buf.Bytes(), Topic: &topic}}
+
+	res, err := r.validateBeaconBlockPubSub(ctx, "", m)
+	require.ErrorContains(t, "invalid proposer index", err)
+	assert.Equal(t, pubsub.ValidationReject, res)
+	// rejected via gossip scoring, not the bad-block cache
+	assert.Equal(t, false, r.hasBadBlock(blockRoot))
 }
 
 func TestValidateBeaconBlockPubSub_BlockAlreadyPresentInDB(t *testing.T) {
@@ -771,7 +822,7 @@ func TestValidateBeaconBlockPubSub_IgnoreAndQueueBlocksFromNearFuture(t *testing
 			operationNotifier: chainService.OperationNotifier(),
 			stateGen:          stateGen,
 		},
-		chainStarted:        abool.New(),
+		chainStarted:        &atomic.Bool{},
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
@@ -833,7 +884,7 @@ func TestValidateBeaconBlockPubSub_RejectBlocksFromFuture(t *testing.T) {
 			blockNotifier:     chainService.BlockNotifier(),
 			operationNotifier: chainService.OperationNotifier(),
 		},
-		chainStarted:        abool.New(),
+		chainStarted:        &atomic.Bool{},
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
@@ -1284,9 +1335,8 @@ func TestValidateBeaconBlockPubSub_InvalidParentBlock(t *testing.T) {
 	r.cfg.clock = startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)
 
 	res, err = r.validateBeaconBlockPubSub(ctx, "", m)
-	require.ErrorContains(t, "has an invalid parent", err)
-	// Expect block with bad parent to fail too
-	assert.Equal(t, res, pubsub.ValidationReject, "block with invalid parent should be ignored")
+	require.ErrorContains(t, "unknown parent for block", err)
+	assert.Equal(t, res, pubsub.ValidationIgnore, "block with unknown parent should be ignored")
 
 	select {
 	case event := <-opChannel:
@@ -1921,7 +1971,7 @@ func TestDetectAndBroadcastEquivocation(t *testing.T) {
 		signedBlock, err := blocks.NewSignedBeaconBlock(block)
 		require.NoError(t, err)
 
-		err = r.detectAndBroadcastEquivocation(ctx, signedBlock)
+		err = r.detectAndBroadcastEquivocation(ctx, signedBlock, time.Now())
 		require.NoError(t, err)
 		assert.Equal(t, 0, len(slashingPool.PendingPropSlashings), "Expected no slashings")
 	})
@@ -1967,7 +2017,7 @@ func TestDetectAndBroadcastEquivocation(t *testing.T) {
 		signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
 		require.NoError(t, err)
 
-		err = r.detectAndBroadcastEquivocation(ctx, signedNewBlock)
+		err = r.detectAndBroadcastEquivocation(ctx, signedNewBlock, time.Now())
 		require.NoError(t, err)
 
 		// Verify slashing was inserted
@@ -2005,7 +2055,7 @@ func TestDetectAndBroadcastEquivocation(t *testing.T) {
 			seenBlockCache: lruwrpr.New(10),
 		}
 
-		err = r.detectAndBroadcastEquivocation(ctx, signedBlock)
+		err = r.detectAndBroadcastEquivocation(ctx, signedBlock, time.Now())
 		require.NoError(t, err)
 		assert.Equal(t, 0, len(slashingPool.PendingPropSlashings), "Expected no slashings for same signature")
 	})
@@ -2048,7 +2098,7 @@ func TestDetectAndBroadcastEquivocation(t *testing.T) {
 			seenBlockCache: lruwrpr.New(10),
 		}
 
-		err = r.detectAndBroadcastEquivocation(ctx, signedBlock)
+		err = r.detectAndBroadcastEquivocation(ctx, signedBlock, time.Now())
 		require.ErrorContains(t, "could not get head state", err)
 	})
 	t.Run("signature verification failure", func(t *testing.T) {
@@ -2091,8 +2141,113 @@ func TestDetectAndBroadcastEquivocation(t *testing.T) {
 			seenBlockCache: lruwrpr.New(10),
 		}
 
-		err = r.detectAndBroadcastEquivocation(ctx, signedNewBlock)
+		err = r.detectAndBroadcastEquivocation(ctx, signedNewBlock, time.Now())
 		require.ErrorIs(t, err, ErrSlashingSignatureFailure)
+	})
+
+	t.Run("early equivocation recorded in forkchoice when flag on", func(t *testing.T) {
+		resetFn := features.InitWithReset(&features.Flags{TrackEquivocations: true})
+		defer resetFn()
+
+		headBlock := util.NewBeaconBlock()
+		headBlock.Block.Slot = 1
+		headBlock.Block.ProposerIndex = 0
+		headBlock.Block.ParentRoot = bytesutil.PadTo([]byte("parent1"), 32)
+		sig1, err := signing.ComputeDomainAndSign(beaconState, 0, headBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+		require.NoError(t, err)
+		headBlock.Signature = sig1
+
+		newBlock := util.NewBeaconBlock()
+		newBlock.Block.Slot = 1
+		newBlock.Block.ProposerIndex = 0
+		newBlock.Block.ParentRoot = bytesutil.PadTo([]byte("parent2"), 32)
+		sig2, err := signing.ComputeDomainAndSign(beaconState, 0, newBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+		require.NoError(t, err)
+		newBlock.Signature = sig2
+
+		signedHeadBlock, err := blocks.NewSignedBeaconBlock(headBlock)
+		require.NoError(t, err)
+		signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
+		require.NoError(t, err)
+
+		genesis := time.Now()
+		chainService := &mock.ChainService{
+			State:   beaconState,
+			Genesis: genesis,
+			Block:   signedHeadBlock,
+		}
+
+		r := &Service{
+			cfg: &config{
+				p2p:          p,
+				chain:        chainService,
+				slashingPool: &slashingsmock.PoolMock{},
+				clock:        startup.NewClock(genesis, chainService.ValidatorsRoot),
+			},
+			seenBlockCache: lruwrpr.New(10),
+		}
+
+		slotStart, err := slots.StartTime(genesis, 1)
+		require.NoError(t, err)
+		require.NoError(t, r.detectAndBroadcastEquivocation(ctx, signedNewBlock, slotStart))
+
+		expectedRoot, err := signedNewBlock.Block().HashTreeRoot()
+		require.NoError(t, err)
+		key := mock.EquivocationKey{Slot: 1, Proposer: 0}
+		recorded := chainService.RecordedEquivocations[key]
+		require.Equal(t, 1, len(recorded))
+		require.Equal(t, expectedRoot, recorded[0])
+	})
+
+	t.Run("late equivocation not recorded when flag on", func(t *testing.T) {
+		resetFn := features.InitWithReset(&features.Flags{TrackEquivocations: true})
+		defer resetFn()
+
+		headBlock := util.NewBeaconBlock()
+		headBlock.Block.Slot = 1
+		headBlock.Block.ProposerIndex = 0
+		headBlock.Block.ParentRoot = bytesutil.PadTo([]byte("parent1"), 32)
+		sig1, err := signing.ComputeDomainAndSign(beaconState, 0, headBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+		require.NoError(t, err)
+		headBlock.Signature = sig1
+
+		newBlock := util.NewBeaconBlock()
+		newBlock.Block.Slot = 1
+		newBlock.Block.ProposerIndex = 0
+		newBlock.Block.ParentRoot = bytesutil.PadTo([]byte("parent2"), 32)
+		sig2, err := signing.ComputeDomainAndSign(beaconState, 0, newBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+		require.NoError(t, err)
+		newBlock.Signature = sig2
+
+		signedHeadBlock, err := blocks.NewSignedBeaconBlock(headBlock)
+		require.NoError(t, err)
+		signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
+		require.NoError(t, err)
+
+		genesis := time.Now()
+		chainService := &mock.ChainService{
+			State:   beaconState,
+			Genesis: genesis,
+			Block:   signedHeadBlock,
+		}
+
+		r := &Service{
+			cfg: &config{
+				p2p:          p,
+				chain:        chainService,
+				slashingPool: &slashingsmock.PoolMock{},
+				clock:        startup.NewClock(genesis, chainService.ValidatorsRoot),
+			},
+			seenBlockCache: lruwrpr.New(10),
+		}
+
+		slotStart, err := slots.StartTime(genesis, 1)
+		require.NoError(t, err)
+		// Past the early deadline (75% of slot at default mainnet config).
+		lateReceived := slotStart.Add(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+		require.NoError(t, r.detectAndBroadcastEquivocation(ctx, signedNewBlock, lateReceived))
+
+		require.Equal(t, 0, len(chainService.RecordedEquivocations))
 	})
 }
 

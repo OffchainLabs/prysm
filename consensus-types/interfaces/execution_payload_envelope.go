@@ -18,11 +18,11 @@ type ROSignedExecutionPayloadEnvelope interface {
 // ROBlindedExecutionPayloadEnvelope contains the fields common to both
 // full and blinded execution payload envelopes.
 type ROBlindedExecutionPayloadEnvelope interface {
-	ExecutionRequests() *enginev1.ExecutionRequests
+	ExecutionRequests() *enginev1.ExecutionRequestsGloas
 	BuilderIndex() primitives.BuilderIndex
 	BeaconBlockRoot() [field_params.RootLength]byte
+	ParentBeaconBlockRoot() [field_params.RootLength]byte
 	Slot() primitives.Slot
-	StateRoot() [field_params.RootLength]byte
 	BlockHash() [field_params.RootLength]byte
 	IsBlinded() bool
 	IsNil() bool

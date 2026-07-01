@@ -22,39 +22,25 @@ func TestService_isNewHead(t *testing.T) {
 
 	// Zero root is always a new head
 	require.Equal(t, true, service.isNewHead([32]byte{}, false))
-	require.Equal(t, true, service.isNewHead([32]byte{}, true))
 
 	// Different root is a new head
 	service.head = &head{root: [32]byte{1}}
 	require.Equal(t, true, service.isNewHead([32]byte{2}, false))
 
-	// Same root and same full status is not a new head
+	// Same root is not a new head.
 	require.Equal(t, false, service.isNewHead([32]byte{1}, false))
-
-	// Same root but different full status is a new head
-	require.Equal(t, true, service.isNewHead([32]byte{1}, true))
-
-	// Same root and both full is not a new head
-	service.head = &head{root: [32]byte{1}, full: true}
-	require.Equal(t, false, service.isNewHead([32]byte{1}, true))
-
-	// Same root, head is full but incoming is not full, is a new head
-	require.Equal(t, true, service.isNewHead([32]byte{1}, false))
 
 	// Nil head should use origin root
 	service.head = nil
 	service.originBlockRoot = [32]byte{3}
 	require.Equal(t, true, service.isNewHead([32]byte{2}, false))
 	require.Equal(t, false, service.isNewHead([32]byte{3}, false))
-
-	// Nil head with full=true is always a new head (originBlockRoot has full=false)
-	require.Equal(t, true, service.isNewHead([32]byte{3}, true))
 }
 
 func TestService_getHeadStateAndBlock(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
 	service := setupBeaconChain(t, beaconDB)
-	_, _, err := service.getStateAndBlock(t.Context(), [32]byte{}, [32]byte{})
+	_, _, err := service.getStateAndBlock(t.Context(), [32]byte{})
 	require.ErrorContains(t, "block does not exist", err)
 
 	blk, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlock(&ethpb.SignedBeaconBlock{Signature: []byte{1}}))
@@ -82,7 +68,8 @@ func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
 	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)
 	service.cfg.PayloadIDCache = cache.NewPayloadIDCache()
-	service.cfg.TrackedValidatorsCache = cache.NewTrackedValidatorsCache()
+	service.cfg.ProposerPreferencesCache = cache.NewProposerPreferencesCache()
+	service.cfg.SubscribedValidatorsCache = cache.NewSubscribedValidatorsCache()
 
 	b := util.NewBeaconBlock()
 	b.Block.Slot = 2
@@ -97,7 +84,7 @@ func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
 		block: wsb,
 		state: st,
 	}
-	service.cfg.PayloadIDCache.Set(2, [32]byte{2}, [8]byte{1})
+	service.cfg.PayloadIDCache.Set(2, [32]byte{2}, true, [8]byte{1})
 	b = util.NewBeaconBlock()
 	b.Block.Slot = 3
 	util.SaveBlock(t, ctx, service.cfg.BeaconDB, b)
@@ -109,7 +96,7 @@ func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
 		block: wsb,
 		state: st,
 	}
-	service.cfg.PayloadIDCache.Set(2, [32]byte{2}, [8]byte{1})
+	service.cfg.PayloadIDCache.Set(2, [32]byte{2}, true, [8]byte{1})
 	args := &fcuConfig{
 		headState:     st,
 		headRoot:      r1,
@@ -118,7 +105,7 @@ func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
 	}
 	service.forkchoiceUpdateWithExecution(ctx, args)
 
-	payloadID, has := service.cfg.PayloadIDCache.PayloadID(2, [32]byte{2})
+	payloadID, has := service.cfg.PayloadIDCache.PayloadID(2, [32]byte{2}, true)
 	require.Equal(t, true, has)
 	require.Equal(t, primitives.PayloadID{1}, payloadID)
 }
@@ -163,7 +150,7 @@ func TestService_forkchoiceUpdateWithExecution_SameHeadRootNewProposer(t *testin
 	service.head.root = r
 	service.head.block = sb
 	service.head.state = st
-	service.cfg.PayloadIDCache.Set(service.CurrentSlot()+1, [32]byte{} /* root */, [8]byte{})
+	service.cfg.PayloadIDCache.Set(service.CurrentSlot()+1, [32]byte{} /* root */, true, [8]byte{})
 	args := &fcuConfig{
 		headState:     st,
 		headBlock:     sb,

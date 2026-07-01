@@ -8,14 +8,19 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	common "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/common/operations"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
-func blockWithSignedExecutionPayloadBid(blockSSZ []byte) (interfaces.SignedBeaconBlock, error) {
-	var block ethpb.BeaconBlockGloas
-	if err := block.UnmarshalSSZ(blockSSZ); err != nil {
+func blockWithSignedExecutionPayloadBid(bidSSZ []byte) (interfaces.SignedBeaconBlock, error) {
+	signedBid := &ethpb.SignedExecutionPayloadBid{}
+	if err := signedBid.UnmarshalSSZ(bidSSZ); err != nil {
 		return nil, err
 	}
-	return blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{Block: &block})
+	blk := util.NewBeaconBlockGloas()
+	blk.Block.Slot = signedBid.Message.Slot
+	blk.Block.ParentRoot = signedBid.Message.ParentBlockRoot
+	blk.Block.Body.SignedExecutionPayloadBid = signedBid
+	return blocks.NewSignedBeaconBlock(blk)
 }
 
 func RunExecutionPayloadBidTest(t *testing.T, config string) {

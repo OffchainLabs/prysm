@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -117,6 +119,10 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	if err := v.VerifyPayloadHash(bid); err != nil {
 		return pubsub.ValidationReject, err
 	}
+	// [REJECT] hash_tree_root(envelope.execution_requests) == bid.execution_requests_root.
+	if err := v.VerifyExecutionRequestsRoot(bid); err != nil {
+		return pubsub.ValidationReject, err
+	}
 
 	// For self-build, the state is retrived via how we retrieve for beacon block optimization
 	// For builder index, the state is retrived via head state read only
@@ -126,7 +132,7 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	}
 
 	// [REJECT] signed_execution_payload_envelope.signature is valid with respect to the builder's public key.
-	if err := v.VerifySignature(st); err != nil {
+	if err := v.VerifySignature(ctx, st); err != nil {
 		return pubsub.ValidationReject, err
 	}
 	s.setSeenPayloadEnvelope(root, env.BuilderIndex())
@@ -137,6 +143,20 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	} else {
 		log.WithError(err).WithField("slot", env.Slot()).Debug("Could not compute execution payload envelope slot start time")
 	}
+
+	// execution_payload_gossip fires once the envelope passes gossip validation.
+	if s.cfg.operationNotifier != nil {
+		s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
+			Type: operation.ExecutionPayloadGossipReceived,
+			Data: &operation.ExecutionPayloadGossipReceivedData{
+				Slot:         env.Slot(),
+				BuilderIndex: env.BuilderIndex(),
+				BlockHash:    env.BlockHash(),
+				BlockRoot:    env.BeaconBlockRoot(),
+			},
+		})
+	}
+
 	return pubsub.ValidationAccept, nil
 }
 
@@ -150,6 +170,7 @@ func (s *Service) queuePendingPayloadEnvelope(
 ) (pubsub.ValidationResult, error) {
 	currentSlot := s.cfg.clock.CurrentSlot()
 	if env.Slot() != currentSlot {
+		log.WithField("envelopeSlot", env.Slot()).WithField("currentSlot", currentSlot).Debug("Ignoring payload envelope not for current slot")
 		return pubsub.ValidationIgnore, nil
 	}
 	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
@@ -162,6 +183,9 @@ func (s *Service) queuePendingPayloadEnvelope(
 	builderIdx := uint64(env.BuilderIndex())
 	isSelfBuild := builderIdx == uint64(params.BeaconConfig().BuilderIndexSelfBuild)
 	root := env.BeaconBlockRoot()
+	if signedEnvelope == nil || signedEnvelope.Message == nil || signedEnvelope.Message.Payload == nil {
+		return pubsub.ValidationIgnore, errNilMessage
+	}
 	s.pendingEnvelopeLock.Lock()
 	defer s.pendingEnvelopeLock.Unlock()
 	inner, rootExists := s.pendingPayloadEnvelopes[root]
@@ -180,7 +204,7 @@ func (s *Service) queuePendingPayloadEnvelope(
 	}
 
 	if !isSelfBuild || proposerInLookahead {
-		if err := v.VerifySignature(st); err != nil {
+		if err := v.VerifySignature(ctx, st); err != nil {
 			if isSelfBuild {
 				s.selfBuildSigFailures++
 				log.WithError(err).Debug("Ignoring self-built payload with invalid signature")
@@ -197,8 +221,13 @@ func (s *Service) queuePendingPayloadEnvelope(
 		inner = make(map[uint64]*ethpb.SignedExecutionPayloadEnvelope)
 		s.pendingPayloadEnvelopes[root] = inner
 	} else {
-		for _, existing := range inner {
-			if existing.Message.Slot != signedEnvelope.Message.Slot {
+		for existingBuilderIdx, existing := range inner {
+			if existing == nil || existing.Message == nil || existing.Message.Payload == nil {
+				delete(inner, existingBuilderIdx)
+				log.Debug("Removed malformed pending payload envelope")
+				continue
+			}
+			if existing.Message.Payload.SlotNumber != signedEnvelope.Message.Payload.SlotNumber {
 				log.Debug("Ignoring payload envelope with mismatched slot")
 				return pubsub.ValidationIgnore, nil
 			}
@@ -243,6 +272,13 @@ func (s *Service) executionPayloadEnvelopeSubscriber(ctx context.Context, msg pr
 			}
 		}
 		return err
+	}
+	if s.chainIsStarted() {
+		go func() {
+			if err := s.processPendingBlocks(s.ctx); err != nil {
+				log.WithError(err).Debug("Could not process pending blocks after envelope receipt")
+			}
+		}()
 	}
 	return nil
 }

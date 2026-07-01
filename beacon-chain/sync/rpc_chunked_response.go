@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
@@ -169,7 +170,7 @@ func WriteExecutionPayloadEnvelopeChunk(stream libp2pcore.Stream, encoding encod
 	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
 		return err
 	}
-	ctxBytes := params.ForkDigest(slots.ToEpoch(envelope.Message.Slot))
+	ctxBytes := params.ForkDigest(slots.ToEpoch(primitives.Slot(envelope.Message.Payload.SlotNumber)))
 	if err := writeContextToStream(ctxBytes[:], stream); err != nil {
 		return err
 	}

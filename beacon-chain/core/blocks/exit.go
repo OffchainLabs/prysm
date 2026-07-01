@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	v "github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -52,6 +52,11 @@ func ProcessVoluntaryExits(
 	exits []*ethpb.SignedVoluntaryExit,
 	exitInfo *v.ExitInfo,
 ) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "blocks.ProcessVoluntaryExits")
+	defer span.End()
+
+	span.SetAttributes(trace.Int64Attribute("count", int64(len(exits))))
+
 	// Avoid calculating the epoch churn if no exits exist.
 	if len(exits) == 0 {
 		return beaconState, nil
@@ -62,16 +67,6 @@ func ProcessVoluntaryExits(
 	for idx, exit := range exits {
 		if exit == nil || exit.Exit == nil {
 			return nil, errors.New("nil voluntary exit in block body")
-		}
-		// [New in Gloas:EIP7732] Builder exits are identified by the builder index flag.
-		if beaconState.Version() >= version.Gloas && exit.Exit.ValidatorIndex.IsBuilderIndex() {
-			if err := verifyBuilderExitAndSignature(beaconState, exit); err != nil {
-				return nil, errors.Wrapf(err, "could not verify builder exit %d", idx)
-			}
-			if err := gloas.InitiateBuilderExit(beaconState, exit.Exit.ValidatorIndex.ToBuilderIndex()); err != nil {
-				return nil, err
-			}
-			continue
 		}
 		val, err := beaconState.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
 		if err != nil {
@@ -118,11 +113,6 @@ func VerifyExitAndSignature(
 ) error {
 	if signed == nil || signed.Exit == nil {
 		return errors.New("nil exit")
-	}
-
-	// [New in Gloas:EIP7732] Builder exits are verified separately.
-	if st.Version() >= version.Gloas && signed.Exit.ValidatorIndex.IsBuilderIndex() {
-		return verifyBuilderExitAndSignature(st, signed)
 	}
 
 	fork := st.Fork()
@@ -212,59 +202,5 @@ func verifyExitConditions(st state.ReadOnlyBeaconState, validator state.ReadOnly
 		}
 	}
 
-	return nil
-}
-
-// verifyBuilderExitAndSignature validates a builder voluntary exit.
-// [New in Gloas:EIP7732]
-func verifyBuilderExitAndSignature(st state.ReadOnlyBeaconState, signed *ethpb.SignedVoluntaryExit) error {
-	if signed == nil || signed.Exit == nil {
-		return errors.New("nil exit")
-	}
-	exit := signed.Exit
-	builderIndex := exit.ValidatorIndex.ToBuilderIndex()
-
-	// Exits must specify an epoch when they become valid; they are not valid before then.
-	currentEpoch := slots.ToEpoch(st.Slot())
-	if currentEpoch < exit.Epoch {
-		return fmt.Errorf("expected current epoch >= exit epoch, received %d < %d", currentEpoch, exit.Epoch)
-	}
-
-	// Verify the builder is active.
-	active, err := st.IsActiveBuilder(builderIndex)
-	if err != nil {
-		return errors.Wrap(err, "could not check if builder is active")
-	}
-	if !active {
-		return fmt.Errorf("builder %d is not active", builderIndex)
-	}
-
-	// Only exit builder if it has no pending balance to withdraw.
-	pendingBalance, err := st.BuilderPendingBalanceToWithdraw(builderIndex)
-	if err != nil {
-		return errors.Wrap(err, "could not get builder pending balance to withdraw")
-	}
-	if pendingBalance != 0 {
-		return fmt.Errorf("builder %d has pending balance to withdraw: %d", builderIndex, pendingBalance)
-	}
-
-	// Verify signature using builder pubkey with Capella fork version (EIP-7044).
-	pubkey, err := st.BuilderPubkey(builderIndex)
-	if err != nil {
-		return errors.Wrap(err, "could not get builder pubkey")
-	}
-	fork := &ethpb.Fork{
-		PreviousVersion: params.BeaconConfig().CapellaForkVersion,
-		CurrentVersion:  params.BeaconConfig().CapellaForkVersion,
-		Epoch:           params.BeaconConfig().CapellaForkEpoch,
-	}
-	genesisRoot := st.GenesisValidatorsRoot()
-	domain, err := signing.Domain(fork, exit.Epoch, params.BeaconConfig().DomainVoluntaryExit, genesisRoot)
-	if err != nil {
-		return err
-	}
-	if err := signing.VerifySigningRoot(exit, pubkey[:], signed.Signature, domain); err != nil {
-		return signing.ErrSigFailedToVerify
-	}
 	return nil
 }

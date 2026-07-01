@@ -200,14 +200,6 @@ func WithAvailableBlocker(avb coverage.AvailableBlocker) Option {
 	}
 }
 
-// WithTrackedValidatorsCache for tracked validators cache.
-func WithTrackedValidatorsCache(c *cache.TrackedValidatorsCache) Option {
-	return func(s *Service) error {
-		s.trackedValidatorsCache = c
-		return nil
-	}
-}
-
 func WithPayloadAttestationCache(c *cache.PayloadAttestationCache) Option {
 	return func(s *Service) error {
 		s.payloadAttestationCache = c
@@ -222,9 +214,9 @@ func WithProposerPreferencesCache(c *cache.ProposerPreferencesCache) Option {
 	}
 }
 
-func WithHighestExecutionPayloadBidCache(c *cache.HighestExecutionPayloadBidCache) Option {
+func WithSubscribedValidatorsCache(c *cache.SubscribedValidatorsCache) Option {
 	return func(s *Service) error {
-		s.highestExecutionPayloadBidCache = c
+		s.subscribedValidatorsCache = c
 		return nil
 	}
 }

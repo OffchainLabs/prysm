@@ -3,8 +3,10 @@ package verification
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -15,15 +17,36 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
-func TestProposerPreferencesVerifier_VerifyNextEpoch(t *testing.T) {
+func TestProposerPreferencesVerifier_VerifyCurrentOrNextEpoch(t *testing.T) {
+	// Next epoch future slot is accepted.
 	st, _, signed := newSignedProposerPreferencesState(t, 31, 40, 0)
+	verifier := &ProposerPreferencesVerifier{sharedResources: &sharedResources{clock: testClockAtSlotForProposerPreferences(t, st.Slot())}, results: newResults(RequireProposerPreferencesCurrentOrNextEpoch), p: signed}
+	require.NoError(t, verifier.VerifyCurrentOrNextEpoch())
 
-	verifier := &ProposerPreferencesVerifier{sharedResources: &sharedResources{}, results: newResults(RequireProposerPreferencesNextEpoch), p: signed}
-	require.NoError(t, verifier.VerifyNextEpoch(st))
+	// Current epoch future slot is accepted.
+	signed.Message.ProposalSlot = st.Slot() + 1
+	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{clock: testClockAtSlotForProposerPreferences(t, st.Slot())}, results: newResults(RequireProposerPreferencesCurrentOrNextEpoch), p: signed}
+	require.NoError(t, verifier.VerifyCurrentOrNextEpoch())
 
+	// Current slot (already passed) is rejected.
 	signed.Message.ProposalSlot = st.Slot()
-	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{}, results: newResults(RequireProposerPreferencesNextEpoch), p: signed}
-	require.ErrorIs(t, verifier.VerifyNextEpoch(st), ErrProposerPreferencesNotNextEpoch)
+	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{clock: testClockAtSlotForProposerPreferences(t, st.Slot())}, results: newResults(RequireProposerPreferencesCurrentOrNextEpoch), p: signed}
+	require.ErrorIs(t, verifier.VerifyCurrentOrNextEpoch(), ErrProposerPreferencesSlotAlreadyPassed)
+
+	// Same-epoch future slot with more room.
+	st2, _, signed2 := newSignedProposerPreferencesState(t, 24, 28, 0)
+	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{clock: testClockAtSlotForProposerPreferences(t, st2.Slot())}, results: newResults(RequireProposerPreferencesCurrentOrNextEpoch), p: signed2}
+	require.NoError(t, verifier.VerifyCurrentOrNextEpoch())
+}
+
+func TestProposerPreferencesVerifier_VerifyCurrentOrNextEpoch_UsesClockWhenStateLags(t *testing.T) {
+	_, _, signed := newSignedProposerPreferencesState(t, 31, 32, 0)
+	verifier := &ProposerPreferencesVerifier{
+		sharedResources: &sharedResources{clock: testClockAtSlotForProposerPreferences(t, 32)},
+		results:         newResults(RequireProposerPreferencesCurrentOrNextEpoch),
+		p:               signed,
+	}
+	require.ErrorIs(t, verifier.VerifyCurrentOrNextEpoch(), ErrProposerPreferencesSlotAlreadyPassed)
 }
 
 func TestProposerPreferencesVerifier_VerifyValidProposalSlot(t *testing.T) {
@@ -76,10 +99,11 @@ func TestProposerPreferencesVerifier_VerifySignature_ForkBoundary(t *testing.T) 
 
 	signed := &ethpb.SignedProposerPreferences{
 		Message: &ethpb.ProposerPreferences{
+			DependentRoot:  bytes.Repeat([]byte{0x02}, 32),
 			ProposalSlot:   proposalSlot,
 			ValidatorIndex: validatorIndex,
 			FeeRecipient:   bytes.Repeat([]byte{0x01}, 20),
-			GasLimit:       30_000_000,
+			TargetGasLimit: 30_000_000,
 		},
 	}
 	// Sign using config fork (like the DomainData RPC does).
@@ -107,16 +131,19 @@ func newSignedProposerPreferencesState(t *testing.T, currentSlot, proposalSlot p
 
 	lookaheadSize := int(uint64(params.BeaconConfig().MinSeedLookahead+1) * uint64(params.BeaconConfig().SlotsPerEpoch))
 	lookahead := make([]primitives.ValidatorIndex, lookaheadSize)
-	index := params.BeaconConfig().SlotsPerEpoch + (proposalSlot % params.BeaconConfig().SlotsPerEpoch)
+	currentEpoch := slots.ToEpoch(currentSlot)
+	proposalEpoch := slots.ToEpoch(proposalSlot)
+	index := primitives.Slot(proposalEpoch-currentEpoch)*params.BeaconConfig().SlotsPerEpoch + (proposalSlot % params.BeaconConfig().SlotsPerEpoch)
 	lookahead[index] = validatorIndex
 	require.NoError(t, st.SetProposerLookahead(lookahead))
 
 	signed := &ethpb.SignedProposerPreferences{
 		Message: &ethpb.ProposerPreferences{
+			DependentRoot:  bytes.Repeat([]byte{0x02}, 32),
 			ProposalSlot:   proposalSlot,
 			ValidatorIndex: validatorIndex,
 			FeeRecipient:   bytes.Repeat([]byte{0x01}, 20),
-			GasLimit:       30_000_000,
+			TargetGasLimit: 30_000_000,
 		},
 	}
 	signed.Signature = signProposerPreferencesWithConfigFork(t, keys[validatorIndex], signed.Message, st)
@@ -134,4 +161,13 @@ func signProposerPreferencesWithConfigFork(t *testing.T, sk bls.SecretKey, prefe
 	sig, err := signing.ComputeDomainAndSignWithoutState(fork, epoch, params.BeaconConfig().DomainProposerPreferences, st.GenesisValidatorsRoot(), preferences, sk)
 	require.NoError(t, err)
 	return sig
+}
+
+func testClockAtSlotForProposerPreferences(t *testing.T, slot primitives.Slot) *startup.Clock {
+	t.Helper()
+
+	genesis := time.Unix(1_700_000_000, 0)
+	now, err := slots.StartTime(genesis, slot)
+	require.NoError(t, err)
+	return startup.NewClock(genesis, [32]byte{}, startup.WithNower(func() time.Time { return now }))
 }

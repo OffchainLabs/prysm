@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
@@ -17,8 +18,7 @@ import (
 
 // validateExecutionPayloadBid validates execution payload bid gossip rules.
 // [REJECT] The bid's parent (defined by bid.parent_block_root) equals the block's parent (defined by block.parent_root).
-// [REJECT] The length of KZG commitments is less than or equal to the limitation defined in the consensus layer --
-// i.e. validate that len(bid.blob_kzg_commitments) <= get_blob_parameters(get_current_epoch(state)).max_blobs_per_block
+// [REJECT] The length of KZG commitments is less than or equal to the limitation defined in the consensus layer.
 func (s *Service) validateExecutionPayloadBid(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock) (pubsub.ValidationResult, error) {
 	if blk.Version() < version.Gloas {
 		return pubsub.ValidationAccept, nil
@@ -44,6 +44,7 @@ func (s *Service) validateExecutionPayloadBid(ctx context.Context, blk interface
 	if bid.BlobKzgCommitmentCount() > uint64(maxBlobsPerBlock) {
 		return pubsub.ValidationReject, errors.Wrapf(errRejectCommitmentLen, "%d > %d", bid.BlobKzgCommitmentCount(), maxBlobsPerBlock)
 	}
+
 	return pubsub.ValidationAccept, nil
 }
 
@@ -73,30 +74,43 @@ func (s *Service) validateExecutionPayloadBidParentValid(_ context.Context, blk 
 	return pubsub.ValidationAccept, nil
 }
 
-// requestPayloadEnvelope asks a random peer for the execution payload
-// envelope identified by root and feeds any response through
-// ReceiveExecutionPayloadEnvelope.
 func (s *Service) requestPayloadEnvelope(root [32]byte) {
+	if s.cfg.chain.HasFullNode(root) || s.hasBadPayload(root) {
+		return
+	}
+	key := fmt.Sprintf("%#x", root)
+	_, _, _ = s.payloadEnvelopeRequestSingleFlight.Do(key, func() (any, error) {
+		s.fetchPayloadEnvelope(root)
+		return nil, nil
+	})
+}
+
+const maxPayloadEnvelopeFetchAttempts = 3
+
+func (s *Service) fetchPayloadEnvelope(root [32]byte) {
 	bestPeers := s.getBestPeers()
 	if len(bestPeers) == 0 {
 		return
 	}
-	pid := bestPeers[rand.NewGenerator().Int()%len(bestPeers)]
+	gen := rand.NewGenerator()
+	gen.Shuffle(len(bestPeers), func(i, j int) { bestPeers[i], bestPeers[j] = bestPeers[j], bestPeers[i] })
+	if len(bestPeers) > maxPayloadEnvelopeFetchAttempts {
+		bestPeers = bestPeers[:maxPayloadEnvelopeFetchAttempts]
+	}
 	req := p2ptypes.ExecutionPayloadEnvelopesByRootReq{root}
-	envelopes, err := SendExecutionPayloadEnvelopesByRootRequest(s.ctx, s.cfg.clock, s.cfg.p2p, pid, s.ctxMap, &req)
-	if err != nil {
-		log.WithError(err).Debug("Could not request payload envelope by root")
-		return
-	}
-	if len(envelopes) == 0 {
-		log.Debug("No payload envelopes returned by peer")
-		return
-	}
-	if len(envelopes) > 1 {
-		log.Warn("Multiple payload envelopes returned by peer, expected at most one")
-	}
-	for _, env := range envelopes {
-		wrapped, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(env)
+	for _, pid := range bestPeers {
+		if s.cfg.chain.HasFullNode(root) {
+			return
+		}
+		envelopes, err := SendExecutionPayloadEnvelopesByRootRequest(s.ctx, s.cfg.clock, s.cfg.p2p, pid, s.ctxMap, &req)
+		if err != nil {
+			log.WithError(err).WithField("peer", pid).Debug("Could not request payload envelope by root")
+			continue
+		}
+		if len(envelopes) == 0 {
+			continue
+		}
+		wrapped, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(envelopes[0])
 		if err != nil {
 			log.WithError(err).Debug("Could not wrap requested payload envelope")
 			continue
@@ -104,8 +118,11 @@ func (s *Service) requestPayloadEnvelope(root [32]byte) {
 		if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(s.ctx, wrapped); err != nil {
 			if blockchain.IsInvalidBlock(err) {
 				s.setBadPayload(s.ctx, root)
+				return
 			}
 			log.WithError(err).Debug("Could not process requested payload envelope")
+			continue
 		}
+		return
 	}
 }

@@ -138,24 +138,19 @@ func (s *Service) SyncCommitteeDuties(ctx context.Context, st state.BeaconState,
 	nextSyncCommitteeFirstEpoch := currentSyncCommitteeFirstEpoch + params.BeaconConfig().EpochsPerSyncCommitteePeriod
 	isCurrentCommittee := requestedEpoch < nextSyncCommitteeFirstEpoch
 
-	var committee [][]byte
+	syncCommitteeFunc := st.NextSyncCommittee
 	if isCurrentCommittee {
-		sc, err := st.CurrentSyncCommittee()
-		if err != nil {
-			return nil, &RpcError{Err: errors.Wrap(err, "could not get sync committee"), Reason: Internal}
-		}
-		committee = sc.Pubkeys
-	} else {
-		sc, err := st.NextSyncCommittee()
-		if err != nil {
-			return nil, &RpcError{Err: errors.Wrap(err, "could not get sync committee"), Reason: Internal}
-		}
-		committee = sc.Pubkeys
+		syncCommitteeFunc = st.CurrentSyncCommittee
+	}
+
+	sc, err := syncCommitteeFunc()
+	if err != nil {
+		return nil, &RpcError{Err: errors.Wrap(err, "could not get sync committee"), Reason: Internal}
 	}
 
 	// Build pubkey → positions map from committee pubkeys.
 	committeePubkeys := make(map[[fieldparams.BLSPubkeyLength]byte][]uint64)
-	for j, pk := range committee {
+	for j, pk := range sc.Pubkeys {
 		var pk48 [fieldparams.BLSPubkeyLength]byte
 		copy(pk48[:], pk)
 		committeePubkeys[pk48] = append(committeePubkeys[pk48], uint64(j))

@@ -170,6 +170,10 @@ var (
 		Name: "txs_per_slot_count",
 		Help: "Count the number of txs per slot",
 	})
+	consolidationRequestCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "consolidation_request_count",
+		Help: "Count the number of consolidation requests",
+	})
 	onBlockProcessingTime = promauto.NewSummary(prometheus.SummaryOpts{
 		Name: "on_block_processing_milliseconds",
 		Help: "Total time in milliseconds to complete a call to postBlockProcess()",
@@ -253,6 +257,10 @@ var (
 		Name: "beacon_late_payload_task_triggered_total",
 		Help: "Count the number of times late payload tasks fired.",
 	})
+	goroutineCountGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "beacon_goroutine_count",
+		Help: "Goroutine count sampled once per slot.",
+	}, []string{"kind"})
 )
 
 // reportSlotMetrics reports slot related metrics.

@@ -126,7 +126,7 @@ func TestEnvelopeVerifier_VerifySignature_Builder(t *testing.T) {
 	require.NoError(t, err)
 
 	verifier := &EnvelopeVerifier{results: newResults(RequireBuilderSignatureValid), e: wrapped}
-	require.NoError(t, verifier.VerifySignature(st))
+	require.NoError(t, verifier.VerifySignature(t.Context(), st))
 
 	sk2, err := bls.RandKey()
 	require.NoError(t, err)
@@ -135,7 +135,7 @@ func TestEnvelopeVerifier_VerifySignature_Builder(t *testing.T) {
 	wrapped, err = blocks.WrappedROSignedExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
 	verifier = &EnvelopeVerifier{results: newResults(RequireBuilderSignatureValid), e: wrapped}
-	require.ErrorIs(t, verifier.VerifySignature(st), signing.ErrSigFailedToVerify)
+	require.ErrorIs(t, verifier.VerifySignature(t.Context(), st), signing.ErrSigFailedToVerify)
 }
 
 func TestEnvelopeVerifier_VerifySignature_SelfBuild(t *testing.T) {
@@ -164,13 +164,13 @@ func TestEnvelopeVerifier_VerifySignature_SelfBuild(t *testing.T) {
 	require.NoError(t, err)
 
 	verifier := &EnvelopeVerifier{results: newResults(RequireBuilderSignatureValid), e: wrapped}
-	require.NoError(t, verifier.VerifySignature(st))
+	require.NoError(t, verifier.VerifySignature(t.Context(), st))
 }
 
 func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, builderIdx primitives.BuilderIndex, root, blockHash [32]byte) *ethpb.SignedExecutionPayloadEnvelope {
 	t.Helper()
 
-	payload := &enginev1.ExecutionPayloadDeneb{
+	payload := &enginev1.ExecutionPayloadGloas{
 		ParentHash:    bytes.Repeat([]byte{0x01}, 32),
 		FeeRecipient:  bytes.Repeat([]byte{0x02}, 20),
 		StateRoot:     bytes.Repeat([]byte{0x03}, 32),
@@ -187,18 +187,18 @@ func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, buil
 		Withdrawals:   []*enginev1.Withdrawal{},
 		BlobGasUsed:   0,
 		ExcessBlobGas: 0,
+		SlotNumber:    slot,
 	}
 
 	return &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
 			Payload: payload,
-			ExecutionRequests: &enginev1.ExecutionRequests{
+			ExecutionRequests: &enginev1.ExecutionRequestsGloas{
 				Deposits: []*enginev1.DepositRequest{},
 			},
-			BuilderIndex:    builderIdx,
-			BeaconBlockRoot: root[:],
-			Slot:            slot,
-			StateRoot:       bytes.Repeat([]byte{0xBB}, 32),
+			BuilderIndex:          builderIdx,
+			BeaconBlockRoot:       root[:],
+			ParentBeaconBlockRoot: make([]byte, 32),
 		},
 		Signature: bytes.Repeat([]byte{0xCC}, 96),
 	}

@@ -785,7 +785,7 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		p2p := testp2p.NewTestP2P(t)
 
 		// Setup test data and expectations
-		_, roDataColumnSidecars, expected := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
+		roBlock, roDataColumnSidecars, expected := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
 
 		roDataColumnsByPeer := map[peer.ID][]blocks.RODataColumn{
 			"peer1": roDataColumnSidecars[start:5],
@@ -800,8 +800,12 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		initializer, err := waiter.WaitForInitializer(t.Context())
 		require.NoError(t, err)
 
+		blockByRoot := map[[fieldparams.RootLength]byte]blocks.ROBlock{
+			roBlock.Root(): roBlock,
+		}
+
 		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
-		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, roDataColumnsByPeer)
+		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blockByRoot, roDataColumnsByPeer)
 		require.NoError(t, err)
 
 		require.Equal(t, stop-start, len(actual))
@@ -823,7 +827,7 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		p2p := testp2p.NewTestP2P(t)
 
 		// Setup test data and expectations
-		_, roDataColumnSidecars, expected := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
+		roBlock, roDataColumnSidecars, expected := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
 
 		// Modify one sidecar to ensure proof verification fails.
 		if roDataColumnSidecars[middle].KzgProofs()[0][0] == 0 {
@@ -845,8 +849,12 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		initializer, err := waiter.WaitForInitializer(t.Context())
 		require.NoError(t, err)
 
+		blockByRoot := map[[fieldparams.RootLength]byte]blocks.ROBlock{
+			roBlock.Root(): roBlock,
+		}
+
 		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
-		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, roDataColumnsByPeer)
+		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blockByRoot, roDataColumnsByPeer)
 		require.NoError(t, err)
 
 		require.Equal(t, middle-start, len(actual))
@@ -857,6 +865,84 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 			expectedSidecar := expected[index]
 			require.DeepSSZEqual(t, expectedSidecar.DataColumnSidecar(), actualSidecar.DataColumnSidecar())
 		}
+	})
+
+	t.Run("rogue peer with junk header signature", func(t *testing.T) {
+		const (
+			start, middle, stop = 0, 5, 15
+			blobCount           = 1
+		)
+
+		p2p := testp2p.NewTestP2P(t)
+
+		roBlock, roDataColumnSidecars, expected := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
+
+		origHeader, headerErr := roDataColumnSidecars[middle].SignedBlockHeader()
+		require.NoError(t, headerErr)
+		junkSig := make([]byte, fieldparams.BLSSignatureLength)
+		junkSig[0] = 0xff
+		roDataColumnSidecars[middle].DataColumnSidecar().SignedBlockHeader = &ethpb.SignedBeaconBlockHeader{
+			Header:    origHeader.Header,
+			Signature: junkSig,
+		}
+
+		roDataColumnsByPeer := map[peer.ID][]blocks.RODataColumn{
+			"peer1": roDataColumnSidecars[start:middle],
+			"peer2": roDataColumnSidecars[middle:stop],
+		}
+		gs := startup.NewClockSynchronizer()
+		err := gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
+		require.NoError(t, err)
+
+		waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
+		initializer, err := waiter.WaitForInitializer(t.Context())
+		require.NoError(t, err)
+
+		blocksByRoot := map[[fieldparams.RootLength]byte]blocks.ROBlock{
+			roBlock.Root(): roBlock,
+		}
+
+		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
+		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blocksByRoot, roDataColumnsByPeer)
+		require.NoError(t, err)
+
+		// Only the honest peer's sidecars should be returned.
+		require.Equal(t, middle-start, len(actual))
+		for i := range actual {
+			actualSidecar := actual[i]
+			index := actualSidecar.Index()
+			expectedSidecar := expected[index]
+			require.DeepSSZEqual(t, expectedSidecar.DataColumnSidecar(), actualSidecar.DataColumnSidecar())
+		}
+	})
+
+	t.Run("unknown block root", func(t *testing.T) {
+		const (
+			start, stop = 0, 15
+			blobCount   = 1
+		)
+
+		p2p := testp2p.NewTestP2P(t)
+
+		_, roDataColumnSidecars, _ := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
+
+		roDataColumnsByPeer := map[peer.ID][]blocks.RODataColumn{
+			"peer1": roDataColumnSidecars[start:stop],
+		}
+		gs := startup.NewClockSynchronizer()
+		err := gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
+		require.NoError(t, err)
+
+		waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
+		initializer, err := waiter.WaitForInitializer(t.Context())
+		require.NoError(t, err)
+
+		blockByRoot := map[[fieldparams.RootLength]byte]blocks.ROBlock{}
+
+		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
+		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blockByRoot, roDataColumnsByPeer)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(actual))
 	})
 }
 
@@ -1033,49 +1119,39 @@ func TestComputeTotalCount(t *testing.T) {
 	require.Equal(t, expected, actual)
 }
 
-func TestSetBidCommitments(t *testing.T) {
+func TestVerifyByRootDataColumnSidecars_SeedsGloasBidCommitments(t *testing.T) {
 	root := [fieldparams.RootLength]byte{1}
-	comms := [][]byte{{0xaa}, {0xbb}}
+	commitments := [][]byte{{0xaa}, {0xbb}}
 
-	// Fulu column should be untouched.
-	fuluDC := &ethpb.DataColumnSidecar{
-		SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
-			Header: &ethpb.BeaconBlockHeader{
-				ParentRoot: make([]byte, 32),
-				StateRoot:  make([]byte, 32),
-				BodyRoot:   make([]byte, 32),
-			},
-			Signature: make([]byte, 96),
-		},
-	}
-	fuluCol := blocks.NewRODataColumnNoVerify(fuluDC)
+	// Gloas block whose bid carries the commitments.
+	pb := util.NewBeaconBlockGloas()
+	pb.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = commitments
+	signedBlock, err := blocks.NewSignedBeaconBlock(pb)
+	require.NoError(t, err)
+	roBlock, err := blocks.NewROBlockWithRoot(signedBlock, root)
+	require.NoError(t, err)
+	blockByRoot := map[[fieldparams.RootLength]byte]blocks.ROBlock{root: roBlock}
 
-	// Gloas column should get commitments set.
-	gloasDC := &ethpb.DataColumnSidecarGloas{
-		Index:           5,
-		BeaconBlockRoot: root[:],
-		Column:          [][]byte{make([]byte, 2048)},
-		KzgProofs:       [][]byte{make([]byte, 48)},
+	newVerifier := func(_ []blocks.RODataColumn, _ []verification.Requirement) verification.DataColumnsVerifier {
+		return &verification.MockDataColumnsVerifier{}
 	}
-	gloasCol, err := blocks.NewRODataColumnGloasWithRoot(gloasDC, root)
+
+	gloasSidecar := &ethpb.DataColumnSidecarGloas{Index: 5, BeaconBlockRoot: root[:]}
+	gloasColumn, err := blocks.NewRODataColumnGloasWithRoot(gloasSidecar, root)
 	require.NoError(t, err)
 
-	pid := peer.ID("test-peer")
-	columnsByPeer := map[peer.ID][]blocks.RODataColumn{
-		pid: {fuluCol, gloasCol},
-	}
-	commitmentsByRoot := map[[fieldparams.RootLength]byte][][]byte{
-		root: comms,
-	}
+	t.Run("seeds commitments from the local block", func(t *testing.T) {
+		columns := []blocks.RODataColumn{gloasColumn}
+		_, err := verifyByRootDataColumnSidecars(newVerifier, blockByRoot, columns)
+		require.NoError(t, err)
 
-	setBidCommitments(commitmentsByRoot, columnsByPeer)
+		got, err := columns[0].KzgCommitments()
+		require.NoError(t, err)
+		require.Equal(t, len(commitments), len(got))
+	})
 
-	// Fulu column should not have bid commitments.
-	_, err = columnsByPeer[pid][0].KzgCommitments()
-	require.NoError(t, err)
-
-	// Gloas column should now have bid commitments.
-	got, err := columnsByPeer[pid][1].KzgCommitments()
-	require.NoError(t, err)
-	require.Equal(t, 2, len(got))
+	t.Run("errors when the block is not local", func(t *testing.T) {
+		_, err := verifyByRootDataColumnSidecars(newVerifier, map[[fieldparams.RootLength]byte]blocks.ROBlock{}, []blocks.RODataColumn{gloasColumn})
+		require.ErrorIs(t, err, ErrSidecarHeaderMismatch)
+	})
 }

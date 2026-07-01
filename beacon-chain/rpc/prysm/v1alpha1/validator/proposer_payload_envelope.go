@@ -1,12 +1,14 @@
 package validator
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
-	coregloas "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -15,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -24,79 +27,55 @@ import (
 )
 
 // storeExecutionPayloadEnvelope creates and caches the execution payload envelope
-// after the block is fully built (state root set). The envelope is cached with a
-// zeroed state root; the actual post-payload state root is computed lazily in
-// GetExecutionPayloadEnvelope once the block has been submitted and the post-block
-// state is available via StateGen.
+// after the block is fully built (state root set), returning the envelope for the caller to bundle.
 func (vs *Server) storeExecutionPayloadEnvelope(
 	sBlk interfaces.SignedBeaconBlock,
 	local *consensusblocks.GetPayloadResponse,
-) error {
+) (*ethpb.ExecutionPayloadEnvelope, error) {
 	blockRoot, err := sBlk.Block().HashTreeRoot()
 	if err != nil {
-		return errors.Wrap(err, "could not compute block hash tree root")
+		return nil, errors.Wrap(err, "could not compute block hash tree root")
 	}
 
-	payload := extractExecutionPayloadDeneb(local)
+	payload := extractExecutionPayloadGloas(local)
 
+	parentRoot := sBlk.Block().ParentRoot()
 	envelope := &ethpb.ExecutionPayloadEnvelope{
-		Payload:           payload,
-		ExecutionRequests: local.ExecutionRequests,
-		BuilderIndex:      params.BeaconConfig().BuilderIndexSelfBuild,
-		BeaconBlockRoot:   blockRoot[:],
-		Slot:              sBlk.Block().Slot(),
-		StateRoot:         make([]byte, 32), // zeroed; computed lazily in GetExecutionPayloadEnvelope
+		Payload:               payload,
+		ExecutionRequests:     local.ExecutionRequestsGloas,
+		BuilderIndex:          params.BeaconConfig().BuilderIndexSelfBuild,
+		BeaconBlockRoot:       blockRoot[:],
+		ParentBeaconBlockRoot: parentRoot[:],
 	}
 
-	// Precompute data column sidecars now (inside ProposeBeaconBlock) so the
-	// expensive KZG cell computation doesn't run during PublishExecutionPayloadEnvelope.
+	// Precompute sidecars here (during ProposeBeaconBlock slack) so publish stays fast.
 	var roSidecars []consensusblocks.RODataColumn
 	if bundle := local.BlobsBundler; bundle != nil && len(bundle.GetBlobs()) > 0 {
 		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(bundle.GetBlobs(), bundle.GetProofs())
 		if err != nil {
-			return errors.Wrap(err, "compute cells and proofs from blobs bundle")
+			return nil, errors.Wrap(err, "compute cells and proofs from blobs bundle")
 		}
 		roSidecars, err = peerdas.DataColumnSidecarsGloas(cellsPerBlob, proofsPerBlob, sBlk.Block().Slot(), blockRoot)
 		if err != nil {
-			return errors.Wrap(err, "build gloas data column sidecars")
+			return nil, errors.Wrap(err, "build gloas data column sidecars")
 		}
 	}
 
-	vs.setExecutionPayloadEnvelope(envelope, roSidecars)
-	return nil
+	vs.ExecutionPayloadEnvelopeCache.Set(&cache.ExecutionPayloadContents{
+		Envelope:    envelope,
+		DataColumns: roSidecars,
+	})
+	return envelope, nil
 }
 
-func extractExecutionPayloadDeneb(local *consensusblocks.GetPayloadResponse) *enginev1.ExecutionPayloadDeneb {
+func extractExecutionPayloadGloas(local *consensusblocks.GetPayloadResponse) *enginev1.ExecutionPayloadGloas {
 	if local == nil || local.ExecutionData == nil || local.ExecutionData.IsNil() {
 		return nil
 	}
-	if p, ok := local.ExecutionData.Proto().(*enginev1.ExecutionPayloadDeneb); ok {
+	if p, ok := local.ExecutionData.Proto().(*enginev1.ExecutionPayloadGloas); ok {
 		return p
 	}
 	return nil
-}
-
-func (vs *Server) setExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayloadEnvelope, dataColumns []consensusblocks.RODataColumn) {
-	if envelope == nil {
-		return
-	}
-	vs.executionPayloadEnvelopeMu.Lock()
-	defer vs.executionPayloadEnvelopeMu.Unlock()
-	vs.executionPayloadEnvelope = envelope
-	vs.executionPayloadDataColumns = dataColumns
-}
-
-func (vs *Server) getExecutionPayloadEnvelope(slot primitives.Slot) (*ethpb.ExecutionPayloadEnvelope, bool) {
-	vs.executionPayloadEnvelopeMu.RLock()
-	envelope := vs.executionPayloadEnvelope
-	vs.executionPayloadEnvelopeMu.RUnlock()
-	if envelope == nil {
-		return nil, false
-	}
-	if envelope.Slot != slot {
-		return nil, false
-	}
-	return envelope, true
 }
 
 // GetExecutionPayloadEnvelope implements the gRPC endpoint:
@@ -107,65 +86,34 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 	ctx context.Context,
 	req *ethpb.ExecutionPayloadEnvelopeRequest,
 ) (*ethpb.ExecutionPayloadEnvelopeResponse, error) {
-	ctx, span := trace.StartSpan(ctx, "ProposerServer.GetExecutionPayloadEnvelope")
+	_, span := trace.StartSpan(ctx, "ProposerServer.GetExecutionPayloadEnvelope")
 	defer span.End()
 
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request cannot be nil")
 	}
-	span.SetAttributes(trace.Int64Attribute("slot", int64(req.Slot)))
+	span.SetAttributes(trace.StringAttribute("slot", fmt.Sprintf("%d", req.Slot)))
 
 	if slots.ToEpoch(req.Slot) < params.BeaconConfig().GloasForkEpoch {
 		return nil, status.Errorf(codes.InvalidArgument,
 			"execution payload envelopes are not supported before Gloas fork (slot %d)", req.Slot)
 	}
 
-	envelope, found := vs.getExecutionPayloadEnvelope(req.Slot)
-	if !found {
+	contents, ok := vs.ExecutionPayloadEnvelopeCache.Contents()
+	if !ok || contents.Envelope.Payload.SlotNumber != req.Slot {
 		return nil, status.Errorf(codes.NotFound,
 			"execution payload envelope not found for slot %d", req.Slot)
 	}
 
-	if bytes.Equal(envelope.StateRoot, make([]byte, 32)) {
-		// Lazily set the state root in the envelope by applying the payload evelope on the post block state
-		roEnvelope, err := consensusblocks.WrappedROExecutionPayloadEnvelope(envelope)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "could not wrap envelope: %v", err)
-		}
-		stateRoot, err := vs.computePostPayloadStateRoot(ctx, roEnvelope)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "could not compute post-payload state root: %v", err)
-		}
-		vs.executionPayloadEnvelopeMu.Lock()
-		envelope.StateRoot = stateRoot
-		vs.executionPayloadEnvelopeMu.Unlock()
+	// Return the blinded wire form (payload_root); the signer validates over its HTR, which equals
+	// the full envelope's HTR, and the BN reconstructs the full payload from this cache on publish.
+	blinded, err := contents.Envelope.WireBlinded()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "could not build blinded envelope: %v", err)
 	}
-
 	return &ethpb.ExecutionPayloadEnvelopeResponse{
-		Envelope: envelope,
+		Blinded: blinded,
 	}, nil
-}
-
-// computePostPayloadStateRoot retrieves the post-block state (after the block has
-// been submitted and processed) and applies the execution payload state mutations
-// to compute the post-payload state root for the envelope.
-func (vs *Server) computePostPayloadStateRoot(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope) ([]byte, error) {
-	ctx, span := trace.StartSpan(ctx, "ProposerServer.computePostPayloadStateRoot")
-	defer span.End()
-
-	beaconState, err := vs.StateGen.StateByRoot(ctx, envelope.BeaconBlockRoot())
-	if err != nil {
-		return nil, errors.Wrap(err, "could not retrieve post-block state")
-	}
-	beaconState = beaconState.Copy()
-	if err := coregloas.ApplyExecutionPayload(ctx, beaconState, envelope); err != nil {
-		return nil, errors.Wrapf(err, "could not apply execution payload at slot %d", beaconState.Slot())
-	}
-	root, err := beaconState.HashTreeRoot(ctx)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not compute post-payload state root at slot %d", beaconState.Slot())
-	}
-	return root[:], nil
 }
 
 // PublishExecutionPayloadEnvelope validates and broadcasts a signed execution payload envelope.
@@ -174,51 +122,64 @@ func (vs *Server) computePostPayloadStateRoot(ctx context.Context, envelope inte
 // gRPC endpoint: POST /eth/v1alpha1/validator/execution_payload_envelope
 func (vs *Server) PublishExecutionPayloadEnvelope(
 	ctx context.Context,
-	req *ethpb.SignedExecutionPayloadEnvelope,
+	req *ethpb.GenericSignedExecutionPayloadEnvelope,
 ) (*emptypb.Empty, error) {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.PublishExecutionPayloadEnvelope")
 	defer span.End()
 
-	if req == nil || req.Message == nil {
-		return nil, status.Error(codes.InvalidArgument, "signed envelope cannot be nil")
+	signed, blobs, kzgProofs, err := vs.resolveEnvelopeToPublish(req)
+	if err != nil {
+		return nil, err
 	}
 
-	if slots.ToEpoch(req.Message.Slot) < params.BeaconConfig().GloasForkEpoch {
+	envSlot := primitives.Slot(signed.Message.Payload.SlotNumber)
+	if slots.ToEpoch(envSlot) < params.BeaconConfig().GloasForkEpoch {
 		return nil, status.Errorf(codes.InvalidArgument,
-			"execution payload envelopes are not supported before Gloas fork (slot %d)", req.Message.Slot)
+			"execution payload envelopes are not supported before Gloas fork (slot %d)", envSlot)
 	}
 
-	beaconBlockRoot := bytesutil.ToBytes32(req.Message.BeaconBlockRoot)
+	beaconBlockRoot := bytesutil.ToBytes32(signed.Message.BeaconBlockRoot)
 	span.SetAttributes(
-		trace.Int64Attribute("slot", int64(req.Message.Slot)),
-		trace.Int64Attribute("builderIndex", int64(req.Message.BuilderIndex)),
+		trace.StringAttribute("slot", fmt.Sprintf("%d", envSlot)),
+		trace.StringAttribute("builderIndex", fmt.Sprintf("%d", signed.Message.BuilderIndex)),
 		trace.StringAttribute("beaconBlockRoot", fmt.Sprintf("%#x", beaconBlockRoot[:8])),
 	)
 
 	log := log.WithFields(logrus.Fields{
-		"slot":            req.Message.Slot,
-		"builderIndex":    req.Message.BuilderIndex,
+		"slot":            envSlot,
+		"builderIndex":    signed.Message.BuilderIndex,
 		"beaconBlockRoot": fmt.Sprintf("%#x", beaconBlockRoot[:8]),
 	})
 	log.Info("Publishing signed execution payload envelope")
 
-	// Broadcast pre-computed data column sidecars BEFORE receiving the envelope,
-	// because ReceiveExecutionPayloadEnvelope checks data availability.
-	// Sidecars were computed during ProposeBeaconBlock (storeExecutionPayloadEnvelope).
-	if err := vs.broadcastGloasDataColumns(ctx); err != nil {
-		log.WithError(err).Error("Failed to broadcast Gloas data column sidecars")
+	// Broadcast sidecars BEFORE receiving the envelope so the DA check sees them. Stateless publishes
+	// carry blobs+proofs (this node may not have them cached); stateful publishes rely on the cache.
+	var sidecars []consensusblocks.RODataColumn
+	if len(blobs) > 0 {
+		sidecars, err = vs.sidecarsFromContents(blobs, kzgProofs, envSlot, beaconBlockRoot)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid execution payload envelope contents: %v", err)
+		}
+	} else if cached, ok := vs.ExecutionPayloadEnvelopeCache.Contents(); ok && cached.Envelope.Payload.SlotNumber == envSlot {
+		sidecars = cached.DataColumns
+	}
+	if len(sidecars) > 0 {
+		if err := vs.broadcastAndReceiveDataColumns(ctx, sidecars, nil); err != nil {
+			log.WithError(err).Error("Failed to broadcast Gloas data column sidecars")
+		}
 	}
 
-	if err := vs.P2P.Broadcast(ctx, req); err != nil {
+	if err := vs.P2P.Broadcast(ctx, signed); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to broadcast execution payload envelope: %v", err)
 	}
 
-	roSigned, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(req)
+	roSigned, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(signed)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "could not wrap signed envelope: %v", err)
 	}
 	if err := vs.ExecutionPayloadEnvelopeReceiver.ReceiveExecutionPayloadEnvelope(ctx, roSigned); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to receive execution payload envelope: %v", err)
+		// Broadcast already succeeded; import failed. REST maps Aborted -> 202 (beacon-APIs #580).
+		return nil, status.Errorf(codes.Aborted, "failed to receive execution payload envelope: %v", err)
 	}
 
 	log.Info("Successfully published execution payload envelope")
@@ -226,27 +187,100 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	return &emptypb.Empty{}, nil
 }
 
-// broadcastGloasDataColumns broadcasts pre-computed DataColumnSidecarGloas from the cache.
-// The sidecars are computed during storeExecutionPayloadEnvelope (inside ProposeBeaconBlock)
-// so no expensive KZG work happens here.
-func (vs *Server) broadcastGloasDataColumns(ctx context.Context) error {
-	vs.executionPayloadEnvelopeMu.RLock()
-	roSidecars := vs.executionPayloadDataColumns
-	vs.executionPayloadEnvelopeMu.RUnlock()
+// resolveEnvelopeToPublish turns the generic publish request into the full signed envelope plus any
+// caller-supplied blobs. The blinded (stateful) arm reconstructs the full envelope from the cache by
+// matching beacon_block_root; the contents (stateless) arm carries everything in the request.
+func (vs *Server) resolveEnvelopeToPublish(req *ethpb.GenericSignedExecutionPayloadEnvelope) (*ethpb.SignedExecutionPayloadEnvelope, [][]byte, [][]byte, error) {
+	switch {
+	case req.GetContents() != nil:
+		c := req.GetContents()
+		if c.SignedExecutionPayloadEnvelope == nil || c.SignedExecutionPayloadEnvelope.Message == nil ||
+			c.SignedExecutionPayloadEnvelope.Message.Payload == nil {
+			return nil, nil, nil, status.Error(codes.InvalidArgument, "signed envelope or payload cannot be nil")
+		}
+		return c.SignedExecutionPayloadEnvelope, c.Blobs, c.KzgProofs, nil
+	case req.GetBlinded() != nil:
+		b := req.GetBlinded()
+		if b.Message == nil {
+			return nil, nil, nil, status.Error(codes.InvalidArgument, "blinded envelope message cannot be nil")
+		}
+		cached, ok := vs.ExecutionPayloadEnvelopeCache.Contents()
+		if !ok || cached.Envelope == nil {
+			return nil, nil, nil, status.Error(codes.FailedPrecondition, "no cached execution payload envelope to reconstruct from")
+		}
+		cachedBlinded, err := cached.Envelope.WireBlinded()
+		if err != nil {
+			return nil, nil, nil, status.Errorf(codes.Internal, "could not derive blinded envelope from cache: %v", err)
+		}
+		cachedRoot, err := cachedBlinded.HashTreeRoot()
+		if err != nil {
+			return nil, nil, nil, status.Errorf(codes.Internal, "could not hash cached blinded envelope: %v", err)
+		}
+		blindedRoot, err := b.Message.HashTreeRoot()
+		if err != nil {
+			return nil, nil, nil, status.Errorf(codes.Internal, "could not hash blinded envelope: %v", err)
+		}
+		if cachedRoot != blindedRoot {
+			return nil, nil, nil, status.Error(codes.InvalidArgument, "cached envelope does not match blinded envelope")
+		}
+		return &ethpb.SignedExecutionPayloadEnvelope{Message: cached.Envelope, Signature: b.Signature}, nil, nil, nil
+	default:
+		return nil, nil, nil, status.Error(codes.InvalidArgument, "generic signed execution payload envelope must set contents or blinded")
+	}
+}
 
-	if len(roSidecars) == 0 {
-		return nil
+// sidecarsFromContents verifies caller-supplied blobs+KZG proofs (stateless publish) and builds the
+// data column sidecars for the slot. Verification matters because broadcastAndReceiveDataColumns
+// upgrades the sidecars to "verified" without re-checking.
+func (vs *Server) sidecarsFromContents(blobs, kzgProofs [][]byte, slot primitives.Slot, blockRoot [32]byte) ([]consensusblocks.RODataColumn, error) {
+	if err := verifyCellProofs(blobs, kzgProofs); err != nil {
+		return nil, errors.Wrap(err, "kzg verification failed")
+	}
+	cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(blobs, kzgProofs)
+	if err != nil {
+		return nil, errors.Wrap(err, "compute cells and proofs")
+	}
+	return peerdas.DataColumnSidecarsGloas(cellsPerBlob, proofsPerBlob, slot, blockRoot)
+}
+
+// verifyCellProofs batch-verifies cell proofs against commitments derived from the blobs.
+func verifyCellProofs(blobs [][]byte, flatProofs [][]byte) error {
+	commitments := make([][]byte, len(blobs))
+	for i, blob := range blobs {
+		if len(blob) != kzg.BytesPerBlob {
+			return errors.Errorf("blob %d has wrong size %d", i, len(blob))
+		}
+		var b kzg.Blob
+		copy(b[:], blob)
+		c, err := kzg.BlobToKZGCommitment(&b)
+		if err != nil {
+			return errors.Wrapf(err, "compute kzg commitment for blob %d", i)
+		}
+		commitments[i] = c[:]
+	}
+	return kzg.VerifyCellKZGProofBatchFromBlobData(blobs, commitments, flatProofs, fieldparams.NumberOfColumns)
+}
+
+// setParentExecutionRequests populates the parent_execution_requests field
+// in the block body based on the parent's execution payload envelope.
+func (vs *Server) setParentExecutionRequests(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, parentFull bool) error {
+	if head.Version() < version.Gloas {
+		return sBlk.SetParentExecutionRequests(&enginev1.ExecutionRequestsGloas{})
 	}
 
-	log.WithFields(logrus.Fields{
-		"slot":    roSidecars[0].Slot(),
-		"root":    fmt.Sprintf("%#x", roSidecars[0].BlockRoot()),
-		"columns": len(roSidecars),
-	}).Debug("Broadcasting Gloas data column sidecars")
-
-	if err := vs.broadcastAndReceiveDataColumns(ctx, roSidecars); err != nil {
-		return errors.Wrap(err, "broadcast and receive data columns")
+	parentRoot := sBlk.Block().ParentRoot()
+	parentSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(parentRoot)
+	if err != nil {
+		return errors.Wrap(err, "could not get parent block slot")
+	}
+	if slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch || !parentFull {
+		return sBlk.SetParentExecutionRequests(&enginev1.ExecutionRequestsGloas{})
 	}
 
-	return nil
+	// TODO: replace DB lookup with a single-entry cache (blockroot → envelope).
+	signedEnvelope, err := vs.BeaconDB.ExecutionPayloadEnvelope(ctx, parentRoot)
+	if err != nil {
+		return errors.Wrap(err, "could not get parent execution payload envelope")
+	}
+	return sBlk.SetParentExecutionRequests(signedEnvelope.Message.ExecutionRequests)
 }

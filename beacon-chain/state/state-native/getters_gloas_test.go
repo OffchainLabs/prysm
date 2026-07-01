@@ -384,6 +384,115 @@ func TestBuilderIndexByPubkey(t *testing.T) {
 		require.Equal(t, true, ok)
 		require.Equal(t, wantIdx, idx)
 	})
+
+	t.Run("AddBuilderFromDeposit populates map", func(t *testing.T) {
+		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{})
+		require.NoError(t, err)
+
+		var pk [fieldparams.BLSPubkeyLength]byte
+		copy(pk[:], bytes.Repeat([]byte{0xCD}, fieldparams.BLSPubkeyLength))
+		var wc [32]byte
+		require.NoError(t, st.AddBuilderFromDeposit(pk, wc, 1))
+
+		idx, ok := st.BuilderIndexByPubkey(pk)
+		require.Equal(t, true, ok)
+		require.Equal(t, primitives.BuilderIndex(0), idx)
+	})
+
+	t.Run("reused slot evicts old pubkey", func(t *testing.T) {
+		oldPk := bytes.Repeat([]byte{0x11}, fieldparams.BLSPubkeyLength)
+		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			Builders: []*ethpb.Builder{
+				{
+					Pubkey:            oldPk,
+					WithdrawableEpoch: 0,
+					Balance:           0,
+				},
+			},
+		})
+		require.NoError(t, err)
+
+		var oldPkArr [fieldparams.BLSPubkeyLength]byte
+		copy(oldPkArr[:], oldPk)
+		_, ok := st.BuilderIndexByPubkey(oldPkArr)
+		require.Equal(t, true, ok)
+
+		var newPk [fieldparams.BLSPubkeyLength]byte
+		copy(newPk[:], bytes.Repeat([]byte{0x22}, fieldparams.BLSPubkeyLength))
+		var wc [32]byte
+		require.NoError(t, st.AddBuilderFromDeposit(newPk, wc, 1))
+
+		_, ok = st.BuilderIndexByPubkey(oldPkArr)
+		require.Equal(t, false, ok)
+		idx, ok := st.BuilderIndexByPubkey(newPk)
+		require.Equal(t, true, ok)
+		require.Equal(t, primitives.BuilderIndex(0), idx)
+	})
+
+	t.Run("SetBuilders rebuilds map", func(t *testing.T) {
+		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			Builders: []*ethpb.Builder{
+				{Pubkey: bytes.Repeat([]byte{0x11}, fieldparams.BLSPubkeyLength)},
+			},
+		})
+		require.NoError(t, err)
+
+		var oldPk [fieldparams.BLSPubkeyLength]byte
+		copy(oldPk[:], bytes.Repeat([]byte{0x11}, fieldparams.BLSPubkeyLength))
+		newPkBytes := bytes.Repeat([]byte{0x33}, fieldparams.BLSPubkeyLength)
+		require.NoError(t, st.SetBuilders([]*ethpb.Builder{{Pubkey: newPkBytes}}))
+
+		_, ok := st.BuilderIndexByPubkey(oldPk)
+		require.Equal(t, false, ok)
+		var newPk [fieldparams.BLSPubkeyLength]byte
+		copy(newPk[:], newPkBytes)
+		idx, ok := st.BuilderIndexByPubkey(newPk)
+		require.Equal(t, true, ok)
+		require.Equal(t, primitives.BuilderIndex(0), idx)
+	})
+
+	t.Run("UpdateBuilderAtIndex swaps pubkey mapping", func(t *testing.T) {
+		oldPk := bytes.Repeat([]byte{0x11}, fieldparams.BLSPubkeyLength)
+		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			Builders: []*ethpb.Builder{
+				{Pubkey: oldPk},
+			},
+		})
+		require.NoError(t, err)
+
+		newPkBytes := bytes.Repeat([]byte{0x44}, fieldparams.BLSPubkeyLength)
+		require.NoError(t, st.UpdateBuilderAtIndex(0, &ethpb.Builder{Pubkey: newPkBytes}))
+
+		var oldPkArr [fieldparams.BLSPubkeyLength]byte
+		copy(oldPkArr[:], oldPk)
+		_, ok := st.BuilderIndexByPubkey(oldPkArr)
+		require.Equal(t, false, ok)
+		var newPk [fieldparams.BLSPubkeyLength]byte
+		copy(newPk[:], newPkBytes)
+		idx, ok := st.BuilderIndexByPubkey(newPk)
+		require.Equal(t, true, ok)
+		require.Equal(t, primitives.BuilderIndex(0), idx)
+	})
+
+	t.Run("Copy yields independent maps", func(t *testing.T) {
+		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			Builders: []*ethpb.Builder{
+				{Pubkey: bytes.Repeat([]byte{0x55}, fieldparams.BLSPubkeyLength)},
+			},
+		})
+		require.NoError(t, err)
+
+		copied := st.Copy()
+		var newPk [fieldparams.BLSPubkeyLength]byte
+		copy(newPk[:], bytes.Repeat([]byte{0x66}, fieldparams.BLSPubkeyLength))
+		var wc [32]byte
+		require.NoError(t, copied.AddBuilderFromDeposit(newPk, wc, 1))
+
+		_, ok := st.BuilderIndexByPubkey(newPk)
+		require.Equal(t, false, ok)
+		_, ok = copied.BuilderIndexByPubkey(newPk)
+		require.Equal(t, true, ok)
+	})
 }
 
 func TestBuilderPendingPayment(t *testing.T) {
@@ -462,16 +571,16 @@ func TestExecutionPayloadAvailability(t *testing.T) {
 	})
 }
 
-func TestIsParentBlockFull(t *testing.T) {
+func TestLatestBlockHashMatchesBidBlockHash(t *testing.T) {
 	t.Run("returns error before gloas", func(t *testing.T) {
 		st := &BeaconState{version: version.Fulu}
-		_, err := st.IsParentBlockFull()
+		_, err := st.LatestBlockHashMatchesBidBlockHash()
 		require.ErrorContains(t, "is not supported", err)
 	})
 
 	t.Run("returns false when bid is nil", func(t *testing.T) {
 		st := &BeaconState{version: version.Gloas}
-		got, err := st.IsParentBlockFull()
+		got, err := st.LatestBlockHashMatchesBidBlockHash()
 		require.NoError(t, err)
 		require.Equal(t, false, got)
 	})
@@ -486,7 +595,7 @@ func TestIsParentBlockFull(t *testing.T) {
 			latestBlockHash: hash,
 		}
 
-		got, err := st.IsParentBlockFull()
+		got, err := st.LatestBlockHashMatchesBidBlockHash()
 		require.NoError(t, err)
 		require.Equal(t, true, got)
 	})
@@ -502,7 +611,7 @@ func TestIsParentBlockFull(t *testing.T) {
 			latestBlockHash: other,
 		}
 
-		got, err := st.IsParentBlockFull()
+		got, err := st.LatestBlockHashMatchesBidBlockHash()
 		require.NoError(t, err)
 		require.Equal(t, false, got)
 	})

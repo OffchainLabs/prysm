@@ -8,12 +8,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -27,6 +31,7 @@ type Builder struct {
 	lastTick int64
 	execMock *engineMock
 	vwait    *verification.InitializerWaiter
+	fc       forkchoice.ForkChoicer
 }
 
 func NewBuilder(t testing.TB, initialState state.BeaconState, initialBlock interfaces.ReadOnlySignedBeaconBlock) *Builder {
@@ -47,6 +52,7 @@ func NewBuilder(t testing.TB, initialState state.BeaconState, initialBlock inter
 		service:  service,
 		execMock: execMock,
 		vwait:    bvw,
+		fc:       fc,
 	}
 }
 
@@ -115,6 +121,34 @@ func (bb *Builder) ValidBlock(t testing.TB, b interfaces.ReadOnlySignedBeaconBlo
 	require.NoError(t, bb.service.ReceiveBlock(ctx, b, r, nil))
 }
 
+// ExecutionPayloadEnvelope receives an envelope and notifies the chain service.
+// If expectValid is false the receive call must error; otherwise it must succeed.
+func (bb *Builder) ExecutionPayloadEnvelope(t testing.TB, signed *ethpb.SignedExecutionPayloadEnvelope, expectValid bool) {
+	ro, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signed)
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	err = bb.service.ReceiveExecutionPayloadEnvelope(ctx, ro)
+	if expectValid {
+		require.NoError(t, err)
+	} else {
+		require.NotNil(t, err)
+	}
+}
+
+// PayloadAttestationMessage feeds the message to the chain service.
+// If expectValid is false the receive call must error; otherwise it must succeed.
+func (bb *Builder) PayloadAttestationMessage(t testing.TB, m *ethpb.PayloadAttestationMessage, expectValid bool) {
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	err := bb.service.ReceivePayloadAttestationMessage(ctx, m)
+	if expectValid {
+		require.NoError(t, err)
+	} else {
+		require.NotNil(t, err, "expected payload attestation message to be rejected")
+	}
+}
+
 // PoWBlock receives the block and notifies a mocked execution engine.
 func (bb *Builder) PoWBlock(pb *ethpb.PowBlock) {
 	bb.execMock.powBlocks[bytesutil.ToBytes32(pb.BlockHash)] = pb
@@ -171,9 +205,49 @@ func (bb *Builder) Check(t testing.TB, c *Check) {
 		got := fmt.Sprintf("%#x", bb.service.GetProposerHead())
 		require.Equal(t, want, got)
 	}
+	if c.HeadPayloadStatus != nil {
+		_, _, full, err := bb.fc.FullHead(ctx)
+		require.NoError(t, err)
+		want := *c.HeadPayloadStatus
+		got := 0
+		if full {
+			got = 1
+		}
+		require.Equal(t, want, got, "head payload status mismatch")
+	}
 	/* TODO: We need to mock the entire proposer system to be able to test this.
 	if c.ShouldOverrideFCU != nil {
 		require.DeepEqual(t, c.ShouldOverrideFCU.Result, bb.service.ShouldOverrideFCU())
 	}
 	*/
+	if c.PayloadTimelinessVote != nil || c.PayloadDataAvailabilityVote != nil {
+		dlt, ok := bb.fc.(*doublylinkedtree.ForkChoice)
+		require.Equal(t, true, ok, "forkchoice is not a doubly linked tree")
+		bb.fc.Lock()
+		defer bb.fc.Unlock()
+		if c.PayloadTimelinessVote != nil {
+			root := bytesutil.ToBytes32(common.FromHex(c.PayloadTimelinessVote.BlockRoot))
+			attesters, present, _, ok := dlt.PTCVotes(root)
+			require.Equal(t, true, ok, "no forkchoice node for payload_timeliness_vote root")
+			checkPTCVotes(t, "payload_timeliness_vote", c.PayloadTimelinessVote, attesters, present)
+		}
+		if c.PayloadDataAvailabilityVote != nil {
+			root := bytesutil.ToBytes32(common.FromHex(c.PayloadDataAvailabilityVote.BlockRoot))
+			attesters, _, da, ok := dlt.PTCVotes(root)
+			require.Equal(t, true, ok, "no forkchoice node for payload_data_availability_vote root")
+			checkPTCVotes(t, "payload_data_availability_vote", c.PayloadDataAvailabilityVote, attesters, da)
+		}
+	}
+}
+
+func checkPTCVotes(t testing.TB, name string, want *PTCVotes, attesters, values bitfield.Bitvector512) {
+	for i, v := range want.Votes {
+		voted := attesters.BitAt(uint64(i))
+		if v == nil {
+			require.Equal(t, false, voted, fmt.Sprintf("%s: unexpected vote at index %d", name, i))
+			continue
+		}
+		require.Equal(t, true, voted, fmt.Sprintf("%s: expected vote at index %d", name, i))
+		require.Equal(t, *v, values.BitAt(uint64(i)), fmt.Sprintf("%s: vote value mismatch at index %d", name, i))
+	}
 }

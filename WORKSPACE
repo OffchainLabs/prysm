@@ -228,7 +228,7 @@ http_archive(
 go_rules_dependencies()
 
 go_register_toolchains(
-    go_version = "1.25.1",
+    go_version = "1.26.4",
     nogo = "@//:nogo",
 )
 
@@ -273,16 +273,16 @@ filegroup(
     url = "https://github.com/ethereum/EIPs/archive/5480440fe51742ed23342b68cf106cefd427e39d.tar.gz",
 )
 
-consensus_spec_version = "v1.7.0-alpha.4"
+consensus_spec_version = "v1.7.0-alpha.11"
 
 load("@prysm//tools:download_spectests.bzl", "consensus_spec_tests")
 
 consensus_spec_tests(
     name = "consensus_spec_tests",
     flavors = {
-        "general": "sha256-kNJxuhCtW4RbuS9nb4U6JXHlPgTSg6G3hWeHFVB9gZ4=",
-        "minimal": "sha256-U1tCkXxtdI6mkEdk80i8z9LU2hAyf7Ztz5SBYo5oMzo=",
-        "mainnet": "sha256-Ga8VDOcNhTTdXDj8tSyBVYrwya9f1HO94ehJ5vv91r4=",
+        "general": "sha256-szDpBVO2Ebi8/bwbiWFpW6H4c5gxnpU3hAUS31AF02E=",
+        "minimal": "sha256-irUv63gOA03eGIFD23Ca3PsDq87ovrA/HVAvtSG6/0o=",
+        "mainnet": "sha256-lWzAX5uy50Xs0Etg+yu5FnnIDt6C6BtIm11HqdZetms=",
     },
     version = consensus_spec_version,
 )
@@ -298,7 +298,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-XHu5K/65mue+5po63L9yGTFjGfU1RGj4S56dmcHc2Rs=",
+    integrity = "sha256-6XWl6m5tkPIlx5eh3DxrHAShRzWh3gz4LlLjIM78wJo=",
     strip_prefix = "consensus-specs-" + consensus_spec_version[1:],
     url = "https://github.com/ethereum/consensus-specs/archive/refs/tags/%s.tar.gz" % consensus_spec_version,
 )

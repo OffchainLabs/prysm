@@ -15,17 +15,18 @@ import (
 
 func validExecutionPayloadBid() *ethpb.ExecutionPayloadBid {
 	return &ethpb.ExecutionPayloadBid{
-		ParentBlockHash:    bytes.Repeat([]byte{0x01}, 32),
-		ParentBlockRoot:    bytes.Repeat([]byte{0x02}, 32),
-		BlockHash:          bytes.Repeat([]byte{0x03}, 32),
-		PrevRandao:         bytes.Repeat([]byte{0x04}, 32),
-		GasLimit:           123,
-		BuilderIndex:       5,
-		Slot:               6,
-		Value:              7,
-		ExecutionPayment:   8,
-		BlobKzgCommitments: [][]byte{bytes.Repeat([]byte{0x05}, 48)},
-		FeeRecipient:       bytes.Repeat([]byte{0x06}, 20),
+		ParentBlockHash:       bytes.Repeat([]byte{0x01}, 32),
+		ParentBlockRoot:       bytes.Repeat([]byte{0x02}, 32),
+		BlockHash:             bytes.Repeat([]byte{0x03}, 32),
+		PrevRandao:            bytes.Repeat([]byte{0x04}, 32),
+		GasLimit:              123,
+		BuilderIndex:          5,
+		Slot:                  6,
+		Value:                 7,
+		ExecutionPayment:      8,
+		BlobKzgCommitments:    [][]byte{bytes.Repeat([]byte{0x05}, 48)},
+		FeeRecipient:          bytes.Repeat([]byte{0x06}, 20),
+		ExecutionRequestsRoot: bytes.Repeat([]byte{0x07}, 32),
 	}
 }
 

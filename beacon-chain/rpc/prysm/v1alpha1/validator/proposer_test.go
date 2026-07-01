@@ -10,7 +10,6 @@ import (
 	builderapi "github.com/OffchainLabs/prysm/v7/api/client/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	builderTest "github.com/OffchainLabs/prysm/v7/beacon-chain/builder/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
@@ -95,7 +94,7 @@ func TestServer_GetBeaconBlock_Phase0(t *testing.T) {
 
 	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
 	// Use a separate mock for BlockReceiver with an independent state copy.
-	// This mirrors production where computeStateRoot calls StateByRoot (fresh from DB),
+	// This mirrors production where computePostBlockStateAndRoot calls StateByRoot (fresh from DB),
 	// not the same head state object mutated by the getSlashings goroutine.
 	proposerServer.BlockReceiver = &mock.ChainService{
 		State:           beaconState.Copy(),
@@ -905,11 +904,11 @@ func getProposerServer(ctx context.Context, db db.HeadAccessDatabase, headState 
 		TimeFetcher: &testutil.MockGenesisTimeFetcher{
 			Genesis: time.Now(),
 		},
-		PayloadIDCache:         cache.NewPayloadIDCache(),
-		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-		BeaconDB:               db,
-		BLSChangesPool:         blstoexec.NewPool(),
-		BlockBuilder:           &builderTest.MockBuilderService{HasConfigured: true},
+		PayloadIDCache:           cache.NewPayloadIDCache(),
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		BeaconDB:                 db,
+		BLSChangesPool:           blstoexec.NewPool(),
+		BlockBuilder:             &builderTest.MockBuilderService{HasConfigured: true},
 	}
 }
 
@@ -1301,10 +1300,11 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 				BlockBuilder: &builderTest.MockBuilderService{HasConfigured: tt.useBuilder, PayloadCapella: emptyPayloadCapella(), PayloadDeneb: emptyPayloadDeneb(),
 					BlobBundle:   &enginev1.BlobsBundle{KzgCommitments: [][]byte{mockCommitment}, Proofs: [][]byte{{0x02}}, Blobs: [][]byte{{0x03}}},
 					BlobBundleV2: &enginev1.BlobsBundleV2{KzgCommitments: [][]byte{mockCommitment}, Proofs: cellProofs, Blobs: [][]byte{mockBlob}}},
-				BeaconDB:           db,
-				BlobReceiver:       c,
-				DataColumnReceiver: c, // Add DataColumnReceiver for Fulu blocks
-				OperationNotifier:  c.OperationNotifier(),
+				BeaconDB:              db,
+				BlobReceiver:          c,
+				DataColumnReceiver:    c, // Add DataColumnReceiver for Fulu blocks
+				OperationNotifier:     c.OperationNotifier(),
+				ExecutionEngineCaller: &mockExecution.EngineClient{PartialColumnsSupportedFlag: true},
 			}
 			blockToPropose := tt.block(bsRoot)
 			res, err := proposerServer.ProposeBeaconBlock(t.Context(), blockToPropose)
@@ -1318,6 +1318,64 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProposer_handleUnblindedBlock_PartialColumnsGating(t *testing.T) {
+	require.NoError(t, kzg.Start())
+
+	numberOfColumns := uint64(128)
+	cellProofs := make([][]byte, numberOfColumns)
+	for i := range numberOfColumns {
+		cellProofs[i] = bytesutil.PadTo([]byte{byte(i)}, 48)
+	}
+	blob := make([]byte, 131072)
+	blob[0] = 0x01
+
+	// newFuluReq builds a Fulu block proposal request with a single blob and cell proofs.
+	newFuluReq := func() *ethpb.GenericSignedBeaconBlock {
+		sb := &ethpb.SignedBeaconBlockContentsFulu{
+			Block: &ethpb.SignedBeaconBlockFulu{
+				Block: &ethpb.BeaconBlockElectra{
+					Slot: 5,
+					Body: util.HydrateBeaconBlockBodyElectra(&ethpb.BeaconBlockBodyElectra{
+						BlobKzgCommitments: [][]byte{bytesutil.PadTo([]byte("kc"), 48)},
+					}),
+				},
+			},
+			KzgProofs: cellProofs,
+			Blobs:     [][]byte{blob},
+		}
+		return &ethpb.GenericSignedBeaconBlock{Block: &ethpb.GenericSignedBeaconBlock_Fulu{Fulu: sb}, IsBlinded: false}
+	}
+
+	roBlock := func(t *testing.T, req *ethpb.GenericSignedBeaconBlock) blocks.ROBlock {
+		block, err := blocks.NewSignedBeaconBlock(req.Block)
+		require.NoError(t, err)
+		root, err := block.Block().HashTreeRoot()
+		require.NoError(t, err)
+		rob, err := blocks.NewROBlockWithRoot(block, root)
+		require.NoError(t, err)
+		return rob
+	}
+
+	t.Run("enabled builds partial columns", func(t *testing.T) {
+		vs := &Server{ExecutionEngineCaller: &mockExecution.EngineClient{PartialColumnsSupportedFlag: true}}
+		req := newFuluReq()
+		_, dataColumns, partialColumns, err := vs.handleUnblindedBlock(roBlock(t, req), req)
+		require.NoError(t, err)
+		require.NotEmpty(t, dataColumns)
+		// One partial column is produced per data column sidecar.
+		require.Equal(t, len(dataColumns), len(partialColumns))
+	})
+
+	t.Run("disabled skips partial columns but still builds data columns", func(t *testing.T) {
+		vs := &Server{ExecutionEngineCaller: &mockExecution.EngineClient{PartialColumnsSupportedFlag: false}}
+		req := newFuluReq()
+		_, dataColumns, partialColumns, err := vs.handleUnblindedBlock(roBlock(t, req), req)
+		require.NoError(t, err)
+		require.NotEmpty(t, dataColumns)
+		require.Equal(t, 0, len(partialColumns))
+	})
 }
 
 func TestProposer_ComputeStateRoot_OK(t *testing.T) {
@@ -1354,12 +1412,12 @@ func TestProposer_ComputeStateRoot_OK(t *testing.T) {
 
 	wsb, err := blocks.NewSignedBeaconBlock(req)
 	require.NoError(t, err)
-	_, err = proposerServer.computeStateRoot(t.Context(), wsb)
+	_, _, err = proposerServer.computePostBlockStateAndRoot(t.Context(), wsb)
 	require.NoError(t, err)
 }
 
-func TestHandleStateRootError_MaxAttemptsReached(t *testing.T) {
-	// Test that handleStateRootError returns an error when max attempts is reached
+func TestHandlePostBlockStateError_MaxAttemptsReached(t *testing.T) {
+	// Test that handlePostBlockStateError returns an error when max attempts is reached
 	// instead of recursing infinitely.
 	ctx := t.Context()
 	vs := &Server{}
@@ -1372,15 +1430,15 @@ func TestHandleStateRootError_MaxAttemptsReached(t *testing.T) {
 	// Pre-seed the context with max attempts already reached
 	ctx = context.WithValue(ctx, computeStateRootAttemptsKey, maxComputeStateRootAttempts)
 
-	// Call handleStateRootError with a retryable error
-	_, err = vs.handleStateRootError(ctx, wsb, transition.ErrAttestationsSignatureInvalid)
+	// Call handlePostBlockStateError with a retryable error
+	_, err = vs.handlePostBlockStateError(ctx, wsb, transition.ErrAttestationsSignatureInvalid)
 
 	// Should return an error about max attempts instead of recursing
 	require.ErrorContains(t, "attempted max compute state root attempts", err)
 }
 
-func TestHandleStateRootError_IncrementsAttempts(t *testing.T) {
-	// Test that handleStateRootError properly increments the attempts counter
+func TestHandlePostBlockStateError_IncrementsAttempts(t *testing.T) {
+	// Test that handlePostBlockStateError properly increments the attempts counter
 	// and eventually fails after max attempts.
 	db := dbutil.SetupDB(t)
 	ctx := t.Context()
@@ -1403,10 +1461,10 @@ func TestHandleStateRootError_IncrementsAttempts(t *testing.T) {
 	// Add a state for the parent root so StateByRoot succeeds
 	require.NoError(t, stateGen.SaveState(ctx, parentRoot, beaconState))
 
-	// Call handleStateRootError with a retryable error - it will recurse
-	// but eventually hit the max attempts limit since CalculateStateRoot
+	// Call handlePostBlockStateError with a retryable error - it will recurse
+	// but eventually hit the max attempts limit since CalculatePostState
 	// will keep failing (no valid attestations, randao, etc.)
-	_, err = vs.handleStateRootError(ctx, wsb, transition.ErrAttestationsSignatureInvalid)
+	_, err = vs.handlePostBlockStateError(ctx, wsb, transition.ErrAttestationsSignatureInvalid)
 
 	// Should eventually fail - either with max attempts or another error
 	require.NotNil(t, err)
@@ -3239,25 +3297,44 @@ func TestProposer_PrepareBeaconProposer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db := dbutil.SetupDB(t)
 			ctx := t.Context()
+			zero := primitives.Slot(0)
 			proposerServer := &Server{
-				BeaconDB:               db,
-				TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+				BeaconDB:                  db,
+				ProposerPreferencesCache:  cache.NewProposerPreferencesCache(),
+				SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
+				TimeFetcher:               &mock.ChainService{Slot: &zero},
 			}
-			require.Equal(t, false, proposerServer.TrackedValidatorsCache.Validating())
 			_, err := proposerServer.PrepareBeaconProposer(ctx, tt.args.request)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, tt.wantErr, err)
 				return
-			} else {
-				require.Equal(t, true, proposerServer.TrackedValidatorsCache.Validating())
 			}
 			require.NoError(t, err)
-			val, tracked := proposerServer.TrackedValidatorsCache.Validator(1)
-			require.Equal(t, true, tracked)
-			require.Equal(t, primitives.ExecutionAddress(tt.args.request.Recipients[0].FeeRecipient), val.FeeRecipient)
-
 		})
 	}
+}
+
+func TestProposer_PrepareBeaconProposer_PostGloasNoOp(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	zero := primitives.Slot(0)
+	proposerServer := &Server{
+		ProposerPreferencesCache:  cache.NewProposerPreferencesCache(),
+		SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
+		TimeFetcher:               &mock.ChainService{Slot: &zero},
+	}
+	_, err := proposerServer.PrepareBeaconProposer(t.Context(), &ethpb.PrepareBeaconProposerRequest{
+		Recipients: []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer{
+			{FeeRecipient: make([]byte, fieldparams.FeeRecipientLength), ValidatorIndex: 1},
+		},
+	})
+	require.NoError(t, err)
+	// Post-Gloas the request is a no-op: nothing is cached.
+	_, ok := proposerServer.ProposerPreferencesCache.DefaultFor(1)
+	require.Equal(t, false, ok)
 }
 
 func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
@@ -3267,8 +3344,10 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	db := dbutil.SetupDB(t)
 	ctx := t.Context()
 	proposerServer := &Server{
-		BeaconDB:               db,
-		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+		BeaconDB:                  db,
+		ProposerPreferencesCache:  cache.NewProposerPreferencesCache(),
+		SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
+		TimeFetcher:               &mock.ChainService{},
 	}
 
 	// New validator
@@ -3324,8 +3403,10 @@ func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
 	db := dbutil.SetupDB(b)
 	ctx := b.Context()
 	proposerServer := &Server{
-		BeaconDB:               db,
-		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+		BeaconDB:                  db,
+		ProposerPreferencesCache:  cache.NewProposerPreferencesCache(),
+		SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
+		TimeFetcher:               &mock.ChainService{},
 	}
 	f := bytesutil.PadTo([]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF}, fieldparams.FeeRecipientLength)
 	recipients := make([]*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer, 0)
@@ -3350,10 +3431,10 @@ func TestProposer_SubmitValidatorRegistrations(t *testing.T) {
 	proposerServer := &Server{}
 	reg := &ethpb.SignedValidatorRegistrationsV1{}
 	_, err := proposerServer.SubmitValidatorRegistrations(ctx, reg)
-	require.ErrorContains(t, builder.ErrNoBuilder.Error(), err)
+	require.ErrorContains(t, "Could not register block builder: not configured", err)
 	proposerServer = &Server{BlockBuilder: &builderTest.MockBuilderService{}}
 	_, err = proposerServer.SubmitValidatorRegistrations(ctx, reg)
-	require.ErrorContains(t, builder.ErrNoBuilder.Error(), err)
+	require.ErrorContains(t, "Could not register block builder: not configured", err)
 	proposerServer = &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true}}
 	_, err = proposerServer.SubmitValidatorRegistrations(ctx, reg)
 	require.NoError(t, err)
@@ -3483,20 +3564,12 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 		require.LogsContain(t, hook, "Late block attempted reorg failed")
 	})
 
-	t.Run("successful reorg uses payload content lookup access root", func(tt *testing.T) {
-		fullAccessRoot := bytesutil.ToBytes32([]byte("full-access-root"))
-		require.NoError(t, transition.UpdateNextSlotCache(ctx, fullAccessRoot[:], parentState))
+	t.Run("successful reorg uses parent root for NSC lookup", func(tt *testing.T) {
+		require.NoError(t, transition.UpdateNextSlotCache(ctx, parentRoot[:], parentState))
 
 		proposerServer := &Server{
-			ForkchoiceFetcher: &mock.ChainService{
-				MockPayloadContentLookup: map[[32]byte][32]byte{
-					parentRoot: fullAccessRoot,
-				},
-				MockPayloadContentIsFull: map[[32]byte]bool{
-					parentRoot: true,
-				},
-			},
-			StateGen: stategen.New(db, doublylinkedtree.New()),
+			ForkchoiceFetcher: &mock.ChainService{},
+			StateGen:          stategen.New(db, doublylinkedtree.New()),
 		}
 
 		head, err := proposerServer.getParentStateFromReorgData(ctx, 1, parentRoot, parentRoot, headRoot)
@@ -3511,19 +3584,11 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 		require.Equal(t, [32]byte(str), [32]byte(headStr))
 	})
 
-	t.Run("no reorg uses payload content lookup access root", func(tt *testing.T) {
-		fullAccessRoot := bytesutil.ToBytes32([]byte("full-access-root-no-reorg"))
-		require.NoError(t, transition.UpdateNextSlotCache(ctx, fullAccessRoot[:], parentState))
+	t.Run("no reorg uses parent root for NSC lookup", func(tt *testing.T) {
+		require.NoError(t, transition.UpdateNextSlotCache(ctx, headRoot[:], parentState))
 
 		proposerServer := &Server{
-			ForkchoiceFetcher: &mock.ChainService{
-				MockPayloadContentLookup: map[[32]byte][32]byte{
-					headRoot: fullAccessRoot,
-				},
-				MockPayloadContentIsFull: map[[32]byte]bool{
-					headRoot: true,
-				},
-			},
+			ForkchoiceFetcher: &mock.ChainService{},
 			HeadFetcher: &mock.ChainService{
 				State: headState,
 				Root:  headRoot[:],

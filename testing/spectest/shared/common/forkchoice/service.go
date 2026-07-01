@@ -77,7 +77,8 @@ func startChainService(t testing.TB,
 		blockchain.WithStateNotifier(&mock.MockStateNotifier{}),
 		blockchain.WithAttestationPool(attestations.NewPool()),
 		blockchain.WithDepositCache(depositCache),
-		blockchain.WithTrackedValidatorsCache(cache.NewTrackedValidatorsCache()),
+		blockchain.WithProposerPreferencesCache(cache.NewProposerPreferencesCache()),
+		blockchain.WithSubscribedValidatorsCache(cache.NewSubscribedValidatorsCache()),
 		blockchain.WithPayloadIDCache(cache.NewPayloadIDCache()),
 		blockchain.WithClockSynchronizer(clockSync),
 		blockchain.WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
@@ -110,7 +111,7 @@ func (m *engineMock) ForkchoiceUpdated(context.Context, *pb.ForkchoiceState, pay
 	return nil, m.latestValidHash, m.payloadStatus
 }
 
-func (m *engineMock) NewPayload(context.Context, interfaces.ExecutionData, []common.Hash, *common.Hash, *pb.ExecutionRequests, primitives.Slot) ([]byte, error) {
+func (m *engineMock) NewPayload(context.Context, interfaces.ExecutionData, []common.Hash, *common.Hash, pb.ExecutionRequester) ([]byte, error) {
 	return m.latestValidHash, m.payloadStatus
 }
 
@@ -145,4 +146,8 @@ func (m *engineMock) GetTerminalBlockHash(context.Context, uint64) ([]byte, bool
 
 func (m *engineMock) GetClientVersionV1(context.Context) ([]*structs.ClientVersionV1, error) {
 	return nil, nil
+}
+
+func (*engineMock) PartialColumnsSupported() bool {
+	return false
 }

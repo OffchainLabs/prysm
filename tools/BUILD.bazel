@@ -1,5 +1,5 @@
-load("@rules_pkg//pkg:pkg.bzl", "pkg_tar")
 load("@rules_distroless//distroless:defs.bzl", "passwd")
+load("@rules_pkg//pkg:pkg.bzl", "pkg_tar")
 
 passwd(
     name = "passwd",

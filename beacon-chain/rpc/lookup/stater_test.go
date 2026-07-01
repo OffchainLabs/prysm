@@ -1,6 +1,7 @@
 package lookup
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -15,11 +16,13 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/proto/dbval"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/pkg/errors"
 )
 
 func TestGetState(t *testing.T) {
@@ -91,20 +94,20 @@ func TestGetState(t *testing.T) {
 	})
 
 	t.Run("finalized", func(t *testing.T) {
-		// Use a block root distinct from the state root to verify
-		// we look up by checkpoint root, not by state root.
-		blockRoot := bytesutil.ToBytes32([]byte("finalized-block-root"))
 		stateGen := mockstategen.NewService()
-		stateGen.StatesByRoot[blockRoot] = newBeaconState
+		replayer := mockstategen.NewReplayerBuilder()
+		replayer.SetMockStateForSlot(newBeaconState, params.BeaconConfig().SlotsPerEpoch*10)
+		stateGen.StatesByRoot[stateRoot] = newBeaconState
 
 		p := BeaconDbStater{
 			ChainInfoFetcher: &chainMock.ChainService{
 				FinalizedCheckPoint: &ethpb.Checkpoint{
-					Root:  blockRoot[:],
+					Root:  stateRoot[:],
 					Epoch: 10,
 				},
 			},
 			StateGenService: stateGen,
+			ReplayerBuilder: replayer,
 		}
 
 		s, err := p.State(ctx, []byte("finalized"))
@@ -115,18 +118,20 @@ func TestGetState(t *testing.T) {
 	})
 
 	t.Run("justified", func(t *testing.T) {
-		blockRoot := bytesutil.ToBytes32([]byte("justified-block-root"))
 		stateGen := mockstategen.NewService()
-		stateGen.StatesByRoot[blockRoot] = newBeaconState
+		replayer := mockstategen.NewReplayerBuilder()
+		replayer.SetMockStateForSlot(newBeaconState, params.BeaconConfig().SlotsPerEpoch*10)
+		stateGen.StatesByRoot[stateRoot] = newBeaconState
 
 		p := BeaconDbStater{
 			ChainInfoFetcher: &chainMock.ChainService{
 				CurrentJustifiedCheckPoint: &ethpb.Checkpoint{
-					Root:  blockRoot[:],
+					Root:  stateRoot[:],
 					Epoch: 10,
 				},
 			},
 			StateGenService: stateGen,
+			ReplayerBuilder: replayer,
 		}
 
 		s, err := p.State(ctx, []byte("justified"))
@@ -441,6 +446,72 @@ func TestStateBySlot_AfterHeadSlot(t *testing.T) {
 	st, err := p.StateBySlot(t.Context(), 101)
 	require.NoError(t, err)
 	assert.Equal(t, primitives.Slot(101), st.Slot())
+}
+
+func TestStateBySlot_EarlierThanEarliestAvailableSlot(t *testing.T) {
+	ctx := t.Context()
+	db := testDB.SetupDB(t)
+	target := primitives.Slot(100)
+
+	genesisRoot := bytesutil.ToBytes32([]byte("genesis"))
+	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesisRoot))
+
+	b := util.NewBeaconBlock()
+	b.Block.ParentRoot = genesisRoot[:]
+	b.Block.Slot = target + 2
+	util.SaveBlock(t, ctx, db, b)
+
+	currentSlot := target + 3
+	p := BeaconDbStater{
+		BeaconDB:           db,
+		GenesisTimeFetcher: &chainMock.ChainService{Slot: &currentSlot},
+	}
+
+	_, err := p.StateBySlot(ctx, target)
+	require.ErrorContains(t, fmt.Sprintf("earliest available slot is %d", b.Block.Slot), err)
+	var stateNotFoundErr *StateNotFoundError
+	require.Equal(t, true, errors.As(err, &stateNotFoundErr))
+}
+
+func TestStateBySlot_BeforeBackfillLowSlot(t *testing.T) {
+	ctx := t.Context()
+	db := testDB.SetupDB(t)
+	target := primitives.Slot(100)
+
+	genesisRoot := bytesutil.ToBytes32([]byte("genesis"))
+	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesisRoot))
+
+	lowSlot := target + 1
+	require.NoError(t, db.SaveBackfillStatus(ctx, &dbval.BackfillStatus{LowSlot: uint64(lowSlot)}))
+
+	currentSlot := lowSlot + 1
+	p := BeaconDbStater{
+		BeaconDB:           db,
+		GenesisTimeFetcher: &chainMock.ChainService{Slot: &currentSlot},
+	}
+
+	_, err := p.StateBySlot(ctx, target)
+	require.ErrorContains(t, fmt.Sprintf("backfill starts at slot %d", lowSlot), err)
+	var stateNotFoundErr *StateNotFoundError
+	require.Equal(t, true, errors.As(err, &stateNotFoundErr))
+}
+
+func TestStateBySlot_ReplayNoDataForSlotReturnsNotFound(t *testing.T) {
+	target := primitives.Slot(100)
+	currentSlot := target + 1
+	mock := &chainMock.ChainService{Slot: &currentSlot}
+	mockReplayer := mockstategen.NewReplayerBuilder()
+	mockReplayer.SetMockSlotError(target, errors.Wrap(stategen.ErrNoDataForSlot, fmt.Sprintf("slot %d not in db due to checkpoint sync", target)))
+
+	p := BeaconDbStater{
+		GenesisTimeFetcher: mock,
+		ReplayerBuilder:    mockReplayer,
+	}
+
+	_, err := p.StateBySlot(t.Context(), target)
+	require.ErrorContains(t, "historical data not available", err)
+	var stateNotFoundErr *StateNotFoundError
+	require.Equal(t, true, errors.As(err, &stateNotFoundErr))
 }
 
 func TestStateByEpoch(t *testing.T) {
