@@ -47,6 +47,7 @@ type KurtosisTestSuites struct {
 	extraPlaybooks    []string
 	skipPlaybooks     []string
 	serviceEvents     []kurtosis.EpochServiceEvent
+	assertoorEvents   []kurtosis.AssertoorEvent
 }
 
 func (k *KurtosisTestSuites) Run(t *testing.T) {
@@ -104,6 +105,11 @@ func (k *KurtosisTestSuites) Run(t *testing.T) {
 
 	k.scheduleServiceEvents(t, kw, genesisTime, secondsPerEpoch)
 
+	if len(k.assertoorEvents) == 0 {
+		assertoorRunIDs := k.scheduleAssertoorEvents(t, ctx, kw, genesisTime, secondsPerEpoch)
+		require.NoError(t, kw.WaitForAssertoorRunIDs(ctx, deadline, assertoorRunIDs...), "Assertoor one-shot checks failed")
+	}
+
 	require.NoError(t, kw.WaitForAssertoor(ctx, deadline), "Assertoor checks failed")
 }
 
@@ -123,6 +129,44 @@ func (k *KurtosisTestSuites) scheduleServiceEvents(t *testing.T, kw *kurtosis.Ku
 	if len(k.serviceEvents) > 0 {
 		kw.ScheduleServiceEvents(genesisTime, secondsPerEpoch, k.serviceEvents...)
 	}
+}
+
+func (k *KurtosisTestSuites) scheduleAssertoorEvents(t *testing.T, ctx context.Context, kw *kurtosis.KurtosisWrapper, genesisTime time.Time, secondsPerEpoch uint64) []uint64 {
+	events := kurtosis.SortedAssertoorEvents(k.assertoorEvents)
+
+	playbookIDs := make(map[string]string)
+	for _, event := range events {
+		if _, ok := playbookIDs[event.Playbook]; ok {
+			continue
+		}
+		testID, err := kw.RegisterPlaybook(ctx, event.Playbook)
+		require.NoError(t, err, "Failed to register Assertoor playbook %s", event.Playbook)
+		playbookIDs[event.Playbook] = testID
+	}
+
+	runIDs := make([]uint64, 0, len(events))
+	for _, event := range events {
+		runAt := genesisTime.Add(time.Duration(event.Epoch*secondsPerEpoch) * time.Second)
+		delay := time.Until(runAt)
+		if delay > 0 {
+			t.Logf("Will schedule Assertoor playbook %s at epoch %d after %s", event.Playbook, event.Epoch, delay)
+			select {
+			case <-ctx.Done():
+				require.NoError(t, ctx.Err(), "Context ended before scheduling Assertoor playbook %s at epoch %d", event.Playbook, event.Epoch)
+			case <-time.After(delay):
+			}
+		}
+
+		config := map[string]any{"targetEpoch": event.Epoch}
+		for k, v := range event.Config {
+			config[k] = v
+		}
+
+		runID, err := kw.ScheduleAssertoorTest(ctx, playbookIDs[event.Playbook], config)
+		require.NoError(t, err, "Failed to schedule Assertoor playbook %s at epoch %d", event.Playbook, event.Epoch)
+		runIDs = append(runIDs, runID)
+	}
+	return runIDs
 }
 
 // waitForNodeReady blocks until the beacon node reports healthy (200 from
