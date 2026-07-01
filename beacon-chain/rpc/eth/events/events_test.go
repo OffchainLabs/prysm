@@ -766,11 +766,11 @@ func TestPayloadAttributesReader_ParentBlockNumber(t *testing.T) {
 			stategen.AddStateForRoot(st, headRoot)
 			mockChainService := &mockChain.ChainService{Root: make([]byte, 32), State: st, Slot: &currentSlot, Genesis: genesis}
 			s := &Server{
-				HeadFetcher:            mockChainService,
-				ChainInfoFetcher:       mockChainService,
-				TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-				EventWriteTimeout:      testEventWriteTimeout,
-				StateGen:               stategen,
+				HeadFetcher:              mockChainService,
+				ChainInfoFetcher:         mockChainService,
+				ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+				EventWriteTimeout:        testEventWriteTimeout,
+				StateGen:                 stategen,
 			}
 
 			ev := payloadattribute.EventData{
