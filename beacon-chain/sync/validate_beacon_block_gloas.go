@@ -88,9 +88,12 @@ func (s *Service) requestPayloadEnvelope(root [32]byte) {
 // requestDataColumnsForEnvelope fetches and stores the data column sidecars needed to
 // validate the envelope for root, if the block carries commitments and we are missing them.
 func (s *Service) requestDataColumnsForEnvelope(root [32]byte) {
+	if !s.cfg.chain.HasNode(root) {
+		return
+	}
 	blk, err := s.cfg.beaconDB.Block(s.ctx, root)
 	if err != nil {
-		log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Debug("Could not fetch block for payload envelope data columns")
+		log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Error("Could not fetch block for payload envelope data columns")
 		return
 	}
 	if err := consensusblocks.BeaconBlockIsNil(blk); err != nil {
@@ -110,7 +113,7 @@ const maxPayloadEnvelopeFetchAttempts = 3
 
 func (s *Service) fetchPayloadEnvelope(root [32]byte) {
 	// Validating the envelope requires the block's data column sidecars; fetch any we are missing.
-	s.requestDataColumnsForEnvelope(root)
+	go s.requestDataColumnsForEnvelope(root)
 
 	bestPeers := s.getBestPeers()
 	if len(bestPeers) == 0 {
