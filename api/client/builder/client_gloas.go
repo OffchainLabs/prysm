@@ -153,11 +153,7 @@ func (c *Client) SubmitSignedBeaconBlock(ctx context.Context, sb interfaces.Read
 	if err != nil {
 		return errors.Wrap(err, "could not json encode SignedBeaconBlock")
 	}
-	jsonOpts := func(r *http.Request) {
-		r.Header.Set("Content-Type", api.JsonMediaType)
-		r.Header.Set(api.VersionHeader, version.String(sb.Version()))
-	}
-	if _, _, err := c.do(ctx, http.MethodPost, postBeaconBlockPath, bytes.NewReader(jsonBody), http.StatusAccepted, jsonOpts); err != nil {
+	if _, _, err := c.do(ctx, http.MethodPost, postBeaconBlockPath, bytes.NewReader(jsonBody), http.StatusAccepted, contentTypeOpts(api.JsonMediaType, sb.Version())); err != nil {
 		return errors.Wrap(err, "error submitting json signed beacon block to builder")
 	}
 	return nil
