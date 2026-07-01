@@ -802,7 +802,15 @@ func (s *Store) dependentRoot(epoch primitives.Epoch) ([32]byte, error) {
 	if s.headNode != nil {
 		headRoot = s.headNode.root
 	}
-	return s.dependentRootForEpoch(headRoot, epoch)
+	root, err := s.dependentRootForEpoch(headRoot, epoch)
+	if errors.Is(err, ErrNilNode) && epoch == s.finalizedCheckpoint.Epoch {
+		// The walk hit a node pruned past the finalized checkpoint.
+		// finalizedDependentRoot is the dependent root for the finalized epoch only,
+		// so substitute it for that epoch alone; for any other epoch the missing node
+		// is a real error, not a value we can safely replace.
+		return s.finalizedDependentRoot, nil
+	}
+	return root, err
 }
 
 func (s *Store) dependentRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
