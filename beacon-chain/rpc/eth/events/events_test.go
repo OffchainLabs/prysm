@@ -711,8 +711,6 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 // returns errPayloadAttributeExpired for a past slot, which is an expected, high-volume skip
 // (especially under ePBS), not a failure.
 func TestStreamEvents_PayloadAttributesExpiredSlotNotLoggedAsError(t *testing.T) {
-	const unableToHandleMsg = "StreamEvents API endpoint received an event it was unable to handle."
-
 	testSync := newStreamTestSync(t)
 	defer testSync.cleanup()
 
@@ -798,8 +796,10 @@ func TestStreamEvents_PayloadAttributesExpiredSlotNotLoggedAsError(t *testing.T)
 	for {
 		select {
 		case entry := <-testSync.logs:
-			require.NotEqual(t, unableToHandleMsg, entry.Message,
-				"expired payload attributes event should be skipped silently, not logged as an error")
+			// A past-slot skip is expected and must not surface as an error-level log. Asserting on the
+			// level (rather than an exact message) keeps the guard robust if the message is reworded.
+			require.NotEqual(t, logrus.ErrorLevel, entry.Level,
+				fmt.Sprintf("expired payload attributes event should be skipped silently; got error log: %q", entry.Message))
 		default:
 			return
 		}
