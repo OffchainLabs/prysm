@@ -6,6 +6,17 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [v7.1.6](https://github.com/prysmaticlabs/prysm/compare/v7.1.5...v7.1.6) - 2026-07-01
 
+This patch release contains targeted gossip-validation, sync, and operator-facing improvements, alongside continued Gloas (ePBS), PeerDAS/data-column, builder API, and performance work from the release candidate.
+
+Release highlights:
+
+- **Gloas and builder APIs**: Continued Gloas block-production separation, stateless Gloas gRPC support, builder execution request types, builder API clients, proposer preferences, execution payload bid events, and payload-attestation handling.
+- **Beacon API and operator polish**: Added SSZ-QL proof and length-query support, improved event-subscription error reporting, and introduced the `--postpone-shutdown-for-proposals` flag to defer graceful shutdown around upcoming proposal duties.
+- **PeerDAS and data columns**: Improved pending-column handling, sidecar validation, RPC reconstruction paths, rebroadcast behavior, and bounded availability waits for Gloas data columns.
+- **Stability and performance**: Reduced allocations in randomness, KZG, and fork-choice paths; bounded Engine API capability growth; fixed trusted-peer address handling; and improved sync behavior around payload requests and unavailable payloads.
+
+Operators are encouraged to update to this release as soon as practical.
+
 ### Added
 
 - Add `--postpone-shutdown-for-proposals` flag. When set, a graceful shutdown signal (SIGINT/SIGTERM, e.g. Ctrl-C on Linux) is postponed while a validator controlled by a connected validator client still has a block proposal duty in the current or next epoch. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16895)
