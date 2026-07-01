@@ -687,7 +687,7 @@ func TestBeaconApiValidatorClient_StartEventStream_FallsBackToHead(t *testing.T)
 	require.StringContains(t, eventClient.EventHead, secondTopics)
 
 	e := <-ch
-	require.Equal(t, eventClient.EventHead, e.EventType)
+	require.Equal(t, eventClient.EventHead, e.Type)
 }
 
 func TestBeaconApiValidatorClient_ConnectionGeneration(t *testing.T) {

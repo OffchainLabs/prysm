@@ -38,8 +38,8 @@ type EventStreamClient interface {
 }
 
 type Event struct {
-	EventType string
-	Data      []byte
+	Type string
+	Data []byte
 }
 
 // EventStream is responsible for subscribing to the Beacon API events endpoint
@@ -92,8 +92,8 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
 	if err != nil {
 		err = errors.Wrap(err, "failed to create HTTP request")
 		h.send(eventsChannel, &Event{
-			EventType: EventConnectionError,
-			Data:      []byte(err.Error()),
+			Type: EventConnectionError,
+			Data: []byte(err.Error()),
 		})
 		return err
 	}
@@ -103,8 +103,8 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
 	if err != nil {
 		err = errors.Wrap(err, client.ErrConnectionIssue.Error())
 		h.send(eventsChannel, &Event{
-			EventType: EventConnectionError,
-			Data:      []byte(err.Error()),
+			Type: EventConnectionError,
+			Data: []byte(err.Error()),
 		})
 		return err
 	}
@@ -145,7 +145,7 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
 				// Empty line indicates the end of an event
 				if eventType != "" && data != "" {
 					// Process the event when both eventType and data are set
-					if !h.send(eventsChannel, &Event{EventType: eventType, Data: []byte(data)}) {
+					if !h.send(eventsChannel, &Event{Type: eventType, Data: []byte(data)}) {
 						return nil
 					}
 				}
@@ -170,8 +170,8 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
 	if err := scanner.Err(); err != nil {
 		err = errors.Wrap(err, errors.Wrap(client.ErrConnectionIssue, "scanner failed").Error())
 		h.send(eventsChannel, &Event{
-			EventType: EventConnectionError,
-			Data:      []byte(err.Error()),
+			Type: EventConnectionError,
+			Data: []byte(err.Error()),
 		})
 		return err
 	}

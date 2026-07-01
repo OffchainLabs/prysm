@@ -358,8 +358,8 @@ func (c *beaconApiValidatorClient) StartEventStream(ctx context.Context, topics 
 		if err != nil {
 			select {
 			case eventsChannel <- &event.Event{
-				EventType: event.EventError,
-				Data:      []byte(errors.Wrap(err, "failed to start event stream").Error()),
+				Type: event.EventError,
+				Data: []byte(errors.Wrap(err, "failed to start event stream").Error()),
 			}:
 			case <-subCtx.Done():
 			}
@@ -389,8 +389,8 @@ func (c *beaconApiValidatorClient) StartEventStream(ctx context.Context, topics 
 		if errors.As(err, &subErr) {
 			select {
 			case eventsChannel <- &event.Event{
-				EventType: event.EventConnectionError,
-				Data:      []byte(err.Error()),
+				Type: event.EventConnectionError,
+				Data: []byte(err.Error()),
 			}:
 			case <-subCtx.Done():
 			}
