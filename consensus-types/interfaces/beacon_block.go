@@ -130,3 +130,11 @@ type ExecutionData interface {
 	WithdrawalsRoot() ([]byte, error)
 	BlockAccessList() ([]byte, error)
 }
+
+// ExecutionPayloadBody represents the execution payload body from Engine API.
+type ExecutionPayloadBody interface {
+	IsNil() bool
+	Transactions() ([][]byte, error)
+	Withdrawals() ([]*enginev1.Withdrawal, error)
+	BlockAccessList() ([]byte, error)
+}

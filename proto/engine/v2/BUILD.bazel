@@ -1,0 +1,112 @@
+##############################################################################
+# Common
+##############################################################################
+
+##############################################################################
+# Go
+##############################################################################
+# gazelle:ignore
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("//proto:ssz_proto_library.bzl", "ssz_proto_files")
+load("//tools:ssz.bzl", "SSZ_DEPS", "ssz_gen_marshal")
+
+proto_library(
+    name = "proto",
+    srcs = [
+        ":ssz_proto_files",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//proto/engine/v1:proto",
+        "//proto/eth/ext:proto",
+        "@googleapis//google/api:annotations_proto",
+    ],
+)
+
+##############################################################################
+# Go
+##############################################################################
+ssz_gen_marshal(
+    name = "ssz_generated_files",
+    out = "engine_v2.ssz.go",
+    go_proto = ":go_proto",
+    includes = [
+        "//consensus-types/primitives:go_default_library",
+        "//proto/engine/v1:go_default_library",
+    ],
+    objs = [
+        "PayloadStatus",
+        "ForkchoiceUpdateResponse",
+        "BodiesByHashRequest",
+        "BlobsRequest",
+        "ExecutionPayloadEnvelopeFulu",
+        "ForkchoiceUpdateFulu",
+        "BuiltPayloadFulu",
+        "ExecutionPayloadBodyFulu",
+        "BodyEntryFulu",
+        "BodiesResponseFulu",
+        "ExecutionPayloadEnvelopeGloas",
+        "ForkchoiceUpdateGloas",
+        "BuiltPayloadGloas",
+        "ExecutionPayloadBodyGloas",
+        "BodyEntryGloas",
+        "BodiesResponseGloas",
+        "BlobAndProofV1",
+        "BlobV1Entry",
+        "BlobsV1Response",
+        "BlobAndProofV2",
+        "BlobV2Entry",
+        "BlobsV2Response",
+    ],
+)
+
+go_proto_library(
+    name = "go_proto",
+    compilers = [
+        "@com_github_prysmaticlabs_protoc_gen_go_cast//:go_cast_grpc",
+    ],
+    importpath = "github.com/OffchainLabs/prysm/v7/proto/engine/v2",
+    proto = ":proto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//consensus-types/primitives:go_default_library",
+        "//proto/engine/v1:go_default_library",
+        "//proto/eth/ext:go_default_library",
+        "@com_github_golang_protobuf//proto:go_default_library",
+        "@googleapis//google/api:annotations_go_proto",
+        "@io_bazel_rules_go//proto/wkt:descriptor_go_proto",
+        "@org_golang_google_protobuf//reflect/protoreflect:go_default_library",
+        "@org_golang_google_protobuf//runtime/protoimpl:go_default_library",
+    ],
+)
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "payload_status.go",
+        ":ssz_generated_files",  # keep
+    ],
+    embed = [
+        ":go_proto",
+    ],
+    importpath = "github.com/OffchainLabs/prysm/v7/proto/engine/v2",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//proto/engine/v1:go_default_library",
+        "@com_github_prysmaticlabs_fastssz//:go_default_library",
+    ],  # keep
+)
+
+ssz_proto_files(
+    name = "ssz_proto_files",
+    srcs = [
+        "engine_v2.proto",
+    ],
+    config = select({
+        "//conditions:default": "mainnet",
+        "//proto:ssz_mainnet": "mainnet",
+        "//proto:ssz_minimal": "minimal",
+    }),
+)

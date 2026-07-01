@@ -1,0 +1,747 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "description": "Prometheus data source",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "10.0.0"
+    },
+    {
+      "type": "datasource",
+      "id": "prometheus",
+      "name": "Prometheus",
+      "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Average JSON-RPC body size divided by average SSZ-over-HTTP body size. Each instance is averaged first, so a fleet with N JSON-RPC nodes and M SSZ-over-HTTP nodes is not weighted by node count.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 16,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "avg by (method, direction) (\n  (\n    sum by (instance, method, direction) (\n      rate(engine_body_size_bytes_sum{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", direction=~\"$direction\", transport=\"json-rpc\"}[$__rate_interval])\n    )\n    /\n    sum by (instance, method, direction) (\n      rate(engine_body_size_bytes_count{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", direction=~\"$direction\", transport=\"json-rpc\"}[$__rate_interval])\n    )\n  )\n  and on (instance, method, direction)\n  (\n    sum by (instance, method, direction) (\n      rate(engine_body_size_bytes_count{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", direction=~\"$direction\", transport=\"json-rpc\"}[$__rate_interval])\n    ) > 0\n  )\n)\n/\navg by (method, direction) (\n  (\n    sum by (instance, method, direction) (\n      rate(engine_body_size_bytes_sum{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", direction=~\"$direction\", transport=\"ssz-http\"}[$__rate_interval])\n    )\n    /\n    sum by (instance, method, direction) (\n      rate(engine_body_size_bytes_count{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", direction=~\"$direction\", transport=\"ssz-http\"}[$__rate_interval])\n    )\n  )\n  and on (instance, method, direction)\n  (\n    sum by (instance, method, direction) (\n      rate(engine_body_size_bytes_count{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", direction=~\"$direction\", transport=\"ssz-http\"}[$__rate_interval])\n    ) > 0\n  )\n)",
+          "legendFormat": "{{method}} {{direction}} json-rpc/ssz-http",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Body Size Ratio, Equal Instance Weight",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "SSZ-over-HTTP fallback count divided by the number of selected instances that expose engine transport metrics.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "(\n  sum(increase(engine_ssz_http_fallback_count{job=~\"$job\", instance=~\"$instance\"}[$__range]))\n  or vector(0)\n)\n/\nclamp_min(\n  count(count by (instance) (engine_request_latency_milliseconds_count{job=~\"$job\", instance=~\"$instance\"})),\n  1\n)",
+          "legendFormat": "fallbacks per instance",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Fallbacks per Instance",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Engine call rate divided by the number of active instances for each transport.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 4
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (transport) (\n  rate(engine_request_latency_milliseconds_count{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", transport=~\"$transport\"}[$__rate_interval])\n)\n/\nclamp_min(\n  count by (transport) (\n    sum by (instance, transport) (\n      rate(engine_request_latency_milliseconds_count{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", transport=~\"$transport\"}[$__rate_interval])\n    ) > 0\n  ),\n  1\n)",
+          "legendFormat": "{{transport}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Calls/sec per Active Instance",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "P95 latency is calculated per instance first, then averaged across instances so larger transport fleets do not carry extra weight.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 500
+              },
+              {
+                "color": "red",
+                "value": 1000
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "avg by (method, transport) (\n  histogram_quantile(\n    0.95,\n    sum by (le, instance, method, transport) (\n      rate(engine_request_latency_milliseconds_bucket{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", transport=~\"$transport\"}[$__rate_interval])\n    )\n  )\n  and on (instance, method, transport)\n  (\n    sum by (instance, method, transport) (\n      rate(engine_request_latency_milliseconds_count{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", transport=~\"$transport\"}[$__rate_interval])\n    ) > 0\n  )\n)",
+          "legendFormat": "{{method}} {{transport}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "P95 Latency, Equal Instance Weight",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Average latency is calculated per instance first, then averaged across instances.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "avg by (method, transport) (\n  (\n    sum by (instance, method, transport) (\n      rate(engine_request_latency_milliseconds_sum{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", transport=~\"$transport\"}[$__rate_interval])\n    )\n    /\n    sum by (instance, method, transport) (\n      rate(engine_request_latency_milliseconds_count{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", transport=~\"$transport\"}[$__rate_interval])\n    )\n  )\n  and on (instance, method, transport)\n  (\n    sum by (instance, method, transport) (\n      rate(engine_request_latency_milliseconds_count{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", transport=~\"$transport\"}[$__rate_interval])\n    ) > 0\n  )\n)",
+          "legendFormat": "{{method}} {{transport}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Average Latency, Equal Instance Weight",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Average JSON-RPC latency divided by average SSZ-over-HTTP latency. Each instance is averaged before comparing transports.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "avg by (method) (\n  (\n    sum by (instance, method) (\n      rate(engine_request_latency_milliseconds_sum{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", transport=\"json-rpc\"}[$__rate_interval])\n    )\n    /\n    sum by (instance, method) (\n      rate(engine_request_latency_milliseconds_count{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", transport=\"json-rpc\"}[$__rate_interval])\n    )\n  )\n  and on (instance, method)\n  (\n    sum by (instance, method) (\n      rate(engine_request_latency_milliseconds_count{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", transport=\"json-rpc\"}[$__rate_interval])\n    ) > 0\n  )\n)\n/\navg by (method) (\n  (\n    sum by (instance, method) (\n      rate(engine_request_latency_milliseconds_sum{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", transport=\"ssz-http\"}[$__rate_interval])\n    )\n    /\n    sum by (instance, method) (\n      rate(engine_request_latency_milliseconds_count{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", transport=\"ssz-http\"}[$__rate_interval])\n    )\n  )\n  and on (instance, method)\n  (\n    sum by (instance, method) (\n      rate(engine_request_latency_milliseconds_count{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", transport=\"ssz-http\"}[$__rate_interval])\n    ) > 0\n  )\n)",
+          "legendFormat": "{{method}} json-rpc/ssz-http",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Latency Ratio, Equal Instance Weight",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "P95 body size is calculated per instance first, then averaged across instances.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "avg by (method, transport, direction) (\n  histogram_quantile(\n    0.95,\n    sum by (le, instance, method, transport, direction) (\n      rate(engine_body_size_bytes_bucket{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", transport=~\"$transport\", direction=~\"$direction\"}[$__rate_interval])\n    )\n  )\n  and on (instance, method, transport, direction)\n  (\n    sum by (instance, method, transport, direction) (\n      rate(engine_body_size_bytes_count{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", transport=~\"$transport\", direction=~\"$direction\"}[$__rate_interval])\n    ) > 0\n  )\n)",
+          "legendFormat": "{{method}} {{transport}} {{direction}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "P95 Body Size, Equal Instance Weight",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Total body bytes/sec divided by the number of active instances for each method, transport, and direction.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (method, transport, direction) (\n  rate(engine_body_size_bytes_sum{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", transport=~\"$transport\", direction=~\"$direction\"}[$__rate_interval])\n)\n/\nclamp_min(\n  count by (method, transport, direction) (\n    sum by (instance, method, transport, direction) (\n      rate(engine_body_size_bytes_count{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", transport=~\"$transport\", direction=~\"$direction\"}[$__rate_interval])\n    ) > 0\n  ),\n  1\n)",
+          "legendFormat": "{{method}} {{transport}} {{direction}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Body Throughput per Active Instance",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "prysm",
+    "engine",
+    "ssz-http",
+    "json-rpc",
+    "normalized"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "definition": "label_values(engine_request_latency_milliseconds_count, job)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Job",
+        "multi": true,
+        "name": "job",
+        "options": [],
+        "query": "label_values(engine_request_latency_milliseconds_count, job)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query",
+        "allValue": ".*"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "definition": "label_values(engine_request_latency_milliseconds_count{job=~\"$job\"}, instance)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Instance",
+        "multi": true,
+        "name": "instance",
+        "options": [],
+        "query": "label_values(engine_request_latency_milliseconds_count{job=~\"$job\"}, instance)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query",
+        "allValue": ".*"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "definition": "label_values(engine_request_latency_milliseconds_count{job=~\"$job\", instance=~\"$instance\"}, method)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Method",
+        "multi": true,
+        "name": "method",
+        "options": [],
+        "query": "label_values(engine_request_latency_milliseconds_count{job=~\"$job\", instance=~\"$instance\"}, method)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query",
+        "allValue": ".*"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "definition": "label_values(engine_request_latency_milliseconds_count{job=~\"$job\", instance=~\"$instance\", method=~\"$method\"}, transport)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Transport",
+        "multi": true,
+        "name": "transport",
+        "options": [],
+        "query": "label_values(engine_request_latency_milliseconds_count{job=~\"$job\", instance=~\"$instance\", method=~\"$method\"}, transport)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query",
+        "allValue": ".*"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "definition": "label_values(engine_body_size_bytes_count{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", transport=~\"$transport\"}, direction)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Direction",
+        "multi": true,
+        "name": "direction",
+        "options": [],
+        "query": "label_values(engine_body_size_bytes_count{job=~\"$job\", instance=~\"$instance\", method=~\"$method\", transport=~\"$transport\"}, direction)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query",
+        "allValue": ".*"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Prysm Engine Transport",
+  "uid": "prysm-engine-transport",
+  "version": 2,
+  "weekStart": ""
+}

@@ -27,6 +27,20 @@ type jwtTransport struct {
 	jwtId               string
 }
 
+// NewJWTRoundTripper wraps underlying with a RoundTripper that signs a fresh
+// HS256 JWT (claims: iat=now, optional id) and sets it as the Authorization
+// bearer token on every request. Both the JSON-RPC HTTP client and the
+// SSZ-over-HTTP engine client use this so JWT signing has a single source of
+// truth. The engine API authenticates per request, so this is safe to reuse
+// across a long-lived HTTP/2 connection.
+func NewJWTRoundTripper(underlying http.RoundTripper, secret []byte, id string) http.RoundTripper {
+	return &jwtTransport{
+		underlyingTransport: underlying,
+		jwtSecret:           secret,
+		jwtId:               id,
+	}
+}
+
 // RoundTrip ensures our transport implements http.RoundTripper interface from the
 // standard library. When used as the transport for an HTTP client, the code below
 // will run every time our client makes an HTTP request. This is used to inject

@@ -114,18 +114,17 @@ func Method(auth string) authorization.Method {
 // NewHttpClientWithSecret returns a http client that utilizes
 // jwt authentication.
 func NewHttpClientWithSecret(secret, id string) *http.Client {
-	authTransport := &jwtTransport{
-		underlyingTransport: http.DefaultTransport,
-		jwtSecret:           []byte(secret),
-		jwtId:               id,
-	}
 	return &http.Client{
 		Timeout:   DefaultRPCHTTPTimeout,
-		Transport: otelhttp.NewTransport(authTransport),
+		Transport: otelhttp.NewTransport(NewJWTRoundTripper(http.DefaultTransport, []byte(secret), id)),
 	}
 }
 
-func NewExecutionRPCClient(ctx context.Context, endpoint Endpoint, headers http.Header) (*gethRPC.Client, error) {
+// NewExecutionRPCClient dials the execution endpoint. wrapTransport, when non-nil,
+// wraps the HTTP(S) client's RoundTripper before dialing — callers use it to layer
+// in transport-level instrumentation without this package depending on theirs. It
+// is ignored for IPC.
+func NewExecutionRPCClient(ctx context.Context, endpoint Endpoint, headers http.Header, wrapTransport func(http.RoundTripper) http.RoundTripper) (*gethRPC.Client, error) {
 	// Need to handle ipc and http
 	var client *gethRPC.Client
 	u, err := url.Parse(endpoint.Url)
@@ -134,7 +133,11 @@ func NewExecutionRPCClient(ctx context.Context, endpoint Endpoint, headers http.
 	}
 	switch u.Scheme {
 	case "http", "https":
-		client, err = gethRPC.DialOptions(ctx, endpoint.Url, gethRPC.WithHTTPClient(endpoint.HttpClient()), gethRPC.WithHeaders(headers))
+		httpClient := endpoint.HttpClient()
+		if wrapTransport != nil {
+			httpClient.Transport = wrapTransport(httpClient.Transport)
+		}
+		client, err = gethRPC.DialOptions(ctx, endpoint.Url, gethRPC.WithHTTPClient(httpClient), gethRPC.WithHeaders(headers))
 		if err != nil {
 			return nil, err
 		}

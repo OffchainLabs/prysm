@@ -46,6 +46,9 @@ func (s *Service) setupExecutionClientConnections(ctx context.Context, currEndpo
 		return errors.Wrap(err, errStr)
 	}
 	s.updateConnectedETH1(true)
+
+	// Decide JSON-RPC vs SSZ-over-HTTP for the engine API on this connection.
+	s.selectEngineTransport(ctx, currEndpoint)
 	s.runError = nil
 	return nil
 }
@@ -79,17 +82,8 @@ func (s *Service) pollConnectionStatus(ctx context.Context) {
 			}
 			log.WithField("endpoint", logs.MaskCredentialsLogging(s.cfg.currHttpEndpoint.Url)).Info("Connected to new endpoint")
 
-			c, err := s.ExchangeCapabilities(ctx)
-			if err != nil {
+			if err := s.ExchangeCapabilities(ctx); err != nil {
 				errorLogger(err, "Could not exchange capabilities with execution client")
-			}
-			s.capabilityCache.save(c)
-			if !s.capabilityCache.has(GetBlobsV3) && s.partialColumnsSupported {
-				log.Warn("Execution client does not support blobs v3, but partial data columns are enabled")
-			}
-
-			if s.capabilityCache.has(HasBlobs) && s.partialColumnsSupported {
-				log.WithField("method", HasBlobs).Info("Execution client supports blob availability checks, missing blobs will be requested via partial columns")
 			}
 
 			return
@@ -140,7 +134,13 @@ func (s *Service) newRPCClientWithAuth(ctx context.Context, endpoint network.End
 		}
 		headers.Set(keyValue[0], strings.Join(keyValue[1:], "="))
 	}
-	return network.NewExecutionRPCClient(ctx, endpoint, headers)
+	// Wrap the engine connection's HTTP transport so JSON-RPC engine body sizes are
+	// recorded for comparison against the ssz-http path. The wrapper is engine-domain
+	// (it references the execution metrics), so it lives here and is injected into the
+	// generic dialer; IPC connections receive a nil wrapper.
+	return network.NewExecutionRPCClient(ctx, endpoint, headers, func(rt http.RoundTripper) http.RoundTripper {
+		return &engineSizeRoundTripper{base: rt}
+	})
 }
 
 // Checks the chain ID of the execution client to ensure
