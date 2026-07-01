@@ -76,6 +76,7 @@ type validator struct {
 	prevEpochBalancesLock        sync.RWMutex
 	cachedAttestationDataLock    sync.RWMutex
 	submittedPrefSlotsLock       sync.RWMutex
+	signedRequestAuthsLock       sync.Mutex
 	domainDataLock               sync.RWMutex
 	cachedAttestationData        *ethpb.AttestationData
 	graffitiOrderedIndex         uint64
@@ -104,6 +105,7 @@ type validator struct {
 	payloadAvailability          *payloadAvailability
 	pubkeyToStatus               map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus
 	signedValidatorRegistrations map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
+	signedRequestAuths           map[requestAuthKey]*ethpb.SignedRequestAuthV1
 	aggSelector                  aggregatorSelector
 	validatorClient              iface.ValidatorClient
 	chainClient                  iface.ChainClient
@@ -869,6 +871,16 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		}()
 	}
 
+	if reqs := v.buildBuilderPreferenceRequests(ctx, km, slot); len(reqs) > 0 {
+		delay := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
+		time.AfterFunc(delay, func() {
+			// Detached from the slot context, which may expire before the delay elapses.
+			subCtx, cancel := context.WithTimeout(context.Background(), delay)
+			defer cancel()
+			v.submitBuilderPreferenceRequests(subCtx, reqs)
+		})
+	}
+
 	// TODO: figure out what to do post gloas for builder apis
 	if !isPreGloas {
 		return nil
@@ -1273,6 +1285,79 @@ func (v *validator) submittedPrefSlotsCount() int {
 	v.submittedPrefSlotsLock.RLock()
 	defer v.submittedPrefSlotsLock.RUnlock()
 	return len(v.submittedPrefSlots)
+}
+
+func (v *validator) builderConfigForKey(pk pubkey) ([]string, uint64, bool) {
+	ps := v.ProposerSettings()
+	if ps == nil {
+		return nil, 0, false
+	}
+	var bc *proposer.BuilderConfig
+	if ps.DefaultConfig != nil {
+		bc = ps.DefaultConfig.BuilderConfig
+	}
+	if ps.ProposeConfig != nil {
+		if c, ok := ps.ProposeConfig[pk]; ok && c != nil && c.BuilderConfig != nil {
+			bc = c.BuilderConfig
+		}
+	}
+	if bc == nil {
+		return nil, 0, false
+	}
+	return bc.Relays, uint64(bc.MaxExecutionPayment), bc.Enabled
+}
+
+// Resubmitted every push to repopulate a restarted beacon node, using cached auths to avoid re-signing.
+func (v *validator) buildBuilderPreferenceRequests(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot) []*ethpb.SubmitBuilderPreferencesRequest {
+	if slots.ToEpoch(slot)+1 < params.BeaconConfig().GloasForkEpoch {
+		return nil
+	}
+	snap := v.duties.snapshot()
+	if !snap.isInitialized() {
+		return nil
+	}
+	v.pruneSignedRequestAuths(slot)
+
+	reqs := v.builderPreferenceRequestsForDuties(ctx, km, slot, snap.currentDuties())
+	return append(reqs, v.builderPreferenceRequestsForDuties(ctx, km, slot, snap.nextDuties())...)
+}
+
+func (v *validator) builderPreferenceRequestsForDuties(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, duties iter.Seq2[pubkey, *ethpb.ValidatorDuty]) []*ethpb.SubmitBuilderPreferencesRequest {
+	var reqs []*ethpb.SubmitBuilderPreferencesRequest
+	for pk, duty := range duties {
+		relays, maxPayment, enabled := v.builderConfigForKey(pk)
+		if !enabled || len(relays) == 0 {
+			continue
+		}
+		for _, proposalSlot := range duty.ProposerSlots {
+			if proposalSlot <= slot {
+				continue
+			}
+			for _, relay := range relays {
+				signed, err := v.signRequestAuthCached(ctx, km, pk, relay, proposalSlot)
+				if err != nil {
+					log.WithError(err).Warn("Failed to sign builder request auth")
+					continue
+				}
+				reqs = append(reqs, &ethpb.SubmitBuilderPreferencesRequest{
+					ValidatorPubkey: pk[:],
+					Request: &ethpb.BuilderPreferencesRequestV1{
+						Preferences: &ethpb.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(maxPayment)},
+						Auth:        signed,
+					},
+				})
+			}
+		}
+	}
+	return reqs
+}
+
+func (v *validator) submitBuilderPreferenceRequests(ctx context.Context, reqs []*ethpb.SubmitBuilderPreferencesRequest) {
+	for _, req := range reqs {
+		if _, err := v.validatorClient.SubmitBuilderPreferences(ctx, req); err != nil {
+			log.WithError(err).Warn("Failed to submit builder preferences")
+		}
+	}
 }
 
 // submitProposerPreferences builds and submits proposer preferences for the

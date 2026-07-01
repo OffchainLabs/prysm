@@ -18,6 +18,7 @@ go_library(
         "propose.go",
         "propose_gloas.go",
         "registration.go",
+        "request_auth.go",
         "runner.go",
         "service.go",
         "subnets.go",
