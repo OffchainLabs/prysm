@@ -12,8 +12,10 @@ Release highlights:
 
 - **Gloas and builder APIs**: Continued Gloas block-production separation, stateless Gloas gRPC support, builder execution request types, builder API clients, proposer preferences, execution payload bid events, and payload-attestation handling.
 - **Beacon API and operator polish**: Added SSZ-QL proof and length-query support, improved event-subscription error reporting, and introduced the `--postpone-shutdown-for-proposals` flag to defer graceful shutdown around upcoming proposal duties.
-- **PeerDAS and data columns**: Improved pending-column handling, sidecar validation, RPC reconstruction paths, rebroadcast behavior, and bounded availability waits for Gloas data columns.
+- **PeerDAS and data columns**: Improved pending-column handling, sidecar validation, RPC reconstruction paths, rebroadcast behavior, bounded availability waits for Gloas data columns, and cell-level data column dissemination via the `--partial-data-columns` flag.
 - **Stability and performance**: Reduced allocations in randomness, KZG, and fork-choice paths; bounded Engine API capability growth; fixed trusted-peer address handling; and improved sync behavior around payload requests and unavailable payloads.
+
+To learn more about how `--partial-data-columns` save bandwidth by exchanging selected cells and proofs, see [Prysm docs](https://prysm.offchainlabs.com/docs/learn/concepts/partial-columns)
 
 Operators are encouraged to update to this release as soon as practical.
 
