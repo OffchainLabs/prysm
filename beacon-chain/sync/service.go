@@ -165,6 +165,9 @@ type Service struct {
 	pendingGloasColumns                  map[[32]byte]*pendingGloasEntry
 	seenAggregatedAttestationLock        sync.RWMutex
 	seenAggregatedAttestationCache       *lru.Cache
+	seenAggregatedAttestationByEpoch     map[primitives.Epoch]map[primitives.ValidatorIndex]struct{}
+	seenAggregatedAttestationMaxEpoch    primitives.Epoch
+	seenAggregatedAttestationHasMaxEpoch bool
 	seenUnAggregatedAttestationLock      sync.RWMutex
 	seenUnAggregatedAttestationCache     *lru.Cache
 	seenExitLock                         sync.RWMutex
@@ -417,6 +420,8 @@ func (s *Service) initCaches() {
 	s.seenBlobCache = lruwrpr.New(seenBlockSize * params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra)
 	s.seenDataColumnCache = newSlotAwareCache(seenDataColumnSize)
 	s.seenAggregatedAttestationCache = lruwrpr.New(seenAggregatedAttSize)
+	s.seenAggregatedAttestationByEpoch = make(map[primitives.Epoch]map[primitives.ValidatorIndex]struct{})
+	s.seenAggregatedAttestationHasMaxEpoch = false
 	s.seenUnAggregatedAttestationCache = lruwrpr.New(seenUnaggregatedAttSize)
 	s.seenSyncMessageCache = lruwrpr.New(seenSyncMsgSize)
 	s.seenSyncContributionCache = lruwrpr.New(seenSyncContributionSize)
