@@ -105,7 +105,7 @@ func (k *KurtosisTestSuites) Run(t *testing.T) {
 
 	k.scheduleServiceEvents(t, kw, genesisTime, secondsPerEpoch)
 
-	if len(k.assertoorEvents) == 0 {
+	if len(k.assertoorEvents) > 0 {
 		assertoorRunIDs := k.scheduleAssertoorEvents(t, ctx, kw, genesisTime, secondsPerEpoch)
 		require.NoError(t, kw.WaitForAssertoorRunIDs(ctx, deadline, assertoorRunIDs...), "Assertoor one-shot checks failed")
 	}
