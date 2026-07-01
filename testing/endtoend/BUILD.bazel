@@ -273,6 +273,7 @@ go_test(
     data = [
 "network-config/minimal-current-fork.yaml",
         "network-config/minimal-restapi.yaml",
+        "network-config/minimal-scenario.yaml",
         "network-config/minimal-web3signer.yaml",
         "//cmd/beacon-chain",
         "//cmd/beacon-chain:oci_image_tarball_e2e",
