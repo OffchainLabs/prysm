@@ -769,6 +769,17 @@ func (s *ChainService) HighestReceivedBlockRoot() [32]byte {
 	return [32]byte{}
 }
 
+// HasNode mocks the same method in the chain service
+func (s *ChainService) HasNode(root [32]byte) bool {
+	if s.ForkChoiceStore != nil {
+		return s.ForkChoiceStore.HasNode(root)
+	}
+	if s.ForkchoiceRoots != nil {
+		return s.ForkchoiceRoots[root]
+	}
+	return false
+}
+
 // HasFullNode mocks the same method in the chain service
 func (s *ChainService) HasFullNode(root [32]byte) bool {
 	if s.ForkChoiceStore != nil {
