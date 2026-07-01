@@ -155,6 +155,14 @@ func TestQueryBeaconState(t *testing.T) {
 			BeaconStateRoot: stateRoot[:],
 			BeaconState:     st,
 		},
+		{
+			path: "len(validators)",
+			expectedValue: func() []byte {
+				b := make([]byte, 8)
+				binary.LittleEndian.PutUint64(b, uint64(len(st.Validators())))
+				return b
+			}(),
+		},
 	}
 
 	for _, tt := range tests {
@@ -263,6 +271,18 @@ func TestQueryBeaconStateInvalidRequest(t *testing.T) {
 			path:        ".non_existent_field",
 			code:        http.StatusInternalServerError,
 			errorString: "Could not calculate offset and length for path",
+		},
+		{
+			name:        "len() on a non-collection field",
+			stateId:     "head",
+			path:        "len(slot)",
+			errorString: "only supported for List and Bitlist",
+		},
+		{
+			name:        "len() on an non-collection field with index",
+			stateId:     "head",
+			path:        "len(validators[0])",
+			errorString: "only supported for List and Bitlist",
 		},
 		{
 			name:    "empty state ID",
@@ -461,6 +481,40 @@ func TestQueryBeaconBlock(t *testing.T) {
 			expectedValue: func() []byte {
 				b, err := att.MarshalSSZ()
 				require.NoError(t, err)
+				return b
+			}(),
+		},
+		{
+			name:         "len(body.attestations)",
+			path:         "len(body.attestations)",
+			includeProof: false,
+			block: func() interfaces.ReadOnlySignedBeaconBlock {
+				b := util.NewBeaconBlock()
+				b.Block.Body.Attestations = []*eth.Attestation{att, att}
+				sb, err := blocks.NewSignedBeaconBlock(b)
+				require.NoError(t, err)
+				return sb
+			}(),
+			expectedValue: func() []byte {
+				b := make([]byte, 8)
+				binary.LittleEndian.PutUint64(b, 2)
+				return b
+			}(),
+		},
+		{
+			name:         "len(body.attestations)",
+			path:         "len(body.attestations)",
+			includeProof: true,
+			block: func() interfaces.ReadOnlySignedBeaconBlock {
+				b := util.NewBeaconBlock()
+				b.Block.Body.Attestations = []*eth.Attestation{att, att}
+				sb, err := blocks.NewSignedBeaconBlock(b)
+				require.NoError(t, err)
+				return sb
+			}(),
+			expectedValue: func() []byte {
+				b := make([]byte, 8)
+				binary.LittleEndian.PutUint64(b, 2)
 				return b
 			}(),
 		},

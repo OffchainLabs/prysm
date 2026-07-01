@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -23,44 +25,65 @@ import (
 func TestPayloadAttestationData(t *testing.T) {
 	ctx := t.Context()
 	slot := uint64(42)
-	beaconBlockRoot := hexutil.Encode(testhelpers.FillByteSlice(32, 0xab))
+	beaconBlockRoot := testhelpers.FillByteSlice(32, 0xab)
+	endpoint := fmt.Sprintf("/eth/v1/validator/payload_attestation_data/%d", slot)
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	jsonHeader := http.Header{"Content-Type": []string{api.JsonMediaType}}
+	sszHeader := http.Header{"Content-Type": []string{api.OctetStreamMediaType}}
 
-	resp := structs.GetPayloadAttestationDataResponse{}
-	handler.EXPECT().Get(
-		gomock.Any(),
-		fmt.Sprintf("/eth/v1/validator/payload_attestation_data/%d", slot),
-		&resp,
-	).Return(nil).SetArg(2, structs.GetPayloadAttestationDataResponse{
+	jsonResp, err := json.Marshal(structs.GetPayloadAttestationDataResponse{
 		Version: version.String(version.Gloas),
 		Data: &structs.PayloadAttestationData{
-			BeaconBlockRoot:   beaconBlockRoot,
+			BeaconBlockRoot:   hexutil.Encode(beaconBlockRoot),
 			Slot:              fmt.Sprintf("%d", slot),
 			PayloadPresent:    true,
 			BlobDataAvailable: false,
 		},
-	}).Times(1)
-
-	client := &beaconApiValidatorClient{handler: handler}
-	data, err := client.payloadAttestationData(ctx, primitives.Slot(slot))
+	})
 	require.NoError(t, err)
-	require.NotNil(t, data)
-	assert.Equal(t, primitives.Slot(slot), data.Slot)
-	assert.Equal(t, beaconBlockRoot, hexutil.Encode(data.BeaconBlockRoot))
-	assert.Equal(t, true, data.PayloadPresent)
-	assert.Equal(t, false, data.BlobDataAvailable)
+
+	sszResp, err := (&ethpb.PayloadAttestationData{
+		BeaconBlockRoot:   beaconBlockRoot,
+		Slot:              primitives.Slot(slot),
+		PayloadPresent:    true,
+		BlobDataAvailable: false,
+	}).MarshalSSZ()
+	require.NoError(t, err)
+
+	for _, tt := range []struct {
+		name   string
+		body   []byte
+		header http.Header
+	}{
+		{name: "json response", body: jsonResp, header: jsonHeader},
+		{name: "ssz response", body: sszResp, header: sszHeader},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			handler := mock.NewMockHandler(ctrl)
+			handler.EXPECT().GetSSZ(gomock.Any(), endpoint).Return(tt.body, tt.header, nil).Times(1)
+
+			client := &beaconApiValidatorClient{handler: handler}
+			data, err := client.payloadAttestationData(ctx, primitives.Slot(slot))
+			require.NoError(t, err)
+			require.NotNil(t, data)
+			assert.Equal(t, primitives.Slot(slot), data.Slot)
+			assert.Equal(t, hexutil.Encode(beaconBlockRoot), hexutil.Encode(data.BeaconBlockRoot))
+			assert.Equal(t, true, data.PayloadPresent)
+			assert.Equal(t, false, data.BlobDataAvailable)
+		})
+	}
 }
 
 func TestPayloadAttestationData_NilData(t *testing.T) {
 	ctx := t.Context()
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
-	handler.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	jsonHeader := http.Header{"Content-Type": []string{api.JsonMediaType}}
+	handler.EXPECT().GetSSZ(gomock.Any(), gomock.Any()).Return([]byte("{}"), jsonHeader, nil).Times(1)
 
 	client := &beaconApiValidatorClient{handler: handler}
 	_, err := client.payloadAttestationData(ctx, 1)
@@ -71,9 +94,9 @@ func TestPayloadAttestationData_EndpointError(t *testing.T) {
 	ctx := t.Context()
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
-	handler.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("boom")).Times(1)
+	handler.EXPECT().GetSSZ(gomock.Any(), gomock.Any()).Return(nil, nil, errors.New("boom")).Times(1)
 
 	client := &beaconApiValidatorClient{handler: handler}
 	_, err := client.payloadAttestationData(ctx, 1)
@@ -91,59 +114,63 @@ func TestSubmitPayloadAttestation(t *testing.T) {
 		},
 		Signature: testhelpers.FillByteSlice(96, 0x22),
 	}
-
-	validBody, err := json.Marshal([]*structs.PayloadAttestationMessage{{
-		ValidatorIndex: "7",
-		Data: &structs.PayloadAttestationData{
-			BeaconBlockRoot:   hexutil.Encode(testhelpers.FillByteSlice(32, 0x11)),
-			Slot:              "99",
-			PayloadPresent:    true,
-			BlobDataAvailable: true,
-		},
-		Signature: hexutil.Encode(testhelpers.FillByteSlice(96, 0x22)),
-	}})
+	sszBody, err := msg.MarshalSSZ()
 	require.NoError(t, err)
+	jsonBody, err := json.Marshal([]*structs.PayloadAttestationMessage{structs.PayloadAttestationMessageFromConsensus(msg)})
+	require.NoError(t, err)
+	headers := map[string]string{api.VersionHeader: version.String(version.Gloas)}
 
-	tests := []struct {
-		name          string
-		msg           *ethpb.PayloadAttestationMessage
-		endpointError error
-		endpointCall  int
-		expectErr     string
-	}{
-		{name: "valid", msg: msg, endpointCall: 1},
-		{name: "nil message", msg: nil, expectErr: "payload attestation message is nil"},
-		{name: "nil data", msg: &ethpb.PayloadAttestationMessage{ValidatorIndex: 1}, expectErr: "payload attestation message is nil"},
-		{name: "endpoint error", msg: msg, endpointError: errors.New("bad request"), endpointCall: 1, expectErr: "bad request"},
-	}
+	t.Run("valid sends SSZ", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		handler := mock.NewMockHandler(ctrl)
+		handler.EXPECT().PostSSZ(
+			gomock.Any(),
+			payloadAttestationsEndpoint,
+			headers,
+			bytes.NewBuffer(sszBody),
+		).Return(nil, nil, nil).Times(1)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-			handler := mock.NewMockJsonRestHandler(ctrl)
+		client := &beaconApiValidatorClient{handler: handler}
+		require.NoError(t, client.submitPayloadAttestation(t.Context(), msg))
+	})
 
-			var body []byte
-			if tt.msg != nil && tt.msg.Data != nil {
-				body = validBody
-			}
+	t.Run("falls back to JSON on 415", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		handler := mock.NewMockHandler(ctrl)
+		handler.EXPECT().PostSSZ(gomock.Any(), payloadAttestationsEndpoint, gomock.Any(), gomock.Any()).
+			Return(nil, nil, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType, Message: "unsupported media type"}).Times(1)
+		handler.EXPECT().Post(
+			gomock.Any(),
+			payloadAttestationsEndpoint,
+			headers,
+			bytes.NewBuffer(jsonBody),
+			nil,
+		).Return(nil).Times(1)
 
-			headers := map[string]string{api.VersionHeader: version.String(version.Gloas)}
-			handler.EXPECT().Post(
-				gomock.Any(),
-				"/eth/v1/beacon/pool/payload_attestations",
-				headers,
-				bytes.NewBuffer(body),
-				nil,
-			).Return(tt.endpointError).Times(tt.endpointCall)
+		client := &beaconApiValidatorClient{handler: handler}
+		require.NoError(t, client.submitPayloadAttestation(t.Context(), msg))
+	})
 
-			client := &beaconApiValidatorClient{handler: handler}
-			err := client.submitPayloadAttestation(t.Context(), tt.msg)
-			if tt.expectErr != "" {
-				require.ErrorContains(t, tt.expectErr, err)
-				return
-			}
-			require.NoError(t, err)
-		})
-	}
+	t.Run("non-415 error does not fall back", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		handler := mock.NewMockHandler(ctrl)
+		handler.EXPECT().PostSSZ(gomock.Any(), payloadAttestationsEndpoint, gomock.Any(), gomock.Any()).
+			Return(nil, nil, errors.New("bad request")).Times(1)
+
+		client := &beaconApiValidatorClient{handler: handler}
+		require.ErrorContains(t, "bad request", client.submitPayloadAttestation(t.Context(), msg))
+	})
+
+	t.Run("nil message", func(t *testing.T) {
+		client := &beaconApiValidatorClient{}
+		require.ErrorContains(t, "payload attestation message is nil", client.submitPayloadAttestation(t.Context(), nil))
+	})
+
+	t.Run("nil data", func(t *testing.T) {
+		client := &beaconApiValidatorClient{}
+		require.ErrorContains(t, "payload attestation message is nil", client.submitPayloadAttestation(t.Context(), &ethpb.PayloadAttestationMessage{ValidatorIndex: 1}))
+	})
 }

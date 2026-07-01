@@ -164,11 +164,11 @@ func ProcessSlotsIfNeeded(ctx context.Context, st state.ReadOnlyBeaconState, par
 	if slot <= st.Slot() {
 		return st, nil
 	}
-	if cached := NextSlotState(parentRoot, slot); cached != nil {
+	if cached := NextSlotStateReadOnly(parentRoot, slot); cached != nil {
 		if cached.Slot() >= slot {
 			return cached, nil
 		}
-		return ProcessSlots(ctx, cached, slot)
+		return ProcessSlots(ctx, cached.Copy(), slot)
 	}
 	return ProcessSlots(ctx, st.Copy(), slot)
 }

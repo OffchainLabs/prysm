@@ -3,6 +3,7 @@ package event
 import (
 	"bufio"
 	"context"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -89,6 +90,25 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 			log.WithError(closeErr).Error("Failed to close events response body")
 		}
 	}()
+
+	// Check response status code and handle non-200 responses
+	// as connection errors.
+	// e.g., requesting unsupported topics.
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		wrapErr := errors.Wrapf(
+			client.ErrConnectionIssue,
+			"received status code %d subscribing to beacon node events: %q",
+			resp.StatusCode,
+			strings.TrimSpace(string(body)),
+		)
+		eventsChannel <- &Event{
+			EventType: EventConnectionError,
+			Data:      []byte(wrapErr.Error()),
+		}
+		return
+	}
+
 	// Create a new scanner to read lines from the response body
 	scanner := bufio.NewScanner(resp.Body)
 	// Set the split function for the scanning operation

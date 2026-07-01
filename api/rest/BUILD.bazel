@@ -25,9 +25,14 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["rest_connection_provider_test.go"],
+    srcs = [
+        "rest_connection_provider_test.go",
+        "rest_handler_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
+        "//api:go_default_library",
+        "//network/httputil:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
     ],

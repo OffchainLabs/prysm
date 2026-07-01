@@ -102,11 +102,15 @@ func ComputeSubnetForAttestation(activeValCount uint64, att ethpb.Att) uint64 {
 //
 //	return uint64((committees_since_epoch_start + committee_index) % ATTESTATION_SUBNET_COUNT)
 func ComputeSubnetFromCommitteeAndSlot(activeValCount uint64, comIdx primitives.CommitteeIndex, attSlot primitives.Slot) uint64 {
+	return ComputeSubnetForCommitteesPerSlot(SlotCommitteeCount(activeValCount), comIdx, attSlot)
+}
+
+// ComputeSubnetForCommitteesPerSlot is ComputeSubnetFromCommitteeAndSlot with the
+// committees-per-slot supplied directly, skipping the active-validator-count lookup.
+func ComputeSubnetForCommitteesPerSlot(committeesPerSlot uint64, comIdx primitives.CommitteeIndex, attSlot primitives.Slot) uint64 {
 	slotSinceStart := slots.SinceEpochStarts(attSlot)
-	comCount := SlotCommitteeCount(activeValCount)
-	commsSinceStart := uint64(slotSinceStart.Mul(comCount))
-	computedSubnet := (commsSinceStart + uint64(comIdx)) % params.BeaconConfig().AttestationSubnetCount
-	return computedSubnet
+	commsSinceStart := uint64(slotSinceStart.Mul(committeesPerSlot))
+	return (commsSinceStart + uint64(comIdx)) % params.BeaconConfig().AttestationSubnetCount
 }
 
 // ValidateAttestationTime Validates that the incoming attestation is in the desired time range.

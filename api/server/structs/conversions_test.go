@@ -537,8 +537,9 @@ func TestBuilderPendingPaymentConversionsFromConsensus(t *testing.T) {
 		BuilderIndex: 2,
 	}
 	payment := &eth.BuilderPendingPayment{
-		Weight:     5,
-		Withdrawal: withdrawal,
+		Weight:        5,
+		Withdrawal:    withdrawal,
+		ProposerIndex: 9,
 	}
 	wantWithdrawal := &BuilderPendingWithdrawal{
 		FeeRecipient: hexutil.Encode(withdrawal.FeeRecipient),
@@ -546,8 +547,9 @@ func TestBuilderPendingPaymentConversionsFromConsensus(t *testing.T) {
 		BuilderIndex: "2",
 	}
 	wantPayment := &BuilderPendingPayment{
-		Weight:     "5",
-		Withdrawal: wantWithdrawal,
+		Weight:        "5",
+		Withdrawal:    wantWithdrawal,
+		ProposerIndex: "9",
 	}
 
 	assert.DeepEqual(t, wantPayment, BuilderPendingPaymentFromConsensus(payment))

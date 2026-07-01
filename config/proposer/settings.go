@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/config"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
@@ -15,7 +16,7 @@ import (
 
 // SettingFromConsensus converts struct to Settings while verifying the fields
 func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, error) {
-	settings := &Settings{}
+	settings := &Settings{Version: ps.Version}
 	if len(ps.ProposerConfig) != 0 {
 		settings.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
 		for key, optionPayload := range ps.ProposerConfig {
@@ -39,6 +40,7 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 			if optionPayload.Builder != nil {
 				p.BuilderConfig = BuilderConfigFromConsensus(optionPayload.Builder)
 			}
+			p.GasLimit = optionPayload.GasLimit
 			settings.ProposeConfig[bytesutil.ToBytes48(decodedKey)] = p
 		}
 	}
@@ -58,6 +60,7 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 		if ps.DefaultConfig.Builder != nil {
 			d.BuilderConfig = BuilderConfigFromConsensus(ps.DefaultConfig.Builder)
 		}
+		d.GasLimit = ps.DefaultConfig.GasLimit
 		settings.DefaultConfig = d
 	}
 	return settings, nil
@@ -79,9 +82,10 @@ func verifyOption(key string, option *validatorpb.ProposerOptionPayload) error {
 // BuilderConfig is the struct representation of the JSON config file set in the validator through the CLI.
 // GasLimit is a number set to help the network decide on the maximum gas in each block.
 type BuilderConfig struct {
-	Enabled  bool             `json:"enabled" yaml:"enabled"`
-	GasLimit validator.Uint64 `json:"gas_limit,omitempty" yaml:"gas_limit,omitempty"`
-	Relays   []string         `json:"relays,omitempty" yaml:"relays,omitempty"`
+	Enabled             bool             `json:"enabled" yaml:"enabled"`
+	GasLimit            validator.Uint64 `json:"gas_limit,omitempty" yaml:"gas_limit,omitempty"`
+	Relays              []string         `json:"relays,omitempty" yaml:"relays,omitempty"`
+	MaxExecutionPayment validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"`
 }
 
 // BuilderConfigFromConsensus converts protobuf to a builder config used in in-memory storage
@@ -90,8 +94,9 @@ func BuilderConfigFromConsensus(from *validatorpb.BuilderConfig) *BuilderConfig 
 		return nil
 	}
 	c := &BuilderConfig{
-		Enabled:  from.Enabled,
-		GasLimit: from.GasLimit,
+		Enabled:             from.Enabled,
+		GasLimit:            from.GasLimit,
+		MaxExecutionPayment: from.MaxExecutionPayment,
 	}
 	if from.Relays != nil {
 		relays := make([]string, len(from.Relays))
@@ -101,20 +106,30 @@ func BuilderConfigFromConsensus(from *validatorpb.BuilderConfig) *BuilderConfig 
 	return c
 }
 
+// Schema versions for proposer settings. SchemaV1Unset is the proto3 zero
+// value — every existing v1 user has it, since the version field is new.
+// Both SchemaV1Unset and SchemaV1 are legacy v1 inputs to the migration.
+const (
+	SchemaV1Unset uint32 = 0
+	SchemaV1      uint32 = 1
+	SchemaV2      uint32 = 2
+)
+
 // Settings is a Prysm internal representation of the fee recipient config on the validator client.
 // validatorpb.ProposerSettingsPayload maps to Settings on import through the CLI.
 type Settings struct {
 	ProposeConfig map[[fieldparams.BLSPubkeyLength]byte]*Option
 	DefaultConfig *Option
+	Version       uint32
 }
 
 // ShouldBeSaved goes through checks to see if the value should be saveable
 // Pseudocode: conditions for being saved into the database
 // 1. settings are not nil
 // 2. proposeconfig is not nil (this defines specific settings for each validator key), default config can be nil in this case and fall back to beacon node settings
-// 3. defaultconfig is not nil, meaning it has at least fee recipient settings (this defines general settings for all validator keys but keys will use settings from propose config if available), propose config can be nil in this case
+// 3. defaultconfig is not nil, meaning it has at least fee recipient or gas limit settings (this defines general settings for all validator keys but keys will use settings from propose config if available), propose config can be nil in this case
 func (ps *Settings) ShouldBeSaved() bool {
-	return ps != nil && (ps.ProposeConfig != nil || ps.DefaultConfig != nil && ps.DefaultConfig.FeeRecipientConfig != nil)
+	return ps != nil && (ps.ProposeConfig != nil || ps.DefaultConfig != nil && (ps.DefaultConfig.FeeRecipientConfig != nil || ps.DefaultConfig.GasLimit != 0))
 }
 
 // ToConsensus converts struct to ProposerSettingsPayload
@@ -122,7 +137,7 @@ func (ps *Settings) ToConsensus() *validatorpb.ProposerSettingsPayload {
 	if ps == nil {
 		return nil
 	}
-	payload := &validatorpb.ProposerSettingsPayload{}
+	payload := &validatorpb.ProposerSettingsPayload{Version: ps.Version}
 	if ps.ProposeConfig != nil {
 		payload.ProposerConfig = make(map[string]*validatorpb.ProposerOptionPayload)
 		for key, option := range ps.ProposeConfig {
@@ -146,10 +161,12 @@ type GraffitiConfig struct {
 }
 
 // Option is a Prysm internal representation of the ProposerOptionPayload on the validator client in bytes format instead of hex.
+// GasLimit is the v2 home for the gas-limit signal, per-pubkey or in default_config.
 type Option struct {
 	FeeRecipientConfig *FeeRecipientConfig
 	BuilderConfig      *BuilderConfig
 	GraffitiConfig     *GraffitiConfig
+	GasLimit           validator.Uint64
 }
 
 // Clone creates a deep copy of proposer option
@@ -157,7 +174,7 @@ func (po *Option) Clone() *Option {
 	if po == nil {
 		return nil
 	}
-	p := &Option{}
+	p := &Option{GasLimit: po.GasLimit}
 	if po.FeeRecipientConfig != nil {
 		p.FeeRecipientConfig = po.FeeRecipientConfig.Clone()
 	}
@@ -174,7 +191,7 @@ func (po *Option) ToConsensus() *validatorpb.ProposerOptionPayload {
 	if po == nil {
 		return nil
 	}
-	p := &validatorpb.ProposerOptionPayload{}
+	p := &validatorpb.ProposerOptionPayload{GasLimit: po.GasLimit}
 	if po.FeeRecipientConfig != nil {
 		p.FeeRecipient = po.FeeRecipientConfig.FeeRecipient.Hex()
 	}
@@ -192,7 +209,7 @@ func (ps *Settings) Clone() *Settings {
 	if ps == nil {
 		return nil
 	}
-	clone := &Settings{}
+	clone := &Settings{Version: ps.Version}
 	if ps.DefaultConfig != nil {
 		clone.DefaultConfig = ps.DefaultConfig.Clone()
 	}
@@ -224,6 +241,7 @@ func (bc *BuilderConfig) Clone() *BuilderConfig {
 	c := &BuilderConfig{}
 	c.Enabled = bc.Enabled
 	c.GasLimit = bc.GasLimit
+	c.MaxExecutionPayment = bc.MaxExecutionPayment
 	var relays []string
 	if bc.Relays != nil {
 		relays = make([]string, len(bc.Relays))
@@ -255,5 +273,160 @@ func (bc *BuilderConfig) ToConsensus() *validatorpb.BuilderConfig {
 		c.Relays = relays
 	}
 	c.GasLimit = bc.GasLimit
+	c.MaxExecutionPayment = bc.MaxExecutionPayment
 	return c
+}
+
+func (ps *Settings) isV2() bool {
+	return ps != nil && ps.Version == SchemaV2
+}
+
+// WarnDeprecatedSchema logs a warning when v1 settings are used on a network
+// with gloas scheduled.
+func (ps *Settings) WarnDeprecatedSchema() {
+	if ps == nil || ps.Version == SchemaV2 || !params.GloasEnabled() {
+		return
+	}
+	log.Warn("Proposer settings use the deprecated v1 schema; they are upgraded automatically at the gloas fork. Please migrate your settings source to v2.")
+}
+
+// UpgradeToV2 migrates v1 settings to v2 in place: builder gas limits are
+// promoted to the top-level preferences gas limit (unless one is already set).
+// BuilderConfig is retained because it carries the gloas builder-API relays /
+// enabled / max_execution_payment, which have no top-level v2 field. Settings
+// already on v2 are left untouched. Returns true if changed.
+func (ps *Settings) UpgradeToV2() bool {
+	if ps == nil || ps.isV2() {
+		return false
+	}
+	migrate := func(opt *Option) {
+		if opt == nil || opt.BuilderConfig == nil {
+			return
+		}
+		if opt.GasLimit == 0 {
+			opt.GasLimit = opt.BuilderConfig.GasLimit
+		}
+	}
+	migrate(ps.DefaultConfig)
+	for _, opt := range ps.ProposeConfig {
+		migrate(opt)
+	}
+	ps.Version = SchemaV2
+	return true
+}
+
+// TargetGasLimit returns the proposer preferences gas limit for pubkey from
+// the top-level fields only: the per-pubkey override, else the default config
+// value, else the chain default. Builder gas limits are registration-only and
+// intentionally not consulted.
+func (ps *Settings) TargetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) validator.Uint64 {
+	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+	if ps == nil {
+		return chainDefault
+	}
+	if opt, ok := ps.ProposeConfig[pubkey]; ok && opt != nil && opt.GasLimit != 0 {
+		return opt.GasLimit
+	}
+	if ps.DefaultConfig != nil && ps.DefaultConfig.GasLimit != 0 {
+		return ps.DefaultConfig.GasLimit
+	}
+	return chainDefault
+}
+
+// GasLimit returns the gas limit (gwei) for pubkey: the per-pubkey override,
+// else the default config value, else the chain default. v1 reads the builder
+// gas limit; v2 reads the top-level fields.
+func (ps *Settings) GasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) validator.Uint64 {
+	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+	if ps == nil {
+		return chainDefault
+	}
+	if ps.isV2() {
+		return ps.TargetGasLimit(pubkey)
+	}
+	if opt, ok := ps.ProposeConfig[pubkey]; ok && opt != nil && opt.BuilderConfig != nil && opt.BuilderConfig.GasLimit != 0 {
+		return opt.BuilderConfig.GasLimit
+	}
+	if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil && ps.DefaultConfig.BuilderConfig.GasLimit != 0 {
+		return ps.DefaultConfig.BuilderConfig.GasLimit
+	}
+	return chainDefault
+}
+
+// SetGasLimit writes the per-pubkey gas limit. v1 requires existing settings
+// with builder enabled.
+func (ps *Settings) SetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, gasLimit validator.Uint64) error {
+	if ps == nil {
+		return errors.New("No proposer settings were found to update")
+	}
+	if ps.isV2() {
+		if ps.ProposeConfig == nil {
+			ps.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
+		}
+		opt := ps.ProposeConfig[pubkey]
+		if opt == nil {
+			opt = &Option{}
+			ps.ProposeConfig[pubkey] = opt
+		}
+		opt.GasLimit = gasLimit
+		return nil
+	}
+	builderEnabled := func(o *Option) bool {
+		return o != nil && o.BuilderConfig != nil && o.BuilderConfig.Enabled
+	}
+	if ps.ProposeConfig == nil {
+		if !builderEnabled(ps.DefaultConfig) {
+			return errors.New("Gas limit changes only apply when builder is enabled")
+		}
+		ps.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
+		opt := ps.DefaultConfig.Clone()
+		opt.BuilderConfig.GasLimit = gasLimit
+		ps.ProposeConfig[pubkey] = opt
+		return nil
+	}
+	if opt, found := ps.ProposeConfig[pubkey]; found {
+		if !builderEnabled(opt) {
+			return errors.New("Gas limit changes only apply when builder is enabled")
+		}
+		opt.BuilderConfig.GasLimit = gasLimit
+		return nil
+	}
+	if !builderEnabled(ps.DefaultConfig) {
+		return errors.New("Gas limit changes only apply when builder is enabled")
+	}
+	opt := ps.DefaultConfig.Clone()
+	opt.BuilderConfig.GasLimit = gasLimit
+	ps.ProposeConfig[pubkey] = opt
+	return nil
+}
+
+// ResetGasLimit reverts pubkey's gas limit to the configured default (or chain
+// default). Returns false when there's nothing to reset.
+func (ps *Settings) ResetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) bool {
+	if ps == nil {
+		return false
+	}
+	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+	if ps.isV2() {
+		opt, found := ps.ProposeConfig[pubkey]
+		if !found || opt == nil || opt.GasLimit == 0 {
+			return false
+		}
+		if ps.DefaultConfig != nil && ps.DefaultConfig.GasLimit != 0 {
+			opt.GasLimit = ps.DefaultConfig.GasLimit
+		} else {
+			opt.GasLimit = chainDefault
+		}
+		return true
+	}
+	opt, found := ps.ProposeConfig[pubkey]
+	if !found || opt == nil || opt.BuilderConfig == nil {
+		return false
+	}
+	if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil {
+		opt.BuilderConfig.GasLimit = ps.DefaultConfig.BuilderConfig.GasLimit
+	} else {
+		opt.BuilderConfig.GasLimit = chainDefault
+	}
+	return true
 }

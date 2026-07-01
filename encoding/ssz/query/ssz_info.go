@@ -90,6 +90,25 @@ func (info *SszInfo) Size() uint64 {
 	}
 }
 
+// LengthValue returns the runtime length of a List (counted in elements) or a Bitlist
+// (counted in bits). len() queries are only valid for these two types; any other type
+// returns an error. The value is populated during AnalyzeObject, so it reflects the
+// analyzed instance rather than the type's limit.
+func (info *SszInfo) LengthValue() (uint64, error) {
+	if info == nil {
+		return 0, errors.New("SszInfo is nil")
+	}
+
+	switch info.sszType {
+	case List:
+		return info.listInfo.Length(), nil
+	case Bitlist:
+		return info.bitlistInfo.Length(), nil
+	default:
+		return 0, fmt.Errorf("len() is only supported for List and Bitlist types, got %s", info.sszType)
+	}
+}
+
 func (info *SszInfo) ContainerInfo() (*containerInfo, error) {
 	if info == nil {
 		return nil, errors.New("SszInfo is nil")

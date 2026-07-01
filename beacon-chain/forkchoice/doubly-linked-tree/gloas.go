@@ -123,6 +123,14 @@ func (s *Store) allConsensusChildren(n *Node) []*Node {
 	return en.children
 }
 
+// hasConsensusChildren reports whether any consensus block builds on the given node.
+// It avoids the allocation allConsensusChildren makes when only the count is needed.
+func (s *Store) hasConsensusChildren(n *Node) bool {
+	en := s.emptyNodeByRoot[n.root]
+	fn, ok := s.fullNodeByRoot[n.root]
+	return len(en.children) > 0 || (ok && len(fn.children) > 0)
+}
+
 // setNodeAndParentValidated sets the current node and all the ancestors as validated (i.e. non-optimistic).
 func (s *Store) setNodeAndParentValidated(ctx context.Context, pn *PayloadNode) error {
 	if ctx.Err() != nil {
@@ -230,7 +238,7 @@ func (s *Store) updateBestDescendantConsensusNode(ctx context.Context, n *Node, 
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if len(s.allConsensusChildren(n)) == 0 {
+	if !s.hasConsensusChildren(n) {
 		n.bestDescendant = nil
 		return nil
 	}
@@ -555,9 +563,6 @@ func (f *ForkChoice) HasFullNode(root [32]byte) bool {
 func (f *ForkChoice) FullBeatsEmpty(root [32]byte) bool {
 	en := f.store.emptyNodeByRoot[root]
 	if en == nil || en.node == nil {
-		return false
-	}
-	if slots.ToEpoch(en.node.slot) < params.BeaconConfig().GloasForkEpoch {
 		return false
 	}
 	pn := f.store.choosePayloadContent(en.node)

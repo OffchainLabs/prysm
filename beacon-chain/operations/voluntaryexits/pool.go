@@ -9,7 +9,6 @@ import (
 	types "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	doublylinkedlist "github.com/OffchainLabs/prysm/v7/container/doubly-linked-list"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/sirupsen/logrus"
 )
@@ -80,8 +79,9 @@ func (p *Pool) ExitsForInclusion(st state.ReadOnlyBeaconState, slot types.Slot) 
 			}
 			continue
 		}
-		// Builder exits are only valid from Gloas onwards.
-		if exit.Exit.ValidatorIndex.IsBuilderIndex() && st.Version() < version.Gloas {
+		// [Modified in Gloas:EIP8282] Builder exits are no longer carried as voluntary
+		// exits; builders exit via BuilderExitRequest on the execution layer.
+		if exit.Exit.ValidatorIndex.IsBuilderIndex() {
 			node, err = node.Next()
 			if err != nil {
 				p.lock.RUnlock()
@@ -89,19 +89,15 @@ func (p *Pool) ExitsForInclusion(st state.ReadOnlyBeaconState, slot types.Slot) 
 			}
 			continue
 		}
-		var validator state.ReadOnlyValidator
-		if !exit.Exit.ValidatorIndex.IsBuilderIndex() {
-			var vErr error
-			validator, vErr = st.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
-			if vErr != nil {
-				logrus.WithError(vErr).Warningf("could not get validator at index %d", exit.Exit.ValidatorIndex)
-				node, err = node.Next()
-				if err != nil {
-					p.lock.RUnlock()
-					return nil, err
-				}
-				continue
+		validator, vErr := st.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
+		if vErr != nil {
+			logrus.WithError(vErr).Warningf("could not get validator at index %d", exit.Exit.ValidatorIndex)
+			node, err = node.Next()
+			if err != nil {
+				p.lock.RUnlock()
+				return nil, err
 			}
+			continue
 		}
 		if err = blocks.VerifyExitAndSignature(validator, st, exit); err != nil {
 			logrus.WithError(err).Warning("removing invalid exit from pool")

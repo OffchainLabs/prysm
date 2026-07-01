@@ -8,6 +8,8 @@ go_library(
         "attester_slashing.go",
         "block_header.go",
         "bls_to_execution_changes.go",
+        "builder_deposit_request.go",
+        "builder_exit_request.go",
         "consolidations.go",
         "deposit_request.go",
         "execution_payload_bid.go",

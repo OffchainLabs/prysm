@@ -16,9 +16,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Go 1.25.1
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.1'
+
       - name: Go mod tidy checker
-        id: gomodtidy
-        uses: ./.github/actions/gomodtidy
+        run: go mod tidy -diff
 
   gosec:
     name: Gosec scan
