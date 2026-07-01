@@ -268,7 +268,7 @@ func (s *Store) shouldExtendPayload(fn *PayloadNode) bool {
 		return false
 	}
 	n := fn.node
-	if n.payloadAvailabilityVote.Count() > fieldparams.PTCSize/2 && n.payloadDataAvailabilityVote.Count() > fieldparams.PTCSize/2 {
+	if ptcVotedEarlyAndAvailable(n) {
 		return true
 	}
 	if s.proposerBoostRoot == [32]byte{} {
@@ -282,6 +282,24 @@ func (s *Store) shouldExtendPayload(fn *PayloadNode) bool {
 		return true
 	}
 	return pn.node.parent.full
+}
+
+func ptcVotedEarlyAndAvailable(n *Node) bool {
+	return n != nil &&
+		n.payloadAvailabilityVote.Count() > fieldparams.PTCSize/2 &&
+		n.payloadDataAvailabilityVote.Count() > fieldparams.PTCSize/2
+}
+
+func ptcVotedLate(n *Node) bool {
+	if n == nil {
+		return false
+	}
+	attesters := n.payloadAttesters.Count()
+	payloadPresent := n.payloadAvailabilityVote.Count()
+	if payloadPresent >= attesters {
+		return false
+	}
+	return attesters-payloadPresent > fieldparams.PTCSize/2
 }
 
 // choosePayloadContent chooses between empty or full for the passed consensus node.
@@ -567,6 +585,33 @@ func (f *ForkChoice) FullBeatsEmpty(root [32]byte) bool {
 	}
 	pn := f.store.choosePayloadContent(en.node)
 	return pn != nil && pn.full
+}
+
+// PTCVotedEarlyAndAvailable returns whether the PTC has majority-voted that the payload and blob data are available.
+func (f *ForkChoice) PTCVotedEarlyAndAvailable(root [32]byte) bool {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return false
+	}
+	return ptcVotedEarlyAndAvailable(en.node)
+}
+
+// PTCVotedLate returns whether the PTC has majority-voted that the payload is not present.
+func (f *ForkChoice) PTCVotedLate(root [32]byte) bool {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return false
+	}
+	return ptcVotedLate(en.node)
+}
+
+// ParentHash returns the payload hash of the latest full parent that the given block builds on.
+func (f *ForkChoice) ParentHash(root [32]byte) [32]byte {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return [32]byte{}
+	}
+	return f.store.parentHash(en)
 }
 
 // BlockHash returns the hash committed in the given block

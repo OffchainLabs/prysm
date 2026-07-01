@@ -185,6 +185,12 @@ var (
 		Name:  "enable-state-diff",
 		Usage: "Enables the experimental state diff feature.",
 	}
+	reorgLatePayloads = &cli.BoolFlag{
+		Name:   "reorg-late-payloads",
+		Usage:  "Enables reorging late payloads.",
+		Value:  false,
+		Hidden: true,
+	}
 	// forceHeadFlag is a flag to force the head of the beacon chain to a specific block.
 	forceHeadFlag = &cli.StringFlag{
 		Name: "sync-from",
@@ -286,6 +292,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
 	EnableStateDiff,
+	reorgLatePayloads,
 	forceHeadFlag,
 	blacklistRoots,
 	enableHashtree,

@@ -313,6 +313,64 @@ func TestBlockHash_GenesisRoot(t *testing.T) {
 	assert.Equal(t, [32]byte{}, got)
 }
 
+func TestParentHash(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 1, rootA, params.BeaconConfig().ZeroHash, blockHashA, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	rootB := indexToHash(2)
+	blockHashB := indexToHash(200)
+	st, roblock, err = prepareGloasForkchoiceState(ctx, 2, rootB, rootA, blockHashB, blockHashA, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	assert.Equal(t, blockHashA, f.ParentHash(rootB))
+}
+
+func TestParentHash_SkipsEmptyParents(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 1, rootA, params.BeaconConfig().ZeroHash, blockHashA, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	rootB := indexToHash(2)
+	blockHashB := indexToHash(200)
+	st, roblock, err = prepareGloasForkchoiceState(ctx, 2, rootB, rootA, blockHashB, blockHashA, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	rootC := indexToHash(3)
+	blockHashC := indexToHash(300)
+	st, roblock, err = prepareGloasForkchoiceState(ctx, 3, rootC, rootB, blockHashC, indexToHash(999), 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	assert.Equal(t, blockHashA, f.ParentHash(rootC))
+}
+
+func TestParentHash_UnknownRoot(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+
+	assert.Equal(t, [32]byte{}, f.ParentHash(indexToHash(999)))
+}
+
 func TestGloasBlock_ChildBuildsOnFull(t *testing.T) {
 	f := setupGloas(t, 0, 0)
 	ctx := t.Context()
@@ -1349,6 +1407,67 @@ func TestSetPTCVote(t *testing.T) {
 		en := f.store.emptyNodeByRoot[root]
 		require.NotNil(t, en)
 		assert.Equal(t, uint64(4), en.node.payloadAttesters.Count())
+	})
+}
+
+func TestPTCVotedEarlyAndAvailableAndLate(t *testing.T) {
+	setupForkchoice := func(t *testing.T) (*ForkChoice, [32]byte) {
+		t.Helper()
+		f := setupGloas(t, 0, 0)
+		ctx := t.Context()
+		root := indexToHash(1)
+		blockHash := indexToHash(100)
+		st, roblock, err := prepareGloasForkchoiceState(ctx, 1, root, params.BeaconConfig().ZeroHash, blockHash, params.BeaconConfig().ZeroHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, st, roblock))
+		return f, root
+	}
+
+	t.Run("unknown root", func(t *testing.T) {
+		f, _ := setupForkchoice(t)
+		root := indexToHash(999)
+		assert.Equal(t, false, f.PTCVotedEarlyAndAvailable(root))
+		assert.Equal(t, false, f.PTCVotedLate(root))
+	})
+
+	t.Run("early requires payload and blob data majorities", func(t *testing.T) {
+		f, root := setupForkchoice(t)
+		majority := uint64(fieldparams.PTCSize/2) + 1
+		for i := uint64(0); i < majority; i++ {
+			f.SetPTCVote(root, i, true, true)
+		}
+		assert.Equal(t, true, f.PTCVotedEarlyAndAvailable(root))
+		assert.Equal(t, false, f.PTCVotedLate(root))
+	})
+
+	t.Run("early false without blob data majority", func(t *testing.T) {
+		f, root := setupForkchoice(t)
+		majority := uint64(fieldparams.PTCSize/2) + 1
+		for i := uint64(0); i < majority; i++ {
+			f.SetPTCVote(root, i, true, false)
+		}
+		assert.Equal(t, false, f.PTCVotedEarlyAndAvailable(root))
+		assert.Equal(t, false, f.PTCVotedLate(root))
+	})
+
+	t.Run("late requires payload not present majority", func(t *testing.T) {
+		f, root := setupForkchoice(t)
+		majority := uint64(fieldparams.PTCSize/2) + 1
+		for i := uint64(0); i < majority; i++ {
+			f.SetPTCVote(root, i, false, false)
+		}
+		assert.Equal(t, false, f.PTCVotedEarlyAndAvailable(root))
+		assert.Equal(t, true, f.PTCVotedLate(root))
+	})
+
+	t.Run("half is not a majority", func(t *testing.T) {
+		f, root := setupForkchoice(t)
+		half := uint64(fieldparams.PTCSize / 2)
+		for i := uint64(0); i < half; i++ {
+			f.SetPTCVote(root, i, false, false)
+		}
+		assert.Equal(t, false, f.PTCVotedEarlyAndAvailable(root))
+		assert.Equal(t, false, f.PTCVotedLate(root))
 	})
 }
 
