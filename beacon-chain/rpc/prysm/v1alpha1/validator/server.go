@@ -92,7 +92,11 @@ type Server struct {
 	CoreService                      *core.Service
 	AttestationStateFetcher          blockchain.AttestationStateFetcher
 	GraffitiInfo                     *execution.GraffitiInfo
-	maxExecutionPayments             sync.Map // validator pubkey [48]byte -> max execution payment (Gwei uint64).
+	lastBidLock                      sync.Mutex
+	lastBidSlot                      primitives.Slot
+	lastBidSource                    bidSource // Guarded by lastBidLock; set during Gloas block build, read when proposing.
+	lastBidBuilderURL                string    // Guarded by lastBidLock; winning Builder-API URL for lastBidSlot.
+	maxExecutionPayments             sync.Map  // validator pubkey [48]byte -> max execution payment (Gwei uint64).
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.

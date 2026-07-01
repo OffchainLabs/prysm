@@ -15,21 +15,22 @@ type Option func(s *Service) error
 func FlagOptions(c *cli.Context) ([]Option, error) {
 	endpoint := c.String(flags.MevRelayEndpoint.Name)
 	sszDisabled := c.Bool(flags.DisableBuilderSSZ.Name)
+	var clientOpts []builder.ClientOpt
+	if !sszDisabled {
+		log.Info("Using APIs with SSZ enabled")
+		clientOpts = append(clientOpts, builder.WithSSZ())
+	}
 	var client *builder.Client
 	if endpoint != "" {
-		var opts []builder.ClientOpt
-		if !sszDisabled {
-			log.Info("Using Builder APIs with SSZ enabled")
-			opts = append(opts, builder.WithSSZ())
-		}
 		var err error
-		client, err = builder.NewClient(endpoint, opts...)
+		client, err = builder.NewClient(endpoint, clientOpts...)
 		if err != nil {
 			return nil, err
 		}
 	}
 	opts := []Option{
 		WithBuilderClient(client),
+		WithBuilderClientOpts(clientOpts...),
 	}
 	return opts, nil
 }
@@ -38,6 +39,15 @@ func FlagOptions(c *cli.Context) ([]Option, error) {
 func WithBuilderClient(client builder.BuilderClient) Option {
 	return func(s *Service) error {
 		s.cfg.builderClient = client
+		return nil
+	}
+}
+
+// WithBuilderClientOpts records the client options used to dial builders lazily
+// per URL, so VC-driven Gloas builders match the flag client's configuration.
+func WithBuilderClientOpts(opts ...builder.ClientOpt) Option {
+	return func(s *Service) error {
+		s.clientOpts = opts
 		return nil
 	}
 }
