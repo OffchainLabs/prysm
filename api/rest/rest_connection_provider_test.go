@@ -44,18 +44,8 @@ func TestRestConnectionProvider(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("initial state", func(t *testing.T) {
-		assert.Equal(t, 3, len(provider.Hosts()))
-		assert.Equal(t, "http://host1:3500", provider.CurrentHost())
+		assert.DeepEqual(t, []string{"http://host1:3500", "http://host2:3500", "http://host3:3500"}, provider.Hosts())
 		assert.NotNil(t, provider.HttpClient())
-	})
-
-	t.Run("SwitchHost", func(t *testing.T) {
-		require.NoError(t, provider.SwitchHost(1))
-		assert.Equal(t, "http://host2:3500", provider.CurrentHost())
-		require.NoError(t, provider.SwitchHost(0))
-		assert.Equal(t, "http://host1:3500", provider.CurrentHost())
-		require.ErrorContains(t, "invalid host index", provider.SwitchHost(-1))
-		require.ErrorContains(t, "invalid host index", provider.SwitchHost(3))
 	})
 
 	t.Run("Hosts returns copy", func(t *testing.T) {
@@ -76,5 +66,5 @@ func TestRestConnectionProvider_WithOptions(t *testing.T) {
 	)
 	require.NoError(t, err)
 	assert.NotNil(t, provider.HttpClient())
-	assert.Equal(t, "http://localhost:3500", provider.CurrentHost())
+	assert.DeepEqual(t, []string{"http://localhost:3500"}, provider.Hosts())
 }

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/client/event"
-	"github.com/OffchainLabs/prysm/v7/api/fallback"
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -24,8 +23,8 @@ type beaconApiValidatorClient struct {
 	genesisProvider         GenesisProvider
 	dutiesProvider          dutiesProvider
 	stateValidatorsProvider StateValidatorsProvider
-	restProvider            rest.RestConnectionProvider
 	handler                 rest.Handler
+	eventStreamHosts        []string
 	nodeClient              *beaconApiNodeClient
 	beaconBlockConverter    BeaconBlockConverter
 	prysmChainClient        iface.PrysmChainClient
@@ -53,8 +52,8 @@ func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...V
 		genesisProvider:         &beaconApiGenesisProvider{handler: handler},
 		dutiesProvider:          beaconApiDutiesProvider{handler: handler},
 		stateValidatorsProvider: beaconApiStateValidatorsProvider{handler: handler},
-		restProvider:            provider,
 		handler:                 handler,
+		eventStreamHosts:        provider.Hosts(),
 		nodeClient:              nc,
 		beaconBlockConverter:    beaconApiBeaconBlockConverter{},
 		prysmChainClient: prysmChainClient{
@@ -349,7 +348,7 @@ func (c *beaconApiValidatorClient) WaitForChainStart(ctx context.Context, _ *emp
 
 func (c *beaconApiValidatorClient) StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *event.Event) {
 	client := &http.Client{} // event stream should not be subject to the same settings as other api calls
-	eventStream, err := event.NewEventStream(ctx, client, c.handler.Host(), topics)
+	eventStream, err := event.NewMultiEventStream(ctx, client, c.eventStreamHosts, topics)
 	if err != nil {
 		eventsChannel <- &event.Event{
 			Type: event.EventError,
@@ -412,7 +411,7 @@ func (c *beaconApiValidatorClient) Host() string {
 }
 
 func (c *beaconApiValidatorClient) EnsureReady(ctx context.Context) bool {
-	return fallback.EnsureReady(ctx, c.restProvider, c.nodeClient)
+	return c.nodeClient.IsReady(ctx)
 }
 
 // Gloas Fork Methods

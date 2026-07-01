@@ -313,7 +313,3 @@ func decodeResp(httpResp *http.Response, resp any) error {
 
 	return nil
 }
-
-func (c *handler) SwitchHost(host string) {
-	c.host = host
-}
