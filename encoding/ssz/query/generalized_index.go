@@ -3,8 +3,10 @@ package query
 import (
 	"errors"
 	"fmt"
+	"math/bits"
 
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
+	"github.com/OffchainLabs/prysm/v7/math"
 )
 
 const listBaseIndex = 2
@@ -49,7 +51,7 @@ func GetGeneralizedIndexFromPath(info *SszInfo, path Path) (uint64, error) {
 		}
 
 		// Update the generalized index to point to the specified field
-		currentIndex = currentIndex*nextPowerOfTwo(chunkCount) + fieldPos
+		currentIndex = currentIndex*math.NextPowerOf2(chunkCount) + fieldPos
 		currentInfo = fieldSsz
 
 		// Check for length access: element is the last in the path and requests length
@@ -97,6 +99,39 @@ func GetGeneralizedIndexFromPath(info *SszInfo, path Path) (uint64, error) {
 	}
 
 	return currentIndex, nil
+}
+
+// ComputeRelativeGindex computes the generalized index of a child
+// relative to its parent generalized index.
+// For example, given parent gindex 36 (100100) and child gindex 289 (100100001),
+// the shift would be 3 (since 289 is 3 bits longer than 36),
+// and the relative offset would be 001 (since the last 3 bits of 289 are 001).
+// the relative gindex would be 9 (1001).
+// Used for computing relative gindex for proof collection.
+func ComputeRelativeGindex(parent, child uint64) (uint64, error) {
+	if parent == 0 || child == 0 {
+		return 0, fmt.Errorf("parent and child must be non-zero")
+	}
+
+	pLen := bits.Len64(parent)
+	cLen := bits.Len64(child)
+
+	if pLen >= cLen {
+		return 0, fmt.Errorf("parent gindex %d is not an ancestor of child gindex %d", parent, child)
+	}
+
+	shift := cLen - pLen
+
+	// Verify that parent is actually an ancestor: its bits must be a prefix of child's bits.
+	if child>>shift != parent {
+		return 0, fmt.Errorf("child gindex %d is not deeper than parent gindex %d", parent, child)
+	}
+
+	// Extract the "shift" least significant bits from child
+	mask := (uint64(1) << shift) - 1
+	relativeOffset := child & mask
+
+	return (1 << shift) | relativeOffset, nil
 }
 
 // getContainerFieldByName finds a container field by its name
@@ -170,7 +205,7 @@ func calculateListGeneralizedIndex(fieldSsz *SszInfo, element PathElement, paren
 		return nil, 0, fmt.Errorf("chunk count error: %w", err)
 	}
 	// root = root * base_index * pow2ceil(chunk_count(container)) + fieldPos
-	listIndex := parentIndex*listBaseIndex*nextPowerOfTwo(innerChunkCount) + chunkPos
+	listIndex := parentIndex*listBaseIndex*math.NextPowerOf2(innerChunkCount) + chunkPos
 	currentInfo := elem
 
 	return currentInfo, listIndex, nil
@@ -203,7 +238,7 @@ func calculateVectorGeneralizedIndex(fieldSsz *SszInfo, element PathElement, par
 	if err != nil {
 		return nil, 0, fmt.Errorf("chunk count error: %w", err)
 	}
-	vectorIndex := parentIndex*nextPowerOfTwo(innerChunkCount) + chunkPos
+	vectorIndex := parentIndex*math.NextPowerOf2(innerChunkCount) + chunkPos
 
 	currentInfo := elem
 	return currentInfo, vectorIndex, nil
@@ -220,7 +255,7 @@ func calculateBitlistGeneralizedIndex(fieldSsz *SszInfo, element PathElement, pa
 	if err != nil {
 		return nil, 0, fmt.Errorf("chunk count error: %w", err)
 	}
-	bitlistIndex := parentIndex*listBaseIndex*nextPowerOfTwo(innerChunkCount) + chunkPos
+	bitlistIndex := parentIndex*listBaseIndex*math.NextPowerOf2(innerChunkCount) + chunkPos
 
 	// Bits element is not further descendable; set to basic to guard further steps
 	currentInfo := &SszInfo{sszType: Boolean}
@@ -237,7 +272,7 @@ func calculateBitvectorGeneralizedIndex(fieldSsz *SszInfo, element PathElement, 
 	if err != nil {
 		return nil, 0, fmt.Errorf("chunk count error: %w", err)
 	}
-	bitvectorIndex := parentIndex*nextPowerOfTwo(innerChunkCount) + chunkPos
+	bitvectorIndex := parentIndex*math.NextPowerOf2(innerChunkCount) + chunkPos
 
 	// Bits element is not further descendable; set to basic to guard further steps
 	currentInfo := &SszInfo{sszType: Boolean}
@@ -256,18 +291,6 @@ func itemLength(info *SszInfo) uint64 {
 		return info.Size()
 	}
 	return ssz.BytesPerChunk
-}
-
-// nextPowerOfTwo computes the next power of two greater than or equal to v.
-func nextPowerOfTwo(v uint64) uint64 {
-	v--
-	v |= v >> 1
-	v |= v >> 2
-	v |= v >> 4
-	v |= v >> 8
-	v |= v >> 16
-	v++
-	return uint64(v)
 }
 
 // getChunkCount returns the number of chunks for the given SSZInfo (equivalent to chunk_count in the spec)

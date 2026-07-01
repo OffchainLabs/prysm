@@ -1,6 +1,7 @@
 package beacon
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz/query"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
@@ -109,9 +111,23 @@ func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 		result = encodedState[offset : offset+length]
 	}
 
-	response := &sszquerypb.SSZQueryResponse{
-		Root:   stateRoot,
-		Result: result,
+	var response ssz.Marshaler
+	if req.IncludeProof {
+		proof, err := getBeaconStateProof(ctx, st, info, path)
+		if err != nil {
+			httputil.HandleError(w, "Could not compute merkle proofs for path "+req.Query+": "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		response = &sszquerypb.SSZQueryResponseWithProof{
+			Root:   stateRoot,
+			Result: result,
+			Proof:  proof,
+		}
+	} else {
+		response = &sszquerypb.SSZQueryResponse{
+			Root:   stateRoot,
+			Result: result,
+		}
 	}
 
 	responseSsz, err := response.MarshalSSZ()
@@ -253,4 +269,190 @@ func getSSZQueryProof(info *query.SszInfo, path query.Path) (*ssz.Proof, error) 
 		return nil, fmt.Errorf("prove gindex %d: %w", gi, err)
 	}
 	return proof, nil
+}
+
+// anchor is the resolved first path element.
+// e.g.,
+// 1) path = "validators[0].pubkey", anchor = "validators[0]"
+// 2) path = "eth1_data.deposit_count", anchor = "eth1_data"
+type anchor struct {
+	info   *query.SszInfo
+	gindex uint64
+	leaf   []byte
+	proof  [][]byte
+}
+
+// getBeaconStateProof proves the given path using hybrid-approach.
+// - Leverage the native state's proof generation for anchor fields (= top-level fields e.g., "validators", "latest_block_header").
+// - If needed, use generic proof collector for deeper fields, starting from the anchor (e.g., "validators[0].effective_balance").
+func getBeaconStateProof(ctx context.Context, st state.BeaconState, info *query.SszInfo, path query.Path) (*sszquerypb.SSZQueryProof, error) {
+	if len(path.Elements) == 0 {
+		return nil, errors.New("cannot compute proof for empty path")
+	}
+
+	a, err := resolveAnchor(ctx, st, info, path.Elements[0])
+	if err != nil {
+		return nil, err
+	}
+
+	// If the query is only for the anchor field,
+	// return the anchor proof directly without invoking the generic prover.
+	if len(path.Elements) == 1 {
+		return &sszquerypb.SSZQueryProof{
+			Leaf:   a.leaf,
+			Proofs: a.proof,
+			Gindex: a.gindex,
+		}, nil
+	}
+
+	// For deeper paths, use the generic prover rooted at the anchor.
+	return deepenProof(info, path, a)
+}
+
+// resolveAnchor resolves the first path element into an anchor whose proof reaches the state root.
+func resolveAnchor(ctx context.Context, st state.BeaconState, info *query.SszInfo, field query.PathElement) (*anchor, error) {
+	name := field.Name
+
+	beaconStateInfo, err := info.ContainerInfo()
+	if err != nil {
+		return nil, fmt.Errorf("could not get container info of BeaconState: %w", err)
+	}
+
+	fieldInfo, err := beaconStateInfo.FieldInfo(name)
+	if err != nil {
+		return nil, fmt.Errorf("could not get field info for anchor field %q: %w", name, err)
+	}
+
+	pos, ok := beaconStateInfo.FieldPosition(name)
+	if !ok {
+		return nil, fmt.Errorf("unknown field name: %s", name)
+	}
+
+	gindex, err := query.GetGeneralizedIndexFromPath(info, query.Path{Elements: []query.PathElement{field}})
+	if err != nil {
+		return nil, fmt.Errorf("could not compute gindex for anchor field %q: %w", name, err)
+	}
+
+	// Top-level field without index.
+	if field.Index == nil {
+		leaf, proof, err := st.ProofByFieldPosition(ctx, pos)
+		if err != nil {
+			return nil, fmt.Errorf("could not compute proof for anchor field %q: %w", name, err)
+		}
+		return &anchor{
+			info:   fieldInfo,
+			gindex: gindex,
+			leaf:   leaf,
+			proof:  proof,
+		}, nil
+	}
+
+	// Note: From here on, the anchor field is expected
+	// to be a List/Vector with index access (e.g., validators[0]).
+
+	// elemInfo will be a new SszInfo for the element type.
+	elemInfo, err := elementInfo(fieldInfo, field)
+	if err != nil {
+		return nil, err
+	}
+
+	leaf, proof, err := proveElement(ctx, st, info, field, pos, gindex)
+	if err != nil {
+		return nil, err
+	}
+
+	return &anchor{
+		info:   elemInfo,
+		gindex: gindex,
+		leaf:   leaf,
+		proof:  proof,
+	}, nil
+}
+
+// elementInfo descends a List/Vector field's SszInfo to its element type, wiring the
+// element value as the source (lists) for deeper proofs.
+func elementInfo(fieldInfo *query.SszInfo, field query.PathElement) (*query.SszInfo, error) {
+	name := field.Name
+
+	switch fieldInfo.Type() {
+	case query.List:
+		li, err := fieldInfo.ListInfo()
+		if err != nil {
+			return nil, fmt.Errorf("could not get list info for field %q: %w", name, err)
+		}
+
+		elemInfo, err := li.Element()
+		if err != nil {
+			return nil, fmt.Errorf("could not get element info for list field %q: %w", name, err)
+		}
+
+		elementValue, err := li.ElementValue(int(*field.Index)) // lint:ignore uintcast -- BeaconState's list fields are not expected to exceed int64 max value.
+		if err != nil {
+			return nil, fmt.Errorf("could not get reflect.Value for list element %s[%d]: %w", name, *field.Index, err)
+		}
+
+		if sszObj, ok := elementValue.Interface().(query.SSZObject); ok {
+			elemInfo.SetSource(sszObj)
+		}
+
+		return elemInfo, nil
+	case query.Vector:
+		vi, err := fieldInfo.VectorInfo()
+		if err != nil {
+			return nil, fmt.Errorf("could not get vector info for field %q: %w", name, err)
+		}
+
+		elemInfo, err := vi.Element()
+		if err != nil {
+			return nil, fmt.Errorf("could not get element info for vector field %q: %w", name, err)
+		}
+
+		return elemInfo, nil
+	default:
+		return nil, fmt.Errorf("field %q is not a List or Vector, cannot access by index", name)
+	}
+}
+
+// proveElement proves field[index] to the state root, falling back to the generic prover
+// for fields with no native field trie (e.g. slashings, historical_roots).
+func proveElement(ctx context.Context, st state.BeaconState, info *query.SszInfo, field query.PathElement, pos int, gindex uint64) ([]byte, [][]byte, error) {
+	index := *field.Index
+
+	leaf, proof, err := st.ProofForFieldElement(ctx, pos, index)
+	switch {
+	case errors.Is(err, state.ErrFieldElementProofUnsupported):
+		result, pErr := info.Prove(gindex)
+		if pErr != nil {
+			return nil, nil, fmt.Errorf("could not compute fallback proof for element %s[%d]: %w", field.Name, index, pErr)
+		}
+		return result.Leaf, result.Hashes, nil
+	case err != nil:
+		return nil, nil, fmt.Errorf("could not compute proof for element %s[%d]: %w", field.Name, index, err)
+	default:
+		return leaf, proof, nil
+	}
+}
+
+// deepenProof extends the anchor proof to a deeper path via the generic prover.
+func deepenProof(info *query.SszInfo, path query.Path, a *anchor) (*sszquerypb.SSZQueryProof, error) {
+	targetGindex, err := query.GetGeneralizedIndexFromPath(info, path)
+	if err != nil {
+		return nil, fmt.Errorf("could not compute full gindex: %w", err)
+	}
+
+	relativeGindex, err := query.ComputeRelativeGindex(a.gindex, targetGindex)
+	if err != nil {
+		return nil, fmt.Errorf("could not compute relative gindex from the anchor: %w", err)
+	}
+
+	bottomProof, err := a.info.Prove(relativeGindex)
+	if err != nil {
+		return nil, fmt.Errorf("could not generate proof starting from the anchor: %w", err)
+	}
+
+	return &sszquerypb.SSZQueryProof{
+		Leaf:   bottomProof.Leaf,
+		Proofs: append(bottomProof.Hashes, a.proof...), // decreasing gindex order
+		Gindex: targetGindex,
+	}, nil
 }

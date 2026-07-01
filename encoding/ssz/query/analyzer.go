@@ -62,6 +62,9 @@ func PopulateVariableLengthInfo(sszInfo *SszInfo, value reflect.Value) error {
 
 		length := value.Len()
 
+		// Set the underlying slice value again
+		listInfo.sliceValue = value
+
 		if listInfo.element.isVariable {
 			listInfo.elementSizes = make([]uint64, 0, length)
 
@@ -287,8 +290,9 @@ func analyzeListType(value reflect.Value, elementInfo *SszInfo, limit uint64, is
 		isVariable: true,
 
 		listInfo: &listInfo{
-			limit:   limit,
-			element: elementInfo,
+			limit:      limit,
+			element:    elementInfo,
+			sliceValue: value,
 		},
 	}, nil
 }
