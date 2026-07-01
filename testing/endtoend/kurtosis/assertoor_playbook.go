@@ -54,11 +54,42 @@ func (kw *KurtosisWrapper) RegisterPlaybooks(ctx context.Context, optIn, skip []
 		if err != nil {
 			return err
 		}
-		if err := registerAndScheduleTest(ctx, baseURL, data); err != nil {
+
+		testID, err := registerAssertoorTest(ctx, baseURL, data)
+		if err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+		if _, err := scheduleAssertoorTest(ctx, baseURL, testID, nil); err != nil {
 			return fmt.Errorf("%s: %w", name, err)
 		}
 	}
 	return nil
+}
+
+// RegisterPlaybook registers one embedded playbook by filename and returns its test ID.
+func (kw *KurtosisWrapper) RegisterPlaybook(ctx context.Context, name string) (string, error) {
+	baseURL, err := kw.NewAssertoorEndpoint()
+	if err != nil {
+		return "", err
+	}
+	if err := waitForAssertoorReady(ctx, baseURL); err != nil {
+		return "", err
+	}
+
+	data, err := assertoorPlaybooksFS.ReadFile("playbooks/" + name)
+	if err != nil {
+		return "", err
+	}
+	return registerAssertoorTest(ctx, baseURL, data)
+}
+
+// ScheduleAssertoorTest schedules a registered test immediately and returns the run ID.
+func (kw *KurtosisWrapper) ScheduleAssertoorTest(ctx context.Context, testID string, config map[string]any) (uint64, error) {
+	baseURL, err := kw.NewAssertoorEndpoint()
+	if err != nil {
+		return 0, err
+	}
+	return scheduleAssertoorTest(ctx, baseURL, testID, config)
 }
 
 func toSet(names []string) map[string]bool {
@@ -87,23 +118,32 @@ func waitForAssertoorReady(ctx context.Context, baseURL string) error {
 	return fmt.Errorf("Assertoor API never became ready: %w", err)
 }
 
-// registerAndScheduleTest registers an inline test (YAML body, with tasks) with
-// Assertoor and schedules a run of it.
-func registerAndScheduleTest(ctx context.Context, baseURL string, testYAML []byte) error {
+func registerAssertoorTest(ctx context.Context, baseURL string, testYAML []byte) (string, error) {
 	var reg struct {
 		TestID string `json:"test_id"`
 	}
 	if err := assertoorPost(ctx, baseURL+"/api/v1/tests/register", contentTypeYAML, testYAML, &reg); err != nil {
-		return fmt.Errorf("register test: %w", err)
+		return "", fmt.Errorf("register test: %w", err)
 	}
+	return reg.TestID, nil
+}
 
+func scheduleAssertoorTest(ctx context.Context, baseURL, testID string, config map[string]any) (uint64, error) {
 	// skip_queue runs the test off-queue (in parallel). Safe for our read-only checks.
-	body, err := json.Marshal(map[string]any{"test_id": reg.TestID, "skip_queue": true})
+	body, err := json.Marshal(map[string]any{
+		"test_id":         testID,
+		"config":          config,
+		"allow_duplicate": true,
+		"skip_queue":      true,
+	})
 	if err != nil {
-		return err
+		return 0, err
 	}
-	if err := assertoorPost(ctx, baseURL+"/api/v1/test_runs/schedule", contentTypeJSON, body, nil); err != nil {
-		return fmt.Errorf("schedule test %q: %w", reg.TestID, err)
+	var scheduled struct {
+		RunID uint64 `json:"run_id"`
 	}
-	return nil
+	if err := assertoorPost(ctx, baseURL+"/api/v1/test_runs/schedule", contentTypeJSON, body, &scheduled); err != nil {
+		return 0, fmt.Errorf("schedule test %q: %w", testID, err)
+	}
+	return scheduled.RunID, nil
 }
