@@ -3,6 +3,7 @@ package node
 import (
 	"fmt"
 
+	regularsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -26,8 +27,11 @@ func configureTracing(cliCtx *cli.Context) error {
 func configureChainConfig(cliCtx *cli.Context) error {
 	if cliCtx.IsSet(cmd.ChainConfigFileFlag.Name) {
 		chainConfigFileName := cliCtx.String(cmd.ChainConfigFileFlag.Name)
-		return params.LoadChainConfigFile(chainConfigFileName, nil)
+		if err := params.LoadChainConfigFile(chainConfigFileName, nil); err != nil {
+			return err
+		}
 	}
+	regularsync.RefreshRPCTimeoutsFromConfig()
 	return nil
 }
 
