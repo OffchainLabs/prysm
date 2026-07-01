@@ -179,7 +179,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 			"payloadID": fmt.Sprintf("%#x", bytesutil.Trunc(payloadID[:])),
 		}).Info("Forkchoice updated with payload attributes for proposal")
 		s.cfg.PayloadIDCache.Set(nextSlot, arg.headRoot, true, pId)
-		go s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), arg.headBlock, arg.headRoot, nextSlot, arg.attributes)
+		go s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), arg.headBlock, arg.headRoot, nextSlot, arg.attributes, nil)
 	} else if hasAttr && payloadID == nil && !features.Get().PrepareAllPayloads {
 		log.WithFields(logrus.Fields{
 			"blockHash": fmt.Sprintf("%#x", headPayload.BlockHash()),
@@ -190,15 +190,15 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 	return payloadID, nil
 }
 
-func (s *Service) firePayloadAttributesEvent(f event.SubscriberSender, block interfaces.ReadOnlySignedBeaconBlock, root [32]byte, nextSlot primitives.Slot, attr payloadattribute.Attributer) {
+func (s *Service) firePayloadAttributesEvent(f event.SubscriberSender, block interfaces.ReadOnlySignedBeaconBlock, root [32]byte, nextSlot primitives.Slot, attr payloadattribute.Attributer, parentBlockHash []byte) {
 	// If we're syncing a block in the past and init-sync is still running, we shouldn't fire this event.
 	if !s.cfg.SyncChecker.Synced() {
 		return
 	}
-	// Carry the attribute already sent to the engine so the SSE value matches it exactly; the handler fills the remaining scalar fields lazily.
+	// Carry the attribute and parent block hash already sent to the engine so the SSE value matches it exactly; the handler fills the remaining scalar fields lazily.
 	f.Send(&feed.Event{
 		Type: statefeed.PayloadAttributes,
-		Data: payloadattribute.EventData{HeadBlock: block, HeadRoot: root, ProposalSlot: nextSlot, Attributer: attr},
+		Data: payloadattribute.EventData{HeadBlock: block, HeadRoot: root, ProposalSlot: nextSlot, Attributer: attr, ParentBlockHash: parentBlockHash},
 	})
 }
 
