@@ -48,8 +48,8 @@ import (
 type Server struct {
 	Ctx                              context.Context
 	PayloadIDCache                   *cache.PayloadIDCache
-	TrackedValidatorsCache           *cache.TrackedValidatorsCache
 	ProposerPreferencesCache         *cache.ProposerPreferencesCache
+	SubscribedValidatorsCache        *cache.SubscribedValidatorsCache
 	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
 	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache
 	HeadFetcher                      blockchain.HeadFetcher

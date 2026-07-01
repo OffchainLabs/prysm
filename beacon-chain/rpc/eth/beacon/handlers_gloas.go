@@ -11,16 +11,13 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
@@ -187,6 +184,9 @@ func (s *Server) publishBlindedEnvelope(ctx context.Context, w http.ResponseWrit
 		return
 	}
 
+	// Consensus-level broadcast_validation needs the full envelope; reconstruct it from cache for
+	// the check only. The publish-side reconstruction + sidecar broadcast happens in the v1alpha1
+	// server (shared with the gRPC path), so forward the blinded arm and let it rebuild the payload.
 	full := &eth.SignedExecutionPayloadEnvelope{
 		Message:   cached.Envelope,
 		Signature: signedBlinded.Signature,
@@ -196,7 +196,10 @@ func (s *Server) publishBlindedEnvelope(ctx context.Context, w http.ResponseWrit
 		return
 	}
 
-	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, full); err != nil {
+	generic := &eth.GenericSignedExecutionPayloadEnvelope{
+		Envelope: &eth.GenericSignedExecutionPayloadEnvelope_Blinded{Blinded: signedBlinded},
+	}
+	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, generic); err != nil {
 		writeEnvelopePublishError(w, err)
 		return
 	}
@@ -258,45 +261,23 @@ func (s *Server) publishExecutionPayloadEnvelopeContentsSSZ(ctx context.Context,
 	s.processEnvelopeContents(ctx, w, r, contents.SignedExecutionPayloadEnvelope, contents.KzgProofs, contents.Blobs)
 }
 
-// processEnvelopeContents verifies caller-supplied blobs/proofs, broadcasts
-// derived sidecars, then delegates the envelope to the bare publish path.
+// processEnvelopeContents delegates the signed envelope + blobs/proofs to the v1alpha1 publish path,
+// which verifies the blobs, broadcasts the data column sidecars, and publishes the envelope.
 func (s *Server) processEnvelopeContents(ctx context.Context, w http.ResponseWriter, r *http.Request, signed *eth.SignedExecutionPayloadEnvelope, kzgProofs, blobs [][]byte) {
 	if !s.validateEnvelopeBroadcast(ctx, w, r, signed) {
 		return
 	}
 
-	if len(blobs) > 0 {
-		blockRoot := bytesutil.ToBytes32(signed.Message.BeaconBlockRoot)
-		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(blobs, kzgProofs)
-		if err != nil {
-			httputil.HandleError(w, "could not compute cells and proofs: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		// External trust boundary — verify before broadcasting/storing.
-		if err := verifyCellProofs(blobs, kzgProofs); err != nil {
-			httputil.HandleError(w, "kzg verification failed: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		roSidecars, err := peerdas.DataColumnSidecarsGloas(cellsPerBlob, proofsPerBlob, primitives.Slot(signed.Message.Payload.SlotNumber), blockRoot)
-		if err != nil {
-			httputil.HandleError(w, "could not build data column sidecars: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		verifiedSidecars := make([]consensusblocks.VerifiedRODataColumn, 0, len(roSidecars))
-		for _, sc := range roSidecars {
-			verifiedSidecars = append(verifiedSidecars, consensusblocks.NewVerifiedRODataColumn(sc))
-		}
-		if err := s.Broadcaster.BroadcastDataColumnSidecars(ctx, verifiedSidecars, nil); err != nil {
-			httputil.HandleError(w, "could not broadcast data column sidecars: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if err := s.DataColumnReceiver.ReceiveDataColumns(verifiedSidecars); err != nil {
-			httputil.HandleError(w, "could not receive data column sidecars: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
+	generic := &eth.GenericSignedExecutionPayloadEnvelope{
+		Envelope: &eth.GenericSignedExecutionPayloadEnvelope_Contents{
+			Contents: &eth.SignedExecutionPayloadEnvelopeContents{
+				SignedExecutionPayloadEnvelope: signed,
+				KzgProofs:                      kzgProofs,
+				Blobs:                          blobs,
+			},
+		},
 	}
-
-	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, signed); err != nil {
+	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, generic); err != nil {
 		writeEnvelopePublishError(w, err)
 		return
 	}
@@ -307,8 +288,8 @@ func (s *Server) processEnvelopeContents(ctx context.Context, w http.ResponseWri
 // envelope publish before it is broadcast to gossip. Spec: beacon-APIs #580.
 // Writes the HTTP error and returns false on failure: 400 for validation
 // failures, 500 for internal errors.
-//   - gossip (default): no extra REST-layer checks — the downstream gossip
-//     pipeline performs validation.
+//   - gossip (default): the REJECT-class gossip checks (slot, bid consistency,
+//     builder signature) against the envelope's beacon block.
 //   - consensus: full envelope consensus checks against the head state. Submission
 //     path requires envRoot to equal head.
 //   - consensus_and_equivocation: consensus + reject if a different beacon
@@ -317,8 +298,7 @@ func (s *Server) validateEnvelopeBroadcast(ctx context.Context, w http.ResponseW
 	level := r.URL.Query().Get(broadcastValidationQueryParam)
 	switch level {
 	case "", broadcastValidationGossip:
-		// TODO: run lightweight gossip checks (sig + bid consistency) here — beacon-APIs #580.
-		return true
+		return s.validateEnvelopeGossip(ctx, w, signed)
 	case broadcastValidationConsensus, broadcastValidationConsensusAndEquivocation:
 	default:
 		httputil.HandleError(w, fmt.Sprintf("invalid %s value: %q", broadcastValidationQueryParam, level), http.StatusBadRequest)
@@ -366,24 +346,81 @@ func (s *Server) validateEnvelopeBroadcast(ctx context.Context, w http.ResponseW
 	return true
 }
 
-// verifyCellProofs batch-verifies cell proofs against commitments derived
-// from the supplied blobs. Does not tie data to a specific block — that needs
-// the block's BlobKzgCommitments which a stateless receiver may not have.
-func verifyCellProofs(blobs [][]byte, flatProofs [][]byte) error {
-	commitments := make([][]byte, len(blobs))
-	for i, blob := range blobs {
-		if len(blob) != len(kzg.Blob{}) {
-			return errors.Errorf("blob %d has wrong size %d", i, len(blob))
-		}
-		var b kzg.Blob
-		copy(b[:], blob)
-		c, err := kzg.BlobToKZGCommitment(&b)
-		if err != nil {
-			return errors.Wrapf(err, "compute kzg commitment for blob %d", i)
-		}
-		commitments[i] = c[:]
+// validateEnvelopeGossip runs the REJECT-class gossip checks; p2p-only IGNORE checks are skipped.
+// TODO: share orchestration with sync.validateExecutionPayloadEnvelope so check inputs can't drift.
+func (s *Server) validateEnvelopeGossip(ctx context.Context, w http.ResponseWriter, signed *eth.SignedExecutionPayloadEnvelope) bool {
+	roSigned, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(signed)
+	if err != nil {
+		httputil.HandleError(w, "invalid signed envelope: "+err.Error(), http.StatusBadRequest)
+		return false
 	}
-	return kzg.VerifyCellKZGProofBatchFromBlobData(blobs, commitments, flatProofs, fieldparams.NumberOfColumns)
+	v := s.PayloadEnvelopeVerifier(roSigned, verification.GossipExecutionPayloadEnvelopeRequirements)
+
+	blk, err := s.Blocker.Block(ctx, signed.Message.BeaconBlockRoot)
+	if err != nil || blk == nil {
+		httputil.HandleError(w, "gossip validation failed: envelope beacon block root is unknown", http.StatusBadRequest)
+		return false
+	}
+	// VerifyBlockRootValid is skipped: the bad-block cache is sync-only and a bad root can't be canonical.
+	if err := v.VerifySlotMatchesBlock(blk.Block().Slot()); err != nil {
+		httputil.HandleError(w, "gossip validation failed: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+
+	signedBid, err := blk.Block().Body().SignedExecutionPayloadBid()
+	if err != nil {
+		httputil.HandleError(w, "gossip validation failed: block has no execution payload bid: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+	wrappedBid, err := consensusblocks.WrappedROSignedExecutionPayloadBid(signedBid)
+	if err != nil {
+		httputil.HandleError(w, "could not wrap signed bid: "+err.Error(), http.StatusInternalServerError)
+		return false
+	}
+	bid, err := wrappedBid.Bid()
+	if err != nil {
+		httputil.HandleError(w, "could not get bid: "+err.Error(), http.StatusInternalServerError)
+		return false
+	}
+	if err := v.VerifyBuilderValid(bid); err != nil {
+		httputil.HandleError(w, "gossip validation failed: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+	if err := v.VerifyPayloadHash(bid); err != nil {
+		httputil.HandleError(w, "gossip validation failed: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+	if err := v.VerifyExecutionRequestsRoot(bid); err != nil {
+		httputil.HandleError(w, "gossip validation failed: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+
+	// VerifySignature needs the state at the envelope's block. We only have head state on
+	// hand, so require the envelope to be for the canonical head rather than replaying state.
+	headRoot, err := s.HeadFetcher.HeadRoot(ctx)
+	if err != nil {
+		httputil.HandleError(w, "could not get head root: "+err.Error(), http.StatusInternalServerError)
+		return false
+	}
+	if !bytes.Equal(headRoot, signed.Message.BeaconBlockRoot) {
+		httputil.HandleError(w, "gossip validation failed: envelope beacon block root is not canonical head", http.StatusBadRequest)
+		return false
+	}
+	// Read-only head state is the cheapest option (no copy). It only goes wrong on a long fork
+	// where head diverges from the envelope's validator index position — an edge case we don't
+	// support. Replaying the block's state would be correct but expensive; this endpoint is
+	// trusted (attackers can't reach it, worst case is a self-inflicted DoS), so the cheap path
+	// is fine for now. Worth revisiting — replay could also return a read-only state to skip the copy.
+	st, err := s.HeadFetcher.HeadStateReadOnly(ctx)
+	if err != nil {
+		httputil.HandleError(w, "could not get head state: "+err.Error(), http.StatusInternalServerError)
+		return false
+	}
+	if err := v.VerifySignature(ctx, st); err != nil {
+		httputil.HandleError(w, "gossip validation failed: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+	return true
 }
 
 // PublishSignedExecutionPayloadBid broadcasts a signed execution payload bid to the P2P network.

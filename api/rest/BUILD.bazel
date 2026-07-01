@@ -31,6 +31,8 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//api:go_default_library",
+        "//network/httputil:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
     ],

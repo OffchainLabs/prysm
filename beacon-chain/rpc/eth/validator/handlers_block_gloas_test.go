@@ -10,16 +10,12 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	blockchainTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	rewardtesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/rewards/testing"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -68,6 +64,18 @@ func gloasGenericBlockWithBuilder(builderIndex primitives.BuilderIndex) *eth.Gen
 	}
 }
 
+// gloasGenericBlockContents mirrors a self-built block: the producer bundles the envelope inline.
+func gloasGenericBlockContents() *eth.GenericBeaconBlock {
+	return &eth.GenericBeaconBlock{
+		Block: &eth.GenericBeaconBlock_GloasContents{
+			GloasContents: &eth.BeaconBlockContentsGloas{
+				Block:                    util.NewBeaconBlockGloas().Block,
+				ExecutionPayloadEnvelope: testEnvelope(),
+			},
+		},
+	}
+}
+
 func TestProduceBlockV4_IncludePayloadTrue(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -76,10 +84,7 @@ func TestProduceBlockV4_IncludePayloadTrue(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).Return(gloasGenericBlock(), nil)
-	v1alpha1Server.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).Return(
-		&eth.ExecutionPayloadEnvelopeResponse{Envelope: testEnvelope()}, nil,
-	)
+	v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).Return(gloasGenericBlockContents(), nil)
 
 	server := &Server{
 		V1Alpha1Server:        v1alpha1Server,
@@ -110,48 +115,38 @@ func TestProduceBlockV4_IncludePayloadTrue(t *testing.T) {
 	require.Equal(t, "true", writer.Header().Get(api.ExecutionPayloadIncludedHeader))
 }
 
-// TestProduceBlockV4_IncludePayloadTrue_PopulatedCache covers the cache-hit
-// path: when the producer has cached data column sidecars for this slot, the
-// v4 response derives raw blobs and flat KZG proofs from them and embeds them
-// in the BlockContentsGloas body.
-func TestProduceBlockV4_IncludePayloadTrue_PopulatedCache(t *testing.T) {
-	require.NoError(t, kzg.Start())
-
+// TestProduceBlockV4_IncludePayloadTrue_WithBlobs covers the blob path: the producer bundles
+// raw blobs and flat KZG proofs in GloasContents, which the v4 response embeds in the body.
+func TestProduceBlockV4_IncludePayloadTrue_WithBlobs(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
 	const blobCount = 2
-	rawBlobs := make([]kzg.Blob, blobCount)
-	for i := range rawBlobs {
-		rawBlobs[i] = kzg.Blob{uint8(i + 1)}
+	blobs := make([][]byte, blobCount)
+	for i := range blobs {
+		blobs[i] = []byte{byte(i + 1)}
 	}
-	cellsPerBlob, proofsPerBlob := util.GenerateCellsAndProofs(t, rawBlobs)
-	envelope := testEnvelope()
-	blockRoot := bytesutil.ToBytes32(envelope.BeaconBlockRoot)
-	roSidecars, err := peerdas.DataColumnSidecarsGloas(cellsPerBlob, proofsPerBlob, primitives.Slot(envelope.Payload.SlotNumber), blockRoot)
-	require.NoError(t, err)
+	proofs := make([][]byte, blobCount*fieldparams.NumberOfColumns)
+	for i := range proofs {
+		proofs[i] = make([]byte, 48)
+	}
 
-	envCache := cache.NewExecutionPayloadEnvelopeCache()
-	envCache.Set(&cache.ExecutionPayloadContents{
-		Envelope:    envelope,
-		DataColumns: roSidecars,
-	})
+	contents := gloasGenericBlockContents()
+	gc := contents.Block.(*eth.GenericBeaconBlock_GloasContents).GloasContents
+	gc.Blobs = blobs
+	gc.KzgProofs = proofs
 
 	ctrl := gomock.NewController(t)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).Return(gloasGenericBlock(), nil)
-	v1alpha1Server.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).Return(
-		&eth.ExecutionPayloadEnvelopeResponse{Envelope: envelope}, nil,
-	)
+	v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).Return(contents, nil)
 
 	server := &Server{
-		V1Alpha1Server:                v1alpha1Server,
-		ExecutionPayloadEnvelopeCache: envCache,
-		SyncChecker:                   &mockSync.Sync{IsSyncing: false},
-		OptimisticModeFetcher:         &blockchainTesting.ChainService{},
-		BlockRewardFetcher:            &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
+		V1Alpha1Server:        v1alpha1Server,
+		SyncChecker:           &mockSync.Sync{IsSyncing: false},
+		OptimisticModeFetcher: &blockchainTesting.ChainService{},
+		BlockRewardFetcher:    &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
 	}
 
 	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s", testRandao, testGraffiti), nil)
@@ -214,7 +209,7 @@ func TestProduceBlockV4_BuilderBidExcludesPayload(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	// Builder index != self-build, so GetExecutionPayloadEnvelope must not be called.
+	// External builder bid: the producer returns the block alone (no inline contents), so the payload is excluded.
 	v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).Return(gloasGenericBlockWithBuilder(3), nil)
 
 	server := &Server{
@@ -293,10 +288,7 @@ func TestProduceBlockV4_SSZ_IncludePayloadTrue(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).Return(gloasGenericBlock(), nil)
-	v1alpha1Server.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).Return(
-		&eth.ExecutionPayloadEnvelopeResponse{Envelope: testEnvelope()}, nil,
-	)
+	v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).Return(gloasGenericBlockContents(), nil)
 
 	server := &Server{
 		V1Alpha1Server:        v1alpha1Server,
@@ -324,9 +316,11 @@ func TestExecutionPayloadEnvelope_SSZ(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	envelope := testEnvelope()
+	wireBlinded, err := envelope.WireBlinded()
+	require.NoError(t, err)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 	v1alpha1Server.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).Return(
-		&eth.ExecutionPayloadEnvelopeResponse{Envelope: envelope}, nil,
+		&eth.ExecutionPayloadEnvelopeResponse{Blinded: wireBlinded}, nil,
 	)
 
 	server := &Server{V1Alpha1Server: v1alpha1Server}
@@ -359,9 +353,11 @@ func TestExecutionPayloadEnvelope_BeaconBlockRootMismatch(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	envelope := testEnvelope()
+	wireBlinded, err := envelope.WireBlinded()
+	require.NoError(t, err)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 	v1alpha1Server.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).Return(
-		&eth.ExecutionPayloadEnvelopeResponse{Envelope: envelope}, nil,
+		&eth.ExecutionPayloadEnvelopeResponse{Blinded: wireBlinded}, nil,
 	)
 
 	server := &Server{V1Alpha1Server: v1alpha1Server}
