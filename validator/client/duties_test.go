@@ -420,7 +420,7 @@ func TestProcessEvent_HeadV2(t *testing.T) {
 		slotFeed:        &event.Feed{},
 	}
 	v.aggSelector = testLocalSelector(t, v)
-	client.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any(), gomock.Any()).
+	client.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any()).
 		Return(&emptypb.Empty{}, nil).AnyTimes()
 
 	const divergent = "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12"
