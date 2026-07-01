@@ -15,6 +15,10 @@ var assertoorPlaybooksFS embed.FS
 // suite explicitly opts in.
 var optionalPlaybooks = map[string]bool{
 	"builder.yaml": true,
+
+	"metrics-once.yaml":                       true,
+	"network-health-once.yaml":                true,
+	"validators-sync-participation-once.yaml": true,
 }
 
 // RegisterPlaybooks registers and schedules the common Assertoor playbooks, plus

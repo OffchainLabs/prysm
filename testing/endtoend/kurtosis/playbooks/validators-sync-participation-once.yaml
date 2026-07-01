@@ -1,0 +1,48 @@
+# One-shot sync committee participation check for scenario windows.
+#
+# Replaces one epoch worth of this legacy evaluator:
+# - ValidatorSyncParticipation
+
+id: validator-sync-participation-once
+name: "Validator sync committee participation one-shot"
+timeout: 60m
+
+config:
+  targetEpoch: 2
+  blockId: "head"
+
+tasks:
+  - name: check_clients_are_healthy
+    id: clients
+    title: "Wait for a ready consensus client"
+    timeout: 5m
+    config:
+      minClientCount: 1
+
+  - name: get_consensus_specs
+    id: specs
+    title: "Get consensus specs"
+
+  - name: check_consensus_slot_range
+    title: "Wait until target epoch is reached"
+    timeout: 50m
+    configVars:
+      minEpochNumber: "| [(.targetEpoch | tonumber), (.tasks.specs.outputs.specs.ALTAIR_FORK_EPOCH | tonumber), 2] | max"
+
+  - name: check_http_json
+    title: "Sync participation >= 95%"
+    timeout: 2m
+    configVars:
+      url: '| .tasks.clients.outputs.goodClients[0].clRpcUrl + "/eth/v2/beacon/blocks/" + .blockId'
+    config:
+      failOnCheckMiss: true
+      assertions:
+        # query: strip 0x, convert each hex char to its nibble value, popcount
+        # each nibble with bit tests, then divide by the bitvector width.
+        - name: sync_committee_participation
+          query: |
+            def bits: .data.message.body.sync_aggregate.sync_committee_bits | ltrimstr("0x");
+            def pc: explode | map(if . >= 97 then .-87 elif . >= 65 then .-55 else .-48 end) | map((.%2)+((./2|floor)%2)+((./4|floor)%2)+((./8|floor)%2)) | add;
+            (bits | pc) / ((bits | length) * 4)
+          operator: gte
+          value: 0.95
