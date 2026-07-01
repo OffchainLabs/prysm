@@ -65,6 +65,7 @@ func TestSetPendingDeposits(t *testing.T) {
 	pbd, err = s.PendingDeposits()
 	require.NoError(t, err)
 	require.Equal(t, 3, len(pbd))
+	require.ErrorContains(t, "cannot set nil pending deposit", s.SetPendingDeposits([]*eth.PendingDeposit{{}, nil, {}}))
 
 	// Fails for versions older than electra
 	s, err = state_native.InitializeFromProtoDeneb(&eth.BeaconStateDeneb{})

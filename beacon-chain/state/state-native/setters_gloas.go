@@ -739,6 +739,10 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 	newPendingDeposits := make([]*ethpb.PendingDeposit, 0, len(pendingDeposits))
 
 	for _, deposit := range pendingDeposits {
+		if deposit == nil {
+			log.Warn("Skipping nil pending deposit in OnboardBuildersFromPendingDeposits; state may be malformed")
+			continue
+		}
 		pubkey := bytesutil.ToBytes48(deposit.PublicKey)
 		if _, ok := b.validatorIndexByPubkey(pubkey); ok {
 			newPendingDeposits = append(newPendingDeposits, deposit)
