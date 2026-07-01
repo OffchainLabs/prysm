@@ -715,6 +715,7 @@ func TestFillEventData(t *testing.T) {
 		})
 		require.NoError(t, err)
 		alreadyFilled := payloadattribute.EventData{
+			ProposerIndex:   7,
 			HeadBlock:       b,
 			HeadRoot:        [32]byte{1, 2, 3},
 			Attributer:      attributor,
@@ -751,6 +752,18 @@ func TestFillEventData(t *testing.T) {
 		require.NotEmpty(t, filled.ParentBlockHash, "ParentBlockHash should still be filled")
 		require.Equal(t, attributor, filled.Attributer, "provided Attributer should be preserved")
 		require.Equal(t, version.Bellatrix, filled.Attributer.Version(), "preserved Attributer keeps its version; a recompute on Electra state would be Deneb-versioned")
+	})
+	t.Run("Electra PreservesProvidedParentBlockHash", func(t *testing.T) {
+		srv, partial := newPartialFillTestServer(t)
+		// The blockchain package carries the exact hash it sent to the engine; fillEventData
+		// must keep it verbatim rather than recompute it from state.
+		provided := make([]byte, 32)
+		provided[0] = 0x9
+		partial.ParentBlockHash = provided
+
+		filled, err := srv.fillEventData(ctx, partial)
+		require.NoError(t, err)
+		require.DeepEqual(t, provided, filled.ParentBlockHash, "provided ParentBlockHash must be preserved, not recomputed")
 	})
 }
 
