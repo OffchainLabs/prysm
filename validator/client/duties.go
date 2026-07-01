@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -724,11 +723,12 @@ func (v *validator) logDuties(slot primitives.Slot) {
 	}
 }
 
-func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadEvent) error {
-	if head == nil {
-		return errors.New("received empty head event")
+func (v *validator) checkDependentRoots(ctx context.Context, prevRoot, currRoot string) error {
+	if prevRoot == "" || currRoot == "" {
+		return errors.New("dependent root missing from head event")
 	}
-	prevDependentRoot, err := bytesutil.DecodeHexWithLength(head.PreviousDutyDependentRoot, fieldparams.RootLength)
+
+	prevDependentRoot, err := bytesutil.DecodeHexWithLength(prevRoot, fieldparams.RootLength)
 	if err != nil {
 		return errors.Wrap(err, "failed to decode previous duty dependent root")
 	}
@@ -755,7 +755,7 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 		return nil
 	}
 
-	currDependentRoot, err := bytesutil.DecodeHexWithLength(head.CurrentDutyDependentRoot, fieldparams.RootLength)
+	currDependentRoot, err := bytesutil.DecodeHexWithLength(currRoot, fieldparams.RootLength)
 	if err != nil {
 		return errors.Wrap(err, "failed to decode current duty dependent root")
 	}

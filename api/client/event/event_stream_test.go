@@ -1,6 +1,7 @@
 package event
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -56,7 +57,10 @@ func TestEventStream(t *testing.T) {
 	eventsChannel := make(chan *Event, 1)
 	stream, err := NewEventStream(t.Context(), http.DefaultClient, server.URL, topics)
 	require.NoError(t, err)
-	go stream.Subscribe(eventsChannel)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- stream.Subscribe(eventsChannel)
+	}()
 
 	// Collect events
 	var events []*Event
@@ -76,6 +80,7 @@ func TestEventStream(t *testing.T) {
 			t.Errorf("Expected event data %q, got %q", expectedData[i], string(event.Data))
 		}
 	}
+	require.NoError(t, <-errCh)
 }
 
 func TestEventStream_InvalidTopic(t *testing.T) {
@@ -93,12 +98,17 @@ func TestEventStream_InvalidTopic(t *testing.T) {
 	eventsChannel := make(chan *Event, 1)
 	stream, err := NewEventStream(t.Context(), http.DefaultClient, server.URL, []string{invalidTopic})
 	require.NoError(t, err)
-	go stream.Subscribe(eventsChannel)
 
-	event := <-eventsChannel
-	require.Equal(t, EventConnectionError, event.EventType)
-	require.StringContains(t, "400", string(event.Data))
-	require.StringContains(t, "invalid topic name: "+invalidTopic, string(event.Data))
+	err = stream.Subscribe(eventsChannel)
+	var subErr *SubscriptionError
+	require.Equal(t, true, errors.As(err, &subErr))
+	require.Equal(t, http.StatusBadRequest, subErr.StatusCode)
+	require.StringContains(t, "invalid topic name: "+invalidTopic, subErr.Body)
+	select {
+	case event := <-eventsChannel:
+		t.Fatalf("unexpected event for subscription error: %#v", event)
+	default:
+	}
 }
 
 func TestEventStreamRequestError(t *testing.T) {
@@ -111,7 +121,8 @@ func TestEventStreamRequestError(t *testing.T) {
 	require.NoError(t, err)
 
 	// error will happen when request is made, should be received over events channel
-	go stream.Subscribe(eventsChannel)
+	err = stream.Subscribe(eventsChannel)
+	require.NotNil(t, err)
 
 	event := <-eventsChannel
 	if event.EventType != EventConnectionError {

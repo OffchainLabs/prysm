@@ -1,12 +1,16 @@
 package beacon_api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
+	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	rpctesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared/testing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -638,4 +642,49 @@ func generateSignedBlindedFuluBlock() *ethpb.GenericSignedBeaconBlock_BlindedFul
 	return &ethpb.GenericSignedBeaconBlock_BlindedFulu{
 		BlindedFulu: genericBlock.GetBlindedFulu(),
 	}
+}
+
+// TestBeaconApiValidatorClient_StartEventStream_FallsBackToHead asserts that
+// when the beacon node rejects the head_v2 topic with HTTP 400 (older node),
+// StartEventStream retries with the legacy head topic set and delivers events.
+func TestBeaconApiValidatorClient_StartEventStream_FallsBackToHead(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	topicCh := make(chan string, 4)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		topics := r.URL.Query().Get("topics")
+		topicCh <- topics
+		if strings.Contains(topics, eventClient.EventHeadV2) {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"message":"invalid topic name: head_v2","code":400}`))
+			return
+		}
+		flusher, ok := w.(http.Flusher)
+		require.Equal(t, true, ok)
+		_, err := fmt.Fprint(w, "event: head\ndata: {\"slot\":\"1\"}\n\n")
+		require.NoError(t, err)
+		flusher.Flush()
+		<-r.Context().Done() // keep the stream open until the client disconnects
+	}))
+	defer server.Close()
+
+	handler := mock.NewMockHandler(ctrl)
+	handler.EXPECT().Host().Return(server.URL).AnyTimes()
+	c := &beaconApiValidatorClient{handler: handler}
+
+	ch := make(chan *eventClient.Event, 8)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	go c.StartEventStream(ctx, eventClient.DefaultEventTopics, ch)
+
+	// First attempt subscribes with head_v2 (the new default).
+	require.StringContains(t, eventClient.EventHeadV2, <-topicCh)
+	// Retry swaps head_v2 for the legacy head topic, keeping the others.
+	secondTopics := <-topicCh
+	require.Equal(t, false, strings.Contains(secondTopics, eventClient.EventHeadV2))
+	require.StringContains(t, eventClient.EventHead, secondTopics)
+
+	e := <-ch
+	require.Equal(t, eventClient.EventHead, e.EventType)
 }

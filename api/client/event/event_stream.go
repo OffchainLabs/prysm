@@ -15,6 +15,7 @@ import (
 
 const (
 	EventHead                      = "head"
+	EventHeadV2                    = "head_v2"
 	EventExecutionPayloadAvailable = "execution_payload_available"
 
 	EventError           = "error"
@@ -23,12 +24,16 @@ const (
 
 var (
 	_ = EventStreamClient(&EventStream{})
+
+	// LegacyEventTopicMapping maps newer event topics to their legacy equivalents for fallback purposes.
+	LegacyEventTopicMapping = map[string]string{
+		EventHeadV2: EventHead,
+	}
+	DefaultEventTopics = []string{EventHeadV2, EventExecutionPayloadAvailable}
 )
 
-var DefaultEventTopics = []string{EventHead, EventExecutionPayloadAvailable}
-
 type EventStreamClient interface {
-	Subscribe(eventsChannel chan<- *Event)
+	Subscribe(eventsChannel chan<- *Event) error
 }
 
 type Event struct {
@@ -63,26 +68,31 @@ func NewEventStream(ctx context.Context, httpClient *http.Client, host string, t
 	}, nil
 }
 
-func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
+// Subscribe opens the events stream and dispatches received events on
+// eventsChannel until the context is canceled or an error ends the stream.
+func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
 	allTopics := strings.Join(h.topics, ",")
 	log.WithField("topics", allTopics).Info("Listening to Beacon API events")
 	fullUrl := h.host + "/eth/v1/events?topics=" + allTopics
 	req, err := http.NewRequestWithContext(h.ctx, http.MethodGet, fullUrl, nil)
 	if err != nil {
+		err = errors.Wrap(err, "failed to create HTTP request")
 		eventsChannel <- &Event{
 			EventType: EventConnectionError,
-			Data:      []byte(errors.Wrap(err, "failed to create HTTP request").Error()),
+			Data:      []byte(err.Error()),
 		}
+		return err
 	}
 	req.Header.Set("Accept", api.EventStreamMediaType)
 	req.Header.Set("Connection", api.KeepAlive)
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
+		err = errors.Wrap(err, client.ErrConnectionIssue.Error())
 		eventsChannel <- &Event{
 			EventType: EventConnectionError,
-			Data:      []byte(errors.Wrap(err, client.ErrConnectionIssue.Error()).Error()),
+			Data:      []byte(err.Error()),
 		}
-		return
+		return err
 	}
 
 	defer func() {
@@ -91,22 +101,12 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 		}
 	}()
 
-	// Check response status code and handle non-200 responses
-	// as connection errors.
-	// e.g., requesting unsupported topics.
+	// Check response status code and let callers decide whether the
+	// subscription failure is recoverable (e.g. fallback for unsupported topics).
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		wrapErr := errors.Wrapf(
-			client.ErrConnectionIssue,
-			"received status code %d subscribing to beacon node events: %q",
-			resp.StatusCode,
-			strings.TrimSpace(string(body)),
-		)
-		eventsChannel <- &Event{
-			EventType: EventConnectionError,
-			Data:      []byte(wrapErr.Error()),
-		}
-		return
+		bodyStr := strings.TrimSpace(string(body))
+		return &SubscriptionError{StatusCode: resp.StatusCode, Body: bodyStr}
 	}
 
 	// Create a new scanner to read lines from the response body
@@ -122,7 +122,7 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 		case <-h.ctx.Done():
 			log.Info("Context canceled, stopping event stream")
 			close(eventsChannel)
-			return
+			return nil
 		default:
 			line := scanner.Text()
 			// Handle the event based on your specific format
@@ -151,9 +151,12 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 	}
 
 	if err := scanner.Err(); err != nil {
+		err = errors.Wrap(err, errors.Wrap(client.ErrConnectionIssue, "scanner failed").Error())
 		eventsChannel <- &Event{
 			EventType: EventConnectionError,
-			Data:      []byte(errors.Wrap(err, errors.Wrap(client.ErrConnectionIssue, "scanner failed").Error()).Error()),
+			Data:      []byte(err.Error()),
 		}
+		return err
 	}
+	return nil
 }
