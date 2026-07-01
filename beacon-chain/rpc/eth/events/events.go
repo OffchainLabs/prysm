@@ -825,7 +825,8 @@ var zeroRoot [32]byte
 // needsFill allows tests to provide filled EventData values. An ordinary event data value fired by the blockchain package will have
 // all of the checked fields empty, so the logical short circuit should hit immediately.
 func needsFill(ev payloadattribute.EventData) bool {
-	return len(ev.ParentBlockHash) == 0 ||
+	return ev.ProposerIndex == 0 ||
+		len(ev.ParentBlockHash) == 0 ||
 		ev.Attributer == nil || ev.Attributer.IsEmpty()
 }
 
@@ -878,19 +879,23 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 
 	ev.ProposerIndex = proposerIndex
 
-	if ev.HeadBlock.Version() >= version.Gloas {
-		h, err := rost.LatestBlockHash()
-		if err != nil {
-			return ev, errors.Wrap(err, "could not get latest block hash from head state")
+	// Real fire sites carry the exact hash sent to the engine's forkchoiceUpdated; only
+	// compute it here as a fallback when it wasn't provided.
+	if len(ev.ParentBlockHash) == 0 {
+		if ev.HeadBlock.Version() >= version.Gloas {
+			h, err := rost.LatestBlockHash()
+			if err != nil {
+				return ev, errors.Wrap(err, "could not get latest block hash from head state")
+			}
+			ev.ParentBlockHash = h[:]
+		} else {
+			payload, err := ev.HeadBlock.Block().Body().Execution()
+			if err != nil {
+				return ev, errors.Wrap(err, "could not get execution payload for head block")
+			}
+			ev.ParentBlockHash = payload.BlockHash()
+			ev.ParentBlockNumber = payload.BlockNumber()
 		}
-		ev.ParentBlockHash = h[:]
-	} else {
-		payload, err := ev.HeadBlock.Block().Body().Execution()
-		if err != nil {
-			return ev, errors.Wrap(err, "could not get execution payload for head block")
-		}
-		ev.ParentBlockHash = payload.BlockHash()
-		ev.ParentBlockNumber = payload.BlockNumber()
 	}
 
 	if ev.Attributer != nil && !ev.Attributer.IsEmpty() {
