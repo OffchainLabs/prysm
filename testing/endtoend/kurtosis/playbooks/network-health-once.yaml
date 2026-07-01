@@ -4,7 +4,6 @@
 # - HealthzCheck
 # - FinishedSyncing
 # - AllNodesHaveSameHead
-# - ValidatorsParticipatingAtEpoch
 # - FinalizationOccurs
 
 id: network-health-once
@@ -22,10 +21,6 @@ tasks:
   timeout: 5m
   config:
     minClientCount: 1
-
-- name: get_consensus_specs
-  id: specs
-  title: "Get consensus specs"
 
 - name: check_consensus_slot_range
   title: "Wait for target epoch"
@@ -62,18 +57,6 @@ tasks:
         config:
           maxUnfinalizedEpochs: 4
           failOnCheckMiss: true
-
-      - name: check_consensus_attestation_stats
-        title: "Attestation quality"
-        timeout: 30m
-        config:
-          minHeadPercent: 80
-          failOnCheckMiss: true
-          minCheckedEpochs: 1
-        configVars:
-          # Note: At Electra fork, the target participation drops to ~85%, so relax to 82% there.
-          # If a network starts from Electra, then strictly check for 98% participation.
-          minTargetPercent: "| if (.tasks.specs.outputs.specs.ELECTRA_FORK_EPOCH | tonumber) == 0 then 98 else 82 end"
 
       - name: check_consensus_forks
         title: "Fork check"

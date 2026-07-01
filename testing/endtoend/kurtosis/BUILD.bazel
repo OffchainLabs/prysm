@@ -40,6 +40,7 @@ go_library(
         "playbooks/checkpoint-sync.yaml",
 
         # One-shot playbooks for testing multiScenario
+        "playbooks/attestation-stats-once.yaml",
         "playbooks/metrics-once.yaml",
         "playbooks/network-health-once.yaml",
         "playbooks/validators-sync-participation-once.yaml",

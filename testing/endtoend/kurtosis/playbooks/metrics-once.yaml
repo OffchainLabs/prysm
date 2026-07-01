@@ -2,6 +2,9 @@
 #
 # Replaces one epoch worth of this legacy evaluator:
 # - MetricsCheck
+#
+# NOTE: Unlike `metrics.yaml`, this playbook DO NOT check for cache miss ratio,
+# as it is common for beacon node to have high cache miss ratio while recovering after downtime.
 
 id: metrics-once
 name: "Prysm metrics one-shot"
@@ -69,8 +72,6 @@ tasks:
                   const series = await scrapeMetrics(metricsUrl);
                   const failures = [];
 
-                  checkMetricRatio(failures, series, "committee_cache", "committee_cache_miss", "committee_cache_hit", 0.1);
-                  checkMetricRatio(failures, series, "hot_state_cache", "hot_state_cache_miss", "hot_state_cache_hit", 0.1);
                   checkP2PRatio(failures, series, "aggregate_and_proof", "beacon_aggregate_and_proof", 0.8);
                   checkP2PRatio(failures, series, "attestation", "beacon_attestation_[0-9]+", 0.15);
 
@@ -84,17 +85,6 @@ tasks:
                       throw new Error(`metrics scrape failed: HTTP ${response.status}`);
                     }
                     return parsePrometheusText(await response.text());
-                  }
-
-                  function checkMetricRatio(failures, series, name, missKey, hitKey, maxRatio) {
-                    const miss = sumSeries(series, missKey);
-                    const hit = sumSeries(series, hitKey);
-                    if (hit === 0) return;
-
-                    const ratio = miss / hit;
-                    if (ratio >= maxRatio) {
-                      failures.push(`${name}_miss_rate: ratio ${ratio} >= ${maxRatio} (${miss}/${hit})`);
-                    }
                   }
 
                   function checkP2PRatio(failures, series, name, topicPart, maxRatio) {

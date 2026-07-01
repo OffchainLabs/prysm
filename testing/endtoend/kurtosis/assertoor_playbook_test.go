@@ -79,6 +79,7 @@ func TestScheduleAssertoorTestWithConfig(t *testing.T) {
 
 func TestOneShotPlaybooksAreOptional(t *testing.T) {
 	for _, name := range []string{
+		"attestation-stats-once.yaml",
 		"metrics-once.yaml",
 		"network-health-once.yaml",
 		"validators-sync-participation-once.yaml",

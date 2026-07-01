@@ -16,6 +16,7 @@ var assertoorPlaybooksFS embed.FS
 var optionalPlaybooks = map[string]bool{
 	"builder.yaml": true,
 
+	"attestation-stats-once.yaml":             true,
 	"metrics-once.yaml":                       true,
 	"network-health-once.yaml":                true,
 	"validators-sync-participation-once.yaml": true,
