@@ -304,6 +304,10 @@ func (c *grpcValidatorClient) SubmitSignedProposerPreferences(ctx context.Contex
 	return c.getClient().SubmitSignedProposerPreferences(ctx, in)
 }
 
+func (c *grpcValidatorClient) SubmitBuilderPreferences(ctx context.Context, in *ethpb.SubmitBuilderPreferencesRequest) (*empty.Empty, error) {
+	return c.getClient().SubmitBuilderPreferences(ctx, in)
+}
+
 func (c *grpcValidatorClient) SubmitSignedExecutionPayloadBid(ctx context.Context, in *ethpb.SignedExecutionPayloadBid) (*empty.Empty, error) {
 	return c.getClient().SubmitSignedExecutionPayloadBid(ctx, in)
 }

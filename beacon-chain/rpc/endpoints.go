@@ -380,7 +380,7 @@ func (s *Service) validatorEndpoints(
 			template: "/eth/v1/validator/proposer_preferences",
 			name:     namespace + ".SubmitSignedProposerPreferences",
 			middleware: []middleware.Middleware{
-				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
@@ -953,7 +953,7 @@ func (s *Service) beaconEndpoints(
 			template: "/eth/v1/beacon/pool/payload_attestations",
 			name:     namespace + ".ListPayloadAttestations",
 			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.ListPayloadAttestations,
@@ -963,7 +963,7 @@ func (s *Service) beaconEndpoints(
 			template: "/eth/v1/beacon/pool/payload_attestations",
 			name:     namespace + ".SubmitPayloadAttestations",
 			middleware: []middleware.Middleware{
-				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
