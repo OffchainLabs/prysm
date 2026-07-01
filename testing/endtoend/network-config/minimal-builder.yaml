@@ -112,6 +112,9 @@ ethereum_genesis_generator_params:
     SECONDS_PER_ETH1_BLOCK: "2"
 
 buildoor_params:
+  # Use the fixed buildoor image for testing, that has the fix below:
+  # https://github.com/ethpandaops/buildoor/pull/123
+  image: "ethpandaops/buildoor:main-97fc876"
   # Ensure builder bids beat local EL value on spammed devnets; otherwise Prysm
   # correctly falls back to local execution even when buildoor returns a valid bid.
   extra_args:
