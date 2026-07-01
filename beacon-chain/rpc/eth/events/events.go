@@ -270,8 +270,12 @@ func (es *eventStreamer) recvEventLoop(ctx context.Context, cancel context.Cance
 		case event := <-eventsChan:
 			lr, err := s.lazyReaderForEvent(ctx, event, req)
 			if err != nil {
-				if !errors.Is(err, errNotRequested) {
-					log.WithField("event_type", fmt.Sprintf("%v", event.Data)).WithError(err).Error("StreamEvents API endpoint received an event it was unable to handle.")
+				// errNotRequested (client didn't subscribe to this topic) and
+				// errPayloadAttributeExpired (the proposal slot has already started, so builders
+				// can no longer use it) are both expected, benign skips rather than failures, so
+				// they should not be logged as errors.
+				if !errors.Is(err, errNotRequested) && !errors.Is(err, errPayloadAttributeExpired) {
+					log.WithField("event_type", fmt.Sprintf("%T", event.Data)).WithError(err).Error("StreamEvents API endpoint received an event it was unable to handle.")
 				}
 				continue
 			}

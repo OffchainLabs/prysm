@@ -705,6 +705,107 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 	})
 }
 
+// TestStreamEvents_PayloadAttributesExpiredSlotNotLoggedAsError verifies that a payload
+// attributes event whose proposal slot has already started is skipped silently rather than
+// logged at ERROR as an event the endpoint "was unable to handle". payloadAttributesReader
+// returns errPayloadAttributeExpired for a past slot, which is an expected, high-volume skip
+// (especially under ePBS), not a failure.
+func TestStreamEvents_PayloadAttributesExpiredSlotNotLoggedAsError(t *testing.T) {
+	testSync := newStreamTestSync(t)
+	defer testSync.cleanup()
+
+	// Genesis one second in the past makes proposal slot 0's start time already elapsed,
+	// forcing payloadAttributesReader down the errPayloadAttributeExpired path.
+	genesis := time.Now().Add(-1 * time.Second)
+	currentSlot := primitives.Slot(0)
+	mockChainService := &mockChain.ChainService{
+		Root:    make([]byte, 32),
+		Slot:    &currentSlot,
+		Genesis: genesis,
+	}
+
+	stn := mockChain.NewEventFeedWrapper()
+	opn := mockChain.NewEventFeedWrapper()
+	s := &Server{
+		StateNotifier:     &mockChain.SimpleNotifier{Feed: stn},
+		OperationNotifier: &mockChain.SimpleNotifier{Feed: opn},
+		ChainInfoFetcher:  mockChainService,
+		EventWriteTimeout: testEventWriteTimeout,
+	}
+
+	// Subscribe to payload attributes (the expired event) plus a block topic used purely as an
+	// ordering barrier: recvEventLoop processes events serially, so once the block event reaches
+	// the client we know the expired event ahead of it has already been handled.
+	topics, err := newTopicRequest([]string{PayloadAttributesTopic, BlockTopic})
+	require.NoError(t, err)
+	request := topics.testHttpRequest(testSync.ctx, t)
+	w := NewStreamingResponseWriterRecorder(testSync.ctx)
+
+	go func() {
+		s.StreamEvents(w, request)
+		testSync.markDone()
+	}()
+
+	blk, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlock(&eth.SignedBeaconBlock{}))
+	require.NoError(t, err)
+	expired := &feed.Event{
+		Type: statefeed.PayloadAttributes,
+		Data: payloadattribute.EventData{
+			ProposalSlot:    currentSlot, // slot 0 start time is in the past → expired
+			ParentBlockHash: make([]byte, 32),
+			HeadBlock:       blk,
+		},
+	}
+	barrier := &feed.Event{
+		Type: statefeed.BlockProcessed,
+		Data: &statefeed.BlockProcessedData{
+			Slot:        0,
+			BlockRoot:   [32]byte{},
+			SignedBlock: blk,
+			Verified:    true,
+		},
+	}
+
+	require.NoError(t, stn.WaitForSubscription(testSync.ctx))
+	s.StateNotifier.StateFeed().Send(expired)
+	s.StateNotifier.StateFeed().Send(barrier)
+
+	// Read the stream until the barrier (block) event arrives.
+	sseR := sse.NewEventStreamReader(w.Body(), 1<<24)
+	got := make(chan struct{})
+	go func() {
+		defer close(got)
+		for {
+			ev, err := sseR.ReadEvent()
+			if err != nil {
+				return
+			}
+			if strings.Contains(string(ev), "event: "+BlockTopic+"\n") {
+				return
+			}
+		}
+	}()
+	select {
+	case <-got:
+	case <-time.After(time.Second): // failsafe only; delivery is sub-millisecond on success
+		t.Fatal("timed out waiting for the block event that follows the expired payload attributes event")
+	}
+
+	// The expired event has now been processed. Because recvEventLoop wrote the log entry (if any)
+	// before handing the barrier event to the outbox, any such entry is already buffered here.
+	for {
+		select {
+		case entry := <-testSync.logs:
+			// A past-slot skip is expected and must not surface as an error-level log. Asserting on the
+			// level (rather than an exact message) keeps the guard robust if the message is reworded.
+			require.NotEqual(t, logrus.ErrorLevel, entry.Level,
+				fmt.Sprintf("expired payload attributes event should be skipped silently; got error log: %q", entry.Message))
+		default:
+			return
+		}
+	}
+}
+
 func TestFillEventData(t *testing.T) {
 	ctx := t.Context()
 	t.Run("AlreadyFilledData_ShouldShortCircuitWithoutError", func(t *testing.T) {
