@@ -214,7 +214,7 @@ func (s *Service) shouldReorgPayload(root [32]byte, full bool, proposingSlot pri
 	if early {
 		return s.cfg.ForkChoiceStore.PTCVotedLate(root)
 	}
-	return s.cfg.ForkChoiceStore.PTCVotedEarlyAndAvailable(root)
+	return !s.cfg.ForkChoiceStore.PTCVotedEarlyAndAvailable(root)
 }
 
 // the caller of this function must hold a forkchoice lock
