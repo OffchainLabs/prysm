@@ -21,6 +21,9 @@ type NodeConnection interface {
 	// GetRestHandler returns the REST handler for making API requests.
 	// Returns nil if no REST provider is configured.
 	GetRestHandler() rest.Handler
+	// ConnectionGeneration returns a monotonic counter that advances on each
+	// beacon-node fallback host switch.
+	ConnectionGeneration() uint64
 }
 
 type nodeConnection struct {
@@ -48,6 +51,16 @@ func (c *nodeConnection) GetRestHandler() rest.Handler {
 		return nil
 	}
 	return c.restConnectionProvider.Handler()
+}
+
+func (c *nodeConnection) ConnectionGeneration() uint64 {
+	if c.grpcConnectionProvider != nil {
+		return c.grpcConnectionProvider.ConnectionCounter()
+	}
+	if c.restConnectionProvider != nil {
+		return c.restConnectionProvider.ConnectionCounter()
+	}
+	return 0
 }
 
 // NodeConnectionOption is a functional option for configuring a NodeConnection.

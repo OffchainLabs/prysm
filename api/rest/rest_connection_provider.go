@@ -26,6 +26,9 @@ type RestConnectionProvider interface {
 	Hosts() []string
 	// SwitchHost switches to the endpoint at the given index.
 	SwitchHost(index int) error
+	// ConnectionCounter returns a monotonic counter that advances on each host
+	// switch, distinguishing a host0 → host1 → host0 bounce from no change.
+	ConnectionCounter() uint64
 }
 
 // RestConnectionProviderOption is a functional option for configuring the REST connection provider.
@@ -57,6 +60,7 @@ type restConnectionProvider struct {
 	httpClient    *http.Client
 	restHandler   *handler
 	currentIndex  atomic.Uint64
+	connCounter   atomic.Uint64
 	timeout       time.Duration
 	headers       map[string][]string
 	enableTracing bool
@@ -146,7 +150,11 @@ func (p *restConnectionProvider) SwitchHost(index int) error {
 	}
 
 	oldIdx := p.currentIndex.Load()
+	if oldIdx == uint64(index) {
+		return nil // already on this host
+	}
 	p.currentIndex.Store(uint64(index))
+	p.connCounter.Add(1)
 
 	// Update the rest handler's host
 	p.restHandler.SwitchHost(p.endpoints[index])
@@ -156,4 +164,8 @@ func (p *restConnectionProvider) SwitchHost(index int) error {
 		"newHost":      api.RedactEndpoint(p.endpoints[index]),
 	}).Debug("Switched REST endpoint")
 	return nil
+}
+
+func (p *restConnectionProvider) ConnectionCounter() uint64 {
+	return p.connCounter.Load()
 }

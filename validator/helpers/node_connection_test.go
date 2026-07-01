@@ -82,6 +82,30 @@ func TestNodeConnection_GetGrpcClientConn(t *testing.T) {
 	})
 }
 
+func TestNodeConnection_ConnectionGeneration(t *testing.T) {
+	t.Run("uses grpc provider counter", func(t *testing.T) {
+		grpcProvider := &grpcutil.MockGrpcProvider{MockHosts: []string{"localhost:4000"}, ConnCounter: 7}
+		conn, err := NewNodeConnection(WithGRPCProvider(grpcProvider))
+		require.NoError(t, err)
+		assert.Equal(t, uint64(7), conn.ConnectionGeneration())
+	})
+
+	t.Run("uses rest provider counter when no grpc", func(t *testing.T) {
+		restProvider := &rest.MockRestProvider{MockHosts: []string{"http://localhost:3500"}, ConnCounter: 4}
+		conn, err := NewNodeConnection(WithRestProvider(restProvider))
+		require.NoError(t, err)
+		assert.Equal(t, uint64(4), conn.ConnectionGeneration())
+	})
+
+	t.Run("grpc takes precedence over rest", func(t *testing.T) {
+		grpcProvider := &grpcutil.MockGrpcProvider{MockHosts: []string{"localhost:4000"}, ConnCounter: 2}
+		restProvider := &rest.MockRestProvider{MockHosts: []string{"http://localhost:3500"}, ConnCounter: 9}
+		conn, err := NewNodeConnection(WithGRPCProvider(grpcProvider), WithRestProvider(restProvider))
+		require.NoError(t, err)
+		assert.Equal(t, uint64(2), conn.ConnectionGeneration())
+	})
+}
+
 func TestNodeConnection_GetRestHandler(t *testing.T) {
 	t.Run("delegates to provider", func(t *testing.T) {
 		mockHandler := &rest.MockHandler{}

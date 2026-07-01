@@ -90,6 +90,7 @@ type validator struct {
 	web3SignerConfig             *remoteweb3signer.SetupConfig
 	proposerSettings             *proposer.Settings
 	submittedPrefSlots           map[primitives.Slot]bool
+	lastConnCounter              uint64
 	submittedAtts                map[submittedAttKey]*submittedAtt
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
@@ -824,6 +825,12 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 	currentEpoch := slots.ToEpoch(slot)
 	isPreGloas := currentEpoch < params.BeaconConfig().GloasForkEpoch
 
+	// A fallback host switch keeps the VC "healthy", so (unlike a dead node) it
+	// never trips the runner restart that re-pushes; force a re-push here instead.
+	if v.beaconConnectionChanged() {
+		forceFullPush = true
+	}
+
 	// Pre-Gloas, PrepareBeaconProposer carries the per-validator fee recipient.
 	// Post-Gloas, SignedProposerPreferences (submitted below) is canonical.
 	if isPreGloas {
@@ -847,7 +854,10 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		v.upgradeProposerSettingsToV2(ctx)
 	}
 
-	prefs := v.buildProposerPreferences(ctx, km, slot, false)
+	// forceFullPush is set when a new runner starts (initial connect or after a
+	// beacon-node disconnect/reconnect), so re-push all proposer preferences to
+	// repopulate a beacon node that has no preference state.
+	prefs := v.buildProposerPreferences(ctx, km, slot, forceFullPush)
 	if len(prefs) > 0 {
 		// Delay to mid-slot so the block for this slot is processed first.
 		delay := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
@@ -947,6 +957,18 @@ func (v *validator) EventStreamIsRunning() bool {
 
 func (v *validator) Host() string {
 	return v.validatorClient.Host()
+}
+
+// beaconConnectionChanged reports whether the beacon-node connection switched
+// to a different host since the previous push, updating the watermark.
+func (v *validator) beaconConnectionChanged() bool {
+	if v.conn == nil {
+		return false
+	}
+	counter := v.conn.ConnectionGeneration()
+	changed := counter != v.lastConnCounter
+	v.lastConnCounter = counter
+	return changed
 }
 
 func (v *validator) EnsureReady(ctx context.Context) bool {
@@ -1068,8 +1090,9 @@ func (v *validator) upgradeProposerSettingsToV2(ctx context.Context) {
 
 // buildProposerPreferences creates signed proposer preferences for validators
 // that have proposer slots in the current epoch (future slots) or next epoch. During normal operation it is
-// gated to run once at mid-epoch; pass force=true to bypass that gate (e.g.
-// after a reorg triggers a duty change).
+// gated to run once at mid-epoch; pass force=true to clear the submitted-slot
+// dedup cache and bypass that gate (e.g. after a reorg triggers a duty change,
+// or when a new runner starts after a beacon-node disconnect/reconnect).
 //
 // Current-epoch preferences are submitted after the first slot of the epoch
 // (slot 0 is skipped to avoid stale state after epoch transition). If the

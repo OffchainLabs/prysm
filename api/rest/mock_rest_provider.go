@@ -12,6 +12,7 @@ type MockRestProvider struct {
 	MockHandler Handler
 	MockHosts   []string
 	HostIndex   int
+	ConnCounter uint64
 }
 
 func (m *MockRestProvider) HttpClient() *http.Client { return m.MockClient }
@@ -24,6 +25,7 @@ func (m *MockRestProvider) CurrentHost() string {
 }
 func (m *MockRestProvider) Hosts() []string            { return m.MockHosts }
 func (m *MockRestProvider) SwitchHost(index int) error { m.HostIndex = index; return nil }
+func (m *MockRestProvider) ConnectionCounter() uint64  { return m.ConnCounter }
 
 // MockHandler implements Handler for testing.
 type MockHandler struct {

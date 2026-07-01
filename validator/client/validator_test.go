@@ -2118,6 +2118,33 @@ func TestValidator_buildProposerSettingsRequests_WithDefaultConfig(t *testing.T)
 
 var testProposerPrefDependentRoot = bytes.Repeat([]byte{0x42}, 32)
 
+func TestValidator_beaconConnectionChanged(t *testing.T) {
+	t.Run("nil conn never reports a change", func(t *testing.T) {
+		v := &validator{}
+		require.Equal(t, false, v.beaconConnectionChanged())
+		require.Equal(t, false, v.beaconConnectionChanged())
+	})
+
+	t.Run("reports a change only when the connection counter advances", func(t *testing.T) {
+		provider := &grpcutil.MockGrpcProvider{MockHosts: []string{"node-a:4000"}}
+		conn, err := validatorHelpers.NewNodeConnection(validatorHelpers.WithGRPCProvider(provider))
+		require.NoError(t, err)
+		v := &validator{conn: conn}
+
+		// Counter starts at 0 and matches the zero-valued lastConnCounter.
+		require.Equal(t, false, v.beaconConnectionChanged())
+		// A fallback switch bumps the counter — detected once.
+		provider.ConnCounter = 1
+		require.Equal(t, true, v.beaconConnectionChanged())
+		require.Equal(t, false, v.beaconConnectionChanged())
+		// A round-robin bounce (host0 → host1 → host0) leaves the host unchanged
+		// but advances the counter twice; still detected.
+		provider.ConnCounter = 3
+		require.Equal(t, true, v.beaconConnectionChanged())
+		require.Equal(t, false, v.beaconConnectionChanged())
+	})
+}
+
 func TestValidator_buildProposerPreferences(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 
@@ -2717,6 +2744,42 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 
 		delete(v.pubkeyToStatus, kp2.pub)
 		delete(km.keysMap, kp2.pub)
+	})
+
+	t.Run("force re-pushes already-submitted slots after reconnect", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		v.duties = &dutyStore{}
+		v.submittedPrefSlots = make(map[primitives.Slot]bool)
+		{
+			var data dutyStoreData
+			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+						ProposerSlots:  []primitives.Slot{5},
+					},
+				},
+				NextEpochDuties:   []*ethpb.ValidatorDuty{},
+				PrevDependentRoot: testProposerPrefDependentRoot,
+				CurrDependentRoot: testProposerPrefDependentRoot,
+			})
+			v.duties.write(data)
+		}
+
+		// Initial push submits slot 5; the dedup cache suppresses the next push.
+		require.Equal(t, 1, len(v.buildProposerPreferences(t.Context(), km, 1, false)))
+		require.Equal(t, 0, len(v.buildProposerPreferences(t.Context(), km, 2, false)))
+
+		// A reconnect (newRunner → force=true) clears the cache and re-pushes so
+		// the freshly connected beacon node receives the preference again.
+		prefs := v.buildProposerPreferences(t.Context(), km, 2, true)
+		require.Equal(t, 1, len(prefs))
+		require.Equal(t, primitives.Slot(5), prefs[0].Message.ProposalSlot)
 	})
 
 	t.Run("next epoch before mid-epoch returns nil", func(t *testing.T) {
