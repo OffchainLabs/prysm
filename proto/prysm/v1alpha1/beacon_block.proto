@@ -121,6 +121,10 @@ message GenericBeaconBlock {
     BlindedBeaconBlockFulu blinded_fulu = 12;
 
     BeaconBlockGloas gloas = 13;
+
+    // Returned when eager_payload_state_root (stateless) is requested so the
+    // validator client has the envelope + blob data without a second fetch.
+    BeaconBlockContentsGloas gloas_contents = 14;
   }
   bool is_blinded = 100;
   string payload_value = 101;

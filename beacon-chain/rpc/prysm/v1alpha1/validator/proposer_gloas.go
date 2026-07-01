@@ -14,7 +14,7 @@ import (
 
 // buildBlockGloas builds a Gloas (ePBS) block, whose body carries an execution payload bid
 // rather than the payload itself. The payload is revealed separately via the envelope.
-func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipBuilder, parentFull bool) (*ethpb.GenericBeaconBlock, error) {
+func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipBuilder, parentFull, eagerPayloadStateRoot bool) (*ethpb.GenericBeaconBlock, error) {
 	if parentFull {
 		if err := vs.applyParentExecutionPayloadToHead(ctx, head, sBlk.Block().ParentRoot()); err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not apply parent execution payload: %v", err)
@@ -55,11 +55,32 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 	}
 	sBlk.SetStateRoot(sr)
 
+	var envelope *ethpb.ExecutionPayloadEnvelope
 	if selfBuilt { // self-build reveals its own payload later, so cache the envelope now
-		if err := vs.storeExecutionPayloadEnvelope(sBlk, local); err != nil {
+		envelope, err = vs.storeExecutionPayloadEnvelope(sBlk, local)
+		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not build execution payload envelope: %v", err)
 		}
 	}
 
-	return vs.constructGenericBeaconBlock(sBlk, nil, primitives.ZeroWei())
+	blk, err := vs.constructGenericBeaconBlock(sBlk, nil, primitives.ZeroWei())
+	if err != nil {
+		return nil, err
+	}
+
+	// Eager (stateless) self-build: bundle envelope + blobs inline; stateful publishes from the cache.
+	if eagerPayloadStateRoot && envelope != nil {
+		var blobs, kzgProofs [][]byte
+		if local.BlobsBundler != nil {
+			blobs = local.BlobsBundler.GetBlobs()
+			kzgProofs = local.BlobsBundler.GetProofs()
+		}
+		blk.Block = &ethpb.GenericBeaconBlock_GloasContents{GloasContents: &ethpb.BeaconBlockContentsGloas{
+			Block:                    blk.GetGloas(),
+			ExecutionPayloadEnvelope: envelope,
+			KzgProofs:                kzgProofs,
+			Blobs:                    blobs,
+		}}
+	}
+	return blk, nil
 }

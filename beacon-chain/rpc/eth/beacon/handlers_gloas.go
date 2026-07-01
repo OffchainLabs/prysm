@@ -11,17 +11,13 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
@@ -188,6 +184,9 @@ func (s *Server) publishBlindedEnvelope(ctx context.Context, w http.ResponseWrit
 		return
 	}
 
+	// Consensus-level broadcast_validation needs the full envelope; reconstruct it from cache for
+	// the check only. The publish-side reconstruction + sidecar broadcast happens in the v1alpha1
+	// server (shared with the gRPC path), so forward the blinded arm and let it rebuild the payload.
 	full := &eth.SignedExecutionPayloadEnvelope{
 		Message:   cached.Envelope,
 		Signature: signedBlinded.Signature,
@@ -197,7 +196,10 @@ func (s *Server) publishBlindedEnvelope(ctx context.Context, w http.ResponseWrit
 		return
 	}
 
-	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, full); err != nil {
+	generic := &eth.GenericSignedExecutionPayloadEnvelope{
+		Envelope: &eth.GenericSignedExecutionPayloadEnvelope_Blinded{Blinded: signedBlinded},
+	}
+	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, generic); err != nil {
 		writeEnvelopePublishError(w, err)
 		return
 	}
@@ -259,45 +261,23 @@ func (s *Server) publishExecutionPayloadEnvelopeContentsSSZ(ctx context.Context,
 	s.processEnvelopeContents(ctx, w, r, contents.SignedExecutionPayloadEnvelope, contents.KzgProofs, contents.Blobs)
 }
 
-// processEnvelopeContents verifies caller-supplied blobs/proofs, broadcasts
-// derived sidecars, then delegates the envelope to the bare publish path.
+// processEnvelopeContents delegates the signed envelope + blobs/proofs to the v1alpha1 publish path,
+// which verifies the blobs, broadcasts the data column sidecars, and publishes the envelope.
 func (s *Server) processEnvelopeContents(ctx context.Context, w http.ResponseWriter, r *http.Request, signed *eth.SignedExecutionPayloadEnvelope, kzgProofs, blobs [][]byte) {
 	if !s.validateEnvelopeBroadcast(ctx, w, r, signed) {
 		return
 	}
 
-	if len(blobs) > 0 {
-		blockRoot := bytesutil.ToBytes32(signed.Message.BeaconBlockRoot)
-		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(blobs, kzgProofs)
-		if err != nil {
-			httputil.HandleError(w, "could not compute cells and proofs: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		// External trust boundary — verify before broadcasting/storing.
-		if err := verifyCellProofs(blobs, kzgProofs); err != nil {
-			httputil.HandleError(w, "kzg verification failed: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		roSidecars, err := peerdas.DataColumnSidecarsGloas(cellsPerBlob, proofsPerBlob, primitives.Slot(signed.Message.Payload.SlotNumber), blockRoot)
-		if err != nil {
-			httputil.HandleError(w, "could not build data column sidecars: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		verifiedSidecars := make([]consensusblocks.VerifiedRODataColumn, 0, len(roSidecars))
-		for _, sc := range roSidecars {
-			verifiedSidecars = append(verifiedSidecars, consensusblocks.NewVerifiedRODataColumn(sc))
-		}
-		if err := s.Broadcaster.BroadcastDataColumnSidecars(ctx, verifiedSidecars, nil); err != nil {
-			httputil.HandleError(w, "could not broadcast data column sidecars: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if err := s.DataColumnReceiver.ReceiveDataColumns(verifiedSidecars); err != nil {
-			httputil.HandleError(w, "could not receive data column sidecars: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
+	generic := &eth.GenericSignedExecutionPayloadEnvelope{
+		Envelope: &eth.GenericSignedExecutionPayloadEnvelope_Contents{
+			Contents: &eth.SignedExecutionPayloadEnvelopeContents{
+				SignedExecutionPayloadEnvelope: signed,
+				KzgProofs:                      kzgProofs,
+				Blobs:                          blobs,
+			},
+		},
 	}
-
-	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, signed); err != nil {
+	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, generic); err != nil {
 		writeEnvelopePublishError(w, err)
 		return
 	}
@@ -441,26 +421,6 @@ func (s *Server) validateEnvelopeGossip(ctx context.Context, w http.ResponseWrit
 		return false
 	}
 	return true
-}
-
-// verifyCellProofs batch-verifies cell proofs against commitments derived
-// from the supplied blobs. Does not tie data to a specific block — that needs
-// the block's BlobKzgCommitments which a stateless receiver may not have.
-func verifyCellProofs(blobs [][]byte, flatProofs [][]byte) error {
-	commitments := make([][]byte, len(blobs))
-	for i, blob := range blobs {
-		if len(blob) != len(kzg.Blob{}) {
-			return errors.Errorf("blob %d has wrong size %d", i, len(blob))
-		}
-		var b kzg.Blob
-		copy(b[:], blob)
-		c, err := kzg.BlobToKZGCommitment(&b)
-		if err != nil {
-			return errors.Wrapf(err, "compute kzg commitment for blob %d", i)
-		}
-		commitments[i] = c[:]
-	}
-	return kzg.VerifyCellKZGProofBatchFromBlobData(blobs, commitments, flatProofs, fieldparams.NumberOfColumns)
 }
 
 // PublishSignedExecutionPayloadBid broadcasts a signed execution payload bid to the P2P network.

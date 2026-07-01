@@ -1,6 +1,7 @@
 package state_native
 
 import (
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -9,11 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
-
-// ErrProposerDependentRootUnderflow is returned by ProposerDependentRoot when
-// the proposal epoch is less than 2, in which case the spec falls back to the
-// genesis block root — callers must supply that themselves.
-var ErrProposerDependentRootUnderflow = errors.New("proposer dependent root: epoch < 2")
 
 // LatestBlockHeader stored within the beacon state.
 func (b *BeaconState) LatestBlockHeader() *ethpb.BeaconBlockHeader {
@@ -94,7 +90,7 @@ func (b *BeaconState) BlockRootAtIndex(idx uint64) ([]byte, error) {
 func (b *BeaconState) ProposerDependentRoot(slot primitives.Slot) ([32]byte, error) {
 	epoch := slots.ToEpoch(slot)
 	if epoch < 2 {
-		return [32]byte{}, ErrProposerDependentRootUnderflow
+		return [32]byte{}, state.ErrProposerDependentRootUnderflow
 	}
 	boundary, err := slots.EpochStart(epoch - 1)
 	if err != nil {
