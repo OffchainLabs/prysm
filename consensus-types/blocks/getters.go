@@ -1268,6 +1268,9 @@ func (b *BeaconBlockBody) BlobKzgCommitments() ([][]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+		if signedBid == nil || signedBid.Message == nil {
+			return nil, errors.New("nil execution payload bid or bid message")
+		}
 		return signedBid.Message.BlobKzgCommitments, nil
 	}
 	if b.version >= version.Deneb {

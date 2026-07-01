@@ -8,6 +8,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -196,6 +197,56 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_RejectsBadProofs(t *t
 		},
 	})
 	require.ErrorContains(t, "kzg verification failed", err)
+}
+
+// Stateless (builder) publish must build partial columns from the supplied blobs when partial
+// columns are supported, mirroring the self-build arm — otherwise builder envelopes broadcast full
+// columns but zero partials.
+func TestSidecarsFromContents_BuildsPartialColumns(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	require.NoError(t, kzg.Start())
+
+	blobCount := 2
+	rawBlobs := make([]kzg.Blob, blobCount)
+	for i := range rawBlobs {
+		rawBlobs[i] = kzg.Blob{uint8(i + 1)}
+	}
+	_, proofsPerBlob := util.GenerateCellsAndProofs(t, rawBlobs)
+
+	flatBlobs := make([][]byte, blobCount)
+	for i, b := range rawBlobs {
+		flatBlobs[i] = b[:]
+	}
+	flatProofs := make([][]byte, 0, blobCount*fieldparams.NumberOfColumns)
+	for _, proofs := range proofsPerBlob {
+		for _, p := range proofs {
+			flatProofs = append(flatProofs, p[:])
+		}
+	}
+
+	var blockRoot [32]byte
+
+	// Partial columns enabled: one fully-included partial per full sidecar, with a Gloas group id.
+	vs := &Server{ExecutionEngineCaller: &mockExecution.EngineClient{PartialColumnsSupportedFlag: true}}
+	sidecars, partials, err := vs.sidecarsFromContents(flatBlobs, flatProofs, 1, blockRoot)
+	require.NoError(t, err)
+	require.Equal(t, fieldparams.NumberOfColumns, len(sidecars))
+	require.Equal(t, len(sidecars), len(partials))
+	for i := range partials {
+		require.Equal(t, true, partials[i].IsComplete())
+		// Gloas partial-column group ids are versioned with a 0x01 prefix byte.
+		require.Equal(t, byte(0x01), partials[i].GroupID()[0])
+	}
+
+	// Partial columns disabled: full sidecars only, no partials.
+	vsOff := &Server{ExecutionEngineCaller: &mockExecution.EngineClient{PartialColumnsSupportedFlag: false}}
+	sidecarsOff, partialsOff, err := vsOff.sidecarsFromContents(flatBlobs, flatProofs, 1, blockRoot)
+	require.NoError(t, err)
+	require.Equal(t, fieldparams.NumberOfColumns, len(sidecarsOff))
+	require.Equal(t, 0, len(partialsOff))
 }
 
 func TestGetExecutionPayloadEnvelopeRPC_Success(t *testing.T) {

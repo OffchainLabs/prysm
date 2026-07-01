@@ -83,6 +83,17 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 				return
 			}
 
+			if isGloas {
+				commitments, err := s.bidCommitmentsForRoot(ctx, root)
+				if err != nil {
+					log.WithError(err).Error("Failed to get bid commitments for reconstructed Gloas columns")
+					return
+				}
+				for i := range reconstructedSidecars {
+					reconstructedSidecars[i].SetBidCommitments(commitments)
+				}
+			}
+
 			duration := time.Since(startTime)
 			dataColumnReconstructionHistogram.Observe(float64(duration.Milliseconds()))
 			if len(reconstructedSidecars) < len(verifiedSidecars) {

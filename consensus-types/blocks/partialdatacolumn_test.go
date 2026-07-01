@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/libp2p/go-libp2p-pubsub/partialmessages"
@@ -85,9 +86,7 @@ func mustNewPartialColumnWithSigLen(t *testing.T, n int, sigLen int, included ..
 	require.NoError(t, err)
 
 	for _, idx := range included {
-		pdc.Included.SetBitAt(idx, true)
-		pdc.Column[idx] = sizedSlices(1, 2048, byte(idx+1))[0]
-		pdc.KzgProofs[idx] = sizedSlices(1, 48, byte(idx+11))[0]
+		pdc.ExtendFromVerifiedCell(idx, sizedSlices(1, 2048, byte(idx+1))[0], sizedSlices(1, 48, byte(idx+11))[0])
 	}
 	return &pdc
 }
@@ -145,9 +144,9 @@ func TestNewPartialDataColumn(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, uint64(11), pdc.Index)
-			require.Equal(t, len(tt.commitments), len(pdc.Column))
-			require.Equal(t, len(tt.commitments), len(pdc.KzgProofs))
+			require.Equal(t, uint64(11), pdc.Index())
+			require.Equal(t, len(tt.commitments), len(pdc.Column()))
+			require.Equal(t, len(tt.commitments), len(pdc.KzgProofs()))
 			require.Equal(t, uint64(len(tt.commitments)), pdc.Included.Len())
 			require.Equal(t, uint64(0), pdc.Included.Count())
 			require.Equal(t, fieldparams.RootLength+1, len(pdc.groupID))
@@ -176,7 +175,7 @@ func TestNewPartialDataColumnFromVerifiedRODataColumn(t *testing.T) {
 
 				pdc, err := NewPartialDataColumnFromVerifiedRODataColumn(verified)
 				require.NoError(t, err)
-				require.Equal(t, sidecar, pdc.DataColumnSidecar)
+				require.Equal(t, sidecar, pdc.DataColumnSidecar())
 				require.Equal(t, uint64(3), pdc.Included.Len())
 				// All cells of a verified column should be marked as included.
 				require.Equal(t, uint64(3), pdc.Included.Count())
@@ -184,12 +183,14 @@ func TestNewPartialDataColumnFromVerifiedRODataColumn(t *testing.T) {
 				// groupID is derived from the column's block root.
 				root, err := sidecar.SignedBlockHeader.Header.HashTreeRoot()
 				require.NoError(t, err)
-				require.DeepEqual(t, groupIdFromRoot(root), pdc.groupID)
+				require.DeepEqual(t, groupIDFromRoot(root), pdc.groupID)
 			},
 		},
 		{
-			name: "no commitments",
+			name: "no commitments is rejected",
 			run: func(t *testing.T) {
+				// A column with no commitments would yield an inert, cell-less partial column, so
+				// the constructor rejects it. Producers guard against this upstream as well.
 				sidecar := &ethpb.DataColumnSidecar{
 					KzgCommitments:    nil,
 					SignedBlockHeader: testSignedHeader(true, fieldparams.BLSSignatureLength),
@@ -197,10 +198,8 @@ func TestNewPartialDataColumnFromVerifiedRODataColumn(t *testing.T) {
 				roCol, err := NewRODataColumn(sidecar)
 				require.NoError(t, err)
 
-				pdc, err := NewPartialDataColumnFromVerifiedRODataColumn(NewVerifiedRODataColumn(roCol))
-				require.NoError(t, err)
-				require.Equal(t, uint64(0), pdc.Included.Len())
-				require.Equal(t, uint64(0), pdc.Included.Count())
+				_, err = NewPartialDataColumnFromVerifiedRODataColumn(NewVerifiedRODataColumn(roCol))
+				require.ErrorContains(t, "no KZG commitments", err)
 			},
 		},
 		{
@@ -211,6 +210,7 @@ func TestNewPartialDataColumnFromVerifiedRODataColumn(t *testing.T) {
 				verified := NewVerifiedRODataColumn(RODataColumn{gloas: &ethpb.DataColumnSidecarGloas{}})
 				_, err := NewPartialDataColumnFromVerifiedRODataColumn(verified)
 				require.ErrorContains(t, "get KZG commitments", err)
+				require.ErrorIs(t, err, errNotFuluDataColumn)
 			},
 		},
 	}
@@ -417,9 +417,6 @@ func TestPartialDataColumn_PartsMetadata(t *testing.T) {
 		{
 			name: "marshal error due max bitlist size",
 			p: &PartialDataColumn{
-				DataColumnSidecar: &ethpb.DataColumnSidecar{
-					KzgCommitments: make([][]byte, 4096),
-				},
 				// 32768 bits serializes to 4097 bytes, one over the 4096-byte ssz_max.
 				Included: bitfield.NewBitlist(32768),
 			},
@@ -490,7 +487,7 @@ func TestPartialDataColumn_cellsToSendToPeer(t *testing.T) {
 			name: "marshal fails with invalid cell length",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 1, 0)
-				p.Column[0] = []byte{1}
+				p.Column()[0] = []byte{1}
 				_, _, err := p.cellsToSendToPeer(testPeerMeta(1, nil, []uint64{0}))
 				require.ErrorContains(t, "PartialColumn", err)
 			},
@@ -499,7 +496,7 @@ func TestPartialDataColumn_cellsToSendToPeer(t *testing.T) {
 			name: "marshal fails with invalid proof length",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 1, 0)
-				p.KzgProofs[0] = []byte{1}
+				p.KzgProofs()[0] = []byte{1}
 				_, _, err := p.cellsToSendToPeer(testPeerMeta(1, nil, []uint64{0}))
 				require.ErrorContains(t, "KzgProofs", err)
 			},
@@ -534,7 +531,7 @@ func TestPartialDataColumn_buildPartialColumnHeader(t *testing.T) {
 			name: "invalid commitment size",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
-				p.KzgCommitments[0] = []byte{1}
+				p.DataColumnSidecar().KzgCommitments[0] = []byte{1}
 				_, err := p.buildPartialColumnHeader()
 				require.ErrorContains(t, "KzgCommitments", err)
 			},
@@ -543,7 +540,8 @@ func TestPartialDataColumn_buildPartialColumnHeader(t *testing.T) {
 			name: "invalid inclusion proof vector length",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
-				p.KzgCommitmentsInclusionProof = p.KzgCommitmentsInclusionProof[:3]
+				sidecar := p.DataColumnSidecar()
+				sidecar.KzgCommitmentsInclusionProof = sidecar.KzgCommitmentsInclusionProof[:3]
 				_, err := p.buildPartialColumnHeader()
 				require.ErrorContains(t, "KzgCommitmentsInclusionProof", err)
 			},
@@ -1214,11 +1212,13 @@ func TestPartialDataColumn_CellsToVerifyFromPartialMessage(t *testing.T) {
 				require.NoError(t, err)
 				require.DeepEqual(t, []uint64{0, 3}, indices)
 				require.Equal(t, 2, len(bundles))
-				require.Equal(t, p.Index, bundles[0].ColumnIndex)
+				require.Equal(t, p.Index(), bundles[0].ColumnIndex)
 				require.DeepEqual(t, []byte{0xA}, bundles[0].Cell)
 				require.DeepEqual(t, []byte{0xC}, bundles[1].Cell)
-				require.DeepEqual(t, p.KzgCommitments[0], bundles[0].Commitment)
-				require.DeepEqual(t, p.KzgCommitments[3], bundles[1].Commitment)
+				commitments, err := p.KzgCommitments()
+				require.NoError(t, err)
+				require.DeepEqual(t, commitments[0], bundles[0].Commitment)
+				require.DeepEqual(t, commitments[3], bundles[1].Commitment)
 			},
 		},
 		{
@@ -1252,10 +1252,10 @@ func TestPartialDataColumn_ExtendFromVerifiedCell(t *testing.T) {
 			name: "already present cell is not overwritten",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 1)
-				oldCell := p.Column[1]
+				oldCell := p.Column()[1]
 				ok := p.ExtendFromVerifiedCell(1, []byte{9}, []byte{8})
 				require.Equal(t, false, ok)
-				require.DeepEqual(t, oldCell, p.Column[1])
+				require.DeepEqual(t, oldCell, p.Column()[1])
 			},
 		},
 		{
@@ -1265,8 +1265,8 @@ func TestPartialDataColumn_ExtendFromVerifiedCell(t *testing.T) {
 				ok := p.ExtendFromVerifiedCell(0, []byte{9}, []byte{8})
 				require.Equal(t, true, ok)
 				require.Equal(t, true, p.Included.BitAt(0))
-				require.DeepEqual(t, []byte{9}, p.Column[0])
-				require.DeepEqual(t, []byte{8}, p.KzgProofs[0])
+				require.DeepEqual(t, []byte{9}, p.Column()[0])
+				require.DeepEqual(t, []byte{8}, p.KzgProofs()[0])
 			},
 		},
 		{
@@ -1379,4 +1379,288 @@ func decodePartsMetadata(pm partialmessages.PartsMetadata, expectedLength uint64
 		return nil, errors.New("invalid parts metadata length")
 	}
 	return meta, nil
+}
+
+// mustNewGloasPartialColumn builds a Gloas partial column with n commitments and
+// the given cells marked as included, mirroring mustNewPartialColumn for Fulu.
+func mustNewGloasPartialColumn(t *testing.T, n int, included ...uint64) *PartialDataColumn {
+	t.Helper()
+	commitments := sizedSlices(n, 48, 1)
+	pdc, err := NewPartialDataColumnGloas([fieldparams.RootLength]byte{}, 9, 7, commitments)
+	require.NoError(t, err)
+	for _, idx := range included {
+		pdc.ExtendFromVerifiedCell(idx, sizedSlices(1, 2048, byte(idx+1))[0], sizedSlices(1, 48, byte(idx+11))[0])
+	}
+	return &pdc
+}
+
+func mustDecodeGloasSidecar(t *testing.T, encoded []byte) *ethpb.PartialDataColumnSidecarGloas {
+	t.Helper()
+	var msg ethpb.PartialDataColumnSidecarGloas
+	require.NoError(t, msg.UnmarshalSSZ(encoded))
+	return &msg
+}
+
+func nonZeroRoot() [fieldparams.RootLength]byte {
+	var root [fieldparams.RootLength]byte
+	for i := range root {
+		root[i] = byte(i + 1)
+	}
+	return root
+}
+
+func TestPartialColumnGroupID_RoundTrip(t *testing.T) {
+	root := nonZeroRoot()
+
+	t.Run("gloas round trips", func(t *testing.T) {
+		groupID, err := gloasGroupID(42, root)
+		require.NoError(t, err)
+		// 1 version byte + 8 slot + 32 root.
+		require.Equal(t, fieldparams.RootLength+9, len(groupID))
+		require.Equal(t, byte(0x01), groupID[0])
+
+		isGloas, slot, gotRoot, err := ParsePartialColumnGroupID(groupID)
+		require.NoError(t, err)
+		require.Equal(t, true, isGloas)
+		require.Equal(t, primitives.Slot(42), slot)
+		require.Equal(t, root, gotRoot)
+	})
+
+	t.Run("fulu parses as non-gloas with zero slot", func(t *testing.T) {
+		groupID := groupIDFromRoot(root)
+		require.Equal(t, fieldparams.RootLength+1, len(groupID))
+		require.Equal(t, byte(0x00), groupID[0])
+
+		isGloas, slot, gotRoot, err := ParsePartialColumnGroupID(groupID)
+		require.NoError(t, err)
+		require.Equal(t, false, isGloas)
+		require.Equal(t, primitives.Slot(0), slot)
+		require.Equal(t, root, gotRoot)
+	})
+}
+
+func TestParsePartialColumnGroupID_Malformed(t *testing.T) {
+	validGloas, err := gloasGroupID(1, [fieldparams.RootLength]byte{})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name    string
+		input   []byte
+		wantErr string
+	}{
+		{name: "empty", input: nil, wantErr: "empty partial column group id"},
+		{name: "unknown version", input: []byte{0x02, 1, 2, 3}, wantErr: "unknown partial column group id version"},
+		{name: "fulu wrong length", input: append([]byte{0x00}, make([]byte, 10)...), wantErr: "invalid fulu group id length"},
+		{name: "gloas truncated ssz", input: validGloas[:len(validGloas)-1], wantErr: "unmarshal gloas group id"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, _, err := ParsePartialColumnGroupID(tt.input)
+			require.ErrorContains(t, tt.wantErr, err)
+		})
+	}
+}
+
+func TestNewPartialDataColumnGloas(t *testing.T) {
+	t.Run("nominal", func(t *testing.T) {
+		root := nonZeroRoot()
+		commitments := sizedSlices(3, 48, 10)
+		pdc, err := NewPartialDataColumnGloas(root, 5, 7, commitments)
+		require.NoError(t, err)
+
+		require.Equal(t, true, pdc.IsGloas())
+		require.Equal(t, uint64(7), pdc.Index())
+		require.Equal(t, primitives.Slot(5), pdc.Slot())
+		require.Equal(t, root, pdc.BlockRoot())
+		// Cell and proof slots are pre-sized to the commitment count and empty.
+		require.Equal(t, 3, len(pdc.Column()))
+		require.Equal(t, 3, len(pdc.KzgProofs()))
+		require.Equal(t, uint64(3), pdc.Included.Len())
+		require.Equal(t, uint64(0), pdc.Included.Count())
+		// Bid commitments are set at construction.
+		got, err := pdc.KzgCommitments()
+		require.NoError(t, err)
+		require.DeepEqual(t, commitments, got)
+		// Group id is the 41-byte versioned gloas id derived from slot+root.
+		expectedGroupID, err := gloasGroupID(5, root)
+		require.NoError(t, err)
+		require.DeepEqual(t, expectedGroupID, pdc.groupID)
+	})
+
+	t.Run("empty commitments errors", func(t *testing.T) {
+		_, err := NewPartialDataColumnGloas([fieldparams.RootLength]byte{}, 5, 7, nil)
+		require.ErrorContains(t, "kzgCommitments is empty", err)
+	})
+}
+
+func TestNewPartialDataColumnFromVerifiedRODataColumn_Gloas(t *testing.T) {
+	root := nonZeroRoot()
+	commitments := sizedSlices(2, 48, 5)
+	sidecar := &ethpb.DataColumnSidecarGloas{
+		Slot:            11,
+		BeaconBlockRoot: root[:],
+		Column:          make([][]byte, 2),
+		KzgProofs:       make([][]byte, 2),
+	}
+	roCol, err := NewRODataColumnGloasWithRoot(sidecar, root)
+	require.NoError(t, err)
+	// Caller must seed the bid commitments before constructing the partial.
+	roCol.SetBidCommitments(commitments)
+
+	pdc, err := NewPartialDataColumnFromVerifiedRODataColumn(NewVerifiedRODataColumn(roCol))
+	require.NoError(t, err)
+	require.Equal(t, true, pdc.IsGloas())
+	// All cells of a verified column are marked included.
+	require.Equal(t, uint64(2), pdc.Included.Count())
+	expectedGroupID, err := gloasGroupID(11, root)
+	require.NoError(t, err)
+	require.DeepEqual(t, expectedGroupID, pdc.groupID)
+}
+
+// The Gloas group id is keyed only on (slot, root), so it is byte-identical
+// across calls and independent of the column index. This is the per-block dedup
+// key the broadcaster relies on to coalesce every column of a block.
+func TestNewPartialDataColumnGloas_GroupIDDeterministic(t *testing.T) {
+	root := nonZeroRoot()
+	commitments := sizedSlices(3, 48, 10)
+
+	a, err := NewPartialDataColumnGloas(root, 5, 7, commitments)
+	require.NoError(t, err)
+	b, err := NewPartialDataColumnGloas(root, 5, 7, commitments)
+	require.NoError(t, err)
+	require.DeepEqual(t, a.GroupID(), b.GroupID())
+
+	// Different column index, same block: identical group id.
+	c, err := NewPartialDataColumnGloas(root, 5, 9, commitments)
+	require.NoError(t, err)
+	require.DeepEqual(t, a.GroupID(), c.GroupID())
+}
+
+func TestPartialDataColumn_cellsToSendToPeer_Gloas(t *testing.T) {
+	p := mustNewGloasPartialColumn(t, 4, 0, 1, 3)
+	encoded, sent, err := p.cellsToSendToPeer(testPeerMeta(4, []uint64{1}, allSet(4)))
+	require.NoError(t, err)
+	require.NotNil(t, encoded)
+	require.NotNil(t, sent)
+	require.Equal(t, true, sent.BitAt(0))
+	require.Equal(t, false, sent.BitAt(1)) // peer already has cell 1
+	require.Equal(t, true, sent.BitAt(3))
+
+	// Gloas columns emit the 3-field PartialDataColumnSidecarGloas wire message,
+	// which structurally has no header field.
+	msg := mustDecodeGloasSidecar(t, encoded)
+	require.Equal(t, 2, len(msg.PartialColumn))
+	require.Equal(t, 2, len(msg.KzgProofs))
+	require.Equal(t, true, bitfield.Bitlist(msg.CellsPresentBitmap).BitAt(0))
+	require.Equal(t, false, bitfield.Bitlist(msg.CellsPresentBitmap).BitAt(1))
+	require.Equal(t, true, bitfield.Bitlist(msg.CellsPresentBitmap).BitAt(3))
+}
+
+func TestPartialDataColumn_CellsToVerifyFromPartialMessage_Gloas(t *testing.T) {
+	// A Gloas column verifies incoming cells against its bid commitments.
+	p := mustNewGloasPartialColumn(t, 4, 1)
+	msg := &ethpb.PartialDataColumnSidecar{
+		CellsPresentBitmap: testBitlist(4, 0, 1, 3),
+		PartialColumn:      [][]byte{{0xA}, {0xB}, {0xC}},
+		KzgProofs:          [][]byte{{0x1}, {0x2}, {0x3}},
+	}
+	indices, bundles, err := p.CellsToVerifyFromPartialMessage(msg)
+	require.NoError(t, err)
+	require.DeepEqual(t, []uint64{0, 3}, indices)
+	require.Equal(t, 2, len(bundles))
+
+	commitments, err := p.KzgCommitments()
+	require.NoError(t, err)
+	require.Equal(t, p.Index(), bundles[0].ColumnIndex)
+	require.DeepEqual(t, commitments[0], bundles[0].Commitment)
+	require.DeepEqual(t, commitments[3], bundles[1].Commitment)
+}
+
+func TestPartialDataColumn_ForPeer_GloasNoHeaderEagerPush(t *testing.T) {
+	p := mustNewGloasPartialColumn(t, 2, 0)
+	nextState, action, includeHeader := p.forPeer(peer.ID("peer-a"), true, PartialDataColumnPeerState{}, true)
+	require.NoError(t, action.Err)
+	// Gloas never eager-pushes a header.
+	require.Equal(t, false, includeHeader)
+	// The eager push carries parts metadata only, no encoded partial message.
+	require.IsNil(t, action.EncodedPartialMessage)
+	require.NotNil(t, action.EncodedPartsMetadata)
+	// Recvd/Sent are initialized so the eager push is not retried.
+	require.NotNil(t, nextState.Recvd)
+	require.NotNil(t, nextState.Sent)
+}
+
+func TestPartialDataColumn_PublishActionsFn_GloasNeverSendsHeader(t *testing.T) {
+	p := mustNewGloasPartialColumn(t, 2, 0)
+	peerStates := map[peer.ID]PartialDataColumnPeerState{"peer-a": {}}
+	headerSentCache := map[peer.ID]bool{}
+	actions := runPublishActions(p, peerStates, headerSentCache, map[peer.ID]bool{"peer-a": true})
+
+	action := actions["peer-a"]
+	require.NoError(t, action.Err)
+	require.IsNil(t, action.EncodedPartialMessage)
+	require.NotNil(t, action.EncodedPartsMetadata)
+	// The header-sent cache is never marked for a Gloas column.
+	require.Equal(t, false, headerSentCache["peer-a"])
+	require.NotNil(t, peerStates["peer-a"].Recvd)
+}
+
+func TestPartialDataColumn_Gloas_ExtendAndComplete(t *testing.T) {
+	p := mustNewGloasPartialColumn(t, 2, 0)
+	require.Equal(t, false, p.IsComplete())
+	ok := p.ExtendFromVerifiedCell(1, sizedSlices(1, 2048, 9)[0], sizedSlices(1, 48, 8)[0])
+	require.Equal(t, true, ok)
+	require.Equal(t, true, p.IsComplete())
+}
+
+func TestDecodePartialColumnSidecar(t *testing.T) {
+	cells := sizedSlices(2, 2048, 1)
+	proofs := sizedSlices(2, 48, 9)
+	present := bitfield.NewBitlist(4)
+	present.SetBitAt(0, true)
+	present.SetBitAt(2, true)
+
+	t.Run("gloas wire decodes and normalizes with a nil header", func(t *testing.T) {
+		raw, err := (&ethpb.PartialDataColumnSidecarGloas{
+			CellsPresentBitmap: present,
+			PartialColumn:      cells,
+			KzgProofs:          proofs,
+		}).MarshalSSZ()
+		require.NoError(t, err)
+
+		got, err := DecodePartialColumnSidecar(raw, true)
+		require.NoError(t, err)
+		require.IsNil(t, got.Header)
+		require.DeepEqual(t, present, got.CellsPresentBitmap)
+		require.DeepEqual(t, cells, got.PartialColumn)
+		require.DeepEqual(t, proofs, got.KzgProofs)
+	})
+
+	t.Run("fulu wire decodes", func(t *testing.T) {
+		raw, err := (&ethpb.PartialDataColumnSidecar{
+			CellsPresentBitmap: present,
+			PartialColumn:      cells,
+			KzgProofs:          proofs,
+		}).MarshalSSZ()
+		require.NoError(t, err)
+
+		got, err := DecodePartialColumnSidecar(raw, false)
+		require.NoError(t, err)
+		require.DeepEqual(t, present, got.CellsPresentBitmap)
+		require.DeepEqual(t, cells, got.PartialColumn)
+		require.DeepEqual(t, proofs, got.KzgProofs)
+	})
+
+	t.Run("gloas wire is rejected when decoded as fulu", func(t *testing.T) {
+		raw, err := (&ethpb.PartialDataColumnSidecarGloas{
+			CellsPresentBitmap: present,
+			PartialColumn:      cells,
+			KzgProofs:          proofs,
+		}).MarshalSSZ()
+		require.NoError(t, err)
+
+		_, err = DecodePartialColumnSidecar(raw, false)
+		require.NotNil(t, err)
+	})
 }

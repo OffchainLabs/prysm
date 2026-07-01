@@ -2840,23 +2840,6 @@ func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
 			require.Equal(t, true, requests.BitAt(2))
 		}
 	})
-
-	// Keep this subtest last: it overrides the Gloas fork epoch and relies on
-	// SetupTestConfigCleanup to restore the config after the test.
-	t.Run("Gloas-epoch block is gated off and reports unsupported", func(t *testing.T) {
-		gloasCfg := params.BeaconConfig().Copy()
-		gloasCfg.GloasForkEpoch = 0
-		params.OverrideBeaconConfig(gloasCfg)
-
-		client := &Service{
-			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobs: nil}},
-			partialColumnsSupported: true,
-		}
-		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
-		require.NoError(t, err)
-		require.Equal(t, false, supported)
-		require.Equal(t, 0, len(cols))
-	})
 }
 
 func TestConstructDataColumnSidecars_PartialColumns(t *testing.T) {

@@ -811,7 +811,7 @@ func (f *fakePartialColumnBroadcaster) Publish(_ context.Context, seq iter.Seq2[
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for topic, col := range seq {
-		f.published = append(f.published, publishedPartial{topic: topic, index: col.Index})
+		f.published = append(f.published, publishedPartial{topic: topic, index: col.Index()})
 	}
 	return f.err
 }

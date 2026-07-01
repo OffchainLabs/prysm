@@ -122,7 +122,7 @@ func TestProcessDataColumnSidecarsFromReconstruction(t *testing.T) {
 		broadcastedPartials := p2p.BroadcastedPartialColumns()
 		require.Equal(t, len(unseenExpected), len(broadcastedPartials))
 		for _, partial := range broadcastedPartials {
-			require.Equal(t, true, unseenExpected[partial.Index])
+			require.Equal(t, true, unseenExpected[partial.Index()])
 		}
 	})
 }

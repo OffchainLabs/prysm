@@ -16,6 +16,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -36,10 +37,11 @@ type testColumnCallbacks struct {
 }
 
 func (c *testColumnCallbacks) PartialVerifierFromHeader(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, pubsub.ValidationResult, error) {
-	if col.SignedBlockHeader == nil || col.SignedBlockHeader.Header == nil {
+	sbh, err := col.SignedBlockHeader()
+	if err != nil || sbh == nil || sbh.Header == nil {
 		return nil, pubsub.ValidationReject, fmt.Errorf("nil signed block header")
 	}
-	if len(col.KzgCommitments) == 0 {
+	if col.KzgCommitmentCount() == 0 {
 		return nil, pubsub.ValidationReject, fmt.Errorf("empty kzg commitments")
 	}
 	verifier, err := c.newVerifier(col)
@@ -63,6 +65,10 @@ func (c *testColumnCallbacks) HandleColumn(_ string, col blocks.VerifiedRODataCo
 }
 
 func (c *testColumnCallbacks) HandleHeader(_ *ethpb.PartialDataColumnHeader, _ string) {}
+
+func (c *testColumnCallbacks) ValidatePartialColumnGroupID(_ []byte) pubsub.ValidationResult {
+	return pubsub.ValidationAccept
+}
 
 // TestTwoNodePartialColumnExchange tests that two nodes can exchange partial columns
 // and reconstruct the complete column. Node 1 has cells 0-2, Node 2 has cells 3-5.
@@ -189,11 +195,7 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 
 		newVerifier := func(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
 			mock := &verification.MockDataColumnsVerifier{}
-			roCol, err := blocks.NewRODataColumn(col.DataColumnSidecar)
-			if err != nil {
-				return nil, err
-			}
-			mock.AppendRODataColumns(roCol)
+			mock.AppendRODataColumns(col.RODataColumn)
 			verifier := verification.NewPartialColumnVerifier(mock, col)
 			return verifier, nil
 		}
@@ -248,6 +250,202 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 
 		t.Log("Publishing from Node 2")
+		err = broadcaster2.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
+			yield(topicStr, pc2)
+		})
+		require.NoError(t, err)
+
+		//  Wait for Completion
+		timeout := time.After(10 * time.Second)
+		var col1, col2 blocks.VerifiedRODataColumn
+		receivedCount := 0
+
+		for receivedCount < 2 {
+			select {
+			case col1 = <-node1Complete:
+				t.Log("Node 1 completed reconstruction")
+				receivedCount++
+			case col2 = <-node2Complete:
+				t.Log("Node 2 completed reconstruction")
+				receivedCount++
+			case <-timeout:
+				t.Fatalf("Timeout: Only %d/2 nodes completed", receivedCount)
+			}
+		}
+
+		// Verify both columns have all cells
+		assert.Equal(t, numCells, len(col1.Column()), "Node 1 should have all cells")
+		assert.Equal(t, numCells, len(col2.Column()), "Node 2 should have all cells")
+		assert.DeepSSZEqual(t, cells, col1.Column(), "Node 1 cell mismatch")
+		assert.DeepSSZEqual(t, cells, col2.Column(), "Node 2 cell mismatch")
+	})
+}
+
+// TestTwoNodePartialColumnExchange_Gloas is the Gloas analogue of the Fulu exchange above. Gloas
+// partial columns carry no header and source commitments from the bid, and the wire is the 3-field
+// PartialDataColumnSidecarGloas under a 41B group id. Because a Gloas node can only verify cells
+// once it has published locally, both nodes publish their half and recover the other half via the
+// parts-metadata request/response. The same testColumnCallbacks works unchanged (no header path).
+func TestTwoNodePartialColumnExchange_Gloas(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		// Create a simulated libp2p network
+		latency := time.Millisecond * 10
+		network, meta, err := simlibp2p.SimpleLibp2pNetwork([]simlibp2p.NodeLinkSettingsAndCount{
+			{LinkSettings: simnet.NodeBiDiLinkSettings{
+				Downlink: simnet.LinkSettings{BitsPerSecond: 20 * simlibp2p.OneMbps},
+				Uplink:   simnet.LinkSettings{BitsPerSecond: 20 * simlibp2p.OneMbps},
+			}, Count: 2},
+		}, simnet.StaticLatency(latency/2), simlibp2p.NetworkSettings{UseBlankHost: true})
+		require.NoError(t, err)
+		network.Start()
+		defer func() {
+			network.Close()
+		}()
+		defer func() {
+			for _, node := range meta.Nodes {
+				err := node.Close()
+				if err != nil {
+					panic(err)
+				}
+			}
+		}()
+
+		h1 := meta.Nodes[0]
+		h2 := meta.Nodes[1]
+
+		logger := logrus.New()
+		logger.SetLevel(logrus.DebugLevel)
+		bcastCtx1, cancelBcast1 := context.WithCancel(t.Context())
+		bcastCtx2, cancelBcast2 := context.WithCancel(t.Context())
+		broadcaster1 := partialdatacolumnbroadcaster.NewBroadcaster(bcastCtx1, logger)
+		broadcaster2 := partialdatacolumnbroadcaster.NewBroadcaster(bcastCtx2, logger)
+
+		opts1 := broadcaster1.AppendPubSubOpts([]pubsub.Option{
+			pubsub.WithMessageSigning(false),
+			pubsub.WithStrictSignatureVerification(false),
+		})
+		opts2 := broadcaster2.AppendPubSubOpts([]pubsub.Option{
+			pubsub.WithMessageSigning(false),
+			pubsub.WithStrictSignatureVerification(false),
+		})
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		ps1, err := pubsub.NewGossipSub(ctx, h1, opts1...)
+		require.NoError(t, err)
+		ps2, err := pubsub.NewGossipSub(ctx, h2, opts2...)
+		require.NoError(t, err)
+
+		defer func() {
+			cancelBcast1()
+			cancelBcast2()
+		}()
+
+		// Generate Gloas test data: no header / inclusion proof; commitments come from the bid.
+		var blockRoot [fieldparams.RootLength]byte
+		copy(blockRoot[:], []byte("gloas-test-block-root"))
+		slot := primitives.Slot(9)
+		columnIndex := uint64(12)
+
+		numCells := 6
+		commitments := make([][]byte, numCells)
+		cells := make([][]byte, numCells)
+		proofs := make([][]byte, numCells)
+
+		for i := range numCells {
+			commitments[i] = make([]byte, 48)
+
+			cells[i] = make([]byte, 2048)
+			_, err := rand.Read(cells[i])
+			require.NoError(t, err)
+			proofs[i] = make([]byte, 48)
+			_ = fmt.Appendf(proofs[i][:0], "proof %d", i)
+		}
+
+		pc1, err := blocks.NewPartialDataColumnGloas(blockRoot, slot, columnIndex, commitments)
+		require.NoError(t, err)
+		pc2, err := blocks.NewPartialDataColumnGloas(blockRoot, slot, columnIndex, commitments)
+		require.NoError(t, err)
+
+		// Split data: node 1 has even cells, node 2 has odd cells.
+		for i := range numCells {
+			if i%2 == 0 {
+				pc1.ExtendFromVerifiedCell(uint64(i), cells[i], proofs[i])
+			} else {
+				pc2.ExtendFromVerifiedCell(uint64(i), cells[i], proofs[i])
+			}
+		}
+
+		// Setup Topic and Subscriptions
+		digest := params.ForkDigest(0)
+		subnet := peerdas.ComputeSubnetForDataColumnSidecar(columnIndex)
+		topicStr := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) +
+			encoder.SszNetworkEncoder{}.ProtocolSuffix()
+
+		time.Sleep(100 * time.Millisecond)
+
+		topic1, err := ps1.Join(topicStr, pubsub.RequestPartialMessages())
+		require.NoError(t, err)
+		topic2, err := ps2.Join(topicStr, pubsub.RequestPartialMessages())
+		require.NoError(t, err)
+
+		newVerifier := func(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
+			mock := &verification.MockDataColumnsVerifier{}
+			mock.AppendRODataColumns(col.RODataColumn)
+			verifier := verification.NewPartialColumnVerifier(mock, col)
+			return verifier, nil
+		}
+
+		node1Complete := make(chan blocks.VerifiedRODataColumn, 1)
+		node2Complete := make(chan blocks.VerifiedRODataColumn, 1)
+
+		newTestCallbacks := func(completeCh chan blocks.VerifiedRODataColumn, label string) *testColumnCallbacks {
+			return &testColumnCallbacks{
+				t:           t,
+				newVerifier: newVerifier,
+				completeCh:  completeCh,
+				label:       label,
+			}
+		}
+
+		// Connect hosts
+		err = h1.Connect(context.Background(), peer.AddrInfo{
+			ID:    h2.ID(),
+			Addrs: h2.Addrs(),
+		})
+		require.NoError(t, err)
+		time.Sleep(300 * time.Millisecond)
+
+		// Subscribe to regular GossipSub (critical for partial message RPC exchange!)
+		sub1, err := topic1.Subscribe()
+		require.NoError(t, err)
+		defer sub1.Cancel()
+
+		sub2, err := topic2.Subscribe()
+		require.NoError(t, err)
+		defer sub2.Cancel()
+
+		go broadcaster1.Start(newTestCallbacks(node1Complete, "Node 1"))
+		go broadcaster2.Start(newTestCallbacks(node2Complete, "Node 2"))
+
+		err = broadcaster1.Subscribe(ctx, topic1)
+		require.NoError(t, err)
+		err = broadcaster2.Subscribe(ctx, topic2)
+		require.NoError(t, err)
+
+		// Wait for mesh to form
+		time.Sleep(2 * time.Second)
+
+		// Publish
+		t.Log("Publishing Gloas partial from Node 1")
+		err = broadcaster1.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
+			yield(topicStr, pc1)
+		})
+		require.NoError(t, err)
+
+		time.Sleep(200 * time.Millisecond)
+
+		t.Log("Publishing Gloas partial from Node 2")
 		err = broadcaster2.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
 			yield(topicStr, pc2)
 		})

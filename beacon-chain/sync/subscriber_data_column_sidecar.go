@@ -73,6 +73,10 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		}
 	}
 
+	if sidecar.IsGloas() {
+		s.republishGloasColumnAsPartial(ctx, sidecar)
+	}
+
 	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
 		return wrapDataColumnError(sidecar, "receive data column sidecar", err)
 	}
@@ -105,6 +109,62 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 	}
 
 	return nil
+}
+
+// republishGloasColumnAsPartial republishes a verified Gloas full column received via gossip as
+// a partial column so partial-column peers (who don't receive full columns) can fill in cells.
+// The column was re-wrapped from the raw proto and carries no commitments, so they are seeded
+// from the block's bid (the block is in the DB — Gloas validation required it). De-dup is not
+// needed here: the Gloas validator delivers only the first valid receipt per (root, index), and
+// the broadcaster is idempotent per group id.
+func (s *Service) republishGloasColumnAsPartial(ctx context.Context, sidecar blocks.VerifiedRODataColumn) {
+	broadcaster := s.cfg.p2p.PartialColumnBroadcaster()
+	if broadcaster == nil {
+		return
+	}
+
+	commitments, err := s.bidCommitmentsForRoot(ctx, sidecar.BlockRoot())
+	if err != nil {
+		log.WithError(err).Error("Failed to get bid commitments for gloas partial column republish")
+		return
+	}
+	sidecar.SetBidCommitments(commitments)
+
+	digest, err := s.currentForkDigest()
+	if err != nil {
+		log.WithError(err).Error("Failed to get current fork digest")
+		return
+	}
+
+	if err := broadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
+		subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index())
+		topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
+		partialColumn, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar)
+		if err != nil {
+			log.WithError(err).Error("Failed to create gloas partial data column from verified RO data column")
+			return
+		}
+		yield(topic, partialColumn)
+	}); err != nil {
+		log.WithError(err).Error("Failed to publish gloas partial column on getting data column sidecar")
+	}
+}
+
+// bidCommitmentsForRoot returns the bid KZG commitments for the block with the given root,
+// which must be present in the database.
+func (s *Service) bidCommitmentsForRoot(ctx context.Context, root [32]byte) ([][]byte, error) {
+	block, err := s.cfg.beaconDB.Block(ctx, root)
+	if err != nil {
+		return nil, errors.Wrap(err, "get block")
+	}
+	if block == nil || block.IsNil() {
+		return nil, errors.New("nil block")
+	}
+	commitments, err := block.Block().Body().BlobKzgCommitments()
+	if err != nil {
+		return nil, errors.Wrap(err, "blob kzg commitments")
+	}
+	return commitments, nil
 }
 
 func (s *Service) verifiedRODataColumnSubscriber(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
