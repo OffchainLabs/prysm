@@ -187,7 +187,7 @@ func TestStartEventStream(t *testing.T) {
 				).AnyTimes()
 			},
 			verify: func(t *testing.T, event *eventClient.Event) {
-				require.Equal(t, event.EventType, eventClient.EventHead)
+				require.Equal(t, event.Type, eventClient.EventHead)
 				head := structs.HeadEvent{}
 				require.NoError(t, json.Unmarshal(event.Data, &head))
 				require.Equal(t, head.Slot, "123")
@@ -207,7 +207,7 @@ func TestStartEventStream(t *testing.T) {
 				).AnyTimes()
 			},
 			verify: func(t *testing.T, event *eventClient.Event) {
-				require.Equal(t, event.EventType, eventClient.EventConnectionError)
+				require.Equal(t, event.Type, eventClient.EventConnectionError)
 			},
 		},
 		{
@@ -224,7 +224,7 @@ func TestStartEventStream(t *testing.T) {
 				).AnyTimes()
 			},
 			verify: func(t *testing.T, event *eventClient.Event) {
-				require.Equal(t, event.EventType, eventClient.EventHead)
+				require.Equal(t, event.Type, eventClient.EventHead)
 				head := structs.HeadEvent{}
 				require.NoError(t, json.Unmarshal(event.Data, &head))
 				require.Equal(t, head.Slot, "123")
@@ -236,7 +236,7 @@ func TestStartEventStream(t *testing.T) {
 			topics:  []string{},
 			prepare: func() {},
 			verify: func(t *testing.T, event *eventClient.Event) {
-				require.Equal(t, event.EventType, eventClient.EventError)
+				require.Equal(t, event.Type, eventClient.EventError)
 			},
 		},
 	}

@@ -32,8 +32,8 @@ type EventStreamClient interface {
 }
 
 type Event struct {
-	EventType string
-	Data      []byte
+	Type string
+	Data []byte
 }
 
 // EventStream is responsible for subscribing to the Beacon API events endpoint
@@ -70,8 +70,8 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 	req, err := http.NewRequestWithContext(h.ctx, http.MethodGet, fullUrl, nil)
 	if err != nil {
 		eventsChannel <- &Event{
-			EventType: EventConnectionError,
-			Data:      []byte(errors.Wrap(err, "failed to create HTTP request").Error()),
+			Type: EventConnectionError,
+			Data: []byte(errors.Wrap(err, "failed to create HTTP request").Error()),
 		}
 	}
 	req.Header.Set("Accept", api.EventStreamMediaType)
@@ -79,8 +79,8 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
 		eventsChannel <- &Event{
-			EventType: EventConnectionError,
-			Data:      []byte(errors.Wrap(err, client.ErrConnectionIssue.Error()).Error()),
+			Type: EventConnectionError,
+			Data: []byte(errors.Wrap(err, client.ErrConnectionIssue.Error()).Error()),
 		}
 		return
 	}
@@ -103,8 +103,8 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 			strings.TrimSpace(string(body)),
 		)
 		eventsChannel <- &Event{
-			EventType: EventConnectionError,
-			Data:      []byte(wrapErr.Error()),
+			Type: EventConnectionError,
+			Data: []byte(wrapErr.Error()),
 		}
 		return
 	}
@@ -129,7 +129,7 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 				// Empty line indicates the end of an event
 				if eventType != "" && data != "" {
 					// Process the event when both eventType and data are set
-					eventsChannel <- &Event{EventType: eventType, Data: []byte(data)}
+					eventsChannel <- &Event{Type: eventType, Data: []byte(data)}
 				}
 
 				// Reset eventType and data for the next event
@@ -151,8 +151,8 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 
 	if err := scanner.Err(); err != nil {
 		eventsChannel <- &Event{
-			EventType: EventConnectionError,
-			Data:      []byte(errors.Wrap(err, errors.Wrap(client.ErrConnectionIssue, "scanner failed").Error()).Error()),
+			Type: EventConnectionError,
+			Data: []byte(errors.Wrap(err, errors.Wrap(client.ErrConnectionIssue, "scanner failed").Error()).Error()),
 		}
 	}
 }

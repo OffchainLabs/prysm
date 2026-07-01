@@ -352,8 +352,8 @@ func (c *beaconApiValidatorClient) StartEventStream(ctx context.Context, topics 
 	eventStream, err := event.NewEventStream(ctx, client, c.handler.Host(), topics)
 	if err != nil {
 		eventsChannel <- &event.Event{
-			EventType: event.EventError,
-			Data:      []byte(errors.Wrap(err, "failed to start event stream").Error()),
+			Type: event.EventError,
+			Data: []byte(errors.Wrap(err, "failed to start event stream").Error()),
 		}
 		return
 	}

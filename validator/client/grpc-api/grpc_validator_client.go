@@ -347,8 +347,8 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 	defer span.End()
 	if len(topics) == 0 {
 		eventsChannel <- &eventClient.Event{
-			EventType: eventClient.EventError,
-			Data:      []byte(errors.New("no topics were added").Error()),
+			Type: eventClient.EventError,
+			Data: []byte(errors.New("no topics were added").Error()),
 		}
 		return
 	}
@@ -361,8 +361,8 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 	}
 	if !containsHead {
 		eventsChannel <- &eventClient.Event{
-			EventType: eventClient.EventConnectionError,
-			Data:      []byte(errors.Wrap(client.ErrConnectionIssue, "gRPC only supports the head topic, and head topic was not passed").Error()),
+			Type: eventClient.EventConnectionError,
+			Data: []byte(errors.Wrap(client.ErrConnectionIssue, "gRPC only supports the head topic, and head topic was not passed").Error()),
 		}
 	}
 	if containsHead && len(topics) > 1 {
@@ -372,8 +372,8 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 	stream, err := c.getClient().StreamSlots(ctx, &ethpb.StreamSlotsRequest{VerifiedOnly: true})
 	if err != nil {
 		eventsChannel <- &eventClient.Event{
-			EventType: eventClient.EventConnectionError,
-			Data:      []byte(errors.Wrap(client.ErrConnectionIssue, err.Error()).Error()),
+			Type: eventClient.EventConnectionError,
+			Data: []byte(errors.Wrap(client.ErrConnectionIssue, err.Error()).Error()),
 		}
 		return
 	}
@@ -389,14 +389,14 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 				c.isEventStreamRunning = false
 				if errors.Is(ctx.Err(), context.Canceled) {
 					eventsChannel <- &eventClient.Event{
-						EventType: eventClient.EventConnectionError,
-						Data:      []byte(errors.Wrap(client.ErrConnectionIssue, ctx.Err().Error()).Error()),
+						Type: eventClient.EventConnectionError,
+						Data: []byte(errors.Wrap(client.ErrConnectionIssue, ctx.Err().Error()).Error()),
 					}
 					return
 				}
 				eventsChannel <- &eventClient.Event{
-					EventType: eventClient.EventError,
-					Data:      []byte(ctx.Err().Error()),
+					Type: eventClient.EventError,
+					Data: []byte(ctx.Err().Error()),
 				}
 				return
 			}
@@ -404,8 +404,8 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 			if err != nil {
 				c.isEventStreamRunning = false
 				eventsChannel <- &eventClient.Event{
-					EventType: eventClient.EventConnectionError,
-					Data:      []byte(errors.Wrap(client.ErrConnectionIssue, err.Error()).Error()),
+					Type: eventClient.EventConnectionError,
+					Data: []byte(errors.Wrap(client.ErrConnectionIssue, err.Error()).Error()),
 				}
 				return
 			}
@@ -424,13 +424,13 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 			})
 			if err != nil {
 				eventsChannel <- &eventClient.Event{
-					EventType: eventClient.EventError,
-					Data:      []byte(errors.Wrap(err, "failed to marshal Head Event").Error()),
+					Type: eventClient.EventError,
+					Data: []byte(errors.Wrap(err, "failed to marshal Head Event").Error()),
 				}
 			}
 			eventsChannel <- &eventClient.Event{
-				EventType: eventClient.EventHead,
-				Data:      b,
+				Type: eventClient.EventHead,
+				Data: b,
 			}
 		}
 	}

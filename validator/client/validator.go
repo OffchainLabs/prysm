@@ -885,7 +885,7 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 		return
 	}
 
-	switch event.EventType {
+	switch event.Type {
 	case eventClient.EventError:
 		log.Error(string(event.Data))
 	case eventClient.EventConnectionError:
@@ -921,7 +921,7 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 		v.payloadAvailability.notify(primitives.Slot(uintSlot))
 	default:
 		// just keep going and log the error
-		log.WithField("type", event.EventType).WithField("data", string(event.Data)).Warn("Received an unknown event")
+		log.WithField("type", event.Type).WithField("data", string(event.Data)).Warn("Received an unknown event")
 	}
 }
 

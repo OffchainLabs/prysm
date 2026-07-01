@@ -96,7 +96,7 @@ func TestEventStream_InvalidTopic(t *testing.T) {
 	go stream.Subscribe(eventsChannel)
 
 	event := <-eventsChannel
-	require.Equal(t, EventConnectionError, event.EventType)
+	require.Equal(t, EventConnectionError, event.Type)
 	require.StringContains(t, "400", string(event.Data))
 	require.StringContains(t, "invalid topic name: "+invalidTopic, string(event.Data))
 }
@@ -114,8 +114,8 @@ func TestEventStreamRequestError(t *testing.T) {
 	go stream.Subscribe(eventsChannel)
 
 	event := <-eventsChannel
-	if event.EventType != EventConnectionError {
-		t.Errorf("Expected event type %q, got %q", EventConnectionError, event.EventType)
+	if event.Type != EventConnectionError {
+		t.Errorf("Expected event type %q, got %q", EventConnectionError, event.Type)
 	}
 
 }
