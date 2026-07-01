@@ -6,8 +6,9 @@ DIST ?= dist
 
 BINARIES := $(notdir $(patsubst %/,%,$(dir $(wildcard cmd/*/main.go))))
 GEN_KINDS := proto ssz mocks
-POSITIONAL := $(sort $(GEN_KINDS) $(BINARIES))
-COMMANDS := run build gen clean help
+TEST_KINDS := mainnet mainnet-spectest minimal minimal-spectest
+POSITIONAL := $(sort $(GEN_KINDS) $(TEST_KINDS) $(BINARIES))
+COMMANDS := run build gen clean help test testdata
 
 TAGS ?=
 TAGFLAG := $(if $(TAGS),-tags=$(TAGS),)
@@ -22,6 +23,11 @@ endif
 
 GEN_MODE     := $(or $(mode),no-force)
 GEN_MODE_BAD := $(filter-out force no-force,$(GEN_MODE))
+
+TEST_MODE     := $(or $(mode),no-race)
+TEST_MODE_BAD := $(filter-out no-race race,$(TEST_MODE))
+TEST_ARGS     := $(filter-out $(COMMANDS),$(MAKECMDGOALS))
+TEST_BAD      := $(filter-out $(TEST_KINDS),$(TEST_ARGS))
 
 # Goals left over after `run` and the binary name are the program's arguments.
 # A leading `--` ends make's option parsing so `--flag value` reaches us as goals
@@ -42,8 +48,9 @@ gen:
 	$(GO) run ./build/gen --mode=$(GEN_MODE) $(filter $(GEN_KINDS),$(MAKECMDGOALS))
 
 .PHONY: clean
-clean: 
+clean:
 	rm -f .gen-cache.json
+	rm -rf third_party/testdata
 	$(GO) clean -cache -testcache -modcache -fuzzcache
 
 # ---------------------------------------------------------------------------
@@ -81,6 +88,22 @@ build:
 	echo "✅ build ==> $(DIST)/"
 
 # ---------------------------------------------------------------------------
+# Test
+# ---------------------------------------------------------------------------
+.PHONY: test
+test:
+	@$(if $(TEST_MODE_BAD),echo "❌ test: invalid mode '$(TEST_MODE)'  (one of: no-race race)" >&2; exit 1;) \
+	$(if $(TEST_BAD),echo "❌ test: unknown kind(s): $(TEST_BAD)  (one of: $(TEST_KINDS))" >&2; exit 1;) :
+
+	@$(MAKE) --no-print-directory gen
+
+	@GO="$(GO)" $(GO) run ./build/test $(if $(filter race,$(TEST_MODE)),-race,) $(TEST_ARGS)
+
+.PHONY: testdata
+testdata:
+	$(GO) run ./tools/cmd/fetch-testdata
+
+# ---------------------------------------------------------------------------
 # Help (default target)
 # ---------------------------------------------------------------------------
 .DEFAULT_GOAL := help
@@ -92,14 +115,18 @@ help: ## Show this help
 	@printf '\033[0m'
 	@echo ""
 	@printf '\033[1mCommands:\033[0m\n'
-	@printf "  \033[36m%-50s\033[0m %s\n" "make run <bin> [flags=...] [-- <args>]"     "Run a binary"
-	@printf "  \033[36m%-50s\033[0m %s\n" "make build [<bin>...] [flags=...]"             "Build a binary (default: all)"
-	@printf "  \033[36m%-50s\033[0m %s\n" "make gen [$(GEN_KINDS)] [mode=force|no-force]" "Create generated code (default: all,no-force)"
-	@printf "  \033[36m%-50s\033[0m %s\n" "make clean"                                    "Clean everything"
-	@printf "  \033[36m%-50s\033[0m %s\n" "make help"                                     "Show this help"
+	@printf "  \033[36m%-44s\033[0m %s\n" "make run <bin> [flags=...] [-- <args>]"     "Run a binary"
+	@printf "  \033[36m%-44s\033[0m %s\n" "make build [<bin>...] [flags=...]"          "Build a binary (default: all)"
+	@printf "  \033[36m%-44s\033[0m %s\n" "make gen [<kind>...] [mode=force|no-force]" "Create generated code (default: all,no-force)"
+	@printf "  \033[36m%-44s\033[0m %s\n" "make test [<kind>...] [mode=no-race|race]"  "Run unit tests (default: all,no-race)"
+	@printf "  \033[36m%-44s\033[0m %s\n" "make testdata"                              "Pre-fetch external spec-test data"
+	@printf "  \033[36m%-44s\033[0m %s\n" "make clean"                                 "Clean everything"
+	@printf "  \033[36m%-44s\033[0m %s\n" "make help"                                  "Show this help"
 	@echo ""
 	@printf '\033[1mOptions:\033[0m\n'
-	@printf "  \033[36m%-16s\033[0m %s\n" "<bin>:" "$(BINARIES)"
+	@printf "  \033[36m%-14s\033[0m %s\n" "<bin>:"       "$(BINARIES)"
+	@printf "  \033[36m%-14s\033[0m %s\n" "gen <kind>:"  "$(GEN_KINDS)"
+	@printf "  \033[36m%-14s\033[0m %s\n" "test <kind>:" "$(TEST_KINDS)"
 	@echo ""
 	@printf '\033[1mNotes:\033[0m\n'
 	@echo "  After '--', pass '--flag value' (not '--flag=value')"

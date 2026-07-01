@@ -57,6 +57,7 @@ go_test(
     deps = [
         "//beacon-chain/core/transition:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
+        "//build/bazel:go_default_library",
         "//config/params:go_default_library",
         "//container/trie:go_default_library",
         "//proto/engine/v1:go_default_library",
@@ -67,6 +68,5 @@ go_test(
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_ethereum_go_ethereum//core/types:go_default_library",
         "@com_github_go_yaml_yaml//:go_default_library",
-        "@io_bazel_rules_go//go/tools/bazel:go_default_library",
     ],
 )

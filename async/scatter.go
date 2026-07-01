@@ -27,9 +27,7 @@ func Scatter(inputLen int, sFunc func(int, int, *sync.RWMutex) (any, error)) ([]
 		workers++
 	}
 	resultCh := make(chan *WorkerResults, workers)
-	defer close(resultCh)
 	errorCh := make(chan error, workers)
-	defer close(errorCh)
 	mutex := new(sync.RWMutex)
 	for worker := 0; worker < workers; worker++ {
 		offset := worker * chunkSize

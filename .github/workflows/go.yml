@@ -90,6 +90,54 @@ jobs:
         env:
            CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
 
-# Tests run via Bazel for now...
-#      - name: Test
-#        run: go test -v ./...
+
+  test-mainnet:
+    name: Test (mainnet, excluding spectests)
+    runs-on: ubuntu-4
+    # TODO: Remove `continue-on-error: true` when removing Bazel
+    continue-on-error: true
+    steps:
+      - name: Set up Go 1.26.4
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.4'
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run mainnet tests
+        run: make test mainnet
+        env:
+           CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
+
+  test-mainnet-spectest:
+    name: Test (mainnet spectests)
+    runs-on: ubuntu-4
+    # TODO: Remove `continue-on-error: true` when removing Bazel
+    continue-on-error: true
+    steps:
+      - name: Set up Go 1.26.4
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.4'
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run mainnet spectests
+        run: make test mainnet-spectest
+        env:
+           CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
+
+  test-minimal:
+    name: Test (minimal, including spectests)
+    runs-on: ubuntu-4
+    # TODO: Remove `continue-on-error: true` when removing Bazel
+    continue-on-error: true
+    steps:
+      - name: Set up Go 1.26.4
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.4'
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run minimal tests
+        run: make test minimal minimal-spectest
+        env:
+           CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
