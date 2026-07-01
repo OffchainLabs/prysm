@@ -947,7 +947,9 @@ func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribut
 			PayloadAttributes: attributesBytes,
 		}
 		// parent_block_number was removed from the payload_attributes event from gloas onwards.
-		if ev.HeadBlock.Version() < version.Gloas {
+		// The event's fork is keyed to proposal_slot (per beacon-APIs), so gate on the
+		// proposal slot's fork rather than the head block's version, which differ at the boundary.
+		if slots.ToEpoch(ev.ProposalSlot) < params.BeaconConfig().GloasForkEpoch {
 			attrData.ParentBlockNumber = strconv.FormatUint(ev.ParentBlockNumber, 10)
 		}
 		d.data, d.err = json.Marshal(attrData)

@@ -710,18 +710,20 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 // omitted from gloas onwards.
 func TestPayloadAttributesReader_ParentBlockNumber(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.GloasForkEpoch = 1 // keep deneb at epoch 0 so both forks are reachable.
-	params.OverrideBeaconConfig(cfg)
 
+	// The event's fork is keyed to proposal_slot, so presence is gated on the proposal
+	// slot's fork, not the head block's version. Proposal slot sits in epoch 0 in every
+	// case (head slot 0 avoids slot processing), so GloasForkEpoch selects the fork.
 	cases := []struct {
 		name        string
+		gloasEpoch  primitives.Epoch
 		getState    func() state.BeaconState
 		getBlock    func() interfaces.SignedBeaconBlock
 		wantPresent bool
 	}{
 		{
-			name: "deneb includes parent_block_number",
+			name:       "pre-gloas proposal slot includes parent_block_number",
+			gloasEpoch: math.MaxUint64,
 			getState: func() state.BeaconState {
 				st, err := util.NewBeaconStateDeneb()
 				require.NoError(t, err)
@@ -735,7 +737,8 @@ func TestPayloadAttributesReader_ParentBlockNumber(t *testing.T) {
 			wantPresent: true,
 		},
 		{
-			name: "gloas omits parent_block_number",
+			name:       "gloas proposal slot omits parent_block_number",
+			gloasEpoch: 0,
 			getState: func() state.BeaconState {
 				st, err := util.NewBeaconStateGloas()
 				require.NoError(t, err)
@@ -748,9 +751,30 @@ func TestPayloadAttributesReader_ParentBlockNumber(t *testing.T) {
 			},
 			wantPresent: false,
 		},
+		{
+			// Boundary: the head block is pre-gloas (so ev.ParentBlockNumber is populated),
+			// but the proposal slot is gloas, so the field must still be omitted.
+			name:       "gloas proposal slot with pre-gloas head omits parent_block_number",
+			gloasEpoch: 0,
+			getState: func() state.BeaconState {
+				st, err := util.NewBeaconStateDeneb()
+				require.NoError(t, err)
+				return st
+			},
+			getBlock: func() interfaces.SignedBeaconBlock {
+				b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockDeneb(&eth.SignedBeaconBlockDeneb{}))
+				require.NoError(t, err)
+				return b
+			},
+			wantPresent: false,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			cfg := params.BeaconConfig().Copy()
+			cfg.GloasForkEpoch = tc.gloasEpoch
+			params.OverrideBeaconConfig(cfg)
+
 			st := tc.getState()
 			v := &eth.Validator{ExitEpoch: math.MaxUint64, EffectiveBalance: params.BeaconConfig().MinActivationBalance, WithdrawalCredentials: make([]byte, 32)}
 			require.NoError(t, st.SetValidators([]*eth.Validator{v}))
