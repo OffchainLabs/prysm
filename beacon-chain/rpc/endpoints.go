@@ -380,7 +380,7 @@ func (s *Service) validatorEndpoints(
 			template: "/eth/v1/validator/proposer_preferences",
 			name:     namespace + ".SubmitSignedProposerPreferences",
 			middleware: []middleware.Middleware{
-				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},

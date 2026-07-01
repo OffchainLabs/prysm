@@ -164,10 +164,12 @@ func (c *handler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Hea
 
 	// non-2XX codes are a failure
 	if !strings.HasPrefix(httpResp.Status, "2") {
-		decoder := json.NewDecoder(bytes.NewBuffer(body))
+		if !strings.Contains(contentType, api.JsonMediaType) {
+			return nil, nil, &httputil.DefaultJsonError{Code: httpResp.StatusCode, Message: string(body)}
+		}
 		errorJson := &httputil.DefaultJsonError{}
-		if err = decoder.Decode(errorJson); err != nil {
-			return nil, nil, fmt.Errorf("HTTP request for %s unsuccessful (%d: %s)", httpResp.Request.URL.Redacted(), httpResp.StatusCode, string(body))
+		if err = json.NewDecoder(bytes.NewBuffer(body)).Decode(errorJson); err != nil {
+			return nil, nil, errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL.Redacted())
 		}
 		return nil, nil, errorJson
 	}
@@ -270,10 +272,15 @@ func (c *handler) PostSSZ(
 
 	// non-2XX codes are a failure
 	if !strings.HasPrefix(httpResp.Status, "2") {
-		decoder := json.NewDecoder(bytes.NewBuffer(body))
+		// Some servers return non-JSON (e.g. plain-text) error bodies, such as a 415 produced by
+		// content-type negotiation. Surface the status code as a typed error so callers can react to
+		// it (e.g. fall back to JSON). Mirrors decodeResp used by the JSON Post path.
+		if !strings.Contains(contentType, api.JsonMediaType) {
+			return nil, nil, &httputil.DefaultJsonError{Code: httpResp.StatusCode, Message: string(body)}
+		}
 		errorJson := &httputil.DefaultJsonError{}
-		if err = decoder.Decode(errorJson); err != nil {
-			return nil, nil, fmt.Errorf("HTTP request for %s unsuccessful (%d: %s)", httpResp.Request.URL.Redacted(), httpResp.StatusCode, string(body))
+		if err = json.NewDecoder(bytes.NewBuffer(body)).Decode(errorJson); err != nil {
+			return nil, nil, errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL.Redacted())
 		}
 		return nil, nil, errorJson
 	}
