@@ -35,7 +35,7 @@ func TestWaitForAssertoorRuns_AllSucceed(t *testing.T) {
 	srv := assertoorStub(list, nil)
 	defer srv.Close()
 
-	if err := waitForAssertoorRuns(context.Background(), srv.URL, time.Now().Add(2*time.Second), time.Millisecond); err != nil {
+	if err := waitForAssertoorRunsMatching(context.Background(), srv.URL, time.Now().Add(2*time.Second), nil); err != nil {
 		t.Fatalf("expected success, got: %v", err)
 	}
 }
@@ -51,7 +51,7 @@ func TestWaitForAssertoorRuns_OneFails(t *testing.T) {
 	srv := assertoorStub(list, detail)
 	defer srv.Close()
 
-	err := waitForAssertoorRuns(context.Background(), srv.URL, time.Now().Add(2*time.Second), time.Millisecond)
+	err := waitForAssertoorRunsMatching(context.Background(), srv.URL, time.Now().Add(2*time.Second), nil)
 	if err == nil {
 		t.Fatal("expected failure error, got nil")
 	}
@@ -71,7 +71,7 @@ func TestWaitForAssertoorRuns_RunningMonitorPasses(t *testing.T) {
 	srv := assertoorStub(list, nil)
 	defer srv.Close()
 
-	if err := waitForAssertoorRuns(context.Background(), srv.URL, time.Now().Add(50*time.Millisecond), time.Millisecond); err != nil {
+	if err := waitForAssertoorRunsMatching(context.Background(), srv.URL, time.Now().Add(50*time.Millisecond), nil); err != nil {
 		t.Fatalf("expected pass for a still-running monitor, got: %v", err)
 	}
 }
@@ -88,7 +88,7 @@ func TestWaitForAssertoorRuns_FailsFast(t *testing.T) {
 	defer srv.Close()
 
 	start := time.Now()
-	err := waitForAssertoorRuns(context.Background(), srv.URL, time.Now().Add(time.Hour), time.Millisecond)
+	err := waitForAssertoorRunsMatching(context.Background(), srv.URL, time.Now().Add(time.Hour), nil)
 	if time.Since(start) > time.Second {
 		t.Fatalf("expected fail-fast, but waited %v", time.Since(start))
 	}
@@ -99,4 +99,59 @@ func TestWaitForAssertoorRuns_FailsFast(t *testing.T) {
 	if strings.Contains(err.Error(), "Network health") {
 		t.Fatalf("error should not mention the still-running monitor, got: %v", err)
 	}
+}
+
+func TestWaitForAssertoorRunIDs_IgnoresUnrelatedFailures(t *testing.T) {
+	list := `[{"run_id":1,"test_id":"network-health-monitor","name":"Network health","status":"failure"},
+		{"run_id":2,"test_id":"network-health-once","name":"Network health one-shot","status":"success"}]`
+	srv := assertoorStub(list, nil)
+	defer srv.Close()
+
+	if err := waitForAssertoorRunsMatching(context.Background(), srv.URL, time.Now().Add(2*time.Second), assertoorRunFilter(2)); err != nil {
+		t.Fatalf("expected success for requested run only, got: %v", err)
+	}
+}
+
+func TestWaitForAssertoorRunIDs_TargetFails(t *testing.T) {
+	list := `[{"run_id":1,"test_id":"network-health-monitor","name":"Network health","status":"success"},
+		{"run_id":2,"test_id":"network-health-once","name":"Network health one-shot","status":"failure"}]`
+	detail := map[uint64]string{
+		2: `{"run_id":2,"status":"failure","tasks":[{"title":"Finality check","result":"failure","result_error":"not finalized"}]}`,
+	}
+	srv := assertoorStub(list, detail)
+	defer srv.Close()
+
+	err := waitForAssertoorRunsMatching(context.Background(), srv.URL, time.Now().Add(2*time.Second), assertoorRunFilter(2))
+	if err == nil {
+		t.Fatal("expected failure error, got nil")
+	}
+	if !strings.Contains(err.Error(), "Network health one-shot") ||
+		!strings.Contains(err.Error(), "Finality check (not finalized)") {
+		t.Fatalf("error should name the requested failed run and task, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "Network health [") {
+		t.Fatalf("error should not mention unrelated runs, got: %v", err)
+	}
+}
+
+func TestWaitForAssertoorRunIDs_TimesOutOnRunningTarget(t *testing.T) {
+	list := `[{"run_id":2,"test_id":"network-health-once","status":"running"}]`
+	srv := assertoorStub(list, nil)
+	defer srv.Close()
+
+	err := waitForAssertoorRunsMatching(context.Background(), srv.URL, time.Now().Add(20*time.Millisecond), assertoorRunFilter(2, 3))
+	if err == nil {
+		t.Fatal("expected timeout error, got nil")
+	}
+	if !strings.Contains(err.Error(), "2=running") || !strings.Contains(err.Error(), "3=missing") {
+		t.Fatalf("timeout should include requested run statuses, got: %v", err)
+	}
+}
+
+func assertoorRunFilter(runIDs ...uint64) map[uint64]bool {
+	filter := make(map[uint64]bool, len(runIDs))
+	for _, id := range runIDs {
+		filter[id] = true
+	}
+	return filter
 }

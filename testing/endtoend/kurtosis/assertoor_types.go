@@ -55,6 +55,10 @@ func (r assertoorRun) label() string {
 	return r.TestID
 }
 
+func (r assertoorRun) String() string {
+	return fmt.Sprintf("%d=%s", r.RunID, r.Status)
+}
+
 // failedTasks returns "title (error)" for each task in the run that failed.
 func (r assertoorRun) failedTasks() []string {
 	var failed []string

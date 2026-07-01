@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 )
@@ -14,6 +15,8 @@ import (
 const (
 	contentTypeJSON = "application/json"
 	contentTypeYAML = "application/yaml"
+
+	assertoorPollInterval = 5 * time.Second
 )
 
 // WaitForAssertoor polls every Assertoor test run until all are terminal, then
@@ -23,7 +26,25 @@ func (kw *KurtosisWrapper) WaitForAssertoor(ctx context.Context, deadline time.T
 	if err != nil {
 		return err
 	}
-	return waitForAssertoorRuns(ctx, baseURL, deadline, 5*time.Second)
+	return waitForAssertoorRunsMatching(ctx, baseURL, deadline, nil)
+}
+
+// WaitForAssertoorRunIDs waits only for the requested one-shot runs.
+func (kw *KurtosisWrapper) WaitForAssertoorRunIDs(ctx context.Context, deadline time.Time, runIDs ...uint64) error {
+	if len(runIDs) == 0 {
+		return nil
+	}
+
+	baseURL, err := kw.NewAssertoorEndpoint()
+	if err != nil {
+		return err
+	}
+
+	want := make(map[uint64]bool, len(runIDs))
+	for _, id := range runIDs {
+		want[id] = true
+	}
+	return waitForAssertoorRunsMatching(ctx, baseURL, deadline, want)
 }
 
 // DumpFailedAssertoorLogs writes each failed Assertoor task's log lines to the
@@ -64,43 +85,84 @@ func (kw *KurtosisWrapper) DumpFailedAssertoorLogs() {
 	}
 }
 
-// waitForAssertoorRuns polls baseURL until a run fails (fail fast) or every run
-// finishes, then renders a verdict.
-func waitForAssertoorRuns(ctx context.Context, baseURL string, deadline time.Time, pollInterval time.Duration) error {
+// waitForAssertoorRunsMatching waits for Assertoor runs.
+//
+// If want is nil, it watches all currently visible runs and treats a clean
+// deadline with still-running monitors as success. If want is non-nil, it
+// watches only those run IDs and requires every requested run to appear and
+// become terminal.
+func waitForAssertoorRunsMatching(ctx context.Context, baseURL string, deadline time.Time, want map[uint64]bool) error {
 	ctx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
 
 	var runs []assertoorRun
 	for {
 		// Errors here (Assertoor not up yet, runs not scheduled yet) are transient: retry.
-		if got, err := assertoorRuns(ctx, baseURL); err == nil && len(got) > 0 {
-			runs = got
+		if got, err := assertoorRuns(ctx, baseURL); err == nil && (want != nil || len(got) > 0) {
+			runs = matchingAssertoorRuns(got, want)
 			switch {
 			case hasFailure(runs):
 				return assertoorVerdict(ctx, baseURL, runs)
-			case allTerminal(runs):
+			case assertoorWaitSatisfied(runs, want):
 				return nil // every run finished, none failed
 			}
 		}
 
 		select {
 		case <-ctx.Done():
+			if want != nil {
+				return fmt.Errorf("timed out waiting for Assertoor test runs: %s: %w", assertoorRunIDStatus(runs, want), ctx.Err())
+			}
 			if len(runs) == 0 {
 				return fmt.Errorf("timed out waiting for Assertoor test runs: %w", ctx.Err())
 			}
 			return nil // deadline reached with no failure: monitors ran the full window clean
-		case <-time.After(pollInterval):
+		case <-time.After(assertoorPollInterval):
 		}
 	}
 }
 
-func allTerminal(runs []assertoorRun) bool {
+func matchingAssertoorRuns(runs []assertoorRun, want map[uint64]bool) []assertoorRun {
+	if want == nil {
+		return runs
+	}
+
+	filtered := make([]assertoorRun, 0, len(want))
+	for _, r := range runs {
+		if want[r.RunID] {
+			filtered = append(filtered, r)
+		}
+	}
+	return filtered
+}
+
+func assertoorWaitSatisfied(runs []assertoorRun, want map[uint64]bool) bool {
+	if want != nil && len(runs) != len(want) {
+		return false
+	}
+
 	for _, r := range runs {
 		if !r.terminal() {
 			return false
 		}
 	}
 	return true
+}
+
+func assertoorRunIDStatus(runs []assertoorRun, want map[uint64]bool) string {
+	found := make(map[uint64]bool, len(runs))
+	parts := make([]string, 0, len(want))
+	for _, r := range runs {
+		found[r.RunID] = true
+		parts = append(parts, r.String())
+	}
+	for id := range want {
+		if !found[id] {
+			parts = append(parts, fmt.Sprintf("%d=missing", id))
+		}
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ", ")
 }
 
 func hasFailure(runs []assertoorRun) bool {
