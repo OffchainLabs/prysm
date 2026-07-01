@@ -510,7 +510,7 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 		ForkchoiceBlockHashes: map[[32]byte][32]byte{[32]byte{0x02}: [32]byte{0x01}},
 		ForkchoiceGasLimits:   map[[32]byte]uint64{[32]byte{0x02}: 1},
 	}
-	require.NoError(t, transition.UpdateNextSlotCache(ctx, chainService.Root, state))
+	require.NoError(t, transition.UpdateNextSlotCache(context.Background(), chainService.Root, state))
 	s := &Service{
 		seenExecutionPayloadBidCache:    newSlotAwareCache(10),
 		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
