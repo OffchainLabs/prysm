@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"slices"
 )
 
 func mockgen(args ...string) error {
@@ -20,10 +19,24 @@ type sourceMock struct {
 	extra             []string
 }
 
-func genMocks() error {
+type mockSpecs struct {
+	reflect   []reflectMock // reflection-based mocks (proto + iface interfaces)
+	beaconAPI []sourceMock  // source-based mocks under validator/client/beacon-api
+	bls       []sourceMock  // source-based mocks under crypto/bls/common
+
+	mockPath          string
+	beaconAPIMockPath string
+	blsMockPath       string
+}
+
+func mockSpecsList() mockSpecs {
 	const (
 		mockPath      = "testing/mock"
 		ifaceMockPath = "testing/validator-mock"
+		ifacePkg      = "github.com/OffchainLabs/prysm/v7/validator/client/iface"
+
+		beaconAPIMockPath = "validator/client/beacon-api/mock"
+		blsMockPath       = "crypto/bls/common/mock"
 	)
 
 	v1alpha1 := []reflectMock{
@@ -34,7 +47,6 @@ func genMocks() error {
 		{mockPath + "/node_service_mock.go", "mock", v1alpha1Pkg, "NodeClient"},
 	}
 
-	const ifacePkg = "github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	iface := []reflectMock{
 		{ifaceMockPath + "/chain_client_mock.go", "validator_mock", ifacePkg, "ChainClient"},
 		{ifaceMockPath + "/prysm_chain_client_mock.go", "validator_mock", ifacePkg, "PrysmChainClient"},
@@ -42,7 +54,6 @@ func genMocks() error {
 		{ifaceMockPath + "/validator_client_mock.go", "validator_mock", ifacePkg, "ValidatorClient"},
 	}
 
-	const beaconAPIMockPath = "validator/client/beacon-api/mock"
 	beaconAPI := []sourceMock{
 		{beaconAPIMockPath + "/genesis_mock.go", "mock", "validator/client/beacon-api/genesis.go", nil},
 		{beaconAPIMockPath + "/duties_mock.go", "mock", "validator/client/beacon-api/duties.go", nil},
@@ -51,27 +62,39 @@ func genMocks() error {
 		{beaconAPIMockPath + "/json_rest_handler_mock.go", "mock", "api/rest/rest_handler.go", []string{"Handler"}},
 	}
 
-	const blsMockPath = "crypto/bls/common/mock"
 	bls := []sourceMock{
 		{blsMockPath + "/interface_mock.go", "mock", "crypto/bls/common/interface.go", nil},
 	}
 
-	for _, mock := range slices.Concat(v1alpha1, iface) {
+	return mockSpecs{
+		reflect:           append(v1alpha1, iface...),
+		beaconAPI:         beaconAPI,
+		bls:               bls,
+		mockPath:          mockPath,
+		beaconAPIMockPath: beaconAPIMockPath,
+		blsMockPath:       blsMockPath,
+	}
+}
+
+func genMocks() error {
+	specs := mockSpecsList()
+
+	for _, mock := range specs.reflect {
 		fmt.Printf("generating %s for interfaces: %s\n", mock.dest, mock.interfaces)
 		if err := mockgen("-package="+mock.pkg, "-destination="+mock.dest, mock.importPath, mock.interfaces); err != nil {
 			return fmt.Errorf("mockgen: %w", err)
 		}
 	}
 
-	if err := goimports(mockPath + "/."); err != nil {
+	if err := goimports(specs.mockPath + "/."); err != nil {
 		return fmt.Errorf("goimports: %w", err)
 	}
 
-	if err := gofmtSimplify(mockPath + "/."); err != nil {
+	if err := gofmtSimplify(specs.mockPath + "/."); err != nil {
 		return fmt.Errorf("gofmtSimplify: %w", err)
 	}
 
-	for _, mock := range beaconAPI {
+	for _, mock := range specs.beaconAPI {
 		fmt.Printf("Generating %s for file: %s\n", mock.dest, mock.source)
 		args := append([]string{"-package=" + mock.pkg, "-source=" + mock.source, "-destination=" + mock.dest}, mock.extra...)
 		if err := mockgen(args...); err != nil {
@@ -79,26 +102,26 @@ func genMocks() error {
 		}
 	}
 
-	if err := goimports(beaconAPIMockPath + "/."); err != nil {
+	if err := goimports(specs.beaconAPIMockPath + "/."); err != nil {
 		return fmt.Errorf("goimports: %w", err)
 	}
 
-	if err := gofmtSimplify(beaconAPIMockPath + "/."); err != nil {
+	if err := gofmtSimplify(specs.beaconAPIMockPath + "/."); err != nil {
 		return fmt.Errorf("gofmtSimplify: %w", err)
 	}
 
-	for _, mock := range bls {
+	for _, mock := range specs.bls {
 		fmt.Printf("Generating %s for file: %s\n", mock.dest, mock.source)
 		if err := mockgen("-package="+mock.pkg, "-source="+mock.source, "-destination="+mock.dest); err != nil {
 			return fmt.Errorf("mockgen: %w", err)
 		}
 	}
 
-	if err := goimports(blsMockPath + "/."); err != nil {
+	if err := goimports(specs.blsMockPath + "/."); err != nil {
 		return fmt.Errorf("goimports: %w", err)
 	}
 
-	if err := gofmtSimplify(blsMockPath + "/."); err != nil {
+	if err := gofmtSimplify(specs.blsMockPath + "/."); err != nil {
 		return fmt.Errorf("gofmtSimplify: %w", err)
 	}
 

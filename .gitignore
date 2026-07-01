@@ -1,6 +1,9 @@
 # Ignore bazel directories
 bazel-*
 
+# `make gen` content cache
+.gen-cache.json
+
 .DS_Store
 .swp
 
