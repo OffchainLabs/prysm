@@ -27,7 +27,7 @@ var (
 // TestEndToEnd_MultiScenarioRun runs the specified scenarios in a single enclave, with the following events:
 // Event 1. Freeze the 2nd BN + VC (secondNodeServices), and resume after one epoch.
 // Event 2. Freeze all validator clients (allValidatorServices), and resume after one epoch.
-// Event 3. Optimistic Sync with rpc snooper (TODO).
+// Event 3. Optimistic Sync with rpc snooper.
 //
 // Between each events, we wait for two epochs for recovery, and run one-shot assertoor playbooks
 // to verify whether the recovery is successful.
@@ -35,15 +35,16 @@ var (
 // Note that the network doesn't fork at all, starts from Fulu. See minimal-scenario.yaml for the network config.
 // Here's the brief timeline (absolute epochs, anchored at firstFinalizedEpoch = 3):
 //
-//	epoch:  3    4    5    6    7    8    9    10   11   12   13   14   15
+//	epoch:  3    4    5    6    7    8    9    10   11   12   13   14   15   16
 //	BN #2        x════o
 //	all VCs                          x════o
-//	one-shot               A    M              A    M
+//	opt sync                                             F════C
+//	one-shot               A    M              A    M              A    M
 //
-//	x = stop   o = start (resume)
+//	x = stop   o = start (resume)   F = opt-sync fault on  C = fault cleared
 //	A = attestation-stats-once
 //	M = metrics-once + validators-sync-participation-once + network-health-once
-//	Test ends at epoch 15 (epochsToRun).
+//	Test ends at epoch 16 (epochsToRun).
 //
 // Note for migration: Legacy e2e test corresponding to this starts from Bellatrix and upgrades until Electra,
 // and then runs the same scenarios. Actually we do not need to test the fork upgrade here, as
@@ -51,6 +52,7 @@ var (
 // which is to test the service stop/start scenarios, we can start from Fulu and never fork.
 func TestEndToEnd_MultiScenarioRun2(t *testing.T) {
 	LoadPrysmDockerImages(t)
+	LoadFaultproxyImage(t)
 
 	var (
 		// serviceEvents defines the service stop/start events to simulate failures and recoveries.
@@ -75,16 +77,19 @@ func TestEndToEnd_MultiScenarioRun2(t *testing.T) {
 	)
 
 	// Scenario 3. Optimistic Sync.
-	// TODO.
+	assertoorEvents = append(assertoorEvents,
+		kurtosis.AssertoorEvent{Epoch: firstFinalizedEpoch + 9, Playbook: "optimistic-sync-fault-on.yaml"},
+		kurtosis.AssertoorEvent{Epoch: firstFinalizedEpoch + 10, Playbook: "optimistic-sync-fault-off.yaml"},
+	)
 
 	// Schedule attestation stats one-shot playbook. See timeline above for the epochs.
-	for _, epoch := range []uint64{firstFinalizedEpoch + 3, firstFinalizedEpoch + 7} {
+	for _, epoch := range []uint64{firstFinalizedEpoch + 3, firstFinalizedEpoch + 7, firstFinalizedEpoch + 11} {
 		assertoorEvents = append(assertoorEvents,
 			kurtosis.AssertoorEvent{Epoch: epoch, Playbook: "attestation-stats-once.yaml"},
 		)
 	}
 	// Schedule other one-shot playbooks. See timeline above for the epochs.
-	for _, epoch := range []uint64{firstFinalizedEpoch + 4, firstFinalizedEpoch + 8} {
+	for _, epoch := range []uint64{firstFinalizedEpoch + 4, firstFinalizedEpoch + 8, firstFinalizedEpoch + 12} {
 		assertoorEvents = append(assertoorEvents,
 			kurtosis.AssertoorEvent{Epoch: epoch, Playbook: "metrics-once.yaml"},
 			kurtosis.AssertoorEvent{Epoch: epoch, Playbook: "validators-sync-participation-once.yaml"},
@@ -96,7 +101,7 @@ func TestEndToEnd_MultiScenarioRun2(t *testing.T) {
 		{
 			enclaveName: "minimal-scenario",
 			configPath:  "testing/endtoend/network-config/minimal-scenario.yaml",
-			epochsToRun: 15,
+			epochsToRun: 16,
 			runSyncTest: true,
 			skipPlaybooks: []string{
 				// Skip validator lifecycle playbooks.

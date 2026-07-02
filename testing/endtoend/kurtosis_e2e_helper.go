@@ -33,9 +33,11 @@ const (
 
 	BEACON_CHAIN_IMAGE_TARGET = "cmd/beacon-chain/oci_image_tarball_e2e/tarball.tar"
 	VALIDATOR_IMAGE_TARGET    = "cmd/validator/oci_image_tarball_e2e/tarball.tar"
+	FAULTPROXY_IMAGE_TARGET   = "testing/middleware/engine-api-proxy/cmd/faultproxy/oci_image_tarball_e2e/tarball.tar"
 
 	BEACON_CHAIN_IMAGE_NAME = "gcr.io/offchainlabs/prysm/beacon-chain:latest"
 	VALIDATOR_IMAGE_NAME    = "gcr.io/offchainlabs/prysm/validator:latest"
+	FAULTPROXY_IMAGE_NAME   = "prysm-faultproxy:local"
 )
 
 type KurtosisTestSuites struct {
@@ -225,6 +227,13 @@ func LoadPrysmDockerImages(t *testing.T) {
 	// Load the validator image.
 	loadDockerImage(t, VALIDATOR_IMAGE_TARGET)
 	verifyImageLoaded(t, VALIDATOR_IMAGE_NAME)
+}
+
+// LoadFaultproxyImage loads the faultproxy snooper drop-in image into the local
+// Docker daemon. Only the optimistic-sync test needs it.
+func LoadFaultproxyImage(t *testing.T) {
+	loadDockerImage(t, FAULTPROXY_IMAGE_TARGET)
+	verifyImageLoaded(t, FAULTPROXY_IMAGE_NAME)
 }
 
 // loadDockerImage loads a Docker image from a Bazel runfile path into the local Docker daemon.

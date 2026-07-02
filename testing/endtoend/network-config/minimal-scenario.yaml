@@ -2,6 +2,28 @@
 # See minimal_scenario_e2e_test.go for the scenario definition.
 
 participants:
+  # Always healthy node.
+  - el_type: geth
+    cl_type: prysm
+    cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:latest"
+    cl_extra_params:
+      - "--slots-per-archive-point=128" # slots_per_epoch * 16 = 128
+      - "--blob-batch-limit=256"
+      - "--blob-batch-limit-burst-factor=16"
+      - "--block-batch-limit-burst-factor=8"
+
+      # Tracing params
+      - "--enable-tracing"
+      - "--tracing-endpoint=127.0.0.1:9150"
+      - "--trace-sample-fraction=1.0"
+    vc_image: "gcr.io/offchainlabs/prysm/validator:latest"
+    vc_extra_params:
+      - "--graffiti-file=/config/graffiti.yaml"
+    vc_extra_mounts:
+      "/config": "graffiti.yaml"
+    count: 1
+
+  # Second node, which will be stopped and started at specific epochs.
   - el_type: geth
     cl_type: prysm
     cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:latest"
@@ -24,7 +46,9 @@ participants:
       - "--graffiti-file=/config/graffiti.yaml"
     vc_extra_mounts:
       "/config": "graffiti.yaml"
-    count: 2
+    # Enable snooper to test optimistic sync behavior.
+    snooper_enabled: true
+    count: 1
 
   # Late-joining beacon node for the P2P normal sync test.
   # Asserted by beacon-chain-sync.yaml.
@@ -101,6 +125,9 @@ additional_services:
 
 spamoor_params:
   min_cpu: 10
+
+snooper_params:
+  image: "prysm-faultproxy:local"
 
 assertoor_params:
 
