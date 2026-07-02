@@ -101,6 +101,7 @@ type NewSignedProposerPreferencesVerifier func(p *ethpb.SignedProposerPreference
 // ExecutionPayloadBidVerifier defines the methods implemented by the ROSignedExecutionPayloadBid verifier.
 type ExecutionPayloadBidVerifier interface {
 	VerifyCurrentOrNextSlot() error
+	VerifyBidSlotMatches(slot primitives.Slot) error
 	VerifyBuilderActive(state.ReadOnlyBeaconState) error
 	VerifyBuilderVersion(state.ReadOnlyBeaconState) error
 	VerifyExecutionPaymentZero() error

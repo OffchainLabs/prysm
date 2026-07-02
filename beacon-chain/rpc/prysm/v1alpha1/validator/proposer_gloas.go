@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -14,7 +15,7 @@ import (
 
 // buildBlockGloas builds a Gloas (ePBS) block, whose body carries an execution payload bid
 // rather than the payload itself. The payload is revealed separately via the envelope.
-func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipBuilder, parentFull, eagerPayloadStateRoot bool) (*ethpb.GenericBeaconBlock, error) {
+func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipBuilder, parentFull, eagerPayloadStateRoot bool, builderRequestAuths []*ethpb.SignedRequestAuthV1) (*ethpb.GenericBeaconBlock, error) {
 	if parentFull {
 		if err := vs.applyParentExecutionPayloadToHead(ctx, head, sBlk.Block().ParentRoot()); err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not apply parent execution payload: %v", err)
@@ -41,10 +42,44 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 			return nil, status.Errorf(codes.Internal, "Could not get local payload and no P2P bid fallback: %v", fbErr)
 		}
 	} else {
-		selfBuilt, err = vs.setExecutionPayloadBid(ctx, sBlk, local, local.OverrideBuilder || skipBuilder)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not set execution payload bid: %v", err)
+		selfBuildOnly := local.OverrideBuilder || skipBuilder
+		var builderBid *ethpb.SignedExecutionPayloadBid
+		var builderURL string
+		var maxExecutionPayment uint64
+		if !selfBuildOnly && len(builderRequestAuths) > 0 {
+			val, valErr := head.ValidatorAtIndexReadOnly(sBlk.Block().ProposerIndex())
+			parentGasLimit, glErr := vs.ForkchoiceFetcher.GasLimit(sBlk.Block().ParentRoot())
+			switch {
+			case valErr != nil:
+				log.WithError(valErr).Error("Could not get proposer for builder bid request")
+			case glErr != nil:
+				log.WithError(glErr).Error("Could not get parent gas limit for builder bid request")
+			default:
+				pubkey := val.PublicKey()
+				if v, ok := vs.maxExecutionPayments.Load(pubkey); ok {
+					maxExecutionPayment, _ = v.(uint64)
+				}
+				pref := vs.proposerPreferenceForProposal(ctx, head, sBlk.Block().Slot(), sBlk.Block().ProposerIndex())
+				feeRecipient := pref.FeeRecipientOrDefault()
+				builderBid, builderURL = vs.getBuilderExecutionPayloadBid(ctx, head, &builderBidQuery{
+					slot:           sBlk.Block().Slot(),
+					parentRoot:     sBlk.Block().ParentRoot(),
+					parentHash:     bytesutil.ToBytes32(local.ExecutionData.ParentHash()),
+					pubkey:         pubkey,
+					maxPayment:     maxExecutionPayment,
+					feeRecipient:   feeRecipient[:],
+					parentGasLimit: parentGasLimit,
+					targetGasLimit: pref.GasLimitOr(parentGasLimit),
+					auths:          builderRequestAuths,
+				})
+			}
 		}
+		src, bidErr := vs.setExecutionPayloadBid(ctx, sBlk, local, builderBid, maxExecutionPayment, selfBuildOnly)
+		if bidErr != nil {
+			return nil, status.Errorf(codes.Internal, "Could not set execution payload bid: %v", bidErr)
+		}
+		vs.recordBidSource(sBlk.Block().Slot(), src, builderURL)
+		selfBuilt = src == bidSourceSelfBuild
 	}
 
 	wg.Wait()
