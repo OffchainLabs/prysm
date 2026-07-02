@@ -71,11 +71,12 @@ func (s *Service) validatePartialDataColumnHeader(ctx context.Context, col *bloc
 	if col == nil {
 		return nil, pubsub.ValidationIgnore, errHeaderNil
 	}
-	sbh, err := col.SignedBlockHeader()
-	if err != nil {
+	// Gloas partial columns carry no signed block header, so this Fulu header path does not apply.
+	if col.IsGloas() {
 		return nil, pubsub.ValidationIgnore, errColumnNotFulu
 	}
-	if sbh == nil || sbh.Header == nil {
+	sbh, err := col.SignedBlockHeader()
+	if err != nil || sbh == nil || sbh.Header == nil {
 		return nil, pubsub.ValidationIgnore, errHeaderNil
 	}
 
