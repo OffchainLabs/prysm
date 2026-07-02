@@ -271,31 +271,34 @@ func idealAttRewards(
 	bal *precompute.Balance,
 	vals []*precompute.Validator,
 ) ([]structs.IdealAttestationReward, bool) {
-	idealValsCount := uint64(16)
-	minIdealBalance := uint64(17)
-	maxIdealBalance := minIdealBalance + idealValsCount - 1
-	idealRewards := make([]structs.IdealAttestationReward, 0, idealValsCount)
-	idealVals := make([]*precompute.Validator, 0, idealValsCount)
 	increment := params.BeaconConfig().EffectiveBalanceIncrement
-	for i := minIdealBalance; i <= maxIdealBalance; i++ {
-		for _, v := range vals {
-			if v.CurrentEpochEffectiveBalance/1e9 == i {
-				effectiveBalance := i * increment
-				idealVals = append(idealVals, &precompute.Validator{
-					IsActivePrevEpoch:            true,
-					IsSlashed:                    false,
-					CurrentEpochEffectiveBalance: effectiveBalance,
-					IsPrevEpochSourceAttester:    true,
-					IsPrevEpochTargetAttester:    true,
-					IsPrevEpochHeadAttester:      true,
-				})
-				idealRewards = append(idealRewards, structs.IdealAttestationReward{
-					EffectiveBalance: strconv.FormatUint(effectiveBalance, 10),
-					Inactivity:       strconv.FormatUint(0, 10),
-				})
-				break
-			}
+	effectiveBalances := make([]uint64, 0, len(vals))
+	seen := make(map[uint64]bool, len(vals))
+	for _, v := range vals {
+		effectiveBalance := v.CurrentEpochEffectiveBalance
+		if effectiveBalance <= params.BeaconConfig().EjectionBalance || effectiveBalance%increment != 0 || seen[effectiveBalance] {
+			continue
 		}
+		seen[effectiveBalance] = true
+		effectiveBalances = append(effectiveBalances, effectiveBalance)
+	}
+	slices.Sort(effectiveBalances)
+
+	idealRewards := make([]structs.IdealAttestationReward, 0, len(effectiveBalances))
+	idealVals := make([]*precompute.Validator, 0, len(effectiveBalances))
+	for _, effectiveBalance := range effectiveBalances {
+		idealVals = append(idealVals, &precompute.Validator{
+			IsActivePrevEpoch:            true,
+			IsSlashed:                    false,
+			CurrentEpochEffectiveBalance: effectiveBalance,
+			IsPrevEpochSourceAttester:    true,
+			IsPrevEpochTargetAttester:    true,
+			IsPrevEpochHeadAttester:      true,
+		})
+		idealRewards = append(idealRewards, structs.IdealAttestationReward{
+			EffectiveBalance: strconv.FormatUint(effectiveBalance, 10),
+			Inactivity:       strconv.FormatUint(0, 10),
+		})
 	}
 	deltas, err := altair.AttestationsDelta(st, bal, idealVals)
 	if err != nil {
