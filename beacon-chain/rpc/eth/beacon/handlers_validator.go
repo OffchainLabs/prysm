@@ -245,18 +245,6 @@ func (s *Server) GetValidatorBalances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
-	if err != nil {
-		helpers.HandleIsOptimisticError(w, err)
-		return
-	}
-	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
-	if err != nil {
-		httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
-
 	var rawIds []string
 	if r.Method == http.MethodGet {
 		rawIds = r.URL.Query()["id"]
@@ -272,6 +260,69 @@ func (s *Server) GetValidatorBalances(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+
+	if httputil.RespondWithSsz(r) {
+		s.getValidatorBalancesSSZ(w, st, rawIds, ids)
+	} else {
+		s.getValidatorBalancesJSON(ctx, w, st, stateId, rawIds, ids)
+	}
+}
+
+func (s *Server) getValidatorBalancesSSZ(w http.ResponseWriter, st state.BeaconState, rawIds []string, ids []primitives.ValidatorIndex) {
+	// return no data if all IDs are ignored
+	if len(rawIds) > 0 && len(ids) == 0 {
+		httputil.WriteSsz(w, []byte{})
+		return
+	}
+
+	bals := st.Balances()
+	var balances []*eth.ValidatorBalance
+	if len(ids) == 0 {
+		balances = make([]*eth.ValidatorBalance, len(bals))
+		for i, b := range bals {
+			balances[i] = &eth.ValidatorBalance{
+				Index:   primitives.ValidatorIndex(i),
+				Balance: b,
+			}
+		}
+	} else {
+		balances = make([]*eth.ValidatorBalance, len(ids))
+		for i, id := range ids {
+			balances[i] = &eth.ValidatorBalance{
+				Index:   id,
+				Balance: bals[id],
+			}
+		}
+	}
+
+	resp, err := serializeItems(balances)
+	if err != nil {
+		httputil.HandleError(w, "Could not marshal validator balances to SSZ: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	httputil.WriteSsz(w, resp)
+}
+
+func (s *Server) getValidatorBalancesJSON(
+	ctx context.Context,
+	w http.ResponseWriter,
+	st state.BeaconState,
+	stateId string,
+	rawIds []string,
+	ids []primitives.ValidatorIndex,
+) {
+	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
+	if err != nil {
+		helpers.HandleIsOptimisticError(w, err)
+		return
+	}
+	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+	if err != nil {
+		httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
+
 	// return no data if all IDs are ignored
 	if len(rawIds) > 0 && len(ids) == 0 {
 		resp := &structs.GetValidatorBalancesResponse{
