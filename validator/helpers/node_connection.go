@@ -5,6 +5,7 @@ import (
 
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/api/rest"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
@@ -22,7 +23,7 @@ type NodeConnection interface {
 	// Returns nil if no REST provider is configured.
 	GetRestHandler() rest.Handler
 	// ConnectionGeneration returns a monotonic counter that advances on each
-	// beacon-node fallback host switch.
+	// beacon-node fallback host switch of the active provider (REST or gRPC).
 	ConnectionGeneration() uint64
 }
 
@@ -54,11 +55,14 @@ func (c *nodeConnection) GetRestHandler() rest.Handler {
 }
 
 func (c *nodeConnection) ConnectionGeneration() uint64 {
+	if features.Get().EnableBeaconRESTApi {
+		if c.restConnectionProvider != nil {
+			return c.restConnectionProvider.ConnectionCounter()
+		}
+		return 0
+	}
 	if c.grpcConnectionProvider != nil {
 		return c.grpcConnectionProvider.ConnectionCounter()
-	}
-	if c.restConnectionProvider != nil {
-		return c.restConnectionProvider.ConnectionCounter()
 	}
 	return 0
 }
