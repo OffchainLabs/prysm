@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/kurtosis"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -107,12 +108,7 @@ func (k *KurtosisTestSuites) Run(t *testing.T) {
 
 	k.scheduleServiceEvents(t, kw, genesisTime, secondsPerEpoch)
 
-	if len(k.assertoorEvents) > 0 {
-		assertoorRunIDs := k.scheduleAssertoorEvents(t, ctx, kw, genesisTime, secondsPerEpoch)
-		require.NoError(t, kw.WaitForAssertoorRunIDs(ctx, deadline, assertoorRunIDs...), "Assertoor one-shot checks failed")
-	}
-
-	require.NoError(t, kw.WaitForAssertoor(ctx, deadline), "Assertoor checks failed")
+	require.NoError(t, k.runAssertoorChecks(t, ctx, kw, genesisTime, secondsPerEpoch, deadline), "Assertoor checks failed")
 }
 
 func (k *KurtosisTestSuites) scheduleServiceEvents(t *testing.T, kw *kurtosis.KurtosisWrapper, genesisTime time.Time, secondsPerEpoch uint64) {
@@ -133,42 +129,72 @@ func (k *KurtosisTestSuites) scheduleServiceEvents(t *testing.T, kw *kurtosis.Ku
 	}
 }
 
-func (k *KurtosisTestSuites) scheduleAssertoorEvents(t *testing.T, ctx context.Context, kw *kurtosis.KurtosisWrapper, genesisTime time.Time, secondsPerEpoch uint64) []uint64 {
+// runAssertoorChecks runs the steady-state monitors and every one-shot concurrently,
+// reporting each run as it finishes; the first failure cancels the rest.
+func (k *KurtosisTestSuites) runAssertoorChecks(t *testing.T, ctx context.Context, kw *kurtosis.KurtosisWrapper, genesisTime time.Time, secondsPerEpoch uint64, deadline time.Time) error {
 	events := kurtosis.SortedAssertoorEvents(k.assertoorEvents)
 
+	// Register each one-shot playbook once, up front.
 	playbookIDs := make(map[string]string)
 	for _, event := range events {
 		if _, ok := playbookIDs[event.Playbook]; ok {
 			continue
 		}
 		testID, err := kw.RegisterPlaybook(ctx, event.Playbook)
-		require.NoError(t, err, "Failed to register Assertoor playbook %s", event.Playbook)
+		if err != nil {
+			return fmt.Errorf("register Assertoor playbook %s: %w", event.Playbook, err)
+		}
 		playbookIDs[event.Playbook] = testID
 	}
 
-	runIDs := make([]uint64, 0, len(events))
+	g, gctx := errgroup.WithContext(ctx)
+
+	// 1. Steady-state monitors.
+	g.Go(func() error {
+		if err := kw.WaitForAssertoor(gctx, deadline); err != nil {
+			return fmt.Errorf("Assertoor steady-state checks: %w", err)
+		}
+		return nil
+	})
+
+	// A late one-shot needs a few extra epochs to settle, so give each run its own deadline.
+	settle := time.Duration(3*secondsPerEpoch) * time.Second
+
+	// 2. One-shot events. Dedicate a goroutine to each one.
 	for _, event := range events {
-		runAt := genesisTime.Add(time.Duration(event.Epoch*secondsPerEpoch) * time.Second)
-		delay := time.Until(runAt)
-		if delay > 0 {
-			t.Logf("Will schedule Assertoor playbook %s at epoch %d after %s", event.Playbook, event.Epoch, delay)
+		event := event
+		testID := playbookIDs[event.Playbook]
+		g.Go(func() error {
+			runAt := genesisTime.Add(time.Duration(event.Epoch*secondsPerEpoch) * time.Second)
 			select {
-			case <-ctx.Done():
-				require.NoError(t, ctx.Err(), "Context ended before scheduling Assertoor playbook %s at epoch %d", event.Playbook, event.Epoch)
-			case <-time.After(delay):
+			case <-gctx.Done():
+				return gctx.Err()
+			case <-time.After(time.Until(runAt)):
 			}
-		}
 
-		config := map[string]any{"targetEpoch": event.Epoch}
-		for k, v := range event.Config {
-			config[k] = v
-		}
+			config := map[string]any{"targetEpoch": event.Epoch}
+			for k, v := range event.Config {
+				config[k] = v
+			}
+			runID, err := kw.ScheduleAssertoorTest(gctx, testID, config)
+			if err != nil {
+				return fmt.Errorf("schedule Assertoor playbook %s at epoch %d: %w", event.Playbook, event.Epoch, err)
+			}
+			t.Logf("Scheduled Assertoor playbook %s at epoch %d (run %d)", event.Playbook, event.Epoch, runID)
 
-		runID, err := kw.ScheduleAssertoorTest(ctx, playbookIDs[event.Playbook], config)
-		require.NoError(t, err, "Failed to schedule Assertoor playbook %s at epoch %d", event.Playbook, event.Epoch)
-		runIDs = append(runIDs, runID)
+			runDeadline := runAt.Add(settle)
+			if runDeadline.Before(deadline) {
+				runDeadline = deadline
+			}
+			if err := kw.WaitForAssertoorRunIDs(gctx, runDeadline, runID); err != nil {
+				return fmt.Errorf("Assertoor playbook %s at epoch %d (run %d): %w", event.Playbook, event.Epoch, runID, err)
+			}
+			t.Logf("PASSED Assertoor playbook %s at epoch %d (run %d)", event.Playbook, event.Epoch, runID)
+			return nil
+		})
 	}
-	return runIDs
+
+	return g.Wait()
 }
 
 // waitForNodeReady blocks until the beacon node reports healthy (200 from
