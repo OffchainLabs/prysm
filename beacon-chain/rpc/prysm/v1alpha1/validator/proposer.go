@@ -346,15 +346,15 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 			return nil, status.Errorf(codes.Internal, "Could not broadcast/receive sidecars: %v", err)
 		}
 	}
-	if err := <-errChan; err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive block: %v", err)
-	}
 
-	// Submit to the winning builder so it reveals the envelope when its bid won.
 	if block.Version() >= version.Gloas {
 		if src, builderURL := vs.bidSourceForSlot(block.Block().Slot()); src == bidSourceBuilderAPI {
 			go vs.submitBlockToBuilder(block, builderURL)
 		}
+	}
+
+	if err := <-errChan; err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive block: %v", err)
 	}
 
 	return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
