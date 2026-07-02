@@ -251,6 +251,7 @@ func (vs *Server) proposerPreferenceForProposal(ctx context.Context, st state.Be
 	pref := cache.ProposerPreference{ValidatorIndex: idx}
 	dependentRoot, err := helpers.ProposerDependentRootOrGenesis(ctx, vs.BeaconDB, st, slot)
 	if err != nil {
+		log.WithError(err).WithField("slot", slot).Debug("Could not get proposer dependent root, falling back to default proposer preference")
 		if def, ok := vs.ProposerPreferencesCache.DefaultFor(idx); ok {
 			pref = def
 		}
