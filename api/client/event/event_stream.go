@@ -10,6 +10,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/client"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/pkg/errors"
 )
 
@@ -106,7 +107,7 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		bodyStr := strings.TrimSpace(string(body))
-		return &SubscriptionError{StatusCode: resp.StatusCode, Body: bodyStr}
+		return &httputil.DefaultJsonError{Code: resp.StatusCode, Message: bodyStr}
 	}
 
 	// Create a new scanner to read lines from the response body

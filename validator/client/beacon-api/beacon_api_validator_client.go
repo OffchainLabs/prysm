@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/client/cache"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
@@ -367,9 +368,9 @@ func (c *beaconApiValidatorClient) StartEventStream(ctx context.Context, topics 
 		// request fails when any topic is unknown), so fallback with legacy topics
 		// before surfacing subscription failures to the validator event loop.
 		err = eventStream.Subscribe(eventsChannel)
-		var subErr *event.SubscriptionError
+		var subErr *httputil.DefaultJsonError
 		if fallbackTopics, ok := event.LegacyTopicFallback(topics); ok &&
-			errors.As(err, &subErr) && subErr.StatusCode == http.StatusBadRequest {
+			errors.As(err, &subErr) && subErr.Code == http.StatusBadRequest {
 
 			// Log the topics so that users can understand why the fallback is happening.
 			log.WithFields(logrus.Fields{

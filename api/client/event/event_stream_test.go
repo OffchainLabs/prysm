@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
@@ -100,10 +101,10 @@ func TestEventStream_InvalidTopic(t *testing.T) {
 	require.NoError(t, err)
 
 	err = stream.Subscribe(eventsChannel)
-	var subErr *SubscriptionError
+	var subErr *httputil.DefaultJsonError
 	require.Equal(t, true, errors.As(err, &subErr))
-	require.Equal(t, http.StatusBadRequest, subErr.StatusCode)
-	require.StringContains(t, "invalid topic name: "+invalidTopic, subErr.Body)
+	require.Equal(t, http.StatusBadRequest, subErr.Code)
+	require.StringContains(t, "invalid topic name: "+invalidTopic, subErr.Message)
 	select {
 	case event := <-eventsChannel:
 		t.Fatalf("unexpected event for subscription error: %#v", event)
