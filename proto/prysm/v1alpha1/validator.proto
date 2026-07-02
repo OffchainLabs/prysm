@@ -227,17 +227,6 @@ service BeaconNodeValidator {
     };
   }
 
-  // SubmitBuilderPreferences forwards a proposer's builder preferences to the
-  // configured builder ahead of a future proposal slot.
-  rpc SubmitBuilderPreferences(SubmitBuilderPreferencesRequest)
-      returns (google.protobuf.Empty) {
-    option deprecated = true;
-    option (google.api.http) = {
-      post : "/eth/v1alpha1/validator/builder_preferences"
-      body : "*"
-    };
-  }
-
   // PrepareBeaconProposer submits fee recipient information to be used when
   // preparing block proposal execution payloads.
   rpc PrepareBeaconProposer(PrepareBeaconProposerRequest)
@@ -549,6 +538,17 @@ service BeaconNodeValidator {
     option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha1/validator/proposer_preferences"
+      body : "*"
+    };
+  }
+
+  // SubmitBuilderPreferences forwards a proposer's builder preferences to the
+  // configured builder ahead of a future proposal slot.
+  rpc SubmitBuilderPreferences(SubmitBuilderPreferencesRequest)
+      returns (google.protobuf.Empty) {
+    option deprecated = true;
+    option (google.api.http) = {
+      post : "/eth/v1alpha1/validator/builder_preferences"
       body : "*"
     };
   }
@@ -978,6 +978,10 @@ message BlockRequest {
   // include_payload=true so the envelope is immediately available with a
   // populated state root.
   bool eager_payload_state_root = 6;
+
+  // Signed builder request auths for this slot, one per configured builder.
+  // The beacon node forwards the auth matching its builder when requesting a bid.
+  repeated SignedRequestAuthV1 builder_request_auths = 7;
 }
 
 message ProposeResponse {

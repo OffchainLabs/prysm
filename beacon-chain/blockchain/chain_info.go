@@ -48,6 +48,7 @@ type ForkchoiceFetcher interface {
 	UpdateHead(context.Context, primitives.Slot)
 	HighestReceivedBlockSlot() primitives.Slot
 	HighestReceivedBlockRoot() [32]byte
+	HasNode([32]byte) bool
 	HasFullNode([32]byte) bool
 	PayloadEarly([32]byte) (bool, bool)
 	FullBeatsEmpty([32]byte) bool
