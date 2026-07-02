@@ -4,20 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/kurtosis"
-	"github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 )
-
-func TestEndToEnd_MultiScenarioRun_Multiclient(t *testing.T) {
-	cfg := types.InitForkCfg(version.Bellatrix, version.Electra, params.E2EMainnetTestConfig())
-	runner := e2eMainnet(t, true, cfg, types.WithEpochs(26))
-	// override for scenario tests
-	runner.config.Evaluators = scenarioEvalsMulti(cfg)
-	runner.config.EvalInterceptor = runner.multiScenarioMulticlient
-	runner.scenarioRunner()
-}
 
 // TestEndToEnd_MultiScenarioRun_MultiClient2 assumes those service names.
 var mainnetSecondNodeServices = []string{"cl-2-prysm-geth", "vc-2-geth-prysm"}
