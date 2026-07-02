@@ -9,7 +9,8 @@ timeout: 60m
 
 config:
   targetEpoch: 2
-  blockId: "head"
+  # Number of recent blocks to sample; pass if any one reaches the threshold.
+  lookbackBlocks: 8
 
 tasks:
   - name: check_clients_are_healthy
@@ -18,7 +19,7 @@ tasks:
     timeout: 5m
     config:
       minClientCount: 1
-      clientPattern: "^1-geth-prysm$"   # pin to canonical main node; goodClients[0] deterministic for "Sync participation >= 95%" check below
+      clientPattern: "^1-geth-prysm$"   # pin to canonical main node; goodClients[0] deterministic for the check below
 
   - name: get_consensus_specs
     id: specs
@@ -30,20 +31,47 @@ tasks:
     configVars:
       minEpochNumber: "| [(.targetEpoch | tonumber), (.tasks.specs.outputs.specs.ALTAIR_FORK_EPOCH | tonumber), 2] | max"
 
-  - name: check_http_json
-    title: "Sync participation >= 95%"
+  - name: get_consensus_block_header
+    id: head
+    title: "Anchor the block range at head"
     timeout: 2m
-    configVars:
-      url: '| .tasks.clients.outputs.goodClients[0].clRpcUrl + "/eth/v2/beacon/blocks/" + .blockId'
     config:
-      failOnCheckMiss: true
-      assertions:
-        # query: strip 0x, convert each hex char to its nibble value, popcount
-        # each nibble with bit tests, then divide by the bitvector width.
-        - name: sync_committee_participation
-          query: |
-            def bits: .data.message.body.sync_aggregate.sync_committee_bits | ltrimstr("0x");
-            def pc: explode | map(if . >= 97 then .-87 elif . >= 65 then .-55 else .-48 end) | map((.%2)+((./2|floor)%2)+((./4|floor)%2)+((./8|floor)%2)) | add;
-            (bits | pc) / ((bits | length) * 4)
-          operator: gte
-          value: 0.95
+      clientPattern: "^1-geth-prysm$"
+      # A couple slots back from head so the range is settled/aggregated.
+      headOffset: 2
+
+  # Check sync participation across the last N blocks and pass if ANY one clears
+  # 95%. A single low-participation proposal (e.g. right after a node restart, or
+  # while a node runs behind the engine snooper) shouldn't fail the check; a real
+  # systemic sync-committee failure keeps every block below the threshold.
+  - name: run_task_matrix
+    title: "Sync participation >= 95% in a recent block"
+    timeout: 10m
+    configVars:
+      matrixValues: "| [range((.tasks.head.outputs.slot | tonumber) - ((.lookbackBlocks | tonumber) - 1); (.tasks.head.outputs.slot | tonumber) + 1)]"
+    config:
+      runConcurrent: true
+      successThreshold: 1
+      # Disable the default failureThreshold (1) so a single low/missed block
+      # doesn't fail the matrix before a healthy block is found.
+      failureThreshold: 0
+      stopOnThreshold: true
+      matrixVar: blockId
+      task:
+        name: check_http_json
+        title: "Sync participation >= 95% at block"
+        timeout: 2m
+        configVars:
+          url: '| .tasks.clients.outputs.goodClients[0].clRpcUrl + "/eth/v2/beacon/blocks/" + (.blockId | tostring)'
+        config:
+          failOnCheckMiss: true
+          assertions:
+            # query: strip 0x, convert each hex char to its nibble value, popcount
+            # each nibble with bit tests, then divide by the bitvector width.
+            - name: sync_committee_participation
+              query: |
+                def bits: .data.message.body.sync_aggregate.sync_committee_bits | ltrimstr("0x");
+                def pc: explode | map(if . >= 97 then .-87 elif . >= 65 then .-55 else .-48 end) | map((.%2)+((./2|floor)%2)+((./4|floor)%2)+((./8|floor)%2)) | add;
+                (bits | pc) / ((bits | length) * 4)
+              operator: gte
+              value: 0.95

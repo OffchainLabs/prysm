@@ -2,6 +2,7 @@
 # See mainnet_scenario_e2e_test.go for the scenario definition.
 
 participants:
+  # Always-healthy majority node.
   - el_type: geth
     cl_type: prysm
     cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:latest"
@@ -12,7 +13,22 @@ participants:
     # Need supernode setting for Fulu.
     supernode: true
     vc_image: "gcr.io/offchainlabs/prysm/validator:latest"
-    count: 2
+    count: 1
+
+  # Second node: stopped/started (scenario 1) and driven optimistic via snooper (scenario 2).
+  # Kept a minority (fewer validators than the others) so the engine snooper's added
+  # latency on this validating node barely moves fork choice under mainnet's 6s slots.
+  - el_type: geth
+    cl_type: prysm
+    cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:latest"
+    cl_extra_params:
+      - "--min-sync-peers=1"
+    supernode: true
+    vc_image: "gcr.io/offchainlabs/prysm/validator:latest"
+    # Enable snooper to test optimistic sync behavior.
+    snooper_enabled: true
+    validator_count: 32
+    count: 1
 
   # Late-joining beacon node for the P2P normal sync test.
   # Asserted by beacon-chain-sync.yaml.
@@ -64,7 +80,8 @@ network_params:
   eth1_follow_distance: 8
 
   # Validator cycle parameters
-  # 4 active participants * 64 validators = 256 genesis validators.
+  # Default 64/node; cl-2 overrides to 32 (minority snooper node).
+  # cl-1 64 + cl-2 32 + 2x lighthouse 64 = 224 genesis validators.
   num_validator_keys_per_node: 64
   churn_limit_quotient: 65536
 
@@ -80,6 +97,9 @@ additional_services:
 
 spamoor_params:
   min_cpu: 10
+
+snooper_params:
+  image: "prysm-faultproxy:local"
 
 assertoor_params:
   # Use the pinned assertoor image for testing, that has the fix below:

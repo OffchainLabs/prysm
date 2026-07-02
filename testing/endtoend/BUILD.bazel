@@ -246,6 +246,7 @@ go_test(
         "network-config/mainnet-scenario.yaml",
         "//cmd/beacon-chain:oci_image_tarball_e2e",
         "//cmd/validator:oci_image_tarball_e2e",
+        "//testing/middleware/engine-api-proxy/cmd/faultproxy:oci_image_tarball_e2e",
         "//cmd/beacon-chain",
         "//cmd/validator",
         "//config/params:custom_configs",
