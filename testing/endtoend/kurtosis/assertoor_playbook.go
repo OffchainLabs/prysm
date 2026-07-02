@@ -20,6 +20,10 @@ var optionalPlaybooks = map[string]bool{
 	"metrics-once.yaml":                       true,
 	"network-health-once.yaml":                true,
 	"validators-sync-participation-once.yaml": true,
+
+	// Optimistic-sync test toggles these via AssertoorEvent, not the common suite.
+	"optimistic-sync-fault-on.yaml":  true,
+	"optimistic-sync-fault-off.yaml": true,
 }
 
 // RegisterPlaybooks registers and schedules the common Assertoor playbooks, plus

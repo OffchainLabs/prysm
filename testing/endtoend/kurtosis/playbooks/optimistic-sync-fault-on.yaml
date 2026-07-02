@@ -1,0 +1,36 @@
+# Drive the target node (cl-2) into optimistic sync.
+#
+# POSTs the SYNCING fault to target's snooper (faultproxy) admin port, then asserts
+# target reports is_optimistic=true.
+
+id: optimistic-sync-fault-on
+name: "Optimistic sync: enable fault + assert optimistic"
+timeout: 10m
+
+config:
+  targetEpoch: 4
+  # Engine snooper DNS name for target (cl-2).
+  faultURL: "http://snooper-engine-2-prysm-geth:8552/fault/syncing"
+
+tasks:
+  - name: check_clients_are_healthy
+    title: "Wait for a ready consensus client"
+    timeout: 5m
+    config:
+      minClientCount: 1
+
+  - name: check_http_json
+    title: "POST fault/syncing (enable SYNCING fault on target)"
+    timeout: 2m
+    configVars:
+      url: "| .faultURL"
+    config:
+      method: POST
+      expectStatus: 200
+
+  - name: check_consensus_sync_status
+    title: "target is optimistic"
+    timeout: 5m
+    config:
+      clientPattern: "^2-geth-prysm$"
+      expectOptimistic: true

@@ -1,0 +1,26 @@
+# Clear the fault and assert target (cl-2) recovers from optimistic sync.
+
+id: optimistic-sync-fault-off
+name: "Optimistic sync: disable fault + assert recovery"
+timeout: 10m
+
+config:
+  targetEpoch: 5
+  faultURL: "http://snooper-engine-2-prysm-geth:8552/fault/syncing"
+
+tasks:
+  - name: check_http_json
+    title: "DELETE fault/syncing (disable fault, replay held payloads)"
+    timeout: 2m
+    configVars:
+      url: "| .faultURL"
+    config:
+      method: DELETE
+      expectStatus: 200
+
+  - name: check_consensus_sync_status
+    title: "target recovered (not optimistic)"
+    timeout: 5m
+    config:
+      clientPattern: "^2-geth-prysm$"
+      expectOptimistic: false
