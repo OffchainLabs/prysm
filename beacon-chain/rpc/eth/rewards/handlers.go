@@ -272,14 +272,19 @@ func idealAttRewards(
 	vals []*precompute.Validator,
 ) ([]structs.IdealAttestationReward, bool) {
 	increment := params.BeaconConfig().EffectiveBalanceIncrement
-	effectiveBalances := make([]uint64, 0, len(vals))
-	seen := make(map[uint64]bool, len(vals))
+	maxIdealRewards := int((params.BeaconConfig().MaxEffectiveBalanceElectra - params.BeaconConfig().EjectionBalance) / increment)
+	capacity := min(len(vals), maxIdealRewards)
+	effectiveBalances := make([]uint64, 0, capacity)
+	seen := make(map[uint64]struct{}, capacity)
 	for _, v := range vals {
 		effectiveBalance := v.CurrentEpochEffectiveBalance
-		if effectiveBalance <= params.BeaconConfig().EjectionBalance || effectiveBalance%increment != 0 || seen[effectiveBalance] {
+		if effectiveBalance <= params.BeaconConfig().EjectionBalance || effectiveBalance%increment != 0 {
 			continue
 		}
-		seen[effectiveBalance] = true
+		if _, ok := seen[effectiveBalance]; ok {
+			continue
+		}
+		seen[effectiveBalance] = struct{}{}
 		effectiveBalances = append(effectiveBalances, effectiveBalance)
 	}
 	slices.Sort(effectiveBalances)
