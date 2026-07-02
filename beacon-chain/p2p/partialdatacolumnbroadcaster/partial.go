@@ -320,9 +320,6 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 		return errors.Errorf("invalid topic ID %q: column index missing or out of bounds", rpc.GetTopicID())
 	}
 
-	// Gate the untrusted SSZ decode on subscription: it runs on the shared gossip loop and is dropped
-	// downstream for topics we do not serve. Do not downscore, since a topic can legitimately look
-	// unsubscribed during the brief window while its subscription is still being set up.
 	if _, subscribed := p.subscribedTopics.Load(rpc.GetTopicID()); !subscribed {
 		p.logIgnoreUnsubscribedTopic(from, rpc.GetTopicID())
 		return nil
@@ -367,7 +364,6 @@ func (p *PartialColumnBroadcaster) reportPeerFeedbackAsync(topic string, from pe
 	}
 }
 
-// logIgnoreUnsubscribedTopic logs a partial message dropped because we are not subscribed to its topic.
 func (p *PartialColumnBroadcaster) logIgnoreUnsubscribedTopic(from peer.ID, topic string) {
 	p.logger.WithFields(logrus.Fields{"peer": from, "topic": topic}).Debug("Ignoring partial message for unsubscribed topic")
 }
@@ -634,8 +630,6 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 	// The topic ID is peer-controlled, so this prevents a peer from making us
 	// allocate verifier/header state for columns we never asked for.
 	if _, subscribed := p.topics[topicID]; !subscribed {
-		// A message reaches here only if it was subscribed when onIncomingRPC accepted it and we
-		// unsubscribed while it was queued, so just drop it.
 		p.logIgnoreUnsubscribedTopic(rpc.from, topicID)
 		return nil
 	}

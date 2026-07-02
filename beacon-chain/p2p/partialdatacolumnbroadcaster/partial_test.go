@@ -1260,7 +1260,7 @@ func TestPartialColumnBroadcaster_onIncomingRPC_inputValidation(t *testing.T) {
 		nilRPC         bool
 		expectReject   bool
 		expectEnqueued bool
-		subscribed     bool // register the topic in subscribedTopics before the call
+		subscribed     bool
 	}{
 		{
 			name:           "in-bounds topic is accepted and enqueued",
