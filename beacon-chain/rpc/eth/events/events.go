@@ -938,7 +938,9 @@ func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribut
 			d.err = errors.Wrap(err, "Could not fill event data")
 			return
 		}
-		d.version = version.String(ev.HeadBlock.Version())
+		// The event is keyed to the proposal slot's fork, not the head block's version.
+		pv := params.GetNetworkScheduleEntry(slots.ToEpoch(ev.ProposalSlot)).VersionEnum
+		d.version = version.String(pv)
 		attributesBytes, err := marshalAttributes(ev.Attributer)
 		if err != nil {
 			d.err = errors.Wrap(err, "errors marshaling payload attributes to json")
@@ -952,7 +954,7 @@ func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribut
 			PayloadAttributes: attributesBytes,
 		}
 		// parent_block_number was removed from the payload_attributes event from gloas onwards.
-		if slots.ToEpoch(ev.ProposalSlot) < params.BeaconConfig().GloasForkEpoch {
+		if pv < version.Gloas {
 			attrData.ParentBlockNumber = strconv.FormatUint(ev.ParentBlockNumber, 10)
 		}
 		d.data, d.err = json.Marshal(attrData)

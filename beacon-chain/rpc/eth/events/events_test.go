@@ -720,6 +720,7 @@ func TestPayloadAttributesReader_ParentBlockNumber(t *testing.T) {
 		getState    func() state.BeaconState
 		getBlock    func() interfaces.SignedBeaconBlock
 		wantPresent bool
+		wantVersion string
 	}{
 		{
 			name:       "pre-gloas proposal slot includes parent_block_number",
@@ -735,6 +736,8 @@ func TestPayloadAttributesReader_ParentBlockNumber(t *testing.T) {
 				return b
 			},
 			wantPresent: true,
+			// The schedule fork at epoch 0 is phase0 even though the head block is deneb.
+			wantVersion: "phase0",
 		},
 		{
 			name:       "gloas proposal slot omits parent_block_number",
@@ -750,6 +753,7 @@ func TestPayloadAttributesReader_ParentBlockNumber(t *testing.T) {
 				return b
 			},
 			wantPresent: false,
+			wantVersion: "gloas",
 		},
 		{
 			// Boundary: the head block is pre-gloas (so ev.ParentBlockNumber is populated),
@@ -767,6 +771,7 @@ func TestPayloadAttributesReader_ParentBlockNumber(t *testing.T) {
 				return b
 			},
 			wantPresent: false,
+			wantVersion: "gloas",
 		},
 	}
 	for _, tc := range cases {
@@ -811,20 +816,14 @@ func TestPayloadAttributesReader_ParentBlockNumber(t *testing.T) {
 			require.Equal(t, true, found)
 			var got structs.PayloadAttributesEvent
 			require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(payload)), &got))
-			var data structs.PayloadAttributesEventData
-			require.NoError(t, json.Unmarshal(got.Data, &data))
+			require.Equal(t, tc.wantVersion, got.Version)
 
-			_, present := keys(t, got.Data)["parent_block_number"]
+			fields := make(map[string]json.RawMessage)
+			require.NoError(t, json.Unmarshal(got.Data, &fields))
+			_, present := fields["parent_block_number"]
 			require.Equal(t, tc.wantPresent, present, "parent_block_number presence mismatch")
 		})
 	}
-}
-
-// keys decodes a JSON object into the set of its top-level field names.
-func keys(t *testing.T, raw json.RawMessage) map[string]json.RawMessage {
-	m := make(map[string]json.RawMessage)
-	require.NoError(t, json.Unmarshal(raw, &m))
-	return m
 }
 
 func TestFillEventData(t *testing.T) {
