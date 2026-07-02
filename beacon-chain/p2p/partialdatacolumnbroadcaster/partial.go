@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -86,7 +87,9 @@ type PartialColumnBroadcaster struct {
 	publishPartialCol func(topic string, groupID []byte, col *blocks.PartialDataColumn) error
 	callbacks         ColumnCallbacks
 	// map topic -> *pubsub.Topic
-	topics                           map[string]*pubsub.Topic
+	topics map[string]*pubsub.Topic
+	// subscribedTopics mirrors topics for lookups from the pubsub loop, which cannot touch the broadcaster-owned topics map.
+	subscribedTopics                 sync.Map
 	peerFeedbackSemaphore            chan struct{}
 	concurrentValidatorSemaphore     chan struct{}
 	concurrentHeaderHandlerSemaphore chan struct{}
@@ -315,6 +318,12 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 		}).Debug("Invalid topic ID: column index missing or out of bounds")
 		p.reportPeerFeedbackAsync(rpc.GetTopicID(), from, pubsub.PeerFeedbackInvalidMessage)
 		return errors.Errorf("invalid topic ID %q: column index missing or out of bounds", rpc.GetTopicID())
+	}
+
+	// Gate the untrusted SSZ decode on subscription, it runs on the shared gossip loop and is dropped downstream for topics we do not serve.
+	if _, subscribed := p.subscribedTopics.Load(rpc.GetTopicID()); !subscribed {
+		p.logger.WithFields(logrus.Fields{"peer": from, "topic": rpc.GetTopicID()}).Debug("Ignoring partial message for unsubscribed topic")
+		return nil
 	}
 
 	nextPeerState, message, err := updatePeerStateFromIncomingRPC(peerStates[from], rpc)
@@ -1021,6 +1030,7 @@ func (p *PartialColumnBroadcaster) subscribe(t *pubsub.Topic) error {
 	}
 
 	p.topics[topic] = t
+	p.subscribedTopics.Store(topic, struct{}{})
 	return nil
 }
 
@@ -1041,6 +1051,7 @@ func (p *PartialColumnBroadcaster) unsubscribe(topic string) error {
 		return errors.New("topic not found")
 	}
 	delete(p.topics, topic)
+	p.subscribedTopics.Delete(topic)
 	delete(p.partialMsgStore, topic)
 	return t.Close()
 }
