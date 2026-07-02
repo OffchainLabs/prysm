@@ -706,10 +706,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 }
 
 // TestStreamEvents_PayloadAttributesExpiredSlotNotLoggedAsError verifies that a payload
-// attributes event whose proposal slot has already started is skipped silently rather than
-// logged at ERROR as an event the endpoint "was unable to handle". payloadAttributesReader
-// returns errPayloadAttributeExpired for a past slot, which is an expected, high-volume skip
-// (especially under ePBS), not a failure.
+// attributes event whose proposal slot has already started is skipped without an ERROR log.
 func TestStreamEvents_PayloadAttributesExpiredSlotNotLoggedAsError(t *testing.T) {
 	testSync := newStreamTestSync(t)
 	defer testSync.cleanup()
