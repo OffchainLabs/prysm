@@ -237,6 +237,7 @@ go_test(
         "validate_data_column_test.go",
         "validate_execution_payload_bid_test.go",
         "validate_execution_payload_envelope_test.go",
+        "validate_gloas_group_id_test.go",
         "validate_light_client_test.go",
         "validate_partial_header_test.go",
         "validate_payload_attestation_test.go",

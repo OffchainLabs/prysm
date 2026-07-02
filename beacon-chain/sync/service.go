@@ -523,9 +523,10 @@ func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedR
 		log.WithError(err).Error("Failed to get KZG commitments from data column")
 		return
 	}
+	if len(commitments) == 0 {
+		return
+	}
 
-	// Gloas columns carry no proposer index, so de-dup on (block root, index); Fulu keys on
-	// (slot, proposer index, index).
 	if col.IsGloas() {
 		if c.service.hasSeenDataColumnRootIndex(col.BlockRoot(), col.Index()) {
 			return
@@ -543,9 +544,6 @@ func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedR
 		c.service.setSeenDataColumnIndex(col.Slot(), proposerIndex, col.Index())
 	}
 
-	if len(commitments) == 0 {
-		return
-	}
 	// This column was completed from a partial message.
 	partialMessageColumnCompletionsTotal.WithLabelValues(strconv.FormatUint(col.Index(), 10)).Inc()
 	if err := c.service.verifiedRODataColumnSubscriber(ctx, col); err != nil {
