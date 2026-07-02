@@ -3,20 +3,8 @@ package endtoend
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/kurtosis"
-	"github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 )
-
-func TestEndToEnd_MultiScenarioRun(t *testing.T) {
-	cfg := types.InitForkCfg(version.Bellatrix, version.Electra, params.E2ETestConfig())
-	runner := e2eMinimal(t, cfg, types.WithEpochs(28))
-	// override for scenario tests
-	runner.config.Evaluators = scenarioEvals(cfg)
-	runner.config.EvalInterceptor = runner.multiScenario
-	runner.scenarioRunner()
-}
 
 // TestEndToEnd_MultiScenarioRun assumes those service names.
 var (
@@ -50,7 +38,7 @@ var (
 // and then runs the same scenarios. Actually we do not need to test the fork upgrade here, as
 // other e2e tests already cover the fork upgrade. Focusing on the main purpose of this test,
 // which is to test the service stop/start scenarios, we can start from Fulu and never fork.
-func TestEndToEnd_MultiScenarioRun2(t *testing.T) {
+func TestEndToEnd_MultiScenarioRun(t *testing.T) {
 	LoadPrysmDockerImages(t)
 	LoadFaultproxyImage(t)
 
