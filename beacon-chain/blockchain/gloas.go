@@ -217,7 +217,7 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 	var pId [8]byte
 	copy(pId[:], pid[:])
 	s.cfg.PayloadIDCache.Set(currentSlot+1, hr, false, pId)
-	s.firePayloadAttributesEventForHead(hr, currentSlot+1, attr)
+	s.firePayloadAttributesEventForHead(hr, currentSlot+1, attr, bh[:])
 }
 
 func (s *Service) fcuFromReorgData(headBlock interfaces.ReadOnlySignedBeaconBlock, hr [32]byte, hash [32]byte, full bool, attr payloadattribute.Attributer, proposingSlot primitives.Slot) {
@@ -236,11 +236,11 @@ func (s *Service) fcuFromReorgData(headBlock interfaces.ReadOnlySignedBeaconBloc
 	s.cfg.PayloadIDCache.Set(proposingSlot, hr, full, pId)
 
 	if !attr.IsEmpty() {
-		s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, hr, proposingSlot, attr)
+		s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, hr, proposingSlot, attr, hash[:])
 	}
 }
 
-func (s *Service) firePayloadAttributesEventForHead(headRoot [32]byte, proposingSlot primitives.Slot, attr payloadattribute.Attributer) {
+func (s *Service) firePayloadAttributesEventForHead(headRoot [32]byte, proposingSlot primitives.Slot, attr payloadattribute.Attributer, parentBlockHash []byte) {
 	s.headLock.RLock()
 	var headBlock interfaces.ReadOnlySignedBeaconBlock
 	if s.head != nil && s.head.root == headRoot {
@@ -250,7 +250,7 @@ func (s *Service) firePayloadAttributesEventForHead(headRoot [32]byte, proposing
 	if headBlock == nil {
 		return
 	}
-	s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, headRoot, proposingSlot, attr)
+	s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, headRoot, proposingSlot, attr, parentBlockHash)
 }
 
 // This saves head and prunes atts from the pool only if the head is new and if we are either
