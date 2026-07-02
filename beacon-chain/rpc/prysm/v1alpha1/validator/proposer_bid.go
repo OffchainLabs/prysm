@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/io/logs"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
@@ -168,12 +169,12 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 			continue
 		}
 		if err := vs.validateBuilderBid(head, pb.Bid, q); err != nil {
-			bidLog = append(bidLog, fmt.Sprintf("%s(builder=%d discarded: %v)", pb.BuilderURL, pb.Bid.Message.BuilderIndex, err))
+			bidLog = append(bidLog, fmt.Sprintf("%s(builder=%d discarded: %v)", logs.MaskCredentialsLogging(pb.BuilderURL), pb.Bid.Message.BuilderIndex, err))
 			continue
 		}
 		value := effectiveBidValue(pb.Bid, q.maxPayment)
 		bidLog = append(bidLog, fmt.Sprintf("%s(builder=%d value=%d payment=%d effective=%d)",
-			pb.BuilderURL, pb.Bid.Message.BuilderIndex, pb.Bid.Message.Value, pb.Bid.Message.ExecutionPayment, value))
+			logs.MaskCredentialsLogging(pb.BuilderURL), pb.Bid.Message.BuilderIndex, pb.Bid.Message.Value, pb.Bid.Message.ExecutionPayment, value))
 		if best == nil || value > bestValue {
 			best, bestURL, bestValue = pb.Bid, pb.BuilderURL, value
 		}
@@ -182,7 +183,7 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 	if len(bidLog) > 0 {
 		log.WithFields(logrus.Fields{
 			"slot":            q.slot,
-			"bestBuilder":     bestURL,
+			"bestBuilder":     logs.MaskCredentialsLogging(bestURL),
 			"bestBuilderGwei": uint64(bestValue),
 		}).Infof("Received builder bids: [%s]", strings.Join(bidLog, " | "))
 	}

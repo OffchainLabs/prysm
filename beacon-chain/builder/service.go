@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/io/logs"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -113,7 +114,7 @@ func (s *Service) clientFor(url string) (builder.BuilderClient, error) {
 	}
 	c, err := s.dial(url)
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not create builder client for %s", url)
+		return nil, errors.Wrapf(err, "could not create builder client for %s", logs.MaskCredentialsLogging(url))
 	}
 	s.clients[url] = c
 	return c, nil
@@ -193,12 +194,12 @@ func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Sl
 			defer wg.Done()
 			c, err := s.clientFor(url)
 			if err != nil {
-				log.WithError(err).WithField("builder", url).Warn("Could not get builder client")
+				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(url)).Warn("Could not get builder client")
 				return
 			}
 			bid, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, proposerPubkey, byURL[url])
 			if err != nil {
-				log.WithError(err).WithField("builder", url).Warn("Could not get builder execution payload bid")
+				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(url)).Warn("Could not get builder execution payload bid")
 				return
 			}
 			if bid == nil {
