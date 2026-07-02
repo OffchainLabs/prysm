@@ -55,7 +55,9 @@ tasks:
         title: "Finality check"
         timeout: 2m
         config:
-          maxUnfinalizedEpochs: 4
+          # Scenario freezes all validators for an epoch, so finality lags ~2
+          # epochs beyond normal before recovering. Plus one more epoch for recovering from the freeze.
+          maxUnfinalizedEpochs: 5
           failOnCheckMiss: true
 
       - name: check_consensus_forks

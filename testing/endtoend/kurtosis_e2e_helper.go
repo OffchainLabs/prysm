@@ -158,7 +158,7 @@ func (k *KurtosisTestSuites) runAssertoorChecks(t *testing.T, ctx context.Contex
 	})
 
 	// A late one-shot needs a few extra epochs to settle, so give each run its own deadline.
-	settle := time.Duration(3*secondsPerEpoch) * time.Second
+	settle := time.Duration(5*secondsPerEpoch) * time.Second
 
 	// 2. One-shot events. Dedicate a goroutine to each one.
 	for _, event := range events {

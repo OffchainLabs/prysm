@@ -101,6 +101,11 @@ func TestEndToEnd_MultiScenarioRun(t *testing.T) {
 				"metrics.yaml",
 				"network-health-monitor.yaml",
 				"validators-sync-participation.yaml",
+
+				// Skip blob-limits: it runs a long blob-spam campaign that needs stable
+				// funding and block production, but this scenario deliberately restarts
+				// services, so it can't complete reliably.
+				"blob-limits.yaml",
 			},
 			serviceEvents:   serviceEvents,
 			assertoorEvents: assertoorEvents,
