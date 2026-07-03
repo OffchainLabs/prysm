@@ -104,7 +104,6 @@ go_test(
         "proposer_preferences_test.go",
         "prysm_beacon_chain_client_test.go",
         "registration_test.go",
-        "rest_handler_client_test.go",
         "state_validators_test.go",
         "status_test.go",
         "stream_blocks_test.go",
