@@ -24,6 +24,7 @@ import (
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
@@ -1092,8 +1093,8 @@ func (s *Service) areDataColumnsAvailable(
 				log.WithFields(logrus.Fields{
 					"slot":            slot,
 					"root":            fmt.Sprintf("%#x", root),
-					"columnsExpected": helpers.SortedPrettySliceFromMap(peerInfo.CustodyColumns),
-					"columnsWaiting":  helpers.SortedPrettySliceFromMap(missing),
+					"columnsExpected": slice.SortedPrettySliceFromMap(peerInfo.CustodyColumns),
+					"columnsWaiting":  slice.SortedPrettySliceFromMap(missing),
 				}).Warning("Data columns still missing at slot end")
 			}
 			slotEnd = nil
@@ -1103,7 +1104,7 @@ func (s *Service) areDataColumnsAvailable(
 			missingIndicesCount := len(missing)
 
 			if missingIndicesCount < fieldparams.NumberOfColumns {
-				missingIndices = helpers.SortedPrettySliceFromMap(missing)
+				missingIndices = slice.SortedPrettySliceFromMap(missing)
 			}
 
 			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing: %v", slot, root, missingIndices)

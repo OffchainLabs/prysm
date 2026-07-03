@@ -13,7 +13,6 @@ go_library(
         "log.go",
         "metrics.go",
         "randao.go",
-        "ranges.go",
         "rewards_penalties.go",
         "shuffle.go",
         "sync_committee.go",

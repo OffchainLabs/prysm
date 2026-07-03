@@ -6,11 +6,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -116,7 +116,7 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 				"root":     fmt.Sprintf("%#x", root),
 				"slot":     slot,
 				"count":    len(unseenIndices),
-				"indices":  helpers.SortedPrettySliceFromMap(unseenIndices),
+				"indices":  slice.SortedPrettySliceFromMap(unseenIndices),
 				"duration": duration,
 			}
 			// Gloas sidecars have no proposer index; only log it for pre-Gloas.
