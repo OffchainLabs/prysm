@@ -410,7 +410,8 @@ func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkey
 
 func (b *BeaconState) builderInsertionIndex(currentEpoch primitives.Epoch) primitives.BuilderIndex {
 	for i, builder := range b.builders {
-		if builder.WithdrawableEpoch <= currentEpoch && builder.Balance == 0 {
+		// A nil entry behaves like a zero-value builder, which is reusable.
+		if builder == nil || (builder.WithdrawableEpoch <= currentEpoch && builder.Balance == 0) {
 			return primitives.BuilderIndex(i)
 		}
 	}
