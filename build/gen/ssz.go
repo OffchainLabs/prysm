@@ -23,10 +23,8 @@ import (
 // Each target is generated twice: once for mainnet (default build tags) and
 // once for minimal (--build-tags=minimal, which makes methodical's package
 // loader pick up the //go:build minimal .pb.go sources written by `make gen
-// proto`). When the two outputs match the SSZ code is config-invariant and is
-// written once, untagged; when they differ (baked sizes, cast types) the target
-// is split into a //go:build !minimal file plus a <name>.minimal.ssz.go twin,
-// mirroring the proto split. This requires `make gen proto` to have run first
+// proto`), and always written as a //go:build !minimal file plus a
+// <name>.minimal.ssz.go twin. This requires `make gen proto` to have run first
 // so both .pb.go variants are on disk.
 func genSSZ() error {
 	targets, err := loadMethodicalTargets()
@@ -53,9 +51,16 @@ func genSSZ() error {
 	return nil
 }
 
-// genMethodical generates a single target for both networks and writes the
-// result back to the source tree, splitting into build-tagged mainnet/minimal
-// files only when the two outputs differ.
+// genMethodical generates a single target for both networks and always writes a
+// build-tagged mainnet/minimal pair.
+//
+// We deliberately do not collapse to one untagged file when the two outputs
+// match. Whether a target differs across networks depends on the progressive
+// flag (progressive collections merkleize size-independently, so a target that
+// differs under bounded merkleization can become identical under progressive)
+// and on the bounded sizes themselves. A compare-and-collapse would make the
+// .minimal.ssz.go twins appear and disappear as those inputs change; we accept
+// the duplication of an identical twin to keep the generated file set stable.
 func genMethodical(t methodicalTarget, disableProgressive bool) error {
 	out := filepath.Join(t.pkg, t.out)
 	fmt.Printf("generating %s\n", out)
@@ -68,14 +73,6 @@ func genMethodical(t methodicalTarget, disableProgressive bool) error {
 	minimal, err := methodicalOne(t, disableProgressive, []string{"minimal"})
 	if err != nil {
 		return fmt.Errorf("minimal: %w", err)
-	}
-
-	if mainnet == minimal {
-		if err := os.WriteFile(out, []byte(mainnet), 0o600); err != nil {
-			return fmt.Errorf("writeFile: %w", err)
-		}
-
-		return nil
 	}
 
 	if err := os.WriteFile(out, []byte("//go:build !minimal\n\n"+mainnet), 0o600); err != nil {

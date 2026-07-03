@@ -297,4 +297,4 @@ tool (
 	go.uber.org/mock/mockgen
 )
 
-replace github.com/OffchainLabs/methodical-ssz => /Users/kasey/src/OffchainLabs/methodical-ssz
+replace github.com/OffchainLabs/methodical-ssz => github.com/kasey/methodical-ssz v0.0.0-20260703044252-f02d8c431d71
