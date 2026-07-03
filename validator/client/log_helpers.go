@@ -41,6 +41,15 @@ type submittedSyncContributionKey struct {
 	bitsCount         uint64
 }
 
+// submittedPayloadAttKey groups payload attestations submitted for the same slot, block root,
+// and payload status.
+type submittedPayloadAttKey struct {
+	blockRoot         [fieldparams.RootLength]byte
+	slot              primitives.Slot
+	payloadPresent    bool
+	blobDataAvailable bool
+}
+
 // submittedAttKey is defined as a concatenation of:
 //   - AttestationData.BeaconBlockRoot
 //   - AttestationData.Source.HashTreeRoot()
@@ -104,8 +113,28 @@ func (v *validator) saveSubmittedAtt(att ethpb.Att, pubkey []byte, isAggregate b
 // LogSubmissions logs info about all successful submissions the validator client made this slot.
 func (v *validator) LogSubmissions(slot primitives.Slot) {
 	v.logSubmittedAtts(slot)
+	v.logSubmittedPayloadAttestations(slot)
 	v.logSubmittedSyncCommitteeMessages(slot)
 	v.logSubmittedSyncCommitteeContributions(slot)
+}
+
+// saveSubmittedPayloadAtt saves the submitted payload attestation data along with the PTC
+// member's validator index. The purpose of this is to display combined logs for all keys managed
+// by the validator client.
+func (v *validator) saveSubmittedPayloadAtt(data *ethpb.PayloadAttestationData, idx primitives.ValidatorIndex) {
+	v.submissionLogsLock.Lock()
+	defer v.submissionLogsLock.Unlock()
+
+	if v.submittedPayloadAtts == nil {
+		v.submittedPayloadAtts = make(map[submittedPayloadAttKey][]uint64)
+	}
+	key := submittedPayloadAttKey{
+		slot:              data.Slot,
+		payloadPresent:    data.PayloadPresent,
+		blobDataAvailable: data.BlobDataAvailable,
+	}
+	copy(key.blockRoot[:], data.BeaconBlockRoot)
+	v.submittedPayloadAtts[key] = append(v.submittedPayloadAtts[key], uint64(idx))
 }
 
 // saveSubmittedSyncContribution saves the submitted sync committee contribution along with the
@@ -191,6 +220,27 @@ func (v *validator) logSubmittedAtts(slot primitives.Slot) {
 
 	v.submittedAtts = make(map[submittedAttKey]*submittedAtt)
 	v.submittedAggregates = make(map[submittedAttKey]*submittedAtt)
+}
+
+// logSubmittedPayloadAttestations logs info about submitted payload attestations.
+func (v *validator) logSubmittedPayloadAttestations(slot primitives.Slot) {
+	v.submissionLogsLock.Lock()
+	defer v.submissionLogsLock.Unlock()
+
+	for key, indices := range v.submittedPayloadAtts {
+		slices.Sort(indices)
+		log.WithFields(logrus.Fields{
+			"slot":              slot,
+			"dataSlot":          key.slot,
+			"blockRoot":         fmt.Sprintf("%#x", bytesutil.Trunc(key.blockRoot[:])),
+			"payloadPresent":    key.payloadPresent,
+			"blobDataAvailable": key.blobDataAvailable,
+			"validatorIndices":  helpers.PrettySlice(indices),
+			"attestations":      len(indices),
+		}).Info("Submitted payload attestations")
+	}
+
+	v.submittedPayloadAtts = make(map[submittedPayloadAttKey][]uint64)
 }
 
 // logSubmittedSyncCommitteeMessages logs info about submitted sync committee messages.

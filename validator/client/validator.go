@@ -93,6 +93,7 @@ type validator struct {
 	submittedAggregates          map[submittedAttKey]*submittedAtt
 	submittedSyncMessages        map[submittedSyncMsgKey][]uint64
 	submittedSyncContributions   map[submittedSyncContributionKey][]uint64
+	submittedPayloadAtts         map[submittedPayloadAttKey][]uint64
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
 	interopKeysConfig            *local.InteropKeymanagerConfig

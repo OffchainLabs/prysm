@@ -111,4 +111,5 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 		"blobDataAvailable":  data.BlobDataAvailable,
 		"validatorIndex":     duty.ValidatorIndex,
 	}).Debug("Submitted new payload attestation")
+	v.saveSubmittedPayloadAtt(data, duty.ValidatorIndex)
 }

@@ -129,3 +129,27 @@ func TestLogSubmittedSyncCommitteeContributions(t *testing.T) {
 	v.logSubmittedSyncCommitteeContributions(12)
 	assert.Equal(t, 0, len(logHook.AllEntries()))
 }
+
+func TestLogSubmittedPayloadAttestations(t *testing.T) {
+	logHook := logTest.NewGlobal()
+	v := validator{}
+	data := &ethpb.PayloadAttestationData{
+		BeaconBlockRoot:   bytesutil.PadTo([]byte("root"), field_params.RootLength),
+		Slot:              12,
+		PayloadPresent:    true,
+		BlobDataAvailable: true,
+	}
+	v.saveSubmittedPayloadAtt(data, 8)
+	v.saveSubmittedPayloadAtt(data, 7)
+
+	v.logSubmittedPayloadAttestations(12)
+
+	assert.LogsContain(t, logHook, "msg=\"Submitted payload attestations\"")
+	assert.LogsContain(t, logHook, "validatorIndices=7-8")
+	assert.LogsContain(t, logHook, "attestations=2")
+	assert.LogsContain(t, logHook, "payloadPresent=true")
+	assert.LogsContain(t, logHook, "blobDataAvailable=true")
+	logHook.Reset()
+	v.logSubmittedPayloadAttestations(12)
+	assert.Equal(t, 0, len(logHook.AllEntries()))
+}
