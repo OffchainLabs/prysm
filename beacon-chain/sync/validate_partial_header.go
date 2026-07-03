@@ -3,12 +3,14 @@ package sync
 import (
 	"context"
 	stderrors "errors"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 var errHeaderEmptyCommitments = errors.New("header has no kzg commitments")
@@ -63,6 +65,14 @@ func (s *Service) partialVerifierFromTrustedGloasColumn(col *blocks.PartialDataC
 		return nil, errHeaderEmptyCommitments
 	}
 	dcv := s.newColumnsVerifier([]blocks.RODataColumn{col.RODataColumn}, verification.GloasPartialColumnRequirements)
+	log.WithFields(logrus.Fields{
+		"gpcPath":     "verifier",
+		"blockRoot":   fmt.Sprintf("%#x", col.BlockRoot()),
+		"slot":        col.Slot(),
+		"columnIndex": col.Index(),
+		"included":    col.Included.Count(),
+		"total":       col.Included.Len(),
+	}).Debug("Created Gloas partial column verifier from trusted column")
 	return verification.NewPartialColumnVerifier(dcv, col), nil
 }
 

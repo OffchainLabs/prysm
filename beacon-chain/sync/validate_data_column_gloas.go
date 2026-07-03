@@ -112,6 +112,14 @@ func (s *Service) validateDataColumnGloas(
 	verifiedRODataColumn.SetBidCommitments(commitments)
 
 	s.setSeenDataColumnRootIndex(verifiedRODataColumn.BlockRoot(), verifiedRODataColumn.Index(), verifiedRODataColumn.Slot())
+	log.WithFields(logrus.Fields{
+		"gpcPath":     "incoming",
+		"blockRoot":   fmt.Sprintf("%#x", verifiedRODataColumn.BlockRoot()),
+		"slot":        verifiedRODataColumn.Slot(),
+		"columnIndex": verifiedRODataColumn.Index(),
+		"peer":        pid,
+		"commitments": len(commitments),
+	}).Debug("Validated Gloas data column sidecar from gossip")
 	return verifiedRODataColumn, nil
 }
 
@@ -164,6 +172,13 @@ func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID
 	entry := s.pendingGloasColumns[root]
 	if entry == nil {
 		if len(s.pendingGloasColumns) >= maxPendingGloasRoots {
+			log.WithFields(logrus.Fields{
+				"gpcPath":      "pending",
+				"blockRoot":    fmt.Sprintf("%#x", root),
+				"slot":         slot,
+				"columnIndex":  idx,
+				"pendingRoots": len(s.pendingGloasColumns),
+			}).Debug("Pending Gloas column dropped: root cap reached")
 			return nil
 		}
 		entry = &pendingGloasEntry{slot: slot}
@@ -174,6 +189,13 @@ func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID
 		return nil
 	}
 	entry.columns[idx] = &pendingColumnEntry{sidecar: dc, peer: pid}
+	log.WithFields(logrus.Fields{
+		"gpcPath":     "pending",
+		"blockRoot":   fmt.Sprintf("%#x", root),
+		"slot":        slot,
+		"columnIndex": idx,
+		"peer":        pid,
+	}).Debug("Queued Gloas data column pending its block")
 	return nil
 }
 
@@ -279,10 +301,12 @@ func (s *Service) processPendingGloasColumns(ctx context.Context, root [fieldpar
 		}
 
 		log.WithFields(logrus.Fields{
-			"root":    fmt.Sprintf("%#x", root),
-			"count":   len(verified),
-			"skipped": skipped,
-			"slot":    entry.slot,
+			"gpcPath":  "pending",
+			"root":     fmt.Sprintf("%#x", root),
+			"count":    len(verified),
+			"partials": len(partials),
+			"skipped":  skipped,
+			"slot":     entry.slot,
 		}).Debug("Processed pending Gloas data columns")
 	}
 }
@@ -343,11 +367,20 @@ func (s *Service) pruneStaleGloasColumns(currentSlot primitives.Slot) {
 	// HasBlock + downscore outside the lock; a root we never learned of was fabricated.
 	for _, p := range pruned {
 		if s.cfg.chain == nil || s.cfg.chain.HasBlock(s.ctx, p.root) {
+			log.WithFields(logrus.Fields{
+				"gpcPath":   "pending",
+				"blockRoot": fmt.Sprintf("%#x", p.root),
+			}).Debug("Pruned stale pending Gloas columns for known root (no downscore)")
 			continue
 		}
 		for _, pid := range p.peers {
 			s.downscorePeer(pid, "pendingGloasColumnUnknownRoot", logrus.Fields{"root": fmt.Sprintf("%#x", p.root)})
 		}
+		log.WithFields(logrus.Fields{
+			"gpcPath":   "pending",
+			"blockRoot": fmt.Sprintf("%#x", p.root),
+			"peers":     len(p.peers),
+		}).Debug("Pruned stale pending Gloas columns for unknown root; downscored forwarders")
 	}
 }
 

@@ -970,35 +970,46 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 	if err != nil {
 		return nil, nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
 	}
-	log.WithFields(logrus.Fields{
-		"included":   cp.Included,
-		"cellsCount": len(cp.CellsPerBlob),
-	}).Debug("Received cells and proofs from execution client")
+	slot := populator.Slot()
+	isGloas := slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch
+	elFields := logrus.Fields{
+		"gpcPath":     "el",
+		"blockRoot":   fmt.Sprintf("%#x", root),
+		"slot":        slot,
+		"gloas":       isGloas,
+		"commitments": len(commitments),
+	}
+	includedCount := uint64(0)
+	if cp.Included != nil {
+		includedCount = cp.Included.Count()
+		elFields["includedBlobs"] = includedCount
+		elFields["includedIndices"] = cp.Included.BitIndices()
+	}
+	log.WithFields(elFields).Debug("Received cells and proofs from execution client")
 
 	// Return early if the execution client returned nothing; otherwise we would
 	// build and broadcast empty partial columns.
 	if cp.Included == nil || cp.Included.Count() == 0 {
+		log.WithFields(elFields).Debug("Execution client returned no blobs; nothing to construct")
 		return nil, nil, nil
 	}
 
 	haveAllBlobs := cp.Included.Count() == uint64(len(commitments))
 
 	var partialColumns []blocks.PartialDataColumn
-	slot := populator.Slot()
 	if haveAllBlobs {
 		// Construct data column sidecars from the signed block and cells and proofs.
 		roSidecars, err := peerdas.DataColumnSidecars(cp.CellsPerBlob, cp.ProofsPerBlob, populator)
 		if err != nil {
 			return nil, nil, wrapWithBlockRoot(err, populator.Root(), "data column sidecars from column sidecar")
 		}
-		log.WithField("haveAllBlobs", haveAllBlobs).Debug("Constructed full data column sidecars")
+		log.WithFields(elFields).WithField("columns", len(roSidecars)).Debug("Constructed full data column sidecars")
 
 		// Upgrade the sidecars to verified sidecars.
 		// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
 		verifiedROSidecars := upgradeSidecarsToVerifiedSidecars(roSidecars)
 
 		if s.partialColumnsSupported {
-			isGloas := slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch
 			for i := range verifiedROSidecars {
 				if isGloas {
 					verifiedROSidecars[i].SetBidCommitments(commitments)
@@ -1009,10 +1020,9 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 				}
 				partialColumns = append(partialColumns, pc)
 			}
-			log.WithFields(logrus.Fields{
+			log.WithFields(elFields).WithFields(logrus.Fields{
 				"haveAllBlobs": haveAllBlobs,
-				"blockRoot":    fmt.Sprintf("%#x", root),
-				"slot":         slot,
+				"partials":     len(partialColumns),
 			}).Debug("Constructed partial data column sidecars")
 		}
 
@@ -1024,10 +1034,9 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		if err != nil {
 			return nil, nil, wrapWithBlockRoot(err, root, "construct partial columns")
 		}
-		log.WithFields(logrus.Fields{
+		log.WithFields(elFields).WithFields(logrus.Fields{
 			"haveAllBlobs": haveAllBlobs,
-			"blockRoot":    fmt.Sprintf("%#x", root),
-			"slot":         slot,
+			"partials":     len(partialColumns),
 		}).Debug("Constructed partial data column sidecars")
 	}
 
@@ -1080,6 +1089,7 @@ func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Con
 	if requests.Count() == 0 {
 		// EL has all blobs; GetBlobsV3 will succeed immediately, no need for an early publish.
 		log.WithFields(logrus.Fields{
+			"gpcPath":     "el",
 			"blockRoot":   fmt.Sprintf("%#x", root),
 			"slot":        populator.Slot(),
 			"commitments": len(commitments),
@@ -1099,6 +1109,7 @@ func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Con
 		}
 	}
 	log.WithFields(logrus.Fields{
+		"gpcPath":        "el",
 		"blockRoot":      fmt.Sprintf("%#x", root),
 		"slot":           populator.Slot(),
 		"commitments":    len(commitments),

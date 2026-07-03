@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 )
@@ -53,6 +54,12 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 	}
 
 	if sidecar.IsGloas() {
+		log.WithFields(logrus.Fields{
+			"gpcPath":     "republish",
+			"blockRoot":   fmt.Sprintf("%#x", sidecar.BlockRoot()),
+			"slot":        sidecar.Slot(),
+			"columnIndex": sidecar.Index(),
+		}).Debug("Received full Gloas data column sidecar via gossip")
 		s.republishGloasColumnAsPartial(ctx, sidecar)
 	}
 
@@ -121,13 +128,21 @@ func (s *Service) republishGloasColumnAsPartial(ctx context.Context, sidecar blo
 		return
 	}
 
+	republishFields := logrus.Fields{
+		"gpcPath":     "republish",
+		"blockRoot":   fmt.Sprintf("%#x", sidecar.BlockRoot()),
+		"slot":        sidecar.Slot(),
+		"columnIndex": sidecar.Index(),
+	}
+
 	commitments, err := s.bidCommitmentsForRoot(ctx, sidecar.BlockRoot())
 	if err != nil {
-		log.WithError(err).Error("Failed to get bid commitments for gloas partial column republish")
+		log.WithError(err).WithFields(republishFields).Error("Failed to get bid commitments for gloas partial column republish")
 		return
 	}
 	sidecar.SetBidCommitments(commitments)
 
+	log.WithFields(republishFields).WithField("commitments", len(commitments)).Debug("Republishing Gloas column received via gossip as partial")
 	s.publishColumnAsPartial(ctx, sidecar)
 }
 

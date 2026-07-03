@@ -232,6 +232,17 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 		isGloas := slots.ToEpoch(source.Slot()) >= params.BeaconConfig().GloasForkEpoch
 		root := source.Root()
 
+		log.WithFields(logrus.Fields{
+			"gpcPath":        "el",
+			"root":           fmt.Sprintf("%#x", root),
+			"slot":           source.Slot(),
+			"gloas":          isGloas,
+			"type":           source.Type(),
+			"commitments":    len(commitments),
+			"partialEnabled": isPartialEnabled,
+			"sampledIndices": len(columnIndicesToSample),
+		}).Debug("Fetching data column sidecars from the execution client")
+
 		var hasBlobsColumns []blocks.PartialDataColumn
 		for iteration := uint64(0); ; /*no stop condition*/ iteration++ {
 			log = log.WithField("iteration", iteration)
@@ -371,6 +382,7 @@ func (s *Service) publishPartialColumns(ctx context.Context, indices map[uint64]
 		return errors.Wrap(err, "current fork digest")
 	}
 
+	published := 0
 	err = partialBroadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
 		for i := range uint64(len(partialColumns)) {
 			if !indices[i] {
@@ -378,11 +390,24 @@ func (s *Service) publishPartialColumns(ctx context.Context, indices map[uint64]
 			}
 			subnet := peerdas.ComputeSubnetForDataColumnSidecar(i)
 			topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
+			published++
 			if !yield(topic, partialColumns[i]) {
 				return
 			}
 		}
 	})
+	if err == nil && published > 0 {
+		first := &partialColumns[0]
+		log.WithFields(logrus.Fields{
+			"gpcPath":   "publish",
+			"root":      fmt.Sprintf("%#x", first.BlockRoot()),
+			"slot":      first.Slot(),
+			"gloas":     first.IsGloas(),
+			"columns":   published,
+			"included":  first.Included.Count(),
+			"cellCount": first.Included.Len(),
+		}).Debug("Handed partial columns to broadcaster")
+	}
 	return errors.Wrap(err, "publish partial columns")
 }
 

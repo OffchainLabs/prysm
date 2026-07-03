@@ -104,11 +104,22 @@ type PartialColumnBroadcaster struct {
 	incomingReq      chan request
 	eagerPushed      map[string]*eagerPushAgg
 	republishSkipped map[string]map[uint64]bool
+	gloasEarlyRPCs   map[string]*gloasEarlyRPCAgg
+	publishedNew     map[string]map[uint64]bool
 }
 
 type eagerPushAgg struct {
 	indices map[uint64]bool
 	peers   map[peer.ID]bool
+}
+
+// gloasEarlyRPCAgg aggregates Gloas partial RPCs that arrived before we published a
+// verifier for their group (dropped, never buffered), flushed once per slot tick.
+type gloasEarlyRPCAgg struct {
+	metaOnly     int
+	cellMessages int
+	cellsDropped uint64
+	peers        map[peer.ID]bool
 }
 
 type requestKind uint8
@@ -229,11 +240,32 @@ type incomingPartialRPC struct {
 }
 
 func (r incomingPartialRPC) logFields() logrus.Fields {
-	return logrus.Fields{
+	fields := logrus.Fields{
 		"from":  r.from,
 		"topic": r.GetTopicID(),
 		"group": fmt.Sprintf("%#x", r.GroupID),
 	}
+	addParsedGroupFields(fields, r.GroupID)
+	return fields
+}
+
+// addParsedGroupFields decodes the group id (fork, slot, block root) into log fields, best effort.
+func addParsedGroupFields(fields logrus.Fields, groupID []byte) {
+	isGloas, slot, root, err := blocks.ParsePartialColumnGroupID(groupID)
+	if err != nil {
+		return
+	}
+	fields["gloas"] = isGloas
+	fields["blockRoot"] = fmt.Sprintf("%#x", root)
+	if isGloas {
+		fields["slot"] = slot
+	}
+}
+
+func groupLogFields(groupID string) logrus.Fields {
+	fields := logrus.Fields{"group": fmt.Sprintf("%#x", groupID)}
+	addParsedGroupFields(fields, []byte(groupID))
+	return fields
 }
 
 type cellsValidated struct {
@@ -245,10 +277,12 @@ type cellsValidated struct {
 }
 
 func (c *cellsValidated) logFields() logrus.Fields {
-	return logrus.Fields{
+	fields := logrus.Fields{
 		"topic": c.topic,
 		"group": fmt.Sprintf("%#x", c.group),
 	}
+	addParsedGroupFields(fields, c.group)
+	return fields
 }
 
 // gossip is used when we are republishing our PartialDataColumn to gossip peers.
@@ -268,6 +302,8 @@ func NewBroadcaster(ctx context.Context, logger *logrus.Logger) *PartialColumnBr
 		headerSentCache:  make(map[string]map[peer.ID]bool),
 		eagerPushed:      make(map[string]*eagerPushAgg),
 		republishSkipped: make(map[string]map[uint64]bool),
+		gloasEarlyRPCs:   make(map[string]*gloasEarlyRPCAgg),
+		publishedNew:     make(map[string]map[uint64]bool),
 
 		// GossipSub sends the messages to this channel. The buffer should be
 		// big enough to avoid dropping messages. We don't want to block the gossipsub event loop for this.
@@ -472,10 +508,33 @@ func (p *PartialColumnBroadcaster) recordRepublishSkip(groupID []byte, columnInd
 	indices[columnIndex] = true
 }
 
+func (p *PartialColumnBroadcaster) recordGloasEarlyRPC(groupID []byte, from peer.ID, hadMessage bool, droppedCells uint64) {
+	agg, ok := p.gloasEarlyRPCs[string(groupID)]
+	if !ok {
+		agg = &gloasEarlyRPCAgg{peers: make(map[peer.ID]bool)}
+		p.gloasEarlyRPCs[string(groupID)] = agg
+	}
+	if hadMessage {
+		agg.cellMessages++
+		agg.cellsDropped += droppedCells
+	} else {
+		agg.metaOnly++
+	}
+	agg.peers[from] = true
+}
+
+func (p *PartialColumnBroadcaster) recordPublishedNew(groupID []byte, columnIndex uint64) {
+	indices, ok := p.publishedNew[string(groupID)]
+	if !ok {
+		indices = make(map[uint64]bool)
+		p.publishedNew[string(groupID)] = indices
+	}
+	indices[columnIndex] = true
+}
+
 func (p *PartialColumnBroadcaster) flushAggregatedLogs() {
 	for groupID, agg := range p.eagerPushed {
-		p.logger.WithFields(logrus.Fields{
-			"group":   fmt.Sprintf("%#x", groupID),
+		p.logger.WithFields(groupLogFields(groupID)).WithFields(logrus.Fields{
 			"count":   len(agg.indices),
 			"indices": helpers.SortedPrettySliceFromMap(agg.indices),
 			"peers":   len(agg.peers),
@@ -483,12 +542,29 @@ func (p *PartialColumnBroadcaster) flushAggregatedLogs() {
 		delete(p.eagerPushed, groupID)
 	}
 	for groupID, indices := range p.republishSkipped {
-		p.logger.WithFields(logrus.Fields{
-			"group":   fmt.Sprintf("%#x", groupID),
+		p.logger.WithFields(groupLogFields(groupID)).WithFields(logrus.Fields{
 			"count":   len(indices),
 			"indices": helpers.SortedPrettySliceFromMap(indices),
 		}).Debug("Columns not published, skipping republish")
 		delete(p.republishSkipped, groupID)
+	}
+	for groupID, indices := range p.publishedNew {
+		p.logger.WithFields(groupLogFields(groupID)).WithFields(logrus.Fields{
+			"gpcPath": "publish",
+			"count":   len(indices),
+			"indices": helpers.SortedPrettySliceFromMap(indices),
+		}).Debug("Published new partial column groups")
+		delete(p.publishedNew, groupID)
+	}
+	for groupID, agg := range p.gloasEarlyRPCs {
+		p.logger.WithFields(groupLogFields(groupID)).WithFields(logrus.Fields{
+			"gpcPath":      "incoming",
+			"metaOnly":     agg.metaOnly,
+			"cellMessages": agg.cellMessages,
+			"cellsDropped": agg.cellsDropped,
+			"peers":        len(agg.peers),
+		}).Debug("Dropped early Gloas partial RPCs (no local verifier yet)")
+		delete(p.gloasEarlyRPCs, groupID)
 	}
 }
 
@@ -644,14 +720,21 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 	// pushed cells before we published; [IGNORE] otherwise.
 	if ourVerifier == nil && rpc.isGloas {
 		if p.callbacks.ValidateGloasGroupID(rpc.GroupID) == pubsub.ValidationReject {
-			p.logger.WithFields(rpc.logFields()).Debug("Rejecting Gloas partial message: group slot does not match block slot")
+			p.logger.WithFields(rpc.logFields()).WithField("gpcPath", "incoming").Debug("Rejecting Gloas partial message: group slot does not match block slot")
 			_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
 			return nil
 		}
+		var droppedCells uint64
 		if hasMessage && message.CellsPresentBitmap.Count() > 0 {
-			p.logger.WithFields(rpc.logFields()).Debug("Peer pushed Gloas cells before we published our column; downscoring")
+			droppedCells = message.CellsPresentBitmap.Count()
+			p.logger.WithFields(rpc.logFields()).WithFields(logrus.Fields{
+				"gpcPath":      "incoming",
+				"droppedCells": droppedCells,
+				"hasMeta":      len(rpc.PartsMetadata) > 0,
+			}).Debug("Peer pushed Gloas cells before we published our column; downscoring")
 			_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
 		}
+		p.recordGloasEarlyRPC(rpc.GroupID, rpc.from, hasMessage, droppedCells)
 		return nil
 	}
 
@@ -835,6 +918,20 @@ func (p *PartialColumnBroadcaster) handlePartialCells(ourDataColumn *blocks.Part
 	if len(cellIndices) > 0 {
 		columnIndexStr := strconv.FormatUint(ourDataColumn.Index(), 10)
 		partialMessageCellsReceivedTotal.WithLabelValues(columnIndexStr).Add(float64(len(cellIndices)))
+		p.logger.WithFields(rpc.logFields()).WithFields(logrus.Fields{
+			"gpcPath":     "incoming",
+			"columnIndex": ourDataColumn.Index(),
+			"newCells":    len(cellIndices),
+			"cellIndices": cellIndices,
+			"included":    ourDataColumn.Included.Count(),
+			"total":       ourDataColumn.Included.Len(),
+		}).Debug("Received new cells via partial message")
+	} else if sent := message.CellsPresentBitmap.Count(); sent > 0 {
+		p.logger.WithFields(rpc.logFields()).WithFields(logrus.Fields{
+			"gpcPath":     "incoming",
+			"columnIndex": ourDataColumn.Index(),
+			"sentCells":   sent,
+		}).Debug("Received partial cells, none new")
 	}
 	if len(cellsToVerify) > 0 {
 		select {
@@ -913,8 +1010,19 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 			p.logger.WithError(err).WithFields(cells.logFields()).Error("Failed to complete partial column verifier")
 			return errors.Wrap(err, "complete partial column verifier")
 		}
+		extendFields := logrus.Fields{
+			"gpcPath":        "completion",
+			"columnIndex":    ourDataColumn.Index(),
+			"newCells":       len(cells.cells),
+			"included":       ourDataColumn.Included.Count(),
+			"total":          ourDataColumn.Included.Len(),
+			"validationTook": cells.validationTook,
+		}
 		if ok {
+			p.logger.WithFields(cells.logFields()).WithFields(extendFields).Debug("Partial column completed from peer cells")
 			go p.callbacks.HandleColumn(cells.topic, col)
+		} else {
+			p.logger.WithFields(cells.logFields()).WithFields(extendFields).Debug("Extended partial column from peer cells")
 		}
 
 		if !ourDataColumn.Published {
@@ -992,6 +1100,7 @@ func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, bl
 				continue
 			}
 			topicStore[string(groupIDBytes)] = verifier
+			p.recordPublishedNew(groupIDBytes, partialCol.Index())
 		} else {
 			if requests, ok := partialCol.PartsRequests(); ok {
 				if err := verifier.Column.SetPartsRequests(requests); err != nil {
@@ -1017,6 +1126,12 @@ func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, bl
 					continue
 				}
 				if ok {
+					p.logger.WithFields(groupLogFields(string(groupIDBytes))).WithFields(logrus.Fields{
+						"gpcPath":     "completion",
+						"topic":       topic,
+						"columnIndex": verifier.Column.Index(),
+						"total":       verifier.Column.Included.Len(),
+					}).Debug("Partial column completed by publish merge")
 					go p.callbacks.HandleColumn(topic, col)
 				}
 			}

@@ -6,6 +6,7 @@ package sync
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -487,6 +488,10 @@ func (c *partialColumnCallbacks) PartialVerifierFromTrustedColumn(col *blocks.Pa
 func (c *partialColumnCallbacks) ValidateGloasGroupID(groupID []byte) pubsub.ValidationResult {
 	isGloas, slot, root, err := blocks.ParsePartialColumnGroupID(groupID)
 	if err != nil {
+		log.WithError(err).WithFields(logrus.Fields{
+			"gpcPath": "incoming",
+			"group":   fmt.Sprintf("%#x", groupID),
+		}).Debug("Rejecting Gloas partial group id: unparseable")
 		return pubsub.ValidationReject
 	}
 	if !isGloas {
@@ -499,10 +504,21 @@ func (c *partialColumnCallbacks) ValidateGloasGroupID(groupID []byte) pubsub.Val
 	}
 	block, err := c.service.cfg.beaconDB.Block(c.service.ctx, root)
 	if err != nil || block == nil || block.IsNil() {
+		log.WithError(err).WithFields(logrus.Fields{
+			"gpcPath":   "incoming",
+			"blockRoot": fmt.Sprintf("%#x", root),
+			"groupSlot": slot,
+		}).Debug("Gloas partial group id: block seen but not yet readable from DB; ignoring")
 		return pubsub.ValidationIgnore
 	}
 	// [REJECT] The group's slot must match the slot of the block at beacon_block_root.
 	if block.Block().Slot() != slot {
+		log.WithFields(logrus.Fields{
+			"gpcPath":   "incoming",
+			"blockRoot": fmt.Sprintf("%#x", root),
+			"groupSlot": slot,
+			"blockSlot": block.Block().Slot(),
+		}).Debug("Rejecting Gloas partial group id: slot mismatch with seen block")
 		return pubsub.ValidationReject
 	}
 	return pubsub.ValidationAccept
@@ -527,8 +543,18 @@ func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedR
 		return
 	}
 
+	handleFields := logrus.Fields{
+		"gpcPath":     "completion",
+		"gloas":       col.IsGloas(),
+		"blockRoot":   fmt.Sprintf("%#x", col.BlockRoot()),
+		"slot":        col.Slot(),
+		"columnIndex": col.Index(),
+		"commitments": len(commitments),
+	}
+
 	if col.IsGloas() {
 		if c.service.hasSeenDataColumnRootIndex(col.BlockRoot(), col.Index()) {
+			log.WithFields(handleFields).Debug("Completed partial column already seen; skipping import and broadcast")
 			return
 		}
 		c.service.setSeenDataColumnRootIndex(col.BlockRoot(), col.Index(), col.Slot())
@@ -539,6 +565,7 @@ func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedR
 			return
 		}
 		if c.service.hasSeenDataColumnIndex(col.Slot(), proposerIndex, col.Index()) {
+			log.WithFields(handleFields).Debug("Completed partial column already seen; skipping import and broadcast")
 			return
 		}
 		c.service.setSeenDataColumnIndex(col.Slot(), proposerIndex, col.Index())
@@ -547,8 +574,10 @@ func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedR
 	// This column was completed from a partial message.
 	partialMessageColumnCompletionsTotal.WithLabelValues(strconv.FormatUint(col.Index(), 10)).Inc()
 	if err := c.service.verifiedRODataColumnSubscriber(ctx, col); err != nil {
-		log.WithError(err).Error("Failed to handle verified RO data column subscriber")
+		log.WithError(err).WithFields(handleFields).Error("Failed to handle verified RO data column subscriber")
+		return
 	}
+	log.WithFields(handleFields).Debug("Imported and broadcast column completed from partial messages")
 }
 
 // HandleHeader handles a received partial data column header.

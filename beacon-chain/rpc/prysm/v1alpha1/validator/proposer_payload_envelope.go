@@ -73,6 +73,15 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 		}
 	}
 
+	log.WithFields(logrus.Fields{
+		"gpcPath":         "proposer",
+		"slot":            sBlk.Block().Slot(),
+		"beaconBlockRoot": fmt.Sprintf("%#x", blockRoot[:8]),
+		"columns":         len(roSidecars),
+		"partials":        len(partialColumns),
+		"partialsEnabled": vs.ExecutionEngineCaller.PartialColumnsSupported(),
+	}).Debug("Cached self-built Gloas envelope with data columns and partials")
+
 	vs.ExecutionPayloadEnvelopeCache.Set(&cache.ExecutionPayloadContents{
 		Envelope:       envelope,
 		DataColumns:    roSidecars,
@@ -169,23 +178,34 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	// carry blobs+proofs (this node may not have them cached); stateful publishes rely on the cache.
 	var sidecars []consensusblocks.RODataColumn
 	var partialColumns []consensusblocks.PartialDataColumn
+	source := "none"
 	if len(blobs) > 0 {
+		source = "stateless"
 		sidecars, partialColumns, err = vs.sidecarsFromContents(blobs, kzgProofs, envSlot, beaconBlockRoot)
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "invalid execution payload envelope contents: %v", err)
 		}
 	} else if cached, ok := vs.ExecutionPayloadEnvelopeCache.Contents(); ok && cached.Envelope.Payload.SlotNumber == envSlot {
+		source = "cache"
 		sidecars = cached.DataColumns
 		partialColumns = cached.PartialColumns
 	}
 	if len(sidecars) > 0 {
 		log.WithFields(logrus.Fields{
+			"gpcPath":  "proposer",
 			"columns":  len(sidecars),
 			"partials": len(partialColumns),
+			"source":   source,
 		}).Debug("Broadcasting Gloas data column sidecars")
 		if err := vs.broadcastAndReceiveDataColumns(ctx, sidecars, partialColumns); err != nil {
 			log.WithError(err).Error("Failed to broadcast Gloas data column sidecars")
 		}
+	} else {
+		log.WithFields(logrus.Fields{
+			"gpcPath": "proposer",
+			"source":  source,
+			"blobs":   len(blobs),
+		}).Debug("No Gloas data column sidecars to broadcast with envelope")
 	}
 
 	if err := vs.P2P.Broadcast(ctx, signed); err != nil {
@@ -273,6 +293,15 @@ func (vs *Server) sidecarsFromContents(blobs, kzgProofs [][]byte, slot primitive
 			return nil, nil, errors.Wrap(err, "partialColumnsFromSidecars")
 		}
 	}
+	log.WithFields(logrus.Fields{
+		"gpcPath":     "proposer",
+		"slot":        slot,
+		"blockRoot":   fmt.Sprintf("%#x", blockRoot[:8]),
+		"blobs":       len(blobs),
+		"commitments": len(commitments),
+		"columns":     len(sidecars),
+		"partials":    len(partialColumns),
+	}).Debug("Built Gloas sidecars and partials from stateless envelope contents")
 	return sidecars, partialColumns, nil
 }
 

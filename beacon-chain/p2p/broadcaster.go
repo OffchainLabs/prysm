@@ -406,6 +406,22 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 	logLevel := logrus.GetLevel()
 	slotPerRoot := make(map[[fieldparams.RootLength]byte]primitives.Slot, 1)
 
+	if len(sidecars) > 0 || len(partialColumns) > 0 {
+		broadcastFields := logrus.Fields{
+			"gpcPath":  "publish",
+			"fulls":    len(sidecars),
+			"partials": len(partialColumns),
+		}
+		if len(sidecars) > 0 {
+			broadcastFields["slot"] = sidecars[0].Slot()
+			broadcastFields["blockRoot"] = fmt.Sprintf("%#x", sidecars[0].BlockRoot())
+		} else {
+			broadcastFields["slot"] = partialColumns[0].Slot()
+			broadcastFields["blockRoot"] = fmt.Sprintf("%#x", partialColumns[0].BlockRoot())
+		}
+		log.WithFields(broadcastFields).Debug("Broadcasting data column sidecars and partial columns")
+	}
+
 	// Build combined items by column index, merging full sidecars and partial columns.
 	itemsByIndex := make(map[uint64]*columnBroadcastItem)
 	for i := range sidecars {
