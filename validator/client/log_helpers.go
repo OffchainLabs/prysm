@@ -110,31 +110,19 @@ func (v *validator) saveSubmittedAtt(att ethpb.Att, pubkey []byte, isAggregate b
 	return nil
 }
 
-// LogSubmissions logs info about all successful submissions the validator client made this slot.
-func (v *validator) LogSubmissions(slot primitives.Slot) {
-	v.logSubmittedAtts(slot)
-	v.logSubmittedPayloadAttestations(slot)
-	v.logSubmittedSyncCommitteeMessages(slot)
-	v.logSubmittedSyncCommitteeContributions(slot)
-}
-
-// saveSubmittedPayloadAtt saves the submitted payload attestation data along with the PTC
-// member's validator index. The purpose of this is to display combined logs for all keys managed
-// by the validator client.
-func (v *validator) saveSubmittedPayloadAtt(data *ethpb.PayloadAttestationData, idx primitives.ValidatorIndex) {
+// saveSubmittedSyncMessage saves the submitted sync committee message along with the signer's
+// validator index. The purpose of this is to display combined logs for all keys managed by the
+// validator client.
+func (v *validator) saveSubmittedSyncMessage(msg *ethpb.SyncCommitteeMessage) {
 	v.submissionLogsLock.Lock()
 	defer v.submissionLogsLock.Unlock()
 
-	if v.submittedPayloadAtts == nil {
-		v.submittedPayloadAtts = make(map[submittedPayloadAttKey][]uint64)
+	if v.submittedSyncMessages == nil {
+		v.submittedSyncMessages = make(map[submittedSyncMsgKey][]uint64)
 	}
-	key := submittedPayloadAttKey{
-		slot:              data.Slot,
-		payloadPresent:    data.PayloadPresent,
-		blobDataAvailable: data.BlobDataAvailable,
-	}
-	copy(key.blockRoot[:], data.BeaconBlockRoot)
-	v.submittedPayloadAtts[key] = append(v.submittedPayloadAtts[key], uint64(idx))
+	key := submittedSyncMsgKey{slot: msg.Slot}
+	copy(key.blockRoot[:], msg.BlockRoot)
+	v.submittedSyncMessages[key] = append(v.submittedSyncMessages[key], uint64(msg.ValidatorIndex))
 }
 
 // saveSubmittedSyncContribution saves the submitted sync committee contribution along with the
@@ -157,26 +145,39 @@ func (v *validator) saveSubmittedSyncContribution(contributionAndProof *ethpb.Co
 	v.submittedSyncContributions[key] = append(v.submittedSyncContributions[key], uint64(contributionAndProof.AggregatorIndex))
 }
 
-// saveSubmittedSyncMessage saves the submitted sync committee message along with the signer's
-// validator index. The purpose of this is to display combined logs for all keys managed by the
-// validator client.
-func (v *validator) saveSubmittedSyncMessage(msg *ethpb.SyncCommitteeMessage) {
+// saveSubmittedPayloadAtt saves the submitted payload attestation data along with the PTC
+// member's validator index. The purpose of this is to display combined logs for all keys managed
+// by the validator client.
+func (v *validator) saveSubmittedPayloadAtt(data *ethpb.PayloadAttestationData, idx primitives.ValidatorIndex) {
 	v.submissionLogsLock.Lock()
 	defer v.submissionLogsLock.Unlock()
 
-	if v.submittedSyncMessages == nil {
-		v.submittedSyncMessages = make(map[submittedSyncMsgKey][]uint64)
+	if v.submittedPayloadAtts == nil {
+		v.submittedPayloadAtts = make(map[submittedPayloadAttKey][]uint64)
 	}
-	key := submittedSyncMsgKey{slot: msg.Slot}
-	copy(key.blockRoot[:], msg.BlockRoot)
-	v.submittedSyncMessages[key] = append(v.submittedSyncMessages[key], uint64(msg.ValidatorIndex))
+	key := submittedPayloadAttKey{
+		slot:              data.Slot,
+		payloadPresent:    data.PayloadPresent,
+		blobDataAvailable: data.BlobDataAvailable,
+	}
+	copy(key.blockRoot[:], data.BeaconBlockRoot)
+	v.submittedPayloadAtts[key] = append(v.submittedPayloadAtts[key], uint64(idx))
+}
+
+// LogSubmissions logs info about all successful submissions the validator client made this slot.
+// Note: This method holds the lock for the entire duration of logging.
+func (v *validator) LogSubmissions(slot primitives.Slot) {
+	v.submissionLogsLock.Lock()
+	defer v.submissionLogsLock.Unlock()
+
+	v.logSubmittedAtts(slot)
+	v.logSubmittedPayloadAttestations(slot)
+	v.logSubmittedSyncCommitteeMessages(slot)
+	v.logSubmittedSyncCommitteeContributions(slot)
 }
 
 // logSubmittedAtts logs info about submitted attestations.
 func (v *validator) logSubmittedAtts(slot primitives.Slot) {
-	v.submissionLogsLock.Lock()
-	defer v.submissionLogsLock.Unlock()
-
 	for _, attLog := range v.submittedAtts {
 		pubkeys := make([]string, len(attLog.pubkeys))
 		for i, p := range attLog.pubkeys {
@@ -224,9 +225,6 @@ func (v *validator) logSubmittedAtts(slot primitives.Slot) {
 
 // logSubmittedPayloadAttestations logs info about submitted payload attestations.
 func (v *validator) logSubmittedPayloadAttestations(slot primitives.Slot) {
-	v.submissionLogsLock.Lock()
-	defer v.submissionLogsLock.Unlock()
-
 	for key, indices := range v.submittedPayloadAtts {
 		slices.Sort(indices)
 		log.WithFields(logrus.Fields{
@@ -245,9 +243,6 @@ func (v *validator) logSubmittedPayloadAttestations(slot primitives.Slot) {
 
 // logSubmittedSyncCommitteeMessages logs info about submitted sync committee messages.
 func (v *validator) logSubmittedSyncCommitteeMessages(slot primitives.Slot) {
-	v.submissionLogsLock.Lock()
-	defer v.submissionLogsLock.Unlock()
-
 	for key, indices := range v.submittedSyncMessages {
 		slices.Sort(indices)
 		log.WithFields(logrus.Fields{
@@ -264,9 +259,6 @@ func (v *validator) logSubmittedSyncCommitteeMessages(slot primitives.Slot) {
 
 // logSubmittedSyncCommitteeContributions logs info about submitted sync committee contributions.
 func (v *validator) logSubmittedSyncCommitteeContributions(slot primitives.Slot) {
-	v.submissionLogsLock.Lock()
-	defer v.submissionLogsLock.Unlock()
-
 	for key, indices := range v.submittedSyncContributions {
 		slices.Sort(indices)
 		log.WithFields(logrus.Fields{
