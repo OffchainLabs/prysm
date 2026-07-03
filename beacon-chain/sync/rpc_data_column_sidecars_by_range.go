@@ -8,10 +8,14 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
 
@@ -133,9 +137,19 @@ func (s *Service) streamDataColumnBatch(ctx context.Context, batch blockBatch, q
 	}
 
 	// Loop over the blocks in the batch.
-	for _, block := range batch.canonical() {
+	canonicalBlocks := batch.canonical()
+	for i, block := range canonicalBlocks {
 		// Get the block blockRoot.
 		blockRoot := block.Root()
+
+		included, err := s.payloadIncluded(ctx, canonicalBlocks, i)
+		if err != nil {
+			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+			return quota, errors.Wrapf(err, "payload included: block root %#x", blockRoot)
+		}
+		if !included {
+			continue
+		}
 
 		// Retrieve the data column sidecars from the store.
 		verifiedRODataColumns, err := s.cfg.dataColumnStorage.Get(blockRoot, wantedDataColumnIndices)
@@ -165,6 +179,38 @@ func (s *Service) streamDataColumnBatch(ctx context.Context, batch blockBatch, q
 	}
 
 	return quota, nil
+}
+
+// Columns of a block whose payload never became canonical (empty slot) are not chain data, mirroring the envelopes by range walk.
+func (s *Service) payloadIncluded(ctx context.Context, canonicalBlocks []blocks.ROBlock, i int) (bool, error) {
+	block := canonicalBlocks[i]
+	if block.Block().Version() < version.Gloas {
+		return true, nil
+	}
+
+	var successor interfaces.ReadOnlySignedBeaconBlock
+	if i+1 < len(canonicalBlocks) {
+		successor = canonicalBlocks[i+1]
+	} else {
+		successorBlock, err := s.canonicalSuccessorBlock(ctx, block.Block().Slot()+1)
+		if err != nil {
+			return false, errors.Wrap(err, "canonical successor block")
+		}
+		// No successor means fullness is undecided at the chain tip, serve only if we processed the envelope.
+		if successorBlock == nil {
+			bid, err := block.Block().Body().SignedExecutionPayloadBid()
+			if err != nil {
+				return false, errors.Wrap(err, "signed execution payload bid")
+			}
+			if _, err := s.cfg.beaconDB.ExecutionPayloadEnvelopeByBlockHash(ctx, bytesutil.ToBytes32(bid.Message.BlockHash)); err != nil {
+				return false, nil
+			}
+			return true, nil
+		}
+		successor = successorBlock
+	}
+
+	return blocks.BlockBuiltOnParentPayload(block.Block(), successor.Block())
 }
 
 func validateDataColumnsByRange(request *pb.DataColumnSidecarsByRangeRequest, currentSlot primitives.Slot) (*rangeParams, error) {
