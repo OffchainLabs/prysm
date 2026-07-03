@@ -1162,6 +1162,17 @@ message ValidatorIdentity {
   ];
 }
 
+// ValidatorBalance gives the balance of a validator at a certain state.
+message ValidatorBalance {
+  // The validator's index in the beacon state.
+  uint64 index = 1 [ (ethereum.eth.ext.cast_type) =
+                         "github.com/OffchainLabs/prysm/v7/consensus-types/"
+                         "primitives.ValidatorIndex" ];
+
+  // The validator's balance in gwei.
+  uint64 balance = 2;
+}
+
 // DoppelGangerRequest represents the request sent by the validator in order to
 // determine if there is any duplicate instance of it running in the network.
 message DoppelGangerRequest {

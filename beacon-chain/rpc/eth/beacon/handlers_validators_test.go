@@ -1211,6 +1211,76 @@ func TestGetValidatorBalances(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, e.Code)
 		assert.StringContains(t, "Could not decode request body", e.Message)
 	})
+	t.Run("ssz", func(t *testing.T) {
+		size := uint64((&eth.ValidatorBalance{}).SizeSSZ())
+		newServer := func() Server {
+			chainService := &chainMock.ChainService{}
+			return Server{
+				Stater: &testutil.MockStater{
+					BeaconState: st,
+				},
+				HeadFetcher:           chainService,
+				OptimisticModeFetcher: chainService,
+				FinalizationFetcher:   chainService,
+			}
+		}
+
+		t.Run("get all", func(t *testing.T) {
+			s := newServer()
+			request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validator_balances", nil)
+			request.Header.Set("Accept", api.OctetStreamMediaType)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorBalances(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			require.Equal(t, size*count, uint64(len(writer.Body.Bytes())))
+			vb := &eth.ValidatorBalance{}
+			require.NoError(t, vb.UnmarshalSSZ(writer.Body.Bytes()[3*size:4*size]))
+			assert.Equal(t, primitives.ValidatorIndex(3), vb.Index)
+			assert.Equal(t, uint64(3), vb.Balance)
+		})
+		t.Run("get by index", func(t *testing.T) {
+			s := newServer()
+			request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validator_balances?id=0&id=1", nil)
+			request.Header.Set("Accept", api.OctetStreamMediaType)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorBalances(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			assert.Equal(t, size*2, uint64(len(writer.Body.Bytes())))
+		})
+		t.Run("POST", func(t *testing.T) {
+			s := newServer()
+			body := bytes.Buffer{}
+			_, err := body.WriteString("[\"0\",\"1\"]")
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_balances", &body)
+			request.Header.Set("Accept", api.OctetStreamMediaType)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorBalances(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			assert.Equal(t, size*2, uint64(len(writer.Body.Bytes())))
+		})
+		t.Run("all unknown IDs return empty", func(t *testing.T) {
+			s := newServer()
+			request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validator_balances?id=99999", nil)
+			request.Header.Set("Accept", api.OctetStreamMediaType)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorBalances(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			assert.Equal(t, 0, len(writer.Body.Bytes()))
+		})
+	})
 }
 
 func TestGetValidatorIdentities(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -90,7 +91,9 @@ type PartialColumnBroadcaster struct {
 	publishPartialCol func(topic string, groupID []byte, col *blocks.PartialDataColumn) error
 	callbacks         ColumnCallbacks
 	// map topic -> *pubsub.Topic
-	topics                           map[string]*pubsub.Topic
+	topics map[string]*pubsub.Topic
+	// subscribedTopics mirrors topics for lookups from the pubsub loop, which cannot touch the broadcaster-owned topics map.
+	subscribedTopics                 sync.Map
 	peerFeedbackSemaphore            chan struct{}
 	concurrentValidatorSemaphore     chan struct{}
 	concurrentHeaderHandlerSemaphore chan struct{}
@@ -323,10 +326,16 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 		return errors.Errorf("invalid topic ID %q: column index missing or out of bounds", rpc.GetTopicID())
 	}
 
+	if _, subscribed := p.subscribedTopics.Load(rpc.GetTopicID()); !subscribed {
+		p.logIgnoreUnsubscribedTopic(from, rpc.GetTopicID())
+		return nil
+	}
+
 	nextPeerState, message, err := updatePeerStateFromIncomingRPC(peerStates[from], rpc, isGloas)
 	if err != nil {
 		return errors.Wrap(err, "update peer state from incoming rpc")
 	}
+
 	_, ok := p.tryEnqueue(requestKindHandleIncomingRPC, requestValues{
 		incomingRPC: incomingPartialRPC{rpc, from, message, isGloas},
 	})
@@ -360,6 +369,10 @@ func (p *PartialColumnBroadcaster) reportPeerFeedbackAsync(topic string, from pe
 			"topic": topic,
 		}).Warn("Peer feedback semaphore saturated, dropping feedback")
 	}
+}
+
+func (p *PartialColumnBroadcaster) logIgnoreUnsubscribedTopic(from peer.ID, topic string) {
+	p.logger.WithFields(logrus.Fields{"peer": from, "topic": topic}).Debug("Ignoring partial message for unsubscribed topic")
 }
 
 // AppendPubSubOpts adds the necessary pubsub options to enable partial messages.
@@ -627,7 +640,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 	// The topic ID is peer-controlled, so this prevents a peer from making us
 	// allocate verifier/header state for columns we never asked for.
 	if _, subscribed := p.topics[topicID]; !subscribed {
-		p.logger.WithFields(rpc.logFields()).Debug("Ignoring partial message for unsubscribed topic")
+		p.logIgnoreUnsubscribedTopic(rpc.from, topicID)
 		return nil
 	}
 
@@ -1053,6 +1066,7 @@ func (p *PartialColumnBroadcaster) subscribe(t *pubsub.Topic) error {
 	}
 
 	p.topics[topic] = t
+	p.subscribedTopics.Store(topic, struct{}{})
 	return nil
 }
 
@@ -1073,6 +1087,7 @@ func (p *PartialColumnBroadcaster) unsubscribe(topic string) error {
 		return errors.New("topic not found")
 	}
 	delete(p.topics, topic)
+	p.subscribedTopics.Delete(topic)
 	delete(p.partialMsgStore, topic)
 	return t.Close()
 }
