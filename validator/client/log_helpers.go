@@ -83,8 +83,14 @@ func (v *validator) saveSubmittedAtt(att ethpb.Att, pubkey []byte, isAggregate b
 	return nil
 }
 
-// LogSubmittedAtts logs info about submitted attestations.
-func (v *validator) LogSubmittedAtts(slot primitives.Slot) {
+// LogSubmissions logs info about all successful submissions the validator client made this slot.
+func (v *validator) LogSubmissions(slot primitives.Slot) {
+	v.logSubmittedAtts(slot)
+	v.logSubmittedSyncCommitteeMessages()
+}
+
+// logSubmittedAtts logs info about submitted attestations.
+func (v *validator) logSubmittedAtts(slot primitives.Slot) {
 	v.submissionLogsLock.Lock()
 	defer v.submissionLogsLock.Unlock()
 
@@ -133,8 +139,8 @@ func (v *validator) LogSubmittedAtts(slot primitives.Slot) {
 	v.submittedAggregates = make(map[submittedAttKey]*submittedAtt)
 }
 
-// LogSubmittedSyncCommitteeMessages logs info about submitted sync committee messages.
-func (v *validator) LogSubmittedSyncCommitteeMessages() {
+// logSubmittedSyncCommitteeMessages logs info about submitted sync committee messages.
+func (v *validator) logSubmittedSyncCommitteeMessages() {
 	if count := v.syncCommitteeStats.totalMessagesSubmitted.Load(); count > 0 {
 		log.WithField("messages", count).
 			Debug("Submitted sync committee messages successfully to beacon node")
