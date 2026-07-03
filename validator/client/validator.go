@@ -91,8 +91,8 @@ type validator struct {
 	submittedPrefSlots           map[primitives.Slot]bool
 	submittedAtts                map[submittedAttKey]*submittedAtt
 	submittedAggregates          map[submittedAttKey]*submittedAtt
-	submittedSyncMessages        map[submittedSyncMsgKey][]uint64
-	submittedSyncContributions   map[submittedSyncContributionKey][]uint64
+	submittedSyncMessages        map[slotRootKey][]uint64
+	submittedSyncContributions   map[slotRootKey]*submittedSyncContribution
 	submittedPayloadAtts         map[submittedPayloadAttKey][]uint64
 	validatorsRegBatchSize       int
 	duties                       *dutyStore

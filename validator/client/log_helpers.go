@@ -26,19 +26,17 @@ type submittedAtt struct {
 	committees []primitives.CommitteeIndex
 }
 
-// submittedSyncMsgKey groups sync committee messages submitted for the same slot and block root.
-type submittedSyncMsgKey struct {
+// slotRootKey groups submissions made for the same slot and block root.
+type slotRootKey struct {
 	blockRoot [fieldparams.RootLength]byte
 	slot      primitives.Slot
 }
 
-// submittedSyncContributionKey groups sync committee contributions submitted for the same slot,
-// block root, subcommittee, and participation bit count.
-type submittedSyncContributionKey struct {
-	blockRoot         [fieldparams.RootLength]byte
-	slot              primitives.Slot
-	subcommitteeIndex uint64
-	bitsCount         uint64
+// submittedSyncContribution accumulates the aggregator indices and the best observed
+// participation bits per subcommittee for contributions sharing the same slot and block root.
+type submittedSyncContribution struct {
+	aggregatorIndices []uint64
+	subcommitteeBits  map[uint64]uint64
 }
 
 // submittedPayloadAttKey groups payload attestations submitted for the same slot, block root,
@@ -118,9 +116,9 @@ func (v *validator) saveSubmittedSyncMessage(msg *ethpb.SyncCommitteeMessage) {
 	defer v.submissionLogsLock.Unlock()
 
 	if v.submittedSyncMessages == nil {
-		v.submittedSyncMessages = make(map[submittedSyncMsgKey][]uint64)
+		v.submittedSyncMessages = make(map[slotRootKey][]uint64)
 	}
-	key := submittedSyncMsgKey{slot: msg.Slot}
+	key := slotRootKey{slot: msg.Slot}
 	copy(key.blockRoot[:], msg.BlockRoot)
 	v.submittedSyncMessages[key] = append(v.submittedSyncMessages[key], uint64(msg.ValidatorIndex))
 }
@@ -133,16 +131,20 @@ func (v *validator) saveSubmittedSyncContribution(contributionAndProof *ethpb.Co
 	defer v.submissionLogsLock.Unlock()
 
 	if v.submittedSyncContributions == nil {
-		v.submittedSyncContributions = make(map[submittedSyncContributionKey][]uint64)
+		v.submittedSyncContributions = make(map[slotRootKey]*submittedSyncContribution)
 	}
 	contribution := contributionAndProof.Contribution
-	key := submittedSyncContributionKey{
-		slot:              contribution.Slot,
-		subcommitteeIndex: contribution.SubcommitteeIndex,
-		bitsCount:         contribution.AggregationBits.Count(),
-	}
+	key := slotRootKey{slot: contribution.Slot}
 	copy(key.blockRoot[:], contribution.BlockRoot)
-	v.submittedSyncContributions[key] = append(v.submittedSyncContributions[key], uint64(contributionAndProof.AggregatorIndex))
+	entry := v.submittedSyncContributions[key]
+	if entry == nil {
+		entry = &submittedSyncContribution{subcommitteeBits: make(map[uint64]uint64)}
+		v.submittedSyncContributions[key] = entry
+	}
+	entry.aggregatorIndices = append(entry.aggregatorIndices, uint64(contributionAndProof.AggregatorIndex))
+	if bits := contribution.AggregationBits.Count(); bits > entry.subcommitteeBits[contribution.SubcommitteeIndex] {
+		entry.subcommitteeBits[contribution.SubcommitteeIndex] = bits
+	}
 }
 
 // saveSubmittedPayloadAtt saves the submitted payload attestation data along with the PTC
@@ -254,23 +256,30 @@ func (v *validator) logSubmittedSyncCommitteeMessages(slot primitives.Slot) {
 		}).Info("Submitted sync committee messages")
 	}
 
-	v.submittedSyncMessages = make(map[submittedSyncMsgKey][]uint64)
+	v.submittedSyncMessages = make(map[slotRootKey][]uint64)
 }
 
 // logSubmittedSyncCommitteeContributions logs info about submitted sync committee contributions.
 func (v *validator) logSubmittedSyncCommitteeContributions(slot primitives.Slot) {
-	for key, indices := range v.submittedSyncContributions {
-		slices.Sort(indices)
+	for key, entry := range v.submittedSyncContributions {
+		slices.Sort(entry.aggregatorIndices)
+		subcommittees := make([]uint64, 0, len(entry.subcommitteeBits))
+		var totalBits uint64
+		for idx, bits := range entry.subcommitteeBits {
+			subcommittees = append(subcommittees, idx)
+			totalBits += bits
+		}
+		slices.Sort(subcommittees)
 		log.WithFields(logrus.Fields{
 			"slot":              slot,
 			"dataSlot":          key.slot,
 			"blockRoot":         fmt.Sprintf("%#x", bytesutil.Trunc(key.blockRoot[:])),
-			"subcommitteeIndex": key.subcommitteeIndex,
-			"bitsCount":         key.bitsCount,
-			"aggregatorIndices": slice.PrettySlice(indices),
-			"contributions":     len(indices),
+			"subcommittees":     slice.PrettySlice(subcommittees),
+			"totalBits":         totalBits,
+			"aggregatorIndices": slice.PrettySlice(entry.aggregatorIndices),
+			"contributions":     len(entry.aggregatorIndices),
 		}).Info("Submitted sync committee contributions and proofs")
 	}
 
-	v.submittedSyncContributions = make(map[submittedSyncContributionKey][]uint64)
+	v.submittedSyncContributions = make(map[slotRootKey]*submittedSyncContribution)
 }
