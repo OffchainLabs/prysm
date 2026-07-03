@@ -15,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/client"
@@ -92,12 +91,12 @@ type validator struct {
 	submittedPrefSlots           map[primitives.Slot]bool
 	submittedAtts                map[submittedAttKey]*submittedAtt
 	submittedAggregates          map[submittedAttKey]*submittedAtt
+	submittedSyncMessages        map[submittedSyncMsgKey][]uint64
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
 	interopKeysConfig            *local.InteropKeymanagerConfig
 	domainDataCache              *ristretto.Cache[string, proto.Message]
 	slotFeed                     *event.Feed
-	syncCommitteeStats           syncCommitteeStats
 	graffitiStruct               *graffiti.Graffiti
 	highestValidSlot             primitives.Slot
 	eventsChannel                chan *eventClient.Event
@@ -1477,9 +1476,4 @@ type voteStats struct {
 	totalCorrectSource  uint64
 	totalCorrectTarget  uint64
 	totalCorrectHead    uint64
-}
-
-// This tracks all validators' submissions for sync committees.
-type syncCommitteeStats struct {
-	totalMessagesSubmitted atomic.Uint64
 }

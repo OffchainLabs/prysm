@@ -2,8 +2,11 @@ package client
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -21,6 +24,12 @@ type submittedAtt struct {
 	data       submittedAttData
 	pubkeys    [][]byte
 	committees []primitives.CommitteeIndex
+}
+
+// submittedSyncMsgKey groups sync committee messages submitted for the same slot and block root.
+type submittedSyncMsgKey struct {
+	blockRoot [fieldparams.RootLength]byte
+	slot      primitives.Slot
 }
 
 // submittedAttKey is defined as a concatenation of:
@@ -86,7 +95,22 @@ func (v *validator) saveSubmittedAtt(att ethpb.Att, pubkey []byte, isAggregate b
 // LogSubmissions logs info about all successful submissions the validator client made this slot.
 func (v *validator) LogSubmissions(slot primitives.Slot) {
 	v.logSubmittedAtts(slot)
-	v.logSubmittedSyncCommitteeMessages()
+	v.logSubmittedSyncCommitteeMessages(slot)
+}
+
+// saveSubmittedSyncMessage saves the submitted sync committee message along with the signer's
+// validator index. The purpose of this is to display combined logs for all keys managed by the
+// validator client.
+func (v *validator) saveSubmittedSyncMessage(msg *ethpb.SyncCommitteeMessage) {
+	v.submissionLogsLock.Lock()
+	defer v.submissionLogsLock.Unlock()
+
+	if v.submittedSyncMessages == nil {
+		v.submittedSyncMessages = make(map[submittedSyncMsgKey][]uint64)
+	}
+	key := submittedSyncMsgKey{slot: msg.Slot}
+	copy(key.blockRoot[:], msg.BlockRoot)
+	v.submittedSyncMessages[key] = append(v.submittedSyncMessages[key], uint64(msg.ValidatorIndex))
 }
 
 // logSubmittedAtts logs info about submitted attestations.
@@ -140,12 +164,20 @@ func (v *validator) logSubmittedAtts(slot primitives.Slot) {
 }
 
 // logSubmittedSyncCommitteeMessages logs info about submitted sync committee messages.
-func (v *validator) logSubmittedSyncCommitteeMessages() {
-	if count := v.syncCommitteeStats.totalMessagesSubmitted.Load(); count > 0 {
-		log.WithField("messages", count).
-			Debug("Submitted sync committee messages successfully to beacon node")
+func (v *validator) logSubmittedSyncCommitteeMessages(slot primitives.Slot) {
+	v.submissionLogsLock.Lock()
+	defer v.submissionLogsLock.Unlock()
 
-		// Reset the amount.
-		v.syncCommitteeStats.totalMessagesSubmitted.Store(0)
+	for key, indices := range v.submittedSyncMessages {
+		slices.Sort(indices)
+		log.WithFields(logrus.Fields{
+			"slot":             slot,
+			"dataSlot":         key.slot,
+			"blockRoot":        fmt.Sprintf("%#x", bytesutil.Trunc(key.blockRoot[:])),
+			"validatorIndices": helpers.PrettySlice(indices),
+			"messages":         len(indices),
+		}).Info("Submitted sync committee messages")
 	}
+
+	v.submittedSyncMessages = make(map[submittedSyncMsgKey][]uint64)
 }

@@ -91,7 +91,7 @@ func (v *validator) SubmitSyncCommitteeMessage(ctx context.Context, slot primiti
 		"blockRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(msg.BlockRoot)),
 		"validatorIndex":     msg.ValidatorIndex,
 	}).Debug("Submitted new sync message")
-	v.syncCommitteeStats.totalMessagesSubmitted.Add(1)
+	v.saveSubmittedSyncMessage(msg)
 }
 
 // SubmitSignedContributionAndProof submits the signed sync committee contribution and proof to the beacon chain.

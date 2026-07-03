@@ -5,6 +5,7 @@ import (
 
 	field_params "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -81,4 +82,23 @@ func TestLogSubmittedAtts(t *testing.T) {
 		v.logSubmittedAtts(0)
 		assert.LogsContain(t, logHook, "committeeIndices=\"[63]\"")
 	})
+}
+
+func TestLogSubmittedSyncCommitteeMessages(t *testing.T) {
+	logHook := logTest.NewGlobal()
+	v := validator{}
+	blockRoot := bytesutil.PadTo([]byte("root"), field_params.RootLength)
+	for _, idx := range []primitives.ValidatorIndex{9, 7, 8} {
+		v.saveSubmittedSyncMessage(&ethpb.SyncCommitteeMessage{Slot: 12, BlockRoot: blockRoot, ValidatorIndex: idx})
+	}
+
+	v.logSubmittedSyncCommitteeMessages(12)
+
+	assert.LogsContain(t, logHook, "msg=\"Submitted sync committee messages\"")
+	assert.LogsContain(t, logHook, "validatorIndices=7-9")
+	assert.LogsContain(t, logHook, "messages=3")
+	assert.LogsContain(t, logHook, "dataSlot=12")
+	logHook.Reset()
+	v.logSubmittedSyncCommitteeMessages(12)
+	assert.Equal(t, 0, len(logHook.AllEntries()))
 }
