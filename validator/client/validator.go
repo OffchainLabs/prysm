@@ -70,7 +70,7 @@ type validator struct {
 	disableDutiesPolling         bool
 	emitAccountMetrics           bool
 	logValidatorPerformance      bool
-	attLogsLock                  sync.Mutex
+	submissionLogsLock           sync.Mutex
 	highestValidSlotLock         sync.Mutex
 	blacklistedPubkeysLock       sync.RWMutex
 	prevEpochBalancesLock        sync.RWMutex
