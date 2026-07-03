@@ -5,9 +5,9 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
@@ -235,7 +235,7 @@ func (v *validator) logSubmittedPayloadAttestations(slot primitives.Slot) {
 			"blockRoot":         fmt.Sprintf("%#x", bytesutil.Trunc(key.blockRoot[:])),
 			"payloadPresent":    key.payloadPresent,
 			"blobDataAvailable": key.blobDataAvailable,
-			"validatorIndices":  helpers.PrettySlice(indices),
+			"validatorIndices":  slice.PrettySlice(indices),
 			"attestations":      len(indices),
 		}).Info("Submitted payload attestations")
 	}
@@ -254,7 +254,7 @@ func (v *validator) logSubmittedSyncCommitteeMessages(slot primitives.Slot) {
 			"slot":             slot,
 			"dataSlot":         key.slot,
 			"blockRoot":        fmt.Sprintf("%#x", bytesutil.Trunc(key.blockRoot[:])),
-			"validatorIndices": helpers.PrettySlice(indices),
+			"validatorIndices": slice.PrettySlice(indices),
 			"messages":         len(indices),
 		}).Info("Submitted sync committee messages")
 	}
@@ -275,7 +275,7 @@ func (v *validator) logSubmittedSyncCommitteeContributions(slot primitives.Slot)
 			"blockRoot":         fmt.Sprintf("%#x", bytesutil.Trunc(key.blockRoot[:])),
 			"subcommitteeIndex": key.subcommitteeIndex,
 			"bitsCount":         key.bitsCount,
-			"aggregatorIndices": helpers.PrettySlice(indices),
+			"aggregatorIndices": slice.PrettySlice(indices),
 			"contributions":     len(indices),
 		}).Info("Submitted sync committee contributions and proofs")
 	}
