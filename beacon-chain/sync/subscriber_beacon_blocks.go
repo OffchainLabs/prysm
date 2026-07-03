@@ -50,7 +50,13 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 	}
 
 	go func() {
-		if err := s.processSidecarsFromExecutionFromBlock(ctx, roBlock); err != nil {
+		// Detached from the handler ctx: the pubsub pipeline cancels it as soon as this handler
+		// returns, which post-Gloas happens before reconstruction/publish completes (no payload
+		// execution in the block handler). A canceled publish leaves this node without partial
+		// column verifiers for the block, and Gloas drops unsolicited cells, so DA would starve.
+		sidecarCtx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
+		defer cancel()
+		if err := s.processSidecarsFromExecutionFromBlock(sidecarCtx, roBlock); err != nil {
 			log.WithError(err).WithFields(logrus.Fields{
 				"root": fmt.Sprintf("%#x", root),
 				"slot": block.Slot(),
