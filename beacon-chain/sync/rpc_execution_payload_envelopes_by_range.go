@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
@@ -109,36 +110,13 @@ func (s *Service) streamCanonicalEnvelopes(ctx context.Context, rp rangeParams, 
 		blockHash [32]byte
 	}
 
-	_, roots, err := s.cfg.beaconDB.LowestRootsAtOrAboveSlot(ctx, rp.end+1)
+	successorBlock, err := s.canonicalSuccessorBlock(ctx, rp.end+1)
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-		return errors.Wrap(err, "could not find successor block")
+		return err
 	}
-	if len(roots) == 0 {
+	if successorBlock == nil {
 		return nil
-	}
-
-	var successorRoot [32]byte
-	var found bool
-	for _, r := range roots {
-		canonical, err := s.cfg.chain.IsCanonical(ctx, r)
-		if err != nil {
-			log.WithError(err).WithField("blockRoot", bytesutil.Trunc(r[:])).Debug("Could not check if block is canonical")
-			continue
-		}
-		if canonical {
-			successorRoot = r
-			found = true
-			break
-		}
-	}
-	if !found {
-		return nil
-	}
-	successorBlock, err := s.cfg.beaconDB.Block(ctx, successorRoot)
-	if err != nil {
-		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-		return errors.Wrap(err, "could not load successor block")
 	}
 	bid, err := successorBlock.Block().Body().SignedExecutionPayloadBid()
 	if err != nil {
@@ -270,4 +248,34 @@ func validateEnvelopesByRange(r *pb.ExecutionPayloadEnvelopesByRangeRequest, cur
 	}
 
 	return rp, nil
+}
+
+func (s *Service) canonicalSuccessorBlock(ctx context.Context, slot primitives.Slot) (interfaces.ReadOnlySignedBeaconBlock, error) {
+	_, roots, err := s.cfg.beaconDB.LowestRootsAtOrAboveSlot(ctx, slot)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not find successor block")
+	}
+
+	var successorRoot [32]byte
+	var found bool
+	for _, r := range roots {
+		canonical, err := s.cfg.chain.IsCanonical(ctx, r)
+		if err != nil {
+			log.WithError(err).WithField("blockRoot", bytesutil.Trunc(r[:])).Debug("Could not check if block is canonical")
+			continue
+		}
+		if canonical {
+			successorRoot = r
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, nil
+	}
+	successorBlock, err := s.cfg.beaconDB.Block(ctx, successorRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not load successor block")
+	}
+	return successorBlock, nil
 }

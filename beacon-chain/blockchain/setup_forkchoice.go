@@ -166,15 +166,11 @@ func resolveChainPayloadStatus(chain []*forkchoicetypes.BlockAndCheckpoints) {
 		if curr.Version() < version.Gloas || next.Version() < version.Gloas {
 			continue
 		}
-		currBid, err := curr.Body().SignedExecutionPayloadBid()
-		if err != nil || currBid == nil || currBid.Message == nil {
+		builtOn, err := blocks.BlockBuiltOnParentPayload(curr, next)
+		if err != nil {
 			continue
 		}
-		nextBid, err := next.Body().SignedExecutionPayloadBid()
-		if err != nil || nextBid == nil || nextBid.Message == nil {
-			continue
-		}
-		if bytes.Equal(nextBid.Message.ParentBlockHash, currBid.Message.BlockHash) {
+		if builtOn {
 			chain[i].HasPayload = true
 		}
 	}
