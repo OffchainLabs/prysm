@@ -5,6 +5,7 @@ import (
 
 	field_params "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -81,4 +82,17 @@ func TestLogSubmittedAtts(t *testing.T) {
 		v.LogSubmittedAtts(0)
 		assert.LogsContain(t, logHook, "committeeIndices=\"[63]\"")
 	})
+}
+
+func TestFromAttData(t *testing.T) {
+	att := util.HydrateAttestation(&ethpb.Attestation{})
+	key := submittedAttKey{}
+	require.NoError(t, key.FromAttData(att.Data))
+	assert.NotEqual(t, submittedAttKey{}, key, "key not populated from att data")
+
+	att2 := util.HydrateAttestation(&ethpb.Attestation{})
+	att2.Data.BeaconBlockRoot = bytesutil.PadTo([]byte("different root"), 32)
+	key2 := submittedAttKey{}
+	require.NoError(t, key2.FromAttData(att2.Data))
+	assert.NotEqual(t, key, key2, "distinct att data must produce distinct keys")
 }

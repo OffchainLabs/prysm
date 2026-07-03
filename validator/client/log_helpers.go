@@ -29,7 +29,7 @@ type submittedAtt struct {
 //   - AttestationData.Target.HashTreeRoot()
 type submittedAttKey [96]byte
 
-func (k submittedAttKey) FromAttData(data *ethpb.AttestationData) error {
+func (k *submittedAttKey) FromAttData(data *ethpb.AttestationData) error {
 	sourceRoot, err := data.Source.HashTreeRoot()
 	if err != nil {
 		return err
