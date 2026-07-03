@@ -74,6 +74,11 @@ func (b *BeaconState) AppendBuilderPendingWithdrawals(withdrawals []*ethpb.Build
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
+	b.appendBuilderPendingWithdrawalsLockFree(withdrawals)
+	return nil
+}
+
+func (b *BeaconState) appendBuilderPendingWithdrawalsLockFree(withdrawals []*ethpb.BuilderPendingWithdrawal) {
 	pendingWithdrawals := b.builderPendingWithdrawals
 	if b.sharedFieldReferences[types.BuilderPendingWithdrawals].Refs() > 1 {
 		pendingWithdrawals = make([]*ethpb.BuilderPendingWithdrawal, 0, len(b.builderPendingWithdrawals)+len(withdrawals))
@@ -84,7 +89,6 @@ func (b *BeaconState) AppendBuilderPendingWithdrawals(withdrawals []*ethpb.Build
 
 	b.builderPendingWithdrawals = append(pendingWithdrawals, withdrawals...)
 	b.markFieldAsDirty(types.BuilderPendingWithdrawals)
-	return nil
 }
 
 // SetExecutionPayloadBid sets the latest execution payload bid in the state.
@@ -145,6 +149,10 @@ func (b *BeaconState) QueueBuilderPaymentForSlot(parentSlot primitives.Slot) err
 	if b.version < version.Gloas {
 		return errNotSupported("QueueBuilderPaymentForSlot", b.version)
 	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
 	currentEpoch := slots.ToEpoch(b.slot)
 	parentEpoch := slots.ToEpoch(parentSlot)
@@ -159,25 +167,23 @@ func (b *BeaconState) QueueBuilderPaymentForSlot(parentSlot primitives.Slot) err
 	if bid == nil || bid.Value == 0 {
 		return nil
 	}
-	return b.AppendBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal{{
+	b.appendBuilderPendingWithdrawalsLockFree([]*ethpb.BuilderPendingWithdrawal{{
 		FeeRecipient: bytesutil.SafeCopyBytes(bid.FeeRecipient),
 		Amount:       bid.Value,
 		BuilderIndex: bid.BuilderIndex,
 	}})
+	return nil
 }
 
+// queueBuilderPaymentAtIndex requires the caller to hold the state lock.
 func (b *BeaconState) queueBuilderPaymentAtIndex(paymentIndex primitives.Slot) error {
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
 	if uint64(paymentIndex) >= uint64(len(b.builderPendingPayments)) {
 		return fmt.Errorf("builder pending payments index %d out of range (len=%d)", paymentIndex, len(b.builderPendingPayments))
 	}
 
 	payment := b.builderPendingPayments[paymentIndex]
 	if payment != nil && payment.Withdrawal != nil && payment.Withdrawal.Amount > 0 {
-		b.builderPendingWithdrawals = append(b.builderPendingWithdrawals, ethpb.CopyBuilderPendingWithdrawal(payment.Withdrawal))
-		b.markFieldAsDirty(types.BuilderPendingWithdrawals)
+		b.appendBuilderPendingWithdrawalsLockFree([]*ethpb.BuilderPendingWithdrawal{ethpb.CopyBuilderPendingWithdrawal(payment.Withdrawal)})
 	}
 
 	b.builderPendingPayments[paymentIndex] = emptyBuilderPendingPayment
