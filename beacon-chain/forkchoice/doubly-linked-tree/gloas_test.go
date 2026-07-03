@@ -203,6 +203,27 @@ func TestInsertPayload_DuplicateIsNoop(t *testing.T) {
 	require.Equal(t, 2, len(f.store.fullNodeByRoot))
 }
 
+func TestMarkFullNode_SetsGasLimit(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	root := indexToHash(1)
+	blockHash := indexToHash(100)
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 1, root, params.BeaconConfig().ZeroHash, blockHash, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	f.MarkFullNode(root, 30_000_000)
+
+	fn := f.store.fullNodeByRoot[root]
+	require.NotNil(t, fn)
+	assert.Equal(t, uint64(30_000_000), fn.gasLimit)
+
+	gl, err := f.GasLimit(root)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(30_000_000), gl)
+}
+
 func TestInsertPayload_WithoutEmptyNode_Errors(t *testing.T) {
 	f := setupGloas(t, 0, 0)
 
