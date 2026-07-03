@@ -51,7 +51,6 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Valida
 	g.SetLimit(subnetSubscriptionAggregatorWorkers)
 	req.IsAggregator = make([]bool, len(subscribeDuties))
 	for i, duty := range subscribeDuties {
-		i, duty := i, duty
 		g.Go(func() error {
 			agg, err := v.isAggregator(gctx, duty.CommitteeLength, duty.AttesterSlot, bytesutil.ToBytes48(duty.PublicKey))
 			if err != nil {
