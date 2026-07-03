@@ -201,6 +201,7 @@ func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot p
 			"aggregatorIndex":    contributionAndProof.AggregatorIndex,
 			"bitsCount":          contributionAndProof.Contribution.AggregationBits.Count(),
 		}).Debug("Submitted new sync contribution and proof")
+		v.saveSubmittedSyncContribution(contributionAndProof)
 	}
 }
 

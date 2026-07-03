@@ -32,6 +32,15 @@ type submittedSyncMsgKey struct {
 	slot      primitives.Slot
 }
 
+// submittedSyncContributionKey groups sync committee contributions submitted for the same slot,
+// block root, subcommittee, and participation bit count.
+type submittedSyncContributionKey struct {
+	blockRoot         [fieldparams.RootLength]byte
+	slot              primitives.Slot
+	subcommitteeIndex uint64
+	bitsCount         uint64
+}
+
 // submittedAttKey is defined as a concatenation of:
 //   - AttestationData.BeaconBlockRoot
 //   - AttestationData.Source.HashTreeRoot()
@@ -96,6 +105,27 @@ func (v *validator) saveSubmittedAtt(att ethpb.Att, pubkey []byte, isAggregate b
 func (v *validator) LogSubmissions(slot primitives.Slot) {
 	v.logSubmittedAtts(slot)
 	v.logSubmittedSyncCommitteeMessages(slot)
+	v.logSubmittedSyncCommitteeContributions(slot)
+}
+
+// saveSubmittedSyncContribution saves the submitted sync committee contribution along with the
+// aggregator's validator index. The purpose of this is to display combined logs for all keys
+// managed by the validator client.
+func (v *validator) saveSubmittedSyncContribution(contributionAndProof *ethpb.ContributionAndProof) {
+	v.submissionLogsLock.Lock()
+	defer v.submissionLogsLock.Unlock()
+
+	if v.submittedSyncContributions == nil {
+		v.submittedSyncContributions = make(map[submittedSyncContributionKey][]uint64)
+	}
+	contribution := contributionAndProof.Contribution
+	key := submittedSyncContributionKey{
+		slot:              contribution.Slot,
+		subcommitteeIndex: contribution.SubcommitteeIndex,
+		bitsCount:         contribution.AggregationBits.Count(),
+	}
+	copy(key.blockRoot[:], contribution.BlockRoot)
+	v.submittedSyncContributions[key] = append(v.submittedSyncContributions[key], uint64(contributionAndProof.AggregatorIndex))
 }
 
 // saveSubmittedSyncMessage saves the submitted sync committee message along with the signer's
@@ -180,4 +210,25 @@ func (v *validator) logSubmittedSyncCommitteeMessages(slot primitives.Slot) {
 	}
 
 	v.submittedSyncMessages = make(map[submittedSyncMsgKey][]uint64)
+}
+
+// logSubmittedSyncCommitteeContributions logs info about submitted sync committee contributions.
+func (v *validator) logSubmittedSyncCommitteeContributions(slot primitives.Slot) {
+	v.submissionLogsLock.Lock()
+	defer v.submissionLogsLock.Unlock()
+
+	for key, indices := range v.submittedSyncContributions {
+		slices.Sort(indices)
+		log.WithFields(logrus.Fields{
+			"slot":              slot,
+			"dataSlot":          key.slot,
+			"blockRoot":         fmt.Sprintf("%#x", bytesutil.Trunc(key.blockRoot[:])),
+			"subcommitteeIndex": key.subcommitteeIndex,
+			"bitsCount":         key.bitsCount,
+			"aggregatorIndices": helpers.PrettySlice(indices),
+			"contributions":     len(indices),
+		}).Info("Submitted sync committee contributions and proofs")
+	}
+
+	v.submittedSyncContributions = make(map[submittedSyncContributionKey][]uint64)
 }

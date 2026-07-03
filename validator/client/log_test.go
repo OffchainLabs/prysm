@@ -102,3 +102,30 @@ func TestLogSubmittedSyncCommitteeMessages(t *testing.T) {
 	v.logSubmittedSyncCommitteeMessages(12)
 	assert.Equal(t, 0, len(logHook.AllEntries()))
 }
+
+func TestLogSubmittedSyncCommitteeContributions(t *testing.T) {
+	logHook := logTest.NewGlobal()
+	v := validator{}
+	blockRoot := bytesutil.PadTo([]byte("root"), field_params.RootLength)
+	aggregationBits := ethpb.NewSyncCommitteeAggregationBits()
+	aggregationBits.SetBitAt(0, true)
+	contribution := &ethpb.SyncCommitteeContribution{
+		BlockRoot:         blockRoot,
+		Slot:              12,
+		SubcommitteeIndex: 3,
+		AggregationBits:   aggregationBits,
+	}
+	v.saveSubmittedSyncContribution(&ethpb.ContributionAndProof{AggregatorIndex: 8, Contribution: contribution})
+	v.saveSubmittedSyncContribution(&ethpb.ContributionAndProof{AggregatorIndex: 7, Contribution: contribution})
+
+	v.logSubmittedSyncCommitteeContributions(12)
+
+	assert.LogsContain(t, logHook, "msg=\"Submitted sync committee contributions and proofs\"")
+	assert.LogsContain(t, logHook, "aggregatorIndices=7-8")
+	assert.LogsContain(t, logHook, "contributions=2")
+	assert.LogsContain(t, logHook, "bitsCount=1")
+	assert.LogsContain(t, logHook, "subcommitteeIndex=3")
+	logHook.Reset()
+	v.logSubmittedSyncCommitteeContributions(12)
+	assert.Equal(t, 0, len(logHook.AllEntries()))
+}
