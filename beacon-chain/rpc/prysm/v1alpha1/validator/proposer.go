@@ -122,7 +122,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 		return nil, errors.Wrap(err, "could not build block in parallel")
 	}
 
-	l.Info("Built block")
+	l.Info("Finished building block")
 	return resp, nil
 }
 
