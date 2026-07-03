@@ -8,7 +8,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 )
+
+const subnetSubscriptionAggregatorWorkers = 16
 
 // subscribeToSubnets iterates through each validator duty, signs each slot, and asks beacon node
 // to eagerly subscribe to subnets so that the aggregator has attestations to aggregate.
@@ -17,11 +20,13 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Valida
 	defer span.End()
 
 	total := len(duties.CurrentEpochDuties) + len(duties.NextEpochDuties)
-	subscribeSlots := make([]primitives.Slot, 0, total)
-	subscribeCommitteeIndices := make([]primitives.CommitteeIndex, 0, total)
-	subscribeIsAggregator := make([]bool, 0, total)
-	subscribeValidatorIndices := make([]primitives.ValidatorIndex, 0, total)
-	subscribeCommitteesAtSlot := make([]uint64, 0, total)
+	subscribeDuties := make([]*ethpb.ValidatorDuty, 0, total)
+	req := &ethpb.CommitteeSubnetsSubscribeRequest{
+		Slots:            make([]primitives.Slot, 0, total),
+		CommitteeIds:     make([]primitives.CommitteeIndex, 0, total),
+		ValidatorIndices: make([]primitives.ValidatorIndex, 0, total),
+		CommitteesAtSlot: make([]uint64, 0, total),
+	}
 
 	if err := v.aggSelector.RefreshSelectionProofs(ctx); err != nil {
 		return errors.Wrap(err, "could not prepare aggregated selection proofs")
@@ -32,28 +37,35 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Valida
 			if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
 				continue
 			}
-			// TODO: parallelize — serial sign here is O(N) signer round-trips at scale.
-			isAgg, err := v.isAggregator(ctx, duty.CommitteeLength, duty.AttesterSlot, bytesutil.ToBytes48(duty.PublicKey))
-			if err != nil {
-				return errors.Wrap(err, "could not check if a validator is an aggregator")
-			}
-			subscribeSlots = append(subscribeSlots, duty.AttesterSlot)
-			subscribeCommitteeIndices = append(subscribeCommitteeIndices, duty.CommitteeIndex)
-			subscribeIsAggregator = append(subscribeIsAggregator, isAgg)
-			subscribeValidatorIndices = append(subscribeValidatorIndices, duty.ValidatorIndex)
-			subscribeCommitteesAtSlot = append(subscribeCommitteesAtSlot, duty.CommitteesAtSlot)
+			subscribeDuties = append(subscribeDuties, duty)
+			req.Slots = append(req.Slots, duty.AttesterSlot)
+			req.CommitteeIds = append(req.CommitteeIds, duty.CommitteeIndex)
+			req.ValidatorIndices = append(req.ValidatorIndices, duty.ValidatorIndex)
+			req.CommitteesAtSlot = append(req.CommitteesAtSlot, duty.CommitteesAtSlot)
 		}
 	}
 
-	_, err := v.validatorClient.SubscribeCommitteeSubnets(ctx,
-		&ethpb.CommitteeSubnetsSubscribeRequest{
-			Slots:            subscribeSlots,
-			CommitteeIds:     subscribeCommitteeIndices,
-			IsAggregator:     subscribeIsAggregator,
-			ValidatorIndices: subscribeValidatorIndices,
-			CommitteesAtSlot: subscribeCommitteesAtSlot,
-		},
-	)
+	// Run concurrently to check if each validator is an aggregator.
+	// Maximum goroutine: subnetSubscriptionAggregatorWorkers (16)
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(subnetSubscriptionAggregatorWorkers)
+	req.IsAggregator = make([]bool, len(subscribeDuties))
+	for i, duty := range subscribeDuties {
+		i, duty := i, duty
+		g.Go(func() error {
+			agg, err := v.isAggregator(gctx, duty.CommitteeLength, duty.AttesterSlot, bytesutil.ToBytes48(duty.PublicKey))
+			if err != nil {
+				return err
+			}
+			req.IsAggregator[i] = agg
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return errors.Wrap(err, "could not check if a validator is an aggregator")
+	}
+
+	_, err := v.validatorClient.SubscribeCommitteeSubnets(ctx, req)
 
 	return err
 }
