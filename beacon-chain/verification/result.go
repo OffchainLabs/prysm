@@ -95,6 +95,8 @@ func (r Requirement) String() string {
 		return "RequireBidBuilderCanCover"
 	case RequireBidSignatureValid:
 		return "RequireBidSignatureValid"
+	case RequireBidSlotMatches:
+		return "RequireBidSlotMatches"
 	case RequireProposerPreferencesCurrentOrNextEpoch:
 		return "RequireProposerPreferencesCurrentOrNextEpoch"
 	case RequireProposerPreferencesProposalSlotValid:

@@ -402,6 +402,7 @@ func TestExecutionPayloadBidSubscriber_NilMessage(t *testing.T) {
 
 type mockExecutionPayloadBidVerifier struct {
 	errCurrentOrNextSlot    error
+	errSlotMatches          error
 	errBuilderActive        error
 	errBuilderVersion       error
 	errExecutionPayment     error
@@ -420,6 +421,10 @@ var _ verification.ExecutionPayloadBidVerifier = &mockExecutionPayloadBidVerifie
 
 func (m *mockExecutionPayloadBidVerifier) VerifyCurrentOrNextSlot() error {
 	return m.errCurrentOrNextSlot
+}
+
+func (m *mockExecutionPayloadBidVerifier) VerifyBidSlotMatches(primitives.Slot) error {
+	return m.errSlotMatches
 }
 
 func (m *mockExecutionPayloadBidVerifier) VerifyBuilderActive(state.ReadOnlyBeaconState) error {

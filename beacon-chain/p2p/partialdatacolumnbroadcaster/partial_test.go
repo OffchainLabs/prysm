@@ -1260,12 +1260,14 @@ func TestPartialColumnBroadcaster_onIncomingRPC_inputValidation(t *testing.T) {
 		nilRPC         bool
 		expectReject   bool
 		expectEnqueued bool
+		subscribed     bool
 	}{
 		{
 			name:           "in-bounds topic is accepted and enqueued",
 			topic:          "/eth2/abcd1234/data_column_sidecar_0/ssz_snappy",
 			expectReject:   false,
 			expectEnqueued: true,
+			subscribed:     true,
 		},
 		{
 			name:           "nil rpc is ignored",
@@ -1305,6 +1307,9 @@ func TestPartialColumnBroadcaster_onIncomingRPC_inputValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ps := newMockPubSub(nil, nil)
 			h := newBroadcasterHarness(t, ps)
+			if tt.subscribed {
+				h.broadcaster.subscribedTopics.Store(tt.topic, struct{}{})
+			}
 
 			var rpc *pubsub_pb.PartialMessagesExtension
 			if !tt.nilRPC {
@@ -1355,6 +1360,7 @@ func TestPartialColumnBroadcaster_onIncomingRPC_dropsWhenQueueFull(t *testing.T)
 
 	ps := newMockPubSub(nil, nil)
 	h := newBroadcasterHarness(t, ps)
+	h.broadcaster.subscribedTopics.Store(topic, struct{}{})
 	fillRequestQueue(h.broadcaster)
 
 	rpc := &pubsub_pb.PartialMessagesExtension{
@@ -1367,6 +1373,34 @@ func TestPartialColumnBroadcaster_onIncomingRPC_dropsWhenQueueFull(t *testing.T)
 	err := h.broadcaster.onIncomingRPC(from, peerStates, rpc)
 	require.ErrorContains(t, "incomingReq channel is full", err)
 	// The peer state update is discarded along with the dropped RPC.
+	require.Equal(t, 0, len(peerStates))
+	require.Equal(t, 0, ps.peerFeedbackCallCount())
+}
+
+// A well-formed partial message for a topic we never subscribed to is dropped before the SSZ decode
+// (updatePeerStateFromIncomingRPC) without downscoring the peer.
+func TestPartialColumnBroadcaster_onIncomingRPC_ignoresUnsubscribedTopic(t *testing.T) {
+	const from = peer.ID("peer-a")
+	// Well-formed, in-bounds topic that we never subscribed to.
+	topic := "/eth2/abcd1234/data_column_sidecar_37/ssz_snappy"
+
+	ps := newMockPubSub(nil, nil)
+	h := newBroadcasterHarness(t, ps)
+	// Intentionally do NOT register the topic in subscribedTopics.
+
+	rpc := &pubsub_pb.PartialMessagesExtension{
+		TopicID:       &topic,
+		GroupID:       slices.Clone(createPartialColumn(t, 2, nil).GroupID()),
+		PartsMetadata: mustMarshalPartsMetadata(t, testPartsMetadata(2, []uint64{0}, nil)),
+	}
+	peerStates := map[peer.ID]blocks.PartialDataColumnPeerState{}
+
+	err := h.broadcaster.onIncomingRPC(from, peerStates, rpc)
+	require.NoError(t, err)
+
+	// The gate short-circuits before updatePeerStateFromIncomingRPC: nothing is decoded, enqueued, or
+	// tracked, peer state is untouched, and the peer is not downscored.
+	require.Equal(t, 0, len(h.broadcaster.incomingReq))
 	require.Equal(t, 0, len(peerStates))
 	require.Equal(t, 0, ps.peerFeedbackCallCount())
 }

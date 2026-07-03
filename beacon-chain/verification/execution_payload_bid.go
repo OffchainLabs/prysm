@@ -34,8 +34,26 @@ var ExecutionPayloadBidGossipRequirements = []Requirement{
 // GossipExecutionPayloadBidRequirements is a requirement list for gossip execution payload bids.
 var GossipExecutionPayloadBidRequirements = requirementList(ExecutionPayloadBidGossipRequirements)
 
+// ExecutionPayloadBidBuilderAPIRequirements mirrors the non-self-build branch of process_execution_payload_bid so a chosen bid never invalidates the proposer's own block.
+var ExecutionPayloadBidBuilderAPIRequirements = []Requirement{
+	RequireBidSlotMatches,
+	RequireBidParentBlockRootSeen,
+	RequireBidParentBlockHashValid,
+	RequireBidBuilderActive,
+	RequireBidBuilderVersionValid,
+	RequireBidBuilderCanCover,
+	RequireBidFeeRecipientMatches,
+	RequireBidGasLimitCompatible,
+	RequireBidBlobKzgCommitmentsLimit,
+	RequireBidPrevRandaoValid,
+	RequireBidSignatureValid,
+}
+
+var BuilderAPIBidRequirements = requirementList(ExecutionPayloadBidBuilderAPIRequirements)
+
 var (
 	ErrBidSlotNotCurrentOrNext      = errors.New("bid slot is not current or next")
+	ErrBidSlotMismatch              = errors.New("bid slot does not match expected slot")
 	ErrBidBuilderNotActive          = errors.New("builder is not active")
 	ErrBidBuilderVersionInvalid     = errors.New("builder is not a payload builder")
 	ErrBidExecutionPaymentNonZero   = errors.New("execution payment is non-zero")
@@ -73,6 +91,20 @@ func (v *BidVerifier) VerifyCurrentOrNextSlot() (err error) {
 	currentSlot := v.clock.CurrentSlot()
 	if bid.Slot() != currentSlot && bid.Slot() != currentSlot+1 {
 		return fmt.Errorf("%w: got %d want %d or %d", ErrBidSlotNotCurrentOrNext, bid.Slot(), currentSlot, currentSlot+1)
+	}
+	return nil
+}
+
+// VerifyBidSlotMatches verifies the bid slot equals the expected slot.
+func (v *BidVerifier) VerifyBidSlotMatches(slot primitives.Slot) (err error) {
+	defer v.record(RequireBidSlotMatches, &err)
+
+	bid, err := v.b.Bid()
+	if err != nil {
+		return errors.Wrap(err, "failed to get bid")
+	}
+	if bid.Slot() != slot {
+		return fmt.Errorf("%w: got %d want %d", ErrBidSlotMismatch, bid.Slot(), slot)
 	}
 	return nil
 }
