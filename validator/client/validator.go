@@ -91,6 +91,7 @@ type validator struct {
 	proposerSettings             *proposer.Settings
 	submittedPrefSlots           map[primitives.Slot]bool
 	submittedAtts                map[submittedAttKey]*submittedAtt
+	submittedAggregates          map[submittedAttKey]*submittedAtt
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
 	interopKeysConfig            *local.InteropKeymanagerConfig
@@ -98,7 +99,6 @@ type validator struct {
 	slotFeed                     *event.Feed
 	syncCommitteeStats           syncCommitteeStats
 	graffitiStruct               *graffiti.Graffiti
-	submittedAggregates          map[submittedAttKey]*submittedAtt
 	highestValidSlot             primitives.Slot
 	eventsChannel                chan *eventClient.Event
 	payloadAvailability          *payloadAvailability
