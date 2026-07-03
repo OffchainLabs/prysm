@@ -19,6 +19,7 @@ import (
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -165,7 +166,8 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		return pubsub.ValidationIgnore, err
 	}
 
-	if s.cfg.chain.ShouldIgnoreData(blk.Block().ParentRoot(), blk.Block().Slot()) {
+	parentRoot := blk.Block().ParentRoot()
+	if s.cfg.chain.ShouldIgnoreData(parentRoot, blk.Block().Slot()) {
 		log.WithFields(getBlockFields(blk)).Debug("Ignoring block with canonical parent before justified checkpoint")
 		ignoredPreJustifiedBlockCount.Inc()
 		return pubsub.ValidationIgnore, nil
@@ -191,7 +193,7 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 	}
 
 	// Handle block when the parent is unknown.
-	if !s.cfg.chain.HasBlock(ctx, blk.Block().ParentRoot()) {
+	if !s.cfg.chain.HasBlock(ctx, parentRoot) {
 		if res, err := s.verifyPendingBlockSignature(ctx, pid, blk, blockRoot); err != nil {
 			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not verify block signature")
 			return res, err
@@ -203,7 +205,12 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 			return pubsub.ValidationIgnore, err
 		}
 		s.pendingQueueLock.Unlock()
-		err := errors.Errorf("unknown parent for block with slot %d and parent root %#x", blk.Block().Slot(), blk.Block().ParentRoot())
+		go func() {
+			if err := s.sendBatchRootRequest(s.ctx, [][32]byte{parentRoot}, rand.NewGenerator()); err != nil {
+				log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not request unknown parent block")
+			}
+		}()
+		err := errors.Errorf("unknown parent for block with slot %d and parent root %#x", blk.Block().Slot(), parentRoot)
 		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not identify parent for block")
 		return pubsub.ValidationIgnore, err
 	}

@@ -210,25 +210,28 @@ type Service struct {
 	pendingPayloadEnvelopes              map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope
 	pendingEnvelopeLock                  sync.RWMutex
 	selfBuildSigFailures                 int
+	pendingPayloadAttestations           map[[32]byte][]*ethpb.PayloadAttestationMessage
+	pendingPayloadAttestationLock        sync.RWMutex
 }
 
 // NewService initializes new regular sync service.
 func NewService(ctx context.Context, opts ...Option) *Service {
 	ctx, cancel := context.WithCancel(ctx)
 	r := &Service{
-		ctx:                      ctx,
-		cancel:                   cancel,
-		chainStarted:             &atomic.Bool{},
-		cfg:                      &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
-		slotToPendingBlocks:      gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
-		seenPendingBlocks:        make(map[[32]byte]bool),
-		blkRootToPendingAtts:     make(map[[32]byte][]any),
-		pendingGloasColumns:      make(map[[32]byte]*pendingGloasEntry),
-		dataColumnLogCh:          make(chan dataColumnLogEntry, 1000),
-		reconstructionRandGen:    rand.NewGenerator(),
-		payloadAttestationCache:  &cache.PayloadAttestationCache{},
-		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
-		pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+		ctx:                        ctx,
+		cancel:                     cancel,
+		chainStarted:               &atomic.Bool{},
+		cfg:                        &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
+		slotToPendingBlocks:        gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
+		seenPendingBlocks:          make(map[[32]byte]bool),
+		blkRootToPendingAtts:       make(map[[32]byte][]any),
+		pendingGloasColumns:        make(map[[32]byte]*pendingGloasEntry),
+		dataColumnLogCh:            make(chan dataColumnLogEntry, 1000),
+		reconstructionRandGen:      rand.NewGenerator(),
+		payloadAttestationCache:    &cache.PayloadAttestationCache{},
+		proposerPreferencesCache:   cache.NewProposerPreferencesCache(),
+		pendingPayloadEnvelopes:    make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+		pendingPayloadAttestations: make(map[[32]byte][]*ethpb.PayloadAttestationMessage),
 	}
 
 	for _, opt := range opts {
@@ -348,7 +351,6 @@ func (s *Service) Start() {
 	if err := s.maintainCustodyInfo(); err != nil {
 		log.WithError(err).Error("Failed to maintain custody info")
 	}
-
 }
 
 // Stop the regular sync service.

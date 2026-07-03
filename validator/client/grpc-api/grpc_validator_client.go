@@ -304,6 +304,10 @@ func (c *grpcValidatorClient) SubmitSignedProposerPreferences(ctx context.Contex
 	return c.getClient().SubmitSignedProposerPreferences(ctx, in)
 }
 
+func (c *grpcValidatorClient) SubmitBuilderPreferences(ctx context.Context, in *ethpb.SubmitBuilderPreferencesRequest) (*empty.Empty, error) {
+	return c.getClient().SubmitBuilderPreferences(ctx, in)
+}
+
 func (c *grpcValidatorClient) SubmitSignedExecutionPayloadBid(ctx context.Context, in *ethpb.SignedExecutionPayloadBid) (*empty.Empty, error) {
 	return c.getClient().SubmitSignedExecutionPayloadBid(ctx, in)
 }
@@ -383,9 +387,13 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 	}
 	// TODO(13563): ONLY WORKS WITH HEAD TOPIC.
 	containsHead := false
-	for i := range topics {
-		if topics[i] == eventClient.EventHead {
+
+	// Treat EventHeadV2 and EventHead as equivalent for the purpose of this check,
+	// since the gRPC API only supports the head topic, and head_v2 is a superset of head.
+	for _, topic := range topics {
+		if topic == eventClient.EventHead || topic == eventClient.EventHeadV2 {
 			containsHead = true
+			break
 		}
 	}
 	if !containsHead {

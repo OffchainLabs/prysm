@@ -705,6 +705,225 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 	})
 }
 
+// TestPayloadAttributesReader_ParentBlockNumber verifies beacon-APIs #621: the
+// parent_block_number field is present in the payload_attributes event pre-gloas and
+// omitted from gloas onwards.
+func TestPayloadAttributesReader_ParentBlockNumber(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+
+	// The event's fork is keyed to proposal_slot, so presence is gated on the proposal
+	// slot's fork, not the head block's version. Proposal slot sits in epoch 0 in every
+	// case (head slot 0 avoids slot processing), so GloasForkEpoch selects the fork.
+	cases := []struct {
+		name        string
+		gloasEpoch  primitives.Epoch
+		getState    func() state.BeaconState
+		getBlock    func() interfaces.SignedBeaconBlock
+		wantPresent bool
+		wantVersion string
+	}{
+		{
+			name:       "pre-gloas proposal slot includes parent_block_number",
+			gloasEpoch: math.MaxUint64,
+			getState: func() state.BeaconState {
+				st, err := util.NewBeaconStateDeneb()
+				require.NoError(t, err)
+				return st
+			},
+			getBlock: func() interfaces.SignedBeaconBlock {
+				b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockDeneb(&eth.SignedBeaconBlockDeneb{}))
+				require.NoError(t, err)
+				return b
+			},
+			wantPresent: true,
+			// The schedule fork at epoch 0 is phase0 even though the head block is deneb.
+			wantVersion: "phase0",
+		},
+		{
+			name:       "gloas proposal slot omits parent_block_number",
+			gloasEpoch: 0,
+			getState: func() state.BeaconState {
+				st, err := util.NewBeaconStateGloas()
+				require.NoError(t, err)
+				return st
+			},
+			getBlock: func() interfaces.SignedBeaconBlock {
+				b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockGloas(&eth.SignedBeaconBlockGloas{}))
+				require.NoError(t, err)
+				return b
+			},
+			wantPresent: false,
+			wantVersion: "gloas",
+		},
+		{
+			// Boundary: the head block is pre-gloas (so ev.ParentBlockNumber is populated),
+			// but the proposal slot is gloas, so the field must still be omitted.
+			name:       "gloas proposal slot with pre-gloas head omits parent_block_number",
+			gloasEpoch: 0,
+			getState: func() state.BeaconState {
+				st, err := util.NewBeaconStateDeneb()
+				require.NoError(t, err)
+				return st
+			},
+			getBlock: func() interfaces.SignedBeaconBlock {
+				b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockDeneb(&eth.SignedBeaconBlockDeneb{}))
+				require.NoError(t, err)
+				return b
+			},
+			wantPresent: false,
+			wantVersion: "gloas",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := params.BeaconConfig().Copy()
+			cfg.GloasForkEpoch = tc.gloasEpoch
+			params.OverrideBeaconConfig(cfg)
+
+			st := tc.getState()
+			v := &eth.Validator{ExitEpoch: math.MaxUint64, EffectiveBalance: params.BeaconConfig().MinActivationBalance, WithdrawalCredentials: make([]byte, 32)}
+			require.NoError(t, st.SetValidators([]*eth.Validator{v}))
+			require.NoError(t, st.SetBalances([]uint64{0}))
+			currentSlot := primitives.Slot(0)
+			require.NoError(t, st.SetSlot(currentSlot+1)) // avoid slot processing.
+			genesis := time.Now()
+			require.NoError(t, st.SetGenesisTime(genesis))
+			b := tc.getBlock()
+			headRoot, err := b.Block().HashTreeRoot()
+			require.NoError(t, err)
+			stategen := mock.NewService()
+			stategen.AddStateForRoot(st, headRoot)
+			mockChainService := &mockChain.ChainService{Root: make([]byte, 32), State: st, Slot: &currentSlot, Genesis: genesis}
+			s := &Server{
+				HeadFetcher:              mockChainService,
+				ChainInfoFetcher:         mockChainService,
+				ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+				EventWriteTimeout:        testEventWriteTimeout,
+				StateGen:                 stategen,
+			}
+
+			ev := payloadattribute.EventData{
+				ProposalSlot: currentSlot + 1,
+				HeadBlock:    b,
+				HeadRoot:     headRoot,
+			}
+			lr, err := s.payloadAttributesReader(t.Context(), ev)
+			require.NoError(t, err)
+			out, err := io.ReadAll(lr())
+			require.NoError(t, err)
+
+			_, payload, found := strings.Cut(string(out), "data: ")
+			require.Equal(t, true, found)
+			var got structs.PayloadAttributesEvent
+			require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(payload)), &got))
+			require.Equal(t, tc.wantVersion, got.Version)
+
+			fields := make(map[string]json.RawMessage)
+			require.NoError(t, json.Unmarshal(got.Data, &fields))
+			_, present := fields["parent_block_number"]
+			require.Equal(t, tc.wantPresent, present, "parent_block_number presence mismatch")
+		})
+  }
+}
+
+// TestStreamEvents_PayloadAttributesExpiredSlotNotLoggedAsError verifies that a payload
+// attributes event whose proposal slot has already started is skipped without an ERROR log.
+func TestStreamEvents_PayloadAttributesExpiredSlotNotLoggedAsError(t *testing.T) {
+	testSync := newStreamTestSync(t)
+	defer testSync.cleanup()
+
+	// Genesis one second in the past makes proposal slot 0's start time already elapsed,
+	// forcing payloadAttributesReader down the errPayloadAttributeExpired path.
+	genesis := time.Now().Add(-1 * time.Second)
+	currentSlot := primitives.Slot(0)
+	mockChainService := &mockChain.ChainService{
+		Root:    make([]byte, 32),
+		Slot:    &currentSlot,
+		Genesis: genesis,
+	}
+
+	stn := mockChain.NewEventFeedWrapper()
+	opn := mockChain.NewEventFeedWrapper()
+	s := &Server{
+		StateNotifier:     &mockChain.SimpleNotifier{Feed: stn},
+		OperationNotifier: &mockChain.SimpleNotifier{Feed: opn},
+		ChainInfoFetcher:  mockChainService,
+		EventWriteTimeout: testEventWriteTimeout,
+	}
+
+	// Subscribe to payload attributes (the expired event) plus a block topic used purely as an
+	// ordering barrier: recvEventLoop processes events serially, so once the block event reaches
+	// the client we know the expired event ahead of it has already been handled.
+	topics, err := newTopicRequest([]string{PayloadAttributesTopic, BlockTopic})
+	require.NoError(t, err)
+	request := topics.testHttpRequest(testSync.ctx, t)
+	w := NewStreamingResponseWriterRecorder(testSync.ctx)
+
+	go func() {
+		s.StreamEvents(w, request)
+		testSync.markDone()
+	}()
+
+	blk, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlock(&eth.SignedBeaconBlock{}))
+	require.NoError(t, err)
+	expired := &feed.Event{
+		Type: statefeed.PayloadAttributes,
+		Data: payloadattribute.EventData{
+			ProposalSlot:    currentSlot, // slot 0 start time is in the past → expired
+			ParentBlockHash: make([]byte, 32),
+			HeadBlock:       blk,
+		},
+	}
+	barrier := &feed.Event{
+		Type: statefeed.BlockProcessed,
+		Data: &statefeed.BlockProcessedData{
+			Slot:        0,
+			BlockRoot:   [32]byte{},
+			SignedBlock: blk,
+			Verified:    true,
+		},
+	}
+
+	require.NoError(t, stn.WaitForSubscription(testSync.ctx))
+	s.StateNotifier.StateFeed().Send(expired)
+	s.StateNotifier.StateFeed().Send(barrier)
+
+	// Read the stream until the barrier (block) event arrives.
+	sseR := sse.NewEventStreamReader(w.Body(), 1<<24)
+	got := make(chan struct{})
+	go func() {
+		defer close(got)
+		for {
+			ev, err := sseR.ReadEvent()
+			if err != nil {
+				return
+			}
+			if strings.Contains(string(ev), "event: "+BlockTopic+"\n") {
+				return
+			}
+		}
+	}()
+	select {
+	case <-got:
+	case <-time.After(time.Second): // failsafe only; delivery is sub-millisecond on success
+		t.Fatal("timed out waiting for the block event that follows the expired payload attributes event")
+	}
+
+	// The expired event has now been processed. Because recvEventLoop wrote the log entry (if any)
+	// before handing the barrier event to the outbox, any such entry is already buffered here.
+	for {
+		select {
+		case entry := <-testSync.logs:
+			// A past-slot skip is expected and must not surface as an error-level log. Asserting on the
+			// level (rather than an exact message) keeps the guard robust if the message is reworded.
+			require.NotEqual(t, logrus.ErrorLevel, entry.Level,
+				fmt.Sprintf("expired payload attributes event should be skipped silently; got error log: %q", entry.Message))
+		default:
+			return
+		}
+	}
+}
+
 func TestFillEventData(t *testing.T) {
 	ctx := t.Context()
 	t.Run("AlreadyFilledData_ShouldShortCircuitWithoutError", func(t *testing.T) {
@@ -715,6 +934,7 @@ func TestFillEventData(t *testing.T) {
 		})
 		require.NoError(t, err)
 		alreadyFilled := payloadattribute.EventData{
+			ProposerIndex:   7,
 			HeadBlock:       b,
 			HeadRoot:        [32]byte{1, 2, 3},
 			Attributer:      attributor,
@@ -751,6 +971,18 @@ func TestFillEventData(t *testing.T) {
 		require.NotEmpty(t, filled.ParentBlockHash, "ParentBlockHash should still be filled")
 		require.Equal(t, attributor, filled.Attributer, "provided Attributer should be preserved")
 		require.Equal(t, version.Bellatrix, filled.Attributer.Version(), "preserved Attributer keeps its version; a recompute on Electra state would be Deneb-versioned")
+	})
+	t.Run("Electra PreservesProvidedParentBlockHash", func(t *testing.T) {
+		srv, partial := newPartialFillTestServer(t)
+		// The blockchain package carries the exact hash it sent to the engine; fillEventData
+		// must keep it verbatim rather than recompute it from state.
+		provided := make([]byte, 32)
+		provided[0] = 0x9
+		partial.ParentBlockHash = provided
+
+		filled, err := srv.fillEventData(ctx, partial)
+		require.NoError(t, err)
+		require.DeepEqual(t, provided, filled.ParentBlockHash, "provided ParentBlockHash must be preserved, not recomputed")
 	})
 }
 

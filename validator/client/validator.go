@@ -76,6 +76,7 @@ type validator struct {
 	prevEpochBalancesLock        sync.RWMutex
 	cachedAttestationDataLock    sync.RWMutex
 	submittedPrefSlotsLock       sync.RWMutex
+	signedRequestAuthsLock       sync.Mutex
 	domainDataLock               sync.RWMutex
 	cachedAttestationData        *ethpb.AttestationData
 	graffitiOrderedIndex         uint64
@@ -103,6 +104,7 @@ type validator struct {
 	payloadAvailability          *payloadAvailability
 	pubkeyToStatus               map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus
 	signedValidatorRegistrations map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
+	signedRequestAuths           map[requestAuthKey]*ethpb.SignedRequestAuthV1
 	aggSelector                  aggregatorSelector
 	validatorClient              iface.ValidatorClient
 	chainClient                  iface.ChainClient
@@ -859,6 +861,16 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		}()
 	}
 
+	if reqs := v.buildBuilderPreferenceRequests(ctx, km, slot); len(reqs) > 0 {
+		delay := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
+		time.AfterFunc(delay, func() {
+			// Detached from the slot context, which may expire before the delay elapses.
+			subCtx, cancel := context.WithTimeout(context.Background(), delay)
+			defer cancel()
+			v.submitBuilderPreferenceRequests(subCtx, reqs)
+		})
+	}
+
 	// TODO: figure out what to do post gloas for builder apis
 	if !isPreGloas {
 		return nil
@@ -895,11 +907,17 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 	case eventClient.EventConnectionError:
 		log.WithError(errors.New(string(event.Data))).Error("Event stream interrupted")
 	case eventClient.EventHead:
-		log.Debug("Received head event")
 		head := &structs.HeadEvent{}
 		if err := json.Unmarshal(event.Data, head); err != nil {
 			log.WithError(err).Error("Failed to unmarshal head Event into JSON")
 		}
+
+		log.WithFields(logrus.Fields{
+			"slot":                         head.Slot,
+			"previous_duty_dependent_root": head.PreviousDutyDependentRoot,
+			"current_duty_dependent_root":  head.CurrentDutyDependentRoot,
+		}).Debug("Received head event")
+
 		uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
 		if err != nil {
 			log.WithError(err).Error("Failed to parse slot")
@@ -907,7 +925,36 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 		}
 		v.setHighestSlot(primitives.Slot(uintSlot))
 		if !v.disableDutiesPolling {
-			if err := v.checkDependentRoots(ctx, head); err != nil {
+			if err := v.checkDependentRoots(ctx, head.PreviousDutyDependentRoot, head.CurrentDutyDependentRoot); err != nil {
+				log.WithError(err).Error("Failed to check dependent roots")
+			}
+		}
+	case eventClient.EventHeadV2:
+		head := &structs.HeadEventV2{}
+		if err := json.Unmarshal(event.Data, head); err != nil {
+			log.WithError(err).Error("Failed to unmarshal head_v2 event into JSON")
+			return
+		}
+		if head.Data == nil {
+			log.Error("Received head_v2 event with no data")
+			return
+		}
+
+		log.WithFields(logrus.Fields{
+			"slot":                         head.Data.Slot,
+			"block_root":                   head.Data.Block,
+			"current_epoch_dependent_root": head.Data.CurrentEpochDependentRoot,
+			"next_epoch_dependent_root":    head.Data.NextEpochDependentRoot,
+		}).Debug("Received head_v2 event")
+
+		uintSlot, err := strconv.ParseUint(head.Data.Slot, 10, 64)
+		if err != nil {
+			log.WithError(err).Error("Failed to parse slot")
+			return
+		}
+		v.setHighestSlot(primitives.Slot(uintSlot))
+		if !v.disableDutiesPolling {
+			if err := v.checkDependentRoots(ctx, head.Data.CurrentEpochDependentRoot, head.Data.NextEpochDependentRoot); err != nil {
 				log.WithError(err).Error("Failed to check dependent roots")
 			}
 		}
@@ -1250,6 +1297,79 @@ func (v *validator) submittedPrefSlotsCount() int {
 	v.submittedPrefSlotsLock.RLock()
 	defer v.submittedPrefSlotsLock.RUnlock()
 	return len(v.submittedPrefSlots)
+}
+
+func (v *validator) builderConfigForKey(pk pubkey) ([]string, uint64, bool) {
+	ps := v.ProposerSettings()
+	if ps == nil {
+		return nil, 0, false
+	}
+	var bc *proposer.BuilderConfig
+	if ps.DefaultConfig != nil {
+		bc = ps.DefaultConfig.BuilderConfig
+	}
+	if ps.ProposeConfig != nil {
+		if c, ok := ps.ProposeConfig[pk]; ok && c != nil && c.BuilderConfig != nil {
+			bc = c.BuilderConfig
+		}
+	}
+	if bc == nil {
+		return nil, 0, false
+	}
+	return bc.Relays, uint64(bc.MaxExecutionPayment), bc.Enabled
+}
+
+// Resubmitted every push to repopulate a restarted beacon node, using cached auths to avoid re-signing.
+func (v *validator) buildBuilderPreferenceRequests(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot) []*ethpb.SubmitBuilderPreferencesRequest {
+	if slots.ToEpoch(slot)+1 < params.BeaconConfig().GloasForkEpoch {
+		return nil
+	}
+	snap := v.duties.snapshot()
+	if !snap.isInitialized() {
+		return nil
+	}
+	v.pruneSignedRequestAuths(slot)
+
+	reqs := v.builderPreferenceRequestsForDuties(ctx, km, slot, snap.currentDuties())
+	return append(reqs, v.builderPreferenceRequestsForDuties(ctx, km, slot, snap.nextDuties())...)
+}
+
+func (v *validator) builderPreferenceRequestsForDuties(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, duties iter.Seq2[pubkey, *ethpb.ValidatorDuty]) []*ethpb.SubmitBuilderPreferencesRequest {
+	var reqs []*ethpb.SubmitBuilderPreferencesRequest
+	for pk, duty := range duties {
+		relays, maxPayment, enabled := v.builderConfigForKey(pk)
+		if !enabled || len(relays) == 0 {
+			continue
+		}
+		for _, proposalSlot := range duty.ProposerSlots {
+			if proposalSlot <= slot {
+				continue
+			}
+			for _, relay := range relays {
+				signed, err := v.signRequestAuthCached(ctx, km, pk, relay, proposalSlot)
+				if err != nil {
+					log.WithError(err).Warn("Failed to sign builder request auth")
+					continue
+				}
+				reqs = append(reqs, &ethpb.SubmitBuilderPreferencesRequest{
+					ValidatorPubkey: pk[:],
+					Request: &ethpb.BuilderPreferencesRequestV1{
+						Preferences: &ethpb.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(maxPayment)},
+						Auth:        signed,
+					},
+				})
+			}
+		}
+	}
+	return reqs
+}
+
+func (v *validator) submitBuilderPreferenceRequests(ctx context.Context, reqs []*ethpb.SubmitBuilderPreferencesRequest) {
+	for _, req := range reqs {
+		if _, err := v.validatorClient.SubmitBuilderPreferences(ctx, req); err != nil {
+			log.WithError(err).Warn("Failed to submit builder preferences")
+		}
+	}
 }
 
 // submitProposerPreferences builds and submits proposer preferences for the

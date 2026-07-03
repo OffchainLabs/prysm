@@ -73,6 +73,7 @@ ssz_phase0_objs = [
     "Status",
     "Status",
     "Validator",
+    "ValidatorBalance",
     "ValidatorIdentity",
     "VoluntaryExit",
 ]
