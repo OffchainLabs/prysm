@@ -54,6 +54,7 @@ go_library(
         "//crypto/hash:go_default_library",
         "//crypto/rand:go_default_library",
         "//encoding/bytesutil:go_default_library",
+        "//io/logs:go_default_library",
         "//monitoring/tracing:go_default_library",
         "//monitoring/tracing/trace:go_default_library",
         "//network/httputil:go_default_library",

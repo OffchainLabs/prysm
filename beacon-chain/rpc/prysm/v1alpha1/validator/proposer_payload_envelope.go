@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
@@ -14,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/io/logs"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -126,6 +128,7 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 ) (*emptypb.Empty, error) {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.PublishExecutionPayloadEnvelope")
 	defer span.End()
+	start := time.Now()
 
 	signed, blobs, kzgProofs, err := vs.resolveEnvelopeToPublish(req)
 	if err != nil {
@@ -147,10 +150,10 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 
 	log := log.WithFields(logrus.Fields{
 		"slot":            envSlot,
-		"builderIndex":    signed.Message.BuilderIndex,
+		"builderIndex":    logs.BuilderIndexLabel(signed.Message.BuilderIndex),
 		"beaconBlockRoot": fmt.Sprintf("%#x", beaconBlockRoot[:8]),
 	})
-	log.Info("Publishing signed execution payload envelope")
+	log.Debug("Publishing execution payload envelope")
 
 	// Broadcast sidecars BEFORE receiving the envelope so the DA check sees them. Stateless publishes
 	// carry blobs+proofs (this node may not have them cached); stateful publishes rely on the cache.
@@ -182,7 +185,7 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 		return nil, status.Errorf(codes.Aborted, "failed to receive execution payload envelope: %v", err)
 	}
 
-	log.Info("Successfully published execution payload envelope")
+	log.WithField("duration", time.Since(start)).Info("Published execution payload envelope")
 
 	return &emptypb.Empty{}, nil
 }
