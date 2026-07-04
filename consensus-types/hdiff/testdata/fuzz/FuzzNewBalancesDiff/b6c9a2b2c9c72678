@@ -1,0 +1,3 @@
+go test fuzz v1
+byte('D')
+[]byte(":N\xd0R\x95\x84\xaa;h\xea\x17 7O$T\xfa")
