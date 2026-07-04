@@ -10,7 +10,6 @@ import (
 	builderapi "github.com/OffchainLabs/prysm/v7/api/client/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	builderTest "github.com/OffchainLabs/prysm/v7/beacon-chain/builder/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
@@ -905,11 +904,11 @@ func getProposerServer(ctx context.Context, db db.HeadAccessDatabase, headState 
 		TimeFetcher: &testutil.MockGenesisTimeFetcher{
 			Genesis: time.Now(),
 		},
-		PayloadIDCache:         cache.NewPayloadIDCache(),
-		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-		BeaconDB:               db,
-		BLSChangesPool:         blstoexec.NewPool(),
-		BlockBuilder:           &builderTest.MockBuilderService{HasConfigured: true},
+		PayloadIDCache:           cache.NewPayloadIDCache(),
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		BeaconDB:                 db,
+		BLSChangesPool:           blstoexec.NewPool(),
+		BlockBuilder:             &builderTest.MockBuilderService{HasConfigured: true},
 	}
 }
 
@@ -1301,10 +1300,11 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 				BlockBuilder: &builderTest.MockBuilderService{HasConfigured: tt.useBuilder, PayloadCapella: emptyPayloadCapella(), PayloadDeneb: emptyPayloadDeneb(),
 					BlobBundle:   &enginev1.BlobsBundle{KzgCommitments: [][]byte{mockCommitment}, Proofs: [][]byte{{0x02}}, Blobs: [][]byte{{0x03}}},
 					BlobBundleV2: &enginev1.BlobsBundleV2{KzgCommitments: [][]byte{mockCommitment}, Proofs: cellProofs, Blobs: [][]byte{mockBlob}}},
-				BeaconDB:           db,
-				BlobReceiver:       c,
-				DataColumnReceiver: c, // Add DataColumnReceiver for Fulu blocks
-				OperationNotifier:  c.OperationNotifier(),
+				BeaconDB:              db,
+				BlobReceiver:          c,
+				DataColumnReceiver:    c, // Add DataColumnReceiver for Fulu blocks
+				OperationNotifier:     c.OperationNotifier(),
+				ExecutionEngineCaller: &mockExecution.EngineClient{PartialColumnsSupportedFlag: true},
 			}
 			blockToPropose := tt.block(bsRoot)
 			res, err := proposerServer.ProposeBeaconBlock(t.Context(), blockToPropose)
@@ -1318,6 +1318,64 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProposer_handleUnblindedBlock_PartialColumnsGating(t *testing.T) {
+	require.NoError(t, kzg.Start())
+
+	numberOfColumns := uint64(128)
+	cellProofs := make([][]byte, numberOfColumns)
+	for i := range numberOfColumns {
+		cellProofs[i] = bytesutil.PadTo([]byte{byte(i)}, 48)
+	}
+	blob := make([]byte, 131072)
+	blob[0] = 0x01
+
+	// newFuluReq builds a Fulu block proposal request with a single blob and cell proofs.
+	newFuluReq := func() *ethpb.GenericSignedBeaconBlock {
+		sb := &ethpb.SignedBeaconBlockContentsFulu{
+			Block: &ethpb.SignedBeaconBlockFulu{
+				Block: &ethpb.BeaconBlockElectra{
+					Slot: 5,
+					Body: util.HydrateBeaconBlockBodyElectra(&ethpb.BeaconBlockBodyElectra{
+						BlobKzgCommitments: [][]byte{bytesutil.PadTo([]byte("kc"), 48)},
+					}),
+				},
+			},
+			KzgProofs: cellProofs,
+			Blobs:     [][]byte{blob},
+		}
+		return &ethpb.GenericSignedBeaconBlock{Block: &ethpb.GenericSignedBeaconBlock_Fulu{Fulu: sb}, IsBlinded: false}
+	}
+
+	roBlock := func(t *testing.T, req *ethpb.GenericSignedBeaconBlock) blocks.ROBlock {
+		block, err := blocks.NewSignedBeaconBlock(req.Block)
+		require.NoError(t, err)
+		root, err := block.Block().HashTreeRoot()
+		require.NoError(t, err)
+		rob, err := blocks.NewROBlockWithRoot(block, root)
+		require.NoError(t, err)
+		return rob
+	}
+
+	t.Run("enabled builds partial columns", func(t *testing.T) {
+		vs := &Server{ExecutionEngineCaller: &mockExecution.EngineClient{PartialColumnsSupportedFlag: true}}
+		req := newFuluReq()
+		_, dataColumns, partialColumns, err := vs.handleUnblindedBlock(roBlock(t, req), req)
+		require.NoError(t, err)
+		require.NotEmpty(t, dataColumns)
+		// One partial column is produced per data column sidecar.
+		require.Equal(t, len(dataColumns), len(partialColumns))
+	})
+
+	t.Run("disabled skips partial columns but still builds data columns", func(t *testing.T) {
+		vs := &Server{ExecutionEngineCaller: &mockExecution.EngineClient{PartialColumnsSupportedFlag: false}}
+		req := newFuluReq()
+		_, dataColumns, partialColumns, err := vs.handleUnblindedBlock(roBlock(t, req), req)
+		require.NoError(t, err)
+		require.NotEmpty(t, dataColumns)
+		require.Equal(t, 0, len(partialColumns))
+	})
 }
 
 func TestProposer_ComputeStateRoot_OK(t *testing.T) {
@@ -3239,25 +3297,44 @@ func TestProposer_PrepareBeaconProposer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db := dbutil.SetupDB(t)
 			ctx := t.Context()
+			zero := primitives.Slot(0)
 			proposerServer := &Server{
-				BeaconDB:               db,
-				TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+				BeaconDB:                  db,
+				ProposerPreferencesCache:  cache.NewProposerPreferencesCache(),
+				SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
+				TimeFetcher:               &mock.ChainService{Slot: &zero},
 			}
-			require.Equal(t, false, proposerServer.TrackedValidatorsCache.Validating())
 			_, err := proposerServer.PrepareBeaconProposer(ctx, tt.args.request)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, tt.wantErr, err)
 				return
-			} else {
-				require.Equal(t, true, proposerServer.TrackedValidatorsCache.Validating())
 			}
 			require.NoError(t, err)
-			val, tracked := proposerServer.TrackedValidatorsCache.Validator(1)
-			require.Equal(t, true, tracked)
-			require.Equal(t, primitives.ExecutionAddress(tt.args.request.Recipients[0].FeeRecipient), val.FeeRecipient)
-
 		})
 	}
+}
+
+func TestProposer_PrepareBeaconProposer_PostGloasNoOp(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	zero := primitives.Slot(0)
+	proposerServer := &Server{
+		ProposerPreferencesCache:  cache.NewProposerPreferencesCache(),
+		SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
+		TimeFetcher:               &mock.ChainService{Slot: &zero},
+	}
+	_, err := proposerServer.PrepareBeaconProposer(t.Context(), &ethpb.PrepareBeaconProposerRequest{
+		Recipients: []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer{
+			{FeeRecipient: make([]byte, fieldparams.FeeRecipientLength), ValidatorIndex: 1},
+		},
+	})
+	require.NoError(t, err)
+	// Post-Gloas the request is a no-op: nothing is cached.
+	_, ok := proposerServer.ProposerPreferencesCache.DefaultFor(1)
+	require.Equal(t, false, ok)
 }
 
 func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
@@ -3267,8 +3344,10 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	db := dbutil.SetupDB(t)
 	ctx := t.Context()
 	proposerServer := &Server{
-		BeaconDB:               db,
-		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+		BeaconDB:                  db,
+		ProposerPreferencesCache:  cache.NewProposerPreferencesCache(),
+		SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
+		TimeFetcher:               &mock.ChainService{},
 	}
 
 	// New validator
@@ -3324,8 +3403,10 @@ func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
 	db := dbutil.SetupDB(b)
 	ctx := b.Context()
 	proposerServer := &Server{
-		BeaconDB:               db,
-		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+		BeaconDB:                  db,
+		ProposerPreferencesCache:  cache.NewProposerPreferencesCache(),
+		SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
+		TimeFetcher:               &mock.ChainService{},
 	}
 	f := bytesutil.PadTo([]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF}, fieldparams.FeeRecipientLength)
 	recipients := make([]*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer, 0)
@@ -3350,10 +3431,10 @@ func TestProposer_SubmitValidatorRegistrations(t *testing.T) {
 	proposerServer := &Server{}
 	reg := &ethpb.SignedValidatorRegistrationsV1{}
 	_, err := proposerServer.SubmitValidatorRegistrations(ctx, reg)
-	require.ErrorContains(t, builder.ErrNoBuilder.Error(), err)
+	require.ErrorContains(t, "Could not register block builder: not configured", err)
 	proposerServer = &Server{BlockBuilder: &builderTest.MockBuilderService{}}
 	_, err = proposerServer.SubmitValidatorRegistrations(ctx, reg)
-	require.ErrorContains(t, builder.ErrNoBuilder.Error(), err)
+	require.ErrorContains(t, "Could not register block builder: not configured", err)
 	proposerServer = &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true}}
 	_, err = proposerServer.SubmitValidatorRegistrations(ctx, reg)
 	require.NoError(t, err)

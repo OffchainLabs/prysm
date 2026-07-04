@@ -194,6 +194,35 @@ func TestEncodeExecutionRequests(t *testing.T) {
 		require.NotNil(t, b)
 		require.Equal(t, len(b), 0)
 	})
+	t.Run("Builder deposit and exit requests round-trip", func(t *testing.T) {
+		reqs := &enginev1.ExecutionRequestsGloas{
+			BuilderDeposits: []*enginev1.BuilderDepositRequest{{
+				Pubkey:                bytesutil.PadTo([]byte("bpk"), 48),
+				WithdrawalCredentials: bytesutil.PadTo([]byte("wc"), 32),
+				Amount:                64,
+				Signature:             bytesutil.PadTo([]byte("sig"), 96),
+			}},
+			BuilderExits: []*enginev1.BuilderExitRequest{{
+				SourceAddress: bytesutil.PadTo([]byte("addr"), 20),
+				Pubkey:        bytesutil.PadTo([]byte("bpk"), 48),
+			}},
+		}
+		encoded, err := enginev1.EncodeExecutionRequestsGloas(reqs)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(encoded))
+		require.Equal(t, byte(enginev1.BuilderDepositRequestType), encoded[0][0])
+		require.Equal(t, byte(enginev1.BuilderExitRequestType), encoded[1][0])
+
+		raw := make([][]byte, len(encoded))
+		for i := range encoded {
+			raw[i] = encoded[i]
+		}
+		bundle := &enginev1.ExecutionBundleGloas{ExecutionRequests: raw}
+		decoded, err := bundle.GetDecodedExecutionRequests(params.BeaconConfig().ExecutionRequestLimits())
+		require.NoError(t, err)
+		require.DeepEqual(t, reqs.BuilderDeposits, decoded.BuilderDeposits)
+		require.DeepEqual(t, reqs.BuilderExits, decoded.BuilderExits)
+	})
 }
 
 func TestUnmarshalItems_OK(t *testing.T) {
@@ -241,7 +270,7 @@ func TestMarshalItems_OK(t *testing.T) {
 }
 
 func TestEmptyExecutionRequestsHashTreeRoot(t *testing.T) {
-	want, err := (&enginev1.ExecutionRequests{}).HashTreeRoot()
+	want, err := (&enginev1.ExecutionRequestsGloas{}).HashTreeRoot()
 	require.NoError(t, err)
 	got, err := enginev1.EmptyExecutionRequestsHashTreeRoot()
 	require.NoError(t, err)

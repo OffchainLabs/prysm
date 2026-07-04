@@ -278,7 +278,7 @@
 - name: NewPayloadRequest#electra
   sources:
     - file: beacon-chain/execution/engine_client.go
-      search: func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests
+      search: func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester
   spec: |
     <spec dataclass="NewPayloadRequest" fork="electra" hash="366a2e72">
     class NewPayloadRequest:

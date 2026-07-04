@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -496,38 +495,6 @@ func IsEligibleForActivationUsingROVal(state state.ReadOnlyCheckpoint, validator
 func isEligibleForActivation(activationEligibilityEpoch, activationEpoch, finalizedEpoch primitives.Epoch) bool {
 	return activationEligibilityEpoch <= finalizedEpoch &&
 		activationEpoch == params.BeaconConfig().FarFutureEpoch
-}
-
-// LastActivatedValidatorIndex provides the last activated validator given a state
-func LastActivatedValidatorIndex(ctx context.Context, st state.ReadOnlyBeaconState) (primitives.ValidatorIndex, error) {
-	_, span := trace.StartSpan(ctx, "helpers.LastActivatedValidatorIndex")
-	defer span.End()
-	var lastActivatedvalidatorIndex primitives.ValidatorIndex
-	// linear search because status are not sorted
-	for j := st.NumValidators() - 1; j >= 0; j-- {
-		val, err := st.ValidatorAtIndexReadOnly(primitives.ValidatorIndex(j))
-		if err != nil {
-			return 0, err
-		}
-		if IsActiveValidatorUsingTrie(val, time.CurrentEpoch(st)) {
-			lastActivatedvalidatorIndex = primitives.ValidatorIndex(j)
-			break
-		}
-	}
-	return lastActivatedvalidatorIndex, nil
-}
-
-// IsSameWithdrawalCredentials returns true if both validators have the same withdrawal credentials.
-//
-//	return a.withdrawal_credentials[12:] == b.withdrawal_credentials[12:]
-func IsSameWithdrawalCredentials(a, b *ethpb.Validator) bool {
-	if a == nil || b == nil {
-		return false
-	}
-	if len(a.WithdrawalCredentials) <= 12 || len(b.WithdrawalCredentials) <= 12 {
-		return false
-	}
-	return bytes.Equal(a.WithdrawalCredentials[12:], b.WithdrawalCredentials[12:])
 }
 
 // IsFullyWithdrawableValidator returns whether the validator is able to perform a full

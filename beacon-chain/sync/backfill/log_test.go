@@ -256,12 +256,10 @@ func TestConcurrentLogging(t *testing.T) {
 	var wg sync.WaitGroup
 	wait := make(chan struct{})
 	for range 10 {
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			<-wait
-			defer wg.Done()
 			il.Log(logrus.InfoLevel, "concurrent message")
-		}()
+		})
 	}
 	close(wait) // maximize raciness by unblocking goroutines together
 	wg.Wait()

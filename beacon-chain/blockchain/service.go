@@ -12,9 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
@@ -33,7 +30,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -74,30 +70,30 @@ type Service struct {
 
 // config options for the service.
 type config struct {
-	BeaconBlockBuf           int
-	ChainStartFetcher        execution.ChainStartFetcher
-	BeaconDB                 db.HeadAccessDatabase
-	DepositCache             cache.DepositCache
-	PayloadIDCache           *cache.PayloadIDCache
-	TrackedValidatorsCache   *cache.TrackedValidatorsCache
-	ProposerPreferencesCache *cache.ProposerPreferencesCache
-	AttestationCache         *cache.AttestationCache
-	AttPool                  attestations.Pool
-	ExitPool                 voluntaryexits.PoolManager
-	SlashingPool             slashings.PoolManager
-	BLSToExecPool            blstoexec.PoolManager
-	P2P                      p2p.Accessor
-	MaxRoutines              int
-	StateNotifier            statefeed.Notifier
-	ForkChoiceStore          f.ForkChoicer
-	AttService               *attestations.Service
-	StateGen                 *stategen.State
-	SlasherAttestationsFeed  *event.Feed
-	WeakSubjectivityCheckpt  *ethpb.Checkpoint
-	BlockFetcher             execution.POWBlockFetcher
-	FinalizedStateAtStartUp  state.BeaconState
-	ExecutionEngineCaller    execution.EngineCaller
-	SyncChecker              Checker
+	BeaconBlockBuf            int
+	ChainStartFetcher         execution.ChainStartFetcher
+	BeaconDB                  db.HeadAccessDatabase
+	DepositCache              cache.DepositCache
+	PayloadIDCache            *cache.PayloadIDCache
+	ProposerPreferencesCache  *cache.ProposerPreferencesCache
+	SubscribedValidatorsCache *cache.SubscribedValidatorsCache
+	AttestationCache          *cache.AttestationCache
+	AttPool                   attestations.Pool
+	ExitPool                  voluntaryexits.PoolManager
+	SlashingPool              slashings.PoolManager
+	BLSToExecPool             blstoexec.PoolManager
+	P2P                       p2p.Accessor
+	MaxRoutines               int
+	StateNotifier             statefeed.Notifier
+	ForkChoiceStore           f.ForkChoicer
+	AttService                *attestations.Service
+	StateGen                  *stategen.State
+	SlasherAttestationsFeed   *event.Feed
+	WeakSubjectivityCheckpt   *ethpb.Checkpoint
+	BlockFetcher              execution.POWBlockFetcher
+	FinalizedStateAtStartUp   state.BeaconState
+	ExecutionEngineCaller     execution.EngineCaller
+	SyncChecker               Checker
 }
 
 // Checker is an interface used to determine if a node is in initial sync
@@ -357,46 +353,6 @@ func (s *Service) initializeHead(ctx context.Context, st state.BeaconState) erro
 		"slot": blk.Block().Slot(),
 	}).Info("Initialized head block from DB")
 	return nil
-}
-
-// initializes the state and genesis block of the beacon chain to persistent storage
-// based on a genesis timestamp value obtained from the ChainStart event emitted
-// by the ETH1.0 Deposit Contract and the POWChain service of the node.
-func (s *Service) initializeBeaconChain(
-	ctx context.Context,
-	genesisTime time.Time,
-	preGenesisState state.BeaconState,
-	eth1data *ethpb.Eth1Data) (state.BeaconState, error) {
-	ctx, span := trace.StartSpan(ctx, "beacon-chain.Service.initializeBeaconChain")
-	defer span.End()
-	s.genesisTime = genesisTime.Truncate(time.Second) // Genesis time has a precision of 1 second.
-	unixTime := uint64(genesisTime.Unix())
-
-	genesisState, err := transition.OptimizedGenesisBeaconState(unixTime, preGenesisState, eth1data)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not initialize genesis state")
-	}
-
-	if err := s.saveGenesisData(ctx, genesisState); err != nil {
-		return nil, errors.Wrap(err, "could not save genesis data")
-	}
-
-	log.Info("Initialized beacon chain genesis state")
-
-	// Clear out all pre-genesis data now that the state is initialized.
-	s.cfg.ChainStartFetcher.ClearPreGenesisData()
-
-	// Update committee shuffled indices for genesis epoch.
-	if err := helpers.UpdateCommitteeCache(ctx, genesisState, 0); err != nil {
-		return nil, err
-	}
-	if err := helpers.UpdateProposerIndicesInCache(ctx, genesisState, coreTime.CurrentEpoch(genesisState)); err != nil {
-		return nil, err
-	}
-
-	s.cfg.AttService.SetGenesisTime(genesisState.GenesisTime())
-
-	return genesisState, nil
 }
 
 // This gets called when beacon chain is first initialized to save genesis data (state, block, and more) in db.

@@ -16,72 +16,43 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Valida
 	ctx, span := trace.StartSpan(ctx, "validator.subscribeToSubnets")
 	defer span.End()
 
-	subscribeSlots := make([]primitives.Slot, 0, len(duties.CurrentEpochDuties)+len(duties.NextEpochDuties))
-	subscribeCommitteeIndices := make([]primitives.CommitteeIndex, 0, len(duties.CurrentEpochDuties)+len(duties.NextEpochDuties))
-	subscribeIsAggregator := make([]bool, 0, len(duties.CurrentEpochDuties)+len(duties.NextEpochDuties))
-	activeDuties := make([]*ethpb.ValidatorDuty, 0, len(duties.CurrentEpochDuties)+len(duties.NextEpochDuties))
-	alreadySubscribed := make(map[[64]byte]bool)
+	total := len(duties.CurrentEpochDuties) + len(duties.NextEpochDuties)
+	subscribeSlots := make([]primitives.Slot, 0, total)
+	subscribeCommitteeIndices := make([]primitives.CommitteeIndex, 0, total)
+	subscribeIsAggregator := make([]bool, 0, total)
+	subscribeValidatorIndices := make([]primitives.ValidatorIndex, 0, total)
+	subscribeCommitteesAtSlot := make([]uint64, 0, total)
 
 	if err := v.aggSelector.RefreshSelectionProofs(ctx); err != nil {
 		return errors.Wrap(err, "could not prepare aggregated selection proofs")
 	}
 
-	for _, duty := range duties.CurrentEpochDuties {
-		pk := bytesutil.ToBytes48(duty.PublicKey)
-		if duty.Status == ethpb.ValidatorStatus_ACTIVE || duty.Status == ethpb.ValidatorStatus_EXITING {
-			attesterSlot := duty.AttesterSlot
-			committeeIndex := duty.CommitteeIndex
-			alreadySubscribedKey := validatorSubnetSubscriptionKey(attesterSlot, committeeIndex)
-			if _, ok := alreadySubscribed[alreadySubscribedKey]; ok {
+	for _, set := range [][]*ethpb.ValidatorDuty{duties.CurrentEpochDuties, duties.NextEpochDuties} {
+		for _, duty := range set {
+			if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
 				continue
 			}
-
-			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, attesterSlot, pk)
+			// TODO: parallelize — serial sign here is O(N) signer round-trips at scale.
+			isAgg, err := v.isAggregator(ctx, duty.CommitteeLength, duty.AttesterSlot, bytesutil.ToBytes48(duty.PublicKey))
 			if err != nil {
 				return errors.Wrap(err, "could not check if a validator is an aggregator")
 			}
-			if aggregator {
-				alreadySubscribed[alreadySubscribedKey] = true
-			}
-
-			subscribeSlots = append(subscribeSlots, attesterSlot)
-			subscribeCommitteeIndices = append(subscribeCommitteeIndices, committeeIndex)
-			subscribeIsAggregator = append(subscribeIsAggregator, aggregator)
-			activeDuties = append(activeDuties, duty)
-		}
-	}
-
-	for _, duty := range duties.NextEpochDuties {
-		if duty.Status == ethpb.ValidatorStatus_ACTIVE || duty.Status == ethpb.ValidatorStatus_EXITING {
-			attesterSlot := duty.AttesterSlot
-			committeeIndex := duty.CommitteeIndex
-			alreadySubscribedKey := validatorSubnetSubscriptionKey(attesterSlot, committeeIndex)
-			if _, ok := alreadySubscribed[alreadySubscribedKey]; ok {
-				continue
-			}
-
-			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, attesterSlot, bytesutil.ToBytes48(duty.PublicKey))
-			if err != nil {
-				return errors.Wrap(err, "could not check if a validator is an aggregator")
-			}
-			if aggregator {
-				alreadySubscribed[alreadySubscribedKey] = true
-			}
-
-			subscribeSlots = append(subscribeSlots, attesterSlot)
-			subscribeCommitteeIndices = append(subscribeCommitteeIndices, committeeIndex)
-			subscribeIsAggregator = append(subscribeIsAggregator, aggregator)
-			activeDuties = append(activeDuties, duty)
+			subscribeSlots = append(subscribeSlots, duty.AttesterSlot)
+			subscribeCommitteeIndices = append(subscribeCommitteeIndices, duty.CommitteeIndex)
+			subscribeIsAggregator = append(subscribeIsAggregator, isAgg)
+			subscribeValidatorIndices = append(subscribeValidatorIndices, duty.ValidatorIndex)
+			subscribeCommitteesAtSlot = append(subscribeCommitteesAtSlot, duty.CommitteesAtSlot)
 		}
 	}
 
 	_, err := v.validatorClient.SubscribeCommitteeSubnets(ctx,
 		&ethpb.CommitteeSubnetsSubscribeRequest{
-			Slots:        subscribeSlots,
-			CommitteeIds: subscribeCommitteeIndices,
-			IsAggregator: subscribeIsAggregator,
+			Slots:            subscribeSlots,
+			CommitteeIds:     subscribeCommitteeIndices,
+			IsAggregator:     subscribeIsAggregator,
+			ValidatorIndices: subscribeValidatorIndices,
+			CommitteesAtSlot: subscribeCommitteesAtSlot,
 		},
-		activeDuties,
 	)
 
 	return err

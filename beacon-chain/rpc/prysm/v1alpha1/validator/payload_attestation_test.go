@@ -52,7 +52,7 @@ func TestPayloadAttestationData_OK(t *testing.T) {
 		TimeFetcher:       chain,
 		HeadFetcher:       chain,
 		ForkchoiceFetcher: chain,
-		CoreService:       &core.Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain},
+		CoreService:       &core.Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain},
 	}
 
 	resp, err := vs.PayloadAttestationData(t.Context(), &ethpb.PayloadAttestationDataRequest{Slot: slot})

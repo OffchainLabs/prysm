@@ -1779,7 +1779,7 @@ func TestErrorMessage_unexpectedStatusErr(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := unexpectedStatusErr(tt.args, http.StatusOK)
+			err := unexpectedStatusErr(tt.args, []int{http.StatusOK})
 			if err != nil && tt.wantMessage != "" {
 				require.ErrorContains(t, tt.wantMessage, err)
 			}

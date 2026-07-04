@@ -14,6 +14,23 @@ type HeadEvent struct {
 	CurrentDutyDependentRoot  string `json:"current_duty_dependent_root"`
 }
 
+// HeadEventV2 is the versioned, Gloas-aware head_v2 event.
+type HeadEventV2 struct {
+	Version string           `json:"version"`
+	Data    *HeadEventV2Data `json:"data"`
+}
+
+type HeadEventV2Data struct {
+	Slot                      string `json:"slot"`
+	Block                     string `json:"block"`
+	State                     string `json:"state"`
+	PayloadStatus             string `json:"payload_status"`
+	CurrentEpochDependentRoot string `json:"current_epoch_dependent_root"`
+	NextEpochDependentRoot    string `json:"next_epoch_dependent_root"`
+	EpochTransition           bool   `json:"epoch_transition"`
+	ExecutionOptimistic       bool   `json:"execution_optimistic"`
+}
+
 type BlockEvent struct {
 	Slot                string `json:"slot"`
 	Block               string `json:"block"`
@@ -68,7 +85,7 @@ type PayloadAttributesEvent struct {
 type PayloadAttributesEventData struct {
 	ProposerIndex     string          `json:"proposer_index"`
 	ProposalSlot      string          `json:"proposal_slot"`
-	ParentBlockNumber string          `json:"parent_block_number"`
+	ParentBlockNumber string          `json:"parent_block_number,omitempty"` // Removed from gloas onwards.
 	ParentBlockRoot   string          `json:"parent_block_root"`
 	ParentBlockHash   string          `json:"parent_block_hash"`
 	PayloadAttributes json.RawMessage `json:"payload_attributes"`
@@ -111,6 +128,16 @@ type LightClientFinalityUpdateEvent struct {
 type LightClientOptimisticUpdateEvent struct {
 	Version string                       `json:"version"`
 	Data    *LightClientOptimisticUpdate `json:"data"`
+}
+
+type ProposerPreferencesEvent struct {
+	Version string                     `json:"version"`
+	Data    *SignedProposerPreferences `json:"data"`
+}
+
+type ExecutionPayloadBidEvent struct {
+	Version string                     `json:"version"`
+	Data    *SignedExecutionPayloadBid `json:"data"`
 }
 
 type ExecutionPayloadAvailableEvent struct {

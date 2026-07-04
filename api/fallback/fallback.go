@@ -3,6 +3,7 @@ package fallback
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/sirupsen/logrus"
 )
 
@@ -43,9 +44,9 @@ func EnsureReady(ctx context.Context, provider HostProvider, checker ReadyChecke
 		if checker.IsReady(ctx) {
 			if len(attemptedHosts) > 0 {
 				log.WithFields(logrus.Fields{
-					"previous": startingHost,
-					"current":  provider.CurrentHost(),
-					"tried":    attemptedHosts,
+					"previous": api.RedactEndpoint(startingHost),
+					"current":  api.RedactEndpoint(provider.CurrentHost()),
+					"tried":    api.RedactEndpoints(attemptedHosts),
 				}).Warn("Switched to responsive beacon node")
 			}
 			return true
@@ -61,6 +62,6 @@ func EnsureReady(ctx context.Context, provider HostProvider, checker ReadyChecke
 		}
 	}
 
-	log.WithField("tried", attemptedHosts).Warn("No responsive beacon node found")
+	log.WithField("tried", api.RedactEndpoints(attemptedHosts)).Warn("No responsive beacon node found")
 	return false
 }

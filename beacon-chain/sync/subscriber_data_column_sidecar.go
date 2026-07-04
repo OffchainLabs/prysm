@@ -3,10 +3,12 @@ package sync
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -38,21 +40,53 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		return fmt.Errorf("unexpected data column type: %T", msg)
 	}
 
+	if !sidecar.IsGloas() {
+		// Track useful full columns received via gossip (not previously seen)
+		proposerIndex, err := sidecar.ProposerIndex()
+		if err != nil {
+			return errors.Wrap(err, "proposer index")
+		}
+		if !s.hasSeenDataColumnIndex(sidecar.Slot(), proposerIndex, sidecar.Index()) && !sidecar.IsGloas() {
+			usefulFullColumnsReceivedTotal.WithLabelValues(strconv.FormatUint(sidecar.Index(), 10)).Inc()
+			// re-publish the full column on the partial column extension as we don't send full columns to peers
+			// who have explicitly requested for partial columns. This method is idempotent so this is fine.
+			if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
+				digest, err := s.currentForkDigest()
+				if err != nil {
+					log.Error("Failed to get current fork digest")
+				} else {
+					err := broadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
+						subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index())
+						topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
+						partialColumn, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar)
+						if err != nil {
+							log.WithError(err).Error("Failed to create partial data column from verified RO data column")
+							return
+						}
+						yield(topic, partialColumn)
+					})
+					if err != nil {
+						log.WithError(err).Error("Failed to publish partial column on getting data column sidecar")
+					}
+				}
+			}
+		}
+	}
+
 	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
 		return wrapDataColumnError(sidecar, "receive data column sidecar", err)
 	}
 
-	// Reconstruction and execution processing require Fulu-specific fields
-	// (SignedBlockHeader, KzgCommitments) that Gloas sidecars don't carry.
+	// CL reconstruction (from >=50% seen columns) runs for both Fulu and Gloas.
+	wg.Go(func() error {
+		if err := s.processDataColumnSidecarsFromReconstruction(ctx, sidecar); err != nil {
+			return wrapDataColumnError(sidecar, "process data column sidecars from reconstruction", err)
+		}
+
+		return nil
+	})
+
 	if !sidecar.IsGloas() {
-		wg.Go(func() error {
-			if err := s.processDataColumnSidecarsFromReconstruction(ctx, sidecar); err != nil {
-				return wrapDataColumnError(sidecar, "process data column sidecars from reconstruction", err)
-			}
-
-			return nil
-		})
-
 		wg.Go(func() error {
 			if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromSidecar(sidecar)); err != nil {
 				if errors.Is(err, context.Canceled) {
@@ -71,6 +105,28 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 	}
 
 	return nil
+}
+
+func (s *Service) verifiedRODataColumnSubscriber(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
+	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
+		return errors.Wrap(err, "receive data column sidecar")
+	}
+
+	var wg errgroup.Group
+	wg.Go(func() error {
+		// Broadcast our complete column for peers that don't use partial messages
+		if err := s.cfg.p2p.BroadcastDataColumnSidecars(ctx, []blocks.VerifiedRODataColumn{sidecar}, nil); err != nil {
+			return errors.Wrap(err, "broadcast data column sidecars")
+		}
+
+		return nil
+	})
+
+	if err := s.processDataColumnSidecarsFromReconstruction(ctx, sidecar); err != nil {
+		return errors.Wrap(err, "process data column sidecars from reconstruction")
+	}
+
+	return wg.Wait()
 }
 
 // receiveDataColumnSidecar receives a single data column sidecar: marks it as seen and saves it to the chain.

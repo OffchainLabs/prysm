@@ -126,6 +126,15 @@ func (s *Service) setSeenDataColumnRootIndex(root [fieldparams.RootLength]byte, 
 	s.seenDataColumnCache.Add(slot, key, true)
 }
 
+// hasSeenDataColumn reports whether the sidecar identity has been seen. Gloas sidecars are keyed
+// by (block root, index); pre-Gloas sidecars by (slot, proposer index, index).
+func (s *Service) hasSeenDataColumn(isGloas bool, root [fieldparams.RootLength]byte, slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) bool {
+	if isGloas {
+		return s.hasSeenDataColumnRootIndex(root, index)
+	}
+	return s.hasSeenDataColumnIndex(slot, proposerIndex, index)
+}
+
 // queuePendingGloasColumn returns a non-nil error for malformed sidecars (the caller propagates it as ValidationReject).
 func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID) error {
 	dc := roCol.DataColumnSidecarGloas()
@@ -168,7 +177,7 @@ func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID
 	return nil
 }
 
-func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, blk interfaces.ReadOnlySignedBeaconBlock) {
+func (s *Service) processPendingGloasColumns(ctx context.Context, root [fieldparams.RootLength]byte, blk interfaces.ReadOnlySignedBeaconBlock) {
 	if blk == nil || blk.IsNil() {
 		return
 	}
@@ -198,7 +207,6 @@ func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, 
 
 	verified := make([]blocks.VerifiedRODataColumn, 0, count)
 	var skipped int
-	badPeers := make(map[peer.ID]bool)
 	for _, pe := range entry.columns {
 		if pe == nil {
 			continue
@@ -219,17 +227,17 @@ func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, 
 
 		if err := verifier.VerifyDataColumnSidecarSlotMatchesBlockGloas(); err != nil {
 			skipped++
-			badPeers[pe.peer] = true
+			s.downscorePeer(pe.peer, "pendingGloasColumnSlotMismatch", logrus.Fields{"error": err})
 			continue
 		}
 		if err := verifier.VerifyDataColumnSidecarGloas(); err != nil {
 			skipped++
-			badPeers[pe.peer] = true
+			s.downscorePeer(pe.peer, "pendingGloasColumnInvalidSidecar", logrus.Fields{"error": err})
 			continue
 		}
 		if err := verifier.VerifyDataColumnSidecarKzgProofsGloas(); err != nil {
 			skipped++
-			badPeers[pe.peer] = true
+			s.downscorePeer(pe.peer, "pendingGloasColumnInvalidKzgProof", logrus.Fields{"error": err})
 			continue
 		}
 
@@ -245,14 +253,14 @@ func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, 
 		verified = append(verified, v)
 	}
 
-	for pid := range badPeers {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(pid)
-	}
-
 	if len(verified) > 0 {
 		if err := s.cfg.dataColumnStorage.Save(verified); err != nil {
 			log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Warn("Failed to save pending Gloas columns")
 			return
+		}
+
+		if err := s.cfg.p2p.BroadcastDataColumnSidecars(ctx, verified, nil); err != nil {
+			log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Warn("Failed to broadcast pending Gloas columns")
 		}
 
 		log.WithFields(logrus.Fields{
@@ -278,15 +286,52 @@ func (s *Service) prunePendingGloasColumns() {
 	for {
 		select {
 		case currentSlot := <-slotTicker.C():
-			s.pendingGloasColumnsLock.Lock()
-			for r, e := range s.pendingGloasColumns {
-				if e.slot+1 < currentSlot {
-					delete(s.pendingGloasColumns, r)
-				}
-			}
-			s.pendingGloasColumnsLock.Unlock()
+			s.pruneStaleGloasColumns(currentSlot)
 		case <-s.ctx.Done():
 			return
+		}
+	}
+}
+
+// pruneStaleGloasColumns drops entries whose slot has passed. A column queued for
+// a block root that never became known is treated as fabricated and its forwarding
+// peer is downscored; known-but-orphaned roots (honest reorgs) are spared.
+func (s *Service) pruneStaleGloasColumns(currentSlot primitives.Slot) {
+	type prunedRoot struct {
+		root  [fieldparams.RootLength]byte
+		peers []peer.ID
+	}
+	var pruned []prunedRoot
+	s.pendingGloasColumnsLock.Lock()
+	for r, e := range s.pendingGloasColumns {
+		if e.slot+1 >= currentSlot {
+			continue
+		}
+		// Dedupe forwarders: a peer that relayed many columns for one root is downscored once, not per column.
+		seen := make(map[peer.ID]struct{})
+		peers := make([]peer.ID, 0, fieldparams.NumberOfColumns)
+		for _, pe := range e.columns {
+			if pe == nil {
+				continue
+			}
+			if _, ok := seen[pe.peer]; ok {
+				continue
+			}
+			seen[pe.peer] = struct{}{}
+			peers = append(peers, pe.peer)
+		}
+		pruned = append(pruned, prunedRoot{root: r, peers: peers})
+		delete(s.pendingGloasColumns, r)
+	}
+	s.pendingGloasColumnsLock.Unlock()
+
+	// HasBlock + downscore outside the lock; a root we never learned of was fabricated.
+	for _, p := range pruned {
+		if s.cfg.chain == nil || s.cfg.chain.HasBlock(s.ctx, p.root) {
+			continue
+		}
+		for _, pid := range p.peers {
+			s.downscorePeer(pid, "pendingGloasColumnUnknownRoot", logrus.Fields{"root": fmt.Sprintf("%#x", p.root)})
 		}
 	}
 }

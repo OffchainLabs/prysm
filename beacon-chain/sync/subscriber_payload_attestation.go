@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"google.golang.org/protobuf/proto"
 )
@@ -18,7 +19,10 @@ func (s *Service) payloadAttestationSubscriber(ctx context.Context, msg proto.Me
 	if a == nil || a.Data == nil {
 		return errNilMessage
 	}
+	return s.processPayloadAttestationMessage(ctx, a)
+}
 
+func (s *Service) processPayloadAttestationMessage(ctx context.Context, a *eth.PayloadAttestationMessage) error {
 	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
 		Type: opfeed.PayloadAttestationMessageReceived,
 		Data: &opfeed.PayloadAttestationMessageReceivedData{
@@ -30,9 +34,12 @@ func (s *Service) payloadAttestationSubscriber(ctx context.Context, msg proto.Me
 		return err
 	}
 
-	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
+	st, err := s.cfg.chain.PtcLookupState(ctx, bytesutil.ToBytes32(a.Data.BeaconBlockRoot), a.Data.Slot)
 	if err != nil {
 		return err
+	}
+	if st == nil {
+		return nil
 	}
 	idx, err := gloas.PayloadCommitteeIndex(ctx, st, a.Data.Slot, a.ValidatorIndex)
 	if err != nil {

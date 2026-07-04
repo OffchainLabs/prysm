@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -12,11 +13,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen/mock"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -25,9 +28,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common"
@@ -124,6 +129,7 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 		BlockGossipTopic,
 		DataColumnTopic,
 		PayloadAttestationMessageTopic,
+		ProposerPreferencesTopic,
 		ExecutionPayloadGossipTopic,
 	})
 	require.NoError(t, err)
@@ -330,6 +336,21 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 			},
 		},
 		{
+			Type: operation.ProposerPreferencesReceived,
+			Data: &operation.ProposerPreferencesReceivedData{
+				Data: &eth.SignedProposerPreferences{
+					Message: &eth.ProposerPreferences{
+						DependentRoot:  make([]byte, fieldparams.RootLength),
+						ProposalSlot:   32,
+						ValidatorIndex: 7,
+						FeeRecipient:   make([]byte, 20),
+						TargetGasLimit: 30_000_000,
+					},
+					Signature: make([]byte, fieldparams.BLSSignatureLength),
+				},
+			},
+		},
+		{
 			Type: operation.ExecutionPayloadGossipReceived,
 			Data: &operation.ExecutionPayloadGossipReceivedData{
 				Slot:         1,
@@ -379,6 +400,44 @@ func newStreamTestSync(t *testing.T) *streamTestSync {
 	}
 }
 
+func TestStreamEvents_ProposerPreferencesWrappedWithVersion(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	s := &Server{}
+	topics, err := newTopicRequest([]string{ProposerPreferencesTopic})
+	require.NoError(t, err)
+	ev := &feed.Event{
+		Type: operation.ProposerPreferencesReceived,
+		Data: &operation.ProposerPreferencesReceivedData{
+			Data: &eth.SignedProposerPreferences{
+				Message: &eth.ProposerPreferences{
+					DependentRoot:  make([]byte, fieldparams.RootLength),
+					ProposalSlot:   32,
+					ValidatorIndex: 7,
+					FeeRecipient:   make([]byte, 20),
+					TargetGasLimit: 30_000_000,
+				},
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+		},
+	}
+	lr, err := s.lazyReaderForEvent(t.Context(), ev, topics)
+	require.NoError(t, err)
+	out, err := io.ReadAll(lr())
+	require.NoError(t, err)
+
+	_, payload, found := strings.Cut(string(out), "data: ")
+	require.Equal(t, true, found)
+	var got structs.ProposerPreferencesEvent
+	require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(payload)), &got))
+	require.Equal(t, "gloas", got.Version)
+	require.NotNil(t, got.Data)
+	require.Equal(t, "7", got.Data.Message.ValidatorIndex)
+}
+
 func TestStreamEvents_OperationsEvents(t *testing.T) {
 	t.Run("operations", func(t *testing.T) {
 		testSync := newStreamTestSync(t)
@@ -416,6 +475,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 
 		topics, err := newTopicRequest([]string{
 			HeadTopic,
+			HeadV2Topic,
 			FinalizedCheckpointTopic,
 			ChainReorgTopic,
 			BlockTopic,
@@ -449,6 +509,20 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 					PreviousDutyDependentRoot: make([]byte, 32),
 					CurrentDutyDependentRoot:  make([]byte, 32),
 					ExecutionOptimistic:       false,
+				},
+			},
+			{
+				Type: statefeed.NewHeadV2,
+				Data: &statefeed.HeadV2Data{
+					Slot:                      0,
+					Block:                     [32]byte{},
+					State:                     [32]byte{},
+					EpochTransition:           true,
+					ExecutionOptimistic:       false,
+					CurrentEpochDependentRoot: [32]byte{},
+					NextEpochDependentRoot:    [32]byte{},
+					PayloadStatus:             statefeed.PayloadStatusFull,
+					Version:                   version.Gloas,
 				},
 			},
 			{
@@ -501,10 +575,10 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 	})
 	t.Run("payload attributes", func(t *testing.T) {
 		type testCase struct {
-			name                      string
-			getState                  func() state.BeaconState
-			getBlock                  func() interfaces.SignedBeaconBlock
-			SetTrackedValidatorsCache func(*cache.TrackedValidatorsCache)
+			name                        string
+			getState                    func() state.BeaconState
+			getBlock                    func() interfaces.SignedBeaconBlock
+			SetProposerPreferencesCache func(*cache.ProposerPreferencesCache)
 		}
 		testCases := []testCase{
 			{
@@ -558,13 +632,6 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 					require.NoError(t, err)
 					return b
 				},
-				SetTrackedValidatorsCache: func(c *cache.TrackedValidatorsCache) {
-					c.Set(cache.TrackedValidator{
-						Active:       true,
-						Index:        0,
-						FeeRecipient: primitives.ExecutionAddress(common.HexToAddress("0xd2DBd02e4efe087d7d195de828b9Dd25f19A89C9").Bytes()),
-					})
-				},
 			},
 		}
 		for _, tc := range testCases {
@@ -596,17 +663,19 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 				opn := mockChain.NewEventFeedWrapper()
 				stategen := mock.NewService()
 				stategen.AddStateForRoot(st, headRoot)
+				beaconDB := dbtest.SetupDB(t)
 				s := &Server{
-					StateNotifier:          &mockChain.SimpleNotifier{Feed: stn},
-					OperationNotifier:      &mockChain.SimpleNotifier{Feed: opn},
-					HeadFetcher:            mockChainService,
-					ChainInfoFetcher:       mockChainService,
-					TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-					EventWriteTimeout:      testEventWriteTimeout,
-					StateGen:               stategen,
+					StateNotifier:            &mockChain.SimpleNotifier{Feed: stn},
+					OperationNotifier:        &mockChain.SimpleNotifier{Feed: opn},
+					HeadFetcher:              mockChainService,
+					ChainInfoFetcher:         mockChainService,
+					ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+					BeaconDB:                 beaconDB,
+					EventWriteTimeout:        testEventWriteTimeout,
+					StateGen:                 stategen,
 				}
-				if tc.SetTrackedValidatorsCache != nil {
-					tc.SetTrackedValidatorsCache(s.TrackedValidatorsCache)
+				if tc.SetProposerPreferencesCache != nil {
+					tc.SetProposerPreferencesCache(s.ProposerPreferencesCache)
 				}
 				topics, err := newTopicRequest([]string{PayloadAttributesTopic})
 				require.NoError(t, err)
@@ -636,6 +705,225 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 	})
 }
 
+// TestPayloadAttributesReader_ParentBlockNumber verifies beacon-APIs #621: the
+// parent_block_number field is present in the payload_attributes event pre-gloas and
+// omitted from gloas onwards.
+func TestPayloadAttributesReader_ParentBlockNumber(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+
+	// The event's fork is keyed to proposal_slot, so presence is gated on the proposal
+	// slot's fork, not the head block's version. Proposal slot sits in epoch 0 in every
+	// case (head slot 0 avoids slot processing), so GloasForkEpoch selects the fork.
+	cases := []struct {
+		name        string
+		gloasEpoch  primitives.Epoch
+		getState    func() state.BeaconState
+		getBlock    func() interfaces.SignedBeaconBlock
+		wantPresent bool
+		wantVersion string
+	}{
+		{
+			name:       "pre-gloas proposal slot includes parent_block_number",
+			gloasEpoch: math.MaxUint64,
+			getState: func() state.BeaconState {
+				st, err := util.NewBeaconStateDeneb()
+				require.NoError(t, err)
+				return st
+			},
+			getBlock: func() interfaces.SignedBeaconBlock {
+				b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockDeneb(&eth.SignedBeaconBlockDeneb{}))
+				require.NoError(t, err)
+				return b
+			},
+			wantPresent: true,
+			// The schedule fork at epoch 0 is phase0 even though the head block is deneb.
+			wantVersion: "phase0",
+		},
+		{
+			name:       "gloas proposal slot omits parent_block_number",
+			gloasEpoch: 0,
+			getState: func() state.BeaconState {
+				st, err := util.NewBeaconStateGloas()
+				require.NoError(t, err)
+				return st
+			},
+			getBlock: func() interfaces.SignedBeaconBlock {
+				b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockGloas(&eth.SignedBeaconBlockGloas{}))
+				require.NoError(t, err)
+				return b
+			},
+			wantPresent: false,
+			wantVersion: "gloas",
+		},
+		{
+			// Boundary: the head block is pre-gloas (so ev.ParentBlockNumber is populated),
+			// but the proposal slot is gloas, so the field must still be omitted.
+			name:       "gloas proposal slot with pre-gloas head omits parent_block_number",
+			gloasEpoch: 0,
+			getState: func() state.BeaconState {
+				st, err := util.NewBeaconStateDeneb()
+				require.NoError(t, err)
+				return st
+			},
+			getBlock: func() interfaces.SignedBeaconBlock {
+				b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockDeneb(&eth.SignedBeaconBlockDeneb{}))
+				require.NoError(t, err)
+				return b
+			},
+			wantPresent: false,
+			wantVersion: "gloas",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := params.BeaconConfig().Copy()
+			cfg.GloasForkEpoch = tc.gloasEpoch
+			params.OverrideBeaconConfig(cfg)
+
+			st := tc.getState()
+			v := &eth.Validator{ExitEpoch: math.MaxUint64, EffectiveBalance: params.BeaconConfig().MinActivationBalance, WithdrawalCredentials: make([]byte, 32)}
+			require.NoError(t, st.SetValidators([]*eth.Validator{v}))
+			require.NoError(t, st.SetBalances([]uint64{0}))
+			currentSlot := primitives.Slot(0)
+			require.NoError(t, st.SetSlot(currentSlot+1)) // avoid slot processing.
+			genesis := time.Now()
+			require.NoError(t, st.SetGenesisTime(genesis))
+			b := tc.getBlock()
+			headRoot, err := b.Block().HashTreeRoot()
+			require.NoError(t, err)
+			stategen := mock.NewService()
+			stategen.AddStateForRoot(st, headRoot)
+			mockChainService := &mockChain.ChainService{Root: make([]byte, 32), State: st, Slot: &currentSlot, Genesis: genesis}
+			s := &Server{
+				HeadFetcher:              mockChainService,
+				ChainInfoFetcher:         mockChainService,
+				ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+				EventWriteTimeout:        testEventWriteTimeout,
+				StateGen:                 stategen,
+			}
+
+			ev := payloadattribute.EventData{
+				ProposalSlot: currentSlot + 1,
+				HeadBlock:    b,
+				HeadRoot:     headRoot,
+			}
+			lr, err := s.payloadAttributesReader(t.Context(), ev)
+			require.NoError(t, err)
+			out, err := io.ReadAll(lr())
+			require.NoError(t, err)
+
+			_, payload, found := strings.Cut(string(out), "data: ")
+			require.Equal(t, true, found)
+			var got structs.PayloadAttributesEvent
+			require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(payload)), &got))
+			require.Equal(t, tc.wantVersion, got.Version)
+
+			fields := make(map[string]json.RawMessage)
+			require.NoError(t, json.Unmarshal(got.Data, &fields))
+			_, present := fields["parent_block_number"]
+			require.Equal(t, tc.wantPresent, present, "parent_block_number presence mismatch")
+		})
+  }
+}
+
+// TestStreamEvents_PayloadAttributesExpiredSlotNotLoggedAsError verifies that a payload
+// attributes event whose proposal slot has already started is skipped without an ERROR log.
+func TestStreamEvents_PayloadAttributesExpiredSlotNotLoggedAsError(t *testing.T) {
+	testSync := newStreamTestSync(t)
+	defer testSync.cleanup()
+
+	// Genesis one second in the past makes proposal slot 0's start time already elapsed,
+	// forcing payloadAttributesReader down the errPayloadAttributeExpired path.
+	genesis := time.Now().Add(-1 * time.Second)
+	currentSlot := primitives.Slot(0)
+	mockChainService := &mockChain.ChainService{
+		Root:    make([]byte, 32),
+		Slot:    &currentSlot,
+		Genesis: genesis,
+	}
+
+	stn := mockChain.NewEventFeedWrapper()
+	opn := mockChain.NewEventFeedWrapper()
+	s := &Server{
+		StateNotifier:     &mockChain.SimpleNotifier{Feed: stn},
+		OperationNotifier: &mockChain.SimpleNotifier{Feed: opn},
+		ChainInfoFetcher:  mockChainService,
+		EventWriteTimeout: testEventWriteTimeout,
+	}
+
+	// Subscribe to payload attributes (the expired event) plus a block topic used purely as an
+	// ordering barrier: recvEventLoop processes events serially, so once the block event reaches
+	// the client we know the expired event ahead of it has already been handled.
+	topics, err := newTopicRequest([]string{PayloadAttributesTopic, BlockTopic})
+	require.NoError(t, err)
+	request := topics.testHttpRequest(testSync.ctx, t)
+	w := NewStreamingResponseWriterRecorder(testSync.ctx)
+
+	go func() {
+		s.StreamEvents(w, request)
+		testSync.markDone()
+	}()
+
+	blk, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlock(&eth.SignedBeaconBlock{}))
+	require.NoError(t, err)
+	expired := &feed.Event{
+		Type: statefeed.PayloadAttributes,
+		Data: payloadattribute.EventData{
+			ProposalSlot:    currentSlot, // slot 0 start time is in the past → expired
+			ParentBlockHash: make([]byte, 32),
+			HeadBlock:       blk,
+		},
+	}
+	barrier := &feed.Event{
+		Type: statefeed.BlockProcessed,
+		Data: &statefeed.BlockProcessedData{
+			Slot:        0,
+			BlockRoot:   [32]byte{},
+			SignedBlock: blk,
+			Verified:    true,
+		},
+	}
+
+	require.NoError(t, stn.WaitForSubscription(testSync.ctx))
+	s.StateNotifier.StateFeed().Send(expired)
+	s.StateNotifier.StateFeed().Send(barrier)
+
+	// Read the stream until the barrier (block) event arrives.
+	sseR := sse.NewEventStreamReader(w.Body(), 1<<24)
+	got := make(chan struct{})
+	go func() {
+		defer close(got)
+		for {
+			ev, err := sseR.ReadEvent()
+			if err != nil {
+				return
+			}
+			if strings.Contains(string(ev), "event: "+BlockTopic+"\n") {
+				return
+			}
+		}
+	}()
+	select {
+	case <-got:
+	case <-time.After(time.Second): // failsafe only; delivery is sub-millisecond on success
+		t.Fatal("timed out waiting for the block event that follows the expired payload attributes event")
+	}
+
+	// The expired event has now been processed. Because recvEventLoop wrote the log entry (if any)
+	// before handing the barrier event to the outbox, any such entry is already buffered here.
+	for {
+		select {
+		case entry := <-testSync.logs:
+			// A past-slot skip is expected and must not surface as an error-level log. Asserting on the
+			// level (rather than an exact message) keeps the guard robust if the message is reworded.
+			require.NotEqual(t, logrus.ErrorLevel, entry.Level,
+				fmt.Sprintf("expired payload attributes event should be skipped silently; got error log: %q", entry.Message))
+		default:
+			return
+		}
+	}
+}
+
 func TestFillEventData(t *testing.T) {
 	ctx := t.Context()
 	t.Run("AlreadyFilledData_ShouldShortCircuitWithoutError", func(t *testing.T) {
@@ -646,6 +934,7 @@ func TestFillEventData(t *testing.T) {
 		})
 		require.NoError(t, err)
 		alreadyFilled := payloadattribute.EventData{
+			ProposerIndex:   7,
 			HeadBlock:       b,
 			HeadRoot:        [32]byte{1, 2, 3},
 			Attributer:      attributor,
@@ -656,68 +945,114 @@ func TestFillEventData(t *testing.T) {
 		require.NoError(t, err)
 		require.DeepEqual(t, alreadyFilled, result)
 	})
-	t.Run("Electra PartialData_ShouldFetchHeadStateAndBlock", func(t *testing.T) {
-		st, err := util.NewBeaconStateElectra()
-		require.NoError(t, err)
-		valCount := 10
-		setActiveValidators(t, st, valCount)
-		inactivityScores := make([]uint64, valCount)
-		for i := range inactivityScores {
-			inactivityScores[i] = 10
-		}
-		require.NoError(t, st.SetInactivityScores(inactivityScores))
-		b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockElectra(&eth.SignedBeaconBlockElectra{}))
-		require.NoError(t, err)
-		attributor, err := payloadattribute.New(&enginev1.PayloadAttributes{
-			Timestamp: uint64(time.Now().Unix()),
-		})
-		require.NoError(t, err)
-		headRoot, err := b.Block().HashTreeRoot()
-		require.NoError(t, err)
-		// Create an event data object missing certain fields:
-		partial := payloadattribute.EventData{
-			ProposalSlot: 42,         // different epoch from current slot
-			Attributer:   attributor, // Must be Bellatrix or later
-			HeadBlock:    b,
-			HeadRoot:     headRoot,
-		}
-		currentSlot := primitives.Slot(0)
-		// to avoid slot processing
-		require.NoError(t, st.SetSlot(currentSlot+1))
-		mockChainService := &mockChain.ChainService{
-			Root:  make([]byte, 32),
-			State: st,
-			Block: b,
-			Slot:  &currentSlot,
-		}
-
-		stategen := mock.NewService()
-		stategen.AddStateForRoot(st, headRoot)
-		stn := mockChain.NewEventFeedWrapper()
-		opn := mockChain.NewEventFeedWrapper()
-		srv := &Server{
-			StateNotifier:          &mockChain.SimpleNotifier{Feed: stn},
-			OperationNotifier:      &mockChain.SimpleNotifier{Feed: opn},
-			HeadFetcher:            mockChainService,
-			ChainInfoFetcher:       mockChainService,
-			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-			EventWriteTimeout:      testEventWriteTimeout,
-			StateGen:               stategen,
-		}
-
+	t.Run("Electra PartialData_RecomputesAttributerWhenAbsent", func(t *testing.T) {
+		srv, partial := newPartialFillTestServer(t)
 		filled, err := srv.fillEventData(ctx, partial)
 		require.NoError(t, err, "expected successful fill of partial event data")
 
-		// Verify that fields have been updated from the mock data:
 		require.NotNil(t, filled.HeadBlock, "HeadBlock should be assigned")
 		require.NotEqual(t, [32]byte{}, filled.HeadRoot, "HeadRoot should no longer be zero")
 		require.NotEmpty(t, filled.ParentBlockHash, "ParentBlockHash should be filled")
 		require.Equal(t, uint64(0), filled.ParentBlockNumber, "ParentBlockNumber must match mock block")
-
-		// Check that a valid Attributer was set:
 		require.NotNil(t, filled.Attributer, "Should have a valid payload attributes object")
 		require.Equal(t, false, filled.Attributer.IsEmpty(), "Attributer should not be empty after fill")
+		require.NotEqual(t, version.Bellatrix, filled.Attributer.Version(), "recomputed Attributer should match the head state version")
 	})
+	t.Run("Electra PartialData_PreservesProvidedAttributer", func(t *testing.T) {
+		srv, partial := newPartialFillTestServer(t)
+		// The blockchain package now supplies the attribute it already sent to the engine; fillEventData
+		// must keep it verbatim and only fill the scalar fields, never recompute it.
+		attributor, err := payloadattribute.New(&enginev1.PayloadAttributes{Timestamp: uint64(time.Now().Unix())})
+		require.NoError(t, err)
+		partial.Attributer = attributor
+
+		filled, err := srv.fillEventData(ctx, partial)
+		require.NoError(t, err)
+		require.NotEmpty(t, filled.ParentBlockHash, "ParentBlockHash should still be filled")
+		require.Equal(t, attributor, filled.Attributer, "provided Attributer should be preserved")
+		require.Equal(t, version.Bellatrix, filled.Attributer.Version(), "preserved Attributer keeps its version; a recompute on Electra state would be Deneb-versioned")
+	})
+	t.Run("Electra PreservesProvidedParentBlockHash", func(t *testing.T) {
+		srv, partial := newPartialFillTestServer(t)
+		// The blockchain package carries the exact hash it sent to the engine; fillEventData
+		// must keep it verbatim rather than recompute it from state.
+		provided := make([]byte, 32)
+		provided[0] = 0x9
+		partial.ParentBlockHash = provided
+
+		filled, err := srv.fillEventData(ctx, partial)
+		require.NoError(t, err)
+		require.DeepEqual(t, provided, filled.ParentBlockHash, "provided ParentBlockHash must be preserved, not recomputed")
+	})
+}
+
+func newPartialFillTestServer(t *testing.T) (*Server, payloadattribute.EventData) {
+	st, err := util.NewBeaconStateElectra()
+	require.NoError(t, err)
+	valCount := 10
+	setActiveValidators(t, st, valCount)
+	inactivityScores := make([]uint64, valCount)
+	for i := range inactivityScores {
+		inactivityScores[i] = 10
+	}
+	require.NoError(t, st.SetInactivityScores(inactivityScores))
+	b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockElectra(&eth.SignedBeaconBlockElectra{}))
+	require.NoError(t, err)
+	headRoot, err := b.Block().HashTreeRoot()
+	require.NoError(t, err)
+	currentSlot := primitives.Slot(0)
+	require.NoError(t, st.SetSlot(currentSlot+1)) // avoid slot processing on the source state
+	mockChainService := &mockChain.ChainService{
+		Root:  make([]byte, 32),
+		State: st,
+		Block: b,
+		Slot:  &currentSlot,
+	}
+	stategen := mock.NewService()
+	stategen.AddStateForRoot(st, headRoot)
+	srv := &Server{
+		StateNotifier:            &mockChain.SimpleNotifier{Feed: mockChain.NewEventFeedWrapper()},
+		OperationNotifier:        &mockChain.SimpleNotifier{Feed: mockChain.NewEventFeedWrapper()},
+		HeadFetcher:              mockChainService,
+		ChainInfoFetcher:         mockChainService,
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		EventWriteTimeout:        testEventWriteTimeout,
+		StateGen:                 stategen,
+	}
+	// ProposalSlot sits in a later epoch than the head to exercise slot processing.
+	return srv, payloadattribute.EventData{ProposalSlot: 42, HeadBlock: b, HeadRoot: headRoot}
+}
+
+func TestComputePayloadAttributes_CacheMissEmitsDefaults(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.DefaultFeeRecipient = common.Address([20]byte{'a'})
+	cfg.DefaultBuilderGasLimit = 36_000_000
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := t.Context()
+	const parentGasLimit uint64 = 40_000_000
+	st, err := util.NewBeaconStateGloas(func(s *eth.BeaconStateGloas) error {
+		s.LatestExecutionPayloadBid.BlockHash = bytesutil.PadTo([]byte{0x01}, 32)
+		s.LatestExecutionPayloadBid.GasLimit = parentGasLimit
+		return nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, st.SetSlot(1))
+
+	srv := &Server{
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		BeaconDB:                 dbtest.SetupDB(t),
+	}
+
+	attr, err := srv.computePayloadAttributes(ctx, st, [32]byte{}, 0, uint64(time.Now().Unix()), make([]byte, 32), 1)
+	require.NoError(t, err)
+
+	require.DeepEqual(t, cfg.DefaultFeeRecipient.Bytes(), attr.SuggestedFeeRecipient())
+
+	v4, err := attr.PbV4()
+	require.NoError(t, err)
+	require.Equal(t, parentGasLimit, v4.TargetGasLimit)
 }
 
 func setActiveValidators(t *testing.T, st state.BeaconState, count int) {
@@ -766,7 +1101,7 @@ func TestStuckReaderScenarios(t *testing.T) {
 
 func wedgedWriterTestCase(t *testing.T, queueDepth func([]*feed.Event) int) {
 	topics, events := operationEventsFixtures(t)
-	require.Equal(t, 14, len(events))
+	require.Equal(t, 15, len(events))
 
 	// set eventFeedDepth to a number lower than the events we intend to send to force the server to drop the reader.
 	stn := mockChain.NewEventFeedWrapper()

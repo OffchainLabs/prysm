@@ -20,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/v1alpha1/validator"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -38,6 +39,7 @@ import (
 
 const (
 	broadcastValidationQueryParam               = "broadcast_validation"
+	broadcastValidationGossip                   = "gossip"
 	broadcastValidationConsensus                = "consensus"
 	broadcastValidationConsensusAndEquivocation = "consensus_and_equivocation"
 )
@@ -915,6 +917,11 @@ func unmarshalStrict(data []byte, v any) error {
 
 func (s *Server) validateBroadcast(ctx context.Context, r *http.Request, blk *eth.GenericSignedBeaconBlock) error {
 	switch r.URL.Query().Get(broadcastValidationQueryParam) {
+	// "" (spec default gossip) stays a no-op to keep the proposal hot path unchanged.
+	case broadcastValidationGossip:
+		if err := s.validateGossip(ctx, blk); err != nil {
+			return errors.Wrap(err, "gossip validation failed")
+		}
 	case broadcastValidationConsensus:
 		if err := s.validateConsensus(ctx, blk); err != nil {
 			return errors.Wrap(err, "consensus validation failed")
@@ -936,20 +943,26 @@ func (s *Server) validateBroadcast(ctx context.Context, r *http.Request, blk *et
 	return nil
 }
 
-func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeaconBlock) error {
+// validateGossip runs the REJECT-class gossip checks: known parent, valid proposer signature.
+func (s *Server) validateGossip(ctx context.Context, b *eth.GenericSignedBeaconBlock) error {
 	blk, err := blocks.NewSignedBeaconBlock(b.Block)
 	if err != nil {
 		return errors.Wrapf(err, "could not create signed beacon block")
+	}
+	_, err = s.verifyBlockSignature(ctx, blk)
+	return err
+}
+
+// verifyBlockSignature returns the parent state advanced to the block's slot.
+func (s *Server) verifyBlockSignature(ctx context.Context, blk interfaces.SignedBeaconBlock) (state.BeaconState, error) {
+	if err := blocks.BeaconBlockIsNil(blk); err != nil {
+		return nil, errors.Wrap(err, "could not validate block")
 	}
 
 	parentBlockRoot := blk.Block().ParentRoot()
 	parentBlock, err := s.Blocker.Block(ctx, parentBlockRoot[:])
 	if err != nil {
-		return errors.Wrap(err, "could not get parent block")
-	}
-
-	if err := blocks.BeaconBlockIsNil(blk); err != nil {
-		return errors.Wrap(err, "could not validate block")
+		return nil, errors.Wrap(err, "could not get parent block")
 	}
 
 	parentStateRoot := parentBlock.Block().StateRoot()
@@ -959,33 +972,44 @@ func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeac
 		// The state is not advanced in the NSC, check first if the parent post-state is head
 		headRoot, err := s.HeadFetcher.HeadRoot(ctx)
 		if err != nil {
-			return errors.Wrap(err, "could not get head root")
+			return nil, errors.Wrap(err, "could not get head root")
 		}
 		if bytes.Equal(headRoot, parentBlockRoot[:]) {
 			parentState, err = s.HeadFetcher.HeadState(ctx)
 			if err != nil {
-				return errors.Wrap(err, "could not get head state")
+				return nil, errors.Wrap(err, "could not get head state")
 			}
 			parentState, err = transition.ProcessSlots(ctx, parentState, blk.Block().Slot())
 			if err != nil {
-				return errors.Wrap(err, "could not process slots to get parent state")
+				return nil, errors.Wrap(err, "could not process slots to get parent state")
 			}
 		} else {
 			parentState, err = s.Stater.State(ctx, parentStateRoot[:])
 			if err != nil {
-				return errors.Wrap(err, "could not get parent state")
+				return nil, errors.Wrap(err, "could not get parent state")
 			}
 		}
 	}
 	blockRoot, err := blk.Block().HashTreeRoot()
 	if err != nil {
-		return errors.Wrap(err, "could not hash block")
+		return nil, errors.Wrap(err, "could not hash block")
 	}
 	if err := coreblocks.VerifyBlockSignatureUsingCurrentFork(parentState, blk, blockRoot); err != nil {
-		return errors.Wrap(err, "could not verify block signature")
+		return nil, errors.Wrap(err, "could not verify block signature")
 	}
-	_, err = transition.ExecuteStateTransition(ctx, parentState, blk)
+	return parentState, nil
+}
+
+func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeaconBlock) error {
+	blk, err := blocks.NewSignedBeaconBlock(b.Block)
 	if err != nil {
+		return errors.Wrapf(err, "could not create signed beacon block")
+	}
+	parentState, err := s.verifyBlockSignature(ctx, blk)
+	if err != nil {
+		return err
+	}
+	if _, err := transition.ExecuteStateTransition(ctx, parentState, blk); err != nil {
 		return errors.Wrap(err, "could not execute state transition")
 	}
 

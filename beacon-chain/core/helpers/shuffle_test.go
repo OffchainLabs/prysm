@@ -5,9 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
@@ -48,22 +46,6 @@ func TestShuffleList_OK(t *testing.T) {
 	}
 	assert.DeepEqual(t, []primitives.ValidatorIndex{0, 7, 8, 6, 3, 9, 4, 5, 2, 1}, list1, "List 1 was incorrectly shuffled got")
 	assert.DeepEqual(t, []primitives.ValidatorIndex{0, 5, 2, 1, 6, 8, 7, 3, 4, 9}, list2, "List 2 was incorrectly shuffled got")
-}
-
-func TestSplitIndices_OK(t *testing.T) {
-	ClearCache()
-
-	var l []uint64
-	numValidators := uint64(64000)
-	for i := range numValidators {
-		l = append(l, i)
-	}
-	split := SplitIndices(l, uint64(params.BeaconConfig().SlotsPerEpoch))
-	assert.Equal(t, uint64(params.BeaconConfig().SlotsPerEpoch), uint64(len(split)), "Split list failed due to incorrect length")
-
-	for _, s := range split {
-		assert.Equal(t, numValidators/uint64(params.BeaconConfig().SlotsPerEpoch), uint64(len(s)), "Split list failed due to incorrect length")
-	}
 }
 
 func TestShuffleList_Vs_ShuffleIndex(t *testing.T) {
@@ -154,22 +136,4 @@ func TestShuffledIndex(t *testing.T) {
 		unshuffledlist[ui] = shuffledList[i]
 	}
 	assert.DeepEqual(t, list, unshuffledlist)
-}
-
-func TestSplitIndicesAndOffset_OK(t *testing.T) {
-	ClearCache()
-
-	var l []uint64
-	validators := uint64(64000)
-	for i := range validators {
-		l = append(l, i)
-	}
-	chunks := uint64(6)
-	split := SplitIndices(l, chunks)
-	for i := range chunks {
-		if !reflect.DeepEqual(split[i], l[slice.SplitOffset(uint64(len(l)), chunks, i):slice.SplitOffset(uint64(len(l)), chunks, i+1)]) {
-			t.Errorf("Want: %v got: %v", l[slice.SplitOffset(uint64(len(l)), chunks, i):slice.SplitOffset(uint64(len(l)), chunks, i+1)], split[i])
-			break
-		}
-	}
 }

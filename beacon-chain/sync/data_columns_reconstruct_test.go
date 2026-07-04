@@ -63,6 +63,8 @@ func TestProcessDataColumnSidecarsFromReconstruction(t *testing.T) {
 
 		chainService := &mockChain.ChainService{}
 		p2p := p2ptest.NewTestP2P(t)
+		// Enable the partial column broadcaster.
+		p2p.EnablePartialColumnBroadcaster()
 		storage := filesystem.NewEphemeralDataColumnStorage(t)
 
 		service := NewService(
@@ -115,6 +117,13 @@ func TestProcessDataColumnSidecarsFromReconstruction(t *testing.T) {
 		}
 
 		require.Equal(t, true, p2p.BroadcastCalled.Load())
+
+		unseenExpected := map[uint64]bool{75: true, 87: true, 102: true, 117: true}
+		broadcastedPartials := p2p.BroadcastedPartialColumns()
+		require.Equal(t, len(unseenExpected), len(broadcastedPartials))
+		for _, partial := range broadcastedPartials {
+			require.Equal(t, true, unseenExpected[partial.Index])
+		}
 	})
 }
 

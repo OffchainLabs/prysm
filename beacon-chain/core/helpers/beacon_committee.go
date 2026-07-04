@@ -340,61 +340,6 @@ func ProposerAssignments(ctx context.Context, state state.BeaconState, epoch pri
 	return proposerAssignments, nil
 }
 
-// LiteAssignment is a lite version of CommitteeAssignment, and has committee length
-// and validator committee index instead of the full committee list
-type LiteAssignment struct {
-	AttesterSlot            primitives.Slot           // slot in which to attest
-	CommitteeIndex          primitives.CommitteeIndex // position of the committee in the slot
-	CommitteeLength         uint64                    // number of members in the committee
-	ValidatorCommitteeIndex uint64                    // validator’s offset inside the committee
-}
-
-// PrecomputeCommittees returns an array indexed by (slot-startSlot)
-// whose elements are the beacon committees of that slot.
-func PrecomputeCommittees(
-	ctx context.Context,
-	st state.BeaconState,
-	startSlot primitives.Slot,
-) ([][][]primitives.ValidatorIndex, error) {
-	cfg := params.BeaconConfig()
-	out := make([][][]primitives.ValidatorIndex, cfg.SlotsPerEpoch)
-
-	for relativeSlot := primitives.Slot(0); relativeSlot < cfg.SlotsPerEpoch; relativeSlot++ {
-		slot := startSlot + relativeSlot
-
-		comms, err := BeaconCommittees(ctx, st, slot)
-		if err != nil {
-			return nil, errors.Wrapf(err, "BeaconCommittees failed at slot %d", slot)
-		}
-		out[relativeSlot] = comms
-	}
-	return out, nil
-}
-
-// AssignmentForValidator scans the cached committees once
-// and returns the duty for a single validator.
-func AssignmentForValidator(
-	bySlot [][][]primitives.ValidatorIndex,
-	startSlot primitives.Slot,
-	vIdx primitives.ValidatorIndex,
-) *LiteAssignment {
-	for relativeSlot, committees := range bySlot {
-		for cIdx, committee := range committees {
-			for pos, member := range committee {
-				if member == vIdx {
-					return &LiteAssignment{
-						AttesterSlot:            startSlot + primitives.Slot(relativeSlot),
-						CommitteeIndex:          primitives.CommitteeIndex(cIdx),
-						CommitteeLength:         uint64(len(committee)),
-						ValidatorCommitteeIndex: uint64(pos),
-					}
-				}
-			}
-		}
-	}
-	return &LiteAssignment{} // validator is not scheduled this epoch
-}
-
 // CommitteeAssignments calculates committee assignments for each validator during the specified epoch.
 // It retrieves active validator indices, determines the number of committees per slot, and computes
 // assignments for each validator based on their presence in the provided validators slice.

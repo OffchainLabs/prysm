@@ -20,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
@@ -54,4 +55,8 @@ type Server struct {
 	ForkchoiceFetcher       blockchain.ForkchoiceFetcher
 	CoreService             *core.Service
 	AttestationStateFetcher blockchain.AttestationStateFetcher
+	// PayloadEnvelopeVerifier runs gossip-level checks on published envelopes.
+	PayloadEnvelopeVerifier verification.NewExecutionPayloadEnvelopeVerifier
+	// ExecutionPayloadEnvelopeCache reconstructs the full envelope in the blinded publish flow.
+	ExecutionPayloadEnvelopeCache *cache.ExecutionPayloadEnvelopeCache
 }

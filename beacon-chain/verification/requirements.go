@@ -42,14 +42,18 @@ const (
 	// Execution payload bid specific.
 	RequireBidCurrentOrNextSlot
 	RequireBidBuilderActive
+	RequireBidBuilderVersionValid
 	RequireBidExecutionPaymentZero
 	RequireBidFeeRecipientMatches
+	RequireBidBlobKzgCommitmentsLimit
+	RequireBidPrevRandaoValid
 	RequireBidGasLimitCompatible
 	RequireBidParentBlockRootSeen
 	RequireBidSlotHigherThanParent
 	RequireBidParentBlockHashValid
 	RequireBidBuilderCanCover
 	RequireBidSignatureValid
+	RequireBidSlotMatches
 
 	// Signed proposer preferences specific.
 	RequireProposerPreferencesCurrentOrNextEpoch

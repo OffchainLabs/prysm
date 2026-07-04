@@ -9,13 +9,16 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
@@ -78,7 +81,7 @@ func gloasEnvelopeFixture(t *testing.T, blockRoot [32]byte) (*ethpb.BeaconStateG
 		BeaconBlockRoot:       blockRoot[:],
 		ParentBeaconBlockRoot: parentBeaconRoot,
 		Payload:               payload,
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 	}
 
 	domain, err := signing.Domain(base.Fork, slots.ToEpoch(slot), cfg.DomainBeaconBuilder, base.GenesisValidatorsRoot)
@@ -151,6 +154,98 @@ func TestReceiveExecutionPayloadEnvelope_EmitEvents(t *testing.T) {
 			require.Equal(t, tt.wantProcessed, got[statefeed.ExecutionPayloadProcessed])
 		})
 	}
+}
+
+// TestReceiveExecutionPayloadEnvelope_EmitsHeadV2Event verifies the second head_v2
+// emission: importing the execution payload envelope for the current head flips its
+// fork-choice payload status from empty to full and emits a head_v2 event for the same
+// (block, slot) carrying payload_status "full". A duplicate import must not re-emit.
+func TestReceiveExecutionPayloadEnvelope_EmitsHeadV2Event(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	cfg.InitializeForkSchedule()
+	params.OverrideBeaconConfig(cfg)
+
+	setupEmptyHead := func(t *testing.T) (*Service, chan *feed.Event, interfaces.ROSignedExecutionPayloadEnvelope, [32]byte, primitives.Slot) {
+		s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+		ctx := t.Context()
+
+		blockRoot := bytesutil.ToBytes32([]byte("envelope-root"))
+		base, blk, signedProto := gloasEnvelopeFixture(t, blockRoot)
+
+		parentRoot := bytesutil.ToBytes32(bytes.Repeat([]byte{0x11}, 32))
+		parentBlockHash := [32]byte{0xaa}
+		zeroHash := params.BeaconConfig().ZeroHash
+		pst, parentROBlock, err := prepareGloasForkchoiceState(ctx, 4, parentRoot, zeroHash, parentBlockHash, zeroHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, s.cfg.ForkChoiceStore.InsertNode(ctx, pst, parentROBlock))
+
+		insertGloasBlock(t, s, base, blk, blockRoot)
+
+		headBlock, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		headState, err := state_native.InitializeFromProtoUnsafeGloas(base)
+		require.NoError(t, err)
+		s.head = &head{
+			root:  blockRoot,
+			block: headBlock,
+			state: headState,
+			slot:  blk.Block.Slot,
+			full:  false, // head is not full until the payload is imported
+		}
+
+		events := make(chan *feed.Event, 10)
+		sub := s.cfg.StateNotifier.StateFeed().Subscribe(events)
+		t.Cleanup(sub.Unsubscribe)
+
+		signed, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedProto)
+		require.NoError(t, err)
+		return s, events, signed, blockRoot, blk.Block.Slot
+	}
+
+	// drainHeadV2 returns every head_v2 event currently buffered on the feed.
+	drainHeadV2 := func(t *testing.T, events chan *feed.Event) []*statefeed.HeadV2Data {
+		var got []*statefeed.HeadV2Data
+		for {
+			select {
+			case e := <-events:
+				if e.Type == statefeed.NewHeadV2 {
+					d, ok := e.Data.(*statefeed.HeadV2Data)
+					require.Equal(t, true, ok)
+					got = append(got, d)
+				}
+				continue
+			default:
+			}
+			break
+		}
+		return got
+	}
+
+	t.Run("emits once for the empty->full transition", func(t *testing.T) {
+		s, events, signed, blockRoot, headSlot := setupEmptyHead(t)
+		require.NoError(t, s.ReceiveExecutionPayloadEnvelope(t.Context(), signed))
+
+		headV2 := drainHeadV2(t, events)
+		require.Equal(t, 1, len(headV2))
+		require.Equal(t, blockRoot, headV2[0].Block)
+		require.Equal(t, headSlot, headV2[0].Slot)
+		require.Equal(t, version.Gloas, headV2[0].Version)
+		require.Equal(t, "full", headV2[0].PayloadStatus.String())
+	})
+
+	t.Run("does not re-emit when the same envelope is imported again", func(t *testing.T) {
+		s, events, signed, blockRoot, _ := setupEmptyHead(t)
+		// The payload is only newly full on the first import; the duplicate is a no-op.
+		require.NoError(t, s.ReceiveExecutionPayloadEnvelope(t.Context(), signed))
+		require.NoError(t, s.ReceiveExecutionPayloadEnvelope(t.Context(), signed))
+
+		headV2 := drainHeadV2(t, events)
+		require.Equal(t, 1, len(headV2))
+		require.Equal(t, blockRoot, headV2[0].Block)
+		require.Equal(t, "full", headV2[0].PayloadStatus.String())
+	})
 }
 
 // countStateEventsByType is a helper function for counting the number of events

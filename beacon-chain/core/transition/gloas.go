@@ -20,7 +20,7 @@ import (
 //
 // Spec definition:
 //
-//	<spec fn="process_operations" fork="gloas" hash="e0633745">
+//	<spec fn="process_operations" fork="gloas" hash="4864d8ef">
 //	def process_operations(state: BeaconState, body: BeaconBlockBody) -> None:
 //	    assert len(body.deposits) == 0
 //
@@ -33,7 +33,6 @@ import (
 //	    for_ops(body.attester_slashings, process_attester_slashing)
 //	    # [Modified in Gloas:EIP7732]
 //	    for_ops(body.attestations, process_attestation)
-//	    # [Modified in Gloas:EIP7732]
 //	    for_ops(body.voluntary_exits, process_voluntary_exit)
 //	    for_ops(body.bls_to_execution_changes, process_bls_to_execution_change)
 //	    # [Modified in Gloas:EIP7732]

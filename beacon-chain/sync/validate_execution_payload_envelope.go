@@ -132,7 +132,7 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	}
 
 	// [REJECT] signed_execution_payload_envelope.signature is valid with respect to the builder's public key.
-	if err := v.VerifySignature(st); err != nil {
+	if err := v.VerifySignature(ctx, st); err != nil {
 		return pubsub.ValidationReject, err
 	}
 	s.setSeenPayloadEnvelope(root, env.BuilderIndex())
@@ -170,6 +170,7 @@ func (s *Service) queuePendingPayloadEnvelope(
 ) (pubsub.ValidationResult, error) {
 	currentSlot := s.cfg.clock.CurrentSlot()
 	if env.Slot() != currentSlot {
+		log.WithField("envelopeSlot", env.Slot()).WithField("currentSlot", currentSlot).Debug("Ignoring payload envelope not for current slot")
 		return pubsub.ValidationIgnore, nil
 	}
 	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
@@ -203,7 +204,7 @@ func (s *Service) queuePendingPayloadEnvelope(
 	}
 
 	if !isSelfBuild || proposerInLookahead {
-		if err := v.VerifySignature(st); err != nil {
+		if err := v.VerifySignature(ctx, st); err != nil {
 			if isSelfBuild {
 				s.selfBuildSigFailures++
 				log.WithError(err).Debug("Ignoring self-built payload with invalid signature")
