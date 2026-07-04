@@ -90,6 +90,7 @@ additional_services:
 
 spamoor_params:
   min_cpu: 10
+  image: "ethpandaops/spamoor:master-c23ad38"
 
 assertoor_params:
   # Use the pinned assertoor image for testing, that has the fix below:
