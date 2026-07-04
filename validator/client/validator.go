@@ -849,20 +849,11 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 
 	prefs := v.buildProposerPreferences(ctx, km, slot, false)
 	if len(prefs) > 0 {
-		// Delay to mid-slot so the block for this slot is processed first.
-		delay := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
-		go func() {
-			time.Sleep(delay)
-			if _, err := v.validatorClient.SubmitSignedProposerPreferences(ctx, &ethpb.SubmitSignedProposerPreferencesRequest{
-				SignedProposerPreferences: prefs,
-			}); err != nil {
-				log.WithError(err).Warn("Failed to submit proposer preferences")
-			}
-		}()
+		v.submitProposerPreferencesMidSlot(prefs)
 	}
 
 	if reqs := v.buildBuilderPreferenceRequests(ctx, km, slot); len(reqs) > 0 {
-		delay := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
+		delay := params.BeaconConfig().SlotDuration() / 2
 		time.AfterFunc(delay, func() {
 			// Detached from the slot context, which may expire before the delay elapses.
 			subCtx, cancel := context.WithTimeout(context.Background(), delay)
@@ -1393,17 +1384,26 @@ func (v *validator) submitProposerPreferences(ctx context.Context) {
 	if len(prefs) == 0 {
 		return
 	}
-	delay := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
-	go func() {
-		time.Sleep(delay)
+	v.submitProposerPreferencesMidSlot(prefs)
+}
+
+// Delayed to mid-slot so this slot's block is processed first, detached from the slot context, and failed slots are released so the next push retries them.
+func (v *validator) submitProposerPreferencesMidSlot(prefs []*ethpb.SignedProposerPreferences) {
+	delay := params.BeaconConfig().SlotDuration() / 2
+	time.AfterFunc(delay, func() {
+		ctx, cancel := context.WithTimeout(context.Background(), delay)
+		defer cancel()
 		if _, err := v.validatorClient.SubmitSignedProposerPreferences(ctx, &ethpb.SubmitSignedProposerPreferencesRequest{
 			SignedProposerPreferences: prefs,
 		}); err != nil {
-			log.WithError(err).Warn("Failed to resubmit proposer preferences after duty change")
-		} else {
-			log.WithField("count", len(prefs)).Info("Resubmitted proposer preferences after duty change")
+			for _, p := range prefs {
+				v.releasePrefSlot(p.Message.ProposalSlot)
+			}
+			log.WithError(err).WithField("count", len(prefs)).Warn("Failed to submit proposer preferences, will retry next slot")
+			return
 		}
-	}()
+		log.WithField("count", len(prefs)).Info("Submitted proposer preferences")
+	})
 }
 
 func (v *validator) buildSignedRegReqs(
