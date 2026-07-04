@@ -8,14 +8,12 @@ import (
 
 // MockRestProvider implements RestConnectionProvider for testing.
 type MockRestProvider struct {
-	MockClient  *http.Client
 	MockHandler Handler
 	MockHosts   []string
 	HostIndex   int
 }
 
-func (m *MockRestProvider) HttpClient() *http.Client { return m.MockClient }
-func (m *MockRestProvider) Handler() Handler         { return m.MockHandler }
+func (m *MockRestProvider) Handler() Handler { return m.MockHandler }
 func (m *MockRestProvider) CurrentHost() string {
 	if len(m.MockHosts) > 0 {
 		return m.MockHosts[m.HostIndex%len(m.MockHosts)]

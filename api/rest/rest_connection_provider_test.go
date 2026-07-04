@@ -46,7 +46,7 @@ func TestRestConnectionProvider(t *testing.T) {
 	t.Run("initial state", func(t *testing.T) {
 		assert.Equal(t, 3, len(provider.Hosts()))
 		assert.Equal(t, "http://host1:3500", provider.CurrentHost())
-		assert.NotNil(t, provider.HttpClient())
+		assert.NotNil(t, provider.Handler())
 	})
 
 	t.Run("SwitchHost", func(t *testing.T) {
@@ -75,6 +75,6 @@ func TestRestConnectionProvider_WithOptions(t *testing.T) {
 		WithTracing(),
 	)
 	require.NoError(t, err)
-	assert.NotNil(t, provider.HttpClient())
+	assert.NotNil(t, provider.Handler())
 	assert.Equal(t, "http://localhost:3500", provider.CurrentHost())
 }
