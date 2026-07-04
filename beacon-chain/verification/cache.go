@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
@@ -164,11 +165,17 @@ type propCache struct {
 
 // ComputeProposer takes the state and computes the proposer index at the given slot
 func (*propCache) ComputeProposer(ctx context.Context, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error) {
-	// After Fulu, the lookahead only contains proposers for the current and next epoch.
 	stateEpoch := slots.ToEpoch(pst.Slot())
 	slotEpoch := slots.ToEpoch(slot)
-	if slotEpoch > stateEpoch+1 {
-		start, err := slots.EpochStart(slotEpoch - 1)
+	fulu := pst.Version() >= version.Fulu
+	// Post-Fulu the lookahead covers the current and next epoch, so advancing to slotEpoch-1 suffices;
+	// pre-Fulu the proposer is sampled from the target epoch's post-transition balances, so advance into slotEpoch.
+	if (fulu && slotEpoch > stateEpoch+1) || (!fulu && slotEpoch > stateEpoch) {
+		target := slotEpoch
+		if fulu && slotEpoch > 0 {
+			target = slotEpoch - 1
+		}
+		start, err := slots.EpochStart(target)
 		if err != nil {
 			return 0, err
 		}
