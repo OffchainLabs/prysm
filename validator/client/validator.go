@@ -109,7 +109,6 @@ type validator struct {
 	validatorClient              iface.ValidatorClient
 	chainClient                  iface.ChainClient
 	nodeClient                   iface.NodeClient
-	prysmChainClient             iface.PrysmChainClient
 	db                           db.Database
 	conn                         *validatorHelpers.NodeConnection
 	accountChangedSub            event.Subscription

@@ -24,13 +24,6 @@ func NewChainClient(validatorConn *validatorHelpers.NodeConnection) iface.ChainC
 	return grpcClient
 }
 
-func NewPrysmChainClient(validatorConn *validatorHelpers.NodeConnection) iface.PrysmChainClient {
-	if features.Get().EnableBeaconRESTApi {
-		return beaconApi.NewPrysmChainClient(validatorConn.GetRestHandler(), NewNodeClient(validatorConn))
-	}
-	return grpcApi.NewGrpcPrysmChainClient(validatorConn)
-}
-
 func NewValidatorClient(validatorConn *validatorHelpers.NodeConnection, opts ...iface.Option) iface.ValidatorClient {
 	if features.Get().EnableBeaconRESTApi {
 		return beaconApi.NewBeaconApiValidatorClient(validatorConn.GetRestConnectionProvider(), opts...)

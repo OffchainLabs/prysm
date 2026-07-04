@@ -6,7 +6,6 @@ go_library(
         "grpc_beacon_chain_client.go",
         "grpc_client_manager.go",
         "grpc_node_client.go",
-        "grpc_prysm_beacon_chain_client.go",
         "grpc_validator_client.go",
         "log.go",
     ],

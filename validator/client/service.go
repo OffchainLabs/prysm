@@ -206,7 +206,6 @@ func (v *ValidatorService) Start() {
 		validatorClient:              validatorClient,
 		chainClient:                  NewChainClient(v.conn),
 		nodeClient:                   NewNodeClient(v.conn),
-		prysmChainClient:             NewPrysmChainClient(v.conn),
 		db:                           v.db,
 		km:                           nil,
 		web3SignerConfig:             v.web3SignerConfig,
