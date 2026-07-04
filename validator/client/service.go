@@ -42,7 +42,7 @@ type ValidatorService struct {
 	cancel                  context.CancelFunc
 	validator               iface.Validator
 	db                      db.Database
-	conn                    validatorHelpers.NodeConnection
+	conn                    *validatorHelpers.NodeConnection
 	wallet                  *wallet.Wallet
 	walletInitializedFeed   *event.Feed
 	graffiti                []byte
@@ -67,7 +67,7 @@ type Config struct {
 	DB                      db.Database
 	Wallet                  *wallet.Wallet
 	WalletInitializedFeed   *event.Feed
-	Conn                    validatorHelpers.NodeConnection // Optional: pre-built connection (if nil, built from endpoint configs)
+	Conn                    *validatorHelpers.NodeConnection // Optional: pre-built connection (if nil, built from endpoint configs)
 	MaxHealthChecks         int
 	GRPCMaxCallRecvMsgSize  int
 	GRPCRetries             uint

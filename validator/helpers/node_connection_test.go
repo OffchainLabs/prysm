@@ -48,7 +48,7 @@ func TestNewNodeConnection(t *testing.T) {
 	t.Run("with no providers returns error", func(t *testing.T) {
 		conn, err := NewNodeConnection()
 		require.ErrorContains(t, "at least one beacon node endpoint must be provided", err)
-		assert.Equal(t, (NodeConnection)(nil), conn)
+		require.IsNil(t, conn)
 	})
 
 	t.Run("with empty endpoints is no-op", func(t *testing.T) {
@@ -58,7 +58,7 @@ func TestNewNodeConnection(t *testing.T) {
 			WithREST(""),
 		)
 		require.ErrorContains(t, "at least one beacon node endpoint must be provided", err)
-		assert.Equal(t, (NodeConnection)(nil), conn)
+		require.IsNil(t, conn)
 	})
 }
 

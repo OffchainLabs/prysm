@@ -9,7 +9,7 @@ import (
 )
 
 func NewValidatorClient(
-	validatorConn validatorHelpers.NodeConnection,
+	validatorConn *validatorHelpers.NodeConnection,
 	opts ...iface.Option,
 ) iface.ValidatorClient {
 	if features.Get().EnableBeaconRESTApi {

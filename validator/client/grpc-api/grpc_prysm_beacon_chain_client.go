@@ -18,6 +18,6 @@ func (c *grpcPrysmChainClient) ValidatorPerformance(ctx context.Context, in *eth
 
 // NewGrpcPrysmChainClient creates a new gRPC Prysm chain client that supports
 // dynamic connection switching via the NodeConnection's GrpcConnectionProvider.
-func NewGrpcPrysmChainClient(conn validatorHelpers.NodeConnection) iface.PrysmChainClient {
+func NewGrpcPrysmChainClient(conn *validatorHelpers.NodeConnection) iface.PrysmChainClient {
 	return &grpcPrysmChainClient{chainClient: NewGrpcChainClient(conn)}
 }
