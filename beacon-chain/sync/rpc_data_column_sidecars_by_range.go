@@ -11,7 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -142,6 +141,16 @@ func (s *Service) streamDataColumnBatch(ctx context.Context, batch blockBatch, q
 		// Get the block blockRoot.
 		blockRoot := block.Root()
 
+		// Retrieve the data column sidecars from the store.
+		verifiedRODataColumns, err := s.cfg.dataColumnStorage.Get(blockRoot, wantedDataColumnIndices)
+		if err != nil {
+			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+			return quota, errors.Wrapf(err, "get data column sidecars: block root %#x", blockRoot)
+		}
+		if len(verifiedRODataColumns) == 0 {
+			continue
+		}
+
 		included, err := s.payloadIncluded(ctx, canonicalBlocks, i)
 		if err != nil {
 			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
@@ -149,13 +158,6 @@ func (s *Service) streamDataColumnBatch(ctx context.Context, batch blockBatch, q
 		}
 		if !included {
 			continue
-		}
-
-		// Retrieve the data column sidecars from the store.
-		verifiedRODataColumns, err := s.cfg.dataColumnStorage.Get(blockRoot, wantedDataColumnIndices)
-		if err != nil {
-			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-			return quota, errors.Wrapf(err, "get data column sidecars: block root %#x", blockRoot)
 		}
 
 		// Write the retrieved sidecars to the stream.
@@ -188,29 +190,22 @@ func (s *Service) payloadIncluded(ctx context.Context, canonicalBlocks []blocks.
 		return true, nil
 	}
 
-	var successor interfaces.ReadOnlySignedBeaconBlock
+	var successor interfaces.ReadOnlyBeaconBlock
 	if i+1 < len(canonicalBlocks) {
-		successor = canonicalBlocks[i+1]
+		successor = canonicalBlocks[i+1].Block()
 	} else {
 		successorBlock, err := s.canonicalSuccessorBlock(ctx, block.Block().Slot()+1)
 		if err != nil {
 			return false, errors.Wrap(err, "canonical successor block")
 		}
-		// No successor means fullness is undecided at the chain tip, serve only if we processed the envelope.
-		if successorBlock == nil {
-			bid, err := block.Block().Body().SignedExecutionPayloadBid()
-			if err != nil {
-				return false, errors.Wrap(err, "signed execution payload bid")
-			}
-			if _, err := s.cfg.beaconDB.ExecutionPayloadEnvelopeByBlockHash(ctx, bytesutil.ToBytes32(bid.Message.BlockHash)); err != nil {
-				return false, nil
-			}
-			return true, nil
+		// Without a direct child fullness is undecided, the parent root check also rejects the kv head root fallback returning the block itself.
+		if successorBlock == nil || successorBlock.Block().ParentRoot() != block.Root() {
+			return s.cfg.beaconDB.HasExecutionPayloadEnvelope(ctx, block.Root()), nil
 		}
-		successor = successorBlock
+		successor = successorBlock.Block()
 	}
 
-	return blocks.BlockBuiltOnParentPayload(block.Block(), successor.Block())
+	return blocks.BlockBuiltOnParentPayload(block.Block(), successor)
 }
 
 func validateDataColumnsByRange(request *pb.DataColumnSidecarsByRangeRequest, currentSlot primitives.Slot) (*rangeParams, error) {

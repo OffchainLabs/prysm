@@ -190,10 +190,6 @@ func (s *Service) markFinalizedRootFull(chain []*forkchoicetypes.BlockAndCheckpo
 	if firstBlock.Version() < version.Gloas {
 		return nil
 	}
-	firstBid, err := firstBlock.Body().SignedExecutionPayloadBid()
-	if err != nil || firstBid == nil || firstBid.Message == nil {
-		return nil
-	}
 	fBlock, err := s.cfg.BeaconDB.Block(s.ctx, fRoot)
 	if err != nil {
 		return errors.Wrap(err, "could not get finalized block")
@@ -201,11 +197,8 @@ func (s *Service) markFinalizedRootFull(chain []*forkchoicetypes.BlockAndCheckpo
 	if fBlock.Block().Version() < version.Gloas {
 		return nil
 	}
-	fBid, err := fBlock.Block().Body().SignedExecutionPayloadBid()
-	if err != nil || fBid == nil || fBid.Message == nil {
-		return nil
-	}
-	if !bytes.Equal(firstBid.Message.ParentBlockHash, fBid.Message.BlockHash) {
+	builtOn, err := blocks.BlockBuiltOnParentPayload(fBlock.Block(), firstBlock)
+	if err != nil || !builtOn {
 		return nil
 	}
 	// The finalized block's payload was delivered. Create the full node.

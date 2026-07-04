@@ -201,7 +201,7 @@ func (p *blindedExecutionPayloadEnvelope) BlockHash() [field_params.RootLength]b
 	return [field_params.RootLength]byte(p.p.BlockHash)
 }
 
-// BlockBuiltOnParentPayload reports whether child's bid builds on parent's payload, meaning parent's slot was full.
+// Parent slot fullness is committed by the child bid, not recorded in the parent itself.
 func BlockBuiltOnParentPayload(parent, child interfaces.ReadOnlyBeaconBlock) (bool, error) {
 	parentBid, err := parent.Body().SignedExecutionPayloadBid()
 	if err != nil {

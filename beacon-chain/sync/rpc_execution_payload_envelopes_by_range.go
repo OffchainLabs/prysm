@@ -251,31 +251,33 @@ func validateEnvelopesByRange(r *pb.ExecutionPayloadEnvelopesByRangeRequest, cur
 }
 
 func (s *Service) canonicalSuccessorBlock(ctx context.Context, slot primitives.Slot) (interfaces.ReadOnlySignedBeaconBlock, error) {
-	_, roots, err := s.cfg.beaconDB.LowestRootsAtOrAboveSlot(ctx, slot)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not find successor block")
-	}
-
-	var successorRoot [32]byte
-	var found bool
-	for _, r := range roots {
-		canonical, err := s.cfg.chain.IsCanonical(ctx, r)
+	for {
+		fs, roots, err := s.cfg.beaconDB.LowestRootsAtOrAboveSlot(ctx, slot)
 		if err != nil {
-			log.WithError(err).WithField("blockRoot", bytesutil.Trunc(r[:])).Debug("Could not check if block is canonical")
-			continue
+			return nil, errors.Wrap(err, "could not find successor block")
 		}
-		if canonical {
-			successorRoot = r
-			found = true
-			break
+		if len(roots) == 0 {
+			return nil, nil
 		}
+		for _, r := range roots {
+			canonical, err := s.cfg.chain.IsCanonical(ctx, r)
+			if err != nil {
+				log.WithError(err).WithField("blockRoot", bytesutil.Trunc(r[:])).Debug("Could not check if block is canonical")
+				continue
+			}
+			if canonical {
+				successorBlock, err := s.cfg.beaconDB.Block(ctx, r)
+				if err != nil {
+					return nil, errors.Wrap(err, "could not load successor block")
+				}
+				return successorBlock, nil
+			}
+		}
+		// fs below the requested slot means the head root fallback fired, nothing is indexed above.
+		if fs < slot {
+			return nil, nil
+		}
+		// Only orphaned blocks at this slot, keep looking above it.
+		slot = fs + 1
 	}
-	if !found {
-		return nil, nil
-	}
-	successorBlock, err := s.cfg.beaconDB.Block(ctx, successorRoot)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not load successor block")
-	}
-	return successorBlock, nil
 }

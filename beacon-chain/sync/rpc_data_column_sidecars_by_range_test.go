@@ -259,6 +259,7 @@ func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 	})
 
 	t.Run("gloas skips columns of empty slots", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
 		gloasCfg := params.BeaconConfig().Copy()
 		gloasCfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(gloasCfg)
@@ -289,6 +290,9 @@ func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 			roots[i] = htr
 			prevRoot = htr
 		}
+		// Production always has a saved head root, which LowestRootsAtOrAboveSlot falls back to above the tip.
+		require.NoError(t, beaconDB.SaveStateSummary(ctx, &pb.StateSummary{Slot: 40, Root: roots[3][:]}))
+		require.NoError(t, beaconDB.SaveHeadBlockRoot(ctx, roots[3]))
 
 		verifiedSidecars := make([]blocks.VerifiedRODataColumn, 0, len(blockSlots))
 		for i, sl := range blockSlots {
@@ -364,9 +368,7 @@ func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 		requestAndCollect([][fieldparams.RootLength]byte{roots[0], roots[2]})
 
 		// Once the tip envelope is processed, its columns are served.
-		bidHash40 := [32]byte{40}
 		env := testSignedEnvelope(40, roots[3][:])
-		copy(env.Message.Payload.BlockHash, bidHash40[:])
 		require.NoError(t, beaconDB.SaveExecutionPayloadEnvelope(ctx, env))
 		requestAndCollect([][fieldparams.RootLength]byte{roots[0], roots[2], roots[3]})
 	})
