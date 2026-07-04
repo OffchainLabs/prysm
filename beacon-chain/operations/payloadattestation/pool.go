@@ -59,10 +59,26 @@ func (p *Pool) PendingPayloadAttestations(slot primitives.Slot) []*ethpb.Payload
 	result := make([]*ethpb.PayloadAttestation, 0, len(p.pending))
 	for _, att := range p.pending {
 		if att.Data.Slot == slot {
-			result = append(result, att)
+			result = append(result, copyPayloadAttestation(att))
 		}
 	}
 	return result
+}
+
+// Copies protect readers from later in-place aggregation of pool entries, a torn signature and bits pair would invalidate the block including it.
+func copyPayloadAttestation(att *ethpb.PayloadAttestation) *ethpb.PayloadAttestation {
+	bits := ethpb.NewPayloadAttestationAggregationBits()
+	copy(bits, att.AggregationBits)
+	return &ethpb.PayloadAttestation{
+		AggregationBits: bits,
+		Data: &ethpb.PayloadAttestationData{
+			BeaconBlockRoot:   bytesutil.SafeCopyBytes(att.Data.BeaconBlockRoot),
+			Slot:              att.Data.Slot,
+			PayloadPresent:    att.Data.PayloadPresent,
+			BlobDataAvailable: att.Data.BlobDataAvailable,
+		},
+		Signature: bytesutil.SafeCopyBytes(att.Signature),
+	}
 }
 
 // InsertPayloadAttestation inserts a payload attestation message into the pool.
