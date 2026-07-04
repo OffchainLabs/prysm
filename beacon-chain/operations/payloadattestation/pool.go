@@ -189,10 +189,10 @@ func aggregateSigFromMessage(aggregated *ethpb.PayloadAttestation, message *ethp
 	if err != nil {
 		return nil, err
 	}
-	sigs := make([]bls.Signature, 0, count+1)
-	sigs = append(sigs, aggSig)
-	for i := 0; i < count; i++ {
-		sigs = append(sigs, sig)
+	sigs := make([]bls.Signature, count+1)
+	sigs[0] = aggSig
+	for i := range count {
+		sigs[i+1] = sig
 	}
 	return bls.AggregateSignatures(sigs).Marshal(), nil
 }
