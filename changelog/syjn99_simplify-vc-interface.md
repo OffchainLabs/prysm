@@ -1,3 +1,3 @@
 ### Ignored
 
-- Strip out `NodeConnection` interface in favor of using struct instead.
+- Improvements on VC and REST package readability including stripping out `NodeConnection` interface and deleting `PrysmChainClient` interface.
