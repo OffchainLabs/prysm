@@ -34,15 +34,6 @@ func (c *NodeConnection) GetRestConnectionProvider() rest.RestConnectionProvider
 	return c.restConnectionProvider
 }
 
-// GetRestHandler returns the REST handler for making API requests.
-// Returns nil if no REST provider is configured.
-func (c *NodeConnection) GetRestHandler() rest.Handler {
-	if c.restConnectionProvider == nil {
-		return nil
-	}
-	return c.restConnectionProvider.Handler()
-}
-
 // NodeConnectionOption is a functional option for configuring a NodeConnection.
 type NodeConnectionOption func(*NodeConnection) error
 

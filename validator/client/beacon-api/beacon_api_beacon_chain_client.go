@@ -364,7 +364,8 @@ func (c beaconApiChainClient) ValidatorParticipation(ctx context.Context, in *et
 	return nil, errors.New("beaconApiChainClient.ValidatorParticipation is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiChainClientWithFallback.")
 }
 
-func NewBeaconApiChainClientWithFallback(handler rest.Handler, fallbackClient iface.ChainClient) iface.ChainClient {
+func NewBeaconApiChainClientWithFallback(provider rest.RestConnectionProvider, fallbackClient iface.ChainClient) iface.ChainClient {
+	handler := provider.Handler()
 	return &beaconApiChainClient{
 		handler:                 handler,
 		fallbackClient:          fallbackClient,
