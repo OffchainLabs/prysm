@@ -581,11 +581,16 @@ func (f *ForkChoice) InsertChain(ctx context.Context, chain []*forkchoicetypes.B
 			root := bcp.Block.Root()
 			en := f.store.emptyNodeByRoot[root]
 			if en != nil && f.store.fullNodeByRoot[root] == nil {
+				var gasLimit uint64
+				if sbid, err := bcp.Block.Block().Body().SignedExecutionPayloadBid(); err == nil && sbid != nil && sbid.Message != nil {
+					gasLimit = sbid.Message.GasLimit
+				}
 				f.store.fullNodeByRoot[root] = &PayloadNode{
 					node:       en.node,
 					optimistic: true,
 					timestamp:  time.Now(),
 					full:       true,
+					gasLimit:   gasLimit,
 					children:   make([]*Node, 0),
 				}
 			}
