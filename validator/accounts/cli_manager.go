@@ -70,7 +70,7 @@ type CLIManager struct {
 	inputReader          io.Reader
 }
 
-func (acm *CLIManager) prepareBeaconClients(ctx context.Context) (*iface.ValidatorClient, *iface.NodeClient, error) {
+func (acm *CLIManager) prepareBeaconClients(ctx context.Context) (iface.ValidatorClient, iface.NodeClient, error) {
 	if acm.dialOpts == nil {
 		return nil, nil, errors.New("failed to construct dial options for beacon clients")
 	}
@@ -88,5 +88,5 @@ func (acm *CLIManager) prepareBeaconClients(ctx context.Context) (*iface.Validat
 	validatorClient := validatorClientFactory.NewValidatorClient(conn)
 	nodeClient := nodeClientFactory.NewNodeClient(conn)
 
-	return &validatorClient, &nodeClient, nil
+	return validatorClient, nodeClient, nil
 }
