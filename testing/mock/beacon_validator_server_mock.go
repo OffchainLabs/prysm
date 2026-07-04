@@ -418,20 +418,6 @@ func (mr *MockBeaconNodeValidatorServerMockRecorder) PublishExecutionPayloadEnve
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishExecutionPayloadEnvelope", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).PublishExecutionPayloadEnvelope), arg0, arg1)
 }
 
-// StreamBlocksAltair mocks base method.
-func (m *MockBeaconNodeValidatorServer) StreamBlocksAltair(arg0 *eth.StreamBlocksRequest, arg1 eth.BeaconNodeValidator_StreamBlocksAltairServer) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StreamBlocksAltair", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// StreamBlocksAltair indicates an expected call of StreamBlocksAltair.
-func (mr *MockBeaconNodeValidatorServerMockRecorder) StreamBlocksAltair(arg0, arg1 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StreamBlocksAltair", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).StreamBlocksAltair), arg0, arg1)
-}
-
 // StreamSlots mocks base method.
 func (m *MockBeaconNodeValidatorServer) StreamSlots(arg0 *eth.StreamSlotsRequest, arg1 eth.BeaconNodeValidator_StreamSlotsServer) error {
 	m.ctrl.T.Helper()

@@ -27,7 +27,6 @@ type beaconApiValidatorClient struct {
 	restProvider            rest.RestConnectionProvider
 	handler                 rest.Handler
 	nodeClient              *beaconApiNodeClient
-	beaconBlockConverter    BeaconBlockConverter
 	prysmChainClient        iface.PrysmChainClient
 	isEventStreamRunning    bool
 	stateless               bool
@@ -56,7 +55,6 @@ func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...V
 		restProvider:            provider,
 		handler:                 handler,
 		nodeClient:              nc,
-		beaconBlockConverter:    beaconApiBeaconBlockConverter{},
 		prysmChainClient: prysmChainClient{
 			nodeClient: nc,
 			handler:    handler,
@@ -233,10 +231,6 @@ func (c *beaconApiValidatorClient) ProposeExit(ctx context.Context, in *ethpb.Si
 	return wrapInMetrics[*ethpb.ProposeExitResponse]("ProposeExit", func() (*ethpb.ProposeExitResponse, error) {
 		return c.proposeExit(ctx, in)
 	})
-}
-
-func (c *beaconApiValidatorClient) StreamBlocksAltair(ctx context.Context, in *ethpb.StreamBlocksRequest) (ethpb.BeaconNodeValidator_StreamBlocksAltairClient, error) {
-	return c.streamBlocks(ctx, in, time.Second), nil
 }
 
 func (c *beaconApiValidatorClient) SubmitAggregateSelectionProof(ctx context.Context, in *ethpb.AggregateSelectionRequest, index primitives.ValidatorIndex, committeeLength uint64) (*ethpb.AggregateSelectionResponse, error) {
