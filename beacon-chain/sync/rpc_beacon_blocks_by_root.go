@@ -99,7 +99,7 @@ func (s *Service) requestAndSaveMissingDataColumnSidecars(blks []blocks.ROBlock)
 
 	// Process any gossip columns queued before the block arrived.
 	for _, blk := range blks {
-		s.processPendingGloasColumns(blk.Root(), blk)
+		s.processPendingGloasColumns(s.ctx, blk.Root(), blk)
 	}
 
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot

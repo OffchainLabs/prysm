@@ -1,11 +1,68 @@
 package eth
 
 import (
+	"bytes"
 	"reflect"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
+
+// HTR(blinded) must equal HTR(full) so the validator signature stays valid against either form.
+func TestWireBlindedHTRMatchesFull(t *testing.T) {
+	full := &ExecutionPayloadEnvelope{
+		Payload: &enginev1.ExecutionPayloadGloas{
+			ParentHash:    bytes.Repeat([]byte{0x01}, 32),
+			FeeRecipient:  bytes.Repeat([]byte{0x02}, 20),
+			StateRoot:     bytes.Repeat([]byte{0x03}, 32),
+			ReceiptsRoot:  bytes.Repeat([]byte{0x04}, 32),
+			LogsBloom:     bytes.Repeat([]byte{0x05}, 256),
+			PrevRandao:    bytes.Repeat([]byte{0x06}, 32),
+			BaseFeePerGas: bytes.Repeat([]byte{0x07}, 32),
+			BlockHash:     bytes.Repeat([]byte{0x08}, 32),
+			Transactions:  [][]byte{[]byte("tx1"), []byte("tx2")},
+			Withdrawals:   []*enginev1.Withdrawal{},
+			SlotNumber:    primitives.Slot(100),
+		},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
+		BuilderIndex:          primitives.BuilderIndex(42),
+		BeaconBlockRoot:       bytes.Repeat([]byte{0x09}, 32),
+		ParentBeaconBlockRoot: bytes.Repeat([]byte{0x0a}, 32),
+	}
+
+	blinded, err := full.WireBlinded()
+	require.NoError(t, err)
+	fullHTR, err := full.HashTreeRoot()
+	require.NoError(t, err)
+	blindedHTR, err := blinded.HashTreeRoot()
+	require.NoError(t, err)
+	require.Equal(t, fullHTR, blindedHTR)
+
+	// SSZ roundtrip.
+	enc, err := blinded.MarshalSSZ()
+	require.NoError(t, err)
+	decoded := &WireBlindedExecutionPayloadEnvelope{}
+	require.NoError(t, decoded.UnmarshalSSZ(enc))
+	rtHTR, err := decoded.HashTreeRoot()
+	require.NoError(t, err)
+	require.Equal(t, fullHTR, rtHTR)
+
+	// Signed wrapper SSZ roundtrip.
+	signedBlinded, err := (&SignedExecutionPayloadEnvelope{
+		Message:   full,
+		Signature: bytes.Repeat([]byte{0x0b}, 96),
+	}).WireBlinded()
+	require.NoError(t, err)
+	signedEnc, err := signedBlinded.MarshalSSZ()
+	require.NoError(t, err)
+	decodedSigned := &SignedWireBlindedExecutionPayloadEnvelope{}
+	require.NoError(t, decodedSigned.UnmarshalSSZ(signedEnc))
+	rtBlindedHTR, err := decodedSigned.Message.HashTreeRoot()
+	require.NoError(t, err)
+	require.Equal(t, fullHTR, rtBlindedHTR)
+}
 
 func TestExecutionPayloadBid_Copy(t *testing.T) {
 	tests := []struct {

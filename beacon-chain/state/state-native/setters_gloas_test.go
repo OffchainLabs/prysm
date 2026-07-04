@@ -390,7 +390,7 @@ func TestDecreaseWithdrawalBalances(t *testing.T) {
 		require.Equal(t, 0, len(st.dirtyIndices))
 	})
 
-	t.Run("updates validator and builder balances and tracks dirty indices", func(t *testing.T) {
+	t.Run("updates validator and builder balances; tracks Balances dirty indices only", func(t *testing.T) {
 		st := &BeaconState{
 			version:      version.Gloas,
 			dirtyFields:  make(map[types.FieldIndex]bool),
@@ -423,7 +423,7 @@ func TestDecreaseWithdrawalBalances(t *testing.T) {
 		require.Equal(t, true, st.dirtyFields[types.Balances])
 		require.Equal(t, true, st.dirtyFields[types.Builders])
 		require.DeepEqual(t, []uint64{1, 2}, st.dirtyIndices[types.Balances])
-		require.DeepEqual(t, []uint64{1, 0}, st.dirtyIndices[types.Builders])
+		require.Equal(t, 0, len(st.dirtyIndices[types.Builders]))
 	})
 
 	t.Run("returns error on builder index out of range", func(t *testing.T) {

@@ -14,8 +14,29 @@ import (
 
 // ProcessBuilderDepositRequests applies each builder deposit request in order.
 func ProcessBuilderDepositRequests(ctx context.Context, st state.BeaconState, requests []*enginev1.BuilderDepositRequest) error {
-	for _, request := range requests {
-		if err := processBuilderDepositRequest(st, request); err != nil {
+	// Topups to an existing builder skip signature verification per spec, so only batch-verify
+	// deposits that would register a new builder.
+	newDeposits := make([]*enginev1.BuilderDepositRequest, 0, len(requests))
+	newIdx := make([]int, 0, len(requests))
+	for i, request := range requests {
+		if request == nil {
+			continue
+		}
+		if _, isBuilder := st.BuilderIndexByPubkey(bytesutil.ToBytes48(request.Pubkey)); !isBuilder {
+			newDeposits = append(newDeposits, request)
+			newIdx = append(newIdx, i)
+		}
+	}
+	invalid, err := helpers.BatchVerifyBuilderDepositRequestSignatures(ctx, newDeposits)
+	if err != nil {
+		return err
+	}
+	badSig := make([]bool, len(requests))
+	for _, j := range invalid {
+		badSig[newIdx[j]] = true
+	}
+	for i, request := range requests {
+		if err := processBuilderDepositRequest(st, request, !badSig[i]); err != nil {
 			return errors.Wrap(err, "could not process builder deposit request")
 		}
 	}
@@ -49,7 +70,7 @@ func ProcessBuilderDepositRequests(ctx context.Context, st state.BeaconState, re
 //	            epoch = get_current_epoch(state)
 //	            builder.withdrawable_epoch = epoch + MIN_BUILDER_WITHDRAWABILITY_DELAY
 //	</spec>
-func processBuilderDepositRequest(st state.BeaconState, request *enginev1.BuilderDepositRequest) error {
+func processBuilderDepositRequest(st state.BeaconState, request *enginev1.BuilderDepositRequest, sigValid bool) error {
 	if request == nil {
 		return errors.New("nil builder deposit request")
 	}
@@ -73,11 +94,7 @@ func processBuilderDepositRequest(st state.BeaconState, request *enginev1.Builde
 		return nil
 	}
 
-	valid, err := helpers.IsValidBuilderDepositSignature(request)
-	if err != nil {
-		return errors.Wrap(err, "could not verify builder deposit signature")
-	}
-	if !valid {
+	if !sigValid {
 		return nil
 	}
 

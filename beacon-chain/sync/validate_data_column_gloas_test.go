@@ -2,6 +2,7 @@ package sync
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -297,7 +298,7 @@ func TestPendingGloasColumns(t *testing.T) {
 		root := [32]byte{0xcc}
 		s.pendingGloasColumns[root] = &pendingGloasEntry{slot: clock.CurrentSlot()}
 
-		s.processPendingGloasColumns(root, nil)
+		s.processPendingGloasColumns(context.Background(), root, nil)
 		// Entry should remain because the block was nil.
 		require.Equal(t, true, s.hasPendingGloasColumns(root))
 	})
@@ -475,11 +476,14 @@ func TestPendingGloasColumns(t *testing.T) {
 		require.Equal(t, true, s.hasPendingGloasColumns(blockRoot))
 
 		// Process with the block.
-		s.processPendingGloasColumns(blockRoot, signedBlock)
+		s.processPendingGloasColumns(context.Background(), blockRoot, signedBlock)
 		require.Equal(t, false, s.hasPendingGloasColumns(blockRoot))
 
 		// Column should be marked as seen.
 		require.Equal(t, true, s.hasSeenDataColumnRootIndex(blockRoot, sidecar.Index))
+
+		// Deferred validation passed, so the column must be re-broadcast.
+		require.Equal(t, true, p.BroadcastCalled.Load())
 	})
 
 	t.Run("process downscores bad peer for slot mismatch", func(t *testing.T) {
@@ -516,10 +520,12 @@ func TestPendingGloasColumns(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, s.queuePendingGloasColumn(roCol, "badpeer"))
 
-		s.processPendingGloasColumns(blockRoot, signedBlock)
+		s.processPendingGloasColumns(context.Background(), blockRoot, signedBlock)
 		require.Equal(t, false, s.hasPendingGloasColumns(blockRoot))
 		// Column should NOT be marked as seen (it was invalid).
 		require.Equal(t, false, s.hasSeenDataColumnRootIndex(blockRoot, sidecar.Index))
+		// Nothing valid was processed, so nothing is re-broadcast.
+		require.Equal(t, false, p.BroadcastCalled.Load())
 	})
 
 	t.Run("no entry is no-op", func(t *testing.T) {
@@ -537,7 +543,7 @@ func TestPendingGloasColumns(t *testing.T) {
 		blk, err := blocks.NewSignedBeaconBlock(pb)
 		require.NoError(t, err)
 		// Should not panic.
-		s.processPendingGloasColumns(root, blk)
+		s.processPendingGloasColumns(context.Background(), root, blk)
 	})
 
 	t.Run("prune downscores fabricated root, spares known root", func(t *testing.T) {
@@ -581,10 +587,10 @@ func TestPendingGloasColumns(t *testing.T) {
 
 		scorer := p.Peers().Scorers().BadResponsesScorer()
 
-		// One increment per fabricated column.
+		// One increment for the fabricated root even though the peer forwarded three columns.
 		evilCount, err := scorer.Count("evilpeer")
 		require.NoError(t, err)
-		require.Equal(t, 3, evilCount)
+		require.Equal(t, 1, evilCount)
 
 		// The peer on the known (orphaned) root is untouched.
 		_, err = scorer.Count("honestpeer")

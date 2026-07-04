@@ -84,7 +84,8 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 
 	go s.processPendingPayloadEnvelope(s.ctx, root)
 
-	s.processPendingGloasColumns(root, signed)
+	s.processPendingGloasColumns(s.ctx, root, signed)
+	go s.processPendingPayloadAttestation(s.ctx, root)
 
 	return nil
 }
@@ -227,13 +228,18 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			"type":          source.Type(),
 		})
 
-		var constructedSidecarCount uint64
+		isPartialEnabled := s.cfg.p2p.PartialColumnBroadcaster() != nil
+
+		isGloas := slots.ToEpoch(source.Slot()) >= params.BeaconConfig().GloasForkEpoch
+		root := source.Root()
+
+		var hasBlobsColumns []blocks.PartialDataColumn
 		for iteration := uint64(0); ; /*no stop condition*/ iteration++ {
 			log = log.WithField("iteration", iteration)
 
 			// Exit early if all sidecars to sample have been seen.
-			if s.haveAllSidecarsBeenSeen(source.Slot(), proposerIndex, columnIndicesToSample) {
-				if iteration > 0 && constructedSidecarCount == 0 {
+			if s.haveAllSidecarsBeenSeen(isGloas, root, source.Slot(), proposerIndex, columnIndicesToSample) {
+				if iteration > 0 {
 					log.Debug("No data column sidecars constructed from the execution client")
 				}
 
@@ -247,11 +253,18 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 
 			if iteration == 0 {
 				dataColumnsRecoveredFromELAttempts.Inc()
+				if isPartialEnabled {
+					hasBlobsColumns, err = s.publishHasBlobsPartialColumns(ctx, source, columnIndicesToSample)
+					if err != nil {
+						log.WithError(err).WithField("hasBlobsColumns", len(hasBlobsColumns)).Error("Failed to publish HasBlobs partial columns")
+					}
+					if ctx.Err() != nil {
+						return nil, ctx.Err()
+					}
+				}
 			}
 
 			// Try to reconstruct data column constructedSidecars from the execution client.
-			partialBroadcaster := s.cfg.p2p.PartialColumnBroadcaster()
-			isPartialEnabled := partialBroadcaster != nil
 			constructedSidecars, partialColumns, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, source)
 			if err != nil {
 				return nil, errors.Wrap(err, "reconstruct data column sidecars")
@@ -260,35 +273,32 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			count := len(partialColumns)
 
 			if isPartialEnabled && count > 0 {
-				digest, err := s.currentForkDigest()
-				if err != nil {
-					return nil, errors.Wrap(err, "current fork digest")
-				}
 				// Publish the partial column.
 				// Note, the "partial column" may indeed be complete. We still
 				// should publish to help our peers.
-				if err := partialBroadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
-					for i := range uint64(len(partialColumns)) {
-						if !columnIndicesToSample[i] {
-							continue
-						}
-						subnet := peerdas.ComputeSubnetForDataColumnSidecar(i)
-						topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
-						if !yield(topic, partialColumns[i]) {
-							return
-						}
-					}
-				}); err != nil {
+				if err := s.publishPartialColumns(ctx, columnIndicesToSample, partialColumns); err != nil {
 					log.WithError(err).Error("Failed to publish partial columns")
 				}
+				hasBlobsColumns = nil
+			} else if isPartialEnabled && len(hasBlobsColumns) > 0 {
+				// clear parts requests to request everything because `GetBlobsV3` failed to return any cells.
+				for i := range hasBlobsColumns {
+					hasBlobsColumns[i].ClearPartsRequests()
+				}
+				if err := s.publishPartialColumns(ctx, columnIndicesToSample, hasBlobsColumns); err != nil {
+					log.WithError(err).Error("Failed to publish partial columns after clearing HasBlobs parts requests")
+				} else {
+					log.WithField("count", len(hasBlobsColumns)).Debug("Republished partial columns with HasBlobs parts requests cleared")
+				}
+				hasBlobsColumns = nil
 			}
 
 			// No sidecars are retrieved from the EL, retry later
 			constructedCount := uint64(len(constructedSidecars))
 
-			// Boundary check.
-			if constructedSidecarCount > 0 && constructedSidecarCount != fieldparams.NumberOfColumns {
-				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", constructedSidecarCount, fieldparams.NumberOfColumns)
+			// Boundary check: the EL returns either no sidecars or the full set.
+			if constructedCount > 0 && constructedCount != fieldparams.NumberOfColumns {
+				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", constructedCount, fieldparams.NumberOfColumns)
 			}
 
 			// Partial columns are published separately above (for all sampled indices), so do not
@@ -324,6 +334,59 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 	return nil
 }
 
+func (s *Service) publishHasBlobsPartialColumns(ctx context.Context, source peerdas.ConstructionPopulator, indices map[uint64]bool) ([]blocks.PartialDataColumn, error) {
+	partialColumns, supported, err := s.cfg.executionReconstructor.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
+	if err != nil {
+		return nil, errors.Wrap(err, "construct partial data column sidecars from has blobs")
+	}
+	if !supported || len(partialColumns) == 0 {
+		return nil, nil
+	}
+
+	var requestedBlobs []int
+	if requests, ok := partialColumns[0].PartsRequests(); ok {
+		requestedBlobs = requests.BitIndices()
+	}
+
+	if err := s.publishPartialColumns(ctx, indices, partialColumns); err != nil {
+		return partialColumns, errors.Wrap(err, "publish partial columns")
+	}
+
+	log.WithFields(logrus.Fields{
+		"root":           fmt.Sprintf("%#x", source.Root()),
+		"slot":           source.Slot(),
+		"count":          len(partialColumns),
+		"requestedBlobs": requestedBlobs,
+	}).Debug("Published HasBlobs partial columns ahead of GetBlobsV3")
+	return partialColumns, nil
+}
+
+func (s *Service) publishPartialColumns(ctx context.Context, indices map[uint64]bool, partialColumns []blocks.PartialDataColumn) error {
+	partialBroadcaster := s.cfg.p2p.PartialColumnBroadcaster()
+	if partialBroadcaster == nil || len(partialColumns) == 0 {
+		return nil
+	}
+
+	digest, err := s.currentForkDigest()
+	if err != nil {
+		return errors.Wrap(err, "current fork digest")
+	}
+
+	err = partialBroadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
+		for i := range uint64(len(partialColumns)) {
+			if !indices[i] {
+				continue
+			}
+			subnet := peerdas.ComputeSubnetForDataColumnSidecar(i)
+			topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
+			if !yield(topic, partialColumns[i]) {
+				return
+			}
+		}
+	})
+	return errors.Wrap(err, "publish partial columns")
+}
+
 // broadcastAndReceiveUnseenDataColumnSidecars broadcasts and receives unseen data column sidecars.
 func (s *Service) broadcastAndReceiveUnseenDataColumnSidecars(
 	ctx context.Context,
@@ -343,7 +406,7 @@ func (s *Service) broadcastAndReceiveUnseenDataColumnSidecars(
 		}
 
 		// Skip already seen data column sidecars.
-		if s.hasSeenDataColumnIndex(slot, proposerIndex, sidecar.Index()) {
+		if s.hasSeenDataColumn(sidecar.IsGloas(), sidecar.BlockRoot(), slot, proposerIndex, sidecar.Index()) {
 			continue
 		}
 
@@ -384,10 +447,10 @@ func (s *Service) broadcastAndReceiveUnseenDataColumnSidecars(
 	return unseenIndices, nil
 }
 
-// haveAllSidecarsBeenSeen checks if all sidecars for the given slot, proposer index, and data column indices have been seen.
-func (s *Service) haveAllSidecarsBeenSeen(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, indices map[uint64]bool) bool {
+// haveAllSidecarsBeenSeen checks if all sidecars for the given identity and data column indices have been seen.
+func (s *Service) haveAllSidecarsBeenSeen(isGloas bool, root [fieldparams.RootLength]byte, slot primitives.Slot, proposerIndex primitives.ValidatorIndex, indices map[uint64]bool) bool {
 	for index := range indices {
-		if !s.hasSeenDataColumnIndex(slot, proposerIndex, index) {
+		if !s.hasSeenDataColumn(isGloas, root, slot, proposerIndex, index) {
 			return false
 		}
 	}

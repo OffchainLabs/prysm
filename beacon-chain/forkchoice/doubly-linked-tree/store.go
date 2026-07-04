@@ -341,7 +341,7 @@ func (s *Store) tips() ([][32]byte, []primitives.Slot) {
 	var slots []primitives.Slot
 
 	for root, n := range s.emptyNodeByRoot {
-		if len(s.allConsensusChildren(n.node)) == 0 {
+		if !s.hasConsensusChildren(n.node) {
 			roots = append(roots, root)
 			slots = append(slots, n.node.slot)
 		}

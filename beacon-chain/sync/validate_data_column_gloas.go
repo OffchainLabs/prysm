@@ -126,6 +126,15 @@ func (s *Service) setSeenDataColumnRootIndex(root [fieldparams.RootLength]byte, 
 	s.seenDataColumnCache.Add(slot, key, true)
 }
 
+// hasSeenDataColumn reports whether the sidecar identity has been seen. Gloas sidecars are keyed
+// by (block root, index); pre-Gloas sidecars by (slot, proposer index, index).
+func (s *Service) hasSeenDataColumn(isGloas bool, root [fieldparams.RootLength]byte, slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) bool {
+	if isGloas {
+		return s.hasSeenDataColumnRootIndex(root, index)
+	}
+	return s.hasSeenDataColumnIndex(slot, proposerIndex, index)
+}
+
 // queuePendingGloasColumn returns a non-nil error for malformed sidecars (the caller propagates it as ValidationReject).
 func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID) error {
 	dc := roCol.DataColumnSidecarGloas()
@@ -168,7 +177,7 @@ func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID
 	return nil
 }
 
-func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, blk interfaces.ReadOnlySignedBeaconBlock) {
+func (s *Service) processPendingGloasColumns(ctx context.Context, root [fieldparams.RootLength]byte, blk interfaces.ReadOnlySignedBeaconBlock) {
 	if blk == nil || blk.IsNil() {
 		return
 	}
@@ -250,6 +259,10 @@ func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, 
 			return
 		}
 
+		if err := s.cfg.p2p.BroadcastDataColumnSidecars(ctx, verified, nil); err != nil {
+			log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Warn("Failed to broadcast pending Gloas columns")
+		}
+
 		log.WithFields(logrus.Fields{
 			"root":    fmt.Sprintf("%#x", root),
 			"count":   len(verified),
@@ -294,11 +307,18 @@ func (s *Service) pruneStaleGloasColumns(currentSlot primitives.Slot) {
 		if e.slot+1 >= currentSlot {
 			continue
 		}
+		// Dedupe forwarders: a peer that relayed many columns for one root is downscored once, not per column.
+		seen := make(map[peer.ID]struct{})
 		peers := make([]peer.ID, 0, fieldparams.NumberOfColumns)
 		for _, pe := range e.columns {
-			if pe != nil {
-				peers = append(peers, pe.peer)
+			if pe == nil {
+				continue
 			}
+			if _, ok := seen[pe.peer]; ok {
+				continue
+			}
+			seen[pe.peer] = struct{}{}
+			peers = append(peers, pe.peer)
 		}
 		pruned = append(pruned, prunedRoot{root: r, peers: peers})
 		delete(s.pendingGloasColumns, r)

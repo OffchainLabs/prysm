@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -189,7 +187,7 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		"blockRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(root[:])),
 		"blockHash":  fmt.Sprintf("%#x", bytesutil.Trunc(execution.BlockHash())),
 		"parentHash": fmt.Sprintf("%#x", bytesutil.Trunc(execution.ParentHash())),
-	}).Info("Processed execution payload envelope")
+	}).Info("Synced execution payload envelope")
 	return nil
 }
 
@@ -252,27 +250,10 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 			var pId [8]byte
 			copy(pId[:], pid[:])
 			s.cfg.PayloadIDCache.Set(proposingSlot, root, true, pId)
-			s.firePayloadAttributesEventForHead(root, proposingSlot, attr)
+			s.firePayloadAttributesEventForHead(root, proposingSlot, attr, blockHash[:])
 		}
 	}()
-	if requests := envelope.ExecutionRequests(); requests != nil && len(requests.Deposits) > 0 {
-		s.prefetchDepositSignatures(requests)
-	}
 	return nil
-}
-
-func (s *Service) prefetchDepositSignatures(requests *enginev1.ExecutionRequestsGloas) {
-	invalidIdx, err := helpers.BatchVerifyDepositRequestSignatures(s.ctx, requests.Deposits)
-	if err != nil {
-		log.WithError(err).Debug("Could not batch verify deposit signatures for prefetch")
-		return
-	}
-	root, err := requests.HashTreeRoot()
-	if err != nil {
-		log.WithError(err).Debug("Could not hash execution requests for deposit sig prefetch")
-		return
-	}
-	cache.DepositSig.Put(root, invalidIdx)
 }
 
 func (s *Service) getPayloadEnvelopePrestate(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope) (state.BeaconState, error) {

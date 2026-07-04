@@ -19,7 +19,10 @@ func (s *Service) payloadAttestationSubscriber(ctx context.Context, msg proto.Me
 	if a == nil || a.Data == nil {
 		return errNilMessage
 	}
+	return s.processPayloadAttestationMessage(ctx, a)
+}
 
+func (s *Service) processPayloadAttestationMessage(ctx context.Context, a *eth.PayloadAttestationMessage) error {
 	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
 		Type: opfeed.PayloadAttestationMessageReceived,
 		Data: &opfeed.PayloadAttestationMessageReceivedData{

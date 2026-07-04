@@ -2896,8 +2896,72 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 			require.Equal(t, 1, submitted[s], "slot must be submitted exactly once")
 		}
 		require.Equal(t, len(proposalSlots), len(submitted))
-		require.Equal(t, len(proposalSlots), v.submittedPrefSlotsCount())
+		v.submittedPrefSlotsLock.RLock()
+		require.Equal(t, len(proposalSlots), len(v.submittedPrefSlots))
+		v.submittedPrefSlotsLock.RUnlock()
 	})
+}
+
+func TestValidator_buildProposerPreferences_LogsSignFailureCause(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	kp := randKeypair(t)
+	// Keymanager without the proposer's key: signing fails with "not found".
+	km := newMockKeymanager(t)
+	feeRecipient := feeRecipientFromString(t, "0x1111111111111111111111111111111111111111")
+
+	ctrl := gomock.NewController(t)
+	client := validatormock.NewMockValidatorClient(ctrl)
+	domainCache, err := ristretto.NewCache(&ristretto.Config[string, proto.Message]{
+		NumCounters: 1920,
+		MaxCost:     192,
+		BufferItems: 64,
+	})
+	require.NoError(t, err)
+	client.EXPECT().DomainData(gomock.Any(), gomock.Any()).
+		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).AnyTimes()
+
+	v := validator{
+		validatorClient: client,
+		domainDataCache: domainCache,
+		proposerSettings: &proposer.Settings{
+			Version: proposer.SchemaV2,
+			DefaultConfig: &proposer.Option{
+				FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: feeRecipient},
+				GasLimit:           42000000,
+			},
+		},
+		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
+			kp.pub: {publicKey: kp.pub[:], status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}, index: 1},
+		},
+		duties:             &dutyStore{},
+		submittedPrefSlots: make(map[primitives.Slot]bool),
+	}
+
+	nextEpochProposerSlot := params.BeaconConfig().SlotsPerEpoch + 3
+	var data dutyStoreData
+	data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			{PublicKey: kp.pub[:], ValidatorIndex: 1, Status: ethpb.ValidatorStatus_ACTIVE},
+		},
+		NextEpochDuties: []*ethpb.ValidatorDuty{
+			{PublicKey: kp.pub[:], ValidatorIndex: 1, Status: ethpb.ValidatorStatus_ACTIVE, ProposerSlots: []primitives.Slot{nextEpochProposerSlot}},
+		},
+		PrevDependentRoot: testProposerPrefDependentRoot,
+		CurrDependentRoot: testProposerPrefDependentRoot,
+	})
+	v.duties.write(data)
+
+	hook := logTest.NewGlobal()
+	prefs := v.buildProposerPreferences(t.Context(), km, params.BeaconConfig().SlotsPerEpoch/2, false)
+
+	require.Equal(t, 0, len(prefs))
+	require.LogsContain(t, hook, "Failed to sign proposer preferences")
+	// The warn carries the underlying signing error, not just a count.
+	require.LogsContain(t, hook, "could not sign proposer preferences")
 }
 
 func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
@@ -3014,7 +3078,9 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 			})
 			v.duties.write(data)
 
-			v.upgradeProposerSettingsToV2(t.Context(), slots.ToEpoch(midEpochSlot))
+			if slots.ToEpoch(midEpochSlot) >= params.BeaconConfig().GloasForkEpoch {
+				v.upgradeProposerSettingsToV2(t.Context())
+			}
 			prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
 			require.Equal(t, 1, len(prefs))
 			require.Equal(t, tt.wantGasLimit, prefs[0].Message.TargetGasLimit)
@@ -3029,7 +3095,7 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 			}
 			require.Equal(t, proposer.SchemaV2, ps.Version)
 			require.Equal(t, tt.upgradedGasLimit, ps.DefaultConfig.GasLimit)
-			require.Equal(t, true, ps.DefaultConfig.BuilderConfig == nil)
+			require.NotNil(t, ps.DefaultConfig.BuilderConfig)
 
 			dbps, err := v.db.ProposerSettings(t.Context())
 			require.NoError(t, err)
