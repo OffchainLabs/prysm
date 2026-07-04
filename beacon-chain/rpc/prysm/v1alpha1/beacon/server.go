@@ -28,11 +28,9 @@ import (
 type Server struct {
 	BeaconDB                    db.ReadOnlyDatabase
 	Ctx                         context.Context
-	ChainStartFetcher           execution.ChainStartFetcher
 	HeadFetcher                 blockchain.HeadFetcher
 	CanonicalFetcher            blockchain.CanonicalFetcher
 	FinalizationFetcher         blockchain.FinalizationFetcher
-	DepositFetcher              cache.DepositFetcher
 	BlockFetcher                execution.POWBlockFetcher
 	GenesisTimeFetcher          blockchain.TimeFetcher
 	StateNotifier               statefeed.Notifier

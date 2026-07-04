@@ -544,7 +544,6 @@ func (mr *MockBeaconNodeValidatorClientMockRecorder) PublishExecutionPayloadEnve
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishExecutionPayloadEnvelope", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).PublishExecutionPayloadEnvelope), varargs...)
 }
 
-
 // StreamSlots mocks base method.
 func (m *MockBeaconNodeValidatorClient) StreamSlots(ctx context.Context, in *eth.StreamSlotsRequest, opts ...grpc.CallOption) (eth.BeaconNodeValidator_StreamSlotsClient, error) {
 	m.ctrl.T.Helper()

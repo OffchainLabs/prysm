@@ -12,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
 	blockfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/block"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
@@ -94,11 +93,9 @@ type Config struct {
 	BlobReceiver                     blockchain.BlobReceiver
 	DataColumnReceiver               blockchain.DataColumnReceiver
 	ExecutionChainService            execution.Chain
-	ChainStartFetcher                execution.ChainStartFetcher
 	ExecutionChainInfoFetcher        execution.ChainInfoFetcher
 	GenesisTimeFetcher               blockchain.TimeFetcher
 	GenesisFetcher                   blockchain.GenesisFetcher
-	MockEth1Votes                    bool
 	EnableDebugRPCEndpoints          bool
 	AttestationCache                 *cache.AttestationCache
 	AttestationsPool                 attestations.Pool
@@ -112,8 +109,6 @@ type Config struct {
 	PeersFetcher                     p2p.PeersProvider
 	PeerManager                      p2p.PeerManager
 	MetadataProvider                 p2p.MetadataProvider
-	DepositFetcher                   cache.DepositFetcher
-	PendingDepositFetcher            depositsnapshot.PendingDepositsFetcher
 	StateNotifier                    statefeed.Notifier
 	BlockNotifier                    blockfeed.Notifier
 	OperationNotifier                opfeed.Notifier
@@ -238,9 +233,6 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		FinalizationFetcher:              s.cfg.FinalizationFetcher,
 		TimeFetcher:                      s.cfg.GenesisTimeFetcher,
 		BlockFetcher:                     s.cfg.ExecutionChainService,
-		DepositFetcher:                   s.cfg.DepositFetcher,
-		ChainStartFetcher:                s.cfg.ChainStartFetcher,
-		Eth1InfoFetcher:                  s.cfg.ExecutionChainService,
 		OptimisticModeFetcher:            s.cfg.OptimisticModeFetcher,
 		SyncChecker:                      s.cfg.SyncService,
 		StateNotifier:                    s.cfg.StateNotifier,
@@ -253,9 +245,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		ExecutionPayloadEnvelopeReceiver: s.cfg.ExecutionPayloadEnvelopeReceiver,
 		BlobReceiver:                     s.cfg.BlobReceiver,
 		DataColumnReceiver:               s.cfg.DataColumnReceiver,
-		MockEth1Votes:                    s.cfg.MockEth1Votes,
 		Eth1BlockFetcher:                 s.cfg.ExecutionChainService,
-		PendingDepositsFetcher:           s.cfg.PendingDepositFetcher,
 		SlashingsPool:                    s.cfg.SlashingsPool,
 		StateGen:                         s.cfg.StateGen,
 		SyncCommitteePool:                s.cfg.SyncCommitteeObjectPool,
@@ -300,8 +290,6 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		HeadFetcher:                 s.cfg.HeadFetcher,
 		FinalizationFetcher:         s.cfg.FinalizationFetcher,
 		CanonicalFetcher:            s.cfg.CanonicalFetcher,
-		ChainStartFetcher:           s.cfg.ChainStartFetcher,
-		DepositFetcher:              s.cfg.DepositFetcher,
 		BlockFetcher:                s.cfg.ExecutionChainService,
 		GenesisTimeFetcher:          s.cfg.GenesisTimeFetcher,
 		StateNotifier:               s.cfg.StateNotifier,

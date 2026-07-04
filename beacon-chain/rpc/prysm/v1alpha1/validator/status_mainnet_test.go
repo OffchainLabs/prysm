@@ -6,15 +6,10 @@ import (
 	"time"
 
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/container/trie"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"google.golang.org/protobuf/proto"
@@ -24,27 +19,8 @@ func TestValidatorStatus_Active(t *testing.T) {
 	// This test breaks if it doesn't use mainnet config
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.MainnetConfig())
-	ctx := t.Context()
 
 	pubkey := generatePubkey(1)
-
-	depData := &ethpb.Deposit_Data{
-		PublicKey:             pubkey,
-		Signature:             bytesutil.PadTo([]byte("hi"), 96),
-		WithdrawalCredentials: bytesutil.PadTo([]byte("hey"), 32),
-	}
-
-	deposit := &ethpb.Deposit{
-		Data: depData,
-	}
-	depositTrie, err := trie.NewTrie(params.BeaconConfig().DepositContractTreeDepth)
-	require.NoError(t, err, "Could not setup deposit trie")
-	depositCache, err := depositsnapshot.New()
-	require.NoError(t, err)
-
-	root, err := depositTrie.HashTreeRoot()
-	require.NoError(t, err)
-	assert.NoError(t, depositCache.InsertDeposit(ctx, deposit, 0 /*blockNum*/, 0, root))
 
 	// Active because activation epoch <= current epoch < exit epoch.
 	activeEpoch := helpers.ActivationExitEpoch(0)
@@ -65,18 +41,8 @@ func TestValidatorStatus_Active(t *testing.T) {
 	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(st)
 	require.NoError(t, err)
 
-	timestamp := time.Unix(int64(params.BeaconConfig().Eth1FollowDistance), 0).Unix()
-	p := &mockExecution.Chain{
-		TimesByHeight: map[int]uint64{
-			int(params.BeaconConfig().Eth1FollowDistance): uint64(timestamp),
-		},
-	}
 	vs := &Server{
-		ChainStartFetcher: p,
-		BlockFetcher:      p,
-		Eth1InfoFetcher:   p,
-		DepositFetcher:    depositCache,
-		HeadFetcher:       &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
+		HeadFetcher: &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
 	}
 	req := &ethpb.ValidatorStatusRequest{
 		PublicKey: pubkey,

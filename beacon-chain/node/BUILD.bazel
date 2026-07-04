@@ -23,7 +23,6 @@ go_library(
         "//beacon-chain/blockchain:go_default_library",
         "//beacon-chain/builder:go_default_library",
         "//beacon-chain/cache:go_default_library",
-        "//beacon-chain/cache/depositsnapshot:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/das:go_default_library",
         "//beacon-chain/db:go_default_library",

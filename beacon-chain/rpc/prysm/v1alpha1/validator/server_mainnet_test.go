@@ -4,16 +4,10 @@ import (
 	"testing"
 
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
-	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/mock"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -24,7 +18,6 @@ func TestWaitForActivation_ValidatorOriginallyExists(t *testing.T) {
 	// This test breaks if it doesn't use mainnet config
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.MainnetConfig())
-	ctx := t.Context()
 
 	priv1, err := bls.RandKey()
 	require.NoError(t, err)
@@ -48,37 +41,11 @@ func TestWaitForActivation_ValidatorOriginallyExists(t *testing.T) {
 	block := util.NewBeaconBlock()
 	genesisRoot, err := block.Block.HashTreeRoot()
 	require.NoError(t, err, "Could not get signing root")
-	depData := &ethpb.Deposit_Data{
-		PublicKey:             pubKey1,
-		WithdrawalCredentials: bytesutil.PadTo([]byte("hey"), 32),
-		Signature:             make([]byte, 96),
-	}
-	domain, err := signing.ComputeDomain(params.BeaconConfig().DomainDeposit, nil, nil)
-	require.NoError(t, err)
-	signingRoot, err := signing.ComputeSigningRoot(depData, domain)
-	require.NoError(t, err)
-	depData.Signature = priv1.Sign(signingRoot[:]).Marshal()
-
-	deposit := &ethpb.Deposit{
-		Data: depData,
-	}
-	depositTrie, err := trie.NewTrie(params.BeaconConfig().DepositContractTreeDepth)
-	require.NoError(t, err, "Could not setup deposit trie")
-	depositCache, err := depositsnapshot.New()
-	require.NoError(t, err)
-
-	root, err := depositTrie.HashTreeRoot()
-	require.NoError(t, err)
-	assert.NoError(t, depositCache.InsertDeposit(ctx, deposit, 10 /*blockNum*/, 0, root))
 	s, err := state_native.InitializeFromProtoUnsafePhase0(beaconState)
 	require.NoError(t, err)
 	vs := &Server{
-		Ctx:               t.Context(),
-		ChainStartFetcher: &mockExecution.Chain{},
-		BlockFetcher:      &mockExecution.Chain{},
-		Eth1InfoFetcher:   &mockExecution.Chain{},
-		DepositFetcher:    depositCache,
-		HeadFetcher:       &mockChain.ChainService{State: s, Root: genesisRoot[:]},
+		Ctx:         t.Context(),
+		HeadFetcher: &mockChain.ChainService{State: s, Root: genesisRoot[:]},
 	}
 	req := &ethpb.ValidatorActivationRequest{
 		PublicKeys: [][]byte{pubKey1, pubKey2},
@@ -103,7 +70,7 @@ func TestWaitForActivation_ValidatorOriginallyExists(t *testing.T) {
 					Status: &ethpb.ValidatorStatusResponse{
 						ActivationEpoch: params.BeaconConfig().FarFutureEpoch,
 					},
-					Index: nonExistentIndex,
+					Index: 0,
 				},
 			},
 		},

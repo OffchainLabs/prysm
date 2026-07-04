@@ -3,21 +3,16 @@ package validator
 import (
 	"reflect"
 	"testing"
-	"time"
 
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	mockstategen "github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen/mock"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -29,113 +24,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func TestValidatorStatus_DepositedEth1(t *testing.T) {
-	ctx := t.Context()
-	deposits, _, err := util.DeterministicDepositsAndKeys(1)
-	require.NoError(t, err, "Could not generate deposits and keys")
-	deposit := deposits[0]
-	pubKey1 := deposit.Data.PublicKey
-	depositTrie, err := trie.NewTrie(params.BeaconConfig().DepositContractTreeDepth)
-	require.NoError(t, err, "Could not setup deposit trie")
-	depositCache, err := depositsnapshot.New()
-	require.NoError(t, err)
-
-	root, err := depositTrie.HashTreeRoot()
-	require.NoError(t, err)
-	assert.NoError(t, depositCache.InsertDeposit(ctx, deposit, 0 /*blockNum*/, 0, root))
-	height := time.Unix(int64(params.BeaconConfig().Eth1FollowDistance), 0).Unix()
-	p := &mockExecution.Chain{
-		TimesByHeight: map[int]uint64{
-			0: uint64(height),
-		},
-	}
-	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
-	require.NoError(t, err)
-	vs := &Server{
-		DepositFetcher: depositCache,
-		BlockFetcher:   p,
-		HeadFetcher: &mockChain.ChainService{
-			State: stateObj,
-		},
-		Eth1InfoFetcher: p,
-	}
-	req := &ethpb.ValidatorStatusRequest{
-		PublicKey: pubKey1,
-	}
-	resp, err := vs.ValidatorStatus(t.Context(), req)
-	require.NoError(t, err, "Could not get validator status")
-	assert.Equal(t, ethpb.ValidatorStatus_DEPOSITED, resp.Status)
-}
-
-func TestValidatorStatus_Deposited(t *testing.T) {
-	ctx := t.Context()
-
-	deps, keys, err := util.DeterministicDepositsAndKeys(1)
-	require.NoError(t, err)
-	pubKey1 := keys[0].PublicKey().Marshal()
-	depData := deps[0].Data
-	deposit := &ethpb.Deposit{
-		Data: depData,
-	}
-	depositTrie, err := trie.NewTrie(params.BeaconConfig().DepositContractTreeDepth)
-	require.NoError(t, err, "Could not setup deposit trie")
-	depositCache, err := depositsnapshot.New()
-	require.NoError(t, err)
-
-	root, err := depositTrie.HashTreeRoot()
-	require.NoError(t, err)
-	assert.NoError(t, depositCache.InsertDeposit(ctx, deposit, 0 /*blockNum*/, 0, root))
-	height := time.Unix(int64(params.BeaconConfig().Eth1FollowDistance), 0).Unix()
-	p := &mockExecution.Chain{
-		TimesByHeight: map[int]uint64{
-			0: uint64(height),
-		},
-	}
-	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
-	require.NoError(t, err)
-	vs := &Server{
-		DepositFetcher: depositCache,
-		BlockFetcher:   p,
-		HeadFetcher: &mockChain.ChainService{
-			State: stateObj,
-		},
-		Eth1InfoFetcher: p,
-	}
-	req := &ethpb.ValidatorStatusRequest{
-		PublicKey: pubKey1,
-	}
-	resp, err := vs.ValidatorStatus(t.Context(), req)
-	require.NoError(t, err, "Could not get validator status")
-	assert.Equal(t, ethpb.ValidatorStatus_DEPOSITED, resp.Status)
-}
-
 func TestValidatorStatus_PartiallyDeposited(t *testing.T) {
-	ctx := t.Context()
-
 	pubKey1 := pubKey(1)
-	depData := &ethpb.Deposit_Data{
-		Amount:                params.BeaconConfig().MinDepositAmount,
-		PublicKey:             pubKey1,
-		Signature:             []byte("hi"),
-		WithdrawalCredentials: []byte("hey"),
-	}
-	deposit := &ethpb.Deposit{
-		Data: depData,
-	}
-	depositTrie, err := trie.NewTrie(params.BeaconConfig().DepositContractTreeDepth)
-	require.NoError(t, err, "Could not setup deposit trie")
-	depositCache, err := depositsnapshot.New()
-	require.NoError(t, err)
-
-	root, err := depositTrie.HashTreeRoot()
-	require.NoError(t, err)
-	assert.NoError(t, depositCache.InsertDeposit(ctx, deposit, 0 /*blockNum*/, 0, root))
-	height := time.Unix(int64(params.BeaconConfig().Eth1FollowDistance), 0).Unix()
-	p := &mockExecution.Chain{
-		TimesByHeight: map[int]uint64{
-			0: uint64(height),
-		},
-	}
 	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{
 		Validators: []*ethpb.Validator{
 			{
@@ -147,12 +37,9 @@ func TestValidatorStatus_PartiallyDeposited(t *testing.T) {
 	})
 	require.NoError(t, err)
 	vs := &Server{
-		DepositFetcher: depositCache,
-		BlockFetcher:   p,
 		HeadFetcher: &mockChain.ChainService{
 			State: stateObj,
 		},
-		Eth1InfoFetcher: p,
 	}
 	req := &ethpb.ValidatorStatusRequest{
 		PublicKey: pubKey1,
@@ -163,34 +50,7 @@ func TestValidatorStatus_PartiallyDeposited(t *testing.T) {
 }
 
 func TestValidatorStatus_Pending_MultipleDeposits(t *testing.T) {
-	ctx := t.Context()
-
 	pubKey1 := pubKey(1)
-	depData := &ethpb.Deposit_Data{
-		Amount:                16 * params.BeaconConfig().MinDepositAmount,
-		PublicKey:             pubKey1,
-		Signature:             []byte("hi"),
-		WithdrawalCredentials: []byte("hey"),
-	}
-	deposit := &ethpb.Deposit{
-		Data: depData,
-	}
-	depositTrie, err := trie.NewTrie(params.BeaconConfig().DepositContractTreeDepth)
-	require.NoError(t, err, "Could not setup deposit trie")
-	depositCache, err := depositsnapshot.New()
-	require.NoError(t, err)
-
-	root, err := depositTrie.HashTreeRoot()
-	require.NoError(t, err)
-	assert.NoError(t, depositCache.InsertDeposit(ctx, deposit, 0 /*blockNum*/, 0, root))
-	assert.NoError(t, depositCache.InsertDeposit(ctx, deposit, 0 /*blockNum*/, 1, root))
-
-	height := time.Unix(int64(params.BeaconConfig().Eth1FollowDistance), 0).Unix()
-	p := &mockExecution.Chain{
-		TimesByHeight: map[int]uint64{
-			0: uint64(height),
-		},
-	}
 	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{
 		Validators: []*ethpb.Validator{
 			{
@@ -206,12 +66,9 @@ func TestValidatorStatus_Pending_MultipleDeposits(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, stateObj.SetSlot(params.BeaconConfig().SlotsPerEpoch))
 	vs := &Server{
-		DepositFetcher: depositCache,
-		BlockFetcher:   p,
 		HeadFetcher: &mockChain.ChainService{
 			State: stateObj,
 		},
-		Eth1InfoFetcher: p,
 	}
 	req := &ethpb.ValidatorStatusRequest{
 		PublicKey: pubKey1,
@@ -222,8 +79,6 @@ func TestValidatorStatus_Pending_MultipleDeposits(t *testing.T) {
 }
 
 func TestValidatorStatus_Pending(t *testing.T) {
-	ctx := t.Context()
-
 	pubKey := pubKey(1)
 	block := util.NewBeaconBlock()
 	genesisRoot, err := block.Block.HashTreeRoot()
@@ -243,36 +98,8 @@ func TestValidatorStatus_Pending(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	depData := &ethpb.Deposit_Data{
-		PublicKey:             pubKey,
-		Signature:             bytesutil.PadTo([]byte("hi"), 96),
-		WithdrawalCredentials: bytesutil.PadTo([]byte("hey"), 32),
-	}
-
-	deposit := &ethpb.Deposit{
-		Data: depData,
-	}
-	depositTrie, err := trie.NewTrie(params.BeaconConfig().DepositContractTreeDepth)
-	require.NoError(t, err, "Could not setup deposit trie")
-	depositCache, err := depositsnapshot.New()
-	require.NoError(t, err)
-
-	root, err := depositTrie.HashTreeRoot()
-	require.NoError(t, err)
-	assert.NoError(t, depositCache.InsertDeposit(ctx, deposit, 0 /*blockNum*/, 0, root))
-
-	height := time.Unix(int64(params.BeaconConfig().Eth1FollowDistance), 0).Unix()
-	p := &mockExecution.Chain{
-		TimesByHeight: map[int]uint64{
-			0: uint64(height),
-		},
-	}
 	vs := &Server{
-		ChainStartFetcher: p,
-		BlockFetcher:      p,
-		Eth1InfoFetcher:   p,
-		DepositFetcher:    depositCache,
-		HeadFetcher:       &mockChain.ChainService{State: st, Root: genesisRoot[:]},
+		HeadFetcher: &mockChain.ChainService{State: st, Root: genesisRoot[:]},
 	}
 	req := &ethpb.ValidatorStatusRequest{
 		PublicKey: pubKey,
@@ -283,8 +110,6 @@ func TestValidatorStatus_Pending(t *testing.T) {
 }
 
 func TestValidatorStatus_Exiting(t *testing.T) {
-	ctx := t.Context()
-
 	pubKey := pubKey(1)
 
 	// Initiated exit because validator exit epoch and withdrawable epoch are not FAR_FUTURE_EPOCH
@@ -306,35 +131,8 @@ func TestValidatorStatus_Exiting(t *testing.T) {
 		}}
 	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(st)
 	require.NoError(t, err)
-	depData := &ethpb.Deposit_Data{
-		PublicKey:             pubKey,
-		Signature:             bytesutil.PadTo([]byte("hi"), 96),
-		WithdrawalCredentials: bytesutil.PadTo([]byte("hey"), 32),
-	}
-
-	deposit := &ethpb.Deposit{
-		Data: depData,
-	}
-	depositTrie, err := trie.NewTrie(params.BeaconConfig().DepositContractTreeDepth)
-	require.NoError(t, err, "Could not setup deposit trie")
-	depositCache, err := depositsnapshot.New()
-	require.NoError(t, err)
-
-	root, err := depositTrie.HashTreeRoot()
-	require.NoError(t, err)
-	assert.NoError(t, depositCache.InsertDeposit(ctx, deposit, 0 /*blockNum*/, 0, root))
-	height := time.Unix(int64(params.BeaconConfig().Eth1FollowDistance), 0).Unix()
-	p := &mockExecution.Chain{
-		TimesByHeight: map[int]uint64{
-			0: uint64(height),
-		},
-	}
 	vs := &Server{
-		ChainStartFetcher: p,
-		BlockFetcher:      p,
-		Eth1InfoFetcher:   p,
-		DepositFetcher:    depositCache,
-		HeadFetcher:       &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
+		HeadFetcher: &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
 	}
 	req := &ethpb.ValidatorStatusRequest{
 		PublicKey: pubKey,
@@ -345,8 +143,6 @@ func TestValidatorStatus_Exiting(t *testing.T) {
 }
 
 func TestValidatorStatus_Slashing(t *testing.T) {
-	ctx := t.Context()
-
 	pubKey := pubKey(1)
 
 	// Exit slashed because slashed is true, exit epoch is =< current epoch and withdrawable epoch > epoch .
@@ -365,35 +161,8 @@ func TestValidatorStatus_Slashing(t *testing.T) {
 		}}
 	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(st)
 	require.NoError(t, err)
-	depData := &ethpb.Deposit_Data{
-		PublicKey:             pubKey,
-		Signature:             bytesutil.PadTo([]byte("hi"), 96),
-		WithdrawalCredentials: bytesutil.PadTo([]byte("hey"), 32),
-	}
-
-	deposit := &ethpb.Deposit{
-		Data: depData,
-	}
-	depositTrie, err := trie.NewTrie(params.BeaconConfig().DepositContractTreeDepth)
-	require.NoError(t, err, "Could not setup deposit trie")
-	depositCache, err := depositsnapshot.New()
-	require.NoError(t, err)
-
-	root, err := depositTrie.HashTreeRoot()
-	require.NoError(t, err)
-	assert.NoError(t, depositCache.InsertDeposit(ctx, deposit, 0 /*blockNum*/, 0, root))
-	height := time.Unix(int64(params.BeaconConfig().Eth1FollowDistance), 0).Unix()
-	p := &mockExecution.Chain{
-		TimesByHeight: map[int]uint64{
-			0: uint64(height),
-		},
-	}
 	vs := &Server{
-		ChainStartFetcher: p,
-		Eth1InfoFetcher:   p,
-		DepositFetcher:    depositCache,
-		BlockFetcher:      p,
-		HeadFetcher:       &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
+		HeadFetcher: &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
 	}
 	req := &ethpb.ValidatorStatusRequest{
 		PublicKey: pubKey,
@@ -404,8 +173,6 @@ func TestValidatorStatus_Slashing(t *testing.T) {
 }
 
 func TestValidatorStatus_Exited(t *testing.T) {
-	ctx := t.Context()
-
 	pubKey := pubKey(1)
 
 	// Exit because only exit epoch is =< current epoch.
@@ -423,35 +190,8 @@ func TestValidatorStatus_Exited(t *testing.T) {
 		WithdrawalCredentials: make([]byte, 32)},
 	})
 	require.NoError(t, err)
-	depData := &ethpb.Deposit_Data{
-		PublicKey:             pubKey,
-		Signature:             bytesutil.PadTo([]byte("hi"), 96),
-		WithdrawalCredentials: bytesutil.PadTo([]byte("hey"), 32),
-	}
-
-	deposit := &ethpb.Deposit{
-		Data: depData,
-	}
-	depositTrie, err := trie.NewTrie(params.BeaconConfig().DepositContractTreeDepth)
-	require.NoError(t, err, "Could not setup deposit trie")
-	depositCache, err := depositsnapshot.New()
-	require.NoError(t, err)
-
-	root, err := depositTrie.HashTreeRoot()
-	require.NoError(t, err)
-	assert.NoError(t, depositCache.InsertDeposit(ctx, deposit, 0 /*blockNum*/, 0, root))
-	height := time.Unix(int64(params.BeaconConfig().Eth1FollowDistance), 0).Unix()
-	p := &mockExecution.Chain{
-		TimesByHeight: map[int]uint64{
-			0: uint64(height),
-		},
-	}
 	vs := &Server{
-		ChainStartFetcher: p,
-		Eth1InfoFetcher:   p,
-		BlockFetcher:      p,
-		DepositFetcher:    depositCache,
-		HeadFetcher:       &mockChain.ChainService{State: st, Root: genesisRoot[:]},
+		HeadFetcher: &mockChain.ChainService{State: st, Root: genesisRoot[:]},
 	}
 	req := &ethpb.ValidatorStatusRequest{
 		PublicKey: pubKey,
@@ -463,16 +203,11 @@ func TestValidatorStatus_Exited(t *testing.T) {
 
 func TestValidatorStatus_UnknownStatus(t *testing.T) {
 	pubKey := pubKey(1)
-	depositCache, err := depositsnapshot.New()
-	require.NoError(t, err)
-
 	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{
 		Slot: 0,
 	})
 	require.NoError(t, err)
 	vs := &Server{
-		DepositFetcher:  depositCache,
-		Eth1InfoFetcher: &mockExecution.Chain{},
 		HeadFetcher: &mockChain.ChainService{
 			State: stateObj,
 		},
@@ -486,8 +221,6 @@ func TestValidatorStatus_UnknownStatus(t *testing.T) {
 }
 
 func TestActivationStatus_OK(t *testing.T) {
-	ctx := t.Context()
-
 	deposits, _, err := util.DeterministicDepositsAndKeys(4)
 	require.NoError(t, err)
 	pubKeys := [][]byte{deposits[0].Data.PublicKey, deposits[1].Data.PublicKey, deposits[2].Data.PublicKey, deposits[3].Data.PublicKey}
@@ -516,29 +249,10 @@ func TestActivationStatus_OK(t *testing.T) {
 	block := util.NewBeaconBlock()
 	genesisRoot, err := block.Block.HashTreeRoot()
 	require.NoError(t, err, "Could not get signing root")
-	dep := deposits[0]
-	depositTrie, err := trie.NewTrie(params.BeaconConfig().DepositContractTreeDepth)
-	require.NoError(t, err, "Could not setup deposit trie")
-	depositCache, err := depositsnapshot.New()
-	require.NoError(t, err)
-
-	root, err := depositTrie.HashTreeRoot()
-	require.NoError(t, err)
-	assert.NoError(t, depositCache.InsertDeposit(ctx, dep, 10 /*blockNum*/, 0, root))
-
-	dep = deposits[2]
-	assert.NoError(t, depositTrie.Insert(dep.Data.Signature, 15))
-	root, err = depositTrie.HashTreeRoot()
-	require.NoError(t, err)
-	assert.NoError(t, depositCache.InsertDeposit(t.Context(), dep, 0, 1, root))
 
 	vs := &Server{
-		Ctx:               t.Context(),
-		ChainStartFetcher: &mockExecution.Chain{},
-		BlockFetcher:      &mockExecution.Chain{},
-		Eth1InfoFetcher:   &mockExecution.Chain{},
-		DepositFetcher:    depositCache,
-		HeadFetcher:       &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
+		Ctx:         t.Context(),
+		HeadFetcher: &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
 	}
 	activeExists, response, err := vs.activationStatus(t.Context(), pubKeys)
 	require.NoError(t, err)
@@ -559,12 +273,14 @@ func TestActivationStatus_OK(t *testing.T) {
 		t.Errorf("Validator with pubkey %#x is expected to have index %d, received %d", response[1].PublicKey, 1, response[1].Index)
 	}
 
-	if response[2].Status.Status != ethpb.ValidatorStatus_DEPOSITED {
+	// Validator is not in the beacon state, so with the legacy eth1 deposit cache
+	// removed it can no longer be resolved to a deposited status.
+	if response[2].Status.Status != ethpb.ValidatorStatus_UNKNOWN_STATUS {
 		t.Errorf("Validator with pubkey %#x is not unknown and instead has this status: %s",
 			response[2].PublicKey, response[2].Status.Status.String())
 	}
-	if uint64(response[2].Index) != uint64(params.BeaconConfig().FarFutureEpoch) {
-		t.Errorf("Validator with pubkey %#x is expected to have index %d, received %d", response[2].PublicKey, params.BeaconConfig().FarFutureEpoch, response[2].Index)
+	if uint64(response[2].Index) != 0 {
+		t.Errorf("Validator with pubkey %#x is expected to have index %d, received %d", response[2].PublicKey, 0, response[2].Index)
 	}
 
 	if response[3].Status.Status != ethpb.ValidatorStatus_DEPOSITED {
@@ -599,8 +315,6 @@ func TestOptimisticStatus(t *testing.T) {
 }
 
 func TestValidatorStatus_CorrectActivationQueue(t *testing.T) {
-	ctx := t.Context()
-
 	pbKey := pubKey(5)
 	block := util.NewBeaconBlock()
 	genesisRoot, err := block.Block.HashTreeRoot()
@@ -656,39 +370,8 @@ func TestValidatorStatus_CorrectActivationQueue(t *testing.T) {
 	require.NoError(t, st.SetValidators(validators))
 	require.NoError(t, st.SetSlot(currentSlot))
 
-	depositTrie, err := trie.NewTrie(params.BeaconConfig().DepositContractTreeDepth)
-	require.NoError(t, err, "Could not setup deposit trie")
-	depositCache, err := depositsnapshot.New()
-	require.NoError(t, err)
-
-	for i := range 6 {
-		depData := &ethpb.Deposit_Data{
-			PublicKey:             pubKey(uint64(i)),
-			Signature:             bytesutil.PadTo([]byte("hi"), 96),
-			WithdrawalCredentials: bytesutil.PadTo([]byte("hey"), 32),
-		}
-
-		deposit := &ethpb.Deposit{
-			Data: depData,
-		}
-		root, err := depositTrie.HashTreeRoot()
-		require.NoError(t, err)
-		assert.NoError(t, depositCache.InsertDeposit(ctx, deposit, 0 /*blockNum*/, int64(i), root))
-
-	}
-
-	height := time.Unix(int64(params.BeaconConfig().Eth1FollowDistance), 0).Unix()
-	p := &mockExecution.Chain{
-		TimesByHeight: map[int]uint64{
-			0: uint64(height),
-		},
-	}
 	vs := &Server{
-		ChainStartFetcher: p,
-		BlockFetcher:      p,
-		Eth1InfoFetcher:   p,
-		DepositFetcher:    depositCache,
-		HeadFetcher:       &mockChain.ChainService{State: st, Root: genesisRoot[:]},
+		HeadFetcher: &mockChain.ChainService{State: st, Root: genesisRoot[:]},
 	}
 	req := &ethpb.ValidatorStatusRequest{
 		PublicKey: pbKey,
@@ -699,8 +382,6 @@ func TestValidatorStatus_CorrectActivationQueue(t *testing.T) {
 }
 
 func TestMultipleValidatorStatus_Pubkeys(t *testing.T) {
-	ctx := t.Context()
-
 	deposits, _, err := util.DeterministicDepositsAndKeys(6)
 	require.NoError(t, err)
 	pubKeys := [][]byte{
@@ -747,29 +428,11 @@ func TestMultipleValidatorStatus_Pubkeys(t *testing.T) {
 	block := util.NewBeaconBlock()
 	genesisRoot, err := block.Block.HashTreeRoot()
 	require.NoError(t, err, "Could not get signing root")
-	depositTrie, err := trie.NewTrie(params.BeaconConfig().DepositContractTreeDepth)
-	require.NoError(t, err, "Could not setup deposit trie")
-	depositCache, err := depositsnapshot.New()
-	require.NoError(t, err)
-
-	dep := deposits[0]
-	root, err := depositTrie.HashTreeRoot()
-	require.NoError(t, err)
-	assert.NoError(t, depositCache.InsertDeposit(ctx, dep, 10 /*blockNum*/, 0, root))
-	dep = deposits[2]
-	assert.NoError(t, depositTrie.Insert(dep.Data.Signature, 15))
-	root, err = depositTrie.HashTreeRoot()
-	require.NoError(t, err)
-	assert.NoError(t, depositCache.InsertDeposit(t.Context(), dep, 0, 1, root))
 
 	vs := &Server{
-		Ctx:               t.Context(),
-		ChainStartFetcher: &mockExecution.Chain{},
-		BlockFetcher:      &mockExecution.Chain{},
-		Eth1InfoFetcher:   &mockExecution.Chain{},
-		DepositFetcher:    depositCache,
-		HeadFetcher:       &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
-		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		Ctx:         t.Context(),
+		HeadFetcher: &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
+		SyncChecker: &mockSync.Sync{IsSyncing: false},
 	}
 
 	want := []*ethpb.ValidatorStatusResponse{
@@ -780,7 +443,8 @@ func TestMultipleValidatorStatus_Pubkeys(t *testing.T) {
 			Status: ethpb.ValidatorStatus_ACTIVE,
 		},
 		{
-			Status:          ethpb.ValidatorStatus_DEPOSITED,
+			// Not in the beacon state; with the eth1 deposit cache removed this is unknown.
+			Status:          ethpb.ValidatorStatus_UNKNOWN_STATUS,
 			ActivationEpoch: 18446744073709551615,
 		},
 		{
@@ -858,12 +522,9 @@ func TestMultipleValidatorStatus_Indices(t *testing.T) {
 	require.NoError(t, err, "Could not get signing root")
 
 	vs := &Server{
-		Ctx:               t.Context(),
-		ChainStartFetcher: &mockExecution.Chain{},
-		BlockFetcher:      &mockExecution.Chain{},
-		Eth1InfoFetcher:   &mockExecution.Chain{},
-		HeadFetcher:       &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
-		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		Ctx:         t.Context(),
+		HeadFetcher: &mockChain.ChainService{State: stateObj, Root: genesisRoot[:]},
+		SyncChecker: &mockSync.Sync{IsSyncing: false},
 	}
 
 	want := []*ethpb.ValidatorStatusResponse{
@@ -903,45 +564,6 @@ func TestMultipleValidatorStatus_Indices(t *testing.T) {
 			t.Fatalf("Wanted %v\n Received: %v\n", want[i], resp)
 		}
 	}
-}
-
-func TestValidatorStatus_Invalid(t *testing.T) {
-	ctx := t.Context()
-	deposits, _, err := util.DeterministicDepositsAndKeys(1)
-	require.NoError(t, err, "Could not generate deposits and keys")
-	deposit := deposits[0]
-	pubKey1 := deposit.Data.PublicKey
-	deposit.Data.Signature = deposit.Data.Signature[1:]
-	depositTrie, err := trie.NewTrie(params.BeaconConfig().DepositContractTreeDepth)
-	require.NoError(t, err, "Could not setup deposit trie")
-	depositCache, err := depositsnapshot.New()
-	require.NoError(t, err)
-
-	root, err := depositTrie.HashTreeRoot()
-	require.NoError(t, err)
-	assert.NoError(t, depositCache.InsertDeposit(ctx, deposit, 0 /*blockNum*/, 0, root))
-	height := time.Unix(int64(params.BeaconConfig().Eth1FollowDistance), 0).Unix()
-	p := &mockExecution.Chain{
-		TimesByHeight: map[int]uint64{
-			0: uint64(height),
-		},
-	}
-	stateObj, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
-	require.NoError(t, err)
-	vs := &Server{
-		DepositFetcher: depositCache,
-		BlockFetcher:   p,
-		HeadFetcher: &mockChain.ChainService{
-			State: stateObj,
-		},
-		Eth1InfoFetcher: p,
-	}
-	req := &ethpb.ValidatorStatusRequest{
-		PublicKey: pubKey1,
-	}
-	resp, err := vs.ValidatorStatus(t.Context(), req)
-	require.NoError(t, err, "Could not get validator status")
-	assert.Equal(t, ethpb.ValidatorStatus_INVALID, resp.Status)
 }
 
 func Test_DepositStatus(t *testing.T) {

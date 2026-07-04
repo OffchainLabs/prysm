@@ -109,7 +109,7 @@ var (
 	// DepositContractFlag defines a flag for the deposit contract address.
 	DepositContractFlag = &cli.StringFlag{
 		Name:  "deposit-contract",
-		Usage: "Deposit contract address. Beacon chain node will listen logs coming from the deposit contract to determine when validator is eligible to participate.",
+		Usage: "Deposit contract address for the configured network.",
 		Value: params.BeaconConfig().DepositContractAddress,
 	}
 	// RPCHost defines the host on which the RPC server should listen.
@@ -255,12 +255,6 @@ var (
 	EngineEndpointTimeoutSeconds = &cli.Uint64Flag{
 		Name:  "engine-endpoint-timeout-seconds",
 		Usage: "Sets the execution engine timeout (seconds) for execution payload semantics (forkchoiceUpdated, newPayload)",
-	}
-	// Eth1HeaderReqLimit defines a flag to set the maximum number of headers that a deposit log query can fetch. If none is set, 1000 will be the limit.
-	Eth1HeaderReqLimit = &cli.Uint64Flag{
-		Name:  "eth1-header-req-limit",
-		Usage: "Sets the maximum number of headers that a deposit log query can fetch.",
-		Value: uint64(1000),
 	}
 
 	// WeakSubjectivityCheckpoint defines the weak subjectivity checkpoint the node must sync through to defend against long range attacks.

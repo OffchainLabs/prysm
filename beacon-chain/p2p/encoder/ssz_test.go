@@ -119,7 +119,6 @@ type ENRForkIDCreator struct{}
 type MetaDataV0Creator struct{}
 type MetaDataV1Creator struct{}
 type BlobSidecarsByRangeRequestCreator struct{}
-type DepositSnapshotCreator struct{}
 type SyncCommitteeMessageCreator struct{}
 type SyncCommitteeContributionCreator struct{}
 type ContributionAndProofCreator struct{}
@@ -298,7 +297,6 @@ func (MetaDataV1Creator) Create() MarshalerProtoMessage { return &ethpb.MetaData
 func (BlobSidecarsByRangeRequestCreator) Create() MarshalerProtoMessage {
 	return &ethpb.BlobSidecarsByRangeRequest{}
 }
-func (DepositSnapshotCreator) Create() MarshalerProtoMessage { return &ethpb.DepositSnapshot{} }
 func (SyncCommitteeMessageCreator) Create() MarshalerProtoMessage {
 	return &ethpb.SyncCommitteeMessage{}
 }
@@ -406,7 +404,6 @@ var creators = []MarshalerProtoCreator{
 	MetaDataV0Creator{},
 	MetaDataV1Creator{},
 	BlobSidecarsByRangeRequestCreator{},
-	DepositSnapshotCreator{},
 	SyncCommitteeMessageCreator{},
 	SyncCommitteeContributionCreator{},
 	ContributionAndProofCreator{},

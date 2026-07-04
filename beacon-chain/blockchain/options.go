@@ -56,26 +56,10 @@ func WithDatabase(beaconDB db.HeadAccessDatabase) Option {
 	}
 }
 
-// WithChainStartFetcher to retrieve information about genesis.
-func WithChainStartFetcher(f execution.ChainStartFetcher) Option {
-	return func(s *Service) error {
-		s.cfg.ChainStartFetcher = f
-		return nil
-	}
-}
-
 // WithExecutionEngineCaller to call execution engine.
 func WithExecutionEngineCaller(c execution.EngineCaller) Option {
 	return func(s *Service) error {
 		s.cfg.ExecutionEngineCaller = c
-		return nil
-	}
-}
-
-// WithDepositCache for deposit lifecycle after chain inclusion.
-func WithDepositCache(c cache.DepositCache) Option {
-	return func(s *Service) error {
-		s.cfg.DepositCache = c
 		return nil
 	}
 }

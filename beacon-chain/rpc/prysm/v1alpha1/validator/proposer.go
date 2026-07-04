@@ -38,13 +38,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// eth1DataNotification is a latch to stop flooding logs with the same warning.
-var eth1DataNotification bool
-
-const (
-	eth1dataTimeout           = 2 * time.Second
-	defaultBuilderBoostFactor = primitives.Gwei(100)
-)
+const defaultBuilderBoostFactor = primitives.Gwei(100)
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
@@ -199,25 +193,19 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 
 // setPreGloasConsensusFields fills the consensus body fields introduced before Gloas, shared by both build paths.
 func (vs *Server) setPreGloasConsensusFields(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState) {
-	eth1Data, err := vs.eth1DataMajorityVote(ctx, head)
-	if err != nil {
-		eth1Data = &ethpb.Eth1Data{DepositRoot: params.BeaconConfig().ZeroHash[:], BlockHash: params.BeaconConfig().ZeroHash[:]}
-		log.WithError(err).Error("Could not get eth1data")
-	}
-	sBlk.SetEth1Data(eth1Data)
+	// Post EIP-6110 (Electra), the legacy eth1 deposit-log pipeline is gone: eth1 data is
+	// frozen to the value already in the state, and deposits are sourced inline as
+	// execution-layer deposit requests rather than packed from an eth1 deposit cache.
+	sBlk.SetEth1Data(head.Eth1Data())
+	sBlk.SetDeposits([]*ethpb.Deposit{})
 
-	deposits, atts, err := vs.packDepositsAndAttestations(ctx, head, sBlk.Block().Slot(), eth1Data) // TODO: split attestations and deposits
+	atts, err := vs.packAttestations(ctx, head, sBlk.Block().Slot())
 	if err != nil {
-		sBlk.SetDeposits([]*ethpb.Deposit{})
-		if err := sBlk.SetAttestations([]ethpb.Att{}); err != nil {
-			log.WithError(err).Error("Could not set attestations on block")
-		}
-		log.WithError(err).Error("Could not pack deposits and attestations")
-	} else {
-		sBlk.SetDeposits(deposits)
-		if err := sBlk.SetAttestations(atts); err != nil {
-			log.WithError(err).Error("Could not set attestations on block")
-		}
+		log.WithError(err).Error("Could not pack attestations")
+		atts = []ethpb.Att{}
+	}
+	if err := sBlk.SetAttestations(atts); err != nil {
+		log.WithError(err).Error("Could not set attestations on block")
 	}
 
 	validProposerSlashings, validAttSlashings := vs.getSlashings(ctx, head)

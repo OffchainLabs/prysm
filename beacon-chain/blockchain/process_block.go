@@ -39,9 +39,6 @@ import (
 // A custom slot deadline for processing state slots in our cache.
 const slotDeadline = 5 * time.Second
 
-// A custom deadline for deposit trie insertion.
-const depositDeadline = 20 * time.Second
-
 // This defines size of the upper bound for initial sync block cache.
 var initialSyncBlockCacheSize = uint64(2 * params.BeaconConfig().SlotsPerEpoch)
 

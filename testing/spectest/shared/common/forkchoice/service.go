@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -59,9 +58,6 @@ func startChainService(t testing.TB,
 	})
 	require.NoError(t, err)
 
-	depositCache, err := depositsnapshot.New()
-	require.NoError(t, err)
-
 	genesis := st.GenesisTime()
 
 	fc := doublylinkedtree.New()
@@ -76,7 +72,6 @@ func startChainService(t testing.TB,
 		blockchain.WithStateGen(sg),
 		blockchain.WithStateNotifier(&mock.MockStateNotifier{}),
 		blockchain.WithAttestationPool(attestations.NewPool()),
-		blockchain.WithDepositCache(depositCache),
 		blockchain.WithTrackedValidatorsCache(cache.NewTrackedValidatorsCache()),
 		blockchain.WithPayloadIDCache(cache.NewPayloadIDCache()),
 		blockchain.WithClockSynchronizer(clockSync),

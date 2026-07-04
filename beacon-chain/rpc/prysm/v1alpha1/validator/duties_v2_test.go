@@ -7,12 +7,10 @@ import (
 
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
-	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	beaconstate "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
@@ -218,7 +216,6 @@ func TestGetAltairDutiesV2_SyncCommitteeOK(t *testing.T) {
 		HeadFetcher:       chain,
 		TimeFetcher:       chain,
 		ForkchoiceFetcher: chain,
-		Eth1InfoFetcher:   &mockExecution.Chain{},
 		SyncChecker:       &mockSync.Sync{IsSyncing: false},
 		PayloadIDCache:    cache.NewPayloadIDCache(),
 		CoreService:       &core.Service{},
@@ -326,7 +323,6 @@ func TestGetBellatrixDutiesV2_SyncCommitteeOK(t *testing.T) {
 		HeadFetcher:       chain,
 		TimeFetcher:       chain,
 		ForkchoiceFetcher: chain,
-		Eth1InfoFetcher:   &mockExecution.Chain{},
 		SyncChecker:       &mockSync.Sync{IsSyncing: false},
 		PayloadIDCache:    cache.NewPayloadIDCache(),
 		CoreService:       &core.Service{},
@@ -413,16 +409,11 @@ func TestGetAltairDutiesV2_UnknownPubkey(t *testing.T) {
 	chain := &mockChain.ChainService{
 		State: bs, Root: genesisRoot[:], Genesis: time.Now().Add(time.Duration(-1*int64(slot-1)) * time.Second),
 	}
-	depositCache, err := depositsnapshot.New()
-	require.NoError(t, err)
-
 	vs := &Server{
 		HeadFetcher:       chain,
 		ForkchoiceFetcher: chain,
 		TimeFetcher:       chain,
-		Eth1InfoFetcher:   &mockExecution.Chain{},
 		SyncChecker:       &mockSync.Sync{IsSyncing: false},
-		DepositFetcher:    depositCache,
 		PayloadIDCache:    cache.NewPayloadIDCache(),
 		CoreService:       &core.Service{},
 	}

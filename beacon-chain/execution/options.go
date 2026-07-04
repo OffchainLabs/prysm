@@ -1,15 +1,9 @@
 package execution
 
 import (
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/network"
 	"github.com/OffchainLabs/prysm/v7/network/authorization"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 type Option func(s *Service) error
@@ -53,66 +47,10 @@ func WithHeaders(headers []string) Option {
 	}
 }
 
-// WithDepositContractAddress for the deposit contract.
-func WithDepositContractAddress(addr common.Address) Option {
-	return func(s *Service) error {
-		s.cfg.depositContractAddr = addr
-		return nil
-	}
-}
-
-// WithDatabase for the beacon chain database.
-func WithDatabase(database db.HeadAccessDatabase) Option {
-	return func(s *Service) error {
-		s.cfg.beaconDB = database
-		return nil
-	}
-}
-
-// WithDepositCache for caching deposits.
-func WithDepositCache(cache cache.DepositCache) Option {
-	return func(s *Service) error {
-		s.cfg.depositCache = cache
-		return nil
-	}
-}
-
-// WithStateNotifier for subscribing to state changes.
-func WithStateNotifier(notifier statefeed.Notifier) Option {
-	return func(s *Service) error {
-		s.cfg.stateNotifier = notifier
-		return nil
-	}
-}
-
-// WithStateGen to regenerate beacon states from checkpoints.
-func WithStateGen(gen *stategen.State) Option {
-	return func(s *Service) error {
-		s.cfg.stateGen = gen
-		return nil
-	}
-}
-
-// WithEth1HeaderRequestLimit to set the upper limit of eth1 header requests.
-func WithEth1HeaderRequestLimit(limit uint64) Option {
-	return func(s *Service) error {
-		s.cfg.eth1HeaderReqLimit = limit
-		return nil
-	}
-}
-
 // WithBeaconNodeStatsUpdater to set the beacon node stats updater.
 func WithBeaconNodeStatsUpdater(updater BeaconNodeStatsUpdater) Option {
 	return func(s *Service) error {
 		s.cfg.beaconNodeStatsUpdater = updater
-		return nil
-	}
-}
-
-// WithFinalizedStateAtStartup to set the beacon node's finalized state at startup.
-func WithFinalizedStateAtStartup(st state.BeaconState) Option {
-	return func(s *Service) error {
-		s.cfg.finalizedStateAtStartup = st
 		return nil
 	}
 }

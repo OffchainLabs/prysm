@@ -458,8 +458,6 @@ func Test_sendNewFinalizedEvent(t *testing.T) {
 }
 
 func Test_executePostFinalizationTasks(t *testing.T) {
-	logHook := logTest.NewGlobal()
-
 	headState, err := util.NewBeaconStateElectra()
 	require.NoError(t, err)
 	finalizedStRoot, err := headState.HashTreeRoot(t.Context())
@@ -527,9 +525,6 @@ func Test_executePostFinalizationTasks(t *testing.T) {
 		index, ok := headState.ValidatorIndexByPubkey(bytesutil.ToBytes48(key))
 		require.Equal(t, true, ok)
 		require.Equal(t, primitives.ValidatorIndex(0), index) // first index
-
-		// check deposit
-		require.LogsContain(t, logHook, "Finalized deposit insertion completed at index")
 	})
 	t.Run("deposit requests started", func(t *testing.T) {
 		require.NoError(t, headState.SetEth1DepositIndex(1))

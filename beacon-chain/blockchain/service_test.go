@@ -8,17 +8,14 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
-	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -26,7 +23,6 @@ import (
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/genesis"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -34,54 +30,20 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
 func setupBeaconChain(t *testing.T, beaconDB db.Database) *Service {
 	ctx := t.Context()
-	var web3Service *execution.Service
 	var err error
-	srv, endpoint, err := mockExecution.SetupRPCServer()
+	srv, _, err := mockExecution.SetupRPCServer()
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		srv.Stop()
 	})
 	bState, _ := util.DeterministicGenesisState(t, 10)
 	genesis.StoreStateDuringTest(t, bState)
-	pbState, err := state_native.ProtobufBeaconStatePhase0(bState.ToProtoUnsafe())
-	require.NoError(t, err)
-	mockTrie, err := trie.NewTrie(0)
-	require.NoError(t, err)
-	err = beaconDB.SaveExecutionChainData(ctx, &ethpb.ETH1ChainData{
-		BeaconState: pbState,
-		Trie:        mockTrie.ToProto(),
-		CurrentEth1Data: &ethpb.LatestETH1Data{
-			BlockHash: make([]byte, 32),
-		},
-		ChainstartData: &ethpb.ChainStartData{
-			Eth1Data: &ethpb.Eth1Data{
-				DepositRoot:  make([]byte, 32),
-				DepositCount: 0,
-				BlockHash:    make([]byte, 32),
-			},
-		},
-		DepositContainers: []*ethpb.DepositContainer{},
-	})
-	require.NoError(t, err)
-
-	depositCache, err := depositsnapshot.New()
-	require.NoError(t, err)
-
-	web3Service, err = execution.NewService(
-		ctx,
-		execution.WithDatabase(beaconDB),
-		execution.WithHttpEndpoint(endpoint),
-		execution.WithDepositContractAddress(common.Address{}),
-		execution.WithDepositCache(depositCache),
-	)
-	require.NoError(t, err, "Unable to set up web3 service")
 
 	attService, err := attestations.NewService(ctx, &attestations.Config{Pool: attestations.NewPool()})
 	require.NoError(t, err)
@@ -93,8 +55,6 @@ func setupBeaconChain(t *testing.T, beaconDB db.Database) *Service {
 
 	opts := []Option{
 		WithDatabase(beaconDB),
-		WithDepositCache(depositCache),
-		WithChainStartFetcher(web3Service),
 		WithAttestationPool(attestations.NewPool()),
 		WithSlashingPool(slashings.NewPool()),
 		WithExitPool(voluntaryexits.NewPool()),

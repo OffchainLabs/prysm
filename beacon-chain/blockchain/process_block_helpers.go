@@ -9,7 +9,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
@@ -20,12 +19,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	mathutil "github.com/OffchainLabs/prysm/v7/math"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -455,64 +452,6 @@ func (s *Service) insertFirstPayloadIfNeeded(b interfaces.ReadOnlyBeaconBlock) {
 	if s.builtOnFullParentInForkchoice(b) && !s.cfg.ForkChoiceStore.HasFullNode(parentRoot) {
 		s.cfg.ForkChoiceStore.MarkFullNode(parentRoot)
 	}
-}
-
-// inserts finalized deposits into our finalized deposit trie, needs to be
-// called in the background
-// Post-Electra: prunes all proofs and pending deposits in the cache
-func (s *Service) insertFinalizedDepositsAndPrune(ctx context.Context, fRoot [32]byte) {
-	ctx, span := trace.StartSpan(ctx, "blockChain.insertFinalizedDeposits")
-	defer span.End()
-	startTime := time.Now()
-
-	// Update deposit cache.
-	finalizedState, err := s.cfg.StateGen.StateByRoot(ctx, fRoot)
-	if err != nil {
-		log.WithError(err).Error("Could not fetch finalized state")
-		return
-	}
-
-	// Check if we should prune all pending deposits.
-	// In post-Electra(after the legacy deposit mechanism is deprecated),
-	// we can prune all pending deposits in the deposit cache.
-	// See: https://eips.ethereum.org/EIPS/eip-6110#eth1data-poll-deprecation
-	if helpers.DepositRequestsStarted(finalizedState) {
-		s.pruneAllPendingDepositsAndProofs(ctx)
-		return
-	}
-
-	// We update the cache up to the last deposit index in the finalized block's state.
-	// We can be confident that these deposits will be included in some block
-	// because the Eth1 follow distance makes such long-range reorgs extremely unlikely.
-	eth1DepositIndex, err := mathutil.Int(finalizedState.Eth1DepositIndex())
-	if err != nil {
-		log.WithError(err).Error("Could not cast eth1 deposit index")
-		return
-	}
-	// The deposit index in the state is always the index of the next deposit
-	// to be included(rather than the last one to be processed). This was most likely
-	// done as the state cannot represent signed integers.
-	finalizedEth1DepIdx := eth1DepositIndex - 1
-	if err = s.cfg.DepositCache.InsertFinalizedDeposits(ctx, int64(finalizedEth1DepIdx), common.Hash(finalizedState.Eth1Data().BlockHash),
-		0 /* Setting a zero value as we have no access to block height */); err != nil {
-		log.WithError(err).Error("Could not insert finalized deposits")
-		return
-	}
-	// Deposit proofs are only used during state transition and can be safely removed to save space.
-	if err = s.cfg.DepositCache.PruneProofs(ctx, int64(finalizedEth1DepIdx)); err != nil {
-		log.WithError(err).Error("Could not prune deposit proofs")
-	}
-	// Prune deposits which have already been finalized, the below method prunes all pending deposits (non-inclusive) up
-	// to the provided eth1 deposit index.
-	s.cfg.DepositCache.PrunePendingDeposits(ctx, int64(eth1DepositIndex)) // lint:ignore uintcast -- Deposit index should not exceed int64 in your lifetime.
-
-	log.WithField("duration", time.Since(startTime).String()).Debugf("Finalized deposit insertion completed at index %d", finalizedEth1DepIdx)
-}
-
-// pruneAllPendingDepositsAndProofs prunes all proofs and pending deposits in the cache.
-func (s *Service) pruneAllPendingDepositsAndProofs(ctx context.Context) {
-	s.cfg.DepositCache.PruneAllPendingDeposits(ctx)
-	s.cfg.DepositCache.PruneAllProofs(ctx)
 }
 
 // This ensures that the input root defaults to using genesis root instead of zero hashes. This is needed for handling

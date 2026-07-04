@@ -23,8 +23,8 @@ proto_library(
         "node.proto",
         "p2p_messages.proto",
         "p2p_messages_gloas.proto",
-        "powchain.proto",
         "slasher.proto",
+        "trie.proto",
         "validator.proto",
         ":ssz_proto_files",
     ],
@@ -366,7 +366,6 @@ ssz_gen_marshal(
         "ValidatorRegistrationV1",
         "BuilderBid",
         "SignedBuilderBid",
-        "DepositSnapshot",
     ],
 )
 

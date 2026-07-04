@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package ethereum.eth.v1alpha1;
+
+option csharp_namespace = "Ethereum.Eth.V1alpha1";
+option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
+option java_multiple_files = true;
+option java_outer_classname = "TrieProto";
+option java_package = "org.ethereum.eth.v1alpha1";
+option php_namespace = "Ethereum\\Eth\\v1alpha1";
+
+// SparseMerkleTrie is used to describe the model of a sparse Merkle trie.
+message SparseMerkleTrie {
+  uint64 depth = 1;
+  repeated TrieLayer layers = 2;
+  repeated bytes original_items = 3;
+}
+
+// TrieLayer represents each layer in the trie because protobuf does not support multi-dimensional arrays.
+message TrieLayer { repeated bytes layer = 1; }

@@ -344,13 +344,6 @@ func (s *Service) executePostFinalizationTasks(ctx context.Context, finalizedSta
 		s.sendNewFinalizedEvent(ctx, finalizedState)
 	}()
 
-	// Insert finalized deposits into finalized deposit trie
-	depCtx, cancel := context.WithTimeout(context.Background(), depositDeadline)
-	go func() {
-		s.insertFinalizedDepositsAndPrune(depCtx, finalized.Root)
-		cancel()
-	}()
-
 	if features.Get().EnableLightClient {
 		// Save a light client bootstrap for the finalized checkpoint
 		go func() {

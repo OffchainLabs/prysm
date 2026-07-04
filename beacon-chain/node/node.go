@@ -25,7 +25,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
@@ -103,7 +102,6 @@ type BeaconNode struct {
 	slashingsPool            slashings.PoolManager
 	syncCommitteePool        synccommittee.Pool
 	blsToExecPool            blstoexec.PoolManager
-	depositCache             cache.DepositCache
 	trackedValidatorsCache   *cache.TrackedValidatorsCache
 	proposerPreferencesCache *cache.ProposerPreferencesCache
 	payloadIDCache           *cache.PayloadIDCache
@@ -584,12 +582,6 @@ func openDB(ctx context.Context, dbPath string, clearer *dbClearer) (*kv.Store, 
 }
 
 func (b *BeaconNode) startDB(cliCtx *cli.Context, depositAddress string) error {
-	depositCache, err := depositsnapshot.New()
-	if err != nil {
-		return errors.Wrap(err, "could not create deposit cache")
-	}
-	b.depositCache = depositCache
-
 	if err := b.db.EnsureEmbeddedGenesis(b.ctx); err != nil {
 		return errors.Wrap(err, "could not ensure embedded genesis")
 	}
@@ -761,8 +753,6 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		b.serviceFlagOpts.blockchainFlagOpts,
 		blockchain.WithForkChoiceStore(fc),
 		blockchain.WithDatabase(b.db),
-		blockchain.WithDepositCache(b.depositCache),
-		blockchain.WithChainStartFetcher(web3Service),
 		blockchain.WithExecutionEngineCaller(web3Service),
 		blockchain.WithAttestationCache(b.attestationCache),
 		blockchain.WithAttestationPool(b.attestationPool),
@@ -803,10 +793,6 @@ func (b *BeaconNode) registerPOWChainService() error {
 	if err != nil {
 		return err
 	}
-	depositContractAddr, err := execution.DepositContractAddress()
-	if err != nil {
-		return err
-	}
 
 	// Create GraffitiInfo for client version tracking in block graffiti
 	graffitiInfo := execution.NewGraffitiInfo()
@@ -814,13 +800,7 @@ func (b *BeaconNode) registerPOWChainService() error {
 	// skipcq: CRT-D0001
 	opts := append(
 		b.serviceFlagOpts.executionChainFlagOpts,
-		execution.WithDepositContractAddress(common.HexToAddress(depositContractAddr)),
-		execution.WithDatabase(b.db),
-		execution.WithDepositCache(b.depositCache),
-		execution.WithStateNotifier(b),
-		execution.WithStateGen(b.stateGen),
 		execution.WithBeaconNodeStatsUpdater(bs),
-		execution.WithFinalizedStateAtStartup(b.finalizedStateAtStartUp),
 		execution.WithJwtId(b.cliCtx.String(flags.JwtId.Name)),
 		execution.WithVerifierWaiter(b.verifyInitWaiter),
 		execution.WithGraffitiInfo(graffitiInfo),
@@ -973,16 +953,12 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		}
 	}
 
-	depositFetcher := b.depositCache
-	chainStartFetcher := web3Service
-
 	host := b.cliCtx.String(flags.RPCHost.Name)
 	port := b.cliCtx.String(flags.RPCPort.Name)
 	beaconMonitoringHost := b.cliCtx.String(cmd.MonitoringHostFlag.Name)
 	beaconMonitoringPort := b.cliCtx.Int(flags.MonitoringPortFlag.Name)
 	cert := b.cliCtx.String(flags.CertFlag.Name)
 	key := b.cliCtx.String(flags.KeyFlag.Name)
-	mockEth1DataVotes := b.cliCtx.Bool(flags.InteropMockEth1DataVotesFlag.Name)
 	maxMsgSize := b.cliCtx.Int(cmd.GrpcMaxCallRecvMsgSizeFlag.Name)
 	enableDebugRPCEndpoints := !b.cliCtx.Bool(flags.DisableDebugRPCEndpoints.Name)
 
@@ -1025,11 +1001,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		SyncCommitteeObjectPool:          b.syncCommitteePool,
 		ExecutionChainService:            web3Service,
 		ExecutionChainInfoFetcher:        web3Service,
-		ChainStartFetcher:                chainStartFetcher,
-		MockEth1Votes:                    mockEth1DataVotes,
 		SyncService:                      syncService,
-		DepositFetcher:                   depositFetcher,
-		PendingDepositFetcher:            b.depositCache,
 		BlockNotifier:                    b,
 		StateNotifier:                    b,
 		OperationNotifier:                b,

@@ -12,7 +12,6 @@ var (
 	stateSummaryBucket                      = []byte("state-summary")
 	chainMetadataBucket                     = []byte("chain-metadata")
 	checkpointBucket                        = []byte("check-point")
-	powchainBucket                          = []byte("powchain")
 	stateValidatorsBucket                   = []byte("state-validators")
 	feeRecipientBucket                      = []byte("fee-recipient")
 	registrationBucket                      = []byte("registration")
@@ -44,7 +43,6 @@ var (
 	depositContractAddressKey  = []byte("deposit-contract")
 	justifiedCheckpointKey     = []byte("justified-checkpoint")
 	finalizedCheckpointKey     = []byte("finalized-checkpoint")
-	powchainDataKey            = []byte("powchain-data")
 	lastValidatedCheckpointKey = []byte("last-validated-checkpoint")
 	metadataSequenceNumberKey  = []byte("metadata-seq-number")
 

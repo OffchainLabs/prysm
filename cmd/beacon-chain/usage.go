@@ -165,12 +165,10 @@ var appHelpFlagGroups = []flagGroup{
 			flags.ContractDeploymentBlock,
 			flags.DepositContractFlag,
 			flags.EngineEndpointTimeoutSeconds,
-			flags.Eth1HeaderReqLimit,
 			flags.ExecutionEngineEndpoint,
 			flags.ExecutionEngineHeaders,
 			flags.ExecutionJWTSecretFlag,
 			flags.JwtId,
-			flags.InteropMockEth1DataVotesFlag,
 		},
 	},
 	{ // Flags relevant to configuring beacon chain monitoring.

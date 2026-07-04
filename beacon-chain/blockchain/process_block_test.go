@@ -3,8 +3,6 @@ package blockchain
 import (
 	"context"
 	"fmt"
-	"math/big"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -859,123 +857,6 @@ func TestOnBlock_CallNewPayloadAndForkchoiceUpdated(t *testing.T) {
 		service.cfg.ForkChoiceStore.Unlock()
 		testState, err = service.cfg.StateGen.StateByRoot(ctx, r)
 		require.NoError(t, err)
-	}
-}
-
-func TestInsertFinalizedDeposits(t *testing.T) {
-	service, tr := minimalTestService(t)
-	ctx, depositCache := tr.ctx, tr.dc
-
-	gs, _ := util.DeterministicGenesisState(t, 32)
-	require.NoError(t, service.saveGenesisData(ctx, gs))
-	gs = gs.Copy()
-	assert.NoError(t, gs.SetEth1Data(&ethpb.Eth1Data{DepositCount: 10, BlockHash: make([]byte, 32)}))
-	assert.NoError(t, gs.SetEth1DepositIndex(8))
-	assert.NoError(t, service.cfg.StateGen.SaveState(ctx, [32]byte{'m', 'o', 'c', 'k'}, gs))
-	var zeroSig [96]byte
-	for i := uint64(0); i < uint64(4*params.BeaconConfig().SlotsPerEpoch); i++ {
-		root := []byte(strconv.Itoa(int(i)))
-		assert.NoError(t, depositCache.InsertDeposit(ctx, &ethpb.Deposit{Data: &ethpb.Deposit_Data{
-			PublicKey:             bytesutil.FromBytes48([fieldparams.BLSPubkeyLength]byte{}),
-			WithdrawalCredentials: params.BeaconConfig().ZeroHash[:],
-			Amount:                0,
-			Signature:             zeroSig[:],
-		}, Proof: [][]byte{root}}, 100+i, int64(i), bytesutil.ToBytes32(root)))
-	}
-	service.insertFinalizedDepositsAndPrune(ctx, [32]byte{'m', 'o', 'c', 'k'})
-	fDeposits, err := depositCache.FinalizedDeposits(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, 7, int(fDeposits.MerkleTrieIndex()), "Finalized deposits not inserted correctly")
-	deps := depositCache.AllDeposits(ctx, big.NewInt(107))
-	for _, d := range deps {
-		assert.DeepEqual(t, [][]byte(nil), d.Proof, "Proofs are not empty")
-	}
-}
-
-func TestInsertFinalizedDeposits_PrunePendingDeposits(t *testing.T) {
-	service, tr := minimalTestService(t)
-	ctx, depositCache := tr.ctx, tr.dc
-
-	gs, _ := util.DeterministicGenesisState(t, 32)
-	require.NoError(t, service.saveGenesisData(ctx, gs))
-	gs = gs.Copy()
-	assert.NoError(t, gs.SetEth1Data(&ethpb.Eth1Data{DepositCount: 10, BlockHash: make([]byte, 32)}))
-	assert.NoError(t, gs.SetEth1DepositIndex(8))
-	assert.NoError(t, service.cfg.StateGen.SaveState(ctx, [32]byte{'m', 'o', 'c', 'k'}, gs))
-	var zeroSig [96]byte
-	for i := uint64(0); i < uint64(4*params.BeaconConfig().SlotsPerEpoch); i++ {
-		root := []byte(strconv.Itoa(int(i)))
-		assert.NoError(t, depositCache.InsertDeposit(ctx, &ethpb.Deposit{Data: &ethpb.Deposit_Data{
-			PublicKey:             bytesutil.FromBytes48([fieldparams.BLSPubkeyLength]byte{}),
-			WithdrawalCredentials: params.BeaconConfig().ZeroHash[:],
-			Amount:                0,
-			Signature:             zeroSig[:],
-		}, Proof: [][]byte{root}}, 100+i, int64(i), bytesutil.ToBytes32(root)))
-		depositCache.InsertPendingDeposit(ctx, &ethpb.Deposit{Data: &ethpb.Deposit_Data{
-			PublicKey:             bytesutil.FromBytes48([fieldparams.BLSPubkeyLength]byte{}),
-			WithdrawalCredentials: params.BeaconConfig().ZeroHash[:],
-			Amount:                0,
-			Signature:             zeroSig[:],
-		}, Proof: [][]byte{root}}, 100+i, int64(i), bytesutil.ToBytes32(root))
-	}
-	service.insertFinalizedDepositsAndPrune(ctx, [32]byte{'m', 'o', 'c', 'k'})
-	fDeposits, err := depositCache.FinalizedDeposits(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, 7, int(fDeposits.MerkleTrieIndex()), "Finalized deposits not inserted correctly")
-	deps := depositCache.AllDeposits(ctx, big.NewInt(107))
-	for _, d := range deps {
-		assert.DeepEqual(t, [][]byte(nil), d.Proof, "Proofs are not empty")
-	}
-	pendingDeps := depositCache.PendingContainers(ctx, nil)
-	for _, d := range pendingDeps {
-		assert.DeepEqual(t, true, d.Index >= 8, "Pending deposits were not pruned")
-	}
-}
-
-func TestInsertFinalizedDeposits_MultipleFinalizedRoutines(t *testing.T) {
-	service, tr := minimalTestService(t)
-	ctx, depositCache := tr.ctx, tr.dc
-
-	gs, _ := util.DeterministicGenesisState(t, 32)
-	require.NoError(t, service.saveGenesisData(ctx, gs))
-	gs = gs.Copy()
-	assert.NoError(t, gs.SetEth1Data(&ethpb.Eth1Data{DepositCount: 7, BlockHash: make([]byte, 32)}))
-	assert.NoError(t, gs.SetEth1DepositIndex(6))
-	assert.NoError(t, service.cfg.StateGen.SaveState(ctx, [32]byte{'m', 'o', 'c', 'k'}, gs))
-	gs2 := gs.Copy()
-	assert.NoError(t, gs2.SetEth1Data(&ethpb.Eth1Data{DepositCount: 15, BlockHash: make([]byte, 32)}))
-	assert.NoError(t, gs2.SetEth1DepositIndex(13))
-	assert.NoError(t, service.cfg.StateGen.SaveState(ctx, [32]byte{'m', 'o', 'c', 'k', '2'}, gs2))
-	var zeroSig [96]byte
-	for i := uint64(0); i < uint64(4*params.BeaconConfig().SlotsPerEpoch); i++ {
-		root := []byte(strconv.Itoa(int(i)))
-		assert.NoError(t, depositCache.InsertDeposit(ctx, &ethpb.Deposit{Data: &ethpb.Deposit_Data{
-			PublicKey:             bytesutil.FromBytes48([fieldparams.BLSPubkeyLength]byte{}),
-			WithdrawalCredentials: params.BeaconConfig().ZeroHash[:],
-			Amount:                0,
-			Signature:             zeroSig[:],
-		}, Proof: [][]byte{root}}, 100+i, int64(i), bytesutil.ToBytes32(root)))
-	}
-	// Insert 3 deposits before hand.
-	require.NoError(t, depositCache.InsertFinalizedDeposits(ctx, 2, [32]byte{}, 0))
-	service.insertFinalizedDepositsAndPrune(ctx, [32]byte{'m', 'o', 'c', 'k'})
-	fDeposits, err := depositCache.FinalizedDeposits(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, 5, int(fDeposits.MerkleTrieIndex()), "Finalized deposits not inserted correctly")
-
-	deps := depositCache.AllDeposits(ctx, big.NewInt(105))
-	for _, d := range deps {
-		assert.DeepEqual(t, [][]byte(nil), d.Proof, "Proofs are not empty")
-	}
-
-	// Insert New Finalized State with higher deposit count.
-	service.insertFinalizedDepositsAndPrune(ctx, [32]byte{'m', 'o', 'c', 'k', '2'})
-	fDeposits, err = depositCache.FinalizedDeposits(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, 12, int(fDeposits.MerkleTrieIndex()), "Finalized deposits not inserted correctly")
-	deps = depositCache.AllDeposits(ctx, big.NewInt(112))
-	for _, d := range deps {
-		assert.DeepEqual(t, [][]byte(nil), d.Proof, "Proofs are not empty")
 	}
 }
 

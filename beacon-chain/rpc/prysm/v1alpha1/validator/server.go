@@ -12,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
 	blockfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/block"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
@@ -59,9 +58,6 @@ type Server struct {
 	FinalizationFetcher              blockchain.FinalizationFetcher
 	TimeFetcher                      blockchain.TimeFetcher
 	BlockFetcher                     execution.POWBlockFetcher
-	DepositFetcher                   cache.DepositFetcher
-	ChainStartFetcher                execution.ChainStartFetcher
-	Eth1InfoFetcher                  execution.ChainInfoFetcher
 	OptimisticModeFetcher            blockchain.OptimisticModeFetcher
 	SyncChecker                      prysmSync.Checker
 	StateNotifier                    statefeed.Notifier
@@ -78,9 +74,7 @@ type Server struct {
 	ExecutionPayloadEnvelopeReceiver blockchain.ExecutionPayloadEnvelopeReceiver
 	BlobReceiver                     blockchain.BlobReceiver
 	DataColumnReceiver               blockchain.DataColumnReceiver
-	MockEth1Votes                    bool
 	Eth1BlockFetcher                 execution.POWBlockFetcher
-	PendingDepositsFetcher           depositsnapshot.PendingDepositsFetcher
 	OperationNotifier                opfeed.Notifier
 	StateGen                         stategen.StateManager
 	ReplayerBuilder                  stategen.ReplayerBuilder
@@ -197,10 +191,8 @@ func computeDomainData(domain [4]byte, epoch primitives.Epoch, fork *ethpb.Fork)
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
-// WaitForChainStart queries the logs of the Deposit Contract in order to verify the beacon chain
-// has started its runtime and validators begin their responsibilities. If it has not, it then
-// subscribes to an event stream triggered by the powchain service whenever the ChainStart log does
-// occur in the Deposit Contract on ETH 1.0.
+// WaitForChainStart waits until the beacon chain clock is available, then notifies validators
+// that they can begin their responsibilities.
 func (vs *Server) WaitForChainStart(_ *emptypb.Empty, stream ethpb.BeaconNodeValidator_WaitForChainStartServer) error {
 	head, err := vs.HeadFetcher.HeadStateReadOnly(stream.Context())
 	if err != nil {

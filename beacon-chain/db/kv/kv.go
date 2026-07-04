@@ -134,7 +134,6 @@ var Buckets = [][]byte{
 	stateBucket,
 	chainMetadataBucket,
 	checkpointBucket,
-	powchainBucket,
 	stateSummaryBucket,
 	stateValidatorsBucket,
 	lightClientUpdatesBucket,

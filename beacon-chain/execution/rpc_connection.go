@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	contracts "github.com/OffchainLabs/prysm/v7/contracts/deposit"
 	"github.com/OffchainLabs/prysm/v7/io/logs"
 	"github.com/OffchainLabs/prysm/v7/network"
 	"github.com/OffchainLabs/prysm/v7/network/authorization"
@@ -26,13 +25,6 @@ func (s *Service) setupExecutionClientConnections(ctx context.Context, currEndpo
 	fetcher := ethclient.NewClient(client)
 	s.rpcClient = client
 	s.httpLogger = fetcher
-
-	depositContractCaller, err := contracts.NewDepositContractCaller(s.cfg.depositContractAddr, fetcher)
-	if err != nil {
-		client.Close()
-		return errors.Wrap(err, "could not initialize deposit contract caller")
-	}
-	s.depositContractCaller = depositContractCaller
 
 	// Ensure we have the correct chain and deposit IDs.
 	if err := ensureCorrectExecutionChain(ctx, fetcher); err != nil {

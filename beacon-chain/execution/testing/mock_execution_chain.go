@@ -7,14 +7,11 @@ import (
 	"fmt"
 	"math/big"
 	"net/http/httptest"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
@@ -30,17 +27,11 @@ type Chain struct {
 	HashesByHeight    map[int][]byte
 	TimesByHeight     map[int]uint64
 	BlockNumberByTime map[uint64]*big.Int
-	Eth1Data          *ethpb.Eth1Data
-	GenesisEth1Block  *big.Int
-	GenesisState      state.BeaconState
 	CurrEndpoint      string
 	CurrError         error
 	Endpoints         []string
 	Errors            []error
 }
-
-// GenesisTime represents a static past date - JAN 01 2000.
-var GenesisTime = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
 
 // New creates a new mock chain with empty block info.
 func New() *Chain {
@@ -49,15 +40,6 @@ func New() *Chain {
 		TimesByHeight:     make(map[int]uint64),
 		BlockNumberByTime: make(map[uint64]*big.Int),
 	}
-}
-
-// GenesisExecutionChainInfo --
-func (m *Chain) GenesisExecutionChainInfo() (uint64, *big.Int) {
-	blk := m.GenesisEth1Block
-	if blk == nil {
-		blk = big.NewInt(GenesisTime)
-	}
-	return uint64(GenesisTime), blk
 }
 
 // BlockExists --
@@ -102,21 +84,6 @@ func (m *Chain) BlockByTimestamp(_ context.Context, time uint64) (*types.HeaderI
 		}
 	}
 	return &types.HeaderInfo{Number: chosenNumber, Time: chosenTime}, nil
-}
-
-// ChainStartEth1Data --
-func (m *Chain) ChainStartEth1Data() *ethpb.Eth1Data {
-	return m.Eth1Data
-}
-
-// PreGenesisState --
-func (m *Chain) PreGenesisState() state.BeaconState {
-	return m.GenesisState
-}
-
-// ClearPreGenesisData --
-func (*Chain) ClearPreGenesisData() {
-	// no-op
 }
 
 func (*Chain) ExecutionClientConnected() bool {
