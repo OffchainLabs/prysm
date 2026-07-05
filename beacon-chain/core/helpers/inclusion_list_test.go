@@ -93,6 +93,7 @@ func TestValidateNilSignedInclusionList(t *testing.T) {
 }
 
 func TestGetInclusionListCommittee_OK(t *testing.T) {
+	helpers.ClearCache()
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.Eip7805ForkEpoch = 0
@@ -114,7 +115,38 @@ func TestGetInclusionListCommittee_OK(t *testing.T) {
 	require.DeepEqual(t, committee, committee2)
 }
 
+func TestGetInclusionListCommittee_MatchesConcatenatedBeaconCommittees(t *testing.T) {
+	helpers.ClearCache()
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.Eip7805ForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	st, _ := util.DeterministicGenesisStateElectra(t, 256)
+	slot := primitives.Slot(0)
+
+	activeCount, err := helpers.ActiveValidatorCount(t.Context(), st, slots.ToEpoch(slot))
+	require.NoError(t, err)
+	var concatenated []primitives.ValidatorIndex
+	for i := uint64(0); i < helpers.SlotCommitteeCount(activeCount); i++ {
+		committee, err := helpers.BeaconCommitteeFromState(t.Context(), st, slot, primitives.CommitteeIndex(i))
+		require.NoError(t, err)
+		concatenated = append(concatenated, committee...)
+	}
+	require.Equal(t, true, len(concatenated) > 0)
+
+	got, err := helpers.GetInclusionListCommittee(t.Context(), st, slot)
+	require.NoError(t, err)
+
+	size := int(params.BeaconConfig().InclusionListCommitteeSize)
+	require.Equal(t, size, len(got))
+	for i := 0; i < size; i++ {
+		require.Equal(t, concatenated[i%len(concatenated)], got[i])
+	}
+}
+
 func TestGetInclusionListCommittee_BeforeFork(t *testing.T) {
+	helpers.ClearCache()
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.Eip7805ForkEpoch = 5
