@@ -18,6 +18,7 @@ var (
 	errNilCommitteeRoot = errors.New("nil inclusion list committee root")
 	errNilSignature     = errors.New("nil signature")
 	errIncorrectState   = errors.New("incorrect state version")
+	errNoCommittee      = errors.New("no beacon committee members for inclusion list committee")
 )
 
 // ValidateNilSignedInclusionList validates that a SignedInclusionList is not nil and contains a signature.
@@ -42,31 +43,39 @@ func ValidateNilInclusionList(il *eth.InclusionList) error {
 	return nil
 }
 
-// GetInclusionListCommittee retrieves the validator indices assigned to the inclusion list committee
-// for a given slot. Returns an error if the state or slot does not meet the required constraints.
+// GetInclusionListCommittee returns the inclusion list committee for the given slot,
+// formed by concatenating the slot's beacon committees in order and cycling over
+// them to fill INCLUSION_LIST_COMMITTEE_SIZE entries.
 func GetInclusionListCommittee(ctx context.Context, state state.ReadOnlyBeaconState, slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
-	if slots.ToEpoch(slot) < params.BeaconConfig().Eip7805ForkEpoch {
+	epoch := slots.ToEpoch(slot)
+	if epoch < params.BeaconConfig().Eip7805ForkEpoch {
 		return nil, errIncorrectState
 	}
-	epoch := slots.ToEpoch(slot)
-	seed, err := Seed(state, epoch, params.BeaconConfig().DomainInclusionListCommittee)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get seed")
-	}
-	indices, err := ActiveValidatorIndices(ctx, state, epoch)
-	if err != nil {
-		return nil, err
-	}
-	start := uint64(slot%params.BeaconConfig().SlotsPerEpoch) * params.BeaconConfig().InclusionListCommitteeSize
-	end := start + params.BeaconConfig().InclusionListCommitteeSize
 
-	shuffledIndices := make([]primitives.ValidatorIndex, len(indices))
-	copy(shuffledIndices, indices)
-	shuffledList, err := UnshuffleList(shuffledIndices, seed)
+	activeCount, err := ActiveValidatorCount(ctx, state, epoch)
 	if err != nil {
 		return nil, err
 	}
-	return shuffledList[start:end], nil
+	committeesPerSlot := SlotCommitteeCount(activeCount)
+
+	var indices []primitives.ValidatorIndex
+	for i := uint64(0); i < committeesPerSlot; i++ {
+		committee, err := BeaconCommitteeFromState(ctx, state, slot, primitives.CommitteeIndex(i))
+		if err != nil {
+			return nil, err
+		}
+		indices = append(indices, committee...)
+	}
+	if len(indices) == 0 {
+		return nil, errNoCommittee
+	}
+
+	size := params.BeaconConfig().InclusionListCommitteeSize
+	committee := make([]primitives.ValidatorIndex, size)
+	for i := uint64(0); i < size; i++ {
+		committee[i] = indices[i%uint64(len(indices))]
+	}
+	return committee, nil
 }
 
 // ValidateInclusionListSignature verifies the signature on a SignedInclusionList against the public key
@@ -89,8 +98,8 @@ func ValidateInclusionListSignature(ctx context.Context, st state.ReadOnlyBeacon
 		return err
 	}
 
-	currentEpoch := slots.ToEpoch(st.Slot())
-	domain, err := signing.Domain(st.Fork(), currentEpoch, params.BeaconConfig().DomainInclusionListCommittee, st.GenesisValidatorsRoot())
+	epoch := slots.ToEpoch(il.Message.Slot)
+	domain, err := signing.Domain(st.Fork(), epoch, params.BeaconConfig().DomainInclusionListCommittee, st.GenesisValidatorsRoot())
 	if err != nil {
 		return err
 	}
