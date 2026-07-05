@@ -1,9 +1,9 @@
 package sync
 
 import (
+	"sync/atomic"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
@@ -40,11 +40,11 @@ func TestRequestLatePayload_Guards(t *testing.T) {
 					},
 					initialSync: &mockSync.Sync{IsSyncing: tt.syncing},
 				},
-				chainStarted:    abool.New(),
+				chainStarted:    &atomic.Bool{},
 				badPayloadCache: lruwrpr.New(10),
 			}
 			if tt.started {
-				s.chainStarted.Set()
+				s.chainStarted.Store(true)
 			}
 			require.NotPanics(t, func() { s.requestLatePayload(tt.slot) })
 		})
