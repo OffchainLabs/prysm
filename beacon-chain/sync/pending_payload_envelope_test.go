@@ -570,7 +570,7 @@ func TestQueuePendingPayloadEnvelope_SelfBuildBypassesPerRootBound(t *testing.T)
 	require.Equal(t, true, ok)
 }
 
-func TestValidateExecutionPayloadEnvelope_RejectBadSignatureBeforeQueue(t *testing.T) {
+func TestValidateExecutionPayloadEnvelope_IgnoreBadSignatureBeforeQueue(t *testing.T) {
 	ctx := context.Background()
 	s, msg, _, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)
 	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(
@@ -582,7 +582,7 @@ func TestValidateExecutionPayloadEnvelope_RejectBadSignatureBeforeQueue(t *testi
 
 	result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
 	require.NotNil(t, err)
-	require.Equal(t, result, pubsub.ValidationReject)
+	require.Equal(t, result, pubsub.ValidationIgnore)
 	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
 }
 
