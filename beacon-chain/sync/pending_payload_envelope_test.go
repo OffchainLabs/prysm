@@ -361,7 +361,7 @@ func TestQueuePendingPayloadEnvelope_SelfBuildInLookaheadVerifiesSignature(t *te
 	require.Equal(t, maxSelfBuildSigFailures, s.selfBuildSigFailures)
 }
 
-func TestQueuePendingPayloadEnvelope_RejectBadSignature(t *testing.T) {
+func TestQueuePendingPayloadEnvelope_IgnoreBadSignature(t *testing.T) {
 	ctx := context.Background()
 	s, _, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
 
@@ -375,7 +375,7 @@ func TestQueuePendingPayloadEnvelope_RejectBadSignature(t *testing.T) {
 	v := &mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("bad signature")}
 	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
 	require.NotNil(t, err)
-	require.Equal(t, pubsub.ValidationReject, result)
+	require.Equal(t, pubsub.ValidationIgnore, result)
 	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
 }
 
