@@ -420,13 +420,10 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 		func(ps *pubsub.PubSub) error {
 			p.peerFeedback = ps.PeerFeedback
 			p.publishPartialCol = func(topic string, groupID []byte, col *blocks.PartialDataColumn) error {
-				if _, ok := p.headerSentCache[string(groupID)]; !ok {
-					p.headerSentCache[string(groupID)] = make(map[peer.ID]bool)
-				}
 				onEagerPush := func(remote peer.ID) {
 					p.recordEagerPush(groupID, col.Index(), remote)
 				}
-				return pubsub.PublishPartial(ps, topic, groupID, col.PublishActionsFn(p.headerSentCache[string(groupID)], onEagerPush))
+				return pubsub.PublishPartial(ps, topic, groupID, col.PublishActionsFn(p.headerSentCacheFor(groupID, col), onEagerPush))
 			}
 			return nil
 		},
@@ -497,6 +494,18 @@ func (p *PartialColumnBroadcaster) loop() {
 			p.evictExpiredGroups()
 		}
 	}
+}
+
+func (p *PartialColumnBroadcaster) headerSentCacheFor(groupID []byte, col *blocks.PartialDataColumn) map[peer.ID]bool {
+	if col.IsGloas() {
+		return nil
+	}
+	cache, ok := p.headerSentCache[string(groupID)]
+	if !ok {
+		cache = make(map[peer.ID]bool)
+		p.headerSentCache[string(groupID)] = cache
+	}
+	return cache
 }
 
 func (p *PartialColumnBroadcaster) recordEagerPush(groupID []byte, columnIndex uint64, remote peer.ID) {

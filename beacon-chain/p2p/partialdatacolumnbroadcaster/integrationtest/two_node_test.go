@@ -100,6 +100,8 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		h1 := meta.Nodes[0]
 		h2 := meta.Nodes[1]
 
+		synctest.Wait()
+
 		logger := logrus.New()
 		logger.SetLevel(logrus.DebugLevel)
 		bcastCtx1, cancelBcast1 := context.WithCancel(t.Context())
@@ -312,6 +314,8 @@ func TestTwoNodePartialColumnExchange_Gloas(t *testing.T) {
 
 		h1 := meta.Nodes[0]
 		h2 := meta.Nodes[1]
+
+		synctest.Wait()
 
 		logger := logrus.New()
 		logger.SetLevel(logrus.DebugLevel)

@@ -1316,8 +1316,16 @@ func TestPartialColumnBroadcaster_handleIncomingRPC_ignoresUnsubscribedTopic(t *
 }
 
 func TestPartialColumnBroadcaster_onIncomingRPC_inputValidation(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 1_000_000
+	params.OverrideBeaconConfig(cfg)
+
 	const from = peer.ID("peer-a")
 	validGroup := createPartialColumn(t, 2, nil).GroupID()
+	// Accepted messages must arrive on a topic whose fork digest matches the group's fork.
+	fuluTopic := fmt.Sprintf("/eth2/%x/data_column_sidecar_0/ssz_snappy", params.ForkDigest(cfg.FuluForkEpoch))
+	gloasTopic := fmt.Sprintf("/eth2/%x/data_column_sidecar_0/ssz_snappy", params.ForkDigest(cfg.GloasForkEpoch))
 
 	tests := []struct {
 		name           string
@@ -1331,7 +1339,7 @@ func TestPartialColumnBroadcaster_onIncomingRPC_inputValidation(t *testing.T) {
 	}{
 		{
 			name:           "in-bounds topic is accepted and enqueued",
-			topic:          "/eth2/abcd1234/data_column_sidecar_0/ssz_snappy",
+			topic:          fuluTopic,
 			expectReject:   false,
 			expectEnqueued: true,
 			subscribed:     true,
@@ -1344,7 +1352,7 @@ func TestPartialColumnBroadcaster_onIncomingRPC_inputValidation(t *testing.T) {
 		},
 		{
 			name:           "valid Gloas group ID is accepted and enqueued",
-			topic:          "/eth2/abcd1234/data_column_sidecar_0/ssz_snappy",
+			topic:          gloasTopic,
 			group:          createGloasPartialColumn(t, 2, nil).GroupID(),
 			expectReject:   false,
 			expectEnqueued: true,
@@ -1488,9 +1496,28 @@ func TestPartialColumnBroadcaster_onIncomingRPC_groupForkMustMatchTopicFork(t *t
 	}
 }
 
+// Gloas columns have no header to exchange, so no header-sent state is ever allocated for them.
+func TestPartialColumnBroadcaster_headerSentCacheForSkipsGloas(t *testing.T) {
+	h := newBroadcasterHarness(t, newMockPubSub(nil, nil))
+
+	fulu := createPartialColumn(t, 2, nil)
+	cache := h.broadcaster.headerSentCacheFor(fulu.GroupID(), fulu)
+	require.NotNil(t, cache)
+	cache["peer-a"] = true
+	// The same cache is returned for the group on subsequent calls.
+	require.Equal(t, true, h.broadcaster.headerSentCacheFor(fulu.GroupID(), fulu)["peer-a"])
+	require.Equal(t, 1, len(h.broadcaster.headerSentCache))
+
+	gloas := createGloasPartialColumn(t, 2, nil)
+	require.IsNil(t, h.broadcaster.headerSentCacheFor(gloas.GroupID(), gloas))
+	_, ok := h.broadcaster.headerSentCache[string(gloas.GroupID())]
+	require.Equal(t, false, ok)
+	require.Equal(t, 1, len(h.broadcaster.headerSentCache))
+}
+
 func TestPartialColumnBroadcaster_onIncomingRPC_dropsWhenQueueFull(t *testing.T) {
 	const from = peer.ID("peer-a")
-	topic := "/eth2/abcd1234/data_column_sidecar_0/ssz_snappy"
+	topic := fmt.Sprintf("/eth2/%x/data_column_sidecar_0/ssz_snappy", params.ForkDigest(params.BeaconConfig().FuluForkEpoch))
 
 	ps := newMockPubSub(nil, nil)
 	h := newBroadcasterHarness(t, ps)

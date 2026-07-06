@@ -456,8 +456,9 @@ func MergeAvailableIntoPartsMetadata(base *ethpb.PartialDataColumnPartsMetadata,
 // PublishActionsFn returns a PublishActionsFn that, for each known peer, computes
 // the next peer state and the publish action to send to that peer. headerSentCache
 // tracks whether the block header has already been sent to a peer so it is only
-// included once; it is updated as actions are produced. onEagerPush, if non-nil,
-// is invoked for each peer that was eager pushed to.
+// included once; it is updated as actions are produced. Pass nil for Gloas columns,
+// which have no header to exchange. onEagerPush, if non-nil, is invoked for each
+// peer that was eager pushed to.
 func (p *PartialDataColumn) PublishActionsFn(headerSentCache map[peer.ID]bool, onEagerPush func(peer.ID)) partialmessages.PublishActionsFn[PartialDataColumnPeerState] {
 	return func(peerStates map[peer.ID]PartialDataColumnPeerState, peerRequestsPartial func(peer.ID) bool) iter.Seq2[peer.ID, partialmessages.PublishAction] {
 		return p.publishActions(peerStates, peerRequestsPartial, headerSentCache, onEagerPush)
@@ -492,11 +493,13 @@ func (p *PartialDataColumn) publishActions(
 	}
 }
 
-// recordHeaderSent marks in headerSentCache that the header was sent to peerID if
-// includeHeader is true, logging the transition when the cached value changes.
+// recordHeaderSent marks in headerSentCache that the header was sent to peerID. It only
+// writes when a header was actually included, so a nil cache (Gloas columns) is never written.
 func (p *PartialDataColumn) recordHeaderSent(peerID peer.ID, includeHeader bool, headerSentCache map[peer.ID]bool) {
-	prev := headerSentCache[peerID]
-	headerSentCache[peerID] = prev || includeHeader
+	if !includeHeader || headerSentCache == nil {
+		return
+	}
+	headerSentCache[peerID] = true
 }
 
 func isEagerPush(requestedMessage bool, peerState PartialDataColumnPeerState) bool {

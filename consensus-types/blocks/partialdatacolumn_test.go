@@ -1594,16 +1594,20 @@ func TestPartialDataColumn_ForPeer_GloasNoHeaderEagerPush(t *testing.T) {
 func TestPartialDataColumn_PublishActionsFn_GloasNeverSendsHeader(t *testing.T) {
 	p := mustNewGloasPartialColumn(t, 2, 0)
 	peerStates := map[peer.ID]PartialDataColumnPeerState{"peer-a": {}}
-	headerSentCache := map[peer.ID]bool{}
-	actions := runPublishActions(p, peerStates, headerSentCache, map[peer.ID]bool{"peer-a": true})
+	actions := runPublishActions(p, peerStates, nil, map[peer.ID]bool{"peer-a": true})
 
 	action := actions["peer-a"]
 	require.NoError(t, action.Err)
 	require.IsNil(t, action.EncodedPartialMessage)
 	require.NotNil(t, action.EncodedPartsMetadata)
-	// The header-sent cache is never marked for a Gloas column.
-	require.Equal(t, false, headerSentCache["peer-a"])
 	require.NotNil(t, peerStates["peer-a"].Recvd)
+
+	// A caller-provided cache is also never written for a Gloas column.
+	headerSentCache := map[peer.ID]bool{}
+	peerStates = map[peer.ID]PartialDataColumnPeerState{"peer-a": {}}
+	actions = runPublishActions(p, peerStates, headerSentCache, map[peer.ID]bool{"peer-a": true})
+	require.NoError(t, actions["peer-a"].Err)
+	require.Equal(t, 0, len(headerSentCache))
 }
 
 func TestPartialDataColumn_Gloas_ExtendAndComplete(t *testing.T) {
