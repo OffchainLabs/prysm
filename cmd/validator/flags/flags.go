@@ -42,7 +42,7 @@ var (
 	// BeaconRESTApiProviderFlag defines a beacon node REST API endpoint.
 	BeaconRESTApiProviderFlag = &cli.StringFlag{
 		Name:  "beacon-rest-api-provider",
-		Usage: "Beacon node REST API provider endpoint.",
+		Usage: "Beacon node REST API provider endpoint. Use a comma-separated list for ordered failover; the first endpoint is primary, and failover wraps back to the first after the last.",
 		Value: "http://127.0.0.1:3500",
 	}
 	// BeaconRESTApiHeaders defines a list of headers to send with all HTTP requests to the beacon node.

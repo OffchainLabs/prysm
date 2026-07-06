@@ -91,8 +91,8 @@ func (fv *FakeValidator) WaitForKeymanagerInitialization(_ context.Context) erro
 	return nil
 }
 
-// LogSubmittedSyncCommitteeMessages --
-func (fv *FakeValidator) LogSubmittedSyncCommitteeMessages() {}
+// LogSubmissions --
+func (fv *FakeValidator) LogSubmissions(_ primitives.Slot) {}
 
 // WaitForChainStart for mocking.
 func (fv *FakeValidator) WaitForChainStart(_ context.Context) error {
@@ -204,9 +204,6 @@ func (*FakeValidator) SubmitAggregateAndProof(_ context.Context, _ primitives.Sl
 // SubmitSyncCommitteeMessage for mocking.
 func (*FakeValidator) SubmitSyncCommitteeMessage(_ context.Context, _ primitives.Slot, _ [fieldparams.BLSPubkeyLength]byte) {
 }
-
-// LogSubmittedAtts for mocking.
-func (*FakeValidator) LogSubmittedAtts(_ primitives.Slot) {}
 
 // UpdateDomainDataCaches for mocking.
 func (*FakeValidator) UpdateDomainDataCaches(context.Context, primitives.Slot) {}

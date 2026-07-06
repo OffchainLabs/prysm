@@ -68,9 +68,11 @@ func (vs *Server) setExecutionPayloadBid(
 				return bidSourceSelfBuild, errors.Wrap(err, "could not set remote execution payload bid")
 			}
 			log.WithFields(logrus.Fields{
-				"slot":  sBlk.Block().Slot(),
-				"value": uint64(effectiveBidValue(bestBid, maxExecutionPayment)),
-			}).Infof("Chose %s execution payload bid", src)
+				"slot":      sBlk.Block().Slot(),
+				"source":    src,
+				"builder":   bestBid.Message.BuilderIndex,
+				"valueGwei": uint64(effectiveBidValue(bestBid, maxExecutionPayment)),
+			}).Info("Chose payload bid")
 			return src, nil
 		}
 	}
@@ -91,9 +93,10 @@ func (vs *Server) setExecutionPayloadBid(
 	}
 
 	log.WithFields(logrus.Fields{
-		"slot":  sBlk.Block().Slot(),
-		"value": uint64(primitives.WeiToGwei(local.Bid)),
-	}).Infof("Chose %s execution payload bid", bidSourceSelfBuild)
+		"slot":      sBlk.Block().Slot(),
+		"source":    bidSourceSelfBuild,
+		"valueGwei": uint64(primitives.WeiToGwei(local.Bid)),
+	}).Info("Chose payload bid")
 	return bidSourceSelfBuild, nil
 }
 
@@ -181,11 +184,7 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 	}
 
 	if len(bidLog) > 0 {
-		log.WithFields(logrus.Fields{
-			"slot":            q.slot,
-			"bestBuilder":     logs.MaskCredentialsLogging(bestURL),
-			"bestBuilderGwei": uint64(bestValue),
-		}).Infof("Received builder bids: [%s]", strings.Join(bidLog, " | "))
+		log.WithField("slot", q.slot).Debugf("Builder bids: [%s]", strings.Join(bidLog, " | "))
 	}
 
 	if best == nil {
