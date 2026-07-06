@@ -450,18 +450,6 @@ service BeaconNodeValidator {
     };
   }
 
-  // Server-side stream of all signed blocks as they are received by
-  // the beacon chain node.
-  // DEPRECATED: This endpoint is superseded by the /eth/v1/events Beacon API
-  // endpoint
-  rpc StreamBlocksAltair(StreamBlocksRequest)
-      returns (stream StreamBlocksResponse) {
-    option deprecated = true;
-    option (google.api.http) = {
-      get : "/eth/v1alpha1/validator/blocks/stream"
-    };
-  }
-
   rpc SubmitValidatorRegistrations(SignedValidatorRegistrationsV1)
       returns (google.protobuf.Empty) {
     option deprecated = true;
@@ -629,35 +617,6 @@ message StreamSlotsResponse {
   ];
   bytes previous_duty_dependent_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
   bytes current_duty_dependent_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
-}
-
-// DEPRECATED: This endpoint StreamBlocks is superseded by the /eth/v1/events
-// Beacon API endpoint
-message StreamBlocksResponse {
-  option deprecated = true;
-
-  oneof block {
-    // Representing a phase 0 block.
-    SignedBeaconBlock phase0_block = 1;
-
-    // Representing an altair block.
-    SignedBeaconBlockAltair altair_block = 2;
-
-    // Representing a bellatrix block.
-    SignedBeaconBlockBellatrix bellatrix_block = 3;
-
-    // Representing a capella block.
-    SignedBeaconBlockCapella capella_block = 4;
-
-    // Representing a deneb block.
-    SignedBeaconBlockDeneb deneb_block = 5;
-
-    // Representing an electra block.
-    SignedBeaconBlockElectra electra_block = 6;
-
-    // Representing a fulu block.
-    SignedBeaconBlockFulu fulu_block = 7;
-  }
 }
 
 message DomainRequest {
@@ -1190,15 +1149,6 @@ message DoppelGangerResponse {
 // node. DEPRECATED: This endpoint StreamSlots is superseded by the
 // /eth/v1/events Beacon API endpoint.
 message StreamSlotsRequest {
-  option deprecated = true;
-
-  bool verified_only = 1;
-}
-
-// Request to only return blocks that is verified by the beacon node.
-// DEPRECATED: This endpoint StreamBlocks is superseded by the /eth/v1/events
-// Beacon API endpoint
-message StreamBlocksRequest {
   option deprecated = true;
 
   bool verified_only = 1;
