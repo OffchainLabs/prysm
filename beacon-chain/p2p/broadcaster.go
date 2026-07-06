@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -636,7 +637,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 			"root":                  fmt.Sprintf("%#x", root),
 			"slot":                  slotPerRoot[root],
 			"count":                 len(info.indices),
-			"indices":               helpers.PrettySlice(info.indices),
+			"indices":               slice.PrettySlice(info.indices),
 			"timeSinceSlotStartMin": info.durationMin,
 			"timeSinceSlotStartMax": info.durationMax,
 		}).Debug("Broadcasted data column sidecars")

@@ -7,15 +7,16 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -152,8 +153,7 @@ func (c *sigCache) SignatureVerified(sig signatureData) (bool, error) {
 // and cache the result so that it can be reused when the same verification needs to be performed
 // across multiple values.
 type proposerCache interface {
-	ComputeProposer(ctx context.Context, root [32]byte, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error)
-	Proposer(c *forkchoicetypes.Checkpoint, slot primitives.Slot) (primitives.ValidatorIndex, bool)
+	ComputeProposer(ctx context.Context, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error)
 }
 
 func newPropCache() *propCache {
@@ -163,26 +163,26 @@ func newPropCache() *propCache {
 type propCache struct {
 }
 
-// ComputeProposer takes the state for the given parent root and slot and computes the proposer index, updating the
-// proposer index cache when successful.
-func (*propCache) ComputeProposer(ctx context.Context, parent [32]byte, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error) {
-	pst, err := transition.ProcessSlotsUsingNextSlotCache(ctx, pst, parent[:], slot)
-	if err != nil {
-		return 0, err
+// ComputeProposer takes the state and computes the proposer index at the given slot
+func (*propCache) ComputeProposer(ctx context.Context, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error) {
+	stateEpoch := slots.ToEpoch(pst.Slot())
+	slotEpoch := slots.ToEpoch(slot)
+	fulu := pst.Version() >= version.Fulu
+	// Post-Fulu the lookahead covers the current and next epoch, so advancing to slotEpoch-1 suffices;
+	// pre-Fulu the proposer is sampled from the target epoch's post-transition balances, so advance into slotEpoch.
+	if (fulu && slotEpoch > stateEpoch+1) || (!fulu && slotEpoch > stateEpoch) {
+		target := slotEpoch
+		if fulu && slotEpoch > 0 {
+			target = slotEpoch - 1
+		}
+		start, err := slots.EpochStart(target)
+		if err != nil {
+			return 0, err
+		}
+		pst, err = transition.ProcessSlots(ctx, pst, start)
+		if err != nil {
+			return 0, errors.Wrap(err, "failed to advance state to compute proposer")
+		}
 	}
-	idx, err := helpers.BeaconProposerIndex(ctx, pst)
-	if err != nil {
-		return 0, err
-	}
-	return idx, nil
-}
-
-// Proposer returns the validator index if it is found in the cache, along with a boolean indicating
-// whether the value was present, similar to accessing an lru or go map.
-func (*propCache) Proposer(c *forkchoicetypes.Checkpoint, slot primitives.Slot) (primitives.ValidatorIndex, bool) {
-	id, err := helpers.ProposerIndexAtSlotFromCheckpoint(c, slot)
-	if err != nil {
-		return 0, false
-	}
-	return id, true
+	return helpers.BeaconProposerIndexAtSlot(ctx, pst, slot)
 }

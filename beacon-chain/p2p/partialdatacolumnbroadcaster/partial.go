@@ -12,13 +12,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/internal/logrusadapter"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -539,7 +539,7 @@ func (p *PartialColumnBroadcaster) flushAggregatedLogs() {
 		p.logger.WithFields(logrus.Fields{
 			"group":   fmt.Sprintf("%#x", groupID),
 			"count":   len(agg.indices),
-			"indices": helpers.SortedPrettySliceFromMap(agg.indices),
+			"indices": slice.SortedPrettySliceFromMap(agg.indices),
 			"peers":   len(agg.peers),
 		}).Debug("Eager pushed partial data columns")
 		delete(p.eagerPushed, groupID)
@@ -548,7 +548,7 @@ func (p *PartialColumnBroadcaster) flushAggregatedLogs() {
 		p.logger.WithFields(logrus.Fields{
 			"group":   fmt.Sprintf("%#x", groupID),
 			"count":   len(indices),
-			"indices": helpers.SortedPrettySliceFromMap(indices),
+			"indices": slice.SortedPrettySliceFromMap(indices),
 		}).Debug("Columns not published, skipping republish")
 		delete(p.republishSkipped, groupID)
 	}

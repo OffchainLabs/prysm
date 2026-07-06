@@ -16,6 +16,7 @@ go_library(
         "error.go",
         "fork_watcher.go",
         "fuzz_exports.go",  # keep
+        "late_payload_request.go",
         "log.go",
         "metrics.go",
         "once.go",
@@ -193,6 +194,7 @@ go_test(
         "error_test.go",
         "fork_watcher_test.go",
         "kzg_batch_verifier_test.go",
+        "late_payload_request_test.go",
         "once_test.go",
         "pending_attestations_queue_bucket_test.go",
         "pending_attestations_queue_test.go",
@@ -260,6 +262,7 @@ go_test(
         "//beacon-chain/core/altair:go_default_library",
         "//beacon-chain/core/feed:go_default_library",
         "//beacon-chain/core/feed/operation:go_default_library",
+        "//beacon-chain/core/feed/state:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/peerdas:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
