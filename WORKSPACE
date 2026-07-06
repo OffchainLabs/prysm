@@ -215,9 +215,10 @@ http_archive(
     name = "org_golang_x_tools",
     patch_args = ["-p1"],
     patches = [
-        "//third_party:org_golang_x_tools-deletegopls.patch",
         "//third_party:org_golang_x_tools-gazelle.patch",
     ],
+    patch_cmds = ["rm -rf gopls"],
+    patch_cmds_win = ["Remove-Item -Recurse -Force gopls"],
     sha256 = "8509908cd7fc35aa09ff49d8494e4fd25bab9e6239fbf57e0d8344f6bec5802b",
     strip_prefix = "tools-0.38.0",
     urls = [
