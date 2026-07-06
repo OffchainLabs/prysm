@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	libp2p "github.com/libp2p/go-libp2p"
@@ -97,7 +98,7 @@ func (r *callbackRecorder) HandleHeader(header *ethpb.PartialDataColumnHeader, g
 	r.handleHeaderCallCh <- headerHandlerCall{header: header, groupID: groupID}
 }
 
-func (r *callbackRecorder) ValidateGloasGroupID(_ []byte) pubsub.ValidationResult {
+func (r *callbackRecorder) ValidateGloasGroupID(_ primitives.Slot, _ [32]byte) pubsub.ValidationResult {
 	return r.validateGloasGroupResult
 }
 
@@ -1345,6 +1346,7 @@ func TestPartialColumnBroadcaster_onIncomingRPC_inputValidation(t *testing.T) {
 			group:          createGloasPartialColumn(t, 2, nil).GroupID(),
 			expectReject:   false,
 			expectEnqueued: true,
+			subscribed:     true,
 		},
 		{
 			name:           "malformed group ID is rejected",

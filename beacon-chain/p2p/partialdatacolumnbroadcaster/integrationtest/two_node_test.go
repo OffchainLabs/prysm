@@ -66,7 +66,7 @@ func (c *testColumnCallbacks) HandleColumn(_ string, col blocks.VerifiedRODataCo
 
 func (c *testColumnCallbacks) HandleHeader(_ *ethpb.PartialDataColumnHeader, _ string) {}
 
-func (c *testColumnCallbacks) ValidateGloasGroupID(_ []byte) pubsub.ValidationResult {
+func (c *testColumnCallbacks) ValidateGloasGroupID(_ primitives.Slot, _ [32]byte) pubsub.ValidationResult {
 	return pubsub.ValidationAccept
 }
 

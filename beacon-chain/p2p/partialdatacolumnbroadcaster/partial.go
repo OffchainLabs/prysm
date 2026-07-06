@@ -17,6 +17,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/internal/logrusadapter"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -65,10 +66,10 @@ type ColumnCallbacks interface {
 	HandleColumn(topic string, col blocks.VerifiedRODataColumn)
 	// HandleHeader is called when a new partial data column header is first validated.
 	HandleHeader(header *ethpb.PartialDataColumnHeader, groupID string)
-	// ValidateGloasGroupID validates a Gloas partial-column group id against local block state:
+	// ValidateGloasGroupID validates a Gloas partial-column group's slot and root against local block state:
 	// [REJECT] when a seen block at the group's root has a different slot, [IGNORE] when no block for
 	// the root has been seen, else [ACCEPT].
-	ValidateGloasGroupID(groupID []byte) pubsub.ValidationResult
+	ValidateGloasGroupID(slot primitives.Slot, root [32]byte) pubsub.ValidationResult
 }
 
 // Broadcaster is the behaviour of the partial data column broadcaster used by the rest of the node.
@@ -229,6 +230,8 @@ type incomingPartialRPC struct {
 	from    peer.ID
 	message *ethpb.PartialDataColumnSidecar
 	isGloas bool
+	slot    primitives.Slot
+	root    [32]byte
 }
 
 func (r incomingPartialRPC) logFields() logrus.Fields {
@@ -303,7 +306,7 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 
 	// Parse the group ID to detect the fork (Fulu 0x00||root, 33B; Gloas 0x01||SSZ(groupID), 41B).
 	// This validates the version byte, length, and (for Gloas) the SSZ encoding in one place.
-	isGloas, _, _, err := blocks.ParsePartialColumnGroupID(rpc.GetGroupID())
+	isGloas, slot, root, err := blocks.ParsePartialColumnGroupID(rpc.GetGroupID())
 	if err != nil {
 		p.logger.WithError(err).WithFields(logrus.Fields{
 			"peer":  from,
@@ -337,7 +340,7 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 	}
 
 	_, ok := p.tryEnqueue(requestKindHandleIncomingRPC, requestValues{
-		incomingRPC: incomingPartialRPC{rpc, from, message, isGloas},
+		incomingRPC: incomingPartialRPC{rpc, from, message, isGloas, slot, root},
 	})
 	if !ok {
 		p.logger.WithFields(logrus.Fields{
@@ -656,7 +659,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 	// [REJECT] downscore if a seen block at the group's root has a mismatched slot, or if the peer
 	// pushed cells before we published; [IGNORE] otherwise.
 	if ourVerifier == nil && rpc.isGloas {
-		if p.callbacks.ValidateGloasGroupID(rpc.GroupID) == pubsub.ValidationReject {
+		if p.callbacks.ValidateGloasGroupID(rpc.slot, rpc.root) == pubsub.ValidationReject {
 			p.logger.WithFields(rpc.logFields()).Debug("Rejecting Gloas partial message: group slot does not match block slot")
 			_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
 			return nil
