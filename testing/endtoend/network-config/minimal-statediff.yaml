@@ -107,8 +107,12 @@ additional_services:
 
 spamoor_params:
   min_cpu: 10
+  image: "ethpandaops/spamoor:master-c23ad38"
 
 assertoor_params:
+  # Use the pinned assertoor image for testing, that has the fix below:
+  # https://github.com/ethpandaops/assertoor/pull/202
+  image: "ethpandaops/assertoor:master-c6f6ac6"
 
 ethereum_genesis_generator_params:
   extra_env:  
