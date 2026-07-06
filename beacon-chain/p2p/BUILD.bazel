@@ -38,7 +38,6 @@ go_library(
     visibility = [
         "//beacon-chain:__subpackages__",
         "//cmd:__subpackages__",
-        "//testing/endtoend/evaluators:__pkg__",
         "//tools:__subpackages__",
     ],
     deps = [
