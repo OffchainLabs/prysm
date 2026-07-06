@@ -2,6 +2,8 @@ package client
 
 import (
 	"sync"
+
+	"github.com/sirupsen/logrus"
 )
 
 // pushKind identifies a category of data pushed to the beacon node that must
@@ -40,6 +42,10 @@ func (t *connTracker) confirm(kind pushKind, gen uint64) {
 		t.confirmed = make(map[pushKind]uint64)
 	}
 	t.confirmed[kind] = gen
+	log.WithFields(logrus.Fields{
+		"kind":           kind,
+		"connGeneration": gen,
+	}).Debug("Confirmed push for new beacon connection")
 }
 
 // connGeneration returns the current beacon-node connection generation.

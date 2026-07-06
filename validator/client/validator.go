@@ -829,8 +829,17 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 	// A fallback host switch never restarts the runner (the VC stays "healthy"),
 	// so force a re-push here; each push kind retries until its own succeeds.
 	connGen := v.connGeneration()
-	prefsForcePush := forceFullPush || v.connTracker.changed(proposerPrefsPush, connGen)
-	regsForcePush := forceFullPush || v.connTracker.changed(registrationsPush, connGen)
+	prefsChanged := v.connTracker.changed(proposerPrefsPush, connGen)
+	regsChanged := v.connTracker.changed(registrationsPush, connGen)
+	if prefsChanged || regsChanged {
+		log.WithFields(logrus.Fields{
+			"connGeneration": connGen,
+			"preferences":    prefsChanged,
+			"registrations":  regsChanged,
+		}).Debug("Forcing full push after beacon connection change")
+	}
+	prefsForcePush := forceFullPush || prefsChanged
+	regsForcePush := forceFullPush || regsChanged
 
 	// Pre-Gloas, PrepareBeaconProposer carries the per-validator fee recipient.
 	// Post-Gloas, SignedProposerPreferences (submitted below) is canonical.
@@ -873,6 +882,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 				v.releasePrefSlots(prefs)
 				return
 			}
+			log.WithField("count", len(prefs)).Debug("Submitted proposer preferences")
 			v.connTracker.confirm(proposerPrefsPush, connGen)
 		})
 	} else {
@@ -1302,11 +1312,14 @@ func (v *validator) releasePrefSlot(proposalSlot primitives.Slot) {
 // releasePrefSlots un-reserves the slots of a batch whose submission failed so
 // a later build retries them.
 func (v *validator) releasePrefSlots(prefs []*ethpb.SignedProposerPreferences) {
+	slots := make([]primitives.Slot, 0, len(prefs))
 	v.submittedPrefSlotsLock.Lock()
-	defer v.submittedPrefSlotsLock.Unlock()
 	for _, p := range prefs {
 		delete(v.submittedPrefSlots, p.Message.ProposalSlot)
+		slots = append(slots, p.Message.ProposalSlot)
 	}
+	v.submittedPrefSlotsLock.Unlock()
+	log.WithField("proposalSlots", slots).Debug("Released proposer preference reservations for retry")
 }
 
 // proposerConfigForKey returns the fee recipient and target gas limit for pk.
