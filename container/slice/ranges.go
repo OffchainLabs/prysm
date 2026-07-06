@@ -1,4 +1,4 @@
-package helpers
+package slice
 
 import (
 	"fmt"
@@ -7,13 +7,13 @@ import (
 
 // SortedSliceFromMap takes a map with uint64 keys and returns a sorted slice of the keys.
 func SortedSliceFromMap(toSort map[uint64]bool) []uint64 {
-	slice := make([]uint64, 0, len(toSort))
+	sorted := make([]uint64, 0, len(toSort))
 	for key := range toSort {
-		slice = append(slice, key)
+		sorted = append(sorted, key)
 	}
 
-	slices.Sort(slice)
-	return slice
+	slices.Sort(sorted)
+	return sorted
 }
 
 // PrettySlice returns a pretty string representation of a sorted slice of uint64.
@@ -57,6 +57,5 @@ func PrettySlice(sortedSlice []uint64) string {
 
 // SortedPrettySliceFromMap combines SortedSliceFromMap and PrettySlice to return a pretty string representation of the keys in a map.
 func SortedPrettySliceFromMap(toSort map[uint64]bool) string {
-	sorted := SortedSliceFromMap(toSort)
-	return PrettySlice(sorted)
+	return PrettySlice(SortedSliceFromMap(toSort))
 }

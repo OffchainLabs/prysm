@@ -208,6 +208,19 @@ func (s *Service) saveHeadNoDB(ctx context.Context, b interfaces.ReadOnlySignedB
 	if err := s.setHeadInitialSync(r, bCp, hs, optimistic); err != nil {
 		return errors.Wrap(err, "could not set head")
 	}
+	if b.Version() >= version.Gloas {
+		sbid, err := b.Block().Body().SignedExecutionPayloadBid()
+		if err != nil || sbid == nil || sbid.Message == nil || len(sbid.Message.ParentBlockHash) != 32 {
+			log.WithError(err).Error("Could not get bid parent block hash for forkchoice update")
+			return nil
+		}
+		parentHash := bytesutil.ToBytes32(sbid.Message.ParentBlockHash)
+		go func() {
+			if _, err := s.notifyForkchoiceUpdateGloas(s.ctx, parentHash, nil); err != nil {
+				log.WithError(err).Error("Could not notify forkchoice update after batch import")
+			}
+		}()
+	}
 	return nil
 }
 

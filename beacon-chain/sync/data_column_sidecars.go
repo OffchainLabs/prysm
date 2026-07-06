@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	prysmP2P "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -21,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	goPeer "github.com/libp2p/go-libp2p/core/peer"
@@ -188,7 +188,7 @@ func requestSidecarsFromStorage(
 	requestedIndicesMap map[uint64]bool,
 	roots map[[fieldparams.RootLength]byte]bool,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
-	requestedIndices := helpers.SortedSliceFromMap(requestedIndicesMap)
+	requestedIndices := slice.SortedSliceFromMap(requestedIndicesMap)
 
 	result := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, len(roots))
 
@@ -613,7 +613,7 @@ func assembleAvailableSidecarsForRoot(
 	root [fieldparams.RootLength]byte,
 	indices map[uint64]bool,
 ) ([]blocks.VerifiedRODataColumn, error) {
-	stored, err := storage.Get(root, helpers.SortedSliceFromMap(indices))
+	stored, err := storage.Get(root, slice.SortedSliceFromMap(indices))
 	if err != nil {
 		return nil, errors.Wrapf(err, "storage get for root %#x", root)
 	}
@@ -819,7 +819,7 @@ func sendDataColumnSidecarsRequest(
 				prettyRequest := map[string]any{
 					"startSlot": request.StartSlot,
 					"count":     request.Count,
-					"columns":   helpers.PrettySlice(request.Columns),
+					"columns":   slice.PrettySlice(request.Columns),
 				}
 
 				prettyByRangeRequests = append(prettyByRangeRequests, prettyRequest)
@@ -908,7 +908,7 @@ func buildByRangeRequests(
 		}
 	}
 
-	columns := helpers.SortedSliceFromMap(reference)
+	columns := slice.SortedSliceFromMap(reference)
 	startSlot, endSlot := slots[0], slots[len(slots)-1]
 	totalCount := uint64(endSlot - startSlot + 1)
 
@@ -933,7 +933,7 @@ func buildByRootRequest(indicesByRoot map[[fieldparams.RootLength]byte]map[uint6
 	for root, indices := range indicesByRoot {
 		identifier := &ethpb.DataColumnsByRootIdentifier{
 			BlockRoot: root[:],
-			Columns:   helpers.SortedSliceFromMap(indices),
+			Columns:   slice.SortedSliceFromMap(indices),
 		}
 		identifiers = append(identifiers, identifier)
 	}
