@@ -2118,33 +2118,6 @@ func TestValidator_buildProposerSettingsRequests_WithDefaultConfig(t *testing.T)
 
 var testProposerPrefDependentRoot = bytes.Repeat([]byte{0x42}, 32)
 
-func TestValidator_beaconConnectionChanged(t *testing.T) {
-	t.Run("nil conn never reports a change", func(t *testing.T) {
-		v := &validator{}
-		require.Equal(t, false, v.beaconConnectionChanged())
-		require.Equal(t, false, v.beaconConnectionChanged())
-	})
-
-	t.Run("reports a change only when the connection counter advances", func(t *testing.T) {
-		provider := &grpcutil.MockGrpcProvider{MockHosts: []string{"node-a:4000"}}
-		conn, err := validatorHelpers.NewNodeConnection(validatorHelpers.WithGRPCProvider(provider))
-		require.NoError(t, err)
-		v := &validator{conn: conn}
-
-		// Counter starts at 0 and matches the zero-valued lastConnCounter.
-		require.Equal(t, false, v.beaconConnectionChanged())
-		// A fallback switch bumps the counter — detected once.
-		provider.ConnCounter = 1
-		require.Equal(t, true, v.beaconConnectionChanged())
-		require.Equal(t, false, v.beaconConnectionChanged())
-		// A round-robin bounce (host0 → host1 → host0) leaves the host unchanged
-		// but advances the counter twice; still detected.
-		provider.ConnCounter = 3
-		require.Equal(t, true, v.beaconConnectionChanged())
-		require.Equal(t, false, v.beaconConnectionChanged())
-	})
-}
-
 func TestValidator_buildProposerPreferences(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 
@@ -2780,6 +2753,14 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		prefs := v.buildProposerPreferences(t.Context(), km, 2, true)
 		require.Equal(t, 1, len(prefs))
 		require.Equal(t, primitives.Slot(5), prefs[0].Message.ProposalSlot)
+
+		// A failed submission releases the batch's reservations so the next
+		// non-forced build retries; a successful one stays suppressed.
+		v.releasePrefSlots(prefs)
+		prefs = v.buildProposerPreferences(t.Context(), km, 2, false)
+		require.Equal(t, 1, len(prefs))
+		require.Equal(t, primitives.Slot(5), prefs[0].Message.ProposalSlot)
+		require.Equal(t, 0, len(v.buildProposerPreferences(t.Context(), km, 2, false)))
 	})
 
 	t.Run("next epoch before mid-epoch returns nil", func(t *testing.T) {
@@ -3231,6 +3212,104 @@ func TestValidator_PushProposerSettings_SkipsBuilderRegistrationsPostGloas(t *te
 
 	// slot 1 is post-Gloas (GloasForkEpoch == 0).
 	require.NoError(t, v.PushProposerSettings(ctx, 1, false))
+}
+
+// After a fallback host switch, a failed preference submission must keep the
+// switch signal and release its reservations so the next slot retries; the
+// retry's success consumes the signal.
+func TestValidator_PushProposerSettings_RetriesAfterFailedRepush(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	cfg.SecondsPerSlot = 0 // mid-slot submit delay elapses immediately
+	params.OverrideBeaconConfig(cfg)
+
+	kp := randKeypair(t)
+	km := newMockKeymanager(t, kp)
+
+	ctrl := gomock.NewController(t)
+	client := validatormock.NewMockValidatorClient(ctrl)
+	domainCache, err := ristretto.NewCache(&ristretto.Config[string, proto.Message]{
+		NumCounters: 1920,
+		MaxCost:     192,
+		BufferItems: 64,
+	})
+	require.NoError(t, err)
+	client.EXPECT().DomainData(gomock.Any(), gomock.Any()).
+		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).AnyTimes()
+	// The push to the freshly switched host fails once; the retry succeeds.
+	gomock.InOrder(
+		client.EXPECT().SubmitSignedProposerPreferences(gomock.Any(), gomock.Any()).
+			Return(nil, errors.New("new host not ready")),
+		client.EXPECT().SubmitSignedProposerPreferences(gomock.Any(), gomock.Any()).
+			Return(&empty.Empty{}, nil),
+	)
+
+	provider := &grpcutil.MockGrpcProvider{MockHosts: []string{"node-a:4000"}}
+	conn, err := validatorHelpers.NewNodeConnection(validatorHelpers.WithGRPCProvider(provider))
+	require.NoError(t, err)
+
+	v := validator{
+		km:              km,
+		validatorClient: client,
+		conn:            conn,
+		domainDataCache: domainCache,
+		proposerSettings: &proposer.Settings{
+			Version: proposer.SchemaV2,
+			DefaultConfig: &proposer.Option{
+				FeeRecipientConfig: &proposer.FeeRecipientConfig{
+					FeeRecipient: feeRecipientFromString(t, "0x1111111111111111111111111111111111111111"),
+				},
+				GasLimit: 42000000,
+			},
+		},
+		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
+			kp.pub: {publicKey: kp.pub[:], status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}, index: 1},
+		},
+		duties:             &dutyStore{},
+		submittedPrefSlots: make(map[primitives.Slot]bool),
+	}
+	var data dutyStoreData
+	data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			{PublicKey: kp.pub[:], ValidatorIndex: 1, Status: ethpb.ValidatorStatus_ACTIVE, ProposerSlots: []primitives.Slot{5}},
+		},
+		NextEpochDuties:   []*ethpb.ValidatorDuty{},
+		PrevDependentRoot: testProposerPrefDependentRoot,
+		CurrDependentRoot: testProposerPrefDependentRoot,
+	})
+	v.duties.write(data)
+
+	waitFor := func(desc string, cond func() bool) {
+		t.Helper()
+		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+			if cond() {
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		t.Fatalf("timed out waiting for %s", desc)
+	}
+
+	// A fallback host switch bumps the connection generation.
+	provider.ConnCounter = 1
+	gen := v.connGeneration()
+
+	// Slot 1: the switch forces a push; its submission fails, so the reservation
+	// is released and the switch signal is kept for the next slot.
+	require.NoError(t, v.PushProposerSettings(t.Context(), 1, false))
+	waitFor("failed submission to release its reservation", func() bool {
+		return v.submittedPrefSlotsCount() == 0
+	})
+	require.Equal(t, true, v.connTracker.changed(proposerPrefsPush, gen))
+
+	// Slot 2: the kept signal forces another push; it succeeds, consuming the
+	// signal and keeping the reservation.
+	require.NoError(t, v.PushProposerSettings(t.Context(), 2, false))
+	waitFor("successful retry to confirm the generation", func() bool {
+		return !v.connTracker.changed(proposerPrefsPush, gen)
+	})
+	require.Equal(t, 1, v.submittedPrefSlotsCount())
 }
 
 func TestValidator_buildSignedRegReqs_DefaultConfigDisabled(t *testing.T) {

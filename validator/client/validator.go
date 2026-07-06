@@ -90,7 +90,7 @@ type validator struct {
 	web3SignerConfig             *remoteweb3signer.SetupConfig
 	proposerSettings             *proposer.Settings
 	submittedPrefSlots           map[primitives.Slot]bool
-	lastConnCounter              uint64
+	connTracker                  connTracker // per push kind, the conn generation last confirmed pushed
 	submittedAtts                map[submittedAttKey]*submittedAtt
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
@@ -825,11 +825,11 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 	currentEpoch := slots.ToEpoch(slot)
 	isPreGloas := currentEpoch < params.BeaconConfig().GloasForkEpoch
 
-	// A fallback host switch keeps the VC "healthy", so (unlike a dead node) it
-	// never trips the runner restart that re-pushes; force a re-push here instead.
-	if v.beaconConnectionChanged() {
-		forceFullPush = true
-	}
+	// A fallback host switch never restarts the runner (the VC stays "healthy"),
+	// so force a re-push here; each push kind retries until its own succeeds.
+	connGen := v.connGeneration()
+	prefsForcePush := forceFullPush || v.connTracker.changed(proposerPrefsPush, connGen)
+	regsForcePush := forceFullPush || v.connTracker.changed(registrationsPush, connGen)
 
 	// Pre-Gloas, PrepareBeaconProposer carries the per-validator fee recipient.
 	// Post-Gloas, SignedProposerPreferences (submitted below) is canonical.
@@ -854,21 +854,30 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		v.upgradeProposerSettingsToV2(ctx)
 	}
 
-	// forceFullPush is set when a new runner starts (initial connect or after a
+	// prefsForcePush is set when a new runner starts (initial connect or after a
 	// beacon-node disconnect/reconnect), so re-push all proposer preferences to
 	// repopulate a beacon node that has no preference state.
-	prefs := v.buildProposerPreferences(ctx, km, slot, forceFullPush)
+	prefs := v.buildProposerPreferences(ctx, km, slot, prefsForcePush)
 	if len(prefs) > 0 {
 		// Delay to mid-slot so the block for this slot is processed first.
 		delay := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
-		go func() {
-			time.Sleep(delay)
-			if _, err := v.validatorClient.SubmitSignedProposerPreferences(ctx, &ethpb.SubmitSignedProposerPreferencesRequest{
+		time.AfterFunc(delay, func() {
+			// Detached from the slot context, which may expire before the delay elapses.
+			subCtx, cancel := context.WithTimeout(context.Background(), delay)
+			defer cancel()
+			if _, err := v.validatorClient.SubmitSignedProposerPreferences(subCtx, &ethpb.SubmitSignedProposerPreferencesRequest{
 				SignedProposerPreferences: prefs,
 			}); err != nil {
 				log.WithError(err).Warn("Failed to submit proposer preferences")
+				v.releasePrefSlots(prefs)
+				return
 			}
-		}()
+			v.connTracker.confirm(proposerPrefsPush, connGen)
+		})
+	} else {
+		// Nothing was reserved in the dedup cache, so there is no suppressed
+		// batch to retry; safe to consume the switch signal.
+		v.connTracker.confirm(proposerPrefsPush, connGen)
 	}
 
 	if reqs := v.buildBuilderPreferenceRequests(ctx, km, slot); len(reqs) > 0 {
@@ -886,13 +895,19 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		return nil
 	}
 
-	signedRegReqs := v.buildSignedRegReqs(ctx, filteredKeys, km.Sign, slot, forceFullPush)
+	signedRegReqs := v.buildSignedRegReqs(ctx, filteredKeys, km.Sign, slot, regsForcePush)
 	if len(signedRegReqs) > 0 {
 		go func() {
 			if err := SubmitValidatorRegistrations(ctx, v.validatorClient, signedRegReqs, v.validatorsRegBatchSize); err != nil {
 				log.WithError(errors.Wrap(ErrBuilderValidatorRegistration, err.Error())).Warn("Failed to register validator on builder")
+				return
 			}
+			v.connTracker.confirm(registrationsPush, connGen)
 		}()
+	} else {
+		// A forced build includes every builder-enabled key, so an empty build
+		// means the new host is not missing any registration.
+		v.connTracker.confirm(registrationsPush, connGen)
 	}
 
 	return nil
@@ -957,18 +972,6 @@ func (v *validator) EventStreamIsRunning() bool {
 
 func (v *validator) Host() string {
 	return v.validatorClient.Host()
-}
-
-// beaconConnectionChanged reports whether the beacon-node connection switched
-// to a different host since the previous push, updating the watermark.
-func (v *validator) beaconConnectionChanged() bool {
-	if v.conn == nil {
-		return false
-	}
-	counter := v.conn.ConnectionGeneration()
-	changed := counter != v.lastConnCounter
-	v.lastConnCounter = counter
-	return changed
 }
 
 func (v *validator) EnsureReady(ctx context.Context) bool {
@@ -1260,6 +1263,16 @@ func (v *validator) releasePrefSlot(proposalSlot primitives.Slot) {
 	delete(v.submittedPrefSlots, proposalSlot)
 }
 
+// releasePrefSlots un-reserves the slots of a batch whose submission failed so
+// a later build retries them.
+func (v *validator) releasePrefSlots(prefs []*ethpb.SignedProposerPreferences) {
+	v.submittedPrefSlotsLock.Lock()
+	defer v.submittedPrefSlotsLock.Unlock()
+	for _, p := range prefs {
+		delete(v.submittedPrefSlots, p.Message.ProposalSlot)
+	}
+}
+
 // proposerConfigForKey returns the fee recipient and target gas limit for pk.
 // The target gas limit comes from the top-level v2 fields only; builder gas
 // limits are registration-only.
@@ -1388,6 +1401,7 @@ func (v *validator) submitProposerPreferences(ctx context.Context) {
 			SignedProposerPreferences: prefs,
 		}); err != nil {
 			log.WithError(err).Warn("Failed to resubmit proposer preferences after duty change")
+			v.releasePrefSlots(prefs)
 		} else {
 			log.WithField("count", len(prefs)).Info("Resubmitted proposer preferences after duty change")
 		}
