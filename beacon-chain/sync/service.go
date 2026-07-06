@@ -487,16 +487,17 @@ func (c *partialColumnCallbacks) PartialVerifierFromTrustedColumn(col *blocks.Pa
 // mirroring the full-column gossip rules: [IGNORE] until a valid block for the group's root has been seen,
 // [REJECT] when that block's slot does not match the group's slot, else [ACCEPT].
 func (c *partialColumnCallbacks) ValidateGloasGroupID(slot primitives.Slot, root [32]byte) pubsub.ValidationResult {
-	// [IGNORE] A valid block for the group's slot has not been seen yet.
+	// [IGNORE] A valid block for the group's root has not been seen yet.
 	if c.service.cfg.chain == nil || !c.service.cfg.chain.HasBlock(c.service.ctx, root) {
 		return pubsub.ValidationIgnore
 	}
-	block, err := c.service.cfg.beaconDB.Block(c.service.ctx, root)
-	if err != nil || block == nil || block.IsNil() {
+
+	blockSlot, err := c.service.cfg.chain.RecentBlockSlot(root)
+	if err != nil {
 		return pubsub.ValidationIgnore
 	}
 	// [REJECT] The group's slot must match the slot of the block at beacon_block_root.
-	if block.Block().Slot() != slot {
+	if blockSlot != slot {
 		return pubsub.ValidationReject
 	}
 	return pubsub.ValidationAccept

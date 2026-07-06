@@ -75,6 +75,7 @@ type ChainService struct {
 	FinalizedRoots              map[[32]byte]bool
 	OptimisticRoots             map[[32]byte]bool
 	BlockSlot                   primitives.Slot
+	RecentBlockSlotErr          error
 	SyncingRoot                 [32]byte
 	Blobs                       []blocks.VerifiedROBlob
 	DataColumns                 []blocks.VerifiedRODataColumn
@@ -548,6 +549,9 @@ func (s *ChainService) AvailableBlocks(ctx context.Context, blockRoots [][32]byt
 
 // RecentBlockSlot mocks the same method in the chain service.
 func (s *ChainService) RecentBlockSlot([32]byte) (primitives.Slot, error) {
+	if s.RecentBlockSlotErr != nil {
+		return 0, s.RecentBlockSlotErr
+	}
 	return s.BlockSlot, nil
 }
 
