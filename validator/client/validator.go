@@ -828,9 +828,11 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 
 	// A fallback host switch never restarts the runner (the VC stays "healthy"),
 	// so force a re-push here; each push kind retries until its own succeeds.
+	// Registrations are only pushed pre-Gloas, so post-Gloas their kind is never
+	// confirmed and would otherwise report a change every slot.
 	connGen := v.connGeneration()
 	prefsChanged := v.connTracker.changed(proposerPrefsPush, connGen)
-	regsChanged := v.connTracker.changed(registrationsPush, connGen)
+	regsChanged := isPreGloas && v.connTracker.changed(registrationsPush, connGen)
 	if prefsChanged || regsChanged {
 		log.WithFields(logrus.Fields{
 			"connGeneration": connGen,
