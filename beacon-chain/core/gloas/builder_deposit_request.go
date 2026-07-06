@@ -32,11 +32,15 @@ func ProcessBuilderDepositRequests(ctx context.Context, st state.BeaconState, re
 		return err
 	}
 	badSig := make([]bool, len(requests))
+	preVerified := make([]bool, len(requests))
+	for _, i := range newIdx {
+		preVerified[i] = true
+	}
 	for _, j := range invalid {
 		badSig[newIdx[j]] = true
 	}
 	for i, request := range requests {
-		if err := processBuilderDepositRequest(st, request, !badSig[i]); err != nil {
+		if err := processBuilderDepositRequest(ctx, st, request, preVerified[i], !badSig[i]); err != nil {
 			return errors.Wrap(err, "could not process builder deposit request")
 		}
 	}
@@ -70,7 +74,7 @@ func ProcessBuilderDepositRequests(ctx context.Context, st state.BeaconState, re
 //	            epoch = get_current_epoch(state)
 //	            builder.withdrawable_epoch = epoch + MIN_BUILDER_WITHDRAWABILITY_DELAY
 //	</spec>
-func processBuilderDepositRequest(st state.BeaconState, request *enginev1.BuilderDepositRequest, sigValid bool) error {
+func processBuilderDepositRequest(ctx context.Context, st state.BeaconState, request *enginev1.BuilderDepositRequest, preVerified, sigValid bool) error {
 	if request == nil {
 		return errors.New("nil builder deposit request")
 	}
@@ -92,6 +96,14 @@ func processBuilderDepositRequest(st state.BeaconState, request *enginev1.Builde
 		}
 		builderDepositsProcessedTotal.Inc()
 		return nil
+	}
+
+	if !preVerified {
+		valid, err := helpers.VerifyBuilderDepositRequestSignature(ctx, request)
+		if err != nil {
+			return err
+		}
+		sigValid = valid
 	}
 
 	if !sigValid {
