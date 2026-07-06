@@ -85,7 +85,7 @@ func (s *Service) buildOptions(ip net.IP, priKey *ecdsa.PrivateKey) ([]libp2p.Op
 	if cfg.LocalIP != "" {
 		localIP := net.ParseIP(cfg.LocalIP)
 		if localIP == nil {
-			return nil, errors.Wrapf(err, "invalid local ip provided: %s:%d", cfg.LocalIP, cfg.TCPPort)
+			return nil, errors.Errorf("invalid local ip provided: %s:%d", cfg.LocalIP, cfg.TCPPort)
 		}
 
 		multiaddrs, err = MultiAddressBuilder(localIP, cfg.TCPPort, cfg.QUICPort)
