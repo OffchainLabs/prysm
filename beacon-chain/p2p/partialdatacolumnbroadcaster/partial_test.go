@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"sync"
 	"testing"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -1422,6 +1424,65 @@ func TestPartialColumnBroadcaster_onIncomingRPC_inputValidation(t *testing.T) {
 				require.Equal(t, 1, enqueued)
 			} else {
 				require.Equal(t, 0, enqueued)
+			}
+		})
+	}
+}
+
+// A group ID whose fork contradicts the topic's fork digest is downscored and dropped before
+// the SSZ decode; groups matching their topic's fork pass through.
+func TestPartialColumnBroadcaster_onIncomingRPC_groupForkMustMatchTopicFork(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 1_000_000
+	params.OverrideBeaconConfig(cfg)
+
+	const from = peer.ID("peer-a")
+	fuluTopic := fmt.Sprintf("/eth2/%x/data_column_sidecar_0/ssz_snappy", params.ForkDigest(cfg.FuluForkEpoch))
+	gloasTopic := fmt.Sprintf("/eth2/%x/data_column_sidecar_0/ssz_snappy", params.ForkDigest(cfg.GloasForkEpoch))
+	fuluGroup := createPartialColumn(t, 2, nil).GroupID()
+	gloasGroup := createGloasPartialColumn(t, 2, nil).GroupID()
+
+	tests := []struct {
+		name           string
+		topic          string
+		group          []byte
+		expectMismatch bool
+	}{
+		{name: "fulu group on gloas topic is rejected", topic: gloasTopic, group: fuluGroup, expectMismatch: true},
+		{name: "gloas group on fulu topic is rejected", topic: fuluTopic, group: gloasGroup, expectMismatch: true},
+		{name: "fulu group on fulu topic is accepted", topic: fuluTopic, group: fuluGroup},
+		{name: "gloas group on gloas topic is accepted", topic: gloasTopic, group: gloasGroup},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ps := newMockPubSub(nil, nil)
+			h := newBroadcasterHarness(t, ps)
+			h.broadcaster.subscribedTopics.Store(tt.topic, struct{}{})
+
+			topic := tt.topic
+			rpc := &pubsub_pb.PartialMessagesExtension{
+				TopicID: &topic,
+				GroupID: slices.Clone(tt.group),
+			}
+			peerStates := map[peer.ID]blocks.PartialDataColumnPeerState{}
+
+			err := h.broadcaster.onIncomingRPC(from, peerStates, rpc)
+
+			if tt.expectMismatch {
+				require.ErrorContains(t, "does not match topic fork", err)
+				waitForPeerFeedbackCalls(t, ps, 1)
+				feedback := ps.peerFeedbackCallsSnapshot()
+				require.Equal(t, 1, len(feedback))
+				require.Equal(t, pubsub.PeerFeedbackInvalidMessage, feedback[0].kind)
+				require.Equal(t, from, feedback[0].peerID)
+				require.Equal(t, tt.topic, feedback[0].topic)
+				require.Equal(t, 0, len(h.broadcaster.incomingReq))
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, 0, ps.peerFeedbackCallCount())
+				require.Equal(t, 1, len(h.broadcaster.incomingReq))
 			}
 		})
 	}

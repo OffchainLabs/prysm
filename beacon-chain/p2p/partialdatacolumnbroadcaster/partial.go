@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -20,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/internal/logrusadapter"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p-pubsub/partialmessages"
 	pubsub_pb "github.com/libp2p/go-libp2p-pubsub/pb"
@@ -47,6 +49,18 @@ func extractColumnIndexFromTopic(topic string) (uint64, error) {
 		sub = sub[:end]
 	}
 	return strconv.ParseUint(sub, 10, 64)
+}
+
+func topicForkIsGloas(topic string) (isGloas bool, err error) {
+	digest, err := p2ptypes.ExtractGossipDigest(topic)
+	if err != nil {
+		return false, errors.Wrap(err, "ExtractGossipDigest")
+	}
+	_, epoch, err := params.ForkDataFromDigest(digest)
+	if err != nil {
+		return false, errors.Wrap(err, "ForkDataFromDigest")
+	}
+	return params.GetNetworkScheduleEntry(epoch).VersionEnum >= version.Gloas, nil
 }
 
 // ColumnCallbacks is the interface that the broadcaster uses to validate and handle
@@ -332,6 +346,22 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 	if _, subscribed := p.subscribedTopics.Load(rpc.GetTopicID()); !subscribed {
 		p.logIgnoreUnsubscribedTopic(from, rpc.GetTopicID())
 		return nil
+	}
+
+	// Reject groups whose fork does not match the topic's fork digest, e.g. a Fulu group ID
+	// on a Gloas-digest topic.
+	topicIsGloas, err := topicForkIsGloas(rpc.GetTopicID())
+	if err != nil {
+		return errors.Wrap(err, "topicForkIsGloas")
+	}
+	if topicIsGloas != isGloas {
+		p.logger.WithFields(logrus.Fields{
+			"peer":       from,
+			"topic":      rpc.GetTopicID(),
+			"gloasGroup": isGloas,
+		}).Debug("Group ID fork does not match topic fork")
+		p.reportPeerFeedbackAsync(rpc.GetTopicID(), from, pubsub.PeerFeedbackInvalidMessage)
+		return errors.Errorf("group ID fork (gloas=%t) does not match topic fork %q", isGloas, rpc.GetTopicID())
 	}
 
 	nextPeerState, message, err := updatePeerStateFromIncomingRPC(peerStates[from], rpc, isGloas)

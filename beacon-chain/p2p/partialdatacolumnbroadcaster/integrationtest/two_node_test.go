@@ -281,12 +281,12 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 	})
 }
 
-// TestTwoNodePartialColumnExchange_Gloas is the Gloas analogue of the Fulu exchange above. Gloas
-// partial columns carry no header and source commitments from the bid, and the wire is the 3-field
-// PartialDataColumnSidecarGloas under a 41B group id. Because a Gloas node can only verify cells
-// once it has published locally, both nodes publish their half and recover the other half via the
-// parts-metadata request/response. The same testColumnCallbacks works unchanged (no header path).
 func TestTwoNodePartialColumnExchange_Gloas(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	synctest.Test(t, func(t *testing.T) {
 		// Create a simulated libp2p network
 		latency := time.Millisecond * 10

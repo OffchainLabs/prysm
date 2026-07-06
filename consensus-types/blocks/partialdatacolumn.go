@@ -512,7 +512,7 @@ func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerS
 	if isEagerPush(requestedMessage, peerState) {
 		// Gloas columns have no header to exchange, so we never eager-push one;
 		// the eager push then carries parts metadata only.
-		includeHeader = includeHeader && !p.IsGloas()
+		includeHeader = !p.IsGloas() && includeHeader
 		var encoded []byte
 		if includeHeader {
 			var err error

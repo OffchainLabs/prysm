@@ -2,15 +2,14 @@ package p2p
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	pbrpc "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
@@ -39,13 +38,9 @@ const (
 	rSubD = 8 // random gossip target
 )
 
-var ErrInvalidTopic = errors.New("invalid topic format")
-
-// Specifies the fixed size context length.
-const digestLength = 4
-
-// Specifies the prefix for any pubsub topic.
-const gossipTopicPrefix = "/eth2/"
+// ErrInvalidTopic aliases p2ptypes.ErrInvalidTopic, which lives in the leaf types
+// package so p2p subpackages can use it without an import cycle.
+var ErrInvalidTopic = p2ptypes.ErrInvalidTopic
 
 // JoinTopic will join PubSub topic, if not already joined.
 func (s *Service) JoinTopic(topic string, opts ...pubsub.TopicOpt) (*pubsub.Topic, error) {
@@ -244,28 +239,8 @@ func convertTopicScores(topicMap map[string]*pubsub.TopicScoreSnapshot) map[stri
 }
 
 // ExtractGossipDigest extracts the relevant fork digest from the gossip topic.
-// Topics are in the form of /eth2/{fork-digest}/{topic} and this method extracts the
-// fork digest from the topic string to a 4 byte array.
 func ExtractGossipDigest(topic string) ([4]byte, error) {
-	// Ensure the topic prefix is correct.
-	if len(topic) < len(gossipTopicPrefix)+1 || topic[:len(gossipTopicPrefix)] != gossipTopicPrefix {
-		return [4]byte{}, ErrInvalidTopic
-	}
-	start := len(gossipTopicPrefix)
-	end := strings.Index(topic[start:], "/")
-	if end == -1 { // Ensure a topic suffix exists.
-		return [4]byte{}, ErrInvalidTopic
-	}
-	end += start
-	strDigest := topic[start:end]
-	digest, err := hex.DecodeString(strDigest)
-	if err != nil {
-		return [4]byte{}, err
-	}
-	if len(digest) != digestLength {
-		return [4]byte{}, errors.Errorf("invalid digest length wanted %d but got %d", digestLength, len(digest))
-	}
-	return bytesutil.ToBytes4(digest), nil
+	return p2ptypes.ExtractGossipDigest(topic)
 }
 
 // MaxMessageSize returns the maximum allowed compressed message size.
