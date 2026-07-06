@@ -69,3 +69,4 @@ types:
   - name: "SignedRequestAuthV1"
   - name: "SignedWireBlindedExecutionPayloadEnvelope"
   - name: "WireBlindedExecutionPayloadEnvelope"
+    progressive: {}
