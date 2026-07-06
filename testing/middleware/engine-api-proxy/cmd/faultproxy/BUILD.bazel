@@ -1,0 +1,53 @@
+load("@prysm//tools/go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_binary")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_tarball")
+load("@rules_pkg//:pkg.bzl", "pkg_tar")
+load("//tools:multi_arch.bzl", "multi_arch")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["main.go"],
+    importpath = "github.com/OffchainLabs/prysm/v7/testing/middleware/engine-api-proxy/cmd/faultproxy",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//testing/middleware/engine-api-proxy:go_default_library",
+        "@com_github_sirupsen_logrus//:go_default_library",
+    ],
+)
+
+go_binary(
+    name = "json_rpc_snoop",
+    embed = [":go_default_library"],
+    visibility = ["//visibility:public"],
+)
+
+pkg_tar(
+    name = "binary_tar",
+    srcs = [":json_rpc_snoop"],
+    extension = "tar.gz",
+)
+
+oci_image(
+    name = "oci_image",
+    base = "@linux_debian11_multiarch_base",
+    cmd = ["/json_rpc_snoop"],
+    entrypoint = [],
+    tars = [":binary_tar"],
+    workdir = "/",
+)
+
+multi_arch(
+    name = "oci_multiarch_e2e",
+    image = ":oci_image",
+    platforms = select({
+        "@platforms//cpu:x86_64": ["@io_bazel_rules_go//go/toolchain:linux_amd64_cgo"],
+        "@platforms//cpu:arm64": ["@io_bazel_rules_go//go/toolchain:linux_arm64_cgo"],
+    }),
+)
+
+oci_tarball(
+    name = "oci_image_tarball_e2e",
+    image = ":oci_multiarch_e2e",
+    repo_tags = ["prysm-faultproxy:local"],
+    visibility = ["//visibility:public"],
+)
