@@ -4,25 +4,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/kurtosis"
-	"github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 )
 
-func TestEndToEnd_MultiScenarioRun_Multiclient(t *testing.T) {
-	cfg := types.InitForkCfg(version.Bellatrix, version.Electra, params.E2EMainnetTestConfig())
-	runner := e2eMainnet(t, true, cfg, types.WithEpochs(26))
-	// override for scenario tests
-	runner.config.Evaluators = scenarioEvalsMulti(cfg)
-	runner.config.EvalInterceptor = runner.multiScenarioMulticlient
-	runner.scenarioRunner()
-}
-
-// TestEndToEnd_MultiScenarioRun_MultiClient2 assumes those service names.
+// TestEndToEnd_MultiScenarioRun_MultiClient assumes those service names.
 var mainnetSecondNodeServices = []string{"cl-2-prysm-geth", "vc-2-geth-prysm"}
 
-// TestEndToEnd_MultiScenarioRun_MultiClient2 runs mainnet-preset multiclient scenarios in a single enclave, with the following events:
+// TestEndToEnd_MultiScenarioRun_MultiClient runs mainnet-preset multiclient scenarios in a single enclave, with the following events:
 // Event 1. Freeze the 2nd Prysm BN + VC (mainnetSecondNodeServices), and resume after one epoch.
 // Event 2. Optimistic Sync: drive the 2nd Prysm node optimistic via its faultproxy snooper, then clear.
 //
@@ -46,7 +34,7 @@ var mainnetSecondNodeServices = []string{"cl-2-prysm-geth", "vc-2-geth-prysm"}
 //	    (network-health-once is omitted: its fork/reorg checks flag benign 1-slot
 //	    client lag and the still-syncing checkpoint node in this multiclient net)
 //	Test ends at epoch 15 (epochsToRun).
-func TestEndToEnd_MultiScenarioRun_MultiClient2(t *testing.T) {
+func TestEndToEnd_MultiScenarioRun_MultiClient(t *testing.T) {
 	LoadPrysmDockerImages(t)
 	LoadFaultproxyImage(t)
 

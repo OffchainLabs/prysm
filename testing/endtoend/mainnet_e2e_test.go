@@ -17,7 +17,38 @@ func TestEndToEnd_MainnetConfig_ValidatorAtCurrentRelease(t *testing.T) {
 			enclaveName: "mainnet-stable-validator-release",
 			configPath:  "testing/endtoend/network-config/mainnet-stable-validator-release.yaml",
 			// Total test duration = 10 epochs * 6 seconds/slot * 32 slots/epoch = 1920 seconds = 32 minutes
-			epochsToRun:       10,
+			epochsToRun: 10,
+			runSyncTest: false,
+			skipPlaybooks: []string{
+				"block-graffiti.yaml",
+
+				// Skip all validator lifecycle tests.
+				"deposits.yaml",
+				"slashings.yaml",
+				"voluntary-exits.yaml",
+				"withdrawals.yaml",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.enclaveName, func(t *testing.T) {
+			tt.Run(t)
+		})
+	}
+}
+
+func TestEndToEnd_MainnetConfig_Sync(t *testing.T) {
+	t.Parallel()
+
+	// Prerequisite for Kurtosis: Load images needed.
+	LoadPrysmDockerImages(t)
+
+	tests := []KurtosisTestSuites{
+		{
+			enclaveName:       "mainnet-sync",
+			configPath:        "testing/endtoend/network-config/mainnet-sync.yaml",
+			epochsToRun:       12,
 			runSyncTest:       true,
 			lateSyncNodeDelay: 10 * time.Minute,
 			skipPlaybooks: []string{
@@ -28,6 +59,12 @@ func TestEndToEnd_MainnetConfig_ValidatorAtCurrentRelease(t *testing.T) {
 				"slashings.yaml",
 				"voluntary-exits.yaml",
 				"withdrawals.yaml",
+
+				// Skip strict whole-network monitors: a mid-sync node legitimately diverges
+				// from head and would trip fork/participation/health assertions.
+				"network-health-monitor.yaml",
+				"validators-sync-participation.yaml",
+				"metrics.yaml",
 			},
 		},
 	}
@@ -50,9 +87,8 @@ func TestEndToEnd_MainnetConfig_MultiClient(t *testing.T) {
 			enclaveName: "mainnet-multiclient",
 			configPath:  "testing/endtoend/network-config/mainnet-multiclient.yaml",
 			// Total test duration = 10 epochs * 6 seconds/slot * 32 slots/epoch = 1920 seconds = 32 minutes
-			epochsToRun:       10,
-			runSyncTest:       true,
-			lateSyncNodeDelay: 10 * time.Minute,
+			epochsToRun: 10,
+			runSyncTest: false,
 			skipPlaybooks: []string{
 				"block-graffiti.yaml",
 
