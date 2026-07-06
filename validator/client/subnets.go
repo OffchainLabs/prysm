@@ -11,6 +11,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// The length of total subscribeDuties can be large,
+// so need to limit the number of workers to avoid too many goroutines being created.
 const subnetSubscriptionAggregatorWorkers = 16
 
 // subscribeToSubnets iterates through each validator duty, signs each slot, and asks beacon node
