@@ -38,7 +38,7 @@ tasks:
     configVars:
       privateKey: "walletPrivkey"
       walletSeed: "blobWalletSeed"
-      prefundAmount: "| ((1000 * 1000000000000000000) | tostring)"
+      prefundAmount: "| ((10000 * 1000000000000000000) | tostring)"
       prefundMinBalance: "| ((100 * 1000000000000000000) | tostring)"
 
   - name: run_task_background

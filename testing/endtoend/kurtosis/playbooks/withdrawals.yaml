@@ -39,6 +39,9 @@ tasks:
     id: withdrawal_wallet
     title: "Generate withdrawal target wallet"
     timeout: 5m
+    config:
+      prefundAmount: 0
+      prefundMinBalance: 0
     configVars:
       privateKey: "walletPrivkey"
       walletSeed: "withdrawalWalletSeed"
