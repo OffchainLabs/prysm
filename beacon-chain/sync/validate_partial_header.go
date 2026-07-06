@@ -12,6 +12,7 @@ import (
 )
 
 var errHeaderEmptyCommitments = errors.New("header has no kzg commitments")
+var errEmptyCommitments = errors.New("no kzg commitments")
 var errHeaderParentNotSeen = errors.New("header parent not seen")
 var errHeaderNil = errors.New("nil header")
 var errColumnNotFulu = errors.New("partial column is not a fulu type")
@@ -27,7 +28,7 @@ func (s *Service) partialVerifierFromTrustedColumn(_ context.Context, col *block
 	}
 	sbh, err := col.SignedBlockHeader()
 	if err != nil {
-		return nil, errColumnNotFulu
+		return nil, errors.Wrap(err, "signed block header")
 	}
 	if sbh == nil || sbh.Header == nil {
 		return nil, errHeaderNil
@@ -60,7 +61,7 @@ func (s *Service) partialVerifierFromTrustedColumn(_ context.Context, col *block
 // column completes). The Fulu header-check requirements do not apply.
 func (s *Service) partialVerifierFromTrustedGloasColumn(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
 	if col.KzgCommitmentCount() == 0 {
-		return nil, errHeaderEmptyCommitments
+		return nil, errEmptyCommitments
 	}
 	dcv := s.newColumnsVerifier([]blocks.RODataColumn{col.RODataColumn}, verification.GloasPartialColumnRequirements)
 	return verification.NewPartialColumnVerifier(dcv, col), nil
