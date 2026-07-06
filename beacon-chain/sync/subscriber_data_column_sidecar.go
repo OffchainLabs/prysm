@@ -40,8 +40,11 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		return fmt.Errorf("unexpected data column type: %T", msg)
 	}
 
-	if !sidecar.IsGloas() {
-		// Track useful full columns received via gossip (not previously seen)
+	if sidecar.IsGloas() {
+		usefulFullColumnsReceivedTotal.WithLabelValues(strconv.FormatUint(sidecar.Index(), 10)).Inc()
+		s.republishGloasColumnAsPartial(ctx, sidecar)
+	} else {
+		// Track useful full columns received via gossip (not previously seen).
 		proposerIndex, err := sidecar.ProposerIndex()
 		if err != nil {
 			return errors.Wrap(err, "proposer index")
@@ -50,10 +53,6 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 			usefulFullColumnsReceivedTotal.WithLabelValues(strconv.FormatUint(sidecar.Index(), 10)).Inc()
 			s.publishColumnAsPartial(ctx, sidecar)
 		}
-	}
-
-	if sidecar.IsGloas() {
-		s.republishGloasColumnAsPartial(ctx, sidecar)
 	}
 
 	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
