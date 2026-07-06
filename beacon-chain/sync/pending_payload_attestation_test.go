@@ -98,14 +98,14 @@ func TestQueuePendingPayloadAttestation_RootCap(t *testing.T) {
 	require.Equal(t, false, ok)
 }
 
-func TestQueuePendingPayloadAttestation_RejectsBadSignature(t *testing.T) {
+func TestQueuePendingPayloadAttestation_IgnoresBadSignature(t *testing.T) {
 	s := queueTestService(t)
 	v := &verification.MockPayloadAttestation{ErrInvalidMessageSignature: errors.New("bad signature")}
 
 	att, _ := pendingPayloadAtt(t, []byte{'a'}, 1, 1)
 	res, err := s.queuePendingPayloadAttestation(t.Context(), v, att)
 	require.ErrorContains(t, "bad signature", err)
-	require.Equal(t, pubsub.ValidationReject, res)
+	require.Equal(t, pubsub.ValidationIgnore, res)
 	require.Equal(t, 0, len(s.pendingPayloadAttestations))
 }
 

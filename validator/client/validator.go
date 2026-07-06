@@ -851,7 +851,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 	prefs := v.buildProposerPreferences(ctx, km, slot, false)
 	if len(prefs) > 0 {
 		// Delay to mid-slot so the block for this slot is processed first.
-		delay := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
+		delay := params.BeaconConfig().SlotDuration() / 2
 		go func() {
 			time.Sleep(delay)
 			if _, err := v.validatorClient.SubmitSignedProposerPreferences(ctx, &ethpb.SubmitSignedProposerPreferencesRequest{
@@ -863,7 +863,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 	}
 
 	if reqs := v.buildBuilderPreferenceRequests(ctx, km, slot); len(reqs) > 0 {
-		delay := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
+		delay := params.BeaconConfig().SlotDuration() / 2
 		time.AfterFunc(delay, func() {
 			// Detached from the slot context, which may expire before the delay elapses.
 			subCtx, cancel := context.WithTimeout(context.Background(), delay)
@@ -1394,7 +1394,7 @@ func (v *validator) submitProposerPreferences(ctx context.Context) {
 	if len(prefs) == 0 {
 		return
 	}
-	delay := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
+	delay := params.BeaconConfig().SlotDuration() / 2
 	go func() {
 		time.Sleep(delay)
 		if _, err := v.validatorClient.SubmitSignedProposerPreferences(ctx, &ethpb.SubmitSignedProposerPreferencesRequest{

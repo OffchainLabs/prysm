@@ -402,9 +402,9 @@ func TestQueuePendingPayloadEnvelope_SelfBuildInvalidSignature(t *testing.T) {
 			result:     pubsub.ValidationIgnore,
 		},
 		{
-			name:       "non-self-build with invalid signature is rejected",
+			name:       "non-self-build with invalid signature is ignored",
 			builderIdx: 42,
-			result:     pubsub.ValidationReject,
+			result:     pubsub.ValidationIgnore,
 			wantError:  true,
 		},
 	}
