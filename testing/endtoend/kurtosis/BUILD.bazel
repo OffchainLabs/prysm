@@ -38,6 +38,14 @@ go_library(
         # Playbooks for late-joining nodes
         "playbooks/beacon-chain-sync.yaml",
         "playbooks/checkpoint-sync.yaml",
+
+        # One-shot playbooks for testing multiScenario
+        "playbooks/attestation-stats-once.yaml",
+        "playbooks/metrics-once.yaml",
+        "playbooks/network-health-once.yaml",
+        "playbooks/validators-sync-participation-once.yaml",
+        "playbooks/optimistic-sync-fault-off.yaml",
+        "playbooks/optimistic-sync-fault-on.yaml",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/testing/endtoend/kurtosis",
     visibility = ["//visibility:public"],

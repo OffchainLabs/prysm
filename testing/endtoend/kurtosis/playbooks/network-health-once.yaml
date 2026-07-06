@@ -1,0 +1,76 @@
+# One-shot network health check for scenario windows.
+#
+# Replaces one epoch worth of these legacy evaluators:
+# - HealthzCheck
+# - FinishedSyncing
+# - AllNodesHaveSameHead
+# - FinalizationOccurs
+
+id: network-health-once
+name: "Network health one-shot"
+timeout: 60m
+
+config:
+  # NOTE: This assumes the main nodes are the 1st and 2nd participants in Kurtosis network config file.
+  mainNodePattern: "^[12]-geth-prysm$"
+  targetEpoch: 0
+
+tasks:
+- name: check_clients_are_healthy
+  title: "Check if at least one client is ready"
+  timeout: 5m
+  config:
+    minClientCount: 1
+
+- name: check_consensus_slot_range
+  title: "Wait for target epoch"
+  timeout: 50m
+  configVars:
+    minEpochNumber: "| .targetEpoch | tonumber"
+
+- name: run_tasks_concurrent
+  title: "Check network health once"
+  config:
+    tasks:
+      - name: check_clients_are_healthy
+        title: "Client health"
+        timeout: 2m
+        config:
+          clientPattern: "mainNodePattern"
+          failOnCheckMiss: true
+
+      - name: check_consensus_sync_status
+        title: "CL sync status"
+        timeout: 2m
+        config:
+          clientPattern: "mainNodePattern"
+
+      - name: check_execution_sync_status
+        title: "EL sync status"
+        timeout: 2m
+        config:
+          clientPattern: "mainNodePattern"
+
+      - name: check_consensus_finality
+        title: "Finality check"
+        timeout: 2m
+        config:
+          # Scenario freezes all validators for an epoch, so finality lags ~2
+          # epochs beyond normal before recovering. Plus one more epoch for recovering from the freeze.
+          maxUnfinalizedEpochs: 5
+          failOnCheckMiss: true
+
+      - name: check_consensus_forks
+        title: "Fork check"
+        timeout: 15m
+        config:
+          maxForkDistance: 2
+          maxForkCount: 1
+          minCheckEpochCount: 1
+
+      - name: check_consensus_reorgs
+        title: "Reorg check"
+        timeout: 15m
+        config:
+          maxReorgsPerEpoch: 2
+          minCheckEpochCount: 1

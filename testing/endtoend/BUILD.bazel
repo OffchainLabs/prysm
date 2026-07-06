@@ -148,6 +148,7 @@ go_test(
         "//testing/endtoend/types:go_default_library",
         "//testing/require:go_default_library",
         "@io_bazel_rules_go//go/tools/bazel:go_default_library",
+        "@org_golang_x_sync//errgroup:go_default_library",
     ],
 )
 
@@ -184,6 +185,7 @@ go_test(
         "//testing/endtoend/kurtosis:go_default_library",
         "//testing/endtoend/types:go_default_library",
         "//testing/require:go_default_library",
+        "@org_golang_x_sync//errgroup:go_default_library",
         "@io_bazel_rules_go//go/tools/bazel:go_default_library",
     ],
 )
@@ -223,6 +225,7 @@ go_test(
         "//testing/endtoend/types:go_default_library",
         "//testing/require:go_default_library",
         "@io_bazel_rules_go//go/tools/bazel:go_default_library",
+        "@org_golang_x_sync//errgroup:go_default_library",
     ],
 )
 
@@ -334,6 +337,7 @@ go_test(
         "//testing/endtoend/types:go_default_library",
         "//testing/require:go_default_library",
         "@io_bazel_rules_go//go/tools/bazel:go_default_library",
+        "@org_golang_x_sync//errgroup:go_default_library",
     ],
 )
 
@@ -369,5 +373,6 @@ go_test(
         "//testing/endtoend/types:go_default_library",
         "//testing/require:go_default_library",
         "@io_bazel_rules_go//go/tools/bazel:go_default_library",
+        "@org_golang_x_sync//errgroup:go_default_library",
     ],
 )

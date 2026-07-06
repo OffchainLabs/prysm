@@ -1,8 +1,10 @@
 package kurtosis
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
+	"slices"
 )
 
 // assertoorEnvelope is the {status, data} wrapper Assertoor puts around every API response.
@@ -55,6 +57,10 @@ func (r assertoorRun) label() string {
 	return r.TestID
 }
 
+func (r assertoorRun) String() string {
+	return fmt.Sprintf("%d=%s", r.RunID, r.Status)
+}
+
 // failedTasks returns "title (error)" for each task in the run that failed.
 func (r assertoorRun) failedTasks() []string {
 	var failed []string
@@ -69,4 +75,23 @@ func (r assertoorRun) failedTasks() []string {
 		}
 	}
 	return failed
+}
+
+// AssertoorEvent represents a scheduled Assertoor test run at a specific epoch.
+type AssertoorEvent struct {
+	Epoch    uint64
+	Playbook string
+	Config   map[string]any
+}
+
+// SortedAssertoorEvents returns a copy of events ordered by epoch, then playbook name.
+func SortedAssertoorEvents(events []AssertoorEvent) []AssertoorEvent {
+	sorted := slices.Clone(events)
+	slices.SortFunc(sorted, func(a, b AssertoorEvent) int {
+		if a.Epoch != b.Epoch {
+			return cmp.Compare(a.Epoch, b.Epoch)
+		}
+		return cmp.Compare(a.Playbook, b.Playbook)
+	})
+	return sorted
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/kurtosis"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -33,9 +34,11 @@ const (
 
 	BEACON_CHAIN_IMAGE_TARGET = "cmd/beacon-chain/oci_image_tarball_e2e/tarball.tar"
 	VALIDATOR_IMAGE_TARGET    = "cmd/validator/oci_image_tarball_e2e/tarball.tar"
+	FAULTPROXY_IMAGE_TARGET   = "testing/middleware/engine-api-proxy/cmd/faultproxy/oci_image_tarball_e2e/tarball.tar"
 
 	BEACON_CHAIN_IMAGE_NAME = "gcr.io/offchainlabs/prysm/beacon-chain:latest"
 	VALIDATOR_IMAGE_NAME    = "gcr.io/offchainlabs/prysm/validator:latest"
+	FAULTPROXY_IMAGE_NAME   = "prysm-faultproxy:local"
 )
 
 type KurtosisTestSuites struct {
@@ -46,6 +49,8 @@ type KurtosisTestSuites struct {
 	lateSyncNodeDelay time.Duration
 	extraPlaybooks    []string
 	skipPlaybooks     []string
+	serviceEvents     []kurtosis.EpochServiceEvent
+	assertoorEvents   []kurtosis.AssertoorEvent
 }
 
 func (k *KurtosisTestSuites) Run(t *testing.T) {
@@ -101,6 +106,12 @@ func (k *KurtosisTestSuites) Run(t *testing.T) {
 
 	require.NoError(t, kw.RegisterPlaybooks(ctx, k.extraPlaybooks, k.skipPlaybooks), "Failed to register Assertoor playbooks")
 
+	k.scheduleServiceEvents(t, kw, genesisTime, secondsPerEpoch)
+
+	require.NoError(t, k.runAssertoorChecks(t, ctx, kw, genesisTime, secondsPerEpoch, deadline), "Assertoor checks failed")
+}
+
+func (k *KurtosisTestSuites) scheduleServiceEvents(t *testing.T, kw *kurtosis.KurtosisWrapper, genesisTime time.Time, secondsPerEpoch uint64) {
 	if k.runSyncTest {
 		// Resume late-joining beacon node for normal sync and checkpoint sync test.
 		stoppedNodes, err := kw.StoppedPrysmCLName()
@@ -110,10 +121,80 @@ func (k *KurtosisTestSuites) Run(t *testing.T) {
 		require.Equal(t, true, slices.Contains(stoppedNodes, CHECKPOINT_SYNC_NODE_SERVICE), "Expected stopped nodes to contain %s", CHECKPOINT_SYNC_NODE_SERVICE)
 
 		delay := time.Until(genesisTime.Add(k.lateSyncNodeDelay))
-		scheduleLateSyncNodeStart(t, ctx, kw, delay, SYNC_NODE_SERVICE, CHECKPOINT_SYNC_NODE_SERVICE)
+		kw.ScheduleServiceAction(delay, kurtosis.ServiceStart, SYNC_NODE_SERVICE, CHECKPOINT_SYNC_NODE_SERVICE)
 	}
 
-	require.NoError(t, kw.WaitForAssertoor(ctx, deadline), "Assertoor checks failed")
+	if len(k.serviceEvents) > 0 {
+		kw.ScheduleServiceEvents(genesisTime, secondsPerEpoch, k.serviceEvents...)
+	}
+}
+
+// runAssertoorChecks runs the steady-state monitors and every one-shot concurrently,
+// reporting each run as it finishes; the first failure cancels the rest.
+func (k *KurtosisTestSuites) runAssertoorChecks(t *testing.T, ctx context.Context, kw *kurtosis.KurtosisWrapper, genesisTime time.Time, secondsPerEpoch uint64, deadline time.Time) error {
+	events := kurtosis.SortedAssertoorEvents(k.assertoorEvents)
+
+	// Register each one-shot playbook once, up front.
+	playbookIDs := make(map[string]string)
+	for _, event := range events {
+		if _, ok := playbookIDs[event.Playbook]; ok {
+			continue
+		}
+		testID, err := kw.RegisterPlaybook(ctx, event.Playbook)
+		if err != nil {
+			return fmt.Errorf("register Assertoor playbook %s: %w", event.Playbook, err)
+		}
+		playbookIDs[event.Playbook] = testID
+	}
+
+	g, gctx := errgroup.WithContext(ctx)
+
+	// 1. Steady-state monitors.
+	g.Go(func() error {
+		if err := kw.WaitForAssertoor(gctx, deadline); err != nil {
+			return fmt.Errorf("Assertoor steady-state checks: %w", err)
+		}
+		return nil
+	})
+
+	// A late one-shot needs a few extra epochs to settle, so give each run its own deadline.
+	settle := time.Duration(5*secondsPerEpoch) * time.Second
+
+	// 2. One-shot events. Dedicate a goroutine to each one.
+	for _, event := range events {
+		event := event
+		testID := playbookIDs[event.Playbook]
+		g.Go(func() error {
+			runAt := genesisTime.Add(time.Duration(event.Epoch*secondsPerEpoch) * time.Second)
+			select {
+			case <-gctx.Done():
+				return gctx.Err()
+			case <-time.After(time.Until(runAt)):
+			}
+
+			config := map[string]any{"targetEpoch": event.Epoch}
+			for k, v := range event.Config {
+				config[k] = v
+			}
+			runID, err := kw.ScheduleAssertoorTest(gctx, testID, config)
+			if err != nil {
+				return fmt.Errorf("schedule Assertoor playbook %s at epoch %d: %w", event.Playbook, event.Epoch, err)
+			}
+			t.Logf("Scheduled Assertoor playbook %s at epoch %d (run %d)", event.Playbook, event.Epoch, runID)
+
+			runDeadline := runAt.Add(settle)
+			if runDeadline.Before(deadline) {
+				runDeadline = deadline
+			}
+			if err := kw.WaitForAssertoorRunIDs(gctx, runDeadline, runID); err != nil {
+				return fmt.Errorf("Assertoor playbook %s at epoch %d (run %d): %w", event.Playbook, event.Epoch, runID, err)
+			}
+			t.Logf("PASSED Assertoor playbook %s at epoch %d (run %d)", event.Playbook, event.Epoch, runID)
+			return nil
+		})
+	}
+
+	return g.Wait()
 }
 
 // waitForNodeReady blocks until the beacon node reports healthy (200 from
@@ -162,37 +243,6 @@ func fetchGenesisTime(t *testing.T, ctx context.Context, client *beacon.Client) 
 	return time.Unix(secs, 0)
 }
 
-// scheduleLateSyncNodeStart starts the given skip_start beacon nodes after delay.
-func scheduleLateSyncNodeStart(t *testing.T, ctx context.Context, kw *kurtosis.KurtosisWrapper, delay time.Duration, names ...string) {
-	t.Logf("Will start late sync nodes %v after %s", names, delay)
-
-	done := make(chan error, len(names))
-	go func() {
-		select {
-		case <-ctx.Done():
-			return // run ended before the nodes were due to start
-		case <-time.After(delay):
-		}
-		for _, name := range names {
-			t.Logf("Starting late sync node %q", name)
-			done <- kw.StartService(name)
-		}
-	}()
-
-	t.Cleanup(func() {
-		// Non-blocking: report any start that actually ran and failed.
-		for range names {
-			select {
-			case err := <-done:
-				if err != nil {
-					t.Errorf("Failed to start late sync node: %v", err)
-				}
-			default:
-			}
-		}
-	})
-}
-
 // LoadPrysmDockerImages loads the Prysm beacon-chain and validator Docker images
 // into the local Docker daemon with verification.
 func LoadPrysmDockerImages(t *testing.T) {
@@ -203,6 +253,13 @@ func LoadPrysmDockerImages(t *testing.T) {
 	// Load the validator image.
 	loadDockerImage(t, VALIDATOR_IMAGE_TARGET)
 	verifyImageLoaded(t, VALIDATOR_IMAGE_NAME)
+}
+
+// LoadFaultproxyImage loads the faultproxy snooper drop-in image into the local
+// Docker daemon. Only the optimistic-sync test needs it.
+func LoadFaultproxyImage(t *testing.T) {
+	loadDockerImage(t, FAULTPROXY_IMAGE_TARGET)
+	verifyImageLoaded(t, FAULTPROXY_IMAGE_NAME)
 }
 
 // loadDockerImage loads a Docker image from a Bazel runfile path into the local Docker daemon.

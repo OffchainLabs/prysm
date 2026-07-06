@@ -1,0 +1,135 @@
+# One-shot Prysm-specific metrics sanity check for scenario windows.
+#
+# Replaces one epoch worth of this legacy evaluator:
+# - MetricsCheck
+#
+# NOTE: Unlike `metrics.yaml`, this playbook DO NOT check for cache miss ratio,
+# as it is common for beacon node to have high cache miss ratio while recovering after downtime.
+
+id: metrics-once
+name: "Prysm metrics one-shot"
+timeout: 20m
+
+config:
+  targetEpoch: 2
+
+tasks:
+  - name: check_clients_are_healthy
+    id: clients
+    title: "Client health"
+    timeout: 5m
+    config:
+      minClientCount: 1
+      # Scope to Prysm beacon nodes, as we're checking Prysm-specific metrics below.
+      clientPattern: ".*prysm.*"
+
+  - name: check_consensus_slot_range
+    title: "Wait until target epoch"
+    timeout: 15m
+    configVars:
+      minEpochNumber: "| [(.targetEpoch | tonumber), 2] | max"
+
+  - name: run_task_matrix
+    title: "Check each Prysm beacon node metrics endpoint once"
+    timeout: 10m
+    configVars:
+      matrixValues: '| [.tasks.clients.outputs.goodClients[].clRpcUrl | sub(":[0-9]+(/.*)?$"; ":8080/metrics")]'
+    config:
+      runConcurrent: true
+      matrixVar: "metricsUrl"
+      task:
+        name: run_tasks_concurrent
+        title: "Metrics checks for ${metricsUrl}"
+        timeout: 5m
+        config:
+          newVariableScope: false
+          tasks:
+            - name: check_http_metrics
+              title: "Check memory usage for ${metricsUrl}"
+              timeout: 2m
+              configVars:
+                url: "metricsUrl"
+              config:
+                pollInterval: 5s
+                requestTimeout: 5s
+                failOnCheckMiss: true
+                missingMetric: fail
+                missingSeries: fail
+                assertions:
+                  - name: memory_usage_under_2gib
+                    metric: go_memstats_alloc_bytes
+                    operator: lt
+                    value: 2000000000 # 2 GiB
+
+            - name: run_javascript
+              title: "Check metric ratios once for ${metricsUrl}"
+              timeout: 2m
+              config:
+                envVars:
+                  METRICS_URL: "metricsUrl"
+                script: |
+                  const metricsUrl = env.METRICS_URL;
+                  const series = await scrapeMetrics(metricsUrl);
+                  const failures = [];
+
+                  checkP2PRatio(failures, series, "aggregate_and_proof", "beacon_aggregate_and_proof", 0.8);
+                  checkP2PRatio(failures, series, "attestation", "beacon_attestation_[0-9]+", 0.15);
+
+                  if (failures.length > 0) {
+                    throw new Error(failures.join("\n"));
+                  }
+
+                  async function scrapeMetrics(url) {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                      throw new Error(`metrics scrape failed: HTTP ${response.status}`);
+                    }
+                    return parsePrometheusText(await response.text());
+                  }
+
+                  function checkP2PRatio(failures, series, name, topicPart, maxRatio) {
+                    const topic = `^/eth2/[0-9a-fA-F]{8}/${topicPart}/ssz_snappy$`;
+                    const received = sumSeries(series, "p2p_message_received_total", topic);
+                    if (received === 0) return;
+
+                    const failed = sumSeries(series, "p2p_message_failed_validation_total", topic);
+                    const ratio = failed / received;
+                    if (ratio >= maxRatio) {
+                      failures.push(`${name}_failed_validation_rate: ratio ${ratio} >= ${maxRatio} (${failed}/${received})`);
+                    }
+                  }
+
+                  function sumSeries(series, metric, topicRegex) {
+                    const re = topicRegex ? new RegExp(topicRegex) : null;
+                    let value = 0;
+                    for (const s of series) {
+                      if (s.metric === metric && (!re || re.test(s.labels.topic || ""))) {
+                        value += s.value;
+                      }
+                    }
+                    return value;
+                  }
+
+                  function parsePrometheusText(input) {
+                    const parsed = [];
+                    const samplePattern = /^([a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{([^}]*)\})?\s+([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?|NaN|\+Inf|-Inf)\b/;
+                    for (const line of input.split(/\r?\n/)) {
+                      if (!line || line.startsWith("#")) continue;
+                      const match = line.match(samplePattern);
+                      if (!match) continue;
+                      const value = Number(match[3]);
+                      if (!Number.isFinite(value)) continue;
+                      parsed.push({ metric: match[1], labels: parseLabels(match[2] || ""), value });
+                    }
+                    return parsed;
+                  }
+
+                  function parseLabels(input) {
+                    const labels = {};
+                    const labelPattern = /([a-zA-Z_][a-zA-Z0-9_]*)="((?:\\.|[^"\\])*)"/g;
+                    let match;
+                    while ((match = labelPattern.exec(input)) !== null) {
+                      labels[match[1]] = match[2].replace(/\\"/g, '"').replace(/\\\\/g, "\\").replace(/\\n/g, "\n");
+                    }
+                    return labels;
+                  }
