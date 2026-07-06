@@ -439,28 +439,34 @@ func (s *Service) insertFirstPayloadIfNeeded(ctx context.Context, b interfaces.R
 	}
 	parentRoot := b.ParentRoot()
 	if s.builtOnFullParentInForkchoice(b) && !s.cfg.ForkChoiceStore.HasFullNode(parentRoot) {
-		s.cfg.ForkChoiceStore.MarkFullNode(parentRoot, s.parentPayloadGasLimit(ctx, parentRoot))
+		gasLimit, err := s.parentPayloadGasLimit(ctx, parentRoot)
+		if err != nil {
+			log.WithError(err).Debug("Could not read parent payload gas limit, marking full node without it")
+		}
+		s.cfg.ForkChoiceStore.MarkFullNode(parentRoot, gasLimit)
 	}
 }
 
-func (s *Service) parentPayloadGasLimit(ctx context.Context, parentRoot [32]byte) uint64 {
+func (s *Service) parentPayloadGasLimit(ctx context.Context, parentRoot [32]byte) (uint64, error) {
 	parent, err := s.getBlock(ctx, parentRoot)
 	if err != nil {
-		log.WithError(err).Debug("Could not get parent block to set full node gas limit")
-		return 0
+		return 0, err
 	}
 	if parent.Block().Version() >= version.Gloas {
 		bid, err := parent.Block().Body().SignedExecutionPayloadBid()
-		if err != nil || bid == nil || bid.Message == nil {
-			return 0
+		if err != nil {
+			return 0, err
 		}
-		return bid.Message.GasLimit
+		if bid == nil || bid.Message == nil {
+			return 0, errors.New("nil execution payload bid")
+		}
+		return bid.Message.GasLimit, nil
 	}
 	payload, err := parent.Block().Body().Execution()
 	if err != nil {
-		return 0
+		return 0, err
 	}
-	return payload.GasLimit()
+	return payload.GasLimit(), nil
 }
 
 // inserts finalized deposits into our finalized deposit trie, needs to be
