@@ -62,7 +62,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	}
 
 	log := log.WithField("slot", req.Slot)
-	log.WithField("sinceSlotStartTime", time.Since(t)).Info("Begin building block")
+	log.WithField("sinceSlotStartTime", time.Since(t)).Info("Building block")
 
 	// A syncing validator should not produce a block.
 	if vs.SyncChecker.Syncing() {
@@ -118,7 +118,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	})
 
 	if err != nil {
-		l.WithError(err).Error("Finished building block")
+		l.WithError(err).Error("Could not build block")
 		return nil, errors.Wrap(err, "could not build block in parallel")
 	}
 

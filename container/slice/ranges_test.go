@@ -1,9 +1,9 @@
-package helpers_test
+package slice_test
 
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
@@ -11,7 +11,7 @@ func TestSortedSliceFromMap(t *testing.T) {
 	input := map[uint64]bool{5: true, 3: true, 8: true, 1: true}
 	expected := []uint64{1, 3, 5, 8}
 
-	actual := helpers.SortedSliceFromMap(input)
+	actual := slice.SortedSliceFromMap(input)
 	require.Equal(t, len(expected), len(actual))
 
 	for i := range expected {
@@ -49,7 +49,7 @@ func TestPrettySlice(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := helpers.PrettySlice(tt.input)
+			actual := slice.PrettySlice(tt.input)
 			require.Equal(t, tt.expected, actual)
 		})
 	}
@@ -59,6 +59,6 @@ func TestSortedPrettySliceFromMap(t *testing.T) {
 	input := map[uint64]bool{5: true, 7: true, 8: true, 10: true}
 	expected := "5,7-8,10"
 
-	actual := helpers.SortedPrettySliceFromMap(input)
+	actual := slice.SortedPrettySliceFromMap(input)
 	require.Equal(t, expected, actual)
 }
