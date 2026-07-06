@@ -199,7 +199,7 @@ func TestNewPartialDataColumnFromVerifiedRODataColumn(t *testing.T) {
 				require.NoError(t, err)
 
 				_, err = NewPartialDataColumnFromVerifiedRODataColumn(NewVerifiedRODataColumn(roCol))
-				require.ErrorContains(t, "no KZG commitments", err)
+				require.ErrorContains(t, "kzgCommitments is empty", err)
 			},
 		},
 		{
@@ -210,7 +210,7 @@ func TestNewPartialDataColumnFromVerifiedRODataColumn(t *testing.T) {
 				verified := NewVerifiedRODataColumn(RODataColumn{gloas: &ethpb.DataColumnSidecarGloas{}})
 				_, err := NewPartialDataColumnFromVerifiedRODataColumn(verified)
 				require.ErrorContains(t, "get KZG commitments", err)
-				require.ErrorIs(t, err, errNotFuluDataColumn)
+				require.ErrorIs(t, err, errGloasColumnNoCommitments)
 			},
 		},
 	}

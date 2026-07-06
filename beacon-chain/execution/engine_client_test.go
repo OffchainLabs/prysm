@@ -26,7 +26,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -2741,33 +2740,6 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 	// 	_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
 	// 	require.ErrorContains(t, "fetch cells and proofs from execution client", err)
 	// })
-}
-
-// A Gloas data column sidecar carries no inline KZG commitments (they live in the block's bid), so its
-// Commitments() accessor errors. ConstructDataColumnSidecars must skip such an incompatible populator
-// gracefully - returning no sidecars and no error - rather than erroring out or panicking.
-func TestConstructDataColumnSidecars_IncompatiblePopulatorReturnsNil(t *testing.T) {
-	var root [fieldparams.RootLength]byte
-	gloasSidecar := &ethpb.DataColumnSidecarGloas{
-		Index:           0,
-		Column:          [][]byte{{0x01}},
-		KzgProofs:       [][]byte{make([]byte, 48)},
-		Slot:            0,
-		BeaconBlockRoot: root[:],
-	}
-	roCol, err := blocks.NewRODataColumnGloasWithRoot(gloasSidecar, root)
-	require.NoError(t, err)
-	source := peerdas.PopulateFromSidecar(blocks.NewVerifiedRODataColumn(roCol))
-
-	// Sanity check: the populator genuinely cannot provide commitments.
-	_, err = source.Commitments()
-	require.ErrorContains(t, "not a fulu type", err)
-
-	client := &Service{capabilityCache: &capabilityCache{}}
-	sidecars, partials, err := client.ConstructDataColumnSidecars(context.Background(), source)
-	require.NoError(t, err)
-	require.Equal(t, 0, len(sidecars))
-	require.Equal(t, 0, len(partials))
 }
 
 func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {

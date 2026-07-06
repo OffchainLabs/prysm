@@ -62,7 +62,7 @@ func NewPartialDataColumnFromVerifiedRODataColumn(c VerifiedRODataColumn) (Parti
 		return PartialDataColumn{}, errors.Wrap(err, "get KZG commitments")
 	}
 	if len(commitments) == 0 {
-		return PartialDataColumn{}, errors.New("no KZG commitments")
+		return PartialDataColumn{}, errors.New("kzgCommitments is empty")
 	}
 
 	included := bitfield.NewBitlist(uint64(len(commitments)))
