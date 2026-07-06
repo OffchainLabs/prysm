@@ -69,12 +69,11 @@ func (s *Service) setupForkchoiceTree(st state.BeaconState) error {
 		log.WithError(err).Error("Could not get head block, starting with finalized block as head")
 		return nil
 	}
-	b := blk.Block()
-	if b == nil {
-		log.WithField("headRoot", fmt.Sprintf("%#x", headRoot)).Error("Head block is nil, starting with finalized block as head")
+	if err := blocks.BeaconBlockIsNil(blk); err != nil {
+		log.WithError(err).WithField("headRoot", fmt.Sprintf("%#x", headRoot)).Error("Head block is nil, starting with finalized block as head")
 		return nil
 	}
-	if slots.ToEpoch(b.Slot()) < cp.Epoch {
+	if slots.ToEpoch(blk.Block().Slot()) < cp.Epoch {
 		log.WithField("headRoot", fmt.Sprintf("%#x", headRoot)).Error("Head block is older than finalized block, starting with finalized block as head")
 		return nil
 	}
