@@ -17,7 +17,8 @@ import (
 func (c *beaconApiValidatorClient) payloadAttestationData(ctx context.Context, slot primitives.Slot) (*ethpb.PayloadAttestationData, error) {
 	endpoint := fmt.Sprintf("/eth/v1/validator/payload_attestation_data/%d", slot)
 	var resp structs.GetPayloadAttestationDataResponse
-	if err := c.handler.Get(ctx, endpoint, &resp); err != nil {
+	opts := readFreshnessOptions(ctx, attestationRootExtractor)
+	if err := c.handler.Get(ctx, endpoint, &resp, opts...); err != nil {
 		return nil, errors.Wrap(err, "could not get execution payload attestation data")
 	}
 	if resp.Data == nil {

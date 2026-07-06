@@ -29,6 +29,13 @@ func (v *validator) SubmitSyncCommitteeMessage(ctx context.Context, slot primiti
 
 	v.waitUntilAttestationDueOrValidBlock(ctx, slot)
 
+	ctx, err := v.withHeadHint(ctx, slot, attestationDueComponent(slot))
+	if err != nil {
+		log.WithField("slot", slot).WithError(err).Error("Could not attach freshness hint")
+		tracing.AnnotateError(span, err)
+		return
+	}
+
 	res, err := v.validatorClient.SyncMessageBlockRoot(ctx, &emptypb.Empty{})
 	if err != nil {
 		log.WithError(err).Error("Could not request sync message block root to sign")
@@ -131,6 +138,12 @@ func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot p
 		component = cfg.ContributionDueBPSGloas
 	}
 	v.waitUntilSlotComponent(ctx, slot, component)
+
+	ctx, err = v.withHeadHint(ctx, slot, component)
+	if err != nil {
+		log.WithField("slot", slot).WithError(err).Error("Could not attach freshness hint")
+		return
+	}
 
 	coveredSubnets := make(map[uint64]bool)
 	for i, comIdx := range indexRes.Indices {

@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "chain_client.go",
+        "freshness.go",
         "node_client.go",
         "prysm_chain_client.go",
         "validator.go",
