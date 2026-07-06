@@ -65,11 +65,9 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 	if len(roSidecars) > 0 && vs.ExecutionEngineCaller.PartialColumnsSupported() {
 		commitments, err := sBlk.Block().Body().BlobKzgCommitments()
 		if err != nil {
-			return nil, errors.Wrap(err, "blob kzg commitments")
-		}
-		partialColumns, err = partialColumnsFromSidecars(roSidecars, commitments)
-		if err != nil {
-			return nil, err
+			log.WithError(err).Error("Failed to get blob kzg commitments for partial columns")
+		} else if partialColumns, err = partialColumnsFromSidecars(roSidecars, commitments); err != nil {
+			log.WithError(err).Error("Failed to build partial columns")
 		}
 	}
 

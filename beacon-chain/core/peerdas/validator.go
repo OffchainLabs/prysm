@@ -249,6 +249,9 @@ func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofs
 	if err != nil {
 		return nil, errors.Wrap(err, "rotate cells and proofs")
 	}
+	if included.Count() > 0 && (uint64(len(cells)) != numberOfColumns || uint64(len(proofs)) != numberOfColumns) {
+		return nil, errors.New("included blobs present but no cells or proofs to build partial columns")
+	}
 
 	if slots.ToEpoch(src.Slot()) >= params.BeaconConfig().GloasForkEpoch {
 		dataColumns, err := partialColumnsGloas(included, cells, proofs, src)

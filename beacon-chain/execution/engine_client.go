@@ -977,7 +977,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 
 	// Return early if the execution client returned nothing; otherwise we would
 	// build and broadcast empty partial columns.
-	if cp.Included == nil || cp.Included.Count() == 0 {
+	if cp.Included == nil || cp.Included.Count() == 0 || len(cp.CellsPerBlob) == 0 || len(cp.ProofsPerBlob) == 0 {
 		return nil, nil, nil
 	}
 
