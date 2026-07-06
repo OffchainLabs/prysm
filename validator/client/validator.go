@@ -15,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/client"
@@ -70,7 +69,7 @@ type validator struct {
 	disableDutiesPolling         bool
 	emitAccountMetrics           bool
 	logValidatorPerformance      bool
-	attLogsLock                  sync.Mutex
+	submissionLogsLock           sync.Mutex
 	highestValidSlotLock         sync.Mutex
 	blacklistedPubkeysLock       sync.RWMutex
 	prevEpochBalancesLock        sync.RWMutex
@@ -92,14 +91,16 @@ type validator struct {
 	submittedPrefSlots           map[primitives.Slot]bool
 	connTracker                  connTracker // per push kind, the conn generation last confirmed pushed
 	submittedAtts                map[submittedAttKey]*submittedAtt
+	submittedAggregates          map[submittedAttKey]*submittedAtt
+	submittedSyncMessages        map[slotRootKey][]uint64
+	submittedSyncContributions   map[slotRootKey]*submittedSyncContribution
+	submittedPayloadAtts         map[submittedPayloadAttKey][]uint64
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
 	interopKeysConfig            *local.InteropKeymanagerConfig
 	domainDataCache              *ristretto.Cache[string, proto.Message]
 	slotFeed                     *event.Feed
-	syncCommitteeStats           syncCommitteeStats
 	graffitiStruct               *graffiti.Graffiti
-	submittedAggregates          map[submittedAttKey]*submittedAtt
 	highestValidSlot             primitives.Slot
 	eventsChannel                chan *eventClient.Event
 	payloadAvailability          *payloadAvailability
@@ -932,11 +933,17 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 	case eventClient.EventConnectionError:
 		log.WithError(errors.New(string(event.Data))).Error("Event stream interrupted")
 	case eventClient.EventHead:
-		log.Debug("Received head event")
 		head := &structs.HeadEvent{}
 		if err := json.Unmarshal(event.Data, head); err != nil {
 			log.WithError(err).Error("Failed to unmarshal head Event into JSON")
 		}
+
+		log.WithFields(logrus.Fields{
+			"slot":                         head.Slot,
+			"previous_duty_dependent_root": head.PreviousDutyDependentRoot,
+			"current_duty_dependent_root":  head.CurrentDutyDependentRoot,
+		}).Debug("Received head event")
+
 		uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
 		if err != nil {
 			log.WithError(err).Error("Failed to parse slot")
@@ -944,7 +951,36 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 		}
 		v.setHighestSlot(primitives.Slot(uintSlot))
 		if !v.disableDutiesPolling {
-			if err := v.checkDependentRoots(ctx, head); err != nil {
+			if err := v.checkDependentRoots(ctx, head.PreviousDutyDependentRoot, head.CurrentDutyDependentRoot); err != nil {
+				log.WithError(err).Error("Failed to check dependent roots")
+			}
+		}
+	case eventClient.EventHeadV2:
+		head := &structs.HeadEventV2{}
+		if err := json.Unmarshal(event.Data, head); err != nil {
+			log.WithError(err).Error("Failed to unmarshal head_v2 event into JSON")
+			return
+		}
+		if head.Data == nil {
+			log.Error("Received head_v2 event with no data")
+			return
+		}
+
+		log.WithFields(logrus.Fields{
+			"slot":                         head.Data.Slot,
+			"block_root":                   head.Data.Block,
+			"current_epoch_dependent_root": head.Data.CurrentEpochDependentRoot,
+			"next_epoch_dependent_root":    head.Data.NextEpochDependentRoot,
+		}).Debug("Received head_v2 event")
+
+		uintSlot, err := strconv.ParseUint(head.Data.Slot, 10, 64)
+		if err != nil {
+			log.WithError(err).Error("Failed to parse slot")
+			return
+		}
+		v.setHighestSlot(primitives.Slot(uintSlot))
+		if !v.disableDutiesPolling {
+			if err := v.checkDependentRoots(ctx, head.Data.CurrentEpochDependentRoot, head.Data.NextEpochDependentRoot); err != nil {
 				log.WithError(err).Error("Failed to check dependent roots")
 			}
 		}
@@ -1514,9 +1550,4 @@ type voteStats struct {
 	totalCorrectSource  uint64
 	totalCorrectTarget  uint64
 	totalCorrectHead    uint64
-}
-
-// This tracks all validators' submissions for sync committees.
-type syncCommitteeStats struct {
-	totalMessagesSubmitted atomic.Uint64
 }

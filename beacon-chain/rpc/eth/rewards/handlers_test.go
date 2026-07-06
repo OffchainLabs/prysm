@@ -852,6 +852,80 @@ func TestAttestationRewards(t *testing.T) {
 	})
 }
 
+func TestAttestationRewards_IdealRewardsIncludesCompoundingValidatorEffectiveBalance(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.AltairForkEpoch = 1
+	cfg.ElectraForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+	helpers.ClearCache()
+
+	st, err := util.NewBeaconStateElectra()
+	require.NoError(t, err)
+	require.NoError(t, st.SetSlot(params.BeaconConfig().SlotsPerEpoch*3-1))
+
+	blsKey, err := bls.RandKey()
+	require.NoError(t, err)
+	withdrawalCredentials := make([]byte, 32)
+	withdrawalCredentials[0] = params.BeaconConfig().CompoundingWithdrawalPrefixByte
+	validators := []*eth.Validator{
+		{
+			PublicKey:             blsKey.PublicKey().Marshal(),
+			WithdrawalCredentials: withdrawalCredentials,
+			ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
+			WithdrawableEpoch:     params.BeaconConfig().FarFutureEpoch,
+			EffectiveBalance:      params.BeaconConfig().MaxEffectiveBalanceElectra,
+		},
+	}
+	require.NoError(t, st.SetValidators(validators))
+	require.NoError(t, st.SetBalances([]uint64{params.BeaconConfig().MaxEffectiveBalanceElectra}))
+	require.NoError(t, st.SetInactivityScores(make([]uint64, len(validators))))
+	participation := []byte{0b111}
+	require.NoError(t, st.SetCurrentParticipationBits(participation))
+	require.NoError(t, st.SetPreviousParticipationBits(participation))
+
+	blkRoot, err := st.LatestBlockHeader().HashTreeRoot()
+	require.NoError(t, err)
+	currentSlot := params.BeaconConfig().SlotsPerEpoch * 3
+	mockChainService := &mock.ChainService{OptimisticRoots: map[[32]byte]bool{blkRoot: true}, Slot: &currentSlot}
+	s := &Server{
+		Stater: &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{
+			params.BeaconConfig().SlotsPerEpoch*3 - 1: st,
+		}},
+		TimeFetcher:           mockChainService,
+		OptimisticModeFetcher: mockChainService,
+		FinalizationFetcher:   mockChainService,
+	}
+
+	url := "http://only.the.epoch.number.at.the.end.is.important/1"
+	request := httptest.NewRequest("POST", url, nil)
+	request.SetPathValue("epoch", "1")
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+
+	s.AttestationRewards(writer, request)
+	require.Equal(t, http.StatusOK, writer.Code)
+	resp := &structs.AttestationRewardsResponse{}
+	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+
+	wantedEffectiveBalance := strconv.FormatUint(params.BeaconConfig().MaxEffectiveBalanceElectra, 10)
+	var idealReward *structs.IdealAttestationReward
+	for i := range resp.Data.IdealRewards {
+		if resp.Data.IdealRewards[i].EffectiveBalance == wantedEffectiveBalance {
+			idealReward = &resp.Data.IdealRewards[i]
+			break
+		}
+	}
+	require.NotNil(t, idealReward, "ideal_rewards should include a row for a 2048 ETH compounding validator effective balance")
+	assert.Equal(t, "20035008", idealReward.Head)
+	assert.Equal(t, "20035008", idealReward.Source)
+	assert.Equal(t, "37207872", idealReward.Target)
+	assert.Equal(t, "0", idealReward.Inactivity)
+	assert.NotEqual(t, "0", idealReward.Head)
+	assert.NotEqual(t, "0", idealReward.Source)
+	assert.NotEqual(t, "0", idealReward.Target)
+}
+
 func TestSyncCommitteeRewards(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()

@@ -47,11 +47,5 @@ func (vs *Server) getPayloadAttestations(ctx context.Context, head state.BeaconS
 		atts = append(atts, att)
 	}
 
-	log.WithFields(map[string]any{
-		"slot":          head.Slot(),
-		"parentSlot":    parentSlot,
-		"parentRoot":    blockParentRoot,
-		"selectedCount": len(atts),
-	}).Debug("Selected payload attestations for block proposal")
 	return atts
 }

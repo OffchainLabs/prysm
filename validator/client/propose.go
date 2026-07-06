@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/io/logs"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
@@ -243,7 +244,7 @@ func logProposedBlock(log *logrus.Entry, blk interfaces.SignedBeaconBlock, blkRo
 		if bid != nil && bid.Message != nil {
 			msg := bid.Message
 			log = log.WithFields(logrus.Fields{
-				"builderIndex": msg.BuilderIndex,
+				"builderIndex": logs.BuilderIndexLabel(msg.BuilderIndex),
 				"bidValue":     msg.Value,
 				"blockHash":    fmt.Sprintf("%#x", bytesutil.Trunc(msg.BlockHash)),
 				"parentHash":   fmt.Sprintf("%#x", bytesutil.Trunc(msg.ParentBlockHash)),

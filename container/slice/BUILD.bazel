@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "doc.go",
+        "ranges.go",
         "slice.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/container/slice",
@@ -14,9 +15,13 @@ go_library(
 go_test(
     name = "go_default_test",
     size = "small",
-    srcs = ["slice_test.go"],
+    srcs = [
+        "ranges_test.go",
+        "slice_test.go",
+    ],
     deps = [
         ":go_default_library",
         "//consensus-types/primitives:go_default_library",
+        "//testing/require:go_default_library",
     ],
 )

@@ -215,28 +215,16 @@ func (mr *MockValidatorMockRecorder) Keymanager() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Keymanager", reflect.TypeOf((*MockValidator)(nil).Keymanager))
 }
 
-// LogSubmittedAtts mocks base method.
-func (m *MockValidator) LogSubmittedAtts(arg0 primitives.Slot) {
+// LogSubmissions mocks base method.
+func (m *MockValidator) LogSubmissions(arg0 primitives.Slot) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "LogSubmittedAtts", arg0)
+	m.ctrl.Call(m, "LogSubmissions", arg0)
 }
 
-// LogSubmittedAtts indicates an expected call of LogSubmittedAtts.
-func (mr *MockValidatorMockRecorder) LogSubmittedAtts(arg0 any) *gomock.Call {
+// LogSubmissions indicates an expected call of LogSubmissions.
+func (mr *MockValidatorMockRecorder) LogSubmissions(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LogSubmittedAtts", reflect.TypeOf((*MockValidator)(nil).LogSubmittedAtts), arg0)
-}
-
-// LogSubmittedSyncCommitteeMessages mocks base method.
-func (m *MockValidator) LogSubmittedSyncCommitteeMessages() {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "LogSubmittedSyncCommitteeMessages")
-}
-
-// LogSubmittedSyncCommitteeMessages indicates an expected call of LogSubmittedSyncCommitteeMessages.
-func (mr *MockValidatorMockRecorder) LogSubmittedSyncCommitteeMessages() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LogSubmittedSyncCommitteeMessages", reflect.TypeOf((*MockValidator)(nil).LogSubmittedSyncCommitteeMessages))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LogSubmissions", reflect.TypeOf((*MockValidator)(nil).LogSubmissions), arg0)
 }
 
 // LogValidatorGainsAndLosses mocks base method.

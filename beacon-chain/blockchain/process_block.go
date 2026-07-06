@@ -24,6 +24,7 @@ import (
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
@@ -491,10 +492,6 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 	if err := helpers.UpdateCommitteeCache(ctx, st, e); err != nil {
 		return errors.Wrap(err, "could not update committee cache")
 	}
-	if err := helpers.UpdateProposerIndicesInCache(ctx, st, e); err != nil {
-		return errors.Wrap(err, "could not update proposer index cache")
-	}
-
 	go func(ep primitives.Epoch) {
 		// Use a custom deadline here, since this method runs asynchronously.
 		// We ignore the parent method's context and instead create a new one
@@ -517,28 +514,6 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 		}
 	}()
 
-	// The latest block header is from the previous epoch
-	r, err := st.LatestBlockHeader().HashTreeRoot()
-	if err != nil {
-		log.WithError(err).Error("Could not update proposer index state-root map")
-		return nil
-	}
-	// The proposer indices cache takes the target root for the previous
-	// epoch as key
-	if e > 0 {
-		e = e - 1
-	}
-	s.ForkChoicer().RLock()
-	target, err := s.cfg.ForkChoiceStore.TargetRootForEpoch(r, e)
-	s.ForkChoicer().RUnlock()
-	if err != nil {
-		log.WithError(err).Error("Could not update proposer index state-root map")
-		return nil
-	}
-	err = helpers.UpdateCachedCheckpointToStateRoot(st, &forkchoicetypes.Checkpoint{Epoch: e, Root: target})
-	if err != nil {
-		log.WithError(err).Error("Could not update proposer index state-root map")
-	}
 	return nil
 }
 
@@ -1092,8 +1067,8 @@ func (s *Service) areDataColumnsAvailable(
 				log.WithFields(logrus.Fields{
 					"slot":            slot,
 					"root":            fmt.Sprintf("%#x", root),
-					"columnsExpected": helpers.SortedPrettySliceFromMap(peerInfo.CustodyColumns),
-					"columnsWaiting":  helpers.SortedPrettySliceFromMap(missing),
+					"columnsExpected": slice.SortedPrettySliceFromMap(peerInfo.CustodyColumns),
+					"columnsWaiting":  slice.SortedPrettySliceFromMap(missing),
 				}).Warning("Data columns still missing at slot end")
 			}
 			slotEnd = nil
@@ -1103,7 +1078,7 @@ func (s *Service) areDataColumnsAvailable(
 			missingIndicesCount := len(missing)
 
 			if missingIndicesCount < fieldparams.NumberOfColumns {
-				missingIndices = helpers.SortedPrettySliceFromMap(missing)
+				missingIndices = slice.SortedPrettySliceFromMap(missing)
 			}
 
 			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing: %v", slot, root, missingIndices)

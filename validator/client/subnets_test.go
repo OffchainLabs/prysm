@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"testing"
+	"testing/synctest"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -113,6 +114,104 @@ func TestSubscribeToSubnets_AggregatorEvaluatedPerValidator(t *testing.T) {
 	assert.Equal(t, false, captured.IsAggregator[0], "pkB still not aggregator when evaluated first")
 	assert.Equal(t, true, captured.IsAggregator[1], "pkA still aggregator when evaluated second")
 	require.DeepEqual(t, []primitives.ValidatorIndex{2, 1}, captured.ValidatorIndices)
+}
+
+type blockingAggregatorSelector struct {
+	stubAggregatorSelector
+	blockPubKey [fieldparams.BLSPubkeyLength]byte
+	blocked     bool
+	otherDone   bool
+	release     chan struct{}
+}
+
+func (s *blockingAggregatorSelector) AttestationSelectionProof(ctx context.Context, slot primitives.Slot, pk [fieldparams.BLSPubkeyLength]byte) ([]byte, error) {
+	if pk == s.blockPubKey {
+		s.blocked = true
+		select {
+		case <-s.release:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	} else {
+		s.otherDone = true
+	}
+	return s.stubAggregatorSelector.AttestationSelectionProof(ctx, slot, pk)
+}
+
+// TestSubscribeToSubnets_AggregatorChecksRunConcurrentlyAndKeepOrder ensures that aggregator checks run concurrently
+// and the order of duties is preserved in the request.
+//
+// Scenario:
+// 1. Two validators with different pubkeys are subscribed to the same slot and committee.
+// 2. The first validator's aggregator check is blocked until the test releases it. (close(selector.release))
+// 3. The second validator's aggregator check runs concurrently and sets a flag to indicate it has completed. (s.otherDone = true)
+// 4. The test verifies that the order of duties is preserved in the request, even though the aggregator checks ran concurrently.
+func TestSubscribeToSubnets_AggregatorChecksRunConcurrentlyAndKeepOrder(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		committeeLength := uint64(64)
+		modulo := committeeLength / params.BeaconConfig().TargetAggregatorsPerCommittee
+		sigAgg, sigNotAgg := pickDistinguishingProofs(t, modulo)
+
+		pkA := [fieldparams.BLSPubkeyLength]byte{0xaa}
+		pkB := [fieldparams.BLSPubkeyLength]byte{0xbb}
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := validatormock.NewMockValidatorClient(ctrl)
+		v := &validator{
+			validatorClient: client,
+			aggSelector: &blockingAggregatorSelector{
+				stubAggregatorSelector: stubAggregatorSelector{
+					proofs: map[[fieldparams.BLSPubkeyLength]byte][]byte{
+						pkA: sigAgg,
+						pkB: sigNotAgg,
+					},
+				},
+				blockPubKey: pkA,
+				release:     make(chan struct{}),
+			},
+		}
+
+		duties := &ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{AttesterSlot: 10, CommitteeIndex: 3, CommitteeLength: committeeLength, PublicKey: pkA[:], Status: ethpb.ValidatorStatus_ACTIVE, ValidatorIndex: 1},
+				{AttesterSlot: 11, CommitteeIndex: 4, CommitteeLength: committeeLength, PublicKey: pkB[:], Status: ethpb.ValidatorStatus_ACTIVE, ValidatorIndex: 2},
+			},
+		}
+
+		var captured *ethpb.CommitteeSubnetsSubscribeRequest
+		client.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, req *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
+				captured = req
+				return &emptypb.Empty{}, nil
+			})
+
+		var err error
+		done := false
+		go func() {
+			err = v.subscribeToSubnets(t.Context(), duties)
+			done = true
+		}()
+		synctest.Wait()
+
+		selector := v.aggSelector.(*blockingAggregatorSelector)
+		require.Equal(t, true, selector.blocked, "first aggregator check did not start")
+		require.Equal(t, true, selector.otherDone, "second aggregator check did not run while first was blocked")
+		require.Equal(t, false, done, "subscribeToSubnets finished before the blocked signer was released")
+
+		close(selector.release)
+		synctest.Wait()
+
+		require.Equal(t, true, done, "subscribeToSubnets did not finish")
+		require.NoError(t, err)
+		require.NotNil(t, captured)
+
+		// Order of the duties are preserved in the request, even though the aggregator checks ran concurrently.
+		require.DeepEqual(t, []primitives.ValidatorIndex{1, 2}, captured.ValidatorIndices)
+		require.DeepEqual(t, []primitives.Slot{10, 11}, captured.Slots)
+		assert.Equal(t, true, captured.IsAggregator[0])
+		assert.Equal(t, false, captured.IsAggregator[1])
+	})
 }
 
 // pickDistinguishingProofs returns two stub selection proofs that map to opposite isAggregator outcomes.

@@ -12,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	blockfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/block"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
@@ -25,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime"
@@ -501,7 +501,7 @@ func (s *Service) fetchOriginDataColumnSidecars(roBlock blocks.ROBlock) error {
 		// Some sidecars are still missing.
 		log := log.WithFields(logrus.Fields{
 			"attempt":        attempt,
-			"missingIndices": helpers.SortedPrettySliceFromMap(missingIndicesByRoot[root]),
+			"missingIndices": slice.SortedPrettySliceFromMap(missingIndicesByRoot[root]),
 		})
 
 		logFunc := log.Debug

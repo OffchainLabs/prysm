@@ -270,8 +270,12 @@ func (es *eventStreamer) recvEventLoop(ctx context.Context, cancel context.Cance
 		case event := <-eventsChan:
 			lr, err := s.lazyReaderForEvent(ctx, event, req)
 			if err != nil {
-				if !errors.Is(err, errNotRequested) {
-					log.WithField("event_type", fmt.Sprintf("%v", event.Data)).WithError(err).Error("StreamEvents API endpoint received an event it was unable to handle.")
+				// errNotRequested (client didn't subscribe to this topic) and
+				// errPayloadAttributeExpired (the proposal slot has already started, so builders
+				// can no longer use it) are both expected, benign skips rather than failures, so
+				// they should not be logged as errors.
+				if !errors.Is(err, errNotRequested) && !errors.Is(err, errPayloadAttributeExpired) {
+					log.WithField("event_type", fmt.Sprintf("%T", event.Data)).WithError(err).Error("StreamEvents API endpoint received an event it was unable to handle.")
 				}
 				continue
 			}
@@ -938,20 +942,26 @@ func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribut
 			d.err = errors.Wrap(err, "Could not fill event data")
 			return
 		}
-		d.version = version.String(ev.HeadBlock.Version())
+		// The event is keyed to the proposal slot's fork, not the head block's version.
+		pv := params.GetNetworkScheduleEntry(slots.ToEpoch(ev.ProposalSlot)).VersionEnum
+		d.version = version.String(pv)
 		attributesBytes, err := marshalAttributes(ev.Attributer)
 		if err != nil {
 			d.err = errors.Wrap(err, "errors marshaling payload attributes to json")
 			return
 		}
-		d.data, d.err = json.Marshal(structs.PayloadAttributesEventData{
+		attrData := structs.PayloadAttributesEventData{
 			ProposerIndex:     strconv.FormatUint(uint64(ev.ProposerIndex), 10),
 			ProposalSlot:      strconv.FormatUint(uint64(ev.ProposalSlot), 10),
-			ParentBlockNumber: strconv.FormatUint(ev.ParentBlockNumber, 10),
 			ParentBlockRoot:   hexutil.Encode(ev.HeadRoot[:]),
 			ParentBlockHash:   hexutil.Encode(ev.ParentBlockHash),
 			PayloadAttributes: attributesBytes,
-		})
+		}
+		// parent_block_number was removed from the payload_attributes event from gloas onwards.
+		if pv < version.Gloas {
+			attrData.ParentBlockNumber = strconv.FormatUint(ev.ParentBlockNumber, 10)
+		}
+		d.data, d.err = json.Marshal(attrData)
 		if d.err != nil {
 			d.err = errors.Wrap(d.err, "errors marshaling payload attributes event data to json")
 		}
