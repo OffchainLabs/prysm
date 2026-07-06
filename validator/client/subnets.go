@@ -2,12 +2,12 @@ package client
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -29,7 +29,7 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Valida
 	}
 
 	if err := v.aggSelector.RefreshSelectionProofs(ctx); err != nil {
-		return errors.Wrap(err, "could not prepare aggregated selection proofs")
+		return fmt.Errorf("could not prepare aggregated selection proofs: %w", err)
 	}
 
 	for _, set := range [][]*ethpb.ValidatorDuty{duties.CurrentEpochDuties, duties.NextEpochDuties} {
@@ -54,19 +54,20 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Valida
 		g.Go(func() error {
 			agg, err := v.isAggregator(gctx, duty.CommitteeLength, duty.AttesterSlot, bytesutil.ToBytes48(duty.PublicKey))
 			if err != nil {
-				return err
+				return fmt.Errorf("could not check if validator is an aggregator: %w", err)
 			}
 			req.IsAggregator[i] = agg
 			return nil
 		})
 	}
 	if err := g.Wait(); err != nil {
-		return errors.Wrap(err, "could not check if a validator is an aggregator")
+		return fmt.Errorf("could not check if a validator is an aggregator: %w", err)
 	}
 
-	_, err := v.validatorClient.SubscribeCommitteeSubnets(ctx, req)
-
-	return err
+	if _, err := v.validatorClient.SubscribeCommitteeSubnets(ctx, req); err != nil {
+		return fmt.Errorf("could not subscribe to committee subnets: %w", err)
+	}
+	return nil
 }
 
 func validatorSubnetSubscriptionKey(slot primitives.Slot, committeeIndex primitives.CommitteeIndex) [64]byte {
