@@ -1,0 +1,68 @@
+# Mainnet-preset config dedicated to the late-join sync tests (P2P + checkpoint).
+
+participants:
+  - el_type: geth
+    cl_type: prysm
+    cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:latest"
+    vc_image: "gcr.io/offchainlabs/prysm/validator:latest"
+    count: 2
+
+  # Late-joining beacon node for the P2P normal sync test. Asserted by beacon-chain-sync.yaml.
+  - el_type: geth
+    cl_type: prysm
+    cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:latest"
+    validator_count: 0
+    skip_start: true
+    count: 1
+
+  # Late-joining beacon node for the checkpoint sync test: syncs from a finalized
+  # checkpoint (served by the checkpointz additional service). Asserted by checkpoint-sync.yaml.
+  - el_type: geth
+    cl_type: prysm
+    cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:latest"
+    validator_count: 0
+    skip_start: true
+    checkpoint_sync_enabled: true
+    count: 1
+
+network_params:
+  preset: mainnet
+
+  altair_fork_epoch: 0
+  bellatrix_fork_epoch: 0
+  capella_fork_epoch: 0
+  deneb_fork_epoch: 0
+  electra_fork_epoch: 0
+  fulu_fork_epoch: 0
+  gloas_fork_epoch: 18446744073709551615
+
+  # Time parameters
+  seconds_per_slot: 6
+  slot_duration_ms: 6000
+
+  min_validator_withdrawability_delay: 1
+  shard_committee_period: 4
+  eth1_follow_distance: 8
+  churn_limit_quotient: 65536
+
+  network_id: "1337"
+  deposit_contract_address: "0x4242424242424242424242424242424242424242"
+
+additional_services:
+  - assertoor
+  - dora
+  - spamoor
+  - checkpointz
+
+spamoor_params:
+  min_cpu: 10
+  image: "ethpandaops/spamoor:master-c23ad38"
+
+assertoor_params:
+  # Use the pinned assertoor image for testing, that has the fix below:
+  # https://github.com/ethpandaops/assertoor/pull/202
+  image: "ethpandaops/assertoor:master-c6f6ac6"
+
+ethereum_genesis_generator_params:
+  extra_env:
+    SECONDS_PER_ETH1_BLOCK: "2"
