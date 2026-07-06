@@ -88,6 +88,29 @@ func TestService_PartialVerifierFromTrustedColumn(t *testing.T) {
 	}
 }
 
+func TestService_PartialVerifierFromTrustedGloasColumn(t *testing.T) {
+	service := &Service{
+		newColumnsVerifier: testNewColumnsVerifier(verification.MockDataColumnsVerifier{}),
+	}
+
+	t.Run("builds verifier and completes", func(t *testing.T) {
+		v, err := service.partialVerifierFromTrustedGloasColumn(buildGloasPartialColumn(t, 2, []uint64{0, 1}))
+		require.NoError(t, err)
+		require.NotNil(t, v)
+
+		_, ok, err := v.Complete()
+		require.NoError(t, err)
+		require.Equal(t, true, ok)
+	})
+
+	t.Run("empty commitments errors", func(t *testing.T) {
+		// A column with no commitments has a zero-length Included bitlist.
+		v, err := service.partialVerifierFromTrustedGloasColumn(&blocks.PartialDataColumn{})
+		require.ErrorIs(t, err, errEmptyCommitments)
+		require.IsNil(t, v)
+	})
+}
+
 func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 	ctx := context.Background()
 	genericErr := errors.New("generic error")
