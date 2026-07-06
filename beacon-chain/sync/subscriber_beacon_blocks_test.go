@@ -69,6 +69,7 @@ func TestService_beaconBlockSubscriber(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db := dbtest.SetupDB(t)
 			s := &Service{
+				ctx: t.Context(),
 				cfg: &config{
 					chain: &chainMock.ChainService{
 						DB:   db,
@@ -104,6 +105,7 @@ func TestService_beaconBlockSubscriber(t *testing.T) {
 
 func TestService_BeaconBlockSubscribe_ExecutionEngineTimesOut(t *testing.T) {
 	s := &Service{
+		ctx: t.Context(),
 		cfg: &config{
 			chain: &chainMock.ChainService{
 				ReceiveBlockMockErr: execution.ErrHTTPTimeout,
@@ -122,6 +124,7 @@ func TestService_BeaconBlockSubscribe_UndefinedEeError(t *testing.T) {
 	err := errors.WithMessage(blockchain.ErrUndefinedExecutionEngineError, msg)
 
 	s := &Service{
+		ctx: t.Context(),
 		cfg: &config{
 			chain: &chainMock.ChainService{
 				ReceiveBlockMockErr: err,
