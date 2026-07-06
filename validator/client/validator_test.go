@@ -460,84 +460,178 @@ func TestRolesAt_DoesNotAssignProposer_Slot0(t *testing.T) {
 func TestCheckAndLogValidatorStatus_OK(t *testing.T) {
 	nonexistentIndex := primitives.ValidatorIndex(^uint64(0))
 	type statusTest struct {
-		name   string
-		status *validatorStatus
-		log    string
-		active bool
+		name     string
+		statuses []*validatorStatus
+		log      string
+		active   bool
 	}
-	pubKeys := [][]byte{bytesutil.Uint64ToBytesLittleEndian(0)}
+	pubKeys := [][]byte{
+		bytesutil.Uint64ToBytesLittleEndian(0),
+		bytesutil.Uint64ToBytesLittleEndian(1),
+		bytesutil.Uint64ToBytesLittleEndian(2),
+	}
 	tests := []statusTest{
 		{
 			name: "UNKNOWN_STATUS, no deposit found yet",
-			status: &validatorStatus{
-				publicKey: pubKeys[0],
-				index:     nonexistentIndex,
-				status: &ethpb.ValidatorStatusResponse{
-					Status: ethpb.ValidatorStatus_UNKNOWN_STATUS,
+			statuses: []*validatorStatus{
+				{
+					publicKey: pubKeys[0],
+					index:     nonexistentIndex,
+					status: &ethpb.ValidatorStatusResponse{
+						Status: ethpb.ValidatorStatus_UNKNOWN_STATUS,
+					},
 				},
 			},
-			log:    "Waiting for deposit to be observed by beacon node",
+			// non existent validator index is filtered out.
+			log:    "Waiting for deposit to be observed by beacon node\" count=1 package=validator/client pubkeys=\"[0x000000000000]\" status=UNKNOWN_STATUS",
 			active: false,
 		},
 		{
 			name: "DEPOSITED into state",
-			status: &validatorStatus{
-				publicKey: pubKeys[0],
-				index:     30,
-				status: &ethpb.ValidatorStatusResponse{
-					Status: ethpb.ValidatorStatus_DEPOSITED,
+			statuses: []*validatorStatus{
+				{
+					publicKey: pubKeys[0],
+					index:     30,
+					status: &ethpb.ValidatorStatusResponse{
+						Status: ethpb.ValidatorStatus_DEPOSITED,
+					},
 				},
 			},
-			log:    "Validator deposited, entering activation queue after finalization\" package=validator/client pubkey=0x000000000000 status=DEPOSITED validatorIndex=30",
+			log:    "Validator deposited, entering activation queue after finalization\" count=1 indices=30 package=validator/client pubkeys=\"[0x000000000000]\" status=DEPOSITED",
 			active: false,
 		},
 		{
 			name: "PENDING",
-			status: &validatorStatus{
-				publicKey: pubKeys[0],
-				index:     50,
-				status: &ethpb.ValidatorStatusResponse{
-					Status:          ethpb.ValidatorStatus_PENDING,
-					ActivationEpoch: params.BeaconConfig().FarFutureEpoch,
+			statuses: []*validatorStatus{
+				{
+					publicKey: pubKeys[0],
+					index:     50,
+					status: &ethpb.ValidatorStatusResponse{
+						Status:          ethpb.ValidatorStatus_PENDING,
+						ActivationEpoch: params.BeaconConfig().FarFutureEpoch,
+					},
 				},
 			},
-			log:    "Waiting for activation... Check validator queue status in a block explorer\" package=validator/client pubkey=0x000000000000 status=PENDING validatorIndex=50",
+			log:    "Waiting for activation... Check validator queue status in a block explorer\" count=1 indices=50 package=validator/client pubkeys=\"[0x000000000000]\" status=PENDING",
 			active: false,
 		},
 		{
 			name: "ACTIVE",
-			status: &validatorStatus{
-				publicKey: pubKeys[0],
-				index:     89,
-				status: &ethpb.ValidatorStatusResponse{
-					Status: ethpb.ValidatorStatus_ACTIVE,
+			statuses: []*validatorStatus{
+				{
+					publicKey: pubKeys[0],
+					index:     89,
+					status: &ethpb.ValidatorStatusResponse{
+						Status: ethpb.ValidatorStatus_ACTIVE,
+					},
 				},
 			},
 			active: true,
 		},
 		{
 			name: "EXITING",
-			status: &validatorStatus{
-				publicKey: pubKeys[0],
-				index:     89,
-				status: &ethpb.ValidatorStatusResponse{
-					Status: ethpb.ValidatorStatus_EXITING,
+			statuses: []*validatorStatus{
+				{
+					publicKey: pubKeys[0],
+					index:     89,
+					status: &ethpb.ValidatorStatusResponse{
+						Status: ethpb.ValidatorStatus_EXITING,
+					},
 				},
 			},
 			active: true,
 		},
 		{
 			name: "EXITED",
-			status: &validatorStatus{
-				publicKey: pubKeys[0],
-				status: &ethpb.ValidatorStatusResponse{
-					Status: ethpb.ValidatorStatus_EXITED,
+			statuses: []*validatorStatus{
+				{
+					publicKey: pubKeys[0],
+					index:     89,
+					status: &ethpb.ValidatorStatusResponse{
+						Status: ethpb.ValidatorStatus_EXITED,
+					},
 				},
 			},
-			log:    "Validator exited",
 			active: false,
 		},
+		{
+			name: "multiple activated validators",
+			statuses: []*validatorStatus{
+				{
+					publicKey: pubKeys[0],
+					index:     89,
+					status: &ethpb.ValidatorStatusResponse{
+						Status: ethpb.ValidatorStatus_ACTIVE,
+					},
+				},
+				{
+					publicKey: pubKeys[1],
+					index:     90,
+					status: &ethpb.ValidatorStatusResponse{
+						Status: ethpb.ValidatorStatus_ACTIVE,
+					},
+				},
+				{
+					publicKey: pubKeys[2],
+					index:     100,
+					status: &ethpb.ValidatorStatusResponse{
+						Status: ethpb.ValidatorStatus_ACTIVE,
+					},
+				},
+			},
+			// Check whether the log message correctly shows the range of activated validator indices.
+			log:    "indices=\"89-90,100\"",
+			active: true,
+		},
+		{
+			name: "multiple activated validators including exiting validator",
+			statuses: []*validatorStatus{
+				{
+					publicKey: pubKeys[0],
+					index:     89,
+					status: &ethpb.ValidatorStatusResponse{
+						Status: ethpb.ValidatorStatus_ACTIVE,
+					},
+				},
+				{
+					publicKey: pubKeys[1],
+					index:     90,
+					status: &ethpb.ValidatorStatusResponse{
+						Status: ethpb.ValidatorStatus_ACTIVE,
+					},
+				},
+				{
+					publicKey: pubKeys[2],
+					index:     100,
+					status: &ethpb.ValidatorStatusResponse{
+						Status: ethpb.ValidatorStatus_EXITING,
+					},
+				},
+			},
+			log:    "\"Validator activated\" count=3 indices=\"89-90,100\"",
+			active: true,
+		},
+		{
+			name: "thousands of activated validators",
+			statuses: func() []*validatorStatus {
+				statuses := make([]*validatorStatus, 1000)
+				for i := range 1000 {
+					statuses[i] = &validatorStatus{
+						publicKey: bytesutil.Uint64ToBytesLittleEndian(uint64(i)),
+						index:     primitives.ValidatorIndex(i),
+						status: &ethpb.ValidatorStatusResponse{
+							Status: ethpb.ValidatorStatus_ACTIVE,
+						},
+					}
+				}
+
+				return statuses
+			}(),
+			log:    "\"Validator activated\" count=1000 indices=0-999",
+			active: true,
+		},
 	}
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			hook := logTest.NewGlobal()
@@ -551,7 +645,9 @@ func TestCheckAndLogValidatorStatus_OK(t *testing.T) {
 				}),
 				pubkeyToStatus: make(map[[48]byte]*validatorStatus),
 			}
-			v.pubkeyToStatus[bytesutil.ToBytes48(test.status.publicKey)] = test.status
+			for _, status := range test.statuses {
+				v.pubkeyToStatus[bytesutil.ToBytes48(status.publicKey)] = status
+			}
 			active := v.checkAndLogValidatorStatus()
 			require.Equal(t, test.active, active)
 			if test.log != "" {

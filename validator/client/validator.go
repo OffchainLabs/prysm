@@ -27,6 +27,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -390,23 +391,87 @@ func (v *validator) WaitForSync(ctx context.Context) error {
 	}
 }
 
+// checkAndLogValidatorStatus aggregates validator information by status and logs it.
+// Returns true if any validator is active, false otherwise.
 func (v *validator) checkAndLogValidatorStatus() bool {
-	nonexistentIndex := primitives.ValidatorIndex(^uint64(0))
-	var someAreActive bool
+	type logData struct {
+		pubkeys []string
+		indices []primitives.ValidatorIndex
+	}
+
+	var (
+		nonexistentIndex = primitives.ValidatorIndex(^uint64(0))
+		statusToLogData  = make(map[ethpb.ValidatorStatus]logData)
+	)
+
+	// Loop through all validators and group them by status.
 	for _, s := range v.pubkeyToStatus {
-		fields := logrus.Fields{
-			"pubkey": fmt.Sprintf("%#x", bytesutil.Trunc(s.publicKey)),
-			"status": s.status.Status.String(),
-		}
-		if s.index != nonexistentIndex {
-			fields["validatorIndex"] = s.index
-		}
-		log := log.WithFields(fields)
 		if v.emitAccountMetrics {
 			fmtKey, fmtIndex := fmt.Sprintf("%#x", s.publicKey), fmt.Sprintf("%#x", s.index)
 			ValidatorStatusesGaugeVec.WithLabelValues(fmtKey, fmtIndex).Set(float64(s.status.Status))
 		}
-		switch s.status.Status {
+
+		truncatedPubkey := fmt.Sprintf("%#x", bytesutil.Trunc(s.publicKey))
+
+		data, exists := statusToLogData[s.status.Status]
+		if !exists {
+			statusToLogData[s.status.Status] = logData{
+				pubkeys: []string{truncatedPubkey},
+				indices: []primitives.ValidatorIndex{s.index},
+			}
+			continue
+		}
+
+		data.pubkeys = append(data.pubkeys, truncatedPubkey)
+		data.indices = append(data.indices, s.index)
+		statusToLogData[s.status.Status] = data
+	}
+
+	// Consolidate active and exiting entries, as they are both considered "active" for the purposes of logging.
+	exitingData, exitingExists := statusToLogData[ethpb.ValidatorStatus_EXITING]
+	if exitingExists {
+		activeData, activeExists := statusToLogData[ethpb.ValidatorStatus_ACTIVE]
+		if activeExists {
+			activeData.pubkeys = append(activeData.pubkeys, exitingData.pubkeys...)
+			activeData.indices = append(activeData.indices, exitingData.indices...)
+			statusToLogData[ethpb.ValidatorStatus_ACTIVE] = activeData
+		} else {
+			statusToLogData[ethpb.ValidatorStatus_ACTIVE] = exitingData
+		}
+
+		delete(statusToLogData, ethpb.ValidatorStatus_EXITING)
+	}
+
+	for status, data := range statusToLogData {
+		count := len(data.pubkeys)
+		if count == 0 {
+			continue
+		}
+
+		fields := logrus.Fields{
+			"pubkeys": data.pubkeys,
+			"status":  status.String(),
+			"count":   count,
+		}
+
+		// Filter out non-existent indices.
+		indices := make([]uint64, 0, count)
+		for _, index := range data.indices {
+			if index != nonexistentIndex {
+				indices = append(indices, uint64(index))
+			}
+		}
+
+		// If there exists any valid indices, sort and prettify them for logging.
+		if len(indices) > 0 {
+			slices.Sort(indices)
+			fields["indices"] = slice.PrettySlice(indices)
+		}
+
+		log := log.WithFields(fields)
+
+		// Log a message based on the validator status.
+		switch status {
 		case ethpb.ValidatorStatus_UNKNOWN_STATUS:
 			log.Info("Waiting for deposit to be observed by beacon node")
 		case ethpb.ValidatorStatus_DEPOSITED:
@@ -414,21 +479,22 @@ func (v *validator) checkAndLogValidatorStatus() bool {
 		case ethpb.ValidatorStatus_PENDING:
 			log.Info("Waiting for activation... Check validator queue status in a block explorer")
 		case ethpb.ValidatorStatus_ACTIVE, ethpb.ValidatorStatus_EXITING:
-			someAreActive = true
-			log.WithFields(logrus.Fields{
-				"index": s.index,
-			}).Info("Validator activated")
+			log.Info("Validator activated")
 		case ethpb.ValidatorStatus_EXITED:
 			log.Info("Validator exited")
 		case ethpb.ValidatorStatus_INVALID:
 			log.Warn("Invalid Eth1 deposit")
 		default:
-			log.WithFields(logrus.Fields{
-				"status": s.status.Status.String(),
-			}).Info("Validator status")
+			log.Info("Validator status")
 		}
 	}
-	return someAreActive
+
+	// Return true if any validator is active, false otherwise.
+	if data, exists := statusToLogData[ethpb.ValidatorStatus_ACTIVE]; exists && len(data.pubkeys) > 0 {
+		return true
+	}
+
+	return false
 }
 
 // NextSlot emits the next slot number at the start time of that slot.
