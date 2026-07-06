@@ -36,6 +36,8 @@ const logPackage = "beacon-chain/p2p/partialdatacolumnbroadcaster"
 
 var errInvalidHeader = errors.New("invalid header")
 
+var errMalformedPartialMessage = errors.New("malformed partial message")
+
 const dataColumnSidecarPrefix = "data_column_sidecar_"
 
 func extractColumnIndexFromTopic(topic string) (uint64, error) {
@@ -366,6 +368,11 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 
 	nextPeerState, message, err := updatePeerStateFromIncomingRPC(peerStates[from], rpc, isGloas)
 	if err != nil {
+		// A malformed message body is the peer's fault, so downscore it. Other errors
+		// are dropped without penalty.
+		if errors.Is(err, errMalformedPartialMessage) {
+			p.reportPeerFeedbackAsync(rpc.GetTopicID(), from, pubsub.PeerFeedbackInvalidMessage)
+		}
 		return errors.Wrap(err, "update peer state from incoming rpc")
 	}
 
@@ -635,6 +642,11 @@ func updatePeerStateFromIncomingRPC(peerState blocks.PartialDataColumnPeerState,
 	}
 	if isGloas && message.Header != nil {
 		return peerState, nil, errors.New("Gloas sidecar has non-nil header")
+	}
+
+	present := message.CellsPresentBitmap.Count()
+	if uint64(len(message.PartialColumn)) != present || uint64(len(message.KzgProofs)) != present {
+		return peerState, nil, errors.Wrap(errMalformedPartialMessage, "cells/proofs count does not match present bitmap")
 	}
 	if len(message.CellsPresentBitmap) == 0 {
 		return peerState, message, nil

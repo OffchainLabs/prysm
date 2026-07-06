@@ -371,8 +371,17 @@ func mustMarshalPartsMetadata(t *testing.T, meta *ethpb.PartialDataColumnPartsMe
 
 func mustMarshalSidecar(t *testing.T, cellsPresent bitfield.Bitlist) []byte {
 	t.Helper()
+	n := cellsPresent.Count()
+	cells := make([][]byte, n)
+	proofs := make([][]byte, n)
+	for i := range cells {
+		cells[i] = make([]byte, 2048)
+		proofs[i] = make([]byte, 48)
+	}
 	b, err := (&ethpb.PartialDataColumnSidecar{
 		CellsPresentBitmap: cellsPresent,
+		PartialColumn:      cells,
+		KzgProofs:          proofs,
 	}).MarshalSSZ()
 	require.NoError(t, err)
 	return b
@@ -1486,6 +1495,124 @@ func TestPartialColumnBroadcaster_onIncomingRPC_groupForkMustMatchTopicFork(t *t
 				require.Equal(t, pubsub.PeerFeedbackInvalidMessage, feedback[0].kind)
 				require.Equal(t, from, feedback[0].peerID)
 				require.Equal(t, tt.topic, feedback[0].topic)
+				require.Equal(t, 0, len(h.broadcaster.incomingReq))
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, 0, ps.peerFeedbackCallCount())
+				require.Equal(t, 1, len(h.broadcaster.incomingReq))
+			}
+		})
+	}
+}
+
+func TestPartialColumnBroadcaster_onIncomingRPC_malformedMessageDownscored(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 1_000_000
+	params.OverrideBeaconConfig(cfg)
+
+	const from = peer.ID("peer-a")
+	fuluTopic := fmt.Sprintf("/eth2/%x/data_column_sidecar_0/ssz_snappy", params.ForkDigest(cfg.FuluForkEpoch))
+	gloasTopic := fmt.Sprintf("/eth2/%x/data_column_sidecar_0/ssz_snappy", params.ForkDigest(cfg.GloasForkEpoch))
+	fuluGroup := createPartialColumn(t, 2, nil).GroupID()
+	gloasGroup := createGloasPartialColumn(t, 2, nil).GroupID()
+
+	cells := func(n int) [][]byte {
+		out := make([][]byte, n)
+		for i := range out {
+			out[i] = make([]byte, 2048)
+		}
+		return out
+	}
+	proofs := func(n int) [][]byte {
+		out := make([][]byte, n)
+		for i := range out {
+			out[i] = make([]byte, 48)
+		}
+		return out
+	}
+	gloasMsg := func(t *testing.T, bitmap bitfield.Bitlist, nCells int) []byte {
+		raw, err := (&ethpb.PartialDataColumnSidecarGloas{
+			CellsPresentBitmap: bitmap, PartialColumn: cells(nCells), KzgProofs: proofs(nCells),
+		}).MarshalSSZ()
+		require.NoError(t, err)
+		return raw
+	}
+	fuluMsg := func(t *testing.T, bitmap bitfield.Bitlist, nCells int) []byte {
+		raw, err := (&ethpb.PartialDataColumnSidecar{
+			CellsPresentBitmap: bitmap, PartialColumn: cells(nCells), KzgProofs: proofs(nCells),
+		}).MarshalSSZ()
+		require.NoError(t, err)
+		return raw
+	}
+
+	tests := []struct {
+		name            string
+		topic           string
+		group           []byte
+		partialMessage  []byte
+		expectDownscore bool
+	}{
+		{
+			// Bitmap declares zero present cells but the message still carries a cell + proof.
+			name:            "gloas empty bitmap with cells is malformed",
+			topic:           gloasTopic,
+			group:           gloasGroup,
+			partialMessage:  gloasMsg(t, testBitlist(2), 1),
+			expectDownscore: true,
+		},
+		{
+			// Bitmap declares one present cell but the message carries two.
+			name:            "gloas bitmap count disagrees with cell count",
+			topic:           gloasTopic,
+			group:           gloasGroup,
+			partialMessage:  gloasMsg(t, testBitlist(2, 1), 2),
+			expectDownscore: true,
+		},
+		{
+			// Same malformed shape on the Fulu wire type: the check is fork-agnostic.
+			name:            "fulu empty bitmap with cells is malformed",
+			topic:           fuluTopic,
+			group:           fuluGroup,
+			partialMessage:  fuluMsg(t, testBitlist(2), 1),
+			expectDownscore: true,
+		},
+		{
+			// Bitmap count matches the single cell/proof carried: well-formed, not penalized.
+			name:            "well-formed gloas message is accepted",
+			topic:           gloasTopic,
+			group:           gloasGroup,
+			partialMessage:  gloasMsg(t, testBitlist(2, 1), 1),
+			expectDownscore: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ps := newMockPubSub(nil, nil)
+			h := newBroadcasterHarness(t, ps)
+			h.broadcaster.subscribedTopics.Store(tt.topic, struct{}{})
+
+			topic := tt.topic
+			rpc := &pubsub_pb.PartialMessagesExtension{
+				TopicID:        &topic,
+				GroupID:        slices.Clone(tt.group),
+				PartialMessage: tt.partialMessage,
+			}
+			peerStates := map[peer.ID]blocks.PartialDataColumnPeerState{}
+
+			err := h.broadcaster.onIncomingRPC(from, peerStates, rpc)
+
+			if tt.expectDownscore {
+				require.NotNil(t, err)
+				require.Equal(t, true, errors.Is(err, errMalformedPartialMessage))
+				waitForPeerFeedbackCalls(t, ps, 1)
+				feedback := ps.peerFeedbackCallsSnapshot()
+				require.Equal(t, 1, len(feedback))
+				require.Equal(t, pubsub.PeerFeedbackInvalidMessage, feedback[0].kind)
+				require.Equal(t, from, feedback[0].peerID)
+				require.Equal(t, tt.topic, feedback[0].topic)
+				// Malformed messages are dropped before enqueue.
 				require.Equal(t, 0, len(h.broadcaster.incomingReq))
 			} else {
 				require.NoError(t, err)
