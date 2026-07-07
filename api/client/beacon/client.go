@@ -145,7 +145,7 @@ func (c *Client) GetConfigSpec(ctx context.Context) (*structs.GetSpecResponse, e
 	fsr := &structs.GetSpecResponse{}
 	err = json.Unmarshal(body, fsr)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "error decoding json response in GetConfigSpec")
 	}
 	return fsr, nil
 }
@@ -159,7 +159,7 @@ func (c *Client) GetGenesis(ctx context.Context) (*structs.Genesis, error) {
 	}
 	ggr := &structs.GetGenesisResponse{}
 	if err := json.Unmarshal(body, ggr); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "error decoding json response in GetGenesis")
 	}
 	return ggr.Data, nil
 }

@@ -64,3 +64,5 @@ assertoor_params:
 ethereum_genesis_generator_params:
   extra_env:  
     SECONDS_PER_ETH1_BLOCK: "2"
+
+global_log_level: debug
