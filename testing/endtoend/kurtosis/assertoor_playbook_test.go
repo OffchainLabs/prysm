@@ -57,7 +57,7 @@ func TestScheduleAssertoorTestWithConfig(t *testing.T) {
 
 	runID, err := scheduleAssertoorTest(context.Background(), srv.URL, "network-health-once", map[string]any{"targetEpoch": 15})
 	require.NoError(t, err)
-	require.Equal(t, 42, runID, "expected run id 42")
+	require.Equal(t, uint64(42), runID, "expected run id 42")
 	require.Equal(t, 15.0, targetEpoch, "expected targetEpoch override")
 	require.Equal(t, true, scheduledSkipQueue, "expected skip_queue=true so custom tests run in parallel")
 	require.Equal(t, true, scheduledAllowDuplicate, "expected allow_duplicate=true so one-shot tests can be reused")
