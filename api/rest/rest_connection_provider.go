@@ -16,8 +16,6 @@ import (
 // RestConnectionProvider manages HTTP client configuration for REST API with failover support.
 // It allows switching between different beacon node REST endpoints when the current one becomes unavailable.
 type RestConnectionProvider interface {
-	// HttpClient returns the configured HTTP client with headers, timeout, and optional tracing.
-	HttpClient() *http.Client
 	// Handler returns the REST handler for making API requests.
 	Handler() Handler
 	// CurrentHost returns the current REST API endpoint URL.
@@ -29,37 +27,39 @@ type RestConnectionProvider interface {
 }
 
 // RestConnectionProviderOption is a functional option for configuring the REST connection provider.
-type RestConnectionProviderOption func(*restConnectionProvider)
+type RestConnectionProviderOption func(*restConnectionProviderConfig)
 
 // WithHttpTimeout sets the HTTP client timeout.
 func WithHttpTimeout(timeout time.Duration) RestConnectionProviderOption {
-	return func(p *restConnectionProvider) {
-		p.timeout = timeout
+	return func(c *restConnectionProviderConfig) {
+		c.timeout = timeout
 	}
 }
 
 // WithHttpHeaders sets custom HTTP headers to include in all requests.
 func WithHttpHeaders(headers map[string][]string) RestConnectionProviderOption {
-	return func(p *restConnectionProvider) {
-		p.headers = headers
+	return func(c *restConnectionProviderConfig) {
+		c.headers = headers
 	}
 }
 
 // WithTracing enables OpenTelemetry tracing for HTTP requests.
 func WithTracing() RestConnectionProviderOption {
-	return func(p *restConnectionProvider) {
-		p.enableTracing = true
+	return func(c *restConnectionProviderConfig) {
+		c.enableTracing = true
 	}
 }
 
-type restConnectionProvider struct {
-	endpoints     []string
-	httpClient    *http.Client
-	restHandler   *handler
-	currentIndex  atomic.Uint64
+type restConnectionProviderConfig struct {
 	timeout       time.Duration
 	headers       map[string][]string
 	enableTracing bool
+}
+
+type restConnectionProvider struct {
+	endpoints    []string
+	handler      *handler
+	currentIndex atomic.Uint64
 }
 
 // NewRestConnectionProvider creates a new REST connection provider that manages HTTP client configuration.
@@ -70,34 +70,32 @@ func NewRestConnectionProvider(endpoint string, opts ...RestConnectionProviderOp
 		return nil, errors.New("no REST API endpoints provided")
 	}
 
-	p := &restConnectionProvider{
-		endpoints: endpoints,
-	}
-
+	cfg := restConnectionProviderConfig{}
 	for _, opt := range opts {
-		opt(p)
+		opt(&cfg)
 	}
 
 	// Build the HTTP transport chain
 	var transport http.RoundTripper = http.DefaultTransport
 
 	// Add custom headers if configured
-	if len(p.headers) > 0 {
-		transport = client.NewCustomHeadersTransport(transport, p.headers)
+	if len(cfg.headers) > 0 {
+		transport = client.NewCustomHeadersTransport(transport, cfg.headers)
 	}
-
 	// Add tracing if enabled
-	if p.enableTracing {
+	if cfg.enableTracing {
 		transport = otelhttp.NewTransport(transport)
 	}
 
-	p.httpClient = &http.Client{
-		Timeout:   p.timeout,
+	httpClient := http.Client{
+		Timeout:   cfg.timeout,
 		Transport: transport,
 	}
-
-	// Create the REST handler with the HTTP client and initial host
-	p.restHandler = newHandler(*p.httpClient, endpoints[0])
+	p := &restConnectionProvider{
+		endpoints: endpoints,
+		// Create the REST handler with the HTTP client and initial host
+		handler: newHandler(httpClient, endpoints[0]),
+	}
 
 	log.WithFields(logrus.Fields{
 		"endpoints": api.RedactEndpoints(endpoints),
@@ -121,12 +119,8 @@ func parseEndpoints(endpoint string) []string {
 	return endpoints
 }
 
-func (p *restConnectionProvider) HttpClient() *http.Client {
-	return p.httpClient
-}
-
 func (p *restConnectionProvider) Handler() Handler {
-	return p.restHandler
+	return p.handler
 }
 
 func (p *restConnectionProvider) CurrentHost() string {
@@ -149,7 +143,7 @@ func (p *restConnectionProvider) SwitchHost(index int) error {
 	p.currentIndex.Store(uint64(index))
 
 	// Update the rest handler's host
-	p.restHandler.SwitchHost(p.endpoints[index])
+	p.handler.SwitchHost(p.endpoints[index])
 
 	log.WithFields(logrus.Fields{
 		"previousHost": api.RedactEndpoint(p.endpoints[oldIdx]),
