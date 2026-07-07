@@ -449,38 +449,60 @@ func TestService_Resync(t *testing.T) {
 	cache.RUnlock()
 
 	hook := logTest.NewGlobal()
+	healthyChainService := func() *mock.ChainService {
+		st, err := util.NewBeaconState()
+		require.NoError(t, err)
+		futureSlot := primitives.Slot(160)
+		genesis := makeGenesisTime(futureSlot)
+		require.NoError(t, st.SetGenesisTime(genesis))
+		return &mock.ChainService{
+			State: st,
+			Root:  genesisRoot[:],
+			DB:    beaconDB,
+			FinalizedCheckPoint: &eth.Checkpoint{
+				Epoch: slots.ToEpoch(futureSlot),
+			},
+			Genesis:        genesis,
+			ValidatorsRoot: [32]byte{},
+		}
+	}
 	tests := []struct {
 		name         string
+		wantedErr    string
 		assert       func(s *Service)
 		chainService func() *mock.ChainService
-		wantedErr    string
+		preSynced    bool
+		preCancel    bool
+		wantSynced   bool
 	}{
 		{
-			name:      "no head state",
-			wantedErr: "could not retrieve head state",
+			name:       "no head state",
+			wantedErr:  "could not retrieve head state",
+			wantSynced: false,
 		},
 		{
-			name: "resync ok",
-			chainService: func() *mock.ChainService {
-				st, err := util.NewBeaconState()
-				require.NoError(t, err)
-				futureSlot := primitives.Slot(160)
-				genesis := makeGenesisTime(futureSlot)
-				require.NoError(t, st.SetGenesisTime(genesis))
-				return &mock.ChainService{
-					State: st,
-					Root:  genesisRoot[:],
-					DB:    beaconDB,
-					FinalizedCheckPoint: &eth.Checkpoint{
-						Epoch: slots.ToEpoch(futureSlot),
-					},
-					Genesis:        genesis,
-					ValidatorsRoot: [32]byte{},
-				}
-			},
+			name:         "resync ok",
+			chainService: healthyChainService,
 			assert: func(s *Service) {
 				assert.LogsContain(t, hook, "Resync attempt complete")
 				assert.Equal(t, primitives.Slot(160), s.cfg.Chain.HeadSlot())
+			},
+			wantSynced: true,
+		},
+		{
+			// Regression test: a previously synced node that has fallen behind starts a
+			// resync; if the attempt fails (here: service shutdown before syncing), the
+			// node must NOT re-advertise itself as synced — health checks and load
+			// balancers rely on Synced()/Status() to stop routing duties to a node that
+			// is still behind.
+			name:         "failed resync attempt must not mark the node synced",
+			chainService: healthyChainService,
+			preSynced:    true,
+			preCancel:    true,
+			wantedErr:    "context canceled",
+			wantSynced:   false,
+			assert: func(s *Service) {
+				assert.NotNil(t, s.Status(), "Status() must report an error while the node is still behind")
 			},
 		},
 	}
@@ -503,6 +525,16 @@ func TestService_Resync(t *testing.T) {
 			})
 			assert.NotNil(t, s)
 			s.genesisTime = mc.Genesis
+			s.clock = startup.NewClock(mc.Genesis, [32]byte{})
+			if tt.preSynced {
+				// Simulate a node that completed initial sync earlier and has since
+				// fallen behind (chain started, currently marked synced).
+				s.chainStarted.Store(true)
+				s.synced.Store(true)
+			}
+			if tt.preCancel {
+				cancel()
+			}
 			assert.Equal(t, primitives.Slot(0), s.cfg.Chain.HeadSlot())
 			err := s.Resync()
 			if tt.wantedErr != "" {
@@ -510,6 +542,7 @@ func TestService_Resync(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
+			assert.Equal(t, tt.wantSynced, s.Synced(), "unexpected Synced() after Resync")
 			if tt.assert != nil {
 				tt.assert(s)
 			}

@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "kinds": {
+    "mocks": "e438bb1d4d4f9d85192e0bf47a33ae558a6947bb717a972bc1b63fa302ec0bce",
+    "proto": "bb9700170a2bac495a25b6e8ac889903f98de45f3c14614e2d4325bad94e22b6",
+    "ssz": "14f630958858224190107805f44a74472e268cb769c7de3c9f70b44532c0ab58"
+  }
+}

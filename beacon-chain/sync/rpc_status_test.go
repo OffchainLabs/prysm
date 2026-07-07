@@ -1096,9 +1096,10 @@ func TestShouldResync(t *testing.T) {
 	ctx := t.Context()
 
 	type args struct {
-		genesis  time.Time
-		syncing  bool
-		headSlot primitives.Slot
+		genesis      time.Time
+		syncing      bool
+		initSyncDone bool
+		headSlot     primitives.Slot
 	}
 	tests := []struct {
 		name string
@@ -1126,9 +1127,10 @@ func TestShouldResync(t *testing.T) {
 		{
 			name: "two epochs behind, resync ok",
 			args: args{
-				headSlot: 31,
-				genesis:  prysmTime.Now().Add(-1 * 96 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
-				syncing:  false,
+				headSlot:     31,
+				genesis:      prysmTime.Now().Add(-1 * 96 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+				syncing:      false,
+				initSyncDone: true,
 			},
 			want: true,
 		},
@@ -1141,6 +1143,31 @@ func TestShouldResync(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			// Regression test: a failed resync attempt intentionally leaves the node
+			// unsynced (Syncing() == true). Once the initial sync has completed, the
+			// node must keep re-attempting resync while it remains behind — otherwise a
+			// single failed attempt would leave the node stuck reporting "syncing"
+			// forever with no retry scheduled.
+			name: "two epochs behind after failed resync, initial sync complete, retry ok",
+			args: args{
+				headSlot:     31,
+				genesis:      prysmTime.Now().Add(-1 * 96 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+				syncing:      true,
+				initSyncDone: true,
+			},
+			want: true,
+		},
+		{
+			name: "two epochs behind but initial sync still running, no resync",
+			args: args{
+				headSlot:     31,
+				genesis:      prysmTime.Now().Add(-1 * 96 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+				syncing:      true,
+				initSyncDone: false,
+			},
+			want: false,
+		},
 	}
 	for _, tt := range tests {
 		headState, err := transition.GenesisBeaconState(ctx, nil, 0, &ethpb.Eth1Data{})
@@ -1150,6 +1177,10 @@ func TestShouldResync(t *testing.T) {
 			State:   headState,
 			Genesis: tt.args.genesis,
 		}
+		initialSyncComplete := make(chan struct{})
+		if tt.args.initSyncDone {
+			close(initialSyncComplete)
+		}
 		r := &Service{
 			cfg: &config{
 				chain:         chain,
@@ -1157,7 +1188,8 @@ func TestShouldResync(t *testing.T) {
 				initialSync:   &mockSync.Sync{IsSyncing: tt.args.syncing},
 				stateNotifier: chain.StateNotifier(),
 			},
-			ctx: ctx,
+			ctx:                 ctx,
+			initialSyncComplete: initialSyncComplete,
 		}
 		t.Run(tt.name, func(t *testing.T) {
 			if got := r.shouldReSync(); got != tt.want {
