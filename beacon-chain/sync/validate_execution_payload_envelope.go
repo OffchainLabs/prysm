@@ -209,9 +209,9 @@ func (s *Service) queuePendingPayloadEnvelope(
 				s.selfBuildSigFailures++
 				log.WithError(err).Debug("Ignoring self-built payload with invalid signature")
 				return pubsub.ValidationIgnore, nil
-			} else {
-				return pubsub.ValidationReject, err
 			}
+			// The envelope's block is unknown, so the head state used here may be on a different branch, do not penalize the peer.
+			return pubsub.ValidationIgnore, err
 		}
 	} else {
 		log.Debug("Ignoring payload envelope from self-build outside of the Lookahead window")
