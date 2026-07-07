@@ -80,10 +80,7 @@ func scrapeProm(url string, tripper http.RoundTripper) (map[string]*dto.MetricFa
 	go func() {
 		// FetchMetricFamilies handles grpc flavored prometheus ez
 		// but at the cost of the awkward channel select loop below
-		err := prom2json.FetchMetricFamilies(url, mfChan, tripper)
-		if err != nil {
-			errChan <- err
-		}
+		errChan <- prom2json.FetchMetricFamilies(url, mfChan, tripper)
 	}()
 	result := make(map[string]*dto.MetricFamily)
 	// channel select accumulates results from FetchMetricFamilies
@@ -94,15 +91,12 @@ func scrapeProm(url string, tripper http.RoundTripper) (map[string]*dto.MetricFa
 			// FetchMetricFamilies will close the channel when done
 			// at which point we want to stop the goroutine
 			if fam == nil && !chanOpen {
-				return result, nil
+				return result, <-errChan
 			}
 			ptr := fam
 			result[fam.GetName()] = ptr
 		case err := <-errChan:
 			return result, err
-		}
-		if errChan == nil && mfChan == nil {
-			return result, nil
 		}
 	}
 }
