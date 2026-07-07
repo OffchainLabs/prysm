@@ -211,6 +211,14 @@ load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_depe
 # patches or update this dependency again, check out the rules_go repo then run the releaser tool.
 # bazel run //go/tools/releaser -- upgrade-dep -mirror=false org_golang_x_tools
 # Copy the patches and http_archive updates from rules_go here.
+#
+# How to generate the patch:
+# 1. Check out the rules_go repo.
+# 2. Build gazelle: bazel build @bazel_gazelle//cmd/gazelle
+# 3. Set the PATH to include the built gazelle binary:
+#    PATH="$(dirname "$(bazel info bazel-bin)/external/bazel_gazelle/cmd/gazelle/gazelle_/gazelle"):$PATH"
+# 4. bazel run //go/tools/releaser -- upgrade-dep -mirror=false org_golang_x_tools@v0.44.0
+# 5. Copy-paste org_golang_x_tools-gazelle.patch from rules_go into third_party/org_golang_x_tools-gazelle.patch
 http_archive(
     name = "org_golang_x_tools",
     patch_args = ["-p1"],
