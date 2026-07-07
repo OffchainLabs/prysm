@@ -314,7 +314,13 @@ func (s *Service) Resync() error {
 
 	// Set it to false since we are syncing again.
 	s.synced.Store(false)
-	defer func() { s.synced.Store(true) }() // Reset it at the end of the method.
+	// Only re-advertise the node as synced if this attempt actually caught up.
+	// A resync attempt that failed, or ended with the node still multiple epochs
+	// behind the clock, must leave the node reporting "syncing", so that health
+	// checks and load balancers stop routing validator duties to a stale node.
+	// Regular sync keeps re-attempting via resyncIfBehind for as long as the node
+	// remains behind the same threshold (see caughtUpToClock).
+	defer func() { s.synced.Store(s.caughtUpToClock()) }()
 
 	_, err = s.waitForMinimumPeers()
 	if err != nil {
@@ -326,6 +332,20 @@ func (s *Service) Resync() error {
 	}
 	l.WithField("slot", s.cfg.Chain.HeadSlot()).Info("Resync attempt complete")
 	return nil
+}
+
+// caughtUpToClock reports whether the chain head is within one epoch of the
+// wall clock. It intentionally mirrors the trigger threshold of the regular
+// sync service's resyncIfBehind (head epoch < previous epoch): whenever Resync
+// leaves the node unsynced, another resync attempt is guaranteed to be
+// scheduled, and whenever no further attempt would be scheduled, the node is
+// considered synced again.
+func (s *Service) caughtUpToClock() bool {
+	currentEpoch := slots.ToEpoch(s.clock.CurrentSlot())
+	if currentEpoch <= 1 {
+		return true
+	}
+	return slots.ToEpoch(s.cfg.Chain.HeadSlot()) >= currentEpoch-1
 }
 
 func (s *Service) waitForMinimumPeers() ([]peer.ID, error) {

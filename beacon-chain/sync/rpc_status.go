@@ -122,15 +122,29 @@ func (s *Service) resyncIfBehind() {
 	})
 }
 
-// shouldReSync returns true if the node is not syncing and falls behind two epochs.
+// shouldReSync returns true if the initial sync has completed and the node has
+// fallen behind two epochs.
 func (s *Service) shouldReSync() bool {
+	if s.cfg.initialSync == nil {
+		return false
+	}
+	// Never resync while the initial sync itself is still running. Afterwards,
+	// allow resync attempts even while the node reports syncing: a failed resync
+	// deliberately leaves the node unsynced (see initial-sync Resync), and must
+	// still be retried. Resync attempts cannot overlap — resyncIfBehind runs its
+	// checks and the resync itself sequentially on a single goroutine.
+	select {
+	case <-s.initialSyncComplete:
+	default:
+		return false
+	}
 	syncedEpoch := slots.ToEpoch(s.cfg.chain.HeadSlot())
 	currentEpoch := slots.ToEpoch(s.cfg.clock.CurrentSlot())
 	prevEpoch := primitives.Epoch(0)
 	if currentEpoch > 1 {
 		prevEpoch = currentEpoch - 1
 	}
-	return s.cfg.initialSync != nil && !s.cfg.initialSync.Syncing() && syncedEpoch < prevEpoch
+	return syncedEpoch < prevEpoch
 }
 
 // sendRPCStatusRequest for a given topic with an expected protobuf message type.
