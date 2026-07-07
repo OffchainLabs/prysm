@@ -439,6 +439,77 @@ func Test_BeaconBlockBody_SignedExecutionPayloadBid(t *testing.T) {
 	})
 }
 
+func Test_BeaconBlockBody_BlobKzgCommitments(t *testing.T) {
+	commitments := [][]byte{bytesutil.PadTo([]byte{0x01}, fieldparams.BLSPubkeyLength)}
+
+	tests := []struct {
+		name       string
+		body       *BeaconBlockBody
+		want       [][]byte
+		wantErr    error
+		wantErrMsg string
+	}{
+		{
+			name: "gloas returns commitments from bid",
+			body: &BeaconBlockBody{
+				version: version.Gloas,
+				signedExecutionPayloadBid: &eth.SignedExecutionPayloadBid{
+					Message: &eth.ExecutionPayloadBid{BlobKzgCommitments: commitments},
+				},
+			},
+			want: commitments,
+		},
+		{
+			name:       "gloas nil signed bid",
+			body:       &BeaconBlockBody{version: version.Gloas, signedExecutionPayloadBid: nil},
+			wantErrMsg: "nil execution payload bid or bid message",
+		},
+		{
+			name: "gloas nil bid message",
+			body: &BeaconBlockBody{
+				version:                   version.Gloas,
+				signedExecutionPayloadBid: &eth.SignedExecutionPayloadBid{Message: nil},
+			},
+			wantErrMsg: "nil execution payload bid or bid message",
+		},
+		{
+			name: "deneb returns commitments",
+			body: &BeaconBlockBody{version: version.Deneb, blobKzgCommitments: commitments},
+			want: commitments,
+		},
+		{
+			name: "fulu returns commitments",
+			body: &BeaconBlockBody{version: version.Fulu, blobKzgCommitments: commitments},
+			want: commitments,
+		},
+		{
+			name:    "unsupported before deneb",
+			body:    &BeaconBlockBody{version: version.Capella},
+			wantErr: consensus_types.ErrUnsupportedField,
+		},
+		{
+			name:    "incorrect block version below phase0",
+			body:    &BeaconBlockBody{version: version.Phase0 - 1},
+			wantErr: errIncorrectBlockVersion,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.body.BlobKzgCommitments()
+			switch {
+			case tt.wantErr != nil:
+				require.ErrorIs(t, err, tt.wantErr)
+			case tt.wantErrMsg != "":
+				require.ErrorContains(t, tt.wantErrMsg, err)
+			default:
+				require.NoError(t, err)
+				require.DeepEqual(t, tt.want, got)
+			}
+		})
+	}
+}
+
 func Test_BeaconBlockBody_VoluntaryExits(t *testing.T) {
 	ve := make([]*eth.SignedVoluntaryExit, 0)
 	bb := &SignedBeaconBlock{block: &BeaconBlock{body: &BeaconBlockBody{}}}
