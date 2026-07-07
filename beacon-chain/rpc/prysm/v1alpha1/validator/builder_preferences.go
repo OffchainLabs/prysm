@@ -24,9 +24,8 @@ func (vs *Server) SubmitBuilderPreferences(ctx context.Context, req *ethpb.Submi
 		return nil, status.Error(codes.FailedPrecondition, "builder is not configured")
 	}
 	pubkey := bytesutil.ToBytes48(req.ValidatorPubkey)
-	if err := vs.BlockBuilder.SubmitBuilderPreferences(ctx, pubkey, req.Request); err != nil {
+	if err := vs.BlockBuilder.SubmitBuilderPreferences(ctx, pubkey, req.Request, req.Url); err != nil {
 		return nil, status.Errorf(codes.Internal, "could not submit builder preferences: %v", err)
 	}
-	vs.maxExecutionPayments.Store(pubkey, uint64(req.Request.Preferences.GetMaxExecutionPayment()))
 	return &emptypb.Empty{}, nil
 }

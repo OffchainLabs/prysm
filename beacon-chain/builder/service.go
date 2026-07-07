@@ -2,6 +2,7 @@ package builder
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -29,18 +30,18 @@ type BlockBuilder interface {
 	SubmitBlindedBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error)
 	SubmitBlindedBlockPostFulu(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) error
 	GetHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubKey [48]byte) (builder.SignedBid, error)
-	GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte, auths []*ethpb.SignedRequestAuthV1) ([]PayloadBid, error)
+	GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte, entries []*ethpb.BuilderRequestEntry) ([]PayloadBid, error)
 	SubmitSignedBeaconBlock(ctx context.Context, builderURL string, block interfaces.ReadOnlySignedBeaconBlock) error
-	SubmitBuilderPreferences(ctx context.Context, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1) error
+	SubmitBuilderPreferences(ctx context.Context, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1, url string) error
 	RegisterValidator(ctx context.Context, reg []*ethpb.SignedValidatorRegistrationV1) error
 	RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error)
 	Configured() bool
 }
 
-// PayloadBid carries the builder URL so the proposer can route the signed block back to the winning builder.
+// PayloadBid carries the request entry so the proposer can apply per-builder policy and route the signed block.
 type PayloadBid struct {
-	BuilderURL string
-	Bid        *ethpb.SignedExecutionPayloadBid
+	Entry *ethpb.BuilderRequestEntry
+	Bid   *ethpb.SignedExecutionPayloadBid
 }
 
 // config defines a config struct for dependencies into the service.
@@ -163,23 +164,26 @@ func (s *Service) SubmitBlindedBlockPostFulu(ctx context.Context, b interfaces.R
 }
 
 // Builders are queried concurrently, a failing builder drops only its own bid.
-func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte, auths []*ethpb.SignedRequestAuthV1) ([]PayloadBid, error) {
+func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte, entries []*ethpb.BuilderRequestEntry) ([]PayloadBid, error) {
 	ctx, span := trace.StartSpan(ctx, "builder.GetExecutionPayloadBid")
 	defer span.End()
 
-	byURL := make(map[string]*ethpb.SignedRequestAuthV1, len(auths))
-	urls := make([]string, 0, len(auths))
-	for _, a := range auths {
-		url := string(a.GetMessage().GetData())
-		if url == "" {
+	// Deduplicated on the (url, auth data) pair so one builder is only asked once per route.
+	type entryKey struct {
+		url  string
+		data string
+	}
+	seen := make(map[entryKey]bool, len(entries))
+	deduped := make([]*ethpb.BuilderRequestEntry, 0, len(entries))
+	for _, e := range entries {
+		k := entryKey{url: e.GetUrl(), data: string(e.GetAuth().GetMessage().GetData())}
+		if k.url == "" || e.GetAuth() == nil || seen[k] {
 			continue
 		}
-		if _, ok := byURL[url]; !ok {
-			byURL[url] = a
-			urls = append(urls, url)
-		}
+		seen[k] = true
+		deduped = append(deduped, e)
 	}
-	if len(urls) == 0 {
+	if len(deduped) == 0 {
 		return nil, nil
 	}
 
@@ -188,27 +192,31 @@ func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Sl
 		bids []PayloadBid
 		wg   sync.WaitGroup
 	)
-	for _, url := range urls {
+	for _, e := range deduped {
 		wg.Add(1)
-		go func(url string) {
+		go func(e *ethpb.BuilderRequestEntry) {
 			defer wg.Done()
-			c, err := s.clientFor(url)
+			l := log.WithField("builder", logs.MaskCredentialsLogging(e.GetUrl()))
+			if data := string(e.GetAuth().GetMessage().GetData()); data != e.GetUrl() {
+				l = l.WithField("authData", fmt.Sprintf("%q", data))
+			}
+			c, err := s.clientFor(e.GetUrl())
 			if err != nil {
-				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(url)).Warn("Could not get builder client")
+				l.WithError(err).Warn("Could not get builder client")
 				return
 			}
-			bid, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, proposerPubkey, byURL[url])
+			bid, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, proposerPubkey, e.GetAuth())
 			if err != nil {
-				log.WithError(err).WithField("builder", logs.MaskCredentialsLogging(url)).Warn("Could not get builder execution payload bid")
+				l.WithError(err).Warn("Could not get builder execution payload bid")
 				return
 			}
 			if bid == nil {
 				return
 			}
 			mu.Lock()
-			bids = append(bids, PayloadBid{BuilderURL: url, Bid: bid})
+			bids = append(bids, PayloadBid{Entry: e, Bid: bid})
 			mu.Unlock()
-		}(url)
+		}(e)
 	}
 	wg.Wait()
 	return bids, nil
@@ -230,13 +238,12 @@ func (s *Service) SubmitSignedBeaconBlock(ctx context.Context, builderURL string
 	return c.SubmitSignedBeaconBlock(ctx, b)
 }
 
-// Routed to the builder named in the signed request auth.
-func (s *Service) SubmitBuilderPreferences(ctx context.Context, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1) error {
+// The dial target is carried alongside the request, the signed auth data is opaque and may not be a URL.
+func (s *Service) SubmitBuilderPreferences(ctx context.Context, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1, url string) error {
 	ctx, span := trace.StartSpan(ctx, "builder.SubmitBuilderPreferences")
 	defer span.End()
-	url := string(req.GetAuth().GetMessage().GetData())
 	if url == "" {
-		return errors.New("builder preferences missing builder url")
+		return errors.New("builder preferences missing dial url")
 	}
 	c, err := s.clientFor(url)
 	if err != nil {

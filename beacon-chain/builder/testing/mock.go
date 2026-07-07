@@ -124,7 +124,7 @@ func (s *MockBuilderService) RegisterValidator(context.Context, []*ethpb.SignedV
 }
 
 // SubmitBuilderPreferences for mocking.
-func (s *MockBuilderService) SubmitBuilderPreferences(_ context.Context, _ [48]byte, _ *ethpb.BuilderPreferencesRequestV1) error {
+func (s *MockBuilderService) SubmitBuilderPreferences(_ context.Context, _ [48]byte, _ *ethpb.BuilderPreferencesRequestV1, _ string) error {
 	return s.ErrSubmitBuilderPreferences
 }
 
@@ -134,12 +134,12 @@ func (s *MockBuilderService) SubmitBlindedBlockPostFulu(_ context.Context, _ int
 }
 
 // GetExecutionPayloadBid for mocking.
-func (s *MockBuilderService) GetExecutionPayloadBid(_ context.Context, _ primitives.Slot, _, _ [32]byte, _ [48]byte, _ []*ethpb.SignedRequestAuthV1) ([]beaconbuilder.PayloadBid, error) {
+func (s *MockBuilderService) GetExecutionPayloadBid(_ context.Context, _ primitives.Slot, _, _ [32]byte, _ [48]byte, _ []*ethpb.BuilderRequestEntry) ([]beaconbuilder.PayloadBid, error) {
 	if s.PayloadBids != nil {
 		return s.PayloadBids, s.ErrGetExecutionPayloadBid
 	}
 	if s.PayloadBid != nil {
-		return []beaconbuilder.PayloadBid{{Bid: s.PayloadBid}}, s.ErrGetExecutionPayloadBid
+		return []beaconbuilder.PayloadBid{{Entry: &ethpb.BuilderRequestEntry{}, Bid: s.PayloadBid}}, s.ErrGetExecutionPayloadBid
 	}
 	return nil, s.ErrGetExecutionPayloadBid
 }

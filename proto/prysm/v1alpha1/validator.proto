@@ -979,9 +979,24 @@ message BlockRequest {
   // populated state root.
   bool eager_payload_state_root = 6;
 
-  // Signed builder request auths for this slot, one per configured builder.
-  // The beacon node forwards the auth matching its builder when requesting a bid.
-  repeated SignedRequestAuthV1 builder_request_auths = 7;
+  // One entry per configured builder for this proposal slot.
+  repeated BuilderRequestEntry builder_entries = 7;
+}
+
+// BuilderRequestEntry carries one builder's auth and per-builder settings on a block request.
+message BuilderRequestEntry {
+  // Signed over the entry's auth data, forwarded to the builder byte-for-byte unchanged.
+  SignedRequestAuthV1 auth = 1;
+  // url is the HTTP dial target (the builder itself or a sidecar).
+  string url = 2;
+  // pubkey optionally binds trusted execution payments to this builder's on-chain key.
+  bytes pubkey = 3;
+  // Maximum execution payment (in Gwei) the proposer accepts from this builder.
+  uint64 max_execution_payment = 4;
+  // Bids below this value (in Gwei) from this builder are discarded.
+  uint64 min_bid = 5;
+  // Percent multiplier biasing this builder's bid against the local payload, 100 is neutral.
+  uint64 builder_boost_factor = 6;
 }
 
 message ProposeResponse {

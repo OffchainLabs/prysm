@@ -39,6 +39,9 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 			}
 			if optionPayload.Builder != nil {
 				p.BuilderConfig = BuilderConfigFromConsensus(optionPayload.Builder)
+				if err := p.BuilderConfig.verify(); err != nil {
+					return nil, errors.Wrapf(err, "invalid builder config for proposer %s", key)
+				}
 			}
 			p.GasLimit = optionPayload.GasLimit
 			settings.ProposeConfig[bytesutil.ToBytes48(decodedKey)] = p
@@ -59,6 +62,9 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 		}
 		if ps.DefaultConfig.Builder != nil {
 			d.BuilderConfig = BuilderConfigFromConsensus(ps.DefaultConfig.Builder)
+			if err := d.BuilderConfig.verify(); err != nil {
+				return nil, errors.Wrap(err, "invalid default builder config")
+			}
 		}
 		d.GasLimit = ps.DefaultConfig.GasLimit
 		settings.DefaultConfig = d
@@ -79,13 +85,70 @@ func verifyOption(key string, option *validatorpb.ProposerOptionPayload) error {
 	return nil
 }
 
+// MaxAuthDataSize is MAX_DATA_SIZE from the builder specs RequestAuthV1.
+const MaxAuthDataSize = 4096
+
+// BuilderEntry is one builder in a BuilderConfig, URL is the HTTP dial target.
+type BuilderEntry struct {
+	URL string `json:"url" yaml:"url"`
+	// Pubkey binds trusted execution payments to this builder's on-chain key.
+	Pubkey string `json:"pubkey,omitempty" yaml:"pubkey,omitempty"`
+	// AuthData is the 0x-hex bytes signed into request auths, defaults to the UTF-8 bytes of URL.
+	AuthData            string           `json:"auth_data,omitempty" yaml:"auth_data,omitempty"`
+	MaxExecutionPayment validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"`
+	MinBid              validator.Uint64 `json:"min_bid,omitempty" yaml:"min_bid,omitempty"`
+	BuilderBoostFactor  validator.Uint64 `json:"builder_boost_factor,omitempty" yaml:"builder_boost_factor,omitempty"`
+}
+
+// AuthDataBytes returns the bytes signed into this entry's request auths.
+func (e *BuilderEntry) AuthDataBytes() ([]byte, error) {
+	data := []byte(e.URL)
+	if e.AuthData != "" {
+		var err error
+		data, err = hexutil.Decode(e.AuthData)
+		if err != nil {
+			return nil, errors.Wrapf(err, "builder entry auth_data %q is not valid 0x-hex", e.AuthData)
+		}
+	}
+	if len(data) > MaxAuthDataSize {
+		return nil, fmt.Errorf("builder entry auth data exceeds %d bytes", MaxAuthDataSize)
+	}
+	return data, nil
+}
+
 // BuilderConfig is the struct representation of the JSON config file set in the validator through the CLI.
 // GasLimit is a number set to help the network decide on the maximum gas in each block.
 type BuilderConfig struct {
 	Enabled             bool             `json:"enabled" yaml:"enabled"`
 	GasLimit            validator.Uint64 `json:"gas_limit,omitempty" yaml:"gas_limit,omitempty"`
-	Relays              []string         `json:"relays,omitempty" yaml:"relays,omitempty"`
+	Builders            []BuilderEntry   `json:"builders,omitempty" yaml:"builders,omitempty"`
 	MaxExecutionPayment validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"`
+	MinBid              validator.Uint64 `json:"min_bid,omitempty" yaml:"min_bid,omitempty"`
+	BuilderBoostFactor  validator.Uint64 `json:"builder_boost_factor,omitempty" yaml:"builder_boost_factor,omitempty"`
+}
+
+// verify rejects entries whose auth data is malformed and duplicate (url, auth data) pairs, compared as decoded bytes.
+func (bc *BuilderConfig) verify() error {
+	if bc == nil {
+		return nil
+	}
+	type pair struct {
+		url  string
+		data string
+	}
+	seen := make(map[pair]bool, len(bc.Builders))
+	for _, e := range bc.Builders {
+		data, err := e.AuthDataBytes()
+		if err != nil {
+			return err
+		}
+		p := pair{url: e.URL, data: string(data)}
+		if seen[p] {
+			return fmt.Errorf("duplicate builder entry for url %q and auth data %q", e.URL, e.AuthData)
+		}
+		seen[p] = true
+	}
+	return nil
 }
 
 // BuilderConfigFromConsensus converts protobuf to a builder config used in in-memory storage
@@ -97,11 +160,31 @@ func BuilderConfigFromConsensus(from *validatorpb.BuilderConfig) *BuilderConfig 
 		Enabled:             from.Enabled,
 		GasLimit:            from.GasLimit,
 		MaxExecutionPayment: from.MaxExecutionPayment,
+		MinBid:              from.MinBid,
+		BuilderBoostFactor:  from.BuilderBoostFactor,
 	}
-	if from.Relays != nil {
-		relays := make([]string, len(from.Relays))
-		copy(relays, from.Relays)
-		c.Relays = relays
+	for _, e := range from.Builders {
+		if e.GetUrl() == "" {
+			continue
+		}
+		c.Builders = append(c.Builders, BuilderEntry{
+			URL:                 e.Url,
+			Pubkey:              e.Pubkey,
+			AuthData:            e.AuthData,
+			MaxExecutionPayment: e.MaxExecutionPayment,
+			MinBid:              e.MinBid,
+			BuilderBoostFactor:  e.BuilderBoostFactor,
+		})
+	}
+	// relays is the deprecated name for builders, read as a fallback.
+	if len(c.Builders) == 0 && len(from.Relays) > 0 {
+		log.Warn("Proposer settings builder.relays is deprecated, use builder.builders entries")
+		for _, r := range from.Relays {
+			if r == "" {
+				continue
+			}
+			c.Builders = append(c.Builders, BuilderEntry{URL: r})
+		}
 	}
 	return c
 }
@@ -242,11 +325,12 @@ func (bc *BuilderConfig) Clone() *BuilderConfig {
 	c.Enabled = bc.Enabled
 	c.GasLimit = bc.GasLimit
 	c.MaxExecutionPayment = bc.MaxExecutionPayment
-	var relays []string
-	if bc.Relays != nil {
-		relays = make([]string, len(bc.Relays))
-		copy(relays, bc.Relays)
-		c.Relays = relays
+	c.MinBid = bc.MinBid
+	c.BuilderBoostFactor = bc.BuilderBoostFactor
+	if bc.Builders != nil {
+		builders := make([]BuilderEntry, len(bc.Builders))
+		copy(builders, bc.Builders)
+		c.Builders = builders
 	}
 	return c
 }
@@ -266,14 +350,20 @@ func (bc *BuilderConfig) ToConsensus() *validatorpb.BuilderConfig {
 	}
 	c := &validatorpb.BuilderConfig{}
 	c.Enabled = bc.Enabled
-	var relays []string
-	if bc.Relays != nil {
-		relays = make([]string, len(bc.Relays))
-		copy(relays, bc.Relays)
-		c.Relays = relays
+	for _, e := range bc.Builders {
+		c.Builders = append(c.Builders, &validatorpb.BuilderEntry{
+			Url:                 e.URL,
+			Pubkey:              e.Pubkey,
+			AuthData:            e.AuthData,
+			MaxExecutionPayment: e.MaxExecutionPayment,
+			MinBid:              e.MinBid,
+			BuilderBoostFactor:  e.BuilderBoostFactor,
+		})
 	}
 	c.GasLimit = bc.GasLimit
 	c.MaxExecutionPayment = bc.MaxExecutionPayment
+	c.MinBid = bc.MinBid
+	c.BuilderBoostFactor = bc.BuilderBoostFactor
 	return c
 }
 

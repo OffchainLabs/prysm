@@ -27,7 +27,7 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 				BuilderConfig: &BuilderConfig{
 					Enabled:             true,
 					GasLimit:            validator.Uint64(40000000),
-					Relays:              []string{"https://example-relay.com"},
+					Builders:            []BuilderEntry{{URL: "https://example-relay.com"}},
 					MaxExecutionPayment: validator.Uint64(1000000000),
 				},
 			},
@@ -39,7 +39,7 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 			BuilderConfig: &BuilderConfig{
 				Enabled:             false,
 				GasLimit:            validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
-				Relays:              []string{"https://example-relay.com"},
+				Builders:            []BuilderEntry{{URL: "https://example-relay.com"}},
 				MaxExecutionPayment: validator.Uint64(2000000000),
 			},
 		},
@@ -66,7 +66,7 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 	t.Run("Happy Path BuilderConfigFromConsensus", func(t *testing.T) {
 		clone := settings.DefaultConfig.BuilderConfig.Clone()
 		config := BuilderConfigFromConsensus(clone.ToConsensus())
-		require.DeepEqual(t, config.Relays, clone.Relays)
+		require.DeepEqual(t, config.Builders, clone.Builders)
 		require.Equal(t, config.Enabled, clone.Enabled)
 		require.Equal(t, config.GasLimit, clone.GasLimit)
 		require.Equal(t, config.MaxExecutionPayment, clone.MaxExecutionPayment)
@@ -116,7 +116,7 @@ func TestProposerSettings_ShouldBeSaved(t *testing.T) {
 						BuilderConfig: &BuilderConfig{
 							Enabled:  true,
 							GasLimit: validator.Uint64(40000000),
-							Relays:   []string{"https://example-relay.com"},
+							Builders: []BuilderEntry{{URL: "https://example-relay.com"}},
 						},
 					},
 				},
@@ -135,7 +135,7 @@ func TestProposerSettings_ShouldBeSaved(t *testing.T) {
 					BuilderConfig: &BuilderConfig{
 						Enabled:  true,
 						GasLimit: validator.Uint64(40000000),
-						Relays:   []string{"https://example-relay.com"},
+						Builders: []BuilderEntry{{URL: "https://example-relay.com"}},
 					},
 				},
 			},
@@ -152,7 +152,7 @@ func TestProposerSettings_ShouldBeSaved(t *testing.T) {
 						BuilderConfig: &BuilderConfig{
 							Enabled:  true,
 							GasLimit: validator.Uint64(40000000),
-							Relays:   []string{"https://example-relay.com"},
+							Builders: []BuilderEntry{{URL: "https://example-relay.com"}},
 						},
 					},
 				},
@@ -163,7 +163,7 @@ func TestProposerSettings_ShouldBeSaved(t *testing.T) {
 					BuilderConfig: &BuilderConfig{
 						Enabled:  true,
 						GasLimit: validator.Uint64(40000000),
-						Relays:   []string{"https://example-relay.com"},
+						Builders: []BuilderEntry{{URL: "https://example-relay.com"}},
 					},
 				},
 			},
@@ -196,7 +196,7 @@ func TestProposerSettings_ShouldBeSaved(t *testing.T) {
 					BuilderConfig: &BuilderConfig{
 						Enabled:  true,
 						GasLimit: validator.Uint64(40000000),
-						Relays:   []string{"https://example-relay.com"},
+						Builders: []BuilderEntry{{URL: "https://example-relay.com"}},
 					},
 				},
 			},
@@ -507,7 +507,7 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 	t.Run("v1 default lifts BuilderConfig.GasLimit to top-level and retains builder relays", func(t *testing.T) {
 		ps := &Settings{
 			DefaultConfig: &Option{
-				BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(42_000_000), Relays: []string{"http://b:8080"}},
+				BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(42_000_000), Builders: []BuilderEntry{{URL: "http://b:8080"}}},
 			},
 		}
 		require.Equal(t, true, ps.UpgradeToV2())
@@ -515,8 +515,8 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		require.Equal(t, validator.Uint64(42_000_000), ps.DefaultConfig.GasLimit)
 		// BuilderConfig is retained so the gloas builder-API relays/enabled survive the upgrade.
 		require.NotNil(t, ps.DefaultConfig.BuilderConfig)
-		require.Equal(t, 1, len(ps.DefaultConfig.BuilderConfig.Relays))
-		require.Equal(t, "http://b:8080", ps.DefaultConfig.BuilderConfig.Relays[0])
+		require.Equal(t, 1, len(ps.DefaultConfig.BuilderConfig.Builders))
+		require.Equal(t, "http://b:8080", ps.DefaultConfig.BuilderConfig.Builders[0].URL)
 	})
 
 	t.Run("v1 top-level GasLimit already set is preserved", func(t *testing.T) {

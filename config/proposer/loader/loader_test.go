@@ -995,7 +995,7 @@ func Test_ProposerSettingsLoaderWithOnlyBuilder_DoesNotSaveInDB(t *testing.T) {
 					BuilderConfig: &proposer.BuilderConfig{
 						Enabled:  true,
 						GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
-						Relays:   nil,
+						Builders: nil,
 					},
 				},
 			}

@@ -53,6 +53,7 @@ func (vs *Server) setExecutionPayloadBid(
 	local *consensusblocks.GetPayloadResponse,
 	builderBid *ethpb.SignedExecutionPayloadBid,
 	maxExecutionPayment uint64,
+	builderBoost uint64,
 	selfBuildOnly bool,
 ) (bidSource, error) {
 	_, span := trace.StartSpan(ctx, "ProposerServer.setExecutionPayloadBid")
@@ -64,7 +65,7 @@ func (vs *Server) setExecutionPayloadBid(
 
 	if !selfBuildOnly {
 		p2pBid := vs.cachedP2PBid(sBlk, local)
-		if bestBid, src := bestBid(local, p2pBid, builderBid, maxExecutionPayment); bestBid != nil {
+		if bestBid, src := bestBid(local, p2pBid, builderBid, maxExecutionPayment, builderBoost); bestBid != nil {
 			if err := sBlk.SetSignedExecutionPayloadBid(bestBid); err != nil {
 				return bidSourceSelfBuild, errors.Wrap(err, "could not set remote execution payload bid")
 			}
@@ -101,28 +102,29 @@ func (vs *Server) setExecutionPayloadBid(
 	return bidSourceSelfBuild, nil
 }
 
-// Returns a nil bid when the local self-build wins.
+// Returns a nil bid when the local self-build wins. The builder boost biases only the Builder-API bid against the local payload.
 func bestBid(
 	local *consensusblocks.GetPayloadResponse,
 	p2pBid *ethpb.SignedExecutionPayloadBid,
 	builderBid *ethpb.SignedExecutionPayloadBid,
 	maxExecutionPayment uint64,
+	builderBoost uint64,
 ) (*ethpb.SignedExecutionPayloadBid, bidSource) {
 	var bestBid *ethpb.SignedExecutionPayloadBid
 	bestValue := primitives.WeiToGwei(local.Bid)
 	src := bidSourceSelfBuild
 
-	consider := func(bid *ethpb.SignedExecutionPayloadBid, from bidSource) {
+	consider := func(bid *ethpb.SignedExecutionPayloadBid, from bidSource, boost uint64) {
 		if bid == nil {
 			return
 		}
-		if value := effectiveBidValue(bid, maxExecutionPayment); value > bestValue {
+		if value := boostedValue(effectiveBidValue(bid, maxExecutionPayment), boost); value > bestValue {
 			bestBid, bestValue, src = bid, value, from
 		}
 	}
 
-	consider(p2pBid, bidSourceP2P)
-	consider(builderBid, bidSourceBuilderAPI)
+	consider(p2pBid, bidSourceP2P, 0)
+	consider(builderBid, bidSourceBuilderAPI, builderBoost)
 
 	return bestBid, src
 }
@@ -146,45 +148,53 @@ type builderBidQuery struct {
 	parentRoot     [32]byte
 	parentHash     [32]byte
 	pubkey         [fieldparams.BLSPubkeyLength]byte
-	maxPayment     uint64
 	feeRecipient   []byte
 	parentGasLimit uint64
 	targetGasLimit uint64
-	auths          []*ethpb.SignedRequestAuthV1
+	entries        []*ethpb.BuilderRequestEntry
 }
 
-func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.BeaconState, q *builderBidQuery) (*ethpb.SignedExecutionPayloadBid, string) {
-	if vs.BlockBuilder == nil || len(q.auths) == 0 {
-		return nil, ""
+// Returns the winning bid, the dial URL to submit the signed block to, the payment cap, and the builder boost factor the bid was accepted under.
+func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.BeaconState, q *builderBidQuery) (*ethpb.SignedExecutionPayloadBid, string, uint64, uint64) {
+	if vs.BlockBuilder == nil || len(q.entries) == 0 {
+		return nil, "", 0, 0
 	}
 	ctx, cancel := context.WithTimeout(ctx, builderBidTimeout)
 	defer cancel()
-	bids, err := vs.BlockBuilder.GetExecutionPayloadBid(ctx, q.slot, q.parentHash, q.parentRoot, q.pubkey, q.auths)
+	bids, err := vs.BlockBuilder.GetExecutionPayloadBid(ctx, q.slot, q.parentHash, q.parentRoot, q.pubkey, q.entries)
 	if err != nil {
 		builderGetPayloadMissCount.Inc()
 		log.WithError(err).Error("Could not get builder execution payload bid")
-		return nil, ""
+		return nil, "", 0, 0
 	}
 
 	var (
 		best      *ethpb.SignedExecutionPayloadBid
 		bestURL   string
+		bestCap   uint64
+		bestBoost uint64
 		bestValue primitives.Gwei
 	)
 	bidLog := make([]string, 0, len(bids))
 	for _, pb := range bids {
-		if pb.Bid == nil {
+		if pb.Bid == nil || pb.Entry == nil {
 			continue
 		}
-		if err := vs.validateBuilderBid(head, pb.Bid, q); err != nil {
-			bidLog = append(bidLog, fmt.Sprintf("%s(builder=%d discarded: %v)", logs.MaskCredentialsLogging(pb.BuilderURL), pb.Bid.Message.BuilderIndex, err))
+		identity := logs.MaskCredentialsLogging(pb.Entry.GetUrl())
+		maxPayment := pb.Entry.GetMaxExecutionPayment()
+		if err := vs.validateBuilderBid(head, pb.Bid, q, maxPayment, pb.Entry.GetPubkey()); err != nil {
+			bidLog = append(bidLog, fmt.Sprintf("%s(builder=%d discarded: %v)", identity, pb.Bid.Message.BuilderIndex, err))
 			continue
 		}
-		value := effectiveBidValue(pb.Bid, q.maxPayment)
+		value := effectiveBidValue(pb.Bid, maxPayment)
+		if minBid := pb.Entry.GetMinBid(); minBid > 0 && uint64(value) < minBid {
+			bidLog = append(bidLog, fmt.Sprintf("%s(builder=%d discarded: value %d below min_bid %d)", identity, pb.Bid.Message.BuilderIndex, value, minBid))
+			continue
+		}
 		bidLog = append(bidLog, fmt.Sprintf("%s(builder=%d value=%d payment=%d effective=%d)",
-			logs.MaskCredentialsLogging(pb.BuilderURL), pb.Bid.Message.BuilderIndex, pb.Bid.Message.Value, pb.Bid.Message.ExecutionPayment, value))
+			identity, pb.Bid.Message.BuilderIndex, pb.Bid.Message.Value, pb.Bid.Message.ExecutionPayment, value))
 		if best == nil || value > bestValue {
-			best, bestURL, bestValue = pb.Bid, pb.BuilderURL, value
+			best, bestURL, bestCap, bestBoost, bestValue = pb.Bid, pb.Entry.GetUrl(), maxPayment, pb.Entry.GetBuilderBoostFactor(), value
 		}
 	}
 
@@ -194,19 +204,41 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 
 	if best == nil {
 		builderGetPayloadMissCount.Inc()
-		return nil, ""
+		return nil, "", 0, 0
 	}
-	return best, bestURL
+	return best, bestURL, bestCap, bestBoost
+}
+
+// boostedValue biases a builder bid against the local payload, 0 and 100 are neutral.
+func boostedValue(value primitives.Gwei, boost uint64) primitives.Gwei {
+	if boost == 0 || boost == 100 {
+		return value
+	}
+	boosted := (uint64(value) / 100) * boost
+	if boost > 100 && boosted < uint64(value) { // saturate on overflow
+		return primitives.Gwei(^uint64(0))
+	}
+	return primitives.Gwei(boosted)
 }
 
 // validateBuilderBid mirrors process_execution_payload_bid so a chosen bid never invalidates the proposer's own block.
-func (vs *Server) validateBuilderBid(head state.BeaconState, signed *ethpb.SignedExecutionPayloadBid, q *builderBidQuery) error {
+func (vs *Server) validateBuilderBid(head state.BeaconState, signed *ethpb.SignedExecutionPayloadBid, q *builderBidQuery, maxPayment uint64, trustedPubkey []byte) error {
 	if signed == nil || signed.Message == nil {
 		return errors.New("nil builder bid")
 	}
 	bid := signed.Message
-	if uint64(bid.ExecutionPayment) > q.maxPayment {
-		return errors.Errorf("bid execution payment %d exceeds max %d", bid.ExecutionPayment, q.maxPayment)
+	if uint64(bid.ExecutionPayment) > maxPayment {
+		return errors.Errorf("bid execution payment %d exceeds max %d", bid.ExecutionPayment, maxPayment)
+	}
+	// Execution payments are off-protocol promises, an entry that pins a pubkey only credits that builder's promises.
+	if bid.ExecutionPayment > 0 && len(trustedPubkey) == fieldparams.BLSPubkeyLength {
+		pub, err := head.BuilderPubkey(bid.BuilderIndex)
+		if err != nil {
+			return errors.Wrap(err, "could not get builder pubkey for payment trust check")
+		}
+		if pub != bytesutil.ToBytes48(trustedPubkey) {
+			return errors.Errorf("builder %d is not the trusted payment builder for this entry", bid.BuilderIndex)
+		}
 	}
 
 	if vs.NewExecutionPayloadBidVerifier == nil {

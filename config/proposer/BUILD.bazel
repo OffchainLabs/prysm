@@ -24,13 +24,18 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["settings_test.go"],
+    srcs = [
+        "settings_authdata_test.go",
+        "settings_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
+        "//config:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/validator:go_default_library",
         "//encoding/bytesutil:go_default_library",
+        "//proto/prysm/v1alpha1/validator-client:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "@com_github_ethereum_go_ethereum//common:go_default_library",

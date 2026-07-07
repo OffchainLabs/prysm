@@ -21,13 +21,10 @@ func TestServer_SubmitBuilderPreferences(t *testing.T) {
 		},
 	}
 
-	t.Run("stores max execution payment on success", func(t *testing.T) {
+	t.Run("forwards on success", func(t *testing.T) {
 		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true}}
 		_, err := vs.SubmitBuilderPreferences(t.Context(), req)
 		require.NoError(t, err)
-		v, ok := vs.maxExecutionPayments.Load(pubkey)
-		require.Equal(t, true, ok)
-		require.Equal(t, uint64(1000), v.(uint64))
 	})
 
 	t.Run("nil request errors", func(t *testing.T) {
@@ -40,9 +37,6 @@ func TestServer_SubmitBuilderPreferences(t *testing.T) {
 		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: false}}
 		_, err := vs.SubmitBuilderPreferences(t.Context(), req)
 		require.NoError(t, err)
-		v, ok := vs.maxExecutionPayments.Load(pubkey)
-		require.Equal(t, true, ok)
-		require.Equal(t, uint64(1000), v.(uint64))
 	})
 
 	t.Run("nil block builder errors", func(t *testing.T) {
@@ -51,11 +45,9 @@ func TestServer_SubmitBuilderPreferences(t *testing.T) {
 		require.ErrorContains(t, "builder is not configured", err)
 	})
 
-	t.Run("does not store when builder submission fails", func(t *testing.T) {
+	t.Run("builder submission failure errors", func(t *testing.T) {
 		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true, ErrSubmitBuilderPreferences: errors.New("boom")}}
 		_, err := vs.SubmitBuilderPreferences(t.Context(), req)
 		require.ErrorContains(t, "could not submit builder preferences", err)
-		_, ok := vs.maxExecutionPayments.Load(pubkey)
-		require.Equal(t, false, ok)
 	})
 }

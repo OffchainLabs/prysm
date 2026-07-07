@@ -243,15 +243,24 @@ func (s *Store) configuration() (*Configuration, error) {
 	// To get the same behavior as the BoltDB implementation, we need to convert empty array to nil.
 	if config.ProposerSettings != nil &&
 		config.ProposerSettings.DefaultConfig != nil &&
-		config.ProposerSettings.DefaultConfig.Builder != nil &&
-		len(config.ProposerSettings.DefaultConfig.Builder.Relays) == 0 {
-		config.ProposerSettings.DefaultConfig.Builder.Relays = nil
+		config.ProposerSettings.DefaultConfig.Builder != nil {
+		if len(config.ProposerSettings.DefaultConfig.Builder.Relays) == 0 {
+			config.ProposerSettings.DefaultConfig.Builder.Relays = nil
+		}
+		if len(config.ProposerSettings.DefaultConfig.Builder.Builders) == 0 {
+			config.ProposerSettings.DefaultConfig.Builder.Builders = nil
+		}
 	}
 
 	if config.ProposerSettings != nil && config.ProposerSettings.ProposerConfig != nil {
 		for _, option := range config.ProposerSettings.ProposerConfig {
-			if option.Builder != nil && len(option.Builder.Relays) == 0 {
-				option.Builder.Relays = nil
+			if option.Builder != nil {
+				if len(option.Builder.Relays) == 0 {
+					option.Builder.Relays = nil
+				}
+				if len(option.Builder.Builders) == 0 {
+					option.Builder.Builders = nil
+				}
 			}
 		}
 	}

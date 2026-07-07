@@ -14,6 +14,7 @@ import (
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -109,6 +110,7 @@ func TestBestBid(t *testing.T) {
 		p2p        *ethpb.SignedExecutionPayloadBid
 		builder    *ethpb.SignedExecutionPayloadBid
 		maxPayment uint64
+		boost      uint64
 		wantSrc    bidSource
 		wantNil    bool
 	}{
@@ -123,10 +125,12 @@ func TestBestBid(t *testing.T) {
 		{name: "payment cap keeps local ahead", local: localWithGwei(100), builder: newBid(50, 100, builderIdx), maxPayment: 40, wantSrc: bidSourceSelfBuild, wantNil: true},
 		{name: "payment within cap wins", local: localWithGwei(100), builder: newBid(50, 100, builderIdx), maxPayment: 60, wantSrc: bidSourceBuilderAPI},
 		{name: "saturated bid still beats local", local: localWithGwei(100), builder: newBid(math.MaxUint64-5, 100, builderIdx), maxPayment: math.MaxUint64, wantSrc: bidSourceBuilderAPI},
+		{name: "boost lifts builder over local", local: localWithGwei(1500), builder: newBid(1000, 0, builderIdx), maxPayment: 1000, boost: 200, wantSrc: bidSourceBuilderAPI},
+		{name: "low boost keeps local ahead", local: localWithGwei(1500), builder: newBid(1000, 0, builderIdx), maxPayment: 1000, boost: 50, wantSrc: bidSourceSelfBuild, wantNil: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, src := bestBid(tt.local, tt.p2p, tt.builder, tt.maxPayment)
+			got, src := bestBid(tt.local, tt.p2p, tt.builder, tt.maxPayment, tt.boost)
 			require.Equal(t, tt.wantSrc, src)
 			if tt.wantNil {
 				require.IsNil(t, got)
@@ -166,29 +170,69 @@ func TestValidateBuilderBid(t *testing.T) {
 		}
 	}
 
-	query := func(maxPayment uint64) *builderBidQuery {
+	query := func() *builderBidQuery {
 		return &builderBidQuery{
 			slot:       slot,
 			parentRoot: parentRoot,
 			parentHash: parentHash,
-			maxPayment: maxPayment,
 		}
 	}
 
 	t.Run("nil bid", func(t *testing.T) {
 		vs := &Server{}
-		require.ErrorContains(t, "nil builder bid", vs.validateBuilderBid(head, nil, query(1000)))
+		require.ErrorContains(t, "nil builder bid", vs.validateBuilderBid(head, nil, query(), 1000, nil))
 	})
 
 	t.Run("payment exceeds max", func(t *testing.T) {
 		vs := &Server{}
-		err := vs.validateBuilderBid(head, fullBid(), query(50))
+		err := vs.validateBuilderBid(head, fullBid(), query(), 50, nil)
 		require.ErrorContains(t, "exceeds max", err)
+	})
+
+	t.Run("payment from wrong builder for pinned entry rejected", func(t *testing.T) {
+		trustedState, err := util.NewBeaconStateGloas(func(st *ethpb.BeaconStateGloas) error {
+			st.Builders = []*ethpb.Builder{{}, {}, {}, {Pubkey: bytesutil.PadTo([]byte{1}, 48)}}
+			return nil
+		})
+		require.NoError(t, err)
+		vs := &Server{NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
+			return &fakeBidVerifier{}
+		}}
+		err = vs.validateBuilderBid(trustedState, fullBid(), query(), 1000, bytesutil.PadTo([]byte{2}, 48))
+		require.ErrorContains(t, "not the trusted payment builder", err)
+	})
+
+	t.Run("payment from pinned builder accepted", func(t *testing.T) {
+		trustedState, err := util.NewBeaconStateGloas(func(st *ethpb.BeaconStateGloas) error {
+			st.Builders = []*ethpb.Builder{{}, {}, {}, {Pubkey: bytesutil.PadTo([]byte{1}, 48)}}
+			return nil
+		})
+		require.NoError(t, err)
+		vs := &Server{NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
+			return &fakeBidVerifier{}
+		}}
+		require.NoError(t, vs.validateBuilderBid(trustedState, fullBid(), query(), 1000, bytesutil.PadTo([]byte{1}, 48)))
+	})
+
+	t.Run("unpinned entry accepts payment from any builder", func(t *testing.T) {
+		vs := &Server{NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
+			return &fakeBidVerifier{}
+		}}
+		require.NoError(t, vs.validateBuilderBid(head, fullBid(), query(), 1000, nil))
+	})
+
+	t.Run("zero payment ignores pinned pubkey", func(t *testing.T) {
+		vs := &Server{NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
+			return &fakeBidVerifier{}
+		}}
+		bid := fullBid()
+		bid.Message.ExecutionPayment = 0
+		require.NoError(t, vs.validateBuilderBid(head, bid, query(), 1000, bytesutil.PadTo([]byte{2}, 48)))
 	})
 
 	t.Run("verifier not ready", func(t *testing.T) {
 		vs := &Server{}
-		err := vs.validateBuilderBid(head, fullBid(), query(1000))
+		err := vs.validateBuilderBid(head, fullBid(), query(), 1000, nil)
 		require.ErrorContains(t, "bid verifier not ready", err)
 	})
 
@@ -198,7 +242,7 @@ func TestValidateBuilderBid(t *testing.T) {
 			captured = &fakeBidVerifier{}
 			return captured
 		}}
-		require.NoError(t, vs.validateBuilderBid(head, fullBid(), query(1000)))
+		require.NoError(t, vs.validateBuilderBid(head, fullBid(), query(), 1000, nil))
 
 		// The parent-linkage closures must match only the block being produced.
 		require.Equal(t, true, captured.rootSeenFn(parentRoot))
@@ -211,7 +255,7 @@ func TestValidateBuilderBid(t *testing.T) {
 		vs := &Server{NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
 			return &fakeBidVerifier{sigErr: errors.New("bad signature")}
 		}}
-		err := vs.validateBuilderBid(head, fullBid(), query(1000))
+		err := vs.validateBuilderBid(head, fullBid(), query(), 1000, nil)
 		require.ErrorContains(t, "bad signature", err)
 	})
 
@@ -219,7 +263,7 @@ func TestValidateBuilderBid(t *testing.T) {
 		vs := &Server{NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
 			return &fakeBidVerifier{feeErr: errors.New("fee recipient mismatch")}
 		}}
-		err := vs.validateBuilderBid(head, fullBid(), query(1000))
+		err := vs.validateBuilderBid(head, fullBid(), query(), 1000, nil)
 		require.ErrorContains(t, "fee recipient mismatch", err)
 	})
 
@@ -227,7 +271,7 @@ func TestValidateBuilderBid(t *testing.T) {
 		vs := &Server{NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
 			return &fakeBidVerifier{gasErr: errors.New("gas limit incompatible")}
 		}}
-		err := vs.validateBuilderBid(head, fullBid(), query(1000))
+		err := vs.validateBuilderBid(head, fullBid(), query(), 1000, nil)
 		require.ErrorContains(t, "gas limit incompatible", err)
 	})
 }
@@ -237,13 +281,13 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 	parentRoot := [32]byte{1, 2, 3}
 	parentHash := [32]byte{9, 9, 9}
 	pubkey := [48]byte{4, 5, 6}
-	auths := []*ethpb.SignedRequestAuthV1{{}}
+	entries := []*ethpb.BuilderRequestEntry{{Auth: &ethpb.SignedRequestAuthV1{Message: &ethpb.RequestAuthV1{Data: []byte("http://builder")}}, Url: "http://builder", MaxExecutionPayment: 1000}}
 	head, err := util.NewBeaconStateGloas()
 	require.NoError(t, err)
 
 	bid := func(builderIndex primitives.BuilderIndex, value primitives.Gwei) beaconbuilder.PayloadBid {
 		return beaconbuilder.PayloadBid{
-			BuilderURL: "http://builder",
+			Entry: entries[0],
 			Bid: &ethpb.SignedExecutionPayloadBid{
 				Message: &ethpb.ExecutionPayloadBid{
 					Slot:            slot,
@@ -262,26 +306,26 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 	passAll := func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
 		return &fakeBidVerifier{}
 	}
-	query := func(auths []*ethpb.SignedRequestAuthV1) *builderBidQuery {
+	query := func(entries []*ethpb.BuilderRequestEntry) *builderBidQuery {
 		return &builderBidQuery{
 			slot:       slot,
 			parentRoot: parentRoot,
 			parentHash: parentHash,
 			pubkey:     pubkey,
-			auths:      auths,
+			entries:    entries,
 		}
 	}
 
 	t.Run("no builder configured", func(t *testing.T) {
 		vs := &Server{}
-		got, url := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(auths))
+		got, url, _, _ := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
 		require.IsNil(t, got)
 		require.Equal(t, "", url)
 	})
 
-	t.Run("no auths", func(t *testing.T) {
+	t.Run("no entries", func(t *testing.T) {
 		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{}}
-		got, _ := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(nil))
+		got, _, _, _ := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(nil))
 		require.IsNil(t, got)
 	})
 
@@ -290,10 +334,11 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 			BlockBuilder:                   &builderTest.MockBuilderService{PayloadBids: []beaconbuilder.PayloadBid{bid(1, 500), bid(2, 1500), bid(3, 900)}},
 			NewExecutionPayloadBidVerifier: passAll,
 		}
-		got, url := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(auths))
+		got, url, gotCap, _ := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
 		require.NotNil(t, got)
 		require.Equal(t, primitives.BuilderIndex(2), got.Message.BuilderIndex)
 		require.Equal(t, "http://builder", url)
+		require.Equal(t, uint64(1000), gotCap)
 	})
 
 	t.Run("discards invalid bids", func(t *testing.T) {
@@ -308,7 +353,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 				return &fakeBidVerifier{}
 			},
 		}
-		got, _ := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(auths))
+		got, _, _, _ := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
 		require.NotNil(t, got)
 		require.Equal(t, primitives.BuilderIndex(1), got.Message.BuilderIndex)
 	})
@@ -320,7 +365,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 				return &fakeBidVerifier{activeErr: errors.New("not active")}
 			},
 		}
-		got, url := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(auths))
+		got, url, _, _ := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
 		require.IsNil(t, got)
 		require.Equal(t, "", url)
 	})
@@ -330,7 +375,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 			BlockBuilder:                   &builderTest.MockBuilderService{ErrGetExecutionPayloadBid: errors.New("boom")},
 			NewExecutionPayloadBidVerifier: passAll,
 		}
-		got, _ := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(auths))
+		got, _, _, _ := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(entries))
 		require.IsNil(t, got)
 	})
 }
@@ -390,7 +435,7 @@ func TestSetExecutionPayloadBid_PrefersBuilderBid(t *testing.T) {
 
 	// No P2P cache, so the Builder-API bid is the only remote candidate.
 	vs := &Server{}
-	src, err := vs.setExecutionPayloadBid(t.Context(), sBlk, local, builderBid, 1000, false)
+	src, err := vs.setExecutionPayloadBid(t.Context(), sBlk, local, builderBid, 1000, 100, false)
 	require.NoError(t, err)
 	require.Equal(t, bidSourceBuilderAPI, src)
 
