@@ -486,6 +486,16 @@ func (c *grpcValidatorClient) EnsureReady(ctx context.Context) bool {
 	return fallback.EnsureReady(ctx, provider, c.nodeClient)
 }
 
+// ConnectionGeneration returns a monotonic counter that advances on each
+// fallback host switch of this client's gRPC connection provider.
+func (c *grpcValidatorClient) ConnectionGeneration() uint64 {
+	provider := c.grpcClientManager.conn.GetGrpcConnectionProvider()
+	if provider == nil {
+		return 0
+	}
+	return provider.ConnectionCounter()
+}
+
 // Gloas Fork Methods
 //
 // Mirrors the REST split: stateless self-build publishes the full envelope + blobs as the contents

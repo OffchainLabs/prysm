@@ -5,7 +5,6 @@ import (
 
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/api/rest"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
@@ -33,21 +32,6 @@ func (c *NodeConnection) GetGrpcConnectionProvider() grpcutil.GrpcConnectionProv
 // GetRestConnectionProvider returns the REST connection provider.
 func (c *NodeConnection) GetRestConnectionProvider() rest.RestConnectionProvider {
 	return c.restConnectionProvider
-}
-
-// ConnectionGeneration returns a monotonic counter that advances on each
-// beacon-node fallback host switch of the active provider (REST or gRPC).
-func (c *NodeConnection) ConnectionGeneration() uint64 {
-	if features.Get().EnableBeaconRESTApi {
-		if c.restConnectionProvider != nil {
-			return c.restConnectionProvider.ConnectionCounter()
-		}
-		return 0
-	}
-	if c.grpcConnectionProvider != nil {
-		return c.grpcConnectionProvider.ConnectionCounter()
-	}
-	return 0
 }
 
 // NodeConnectionOption is a functional option for configuring a NodeConnection.

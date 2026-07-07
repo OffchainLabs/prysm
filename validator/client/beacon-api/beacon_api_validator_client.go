@@ -442,6 +442,15 @@ func (c *beaconApiValidatorClient) EnsureReady(ctx context.Context) bool {
 	return fallback.EnsureReady(ctx, c.restProvider, c.nodeClient)
 }
 
+// ConnectionGeneration returns a monotonic counter that advances on each
+// fallback host switch of this client's REST connection provider.
+func (c *beaconApiValidatorClient) ConnectionGeneration() uint64 {
+	if c.restProvider == nil {
+		return 0
+	}
+	return c.restProvider.ConnectionCounter()
+}
+
 // Gloas Fork Methods
 
 func (c *beaconApiValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, beaconBlockRoot [32]byte) (*ethpb.ExecutionPayloadEnvelope, *ethpb.WireBlindedExecutionPayloadEnvelope, error) {
