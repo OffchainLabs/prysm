@@ -387,6 +387,43 @@ func mustMarshalSidecar(t *testing.T, cellsPresent bitfield.Bitlist) []byte {
 	return b
 }
 
+func mustMarshalSidecarCounts(t *testing.T, cellsPresent bitfield.Bitlist, nCells, nProofs int) []byte {
+	t.Helper()
+	cells := make([][]byte, nCells)
+	for i := range cells {
+		cells[i] = make([]byte, 2048)
+	}
+	proofs := make([][]byte, nProofs)
+	for i := range proofs {
+		proofs[i] = make([]byte, 48)
+	}
+	b, err := (&ethpb.PartialDataColumnSidecar{
+		CellsPresentBitmap: cellsPresent,
+		PartialColumn:      cells,
+		KzgProofs:          proofs,
+	}).MarshalSSZ()
+	require.NoError(t, err)
+	return b
+}
+
+func mustMarshalGloasSidecar(t *testing.T, cellsPresent bitfield.Bitlist) []byte {
+	t.Helper()
+	n := cellsPresent.Count()
+	cells := make([][]byte, n)
+	proofs := make([][]byte, n)
+	for i := range cells {
+		cells[i] = make([]byte, 2048)
+		proofs[i] = make([]byte, 48)
+	}
+	b, err := (&ethpb.PartialDataColumnSidecarGloas{
+		CellsPresentBitmap: cellsPresent,
+		PartialColumn:      cells,
+		KzgProofs:          proofs,
+	}).MarshalSSZ()
+	require.NoError(t, err)
+	return b
+}
+
 func assertPeerStatePartsMetadata(t *testing.T, got, want *ethpb.PartialDataColumnPartsMetadata) {
 	t.Helper()
 	if want == nil {
@@ -593,6 +630,7 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 		expectedSentState    func() *ethpb.PartialDataColumnPartsMetadata
 		expectedMesageBitmap bitfield.Bitlist
 		expectedMessage      bool
+		isGloas              bool
 	}{
 		{
 			name: "incoming parts metadata only initializes recvd state",
@@ -757,6 +795,52 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 			},
 			wantErrContains: "requests length mismatch",
 		},
+		{
+			name: "partial message with fewer cells than present bitmap returns malformed error",
+			inputPeerState: func() blocks.PartialDataColumnPeerState {
+				return blocks.PartialDataColumnPeerState{}
+			},
+			inputRPC: func(t *testing.T) *pubsub_pb.PartialMessagesExtension {
+				// Bitmap declares two present cells, but only one cell is carried.
+				return &pubsub_pb.PartialMessagesExtension{
+					PartialMessage: mustMarshalSidecarCounts(t, testBitlist(4, 1, 3), 1, 2),
+				}
+			},
+			wantErrContains: "cells/proofs count does not match present bitmap",
+		},
+		{
+			name: "partial message with fewer proofs than present bitmap returns malformed error",
+			inputPeerState: func() blocks.PartialDataColumnPeerState {
+				return blocks.PartialDataColumnPeerState{}
+			},
+			inputRPC: func(t *testing.T) *pubsub_pb.PartialMessagesExtension {
+				// Bitmap declares two present cells, but only one proof is carried.
+				return &pubsub_pb.PartialMessagesExtension{
+					PartialMessage: mustMarshalSidecarCounts(t, testBitlist(4, 1, 3), 2, 1),
+				}
+			},
+			wantErrContains: "cells/proofs count does not match present bitmap",
+		},
+		{
+			name:    "gloas partial message updates recvd and sent states",
+			isGloas: true,
+			inputPeerState: func() blocks.PartialDataColumnPeerState {
+				return blocks.PartialDataColumnPeerState{}
+			},
+			inputRPC: func(t *testing.T) *pubsub_pb.PartialMessagesExtension {
+				return &pubsub_pb.PartialMessagesExtension{
+					PartialMessage: mustMarshalGloasSidecar(t, testBitlist(4, 1, 3)),
+				}
+			},
+			expectedMessage:      true,
+			expectedMesageBitmap: testBitlist(4, 1, 3),
+			expectedRecvdState: func() *ethpb.PartialDataColumnPartsMetadata {
+				return testPartsMetadata(4, []uint64{1, 3}, nil)
+			},
+			expectedSentState: func() *ethpb.PartialDataColumnPartsMetadata {
+				return testPartsMetadata(4, []uint64{1, 3}, nil)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -764,7 +848,7 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 			peerState := tt.inputPeerState()
 			originalPeerState := peerState.Clone()
 
-			nextPeerState, msg, err := updatePeerStateFromIncomingRPC(peerState, tt.inputRPC(t), false)
+			nextPeerState, msg, err := updatePeerStateFromIncomingRPC(peerState, tt.inputRPC(t), tt.isGloas)
 
 			// updatePeerStateFromIncomingRPC must not mutate the input peerState.
 			require.DeepEqual(t, originalPeerState.Recvd, peerState.Recvd)
@@ -778,6 +862,9 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 			require.NoError(t, err)
 			if tt.expectedMessage {
 				require.NotNil(t, msg)
+				if tt.isGloas {
+					require.IsNil(t, msg.Header)
+				}
 				assertBitlistEqual(t, msg.CellsPresentBitmap, tt.expectedMesageBitmap)
 			} else {
 				require.IsNil(t, msg)
@@ -1146,6 +1233,21 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 				})
 			},
 		},
+		{
+			name: "header with no KZG commitments is ignored without downscoring the peer",
+			setup: func(t *testing.T, _ *PartialColumnBroadcaster) testSetup {
+				col := createPartialColumn(t, 2, nil)
+				header := buildHeaderFromColumn(t, col)
+				header.KzgCommitments = nil
+				msg := &ethpb.PartialDataColumnSidecar{
+					CellsPresentBitmap: testBitlist(2),
+					Header:             []*ethpb.PartialDataColumnHeader{header},
+				}
+				return testSetup{
+					inputRPC: buildIncomingRPC(validTopic, col.GroupID(), msg, nil),
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1250,6 +1352,23 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPartialColumnBroadcaster_makeVerifierFromHeader_noKzgCommitments(t *testing.T) {
+	const topic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	h := newBroadcasterHarness(t, newMockPubSub(nil, nil))
+
+	// A well-formed header whose KZG commitments have been cleared.
+	col := createPartialColumn(t, 2, nil)
+	header := buildHeaderFromColumn(t, col)
+	header.KzgCommitments = nil
+
+	verifier, err := h.broadcaster.makeVerifierFromHeader(
+		[32]byte{}, header, col.Index(), false, buildIncomingRPC(topic, col.GroupID(), nil, nil))
+
+	require.Equal(t, true, errors.Is(err, errInvalidHeader))
+	require.IsNil(t, verifier)
 }
 
 // Regression test for the validator-semaphore deadlock: when every validator slot is in

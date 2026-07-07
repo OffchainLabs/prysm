@@ -640,9 +640,6 @@ func updatePeerStateFromIncomingRPC(peerState blocks.PartialDataColumnPeerState,
 	if err != nil {
 		return peerState, nil, errors.Wrap(err, "failed to unmarshal partial message data")
 	}
-	if isGloas && message.Header != nil {
-		return peerState, nil, errors.New("Gloas sidecar has non-nil header")
-	}
 
 	present := message.CellsPresentBitmap.Count()
 	if uint64(len(message.PartialColumn)) != present || uint64(len(message.KzgProofs)) != present {
