@@ -3221,7 +3221,9 @@ func TestValidator_PushProposerSettings_RetriesAfterFailedRepush(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.GloasForkEpoch = 0
-	cfg.SecondsPerSlot = 0 // mid-slot submit delay elapses immediately
+	// Zero both slot-duration sources so the mid-slot submit delay elapses immediately.
+	cfg.SecondsPerSlot = 0
+	cfg.SlotDurationMilliseconds = 0
 	params.OverrideBeaconConfig(cfg)
 
 	kp := randKeypair(t)

@@ -11,7 +11,7 @@ import (
 // It uses generics to work with any gRPC client type.
 type grpcClientManager[T any] struct {
 	mu              sync.Mutex
-	conn            validatorHelpers.NodeConnection
+	conn            *validatorHelpers.NodeConnection
 	client          T
 	lastConnCounter uint64 // connection counter when client was last created; compared to detect host switches
 	newClient       func(grpc.ClientConnInterface) T
@@ -19,7 +19,7 @@ type grpcClientManager[T any] struct {
 
 // newGrpcClientManager creates a new client manager with the given connection and client constructor.
 func newGrpcClientManager[T any](
-	conn validatorHelpers.NodeConnection,
+	conn *validatorHelpers.NodeConnection,
 	newClient func(grpc.ClientConnInterface) T,
 ) *grpcClientManager[T] {
 	var lastConnCounter uint64
