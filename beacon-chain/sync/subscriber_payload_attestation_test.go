@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -51,7 +52,7 @@ func TestPayloadAttestationSubscriber_NoPool(t *testing.T) {
 			BeaconBlockRoot: make([]byte, 32),
 			Slot:            0,
 		},
-		Signature: make([]byte, 96),
+		Signature: bls.NewAggregateSignature().Marshal(),
 	}
 	require.NoError(t, s.payloadAttestationSubscriber(t.Context(), msg))
 }
@@ -122,7 +123,7 @@ func TestPayloadAttestationSubscriber_ValidatorInPTC(t *testing.T) {
 			BeaconBlockRoot: make([]byte, 32),
 			Slot:            0,
 		},
-		Signature: make([]byte, 96),
+		Signature: bls.NewAggregateSignature().Marshal(),
 	}
 	require.NoError(t, s.payloadAttestationSubscriber(t.Context(), msg))
 	require.Equal(t, 1, len(pool.PendingPayloadAttestations(0)))
