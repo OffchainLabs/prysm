@@ -250,7 +250,7 @@ func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofs
 		return nil, errors.Wrap(err, "rotate cells and proofs")
 	}
 	if included.Count() > 0 && (uint64(len(cells)) != numberOfColumns || uint64(len(proofs)) != numberOfColumns) {
-		return nil, errors.New("included blobs present but rotated cells/proofs do not cover all columns: got cells=%d proofs=%d, want %d", len(cells), len(proofs), numberOfColumns)
+		return nil, errors.Errorf("included blobs present but rotated cells/proofs do not cover all columns: got cells=%d proofs=%d, want %d", len(cells), len(proofs), numberOfColumns)
 	}
 
 	if slots.ToEpoch(src.Slot()) >= params.BeaconConfig().GloasForkEpoch {
@@ -317,6 +317,9 @@ func partialColumnsGloas(included bitfield.Bitlist, cells, proofs [][][]byte, sr
 		for i := range len(commitments) {
 			if !included.BitAt(uint64(i)) {
 				continue
+			}
+			if len(cells[idx]) == 0 || len(proofs[idx]) == 0 {
+				return nil, errors.Errorf("insufficient cells or proofs for column %d", idx)
 			}
 			dc.ExtendFromVerifiedCell(uint64(i), cells[idx][0], proofs[idx][0])
 			cells[idx] = cells[idx][1:]
