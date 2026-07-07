@@ -38,11 +38,11 @@ var gossipTopicMappings = map[string]func() proto.Message{
 func GossipTopicMappings(topic string, epoch primitives.Epoch) proto.Message {
 	switch topic {
 	case BlockSubnetTopicFormat:
-		if epoch >= params.BeaconConfig().FuluForkEpoch {
-			return &ethpb.SignedBeaconBlockFulu{}
-		}
 		if epoch >= params.BeaconConfig().GloasForkEpoch {
 			return &ethpb.SignedBeaconBlockGloas{}
+		}
+		if epoch >= params.BeaconConfig().FuluForkEpoch {
+			return &ethpb.SignedBeaconBlockFulu{}
 		}
 		if epoch >= params.BeaconConfig().ElectraForkEpoch {
 			return &ethpb.SignedBeaconBlockElectra{}

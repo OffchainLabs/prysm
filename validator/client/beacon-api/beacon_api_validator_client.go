@@ -30,7 +30,6 @@ type beaconApiValidatorClient struct {
 	handler                 rest.Handler
 	nodeClient              *beaconApiNodeClient
 	beaconBlockConverter    BeaconBlockConverter
-	prysmChainClient        iface.PrysmChainClient
 	eventStreamGuard        event.StreamGuard
 	stateless               bool
 	envelopeCache           *cache.ExecutionPayloadEnvelopeCache
@@ -51,11 +50,7 @@ func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...i
 		handler:                 handler,
 		nodeClient:              nc,
 		beaconBlockConverter:    beaconApiBeaconBlockConverter{},
-		prysmChainClient: prysmChainClient{
-			nodeClient: nc,
-			handler:    handler,
-		},
-		stateless: cfg.Stateless,
+		stateless:               cfg.Stateless,
 	}
 	if cfg.Stateless {
 		c.envelopeCache = cache.NewExecutionPayloadEnvelopeCache()
