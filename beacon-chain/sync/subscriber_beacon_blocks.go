@@ -49,8 +49,15 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return errors.Wrap(err, "new ro block with root")
 	}
 
+	// Sidecar reconstruction runs in its own goroutine and outlives this handler, so
+	// derive its context from the service context rather than the pubsub message ctx
+	// (which is cancelled when the handler returns and would abort engine_getBlobs
+	// mid-flight). Using the service ctx keeps the work bound to the service lifecycle
+	// so it stops on shutdown, while the timeout prevents it leaking under load.
 	go func() {
-		if err := s.processSidecarsFromExecutionFromBlock(ctx, roBlock); err != nil {
+		sidecarCtx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
+		defer cancel()
+		if err := s.processSidecarsFromExecutionFromBlock(sidecarCtx, roBlock); err != nil {
 			log.WithError(err).WithFields(logrus.Fields{
 				"root": fmt.Sprintf("%#x", root),
 				"slot": block.Slot(),

@@ -73,11 +73,11 @@ func (vs *Server) SubmitPayloadAttestation(
 		return nil, status.Errorf(codes.Internal, "Could not process payload attestation message: %v", err)
 	}
 
-	idx, err := vs.payloadAttestationCommitteeIndex(ctx, msg)
+	indices, err := vs.payloadAttestationCommitteeIndices(ctx, msg)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "Could not determine PTC committee index: %v", err)
 	}
-	if err := vs.PayloadAttestationPool.InsertPayloadAttestation(msg, idx); err != nil {
+	if err := vs.PayloadAttestationPool.InsertPayloadAttestation(msg, indices); err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not insert payload attestation into pool: %v", err)
 	}
 
@@ -96,14 +96,14 @@ func (vs *Server) SubmitPayloadAttestation(
 	return &emptypb.Empty{}, nil
 }
 
-func (vs *Server) payloadAttestationCommitteeIndex(ctx context.Context, msg *ethpb.PayloadAttestationMessage) (uint64, error) {
+func (vs *Server) payloadAttestationCommitteeIndices(ctx context.Context, msg *ethpb.PayloadAttestationMessage) ([]uint64, error) {
 	root := bytesutil.ToBytes32(msg.Data.BeaconBlockRoot)
 	st, err := vs.PayloadAttestationReceiver.PtcLookupState(ctx, root, msg.Data.Slot)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	if st == nil {
-		return 0, status.Errorf(codes.Unavailable, "unable to find state for payload attestation")
+		return nil, status.Errorf(codes.Unavailable, "unable to find state for payload attestation")
 	}
-	return gloas.PayloadCommitteeIndex(ctx, st, msg.Data.Slot, msg.ValidatorIndex)
+	return gloas.PayloadCommitteeIndices(ctx, st, msg.Data.Slot, msg.ValidatorIndex)
 }

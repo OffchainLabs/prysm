@@ -63,14 +63,12 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 			t.Fatalf("No test folders found for %s/%s/%s", config, version.String(fork), folderPath)
 		}
 		var skipTests = map[string]string{
-			"voting_source_beyond_two_epoch":                                         "#4807 backporting issues",
-			"justified_update_always_if_better":                                      "#4807 backporting issues",
-			"justified_update_not_realized_finality":                                 "#4807 backporting issues",
-			"on_payload_attestation_message_valid":                                   "PTC votes not recorded at duplicate committee seats (specs#5222)",
-			"on_payload_attestation_message_multiple_ptc_members_vote_independently": "PTC votes not recorded at duplicate committee seats (specs#5222)",
-			"on_payload_attestation_message_current_slot_and_signature":              "signature and current-slot checks live in gossip validation",
-			"on_payload_attestation_message_unknown_block_root":                      "unknown block root check lives in gossip validation",
-			"on_payload_attestation_message_slot_mismatch":                           "block slot match check lives in gossip validation",
+			"voting_source_beyond_two_epoch":                            "#4807 backporting issues",
+			"justified_update_always_if_better":                         "#4807 backporting issues",
+			"justified_update_not_realized_finality":                    "#4807 backporting issues",
+			"on_payload_attestation_message_current_slot_and_signature": "signature and current-slot checks live in gossip validation",
+			"on_payload_attestation_message_unknown_block_root":         "unknown block root check lives in gossip validation",
+			"on_payload_attestation_message_slot_mismatch":              "block slot match check lives in gossip validation",
 		}
 		for _, folder := range testFolders {
 			if reason, ok := skipTests[folder.Name()]; ok {

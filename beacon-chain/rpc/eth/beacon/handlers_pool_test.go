@@ -2726,13 +2726,14 @@ func TestSubmitPayloadAttestations(t *testing.T) {
 		broadcaster := &p2pMock.MockBroadcaster{}
 		pool := &payloadattestationmock.PoolMock{}
 		s := &Server{
-			SyncChecker:            &mockSync.Sync{IsSyncing: false},
-			HeadFetcher:            chainService,
-			TimeFetcher:            chainService,
-			OptimisticModeFetcher:  chainService,
-			Broadcaster:            broadcaster,
-			PayloadAttestationPool: pool,
-			OperationNotifier:      &blockchainmock.MockOperationNotifier{},
+			SyncChecker:                &mockSync.Sync{IsSyncing: false},
+			HeadFetcher:                chainService,
+			TimeFetcher:                chainService,
+			OptimisticModeFetcher:      chainService,
+			Broadcaster:                broadcaster,
+			PayloadAttestationPool:     pool,
+			PayloadAttestationReceiver: chainService,
+			OperationNotifier:          &blockchainmock.MockOperationNotifier{},
 		}
 
 		body := fmt.Sprintf(`[{
@@ -2798,13 +2799,14 @@ func TestSubmitPayloadAttestations(t *testing.T) {
 		broadcaster := &p2pMock.MockBroadcaster{}
 		pool := &payloadattestationmock.PoolMock{}
 		s := &Server{
-			SyncChecker:            &mockSync.Sync{IsSyncing: false},
-			HeadFetcher:            chainService,
-			TimeFetcher:            chainService,
-			OptimisticModeFetcher:  chainService,
-			Broadcaster:            broadcaster,
-			PayloadAttestationPool: pool,
-			OperationNotifier:      &blockchainmock.MockOperationNotifier{},
+			SyncChecker:                &mockSync.Sync{IsSyncing: false},
+			HeadFetcher:                chainService,
+			TimeFetcher:                chainService,
+			OptimisticModeFetcher:      chainService,
+			Broadcaster:                broadcaster,
+			PayloadAttestationPool:     pool,
+			PayloadAttestationReceiver: chainService,
+			OperationNotifier:          &blockchainmock.MockOperationNotifier{},
 		}
 
 		msg := &ethpbv1alpha1.PayloadAttestationMessage{

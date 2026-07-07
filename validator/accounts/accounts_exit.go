@@ -47,7 +47,7 @@ func (acm *CLIManager) Exit(ctx context.Context) error {
 	if nodeClient == nil {
 		return errors.New("could not prepare beacon node client")
 	}
-	syncStatus, err := (*nodeClient).SyncStatus(ctx, &emptypb.Empty{})
+	syncStatus, err := nodeClient.SyncStatus(ctx, &emptypb.Empty{})
 	if err != nil {
 		return err
 	}
@@ -60,8 +60,8 @@ func (acm *CLIManager) Exit(ctx context.Context) error {
 	}
 
 	cfg := PerformExitCfg{
-		*validatorClient,
-		*nodeClient,
+		validatorClient,
+		nodeClient,
 		acm.keymanager,
 		acm.rawPubKeys,
 		acm.formattedPubKeys,
