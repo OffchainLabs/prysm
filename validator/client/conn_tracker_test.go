@@ -2,35 +2,29 @@ package client
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
-	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
-	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"go.uber.org/mock/gomock"
 )
 
 func TestValidator_connTracker(t *testing.T) {
-	t.Run("nil conn generation is zero", func(t *testing.T) {
-		v := &validator{}
-		require.Equal(t, uint64(0), v.connGeneration())
-		require.Equal(t, false, v.connTracker.changed(proposerPrefsPush, v.connGeneration()))
-	})
-
 	t.Run("change persists until the push is confirmed", func(t *testing.T) {
-		provider := &grpcutil.MockGrpcProvider{MockHosts: []string{"node-a:4000"}}
-		conn, err := validatorHelpers.NewNodeConnection(validatorHelpers.WithGRPCProvider(provider))
-		require.NoError(t, err)
-		v := &validator{conn: conn}
+		ctrl := gomock.NewController(t)
+		client := validatormock.NewMockValidatorClient(ctrl)
+		var connGen atomic.Uint64
+		client.EXPECT().ConnectionGeneration().DoAndReturn(connGen.Load).AnyTimes()
+		v := &validator{validatorClient: client}
 
 		// Counter starts at 0, matching the zero confirmed generation.
 		require.Equal(t, false, v.connTracker.changed(proposerPrefsPush, v.connGeneration()))
 
 		// A fallback switch bumps the counter — detected, and stays detected
 		// until a push is confirmed (e.g. the first submission failed).
-		provider.ConnCounter = 1
+		connGen.Store(1)
 		gen := v.connGeneration()
 		require.Equal(t, true, v.connTracker.changed(proposerPrefsPush, gen))
 		require.Equal(t, true, v.connTracker.changed(proposerPrefsPush, v.connGeneration()))
@@ -40,7 +34,7 @@ func TestValidator_connTracker(t *testing.T) {
 
 		// A round-robin bounce (host0 → host1 → host0) leaves the host unchanged
 		// but advances the counter twice; still detected.
-		provider.ConnCounter = 3
+		connGen.Store(3)
 		gen = v.connGeneration()
 		require.Equal(t, true, v.connTracker.changed(proposerPrefsPush, gen))
 		// A stale confirmation from an in-flight push started before the switch
@@ -57,10 +51,9 @@ func TestValidator_connTracker(t *testing.T) {
 func TestValidator_StartEventStream_RebindsOnHostSwitch(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	client := validatormock.NewMockValidatorClient(ctrl)
-	provider := &grpcutil.MockGrpcProvider{MockHosts: []string{"node-a:4000"}}
-	conn, err := validatorHelpers.NewNodeConnection(validatorHelpers.WithGRPCProvider(provider))
-	require.NoError(t, err)
-	v := &validator{conn: conn, validatorClient: client}
+	var connGen atomic.Uint64
+	client.EXPECT().ConnectionGeneration().DoAndReturn(connGen.Load).AnyTimes()
+	v := &validator{validatorClient: client}
 	topics := []string{"head"}
 
 	// The client stream is started in a goroutine; wait for it before moving on.
@@ -80,7 +73,7 @@ func TestValidator_StartEventStream_RebindsOnHostSwitch(t *testing.T) {
 	v.StartEventStream(t.Context(), topics)
 
 	// Running but the host switched: replaced.
-	provider.ConnCounter = 1
+	connGen.Store(1)
 	client.EXPECT().EventStreamIsRunning().Return(true)
 	client.EXPECT().StartEventStream(gomock.Any(), gomock.Any(), gomock.Any()).Do(notifyStarted)
 	v.StartEventStream(t.Context(), topics)

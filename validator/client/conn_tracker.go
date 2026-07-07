@@ -51,8 +51,5 @@ func (t *connTracker) confirm(kind pushKind, gen uint64) {
 
 // connGeneration returns the current beacon-node connection generation.
 func (v *validator) connGeneration() uint64 {
-	if v.conn == nil {
-		return 0
-	}
-	return v.conn.ConnectionGeneration()
+	return v.validatorClient.ConnectionGeneration()
 }

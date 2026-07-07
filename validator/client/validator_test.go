@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1059,6 +1060,7 @@ func TestValidator_PushSettings(t *testing.T) {
 		db := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
 		client := validatormock.NewMockValidatorClient(ctrl)
 		client.EXPECT().SubmitSignedProposerPreferences(gomock.Any(), gomock.Any()).Return(&empty.Empty{}, nil).AnyTimes()
+		client.EXPECT().ConnectionGeneration().Return(uint64(0)).AnyTimes()
 		nodeClient := validatormock.NewMockNodeClient(ctrl)
 		defaultFeeHex := "0x046Fb65722E7b2455043BFEBf6177F1D2e9738D9"
 		byteValueAddress, err := hexutil.Decode("0x046Fb65722E7b2455043BFEBf6177F1D2e9738D9")
@@ -3169,6 +3171,7 @@ func TestValidator_PushProposerSettings_SkipsBuilderRegistrationsPostGloas(t *te
 	client.EXPECT().SubmitSignedProposerPreferences(gomock.Any(), gomock.Any()).Return(&empty.Empty{}, nil).AnyTimes()
 	client.EXPECT().DomainData(gomock.Any(), gomock.Any()).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).AnyTimes()
 	client.EXPECT().PrepareBeaconProposer(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	client.EXPECT().ConnectionGeneration().Return(uint64(0)).AnyTimes()
 
 	v := validator{
 		validatorClient:              client,
@@ -3247,14 +3250,13 @@ func TestValidator_PushProposerSettings_RetriesAfterFailedRepush(t *testing.T) {
 			Return(&empty.Empty{}, nil),
 	)
 
-	provider := &grpcutil.MockGrpcProvider{MockHosts: []string{"node-a:4000"}}
-	conn, err := validatorHelpers.NewNodeConnection(validatorHelpers.WithGRPCProvider(provider))
-	require.NoError(t, err)
+	// The client reports its provider's connection generation; the test drives it.
+	var connGen atomic.Uint64
+	client.EXPECT().ConnectionGeneration().DoAndReturn(connGen.Load).AnyTimes()
 
 	v := validator{
 		km:              km,
 		validatorClient: client,
-		conn:            conn,
 		domainDataCache: domainCache,
 		proposerSettings: &proposer.Settings{
 			Version: proposer.SchemaV2,
@@ -3294,7 +3296,7 @@ func TestValidator_PushProposerSettings_RetriesAfterFailedRepush(t *testing.T) {
 	}
 
 	// A fallback host switch bumps the connection generation.
-	provider.ConnCounter = 1
+	connGen.Store(1)
 	gen := v.connGeneration()
 
 	// Slot 1: the switch forces a push; its submission fails, so the reservation
