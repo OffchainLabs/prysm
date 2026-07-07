@@ -1,11 +1,15 @@
 package client
 
 import (
+	"context"
 	"testing"
 
+	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
+	"go.uber.org/mock/gomock"
 )
 
 func TestValidator_connTracker(t *testing.T) {
@@ -46,4 +50,39 @@ func TestValidator_connTracker(t *testing.T) {
 		v.connTracker.confirm(proposerPrefsPush, gen)
 		require.Equal(t, false, v.connTracker.changed(proposerPrefsPush, v.connGeneration()))
 	})
+}
+
+// StartEventStream must start when the stream is down, no-op while it runs on
+// the current host, and replace it after a fallback host switch.
+func TestValidator_StartEventStream_RebindsOnHostSwitch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	client := validatormock.NewMockValidatorClient(ctrl)
+	provider := &grpcutil.MockGrpcProvider{MockHosts: []string{"node-a:4000"}}
+	conn, err := validatorHelpers.NewNodeConnection(validatorHelpers.WithGRPCProvider(provider))
+	require.NoError(t, err)
+	v := &validator{conn: conn, validatorClient: client}
+	topics := []string{"head"}
+
+	// The client stream is started in a goroutine; wait for it before moving on.
+	started := make(chan struct{}, 2)
+	notifyStarted := func(context.Context, []string, chan<- *eventClient.Event) {
+		started <- struct{}{}
+	}
+
+	// Not running: starts and binds the current generation.
+	client.EXPECT().EventStreamIsRunning().Return(false)
+	client.EXPECT().StartEventStream(gomock.Any(), gomock.Any(), gomock.Any()).Do(notifyStarted)
+	v.StartEventStream(t.Context(), topics)
+	<-started
+
+	// Running on an unchanged host: no-op.
+	client.EXPECT().EventStreamIsRunning().Return(true)
+	v.StartEventStream(t.Context(), topics)
+
+	// Running but the host switched: replaced.
+	provider.ConnCounter = 1
+	client.EXPECT().EventStreamIsRunning().Return(true)
+	client.EXPECT().StartEventStream(gomock.Any(), gomock.Any(), gomock.Any()).Do(notifyStarted)
+	v.StartEventStream(t.Context(), topics)
+	<-started
 }

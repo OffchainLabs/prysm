@@ -926,13 +926,26 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 	return nil
 }
 
+// StartEventStream starts the event stream against the current beacon host in
+// a new goroutine, replacing a running stream when the connection switched
+// hosts since it was bound; a synchronous no-op when the stream is running and
+// the host is unchanged.
 func (v *validator) StartEventStream(ctx context.Context, topics []string) {
-	if v.EventStreamIsRunning() {
-		log.Debug("EventStream is already running")
+	gen := v.connGeneration()
+	running := v.EventStreamIsRunning()
+	if running && !v.connTracker.changed(eventStreamBind, gen) {
 		return
 	}
-	log.WithField("topics", topics).Info("Starting event stream")
-	v.validatorClient.StartEventStream(ctx, topics, v.eventsChannel)
+	reason := "stream not running"
+	if running {
+		reason = "beacon host switched"
+	}
+	v.connTracker.confirm(eventStreamBind, gen)
+	log.WithFields(logrus.Fields{
+		"topics": topics,
+		"reason": reason,
+	}).Info("Starting event stream")
+	go v.validatorClient.StartEventStream(ctx, topics, v.eventsChannel)
 }
 
 func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) {

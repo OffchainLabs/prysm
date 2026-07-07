@@ -31,7 +31,7 @@ type beaconApiValidatorClient struct {
 	nodeClient              *beaconApiNodeClient
 	beaconBlockConverter    BeaconBlockConverter
 	prysmChainClient        iface.PrysmChainClient
-	isEventStreamRunning    bool
+	eventStreamGuard        event.StreamGuard
 	stateless               bool
 	envelopeCache           *cache.ExecutionPayloadEnvelopeCache
 }
@@ -55,8 +55,7 @@ func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...i
 			nodeClient: nc,
 			handler:    handler,
 		},
-		isEventStreamRunning: false,
-		stateless:            cfg.Stateless,
+		stateless: cfg.Stateless,
 	}
 	if cfg.Stateless {
 		c.envelopeCache = cache.NewExecutionPayloadEnvelopeCache()
@@ -349,17 +348,25 @@ func (c *beaconApiValidatorClient) WaitForChainStart(ctx context.Context, _ *emp
 }
 
 func (c *beaconApiValidatorClient) StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *event.Event) {
+	// Replace any previous stream (e.g. bound to a pre-switch host) so two
+	// streams never feed the channel concurrently.
+	subCtx, finish := c.eventStreamGuard.Replace(ctx)
+	defer finish()
+
 	client := &http.Client{} // event stream should not be subject to the same settings as other api calls
 
-	c.isEventStreamRunning = true
-	defer func() { c.isEventStreamRunning = false }()
+	c.eventStreamGuard.MarkRunning(true)
+	defer c.eventStreamGuard.MarkRunning(false)
 
 	for {
-		eventStream, err := event.NewEventStream(ctx, client, c.handler.Host(), topics)
+		eventStream, err := event.NewEventStream(subCtx, client, c.handler.Host(), topics)
 		if err != nil {
-			eventsChannel <- &event.Event{
+			select {
+			case eventsChannel <- &event.Event{
 				EventType: event.EventError,
 				Data:      []byte(errors.Wrap(err, "failed to start event stream").Error()),
+			}:
+			case <-subCtx.Done():
 			}
 			return
 		}
@@ -385,9 +392,12 @@ func (c *beaconApiValidatorClient) StartEventStream(ctx context.Context, topics 
 		// If the subscription failed for any other reason,
 		// surface the error to the validator event loop and exit the stream.
 		if errors.As(err, &subErr) {
-			eventsChannel <- &event.Event{
+			select {
+			case eventsChannel <- &event.Event{
 				EventType: event.EventConnectionError,
 				Data:      []byte(err.Error()),
+			}:
+			case <-subCtx.Done():
 			}
 		}
 		return
@@ -395,7 +405,7 @@ func (c *beaconApiValidatorClient) StartEventStream(ctx context.Context, topics 
 }
 
 func (c *beaconApiValidatorClient) EventStreamIsRunning() bool {
-	return c.isEventStreamRunning
+	return c.eventStreamGuard.IsRunning()
 }
 
 func (c *beaconApiValidatorClient) AggregatedSelections(ctx context.Context, selections []iface.BeaconCommitteeSelection) ([]iface.BeaconCommitteeSelection, error) {
