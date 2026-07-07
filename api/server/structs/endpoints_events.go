@@ -85,7 +85,7 @@ type PayloadAttributesEvent struct {
 type PayloadAttributesEventData struct {
 	ProposerIndex     string          `json:"proposer_index"`
 	ProposalSlot      string          `json:"proposal_slot"`
-	ParentBlockNumber string          `json:"parent_block_number"`
+	ParentBlockNumber string          `json:"parent_block_number,omitempty"` // Removed from gloas onwards.
 	ParentBlockRoot   string          `json:"parent_block_root"`
 	ParentBlockHash   string          `json:"parent_block_hash"`
 	PayloadAttributes json.RawMessage `json:"payload_attributes"`
