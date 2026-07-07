@@ -229,6 +229,11 @@ func mockFiles() ([]string, error) {
 	return files, nil
 }
 
+// pbgoFiles returns the .pb.go files in dir, skipping .minimal.pb.go twins.
+//
+// The .minimal.pb.go twins are not fed to sszgen: the minimal variant is
+// regenerated from .proto files into a temp dir at gen time and they are proto
+// outputs already covered by the proto manifest.
 func pbgoFiles(dir string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
