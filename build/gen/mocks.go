@@ -37,7 +37,6 @@ func genMocks() error {
 	const ifacePkg = "github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	iface := []reflectMock{
 		{ifaceMockPath + "/chain_client_mock.go", "validator_mock", ifacePkg, "ChainClient"},
-		{ifaceMockPath + "/prysm_chain_client_mock.go", "validator_mock", ifacePkg, "PrysmChainClient"},
 		{ifaceMockPath + "/node_client_mock.go", "validator_mock", ifacePkg, "NodeClient"},
 		{ifaceMockPath + "/validator_client_mock.go", "validator_mock", ifacePkg, "ValidatorClient"},
 	}

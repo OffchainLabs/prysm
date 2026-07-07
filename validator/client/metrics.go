@@ -247,7 +247,7 @@ func (v *validator) LogValidatorGainsAndLosses(ctx context.Context, slot primiti
 	req := &ethpb.ValidatorPerformanceRequest{
 		PublicKeys: pubKeys,
 	}
-	resp, err := v.prysmChainClient.ValidatorPerformance(ctx, req)
+	resp, err := v.chainClient.ValidatorPerformance(ctx, req)
 	if err != nil {
 		if errors.Is(err, iface.ErrNotSupported) {
 			log.WithError(err).Debug("Skipping validator performance metric for non-Prysm beacon node")

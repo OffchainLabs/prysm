@@ -214,8 +214,9 @@ load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_depe
 http_archive(
     name = "org_golang_x_tools",
     patch_args = ["-p1"],
+    patch_cmds = ["rm -rf gopls"],
+    patch_cmds_win = ["Remove-Item -Recurse -Force gopls"],
     patches = [
-        "//third_party:org_golang_x_tools-deletegopls.patch",
         "//third_party:org_golang_x_tools-gazelle.patch",
     ],
     sha256 = "8509908cd7fc35aa09ff49d8494e4fd25bab9e6239fbf57e0d8344f6bec5802b",

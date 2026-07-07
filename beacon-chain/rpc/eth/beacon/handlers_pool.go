@@ -982,25 +982,36 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	st, err := s.HeadFetcher.HeadStateReadOnly(ctx)
-	if err != nil {
-		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
+	currentSlot := s.TimeFetcher.CurrentSlot()
 	for i, consensusMsg := range consensusMsgs {
 		if consensusMsg == nil {
 			continue
 		}
-		if _, err = bls.SignatureFromBytes(consensusMsg.Signature); err != nil {
+		if _, err := bls.SignatureFromBytes(consensusMsg.Signature); err != nil {
 			failures = append(failures, &server.IndexedError{
 				Index:   i,
 				Message: "Incorrect payload attestation signature: " + err.Error(),
 			})
 			continue
 		}
+		if consensusMsg.Data.Slot != currentSlot {
+			failures = append(failures, &server.IndexedError{
+				Index:   i,
+				Message: fmt.Sprintf("Payload attestation slot %d does not match current slot %d", consensusMsg.Data.Slot, currentSlot),
+			})
+			continue
+		}
 
-		idx, err := gloas.PayloadCommitteeIndex(ctx, st, consensusMsg.Data.Slot, consensusMsg.ValidatorIndex)
+		st, err := s.PayloadAttestationReceiver.PtcLookupState(ctx, bytesutil.ToBytes32(consensusMsg.Data.BeaconBlockRoot), consensusMsg.Data.Slot)
+		if err != nil || st == nil {
+			msg := "Could not find state for payload attestation"
+			if err != nil {
+				msg += ": " + err.Error()
+			}
+			failures = append(failures, &server.IndexedError{Index: i, Message: msg})
+			continue
+		}
+		indices, err := gloas.PayloadCommitteeIndices(ctx, st, consensusMsg.Data.Slot, consensusMsg.ValidatorIndex)
 		if err != nil {
 			failures = append(failures, &server.IndexedError{
 				Index:   i,
@@ -1017,7 +1028,16 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 			continue
 		}
 
-		if err := s.PayloadAttestationPool.InsertPayloadAttestation(consensusMsg, idx); err != nil {
+		// Self-published gossip is not looped back, so apply the PTC vote to fork choice here.
+		if err := s.PayloadAttestationReceiver.ReceivePayloadAttestationMessage(ctx, consensusMsg); err != nil {
+			failures = append(failures, &server.IndexedError{
+				Index:   i,
+				Message: "Could not process payload attestation: " + err.Error(),
+			})
+			continue
+		}
+
+		if err := s.PayloadAttestationPool.InsertPayloadAttestation(consensusMsg, indices); err != nil {
 			failures = append(failures, &server.IndexedError{
 				Index:   i,
 				Message: "Could not insert payload attestation: " + err.Error(),
