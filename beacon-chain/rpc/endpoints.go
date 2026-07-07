@@ -590,6 +590,7 @@ func (s *Service) beaconEndpoints(
 		ExecutionReconstructor:        s.cfg.ExecutionReconstructor,
 		BLSChangesPool:                s.cfg.BLSChangesPool,
 		PayloadAttestationPool:        s.cfg.PayloadAttestationPool,
+		PayloadAttestationReceiver:    s.cfg.PayloadAttestationReceiver,
 		FinalizationFetcher:           s.cfg.FinalizationFetcher,
 		ForkchoiceFetcher:             s.cfg.ForkchoiceFetcher,
 		CoreService:                   coreService,
