@@ -98,7 +98,7 @@ func (r *runner) run(ctx context.Context) {
 			}
 
 			// Restart the event stream if it died, or rebind it after a fallback
-			v.StartEventStream(ctx, eventClient.DefaultEventTopics)
+			v.EnsureEventStream(ctx, eventClient.DefaultEventTopics)
 
 			deadline := v.SlotDeadline(slot)
 			slotCtx, cancel := context.WithDeadline(ctx, deadline) //nolint:govet

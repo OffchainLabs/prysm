@@ -925,11 +925,11 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 	return nil
 }
 
-// StartEventStream starts the event stream against the current beacon host in
-// a new goroutine, replacing a running stream when the connection switched
-// hosts since it was bound; a synchronous no-op when the stream is running and
-// the host is unchanged.
-func (v *validator) StartEventStream(ctx context.Context, topics []string) {
+// EnsureEventStream reconciles the event stream with the current beacon host:
+// it starts the stream in a new goroutine when it is not running, replaces it
+// when the connection switched hosts since it was bound, and is a synchronous
+// no-op otherwise. Called every slot tick.
+func (v *validator) EnsureEventStream(ctx context.Context, topics []string) {
 	gen := v.connGeneration()
 	running := v.EventStreamIsRunning()
 	if running && !v.connTracker.changed(eventStreamBind, gen) {

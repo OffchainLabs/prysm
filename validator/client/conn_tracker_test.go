@@ -46,9 +46,9 @@ func TestValidator_connTracker(t *testing.T) {
 	})
 }
 
-// StartEventStream must start when the stream is down, no-op while it runs on
+// EnsureEventStream must start when the stream is down, no-op while it runs on
 // the current host, and replace it after a fallback host switch.
-func TestValidator_StartEventStream_RebindsOnHostSwitch(t *testing.T) {
+func TestValidator_EnsureEventStream_RebindsOnHostSwitch(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	client := validatormock.NewMockValidatorClient(ctrl)
 	var connGen atomic.Uint64
@@ -65,17 +65,17 @@ func TestValidator_StartEventStream_RebindsOnHostSwitch(t *testing.T) {
 	// Not running: starts and binds the current generation.
 	client.EXPECT().EventStreamIsRunning().Return(false)
 	client.EXPECT().StartEventStream(gomock.Any(), gomock.Any(), gomock.Any()).Do(notifyStarted)
-	v.StartEventStream(t.Context(), topics)
+	v.EnsureEventStream(t.Context(), topics)
 	<-started
 
 	// Running on an unchanged host: no-op.
 	client.EXPECT().EventStreamIsRunning().Return(true)
-	v.StartEventStream(t.Context(), topics)
+	v.EnsureEventStream(t.Context(), topics)
 
 	// Running but the host switched: replaced.
 	connGen.Store(1)
 	client.EXPECT().EventStreamIsRunning().Return(true)
 	client.EXPECT().StartEventStream(gomock.Any(), gomock.Any(), gomock.Any()).Do(notifyStarted)
-	v.StartEventStream(t.Context(), topics)
+	v.EnsureEventStream(t.Context(), topics)
 	<-started
 }
