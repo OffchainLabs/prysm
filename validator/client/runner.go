@@ -98,8 +98,6 @@ func (r *runner) run(ctx context.Context) {
 			}
 
 			// Restart the event stream if it died, or rebind it after a fallback
-			// host switch (the switch keeps the VC healthy, so nothing else
-			// restarts the stream); a synchronous no-op otherwise.
 			v.StartEventStream(ctx, eventClient.DefaultEventTopics)
 
 			deadline := v.SlotDeadline(slot)
