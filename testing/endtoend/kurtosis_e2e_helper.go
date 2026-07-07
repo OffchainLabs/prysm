@@ -25,6 +25,10 @@ const (
 
 	BEACON_CHAIN_IMAGE_NAME = "gcr.io/offchainlabs/prysm/beacon-chain:latest"
 	VALIDATOR_IMAGE_NAME    = "gcr.io/offchainlabs/prysm/validator:latest"
+
+	// Health check waits maximum 1 minute (30 retries * 2 seconds interval)
+	MAX_HEALTH_CHECK_RETRY = 30
+	HEALTH_CHECK_INTERVAL  = 2 * time.Second
 )
 
 // KurtosisTestSuites defines a suite of end-to-end tests to run against a Kurtosis enclave.
@@ -90,11 +94,11 @@ func (k *KurtosisTestSuites) Run(t *testing.T) {
 // /eth/v1/node/health) or ctx is done.
 func waitForNodeReady(t *testing.T, ctx context.Context, client *beacon.Client) {
 	var err error
-	for range 30 {
+	for range MAX_HEALTH_CHECK_RETRY {
 		if _, err = client.Get(ctx, "/eth/v1/node/health"); err == nil {
 			return
 		}
-		time.Sleep(2 * time.Second)
+		time.Sleep(HEALTH_CHECK_INTERVAL)
 	}
 	require.NoError(t, err, "Beacon node never became healthy")
 }

@@ -32,4 +32,5 @@ go_test(
         "helper_test.go",
     ],
     embed = [":go_default_library"],
+    deps = ["//testing/require:go_default_library"],
 )

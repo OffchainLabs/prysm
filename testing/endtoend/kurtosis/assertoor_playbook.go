@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+const (
+	// Readiness check waits maximum 1 minute (30 retries * 2 seconds interval)
+	MAX_READINESS_CHECK_RETRY = 30
+	READINESS_CHECK_INTERVAL  = 2 * time.Second
+)
+
 //go:embed playbooks/*.yaml
 var assertoorPlaybooksFS embed.FS
 
@@ -52,14 +58,14 @@ func (kw *KurtosisWrapper) RegisterPlaybooks(ctx context.Context) error {
 func waitForAssertoorReady(ctx context.Context, baseURL string) error {
 	var discard json.RawMessage
 	var err error
-	for range 30 {
+	for range MAX_READINESS_CHECK_RETRY {
 		if err = assertoorGet(ctx, baseURL+"/api/v1/version", &discard); err == nil {
 			return nil
 		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(2 * time.Second):
+		case <-time.After(READINESS_CHECK_INTERVAL):
 		}
 	}
 	return fmt.Errorf("Assertoor API never became ready: %w", err)

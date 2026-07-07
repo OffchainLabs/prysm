@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestRegisterAssertoorTest(t *testing.T) {
@@ -23,15 +25,9 @@ func TestRegisterAssertoorTest(t *testing.T) {
 
 	yaml := []byte("id: validators-active\nname: x\ntasks: []\n")
 	testID, err := registerAssertoorTest(context.Background(), srv.URL, yaml)
-	if err != nil {
-		t.Fatalf("registerAssertoorTest: %v", err)
-	}
-	if registeredBody != string(yaml) {
-		t.Fatalf("register body mismatch: got %q", registeredBody)
-	}
-	if testID != "validators-active" {
-		t.Fatalf("registered wrong test id: got %q", testID)
-	}
+	require.NoError(t, err)
+	require.Equal(t, string(yaml), registeredBody, "register body mismatch")
+	require.Equal(t, "validators-active", testID, "registered wrong test id")
 }
 
 func TestScheduleAssertoorTestWithConfig(t *testing.T) {
@@ -60,19 +56,9 @@ func TestScheduleAssertoorTestWithConfig(t *testing.T) {
 	defer srv.Close()
 
 	runID, err := scheduleAssertoorTest(context.Background(), srv.URL, "network-health-once", map[string]any{"targetEpoch": 15})
-	if err != nil {
-		t.Fatalf("scheduleAssertoorTest: %v", err)
-	}
-	if runID != 42 {
-		t.Fatalf("expected run id 42, got %d", runID)
-	}
-	if targetEpoch != 15 {
-		t.Fatalf("expected targetEpoch override, got %v", targetEpoch)
-	}
-	if !scheduledSkipQueue {
-		t.Fatal("expected skip_queue=true so custom tests run in parallel")
-	}
-	if !scheduledAllowDuplicate {
-		t.Fatal("expected allow_duplicate=true so one-shot tests can be reused")
-	}
+	require.NoError(t, err)
+	require.Equal(t, 42, runID, "expected run id 42")
+	require.Equal(t, 15.0, targetEpoch, "expected targetEpoch override")
+	require.Equal(t, true, scheduledSkipQueue, "expected skip_queue=true so custom tests run in parallel")
+	require.Equal(t, true, scheduledAllowDuplicate, "expected allow_duplicate=true so one-shot tests can be reused")
 }
