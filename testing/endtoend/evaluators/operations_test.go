@@ -2,8 +2,10 @@ package evaluators
 
 import (
 	"context"
+	"encoding/binary"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
@@ -52,5 +54,56 @@ func phase0BlockContainer(slot primitives.Slot, vote []byte) *ethpb.BeaconBlockC
 				},
 			},
 		},
+	}
+}
+
+func TestExitCandidatesFallsBackWhenAllInSyncCommittee(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.OverrideBeaconConfig(params.E2EMainnetTestConfig())
+
+	pubkeyAt := func(i primitives.ValidatorIndex) [48]byte {
+		var key [48]byte
+		binary.LittleEndian.PutUint64(key[:8], uint64(i))
+		return key
+	}
+	count := params.BeaconConfig().MinGenesisActiveValidatorCount
+	committee := make(map[[48]byte]bool, count)
+	for i := primitives.ValidatorIndex(0); uint64(i) < count; i++ {
+		committee[pubkeyAt(i)] = true
+	}
+	exited := map[[48]byte]primitives.Epoch{pubkeyAt(0): 1}
+
+	candidates := exitCandidates(numOfExits, exited, committee, pubkeyAt)
+
+	require.Equal(t, numOfExits, len(candidates))
+	for _, idx := range candidates {
+		require.Equal(t, false, idx == 0, "selected an already exited validator")
+	}
+}
+
+func TestExitCandidatesPrefersNonSyncCommitteeMembers(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.OverrideBeaconConfig(params.E2EMainnetTestConfig())
+
+	pubkeyAt := func(i primitives.ValidatorIndex) [48]byte {
+		var key [48]byte
+		binary.LittleEndian.PutUint64(key[:8], uint64(i))
+		return key
+	}
+	count := params.BeaconConfig().MinGenesisActiveValidatorCount
+	// Every validator except indices 7 and 11 is in the upcoming committee.
+	committee := make(map[[48]byte]bool, count)
+	for i := primitives.ValidatorIndex(0); uint64(i) < count; i++ {
+		if i == 7 || i == 11 {
+			continue
+		}
+		committee[pubkeyAt(i)] = true
+	}
+
+	candidates := exitCandidates(numOfExits, map[[48]byte]primitives.Epoch{}, committee, pubkeyAt)
+
+	require.Equal(t, numOfExits, len(candidates))
+	for _, idx := range candidates {
+		require.Equal(t, true, idx == 7 || idx == 11, "selected a sync committee member despite alternatives")
 	}
 }

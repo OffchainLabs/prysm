@@ -527,23 +527,50 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 		}
 	}
 
-	// Send an exit for a non-exited validator.
-	for i := 0; i < numOfExits; {
-		randIndex := primitives.ValidatorIndex(rand.Uint64() % params.BeaconConfig().MinGenesisActiveValidatorCount)
-		randKey := bytesutil.ToBytes48(privKeys[randIndex].PublicKey().Marshal())
-		if _, alreadyExited := ec.ExitedVals[randKey]; alreadyExited {
-			continue
-		}
-		if syncCommitteeKeys[randKey] {
-			continue
-		}
-		if err := sendExit(randIndex); err != nil {
+	pubkeyAt := func(i primitives.ValidatorIndex) [48]byte {
+		return bytesutil.ToBytes48(deposits[i].Data.PublicKey)
+	}
+	for _, idx := range exitCandidates(numOfExits, ec.ExitedVals, syncCommitteeKeys, pubkeyAt) {
+		if err := sendExit(idx); err != nil {
 			return err
 		}
-		i++
 	}
 
 	return nil
+}
+
+// exitCandidates selects up to n non-exited validators to exit. Validators outside
+// the upcoming sync committee are preferred, but committee members are used as a
+// fallback when the committee covers the entire validator set. With the mainnet
+// config, SYNC_COMMITTEE_SIZE (512) exceeds the e2e validator count (256) and
+// pre-Electra sampling accepts every candidate, so every validator serves in the
+// upcoming committee; the selection must not require a non-member to exist. In that
+// setup the committee period is also longer than the test, so the exclusion is moot.
+func exitCandidates(
+	n int,
+	exited map[[48]byte]primitives.Epoch,
+	syncCommitteeKeys map[[48]byte]bool,
+	pubkeyAt func(primitives.ValidatorIndex) [48]byte,
+) []primitives.ValidatorIndex {
+	var preferred, fallback []primitives.ValidatorIndex
+	for i := primitives.ValidatorIndex(0); uint64(i) < params.BeaconConfig().MinGenesisActiveValidatorCount; i++ {
+		key := pubkeyAt(i)
+		if _, alreadyExited := exited[key]; alreadyExited {
+			continue
+		}
+		if syncCommitteeKeys[key] {
+			fallback = append(fallback, i)
+			continue
+		}
+		preferred = append(preferred, i)
+	}
+	rand.Shuffle(len(preferred), func(a, b int) { preferred[a], preferred[b] = preferred[b], preferred[a] })
+	rand.Shuffle(len(fallback), func(a, b int) { fallback[a], fallback[b] = fallback[b], fallback[a] })
+	candidates := append(preferred, fallback...)
+	if len(candidates) > n {
+		candidates = candidates[:n]
+	}
+	return candidates
 }
 
 func validatorsHaveExited(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
