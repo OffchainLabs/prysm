@@ -99,6 +99,7 @@ func (s *Service) endpoints(
 	endpoints = append(endpoints, s.prysmBeaconEndpoints(ch, stater, blocker, coreService)...)
 	endpoints = append(endpoints, s.prysmNodeEndpoints()...)
 	endpoints = append(endpoints, s.prysmValidatorEndpoints(stater, coreService)...)
+	endpoints = append(endpoints, s.removedEndpoints()...)
 
 	if features.Get().EnableLightClient {
 		endpoints = append(endpoints, s.lightClientEndpoints()...)
@@ -106,6 +107,7 @@ func (s *Service) endpoints(
 
 	if enableDebug {
 		endpoints = append(endpoints, s.debugEndpoints(stater, blocker)...)
+		endpoints = append(endpoints, s.removedDebugEndpoints()...)
 	}
 
 	return endpoints
