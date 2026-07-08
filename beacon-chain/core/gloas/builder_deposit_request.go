@@ -77,18 +77,19 @@ func processBuilderDepositRequest(st state.BeaconState, request *enginev1.Builde
 
 	pubkey := bytesutil.ToBytes48(request.Pubkey)
 	if idx, isBuilder := st.BuilderIndexByPubkey(pubkey); isBuilder {
-		if err := st.IncreaseBuilderBalance(idx, request.Amount); err != nil {
-			return err
-		}
 		builder, err := st.Builder(idx)
 		if err != nil {
 			return err
 		}
-		if builder.WithdrawableEpoch != params.BeaconConfig().FarFutureEpoch {
+		// Reset only when exited and fully swept, checked before the top-up is credited.
+		if builder.WithdrawableEpoch != params.BeaconConfig().FarFutureEpoch && builder.Balance == 0 {
 			builder.WithdrawableEpoch = slots.ToEpoch(st.Slot()) + params.BeaconConfig().MinBuilderWithdrawabilityDelay
 			if err := st.UpdateBuilderAtIndex(idx, builder); err != nil {
 				return err
 			}
+		}
+		if err := st.IncreaseBuilderBalance(idx, request.Amount); err != nil {
+			return err
 		}
 		builderDepositsProcessedTotal.Inc()
 		return nil
