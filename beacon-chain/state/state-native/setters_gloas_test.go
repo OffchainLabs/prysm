@@ -882,7 +882,7 @@ func TestAddBuilderFromDeposit(t *testing.T) {
 		copy(pubkey[:], bytes.Repeat([]byte{0xAA}, 48))
 		var wc [32]byte
 		copy(wc[:], bytes.Repeat([]byte{0xBB}, 32))
-		wc[0] = 0x42 // version byte
+		wc[0] = 0x42 // registered version must ignore the credential prefix
 
 		st := &BeaconState{
 			version:     version.Gloas,
@@ -905,7 +905,7 @@ func TestAddBuilderFromDeposit(t *testing.T) {
 		got := st.builders[0]
 		require.NotNil(t, got)
 		require.DeepEqual(t, pubkey[:], got.Pubkey)
-		require.DeepEqual(t, []byte{0x42}, got.Version)
+		require.DeepEqual(t, []byte{params.BeaconConfig().PayloadBuilderVersion}, got.Version)
 		require.DeepEqual(t, wc[12:], got.ExecutionAddress)
 		require.Equal(t, primitives.Gwei(123), got.Balance)
 		require.Equal(t, primitives.Epoch(0), got.DepositEpoch)
