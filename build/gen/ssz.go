@@ -135,6 +135,12 @@ func sszgenOne(t sszTarget, root string) (string, error) {
 	return b.String(), nil
 }
 
+// stagePbgo copies pkgDir's .pb.go files into stageDir, skipping .minimal.pb.go
+// twins.
+//
+// The .minimal.pb.go twins are not fed to sszgen: the minimal variant is
+// regenerated from .proto files into a temp dir at gen time and they are proto
+// outputs already covered by the proto manifest.
 func stagePbgo(pkgDir, stageDir string) error {
 	if err := os.MkdirAll(stageDir, 0o750); err != nil {
 		return fmt.Errorf("mkdirAll: %w", err)

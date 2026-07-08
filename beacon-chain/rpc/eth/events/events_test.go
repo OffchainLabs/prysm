@@ -823,7 +823,7 @@ func TestPayloadAttributesReader_ParentBlockNumber(t *testing.T) {
 			_, present := fields["parent_block_number"]
 			require.Equal(t, tc.wantPresent, present, "parent_block_number presence mismatch")
 		})
-  }
+	}
 }
 
 // TestStreamEvents_PayloadAttributesExpiredSlotNotLoggedAsError verifies that a payload
