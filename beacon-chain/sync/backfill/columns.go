@@ -290,16 +290,20 @@ func buildColumnBatch(ctx context.Context, b batch, blks verifiedROBlocks, p p2p
 		if len(cmts) == 0 {
 			continue
 		}
-		remaining := das.IndicesNotStored(store.Summary(b.Root()), indices)
-		// Empty slots have no canonical columns to require, but keep the root known so peers still serving them are not penalized.
-		if b.Block().Version() >= version.Gloas && i+1 < len(blks) && blks[i+1].Block().ParentRoot() == b.Root() {
-			full, err := blocks.BlockBuiltOnParentPayload(b.Block(), blks[i+1].Block())
+		// Adjacent blocks are parent linked by verify, so the direct child is at i+1 when present.
+		full := true
+		if b.Block().Version() >= version.Gloas && i+1 < len(blks) {
+			full, err = blocks.BlockBuiltOnParentPayload(b.Block(), blks[i+1].Block())
 			if err != nil {
 				return nil, errors.Wrap(err, "block built on parent payload")
 			}
-			if !full {
-				remaining = peerdas.ColumnIndices{}
-			}
+		}
+		var remaining peerdas.ColumnIndices
+		if full {
+			remaining = das.IndicesNotStored(store.Summary(b.Root()), indices)
+		} else {
+			// Empty slots have no canonical columns to require, but keep the root known so peers still serving them are not penalized.
+			remaining = peerdas.ColumnIndices{}
 		}
 		// The last block this part of the loop sees will be the last one
 		// we need to download data columns for.
