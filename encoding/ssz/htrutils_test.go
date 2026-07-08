@@ -339,15 +339,12 @@ func TestWithdrawalSliceRootProgressive(t *testing.T) {
 		Address:        []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0},
 		Amount:         50,
 	}}
-	got, err := ssz.WithdrawalSliceRootProgressive(withdrawals, 16)
+	got, err := ssz.WithdrawalSliceRootProgressive(withdrawals)
 	require.NoError(t, err)
 
 	want, err := ssz.SliceRootProgressive(withdrawals)
 	require.NoError(t, err)
 	require.DeepSSZEqual(t, want, got)
-
-	_, err = ssz.WithdrawalSliceRootProgressive(withdrawals, 0)
-	require.ErrorContains(t, "slice exceeds max length", err)
 }
 
 func TestDepositRequestsSliceRoot(t *testing.T) {

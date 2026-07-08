@@ -117,12 +117,8 @@ func WithdrawalSliceRoot(withdrawals []*enginev1.Withdrawal, limit uint64) ([32]
 	return SliceRoot(withdrawals, limit)
 }
 
-// WithdrawalSliceRootProgressive computes the progressive HTR of a slice of
-// withdrawals.
-func WithdrawalSliceRootProgressive(withdrawals []*enginev1.Withdrawal, limit uint64) ([32]byte, error) {
-	if uint64(len(withdrawals)) > limit {
-		return [32]byte{}, errors.Errorf("slice exceeds max length %d", limit)
-	}
+// WithdrawalSliceRootProgressive computes the progressive HTR of a slice of withdrawals.
+func WithdrawalSliceRootProgressive(withdrawals []*enginev1.Withdrawal) ([32]byte, error) {
 	return SliceRootProgressive(withdrawals)
 }
 

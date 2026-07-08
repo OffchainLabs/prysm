@@ -1511,7 +1511,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 		return bytesutil.ToBytes32(b.latestBlockHash), nil
 	case types.PayloadExpectedWithdrawals:
 		if progressiveSSZ {
-			return ssz.WithdrawalSliceRootProgressive(b.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+			return ssz.WithdrawalSliceRootProgressive(b.payloadExpectedWithdrawals)
 		}
 		return ssz.WithdrawalSliceRoot(b.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
 	case types.PTCWindow:

@@ -85,7 +85,7 @@ func TestRootSelector_ProgressiveSSZGate(t *testing.T) {
 
 	progressiveExpectedWithdrawalsRoot, err := st.rootSelector(context.Background(), types.PayloadExpectedWithdrawals)
 	require.NoError(t, err)
-	expectedProgressiveExpectedWithdrawalsRoot, err := ssz.WithdrawalSliceRootProgressive(st.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+	expectedProgressiveExpectedWithdrawalsRoot, err := ssz.WithdrawalSliceRootProgressive(st.payloadExpectedWithdrawals)
 	require.NoError(t, err)
 	require.Equal(t, expectedProgressiveExpectedWithdrawalsRoot, progressiveExpectedWithdrawalsRoot)
 	require.DeepNotSSZEqual(t, legacyExpectedWithdrawalsRoot, progressiveExpectedWithdrawalsRoot)
@@ -135,7 +135,7 @@ func TestComputeFieldRootsWithHasher_ProgressiveSSZGate(t *testing.T) {
 	require.NoError(t, err)
 	require.DeepEqual(t, expectedProgressivePendingDepositsRoot[:], progressiveRoots[types.PendingDeposits.RealPosition()])
 	require.DeepNotSSZEqual(t, legacyRoots[types.PendingDeposits.RealPosition()], progressiveRoots[types.PendingDeposits.RealPosition()])
-	expectedProgressiveWithdrawalsRoot, err := ssz.WithdrawalSliceRootProgressive(st.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+	expectedProgressiveWithdrawalsRoot, err := ssz.WithdrawalSliceRootProgressive(st.payloadExpectedWithdrawals)
 	require.NoError(t, err)
 	require.DeepEqual(t, expectedProgressiveWithdrawalsRoot[:], progressiveRoots[types.PayloadExpectedWithdrawals.RealPosition()])
 	require.DeepNotSSZEqual(t, legacyRoots[types.PayloadExpectedWithdrawals.RealPosition()], progressiveRoots[types.PayloadExpectedWithdrawals.RealPosition()])

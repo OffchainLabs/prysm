@@ -441,7 +441,7 @@ func progressiveSSZEnabled(stateVersion int) bool {
 
 func payloadExpectedWithdrawalsRoot(state *BeaconState) ([32]byte, error) {
 	if progressiveSSZEnabled(state.version) {
-		return ssz.WithdrawalSliceRootProgressive(state.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+		return ssz.WithdrawalSliceRootProgressive(state.payloadExpectedWithdrawals)
 	}
 	return ssz.WithdrawalSliceRoot(state.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
 }
