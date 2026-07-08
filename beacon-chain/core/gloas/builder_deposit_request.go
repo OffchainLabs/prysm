@@ -81,6 +81,9 @@ func processBuilderDepositRequest(st state.BeaconState, request *enginev1.Builde
 		if err != nil {
 			return err
 		}
+		if builder == nil {
+			return errors.Errorf("builder at index %d is nil", idx)
+		}
 		// Reset only when exited and fully swept, checked before the top-up is credited.
 		if builder.WithdrawableEpoch != params.BeaconConfig().FarFutureEpoch && builder.Balance == 0 {
 			builder.WithdrawableEpoch = slots.ToEpoch(st.Slot()) + params.BeaconConfig().MinBuilderWithdrawabilityDelay
