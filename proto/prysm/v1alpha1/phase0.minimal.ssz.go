@@ -3923,6 +3923,74 @@ func (c *Validator) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return nil
 }
 
+func (c *ValidatorBalance) SizeSSZ() int {
+	size := 16
+
+	return size
+}
+
+func (c *ValidatorBalance) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *ValidatorBalance) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+
+	// Field 0: Index
+	if dst, err = c.Index.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("Index: %w", err)
+	}
+
+	// Field 1: Balance
+	dst = binary.LittleEndian.AppendUint64(dst, c.Balance)
+
+	return dst, err
+}
+
+func (c *ValidatorBalance) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 16 {
+		return ssz.ErrSize
+	}
+
+	sszSlice0 := buf[0:8]  // c.Index
+	sszSlice1 := buf[8:16] // c.Balance
+
+	// Field 0: Index
+	if err = c.Index.UnmarshalSSZ(sszSlice0); err != nil {
+		return fmt.Errorf("Index: %w", err)
+	}
+
+	// Field 1: Balance
+	c.Balance = binary.LittleEndian.Uint64(sszSlice1)
+	return err
+}
+
+func (c *ValidatorBalance) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *ValidatorBalance) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: Index
+	if err := c.Index.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("Index: %w", err)
+	}
+	// Field 1: Balance
+	hh.PutUint64(c.Balance)
+	hh.Merkleize(indx)
+	return nil
+}
+
 func (c *VoluntaryExit) SizeSSZ() int {
 	size := 16
 
@@ -3995,64 +4063,4 @@ func (c *VoluntaryExit) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	}
 	hh.Merkleize(indx)
 	return nil
-}
-
-// MarshalSSZ ssz marshals the ValidatorBalance object
-func (v *ValidatorBalance) MarshalSSZ() ([]byte, error) {
-	return ssz.MarshalSSZ(v)
-}
-
-// MarshalSSZTo ssz marshals the ValidatorBalance object to a target array
-func (v *ValidatorBalance) MarshalSSZTo(buf []byte) (dst []byte, err error) {
-	dst = buf
-
-	// Field (0) 'Index'
-	dst = ssz.MarshalUint(dst, v.Index)
-
-	// Field (1) 'Balance'
-	dst = ssz.MarshalUint(dst, v.Balance)
-
-	return
-}
-
-// UnmarshalSSZ ssz unmarshals the ValidatorBalance object
-func (v *ValidatorBalance) UnmarshalSSZ(buf []byte) error {
-	var err error
-	size := uint64(len(buf))
-	if size != 16 {
-		return ssz.ErrSize
-	}
-
-	// Field (0) 'Index'
-	v.Index = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[0:8])
-
-	// Field (1) 'Balance'
-	v.Balance = ssz.UnmarshallUint[uint64](buf[8:16])
-
-	return err
-}
-
-// SizeSSZ returns the ssz encoded size in bytes for the ValidatorBalance object
-func (v *ValidatorBalance) SizeSSZ() (size int) {
-	size = 16
-	return
-}
-
-// HashTreeRoot ssz hashes the ValidatorBalance object
-func (v *ValidatorBalance) HashTreeRoot() ([32]byte, error) {
-	return ssz.HashWithDefaultHasher(v)
-}
-
-// HashTreeRootWith ssz hashes the ValidatorBalance object with a hasher
-func (v *ValidatorBalance) HashTreeRootWith(hh *ssz.Hasher) (err error) {
-	indx := hh.Index()
-
-	// Field (0) 'Index'
-	ssz.PutUint(hh, v.Index)
-
-	// Field (1) 'Balance'
-	ssz.PutUint(hh, v.Balance)
-
-	hh.Merkleize(indx)
-	return
 }
