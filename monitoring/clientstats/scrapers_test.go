@@ -25,9 +25,17 @@ type mockRT struct {
 }
 
 func (rt *mockRT) RoundTrip(_ *http.Request) (*http.Response, error) {
+	statusCode := rt.statusCode
+	if statusCode == 0 {
+		statusCode = http.StatusOK
+	}
+	status := rt.status
+	if status == "" {
+		status = http.StatusText(statusCode)
+	}
 	return &http.Response{
-		Status:     http.StatusText(http.StatusOK),
-		StatusCode: http.StatusOK,
+		Status:     status,
+		StatusCode: statusCode,
 		Body:       io.NopCloser(strings.NewReader(rt.body)),
 	}, nil
 }
@@ -203,6 +211,16 @@ func TestBadInput(t *testing.T) {
 	_, err := bnScraper.Scrape()
 	require.NoError(t, err)
 	require.LogsContain(t, hook, "Failed to get prysm_version")
+}
+
+func TestScrapePromReturnsFetchMetricFamiliesError(t *testing.T) {
+	_, err := scrapeProm("http://localhost/metrics", &mockRT{
+		body:       "upstream failure",
+		status:     "500 Internal Server Error",
+		statusCode: http.StatusInternalServerError,
+	})
+
+	require.ErrorContains(t, "returned HTTP status 500 Internal Server Error", err)
 }
 
 var prometheusTestBody = `
