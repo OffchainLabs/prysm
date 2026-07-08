@@ -2037,6 +2037,7 @@ def prysm_deps():
         sum = "h1:j7+1HpAFS1zy5+Q4qx1fWh90gTKwiN4QCGoY9TWyyO4=",
         version = "v0.0.0-20170206155736-9520e82c474b",
     )
+
     #go_repository(
     #    name = "com_github_offchainlabs_methodical_ssz",
     #    importpath = "github.com/OffchainLabs/methodical-ssz",
