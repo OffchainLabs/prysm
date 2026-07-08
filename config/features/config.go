@@ -49,6 +49,7 @@ type Flags struct {
 	DisableDutiesV2                     bool // DisableDutiesV2 sets validator client to use the get Duties endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
 	EnableStateDiff                     bool // EnableStateDiff enables the experimental state diff feature for the beacon node.
+	EnableEngineSSZHTTP                 bool // EnableEngineSSZHTTP enables the REST + SSZ Engine API v2 transport (execution-apis#793).
 
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
@@ -308,6 +309,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 			log.Warn("--enable-state-diff is enabled, ignoring --enable-historical-space-representation flag.")
 			cfg.EnableHistoricalSpaceRepresentation = false
 		}
+	}
+	if ctx.Bool(EnableEngineSSZHTTP.Name) {
+		logEnabled(EnableEngineSSZHTTP)
+		cfg.EnableEngineSSZHTTP = true
 	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}

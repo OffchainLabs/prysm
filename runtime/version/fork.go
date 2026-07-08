@@ -28,6 +28,15 @@ var versionToString = map[int]string{
 	Gloas:     "gloas",
 }
 
+var clVersionToELFork = map[int]string{
+	Bellatrix: "paris",
+	Capella:   "shanghai",
+	Deneb:     "cancun",
+	Electra:   "prague",
+	Fulu:      "osaka",
+	Gloas:     "amsterdam",
+}
+
 // stringToVersion and allVersions are populated in init()
 var stringToVersion = map[string]int{}
 var allVersions []int
@@ -70,6 +79,15 @@ func All() []int {
 func IsUnsupported(version int) bool {
 	_, ok := unsupportedVersions[version]
 	return ok
+}
+
+func ELForkName(v int) (string, error) {
+	name, ok := clVersionToELFork[v]
+	// CL version prior to Bellatrix doesn't have a corresponding EL fork.
+	if !ok {
+		return "", errors.Errorf("no EL fork name for version %s", String(v))
+	}
+	return name, nil
 }
 
 func init() {

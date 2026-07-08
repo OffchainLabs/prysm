@@ -118,11 +118,16 @@ func TestPayloadBodiesViaUnblinder(t *testing.T) {
 	t.Run("mix of non-empty and empty", func(t *testing.T) {
 		cli, srv := newMockEngine(t)
 		srv.register(GetPayloadBodiesByHashV1, func(msg *jsonrpcMessage, w http.ResponseWriter, r *http.Request) {
-			executionPayloadBodies := []*pb.ExecutionPayloadBodyV1{
-				payloadToBody(t, fx.denebBlock.blinded.header),
-				payloadToBody(t, fx.emptyDenebBlock.blinded.header),
+			byHash := map[string]*pb.ExecutionPayloadBodyV1{
+				string(fx.denebBlock.blinded.header.BlockHash()):      payloadToBody(t, fx.denebBlock.blinded.header),
+				string(fx.emptyDenebBlock.blinded.header.BlockHash()): payloadToBody(t, fx.emptyDenebBlock.blinded.header),
 			}
-			mockWriteResult(t, w, msg, executionPayloadBodies)
+			requested := mockParseHexByteList(t, msg.Params)
+			bodies := make([]*pb.ExecutionPayloadBodyV1, len(requested))
+			for i, h := range requested {
+				bodies[i] = byHash[string(h)]
+			}
+			mockWriteResult(t, w, msg, bodies)
 		})
 		ctx := t.Context()
 
@@ -130,9 +135,9 @@ func TestPayloadBodiesViaUnblinder(t *testing.T) {
 			fx.denebBlock.blinded.block,
 			fx.emptyDenebBlock.blinded.block,
 		}
-		bbr, err := newBlindedBlockReconstructor(toUnblind)
+		bbr, err := newBlindedBlockReconstructor(&jsonEngine{rpc: cli}, toUnblind)
 		require.NoError(t, err)
-		require.NoError(t, bbr.requestBodies(ctx, cli))
+		require.NoError(t, bbr.requestBodies(ctx, &jsonEngine{rpc: cli}))
 
 		payload, err := bbr.payloadForHeader(fx.denebBlock.blinded.header, fx.denebBlock.blinded.block.Version())
 		require.NoError(t, err)
@@ -270,7 +275,7 @@ func TestReconstructBlindedBlockBatchFallbackToRange(t *testing.T) {
 			fx.denebBlock.blinded.block,
 			fx.emptyDenebBlock.blinded.block,
 		}
-		_, err := reconstructBlindedBlockBatch(ctx, cli, toUnblind)
+		_, err := reconstructBlindedBlockBatch(ctx, &jsonEngine{rpc: cli}, toUnblind)
 		require.ErrorIs(t, err, errNilPayloadBody)
 		require.Equal(t, 1, srv.callCount(GetPayloadBodiesByHashV1))
 		require.Equal(t, 1, srv.callCount(GetPayloadBodiesByRangeV1))
@@ -293,7 +298,7 @@ func TestReconstructBlindedBlockBatchFallbackToRange(t *testing.T) {
 			fx.denebBlock.blinded.block,
 			fx.emptyDenebBlock.blinded.block,
 		}
-		_, err := reconstructBlindedBlockBatch(ctx, cli, unblind)
+		_, err := reconstructBlindedBlockBatch(ctx, &jsonEngine{rpc: cli}, unblind)
 		require.NoError(t, err)
 	})
 	t.Run("separated by block number gap", func(t *testing.T) {
@@ -330,7 +335,7 @@ func TestReconstructBlindedBlockBatchFallbackToRange(t *testing.T) {
 			fx.emptyDenebBlock.blinded.block,
 			fx.afterSkipDeneb.blinded.block,
 		}
-		unblind, err := reconstructBlindedBlockBatch(ctx, cli, blind)
+		unblind, err := reconstructBlindedBlockBatch(ctx, &jsonEngine{rpc: cli}, blind)
 		require.NoError(t, err)
 		for i := range unblind {
 			testAssertReconstructedEquivalent(t, blind[i], unblind[i])
@@ -344,15 +349,24 @@ func TestReconstructBlindedBlockBatchDenebAndBeyond(t *testing.T) {
 		cli, srv := newMockEngine(t)
 		fx := testBlindedBlockFixtures(t)
 		srv.register(GetPayloadBodiesByHashV1, func(msg *jsonrpcMessage, w http.ResponseWriter, r *http.Request) {
-			executionPayloadBodies := []*pb.ExecutionPayloadBodyV1{payloadToBody(t, fx.denebBlock.blinded.header), payloadToBody(t, fx.electra.blinded.header), payloadToBody(t, fx.fulu.blinded.header)}
-			mockWriteResult(t, w, msg, executionPayloadBodies)
+			byHash := map[string]*pb.ExecutionPayloadBodyV1{
+				string(fx.denebBlock.blinded.header.BlockHash()): payloadToBody(t, fx.denebBlock.blinded.header),
+				string(fx.electra.blinded.header.BlockHash()):    payloadToBody(t, fx.electra.blinded.header),
+				string(fx.fulu.blinded.header.BlockHash()):       payloadToBody(t, fx.fulu.blinded.header),
+			}
+			requested := mockParseHexByteList(t, msg.Params)
+			bodies := make([]*pb.ExecutionPayloadBodyV1, len(requested))
+			for i, h := range requested {
+				bodies[i] = byHash[string(h)]
+			}
+			mockWriteResult(t, w, msg, bodies)
 		})
 		blinded := []interfaces.ReadOnlySignedBeaconBlock{
 			fx.denebBlock.blinded.block,
 			fx.electra.blinded.block,
 			fx.fulu.blinded.block,
 		}
-		unblinded, err := reconstructBlindedBlockBatch(t.Context(), cli, blinded)
+		unblinded, err := reconstructBlindedBlockBatch(t.Context(), &jsonEngine{rpc: cli}, blinded)
 		require.NoError(t, err)
 		require.Equal(t, len(blinded), len(unblinded))
 		for i := range unblinded {

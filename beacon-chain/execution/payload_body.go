@@ -8,9 +8,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
@@ -27,35 +26,36 @@ type reconstructionBatch map[[32]byte]uint64
 
 type blindedBlockReconstructor struct {
 	orderedBlocks []*blockWithHeader
-	bodies        map[[32]byte]*pb.ExecutionPayloadBodyV1
-	batches       map[string]reconstructionBatch
+	bodies        map[[32]byte]interfaces.ExecutionPayloadBody
+	// batches groups blocks by CL fork version.
+	batches map[int]reconstructionBatch
 }
 
-func reconstructBlindedBlockBatch(ctx context.Context, client RPCClient, sbb []interfaces.ReadOnlySignedBeaconBlock) ([]interfaces.SignedBeaconBlock, error) {
-	r, err := newBlindedBlockReconstructor(sbb)
+func reconstructBlindedBlockBatch(ctx context.Context, eng engineTransport, sbb []interfaces.ReadOnlySignedBeaconBlock) ([]interfaces.SignedBeaconBlock, error) {
+	r, err := newBlindedBlockReconstructor(eng, sbb)
 	if err != nil {
 		return nil, err
 	}
-	if err := r.requestBodies(ctx, client); err != nil {
+	if err := r.requestBodies(ctx, eng); err != nil {
 		return nil, err
 	}
 	return r.unblinded()
 }
 
-func newBlindedBlockReconstructor(sbb []interfaces.ReadOnlySignedBeaconBlock) (*blindedBlockReconstructor, error) {
+func newBlindedBlockReconstructor(eng engineTransport, sbb []interfaces.ReadOnlySignedBeaconBlock) (*blindedBlockReconstructor, error) {
 	r := &blindedBlockReconstructor{
 		orderedBlocks: make([]*blockWithHeader, 0, len(sbb)),
-		bodies:        make(map[[32]byte]*pb.ExecutionPayloadBodyV1),
+		bodies:        make(map[[32]byte]interfaces.ExecutionPayloadBody),
 	}
 	for i := range sbb {
-		if err := r.addToBatch(sbb[i]); err != nil {
+		if err := r.addToBatch(eng, sbb[i]); err != nil {
 			return nil, err
 		}
 	}
 	return r, nil
 }
 
-func (r *blindedBlockReconstructor) addToBatch(b interfaces.ReadOnlySignedBeaconBlock) error {
+func (r *blindedBlockReconstructor) addToBatch(eng engineTransport, b interfaces.ReadOnlySignedBeaconBlock) error {
 	if err := blocks.BeaconBlockIsNil(b); err != nil {
 		return errors.Wrap(err, "cannot reconstruct bellatrix block from nil data")
 	}
@@ -75,28 +75,24 @@ func (r *blindedBlockReconstructor) addToBatch(b interfaces.ReadOnlySignedBeacon
 		return nil
 	}
 
-	method := payloadBodyMethodForBlock(b)
+	v := b.Version()
 	if r.batches == nil {
-		r.batches = make(map[string]reconstructionBatch)
+		r.batches = make(map[int]reconstructionBatch)
 	}
-	if _, ok := r.batches[method]; !ok {
-		r.batches[method] = make(reconstructionBatch)
+	if _, ok := r.batches[v]; !ok {
+		r.batches[v] = make(reconstructionBatch)
 	}
-	r.batches[method][bytesutil.ToBytes32(header.BlockHash())] = header.BlockNumber()
+	r.batches[v][bytesutil.ToBytes32(header.BlockHash())] = header.BlockNumber()
 	return nil
 }
 
-func payloadBodyMethodForBlock(_ interface{ Version() int }) string {
-	return GetPayloadBodiesByHashV1
-}
-
-func (r *blindedBlockReconstructor) requestBodies(ctx context.Context, client RPCClient) error {
-	for method := range r.batches {
-		nilResults, err := r.requestBodiesByHash(ctx, client, method)
+func (r *blindedBlockReconstructor) requestBodies(ctx context.Context, eng engineTransport) error {
+	for v := range r.batches {
+		nilResults, err := r.requestBodiesByHash(ctx, eng, v)
 		if err != nil {
 			return err
 		}
-		if err := r.handleNilResults(ctx, client, method, nilResults); err != nil {
+		if err := r.handleNilResults(ctx, eng, v, nilResults); err != nil {
 			return err
 		}
 	}
@@ -108,18 +104,18 @@ type hashBlockNumber struct {
 	n uint64
 }
 
-func (r *blindedBlockReconstructor) handleNilResults(ctx context.Context, client RPCClient, method string, nilResults [][32]byte) error {
+func (r *blindedBlockReconstructor) handleNilResults(ctx context.Context, eng engineTransport, v int, nilResults [][32]byte) error {
 	if len(nilResults) == 0 {
 		return nil
 	}
 	hbns := make([]hashBlockNumber, len(nilResults))
 	for i := range nilResults {
 		h := nilResults[i]
-		hbns[i] = hashBlockNumber{h: h, n: r.batches[method][h]}
+		hbns[i] = hashBlockNumber{h: h, n: r.batches[v][h]}
 	}
 	reqs := computeRanges(hbns)
 	for i := range reqs {
-		if err := r.requestBodiesByRange(ctx, client, rangeMethodForHashMethod(method), reqs[i]); err != nil {
+		if err := r.requestBodiesByRange(ctx, eng, v, reqs[i]); err != nil {
 			return err
 		}
 	}
@@ -155,25 +151,25 @@ func computeRanges(hbns []hashBlockNumber) []byRangeReq {
 	return ranges
 }
 
-func (r *blindedBlockReconstructor) requestBodiesByRange(ctx context.Context, client RPCClient, method string, req byRangeReq) error {
-	result := make([]*pb.ExecutionPayloadBodyV1, 0)
-	if err := client.CallContext(ctx, &result, method, hexutil.EncodeUint64(req.start), hexutil.EncodeUint64(req.count)); err != nil {
+func (r *blindedBlockReconstructor) requestBodiesByRange(ctx context.Context, eng engineTransport, v int, req byRangeReq) error {
+	result, err := eng.GetPayloadBodiesByRange(ctx, v, req.start, req.count)
+	if err != nil {
 		return err
 	}
 	if uint64(len(result)) != req.count {
-		return errors.Wrapf(errInvalidPayloadBodyResponse, "received %d payload bodies from %s with count=%d (start=%d)", len(result), method, req.count, req.start)
+		return errors.Wrapf(errInvalidPayloadBodyResponse, "received %d payload bodies for %s with count=%d (start=%d)", len(result), version.String(v), req.count, req.start)
 	}
 	for i := range result {
 		if result[i] == nil {
-			return errors.Wrapf(errNilPayloadBody, "from %s, hash=%#x", method, req.hbns[i].h)
+			return errors.Wrapf(errNilPayloadBody, "for %s, hash=%#x", version.String(v), req.hbns[i].h)
 		}
 		r.bodies[req.hbns[i].h] = result[i]
 	}
 	return nil
 }
 
-func (r *blindedBlockReconstructor) requestBodiesByHash(ctx context.Context, client RPCClient, method string) ([][32]byte, error) {
-	batch := r.batches[method]
+func (r *blindedBlockReconstructor) requestBodiesByHash(ctx context.Context, eng engineTransport, v int) ([][32]byte, error) {
+	batch := r.batches[v]
 	if len(batch) == 0 {
 		return nil, nil
 	}
@@ -184,8 +180,8 @@ func (r *blindedBlockReconstructor) requestBodiesByHash(ctx context.Context, cli
 		}
 		hashes = append(hashes, h)
 	}
-	result := make([]*pb.ExecutionPayloadBodyV1, 0)
-	if err := client.CallContext(ctx, &result, method, hashes); err != nil {
+	result, err := eng.GetPayloadBodiesByHash(ctx, v, hashes)
+	if err != nil {
 		return nil, err
 	}
 	if len(hashes) != len(result) {
@@ -237,8 +233,4 @@ func (r *blindedBlockReconstructor) unblinded() ([]interfaces.SignedBeaconBlock,
 		unblinded[i] = full
 	}
 	return unblinded, nil
-}
-
-func rangeMethodForHashMethod(_ string) string {
-	return GetPayloadBodiesByRangeV1
 }

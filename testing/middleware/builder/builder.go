@@ -124,7 +124,7 @@ func New(opts ...Option) (*Builder, error) {
 	endpoint := network.HttpEndpoint(p.cfg.destinationUrl.String())
 	endpoint.Auth.Method = authorization.Bearer
 	endpoint.Auth.Value = p.cfg.secret
-	execClient, err := network.NewExecutionRPCClient(context.Background(), endpoint, nil)
+	execClient, err := network.NewExecutionRPCClient(context.Background(), endpoint, nil, nil)
 	if err != nil {
 		return nil, err
 	}
