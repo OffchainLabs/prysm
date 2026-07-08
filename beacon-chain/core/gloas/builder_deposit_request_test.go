@@ -39,7 +39,7 @@ func TestProcessBuilderDepositRequest_NewBuilderValidSignature(t *testing.T) {
 	req := signedBuilderDepositRequest(t, sk, cred, 1234)
 
 	st := newGloasState(t, nil, nil)
-	require.NoError(t, processBuilderDepositRequest(t.Context(), st, req, true, true))
+	require.NoError(t, processBuilderDepositRequest(t.Context(), st, req, sigKnownValid))
 
 	idx, ok := st.BuilderIndexByPubkey(toBytes48(req.Pubkey))
 	require.Equal(t, true, ok)
@@ -59,7 +59,7 @@ func TestProcessBuilderDepositRequest_NewBuilderInvalidSignatureIgnored(t *testi
 	req := signedBuilderDepositRequest(t, sk, cred, 1234)
 
 	st := newGloasState(t, nil, nil)
-	require.NoError(t, processBuilderDepositRequest(t.Context(), st, req, true, false))
+	require.NoError(t, processBuilderDepositRequest(t.Context(), st, req, sigKnownInvalid))
 
 	_, ok := st.BuilderIndexByPubkey(toBytes48(req.Pubkey))
 	require.Equal(t, false, ok)
@@ -84,7 +84,7 @@ func TestProcessBuilderDepositRequest_ExistingBuilderTopsUpNoSignatureCheck(t *t
 		Amount:                200,
 		Signature:             make([]byte, 96), // not checked for top-up
 	}
-	require.NoError(t, processBuilderDepositRequest(t.Context(), st, req, false, false))
+	require.NoError(t, processBuilderDepositRequest(t.Context(), st, req, sigUnverified))
 
 	idx, ok := st.BuilderIndexByPubkey(toBytes48(pubkey))
 	require.Equal(t, true, ok)
