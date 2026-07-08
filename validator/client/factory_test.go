@@ -14,14 +14,18 @@ import (
 // The connection generation must come from whichever provider the factory
 // actually selected, so host switches on the active transport are detected.
 func TestNewValidatorClient_ConnectionGenerationFollowsTransport(t *testing.T) {
-	grpcProvider := &grpcutil.MockGrpcProvider{MockHosts: []string{"localhost:4000"}, ConnCounter: 2}
-	restProvider := &rest.MockRestProvider{MockHosts: []string{"http://localhost:3500"}, ConnCounter: 9}
+	var (
+		grpcConnCounter uint64 = 2
+		restConnCounter uint64 = 9
+	)
+	grpcProvider := &grpcutil.MockGrpcProvider{MockHosts: []string{"localhost:4000"}, ConnCounter: grpcConnCounter}
+	restProvider := &rest.MockRestProvider{MockHosts: []string{"http://localhost:3500"}, ConnCounter: restConnCounter}
 
 	t.Run("gRPC mode reads grpc counter even when rest provider present", func(t *testing.T) {
 		conn, err := validatorHelpers.NewNodeConnection(
 			validatorHelpers.WithGRPCProvider(grpcProvider), validatorHelpers.WithRestProvider(restProvider))
 		require.NoError(t, err)
-		assert.Equal(t, uint64(2), NewValidatorClient(conn).ConnectionGeneration())
+		assert.Equal(t, grpcConnCounter, NewValidatorClient(conn).ConnectionGeneration())
 	})
 
 	t.Run("REST mode reads rest counter even when grpc provider present", func(t *testing.T) {
@@ -32,7 +36,7 @@ func TestNewValidatorClient_ConnectionGenerationFollowsTransport(t *testing.T) {
 		conn, err := validatorHelpers.NewNodeConnection(
 			validatorHelpers.WithGRPCProvider(grpcProvider), validatorHelpers.WithRestProvider(restProvider))
 		require.NoError(t, err)
-		assert.Equal(t, uint64(9), NewValidatorClient(conn).ConnectionGeneration())
+		assert.Equal(t, restConnCounter, NewValidatorClient(conn).ConnectionGeneration())
 	})
 
 	t.Run("REST flag without rest provider falls back to grpc counter", func(t *testing.T) {
@@ -42,6 +46,6 @@ func TestNewValidatorClient_ConnectionGenerationFollowsTransport(t *testing.T) {
 		defer reset()
 		conn, err := validatorHelpers.NewNodeConnection(validatorHelpers.WithGRPCProvider(grpcProvider))
 		require.NoError(t, err)
-		assert.Equal(t, uint64(2), NewValidatorClient(conn).ConnectionGeneration())
+		assert.Equal(t, grpcConnCounter, NewValidatorClient(conn).ConnectionGeneration())
 	})
 }

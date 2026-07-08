@@ -832,12 +832,11 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 	connGen := v.connGeneration()
 	prefsChanged := v.connTracker.changed(proposerPrefsPush, connGen)
 	regsChanged := isPreGloas && v.connTracker.changed(registrationsPush, connGen)
-	if prefsChanged || regsChanged {
-		log.WithFields(logrus.Fields{
-			"connGeneration": connGen,
-			"preferences":    prefsChanged,
-			"registrations":  regsChanged,
-		}).Debug("Forcing full push after beacon connection change")
+	if prefsChanged {
+		log.WithField("connGeneration", connGen).Debug("Forcing proposer preferences re-push after beacon connection change")
+	}
+	if regsChanged {
+		log.WithField("connGeneration", connGen).Debug("Forcing validator registrations re-push after beacon connection change")
 	}
 	prefsForcePush := forceFullPush || prefsChanged
 	regsForcePush := forceFullPush || regsChanged
@@ -1326,11 +1325,11 @@ func (v *validator) releasePrefSlot(proposalSlot primitives.Slot) {
 // releasePrefSlots un-reserves the slots of a batch whose submission failed so
 // a later build retries them.
 func (v *validator) releasePrefSlots(prefs []*ethpb.SignedProposerPreferences) {
-	slots := make([]primitives.Slot, 0, len(prefs))
+	slots := make([]primitives.Slot, len(prefs))
 	v.submittedPrefSlotsLock.Lock()
-	for _, p := range prefs {
+	for i, p := range prefs {
 		delete(v.submittedPrefSlots, p.Message.ProposalSlot)
-		slots = append(slots, p.Message.ProposalSlot)
+		slots[i] = p.Message.ProposalSlot
 	}
 	v.submittedPrefSlotsLock.Unlock()
 	log.WithField("proposalSlots", slots).Debug("Released proposer preference reservations for retry")

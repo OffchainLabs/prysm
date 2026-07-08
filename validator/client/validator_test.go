@@ -16,6 +16,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
@@ -3221,99 +3222,94 @@ func TestValidator_PushProposerSettings_SkipsBuilderRegistrationsPostGloas(t *te
 // switch signal and release its reservations so the next slot retries; the
 // retry's success consumes the signal.
 func TestValidator_PushProposerSettings_RetriesAfterFailedRepush(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.GloasForkEpoch = 0
-	// Zero both slot-duration sources so the mid-slot submit delay elapses immediately.
-	cfg.SecondsPerSlot = 0
-	cfg.SlotDurationMilliseconds = 0
-	params.OverrideBeaconConfig(cfg)
-
-	kp := randKeypair(t)
-	km := newMockKeymanager(t, kp)
-
-	ctrl := gomock.NewController(t)
-	client := validatormock.NewMockValidatorClient(ctrl)
 	domainCache, err := ristretto.NewCache(&ristretto.Config[string, proto.Message]{
 		NumCounters: 1920,
 		MaxCost:     192,
 		BufferItems: 64,
 	})
 	require.NoError(t, err)
-	client.EXPECT().DomainData(gomock.Any(), gomock.Any()).
-		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).AnyTimes()
-	// The push to the freshly switched host fails once; the retry succeeds.
-	gomock.InOrder(
-		client.EXPECT().SubmitSignedProposerPreferences(gomock.Any(), gomock.Any()).
-			Return(nil, errors.New("new host not ready")),
-		client.EXPECT().SubmitSignedProposerPreferences(gomock.Any(), gomock.Any()).
-			Return(&empty.Empty{}, nil),
-	)
+	t.Cleanup(domainCache.Close)
 
-	// The client reports its provider's connection generation; the test drives it.
-	var connGen atomic.Uint64
-	client.EXPECT().ConnectionGeneration().DoAndReturn(connGen.Load).AnyTimes()
+	synctest.Test(t, func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
 
-	v := validator{
-		km:              km,
-		validatorClient: client,
-		domainDataCache: domainCache,
-		proposerSettings: &proposer.Settings{
-			Version: proposer.SchemaV2,
-			DefaultConfig: &proposer.Option{
-				FeeRecipientConfig: &proposer.FeeRecipientConfig{
-					FeeRecipient: feeRecipientFromString(t, "0x1111111111111111111111111111111111111111"),
+		kp := randKeypair(t)
+		km := newMockKeymanager(t, kp)
+
+		ctrl := gomock.NewController(t)
+		client := validatormock.NewMockValidatorClient(ctrl)
+		client.EXPECT().DomainData(gomock.Any(), gomock.Any()).
+			Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).AnyTimes()
+		// The push to the freshly switched host fails once; the retry succeeds.
+		gomock.InOrder(
+			client.EXPECT().SubmitSignedProposerPreferences(gomock.Any(), gomock.Any()).
+				Return(nil, errors.New("new host not ready")),
+			client.EXPECT().SubmitSignedProposerPreferences(gomock.Any(), gomock.Any()).
+				Return(&empty.Empty{}, nil),
+		)
+
+		// The client reports its provider's connection generation; the test drives it.
+		var connGen atomic.Uint64
+		client.EXPECT().ConnectionGeneration().DoAndReturn(connGen.Load).AnyTimes()
+
+		v := validator{
+			km:              km,
+			validatorClient: client,
+			domainDataCache: domainCache,
+			proposerSettings: &proposer.Settings{
+				Version: proposer.SchemaV2,
+				DefaultConfig: &proposer.Option{
+					FeeRecipientConfig: &proposer.FeeRecipientConfig{
+						FeeRecipient: feeRecipientFromString(t, "0x1111111111111111111111111111111111111111"),
+					},
+					GasLimit: 42000000,
 				},
-				GasLimit: 42000000,
 			},
-		},
-		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
-			kp.pub: {publicKey: kp.pub[:], status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}, index: 1},
-		},
-		duties:             &dutyStore{},
-		submittedPrefSlots: make(map[primitives.Slot]bool),
-	}
-	var data dutyStoreData
-	data.setFromContainer(&ethpb.ValidatorDutiesContainer{
-		CurrentEpochDuties: []*ethpb.ValidatorDuty{
-			{PublicKey: kp.pub[:], ValidatorIndex: 1, Status: ethpb.ValidatorStatus_ACTIVE, ProposerSlots: []primitives.Slot{5}},
-		},
-		NextEpochDuties:   []*ethpb.ValidatorDuty{},
-		PrevDependentRoot: testProposerPrefDependentRoot,
-		CurrDependentRoot: testProposerPrefDependentRoot,
-	})
-	v.duties.write(data)
-
-	waitFor := func(desc string, cond func() bool) {
-		t.Helper()
-		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
-			if cond() {
-				return
-			}
-			time.Sleep(5 * time.Millisecond)
+			pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
+				kp.pub: {publicKey: kp.pub[:], status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}, index: 1},
+			},
+			duties:             &dutyStore{},
+			submittedPrefSlots: make(map[primitives.Slot]bool),
 		}
-		t.Fatalf("timed out waiting for %s", desc)
-	}
+		var data dutyStoreData
+		data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{PublicKey: kp.pub[:], ValidatorIndex: 1, Status: ethpb.ValidatorStatus_ACTIVE, ProposerSlots: []primitives.Slot{5}},
+			},
+			NextEpochDuties:   []*ethpb.ValidatorDuty{},
+			PrevDependentRoot: testProposerPrefDependentRoot,
+			CurrDependentRoot: testProposerPrefDependentRoot,
+		})
+		v.duties.write(data)
 
-	// A fallback host switch bumps the connection generation.
-	connGen.Store(1)
-	gen := v.connGeneration()
+		// The mid-slot submit runs on a goroutine after half a slot; advance fake
+		// time past it and let the bubble settle before asserting.
+		advanceSubmitTimer := func() {
+			time.Sleep(params.BeaconConfig().SlotDuration() / 2)
+			synctest.Wait()
+		}
 
-	// Slot 1: the switch forces a push; its submission fails, so the reservation
-	// is released and the switch signal is kept for the next slot.
-	require.NoError(t, v.PushProposerSettings(t.Context(), 1, false))
-	waitFor("failed submission to release its reservation", func() bool {
-		return v.submittedPrefSlotsCount() == 0
+		// A fallback host switch bumps the connection generation.
+		connGen.Store(1)
+		gen := v.connGeneration()
+
+		// Slot 1: the switch forces a push; its submission fails, so the reservation
+		// is released and the switch signal is kept for the next slot.
+		require.NoError(t, v.PushProposerSettings(t.Context(), 1, false))
+		advanceSubmitTimer()
+		require.Equal(t, 0, v.submittedPrefSlotsCount())
+		require.Equal(t, true, v.connTracker.changed(proposerPrefsPush, gen))
+
+		// Slot 2: the kept signal forces another push; it succeeds, consuming the
+		// signal and keeping the reservation.
+		require.NoError(t, v.PushProposerSettings(t.Context(), 2, false))
+		advanceSubmitTimer()
+		require.Equal(t, false, v.connTracker.changed(proposerPrefsPush, gen))
+		require.Equal(t, 1, v.submittedPrefSlotsCount())
 	})
-	require.Equal(t, true, v.connTracker.changed(proposerPrefsPush, gen))
-
-	// Slot 2: the kept signal forces another push; it succeeds, consuming the
-	// signal and keeping the reservation.
-	require.NoError(t, v.PushProposerSettings(t.Context(), 2, false))
-	waitFor("successful retry to confirm the generation", func() bool {
-		return !v.connTracker.changed(proposerPrefsPush, gen)
-	})
-	require.Equal(t, 1, v.submittedPrefSlotsCount())
 }
 
 func TestValidator_buildSignedRegReqs_DefaultConfigDisabled(t *testing.T) {
