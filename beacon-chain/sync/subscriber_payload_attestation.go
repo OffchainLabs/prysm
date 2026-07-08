@@ -19,7 +19,10 @@ func (s *Service) payloadAttestationSubscriber(ctx context.Context, msg proto.Me
 	if a == nil || a.Data == nil {
 		return errNilMessage
 	}
+	return s.processPayloadAttestationMessage(ctx, a)
+}
 
+func (s *Service) processPayloadAttestationMessage(ctx context.Context, a *eth.PayloadAttestationMessage) error {
 	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
 		Type: opfeed.PayloadAttestationMessageReceived,
 		Data: &opfeed.PayloadAttestationMessageReceivedData{
@@ -38,11 +41,11 @@ func (s *Service) payloadAttestationSubscriber(ctx context.Context, msg proto.Me
 	if st == nil {
 		return nil
 	}
-	idx, err := gloas.PayloadCommitteeIndex(ctx, st, a.Data.Slot, a.ValidatorIndex)
+	indices, err := gloas.PayloadCommitteeIndices(ctx, st, a.Data.Slot, a.ValidatorIndex)
 	if err != nil {
 		return err
 	}
-	if err := s.cfg.payloadAttestationPool.InsertPayloadAttestation(a, idx); err != nil {
+	if err := s.cfg.payloadAttestationPool.InsertPayloadAttestation(a, indices); err != nil {
 		return err
 	}
 

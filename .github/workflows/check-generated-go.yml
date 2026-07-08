@@ -12,6 +12,7 @@ on:
       - 'Makefile'
       - 'go.mod'
       - '.github/workflows/check-generated-go.yml'
+      - 'hack/check-bazel-drift.sh'
 
 permissions:
   contents: read
@@ -39,3 +40,15 @@ jobs:
             git --no-pager diff --name-only
             exit 1
           fi
+
+
+      - name: Install Bazelisk and goimports
+        run: |
+          go install github.com/bazelbuild/bazelisk@v1.26.0
+          go install golang.org/x/tools/cmd/goimports@v0.40.0
+          mkdir -p "$HOME/bin"
+          ln -sf "$(go env GOPATH)/bin/bazelisk" "$HOME/bin/bazel"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Check generated files against Bazel output
+        run: ./hack/check-bazel-drift.sh

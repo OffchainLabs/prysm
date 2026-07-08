@@ -411,9 +411,6 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 	}
 
 	stateless := cliCtx.Bool(flags.EnableStatelessFlag.Name)
-	if stateless && !features.Get().EnableBeaconRESTApi {
-		log.Warnf("--%s requires --%s; the flag will be ignored.", flags.EnableStatelessFlag.Name, features.EnableBeaconRESTApi.Name)
-	}
 
 	validatorService, err := client.NewValidatorService(cliCtx.Context, &client.Config{
 		DB:                      c.db,

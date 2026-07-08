@@ -119,6 +119,7 @@ func (s *Service) rewardsEndpoints(blocker lookup.Blocker, stater lookup.Stater,
 		TimeFetcher:           s.cfg.GenesisTimeFetcher,
 		Stater:                stater,
 		HeadFetcher:           s.cfg.HeadFetcher,
+		ForkchoiceFetcher:     s.cfg.ForkchoiceFetcher,
 		BlockRewardFetcher:    rewardFetcher,
 	}
 
@@ -217,7 +218,8 @@ func (s *Service) validatorEndpoints(
 		BeaconDB:                      s.cfg.BeaconDB,
 		BlockBuilder:                  s.cfg.BlockBuilder,
 		OperationNotifier:             s.cfg.OperationNotifier,
-		TrackedValidatorsCache:        s.cfg.TrackedValidatorsCache,
+		ProposerPreferencesCache:      s.cfg.ProposerPreferencesCache,
+		SubscribedValidatorsCache:     s.cfg.SubscribedValidatorsCache,
 		PayloadIDCache:                s.cfg.PayloadIDCache,
 		PayloadAttestationPool:        s.cfg.PayloadAttestationPool,
 		CoreService:                   coreService,
@@ -379,7 +381,7 @@ func (s *Service) validatorEndpoints(
 			template: "/eth/v1/validator/proposer_preferences",
 			name:     namespace + ".SubmitSignedProposerPreferences",
 			middleware: []middleware.Middleware{
-				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
@@ -589,6 +591,7 @@ func (s *Service) beaconEndpoints(
 		ExecutionReconstructor:        s.cfg.ExecutionReconstructor,
 		BLSChangesPool:                s.cfg.BLSChangesPool,
 		PayloadAttestationPool:        s.cfg.PayloadAttestationPool,
+		PayloadAttestationReceiver:    s.cfg.PayloadAttestationReceiver,
 		FinalizationFetcher:           s.cfg.FinalizationFetcher,
 		ForkchoiceFetcher:             s.cfg.ForkchoiceFetcher,
 		CoreService:                   coreService,
@@ -893,7 +896,7 @@ func (s *Service) beaconEndpoints(
 			name:     namespace + ".GetValidatorBalances",
 			middleware: []middleware.Middleware{
 				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetValidatorBalances,
@@ -952,7 +955,7 @@ func (s *Service) beaconEndpoints(
 			template: "/eth/v1/beacon/pool/payload_attestations",
 			name:     namespace + ".ListPayloadAttestations",
 			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.ListPayloadAttestations,
@@ -962,7 +965,7 @@ func (s *Service) beaconEndpoints(
 			template: "/eth/v1/beacon/pool/payload_attestations",
 			name:     namespace + ".SubmitPayloadAttestations",
 			middleware: []middleware.Middleware{
-				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
@@ -1159,12 +1162,13 @@ func (s *Service) debugEndpoints(stater lookup.Stater, blocker lookup.Blocker) [
 
 func (s *Service) eventsEndpoints() []endpoint {
 	server := &events.Server{
-		StateNotifier:          s.cfg.StateNotifier,
-		OperationNotifier:      s.cfg.OperationNotifier,
-		HeadFetcher:            s.cfg.HeadFetcher,
-		ChainInfoFetcher:       s.cfg.ChainInfoFetcher,
-		TrackedValidatorsCache: s.cfg.TrackedValidatorsCache,
-		StateGen:               s.cfg.StateGen,
+		StateNotifier:            s.cfg.StateNotifier,
+		OperationNotifier:        s.cfg.OperationNotifier,
+		HeadFetcher:              s.cfg.HeadFetcher,
+		ChainInfoFetcher:         s.cfg.ChainInfoFetcher,
+		ProposerPreferencesCache: s.cfg.ProposerPreferencesCache,
+		BeaconDB:                 s.cfg.BeaconDB,
+		StateGen:                 s.cfg.StateGen,
 	}
 
 	const namespace = "events"

@@ -60,6 +60,29 @@ func TestDebounce_CtxClosing(t *testing.T) {
 	})
 }
 
+func TestDebounce_EventsChannelClosing(t *testing.T) {
+	eventsChan := make(chan any, 100)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan struct{})
+	timesHandled := int32(0)
+	go func() {
+		defer close(done)
+		async.Debounce(ctx, time.Second, eventsChan, func(event any) {
+			atomic.AddInt32(&timesHandled, 1)
+		})
+	}()
+
+	close(eventsChan)
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Debounce should return after events channel is closed")
+	}
+	assert.Equal(t, int32(0), atomic.LoadInt32(&timesHandled), "Wrong number of handled calls")
+}
+
 func TestDebounce_SingleHandlerInvocation(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		eventsChan := make(chan any, 100)

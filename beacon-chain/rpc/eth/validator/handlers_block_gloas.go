@@ -9,11 +9,9 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -103,22 +101,26 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gloasBlock, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_Gloas)
-	if !ok {
+	// A self-built block carries its payload inline as GloasContents. An external builder bid (or
+	// include_payload=false) yields the block alone; its payload is revealed separately (beacon-APIs #580).
+	var block *eth.BeaconBlockGloas
+	var contents *eth.BeaconBlockContentsGloas
+	switch b := v1alpha1resp.Block.(type) {
+	case *eth.GenericBeaconBlock_GloasContents:
+		contents = b.GloasContents
+		block = contents.Block
+	case *eth.GenericBeaconBlock_Gloas:
+		block = b.Gloas
+		includePayload = false
+	default:
 		httputil.HandleError(w, fmt.Sprintf("expected Gloas block, got %T", v1alpha1resp.Block), http.StatusInternalServerError)
 		return
 	}
 
-	consensusBlockValue, httpError := getConsensusBlockValue(ctx, s.BlockRewardFetcher, v1alpha1resp.Block)
+	consensusBlockValue, httpError := getConsensusBlockValue(ctx, s.BlockRewardFetcher, block)
 	if httpError != nil {
 		log.WithError(httpError).Debug("Failed to get consensus block value")
 		consensusBlockValue = "0"
-	}
-
-	// External builder bids reveal their payload separately, so only self-built
-	// blocks carry an inline envelope regardless of include_payload (beacon-APIs #580).
-	if includePayload && !gloasBlockSelfBuilt(gloasBlock.Gloas) {
-		includePayload = false
 	}
 
 	w.Header().Set(api.VersionHeader, version.String(version.Gloas))
@@ -128,30 +130,8 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 	isSSZ := httputil.RespondWithSsz(r)
 
 	if includePayload {
-		envelopeResp, err := s.V1Alpha1Server.GetExecutionPayloadEnvelope(ctx, &eth.ExecutionPayloadEnvelopeRequest{
-			Slot: primitives.Slot(slot),
-		})
-		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, "could not get execution payload envelope").Error(), http.StatusInternalServerError)
-			return
-		}
-		var blobs, kzgProofs [][]byte
-		if contents, ok := s.ExecutionPayloadEnvelopeCache.Contents(); ok &&
-			contents.Envelope.Payload.SlotNumber == primitives.Slot(slot) {
-			blobs, kzgProofs, err = blobsAndProofsFromDataColumns(contents.DataColumns)
-			if err != nil {
-				httputil.HandleError(w, errors.Wrap(err, "could not derive blobs from cached data columns").Error(), http.StatusInternalServerError)
-				return
-			}
-		}
-
 		if isSSZ {
-			sszResp, err := (&eth.BeaconBlockContentsGloas{
-				Block:                    gloasBlock.Gloas,
-				ExecutionPayloadEnvelope: envelopeResp.Envelope,
-				KzgProofs:                kzgProofs,
-				Blobs:                    blobs,
-			}).MarshalSSZ()
+			sszResp, err := contents.MarshalSSZ()
 			if err != nil {
 				httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -160,7 +140,7 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		blockContents, err := structs.BlockContentsGloasFromConsensus(gloasBlock.Gloas, envelopeResp.Envelope, kzgProofs, blobs)
+		blockContents, err := structs.BlockContentsGloasFromConsensus(contents.Block, contents.ExecutionPayloadEnvelope, contents.KzgProofs, contents.Blobs)
 		if err != nil {
 			httputil.HandleError(w, errors.Wrap(err, "could not convert block contents").Error(), http.StatusInternalServerError)
 			return
@@ -179,9 +159,9 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// include_payload=false: return only the beacon block.
+	// include_payload=false (or external builder bid): return only the beacon block.
 	if isSSZ {
-		sszResp, err := gloasBlock.Gloas.MarshalSSZ()
+		sszResp, err := block.MarshalSSZ()
 		if err != nil {
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -190,12 +170,12 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	block, err := structs.BeaconBlockGloasFromConsensus(gloasBlock.Gloas)
+	structBlock, err := structs.BeaconBlockGloasFromConsensus(block)
 	if err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	jsonBytes, err := json.Marshal(block)
+	jsonBytes, err := json.Marshal(structBlock)
 	if err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -206,13 +186,6 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		ExecutionPayloadIncluded: false,
 		Data:                     jsonBytes,
 	})
-}
-
-// gloasBlockSelfBuilt reports whether the block's bid is the proposer's own
-// self-built payload rather than an external builder's.
-func gloasBlockSelfBuilt(b *eth.BeaconBlockGloas) bool {
-	bid := b.GetBody().GetSignedExecutionPayloadBid().GetMessage()
-	return bid != nil && bid.BuilderIndex == params.BeaconConfig().BuilderIndexSelfBuild
 }
 
 // ExecutionPayloadEnvelope returns the cached envelope in blinded form (payload_root);
@@ -261,16 +234,15 @@ func (s *Server) ExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request
 		httputil.HandleError(w, "could not get execution payload envelope: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if !bytes.Equal(resp.Envelope.BeaconBlockRoot, beaconBlockRoot) {
+	if resp.Blinded == nil {
+		httputil.HandleError(w, "execution payload envelope not found", http.StatusNotFound)
+		return
+	}
+	if !bytes.Equal(resp.Blinded.BeaconBlockRoot, beaconBlockRoot) {
 		httputil.HandleError(w, "cached envelope beacon_block_root does not match request", http.StatusNotFound)
 		return
 	}
-
-	blinded, err := structs.WireBlindedFromFull(resp.Envelope)
-	if err != nil {
-		httputil.HandleError(w, "could not build blinded envelope: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+	blinded := resp.Blinded
 
 	w.Header().Set(api.VersionHeader, version.String(version.Gloas))
 
@@ -293,35 +265,4 @@ func (s *Server) ExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request
 		Version: version.String(version.Gloas),
 		Data:    jsonEnvelope,
 	})
-}
-
-// blobsAndProofsFromDataColumns derives raw blobs and the flat KZG proofs
-// vector (indexed [blob*numCols + col]) from cached sidecars. Pure memory
-// shuffling: ReconstructBlobs hits its cheap branch since we have every column.
-func blobsAndProofsFromDataColumns(sidecars []consensusblocks.RODataColumn) ([][]byte, [][]byte, error) {
-	if len(sidecars) == 0 {
-		return nil, nil, nil
-	}
-	const numColumns = fieldparams.NumberOfColumns
-	if len(sidecars) != numColumns {
-		return nil, nil, errors.Errorf("expected %d data column sidecars, got %d", numColumns, len(sidecars))
-	}
-
-	verified := make([]consensusblocks.VerifiedRODataColumn, len(sidecars))
-	for i, sc := range sidecars {
-		verified[i] = consensusblocks.NewVerifiedRODataColumn(sc)
-	}
-	blobCount := len(sidecars[0].Column())
-	blobs, err := peerdas.ReconstructBlobs(verified, nil, blobCount)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "reconstruct blobs from data columns")
-	}
-
-	proofs := make([][]byte, blobCount*numColumns)
-	for blobIdx := range blobCount {
-		for col := range numColumns {
-			proofs[blobIdx*numColumns+col] = sidecars[col].KzgProofs()[blobIdx]
-		}
-	}
-	return blobs, proofs, nil
 }

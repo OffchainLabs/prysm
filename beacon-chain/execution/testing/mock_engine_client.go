@@ -49,6 +49,7 @@ type EngineClient struct {
 	HasBlobsPartialColumns      []blocks.PartialDataColumn
 	ClientVersion               []*structs.ClientVersionV1
 	ErrorClientVersion          error
+	FetchedAttributes           payloadattribute.Attributer
 }
 
 // PartialColumnsSupported --
@@ -63,8 +64,9 @@ func (e *EngineClient) NewPayload(_ context.Context, _ interfaces.ExecutionData,
 
 // ForkchoiceUpdated --
 func (e *EngineClient) ForkchoiceUpdated(
-	_ context.Context, fcs *pb.ForkchoiceState, _ payloadattribute.Attributer,
+	_ context.Context, fcs *pb.ForkchoiceState, attr payloadattribute.Attributer,
 ) (*pb.PayloadIDBytes, []byte, error) {
+	e.FetchedAttributes = attr
 	if e.OverrideValidHash != [32]byte{} && bytesutil.ToBytes32(fcs.HeadBlockHash) == e.OverrideValidHash {
 		return e.PayloadIDBytes, e.ForkChoiceUpdatedResp, nil
 	}

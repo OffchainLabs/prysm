@@ -93,11 +93,11 @@ func TestWaitForPendingProposalsLoop(t *testing.T) {
 	currentSlotZero := func() primitives.Slot { return 0 }
 
 	newNode := func(tracked ...primitives.ValidatorIndex) *BeaconNode {
-		c := cache.NewTrackedValidatorsCache()
+		c := cache.NewSubscribedValidatorsCache()
 		for _, idx := range tracked {
-			c.Set(cache.TrackedValidator{Active: true, Index: idx})
+			c.Add(idx)
 		}
-		return &BeaconNode{ctx: context.Background(), trackedValidatorsCache: c}
+		return &BeaconNode{ctx: context.Background(), subscribedValidatorsCache: c}
 	}
 
 	run := func(n *BeaconNode, sigc <-chan os.Signal, tick <-chan primitives.Slot, headStateFn func(context.Context) (state.BeaconState, error)) <-chan struct{} {
@@ -153,9 +153,9 @@ func TestWaitForPendingProposalsLoop(t *testing.T) {
 		tick := make(chan primitives.Slot)
 		done := run(n, make(chan os.Signal), tick, headStateOK)
 		requireBlocks(t, done)
-		// The validator client disconnects: its tracked entries are gone, so the
-		// next slot tick must let the shutdown proceed.
-		n.trackedValidatorsCache.Prune()
+		// The validator client disconnects: its subscribed entries are gone, so
+		// the next slot tick must let the shutdown proceed.
+		n.subscribedValidatorsCache.Clear()
 		tick <- 1
 		requireReturns(t, done)
 	})

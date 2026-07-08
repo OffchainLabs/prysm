@@ -199,7 +199,7 @@ func TestBeaconState_ProposerDependentRoot(t *testing.T) {
 		s, err := InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 1})
 		require.NoError(t, err)
 		_, err = s.ProposerDependentRoot(primitives.Slot(slotsPerEpoch - 1))
-		require.ErrorIs(t, err, ErrProposerDependentRootUnderflow)
+		require.ErrorIs(t, err, state.ErrProposerDependentRootUnderflow)
 	})
 
 	t.Run("happy path returns block_roots[epoch_start(epoch-1)-1]", func(t *testing.T) {

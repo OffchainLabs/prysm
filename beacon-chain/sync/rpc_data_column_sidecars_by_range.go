@@ -5,10 +5,10 @@ import (
 	"slices"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -50,7 +50,7 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg a
 
 	if log.Logger.Level >= logrus.DebugLevel {
 		slices.Sort(request.Columns)
-		log = log.WithField("requestedColumns", helpers.PrettySlice(request.Columns))
+		log = log.WithField("requestedColumns", slice.PrettySlice(request.Columns))
 	}
 
 	// Validate the request regarding rate limiting.

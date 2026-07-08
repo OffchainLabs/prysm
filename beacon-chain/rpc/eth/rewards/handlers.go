@@ -44,14 +44,14 @@ func (s *Server) BlockRewards(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	optimistic, err := s.OptimisticModeFetcher.IsOptimistic(r.Context())
-	if err != nil {
-		httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
 	blkRoot, err := blk.Block().HashTreeRoot()
 	if err != nil {
 		httputil.HandleError(w, "Could not get block root: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	optimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, blkRoot)
+	if err != nil {
+		httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	blockRewards, httpError := s.BlockRewardFetcher.GetBlockRewardsData(ctx, blk.Block())
@@ -70,6 +70,9 @@ func (s *Server) BlockRewards(w http.ResponseWriter, r *http.Request) {
 // AttestationRewards retrieves attestation reward info for validators specified by array of public keys or validator index.
 // If no array is provided, return reward info for every validator.
 func (s *Server) AttestationRewards(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.AttestationRewards")
+	defer span.End()
+
 	st, ok := s.attRewardsState(w, r)
 	if !ok {
 		return
@@ -87,15 +90,29 @@ func (s *Server) AttestationRewards(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	optimistic, err := s.OptimisticModeFetcher.IsOptimistic(r.Context())
+	headRoot, err := s.HeadFetcher.HeadRoot(ctx)
+	if err != nil {
+		httputil.HandleError(w, "Could not get head root: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	blkRoot, err := s.ForkchoiceFetcher.Ancestor(ctx, headRoot, st.Slot())
+	if err != nil {
+		httputil.HandleError(w, "Could not get block root: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	optimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
 		httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	blkRoot, err := st.LatestBlockHeader().HashTreeRoot()
-	if err != nil {
-		httputil.HandleError(w, "Could not get block root: "+err.Error(), http.StatusInternalServerError)
-		return
+
+	if optimistic {
+		optimistic, err = s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, bytesutil.ToBytes32(blkRoot))
+		if err != nil {
+			httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	resp := &structs.AttestationRewardsResponse{
@@ -104,7 +121,7 @@ func (s *Server) AttestationRewards(w http.ResponseWriter, r *http.Request) {
 			TotalRewards: totalRewards,
 		},
 		ExecutionOptimistic: optimistic,
-		Finalized:           s.FinalizationFetcher.IsFinalized(r.Context(), blkRoot),
+		Finalized:           s.FinalizationFetcher.IsFinalized(r.Context(), bytesutil.ToBytes32(blkRoot)),
 	}
 	httputil.WriteJson(w, resp)
 }
@@ -169,14 +186,14 @@ func (s *Server) SyncCommitteeRewards(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	optimistic, err := s.OptimisticModeFetcher.IsOptimistic(r.Context())
-	if err != nil {
-		httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
 	blkRoot, err := blk.Block().HashTreeRoot()
 	if err != nil {
 		httputil.HandleError(w, "Could not get block root: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	optimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, blkRoot)
+	if err != nil {
+		httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -268,31 +285,39 @@ func idealAttRewards(
 	bal *precompute.Balance,
 	vals []*precompute.Validator,
 ) ([]structs.IdealAttestationReward, bool) {
-	idealValsCount := uint64(16)
-	minIdealBalance := uint64(17)
-	maxIdealBalance := minIdealBalance + idealValsCount - 1
-	idealRewards := make([]structs.IdealAttestationReward, 0, idealValsCount)
-	idealVals := make([]*precompute.Validator, 0, idealValsCount)
 	increment := params.BeaconConfig().EffectiveBalanceIncrement
-	for i := minIdealBalance; i <= maxIdealBalance; i++ {
-		for _, v := range vals {
-			if v.CurrentEpochEffectiveBalance/1e9 == i {
-				effectiveBalance := i * increment
-				idealVals = append(idealVals, &precompute.Validator{
-					IsActivePrevEpoch:            true,
-					IsSlashed:                    false,
-					CurrentEpochEffectiveBalance: effectiveBalance,
-					IsPrevEpochSourceAttester:    true,
-					IsPrevEpochTargetAttester:    true,
-					IsPrevEpochHeadAttester:      true,
-				})
-				idealRewards = append(idealRewards, structs.IdealAttestationReward{
-					EffectiveBalance: strconv.FormatUint(effectiveBalance, 10),
-					Inactivity:       strconv.FormatUint(0, 10),
-				})
-				break
-			}
+	maxIdealRewards := int((params.BeaconConfig().MaxEffectiveBalanceElectra - params.BeaconConfig().EjectionBalance) / increment)
+	capacity := min(len(vals), maxIdealRewards)
+	effectiveBalances := make([]uint64, 0, capacity)
+	seen := make(map[uint64]struct{}, capacity)
+	for _, v := range vals {
+		effectiveBalance := v.CurrentEpochEffectiveBalance
+		if effectiveBalance <= params.BeaconConfig().EjectionBalance || effectiveBalance%increment != 0 {
+			continue
 		}
+		if _, ok := seen[effectiveBalance]; ok {
+			continue
+		}
+		seen[effectiveBalance] = struct{}{}
+		effectiveBalances = append(effectiveBalances, effectiveBalance)
+	}
+	slices.Sort(effectiveBalances)
+
+	idealRewards := make([]structs.IdealAttestationReward, 0, len(effectiveBalances))
+	idealVals := make([]*precompute.Validator, 0, len(effectiveBalances))
+	for _, effectiveBalance := range effectiveBalances {
+		idealVals = append(idealVals, &precompute.Validator{
+			IsActivePrevEpoch:            true,
+			IsSlashed:                    false,
+			CurrentEpochEffectiveBalance: effectiveBalance,
+			IsPrevEpochSourceAttester:    true,
+			IsPrevEpochTargetAttester:    true,
+			IsPrevEpochHeadAttester:      true,
+		})
+		idealRewards = append(idealRewards, structs.IdealAttestationReward{
+			EffectiveBalance: strconv.FormatUint(effectiveBalance, 10),
+			Inactivity:       strconv.FormatUint(0, 10),
+		})
 	}
 	deltas, err := altair.AttestationsDelta(st, bal, idealVals)
 	if err != nil {

@@ -2,12 +2,15 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sync"
 	"testing"
 	"time"
 
+	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/async/event"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -79,8 +82,7 @@ func TestUpdateDuties_OK(t *testing.T) {
 	client.EXPECT().SubscribeCommitteeSubnets(
 		gomock.Any(),
 		gomock.Any(),
-		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
 		wg.Done()
 		return nil, nil
 	})
@@ -134,8 +136,7 @@ func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
 	client.EXPECT().SubscribeCommitteeSubnets(
 		gomock.Any(),
 		gomock.Any(),
-		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
 		wg.Done()
 		return nil, nil
 	})
@@ -274,8 +275,7 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 	client.EXPECT().SubscribeCommitteeSubnets(
 		gomock.Any(),
 		gomock.Any(),
-		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
 		wg.Done()
 		return nil, nil
 	})
@@ -321,51 +321,47 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 	}
 	v.aggSelector = testLocalSelector(t, v)
 
-	t.Run("nil head event", func(t *testing.T) {
-		err := v.checkDependentRoots(ctx, nil)
-		require.ErrorContains(t, "received empty head event", err)
+	t.Run("dependent root missing", func(t *testing.T) {
+		err := v.checkDependentRoots(ctx, "", "")
+		require.ErrorContains(t, "dependent root missing from head event", err)
 	})
 
 	t.Run("invalid previous duty dependent root", func(t *testing.T) {
 		head := &structs.HeadEvent{
-			Slot:                      "0",
 			PreviousDutyDependentRoot: "invalid_hex",
+			CurrentDutyDependentRoot:  "0x0405060000000000000000000000000000000000000000000000000000000000",
 		}
-		err := v.checkDependentRoots(ctx, head)
+		err := v.checkDependentRoots(ctx, head.PreviousDutyDependentRoot, head.CurrentDutyDependentRoot)
 		require.ErrorContains(t, "failed to decode previous duty dependent root", err)
 	})
 
 	t.Run("invalid current duty dependent root", func(t *testing.T) {
 		head := &structs.HeadEvent{
-			Slot:                      "0",
 			PreviousDutyDependentRoot: "0x0102030000000000000000000000000000000000000000000000000000000000",
 			CurrentDutyDependentRoot:  "invalid_hex",
 		}
-		err := v.checkDependentRoots(ctx, head)
+		err := v.checkDependentRoots(ctx, head.PreviousDutyDependentRoot, head.CurrentDutyDependentRoot)
 		require.ErrorContains(t, "failed to decode current duty dependent root", err)
 	})
 
 	t.Run("update duties for previous root mismatch", func(t *testing.T) {
 		head := &structs.HeadEvent{
-			Slot:                      "1",
 			PreviousDutyDependentRoot: "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
 			CurrentDutyDependentRoot:  "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
 		}
 		client.EXPECT().SubscribeCommitteeSubnets(
 			gomock.Any(),
 			gomock.Any(),
-			gomock.Any(),
-		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
 			return nil, nil
 		}).AnyTimes()
 		client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(dutiesContainer, nil)
-		err := v.checkDependentRoots(ctx, head)
+		err := v.checkDependentRoots(ctx, head.PreviousDutyDependentRoot, head.CurrentDutyDependentRoot)
 		require.NoError(t, err)
 	})
 
 	t.Run("update duties for current root mismatch", func(t *testing.T) {
 		head := &structs.HeadEvent{
-			Slot:                      "1",
 			PreviousDutyDependentRoot: "0x0102030000000000000000000000000000000000000000000000000000000000",
 			CurrentDutyDependentRoot:  "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
 		}
@@ -376,25 +372,93 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 		client.EXPECT().SubscribeCommitteeSubnets(
 			gomock.Any(),
 			gomock.Any(),
-			gomock.Any(),
-		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
 			wg.Done()
 			return nil, nil
 		}).AnyTimes()
-		err := v.checkDependentRoots(ctx, head)
+		err := v.checkDependentRoots(ctx, head.PreviousDutyDependentRoot, head.CurrentDutyDependentRoot)
 		require.NoError(t, err)
 		util.WaitTimeout(&wg, 2*time.Second)
 	})
 	t.Run("no updates needed", func(t *testing.T) {
 		head := &structs.HeadEvent{
-			Slot:                      "0",
 			PreviousDutyDependentRoot: "0x0102030000000000000000000000000000000000000000000000000000000000",
 			CurrentDutyDependentRoot:  "0x0405060000000000000000000000000000000000000000000000000000000000",
 		}
 		curr, err := bytesutil.DecodeHexWithLength(head.CurrentDutyDependentRoot, fieldparams.RootLength)
 		require.NoError(t, err)
 		require.DeepEqual(t, curr, v.duties.currDependentRoot())
-		require.NoError(t, v.checkDependentRoots(ctx, head))
+		require.NoError(t, v.checkDependentRoots(ctx, head.PreviousDutyDependentRoot, head.CurrentDutyDependentRoot))
+	})
+}
+
+func TestProcessEvent_HeadV2(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	ctx := t.Context()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	dutiesContainer := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{{
+			AttesterSlot:   params.BeaconConfig().SlotsPerEpoch,
+			ValidatorIndex: 200,
+			PublicKey:      []byte("testPubKey_1"),
+		}},
+		PrevDependentRoot: bytesutil.PadTo([]byte{0x01, 0x02, 0x03}, fieldparams.RootLength),
+		CurrDependentRoot: bytesutil.PadTo([]byte{0x04, 0x05, 0x06}, fieldparams.RootLength),
+	}
+	ds := &dutyStore{}
+	{
+		var data dutyStoreData
+		data.setFromContainer(dutiesContainer)
+		ds.write(data)
+	}
+	v := &validator{
+		km:              newMockKeymanager(t, randKeypair(t)),
+		validatorClient: client,
+		duties:          ds,
+		slotFeed:        &event.Feed{},
+	}
+	v.aggSelector = testLocalSelector(t, v)
+	client.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any()).
+		Return(&emptypb.Empty{}, nil).AnyTimes()
+
+	const divergent = "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12"
+	emit := func(d *structs.HeadEventV2Data) {
+		data, err := json.Marshal(&structs.HeadEventV2{Version: "deneb", Data: d})
+		require.NoError(t, err)
+		v.ProcessEvent(ctx, &eventClient.Event{EventType: eventClient.EventHeadV2, Data: data})
+	}
+
+	t.Run("refetches when current_epoch_dependent_root diverges", func(t *testing.T) {
+		// Refetch returns the same container, so stored roots stay 0x010203/0x040506
+		// for the later subtests. Exactly one Duties call expected.
+		client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(dutiesContainer, nil)
+		emit(&structs.HeadEventV2Data{
+			Slot:                      "7",
+			CurrentEpochDependentRoot: divergent,
+			NextEpochDependentRoot:    divergent,
+		})
+		require.Equal(t, primitives.Slot(7), v.highestSlot())
+	})
+
+	t.Run("no refetch when roots match stored, idempotent on double-fire", func(t *testing.T) {
+		// No Duties expectation: any refetch here fails the mock controller.
+		matching := &structs.HeadEventV2Data{
+			Slot:                      "8",
+			CurrentEpochDependentRoot: "0x0102030000000000000000000000000000000000000000000000000000000000",
+			NextEpochDependentRoot:    "0x0405060000000000000000000000000000000000000000000000000000000000",
+		}
+		emit(matching)
+		emit(matching) // head_v2 may fire twice per slot (Gloas payload transition).
+	})
+
+	t.Run("zero-hash current_epoch_dependent_root short-circuits", func(t *testing.T) {
+		emit(&structs.HeadEventV2Data{
+			Slot:                      "9",
+			CurrentEpochDependentRoot: "0x0000000000000000000000000000000000000000000000000000000000000000",
+			NextEpochDependentRoot:    divergent,
+		})
 	})
 }
 
@@ -487,7 +551,7 @@ func TestValidator_CheckDependentRoots_NoEmptyWindowDuringRefetch(t *testing.T) 
 		},
 	)
 	client.EXPECT().SubscribeCommitteeSubnets(
-		gomock.Any(), gomock.Any(), gomock.Any(),
+		gomock.Any(), gomock.Any(),
 	).Return(&emptypb.Empty{}, nil).AnyTimes()
 
 	// Head event with a prev root that differs from stored — triggers
@@ -499,7 +563,9 @@ func TestValidator_CheckDependentRoots_NoEmptyWindowDuringRefetch(t *testing.T) 
 	}
 
 	done := make(chan error, 1)
-	go func() { done <- v.checkDependentRoots(ctx, head) }()
+	go func() {
+		done <- v.checkDependentRoots(ctx, head.PreviousDutyDependentRoot, head.CurrentDutyDependentRoot)
+	}()
 
 	<-entered // refetch is in flight
 
