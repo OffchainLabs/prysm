@@ -1312,11 +1312,11 @@ func (v *validator) releasePrefSlot(proposalSlot primitives.Slot) {
 // releasePrefSlots un-reserves the slots of a batch whose submission failed so
 // a later build retries them.
 func (v *validator) releasePrefSlots(prefs []*ethpb.SignedProposerPreferences) {
-	slots := make([]primitives.Slot, 0, len(prefs))
+	slots := make([]primitives.Slot, len(prefs))
 	v.submittedPrefSlotsLock.Lock()
-	for _, p := range prefs {
+	for i, p := range prefs {
 		delete(v.submittedPrefSlots, p.Message.ProposalSlot)
-		slots = append(slots, p.Message.ProposalSlot)
+		slots[i] = p.Message.ProposalSlot
 	}
 	v.submittedPrefSlotsLock.Unlock()
 	log.WithField("proposalSlots", slots).Debug("Released proposer preference reservations for retry")
