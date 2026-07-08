@@ -401,13 +401,19 @@ func (p *PartialColumnBroadcaster) reportPeerFeedbackAsync(topic string, from pe
 			if p.ctx.Err() != nil {
 				return
 			}
-			_ = p.peerFeedback(topic, from, kind)
+			p.reportPeerFeedback(topic, from, kind)
 		}()
 	default:
 		p.logger.WithFields(logrus.Fields{
 			"peer":  from,
 			"topic": topic,
 		}).Warn("Peer feedback semaphore saturated, dropping feedback")
+	}
+}
+
+func (p *PartialColumnBroadcaster) reportPeerFeedback(topic string, from peer.ID, kind pubsub.PeerFeedbackKind) {
+	if err := p.peerFeedback(topic, from, kind); err != nil {
+		p.logger.WithFields(logrus.Fields{"peer": from, "topic": topic}).WithError(err).Debug("Failed to report peer feedback")
 	}
 }
 
@@ -709,12 +715,12 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 	if ourVerifier == nil && rpc.isGloas {
 		if p.callbacks.ValidateGloasGroupID(rpc.slot, rpc.root) == pubsub.ValidationReject {
 			p.logger.WithFields(rpc.logFields()).Debug("Rejecting Gloas partial message: group slot does not match block slot")
-			_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
+			p.reportPeerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
 			return nil
 		}
 		if hasMessage && message.CellsPresentBitmap.Count() > 0 {
 			p.logger.WithFields(rpc.logFields()).Debug("Peer pushed Gloas cells before we published our column; downscoring")
-			_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
+			p.reportPeerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
 		}
 		return nil
 	}
@@ -728,7 +734,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 		// downscore peer if invalid header
 		if header.SignedBlockHeader == nil || header.SignedBlockHeader.Header == nil {
 			p.logger.WithFields(rpc.logFields()).Debug("Header is missing signed block header or header")
-			_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
+			p.reportPeerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
 			return errors.New("header is missing signed block header or header")
 		}
 
@@ -736,7 +742,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 		root, err := header.SignedBlockHeader.Header.HashTreeRoot()
 		if err != nil {
 			p.logger.WithFields(rpc.logFields()).WithError(err).Debug("Failed to get root from header")
-			_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
+			p.reportPeerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
 			return errors.Wrap(err, "failed to get root from header")
 		}
 
@@ -816,7 +822,7 @@ func (p *PartialColumnBroadcaster) makeVerifierFromHeader(root [fieldparams.Root
 	if !bytes.Equal(newColumn.GroupID(), rpc.GroupID) {
 		p.logger.WithFields(rpc.logFields()).Error("Group ID mismatch")
 		// REJECT case: penalize the peer
-		_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
+		p.reportPeerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
 		return nil, errors.New("group ID mismatch")
 	}
 
@@ -837,7 +843,7 @@ func (p *PartialColumnBroadcaster) makeVerifierFromHeader(root [fieldparams.Root
 		p.logger.WithError(err).WithFields(rpc.logFields()).WithField("result", result).Debug("Partial column header validation failed")
 		if result == pubsub.ValidationReject {
 			// REJECT case: penalize the peer
-			_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
+			p.reportPeerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
 		}
 		// Both REJECT and IGNORE: don't process further
 		return nil, errInvalidHeader
@@ -911,10 +917,10 @@ func (p *PartialColumnBroadcaster) handlePartialCells(ourDataColumn *blocks.Part
 				err := p.callbacks.ValidateColumn(cellsToVerify)
 				if err != nil {
 					p.logger.WithError(err).WithFields(rpc.logFields()).Error("Failed to validate cells")
-					_ = p.peerFeedback(topicId, rpc.from, pubsub.PeerFeedbackInvalidMessage)
+					p.reportPeerFeedback(topicId, rpc.from, pubsub.PeerFeedbackInvalidMessage)
 					return
 				}
-				_ = p.peerFeedback(topicId, rpc.from, pubsub.PeerFeedbackUsefulMessage)
+				p.reportPeerFeedback(topicId, rpc.from, pubsub.PeerFeedbackUsefulMessage)
 				_, _ = p.enqueue(p.ctx, requestKindCellsValidated, requestValues{
 					cellsValidated: &cellsValidated{
 						validationTook: time.Since(start),
