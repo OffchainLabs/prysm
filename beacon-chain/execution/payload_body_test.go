@@ -14,6 +14,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 func payloadToBody(t *testing.T, ed interfaces.ExecutionData) *pb.ExecutionPayloadBodyV1 {
@@ -372,5 +374,96 @@ func TestReconstructBlindedBlockBatchDenebAndBeyond(t *testing.T) {
 		for i := range unblinded {
 			testAssertReconstructedEquivalent(t, blinded[i], unblinded[i])
 		}
+	})
+}
+
+func TestJSONTransportGetPayloadBodies(t *testing.T) {
+	hashes := []common.Hash{{0x1}}
+	bal := hexutil.Bytes{0xaa, 0xbb}
+
+	t.Run("by hash pre-Gloas uses V1 and has no block access list", func(t *testing.T) {
+		cli, srv := newMockEngine(t)
+		srv.register(GetPayloadBodiesByHashV1, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+			mockWriteResult(t, w, msg, []*pb.ExecutionPayloadBodyV1{{Transactions: []hexutil.Bytes{{0xde}}}})
+		})
+		j := &jsonTransport{rpc: cli}
+		bodies, err := j.GetPayloadBodiesByHash(t.Context(), version.Deneb, hashes)
+		require.NoError(t, err)
+		require.Equal(t, 1, srv.callCount(GetPayloadBodiesByHashV1))
+		require.Equal(t, 0, srv.callCount(GetPayloadBodiesByHashV2))
+		require.Equal(t, 1, len(bodies))
+		_, err = bodies[0].BlockAccessList()
+		require.ErrorContains(t, "unsupported", err)
+	})
+
+	t.Run("by hash Gloas uses V2 and surfaces block access list", func(t *testing.T) {
+		cli, srv := newMockEngine(t)
+		srv.register(GetPayloadBodiesByHashV2, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+			mockWriteResult(t, w, msg, []*pb.ExecutionPayloadBodyV2{{
+				Transactions:    []hexutil.Bytes{{0xde}},
+				BlockAccessList: &bal,
+			}})
+		})
+		j := &jsonTransport{rpc: cli}
+		bodies, err := j.GetPayloadBodiesByHash(t.Context(), version.Gloas, hashes)
+		require.NoError(t, err)
+		require.Equal(t, 1, srv.callCount(GetPayloadBodiesByHashV2))
+		require.Equal(t, 0, srv.callCount(GetPayloadBodiesByHashV1))
+		require.Equal(t, 1, len(bodies))
+		gotBAL, err := bodies[0].BlockAccessList()
+		require.NoError(t, err)
+		require.DeepEqual(t, []byte(bal), gotBAL)
+	})
+
+	t.Run("by range Gloas uses V2", func(t *testing.T) {
+		cli, srv := newMockEngine(t)
+		srv.register(GetPayloadBodiesByRangeV2, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+			mockWriteResult(t, w, msg, []*pb.ExecutionPayloadBodyV2{{Transactions: []hexutil.Bytes{{0xde}}}})
+		})
+		j := &jsonTransport{rpc: cli}
+		bodies, err := j.GetPayloadBodiesByRange(t.Context(), version.Gloas, 0, 1)
+		require.NoError(t, err)
+		require.Equal(t, 1, srv.callCount(GetPayloadBodiesByRangeV2))
+		require.Equal(t, 0, srv.callCount(GetPayloadBodiesByRangeV1))
+		require.Equal(t, 1, len(bodies))
+	})
+}
+
+func TestFullPayloadFromPayloadBody(t *testing.T) {
+	defer util.HackForksMaxuint(t, []int{version.Electra, version.Fulu})()
+	fx := testBlindedBlockFixtures(t)
+	header := fx.denebBlock.blinded.header
+	body, err := blocks.WrappedExecutionPayloadBodyV1JSON(&pb.ExecutionPayloadBodyV1{
+		Transactions: []hexutil.Bytes{{0xde, 0xad}},
+		Withdrawals:  []*pb.Withdrawal{{Index: 3}},
+	})
+	require.NoError(t, err)
+
+	t.Run("nil body errors", func(t *testing.T) {
+		_, err := fullPayloadFromPayloadBody(header, nil, version.Deneb)
+		require.ErrorContains(t, "cannot be nil", err)
+	})
+
+	t.Run("nil header errors", func(t *testing.T) {
+		_, err := fullPayloadFromPayloadBody(nil, body, version.Deneb)
+		require.ErrorContains(t, "cannot be nil", err)
+	})
+
+	t.Run("unknown version errors", func(t *testing.T) {
+		_, err := fullPayloadFromPayloadBody(header, body, version.Altair)
+		require.ErrorContains(t, "unknown execution block version", err)
+	})
+
+	t.Run("deneb builds a deneb payload with body data", func(t *testing.T) {
+		payload, err := fullPayloadFromPayloadBody(header, body, version.Deneb)
+		require.NoError(t, err)
+		_, ok := payload.Proto().(*pb.ExecutionPayloadDeneb)
+		require.Equal(t, true, ok)
+		txs, err := payload.Transactions()
+		require.NoError(t, err)
+		require.DeepEqual(t, [][]byte{{0xde, 0xad}}, txs)
+		wd, err := payload.Withdrawals()
+		require.NoError(t, err)
+		require.Equal(t, 1, len(wd))
 	})
 }
