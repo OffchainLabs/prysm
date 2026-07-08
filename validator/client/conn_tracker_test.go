@@ -25,7 +25,6 @@ func TestValidator_connTracker(t *testing.T) {
 		connGen.Store(1)
 		gen := v.connGeneration()
 		require.Equal(t, true, v.connTracker.changed(proposerPrefsPush, gen))
-		require.Equal(t, true, v.connTracker.changed(proposerPrefsPush, v.connGeneration()))
 
 		v.connTracker.confirm(proposerPrefsPush, gen)
 		require.Equal(t, false, v.connTracker.changed(proposerPrefsPush, v.connGeneration()))

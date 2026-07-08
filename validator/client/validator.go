@@ -832,12 +832,11 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 	connGen := v.connGeneration()
 	prefsChanged := v.connTracker.changed(proposerPrefsPush, connGen)
 	regsChanged := isPreGloas && v.connTracker.changed(registrationsPush, connGen)
-	if prefsChanged || regsChanged {
-		log.WithFields(logrus.Fields{
-			"connGeneration": connGen,
-			"preferences":    prefsChanged,
-			"registrations":  regsChanged,
-		}).Debug("Forcing full push after beacon connection change")
+	if prefsChanged {
+		log.WithField("connGeneration", connGen).Debug("Forcing proposer preferences re-push after beacon connection change")
+	}
+	if regsChanged {
+		log.WithField("connGeneration", connGen).Debug("Forcing validator registrations re-push after beacon connection change")
 	}
 	prefsForcePush := forceFullPush || prefsChanged
 	regsForcePush := forceFullPush || regsChanged
