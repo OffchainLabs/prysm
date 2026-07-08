@@ -12,6 +12,7 @@ import (
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialmsgmux"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
@@ -22,6 +23,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	pubsub_pb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 func defaultClockWithTimeAtEpoch(epoch primitives.Epoch) *startup.Clock {
@@ -267,8 +270,14 @@ func (*fakePartialBroadcaster) Start(partialdatacolumnbroadcaster.ColumnCallback
 func (*fakePartialBroadcaster) Publish(context.Context, iter.Seq2[string, blocks.PartialDataColumn]) error {
 	return nil
 }
-func (*fakePartialBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubsub.Option { return opts }
-func (*fakePartialBroadcaster) Subscribe(context.Context, *pubsub.Topic) error        { return nil }
+func (*fakePartialBroadcaster) OnIncomingRPC(peer.ID, map[peer.ID]blocks.PartialMessagePeerState, *pubsub_pb.PartialMessagesExtension) error {
+	return nil
+}
+func (*fakePartialBroadcaster) OnEmitGossip(string, []byte, []peer.ID, map[peer.ID]blocks.PartialMessagePeerState) {
+}
+func (*fakePartialBroadcaster) InitPubSub(partialmsgmux.PeerFeedbackFn, partialmsgmux.PublishPartialFn) {
+}
+func (*fakePartialBroadcaster) Subscribe(context.Context, *pubsub.Topic) error { return nil }
 
 type p2pWithPartialBroadcaster struct {
 	p2p.P2P

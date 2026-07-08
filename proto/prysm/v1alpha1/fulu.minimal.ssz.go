@@ -2497,6 +2497,355 @@ func (s *StatusV2) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
+// MarshalSSZ ssz marshals the AttestationBundle object
+func (a *AttestationBundle) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(a)
+}
+
+// MarshalSSZTo ssz marshals the AttestationBundle object to a target array
+func (a *AttestationBundle) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(144)
+
+	// Field (0) 'CommitteeIndex'
+	dst = ssz.MarshalUint(dst, a.CommitteeIndex)
+
+	// Field (1) 'AttestationData'
+	if a.AttestationData == nil {
+		a.AttestationData = new(AttestationData)
+	}
+	if dst, err = a.AttestationData.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Offset (2) 'AttesterIndices'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(a.AttesterIndices) * 8
+
+	// Offset (3) 'Signatures'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(a.Signatures) * 96
+
+	// Field (2) 'AttesterIndices'
+	if size := len(a.AttesterIndices); size > 2048 {
+		err = ssz.ErrListTooBigFn("--.AttesterIndices", size, 2048)
+		return
+	}
+	for ii := 0; ii < len(a.AttesterIndices); ii++ {
+		dst = ssz.MarshalUint(dst, a.AttesterIndices[ii])
+	}
+
+	// Field (3) 'Signatures'
+	if size := len(a.Signatures); size > 2048 {
+		err = ssz.ErrListTooBigFn("--.Signatures", size, 2048)
+		return
+	}
+	for ii := 0; ii < len(a.Signatures); ii++ {
+		if size := len(a.Signatures[ii]); size != 96 {
+			err = ssz.ErrBytesLengthFn("--.Signatures[ii]", size, 96)
+			return
+		}
+		dst = append(dst, a.Signatures[ii]...)
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the AttestationBundle object
+func (a *AttestationBundle) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 144 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o2, o3 uint64
+
+	// Field (0) 'CommitteeIndex'
+	a.CommitteeIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.CommitteeIndex](buf[0:8])
+
+	// Field (1) 'AttestationData'
+	if a.AttestationData == nil {
+		a.AttestationData = new(AttestationData)
+	}
+	if err = a.AttestationData.UnmarshalSSZ(buf[8:136]); err != nil {
+		return err
+	}
+
+	// Offset (2) 'AttesterIndices'
+	if o2 = ssz.ReadOffset(buf[136:140]); o2 > size {
+		return ssz.ErrOffset
+	}
+
+	if o2 != 144 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (3) 'Signatures'
+	if o3 = ssz.ReadOffset(buf[140:144]); o3 > size || o2 > o3 {
+		return ssz.ErrOffset
+	}
+
+	// Field (2) 'AttesterIndices'
+	{
+		buf = tail[o2:o3]
+		num, err := ssz.DivideInt2(len(buf), 8, 2048)
+		if err != nil {
+			return err
+		}
+		a.AttesterIndices = ssz.ExtendUint(a.AttesterIndices, num)
+		for ii := 0; ii < num; ii++ {
+			a.AttesterIndices[ii] = ssz.UnmarshallUint[uint64](buf[ii*8 : (ii+1)*8])
+		}
+	}
+
+	// Field (3) 'Signatures'
+	{
+		buf = tail[o3:]
+		num, err := ssz.DivideInt2(len(buf), 96, 2048)
+		if err != nil {
+			return err
+		}
+		a.Signatures = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(a.Signatures[ii]) == 0 {
+				a.Signatures[ii] = make([]byte, 0, len(buf[ii*96:(ii+1)*96]))
+			}
+			a.Signatures[ii] = append(a.Signatures[ii], buf[ii*96:(ii+1)*96]...)
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the AttestationBundle object
+func (a *AttestationBundle) SizeSSZ() (size int) {
+	size = 144
+
+	// Field (2) 'AttesterIndices'
+	size += len(a.AttesterIndices) * 8
+
+	// Field (3) 'Signatures'
+	size += len(a.Signatures) * 96
+
+	return
+}
+
+// HashTreeRoot ssz hashes the AttestationBundle object
+func (a *AttestationBundle) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(a)
+}
+
+// HashTreeRootWith ssz hashes the AttestationBundle object with a hasher
+func (a *AttestationBundle) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'CommitteeIndex'
+	ssz.PutUint(hh, a.CommitteeIndex)
+
+	// Field (1) 'AttestationData'
+	if err = a.AttestationData.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (2) 'AttesterIndices'
+	{
+		if size := len(a.AttesterIndices); size > 2048 {
+			err = ssz.ErrListTooBigFn("--.AttesterIndices", size, 2048)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range a.AttesterIndices {
+			ssz.AppendUint(hh, i)
+		}
+		hh.FillUpTo32()
+
+		numItems := uint64(len(a.AttesterIndices))
+		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(2048, numItems, 8))
+	}
+
+	// Field (3) 'Signatures'
+	{
+		if size := len(a.Signatures); size > 2048 {
+			err = ssz.ErrListTooBigFn("--.Signatures", size, 2048)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range a.Signatures {
+			if len(i) != 96 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.PutBytes(i)
+		}
+
+		numItems := uint64(len(a.Signatures))
+		hh.MerkleizeWithMixin(subIndx, numItems, 2048)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the CommitteeAttestationPartsMetadata object
+func (c *CommitteeAttestationPartsMetadata) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(c)
+}
+
+// MarshalSSZTo ssz marshals the CommitteeAttestationPartsMetadata object to a target array
+func (c *CommitteeAttestationPartsMetadata) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(16)
+
+	// Field (0) 'CommitteeIndex'
+	dst = ssz.MarshalUint(dst, c.CommitteeIndex)
+
+	// Offset (1) 'Available'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.Available) * 8
+
+	// Offset (2) 'Requests'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.Requests) * 8
+
+	// Field (1) 'Available'
+	if size := len(c.Available); size > 2048 {
+		err = ssz.ErrListTooBigFn("--.Available", size, 2048)
+		return
+	}
+	for ii := 0; ii < len(c.Available); ii++ {
+		dst = ssz.MarshalUint(dst, c.Available[ii])
+	}
+
+	// Field (2) 'Requests'
+	if size := len(c.Requests); size > 2048 {
+		err = ssz.ErrListTooBigFn("--.Requests", size, 2048)
+		return
+	}
+	for ii := 0; ii < len(c.Requests); ii++ {
+		dst = ssz.MarshalUint(dst, c.Requests[ii])
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the CommitteeAttestationPartsMetadata object
+func (c *CommitteeAttestationPartsMetadata) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 16 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o1, o2 uint64
+
+	// Field (0) 'CommitteeIndex'
+	c.CommitteeIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.CommitteeIndex](buf[0:8])
+
+	// Offset (1) 'Available'
+	if o1 = ssz.ReadOffset(buf[8:12]); o1 > size {
+		return ssz.ErrOffset
+	}
+
+	if o1 != 16 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (2) 'Requests'
+	if o2 = ssz.ReadOffset(buf[12:16]); o2 > size || o1 > o2 {
+		return ssz.ErrOffset
+	}
+
+	// Field (1) 'Available'
+	{
+		buf = tail[o1:o2]
+		num, err := ssz.DivideInt2(len(buf), 8, 2048)
+		if err != nil {
+			return err
+		}
+		c.Available = ssz.ExtendUint(c.Available, num)
+		for ii := 0; ii < num; ii++ {
+			c.Available[ii] = ssz.UnmarshallUint[uint64](buf[ii*8 : (ii+1)*8])
+		}
+	}
+
+	// Field (2) 'Requests'
+	{
+		buf = tail[o2:]
+		num, err := ssz.DivideInt2(len(buf), 8, 2048)
+		if err != nil {
+			return err
+		}
+		c.Requests = ssz.ExtendUint(c.Requests, num)
+		for ii := 0; ii < num; ii++ {
+			c.Requests[ii] = ssz.UnmarshallUint[uint64](buf[ii*8 : (ii+1)*8])
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the CommitteeAttestationPartsMetadata object
+func (c *CommitteeAttestationPartsMetadata) SizeSSZ() (size int) {
+	size = 16
+
+	// Field (1) 'Available'
+	size += len(c.Available) * 8
+
+	// Field (2) 'Requests'
+	size += len(c.Requests) * 8
+
+	return
+}
+
+// HashTreeRoot ssz hashes the CommitteeAttestationPartsMetadata object
+func (c *CommitteeAttestationPartsMetadata) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(c)
+}
+
+// HashTreeRootWith ssz hashes the CommitteeAttestationPartsMetadata object with a hasher
+func (c *CommitteeAttestationPartsMetadata) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'CommitteeIndex'
+	ssz.PutUint(hh, c.CommitteeIndex)
+
+	// Field (1) 'Available'
+	{
+		if size := len(c.Available); size > 2048 {
+			err = ssz.ErrListTooBigFn("--.Available", size, 2048)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range c.Available {
+			ssz.AppendUint(hh, i)
+		}
+		hh.FillUpTo32()
+
+		numItems := uint64(len(c.Available))
+		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(2048, numItems, 8))
+	}
+
+	// Field (2) 'Requests'
+	{
+		if size := len(c.Requests); size > 2048 {
+			err = ssz.ErrListTooBigFn("--.Requests", size, 2048)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range c.Requests {
+			ssz.AppendUint(hh, i)
+		}
+		hh.FillUpTo32()
+
+		numItems := uint64(len(c.Requests))
+		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(2048, numItems, 8))
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the PartialDataColumnSidecar object
 func (p *PartialDataColumnSidecar) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(p)

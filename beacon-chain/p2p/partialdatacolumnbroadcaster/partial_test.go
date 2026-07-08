@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialmsgmux"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -1323,9 +1324,9 @@ func TestPartialColumnBroadcaster_onIncomingRPC_inputValidation(t *testing.T) {
 					GroupID: slices.Clone(group),
 				}
 			}
-			peerStates := map[peer.ID]blocks.PartialDataColumnPeerState{}
+			peerStates := map[peer.ID]blocks.PartialMessagePeerState{}
 
-			err := h.broadcaster.onIncomingRPC(from, peerStates, rpc)
+			err := h.broadcaster.OnIncomingRPC(from, peerStates, rpc)
 
 			if tt.expectReject {
 				wantErr := tt.expectedErr
@@ -1368,9 +1369,9 @@ func TestPartialColumnBroadcaster_onIncomingRPC_dropsWhenQueueFull(t *testing.T)
 		GroupID:       slices.Clone(createPartialColumn(t, 2, nil).GroupID()),
 		PartsMetadata: mustMarshalPartsMetadata(t, testPartsMetadata(2, []uint64{0}, nil)),
 	}
-	peerStates := map[peer.ID]blocks.PartialDataColumnPeerState{}
+	peerStates := map[peer.ID]blocks.PartialMessagePeerState{}
 
-	err := h.broadcaster.onIncomingRPC(from, peerStates, rpc)
+	err := h.broadcaster.OnIncomingRPC(from, peerStates, rpc)
 	require.ErrorContains(t, "incomingReq channel is full", err)
 	// The peer state update is discarded along with the dropped RPC.
 	require.Equal(t, 0, len(peerStates))
@@ -1393,9 +1394,9 @@ func TestPartialColumnBroadcaster_onIncomingRPC_ignoresUnsubscribedTopic(t *test
 		GroupID:       slices.Clone(createPartialColumn(t, 2, nil).GroupID()),
 		PartsMetadata: mustMarshalPartsMetadata(t, testPartsMetadata(2, []uint64{0}, nil)),
 	}
-	peerStates := map[peer.ID]blocks.PartialDataColumnPeerState{}
+	peerStates := map[peer.ID]blocks.PartialMessagePeerState{}
 
-	err := h.broadcaster.onIncomingRPC(from, peerStates, rpc)
+	err := h.broadcaster.OnIncomingRPC(from, peerStates, rpc)
 	require.NoError(t, err)
 
 	// The gate short-circuits before updatePeerStateFromIncomingRPC: nothing is decoded, enqueued, or
@@ -2602,14 +2603,16 @@ func TestPartialColumnBroadcaster_requestEnqueueStopped(t *testing.T) {
 	}
 }
 
-// Verifies AppendPubSubOpts wires the peer feedback and partial publish hooks at pubsub construction.
-func TestPartialColumnBroadcaster_AppendPubSubOpts(t *testing.T) {
+// Verifies the mux wires the peer feedback and partial publish hooks at pubsub construction.
+func TestPartialColumnBroadcaster_MuxInitPubSub(t *testing.T) {
 	host, err := libp2p.New(libp2p.NoListenAddrs)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = host.Close() })
 
 	b := NewBroadcaster(t.Context(), logrus.New())
-	opts := b.AppendPubSubOpts(nil)
+	mux := partialmsgmux.New()
+	mux.RegisterDataColumnHandler(b)
+	opts := mux.AppendPubSubOpts(nil)
 	require.Equal(t, 2, len(opts))
 
 	_, err = pubsub.NewGossipSub(t.Context(), host, opts...)

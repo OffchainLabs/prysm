@@ -373,4 +373,10 @@ var (
 		Name:  "partial-data-columns",
 		Usage: "Enable cell-level dissemination for PeerDAS data columns",
 	}
+	// PartialAttestations enables bundled attestation propagation over
+	// gossipsub partial messages on the attestation subnets.
+	PartialAttestations = &cli.BoolFlag{
+		Name:  "partial-attestations",
+		Usage: "Enable bundled attestation propagation over gossipsub partial messages",
+	}
 )

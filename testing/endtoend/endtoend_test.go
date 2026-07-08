@@ -160,6 +160,9 @@ func (r *testRunner) waitExtra(ctx context.Context, e primitives.Epoch, conn *gr
 
 // waitForChainStart allows to wait up until beacon nodes are started.
 func (r *testRunner) waitForChainStart() {
+	// Wait out the pre-genesis buffer (which scales with the node count)
+	// before polling: the log line only appears at genesis.
+	time.Sleep(time.Until(e2e.TestParams.CLGenesisTime))
 	// Sleep depending on the count of validators, as generating the genesis state could take some time.
 	time.Sleep(time.Duration(params.BeaconConfig().GenesisDelay) * time.Second)
 	beaconLogFile, err := os.Open(path.Join(e2e.TestParams.LogPath, fmt.Sprintf(e2e.BeaconNodeLogFileName, 0)))

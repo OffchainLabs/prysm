@@ -13,6 +13,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialattestationbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
@@ -61,6 +62,7 @@ type TestP2P struct {
 	BroadcastCalled       atomic.Bool
 	broadcastedPartials   []blocks.PartialDataColumn
 	partialBroadcaster    partialdatacolumnbroadcaster.Broadcaster
+	partialAttBroadcaster *partialattestationbroadcaster.Broadcaster
 	DelaySend             bool
 	Digest                [4]byte
 	peers                 *peers.Status
@@ -341,6 +343,16 @@ func (p *TestP2P) PubSub() *pubsub.PubSub {
 
 func (p *TestP2P) PartialColumnBroadcaster() partialdatacolumnbroadcaster.Broadcaster {
 	return p.partialBroadcaster
+}
+
+// PartialAttestationBroadcaster returns the partial attestation broadcaster, nil unless enabled.
+func (p *TestP2P) PartialAttestationBroadcaster() *partialattestationbroadcaster.Broadcaster {
+	return p.partialAttBroadcaster
+}
+
+// EnablePartialAttestationBroadcaster sets a non-nil partial attestation broadcaster.
+func (p *TestP2P) EnablePartialAttestationBroadcaster() {
+	p.partialAttBroadcaster = partialattestationbroadcaster.NewBroadcaster(context.Background(), func() primitives.Slot { return 0 })
 }
 
 // Disconnect from a peer.

@@ -27,6 +27,7 @@ const (
 // to initialize the p2p service.
 type Config struct {
 	PartialDataColumns    bool
+	PartialAttestations   bool
 	NoDiscovery           bool
 	EnableUPnP            bool
 	StaticPeerID          bool

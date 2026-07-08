@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialmsgmux"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -101,11 +102,15 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		broadcaster1 := partialdatacolumnbroadcaster.NewBroadcaster(bcastCtx1, logger)
 		broadcaster2 := partialdatacolumnbroadcaster.NewBroadcaster(bcastCtx2, logger)
 
-		opts1 := broadcaster1.AppendPubSubOpts([]pubsub.Option{
+		mux1 := partialmsgmux.New()
+		mux1.RegisterDataColumnHandler(broadcaster1)
+		mux2 := partialmsgmux.New()
+		mux2.RegisterDataColumnHandler(broadcaster2)
+		opts1 := mux1.AppendPubSubOpts([]pubsub.Option{
 			pubsub.WithMessageSigning(false),
 			pubsub.WithStrictSignatureVerification(false),
 		})
-		opts2 := broadcaster2.AppendPubSubOpts([]pubsub.Option{
+		opts2 := mux2.AppendPubSubOpts([]pubsub.Option{
 			pubsub.WithMessageSigning(false),
 			pubsub.WithStrictSignatureVerification(false),
 		})

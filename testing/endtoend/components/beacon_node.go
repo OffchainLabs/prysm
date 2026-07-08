@@ -260,6 +260,12 @@ func (node *BeaconNode) Start(ctx context.Context) error {
 		fmt.Sprintf("--%s=%d", cmdshared.P2PQUICPort.Name, e2e.TestParams.Ports.PrysmBeaconNodeQUICPort+index),
 		fmt.Sprintf("--%s=%d", cmdshared.P2PTCPPort.Name, e2e.TestParams.Ports.PrysmBeaconNodeTCPPort+index),
 		fmt.Sprintf("--%s=%d", cmdshared.P2PMaxPeers.Name, expectedNumOfPeers),
+		// Every E2E node shares the host's IP, so per-IP protections refuse
+		// peers on runs with many nodes: the peer scorer's colocation limit
+		// allows 5 identities per IP and libp2p's resource manager allows 8
+		// concurrent connections per IP.
+		fmt.Sprintf("--%s=0.0.0.0/0", cmdshared.P2PColocationWhitelist.Name),
+		"--disable-resource-manager",
 		fmt.Sprintf("--%s=%d", flags.MonitoringPortFlag.Name, e2e.TestParams.Ports.PrysmBeaconNodeMetricsPort+index),
 		fmt.Sprintf("--%s=%d", flags.HTTPServerPort.Name, e2e.TestParams.Ports.PrysmBeaconNodeHTTPPort+index),
 		fmt.Sprintf("--%s=%d", flags.ContractDeploymentBlock.Name, 0),

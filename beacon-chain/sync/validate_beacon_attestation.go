@@ -72,25 +72,49 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	if !ok {
 		return pubsub.ValidationReject, errWrongMessage
 	}
+
+	attForValidation, result, err := s.validateGossipAttestation(ctx, att, *msg.Topic)
+	if result == pubsub.ValidationAccept {
+		// Attach the final validated attestation to the message for further pipeline use.
+		msg.ValidatorData = attForValidation
+		// Partial peers never see this classic copy; feed the broadcaster.
+		if s.submitPartialAtt != nil {
+			if single, ok := att.(*eth.SingleAttestation); ok {
+				s.submitPartialAtt(*msg.Topic, single)
+			}
+		}
+	}
+	return result, err
+}
+
+// validateGossipAttestation runs the classic gossip validation conditions on
+// an already-decoded attestation as received on the given topic, returning
+// on acceptance the attestation converted for downstream pipeline use. The
+// partial attestation broadcaster enters the classic pipeline here: bundled
+// attestations arrive already decoded, so they skip the pubsub envelope.
+func (s *Service) validateGossipAttestation(ctx context.Context, att eth.Att, topic string) (eth.Att, pubsub.ValidationResult, error) {
+	ctx, span := trace.StartSpan(ctx, "sync.validateGossipAttestation")
+	defer span.End()
+
 	if err := helpers.ValidateNilAttestation(att); err != nil {
-		return pubsub.ValidationReject, wrapAttestationError(err, att)
+		return nil, pubsub.ValidationReject, wrapAttestationError(err, att)
 	}
 
 	data := att.GetData()
 
 	// Do not process slot 0 attestations.
 	if data.Slot == 0 {
-		return pubsub.ValidationIgnore, nil
+		return nil, pubsub.ValidationIgnore, nil
 	}
 
 	// Attestation's slot is within ATTESTATION_PROPAGATION_SLOT_RANGE and early attestation
 	// processing tolerance.
 	if err := helpers.ValidateAttestationTime(data.Slot, s.cfg.clock.GenesisTime(), earlyAttestationProcessingTolerance); err != nil {
 		tracing.AnnotateError(span, err)
-		return pubsub.ValidationIgnore, err
+		return nil, pubsub.ValidationIgnore, err
 	}
 	if err := helpers.ValidateSlotTargetEpoch(data); err != nil {
-		return pubsub.ValidationReject, wrapAttestationError(err, att)
+		return nil, pubsub.ValidationReject, wrapAttestationError(err, att)
 	}
 
 	committeeIndex := att.GetCommitteeIndex()
@@ -99,21 +123,21 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	attKey, err := generateUnaggregatedAttCacheKey(att)
 	if err != nil {
 		log.WithError(err).Error("Could not generate cache key for attestation tracking")
-		return pubsub.ValidationIgnore, nil
+		return nil, pubsub.ValidationIgnore, nil
 	}
 
 	if !s.slasherEnabled {
 		// Verify this the first attestation received for the participating validator for the slot. This verification is here to return early if we've already seen this attestation.
 		// This verification is carried again later after all other validations to avoid TOCTOU issues.
 		if s.hasSeenUnaggregatedAtt(attKey) {
-			return pubsub.ValidationIgnore, nil
+			return nil, pubsub.ValidationIgnore, nil
 		}
 		// Reject an attestation if it references an invalid block.
 		if s.hasBadBlock(bytesutil.ToBytes32(data.BeaconBlockRoot)) ||
 			s.hasBadBlock(bytesutil.ToBytes32(data.Target.Root)) ||
 			s.hasBadBlock(bytesutil.ToBytes32(data.Source.Root)) {
 			attBadBlockCount.Inc()
-			return pubsub.ValidationReject, wrapAttestationError(errors.New("attestation data references bad block root"), att)
+			return nil, pubsub.ValidationReject, wrapAttestationError(errors.New("attestation data references bad block root"), att)
 		}
 	}
 
@@ -123,39 +147,39 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		// Block not yet available - save attestation to pending queue for later processing
 		// when the block arrives. Return ValidationIgnore so gossip doesn't potentially penalize the peer.
 		s.savePendingAtt(att)
-		return pubsub.ValidationIgnore, nil
+		return nil, pubsub.ValidationIgnore, nil
 	}
 	// Block exists - verify it's in forkchoice (i.e., it's a descendant of the finalized checkpoint)
 	if !s.cfg.chain.InForkchoice(blockRoot) {
 		tracing.AnnotateError(span, blockchain.ErrNotDescendantOfFinalized)
-		return pubsub.ValidationIgnore, blockchain.ErrNotDescendantOfFinalized
+		return nil, pubsub.ValidationIgnore, blockchain.ErrNotDescendantOfFinalized
 	}
 	if err = s.cfg.chain.VerifyLmdFfgConsistency(ctx, att); err != nil {
 		tracing.AnnotateError(span, err)
 		attBadLmdConsistencyCount.Inc()
-		return pubsub.ValidationReject, wrapAttestationError(err, att)
+		return nil, pubsub.ValidationReject, wrapAttestationError(err, att)
 	}
 
 	preState, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)
 	if err != nil {
 		tracing.AnnotateError(span, err)
-		return pubsub.ValidationIgnore, err
+		return nil, pubsub.ValidationIgnore, err
 	}
 
-	validationRes, err := s.validateUnaggregatedAttTopic(ctx, att, preState, *msg.Topic)
+	validationRes, err := s.validateUnaggregatedAttTopic(ctx, att, preState, topic)
 	if validationRes != pubsub.ValidationAccept {
-		return validationRes, wrapAttestationError(err, att)
+		return nil, validationRes, wrapAttestationError(err, att)
 	}
 
 	committee, err := helpers.BeaconCommitteeFromState(ctx, preState, data.Slot, committeeIndex)
 	if err != nil {
 		tracing.AnnotateError(span, err)
-		return pubsub.ValidationIgnore, err
+		return nil, pubsub.ValidationIgnore, err
 	}
 
 	validationRes, err = validateAttesterData(ctx, att, committee)
 	if validationRes != pubsub.ValidationAccept {
-		return validationRes, wrapAttestationError(err, att)
+		return nil, validationRes, wrapAttestationError(err, att)
 	}
 
 	// Consolidated handling of Electra SingleAttestation vs Phase0 unaggregated attestation
@@ -168,7 +192,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	if att.Version() >= version.Electra {
 		singleAtt, ok := att.(*eth.SingleAttestation)
 		if !ok {
-			return pubsub.ValidationIgnore, fmt.Errorf(
+			return nil, pubsub.ValidationIgnore, fmt.Errorf(
 				"attestation has wrong type (expected %T, got %T)",
 				&eth.SingleAttestation{}, att,
 			)
@@ -190,7 +214,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 
 	validationRes, err = s.validateUnaggregatedAttWithState(ctx, attForValidation, preState)
 	if validationRes != pubsub.ValidationAccept {
-		return validationRes, wrapAttestationError(err, att)
+		return nil, validationRes, wrapAttestationError(err, att)
 	}
 
 	if s.slasherEnabled {
@@ -230,13 +254,10 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 
 	if first := s.setSeenUnaggregatedAtt(attKey); !first {
 		// Another concurrent validation processed the same attestation meanwhile
-		return pubsub.ValidationIgnore, nil
+		return nil, pubsub.ValidationIgnore, nil
 	}
 
-	// Attach final validated attestation to the message for further pipeline use
-	msg.ValidatorData = attForValidation
-
-	return pubsub.ValidationAccept, nil
+	return attForValidation, pubsub.ValidationAccept, nil
 }
 
 // This validates beacon unaggregated attestation has correct topic string.

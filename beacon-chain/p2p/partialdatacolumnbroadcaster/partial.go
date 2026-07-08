@@ -6,21 +6,19 @@ import (
 	stderrors "errors"
 	"fmt"
 	"iter"
-	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialmsgmux"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
-	"github.com/OffchainLabs/prysm/v7/internal/logrusadapter"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p-pubsub/partialmessages"
 	pubsub_pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -69,9 +67,9 @@ type ColumnCallbacks interface {
 
 // Broadcaster is the behaviour of the partial data column broadcaster used by the rest of the node.
 type Broadcaster interface {
+	partialmsgmux.Handler
 	Start(callbacks ColumnCallbacks)
 	Publish(ctx context.Context, topicsAndColumns iter.Seq2[string, blocks.PartialDataColumn]) error
-	AppendPubSubOpts(opts []pubsub.Option) []pubsub.Option
 	Subscribe(ctx context.Context, t *pubsub.Topic) error
 	Unsubscribe(ctx context.Context, topic string) error
 }
@@ -278,8 +276,9 @@ func NewBroadcaster(ctx context.Context, logger *logrus.Logger) *PartialColumnBr
 	}
 }
 
-// onEmitGossip enqueues a gossip request for the broadcaster's event loop.
-func (p *PartialColumnBroadcaster) onEmitGossip(topic string, groupID []byte, _ []peer.ID, _ map[peer.ID]blocks.PartialDataColumnPeerState) {
+// OnEmitGossip enqueues a gossip request for the broadcaster's event loop.
+// It is invoked by the partial message mux on the gossipsub event loop.
+func (p *PartialColumnBroadcaster) OnEmitGossip(topic string, groupID []byte, _ []peer.ID, _ map[peer.ID]blocks.PartialMessagePeerState) {
 	// Drop gossip emission if we have too many pending requests.
 	p.tryEnqueue(requestKindGossip, requestValues{
 		gossip: gossip{
@@ -289,9 +288,10 @@ func (p *PartialColumnBroadcaster) onEmitGossip(topic string, groupID []byte, _ 
 	})
 }
 
-// onIncomingRPC processes an incoming partial message RPC by updating peer state
+// OnIncomingRPC processes an incoming partial message RPC by updating peer state
 // and enqueuing the message for the broadcaster's event loop.
-func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[peer.ID]blocks.PartialDataColumnPeerState, rpc *pubsub_pb.PartialMessagesExtension) error {
+// It is invoked by the partial message mux on the gossipsub event loop.
+func (p *PartialColumnBroadcaster) OnIncomingRPC(from peer.ID, peerStates map[peer.ID]blocks.PartialMessagePeerState, rpc *pubsub_pb.PartialMessagesExtension) error {
 	if rpc == nil {
 		return nil
 	}
@@ -325,7 +325,7 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 		return nil
 	}
 
-	nextPeerState, message, err := updatePeerStateFromIncomingRPC(peerStates[from], rpc)
+	nextPeerState, message, err := updatePeerStateFromIncomingRPC(peerStates[from].Column, rpc)
 	if err != nil {
 		return errors.Wrap(err, "update peer state from incoming rpc")
 	}
@@ -340,7 +340,9 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 		}).Warn("Dropping incoming partial RPC")
 		return errors.New("incomingReq channel is full, dropping RPC")
 	}
-	peerStates[from] = nextPeerState
+	st := peerStates[from]
+	st.Column = nextPeerState
+	peerStates[from] = st
 	return nil
 }
 
@@ -368,30 +370,19 @@ func (p *PartialColumnBroadcaster) logIgnoreUnsubscribedTopic(from peer.ID, topi
 	p.logger.WithFields(logrus.Fields{"peer": from, "topic": topic}).Debug("Ignoring partial message for unsubscribed topic")
 }
 
-// AppendPubSubOpts adds the necessary pubsub options to enable partial messages.
-func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubsub.Option {
-	slogger := slog.New(logrusadapter.Handler{Logger: p.logger.Logger}).With("package", logPackage)
-	opts = append(opts,
-		pubsub.WithPartialMessagesExtension(&partialmessages.PartialMessagesExtension[blocks.PartialDataColumnPeerState]{
-			Logger:        slogger,
-			OnEmitGossip:  p.onEmitGossip,
-			OnIncomingRPC: p.onIncomingRPC,
-		}),
-		func(ps *pubsub.PubSub) error {
-			p.peerFeedback = ps.PeerFeedback
-			p.publishPartialCol = func(topic string, groupID []byte, col *blocks.PartialDataColumn) error {
-				if _, ok := p.headerSentCache[string(groupID)]; !ok {
-					p.headerSentCache[string(groupID)] = make(map[peer.ID]bool)
-				}
-				onEagerPush := func(remote peer.ID) {
-					p.recordEagerPush(groupID, col.Index, remote)
-				}
-				return pubsub.PublishPartial(ps, topic, groupID, col.PublishActionsFn(p.headerSentCache[string(groupID)], onEagerPush))
-			}
-			return nil
-		},
-	)
-	return opts
+// InitPubSub receives the pubsub hooks from the partial message mux at pubsub
+// construction time.
+func (p *PartialColumnBroadcaster) InitPubSub(peerFeedback partialmsgmux.PeerFeedbackFn, publishPartial partialmsgmux.PublishPartialFn) {
+	p.peerFeedback = peerFeedback
+	p.publishPartialCol = func(topic string, groupID []byte, col *blocks.PartialDataColumn) error {
+		if _, ok := p.headerSentCache[string(groupID)]; !ok {
+			p.headerSentCache[string(groupID)] = make(map[peer.ID]bool)
+		}
+		onEagerPush := func(remote peer.ID) {
+			p.recordEagerPush(groupID, col.Index, remote)
+		}
+		return publishPartial(topic, groupID, col.PublishActionsFn(p.headerSentCache[string(groupID)], onEagerPush))
+	}
 }
 
 // Start starts the event loop of the PartialColumnBroadcaster.

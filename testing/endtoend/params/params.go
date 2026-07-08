@@ -206,7 +206,7 @@ func Init(t *testing.T, beaconNodeCount int) error {
 		return err
 	}
 
-	genTime := time.Now().Add(startupBuffer)
+	genTime := time.Now().Add(genesisBuffer(beaconNodeCount))
 	TestParams = &params{
 		TestPath:               filepath.Join(testPath, fmt.Sprintf("shard-%d", testShardIndex)),
 		LogPath:                logPath,
@@ -218,6 +218,15 @@ func Init(t *testing.T, beaconNodeCount int) error {
 		NumberOfExecutionCreds: PregenesisExecCreds,
 	}
 	return nil
+}
+
+// genesisBuffer is the delay until genesis; runs with more than the standard
+// node count need longer to start and peer before genesis.
+func genesisBuffer(beaconNodeCount int) time.Duration {
+	if beaconNodeCount <= StandardBeaconCount {
+		return startupBuffer
+	}
+	return 120 * time.Second
 }
 
 // InitMultiClient initializes the multiclient E2E config, properly handling test sharding.
@@ -259,7 +268,7 @@ func InitMultiClient(t *testing.T, beaconNodeCount int, lighthouseNodeCount int)
 		return err
 	}
 
-	genTime := time.Now().Add(startupBuffer)
+	genTime := time.Now().Add(genesisBuffer(beaconNodeCount + lighthouseNodeCount))
 	TestParams = &params{
 		TestPath:                  filepath.Join(testPath, fmt.Sprintf("shard-%d", testShardIndex)),
 		LogPath:                   logPath,

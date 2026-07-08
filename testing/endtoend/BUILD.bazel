@@ -47,6 +47,7 @@ test_suite(
 
 common_deps = [
     "//runtime/version:go_default_library",
+    "//testing/endtoend/policies:go_default_library",
     "//api/client/beacon:go_default_library",
     "//beacon-chain/blockchain/testing:go_default_library",
     "//beacon-chain/core/transition:go_default_library",
