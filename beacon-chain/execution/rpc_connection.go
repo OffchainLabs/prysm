@@ -27,6 +27,9 @@ func (s *Service) setupExecutionClientConnections(ctx context.Context, currEndpo
 	s.rpcClient = client
 	s.httpLogger = fetcher
 
+	// Use the newly connected RPC client for JSON-RPC engine calls.
+	s.engineTransport = s.jsonRPCTransport()
+
 	depositContractCaller, err := contracts.NewDepositContractCaller(s.cfg.depositContractAddr, fetcher)
 	if err != nil {
 		client.Close()
@@ -79,17 +82,19 @@ func (s *Service) pollConnectionStatus(ctx context.Context) {
 			}
 			log.WithField("endpoint", logs.MaskCredentialsLogging(s.cfg.currHttpEndpoint.Url)).Info("Connected to new endpoint")
 
-			c, err := s.ExchangeCapabilities(ctx)
-			if err != nil {
+			if err := s.ExchangeCapabilities(ctx); err != nil {
 				errorLogger(err, "Could not exchange capabilities with execution client")
 			}
-			s.capabilityCache.save(c)
-			if !s.capabilityCache.has(GetBlobsV3) && s.partialColumnsSupported {
-				log.Warn("Execution client does not support blobs v3, but partial data columns are enabled")
-			}
 
-			if s.capabilityCache.has(HasBlobs) && s.partialColumnsSupported {
-				log.WithField("method", HasBlobs).Info("Execution client supports blob availability checks, missing blobs will be requested via partial columns")
+			eng := s.engine()
+			if s.partialColumnsSupported {
+				if !eng.Supports(GetBlobsV3) {
+					log.Warn("Execution client does not support blobs v3, but partial data columns are enabled")
+				}
+
+				if eng.Supports(HasBlobs) {
+					log.WithField("method", HasBlobs).Info("Execution client supports blob availability checks, missing blobs will be requested via partial columns")
+				}
 			}
 
 			return

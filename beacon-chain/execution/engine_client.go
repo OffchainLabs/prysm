@@ -82,7 +82,7 @@ func (s *Service) ReconstructFullBlock(
 func (s *Service) ReconstructFullBellatrixBlockBatch(
 	ctx context.Context, blindedBlocks []interfaces.ReadOnlySignedBeaconBlock,
 ) ([]interfaces.SignedBeaconBlock, error) {
-	unb, err := reconstructBlindedBlockBatch(ctx, s.rpcClient, blindedBlocks)
+	unb, err := reconstructBlindedBlockBatch(ctx, s.engine(), blindedBlocks)
 	if err != nil {
 		return nil, err
 	}
@@ -155,8 +155,12 @@ func (s *Service) ReconstructFullGloasExecutionPayloadsByHash(
 		return payloads, nil
 	}
 
-	var execBlocks []*pb.ExecutionBlock
-	bodiesV2 := make([]*pb.ExecutionPayloadBodyV2, 0)
+	var (
+		execBlocks []*pb.ExecutionBlock
+		bodiesV2   []interfaces.ExecutionPayloadBody
+	)
+
+	eng := s.engine()
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		blks, err := s.ExecutionBlocksByHashes(gctx, requestHashes, false)
@@ -167,9 +171,11 @@ func (s *Service) ReconstructFullGloasExecutionPayloadsByHash(
 		return nil
 	})
 	g.Go(func() error {
-		if err := s.rpcClient.CallContext(gctx, &bodiesV2, GetPayloadBodiesByHashV2, requestHashes); err != nil {
+		bodies, err := eng.GetPayloadBodiesByHash(gctx, version.Gloas, requestHashes)
+		if err != nil {
 			return errors.Wrap(err, "could not fetch payload bodies V2 by hash")
 		}
+		bodiesV2 = bodies
 		return nil
 	})
 	if err := g.Wait(); err != nil {
@@ -185,12 +191,27 @@ func (s *Service) ReconstructFullGloasExecutionPayloadsByHash(
 		if err != nil {
 			return nil, err
 		}
-		if bodiesV2[i] != nil {
-			payload.Transactions = pb.RecastHexutilByteSlice(bodiesV2[i].Transactions)
-			payload.Withdrawals = bodiesV2[i].Withdrawals
-			if bodiesV2[i].BlockAccessList != nil {
-				payload.BlockAccessList = *bodiesV2[i].BlockAccessList
+
+		body := bodiesV2[i]
+		if body != nil {
+			transactions, err := body.Transactions()
+			if err != nil {
+				return nil, errors.Wrap(err, "could not get transactions from payload body")
 			}
+
+			withdrawals, err := body.Withdrawals()
+			if err != nil {
+				return nil, errors.Wrap(err, "could not get withdrawals from payload body")
+			}
+
+			payload.Transactions = transactions
+			payload.Withdrawals = withdrawals
+
+			blockAccessList, err := body.BlockAccessList()
+			if err != nil {
+				return nil, errors.Wrap(err, "could not get block access list from payload body")
+			}
+			payload.BlockAccessList = blockAccessList
 		}
 		payloads[h] = payload
 	}
@@ -519,12 +540,15 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 }
 
 func (s *Service) useGetBlobsV3() bool {
-	return s.capabilityCache.has(GetBlobsV3) && s.partialColumnsSupported
+	if !s.partialColumnsSupported {
+		return false
+	}
+	return s.engine().Supports(GetBlobsV3)
 }
 
 func (s *Service) useHasBlobs() bool {
-	supported := s.useGetBlobsV3() && s.capabilityCache.has(HasBlobs)
-	return supported
+	eng := s.engine()
+	return s.partialColumnsSupported && eng.Supports(GetBlobsV3) && eng.Supports(HasBlobs)
 }
 
 // PartialColumnsSupported reports whether cell-level (partial) column dissemination is enabled.
@@ -558,10 +582,15 @@ func upgradeSidecarsToVerifiedSidecars(roSidecars []blocks.RODataColumn) []block
 }
 
 func fullPayloadFromPayloadBody(
-	header interfaces.ExecutionData, body *pb.ExecutionPayloadBodyV1, bVersion int,
+	header interfaces.ExecutionData, body interfaces.ExecutionPayloadBody, bVersion int,
 ) (interfaces.ExecutionData, error) {
-	if header == nil || header.IsNil() || body == nil {
+	if header == nil || header.IsNil() || body == nil || body.IsNil() {
 		return nil, errors.New("execution block and header cannot be nil")
+	}
+
+	transactions, err := body.Transactions()
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to extract transactions from execution payload body")
 	}
 
 	if bVersion >= version.Deneb {
@@ -572,6 +601,10 @@ func fullPayloadFromPayloadBody(
 		bgu, err := header.BlobGasUsed()
 		if err != nil {
 			return nil, errors.Wrap(err, "unable to extract BlobGasUsed attribute from execution payload header")
+		}
+		withdrawals, err := body.Withdrawals()
+		if err != nil {
+			return nil, errors.Wrap(err, "unable to extract withdrawals from execution payload body")
 		}
 		return blocks.WrappedExecutionPayloadDeneb(
 			&pb.ExecutionPayloadDeneb{
@@ -588,14 +621,18 @@ func fullPayloadFromPayloadBody(
 				ExtraData:     header.ExtraData(),
 				BaseFeePerGas: header.BaseFeePerGas(),
 				BlockHash:     header.BlockHash(),
-				Transactions:  pb.RecastHexutilByteSlice(body.Transactions),
-				Withdrawals:   body.Withdrawals,
+				Transactions:  transactions,
+				Withdrawals:   withdrawals,
 				ExcessBlobGas: ebg,
 				BlobGasUsed:   bgu,
 			}) // We can't get the block value and don't care about the block value for this instance
 	}
 
 	if bVersion >= version.Capella {
+		withdrawals, err := body.Withdrawals()
+		if err != nil {
+			return nil, errors.Wrap(err, "unable to extract withdrawals from execution payload body")
+		}
 		return blocks.WrappedExecutionPayloadCapella(&pb.ExecutionPayloadCapella{
 			ParentHash:    header.ParentHash(),
 			FeeRecipient:  header.FeeRecipient(),
@@ -610,8 +647,8 @@ func fullPayloadFromPayloadBody(
 			ExtraData:     header.ExtraData(),
 			BaseFeePerGas: header.BaseFeePerGas(),
 			BlockHash:     header.BlockHash(),
-			Transactions:  pb.RecastHexutilByteSlice(body.Transactions),
-			Withdrawals:   body.Withdrawals,
+			Transactions:  transactions,
+			Withdrawals:   withdrawals,
 		}) // We can't get the block value and don't care about the block value for this instance
 	}
 
@@ -630,7 +667,7 @@ func fullPayloadFromPayloadBody(
 			ExtraData:     header.ExtraData(),
 			BaseFeePerGas: header.BaseFeePerGas(),
 			BlockHash:     header.BlockHash(),
-			Transactions:  pb.RecastHexutilByteSlice(body.Transactions),
+			Transactions:  transactions,
 		})
 	}
 
