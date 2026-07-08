@@ -7,7 +7,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -436,7 +435,9 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 }
 
 func progressiveSSZEnabled(stateVersion int) bool {
-	return stateVersion >= version.Gloas && features.Get().EnableProgressiveSSZ
+	// Gloas (EIP-7688) mandates progressive SSZ merkleization.
+	// TODO: Flip EnableProgressiveSSZ to Disable*.
+	return stateVersion >= version.Gloas
 }
 
 func payloadExpectedWithdrawalsRoot(state *BeaconState) ([32]byte, error) {
