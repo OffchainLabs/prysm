@@ -166,6 +166,59 @@ func TestClient_RegisterValidator(t *testing.T) {
 		}
 		require.NoError(t, c.RegisterValidator(ctx, []*eth.SignedValidatorRegistrationV1{reg}))
 	})
+	t.Run("SSZ rejected falls back to JSON", func(t *testing.T) {
+		var reqCount int
+		hc := &http.Client{
+			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				reqCount++
+				if reqCount == 1 {
+					// The builder does not support SSZ; reject the octet-stream body.
+					require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Content-Type"))
+					msg, err := json.Marshal(ErrorMessage{Code: http.StatusUnsupportedMediaType, Message: "expected application/json"})
+					require.NoError(t, err)
+					return &http.Response{
+						StatusCode: http.StatusUnsupportedMediaType,
+						Body:       io.NopCloser(bytes.NewBuffer(msg)),
+						Request:    r.Clone(ctx),
+					}, nil
+				}
+				// Retry must be JSON encoded.
+				require.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
+				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+				body, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
+				require.NoError(t, r.Body.Close())
+				require.Equal(t, expectedBody, string(body))
+				require.Equal(t, expectedPath, r.URL.Path)
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBuffer(nil)),
+					Request:    r.Clone(ctx),
+				}, nil
+			}),
+		}
+		c := &Client{
+			hc:         hc,
+			baseURL:    &url.URL{Host: "localhost:3500", Scheme: "http"},
+			sszEnabled: true,
+		}
+		reg := &eth.SignedValidatorRegistrationV1{
+			Message: &eth.ValidatorRegistrationV1{
+				FeeRecipient: ezDecode(t, params.BeaconConfig().EthBurnAddressHex),
+				GasLimit:     23,
+				Timestamp:    42,
+				Pubkey:       ezDecode(t, "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"),
+			},
+			Signature: ezDecode(t, "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"),
+		}
+		require.NoError(t, c.RegisterValidator(ctx, []*eth.SignedValidatorRegistrationV1{reg}))
+		require.Equal(t, 2, reqCount)
+		require.Equal(t, true, c.sszUnsupported.Load())
+
+		// A subsequent call skips SSZ entirely and goes straight to JSON.
+		require.NoError(t, c.RegisterValidator(ctx, []*eth.SignedValidatorRegistrationV1{reg}))
+		require.Equal(t, 3, reqCount)
+	})
 }
 
 func TestClient_GetHeader(t *testing.T) {
@@ -601,6 +654,44 @@ func TestClient_GetHeader(t *testing.T) {
 		}
 		_, err := c.GetHeader(ctx, slot, bytesutil.ToBytes32(parentHash), bytesutil.ToBytes48(pubkey))
 		require.ErrorContains(t, "unsupported header version", err)
+	})
+	t.Run("SSZ rejected falls back to JSON", func(t *testing.T) {
+		var reqCount int
+		hc := &http.Client{
+			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				reqCount++
+				if reqCount == 1 {
+					// The builder does not accept an SSZ response; reject the octet-stream Accept header.
+					require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+					msg, err := json.Marshal(ErrorMessage{Code: http.StatusNotAcceptable, Message: "only application/json"})
+					require.NoError(t, err)
+					return &http.Response{
+						StatusCode: http.StatusNotAcceptable,
+						Body:       io.NopCloser(bytes.NewBuffer(msg)),
+						Request:    r.Clone(ctx),
+					}, nil
+				}
+				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+				require.Equal(t, expectedPath, r.URL.Path)
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(testExampleHeaderResponseDeneb)),
+					Request:    r.Clone(ctx),
+				}, nil
+			}),
+		}
+		c := &Client{
+			hc:         hc,
+			baseURL:    &url.URL{Host: "localhost:3500", Scheme: "http"},
+			sszEnabled: true,
+		}
+		h, err := c.GetHeader(ctx, slot, bytesutil.ToBytes32(parentHash), bytesutil.ToBytes48(pubkey))
+		require.NoError(t, err)
+		require.Equal(t, 2, reqCount)
+		require.Equal(t, true, c.sszUnsupported.Load())
+		bid, err := h.Message()
+		require.NoError(t, err)
+		require.NotNil(t, bid)
 	})
 }
 

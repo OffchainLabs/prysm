@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"text/template"
 
 	"github.com/OffchainLabs/prysm/v7/api"
@@ -113,10 +114,32 @@ type BuilderClient interface {
 
 // Client provides a collection of helper methods for calling Builder API endpoints.
 type Client struct {
-	hc         *http.Client
-	baseURL    *url.URL
-	obvs       []observer
-	sszEnabled bool
+	hc             *http.Client
+	baseURL        *url.URL
+	obvs           []observer
+	sszEnabled     bool
+	sszUnsupported atomic.Bool
+}
+
+// useSSZ reports whether requests should be SSZ-encoded: SSZ is configured and the remote
+// builder has not previously rejected SSZ requests.
+func (c *Client) useSSZ() bool {
+	return c.sszEnabled && !c.sszUnsupported.Load()
+}
+
+// markSSZUnsupported records that the remote builder does not support SSZ so subsequent
+// requests use JSON. It logs once, on the first transition.
+func (c *Client) markSSZUnsupported() {
+	if c.sszUnsupported.CompareAndSwap(false, true) {
+		log.WithField("url", c.NodeURL()).Warn("Remote builder rejected SSZ request; falling back to JSON encoding for subsequent requests")
+	}
+}
+
+// isSSZRejection reports whether err indicates the remote builder rejected the request
+// because of SSZ content negotiation: 415 Unsupported Media Type for an SSZ request body,
+// or 406 Not Acceptable for an SSZ Accept header.
+func isSSZRejection(err error) bool {
+	return errors.Is(err, ErrUnsupportedMediaType) || errors.Is(err, ErrNotAcceptable)
 }
 
 // NewClient constructs a new client with the provided options (ex WithTimeout).
@@ -235,27 +258,35 @@ func execHeaderPath(slot primitives.Slot, parentHash [32]byte, pubkey [48]byte) 
 }
 
 // GetHeader is used by a proposing validator to request an execution payload header from the Builder node.
+// If the builder rejects the SSZ request, it retries once using JSON.
 func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubkey [48]byte) (SignedBid, error) {
+	ssz := c.useSSZ()
+	bid, err := c.getHeader(ctx, slot, parentHash, pubkey, ssz)
+	if err != nil && ssz && isSSZRejection(err) {
+		c.markSSZUnsupported()
+		bid, err = c.getHeader(ctx, slot, parentHash, pubkey, false)
+	}
+	return bid, err
+}
+
+func (c *Client) getHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubkey [48]byte, ssz bool) (SignedBid, error) {
 	path, err := execHeaderPath(slot, parentHash, pubkey)
 	if err != nil {
 		return nil, err
 	}
-	var getOpts reqOption
-	if c.sszEnabled {
-		getOpts = func(r *http.Request) {
-			r.Header.Set("Accept", api.OctetStreamMediaType)
-		}
-	} else {
-		getOpts = func(r *http.Request) {
-			r.Header.Set("Accept", api.JsonMediaType)
-		}
+	accept := api.JsonMediaType
+	if ssz {
+		accept = api.OctetStreamMediaType
+	}
+	getOpts := func(r *http.Request) {
+		r.Header.Set("Accept", accept)
 	}
 	data, header, err := c.do(ctx, http.MethodGet, path, nil, http.StatusOK, getOpts)
 	if err != nil {
 		return nil, errors.Wrap(err, "error getting header from builder server")
 	}
 
-	bid, err := c.parseHeaderResponse(data, header, slot)
+	bid, err := c.parseHeaderResponse(data, header, slot, ssz)
 	if err != nil {
 		return nil, errors.Wrapf(
 			err,
@@ -268,9 +299,9 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 	return bid, nil
 }
 
-func (c *Client) parseHeaderResponse(data []byte, header http.Header, slot primitives.Slot) (SignedBid, error) {
+func (c *Client) parseHeaderResponse(data []byte, header http.Header, slot primitives.Slot, ssz bool) (SignedBid, error) {
 	var versionHeader string
-	if c.sszEnabled || header.Get(api.VersionHeader) != "" {
+	if ssz || header.Get(api.VersionHeader) != "" {
 		versionHeader = header.Get(api.VersionHeader)
 	} else {
 		// If we don't have a version header, attempt to parse JSON for version
@@ -290,23 +321,23 @@ func (c *Client) parseHeaderResponse(data []byte, header http.Header, slot primi
 	}
 
 	if ver >= version.Electra {
-		return c.parseHeaderElectra(data, slot)
+		return c.parseHeaderElectra(data, slot, ssz)
 	}
 	if ver >= version.Deneb {
-		return c.parseHeaderDeneb(data)
+		return c.parseHeaderDeneb(data, ssz)
 	}
 	if ver >= version.Capella {
-		return c.parseHeaderCapella(data)
+		return c.parseHeaderCapella(data, ssz)
 	}
 	if ver >= version.Bellatrix {
-		return c.parseHeaderBellatrix(data)
+		return c.parseHeaderBellatrix(data, ssz)
 	}
 
 	return nil, fmt.Errorf("unsupported header version %s", versionHeader)
 }
 
-func (c *Client) parseHeaderElectra(data []byte, slot primitives.Slot) (SignedBid, error) {
-	if c.sszEnabled {
+func (c *Client) parseHeaderElectra(data []byte, slot primitives.Slot, ssz bool) (SignedBid, error) {
+	if ssz {
 		sb := &ethpb.SignedBuilderBidElectra{}
 		if err := sb.UnmarshalSSZ(data); err != nil {
 			return nil, errors.Wrap(err, "could not unmarshal SignedBuilderBidElectra SSZ")
@@ -324,8 +355,8 @@ func (c *Client) parseHeaderElectra(data []byte, slot primitives.Slot) (SignedBi
 	return WrappedSignedBuilderBidElectra(p)
 }
 
-func (c *Client) parseHeaderDeneb(data []byte) (SignedBid, error) {
-	if c.sszEnabled {
+func (c *Client) parseHeaderDeneb(data []byte, ssz bool) (SignedBid, error) {
+	if ssz {
 		sb := &ethpb.SignedBuilderBidDeneb{}
 		if err := sb.UnmarshalSSZ(data); err != nil {
 			return nil, errors.Wrap(err, "could not unmarshal SignedBuilderBidDeneb SSZ")
@@ -343,8 +374,8 @@ func (c *Client) parseHeaderDeneb(data []byte) (SignedBid, error) {
 	return WrappedSignedBuilderBidDeneb(p)
 }
 
-func (c *Client) parseHeaderCapella(data []byte) (SignedBid, error) {
-	if c.sszEnabled {
+func (c *Client) parseHeaderCapella(data []byte, ssz bool) (SignedBid, error) {
+	if ssz {
 		sb := &ethpb.SignedBuilderBidCapella{}
 		if err := sb.UnmarshalSSZ(data); err != nil {
 			return nil, errors.Wrap(err, "could not unmarshal SignedBuilderBidCapella SSZ")
@@ -362,8 +393,8 @@ func (c *Client) parseHeaderCapella(data []byte) (SignedBid, error) {
 	return WrappedSignedBuilderBidCapella(p)
 }
 
-func (c *Client) parseHeaderBellatrix(data []byte) (SignedBid, error) {
-	if c.sszEnabled {
+func (c *Client) parseHeaderBellatrix(data []byte, ssz bool) (SignedBid, error) {
+	if ssz {
 		sb := &ethpb.SignedBuilderBid{}
 		if err := sb.UnmarshalSSZ(data); err != nil {
 			return nil, errors.Wrap(err, "could not unmarshal SignedBuilderBid SSZ")
@@ -381,8 +412,9 @@ func (c *Client) parseHeaderBellatrix(data []byte) (SignedBid, error) {
 	return WrappedSignedBuilderBid(p)
 }
 
-// RegisterValidator encodes the SignedValidatorRegistrationV1 message to json (including hex-encoding the byte
-// fields with 0x prefixes) and posts to the builder validator registration endpoint.
+// RegisterValidator encodes the SignedValidatorRegistrationV1 messages (SSZ or, hex-encoded, JSON)
+// and posts to the builder validator registration endpoint. If the builder rejects the SSZ request,
+// it retries once using JSON.
 func (c *Client) RegisterValidator(ctx context.Context, svr []*ethpb.SignedValidatorRegistrationV1) error {
 	ctx, span := trace.StartSpan(ctx, "builder.client.RegisterValidator")
 	defer span.End()
@@ -394,21 +426,34 @@ func (c *Client) RegisterValidator(ctx context.Context, svr []*ethpb.SignedValid
 		return err
 	}
 
+	ssz := c.useSSZ()
+	err := c.registerValidator(ctx, svr, ssz)
+	if err != nil && ssz && isSSZRejection(err) {
+		c.markSSZUnsupported()
+		err = c.registerValidator(ctx, svr, false)
+	}
+	if err != nil {
+		tracing.AnnotateError(span, err)
+		return err
+	}
+	log.WithField("registrationCount", len(svr)).Debug("Successfully registered validator(s) on builder")
+	return nil
+}
+
+func (c *Client) registerValidator(ctx context.Context, svr []*ethpb.SignedValidatorRegistrationV1, ssz bool) error {
 	var (
 		body     []byte
 		err      error
 		postOpts reqOption
 	)
-	if c.sszEnabled {
+	if ssz {
 		postOpts = func(r *http.Request) {
 			r.Header.Set("Content-Type", api.OctetStreamMediaType)
 			r.Header.Set("Accept", api.OctetStreamMediaType)
 		}
 		body, err = sszValidatorRegisterRequest(svr)
 		if err != nil {
-			err := errors.Wrap(err, "error ssz encoding the SignedValidatorRegistration value body in RegisterValidator")
-			tracing.AnnotateError(span, err)
-			return err
+			return errors.Wrap(err, "error ssz encoding the SignedValidatorRegistration value body in RegisterValidator")
 		}
 	} else {
 		postOpts = func(r *http.Request) {
@@ -417,16 +462,13 @@ func (c *Client) RegisterValidator(ctx context.Context, svr []*ethpb.SignedValid
 		}
 		body, err = jsonValidatorRegisterRequest(svr)
 		if err != nil {
-			err := errors.Wrap(err, "error json encoding the SignedValidatorRegistration value body in RegisterValidator")
-			tracing.AnnotateError(span, err)
-			return err
+			return errors.Wrap(err, "error json encoding the SignedValidatorRegistration value body in RegisterValidator")
 		}
 	}
 
 	if _, _, err = c.do(ctx, http.MethodPost, postRegisterValidatorPath, bytes.NewBuffer(body), http.StatusOK, postOpts); err != nil {
 		return errors.Wrap(err, "do")
 	}
-	log.WithField("registrationCount", len(svr)).Debug("Successfully registered validator(s) on builder")
 	return nil
 }
 
@@ -476,9 +518,20 @@ func getVersionsBlockToPayload(blockVersion int) (int, error) {
 }
 
 // SubmitBlindedBlock calls the builder API endpoint that binds the validator to the builder and submits the block.
-// The response is the full execution payload used to create the blinded block.
+// The response is the full execution payload used to create the blinded block. If the builder rejects the SSZ
+// request, it retries once using JSON.
 func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error) {
-	body, postOpts, err := c.buildBlindedBlockRequest(sb)
+	ssz := c.useSSZ()
+	ed, blobs, err := c.submitBlindedBlock(ctx, sb, ssz)
+	if err != nil && ssz && isSSZRejection(err) {
+		c.markSSZUnsupported()
+		ed, blobs, err = c.submitBlindedBlock(ctx, sb, false)
+	}
+	return ed, blobs, err
+}
+
+func (c *Client) submitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock, ssz bool) (interfaces.ExecutionData, v1.BlobsBundler, error) {
+	body, postOpts, err := c.buildBlindedBlockRequest(sb, ssz)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -490,7 +543,7 @@ func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlyS
 		return nil, nil, errors.Wrap(err, "error posting the blinded block to the builder api")
 	}
 
-	ver, err := c.checkBlockVersion(data, header)
+	ver, err := c.checkBlockVersion(data, header, ssz)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -507,7 +560,7 @@ func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlyS
 		return nil, nil, errors.Wrapf(errResponseVersionMismatch, "expected payload version %d, got %d", expectedPayloadVer, gotPayloadVer)
 	}
 
-	ed, blobs, err := c.parseBlindedBlockResponse(data, ver)
+	ed, blobs, err := c.parseBlindedBlockResponse(data, ver, ssz)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -516,9 +569,20 @@ func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlyS
 }
 
 // SubmitBlindedBlockPostFulu calls the builder API endpoint post-Fulu where relays only return status codes.
-// This method is used after the Fulu fork when MEV-boost relays no longer return execution payloads.
+// This method is used after the Fulu fork when MEV-boost relays no longer return execution payloads. If the
+// builder rejects the SSZ request, it retries once using JSON.
 func (c *Client) SubmitBlindedBlockPostFulu(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) error {
-	body, postOpts, err := c.buildBlindedBlockRequest(sb)
+	ssz := c.useSSZ()
+	err := c.submitBlindedBlockPostFulu(ctx, sb, ssz)
+	if err != nil && ssz && isSSZRejection(err) {
+		c.markSSZUnsupported()
+		err = c.submitBlindedBlockPostFulu(ctx, sb, false)
+	}
+	return err
+}
+
+func (c *Client) submitBlindedBlockPostFulu(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock, ssz bool) error {
+	body, postOpts, err := c.buildBlindedBlockRequest(sb, ssz)
 	if err != nil {
 		return err
 	}
@@ -533,9 +597,9 @@ func (c *Client) SubmitBlindedBlockPostFulu(ctx context.Context, sb interfaces.R
 	return nil
 }
 
-func (c *Client) checkBlockVersion(respBytes []byte, header http.Header) (int, error) {
+func (c *Client) checkBlockVersion(respBytes []byte, header http.Header, ssz bool) (int, error) {
 	var versionHeader string
-	if c.sszEnabled {
+	if ssz {
 		versionHeader = strings.ToLower(header.Get(api.VersionHeader))
 	} else {
 		// fallback to JSON-based version extraction
@@ -555,12 +619,12 @@ func (c *Client) checkBlockVersion(respBytes []byte, header http.Header) (int, e
 }
 
 // Helper: build request body for SubmitBlindedBlock
-func (c *Client) buildBlindedBlockRequest(sb interfaces.ReadOnlySignedBeaconBlock) ([]byte, reqOption, error) {
+func (c *Client) buildBlindedBlockRequest(sb interfaces.ReadOnlySignedBeaconBlock, ssz bool) ([]byte, reqOption, error) {
 	if !sb.IsBlinded() {
 		return nil, nil, errNotBlinded
 	}
 
-	if c.sszEnabled {
+	if ssz {
 		body, err := sb.MarshalSSZ()
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "could not marshal SSZ for blinded block")
@@ -593,8 +657,9 @@ func (c *Client) buildBlindedBlockRequest(sb interfaces.ReadOnlySignedBeaconBloc
 func (c *Client) parseBlindedBlockResponse(
 	respBytes []byte,
 	forkVersion int,
+	ssz bool,
 ) (interfaces.ExecutionData, v1.BlobsBundler, error) {
-	if c.sszEnabled {
+	if ssz {
 		return c.parseBlindedBlockResponseSSZ(respBytes, forkVersion)
 	}
 	return c.parseBlindedBlockResponseJSON(respBytes, forkVersion)

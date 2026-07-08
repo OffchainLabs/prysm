@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 )
 
@@ -36,26 +35,8 @@ func contentTypeOpts(contentType string, v int) reqOption {
 	}
 }
 
-// marshalRequestAuthJSON encodes a SignedRequestAuthV1 as the builder-spec JSON
-// the builder expects: message.data is the hex builder_url, slot is decimal, signature is hex.
-func marshalRequestAuthJSON(auth *ethpb.SignedRequestAuthV1) ([]byte, error) {
-	type message struct {
-		Data string `json:"data"`
-		Slot string `json:"slot"`
-	}
-	return json.Marshal(&struct {
-		Message   message `json:"message"`
-		Signature string  `json:"signature"`
-	}{
-		Message: message{
-			Data: hexutil.Encode(auth.GetMessage().GetData()),
-			Slot: fmt.Sprintf("%d", auth.GetMessage().GetSlot()),
-		},
-		Signature: hexutil.Encode(auth.GetSignature()),
-	})
-}
-
 // GetExecutionPayloadBid requests an execution payload bid; returns nil on 204 (no bid).
+// If the builder rejects the SSZ Accept header, it retries once requesting JSON.
 func (c *Client) GetExecutionPayloadBid(
 	ctx context.Context,
 	slot primitives.Slot,
@@ -63,14 +44,35 @@ func (c *Client) GetExecutionPayloadBid(
 	proposerPubkey [48]byte,
 	auth *ethpb.SignedRequestAuthV1,
 ) (*ethpb.SignedExecutionPayloadBid, error) {
+	ssz := c.useSSZ()
+	bid, err := c.getExecutionPayloadBid(ctx, slot, parentHash, parentRoot, proposerPubkey, auth, ssz)
+	if err != nil && ssz && isSSZRejection(err) {
+		c.markSSZUnsupported()
+		bid, err = c.getExecutionPayloadBid(ctx, slot, parentHash, parentRoot, proposerPubkey, auth, false)
+	}
+	return bid, err
+}
+
+func (c *Client) getExecutionPayloadBid(
+	ctx context.Context,
+	slot primitives.Slot,
+	parentHash, parentRoot [32]byte,
+	proposerPubkey [48]byte,
+	auth *ethpb.SignedRequestAuthV1,
+	ssz bool,
+) (*ethpb.SignedExecutionPayloadBid, error) {
+	accept := api.JsonMediaType
+	if ssz {
+		accept = api.OctetStreamMediaType
+	}
 	var body []byte
 	opts := []reqOption{func(r *http.Request) {
-		r.Header.Set("Accept", api.OctetStreamMediaType)
+		r.Header.Set("Accept", accept)
 		r.Header.Set(api.VersionHeader, version.String(version.Gloas))
 	}}
 	if auth != nil {
 		var err error
-		body, err = marshalRequestAuthJSON(auth)
+		body, err = json.Marshal(structs.SignedRequestAuthFromConsensus(auth))
 		if err != nil {
 			return nil, errors.Wrap(err, "could not json encode SignedRequestAuthV1")
 		}
@@ -160,15 +162,40 @@ func (c *Client) SubmitSignedBeaconBlock(ctx context.Context, sb interfaces.Read
 }
 
 // SubmitBuilderPreferences submits a proposer's per-builder preferences ahead of the bid request.
+// If the builder rejects the SSZ request, it retries once using JSON.
 func (c *Client) SubmitBuilderPreferences(ctx context.Context, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1) error {
 	if req == nil {
 		return errors.Wrap(errMalformedRequest, "nil builder preferences request")
 	}
-	body, err := req.MarshalSSZ()
-	if err != nil {
-		return errors.Wrap(err, "could not ssz encode BuilderPreferencesRequestV1")
+	ssz := c.useSSZ()
+	err := c.submitBuilderPreferences(ctx, validatorPubkey, req, ssz)
+	if err != nil && ssz && isSSZRejection(err) {
+		c.markSSZUnsupported()
+		err = c.submitBuilderPreferences(ctx, validatorPubkey, req, false)
 	}
-	if _, _, err := c.do(ctx, http.MethodPost, builderPreferencesPath(validatorPubkey), bytes.NewReader(body), http.StatusAccepted, contentTypeOpts(api.OctetStreamMediaType, version.Gloas)); err != nil {
+	return err
+}
+
+func (c *Client) submitBuilderPreferences(ctx context.Context, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1, ssz bool) error {
+	var (
+		body        []byte
+		err         error
+		contentType string
+	)
+	if ssz {
+		contentType = api.OctetStreamMediaType
+		body, err = req.MarshalSSZ()
+		if err != nil {
+			return errors.Wrap(err, "could not ssz encode BuilderPreferencesRequestV1")
+		}
+	} else {
+		contentType = api.JsonMediaType
+		body, err = json.Marshal(structs.BuilderPreferencesRequestFromConsensus(req))
+		if err != nil {
+			return errors.Wrap(err, "could not json encode BuilderPreferencesRequestV1")
+		}
+	}
+	if _, _, err := c.do(ctx, http.MethodPost, builderPreferencesPath(validatorPubkey), bytes.NewReader(body), http.StatusAccepted, contentTypeOpts(contentType, version.Gloas)); err != nil {
 		return errors.Wrap(err, "error submitting builder preferences")
 	}
 	return nil
