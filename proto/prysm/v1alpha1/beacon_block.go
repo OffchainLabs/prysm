@@ -632,64 +632,19 @@ func (body *BeaconBlockBodyElectra) Copy() *BeaconBlockBodyElectra {
 }
 
 // CopyExecutionRequests copies the provided execution requests.
-func CopyExecutionRequests(e *enginev1.ExecutionRequests) *enginev1.ExecutionRequests {
+func CopyExecutionRequests(e enginev1.ExecutionRequestsData) *enginev1.ExecutionRequests {
 	if e == nil {
 		return nil
 	}
-	dr := make([]*enginev1.DepositRequest, len(e.Deposits))
-	for i, d := range e.Deposits {
-		dr[i] = d.Copy()
-	}
-	wr := make([]*enginev1.WithdrawalRequest, len(e.Withdrawals))
-	for i, w := range e.Withdrawals {
-		wr[i] = w.Copy()
-	}
-	cr := make([]*enginev1.ConsolidationRequest, len(e.Consolidations))
-	for i, c := range e.Consolidations {
-		cr[i] = c.Copy()
-	}
-
-	return &enginev1.ExecutionRequests{
-		Deposits:       dr,
-		Withdrawals:    wr,
-		Consolidations: cr,
-	}
+	return enginev1.CopyExecutionRequests(e)
 }
 
-// CopyExecutionRequestsGloas copies a gloas ExecutionRequests, including builder
-// deposit/exit requests (EIP-8282).
-func CopyExecutionRequestsGloas(e *enginev1.ExecutionRequestsGloas) *enginev1.ExecutionRequestsGloas {
+// CopyExecutionRequestsGloas copies the provided Gloas execution requests.
+func CopyExecutionRequestsGloas(e enginev1.ExecutionRequestsData) *enginev1.ExecutionRequestsGloas {
 	if e == nil {
 		return nil
 	}
-	dr := make([]*enginev1.DepositRequest, len(e.Deposits))
-	for i, d := range e.Deposits {
-		dr[i] = d.Copy()
-	}
-	wr := make([]*enginev1.WithdrawalRequest, len(e.Withdrawals))
-	for i, w := range e.Withdrawals {
-		wr[i] = w.Copy()
-	}
-	cr := make([]*enginev1.ConsolidationRequest, len(e.Consolidations))
-	for i, c := range e.Consolidations {
-		cr[i] = c.Copy()
-	}
-	bd := make([]*enginev1.BuilderDepositRequest, len(e.BuilderDeposits))
-	for i, b := range e.BuilderDeposits {
-		bd[i] = b.Copy()
-	}
-	be := make([]*enginev1.BuilderExitRequest, len(e.BuilderExits))
-	for i, b := range e.BuilderExits {
-		be[i] = b.Copy()
-	}
-
-	return &enginev1.ExecutionRequestsGloas{
-		Deposits:        dr,
-		Withdrawals:     wr,
-		Consolidations:  cr,
-		BuilderDeposits: bd,
-		BuilderExits:    be,
-	}
+	return enginev1.CopyExecutionRequestsGloas(e)
 }
 
 // ----------------------------------------------------------------------------

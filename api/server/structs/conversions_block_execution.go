@@ -927,11 +927,11 @@ func (d *DepositRequest) ToConsensus() (*enginev1.DepositRequest, error) {
 	}, nil
 }
 
-func ExecutionRequestsFromConsensus(er *enginev1.ExecutionRequests) *ExecutionRequests {
+func ExecutionRequestsFromConsensus(er enginev1.ExecutionRequestsData) *ExecutionRequests {
 	return &ExecutionRequests{
-		Deposits:       DepositRequestsFromConsensus(er.Deposits),
-		Withdrawals:    WithdrawalRequestsFromConsensus(er.Withdrawals),
-		Consolidations: ConsolidationRequestsFromConsensus(er.Consolidations),
+		Deposits:       DepositRequestsFromConsensus(er.GetDeposits()),
+		Withdrawals:    WithdrawalRequestsFromConsensus(er.GetWithdrawals()),
+		Consolidations: ConsolidationRequestsFromConsensus(er.GetConsolidations()),
 	}
 }
 

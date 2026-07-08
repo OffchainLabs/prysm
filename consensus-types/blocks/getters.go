@@ -3,6 +3,9 @@ package blocks
 import (
 	"fmt"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+	"github.com/pkg/errors"
+
 	field_params "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -11,8 +14,6 @@ import (
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
-	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 // BeaconBlockIsNil checks if any composite field of input signed beacon block is nil.
@@ -497,7 +498,7 @@ func (b *SignedBeaconBlock) MarshalSSZTo(dst []byte) ([]byte, error) {
 // SizeSSZ returns the size of the serialized signed block
 //
 // WARNING: This function panics. It is required to change the signature
-// of fastssz's SizeSSZ() interface function to avoid panicking.
+// of the SizeSSZ() interface function to avoid panicking.
 // Changing the signature causes very problematic issues with wealdtech deps.
 // For the time being panicking is preferable.
 // lint:nopanic -- Panic warning is communicated in godoc commentary.
@@ -913,7 +914,7 @@ func (b *BeaconBlock) MarshalSSZTo(dst []byte) ([]byte, error) {
 // SizeSSZ returns the size of the serialized block.
 //
 // WARNING: This function panics. It is required to change the signature
-// of fastssz's SizeSSZ() interface function to avoid panicking.
+// of the SizeSSZ() interface function to avoid panicking.
 // Changing the signature causes very problematic issues with wealdtech deps.
 // For the time being panicking is preferable.
 // lint:nopanic -- Panic is communicated in godoc.
@@ -1190,6 +1191,14 @@ func (b *BeaconBlockBody) AttesterSlashings() []eth.AttSlashing {
 		for i, s := range b.attesterSlashings {
 			slashings[i] = s
 		}
+	} else if b.version == version.Gloas {
+		if b.attesterSlashingsGloas == nil {
+			return nil
+		}
+		slashings = make([]eth.AttSlashing, len(b.attesterSlashingsGloas))
+		for i, s := range b.attesterSlashingsGloas {
+			slashings[i] = s
+		}
 	} else {
 		if b.attesterSlashingsElectra == nil {
 			return nil
@@ -1211,6 +1220,14 @@ func (b *BeaconBlockBody) Attestations() []eth.Att {
 		}
 		atts = make([]eth.Att, len(b.attestations))
 		for i, a := range b.attestations {
+			atts[i] = a
+		}
+	} else if b.version == version.Gloas {
+		if b.attestationsGloas == nil {
+			return nil
+		}
+		atts = make([]eth.Att, len(b.attestationsGloas))
+		for i, a := range b.attestationsGloas {
 			atts[i] = a
 		}
 	} else {
@@ -1304,7 +1321,7 @@ func (b *BeaconBlockBody) SignedExecutionPayloadBid() (*eth.SignedExecutionPaylo
 }
 
 // ParentExecutionRequests returns the parent's deferred execution requests.
-func (b *BeaconBlockBody) ParentExecutionRequests() (*enginev1.ExecutionRequestsGloas, error) {
+func (b *BeaconBlockBody) ParentExecutionRequests() (interfaces.ExecutionRequests, error) {
 	if b.version >= version.Gloas {
 		return b.parentExecutionRequests, nil
 	}

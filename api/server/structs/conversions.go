@@ -516,6 +516,15 @@ func AttElectraFromConsensus(a *eth.AttestationElectra) *AttestationElectra {
 	}
 }
 
+func AttGloasFromConsensus(a *eth.AttestationGloas) *AttestationElectra {
+	return &AttestationElectra{
+		AggregationBits: hexutil.Encode(a.AggregationBits),
+		Data:            AttDataFromConsensus(a.Data),
+		Signature:       hexutil.Encode(a.Signature),
+		CommitteeBits:   hexutil.Encode(a.CommitteeBits),
+	}
+}
+
 func (a *AttestationData) ToConsensus() (*eth.AttestationData, error) {
 	slot, err := strconv.ParseUint(a.Slot, 10, 64)
 	if err != nil {
@@ -1259,6 +1268,18 @@ func AttesterSlashingsElectraToConsensus(src []*AttesterSlashingElectra) ([]*eth
 	return attesterSlashings, nil
 }
 
+func AttesterSlashingsGloasToConsensus(src []*AttesterSlashingElectra) ([]*eth.AttesterSlashingGloas, error) {
+	electraSlashings, err := AttesterSlashingsElectraToConsensus(src)
+	if err != nil {
+		return nil, err
+	}
+	attesterSlashings := make([]*eth.AttesterSlashingGloas, len(electraSlashings))
+	for i, s := range electraSlashings {
+		attesterSlashings[i] = eth.AttesterSlashingElectraToGloas(s)
+	}
+	return attesterSlashings, nil
+}
+
 func AttesterSlashingsElectraFromConsensus(src []*eth.AttesterSlashingElectra) []*AttesterSlashingElectra {
 	attesterSlashings := make([]*AttesterSlashingElectra, len(src))
 	for i, s := range src {
@@ -1267,7 +1288,62 @@ func AttesterSlashingsElectraFromConsensus(src []*eth.AttesterSlashingElectra) [
 	return attesterSlashings
 }
 
+func AttesterSlashingsGloasFromConsensus(src []*eth.AttesterSlashingGloas) []*AttesterSlashingElectra {
+	attesterSlashings := make([]*AttesterSlashingElectra, len(src))
+	for i, s := range src {
+		attesterSlashings[i] = AttesterSlashingGloasFromConsensus(s)
+	}
+	return attesterSlashings
+}
+
 func AttesterSlashingElectraFromConsensus(src *eth.AttesterSlashingElectra) *AttesterSlashingElectra {
+	a1AttestingIndices := make([]string, len(src.Attestation_1.AttestingIndices))
+	for j, ix := range src.Attestation_1.AttestingIndices {
+		a1AttestingIndices[j] = fmt.Sprintf("%d", ix)
+	}
+	a2AttestingIndices := make([]string, len(src.Attestation_2.AttestingIndices))
+	for j, ix := range src.Attestation_2.AttestingIndices {
+		a2AttestingIndices[j] = fmt.Sprintf("%d", ix)
+	}
+	return &AttesterSlashingElectra{
+		Attestation1: &IndexedAttestationElectra{
+			AttestingIndices: a1AttestingIndices,
+			Data: &AttestationData{
+				Slot:            fmt.Sprintf("%d", src.Attestation_1.Data.Slot),
+				CommitteeIndex:  fmt.Sprintf("%d", src.Attestation_1.Data.CommitteeIndex),
+				BeaconBlockRoot: hexutil.Encode(src.Attestation_1.Data.BeaconBlockRoot),
+				Source: &Checkpoint{
+					Epoch: fmt.Sprintf("%d", src.Attestation_1.Data.Source.Epoch),
+					Root:  hexutil.Encode(src.Attestation_1.Data.Source.Root),
+				},
+				Target: &Checkpoint{
+					Epoch: fmt.Sprintf("%d", src.Attestation_1.Data.Target.Epoch),
+					Root:  hexutil.Encode(src.Attestation_1.Data.Target.Root),
+				},
+			},
+			Signature: hexutil.Encode(src.Attestation_1.Signature),
+		},
+		Attestation2: &IndexedAttestationElectra{
+			AttestingIndices: a2AttestingIndices,
+			Data: &AttestationData{
+				Slot:            fmt.Sprintf("%d", src.Attestation_2.Data.Slot),
+				CommitteeIndex:  fmt.Sprintf("%d", src.Attestation_2.Data.CommitteeIndex),
+				BeaconBlockRoot: hexutil.Encode(src.Attestation_2.Data.BeaconBlockRoot),
+				Source: &Checkpoint{
+					Epoch: fmt.Sprintf("%d", src.Attestation_2.Data.Source.Epoch),
+					Root:  hexutil.Encode(src.Attestation_2.Data.Source.Root),
+				},
+				Target: &Checkpoint{
+					Epoch: fmt.Sprintf("%d", src.Attestation_2.Data.Target.Epoch),
+					Root:  hexutil.Encode(src.Attestation_2.Data.Target.Root),
+				},
+			},
+			Signature: hexutil.Encode(src.Attestation_2.Signature),
+		},
+	}
+}
+
+func AttesterSlashingGloasFromConsensus(src *eth.AttesterSlashingGloas) *AttesterSlashingElectra {
 	a1AttestingIndices := make([]string, len(src.Attestation_1.AttestingIndices))
 	for j, ix := range src.Attestation_1.AttestingIndices {
 		a1AttestingIndices[j] = fmt.Sprintf("%d", ix)
@@ -1366,10 +1442,41 @@ func AttsElectraToConsensus(src []*AttestationElectra) ([]*eth.AttestationElectr
 	return atts, nil
 }
 
+func AttsGloasToConsensus(src []*AttestationElectra) ([]*eth.AttestationGloas, error) {
+	if src == nil {
+		return nil, server.NewDecodeError(errNilValue, "AttestationsGloas")
+	}
+	err := slice.VerifyMaxLength(src, 8)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "AttestationsGloas")
+	}
+
+	atts := make([]*eth.AttestationGloas, len(src))
+	for i, a := range src {
+		if a == nil {
+			return nil, server.NewDecodeError(errNilValue, fmt.Sprintf("[%d]", i))
+		}
+		att, err := a.ToConsensus()
+		if err != nil {
+			return nil, server.NewDecodeError(err, fmt.Sprintf("[%d]", i))
+		}
+		atts[i] = eth.AttestationElectraToGloas(att)
+	}
+	return atts, nil
+}
+
 func AttsElectraFromConsensus(src []*eth.AttestationElectra) []*AttestationElectra {
 	atts := make([]*AttestationElectra, len(src))
 	for i, a := range src {
 		atts[i] = AttElectraFromConsensus(a)
+	}
+	return atts
+}
+
+func AttsGloasFromConsensus(src []*eth.AttestationGloas) []*AttestationElectra {
+	atts := make([]*AttestationElectra, len(src))
+	for i, a := range src {
+		atts[i] = AttGloasFromConsensus(a)
 	}
 	return atts
 }

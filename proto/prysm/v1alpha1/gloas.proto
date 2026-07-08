@@ -210,9 +210,9 @@ message BeaconBlockBodyGloas {
   bytes graffiti = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
   repeated ProposerSlashing proposer_slashings = 4
       [ (ethereum.eth.ext.ssz_max) = "16" ];
-  repeated AttesterSlashingElectra attester_slashings = 5
+  repeated AttesterSlashingGloas attester_slashings = 5
       [ (ethereum.eth.ext.ssz_max) = "1" ];
-  repeated AttestationElectra attestations = 6
+  repeated AttestationGloas attestations = 6
       [ (ethereum.eth.ext.ssz_max) = "8" ];
   repeated Deposit deposits = 7 [ (ethereum.eth.ext.ssz_max) = "16" ];
   repeated SignedVoluntaryExit voluntary_exits = 8

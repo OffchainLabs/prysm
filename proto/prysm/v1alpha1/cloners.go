@@ -213,7 +213,7 @@ func copyExecutionPayloadEnvelope(env *ExecutionPayloadEnvelope) *ExecutionPaylo
 	}
 	return &ExecutionPayloadEnvelope{
 		Payload:               env.Payload, // engine proto, not deep copied here
-		ExecutionRequests:     env.ExecutionRequests,
+		ExecutionRequests:     CopyExecutionRequestsGloas(env.ExecutionRequests),
 		BuilderIndex:          env.BuilderIndex,
 		BeaconBlockRoot:       bytesutil.SafeCopyBytes(env.BeaconBlockRoot),
 		ParentBeaconBlockRoot: bytesutil.SafeCopyBytes(env.ParentBeaconBlockRoot),
@@ -238,7 +238,7 @@ func copyBlindedExecutionPayloadEnvelope(env *BlindedExecutionPayloadEnvelope) *
 	}
 	return &BlindedExecutionPayloadEnvelope{
 		BlockHash:             bytesutil.SafeCopyBytes(env.BlockHash),
-		ExecutionRequests:     env.ExecutionRequests,
+		ExecutionRequests:     CopyExecutionRequestsGloas(env.ExecutionRequests),
 		BuilderIndex:          env.BuilderIndex,
 		BeaconBlockRoot:       bytesutil.SafeCopyBytes(env.BeaconBlockRoot),
 		Slot:                  env.Slot,

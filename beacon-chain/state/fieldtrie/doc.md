@@ -159,8 +159,8 @@ import (
 	"fmt"
 	"runtime"
 
-	fieldtrie "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/fieldtrie"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/types"
+	fieldtrie "github.com/prysmaticlabs/prysm/v7/beacon-chain/state/fieldtrie"
+	"github.com/prysmaticlabs/prysm/v7/beacon-chain/state/state-native/types"
 )
 
 func main() {

@@ -615,6 +615,7 @@ func TestToForkVersion(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		config := params.BeaconConfig()
 		config.FuluForkEpoch = 100
+		config.GloasForkEpoch = 101
 		params.OverrideBeaconConfig(config)
 
 		slot, err := EpochStart(params.BeaconConfig().FuluForkEpoch)
@@ -624,10 +625,26 @@ func TestToForkVersion(t *testing.T) {
 		require.Equal(t, version.Fulu, result)
 	})
 
+	t.Run("Gloas fork version", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig()
+		config.FuluForkEpoch = 100
+		config.GloasForkEpoch = 101
+		params.OverrideBeaconConfig(config)
+
+		slot, err := EpochStart(params.BeaconConfig().GloasForkEpoch)
+		require.NoError(t, err)
+
+		result := ToForkVersion(slot)
+		require.Equal(t, version.Gloas, result)
+	})
+
 	t.Run("Electra fork version", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		config := params.BeaconConfig()
 		config.ElectraForkEpoch = 100
+		config.FuluForkEpoch = 101
+		config.GloasForkEpoch = 102
 		params.OverrideBeaconConfig(config)
 
 		slot, err := EpochStart(params.BeaconConfig().ElectraForkEpoch)

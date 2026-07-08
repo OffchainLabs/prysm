@@ -1,0 +1,6 @@
+[
+  "bazel-out/darwin_arm64-fastbuild/bin/external/io_bazel_rules_go/stdlib_/stdlib.pkg.json",
+  "bazel-out/darwin_arm64-fastbuild/bin/external/com_github_thomaso_mirodin_intmath/constants/c64/c64.pkg.json",
+  "bazel-out/darwin_arm64-fastbuild/bin/external/com_github_thomaso_mirodin_intmath/u64/u64.pkg.json",
+  "bazel-out/darwin_arm64-fastbuild/bin/proto/prysm/v1alpha1/go_proto.pkg.json"
+]

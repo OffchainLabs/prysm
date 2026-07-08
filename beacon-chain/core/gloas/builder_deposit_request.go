@@ -19,7 +19,7 @@ func ProcessBuilderDepositRequests(ctx context.Context, st state.BeaconState, re
 	newDeposits := make([]*enginev1.BuilderDepositRequest, 0, len(requests))
 	newIdx := make([]int, 0, len(requests))
 	for i, request := range requests {
-		if request == nil {
+		if request == nil || !helpers.IsBuilderWithdrawalCredential(request.WithdrawalCredentials) {
 			continue
 		}
 		if _, isBuilder := st.BuilderIndexByPubkey(bytesutil.ToBytes48(request.Pubkey)); !isBuilder {
@@ -75,20 +75,29 @@ func processBuilderDepositRequest(st state.BeaconState, request *enginev1.Builde
 		return errors.New("nil builder deposit request")
 	}
 
+	// Deposits without BUILDER_WITHDRAWAL_PREFIX are dropped and the funds are lost.
+	if !helpers.IsBuilderWithdrawalCredential(request.WithdrawalCredentials) {
+		return nil
+	}
+
 	pubkey := bytesutil.ToBytes48(request.Pubkey)
 	if idx, isBuilder := st.BuilderIndexByPubkey(pubkey); isBuilder {
-		if err := st.IncreaseBuilderBalance(idx, request.Amount); err != nil {
-			return err
-		}
 		builder, err := st.Builder(idx)
 		if err != nil {
 			return err
 		}
-		if builder.WithdrawableEpoch != params.BeaconConfig().FarFutureEpoch {
+		if builder == nil {
+			return errors.Errorf("builder at index %d is nil", idx)
+		}
+		// Reset only when exited and fully swept, checked before the top-up is credited.
+		if builder.WithdrawableEpoch != params.BeaconConfig().FarFutureEpoch && builder.Balance == 0 {
 			builder.WithdrawableEpoch = slots.ToEpoch(st.Slot()) + params.BeaconConfig().MinBuilderWithdrawabilityDelay
 			if err := st.UpdateBuilderAtIndex(idx, builder); err != nil {
 				return err
 			}
+		}
+		if err := st.IncreaseBuilderBalance(idx, request.Amount); err != nil {
+			return err
 		}
 		builderDepositsProcessedTotal.Inc()
 		return nil

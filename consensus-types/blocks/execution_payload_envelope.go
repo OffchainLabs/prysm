@@ -8,7 +8,6 @@ import (
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"google.golang.org/protobuf/proto"
 )
@@ -114,7 +113,7 @@ func (p *executionPayloadEnvelope) Execution() (interfaces.ExecutionData, error)
 }
 
 // ExecutionRequests returns the execution requests attached to the envelope.
-func (p *executionPayloadEnvelope) ExecutionRequests() *enginev1.ExecutionRequestsGloas {
+func (p *executionPayloadEnvelope) ExecutionRequests() interfaces.ExecutionRequests {
 	return ethpb.CopyExecutionRequestsGloas(p.p.ExecutionRequests)
 }
 
@@ -176,7 +175,7 @@ func (p *blindedExecutionPayloadEnvelope) IsBlinded() bool {
 	return true
 }
 
-func (p *blindedExecutionPayloadEnvelope) ExecutionRequests() *enginev1.ExecutionRequestsGloas {
+func (p *blindedExecutionPayloadEnvelope) ExecutionRequests() interfaces.ExecutionRequests {
 	return ethpb.CopyExecutionRequestsGloas(p.p.ExecutionRequests)
 }
 
