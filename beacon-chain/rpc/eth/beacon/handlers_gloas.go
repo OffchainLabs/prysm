@@ -11,8 +11,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
-	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
@@ -468,13 +466,22 @@ func (s *Server) PublishSignedExecutionPayloadBid(w http.ResponseWriter, r *http
 		}
 	}
 
-	if err := s.Broadcaster.Broadcast(ctx, signedBid); err != nil {
-		httputil.HandleError(w, "Could not broadcast execution payload bid: "+err.Error(), http.StatusInternalServerError)
-		return
+	// Delegate to the v1alpha1 server, which verifies the bid with the gossip rules, records it in
+	// the local highest-bid cache, broadcasts it, and emits the operation feed event.
+	if _, err := s.V1Alpha1ValidatorServer.SubmitSignedExecutionPayloadBid(ctx, signedBid); err != nil {
+		if st, ok := status.FromError(err); ok {
+			switch st.Code() {
+			case codes.InvalidArgument:
+				httputil.HandleError(w, st.Message(), http.StatusBadRequest)
+			case codes.FailedPrecondition:
+				httputil.HandleError(w, st.Message(), http.StatusBadRequest)
+			case codes.Unavailable:
+				httputil.HandleError(w, st.Message(), http.StatusServiceUnavailable)
+			default:
+				httputil.HandleError(w, st.Message(), http.StatusInternalServerError)
+			}
+			return
+		}
+		httputil.HandleError(w, "Could not submit execution payload bid: "+err.Error(), http.StatusInternalServerError)
 	}
-
-	s.OperationNotifier.OperationFeed().Send(&feed.Event{
-		Type: opfeed.ExecutionPayloadBidReceived,
-		Data: &opfeed.ExecutionPayloadBidReceivedData{Bid: signedBid},
-	})
 }

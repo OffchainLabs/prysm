@@ -119,6 +119,7 @@ func (s *Service) rewardsEndpoints(blocker lookup.Blocker, stater lookup.Stater,
 		TimeFetcher:           s.cfg.GenesisTimeFetcher,
 		Stater:                stater,
 		HeadFetcher:           s.cfg.HeadFetcher,
+		ForkchoiceFetcher:     s.cfg.ForkchoiceFetcher,
 		BlockRewardFetcher:    rewardFetcher,
 	}
 
