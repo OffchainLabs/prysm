@@ -27,6 +27,16 @@ var (
 			Buckets: []float64{25, 50, 100, 200, 500, 1000, 2000, 4000},
 		},
 	)
+	getBlobsV2RequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_engine_getBlobsV2_requests_total",
+		Help: "Total number of engine_getBlobsV2 requests sent",
+	})
+	getBlobsV2ResponsesTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_engine_getBlobsV2_responses_total",
+		Help: "Total number of engine_getBlobsV2 responses received",
+	})
+	// Note: This metric is equivalent to beacon_engine_getBlobsV2_request_duration_seconds,
+	// with the difference that this metric is in milliseconds.
 	getBlobsV2Latency = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "get_blobs_v2_latency_milliseconds",
