@@ -226,24 +226,6 @@ http_archive(
     ],
 )
 
-# Override rules_go's google.golang.org/protobuf (v1.36.3) to match go.mod, as
-# go-libp2p-pubsub requires proto.CloneOf which was added in later versions.
-# The gazelle patch is regenerated for this version in third_party, mirroring
-# the rules_go releaser patch-cmd:
-# gazelle -repo_root . -go_prefix google.golang.org/protobuf -go_naming_convention import_alias -proto disable_global
-http_archive(
-    name = "org_golang_google_protobuf",
-    patch_args = ["-p1"],
-    patches = [
-        "//third_party:org_golang_google_protobuf-gazelle.patch",
-    ],
-    sha256 = "4822cb3cd34077b4eee2a3b821ee5de5dc3dba16713506cc31d2685185a671b9",
-    strip_prefix = "protobuf-go-1.36.11",
-    urls = [
-        "https://github.com/protocolbuffers/protobuf-go/archive/refs/tags/v1.36.11.zip",
-    ],
-)
-
 go_rules_dependencies()
 
 go_register_toolchains(
