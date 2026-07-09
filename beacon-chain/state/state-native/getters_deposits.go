@@ -42,6 +42,16 @@ func (b *BeaconState) IsPendingValidator(pubkey []byte) (bool, error) {
 	return helpers.IsPendingValidator(b.pendingDeposits, pubkey)
 }
 
+// NumPendingDeposits returns the number of pending deposits in the state's pending_deposits queue under RLock.
+func (b *BeaconState) NumPendingDeposits() (uint64, error) {
+	if b.version < version.Electra {
+		return 0, errNotSupported("NumPendingDeposits", b.version)
+	}
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+	return uint64(len(b.pendingDeposits)), nil
+}
+
 func (b *BeaconState) pendingDepositsVal() []*ethpb.PendingDeposit {
 	if b.pendingDeposits == nil {
 		return nil

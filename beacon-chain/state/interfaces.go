@@ -241,6 +241,7 @@ type ReadOnlyDeposits interface {
 	DepositRequestsStartIndex() (uint64, error)
 	PendingDeposits() ([]*ethpb.PendingDeposit, error)
 	IsPendingValidator(pubkey []byte) (bool, error)
+	NumPendingDeposits() (uint64, error)
 }
 
 type ReadOnlyConsolidations interface {
