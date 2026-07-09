@@ -135,10 +135,21 @@ func (c *Client) markSSZRejected() {
 	}
 }
 
-// isSSZRejection reports whether err is an SSZ content-negotiation rejection:
+// httpError carries the response status code alongside a package sentinel, so callers branch
+// on the status (spec-defined) rather than on the error body, which may not be JSON.
+type httpError struct {
+	status  int
+	wrapped error
+}
+
+func (e *httpError) Error() string { return e.wrapped.Error() }
+func (e *httpError) Unwrap() error { return e.wrapped }
+
+// isSSZRejection reports whether err is an SSZ content-negotiation rejection by the builder:
 // 415 Unsupported Media Type (request body) or 406 Not Acceptable (Accept header).
 func isSSZRejection(err error) bool {
-	return errors.Is(err, ErrUnsupportedMediaType) || errors.Is(err, ErrNotAcceptable)
+	var e *httpError
+	return errors.As(err, &e) && (e.status == http.StatusUnsupportedMediaType || e.status == http.StatusNotAcceptable)
 }
 
 // sszFallback runs do in the client's current SSZ mode; on an SSZ rejection it latches SSZ
@@ -765,8 +776,8 @@ func (c *Client) Status(ctx context.Context) error {
 	return err
 }
 
-// errorMessageOrBody returns the JSON "message" field if the body parses, else the raw text.
-// Builder error bodies aren't always JSON (Commit Boost sends plain text), so parsing must not drop the sentinel.
+// errorMessageOrBody extracts the message from the spec's JSON ErrorMessage body, falling
+// back to the raw text when a builder returns a non-JSON error (e.g. Commit Boost).
 func errorMessageOrBody(bodyBytes []byte) string {
 	var errMessage ErrorMessage
 	if err := json.Unmarshal(bodyBytes, &errMessage); err == nil && errMessage.Message != "" {
@@ -784,30 +795,28 @@ func unexpectedStatusErr(response *http.Response, expected []int) error {
 		body = "response body:\n" + string(bodyBytes)
 	}
 	msg := fmt.Sprintf("expected=%v, got=%d, url=%s, body=%s", expected, response.StatusCode, response.Request.URL, body)
+
+	var sentinel error
 	switch response.StatusCode {
-	case http.StatusUnsupportedMediaType:
-		log.WithError(ErrUnsupportedMediaType).Debug(msg)
-		return errors.Wrap(ErrUnsupportedMediaType, errorMessageOrBody(bodyBytes))
-	case http.StatusNotAcceptable:
-		log.WithError(ErrNotAcceptable).Debug(msg)
-		return errors.Wrap(ErrNotAcceptable, errorMessageOrBody(bodyBytes))
 	case http.StatusNoContent:
 		log.WithError(ErrNoContent).Debug(msg)
 		return ErrNoContent
+	case http.StatusUnsupportedMediaType:
+		sentinel = ErrUnsupportedMediaType
+	case http.StatusNotAcceptable:
+		sentinel = ErrNotAcceptable
 	case http.StatusBadRequest:
-		log.WithError(ErrBadRequest).Debug(msg)
-		return errors.Wrap(ErrBadRequest, errorMessageOrBody(bodyBytes))
+		sentinel = ErrBadRequest
 	case http.StatusNotFound:
-		log.WithError(ErrNotFound).Debug(msg)
-		return errors.Wrap(ErrNotFound, errorMessageOrBody(bodyBytes))
+		sentinel = ErrNotFound
 	case http.StatusInternalServerError:
-		log.WithError(ErrNotOK).Debug(msg)
-		return errors.Wrap(ErrNotOK, errorMessageOrBody(bodyBytes))
+		sentinel = ErrNotOK
 	case http.StatusBadGateway:
-		log.WithError(ErrBadGateway).Debug(msg)
-		return errors.Wrap(ErrBadGateway, errorMessageOrBody(bodyBytes))
+		sentinel = ErrBadGateway
 	default:
 		log.WithError(ErrNotOK).Debug(msg)
 		return errors.Wrap(ErrNotOK, fmt.Sprintf("unsupported error code: %d", response.StatusCode))
 	}
+	log.WithError(sentinel).Debug(msg)
+	return &httpError{status: response.StatusCode, wrapped: errors.Wrap(sentinel, errorMessageOrBody(bodyBytes))}
 }
