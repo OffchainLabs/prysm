@@ -63,6 +63,7 @@ type ChainService struct {
 	blockNotifier               blockfeed.Notifier
 	opNotifier                  opfeed.Notifier
 	Root                        []byte
+	Full                        bool
 	SyncCommitteeDomain         []byte
 	SyncSelectionProofDomain    []byte
 	SyncContributionProofDomain []byte
@@ -393,6 +394,11 @@ func (s *ChainService) HeadRoot(_ context.Context) ([]byte, error) {
 		return s.Root, nil
 	}
 	return make([]byte, 32), nil
+}
+
+// HeadRootAndFull mocks HeadRootAndFull method in chain service.
+func (s *ChainService) HeadRootAndFull() ([32]byte, bool) {
+	return bytesutil.ToBytes32(s.Root), s.Full
 }
 
 // HeadBlock mocks HeadBlock method in chain service.
