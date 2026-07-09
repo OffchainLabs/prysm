@@ -520,3 +520,14 @@ func TestGetExecutionPayloadEnvelope(t *testing.T) {
 		})
 	}
 }
+
+func TestGrpcValidatorClient_ConnectionGeneration(t *testing.T) {
+	conn, err := validatorHelpers.NewNodeConnection(
+		validatorHelpers.WithGRPCProvider(&grpcutil.MockGrpcProvider{MockHosts: []string{"mock:4000"}, ConnCounter: 7}),
+	)
+	require.NoError(t, err)
+	c := &grpcValidatorClient{
+		grpcClientManager: newGrpcClientManager(conn, func(_ grpc.ClientConnInterface) eth.BeaconNodeValidatorClient { return nil }),
+	}
+	require.Equal(t, uint64(7), c.ConnectionGeneration())
+}

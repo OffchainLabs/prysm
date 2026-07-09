@@ -96,9 +96,10 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyExecutionPaymentZero(); err != nil {
 		return pubsub.ValidationReject, err
 	}
-	// [REJECT] bid.fee_recipient matches the fee_recipient from the proposer's SignedProposerPreferences associated with bid.slot.
+	// [IGNORE] bid.fee_recipient matches the fee_recipient from the proposer's SignedProposerPreferences associated with bid.slot.
+	// Preferences are not checked for equivocations, so a mismatch is not provably the builder's fault.
 	if err := v.VerifyFeeRecipientMatches(pref.FeeRecipient[:]); err != nil {
-		return pubsub.ValidationReject, err
+		return pubsub.ValidationIgnore, err
 	}
 	// [REJECT] len(bid.blob_kzg_commitments) <= get_blob_parameters(compute_epoch_at_slot(bid.slot)).max_blobs_per_block.
 	if err := v.VerifyBlobKzgCommitmentsLimit(); err != nil {

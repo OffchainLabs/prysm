@@ -240,3 +240,37 @@ func TestMultiAddressBuilderWithID(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildOptions_InvalidLocalIPReturnsError(t *testing.T) {
+	p2pCfg := &Config{
+		UDPPort:       2000,
+		TCPPort:       3000,
+		QUICPort:      3000,
+		LocalIP:       "not-an-ip",
+		StateNotifier: &mock.MockStateNotifier{},
+	}
+	svc := &Service{cfg: p2pCfg}
+	var err error
+	svc.privKey, err = privKey(svc.cfg)
+	require.NoError(t, err)
+
+	_, err = svc.buildOptions(network.IPAddr(), svc.privKey)
+	require.ErrorContains(t, "invalid local ip", err)
+}
+
+func TestBuildOptions_InvalidHostAddressReturnsError(t *testing.T) {
+	p2pCfg := &Config{
+		UDPPort:       2000,
+		TCPPort:       3000,
+		QUICPort:      3000,
+		HostAddress:   "not-an-ip",
+		StateNotifier: &mock.MockStateNotifier{},
+	}
+	svc := &Service{cfg: p2pCfg}
+	var err error
+	svc.privKey, err = privKey(svc.cfg)
+	require.NoError(t, err)
+
+	_, err = svc.buildOptions(network.IPAddr(), svc.privKey)
+	require.ErrorContains(t, "invalid host address", err)
+}
