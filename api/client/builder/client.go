@@ -114,32 +114,51 @@ type BuilderClient interface {
 
 // Client provides a collection of helper methods for calling Builder API endpoints.
 type Client struct {
-	hc             *http.Client
-	baseURL        *url.URL
-	obvs           []observer
-	sszEnabled     bool
-	sszUnsupported atomic.Bool
+	hc          *http.Client
+	baseURL     *url.URL
+	obvs        []observer
+	sszEnabled  bool
+	sszRejected atomic.Bool
 }
 
 // useSSZ reports whether requests should be SSZ-encoded: SSZ is configured and the remote
 // builder has not previously rejected SSZ requests.
 func (c *Client) useSSZ() bool {
-	return c.sszEnabled && !c.sszUnsupported.Load()
+	return c.sszEnabled && !c.sszRejected.Load()
 }
 
-// markSSZUnsupported records that the remote builder does not support SSZ so subsequent
+// markSSZRejected records that the remote builder does not support SSZ so subsequent
 // requests use JSON. It logs once, on the first transition.
-func (c *Client) markSSZUnsupported() {
-	if c.sszUnsupported.CompareAndSwap(false, true) {
+func (c *Client) markSSZRejected() {
+	if c.sszRejected.CompareAndSwap(false, true) {
 		log.WithField("url", c.NodeURL()).Warn("Remote builder rejected SSZ request; falling back to JSON encoding for subsequent requests")
 	}
 }
 
-// isSSZRejection reports whether err indicates the remote builder rejected the request
-// because of SSZ content negotiation: 415 Unsupported Media Type for an SSZ request body,
-// or 406 Not Acceptable for an SSZ Accept header.
+// isSSZRejection reports whether err is an SSZ content-negotiation rejection:
+// 415 Unsupported Media Type (request body) or 406 Not Acceptable (Accept header).
 func isSSZRejection(err error) bool {
 	return errors.Is(err, ErrUnsupportedMediaType) || errors.Is(err, ErrNotAcceptable)
+}
+
+// sszFallback runs do in the client's current SSZ mode; on an SSZ rejection it latches SSZ
+// off and retries once with JSON. Error-only methods use sszFallbackErr.
+func sszFallback[T any](c *Client, do func(ssz bool) (T, error)) (T, error) {
+	ssz := c.useSSZ()
+	res, err := do(ssz)
+	if err != nil && ssz && isSSZRejection(err) {
+		c.markSSZRejected()
+		res, err = do(false)
+	}
+	return res, err
+}
+
+// sszFallbackErr is sszFallback for methods that return only an error.
+func (c *Client) sszFallbackErr(do func(ssz bool) error) error {
+	_, err := sszFallback(c, func(ssz bool) (struct{}, error) {
+		return struct{}{}, do(ssz)
+	})
+	return err
 }
 
 // NewClient constructs a new client with the provided options (ex WithTimeout).
@@ -260,13 +279,9 @@ func execHeaderPath(slot primitives.Slot, parentHash [32]byte, pubkey [48]byte) 
 // GetHeader is used by a proposing validator to request an execution payload header from the Builder node.
 // If the builder rejects the SSZ request, it retries once using JSON.
 func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubkey [48]byte) (SignedBid, error) {
-	ssz := c.useSSZ()
-	bid, err := c.getHeader(ctx, slot, parentHash, pubkey, ssz)
-	if err != nil && ssz && isSSZRejection(err) {
-		c.markSSZUnsupported()
-		bid, err = c.getHeader(ctx, slot, parentHash, pubkey, false)
-	}
-	return bid, err
+	return sszFallback(c, func(ssz bool) (SignedBid, error) {
+		return c.getHeader(ctx, slot, parentHash, pubkey, ssz)
+	})
 }
 
 func (c *Client) getHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubkey [48]byte, ssz bool) (SignedBid, error) {
@@ -412,9 +427,8 @@ func (c *Client) parseHeaderBellatrix(data []byte, ssz bool) (SignedBid, error) 
 	return WrappedSignedBuilderBid(p)
 }
 
-// RegisterValidator encodes the SignedValidatorRegistrationV1 messages (SSZ or, hex-encoded, JSON)
-// and posts to the builder validator registration endpoint. If the builder rejects the SSZ request,
-// it retries once using JSON.
+// RegisterValidator encodes the registrations (SSZ, or hex-encoded JSON) and posts them to the
+// builder. If the builder rejects SSZ, it retries once using JSON.
 func (c *Client) RegisterValidator(ctx context.Context, svr []*ethpb.SignedValidatorRegistrationV1) error {
 	ctx, span := trace.StartSpan(ctx, "builder.client.RegisterValidator")
 	defer span.End()
@@ -426,12 +440,9 @@ func (c *Client) RegisterValidator(ctx context.Context, svr []*ethpb.SignedValid
 		return err
 	}
 
-	ssz := c.useSSZ()
-	err := c.registerValidator(ctx, svr, ssz)
-	if err != nil && ssz && isSSZRejection(err) {
-		c.markSSZUnsupported()
-		err = c.registerValidator(ctx, svr, false)
-	}
+	err := c.sszFallbackErr(func(ssz bool) error {
+		return c.registerValidator(ctx, svr, ssz)
+	})
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return err
@@ -517,17 +528,18 @@ func getVersionsBlockToPayload(blockVersion int) (int, error) {
 	return 0, errors.Wrapf(errVersionUnsupported, "block version %d", blockVersion)
 }
 
-// SubmitBlindedBlock calls the builder API endpoint that binds the validator to the builder and submits the block.
-// The response is the full execution payload used to create the blinded block. If the builder rejects the SSZ
-// request, it retries once using JSON.
+// SubmitBlindedBlock submits the blinded block and returns the unblinded execution payload.
+// If the builder rejects SSZ, it retries once using JSON.
 func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error) {
-	ssz := c.useSSZ()
-	ed, blobs, err := c.submitBlindedBlock(ctx, sb, ssz)
-	if err != nil && ssz && isSSZRejection(err) {
-		c.markSSZUnsupported()
-		ed, blobs, err = c.submitBlindedBlock(ctx, sb, false)
+	type payload struct {
+		ed    interfaces.ExecutionData
+		blobs v1.BlobsBundler
 	}
-	return ed, blobs, err
+	p, err := sszFallback(c, func(ssz bool) (payload, error) {
+		ed, blobs, err := c.submitBlindedBlock(ctx, sb, ssz)
+		return payload{ed, blobs}, err
+	})
+	return p.ed, p.blobs, err
 }
 
 func (c *Client) submitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock, ssz bool) (interfaces.ExecutionData, v1.BlobsBundler, error) {
@@ -568,17 +580,12 @@ func (c *Client) submitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlyS
 	return ed, blobs, nil
 }
 
-// SubmitBlindedBlockPostFulu calls the builder API endpoint post-Fulu where relays only return status codes.
-// This method is used after the Fulu fork when MEV-boost relays no longer return execution payloads. If the
-// builder rejects the SSZ request, it retries once using JSON.
+// SubmitBlindedBlockPostFulu submits the blinded block post-Fulu, where relays return only a status
+// code. If the builder rejects SSZ, it retries once using JSON.
 func (c *Client) SubmitBlindedBlockPostFulu(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) error {
-	ssz := c.useSSZ()
-	err := c.submitBlindedBlockPostFulu(ctx, sb, ssz)
-	if err != nil && ssz && isSSZRejection(err) {
-		c.markSSZUnsupported()
-		err = c.submitBlindedBlockPostFulu(ctx, sb, false)
-	}
-	return err
+	return c.sszFallbackErr(func(ssz bool) error {
+		return c.submitBlindedBlockPostFulu(ctx, sb, ssz)
+	})
 }
 
 func (c *Client) submitBlindedBlockPostFulu(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock, ssz bool) error {
@@ -758,9 +765,18 @@ func (c *Client) Status(ctx context.Context) error {
 	return err
 }
 
+// errorMessageOrBody returns the JSON "message" field if the body parses, else the raw text.
+// Builder error bodies aren't always JSON (Commit Boost sends plain text), so parsing must not drop the sentinel.
+func errorMessageOrBody(bodyBytes []byte) string {
+	var errMessage ErrorMessage
+	if err := json.Unmarshal(bodyBytes, &errMessage); err == nil && errMessage.Message != "" {
+		return errMessage.Message
+	}
+	return strings.TrimSpace(string(bodyBytes))
+}
+
 func unexpectedStatusErr(response *http.Response, expected []int) error {
 	bodyBytes, err := io.ReadAll(io.LimitReader(response.Body, client.MaxErrBodySize))
-	var errMessage ErrorMessage
 	var body string
 	if err != nil {
 		body = "(Unable to read response body.)"
@@ -771,43 +787,25 @@ func unexpectedStatusErr(response *http.Response, expected []int) error {
 	switch response.StatusCode {
 	case http.StatusUnsupportedMediaType:
 		log.WithError(ErrUnsupportedMediaType).Debug(msg)
-		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
-			return errors.Wrap(jsonErr, "unable to read response body")
-		}
-		return errors.Wrap(ErrUnsupportedMediaType, errMessage.Message)
+		return errors.Wrap(ErrUnsupportedMediaType, errorMessageOrBody(bodyBytes))
 	case http.StatusNotAcceptable:
 		log.WithError(ErrNotAcceptable).Debug(msg)
-		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
-			return errors.Wrap(jsonErr, "unable to read response body")
-		}
-		return errors.Wrap(ErrNotAcceptable, errMessage.Message)
+		return errors.Wrap(ErrNotAcceptable, errorMessageOrBody(bodyBytes))
 	case http.StatusNoContent:
 		log.WithError(ErrNoContent).Debug(msg)
 		return ErrNoContent
 	case http.StatusBadRequest:
 		log.WithError(ErrBadRequest).Debug(msg)
-		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
-			return errors.Wrap(jsonErr, "unable to read response body")
-		}
-		return errors.Wrap(ErrBadRequest, errMessage.Message)
+		return errors.Wrap(ErrBadRequest, errorMessageOrBody(bodyBytes))
 	case http.StatusNotFound:
 		log.WithError(ErrNotFound).Debug(msg)
-		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
-			return errors.Wrap(jsonErr, "unable to read response body")
-		}
-		return errors.Wrap(ErrNotFound, errMessage.Message)
+		return errors.Wrap(ErrNotFound, errorMessageOrBody(bodyBytes))
 	case http.StatusInternalServerError:
 		log.WithError(ErrNotOK).Debug(msg)
-		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
-			return errors.Wrap(jsonErr, "unable to read response body")
-		}
-		return errors.Wrap(ErrNotOK, errMessage.Message)
+		return errors.Wrap(ErrNotOK, errorMessageOrBody(bodyBytes))
 	case http.StatusBadGateway:
 		log.WithError(ErrBadGateway).Debug(msg)
-		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
-			return errors.Wrap(jsonErr, "unable to read response body")
-		}
-		return errors.Wrap(ErrBadGateway, errMessage.Message)
+		return errors.Wrap(ErrBadGateway, errorMessageOrBody(bodyBytes))
 	default:
 		log.WithError(ErrNotOK).Debug(msg)
 		return errors.Wrap(ErrNotOK, fmt.Sprintf("unsupported error code: %d", response.StatusCode))

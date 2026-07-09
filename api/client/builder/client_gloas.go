@@ -44,13 +44,9 @@ func (c *Client) GetExecutionPayloadBid(
 	proposerPubkey [48]byte,
 	auth *ethpb.SignedRequestAuthV1,
 ) (*ethpb.SignedExecutionPayloadBid, error) {
-	ssz := c.useSSZ()
-	bid, err := c.getExecutionPayloadBid(ctx, slot, parentHash, parentRoot, proposerPubkey, auth, ssz)
-	if err != nil && ssz && isSSZRejection(err) {
-		c.markSSZUnsupported()
-		bid, err = c.getExecutionPayloadBid(ctx, slot, parentHash, parentRoot, proposerPubkey, auth, false)
-	}
-	return bid, err
+	return sszFallback(c, func(ssz bool) (*ethpb.SignedExecutionPayloadBid, error) {
+		return c.getExecutionPayloadBid(ctx, slot, parentHash, parentRoot, proposerPubkey, auth, ssz)
+	})
 }
 
 func (c *Client) getExecutionPayloadBid(
@@ -167,13 +163,9 @@ func (c *Client) SubmitBuilderPreferences(ctx context.Context, validatorPubkey [
 	if req == nil {
 		return errors.Wrap(errMalformedRequest, "nil builder preferences request")
 	}
-	ssz := c.useSSZ()
-	err := c.submitBuilderPreferences(ctx, validatorPubkey, req, ssz)
-	if err != nil && ssz && isSSZRejection(err) {
-		c.markSSZUnsupported()
-		err = c.submitBuilderPreferences(ctx, validatorPubkey, req, false)
-	}
-	return err
+	return c.sszFallbackErr(func(ssz bool) error {
+		return c.submitBuilderPreferences(ctx, validatorPubkey, req, ssz)
+	})
 }
 
 func (c *Client) submitBuilderPreferences(ctx context.Context, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1, ssz bool) error {

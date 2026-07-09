@@ -119,11 +119,10 @@ func TestClient_GetExecutionPayloadBid(t *testing.T) {
 				}
 				reqCount++
 				if reqCount == 1 {
-					// The builder cannot produce an SSZ response; reject the octet-stream Accept header.
+					// The builder cannot produce an SSZ response; reject the octet-stream Accept
+					// header with a PLAIN-TEXT body (matching real builders, not a JSON error).
 					require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
-					msg, err := json.Marshal(ErrorMessage{Code: http.StatusNotAcceptable, Message: "only application/json"})
-					require.NoError(t, err)
-					return &http.Response{StatusCode: http.StatusNotAcceptable, Body: io.NopCloser(bytes.NewReader(msg)), Request: r}, nil
+					return &http.Response{StatusCode: http.StatusNotAcceptable, Body: io.NopCloser(bytes.NewBufferString("only " + api.JsonMediaType)), Request: r}, nil
 				}
 				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
 				h := http.Header{}
@@ -136,7 +135,7 @@ func TestClient_GetExecutionPayloadBid(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, got)
 		require.Equal(t, 2, reqCount)
-		require.Equal(t, true, c.sszUnsupported.Load())
+		require.Equal(t, true, c.sszRejected.Load())
 		require.Equal(t, want.Message.Value, got.Message.Value)
 	})
 }
@@ -159,11 +158,10 @@ func TestClient_SubmitBuilderPreferences_SSZFallback(t *testing.T) {
 			require.NoError(t, r.Body.Close())
 			reqCount++
 			if reqCount == 1 {
-				// The builder does not support SSZ; reject the octet-stream body.
+				// The builder does not support SSZ; reject the octet-stream body with a
+				// PLAIN-TEXT body, matching real Commit Boost (not a JSON error object).
 				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Content-Type"))
-				msg, err := json.Marshal(ErrorMessage{Code: http.StatusUnsupportedMediaType, Message: "expected application/json"})
-				require.NoError(t, err)
-				return &http.Response{StatusCode: http.StatusUnsupportedMediaType, Body: io.NopCloser(bytes.NewReader(msg)), Request: r}, nil
+				return &http.Response{StatusCode: http.StatusUnsupportedMediaType, Body: io.NopCloser(bytes.NewBufferString("Expected request with `Content-Type: " + api.JsonMediaType + "`")), Request: r}, nil
 			}
 			require.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
 			var decoded struct {
@@ -179,5 +177,5 @@ func TestClient_SubmitBuilderPreferences_SSZFallback(t *testing.T) {
 	c := &Client{hc: hc, baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"}, sszEnabled: true}
 	require.NoError(t, c.SubmitBuilderPreferences(ctx, pubkey, req))
 	require.Equal(t, 2, reqCount)
-	require.Equal(t, true, c.sszUnsupported.Load())
+	require.Equal(t, true, c.sszRejected.Load())
 }

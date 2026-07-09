@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -1776,6 +1777,15 @@ func TestErrorMessage_unexpectedStatusErr(t *testing.T) {
 			}(),
 			wantMessage: "did not receive 200 response from API",
 		},
+		{
+			name: "415 plain-text body",
+			args: &http.Response{
+				Request:    mockRequest,
+				StatusCode: http.StatusUnsupportedMediaType,
+				Body:       io.NopCloser(bytes.NewReader([]byte("Expected request with `Content-Type: " + api.JsonMediaType + "`"))),
+			},
+			wantMessage: "unsupported",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1784,6 +1794,29 @@ func TestErrorMessage_unexpectedStatusErr(t *testing.T) {
 				require.ErrorContains(t, tt.wantMessage, err)
 			}
 		})
+	}
+}
+
+// A plain-text 415/406 body must still errors.Is-match the media-type sentinels,
+// otherwise the builder SSZ->JSON fallback never triggers.
+func TestUnexpectedStatusErr_SentinelSurvivesNonJSONBody(t *testing.T) {
+	mockRequest := &http.Request{URL: &url.URL{Path: "example.com"}}
+	cases := []struct {
+		status   int
+		sentinel error
+	}{
+		{http.StatusUnsupportedMediaType, ErrUnsupportedMediaType},
+		{http.StatusNotAcceptable, ErrNotAcceptable},
+	}
+	for _, c := range cases {
+		resp := &http.Response{
+			Request:    mockRequest,
+			StatusCode: c.status,
+			Body:       io.NopCloser(bytes.NewReader([]byte("plain text, not json"))),
+		}
+		err := unexpectedStatusErr(resp, []int{http.StatusOK})
+		require.ErrorIs(t, err, c.sentinel)
+		require.Equal(t, true, isSSZRejection(err))
 	}
 }
 
