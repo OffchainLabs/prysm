@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	builderAPI "github.com/OffchainLabs/prysm/v7/api/client/builder"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -268,7 +269,21 @@ func (*Builder) isBuilderCall(req *http.Request) bool {
 	return strings.Contains(req.URL.Path, "/eth/v1/builder/")
 }
 
+// sszRequested returns true when the client asks for an SSZ response.
+func sszRequested(req *http.Request) bool {
+	return strings.Contains(req.Header.Get("Accept"), api.OctetStreamMediaType)
+}
+
+// sszSubmitted returns true when the client sent an SSZ request body.
+func sszSubmitted(req *http.Request) bool {
+	return strings.Contains(req.Header.Get("Content-Type"), api.OctetStreamMediaType)
+}
+
 func (p *Builder) registerValidators(w http.ResponseWriter, req *http.Request) {
+	if sszSubmitted(req) {
+		p.registerValidatorsSSZ(w, req)
+		return
+	}
 	var registrations []structs.SignedValidatorRegistration
 	if err := json.NewDecoder(req.Body).Decode(&registrations); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
@@ -286,6 +301,56 @@ func (p *Builder) registerValidators(w http.ResponseWriter, req *http.Request) {
 	}
 	// TODO: Verify Signatures from validators
 	w.WriteHeader(http.StatusOK)
+}
+
+// registerValidatorsSSZ decodes a concatenated list of fixed-size
+// SignedValidatorRegistrationV1 SSZ values, matching the request body produced
+// by the beacon node's builder client when SSZ is enabled.
+func (p *Builder) registerValidatorsSSZ(w http.ResponseWriter, req *http.Request) {
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		http.Error(w, "unable to read request body", http.StatusBadRequest)
+		return
+	}
+	size := (&eth.SignedValidatorRegistrationV1{}).SizeSSZ()
+	if len(body) == 0 || len(body)%size != 0 {
+		http.Error(w, "invalid ssz registration list", http.StatusBadRequest)
+		return
+	}
+	for i := 0; i < len(body); i += size {
+		reg := &eth.SignedValidatorRegistrationV1{}
+		if err := reg.UnmarshalSSZ(body[i : i+size]); err != nil {
+			http.Error(w, "invalid ssz registration", http.StatusBadRequest)
+			return
+		}
+		p.valLock.Lock()
+		p.validatorMap[hexutil.Encode(reg.Message.Pubkey)] = reg.Message
+		p.valLock.Unlock()
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+type sszMarshaler interface {
+	MarshalSSZ() ([]byte, error)
+}
+
+// writeHeaderResponse writes the signed bid as SSZ when the request asks for
+// octet-stream and as JSON otherwise. The consensus version header is always
+// set; the beacon's SSZ builder client requires it to select the bid type.
+func (p *Builder) writeHeaderResponse(w http.ResponseWriter, req *http.Request, v int, jsonResp any, signedBid sszMarshaler) error {
+	w.Header().Set(api.VersionHeader, version.String(v))
+	if sszRequested(req) {
+		b, err := signedBid.MarshalSSZ()
+		if err != nil {
+			return err
+		}
+		w.Header().Set("Content-Type", api.OctetStreamMediaType)
+		w.WriteHeader(http.StatusOK)
+		_, err = w.Write(b)
+		return err
+	}
+	w.WriteHeader(http.StatusOK)
+	return json.NewEncoder(w).Encode(jsonResp)
 }
 
 func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) {
@@ -322,17 +387,17 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 	ax := types.Slot(slot)
 	currEpoch := types.Epoch(ax / params.BeaconConfig().SlotsPerEpoch)
 	if currEpoch >= params.BeaconConfig().ElectraForkEpoch {
-		p.handleHeaderRequestElectra(w)
+		p.handleHeaderRequestElectra(w, req)
 		return
 	}
 
 	if currEpoch >= params.BeaconConfig().DenebForkEpoch {
-		p.handleHeaderRequestDeneb(w)
+		p.handleHeaderRequestDeneb(w, req)
 		return
 	}
 
 	if currEpoch >= params.BeaconConfig().CapellaForkEpoch {
-		p.handleHeaderRequestCapella(w)
+		p.handleHeaderRequestCapella(w, req)
 		return
 	}
 
@@ -405,9 +470,8 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 			Message:   bid,
 		},
 	}
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(hdrResp)
-	if err != nil {
+	signedBid := &eth.SignedBuilderBid{Message: sszBid, Signature: sig.Marshal()}
+	if err := p.writeHeaderResponse(w, req, version.Bellatrix, hdrResp, signedBid); err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -416,7 +480,7 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 	p.currPayload = wObj
 }
 
-func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
+func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter, req *http.Request) {
 	b, err := p.retrievePendingBlockCapella()
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not retrieve pending block")
@@ -487,9 +551,8 @@ func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
 			Message:   bid,
 		},
 	}
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(hdrResp)
-	if err != nil {
+	signedBid := &eth.SignedBuilderBidCapella{Message: sszBid, Signature: sig.Marshal()}
+	if err := p.writeHeaderResponse(w, req, version.Capella, hdrResp, signedBid); err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -498,7 +561,7 @@ func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
 	p.currPayload = wObj
 }
 
-func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
+func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter, req *http.Request) {
 	b, err := p.retrievePendingBlockDeneb()
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not retrieve pending block")
@@ -577,9 +640,8 @@ func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
 			Message:   bid,
 		},
 	}
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(hdrResp)
-	if err != nil {
+	signedBid := &eth.SignedBuilderBidDeneb{Message: sszBid, Signature: sig.Marshal()}
+	if err := p.writeHeaderResponse(w, req, version.Deneb, hdrResp, signedBid); err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -589,7 +651,7 @@ func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
 	p.blobBundle = b.BlobsBundle
 }
 
-func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
+func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter, req *http.Request) {
 	b, err := p.retrievePendingBlockElectra()
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not retrieve pending block")
@@ -679,9 +741,8 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
 			Message:   bid,
 		},
 	}
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(hdrResp)
-	if err != nil {
+	signedBid := &eth.SignedBuilderBidElectra{Message: sszBid, Signature: sig.Marshal()}
+	if err := p.writeHeaderResponse(w, req, version.Electra, hdrResp, signedBid); err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -692,6 +753,10 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
 }
 
 func (p *Builder) handleBlindedBlock(w http.ResponseWriter, req *http.Request) {
+	if sszSubmitted(req) {
+		p.handleBlindedBlockSSZ(w, req)
+		return
+	}
 	// Decode blinded block based on the current fork version.
 	// The beacon node sends JSON using api/server/structs types.
 	var err error
@@ -730,6 +795,66 @@ func (p *Builder) handleBlindedBlock(w http.ResponseWriter, req *http.Request) {
 		p.cfg.logger.WithError(err).Error("Could not encode full payload response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+}
+
+// handleBlindedBlockSSZ mirrors handleBlindedBlock for SSZ requests: the
+// blinded block is decoded only for validation logging, and the cached payload
+// is returned SSZ-encoded with the consensus version header set, matching what
+// the beacon's SSZ builder client expects.
+func (p *Builder) handleBlindedBlockSSZ(w http.ResponseWriter, req *http.Request) {
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		http.Error(w, "unable to read request body", http.StatusBadRequest)
+		return
+	}
+	switch p.currVersion {
+	case version.Electra:
+		sb := &eth.SignedBlindedBeaconBlockElectra{}
+		err = sb.UnmarshalSSZ(body)
+	case version.Deneb:
+		sb := &eth.SignedBlindedBeaconBlockDeneb{}
+		err = sb.UnmarshalSSZ(body)
+	case version.Capella:
+		sb := &eth.SignedBlindedBeaconBlockCapella{}
+		err = sb.UnmarshalSSZ(body)
+	default:
+		sb := &eth.SignedBlindedBeaconBlockBellatrix{}
+		err = sb.UnmarshalSSZ(body)
+	}
+	if err != nil {
+		p.cfg.logger.WithError(err).WithField("version", version.String(p.currVersion)).Error("Could not decode blinded block")
+	}
+	if p.currPayload == nil {
+		p.cfg.logger.Error("No payload is cached")
+		http.Error(w, "payload not found", http.StatusInternalServerError)
+		return
+	}
+
+	var data sszMarshaler
+	switch pb := p.currPayload.Proto().(type) {
+	case *v1.ExecutionPayloadDeneb:
+		data = &v1.ExecutionPayloadDenebAndBlobsBundle{Payload: pb, BlobsBundle: p.blobBundle}
+	case *v1.ExecutionPayloadCapella:
+		data = pb
+	case *v1.ExecutionPayload:
+		data = pb
+	default:
+		p.cfg.logger.Error("Unsupported payload type for SSZ response")
+		http.Error(w, errInvalidTypeConversion.Error(), http.StatusInternalServerError)
+		return
+	}
+	encoded, err := data.MarshalSSZ()
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not encode full payload response")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(api.VersionHeader, version.String(p.currVersion))
+	w.Header().Set("Content-Type", api.OctetStreamMediaType)
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(encoded); err != nil {
+		p.cfg.logger.WithError(err).Error("Could not write full payload response")
 	}
 }
 
