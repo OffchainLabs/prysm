@@ -41,7 +41,8 @@ func (s *Service) queuePendingPayloadAttestation(ctx context.Context, v verifica
 	}
 	if err := v.VerifySignature(st); err != nil {
 		s.pendingPayloadAttestationLock.Unlock()
-		return pubsub.ValidationReject, err
+		// The attested block is unknown, so the head state used here may be on a different branch, do not penalize the peer.
+		return pubsub.ValidationIgnore, err
 	}
 	s.pendingPayloadAttestations[root] = append(inner, att)
 	s.pendingPayloadAttestationLock.Unlock()

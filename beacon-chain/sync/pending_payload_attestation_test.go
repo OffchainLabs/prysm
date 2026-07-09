@@ -10,10 +10,10 @@ import (
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	payloadatt "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -33,7 +33,7 @@ func pendingPayloadAtt(t *testing.T, root []byte, validatorIndex primitives.Vali
 			BeaconBlockRoot: bytesutil.PadTo(root, 32),
 			Slot:            slot,
 		},
-		Signature: make([]byte, fieldparams.BLSSignatureLength),
+		Signature: bls.NewAggregateSignature().Marshal(),
 	}
 	pa, err := payloadatt.NewReadOnly(att)
 	require.NoError(t, err)
@@ -98,14 +98,14 @@ func TestQueuePendingPayloadAttestation_RootCap(t *testing.T) {
 	require.Equal(t, false, ok)
 }
 
-func TestQueuePendingPayloadAttestation_RejectsBadSignature(t *testing.T) {
+func TestQueuePendingPayloadAttestation_IgnoresBadSignature(t *testing.T) {
 	s := queueTestService(t)
 	v := &verification.MockPayloadAttestation{ErrInvalidMessageSignature: errors.New("bad signature")}
 
 	att, _ := pendingPayloadAtt(t, []byte{'a'}, 1, 1)
 	res, err := s.queuePendingPayloadAttestation(t.Context(), v, att)
 	require.ErrorContains(t, "bad signature", err)
-	require.Equal(t, pubsub.ValidationReject, res)
+	require.Equal(t, pubsub.ValidationIgnore, res)
 	require.Equal(t, 0, len(s.pendingPayloadAttestations))
 }
 

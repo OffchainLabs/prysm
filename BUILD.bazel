@@ -238,7 +238,10 @@ nogo(
         "@org_golang_x_tools//go/analysis/passes/httpresponse:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/ifaceassert:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/inspect:go_default_library",
-        "@org_golang_x_tools//go/analysis/passes/loopclosure:go_default_library",
+        # loopclosure disabled: can generate false positives after Go 1.22.
+        # Note: Loop variables declared using := are now unique per iteration.
+        # See https://github.com/golang/go/issues/60078 for more details.
+        # "@org_golang_x_tools//go/analysis/passes/loopclosure:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/nilfunc:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/nilness:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/pkgfact:go_default_library",

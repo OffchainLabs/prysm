@@ -357,7 +357,7 @@ func (*grpcValidatorClient) AggregatedSyncSelections(context.Context, []iface.Sy
 
 // NewGrpcValidatorClient creates a new gRPC validator client that supports
 // dynamic connection switching via the NodeConnection's GrpcConnectionProvider.
-func NewGrpcValidatorClient(conn validatorHelpers.NodeConnection, opts ...iface.Option) iface.ValidatorClient {
+func NewGrpcValidatorClient(conn *validatorHelpers.NodeConnection, opts ...iface.Option) iface.ValidatorClient {
 	var cfg iface.ClientConfig
 	for _, opt := range opts {
 		opt(&cfg)
@@ -484,6 +484,16 @@ func (c *grpcValidatorClient) Host() string {
 func (c *grpcValidatorClient) EnsureReady(ctx context.Context) bool {
 	provider := c.grpcClientManager.conn.GetGrpcConnectionProvider()
 	return fallback.EnsureReady(ctx, provider, c.nodeClient)
+}
+
+// ConnectionGeneration returns a monotonic counter that advances on each
+// fallback host switch of this client's gRPC connection provider.
+func (c *grpcValidatorClient) ConnectionGeneration() uint64 {
+	provider := c.grpcClientManager.conn.GetGrpcConnectionProvider()
+	if provider == nil {
+		return 0
+	}
+	return provider.ConnectionCounter()
 }
 
 // Gloas Fork Methods

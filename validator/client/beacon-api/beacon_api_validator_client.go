@@ -30,7 +30,6 @@ type beaconApiValidatorClient struct {
 	handler                 rest.Handler
 	nodeClient              *beaconApiNodeClient
 	beaconBlockConverter    BeaconBlockConverter
-	prysmChainClient        iface.PrysmChainClient
 	isEventStreamRunning    bool
 	stateless               bool
 	envelopeCache           *cache.ExecutionPayloadEnvelopeCache
@@ -51,12 +50,8 @@ func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...i
 		handler:                 handler,
 		nodeClient:              nc,
 		beaconBlockConverter:    beaconApiBeaconBlockConverter{},
-		prysmChainClient: prysmChainClient{
-			nodeClient: nc,
-			handler:    handler,
-		},
-		isEventStreamRunning: false,
-		stateless:            cfg.Stateless,
+		isEventStreamRunning:    false,
+		stateless:               cfg.Stateless,
 	}
 	if cfg.Stateless {
 		c.envelopeCache = cache.NewExecutionPayloadEnvelopeCache()
@@ -445,6 +440,15 @@ func (c *beaconApiValidatorClient) Host() string {
 
 func (c *beaconApiValidatorClient) EnsureReady(ctx context.Context) bool {
 	return fallback.EnsureReady(ctx, c.restProvider, c.nodeClient)
+}
+
+// ConnectionGeneration returns a monotonic counter that advances on each
+// fallback host switch of this client's REST connection provider.
+func (c *beaconApiValidatorClient) ConnectionGeneration() uint64 {
+	if c.restProvider == nil {
+		return 0
+	}
+	return c.restProvider.ConnectionCounter()
 }
 
 // Gloas Fork Methods

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api"
@@ -77,4 +78,42 @@ func TestPostSSZ_JSONErrorBodyIsDecoded(t *testing.T) {
 	require.Equal(t, true, errors.As(err, &errJson), "expected DefaultJsonError, got %T", err)
 	require.Equal(t, http.StatusBadRequest, errJson.Code)
 	require.Equal(t, "bad request", errJson.Message)
+}
+
+func TestHandler_ConcurrentHostSwitch(t *testing.T) {
+	newServer := func() *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", api.JsonMediaType)
+			_, _ = w.Write([]byte(`{"data":"ok"}`))
+		}))
+	}
+	srv1 := newServer()
+	defer srv1.Close()
+	srv2 := newServer()
+	defer srv2.Close()
+
+	c := newHandler(http.Client{}, srv1.URL)
+	errs := make(chan error, 100)
+	var wg sync.WaitGroup
+	for range 10 {
+		wg.Go(func() {
+			for range 10 {
+				var resp struct {
+					Data string `json:"data"`
+				}
+				if err := c.Get(context.Background(), "/eth/v1/test", &resp); err != nil {
+					errs <- err
+				}
+			}
+		})
+	}
+	for range 100 {
+		c.SwitchHost(srv2.URL)
+		c.SwitchHost(srv1.URL)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		require.NoError(t, err)
+	}
 }
