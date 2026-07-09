@@ -689,7 +689,11 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		}, nil
 	case *operation.PayloadAttestationMessageReceivedData:
 		return func() io.Reader {
-			return jsonMarshalReader(eventName, structs.PayloadAttestationMessageFromConsensus(v.Message))
+			epoch := slots.ToEpoch(v.Message.Data.Slot)
+			return jsonMarshalReader(eventName, &structs.PayloadAttestationMessageEvent{
+				Version: version.String(params.GetNetworkScheduleEntry(epoch).VersionEnum),
+				Data:    structs.PayloadAttestationMessageFromConsensus(v.Message),
+			})
 		}, nil
 	case *operation.ProposerPreferencesReceivedData:
 		return func() io.Reader {
