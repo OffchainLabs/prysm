@@ -314,13 +314,8 @@ func (s *Service) Resync() error {
 
 	// Set it to false since we are syncing again.
 	s.synced.Store(false)
-	// Only re-advertise the node as synced if this attempt actually caught up.
-	// A resync attempt that failed, or ended with the node still multiple epochs
-	// behind the clock, must leave the node reporting "syncing", so that health
-	// checks and load balancers stop routing validator duties to a stale node.
-	// Regular sync keeps re-attempting via resyncIfBehind for as long as the node
-	// remains behind the same threshold (see caughtUpToClock).
-	defer func() { s.synced.Store(s.caughtUpToClock()) }()
+	// Re-advertise as synced only if the attempt caught up (see resyncCaughtUp).
+	defer func() { s.synced.Store(s.resyncCaughtUp()) }()
 
 	_, err = s.waitForMinimumPeers()
 	if err != nil {
@@ -334,18 +329,21 @@ func (s *Service) Resync() error {
 	return nil
 }
 
-// caughtUpToClock reports whether the chain head is within one epoch of the
-// wall clock. It intentionally mirrors the trigger threshold of the regular
-// sync service's resyncIfBehind (head epoch < previous epoch): whenever Resync
-// leaves the node unsynced, another resync attempt is guaranteed to be
-// scheduled, and whenever no further attempt would be scheduled, the node is
-// considered synced again.
-func (s *Service) caughtUpToClock() bool {
-	currentEpoch := slots.ToEpoch(s.clock.CurrentSlot())
-	if currentEpoch <= 1 {
+// resyncCaughtUp reports whether a resync attempt may re-advertise the node as
+// synced. It is the negation of resyncIfBehind's trigger, so a node left unsynced
+// is guaranteed another attempt. The head is measured against peers, not just the
+// wall clock: a node at the head of a network that has stopped producing blocks
+// for over an epoch must keep reporting healthy.
+func (s *Service) resyncCaughtUp() bool {
+	headEpoch := slots.ToEpoch(s.cfg.Chain.HeadSlot())
+	// Within one epoch of the wall clock: caught up, regardless of what peers claim.
+	if slots.ToEpoch(s.clock.CurrentSlot()) <= headEpoch+1 {
 		return true
 	}
-	return slots.ToEpoch(s.cfg.Chain.HeadSlot()) >= currentEpoch-1
+	// Behind the clock: behind the network only if a peer quorum claims a head
+	// more than one epoch ahead — the same gate resyncIfBehind uses.
+	highestEpoch, _ := s.cfg.P2P.Peers().BestNonFinalized(flags.Get().MinimumSyncPeers*2, headEpoch)
+	return highestEpoch <= headEpoch+1
 }
 
 func (s *Service) waitForMinimumPeers() ([]peer.ID, error) {

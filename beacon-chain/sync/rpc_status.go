@@ -128,11 +128,9 @@ func (s *Service) shouldReSync() bool {
 	if s.cfg.initialSync == nil {
 		return false
 	}
-	// Never resync while the initial sync itself is still running. Afterwards,
-	// allow resync attempts even while the node reports syncing: a failed resync
-	// deliberately leaves the node unsynced (see initial-sync Resync), and must
-	// still be retried. Resync attempts cannot overlap — resyncIfBehind runs its
-	// checks and the resync itself sequentially on a single goroutine.
+	// Never resync while the initial sync itself is still running. Afterwards keep
+	// retrying even while the node reports syncing: a failed resync deliberately
+	// leaves it unsynced (see initial-sync Resync).
 	select {
 	case <-s.initialSyncComplete:
 	default:

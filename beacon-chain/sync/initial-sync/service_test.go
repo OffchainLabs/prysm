@@ -466,11 +466,33 @@ func TestService_Resync(t *testing.T) {
 			ValidatorsRoot: [32]byte{},
 		}
 	}
+	// A node at the network head (slot 160, same as the connected peer) while the
+	// wall clock has moved several epochs past it: the network stopped producing
+	// blocks, but the node is not behind anyone.
+	stalledChainService := func() *mock.ChainService {
+		st, err := util.NewBeaconState()
+		require.NoError(t, err)
+		headSlot := primitives.Slot(160)
+		require.NoError(t, st.SetSlot(headSlot))
+		genesis := makeGenesisTime(320)
+		require.NoError(t, st.SetGenesisTime(genesis))
+		return &mock.ChainService{
+			State: st,
+			Root:  genesisRoot[:],
+			DB:    beaconDB,
+			FinalizedCheckPoint: &eth.Checkpoint{
+				Epoch: slots.ToEpoch(headSlot),
+			},
+			Genesis:        genesis,
+			ValidatorsRoot: [32]byte{},
+		}
+	}
 	tests := []struct {
 		name         string
 		wantedErr    string
 		assert       func(s *Service)
 		chainService func() *mock.ChainService
+		startHead    primitives.Slot
 		preSynced    bool
 		preCancel    bool
 		wantSynced   bool
@@ -490,11 +512,11 @@ func TestService_Resync(t *testing.T) {
 			wantSynced: true,
 		},
 		{
-			// Regression test: a previously synced node that has fallen behind starts a
-			// resync; if the attempt fails (here: service shutdown before syncing), the
-			// node must NOT re-advertise itself as synced — health checks and load
-			// balancers rely on Synced()/Status() to stop routing duties to a node that
-			// is still behind.
+			// Regression test: a previously synced node that has fallen behind its
+			// peers starts a resync; if the attempt fails (here: service shutdown
+			// before syncing), the node must NOT re-advertise itself as synced —
+			// health checks and load balancers rely on Synced()/Status() to stop
+			// routing duties to a node that is still behind.
 			name:         "failed resync attempt must not mark the node synced",
 			chainService: healthyChainService,
 			preSynced:    true,
@@ -503,6 +525,24 @@ func TestService_Resync(t *testing.T) {
 			wantSynced:   false,
 			assert: func(s *Service) {
 				assert.NotNil(t, s.Status(), "Status() must report an error while the node is still behind")
+			},
+		},
+		{
+			// Regression test: the network stopped producing blocks for over an epoch.
+			// The node is at the network head (no peer claims to be ahead) even though
+			// the wall clock has moved on, so a resync attempt — even a failed one —
+			// must re-advertise the node as synced. Otherwise every synced node would
+			// report unhealthy exactly when the network is too unhealthy to produce
+			// blocks, pulling validators out of rotation and preventing recovery.
+			name:         "node at head of stalled network stays synced after failed resync",
+			chainService: stalledChainService,
+			startHead:    160,
+			preSynced:    true,
+			preCancel:    true,
+			wantedErr:    "context canceled",
+			wantSynced:   true,
+			assert: func(s *Service) {
+				assert.NoError(t, s.Status(), "Status() must not report an error while at the network head")
 			},
 		},
 	}
@@ -535,7 +575,7 @@ func TestService_Resync(t *testing.T) {
 			if tt.preCancel {
 				cancel()
 			}
-			assert.Equal(t, primitives.Slot(0), s.cfg.Chain.HeadSlot())
+			assert.Equal(t, tt.startHead, s.cfg.Chain.HeadSlot())
 			err := s.Resync()
 			if tt.wantedErr != "" {
 				assert.ErrorContains(t, tt.wantedErr, err)
@@ -546,6 +586,82 @@ func TestService_Resync(t *testing.T) {
 			if tt.assert != nil {
 				tt.assert(s)
 			}
+		})
+	}
+}
+
+func TestService_resyncCaughtUp(t *testing.T) {
+	tests := []struct {
+		name      string
+		headSlot  primitives.Slot
+		clockSlot primitives.Slot
+		peerHeads []primitives.Slot
+		want      bool
+	}{
+		{
+			name:      "at wall clock head",
+			headSlot:  320,
+			clockSlot: 320,
+			peerHeads: []primitives.Slot{320},
+			want:      true,
+		},
+		{
+			// Peers claiming heads past the wall clock cannot force a synced node to
+			// advertise itself unhealthy.
+			name:      "at wall clock head, peers claim far ahead",
+			headSlot:  320,
+			clockSlot: 320,
+			peerHeads: []primitives.Slot{640, 640, 640},
+			want:      true,
+		},
+		{
+			// No blocks network-wide for several epochs: behind the clock, but no peer
+			// is ahead of us — we are at the network head.
+			name:      "stalled network, at network head",
+			headSlot:  160,
+			clockSlot: 320,
+			peerHeads: []primitives.Slot{160, 160},
+			want:      true,
+		},
+		{
+			// Same threshold as the resyncIfBehind trigger: peers within one epoch of
+			// our head do not count as being ahead.
+			name:      "behind clock, peers ahead within one epoch",
+			headSlot:  160,
+			clockSlot: 320,
+			peerHeads: []primitives.Slot{190, 190},
+			want:      true,
+		},
+		{
+			name:      "behind clock and peers more than one epoch ahead",
+			headSlot:  160,
+			clockSlot: 320,
+			peerHeads: []primitives.Slot{320, 320},
+			want:      false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := p2ptest.NewTestP2P(t)
+			for _, headSlot := range tt.peerHeads {
+				connectPeer(t, p, &peerData{headSlot: headSlot, finalizedEpoch: slots.ToEpoch(headSlot)}, p.Peers())
+			}
+			st, err := util.NewBeaconState()
+			require.NoError(t, err)
+			require.NoError(t, st.SetSlot(tt.headSlot))
+			mc := &mock.ChainService{
+				State:          st,
+				Genesis:        makeGenesisTime(tt.clockSlot),
+				ValidatorsRoot: [32]byte{},
+			}
+			s := NewService(t.Context(), &Config{
+				P2P:           p,
+				Chain:         mc,
+				StateNotifier: mc.StateNotifier(),
+			})
+			require.NotNil(t, s)
+			s.clock = startup.NewClock(mc.Genesis, [32]byte{})
+			assert.Equal(t, tt.want, s.resyncCaughtUp())
 		})
 	}
 }
