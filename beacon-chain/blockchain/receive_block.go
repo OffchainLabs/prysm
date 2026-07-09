@@ -299,7 +299,7 @@ func (s *Service) reportPostBlockProcessing(
 	// Reports on block and fork choice metrics.
 	cp := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
 	finalized := &ethpb.Checkpoint{Epoch: cp.Epoch, Root: bytesutil.SafeCopyBytes(cp.Root[:])}
-	reportSlotMetrics(block.Slot(), s.HeadSlot(), s.CurrentSlot(), finalized)
+	reportSlotMetrics(block.Slot(), s.HeadSlot(), s.CurrentSlot(), finalized, block.StateRoot())
 
 	// Log block sync status.
 	cp = s.cfg.ForkChoiceStore.JustifiedCheckpoint()
@@ -426,7 +426,7 @@ func (s *Service) ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock
 		// Reports on blockCopy and fork choice metrics.
 		cp := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
 		finalized := &ethpb.Checkpoint{Epoch: cp.Epoch, Root: bytesutil.SafeCopyBytes(cp.Root[:])}
-		reportSlotMetrics(blockCopy.Block().Slot(), s.HeadSlot(), s.CurrentSlot(), finalized)
+		reportSlotMetrics(blockCopy.Block().Slot(), s.HeadSlot(), s.CurrentSlot(), finalized, blockCopy.Block().StateRoot())
 	}
 
 	if err := s.cfg.BeaconDB.SaveBlocks(ctx, s.getInitSyncBlocks()); err != nil {
