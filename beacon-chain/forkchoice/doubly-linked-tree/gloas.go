@@ -294,16 +294,21 @@ func (s *Store) choosePayloadContent(n *Node) *PayloadNode {
 	if fn == nil {
 		return en
 	}
+	if en == nil {
+		return fn
+	}
+	if n.slot+1 == s.currentSlot() {
+		if s.shouldExtendPayload(fn) {
+			return fn
+		}
+		return en
+	}
 	if fn.weight > en.weight {
 		return fn
 	} else if fn.weight < en.weight {
 		return en
 	}
-	previousSlot := n.slot+1 == s.currentSlot()
-	if !previousSlot || s.shouldExtendPayload(fn) {
-		return fn
-	}
-	return en
+	return fn
 }
 
 // nodeTreeDump appends to the given list all the nodes descending from this one
