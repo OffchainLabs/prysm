@@ -144,20 +144,22 @@ func (v *validator) updateDutiesCombined(ctx context.Context, epoch primitives.E
 	return nil
 }
 
-// depRootsDiverged reports whether the freshly fetched next-epoch attester and
-// proposer dependent roots disagree.
-func depRootsDiverged(epoch primitives.Epoch, res dutiesFetchResult) bool {
-	if epoch < params.BeaconConfig().FuluForkEpoch {
-		// Pre-fulu, attester dep root for epoch+1 is get_block_root_at_slot(
-		// compute_start_slot_at_epoch(epoch) - 1)
-		// proposer dep root is get_block_root_at_slot(compute_start_slot_at_epoch(epoch+1) - 1)
-		// they differ by design
-		return false
+// dropIfDivergent treats a fetched duty response as missing (nil) when its
+// dependent root contradicts the next-epoch attester root, so it gets flagged
+// missing and re-fetched by the per-slot retry. Callers run >= gloas, where
+// all duty dependent roots coincide (pre-fulu proposer roots differ by design).
+func dropIfDivergent[T interface{ GetDependentRoot() []byte }](resp T, attRoot []byte, dutyType string) T {
+	root := resp.GetDependentRoot()
+	if len(root) == 0 || bytes.Equal(root, attRoot) {
+		return resp
 	}
-	if res.propNext == nil || res.attNext == nil {
-		return false
-	}
-	return !bytes.Equal(res.propNext.DependentRoot, res.attNext.DependentRoot)
+	log.WithFields(logrus.Fields{
+		"dutyType":              dutyType,
+		"dependentRoot":         fmt.Sprintf("%#x", bytesutil.Trunc(root)),
+		"attesterDependentRoot": fmt.Sprintf("%#x", bytesutil.Trunc(attRoot)),
+	}).Warn("Duties have divergent dependent root, treating them as missing")
+	var zero T
+	return zero
 }
 
 // allCurrentDutiesExited reports whether there is at least one duty and all are EXITED.
@@ -229,18 +231,6 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 		res, err = v.fetchAllDuties(ctx, epoch, indices)
 		if err != nil {
 			return errors.Wrap(err, "fetch all duties")
-		}
-	}
-
-	if depRootsDiverged(epoch, res) {
-		if canPromote {
-			log.Warn("Proposer and attester dependent roots diverged on promotion, refetching all duties")
-			res, err = v.fetchAllDuties(ctx, epoch, indices)
-			if err != nil {
-				return errors.Wrap(err, "refetch all duties after promotion divergence")
-			}
-		} else {
-			log.Warn("Proposer and attester dependent roots diverged on fresh fetch")
 		}
 	}
 
@@ -356,6 +346,10 @@ func (v *validator) fetchAllDuties(ctx context.Context, epoch primitives.Epoch, 
 		log.WithError(ptcErr).Warn("Error getting PTC duties")
 	}
 
+	if res.attNext != nil {
+		res.propNext = dropIfDivergent(res.propNext, res.attNext.DependentRoot, "proposer")
+		res.ptcNext = dropIfDivergent(res.ptcNext, res.attNext.DependentRoot, "ptc")
+	}
 	res.missingNext = missingNextMask(epoch.Add(1), res.attNext, res.propNext, res.syncNext, res.ptcNext)
 
 	if attCurr != nil {
@@ -551,7 +545,8 @@ func (v *validator) fetchPtcDuties(
 }
 
 // fetchNextEpochDuties fetches all next-epoch duty types in parallel, soft-
-// logging failures (a nil response marks that type missing). Shared by
+// logging failures (a nil response marks that type missing). Responses whose
+// dependent root contradicts the attester's are dropped too. Shared by
 // promotion and retry; both run only post-Gloas, where every type applies.
 func (v *validator) fetchNextEpochDuties(ctx context.Context, nextEpoch primitives.Epoch, indices []primitives.ValidatorIndex) (
 	att *ethpb.AttesterDutiesResponse,
@@ -570,6 +565,10 @@ func (v *validator) fetchNextEpochDuties(ctx context.Context, nextEpoch primitiv
 		if e != nil {
 			log.WithError(e).Debug("Could not get a next epoch duty")
 		}
+	}
+	if att != nil {
+		prop = dropIfDivergent(prop, att.DependentRoot, "proposer")
+		ptc = dropIfDivergent(ptc, att.DependentRoot, "ptc")
 	}
 	return att, prop, syncResp, ptc
 }
@@ -629,7 +628,7 @@ func (v *validator) RetryMissingNextDuties(ctx context.Context) error {
 	} else {
 		// Spine intact: re-fetch only the missing types and overlay them, leaving
 		// the attester duties and dependent root untouched.
-		prop, sync, ptc := v.fetchMissingNextDuties(ctx, nextEpoch, indices, missing)
+		prop, sync, ptc := v.fetchMissingNextDuties(ctx, nextEpoch, indices, missing, snap.currDependentRoot())
 		existing := make([]*ethpb.ValidatorDuty, 0, snap.nextDutyCount())
 		for _, d := range snap.nextDuties() {
 			existing = append(existing, d)
@@ -657,8 +656,9 @@ func (v *validator) RetryMissingNextDuties(ctx context.Context) error {
 }
 
 // fetchMissingNextDuties re-fetches only the flagged next-epoch proposer/sync/PTC
-// types (attester handled separately). A nil return means not requested or failed.
-func (v *validator) fetchMissingNextDuties(ctx context.Context, nextEpoch primitives.Epoch, indices []primitives.ValidatorIndex, missing missingNextDuties) (
+// types (attester handled separately). A nil return means not requested, failed,
+// or divergent from the stored attester dependent root attRoot.
+func (v *validator) fetchMissingNextDuties(ctx context.Context, nextEpoch primitives.Epoch, indices []primitives.ValidatorIndex, missing missingNextDuties, attRoot []byte) (
 	prop *ethpb.ProposerDutiesResponse,
 	syncResp *ethpb.SyncCommitteeDutiesResponse,
 	ptc *ethpb.PTCDutiesResponse,
@@ -680,7 +680,7 @@ func (v *validator) fetchMissingNextDuties(ctx context.Context, nextEpoch primit
 			log.WithError(e).Debug("Could not get a missing next epoch duty")
 		}
 	}
-	return prop, syncResp, ptc
+	return dropIfDivergent(prop, attRoot, "proposer"), syncResp, dropIfDivergent(ptc, attRoot, "ptc")
 }
 
 // overlayNextDuties clones existing next-epoch duties, overlaying re-fetched
