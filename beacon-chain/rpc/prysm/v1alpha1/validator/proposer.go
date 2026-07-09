@@ -82,6 +82,22 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 		log.WithError(err).Error("Fail to build block: could not get parent state")
 		return nil, err
 	}
+	if slots.ToEpoch(req.Slot) >= params.BeaconConfig().GloasForkEpoch {
+		payloadStr := "empty"
+		if full {
+			payloadStr = "full"
+		}
+		parentSlot, err :=vs.CoreService.ChainInfoFetcher.RecentBlockSlot(parentRoot)
+		if err != nil {
+			return nil, err
+		}
+		log.WithFields(logrus.Fields{
+			"slot":       req.Slot,
+			"parentRoot": fmt.Sprintf("%#x", parentRoot),
+			"parentSlot": parentSlot,
+			"payload":    payloadStr,
+		}).Info("Proposer request")
+	}
 	sBlk, err := getEmptyBlock(req.Slot)
 	if err != nil {
 		log.WithError(err).Error("Fail to build block: could not get empty block")

@@ -262,7 +262,8 @@ func TestPendingGloasColumns(t *testing.T) {
 		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
 		require.NoError(t, err)
 
-		require.NoError(t, s.queuePendingGloasColumn(roCol, "peer1"))
+		_, err = s.queuePendingGloasColumn(roCol, "peer1")
+		require.NoError(t, err)
 		require.Equal(t, true, s.hasPendingGloasColumns(root))
 
 		entry := s.pendingGloasColumns[root]
@@ -287,8 +288,10 @@ func TestPendingGloasColumns(t *testing.T) {
 		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
 		require.NoError(t, err)
 
-		require.NoError(t, s.queuePendingGloasColumn(roCol, "peer1"))
-		require.NoError(t, s.queuePendingGloasColumn(roCol, "peer2"))
+		_, err = s.queuePendingGloasColumn(roCol, "peer1")
+		require.NoError(t, err)
+		_, err = s.queuePendingGloasColumn(roCol, "peer2")
+		require.NoError(t, err)
 		require.Equal(t, peer.ID("peer1"), s.pendingGloasColumns[root].columns[10].peer)
 	})
 
@@ -321,7 +324,8 @@ func TestPendingGloasColumns(t *testing.T) {
 		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
 		require.NoError(t, err)
 
-		require.NotNil(t, s.queuePendingGloasColumn(roCol, "peer1"))
+		_, err = s.queuePendingGloasColumn(roCol, "peer1")
+		require.NotNil(t, err)
 		require.Equal(t, false, s.hasPendingGloasColumns(root))
 	})
 
@@ -350,7 +354,8 @@ func TestPendingGloasColumns(t *testing.T) {
 		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
 		require.NoError(t, err)
 
-		require.NotNil(t, s.queuePendingGloasColumn(roCol, "peer1"))
+		_, err = s.queuePendingGloasColumn(roCol, "peer1")
+		require.NotNil(t, err)
 		require.Equal(t, false, s.hasPendingGloasColumns(root))
 	})
 
@@ -370,7 +375,8 @@ func TestPendingGloasColumns(t *testing.T) {
 		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
 		require.NoError(t, err)
 
-		require.NotNil(t, s.queuePendingGloasColumn(roCol, "peer1"))
+		_, err = s.queuePendingGloasColumn(roCol, "peer1")
+		require.NotNil(t, err)
 		require.Equal(t, false, s.hasPendingGloasColumns(root))
 	})
 
@@ -390,7 +396,8 @@ func TestPendingGloasColumns(t *testing.T) {
 		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
 		require.NoError(t, err)
 
-		require.NotNil(t, s.queuePendingGloasColumn(roCol, "peer1"))
+		_, err = s.queuePendingGloasColumn(roCol, "peer1")
+		require.NotNil(t, err)
 		require.Equal(t, false, s.hasPendingGloasColumns(root))
 	})
 
@@ -411,7 +418,8 @@ func TestPendingGloasColumns(t *testing.T) {
 			}
 			roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
 			require.NoError(t, err)
-			require.NoError(t, s.queuePendingGloasColumn(roCol, "peer1"))
+			_, err = s.queuePendingGloasColumn(roCol, "peer1")
+			require.NoError(t, err)
 		}
 		require.Equal(t, maxPendingGloasRoots, len(s.pendingGloasColumns))
 
@@ -426,7 +434,8 @@ func TestPendingGloasColumns(t *testing.T) {
 		}
 		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, overflowRoot)
 		require.NoError(t, err)
-		require.NoError(t, s.queuePendingGloasColumn(roCol, "peer1"))
+		_, err = s.queuePendingGloasColumn(roCol, "peer1")
+		require.NoError(t, err)
 		require.Equal(t, false, s.hasPendingGloasColumns(overflowRoot))
 
 		// Adding to an existing root should still work.
@@ -440,7 +449,8 @@ func TestPendingGloasColumns(t *testing.T) {
 		}
 		roCol2, err := blocks.NewRODataColumnGloasWithRoot(dc2, existingRoot)
 		require.NoError(t, err)
-		require.NoError(t, s.queuePendingGloasColumn(roCol2, "peer1"))
+		_, err = s.queuePendingGloasColumn(roCol2, "peer1")
+		require.NoError(t, err)
 		require.NotNil(t, s.pendingGloasColumns[existingRoot].columns[1])
 	})
 
@@ -474,7 +484,8 @@ func TestPendingGloasColumns(t *testing.T) {
 		// Queue the sidecar.
 		roCol, err := blocks.NewRODataColumnGloasWithRoot(sidecar, blockRoot)
 		require.NoError(t, err)
-		require.NoError(t, s.queuePendingGloasColumn(roCol, "peer1"))
+		_, err = s.queuePendingGloasColumn(roCol, "peer1")
+		require.NoError(t, err)
 		require.Equal(t, true, s.hasPendingGloasColumns(blockRoot))
 
 		// Process with the block.
@@ -520,7 +531,8 @@ func TestPendingGloasColumns(t *testing.T) {
 
 		roCol, err := blocks.NewRODataColumnGloasWithRoot(sidecar, blockRoot)
 		require.NoError(t, err)
-		require.NoError(t, s.queuePendingGloasColumn(roCol, "badpeer"))
+		_, err = s.queuePendingGloasColumn(roCol, "badpeer")
+		require.NoError(t, err)
 
 		s.processPendingGloasColumns(context.Background(), blockRoot, signedBlock)
 		require.Equal(t, false, s.hasPendingGloasColumns(blockRoot))
