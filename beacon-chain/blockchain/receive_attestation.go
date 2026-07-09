@@ -180,43 +180,6 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 	s.pruneAttsFromPool(s.ctx, headState, headBlock)
 }
 
-func (s *Service) ptcForcedReorg(root [32]byte, proposingSlot primitives.Slot) bool {
-	hs, err := s.cfg.ForkChoiceStore.Slot(root)
-	if err != nil {
-		log.WithError(err).Error("Could not get slot for head root")
-		return false
-	}
-	if hs+1 != proposingSlot {
-		return false
-	}
-	return s.cfg.ForkChoiceStore.PTCVotedLate(root)
-}
-
-func (s *Service) shouldReorgPayload(root [32]byte, full bool, proposingSlot primitives.Slot) bool {
-	if !full {
-		// only way of moving from full to empty is on two paths:
-		// 1) because of attestations and this can only happen if the head root is from previous slots, we need to send FCU
-		// 2) because of PTC votes on a previously sent FCU, in this path we need to roll back the chain
-		return false
-	}
-	hs, err := s.cfg.ForkChoiceStore.Slot(root)
-	if err != nil {
-		log.WithError(err).Error("Could not get slot for head root")
-		return false
-	}
-	if hs+1 != proposingSlot {
-		return false
-	}
-	early, ok := s.PayloadEarly(root)
-	if !ok {
-		return true
-	}
-	if early {
-		return s.cfg.ForkChoiceStore.PTCVotedLate(root)
-	}
-	return !s.cfg.ForkChoiceStore.PTCVotedEarlyAndAvailable(root)
-}
-
 // the caller of this function must hold a forkchoice lock
 func (s *Service) keepReorgBet(attr payloadattribute.Attributer, newHeadRoot [32]byte, slot primitives.Slot, full bool) bool {
 	if attr.IsEmpty() {

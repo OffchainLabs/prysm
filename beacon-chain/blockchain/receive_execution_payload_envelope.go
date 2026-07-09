@@ -189,20 +189,20 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 // checkAndSetPayloadIfHead reports whether the envelope's payload becomes the
 // head's content, marking the head full. wasFull is the head's status before
 // this call, so callers can detect the empty->full transition.
-func (s *Service) checkAndSetPayloadIfHead(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope) (isHead, wasFull bool) {
+func (s *Service) checkAndSetPayloadIfHead(envelope interfaces.ROExecutionPayloadEnvelope) (isHead, wasFull bool) {
 	if !s.inRegularSync() {
+		return false, false
+	}
+	root := envelope.BeaconBlockRoot()
+	if !s.FullBeatsEmpty(root) {
 		return false, false
 	}
 	s.headLock.Lock()
 	defer s.headLock.Unlock()
-	if s.head == nil || len(s.head.root) == 0 {
+	if s.head == nil {
 		return false, false
 	}
-	root := envelope.BeaconBlockRoot()
 	if s.head.root != root {
-		return false, false
-	}
-	if !s.FullBeatsEmpty(root) {
 		return false, false
 	}
 	wasFull = s.head.full
@@ -223,7 +223,7 @@ func (s *Service) reorgingLatePayload(root [32]byte, slot primitives.Slot) bool 
 	}
 	// rollBack head insertion
 	s.headLock.Lock()
-	if s.head.root == root {
+	if s.head != nil && s.head.root == root {
 		s.head.full = false
 	}
 	s.headLock.Unlock()
@@ -231,7 +231,7 @@ func (s *Service) reorgingLatePayload(root [32]byte, slot primitives.Slot) bool 
 }
 
 func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope, st state.BeaconState) error {
-	isHead, wasFull := s.checkAndSetPayloadIfHead(ctx, envelope)
+	isHead, wasFull := s.checkAndSetPayloadIfHead(envelope)
 	if !isHead {
 		return nil
 	}
@@ -262,12 +262,6 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 		s.headLock.Unlock()
 	}
 
-	if emitHeadV2 {
-		if err := s.notifyNewHeadV2Event(ctx, headSlot, headStateRoot, root, headVersion); err != nil {
-			log.WithError(err).Error("Could not notify event feed of head_v2 payload update")
-		}
-	}
-
 	proposingSlot := s.CurrentSlot() + 1
 	attr := s.getPayloadAttribute(ctx, st, proposingSlot, root[:], true)
 	if !attr.IsEmpty() && s.reorgingLatePayload(root, envelope.Slot()) {
@@ -277,6 +271,13 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 		}).Info("Not notifying forkchoice update for late payload")
 		return nil
 	}
+
+	if emitHeadV2 {
+		if err := s.notifyNewHeadV2Event(ctx, headSlot, headStateRoot, root, headVersion); err != nil {
+			log.WithError(err).Error("Could not notify event feed of head_v2 payload update")
+		}
+	}
+
 	go func() {
 		pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)
 		if err != nil {
