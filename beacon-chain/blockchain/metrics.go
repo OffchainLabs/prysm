@@ -67,6 +67,18 @@ var (
 		Name: "beacon_current_active_validators",
 		Help: "Current total active validators",
 	})
+	beaconPendingDeposits = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "beacon_pending_deposits",
+		Help: "Number of pending deposits in the current state",
+	})
+	beaconPendingPartialWithdrawals = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "beacon_pending_partial_withdrawals",
+		Help: "Number of pending partial withdrawals in the current state",
+	})
+	beaconPendingConsolidations = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "beacon_pending_consolidations",
+		Help: "Number of pending consolidations in the current state",
+	})
 	validatorsCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "validator_count",
 		Help: "The total number of validators",
@@ -397,6 +409,19 @@ func reportEpochMetrics(ctx context.Context, postState, headState state.BeaconSt
 	prevEpochSourceBalances.Set(float64(b.PrevEpochAttested))
 	prevEpochTargetBalances.Set(float64(b.PrevEpochTargetAttested))
 	prevEpochHeadBalances.Set(float64(b.PrevEpochHeadAttested))
+
+	// Post-Electra state queue lengths.
+	if postState.Version() >= version.Electra {
+		if n, err := postState.NumPendingDeposits(); err == nil {
+			beaconPendingDeposits.Set(float64(n))
+		}
+		if n, err := postState.NumPendingPartialWithdrawals(); err == nil {
+			beaconPendingPartialWithdrawals.Set(float64(n))
+		}
+		if n, err := postState.NumPendingConsolidations(); err == nil {
+			beaconPendingConsolidations.Set(float64(n))
+		}
+	}
 
 	refMap := postState.FieldReferencesCount()
 	for name, val := range refMap {
