@@ -1306,6 +1306,7 @@ func (s *Service) prysmNodeEndpoints() []endpoint {
 		PeersFetcher:              s.cfg.PeersFetcher,
 		PeerManager:               s.cfg.PeerManager,
 		MetadataProvider:          s.cfg.MetadataProvider,
+		CustodyManager:            s.cfg.CustodyManager,
 		HeadFetcher:               s.cfg.HeadFetcher,
 		ExecutionChainInfoFetcher: s.cfg.ExecutionChainInfoFetcher,
 	}
@@ -1373,6 +1374,16 @@ func (s *Service) prysmNodeEndpoints() []endpoint {
 			},
 			handler: server.RemoveTrustedPeer,
 			methods: []string{http.MethodDelete},
+		},
+		{
+			template: "/prysm/v1/node/custody",
+			name:     namespace + ".GetCustody",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetCustody,
+			methods: []string{http.MethodGet},
 		},
 	}
 }
