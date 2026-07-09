@@ -89,6 +89,7 @@ type validator struct {
 	web3SignerConfig             *remoteweb3signer.SetupConfig
 	proposerSettings             *proposer.Settings
 	submittedPrefSlots           map[primitives.Slot]bool
+	connTracker                  connTracker // per push kind, the conn generation last confirmed pushed
 	submittedAtts                map[submittedAttKey]*submittedAtt
 	submittedAggregates          map[submittedAttKey]*submittedAtt
 	submittedSyncMessages        map[slotRootKey][]uint64
@@ -824,6 +825,22 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 	currentEpoch := slots.ToEpoch(slot)
 	isPreGloas := currentEpoch < params.BeaconConfig().GloasForkEpoch
 
+	// A fallback host switch never restarts the runner (the VC stays "healthy"),
+	// so force a re-push here; each push kind retries until its own succeeds.
+	// Registrations are only pushed pre-Gloas, so post-Gloas their kind is never
+	// confirmed and would otherwise report a change every slot.
+	connGen := v.connGeneration()
+	prefsChanged := v.connTracker.changed(proposerPrefsPush, connGen)
+	regsChanged := isPreGloas && v.connTracker.changed(registrationsPush, connGen)
+	if prefsChanged {
+		log.WithField("connGeneration", connGen).Debug("Forcing proposer preferences re-push after beacon connection change")
+	}
+	if regsChanged {
+		log.WithField("connGeneration", connGen).Debug("Forcing validator registrations re-push after beacon connection change")
+	}
+	prefsForcePush := forceFullPush || prefsChanged
+	regsForcePush := forceFullPush || regsChanged
+
 	// Pre-Gloas, PrepareBeaconProposer carries the per-validator fee recipient.
 	// Post-Gloas, SignedProposerPreferences (submitted below) is canonical.
 	if isPreGloas {
@@ -847,18 +864,31 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		v.upgradeProposerSettingsToV2(ctx)
 	}
 
-	prefs := v.buildProposerPreferences(ctx, km, slot, false)
+	// prefsForcePush is set when a new runner starts (initial connect or after a
+	// beacon-node disconnect/reconnect), so re-push all proposer preferences to
+	// repopulate a beacon node that has no preference state.
+	prefs := v.buildProposerPreferences(ctx, km, slot, prefsForcePush)
 	if len(prefs) > 0 {
 		// Delay to mid-slot so the block for this slot is processed first.
 		delay := params.BeaconConfig().SlotDuration() / 2
-		go func() {
-			time.Sleep(delay)
-			if _, err := v.validatorClient.SubmitSignedProposerPreferences(ctx, &ethpb.SubmitSignedProposerPreferencesRequest{
+		time.AfterFunc(delay, func() {
+			// Detached from the slot context, which may expire before the delay elapses.
+			subCtx, cancel := context.WithTimeout(context.Background(), delay)
+			defer cancel()
+			if _, err := v.validatorClient.SubmitSignedProposerPreferences(subCtx, &ethpb.SubmitSignedProposerPreferencesRequest{
 				SignedProposerPreferences: prefs,
 			}); err != nil {
 				log.WithError(err).Warn("Failed to submit proposer preferences")
+				v.releasePrefSlots(prefs)
+				return
 			}
-		}()
+			log.WithField("count", len(prefs)).Debug("Submitted proposer preferences")
+			v.connTracker.confirm(proposerPrefsPush, connGen)
+		})
+	} else {
+		// Nothing was reserved in the dedup cache, so there is no suppressed
+		// batch to retry; safe to consume the switch signal.
+		v.connTracker.confirm(proposerPrefsPush, connGen)
 	}
 
 	if reqs := v.buildBuilderPreferenceRequests(ctx, km, slot); len(reqs) > 0 {
@@ -876,13 +906,19 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		return nil
 	}
 
-	signedRegReqs := v.buildSignedRegReqs(ctx, filteredKeys, km.Sign, slot, forceFullPush)
+	signedRegReqs := v.buildSignedRegReqs(ctx, filteredKeys, km.Sign, slot, regsForcePush)
 	if len(signedRegReqs) > 0 {
 		go func() {
 			if err := SubmitValidatorRegistrations(ctx, v.validatorClient, signedRegReqs, v.validatorsRegBatchSize); err != nil {
 				log.WithError(errors.Wrap(ErrBuilderValidatorRegistration, err.Error())).Warn("Failed to register validator on builder")
+				return
 			}
+			v.connTracker.confirm(registrationsPush, connGen)
 		}()
+	} else {
+		// A forced build includes every builder-enabled key, so an empty build
+		// means the new host is not missing any registration.
+		v.connTracker.confirm(registrationsPush, connGen)
 	}
 
 	return nil
@@ -1103,8 +1139,9 @@ func (v *validator) upgradeProposerSettingsToV2(ctx context.Context) {
 
 // buildProposerPreferences creates signed proposer preferences for validators
 // that have proposer slots in the current epoch (future slots) or next epoch. During normal operation it is
-// gated to run once at mid-epoch; pass force=true to bypass that gate (e.g.
-// after a reorg triggers a duty change).
+// gated to run once at mid-epoch; pass force=true to clear the submitted-slot
+// dedup cache and bypass that gate (e.g. after a reorg triggers a duty change,
+// or when a new runner starts after a beacon-node disconnect/reconnect).
 //
 // Current-epoch preferences are submitted after the first slot of the epoch
 // (slot 0 is skipped to avoid stale state after epoch transition). If the
@@ -1272,6 +1309,19 @@ func (v *validator) releasePrefSlot(proposalSlot primitives.Slot) {
 	delete(v.submittedPrefSlots, proposalSlot)
 }
 
+// releasePrefSlots un-reserves the slots of a batch whose submission failed so
+// a later build retries them.
+func (v *validator) releasePrefSlots(prefs []*ethpb.SignedProposerPreferences) {
+	slots := make([]primitives.Slot, len(prefs))
+	v.submittedPrefSlotsLock.Lock()
+	for i, p := range prefs {
+		delete(v.submittedPrefSlots, p.Message.ProposalSlot)
+		slots[i] = p.Message.ProposalSlot
+	}
+	v.submittedPrefSlotsLock.Unlock()
+	log.WithField("proposalSlots", slots).Debug("Released proposer preference reservations for retry")
+}
+
 // proposerConfigForKey returns the fee recipient and target gas limit for pk.
 // The target gas limit comes from the top-level v2 fields only; builder gas
 // limits are registration-only.
@@ -1400,6 +1450,7 @@ func (v *validator) submitProposerPreferences(ctx context.Context) {
 			SignedProposerPreferences: prefs,
 		}); err != nil {
 			log.WithError(err).Warn("Failed to resubmit proposer preferences after duty change")
+			v.releasePrefSlots(prefs)
 		} else {
 			log.WithField("count", len(prefs)).Info("Resubmitted proposer preferences after duty change")
 		}

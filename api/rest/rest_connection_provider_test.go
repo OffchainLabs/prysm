@@ -58,6 +58,21 @@ func TestRestConnectionProvider(t *testing.T) {
 		require.ErrorContains(t, "invalid host index", provider.SwitchHost(3))
 	})
 
+	t.Run("ConnectionCounter advances on real switches only", func(t *testing.T) {
+		p, err := NewRestConnectionProvider("http://host1:3500,http://host2:3500")
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), p.ConnectionCounter())
+		// Switching to the current host is a no-op.
+		require.NoError(t, p.SwitchHost(0))
+		require.Equal(t, uint64(0), p.ConnectionCounter())
+		// A real switch advances the counter.
+		require.NoError(t, p.SwitchHost(1))
+		require.Equal(t, uint64(1), p.ConnectionCounter())
+		// A bounce back is still a distinct switch (host1 → host0).
+		require.NoError(t, p.SwitchHost(0))
+		require.Equal(t, uint64(2), p.ConnectionCounter())
+	})
+
 	t.Run("Hosts returns copy", func(t *testing.T) {
 		hosts := provider.Hosts()
 		original := hosts[0]

@@ -90,15 +90,29 @@ func (s *Server) AttestationRewards(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	blkRoot, err := st.LatestBlockHeader().HashTreeRoot()
+	headRoot, err := s.HeadFetcher.HeadRoot(ctx)
+	if err != nil {
+		httputil.HandleError(w, "Could not get head root: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	blkRoot, err := s.ForkchoiceFetcher.Ancestor(ctx, headRoot, st.Slot())
 	if err != nil {
 		httputil.HandleError(w, "Could not get block root: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	optimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, blkRoot)
+
+	optimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
 		httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	if optimistic {
+		optimistic, err = s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, bytesutil.ToBytes32(blkRoot))
+		if err != nil {
+			httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	resp := &structs.AttestationRewardsResponse{
@@ -107,7 +121,7 @@ func (s *Server) AttestationRewards(w http.ResponseWriter, r *http.Request) {
 			TotalRewards: totalRewards,
 		},
 		ExecutionOptimistic: optimistic,
-		Finalized:           s.FinalizationFetcher.IsFinalized(r.Context(), blkRoot),
+		Finalized:           s.FinalizationFetcher.IsFinalized(r.Context(), bytesutil.ToBytes32(blkRoot)),
 	}
 	httputil.WriteJson(w, resp)
 }
