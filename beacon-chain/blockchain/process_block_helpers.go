@@ -450,12 +450,12 @@ func (s *Service) insertFirstPayloadIfNeeded(ctx context.Context, b interfaces.R
 func (s *Service) parentPayloadGasLimit(ctx context.Context, parentRoot [32]byte) (uint64, error) {
 	parent, err := s.getBlock(ctx, parentRoot)
 	if err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, "could not get parent block")
 	}
 	if parent.Block().Version() >= version.Gloas {
 		bid, err := parent.Block().Body().SignedExecutionPayloadBid()
 		if err != nil {
-			return 0, err
+			return 0, errors.Wrap(err, "could not get signed execution payload bid")
 		}
 		if bid == nil || bid.Message == nil {
 			return 0, errors.New("nil execution payload bid")
@@ -464,7 +464,7 @@ func (s *Service) parentPayloadGasLimit(ctx context.Context, parentRoot [32]byte
 	}
 	payload, err := parent.Block().Body().Execution()
 	if err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, "could not get execution payload")
 	}
 	return payload.GasLimit(), nil
 }
