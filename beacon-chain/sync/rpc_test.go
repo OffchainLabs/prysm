@@ -3,6 +3,7 @@ package sync
 import (
 	"bytes"
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -43,9 +44,15 @@ func expectFailure(t *testing.T, expectedCode uint8, expectedErrorMsg string, st
 
 // expectResetStream status code from a stream in regular sync.
 func expectResetStream(t *testing.T, stream network.Stream) {
-	expectedErr := "stream reset"
 	_, _, err := ReadStatusCode(stream, &encoder.SszNetworkEncoder{})
-	require.ErrorContains(t, expectedErr, err)
+	require.NotNil(t, err, "expected stream error")
+
+	// TCP muxers surface a stream reset; QUIC surfaces a connection close.
+	tcpErr := "stream reset"
+	quicErr := "connection closed"
+
+	isExpectedErr := strings.Contains(err.Error(), tcpErr) || strings.Contains(err.Error(), quicErr)
+	require.Equal(t, true, isExpectedErr, "expected stream reset or connection closed error, got: %v", err)
 }
 
 func TestRegisterRPC_ReceivesValidMessage(t *testing.T) {

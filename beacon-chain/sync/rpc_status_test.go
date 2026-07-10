@@ -910,105 +910,109 @@ func TestStatusRPCRequest_FinalizedBlockSkippedSlots(t *testing.T) {
 }
 
 func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
-	ctx := t.Context()
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := t.Context()
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
 
-	p1 := p2ptest.NewTestP2P(t)
-	p2 := p2ptest.NewTestP2P(t)
+		p1 := p2ptest.NewTestP2P(t)
+		p2 := p2ptest.NewTestP2P(t)
 
-	// Set up a head state with data we expect.
-	head := util.NewBeaconBlock()
-	head.Block.Slot = 111
-	headRoot, err := head.Block.HashTreeRoot()
-	require.NoError(t, err)
-	finalized := util.NewBeaconBlock()
-	finalizedRoot, err := finalized.Block.HashTreeRoot()
-	require.NoError(t, err)
-	genesisState, err := transition.GenesisBeaconState(ctx, nil, 0, &ethpb.Eth1Data{})
-	require.NoError(t, err)
-	require.NoError(t, genesisState.SetSlot(111))
-	require.NoError(t, genesisState.UpdateBlockRootAtIndex(111%uint64(params.BeaconConfig().SlotsPerHistoricalRoot), headRoot))
-	finalizedCheckpt := &ethpb.Checkpoint{
-		Epoch: 5,
-		Root:  finalizedRoot[:],
-	}
-	chain := &mock.ChainService{
-		State:               genesisState,
-		FinalizedCheckPoint: finalizedCheckpt,
-		Root:                headRoot[:],
-		Fork: &ethpb.Fork{
-			PreviousVersion: params.BeaconConfig().GenesisForkVersion,
-			CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
-		},
-		Genesis:        time.Now(),
-		ValidatorsRoot: [32]byte{'A'},
-	}
-	cw := startup.NewClockSynchronizer()
-
-	r := &Service{
-		cfg: &config{
-			p2p:           p1,
-			beaconDB:      dbTest.SetupDB(t),
-			chain:         chain,
-			stateNotifier: chain.StateNotifier(),
-			initialSync:   &mockSync.Sync{IsSyncing: false},
-		},
-
-		ctx:                             ctx,
-		rateLimiter:                     newRateLimiter(p1),
-		clockWaiter:                     cw,
-		chainStarted:                    &atomic.Bool{},
-		subHandler:                      newSubTopicHandler(),
-		proposerPreferencesCache:        cache.NewProposerPreferencesCache(),
-		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
-	}
-	markInitSyncComplete(t, r)
-	clock := startup.NewClockSynchronizer()
-	require.NoError(t, clock.SetClock(startup.NewClock(time.Now(), [32]byte{})))
-	r.verifierWaiter = verification.NewInitializerWaiter(clock, chain.ForkChoiceStore, r.cfg.stateGen, chain)
-
-	go r.Start()
-
-	// Setup streams
-	pcl := protocol.ID("/eth2/beacon_chain/req/status/1/ssz_snappy")
-	topic := string(pcl)
-	r.rateLimiter.limiterMap[topic] = leakybucket.NewCollector(1, 1, time.Second, false)
-	var wg sync.WaitGroup
-	wg.Add(1)
-	p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
-		defer wg.Done()
-		out := &ethpb.Status{}
-		assert.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, out))
-		expected := &ethpb.Status{
-			ForkDigest:     []byte{1, 1, 1, 1},
-			HeadSlot:       genesisState.Slot(),
-			HeadRoot:       headRoot[:],
-			FinalizedEpoch: 5,
-			FinalizedRoot:  finalizedRoot[:],
+		// Set up a head state with data we expect.
+		head := util.NewBeaconBlock()
+		head.Block.Slot = 111
+		headRoot, err := head.Block.HashTreeRoot()
+		require.NoError(t, err)
+		finalized := util.NewBeaconBlock()
+		finalizedRoot, err := finalized.Block.HashTreeRoot()
+		require.NoError(t, err)
+		genesisState, err := transition.GenesisBeaconState(ctx, nil, 0, &ethpb.Eth1Data{})
+		require.NoError(t, err)
+		require.NoError(t, genesisState.SetSlot(111))
+		require.NoError(t, genesisState.UpdateBlockRootAtIndex(111%uint64(params.BeaconConfig().SlotsPerHistoricalRoot), headRoot))
+		finalizedCheckpt := &ethpb.Checkpoint{
+			Epoch: 5,
+			Root:  finalizedRoot[:],
 		}
-		if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
-			log.WithError(err).Debug("Could not write to stream")
+		chain := &mock.ChainService{
+			State:               genesisState,
+			FinalizedCheckPoint: finalizedCheckpt,
+			Root:                headRoot[:],
+			Fork: &ethpb.Fork{
+				PreviousVersion: params.BeaconConfig().GenesisForkVersion,
+				CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
+			},
+			Genesis:        time.Now(),
+			ValidatorsRoot: [32]byte{'A'},
 		}
-		_, err := r.cfg.p2p.Encoding().EncodeWithMaxLength(stream, expected)
-		assert.NoError(t, err)
+		cw := startup.NewClockSynchronizer()
+
+		r := &Service{
+			cfg: &config{
+				p2p:           p1,
+				beaconDB:      dbTest.SetupDB(t),
+				chain:         chain,
+				stateNotifier: chain.StateNotifier(),
+				initialSync:   &mockSync.Sync{IsSyncing: false},
+			},
+
+			ctx:                             ctx,
+			rateLimiter:                     newRateLimiter(p1),
+			clockWaiter:                     cw,
+			chainStarted:                    &atomic.Bool{},
+			subHandler:                      newSubTopicHandler(),
+			proposerPreferencesCache:        cache.NewProposerPreferencesCache(),
+			highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
+		}
+		markInitSyncComplete(t, r)
+		clock := startup.NewClockSynchronizer()
+		require.NoError(t, clock.SetClock(startup.NewClock(time.Now(), [32]byte{})))
+		r.verifierWaiter = verification.NewInitializerWaiter(clock, chain.ForkChoiceStore, r.cfg.stateGen, chain)
+
+		go r.Start()
+
+		// Setup streams
+		pcl := protocol.ID("/eth2/beacon_chain/req/status/1/ssz_snappy")
+		topic := string(pcl)
+		r.rateLimiter.limiterMap[topic] = leakybucket.NewCollector(1, 1, time.Second, false)
+		var wg sync.WaitGroup
+		wg.Add(1)
+
+		var once sync.Once
+		p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
+			defer once.Do(wg.Done)
+			out := &ethpb.Status{}
+			assert.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, out))
+			expected := &ethpb.Status{
+				ForkDigest:     []byte{1, 1, 1, 1},
+				HeadSlot:       genesisState.Slot(),
+				HeadRoot:       headRoot[:],
+				FinalizedEpoch: 5,
+				FinalizedRoot:  finalizedRoot[:],
+			}
+			if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+				log.WithError(err).Debug("Could not write to stream")
+			}
+			_, err := r.cfg.p2p.Encoding().EncodeWithMaxLength(stream, expected)
+			assert.NoError(t, err)
+		})
+
+		require.NoError(t, cw.SetClock(startup.NewClock(chain.Genesis, chain.ValidatorsRoot)))
+
+		assert.NoError(t, p1.Peers().Scorers().IsBadPeer(p2.PeerID()), "Peer is marked as bad")
+		p1.Connect(p2)
+
+		if util.WaitTimeout(&wg, time.Second) {
+			t.Fatal("Did not receive stream within 1 sec")
+		}
+		time.Sleep(100 * time.Millisecond)
+
+		connectionState, err := p1.Peers().ConnectionState(p2.PeerID())
+		require.NoError(t, err, "Could not obtain peer connection state")
+		assert.Equal(t, peers.Disconnected, connectionState, "Expected peer to be disconnected")
+
+		assert.NotNil(t, p1.Peers().Scorers().IsBadPeer(p2.PeerID()), "Peer is not marked as bad")
 	})
-
-	require.NoError(t, cw.SetClock(startup.NewClock(chain.Genesis, chain.ValidatorsRoot)))
-
-	assert.NoError(t, p1.Peers().Scorers().IsBadPeer(p2.PeerID()), "Peer is marked as bad")
-	p1.Connect(p2)
-
-	if util.WaitTimeout(&wg, time.Second) {
-		t.Fatal("Did not receive stream within 1 sec")
-	}
-	time.Sleep(100 * time.Millisecond)
-
-	connectionState, err := p1.Peers().ConnectionState(p2.PeerID())
-	require.NoError(t, err, "Could not obtain peer connection state")
-	assert.Equal(t, peers.Disconnected, connectionState, "Expected peer to be disconnected")
-
-	assert.NotNil(t, p1.Peers().Scorers().IsBadPeer(p2.PeerID()), "Peer is not marked as bad")
 }
 
 func TestStatusRPC_ValidGenesisMessage(t *testing.T) {
