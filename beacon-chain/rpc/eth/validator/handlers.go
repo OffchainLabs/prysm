@@ -1655,7 +1655,7 @@ func (s *Server) GetPayloadAttestationData(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	_, slot, ok := shared.UintFromRoute(w, r, "slot")
+	_, slot, ok := shared.UintFromQuery(w, r, "slot", true)
 	if !ok {
 		return
 	}

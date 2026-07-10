@@ -4055,8 +4055,7 @@ func TestGetPayloadAttestationData(t *testing.T) {
 			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService},
 		}
 
-		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/validator/payload_attestation_data/{slot}", nil)
-		request.SetPathValue("slot", "0")
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/validator/payload_attestation_data?slot=0", nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -4087,8 +4086,7 @@ func TestGetPayloadAttestationData(t *testing.T) {
 			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService},
 		}
 
-		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/validator/payload_attestation_data/{slot}", nil)
-		request.SetPathValue("slot", "5")
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/validator/payload_attestation_data?slot=5", nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -4121,8 +4119,7 @@ func TestGetPayloadAttestationData(t *testing.T) {
 			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService},
 		}
 
-		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/validator/payload_attestation_data/{slot}", nil)
-		request.SetPathValue("slot", "5")
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/validator/payload_attestation_data?slot=5", nil)
 		request.Header.Set("Accept", "application/octet-stream")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
