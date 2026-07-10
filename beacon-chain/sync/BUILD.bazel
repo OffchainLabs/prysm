@@ -330,7 +330,6 @@ go_test(
         "@com_github_libp2p_go_libp2p//core/network:go_default_library",
         "@com_github_libp2p_go_libp2p//core/peer:go_default_library",
         "@com_github_libp2p_go_libp2p//core/protocol:go_default_library",
-        "@com_github_libp2p_go_libp2p//p2p/transport/quic:go_default_library",
         "@com_github_libp2p_go_libp2p_pubsub//:go_default_library",
         "@com_github_libp2p_go_libp2p_pubsub//pb:go_default_library",
         "@com_github_patrickmn_go_cache//:go_default_library",

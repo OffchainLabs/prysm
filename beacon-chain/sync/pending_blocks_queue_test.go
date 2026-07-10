@@ -40,342 +40,352 @@ import (
 //
 // Test b1 was missing then received and we can process b0 -> b1 -> b2
 func TestRegularSyncBeaconBlockSubscriber_ProcessPendingBlocks1(t *testing.T) {
-	db := dbtest.SetupDB(t)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		db := dbtest.SetupDB(t)
 
-	p1 := p2ptest.NewTestP2P(t)
-	mockChain := &mock.ChainService{
-		FinalizedCheckPoint: &ethpb.Checkpoint{
-			Epoch: 0,
-		},
-	}
-	r := &Service{
-		cfg: &config{
-			p2p:      p1,
-			beaconDB: db,
-			chain:    mockChain,
-			clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
-			stateGen: stategen.New(db, doublylinkedtree.New()),
-		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
-	}
-	r.initCaches()
+		p1 := p2ptest.NewTestP2P(t)
+		mockChain := &mock.ChainService{
+			FinalizedCheckPoint: &ethpb.Checkpoint{
+				Epoch: 0,
+			},
+		}
+		r := &Service{
+			cfg: &config{
+				p2p:      p1,
+				beaconDB: db,
+				chain:    mockChain,
+				clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
+				stateGen: stategen.New(db, doublylinkedtree.New()),
+			},
+			slotToPendingBlocks: gcache.New(time.Second, 0 /* disable janitor */),
+			seenPendingBlocks:   make(map[[32]byte]bool),
+		}
+		r.initCaches()
 
-	b0 := util.NewBeaconBlock()
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
-	b0Root, err := b0.Block.HashTreeRoot()
-	require.NoError(t, err)
+		b0 := util.NewBeaconBlock()
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
+		b0Root, err := b0.Block.HashTreeRoot()
+		require.NoError(t, err)
 
-	// Setup head state for blockVerifyingState logic
-	st, err := util.NewBeaconState()
-	require.NoError(t, err)
-	mockChain.Root = b0Root[:]
-	mockChain.State = st
-	b3 := util.NewBeaconBlock()
-	b3.Block.Slot = 3
-	b3.Block.ParentRoot = b0Root[:]
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b3)
-	// Incomplete block link
-	b1 := util.NewBeaconBlock()
-	b1.Block.Slot = 1
-	b1.Block.ParentRoot = b0Root[:]
-	b1Root, err := b1.Block.HashTreeRoot()
-	require.NoError(t, err)
-	b2 := util.NewBeaconBlock()
-	b2.Block.Slot = 2
-	b2.Block.ParentRoot = b1Root[:]
-	b2Root, err := b1.Block.HashTreeRoot()
-	require.NoError(t, err)
+		// Setup head state for blockVerifyingState logic
+		st, err := util.NewBeaconState()
+		require.NoError(t, err)
+		mockChain.Root = b0Root[:]
+		mockChain.State = st
+		b3 := util.NewBeaconBlock()
+		b3.Block.Slot = 3
+		b3.Block.ParentRoot = b0Root[:]
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b3)
+		// Incomplete block link
+		b1 := util.NewBeaconBlock()
+		b1.Block.Slot = 1
+		b1.Block.ParentRoot = b0Root[:]
+		b1Root, err := b1.Block.HashTreeRoot()
+		require.NoError(t, err)
+		b2 := util.NewBeaconBlock()
+		b2.Block.Slot = 2
+		b2.Block.ParentRoot = b1Root[:]
+		b2Root, err := b1.Block.HashTreeRoot()
+		require.NoError(t, err)
 
-	// Add b2 to the cache
-	wsb, err := blocks.NewSignedBeaconBlock(b2)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b2.Block.Slot, wsb, b2Root))
+		// Add b2 to the cache
+		wsb, err := blocks.NewSignedBeaconBlock(b2)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b2.Block.Slot, wsb, b2Root))
 
-	require.NoError(t, r.processPendingBlocks(t.Context()))
-	assert.Equal(t, 1, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
-	assert.Equal(t, 1, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
+		require.NoError(t, r.processPendingBlocks(t.Context()))
+		assert.Equal(t, 1, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
+		assert.Equal(t, 1, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
 
-	// Add b1 to the cache
-	wsb, err = blocks.NewSignedBeaconBlock(b1)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b1.Block.Slot, wsb, b1Root))
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b1)
+		// Add b1 to the cache
+		wsb, err = blocks.NewSignedBeaconBlock(b1)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b1.Block.Slot, wsb, b1Root))
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b1)
 
-	nBlock := util.NewBeaconBlock()
-	nBlock.Block.Slot = b1.Block.Slot
-	nRoot, err := nBlock.Block.HashTreeRoot()
-	require.NoError(t, err)
+		nBlock := util.NewBeaconBlock()
+		nBlock.Block.Slot = b1.Block.Slot
+		nRoot, err := nBlock.Block.HashTreeRoot()
+		require.NoError(t, err)
 
-	// Insert bad b1 in the cache to verify the good one doesn't get replaced.
-	wsb, err = blocks.NewSignedBeaconBlock(nBlock)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(nBlock.Block.Slot, wsb, nRoot))
-	require.NoError(t, r.processPendingBlocks(t.Context())) // Marks a block as bad
-	require.NoError(t, r.processPendingBlocks(t.Context())) // Bad block removed on second run
+		// Insert bad b1 in the cache to verify the good one doesn't get replaced.
+		wsb, err = blocks.NewSignedBeaconBlock(nBlock)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(nBlock.Block.Slot, wsb, nRoot))
+		require.NoError(t, r.processPendingBlocks(t.Context())) // Marks a block as bad
+		require.NoError(t, r.processPendingBlocks(t.Context())) // Bad block removed on second run
 
-	assert.Equal(t, 2, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
-	assert.Equal(t, 2, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
+		assert.Equal(t, 2, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
+		assert.Equal(t, 2, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
+	})
 }
 
 func TestRegularSyncBeaconBlockSubscriber_OptimisticStatus(t *testing.T) {
-	db := dbtest.SetupDB(t)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		db := dbtest.SetupDB(t)
 
-	p1 := p2ptest.NewTestP2P(t)
-	mockChain := &mock.ChainService{
-		Optimistic: true,
-		FinalizedCheckPoint: &ethpb.Checkpoint{
-			Epoch: 0,
-		},
-	}
-	r := &Service{
-		cfg: &config{
-			p2p:      p1,
-			beaconDB: db,
-			chain:    mockChain,
-			clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
-			stateGen: stategen.New(db, doublylinkedtree.New()),
-		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
-	}
-	r.initCaches()
+		p1 := p2ptest.NewTestP2P(t)
+		mockChain := &mock.ChainService{
+			Optimistic: true,
+			FinalizedCheckPoint: &ethpb.Checkpoint{
+				Epoch: 0,
+			},
+		}
+		r := &Service{
+			cfg: &config{
+				p2p:      p1,
+				beaconDB: db,
+				chain:    mockChain,
+				clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
+				stateGen: stategen.New(db, doublylinkedtree.New()),
+			},
+			slotToPendingBlocks: gcache.New(time.Second, 0 /* disable janitor */),
+			seenPendingBlocks:   make(map[[32]byte]bool),
+		}
+		r.initCaches()
 
-	b0 := util.NewBeaconBlock()
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
-	b0Root, err := b0.Block.HashTreeRoot()
-	require.NoError(t, err)
+		b0 := util.NewBeaconBlock()
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
+		b0Root, err := b0.Block.HashTreeRoot()
+		require.NoError(t, err)
 
-	// Setup head state for blockVerifyingState logic
-	st, err := util.NewBeaconState()
-	require.NoError(t, err)
-	mockChain.Root = b0Root[:]
-	mockChain.State = st
-	b3 := util.NewBeaconBlock()
-	b3.Block.Slot = 3
-	b3.Block.ParentRoot = b0Root[:]
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b3)
-	// Incomplete block link
-	b1 := util.NewBeaconBlock()
-	b1.Block.Slot = 1
-	b1.Block.ParentRoot = b0Root[:]
-	b1Root, err := b1.Block.HashTreeRoot()
-	require.NoError(t, err)
-	b2 := util.NewBeaconBlock()
-	b2.Block.Slot = 2
-	b2.Block.ParentRoot = b1Root[:]
-	b2Root, err := b1.Block.HashTreeRoot()
-	require.NoError(t, err)
+		// Setup head state for blockVerifyingState logic
+		st, err := util.NewBeaconState()
+		require.NoError(t, err)
+		mockChain.Root = b0Root[:]
+		mockChain.State = st
+		b3 := util.NewBeaconBlock()
+		b3.Block.Slot = 3
+		b3.Block.ParentRoot = b0Root[:]
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b3)
+		// Incomplete block link
+		b1 := util.NewBeaconBlock()
+		b1.Block.Slot = 1
+		b1.Block.ParentRoot = b0Root[:]
+		b1Root, err := b1.Block.HashTreeRoot()
+		require.NoError(t, err)
+		b2 := util.NewBeaconBlock()
+		b2.Block.Slot = 2
+		b2.Block.ParentRoot = b1Root[:]
+		b2Root, err := b1.Block.HashTreeRoot()
+		require.NoError(t, err)
 
-	// Add b2 to the cache
-	wsb, err := blocks.NewSignedBeaconBlock(b2)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b2.Block.Slot, wsb, b2Root))
+		// Add b2 to the cache
+		wsb, err := blocks.NewSignedBeaconBlock(b2)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b2.Block.Slot, wsb, b2Root))
 
-	require.NoError(t, r.processPendingBlocks(t.Context()))
-	assert.Equal(t, 1, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
-	assert.Equal(t, 1, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
+		require.NoError(t, r.processPendingBlocks(t.Context()))
+		assert.Equal(t, 1, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
+		assert.Equal(t, 1, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
 
-	// Add b1 to the cache
-	wsb, err = blocks.NewSignedBeaconBlock(b1)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b1.Block.Slot, wsb, b1Root))
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b1)
+		// Add b1 to the cache
+		wsb, err = blocks.NewSignedBeaconBlock(b1)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b1.Block.Slot, wsb, b1Root))
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b1)
 
-	nBlock := util.NewBeaconBlock()
-	nBlock.Block.Slot = b1.Block.Slot
-	nRoot, err := nBlock.Block.HashTreeRoot()
-	require.NoError(t, err)
+		nBlock := util.NewBeaconBlock()
+		nBlock.Block.Slot = b1.Block.Slot
+		nRoot, err := nBlock.Block.HashTreeRoot()
+		require.NoError(t, err)
 
-	// Insert bad b1 in the cache to verify the good one doesn't get replaced.
-	wsb, err = blocks.NewSignedBeaconBlock(nBlock)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(nBlock.Block.Slot, wsb, nRoot))
-	require.NoError(t, r.processPendingBlocks(t.Context())) // Marks a block as bad
-	require.NoError(t, r.processPendingBlocks(t.Context())) // Bad block removed on second run
+		// Insert bad b1 in the cache to verify the good one doesn't get replaced.
+		wsb, err = blocks.NewSignedBeaconBlock(nBlock)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(nBlock.Block.Slot, wsb, nRoot))
+		require.NoError(t, r.processPendingBlocks(t.Context())) // Marks a block as bad
+		require.NoError(t, r.processPendingBlocks(t.Context())) // Bad block removed on second run
 
-	assert.Equal(t, 2, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
-	assert.Equal(t, 2, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
+		assert.Equal(t, 2, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
+		assert.Equal(t, 2, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
+	})
 }
 
 func TestRegularSyncBeaconBlockSubscriber_ExecutionEngineTimesOut(t *testing.T) {
-	db := dbtest.SetupDB(t)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		db := dbtest.SetupDB(t)
 
-	p1 := p2ptest.NewTestP2P(t)
-	fcs := doublylinkedtree.New()
-	mockChain := &mock.ChainService{
-		FinalizedCheckPoint: &ethpb.Checkpoint{
-			Epoch: 0,
-		},
-		ReceiveBlockMockErr: execution.ErrHTTPTimeout,
-	}
-	r := &Service{
-		cfg: &config{
-			p2p:      p1,
-			beaconDB: db,
-			chain:    mockChain,
-			clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
-			stateGen: stategen.New(db, fcs),
-		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
-	}
-	r.initCaches()
+		p1 := p2ptest.NewTestP2P(t)
+		fcs := doublylinkedtree.New()
+		mockChain := &mock.ChainService{
+			FinalizedCheckPoint: &ethpb.Checkpoint{
+				Epoch: 0,
+			},
+			ReceiveBlockMockErr: execution.ErrHTTPTimeout,
+		}
+		r := &Service{
+			cfg: &config{
+				p2p:      p1,
+				beaconDB: db,
+				chain:    mockChain,
+				clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
+				stateGen: stategen.New(db, fcs),
+			},
+			slotToPendingBlocks: gcache.New(time.Second, 0 /* disable janitor */),
+			seenPendingBlocks:   make(map[[32]byte]bool),
+		}
+		r.initCaches()
 
-	b0 := util.NewBeaconBlock()
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
-	b0Root, err := b0.Block.HashTreeRoot()
-	require.NoError(t, err)
+		b0 := util.NewBeaconBlock()
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
+		b0Root, err := b0.Block.HashTreeRoot()
+		require.NoError(t, err)
 
-	// Setup head state for blockVerifyingState logic
-	st, err := util.NewBeaconState()
-	require.NoError(t, err)
-	mockChain.Root = b0Root[:]
-	mockChain.State = st
-	b3 := util.NewBeaconBlock()
-	b3.Block.Slot = 3
-	b3.Block.ParentRoot = b0Root[:]
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b3)
-	// Incomplete block link
-	b1 := util.NewBeaconBlock()
-	b1.Block.Slot = 1
-	b1.Block.ParentRoot = b0Root[:]
-	b1Root, err := b1.Block.HashTreeRoot()
-	require.NoError(t, err)
-	b2 := util.NewBeaconBlock()
-	b2.Block.Slot = 2
-	b2.Block.ParentRoot = b1Root[:]
-	b2Root, err := b1.Block.HashTreeRoot()
-	require.NoError(t, err)
+		// Setup head state for blockVerifyingState logic
+		st, err := util.NewBeaconState()
+		require.NoError(t, err)
+		mockChain.Root = b0Root[:]
+		mockChain.State = st
+		b3 := util.NewBeaconBlock()
+		b3.Block.Slot = 3
+		b3.Block.ParentRoot = b0Root[:]
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b3)
+		// Incomplete block link
+		b1 := util.NewBeaconBlock()
+		b1.Block.Slot = 1
+		b1.Block.ParentRoot = b0Root[:]
+		b1Root, err := b1.Block.HashTreeRoot()
+		require.NoError(t, err)
+		b2 := util.NewBeaconBlock()
+		b2.Block.Slot = 2
+		b2.Block.ParentRoot = b1Root[:]
+		b2Root, err := b1.Block.HashTreeRoot()
+		require.NoError(t, err)
 
-	// Add b2 to the cache
-	wsb, err := blocks.NewSignedBeaconBlock(b2)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b2.Block.Slot, wsb, b2Root))
+		// Add b2 to the cache
+		wsb, err := blocks.NewSignedBeaconBlock(b2)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b2.Block.Slot, wsb, b2Root))
 
-	require.NoError(t, r.processPendingBlocks(t.Context()))
-	assert.Equal(t, 1, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
-	assert.Equal(t, 1, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
+		require.NoError(t, r.processPendingBlocks(t.Context()))
+		assert.Equal(t, 1, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
+		assert.Equal(t, 1, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
 
-	// Add b1 to the cache
-	wsb, err = blocks.NewSignedBeaconBlock(b1)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b1.Block.Slot, wsb, b1Root))
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b1)
+		// Add b1 to the cache
+		wsb, err = blocks.NewSignedBeaconBlock(b1)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b1.Block.Slot, wsb, b1Root))
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b1)
 
-	nBlock := util.NewBeaconBlock()
-	nBlock.Block.Slot = b1.Block.Slot
-	nRoot, err := nBlock.Block.HashTreeRoot()
-	require.NoError(t, err)
+		nBlock := util.NewBeaconBlock()
+		nBlock.Block.Slot = b1.Block.Slot
+		nRoot, err := nBlock.Block.HashTreeRoot()
+		require.NoError(t, err)
 
-	// Insert bad b1 in the cache to verify the good one doesn't get replaced.
-	wsb, err = blocks.NewSignedBeaconBlock(nBlock)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(nBlock.Block.Slot, wsb, nRoot))
-	require.NoError(t, r.processPendingBlocks(t.Context())) // Marks a block as bad
-	require.NoError(t, r.processPendingBlocks(t.Context())) // Bad block removed on second run
+		// Insert bad b1 in the cache to verify the good one doesn't get replaced.
+		wsb, err = blocks.NewSignedBeaconBlock(nBlock)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(nBlock.Block.Slot, wsb, nRoot))
+		require.NoError(t, r.processPendingBlocks(t.Context())) // Marks a block as bad
+		require.NoError(t, r.processPendingBlocks(t.Context())) // Bad block removed on second run
 
-	assert.Equal(t, 2, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
-	assert.Equal(t, 2, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
-	require.Equal(t, 0, len(r.badBlockCache.Keys())) // Account for the bad block above
-	require.Equal(t, 0, len(r.seenBlockCache.Keys()))
+		assert.Equal(t, 2, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
+		assert.Equal(t, 2, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
+		require.Equal(t, 0, len(r.badBlockCache.Keys())) // Account for the bad block above
+		require.Equal(t, 0, len(r.seenBlockCache.Keys()))
+	})
 }
 
 func TestRegularSync_InsertDuplicateBlocks(t *testing.T) {
-	db := dbtest.SetupDB(t)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		db := dbtest.SetupDB(t)
 
-	p1 := p2ptest.NewTestP2P(t)
-	r := &Service{
-		cfg: &config{
-			p2p:      p1,
-			beaconDB: db,
-			chain: &mock.ChainService{
-				FinalizedCheckPoint: &ethpb.Checkpoint{
-					Epoch: 0,
-					Root:  make([]byte, 32),
+		p1 := p2ptest.NewTestP2P(t)
+		r := &Service{
+			cfg: &config{
+				p2p:      p1,
+				beaconDB: db,
+				chain: &mock.ChainService{
+					FinalizedCheckPoint: &ethpb.Checkpoint{
+						Epoch: 0,
+						Root:  make([]byte, 32),
+					},
 				},
 			},
-		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
-	}
-	r.initCaches()
+			slotToPendingBlocks: gcache.New(time.Second, 0 /* disable janitor */),
+			seenPendingBlocks:   make(map[[32]byte]bool),
+		}
+		r.initCaches()
 
-	b0 := util.NewBeaconBlock()
-	b0r := [32]byte{'a'}
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
-	b0Root, err := b0.Block.HashTreeRoot()
-	require.NoError(t, err)
-	b1 := util.NewBeaconBlock()
-	b1.Block.Slot = 1
-	b1.Block.ParentRoot = b0Root[:]
-	b1r := [32]byte{'b'}
+		b0 := util.NewBeaconBlock()
+		b0r := [32]byte{'a'}
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
+		b0Root, err := b0.Block.HashTreeRoot()
+		require.NoError(t, err)
+		b1 := util.NewBeaconBlock()
+		b1.Block.Slot = 1
+		b1.Block.ParentRoot = b0Root[:]
+		b1r := [32]byte{'b'}
 
-	wsb, err := blocks.NewSignedBeaconBlock(b0)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b0.Block.Slot, wsb, b0r))
-	require.Equal(t, 1, len(r.pendingBlocksInCache(b0.Block.Slot)), "Block was not added to map")
+		wsb, err := blocks.NewSignedBeaconBlock(b0)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b0.Block.Slot, wsb, b0r))
+		require.Equal(t, 1, len(r.pendingBlocksInCache(b0.Block.Slot)), "Block was not added to map")
 
-	wsb, err = blocks.NewSignedBeaconBlock(b1)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b1.Block.Slot, wsb, b1r))
-	require.Equal(t, 1, len(r.pendingBlocksInCache(b1.Block.Slot)), "Block was not added to map")
+		wsb, err = blocks.NewSignedBeaconBlock(b1)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b1.Block.Slot, wsb, b1r))
+		require.Equal(t, 1, len(r.pendingBlocksInCache(b1.Block.Slot)), "Block was not added to map")
 
-	// Add duplicate block which should not be saved.
-	wsb, err = blocks.NewSignedBeaconBlock(b0)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b0.Block.Slot, wsb, b0r))
-	require.Equal(t, 1, len(r.pendingBlocksInCache(b0.Block.Slot)), "Block was added to map")
+		// Add duplicate block which should not be saved.
+		wsb, err = blocks.NewSignedBeaconBlock(b0)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b0.Block.Slot, wsb, b0r))
+		require.Equal(t, 1, len(r.pendingBlocksInCache(b0.Block.Slot)), "Block was added to map")
 
-	// Add duplicate block which should not be saved.
-	wsb, err = blocks.NewSignedBeaconBlock(b1)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b1.Block.Slot, wsb, b1r))
-	require.Equal(t, 1, len(r.pendingBlocksInCache(b1.Block.Slot)), "Block was added to map")
+		// Add duplicate block which should not be saved.
+		wsb, err = blocks.NewSignedBeaconBlock(b1)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b1.Block.Slot, wsb, b1r))
+		require.Equal(t, 1, len(r.pendingBlocksInCache(b1.Block.Slot)), "Block was added to map")
 
+	})
 }
 
 func TestRegularSyncBeaconBlockSubscriber_DoNotReprocessBlock(t *testing.T) {
-	db := dbtest.SetupDB(t)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		db := dbtest.SetupDB(t)
 
-	p1 := p2ptest.NewTestP2P(t)
-	r := &Service{
-		cfg: &config{
-			p2p:      p1,
-			beaconDB: db,
-			chain: &mock.ChainService{
-				FinalizedCheckPoint: &ethpb.Checkpoint{
-					Epoch: 0,
+		p1 := p2ptest.NewTestP2P(t)
+		r := &Service{
+			cfg: &config{
+				p2p:      p1,
+				beaconDB: db,
+				chain: &mock.ChainService{
+					FinalizedCheckPoint: &ethpb.Checkpoint{
+						Epoch: 0,
+					},
 				},
+				clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
+				stateGen: stategen.New(db, doublylinkedtree.New()),
 			},
-			clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
-			stateGen: stategen.New(db, doublylinkedtree.New()),
-		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
-	}
-	r.initCaches()
+			slotToPendingBlocks: gcache.New(time.Second, 0 /* disable janitor */),
+			seenPendingBlocks:   make(map[[32]byte]bool),
+		}
+		r.initCaches()
 
-	b0 := util.NewBeaconBlock()
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
-	b0Root, err := b0.Block.HashTreeRoot()
-	require.NoError(t, err)
-	b3 := util.NewBeaconBlock()
-	b3.Block.Slot = 3
-	b3.Block.ParentRoot = b0Root[:]
-	b3Root, err := b3.Block.HashTreeRoot()
-	require.NoError(t, err)
+		b0 := util.NewBeaconBlock()
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
+		b0Root, err := b0.Block.HashTreeRoot()
+		require.NoError(t, err)
+		b3 := util.NewBeaconBlock()
+		b3.Block.Slot = 3
+		b3.Block.ParentRoot = b0Root[:]
+		b3Root, err := b3.Block.HashTreeRoot()
+		require.NoError(t, err)
 
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b3)
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b3)
 
-	// Add b3 to the cache
-	wsb, err := blocks.NewSignedBeaconBlock(b3)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b3.Block.Slot, wsb, b3Root))
+		// Add b3 to the cache
+		wsb, err := blocks.NewSignedBeaconBlock(b3)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b3.Block.Slot, wsb, b3Root))
 
-	require.NoError(t, r.processPendingBlocks(t.Context()))
-	assert.Equal(t, 0, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
-	assert.Equal(t, 0, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
+		require.NoError(t, r.processPendingBlocks(t.Context()))
+		assert.Equal(t, 0, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
+		assert.Equal(t, 0, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
+	})
 }
 
 //	/- b1 - b2 - b5
@@ -386,210 +396,214 @@ func TestRegularSyncBeaconBlockSubscriber_DoNotReprocessBlock(t *testing.T) {
 //
 // Test b2 and b3 were missed, after receiving them we can process 2 chains.
 func TestRegularSyncBeaconBlockSubscriber_ProcessPendingBlocks_2Chains(t *testing.T) {
-	db := dbtest.SetupDB(t)
-	p1 := p2ptest.NewTestP2P(t)
-	p2 := p2ptest.NewTestP2P(t)
-	p1.Connect(p2)
-	assert.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
-	pcl := protocol.ID("/eth2/beacon_chain/req/hello/1/ssz_snappy")
-	var wg sync.WaitGroup
-	wg.Add(1)
-	p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
-		defer wg.Done()
-		code, errMsg, err := ReadStatusCode(stream, p1.Encoding())
-		assert.NoError(t, err)
-		if code == 0 {
-			t.Error("Expected a non-zero code")
-		}
-		if errMsg != p2ptypes.ErrWrongForkDigestVersion.Error() {
-			t.Logf("Received error string len %d, wanted error string len %d", len(errMsg), len(p2ptypes.ErrWrongForkDigestVersion.Error()))
-			t.Errorf("Received unexpected message response in the stream: %s. Wanted %s.", errMsg, p2ptypes.ErrWrongForkDigestVersion.Error())
-		}
-	})
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		db := dbtest.SetupDB(t)
+		p1 := p2ptest.NewTestP2P(t)
+		p2 := p2ptest.NewTestP2P(t)
+		p1.Connect(p2)
+		assert.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
+		pcl := protocol.ID("/eth2/beacon_chain/req/hello/1/ssz_snappy")
+		var wg sync.WaitGroup
+		wg.Add(1)
+		p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
+			defer wg.Done()
+			code, errMsg, err := ReadStatusCode(stream, p1.Encoding())
+			assert.NoError(t, err)
+			if code == 0 {
+				t.Error("Expected a non-zero code")
+			}
+			if errMsg != p2ptypes.ErrWrongForkDigestVersion.Error() {
+				t.Logf("Received error string len %d, wanted error string len %d", len(errMsg), len(p2ptypes.ErrWrongForkDigestVersion.Error()))
+				t.Errorf("Received unexpected message response in the stream: %s. Wanted %s.", errMsg, p2ptypes.ErrWrongForkDigestVersion.Error())
+			}
+		})
 
-	r := &Service{
-		cfg: &config{
-			p2p:      p1,
-			beaconDB: db,
-			chain: &mock.ChainService{
-				FinalizedCheckPoint: &ethpb.Checkpoint{
-					Epoch: 0,
-					Root:  make([]byte, 32),
+		r := &Service{
+			cfg: &config{
+				p2p:      p1,
+				beaconDB: db,
+				chain: &mock.ChainService{
+					FinalizedCheckPoint: &ethpb.Checkpoint{
+						Epoch: 0,
+						Root:  make([]byte, 32),
+					},
 				},
+				clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
+				stateGen: stategen.New(db, doublylinkedtree.New()),
 			},
-			clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
-			stateGen: stategen.New(db, doublylinkedtree.New()),
-		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
-	}
-	r.initCaches()
+			slotToPendingBlocks: gcache.New(time.Second, 0 /* disable janitor */),
+			seenPendingBlocks:   make(map[[32]byte]bool),
+		}
+		r.initCaches()
 
-	p1.Peers().Add(new(enr.Record), p2.PeerID(), nil, network.DirOutbound)
-	p1.Peers().SetConnectionState(p2.PeerID(), peers.Connected)
-	p1.Peers().SetChainState(p2.PeerID(), &ethpb.StatusV2{})
+		p1.Peers().Add(new(enr.Record), p2.PeerID(), nil, network.DirOutbound)
+		p1.Peers().SetConnectionState(p2.PeerID(), peers.Connected)
+		p1.Peers().SetChainState(p2.PeerID(), &ethpb.StatusV2{})
 
-	b0 := util.NewBeaconBlock()
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
-	b0Root, err := b0.Block.HashTreeRoot()
-	require.NoError(t, err)
+		b0 := util.NewBeaconBlock()
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
+		b0Root, err := b0.Block.HashTreeRoot()
+		require.NoError(t, err)
 
-	// Setup head state for blockVerifyingState logic
-	st, err := util.NewBeaconState()
-	require.NoError(t, err)
-	mockChain := r.cfg.chain.(*mock.ChainService)
-	mockChain.Root = b0Root[:]
-	mockChain.State = st
+		// Setup head state for blockVerifyingState logic
+		st, err := util.NewBeaconState()
+		require.NoError(t, err)
+		mockChain := r.cfg.chain.(*mock.ChainService)
+		mockChain.Root = b0Root[:]
+		mockChain.State = st
 
-	b1 := util.NewBeaconBlock()
-	b1.Block.Slot = 1
-	b1.Block.ParentRoot = b0Root[:]
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b1)
-	b1Root, err := b1.Block.HashTreeRoot()
-	require.NoError(t, err)
+		b1 := util.NewBeaconBlock()
+		b1.Block.Slot = 1
+		b1.Block.ParentRoot = b0Root[:]
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b1)
+		b1Root, err := b1.Block.HashTreeRoot()
+		require.NoError(t, err)
 
-	// Incomplete block links
-	b2 := util.NewBeaconBlock()
-	b2.Block.Slot = 2
-	b2.Block.ParentRoot = b1Root[:]
-	b2Root, err := b2.Block.HashTreeRoot()
-	require.NoError(t, err)
-	b5 := util.NewBeaconBlock()
-	b5.Block.Slot = 5
-	b5.Block.ParentRoot = b2Root[:]
-	b5Root, err := b5.Block.HashTreeRoot()
-	require.NoError(t, err)
-	b3 := util.NewBeaconBlock()
-	b3.Block.Slot = 3
-	b3.Block.ParentRoot = b0Root[:]
-	b3Root, err := b3.Block.HashTreeRoot()
-	require.NoError(t, err)
-	b4 := util.NewBeaconBlock()
-	b4.Block.Slot = 4
-	b4.Block.ParentRoot = b3Root[:]
-	b4Root, err := b4.Block.HashTreeRoot()
-	require.NoError(t, err)
+		// Incomplete block links
+		b2 := util.NewBeaconBlock()
+		b2.Block.Slot = 2
+		b2.Block.ParentRoot = b1Root[:]
+		b2Root, err := b2.Block.HashTreeRoot()
+		require.NoError(t, err)
+		b5 := util.NewBeaconBlock()
+		b5.Block.Slot = 5
+		b5.Block.ParentRoot = b2Root[:]
+		b5Root, err := b5.Block.HashTreeRoot()
+		require.NoError(t, err)
+		b3 := util.NewBeaconBlock()
+		b3.Block.Slot = 3
+		b3.Block.ParentRoot = b0Root[:]
+		b3Root, err := b3.Block.HashTreeRoot()
+		require.NoError(t, err)
+		b4 := util.NewBeaconBlock()
+		b4.Block.Slot = 4
+		b4.Block.ParentRoot = b3Root[:]
+		b4Root, err := b4.Block.HashTreeRoot()
+		require.NoError(t, err)
 
-	wsb, err := blocks.NewSignedBeaconBlock(b4)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b4.Block.Slot, wsb, b4Root))
-	wsb, err = blocks.NewSignedBeaconBlock(b5)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b5.Block.Slot, wsb, b5Root))
+		wsb, err := blocks.NewSignedBeaconBlock(b4)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b4.Block.Slot, wsb, b4Root))
+		wsb, err = blocks.NewSignedBeaconBlock(b5)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b5.Block.Slot, wsb, b5Root))
 
-	require.NoError(t, r.processPendingBlocks(t.Context())) // Marks a block as bad
-	require.NoError(t, r.processPendingBlocks(t.Context())) // Bad block removed on second run
+		require.NoError(t, r.processPendingBlocks(t.Context())) // Marks a block as bad
+		require.NoError(t, r.processPendingBlocks(t.Context())) // Bad block removed on second run
 
-	assert.Equal(t, 2, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
-	assert.Equal(t, 2, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
+		assert.Equal(t, 2, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
+		assert.Equal(t, 2, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
 
-	// Add b3 to the cache
-	wsb, err = blocks.NewSignedBeaconBlock(b3)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b3.Block.Slot, wsb, b3Root))
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b3)
+		// Add b3 to the cache
+		wsb, err = blocks.NewSignedBeaconBlock(b3)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b3.Block.Slot, wsb, b3Root))
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b3)
 
-	require.NoError(t, r.processPendingBlocks(t.Context())) // Marks a block as bad
-	require.NoError(t, r.processPendingBlocks(t.Context())) // Bad block removed on second run
+		require.NoError(t, r.processPendingBlocks(t.Context())) // Marks a block as bad
+		require.NoError(t, r.processPendingBlocks(t.Context())) // Bad block removed on second run
 
-	assert.Equal(t, 2, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
-	assert.Equal(t, 2, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
+		assert.Equal(t, 2, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
+		assert.Equal(t, 2, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
 
-	// Add b2 to the cache
-	wsb, err = blocks.NewSignedBeaconBlock(b2)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b2.Block.Slot, wsb, b2Root))
+		// Add b2 to the cache
+		wsb, err = blocks.NewSignedBeaconBlock(b2)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b2.Block.Slot, wsb, b2Root))
 
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b2)
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b2)
 
-	require.NoError(t, r.processPendingBlocks(t.Context())) // Marks a block as bad
-	require.NoError(t, r.processPendingBlocks(t.Context())) // Bad block removed on second run
+		require.NoError(t, r.processPendingBlocks(t.Context())) // Marks a block as bad
+		require.NoError(t, r.processPendingBlocks(t.Context())) // Bad block removed on second run
 
-	assert.Equal(t, 2, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
-	assert.Equal(t, 2, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
+		assert.Equal(t, 2, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
+		assert.Equal(t, 2, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
+	})
 }
 
 func TestRegularSyncBeaconBlockSubscriber_PruneOldPendingBlocks(t *testing.T) {
-	db := dbtest.SetupDB(t)
-	p1 := p2ptest.NewTestP2P(t)
-	p2 := p2ptest.NewTestP2P(t)
-	p1.Connect(p2)
-	assert.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		db := dbtest.SetupDB(t)
+		p1 := p2ptest.NewTestP2P(t)
+		p2 := p2ptest.NewTestP2P(t)
+		p1.Connect(p2)
+		assert.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
 
-	r := &Service{
-		cfg: &config{
-			p2p:      p1,
-			beaconDB: db,
-			chain: &mock.ChainService{
-				FinalizedCheckPoint: &ethpb.Checkpoint{
-					Epoch: 1,
-					Root:  make([]byte, 32),
+		r := &Service{
+			cfg: &config{
+				p2p:      p1,
+				beaconDB: db,
+				chain: &mock.ChainService{
+					FinalizedCheckPoint: &ethpb.Checkpoint{
+						Epoch: 1,
+						Root:  make([]byte, 32),
+					},
 				},
 			},
-		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
-	}
-	r.initCaches()
+			slotToPendingBlocks: gcache.New(time.Second, 0 /* disable janitor */),
+			seenPendingBlocks:   make(map[[32]byte]bool),
+		}
+		r.initCaches()
 
-	p1.Peers().Add(new(enr.Record), p1.PeerID(), nil, network.DirOutbound)
-	p1.Peers().SetConnectionState(p1.PeerID(), peers.Connected)
-	p1.Peers().SetChainState(p1.PeerID(), &ethpb.StatusV2{})
+		p1.Peers().Add(new(enr.Record), p1.PeerID(), nil, network.DirOutbound)
+		p1.Peers().SetConnectionState(p1.PeerID(), peers.Connected)
+		p1.Peers().SetChainState(p1.PeerID(), &ethpb.StatusV2{})
 
-	b0 := util.NewBeaconBlock()
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
-	b0Root, err := b0.Block.HashTreeRoot()
-	require.NoError(t, err)
-	b1 := util.NewBeaconBlock()
-	b1.Block.Slot = 1
-	b1.Block.ParentRoot = b0Root[:]
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b1)
-	b1Root, err := b1.Block.HashTreeRoot()
-	require.NoError(t, err)
+		b0 := util.NewBeaconBlock()
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
+		b0Root, err := b0.Block.HashTreeRoot()
+		require.NoError(t, err)
+		b1 := util.NewBeaconBlock()
+		b1.Block.Slot = 1
+		b1.Block.ParentRoot = b0Root[:]
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b1)
+		b1Root, err := b1.Block.HashTreeRoot()
+		require.NoError(t, err)
 
-	// Incomplete block links
-	b2 := util.NewBeaconBlock()
-	b2.Block.Slot = 2
-	b2.Block.ParentRoot = b1Root[:]
-	b2Root, err := b2.Block.HashTreeRoot()
-	require.NoError(t, err)
-	b5 := util.NewBeaconBlock()
-	b5.Block.Slot = 5
-	b5.Block.ParentRoot = b2Root[:]
-	b5Root, err := b5.Block.HashTreeRoot()
-	require.NoError(t, err)
-	b3 := util.NewBeaconBlock()
-	b3.Block.Slot = 3
-	b3.Block.ParentRoot = b0Root[:]
-	b3Root, err := b3.Block.HashTreeRoot()
-	require.NoError(t, err)
-	b4 := util.NewBeaconBlock()
-	b4.Block.Slot = 4
-	b4.Block.ParentRoot = b3Root[:]
-	b4Root, err := b4.Block.HashTreeRoot()
-	require.NoError(t, err)
+		// Incomplete block links
+		b2 := util.NewBeaconBlock()
+		b2.Block.Slot = 2
+		b2.Block.ParentRoot = b1Root[:]
+		b2Root, err := b2.Block.HashTreeRoot()
+		require.NoError(t, err)
+		b5 := util.NewBeaconBlock()
+		b5.Block.Slot = 5
+		b5.Block.ParentRoot = b2Root[:]
+		b5Root, err := b5.Block.HashTreeRoot()
+		require.NoError(t, err)
+		b3 := util.NewBeaconBlock()
+		b3.Block.Slot = 3
+		b3.Block.ParentRoot = b0Root[:]
+		b3Root, err := b3.Block.HashTreeRoot()
+		require.NoError(t, err)
+		b4 := util.NewBeaconBlock()
+		b4.Block.Slot = 4
+		b4.Block.ParentRoot = b3Root[:]
+		b4Root, err := b4.Block.HashTreeRoot()
+		require.NoError(t, err)
 
-	wsb, err := blocks.NewSignedBeaconBlock(b2)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b2.Block.Slot, wsb, b2Root))
-	wsb, err = blocks.NewSignedBeaconBlock(b3)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b3.Block.Slot, wsb, b3Root))
-	wsb, err = blocks.NewSignedBeaconBlock(b4)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b4.Block.Slot, wsb, b4Root))
-	wsb, err = blocks.NewSignedBeaconBlock(b5)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b5.Block.Slot, wsb, b5Root))
+		wsb, err := blocks.NewSignedBeaconBlock(b2)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b2.Block.Slot, wsb, b2Root))
+		wsb, err = blocks.NewSignedBeaconBlock(b3)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b3.Block.Slot, wsb, b3Root))
+		wsb, err = blocks.NewSignedBeaconBlock(b4)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b4.Block.Slot, wsb, b4Root))
+		wsb, err = blocks.NewSignedBeaconBlock(b5)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b5.Block.Slot, wsb, b5Root))
 
-	require.NoError(t, r.processPendingBlocks(t.Context()))
-	assert.Equal(t, 0, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
-	assert.Equal(t, 0, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
+		require.NoError(t, r.processPendingBlocks(t.Context()))
+		assert.Equal(t, 0, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
+		assert.Equal(t, 0, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
+	})
 }
 
 func TestService_sortedPendingSlots(t *testing.T) {
 	r := &Service{
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
+		slotToPendingBlocks: gcache.New(time.Second, 0 /* disable janitor */),
 		seenPendingBlocks:   make(map[[32]byte]bool),
 	}
 
@@ -612,109 +626,111 @@ func TestService_sortedPendingSlots(t *testing.T) {
 }
 
 func TestService_BatchRootRequest(t *testing.T) {
-	db := dbtest.SetupDB(t)
-	p1 := p2ptest.NewTestP2P(t)
-	p2 := p2ptest.NewTestP2P(t)
-	p1.Connect(p2)
-	assert.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		db := dbtest.SetupDB(t)
+		p1 := p2ptest.NewTestP2P(t)
+		p2 := p2ptest.NewTestP2P(t)
+		p1.Connect(p2)
+		assert.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
 
-	st, keys := util.DeterministicGenesisState(t, 64)
-	chain := &mock.ChainService{
-		State: st,
-		FinalizedCheckPoint: &ethpb.Checkpoint{
-			Epoch: 1,
-			Root:  make([]byte, 32),
-		},
-		ValidatorsRoot: [32]byte{},
-		Genesis:        time.Now(),
-	}
-	r := &Service{
-		cfg: &config{
-			p2p:      p1,
-			beaconDB: db,
-			chain:    chain,
-			clock:    startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
-		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
-	}
-	r.initCaches()
-
-	p1.Peers().Add(new(enr.Record), p2.PeerID(), nil, network.DirOutbound)
-	p1.Peers().SetConnectionState(p2.PeerID(), peers.Connected)
-	p1.Peers().SetChainState(p2.PeerID(), &ethpb.StatusV2{FinalizedEpoch: 2})
-
-	b0 := util.NewBeaconBlock()
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
-	b0Root, err := b0.Block.HashTreeRoot()
-	require.NoError(t, err)
-	b1 := util.NewBeaconBlock()
-	b1.Block.Slot = 1
-	b1.Block.ParentRoot = b0Root[:]
-	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b1)
-	b1Root, err := b1.Block.HashTreeRoot()
-	require.NoError(t, err)
-
-	b2 := util.NewBeaconBlock()
-	b2.Block.Slot = 2
-	b2.Block.ParentRoot = b1Root[:]
-	b2Root, err := b2.Block.HashTreeRoot()
-	require.NoError(t, err)
-	b5 := util.NewBeaconBlock()
-	b5.Block.Slot = 5
-	b5.Block.ParentRoot = b2Root[:]
-	b5Root, err := b5.Block.HashTreeRoot()
-	require.NoError(t, err)
-	b3 := util.NewBeaconBlock()
-	b3.Block.Slot = 3
-	b3.Block.ParentRoot = b0Root[:]
-	b3Root, err := b3.Block.HashTreeRoot()
-	require.NoError(t, err)
-	b4 := util.NewBeaconBlock()
-	b4.Block.Slot = 4
-	b4.Block.ParentRoot = b3Root[:]
-	b4Root, err := b4.Block.HashTreeRoot()
-	require.NoError(t, err)
-
-	for _, blk := range []*ethpb.SignedBeaconBlock{b2, b3, b4, b5} {
-		blk.Signature, err = signing.ComputeDomainAndSign(st, 0, blk.Block, params.BeaconConfig().DomainBeaconProposer, keys[0])
-		require.NoError(t, err)
-	}
-
-	// Send in duplicated roots to also test deduplication.
-	sentRoots := p2ptypes.BeaconBlockByRootsReq{b2Root, b2Root, b3Root, b3Root, b4Root, b5Root}
-	expectedRoots := p2ptypes.BeaconBlockByRootsReq{b2Root, b3Root, b4Root, b5Root}
-
-	pcl := protocol.ID("/eth2/beacon_chain/req/beacon_blocks_by_root/1/ssz_snappy")
-	var wg sync.WaitGroup
-	wg.Add(1)
-	p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
-		defer wg.Done()
-		var out p2ptypes.BeaconBlockByRootsReq
-		assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, &out))
-		assert.DeepEqual(t, expectedRoots, out, "Did not receive expected message")
-		response := []*ethpb.SignedBeaconBlock{b2, b3, b4, b5}
-		for _, blk := range response {
-			_, err := stream.Write([]byte{responseCodeSuccess})
-			assert.NoError(t, err, "Could not write to stream")
-			_, err = p2.Encoding().EncodeWithMaxLength(stream, blk)
-			assert.NoError(t, err, "Could not send response back")
+		st, keys := util.DeterministicGenesisState(t, 64)
+		chain := &mock.ChainService{
+			State: st,
+			FinalizedCheckPoint: &ethpb.Checkpoint{
+				Epoch: 1,
+				Root:  make([]byte, 32),
+			},
+			ValidatorsRoot: [32]byte{},
+			Genesis:        time.Now(),
 		}
-		assert.NoError(t, stream.Close())
+		r := &Service{
+			cfg: &config{
+				p2p:      p1,
+				beaconDB: db,
+				chain:    chain,
+				clock:    startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			},
+			slotToPendingBlocks: gcache.New(time.Second, 0 /* disable janitor */),
+			seenPendingBlocks:   make(map[[32]byte]bool),
+		}
+		r.initCaches()
+
+		p1.Peers().Add(new(enr.Record), p2.PeerID(), nil, network.DirOutbound)
+		p1.Peers().SetConnectionState(p2.PeerID(), peers.Connected)
+		p1.Peers().SetChainState(p2.PeerID(), &ethpb.StatusV2{FinalizedEpoch: 2})
+
+		b0 := util.NewBeaconBlock()
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
+		b0Root, err := b0.Block.HashTreeRoot()
+		require.NoError(t, err)
+		b1 := util.NewBeaconBlock()
+		b1.Block.Slot = 1
+		b1.Block.ParentRoot = b0Root[:]
+		util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b1)
+		b1Root, err := b1.Block.HashTreeRoot()
+		require.NoError(t, err)
+
+		b2 := util.NewBeaconBlock()
+		b2.Block.Slot = 2
+		b2.Block.ParentRoot = b1Root[:]
+		b2Root, err := b2.Block.HashTreeRoot()
+		require.NoError(t, err)
+		b5 := util.NewBeaconBlock()
+		b5.Block.Slot = 5
+		b5.Block.ParentRoot = b2Root[:]
+		b5Root, err := b5.Block.HashTreeRoot()
+		require.NoError(t, err)
+		b3 := util.NewBeaconBlock()
+		b3.Block.Slot = 3
+		b3.Block.ParentRoot = b0Root[:]
+		b3Root, err := b3.Block.HashTreeRoot()
+		require.NoError(t, err)
+		b4 := util.NewBeaconBlock()
+		b4.Block.Slot = 4
+		b4.Block.ParentRoot = b3Root[:]
+		b4Root, err := b4.Block.HashTreeRoot()
+		require.NoError(t, err)
+
+		for _, blk := range []*ethpb.SignedBeaconBlock{b2, b3, b4, b5} {
+			blk.Signature, err = signing.ComputeDomainAndSign(st, 0, blk.Block, params.BeaconConfig().DomainBeaconProposer, keys[0])
+			require.NoError(t, err)
+		}
+
+		// Send in duplicated roots to also test deduplication.
+		sentRoots := p2ptypes.BeaconBlockByRootsReq{b2Root, b2Root, b3Root, b3Root, b4Root, b5Root}
+		expectedRoots := p2ptypes.BeaconBlockByRootsReq{b2Root, b3Root, b4Root, b5Root}
+
+		pcl := protocol.ID("/eth2/beacon_chain/req/beacon_blocks_by_root/1/ssz_snappy")
+		var wg sync.WaitGroup
+		wg.Add(1)
+		p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
+			defer wg.Done()
+			var out p2ptypes.BeaconBlockByRootsReq
+			assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, &out))
+			assert.DeepEqual(t, expectedRoots, out, "Did not receive expected message")
+			response := []*ethpb.SignedBeaconBlock{b2, b3, b4, b5}
+			for _, blk := range response {
+				_, err := stream.Write([]byte{responseCodeSuccess})
+				assert.NoError(t, err, "Could not write to stream")
+				_, err = p2.Encoding().EncodeWithMaxLength(stream, blk)
+				assert.NoError(t, err, "Could not send response back")
+			}
+			assert.NoError(t, stream.Close())
+		})
+
+		require.NoError(t, r.sendBatchRootRequest(t.Context(), sentRoots, rand.NewGenerator()))
+
+		if util.WaitTimeout(&wg, 1*time.Second) {
+			t.Fatal("Did not receive stream within 1 sec")
+		}
+		assert.Equal(t, 4, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
+		assert.Equal(t, 4, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
 	})
-
-	require.NoError(t, r.sendBatchRootRequest(t.Context(), sentRoots, rand.NewGenerator()))
-
-	if util.WaitTimeout(&wg, 1*time.Second) {
-		t.Fatal("Did not receive stream within 1 sec")
-	}
-	assert.Equal(t, 4, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
-	assert.Equal(t, 4, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
 }
 
 func TestService_AddPendingBlockToQueueOverMax(t *testing.T) {
 	r := &Service{
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
+		slotToPendingBlocks: gcache.New(time.Second, 0 /* disable janitor */),
 		seenPendingBlocks:   make(map[[32]byte]bool),
 	}
 
@@ -742,178 +758,184 @@ func TestService_AddPendingBlockToQueueOverMax(t *testing.T) {
 }
 
 func TestService_ProcessPendingBlockOnCorrectSlot(t *testing.T) {
-	ctx := t.Context()
-	db := dbtest.SetupDB(t)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := t.Context()
+		db := dbtest.SetupDB(t)
 
-	p1 := p2ptest.NewTestP2P(t)
-	fcs := doublylinkedtree.New()
-	mockChain := mock.ChainService{
-		Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
-		FinalizedCheckPoint: &ethpb.Checkpoint{
-			Epoch: 0,
-		}}
-	r := &Service{
-		cfg: &config{
-			p2p:      p1,
-			beaconDB: db,
-			chain:    &mockChain,
-			clock:    startup.NewClock(mockChain.Genesis, mockChain.ValidatorsRoot),
-			stateGen: stategen.New(db, fcs),
-		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
-	}
-	r.initCaches()
+		p1 := p2ptest.NewTestP2P(t)
+		fcs := doublylinkedtree.New()
+		mockChain := mock.ChainService{
+			Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+			FinalizedCheckPoint: &ethpb.Checkpoint{
+				Epoch: 0,
+			}}
+		r := &Service{
+			cfg: &config{
+				p2p:      p1,
+				beaconDB: db,
+				chain:    &mockChain,
+				clock:    startup.NewClock(mockChain.Genesis, mockChain.ValidatorsRoot),
+				stateGen: stategen.New(db, fcs),
+			},
+			slotToPendingBlocks: gcache.New(time.Second, 0 /* disable janitor */),
+			seenPendingBlocks:   make(map[[32]byte]bool),
+		}
+		r.initCaches()
 
-	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
-	parentBlock := util.NewBeaconBlock()
-	util.SaveBlock(t, ctx, db, parentBlock)
-	bRoot, err := parentBlock.Block.HashTreeRoot()
-	require.NoError(t, err)
-	require.NoError(t, db.SaveState(ctx, beaconState, bRoot))
-	require.NoError(t, db.SaveStateSummary(ctx, &ethpb.StateSummary{Root: bRoot[:]}))
-	copied := beaconState.Copy()
-	require.NoError(t, copied.SetSlot(1))
-	proposerIdx, err := helpers.BeaconProposerIndex(ctx, copied)
-	require.NoError(t, err)
+		beaconState, privKeys := util.DeterministicGenesisState(t, 100)
+		parentBlock := util.NewBeaconBlock()
+		util.SaveBlock(t, ctx, db, parentBlock)
+		bRoot, err := parentBlock.Block.HashTreeRoot()
+		require.NoError(t, err)
+		require.NoError(t, db.SaveState(ctx, beaconState, bRoot))
+		require.NoError(t, db.SaveStateSummary(ctx, &ethpb.StateSummary{Root: bRoot[:]}))
+		copied := beaconState.Copy()
+		require.NoError(t, copied.SetSlot(1))
+		proposerIdx, err := helpers.BeaconProposerIndex(ctx, copied)
+		require.NoError(t, err)
 
-	mockChain.Root = bRoot[:]
-	mockChain.State = beaconState
+		mockChain.Root = bRoot[:]
+		mockChain.State = beaconState
 
-	b1 := util.NewBeaconBlock()
-	b1.Block.ParentRoot = bRoot[:]
-	b1.Block.Slot = 1
-	b1Root, err := b1.Block.HashTreeRoot()
-	require.NoError(t, err)
-	b1.Block.ProposerIndex = proposerIdx
-	b1.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, b1.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
-	require.NoError(t, err)
+		b1 := util.NewBeaconBlock()
+		b1.Block.ParentRoot = bRoot[:]
+		b1.Block.Slot = 1
+		b1Root, err := b1.Block.HashTreeRoot()
+		require.NoError(t, err)
+		b1.Block.ProposerIndex = proposerIdx
+		b1.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, b1.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
+		require.NoError(t, err)
 
-	b2 := util.NewBeaconBlock()
-	b2.Block.Slot = 2
-	b2.Block.ParentRoot = bRoot[:]
-	b2Root, err := b2.Block.HashTreeRoot()
-	require.NoError(t, err)
+		b2 := util.NewBeaconBlock()
+		b2.Block.Slot = 2
+		b2.Block.ParentRoot = bRoot[:]
+		b2Root, err := b2.Block.HashTreeRoot()
+		require.NoError(t, err)
 
-	b3 := util.NewBeaconBlock()
-	b3.Block.Slot = 3
-	b3.Block.ParentRoot = b2Root[:]
-	b3Root, err := b3.Block.HashTreeRoot()
-	require.NoError(t, err)
+		b3 := util.NewBeaconBlock()
+		b3.Block.Slot = 3
+		b3.Block.ParentRoot = b2Root[:]
+		b3Root, err := b3.Block.HashTreeRoot()
+		require.NoError(t, err)
 
-	// Add block1 for slot1
-	wsb, err := blocks.NewSignedBeaconBlock(b1)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b1.Block.Slot, wsb, b1Root))
-	// Add block2 for slot2
-	wsb, err = blocks.NewSignedBeaconBlock(b2)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b2.Block.Slot, wsb, b2Root))
-	// Add block3 for slot3
-	wsb, err = blocks.NewSignedBeaconBlock(b3)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b3.Block.Slot, wsb, b3Root))
+		// Add block1 for slot1
+		wsb, err := blocks.NewSignedBeaconBlock(b1)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b1.Block.Slot, wsb, b1Root))
+		// Add block2 for slot2
+		wsb, err = blocks.NewSignedBeaconBlock(b2)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b2.Block.Slot, wsb, b2Root))
+		// Add block3 for slot3
+		wsb, err = blocks.NewSignedBeaconBlock(b3)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b3.Block.Slot, wsb, b3Root))
 
-	// processPendingBlocks should process only blocks of the current slot. i.e. slot 1.
-	// Then check if the other two blocks are still in the pendingQueue.
-	require.NoError(t, r.processPendingBlocks(t.Context()))
-	assert.Equal(t, 2, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
+		// processPendingBlocks should process only blocks of the current slot. i.e. slot 1.
+		// Then check if the other two blocks are still in the pendingQueue.
+		require.NoError(t, r.processPendingBlocks(t.Context()))
+		assert.Equal(t, 2, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
+	})
 }
 
 func TestService_ProcessBadPendingBlocks(t *testing.T) {
-	ctx := t.Context()
-	db := dbtest.SetupDB(t)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := t.Context()
+		db := dbtest.SetupDB(t)
 
-	p1 := p2ptest.NewTestP2P(t)
-	mockChain := mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
-		FinalizedCheckPoint: &ethpb.Checkpoint{
-			Epoch: 0,
-		}}
-	r := &Service{
-		cfg: &config{
-			p2p:      p1,
-			beaconDB: db,
-			chain:    &mockChain,
-			stateGen: stategen.New(db, doublylinkedtree.New()),
-		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
-	}
-	r.initCaches()
+		p1 := p2ptest.NewTestP2P(t)
+		mockChain := mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+			FinalizedCheckPoint: &ethpb.Checkpoint{
+				Epoch: 0,
+			}}
+		r := &Service{
+			cfg: &config{
+				p2p:      p1,
+				beaconDB: db,
+				chain:    &mockChain,
+				stateGen: stategen.New(db, doublylinkedtree.New()),
+			},
+			slotToPendingBlocks: gcache.New(time.Second, 0 /* disable janitor */),
+			seenPendingBlocks:   make(map[[32]byte]bool),
+		}
+		r.initCaches()
 
-	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
-	parentBlock := util.NewBeaconBlock()
-	util.SaveBlock(t, ctx, db, parentBlock)
-	bRoot, err := parentBlock.Block.HashTreeRoot()
-	require.NoError(t, err)
-	require.NoError(t, db.SaveState(ctx, beaconState, bRoot))
-	require.NoError(t, db.SaveStateSummary(ctx, &ethpb.StateSummary{Root: bRoot[:]}))
-	copied := beaconState.Copy()
-	require.NoError(t, copied.SetSlot(1))
-	proposerIdx, err := helpers.BeaconProposerIndex(ctx, copied)
-	require.NoError(t, err)
+		beaconState, privKeys := util.DeterministicGenesisState(t, 100)
+		parentBlock := util.NewBeaconBlock()
+		util.SaveBlock(t, ctx, db, parentBlock)
+		bRoot, err := parentBlock.Block.HashTreeRoot()
+		require.NoError(t, err)
+		require.NoError(t, db.SaveState(ctx, beaconState, bRoot))
+		require.NoError(t, db.SaveStateSummary(ctx, &ethpb.StateSummary{Root: bRoot[:]}))
+		copied := beaconState.Copy()
+		require.NoError(t, copied.SetSlot(1))
+		proposerIdx, err := helpers.BeaconProposerIndex(ctx, copied)
+		require.NoError(t, err)
 
-	mockChain.Root = bRoot[:]
-	mockChain.State = beaconState
+		mockChain.Root = bRoot[:]
+		mockChain.State = beaconState
 
-	b1 := util.NewBeaconBlock()
-	b1.Block.ParentRoot = bRoot[:]
-	b1.Block.Slot = 1
-	b1Root, err := b1.Block.HashTreeRoot()
-	require.NoError(t, err)
-	b1.Block.ProposerIndex = proposerIdx
-	b1.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, b1.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
-	require.NoError(t, err)
+		b1 := util.NewBeaconBlock()
+		b1.Block.ParentRoot = bRoot[:]
+		b1.Block.Slot = 1
+		b1Root, err := b1.Block.HashTreeRoot()
+		require.NoError(t, err)
+		b1.Block.ProposerIndex = proposerIdx
+		b1.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, b1.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
+		require.NoError(t, err)
 
-	b := util.NewBeaconBlock()
-	b.Block.Slot = 55
-	b.Block.ParentRoot = []byte{'A', 'B', 'C'}
-	bA, err := blocks.NewSignedBeaconBlock(b)
-	assert.NoError(t, err)
+		b := util.NewBeaconBlock()
+		b.Block.Slot = 55
+		b.Block.ParentRoot = []byte{'A', 'B', 'C'}
+		bA, err := blocks.NewSignedBeaconBlock(b)
+		assert.NoError(t, err)
 
-	// Add block1 for slot 55
-	require.NoError(t, r.insertBlockToPendingQueue(b.Block.Slot, bA, b1Root))
-	bB, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
-	assert.NoError(t, err)
-	// remove with a different block from the same slot.
-	require.NoError(t, r.deleteBlockFromPendingQueue(b.Block.Slot, bB, b1Root))
+		// Add block1 for slot 55
+		require.NoError(t, r.insertBlockToPendingQueue(b.Block.Slot, bA, b1Root))
+		bB, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
+		assert.NoError(t, err)
+		// remove with a different block from the same slot.
+		require.NoError(t, r.deleteBlockFromPendingQueue(b.Block.Slot, bB, b1Root))
+	})
 }
 
 func TestAlreadySyncingBlock(t *testing.T) {
-	ctx := t.Context()
-	db := dbtest.SetupDB(t)
-	hook := logTest.NewGlobal()
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := t.Context()
+		db := dbtest.SetupDB(t)
+		hook := logTest.NewGlobal()
 
-	mockChain := &mock.ChainService{
-		FinalizedCheckPoint: &ethpb.Checkpoint{
-			Epoch: 0,
-		},
-	}
+		mockChain := &mock.ChainService{
+			FinalizedCheckPoint: &ethpb.Checkpoint{
+				Epoch: 0,
+			},
+		}
 
-	p1 := p2ptest.NewTestP2P(t)
-	r := &Service{
-		cfg: &config{
-			p2p:      p1,
-			beaconDB: db,
-			chain:    mockChain,
-			clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
-			stateGen: stategen.New(db, doublylinkedtree.New()),
-		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
-	}
-	r.initCaches()
+		p1 := p2ptest.NewTestP2P(t)
+		r := &Service{
+			cfg: &config{
+				p2p:      p1,
+				beaconDB: db,
+				chain:    mockChain,
+				clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
+				stateGen: stategen.New(db, doublylinkedtree.New()),
+			},
+			slotToPendingBlocks: gcache.New(time.Second, 0 /* disable janitor */),
+			seenPendingBlocks:   make(map[[32]byte]bool),
+		}
+		r.initCaches()
 
-	b := util.NewBeaconBlock()
-	b.Block.Slot = 2
-	bRoot, err := b.Block.HashTreeRoot()
-	require.NoError(t, err)
-	wsb, err := blocks.NewSignedBeaconBlock(b)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(b.Block.Slot, wsb, bRoot))
-	mockChain.SyncingRoot = bRoot
-	require.NoError(t, r.processPendingBlocks(ctx))
-	require.LogsContain(t, hook, "Skipping pending block already being processed")
+		b := util.NewBeaconBlock()
+		b.Block.Slot = 2
+		bRoot, err := b.Block.HashTreeRoot()
+		require.NoError(t, err)
+		wsb, err := blocks.NewSignedBeaconBlock(b)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(b.Block.Slot, wsb, bRoot))
+		mockChain.SyncingRoot = bRoot
+		require.NoError(t, r.processPendingBlocks(ctx))
+		require.LogsContain(t, hook, "Skipping pending block already being processed")
+	})
 }
 
 func TestExpirationCache_PruneOldBlocksCorrectly(t *testing.T) {
