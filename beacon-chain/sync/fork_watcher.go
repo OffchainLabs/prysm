@@ -15,6 +15,8 @@ import (
 // - We are subscribed to the correct gossipsub topics (for the current and upcoming epoch).
 // - We have registered the correct RPC stream handlers (for the current and upcoming epoch).
 // - We have cleaned up gossipsub topics and RPC stream handlers that are no longer needed.
+//
+// It prunes slot-keyed caches (proposer preferences, payload bids, pending gloas columns).
 func (s *Service) p2pHandlerControlLoop() {
 	// At startup, launch registration and peer discovery loops, and register rpc stream handlers.
 	startEntry := params.GetNetworkScheduleEntry(s.cfg.clock.CurrentEpoch())
@@ -29,6 +31,7 @@ func (s *Service) p2pHandlerControlLoop() {
 		case currentSlot := <-slotTicker.C():
 			s.proposerPreferencesCache.PruneBefore(currentSlot)
 			s.highestExecutionPayloadBidCache.PruneBefore(currentSlot)
+			s.pruneStaleGloasColumns(currentSlot)
 			current := s.cfg.clock.CurrentEpoch()
 			if err := s.ensureRegistrationsForEpoch(current); err != nil {
 				log.WithError(err).Error("Unable to check for fork in the next epoch")
