@@ -26,13 +26,21 @@ func ProcessBuilderDepositRequests(ctx context.Context, st state.BeaconState, re
 	// deposits that would register a new builder.
 	newDeposits := make([]*enginev1.BuilderDepositRequest, 0, len(requests))
 	newIdx := make([]int, 0, len(requests))
+	seen := make(map[[48]byte]bool, len(requests))
 	for i, request := range requests {
 		if request == nil {
 			continue
 		}
-		if _, isBuilder := st.BuilderIndexByPubkey(bytesutil.ToBytes48(request.Pubkey)); !isBuilder {
+		pubkey := bytesutil.ToBytes48(request.Pubkey)
+		// A later duplicate is a top-up if the first registers, otherwise the sigUnverified
+		// fallback covers it, so skip it here to avoid a wasted batch verification.
+		if seen[pubkey] {
+			continue
+		}
+		if _, isBuilder := st.BuilderIndexByPubkey(pubkey); !isBuilder {
 			newDeposits = append(newDeposits, request)
 			newIdx = append(newIdx, i)
+			seen[pubkey] = true
 		}
 	}
 	invalid, err := helpers.BatchVerifyBuilderDepositRequestSignatures(ctx, newDeposits)
