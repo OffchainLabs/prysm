@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"slices"
@@ -402,22 +401,9 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 		}
 		hasPayload := false
 		if roblock.Version() >= version.Gloas {
-			sbid, err := child.Block().Body().SignedExecutionPayloadBid()
+			hasPayload, err = consensus_blocks.BlockBuiltOnParentPayload(b.Block(), child.Block())
 			if err != nil {
-				return errors.Wrapf(err, "could not get execution payload bid for block at slot %d", child.Block().Slot())
-			}
-			if sbid == nil || sbid.Message == nil {
-				return fmt.Errorf("missing execution payload bid for block at slot %d", child.Block().Slot())
-			}
-			parentBid, err := b.Block().Body().SignedExecutionPayloadBid()
-			if err != nil {
-				return errors.Wrapf(err, "could not get execution payload bid for block at slot %d", b.Block().Slot())
-			}
-			if parentBid == nil || parentBid.Message == nil {
-				return fmt.Errorf("missing execution payload bid for block at slot %d", b.Block().Slot())
-			}
-			if bytes.Equal(sbid.Message.ParentBlockHash, parentBid.Message.BlockHash) {
-				hasPayload = true
+				return errors.Wrapf(err, "block built on parent payload for block at slot %d", b.Block().Slot())
 			}
 		}
 		root = b.Block().ParentRoot()

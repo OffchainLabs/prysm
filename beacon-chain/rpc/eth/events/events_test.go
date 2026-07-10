@@ -438,6 +438,45 @@ func TestStreamEvents_ProposerPreferencesWrappedWithVersion(t *testing.T) {
 	require.Equal(t, "7", got.Data.Message.ValidatorIndex)
 }
 
+func TestStreamEvents_PayloadAttestationMessageWrappedWithVersion(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	s := &Server{}
+	topics, err := newTopicRequest([]string{PayloadAttestationMessageTopic})
+	require.NoError(t, err)
+	ev := &feed.Event{
+		Type: operation.PayloadAttestationMessageReceived,
+		Data: &operation.PayloadAttestationMessageReceivedData{
+			Message: &eth.PayloadAttestationMessage{
+				ValidatorIndex: 3,
+				Data: &eth.PayloadAttestationData{
+					BeaconBlockRoot:   make([]byte, fieldparams.RootLength),
+					Slot:              0,
+					PayloadPresent:    true,
+					BlobDataAvailable: true,
+				},
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+		},
+	}
+	lr, err := s.lazyReaderForEvent(t.Context(), ev, topics)
+	require.NoError(t, err)
+	out, err := io.ReadAll(lr())
+	require.NoError(t, err)
+
+	_, payload, found := strings.Cut(string(out), "data: ")
+	require.Equal(t, true, found)
+	var got structs.PayloadAttestationMessageEvent
+	require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(payload)), &got))
+	require.Equal(t, "gloas", got.Version)
+	require.NotNil(t, got.Data)
+	require.Equal(t, "3", got.Data.ValidatorIndex)
+	require.Equal(t, true, got.Data.Data.PayloadPresent)
+}
+
 func TestStreamEvents_OperationsEvents(t *testing.T) {
 	t.Run("operations", func(t *testing.T) {
 		testSync := newStreamTestSync(t)
