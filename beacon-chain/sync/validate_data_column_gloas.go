@@ -47,7 +47,11 @@ func (s *Service) validateDataColumnGloas(
 ) (blocks.VerifiedRODataColumn, error) {
 	// data_column_sidecar_{subnet_id}
 	// [Modified in Gloas:EIP7732]
-	//
+
+	if err := s.gloasColumnNotFromFutureSlot(roDataColumn.Slot()); err != nil {
+		return blocks.VerifiedRODataColumn{}, ignoreValidation(err)
+	}
+
 	// [IGNORE] A valid block for the sidecar's slot has been seen (via gossip or non-gossip sources).
 	// If not yet seen, a client MUST queue the sidecar for deferred validation and possible processing once
 	// the block is received or retrieved.
@@ -177,6 +181,21 @@ func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID
 		return nil
 	}
 	entry.columns[idx] = &pendingColumnEntry{sidecar: dc, peer: pid}
+	return nil
+}
+
+func (s *Service) gloasColumnNotFromFutureSlot(slot primitives.Slot) error {
+	if s.cfg.clock.CurrentSlot() == slot {
+		return nil
+	}
+	earliestStart, err := s.cfg.clock.SlotStart(slot)
+	if err != nil {
+		return errors.Wrap(err, "slot start time")
+	}
+	earliestStart = earliestStart.Add(-params.BeaconConfig().MaximumGossipClockDisparityDuration())
+	if s.cfg.clock.Now().Before(earliestStart) {
+		return errors.Errorf("gloas data column slot %d is from a future slot", slot)
+	}
 	return nil
 }
 
