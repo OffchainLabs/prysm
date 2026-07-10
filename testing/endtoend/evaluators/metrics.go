@@ -168,20 +168,15 @@ func metricCheckLessThan(pageContent, topic string, value int) error {
 
 func metricCheckComparison(pageContent, topic1, topic2 string, comparison float64) error {
 	topic2Value, err := valueOfTopic(pageContent, topic2)
-	// If we can't find the first topic (error metrics), then assume the test passes.
-	if topic2Value != -1 {
+	if err != nil || topic2Value == -1 {
 		return nil
 	}
-	if err != nil {
-		return err
-	}
+
 	topic1Value, err := valueOfTopic(pageContent, topic1)
-	if topic1Value != -1 {
+	if err != nil || topic1Value == -1 {
 		return nil
 	}
-	if err != nil {
-		return err
-	}
+
 	topicComparison := float64(topic1Value) / float64(topic2Value)
 	if topicComparison >= comparison {
 		return fmt.Errorf(
