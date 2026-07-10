@@ -37,9 +37,11 @@ func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 	params.BeaconConfig().InitializeForkSchedule()
 	ctx := context.Background()
 	t.Run("wrong message type", func(t *testing.T) {
-		service := &Service{}
-		err := service.dataColumnSidecarsByRangeRPCHandler(ctx, nil, nil)
-		require.ErrorIs(t, err, notDataColumnsByRangeIdentifiersError)
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			service := &Service{}
+			err := service.dataColumnSidecarsByRangeRPCHandler(ctx, nil, nil)
+			require.ErrorIs(t, err, notDataColumnsByRangeIdentifiersError)
+		})
 	})
 	mockNower := &startup.MockNower{}
 	clock := startup.NewClock(time.Now(), params.BeaconConfig().GenesisValidatorsRoot, startup.WithNower(mockNower.Now))
@@ -48,50 +50,52 @@ func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("invalid request", func(t *testing.T) {
-		slot := primitives.Slot(400)
-		mockNower.SetSlot(t, clock, slot)
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			slot := primitives.Slot(400)
+			mockNower.SetSlot(t, clock, slot)
 
-		localP2P, remoteP2P := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+			localP2P, remoteP2P := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
 
-		service := &Service{
-			cfg: &config{
-				p2p: localP2P,
-				chain: &chainMock.ChainService{
-					Slot: &slot,
+			service := &Service{
+				cfg: &config{
+					p2p: localP2P,
+					chain: &chainMock.ChainService{
+						Slot: &slot,
+					},
+					clock: clock,
 				},
-				clock: clock,
-			},
-			rateLimiter: newRateLimiter(localP2P),
-		}
+				rateLimiter: newRateLimiter(localP2P),
+			}
 
-		protocolID := protocol.ID(fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRangeTopicV1))
+			protocolID := protocol.ID(fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRangeTopicV1))
 
-		var wg sync.WaitGroup
-		wg.Add(1)
+			var wg sync.WaitGroup
+			wg.Add(1)
 
-		remoteP2P.BHost.SetStreamHandler(protocolID, func(stream network.Stream) {
-			defer wg.Done()
-			code, _, err := readStatusCodeNoDeadline(stream, localP2P.Encoding())
-			assert.NoError(t, err)
-			assert.Equal(t, responseCodeInvalidRequest, code)
+			remoteP2P.BHost.SetStreamHandler(protocolID, func(stream network.Stream) {
+				defer wg.Done()
+				code, _, err := readStatusCodeNoDeadline(stream, localP2P.Encoding())
+				assert.NoError(t, err)
+				assert.Equal(t, responseCodeInvalidRequest, code)
+			})
+
+			localP2P.Connect(remoteP2P)
+			stream, err := localP2P.BHost.NewStream(ctx, remoteP2P.BHost.ID(), protocolID)
+			require.NoError(t, err)
+
+			msg := &pb.DataColumnSidecarsByRangeRequest{
+				Count: 0, // Invalid count
+			}
+			require.Equal(t, true, localP2P.Peers().Scorers().BadResponsesScorer().Score(remoteP2P.PeerID()) >= 0)
+
+			err = service.dataColumnSidecarsByRangeRPCHandler(ctx, msg, stream)
+			require.NotNil(t, err)
+			require.Equal(t, true, localP2P.Peers().Scorers().BadResponsesScorer().Score(remoteP2P.PeerID()) < 0)
+
+			if util.WaitTimeout(&wg, 1*time.Second) {
+				t.Fatal("Did not receive stream within 1 sec")
+			}
 		})
-
-		localP2P.Connect(remoteP2P)
-		stream, err := localP2P.BHost.NewStream(ctx, remoteP2P.BHost.ID(), protocolID)
-		require.NoError(t, err)
-
-		msg := &pb.DataColumnSidecarsByRangeRequest{
-			Count: 0, // Invalid count
-		}
-		require.Equal(t, true, localP2P.Peers().Scorers().BadResponsesScorer().Score(remoteP2P.PeerID()) >= 0)
-
-		err = service.dataColumnSidecarsByRangeRPCHandler(ctx, msg, stream)
-		require.NotNil(t, err)
-		require.Equal(t, true, localP2P.Peers().Scorers().BadResponsesScorer().Score(remoteP2P.PeerID()) < 0)
-
-		if util.WaitTimeout(&wg, 1*time.Second) {
-			t.Fatal("Did not receive stream within 1 sec")
-		}
 	})
 
 	t.Run("in the future", func(t *testing.T) {

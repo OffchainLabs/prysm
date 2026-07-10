@@ -928,61 +928,63 @@ func TestAlreadySyncingBlock(t *testing.T) {
 }
 
 func TestExpirationCache_PruneOldBlocksCorrectly(t *testing.T) {
-	ctx := t.Context()
-	db := dbtest.SetupDB(t)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := t.Context()
+		db := dbtest.SetupDB(t)
 
-	mockChain := &mock.ChainService{
-		FinalizedCheckPoint: &ethpb.Checkpoint{
-			Epoch: 0,
-		},
-	}
+		mockChain := &mock.ChainService{
+			FinalizedCheckPoint: &ethpb.Checkpoint{
+				Epoch: 0,
+			},
+		}
 
-	p1 := p2ptest.NewTestP2P(t)
-	// Reset expiration time
-	currExpTime := pendingBlockExpTime
-	defer func() {
-		pendingBlockExpTime = currExpTime
-	}()
-	pendingBlockExpTime = 500 * time.Millisecond
+		p1 := p2ptest.NewTestP2P(t)
+		// Reset expiration time
+		currExpTime := pendingBlockExpTime
+		defer func() {
+			pendingBlockExpTime = currExpTime
+		}()
+		pendingBlockExpTime = 500 * time.Millisecond
 
-	r := NewService(ctx,
-		WithStateGen(stategen.New(db, doublylinkedtree.New())),
-		WithDatabase(db),
-		WithChainService(mockChain),
-		WithP2P(p1),
-	)
-	b1 := util.NewBeaconBlock()
-	b1.Block.Slot = 1
-	b1.Block.ProposerIndex = 10
-	b1Root, err := b1.Block.HashTreeRoot()
-	require.NoError(t, err)
-	wsb, err := blocks.NewSignedBeaconBlock(b1)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(1, wsb, b1Root))
+		r := NewService(ctx,
+			WithStateGen(stategen.New(db, doublylinkedtree.New())),
+			WithDatabase(db),
+			WithChainService(mockChain),
+			WithP2P(p1),
+		)
+		b1 := util.NewBeaconBlock()
+		b1.Block.Slot = 1
+		b1.Block.ProposerIndex = 10
+		b1Root, err := b1.Block.HashTreeRoot()
+		require.NoError(t, err)
+		wsb, err := blocks.NewSignedBeaconBlock(b1)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(1, wsb, b1Root))
 
-	// Add new block with the same slot.
-	b2 := util.NewBeaconBlock()
-	b2.Block.Slot = 1
-	b2.Block.ProposerIndex = 11
-	b2Root, err := b2.Block.HashTreeRoot()
-	require.NoError(t, err)
-	wsb, err = blocks.NewSignedBeaconBlock(b2)
-	require.NoError(t, err)
-	require.NoError(t, r.insertBlockToPendingQueue(1, wsb, b2Root))
+		// Add new block with the same slot.
+		b2 := util.NewBeaconBlock()
+		b2.Block.Slot = 1
+		b2.Block.ProposerIndex = 11
+		b2Root, err := b2.Block.HashTreeRoot()
+		require.NoError(t, err)
+		wsb, err = blocks.NewSignedBeaconBlock(b2)
+		require.NoError(t, err)
+		require.NoError(t, r.insertBlockToPendingQueue(1, wsb, b2Root))
 
-	require.Equal(t, true, r.seenPendingBlocks[b1Root])
-	require.Equal(t, true, r.seenPendingBlocks[b2Root])
-	require.Equal(t, 2, len(r.pendingBlocksInCache(1)))
+		require.Equal(t, true, r.seenPendingBlocks[b1Root])
+		require.Equal(t, true, r.seenPendingBlocks[b2Root])
+		require.Equal(t, 2, len(r.pendingBlocksInCache(1)))
 
-	// Wait for expiration cache to cleanup and remove old block.
-	time.Sleep(2 * pendingBlockExpTime)
+		// Wait for expiration cache to cleanup and remove old block.
+		time.Sleep(2 * pendingBlockExpTime)
 
-	// Run pending queue with expired blocks.
-	require.NoError(t, r.processPendingBlocks(ctx))
+		// Run pending queue with expired blocks.
+		require.NoError(t, r.processPendingBlocks(ctx))
 
-	assert.Equal(t, false, r.seenPendingBlocks[b1Root])
-	assert.Equal(t, false, r.seenPendingBlocks[b2Root])
-	assert.Equal(t, 0, len(r.pendingBlocksInCache(1)))
+		assert.Equal(t, false, r.seenPendingBlocks[b1Root])
+		assert.Equal(t, false, r.seenPendingBlocks[b2Root])
+		assert.Equal(t, 0, len(r.pendingBlocksInCache(1)))
+	})
 }
 
 // Override only the transport so requests still exercise the shared fetch and RPC paths.
@@ -1040,70 +1042,72 @@ func TestValidateSidecar_ParentRequestServiceLifetime(t *testing.T) {
 
 	for _, kind := range []string{"blob", "data column"} {
 		t.Run(kind, func(t *testing.T) {
-			requests := make(chan context.Context, numOfTries)
-			stream := &stalledParentStream{reading: make(chan struct{}), reset: make(chan struct{})}
-			t.Cleanup(func() { _ = stream.Reset() })
-			s := parentRequestService(t, func(ctx context.Context, _ any) (network.Stream, error) {
-				requests <- ctx
-				return stream, nil
+			p2ptest.SynctestTest(t, func(t *testing.T) {
+				requests := make(chan context.Context, numOfTries)
+				stream := &stalledParentStream{reading: make(chan struct{}), reset: make(chan struct{})}
+				t.Cleanup(func() { _ = stream.Reset() })
+				s := parentRequestService(t, func(ctx context.Context, _ any) (network.Stream, error) {
+					requests <- ctx
+					return stream, nil
+				})
+				missingParent := errors.New("missing parent")
+				s.newBlobVerifier = func(blocks.ROBlob, []verification.Requirement) verification.BlobVerifier {
+					return &verification.MockBlobVerifier{ErrSidecarParentSeen: missingParent}
+				}
+				s.newColumnsVerifier = testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{ErrSidecarParentSeen: missingParent})
+				_, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{1}, 1, 1)
+				blob := blobs[0].BlobSidecar
+				buf := new(bytes.Buffer)
+				var topic string
+				validate := s.validateBlob
+				if kind == "blob" {
+					_, err := s.cfg.p2p.Encoding().EncodeGossip(buf, blob)
+					require.NoError(t, err)
+					topic = p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.BlobSidecar]()]
+				} else {
+					column := &ethpb.DataColumnSidecar{
+						SignedBlockHeader:            blob.SignedBlockHeader,
+						KzgCommitmentsInclusionProof: make([][]byte, 4),
+					}
+					for i := range column.KzgCommitmentsInclusionProof {
+						column.KzgCommitmentsInclusionProof[i] = make([]byte, 32)
+					}
+					_, err := s.cfg.p2p.Encoding().EncodeGossip(buf, column)
+					require.NoError(t, err)
+					topic = p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.DataColumnSidecar]()]
+					validate = s.validateDataColumn
+				}
+				topic = s.addDigestAndIndexToTopic(topic, s.currentForkDigest(), 0) + s.cfg.p2p.Encoding().ProtocolSuffix()
+
+				// Regression of #13061.
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				result, err := validate(ctx, "", &pubsub.Message{Message: &pb.Message{Data: buf.Bytes(), Topic: &topic}})
+				cancel()
+				require.Equal(t, pubsub.ValidationIgnore, result)
+				require.ErrorIs(t, err, missingParent)
+
+				select {
+				case <-stream.reading:
+				case <-time.After(time.Second):
+					t.Fatal("parent request did not reach response read after validation returned")
+				}
+				requestCtx := <-requests
+				require.NoError(t, requestCtx.Err(), "validation cancellation must not cancel parent fetch")
+
+				// Ensure the request context has a bounded deadline.
+				_, bounded := requestCtx.Deadline()
+				require.Equal(t, true, bounded)
+
+				// Stop the service and ensure the parent request is canceled.
+				require.NoError(t, s.Stop())
+				require.ErrorIs(t, requestCtx.Err(), context.Canceled)
+				select {
+				case <-stream.reset:
+				case <-time.After(time.Second):
+					t.Fatal("service stop did not interrupt the parent response read")
+				}
 			})
-			missingParent := errors.New("missing parent")
-			s.newBlobVerifier = func(blocks.ROBlob, []verification.Requirement) verification.BlobVerifier {
-				return &verification.MockBlobVerifier{ErrSidecarParentSeen: missingParent}
-			}
-			s.newColumnsVerifier = testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{ErrSidecarParentSeen: missingParent})
-			_, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{1}, 1, 1)
-			blob := blobs[0].BlobSidecar
-			buf := new(bytes.Buffer)
-			var topic string
-			validate := s.validateBlob
-			if kind == "blob" {
-				_, err := s.cfg.p2p.Encoding().EncodeGossip(buf, blob)
-				require.NoError(t, err)
-				topic = p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.BlobSidecar]()]
-			} else {
-				column := &ethpb.DataColumnSidecar{
-					SignedBlockHeader:            blob.SignedBlockHeader,
-					KzgCommitmentsInclusionProof: make([][]byte, 4),
-				}
-				for i := range column.KzgCommitmentsInclusionProof {
-					column.KzgCommitmentsInclusionProof[i] = make([]byte, 32)
-				}
-				_, err := s.cfg.p2p.Encoding().EncodeGossip(buf, column)
-				require.NoError(t, err)
-				topic = p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.DataColumnSidecar]()]
-				validate = s.validateDataColumn
-			}
-			topic = s.addDigestAndIndexToTopic(topic, s.currentForkDigest(), 0) + s.cfg.p2p.Encoding().ProtocolSuffix()
-
-			// Regression of #13061.
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-			result, err := validate(ctx, "", &pubsub.Message{Message: &pb.Message{Data: buf.Bytes(), Topic: &topic}})
-			cancel()
-			require.Equal(t, pubsub.ValidationIgnore, result)
-			require.ErrorIs(t, err, missingParent)
-
-			select {
-			case <-stream.reading:
-			case <-time.After(time.Second):
-				t.Fatal("parent request did not reach response read after validation returned")
-			}
-			requestCtx := <-requests
-			require.NoError(t, requestCtx.Err(), "validation cancellation must not cancel parent fetch")
-
-			// Ensure the request context has a bounded deadline.
-			_, bounded := requestCtx.Deadline()
-			require.Equal(t, true, bounded)
-
-			// Stop the service and ensure the parent request is canceled.
-			require.NoError(t, s.Stop())
-			require.ErrorIs(t, requestCtx.Err(), context.Canceled)
-			select {
-			case <-stream.reset:
-			case <-time.After(time.Second):
-				t.Fatal("service stop did not interrupt the parent response read")
-			}
 		})
 	}
 }
@@ -1114,85 +1118,91 @@ func TestService_BatchRootRequestCancellation(t *testing.T) {
 	params.BeaconConfig().InitializeForkSchedule()
 
 	t.Run("block and envelope reads", func(t *testing.T) {
-		streams := make(chan *stalledParentStream, 2*numOfTries)
-		s := parentRequestService(t, func(ctx context.Context, _ any) (network.Stream, error) {
-			_, bounded := ctx.Deadline()
-			assert.Equal(t, true, bounded)
-			stream := &stalledParentStream{reading: make(chan struct{}), reset: make(chan struct{})}
-			t.Cleanup(func() { _ = stream.Reset() })
-			streams <- stream
-			return stream, nil
-		})
-		done := make(chan error, 1)
-		go func() { done <- s.sendBatchRootRequest(s.ctx, [][32]byte{{1}}, rand.NewGenerator()) }()
-		for range 2 {
-			select {
-			case stream := <-streams:
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			streams := make(chan *stalledParentStream, 2*numOfTries)
+			s := parentRequestService(t, func(ctx context.Context, _ any) (network.Stream, error) {
+				_, bounded := ctx.Deadline()
+				assert.Equal(t, true, bounded)
+				stream := &stalledParentStream{reading: make(chan struct{}), reset: make(chan struct{})}
+				t.Cleanup(func() { _ = stream.Reset() })
+				streams <- stream
+				return stream, nil
+			})
+			done := make(chan error, 1)
+			go func() { done <- s.sendBatchRootRequest(s.ctx, [][32]byte{{1}}, rand.NewGenerator()) }()
+			for range 2 {
 				select {
-				case <-stream.reading:
+				case stream := <-streams:
+					select {
+					case <-stream.reading:
+					case <-time.After(time.Second):
+						t.Fatal("request did not reach response read")
+					}
 				case <-time.After(time.Second):
-					t.Fatal("request did not reach response read")
+					t.Fatal("block and envelope requests did not both start")
 				}
-			case <-time.After(time.Second):
-				t.Fatal("block and envelope requests did not both start")
 			}
-		}
-		require.NoError(t, s.Stop())
-		select {
-		case err := <-done:
-			require.ErrorIs(t, err, context.Canceled)
-		case <-time.After(time.Second):
-			t.Fatal("canceled batch did not return promptly")
-		}
-		require.Equal(t, 0, len(streams), "canceled requests must not be retried")
+			require.NoError(t, s.Stop())
+			select {
+			case err := <-done:
+				require.ErrorIs(t, err, context.Canceled)
+			case <-time.After(time.Second):
+				t.Fatal("canceled batch did not return promptly")
+			}
+			require.Equal(t, 0, len(streams), "canceled requests must not be retried")
+		})
 	})
 
 	t.Run("envelope timeouts preserve retries", func(t *testing.T) {
-		previousTimeout := respTimeout
-		respTimeout = 20 * time.Millisecond
-		t.Cleanup(func() { respTimeout = previousTimeout })
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			previousTimeout := respTimeout
+			respTimeout = 20 * time.Millisecond
+			t.Cleanup(func() { respTimeout = previousTimeout })
 
-		blockAttempts, envelopeAttempts := 0, 0
-		s := parentRequestService(t, func(ctx context.Context, msg any) (network.Stream, error) {
-			if _, ok := msg.(*p2ptypes.ExecutionPayloadEnvelopesByRootReq); ok {
-				envelopeAttempts++
-				<-ctx.Done()
-				assert.Equal(t, context.DeadlineExceeded, ctx.Err())
-				return nil, ctx.Err()
-			}
-			blockAttempts++
-			return nil, errors.New("request failed")
+			blockAttempts, envelopeAttempts := 0, 0
+			s := parentRequestService(t, func(ctx context.Context, msg any) (network.Stream, error) {
+				if _, ok := msg.(*p2ptypes.ExecutionPayloadEnvelopesByRootReq); ok {
+					envelopeAttempts++
+					<-ctx.Done()
+					assert.Equal(t, context.DeadlineExceeded, ctx.Err())
+					return nil, ctx.Err()
+				}
+				blockAttempts++
+				return nil, errors.New("request failed")
+			})
+
+			require.NoError(t, s.sendBatchRootRequest(s.ctx, [][32]byte{{1}}, rand.NewGenerator()))
+			require.NoError(t, s.ctx.Err())
+			require.Equal(t, numOfTries, blockAttempts)
+			require.Equal(t, numOfTries, envelopeAttempts)
 		})
-
-		require.NoError(t, s.sendBatchRootRequest(s.ctx, [][32]byte{{1}}, rand.NewGenerator()))
-		require.NoError(t, s.ctx.Err())
-		require.Equal(t, numOfTries, blockAttempts)
-		require.Equal(t, numOfTries, envelopeAttempts)
 	})
 
 	params.BeaconConfig().GloasForkEpoch = 1
 	for _, cancelAt := range []int{0, 1, numOfTries, numOfTries + 1} {
 		t.Run(fmt.Sprintf("cancel at attempt %d", cancelAt), func(t *testing.T) {
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-			attempts := 0
-			s := parentRequestService(t, func(context.Context, any) (network.Stream, error) {
-				attempts++
-				if attempts == cancelAt {
+			p2ptest.SynctestTest(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				attempts := 0
+				s := parentRequestService(t, func(context.Context, any) (network.Stream, error) {
+					attempts++
+					if attempts == cancelAt {
+						cancel()
+					}
+					return nil, errors.New("request failed")
+				})
+				if cancelAt == 0 {
 					cancel()
 				}
-				return nil, errors.New("request failed")
+				err := s.sendBatchRootRequest(ctx, [][32]byte{{1}}, rand.NewGenerator())
+				if cancelAt <= numOfTries {
+					require.ErrorIs(t, err, context.Canceled)
+				} else {
+					require.NoError(t, err)
+				}
+				require.Equal(t, min(cancelAt, numOfTries), attempts)
 			})
-			if cancelAt == 0 {
-				cancel()
-			}
-			err := s.sendBatchRootRequest(ctx, [][32]byte{{1}}, rand.NewGenerator())
-			if cancelAt <= numOfTries {
-				require.ErrorIs(t, err, context.Canceled)
-			} else {
-				require.NoError(t, err)
-			}
-			require.Equal(t, min(cancelAt, numOfTries), attempts)
 		})
 	}
 }

@@ -76,276 +76,288 @@ func setupValidAttesterSlashing(t *testing.T) (*ethpb.AttesterSlashing, state.Be
 }
 
 func TestValidateAttesterSlashing_ValidSlashing(t *testing.T) {
-	p := p2ptest.NewTestP2P(t)
-	ctx := t.Context()
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		p := p2ptest.NewTestP2P(t)
+		ctx := t.Context()
 
-	slashing, s := setupValidAttesterSlashing(t)
+		slashing, s := setupValidAttesterSlashing(t)
 
-	chain := &mock.ChainService{State: s, Genesis: time.Now()}
-	r := &Service{
-		cfg: &config{
-			p2p:               p,
-			chain:             chain,
-			clock:             startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
-			initialSync:       &mockSync.Sync{IsSyncing: false},
-			operationNotifier: chain.OperationNotifier(),
-		},
-		seenAttesterSlashingCache: make(map[uint64]bool),
-		subHandler:                newSubTopicHandler(),
-	}
+		chain := &mock.ChainService{State: s, Genesis: time.Now()}
+		r := &Service{
+			cfg: &config{
+				p2p:               p,
+				chain:             chain,
+				clock:             startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+				initialSync:       &mockSync.Sync{IsSyncing: false},
+				operationNotifier: chain.OperationNotifier(),
+			},
+			seenAttesterSlashingCache: make(map[uint64]bool),
+			subHandler:                newSubTopicHandler(),
+		}
 
-	buf := new(bytes.Buffer)
-	_, err := p.Encoding().EncodeGossip(buf, slashing)
-	require.NoError(t, err)
+		buf := new(bytes.Buffer)
+		_, err := p.Encoding().EncodeGossip(buf, slashing)
+		require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
-	d := r.currentForkDigest()
-	topic = r.addDigestToTopic(topic, d)
-	msg := &pubsub.Message{
-		Message: &pubsubpb.Message{
-			Data:  buf.Bytes(),
-			Topic: &topic,
-		},
-	}
-	res, err := r.validateAttesterSlashing(ctx, "foobar", msg)
-	assert.NoError(t, err)
-	valid := res == pubsub.ValidationAccept
+		topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
+		d := r.currentForkDigest()
+		topic = r.addDigestToTopic(topic, d)
+		msg := &pubsub.Message{
+			Message: &pubsubpb.Message{
+				Data:  buf.Bytes(),
+				Topic: &topic,
+			},
+		}
+		res, err := r.validateAttesterSlashing(ctx, "foobar", msg)
+		assert.NoError(t, err)
+		valid := res == pubsub.ValidationAccept
 
-	assert.Equal(t, true, valid, "Failed Validation")
-	assert.NotNil(t, msg.ValidatorData, "Decoded message was not set on the message validator data")
+		assert.Equal(t, true, valid, "Failed Validation")
+		assert.NotNil(t, msg.ValidatorData, "Decoded message was not set on the message validator data")
+	})
 }
 
 func TestValidateAttesterSlashing_ValidOldSlashing(t *testing.T) {
-	p := p2ptest.NewTestP2P(t)
-	ctx := t.Context()
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		p := p2ptest.NewTestP2P(t)
+		ctx := t.Context()
 
-	slashing, s := setupValidAttesterSlashing(t)
-	vals := s.Validators()
-	for _, v := range vals {
-		v.Slashed = true
-	}
-	require.NoError(t, s.SetValidators(vals))
-	chain := &mock.ChainService{State: s, Genesis: time.Now()}
-	r := &Service{
-		cfg: &config{
-			p2p:               p,
-			chain:             chain,
-			clock:             startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
-			initialSync:       &mockSync.Sync{IsSyncing: false},
-			operationNotifier: chain.OperationNotifier(),
-		},
-		seenAttesterSlashingCache: make(map[uint64]bool),
-		subHandler:                newSubTopicHandler(),
-	}
+		slashing, s := setupValidAttesterSlashing(t)
+		vals := s.Validators()
+		for _, v := range vals {
+			v.Slashed = true
+		}
+		require.NoError(t, s.SetValidators(vals))
+		chain := &mock.ChainService{State: s, Genesis: time.Now()}
+		r := &Service{
+			cfg: &config{
+				p2p:               p,
+				chain:             chain,
+				clock:             startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+				initialSync:       &mockSync.Sync{IsSyncing: false},
+				operationNotifier: chain.OperationNotifier(),
+			},
+			seenAttesterSlashingCache: make(map[uint64]bool),
+			subHandler:                newSubTopicHandler(),
+		}
 
-	buf := new(bytes.Buffer)
-	_, err := p.Encoding().EncodeGossip(buf, slashing)
-	require.NoError(t, err)
+		buf := new(bytes.Buffer)
+		_, err := p.Encoding().EncodeGossip(buf, slashing)
+		require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
-	d := r.currentForkDigest()
-	topic = r.addDigestToTopic(topic, d)
-	msg := &pubsub.Message{
-		Message: &pubsubpb.Message{
-			Data:  buf.Bytes(),
-			Topic: &topic,
-		},
-	}
-	res, err := r.validateAttesterSlashing(ctx, "foobar", msg)
-	assert.ErrorContains(t, "validators were previously slashed", err)
-	valid := res == pubsub.ValidationIgnore
+		topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
+		d := r.currentForkDigest()
+		topic = r.addDigestToTopic(topic, d)
+		msg := &pubsub.Message{
+			Message: &pubsubpb.Message{
+				Data:  buf.Bytes(),
+				Topic: &topic,
+			},
+		}
+		res, err := r.validateAttesterSlashing(ctx, "foobar", msg)
+		assert.ErrorContains(t, "validators were previously slashed", err)
+		valid := res == pubsub.ValidationIgnore
 
-	assert.Equal(t, true, valid, "Incorrect Validation")
+		assert.Equal(t, true, valid, "Incorrect Validation")
+	})
 }
 
 func TestValidateAttesterSlashing_InvalidSlashing_WithdrawableEpoch(t *testing.T) {
-	p := p2ptest.NewTestP2P(t)
-	ctx := t.Context()
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		p := p2ptest.NewTestP2P(t)
+		ctx := t.Context()
 
-	slashing, s := setupValidAttesterSlashing(t)
-	// Set only one of the  validators as withdrawn
-	vals := s.Validators()
-	vals[1].WithdrawableEpoch = primitives.Epoch(1)
+		slashing, s := setupValidAttesterSlashing(t)
+		// Set only one of the  validators as withdrawn
+		vals := s.Validators()
+		vals[1].WithdrawableEpoch = primitives.Epoch(1)
 
-	require.NoError(t, s.SetValidators(vals))
+		require.NoError(t, s.SetValidators(vals))
 
-	chain := &mock.ChainService{State: s, Genesis: time.Now()}
-	r := &Service{
-		cfg: &config{
-			p2p:               p,
-			chain:             chain,
-			clock:             startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
-			initialSync:       &mockSync.Sync{IsSyncing: false},
-			operationNotifier: chain.OperationNotifier(),
-		},
-		seenAttesterSlashingCache: make(map[uint64]bool),
-		subHandler:                newSubTopicHandler(),
-	}
+		chain := &mock.ChainService{State: s, Genesis: time.Now()}
+		r := &Service{
+			cfg: &config{
+				p2p:               p,
+				chain:             chain,
+				clock:             startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+				initialSync:       &mockSync.Sync{IsSyncing: false},
+				operationNotifier: chain.OperationNotifier(),
+			},
+			seenAttesterSlashingCache: make(map[uint64]bool),
+			subHandler:                newSubTopicHandler(),
+		}
 
-	buf := new(bytes.Buffer)
-	_, err := p.Encoding().EncodeGossip(buf, slashing)
-	require.NoError(t, err)
+		buf := new(bytes.Buffer)
+		_, err := p.Encoding().EncodeGossip(buf, slashing)
+		require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
-	d := r.currentForkDigest()
-	topic = r.addDigestToTopic(topic, d)
-	msg := &pubsub.Message{
-		Message: &pubsubpb.Message{
-			Data:  buf.Bytes(),
-			Topic: &topic,
-		},
-	}
-	res, err := r.validateAttesterSlashing(ctx, "foobar", msg)
-	assert.NoError(t, err)
-	valid := res == pubsub.ValidationAccept
+		topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
+		d := r.currentForkDigest()
+		topic = r.addDigestToTopic(topic, d)
+		msg := &pubsub.Message{
+			Message: &pubsubpb.Message{
+				Data:  buf.Bytes(),
+				Topic: &topic,
+			},
+		}
+		res, err := r.validateAttesterSlashing(ctx, "foobar", msg)
+		assert.NoError(t, err)
+		valid := res == pubsub.ValidationAccept
 
-	assert.Equal(t, true, valid, "Rejected Validation")
+		assert.Equal(t, true, valid, "Rejected Validation")
 
-	// Set all validators as withdrawn.
-	vals = s.Validators()
-	for _, vv := range vals {
-		vv.WithdrawableEpoch = primitives.Epoch(1)
-	}
+		// Set all validators as withdrawn.
+		vals = s.Validators()
+		for _, vv := range vals {
+			vv.WithdrawableEpoch = primitives.Epoch(1)
+		}
 
-	require.NoError(t, s.SetValidators(vals))
-	res, err = r.validateAttesterSlashing(ctx, "foobar", msg)
-	assert.ErrorContains(t, "none of the validators are slashable", err)
-	invalid := res == pubsub.ValidationReject
+		require.NoError(t, s.SetValidators(vals))
+		res, err = r.validateAttesterSlashing(ctx, "foobar", msg)
+		assert.ErrorContains(t, "none of the validators are slashable", err)
+		invalid := res == pubsub.ValidationReject
 
-	assert.Equal(t, true, invalid, "Passed Validation")
+		assert.Equal(t, true, invalid, "Passed Validation")
+	})
 }
 
 func TestValidateAttesterSlashing_CanFilter(t *testing.T) {
-	p := p2ptest.NewTestP2P(t)
-	ctx := t.Context()
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		p := p2ptest.NewTestP2P(t)
+		ctx := t.Context()
 
-	chain := &mock.ChainService{Genesis: time.Now()}
-	r := &Service{
-		cfg: &config{
-			p2p:         p,
-			initialSync: &mockSync.Sync{IsSyncing: false},
-			chain:       chain,
-			clock:       startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
-		},
-		seenAttesterSlashingCache: make(map[uint64]bool),
-		subHandler:                newSubTopicHandler(),
-	}
+		chain := &mock.ChainService{Genesis: time.Now()}
+		r := &Service{
+			cfg: &config{
+				p2p:         p,
+				initialSync: &mockSync.Sync{IsSyncing: false},
+				chain:       chain,
+				clock:       startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			},
+			seenAttesterSlashingCache: make(map[uint64]bool),
+			subHandler:                newSubTopicHandler(),
+		}
 
-	r.setAttesterSlashingIndicesSeen([]uint64{1, 2, 3, 4}, []uint64{3, 4, 5, 6})
+		r.setAttesterSlashingIndicesSeen([]uint64{1, 2, 3, 4}, []uint64{3, 4, 5, 6})
 
-	// The below attestations should be filtered hence bad signature is ok.
-	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
-	d := r.currentForkDigest()
-	topic = r.addDigestToTopic(topic, d)
-	buf := new(bytes.Buffer)
-	_, err := p.Encoding().EncodeGossip(buf, &ethpb.AttesterSlashing{
-		Attestation_1: util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
-			AttestingIndices: []uint64{3},
-		}),
-		Attestation_2: util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
-			AttestingIndices: []uint64{3},
-		}),
+		// The below attestations should be filtered hence bad signature is ok.
+		topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
+		d := r.currentForkDigest()
+		topic = r.addDigestToTopic(topic, d)
+		buf := new(bytes.Buffer)
+		_, err := p.Encoding().EncodeGossip(buf, &ethpb.AttesterSlashing{
+			Attestation_1: util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
+				AttestingIndices: []uint64{3},
+			}),
+			Attestation_2: util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
+				AttestingIndices: []uint64{3},
+			}),
+		})
+		require.NoError(t, err)
+		msg := &pubsub.Message{
+			Message: &pubsubpb.Message{
+				Data:  buf.Bytes(),
+				Topic: &topic,
+			},
+		}
+		res, err := r.validateAttesterSlashing(ctx, "foobar", msg)
+		_ = err
+		ignored := res == pubsub.ValidationIgnore
+		assert.Equal(t, true, ignored)
+
+		buf = new(bytes.Buffer)
+		_, err = p.Encoding().EncodeGossip(buf, &ethpb.AttesterSlashing{
+			Attestation_1: util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
+				AttestingIndices: []uint64{4, 3},
+			}),
+			Attestation_2: util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
+				AttestingIndices: []uint64{3, 4},
+			}),
+		})
+		require.NoError(t, err)
+		msg = &pubsub.Message{
+			Message: &pubsubpb.Message{
+				Data:  buf.Bytes(),
+				Topic: &topic,
+			},
+		}
+		res, err = r.validateAttesterSlashing(ctx, "foobar", msg)
+		_ = err
+		ignored = res == pubsub.ValidationIgnore
+		assert.Equal(t, true, ignored)
 	})
-	require.NoError(t, err)
-	msg := &pubsub.Message{
-		Message: &pubsubpb.Message{
-			Data:  buf.Bytes(),
-			Topic: &topic,
-		},
-	}
-	res, err := r.validateAttesterSlashing(ctx, "foobar", msg)
-	_ = err
-	ignored := res == pubsub.ValidationIgnore
-	assert.Equal(t, true, ignored)
-
-	buf = new(bytes.Buffer)
-	_, err = p.Encoding().EncodeGossip(buf, &ethpb.AttesterSlashing{
-		Attestation_1: util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
-			AttestingIndices: []uint64{4, 3},
-		}),
-		Attestation_2: util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
-			AttestingIndices: []uint64{3, 4},
-		}),
-	})
-	require.NoError(t, err)
-	msg = &pubsub.Message{
-		Message: &pubsubpb.Message{
-			Data:  buf.Bytes(),
-			Topic: &topic,
-		},
-	}
-	res, err = r.validateAttesterSlashing(ctx, "foobar", msg)
-	_ = err
-	ignored = res == pubsub.ValidationIgnore
-	assert.Equal(t, true, ignored)
 }
 
 func TestValidateAttesterSlashing_ContextTimeout(t *testing.T) {
-	p := p2ptest.NewTestP2P(t)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		p := p2ptest.NewTestP2P(t)
 
-	slashing, s := setupValidAttesterSlashing(t)
-	slashing.Attestation_1.Data.Target.Epoch = 100000000
+		slashing, s := setupValidAttesterSlashing(t)
+		slashing.Attestation_1.Data.Target.Epoch = 100000000
 
-	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+		defer cancel()
 
-	chain := &mock.ChainService{State: s}
-	r := &Service{
-		cfg: &config{
-			p2p:         p,
-			chain:       chain,
-			clock:       startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
-			initialSync: &mockSync.Sync{IsSyncing: false},
-		},
-		seenAttesterSlashingCache: make(map[uint64]bool),
-	}
+		chain := &mock.ChainService{State: s}
+		r := &Service{
+			cfg: &config{
+				p2p:         p,
+				chain:       chain,
+				clock:       startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+				initialSync: &mockSync.Sync{IsSyncing: false},
+			},
+			seenAttesterSlashingCache: make(map[uint64]bool),
+		}
 
-	buf := new(bytes.Buffer)
-	_, err := p.Encoding().EncodeGossip(buf, slashing)
-	require.NoError(t, err)
+		buf := new(bytes.Buffer)
+		_, err := p.Encoding().EncodeGossip(buf, slashing)
+		require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
-	msg := &pubsub.Message{
-		Message: &pubsubpb.Message{
-			Data:  buf.Bytes(),
-			Topic: &topic,
-		},
-	}
-	res, err := r.validateAttesterSlashing(ctx, "foobar", msg)
-	_ = err
-	valid := res == pubsub.ValidationAccept
-	assert.Equal(t, false, valid, "slashing from the far distant future should have timed out and returned false")
+		topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
+		msg := &pubsub.Message{
+			Message: &pubsubpb.Message{
+				Data:  buf.Bytes(),
+				Topic: &topic,
+			},
+		}
+		res, err := r.validateAttesterSlashing(ctx, "foobar", msg)
+		_ = err
+		valid := res == pubsub.ValidationAccept
+		assert.Equal(t, false, valid, "slashing from the far distant future should have timed out and returned false")
+	})
 }
 
 func TestValidateAttesterSlashing_Syncing(t *testing.T) {
-	p := p2ptest.NewTestP2P(t)
-	ctx := t.Context()
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		p := p2ptest.NewTestP2P(t)
+		ctx := t.Context()
 
-	slashing, s := setupValidAttesterSlashing(t)
+		slashing, s := setupValidAttesterSlashing(t)
 
-	r := &Service{
-		cfg: &config{
-			p2p:         p,
-			chain:       &mock.ChainService{State: s},
-			initialSync: &mockSync.Sync{IsSyncing: true},
-		},
-	}
+		r := &Service{
+			cfg: &config{
+				p2p:         p,
+				chain:       &mock.ChainService{State: s},
+				initialSync: &mockSync.Sync{IsSyncing: true},
+			},
+		}
 
-	buf := new(bytes.Buffer)
-	_, err := p.Encoding().EncodeGossip(buf, slashing)
-	require.NoError(t, err)
+		buf := new(bytes.Buffer)
+		_, err := p.Encoding().EncodeGossip(buf, slashing)
+		require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
-	msg := &pubsub.Message{
-		Message: &pubsubpb.Message{
-			Data:  buf.Bytes(),
-			Topic: &topic,
-		},
-	}
-	res, err := r.validateAttesterSlashing(ctx, "foobar", msg)
-	_ = err
-	valid := res == pubsub.ValidationAccept
-	assert.Equal(t, false, valid, "Passed validation")
+		topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
+		msg := &pubsub.Message{
+			Message: &pubsubpb.Message{
+				Data:  buf.Bytes(),
+				Topic: &topic,
+			},
+		}
+		res, err := r.validateAttesterSlashing(ctx, "foobar", msg)
+		_ = err
+		valid := res == pubsub.ValidationAccept
+		assert.Equal(t, false, valid, "Passed validation")
+	})
 }
 
 func TestSeenAttesterSlashingIndices(t *testing.T) {

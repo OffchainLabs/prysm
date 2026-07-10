@@ -55,28 +55,30 @@ func testForkWatcherService(t *testing.T, current primitives.Epoch) *Service {
 }
 
 func TestRegisterSubscriptions_Idempotent(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
-	fulu := params.BeaconConfig().ElectraForkEpoch + 4096*2
-	params.BeaconConfig().FuluForkEpoch = fulu
-	params.BeaconConfig().GloasForkEpoch = params.BeaconConfig().FarFutureEpoch
-	params.BeaconConfig().InitializeForkSchedule()
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
+		fulu := params.BeaconConfig().ElectraForkEpoch + 4096*2
+		params.BeaconConfig().FuluForkEpoch = fulu
+		params.BeaconConfig().GloasForkEpoch = params.BeaconConfig().FarFutureEpoch
+		params.BeaconConfig().InitializeForkSchedule()
 
-	current := fulu - 1
-	s := testForkWatcherService(t, current)
-	next := params.GetNetworkScheduleEntry(fulu)
-	wg := attachSpawner(s)
-	require.Equal(t, true, s.registerSubscribers(next))
-	done := make(chan struct{})
-	go func() { wg.Wait(); close(done) }()
-	select {
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for subscriptions to be registered")
-	case <-done:
-	}
-	// the goal of this callback is just to assert that spawn is never called.
-	s.subscriptionSpawner = func(func()) { t.Error("registration routines spawned twice for the same digest") }
-	require.NoError(t, s.ensureRegistrationsForEpoch(fulu))
+		current := fulu - 1
+		s := testForkWatcherService(t, current)
+		next := params.GetNetworkScheduleEntry(fulu)
+		wg := attachSpawner(s)
+		require.Equal(t, true, s.registerSubscribers(next))
+		done := make(chan struct{})
+		go func() { wg.Wait(); close(done) }()
+		select {
+		case <-time.After(5 * time.Second):
+			t.Fatal("timed out waiting for subscriptions to be registered")
+		case <-done:
+		}
+		// the goal of this callback is just to assert that spawn is never called.
+		s.subscriptionSpawner = func(func()) { t.Error("registration routines spawned twice for the same digest") }
+		require.NoError(t, s.ensureRegistrationsForEpoch(fulu))
+	})
 }
 
 func TestService_CheckForNextEpochFork(t *testing.T) {
@@ -198,40 +200,42 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			current := tt.epochAtRegistration(tt.forkEpoch)
-			s := testForkWatcherService(t, current)
-			wg := attachSpawner(s)
-			require.NoError(t, s.ensureRegistrationsForEpoch(s.cfg.clock.CurrentEpoch()))
-			wg.Wait()
-			tt.checkRegistration(t, s)
+			p2ptest.SynctestTest(t, func(t *testing.T) {
+				current := tt.epochAtRegistration(tt.forkEpoch)
+				s := testForkWatcherService(t, current)
+				wg := attachSpawner(s)
+				require.NoError(t, s.ensureRegistrationsForEpoch(s.cfg.clock.CurrentEpoch()))
+				wg.Wait()
+				tt.checkRegistration(t, s)
 
-			if current != tt.forkEpoch-1 {
-				return
-			}
+				if current != tt.forkEpoch-1 {
+					return
+				}
 
-			// Ensure the topics were registered for the upcoming fork
-			digest := params.ForkDigest(tt.forkEpoch)
-			assert.Equal(t, true, s.subHandler.digestExists(digest))
+				// Ensure the topics were registered for the upcoming fork
+				digest := params.ForkDigest(tt.forkEpoch)
+				assert.Equal(t, true, s.subHandler.digestExists(digest))
 
-			// After this point we are checking deregistration, which doesn't apply if there isn't a higher
-			// nextForkEpoch.
-			if tt.forkEpoch >= tt.nextForkEpoch {
-				return
-			}
+				// After this point we are checking deregistration, which doesn't apply if there isn't a higher
+				// nextForkEpoch.
+				if tt.forkEpoch >= tt.nextForkEpoch {
+					return
+				}
 
-			nextDigest := params.ForkDigest(tt.nextForkEpoch)
-			// Move the clock to just before the next fork epoch and ensure deregistration is correct
-			wg = attachSpawner(s)
-			s.cfg.clock = defaultClockWithTimeAtEpoch(tt.nextForkEpoch - 1)
-			require.NoError(t, s.ensureRegistrationsForEpoch(s.cfg.clock.CurrentEpoch()))
-			wg.Wait()
+				nextDigest := params.ForkDigest(tt.nextForkEpoch)
+				// Move the clock to just before the next fork epoch and ensure deregistration is correct
+				wg = attachSpawner(s)
+				s.cfg.clock = defaultClockWithTimeAtEpoch(tt.nextForkEpoch - 1)
+				require.NoError(t, s.ensureRegistrationsForEpoch(s.cfg.clock.CurrentEpoch()))
+				wg.Wait()
 
-			require.NoError(t, s.ensureDeregistrationForEpoch(tt.nextForkEpoch))
-			assert.Equal(t, true, s.subHandler.digestExists(digest))
-			// deregister as if it is the epoch after the next fork epoch
-			require.NoError(t, s.ensureDeregistrationForEpoch(tt.nextForkEpoch+1))
-			assert.Equal(t, false, s.subHandler.digestExists(digest))
-			assert.Equal(t, true, s.subHandler.digestExists(nextDigest))
+				require.NoError(t, s.ensureDeregistrationForEpoch(tt.nextForkEpoch))
+				assert.Equal(t, true, s.subHandler.digestExists(digest))
+				// deregister as if it is the epoch after the next fork epoch
+				require.NoError(t, s.ensureDeregistrationForEpoch(tt.nextForkEpoch+1))
+				assert.Equal(t, false, s.subHandler.digestExists(digest))
+				assert.Equal(t, true, s.subHandler.digestExists(nextDigest))
+			})
 		})
 	}
 }
@@ -283,37 +287,39 @@ func (p *p2pWithPartialBroadcaster) PartialColumnBroadcaster() partialdatacolumn
 // ensureDeregistrationForEpoch unsubscribes the partial-column broadcaster from previous-fork-digest
 // data column topics (and only those), in addition to removing the full gossip subscriptions.
 func TestEnsureDeregistration_UnsubscribesPartialColumns(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
-	// Place forks at epochs 1 and 2 so that, one epoch later, there is a "previous" fork digest
-	// (altair) distinct from the "current" one (bellatrix) for the deregistration logic to act on.
-	params.BeaconConfig().AltairForkEpoch = 1
-	params.BeaconConfig().BellatrixForkEpoch = 2
-	params.BeaconConfig().InitializeForkSchedule()
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
+		// Place forks at epochs 1 and 2 so that, one epoch later, there is a "previous" fork digest
+		// (altair) distinct from the "current" one (bellatrix) for the deregistration logic to act on.
+		params.BeaconConfig().AltairForkEpoch = 1
+		params.BeaconConfig().BellatrixForkEpoch = 2
+		params.BeaconConfig().InitializeForkSchedule()
 
-	const currentEpoch = 3
-	current := params.GetNetworkScheduleEntry(currentEpoch)
-	previous := params.GetNetworkScheduleEntry(current.Epoch - 1)
-	require.NotEqual(t, previous.ForkDigest, current.ForkDigest)
+		const currentEpoch = 3
+		current := params.GetNetworkScheduleEntry(currentEpoch)
+		previous := params.GetNetworkScheduleEntry(current.Epoch - 1)
+		require.NotEqual(t, previous.ForkDigest, current.ForkDigest)
 
-	s := testForkWatcherService(t, currentEpoch)
-	fake := &fakePartialBroadcaster{}
-	s.cfg.p2p = &p2pWithPartialBroadcaster{P2P: s.cfg.p2p, broadcaster: fake}
-	suffix := s.cfg.p2p.Encoding().ProtocolSuffix()
+		s := testForkWatcherService(t, currentEpoch)
+		fake := &fakePartialBroadcaster{}
+		s.cfg.p2p = &p2pWithPartialBroadcaster{P2P: s.cfg.p2p, broadcaster: fake}
+		suffix := s.cfg.p2p.Encoding().ProtocolSuffix()
 
-	prevDataCol := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, previous.ForkDigest, 7) + suffix
-	prevBlock := fmt.Sprintf(p2p.BlockSubnetTopicFormat, previous.ForkDigest) + suffix
-	currDataCol := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, current.ForkDigest, 7) + suffix
-	for _, topic := range []string{prevDataCol, prevBlock, currDataCol} {
-		s.subHandler.addTopic(topic, nil)
-	}
+		prevDataCol := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, previous.ForkDigest, 7) + suffix
+		prevBlock := fmt.Sprintf(p2p.BlockSubnetTopicFormat, previous.ForkDigest) + suffix
+		currDataCol := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, current.ForkDigest, 7) + suffix
+		for _, topic := range []string{prevDataCol, prevBlock, currDataCol} {
+			s.subHandler.addTopic(topic, nil)
+		}
 
-	require.NoError(t, s.ensureDeregistrationForEpoch(currentEpoch))
+		require.NoError(t, s.ensureDeregistrationForEpoch(currentEpoch))
 
-	require.DeepEqual(t, []string{prevDataCol}, fake.unsubscribed)
+		require.DeepEqual(t, []string{prevDataCol}, fake.unsubscribed)
 
-	// Both previous-digest topics are removed from the subHandler; the current-digest topic remains.
-	assert.Equal(t, false, s.subHandler.topicExists(prevDataCol))
-	assert.Equal(t, false, s.subHandler.topicExists(prevBlock))
-	assert.Equal(t, true, s.subHandler.topicExists(currDataCol))
+		// Both previous-digest topics are removed from the subHandler; the current-digest topic remains.
+		assert.Equal(t, false, s.subHandler.topicExists(prevDataCol))
+		assert.Equal(t, false, s.subHandler.topicExists(prevBlock))
+		assert.Equal(t, true, s.subHandler.topicExists(currDataCol))
+	})
 }

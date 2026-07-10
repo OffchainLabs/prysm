@@ -72,131 +72,137 @@ func setupValidExit(t *testing.T) (*ethpb.SignedVoluntaryExit, state.BeaconState
 }
 
 func TestValidateVoluntaryExit_ValidExit(t *testing.T) {
-	cfg := params.BeaconConfig().Copy()
-	cfg.DenebForkEpoch = math.MaxUint64
-	params.OverrideBeaconConfig(cfg)
-	params.SetupTestConfigCleanup(t)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.DenebForkEpoch = math.MaxUint64
+		params.OverrideBeaconConfig(cfg)
+		params.SetupTestConfigCleanup(t)
 
-	p := p2ptest.NewTestP2P(t)
-	ctx := t.Context()
+		p := p2ptest.NewTestP2P(t)
+		ctx := t.Context()
 
-	exit, s := setupValidExit(t)
+		exit, s := setupValidExit(t)
 
-	gt := time.Now()
-	mockChainService := &mock.ChainService{
-		State:   s,
-		Genesis: gt,
-	}
-	r := &Service{
-		cfg: &config{
-			p2p:               p,
-			chain:             mockChainService,
-			clock:             startup.NewClock(gt, [32]byte{}),
-			initialSync:       &mockSync.Sync{IsSyncing: false},
-			operationNotifier: mockChainService.OperationNotifier(),
-		},
-		seenExitCache: lruwrpr.New(10),
-	}
-
-	buf := new(bytes.Buffer)
-	_, err := p.Encoding().EncodeGossip(buf, exit)
-	require.NoError(t, err)
-	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedVoluntaryExit]()]
-	d := r.currentForkDigest()
-	topic = r.addDigestToTopic(topic, d)
-	m := &pubsub.Message{
-		Message: &pubsubpb.Message{
-			Data:  buf.Bytes(),
-			Topic: &topic,
-		},
-	}
-
-	// Subscribe to operation notifications.
-	opChannel := make(chan *feed.Event, 1)
-	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
-	defer opSub.Unsubscribe()
-
-	res, err := r.validateVoluntaryExit(ctx, "", m)
-	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationAccept, res, "Failed validation")
-	require.NotNil(t, m.ValidatorData, "Decoded message was not set on the message validator data")
-
-	select {
-	case event := <-opChannel:
-		if event.Type == opfeed.ExitReceived {
-			_, ok := event.Data.(*opfeed.ExitReceivedData)
-			assert.Equal(t, true, ok, "Entity is not of type *opfeed.ExitReceivedData")
-		} else {
-			t.Error("Unexpected event type received")
+		gt := time.Now()
+		mockChainService := &mock.ChainService{
+			State:   s,
+			Genesis: gt,
 		}
-	case <-opSub.Err():
-		t.Error("Subscription to state notifier failed")
-	case <-time.After(10 * time.Second): // Timeout to prevent hanging tests
-		t.Error("Timeout waiting for exit notification")
-	}
+		r := &Service{
+			cfg: &config{
+				p2p:               p,
+				chain:             mockChainService,
+				clock:             startup.NewClock(gt, [32]byte{}),
+				initialSync:       &mockSync.Sync{IsSyncing: false},
+				operationNotifier: mockChainService.OperationNotifier(),
+			},
+			seenExitCache: lruwrpr.New(10),
+		}
+
+		buf := new(bytes.Buffer)
+		_, err := p.Encoding().EncodeGossip(buf, exit)
+		require.NoError(t, err)
+		topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedVoluntaryExit]()]
+		d := r.currentForkDigest()
+		topic = r.addDigestToTopic(topic, d)
+		m := &pubsub.Message{
+			Message: &pubsubpb.Message{
+				Data:  buf.Bytes(),
+				Topic: &topic,
+			},
+		}
+
+		// Subscribe to operation notifications.
+		opChannel := make(chan *feed.Event, 1)
+		opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
+		defer opSub.Unsubscribe()
+
+		res, err := r.validateVoluntaryExit(ctx, "", m)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationAccept, res, "Failed validation")
+		require.NotNil(t, m.ValidatorData, "Decoded message was not set on the message validator data")
+
+		select {
+		case event := <-opChannel:
+			if event.Type == opfeed.ExitReceived {
+				_, ok := event.Data.(*opfeed.ExitReceivedData)
+				assert.Equal(t, true, ok, "Entity is not of type *opfeed.ExitReceivedData")
+			} else {
+				t.Error("Unexpected event type received")
+			}
+		case <-opSub.Err():
+			t.Error("Subscription to state notifier failed")
+		case <-time.After(10 * time.Second): // Timeout to prevent hanging tests
+			t.Error("Timeout waiting for exit notification")
+		}
+	})
 }
 
 func TestValidateVoluntaryExit_InvalidExitSlot(t *testing.T) {
-	p := p2ptest.NewTestP2P(t)
-	ctx := t.Context()
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		p := p2ptest.NewTestP2P(t)
+		ctx := t.Context()
 
-	exit, s := setupValidExit(t)
-	// Set state slot to 1 to cause exit object fail to verify.
-	require.NoError(t, s.SetSlot(1))
-	r := &Service{
-		cfg: &config{
-			p2p: p,
-			chain: &mock.ChainService{
-				State: s,
+		exit, s := setupValidExit(t)
+		// Set state slot to 1 to cause exit object fail to verify.
+		require.NoError(t, s.SetSlot(1))
+		r := &Service{
+			cfg: &config{
+				p2p: p,
+				chain: &mock.ChainService{
+					State: s,
+				},
+				initialSync: &mockSync.Sync{IsSyncing: false},
 			},
-			initialSync: &mockSync.Sync{IsSyncing: false},
-		},
-		seenExitCache: lruwrpr.New(10),
-	}
+			seenExitCache: lruwrpr.New(10),
+		}
 
-	buf := new(bytes.Buffer)
-	_, err := p.Encoding().EncodeGossip(buf, exit)
-	require.NoError(t, err)
-	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedVoluntaryExit]()]
-	m := &pubsub.Message{
-		Message: &pubsubpb.Message{
-			Data:  buf.Bytes(),
-			Topic: &topic,
-		},
-	}
-	res, err := r.validateVoluntaryExit(ctx, "", m)
-	_ = err
-	valid := res == pubsub.ValidationAccept
-	assert.Equal(t, false, valid, "passed validation")
+		buf := new(bytes.Buffer)
+		_, err := p.Encoding().EncodeGossip(buf, exit)
+		require.NoError(t, err)
+		topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedVoluntaryExit]()]
+		m := &pubsub.Message{
+			Message: &pubsubpb.Message{
+				Data:  buf.Bytes(),
+				Topic: &topic,
+			},
+		}
+		res, err := r.validateVoluntaryExit(ctx, "", m)
+		_ = err
+		valid := res == pubsub.ValidationAccept
+		assert.Equal(t, false, valid, "passed validation")
+	})
 }
 
 func TestValidateVoluntaryExit_ValidExit_Syncing(t *testing.T) {
-	p := p2ptest.NewTestP2P(t)
-	ctx := t.Context()
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		p := p2ptest.NewTestP2P(t)
+		ctx := t.Context()
 
-	exit, s := setupValidExit(t)
+		exit, s := setupValidExit(t)
 
-	r := &Service{
-		cfg: &config{
-			p2p: p,
-			chain: &mock.ChainService{
-				State: s,
+		r := &Service{
+			cfg: &config{
+				p2p: p,
+				chain: &mock.ChainService{
+					State: s,
+				},
+				initialSync: &mockSync.Sync{IsSyncing: true},
 			},
-			initialSync: &mockSync.Sync{IsSyncing: true},
-		},
-	}
-	buf := new(bytes.Buffer)
-	_, err := p.Encoding().EncodeGossip(buf, exit)
-	require.NoError(t, err)
-	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedVoluntaryExit]()]
-	m := &pubsub.Message{
-		Message: &pubsubpb.Message{
-			Data:  buf.Bytes(),
-			Topic: &topic,
-		},
-	}
-	res, err := r.validateVoluntaryExit(ctx, "", m)
-	_ = err
-	valid := res == pubsub.ValidationAccept
-	assert.Equal(t, false, valid, "Validation should have failed")
+		}
+		buf := new(bytes.Buffer)
+		_, err := p.Encoding().EncodeGossip(buf, exit)
+		require.NoError(t, err)
+		topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedVoluntaryExit]()]
+		m := &pubsub.Message{
+			Message: &pubsubpb.Message{
+				Data:  buf.Bytes(),
+				Topic: &topic,
+			},
+		}
+		res, err := r.validateVoluntaryExit(ctx, "", m)
+		_ = err
+		valid := res == pubsub.ValidationAccept
+		assert.Equal(t, false, valid, "Validation should have failed")
+	})
 }
