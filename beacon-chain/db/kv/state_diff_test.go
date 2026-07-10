@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/golang/snappy"
 	"go.etcd.io/bbolt"
 )
 
@@ -247,6 +248,8 @@ func TestStateDiff_SaveFullSnapshot(t *testing.T) {
 				if s == nil {
 					return bbolt.ErrIncompatibleValue
 				}
+				s, err = snappy.Decode(nil, s)
+				require.NoError(t, err)
 				require.DeepSSZEqual(t, enc, s)
 				return nil
 			})
@@ -510,6 +513,8 @@ func TestStateDiff_SaveDiff(t *testing.T) {
 				if s == nil {
 					return bbolt.ErrIncompatibleValue
 				}
+				s, err = snappy.Decode(nil, s)
+				require.NoError(t, err)
 				require.DeepSSZEqual(t, enc, s)
 				return nil
 			})

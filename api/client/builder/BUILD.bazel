@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "bid.go",
         "client.go",
+        "client_gloas.go",
         "errors.go",
         "log.go",
         "types.go",
@@ -40,6 +41,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "client_gloas_test.go",
         "client_test.go",
         "types_test.go",
     ],

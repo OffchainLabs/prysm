@@ -80,7 +80,7 @@ func (s *ServiceRegistry) RegisterService(service Service) error {
 // to a service currently stored in the service registry. This ensures the input argument is
 // set to the right pointer that refers to the originally registered service.
 func (s *ServiceRegistry) FetchService(service any) error {
-	if reflect.TypeOf(service).Kind() != reflect.Ptr {
+	if reflect.TypeOf(service).Kind() != reflect.Pointer {
 		return fmt.Errorf("input must be of pointer type, received value type instead: %T", service)
 	}
 	element := reflect.ValueOf(service).Elem()

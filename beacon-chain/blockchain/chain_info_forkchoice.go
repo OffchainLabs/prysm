@@ -63,6 +63,13 @@ func (s *Service) GasLimit(root [32]byte) (uint64, error) {
 	return s.cfg.ForkChoiceStore.GasLimit(root)
 }
 
+// HasNode returns the corresponding value from forkchoice
+func (s *Service) HasNode(root [32]byte) bool {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.HasNode(root)
+}
+
 // HasFullNode returns the corresponding value from forkchoice
 func (s *Service) HasFullNode(root [32]byte) bool {
 	s.cfg.ForkChoiceStore.RLock()
@@ -103,6 +110,13 @@ func (s *Service) ForkChoiceDump(ctx context.Context) (*forkchoice.Dump, error) 
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.ForkChoiceDump(ctx)
+}
+
+// ForkChoiceDumpV2 returns the corresponding value from forkchoice
+func (s *Service) ForkChoiceDumpV2(ctx context.Context) (*forkchoice.DumpV2, error) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.ForkChoiceDumpV2(ctx)
 }
 
 // NewSlot returns the corresponding value from forkchoice

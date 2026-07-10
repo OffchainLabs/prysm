@@ -85,13 +85,29 @@ func (v *validator) proposeSelfBuildEnvelope(
 		return nil
 	}
 
-	envelope, err := v.validatorClient.GetExecutionPayloadEnvelope(ctx, slot)
+	blockRoot, err := blk.Block().HashTreeRoot()
+	if err != nil {
+		return errors.Wrap(err, "could not compute beacon block root")
+	}
+
+	full, blinded, err := v.validatorClient.GetExecutionPayloadEnvelope(ctx, slot, blockRoot)
 	if err != nil {
 		validatorSelfBuildEnvelopeSubmissionTotal.WithLabelValues("failed").Inc()
 		return errors.Wrap(err, "failed to get execution payload envelope for self-build")
 	}
 
-	signedEnvelope, err := v.signExecutionPayloadEnvelope(ctx, pubKey, slot, envelope)
+	// Stateful self-build (REST or gRPC) returns only the blinded envelope — the BN reconstructs the
+	// full payload from its cache. Stateless self-build returns the full envelope.
+	if full == nil {
+		if err := v.publishSelfBuildBlinded(ctx, pubKey, slot, blinded); err != nil {
+			validatorSelfBuildEnvelopeSubmissionTotal.WithLabelValues("failed").Inc()
+			return err
+		}
+		validatorSelfBuildEnvelopeSubmissionTotal.WithLabelValues("success").Inc()
+		return nil
+	}
+
+	signedEnvelope, err := v.signExecutionPayloadEnvelope(ctx, pubKey, slot, full)
 	if err != nil {
 		validatorSelfBuildEnvelopeSubmissionTotal.WithLabelValues("failed").Inc()
 		return errors.Wrap(err, "could not sign execution payload envelope")
@@ -103,5 +119,45 @@ func (v *validator) proposeSelfBuildEnvelope(
 	}
 	validatorSelfBuildEnvelopeSubmissionTotal.WithLabelValues("success").Inc()
 
+	return nil
+}
+
+// publishSelfBuildBlinded signs the blinded envelope (HTR matches the full envelope, so the
+// signature is valid against either) and publishes it. Signing is local-keymanager only —
+// web3signer blinded-envelope signing is not yet supported.
+func (v *validator) publishSelfBuildBlinded(
+	ctx context.Context,
+	pubKey [fieldparams.BLSPubkeyLength]byte,
+	slot primitives.Slot,
+	blinded *ethpb.WireBlindedExecutionPayloadEnvelope,
+) error {
+	if blinded == nil {
+		return errors.New("nil blinded execution payload envelope")
+	}
+	epoch := slots.ToEpoch(slot)
+	domain, err := v.domainData(ctx, epoch, params.BeaconConfig().DomainBeaconBuilder[:])
+	if err != nil {
+		return errors.Wrap(err, "could not get domain data")
+	}
+	if domain == nil {
+		return errors.New("nil domain data")
+	}
+	signingRoot, err := signing.ComputeSigningRoot(blinded, domain.SignatureDomain)
+	if err != nil {
+		return errors.Wrap(err, "could not compute signing root")
+	}
+	sig, err := v.km.Sign(ctx, &validatorpb.SignRequest{
+		PublicKey:       pubKey[:],
+		SigningRoot:     signingRoot[:],
+		SignatureDomain: domain.SignatureDomain,
+		SigningSlot:     slot,
+	})
+	if err != nil {
+		return errors.Wrap(err, "could not sign blinded execution payload envelope")
+	}
+	signed := &ethpb.SignedWireBlindedExecutionPayloadEnvelope{Message: blinded, Signature: sig.Marshal()}
+	if _, err := v.validatorClient.PublishBlindedExecutionPayloadEnvelope(ctx, signed); err != nil {
+		return errors.Wrap(err, "failed to publish blinded execution payload envelope")
+	}
 	return nil
 }

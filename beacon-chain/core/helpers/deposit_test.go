@@ -180,11 +180,11 @@ func TestBatchVerifyPendingDepositsSignatures_InvalidSignature(t *testing.T) {
 	require.Equal(t, false, verified)
 }
 
-func makeValidDepositRequest(t *testing.T, amount uint64) *enginev1.DepositRequest {
+func makeValidBuilderDepositRequest(t *testing.T, amount uint64) *enginev1.BuilderDepositRequest {
 	t.Helper()
 	sk, err := bls.RandKey()
 	require.NoError(t, err)
-	domain, err := signing.ComputeDomain(params.BeaconConfig().DomainDeposit, nil, nil)
+	domain, err := signing.ComputeDomain(params.BeaconConfig().DomainBuilderDeposit, nil, nil)
 	require.NoError(t, err)
 	wc := make([]byte, 32)
 	sr, err := signing.ComputeSigningRoot(&ethpb.DepositMessage{
@@ -193,7 +193,7 @@ func makeValidDepositRequest(t *testing.T, amount uint64) *enginev1.DepositReque
 		Amount:                amount,
 	}, domain)
 	require.NoError(t, err)
-	return &enginev1.DepositRequest{
+	return &enginev1.BuilderDepositRequest{
 		Pubkey:                sk.PublicKey().Marshal(),
 		WithdrawalCredentials: wc,
 		Amount:                amount,
@@ -201,11 +201,11 @@ func makeValidDepositRequest(t *testing.T, amount uint64) *enginev1.DepositReque
 	}
 }
 
-func makeInvalidDepositRequest(t *testing.T, amount uint64) *enginev1.DepositRequest {
+func makeInvalidBuilderDepositRequest(t *testing.T, amount uint64) *enginev1.BuilderDepositRequest {
 	t.Helper()
 	sk, err := bls.RandKey()
 	require.NoError(t, err)
-	return &enginev1.DepositRequest{
+	return &enginev1.BuilderDepositRequest{
 		Pubkey:                sk.PublicKey().Marshal(),
 		WithdrawalCredentials: make([]byte, 32),
 		Amount:                amount,
@@ -213,87 +213,50 @@ func makeInvalidDepositRequest(t *testing.T, amount uint64) *enginev1.DepositReq
 	}
 }
 
-func TestBatchVerifyDepositRequestSignatures_Empty(t *testing.T) {
-	invalid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), nil)
+func TestBatchVerifyBuilderDepositRequestSignatures_Empty(t *testing.T) {
+	invalid, err := helpers.BatchVerifyBuilderDepositRequestSignatures(t.Context(), nil)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(invalid))
 }
 
-func TestBatchVerifyDepositRequestSignatures_AllValid(t *testing.T) {
-	reqs := []*enginev1.DepositRequest{
-		makeValidDepositRequest(t, 100),
-		makeValidDepositRequest(t, 200),
-		makeValidDepositRequest(t, 300),
-		makeValidDepositRequest(t, 400),
+func TestBatchVerifyBuilderDepositRequestSignatures_AllValid(t *testing.T) {
+	reqs := []*enginev1.BuilderDepositRequest{
+		makeValidBuilderDepositRequest(t, 100),
+		makeValidBuilderDepositRequest(t, 200),
+		makeValidBuilderDepositRequest(t, 300),
 	}
-	invalid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
+	invalid, err := helpers.BatchVerifyBuilderDepositRequestSignatures(t.Context(), reqs)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(invalid))
 }
 
-func TestBatchVerifyDepositRequestSignatures_AllInvalid(t *testing.T) {
-	reqs := []*enginev1.DepositRequest{
-		makeInvalidDepositRequest(t, 100),
-		makeInvalidDepositRequest(t, 200),
-		makeInvalidDepositRequest(t, 300),
+func TestBatchVerifyBuilderDepositRequestSignatures_MixedDC(t *testing.T) {
+	reqs := []*enginev1.BuilderDepositRequest{
+		makeInvalidBuilderDepositRequest(t, 1),
+		makeValidBuilderDepositRequest(t, 2),
+		makeValidBuilderDepositRequest(t, 3),
+		makeInvalidBuilderDepositRequest(t, 4),
+		makeValidBuilderDepositRequest(t, 5),
+		makeValidBuilderDepositRequest(t, 6),
+		makeInvalidBuilderDepositRequest(t, 7),
+		makeValidBuilderDepositRequest(t, 8),
 	}
-	invalid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
-	require.NoError(t, err)
-	require.DeepEqual(t, []int{0, 1, 2}, invalid)
-}
-
-func TestBatchVerifyDepositRequestSignatures_SingleValid(t *testing.T) {
-	invalid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), []*enginev1.DepositRequest{makeValidDepositRequest(t, 1)})
-	require.NoError(t, err)
-	require.Equal(t, 0, len(invalid))
-}
-
-func TestBatchVerifyDepositRequestSignatures_SingleInvalid(t *testing.T) {
-	invalid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), []*enginev1.DepositRequest{makeInvalidDepositRequest(t, 1)})
-	require.NoError(t, err)
-	require.DeepEqual(t, []int{0}, invalid)
-}
-
-func TestBatchVerifyDepositRequestSignatures_MixedDC(t *testing.T) {
-	reqs := []*enginev1.DepositRequest{
-		makeInvalidDepositRequest(t, 1),
-		makeValidDepositRequest(t, 2),
-		makeValidDepositRequest(t, 3),
-		makeInvalidDepositRequest(t, 4),
-		makeValidDepositRequest(t, 5),
-		makeValidDepositRequest(t, 6),
-		makeInvalidDepositRequest(t, 7),
-		makeValidDepositRequest(t, 8),
-	}
-	invalid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
+	invalid, err := helpers.BatchVerifyBuilderDepositRequestSignatures(t.Context(), reqs)
 	require.NoError(t, err)
 	require.DeepEqual(t, []int{0, 3, 6}, invalid)
 }
 
-func TestBatchVerifyDepositRequestSignatures_OneBadInLargeBatch(t *testing.T) {
+func TestBatchVerifyBuilderDepositRequestSignatures_MultipleBadAcrossSubtrees(t *testing.T) {
 	const n = 128
-	reqs := make([]*enginev1.DepositRequest, n)
+	reqs := make([]*enginev1.BuilderDepositRequest, n)
 	for i := range n {
-		reqs[i] = makeValidDepositRequest(t, uint64(i+1))
-	}
-	const badIdx = 11
-	reqs[badIdx] = makeInvalidDepositRequest(t, badIdx+1)
-	invalid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
-	require.NoError(t, err)
-	require.DeepEqual(t, []int{badIdx}, invalid)
-}
-
-func TestBatchVerifyDepositRequestSignatures_MultipleBadAcrossSubtrees(t *testing.T) {
-	const n = 128
-	reqs := make([]*enginev1.DepositRequest, n)
-	for i := range n {
-		reqs[i] = makeValidDepositRequest(t, uint64(i+1))
+		reqs[i] = makeValidBuilderDepositRequest(t, uint64(i+1))
 	}
 	badIdxs := []int{5, 47, 99, 120}
 	for _, idx := range badIdxs {
-		reqs[idx] = makeInvalidDepositRequest(t, uint64(idx+1))
+		reqs[idx] = makeInvalidBuilderDepositRequest(t, uint64(idx+1))
 	}
-	invalid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
+	invalid, err := helpers.BatchVerifyBuilderDepositRequestSignatures(t.Context(), reqs)
 	require.NoError(t, err)
 	require.DeepEqual(t, badIdxs, invalid)
 }

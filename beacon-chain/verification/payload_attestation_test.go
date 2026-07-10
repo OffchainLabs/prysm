@@ -60,6 +60,19 @@ func TestPayloadAttestationVerifyBlockRootSeenAndValid(t *testing.T) {
 	require.ErrorIs(t, v.VerifyBlockRootValid(func([32]byte) bool { return true }), ErrPayloadAttBlockRootInvalid)
 }
 
+func TestPayloadAttestationVerifyBlockSlotMatches(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	ini := &Initializer{shared: &sharedResources{}}
+
+	msg := newPayloadAttestationMessage(primitives.Slot(5), 0, bytes.Repeat([]byte{0x22}, 32))
+	pa, err := payloadattestation.NewReadOnly(msg)
+	require.NoError(t, err)
+	v := ini.NewPayloadAttestationMsgVerifier(pa, GossipPayloadAttestationMessageRequirements)
+
+	require.NoError(t, v.VerifyBlockSlotMatches(5))
+	require.ErrorIs(t, v.VerifyBlockSlotMatches(4), ErrPayloadAttBlockSlotMismatch)
+}
+
 func TestPayloadAttestationVerifyValidatorInPTC(t *testing.T) {
 	setupPayloadAttTestConfig(t)
 

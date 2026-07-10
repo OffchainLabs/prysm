@@ -214,8 +214,9 @@ load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_depe
 http_archive(
     name = "org_golang_x_tools",
     patch_args = ["-p1"],
+    patch_cmds = ["rm -rf gopls"],
+    patch_cmds_win = ["Remove-Item -Recurse -Force gopls"],
     patches = [
-        "//third_party:org_golang_x_tools-deletegopls.patch",
         "//third_party:org_golang_x_tools-gazelle.patch",
     ],
     sha256 = "8509908cd7fc35aa09ff49d8494e4fd25bab9e6239fbf57e0d8344f6bec5802b",
@@ -228,7 +229,7 @@ http_archive(
 go_rules_dependencies()
 
 go_register_toolchains(
-    go_version = "1.25.1",
+    go_version = "1.26.4",
     nogo = "@//:nogo",
 )
 
@@ -273,7 +274,7 @@ filegroup(
     url = "https://github.com/ethereum/EIPs/archive/5480440fe51742ed23342b68cf106cefd427e39d.tar.gz",
 )
 
-consensus_spec_version = "v1.7.0-alpha.8"
+consensus_spec_version = "v1.7.0-alpha.11"
 
 load("@prysm//tools:download_spectests.bzl", "consensus_spec_tests")
 
@@ -281,8 +282,8 @@ consensus_spec_tests(
     name = "consensus_spec_tests",
     flavors = {
         "general": "sha256-szDpBVO2Ebi8/bwbiWFpW6H4c5gxnpU3hAUS31AF02E=",
-        "minimal": "sha256-SBEdtQ+HwaxFCuPwzcvkJazRuur6LlMol3egANCwH4Y=",
-        "mainnet": "sha256-alrKgbLxWFRNb8/jLInQ0eJru5ScAWnxM0rEOzdm/YE=",
+        "minimal": "sha256-irUv63gOA03eGIFD23Ca3PsDq87ovrA/HVAvtSG6/0o=",
+        "mainnet": "sha256-lWzAX5uy50Xs0Etg+yu5FnnIDt6C6BtIm11HqdZetms=",
     },
     version = consensus_spec_version,
 )
@@ -298,7 +299,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-x0OkYCK+MJfPoEAnEmpftgl60ervC4W3zCg0KA9XiXU=",
+    integrity = "sha256-6XWl6m5tkPIlx5eh3DxrHAShRzWh3gz4LlLjIM78wJo=",
     strip_prefix = "consensus-specs-" + consensus_spec_version[1:],
     url = "https://github.com/ethereum/consensus-specs/archive/refs/tags/%s.tar.gz" % consensus_spec_version,
 )

@@ -38,7 +38,8 @@ type Server struct {
 	OperationNotifier             operation.Notifier
 	CoreService                   *core.Service
 	BlockRewardFetcher            rewards.BlockRewardsFetcher
-	TrackedValidatorsCache        *cache.TrackedValidatorsCache
+	ProposerPreferencesCache      *cache.ProposerPreferencesCache
+	SubscribedValidatorsCache     *cache.SubscribedValidatorsCache
 	PayloadIDCache                *cache.PayloadIDCache
 	PayloadAttestationPool        payloadattestation.PoolManager
 }

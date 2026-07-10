@@ -14,6 +14,14 @@ var (
 		},
 	)
 
+	partialDataColumnComputationTime = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "beacon_partial_data_column_sidecar_computation_milliseconds",
+			Help:    "Captures the time taken to compute partial data column sidecars from blobs.",
+			Buckets: []float64{25, 50, 100, 250, 500, 750, 1000},
+		},
+	)
+
 	cellsAndProofsFromStructuredComputationTime = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "cells_and_proofs_from_structured_computation_milliseconds",

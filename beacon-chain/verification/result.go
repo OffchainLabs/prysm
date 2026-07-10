@@ -51,6 +51,8 @@ func (r Requirement) String() string {
 		return "RequireValidatorInPTC"
 	case RequireBlockRootSeen:
 		return "RequireBlockRootSeen"
+	case RequireBlockSlotMatches:
+		return "RequireBlockSlotMatches"
 	case RequireBlockRootValid:
 		return "RequireBlockRootValid"
 	case RequireSignatureValid:
@@ -71,20 +73,30 @@ func (r Requirement) String() string {
 		return "RequireBidCurrentOrNextSlot"
 	case RequireBidBuilderActive:
 		return "RequireBidBuilderActive"
+	case RequireBidBuilderVersionValid:
+		return "RequireBidBuilderVersionValid"
 	case RequireBidExecutionPaymentZero:
 		return "RequireBidExecutionPaymentZero"
 	case RequireBidFeeRecipientMatches:
 		return "RequireBidFeeRecipientMatches"
+	case RequireBidBlobKzgCommitmentsLimit:
+		return "RequireBidBlobKzgCommitmentsLimit"
+	case RequireBidPrevRandaoValid:
+		return "RequireBidPrevRandaoValid"
 	case RequireBidGasLimitCompatible:
 		return "RequireBidGasLimitCompatible"
 	case RequireBidParentBlockRootSeen:
 		return "RequireBidParentBlockRootSeen"
+	case RequireBidSlotHigherThanParent:
+		return "RequireBidSlotHigherThanParent"
 	case RequireBidParentBlockHashValid:
 		return "RequireBidParentBlockHashValid"
 	case RequireBidBuilderCanCover:
 		return "RequireBidBuilderCanCover"
 	case RequireBidSignatureValid:
 		return "RequireBidSignatureValid"
+	case RequireBidSlotMatches:
+		return "RequireBidSlotMatches"
 	case RequireProposerPreferencesCurrentOrNextEpoch:
 		return "RequireProposerPreferencesCurrentOrNextEpoch"
 	case RequireProposerPreferencesProposalSlotValid:

@@ -5,12 +5,14 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
 type MockPayloadAttestation struct {
 	ErrIncorrectPayloadAttSlot      error
 	ErrIncorrectPayloadAttValidator error
 	ErrPayloadAttBlockRootNotSeen   error
+	ErrPayloadAttBlockSlotMismatch  error
 	ErrPayloadAttBlockRootInvalid   error
 	ErrInvalidPayloadAttMessage     error
 	ErrInvalidMessageSignature      error
@@ -29,6 +31,10 @@ func (m *MockPayloadAttestation) VerifyValidatorInPTC(ctx context.Context, st st
 
 func (m *MockPayloadAttestation) VerifyBlockRootSeen(_ func([32]byte) bool) error {
 	return m.ErrPayloadAttBlockRootNotSeen
+}
+
+func (m *MockPayloadAttestation) VerifyBlockSlotMatches(primitives.Slot) error {
+	return m.ErrPayloadAttBlockSlotMismatch
 }
 
 func (m *MockPayloadAttestation) VerifyBlockRootValid(func([32]byte) bool) error {

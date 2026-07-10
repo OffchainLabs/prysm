@@ -2,8 +2,9 @@ package wallet
 
 import (
 	"fmt"
+	"maps"
 	"os"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -123,11 +124,7 @@ func inputMnemonic(cliCtx *cli.Context) (mnemonicPhrase string, err error) {
 		"italian":             wordlists.Italian,
 		"spanish":             wordlists.Spanish,
 	}
-	languages := make([]string, 0)
-	for k := range allowedLanguages {
-		languages = append(languages, k)
-	}
-	sort.Strings(languages)
+	languages := slices.Sorted(maps.Keys(allowedLanguages))
 	selectedLanguage, err := prompt.ValidatePrompt(
 		os.Stdin,
 		fmt.Sprintf("Enter the language of your seed phrase: %s", strings.Join(languages, ", ")),
