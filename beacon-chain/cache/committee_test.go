@@ -7,7 +7,10 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -149,4 +152,84 @@ func TestCommitteeCache_DoesNothingWhenCancelledContext(t *testing.T) {
 	count, err = cache.ActiveIndicesCount(item.Seed)
 	require.NoError(t, err)
 	assert.Equal(t, 0, count)
+}
+
+func TestCommitteeCache_GoFill(t *testing.T) {
+	t.Run("clear waits for in-flight fills", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			cache := NewCommitteesCache()
+
+			release := make(chan struct{})
+			cache.GoFill(func() { <-release })
+
+			cleared := make(chan struct{})
+			go func() {
+				cache.Clear()
+				close(cleared)
+			}()
+
+			synctest.Wait()
+
+			select {
+			case <-cleared:
+				t.Fatal("Clear returned while a fill was still in flight")
+			default:
+			}
+
+			close(release)
+			<-cleared
+		})
+	})
+
+	// Regression test for the sync.WaitGroup when used with synctest.
+	t.Run("fill inside bubble then clear outside", func(t *testing.T) {
+		cache := NewCommitteesCache()
+		synctest.Test(t, func(t *testing.T) {
+			done := make(chan struct{})
+			cache.GoFill(func() { close(done) })
+			<-done
+		})
+		cache.Clear()
+	})
+
+	t.Run("concurrent fills and clears", func(t *testing.T) {
+		cache := NewCommitteesCache()
+
+		var inFlight atomic.Int64
+		var wg sync.WaitGroup
+		for range 8 {
+			wg.Go(func() {
+				for range 1000 {
+					cache.GoFill(func() {
+						inFlight.Add(1)
+						defer inFlight.Add(-1)
+					})
+				}
+			})
+
+			wg.Go(func() {
+				for range 200 {
+					cache.Clear()
+				}
+			})
+		}
+		wg.Wait()
+
+		cache.Clear()
+		assert.Equal(t, int64(0), inFlight.Load(), "Fills still in flight after final Clear")
+	})
+
+	t.Run("panicking fill still decrements", func(t *testing.T) {
+		cache := NewCommitteesCache()
+
+		panicked := make(chan any, 1)
+		cache.GoFill(func() {
+			defer func() { panicked <- recover() }()
+			panic("fill failed")
+		})
+
+		require.NotNil(t, <-panicked)
+		// Must not deadlock: the deferred decrement ran despite the panic.
+		cache.Clear()
+	})
 }

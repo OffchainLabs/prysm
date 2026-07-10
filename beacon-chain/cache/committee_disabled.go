@@ -76,3 +76,7 @@ func (c *FakeCommitteeCache) ExpandCommitteeCache() {
 func (c *FakeCommitteeCache) CompressCommitteeCache() {
 	return
 }
+
+func (c *FakeCommitteeCache) GoFill(func()) {
+	return
+}
