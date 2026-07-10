@@ -1662,6 +1662,12 @@ func (s *Server) GetPayloadAttestationData(w http.ResponseWriter, r *http.Reques
 
 	data, rpcErr := s.CoreService.PayloadAttestationData(ctx, primitives.Slot(slot))
 	if rpcErr != nil {
+		// No block seen for the slot: return 204 to signal the validator not to
+		// cast a payload attestation, per the beacon-APIs spec.
+		if rpcErr.Reason == core.NoContent {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		httputil.HandleError(w, rpcErr.Err.Error(), core.ErrorReasonToHTTP(rpcErr.Reason))
 		return
 	}

@@ -176,7 +176,7 @@ func TestPayloadAttestationData(t *testing.T) {
 		assert.Equal(t, ErrorReason(BadRequest), rpcErr.Reason)
 		assert.ErrorContains(t, "current slot", rpcErr.Err)
 	})
-	t.Run("no block received for slot → NotFound", func(t *testing.T) {
+	t.Run("no block received for slot → NoContent", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig().Copy()
 		cfg.GloasForkEpoch = 0
@@ -189,7 +189,7 @@ func TestPayloadAttestationData(t *testing.T) {
 
 		_, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 		require.NotNil(t, rpcErr)
-		assert.Equal(t, ErrorReason(NotFound), rpcErr.Reason)
+		assert.Equal(t, ErrorReason(NoContent), rpcErr.Reason)
 		assert.ErrorContains(t, "no block found at slot=5", rpcErr.Err)
 	})
 	t.Run("empty highest received root → Internal", func(t *testing.T) {
