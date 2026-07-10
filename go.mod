@@ -16,7 +16,7 @@ require (
 	github.com/dgraph-io/ristretto/v2 v2.2.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/emicklei/dot v1.6.2
-	github.com/ethereum/c-kzg-4844/v2 v2.1.6
+	github.com/ethereum/c-kzg-4844/v2 v2.1.8
 	github.com/ethereum/go-ethereum v1.17.3
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/ghodss/yaml v1.0.0
