@@ -19,7 +19,7 @@ func (acm *CLIManager) List(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		return listValidatorIndices(ctx, acm.keymanager, *client)
+		return listValidatorIndices(ctx, acm.keymanager, client)
 	}
 	return acm.keymanager.ListKeymanagerAccounts(ctx,
 		keymanager.ListKeymanagerAccountConfig{

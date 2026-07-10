@@ -2,9 +2,7 @@ package beacon
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,14 +11,15 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
-	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
-	p2pMock "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	mock2 "github.com/OffchainLabs/prysm/v7/testing/mock"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"google.golang.org/protobuf/proto"
+	"go.uber.org/mock/gomock"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func testJSONSignedBid() *structs.SignedExecutionPayloadBid {
@@ -96,14 +95,18 @@ func TestPublishSignedExecutionPayloadBid_Syncing(t *testing.T) {
 }
 
 func TestPublishSignedExecutionPayloadBid_JSON(t *testing.T) {
-	broadcaster := &p2pMock.MockBroadcaster{}
+	ctrl := gomock.NewController(t)
+	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+	v1alpha1Server.EXPECT().SubmitSignedExecutionPayloadBid(
+		gomock.Any(), gomock.Any(),
+	).Return(&emptypb.Empty{}, nil)
+
 	s := &Server{
-		SyncChecker:           &mockSync.Sync{IsSyncing: false},
-		HeadFetcher:           &chainMock.ChainService{},
-		TimeFetcher:           &chainMock.ChainService{},
-		OptimisticModeFetcher: &chainMock.ChainService{},
-		Broadcaster:           broadcaster,
-		OperationNotifier:     &chainMock.MockOperationNotifier{},
+		SyncChecker:             &mockSync.Sync{IsSyncing: false},
+		HeadFetcher:             &chainMock.ChainService{},
+		TimeFetcher:             &chainMock.ChainService{},
+		OptimisticModeFetcher:   &chainMock.ChainService{},
+		V1Alpha1ValidatorServer: v1alpha1Server,
 	}
 
 	bid := testJSONSignedBid()
@@ -118,7 +121,6 @@ func TestPublishSignedExecutionPayloadBid_JSON(t *testing.T) {
 
 	s.PublishSignedExecutionPayloadBid(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
-	require.Equal(t, 1, len(broadcaster.BroadcastMessages))
 }
 
 func TestPublishSignedExecutionPayloadBid_MalformedJSON(t *testing.T) {
@@ -158,14 +160,18 @@ func TestPublishSignedExecutionPayloadBid_InvalidSSZ(t *testing.T) {
 }
 
 func TestPublishSignedExecutionPayloadBid_SSZ(t *testing.T) {
-	broadcaster := &p2pMock.MockBroadcaster{}
+	ctrl := gomock.NewController(t)
+	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+	v1alpha1Server.EXPECT().SubmitSignedExecutionPayloadBid(
+		gomock.Any(), gomock.Any(),
+	).Return(&emptypb.Empty{}, nil)
+
 	s := &Server{
-		SyncChecker:           &mockSync.Sync{IsSyncing: false},
-		HeadFetcher:           &chainMock.ChainService{},
-		TimeFetcher:           &chainMock.ChainService{},
-		OptimisticModeFetcher: &chainMock.ChainService{},
-		Broadcaster:           broadcaster,
-		OperationNotifier:     &chainMock.MockOperationNotifier{},
+		SyncChecker:             &mockSync.Sync{IsSyncing: false},
+		HeadFetcher:             &chainMock.ChainService{},
+		TimeFetcher:             &chainMock.ChainService{},
+		OptimisticModeFetcher:   &chainMock.ChainService{},
+		V1Alpha1ValidatorServer: v1alpha1Server,
 	}
 
 	bid := &ethpb.SignedExecutionPayloadBid{
@@ -195,65 +201,53 @@ func TestPublishSignedExecutionPayloadBid_SSZ(t *testing.T) {
 
 	s.PublishSignedExecutionPayloadBid(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
-	require.Equal(t, 1, len(broadcaster.BroadcastMessages))
 }
 
-func TestPublishSignedExecutionPayloadBid_FiresEvent(t *testing.T) {
-	notifier := &chainMock.MockOperationNotifier{}
-	s := &Server{
-		SyncChecker:           &mockSync.Sync{IsSyncing: false},
-		HeadFetcher:           &chainMock.ChainService{},
-		TimeFetcher:           &chainMock.ChainService{},
-		OptimisticModeFetcher: &chainMock.ChainService{},
-		Broadcaster:           &p2pMock.MockBroadcaster{},
-		OperationNotifier:     notifier,
-	}
+func TestPublishSignedExecutionPayloadBid_ValidationFailure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+	v1alpha1Server.EXPECT().SubmitSignedExecutionPayloadBid(
+		gomock.Any(), gomock.Any(),
+	).Return(nil, status.Error(codes.FailedPrecondition, "no proposer preferences seen for bid slot"))
 
-	events := make(chan *feed.Event, 1)
-	sub := notifier.OperationFeed().Subscribe(events)
-	defer sub.Unsubscribe()
+	s := &Server{
+		SyncChecker:             &mockSync.Sync{IsSyncing: false},
+		HeadFetcher:             &chainMock.ChainService{},
+		TimeFetcher:             &chainMock.ChainService{},
+		OptimisticModeFetcher:   &chainMock.ChainService{},
+		V1Alpha1ValidatorServer: v1alpha1Server,
+	}
 
 	body, err := json.Marshal(testJSONSignedBid())
 	require.NoError(t, err)
-	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_bids", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/eth/v2/beacon/execution_payload/bid", bytes.NewReader(body))
 	req.Header.Set(api.VersionHeader, "gloas")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
 	s.PublishSignedExecutionPayloadBid(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
-
-	require.Equal(t, 1, len(events))
-
-	ev := <-events
-	require.Equal(t, feed.EventType(opfeed.ExecutionPayloadBidReceived), ev.Type)
-
-	data, ok := ev.Data.(*opfeed.ExecutionPayloadBidReceivedData)
-	require.Equal(t, true, ok)
-	require.Equal(t, uint64(100), uint64(data.Bid.Message.Slot))
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, true, bytes.Contains(w.Body.Bytes(), []byte("no proposer preferences")))
 }
 
-// errorBroadcaster is a test broadcaster that always returns an error.
-type errorBroadcaster struct{ p2pMock.MockBroadcaster }
+func TestPublishSignedExecutionPayloadBid_InternalError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+	v1alpha1Server.EXPECT().SubmitSignedExecutionPayloadBid(
+		gomock.Any(), gomock.Any(),
+	).Return(nil, status.Error(codes.Internal, "could not broadcast signed execution payload bid"))
 
-func (e *errorBroadcaster) Broadcast(_ context.Context, _ proto.Message) error {
-	return fmt.Errorf("broadcast failed")
-}
-
-func TestPublishSignedExecutionPayloadBid_BroadcastError(t *testing.T) {
 	s := &Server{
-		SyncChecker:           &mockSync.Sync{IsSyncing: false},
-		HeadFetcher:           &chainMock.ChainService{},
-		TimeFetcher:           &chainMock.ChainService{},
-		OptimisticModeFetcher: &chainMock.ChainService{},
-		Broadcaster:           &errorBroadcaster{},
+		SyncChecker:             &mockSync.Sync{IsSyncing: false},
+		HeadFetcher:             &chainMock.ChainService{},
+		TimeFetcher:             &chainMock.ChainService{},
+		OptimisticModeFetcher:   &chainMock.ChainService{},
+		V1Alpha1ValidatorServer: v1alpha1Server,
 	}
 
-	bid := testJSONSignedBid()
-	body, err := json.Marshal(bid)
+	body, err := json.Marshal(testJSONSignedBid())
 	require.NoError(t, err)
-
 	req := httptest.NewRequest(http.MethodPost, "/eth/v2/beacon/execution_payload/bid", bytes.NewReader(body))
 	req.Header.Set(api.VersionHeader, "gloas")
 	req.Header.Set("Content-Type", "application/json")
@@ -262,5 +256,5 @@ func TestPublishSignedExecutionPayloadBid_BroadcastError(t *testing.T) {
 
 	s.PublishSignedExecutionPayloadBid(w, req)
 	require.Equal(t, http.StatusInternalServerError, w.Code)
-	assert.Equal(t, true, bytes.Contains(w.Body.Bytes(), []byte("Could not broadcast")))
+	assert.Equal(t, true, bytes.Contains(w.Body.Bytes(), []byte("could not broadcast")))
 }

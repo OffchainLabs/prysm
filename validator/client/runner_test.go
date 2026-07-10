@@ -387,6 +387,7 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 	liveCtx := gomock.Cond(func(ctx context.Context) bool { return ctx.Err() == nil || timedCtx.Err() != nil })
 	// Mocked client(s) setup.
 	vcm := validatormock.NewMockValidatorClient(ctrl)
+	vcm.EXPECT().ConnectionGeneration().Return(uint64(0)).AnyTimes()
 	vcm.EXPECT().WaitForChainStart(liveCtx, gomock.Any()).Return(&ethpb.ChainStartResponse{
 		GenesisTime: uint64(time.Now().Unix()) - params.BeaconConfig().SecondsPerSlot,
 	}, nil)

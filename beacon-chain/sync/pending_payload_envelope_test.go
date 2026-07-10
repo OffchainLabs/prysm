@@ -386,7 +386,7 @@ func TestQueuePendingPayloadEnvelope_SelfBuildSigFailuresResetPerSlot(t *testing
 	require.Equal(t, currentSlot, s.selfBuildSigFailSlot)
 }
 
-func TestQueuePendingPayloadEnvelope_RejectBadSignature(t *testing.T) {
+func TestQueuePendingPayloadEnvelope_IgnoreBadSignature(t *testing.T) {
 	ctx := context.Background()
 	s, _, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
 
@@ -400,7 +400,7 @@ func TestQueuePendingPayloadEnvelope_RejectBadSignature(t *testing.T) {
 	v := &mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("bad signature")}
 	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
 	require.NotNil(t, err)
-	require.Equal(t, pubsub.ValidationReject, result)
+	require.Equal(t, pubsub.ValidationIgnore, result)
 	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
 }
 
@@ -595,7 +595,7 @@ func TestQueuePendingPayloadEnvelope_SelfBuildBypassesPerRootBound(t *testing.T)
 	require.Equal(t, true, ok)
 }
 
-func TestValidateExecutionPayloadEnvelope_RejectBadSignatureBeforeQueue(t *testing.T) {
+func TestValidateExecutionPayloadEnvelope_IgnoreBadSignatureBeforeQueue(t *testing.T) {
 	ctx := context.Background()
 	s, msg, _, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)
 	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(
@@ -607,7 +607,7 @@ func TestValidateExecutionPayloadEnvelope_RejectBadSignatureBeforeQueue(t *testi
 
 	result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
 	require.NotNil(t, err)
-	require.Equal(t, result, pubsub.ValidationReject)
+	require.Equal(t, result, pubsub.ValidationIgnore)
 	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
 }
 

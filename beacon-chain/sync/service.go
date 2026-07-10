@@ -334,6 +334,7 @@ func (s *Service) Start() {
 
 	s.processPendingBlocksQueue()
 	s.processPendingPayloadEnvelopeQueue()
+	go s.runLatePayloadRequest()
 	s.maintainPeerStatuses()
 	s.resyncIfBehind()
 
@@ -344,6 +345,7 @@ func (s *Service) Start() {
 	async.RunEvery(s.ctx, 30*time.Second, s.pruneDataColumnCache)
 
 	go s.prunePendingGloasColumns()
+	go s.processPendingGloasColumnsRoutine()
 
 	if !params.FuluEnabled() {
 		return

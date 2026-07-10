@@ -2,7 +2,9 @@ package validator
 
 import (
 	"bytes"
+	"cmp"
 	"context"
+	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -46,6 +48,28 @@ func (vs *Server) getPayloadAttestations(ctx context.Context, head state.BeaconS
 		}
 		atts = append(atts, att)
 	}
+
+	slices.SortFunc(atts, func(a, b *ethpb.PayloadAttestation) int {
+		if c := cmp.Compare(a.Data.Slot, b.Data.Slot); c != 0 {
+			return c
+		}
+		if c := bytes.Compare(a.Data.BeaconBlockRoot, b.Data.BeaconBlockRoot); c != 0 {
+			return c
+		}
+		if a.Data.PayloadPresent != b.Data.PayloadPresent {
+			if !a.Data.PayloadPresent {
+				return -1
+			}
+			return 1
+		}
+		if a.Data.BlobDataAvailable != b.Data.BlobDataAvailable {
+			if !a.Data.BlobDataAvailable {
+				return -1
+			}
+			return 1
+		}
+		return bytes.Compare(a.Signature, b.Signature)
+	})
 
 	return atts
 }

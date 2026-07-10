@@ -958,6 +958,11 @@ func getPort(node *enode.Node, protocol internetProtocol) (uint, bool, error) {
 		return 0, false, errors.Wrap(err, "could not get port")
 	}
 
+	// A zero port is not a usable endpoint; treat it as absent so callers do not build /tcp/0 dial addresses.
+	if port == 0 {
+		return port, false, nil
+	}
+
 	return port, true, nil
 }
 

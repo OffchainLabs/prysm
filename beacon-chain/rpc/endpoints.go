@@ -99,6 +99,7 @@ func (s *Service) endpoints(
 	endpoints = append(endpoints, s.prysmBeaconEndpoints(ch, stater, blocker, coreService)...)
 	endpoints = append(endpoints, s.prysmNodeEndpoints()...)
 	endpoints = append(endpoints, s.prysmValidatorEndpoints(stater, coreService)...)
+	endpoints = append(endpoints, s.removedEndpoints()...)
 
 	if features.Get().EnableLightClient {
 		endpoints = append(endpoints, s.lightClientEndpoints()...)
@@ -106,6 +107,7 @@ func (s *Service) endpoints(
 
 	if enableDebug {
 		endpoints = append(endpoints, s.debugEndpoints(stater, blocker)...)
+		endpoints = append(endpoints, s.removedDebugEndpoints()...)
 	}
 
 	return endpoints
@@ -119,6 +121,7 @@ func (s *Service) rewardsEndpoints(blocker lookup.Blocker, stater lookup.Stater,
 		TimeFetcher:           s.cfg.GenesisTimeFetcher,
 		Stater:                stater,
 		HeadFetcher:           s.cfg.HeadFetcher,
+		ForkchoiceFetcher:     s.cfg.ForkchoiceFetcher,
 		BlockRewardFetcher:    rewardFetcher,
 	}
 
@@ -590,6 +593,7 @@ func (s *Service) beaconEndpoints(
 		ExecutionReconstructor:        s.cfg.ExecutionReconstructor,
 		BLSChangesPool:                s.cfg.BLSChangesPool,
 		PayloadAttestationPool:        s.cfg.PayloadAttestationPool,
+		PayloadAttestationReceiver:    s.cfg.PayloadAttestationReceiver,
 		FinalizationFetcher:           s.cfg.FinalizationFetcher,
 		ForkchoiceFetcher:             s.cfg.ForkchoiceFetcher,
 		CoreService:                   coreService,

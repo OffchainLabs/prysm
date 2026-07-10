@@ -430,7 +430,6 @@ func (s *Service) notifyForkchoiceUpdateGloas(ctx context.Context, blockHash [32
 			lastValidHash: bytesutil.ToBytes32(lastValidHash),
 		}
 	default:
-		log.WithError(err).Error(ErrUndefinedExecutionEngineError)
-		return nil, nil
+		return nil, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
 	}
 }

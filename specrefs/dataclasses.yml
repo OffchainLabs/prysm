@@ -255,7 +255,7 @@
 
 - name: NewPayloadRequest#bellatrix
   sources:
-    - file: beacon-chain/execution/engine_client.go
+    - file: beacon-chain/execution/engine_jsonrpc.go
       search: func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData
   spec: |
     <spec dataclass="NewPayloadRequest" fork="bellatrix" hash="cbd668dc">
@@ -265,7 +265,7 @@
 
 - name: NewPayloadRequest#deneb
   sources:
-    - file: beacon-chain/execution/engine_client.go
+    - file: beacon-chain/execution/engine_jsonrpc.go
       search: func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash
   spec: |
     <spec dataclass="NewPayloadRequest" fork="deneb" hash="a61cff05">
@@ -277,7 +277,7 @@
 
 - name: NewPayloadRequest#electra
   sources:
-    - file: beacon-chain/execution/engine_client.go
+    - file: beacon-chain/execution/engine_jsonrpc.go
       search: func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester
   spec: |
     <spec dataclass="NewPayloadRequest" fork="electra" hash="366a2e72">
