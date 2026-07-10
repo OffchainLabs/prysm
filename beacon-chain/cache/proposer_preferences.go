@@ -12,10 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-const (
-	defaultExpiration = 1 * time.Hour
-	cleanupInterval   = 15 * time.Minute
-)
+const defaultExpiration = 1 * time.Hour
 
 var (
 	proposerPreferencesCacheHit = promauto.NewCounter(prometheus.CounterOpts{
@@ -81,7 +78,13 @@ type ProposerPreferencesCache struct {
 func NewProposerPreferencesCache() *ProposerPreferencesCache {
 	return &ProposerPreferencesCache{
 		preferences: make(map[primitives.Slot][]ProposerPreference),
-		defaults:    gocache.New(defaultExpiration, cleanupInterval),
+
+		// Disable janitor because
+		// 1. If janitor is enabled, it stops ONLY when the cache is GC'd,
+		// which makes it impossible to stop goroutines.
+		// 2. It's still correct to access expired entries, which are treated as absent by Get.
+		// Janitor is manually invoked by PruneBefore as go-cache exposes a DeleteExpired method.
+		defaults: gocache.New(defaultExpiration, 0 /* disable janitor */),
 	}
 }
 
@@ -143,7 +146,8 @@ func (c *ProposerPreferencesCache) Has(dependentRoot [32]byte, slot primitives.S
 	return false
 }
 
-// PruneBefore removes all signed preferences for slots before the provided slot.
+// PruneBefore removes all signed preferences for slots before the provided
+// slot, and deletes expired per-validator defaults.
 func (c *ProposerPreferencesCache) PruneBefore(slot primitives.Slot) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -153,6 +157,8 @@ func (c *ProposerPreferencesCache) PruneBefore(slot primitives.Slot) {
 			delete(c.preferences, cachedSlot)
 		}
 	}
+
+	c.defaults.DeleteExpired()
 }
 
 // Clear removes all cached signed preferences. Does not touch defaults.
