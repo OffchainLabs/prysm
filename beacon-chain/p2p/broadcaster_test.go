@@ -41,66 +41,68 @@ import (
 )
 
 func TestService_Broadcast(t *testing.T) {
-	p1 := p2ptest.NewTestP2P(t)
-	p2 := p2ptest.NewTestP2P(t)
-	p1.Connect(p2)
-	if len(p1.BHost.Network().Peers()) == 0 {
-		t.Fatal("No peers")
-	}
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		p1 := p2ptest.NewTestP2P(t)
+		p2 := p2ptest.NewTestP2P(t)
+		p1.Connect(p2)
+		if len(p1.BHost.Network().Peers()) == 0 {
+			t.Fatal("No peers")
+		}
 
-	p := &Service{
-		host:                  p1.BHost,
-		pubsub:                p1.PubSub(),
-		joinedTopics:          map[string]*pubsub.Topic{},
-		cfg:                   &Config{},
-		genesisTime:           time.Now(),
-		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-	}
+		p := &Service{
+			host:                  p1.BHost,
+			pubsub:                p1.PubSub(),
+			joinedTopics:          map[string]*pubsub.Topic{},
+			cfg:                   &Config{},
+			genesisTime:           time.Now(),
+			genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+		}
 
-	msg := &ethpb.Fork{
-		Epoch:           55,
-		CurrentVersion:  []byte("fooo"),
-		PreviousVersion: []byte("barr"),
-	}
+		msg := &ethpb.Fork{
+			Epoch:           55,
+			CurrentVersion:  []byte("fooo"),
+			PreviousVersion: []byte("barr"),
+		}
 
-	topic := "/eth2/%x/testing"
-	// Set a test gossip mapping for testpb.TestSimpleMessage.
-	GossipTypeMapping[reflect.TypeFor[*ethpb.Fork]()] = topic
-	digest, err := p.currentForkDigest()
-	require.NoError(t, err)
-	topic = fmt.Sprintf(topic, digest)
+		topic := "/eth2/%x/testing"
+		// Set a test gossip mapping for testpb.TestSimpleMessage.
+		GossipTypeMapping[reflect.TypeFor[*ethpb.Fork]()] = topic
+		digest, err := p.currentForkDigest()
+		require.NoError(t, err)
+		topic = fmt.Sprintf(topic, digest)
 
-	// External peer subscribes to the topic.
-	topic += p.Encoding().ProtocolSuffix()
-	sub, err := p2.SubscribeToTopic(topic)
-	require.NoError(t, err)
-
-	// Wait for libp2p mesh to establish
-	require.Eventually(t, func() bool {
-		return len(p.pubsub.ListPeers(topic)) > 0
-	}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
-
-	// Async listen for the pubsub, must be before the broadcast.
-	var wg sync.WaitGroup
-	wg.Go(func() {
-		ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
-		defer cancel()
-
-		incomingMessage, err := sub.Next(ctx)
+		// External peer subscribes to the topic.
+		topic += p.Encoding().ProtocolSuffix()
+		sub, err := p2.SubscribeToTopic(topic)
 		require.NoError(t, err)
 
-		result := &ethpb.Fork{}
-		require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
-		if !proto.Equal(result, msg) {
-			t.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
+		// Wait for libp2p mesh to establish
+		require.Eventually(t, func() bool {
+			return len(p.pubsub.ListPeers(topic)) > 0
+		}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
+
+		// Async listen for the pubsub, must be before the broadcast.
+		var wg sync.WaitGroup
+		wg.Go(func() {
+			ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
+			defer cancel()
+
+			incomingMessage, err := sub.Next(ctx)
+			require.NoError(t, err)
+
+			result := &ethpb.Fork{}
+			require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
+			if !proto.Equal(result, msg) {
+				t.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
+			}
+		})
+
+		// Broadcast to peers and wait.
+		require.NoError(t, p.Broadcast(t.Context(), msg))
+		if util.WaitTimeout(&wg, 1*time.Second) {
+			t.Error("Failed to receive pubsub within 1s")
 		}
 	})
-
-	// Broadcast to peers and wait.
-	require.NoError(t, p.Broadcast(t.Context(), msg))
-	if util.WaitTimeout(&wg, 1*time.Second) {
-		t.Error("Failed to receive pubsub within 1s")
-	}
 }
 
 func TestService_Broadcast_ReturnsErr_TopicNotMapped(t *testing.T) {
@@ -155,71 +157,73 @@ func TestService_Attestation_Subnet(t *testing.T) {
 }
 
 func TestService_BroadcastAttestation(t *testing.T) {
-	p1 := p2ptest.NewTestP2P(t)
-	p2 := p2ptest.NewTestP2P(t)
-	p1.Connect(p2)
-	if len(p1.BHost.Network().Peers()) == 0 {
-		t.Fatal("No peers")
-	}
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		p1 := p2ptest.NewTestP2P(t)
+		p2 := p2ptest.NewTestP2P(t)
+		p1.Connect(p2)
+		if len(p1.BHost.Network().Peers()) == 0 {
+			t.Fatal("No peers")
+		}
 
-	p := &Service{
-		host:                  p1.BHost,
-		pubsub:                p1.PubSub(),
-		joinedTopics:          map[string]*pubsub.Topic{},
-		cfg:                   &Config{},
-		genesisTime:           time.Now(),
-		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-		subnetsLock:           make(map[uint64]*sync.RWMutex),
-		subnetsLockLock:       sync.Mutex{},
-		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
-			ScorerParams: &scorers.Config{},
-		}),
-	}
+		p := &Service{
+			host:                  p1.BHost,
+			pubsub:                p1.PubSub(),
+			joinedTopics:          map[string]*pubsub.Topic{},
+			cfg:                   &Config{},
+			genesisTime:           time.Now(),
+			genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+			subnetsLock:           make(map[uint64]*sync.RWMutex),
+			subnetsLockLock:       sync.Mutex{},
+			peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
+				ScorerParams: &scorers.Config{},
+			}),
+		}
 
-	msg := util.HydrateAttestation(&ethpb.Attestation{AggregationBits: bitfield.NewBitlist(7)})
-	subnet := uint64(5)
+		msg := util.HydrateAttestation(&ethpb.Attestation{AggregationBits: bitfield.NewBitlist(7)})
+		subnet := uint64(5)
 
-	topic := AttestationSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()] = topic
-	digest, err := p.currentForkDigest()
-	require.NoError(t, err)
-	topic = fmt.Sprintf(topic, digest, subnet)
+		topic := AttestationSubnetTopicFormat
+		GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()] = topic
+		digest, err := p.currentForkDigest()
+		require.NoError(t, err)
+		topic = fmt.Sprintf(topic, digest, subnet)
 
-	// External peer subscribes to the topic.
-	topic += p.Encoding().ProtocolSuffix()
-	sub, err := p2.SubscribeToTopic(topic)
-	require.NoError(t, err)
-
-	// Wait for libp2p mesh to establish
-	require.Eventually(t, func() bool {
-		return len(p.pubsub.ListPeers(topic)) > 0
-	}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
-
-	// Async listen for the pubsub, must be before the broadcast.
-	var wg sync.WaitGroup
-	wg.Go(func() {
-		ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
-		defer cancel()
-
-		incomingMessage, err := sub.Next(ctx)
+		// External peer subscribes to the topic.
+		topic += p.Encoding().ProtocolSuffix()
+		sub, err := p2.SubscribeToTopic(topic)
 		require.NoError(t, err)
 
-		result := &ethpb.Attestation{}
-		require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
-		if !proto.Equal(result, msg) {
-			t.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
+		// Wait for libp2p mesh to establish
+		require.Eventually(t, func() bool {
+			return len(p.pubsub.ListPeers(topic)) > 0
+		}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
+
+		// Async listen for the pubsub, must be before the broadcast.
+		var wg sync.WaitGroup
+		wg.Go(func() {
+			ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
+			defer cancel()
+
+			incomingMessage, err := sub.Next(ctx)
+			require.NoError(t, err)
+
+			result := &ethpb.Attestation{}
+			require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
+			if !proto.Equal(result, msg) {
+				t.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
+			}
+		})
+
+		// Attempt to broadcast nil object should fail.
+		ctx := t.Context()
+		require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastAttestation(ctx, subnet, nil))
+
+		// Broadcast to peers and wait.
+		require.NoError(t, p.BroadcastAttestation(ctx, subnet, msg))
+		if util.WaitTimeout(&wg, 1*time.Second) {
+			t.Error("Failed to receive pubsub within 1s")
 		}
 	})
-
-	// Attempt to broadcast nil object should fail.
-	ctx := t.Context()
-	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastAttestation(ctx, subnet, nil))
-
-	// Broadcast to peers and wait.
-	require.NoError(t, p.BroadcastAttestation(ctx, subnet, msg))
-	if util.WaitTimeout(&wg, 1*time.Second) {
-		t.Error("Failed to receive pubsub within 1s")
-	}
 }
 
 func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
@@ -409,299 +413,307 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 }
 
 func TestService_BroadcastSyncCommittee(t *testing.T) {
-	p1 := p2ptest.NewTestP2P(t)
-	p2 := p2ptest.NewTestP2P(t)
-	p1.Connect(p2)
-	if len(p1.BHost.Network().Peers()) == 0 {
-		t.Fatal("No peers")
-	}
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		p1 := p2ptest.NewTestP2P(t)
+		p2 := p2ptest.NewTestP2P(t)
+		p1.Connect(p2)
+		if len(p1.BHost.Network().Peers()) == 0 {
+			t.Fatal("No peers")
+		}
 
-	p := &Service{
-		host:                  p1.BHost,
-		pubsub:                p1.PubSub(),
-		joinedTopics:          map[string]*pubsub.Topic{},
-		cfg:                   &Config{},
-		genesisTime:           time.Now(),
-		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-		subnetsLock:           make(map[uint64]*sync.RWMutex),
-		subnetsLockLock:       sync.Mutex{},
-		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
-			ScorerParams: &scorers.Config{},
-		}),
-	}
+		p := &Service{
+			host:                  p1.BHost,
+			pubsub:                p1.PubSub(),
+			joinedTopics:          map[string]*pubsub.Topic{},
+			cfg:                   &Config{},
+			genesisTime:           time.Now(),
+			genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+			subnetsLock:           make(map[uint64]*sync.RWMutex),
+			subnetsLockLock:       sync.Mutex{},
+			peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
+				ScorerParams: &scorers.Config{},
+			}),
+		}
 
-	msg := util.HydrateSyncCommittee(&ethpb.SyncCommitteeMessage{})
-	subnet := uint64(5)
+		msg := util.HydrateSyncCommittee(&ethpb.SyncCommitteeMessage{})
+		subnet := uint64(5)
 
-	topic := SyncCommitteeSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeFor[*ethpb.SyncCommitteeMessage]()] = topic
-	digest, err := p.currentForkDigest()
-	require.NoError(t, err)
-	topic = fmt.Sprintf(topic, digest, subnet)
+		topic := SyncCommitteeSubnetTopicFormat
+		GossipTypeMapping[reflect.TypeFor[*ethpb.SyncCommitteeMessage]()] = topic
+		digest, err := p.currentForkDigest()
+		require.NoError(t, err)
+		topic = fmt.Sprintf(topic, digest, subnet)
 
-	// External peer subscribes to the topic.
-	topic += p.Encoding().ProtocolSuffix()
-	sub, err := p2.SubscribeToTopic(topic)
-	require.NoError(t, err)
-
-	// Wait for libp2p mesh to establish
-	require.Eventually(t, func() bool {
-		return len(p.pubsub.ListPeers(topic)) > 0
-	}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
-
-	// Async listen for the pubsub, must be before the broadcast.
-	var wg sync.WaitGroup
-	wg.Go(func() {
-		ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
-		defer cancel()
-
-		incomingMessage, err := sub.Next(ctx)
+		// External peer subscribes to the topic.
+		topic += p.Encoding().ProtocolSuffix()
+		sub, err := p2.SubscribeToTopic(topic)
 		require.NoError(t, err)
 
-		result := &ethpb.SyncCommitteeMessage{}
-		require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
-		if !proto.Equal(result, msg) {
-			t.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
+		// Wait for libp2p mesh to establish
+		require.Eventually(t, func() bool {
+			return len(p.pubsub.ListPeers(topic)) > 0
+		}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
+
+		// Async listen for the pubsub, must be before the broadcast.
+		var wg sync.WaitGroup
+		wg.Go(func() {
+			ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
+			defer cancel()
+
+			incomingMessage, err := sub.Next(ctx)
+			require.NoError(t, err)
+
+			result := &ethpb.SyncCommitteeMessage{}
+			require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
+			if !proto.Equal(result, msg) {
+				t.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
+			}
+		})
+
+		// Broadcasting nil should fail.
+		ctx := t.Context()
+		require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastSyncCommitteeMessage(ctx, subnet, nil))
+
+		// Broadcast to peers and wait.
+		require.NoError(t, p.BroadcastSyncCommitteeMessage(ctx, subnet, msg))
+		if util.WaitTimeout(&wg, 1*time.Second) {
+			t.Error("Failed to receive pubsub within 1s")
 		}
 	})
-
-	// Broadcasting nil should fail.
-	ctx := t.Context()
-	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastSyncCommitteeMessage(ctx, subnet, nil))
-
-	// Broadcast to peers and wait.
-	require.NoError(t, p.BroadcastSyncCommitteeMessage(ctx, subnet, msg))
-	if util.WaitTimeout(&wg, 1*time.Second) {
-		t.Error("Failed to receive pubsub within 1s")
-	}
 }
 
 func TestService_BroadcastBlob(t *testing.T) {
-	p1 := p2ptest.NewTestP2P(t)
-	p2 := p2ptest.NewTestP2P(t)
-	p1.Connect(p2)
-	require.NotEqual(t, 0, len(p1.BHost.Network().Peers()), "No peers")
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		p1 := p2ptest.NewTestP2P(t)
+		p2 := p2ptest.NewTestP2P(t)
+		p1.Connect(p2)
+		require.NotEqual(t, 0, len(p1.BHost.Network().Peers()), "No peers")
 
-	p := &Service{
-		host:                  p1.BHost,
-		pubsub:                p1.PubSub(),
-		joinedTopics:          map[string]*pubsub.Topic{},
-		cfg:                   &Config{},
-		genesisTime:           time.Now(),
-		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-		subnetsLock:           make(map[uint64]*sync.RWMutex),
-		subnetsLockLock:       sync.Mutex{},
-		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
-			ScorerParams: &scorers.Config{},
-		}),
-	}
+		p := &Service{
+			host:                  p1.BHost,
+			pubsub:                p1.PubSub(),
+			joinedTopics:          map[string]*pubsub.Topic{},
+			cfg:                   &Config{},
+			genesisTime:           time.Now(),
+			genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+			subnetsLock:           make(map[uint64]*sync.RWMutex),
+			subnetsLockLock:       sync.Mutex{},
+			peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
+				ScorerParams: &scorers.Config{},
+			}),
+		}
 
-	header := util.HydrateSignedBeaconHeader(&ethpb.SignedBeaconBlockHeader{})
-	commitmentInclusionProof := make([][]byte, 17)
-	for i := range commitmentInclusionProof {
-		commitmentInclusionProof[i] = bytesutil.PadTo([]byte{}, 32)
-	}
-	blobSidecar := &ethpb.BlobSidecar{
-		Index:                    1,
-		Blob:                     bytesutil.PadTo([]byte{'C'}, fieldparams.BlobLength),
-		KzgCommitment:            bytesutil.PadTo([]byte{'D'}, fieldparams.BLSPubkeyLength),
-		KzgProof:                 bytesutil.PadTo([]byte{'E'}, fieldparams.BLSPubkeyLength),
-		SignedBlockHeader:        header,
-		CommitmentInclusionProof: commitmentInclusionProof,
-	}
-	subnet := uint64(0)
+		header := util.HydrateSignedBeaconHeader(&ethpb.SignedBeaconBlockHeader{})
+		commitmentInclusionProof := make([][]byte, 17)
+		for i := range commitmentInclusionProof {
+			commitmentInclusionProof[i] = bytesutil.PadTo([]byte{}, 32)
+		}
+		blobSidecar := &ethpb.BlobSidecar{
+			Index:                    1,
+			Blob:                     bytesutil.PadTo([]byte{'C'}, fieldparams.BlobLength),
+			KzgCommitment:            bytesutil.PadTo([]byte{'D'}, fieldparams.BLSPubkeyLength),
+			KzgProof:                 bytesutil.PadTo([]byte{'E'}, fieldparams.BLSPubkeyLength),
+			SignedBlockHeader:        header,
+			CommitmentInclusionProof: commitmentInclusionProof,
+		}
+		subnet := uint64(0)
 
-	topic := BlobSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeFor[*ethpb.BlobSidecar]()] = topic
-	digest, err := p.currentForkDigest()
-	require.NoError(t, err)
-	topic = fmt.Sprintf(topic, digest, subnet)
+		topic := BlobSubnetTopicFormat
+		GossipTypeMapping[reflect.TypeFor[*ethpb.BlobSidecar]()] = topic
+		digest, err := p.currentForkDigest()
+		require.NoError(t, err)
+		topic = fmt.Sprintf(topic, digest, subnet)
 
-	// External peer subscribes to the topic.
-	topic += p.Encoding().ProtocolSuffix()
-	sub, err := p2.SubscribeToTopic(topic)
-	require.NoError(t, err)
-
-	// Wait for libp2p mesh to establish
-	require.Eventually(t, func() bool {
-		return len(p.pubsub.ListPeers(topic)) > 0
-	}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
-
-	// Async listen for the pubsub, must be before the broadcast.
-	var wg sync.WaitGroup
-	wg.Go(func() {
-		ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
-		defer cancel()
-
-		incomingMessage, err := sub.Next(ctx)
+		// External peer subscribes to the topic.
+		topic += p.Encoding().ProtocolSuffix()
+		sub, err := p2.SubscribeToTopic(topic)
 		require.NoError(t, err)
 
-		result := &ethpb.BlobSidecar{}
-		require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
-		require.DeepEqual(t, result, blobSidecar)
+		// Wait for libp2p mesh to establish
+		require.Eventually(t, func() bool {
+			return len(p.pubsub.ListPeers(topic)) > 0
+		}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
+
+		// Async listen for the pubsub, must be before the broadcast.
+		var wg sync.WaitGroup
+		wg.Go(func() {
+			ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
+			defer cancel()
+
+			incomingMessage, err := sub.Next(ctx)
+			require.NoError(t, err)
+
+			result := &ethpb.BlobSidecar{}
+			require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
+			require.DeepEqual(t, result, blobSidecar)
+		})
+
+		// Attempt to broadcast nil object should fail.
+		ctx := t.Context()
+		require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastBlob(ctx, subnet, nil))
+
+		// Broadcast to peers and wait.
+		require.NoError(t, p.BroadcastBlob(ctx, subnet, blobSidecar))
+		require.Equal(t, false, util.WaitTimeout(&wg, 1*time.Second), "Failed to receive pubsub within 1s")
 	})
-
-	// Attempt to broadcast nil object should fail.
-	ctx := t.Context()
-	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastBlob(ctx, subnet, nil))
-
-	// Broadcast to peers and wait.
-	require.NoError(t, p.BroadcastBlob(ctx, subnet, blobSidecar))
-	require.Equal(t, false, util.WaitTimeout(&wg, 1*time.Second), "Failed to receive pubsub within 1s")
 }
 
 func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig().Copy()
-	config.SyncMessageDueBPS = 60 // ~72 millisecond
-	params.OverrideBeaconConfig(config)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig().Copy()
+		config.SyncMessageDueBPS = 60 // ~72 millisecond
+		params.OverrideBeaconConfig(config)
 
-	p1 := p2ptest.NewTestP2P(t)
-	p2 := p2ptest.NewTestP2P(t)
-	p1.Connect(p2)
-	require.NotEqual(t, 0, len(p1.BHost.Network().Peers()))
+		p1 := p2ptest.NewTestP2P(t)
+		p2 := p2ptest.NewTestP2P(t)
+		p1.Connect(p2)
+		require.NotEqual(t, 0, len(p1.BHost.Network().Peers()))
 
-	p := &Service{
-		host:                  p1.BHost,
-		pubsub:                p1.PubSub(),
-		joinedTopics:          map[string]*pubsub.Topic{},
-		cfg:                   &Config{},
-		genesisTime:           time.Now().Add(-33 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second), // the signature slot of the mock update is 33
-		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-		subnetsLock:           make(map[uint64]*sync.RWMutex),
-		subnetsLockLock:       sync.Mutex{},
-		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
-			ScorerParams: &scorers.Config{},
-		}),
-	}
-
-	msg, err := util.MockOptimisticUpdate()
-	require.NoError(t, err)
-
-	GossipTypeMapping[reflect.TypeOf(msg)] = LightClientOptimisticUpdateTopicFormat
-	topic := fmt.Sprintf(LightClientOptimisticUpdateTopicFormat, params.ForkDigest(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot)))
-
-	// External peer subscribes to the topic.
-	topic += p.Encoding().ProtocolSuffix()
-	sub, err := p2.SubscribeToTopic(topic)
-	require.NoError(t, err)
-
-	// Wait for libp2p mesh to establish
-	require.Eventually(t, func() bool {
-		return len(p.pubsub.ListPeers(topic)) > 0
-	}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
-
-	// Async listen for the pubsub, must be before the broadcast.
-	var wg sync.WaitGroup
-	wg.Go(func() {
-		ctx, cancel := context.WithTimeout(t.Context(), 150*time.Millisecond)
-		defer cancel()
-
-		incomingMessage, err := sub.Next(ctx)
-		require.NoError(t, err)
-
-		slotStartTime, err := slots.StartTime(p.genesisTime, msg.SignatureSlot())
-		require.NoError(t, err)
-		expectedDelay := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)
-		if time.Now().Before(slotStartTime.Add(expectedDelay)) {
-			t.Errorf("Message received too early, now %v, expected at least %v", time.Now(), slotStartTime.Add(expectedDelay))
+		p := &Service{
+			host:                  p1.BHost,
+			pubsub:                p1.PubSub(),
+			joinedTopics:          map[string]*pubsub.Topic{},
+			cfg:                   &Config{},
+			genesisTime:           time.Now().Add(-33 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second), // the signature slot of the mock update is 33
+			genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+			subnetsLock:           make(map[uint64]*sync.RWMutex),
+			subnetsLockLock:       sync.Mutex{},
+			peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
+				ScorerParams: &scorers.Config{},
+			}),
 		}
 
-		result := &ethpb.LightClientOptimisticUpdateAltair{}
-		require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
-		if !proto.Equal(result, msg.Proto()) {
-			t.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
+		msg, err := util.MockOptimisticUpdate()
+		require.NoError(t, err)
+
+		GossipTypeMapping[reflect.TypeOf(msg)] = LightClientOptimisticUpdateTopicFormat
+		topic := fmt.Sprintf(LightClientOptimisticUpdateTopicFormat, params.ForkDigest(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot)))
+
+		// External peer subscribes to the topic.
+		topic += p.Encoding().ProtocolSuffix()
+		sub, err := p2.SubscribeToTopic(topic)
+		require.NoError(t, err)
+
+		// Wait for libp2p mesh to establish
+		require.Eventually(t, func() bool {
+			return len(p.pubsub.ListPeers(topic)) > 0
+		}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
+
+		// Async listen for the pubsub, must be before the broadcast.
+		var wg sync.WaitGroup
+		wg.Go(func() {
+			ctx, cancel := context.WithTimeout(t.Context(), 150*time.Millisecond)
+			defer cancel()
+
+			incomingMessage, err := sub.Next(ctx)
+			require.NoError(t, err)
+
+			slotStartTime, err := slots.StartTime(p.genesisTime, msg.SignatureSlot())
+			require.NoError(t, err)
+			expectedDelay := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)
+			if time.Now().Before(slotStartTime.Add(expectedDelay)) {
+				t.Errorf("Message received too early, now %v, expected at least %v", time.Now(), slotStartTime.Add(expectedDelay))
+			}
+
+			result := &ethpb.LightClientOptimisticUpdateAltair{}
+			require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
+			if !proto.Equal(result, msg.Proto()) {
+				t.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
+			}
+		})
+
+		// Broadcasting nil should fail.
+		ctx := t.Context()
+		require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientOptimisticUpdate(ctx, nil))
+		var nilUpdate interfaces.LightClientOptimisticUpdate
+		require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientOptimisticUpdate(ctx, nilUpdate))
+
+		// Broadcast to peers and wait.
+		require.NoError(t, p.BroadcastLightClientOptimisticUpdate(ctx, msg))
+		if util.WaitTimeout(&wg, 1*time.Second) {
+			t.Error("Failed to receive pubsub within 1s")
 		}
 	})
-
-	// Broadcasting nil should fail.
-	ctx := t.Context()
-	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientOptimisticUpdate(ctx, nil))
-	var nilUpdate interfaces.LightClientOptimisticUpdate
-	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientOptimisticUpdate(ctx, nilUpdate))
-
-	// Broadcast to peers and wait.
-	require.NoError(t, p.BroadcastLightClientOptimisticUpdate(ctx, msg))
-	if util.WaitTimeout(&wg, 1*time.Second) {
-		t.Error("Failed to receive pubsub within 1s")
-	}
 }
 
 func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig().Copy()
-	config.SyncMessageDueBPS = 60 // ~72 millisecond
-	params.OverrideBeaconConfig(config)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig().Copy()
+		config.SyncMessageDueBPS = 60 // ~72 millisecond
+		params.OverrideBeaconConfig(config)
 
-	p1 := p2ptest.NewTestP2P(t)
-	p2 := p2ptest.NewTestP2P(t)
-	p1.Connect(p2)
-	require.NotEqual(t, 0, len(p1.BHost.Network().Peers()))
+		p1 := p2ptest.NewTestP2P(t)
+		p2 := p2ptest.NewTestP2P(t)
+		p1.Connect(p2)
+		require.NotEqual(t, 0, len(p1.BHost.Network().Peers()))
 
-	p := &Service{
-		host:                  p1.BHost,
-		pubsub:                p1.PubSub(),
-		joinedTopics:          map[string]*pubsub.Topic{},
-		cfg:                   &Config{},
-		genesisTime:           time.Now().Add(-33 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second), // the signature slot of the mock update is 33
-		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-		subnetsLock:           make(map[uint64]*sync.RWMutex),
-		subnetsLockLock:       sync.Mutex{},
-		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
-			ScorerParams: &scorers.Config{},
-		}),
-	}
-
-	msg, err := util.MockFinalityUpdate()
-	require.NoError(t, err)
-
-	GossipTypeMapping[reflect.TypeOf(msg)] = LightClientFinalityUpdateTopicFormat
-	topic := fmt.Sprintf(LightClientFinalityUpdateTopicFormat, params.ForkDigest(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot)))
-
-	// External peer subscribes to the topic.
-	topic += p.Encoding().ProtocolSuffix()
-	sub, err := p2.SubscribeToTopic(topic)
-	require.NoError(t, err)
-
-	// Wait for libp2p mesh to establish
-	require.Eventually(t, func() bool {
-		return len(p.pubsub.ListPeers(topic)) > 0
-	}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
-
-	// Async listen for the pubsub, must be before the broadcast.
-	var wg sync.WaitGroup
-	wg.Go(func() {
-		ctx, cancel := context.WithTimeout(t.Context(), 150*time.Millisecond)
-		defer cancel()
-
-		incomingMessage, err := sub.Next(ctx)
-		require.NoError(t, err)
-
-		slotStartTime, err := slots.StartTime(p.genesisTime, msg.SignatureSlot())
-		require.NoError(t, err)
-		expectedDelay := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)
-		if time.Now().Before(slotStartTime.Add(expectedDelay)) {
-			t.Errorf("Message received too early, now %v, expected at least %v", time.Now(), slotStartTime.Add(expectedDelay))
+		p := &Service{
+			host:                  p1.BHost,
+			pubsub:                p1.PubSub(),
+			joinedTopics:          map[string]*pubsub.Topic{},
+			cfg:                   &Config{},
+			genesisTime:           time.Now().Add(-33 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second), // the signature slot of the mock update is 33
+			genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+			subnetsLock:           make(map[uint64]*sync.RWMutex),
+			subnetsLockLock:       sync.Mutex{},
+			peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
+				ScorerParams: &scorers.Config{},
+			}),
 		}
 
-		result := &ethpb.LightClientFinalityUpdateAltair{}
-		require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
-		if !proto.Equal(result, msg.Proto()) {
-			t.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
+		msg, err := util.MockFinalityUpdate()
+		require.NoError(t, err)
+
+		GossipTypeMapping[reflect.TypeOf(msg)] = LightClientFinalityUpdateTopicFormat
+		topic := fmt.Sprintf(LightClientFinalityUpdateTopicFormat, params.ForkDigest(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot)))
+
+		// External peer subscribes to the topic.
+		topic += p.Encoding().ProtocolSuffix()
+		sub, err := p2.SubscribeToTopic(topic)
+		require.NoError(t, err)
+
+		// Wait for libp2p mesh to establish
+		require.Eventually(t, func() bool {
+			return len(p.pubsub.ListPeers(topic)) > 0
+		}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
+
+		// Async listen for the pubsub, must be before the broadcast.
+		var wg sync.WaitGroup
+		wg.Go(func() {
+			ctx, cancel := context.WithTimeout(t.Context(), 150*time.Millisecond)
+			defer cancel()
+
+			incomingMessage, err := sub.Next(ctx)
+			require.NoError(t, err)
+
+			slotStartTime, err := slots.StartTime(p.genesisTime, msg.SignatureSlot())
+			require.NoError(t, err)
+			expectedDelay := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)
+			if time.Now().Before(slotStartTime.Add(expectedDelay)) {
+				t.Errorf("Message received too early, now %v, expected at least %v", time.Now(), slotStartTime.Add(expectedDelay))
+			}
+
+			result := &ethpb.LightClientFinalityUpdateAltair{}
+			require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
+			if !proto.Equal(result, msg.Proto()) {
+				t.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
+			}
+		})
+
+		// Broadcasting nil should fail.
+		ctx := t.Context()
+		require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientFinalityUpdate(ctx, nil))
+		var nilUpdate interfaces.LightClientFinalityUpdate
+		require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientFinalityUpdate(ctx, nilUpdate))
+
+		// Broadcast to peers and wait.
+		require.NoError(t, p.BroadcastLightClientFinalityUpdate(ctx, msg))
+		if util.WaitTimeout(&wg, 1*time.Second) {
+			t.Error("Failed to receive pubsub within 1s")
 		}
 	})
-
-	// Broadcasting nil should fail.
-	ctx := t.Context()
-	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientFinalityUpdate(ctx, nil))
-	var nilUpdate interfaces.LightClientFinalityUpdate
-	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientFinalityUpdate(ctx, nilUpdate))
-
-	// Broadcast to peers and wait.
-	require.NoError(t, p.BroadcastLightClientFinalityUpdate(ctx, msg))
-	if util.WaitTimeout(&wg, 1*time.Second) {
-		t.Error("Failed to receive pubsub within 1s")
-	}
 }
 
 func TestService_BroadcastDataColumn(t *testing.T) {
@@ -848,108 +860,112 @@ func buildTestPartialColumn(t *testing.T, index uint64) blocks.PartialDataColumn
 // when a peer is already subscribed to the column's subnet, the partial column is published directly
 // via the broadcaster (no peer discovery).
 func TestService_BroadcastDataColumnPartialWithPeers(t *testing.T) {
-	const columnIndex = 12
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		const columnIndex = 12
 
-	// Require at least one peer per subnet so hasPeerWithSubnet is meaningful.
-	gFlags := new(flags.GlobalFlags)
-	gFlags.MinimumPeersPerSubnet = 1
-	flags.Init(gFlags)
-	defer flags.Init(new(flags.GlobalFlags))
+		// Require at least one peer per subnet so hasPeerWithSubnet is meaningful.
+		gFlags := new(flags.GlobalFlags)
+		gFlags.MinimumPeersPerSubnet = 1
+		flags.Init(gFlags)
+		defer flags.Init(new(flags.GlobalFlags))
 
-	ctx := t.Context()
-	p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
-	p1.Connect(p2)
-	require.NotEqual(t, 0, len(p1.BHost.Network().Peers()), "No peers")
+		ctx := t.Context()
+		p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+		p1.Connect(p2)
+		require.NotEqual(t, 0, len(p1.BHost.Network().Peers()), "No peers")
 
-	fake := &fakePartialColumnBroadcaster{}
-	service := &Service{
-		ctx:                      ctx,
-		host:                     p1.BHost,
-		pubsub:                   p1.PubSub(),
-		joinedTopics:             map[string]*pubsub.Topic{},
-		cfg:                      &Config{},
-		genesisTime:              time.Now(),
-		genesisValidatorsRoot:    bytesutil.PadTo([]byte{'A'}, 32),
-		subnetsLock:              make(map[uint64]*sync.RWMutex),
-		subnetsLockLock:          sync.Mutex{},
-		peers:                    peers.NewStatus(ctx, &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
-		partialColumnBroadcaster: fake,
-	}
+		fake := &fakePartialColumnBroadcaster{}
+		service := &Service{
+			ctx:                      ctx,
+			host:                     p1.BHost,
+			pubsub:                   p1.PubSub(),
+			joinedTopics:             map[string]*pubsub.Topic{},
+			cfg:                      &Config{},
+			genesisTime:              time.Now(),
+			genesisValidatorsRoot:    bytesutil.PadTo([]byte{'A'}, 32),
+			subnetsLock:              make(map[uint64]*sync.RWMutex),
+			subnetsLockLock:          sync.Mutex{},
+			peers:                    peers.NewStatus(ctx, &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
+			partialColumnBroadcaster: fake,
+		}
 
-	digest, err := service.currentForkDigest()
-	require.NoError(t, err)
+		digest, err := service.currentForkDigest()
+		require.NoError(t, err)
 
-	subnet := peerdas.ComputeSubnetForDataColumnSidecar(columnIndex)
-	topic := fmt.Sprintf(DataColumnSubnetTopicFormat, digest, subnet) + service.Encoding().ProtocolSuffix()
+		subnet := peerdas.ComputeSubnetForDataColumnSidecar(columnIndex)
+		topic := fmt.Sprintf(DataColumnSubnetTopicFormat, digest, subnet) + service.Encoding().ProtocolSuffix()
 
-	// p2 subscribes to the subnet topic so service sees a peer for it.
-	_, err = p2.SubscribeToTopic(topic)
-	require.NoError(t, err)
-	require.Eventually(t, func() bool {
-		return len(service.pubsub.ListPeers(topic)) > 0
-	}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
+		// p2 subscribes to the subnet topic so service sees a peer for it.
+		_, err = p2.SubscribeToTopic(topic)
+		require.NoError(t, err)
+		require.Eventually(t, func() bool {
+			return len(service.pubsub.ListPeers(topic)) > 0
+		}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
 
-	pc := buildTestPartialColumn(t, columnIndex)
-	require.NoError(t, service.BroadcastDataColumnSidecars(ctx, nil, []blocks.PartialDataColumn{pc}))
+		pc := buildTestPartialColumn(t, columnIndex)
+		require.NoError(t, service.BroadcastDataColumnSidecars(ctx, nil, []blocks.PartialDataColumn{pc}))
 
-	require.Eventually(t, func() bool {
-		return len(fake.publishedColumns()) == 1
-	}, 5*time.Second, 10*time.Millisecond, "partial column was not published")
+		require.Eventually(t, func() bool {
+			return len(fake.publishedColumns()) == 1
+		}, 5*time.Second, 10*time.Millisecond, "partial column was not published")
 
-	published := fake.publishedColumns()
-	require.Equal(t, 1, len(published))
-	require.Equal(t, topic, published[0].topic)
-	require.Equal(t, uint64(columnIndex), published[0].index)
+		published := fake.publishedColumns()
+		require.Equal(t, 1, len(published))
+		require.Equal(t, topic, published[0].topic)
+		require.Equal(t, uint64(columnIndex), published[0].index)
+	})
 }
 
 func TestService_BroadcastDataColumnPartialWithoutPeers(t *testing.T) {
-	const columnIndex = 12
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		const columnIndex = 12
 
-	// Require at least one peer per subnet so the column is categorized as "without peers".
-	gFlags := new(flags.GlobalFlags)
-	gFlags.MinimumPeersPerSubnet = 1
-	flags.Init(gFlags)
-	defer flags.Init(new(flags.GlobalFlags))
+		// Require at least one peer per subnet so the column is categorized as "without peers".
+		gFlags := new(flags.GlobalFlags)
+		gFlags.MinimumPeersPerSubnet = 1
+		flags.Init(gFlags)
+		defer flags.Init(new(flags.GlobalFlags))
 
-	ctx := t.Context()
-	p1 := p2ptest.NewTestP2P(t)
+		ctx := t.Context()
+		p1 := p2ptest.NewTestP2P(t)
 
-	fake := &fakePartialColumnBroadcaster{}
-	service := &Service{
-		ctx:                      ctx,
-		host:                     p1.BHost,
-		pubsub:                   p1.PubSub(),
-		joinedTopics:             map[string]*pubsub.Topic{},
-		cfg:                      &Config{},
-		genesisTime:              time.Now(),
-		genesisValidatorsRoot:    bytesutil.PadTo([]byte{'A'}, 32),
-		subnetsLock:              make(map[uint64]*sync.RWMutex),
-		subnetsLockLock:          sync.Mutex{},
-		peers:                    peers.NewStatus(ctx, &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
-		partialColumnBroadcaster: fake,
-		// dv5Listener is nil, so FindAndDialPeersWithSubnets returns immediately without discovery.
-	}
+		fake := &fakePartialColumnBroadcaster{}
+		service := &Service{
+			ctx:                      ctx,
+			host:                     p1.BHost,
+			pubsub:                   p1.PubSub(),
+			joinedTopics:             map[string]*pubsub.Topic{},
+			cfg:                      &Config{},
+			genesisTime:              time.Now(),
+			genesisValidatorsRoot:    bytesutil.PadTo([]byte{'A'}, 32),
+			subnetsLock:              make(map[uint64]*sync.RWMutex),
+			subnetsLockLock:          sync.Mutex{},
+			peers:                    peers.NewStatus(ctx, &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
+			partialColumnBroadcaster: fake,
+			// dv5Listener is nil, so FindAndDialPeersWithSubnets returns immediately without discovery.
+		}
 
-	digest, err := service.currentForkDigest()
-	require.NoError(t, err)
+		digest, err := service.currentForkDigest()
+		require.NoError(t, err)
 
-	subnet := peerdas.ComputeSubnetForDataColumnSidecar(columnIndex)
-	expectedTopic := fmt.Sprintf(DataColumnSubnetTopicFormat, digest, subnet) + service.Encoding().ProtocolSuffix()
+		subnet := peerdas.ComputeSubnetForDataColumnSidecar(columnIndex)
+		expectedTopic := fmt.Sprintf(DataColumnSubnetTopicFormat, digest, subnet) + service.Encoding().ProtocolSuffix()
 
-	// No peer is subscribed to the subnet, so hasPeerWithSubnet is false.
-	require.Equal(t, 0, len(service.pubsub.ListPeers(expectedTopic)))
+		// No peer is subscribed to the subnet, so hasPeerWithSubnet is false.
+		require.Equal(t, 0, len(service.pubsub.ListPeers(expectedTopic)))
 
-	pc := buildTestPartialColumn(t, columnIndex)
-	require.NoError(t, service.BroadcastDataColumnSidecars(ctx, nil, []blocks.PartialDataColumn{pc}))
+		pc := buildTestPartialColumn(t, columnIndex)
+		require.NoError(t, service.BroadcastDataColumnSidecars(ctx, nil, []blocks.PartialDataColumn{pc}))
 
-	require.Eventually(t, func() bool {
-		return len(fake.publishedColumns()) == 1
-	}, 5*time.Second, 10*time.Millisecond, "partial column was not published")
+		require.Eventually(t, func() bool {
+			return len(fake.publishedColumns()) == 1
+		}, 5*time.Second, 10*time.Millisecond, "partial column was not published")
 
-	published := fake.publishedColumns()
-	require.Equal(t, 1, len(published))
-	require.Equal(t, expectedTopic, published[0].topic)
-	require.Equal(t, uint64(columnIndex), published[0].index)
+		published := fake.publishedColumns()
+		require.Equal(t, 1, len(published))
+		require.Equal(t, expectedTopic, published[0].topic)
+		require.Equal(t, uint64(columnIndex), published[0].index)
+	})
 }
 
 type topicInvoked struct {
