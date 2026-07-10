@@ -33,257 +33,259 @@ import (
 )
 
 func TestFetchDataColumnSidecars(t *testing.T) {
-	const numberOfColumns = uint64(fieldparams.NumberOfColumns)
-	// Slot 1: All needed sidecars are available in storage ==> Retrieval from storage only.
-	// Slot 2: No commitment ==> Nothing to do.
-	// Slot 3: Some sidecars are in the storage, other have to be retrieved from peers ==> Retrieval from storage and peers.
-	// Slot 4: Some sidecars are in the storage, other have to be retrieved from peers but peers do not deliver all requested sidecars ==> Retrieval from storage and peers then reconstruction.
-	// Slot 5: Some sidecars are in the storage, other have to be retrieved from peers ==> Retrieval from storage and peers but peers do not respond all needed on first attempt and respond needed sidecars on second attempt ==> Retrieval from storage and peers.
-	// Slot 6: Some sidecars are in the storage, other have to be retrieved from peers ==> Retrieval from storage and peers but peers do not respond all needed on first attempt and respond not needed sidecars on second attempt ==> Retrieval from storage and peers then reconstruction.
-	// Slot 7: Some sidecars are in the storage, other have to be retrieved from peers but peers do not send anything ==> Still missing.
+	testp2p.SynctestTest(t, func(t *testing.T) {
+		const numberOfColumns = uint64(fieldparams.NumberOfColumns)
+		// Slot 1: All needed sidecars are available in storage ==> Retrieval from storage only.
+		// Slot 2: No commitment ==> Nothing to do.
+		// Slot 3: Some sidecars are in the storage, other have to be retrieved from peers ==> Retrieval from storage and peers.
+		// Slot 4: Some sidecars are in the storage, other have to be retrieved from peers but peers do not deliver all requested sidecars ==> Retrieval from storage and peers then reconstruction.
+		// Slot 5: Some sidecars are in the storage, other have to be retrieved from peers ==> Retrieval from storage and peers but peers do not respond all needed on first attempt and respond needed sidecars on second attempt ==> Retrieval from storage and peers.
+		// Slot 6: Some sidecars are in the storage, other have to be retrieved from peers ==> Retrieval from storage and peers but peers do not respond all needed on first attempt and respond not needed sidecars on second attempt ==> Retrieval from storage and peers then reconstruction.
+		// Slot 7: Some sidecars are in the storage, other have to be retrieved from peers but peers do not send anything ==> Still missing.
 
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.FuluForkEpoch = 0
-	cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: 10}}
-	params.OverrideBeaconConfig(cfg)
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 0
+		cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: 10}}
+		params.OverrideBeaconConfig(cfg)
 
-	// Start the trusted setup.
-	err := kzg.Start()
-	require.NoError(t, err)
+		// Start the trusted setup.
+		err := kzg.Start()
+		require.NoError(t, err)
 
-	storage := filesystem.NewEphemeralDataColumnStorage(t)
+		storage := filesystem.NewEphemeralDataColumnStorage(t)
 
-	ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
-	require.NoError(t, err)
+		ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
+		require.NoError(t, err)
 
-	const blobCount = 3
-	indices := map[uint64]bool{31: true, 81: true, 106: true}
+		const blobCount = 3
+		indices := map[uint64]bool{31: true, 81: true, 106: true}
 
-	// Block 1
-	block1, _, verifiedSidecars1 := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(1))
-	root1 := block1.Root()
+		// Block 1
+		block1, _, verifiedSidecars1 := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(1))
+		root1 := block1.Root()
 
-	toStore1 := make([]blocks.VerifiedRODataColumn, 0, len(indices))
-	for index := range indices {
-		sidecar := verifiedSidecars1[index]
-		toStore1 = append(toStore1, sidecar)
-	}
-
-	err = storage.Save(toStore1)
-	require.NoError(t, err)
-
-	// Block 2
-	block2, _, _ := util.GenerateTestFuluBlockWithSidecars(t, 0, util.WithSlot(2))
-
-	// Block 3
-	block3, _, verifiedSidecars3 := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(3))
-	root3 := block3.Root()
-	toStore3 := []blocks.VerifiedRODataColumn{verifiedSidecars3[106]}
-
-	err = storage.Save(toStore3)
-	require.NoError(t, err)
-
-	// Block 4
-	minimumColumnsCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
-	block4, _, verifiedSidecars4 := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(4))
-	root4 := block4.Root()
-
-	toStoreCount := minimumColumnsCountToReconstruct - 1
-	toStore4 := make([]blocks.VerifiedRODataColumn, 0, toStoreCount)
-
-	for i := uint64(0); uint64(len(toStore4)) < toStoreCount; i++ {
-		sidecar := verifiedSidecars4[minimumColumnsCountToReconstruct+i]
-		if sidecar.Index() == 81 {
-			continue
+		toStore1 := make([]blocks.VerifiedRODataColumn, 0, len(indices))
+		for index := range indices {
+			sidecar := verifiedSidecars1[index]
+			toStore1 = append(toStore1, sidecar)
 		}
 
-		toStore4 = append(toStore4, sidecar)
-	}
+		err = storage.Save(toStore1)
+		require.NoError(t, err)
 
-	err = storage.Save(toStore4)
-	require.NoError(t, err)
+		// Block 2
+		block2, _, _ := util.GenerateTestFuluBlockWithSidecars(t, 0, util.WithSlot(2))
 
-	// Block 5
-	block5, _, verifiedSidecars5 := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(5))
-	root5 := block5.Root()
-	toStore5 := []blocks.VerifiedRODataColumn{verifiedSidecars5[106]}
+		// Block 3
+		block3, _, verifiedSidecars3 := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(3))
+		root3 := block3.Root()
+		toStore3 := []blocks.VerifiedRODataColumn{verifiedSidecars3[106]}
 
-	err = storage.Save(toStore5)
-	require.NoError(t, err)
+		err = storage.Save(toStore3)
+		require.NoError(t, err)
 
-	// Block 6
-	block6, _, verifiedSidecars6 := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(6))
-	root6 := block6.Root()
-	toStore6 := []blocks.VerifiedRODataColumn{verifiedSidecars6[106]}
+		// Block 4
+		minimumColumnsCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
+		block4, _, verifiedSidecars4 := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(4))
+		root4 := block4.Root()
 
-	err = storage.Save(toStore6)
-	require.NoError(t, err)
+		toStoreCount := minimumColumnsCountToReconstruct - 1
+		toStore4 := make([]blocks.VerifiedRODataColumn, 0, toStoreCount)
 
-	// Block 7
-	block7, _, verifiedSidecars7 := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(7))
-	root7 := block7.Root()
-	toStore7 := []blocks.VerifiedRODataColumn{verifiedSidecars7[106]}
-
-	err = storage.Save(toStore7)
-	require.NoError(t, err)
-
-	// Peers
-	byRangeProtocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRangeTopicV1)
-	byRootProtocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRootTopicV1)
-
-	privateKeyBytes := [32]byte{1}
-	privateKey, err := crypto.UnmarshalSecp256k1PrivateKey(privateKeyBytes[:])
-	require.NoError(t, err)
-
-	p2p, other := testp2p.NewTestP2P(t), testp2p.NewTestP2P(t, libp2p.Identity(privateKey))
-	p2p.Peers().SetConnectionState(other.PeerID(), peers.Connected)
-	p2p.Connect(other)
-
-	p2p.Peers().SetChainState(other.PeerID(), &ethpb.StatusV2{
-		HeadSlot: 8,
-	})
-
-	p2p.Peers().SetMetadata(other.PeerID(), wrapper.WrappedMetadataV2(&ethpb.MetaDataV2{
-		CustodyGroupCount: 128,
-	}))
-
-	clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
-
-	gs := startup.NewClockSynchronizer()
-	err = gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
-	require.NoError(t, err)
-
-	waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
-	initializer, err := waiter.WaitForInitializer(t.Context())
-	require.NoError(t, err)
-
-	newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
-
-	other.SetStreamHandler(byRangeProtocol, func(stream network.Stream) {
-		expectedRequest := &ethpb.DataColumnSidecarsByRangeRequest{
-			StartSlot: 3,
-			Count:     5,
-			Columns:   []uint64{31, 81},
-		}
-
-		actualRequest := new(ethpb.DataColumnSidecarsByRangeRequest)
-		err := other.Encoding().DecodeWithMaxLength(stream, actualRequest)
-		assert.NoError(t, err)
-		assert.DeepEqual(t, expectedRequest, actualRequest)
-
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars3[31].RODataColumn)
-		assert.NoError(t, err)
-
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars3[81].RODataColumn)
-		assert.NoError(t, err)
-
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars4[81].RODataColumn)
-		assert.NoError(t, err)
-
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars5[31].RODataColumn)
-		assert.NoError(t, err)
-
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars6[31].RODataColumn)
-		assert.NoError(t, err)
-
-		err = stream.CloseWrite()
-		assert.NoError(t, err)
-	})
-
-	other.SetStreamHandler(byRootProtocol, func(stream network.Stream) {
-		allBut31And81And106 := make([]uint64, 0, numberOfColumns-3)
-		allBut31And106 := make([]uint64, 0, numberOfColumns-2)
-		allBut106 := make([]uint64, 0, numberOfColumns-1)
-		for i := range numberOfColumns {
-			if !map[uint64]bool{31: true, 81: true, 106: true}[i] {
-				allBut31And81And106 = append(allBut31And81And106, i)
-			}
-			if !map[uint64]bool{31: true, 106: true}[i] {
-				allBut31And106 = append(allBut31And106, i)
+		for i := uint64(0); uint64(len(toStore4)) < toStoreCount; i++ {
+			sidecar := verifiedSidecars4[minimumColumnsCountToReconstruct+i]
+			if sidecar.Index() == 81 {
+				continue
 			}
 
-			if i != 106 {
-				allBut106 = append(allBut106, i)
+			toStore4 = append(toStore4, sidecar)
+		}
+
+		err = storage.Save(toStore4)
+		require.NoError(t, err)
+
+		// Block 5
+		block5, _, verifiedSidecars5 := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(5))
+		root5 := block5.Root()
+		toStore5 := []blocks.VerifiedRODataColumn{verifiedSidecars5[106]}
+
+		err = storage.Save(toStore5)
+		require.NoError(t, err)
+
+		// Block 6
+		block6, _, verifiedSidecars6 := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(6))
+		root6 := block6.Root()
+		toStore6 := []blocks.VerifiedRODataColumn{verifiedSidecars6[106]}
+
+		err = storage.Save(toStore6)
+		require.NoError(t, err)
+
+		// Block 7
+		block7, _, verifiedSidecars7 := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(7))
+		root7 := block7.Root()
+		toStore7 := []blocks.VerifiedRODataColumn{verifiedSidecars7[106]}
+
+		err = storage.Save(toStore7)
+		require.NoError(t, err)
+
+		// Peers
+		byRangeProtocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRangeTopicV1)
+		byRootProtocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRootTopicV1)
+
+		privateKeyBytes := [32]byte{1}
+		privateKey, err := crypto.UnmarshalSecp256k1PrivateKey(privateKeyBytes[:])
+		require.NoError(t, err)
+
+		p2p, other := testp2p.NewTestP2P(t), testp2p.NewTestP2P(t, libp2p.Identity(privateKey))
+		p2p.Peers().SetConnectionState(other.PeerID(), peers.Connected)
+		p2p.Connect(other)
+
+		p2p.Peers().SetChainState(other.PeerID(), &ethpb.StatusV2{
+			HeadSlot: 8,
+		})
+
+		p2p.Peers().SetMetadata(other.PeerID(), wrapper.WrappedMetadataV2(&ethpb.MetaDataV2{
+			CustodyGroupCount: 128,
+		}))
+
+		clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
+
+		gs := startup.NewClockSynchronizer()
+		err = gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
+		require.NoError(t, err)
+
+		waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
+		initializer, err := waiter.WaitForInitializer(t.Context())
+		require.NoError(t, err)
+
+		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
+
+		other.SetStreamHandler(byRangeProtocol, func(stream network.Stream) {
+			expectedRequest := &ethpb.DataColumnSidecarsByRangeRequest{
+				StartSlot: 3,
+				Count:     5,
+				Columns:   []uint64{31, 81},
 			}
-		}
 
-		expectedRequest := &p2ptypes.DataColumnsByRootIdentifiers{
-			{
-				BlockRoot: root7[:],
-				Columns:   allBut106,
-			},
-			{
-				BlockRoot: root5[:],
-				Columns:   allBut31And106,
-			},
-			{
-				BlockRoot: root6[:],
-				Columns:   allBut31And106,
-			},
-		}
-
-		actualRequest := new(p2ptypes.DataColumnsByRootIdentifiers)
-		err := other.Encoding().DecodeWithMaxLength(stream, actualRequest)
-		assert.NoError(t, err)
-		assert.DeepEqual(t, expectedRequest, actualRequest)
-
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars5[81].RODataColumn)
-		assert.NoError(t, err)
-
-		for _, index := range allBut31And81And106 {
-			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars6[index].RODataColumn)
+			actualRequest := new(ethpb.DataColumnSidecarsByRangeRequest)
+			err := other.Encoding().DecodeWithMaxLength(stream, actualRequest)
 			assert.NoError(t, err)
+			assert.DeepEqual(t, expectedRequest, actualRequest)
+
+			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars3[31].RODataColumn)
+			assert.NoError(t, err)
+
+			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars3[81].RODataColumn)
+			assert.NoError(t, err)
+
+			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars4[81].RODataColumn)
+			assert.NoError(t, err)
+
+			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars5[31].RODataColumn)
+			assert.NoError(t, err)
+
+			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars6[31].RODataColumn)
+			assert.NoError(t, err)
+
+			err = stream.CloseWrite()
+			assert.NoError(t, err)
+		})
+
+		other.SetStreamHandler(byRootProtocol, func(stream network.Stream) {
+			allBut31And81And106 := make([]uint64, 0, numberOfColumns-3)
+			allBut31And106 := make([]uint64, 0, numberOfColumns-2)
+			allBut106 := make([]uint64, 0, numberOfColumns-1)
+			for i := range numberOfColumns {
+				if !map[uint64]bool{31: true, 81: true, 106: true}[i] {
+					allBut31And81And106 = append(allBut31And81And106, i)
+				}
+				if !map[uint64]bool{31: true, 106: true}[i] {
+					allBut31And106 = append(allBut31And106, i)
+				}
+
+				if i != 106 {
+					allBut106 = append(allBut106, i)
+				}
+			}
+
+			expectedRequest := &p2ptypes.DataColumnsByRootIdentifiers{
+				{
+					BlockRoot: root7[:],
+					Columns:   allBut106,
+				},
+				{
+					BlockRoot: root5[:],
+					Columns:   allBut31And106,
+				},
+				{
+					BlockRoot: root6[:],
+					Columns:   allBut31And106,
+				},
+			}
+
+			actualRequest := new(p2ptypes.DataColumnsByRootIdentifiers)
+			err := other.Encoding().DecodeWithMaxLength(stream, actualRequest)
+			assert.NoError(t, err)
+			assert.DeepEqual(t, expectedRequest, actualRequest)
+
+			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars5[81].RODataColumn)
+			assert.NoError(t, err)
+
+			for _, index := range allBut31And81And106 {
+				err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars6[index].RODataColumn)
+				assert.NoError(t, err)
+			}
+
+			err = stream.CloseWrite()
+			assert.NoError(t, err)
+		})
+
+		params := DataColumnSidecarsParams{
+			Ctx:         t.Context(),
+			Tor:         clock,
+			P2P:         p2p,
+			RateLimiter: leakybucket.NewCollector(1., 10, time.Second, false /* deleteEmptyBuckets */),
+			CtxMap:      ctxMap,
+			Storage:     storage,
+			NewVerifier: newDataColumnsVerifier,
 		}
 
-		err = stream.CloseWrite()
-		assert.NoError(t, err)
+		expectedResult := map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn{
+			root1: {verifiedSidecars1[31], verifiedSidecars1[81], verifiedSidecars1[106]},
+			// no root2 (no commitments in this block)
+			root3: {verifiedSidecars3[106], verifiedSidecars3[31], verifiedSidecars3[81]},
+			root4: {verifiedSidecars4[31], verifiedSidecars4[81], verifiedSidecars4[106]},
+			root5: {verifiedSidecars5[106], verifiedSidecars5[31], verifiedSidecars5[81]},
+			root6: {verifiedSidecars6[31], verifiedSidecars6[81], verifiedSidecars6[106]},
+			root7: {verifiedSidecars7[106]},
+		}
+
+		expectedMissingIndicesBYRoots := map[[fieldparams.RootLength]byte]map[uint64]bool{
+			root7: {31: true, 81: true},
+		}
+
+		blocks := []blocks.ROBlock{block1, block2, block3, block4, block5, block6, block7}
+		actualResult, actualMissingRoots, err := FetchDataColumnSidecars(params, blocks, indices)
+		require.NoError(t, err)
+
+		require.Equal(t, len(expectedResult), len(actualResult))
+		for root := range expectedResult {
+			require.Equal(t, len(expectedResult[root]), len(actualResult[root]))
+			for i := range expectedResult[root] {
+				require.DeepSSZEqual(t, expectedResult[root][i].DataColumnSidecar(), actualResult[root][i].DataColumnSidecar())
+			}
+		}
+
+		require.Equal(t, len(expectedMissingIndicesBYRoots), len(actualMissingRoots))
+		for root, expectedMissingIndices := range expectedMissingIndicesBYRoots {
+			actualMissingIndices := actualMissingRoots[root]
+			require.Equal(t, len(expectedMissingIndices), len(actualMissingIndices))
+			for index := range expectedMissingIndices {
+				require.Equal(t, true, actualMissingIndices[index])
+			}
+		}
 	})
-
-	params := DataColumnSidecarsParams{
-		Ctx:         t.Context(),
-		Tor:         clock,
-		P2P:         p2p,
-		RateLimiter: leakybucket.NewCollector(1., 10, time.Second, false /* deleteEmptyBuckets */),
-		CtxMap:      ctxMap,
-		Storage:     storage,
-		NewVerifier: newDataColumnsVerifier,
-	}
-
-	expectedResult := map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn{
-		root1: {verifiedSidecars1[31], verifiedSidecars1[81], verifiedSidecars1[106]},
-		// no root2 (no commitments in this block)
-		root3: {verifiedSidecars3[106], verifiedSidecars3[31], verifiedSidecars3[81]},
-		root4: {verifiedSidecars4[31], verifiedSidecars4[81], verifiedSidecars4[106]},
-		root5: {verifiedSidecars5[106], verifiedSidecars5[31], verifiedSidecars5[81]},
-		root6: {verifiedSidecars6[31], verifiedSidecars6[81], verifiedSidecars6[106]},
-		root7: {verifiedSidecars7[106]},
-	}
-
-	expectedMissingIndicesBYRoots := map[[fieldparams.RootLength]byte]map[uint64]bool{
-		root7: {31: true, 81: true},
-	}
-
-	blocks := []blocks.ROBlock{block1, block2, block3, block4, block5, block6, block7}
-	actualResult, actualMissingRoots, err := FetchDataColumnSidecars(params, blocks, indices)
-	require.NoError(t, err)
-
-	require.Equal(t, len(expectedResult), len(actualResult))
-	for root := range expectedResult {
-		require.Equal(t, len(expectedResult[root]), len(actualResult[root]))
-		for i := range expectedResult[root] {
-			require.DeepSSZEqual(t, expectedResult[root][i].DataColumnSidecar(), actualResult[root][i].DataColumnSidecar())
-		}
-	}
-
-	require.Equal(t, len(expectedMissingIndicesBYRoots), len(actualMissingRoots))
-	for root, expectedMissingIndices := range expectedMissingIndicesBYRoots {
-		actualMissingIndices := actualMissingRoots[root]
-		require.Equal(t, len(expectedMissingIndices), len(actualMissingIndices))
-		for index := range expectedMissingIndices {
-			require.Equal(t, true, actualMissingIndices[index])
-		}
-	}
 }
 
 func TestSelectPeers(t *testing.T) {
@@ -373,106 +375,108 @@ func TestUpdateResults(t *testing.T) {
 }
 
 func TestFetchDataColumnSidecarsFromPeers(t *testing.T) {
-	const count = 4
+	testp2p.SynctestTest(t, func(t *testing.T) {
+		const count = 4
 
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
 
-	clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
-	ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
-	require.NoError(t, err)
+		clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
+		ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
+		require.NoError(t, err)
 
-	kzgCommitmentsInclusionProof := make([][]byte, 0, count)
-	for range count {
-		kzgCommitmentsInclusionProof = append(kzgCommitmentsInclusionProof, make([]byte, 32))
-	}
-
-	expectedResponseSidecarPb := &ethpb.DataColumnSidecar{
-		Index: 2,
-		SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
-			Header: &ethpb.BeaconBlockHeader{
-				Slot:       1,
-				ParentRoot: make([]byte, fieldparams.RootLength),
-				StateRoot:  make([]byte, fieldparams.RootLength),
-				BodyRoot:   make([]byte, fieldparams.RootLength),
-			},
-			Signature: make([]byte, fieldparams.BLSSignatureLength),
-		},
-		KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
-	}
-
-	expectedResponseSidecar, err := blocks.NewRODataColumn(expectedResponseSidecarPb)
-	require.NoError(t, err)
-
-	slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
-		{1}: 1,
-		{3}: 3,
-		{4}: 4,
-		{7}: 7,
-	}
-
-	slotsWithCommitments := map[primitives.Slot]bool{
-		1: true,
-		3: true,
-		4: true,
-		7: true,
-	}
-
-	expectedRequest := &ethpb.DataColumnSidecarsByRangeRequest{
-		StartSlot: 1,
-		Count:     7,
-		Columns:   []uint64{1, 2},
-	}
-
-	protocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRangeTopicV1)
-	p2p, other := testp2p.NewTestP2P(t), testp2p.NewTestP2P(t)
-	p2p.Connect(other)
-
-	other.SetStreamHandler(protocol, func(stream network.Stream) {
-		receivedRequest := new(ethpb.DataColumnSidecarsByRangeRequest)
-		err := other.Encoding().DecodeWithMaxLength(stream, receivedRequest)
-		assert.NoError(t, err)
-		assert.DeepEqual(t, expectedRequest, receivedRequest)
-
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), expectedResponseSidecar)
-		assert.NoError(t, err)
-
-		err = stream.CloseWrite()
-		assert.NoError(t, err)
-	})
-
-	indicesByRootByPeer := map[peer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool{
-		other.PeerID(): {
-			{1}: {1: true, 2: true},
-			{3}: {1: true, 2: true},
-			{4}: {1: true, 2: true},
-			{7}: {1: true, 2: true},
-		},
-	}
-
-	params := DataColumnSidecarsParams{
-		Ctx:         t.Context(),
-		Tor:         clock,
-		P2P:         p2p,
-		CtxMap:      ctxMap,
-		RateLimiter: leakybucket.NewCollector(1., 1, time.Second, false /* deleteEmptyBuckets */),
-	}
-
-	expectedResponse := map[peer.ID][]blocks.RODataColumn{
-		other.PeerID(): {expectedResponseSidecar},
-	}
-
-	actualResponse := fetchDataColumnSidecarsFromPeers(params, slotByRoot, slotsWithCommitments, indicesByRootByPeer)
-	require.Equal(t, len(expectedResponse), len(actualResponse))
-
-	for peerID := range expectedResponse {
-		require.Equal(t, len(expectedResponse[peerID]), len(actualResponse[peerID]))
-		for i := range expectedResponse[peerID] {
-			require.DeepSSZEqual(t, expectedResponse[peerID][i].DataColumnSidecar(), actualResponse[peerID][i].DataColumnSidecar())
+		kzgCommitmentsInclusionProof := make([][]byte, 0, count)
+		for range count {
+			kzgCommitmentsInclusionProof = append(kzgCommitmentsInclusionProof, make([]byte, 32))
 		}
-	}
+
+		expectedResponseSidecarPb := &ethpb.DataColumnSidecar{
+			Index: 2,
+			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					Slot:       1,
+					ParentRoot: make([]byte, fieldparams.RootLength),
+					StateRoot:  make([]byte, fieldparams.RootLength),
+					BodyRoot:   make([]byte, fieldparams.RootLength),
+				},
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+			KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
+		}
+
+		expectedResponseSidecar, err := blocks.NewRODataColumn(expectedResponseSidecarPb)
+		require.NoError(t, err)
+
+		slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+			{1}: 1,
+			{3}: 3,
+			{4}: 4,
+			{7}: 7,
+		}
+
+		slotsWithCommitments := map[primitives.Slot]bool{
+			1: true,
+			3: true,
+			4: true,
+			7: true,
+		}
+
+		expectedRequest := &ethpb.DataColumnSidecarsByRangeRequest{
+			StartSlot: 1,
+			Count:     7,
+			Columns:   []uint64{1, 2},
+		}
+
+		protocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRangeTopicV1)
+		p2p, other := testp2p.NewTestP2P(t), testp2p.NewTestP2P(t)
+		p2p.Connect(other)
+
+		other.SetStreamHandler(protocol, func(stream network.Stream) {
+			receivedRequest := new(ethpb.DataColumnSidecarsByRangeRequest)
+			err := other.Encoding().DecodeWithMaxLength(stream, receivedRequest)
+			assert.NoError(t, err)
+			assert.DeepEqual(t, expectedRequest, receivedRequest)
+
+			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), expectedResponseSidecar)
+			assert.NoError(t, err)
+
+			err = stream.CloseWrite()
+			assert.NoError(t, err)
+		})
+
+		indicesByRootByPeer := map[peer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool{
+			other.PeerID(): {
+				{1}: {1: true, 2: true},
+				{3}: {1: true, 2: true},
+				{4}: {1: true, 2: true},
+				{7}: {1: true, 2: true},
+			},
+		}
+
+		params := DataColumnSidecarsParams{
+			Ctx:         t.Context(),
+			Tor:         clock,
+			P2P:         p2p,
+			CtxMap:      ctxMap,
+			RateLimiter: leakybucket.NewCollector(1., 1, time.Second, false /* deleteEmptyBuckets */),
+		}
+
+		expectedResponse := map[peer.ID][]blocks.RODataColumn{
+			other.PeerID(): {expectedResponseSidecar},
+		}
+
+		actualResponse := fetchDataColumnSidecarsFromPeers(params, slotByRoot, slotsWithCommitments, indicesByRootByPeer)
+		require.Equal(t, len(expectedResponse), len(actualResponse))
+
+		for peerID := range expectedResponse {
+			require.Equal(t, len(expectedResponse[peerID]), len(actualResponse[peerID]))
+			for i := range expectedResponse[peerID] {
+				require.DeepSSZEqual(t, expectedResponse[peerID][i].DataColumnSidecar(), actualResponse[peerID][i].DataColumnSidecar())
+			}
+		}
+	})
 }
 
 func TestSendDataColumnSidecarsRequest(t *testing.T) {
@@ -510,128 +514,132 @@ func TestSendDataColumnSidecarsRequest(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("contiguous", func(t *testing.T) {
-		indicesByRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
-			{1}: {1: true, 2: true},
-			{3}: {1: true, 2: true},
-			{4}: {1: true, 2: true},
-			{7}: {1: true, 2: true},
-		}
+		testp2p.SynctestTest(t, func(t *testing.T) {
+			indicesByRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
+				{1}: {1: true, 2: true},
+				{3}: {1: true, 2: true},
+				{4}: {1: true, 2: true},
+				{7}: {1: true, 2: true},
+			}
 
-		slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
-			{1}: 1,
-			{3}: 3,
-			{4}: 4,
-			{7}: 7,
-		}
+			slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+				{1}: 1,
+				{3}: 3,
+				{4}: 4,
+				{7}: 7,
+			}
 
-		slotsWithCommitments := map[primitives.Slot]bool{
-			1: true,
-			3: true,
-			4: true,
-			7: true,
-		}
+			slotsWithCommitments := map[primitives.Slot]bool{
+				1: true,
+				3: true,
+				4: true,
+				7: true,
+			}
 
-		expectedRequest := &ethpb.DataColumnSidecarsByRangeRequest{
-			StartSlot: 1,
-			Count:     7,
-			Columns:   []uint64{1, 2},
-		}
+			expectedRequest := &ethpb.DataColumnSidecarsByRangeRequest{
+				StartSlot: 1,
+				Count:     7,
+				Columns:   []uint64{1, 2},
+			}
 
-		protocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRangeTopicV1)
-		p2p, other := testp2p.NewTestP2P(t), testp2p.NewTestP2P(t)
-		p2p.Connect(other)
+			protocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRangeTopicV1)
+			p2p, other := testp2p.NewTestP2P(t), testp2p.NewTestP2P(t)
+			p2p.Connect(other)
 
-		other.SetStreamHandler(protocol, func(stream network.Stream) {
-			receivedRequest := new(ethpb.DataColumnSidecarsByRangeRequest)
-			err := other.Encoding().DecodeWithMaxLength(stream, receivedRequest)
-			assert.NoError(t, err)
-			assert.DeepEqual(t, expectedRequest, receivedRequest)
+			other.SetStreamHandler(protocol, func(stream network.Stream) {
+				receivedRequest := new(ethpb.DataColumnSidecarsByRangeRequest)
+				err := other.Encoding().DecodeWithMaxLength(stream, receivedRequest)
+				assert.NoError(t, err)
+				assert.DeepEqual(t, expectedRequest, receivedRequest)
 
-			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), expectedResponse)
-			assert.NoError(t, err)
+				err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), expectedResponse)
+				assert.NoError(t, err)
 
-			err = stream.CloseWrite()
-			assert.NoError(t, err)
+				err = stream.CloseWrite()
+				assert.NoError(t, err)
+			})
+
+			params := DataColumnSidecarsParams{
+				Ctx:         t.Context(),
+				Tor:         clock,
+				P2P:         p2p,
+				CtxMap:      ctxMap,
+				RateLimiter: leakybucket.NewCollector(1., 1, time.Second, false /* deleteEmptyBuckets */),
+			}
+
+			actualResponse, err := sendDataColumnSidecarsRequest(params, slotByRoot, slotsWithCommitments, other.PeerID(), indicesByRoot)
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, expectedResponse.DataColumnSidecar(), actualResponse[0].DataColumnSidecar())
 		})
-
-		params := DataColumnSidecarsParams{
-			Ctx:         t.Context(),
-			Tor:         clock,
-			P2P:         p2p,
-			CtxMap:      ctxMap,
-			RateLimiter: leakybucket.NewCollector(1., 1, time.Second, false /* deleteEmptyBuckets */),
-		}
-
-		actualResponse, err := sendDataColumnSidecarsRequest(params, slotByRoot, slotsWithCommitments, other.PeerID(), indicesByRoot)
-		require.NoError(t, err)
-		require.DeepSSZEqual(t, expectedResponse.DataColumnSidecar(), actualResponse[0].DataColumnSidecar())
 	})
 
 	t.Run("non contiguous", func(t *testing.T) {
-		indicesByRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
-			expectedResponse.BlockRoot(): {1: true, 2: true},
-			{4}:                          {1: true, 2: true},
-			{7}:                          {1: true, 2: true},
-		}
+		testp2p.SynctestTest(t, func(t *testing.T) {
+			indicesByRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
+				expectedResponse.BlockRoot(): {1: true, 2: true},
+				{4}:                          {1: true, 2: true},
+				{7}:                          {1: true, 2: true},
+			}
 
-		slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
-			expectedResponse.BlockRoot(): 1,
-			{4}:                          4,
-			{7}:                          7,
-		}
+			slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+				expectedResponse.BlockRoot(): 1,
+				{4}:                          4,
+				{7}:                          7,
+			}
 
-		slotsWithCommitments := map[primitives.Slot]bool{
-			1: true,
-			3: true,
-			4: true,
-			7: true,
-		}
+			slotsWithCommitments := map[primitives.Slot]bool{
+				1: true,
+				3: true,
+				4: true,
+				7: true,
+			}
 
-		roots := [...][fieldparams.RootLength]byte{expectedResponse.BlockRoot(), {4}, {7}}
+			roots := [...][fieldparams.RootLength]byte{expectedResponse.BlockRoot(), {4}, {7}}
 
-		expectedRequest := &p2ptypes.DataColumnsByRootIdentifiers{
-			{
-				BlockRoot: roots[1][:],
-				Columns:   []uint64{1, 2},
-			},
-			{
-				BlockRoot: roots[2][:],
-				Columns:   []uint64{1, 2},
-			},
-			{
-				BlockRoot: roots[0][:],
-				Columns:   []uint64{1, 2},
-			},
-		}
+			expectedRequest := &p2ptypes.DataColumnsByRootIdentifiers{
+				{
+					BlockRoot: roots[1][:],
+					Columns:   []uint64{1, 2},
+				},
+				{
+					BlockRoot: roots[2][:],
+					Columns:   []uint64{1, 2},
+				},
+				{
+					BlockRoot: roots[0][:],
+					Columns:   []uint64{1, 2},
+				},
+			}
 
-		protocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRootTopicV1)
-		p2p, other := testp2p.NewTestP2P(t), testp2p.NewTestP2P(t)
-		p2p.Connect(other)
+			protocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRootTopicV1)
+			p2p, other := testp2p.NewTestP2P(t), testp2p.NewTestP2P(t)
+			p2p.Connect(other)
 
-		other.SetStreamHandler(protocol, func(stream network.Stream) {
-			receivedRequest := new(p2ptypes.DataColumnsByRootIdentifiers)
-			err := other.Encoding().DecodeWithMaxLength(stream, receivedRequest)
-			assert.NoError(t, err)
-			assert.DeepSSZEqual(t, *expectedRequest, *receivedRequest)
+			other.SetStreamHandler(protocol, func(stream network.Stream) {
+				receivedRequest := new(p2ptypes.DataColumnsByRootIdentifiers)
+				err := other.Encoding().DecodeWithMaxLength(stream, receivedRequest)
+				assert.NoError(t, err)
+				assert.DeepSSZEqual(t, *expectedRequest, *receivedRequest)
 
-			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), expectedResponse)
-			assert.NoError(t, err)
+				err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), expectedResponse)
+				assert.NoError(t, err)
 
-			err = stream.CloseWrite()
-			assert.NoError(t, err)
+				err = stream.CloseWrite()
+				assert.NoError(t, err)
+			})
+
+			params := DataColumnSidecarsParams{
+				Ctx:         t.Context(),
+				Tor:         clock,
+				P2P:         p2p,
+				CtxMap:      ctxMap,
+				RateLimiter: leakybucket.NewCollector(1., 1, time.Second, false /* deleteEmptyBuckets */),
+			}
+
+			actualResponse, err := sendDataColumnSidecarsRequest(params, slotByRoot, slotsWithCommitments, other.PeerID(), indicesByRoot)
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, expectedResponse.DataColumnSidecar(), actualResponse[0].DataColumnSidecar())
 		})
-
-		params := DataColumnSidecarsParams{
-			Ctx:         t.Context(),
-			Tor:         clock,
-			P2P:         p2p,
-			CtxMap:      ctxMap,
-			RateLimiter: leakybucket.NewCollector(1., 1, time.Second, false /* deleteEmptyBuckets */),
-		}
-
-		actualResponse, err := sendDataColumnSidecarsRequest(params, slotByRoot, slotsWithCommitments, other.PeerID(), indicesByRoot)
-		require.NoError(t, err)
-		require.DeepSSZEqual(t, expectedResponse.DataColumnSidecar(), actualResponse[0].DataColumnSidecar())
 	})
 
 	t.Run("recovery forces by root", func(t *testing.T) {
@@ -835,178 +843,186 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	t.Run("nominal", func(t *testing.T) {
-		const (
-			start, stop = 0, 15
-			blobCount   = 1
-		)
+		testp2p.SynctestTest(t, func(t *testing.T) {
+			const (
+				start, stop = 0, 15
+				blobCount   = 1
+			)
 
-		p2p := testp2p.NewTestP2P(t)
+			p2p := testp2p.NewTestP2P(t)
 
-		// Setup test data and expectations
-		roBlock, roDataColumnSidecars, expected := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
+			// Setup test data and expectations
+			roBlock, roDataColumnSidecars, expected := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
 
-		roDataColumnsByPeer := map[peer.ID][]blocks.RODataColumn{
-			"peer1": roDataColumnSidecars[start:5],
-			"peer2": roDataColumnSidecars[5:9],
-			"peer3": roDataColumnSidecars[9:stop],
-		}
-		gs := startup.NewClockSynchronizer()
-		err := gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
-		require.NoError(t, err)
+			roDataColumnsByPeer := map[peer.ID][]blocks.RODataColumn{
+				"peer1": roDataColumnSidecars[start:5],
+				"peer2": roDataColumnSidecars[5:9],
+				"peer3": roDataColumnSidecars[9:stop],
+			}
+			gs := startup.NewClockSynchronizer()
+			err := gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
+			require.NoError(t, err)
 
-		waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
-		initializer, err := waiter.WaitForInitializer(t.Context())
-		require.NoError(t, err)
+			waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
+			initializer, err := waiter.WaitForInitializer(t.Context())
+			require.NoError(t, err)
 
-		blockByRoot := map[[fieldparams.RootLength]byte]blocks.ROBlock{
-			roBlock.Root(): roBlock,
-		}
+			blockByRoot := map[[fieldparams.RootLength]byte]blocks.ROBlock{
+				roBlock.Root(): roBlock,
+			}
 
-		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
-		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blockByRoot, roDataColumnsByPeer)
-		require.NoError(t, err)
+			newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
+			actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blockByRoot, roDataColumnsByPeer)
+			require.NoError(t, err)
 
-		require.Equal(t, stop-start, len(actual))
+			require.Equal(t, stop-start, len(actual))
 
-		for i := range actual {
-			actualSidecar := actual[i]
-			index := actualSidecar.Index()
-			expectedSidecar := expected[index]
-			require.DeepSSZEqual(t, expectedSidecar.DataColumnSidecar(), actualSidecar.DataColumnSidecar())
-		}
+			for i := range actual {
+				actualSidecar := actual[i]
+				index := actualSidecar.Index()
+				expectedSidecar := expected[index]
+				require.DeepSSZEqual(t, expectedSidecar.DataColumnSidecar(), actualSidecar.DataColumnSidecar())
+			}
+		})
 	})
 
 	t.Run("one rogue peer", func(t *testing.T) {
-		const (
-			start, middle, stop = 0, 5, 15
-			blobCount           = 1
-		)
+		testp2p.SynctestTest(t, func(t *testing.T) {
+			const (
+				start, middle, stop = 0, 5, 15
+				blobCount           = 1
+			)
 
-		p2p := testp2p.NewTestP2P(t)
+			p2p := testp2p.NewTestP2P(t)
 
-		// Setup test data and expectations
-		roBlock, roDataColumnSidecars, expected := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
+			// Setup test data and expectations
+			roBlock, roDataColumnSidecars, expected := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
 
-		// Modify one sidecar to ensure proof verification fails.
-		if roDataColumnSidecars[middle].KzgProofs()[0][0] == 0 {
-			roDataColumnSidecars[middle].KzgProofs()[0][0]++
-		} else {
-			roDataColumnSidecars[middle].KzgProofs()[0][0]--
-		}
+			// Modify one sidecar to ensure proof verification fails.
+			if roDataColumnSidecars[middle].KzgProofs()[0][0] == 0 {
+				roDataColumnSidecars[middle].KzgProofs()[0][0]++
+			} else {
+				roDataColumnSidecars[middle].KzgProofs()[0][0]--
+			}
 
-		roDataColumnsByPeer := map[peer.ID][]blocks.RODataColumn{
-			"peer1": roDataColumnSidecars[start:middle],
-			"peer2": roDataColumnSidecars[5:middle],
-			"peer3": roDataColumnSidecars[middle:stop],
-		}
-		gs := startup.NewClockSynchronizer()
-		err := gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
-		require.NoError(t, err)
+			roDataColumnsByPeer := map[peer.ID][]blocks.RODataColumn{
+				"peer1": roDataColumnSidecars[start:middle],
+				"peer2": roDataColumnSidecars[5:middle],
+				"peer3": roDataColumnSidecars[middle:stop],
+			}
+			gs := startup.NewClockSynchronizer()
+			err := gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
+			require.NoError(t, err)
 
-		waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
-		initializer, err := waiter.WaitForInitializer(t.Context())
-		require.NoError(t, err)
+			waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
+			initializer, err := waiter.WaitForInitializer(t.Context())
+			require.NoError(t, err)
 
-		blockByRoot := map[[fieldparams.RootLength]byte]blocks.ROBlock{
-			roBlock.Root(): roBlock,
-		}
+			blockByRoot := map[[fieldparams.RootLength]byte]blocks.ROBlock{
+				roBlock.Root(): roBlock,
+			}
 
-		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
-		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blockByRoot, roDataColumnsByPeer)
-		require.NoError(t, err)
+			newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
+			actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blockByRoot, roDataColumnsByPeer)
+			require.NoError(t, err)
 
-		require.Equal(t, middle-start, len(actual))
+			require.Equal(t, middle-start, len(actual))
 
-		for i := range actual {
-			actualSidecar := actual[i]
-			index := actualSidecar.Index()
-			expectedSidecar := expected[index]
-			require.DeepSSZEqual(t, expectedSidecar.DataColumnSidecar(), actualSidecar.DataColumnSidecar())
-		}
+			for i := range actual {
+				actualSidecar := actual[i]
+				index := actualSidecar.Index()
+				expectedSidecar := expected[index]
+				require.DeepSSZEqual(t, expectedSidecar.DataColumnSidecar(), actualSidecar.DataColumnSidecar())
+			}
 
-		scorer := p2p.Peers().Scorers().BadResponsesScorer()
-		require.Equal(t, true, scorer.Score("peer3") < 0)   // genuine KZG-proof fault is downscored
-		require.Equal(t, float64(0), scorer.Score("peer1")) // honest peer is not penalized
+			scorer := p2p.Peers().Scorers().BadResponsesScorer()
+			require.Equal(t, true, scorer.Score("peer3") < 0)   // genuine KZG-proof fault is downscored
+			require.Equal(t, float64(0), scorer.Score("peer1")) // honest peer is not penalized
+		})
 	})
 
 	t.Run("rogue peer with junk header signature", func(t *testing.T) {
-		const (
-			start, middle, stop = 0, 5, 15
-			blobCount           = 1
-		)
+		testp2p.SynctestTest(t, func(t *testing.T) {
+			const (
+				start, middle, stop = 0, 5, 15
+				blobCount           = 1
+			)
 
-		p2p := testp2p.NewTestP2P(t)
+			p2p := testp2p.NewTestP2P(t)
 
-		roBlock, roDataColumnSidecars, expected := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
+			roBlock, roDataColumnSidecars, expected := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
 
-		origHeader, headerErr := roDataColumnSidecars[middle].SignedBlockHeader()
-		require.NoError(t, headerErr)
-		junkSig := make([]byte, fieldparams.BLSSignatureLength)
-		junkSig[0] = 0xff
-		roDataColumnSidecars[middle].DataColumnSidecar().SignedBlockHeader = &ethpb.SignedBeaconBlockHeader{
-			Header:    origHeader.Header,
-			Signature: junkSig,
-		}
+			origHeader, headerErr := roDataColumnSidecars[middle].SignedBlockHeader()
+			require.NoError(t, headerErr)
+			junkSig := make([]byte, fieldparams.BLSSignatureLength)
+			junkSig[0] = 0xff
+			roDataColumnSidecars[middle].DataColumnSidecar().SignedBlockHeader = &ethpb.SignedBeaconBlockHeader{
+				Header:    origHeader.Header,
+				Signature: junkSig,
+			}
 
-		roDataColumnsByPeer := map[peer.ID][]blocks.RODataColumn{
-			"peer1": roDataColumnSidecars[start:middle],
-			"peer2": roDataColumnSidecars[middle:stop],
-		}
-		gs := startup.NewClockSynchronizer()
-		err := gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
-		require.NoError(t, err)
+			roDataColumnsByPeer := map[peer.ID][]blocks.RODataColumn{
+				"peer1": roDataColumnSidecars[start:middle],
+				"peer2": roDataColumnSidecars[middle:stop],
+			}
+			gs := startup.NewClockSynchronizer()
+			err := gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
+			require.NoError(t, err)
 
-		waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
-		initializer, err := waiter.WaitForInitializer(t.Context())
-		require.NoError(t, err)
+			waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
+			initializer, err := waiter.WaitForInitializer(t.Context())
+			require.NoError(t, err)
 
-		blocksByRoot := map[[fieldparams.RootLength]byte]blocks.ROBlock{
-			roBlock.Root(): roBlock,
-		}
+			blocksByRoot := map[[fieldparams.RootLength]byte]blocks.ROBlock{
+				roBlock.Root(): roBlock,
+			}
 
-		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
-		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blocksByRoot, roDataColumnsByPeer)
-		require.NoError(t, err)
+			newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
+			actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blocksByRoot, roDataColumnsByPeer)
+			require.NoError(t, err)
 
-		// Only the honest peer's sidecars should be returned.
-		require.Equal(t, middle-start, len(actual))
-		for i := range actual {
-			actualSidecar := actual[i]
-			index := actualSidecar.Index()
-			expectedSidecar := expected[index]
-			require.DeepSSZEqual(t, expectedSidecar.DataColumnSidecar(), actualSidecar.DataColumnSidecar())
-		}
+			// Only the honest peer's sidecars should be returned.
+			require.Equal(t, middle-start, len(actual))
+			for i := range actual {
+				actualSidecar := actual[i]
+				index := actualSidecar.Index()
+				expectedSidecar := expected[index]
+				require.DeepSSZEqual(t, expectedSidecar.DataColumnSidecar(), actualSidecar.DataColumnSidecar())
+			}
+		})
 	})
 
 	t.Run("unknown block root", func(t *testing.T) {
-		const (
-			start, stop = 0, 15
-			blobCount   = 1
-		)
+		testp2p.SynctestTest(t, func(t *testing.T) {
+			const (
+				start, stop = 0, 15
+				blobCount   = 1
+			)
 
-		p2p := testp2p.NewTestP2P(t)
+			p2p := testp2p.NewTestP2P(t)
 
-		_, roDataColumnSidecars, _ := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
+			_, roDataColumnSidecars, _ := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
 
-		roDataColumnsByPeer := map[peer.ID][]blocks.RODataColumn{
-			"peer1": roDataColumnSidecars[start:stop],
-		}
-		gs := startup.NewClockSynchronizer()
-		err := gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
-		require.NoError(t, err)
+			roDataColumnsByPeer := map[peer.ID][]blocks.RODataColumn{
+				"peer1": roDataColumnSidecars[start:stop],
+			}
+			gs := startup.NewClockSynchronizer()
+			err := gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
+			require.NoError(t, err)
 
-		waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
-		initializer, err := waiter.WaitForInitializer(t.Context())
-		require.NoError(t, err)
+			waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
+			initializer, err := waiter.WaitForInitializer(t.Context())
+			require.NoError(t, err)
 
-		blockByRoot := map[[fieldparams.RootLength]byte]blocks.ROBlock{}
+			blockByRoot := map[[fieldparams.RootLength]byte]blocks.ROBlock{}
 
-		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
-		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blockByRoot, roDataColumnsByPeer)
-		require.NoError(t, err)
-		require.Equal(t, 0, len(actual))
-		// The peer is NOT downscored for returning sidecars whose block we don't hold locally.
-		require.Equal(t, float64(0), p2p.Peers().Scorers().BadResponsesScorer().Score("peer1"))
+			newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
+			actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blockByRoot, roDataColumnsByPeer)
+			require.NoError(t, err)
+			require.Equal(t, 0, len(actual))
+			// The peer is NOT downscored for returning sidecars whose block we don't hold locally.
+			require.Equal(t, float64(0), p2p.Peers().Scorers().BadResponsesScorer().Score("peer1"))
+		})
 	})
 
 	t.Run("foreign roots dropped without downscore", func(t *testing.T) {
@@ -1048,84 +1064,86 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 }
 
 func TestComputeIndicesByRootByPeer(t *testing.T) {
-	peerIdStrs := []string{
-		"16Uiu2HAm3k5Npu6EaYWxiEvzsdLseEkjVyoVhvbxWEuyqdBgBBbq", // Custodies 89, 94, 97 & 122
-		"16Uiu2HAmTwQPAwzTr6hTgBmKNecCfH6kP3Kbzxj36ZRyyQ46L6gf", // Custodies 1, 11, 37 & 86
-		"16Uiu2HAmMDB5uUePTpN7737m78ehePfWPtBL9qMGdH8kCygjzNA8", // Custodies 2, 37, 38 & 68
-		"16Uiu2HAmTAE5Vxf7Pgfk7eWpmCvVJdSba4C9xg4xkYuuvnVbgfFx", // Custodies 10, 29, 36 & 108
-	}
+	testp2p.SynctestTest(t, func(t *testing.T) {
+		peerIdStrs := []string{
+			"16Uiu2HAm3k5Npu6EaYWxiEvzsdLseEkjVyoVhvbxWEuyqdBgBBbq", // Custodies 89, 94, 97 & 122
+			"16Uiu2HAmTwQPAwzTr6hTgBmKNecCfH6kP3Kbzxj36ZRyyQ46L6gf", // Custodies 1, 11, 37 & 86
+			"16Uiu2HAmMDB5uUePTpN7737m78ehePfWPtBL9qMGdH8kCygjzNA8", // Custodies 2, 37, 38 & 68
+			"16Uiu2HAmTAE5Vxf7Pgfk7eWpmCvVJdSba4C9xg4xkYuuvnVbgfFx", // Custodies 10, 29, 36 & 108
+		}
 
-	headSlotByPeer := map[string]primitives.Slot{
-		"16Uiu2HAm3k5Npu6EaYWxiEvzsdLseEkjVyoVhvbxWEuyqdBgBBbq": 89,
-		"16Uiu2HAmTwQPAwzTr6hTgBmKNecCfH6kP3Kbzxj36ZRyyQ46L6gf": 10,
-		"16Uiu2HAmMDB5uUePTpN7737m78ehePfWPtBL9qMGdH8kCygjzNA8": 12,
-		"16Uiu2HAmTAE5Vxf7Pgfk7eWpmCvVJdSba4C9xg4xkYuuvnVbgfFx": 9,
-	}
+		headSlotByPeer := map[string]primitives.Slot{
+			"16Uiu2HAm3k5Npu6EaYWxiEvzsdLseEkjVyoVhvbxWEuyqdBgBBbq": 89,
+			"16Uiu2HAmTwQPAwzTr6hTgBmKNecCfH6kP3Kbzxj36ZRyyQ46L6gf": 10,
+			"16Uiu2HAmMDB5uUePTpN7737m78ehePfWPtBL9qMGdH8kCygjzNA8": 12,
+			"16Uiu2HAmTAE5Vxf7Pgfk7eWpmCvVJdSba4C9xg4xkYuuvnVbgfFx": 9,
+		}
 
-	p2p := testp2p.NewTestP2P(t)
-	peers := p2p.Peers()
+		p2p := testp2p.NewTestP2P(t)
+		peers := p2p.Peers()
 
-	peerIDs := make([]peer.ID, 0, len(peerIdStrs))
-	for _, peerIdStr := range peerIdStrs {
-		peerID, err := peer.Decode(peerIdStr)
+		peerIDs := make([]peer.ID, 0, len(peerIdStrs))
+		for _, peerIdStr := range peerIdStrs {
+			peerID, err := peer.Decode(peerIdStr)
+			require.NoError(t, err)
+
+			peers.SetChainState(peerID, &ethpb.StatusV2{
+				HeadSlot: headSlotByPeer[peerIdStr],
+			})
+
+			peerIDs = append(peerIDs, peerID)
+		}
+
+		slotByBlockRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+			[fieldparams.RootLength]byte{1}: 8,
+			[fieldparams.RootLength]byte{2}: 10,
+			[fieldparams.RootLength]byte{3}: 9,
+			[fieldparams.RootLength]byte{4}: 50,
+		}
+
+		indicesByBlockRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
+			[fieldparams.RootLength]byte{1}: {3: true, 4: true, 5: true},
+			[fieldparams.RootLength]byte{2}: {1: true, 10: true, 37: true, 80: true},
+			[fieldparams.RootLength]byte{3}: {10: true, 38: true, 39: true, 40: true},
+			[fieldparams.RootLength]byte{4}: {89: true, 108: true, 122: true},
+		}
+
+		expected := map[peer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool{
+			peerIDs[0]: {
+				[fieldparams.RootLength]byte{4}: {89: true, 122: true},
+			},
+			peerIDs[1]: {
+				[fieldparams.RootLength]byte{2}: {1: true, 37: true},
+			},
+			peerIDs[2]: {
+				[fieldparams.RootLength]byte{2}: {37: true},
+				[fieldparams.RootLength]byte{3}: {38: true},
+			},
+			peerIDs[3]: {
+				[fieldparams.RootLength]byte{2}: {10: true},
+				[fieldparams.RootLength]byte{3}: {10: true},
+			},
+		}
+
+		peerIDsMap := make(map[peer.ID]bool, len(peerIDs))
+		for _, id := range peerIDs {
+			peerIDsMap[id] = true
+		}
+
+		actual, err := computeIndicesByRootByPeer(p2p, slotByBlockRoot, indicesByBlockRoot, peerIDsMap)
 		require.NoError(t, err)
+		require.Equal(t, len(expected), len(actual))
 
-		peers.SetChainState(peerID, &ethpb.StatusV2{
-			HeadSlot: headSlotByPeer[peerIdStr],
-		})
-
-		peerIDs = append(peerIDs, peerID)
-	}
-
-	slotByBlockRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
-		[fieldparams.RootLength]byte{1}: 8,
-		[fieldparams.RootLength]byte{2}: 10,
-		[fieldparams.RootLength]byte{3}: 9,
-		[fieldparams.RootLength]byte{4}: 50,
-	}
-
-	indicesByBlockRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
-		[fieldparams.RootLength]byte{1}: {3: true, 4: true, 5: true},
-		[fieldparams.RootLength]byte{2}: {1: true, 10: true, 37: true, 80: true},
-		[fieldparams.RootLength]byte{3}: {10: true, 38: true, 39: true, 40: true},
-		[fieldparams.RootLength]byte{4}: {89: true, 108: true, 122: true},
-	}
-
-	expected := map[peer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool{
-		peerIDs[0]: {
-			[fieldparams.RootLength]byte{4}: {89: true, 122: true},
-		},
-		peerIDs[1]: {
-			[fieldparams.RootLength]byte{2}: {1: true, 37: true},
-		},
-		peerIDs[2]: {
-			[fieldparams.RootLength]byte{2}: {37: true},
-			[fieldparams.RootLength]byte{3}: {38: true},
-		},
-		peerIDs[3]: {
-			[fieldparams.RootLength]byte{2}: {10: true},
-			[fieldparams.RootLength]byte{3}: {10: true},
-		},
-	}
-
-	peerIDsMap := make(map[peer.ID]bool, len(peerIDs))
-	for _, id := range peerIDs {
-		peerIDsMap[id] = true
-	}
-
-	actual, err := computeIndicesByRootByPeer(p2p, slotByBlockRoot, indicesByBlockRoot, peerIDsMap)
-	require.NoError(t, err)
-	require.Equal(t, len(expected), len(actual))
-
-	for peer, indicesByRoot := range expected {
-		require.Equal(t, len(indicesByRoot), len(actual[peer]))
-		for root, indices := range indicesByRoot {
-			require.Equal(t, len(indices), len(actual[peer][root]))
-			for index := range indices {
-				require.Equal(t, actual[peer][root][index], true)
+		for peer, indicesByRoot := range expected {
+			require.Equal(t, len(indicesByRoot), len(actual[peer]))
+			for root, indices := range indicesByRoot {
+				require.Equal(t, len(indices), len(actual[peer][root]))
+				for index := range indices {
+					require.Equal(t, actual[peer][root][index], true)
+				}
 			}
 		}
-	}
+	})
 }
 
 func TestRandomPeer(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -145,7 +146,9 @@ func TestBlobByRangeOK(t *testing.T) {
 	for _, c := range cases {
 		c.clock = clock
 		t.Run(c.name, func(t *testing.T) {
-			c.runTestBlobSidecarsByRange(t)
+			p2ptest.SynctestTest(t, func(t *testing.T) {
+				c.runTestBlobSidecarsByRange(t)
+			})
 		})
 	}
 }

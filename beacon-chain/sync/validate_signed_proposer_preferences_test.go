@@ -30,40 +30,46 @@ import (
 )
 
 func TestValidateSignedProposerPreferencesGossip_InvalidTopic(t *testing.T) {
-	ctx := context.Background()
-	p := p2ptest.NewTestP2P(t)
-	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}}}
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		p := p2ptest.NewTestP2P(t)
+		s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}}}
 
-	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", &pubsub.Message{Message: &pb.Message{}})
-	require.ErrorIs(t, p2p.ErrInvalidTopic, err)
-	require.Equal(t, pubsub.ValidationReject, result)
+		result, err := s.validateSignedProposerPreferencesGossip(ctx, "", &pubsub.Message{Message: &pb.Message{}})
+		require.ErrorIs(t, p2p.ErrInvalidTopic, err)
+		require.Equal(t, pubsub.ValidationReject, result)
+	})
 }
 
 func TestValidateSignedProposerPreferencesGossip_InitialSync(t *testing.T) {
-	ctx := context.Background()
-	p := p2ptest.NewTestP2P(t)
-	s := &Service{
-		cfg: &config{
-			p2p:         p,
-			initialSync: &mockSync.Sync{IsSyncing: true},
-		},
-	}
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		p := p2ptest.NewTestP2P(t)
+		s := &Service{
+			cfg: &config{
+				p2p:         p,
+				initialSync: &mockSync.Sync{IsSyncing: true},
+			},
+		}
 
-	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", &pubsub.Message{})
-	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
+		result, err := s.validateSignedProposerPreferencesGossip(ctx, "", &pubsub.Message{})
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+	})
 }
 
 func TestValidateSignedProposerPreferencesGossip_CheckpointBlockNotSeen(t *testing.T) {
-	ctx := context.Background()
-	s, msg, _ := setupSignedProposerPreferencesService(t)
-	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(
-		mockSignedProposerPreferencesVerifier{errDependentRootSeen: errors.New("dependent_root block not seen")},
-	)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		s, msg, _ := setupSignedProposerPreferencesService(t)
+		s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(
+			mockSignedProposerPreferencesVerifier{errDependentRootSeen: errors.New("dependent_root block not seen")},
+		)
 
-	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
-	require.NotNil(t, err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
+		result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
+		require.NotNil(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+	})
 }
 
 func TestValidateSignedProposerPreferencesGossip_ErrorPathsWithMock(t *testing.T) {
@@ -96,33 +102,37 @@ func TestValidateSignedProposerPreferencesGossip_ErrorPathsWithMock(t *testing.T
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			s, msg, _ := setupSignedProposerPreferencesService(t)
-			s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(tc.verifier)
+			p2ptest.SynctestTest(t, func(t *testing.T) {
+				s, msg, _ := setupSignedProposerPreferencesService(t)
+				s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(tc.verifier)
 
-			result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
-			if tc.wantError {
-				require.NotNil(t, err)
-			}
-			require.Equal(t, tc.result, result)
+				result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
+				if tc.wantError {
+					require.NotNil(t, err)
+				}
+				require.Equal(t, tc.result, result)
+			})
 		})
 	}
 }
 
 func TestValidateSignedProposerPreferencesGossip_AlreadySeen(t *testing.T) {
-	ctx := context.Background()
-	s, msg, signedPreferences := setupSignedProposerPreferencesService(t)
-	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		s, msg, signedPreferences := setupSignedProposerPreferencesService(t)
+		s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
 
-	dependentRoot := bytesutil.ToBytes32(signedPreferences.Message.DependentRoot)
-	require.Equal(t, true, s.proposerPreferencesCache.Add(cache.ProposerPreference{
-		DependentRoot:  dependentRoot,
-		ValidatorIndex: signedPreferences.Message.ValidatorIndex,
-		FeeRecipient:   primitives.ExecutionAddress{0x01},
-		TargetGasLimit: 10,
-	}, signedPreferences.Message.ProposalSlot))
-	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
-	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
+		dependentRoot := bytesutil.ToBytes32(signedPreferences.Message.DependentRoot)
+		require.Equal(t, true, s.proposerPreferencesCache.Add(cache.ProposerPreference{
+			DependentRoot:  dependentRoot,
+			ValidatorIndex: signedPreferences.Message.ValidatorIndex,
+			FeeRecipient:   primitives.ExecutionAddress{0x01},
+			TargetGasLimit: 10,
+		}, signedPreferences.Message.ProposalSlot))
+		result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+	})
 }
 
 // TestValidateSignedProposerPreferencesGossip_HeadTooStale exercises the branch
@@ -130,80 +140,88 @@ func TestValidateSignedProposerPreferencesGossip_AlreadySeen(t *testing.T) {
 // (and not the +2 boundary edge case). With head state at epoch 0 and proposal
 // in epoch 3 the validator must ignore — proposer_lookahead cannot cover it.
 func TestValidateSignedProposerPreferencesGossip_HeadTooStale(t *testing.T) {
-	ctx := context.Background()
-	s, _, signedPreferences := setupSignedProposerPreferencesService(t)
-	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
-	signedPreferences.Message.ProposalSlot = primitives.Slot(96)
-	msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		s, _, signedPreferences := setupSignedProposerPreferencesService(t)
+		s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
+		signedPreferences.Message.ProposalSlot = primitives.Slot(96)
+		msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
 
-	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
-	require.ErrorContains(t, "cannot verify", err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
+		result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
+		require.ErrorContains(t, "cannot verify", err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+	})
 }
 
 func TestValidateSignedProposerPreferencesGossip_DependentRootMismatchSkipsStateLoad(t *testing.T) {
-	ctx := context.Background()
-	s, _, signedPreferences := setupSignedProposerPreferencesService(t)
-	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
-	msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		s, _, signedPreferences := setupSignedProposerPreferencesService(t)
+		s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
+		msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
 
-	chainService := s.cfg.chain.(*mock.ChainService)
-	chainService.HeadStateErr = errors.New("head state should not load")
-	chainService.DependentRootCB = func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
-		require.Equal(t, [32]byte{}, root)
-		require.Equal(t, primitives.Epoch(0), epoch)
-		return [32]byte{0xbb}, nil
-	}
+		chainService := s.cfg.chain.(*mock.ChainService)
+		chainService.HeadStateErr = errors.New("head state should not load")
+		chainService.DependentRootCB = func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+			require.Equal(t, [32]byte{}, root)
+			require.Equal(t, primitives.Epoch(0), epoch)
+			return [32]byte{0xbb}, nil
+		}
 
-	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
-	require.ErrorContains(t, "dependent_root", err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
+		result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
+		require.ErrorContains(t, "dependent_root", err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+	})
 }
 
 func TestValidateSignedProposerPreferencesGossip_EpochPlus2DependentRootMismatch(t *testing.T) {
-	ctx := context.Background()
-	s, _, signedPreferences := setupSignedProposerPreferencesService(t)
-	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
-	signedPreferences.Message.ProposalSlot = primitives.Slot(64)
-	msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		s, _, signedPreferences := setupSignedProposerPreferencesService(t)
+		s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
+		signedPreferences.Message.ProposalSlot = primitives.Slot(64)
+		msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
 
-	var called bool
-	var gotRoot [32]byte
-	var gotEpoch primitives.Epoch
-	expectedRoot := [32]byte{0xaa}
-	s.cfg.chain.(*mock.ChainService).DependentRootCB = func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
-		called = true
-		gotRoot = root
-		gotEpoch = epoch
-		return expectedRoot, nil
-	}
+		var called bool
+		var gotRoot [32]byte
+		var gotEpoch primitives.Epoch
+		expectedRoot := [32]byte{0xaa}
+		s.cfg.chain.(*mock.ChainService).DependentRootCB = func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+			called = true
+			gotRoot = root
+			gotEpoch = epoch
+			return expectedRoot, nil
+		}
 
-	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
-	require.ErrorContains(t, "dependent_root", err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
-	require.Equal(t, true, called)
-	require.Equal(t, [32]byte{}, gotRoot)
-	require.Equal(t, primitives.Epoch(1), gotEpoch)
+		result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
+		require.ErrorContains(t, "dependent_root", err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+		require.Equal(t, true, called)
+		require.Equal(t, [32]byte{}, gotRoot)
+		require.Equal(t, primitives.Epoch(1), gotEpoch)
+	})
 }
 
 func TestValidateSignedProposerPreferencesGossip_HappyPath(t *testing.T) {
-	ctx := context.Background()
-	s, msg, signedPreferences := setupSignedProposerPreferencesService(t)
-	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := context.Background()
+		s, msg, signedPreferences := setupSignedProposerPreferencesService(t)
+		s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
 
-	s.proposerPreferencesCache.Clear()
-	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
-	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationAccept, result)
+		s.proposerPreferencesCache.Clear()
+		result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
+		require.NoError(t, err)
+		require.Equal(t, pubsub.ValidationAccept, result)
 
-	dependentRoot := bytesutil.ToBytes32(signedPreferences.Message.DependentRoot)
-	got, ok := s.proposerPreferencesCache.Get(dependentRoot, signedPreferences.Message.ProposalSlot)
-	require.Equal(t, true, ok)
-	require.DeepEqual(t, signedPreferences.Message.FeeRecipient, got.FeeRecipient[:])
-	require.Equal(t, signedPreferences.Message.TargetGasLimit, got.TargetGasLimit)
-	validatorData, ok := msg.ValidatorData.(*ethpb.SignedProposerPreferences)
-	require.Equal(t, true, ok)
-	require.DeepEqual(t, signedPreferences, validatorData)
+		dependentRoot := bytesutil.ToBytes32(signedPreferences.Message.DependentRoot)
+		got, ok := s.proposerPreferencesCache.Get(dependentRoot, signedPreferences.Message.ProposalSlot)
+		require.Equal(t, true, ok)
+		require.DeepEqual(t, signedPreferences.Message.FeeRecipient, got.FeeRecipient[:])
+		require.Equal(t, signedPreferences.Message.TargetGasLimit, got.TargetGasLimit)
+		validatorData, ok := msg.ValidatorData.(*ethpb.SignedProposerPreferences)
+		require.Equal(t, true, ok)
+		require.DeepEqual(t, signedPreferences, validatorData)
+	})
 }
 
 type mockSignedProposerPreferencesVerifier struct {

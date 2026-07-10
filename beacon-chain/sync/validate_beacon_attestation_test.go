@@ -754,40 +754,42 @@ func Test_validateGloasCommitteeIndex(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mc := &mockChain.ChainService{
-				BlockSlot:           tt.blockSlot,
-				FinalizedCheckPoint: &ethpb.Checkpoint{Root: make([]byte, 32)},
-			}
-			if tt.hasFullNode {
-				mc.ForkchoiceRoots = map[[32]byte]bool{blockRoot32: true}
-			}
-			s := &Service{
-				ctx: t.Context(),
-				cfg: &config{
-					chain:    mc,
-					p2p:      p2ptest.NewTestP2P(t),
-					beaconDB: dbtest.SetupDB(t),
-				},
-				badPayloadCache: lruwrpr.New(10),
-			}
-			if tt.hasBadPayload {
-				s.badPayloadCache.Add(string(blockRoot32[:]), true)
-			}
+			p2ptest.SynctestTest(t, func(t *testing.T) {
+				mc := &mockChain.ChainService{
+					BlockSlot:           tt.blockSlot,
+					FinalizedCheckPoint: &ethpb.Checkpoint{Root: make([]byte, 32)},
+				}
+				if tt.hasFullNode {
+					mc.ForkchoiceRoots = map[[32]byte]bool{blockRoot32: true}
+				}
+				s := &Service{
+					ctx: t.Context(),
+					cfg: &config{
+						chain:    mc,
+						p2p:      p2ptest.NewTestP2P(t),
+						beaconDB: dbtest.SetupDB(t),
+					},
+					badPayloadCache: lruwrpr.New(10),
+				}
+				if tt.hasBadPayload {
+					s.badPayloadCache.Add(string(blockRoot32[:]), true)
+				}
 
-			data := &ethpb.AttestationData{
-				Slot:            tt.attestationSlot,
-				CommitteeIndex:  tt.committeeIndex,
-				BeaconBlockRoot: blockRoot,
-			}
+				data := &ethpb.AttestationData{
+					Slot:            tt.attestationSlot,
+					CommitteeIndex:  tt.committeeIndex,
+					BeaconBlockRoot: blockRoot,
+				}
 
-			result, err := s.validateGloasCommitteeIndex(data)
+				result, err := s.validateGloasCommitteeIndex(data)
 
-			require.Equal(t, tt.wantResult, result)
-			if tt.wantErr != "" {
-				require.ErrorContains(t, tt.wantErr, err)
-			} else {
-				require.NoError(t, err)
-			}
+				require.Equal(t, tt.wantResult, result)
+				if tt.wantErr != "" {
+					require.ErrorContains(t, tt.wantErr, err)
+				} else {
+					require.NoError(t, err)
+				}
+			})
 		})
 	}
 }

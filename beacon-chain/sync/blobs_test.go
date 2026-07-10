@@ -279,28 +279,30 @@ func defaultMockChain(t *testing.T, current primitives.Epoch) *mock.ChainService
 }
 
 func TestTestcaseSetup_BlocksAndBlobs(t *testing.T) {
-	ds := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
-	ctx := t.Context()
-	nblocks := 10
-	c := &blobsTestCase{nblocks: nblocks, clock: startup.NewClock(genesis.Time(), genesis.ValidatorsRoot(), startup.WithSlotAsNow(ds))}
-	c.oldestSlot = c.defaultOldestSlotByRoot
-	s, sidecars := c.setup(t)
-	req := blobRootRequestFromSidecars(sidecars)
-	expect := c.filterExpectedByRoot(t, sidecars, req)
-	maxed := nblocks * params.BeaconConfig().MaxBlobsPerBlockAtEpoch(params.BeaconConfig().DenebForkEpoch)
-	require.Equal(t, maxed, len(sidecars))
-	require.Equal(t, maxed, len(expect))
-	for _, sc := range sidecars {
-		blk, err := s.cfg.beaconDB.Block(ctx, sc.BlockRoot())
-		require.NoError(t, err)
-		var found *int
-		comms, err := blk.Block().Body().BlobKzgCommitments()
-		require.NoError(t, err)
-		for i, cm := range comms {
-			if bytesutil.ToBytes48(sc.KzgCommitment) == bytesutil.ToBytes48(cm) {
-				found = &i
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ds := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
+		ctx := t.Context()
+		nblocks := 10
+		c := &blobsTestCase{nblocks: nblocks, clock: startup.NewClock(genesis.Time(), genesis.ValidatorsRoot(), startup.WithSlotAsNow(ds))}
+		c.oldestSlot = c.defaultOldestSlotByRoot
+		s, sidecars := c.setup(t)
+		req := blobRootRequestFromSidecars(sidecars)
+		expect := c.filterExpectedByRoot(t, sidecars, req)
+		maxed := nblocks * params.BeaconConfig().MaxBlobsPerBlockAtEpoch(params.BeaconConfig().DenebForkEpoch)
+		require.Equal(t, maxed, len(sidecars))
+		require.Equal(t, maxed, len(expect))
+		for _, sc := range sidecars {
+			blk, err := s.cfg.beaconDB.Block(ctx, sc.BlockRoot())
+			require.NoError(t, err)
+			var found *int
+			comms, err := blk.Block().Body().BlobKzgCommitments()
+			require.NoError(t, err)
+			for i, cm := range comms {
+				if bytesutil.ToBytes48(sc.KzgCommitment) == bytesutil.ToBytes48(cm) {
+					found = &i
+				}
 			}
+			require.Equal(t, true, found != nil)
 		}
-		require.Equal(t, true, found != nil)
-	}
+	})
 }

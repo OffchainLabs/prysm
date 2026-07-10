@@ -27,143 +27,155 @@ import (
 )
 
 func TestValidateBlob_FromSelf(t *testing.T) {
-	ctx := t.Context()
-	p := p2ptest.NewTestP2P(t)
-	s := &Service{cfg: &config{p2p: p}}
-	result, err := s.validateBlob(ctx, s.cfg.p2p.PeerID(), nil)
-	require.NoError(t, err)
-	require.Equal(t, result, pubsub.ValidationAccept)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := t.Context()
+		p := p2ptest.NewTestP2P(t)
+		s := &Service{cfg: &config{p2p: p}}
+		result, err := s.validateBlob(ctx, s.cfg.p2p.PeerID(), nil)
+		require.NoError(t, err)
+		require.Equal(t, result, pubsub.ValidationAccept)
+	})
 }
 
 func TestValidateBlob_InitSync(t *testing.T) {
-	ctx := t.Context()
-	p := p2ptest.NewTestP2P(t)
-	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{IsSyncing: true}}}
-	result, err := s.validateBlob(ctx, "", nil)
-	require.NoError(t, err)
-	require.Equal(t, result, pubsub.ValidationIgnore)
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := t.Context()
+		p := p2ptest.NewTestP2P(t)
+		s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{IsSyncing: true}}}
+		result, err := s.validateBlob(ctx, "", nil)
+		require.NoError(t, err)
+		require.Equal(t, result, pubsub.ValidationIgnore)
+	})
 }
 
 func TestValidateBlob_InvalidTopic(t *testing.T) {
-	ctx := t.Context()
-	p := p2ptest.NewTestP2P(t)
-	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}}}
-	result, err := s.validateBlob(ctx, "", &pubsub.Message{
-		Message: &pb.Message{},
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := t.Context()
+		p := p2ptest.NewTestP2P(t)
+		s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}}}
+		result, err := s.validateBlob(ctx, "", &pubsub.Message{
+			Message: &pb.Message{},
+		})
+		require.ErrorIs(t, p2p.ErrInvalidTopic, err)
+		require.Equal(t, result, pubsub.ValidationReject)
 	})
-	require.ErrorIs(t, p2p.ErrInvalidTopic, err)
-	require.Equal(t, result, pubsub.ValidationReject)
 }
 
 func TestValidateBlob_InvalidMessageType(t *testing.T) {
-	ctx := t.Context()
-	p := p2ptest.NewTestP2P(t)
-	chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0)}
-	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}}
-	s.newBlobVerifier = testNewBlobVerifier()
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		ctx := t.Context()
+		p := p2ptest.NewTestP2P(t)
+		chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0)}
+		s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}}
+		s.newBlobVerifier = testNewBlobVerifier()
 
-	msg := util.NewBeaconBlock()
-	buf := new(bytes.Buffer)
-	_, err := p.Encoding().EncodeGossip(buf, msg)
-	require.NoError(t, err)
+		msg := util.NewBeaconBlock()
+		buf := new(bytes.Buffer)
+		_, err := p.Encoding().EncodeGossip(buf, msg)
+		require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeFor[*eth.SignedBeaconBlock]()]
-	digest := s.currentForkDigest()
-	topic = s.addDigestToTopic(topic, digest)
-	result, err := s.validateBlob(ctx, "", &pubsub.Message{
-		Message: &pb.Message{
-			Data:  buf.Bytes(),
-			Topic: &topic,
-		}})
-	require.ErrorIs(t, errWrongMessage, err)
-	require.Equal(t, result, pubsub.ValidationReject)
+		topic := p2p.GossipTypeMapping[reflect.TypeFor[*eth.SignedBeaconBlock]()]
+		digest := s.currentForkDigest()
+		topic = s.addDigestToTopic(topic, digest)
+		result, err := s.validateBlob(ctx, "", &pubsub.Message{
+			Message: &pb.Message{
+				Data:  buf.Bytes(),
+				Topic: &topic,
+			}})
+		require.ErrorIs(t, errWrongMessage, err)
+		require.Equal(t, result, pubsub.ValidationReject)
+	})
 }
 
 func TestValidateBlob_AlreadySeenInCache(t *testing.T) {
-	db := dbtest.SetupDB(t)
-	ctx := t.Context()
-	p := p2ptest.NewTestP2P(t)
-	chainService := &mock.ChainService{Genesis: time.Now(), FinalizedCheckPoint: &eth.Checkpoint{}, DB: db}
-	stateGen := stategen.New(db, doublylinkedtree.New())
-	s := &Service{
-		seenBlobCache: lruwrpr.New(10),
-		cfg: &config{
-			p2p:         p,
-			initialSync: &mockSync.Sync{},
-			chain:       chainService,
-			stateGen:    stateGen,
-			clock:       startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}}
-	s.newBlobVerifier = testNewBlobVerifier()
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		db := dbtest.SetupDB(t)
+		ctx := t.Context()
+		p := p2ptest.NewTestP2P(t)
+		chainService := &mock.ChainService{Genesis: time.Now(), FinalizedCheckPoint: &eth.Checkpoint{}, DB: db}
+		stateGen := stategen.New(db, doublylinkedtree.New())
+		s := &Service{
+			seenBlobCache: lruwrpr.New(10),
+			cfg: &config{
+				p2p:         p,
+				initialSync: &mockSync.Sync{},
+				chain:       chainService,
+				stateGen:    stateGen,
+				clock:       startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}}
+		s.newBlobVerifier = testNewBlobVerifier()
 
-	beaconState, _ := util.DeterministicGenesisState(t, 100)
+		beaconState, _ := util.DeterministicGenesisState(t, 100)
 
-	parent := util.NewBeaconBlock()
-	parentBb, err := blocks.NewSignedBeaconBlock(parent)
-	require.NoError(t, err)
-	parentRoot, err := parentBb.Block().HashTreeRoot()
-	require.NoError(t, err)
+		parent := util.NewBeaconBlock()
+		parentBb, err := blocks.NewSignedBeaconBlock(parent)
+		require.NoError(t, err)
+		parentRoot, err := parentBb.Block().HashTreeRoot()
+		require.NoError(t, err)
 
-	bb := util.NewBeaconBlock()
-	bb.Block.Slot = 1
-	bb.Block.ParentRoot = parentRoot[:]
-	bb.Block.ProposerIndex = 19026
-	signedBb, err := blocks.NewSignedBeaconBlock(bb)
-	require.NoError(t, err)
+		bb := util.NewBeaconBlock()
+		bb.Block.Slot = 1
+		bb.Block.ParentRoot = parentRoot[:]
+		bb.Block.ProposerIndex = 19026
+		signedBb, err := blocks.NewSignedBeaconBlock(bb)
+		require.NoError(t, err)
 
-	require.NoError(t, db.SaveBlock(ctx, parentBb))
-	require.NoError(t, db.SaveBlock(ctx, signedBb))
-	r, err := signedBb.Block().HashTreeRoot()
-	require.NoError(t, err)
-	require.NoError(t, db.SaveState(ctx, beaconState, r))
+		require.NoError(t, db.SaveBlock(ctx, parentBb))
+		require.NoError(t, db.SaveBlock(ctx, signedBb))
+		r, err := signedBb.Block().HashTreeRoot()
+		require.NoError(t, err)
+		require.NoError(t, db.SaveState(ctx, beaconState, r))
 
-	header, err := signedBb.Header()
-	require.NoError(t, err)
-	sc := util.GenerateTestDenebBlobSidecar(t, r, header, 0, make([]byte, 48), make([][]byte, 0))
-	b := sc.BlobSidecar
+		header, err := signedBb.Header()
+		require.NoError(t, err)
+		sc := util.GenerateTestDenebBlobSidecar(t, r, header, 0, make([]byte, 48), make([][]byte, 0))
+		b := sc.BlobSidecar
 
-	buf := new(bytes.Buffer)
-	_, err = p.Encoding().EncodeGossip(buf, b)
-	require.NoError(t, err)
+		buf := new(bytes.Buffer)
+		_, err = p.Encoding().EncodeGossip(buf, b)
+		require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeFor[*eth.BlobSidecar]()]
-	digest := s.currentForkDigest()
-	topic = s.addDigestAndIndexToTopic(topic, digest, 0) + p.Encoding().ProtocolSuffix()
+		topic := p2p.GossipTypeMapping[reflect.TypeFor[*eth.BlobSidecar]()]
+		digest := s.currentForkDigest()
+		topic = s.addDigestAndIndexToTopic(topic, digest, 0) + p.Encoding().ProtocolSuffix()
 
-	s.setSeenBlobIndex(sc.Slot(), sc.SignedBlockHeader.Header.ProposerIndex, 0)
-	result, err := s.validateBlob(ctx, "", &pubsub.Message{
-		Message: &pb.Message{
-			Data:  buf.Bytes(),
-			Topic: &topic,
-		}})
-	require.NoError(t, err)
-	require.Equal(t, result, pubsub.ValidationIgnore)
+		s.setSeenBlobIndex(sc.Slot(), sc.SignedBlockHeader.Header.ProposerIndex, 0)
+		result, err := s.validateBlob(ctx, "", &pubsub.Message{
+			Message: &pb.Message{
+				Data:  buf.Bytes(),
+				Topic: &topic,
+			}})
+		require.NoError(t, err)
+		require.Equal(t, result, pubsub.ValidationIgnore)
+	})
 }
 
 func TestValidateBlob_InvalidTopicIndex(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	params.BeaconConfig().InitializeForkSchedule()
-	ctx := t.Context()
-	p := p2ptest.NewTestP2P(t)
-	chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0)}
-	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, params.BeaconConfig().GenesisValidatorsRoot)}}
-	s.newBlobVerifier = testNewBlobVerifier()
+	p2ptest.SynctestTest(t, func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		params.BeaconConfig().InitializeForkSchedule()
+		ctx := t.Context()
+		p := p2ptest.NewTestP2P(t)
+		chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0)}
+		s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, params.BeaconConfig().GenesisValidatorsRoot)}}
+		s.newBlobVerifier = testNewBlobVerifier()
 
-	_, scs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, chainService.CurrentSlot()+1, 1)
-	msg := scs[0].BlobSidecar
-	buf := new(bytes.Buffer)
-	_, err := p.Encoding().EncodeGossip(buf, msg)
-	require.NoError(t, err)
+		_, scs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, chainService.CurrentSlot()+1, 1)
+		msg := scs[0].BlobSidecar
+		buf := new(bytes.Buffer)
+		_, err := p.Encoding().EncodeGossip(buf, msg)
+		require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeFor[*eth.BlobSidecar]()]
-	digest := s.currentForkDigest()
-	topic = s.addDigestAndIndexToTopic(topic, digest, 1) + p.Encoding().ProtocolSuffix()
-	result, err := s.validateBlob(ctx, "", &pubsub.Message{
-		Message: &pb.Message{
-			Data:  buf.Bytes(),
-			Topic: &topic,
-		}})
-	require.ErrorContains(t, "blob_sidecar_1", err)
-	require.Equal(t, result, pubsub.ValidationReject)
+		topic := p2p.GossipTypeMapping[reflect.TypeFor[*eth.BlobSidecar]()]
+		digest := s.currentForkDigest()
+		topic = s.addDigestAndIndexToTopic(topic, digest, 1) + p.Encoding().ProtocolSuffix()
+		result, err := s.validateBlob(ctx, "", &pubsub.Message{
+			Message: &pb.Message{
+				Data:  buf.Bytes(),
+				Topic: &topic,
+			}})
+		require.ErrorContains(t, "blob_sidecar_1", err)
+		require.Equal(t, result, pubsub.ValidationReject)
+	})
 }
 
 func TestValidateBlob_ErrorPathsWithMock(t *testing.T) {
@@ -253,31 +265,33 @@ func TestValidateBlob_ErrorPathsWithMock(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.error.Error(), func(t *testing.T) {
-			ctx := t.Context()
-			p := p2ptest.NewTestP2P(t)
-			chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0)}
-			s := &Service{
-				seenBlobCache:     lruwrpr.New(10),
-				seenPendingBlocks: make(map[[32]byte]bool),
-				cfg:               &config{chain: chainService, p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}}
-			s.newBlobVerifier = tt.verifier
+			p2ptest.SynctestTest(t, func(t *testing.T) {
+				ctx := t.Context()
+				p := p2ptest.NewTestP2P(t)
+				chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0)}
+				s := &Service{
+					seenBlobCache:     lruwrpr.New(10),
+					seenPendingBlocks: make(map[[32]byte]bool),
+					cfg:               &config{chain: chainService, p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}}
+				s.newBlobVerifier = tt.verifier
 
-			_, scs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, chainService.CurrentSlot()+1, 1)
-			msg := scs[0].BlobSidecar
-			buf := new(bytes.Buffer)
-			_, err := p.Encoding().EncodeGossip(buf, msg)
-			require.NoError(t, err)
+				_, scs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, chainService.CurrentSlot()+1, 1)
+				msg := scs[0].BlobSidecar
+				buf := new(bytes.Buffer)
+				_, err := p.Encoding().EncodeGossip(buf, msg)
+				require.NoError(t, err)
 
-			topic := p2p.GossipTypeMapping[reflect.TypeFor[*eth.BlobSidecar]()]
-			digest := s.currentForkDigest()
-			topic = s.addDigestAndIndexToTopic(topic, digest, 0) + p.Encoding().ProtocolSuffix()
-			result, err := s.validateBlob(ctx, "", &pubsub.Message{
-				Message: &pb.Message{
-					Data:  buf.Bytes(),
-					Topic: &topic,
-				}})
-			require.ErrorContains(t, tt.error.Error(), err)
-			require.Equal(t, result, tt.result)
+				topic := p2p.GossipTypeMapping[reflect.TypeFor[*eth.BlobSidecar]()]
+				digest := s.currentForkDigest()
+				topic = s.addDigestAndIndexToTopic(topic, digest, 0) + p.Encoding().ProtocolSuffix()
+				result, err := s.validateBlob(ctx, "", &pubsub.Message{
+					Message: &pb.Message{
+						Data:  buf.Bytes(),
+						Topic: &topic,
+					}})
+				require.ErrorContains(t, tt.error.Error(), err)
+				require.Equal(t, result, tt.result)
+			})
 		})
 	}
 }

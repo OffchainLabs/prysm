@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	p2pTypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -150,7 +151,9 @@ func TestReadChunkEncodedBlobs(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			c.runTestBlobSidecarsByRoot(t)
+			p2ptest.SynctestTest(t, func(t *testing.T) {
+				c.runTestBlobSidecarsByRoot(t)
+			})
 		})
 	}
 }
@@ -243,8 +246,10 @@ func TestBlobsByRootValidation(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			c.clock = clock
-			c.runTestBlobSidecarsByRoot(t)
+			p2ptest.SynctestTest(t, func(t *testing.T) {
+				c.clock = clock
+				c.runTestBlobSidecarsByRoot(t)
+			})
 		})
 	}
 }
@@ -266,7 +271,9 @@ func TestBlobsByRootOK(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			c.runTestBlobSidecarsByRoot(t)
+			p2ptest.SynctestTest(t, func(t *testing.T) {
+				c.runTestBlobSidecarsByRoot(t)
+			})
 		})
 	}
 }
