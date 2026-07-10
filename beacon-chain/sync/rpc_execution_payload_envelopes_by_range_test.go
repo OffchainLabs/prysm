@@ -459,7 +459,6 @@ func TestSendExecutionPayloadEnvelopesByRangeRequest(t *testing.T) {
 	params.BeaconConfig().InitializeForkSchedule()
 
 	topic := fmt.Sprintf("%s/ssz_snappy", p2p.RPCExecutionPayloadEnvelopesByRangeTopicV1)
-	ctx := t.Context()
 
 	// Set the clock such that the current slot is in the Gloas fork.
 	s := uint64(10) * params.BeaconConfig().SecondsPerSlot
@@ -468,133 +467,148 @@ func TestSendExecutionPayloadEnvelopesByRangeRequest(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("receives envelopes from remote peer", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
 
-		startSlot := primitives.Slot(5)
-		count := uint64(3)
+			startSlot := primitives.Slot(5)
+			count := uint64(3)
 
-		p2.SetStreamHandler(topic, func(stream network.Stream) {
-			defer func() {
-				assert.NoError(t, stream.Close())
-			}()
-			// Read and discard the request.
-			req := &pb.ExecutionPayloadEnvelopesByRangeRequest{}
-			assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+			p2.SetStreamHandler(topic, func(stream network.Stream) {
+				defer func() {
+					assert.NoError(t, stream.Close())
+				}()
+				// Read and discard the request.
+				req := &pb.ExecutionPayloadEnvelopesByRangeRequest{}
+				assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
 
-			// Write one envelope per slot.
-			for i := range count {
-				sl := startSlot + primitives.Slot(i)
-				env := testSignedEnvelope(sl, make([]byte, 32))
-				assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2.Encoding(), env))
-			}
+				// Write one envelope per slot.
+				for i := range count {
+					sl := startSlot + primitives.Slot(i)
+					env := testSignedEnvelope(sl, make([]byte, 32))
+					assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2.Encoding(), env))
+				}
+			})
+
+			req := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: startSlot, Count: count}
+			envelopes, recvErr := SendExecutionPayloadEnvelopesByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxMap, req)
+			require.NoError(t, recvErr)
+			require.Equal(t, int(count), len(envelopes))
+			assert.Equal(t, startSlot, primitives.Slot(envelopes[0].Message.Payload.SlotNumber))
+			assert.Equal(t, startSlot+1, primitives.Slot(envelopes[1].Message.Payload.SlotNumber))
+			assert.Equal(t, startSlot+2, primitives.Slot(envelopes[2].Message.Payload.SlotNumber))
 		})
-
-		req := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: startSlot, Count: count}
-		envelopes, recvErr := SendExecutionPayloadEnvelopesByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxMap, req)
-		require.NoError(t, recvErr)
-		require.Equal(t, int(count), len(envelopes))
-		assert.Equal(t, startSlot, primitives.Slot(envelopes[0].Message.Payload.SlotNumber))
-		assert.Equal(t, startSlot+1, primitives.Slot(envelopes[1].Message.Payload.SlotNumber))
-		assert.Equal(t, startSlot+2, primitives.Slot(envelopes[2].Message.Payload.SlotNumber))
 	})
 
 	t.Run("empty response from remote peer", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
 
-		p2.SetStreamHandler(topic, func(stream network.Stream) {
-			defer func() {
-				assert.NoError(t, stream.Close())
-			}()
-			// Read and discard request; send nothing.
-			req := &pb.ExecutionPayloadEnvelopesByRangeRequest{}
-			assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+			p2.SetStreamHandler(topic, func(stream network.Stream) {
+				defer func() {
+					assert.NoError(t, stream.Close())
+				}()
+				// Read and discard request; send nothing.
+				req := &pb.ExecutionPayloadEnvelopesByRangeRequest{}
+				assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+			})
+
+			req := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: 5, Count: 10}
+			envelopes, recvErr := SendExecutionPayloadEnvelopesByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxMap, req)
+			require.NoError(t, recvErr)
+			assert.Equal(t, 0, len(envelopes))
 		})
-
-		req := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: 5, Count: 10}
-		envelopes, recvErr := SendExecutionPayloadEnvelopesByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxMap, req)
-		require.NoError(t, recvErr)
-		assert.Equal(t, 0, len(envelopes))
 	})
 
 	t.Run("slot out of requested range returns error", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
 
-		startSlot := primitives.Slot(5)
-		count := uint64(3)
+			startSlot := primitives.Slot(5)
+			count := uint64(3)
 
-		p2.SetStreamHandler(topic, func(stream network.Stream) {
-			defer func() {
-				assert.NoError(t, stream.Close())
-			}()
-			req := &pb.ExecutionPayloadEnvelopesByRangeRequest{}
-			assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
-			// Send an envelope with a slot BEFORE the requested range.
-			env := testSignedEnvelope(startSlot-1, make([]byte, 32))
-			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2.Encoding(), env))
+			p2.SetStreamHandler(topic, func(stream network.Stream) {
+				defer func() {
+					assert.NoError(t, stream.Close())
+				}()
+				req := &pb.ExecutionPayloadEnvelopesByRangeRequest{}
+				assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+				// Send an envelope with a slot BEFORE the requested range.
+				env := testSignedEnvelope(startSlot-1, make([]byte, 32))
+				assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2.Encoding(), env))
+			})
+
+			req := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: startSlot, Count: count}
+			_, recvErr := SendExecutionPayloadEnvelopesByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxMap, req)
+			require.NotNil(t, recvErr)
+			assert.ErrorContains(t, "outside requested range", recvErr)
 		})
-
-		req := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: startSlot, Count: count}
-		_, recvErr := SendExecutionPayloadEnvelopesByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxMap, req)
-		require.NotNil(t, recvErr)
-		assert.ErrorContains(t, "outside requested range", recvErr)
 	})
 
 	t.Run("slots not monotonically increasing returns error", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
 
-		startSlot := primitives.Slot(5)
+			startSlot := primitives.Slot(5)
 
-		p2.SetStreamHandler(topic, func(stream network.Stream) {
-			defer func() {
-				assert.NoError(t, stream.Close())
-			}()
-			req := &pb.ExecutionPayloadEnvelopesByRangeRequest{}
-			assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
-			// Send slot 6 first, then slot 5 (going backwards).
-			env1 := testSignedEnvelope(startSlot+1, make([]byte, 32))
-			env2 := testSignedEnvelope(startSlot, make([]byte, 32))
-			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2.Encoding(), env1))
-			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2.Encoding(), env2))
+			p2.SetStreamHandler(topic, func(stream network.Stream) {
+				defer func() {
+					assert.NoError(t, stream.Close())
+				}()
+				req := &pb.ExecutionPayloadEnvelopesByRangeRequest{}
+				assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+				// Send slot 6 first, then slot 5 (going backwards).
+				env1 := testSignedEnvelope(startSlot+1, make([]byte, 32))
+				env2 := testSignedEnvelope(startSlot, make([]byte, 32))
+				assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2.Encoding(), env1))
+				assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2.Encoding(), env2))
+			})
+
+			req := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: startSlot, Count: 10}
+			_, recvErr := SendExecutionPayloadEnvelopesByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxMap, req)
+			require.NotNil(t, recvErr)
+			assert.ErrorContains(t, "not greater than previous slot", recvErr)
 		})
-
-		req := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: startSlot, Count: 10}
-		_, recvErr := SendExecutionPayloadEnvelopesByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxMap, req)
-		require.NotNil(t, recvErr)
-		assert.ErrorContains(t, "not greater than previous slot", recvErr)
 	})
 
 	t.Run("peer exceeds requested count returns error", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
 
-		startSlot := primitives.Slot(5)
-		count := uint64(2)
+			startSlot := primitives.Slot(5)
+			count := uint64(2)
 
-		p2.SetStreamHandler(topic, func(stream network.Stream) {
-			defer func() {
-				assert.NoError(t, stream.Close())
-			}()
-			req := &pb.ExecutionPayloadEnvelopesByRangeRequest{}
-			assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
-			// Send count+1 envelopes (one more than requested).
-			for i := uint64(0); i <= count; i++ {
-				env := testSignedEnvelope(startSlot+primitives.Slot(i), make([]byte, 32))
-				assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2.Encoding(), env))
-			}
+			p2.SetStreamHandler(topic, func(stream network.Stream) {
+				defer func() {
+					assert.NoError(t, stream.Close())
+				}()
+				req := &pb.ExecutionPayloadEnvelopesByRangeRequest{}
+				assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+				// Send count+1 envelopes (one more than requested).
+				for i := uint64(0); i <= count; i++ {
+					env := testSignedEnvelope(startSlot+primitives.Slot(i), make([]byte, 32))
+					assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2.Encoding(), env))
+				}
+			})
+
+			req := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: startSlot, Count: count}
+			_, recvErr := SendExecutionPayloadEnvelopesByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxMap, req)
+			require.NotNil(t, recvErr)
+			assert.ErrorContains(t, "more execution payload envelopes than requested", recvErr)
 		})
-
-		req := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: startSlot, Count: count}
-		_, recvErr := SendExecutionPayloadEnvelopesByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxMap, req)
-		require.NotNil(t, recvErr)
-		assert.ErrorContains(t, "more execution payload envelopes than requested", recvErr)
 	})
 }
