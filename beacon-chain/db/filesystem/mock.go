@@ -130,7 +130,10 @@ func NewEphemeralDataColumnStorageUsingFs(t testing.TB, fs afero.Fs, opts ...Dat
 		WithDataColumnFs(fs),
 	)
 
-	bs, err := NewDataColumnStorage(context.Background(), opts...)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	bs, err := NewDataColumnStorage(ctx, opts...)
 	if err != nil {
 		t.Fatal(err)
 	}
