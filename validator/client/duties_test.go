@@ -490,13 +490,10 @@ func TestValidator_CheckDependentRoots_UnknownCurrentRootSkips(t *testing.T) {
 		genesisTime:     time.Now(),
 	}
 
-	head := &structs.HeadEvent{
-		Slot:                      "1",
-		PreviousDutyDependentRoot: "0x0102030000000000000000000000000000000000000000000000000000000000",
-		CurrentDutyDependentRoot:  "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
-	}
+	prevRoot := "0x0102030000000000000000000000000000000000000000000000000000000000"
+	currRoot := "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12"
 	// No Duties/AttesterDuties expectations: a triggered UpdateDuties would fail the test.
-	require.NoError(t, v.checkDependentRoots(t.Context(), head.PreviousDutyDependentRoot, head.CurrentDutyDependentRoot))
+	require.NoError(t, v.checkDependentRoots(t.Context(), prevRoot, currRoot))
 }
 
 // TestValidator_CheckDependentRoots_NoEmptyWindowDuringRefetch asserts that
