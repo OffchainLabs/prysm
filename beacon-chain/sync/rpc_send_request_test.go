@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -32,19 +31,20 @@ import (
 )
 
 func TestSendRequest_SendBeaconBlocksByRangeRequest(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
 	pcl := fmt.Sprintf("%s/ssz_snappy", p2p.RPCBlocksByRangeTopicV1)
 
 	t.Run("stream error", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		// Bogus peer doesn't support a given protocol, so stream error is expected.
-		bogusPeer := p2ptest.NewTestP2P(t)
-		p1.Connect(bogusPeer)
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			// Bogus peer doesn't support a given protocol, so stream error is expected.
+			bogusPeer := p2ptest.NewTestP2P(t)
+			p1.Connect(bogusPeer)
 
-		req := &ethpb.BeaconBlocksByRangeRequest{}
-		_, err := SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, bogusPeer.PeerID(), req, nil)
-		assert.ErrorContains(t, "protocols not supported", err)
+			req := &ethpb.BeaconBlocksByRangeRequest{}
+			_, err := SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, bogusPeer.PeerID(), req, nil)
+			assert.ErrorContains(t, "protocols not supported", err)
+		})
 	})
 
 	knownBlocks := make([]*ethpb.SignedBeaconBlock, 0)
@@ -101,211 +101,230 @@ func TestSendRequest_SendBeaconBlocksByRangeRequest(t *testing.T) {
 	}
 
 	t.Run("no block processor", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
-		p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
+			p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
 
-		req := &ethpb.BeaconBlocksByRangeRequest{
-			StartSlot: 20,
-			Count:     128,
-			Step:      1,
-		}
-		blocks, err := SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
-		assert.NoError(t, err)
-		assert.Equal(t, 128, len(blocks))
+			req := &ethpb.BeaconBlocksByRangeRequest{
+				StartSlot: 20,
+				Count:     128,
+				Step:      1,
+			}
+			blocks, err := SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
+			assert.NoError(t, err)
+			assert.Equal(t, 128, len(blocks))
+		})
 	})
 
 	t.Run("has block processor - no errors", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
-		p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
+			p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
 
-		// No error from block processor.
-		req := &ethpb.BeaconBlocksByRangeRequest{
-			StartSlot: 20,
-			Count:     128,
-			Step:      1,
-		}
-		blocksFromProcessor := make([]interfaces.ReadOnlySignedBeaconBlock, 0)
-		blocks, err := SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, func(block interfaces.ReadOnlySignedBeaconBlock) error {
-			blocksFromProcessor = append(blocksFromProcessor, block)
-			return nil
+			// No error from block processor.
+			req := &ethpb.BeaconBlocksByRangeRequest{
+				StartSlot: 20,
+				Count:     128,
+				Step:      1,
+			}
+			blocksFromProcessor := make([]interfaces.ReadOnlySignedBeaconBlock, 0)
+			blocks, err := SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, func(block interfaces.ReadOnlySignedBeaconBlock) error {
+				blocksFromProcessor = append(blocksFromProcessor, block)
+				return nil
+			})
+			assert.NoError(t, err)
+			assert.Equal(t, 128, len(blocks))
+			assert.DeepEqual(t, blocks, blocksFromProcessor)
 		})
-		assert.NoError(t, err)
-		assert.Equal(t, 128, len(blocks))
-		assert.DeepEqual(t, blocks, blocksFromProcessor)
 	})
 
 	t.Run("has block processor - throw error", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
-		p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
+			p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
 
-		// Send error from block processor.
-		req := &ethpb.BeaconBlocksByRangeRequest{
-			StartSlot: 20,
-			Count:     128,
-			Step:      1,
-		}
-		errFromProcessor := errors.New("processor error")
-		_, err := SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, func(block interfaces.ReadOnlySignedBeaconBlock) error {
-			return errFromProcessor
+			// Send error from block processor.
+			req := &ethpb.BeaconBlocksByRangeRequest{
+				StartSlot: 20,
+				Count:     128,
+				Step:      1,
+			}
+			errFromProcessor := errors.New("processor error")
+			_, err := SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, func(block interfaces.ReadOnlySignedBeaconBlock) error {
+				return errFromProcessor
+			})
+			assert.ErrorContains(t, errFromProcessor.Error(), err)
 		})
-		assert.ErrorContains(t, errFromProcessor.Error(), err)
 	})
 
 	t.Run("max request blocks", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
-		p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
+			p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
 
-		// No cap on max roots.
-		req := &ethpb.BeaconBlocksByRangeRequest{
-			StartSlot: 20,
-			Count:     128,
-			Step:      1,
-		}
-		blocks, err := SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
-		assert.NoError(t, err)
-		assert.Equal(t, 128, len(blocks))
+			// No cap on max roots.
+			req := &ethpb.BeaconBlocksByRangeRequest{
+				StartSlot: 20,
+				Count:     128,
+				Step:      1,
+			}
+			blocks, err := SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
+			assert.NoError(t, err)
+			assert.Equal(t, 128, len(blocks))
 
-		// Cap max returned roots.
-		cfg := params.BeaconConfig().Copy()
-		maxRequestBlocks := cfg.MaxRequestBlocks
-		defer func() {
-			cfg.MaxRequestBlocks = maxRequestBlocks
-			params.OverrideBeaconConfig(cfg)
-		}()
-		blocks, err = SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, func(block interfaces.ReadOnlySignedBeaconBlock) error {
-			// Since ssz checks the boundaries, and doesn't normally allow to send requests bigger than
-			// the max request size, we are updating max request size dynamically. Even when updated dynamically,
-			// no more than max request size of blocks is expected on return.
-			cfg.MaxRequestBlocks = 3
-			params.OverrideBeaconConfig(cfg)
-			return nil
+			// Cap max returned roots.
+			cfg := params.BeaconConfig().Copy()
+			maxRequestBlocks := cfg.MaxRequestBlocks
+			defer func() {
+				cfg.MaxRequestBlocks = maxRequestBlocks
+				params.OverrideBeaconConfig(cfg)
+			}()
+			blocks, err = SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, func(block interfaces.ReadOnlySignedBeaconBlock) error {
+				// Since ssz checks the boundaries, and doesn't normally allow to send requests bigger than
+				// the max request size, we are updating max request size dynamically. Even when updated dynamically,
+				// no more than max request size of blocks is expected on return.
+				cfg.MaxRequestBlocks = 3
+				params.OverrideBeaconConfig(cfg)
+				return nil
+			})
+			assert.ErrorContains(t, ErrInvalidFetchedData.Error(), err)
+			assert.Equal(t, 0, len(blocks))
 		})
-		assert.ErrorContains(t, ErrInvalidFetchedData.Error(), err)
-		assert.Equal(t, 0, len(blocks))
 	})
 
 	t.Run("process custom error", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
-		blocksProcessed := 0
-		expectedErr := errors.New("some error")
-		p2.SetStreamHandler(pcl, knownBlocksProvider(p2, func(block interfaces.ReadOnlySignedBeaconBlock) error {
-			if blocksProcessed > 2 {
-				return expectedErr
-			}
-			blocksProcessed++
-			return nil
-		}))
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
+			blocksProcessed := 0
+			expectedErr := errors.New("some error")
+			p2.SetStreamHandler(pcl, knownBlocksProvider(p2, func(block interfaces.ReadOnlySignedBeaconBlock) error {
+				if blocksProcessed > 2 {
+					return expectedErr
+				}
+				blocksProcessed++
+				return nil
+			}))
 
-		req := &ethpb.BeaconBlocksByRangeRequest{
-			StartSlot: 20,
-			Count:     128,
-			Step:      1,
-		}
-		blocks, err := SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
-		assert.ErrorContains(t, expectedErr.Error(), err)
-		assert.Equal(t, 0, len(blocks))
+			req := &ethpb.BeaconBlocksByRangeRequest{
+				StartSlot: 20,
+				Count:     128,
+				Step:      1,
+			}
+			blocks, err := SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
+			assert.ErrorContains(t, expectedErr.Error(), err)
+			assert.Equal(t, 0, len(blocks))
+		})
 	})
 
 	t.Run("blocks out of order: step 1", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
 
-		// Switch known blocks, so that slots are out of order.
-		knownBlocks[30], knownBlocks[31] = knownBlocks[31], knownBlocks[30]
-		defer func() {
-			knownBlocks[31], knownBlocks[30] = knownBlocks[30], knownBlocks[31]
-		}()
-
-		p2.SetStreamHandler(pcl, func(stream network.Stream) {
+			// Switch known blocks, so that slots are out of order.
+			knownBlocks[30], knownBlocks[31] = knownBlocks[31], knownBlocks[30]
 			defer func() {
-				assert.NoError(t, stream.Close())
+				knownBlocks[31], knownBlocks[30] = knownBlocks[30], knownBlocks[31]
 			}()
 
-			req := &ethpb.BeaconBlocksByRangeRequest{}
-			assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+			p2.SetStreamHandler(pcl, func(stream network.Stream) {
+				defer func() {
+					assert.NoError(t, stream.Close())
+				}()
 
-			for i := req.StartSlot; i < req.StartSlot.Add(req.Count*req.Step); i += primitives.Slot(req.Step) {
-				if uint64(i) >= uint64(len(knownBlocks)) {
-					break
-				}
-				wsb, err := blocks.NewSignedBeaconBlock(knownBlocks[i])
-				require.NoError(t, err)
-				err = WriteBlockChunk(stream, startup.NewClock(time.Now(), [32]byte{}), p2.Encoding(), wsb)
-				if err != nil && err.Error() != network.ErrReset.Error() {
+				req := &ethpb.BeaconBlocksByRangeRequest{}
+				assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+
+				for i := req.StartSlot; i < req.StartSlot.Add(req.Count*req.Step); i += primitives.Slot(req.Step) {
+					if uint64(i) >= uint64(len(knownBlocks)) {
+						break
+					}
+					wsb, err := blocks.NewSignedBeaconBlock(knownBlocks[i])
 					require.NoError(t, err)
+					err = WriteBlockChunk(stream, startup.NewClock(time.Now(), [32]byte{}), p2.Encoding(), wsb)
+					if err != nil && err.Error() != network.ErrReset.Error() {
+						require.NoError(t, err)
+					}
 				}
+			})
+
+			req := &ethpb.BeaconBlocksByRangeRequest{
+				StartSlot: 20,
+				Count:     128,
+				Step:      1,
 			}
+			blocks, err := SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
+			assert.ErrorContains(t, ErrInvalidFetchedData.Error(), err)
+			assert.Equal(t, 0, len(blocks))
+
 		})
-
-		req := &ethpb.BeaconBlocksByRangeRequest{
-			StartSlot: 20,
-			Count:     128,
-			Step:      1,
-		}
-		blocks, err := SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
-		assert.ErrorContains(t, ErrInvalidFetchedData.Error(), err)
-		assert.Equal(t, 0, len(blocks))
-
 	})
 
 	t.Run("blocks out of order: step 10", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
 
-		// Switch known blocks, so that slots are out of order.
-		knownBlocks[30], knownBlocks[31] = knownBlocks[31], knownBlocks[30]
-		defer func() {
-			knownBlocks[31], knownBlocks[30] = knownBlocks[30], knownBlocks[31]
-		}()
-
-		p2.SetStreamHandler(pcl, func(stream network.Stream) {
+			// Switch known blocks, so that slots are out of order.
+			knownBlocks[30], knownBlocks[31] = knownBlocks[31], knownBlocks[30]
 			defer func() {
-				assert.NoError(t, stream.Close())
+				knownBlocks[31], knownBlocks[30] = knownBlocks[30], knownBlocks[31]
 			}()
 
-			req := &ethpb.BeaconBlocksByRangeRequest{}
-			assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+			p2.SetStreamHandler(pcl, func(stream network.Stream) {
+				defer func() {
+					assert.NoError(t, stream.Close())
+				}()
 
-			for i := req.StartSlot; i < req.StartSlot.Add(req.Count*req.Step); i += primitives.Slot(req.Step) {
-				if uint64(i) >= uint64(len(knownBlocks)) {
-					break
-				}
-				wsb, err := blocks.NewSignedBeaconBlock(knownBlocks[i])
-				require.NoError(t, err)
-				err = WriteBlockChunk(stream, startup.NewClock(time.Now(), [32]byte{}), p2.Encoding(), wsb)
-				if err != nil && err.Error() != network.ErrReset.Error() {
+				req := &ethpb.BeaconBlocksByRangeRequest{}
+				assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+
+				for i := req.StartSlot; i < req.StartSlot.Add(req.Count*req.Step); i += primitives.Slot(req.Step) {
+					if uint64(i) >= uint64(len(knownBlocks)) {
+						break
+					}
+					wsb, err := blocks.NewSignedBeaconBlock(knownBlocks[i])
 					require.NoError(t, err)
+					err = WriteBlockChunk(stream, startup.NewClock(time.Now(), [32]byte{}), p2.Encoding(), wsb)
+					if err != nil && err.Error() != network.ErrReset.Error() {
+						require.NoError(t, err)
+					}
 				}
+			})
+
+			req := &ethpb.BeaconBlocksByRangeRequest{
+				StartSlot: 20,
+				Count:     128,
+				Step:      10,
 			}
+			blocks, err := SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
+			assert.ErrorContains(t, ErrInvalidFetchedData.Error(), err)
+			assert.Equal(t, 0, len(blocks))
+
 		})
-
-		req := &ethpb.BeaconBlocksByRangeRequest{
-			StartSlot: 20,
-			Count:     128,
-			Step:      10,
-		}
-		blocks, err := SendBeaconBlocksByRangeRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
-		assert.ErrorContains(t, ErrInvalidFetchedData.Error(), err)
-		assert.Equal(t, 0, len(blocks))
-
 	})
 }
 
 func TestSendRequest_SendBeaconBlocksByRootRequest(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
 	pcl := fmt.Sprintf("%s/ssz_snappy", p2p.RPCBlocksByRootTopicV1)
 
 	knownBlocks := make(map[[32]byte]*ethpb.SignedBeaconBlock)
@@ -319,14 +338,17 @@ func TestSendRequest_SendBeaconBlocksByRootRequest(t *testing.T) {
 	}
 
 	t.Run("stream error", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		// Bogus peer doesn't support a given protocol, so stream error is expected.
-		bogusPeer := p2ptest.NewTestP2P(t)
-		p1.Connect(bogusPeer)
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			// Bogus peer doesn't support a given protocol, so stream error is expected.
+			bogusPeer := p2ptest.NewTestP2P(t)
+			p1.Connect(bogusPeer)
 
-		req := &p2pTypes.BeaconBlockByRootsReq{}
-		_, err := SendBeaconBlocksByRootRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, bogusPeer.PeerID(), req, nil)
-		assert.ErrorContains(t, "protocols not supported", err)
+			req := &p2pTypes.BeaconBlockByRootsReq{}
+			_, err := SendBeaconBlocksByRootRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, bogusPeer.PeerID(), req, nil)
+			assert.ErrorContains(t, "protocols not supported", err)
+		})
 	})
 
 	knownBlocksProvider := func(p2pProvider p2p.P2P, processor BeaconBlockProcessor) func(stream network.Stream) {
@@ -368,120 +390,138 @@ func TestSendRequest_SendBeaconBlocksByRootRequest(t *testing.T) {
 	}
 
 	t.Run("no block processor", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
-		p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
+			p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
 
-		req := &p2pTypes.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1]}
-		blocks, err := SendBeaconBlocksByRootRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
-		assert.NoError(t, err)
-		assert.Equal(t, 2, len(blocks))
+			req := &p2pTypes.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1]}
+			blocks, err := SendBeaconBlocksByRootRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
+			assert.NoError(t, err)
+			assert.Equal(t, 2, len(blocks))
+		})
 	})
 
 	t.Run("has block processor - no errors", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
-		p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
+			p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
 
-		// No error from block processor.
-		req := &p2pTypes.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1]}
-		blocksFromProcessor := make([]interfaces.ReadOnlySignedBeaconBlock, 0)
-		blocks, err := SendBeaconBlocksByRootRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, func(block interfaces.ReadOnlySignedBeaconBlock) error {
-			blocksFromProcessor = append(blocksFromProcessor, block)
-			return nil
+			// No error from block processor.
+			req := &p2pTypes.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1]}
+			blocksFromProcessor := make([]interfaces.ReadOnlySignedBeaconBlock, 0)
+			blocks, err := SendBeaconBlocksByRootRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, func(block interfaces.ReadOnlySignedBeaconBlock) error {
+				blocksFromProcessor = append(blocksFromProcessor, block)
+				return nil
+			})
+			assert.NoError(t, err)
+			assert.Equal(t, 2, len(blocks))
+			assert.DeepEqual(t, blocks, blocksFromProcessor)
 		})
-		assert.NoError(t, err)
-		assert.Equal(t, 2, len(blocks))
-		assert.DeepEqual(t, blocks, blocksFromProcessor)
 	})
 
 	t.Run("has block processor - throw error", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
-		p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
+			p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
 
-		// Send error from block processor.
-		req := &p2pTypes.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1]}
-		errFromProcessor := errors.New("processor error")
-		_, err := SendBeaconBlocksByRootRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, func(block interfaces.ReadOnlySignedBeaconBlock) error {
-			return errFromProcessor
+			// Send error from block processor.
+			req := &p2pTypes.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1]}
+			errFromProcessor := errors.New("processor error")
+			_, err := SendBeaconBlocksByRootRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, func(block interfaces.ReadOnlySignedBeaconBlock) error {
+				return errFromProcessor
+			})
+			assert.ErrorContains(t, errFromProcessor.Error(), err)
 		})
-		assert.ErrorContains(t, errFromProcessor.Error(), err)
 	})
 
 	t.Run("max request blocks", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
-		p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
+			p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
 
-		// No cap on max roots.
-		req := &p2pTypes.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1], knownRoots[2], knownRoots[3]}
-		clock := startup.NewClock(time.Now(), [32]byte{})
-		blocks, err := SendBeaconBlocksByRootRequest(ctx, clock, p1, p2.PeerID(), req, nil)
-		assert.NoError(t, err)
-		assert.Equal(t, 4, len(blocks))
+			// No cap on max roots.
+			req := &p2pTypes.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1], knownRoots[2], knownRoots[3]}
+			clock := startup.NewClock(time.Now(), [32]byte{})
+			blocks, err := SendBeaconBlocksByRootRequest(ctx, clock, p1, p2.PeerID(), req, nil)
+			assert.NoError(t, err)
+			assert.Equal(t, 4, len(blocks))
 
-		// Cap max returned roots.
-		cfg := params.BeaconConfig().Copy()
-		maxRequestBlocks := cfg.MaxRequestBlocks
-		defer func() {
-			cfg.MaxRequestBlocks = maxRequestBlocks
-			params.OverrideBeaconConfig(cfg)
-		}()
-		blocks, err = SendBeaconBlocksByRootRequest(ctx, clock, p1, p2.PeerID(), req, func(block interfaces.ReadOnlySignedBeaconBlock) error {
-			// Since ssz checks the boundaries, and doesn't normally allow to send requests bigger than
-			// the max request size, we are updating max request size dynamically. Even when updated dynamically,
-			// no more than max request size of blocks is expected on return.
-			cfg.MaxRequestBlocks = 3
-			params.OverrideBeaconConfig(cfg)
-			return nil
+			// Cap max returned roots.
+			cfg := params.BeaconConfig().Copy()
+			maxRequestBlocks := cfg.MaxRequestBlocks
+			defer func() {
+				cfg.MaxRequestBlocks = maxRequestBlocks
+				params.OverrideBeaconConfig(cfg)
+			}()
+			blocks, err = SendBeaconBlocksByRootRequest(ctx, clock, p1, p2.PeerID(), req, func(block interfaces.ReadOnlySignedBeaconBlock) error {
+				// Since ssz checks the boundaries, and doesn't normally allow to send requests bigger than
+				// the max request size, we are updating max request size dynamically. Even when updated dynamically,
+				// no more than max request size of blocks is expected on return.
+				cfg.MaxRequestBlocks = 3
+				params.OverrideBeaconConfig(cfg)
+				return nil
+			})
+			assert.NoError(t, err)
+			assert.Equal(t, 3, len(blocks))
 		})
-		assert.NoError(t, err)
-		assert.Equal(t, 3, len(blocks))
 	})
 
 	t.Run("process custom error", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
-		blocksProcessed := 0
-		expectedErr := errors.New("some error")
-		p2.SetStreamHandler(pcl, knownBlocksProvider(p2, func(block interfaces.ReadOnlySignedBeaconBlock) error {
-			if blocksProcessed > 2 {
-				return expectedErr
-			}
-			blocksProcessed++
-			return nil
-		}))
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
+			blocksProcessed := 0
+			expectedErr := errors.New("some error")
+			p2.SetStreamHandler(pcl, knownBlocksProvider(p2, func(block interfaces.ReadOnlySignedBeaconBlock) error {
+				if blocksProcessed > 2 {
+					return expectedErr
+				}
+				blocksProcessed++
+				return nil
+			}))
 
-		req := &p2pTypes.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1], knownRoots[2], knownRoots[3]}
-		blocks, err := SendBeaconBlocksByRootRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
-		assert.ErrorContains(t, expectedErr.Error(), err)
-		assert.Equal(t, 0, len(blocks))
+			req := &p2pTypes.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1], knownRoots[2], knownRoots[3]}
+			blocks, err := SendBeaconBlocksByRootRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
+			assert.ErrorContains(t, expectedErr.Error(), err)
+			assert.Equal(t, 0, len(blocks))
+		})
 	})
 
 	t.Run("process io.EOF error", func(t *testing.T) {
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
-		blocksProcessed := 0
-		expectedErr := io.EOF
-		p2.SetStreamHandler(pcl, knownBlocksProvider(p2, func(block interfaces.ReadOnlySignedBeaconBlock) error {
-			if blocksProcessed > 2 {
-				return expectedErr
-			}
-			blocksProcessed++
-			return nil
-		}))
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
+			blocksProcessed := 0
+			expectedErr := io.EOF
+			p2.SetStreamHandler(pcl, knownBlocksProvider(p2, func(block interfaces.ReadOnlySignedBeaconBlock) error {
+				if blocksProcessed > 2 {
+					return expectedErr
+				}
+				blocksProcessed++
+				return nil
+			}))
 
-		req := &p2pTypes.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1], knownRoots[2], knownRoots[3]}
-		blocks, err := SendBeaconBlocksByRootRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
-		assert.NoError(t, err)
-		assert.Equal(t, 3, len(blocks))
+			req := &p2pTypes.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1], knownRoots[2], knownRoots[3]}
+			blocks, err := SendBeaconBlocksByRootRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
+			assert.NoError(t, err)
+			assert.Equal(t, 3, len(blocks))
+		})
 	})
 }
 
@@ -701,186 +741,194 @@ func TestSeqBlobValid(t *testing.T) {
 
 func TestSendBlobsByRangeRequest(t *testing.T) {
 	topic := fmt.Sprintf("%s/ssz_snappy", p2p.RPCBlobSidecarsByRangeTopicV1)
-	ctx := t.Context()
 
 	t.Run("single blob - Deneb", func(t *testing.T) {
-		// Setup genesis such that we are currently in deneb.
-		s := uint64(util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)) * params.BeaconConfig().SecondsPerSlot
-		clock := startup.NewClock(time.Now().Add(-time.Second*time.Duration(s)), [32]byte{})
-		ctxByte, err := ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
-		require.NoError(t, err)
-		// Setup peers
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
-		// Set current slot to a deneb slot.
-		slot := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch+1)
-		// Create a simple handler that will return a valid response.
-		p2.SetStreamHandler(topic, func(stream network.Stream) {
-			defer func() {
-				assert.NoError(t, stream.Close())
-			}()
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			// Setup genesis such that we are currently in deneb.
+			s := uint64(util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)) * params.BeaconConfig().SecondsPerSlot
+			clock := startup.NewClock(time.Now().Add(-time.Second*time.Duration(s)), [32]byte{})
+			ctxByte, err := ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
+			require.NoError(t, err)
+			// Setup peers
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
+			// Set current slot to a deneb slot.
+			slot := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch+1)
+			// Create a simple handler that will return a valid response.
+			p2.SetStreamHandler(topic, func(stream network.Stream) {
+				defer func() {
+					assert.NoError(t, stream.Close())
+				}()
 
-			req := &ethpb.BlobSidecarsByRangeRequest{}
-			assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
-			assert.Equal(t, slot, req.StartSlot)
-			assert.Equal(t, uint64(1), req.Count)
+				req := &ethpb.BlobSidecarsByRangeRequest{}
+				assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+				assert.Equal(t, slot, req.StartSlot)
+				assert.Equal(t, uint64(1), req.Count)
 
-			// Create a sequential set of blobs with the appropriate header information.
-			var prevRoot [32]byte
-			for i := req.StartSlot; i < req.StartSlot+primitives.Slot(req.Count); i++ {
-				b := util.HydrateBlobSidecar(&ethpb.BlobSidecar{})
-				b.SignedBlockHeader.Header.Slot = i
-				b.SignedBlockHeader.Header.ParentRoot = prevRoot[:]
-				ro, err := blocks.NewROBlob(b)
-				require.NoError(t, err)
-				vro := blocks.NewVerifiedROBlob(ro)
-				prevRoot = vro.BlockRoot()
-				assert.NoError(t, WriteBlobSidecarChunk(stream, clock, p2.Encoding(), vro))
+				// Create a sequential set of blobs with the appropriate header information.
+				var prevRoot [32]byte
+				for i := req.StartSlot; i < req.StartSlot+primitives.Slot(req.Count); i++ {
+					b := util.HydrateBlobSidecar(&ethpb.BlobSidecar{})
+					b.SignedBlockHeader.Header.Slot = i
+					b.SignedBlockHeader.Header.ParentRoot = prevRoot[:]
+					ro, err := blocks.NewROBlob(b)
+					require.NoError(t, err)
+					vro := blocks.NewVerifiedROBlob(ro)
+					prevRoot = vro.BlockRoot()
+					assert.NoError(t, WriteBlobSidecarChunk(stream, clock, p2.Encoding(), vro))
+				}
+			})
+			req := &ethpb.BlobSidecarsByRangeRequest{
+				StartSlot: slot,
+				Count:     1,
 			}
-		})
-		req := &ethpb.BlobSidecarsByRangeRequest{
-			StartSlot: slot,
-			Count:     1,
-		}
 
-		blobs, err := SendBlobsByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxByte, req)
-		assert.NoError(t, err)
-		assert.Equal(t, 1, len(blobs))
+			blobs, err := SendBlobsByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxByte, req)
+			assert.NoError(t, err)
+			assert.Equal(t, 1, len(blobs))
+		})
 	})
 
 	t.Run("Deneb - Electra epoch boundary crossing", func(t *testing.T) {
-		cfg := params.BeaconConfig()
-		cfg.ElectraForkEpoch = cfg.DenebForkEpoch + 1
-		undo, err := params.SetActiveWithUndo(cfg)
-		require.NoError(t, err)
-		defer func() {
-			require.NoError(t, undo())
-		}()
-		// Setup genesis such that we are currently in deneb.
-		s := uint64(util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)) * params.BeaconConfig().SecondsPerSlot
-		clock := startup.NewClock(time.Now().Add(-time.Second*time.Duration(s)), [32]byte{})
-		ctxByte, err := ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
-		require.NoError(t, err)
-		// Setup peers
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
-		// Set current slot to the first slot of the last deneb epoch.
-		slot := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
-		// Create a simple handler that will return a valid response.
-		p2.SetStreamHandler(topic, func(stream network.Stream) {
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			cfg := params.BeaconConfig()
+			cfg.ElectraForkEpoch = cfg.DenebForkEpoch + 1
+			undo, err := params.SetActiveWithUndo(cfg)
+			require.NoError(t, err)
 			defer func() {
-				assert.NoError(t, stream.Close())
+				require.NoError(t, undo())
 			}()
+			// Setup genesis such that we are currently in deneb.
+			s := uint64(util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)) * params.BeaconConfig().SecondsPerSlot
+			clock := startup.NewClock(time.Now().Add(-time.Second*time.Duration(s)), [32]byte{})
+			ctxByte, err := ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
+			require.NoError(t, err)
+			// Setup peers
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
+			// Set current slot to the first slot of the last deneb epoch.
+			slot := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
+			// Create a simple handler that will return a valid response.
+			p2.SetStreamHandler(topic, func(stream network.Stream) {
+				defer func() {
+					assert.NoError(t, stream.Close())
+				}()
 
-			req := &ethpb.BlobSidecarsByRangeRequest{}
-			assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
-			assert.Equal(t, slot, req.StartSlot)
-			assert.Equal(t, uint64(params.BeaconConfig().SlotsPerEpoch)*3, req.Count)
+				req := &ethpb.BlobSidecarsByRangeRequest{}
+				assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+				assert.Equal(t, slot, req.StartSlot)
+				assert.Equal(t, uint64(params.BeaconConfig().SlotsPerEpoch)*3, req.Count)
 
-			// Create a sequential set of blobs with the appropriate header information.
-			var prevRoot [32]byte
-			for i := req.StartSlot; i < req.StartSlot+primitives.Slot(req.Count); i++ {
-				maxBlobsForSlot := cfg.MaxBlobsPerBlock(i)
-				parentRoot := prevRoot
-				header := util.HydrateSignedBeaconHeader(&ethpb.SignedBeaconBlockHeader{})
-				header.Header.Slot = i
-				header.Header.ParentRoot = parentRoot[:]
-				bRoot, err := header.Header.HashTreeRoot()
-				require.NoError(t, err)
-				prevRoot = bRoot
-				// Send the maximum possible blobs per slot.
-				for j := range maxBlobsForSlot {
-					b := util.HydrateBlobSidecar(&ethpb.BlobSidecar{})
-					b.SignedBlockHeader = header
-					b.Index = uint64(j)
-					ro, err := blocks.NewROBlob(b)
+				// Create a sequential set of blobs with the appropriate header information.
+				var prevRoot [32]byte
+				for i := req.StartSlot; i < req.StartSlot+primitives.Slot(req.Count); i++ {
+					maxBlobsForSlot := cfg.MaxBlobsPerBlock(i)
+					parentRoot := prevRoot
+					header := util.HydrateSignedBeaconHeader(&ethpb.SignedBeaconBlockHeader{})
+					header.Header.Slot = i
+					header.Header.ParentRoot = parentRoot[:]
+					bRoot, err := header.Header.HashTreeRoot()
 					require.NoError(t, err)
-					vro := blocks.NewVerifiedROBlob(ro)
-					assert.NoError(t, WriteBlobSidecarChunk(stream, clock, p2.Encoding(), vro))
+					prevRoot = bRoot
+					// Send the maximum possible blobs per slot.
+					for j := range maxBlobsForSlot {
+						b := util.HydrateBlobSidecar(&ethpb.BlobSidecar{})
+						b.SignedBlockHeader = header
+						b.Index = uint64(j)
+						ro, err := blocks.NewROBlob(b)
+						require.NoError(t, err)
+						vro := blocks.NewVerifiedROBlob(ro)
+						assert.NoError(t, WriteBlobSidecarChunk(stream, clock, p2.Encoding(), vro))
+					}
 				}
+			})
+			req := &ethpb.BlobSidecarsByRangeRequest{
+				StartSlot: slot,
+				Count:     uint64(params.BeaconConfig().SlotsPerEpoch) * 3,
 			}
-		})
-		req := &ethpb.BlobSidecarsByRangeRequest{
-			StartSlot: slot,
-			Count:     uint64(params.BeaconConfig().SlotsPerEpoch) * 3,
-		}
-		maxDenebBlobs := cfg.MaxBlobsPerBlockAtEpoch(cfg.DenebForkEpoch)
-		maxElectraBlobs := cfg.MaxBlobsPerBlockAtEpoch(cfg.ElectraForkEpoch)
-		totalDenebBlobs := primitives.Slot(maxDenebBlobs) * params.BeaconConfig().SlotsPerEpoch
-		totalElectraBlobs := primitives.Slot(maxElectraBlobs) * 2 * params.BeaconConfig().SlotsPerEpoch
-		totalExpectedBlobs := totalDenebBlobs + totalElectraBlobs
+			maxDenebBlobs := cfg.MaxBlobsPerBlockAtEpoch(cfg.DenebForkEpoch)
+			maxElectraBlobs := cfg.MaxBlobsPerBlockAtEpoch(cfg.ElectraForkEpoch)
+			totalDenebBlobs := primitives.Slot(maxDenebBlobs) * params.BeaconConfig().SlotsPerEpoch
+			totalElectraBlobs := primitives.Slot(maxElectraBlobs) * 2 * params.BeaconConfig().SlotsPerEpoch
+			totalExpectedBlobs := totalDenebBlobs + totalElectraBlobs
 
-		blobs, err := SendBlobsByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxByte, req)
-		assert.NoError(t, err)
-		assert.Equal(t, int(totalExpectedBlobs), len(blobs))
+			blobs, err := SendBlobsByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxByte, req)
+			assert.NoError(t, err)
+			assert.Equal(t, int(totalExpectedBlobs), len(blobs))
+		})
 	})
 
 	t.Run("Starting from Electra", func(t *testing.T) {
-		cfg := params.BeaconConfig()
-		cfg.ElectraForkEpoch = cfg.DenebForkEpoch + 1
-		undo, err := params.SetActiveWithUndo(cfg)
-		require.NoError(t, err)
-		defer func() {
-			require.NoError(t, undo())
-		}()
-
-		s := uint64(util.SlotAtEpoch(t, params.BeaconConfig().ElectraForkEpoch)) * params.BeaconConfig().SecondsPerSlot
-		clock := startup.NewClock(time.Now().Add(-time.Second*time.Duration(s)), [32]byte{})
-		ctxByte, err := ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
-		require.NoError(t, err)
-		// Setup peers
-		p1 := p2ptest.NewTestP2P(t)
-		p2 := p2ptest.NewTestP2P(t)
-		p1.Connect(p2)
-
-		slot := util.SlotAtEpoch(t, params.BeaconConfig().ElectraForkEpoch)
-		// Create a simple handler that will return a valid response.
-		p2.SetStreamHandler(topic, func(stream network.Stream) {
+		p2ptest.SynctestTest(t, func(t *testing.T) {
+			ctx := t.Context()
+			cfg := params.BeaconConfig()
+			cfg.ElectraForkEpoch = cfg.DenebForkEpoch + 1
+			undo, err := params.SetActiveWithUndo(cfg)
+			require.NoError(t, err)
 			defer func() {
-				assert.NoError(t, stream.Close())
+				require.NoError(t, undo())
 			}()
 
-			req := &ethpb.BlobSidecarsByRangeRequest{}
-			assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
-			assert.Equal(t, slot, req.StartSlot)
-			assert.Equal(t, uint64(params.BeaconConfig().SlotsPerEpoch)*3, req.Count)
+			s := uint64(util.SlotAtEpoch(t, params.BeaconConfig().ElectraForkEpoch)) * params.BeaconConfig().SecondsPerSlot
+			clock := startup.NewClock(time.Now().Add(-time.Second*time.Duration(s)), [32]byte{})
+			ctxByte, err := ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
+			require.NoError(t, err)
+			// Setup peers
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
 
-			// Create a sequential set of blobs with the appropriate header information.
-			var prevRoot [32]byte
-			for i := req.StartSlot; i < req.StartSlot+primitives.Slot(req.Count); i++ {
-				maxBlobsForSlot := cfg.MaxBlobsPerBlock(i)
-				parentRoot := prevRoot
-				header := util.HydrateSignedBeaconHeader(&ethpb.SignedBeaconBlockHeader{})
-				header.Header.Slot = i
-				header.Header.ParentRoot = parentRoot[:]
-				bRoot, err := header.Header.HashTreeRoot()
-				require.NoError(t, err)
-				prevRoot = bRoot
-				// Send the maximum possible blobs per slot.
-				for j := range maxBlobsForSlot {
-					b := util.HydrateBlobSidecar(&ethpb.BlobSidecar{})
-					b.SignedBlockHeader = header
-					b.Index = uint64(j)
-					ro, err := blocks.NewROBlob(b)
+			slot := util.SlotAtEpoch(t, params.BeaconConfig().ElectraForkEpoch)
+			// Create a simple handler that will return a valid response.
+			p2.SetStreamHandler(topic, func(stream network.Stream) {
+				defer func() {
+					assert.NoError(t, stream.Close())
+				}()
+
+				req := &ethpb.BlobSidecarsByRangeRequest{}
+				assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+				assert.Equal(t, slot, req.StartSlot)
+				assert.Equal(t, uint64(params.BeaconConfig().SlotsPerEpoch)*3, req.Count)
+
+				// Create a sequential set of blobs with the appropriate header information.
+				var prevRoot [32]byte
+				for i := req.StartSlot; i < req.StartSlot+primitives.Slot(req.Count); i++ {
+					maxBlobsForSlot := cfg.MaxBlobsPerBlock(i)
+					parentRoot := prevRoot
+					header := util.HydrateSignedBeaconHeader(&ethpb.SignedBeaconBlockHeader{})
+					header.Header.Slot = i
+					header.Header.ParentRoot = parentRoot[:]
+					bRoot, err := header.Header.HashTreeRoot()
 					require.NoError(t, err)
-					vro := blocks.NewVerifiedROBlob(ro)
-					assert.NoError(t, WriteBlobSidecarChunk(stream, clock, p2.Encoding(), vro))
+					prevRoot = bRoot
+					// Send the maximum possible blobs per slot.
+					for j := range maxBlobsForSlot {
+						b := util.HydrateBlobSidecar(&ethpb.BlobSidecar{})
+						b.SignedBlockHeader = header
+						b.Index = uint64(j)
+						ro, err := blocks.NewROBlob(b)
+						require.NoError(t, err)
+						vro := blocks.NewVerifiedROBlob(ro)
+						assert.NoError(t, WriteBlobSidecarChunk(stream, clock, p2.Encoding(), vro))
+					}
 				}
+			})
+			req := &ethpb.BlobSidecarsByRangeRequest{
+				StartSlot: slot,
+				Count:     uint64(params.BeaconConfig().SlotsPerEpoch) * 3,
 			}
+
+			maxElectraBlobs := cfg.MaxBlobsPerBlockAtEpoch(cfg.ElectraForkEpoch)
+			totalElectraBlobs := primitives.Slot(maxElectraBlobs) * 3 * params.BeaconConfig().SlotsPerEpoch
+
+			blobs, err := SendBlobsByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxByte, req)
+			assert.NoError(t, err)
+			assert.Equal(t, int(totalElectraBlobs), len(blobs))
 		})
-		req := &ethpb.BlobSidecarsByRangeRequest{
-			StartSlot: slot,
-			Count:     uint64(params.BeaconConfig().SlotsPerEpoch) * 3,
-		}
-
-		maxElectraBlobs := cfg.MaxBlobsPerBlockAtEpoch(cfg.ElectraForkEpoch)
-		totalElectraBlobs := primitives.Slot(maxElectraBlobs) * 3 * params.BeaconConfig().SlotsPerEpoch
-
-		blobs, err := SendBlobsByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxByte, req)
-		assert.NoError(t, err)
-		assert.Equal(t, int(totalElectraBlobs), len(blobs))
 	})
 }
 
