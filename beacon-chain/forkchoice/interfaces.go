@@ -115,5 +115,5 @@ type Setter interface {
 	InsertSlashedIndex(context.Context, primitives.ValidatorIndex)
 	RecordBlockForEquivocation(primitives.Slot, primitives.ValidatorIndex, [32]byte)
 	SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, blobDataAvailable bool)
-	MarkFullNode(root [32]byte)
+	MarkFullNode(root [32]byte, gasLimit uint64)
 }
