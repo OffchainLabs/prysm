@@ -457,7 +457,7 @@ func TestTestForkStartSlot(t *testing.T) {
 func consumeBlockRootRequest(t *testing.T, p *p2pt.TestP2P) func(network.Stream) {
 	return func(stream network.Stream) {
 		defer func() {
-			_err := stream.Close()
+			_err := stream.CloseWrite()
 			_ = _err
 		}()
 
