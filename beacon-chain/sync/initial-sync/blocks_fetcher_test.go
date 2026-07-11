@@ -553,7 +553,7 @@ func TestBlocksFetcher_RequestBlocksRateLimitingLocks(t *testing.T) {
 	topic := p2p.RPCBlocksByRangeTopicV1
 	protocol := libp2pcore.ProtocolID(topic + p2.Encoding().ProtocolSuffix())
 	streamHandlerFn := func(stream network.Stream) {
-		assert.NoError(t, stream.Close())
+		assert.NoError(t, stream.CloseWrite())
 	}
 	p2.BHost.SetStreamHandler(protocol, streamHandlerFn)
 	p3.BHost.SetStreamHandler(protocol, streamHandlerFn)
@@ -620,7 +620,7 @@ func TestBlocksFetcher_WaitForBandwidth(t *testing.T) {
 	topic := p2p.RPCBlocksByRangeTopicV1
 	protocol := libp2pcore.ProtocolID(topic + p2.Encoding().ProtocolSuffix())
 	streamHandlerFn := func(stream network.Stream) {
-		assert.NoError(t, stream.Close())
+		assert.NoError(t, stream.CloseWrite())
 	}
 	p2.BHost.SetStreamHandler(protocol, streamHandlerFn)
 
@@ -670,7 +670,7 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 						require.NoError(t, err)
 						assert.NoError(t, beaconsync.WriteBlockChunk(stream, tor, p1.Encoding(), wsb))
 					}
-					assert.NoError(t, stream.Close())
+					assert.NoError(t, stream.CloseWrite())
 				}
 			},
 			validate: func(req *ethpb.BeaconBlocksByRangeRequest, blocks []interfaces.ReadOnlySignedBeaconBlock) {
@@ -694,7 +694,7 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 						require.NoError(t, err)
 						assert.NoError(t, beaconsync.WriteBlockChunk(stream, tor, p1.Encoding(), wsb))
 					}
-					assert.NoError(t, stream.Close())
+					assert.NoError(t, stream.CloseWrite())
 				}
 			},
 			validate: func(req *ethpb.BeaconBlocksByRangeRequest, blocks []interfaces.ReadOnlySignedBeaconBlock) {
@@ -723,7 +723,7 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 					wsb, err = blocks.NewSignedBeaconBlock(blk)
 					require.NoError(t, err)
 					assert.NoError(t, beaconsync.WriteBlockChunk(stream, tor, p1.Encoding(), wsb))
-					assert.NoError(t, stream.Close())
+					assert.NoError(t, stream.CloseWrite())
 				}
 			},
 			validate: func(req *ethpb.BeaconBlocksByRangeRequest, blocks []interfaces.ReadOnlySignedBeaconBlock) {
@@ -753,7 +753,7 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 					wsb, err = blocks.NewSignedBeaconBlock(blk)
 					require.NoError(t, err)
 					assert.NoError(t, beaconsync.WriteBlockChunk(stream, tor, p1.Encoding(), wsb))
-					assert.NoError(t, stream.Close())
+					assert.NoError(t, stream.CloseWrite())
 				}
 			},
 			validate: func(req *ethpb.BeaconBlocksByRangeRequest, blocks []interfaces.ReadOnlySignedBeaconBlock) {
@@ -771,7 +771,7 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 			handlerGenFn: func(req *ethpb.BeaconBlocksByRangeRequest) func(stream network.Stream) {
 				return func(stream network.Stream) {
 					defer func() {
-						assert.NoError(t, stream.Close())
+						assert.NoError(t, stream.CloseWrite())
 					}()
 					for i := req.StartSlot; i < req.StartSlot.Add(req.Count*req.Step); i += primitives.Slot(req.Step) {
 						blk := util.NewBeaconBlock()
@@ -806,7 +806,7 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 			handlerGenFn: func(req *ethpb.BeaconBlocksByRangeRequest) func(stream network.Stream) {
 				return func(stream network.Stream) {
 					defer func() {
-						assert.NoError(t, stream.Close())
+						assert.NoError(t, stream.CloseWrite())
 					}()
 					for i := req.StartSlot; i < req.StartSlot.Add(req.Count*req.Step); i += primitives.Slot(req.Step) {
 						blk := util.NewBeaconBlock()
@@ -852,7 +852,7 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 					wsb, err = blocks.NewSignedBeaconBlock(blk)
 					require.NoError(t, err)
 					assert.NoError(t, beaconsync.WriteBlockChunk(stream, tor, p1.Encoding(), wsb))
-					assert.NoError(t, stream.Close())
+					assert.NoError(t, stream.CloseWrite())
 				}
 			},
 			validate: func(req *ethpb.BeaconBlocksByRangeRequest, blocks []interfaces.ReadOnlySignedBeaconBlock) {
@@ -880,7 +880,7 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 					wsb, err = blocks.NewSignedBeaconBlock(blk)
 					require.NoError(t, err)
 					assert.NoError(t, beaconsync.WriteBlockChunk(stream, tor, p1.Encoding(), wsb))
-					assert.NoError(t, stream.Close())
+					assert.NoError(t, stream.CloseWrite())
 				}
 			},
 			validate: func(req *ethpb.BeaconBlocksByRangeRequest, blocks []interfaces.ReadOnlySignedBeaconBlock) {
@@ -946,7 +946,7 @@ func TestBlocksFetcher_requestBlocksDownscoreOnInvalidData(t *testing.T) {
 		wsb, err = blocks.NewSignedBeaconBlock(blk)
 		require.NoError(t, err)
 		assert.NoError(t, beaconsync.WriteBlockChunk(stream, tor, p1.Encoding(), wsb))
-		assert.NoError(t, stream.Close())
+		assert.NoError(t, stream.CloseWrite())
 	})
 
 	// Verify the peer has no bad responses before the request
