@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer/internal"
@@ -26,9 +27,10 @@ func (m *mockTransport) RoundTrip(*http.Request) (*http.Response, error) {
 }
 
 func TestNewApiClient(t *testing.T) {
-	apiClient, err := internal.NewApiClient("http://localhost:8545")
+	apiClient, err := internal.NewApiClient("http://localhost:8545", 5*time.Second)
 	assert.NoError(t, err)
 	assert.NotNil(t, apiClient)
+	assert.Equal(t, 5*time.Second, apiClient.RestClient.Timeout)
 }
 
 func TestClient_Sign_HappyPath(t *testing.T) {

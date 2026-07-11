@@ -126,6 +126,7 @@ var appHelpFlagGroups = []flagGroup{
 		Name: "remote signer",
 		Flags: []cli.Flag{
 			flags.Web3SignerURLFlag,
+			flags.Web3SignerTimeoutFlag,
 			flags.Web3SignerPublicValidatorKeysFlag,
 			flags.Web3SignerKeyFileFlag,
 		},

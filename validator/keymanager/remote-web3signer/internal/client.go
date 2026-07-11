@@ -47,7 +47,7 @@ type ApiClient struct {
 }
 
 // NewApiClient method instantiates a new ApiClient object.
-func NewApiClient(baseEndpoint string) (*ApiClient, error) {
+func NewApiClient(baseEndpoint string, timeout time.Duration) (*ApiClient, error) {
 	u, err := url.ParseRequestURI(baseEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid format, unable to parse url")
@@ -57,7 +57,7 @@ func NewApiClient(baseEndpoint string) (*ApiClient, error) {
 	}
 	return &ApiClient{
 		BaseURL:    u,
-		RestClient: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
+		RestClient: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport), Timeout: timeout},
 	}, nil
 }
 

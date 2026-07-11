@@ -292,6 +292,12 @@ var (
 		Value:   "",
 		Aliases: []string{"remote-signer-url"},
 	}
+	// Web3SignerTimeoutFlag defines the timeout for Web3Signer HTTP requests.
+	Web3SignerTimeoutFlag = &cli.DurationFlag{
+		Name:  "validators-external-signer-timeout",
+		Usage: "Timeout for requests to the Web3Signer server.",
+		Value: 10 * time.Second,
+	}
 	// Web3SignerPublicValidatorKeysFlag defines a comma-separated list of hex string public keys or external url for web3signer to use for validator signing.
 	// example with external url: --validators-external-signer-public-keys= https://web3signer.com/api/v1/eth2/publicKeys
 	// example with public key: --validators-external-signer-public-keys=0xa99a...e44c,0xb89b...4a0b

@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
@@ -231,6 +232,7 @@ func TestWeb3SignerConfig(t *testing.T) {
 			want: &remoteweb3signer.SetupConfig{
 				BaseEndpoint:          "http://localhost:8545",
 				GenesisValidatorsRoot: nil,
+				RequestTimeout:        10 * time.Second,
 				PublicKeysURL:         "",
 				ProvidedPublicKeys: []string{
 					"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88e511e0b337618f8c4eb61349b4bf2d153f649f7b53359fe8b94a38e44c",
@@ -247,6 +249,7 @@ func TestWeb3SignerConfig(t *testing.T) {
 			want: &remoteweb3signer.SetupConfig{
 				BaseEndpoint:          "http://localhost:8545",
 				GenesisValidatorsRoot: nil,
+				RequestTimeout:        10 * time.Second,
 				PublicKeysURL:         "http://localhost:8545/api/v1/eth2/publicKeys",
 				ProvidedPublicKeys:    nil,
 			},
@@ -277,8 +280,9 @@ func TestWeb3SignerConfig(t *testing.T) {
 				persistentFile: "/remote/key/file.txt",
 			},
 			want: &remoteweb3signer.SetupConfig{
-				BaseEndpoint: "http://localhost:8545",
-				KeyFilePath:  "/remote/key/file.txt",
+				BaseEndpoint:   "http://localhost:8545",
+				KeyFilePath:    "/remote/key/file.txt",
+				RequestTimeout: 10 * time.Second,
 			},
 		},
 	}
@@ -288,6 +292,7 @@ func TestWeb3SignerConfig(t *testing.T) {
 			set := flag.NewFlagSet(tt.name, 0)
 			set.String("validators-external-signer-url", tt.args.baseURL, "baseUrl")
 			set.String(flags.Web3SignerKeyFileFlag.Name, "", "")
+			require.NoError(t, flags.Web3SignerTimeoutFlag.Apply(set))
 			c := &cli.StringSliceFlag{
 				Name: "validators-external-signer-public-keys",
 			}
