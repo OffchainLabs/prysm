@@ -420,10 +420,10 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 	// Handle the first payload insertion.
 	if len(pendingNodes) == 0 {
 		// even without pending blocks, the first payload may be pending.
-		s.insertFirstPayloadIfNeeded(signed.Block())
+		s.insertFirstPayloadIfNeeded(ctx, signed.Block())
 		return nil
 	} else {
-		s.insertFirstPayloadIfNeeded(pendingNodes[len(pendingNodes)-1].Block.Block())
+		s.insertFirstPayloadIfNeeded(ctx, pendingNodes[len(pendingNodes)-1].Block.Block())
 	}
 	if root != s.ensureRootNotZeros(finalized.Root) && !s.cfg.ForkChoiceStore.HasNode(root) {
 		return ErrNotDescendantOfFinalized
@@ -433,14 +433,40 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 	return s.cfg.ForkChoiceStore.InsertChain(ctx, pendingNodes)
 }
 
-func (s *Service) insertFirstPayloadIfNeeded(b interfaces.ReadOnlyBeaconBlock) {
+func (s *Service) insertFirstPayloadIfNeeded(ctx context.Context, b interfaces.ReadOnlyBeaconBlock) {
 	if b.Version() < version.Gloas {
 		return
 	}
 	parentRoot := b.ParentRoot()
 	if s.builtOnFullParentInForkchoice(b) && !s.cfg.ForkChoiceStore.HasFullNode(parentRoot) {
-		s.cfg.ForkChoiceStore.MarkFullNode(parentRoot)
+		gasLimit, err := s.parentPayloadGasLimit(ctx, parentRoot)
+		if err != nil {
+			log.WithError(err).Debug("Could not read parent payload gas limit, marking full node without it")
+		}
+		s.cfg.ForkChoiceStore.MarkFullNode(parentRoot, gasLimit)
 	}
+}
+
+func (s *Service) parentPayloadGasLimit(ctx context.Context, parentRoot [32]byte) (uint64, error) {
+	parent, err := s.getBlock(ctx, parentRoot)
+	if err != nil {
+		return 0, errors.Wrap(err, "could not get parent block")
+	}
+	if parent.Block().Version() >= version.Gloas {
+		bid, err := parent.Block().Body().SignedExecutionPayloadBid()
+		if err != nil {
+			return 0, errors.Wrap(err, "could not get signed execution payload bid")
+		}
+		if bid == nil || bid.Message == nil {
+			return 0, errors.New("nil execution payload bid")
+		}
+		return bid.Message.GasLimit, nil
+	}
+	payload, err := parent.Block().Body().Execution()
+	if err != nil {
+		return 0, errors.Wrap(err, "could not get execution payload")
+	}
+	return payload.GasLimit(), nil
 }
 
 // inserts finalized deposits into our finalized deposit trie, needs to be
