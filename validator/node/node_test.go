@@ -293,6 +293,9 @@ func TestWeb3SignerConfig(t *testing.T) {
 			set.String("validators-external-signer-url", tt.args.baseURL, "baseUrl")
 			set.String(flags.Web3SignerKeyFileFlag.Name, "", "")
 			require.NoError(t, flags.Web3SignerTimeoutFlag.Apply(set))
+			require.NoError(t, flags.Web3SignerCACertFlag.Apply(set))
+			require.NoError(t, flags.Web3SignerClientCertFlag.Apply(set))
+			require.NoError(t, flags.Web3SignerClientKeyFlag.Apply(set))
 			c := &cli.StringSliceFlag{
 				Name: "validators-external-signer-public-keys",
 			}

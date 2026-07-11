@@ -461,6 +461,9 @@ func Web3SignerConfig(cliCtx *cli.Context) (*remoteweb3signer.SetupConfig, error
 			BaseEndpoint:          u.String(),
 			GenesisValidatorsRoot: nil,
 			RequestTimeout:        cliCtx.Duration(flags.Web3SignerTimeoutFlag.Name),
+			CACertPath:            cliCtx.String(flags.Web3SignerCACertFlag.Name),
+			ClientCertPath:        cliCtx.String(flags.Web3SignerClientCertFlag.Name),
+			ClientKeyPath:         cliCtx.String(flags.Web3SignerClientKeyFlag.Name),
 		}
 		if cliCtx.IsSet(flags.WalletPasswordFileFlag.Name) {
 			log.Warnf("%s was provided while using web3signer and will be ignored", flags.WalletPasswordFileFlag.Name)

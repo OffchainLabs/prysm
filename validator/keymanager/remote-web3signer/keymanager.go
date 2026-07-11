@@ -46,6 +46,9 @@ type SetupConfig struct {
 	BaseEndpoint          string
 	GenesisValidatorsRoot []byte
 	RequestTimeout        time.Duration
+	CACertPath            string
+	ClientCertPath        string
+	ClientKeyPath         string
 
 	// Either URL or keylist must be set.
 	// If the URL is set, the keymanager will fetch the public keys from the URL.
@@ -78,7 +81,7 @@ func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
 	if cfg.BaseEndpoint == "" || !bytesutil.IsValidRoot(cfg.GenesisValidatorsRoot) {
 		return nil, fmt.Errorf("invalid setup config, one or more configs are empty: BaseEndpoint: %v, GenesisValidatorsRoot: %#x", cfg.BaseEndpoint, cfg.GenesisValidatorsRoot)
 	}
-	client, err := internal.NewApiClient(cfg.BaseEndpoint, cfg.RequestTimeout)
+	client, err := internal.NewApiClient(cfg.BaseEndpoint, cfg.RequestTimeout, cfg.CACertPath, cfg.ClientCertPath, cfg.ClientKeyPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create apiClient")
 	}

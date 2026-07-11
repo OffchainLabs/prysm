@@ -3,12 +3,16 @@ package internal
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -47,7 +51,7 @@ type ApiClient struct {
 }
 
 // NewApiClient method instantiates a new ApiClient object.
-func NewApiClient(baseEndpoint string, timeout time.Duration) (*ApiClient, error) {
+func NewApiClient(baseEndpoint string, timeout time.Duration, caCertPath, clientCertPath, clientKeyPath string) (*ApiClient, error) {
 	u, err := url.ParseRequestURI(baseEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid format, unable to parse url")
@@ -55,10 +59,48 @@ func NewApiClient(baseEndpoint string, timeout time.Duration) (*ApiClient, error
 	if u.Scheme == "" || u.Host == "" {
 		return nil, fmt.Errorf("web3signer url must be in the format of http(s)://host:port url used: %v", baseEndpoint)
 	}
+	transport, err := newTransport(caCertPath, clientCertPath, clientKeyPath)
+	if err != nil {
+		return nil, err
+	}
 	return &ApiClient{
 		BaseURL:    u,
-		RestClient: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport), Timeout: timeout},
+		RestClient: &http.Client{Transport: otelhttp.NewTransport(transport), Timeout: timeout},
 	}, nil
+}
+
+func newTransport(caCertPath, clientCertPath, clientKeyPath string) (*http.Transport, error) {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	if caCertPath == "" && clientCertPath == "" && clientKeyPath == "" {
+		return transport, nil
+	}
+	if (clientCertPath == "") != (clientKeyPath == "") {
+		return nil, errors.New("web3signer client certificate and key must be provided together")
+	}
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+	if caCertPath != "" {
+		roots, err := x509.SystemCertPool()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not load system CA certificates")
+		}
+		caCert, err := os.ReadFile(filepath.Clean(caCertPath)) // #nosec G304 -- path is supplied by the operator.
+		if err != nil {
+			return nil, errors.Wrap(err, "could not read web3signer CA certificate")
+		}
+		if !roots.AppendCertsFromPEM(caCert) {
+			return nil, errors.New("could not parse web3signer CA certificate")
+		}
+		tlsConfig.RootCAs = roots
+	}
+	if clientCertPath != "" {
+		certificate, err := tls.LoadX509KeyPair(filepath.Clean(clientCertPath), filepath.Clean(clientKeyPath))
+		if err != nil {
+			return nil, errors.Wrap(err, "could not load web3signer client certificate and key")
+		}
+		tlsConfig.Certificates = []tls.Certificate{certificate}
+	}
+	transport.TLSClientConfig = tlsConfig
+	return transport, nil
 }
 
 // Sign is a wrapper method around the web3signer sign api.
