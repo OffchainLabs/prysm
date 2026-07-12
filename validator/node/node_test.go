@@ -86,25 +86,16 @@ func TestGetLegacyDatabaseLocation(t *testing.T) {
 	nonExistingWalletDir := t.TempDir()
 
 	testCases := []struct {
-		name                      string
-		isInteropNumValidatorsSet bool
-		isWeb3SignerURLFlagSet    bool
-		dataDir                   string
-		dataFile                  string
-		walletDir                 string
-		validatorClient           *ValidatorClient
-		wallet                    *wallet.Wallet
-		expectedDataDir           string
-		expectedDataFile          string
+		name                   string
+		isWeb3SignerURLFlagSet bool
+		dataDir                string
+		dataFile               string
+		walletDir              string
+		validatorClient        *ValidatorClient
+		wallet                 *wallet.Wallet
+		expectedDataDir        string
+		expectedDataFile       string
 	}{
-		{
-			name:                      "interop num validators set",
-			isInteropNumValidatorsSet: true,
-			dataDir:                   dataDir,
-			dataFile:                  dataFile,
-			expectedDataDir:           dataDir,
-			expectedDataFile:          dataFile,
-		},
 		{
 			name:             "dataDir differs from default",
 			dataDir:          dataDir,
@@ -180,7 +171,6 @@ func TestGetLegacyDatabaseLocation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			validatorClient := &ValidatorClient{wallet: tt.wallet}
 			actualDataDir, actualDataFile, err := validatorClient.getLegacyDatabaseLocation(
-				tt.isInteropNumValidatorsSet,
 				tt.isWeb3SignerURLFlagSet,
 				tt.dataDir,
 				tt.dataFile,
