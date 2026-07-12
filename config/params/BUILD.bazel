@@ -11,7 +11,6 @@ go_library(
         "errors.go",
         "fork.go",
         "init.go",
-        "interop.go",
         "io_config.go",
         "loader.go",
         "log.go",
