@@ -19,6 +19,11 @@ func TestCreateValidatorWallet(t *testing.T) {
 	pubKeys := []bls.PublicKey{privKey.PublicKey()}
 
 	walletDir := t.TempDir()
+
+	// Remove old encrypted wallet files if they exist, to ensure a clean state.
+	_, err = createValidatorWallet(t.Context(), walletDir, privKeys, pubKeys)
+	require.NoError(t, err)
+
 	passwordFile, err := createValidatorWallet(t.Context(), walletDir, privKeys, pubKeys)
 	require.NoError(t, err)
 	password, err := os.ReadFile(passwordFile)

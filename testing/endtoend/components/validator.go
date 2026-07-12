@@ -402,6 +402,11 @@ func FeeRecipientFromPubkey(key string) string {
 // createValidatorWallet creates a new validator wallet with the provided keys
 // and returns the path to the password file.
 func createValidatorWallet(ctx context.Context, walletDir string, privKeys []bls.SecretKey, pubKeys []bls.PublicKey) (string, error) {
+	// Remove old encrypted wallet files if they exist, to ensure a clean state.
+	if err := os.RemoveAll(walletDir); err != nil {
+		return "", err
+	}
+
 	passwordBytes := make([]byte, 32)
 	if _, err := rand.Read(passwordBytes); err != nil {
 		return "", err
