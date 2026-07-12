@@ -23,7 +23,7 @@ func TestCreateValidatorWallet(t *testing.T) {
 	require.NoError(t, err)
 	password, err := os.ReadFile(passwordFile)
 	require.NoError(t, err)
-	require.Equal(t, e2eWalletPassword, string(password))
+	require.Equal(t, 64, len(password))
 
 	w, err := wallet.OpenWallet(t.Context(), &wallet.Config{WalletDir: walletDir, WalletPassword: string(password)})
 	require.NoError(t, err)

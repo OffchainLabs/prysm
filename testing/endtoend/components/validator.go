@@ -2,6 +2,8 @@ package components
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -32,10 +34,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-const (
-	DefaultFeeRecipientAddress = "0x099FB65722e7b2455043bfebF6177f1D2E9738d9"
-	e2eWalletPassword          = "E2eValidatorWalletPassword"
-)
+const DefaultFeeRecipientAddress = "0x099FB65722e7b2455043bfebF6177f1D2E9738d9"
 
 var _ e2etypes.ComponentRunner = (*ValidatorNode)(nil)
 var _ e2etypes.ComponentRunner = (*ValidatorNodeSet)(nil)
@@ -261,6 +260,8 @@ func (v *ValidatorNode) Start(ctx context.Context) error {
 	if !v.config.UsePrysmShValidator {
 		args = append(args, features.E2EValidatorFlags...)
 	}
+	// Holds the wallet password file flag; appended just before exec and kept out of the logs below.
+	var walletPasswordArg string
 	if v.config.UseWeb3RemoteSigner {
 		// Write the pubkeys as comma separated hex strings with 0x prefix.
 		// See: https://docs.teku.consensys.net/en/latest/HowTo/External-Signer/Use-External-Signer/
@@ -282,10 +283,8 @@ func (v *ValidatorNode) Start(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to create validator wallet: %w", err)
 		}
-		args = append(args,
-			fmt.Sprintf("--%s=%s", flags.WalletDirFlag.Name, walletDir),
-			fmt.Sprintf("--%s=%s", flags.WalletPasswordFileFlag.Name, passwordFile),
-		)
+		args = append(args, fmt.Sprintf("--%s=%s", flags.WalletDirFlag.Name, walletDir))
+		walletPasswordArg = fmt.Sprintf("--%s=%s", flags.WalletPasswordFileFlag.Name, passwordFile)
 	}
 	if v.config.UseBuilder {
 		args = append(args, fmt.Sprintf("--%s", flags.EnableBuilderFlag.Name))
@@ -295,6 +294,12 @@ func (v *ValidatorNode) Start(ctx context.Context) error {
 	if v.config.UsePrysmShValidator {
 		args = append([]string{"validator"}, args...)
 		log.Warning("Using latest release validator via prysm.sh")
+	}
+
+	// Snapshot flags for logging before appending the wallet password file flag, keeping the secret path out of logs.
+	flagsForLog := strings.Join(args, " ")
+	if walletPasswordArg != "" {
+		args = append(args, walletPasswordArg)
 	}
 
 	cmd := exec.CommandContext(ctx, binaryPath, args...) // #nosec G204 -- Safe
@@ -319,7 +324,7 @@ func (v *ValidatorNode) Start(ctx context.Context) error {
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 
-	log.Infof("Starting validator client %d with flags: %s %s", index, binaryPath, strings.Join(args, " "))
+	log.Infof("Starting validator client %d with flags: %s %s", index, binaryPath, flagsForLog)
 	if err = cmd.Start(); err != nil {
 		return err
 	}
@@ -397,10 +402,15 @@ func FeeRecipientFromPubkey(key string) string {
 // createValidatorWallet creates a new validator wallet with the provided keys
 // and returns the path to the password file.
 func createValidatorWallet(ctx context.Context, walletDir string, privKeys []bls.SecretKey, pubKeys []bls.PublicKey) (string, error) {
+	passwordBytes := make([]byte, 32)
+	if _, err := rand.Read(passwordBytes); err != nil {
+		return "", err
+	}
+	walletPassword := hex.EncodeToString(passwordBytes)
 	w := wallet.New(&wallet.Config{
 		WalletDir:      walletDir,
 		KeymanagerKind: keymanager.Local,
-		WalletPassword: e2eWalletPassword,
+		WalletPassword: walletPassword,
 	})
 	if err := w.SaveWallet(); err != nil {
 		return "", err
@@ -419,5 +429,5 @@ func createValidatorWallet(ctx context.Context, walletDir string, privKeys []bls
 		return "", err
 	}
 	passwordFile := filepath.Join(walletDir, wallet.DefaultWalletPasswordFile)
-	return passwordFile, file.WriteFile(passwordFile, []byte(e2eWalletPassword))
+	return passwordFile, file.WriteFile(passwordFile, []byte(walletPassword))
 }
