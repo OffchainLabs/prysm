@@ -124,6 +124,14 @@ type HeadData struct {
 	ExecutionOptimistic       bool
 }
 
+// FinalizedCheckpointData is the data sent with FinalizedCheckpoint events.
+type FinalizedCheckpointData struct {
+	Block               [32]byte
+	State               [32]byte
+	Epoch               primitives.Epoch
+	ExecutionOptimistic bool
+}
+
 // ChainReorgData is the data sent with Reorg events.
 type ChainReorgData struct {
 	Slot                primitives.Slot

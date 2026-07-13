@@ -15,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/math"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
-	ethv1 "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
@@ -1559,12 +1558,12 @@ func HeadEventFromDataV2(data *statefeed.HeadV2Data) *HeadEventV2 {
 	}
 }
 
-func FinalizedCheckpointEventFromV1(event *ethv1.EventFinalizedCheckpoint) *FinalizedCheckpointEvent {
+func FinalizedCheckpointEventFromData(data *statefeed.FinalizedCheckpointData) *FinalizedCheckpointEvent {
 	return &FinalizedCheckpointEvent{
-		Block:               hexutil.Encode(event.Block),
-		State:               hexutil.Encode(event.State),
-		Epoch:               fmt.Sprintf("%d", event.Epoch),
-		ExecutionOptimistic: event.ExecutionOptimistic,
+		Block:               hexutil.Encode(data.Block[:]),
+		State:               hexutil.Encode(data.State[:]),
+		Epoch:               fmt.Sprintf("%d", data.Epoch),
+		ExecutionOptimistic: data.ExecutionOptimistic,
 	}
 }
 

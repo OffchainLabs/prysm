@@ -27,7 +27,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	engine "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -485,7 +484,7 @@ func topicForEvent(event *feed.Event) string {
 		return HeadTopic
 	case *statefeed.HeadV2Data:
 		return HeadV2Topic
-	case *ethpb.EventFinalizedCheckpoint:
+	case *statefeed.FinalizedCheckpointData:
 		return FinalizedCheckpointTopic
 	case interfaces.LightClientFinalityUpdate:
 		return LightClientFinalityUpdateTopic
@@ -642,9 +641,9 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, structs.ProposerSlashingFromConsensus(v.ProposerSlashing))
 		}, nil
-	case *ethpb.EventFinalizedCheckpoint:
+	case *statefeed.FinalizedCheckpointData:
 		return func() io.Reader {
-			return jsonMarshalReader(eventName, structs.FinalizedCheckpointEventFromV1(v))
+			return jsonMarshalReader(eventName, structs.FinalizedCheckpointEventFromData(v))
 		}, nil
 	case interfaces.LightClientFinalityUpdate:
 		cv, err := structs.LightClientFinalityUpdateFromConsensus(v)

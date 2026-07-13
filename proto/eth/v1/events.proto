@@ -24,20 +24,3 @@ option java_multiple_files = true;
 option java_outer_classname = "BeaconEventsProto";
 option java_package = "org.ethereum.eth.v1";
 option php_namespace = "Ethereum\\Eth\\v1";
-
-message EventFinalizedCheckpoint {
-  // Block root of the finalized checkpoint.
-  bytes block = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
-
-  // State root of the finalized checkpoint.
-  bytes state = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
-
-  // Epoch the checkpoint references.
-  uint64 epoch = 3 [
-    (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
-  ];
-
-  // Information about optimistic sync.
-  bool execution_optimistic = 4;
-}

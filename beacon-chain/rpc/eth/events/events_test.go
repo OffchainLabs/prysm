@@ -30,7 +30,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -579,9 +578,9 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 			},
 			{
 				Type: statefeed.FinalizedCheckpoint,
-				Data: &ethpb.EventFinalizedCheckpoint{
-					Block:               make([]byte, 32),
-					State:               make([]byte, 32),
+				Data: &statefeed.FinalizedCheckpointData{
+					Block:               [32]byte{},
+					State:               [32]byte{},
 					Epoch:               0,
 					ExecutionOptimistic: false,
 				},
