@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
@@ -32,6 +33,22 @@ func (unavailableCustodyManager) CustodyGroupCount(context.Context) (uint64, err
 
 func (unavailableCustodyManager) EarliestAvailableSlot(context.Context) (primitives.Slot, error) {
 	return 0, errors.New("custody info is not set")
+}
+
+// blockingCustodyManager mimics a node whose custody info is never initialized:
+// like p2p.Service, it blocks until the context is done.
+type blockingCustodyManager struct {
+	p2p.CustodyManager
+}
+
+func (blockingCustodyManager) CustodyGroupCount(ctx context.Context) (uint64, error) {
+	<-ctx.Done()
+	return 0, ctx.Err()
+}
+
+func (blockingCustodyManager) EarliestAvailableSlot(ctx context.Context) (primitives.Slot, error) {
+	<-ctx.Done()
+	return 0, ctx.Err()
 }
 
 func getCustody(t *testing.T, s *Server) *httptest.ResponseRecorder {
@@ -68,6 +85,21 @@ func TestGetCustody_CustodyInfoUnavailable(t *testing.T) {
 
 	writer := getCustody(t, &Server{CustodyManager: unavailableCustodyManager{}})
 	assert.Equal(t, http.StatusServiceUnavailable, writer.Code)
+}
+
+func TestGetCustody_CustodyInfoTimeout(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	originalTimeout := custodyInfoTimeout
+	custodyInfoTimeout = 20 * time.Millisecond
+	t.Cleanup(func() { custodyInfoTimeout = originalTimeout })
+
+	writer := getCustody(t, &Server{CustodyManager: blockingCustodyManager{}})
+	assert.Equal(t, http.StatusServiceUnavailable, writer.Code)
+	assert.StringContains(t, context.DeadlineExceeded.Error(), writer.Body.String())
 }
 
 func TestGetCustody(t *testing.T) {
