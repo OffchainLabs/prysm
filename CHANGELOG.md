@@ -14,6 +14,7 @@ Release highlights:
 - **Partial data columns**: Drop messages for unsubscribed topics before SSZ decoding, preventing large partial messages for non-custodied subnets from blocking the shared gossip loop. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17074)
 - **Beacon API and validator client**: Added SSZ support for proposer preferences, payload attestations, and validator balances; switched REST validator clients to `head_v2` with automatic legacy fallback; and added replacement hints for removed routes.
 - **Resilience and failover**: Re-push proposer preferences after beacon-node failover, retry failed submissions, accelerate unknown-parent recovery, and prevent startup, REST-handler, builder-registry, and peer-address edge-case failures.
+- **Database startup recovery**: Prevent a startup panic when the database returns a nil head block without an error; Prysm now logs the invalid head and starts fork choice from the finalized checkpoint instead. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17087)
 - **Operator experience**: Reduced noisy beacon-node and validator-client logs, added clearer Gloas bid-selection and envelope-publication diagnostics, documented ordered REST endpoint failover, and improved error reporting for invalid P2P IP configuration.
 
 ### Added
