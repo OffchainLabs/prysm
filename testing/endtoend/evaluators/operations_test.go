@@ -40,6 +40,24 @@ func TestValidatorsVoteWithTheMajoritySortsBlocksBySlot(t *testing.T) {
 	require.Equal(t, true, string(ec.ExpectedEth1DataVote) == string(vote))
 }
 
+func TestSelectVoluntaryExitCandidatesReturnsEmptyWhenAllKeysAreReserved(t *testing.T) {
+	keys := [][48]byte{{1}, {2}}
+	reserved := map[[48]byte]bool{{1}: true, {2}: true}
+	exited := map[[48]byte]primitives.Epoch{}
+
+	require.Equal(t, 0, len(selectVoluntaryExitCandidates(keys, exited, reserved, 1)))
+}
+
+func TestSelectVoluntaryExitCandidatesSkipsExitedAndReservedKeys(t *testing.T) {
+	keys := [][48]byte{{1}, {2}, {3}}
+	exited := map[[48]byte]primitives.Epoch{{1}: 1}
+	reserved := map[[48]byte]bool{{2}: true}
+
+	candidates := selectVoluntaryExitCandidates(keys, exited, reserved, 2)
+	require.Equal(t, 1, len(candidates))
+	require.Equal(t, primitives.ValidatorIndex(2), candidates[0])
+}
+
 func phase0BlockContainer(slot primitives.Slot, vote []byte) *ethpb.BeaconBlockContainer {
 	return &ethpb.BeaconBlockContainer{
 		Block: &ethpb.BeaconBlockContainer_Phase0Block{

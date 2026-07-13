@@ -100,20 +100,47 @@ func peersConnect(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) erro
 	if len(conns) == 1 {
 		return nil
 	}
-	ctx := context.Background()
-	for _, conn := range conns {
-		nodeClient := eth.NewNodeClient(conn)
-		peersResp, err := nodeClient.ListPeers(ctx, &emptypb.Empty{})
-		if err != nil {
-			return err
-		}
-		expectedPeers := len(conns) - 1 + e2e.TestParams.LighthouseBeaconNodeCount
-		if expectedPeers != len(peersResp.Peers) {
-			return fmt.Errorf("unexpected amount of peers, expected %d, received %d", expectedPeers, len(peersResp.Peers))
-		}
-		time.Sleep(connTimeDelay)
+	ctx, cancel := context.WithTimeout(context.Background(), params.EpochsDuration(2, params.BeaconConfig()))
+	defer cancel()
+	expectedPeers := len(conns) - 1 + e2e.TestParams.LighthouseBeaconNodeCount
+	clients := make([]eth.NodeClient, len(conns))
+	for i, conn := range conns {
+		clients[i] = eth.NewNodeClient(conn)
 	}
-	return nil
+	return waitForPeersConnected(ctx, expectedPeers, clients...)
+}
+
+// waitForPeersConnected polls each node until it reports the expected peer
+// count. Peer discovery and handshakes complete gradually at genesis, and in
+// multi-client topologies remote clients connect on their own schedule, so a
+// single-shot check races startup and must be retried until the deadline.
+func waitForPeersConnected(ctx context.Context, expectedPeers int, clients ...eth.NodeClient) error {
+	ticker := time.NewTicker(connTimeDelay)
+	defer ticker.Stop()
+
+	var lastErr error
+	for {
+		lastErr = nil
+		for i, client := range clients {
+			peersResp, err := client.ListPeers(ctx, &emptypb.Empty{})
+			if err != nil {
+				return err
+			}
+			if received := len(peersResp.Peers); received != expectedPeers {
+				lastErr = fmt.Errorf("unexpected amount of peers on node %d, expected %d, received %d", i, expectedPeers, received)
+				break
+			}
+		}
+		if lastErr == nil {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return lastErr
+		case <-ticker.C:
+		}
+	}
 }
 
 func finishedSyncing(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {

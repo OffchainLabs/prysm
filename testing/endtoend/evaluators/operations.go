@@ -28,7 +28,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"golang.org/x/exp/rand"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -527,23 +526,34 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 		}
 	}
 
-	// Send an exit for a non-exited validator.
-	for i := 0; i < numOfExits; {
-		randIndex := primitives.ValidatorIndex(rand.Uint64() % params.BeaconConfig().MinGenesisActiveValidatorCount)
-		randKey := bytesutil.ToBytes48(privKeys[randIndex].PublicKey().Marshal())
-		if _, alreadyExited := ec.ExitedVals[randKey]; alreadyExited {
-			continue
-		}
-		if syncCommitteeKeys[randKey] {
-			continue
-		}
-		if err := sendExit(randIndex); err != nil {
+	keys := make([][48]byte, len(privKeys))
+	for i, key := range privKeys {
+		keys[i] = bytesutil.ToBytes48(key.PublicKey().Marshal())
+	}
+	for _, candidate := range selectVoluntaryExitCandidates(keys, ec.ExitedVals, syncCommitteeKeys, numOfExits) {
+		if err := sendExit(candidate); err != nil {
 			return err
 		}
-		i++
 	}
 
 	return nil
+}
+
+func selectVoluntaryExitCandidates(keys [][48]byte, exited map[[48]byte]primitives.Epoch, reserved map[[48]byte]bool, limit int) []primitives.ValidatorIndex {
+	candidates := make([]primitives.ValidatorIndex, 0, limit)
+	for i, key := range keys {
+		if _, alreadyExited := exited[key]; alreadyExited {
+			continue
+		}
+		if reserved[key] {
+			continue
+		}
+		candidates = append(candidates, primitives.ValidatorIndex(i))
+		if len(candidates) == limit {
+			return candidates
+		}
+	}
+	return candidates
 }
 
 func validatorsHaveExited(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {

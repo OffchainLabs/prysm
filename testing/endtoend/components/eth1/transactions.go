@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	"github.com/ethereum/go-ethereum"
@@ -33,6 +34,14 @@ import (
 const txCount = 20
 
 var fundedAccount *keystore.Key
+
+type blobTransactionMode uint8
+
+const (
+	blobTransactionsDisabled blobTransactionMode = iota
+	blobTransactionsWithSidecars
+	blobTransactionsWithCellProofs
+)
 
 type TransactionGenerator struct {
 	keystore      string
@@ -149,18 +158,13 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 
 	cfg := params.BeaconConfig()
 	clock := startup.NewClock(e2e.TestParams.CLGenesisTime, [32]byte{})
-	isPostFulu := clock.CurrentEpoch() >= cfg.FuluForkEpoch
-	// Skip pre-Fulu V0 sends only when Fulu is scheduled: V0 sidecars left in
-	// the pool at the Osaka boundary become invalid under geth >= v1.17 and
-	// occupy maxTxsPerAccount=16, blocking later V1 cell-proof txs. When Fulu
-	// is never scheduled (Deneb/Electra-only tests), V0 is the only path.
-	fuluScheduled := cfg.FuluForkEpoch != cfg.FarFutureEpoch
+	blobMode := blobTransactionModeAtEpoch(clock.CurrentEpoch(), cfg)
 
 	g, _ := errgroup.WithContext(context.Background())
 	var txs []*types.Transaction
 
-	switch {
-	case isPostFulu:
+	switch blobMode {
+	case blobTransactionsWithCellProofs:
 		logrus.Info("Sending blob transactions with cell proofs")
 		txs = make([]*types.Transaction, 5)
 		for index := range uint64(5) {
@@ -177,7 +181,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 				return nil
 			})
 		}
-	case !fuluScheduled:
+	case blobTransactionsWithSidecars:
 		logrus.Info("Sending blob transactions with sidecars")
 		txs = make([]*types.Transaction, 5)
 		for index := range uint64(5) {
@@ -198,6 +202,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 				return nil
 			})
 		}
+	case blobTransactionsDisabled:
 	}
 
 	if err := g.Wait(); err != nil {
@@ -264,6 +269,19 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 		}
 	}
 	return nil
+}
+
+func blobTransactionModeAtEpoch(epoch primitives.Epoch, cfg *params.BeaconChainConfig) blobTransactionMode {
+	if epoch < cfg.DenebForkEpoch {
+		return blobTransactionsDisabled
+	}
+	if epoch >= cfg.FuluForkEpoch {
+		return blobTransactionsWithCellProofs
+	}
+	if cfg.FuluForkEpoch != cfg.FarFutureEpoch && epoch+1 == cfg.FuluForkEpoch {
+		return blobTransactionsDisabled
+	}
+	return blobTransactionsWithSidecars
 }
 
 // Pause pauses the component and its underlying process.

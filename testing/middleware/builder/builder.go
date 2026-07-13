@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	builderAPI "github.com/OffchainLabs/prysm/v7/api/client/builder"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -26,6 +27,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/network"
 	"github.com/OffchainLabs/prysm/v7/network/authorization"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -269,19 +271,44 @@ func (*Builder) isBuilderCall(req *http.Request) bool {
 }
 
 func (p *Builder) registerValidators(w http.ResponseWriter, req *http.Request) {
-	var registrations []structs.SignedValidatorRegistration
-	if err := json.NewDecoder(req.Body).Decode(&registrations); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
-		return
-	}
-	for _, r := range registrations {
-		msg, err := r.Message.ToConsensus()
+	var registrations []*eth.ValidatorRegistrationV1
+	if httputil.IsRequestSsz(req) {
+		body, err := io.ReadAll(req.Body)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, "invalid request", http.StatusBadRequest)
 			return
 		}
+		registrationSize := (&eth.SignedValidatorRegistrationV1{}).SizeSSZ()
+		if len(body)%registrationSize != 0 {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		for offset := 0; offset < len(body); offset += registrationSize {
+			signed := &eth.SignedValidatorRegistrationV1{}
+			if err := signed.UnmarshalSSZ(body[offset : offset+registrationSize]); err != nil {
+				http.Error(w, "invalid request", http.StatusBadRequest)
+				return
+			}
+			registrations = append(registrations, signed.Message)
+		}
+	} else {
+		var jsonRegistrations []structs.SignedValidatorRegistration
+		if err := json.NewDecoder(req.Body).Decode(&jsonRegistrations); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		for _, registration := range jsonRegistrations {
+			msg, err := registration.Message.ToConsensus()
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			registrations = append(registrations, msg)
+		}
+	}
+	for _, registration := range registrations {
 		p.valLock.Lock()
-		p.validatorMap[r.Message.Pubkey] = msg
+		p.validatorMap[hexutil.Encode(registration.Pubkey)] = registration
 		p.valLock.Unlock()
 	}
 	// TODO: Verify Signatures from validators
@@ -322,17 +349,17 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 	ax := types.Slot(slot)
 	currEpoch := types.Epoch(ax / params.BeaconConfig().SlotsPerEpoch)
 	if currEpoch >= params.BeaconConfig().ElectraForkEpoch {
-		p.handleHeaderRequestElectra(w)
+		p.handleHeaderRequestElectra(w, req)
 		return
 	}
 
 	if currEpoch >= params.BeaconConfig().DenebForkEpoch {
-		p.handleHeaderRequestDeneb(w)
+		p.handleHeaderRequestDeneb(w, req)
 		return
 	}
 
 	if currEpoch >= params.BeaconConfig().CapellaForkEpoch {
-		p.handleHeaderRequestCapella(w)
+		p.handleHeaderRequestCapella(w, req)
 		return
 	}
 
@@ -405,9 +432,7 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 			Message:   bid,
 		},
 	}
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(hdrResp)
-	if err != nil {
+	if err = writeBuilderResponse(w, req, version.Bellatrix, hdrResp, &eth.SignedBuilderBid{Message: sszBid, Signature: sig.Marshal()}); err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -416,7 +441,7 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 	p.currPayload = wObj
 }
 
-func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
+func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter, req *http.Request) {
 	b, err := p.retrievePendingBlockCapella()
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not retrieve pending block")
@@ -487,9 +512,7 @@ func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
 			Message:   bid,
 		},
 	}
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(hdrResp)
-	if err != nil {
+	if err = writeBuilderResponse(w, req, version.Capella, hdrResp, &eth.SignedBuilderBidCapella{Message: sszBid, Signature: sig.Marshal()}); err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -498,7 +521,7 @@ func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
 	p.currPayload = wObj
 }
 
-func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
+func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter, req *http.Request) {
 	b, err := p.retrievePendingBlockDeneb()
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not retrieve pending block")
@@ -577,9 +600,7 @@ func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
 			Message:   bid,
 		},
 	}
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(hdrResp)
-	if err != nil {
+	if err = writeBuilderResponse(w, req, version.Deneb, hdrResp, &eth.SignedBuilderBidDeneb{Message: sszBid, Signature: sig.Marshal()}); err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -589,7 +610,7 @@ func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
 	p.blobBundle = b.BlobsBundle
 }
 
-func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
+func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter, req *http.Request) {
 	b, err := p.retrievePendingBlockElectra()
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not retrieve pending block")
@@ -679,9 +700,7 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
 			Message:   bid,
 		},
 	}
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(hdrResp)
-	if err != nil {
+	if err = writeBuilderResponse(w, req, version.Electra, hdrResp, &eth.SignedBuilderBidElectra{Message: sszBid, Signature: sig.Marshal()}); err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -724,13 +743,72 @@ func (p *Builder) handleBlindedBlock(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(resp)
+	sszResp, err := executionPayloadSSZResponse(p.currVersion, p.currPayload, p.blobBundle)
 	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not convert the payload")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err = writeBuilderResponse(w, req, p.currVersion, resp, sszResp); err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode full payload response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+type sszMarshaler interface {
+	MarshalSSZ() ([]byte, error)
+}
+
+func writeBuilderResponse(w http.ResponseWriter, req *http.Request, forkVersion int, jsonResp any, sszResp sszMarshaler) error {
+	w.Header().Set(api.VersionHeader, version.String(forkVersion))
+	if httputil.RespondWithSsz(req) {
+		body, err := sszResp.MarshalSSZ()
+		if err != nil {
+			return err
+		}
+		w.Header().Set("Content-Type", api.OctetStreamMediaType)
+		w.WriteHeader(http.StatusOK)
+		_, err = w.Write(body)
+		return err
+	}
+	w.Header().Set("Content-Type", api.JsonMediaType)
+	w.WriteHeader(http.StatusOK)
+	return json.NewEncoder(w).Encode(jsonResp)
+}
+
+func executionPayloadSSZResponse(forkVersion int, ed interfaces.ExecutionData, bundle *v1.BlobsBundle) (sszMarshaler, error) {
+	pb := ed.Proto()
+	if forkVersion >= version.Fulu {
+		payload, ok := pb.(*v1.ExecutionPayloadDeneb)
+		if !ok {
+			return nil, errInvalidTypeConversion
+		}
+		return &v1.ExecutionPayloadDenebAndBlobsBundleV2{Payload: payload, BlobsBundle: &v1.BlobsBundleV2{
+			KzgCommitments: bundle.GetKzgCommitments(),
+			Proofs:         bundle.GetProofs(),
+			Blobs:          bundle.GetBlobs(),
+		}}, nil
+	}
+	if forkVersion >= version.Deneb {
+		payload, ok := pb.(*v1.ExecutionPayloadDeneb)
+		if !ok {
+			return nil, errInvalidTypeConversion
+		}
+		return &v1.ExecutionPayloadDenebAndBlobsBundle{Payload: payload, BlobsBundle: bundle}, nil
+	}
+	if forkVersion >= version.Capella {
+		payload, ok := pb.(*v1.ExecutionPayloadCapella)
+		if !ok {
+			return nil, errInvalidTypeConversion
+		}
+		return payload, nil
+	}
+	payload, ok := pb.(*v1.ExecutionPayload)
+	if !ok {
+		return nil, errInvalidTypeConversion
+	}
+	return payload, nil
 }
 
 var errInvalidTypeConversion = errors.New("unable to translate between api and foreign type")
