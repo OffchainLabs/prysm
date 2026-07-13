@@ -116,7 +116,7 @@ func (p *Pool) InsertPayloadAttestation(msg *ethpb.PayloadAttestationMessage, in
 		}
 		p.pending[key] = att
 		payloadAttestationPoolSize.Set(float64(len(p.pending)))
-		observeInsertedPayloadAttestation(msg.Data)
+		observeInsertedPayloadAttestation(msg.Data, len(indices))
 		return nil
 	}
 
@@ -134,7 +134,7 @@ func (p *Pool) InsertPayloadAttestation(msg *ethpb.PayloadAttestationMessage, in
 		existing.AggregationBits.SetBitAt(idx, true)
 	}
 	payloadAttestationPoolSize.Set(float64(len(p.pending)))
-	observeInsertedPayloadAttestation(msg.Data)
+	observeInsertedPayloadAttestation(msg.Data, len(indices))
 	return nil
 }
 
