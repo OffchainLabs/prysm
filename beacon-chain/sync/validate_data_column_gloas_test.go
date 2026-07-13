@@ -24,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -134,6 +135,26 @@ func TestValidateDataColumnGloas(t *testing.T) {
 		require.NotNil(t, entry)
 		require.NotNil(t, entry.columns[sidecar.Index])
 		require.Equal(t, peer.ID("aDummyPID"), entry.columns[sidecar.Index].peer)
+	})
+
+	t.Run("ignores future slot without queueing", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.DenebForkEpoch = 0
+		cfg.ElectraForkEpoch = 0
+		cfg.FuluForkEpoch = 0
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		// A far-future slot must be dropped before the unseen-block path queues it, otherwise
+		// the entry is never pruned and 8 of them permanently exhaust the pending queue.
+		sidecar, _ := gloasFixture(t)
+		sidecar.Slot = ^primitives.Slot(0) - 1
+		service, message := serviceAndMessage(t, testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{ErrValidFields: genericError}), sidecar, sidecar.Index)
+		result, err := service.validateDataColumn(ctx, "aDummyPID", message)
+		require.NotNil(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+		require.Equal(t, 0, len(service.pendingGloasColumns))
 	})
 
 	t.Run("validates against bid commitments", func(t *testing.T) {

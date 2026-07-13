@@ -20,7 +20,7 @@ import (
 const payloadAttestationsEndpoint = "/eth/v1/beacon/pool/payload_attestations"
 
 func (c *beaconApiValidatorClient) payloadAttestationData(ctx context.Context, slot primitives.Slot) (*ethpb.PayloadAttestationData, error) {
-	endpoint := fmt.Sprintf("/eth/v1/validator/payload_attestation_data/%d", slot)
+	endpoint := fmt.Sprintf("/eth/v1/validator/payload_attestation_data?slot=%d", slot)
 	// Prefer SSZ; GetSSZ negotiates and the server may answer JSON, which we decode below.
 	data, header, err := c.handler.GetSSZ(ctx, endpoint)
 	if err != nil {

@@ -453,11 +453,9 @@ func (s *Store) nodeTreeDumpV2(ctx context.Context, n *Node, nodes []*forkchoice
 	return nodes, nil
 }
 
-// MarkFullNode creates a full payload node for an existing empty node at the
-// given beacon block root. This is used during forkchoice tree reconstruction on
-// startup to mark blocks whose execution payload was delivered. The caller must
-// hold the forkchoice write lock.
-func (f *ForkChoice) MarkFullNode(root [32]byte) {
+// MarkFullNode creates a full payload node for an existing empty node during
+// tree reconstruction, the caller must hold the forkchoice write lock.
+func (f *ForkChoice) MarkFullNode(root [32]byte, gasLimit uint64) {
 	s := f.store
 	en := s.emptyNodeByRoot[root]
 	if en == nil {
@@ -471,6 +469,7 @@ func (f *ForkChoice) MarkFullNode(root [32]byte) {
 		optimistic: true,
 		timestamp:  time.Now(),
 		full:       true,
+		gasLimit:   gasLimit,
 		children:   make([]*Node, 0),
 	}
 }

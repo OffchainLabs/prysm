@@ -198,6 +198,11 @@ func (s *Service) queuePendingPayloadEnvelope(
 		return pubsub.ValidationIgnore, nil
 	}
 
+	// The failure budget is per slot, matching admission above, so a burst of bad signatures cannot disable self-build queueing beyond the current slot.
+	if isSelfBuild && s.selfBuildSigFailSlot != currentSlot {
+		s.selfBuildSigFailSlot = currentSlot
+		s.selfBuildSigFailures = 0
+	}
 	if isSelfBuild && s.selfBuildSigFailures >= maxSelfBuildSigFailures {
 		log.Debug("Ignoring self-built payload envelope because of too many signature failures")
 		return pubsub.ValidationIgnore, nil
