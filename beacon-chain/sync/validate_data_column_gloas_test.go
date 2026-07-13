@@ -2,6 +2,7 @@ package sync
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -112,6 +115,8 @@ func TestValidateDataColumnGloas(t *testing.T) {
 	t.Run("ignores unseen block", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig()
+		cfg.DenebForkEpoch = 0
+		cfg.ElectraForkEpoch = 0
 		cfg.FuluForkEpoch = 0
 		cfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
@@ -121,11 +126,21 @@ func TestValidateDataColumnGloas(t *testing.T) {
 		result, err := service.validateDataColumn(ctx, "aDummyPID", message)
 		require.ErrorContains(t, "gloas data column block not yet seen", err)
 		require.Equal(t, pubsub.ValidationIgnore, result)
+
+		// The queued entry must record the forwarding peer (`pid`), not msg.From which
+		// is empty under StrictNoSign/WithNoAuthor and would no-op the bad-response scorer.
+		blockRoot := bytesutil.ToBytes32(sidecar.BeaconBlockRoot)
+		entry := service.pendingGloasColumns[blockRoot]
+		require.NotNil(t, entry)
+		require.NotNil(t, entry.columns[sidecar.Index])
+		require.Equal(t, peer.ID("aDummyPID"), entry.columns[sidecar.Index].peer)
 	})
 
 	t.Run("validates against bid commitments", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig()
+		cfg.DenebForkEpoch = 0
+		cfg.ElectraForkEpoch = 0
 		cfg.FuluForkEpoch = 0
 		cfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
@@ -158,6 +173,8 @@ func TestValidateDataColumnGloas(t *testing.T) {
 	t.Run("rejects slot mismatch", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig()
+		cfg.DenebForkEpoch = 0
+		cfg.ElectraForkEpoch = 0
 		cfg.FuluForkEpoch = 0
 		cfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
@@ -186,12 +203,47 @@ func TestValidateDataColumnGloas(t *testing.T) {
 		topic := service.addDigestAndIndexToTopic(p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.DataColumnSidecarGloas]()], digest, peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index))
 		msg := &pubsub.Message{Message: &pb.Message{Topic: &topic}}
 
-		_, err = service.validateDataColumnGloas(ctx, msg, roDataColumn, "/data_column_sidecar_%d/")
+		_, err = service.validateDataColumnGloas(ctx, "aDummyPID", msg, roDataColumn, "/data_column_sidecar_%d/")
 		require.ErrorContains(t, "slot does not match block slot", err)
+	})
+
+	t.Run("rejects oversize column on queue path", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.DenebForkEpoch = 0
+		cfg.ElectraForkEpoch = 0
+		cfg.FuluForkEpoch = 0
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		sidecar, _ := gloasFixture(t)
+		maxCells := params.BeaconConfig().MaxBlobCommitmentsPerBlock
+		sidecar.Column = make([][]byte, maxCells)
+		sidecar.KzgProofs = make([][]byte, maxCells)
+		for i := range sidecar.Column {
+			sidecar.Column[i] = make([]byte, 2048)
+			sidecar.KzgProofs[i] = make([]byte, 48)
+		}
+
+		service, message := serviceAndMessage(t, testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{}), sidecar, sidecar.Index)
+		result, err := service.validateDataColumn(ctx, "aDummyPID", message)
+		require.NotNil(t, err)
+		require.Equal(t, pubsub.ValidationReject, result)
+
+		blockRoot := bytesutil.ToBytes32(sidecar.BeaconBlockRoot)
+		require.Equal(t, false, service.hasPendingGloasColumns(blockRoot))
 	})
 }
 
 func TestPendingGloasColumns(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.DenebForkEpoch = 0
+	cfg.ElectraForkEpoch = 0
+	cfg.FuluForkEpoch = 0
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	clock := startup.NewClock(time.Now(), [32]byte{})
 
 	t.Run("queue and retrieve", func(t *testing.T) {
@@ -210,7 +262,7 @@ func TestPendingGloasColumns(t *testing.T) {
 		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
 		require.NoError(t, err)
 
-		s.queuePendingGloasColumn(roCol, "peer1")
+		require.NoError(t, s.queuePendingGloasColumn(roCol, "peer1"))
 		require.Equal(t, true, s.hasPendingGloasColumns(root))
 
 		entry := s.pendingGloasColumns[root]
@@ -235,8 +287,8 @@ func TestPendingGloasColumns(t *testing.T) {
 		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
 		require.NoError(t, err)
 
-		s.queuePendingGloasColumn(roCol, "peer1")
-		s.queuePendingGloasColumn(roCol, "peer2")
+		require.NoError(t, s.queuePendingGloasColumn(roCol, "peer1"))
+		require.NoError(t, s.queuePendingGloasColumn(roCol, "peer2"))
 		require.Equal(t, peer.ID("peer1"), s.pendingGloasColumns[root].columns[10].peer)
 	})
 
@@ -248,7 +300,7 @@ func TestPendingGloasColumns(t *testing.T) {
 		root := [32]byte{0xcc}
 		s.pendingGloasColumns[root] = &pendingGloasEntry{slot: clock.CurrentSlot()}
 
-		s.processPendingGloasColumns(root, nil)
+		s.processPendingGloasColumns(context.Background(), root, nil)
 		// Entry should remain because the block was nil.
 		require.Equal(t, true, s.hasPendingGloasColumns(root))
 	})
@@ -269,7 +321,76 @@ func TestPendingGloasColumns(t *testing.T) {
 		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
 		require.NoError(t, err)
 
-		s.queuePendingGloasColumn(roCol, "peer1")
+		require.NotNil(t, s.queuePendingGloasColumn(roCol, "peer1"))
+		require.Equal(t, false, s.hasPendingGloasColumns(root))
+	})
+
+	t.Run("oversize column rejected", func(t *testing.T) {
+		s := &Service{
+			cfg:                 &config{clock: clock},
+			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+		}
+		// SSZ allows 4096 cells; live max is much smaller. Without admission cap,
+		// this 8 MiB sidecar would sit on the heap until prune.
+		maxCells := params.BeaconConfig().MaxBlobCommitmentsPerBlock
+		cells := make([][]byte, maxCells)
+		proofs := make([][]byte, maxCells)
+		for i := range cells {
+			cells[i] = make([]byte, 2048)
+			proofs[i] = make([]byte, 48)
+		}
+		root := [32]byte{0x77}
+		dc := &ethpb.DataColumnSidecarGloas{
+			Index:           0,
+			Slot:            clock.CurrentSlot(),
+			BeaconBlockRoot: root[:],
+			Column:          cells,
+			KzgProofs:       proofs,
+		}
+		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
+		require.NoError(t, err)
+
+		require.NotNil(t, s.queuePendingGloasColumn(roCol, "peer1"))
+		require.Equal(t, false, s.hasPendingGloasColumns(root))
+	})
+
+	t.Run("empty column rejected", func(t *testing.T) {
+		s := &Service{
+			cfg:                 &config{clock: clock},
+			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+		}
+		root := [32]byte{0x78}
+		dc := &ethpb.DataColumnSidecarGloas{
+			Index:           0,
+			Slot:            clock.CurrentSlot(),
+			BeaconBlockRoot: root[:],
+			Column:          nil,
+			KzgProofs:       nil,
+		}
+		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
+		require.NoError(t, err)
+
+		require.NotNil(t, s.queuePendingGloasColumn(roCol, "peer1"))
+		require.Equal(t, false, s.hasPendingGloasColumns(root))
+	})
+
+	t.Run("column proof length mismatch rejected", func(t *testing.T) {
+		s := &Service{
+			cfg:                 &config{clock: clock},
+			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+		}
+		root := [32]byte{0x79}
+		dc := &ethpb.DataColumnSidecarGloas{
+			Index:           0,
+			Slot:            clock.CurrentSlot(),
+			BeaconBlockRoot: root[:],
+			Column:          [][]byte{make([]byte, 2048), make([]byte, 2048)},
+			KzgProofs:       [][]byte{make([]byte, 48)},
+		}
+		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
+		require.NoError(t, err)
+
+		require.NotNil(t, s.queuePendingGloasColumn(roCol, "peer1"))
 		require.Equal(t, false, s.hasPendingGloasColumns(root))
 	})
 
@@ -290,7 +411,7 @@ func TestPendingGloasColumns(t *testing.T) {
 			}
 			roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
 			require.NoError(t, err)
-			s.queuePendingGloasColumn(roCol, "peer1")
+			require.NoError(t, s.queuePendingGloasColumn(roCol, "peer1"))
 		}
 		require.Equal(t, maxPendingGloasRoots, len(s.pendingGloasColumns))
 
@@ -305,7 +426,7 @@ func TestPendingGloasColumns(t *testing.T) {
 		}
 		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, overflowRoot)
 		require.NoError(t, err)
-		s.queuePendingGloasColumn(roCol, "peer1")
+		require.NoError(t, s.queuePendingGloasColumn(roCol, "peer1"))
 		require.Equal(t, false, s.hasPendingGloasColumns(overflowRoot))
 
 		// Adding to an existing root should still work.
@@ -319,7 +440,7 @@ func TestPendingGloasColumns(t *testing.T) {
 		}
 		roCol2, err := blocks.NewRODataColumnGloasWithRoot(dc2, existingRoot)
 		require.NoError(t, err)
-		s.queuePendingGloasColumn(roCol2, "peer1")
+		require.NoError(t, s.queuePendingGloasColumn(roCol2, "peer1"))
 		require.NotNil(t, s.pendingGloasColumns[existingRoot].columns[1])
 	})
 
@@ -353,15 +474,18 @@ func TestPendingGloasColumns(t *testing.T) {
 		// Queue the sidecar.
 		roCol, err := blocks.NewRODataColumnGloasWithRoot(sidecar, blockRoot)
 		require.NoError(t, err)
-		s.queuePendingGloasColumn(roCol, "peer1")
+		require.NoError(t, s.queuePendingGloasColumn(roCol, "peer1"))
 		require.Equal(t, true, s.hasPendingGloasColumns(blockRoot))
 
 		// Process with the block.
-		s.processPendingGloasColumns(blockRoot, signedBlock)
+		s.processPendingGloasColumns(context.Background(), blockRoot, signedBlock)
 		require.Equal(t, false, s.hasPendingGloasColumns(blockRoot))
 
 		// Column should be marked as seen.
 		require.Equal(t, true, s.hasSeenDataColumnRootIndex(blockRoot, sidecar.Index))
+
+		// Deferred validation passed, so the column must be re-broadcast.
+		require.Equal(t, true, p.BroadcastCalled.Load())
 	})
 
 	t.Run("process downscores bad peer for slot mismatch", func(t *testing.T) {
@@ -396,12 +520,75 @@ func TestPendingGloasColumns(t *testing.T) {
 
 		roCol, err := blocks.NewRODataColumnGloasWithRoot(sidecar, blockRoot)
 		require.NoError(t, err)
-		s.queuePendingGloasColumn(roCol, "badpeer")
+		require.NoError(t, s.queuePendingGloasColumn(roCol, "badpeer"))
 
-		s.processPendingGloasColumns(blockRoot, signedBlock)
+		s.processPendingGloasColumns(context.Background(), blockRoot, signedBlock)
 		require.Equal(t, false, s.hasPendingGloasColumns(blockRoot))
 		// Column should NOT be marked as seen (it was invalid).
 		require.Equal(t, false, s.hasSeenDataColumnRootIndex(blockRoot, sidecar.Index))
+		// Nothing valid was processed, so nothing is re-broadcast.
+		require.Equal(t, false, p.BroadcastCalled.Load())
+	})
+
+	t.Run("routine drains pending columns on BlockProcessed", func(t *testing.T) {
+		err := kzg.Start()
+		require.NoError(t, err)
+
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.FuluForkEpoch = 0
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		ctx := t.Context()
+
+		p := p2ptest.NewTestP2P(t)
+		dcs := filesystem.NewEphemeralDataColumnStorage(t)
+		notifier := mock.NewSimpleStateNotifier()
+
+		sidecar, signedBlock := gloasFixture(t)
+		blockRoot, err := signedBlock.Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		s := &Service{
+			cfg: &config{
+				p2p:               p,
+				clock:             clock,
+				dataColumnStorage: dcs,
+				stateNotifier:     notifier,
+			},
+			ctx:                 ctx,
+			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+			seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
+		}
+
+		roCol, err := blocks.NewRODataColumnGloasWithRoot(sidecar, blockRoot)
+		require.NoError(t, err)
+		require.NoError(t, s.queuePendingGloasColumn(roCol, "peer1"))
+		require.Equal(t, true, s.hasPendingGloasColumns(blockRoot))
+
+		go s.processPendingGloasColumnsRoutine()
+
+		// Resend until the subscription is live and the routine drains the queue.
+		ev := &feed.Event{
+			Type: statefeed.BlockProcessed,
+			Data: &statefeed.BlockProcessedData{
+				Slot:        signedBlock.Block().Slot(),
+				BlockRoot:   blockRoot,
+				SignedBlock: signedBlock,
+			},
+		}
+		drained := false
+		for range 200 {
+			notifier.StateFeed().Send(ev)
+			if !s.hasPendingGloasColumns(blockRoot) {
+				drained = true
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		require.Equal(t, true, drained)
+		require.Equal(t, true, s.hasSeenDataColumnRootIndex(blockRoot, sidecar.Index))
 	})
 
 	t.Run("no entry is no-op", func(t *testing.T) {
@@ -419,7 +606,58 @@ func TestPendingGloasColumns(t *testing.T) {
 		blk, err := blocks.NewSignedBeaconBlock(pb)
 		require.NoError(t, err)
 		// Should not panic.
-		s.processPendingGloasColumns(root, blk)
+		s.processPendingGloasColumns(context.Background(), root, blk)
+	})
+
+	t.Run("prune downscores fabricated root, spares known root", func(t *testing.T) {
+		ctx := t.Context()
+
+		p := p2ptest.NewTestP2P(t)
+		db := dbtest.SetupDB(t)
+
+		// A known root: a real block saved to the DB (e.g. an orphaned but seen block).
+		_, signedBlock := gloasFixture(t)
+		knownRoot, err := signedBlock.Block().HashTreeRoot()
+		require.NoError(t, err)
+		require.NoError(t, db.SaveBlock(ctx, signedBlock))
+
+		// A fabricated root the node never learned of.
+		fabricatedRoot := [32]byte{0x99}
+
+		s := &Service{
+			cfg:                 &config{p2p: p, clock: clock, chain: &mock.ChainService{DB: db}},
+			ctx:                 ctx,
+			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+		}
+
+		// Honest peer queued one column for the known root.
+		known := &pendingGloasEntry{slot: 0}
+		known.columns[0] = &pendingColumnEntry{peer: "honestpeer"}
+		s.pendingGloasColumns[knownRoot] = known
+
+		// Evil peer queued three columns for the fabricated root.
+		fab := &pendingGloasEntry{slot: 0}
+		fab.columns[0] = &pendingColumnEntry{peer: "evilpeer"}
+		fab.columns[1] = &pendingColumnEntry{peer: "evilpeer"}
+		fab.columns[2] = &pendingColumnEntry{peer: "evilpeer"}
+		s.pendingGloasColumns[fabricatedRoot] = fab
+
+		// Both entries are stale relative to slot 5.
+		s.pruneStaleGloasColumns(5)
+
+		require.Equal(t, false, s.hasPendingGloasColumns(knownRoot))
+		require.Equal(t, false, s.hasPendingGloasColumns(fabricatedRoot))
+
+		scorer := p.Peers().Scorers().BadResponsesScorer()
+
+		// One increment for the fabricated root even though the peer forwarded three columns.
+		evilCount, err := scorer.Count("evilpeer")
+		require.NoError(t, err)
+		require.Equal(t, 1, evilCount)
+
+		// The peer on the known (orphaned) root is untouched.
+		_, err = scorer.Count("honestpeer")
+		require.NotNil(t, err)
 	})
 
 	t.Run("prune keeps current and next slot", func(t *testing.T) {

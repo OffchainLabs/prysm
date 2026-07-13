@@ -53,7 +53,7 @@ func (s stubBlockBody) PayloadAttestations() ([]*ethpb.PayloadAttestation, error
 func (s stubBlockBody) SignedExecutionPayloadBid() (*ethpb.SignedExecutionPayloadBid, error) {
 	return s.signedBid, nil
 }
-func (s stubBlockBody) ParentExecutionRequests() (*enginev1.ExecutionRequests, error) {
+func (s stubBlockBody) ParentExecutionRequests() (*enginev1.ExecutionRequestsGloas, error) {
 	return nil, nil
 }
 func (s stubBlockBody) MarshalSSZ() ([]byte, error)         { return nil, nil }
@@ -220,7 +220,7 @@ func TestProcessExecutionPayloadBid_SelfBuildSuccess(t *testing.T) {
 
 	bid := &ethpb.ExecutionPayloadBid{
 		ParentBlockHash:       latestHash[:],
-		ParentBlockRoot:       bytes.Repeat([]byte{0xCC}, 32),
+		ParentBlockRoot:       bytes.Repeat([]byte{0xAA}, 32),
 		BlockHash:             bytes.Repeat([]byte{0xDD}, 32),
 		PrevRandao:            randao[:],
 		GasLimit:              1,
@@ -308,7 +308,7 @@ func TestProcessExecutionPayloadBid_PendingPaymentAndCacheBid(t *testing.T) {
 
 	bid := &ethpb.ExecutionPayloadBid{
 		ParentBlockHash:       latestHash[:],
-		ParentBlockRoot:       bytes.Repeat([]byte{0xCC}, 32),
+		ParentBlockRoot:       bytes.Repeat([]byte{0xAA}, 32),
 		BlockHash:             bytes.Repeat([]byte{0xDD}, 32),
 		PrevRandao:            randao[:],
 		GasLimit:              1,
@@ -424,7 +424,7 @@ func TestProcessExecutionPayloadBid_CannotCoverBid(t *testing.T) {
 
 	bid := &ethpb.ExecutionPayloadBid{
 		ParentBlockHash:       latestHash[:],
-		ParentBlockRoot:       bytes.Repeat([]byte{0xCC}, 32),
+		ParentBlockRoot:       bytes.Repeat([]byte{0xAA}, 32),
 		BlockHash:             bytes.Repeat([]byte{0xDD}, 32),
 		PrevRandao:            randao[:],
 		GasLimit:              1,
@@ -467,7 +467,7 @@ func TestProcessExecutionPayloadBid_InvalidSignature(t *testing.T) {
 
 	bid := &ethpb.ExecutionPayloadBid{
 		ParentBlockHash:       latestHash[:],
-		ParentBlockRoot:       bytes.Repeat([]byte{0xCC}, 32),
+		ParentBlockRoot:       bytes.Repeat([]byte{0xAA}, 32),
 		BlockHash:             bytes.Repeat([]byte{0xDD}, 32),
 		PrevRandao:            randao[:],
 		GasLimit:              1,
@@ -505,7 +505,7 @@ func TestProcessExecutionPayloadBid_TooManyBlobCommitments(t *testing.T) {
 
 	bid := &ethpb.ExecutionPayloadBid{
 		ParentBlockHash:       latestHash[:],
-		ParentBlockRoot:       bytes.Repeat([]byte{0xCC}, 32),
+		ParentBlockRoot:       bytes.Repeat([]byte{0xAA}, 32),
 		BlockHash:             bytes.Repeat([]byte{0xDD}, 32),
 		PrevRandao:            randao[:],
 		BuilderIndex:          builderIdx,
@@ -590,7 +590,7 @@ func TestProcessExecutionPayloadBid_ParentHashMismatch(t *testing.T) {
 
 	bid := &ethpb.ExecutionPayloadBid{
 		ParentBlockHash:       bytes.Repeat([]byte{0x11}, 32), // mismatch
-		ParentBlockRoot:       bytes.Repeat([]byte{0x22}, 32),
+		ParentBlockRoot:       bytes.Repeat([]byte{0xAA}, 32),
 		BlockHash:             bytes.Repeat([]byte{0x33}, 32),
 		PrevRandao:            randao[:],
 		GasLimit:              1,
@@ -677,7 +677,7 @@ func TestProcessExecutionPayloadBid_PrevRandaoMismatch(t *testing.T) {
 
 	bid := &ethpb.ExecutionPayloadBid{
 		ParentBlockHash:       latestHash[:],
-		ParentBlockRoot:       bytes.Repeat([]byte{0x22}, 32),
+		ParentBlockRoot:       bytes.Repeat([]byte{0xAA}, 32),
 		BlockHash:             bytes.Repeat([]byte{0x33}, 32),
 		PrevRandao:            bytes.Repeat([]byte{0x01}, 32), // mismatch
 		GasLimit:              1,

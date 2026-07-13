@@ -16,7 +16,6 @@ go_library(
     deps = [
         "//beacon-chain/cache:go_default_library",
         "//config/fieldparams:go_default_library",
-        "//container/slice:go_default_library",
         "//container/trie:go_default_library",
         "//crypto/hash:go_default_library",
         "//encoding/bytesutil:go_default_library",

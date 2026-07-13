@@ -6,12 +6,14 @@ import (
 	"fmt"
 
 	prysmsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	p2ppb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -51,11 +53,9 @@ func checkAllBlocksBuildOnEmpty(blks []blocks.BlockWithROSidecars) error {
 // not consistent.
 func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse) {
 	if len(r.envelopes) == 0 {
-		if err := checkAllBlocksBuildOnEmpty(r.bwb); err != nil {
-			r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, err.Error())
-			if r.blocksFrom == r.payloadsFrom {
-				f.downscorePeer(r.blocksFrom, r.err)
-			}
+		// Only downscore with bad payload if the same peer provided available blocks
+		if err := checkAllBlocksBuildOnEmpty(r.bwb); err != nil && r.blocksFrom == r.payloadsFrom {
+			f.downscorePeer(r.blocksFrom, errors.Wrap(prysmsync.ErrInvalidFetchedData, err.Error()))
 		}
 		return
 	}
@@ -100,9 +100,10 @@ func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse)
 		env := r.envelopes[pidx]
 		full, err := blocks.BlockBuiltOnEnvelope(env, b.Block)
 		if err != nil || !full {
-			r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, "envelope does not match block")
 			if r.blocksFrom == r.payloadsFrom {
-				f.downscorePeer(r.blocksFrom, r.err)
+				r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, "envelope does not match block")
+			} else {
+				r.err = errors.New("envelope does not match block")
 			}
 			return
 		}
@@ -153,7 +154,8 @@ func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestRespon
 
 	// The whole block batch is gloas
 	start := r.start
-	if start > 0 {
+	gloasStart, err := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
+	if err == nil && start > gloasStart {
 		start--
 	}
 	envelopes, pid, err := f.fetchPayloadEnvelopesFromPeer(ctx, start, r.count, r.blocksFrom, peers)

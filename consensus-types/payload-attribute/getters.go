@@ -123,6 +123,7 @@ func (a *data) PbV4() (*enginev1.PayloadAttributesV4, error) {
 		Withdrawals:           a.withdrawals,
 		ParentBeaconBlockRoot: a.parentBeaconBlockRoot,
 		SlotNumber:            a.slotNumber,
+		TargetGasLimit:        a.targetGasLimit,
 	}, nil
 }
 

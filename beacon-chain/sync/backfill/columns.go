@@ -11,9 +11,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 )
@@ -23,6 +25,7 @@ var (
 	errUnexpectedBlockRoot       = errors.Wrap(errInvalidDataColumnResponse, "unexpected sidecar block root")
 	errCommitmentLengthMismatch  = errors.Wrap(errInvalidDataColumnResponse, "sidecar has different commitment count than block")
 	errCommitmentValueMismatch   = errors.Wrap(errInvalidDataColumnResponse, "sidecar commitments do not match block")
+	errSidecarSignatureMismatch  = errors.Wrap(errInvalidDataColumnResponse, "sidecar signed block header signature does not match block")
 )
 
 // tune the amount of columns we try to download from peers at once.
@@ -38,9 +41,10 @@ type columnBatch struct {
 }
 
 type toDownload struct {
-	remaining   peerdas.ColumnIndices
-	commitments [][]byte
-	slot        primitives.Slot
+	remaining      peerdas.ColumnIndices
+	commitments    [][]byte
+	slot           primitives.Slot
+	blockSignature [fieldparams.BLSSignatureLength]byte
 }
 
 func (cs *columnBatch) needed() peerdas.ColumnIndices {
@@ -206,6 +210,10 @@ func (v *validatingColumnRequest) countedValidation(cd blocks.RODataColumn) erro
 	if !expected.remaining.Has(cd.Index()) {
 		return nil
 	}
+	// Gloas sidecars carry no commitments on the wire; seed them from the block's bid before reading them.
+	if cd.IsGloas() {
+		cd.SetBidCommitments(expected.commitments)
+	}
 	comms, err := cd.KzgCommitments()
 	if err != nil {
 		return err
@@ -218,6 +226,20 @@ func (v *validatingColumnRequest) countedValidation(cd blocks.RODataColumn) erro
 			return errors.Wrapf(errCommitmentValueMismatch, "root=%#x, slot=%d, index=%d", root, cd.Slot(), cd.Index())
 		}
 	}
+
+	// Cross-check the sidecar's embedded SignedBlockHeader signature against the
+	// locally held block. Gloas sidecars carry no header on the wire, so skip them.
+	if !cd.IsGloas() {
+		sbh, err := cd.SignedBlockHeader()
+		if err != nil {
+			return fmt.Errorf("sidecar signed block header root=%#x, index=%d: %w", root, cd.Index(), err)
+		}
+
+		if !bytes.Equal(sbh.Signature, expected.blockSignature[:]) {
+			return fmt.Errorf("root=%#x, slot=%d, index=%d: %w", root, cd.Slot(), cd.Index(), errSidecarSignatureMismatch)
+		}
+	}
+
 	if err := v.columnSync.store.Persist(v.columnSync.current, cd); err != nil {
 		return errors.Wrap(err, "persisting data column")
 	}
@@ -256,7 +278,7 @@ func buildColumnBatch(ctx context.Context, b batch, blks verifiedROBlocks, p p2p
 		custodyGroups: indices,
 		toDownload:    make(map[[32]byte]*toDownload, len(blks)),
 	}
-	for _, b := range blks {
+	for i, b := range blks {
 		slot := b.Block().Slot()
 		if !needs.Col.At(slot) {
 			continue
@@ -268,6 +290,21 @@ func buildColumnBatch(ctx context.Context, b batch, blks verifiedROBlocks, p p2p
 		if len(cmts) == 0 {
 			continue
 		}
+		// Adjacent blocks are parent linked by verify, so the direct child is at i+1 when present.
+		full := true
+		if b.Block().Version() >= version.Gloas && i+1 < len(blks) {
+			full, err = blocks.BlockBuiltOnParentPayload(b.Block(), blks[i+1].Block())
+			if err != nil {
+				return nil, errors.Wrap(err, "block built on parent payload")
+			}
+		}
+		var remaining peerdas.ColumnIndices
+		if full {
+			remaining = das.IndicesNotStored(store.Summary(b.Root()), indices)
+		} else {
+			// Empty slots have no canonical columns to require, but keep the root known so peers still serving them are not penalized.
+			remaining = peerdas.ColumnIndices{}
+		}
 		// The last block this part of the loop sees will be the last one
 		// we need to download data columns for.
 		if len(summary.toDownload) == 0 {
@@ -276,9 +313,10 @@ func buildColumnBatch(ctx context.Context, b batch, blks verifiedROBlocks, p p2p
 		}
 		summary.last = slot
 		summary.toDownload[b.Root()] = &toDownload{
-			remaining:   das.IndicesNotStored(store.Summary(b.Root()), indices),
-			commitments: cmts,
-			slot:        slot,
+			remaining:      remaining,
+			commitments:    cmts,
+			slot:           slot,
+			blockSignature: b.Signature(),
 		}
 	}
 

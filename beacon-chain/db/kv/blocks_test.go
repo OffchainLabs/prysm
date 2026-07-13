@@ -618,6 +618,66 @@ func TestStore_HistoricalDataBeforeSlot(t *testing.T) {
 
 }
 
+func TestStore_DeleteHistoricalDataBeforeSlot_ClearsOriginCheckpointPointerWhenOriginBlockPruned(t *testing.T) {
+	db := setupDB(t)
+	ctx := t.Context()
+
+	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesisBlockRoot))
+	blks := makeBlocks(t, 0, 8, genesisBlockRoot)
+	require.NoError(t, db.SaveBlocks(ctx, blks))
+
+	originBlk := blks[2]
+	originRoot, err := originBlk.Block().HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, db.SaveOriginCheckpointBlockRoot(ctx, originRoot))
+
+	gotRoot, err := db.OriginCheckpointBlockRoot(ctx)
+	require.NoError(t, err)
+	require.Equal(t, originRoot, gotRoot)
+	gotBlock, err := db.Block(ctx, originRoot)
+	require.NoError(t, err)
+	require.NotNil(t, gotBlock)
+
+	slotsDeleted, err := db.DeleteHistoricalDataBeforeSlot(ctx, originBlk.Block().Slot()+1, 8)
+	require.NoError(t, err)
+	require.NotEqual(t, 0, slotsDeleted)
+
+	_, err = db.OriginCheckpointBlockRoot(ctx)
+	require.ErrorIs(t, err, ErrNotFoundOriginBlockRoot)
+	gotBlock, err = db.Block(ctx, originRoot)
+	require.NoError(t, err)
+	require.Equal(t, nil, gotBlock)
+}
+
+func TestStore_DeleteHistoricalDataBeforeSlot_ClearsAlreadyDanglingOriginCheckpointPointer(t *testing.T) {
+	db := setupDB(t)
+	ctx := t.Context()
+
+	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesisBlockRoot))
+	blks := makeBlocks(t, 0, 2, genesisBlockRoot)
+	require.NoError(t, db.SaveBlocks(ctx, blks))
+
+	originBlk := blks[0]
+	originRoot, err := originBlk.Block().HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, db.SaveOriginCheckpointBlockRoot(ctx, originRoot))
+	require.NoError(t, db.DeleteBlock(ctx, originRoot))
+
+	gotRoot, err := db.OriginCheckpointBlockRoot(ctx)
+	require.NoError(t, err)
+	require.Equal(t, originRoot, gotRoot)
+	gotBlock, err := db.Block(ctx, originRoot)
+	require.NoError(t, err)
+	require.Equal(t, nil, gotBlock)
+
+	slotsDeleted, err := db.DeleteHistoricalDataBeforeSlot(ctx, primitives.Slot(0), 8)
+	require.NoError(t, err)
+	require.Equal(t, 0, slotsDeleted)
+
+	_, err = db.OriginCheckpointBlockRoot(ctx)
+	require.ErrorIs(t, err, ErrNotFoundOriginBlockRoot)
+}
+
 func TestStore_GenesisBlock(t *testing.T) {
 	db := setupDB(t)
 	ctx := t.Context()

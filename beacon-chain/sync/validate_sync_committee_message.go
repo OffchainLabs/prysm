@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -188,9 +187,10 @@ func (s *Service) rejectIncorrectSyncCommittee(
 		format := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SyncCommitteeMessage]()]
 		// Validate that the validator is in the correct committee.
 		subCommitteeSize := params.BeaconConfig().SyncCommitteeSize / params.BeaconConfig().SyncCommitteeSubnetCount
+		suffix := s.cfg.p2p.Encoding().ProtocolSuffix()
 		for _, idx := range committeeIndices {
 			subnet := uint64(idx) / subCommitteeSize
-			if strings.HasPrefix(topic, fmt.Sprintf(format, digest, subnet)) {
+			if topic == fmt.Sprintf(format, digest, subnet)+suffix {
 				isValid = true
 				break
 			}

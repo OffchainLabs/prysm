@@ -3,16 +3,11 @@ package execution
 import (
 	"context"
 	"fmt"
-	"math/big"
-	"strings"
-	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -20,16 +15,11 @@ import (
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	gethRPC "github.com/ethereum/go-ethereum/rpc"
-	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -37,113 +27,9 @@ import (
 )
 
 var (
-	supportedEngineEndpoints = []string{
-		NewPayloadMethod,
-		NewPayloadMethodV2,
-		NewPayloadMethodV3,
-		ForkchoiceUpdatedMethod,
-		ForkchoiceUpdatedMethodV2,
-		ForkchoiceUpdatedMethodV3,
-		GetPayloadMethod,
-		GetPayloadMethodV2,
-		GetPayloadMethodV3,
-		GetPayloadBodiesByHashV1,
-		GetPayloadBodiesByRangeV1,
-		GetBlobsV1,
-	}
-
-	electraEngineEndpoints = []string{
-		NewPayloadMethodV4,
-		GetPayloadMethodV4,
-	}
-
-	fuluEngineEndpoints = []string{
-		GetPayloadMethodV5,
-		GetBlobsV2,
-	}
-
-	gloasEngineEndpoints = []string{
-		NewPayloadMethodV5,
-		GetPayloadMethodV6,
-		ForkchoiceUpdatedMethodV4,
-		GetPayloadBodiesByHashV2,
-		GetPayloadBodiesByRangeV2,
-	}
+	errInvalidPayloadBodyResponse = errors.New("engine api payload body response is invalid")
+	ErrEmptyBlockHash             = errors.New("Block hash is empty 0x0000...")
 )
-
-// ClientVersionV1 represents the response from engine_getClientVersionV1.
-type ClientVersionV1 struct {
-	Code    string `json:"code"`
-	Name    string `json:"name"`
-	Version string `json:"version"`
-	Commit  string `json:"commit"`
-}
-
-const (
-	// GetClientVersionMethod is the engine_getClientVersionV1 method for JSON-RPC.
-	GetClientVersionMethod = "engine_getClientVersionV1"
-	// NewPayloadMethod v1 request string for JSON-RPC.
-	NewPayloadMethod = "engine_newPayloadV1"
-	// NewPayloadMethodV2 v2 request string for JSON-RPC.
-	NewPayloadMethodV2 = "engine_newPayloadV2"
-	NewPayloadMethodV3 = "engine_newPayloadV3"
-	// NewPayloadMethodV4 is the engine_newPayloadVX method added at Electra.
-	NewPayloadMethodV4 = "engine_newPayloadV4"
-	// NewPayloadMethodV5 is the engine_newPayloadVX method added at Gloas.
-	NewPayloadMethodV5 = "engine_newPayloadV5"
-	// ForkchoiceUpdatedMethod v1 request string for JSON-RPC.
-	ForkchoiceUpdatedMethod = "engine_forkchoiceUpdatedV1"
-	// ForkchoiceUpdatedMethodV2 v2 request string for JSON-RPC.
-	ForkchoiceUpdatedMethodV2 = "engine_forkchoiceUpdatedV2"
-	// ForkchoiceUpdatedMethodV3 v3 request string for JSON-RPC.
-	ForkchoiceUpdatedMethodV3 = "engine_forkchoiceUpdatedV3"
-	// GetPayloadMethod v1 request string for JSON-RPC.
-	GetPayloadMethod = "engine_getPayloadV1"
-	// GetPayloadMethodV2 v2 request string for JSON-RPC.
-	GetPayloadMethodV2 = "engine_getPayloadV2"
-	// GetPayloadMethodV3 is the get payload method added for deneb
-	GetPayloadMethodV3 = "engine_getPayloadV3"
-	// GetPayloadMethodV4 is the get payload method added for electra
-	GetPayloadMethodV4 = "engine_getPayloadV4"
-	// GetPayloadMethodV5 is the get payload method added for fulu
-	GetPayloadMethodV5 = "engine_getPayloadV5"
-	// GetPayloadMethodV6 is the get payload method added for gloas/amsterdam.
-	GetPayloadMethodV6 = "engine_getPayloadV6"
-	// ForkchoiceUpdatedMethodV4 is the forkchoice updated method added for gloas/amsterdam.
-	ForkchoiceUpdatedMethodV4 = "engine_forkchoiceUpdatedV4"
-	// BlockByHashMethod request string for JSON-RPC.
-	BlockByHashMethod = "eth_getBlockByHash"
-	// BlockByNumberMethod request string for JSON-RPC.
-	BlockByNumberMethod = "eth_getBlockByNumber"
-	// GetPayloadBodiesByHashV1 is the engine_getPayloadBodiesByHashX JSON-RPC method for pre-Electra payloads.
-	GetPayloadBodiesByHashV1 = "engine_getPayloadBodiesByHashV1"
-	// GetPayloadBodiesByRangeV1 is the engine_getPayloadBodiesByRangeX JSON-RPC method for pre-Electra payloads.
-	GetPayloadBodiesByRangeV1 = "engine_getPayloadBodiesByRangeV1"
-	// GetPayloadBodiesByHashV2 is the engine_getPayloadBodiesByHashV2 JSON-RPC method for amsterdam payloads.
-	GetPayloadBodiesByHashV2 = "engine_getPayloadBodiesByHashV2"
-	// GetPayloadBodiesByRangeV2 is the engine_getPayloadBodiesByRangeV2 JSON-RPC method for amsterdam payloads.
-	GetPayloadBodiesByRangeV2 = "engine_getPayloadBodiesByRangeV2"
-	// ExchangeCapabilities request string for JSON-RPC.
-	ExchangeCapabilities = "engine_exchangeCapabilities"
-	// GetBlobsV1 request string for JSON-RPC.
-	GetBlobsV1 = "engine_getBlobsV1"
-	// GetBlobsV2 request string for JSON-RPC.
-	GetBlobsV2 = "engine_getBlobsV2"
-	// GetClientVersionV1 is the JSON-RPC method that identifies the execution client.
-	GetClientVersionV1 = "engine_getClientVersionV1"
-	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
-	defaultEngineTimeout = time.Second
-)
-
-var errInvalidPayloadBodyResponse = errors.New("engine api payload body response is invalid")
-
-// ForkchoiceUpdatedResponse is the response kind received by the
-// engine_forkchoiceUpdatedV1 endpoint.
-type ForkchoiceUpdatedResponse struct {
-	Status          *pb.PayloadStatus  `json:"payloadStatus"`
-	PayloadId       *pb.PayloadIDBytes `json:"payloadId"`
-	ValidationError string             `json:"validationError"`
-}
 
 // Reconstructor defines a service responsible for reconstructing full beacon chain objects by utilizing the execution API and making requests through the execution client.
 type Reconstructor interface {
@@ -157,14 +43,15 @@ type Reconstructor interface {
 		ctx context.Context, blockHashes [][32]byte,
 	) (map[[32]byte]*pb.ExecutionPayloadGloas, error)
 	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
-	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, error)
+	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error)
+	ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.PartialDataColumn, bool, error)
 	ReconstructExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedBlindedExecutionPayloadEnvelope) (*ethpb.SignedExecutionPayloadEnvelope, error)
 }
 
 // EngineCaller defines a client that can interact with an Ethereum
 // execution node's engine service via JSON-RPC.
 type EngineCaller interface {
-	NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error)
+	NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests pb.ExecutionRequester) ([]byte, error)
 	ForkchoiceUpdated(
 		ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer,
 	) (*pb.PayloadIDBytes, []byte, error)
@@ -172,498 +59,7 @@ type EngineCaller interface {
 	ExecutionBlockByHash(ctx context.Context, hash common.Hash, withTxs bool) (*pb.ExecutionBlock, error)
 	GetTerminalBlockHash(ctx context.Context, transitionTime uint64) ([]byte, bool, error)
 	GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error)
-}
-
-var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
-
-// NewPayload request calls the engine_newPayloadVX method via JSON-RPC.
-func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
-	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.NewPayload")
-	defer span.End()
-	defer func(start time.Time) {
-		newPayloadLatency.Observe(float64(time.Since(start).Milliseconds()))
-	}(time.Now())
-
-	d := time.Now().Add(time.Duration(params.BeaconConfig().ExecutionEngineTimeoutValue) * time.Second)
-	ctx, cancel := context.WithDeadline(ctx, d)
-	defer cancel()
-	result := &pb.PayloadStatus{}
-
-	switch payloadPb := payload.Proto().(type) {
-	case *pb.ExecutionPayload:
-		err := s.rpcClient.CallContext(ctx, result, NewPayloadMethod, payloadPb)
-		if err != nil {
-			return nil, handleRPCError(err)
-		}
-	case *pb.ExecutionPayloadCapella:
-		err := s.rpcClient.CallContext(ctx, result, NewPayloadMethodV2, payloadPb)
-		if err != nil {
-			return nil, handleRPCError(err)
-		}
-	case *pb.ExecutionPayloadDeneb:
-		if executionRequests == nil {
-			err := s.rpcClient.CallContext(ctx, result, NewPayloadMethodV3, payloadPb, versionedHashes, parentBlockRoot)
-			if err != nil {
-				return nil, handleRPCError(err)
-			}
-		} else {
-			flattenedRequests, err := pb.EncodeExecutionRequests(executionRequests)
-			if err != nil {
-				return nil, errors.Wrap(err, "failed to encode execution requests")
-			}
-			err = s.rpcClient.CallContext(ctx, result, NewPayloadMethodV4, payloadPb, versionedHashes, parentBlockRoot, flattenedRequests)
-			if err != nil {
-				return nil, handleRPCError(err)
-			}
-		}
-	case *pb.ExecutionPayloadGloas:
-		flattenedRequests, err := pb.EncodeExecutionRequests(executionRequests)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to encode execution requests")
-		}
-		err = s.rpcClient.CallContext(ctx, result, NewPayloadMethodV5, payloadPb, versionedHashes, parentBlockRoot, flattenedRequests)
-		if err != nil {
-			return nil, handleRPCError(err)
-		}
-	default:
-		return nil, errors.New("unknown execution data type")
-	}
-	if result.ValidationError != "" {
-		log.WithField("status", result.Status.String()).
-			WithField("parentRoot", fmt.Sprintf("%#x", parentBlockRoot)).
-			WithError(errors.New(result.ValidationError)).
-			Error("Got a validation error in newPayload")
-	}
-	switch result.Status {
-	case pb.PayloadStatus_INVALID_BLOCK_HASH:
-		return nil, ErrInvalidBlockHashPayloadStatus
-	case pb.PayloadStatus_ACCEPTED, pb.PayloadStatus_SYNCING:
-		return nil, ErrAcceptedSyncingPayloadStatus
-	case pb.PayloadStatus_INVALID:
-		return result.LatestValidHash, ErrInvalidPayloadStatus
-	case pb.PayloadStatus_VALID:
-		return result.LatestValidHash, nil
-	default:
-		return nil, errors.Wrapf(ErrUnknownPayloadStatus, "unknown payload status: %s", result.Status.String())
-	}
-}
-
-// ForkchoiceUpdated calls the engine_forkchoiceUpdatedV1 method via JSON-RPC.
-func (s *Service) ForkchoiceUpdated(
-	ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer,
-) (*pb.PayloadIDBytes, []byte, error) {
-	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ForkchoiceUpdated")
-	defer span.End()
-	start := time.Now()
-	defer func() {
-		forkchoiceUpdatedLatency.Observe(float64(time.Since(start).Milliseconds()))
-	}()
-
-	d := time.Now().Add(time.Duration(params.BeaconConfig().ExecutionEngineTimeoutValue) * time.Second)
-	ctx, cancel := context.WithDeadline(ctx, d)
-	defer cancel()
-	result := &ForkchoiceUpdatedResponse{}
-
-	if attrs == nil {
-		return nil, nil, errors.New("nil payload attributer")
-	}
-	switch attrs.Version() {
-	case version.Bellatrix:
-		a, err := attrs.PbV1()
-		if err != nil {
-			return nil, nil, err
-		}
-		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethod, state, a)
-		if err != nil {
-			return nil, nil, handleRPCError(err)
-		}
-	case version.Capella:
-		a, err := attrs.PbV2()
-		if err != nil {
-			return nil, nil, err
-		}
-		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethodV2, state, a)
-		if err != nil {
-			return nil, nil, handleRPCError(err)
-		}
-	case version.Deneb, version.Electra, version.Fulu:
-		a, err := attrs.PbV3()
-		if err != nil {
-			return nil, nil, err
-		}
-		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethodV3, state, a)
-		if err != nil {
-			return nil, nil, handleRPCError(err)
-		}
-	case version.Gloas:
-		a, err := attrs.PbV4()
-		if err != nil {
-			return nil, nil, err
-		}
-		err = s.rpcClient.CallContext(ctx, result, ForkchoiceUpdatedMethodV4, state, a)
-		if err != nil {
-			return nil, nil, handleRPCError(err)
-		}
-	default:
-		return nil, nil, fmt.Errorf("unknown payload attribute version: %v", attrs.Version())
-	}
-
-	if result.Status == nil {
-		return nil, nil, ErrNilResponse
-	}
-	if result.ValidationError != "" {
-		log.WithError(errors.New(result.ValidationError)).Error("Got a validation error in forkChoiceUpdated")
-	}
-	resp := result.Status
-	switch resp.Status {
-	case pb.PayloadStatus_SYNCING:
-		return nil, nil, ErrAcceptedSyncingPayloadStatus
-	case pb.PayloadStatus_INVALID:
-		return nil, resp.LatestValidHash, ErrInvalidPayloadStatus
-	case pb.PayloadStatus_VALID:
-		return result.PayloadId, resp.LatestValidHash, nil
-	default:
-		return nil, nil, ErrUnknownPayloadStatus
-	}
-}
-
-func getPayloadMethodAndMessage(slot primitives.Slot) (string, proto.Message) {
-	epoch := slots.ToEpoch(slot)
-	if epoch >= params.BeaconConfig().GloasForkEpoch {
-		return GetPayloadMethodV6, &pb.ExecutionBundleGloas{}
-	}
-	if epoch >= params.BeaconConfig().FuluForkEpoch {
-		return GetPayloadMethodV5, &pb.ExecutionBundleFulu{}
-	}
-	if epoch >= params.BeaconConfig().ElectraForkEpoch {
-		return GetPayloadMethodV4, &pb.ExecutionBundleElectra{}
-	}
-	if epoch >= params.BeaconConfig().DenebForkEpoch {
-		return GetPayloadMethodV3, &pb.ExecutionPayloadDenebWithValueAndBlobsBundle{}
-	}
-	if epoch >= params.BeaconConfig().CapellaForkEpoch {
-		return GetPayloadMethodV2, &pb.ExecutionPayloadCapellaWithValue{}
-	}
-	return GetPayloadMethod, &pb.ExecutionPayload{}
-}
-
-// GetPayload calls the engine_getPayloadVX method via JSON-RPC.
-// It returns the execution data as well as the blobs bundle.
-func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error) {
-	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetPayload")
-	defer span.End()
-	start := time.Now()
-	defer func() {
-		getPayloadLatency.Observe(float64(time.Since(start).Milliseconds()))
-	}()
-	d := time.Now().Add(defaultEngineTimeout)
-	ctx, cancel := context.WithDeadline(ctx, d)
-	defer cancel()
-
-	method, result := getPayloadMethodAndMessage(slot)
-	err := s.rpcClient.CallContext(ctx, result, method, pb.PayloadIDBytes(payloadId))
-	if err != nil {
-		return nil, handleRPCError(err)
-	}
-	res, err := blocks.NewGetPayloadResponse(result)
-	if err != nil {
-		return nil, errors.Wrap(err, "new get payload response")
-	}
-	return res, nil
-}
-
-func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
-	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExchangeCapabilities")
-	defer span.End()
-
-	if params.ElectraEnabled() {
-		supportedEngineEndpoints = append(supportedEngineEndpoints, electraEngineEndpoints...)
-	}
-
-	if params.FuluEnabled() {
-		supportedEngineEndpoints = append(supportedEngineEndpoints, fuluEngineEndpoints...)
-	}
-
-	if params.GloasEnabled() {
-		supportedEngineEndpoints = append(supportedEngineEndpoints, gloasEngineEndpoints...)
-	}
-
-	elSupportedEndpointsSlice := make([]string, len(supportedEngineEndpoints))
-	if err := s.rpcClient.CallContext(ctx, &elSupportedEndpointsSlice, ExchangeCapabilities, supportedEngineEndpoints); err != nil {
-		return nil, handleRPCError(err)
-	}
-
-	elSupportedEndpoints := make(map[string]bool, len(elSupportedEndpointsSlice))
-	for _, method := range elSupportedEndpointsSlice {
-		elSupportedEndpoints[method] = true
-	}
-
-	unsupported := make([]string, 0)
-	for _, method := range supportedEngineEndpoints {
-		if !elSupportedEndpoints[method] {
-			unsupported = append(unsupported, method)
-		}
-	}
-
-	if len(unsupported) != 0 {
-		log.WithField("methods", unsupported).Warning("Connected execution client does not support some requested engine methods")
-	}
-
-	return elSupportedEndpointsSlice, nil
-}
-
-// GetClientVersion calls engine_getClientVersionV1 to retrieve EL client information.
-func (s *Service) GetClientVersion(ctx context.Context) ([]ClientVersionV1, error) {
-	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetClientVersion")
-	defer span.End()
-
-	// Per spec, we send our own client info as the parameter
-	clVersion := ClientVersionV1{
-		Code:    CLCode,
-		Name:    Name,
-		Version: version.SemanticVersion(),
-		Commit:  version.GetCommitPrefix(),
-	}
-
-	var result []ClientVersionV1
-	err := s.rpcClient.CallContext(ctx, &result, GetClientVersionMethod, clVersion)
-	return result, handleRPCError(err)
-}
-
-// GetTerminalBlockHash returns the valid terminal block hash based on total difficulty.
-//
-// Spec code:
-// def get_pow_block_at_terminal_total_difficulty(pow_chain: Dict[Hash32, PowBlock]) -> Optional[PowBlock]:
-//
-//	# `pow_chain` abstractly represents all blocks in the PoW chain
-//	for block in pow_chain:
-//	    parent = pow_chain[block.parent_hash]
-//	    block_reached_ttd = block.total_difficulty >= TERMINAL_TOTAL_DIFFICULTY
-//	    parent_reached_ttd = parent.total_difficulty >= TERMINAL_TOTAL_DIFFICULTY
-//	    if block_reached_ttd and not parent_reached_ttd:
-//	        return block
-//
-//	return None
-func (s *Service) GetTerminalBlockHash(ctx context.Context, transitionTime uint64) ([]byte, bool, error) {
-	ttd := new(big.Int)
-	ttd.SetString(params.BeaconConfig().TerminalTotalDifficulty, 10)
-	terminalTotalDifficulty, overflows := uint256.FromBig(ttd)
-	if overflows {
-		return nil, false, errors.New("could not convert terminal total difficulty to uint256")
-	}
-	blk, err := s.LatestExecutionBlock(ctx)
-	if err != nil {
-		return nil, false, errors.Wrap(err, "could not get latest execution block")
-	}
-	if blk == nil {
-		return nil, false, errors.New("latest execution block is nil")
-	}
-
-	for {
-		if ctx.Err() != nil {
-			return nil, false, ctx.Err()
-		}
-		currentTotalDifficulty, err := tDStringToUint256(blk.TotalDifficulty)
-		if err != nil {
-			return nil, false, errors.Wrap(err, "could not convert total difficulty to uint256")
-		}
-		blockReachedTTD := currentTotalDifficulty.Cmp(terminalTotalDifficulty) >= 0
-
-		parentHash := blk.ParentHash
-		if parentHash == params.BeaconConfig().ZeroHash {
-			return nil, false, nil
-		}
-		parentBlk, err := s.ExecutionBlockByHash(ctx, parentHash, false /* no txs */)
-		if err != nil {
-			return nil, false, errors.Wrap(err, "could not get parent execution block")
-		}
-		if parentBlk == nil {
-			return nil, false, errors.New("parent execution block is nil")
-		}
-
-		if blockReachedTTD {
-			parentTotalDifficulty, err := tDStringToUint256(parentBlk.TotalDifficulty)
-			if err != nil {
-				return nil, false, errors.Wrap(err, "could not convert total difficulty to uint256")
-			}
-
-			// If terminal block has time same timestamp or greater than transition time,
-			// then the node violates the invariant that a block's timestamp must be
-			// greater than its parent's timestamp. Execution layer will reject
-			// a fcu call with such payload attributes. It's best that we return `None` in this a case.
-			parentReachedTTD := parentTotalDifficulty.Cmp(terminalTotalDifficulty) >= 0
-			if !parentReachedTTD {
-				if blk.Time >= transitionTime {
-					return nil, false, nil
-				}
-
-				log.WithFields(logrus.Fields{
-					"number":   blk.Number,
-					"hash":     fmt.Sprintf("%#x", bytesutil.Trunc(blk.Hash[:])),
-					"td":       blk.TotalDifficulty,
-					"parentTd": parentBlk.TotalDifficulty,
-					"ttd":      terminalTotalDifficulty,
-				}).Info("Retrieved terminal block hash")
-				return blk.Hash[:], true, nil
-			}
-		} else {
-			return nil, false, nil
-		}
-		blk = parentBlk
-	}
-}
-
-// LatestExecutionBlock fetches the latest execution engine block by calling
-// eth_blockByNumber via JSON-RPC.
-func (s *Service) LatestExecutionBlock(ctx context.Context) (*pb.ExecutionBlock, error) {
-	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.LatestExecutionBlock")
-	defer span.End()
-
-	result := &pb.ExecutionBlock{}
-	err := s.rpcClient.CallContext(
-		ctx,
-		result,
-		BlockByNumberMethod,
-		"latest",
-		false, /* no full transaction objects */
-	)
-	return result, handleRPCError(err)
-}
-
-// ExecutionBlockByHash fetches an execution engine block by hash by calling
-// eth_blockByHash via JSON-RPC.
-func (s *Service) ExecutionBlockByHash(ctx context.Context, hash common.Hash, withTxs bool) (*pb.ExecutionBlock, error) {
-	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExecutionBlockByHash")
-	defer span.End()
-	result := &pb.ExecutionBlock{}
-	err := s.rpcClient.CallContext(ctx, result, BlockByHashMethod, hash, withTxs)
-	return result, handleRPCError(err)
-}
-
-// ExecutionBlocksByHashes fetches a batch of execution engine blocks by hash by calling
-// eth_blockByHash via JSON-RPC.
-func (s *Service) ExecutionBlocksByHashes(ctx context.Context, hashes []common.Hash, withTxs bool) ([]*pb.ExecutionBlock, error) {
-	_, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExecutionBlocksByHashes")
-	defer span.End()
-	numOfHashes := len(hashes)
-	elems := make([]gethRPC.BatchElem, 0, numOfHashes)
-	execBlks := make([]*pb.ExecutionBlock, 0, numOfHashes)
-	if numOfHashes == 0 {
-		return execBlks, nil
-	}
-	for _, h := range hashes {
-		blk := &pb.ExecutionBlock{}
-		newH := h
-		elems = append(elems, gethRPC.BatchElem{
-			Method: BlockByHashMethod,
-			Args:   []any{newH, withTxs},
-			Result: blk,
-			Error:  error(nil),
-		})
-		execBlks = append(execBlks, blk)
-	}
-	ioErr := s.rpcClient.BatchCall(elems)
-	if ioErr != nil {
-		return nil, ioErr
-	}
-	for _, e := range elems {
-		if e.Error != nil {
-			return nil, handleRPCError(e.Error)
-		}
-	}
-	return execBlks, nil
-}
-
-// HeaderByHash returns the relevant header details for the provided block hash.
-func (s *Service) HeaderByHash(ctx context.Context, hash common.Hash) (*types.HeaderInfo, error) {
-	var hdr *types.HeaderInfo
-	err := s.rpcClient.CallContext(ctx, &hdr, BlockByHashMethod, hash, false /* no transactions */)
-	if err == nil && hdr == nil {
-		err = ethereum.NotFound
-	}
-	return hdr, err
-}
-
-// HeaderByNumber returns the relevant header details for the provided block number.
-func (s *Service) HeaderByNumber(ctx context.Context, number *big.Int) (*types.HeaderInfo, error) {
-	var hdr *types.HeaderInfo
-	err := s.rpcClient.CallContext(ctx, &hdr, BlockByNumberMethod, toBlockNumArg(number), false /* no transactions */)
-	if err == nil && hdr == nil {
-		err = ethereum.NotFound
-	}
-	return hdr, err
-}
-
-// GetBlobs returns the blob and proof from the execution engine for the given versioned hashes.
-func (s *Service) GetBlobs(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProof, error) {
-	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobs")
-	defer span.End()
-
-	// If the execution engine does not support `GetBlobsV1`, return early to prevent encountering an error later.
-	if !s.capabilityCache.has(GetBlobsV1) {
-		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV1))
-	}
-
-	result := make([]*pb.BlobAndProof, len(versionedHashes))
-	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV1, versionedHashes)
-	return result, handleRPCError(err)
-}
-
-func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
-	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsV2")
-	defer span.End()
-
-	start := time.Now()
-
-	if !s.capabilityCache.has(GetBlobsV2) {
-		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV2))
-	}
-
-	if flags.Get().DisableGetBlobsV2 {
-		return []*pb.BlobAndProofV2{}, nil
-	}
-
-	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
-	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV2, versionedHashes)
-
-	if len(result) != 0 {
-		getBlobsV2Latency.Observe(float64(time.Since(start).Milliseconds()))
-	}
-
-	return result, handleRPCError(err)
-}
-
-func (s *Service) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error) {
-	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetClientVersionV1")
-	defer span.End()
-
-	commit := version.GitCommit()
-	if len(commit) >= 8 {
-		commit = commit[:8]
-	}
-
-	var result []*structs.ClientVersionV1
-	err := s.rpcClient.CallContext(
-		ctx,
-		&result,
-		GetClientVersionV1,
-		structs.ClientVersionV1{
-			Code:    "PM",
-			Name:    "Prysm",
-			Version: version.SemanticVersion(),
-			Commit:  commit,
-		},
-	)
-
-	if err != nil {
-		return nil, handleRPCError(err)
-	}
-
-	if len(result) == 0 {
-		return nil, errors.New("execution client returned no result")
-	}
-
-	return result, nil
+	PartialColumnsSupported() bool
 }
 
 // ReconstructFullBlock takes in a blinded beacon block and reconstructs
@@ -712,10 +108,11 @@ func (s *Service) ReconstructExecutionPayloadEnvelope(
 	}
 	return &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
-			Payload:           payload,
-			ExecutionRequests: envelope.Message.ExecutionRequests,
-			BuilderIndex:      envelope.Message.BuilderIndex,
-			BeaconBlockRoot:   envelope.Message.BeaconBlockRoot,
+			Payload:               payload,
+			ExecutionRequests:     envelope.Message.ExecutionRequests,
+			BuilderIndex:          envelope.Message.BuilderIndex,
+			BeaconBlockRoot:       envelope.Message.BeaconBlockRoot,
+			ParentBeaconBlockRoot: envelope.Message.ParentBeaconBlockRoot,
 		},
 		Signature: envelope.Signature,
 	}, nil
@@ -829,22 +226,23 @@ func gloasPayloadFromExecutionBlock(
 	}
 
 	return &pb.ExecutionPayloadGloas{
-		ParentHash:    blk.ParentHash.Bytes(),
-		FeeRecipient:  blk.Coinbase.Bytes(),
-		StateRoot:     blk.Root.Bytes(),
-		ReceiptsRoot:  blk.ReceiptHash.Bytes(),
-		LogsBloom:     blk.Bloom.Bytes(),
-		PrevRandao:    blk.MixDigest.Bytes(),
-		BlockNumber:   blk.Number.Uint64(),
-		GasLimit:      blk.GasLimit,
-		GasUsed:       blk.GasUsed,
-		Timestamp:     blk.Time,
-		ExtraData:     blk.Extra,
-		BaseFeePerGas: bytesutil.PadTo(bytesutil.ReverseByteOrder(blk.BaseFee.Bytes()), fieldparams.RootLength),
-		BlockHash:     blk.Hash.Bytes(),
-		BlobGasUsed:   *blk.BlobGasUsed,
-		ExcessBlobGas: *blk.ExcessBlobGas,
-		SlotNumber:    primitives.Slot(*blk.SlotNumber),
+		ParentHash:      blk.ParentHash.Bytes(),
+		FeeRecipient:    blk.Coinbase.Bytes(),
+		StateRoot:       blk.Root.Bytes(),
+		ReceiptsRoot:    blk.ReceiptHash.Bytes(),
+		LogsBloom:       blk.Bloom.Bytes(),
+		PrevRandao:      blk.MixDigest.Bytes(),
+		BlockNumber:     blk.Number.Uint64(),
+		GasLimit:        blk.GasLimit,
+		GasUsed:         blk.GasUsed,
+		Timestamp:       blk.Time,
+		ExtraData:       blk.Extra,
+		BaseFeePerGas:   bytesutil.PadTo(bytesutil.ReverseByteOrder(blk.BaseFee.Bytes()), fieldparams.RootLength),
+		BlockHash:       blk.Hash.Bytes(),
+		BlobGasUsed:     *blk.BlobGasUsed,
+		ExcessBlobGas:   *blk.ExcessBlobGas,
+		SlotNumber:      primitives.Slot(*blk.SlotNumber),
+		BlockAccessList: blk.BlockAccessList,
 	}, nil
 }
 
@@ -930,65 +328,222 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 	return verifiedBlobs, nil
 }
 
-func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, error) {
+func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
 	root := populator.Root()
 
 	// Fetch cells and proofs from the execution client using the KZG commitments from the sidecar.
 	commitments, err := populator.Commitments()
 	if err != nil {
-		return nil, wrapWithBlockRoot(err, root, "commitments")
+		return nil, nil, wrapWithBlockRoot(err, root, "commitments")
 	}
-
-	cellsPerBlob, proofsPerBlob, err := s.fetchCellsAndProofsFromExecution(ctx, commitments)
+	cp, err := s.fetchCellsAndProofsFromExecution(ctx, commitments)
 	if err != nil {
-		return nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
+		return nil, nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
 	}
+	log.WithFields(logrus.Fields{
+		"included":   cp.Included,
+		"cellsCount": len(cp.CellsPerBlob),
+	}).Debug("Received cells and proofs from execution client")
 
-	// Return early if nothing is returned from the EL.
-	if len(cellsPerBlob) == 0 {
-		return nil, nil
-	}
-
-	// Construct data column sidears from the signed block and cells and proofs.
-	roSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, populator)
-	if err != nil {
-		return nil, wrapWithBlockRoot(err, populator.Root(), "data column sidcars from column sidecar")
-	}
-
-	// Upgrade the sidecars to verified sidecars.
-	// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
-	verifiedROSidecars := upgradeSidecarsToVerifiedSidecars(roSidecars)
-
-	return verifiedROSidecars, nil
-}
-
-// fetchCellsAndProofsFromExecution fetches cells and proofs from the execution client (using engine_getBlobsV2 execution API method)
-func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommitments [][]byte) ([][]kzg.Cell, [][]kzg.Proof, error) {
-	// Collect KZG hashes for all blobs.
-	versionedHashes := make([]common.Hash, 0, len(kzgCommitments))
-	for _, commitment := range kzgCommitments {
-		versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(commitment)
-		versionedHashes = append(versionedHashes, versionedHash)
-	}
-
-	// Fetch all blobsAndCellsProofs from the execution client.
-	blobAndProofV2s, err := s.GetBlobsV2(ctx, versionedHashes)
-	if err != nil {
-		return nil, nil, errors.Wrapf(err, "get blobs V2")
-	}
-
-	// Return early if nothing is returned from the EL.
-	if len(blobAndProofV2s) == 0 {
+	// Return early if the execution client returned nothing; otherwise we would
+	// build and broadcast empty partial columns.
+	if cp.Included == nil || cp.Included.Count() == 0 {
 		return nil, nil, nil
 	}
 
-	// Compute cells and proofs from the blobs and cell proofs.
-	cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromStructured(blobAndProofV2s)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "compute cells and proofs")
+	haveAllBlobs := cp.Included.Count() == uint64(len(commitments))
+
+	var partialColumns []blocks.PartialDataColumn
+	slot := populator.Slot()
+	if haveAllBlobs {
+		// Construct data column sidecars from the signed block and cells and proofs.
+		roSidecars, err := peerdas.DataColumnSidecars(cp.CellsPerBlob, cp.ProofsPerBlob, populator)
+		if err != nil {
+			return nil, nil, wrapWithBlockRoot(err, populator.Root(), "data column sidecars from column sidecar")
+		}
+		log.WithField("haveAllBlobs", haveAllBlobs).Debug("Constructed full data column sidecars")
+
+		// Upgrade the sidecars to verified sidecars.
+		// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
+		verifiedROSidecars := upgradeSidecarsToVerifiedSidecars(roSidecars)
+
+		if s.partialColumnsEnabledForSlot(slot) {
+			for _, sidecar := range verifiedROSidecars {
+				pc, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar)
+				if err != nil {
+					return nil, nil, wrapWithBlockRoot(err, populator.Root(), "partial column from verified ro data column")
+				}
+				partialColumns = append(partialColumns, pc)
+			}
+			log.WithFields(logrus.Fields{
+				"haveAllBlobs": haveAllBlobs,
+				"blockRoot":    fmt.Sprintf("%#x", root),
+				"slot":         slot,
+			}).Debug("Constructed partial data column sidecars")
+		}
+
+		return verifiedROSidecars, partialColumns, nil
 	}
 
-	return cellsPerBlob, proofsPerBlob, nil
+	if s.partialColumnsEnabledForSlot(slot) {
+		partialColumns, err = peerdas.PartialColumns(cp.Included, cp.CellsPerBlob, cp.ProofsPerBlob, populator)
+		if err != nil {
+			return nil, nil, wrapWithBlockRoot(err, root, "construct partial columns")
+		}
+		log.WithFields(logrus.Fields{
+			"haveAllBlobs": haveAllBlobs,
+			"blockRoot":    fmt.Sprintf("%#x", root),
+			"slot":         slot,
+		}).Debug("Constructed partial data column sidecars")
+	}
+
+	return nil, partialColumns, nil
+}
+
+// ConstructPartialDataColumnSidecarsFromHasBlobs constructs partial
+// columns without any cells whose parts metadata requests only the blobs missing from the EL.
+//
+// It returns:
+//   - the partial columns carrying the requests override; nil when
+//     the block has no commitments, the EL already has every blob, or an error
+//     occurred.
+//   - whether the HasBlobs flow is supported: false when the engine lacks the
+//     HasBlobs capability or partial columns are disabled for the block's slot,
+//     in which case the other return values are always nil.
+//   - any error from querying the EL or building the partial columns.
+func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.PartialDataColumn, bool, error) {
+	if !s.useHasBlobs() || !s.partialColumnsEnabledForSlot(populator.Slot()) {
+		return nil, false, nil
+	}
+
+	root := populator.Root()
+	commitments, err := populator.Commitments()
+	if err != nil {
+		return nil, true, wrapWithBlockRoot(err, root, "commitments")
+	}
+	if len(commitments) == 0 {
+		return nil, true, nil
+	}
+
+	hasBlobs, err := s.HasBlobs(ctx, versionedHashesFromCommitments(commitments))
+	if err != nil {
+		return nil, true, wrapWithBlockRoot(err, root, "has blobs")
+	}
+	if len(hasBlobs) != len(commitments) {
+		return nil, true, wrapWithBlockRoot(
+			errors.Errorf("got %d results for %d commitments", len(hasBlobs), len(commitments)),
+			root,
+			"has blobs result length",
+		)
+	}
+
+	requests := bitfield.NewBitlist(uint64(len(commitments)))
+	for i, hasBlob := range hasBlobs {
+		if !hasBlob {
+			requests.SetBitAt(uint64(i), true)
+		}
+	}
+	if requests.Count() == 0 {
+		// EL has all blobs; GetBlobsV3 will succeed immediately, no need for an early publish.
+		log.WithFields(logrus.Fields{
+			"blockRoot":   fmt.Sprintf("%#x", root),
+			"slot":        populator.Slot(),
+			"commitments": len(commitments),
+		}).Debug("Execution client has all blobs, skipping partial column construction with Has Blobs")
+		return nil, true, nil
+	}
+
+	included := bitfield.NewBitlist(uint64(len(commitments)))
+	partialColumns, err := peerdas.PartialColumns(included, nil, nil, populator)
+	if err != nil {
+		return nil, true, wrapWithBlockRoot(err, root, "construct partial columns from has blobs")
+	}
+
+	for i := range partialColumns {
+		if err := partialColumns[i].SetPartsRequests(requests); err != nil {
+			return nil, true, wrapWithBlockRoot(err, root, "set parts requests")
+		}
+	}
+	log.WithFields(logrus.Fields{
+		"blockRoot":      fmt.Sprintf("%#x", root),
+		"slot":           populator.Slot(),
+		"commitments":    len(commitments),
+		"missingBlobs":   requests.Count(),
+		"missingIndices": requests.BitIndices(),
+		"partialColumns": len(partialColumns),
+	}).Debug("Constructed partial data column sidecars using Has Blobs requesting missing blobs")
+	return partialColumns, true, nil
+}
+
+// fetchCellsAndProofsFromExecution fetches cells and proofs from the execution client (using engine_getBlobsV2 execution API method)
+func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommitments [][]byte) (peerdas.StructuredCellsAndProofs, error) {
+	versionedHashes := versionedHashesFromCommitments(kzgCommitments)
+
+	var blobAndProofs []*pb.BlobAndProofV2
+
+	// Fetch all blobsAndCellsProofs from the execution client.
+	var err error
+	useGetBlobsV3 := s.useGetBlobsV3()
+	if useGetBlobsV3 {
+		// v3 can return a partial response. V2 is all or nothing
+		blobAndProofs, err = s.GetBlobsV3(ctx, versionedHashes)
+	} else {
+		blobAndProofs, err = s.GetBlobsV2(ctx, versionedHashes)
+	}
+
+	if err != nil {
+		return peerdas.StructuredCellsAndProofs{}, errors.Wrap(err, "get blobs V2/3")
+	}
+
+	if len(blobAndProofs) == 0 {
+		return peerdas.StructuredCellsAndProofs{}, nil
+	}
+
+	// Compute cells and proofs from the blobs and cell proofs.
+	result, err := peerdas.ComputeCellsAndProofsFromStructured(uint64(len(kzgCommitments)), blobAndProofs)
+	if err != nil {
+		return peerdas.StructuredCellsAndProofs{}, errors.Wrap(err, "compute cells and proofs")
+	}
+	if useGetBlobsV3 {
+		switch includedCount := result.Included.Count(); {
+		case includedCount == uint64(len(kzgCommitments)):
+			getBlobsV3CompleteResponsesTotal.Inc()
+		case includedCount > 0:
+			getBlobsV3PartialResponsesTotal.Inc()
+		default:
+			getBlobsV3EmptyResponsesTotal.Inc()
+		}
+	}
+
+	return result, nil
+}
+
+func (s *Service) useGetBlobsV3() bool {
+	return s.capabilityCache.has(GetBlobsV3) && s.partialColumnsSupported
+}
+
+func (s *Service) useHasBlobs() bool {
+	supported := s.useGetBlobsV3() && s.capabilityCache.has(HasBlobs)
+	return supported
+}
+
+// PartialColumnsSupported reports whether cell-level (partial) column dissemination is enabled.
+func (s *Service) PartialColumnsSupported() bool {
+	return s.partialColumnsSupported
+}
+
+// TODO: Partial Columns for Gloas.
+func (s *Service) partialColumnsEnabledForSlot(slot primitives.Slot) bool {
+	isGloas := slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch
+	return !isGloas && s.partialColumnsSupported
+}
+
+func versionedHashesFromCommitments(kzgCommitments [][]byte) []common.Hash {
+	versionedHashes := make([]common.Hash, 0, len(kzgCommitments))
+	for _, commitment := range kzgCommitments {
+		versionedHashes = append(versionedHashes, primitives.ConvertKzgCommitmentToVersionedHash(commitment))
+	}
+	return versionedHashes
 }
 
 // upgradeSidecarsToVerifiedSidecars upgrades a list of data column sidecars into verified data column sidecars.
@@ -1003,7 +558,7 @@ func upgradeSidecarsToVerifiedSidecars(roSidecars []blocks.RODataColumn) []block
 }
 
 func fullPayloadFromPayloadBody(
-	header interfaces.ExecutionData, body *pb.ExecutionPayloadBody, bVersion int,
+	header interfaces.ExecutionData, body *pb.ExecutionPayloadBodyV1, bVersion int,
 ) (interfaces.ExecutionData, error) {
 	if header == nil || header.IsNil() || body == nil {
 		return nil, errors.New("execution block and header cannot be nil")
@@ -1080,94 +635,6 @@ func fullPayloadFromPayloadBody(
 	}
 
 	return nil, fmt.Errorf("unknown execution block version for payload %s", version.String(bVersion))
-}
-
-// Handles errors received from the RPC server according to the specification.
-func handleRPCError(err error) error {
-	if err == nil {
-		return nil
-	}
-	if isTimeout(err) {
-		return ErrHTTPTimeout
-	}
-	var e gethRPC.Error
-	ok := errors.As(err, &e)
-	if !ok {
-		if strings.Contains(err.Error(), "401 Unauthorized") {
-			log.Error("HTTP authentication to your execution client is not working. Please ensure " +
-				"you are setting a correct value for the --jwt-secret flag in Prysm, or use an IPC connection if on " +
-				"the same machine. Please see our documentation for more information on authenticating connections " +
-				"here https://docs.prylabs.network/docs/execution-node/authentication")
-			return fmt.Errorf("could not authenticate connection to execution client: %w", err)
-		}
-		return errors.Wrapf(err, "got an unexpected error in JSON-RPC response")
-	}
-	switch e.ErrorCode() {
-	case -32700:
-		errParseCount.Inc()
-		return ErrParse
-	case -32600:
-		errInvalidRequestCount.Inc()
-		return ErrInvalidRequest
-	case -32601:
-		errMethodNotFoundCount.Inc()
-		return ErrMethodNotFound
-	case -32602:
-		errInvalidParamsCount.Inc()
-		return ErrInvalidParams
-	case -32603:
-		errInternalCount.Inc()
-		return ErrInternal
-	case -38001:
-		errUnknownPayloadCount.Inc()
-		return ErrUnknownPayload
-	case -38002:
-		errInvalidForkchoiceStateCount.Inc()
-		return ErrInvalidForkchoiceState
-	case -38003:
-		errInvalidPayloadAttributesCount.Inc()
-		return ErrInvalidPayloadAttributes
-	case -38004:
-		errRequestTooLargeCount.Inc()
-		return ErrRequestTooLarge
-	case -32000:
-		errServerErrorCount.Inc()
-		// Only -32000 status codes are data errors in the RPC specification.
-		var errWithData gethRPC.DataError
-		ok := errors.As(err, &errWithData)
-		if !ok {
-			return errors.Wrapf(err, "got an unexpected error in JSON-RPC response")
-		}
-		return errors.Wrapf(ErrServer, "%v", errWithData.Error())
-	default:
-		return err
-	}
-}
-
-// ErrHTTPTimeout returns true if the error is a http.Client timeout error.
-var ErrHTTPTimeout = errors.New("timeout from http.Client")
-
-type httpTimeoutError interface {
-	Error() string
-	Timeout() bool
-}
-
-func isTimeout(e error) bool {
-	var t httpTimeoutError
-	ok := errors.As(e, &t)
-	return ok && t.Timeout()
-}
-
-func tDStringToUint256(td string) (*uint256.Int, error) {
-	b, err := hexutil.DecodeBig(td)
-	if err != nil {
-		return nil, err
-	}
-	i, overflows := uint256.FromBig(b)
-	if overflows {
-		return nil, errors.New("total difficulty overflowed")
-	}
-	return i, nil
 }
 
 func EmptyExecutionPayload(v int) (proto.Message, error) {
@@ -1286,25 +753,6 @@ func EmptyExecutionPayloadHeader(v int) (proto.Message, error) {
 	}
 
 	return nil, errors.Wrapf(ErrUnsupportedVersion, "version=%s", version.String(v))
-}
-
-func toBlockNumArg(number *big.Int) string {
-	if number == nil {
-		return "latest"
-	}
-	pending := big.NewInt(-1)
-	if number.Cmp(pending) == 0 {
-		return "pending"
-	}
-	finalized := big.NewInt(int64(gethRPC.FinalizedBlockNumber))
-	if number.Cmp(finalized) == 0 {
-		return "finalized"
-	}
-	safe := big.NewInt(int64(gethRPC.SafeBlockNumber))
-	if number.Cmp(safe) == 0 {
-		return "safe"
-	}
-	return hexutil.EncodeBig(number)
 }
 
 // wrapWithBlockRoot returns a new error with the given block root.

@@ -13,10 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
-	beaconChainClientFactory "github.com/OffchainLabs/prysm/v7/validator/client/beacon-chain-client-factory"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
-	nodeclientfactory "github.com/OffchainLabs/prysm/v7/validator/client/node-client-factory"
-	validatorclientfactory "github.com/OffchainLabs/prysm/v7/validator/client/validator-client-factory"
 	"github.com/OffchainLabs/prysm/v7/validator/db"
 	"github.com/OffchainLabs/prysm/v7/validator/graffiti"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
@@ -42,7 +39,7 @@ type ValidatorService struct {
 	cancel                  context.CancelFunc
 	validator               iface.Validator
 	db                      db.Database
-	conn                    validatorHelpers.NodeConnection
+	conn                    *validatorHelpers.NodeConnection
 	wallet                  *wallet.Wallet
 	walletInitializedFeed   *event.Feed
 	graffiti                []byte
@@ -57,6 +54,7 @@ type ValidatorService struct {
 	logValidatorPerformance bool
 	distributed             bool
 	disableDutiesPolling    bool
+	stateless               bool
 	closeClientFunc         func() // validator client stop function is used here
 }
 
@@ -66,7 +64,7 @@ type Config struct {
 	DB                      db.Database
 	Wallet                  *wallet.Wallet
 	WalletInitializedFeed   *event.Feed
-	Conn                    validatorHelpers.NodeConnection // Optional: pre-built connection (if nil, built from endpoint configs)
+	Conn                    *validatorHelpers.NodeConnection // Optional: pre-built connection (if nil, built from endpoint configs)
 	MaxHealthChecks         int
 	GRPCMaxCallRecvMsgSize  int
 	GRPCRetries             uint
@@ -88,6 +86,7 @@ type Config struct {
 	EmitAccountMetrics      bool
 	Distributed             bool
 	DisableDutiesPolling    bool
+	Stateless               bool
 	CloseClientFunc         func()
 }
 
@@ -113,6 +112,7 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 		logValidatorPerformance: cfg.LogValidatorPerformance,
 		distributed:             cfg.Distributed,
 		disableDutiesPolling:    cfg.DisableDutiesPolling,
+		stateless:               cfg.Stateless,
 		closeClientFunc:         cfg.CloseClientFunc,
 		maxHealthChecks:         cfg.MaxHealthChecks,
 	}
@@ -188,7 +188,7 @@ func (v *ValidatorService) Start() {
 		return
 	}
 
-	validatorClient := validatorclientfactory.NewValidatorClient(v.conn)
+	validatorClient := NewValidatorClient(v.conn, iface.WithStateless(v.stateless))
 
 	v.validator = &validator{
 		slotFeed:                     new(event.Feed),
@@ -204,9 +204,8 @@ func (v *ValidatorService) Start() {
 		graffitiOrderedIndex:         graffitiOrderedIndex,
 		conn:                         v.conn,
 		validatorClient:              validatorClient,
-		chainClient:                  beaconChainClientFactory.NewChainClient(v.conn),
-		nodeClient:                   nodeclientfactory.NewNodeClient(v.conn),
-		prysmChainClient:             beaconChainClientFactory.NewPrysmChainClient(v.conn),
+		chainClient:                  NewChainClient(v.conn),
+		nodeClient:                   NewNodeClient(v.conn),
 		db:                           v.db,
 		km:                           nil,
 		web3SignerConfig:             v.web3SignerConfig,
@@ -216,9 +215,11 @@ func (v *ValidatorService) Start() {
 		interopKeysConfig:            v.interopKeysConfig,
 		domainDataCache:              cache,
 		voteStats:                    voteStats{startEpoch: primitives.Epoch(^uint64(0))},
-		syncCommitteeStats:           syncCommitteeStats{},
 		submittedAtts:                make(map[submittedAttKey]*submittedAtt),
 		submittedAggregates:          make(map[submittedAttKey]*submittedAtt),
+		submittedSyncMessages:        make(map[slotRootKey][]uint64),
+		submittedSyncContributions:   make(map[slotRootKey]*submittedSyncContribution),
+		submittedPayloadAtts:         make(map[submittedPayloadAttKey][]uint64),
 		logValidatorPerformance:      v.logValidatorPerformance,
 		emitAccountMetrics:           v.emitAccountMetrics,
 		enableAPI:                    v.enableAPI,
@@ -228,6 +229,7 @@ func (v *ValidatorService) Start() {
 		disableDutiesPolling:         v.disableDutiesPolling,
 		accountsChangedChannel:       make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
 		eventsChannel:                make(chan *eventClient.Event, 1),
+		payloadAvailability:          newPayloadAvailability(),
 	}
 
 	val := v.validator.(*validator)

@@ -1,87 +1,189 @@
 package cache
 
 import (
+	"strconv"
 	"sync"
+	"time"
 
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	gocache "github.com/patrickmn/go-cache"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-// ProposerPreference stores the proposer fee recipient and gas limit for a slot.
+const (
+	defaultExpiration = 1 * time.Hour
+	cleanupInterval   = 15 * time.Minute
+)
+
+var (
+	proposerPreferencesCacheHit = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "proposer_preferences_cache_hit",
+		Help: "The number of proposer preference lookups served from the cache.",
+	})
+	proposerPreferencesCacheMiss = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "proposer_preferences_cache_miss",
+		Help: "The number of proposer preference lookups not present in the cache.",
+	})
+)
+
+// ProposerPreference is a proposer fee-recipient / gas-limit preference. When
+// stored in the (slot, dep_root) preferences map it represents a signed
+// SignedProposerPreferences; when stored in the per-validator defaults map it
+// represents a pre-Gloas PrepareBeaconProposer write (no signature, no
+// dependent_root).
 type ProposerPreference struct {
-	FeeRecipient []byte
-	GasLimit     uint64
+	DependentRoot  [32]byte
+	ValidatorIndex primitives.ValidatorIndex
+	FeeRecipient   primitives.ExecutionAddress
+	TargetGasLimit uint64
 }
 
-// ProposerPreferencesCache stores proposer preferences by slot.
+// FeeRecipientOrDefault returns the preference's FeeRecipient, or the
+// --suggested-fee-recipient default when it is unset.
+func (p *ProposerPreference) FeeRecipientOrDefault() primitives.ExecutionAddress {
+	if p.FeeRecipient == (primitives.ExecutionAddress{}) {
+		return primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
+	}
+	return p.FeeRecipient
+}
+
+// GasLimitOr returns the preference's TargetGasLimit, or fallback when it is unset.
+func (p *ProposerPreference) GasLimitOr(fallback uint64) uint64 {
+	if p.TargetGasLimit == 0 {
+		return fallback
+	}
+	return p.TargetGasLimit
+}
+
+// ProposerPreferencesCache holds two stores with different lookup keys:
+//
+//  1. preferences: signed proposer preferences from gossip / our local
+//     SubmitSignedProposerPreferences, keyed by (slot, dependent_root).
+//     Spec-aligned lookup for bid validation and post-Gloas proposing.
+//
+//  2. defaults: per-validator fee-recipient defaults written via the
+//     pre-Gloas PrepareBeaconProposer endpoint, keyed by validator_index.
+//     Branch-independent fallback for proposing when no (slot, dep_root)
+//     entry exists.
+//
+// Lookup order at proposal time: preferences → defaults → DefaultFeeRecipient
+// (the --suggested-fee-recipient flag). "Which validators are attached to this
+// BN" lives in SubscribedValidatorsCache, not here.
 type ProposerPreferencesCache struct {
-	slotToPreferences map[primitives.Slot]ProposerPreference
-	lock              sync.RWMutex
+	preferences map[primitives.Slot][]ProposerPreference
+	defaults    *gocache.Cache
+	lock        sync.RWMutex
 }
 
 // NewProposerPreferencesCache initializes a proposer preferences cache.
 func NewProposerPreferencesCache() *ProposerPreferencesCache {
 	return &ProposerPreferencesCache{
-		slotToPreferences: make(map[primitives.Slot]ProposerPreference),
+		preferences: make(map[primitives.Slot][]ProposerPreference),
+		defaults:    gocache.New(defaultExpiration, cleanupInterval),
 	}
 }
 
-// Add stores proposer preferences for a slot. If the slot already exists, the
-// existing value is kept and false is returned.
-func (c *ProposerPreferencesCache) Add(slot primitives.Slot, feeRecipient []byte, gasLimit uint64) bool {
+// Add stores a signed proposer preference at the given slot. If an entry
+// with the same (slot, pref.DependentRoot) already exists, the existing value
+// is kept and false is returned.
+func (c *ProposerPreferencesCache) Add(pref ProposerPreference, slot primitives.Slot) bool {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	if _, ok := c.slotToPreferences[slot]; ok {
-		return false
+	for _, p := range c.preferences[slot] {
+		if p.DependentRoot == pref.DependentRoot {
+			return false
+		}
 	}
-
-	// FeeRecipient comes from validated SSZ-decoded proposer preferences, so
-	// retaining the slice reference here is intentional.
-	c.slotToPreferences[slot] = ProposerPreference{
-		FeeRecipient: feeRecipient,
-		GasLimit:     gasLimit,
-	}
+	c.preferences[slot] = append(c.preferences[slot], pref)
 	return true
 }
 
-// Get returns proposer preferences for a slot.
-func (c *ProposerPreferencesCache) Get(slot primitives.Slot) (ProposerPreference, bool) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-
-	pref, ok := c.slotToPreferences[slot]
-	if !ok {
-		return ProposerPreference{}, false
+// BestFor returns the best-available preference for proposer `idx` at
+// (slot, dependentRoot): the signed branch-specific entry if present, else
+// the per-validator default, else (zero, false).
+func (c *ProposerPreferencesCache) BestFor(dependentRoot [32]byte, slot primitives.Slot, idx primitives.ValidatorIndex) (ProposerPreference, bool) {
+	if pref, ok := c.Get(dependentRoot, slot); ok && pref.ValidatorIndex == idx {
+		proposerPreferencesCacheHit.Inc()
+		return pref, true
 	}
-
-	return pref, true
+	if def, ok := c.DefaultFor(idx); ok {
+		proposerPreferencesCacheHit.Inc()
+		return def, true
+	}
+	proposerPreferencesCacheMiss.Inc()
+	return ProposerPreference{}, false
 }
 
-// Has returns true if proposer preferences for the slot already exist.
-func (c *ProposerPreferencesCache) Has(slot primitives.Slot) bool {
+// Get returns the signed proposer preference stored for (slot, dependentRoot).
+func (c *ProposerPreferencesCache) Get(dependentRoot [32]byte, slot primitives.Slot) (ProposerPreference, bool) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	_, ok := c.slotToPreferences[slot]
-	return ok
+	for _, p := range c.preferences[slot] {
+		if p.DependentRoot == dependentRoot {
+			return p, true
+		}
+	}
+	return ProposerPreference{}, false
 }
 
-// PruneBefore removes all proposer preferences for slots before the provided slot.
+// Has returns true if a signed preference exists for (slot, dependentRoot).
+func (c *ProposerPreferencesCache) Has(dependentRoot [32]byte, slot primitives.Slot) bool {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	for _, p := range c.preferences[slot] {
+		if p.DependentRoot == dependentRoot {
+			return true
+		}
+	}
+	return false
+}
+
+// PruneBefore removes all signed preferences for slots before the provided slot.
 func (c *ProposerPreferencesCache) PruneBefore(slot primitives.Slot) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	for cachedSlot := range c.slotToPreferences {
+	for cachedSlot := range c.preferences {
 		if cachedSlot < slot {
-			delete(c.slotToPreferences, cachedSlot)
+			delete(c.preferences, cachedSlot)
 		}
 	}
 }
 
-// Clear removes all cached proposer preferences.
+// Clear removes all cached signed preferences. Does not touch defaults.
 func (c *ProposerPreferencesCache) Clear() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	c.slotToPreferences = make(map[primitives.Slot]ProposerPreference)
+	c.preferences = make(map[primitives.Slot][]ProposerPreference)
+}
+
+// SetDefault records a per-validator fee-recipient default, keyed by ValidatorIndex.
+// Populated by the pre-Gloas PrepareBeaconProposer endpoint. DependentRoot on
+// the supplied preference is ignored.
+func (c *ProposerPreferencesCache) SetDefault(pref ProposerPreference) {
+	c.defaults.Set(defaultKey(pref.ValidatorIndex), pref, gocache.DefaultExpiration)
+}
+
+// DefaultFor returns the per-validator fee-recipient default for the given
+// validator index, if one was set via PrepareBeaconProposer.
+func (c *ProposerPreferencesCache) DefaultFor(index primitives.ValidatorIndex) (ProposerPreference, bool) {
+	item, ok := c.defaults.Get(defaultKey(index))
+	if !ok {
+		return ProposerPreference{}, false
+	}
+	pref, ok := item.(ProposerPreference)
+	if !ok {
+		return ProposerPreference{}, false
+	}
+	return pref, true
+}
+
+func defaultKey(index primitives.ValidatorIndex) string {
+	return strconv.FormatUint(uint64(index), 10)
 }

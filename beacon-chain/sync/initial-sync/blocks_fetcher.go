@@ -127,15 +127,19 @@ type fetchRequestResponse struct {
 	count        uint64
 	bwb          []blocks.BlockWithROSidecars
 	envelopes    []interfaces.ROSignedExecutionPayloadEnvelope
-	err          error
+	// columnsToSave holds columns for a payload whose block is not in bwb (the one the first
+	// block builds on); persisted separately since the per-block save loop only covers bwb.
+	columnsToSave []blocks.VerifiedRODataColumn
+	err           error
 }
 
 func (r *fetchRequestResponse) blocksQueueFetchedData() *blocksQueueFetchedData {
 	return &blocksQueueFetchedData{
-		blocksFrom: r.blocksFrom,
-		blobsFrom:  r.blobsFrom,
-		bwb:        r.bwb,
-		envelopes:  r.envelopes,
+		blocksFrom:    r.blocksFrom,
+		blobsFrom:     r.blobsFrom,
+		bwb:           r.bwb,
+		envelopes:     r.envelopes,
+		columnsToSave: r.columnsToSave,
 	}
 }
 
@@ -335,14 +339,16 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 		log.WithError(response.err).Debug("Failed to fetch blocks")
 		return response
 	}
-	f.fetchSidecars(ctx, response, peers)
-	if response.err != nil {
-		log.WithError(response.err).Debug("Failed to fetch sidecars")
-		return response
-	}
+	// Payloads must be fetched before sidecars: in Gloas the set of revealed execution payload
+	// envelopes is what determines which blocks need data columns (see fetchSidecars).
 	f.fetchPayloads(ctx, response, peers)
 	if response.err != nil {
 		log.WithError(response.err).Debug("Failed to fetch payloads")
+		return response
+	}
+	f.fetchSidecars(ctx, response, peers)
+	if response.err != nil {
+		log.WithError(response.err).Debug("Failed to fetch sidecars")
 	}
 	return response
 }
@@ -556,7 +562,7 @@ func dedupPeers(peers []peer.ID) []peer.ID {
 // downscorePeer increments the bad responses score for the peer and logs the event.
 func (f *blocksFetcher) downscorePeer(peerID peer.ID, reason error) {
 	newScore := f.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason.Error(), "newScore": newScore}).Debug("Downscore peer")
 }
 
 // findFirstForkIndex returns the index of the first block with a version >= v.

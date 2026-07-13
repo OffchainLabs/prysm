@@ -73,7 +73,7 @@ func (s *Service) pingHandler(_ context.Context, msg any, stream libp2pcore.Stre
 	// The peer's sequence number was not valid. We ask the peer for its metadata.
 	go func() {
 		// Define a new context so the calling function doesn't cancel on us.
-		ctx, cancel := context.WithTimeout(context.Background(), ttfbTimeout)
+		ctx, cancel := context.WithTimeout(s.ctx, ttfbTimeout)
 		defer cancel()
 
 		// Send a METADATA request to the peer.

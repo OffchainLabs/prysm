@@ -1143,6 +1143,10 @@ func BeaconStateGloasFromConsensus(st beaconState.BeaconState) (*BeaconStateGloa
 	if err != nil {
 		return nil, err
 	}
+	ptcWindow, err := st.PTCWindow()
+	if err != nil {
+		return nil, err
+	}
 
 	return &BeaconStateGloas{
 		GenesisTime:                   fmt.Sprintf("%d", st.GenesisTime().Unix()),
@@ -1190,5 +1194,6 @@ func BeaconStateGloasFromConsensus(st beaconState.BeaconState) (*BeaconStateGloa
 		BuilderPendingWithdrawals:     BuilderPendingWithdrawalsFromConsensus(bpw),
 		LatestBlockHash:               hexutil.Encode(lbh[:]),
 		PayloadExpectedWithdrawals:    WithdrawalsFromConsensus(pew),
+		PtcWindow:                     PTCWindowFromConsensus(ptcWindow),
 	}, nil
 }

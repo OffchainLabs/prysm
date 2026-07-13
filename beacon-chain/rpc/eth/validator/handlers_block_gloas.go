@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -100,13 +101,23 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gloasBlock, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_Gloas)
-	if !ok {
+	// A self-built block carries its payload inline as GloasContents. An external builder bid (or
+	// include_payload=false) yields the block alone; its payload is revealed separately (beacon-APIs #580).
+	var block *eth.BeaconBlockGloas
+	var contents *eth.BeaconBlockContentsGloas
+	switch b := v1alpha1resp.Block.(type) {
+	case *eth.GenericBeaconBlock_GloasContents:
+		contents = b.GloasContents
+		block = contents.Block
+	case *eth.GenericBeaconBlock_Gloas:
+		block = b.Gloas
+		includePayload = false
+	default:
 		httputil.HandleError(w, fmt.Sprintf("expected Gloas block, got %T", v1alpha1resp.Block), http.StatusInternalServerError)
 		return
 	}
 
-	consensusBlockValue, httpError := getConsensusBlockValue(ctx, s.BlockRewardFetcher, v1alpha1resp.Block)
+	consensusBlockValue, httpError := getConsensusBlockValue(ctx, s.BlockRewardFetcher, block)
 	if httpError != nil {
 		log.WithError(httpError).Debug("Failed to get consensus block value")
 		consensusBlockValue = "0"
@@ -119,19 +130,8 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 	isSSZ := httputil.RespondWithSsz(r)
 
 	if includePayload {
-		envelopeResp, err := s.V1Alpha1Server.GetExecutionPayloadEnvelope(ctx, &eth.ExecutionPayloadEnvelopeRequest{
-			Slot: primitives.Slot(slot),
-		})
-		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, "could not get execution payload envelope").Error(), http.StatusInternalServerError)
-			return
-		}
-
 		if isSSZ {
-			sszResp, err := (&eth.BeaconBlockContentsGloas{
-				Block:                    gloasBlock.Gloas,
-				ExecutionPayloadEnvelope: envelopeResp.Envelope,
-			}).MarshalSSZ()
+			sszResp, err := contents.MarshalSSZ()
 			if err != nil {
 				httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -140,7 +140,7 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		blockContents, err := structs.BlockContentsGloasFromConsensus(gloasBlock.Gloas, envelopeResp.Envelope)
+		blockContents, err := structs.BlockContentsGloasFromConsensus(contents.Block, contents.ExecutionPayloadEnvelope, contents.KzgProofs, contents.Blobs)
 		if err != nil {
 			httputil.HandleError(w, errors.Wrap(err, "could not convert block contents").Error(), http.StatusInternalServerError)
 			return
@@ -159,9 +159,9 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// include_payload=false: return only the beacon block.
+	// include_payload=false (or external builder bid): return only the beacon block.
 	if isSSZ {
-		sszResp, err := gloasBlock.Gloas.MarshalSSZ()
+		sszResp, err := block.MarshalSSZ()
 		if err != nil {
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -170,12 +170,12 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	block, err := structs.BeaconBlockGloasFromConsensus(gloasBlock.Gloas)
+	structBlock, err := structs.BeaconBlockGloasFromConsensus(block)
 	if err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	jsonBytes, err := json.Marshal(block)
+	jsonBytes, err := json.Marshal(structBlock)
 	if err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -188,9 +188,9 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ExecutionPayloadEnvelope retrieves a cached execution payload envelope.
-//
-// Endpoint: GET /eth/v1/validator/execution_payload_envelope/{slot}
+// ExecutionPayloadEnvelope returns the cached envelope in blinded form (payload_root);
+// HTR equivalence lets the VC sign the blinded form for the full envelope.
+// Endpoint: GET /eth/v1/validator/execution_payload_envelopes/{slot}/{beacon_block_root}
 func (s *Server) ExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.ExecutionPayloadEnvelope")
 	defer span.End()
@@ -203,6 +203,16 @@ func (s *Server) ExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request
 	slot, err := strconv.ParseUint(rawSlot, 10, 64)
 	if err != nil {
 		httputil.HandleError(w, "invalid slot: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	rawBeaconBlockRoot := r.PathValue("beacon_block_root")
+	if rawBeaconBlockRoot == "" {
+		httputil.HandleError(w, "beacon_block_root is required in URL params", http.StatusBadRequest)
+		return
+	}
+	beaconBlockRoot, err := bytesutil.DecodeHexWithLength(rawBeaconBlockRoot, fieldparams.RootLength)
+	if err != nil {
+		httputil.HandleError(w, "invalid beacon_block_root: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -224,14 +234,34 @@ func (s *Server) ExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request
 		httputil.HandleError(w, "could not get execution payload envelope: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if resp.Blinded == nil {
+		httputil.HandleError(w, "execution payload envelope not found", http.StatusNotFound)
+		return
+	}
+	if !bytes.Equal(resp.Blinded.BeaconBlockRoot, beaconBlockRoot) {
+		httputil.HandleError(w, "cached envelope beacon_block_root does not match request", http.StatusNotFound)
+		return
+	}
+	blinded := resp.Blinded
 
-	jsonEnvelope, err := structs.ExecutionPayloadEnvelopeFromConsensus(resp.Envelope)
+	w.Header().Set(api.VersionHeader, version.String(version.Gloas))
+
+	if httputil.RespondWithSsz(r) {
+		sszBytes, err := blinded.MarshalSSZ()
+		if err != nil {
+			httputil.HandleError(w, "could not marshal blinded envelope to SSZ: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, sszBytes)
+		return
+	}
+
+	jsonEnvelope, err := structs.BlindedExecutionPayloadEnvelopeFromConsensus(blinded)
 	if err != nil {
 		httputil.HandleError(w, "could not convert envelope to JSON: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set(api.VersionHeader, version.String(version.Gloas))
-	httputil.WriteJson(w, &structs.GetValidatorExecutionPayloadEnvelopeResponse{
+	httputil.WriteJson(w, &structs.GetValidatorBlindedExecutionPayloadEnvelopeResponse{
 		Version: version.String(version.Gloas),
 		Data:    jsonEnvelope,
 	})

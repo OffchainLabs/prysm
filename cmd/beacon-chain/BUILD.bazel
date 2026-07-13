@@ -1,5 +1,5 @@
-load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 load("@io_bazel_rules_go//go:def.bzl", "go_binary")
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 load("//tools:prysm_image.bzl", "prysm_image_upload")
 
 go_library(

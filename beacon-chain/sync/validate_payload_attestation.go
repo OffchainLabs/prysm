@@ -1,15 +1,12 @@
 package sync
 
 import (
-	"bytes"
 	"context"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
@@ -66,29 +63,11 @@ func (s *Service) validatePayloadAttestation(ctx context.Context, pid peer.ID, m
 	// [IGNORE] The message's block data.beacon_block_root has been seen (via gossip or non-gossip sources)
 	// (a client MAY queue attestation for processing once the block is retrieved. Note a client might want to request payload after).
 	if err := v.VerifyBlockRootSeen(s.cfg.chain.InForkchoice); err != nil {
-		// TODO: queue attestation
-		return pubsub.ValidationIgnore, err
+		return s.queuePendingPayloadAttestation(ctx, v, att)
 	}
 
-	// [REJECT] The message's block data.beacon_block_root passes validation.
-	if err := v.VerifyBlockRootValid(s.hasBadBlock); err != nil {
-		return pubsub.ValidationReject, err
-	}
-
-	st, err := s.getPtcState(ctx, pa)
-	if err != nil {
-		return pubsub.ValidationIgnore, err
-	}
-
-	// [REJECT] The message's validator index is within the payload committee in get_ptc(state, data.slot).
-	// The state is the head state corresponding to processing the block up to the current slot.
-	if err := v.VerifyValidatorInPTC(ctx, st); err != nil {
-		return pubsub.ValidationReject, err
-	}
-
-	// [REJECT] payload_attestation_message.signature is valid with respect to the validator's public key.
-	if err := v.VerifySignature(st); err != nil {
-		return pubsub.ValidationReject, err
+	if res, err := s.validatePayloadAttestationWithBlock(ctx, v, pa); res != pubsub.ValidationAccept {
+		return res, err
 	}
 
 	msg.ValidatorData = att
@@ -102,38 +81,45 @@ func (s *Service) validatePayloadAttestation(ctx context.Context, pid peer.ID, m
 	return pubsub.ValidationAccept, nil
 }
 
-func (s *Service) getPtcState(ctx context.Context, pa payloadattestation.ROMessage) (state.ReadOnlyBeaconState, error) {
-	blockRoot := pa.BeaconBlockRoot()
-	blockSlot := pa.Slot()
-	blockEpoch := slots.ToEpoch(blockSlot)
-	headSlot := s.cfg.chain.HeadSlot()
-	headEpoch := slots.ToEpoch(headSlot)
-	headRoot, err := s.cfg.chain.HeadRoot(ctx)
+func (s *Service) validatePayloadAttestationWithBlock(ctx context.Context, v verification.PayloadAttestationMsgVerifier, pa payloadattestation.ROMessage) (pubsub.ValidationResult, error) {
+	// [IGNORE] The block referenced by data.beacon_block_root is at slot data.slot.
+	blockSlot, err := s.cfg.chain.RecentBlockSlot(pa.BeaconBlockRoot())
 	if err != nil {
-		return nil, err
+		return pubsub.ValidationIgnore, err
+	}
+	if err := v.VerifyBlockSlotMatches(blockSlot); err != nil {
+		return pubsub.ValidationIgnore, err
 	}
 
-	if blockEpoch == headEpoch {
-		if bytes.Equal(blockRoot[:], headRoot) {
-			return s.cfg.chain.HeadStateReadOnly(ctx)
-		}
-
-		headDependent, err := s.cfg.chain.DependentRootForEpoch(bytesutil.ToBytes32(headRoot), blockEpoch)
-		if err != nil {
-			return nil, err
-		}
-		blockDependent, err := s.cfg.chain.DependentRootForEpoch(blockRoot, blockEpoch)
-		if err != nil {
-			return nil, err
-		}
-		if bytes.Equal(headDependent[:], blockDependent[:]) {
-			return s.cfg.chain.HeadStateReadOnly(ctx)
-		}
+	// [REJECT] The message's block data.beacon_block_root passes validation.
+	if err := v.VerifyBlockRootValid(s.hasBadBlock); err != nil {
+		return pubsub.ValidationReject, err
 	}
 
-	headState, err := s.cfg.chain.HeadState(ctx)
+	st, err := s.cfg.chain.PtcLookupState(ctx, pa.BeaconBlockRoot(), pa.Slot())
 	if err != nil {
-		return nil, err
+		return pubsub.ValidationIgnore, err
 	}
-	return transition.ProcessSlotsUsingNextSlotCache(ctx, headState, headRoot, blockSlot)
+	if st == nil {
+		return pubsub.ValidationIgnore, errors.New("unable to find state for payload attestation")
+	}
+
+	return s.validatePayloadAttestationAgainstState(ctx, v, st)
+}
+
+func (s *Service) validatePayloadAttestationAgainstState(ctx context.Context, v verification.PayloadAttestationMsgVerifier, st state.ReadOnlyBeaconState) (pubsub.ValidationResult, error) {
+	// [REJECT] The message's validator index is within the payload committee in get_ptc(state, data.slot).
+	if err := v.VerifyValidatorInPTC(ctx, st); err != nil {
+		if errors.Is(err, state.ErrNoPayloadCommitteeAvailable) {
+			return pubsub.ValidationIgnore, err
+		}
+		return pubsub.ValidationReject, err
+	}
+
+	// [REJECT] payload_attestation_message.signature is valid with respect to the validator's public key.
+	if err := v.VerifySignature(st); err != nil {
+		return pubsub.ValidationReject, err
+	}
+
+	return pubsub.ValidationAccept, nil
 }

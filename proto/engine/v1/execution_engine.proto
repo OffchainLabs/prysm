@@ -226,7 +226,8 @@ message PayloadAttributesV3 {
   bytes parent_beacon_block_root = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
-// PayloadAttributesV4 extends V3 with slot_number (Amsterdam/EIP-7843).
+// PayloadAttributesV4 extends V3 with slot_number (Amsterdam/EIP-7843) and
+// target_gas_limit.
 message PayloadAttributesV4 {
   uint64 timestamp = 1;
   bytes prev_randao = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
@@ -235,6 +236,7 @@ message PayloadAttributesV4 {
       [ (ethereum.eth.ext.ssz_max) = "withdrawal.size" ];
   bytes parent_beacon_block_root = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
   uint64 slot_number = 6;
+  uint64 target_gas_limit = 7;
 }
 
 message PayloadStatus {

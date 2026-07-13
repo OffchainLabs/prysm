@@ -43,7 +43,7 @@ func TestSubmitSignedContributionAndProof_Valid(t *testing.T) {
 
 	ctx := t.Context()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		submitSignedContributionAndProofTestEndpoint,
@@ -117,7 +117,7 @@ func TestSubmitSignedContributionAndProof_Error(t *testing.T) {
 
 			ctx := t.Context()
 
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 			if testCase.httpRequestExpected {
 				handler.EXPECT().Post(
 					gomock.Any(),

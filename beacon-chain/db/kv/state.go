@@ -31,7 +31,16 @@ func (s *Store) State(ctx context.Context, blockRoot [32]byte) (state.BeaconStat
 
 	// If state diff is enabled, we get the state from the state-diff db.
 	if features.Get().EnableStateDiff {
-		st, err := s.getStateUsingStateDiff(ctx, blockRoot)
+		st, err := s.HotStateSnapshot(ctx, blockRoot)
+		if err == nil {
+			stateReadingTime.Observe(float64(time.Since(startTime).Milliseconds()))
+			return st, nil
+		}
+		if !errors.Is(err, ErrNotFoundState) {
+			return nil, err
+		}
+
+		st, err = s.getStateUsingStateDiff(ctx, blockRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -120,9 +129,17 @@ func (s *Store) LegacyGenesisState(ctx context.Context) (state.BeaconState, erro
 }
 
 // SaveState stores a state to the db using block's signing root which was used to generate the state.
-func (s *Store) SaveState(ctx context.Context, st state.ReadOnlyBeaconState, blockRoot [32]byte) error {
+func (s *Store) SaveState(ctx context.Context, st state.ReadOnlyBeaconState, blockRoot [32]byte) (err error) {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveState")
 	defer span.End()
+
+	startTime := time.Now()
+
+	defer func() {
+		if err == nil {
+			stateSavingTime.Observe(float64(time.Since(startTime).Milliseconds()))
+		}
+	}()
 
 	if features.Get().EnableStateDiff && s.stateDiffCache != nil {
 		return s.saveStateByDiff(ctx, st)
@@ -145,7 +162,6 @@ func (s *Store) SaveStates(ctx context.Context, states []state.ReadOnlyBeaconSta
 	if states == nil {
 		return errors.New("nil state")
 	}
-	startTime := time.Now()
 	multipleEncs := make([][]byte, len(states))
 	for i, st := range states {
 		stateBytes, err := marshalState(ctx, st)
@@ -170,7 +186,6 @@ func (s *Store) SaveStates(ctx context.Context, states []state.ReadOnlyBeaconSta
 	}); err != nil {
 		return err
 	}
-	stateSavingTime.Observe(float64(time.Since(startTime).Milliseconds()))
 	return nil
 }
 
@@ -435,6 +450,9 @@ func (s *Store) HasState(ctx context.Context, blockRoot [32]byte) bool {
 	defer span.End()
 
 	if features.Get().EnableStateDiff {
+		if s.HasHotStateSnapshot(ctx, blockRoot) {
+			return true
+		}
 		hasState, err := s.hasStateUsingStateDiff(ctx, blockRoot)
 		if err != nil {
 			log.WithError(err).Error(fmt.Sprintf("error checking state existence using state-diff"))

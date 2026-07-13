@@ -1292,3 +1292,14 @@ func TestFindPeers_received_bad_existing_node(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result))
 }
+
+func TestGetPort_ZeroPortTreatedAsAbsent(t *testing.T) {
+	localNode := createTestNodeRandom(t)
+	localNode.Set(enr.TCP(0))
+
+	port, ok, err := getPort(localNode.Node(), tcp)
+
+	require.NoError(t, err)
+	require.Equal(t, false, ok)
+	require.Equal(t, uint(0), port)
+}

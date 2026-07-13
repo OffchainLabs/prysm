@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -57,7 +58,13 @@ func (s signedExecutionPayloadEnvelope) IsNil() bool {
 	if len(s.s.Signature) != field_params.BLSSignatureLength {
 		return true
 	}
+	if s.s.Message == nil {
+		return true
+	}
 	if len(s.s.Message.BeaconBlockRoot) != field_params.RootLength {
+		return true
+	}
+	if len(s.s.Message.ParentBeaconBlockRoot) != field_params.RootLength {
 		return true
 	}
 	if s.s.Message.ExecutionRequests == nil {
@@ -91,6 +98,9 @@ func (p *executionPayloadEnvelope) IsNil() bool {
 	if len(p.p.BeaconBlockRoot) != field_params.RootLength {
 		return true
 	}
+	if len(p.p.ParentBeaconBlockRoot) != field_params.RootLength {
+		return true
+	}
 	return false
 }
 
@@ -105,8 +115,8 @@ func (p *executionPayloadEnvelope) Execution() (interfaces.ExecutionData, error)
 }
 
 // ExecutionRequests returns the execution requests attached to the envelope.
-func (p *executionPayloadEnvelope) ExecutionRequests() *enginev1.ExecutionRequests {
-	return ethpb.CopyExecutionRequests(p.p.ExecutionRequests)
+func (p *executionPayloadEnvelope) ExecutionRequests() *enginev1.ExecutionRequestsGloas {
+	return ethpb.CopyExecutionRequestsGloas(p.p.ExecutionRequests)
 }
 
 // BuilderIndex returns the proposer/builder index for the envelope.
@@ -117,6 +127,11 @@ func (p *executionPayloadEnvelope) BuilderIndex() primitives.BuilderIndex {
 // BeaconBlockRoot returns the beacon block root referenced by the envelope.
 func (p *executionPayloadEnvelope) BeaconBlockRoot() [field_params.RootLength]byte {
 	return [field_params.RootLength]byte(p.p.BeaconBlockRoot)
+}
+
+// ParentBeaconBlockRoot returns the parent beacon block root referenced by the envelope.
+func (p *executionPayloadEnvelope) ParentBeaconBlockRoot() [field_params.RootLength]byte {
+	return [field_params.RootLength]byte(p.p.ParentBeaconBlockRoot)
 }
 
 // Slot returns the slot derived from the payload's slot_number field.
@@ -149,6 +164,9 @@ func (p *blindedExecutionPayloadEnvelope) IsNil() bool {
 	if len(p.p.BeaconBlockRoot) != field_params.RootLength {
 		return true
 	}
+	if len(p.p.ParentBeaconBlockRoot) != field_params.RootLength {
+		return true
+	}
 	if len(p.p.BlockHash) != field_params.RootLength {
 		return true
 	}
@@ -159,8 +177,8 @@ func (p *blindedExecutionPayloadEnvelope) IsBlinded() bool {
 	return true
 }
 
-func (p *blindedExecutionPayloadEnvelope) ExecutionRequests() *enginev1.ExecutionRequests {
-	return ethpb.CopyExecutionRequests(p.p.ExecutionRequests)
+func (p *blindedExecutionPayloadEnvelope) ExecutionRequests() *enginev1.ExecutionRequestsGloas {
+	return ethpb.CopyExecutionRequestsGloas(p.p.ExecutionRequests)
 }
 
 func (p *blindedExecutionPayloadEnvelope) BuilderIndex() primitives.BuilderIndex {
@@ -171,12 +189,32 @@ func (p *blindedExecutionPayloadEnvelope) BeaconBlockRoot() [field_params.RootLe
 	return [field_params.RootLength]byte(p.p.BeaconBlockRoot)
 }
 
+func (p *blindedExecutionPayloadEnvelope) ParentBeaconBlockRoot() [field_params.RootLength]byte {
+	return [field_params.RootLength]byte(p.p.ParentBeaconBlockRoot)
+}
+
 func (p *blindedExecutionPayloadEnvelope) Slot() primitives.Slot {
 	return p.p.Slot
 }
 
 func (p *blindedExecutionPayloadEnvelope) BlockHash() [field_params.RootLength]byte {
 	return [field_params.RootLength]byte(p.p.BlockHash)
+}
+
+// Parent slot fullness is committed by the child bid, not recorded in the parent itself.
+func BlockBuiltOnParentPayload(parent, child interfaces.ReadOnlyBeaconBlock) (bool, error) {
+	parentBid, err := parent.Body().SignedExecutionPayloadBid()
+	if err != nil {
+		return false, err
+	}
+	childBid, err := child.Body().SignedExecutionPayloadBid()
+	if err != nil {
+		return false, err
+	}
+	if parentBid == nil || parentBid.Message == nil || childBid == nil || childBid.Message == nil {
+		return false, errors.New("nil execution payload bid")
+	}
+	return bytes.Equal(childBid.Message.ParentBlockHash, parentBid.Message.BlockHash), nil
 }
 
 // BlockBuiltOnEnvelope checks if the block's parent hash matches the envelope's execution block hash.

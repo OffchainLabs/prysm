@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -17,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/golang/snappy"
 	"go.etcd.io/bbolt"
 )
 
@@ -246,6 +248,8 @@ func TestStateDiff_SaveFullSnapshot(t *testing.T) {
 				if s == nil {
 					return bbolt.ErrIncompatibleValue
 				}
+				s, err = snappy.Decode(nil, s)
+				require.NoError(t, err)
 				require.DeepSSZEqual(t, enc, s)
 				return nil
 			})
@@ -509,6 +513,8 @@ func TestStateDiff_SaveDiff(t *testing.T) {
 				if s == nil {
 					return bbolt.ErrIncompatibleValue
 				}
+				s, err = snappy.Decode(nil, s)
+				require.NoError(t, err)
 				require.DeepSSZEqual(t, enc, s)
 				return nil
 			})
@@ -723,6 +729,65 @@ func TestStateDiff_SaveAndReadDiffForkTransition(t *testing.T) {
 	}
 }
 
+// TestStateDiff_SaveAndReadDiffForkTransitionGloas tests the Fulu→Gloas fork transition
+// explicitly since Gloas is not yet in version.All().
+func TestStateDiff_SaveAndReadDiffForkTransitionGloas(t *testing.T) {
+	setDefaultStateDiffExponents()
+
+	db := setupDB(t)
+
+	st, _ := util.DeterministicGenesisStateFulu(t, 64)
+
+	err := setOffsetInDB(db, 0)
+	require.NoError(t, err)
+
+	err = db.saveStateByDiff(context.Background(), st)
+	require.NoError(t, err)
+
+	slot := primitives.Slot(math.PowerOf2(5))
+	gloasSt, err := gloas.UpgradeToGloas(st.Copy())
+	require.NoError(t, err)
+	require.NoError(t, gloasSt.SetSlot(slot))
+
+	err = db.saveStateByDiff(context.Background(), gloasSt)
+	require.NoError(t, err)
+
+	readSt, err := db.stateByDiff(context.Background(), slot)
+	require.NoError(t, err)
+	require.NotNil(t, readSt)
+
+	stSSZ, err := gloasSt.MarshalSSZ()
+	require.NoError(t, err)
+	readStSSZ, err := readSt.MarshalSSZ()
+	require.NoError(t, err)
+	require.DeepSSZEqual(t, stSSZ, readStSSZ)
+}
+
+// TestStateDiff_SaveAndReadSnapshotGloas tests saving and reading a Gloas full snapshot.
+func TestStateDiff_SaveAndReadSnapshotGloas(t *testing.T) {
+	setDefaultStateDiffExponents()
+
+	db := setupDB(t)
+
+	err := setOffsetInDB(db, 0)
+	require.NoError(t, err)
+
+	st, _ := createState(t, 0, version.Gloas)
+
+	err = db.saveStateByDiff(context.Background(), st)
+	require.NoError(t, err)
+
+	readSt, err := db.stateByDiff(context.Background(), 0)
+	require.NoError(t, err)
+	require.NotNil(t, readSt)
+
+	stSSZ, err := st.MarshalSSZ()
+	require.NoError(t, err)
+	readStSSZ, err := readSt.MarshalSSZ()
+	require.NoError(t, err)
+	require.DeepSSZEqual(t, stSSZ, readStSSZ)
+}
+
 func TestStateDiff_OffsetCache(t *testing.T) {
 	setDefaultStateDiffExponents()
 
@@ -779,7 +844,11 @@ func TestStateDiff_AnchorCache(t *testing.T) {
 			localCache[0] = st
 
 			// level 0 should be the same
-			require.DeepEqual(t, localCache[0], db.stateDiffCache.getAnchor(0))
+			localSSZ, err := localCache[0].MarshalSSZ()
+			require.NoError(t, err)
+			cachedSSZ, err := db.stateDiffCache.getAnchor(0).MarshalSSZ()
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, localSSZ, cachedSSZ)
 
 			// rest of the cache should be nil
 			for i := 1; i < len(exponents)-1; i++ {
@@ -818,7 +887,11 @@ func TestStateDiff_AnchorCache(t *testing.T) {
 			localCache[0] = st
 
 			// level 0 should be the same
-			require.DeepEqual(t, localCache[0], db.stateDiffCache.getAnchor(0))
+			localSSZ, err = localCache[0].MarshalSSZ()
+			require.NoError(t, err)
+			cachedSSZ, err = db.stateDiffCache.getAnchor(0).MarshalSSZ()
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, localSSZ, cachedSSZ)
 
 			// rest of the cache should be nil
 			for i := 1; i < len(exponents)-1; i++ {
@@ -909,6 +982,15 @@ func createState(t *testing.T, slot primitives.Slot, v int) (state.ReadOnlyBeaco
 			PreviousVersion: p.ElectraForkVersion,
 			CurrentVersion:  p.FuluForkVersion,
 			Epoch:           p.FuluForkEpoch,
+		})
+		require.NoError(t, err)
+	case version.Gloas:
+		st, err = util.NewBeaconStateGloas()
+		require.NoError(t, err)
+		err = st.SetFork(&ethpb.Fork{
+			PreviousVersion: p.FuluForkVersion,
+			CurrentVersion:  p.GloasForkVersion,
+			Epoch:           p.GloasForkEpoch,
 		})
 		require.NoError(t, err)
 	default:

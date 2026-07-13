@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package ethereum.engine.v1;
+
+import "proto/eth/ext/options.proto";
+import "proto/engine/v1/electra.proto";
+
+option csharp_namespace = "Ethereum.Engine.V1";
+option go_package = "github.com/OffchainLabs/prysm/v7/proto/engine/v1;enginev1";
+option java_multiple_files = true;
+option java_outer_classname = "GloasProto";
+option java_package = "org.ethereum.engine.v1";
+option php_namespace = "Ethereum\\Engine\\v1";
+
+// BuilderDepositRequest is the message from the execution layer to register a
+// new builder or top up an existing builder's balance, new in Gloas (EIP-8282).
+message BuilderDepositRequest {
+  bytes pubkey = 1 [ (ethereum.eth.ext.ssz_size) = "48" ];
+  bytes withdrawal_credentials = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 amount = 3;
+  bytes signature = 4 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// BuilderExitRequest is the message from the execution layer to trigger the
+// exit of a builder, new in Gloas (EIP-8282).
+message BuilderExitRequest {
+  // The execution address that originated the request.
+  bytes source_address = 1 [ (ethereum.eth.ext.ssz_size) = "20" ];
+  // 48 byte BLS public key of the builder.
+  bytes pubkey = 2 [ (ethereum.eth.ext.ssz_size) = "48" ];
+}
+
+// ExecutionRequestsGloas extends ExecutionRequests with builder deposit and exit
+// requests, new in Gloas (EIP-8282).
+message ExecutionRequestsGloas {
+  repeated DepositRequest deposits = 1
+      [ (ethereum.eth.ext.ssz_max) = "max_deposit_requests_per_payload.size" ];
+  repeated WithdrawalRequest withdrawals = 2
+      [ (ethereum.eth.ext.ssz_max) =
+            "max_withdrawal_requests_per_payload.size" ];
+  repeated ConsolidationRequest consolidations = 3
+      [ (ethereum.eth.ext.ssz_max) =
+            "max_consolidation_requests_per_payload.size" ];
+  repeated BuilderDepositRequest builder_deposits = 4
+      [ (ethereum.eth.ext.ssz_max) =
+            "max_builder_deposit_requests_per_payload.size" ];
+  repeated BuilderExitRequest builder_exits = 5
+      [ (ethereum.eth.ext.ssz_max) =
+            "max_builder_exit_requests_per_payload.size" ];
+}

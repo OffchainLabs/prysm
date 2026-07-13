@@ -71,10 +71,8 @@ func (c *AttCaches) aggregateParallel(atts map[attestation.Id][]ethpb.Att, leftO
 
 	n := runtime.GOMAXPROCS(0) // defaults to the value of runtime.NumCPU
 	ch := make(chan []ethpb.Att, n)
-	wg.Add(n)
 	for range n {
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for as := range ch {
 				aggregated, err := attaggregation.AggregateDisjointOneBitAtts(as)
 				if err != nil {
@@ -101,7 +99,7 @@ func (c *AttCaches) aggregateParallel(atts map[attestation.Id][]ethpb.Att, leftO
 					leftoverLock.Unlock()
 				}
 			}
-		}()
+		})
 	}
 
 	for _, as := range atts {

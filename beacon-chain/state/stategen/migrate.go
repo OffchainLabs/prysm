@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -102,13 +103,19 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 			continue
 		}
 
+		saveStart := time.Now()
 		if err := s.beaconDB.SaveState(ctx, aState, aRoot); err != nil {
 			return err
 		}
+
+		duration := time.Since(saveStart)
+		saveStateToColdSummary.Observe(float64(duration.Milliseconds()))
+
 		log.WithFields(
 			logrus.Fields{
-				"slot": aState.Slot(),
-				"root": hex.EncodeToString(bytesutil.Trunc(aRoot[:])),
+				"slot":     aState.Slot(),
+				"root":     hex.EncodeToString(bytesutil.Trunc(aRoot[:])),
+				"duration": duration,
 			}).Info("Saved state in DB")
 	}
 
@@ -162,7 +169,9 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 			aRoot = cached.root
 			aState = cached.state
 		} else {
-			_, roots, err := s.beaconDB.HighestRootsBelowSlot(ctx, slot)
+			// we check for slot+1 because we don't want to treat this slot as a missed block when it's not in cache.
+			// this specifically happens when the state is evicted from the caches in long non finalization.
+			_, roots, err := s.beaconDB.HighestRootsBelowSlot(ctx, slot+1)
 			if err != nil {
 				return err
 			}
@@ -180,10 +189,7 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 				return err
 			}
 		}
-		if s.beaconDB.HasState(ctx, aRoot) {
-			s.migrateHotToCold(aRoot)
-			continue
-		}
+
 		// advance slots to the target slot
 		if aState.Slot() < slot {
 			aState, err = transition.ProcessSlots(ctx, aState, slot)
@@ -191,13 +197,18 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 				return errors.Wrapf(err, "could not process slots to slot %d", slot)
 			}
 		}
+		saveStart := time.Now()
 		if err := s.beaconDB.SaveState(ctx, aState, aRoot); err != nil {
 			return err
 		}
+		duration := time.Since(saveStart)
+		saveStateToColdSummary.Observe(float64(duration.Milliseconds()))
+
 		log.WithFields(
 			logrus.Fields{
-				"slot": aState.Slot(),
-				"root": fmt.Sprintf("%#x", aRoot),
+				"slot":     aState.Slot(),
+				"root":     fmt.Sprintf("%#x", aRoot),
+				"duration": duration,
 			}).Info("Saved state in DB")
 	}
 	// Update finalized info in memory.

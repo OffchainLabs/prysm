@@ -273,12 +273,30 @@ type Builder struct {
 }
 
 type BuilderPendingPayment struct {
-	Weight     string                    `json:"weight"`
-	Withdrawal *BuilderPendingWithdrawal `json:"withdrawal"`
+	Weight        string                    `json:"weight"`
+	Withdrawal    *BuilderPendingWithdrawal `json:"withdrawal"`
+	ProposerIndex string                    `json:"proposer_index"`
 }
 
 type BuilderPendingWithdrawal struct {
 	FeeRecipient string `json:"fee_recipient"`
 	Amount       string `json:"amount"`
 	BuilderIndex string `json:"builder_index"`
+}
+
+type PTCs struct {
+	ValidatorIndices []string `json:"validator_indices"`
+}
+
+type ProposerPreferences struct {
+	DependentRoot  string `json:"dependent_root"`
+	ProposalSlot   string `json:"proposal_slot"`
+	ValidatorIndex string `json:"validator_index"`
+	FeeRecipient   string `json:"fee_recipient"`
+	TargetGasLimit string `json:"target_gas_limit"`
+}
+
+type SignedProposerPreferences struct {
+	Message   *ProposerPreferences `json:"message"`
+	Signature string               `json:"signature"`
 }

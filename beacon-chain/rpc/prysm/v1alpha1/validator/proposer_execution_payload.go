@@ -42,12 +42,6 @@ var (
 	})
 )
 
-func setFeeRecipientIfBurnAddress(val *cache.TrackedValidator) {
-	if val.FeeRecipient == primitives.ExecutionAddress([20]byte{}) && val.Index == 0 {
-		val.FeeRecipient = primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
-	}
-}
-
 // This returns the local execution payload of a given slot. The function has full awareness of pre and post merge.
 func (vs *Server) getLocalPayload(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock, st state.BeaconState, parentFull bool) (*consensusblocks.GetPayloadResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.getLocalPayload")
@@ -79,13 +73,19 @@ func (vs *Server) getLocalPayloadFromEngine(
 		"slot":           slot,
 		"headRoot":       fmt.Sprintf("%#x", parentRoot),
 	}
-	payloadId, ok := vs.PayloadIDCache.PayloadID(slot, parentRoot)
+	payloadId, ok := vs.PayloadIDCache.PayloadID(slot, parentRoot, parentFull)
 
-	val, tracked := vs.TrackedValidatorsCache.Validator(proposerId)
-	if !tracked {
-		logrus.WithFields(logFields).Warn("Could not find tracked proposer index")
+	val := cache.ProposerPreference{ValidatorIndex: proposerId}
+	dependentRoot, err := helpers.ProposerDependentRootOrGenesis(ctx, vs.BeaconDB, st, slot)
+	if err != nil {
+		log.WithFields(logFields).WithError(err).Debug("Could not get proposer dependent root, falling back to default preferences")
+		if def, ok := vs.ProposerPreferencesCache.DefaultFor(proposerId); ok {
+			val = def
+		}
+	} else if pref, ok := vs.ProposerPreferencesCache.BestFor(dependentRoot, slot, proposerId); ok {
+		val = pref
 	}
-	setFeeRecipientIfBurnAddress(&val)
+	val.FeeRecipient = val.FeeRecipientOrDefault()
 
 	if ok && payloadId != [8]byte{} {
 		// Payload ID is cache hit. Return the cached payload ID.
@@ -140,10 +140,11 @@ func (vs *Server) getLocalPayloadFromEngine(
 	var attr payloadattribute.Attributer
 	switch {
 	case st.Version() >= version.Gloas:
-		withdrawals, err := vs.computePayloadWithdrawals(ctx, st, parentRoot, parentFull)
+		withdrawals, err := vs.computePayloadWithdrawals(st, parentFull)
 		if err != nil {
 			return nil, err
 		}
+		parentGasLimit := helpers.ParentTargetGasLimit(st)
 		attr, err = payloadattribute.New(&enginev1.PayloadAttributesV4{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            random,
@@ -151,6 +152,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 			Withdrawals:           withdrawals,
 			ParentBeaconBlockRoot: parentRoot[:],
 			SlotNumber:            uint64(slot),
+			TargetGasLimit:        val.GasLimitOr(parentGasLimit),
 		})
 		if err != nil {
 			return nil, err
@@ -285,29 +287,34 @@ var (
 )
 
 // computePayloadWithdrawals returns the withdrawals for the next payload.
-func (vs *Server) computePayloadWithdrawals(ctx context.Context, st state.BeaconState, parentRoot [32]byte, parentFull bool) ([]*enginev1.Withdrawal, error) {
+func (vs *Server) computePayloadWithdrawals(st state.BeaconState, parentFull bool) ([]*enginev1.Withdrawal, error) {
 	if !parentFull {
 		return st.PayloadExpectedWithdrawals()
-	}
-	parentSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(parentRoot)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get parent block slot")
-	}
-	if slots.ToEpoch(parentSlot) >= params.BeaconConfig().GloasForkEpoch {
-		// TODO: replace DB lookup with a single-entry cache (blockroot → envelope).
-		envelope, err := vs.BeaconDB.ExecutionPayloadEnvelope(ctx, parentRoot)
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get parent execution payload envelope")
-		}
-		if err := coregloas.ApplyParentExecutionPayload(ctx, st, envelope.Message.ExecutionRequests); err != nil {
-			return nil, errors.Wrap(err, "could not apply parent execution payload")
-		}
 	}
 	result, err := st.ExpectedWithdrawalsGloas()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute expected withdrawals")
 	}
 	return result.Withdrawals, nil
+}
+
+func (vs *Server) applyParentExecutionPayloadToHead(ctx context.Context, head state.BeaconState, parentRoot [32]byte) error {
+	parentSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(parentRoot)
+	if err != nil {
+		return errors.Wrap(err, "could not get parent block slot")
+	}
+	if slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch {
+		return nil
+	}
+	// TODO: replace DB lookup with a single-entry cache (blockroot → envelope).
+	envelope, err := vs.BeaconDB.ExecutionPayloadEnvelope(ctx, parentRoot)
+	if err != nil {
+		return errors.Wrap(err, "could not get parent execution payload envelope")
+	}
+	if err := coregloas.ApplyParentExecutionPayload(ctx, head, envelope.Message.ExecutionRequests); err != nil {
+		return errors.Wrap(err, "could not apply parent execution payload")
+	}
+	return nil
 }
 
 // getParentBlockHash retrieves the parent block hash of the block at the given slot.

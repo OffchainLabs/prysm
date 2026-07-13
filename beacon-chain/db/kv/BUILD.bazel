@@ -31,6 +31,7 @@ go_library(
         "state_diff.go",
         "state_diff_cache.go",
         "state_diff_helpers.go",
+        "state_hot_snapshots.go",
         "state_summary.go",
         "state_summary_cache.go",
         "testing_helpers.go",
@@ -109,6 +110,7 @@ go_test(
         "p2p_test.go",
         "state_diff_helpers_test.go",
         "state_diff_test.go",
+        "state_hot_snapshots_test.go",
         "state_summary_test.go",
         "state_test.go",
         "utils_test.go",
@@ -118,6 +120,7 @@ go_test(
     data = glob(["testdata/**"]),
     embed = [":go_default_library"],
     deps = [
+        "//beacon-chain/core/gloas:go_default_library",
         "//beacon-chain/db/filters:go_default_library",
         "//beacon-chain/db/iface:go_default_library",
         "//beacon-chain/state:go_default_library",

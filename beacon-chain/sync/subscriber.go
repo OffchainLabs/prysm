@@ -15,8 +15,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -62,6 +62,14 @@ type subscribeParameters struct {
 	// getSubnetsRequiringPeers is a function that returns all subnets that require peers to be found
 	// but for which no subscriptions are needed.
 	getSubnetsRequiringPeers func(currentSlot primitives.Slot) map[uint64]bool
+
+	// partial is the ONLY topic specific field allowed here (nil for non-data-column topics).
+	// Don't add more: If you need topic specific behavior, generalize this into a topic agnostic hooks instead.
+	partial *partialSubscribeParameters
+}
+
+type partialSubscribeParameters struct {
+	broadcaster partialdatacolumnbroadcaster.Broadcaster
 }
 
 // shortTopic is a less verbose version of topic strings used for logging.
@@ -321,6 +329,12 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 	// Data column gossip topic (Fulu and Gloas).
 	if params.BeaconConfig().FuluForkEpoch <= nse.Epoch {
 		s.spawn(func() {
+			var ps *partialSubscribeParameters
+			if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
+				ps = &partialSubscribeParameters{
+					broadcaster: broadcaster,
+				}
+			}
 			s.subscribeWithParameters(subscribeParameters{
 				topicFormat:              p2p.DataColumnSubnetTopicFormat,
 				validate:                 s.validateDataColumn,
@@ -328,6 +342,7 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 				nse:                      nse,
 				getSubnetsToJoin:         s.dataColumnSubnetIndices,
 				getSubnetsRequiringPeers: s.allDataColumnSubnets,
+				partial:                  ps,
 			})
 		})
 	}
@@ -390,13 +405,10 @@ func (s *Service) subscribeLogFields(topic string, nse params.NetworkScheduleEnt
 // subscribe to a given topic with a given validator and subscription handler.
 // The base protobuf message is used to initialize new messages for decoding.
 func (s *Service) subscribe(topic string, validator wrappedVal, handle subHandler, nse params.NetworkScheduleEntry) {
-	if err := s.waitForInitialSync(s.ctx); err != nil {
-		log.WithFields(s.subscribeLogFields(topic, nse)).WithError(err).Debug("Context cancelled while waiting for initial sync, not subscribing to topic")
-		return
-	}
-	// Check if this subscribe request is still valid - we may have crossed another fork epoch while waiting for initial sync.
+	// Subscriptions need to come up before initial sync completes so the node can
+	// follow new gossip immediately after the synced flag flips. Validators already
+	// ignore messages while initial sync is still active.
 	if s.subscriptionRequestExpired(nse) {
-		// If we are already past the next fork epoch, do not subscribe to this topic.
 		log.WithFields(s.subscribeLogFields(topic, nse)).Debug("Not subscribing to topic as we are already past the next fork epoch")
 		return
 	}
@@ -405,11 +417,10 @@ func (s *Service) subscribe(topic string, validator wrappedVal, handle subHandle
 		// Impossible condition as it would mean topic does not exist.
 		panic(fmt.Sprintf("%s is not mapped to any message in GossipTopicMappings", topic)) // lint:nopanic -- Impossible condition.
 	}
-	s.subscribeWithBase(s.addDigestToTopic(topic, nse.ForkDigest), validator, handle)
+	s.subscribeWithBase(s.addDigestToTopic(topic, nse.ForkDigest)+s.cfg.p2p.Encoding().ProtocolSuffix(), validator, handle)
 }
 
 func (s *Service) subscribeWithBase(topic string, validator wrappedVal, handle subHandler) *pubsub.Subscription {
-	topic += s.cfg.p2p.Encoding().ProtocolSuffix()
 	log := log.WithField("topic", topic)
 
 	// Do not resubscribe already seen subscriptions.
@@ -513,7 +524,7 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 			return pubsub.ValidationReject
 		}
 		// Ignore any messages received before chainstart.
-		if s.chainStarted.IsNotSet() {
+		if !s.chainStarted.Load() {
 			messageIgnoredValidationCounter.WithLabelValues(topic).Inc()
 			return pubsub.ValidationIgnore
 		}
@@ -575,9 +586,16 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 // pruneNotWanted unsubscribes from topics we are currently subscribed to but that are
 // not in the list of wanted subnets.
 func (s *Service) pruneNotWanted(t *subnetTracker, wantedSubnets map[uint64]bool) {
+	suffix := s.cfg.p2p.Encoding().ProtocolSuffix()
 	for _, subnet := range t.unwanted(wantedSubnets) {
 		t.cancelSubscription(subnet)
-		s.unSubscribeFromTopic(t.fullTopic(subnet, s.cfg.p2p.Encoding().ProtocolSuffix()))
+		topic := t.fullTopic(subnet, suffix)
+		if t.partial != nil {
+			if err := t.partial.broadcaster.Unsubscribe(s.ctx, topic); err != nil {
+				log.WithError(err).Error("Failed to unsubscribe from partial column")
+			}
+		}
+		s.unSubscribeFromTopic(topic)
 	}
 }
 
@@ -590,11 +608,7 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 	go s.ensurePeers(ctx, tracker)
 	go s.logMinimumPeersPerSubnet(ctx, p)
 
-	if err := s.waitForInitialSync(ctx); err != nil {
-		log.WithFields(p.logFields()).WithError(err).Debug("Could not subscribe to subnets as initial sync failed")
-		return
-	}
-	s.trySubscribeSubnets(tracker)
+	s.trySubscribeSubnets(ctx, tracker)
 	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
 	defer slotTicker.Done()
 	for {
@@ -611,7 +625,7 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 				}).Debug("Exiting topic subnet subscription loop")
 				return
 			}
-			s.trySubscribeSubnets(tracker)
+			s.trySubscribeSubnets(ctx, tracker)
 		case <-s.ctx.Done():
 			return
 		}
@@ -619,14 +633,38 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 }
 
 // trySubscribeSubnets attempts to subscribe to any missing subnets that we should be subscribed to.
-// Only if initial sync is complete.
-func (s *Service) trySubscribeSubnets(t *subnetTracker) {
+// Validators gate message processing while initial sync is active, so subscriptions can come up early.
+func (s *Service) trySubscribeSubnets(ctx context.Context, t *subnetTracker) {
 	subnetsToJoin := t.getSubnetsToJoin(s.cfg.clock.CurrentSlot())
 	s.pruneNotWanted(t, subnetsToJoin)
+	suffix := s.cfg.p2p.Encoding().ProtocolSuffix()
 	for _, subnet := range t.missing(subnetsToJoin) {
-		// TODO: subscribeWithBase appends the protocol suffix, other methods don't. Make this consistent.
-		topic := t.fullTopic(subnet, "")
-		t.track(subnet, s.subscribeWithBase(topic, t.validate, t.handle))
+		topicStr := t.fullTopic(subnet, suffix)
+		var pubsubOpts []pubsub.TopicOpt
+
+		requestPartial := t.partial != nil
+
+		if requestPartial {
+			pubsubOpts = append(pubsubOpts, pubsub.RequestPartialMessages())
+		}
+
+		topic, err := s.cfg.p2p.JoinTopic(topicStr, pubsubOpts...)
+		if err != nil {
+			log.WithError(err).WithField("topic", topicStr).Error("Failed to join topic")
+			continue
+		}
+
+		if requestPartial {
+			// A failed partial subscription is non-fatal; we log and continue, and still
+			// subscribe to the full columns below as a fallback.
+			if err := t.partial.broadcaster.Subscribe(ctx, topic); err != nil {
+				log.WithError(err).Error("Failed to subscribe to partial column")
+			}
+		}
+
+		// We still need to subscribe to the full columns as well as partial in
+		// case our peers don't support partial messages.
+		t.track(subnet, s.subscribeWithBase(topicStr, t.validate, t.handle))
 	}
 }
 
@@ -867,18 +905,6 @@ func (*Service) addDigestAndIndexToTopic(topic string, digest [4]byte, idx uint6
 
 func (s *Service) currentForkDigest() ([4]byte, error) {
 	return params.ForkDigest(s.cfg.clock.CurrentEpoch()), nil
-}
-
-// Checks if the provided digest matches up with the current supposed digest.
-func isDigestValid(digest [4]byte, clock *startup.Clock) (bool, error) {
-	current := clock.CurrentEpoch()
-	// In the event there is a fork the next epoch,
-	// we skip the check, as we subscribe subnets an
-	// epoch in advance.
-	if params.NextNetworkScheduleEntry(current).Epoch == current+1 {
-		return true, nil
-	}
-	return params.ForkDigest(current) == digest, nil
 }
 
 // computeAllNeededSubnets computes the subnets we want to join

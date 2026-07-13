@@ -376,6 +376,11 @@ func (c *ValidatorClient) registerPrometheusService(cliCtx *cli.Context) error {
 }
 
 func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
+	distributed := cliCtx.Bool(flags.EnableDistributed.Name)
+	if distributed && !features.Get().EnableBeaconRESTApi {
+		return errors.New("--distributed requires --enable-beacon-rest-api")
+	}
+
 	var (
 		interopKmConfig *local.InteropKeymanagerConfig
 		err             error
@@ -410,6 +415,8 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		return err
 	}
 
+	stateless := cliCtx.Bool(flags.EnableStatelessFlag.Name)
+
 	validatorService, err := client.NewValidatorService(cliCtx.Context, &client.Config{
 		DB:                      c.db,
 		Wallet:                  c.wallet,
@@ -432,7 +439,8 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		EnableAPI:               features.Get().EnableWeb || cliCtx.Bool(flags.EnableRPCFlag.Name),
 		LogValidatorPerformance: !cliCtx.Bool(flags.DisablePenaltyRewardLogFlag.Name),
 		EmitAccountMetrics:      !cliCtx.Bool(flags.DisableAccountMetricsFlag.Name),
-		Distributed:             cliCtx.Bool(flags.EnableDistributed.Name),
+		Distributed:             distributed,
+		Stateless:               stateless,
 		CloseClientFunc:         c.Close,
 		MaxHealthChecks:         cliCtx.Int(flags.MaxHealthChecksFlag.Name),
 	})

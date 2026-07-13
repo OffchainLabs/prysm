@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
+	validatorflags "github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/urfave/cli/v2"
@@ -69,6 +70,7 @@ type Flags struct {
 	DisableResourceManager     bool // Disables running the node with libp2p's resource manager.
 	DisableStakinContractCheck bool // Disables check for deposit contract when proposing blocks
 	IgnoreUnviableAttestations bool // Ignore attestations whose target state is not viable (avoids lagging-node DoS).
+	TrackEquivocations         bool // Record proposer equivocations seen on gossip into forkchoice.
 
 	EnableHashtree               bool // Enables usage of the hashtree library for hashing
 	EnableVerboseSigVerification bool // EnableVerboseSigVerification specifies whether to verify individual signature if batch verification fails
@@ -294,6 +296,11 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(ignoreUnviableAttestations)
 		cfg.IgnoreUnviableAttestations = true
 	}
+	cfg.TrackEquivocations = false
+	if ctx.IsSet(trackEquivocations.Name) && ctx.Bool(trackEquivocations.Name) {
+		logEnabled(trackEquivocations)
+		cfg.TrackEquivocations = true
+	}
 	if ctx.IsSet(EnableStateDiff.Name) {
 		logEnabled(EnableStateDiff)
 		cfg.EnableStateDiff = true
@@ -351,7 +358,7 @@ func ConfigureValidator(ctx *cli.Context) error {
 		logEnabled(enableDoppelGangerProtection)
 		cfg.EnableDoppelGanger = true
 	}
-	if ctx.Bool(EnableBeaconRESTApi.Name) {
+	if ctx.Bool(EnableBeaconRESTApi.Name) || ctx.IsSet(validatorflags.BeaconRESTApiProviderFlag.Name) {
 		logEnabled(EnableBeaconRESTApi)
 		cfg.EnableBeaconRESTApi = true
 	}

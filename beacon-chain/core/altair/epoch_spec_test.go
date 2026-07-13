@@ -104,7 +104,7 @@ func TestProcessSlashings_NotSlashed(t *testing.T) {
 	}
 	s, err := state_native.InitializeFromProtoAltair(base)
 	require.NoError(t, err)
-	require.NoError(t, epoch.ProcessSlashings(s))
+	require.NoError(t, epoch.ProcessSlashings(t.Context(), s))
 	wanted := params.BeaconConfig().MaxEffectiveBalance
 	assert.Equal(t, wanted, s.Balances()[0], "Unexpected slashed balance")
 }
@@ -174,7 +174,7 @@ func TestProcessSlashings_SlashedLess(t *testing.T) {
 			original := proto.Clone(tt.state)
 			s, err := state_native.InitializeFromProtoAltair(tt.state)
 			require.NoError(t, err)
-			require.NoError(t, epoch.ProcessSlashings(s))
+			require.NoError(t, epoch.ProcessSlashings(t.Context(), s))
 			assert.Equal(t, tt.want, s.Balances()[0], "ProcessSlashings({%v}) = newState; newState.Balances[0] = %d", original, s.Balances()[0])
 		})
 	}
@@ -189,5 +189,5 @@ func TestProcessSlashings_BadValue(t *testing.T) {
 	}
 	s, err := state_native.InitializeFromProtoAltair(base)
 	require.NoError(t, err)
-	require.ErrorContains(t, "addition overflows", epoch.ProcessSlashings(s))
+	require.ErrorContains(t, "addition overflows", epoch.ProcessSlashings(t.Context(), s))
 }

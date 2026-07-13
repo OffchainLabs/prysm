@@ -107,3 +107,19 @@ func PendingConsolidationsEqual(s, t *ethpb.PendingConsolidation) bool {
 	}
 	return s.SourceIndex == t.SourceIndex && s.TargetIndex == t.TargetIndex
 }
+
+func BuilderPendingWithdrawalsEqual(s, t *ethpb.BuilderPendingWithdrawal) bool {
+	if s == nil && t == nil {
+		return true
+	}
+	if s == nil || t == nil {
+		return false
+	}
+	if s.Amount != t.Amount {
+		return false
+	}
+	if s.BuilderIndex != t.BuilderIndex {
+		return false
+	}
+	return bytes.Equal(s.FeeRecipient, t.FeeRecipient)
+}

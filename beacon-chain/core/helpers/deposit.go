@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/contracts/deposit"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
@@ -76,6 +78,51 @@ func BatchVerifyPendingDepositsSignatures(ctx context.Context, deposits []*ethpb
 	return true, nil
 }
 
+// IsPendingValidator checks whether a pending deposit with a valid signature exists in the
+// given queue for the given pubkey.
+//
+//	<spec fn="is_pending_validator" fork="gloas" hash="4cec3c3c">
+//	def is_pending_validator(pending_deposits: Sequence[PendingDeposit], pubkey: BLSPubkey) -> bool:
+//	    """
+//	    Check if a pending deposit with a valid signature is in the queue for the given pubkey.
+//	    """
+//	    for pending_deposit in pending_deposits:
+//	        if pending_deposit.pubkey != pubkey:
+//	            continue
+//	        if is_valid_deposit_signature(
+//	            pending_deposit.pubkey,
+//	            pending_deposit.withdrawal_credentials,
+//	            pending_deposit.amount,
+//	            pending_deposit.signature,
+//	        ):
+//	            return True
+//	    return False
+//	</spec>
+func IsPendingValidator(pendingDeposits []*ethpb.PendingDeposit, pubkey []byte) (bool, error) {
+	for _, deposit := range pendingDeposits {
+		if deposit == nil {
+			continue
+		}
+		if !bytes.Equal(deposit.PublicKey, pubkey) {
+			continue
+		}
+		valid, err := IsValidDepositSignature(&ethpb.Deposit_Data{
+			PublicKey:             deposit.PublicKey,
+			WithdrawalCredentials: deposit.WithdrawalCredentials,
+			Amount:                deposit.Amount,
+			Signature:             deposit.Signature,
+		})
+		if err != nil {
+			log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Warn("Could not verify pending deposit signature")
+			continue
+		}
+		if valid {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // IsValidDepositSignature returns whether deposit_data is valid
 // def is_valid_deposit_signature(pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: uint64, signature: BLSSignature) -> bool:
 //
@@ -94,6 +141,91 @@ func IsValidDepositSignature(data *ethpb.Deposit_Data) (bool, error) {
 		return false, nil
 	}
 	return true, nil
+}
+
+// BatchVerifyBuilderDepositRequestSignatures returns the indices of builder deposit
+// requests with invalid proof-of-possession signatures.
+func BatchVerifyBuilderDepositRequestSignatures(ctx context.Context, requests []*enginev1.BuilderDepositRequest) ([]int, error) {
+	if len(requests) == 0 {
+		return nil, nil
+	}
+	domain, err := signing.ComputeDomain(params.BeaconConfig().DomainBuilderDeposit, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return verifyBuilderDepositRequestsDC(ctx, requests, domain)
+}
+
+func verifyBuilderDepositRequestDataWithDomain(ctx context.Context, reqs []*enginev1.BuilderDepositRequest, domain []byte) error {
+	if len(reqs) == 0 {
+		return nil
+	}
+	pks := make([]bls.PublicKey, len(reqs))
+	sigs := make([][]byte, len(reqs))
+	msgs := make([][32]byte, len(reqs))
+	for i, req := range reqs {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if req == nil {
+			return errors.New("nil builder deposit request")
+		}
+		pk, err := bls.PublicKeyFromBytes(req.Pubkey)
+		if err != nil {
+			return err
+		}
+		pks[i] = pk
+		sigs[i] = req.Signature
+		sr, err := signing.ComputeSigningRoot(&ethpb.DepositMessage{
+			PublicKey:             req.Pubkey,
+			WithdrawalCredentials: req.WithdrawalCredentials,
+			Amount:                req.Amount,
+		}, domain)
+		if err != nil {
+			return err
+		}
+		msgs[i] = sr
+	}
+	verify, err := bls.VerifyMultipleSignatures(sigs, msgs, pks)
+	if err != nil {
+		return errors.Errorf("could not verify multiple signatures: %v", err)
+	}
+	if !verify {
+		return errors.New("one or more builder deposit signatures did not verify")
+	}
+	return nil
+}
+
+// verifyBuilderDepositRequestsDC localizes invalid signatures by divide-and-conquer. A non-nil
+// verify error means the subtree has at least one bad signature, not a block-level failure: bad
+// signatures only skip the deposit (see process_builder_deposit_request). Real aborts (ctx
+// cancellation) propagate via the ctx.Err guards.
+func verifyBuilderDepositRequestsDC(ctx context.Context, reqs []*enginev1.BuilderDepositRequest, domain []byte) ([]int, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if len(reqs) == 0 {
+		return nil, nil
+	}
+	if err := verifyBuilderDepositRequestDataWithDomain(ctx, reqs, domain); err == nil {
+		return nil, nil
+	}
+	if len(reqs) == 1 {
+		return []int{0}, nil
+	}
+	mid := len(reqs) / 2
+	left, err := verifyBuilderDepositRequestsDC(ctx, reqs[:mid], domain)
+	if err != nil {
+		return nil, err
+	}
+	right, err := verifyBuilderDepositRequestsDC(ctx, reqs[mid:], domain)
+	if err != nil {
+		return nil, err
+	}
+	for i := range right {
+		right[i] += mid
+	}
+	return append(left, right...), nil
 }
 
 // VerifyDeposit verifies the deposit data and signature given the beacon state and deposit information

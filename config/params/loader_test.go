@@ -44,16 +44,14 @@ var placeholderFields = []string{
 	"HEZE_FORK_EPOCH",
 	"HEZE_FORK_VERSION",
 	"INCLUSION_LIST_COMMITTEE_SIZE",
+	"INCLUSION_LIST_DUE_BPS",
 	"INCLUSION_LIST_SUBMISSION_DEADLINE",
-	"INCLUSION_LIST_SUBMISSION_DUE_BPS",
 	"KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH", // Configured in proto/ssz_proto_library.bzl
 	"MAX_BYTES_PER_INCLUSION_LIST",
 	"MAX_REQUEST_INCLUSION_LIST",
 	"NUMBER_OF_COLUMNS", // Configured as a constant in config/fieldparams/mainnet.go
-	"PROPOSER_INCLUSION_LIST_CUTOFF_BPS",
 	"TARGET_NUMBER_OF_PEERS",
 	"UPDATE_TIMEOUT",
-	"VIEW_FREEZE_CUTOFF_BPS",
 	"WHISK_EPOCHS_PER_SHUFFLING_PHASE",
 	"WHISK_FORK_EPOCH",
 	"WHISK_FORK_VERSION",
@@ -114,6 +112,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.DeepEqual(t, expected.GenesisForkVersion, actual.GenesisForkVersion, "%s: GenesisForkVersion", name)
 	assert.DeepEqual(t, expected.BLSWithdrawalPrefixByte, actual.BLSWithdrawalPrefixByte, "%s: BLSWithdrawalPrefixByte", name)
 	assert.DeepEqual(t, expected.BuilderWithdrawalPrefixByte, actual.BuilderWithdrawalPrefixByte, "%s: BuilderWithdrawalPrefixByte", name)
+	assert.DeepEqual(t, expected.PayloadBuilderVersion, actual.PayloadBuilderVersion, "%s: PayloadBuilderVersion", name)
 	assert.DeepEqual(t, expected.ETH1AddressWithdrawalPrefixByte, actual.ETH1AddressWithdrawalPrefixByte, "%s: ETH1AddressWithdrawalPrefixByte", name)
 
 	// Time parameters.

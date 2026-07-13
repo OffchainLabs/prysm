@@ -155,10 +155,11 @@ func Test_signProposerPreferences(t *testing.T) {
 	kp := randKeypair(t)
 	km := newMockKeymanager(t, kp)
 	pref := &ethpb.ProposerPreferences{
+		DependentRoot:  bytesutil.PadTo([]byte("dep"), 32),
 		ProposalSlot:   123,
 		ValidatorIndex: 456,
 		FeeRecipient:   bytesutil.PadTo([]byte("fee"), 20),
-		GasLimit:       789,
+		TargetGasLimit: 789,
 	}
 
 	domain, err := signing.ComputeDomain(

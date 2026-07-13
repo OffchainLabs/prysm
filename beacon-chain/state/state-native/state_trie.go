@@ -3,6 +3,7 @@ package state_native
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math/bits"
 	"runtime"
 	"slices"
@@ -871,6 +872,7 @@ func InitializeFromProtoUnsafeGloas(st *ethpb.BeaconStateGloas) (state.BeaconSta
 		stateFieldLeaves:              make(map[types.FieldIndex]*fieldtrie.FieldTrie, len(fieldMap)),
 		rebuildTrie:                   make(map[types.FieldIndex]bool, fieldCount),
 		valMapHandler:                 stateutil.NewValMapHandler(st.Validators),
+		builderIdxMap:                 newBuilderIdxMap(st.Builders),
 	}
 
 	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
@@ -1014,6 +1016,8 @@ func (b *BeaconState) Copy() state.BeaconState {
 
 		// Share the reference to validator index map.
 		valMapHandler: b.valMapHandler,
+
+		builderIdxMap: maps.Clone(b.builderIdxMap),
 	}
 
 	b.blockRootsMultiValue.Copy(b, dst)

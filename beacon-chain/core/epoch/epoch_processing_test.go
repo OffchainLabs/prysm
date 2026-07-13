@@ -31,7 +31,7 @@ func TestProcessSlashings_NotSlashed(t *testing.T) {
 	}
 	s, err := state_native.InitializeFromProtoPhase0(base)
 	require.NoError(t, err)
-	require.NoError(t, epoch.ProcessSlashings(s))
+	require.NoError(t, epoch.ProcessSlashings(t.Context(), s))
 	wanted := params.BeaconConfig().MaxEffectiveBalance
 	assert.Equal(t, wanted, s.Balances()[0], "Unexpected slashed balance")
 }
@@ -109,7 +109,7 @@ func TestProcessSlashings_SlashedLess(t *testing.T) {
 			s, err := state_native.InitializeFromProtoPhase0(tt.state)
 			require.NoError(t, err)
 			helpers.ClearCache()
-			require.NoError(t, epoch.ProcessSlashings(s))
+			require.NoError(t, epoch.ProcessSlashings(t.Context(), s))
 			assert.Equal(t, tt.want, s.Balances()[0], "ProcessSlashings({%v}) = newState; newState.Balances[0] = %d", original, s.Balances()[0])
 		})
 	}
@@ -361,7 +361,7 @@ func TestProcessSlashings_BadValue(t *testing.T) {
 	}
 	s, err := state_native.InitializeFromProtoPhase0(base)
 	require.NoError(t, err)
-	require.ErrorContains(t, "addition overflows", epoch.ProcessSlashings(s))
+	require.ErrorContains(t, "addition overflows", epoch.ProcessSlashings(t.Context(), s))
 }
 
 func TestProcessHistoricalDataUpdate(t *testing.T) {
@@ -506,7 +506,7 @@ func TestProcessSlashings_SlashedElectra(t *testing.T) {
 			s, err := state_native.InitializeFromProtoElectra(tt.state)
 			require.NoError(t, err)
 			helpers.ClearCache()
-			require.NoError(t, epoch.ProcessSlashings(s))
+			require.NoError(t, epoch.ProcessSlashings(t.Context(), s))
 			assert.Equal(t, tt.want, s.Balances()[0], "ProcessSlashings({%v}); s.Balances[0] = %d", original, s.Balances()[0])
 		})
 	}

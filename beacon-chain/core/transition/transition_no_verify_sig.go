@@ -361,27 +361,37 @@ func ProcessOperationsNoVerifyAttsSigs(
 		return nil, errors.Wrap(err, "could not verify operation lengths")
 	}
 
-	var err error
-	if beaconBlock.Version() == version.Phase0 {
-		state, err = phase0Operations(ctx, state, beaconBlock)
+	blockVersion := beaconBlock.Version()
+	if blockVersion >= version.Gloas {
+		state, err := gloasOperations(ctx, state, beaconBlock)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("gloas operations: %w", err)
 		}
-	} else if beaconBlock.Version() < version.Electra {
-		state, err = altairOperations(ctx, state, beaconBlock)
+
+		return state, nil
+	}
+
+	if blockVersion >= version.Electra {
+		state, err := electraOperations(ctx, state, beaconBlock)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("electra operations: %w", err)
 		}
-	} else if beaconBlock.Version() < version.Gloas {
-		state, err = electraOperations(ctx, state, beaconBlock)
+
+		return state, nil
+	}
+
+	if blockVersion > version.Phase0 {
+		state, err := altairOperations(ctx, state, beaconBlock)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("altair operations: %w", err)
 		}
-	} else {
-		state, err = gloasOperations(ctx, state, beaconBlock)
-		if err != nil {
-			return nil, err
-		}
+
+		return state, nil
+	}
+
+	state, err := phase0Operations(ctx, state, beaconBlock)
+	if err != nil {
+		return nil, fmt.Errorf("phase0 operations: %w", err)
 	}
 
 	return state, nil
@@ -432,7 +442,7 @@ func ProcessBlockForStateRoot(
 	}
 
 	if state.Version() >= version.Gloas {
-		// <spec fn="process_block" fork="gloas" hash="a911a43e">
+		// <spec fn="process_block" fork="gloas" hash="7d98b5a3">
 		// def process_block(state: BeaconState, block: BeaconBlock) -> None:
 		//     # [New in Gloas:EIP7732]
 		//     process_parent_execution_payload(state, block)
@@ -442,7 +452,7 @@ func ProcessBlockForStateRoot(
 		//     # [Modified in Gloas:EIP7732]
 		//     # Removed `process_execution_payload`
 		//     # [New in Gloas:EIP7732]
-		//     process_execution_payload_bid(state, block)
+		//     process_execution_payload_bid(state, block.body.signed_execution_payload_bid)
 		//     process_randao(state, block.body)
 		//     process_eth1_data(state, block.body)
 		//     # [Modified in Gloas:EIP7732]
@@ -514,6 +524,9 @@ func ProcessBlockForStateRoot(
 
 // This calls altair block operations.
 func altairOperations(ctx context.Context, st state.BeaconState, beaconBlock interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "core.state.altairOperations")
+	defer span.End()
+
 	var err error
 
 	hasSlashings := len(beaconBlock.Body().ProposerSlashings()) > 0 || len(beaconBlock.Body().AttesterSlashings()) > 0
@@ -555,6 +568,9 @@ func altairOperations(ctx context.Context, st state.BeaconState, beaconBlock int
 
 // This calls phase 0 block operations.
 func phase0Operations(ctx context.Context, st state.BeaconState, beaconBlock interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "core.state.phase0Operations")
+	defer span.End()
+
 	var err error
 	hasSlashings := len(beaconBlock.Body().ProposerSlashings()) > 0 || len(beaconBlock.Body().AttesterSlashings()) > 0
 	hasExits := len(beaconBlock.Body().VoluntaryExits()) > 0

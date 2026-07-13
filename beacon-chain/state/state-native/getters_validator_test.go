@@ -6,6 +6,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	testtmpl "github.com/OffchainLabs/prysm/v7/beacon-chain/state/testing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -67,6 +69,20 @@ func TestValidatorIndexes(t *testing.T) {
 		require.NotEmpty(t, readOnlyBytes)
 		require.Equal(t, hexutil.Encode(readOnlyBytes[:]), hexutil.Encode(byteValue[:]))
 	})
+}
+
+func TestEffectiveBalanceAtIndex(t *testing.T) {
+	dState, _ := util.DeterministicGenesisState(t, 10)
+	for i := range uint64(10) {
+		want, err := dState.ValidatorAtIndexReadOnly(primitives.ValidatorIndex(i))
+		require.NoError(t, err)
+		got, err := dState.EffectiveBalanceAtIndex(primitives.ValidatorIndex(i))
+		require.NoError(t, err)
+		require.Equal(t, want.EffectiveBalance(), got)
+	}
+
+	_, err := dState.EffectiveBalanceAtIndex(primitives.ValidatorIndex(10))
+	require.NotNil(t, err)
 }
 
 func TestPendingBalanceToWithdraw(t *testing.T) {
@@ -142,4 +158,79 @@ func TestHasPendingBalanceToWithdraw(t *testing.T) {
 	ok, err = state.HasPendingBalanceToWithdraw(4)
 	require.NoError(t, err)
 	require.Equal(t, false, ok)
+}
+
+// BenchmarkValidatorsReadOnlySeq measures the per-validator cost of iterating the
+// registry through the ReadOnlyValidator wrapper.
+func BenchmarkValidatorsReadOnlySeq(b *testing.B) {
+	const n = 2_300_000 // ~ number of validators on mainnet at the time of writing
+
+	vals := make([]*ethpb.Validator, n)
+	for i := range vals {
+		pk := make([]byte, 48)
+		wc := make([]byte, 32)
+		pk[0] = byte(i)
+		vals[i] = &ethpb.Validator{
+			PublicKey:             pk,
+			WithdrawalCredentials: wc,
+			EffectiveBalance:      32_000_000_000,
+			ExitEpoch:             100,
+			ActivationEpoch:       1,
+		}
+	}
+	st, err := statenative.InitializeFromProtoUnsafeDeneb(&ethpb.BeaconStateDeneb{Validators: vals})
+	require.NoError(b, err)
+
+	b.ReportAllocs()
+	for b.Loop() {
+		for _, v := range st.ValidatorsReadOnlySeq() {
+			_ = v.EffectiveBalance()
+		}
+	}
+}
+
+// BenchmarkValidatorsReadOnly measures the cost of building the full slice of read-only
+// validator wrappers returned by ValidatorsReadOnly.
+func BenchmarkValidatorsReadOnly(b *testing.B) {
+	const n = 2_300_000 // ~ number of validators on mainnet at the time of writing
+
+	vals := make([]*ethpb.Validator, n)
+	for i := range vals {
+		pk := make([]byte, 48)
+		wc := make([]byte, 32)
+		pk[0] = byte(i)
+		vals[i] = &ethpb.Validator{
+			PublicKey:             pk,
+			WithdrawalCredentials: wc,
+			EffectiveBalance:      32_000_000_000,
+			ExitEpoch:             100,
+			ActivationEpoch:       1,
+		}
+	}
+	st, err := statenative.InitializeFromProtoUnsafeDeneb(&ethpb.BeaconStateDeneb{Validators: vals})
+	require.NoError(b, err)
+
+	b.ReportAllocs()
+	for b.Loop() {
+		ros := st.ValidatorsReadOnly()
+		require.Equal(b, n, len(ros))
+	}
+}
+
+// BenchmarkAggregateKeyFromIndices measures the cost of aggregating validator public
+// keys.
+func BenchmarkAggregateKeyFromIndices(b *testing.B) {
+	n := params.BeaconConfig().MaxValidatorsPerCommittee
+
+	st, _ := util.DeterministicGenesisState(b, n)
+	idxs := make([]uint64, n)
+	for i := range idxs {
+		idxs[i] = uint64(i)
+	}
+
+	b.ReportAllocs()
+	for b.Loop() {
+		_, err := st.AggregateKeyFromIndices(idxs)
+		require.NoError(b, err)
+	}
 }

@@ -9,6 +9,7 @@ import (
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	p2ptesting "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
@@ -78,6 +79,7 @@ func TestProcessPendingPayloadEnvelope_HappyPath(t *testing.T) {
 		DB:                  db,
 	}
 	stateGen := stategen.New(db, doublylinkedtree.New())
+	broadcaster := p2ptesting.NewTestP2P(t)
 	s := &Service{
 		pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
 		seenPayloadEnvelopeCache: lruwrpr.New(10),
@@ -87,6 +89,7 @@ func TestProcessPendingPayloadEnvelope_HappyPath(t *testing.T) {
 			beaconDB: db,
 			stateGen: stateGen,
 			clock:    startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+			p2p:      broadcaster,
 		},
 	}
 
@@ -113,6 +116,49 @@ func TestProcessPendingPayloadEnvelope_HappyPath(t *testing.T) {
 	s.processPendingPayloadEnvelope(ctx, root)
 	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
 	require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
+	require.Equal(t, true, broadcaster.BroadcastCalled.Load())
+}
+
+func TestProcessPendingPayloadEnvelope_DoesNotBroadcastOnReceiveError(t *testing.T) {
+	ctx := context.Background()
+	db := dbtest.SetupDB(t)
+	chainService := &mock.ChainService{
+		Genesis:                   time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+		FinalizedCheckPoint:       &ethpb.Checkpoint{},
+		DB:                        db,
+		ReceivePayloadEnvelopeErr: errors.New("receive failed"),
+	}
+	stateGen := stategen.New(db, doublylinkedtree.New())
+	broadcaster := p2ptesting.NewTestP2P(t)
+	s := &Service{
+		pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+		seenPayloadEnvelopeCache: lruwrpr.New(10),
+		badBlockCache:            lruwrpr.New(10),
+		cfg: &config{
+			chain:    chainService,
+			beaconDB: db,
+			stateGen: stateGen,
+			clock:    startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+			p2p:      broadcaster,
+		},
+	}
+
+	bid := util.GenerateTestSignedExecutionPayloadBid(1)
+	sb := util.NewBeaconBlockGloas()
+	sb.Block.Slot = 1
+	sb.Block.Body.SignedExecutionPayloadBid = bid
+	signedBlock, err := blocks.NewSignedBeaconBlock(sb)
+	require.NoError(t, err)
+	root, err := signedBlock.Block().HashTreeRoot()
+	require.NoError(t, err)
+
+	builderIdx := primitives.BuilderIndex(bid.Message.BuilderIndex)
+	blockHash := bytesutil.ToBytes32(bid.Message.BlockHash)
+	env := testSignedExecutionPayloadEnvelope(t, 1, builderIdx, root, blockHash)
+	s.pendingPayloadEnvelopes[root] = map[uint64]*ethpb.SignedExecutionPayloadEnvelope{uint64(builderIdx): env}
+
+	s.processPendingPayloadEnvelope(ctx, root)
+	require.Equal(t, false, broadcaster.BroadcastCalled.Load())
 }
 
 func TestProcessPendingPayloadEnvelopes_Sweep(t *testing.T) {
@@ -133,6 +179,7 @@ func TestProcessPendingPayloadEnvelopes_Sweep(t *testing.T) {
 			beaconDB: db,
 			stateGen: stateGen,
 			clock:    startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+			p2p:      p2ptesting.NewTestP2P(t),
 		},
 	}
 
@@ -314,7 +361,32 @@ func TestQueuePendingPayloadEnvelope_SelfBuildInLookaheadVerifiesSignature(t *te
 	require.Equal(t, maxSelfBuildSigFailures, s.selfBuildSigFailures)
 }
 
-func TestQueuePendingPayloadEnvelope_RejectBadSignature(t *testing.T) {
+func TestQueuePendingPayloadEnvelope_SelfBuildSigFailuresResetPerSlot(t *testing.T) {
+	ctx := context.Background()
+	s, _, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	selfBuild := params.BeaconConfig().BuilderIndexSelfBuild
+
+	blockHash := [32]byte{0x02}
+	signedEnv := testSignedExecutionPayloadEnvelope(t, 1, selfBuild, root, blockHash)
+	e, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedEnv)
+	require.NoError(t, err)
+	env, err := e.Envelope()
+	require.NoError(t, err)
+
+	// Failures accumulated in a previous slot must not carry over.
+	currentSlot := s.cfg.clock.CurrentSlot()
+	s.selfBuildSigFailures = maxSelfBuildSigFailures
+	s.selfBuildSigFailSlot = currentSlot - 1
+
+	v := &mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("bad signature")}
+	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.Equal(t, 1, s.selfBuildSigFailures)
+	require.Equal(t, currentSlot, s.selfBuildSigFailSlot)
+}
+
+func TestQueuePendingPayloadEnvelope_IgnoreBadSignature(t *testing.T) {
 	ctx := context.Background()
 	s, _, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
 
@@ -328,7 +400,7 @@ func TestQueuePendingPayloadEnvelope_RejectBadSignature(t *testing.T) {
 	v := &mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("bad signature")}
 	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
 	require.NotNil(t, err)
-	require.Equal(t, pubsub.ValidationReject, result)
+	require.Equal(t, pubsub.ValidationIgnore, result)
 	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
 }
 
@@ -372,6 +444,29 @@ func TestQueuePendingPayloadEnvelope_DoesNotOverwrite(t *testing.T) {
 	require.Equal(t, pubsub.ValidationIgnore, result)
 	require.Equal(t, 1, len(s.pendingPayloadEnvelopes[root]))
 	require.Equal(t, first, s.pendingPayloadEnvelopes[root][1])
+}
+
+func TestQueuePendingPayloadEnvelope_PrunesMalformedExistingEnvelope(t *testing.T) {
+	ctx := context.Background()
+	s, _, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+
+	s.pendingPayloadEnvelopes[root] = map[uint64]*ethpb.SignedExecutionPayloadEnvelope{
+		1: {Signature: bytes.Repeat([]byte{0xAA}, 96)},
+	}
+
+	blockHash := [32]byte{0x02}
+	next := testSignedExecutionPayloadEnvelope(t, 1, 1, root, blockHash)
+	e, err := blocks.WrappedROSignedExecutionPayloadEnvelope(next)
+	require.NoError(t, err)
+	env, err := e.Envelope()
+	require.NoError(t, err)
+
+	v := &mockExecutionPayloadEnvelopeVerifier{}
+	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, next)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.Equal(t, 1, len(s.pendingPayloadEnvelopes[root]))
+	require.Equal(t, next, s.pendingPayloadEnvelopes[root][1])
 }
 
 func TestQueuePendingPayloadEnvelope_RootCountBound(t *testing.T) {
@@ -500,7 +595,7 @@ func TestQueuePendingPayloadEnvelope_SelfBuildBypassesPerRootBound(t *testing.T)
 	require.Equal(t, true, ok)
 }
 
-func TestValidateExecutionPayloadEnvelope_RejectBadSignatureBeforeQueue(t *testing.T) {
+func TestValidateExecutionPayloadEnvelope_IgnoreBadSignatureBeforeQueue(t *testing.T) {
 	ctx := context.Background()
 	s, msg, _, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)
 	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(
@@ -512,7 +607,7 @@ func TestValidateExecutionPayloadEnvelope_RejectBadSignatureBeforeQueue(t *testi
 
 	result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
 	require.NotNil(t, err)
-	require.Equal(t, result, pubsub.ValidationReject)
+	require.Equal(t, result, pubsub.ValidationIgnore)
 	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
 }
 

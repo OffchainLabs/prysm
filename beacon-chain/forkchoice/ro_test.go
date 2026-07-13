@@ -42,6 +42,7 @@ const (
 	targetRootForEpochCalled
 	parentRootCalled
 	blockHashCalled
+	gasLimitCalled
 	dependentRootCalled
 	dependentRootForEpochCalled
 	canonicalNodeAtSlotCalled
@@ -177,6 +178,11 @@ func TestROLocking(t *testing.T) {
 			name: "canonicalNodeAtSlotCalled",
 			call: canonicalNodeAtSlotCalled,
 			cb:   func(g FastGetter) { g.CanonicalNodeAtSlot(0) },
+		},
+		{
+			name: "gasLimitCalled",
+			call: gasLimitCalled,
+			cb:   func(g FastGetter) { _, err := g.GasLimit([32]byte{}); _discard(t, err) },
 		},
 	}
 	for _, c := range cases {
@@ -351,6 +357,11 @@ func (ro *mockROForkchoice) ParentRoot(_ [32]byte) ([32]byte, error) {
 func (ro *mockROForkchoice) BlockHash(_ [32]byte) ([32]byte, error) {
 	ro.calls = append(ro.calls, blockHashCalled)
 	return [32]byte{}, nil
+}
+
+func (ro *mockROForkchoice) GasLimit(_ [32]byte) (uint64, error) {
+	ro.calls = append(ro.calls, gasLimitCalled)
+	return 0, nil
 }
 
 func (ro *mockROForkchoice) CanonicalNodeAtSlot(_ primitives.Slot) ([32]byte, bool) {
