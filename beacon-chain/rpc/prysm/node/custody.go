@@ -17,9 +17,8 @@ import (
 )
 
 // custodyInfoTimeout bounds how long GetCustody waits for the custody info to be
-// initialized at startup before failing the request. It is a variable only so
-// that tests can shorten the wait.
-var custodyInfoTimeout = 3 * time.Second
+// initialized at startup before failing the request.
+const custodyInfoTimeout = 3 * time.Second
 
 // GetCustody returns the current data column custody state of the node: the custody
 // group count, the custody groups and columns, the earliest available slot, the

@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
-	"time"
+	"testing/synctest"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
@@ -20,20 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/proto/dbval"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"github.com/pkg/errors"
 )
-
-type unavailableCustodyManager struct {
-	p2p.CustodyManager
-}
-
-func (unavailableCustodyManager) CustodyGroupCount(context.Context) (uint64, error) {
-	return 0, errors.New("custody info is not set")
-}
-
-func (unavailableCustodyManager) EarliestAvailableSlot(context.Context) (primitives.Slot, error) {
-	return 0, errors.New("custody info is not set")
-}
 
 // blockingCustodyManager mimics a node whose custody info is never initialized:
 // like p2p.Service, it blocks until the context is done.
@@ -83,23 +70,14 @@ func TestGetCustody_CustodyInfoUnavailable(t *testing.T) {
 	cfg.FuluForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
-	writer := getCustody(t, &Server{CustodyManager: unavailableCustodyManager{}})
-	assert.Equal(t, http.StatusServiceUnavailable, writer.Code)
-}
-
-func TestGetCustody_CustodyInfoTimeout(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
-
-	originalTimeout := custodyInfoTimeout
-	custodyInfoTimeout = 20 * time.Millisecond
-	t.Cleanup(func() { custodyInfoTimeout = originalTimeout })
-
-	writer := getCustody(t, &Server{CustodyManager: blockingCustodyManager{}})
-	assert.Equal(t, http.StatusServiceUnavailable, writer.Code)
-	assert.StringContains(t, context.DeadlineExceeded.Error(), writer.Body.String())
+	// synctest fakes time within the bubble: the custodyInfoTimeout deadline
+	// fires as soon as the handler blocks on the custody manager, without the
+	// test waiting for it in real time.
+	synctest.Test(t, func(t *testing.T) {
+		writer := getCustody(t, &Server{CustodyManager: blockingCustodyManager{}})
+		assert.Equal(t, http.StatusServiceUnavailable, writer.Code)
+		assert.StringContains(t, context.DeadlineExceeded.Error(), writer.Body.String())
+	})
 }
 
 func TestGetCustody(t *testing.T) {
