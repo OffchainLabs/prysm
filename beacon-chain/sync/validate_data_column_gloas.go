@@ -320,7 +320,12 @@ func (s *Service) processPendingGloasColumnsRoutine() {
 
 // prunePendingGloasColumns removes stale entries every slot.
 func (s *Service) prunePendingGloasColumns() {
-	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
+	clock, err := s.clockWaiter.WaitForClock(s.ctx)
+	if err != nil {
+		log.WithError(err).Error("Failed to receive clock for pending Gloas columns pruning routine")
+		return
+	}
+	slotTicker := slots.NewSlotTicker(clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
 	defer slotTicker.Done()
 	for {
 		select {
