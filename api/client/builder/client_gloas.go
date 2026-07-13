@@ -68,12 +68,21 @@ func (c *Client) getExecutionPayloadBid(
 	}}
 	if auth != nil {
 		var err error
-		body, err = json.Marshal(structs.SignedRequestAuthFromConsensus(auth))
-		if err != nil {
-			return nil, errors.Wrap(err, "could not json encode SignedRequestAuthV1")
+		contentType := api.JsonMediaType
+		if ssz {
+			contentType = api.OctetStreamMediaType
+			body, err = auth.MarshalSSZ()
+			if err != nil {
+				return nil, errors.Wrap(err, "could not ssz encode SignedRequestAuthV1")
+			}
+		} else {
+			body, err = json.Marshal(structs.SignedRequestAuthFromConsensus(auth))
+			if err != nil {
+				return nil, errors.Wrap(err, "could not json encode SignedRequestAuthV1")
+			}
 		}
 		opts = append(opts, func(r *http.Request) {
-			r.Header.Set("Content-Type", api.JsonMediaType)
+			r.Header.Set("Content-Type", contentType)
 		})
 	}
 
@@ -119,42 +128,55 @@ func bodySnippet(b []byte) string {
 }
 
 // SubmitSignedBeaconBlock sends the signed block to the builder so it can reveal the envelope.
+// If the builder rejects the SSZ request, it retries once using JSON.
 func (c *Client) SubmitSignedBeaconBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) error {
 	if sb.Version() < version.Gloas {
-		return errors.Errorf("submitSignedBeaconBlock requires Gloas or later, got %s", version.String(sb.Version()))
+		return errors.Errorf("SubmitSignedBeaconBlock requires Gloas or later, got %s", version.String(sb.Version()))
 	}
-	body, err := sb.MarshalSSZ()
-	if err != nil {
-		return errors.Wrap(err, "could not ssz encode SignedBeaconBlock")
+	return c.sszFallbackErr(func(ssz bool) error {
+		return c.submitSignedBeaconBlock(ctx, sb, ssz)
+	})
+}
+
+func (c *Client) submitSignedBeaconBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock, ssz bool) error {
+	var (
+		body        []byte
+		err         error
+		contentType string
+	)
+	if ssz {
+		contentType = api.OctetStreamMediaType
+		body, err = sb.MarshalSSZ()
+		if err != nil {
+			return errors.Wrap(err, "could not ssz encode SignedBeaconBlock")
+		}
+	} else {
+		contentType = api.JsonMediaType
+		body, err = jsonSignedBeaconBlock(sb)
+		if err != nil {
+			return err
+		}
 	}
-	_, status, _, err := c.doWithStatus(ctx, http.MethodPost, postBeaconBlockPath, bytes.NewReader(body), []int{http.StatusAccepted, http.StatusUnsupportedMediaType}, contentTypeOpts(api.OctetStreamMediaType, sb.Version()))
-	if err != nil {
+	if _, _, err := c.do(ctx, http.MethodPost, postBeaconBlockPath, bytes.NewReader(body), http.StatusAccepted, contentTypeOpts(contentType, sb.Version())); err != nil {
 		return errors.Wrap(err, "error submitting signed beacon block to builder")
 	}
-	if status != http.StatusUnsupportedMediaType {
-		return nil
-	}
-	// Builder does not accept SSZ; retry as JSON.
+	return nil
+}
+
+func jsonSignedBeaconBlock(sb interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
 	pb, err := sb.Proto()
 	if err != nil {
-		return errors.Wrap(err, "could not get protobuf block")
+		return nil, errors.Wrap(err, "could not get protobuf block")
 	}
 	gloasBlock, ok := pb.(*ethpb.SignedBeaconBlockGloas)
 	if !ok {
-		return errors.Errorf("unexpected block type %T for builder json submission", pb)
+		return nil, errors.Errorf("unexpected block type %T for builder json submission", pb)
 	}
 	jsonBlock, err := structs.SignedBeaconBlockGloasFromConsensus(gloasBlock)
 	if err != nil {
-		return errors.Wrap(err, "could not convert block for json encoding")
+		return nil, errors.Wrap(err, "could not convert block for json encoding")
 	}
-	jsonBody, err := json.Marshal(jsonBlock)
-	if err != nil {
-		return errors.Wrap(err, "could not json encode SignedBeaconBlock")
-	}
-	if _, _, err := c.do(ctx, http.MethodPost, postBeaconBlockPath, bytes.NewReader(jsonBody), http.StatusAccepted, contentTypeOpts(api.JsonMediaType, sb.Version())); err != nil {
-		return errors.Wrap(err, "error submitting json signed beacon block to builder")
-	}
-	return nil
+	return json.Marshal(jsonBlock)
 }
 
 // SubmitBuilderPreferences submits a proposer's per-builder preferences ahead of the bid request.

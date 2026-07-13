@@ -21,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/io/logs"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -121,8 +122,7 @@ type Client struct {
 	sszRejected atomic.Bool
 }
 
-// useSSZ reports whether requests should be SSZ-encoded: SSZ is configured and the remote
-// builder has not previously rejected SSZ requests.
+// useSSZ reports whether requests should be SSZ-encoded.
 func (c *Client) useSSZ() bool {
 	return c.sszEnabled && !c.sszRejected.Load()
 }
@@ -131,7 +131,7 @@ func (c *Client) useSSZ() bool {
 // requests use JSON. It logs once, on the first transition.
 func (c *Client) markSSZRejected() {
 	if c.sszRejected.CompareAndSwap(false, true) {
-		log.WithField("url", c.NodeURL()).Warn("Remote builder rejected SSZ request; falling back to JSON encoding for subsequent requests")
+		log.WithField("url", logs.MaskCredentialsLogging(c.NodeURL())).Warn("Remote builder rejected SSZ request; falling back to JSON encoding for subsequent requests")
 	}
 }
 
