@@ -124,6 +124,18 @@ type HeadData struct {
 	ExecutionOptimistic       bool
 }
 
+// ChainReorgData is the data sent with Reorg events.
+type ChainReorgData struct {
+	Slot                primitives.Slot
+	Depth               uint64
+	OldHeadBlock        [32]byte
+	NewHeadBlock        [32]byte
+	OldHeadState        [32]byte
+	NewHeadState        [32]byte
+	Epoch               primitives.Epoch
+	ExecutionOptimistic bool
+}
+
 // HeadV2Data is the data sent with NewHeadV2 events.
 type HeadV2Data struct {
 	Slot                      primitives.Slot

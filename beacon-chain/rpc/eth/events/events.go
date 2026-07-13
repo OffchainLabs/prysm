@@ -491,7 +491,7 @@ func topicForEvent(event *feed.Event) string {
 		return LightClientFinalityUpdateTopic
 	case interfaces.LightClientOptimisticUpdate:
 		return LightClientOptimisticUpdateTopic
-	case *ethpb.EventChainReorg:
+	case *statefeed.ChainReorgData:
 		return ChainReorgTopic
 	case *statefeed.BlockProcessedData:
 		return BlockTopic
@@ -670,9 +670,9 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, ev)
 		}, nil
-	case *ethpb.EventChainReorg:
+	case *statefeed.ChainReorgData:
 		return func() io.Reader {
-			return jsonMarshalReader(eventName, structs.EventChainReorgFromV1(v))
+			return jsonMarshalReader(eventName, structs.ChainReorgEventFromData(v))
 		}, nil
 	case *statefeed.BlockProcessedData:
 		blockRoot, err := v.SignedBlock.Block().HashTreeRoot()

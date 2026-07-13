@@ -1568,16 +1568,16 @@ func FinalizedCheckpointEventFromV1(event *ethv1.EventFinalizedCheckpoint) *Fina
 	}
 }
 
-func EventChainReorgFromV1(event *ethv1.EventChainReorg) *ChainReorgEvent {
+func ChainReorgEventFromData(data *statefeed.ChainReorgData) *ChainReorgEvent {
 	return &ChainReorgEvent{
-		Slot:                fmt.Sprintf("%d", event.Slot),
-		Depth:               fmt.Sprintf("%d", event.Depth),
-		OldHeadBlock:        hexutil.Encode(event.OldHeadBlock),
-		NewHeadBlock:        hexutil.Encode(event.NewHeadBlock),
-		OldHeadState:        hexutil.Encode(event.OldHeadState),
-		NewHeadState:        hexutil.Encode(event.NewHeadState),
-		Epoch:               fmt.Sprintf("%d", event.Epoch),
-		ExecutionOptimistic: event.ExecutionOptimistic,
+		Slot:                fmt.Sprintf("%d", data.Slot),
+		Depth:               fmt.Sprintf("%d", data.Depth),
+		OldHeadBlock:        hexutil.Encode(data.OldHeadBlock[:]),
+		NewHeadBlock:        hexutil.Encode(data.NewHeadBlock[:]),
+		OldHeadState:        hexutil.Encode(data.OldHeadState[:]),
+		NewHeadState:        hexutil.Encode(data.NewHeadState[:]),
+		Epoch:               fmt.Sprintf("%d", data.Epoch),
+		ExecutionOptimistic: data.ExecutionOptimistic,
 	}
 }
 

@@ -25,38 +25,6 @@ option java_outer_classname = "BeaconEventsProto";
 option java_package = "org.ethereum.eth.v1";
 option php_namespace = "Ethereum\\Eth\\v1";
 
-message EventChainReorg {
-  // The slot of the observed reorg.
-  uint64 slot = 1 [
-    (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
-  ];
-
-  // Depth of the reorg in slots.
-  uint64 depth = 2;
-
-  // Block root of the old head.
-  bytes old_head_block = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
-
-  // Block root of the new head.
-  bytes new_head_block = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
-
-  // State root of the old state.
-  bytes old_head_state = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
-
-  // State root of the new state.
-  bytes new_head_state = 6 [ (ethereum.eth.ext.ssz_size) = "32" ];
-
-  // Epoch of the observed reorg.
-  uint64 epoch = 7 [
-    (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
-  ];
-
-  // Information about optimistic sync.
-  bool execution_optimistic = 8;
-}
-
 message EventFinalizedCheckpoint {
   // Block root of the finalized checkpoint.
   bytes block = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];

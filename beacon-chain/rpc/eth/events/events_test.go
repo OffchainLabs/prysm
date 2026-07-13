@@ -566,13 +566,13 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 			},
 			{
 				Type: statefeed.Reorg,
-				Data: &ethpb.EventChainReorg{
+				Data: &statefeed.ChainReorgData{
 					Slot:                0,
 					Depth:               0,
-					OldHeadBlock:        make([]byte, 32),
-					NewHeadBlock:        make([]byte, 32),
-					OldHeadState:        make([]byte, 32),
-					NewHeadState:        make([]byte, 32),
+					OldHeadBlock:        [32]byte{},
+					NewHeadBlock:        [32]byte{},
+					OldHeadState:        [32]byte{},
+					NewHeadState:        [32]byte{},
 					Epoch:               0,
 					ExecutionOptimistic: false,
 				},
