@@ -4064,6 +4064,32 @@ func TestGetPayloadAttestationData(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
 		assert.StringContains(t, "Gloas fork", writer.Body.String())
 	})
+	t.Run("no block seen for slot returns 204 with no body", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(5)
+		timeChain := &mockChain.ChainService{Slot: &slot}
+		fcChain := &mockChain.ChainService{BlockSlot: primitives.Slot(4)}
+		s := &Server{
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			HeadFetcher:           timeChain,
+			TimeFetcher:           timeChain,
+			OptimisticModeFetcher: timeChain,
+			CoreService:           &core.Service{GenesisTimeFetcher: timeChain, ForkchoiceFetcher: fcChain},
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/validator/payload_attestation_data/{slot}", nil)
+		request.SetPathValue("slot", "5")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPayloadAttestationData(writer, request)
+		assert.Equal(t, http.StatusNoContent, writer.Code)
+		assert.Equal(t, 0, writer.Body.Len())
+	})
 	t.Run("ok json", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig().Copy()
