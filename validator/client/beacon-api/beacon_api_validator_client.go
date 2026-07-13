@@ -301,16 +301,22 @@ func (c *beaconApiValidatorClient) SubmitSignedProposerPreferences(ctx context.C
 	})
 }
 
-// TODO(gloas): Wire up actual REST call to POST /eth/v1alpha1/validator/builder_preferences
-func (c *beaconApiValidatorClient) SubmitBuilderPreferences(_ context.Context, _ *ethpb.SubmitBuilderPreferencesRequest) (*empty.Empty, error) {
-	log.Debug("SubmitBuilderPreferences not yet implemented for beacon API client, skipping")
-	return new(empty.Empty), nil
+func (c *beaconApiValidatorClient) SubmitBuilderPreferences(ctx context.Context, in *ethpb.SubmitBuilderPreferencesRequest) (*empty.Empty, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.SubmitBuilderPreferences")
+	defer span.End()
+
+	return wrapInMetrics[*empty.Empty]("SubmitBuilderPreferences", func() (*empty.Empty, error) {
+		return new(empty.Empty), c.submitBuilderPreferences(ctx, in)
+	})
 }
 
-// TODO(gloas): Wire up actual REST call to POST /eth/v2/beacon/execution_payload/bid
-func (c *beaconApiValidatorClient) SubmitSignedExecutionPayloadBid(_ context.Context, _ *ethpb.SignedExecutionPayloadBid) (*empty.Empty, error) {
-	log.Debug("SubmitSignedExecutionPayloadBid not yet implemented for beacon API client, skipping")
-	return new(empty.Empty), nil
+func (c *beaconApiValidatorClient) SubmitSignedExecutionPayloadBid(ctx context.Context, in *ethpb.SignedExecutionPayloadBid) (*empty.Empty, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.SubmitSignedExecutionPayloadBid")
+	defer span.End()
+
+	return wrapInMetrics[*empty.Empty]("SubmitSignedExecutionPayloadBid", func() (*empty.Empty, error) {
+		return new(empty.Empty), c.submitSignedExecutionPayloadBid(ctx, in)
+	})
 }
 
 func (c *beaconApiValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest) (*empty.Empty, error) {
