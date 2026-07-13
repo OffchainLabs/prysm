@@ -6,6 +6,15 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [v7.1.7](https://github.com/prysmaticlabs/prysm/compare/v7.1.6...v7.1.7) - 2026-07-13
 
+This patch release focuses on Beacon API interoperability, validator-client resilience, and a broad round of Gloas (ePBS) correctness and stability improvements.
+
+Release highlights:
+
+- **Gloas and builder APIs**: Added external builder bid selection and per-builder maximum execution payments, improved payload bid and attestation validation, and strengthened missing-payload and data-column recovery paths.
+- **Beacon API and validator client**: Added SSZ support for proposer preferences, payload attestations, and validator balances; switched REST validator clients to `head_v2` with automatic legacy fallback; and added replacement hints for removed routes.
+- **Resilience and failover**: Re-push proposer preferences after beacon-node failover, retry failed submissions, accelerate unknown-parent recovery, and prevent startup, REST-handler, builder-registry, and peer-address edge-case failures.
+- **Operator experience**: Reduced noisy beacon-node and validator-client logs, added clearer Gloas bid-selection and envelope-publication diagnostics, documented ordered REST endpoint failover, and improved error reporting for invalid P2P IP configuration.
+
 ### Added
 
 - Accept SSZ (`application/octet-stream`) request bodies on `POST /eth/v1/validator/proposer_preferences`, matching beacon-APIs #608. [[PR]](https://github.com/prysmaticlabs/prysm/pull/17054)
