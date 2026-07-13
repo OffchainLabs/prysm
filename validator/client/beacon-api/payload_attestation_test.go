@@ -26,7 +26,7 @@ func TestPayloadAttestationData(t *testing.T) {
 	ctx := t.Context()
 	slot := uint64(42)
 	beaconBlockRoot := testhelpers.FillByteSlice(32, 0xab)
-	endpoint := fmt.Sprintf("/eth/v1/validator/payload_attestation_data/%d", slot)
+	endpoint := fmt.Sprintf("/eth/v1/validator/payload_attestation_data?slot=%d", slot)
 
 	jsonHeader := http.Header{"Content-Type": []string{api.JsonMediaType}}
 	sszHeader := http.Header{"Content-Type": []string{api.OctetStreamMediaType}}

@@ -361,6 +361,31 @@ func TestQueuePendingPayloadEnvelope_SelfBuildInLookaheadVerifiesSignature(t *te
 	require.Equal(t, maxSelfBuildSigFailures, s.selfBuildSigFailures)
 }
 
+func TestQueuePendingPayloadEnvelope_SelfBuildSigFailuresResetPerSlot(t *testing.T) {
+	ctx := context.Background()
+	s, _, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	selfBuild := params.BeaconConfig().BuilderIndexSelfBuild
+
+	blockHash := [32]byte{0x02}
+	signedEnv := testSignedExecutionPayloadEnvelope(t, 1, selfBuild, root, blockHash)
+	e, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedEnv)
+	require.NoError(t, err)
+	env, err := e.Envelope()
+	require.NoError(t, err)
+
+	// Failures accumulated in a previous slot must not carry over.
+	currentSlot := s.cfg.clock.CurrentSlot()
+	s.selfBuildSigFailures = maxSelfBuildSigFailures
+	s.selfBuildSigFailSlot = currentSlot - 1
+
+	v := &mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("bad signature")}
+	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.Equal(t, 1, s.selfBuildSigFailures)
+	require.Equal(t, currentSlot, s.selfBuildSigFailSlot)
+}
+
 func TestQueuePendingPayloadEnvelope_IgnoreBadSignature(t *testing.T) {
 	ctx := context.Background()
 	s, _, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)

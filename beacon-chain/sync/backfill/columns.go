@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 )
@@ -277,7 +278,7 @@ func buildColumnBatch(ctx context.Context, b batch, blks verifiedROBlocks, p p2p
 		custodyGroups: indices,
 		toDownload:    make(map[[32]byte]*toDownload, len(blks)),
 	}
-	for _, b := range blks {
+	for i, b := range blks {
 		slot := b.Block().Slot()
 		if !needs.Col.At(slot) {
 			continue
@@ -289,6 +290,21 @@ func buildColumnBatch(ctx context.Context, b batch, blks verifiedROBlocks, p p2p
 		if len(cmts) == 0 {
 			continue
 		}
+		// Adjacent blocks are parent linked by verify, so the direct child is at i+1 when present.
+		full := true
+		if b.Block().Version() >= version.Gloas && i+1 < len(blks) {
+			full, err = blocks.BlockBuiltOnParentPayload(b.Block(), blks[i+1].Block())
+			if err != nil {
+				return nil, errors.Wrap(err, "block built on parent payload")
+			}
+		}
+		var remaining peerdas.ColumnIndices
+		if full {
+			remaining = das.IndicesNotStored(store.Summary(b.Root()), indices)
+		} else {
+			// Empty slots have no canonical columns to require, but keep the root known so peers still serving them are not penalized.
+			remaining = peerdas.ColumnIndices{}
+		}
 		// The last block this part of the loop sees will be the last one
 		// we need to download data columns for.
 		if len(summary.toDownload) == 0 {
@@ -297,7 +313,7 @@ func buildColumnBatch(ctx context.Context, b batch, blks verifiedROBlocks, p p2p
 		}
 		summary.last = slot
 		summary.toDownload[b.Root()] = &toDownload{
-			remaining:      das.IndicesNotStored(store.Summary(b.Root()), indices),
+			remaining:      remaining,
 			commitments:    cmts,
 			slot:           slot,
 			blockSignature: b.Signature(),
