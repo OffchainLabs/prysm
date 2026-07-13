@@ -593,6 +593,9 @@ func TestPTCForcedReorg(t *testing.T) {
 }
 
 func TestShouldReorgPayload(t *testing.T) {
+	resetCfg := features.InitWithReset(&features.Flags{ReorgLatePayloads: true})
+	defer resetCfg()
+
 	setup := func(t *testing.T, name string) (*Service, [32]byte, primitives.Slot) {
 		t.Helper()
 		service, _ := setupGloasService(t, &mockExecution.EngineClient{})
