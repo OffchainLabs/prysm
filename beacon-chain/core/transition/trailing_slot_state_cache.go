@@ -34,6 +34,25 @@ var (
 	})
 )
 
+// NextSlotStateReadOnly returns the saved state for the given blockroot.
+// It returns the last updated state if it matches. Otherwise it returns the previously
+// updated state if it matches its root. If no root matches it returns nil.
+// This version returns a ReadoOnlyBeaconState without making a copy.
+func NextSlotStateReadOnly(root []byte, wantedSlot types.Slot) state.ReadOnlyBeaconState {
+	nsc.Lock()
+	defer nsc.Unlock()
+	if bytes.Equal(root, nsc.lastRoot) && nsc.lastState.Slot() <= wantedSlot {
+		nextSlotCacheHit.Inc()
+		return nsc.lastState
+	}
+	if bytes.Equal(root, nsc.prevRoot) && nsc.prevState.Slot() <= wantedSlot {
+		nextSlotCacheHit.Inc()
+		return nsc.prevState
+	}
+	nextSlotCacheMiss.Inc()
+	return nil
+}
+
 // NextSlotState returns the saved state for the given blockroot.
 // It returns the last updated state if it matches. Otherwise it returns the previously
 // updated state if it matches its root. If no root matches it returns nil

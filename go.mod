@@ -6,15 +6,17 @@ require (
 	github.com/OffchainLabs/go-bitfield v0.0.0-20260504143531-5cbb6d0f5f2e
 	github.com/OffchainLabs/hashtree v0.2.3
 	github.com/aristanetworks/goarista v0.0.0-20200805130819-fd197cf57d96
+	github.com/bazelbuild/buildtools v0.0.0-20260528135316-84fa6c32aee6
 	github.com/bazelbuild/rules_go v0.23.2
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
+	github.com/bufbuild/protocompile v0.14.1
 	github.com/consensys/gnark-crypto v0.18.1
 	github.com/crate-crypto/go-kzg-4844 v1.1.0
 	github.com/d4l3k/messagediff v1.2.1
 	github.com/dgraph-io/ristretto/v2 v2.2.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/emicklei/dot v1.6.2
-	github.com/ethereum/c-kzg-4844/v2 v2.1.6
+	github.com/ethereum/c-kzg-4844/v2 v2.1.8
 	github.com/ethereum/go-ethereum v1.17.4
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/ghodss/yaml v1.0.0
@@ -284,4 +286,8 @@ replace github.com/json-iterator/go => github.com/prestonvanloon/go v1.1.7-0.201
 
 replace github.com/tyler-smith/go-bip39 => ./third_party/go-bip39
 
-tool github.com/prysmaticlabs/protoc-gen-go-cast
+tool (
+	github.com/prysmaticlabs/fastssz/sszgen
+	github.com/prysmaticlabs/protoc-gen-go-cast
+	go.uber.org/mock/mockgen
+)

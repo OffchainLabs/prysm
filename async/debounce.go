@@ -17,7 +17,10 @@ func Debounce(ctx context.Context, interval time.Duration, eventsChan <-chan any
 	for {
 		select {
 		// Wait until an event is triggered.
-		case event := <-eventsChan:
+		case event, ok := <-eventsChan:
+			if !ok {
+				return
+			}
 			timer = time.NewTimer(interval)
 		loop:
 			for {
@@ -25,7 +28,10 @@ func Debounce(ctx context.Context, interval time.Duration, eventsChan <-chan any
 				// If another event is received before the interval has passed, store
 				// it and reset the timer.
 				select {
-				case event = <-eventsChan:
+				case event, ok = <-eventsChan:
+					if !ok {
+						return
+					}
 					// Reset timer.
 					timer.Stop()
 					timer = time.NewTimer(interval)

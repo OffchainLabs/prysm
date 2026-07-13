@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -198,6 +199,22 @@ func (p *blindedExecutionPayloadEnvelope) Slot() primitives.Slot {
 
 func (p *blindedExecutionPayloadEnvelope) BlockHash() [field_params.RootLength]byte {
 	return [field_params.RootLength]byte(p.p.BlockHash)
+}
+
+// Parent slot fullness is committed by the child bid, not recorded in the parent itself.
+func BlockBuiltOnParentPayload(parent, child interfaces.ReadOnlyBeaconBlock) (bool, error) {
+	parentBid, err := parent.Body().SignedExecutionPayloadBid()
+	if err != nil {
+		return false, err
+	}
+	childBid, err := child.Body().SignedExecutionPayloadBid()
+	if err != nil {
+		return false, err
+	}
+	if parentBid == nil || parentBid.Message == nil || childBid == nil || childBid.Message == nil {
+		return false, errors.New("nil execution payload bid")
+	}
+	return bytes.Equal(childBid.Message.ParentBlockHash, parentBid.Message.BlockHash), nil
 }
 
 // BlockBuiltOnEnvelope checks if the block's parent hash matches the envelope's execution block hash.

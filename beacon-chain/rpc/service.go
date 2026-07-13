@@ -37,8 +37,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	chainSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/io/logs"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	ethpbv1alpha1 "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -126,13 +128,14 @@ type Config struct {
 	ClockWaiter                      startup.ClockWaiter
 	BlobStorage                      *filesystem.BlobStorage
 	DataColumnStorage                *filesystem.DataColumnStorage
-	TrackedValidatorsCache           *cache.TrackedValidatorsCache
 	ProposerPreferencesCache         *cache.ProposerPreferencesCache
+	SubscribedValidatorsCache        *cache.SubscribedValidatorsCache
 	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
 	PayloadIDCache                   *cache.PayloadIDCache
 	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache
 	LCStore                          *lightClient.Store
 	GraffitiInfo                     *execution.GraffitiInfo
+	VerifierWaiter                   *verification.InitializerWaiter
 }
 
 // NewService instantiates a new RPC service instance that will
@@ -266,8 +269,8 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		BLSChangesPool:                   s.cfg.BLSChangesPool,
 		ClockWaiter:                      s.cfg.ClockWaiter,
 		CoreService:                      coreService,
-		TrackedValidatorsCache:           s.cfg.TrackedValidatorsCache,
 		ProposerPreferencesCache:         s.cfg.ProposerPreferencesCache,
+		SubscribedValidatorsCache:        s.cfg.SubscribedValidatorsCache,
 		HighestBidCache:                  s.cfg.HighestBidCache,
 		PayloadIDCache:                   s.cfg.PayloadIDCache,
 		ExecutionPayloadEnvelopeCache:    s.cfg.ExecutionPayloadEnvelopeCache,
@@ -355,6 +358,18 @@ var _ stategen.CurrentSlotter = blockchain.ChainInfoFetcher(nil)
 // Start the gRPC server.
 func (s *Service) Start() {
 	grpcprometheus.EnableHandlingTimeHistogram()
+	if s.cfg.VerifierWaiter != nil && s.validatorServer != nil {
+		go func() {
+			ini, err := s.cfg.VerifierWaiter.WaitForInitializer(s.ctx)
+			if err != nil {
+				log.WithError(err).Error("Could not get verification initializer for validator server")
+				return
+			}
+			s.validatorServer.NewExecutionPayloadBidVerifier = func(b interfaces.ROSignedExecutionPayloadBid, reqs []verification.Requirement) verification.ExecutionPayloadBidVerifier {
+				return ini.NewExecutionPayloadBidVerifier(b, reqs)
+			}
+		}()
+	}
 	go func() {
 		if s.listener != nil {
 			if err := s.grpcServer.Serve(s.listener); err != nil {

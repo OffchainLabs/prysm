@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -376,6 +377,17 @@ func TestNotifyForkchoiceUpdateGloas_NilAttributes(t *testing.T) {
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
 	_, err := s.notifyForkchoiceUpdateGloas(ctx, blockHash, nil)
 	require.NoError(t, err)
+}
+
+func TestNotifyForkchoiceUpdateGloas_UndefinedError(t *testing.T) {
+	s, _ := setupGloasService(t, &mockExecution.EngineClient{
+		ErrForkchoiceUpdated: errors.New("engine timeout"),
+	})
+	ctx := t.Context()
+
+	blockHash := bytesutil.ToBytes32([]byte("hash1"))
+	_, err := s.notifyForkchoiceUpdateGloas(ctx, blockHash, nil)
+	require.ErrorIs(t, err, ErrUndefinedExecutionEngineError)
 }
 
 func TestFcuFromReorgData_CachesPayloadID(t *testing.T) {

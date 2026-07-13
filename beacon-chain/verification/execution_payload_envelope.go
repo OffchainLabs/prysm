@@ -59,6 +59,13 @@ var (
 )
 
 var _ ExecutionPayloadEnvelopeVerifier = &EnvelopeVerifier{}
+var _ NewExecutionPayloadEnvelopeVerifier = NewEnvelopeVerifier
+
+// NewEnvelopeVerifier creates an EnvelopeVerifier without an Initializer;
+// envelope verification needs no shared resources.
+func NewEnvelopeVerifier(e interfaces.ROSignedExecutionPayloadEnvelope, reqs []Requirement) ExecutionPayloadEnvelopeVerifier {
+	return &EnvelopeVerifier{results: newResults(reqs...), e: e}
+}
 
 // EnvelopeVerifier is a read-only verifier for execution payload envelopes.
 type EnvelopeVerifier struct {

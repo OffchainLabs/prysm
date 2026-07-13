@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
@@ -720,17 +721,19 @@ func Test_GetPayloadAttribute(t *testing.T) {
 	attr := service.getPayloadAttribute(ctx, st, 0, []byte{}, true)
 	require.Equal(t, true, attr.IsEmpty())
 
-	service.cfg.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, Index: 0})
-	// Cache hit, advance state, no fee recipient
+	// Subscribe the proposer; with no preference cached, fee recipient falls back
+	// to --suggested-fee-recipient (burn by default).
+	service.cfg.SubscribedValidatorsCache.Add(0)
 	slot := primitives.Slot(1)
 	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
 	require.Equal(t, false, attr.IsEmpty())
 	require.Equal(t, params.BeaconConfig().EthBurnAddressHex, common.BytesToAddress(attr.SuggestedFeeRecipient()).String())
 
-	// Cache hit, advance state, has fee recipient
+	// With a per-validator default fee recipient cached (pre-Gloas PrepareBeaconProposer),
+	// the attribute carries it.
 	suggestedAddr := common.HexToAddress("123")
-	service.cfg.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, FeeRecipient: primitives.ExecutionAddress(suggestedAddr), Index: 0})
+	service.cfg.ProposerPreferencesCache.SetDefault(cache.ProposerPreference{ValidatorIndex: 0, FeeRecipient: primitives.ExecutionAddress(suggestedAddr)})
 	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
 	require.Equal(t, false, attr.IsEmpty())
@@ -760,8 +763,9 @@ func Test_GetPayloadAttributeV2(t *testing.T) {
 	attr := service.getPayloadAttribute(ctx, st, 0, []byte{}, true)
 	require.Equal(t, true, attr.IsEmpty())
 
-	// Cache hit, advance state, no fee recipient
-	service.cfg.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, Index: 0})
+	// Subscribe the proposer; with no preference cached, fee recipient falls back
+	// to --suggested-fee-recipient (burn by default).
+	service.cfg.SubscribedValidatorsCache.Add(0)
 	slot := primitives.Slot(1)
 	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
@@ -771,9 +775,9 @@ func Test_GetPayloadAttributeV2(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, len(a))
 
-	// Cache hit, advance state, has fee recipient
+	// With a per-validator default fee recipient cached, the attribute carries it.
 	suggestedAddr := common.HexToAddress("123")
-	service.cfg.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, FeeRecipient: primitives.ExecutionAddress(suggestedAddr), Index: 0})
+	service.cfg.ProposerPreferencesCache.SetDefault(cache.ProposerPreference{ValidatorIndex: 0, FeeRecipient: primitives.ExecutionAddress(suggestedAddr)})
 	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
 	require.Equal(t, false, attr.IsEmpty())
@@ -812,9 +816,10 @@ func Test_GetPayloadAttributeV3(t *testing.T) {
 			attr := service.getPayloadAttribute(ctx, test.st, 0, []byte{}, true)
 			require.Equal(t, true, attr.IsEmpty())
 
-			// Cache hit, advance state, no fee recipient
+			// Subscribe the proposer; with no preference cached, fee recipient falls
+			// back to --suggested-fee-recipient (burn by default).
+			service.cfg.SubscribedValidatorsCache.Add(0)
 			slot := primitives.Slot(1)
-			service.cfg.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, Index: 0})
 			service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
 			attr = service.getPayloadAttribute(ctx, test.st, slot, params.BeaconConfig().ZeroHash[:], true)
 			require.Equal(t, false, attr.IsEmpty())
@@ -823,23 +828,64 @@ func Test_GetPayloadAttributeV3(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, 0, len(a))
 
-			// Cache hit, advance state, has fee recipient
-			suggestedAddr := common.HexToAddress("123")
-			service.cfg.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, FeeRecipient: primitives.ExecutionAddress(suggestedAddr), Index: 0})
-			service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
-			attr = service.getPayloadAttribute(ctx, test.st, slot, params.BeaconConfig().ZeroHash[:], true)
-			require.Equal(t, false, attr.IsEmpty())
-			require.Equal(t, suggestedAddr, common.BytesToAddress(attr.SuggestedFeeRecipient()))
-			a, err = attr.Withdrawals()
-			require.NoError(t, err)
-			require.Equal(t, 0, len(a))
-
 			attrV3, err := attr.PbV3()
 			require.NoError(t, err)
 			hr := service.headRoot()
 			require.Equal(t, hr, [32]byte(attrV3.ParentBeaconBlockRoot))
+
+			// With a per-validator default fee recipient cached, the attribute carries it.
+			suggestedAddr := common.HexToAddress("123")
+			service.cfg.ProposerPreferencesCache.SetDefault(cache.ProposerPreference{ValidatorIndex: 0, FeeRecipient: primitives.ExecutionAddress(suggestedAddr)})
+			service.cfg.PayloadIDCache.Set(slot, [32]byte{}, true, [8]byte{})
+			attr = service.getPayloadAttribute(ctx, test.st, slot, params.BeaconConfig().ZeroHash[:], true)
+			require.Equal(t, false, attr.IsEmpty())
+			require.Equal(t, suggestedAddr, common.BytesToAddress(attr.SuggestedFeeRecipient()))
 		})
 	}
+}
+
+func Test_GetPayloadAttribute_GloasNoPreferenceFallback(t *testing.T) {
+	const parentGasLimit uint64 = 40_000_000
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	defaultFeeRecipient := common.HexToAddress("0x0123456789012345678901234567890123456789")
+	cfg.DefaultFeeRecipient = defaultFeeRecipient
+	params.OverrideBeaconConfig(cfg)
+
+	st, _ := util.DeterministicGenesisStateGloas(t, 64)
+	bid, err := st.LatestExecutionPayloadBid()
+	require.NoError(t, err)
+	require.NotNil(t, bid)
+	blockHash := bid.BlockHash()
+	updated := &ethpb.ExecutionPayloadBid{
+		ParentBlockHash:       bytesutil.PadTo([]byte{}, 32),
+		ParentBlockRoot:       bytesutil.PadTo([]byte{}, 32),
+		BlockHash:             blockHash[:],
+		PrevRandao:            bytesutil.PadTo([]byte{}, 32),
+		FeeRecipient:          bytesutil.PadTo([]byte{}, 20),
+		ExecutionRequestsRoot: bytesutil.PadTo([]byte{}, 32),
+		GasLimit:              parentGasLimit,
+	}
+	wrapped, err := consensusblocks.WrappedROExecutionPayloadBid(updated)
+	require.NoError(t, err)
+	require.NoError(t, st.SetExecutionPayloadBid(wrapped))
+
+	service, tr := minimalTestService(t, WithPayloadIDCache(cache.NewPayloadIDCache()))
+	ctx := tr.ctx
+
+	proposerIdx, err := helpers.BeaconProposerIndexAtSlot(ctx, st, 1)
+	require.NoError(t, err)
+	service.cfg.SubscribedValidatorsCache.Add(proposerIdx)
+	slot := primitives.Slot(1)
+	service.cfg.PayloadIDCache.Set(slot, [32]byte{},true, [8]byte{})
+
+	attr := service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], false)
+	require.Equal(t, false, attr.IsEmpty())
+	v4, err := attr.PbV4()
+	require.NoError(t, err)
+	require.Equal(t, parentGasLimit, v4.TargetGasLimit)
+	require.Equal(t, defaultFeeRecipient, common.BytesToAddress(attr.SuggestedFeeRecipient()))
 }
 
 func Test_UpdateLastValidatedCheckpoint(t *testing.T) {

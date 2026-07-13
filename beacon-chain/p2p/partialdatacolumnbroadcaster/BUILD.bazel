@@ -10,11 +10,11 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster",
     visibility = ["//visibility:public"],
     deps = [
-        "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/verification:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
+        "//container/slice:go_default_library",
         "//internal/logrusadapter:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "@com_github_libp2p_go_libp2p//core/peer:go_default_library",

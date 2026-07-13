@@ -263,6 +263,12 @@ def prysm_deps():
         version = "v1.2.0",
     )
     go_repository(
+        name = "com_github_bazelbuild_buildtools",
+        importpath = "github.com/bazelbuild/buildtools",
+        sum = "h1:qoTpOHw6TAC4AtKC/O/Bx2QXn2c8OnzwTOD1nBzLynk=",
+        version = "v0.0.0-20260528135316-84fa6c32aee6",
+    )
+    go_repository(
         name = "com_github_bazelbuild_rules_go",
         importpath = "github.com/bazelbuild/rules_go",
         sum = "h1:Wxu7JjqnF78cKZbsBsARLSXx/jlGaSLCnUV3mTlyHvM=",
@@ -309,6 +315,13 @@ def prysm_deps():
         importpath = "github.com/btcsuite/btcd/chaincfg/chainhash",
         sum = "h1:q0rUy8C/TYNBQS1+CGKw68tLOFYSNEs0TFnxxnS9+4U=",
         version = "v1.0.1",
+    )
+    go_repository(
+        name = "com_github_bufbuild_protocompile",
+        build_file_proto_mode = "disable_global",
+        importpath = "github.com/bufbuild/protocompile",
+        sum = "h1:iA73zAf/fyljNjQKwYzUHD6AD4R8KMasmwa/FBatYVw=",
+        version = "v0.14.1",
     )
     go_repository(
         name = "com_github_burntsushi_toml",
@@ -723,8 +736,8 @@ def prysm_deps():
         importpath = "github.com/ethereum/c-kzg-4844/v2",
         patch_args = ["-p1"],
         patches = ["//third_party:com_github_ethereum_c_kzg_4844_v2.patch"],
-        sum = "h1:xQymkKCT5E2Jiaoqf3v4wsNgjZLY0lRSkZn27fRjSls=",
-        version = "v2.1.6",
+        sum = "h1:oQ48q/TMe2SKU8qBE3N7e4/HlG3EpJftom6EsPQgJ58=",
+        version = "v2.1.8",
     )
     go_repository(
         name = "com_github_ethereum_go_bigmodexpfix",
@@ -4348,6 +4361,12 @@ def prysm_deps():
         importpath = "rsc.io/tmplfunc",
         sum = "h1:53XFQh69AfOa8Tw0Jm7t+GV7KZhOi6jzsCzTtKbMvzU=",
         version = "v0.0.3",
+    )
+    go_repository(
+        name = "net_starlark_go",
+        importpath = "go.starlark.net",
+        sum = "h1:xwwDQW5We85NaTk2APgoN9202w/l0DVGp+GZMfsrh7s=",
+        version = "v0.0.0-20210223155950-e043a3d3c984",
     )
     go_repository(
         name = "org_golang_google_api",

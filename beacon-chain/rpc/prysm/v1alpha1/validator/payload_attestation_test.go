@@ -11,6 +11,7 @@ import (
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -102,7 +103,7 @@ func TestSubmitPayloadAttestation_OK(t *testing.T) {
 			BeaconBlockRoot: root,
 			Slot:            slot,
 		},
-		Signature: make([]byte, 96),
+		Signature: bls.NewAggregateSignature().Marshal(),
 	}
 
 	resp, err := vs.SubmitPayloadAttestation(t.Context(), msg)

@@ -25,9 +25,10 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 					FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
 				},
 				BuilderConfig: &BuilderConfig{
-					Enabled:  true,
-					GasLimit: validator.Uint64(40000000),
-					Relays:   []string{"https://example-relay.com"},
+					Enabled:             true,
+					GasLimit:            validator.Uint64(40000000),
+					Relays:              []string{"https://example-relay.com"},
+					MaxExecutionPayment: validator.Uint64(1000000000),
 				},
 			},
 		},
@@ -35,11 +36,11 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 			FeeRecipientConfig: &FeeRecipientConfig{
 				FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 			},
-			MaxExecutionPayment: validator.Uint64(1000000),
 			BuilderConfig: &BuilderConfig{
-				Enabled:  false,
-				GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
-				Relays:   []string{"https://example-relay.com"},
+				Enabled:             false,
+				GasLimit:            validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
+				Relays:              []string{"https://example-relay.com"},
+				MaxExecutionPayment: validator.Uint64(2000000000),
 			},
 		},
 	}
@@ -68,6 +69,7 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 		require.DeepEqual(t, config.Relays, clone.Relays)
 		require.Equal(t, config.Enabled, clone.Enabled)
 		require.Equal(t, config.GasLimit, clone.GasLimit)
+		require.Equal(t, config.MaxExecutionPayment, clone.MaxExecutionPayment)
 	})
 	t.Run("To Payload and SettingFromConsensus", func(t *testing.T) {
 		payload := settings.ToConsensus()
@@ -79,11 +81,9 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 		require.Equal(t, option.FeeRecipientConfig.FeeRecipient.Hex(), potion.FeeRecipient)
 		require.Equal(t, settings.DefaultConfig.FeeRecipientConfig.FeeRecipient.Hex(), payload.DefaultConfig.FeeRecipient)
 		require.Equal(t, settings.DefaultConfig.BuilderConfig.Enabled, payload.DefaultConfig.Builder.Enabled)
-		require.Equal(t, settings.DefaultConfig.MaxExecutionPayment, payload.DefaultConfig.MaxExecutionPayment)
 		potion.FeeRecipient = fee
 		newSettings, err := SettingFromConsensus(payload)
 		require.NoError(t, err)
-		require.Equal(t, settings.DefaultConfig.MaxExecutionPayment, newSettings.DefaultConfig.MaxExecutionPayment)
 		noption, ok := newSettings.ProposeConfig[bytesutil.ToBytes48(key1)]
 		require.Equal(t, true, ok)
 		require.Equal(t, option.FeeRecipientConfig.FeeRecipient.Hex(), noption.FeeRecipientConfig.FeeRecipient.Hex())
@@ -504,16 +504,19 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		require.Equal(t, false, ps.UpgradeToV2())
 	})
 
-	t.Run("v1 default lifts BuilderConfig.GasLimit to top-level and drops builder", func(t *testing.T) {
+	t.Run("v1 default lifts BuilderConfig.GasLimit to top-level and retains builder relays", func(t *testing.T) {
 		ps := &Settings{
 			DefaultConfig: &Option{
-				BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(42_000_000)},
+				BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(42_000_000), Relays: []string{"http://b:8080"}},
 			},
 		}
 		require.Equal(t, true, ps.UpgradeToV2())
 		require.Equal(t, SchemaV2, ps.Version)
 		require.Equal(t, validator.Uint64(42_000_000), ps.DefaultConfig.GasLimit)
-		require.Equal(t, true, ps.DefaultConfig.BuilderConfig == nil)
+		// BuilderConfig is retained so the gloas builder-API relays/enabled survive the upgrade.
+		require.NotNil(t, ps.DefaultConfig.BuilderConfig)
+		require.Equal(t, 1, len(ps.DefaultConfig.BuilderConfig.Relays))
+		require.Equal(t, "http://b:8080", ps.DefaultConfig.BuilderConfig.Relays[0])
 	})
 
 	t.Run("v1 top-level GasLimit already set is preserved", func(t *testing.T) {
@@ -527,7 +530,7 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		require.Equal(t, validator.Uint64(70_000_000), ps.DefaultConfig.GasLimit)
 	})
 
-	t.Run("per-validator builder gas limits promoted and builders dropped", func(t *testing.T) {
+	t.Run("per-validator builder gas limits promoted and builders retained", func(t *testing.T) {
 		pubkey2, err := hexutil.Decode("0xbedefeaa94e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2cdddddddddddddddddddddddd")
 		require.NoError(t, err)
 		pk2 := bytesutil.ToBytes48(pubkey2)
@@ -541,10 +544,10 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		require.Equal(t, SchemaV2, ps.Version)
 		require.Equal(t, true, ps.DefaultConfig == nil)
 		require.Equal(t, validator.Uint64(35_000_000), ps.ProposeConfig[pk].GasLimit)
-		require.Equal(t, true, ps.ProposeConfig[pk].BuilderConfig == nil)
+		require.NotNil(t, ps.ProposeConfig[pk].BuilderConfig)
 		// An explicit top-level gas limit wins over the builder value.
 		require.Equal(t, validator.Uint64(50_000_000), ps.ProposeConfig[pk2].GasLimit)
-		require.Equal(t, true, ps.ProposeConfig[pk2].BuilderConfig == nil)
+		require.NotNil(t, ps.ProposeConfig[pk2].BuilderConfig)
 	})
 
 	t.Run("already v2 is left untouched", func(t *testing.T) {
@@ -609,43 +612,5 @@ func TestSettings_TargetGasLimit(t *testing.T) {
 			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(40_000_000)}},
 		}
 		require.Equal(t, chainDefault, ps.TargetGasLimit(pk))
-	})
-}
-
-func TestSettings_MaxExecutionPayment(t *testing.T) {
-	pubkey, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
-	require.NoError(t, err)
-	pk := bytesutil.ToBytes48(pubkey)
-
-	t.Run("nil settings returns zero", func(t *testing.T) {
-		var ps *Settings
-		require.Equal(t, validator.Uint64(0), ps.MaxExecutionPayment(pk))
-	})
-
-	t.Run("v1 settings return zero even when set", func(t *testing.T) {
-		ps := &Settings{
-			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
-				pk: {MaxExecutionPayment: validator.Uint64(1_000_000)},
-			},
-			DefaultConfig: &Option{MaxExecutionPayment: validator.Uint64(2_000_000)},
-		}
-		require.Equal(t, validator.Uint64(0), ps.MaxExecutionPayment(pk))
-	})
-
-	t.Run("per-validator wins over default", func(t *testing.T) {
-		ps := &Settings{
-			Version: SchemaV2,
-			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
-				pk: {MaxExecutionPayment: validator.Uint64(1_000_000)},
-			},
-			DefaultConfig: &Option{MaxExecutionPayment: validator.Uint64(2_000_000)},
-		}
-		require.Equal(t, validator.Uint64(1_000_000), ps.MaxExecutionPayment(pk))
-	})
-
-	t.Run("falls back to default then zero", func(t *testing.T) {
-		ps := &Settings{Version: SchemaV2, DefaultConfig: &Option{MaxExecutionPayment: validator.Uint64(2_000_000)}}
-		require.Equal(t, validator.Uint64(2_000_000), ps.MaxExecutionPayment(pk))
-		require.Equal(t, validator.Uint64(0), (&Settings{Version: SchemaV2}).MaxExecutionPayment(pk))
 	})
 }
