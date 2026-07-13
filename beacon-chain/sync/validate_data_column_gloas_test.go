@@ -201,8 +201,7 @@ func TestValidateDataColumnGloas(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		sidecar, signedBlock := gloasFixture(t)
-		// Decrement so the mismatch is a past slot, else the future-slot IGNORE fires before the slot-match REJECT.
-		sidecar.Slot--
+		sidecar.Slot++
 
 		service, _ := serviceAndMessage(t, testVerifierReturnsAll(&verification.MockDataColumnsVerifier{}), sidecar, sidecar.Index)
 

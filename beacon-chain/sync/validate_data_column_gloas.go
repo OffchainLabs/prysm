@@ -47,15 +47,15 @@ func (s *Service) validateDataColumnGloas(
 ) (blocks.VerifiedRODataColumn, error) {
 	// data_column_sidecar_{subnet_id}
 	// [Modified in Gloas:EIP7732]
-
-	if err := s.gloasColumnNotFromFutureSlot(roDataColumn.Slot()); err != nil {
-		return blocks.VerifiedRODataColumn{}, ignoreValidation(err)
-	}
-
+	//
 	// [IGNORE] A valid block for the sidecar's slot has been seen (via gossip or non-gossip sources).
 	// If not yet seen, a client MUST queue the sidecar for deferred validation and possible processing once
 	// the block is received or retrieved.
 	if s.cfg.chain == nil || !s.cfg.chain.HasBlock(ctx, roDataColumn.BlockRoot()) {
+		// The slot is attacker controlled, a far-future slot would make the queued entry unprunable.
+		if err := s.gloasColumnNotFromFutureSlot(roDataColumn.Slot()); err != nil {
+			return blocks.VerifiedRODataColumn{}, ignoreValidation(err)
+		}
 		actualSubnet := peerdas.ComputeSubnetForDataColumnSidecar(roDataColumn.Index())
 		expectedSubTopic := fmt.Sprintf(dataColumnSidecarSubTopic, actualSubnet)
 		if msg.Topic == nil || !strings.Contains(*msg.Topic+"/", expectedSubTopic) {

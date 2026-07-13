@@ -249,6 +249,7 @@ go_test(
         "validate_sync_committee_message_test.go",
         "validate_sync_contribution_proof_test.go",
         "validate_voluntary_exit_test.go",
+        "wire_vs_memory_test.go",
     ],
     embed = [":go_default_library"],
     shard_count = 4,
