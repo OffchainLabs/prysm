@@ -25,20 +25,6 @@ option java_outer_classname = "BeaconEventsProto";
 option java_package = "org.ethereum.eth.v1";
 option php_namespace = "Ethereum\\Eth\\v1";
 
-message EventBlock {
-  // The slot of the observed block.
-  uint64 slot = 1 [
-    (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
-  ];
-
-  // The root of the observed block.
-  bytes block = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
-
-  // Information about optimistic sync.
-  bool execution_optimistic = 3;
-}
-
 message EventChainReorg {
   // The slot of the observed reorg.
   uint64 slot = 1 [
