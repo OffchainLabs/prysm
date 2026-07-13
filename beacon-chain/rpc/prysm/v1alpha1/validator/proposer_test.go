@@ -3510,6 +3510,7 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 		Eth1InfoFetcher:   &mockExecution.Chain{},
 		Eth1BlockFetcher:  &mockExecution.Chain{},
 		ForkchoiceFetcher: &mock.ChainService{},
+		HeadFetcher:       &mock.ChainService{},
 		StateGen:          stategen.New(db, doublylinkedtree.New()),
 	}
 	t.Run("successful reorg", func(tt *testing.T) {
