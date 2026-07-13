@@ -48,6 +48,11 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 			return fmt.Errorf("received unexpected block with root %x", blkRoot)
 		}
 
+		// Verify the signature before queueing, matching the gossip path, since a matched root does not cover it.
+		if _, err := s.verifyPendingBlockSignature(ctx, id, blk, blkRoot); err != nil {
+			return errors.Wrapf(err, "verify block signature for block with root %x", blkRoot)
+		}
+
 		s.pendingQueueLock.Lock()
 		defer s.pendingQueueLock.Unlock()
 

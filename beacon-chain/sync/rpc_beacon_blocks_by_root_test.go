@@ -7,6 +7,7 @@ import (
 	"time"
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	db "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -28,6 +29,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -198,10 +200,13 @@ func TestRecentBeaconBlocks_RPCRequestSent(t *testing.T) {
 	require.NoError(t, err)
 	blockBRoot, err := blockB.Block.HashTreeRoot()
 	require.NoError(t, err)
-	genesisState, err := transition.GenesisBeaconState(t.Context(), nil, 0, &ethpb.Eth1Data{})
-	require.NoError(t, err)
+	genesisState, keys := util.DeterministicGenesisState(t, 64)
 	require.NoError(t, genesisState.SetSlot(111))
 	require.NoError(t, genesisState.UpdateBlockRootAtIndex(111%uint64(params.BeaconConfig().SlotsPerHistoricalRoot), blockARoot))
+	blockA.Signature, err = signing.ComputeDomainAndSign(genesisState, slots.ToEpoch(blockA.Block.Slot), blockA.Block, params.BeaconConfig().DomainBeaconProposer, keys[0])
+	require.NoError(t, err)
+	blockB.Signature, err = signing.ComputeDomainAndSign(genesisState, slots.ToEpoch(blockB.Block.Slot), blockB.Block, params.BeaconConfig().DomainBeaconProposer, keys[0])
+	require.NoError(t, err)
 	finalizedCheckpt := &ethpb.Checkpoint{
 		Epoch: 5,
 		Root:  blockBRoot[:],
