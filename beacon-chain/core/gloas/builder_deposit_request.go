@@ -12,6 +12,14 @@ import (
 	"github.com/pkg/errors"
 )
 
+type sigStatus int
+
+const (
+	sigUnverified sigStatus = iota
+	sigKnownValid
+	sigKnownInvalid
+)
+
 // ProcessBuilderDepositRequests applies each builder deposit request in order.
 func ProcessBuilderDepositRequests(ctx context.Context, st state.BeaconState, requests []*enginev1.BuilderDepositRequest) error {
 	// Topups to an existing builder skip signature verification per spec, so only batch-verify
@@ -31,12 +39,15 @@ func ProcessBuilderDepositRequests(ctx context.Context, st state.BeaconState, re
 	if err != nil {
 		return err
 	}
-	badSig := make([]bool, len(requests))
+	statuses := make([]sigStatus, len(requests))
+	for _, i := range newIdx {
+		statuses[i] = sigKnownValid
+	}
 	for _, j := range invalid {
-		badSig[newIdx[j]] = true
+		statuses[newIdx[j]] = sigKnownInvalid
 	}
 	for i, request := range requests {
-		if err := processBuilderDepositRequest(st, request, !badSig[i]); err != nil {
+		if err := processBuilderDepositRequest(ctx, st, request, statuses[i]); err != nil {
 			return errors.Wrap(err, "could not process builder deposit request")
 		}
 	}
@@ -70,7 +81,7 @@ func ProcessBuilderDepositRequests(ctx context.Context, st state.BeaconState, re
 //	            epoch = get_current_epoch(state)
 //	            builder.withdrawable_epoch = epoch + MIN_BUILDER_WITHDRAWABILITY_DELAY
 //	</spec>
-func processBuilderDepositRequest(st state.BeaconState, request *enginev1.BuilderDepositRequest, sigValid bool) error {
+func processBuilderDepositRequest(ctx context.Context, st state.BeaconState, request *enginev1.BuilderDepositRequest, status sigStatus) error {
 	if request == nil {
 		return errors.New("nil builder deposit request")
 	}
@@ -94,7 +105,21 @@ func processBuilderDepositRequest(st state.BeaconState, request *enginev1.Builde
 		return nil
 	}
 
-	if !sigValid {
+	// An in-batch index reuse can evict a pubkey that was a top-up at classification time, so
+	// an unverified request reaching the registration path must have its signature checked here.
+	if status == sigUnverified {
+		valid, err := helpers.VerifyBuilderDepositRequestSignature(ctx, request)
+		if err != nil {
+			return err
+		}
+		if valid {
+			status = sigKnownValid
+		} else {
+			status = sigKnownInvalid
+		}
+	}
+
+	if status != sigKnownValid {
 		return nil
 	}
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -38,7 +39,7 @@ func TestProcessBuilderDepositRequest_NewBuilderValidSignature(t *testing.T) {
 	req := signedBuilderDepositRequest(t, sk, cred, 1234)
 
 	st := newGloasState(t, nil, nil)
-	require.NoError(t, processBuilderDepositRequest(st, req, true))
+	require.NoError(t, processBuilderDepositRequest(t.Context(), st, req, sigKnownValid))
 
 	idx, ok := st.BuilderIndexByPubkey(toBytes48(req.Pubkey))
 	require.Equal(t, true, ok)
@@ -58,7 +59,7 @@ func TestProcessBuilderDepositRequest_NewBuilderInvalidSignatureIgnored(t *testi
 	req := signedBuilderDepositRequest(t, sk, cred, 1234)
 
 	st := newGloasState(t, nil, nil)
-	require.NoError(t, processBuilderDepositRequest(st, req, false))
+	require.NoError(t, processBuilderDepositRequest(t.Context(), st, req, sigKnownInvalid))
 
 	_, ok := st.BuilderIndexByPubkey(toBytes48(req.Pubkey))
 	require.Equal(t, false, ok)
@@ -83,7 +84,7 @@ func TestProcessBuilderDepositRequest_ExistingBuilderTopsUpNoSignatureCheck(t *t
 		Amount:                200,
 		Signature:             make([]byte, 96), // not checked for top-up
 	}
-	require.NoError(t, processBuilderDepositRequest(st, req, false))
+	require.NoError(t, processBuilderDepositRequest(t.Context(), st, req, sigUnverified))
 
 	idx, ok := st.BuilderIndexByPubkey(toBytes48(pubkey))
 	require.Equal(t, true, ok)
@@ -170,6 +171,78 @@ func TestProcessBuilderDepositRequests_DuplicatePubkeyInvalidThenValidRegisters(
 	builder, err := st.Builder(idx)
 	require.NoError(t, err)
 	require.Equal(t, uint64(700), uint64(builder.Balance))
+}
+
+func TestProcessBuilderDepositRequests_EvictedPubkeyReverifiesSignature(t *testing.T) {
+	cred := builderWithdrawalCredentials()
+	skNew, err := bls.RandKey()
+	require.NoError(t, err)
+	skVictim, err := bls.RandKey()
+	require.NoError(t, err)
+	victimPubkey := skVictim.PublicKey().Marshal()
+
+	builders := []*ethpb.Builder{{
+		Pubkey:            victimPubkey,
+		Version:           []byte{params.BeaconConfig().BuilderWithdrawalPrefixByte},
+		ExecutionAddress:  bytes.Repeat([]byte{0x11}, 20),
+		Balance:           0,
+		WithdrawableEpoch: 0,
+	}}
+	st := newGloasState(t, nil, builders)
+
+	victimReq := &enginev1.BuilderDepositRequest{
+		Pubkey:                victimPubkey,
+		WithdrawalCredentials: cred[:],
+		Amount:                200,
+		Signature:             make([]byte, 96), // garbage
+	}
+	reqs := []*enginev1.BuilderDepositRequest{
+		signedBuilderDepositRequest(t, skNew, cred, 1000), // reuses index 0, evicts victim
+		victimReq,
+	}
+	require.NoError(t, ProcessBuilderDepositRequests(t.Context(), st, reqs))
+
+	idx, ok := st.BuilderIndexByPubkey(toBytes48(skNew.PublicKey().Marshal()))
+	require.Equal(t, true, ok)
+	require.Equal(t, primitives.BuilderIndex(0), idx)
+
+	_, ok = st.BuilderIndexByPubkey(toBytes48(victimPubkey))
+	require.Equal(t, false, ok)
+}
+
+func TestProcessBuilderDepositRequests_EvictedPubkeyValidSignatureRegisters(t *testing.T) {
+	cred := builderWithdrawalCredentials()
+	skNew, err := bls.RandKey()
+	require.NoError(t, err)
+	skVictim, err := bls.RandKey()
+	require.NoError(t, err)
+	victimPubkey := skVictim.PublicKey().Marshal()
+
+	builders := []*ethpb.Builder{{
+		Pubkey:            victimPubkey,
+		Version:           []byte{params.BeaconConfig().BuilderWithdrawalPrefixByte},
+		ExecutionAddress:  bytes.Repeat([]byte{0x11}, 20),
+		Balance:           0,
+		WithdrawableEpoch: 0,
+	}}
+	st := newGloasState(t, nil, builders)
+
+	reqs := []*enginev1.BuilderDepositRequest{
+		signedBuilderDepositRequest(t, skNew, cred, 1000), // reuses index 0, evicts victim
+		signedBuilderDepositRequest(t, skVictim, cred, 200),
+	}
+	require.NoError(t, ProcessBuilderDepositRequests(t.Context(), st, reqs))
+
+	idx, ok := st.BuilderIndexByPubkey(toBytes48(skNew.PublicKey().Marshal()))
+	require.Equal(t, true, ok)
+	require.Equal(t, primitives.BuilderIndex(0), idx)
+
+	idx, ok = st.BuilderIndexByPubkey(toBytes48(victimPubkey))
+	require.Equal(t, true, ok)
+	require.Equal(t, primitives.BuilderIndex(1), idx)
+	builder, err := st.Builder(idx)
+	require.NoError(t, err)
+	require.Equal(t, uint64(200), uint64(builder.Balance))
 }
 
 func builderWithdrawalCredentialsAt(b byte) []byte {
