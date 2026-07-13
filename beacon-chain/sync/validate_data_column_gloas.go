@@ -52,6 +52,10 @@ func (s *Service) validateDataColumnGloas(
 	// If not yet seen, a client MUST queue the sidecar for deferred validation and possible processing once
 	// the block is received or retrieved.
 	if s.cfg.chain == nil || !s.cfg.chain.HasBlock(ctx, roDataColumn.BlockRoot()) {
+		// The slot is attacker controlled, a far-future slot would make the queued entry unprunable.
+		if err := s.gloasColumnNotFromFutureSlot(roDataColumn.Slot()); err != nil {
+			return blocks.VerifiedRODataColumn{}, ignoreValidation(err)
+		}
 		actualSubnet := peerdas.ComputeSubnetForDataColumnSidecar(roDataColumn.Index())
 		expectedSubTopic := fmt.Sprintf(dataColumnSidecarSubTopic, actualSubnet)
 		if msg.Topic == nil || !strings.Contains(*msg.Topic+"/", expectedSubTopic) {
@@ -177,6 +181,21 @@ func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID
 		return nil
 	}
 	entry.columns[idx] = &pendingColumnEntry{sidecar: dc, peer: pid}
+	return nil
+}
+
+func (s *Service) gloasColumnNotFromFutureSlot(slot primitives.Slot) error {
+	if s.cfg.clock.CurrentSlot() == slot {
+		return nil
+	}
+	earliestStart, err := s.cfg.clock.SlotStart(slot)
+	if err != nil {
+		return errors.Wrap(err, "slot start time")
+	}
+	earliestStart = earliestStart.Add(-params.BeaconConfig().MaximumGossipClockDisparityDuration())
+	if s.cfg.clock.Now().Before(earliestStart) {
+		return errors.Errorf("gloas data column slot %d is from a future slot", slot)
+	}
 	return nil
 }
 
@@ -320,7 +339,12 @@ func (s *Service) processPendingGloasColumnsRoutine() {
 
 // prunePendingGloasColumns removes stale entries every slot.
 func (s *Service) prunePendingGloasColumns() {
-	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
+	clock, err := s.clockWaiter.WaitForClock(s.ctx)
+	if err != nil {
+		log.WithError(err).Error("Failed to receive clock for pending Gloas columns pruning routine")
+		return
+	}
+	slotTicker := slots.NewSlotTicker(clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
 	defer slotTicker.Done()
 	for {
 		select {
