@@ -143,7 +143,6 @@ var excludeRe = regexp.MustCompile(strings.Join([]string{
 	`/testing/endtoend`,
 	`/testing/spectest/`,
 	`/beacon-chain/rpc/prysm/v1alpha1/beacon$`,
-	`/beacon-chain/rpc/prysm/v1alpha1/validator$`,
 }, "|"))
 
 // mainnetPackages is `go list ./...` minus the excludeRe packages.

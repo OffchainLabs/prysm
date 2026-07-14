@@ -190,6 +190,7 @@ func TestMainnetPackages(t *testing.T) {
 	require.NoError(t, err)
 	require.DeepEqual(t, []string{
 		base + "/beacon-chain/core",
+		base + "/beacon-chain/rpc/prysm/v1alpha1/validator",
 		base + "/beacon-chain/rpc/prysm/v1alpha1/beacon/blocks",
 		base + "/config",
 	}, pkgs)
