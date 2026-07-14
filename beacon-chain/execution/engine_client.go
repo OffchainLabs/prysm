@@ -9,7 +9,6 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
@@ -959,6 +958,13 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 	return verifiedBlobs, nil
 }
 
+// ConstructDataColumnSidecars constructs data column sidecars from cells and proofs fetched
+// from the execution client.
+//
+// The first return value is an array of complete columns. When using getBlobsV4, it may be only
+// a subset of the custody columns.
+// The second return value is the partial columns, which is delivered only when partial-column
+// support is enabled for the slot.
 func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator, custodyColumns map[uint64]bool) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
 	root := populator.Root()
 
@@ -982,53 +988,33 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		return nil, nil, nil
 	}
 
-	haveAllBlobs := cp.Included.Count() == uint64(len(commitments))
-
-	var partialColumns []blocks.PartialDataColumn
-	slot := populator.Slot()
-	if haveAllBlobs {
-		// Construct data column sidecars from the signed block and cells and proofs.
-		roSidecars, err := peerdas.DataColumnSidecars(cp.CellsPerBlob, cp.ProofsPerBlob, populator)
-		if err != nil {
-			return nil, nil, wrapWithBlockRoot(err, populator.Root(), "data column sidecars from column sidecar")
-		}
-		log.WithField("haveAllBlobs", haveAllBlobs).Debug("Constructed full data column sidecars")
-
-		// Upgrade the sidecars to verified sidecars.
-		// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
-		verifiedROSidecars := upgradeSidecarsToVerifiedSidecars(roSidecars)
-
-		if s.partialColumnsEnabledForSlot(slot) {
-			for _, sidecar := range verifiedROSidecars {
-				pc, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar)
-				if err != nil {
-					return nil, nil, wrapWithBlockRoot(err, populator.Root(), "partial column from verified ro data column")
-				}
-				partialColumns = append(partialColumns, pc)
-			}
-			log.WithFields(logrus.Fields{
-				"haveAllBlobs": haveAllBlobs,
-				"blockRoot":    fmt.Sprintf("%#x", root),
-				"slot":         slot,
-			}).Debug("Constructed partial data column sidecars")
-		}
-
-		return verifiedROSidecars, partialColumns, nil
+	allPartials, err := peerdas.PartialColumns(cp.Included, cp.CellsPerBlob, cp.ProofsPerBlob, populator)
+	if err != nil {
+		return nil, nil, wrapWithBlockRoot(err, root, "partial columns")
 	}
 
-	if s.partialColumnsEnabledForSlot(slot) {
-		partialColumns, err = peerdas.PartialColumns(cp.Included, cp.CellsPerBlob, cp.ProofsPerBlob, populator)
-		if err != nil {
-			return nil, nil, wrapWithBlockRoot(err, root, "construct partial columns")
+	// Upgrade the columns to verified columns.
+	// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
+	var complete []blocks.VerifiedRODataColumn
+	for i := range allPartials {
+		if !allPartials[i].IsComplete() {
+			continue
 		}
-		log.WithFields(logrus.Fields{
-			"haveAllBlobs": haveAllBlobs,
-			"blockRoot":    fmt.Sprintf("%#x", root),
-			"slot":         slot,
-		}).Debug("Constructed partial data column sidecars")
+		roSidecar, err := blocks.NewRODataColumnWithRoot(allPartials[i].DataColumnSidecar, root)
+		if err != nil {
+			return nil, nil, wrapWithBlockRoot(err, root, "ro data column")
+		}
+		complete = append(complete, blocks.NewVerifiedRODataColumn(roSidecar))
 	}
 
-	return nil, partialColumns, nil
+	// Incomplete partial columns are only disseminated when partial-column support is enabled for
+	// this slot
+	var partials []blocks.PartialDataColumn
+	if s.partialColumnsEnabledForSlot(populator.Slot()) {
+		partials = allPartials
+	}
+
+	return complete, partials, nil
 }
 
 // ConstructPartialDataColumnSidecarsFromHasBlobs constructs partial
@@ -1106,13 +1092,23 @@ func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Con
 	return partialColumns, true, nil
 }
 
-// fetchCellsAndProofsFromExecution fetches cells and proofs from the execution client
-// (prefers engine_getBlobsV4, falling back to engine_getBlobsV3/V2).
+// fetchCellsAndProofsFromExecution fetches cells and proofs from the execution client.
 func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommitments [][]byte, custodyColumns map[uint64]bool) (peerdas.StructuredCellsAndProofs, error) {
 	versionedHashes := versionedHashesFromCommitments(kzgCommitments)
+	commitmentCount := uint64(len(kzgCommitments))
 
 	if s.capabilityCache.has(GetBlobsV4) {
-		return s.fetchCellsAndProofsV4(ctx, uint64(len(kzgCommitments)), versionedHashes, custodyColumns)
+		// requested is the ascending list of absolute custody column indices; the EL's response is
+		// dense: BlobCells[j]/Proofs[j] correspond to requested[j], not to absolute column j.
+		requested, indicesBitarray := custodyColumnsRequest(custodyColumns)
+		result, err := s.GetBlobsV4(ctx, versionedHashes, indicesBitarray)
+		if err != nil {
+			return peerdas.StructuredCellsAndProofs{}, errors.Wrap(err, "get blobs V4")
+		}
+		if len(result) == 0 {
+			return peerdas.StructuredCellsAndProofs{}, nil
+		}
+		return peerdas.CellsAndProofsFromStructuredV4(commitmentCount, requested, result), nil
 	}
 
 	var blobAndProofs []*pb.BlobAndProofV2
@@ -1136,13 +1132,13 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	}
 
 	// Compute cells and proofs from the blobs and cell proofs.
-	result, err := peerdas.ComputeCellsAndProofsFromStructured(uint64(len(kzgCommitments)), blobAndProofs)
+	result, err := peerdas.CellsAndProofsFromStructured(commitmentCount, blobAndProofs)
 	if err != nil {
 		return peerdas.StructuredCellsAndProofs{}, errors.Wrap(err, "compute cells and proofs")
 	}
 	if useGetBlobsV3 {
 		switch includedCount := result.Included.Count(); {
-		case includedCount == uint64(len(kzgCommitments)):
+		case includedCount == commitmentCount:
 			getBlobsV3CompleteResponsesTotal.Inc()
 		case includedCount > 0:
 			getBlobsV3PartialResponsesTotal.Inc()
@@ -1152,59 +1148,6 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	}
 
 	return result, nil
-}
-
-// fetchCellsAndProofsV4 fetches cells and proofs from the execution client via engine_getBlobsV4
-func (s *Service) fetchCellsAndProofsV4(ctx context.Context, commitmentCount uint64, versionedHashes []common.Hash, custodyColumns map[uint64]bool) (peerdas.StructuredCellsAndProofs, error) {
-	numberOfColumns := uint64(fieldparams.NumberOfColumns)
-
-	// Build a 16-byte little-endian uint128 bitarray of the custody columns to request.
-	// Column i maps to bit (i%8) of byte (i/8) (LSB = column 0).
-	indicesBitarray := make([]byte, 16)
-	for colIdx := range custodyColumns {
-		if colIdx < numberOfColumns {
-			indicesBitarray[colIdx/8] |= 1 << (colIdx % 8)
-		}
-	}
-
-	result, err := s.GetBlobsV4(ctx, versionedHashes, indicesBitarray)
-	if err != nil {
-		return peerdas.StructuredCellsAndProofs{}, errors.Wrap(err, "get blobs V4")
-	}
-	if len(result) == 0 {
-		return peerdas.StructuredCellsAndProofs{}, nil
-	}
-
-	included := bitfield.NewBitlist(commitmentCount)
-	cellsPerBlob := make([][]kzg.Cell, 0, len(result))
-	proofsPerBlob := make([][]kzg.Proof, 0, len(result))
-	for i, blobCells := range result {
-		// A nil entry means the EL did not have that blob. Leave it out of the
-		// included set so the caller can treat the response as partial.
-		if blobCells == nil {
-			continue
-		}
-		included.SetBitAt(uint64(i), true)
-
-		cells := make([]kzg.Cell, numberOfColumns)
-		proofs := make([]kzg.Proof, numberOfColumns)
-		for j := range numberOfColumns {
-			if j < uint64(len(blobCells.BlobCells)) && blobCells.BlobCells[j] != nil {
-				copy(cells[j][:], *blobCells.BlobCells[j])
-			}
-			if j < uint64(len(blobCells.Proofs)) && blobCells.Proofs[j] != nil {
-				copy(proofs[j][:], *blobCells.Proofs[j])
-			}
-		}
-		cellsPerBlob = append(cellsPerBlob, cells)
-		proofsPerBlob = append(proofsPerBlob, proofs)
-	}
-
-	return peerdas.StructuredCellsAndProofs{
-		Included:      included,
-		CellsPerBlob:  cellsPerBlob,
-		ProofsPerBlob: proofsPerBlob,
-	}, nil
 }
 
 func (s *Service) useGetBlobsV3() bool {
@@ -1562,6 +1505,19 @@ func custodyColumnsBitmask(custodyColumns map[uint64]bool) []byte {
 		}
 	}
 	return mask
+}
+
+// custodyColumnsRequest returns the ascending list of custody column indices along with the 16-byte
+// little-endian bitarray (custodyColumnsBitmask) that encodes them, as expected by engine_getBlobsV4.
+func custodyColumnsRequest(custodyColumns map[uint64]bool) (requested []uint64, bitarray []byte) {
+	bitarray = custodyColumnsBitmask(custodyColumns)
+	numberOfColumns := uint64(fieldparams.NumberOfColumns)
+	for col := uint64(0); col < numberOfColumns; col++ {
+		if bitarray[col/8]&(1<<(col%8)) != 0 {
+			requested = append(requested, col)
+		}
+	}
+	return requested, bitarray
 }
 
 // GetBlobsV4 calls the engine_getBlobsV4 method via JSON-RPC.

@@ -342,13 +342,33 @@ func ComputeCellsAndProofsFromFlat(blobs [][]byte, cellProofs [][]byte) ([][]kzg
 // StructuredCellsAndProofs packages the results of computing cells and proofs from structured blobs.
 type StructuredCellsAndProofs struct {
 	Included      bitfield.Bitlist
-	CellsPerBlob  [][]kzg.Cell
-	ProofsPerBlob [][]kzg.Proof
+	CellsPerBlob  [][]*kzg.Cell
+	ProofsPerBlob [][]*kzg.Proof
 }
 
-// ComputeCellsAndProofsFromStructured computes the cells and proofs from blobs and cell proofs.
+// buildStructuredCellsAndProofs compacts per-blob cell/proof arrays into a StructuredCellsAndProofs.
+func buildStructuredCellsAndProofs(commitmentCount uint64, perBlobCells [][]*kzg.Cell, perBlobProofs [][]*kzg.Proof) StructuredCellsAndProofs {
+	included := bitfield.NewBitlist(commitmentCount)
+	cellsPerBlob := make([][]*kzg.Cell, 0, len(perBlobCells))
+	proofsPerBlob := make([][]*kzg.Proof, 0, len(perBlobProofs))
+	for i := range perBlobCells {
+		if perBlobCells[i] == nil {
+			continue
+		}
+		included.SetBitAt(uint64(i), true)
+		cellsPerBlob = append(cellsPerBlob, perBlobCells[i])
+		proofsPerBlob = append(proofsPerBlob, perBlobProofs[i])
+	}
+	return StructuredCellsAndProofs{
+		Included:      included,
+		CellsPerBlob:  cellsPerBlob,
+		ProofsPerBlob: proofsPerBlob,
+	}
+}
+
+// CellsAndProofsFromStructured computes the cells and proofs from blobs and cell proofs.
 // commitmentCount is required to return the correct sized bitlist even if we see a nil slice of blobsAndProofs.
-func ComputeCellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs []*pb.BlobAndProofV2) (_ StructuredCellsAndProofs, err error) {
+func CellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs []*pb.BlobAndProofV2) (_ StructuredCellsAndProofs, err error) {
 	start := time.Now()
 	defer func() {
 		// Only record the computation time on success, so error returns don't pollute the metric.
@@ -361,26 +381,14 @@ func ComputeCellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs 
 		return StructuredCellsAndProofs{}, errors.Errorf("blobs and proofs length (%d) exceeds commitment count (%d)", len(blobsAndProofs), commitmentCount)
 	}
 
+	perBlobCells := make([][]*kzg.Cell, len(blobsAndProofs))
+	perBlobProofs := make([][]*kzg.Proof, len(blobsAndProofs))
+
 	var wg errgroup.Group
-
-	var blobsPresent int
-	for _, blobAndProof := range blobsAndProofs {
-		if blobAndProof != nil {
-			blobsPresent++
-		}
-	}
-	cellsPerBlob := make([][]kzg.Cell, blobsPresent)
-	proofsPerBlob := make([][]kzg.Proof, blobsPresent)
-	included := bitfield.NewBitlist(commitmentCount)
-
-	var j int
 	for i, blobAndProof := range blobsAndProofs {
 		if blobAndProof == nil {
 			continue
 		}
-		included.SetBitAt(uint64(i), true)
-
-		compactIndex := j
 		wg.Go(func() error {
 			var kzgBlob kzg.Blob
 			if copy(kzgBlob[:], blobAndProof.Blob) != len(kzgBlob) {
@@ -393,7 +401,7 @@ func ComputeCellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs 
 				return errors.Wrap(err, "compute cells")
 			}
 
-			kzgProofs := make([]kzg.Proof, 0, fieldparams.NumberOfColumns)
+			kzgProofs := make([]*kzg.Proof, 0, fieldparams.NumberOfColumns)
 			for _, kzgProofBytes := range blobAndProof.KzgProofs {
 				if len(kzgProofBytes) != kzg.BytesPerProof {
 					return errors.New("wrong KZG proof size - should never happen")
@@ -404,25 +412,60 @@ func ComputeCellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs 
 					return errors.New("wrong copied KZG proof size - should never happen")
 				}
 
-				kzgProofs = append(kzgProofs, kzgProof)
+				kzgProofs = append(kzgProofs, &kzgProof)
 			}
 
-			cellsPerBlob[compactIndex] = cells
-			proofsPerBlob[compactIndex] = kzgProofs
+			cellPtrs := make([]*kzg.Cell, len(cells))
+			for k := range cells {
+				cellPtrs[k] = &cells[k]
+			}
+
+			perBlobCells[i] = cellPtrs
+			perBlobProofs[i] = kzgProofs
 			return nil
 		})
-		j++
 	}
 
 	if err = wg.Wait(); err != nil {
 		return StructuredCellsAndProofs{}, errors.Wrap(err, "wait for ComputeCells")
 	}
 
-	return StructuredCellsAndProofs{
-		Included:      included,
-		CellsPerBlob:  cellsPerBlob,
-		ProofsPerBlob: proofsPerBlob,
-	}, nil
+	return buildStructuredCellsAndProofs(commitmentCount, perBlobCells, perBlobProofs), nil
+}
+
+// CellsAndProofsFromStructured computes the cells and proofs from blobs and cell proofs.
+// commitmentCount is required to return the correct sized bitlist even if we see a nil slice of blobsAndProofs.
+
+// CellsAndProofsFromStructuredV4 maps the getBlobsV4 response into a StructuredCellsAndProofs.
+// In the returned value, nil cells or proofs can exist to mark an absent entry.
+func CellsAndProofsFromStructuredV4(commitmentCount uint64, requested []uint64, result []*pb.BlobCellsAndProofsV1) StructuredCellsAndProofs {
+	numberOfColumns := uint64(fieldparams.NumberOfColumns)
+	perBlobCells := make([][]*kzg.Cell, len(result))
+	perBlobProofs := make([][]*kzg.Proof, len(result))
+	for i, blobCells := range result {
+		if blobCells == nil {
+			continue
+		}
+		cells := make([]*kzg.Cell, numberOfColumns)
+		proofs := make([]*kzg.Proof, numberOfColumns)
+		for j, col := range requested {
+			if col >= numberOfColumns || j >= len(blobCells.BlobCells) || j >= len(blobCells.Proofs) {
+				continue
+			}
+			if blobCells.BlobCells[j] == nil || blobCells.Proofs[j] == nil {
+				continue
+			}
+			var cell kzg.Cell
+			copy(cell[:], *blobCells.BlobCells[j])
+			var proof kzg.Proof
+			copy(proof[:], *blobCells.Proofs[j])
+			cells[col] = &cell
+			proofs[col] = &proof
+		}
+		perBlobCells[i] = cells
+		perBlobProofs[i] = proofs
+	}
+	return buildStructuredCellsAndProofs(commitmentCount, perBlobCells, perBlobProofs)
 }
 
 // ReconstructBlobs reconstructs blobs from data column sidecars without computing KZG proofs or creating sidecars.
