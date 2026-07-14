@@ -156,6 +156,14 @@ func BatchVerifyBuilderDepositRequestSignatures(ctx context.Context, requests []
 	return verifyBuilderDepositRequestsDC(ctx, requests, domain)
 }
 
+func VerifyBuilderDepositRequestSignature(ctx context.Context, request *enginev1.BuilderDepositRequest) (bool, error) {
+	invalid, err := BatchVerifyBuilderDepositRequestSignatures(ctx, []*enginev1.BuilderDepositRequest{request})
+	if err != nil {
+		return false, err
+	}
+	return len(invalid) == 0, nil
+}
+
 func verifyBuilderDepositRequestDataWithDomain(ctx context.Context, reqs []*enginev1.BuilderDepositRequest, domain []byte) error {
 	if len(reqs) == 0 {
 		return nil

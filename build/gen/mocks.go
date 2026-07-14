@@ -51,6 +51,7 @@ func mockSpecsList() mockSpecs {
 		{ifaceMockPath + "/chain_client_mock.go", "validator_mock", ifacePkg, "ChainClient"},
 		{ifaceMockPath + "/node_client_mock.go", "validator_mock", ifacePkg, "NodeClient"},
 		{ifaceMockPath + "/validator_client_mock.go", "validator_mock", ifacePkg, "ValidatorClient"},
+		{ifaceMockPath + "/validator_mock.go", "validator_mock", ifacePkg, "Validator"},
 	}
 
 	beaconAPI := []sourceMock{

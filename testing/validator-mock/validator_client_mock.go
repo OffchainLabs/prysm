@@ -135,6 +135,20 @@ func (mr *MockValidatorClientMockRecorder) CheckDoppelGanger(ctx, in any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckDoppelGanger", reflect.TypeOf((*MockValidatorClient)(nil).CheckDoppelGanger), ctx, in)
 }
 
+// ConnectionGeneration mocks base method.
+func (m *MockValidatorClient) ConnectionGeneration() uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConnectionGeneration")
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
+// ConnectionGeneration indicates an expected call of ConnectionGeneration.
+func (mr *MockValidatorClientMockRecorder) ConnectionGeneration() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConnectionGeneration", reflect.TypeOf((*MockValidatorClient)(nil).ConnectionGeneration))
+}
+
 // DomainData mocks base method.
 func (m *MockValidatorClient) DomainData(ctx context.Context, in *eth.DomainRequest) (*eth.DomainResponse, error) {
 	m.ctrl.T.Helper()

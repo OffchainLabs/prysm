@@ -257,6 +257,121 @@ func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 		err = service.dataColumnSidecarsByRangeRPCHandler(ctx, msg, stream)
 		require.NoError(t, err)
 	})
+
+	t.Run("gloas skips columns of empty slots", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		gloasCfg := params.BeaconConfig().Copy()
+		gloasCfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(gloasCfg)
+		params.BeaconConfig().InitializeForkSchedule()
+
+		gloasCtxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
+		require.NoError(t, err)
+
+		beaconDB := testDB.SetupDB(t)
+		storage := filesystem.NewEphemeralDataColumnStorage(t)
+
+		// Block at slot 30 builds on slot 10's payload, so slot 20 is an empty slot.
+		blockSlots := []primitives.Slot{10, 20, 30, 40}
+		bidParentHashes := [][32]byte{{0}, {10}, {10}, {30}}
+		roots := make([][fieldparams.RootLength]byte, len(blockSlots))
+		var prevRoot [32]byte
+
+		for i, sl := range blockSlots {
+			blk := util.NewBeaconBlockGloas()
+			blk.Block.Slot = sl
+			copy(blk.Block.ParentRoot, prevRoot[:])
+			bidHash := [32]byte{byte(sl)}
+			copy(blk.Block.Body.SignedExecutionPayloadBid.Message.BlockHash, bidHash[:])
+			copy(blk.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockHash, bidParentHashes[i][:])
+			wsb := util.SaveBlock(t, ctx, beaconDB, blk)
+			htr, err := wsb.Block().HashTreeRoot()
+			require.NoError(t, err)
+			roots[i] = htr
+			prevRoot = htr
+		}
+		// Production always has a saved head root, which LowestRootsAtOrAboveSlot falls back to above the tip.
+		require.NoError(t, beaconDB.SaveStateSummary(ctx, &pb.StateSummary{Slot: 40, Root: roots[3][:]}))
+		require.NoError(t, beaconDB.SaveHeadBlockRoot(ctx, roots[3]))
+
+		verifiedSidecars := make([]blocks.VerifiedRODataColumn, 0, len(blockSlots))
+		for i, sl := range blockSlots {
+			sidecar := &pb.DataColumnSidecarGloas{
+				Index:           1,
+				Slot:            sl,
+				BeaconBlockRoot: roots[i][:],
+			}
+			roSidecar, err := blocks.NewRODataColumnGloas(sidecar)
+			require.NoError(t, err)
+			verifiedSidecars = append(verifiedSidecars, blocks.NewVerifiedRODataColumn(roSidecar))
+		}
+		require.NoError(t, storage.Save(verifiedSidecars))
+
+		localP2P, remoteP2P := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+		protocolID := protocol.ID(fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRangeTopicV1))
+
+		slot := primitives.Slot(400)
+		mockNower.SetSlot(t, clock, slot)
+		service := &Service{
+			cfg: &config{
+				p2p:               localP2P,
+				beaconDB:          beaconDB,
+				chain:             &chainMock.ChainService{},
+				dataColumnStorage: storage,
+				clock:             clock,
+			},
+			rateLimiter: newRateLimiter(localP2P),
+		}
+
+		localP2P.Connect(remoteP2P)
+		msg := &pb.DataColumnSidecarsByRangeRequest{
+			StartSlot: 5,
+			Count:     50,
+			Columns:   []uint64{1},
+		}
+
+		requestAndCollect := func(expectedRoots [][fieldparams.RootLength]byte) {
+			var wg sync.WaitGroup
+			wg.Add(1)
+
+			remoteP2P.BHost.SetStreamHandler(protocolID, func(stream network.Stream) {
+				defer wg.Done()
+
+				sidecars := make([]*blocks.RODataColumn, 0, len(expectedRoots))
+				for {
+					sidecar, err := readChunkedDataColumnSidecar(stream, remoteP2P, gloasCtxMap)
+					if errors.Is(err, io.EOF) {
+						break
+					}
+					assert.NoError(t, err)
+					sidecars = append(sidecars, sidecar)
+				}
+
+				assert.Equal(t, len(expectedRoots), len(sidecars))
+				if len(sidecars) == len(expectedRoots) {
+					for i, root := range expectedRoots {
+						assert.Equal(t, root, sidecars[i].BlockRoot())
+					}
+				}
+			})
+
+			stream, err := localP2P.BHost.NewStream(ctx, remoteP2P.BHost.ID(), protocolID)
+			require.NoError(t, err)
+			require.NoError(t, service.dataColumnSidecarsByRangeRPCHandler(ctx, msg, stream))
+
+			if util.WaitTimeout(&wg, 2*time.Second) {
+				t.Fatal("timed out waiting for remote stream handler")
+			}
+		}
+
+		// Slot 20 is empty and slot 40 is the tip without a processed envelope, both are withheld.
+		requestAndCollect([][fieldparams.RootLength]byte{roots[0], roots[2]})
+
+		// Once the tip envelope is processed, its columns are served.
+		env := testSignedEnvelope(40, roots[3][:])
+		require.NoError(t, beaconDB.SaveExecutionPayloadEnvelope(ctx, env))
+		requestAndCollect([][fieldparams.RootLength]byte{roots[0], roots[2], roots[3]})
+	})
 }
 
 func TestValidateDataColumnsByRange(t *testing.T) {
