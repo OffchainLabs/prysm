@@ -2931,6 +2931,51 @@ func TestGloasPayloadFromExecutionBlock_PropagatesBlockAccessList(t *testing.T) 
 	require.DeepEqual(t, bal, payload.BlockAccessList)
 }
 
+func TestGloasPayloadFromBlockAndBody(t *testing.T) {
+	hash := common.BytesToHash([]byte("block-hash"))
+	blobGasUsed := uint64(123)
+	excessBlobGas := uint64(456)
+	slotNumber := uint64(789)
+	newBlock := func(bal []byte) *pb.ExecutionBlock {
+		return &pb.ExecutionBlock{
+			Hash: hash,
+			Header: gethtypes.Header{
+				Number:        big.NewInt(1),
+				BaseFee:       big.NewInt(1),
+				BlobGasUsed:   &blobGasUsed,
+				ExcessBlobGas: &excessBlobGas,
+				SlotNumber:    &slotNumber,
+			},
+			BlockAccessList: bal,
+		}
+	}
+
+	t.Run("body BAL overrides block BAL", func(t *testing.T) {
+		bodyBal := hexutil.Bytes{0x0a, 0x0b}
+		txs := []hexutil.Bytes{{0x01}}
+		body := &pb.ExecutionPayloadBodyV2{Transactions: txs, BlockAccessList: &bodyBal}
+		payload, err := gloasPayloadFromBlockAndBody(hash, newBlock([]byte{0x01}), body)
+		require.NoError(t, err)
+		require.DeepEqual(t, []byte(bodyBal), payload.BlockAccessList)
+		require.Equal(t, 1, len(payload.Transactions))
+	})
+	t.Run("nil body errors", func(t *testing.T) {
+		_, err := gloasPayloadFromBlockAndBody(hash, newBlock([]byte{0x01}), nil)
+		require.ErrorContains(t, "execution payload body unavailable", err)
+	})
+	t.Run("nil BAL in both sources errors", func(t *testing.T) {
+		body := &pb.ExecutionPayloadBodyV2{}
+		_, err := gloasPayloadFromBlockAndBody(hash, newBlock(nil), body)
+		require.ErrorContains(t, "block access list unavailable", err)
+	})
+	t.Run("block BAL used when body BAL is nil", func(t *testing.T) {
+		body := &pb.ExecutionPayloadBodyV2{}
+		payload, err := gloasPayloadFromBlockAndBody(hash, newBlock([]byte{0x01, 0x02}), body)
+		require.NoError(t, err)
+		require.DeepEqual(t, []byte{0x01, 0x02}, payload.BlockAccessList)
+	})
+}
+
 func TestExecutionBlock_MarshalUnmarshalJSON_BlockAccessList(t *testing.T) {
 	bal := hexutil.Bytes{0xde, 0xad, 0xbe, 0xef}
 	original := &pb.ExecutionBlock{
