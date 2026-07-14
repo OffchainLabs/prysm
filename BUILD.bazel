@@ -1,8 +1,8 @@
 load("@bazel_gazelle//:def.bzl", "gazelle")
-load("@com_github_atlassian_bazel_tools//goimports:def.bzl", "goimports")
-load("@io_kubernetes_build//defs:run_in_workspace.bzl", "workspace_binary")
-load("@io_bazel_rules_go//go:def.bzl", "nogo")
 load("@bazel_skylib//rules:common_settings.bzl", "string_setting")
+load("@com_github_atlassian_bazel_tools//goimports:def.bzl", "goimports")
+load("@io_bazel_rules_go//go:def.bzl", "nogo")
+load("@io_kubernetes_build//defs:run_in_workspace.bzl", "workspace_binary")
 load("@prysm//tools/nogo_config:def.bzl", "nogo_config_exclude")
 
 prefix = "github.com/OffchainLabs/prysm"
@@ -238,7 +238,10 @@ nogo(
         "@org_golang_x_tools//go/analysis/passes/httpresponse:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/ifaceassert:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/inspect:go_default_library",
-        "@org_golang_x_tools//go/analysis/passes/loopclosure:go_default_library",
+        # loopclosure disabled: can generate false positives after Go 1.22.
+        # Note: Loop variables declared using := are now unique per iteration.
+        # See https://github.com/golang/go/issues/60078 for more details.
+        # "@org_golang_x_tools//go/analysis/passes/loopclosure:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/nilfunc:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/nilness:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/pkgfact:go_default_library",

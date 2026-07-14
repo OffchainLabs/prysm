@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition/interop"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -18,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -49,8 +49,15 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return errors.Wrap(err, "new ro block with root")
 	}
 
+	// Sidecar reconstruction runs in its own goroutine and outlives this handler, so
+	// derive its context from the service context rather than the pubsub message ctx
+	// (which is cancelled when the handler returns and would abort engine_getBlobs
+	// mid-flight). Using the service ctx keeps the work bound to the service lifecycle
+	// so it stops on shutdown, while the timeout prevents it leaking under load.
 	go func() {
-		if err := s.processSidecarsFromExecutionFromBlock(ctx, roBlock); err != nil {
+		sidecarCtx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
+		defer cancel()
+		if err := s.processSidecarsFromExecutionFromBlock(sidecarCtx, roBlock); err != nil {
 			log.WithError(err).WithFields(logrus.Fields{
 				"root": fmt.Sprintf("%#x", root),
 				"slot": block.Slot(),
@@ -85,6 +92,7 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 	go s.processPendingPayloadEnvelope(s.ctx, root)
 
 	s.processPendingGloasColumns(s.ctx, root, signed)
+	go s.processPendingPayloadAttestation(s.ctx, root)
 
 	return nil
 }
@@ -229,15 +237,16 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 
 		isPartialEnabled := s.cfg.p2p.PartialColumnBroadcaster() != nil
 
-		var constructedSidecarCount uint64
+		isGloas := slots.ToEpoch(source.Slot()) >= params.BeaconConfig().GloasForkEpoch
+		root := source.Root()
 
 		var hasBlobsColumns []blocks.PartialDataColumn
 		for iteration := uint64(0); ; /*no stop condition*/ iteration++ {
 			log = log.WithField("iteration", iteration)
 
 			// Exit early if all sidecars to sample have been seen.
-			if s.haveAllSidecarsBeenSeen(source.Slot(), proposerIndex, columnIndicesToSample) {
-				if iteration > 0 && constructedSidecarCount == 0 {
+			if s.haveAllSidecarsBeenSeen(isGloas, root, source.Slot(), proposerIndex, columnIndicesToSample) {
+				if iteration > 0 {
 					log.Debug("No data column sidecars constructed from the execution client")
 				}
 
@@ -294,9 +303,9 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			// No sidecars are retrieved from the EL, retry later
 			constructedCount := uint64(len(constructedSidecars))
 
-			// Boundary check.
-			if constructedSidecarCount > 0 && constructedSidecarCount != fieldparams.NumberOfColumns {
-				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", constructedSidecarCount, fieldparams.NumberOfColumns)
+			// Boundary check: the EL returns either no sidecars or the full set.
+			if constructedCount > 0 && constructedCount != fieldparams.NumberOfColumns {
+				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", constructedCount, fieldparams.NumberOfColumns)
 			}
 
 			// Partial columns are published separately above (for all sampled indices), so do not
@@ -316,7 +325,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 					"iteration":     iteration,
 					"type":          source.Type(),
 					"count":         len(unseenIndices),
-					"indices":       helpers.SortedPrettySliceFromMap(unseenIndices),
+					"indices":       slice.SortedPrettySliceFromMap(unseenIndices),
 				}).Debug("Constructed data column sidecars from the execution client")
 
 				return nil, nil
@@ -404,7 +413,7 @@ func (s *Service) broadcastAndReceiveUnseenDataColumnSidecars(
 		}
 
 		// Skip already seen data column sidecars.
-		if s.hasSeenDataColumnIndex(slot, proposerIndex, sidecar.Index()) {
+		if s.hasSeenDataColumn(sidecar.IsGloas(), sidecar.BlockRoot(), slot, proposerIndex, sidecar.Index()) {
 			continue
 		}
 
@@ -445,10 +454,10 @@ func (s *Service) broadcastAndReceiveUnseenDataColumnSidecars(
 	return unseenIndices, nil
 }
 
-// haveAllSidecarsBeenSeen checks if all sidecars for the given slot, proposer index, and data column indices have been seen.
-func (s *Service) haveAllSidecarsBeenSeen(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, indices map[uint64]bool) bool {
+// haveAllSidecarsBeenSeen checks if all sidecars for the given identity and data column indices have been seen.
+func (s *Service) haveAllSidecarsBeenSeen(isGloas bool, root [fieldparams.RootLength]byte, slot primitives.Slot, proposerIndex primitives.ValidatorIndex, indices map[uint64]bool) bool {
 	for index := range indices {
-		if !s.hasSeenDataColumnIndex(slot, proposerIndex, index) {
+		if !s.hasSeenDataColumn(isGloas, root, slot, proposerIndex, index) {
 			return false
 		}
 	}

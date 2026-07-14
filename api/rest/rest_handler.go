@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/apiutil"
@@ -33,7 +34,7 @@ type Handler interface {
 
 type handler struct {
 	client       http.Client
-	host         string
+	host         atomic.Value
 	reqOverrides []reqOption
 }
 
@@ -41,8 +42,8 @@ type handler struct {
 func newHandler(client http.Client, host string) *handler {
 	rh := &handler{
 		client: client,
-		host:   host,
 	}
+	rh.host.Store(host)
 	rh.appendAcceptOverride()
 	return rh
 }
@@ -51,8 +52,8 @@ func newHandler(client http.Client, host string) *handler {
 func NewHandler(client http.Client, host string) Handler {
 	rh := &handler{
 		client: client,
-		host:   host,
 	}
+	rh.host.Store(host)
 	rh.appendAcceptOverride()
 	return rh
 }
@@ -68,20 +69,16 @@ func (c *handler) appendAcceptOverride() {
 	}
 }
 
-// HttpClient returns the underlying HTTP client of the handler
-func (c *handler) HttpClient() *http.Client {
-	return &c.client
-}
-
 // Host returns the underlying HTTP host
 func (c *handler) Host() string {
-	return c.host
+	host, _ := c.host.Load().(string)
+	return host
 }
 
 // Get sends a GET request and decodes the response body as a JSON object into the passed in object.
 // If an HTTP error is returned, the body is decoded as a DefaultJsonError JSON object and returned as the first return value.
 func (c *handler) Get(ctx context.Context, endpoint string, resp any) error {
-	url := c.host + endpoint
+	url := c.Host() + endpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return errors.Wrapf(err, "failed to create request for endpoint %s", api.RedactEndpoint(url))
@@ -104,7 +101,7 @@ func (c *handler) Get(ctx context.Context, endpoint string, resp any) error {
 // This is useful for endpoints like /eth/v1/node/health that communicate status via HTTP codes
 // (200 = ready, 206 = syncing, 503 = unavailable) rather than response bodies.
 func (c *handler) GetStatusCode(ctx context.Context, endpoint string) (int, error) {
-	url := c.host + endpoint
+	url := c.Host() + endpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return 0, errors.Wrapf(err, "failed to create request for endpoint %s", api.RedactEndpoint(url))
@@ -123,7 +120,7 @@ func (c *handler) GetStatusCode(ctx context.Context, endpoint string) (int, erro
 }
 
 func (c *handler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Header, error) {
-	url := c.host + endpoint
+	url := c.Host() + endpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to create request for endpoint %s", api.RedactEndpoint(url))
@@ -164,10 +161,12 @@ func (c *handler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Hea
 
 	// non-2XX codes are a failure
 	if !strings.HasPrefix(httpResp.Status, "2") {
-		decoder := json.NewDecoder(bytes.NewBuffer(body))
+		if !strings.Contains(contentType, api.JsonMediaType) {
+			return nil, nil, &httputil.DefaultJsonError{Code: httpResp.StatusCode, Message: string(body)}
+		}
 		errorJson := &httputil.DefaultJsonError{}
-		if err = decoder.Decode(errorJson); err != nil {
-			return nil, nil, fmt.Errorf("HTTP request for %s unsuccessful (%d: %s)", httpResp.Request.URL.Redacted(), httpResp.StatusCode, string(body))
+		if err = json.NewDecoder(bytes.NewBuffer(body)).Decode(errorJson); err != nil {
+			return nil, nil, errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL.Redacted())
 		}
 		return nil, nil, errorJson
 	}
@@ -188,7 +187,7 @@ func (c *handler) Post(
 		return errors.New("data is nil")
 	}
 
-	url := c.host + apiEndpoint
+	url := c.Host() + apiEndpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, data)
 	if err != nil {
 		return errors.Wrapf(err, "failed to create request for endpoint %s", api.RedactEndpoint(url))
@@ -222,7 +221,7 @@ func (c *handler) PostSSZ(
 	if data == nil {
 		return nil, nil, errors.New("data is nil")
 	}
-	url := c.host + apiEndpoint
+	url := c.Host() + apiEndpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, data)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to create request for endpoint %s", api.RedactEndpoint(url))
@@ -270,10 +269,12 @@ func (c *handler) PostSSZ(
 
 	// non-2XX codes are a failure
 	if !strings.HasPrefix(httpResp.Status, "2") {
-		decoder := json.NewDecoder(bytes.NewBuffer(body))
+		if !strings.Contains(contentType, api.JsonMediaType) {
+			return nil, nil, &httputil.DefaultJsonError{Code: httpResp.StatusCode, Message: string(body)}
+		}
 		errorJson := &httputil.DefaultJsonError{}
-		if err = decoder.Decode(errorJson); err != nil {
-			return nil, nil, fmt.Errorf("HTTP request for %s unsuccessful (%d: %s)", httpResp.Request.URL.Redacted(), httpResp.StatusCode, string(body))
+		if err = json.NewDecoder(bytes.NewBuffer(body)).Decode(errorJson); err != nil {
+			return nil, nil, errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL.Redacted())
 		}
 		return nil, nil, errorJson
 	}
@@ -315,5 +316,5 @@ func decodeResp(httpResp *http.Response, resp any) error {
 }
 
 func (c *handler) SwitchHost(host string) {
-	c.host = host
+	c.host.Store(host)
 }

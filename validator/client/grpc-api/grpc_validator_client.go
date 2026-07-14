@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/validator/client/cache"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -25,8 +26,10 @@ import (
 
 type grpcValidatorClient struct {
 	*grpcClientManager[ethpb.BeaconNodeValidatorClient]
-	nodeClient           *grpcNodeClient
-	isEventStreamRunning bool
+	nodeClient       *grpcNodeClient
+	eventStreamGuard eventClient.StreamGuard
+	stateless        bool
+	envelopeCache    *cache.ExecutionPayloadEnvelopeCache
 }
 
 func (c *grpcValidatorClient) Duties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
@@ -205,7 +208,24 @@ func (c *grpcValidatorClient) AttestationData(ctx context.Context, in *ethpb.Att
 }
 
 func (c *grpcValidatorClient) BeaconBlock(ctx context.Context, in *ethpb.BlockRequest) (*ethpb.GenericBeaconBlock, error) {
-	return c.getClient().GetBeaconBlock(ctx, in)
+	if c.stateless {
+		in.EagerPayloadStateRoot = true
+	}
+	resp, err := c.getClient().GetBeaconBlock(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	// Stateless self-build: cache the bundled envelope + blobs for the publisher and hand the
+	// proposer the block alone, matching the non-stateless response shape.
+	contents, ok := resp.GetBlock().(*ethpb.GenericBeaconBlock_GloasContents)
+	if !ok {
+		return resp, nil
+	}
+	gc := contents.GloasContents
+	if c.stateless && gc.GetExecutionPayloadEnvelope() != nil {
+		c.envelopeCache.Add(in.Slot, gc.ExecutionPayloadEnvelope, gc.Blobs, gc.KzgProofs)
+	}
+	return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: gc.Block}}, nil
 }
 
 func (c *grpcValidatorClient) FeeRecipientByPubKey(ctx context.Context, in *ethpb.FeeRecipientByPubKeyRequest) (*ethpb.FeeRecipientByPubKeyResponse, error) {
@@ -284,11 +304,15 @@ func (c *grpcValidatorClient) SubmitSignedProposerPreferences(ctx context.Contex
 	return c.getClient().SubmitSignedProposerPreferences(ctx, in)
 }
 
+func (c *grpcValidatorClient) SubmitBuilderPreferences(ctx context.Context, in *ethpb.SubmitBuilderPreferencesRequest) (*empty.Empty, error) {
+	return c.getClient().SubmitBuilderPreferences(ctx, in)
+}
+
 func (c *grpcValidatorClient) SubmitSignedExecutionPayloadBid(ctx context.Context, in *ethpb.SignedExecutionPayloadBid) (*empty.Empty, error) {
 	return c.getClient().SubmitSignedExecutionPayloadBid(ctx, in)
 }
 
-func (c *grpcValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*empty.Empty, error) {
+func (c *grpcValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest) (*empty.Empty, error) {
 	return c.getClient().SubscribeCommitteeSubnets(ctx, in)
 }
 
@@ -333,12 +357,32 @@ func (*grpcValidatorClient) AggregatedSyncSelections(context.Context, []iface.Sy
 
 // NewGrpcValidatorClient creates a new gRPC validator client that supports
 // dynamic connection switching via the NodeConnection's GrpcConnectionProvider.
-func NewGrpcValidatorClient(conn validatorHelpers.NodeConnection) iface.ValidatorClient {
-	return &grpcValidatorClient{
+func NewGrpcValidatorClient(conn *validatorHelpers.NodeConnection, opts ...iface.Option) iface.ValidatorClient {
+	var cfg iface.ClientConfig
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	c := &grpcValidatorClient{
 		grpcClientManager: newGrpcClientManager(conn, ethpb.NewBeaconNodeValidatorClient),
 		nodeClient: &grpcNodeClient{
 			grpcClientManager: newGrpcClientManager(conn, ethpb.NewNodeClient),
 		},
+		stateless: cfg.Stateless,
+	}
+	if cfg.Stateless {
+		c.envelopeCache = cache.NewExecutionPayloadEnvelopeCache()
+	}
+	return c
+}
+
+// sendEvent forwards ev unless ctx is canceled, so a canceled (replaced)
+// stream can always exit even when the channel is full.
+func sendEvent(ctx context.Context, eventsChannel chan<- *eventClient.Event, ev *eventClient.Event) bool {
+	select {
+	case eventsChannel <- ev:
+		return true
+	case <-ctx.Done():
+		return false
 	}
 }
 
@@ -346,67 +390,60 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 	ctx, span := trace.StartSpan(ctx, "validator.gRPCClient.StartEventStream")
 	defer span.End()
 	if len(topics) == 0 {
-		eventsChannel <- &eventClient.Event{
+		sendEvent(ctx, eventsChannel, &eventClient.Event{
 			EventType: eventClient.EventError,
 			Data:      []byte(errors.New("no topics were added").Error()),
-		}
+		})
 		return
 	}
 	// TODO(13563): ONLY WORKS WITH HEAD TOPIC.
 	containsHead := false
-	for i := range topics {
-		if topics[i] == eventClient.EventHead {
+
+	// Treat EventHeadV2 and EventHead as equivalent for the purpose of this check,
+	// since the gRPC API only supports the head topic, and head_v2 is a superset of head.
+	for _, topic := range topics {
+		if topic == eventClient.EventHead || topic == eventClient.EventHeadV2 {
 			containsHead = true
+			break
 		}
 	}
 	if !containsHead {
-		eventsChannel <- &eventClient.Event{
+		sendEvent(ctx, eventsChannel, &eventClient.Event{
 			EventType: eventClient.EventConnectionError,
 			Data:      []byte(errors.Wrap(client.ErrConnectionIssue, "gRPC only supports the head topic, and head topic was not passed").Error()),
-		}
+		})
 	}
 	if containsHead && len(topics) > 1 {
 		log.Warn("gRPC only supports the head topic, other topics will be ignored")
 	}
 
-	stream, err := c.getClient().StreamSlots(ctx, &ethpb.StreamSlotsRequest{VerifiedOnly: true})
+	// Replace any previous stream (e.g. bound to a pre-switch host) so two
+	// streams never feed the channel concurrently.
+	subCtx, finish := c.eventStreamGuard.Replace(ctx)
+	defer finish()
+
+	stream, err := c.getClient().StreamSlots(subCtx, &ethpb.StreamSlotsRequest{VerifiedOnly: true})
 	if err != nil {
-		eventsChannel <- &eventClient.Event{
+		sendEvent(subCtx, eventsChannel, &eventClient.Event{
 			EventType: eventClient.EventConnectionError,
 			Data:      []byte(errors.Wrap(client.ErrConnectionIssue, err.Error()).Error()),
-		}
+		})
 		return
 	}
-	c.isEventStreamRunning = true
+	c.eventStreamGuard.MarkRunning(true)
+	defer c.eventStreamGuard.MarkRunning(false)
 	for {
 		select {
-		case <-ctx.Done():
+		case <-subCtx.Done():
 			log.Info("Context canceled, stopping event stream")
-			c.isEventStreamRunning = false
 			return
 		default:
-			if ctx.Err() != nil {
-				c.isEventStreamRunning = false
-				if errors.Is(ctx.Err(), context.Canceled) {
-					eventsChannel <- &eventClient.Event{
-						EventType: eventClient.EventConnectionError,
-						Data:      []byte(errors.Wrap(client.ErrConnectionIssue, ctx.Err().Error()).Error()),
-					}
-					return
-				}
-				eventsChannel <- &eventClient.Event{
-					EventType: eventClient.EventError,
-					Data:      []byte(ctx.Err().Error()),
-				}
-				return
-			}
 			res, err := stream.Recv()
 			if err != nil {
-				c.isEventStreamRunning = false
-				eventsChannel <- &eventClient.Event{
+				sendEvent(subCtx, eventsChannel, &eventClient.Event{
 					EventType: eventClient.EventConnectionError,
 					Data:      []byte(errors.Wrap(client.ErrConnectionIssue, err.Error()).Error()),
-				}
+				})
 				return
 			}
 			if res == nil {
@@ -423,21 +460,25 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 				CurrentDutyDependentRoot:  hexutil.Encode(res.CurrentDutyDependentRoot),
 			})
 			if err != nil {
-				eventsChannel <- &eventClient.Event{
+				if !sendEvent(subCtx, eventsChannel, &eventClient.Event{
 					EventType: eventClient.EventError,
 					Data:      []byte(errors.Wrap(err, "failed to marshal Head Event").Error()),
+				}) {
+					return
 				}
 			}
-			eventsChannel <- &eventClient.Event{
+			if !sendEvent(subCtx, eventsChannel, &eventClient.Event{
 				EventType: eventClient.EventHead,
 				Data:      b,
+			}) {
+				return
 			}
 		}
 	}
 }
 
 func (c *grpcValidatorClient) EventStreamIsRunning() bool {
-	return c.isEventStreamRunning
+	return c.eventStreamGuard.IsRunning()
 }
 
 func (c *grpcValidatorClient) Host() string {
@@ -449,13 +490,30 @@ func (c *grpcValidatorClient) EnsureReady(ctx context.Context) bool {
 	return fallback.EnsureReady(ctx, provider, c.nodeClient)
 }
 
+// ConnectionGeneration returns a monotonic counter that advances on each
+// fallback host switch of this client's gRPC connection provider.
+func (c *grpcValidatorClient) ConnectionGeneration() uint64 {
+	provider := c.grpcClientManager.conn.GetGrpcConnectionProvider()
+	if provider == nil {
+		return 0
+	}
+	return provider.ConnectionCounter()
+}
+
 // Gloas Fork Methods
 //
-// TODO(#580): the gRPC envelope path is full-typed end-to-end (get full, sign full, publish full).
-// The beacon-APIs blinded flow (GET BlindedExecutionPayloadEnvelope / POST
-// SignedBlindedExecutionPayloadEnvelope) is implemented only over REST. A blinded gRPC variant would
-// need a v1alpha1 service change plus web3signer blinded signing; deferred as gRPC is BN-internal.
-func (c *grpcValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, _ [32]byte) (*ethpb.ExecutionPayloadEnvelope, *ethpb.WireBlindedExecutionPayloadEnvelope, error) {
+// Mirrors the REST split: stateless self-build publishes the full envelope + blobs as the contents
+// arm; stateful self-build fetches the blinded envelope (the BN keeps the full payload) and
+// publishes the blinded arm, which the BN reconstructs from its cache.
+func (c *grpcValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, beaconBlockRoot [32]byte) (*ethpb.ExecutionPayloadEnvelope, *ethpb.WireBlindedExecutionPayloadEnvelope, error) {
+	// Stateless: the full envelope + blobs were cached during block production.
+	if envelope, _, _ := c.envelopeCache.Peek(slot); envelope != nil {
+		if bytesutil.ToBytes32(envelope.BeaconBlockRoot) != beaconBlockRoot {
+			return nil, nil, errors.New("cached execution payload envelope beacon_block_root does not match requested block")
+		}
+		return envelope, nil, nil
+	}
+	// Stateful: the BN returns the blinded envelope and reconstructs the full payload on publish.
 	req := &ethpb.ExecutionPayloadEnvelopeRequest{
 		Slot: slot,
 	}
@@ -466,17 +524,40 @@ func (c *grpcValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, s
 			errors.Wrap(err, "GetExecutionPayloadEnvelope").Error(),
 		)
 	}
-	// TODO(#580): gRPC only returns the full envelope (blinded form is nil). The spec-wire blinded
-	// flow is REST-only; implementing it over gRPC needs a v1alpha1 service change + web3signer support.
-	return resp.Envelope, nil, nil
+	// Mirror the REST handler's root check (the gRPC request carries only the slot): the returned
+	// envelope must be for the block we are proposing before the VC signs and publishes it.
+	if resp.Blinded == nil || bytesutil.ToBytes32(resp.Blinded.BeaconBlockRoot) != beaconBlockRoot {
+		return nil, nil, errors.New("blinded execution payload envelope beacon_block_root does not match requested block")
+	}
+	return nil, resp.Blinded, nil
 }
 
+// PublishExecutionPayloadEnvelope publishes the stateless contents arm: the full signed envelope
+// plus the blobs/proofs cached during block production.
 func (c *grpcValidatorClient) PublishExecutionPayloadEnvelope(ctx context.Context, in *ethpb.SignedExecutionPayloadEnvelope) (*empty.Empty, error) {
-	return c.getClient().PublishExecutionPayloadEnvelope(ctx, in)
+	var blobs, kzgProofs [][]byte
+	if in.GetMessage().GetPayload() != nil {
+		_, blobs, kzgProofs = c.envelopeCache.Take(primitives.Slot(in.Message.Payload.SlotNumber))
+	}
+	generic := &ethpb.GenericSignedExecutionPayloadEnvelope{
+		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Contents{
+			Contents: &ethpb.SignedExecutionPayloadEnvelopeContents{
+				SignedExecutionPayloadEnvelope: in,
+				KzgProofs:                      kzgProofs,
+				Blobs:                          blobs,
+			},
+		},
+	}
+	return c.getClient().PublishExecutionPayloadEnvelope(ctx, generic)
 }
 
-func (c *grpcValidatorClient) PublishBlindedExecutionPayloadEnvelope(_ context.Context, _ *ethpb.SignedWireBlindedExecutionPayloadEnvelope) (*empty.Empty, error) {
-	return nil, errors.New("blinded execution payload envelope publishing is not supported over gRPC; use the REST API")
+// PublishBlindedExecutionPayloadEnvelope publishes the stateful blinded arm; the BN reconstructs the
+// full envelope and data column sidecars from its own cache.
+func (c *grpcValidatorClient) PublishBlindedExecutionPayloadEnvelope(ctx context.Context, in *ethpb.SignedWireBlindedExecutionPayloadEnvelope) (*empty.Empty, error) {
+	generic := &ethpb.GenericSignedExecutionPayloadEnvelope{
+		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Blinded{Blinded: in},
+	}
+	return c.getClient().PublishExecutionPayloadEnvelope(ctx, generic)
 }
 
 func (c *grpcValidatorClient) PayloadAttestationData(ctx context.Context, slot primitives.Slot) (*ethpb.PayloadAttestationData, error) {

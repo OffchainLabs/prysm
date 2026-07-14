@@ -46,7 +46,7 @@ func (b *BeaconNode) waitForPendingProposalsLoop(
 	currentSlotFn func() primitives.Slot,
 ) {
 	for {
-		tracked := b.trackedValidatorsCache.Indices()
+		tracked := b.subscribedValidatorsCache.Indices()
 		// No validator client connected, nothing to wait for.
 		if len(tracked) == 0 {
 			return

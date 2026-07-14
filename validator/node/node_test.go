@@ -10,6 +10,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -323,4 +324,37 @@ func Test_parseBeaconApiHeaders(t *testing.T) {
 		assert.Equal(t, 1, len(h))
 		assert.DeepEqual(t, []string{"value1"}, h["key1"])
 	})
+}
+
+func TestRegisterValidatorService_DistributedFlag(t *testing.T) {
+	tests := []struct {
+		name                string
+		enableBeaconRESTApi bool
+		wantErrMsg          string
+	}{
+		{
+			name:                "fails when distributed is true but REST API is false",
+			enableBeaconRESTApi: false,
+			wantErrMsg:          "--distributed requires --enable-beacon-rest-api",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resetCfg := features.InitWithReset(&features.Flags{EnableBeaconRESTApi: tt.enableBeaconRESTApi})
+			defer resetCfg()
+
+			app := cli.App{}
+			set := flag.NewFlagSet("test", 0)
+			set.Bool(flags.EnableDistributed.Name, false, "")
+			require.NoError(t, set.Set(flags.EnableDistributed.Name, "true"))
+			cliCtx := cli.NewContext(&app, set, nil)
+
+			c := &ValidatorClient{}
+			err := c.registerValidatorService(cliCtx)
+
+			require.NotNil(t, err)
+			require.ErrorContains(t, tt.wantErrMsg, err)
+		})
+	}
 }

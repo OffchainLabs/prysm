@@ -67,23 +67,11 @@ func Test_BuilderMethodsWithouClient(t *testing.T) {
 	err = s.RegisterValidator(t.Context(), nil)
 	assert.ErrorContains(t, ErrNoBuilder.Error(), err)
 
-	_, err = s.GetExecutionPayloadBid(t.Context(), 0, [32]byte{}, [32]byte{}, [48]byte{}, nil)
+	// With no signed auths there's nothing to query; multiplex returns no bids and no error.
+	bids, err := s.GetExecutionPayloadBid(t.Context(), 0, [32]byte{}, [32]byte{}, [48]byte{}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(bids))
+
+	err = s.SubmitSignedBeaconBlock(t.Context(), "", nil)
 	assert.ErrorContains(t, ErrNoBuilder.Error(), err)
-
-	err = s.SubmitSignedBeaconBlock(t.Context(), nil)
-	assert.ErrorContains(t, ErrNoBuilder.Error(), err)
-}
-
-func Test_authForBuilder(t *testing.T) {
-	mk := func(url string) *eth.SignedRequestAuthV1 {
-		return &eth.SignedRequestAuthV1{Message: &eth.RequestAuthV1{Data: []byte(url)}}
-	}
-	auths := []*eth.SignedRequestAuthV1{mk("https://a.example.com"), mk("https://b.example.com")}
-
-	got := authForBuilder(auths, "https://b.example.com")
-	require.NotNil(t, got)
-	assert.DeepEqual(t, []byte("https://b.example.com"), got.GetMessage().GetData())
-
-	assert.Equal(t, (*eth.SignedRequestAuthV1)(nil), authForBuilder(auths, "https://c.example.com"))
-	assert.Equal(t, (*eth.SignedRequestAuthV1)(nil), authForBuilder(nil, "https://a.example.com"))
 }

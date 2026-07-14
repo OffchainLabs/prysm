@@ -42,12 +42,6 @@ var (
 	})
 )
 
-func setFeeRecipientIfBurnAddress(val *cache.TrackedValidator) {
-	if val.FeeRecipient == primitives.ExecutionAddress([20]byte{}) && val.Index == 0 {
-		val.FeeRecipient = primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
-	}
-}
-
 // This returns the local execution payload of a given slot. The function has full awareness of pre and post merge.
 func (vs *Server) getLocalPayload(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock, st state.BeaconState, parentFull bool) (*consensusblocks.GetPayloadResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.getLocalPayload")
@@ -81,11 +75,17 @@ func (vs *Server) getLocalPayloadFromEngine(
 	}
 	payloadId, ok := vs.PayloadIDCache.PayloadID(slot, parentRoot, parentFull)
 
-	val, tracked := vs.TrackedValidatorsCache.Validator(proposerId)
-	if !tracked {
-		logrus.WithFields(logFields).Warn("Could not find tracked proposer index")
+	val := cache.ProposerPreference{ValidatorIndex: proposerId}
+	dependentRoot, err := helpers.ProposerDependentRootOrGenesis(ctx, vs.BeaconDB, st, slot)
+	if err != nil {
+		log.WithFields(logFields).WithError(err).Debug("Could not get proposer dependent root, falling back to default preferences")
+		if def, ok := vs.ProposerPreferencesCache.DefaultFor(proposerId); ok {
+			val = def
+		}
+	} else if pref, ok := vs.ProposerPreferencesCache.BestFor(dependentRoot, slot, proposerId); ok {
+		val = pref
 	}
-	setFeeRecipientIfBurnAddress(&val)
+	val.FeeRecipient = val.FeeRecipientOrDefault()
 
 	if ok && payloadId != [8]byte{} {
 		// Payload ID is cache hit. Return the cached payload ID.
@@ -144,10 +144,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		if err != nil {
 			return nil, err
 		}
-		targetGasLimit := val.GasLimit
-		if targetGasLimit == 0 {
-			targetGasLimit = params.BeaconConfig().DefaultBuilderGasLimit
-		}
+		parentGasLimit := helpers.ParentTargetGasLimit(st)
 		attr, err = payloadattribute.New(&enginev1.PayloadAttributesV4{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            random,
@@ -155,7 +152,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 			Withdrawals:           withdrawals,
 			ParentBeaconBlockRoot: parentRoot[:],
 			SlotNumber:            uint64(slot),
-			TargetGasLimit:        targetGasLimit,
+			TargetGasLimit:        val.GasLimitOr(parentGasLimit),
 		})
 		if err != nil {
 			return nil, err

@@ -130,8 +130,9 @@ var (
 		Usage: "Saves beacon blocks with full execution payloads instead of execution payload headers in the database.",
 	}
 	EnableBeaconRESTApi = &cli.BoolFlag{
-		Name:  "enable-beacon-rest-api",
-		Usage: "(Experimental): Enables of the beacon REST API when querying a beacon node.",
+		Name:    "enable-beacon-rest-api",
+		Aliases: []string{"enable-rest"},
+		Usage:   "(Experimental): Enables the beacon REST API when querying a beacon node. Optional: also enabled implicitly when --beacon-rest-api-provider is set.",
 	}
 	enableHashtree = &cli.BoolFlag{
 		Name:  "enable-hashtree",

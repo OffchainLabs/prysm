@@ -19,7 +19,8 @@ func (vs *Server) SubmitBuilderPreferences(ctx context.Context, req *ethpb.Submi
 	if req == nil || req.Request == nil {
 		return nil, status.Error(codes.InvalidArgument, "builder preferences request is empty")
 	}
-	if vs.BlockBuilder == nil || !vs.BlockBuilder.Configured() {
+	// Not gated on Configured(), gloas builders are dialed per URL from the request auth rather than the endpoint flag.
+	if vs.BlockBuilder == nil {
 		return nil, status.Error(codes.FailedPrecondition, "builder is not configured")
 	}
 	pubkey := bytesutil.ToBytes48(req.ValidatorPubkey)

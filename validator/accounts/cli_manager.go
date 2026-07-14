@@ -10,9 +10,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
+	"github.com/OffchainLabs/prysm/v7/validator/client"
 	iface "github.com/OffchainLabs/prysm/v7/validator/client/iface"
-	nodeClientFactory "github.com/OffchainLabs/prysm/v7/validator/client/node-client-factory"
-	validatorClientFactory "github.com/OffchainLabs/prysm/v7/validator/client/validator-client-factory"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/derived"
@@ -70,7 +69,7 @@ type CLIManager struct {
 	inputReader          io.Reader
 }
 
-func (acm *CLIManager) prepareBeaconClients(ctx context.Context) (*iface.ValidatorClient, *iface.NodeClient, error) {
+func (acm *CLIManager) prepareBeaconClients(ctx context.Context) (iface.ValidatorClient, iface.NodeClient, error) {
 	if acm.dialOpts == nil {
 		return nil, nil, errors.New("failed to construct dial options for beacon clients")
 	}
@@ -85,8 +84,8 @@ func (acm *CLIManager) prepareBeaconClients(ctx context.Context) (*iface.Validat
 		return nil, nil, err
 	}
 
-	validatorClient := validatorClientFactory.NewValidatorClient(conn)
-	nodeClient := nodeClientFactory.NewNodeClient(conn)
+	validatorClient := client.NewValidatorClient(conn)
+	nodeClient := client.NewNodeClient(conn)
 
-	return &validatorClient, &nodeClient, nil
+	return validatorClient, nodeClient, nil
 }

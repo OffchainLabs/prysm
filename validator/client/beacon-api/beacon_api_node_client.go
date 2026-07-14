@@ -116,7 +116,8 @@ func (c *beaconApiNodeClient) IsReady(ctx context.Context) bool {
 	return statusCode == http.StatusOK
 }
 
-func NewNodeClientWithFallback(handler rest.Handler, fallbackClient iface.NodeClient) iface.NodeClient {
+func NewNodeClientWithFallback(provider rest.RestConnectionProvider, fallbackClient iface.NodeClient) iface.NodeClient {
+	handler := provider.Handler()
 	b := &beaconApiNodeClient{
 		handler:         handler,
 		fallbackClient:  fallbackClient,

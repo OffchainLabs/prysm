@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
-	ethpbv1 "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
@@ -133,13 +132,13 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 
 		s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 			Type: statefeed.Reorg,
-			Data: &ethpbv1.EventChainReorg{
+			Data: &statefeed.ChainReorgData{
 				Slot:                newHeadSlot,
 				Depth:               max(uint64(headSlot-forkSlot), uint64(newHeadSlot-forkSlot)),
-				OldHeadBlock:        oldHeadRoot[:],
-				NewHeadBlock:        newHeadRoot[:],
-				OldHeadState:        oldStateRoot[:],
-				NewHeadState:        newStateRoot[:],
+				OldHeadBlock:        oldHeadRoot,
+				NewHeadBlock:        newHeadRoot,
+				OldHeadState:        oldStateRoot,
+				NewHeadState:        newStateRoot,
 				Epoch:               slots.ToEpoch(newHeadSlot),
 				ExecutionOptimistic: isOptimistic,
 			},
@@ -172,7 +171,7 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 	// Forward an event capturing a new chain head over a common event feed
 	// done in a goroutine to avoid blocking the critical runtime main routine.
 	go func() {
-		if err := s.notifyNewHeadEvent(s.ctx, newHeadSlot, newStateRoot[:], newHeadRoot[:]); err != nil {
+		if err := s.notifyNewHeadEvent(s.ctx, newHeadSlot, newStateRoot, newHeadRoot); err != nil {
 			log.WithError(err).Error("Could not notify event feed of new chain head")
 		}
 
@@ -207,6 +206,19 @@ func (s *Service) saveHeadNoDB(ctx context.Context, b interfaces.ReadOnlySignedB
 	}
 	if err := s.setHeadInitialSync(r, bCp, hs, optimistic); err != nil {
 		return errors.Wrap(err, "could not set head")
+	}
+	if b.Version() >= version.Gloas {
+		sbid, err := b.Block().Body().SignedExecutionPayloadBid()
+		if err != nil || sbid == nil || sbid.Message == nil || len(sbid.Message.ParentBlockHash) != 32 {
+			log.WithError(err).Error("Could not get bid parent block hash for forkchoice update")
+			return nil
+		}
+		parentHash := bytesutil.ToBytes32(sbid.Message.ParentBlockHash)
+		go func() {
+			if _, err := s.notifyForkchoiceUpdateGloas(s.ctx, parentHash, nil); err != nil {
+				log.WithError(err).Error("Could not notify forkchoice update after batch import")
+			}
+		}()
 	}
 	return nil
 }
@@ -332,7 +344,7 @@ func (s *Service) notifyNewHeadEvent(
 	ctx context.Context,
 	newHeadSlot primitives.Slot,
 	newHeadStateRoot,
-	newHeadRoot []byte,
+	newHeadRoot [32]byte,
 ) error {
 	currEpoch := slots.ToEpoch(newHeadSlot)
 	previousDutyDependentRoot, currentDutyDependentRoot, err := s.headEventDependentRoots(currEpoch)
@@ -345,20 +357,20 @@ func (s *Service) notifyNewHeadEvent(
 		return errors.Wrap(err, "could not check if node is optimistically synced")
 	}
 
-	epochTransition, err := s.headEpochTransition(newHeadSlot, bytesutil.ToBytes32(newHeadRoot))
+	epochTransition, err := s.headEpochTransition(newHeadSlot, newHeadRoot)
 	if err != nil {
 		return err
 	}
 
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.NewHead,
-		Data: &ethpbv1.EventHead{
+		Data: &statefeed.HeadData{
 			Slot:                      newHeadSlot,
 			Block:                     newHeadRoot,
 			State:                     newHeadStateRoot,
 			EpochTransition:           epochTransition,
-			PreviousDutyDependentRoot: previousDutyDependentRoot[:],
-			CurrentDutyDependentRoot:  currentDutyDependentRoot[:],
+			PreviousDutyDependentRoot: previousDutyDependentRoot,
+			CurrentDutyDependentRoot:  currentDutyDependentRoot,
 			ExecutionOptimistic:       isOptimistic,
 		},
 	})
@@ -448,6 +460,11 @@ func (s *Service) headEventDependentRoots(currEpoch primitives.Epoch) (previousD
 // headEpochTransition reports whether the head at newHeadSlot crossed an epoch boundary
 // relative to its parent block.
 func (s *Service) headEpochTransition(newHeadSlot primitives.Slot, newHeadRoot [32]byte) (bool, error) {
+	// Consider the head to be an epoch transition if it is the genesis block.
+	if newHeadSlot == 0 {
+		return true, nil
+	}
+
 	parentRoot, err := s.ParentRoot(newHeadRoot)
 	if err != nil {
 		return false, errors.Wrap(err, "could not obtain parent root in forkchoice")
