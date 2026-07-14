@@ -6,6 +6,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
@@ -25,6 +27,54 @@ func (s *Service) processPendingPayloadEnvelopeQueue() {
 		}
 		s.processPendingPayloadEnvelopes(s.ctx)
 	})
+}
+
+// Caller must hold pendingEnvelopeLock, allowOverflow lets locally self built envelopes bypass the caps.
+func (s *Service) storePendingPayloadEnvelope(signedEnvelope *ethpb.SignedExecutionPayloadEnvelope, allowOverflow bool) (stored, newRoot bool) {
+	msg := signedEnvelope.Message
+	if msg == nil || msg.Payload == nil {
+		return false, false
+	}
+	root := bytesutil.ToBytes32(msg.BeaconBlockRoot)
+	builderIdx := uint64(msg.BuilderIndex)
+
+	inner, rootExists := s.pendingPayloadEnvelopes[root]
+	if !allowOverflow {
+		if !rootExists && len(s.pendingPayloadEnvelopes) >= maxPendingPayloadRoots {
+			return false, false
+		}
+		if len(inner) >= maxPendingBuildersPerRoot {
+			return false, false
+		}
+	}
+	for existingIdx, existing := range inner {
+		if existing == nil || existing.Message == nil || existing.Message.Payload == nil {
+			delete(inner, existingIdx)
+			continue
+		}
+		if existing.Message.Payload.SlotNumber != msg.Payload.SlotNumber {
+			return false, false
+		}
+		break
+	}
+	if _, exists := inner[builderIdx]; exists {
+		return false, false
+	}
+	if !rootExists {
+		inner = make(map[uint64]*ethpb.SignedExecutionPayloadEnvelope)
+		s.pendingPayloadEnvelopes[root] = inner
+	}
+	inner[builderIdx] = signedEnvelope
+	return true, !rootExists
+}
+
+// Bounds the fetch path so a far future slot cannot defeat finalization based pruning.
+func (s *Service) payloadEnvelopeSlotInWindow(slot primitives.Slot) bool {
+	finalizedStart, err := slots.EpochStart(s.cfg.chain.FinalizedCheckpt().Epoch)
+	if err != nil {
+		return false
+	}
+	return slot >= finalizedStart && slot <= s.cfg.clock.CurrentSlot()
 }
 
 // processPendingPayloadEnvelope retrieves all queued payload envelopes for the

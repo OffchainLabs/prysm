@@ -22,6 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/pkg/errors"
 )
 
 func makeSignedEnvelope(root [32]byte, slot primitives.Slot) *ethpb.SignedExecutionPayloadEnvelope {
@@ -47,8 +48,9 @@ func makeSignedEnvelope(root [32]byte, slot primitives.Slot) *ethpb.SignedExecut
 
 func newEnvelopeFetchService(t *testing.T, p1 p2p.P2P) *Service {
 	chain := &mock.ChainService{
-		ValidatorsRoot: [32]byte{},
-		Genesis:        time.Now(),
+		ValidatorsRoot:      [32]byte{},
+		Genesis:             time.Now().Add(-time.Hour),
+		FinalizedCheckPoint: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 	}
 	r := &Service{
 		cfg: &config{
@@ -57,7 +59,8 @@ func newEnvelopeFetchService(t *testing.T, p1 p2p.P2P) *Service {
 			chain:    chain,
 			clock:    startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 		},
-		pendingPayloadEnvelopes: make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+		pendingPayloadEnvelopes:             make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+		newExecutionPayloadEnvelopeVerifier: testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{}),
 	}
 	ctxMap, err := ContextByteVersionsForValRoot(chain.ValidatorsRoot)
 	require.NoError(t, err)
@@ -109,6 +112,91 @@ func TestFetchAndQueuePayloadEnvelopesForRoots_QueuesWithoutPendingBlock(t *test
 	require.Equal(t, true, ok)
 	require.Equal(t, 1, len(inner))
 	assert.NotNil(t, inner[0])
+}
+
+// An envelope fetched by root with an invalid signature is dropped, not queued.
+func TestQueuePendingPayloadEnvelopeFromRootRequest_RejectsBadSignature(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.FuluForkEpoch = 0
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	params.BeaconConfig().InitializeForkSchedule()
+
+	p1 := p2ptest.NewTestP2P(t)
+	r := newEnvelopeFetchService(t, p1)
+	r.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(
+		mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("bad signature")},
+	)
+
+	root := [32]byte{0xBB}
+	r.queuePendingPayloadEnvelopeFromRootRequest(t.Context(), makeSignedEnvelope(root, 1))
+
+	r.pendingEnvelopeLock.RLock()
+	defer r.pendingEnvelopeLock.RUnlock()
+	assert.Equal(t, 0, len(r.pendingPayloadEnvelopes))
+}
+
+// An envelope fetched by root with a far-future slot is dropped so it cannot defeat
+// finalization based pruning and pin memory permanently.
+func TestQueuePendingPayloadEnvelopeFromRootRequest_RejectsFarFutureSlot(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.FuluForkEpoch = 0
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	params.BeaconConfig().InitializeForkSchedule()
+
+	p1 := p2ptest.NewTestP2P(t)
+	r := newEnvelopeFetchService(t, p1)
+
+	root := [32]byte{0xDD}
+	r.queuePendingPayloadEnvelopeFromRootRequest(t.Context(), makeSignedEnvelope(root, 1_000_000))
+
+	r.pendingEnvelopeLock.RLock()
+	defer r.pendingEnvelopeLock.RUnlock()
+	assert.Equal(t, 0, len(r.pendingPayloadEnvelopes))
+}
+
+// storePendingPayloadEnvelope caps the number of roots and builders per root, and
+// self-built envelopes may bypass the caps.
+func TestStorePendingPayloadEnvelope_Caps(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	r := &Service{pendingPayloadEnvelopes: make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope)}
+
+	for i := 0; i < maxPendingPayloadRoots; i++ {
+		env := makeSignedEnvelope([32]byte{byte(i), byte(i >> 8)}, 1)
+		stored, _ := r.storePendingPayloadEnvelope(env, false)
+		require.Equal(t, true, stored)
+	}
+	require.Equal(t, maxPendingPayloadRoots, len(r.pendingPayloadEnvelopes))
+
+	overflow := makeSignedEnvelope([32]byte{0xFF, 0xFF, 0xFF}, 1)
+	stored, _ := r.storePendingPayloadEnvelope(overflow, false)
+	assert.Equal(t, false, stored)
+
+	selfBuild := makeSignedEnvelope([32]byte{0xFE, 0xFE, 0xFE}, 1)
+	selfBuild.Message.BuilderIndex = primitives.BuilderIndex(params.BeaconConfig().BuilderIndexSelfBuild)
+	stored, _ = r.storePendingPayloadEnvelope(selfBuild, true)
+	assert.Equal(t, true, stored)
+}
+
+// storePendingPayloadEnvelope caps the number of builders retained per root.
+func TestStorePendingPayloadEnvelope_BuildersPerRootCap(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	r := &Service{pendingPayloadEnvelopes: make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope)}
+
+	root := [32]byte{0x01}
+	for i := 0; i < maxPendingBuildersPerRoot; i++ {
+		env := makeSignedEnvelope(root, 1)
+		env.Message.BuilderIndex = primitives.BuilderIndex(i)
+		stored, _ := r.storePendingPayloadEnvelope(env, false)
+		require.Equal(t, true, stored)
+	}
+	overflow := makeSignedEnvelope(root, 1)
+	overflow.Message.BuilderIndex = primitives.BuilderIndex(maxPendingBuildersPerRoot)
+	stored, _ := r.storePendingPayloadEnvelope(overflow, false)
+	assert.Equal(t, false, stored)
 }
 
 // Pre-Gloas: the chain-level CurrentSlot() < gloasStartSlot gate short-circuits
