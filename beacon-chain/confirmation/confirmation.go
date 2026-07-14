@@ -4,6 +4,7 @@ package confirmation
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
@@ -28,8 +29,10 @@ type FastConfirmationRule struct {
 	prevSupportBuf *SupportMap
 	votesBuf       []forkchoicetypes.VoteData
 
-	committeeCache      *cachedCommittees
-	committeeCacheEpoch primitives.Epoch
+	// Assignment tables for epochs [current-2, current].
+	// Rebuilt at epoch boundaries.
+	tables      []*epochSlotTable
+	tablesEpoch primitives.Epoch
 
 	fc         ForkchoiceReader
 	committees CommitteeAccessor
@@ -131,23 +134,20 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 		ffg = &FFGStateInfo{TotalActiveBalance: totalActiveBalance}
 	}
 
+	// Committee assignment tables read the head state, keep it off the forkchoice lock.
+	if err := f.rebuildTables(ctx, currentSlot, len(balances)); err != nil {
+		return
+	}
+
 	f.fc.RLock()
 	defer f.fc.RUnlock()
 
 	equivocating := f.fc.SlashedIndices()
-	// Committee shuffles are fixed within an epoch, reuse across slots and drop at the boundary.
-	if f.committeeCache == nil || f.committeeCacheEpoch != slots.ToEpoch(currentSlot) {
-		f.committeeCache = newCachedCommittees(f.committees)
-		f.committeeCacheEpoch = slots.ToEpoch(currentSlot)
-	}
-	committees := f.committeeCache
 	f.votesBuf = f.fc.VoteSnapshot(f.votesBuf[:0])
 	votes := f.votesBuf
-	if err := f.support.Build(ctx, votes, balances, committees, equivocating, currentSlot, f.fc); err != nil {
-		return
-	}
+	f.support.Build(votes, balances, f.tables, equivocating, f.fc)
 
-	equivScorer := newMemoizedEquivScorer(ctx, committees, equivocating, balances)
+	equivScorer := EquivocationScorer(f.support.EquivocationScore)
 
 	prevSupport := f.support
 	prevTotalActiveBalance := totalActiveBalance
@@ -157,11 +157,10 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 			f.prevSupportBuf = NewSupportMap()
 		}
 		ps := f.prevSupportBuf
-		if err := ps.Build(ctx, votes, prevBalances, committees, equivocating, currentSlot, f.fc); err == nil {
-			prevSupport = ps
-			prevTotalActiveBalance = prevTotalActive
-			prevEquivScorer = newMemoizedEquivScorer(ctx, committees, equivocating, prevBalances)
-		}
+		ps.Build(votes, prevBalances, f.tables, equivocating, f.fc)
+		prevSupport = ps
+		prevTotalActiveBalance = prevTotalActive
+		prevEquivScorer = EquivocationScorer(ps.EquivocationScore)
 	}
 
 	currentTarget := f.getCurrentTarget(ctx, slots.ToEpoch(currentSlot))
@@ -176,23 +175,35 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 	))
 }
 
-func newMemoizedEquivScorer(
-	ctx context.Context,
-	committees CommitteeAccessor,
-	equivocating map[primitives.ValidatorIndex]bool,
-	balances []uint64,
-) EquivocationScorer {
-	type slotRange struct{ start, end primitives.Slot }
-	cache := make(map[slotRange]uint64)
-	return func(startSlot, endSlot primitives.Slot) uint64 {
-		k := slotRange{startSlot, endSlot}
-		if v, ok := cache[k]; ok {
-			return v
-		}
-		v := EquivocationScoreByCommittee(ctx, committees, equivocating, balances, startSlot, endSlot)
-		cache[k] = v
-		return v
+// rebuildTables rebuilds the per-epoch assignment tables when the epoch changes.
+func (f *FastConfirmationRule) rebuildTables(ctx context.Context, currentSlot primitives.Slot, sizeHint int) error {
+	epoch := slots.ToEpoch(currentSlot)
+	// Current tables are built for the current epoch, no rebuild needed.
+	if f.tables != nil && f.tablesEpoch == epoch {
+		return nil
 	}
+
+	// Bound the start epoch to zero.
+	startEpoch := primitives.Epoch(0)
+	if epoch > 2 {
+		startEpoch = epoch - 2
+	}
+
+	// Build tables for epochs [current-2, current].
+	tables := make([]*epochSlotTable, 0, 3)
+	for e := startEpoch; e <= epoch; e++ {
+		t, err := newEpochSlotTable(ctx, f.committees, e, sizeHint)
+		if err != nil {
+			return fmt.Errorf("failed to create epoch slot table: %w", err)
+		}
+		tables = append(tables, t)
+	}
+
+	// Update the tables and epoch after successful rebuild.
+	f.tables = tables
+	f.tablesEpoch = epoch
+
+	return nil
 }
 
 // getLatestConfirmed executes the FCR algorithm: revert, restart, then advance.

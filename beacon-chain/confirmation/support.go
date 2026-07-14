@@ -2,79 +2,108 @@ package confirmation
 
 import (
 	"context"
+	"fmt"
 
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
+// noAssignment marks a validator with no attestation duty in an epoch.
+const noAssignment = uint8(0xFF)
+
+// epochSlotTable maps every validator to its assigned attestation slot within one
+// epoch. This makes membership queries O(1).
+type epochSlotTable struct {
+	start      primitives.Slot
+	slotOffset []uint8 // val index -> slot offset
+}
+
+// newEpochSlotTable builds the table for one epoch.
+func newEpochSlotTable(ctx context.Context, committees CommitteeAccessor, epoch primitives.Epoch, sizeHint int) (*epochSlotTable, error) {
+	start, err := slots.EpochStart(epoch)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get epoch start: %w", err)
+	}
+
+	// Initialize slot offset tables filling with noAssignment sentinel.
+	offs := make([]uint8, sizeHint)
+	for i := range offs {
+		offs[i] = noAssignment
+	}
+
+	// Loop through the given epoch.
+	spe := primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
+	for slot := start; slot < start+spe; slot++ {
+		// Fetch the committee information.
+		members, err := committees.Committee(ctx, slot)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get committee for slot %d: %w", slot, err)
+		}
+
+		// Iterate through the committee members and assign their slot offsets.
+		for _, v := range members {
+			// Grow the slice if the validator index exceeds the current length.
+			if uint64(v) >= uint64(len(offs)) {
+				grown := make([]uint8, v+1)
+				copy(grown, offs)
+				for i := len(offs); i < len(grown); i++ {
+					grown[i] = noAssignment
+				}
+				offs = grown
+			}
+
+			offs[v] = uint8(slot - start)
+		}
+	}
+	return &epochSlotTable{start: start, slotOffset: offs}, nil
+}
+
+// assignedSlot computes the attestation slot assigned to a validator in this epoch, if any.
+// Caller should check the boolean return value before using the slot.
+func (t *epochSlotTable) assignedSlot(v primitives.ValidatorIndex) (primitives.Slot, bool) {
+	// Validator index is out of range.
+	if uint64(v) >= uint64(len(t.slotOffset)) {
+		return 0, false
+	}
+
+	// Validator has no attestation duty in this epoch.
+	if t.slotOffset[v] == noAssignment {
+		return 0, false
+	}
+
+	return t.start + primitives.Slot(t.slotOffset[v]), true
+}
+
 // SupportMap pre-aggregates vote support for the slot-range queries FCR needs.
-// slotRootVoters backs get_block_support_between_slots (direct vote equality),
-// totalSupport backs get_attestation_score (a vote credits every ancestor).
+// totalSupport backs get_attestation_score (a vote credits every ancestor);
 type SupportMap struct {
-	slotRootVoters map[primitives.Slot]map[[32]byte][]primitives.ValidatorIndex
-	balances       []uint64
-	totalSupport   map[[32]byte]uint64
+	votes        []forkchoicetypes.VoteData
+	balances     []uint64
+	equivocating map[primitives.ValidatorIndex]bool
+	tables       []*epochSlotTable
+	totalSupport map[[32]byte]uint64
 }
 
 func NewSupportMap() *SupportMap {
-	return &SupportMap{
-		slotRootVoters: make(map[primitives.Slot]map[[32]byte][]primitives.ValidatorIndex),
-		totalSupport:   make(map[[32]byte]uint64),
-	}
+	return &SupportMap{totalSupport: make(map[[32]byte]uint64)}
 }
 
+// Build snapshots the query inputs and aggregates totalSupport.
 func (s *SupportMap) Build(
-	ctx context.Context,
 	votes []forkchoicetypes.VoteData,
 	balances []uint64,
-	committees CommitteeAccessor,
+	tables []*epochSlotTable,
 	equivocating map[primitives.ValidatorIndex]bool,
-	currentSlot primitives.Slot,
 	fc ForkchoiceReader,
-) error {
-	if currentSlot == 0 {
-		return nil
-	}
-	// is_confirmed_chain_safe reconfirmation can query empty-slot discounts down to current_epoch - 2.
-	currentEpoch := slots.ToEpoch(currentSlot)
-	startSlot := primitives.Slot(0)
-	if currentEpoch > 2 {
-		es, err := slots.EpochStart(currentEpoch - 2)
-		if err == nil {
-			startSlot = es
-		}
-	}
-	endSlot := currentSlot - 1
-
-	// Reuse the map buckets across the per-slot rebuilds.
-	clear(s.slotRootVoters)
+) {
+	s.votes = votes
 	s.balances = balances
+	s.tables = tables
+	s.equivocating = equivocating
 
-	for slot := startSlot; slot <= endSlot; slot++ {
-		members, err := committees.Committee(ctx, slot)
-		if err != nil {
-			return err
-		}
-
-		slotMap := make(map[[32]byte][]primitives.ValidatorIndex)
-		for _, idx := range members {
-			if equivocating[idx] {
-				continue
-			}
-
-			i := uint64(idx)
-			if i < uint64(len(balances)) && i < uint64(len(votes)) && balances[i] > 0 {
-				root := votes[i].Root
-				if root != [32]byte{} {
-					slotMap[root] = append(slotMap[root], idx)
-				}
-			}
-		}
-		if len(slotMap) > 0 {
-			s.slotRootVoters[slot] = slotMap
-		}
-	}
+	hasEquivocating := len(equivocating) > 0
 
 	clear(s.totalSupport)
 	globalVotes := make(map[[32]byte]uint64)
@@ -85,7 +114,7 @@ func (s *SupportMap) Build(
 		if i >= len(balances) || balances[i] == 0 {
 			continue
 		}
-		if equivocating[primitives.ValidatorIndex(i)] {
+		if hasEquivocating && equivocating[primitives.ValidatorIndex(i)] {
 			continue
 		}
 		globalVotes[vote.Root] += balances[i]
@@ -101,8 +130,6 @@ func (s *SupportMap) Build(
 			r = parent
 		}
 	}
-
-	return nil
 }
 
 // BlockSupportBetweenSlots implements get_block_support_between_slots.
@@ -119,16 +146,25 @@ func (s *SupportMap) Build(
 //	    and i not in equivocating_indices)
 //	</spec>
 func (s *SupportMap) BlockSupportBetweenSlots(root [32]byte, startSlot, endSlot primitives.Slot) uint64 {
+	if root == ([32]byte{}) {
+		return 0
+	}
+	hasEquivocating := len(s.equivocating) > 0
 	total := uint64(0)
-	seen := make(map[primitives.ValidatorIndex]bool)
-	for slot := startSlot; slot <= endSlot; slot++ {
-		for _, idx := range s.slotRootVoters[slot][root] {
-			if seen[idx] {
-				continue
-			}
-			seen[idx] = true
-			if uint64(idx) < uint64(len(s.balances)) {
-				total += s.balances[idx]
+	for i, vote := range s.votes {
+		if vote.Root != root {
+			continue
+		}
+		if i >= len(s.balances) || s.balances[i] == 0 {
+			continue
+		}
+		if hasEquivocating && s.equivocating[primitives.ValidatorIndex(i)] {
+			continue
+		}
+		for _, t := range s.tables {
+			if sl, ok := t.assignedSlot(primitives.ValidatorIndex(i)); ok && sl >= startSlot && sl <= endSlot {
+				total += s.balances[i]
+				break
 			}
 		}
 	}
@@ -147,55 +183,19 @@ func (s *SupportMap) AttestationScore(root [32]byte) uint64 {
 	return s.totalSupport[root]
 }
 
-// EquivocationScoreByCommittee implements the spec's get_equivocation_score.
-func EquivocationScoreByCommittee(
-	ctx context.Context,
-	committees CommitteeAccessor,
-	equivocating map[primitives.ValidatorIndex]bool,
-	balances []uint64,
-	startSlot, endSlot primitives.Slot,
-) uint64 {
-	if len(equivocating) == 0 {
-		return 0
-	}
+// EquivocationScore implements the spec's get_equivocation_score.
+func (s *SupportMap) EquivocationScore(startSlot, endSlot primitives.Slot) uint64 {
 	total := uint64(0)
-	seen := make(map[primitives.ValidatorIndex]bool)
-	for slot := startSlot; slot <= endSlot; slot++ {
-		members, err := committees.Committee(ctx, slot)
-		if err != nil {
+	for idx, isEquivocating := range s.equivocating {
+		if !isEquivocating || uint64(idx) >= uint64(len(s.balances)) {
 			continue
 		}
-		for _, idx := range members {
-			if seen[idx] {
-				continue
-			}
-			seen[idx] = true
-			if equivocating[idx] && uint64(idx) < uint64(len(balances)) {
-				total += balances[idx]
+		for _, t := range s.tables {
+			if sl, ok := t.assignedSlot(idx); ok && sl >= startSlot && sl <= endSlot {
+				total += s.balances[idx]
+				break
 			}
 		}
 	}
 	return total
-}
-
-// cachedCommittees memoizes per-slot committee lookups for the duration of one FCR run.
-type cachedCommittees struct {
-	inner CommitteeAccessor
-	m     map[primitives.Slot][]primitives.ValidatorIndex
-}
-
-func newCachedCommittees(inner CommitteeAccessor) *cachedCommittees {
-	return &cachedCommittees{inner: inner, m: make(map[primitives.Slot][]primitives.ValidatorIndex)}
-}
-
-func (c *cachedCommittees) Committee(ctx context.Context, slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
-	if v, ok := c.m[slot]; ok {
-		return v, nil
-	}
-	v, err := c.inner.Committee(ctx, slot)
-	if err != nil {
-		return nil, err
-	}
-	c.m[slot] = v
-	return v, nil
 }
