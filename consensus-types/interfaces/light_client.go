@@ -1,10 +1,10 @@
 package interfaces
 
 import (
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/methodical-ssz/ssz"
 	"google.golang.org/protobuf/proto"
 )
 

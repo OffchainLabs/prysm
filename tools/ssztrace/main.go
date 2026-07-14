@@ -180,7 +180,11 @@ func main() {
 		if err != nil {
 			fatal(err)
 		}
-		defer f.Close()
+		defer func() {
+			if err := f.Close(); err != nil {
+				fatal(err)
+			}
+		}()
 		w = f
 	}
 
