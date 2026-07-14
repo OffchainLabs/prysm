@@ -180,17 +180,27 @@ func (s *Service) ReconstructFullGloasExecutionPayloadsByHash(
 	}
 
 	for i, h := range requestHashes {
+		body := bodiesV2[i]
+		// eth_getBlockByHash returns nil for the body: cannot reconstruct the payload without the body.
+		if body == nil {
+			return nil, errors.Errorf("payload body V2 not found for block hash %#x", h)
+		}
 		blk := execBlocks[i]
 		payload, err := gloasPayloadFromExecutionBlock(h, blk)
 		if err != nil {
 			return nil, err
 		}
-		if bodiesV2[i] != nil {
-			payload.Transactions = pb.RecastHexutilByteSlice(bodiesV2[i].Transactions)
-			payload.Withdrawals = bodiesV2[i].Withdrawals
-			if bodiesV2[i].BlockAccessList != nil {
-				payload.BlockAccessList = *bodiesV2[i].BlockAccessList
-			}
+		payload.Transactions = pb.RecastHexutilByteSlice(body.Transactions)
+		payload.Withdrawals = body.Withdrawals
+
+		// Prefer the response from eth_getBlockByHash when reconstructing BAL.
+		if body.BlockAccessList != nil {
+			payload.BlockAccessList = *body.BlockAccessList
+		}
+		// Reconstructed payload must have a non-nil block access list, even if it is empty,
+		// as the empty RLP list is 0xc0.
+		if len(payload.BlockAccessList) == 0 {
+			return nil, errors.Errorf("block access list unavailable for block hash %#x", h)
 		}
 		payloads[h] = payload
 	}
