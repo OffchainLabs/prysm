@@ -257,6 +257,10 @@ var (
 		Name: "beacon_late_payload_task_triggered_total",
 		Help: "Count the number of times late payload tasks fired.",
 	})
+	gloasPayloadRevealOutcomeTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "gloas_payload_reveal_outcome_total",
+		Help: "Count of classified execution payload reveal outcomes: on_time (revealed before the payload-due time), late (revealed after it), or withheld (not imported by the slot boundary).",
+	}, []string{"outcome"})
 	goroutineCountGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "beacon_goroutine_count",
 		Help: "Goroutine count sampled once per slot.",
