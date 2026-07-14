@@ -22,6 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/pkg/errors"
 )
 
 func makeSignedEnvelope(root [32]byte, slot primitives.Slot) *ethpb.SignedExecutionPayloadEnvelope {
@@ -45,10 +46,20 @@ func makeSignedEnvelope(root [32]byte, slot primitives.Slot) *ethpb.SignedExecut
 	}
 }
 
+func setupGloasForkConfig(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.FuluForkEpoch = 0
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+	params.BeaconConfig().InitializeForkSchedule()
+}
+
 func newEnvelopeFetchService(t *testing.T, p1 p2p.P2P) *Service {
 	chain := &mock.ChainService{
-		ValidatorsRoot: [32]byte{},
-		Genesis:        time.Now(),
+		ValidatorsRoot:      [32]byte{},
+		Genesis:             time.Now().Add(-time.Hour),
+		FinalizedCheckPoint: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 	}
 	r := &Service{
 		cfg: &config{
@@ -57,7 +68,8 @@ func newEnvelopeFetchService(t *testing.T, p1 p2p.P2P) *Service {
 			chain:    chain,
 			clock:    startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 		},
-		pendingPayloadEnvelopes: make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+		pendingPayloadEnvelopes:             make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+		newExecutionPayloadEnvelopeVerifier: testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{}),
 	}
 	ctxMap, err := ContextByteVersionsForValRoot(chain.ValidatorsRoot)
 	require.NoError(t, err)
@@ -69,12 +81,7 @@ func newEnvelopeFetchService(t *testing.T, p1 p2p.P2P) *Service {
 // block for that root exists in the queue. This locks in the PR's removal of the
 // per-block pendingBlockByRoot gate.
 func TestFetchAndQueuePayloadEnvelopesForRoots_QueuesWithoutPendingBlock(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig()
-	cfg.FuluForkEpoch = 0
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
-	params.BeaconConfig().InitializeForkSchedule()
+	setupGloasForkConfig(t)
 
 	p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
 	p1.Connect(p2)
@@ -111,6 +118,77 @@ func TestFetchAndQueuePayloadEnvelopesForRoots_QueuesWithoutPendingBlock(t *test
 	assert.NotNil(t, inner[0])
 }
 
+// An envelope fetched by root with an invalid signature is dropped, not queued.
+func TestQueuePendingPayloadEnvelopeFromRootRequest_RejectsBadSignature(t *testing.T) {
+	setupGloasForkConfig(t)
+
+	p1 := p2ptest.NewTestP2P(t)
+	r := newEnvelopeFetchService(t, p1)
+	r.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(
+		mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("bad signature")},
+	)
+
+	root := [32]byte{0xBB}
+	r.queuePendingPayloadEnvelopeFromRootRequest(t.Context(), nil, makeSignedEnvelope(root, 1))
+
+	r.pendingEnvelopeLock.RLock()
+	defer r.pendingEnvelopeLock.RUnlock()
+	assert.Equal(t, 0, len(r.pendingPayloadEnvelopes))
+}
+
+// A far future slot must not defeat finalization based pruning by pinning memory.
+func TestQueuePendingPayloadEnvelopeFromRootRequest_RejectsFarFutureSlot(t *testing.T) {
+	setupGloasForkConfig(t)
+
+	p1 := p2ptest.NewTestP2P(t)
+	r := newEnvelopeFetchService(t, p1)
+
+	root := [32]byte{0xDD}
+	r.queuePendingPayloadEnvelopeFromRootRequest(t.Context(), nil, makeSignedEnvelope(root, 1_000_000))
+
+	r.pendingEnvelopeLock.RLock()
+	defer r.pendingEnvelopeLock.RUnlock()
+	assert.Equal(t, 0, len(r.pendingPayloadEnvelopes))
+}
+
+func TestStorePendingPayloadEnvelope_Caps(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	r := &Service{pendingPayloadEnvelopes: make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope)}
+
+	for i := 0; i < maxPendingPayloadRoots; i++ {
+		env := makeSignedEnvelope([32]byte{byte(i), byte(i >> 8)}, 1)
+		stored, _ := r.storePendingPayloadEnvelope(env, false)
+		require.Equal(t, true, stored)
+	}
+	require.Equal(t, maxPendingPayloadRoots, len(r.pendingPayloadEnvelopes))
+
+	overflow := makeSignedEnvelope([32]byte{0xFF, 0xFF, 0xFF}, 1)
+	stored, _ := r.storePendingPayloadEnvelope(overflow, false)
+	assert.Equal(t, false, stored)
+
+	selfBuild := makeSignedEnvelope([32]byte{0xFE, 0xFE, 0xFE}, 1)
+	selfBuild.Message.BuilderIndex = primitives.BuilderIndex(params.BeaconConfig().BuilderIndexSelfBuild)
+	stored, _ = r.storePendingPayloadEnvelope(selfBuild, true)
+	assert.Equal(t, true, stored)
+}
+
+func TestStorePendingPayloadEnvelope_BuildersPerRootCap(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	r := &Service{pendingPayloadEnvelopes: make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope)}
+
+	root := [32]byte{0x01}
+	for i := 0; i < maxPendingBuildersPerRoot; i++ {
+		env := makeSignedEnvelope(root, 1)
+		env.Message.BuilderIndex = primitives.BuilderIndex(i)
+		stored, _ := r.storePendingPayloadEnvelope(env, false)
+		require.Equal(t, true, stored)
+	}
+	overflow := makeSignedEnvelope(root, 1)
+	overflow.Message.BuilderIndex = primitives.BuilderIndex(maxPendingBuildersPerRoot)
+	stored, _ := r.storePendingPayloadEnvelope(overflow, false)
+	assert.Equal(t, false, stored)
+}
+
 // Pre-Gloas: the chain-level CurrentSlot() < gloasStartSlot gate short-circuits
 // before any request is sent.
 func TestFetchAndQueuePayloadEnvelopesForRoots_PreGloasNoRequest(t *testing.T) {
@@ -139,12 +217,7 @@ func TestFetchAndQueuePayloadEnvelopesForRoots_PreGloasNoRequest(t *testing.T) {
 // Post-Gloas: a root whose envelope is already in the DB is filtered out, so no
 // request is sent for it.
 func TestFetchAndQueuePayloadEnvelopesForRoots_SkipsRootAlreadyInDB(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig()
-	cfg.FuluForkEpoch = 0
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
-	params.BeaconConfig().InitializeForkSchedule()
+	setupGloasForkConfig(t)
 
 	p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
 	p1.Connect(p2)

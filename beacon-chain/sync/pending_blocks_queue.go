@@ -10,6 +10,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -510,31 +512,49 @@ func (s *Service) fetchAndQueuePayloadEnvelopesForRoots(
 		return
 	}
 
+	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
+	if err != nil {
+		log.WithError(err).Debug("Could not get head state to verify fetched payload envelopes")
+		return
+	}
 	for _, env := range envelopes {
 		if env == nil || env.Message == nil {
 			continue
 		}
-		s.queuePendingPayloadEnvelopeFromRootRequest(env)
+		s.queuePendingPayloadEnvelopeFromRootRequest(ctx, st, env)
 	}
 }
 
-func (s *Service) queuePendingPayloadEnvelopeFromRootRequest(signedEnvelope *ethpb.SignedExecutionPayloadEnvelope) {
-	if signedEnvelope == nil || signedEnvelope.Message == nil {
+// The responding peer is matched only on root, so slot window, signature, and cap guards run before storing.
+func (s *Service) queuePendingPayloadEnvelopeFromRootRequest(ctx context.Context, st state.ReadOnlyBeaconState, signedEnvelope *ethpb.SignedExecutionPayloadEnvelope) {
+	if signedEnvelope == nil || signedEnvelope.Message == nil || signedEnvelope.Message.Payload == nil {
+		return
+	}
+	e, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedEnvelope)
+	if err != nil {
+		log.WithError(err).Debug("Could not wrap fetched payload envelope")
+		return
+	}
+	env, err := e.Envelope()
+	if err != nil {
+		log.WithError(err).Debug("Could not read fetched payload envelope")
+		return
+	}
+	if !s.payloadEnvelopeSlotInWindow(env.Slot()) {
+		log.WithField("envelopeSlot", env.Slot()).Debug("Ignoring fetched payload envelope outside slot window")
+		return
+	}
+	v := s.newExecutionPayloadEnvelopeVerifier(e, []verification.Requirement{verification.RequireBuilderSignatureValid})
+	if err := v.VerifySignature(ctx, st); err != nil {
+		log.WithError(err).Debug("Ignoring fetched payload envelope with invalid signature")
 		return
 	}
 
-	root := bytesutil.ToBytes32(signedEnvelope.Message.BeaconBlockRoot)
-	builderIdx := uint64(signedEnvelope.Message.BuilderIndex)
-
 	s.pendingEnvelopeLock.Lock()
 	defer s.pendingEnvelopeLock.Unlock()
-
-	inner, ok := s.pendingPayloadEnvelopes[root]
-	if !ok {
-		inner = make(map[uint64]*ethpb.SignedExecutionPayloadEnvelope)
-		s.pendingPayloadEnvelopes[root] = inner
+	if stored, _ := s.storePendingPayloadEnvelope(signedEnvelope, false); !stored {
+		log.Debug("Dropped fetched payload envelope, pending caps reached or duplicate")
 	}
-	inner[builderIdx] = signedEnvelope
 }
 
 // filterOutPendingAndSynced filters out roots that are already seen in pending blocks or being synced.

@@ -188,17 +188,13 @@ func (s *Service) queuePendingPayloadEnvelope(
 	}
 	s.pendingEnvelopeLock.Lock()
 	defer s.pendingEnvelopeLock.Unlock()
-	inner, rootExists := s.pendingPayloadEnvelopes[root]
-	if !isSelfBuild && len(s.pendingPayloadEnvelopes) >= maxPendingPayloadRoots {
-		log.Debug("Too many pending payload roots, ignoring new payload envelope")
-		return pubsub.ValidationIgnore, nil
-	}
-	if !isSelfBuild && len(inner) >= maxPendingBuildersPerRoot {
-		log.Debug("Too many pending builders for root, ignoring new payload envelope")
+
+	if !isSelfBuild && s.pendingPayloadCapsReached(root) {
+		log.Debug("Too many pending payload envelopes, ignoring")
 		return pubsub.ValidationIgnore, nil
 	}
 
-	// The failure budget is per slot, matching admission above, so a burst of bad signatures cannot disable self-build queueing beyond the current slot.
+	// The failure budget is per slot, matching admission below, so a burst of bad signatures cannot disable self-build queueing beyond the current slot.
 	if isSelfBuild && s.selfBuildSigFailSlot != currentSlot {
 		s.selfBuildSigFailSlot = currentSlot
 		s.selfBuildSigFailures = 0
@@ -222,33 +218,16 @@ func (s *Service) queuePendingPayloadEnvelope(
 		log.Debug("Ignoring payload envelope from self-build outside of the Lookahead window")
 		return pubsub.ValidationIgnore, nil
 	}
-	if !rootExists {
-		inner = make(map[uint64]*ethpb.SignedExecutionPayloadEnvelope)
-		s.pendingPayloadEnvelopes[root] = inner
-	} else {
-		for existingBuilderIdx, existing := range inner {
-			if existing == nil || existing.Message == nil || existing.Message.Payload == nil {
-				delete(inner, existingBuilderIdx)
-				log.Debug("Removed malformed pending payload envelope")
-				continue
-			}
-			if existing.Message.Payload.SlotNumber != signedEnvelope.Message.Payload.SlotNumber {
-				log.Debug("Ignoring payload envelope with mismatched slot")
-				return pubsub.ValidationIgnore, nil
-			}
-			break
-		}
-	}
-	if _, exists := inner[builderIdx]; exists {
-		log.Debug("Already have a pending payload envelope for this builder and root, ignoring")
+
+	stored, newRoot := s.storePendingPayloadEnvelope(signedEnvelope, isSelfBuild)
+	if !stored {
 		return pubsub.ValidationIgnore, nil
 	}
-	inner[builderIdx] = signedEnvelope
 
 	s.pendingQueueLock.RLock()
 	inPendingQueue := s.seenPendingBlocks[root]
 	s.pendingQueueLock.RUnlock()
-	if !rootExists && !inPendingQueue && !s.cfg.chain.InForkchoice(root) && !s.cfg.chain.BlockBeingSynced(root) {
+	if newRoot && !inPendingQueue && !s.cfg.chain.InForkchoice(root) && !s.cfg.chain.BlockBeingSynced(root) {
 		go func() {
 			if err := s.sendBatchRootRequest(s.ctx, [][32]byte{root}, rand.NewGenerator()); err != nil {
 				log.WithError(err).Debug("Could not request beacon block for pending payload envelope")
