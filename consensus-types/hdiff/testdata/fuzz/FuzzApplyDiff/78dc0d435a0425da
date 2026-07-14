@@ -1,0 +1,4 @@
+go test fuzz v1
+[]byte("1")
+[]byte("\xec")
+[]byte("\xec\x81}\xc7 {5\xd8$")
