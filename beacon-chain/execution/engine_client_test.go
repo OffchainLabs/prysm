@@ -61,6 +61,25 @@ func (RPCClientBad) CallContext(context.Context, any, string, ...any) error {
 	return ethereum.NotFound
 }
 
+type reconstructionRPCClient struct {
+	block *pb.ExecutionBlock
+	body  *pb.ExecutionPayloadBodyV2
+}
+
+func (reconstructionRPCClient) Close() {}
+
+func (c reconstructionRPCClient) BatchCall(elems []rpc.BatchElem) error {
+	for i := range elems {
+		*elems[i].Result.(*pb.ExecutionBlock) = *c.block
+	}
+	return nil
+}
+
+func (c reconstructionRPCClient) CallContext(_ context.Context, result any, _ string, _ ...any) error {
+	*result.(*[]*pb.ExecutionPayloadBodyV2) = []*pb.ExecutionPayloadBodyV2{c.body}
+	return nil
+}
+
 func TestClient_IPC(t *testing.T) {
 	t.Skip("Skipping IPC test to support Capella devnet-3")
 	server := newTestIPCServer(t)
@@ -2929,6 +2948,51 @@ func TestGloasPayloadFromExecutionBlock_PropagatesBlockAccessList(t *testing.T) 
 	payload, err := gloasPayloadFromExecutionBlock(hash, blk)
 	require.NoError(t, err)
 	require.DeepEqual(t, bal, payload.BlockAccessList)
+}
+
+func TestGloasPayloadFromBlockAndBody(t *testing.T) {
+	hash := common.BytesToHash([]byte("block-hash"))
+	blobGasUsed := uint64(123)
+	excessBlobGas := uint64(456)
+	slotNumber := uint64(789)
+	newBlock := func(bal []byte) *pb.ExecutionBlock {
+		return &pb.ExecutionBlock{
+			Hash: hash,
+			Header: gethtypes.Header{
+				Number:        big.NewInt(1),
+				BaseFee:       big.NewInt(1),
+				BlobGasUsed:   &blobGasUsed,
+				ExcessBlobGas: &excessBlobGas,
+				SlotNumber:    &slotNumber,
+			},
+			BlockAccessList: bal,
+		}
+	}
+
+	t.Run("body BAL overrides block BAL", func(t *testing.T) {
+		bodyBal := hexutil.Bytes{0x0a, 0x0b}
+		txs := []hexutil.Bytes{{0x01}}
+		body := &pb.ExecutionPayloadBodyV2{Transactions: txs, BlockAccessList: &bodyBal}
+		payload, err := gloasPayloadFromBlockAndBody(hash, newBlock([]byte{0x01}), body)
+		require.NoError(t, err)
+		require.DeepEqual(t, []byte(bodyBal), payload.BlockAccessList)
+		require.Equal(t, 1, len(payload.Transactions))
+	})
+	t.Run("nil body errors", func(t *testing.T) {
+		_, err := gloasPayloadFromBlockAndBody(hash, newBlock([]byte{0x01}), nil)
+		require.ErrorContains(t, "execution payload body unavailable", err)
+	})
+	t.Run("nil BAL in both sources errors", func(t *testing.T) {
+		body := &pb.ExecutionPayloadBodyV2{}
+		_, err := gloasPayloadFromBlockAndBody(hash, newBlock(nil), body)
+		require.ErrorContains(t, "block access list unavailable", err)
+	})
+	t.Run("block BAL used when body BAL is nil", func(t *testing.T) {
+		body := &pb.ExecutionPayloadBodyV2{}
+		payload, err := gloasPayloadFromBlockAndBody(hash, newBlock([]byte{0x01, 0x02}), body)
+		require.NoError(t, err)
+		require.DeepEqual(t, []byte{0x01, 0x02}, payload.BlockAccessList)
+	})
 }
 
 func TestExecutionBlock_MarshalUnmarshalJSON_BlockAccessList(t *testing.T) {
