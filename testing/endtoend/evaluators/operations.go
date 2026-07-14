@@ -540,18 +540,32 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 }
 
 func selectVoluntaryExitCandidates(keys [][48]byte, exited map[[48]byte]primitives.Epoch, reserved map[[48]byte]bool, limit int) []primitives.ValidatorIndex {
-	candidates := make([]primitives.ValidatorIndex, 0, limit)
+	if limit <= 0 {
+		return nil
+	}
+
+	preferred := make([]primitives.ValidatorIndex, 0, limit)
+	fallback := make([]primitives.ValidatorIndex, 0, limit)
 	for i, key := range keys {
 		if _, alreadyExited := exited[key]; alreadyExited {
 			continue
 		}
 		if reserved[key] {
+			fallback = append(fallback, primitives.ValidatorIndex(i))
 			continue
 		}
-		candidates = append(candidates, primitives.ValidatorIndex(i))
-		if len(candidates) == limit {
-			return candidates
+		preferred = append(preferred, primitives.ValidatorIndex(i))
+		if len(preferred) == limit {
+			return preferred
 		}
+	}
+
+	// With the mainnet E2E configuration, the sync committee contains every
+	// validator. Prefer non-members when they exist, but fall back to committee
+	// members so the voluntary-exit scenario still exercises exits and withdrawals.
+	candidates := append(preferred, fallback...)
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
 	}
 	return candidates
 }
