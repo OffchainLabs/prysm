@@ -21,6 +21,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 func testGloasBlock(t *testing.T) (*consensusblocks.GetPayloadResponse, interfaces.SignedBeaconBlock) {
@@ -117,7 +118,7 @@ func TestGetExecutionPayloadEnvelopeRPC_PreFork(t *testing.T) {
 func TestPublishExecutionPayloadEnvelope_NilRequest(t *testing.T) {
 	vs := &Server{}
 	_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), nil)
-	require.ErrorContains(t, "must set contents or blinded", err)
+	require.ErrorContains(t, "must set contents or signed_envelope", err)
 
 	_, err = vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
 		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Contents{
@@ -230,13 +231,76 @@ func TestGetExecutionPayloadEnvelopeRPC_Success(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	// The RPC returns the blinded wire form; its HTR must equal the cached full envelope's HTR.
-	require.NotNil(t, resp.Blinded)
+	require.NotNil(t, resp.Envelope)
 	wantHTR, err := envelope.HashTreeRoot()
 	require.NoError(t, err)
-	gotHTR, err := resp.Blinded.HashTreeRoot()
+	gotHTR, err := resp.Envelope.HashTreeRoot()
 	require.NoError(t, err)
 	require.Equal(t, wantHTR, gotHTR)
+}
+
+// Stateful publish: bare signed_envelope arm must match the cached envelope by HTR.
+func TestPublishExecutionPayloadEnvelope_SignedEnvelopeArm(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	envelope := &ethpb.ExecutionPayloadEnvelope{
+		Payload: &enginev1.ExecutionPayloadGloas{
+			ParentHash:    make([]byte, 32),
+			FeeRecipient:  make([]byte, 20),
+			StateRoot:     make([]byte, 32),
+			ReceiptsRoot:  make([]byte, 32),
+			LogsBloom:     make([]byte, 256),
+			PrevRandao:    make([]byte, 32),
+			BaseFeePerGas: make([]byte, 32),
+			BlockHash:     make([]byte, 32),
+			ExtraData:     make([]byte, 0),
+			SlotNumber:    1,
+		},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
+		BuilderIndex:          0,
+		BeaconBlockRoot:       make([]byte, 32),
+		ParentBeaconBlockRoot: make([]byte, 32),
+	}
+	signed := &ethpb.SignedExecutionPayloadEnvelope{Message: envelope, Signature: make([]byte, 96)}
+	statefulReq := &ethpb.GenericSignedExecutionPayloadEnvelope{
+		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_SignedEnvelope{SignedEnvelope: signed},
+	}
+
+	t.Run("cache miss", func(t *testing.T) {
+		vs := &Server{ExecutionPayloadEnvelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
+		_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), statefulReq)
+		require.ErrorContains(t, "no cached blobs and KZG proofs", err)
+		require.Equal(t, codes.FailedPrecondition, status.Code(err))
+	})
+
+	t.Run("cached envelope mismatch", func(t *testing.T) {
+		tampered := proto.Clone(envelope).(*ethpb.ExecutionPayloadEnvelope)
+		tampered.BuilderIndex = envelope.BuilderIndex + 1
+		vs := &Server{ExecutionPayloadEnvelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
+		vs.ExecutionPayloadEnvelopeCache.Set(&cache.ExecutionPayloadContents{Envelope: tampered})
+		_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), statefulReq)
+		require.ErrorContains(t, "does not match submitted envelope", err)
+		require.Equal(t, codes.InvalidArgument, status.Code(err))
+	})
+
+	t.Run("success", func(t *testing.T) {
+		broadcaster := &mockp2p.MockBroadcaster{}
+		receiver := &mockExecutionPayloadEnvelopeReceiver{}
+		vs := &Server{
+			P2P:                              broadcaster,
+			ExecutionPayloadEnvelopeReceiver: receiver,
+			ExecutionPayloadEnvelopeCache:    cache.NewExecutionPayloadEnvelopeCache(),
+		}
+		vs.ExecutionPayloadEnvelopeCache.Set(&cache.ExecutionPayloadContents{Envelope: envelope})
+		resp, err := vs.PublishExecutionPayloadEnvelope(t.Context(), statefulReq)
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		require.Equal(t, true, broadcaster.BroadcastCalled.Load())
+		require.Equal(t, 1, receiver.calls)
+	})
 }
 
 func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
