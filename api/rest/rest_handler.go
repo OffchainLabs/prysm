@@ -97,6 +97,58 @@ func (c *handler) Get(ctx context.Context, endpoint string, resp any) error {
 	return decodeResp(httpResp, resp)
 }
 
+// getRaw sends a GET request and returns the response body as raw JSON, without
+// decoding it. A non-2XX status is returned as a *httputil.DefaultJsonError, and
+// an empty body on success is treated as an error.
+func (c *handler) getRaw(ctx context.Context, endpoint string) (json.RawMessage, error) {
+	url := c.Host() + endpoint
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to create request for endpoint %s", url)
+	}
+
+	req.Header.Set("User-Agent", version.BuildData())
+	httpResp, err := c.client.Do(req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to perform request for endpoint %s", url)
+	}
+
+	defer func() {
+		if closeErr := httpResp.Body.Close(); closeErr != nil {
+			log.WithError(closeErr).Error("Failed to close response body")
+		}
+	}()
+
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL)
+	}
+
+	if !strings.Contains(httpResp.Header.Get("Content-Type"), api.JsonMediaType) {
+		if !strings.HasPrefix(httpResp.Status, "2") {
+			return nil, &httputil.DefaultJsonError{Code: httpResp.StatusCode, Message: string(body)}
+		}
+
+		return nil, nil
+	}
+
+	// non-2XX codes are a failure.
+	if !strings.HasPrefix(httpResp.Status, "2") {
+		errorJson := &httputil.DefaultJsonError{}
+		if err := json.Unmarshal(body, errorJson); err != nil {
+			return nil, errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL)
+		}
+
+		return nil, errorJson
+	}
+
+	if len(body) == 0 {
+		return nil, errors.Errorf("empty response body for %s", httpResp.Request.URL)
+	}
+
+	return json.RawMessage(body), nil
+}
+
 // GetStatusCode sends a GET request and returns only the HTTP status code.
 // This is useful for endpoints like /eth/v1/node/health that communicate status via HTTP codes
 // (200 = ready, 206 = syncing, 503 = unavailable) rather than response bodies.
