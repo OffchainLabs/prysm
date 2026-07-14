@@ -180,32 +180,36 @@ func (s *Service) ReconstructFullGloasExecutionPayloadsByHash(
 	}
 
 	for i, h := range requestHashes {
-		body := bodiesV2[i]
-		// eth_getBlockByHash returns nil for the body: cannot reconstruct the payload without the body.
-		if body == nil {
-			return nil, errors.Errorf("payload body V2 not found for block hash %#x", h)
-		}
-		blk := execBlocks[i]
-		payload, err := gloasPayloadFromExecutionBlock(h, blk)
+		payload, err := gloasPayloadFromBlockAndBody(h, execBlocks[i], bodiesV2[i])
 		if err != nil {
 			return nil, err
-		}
-		payload.Transactions = pb.RecastHexutilByteSlice(body.Transactions)
-		payload.Withdrawals = body.Withdrawals
-
-		// Prefer the response from eth_getBlockByHash when reconstructing BAL.
-		if body.BlockAccessList != nil {
-			payload.BlockAccessList = *body.BlockAccessList
-		}
-		// Reconstructed payload must have a non-nil block access list, even if it is empty,
-		// as the empty RLP list is 0xc0.
-		if len(payload.BlockAccessList) == 0 {
-			return nil, errors.Errorf("block access list unavailable for block hash %#x", h)
 		}
 		payloads[h] = payload
 	}
 
 	return payloads, nil
+}
+
+// gloasPayloadFromBlockAndBody constructs a Gloas payload from an execution block and its corresponding payload body.
+func gloasPayloadFromBlockAndBody(
+	requestedHash [32]byte, blk *pb.ExecutionBlock, body *pb.ExecutionPayloadBodyV2,
+) (*pb.ExecutionPayloadGloas, error) {
+	payload, err := gloasPayloadFromExecutionBlock(requestedHash, blk)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not construct payload from execution block")
+	}
+	if body == nil {
+		return nil, errors.Errorf("execution payload body unavailable for block hash %#x", requestedHash)
+	}
+	payload.Transactions = pb.RecastHexutilByteSlice(body.Transactions)
+	payload.Withdrawals = body.Withdrawals
+	if body.BlockAccessList != nil {
+		payload.BlockAccessList = *body.BlockAccessList
+	}
+	if payload.BlockAccessList == nil {
+		return nil, errors.Errorf("block access list unavailable for block hash %#x", requestedHash)
+	}
+	return payload, nil
 }
 
 // gloasPayloadFromExecutionBlock extracts header fields from an execution block.

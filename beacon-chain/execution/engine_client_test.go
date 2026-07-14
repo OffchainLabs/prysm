@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
-	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	mocks "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -27,7 +26,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -2952,97 +2950,48 @@ func TestGloasPayloadFromExecutionBlock_PropagatesBlockAccessList(t *testing.T) 
 	require.DeepEqual(t, bal, payload.BlockAccessList)
 }
 
-func TestReconstructExecutionPayloadEnvelope_BlindedStorage(t *testing.T) {
-	ctx := t.Context()
-	beaconDB := dbtest.SetupDB(t)
-
-	// Construct ExecutionPayloadEnvelope with a BlockAccessList and save it to the database.
-	hash := common.BytesToHash([]byte("envelope-block-hash"))
-	bal := hexutil.Bytes{0xc0}
-	env := &ethpb.SignedExecutionPayloadEnvelope{
-		Message: &ethpb.ExecutionPayloadEnvelope{
-			Payload: &pb.ExecutionPayloadGloas{
-				ParentHash:      bytesutil.PadTo([]byte("parent"), 32),
-				BlockHash:       hash[:],
-				BlockAccessList: bal,
-				SlotNumber:      99,
+func TestGloasPayloadFromBlockAndBody(t *testing.T) {
+	hash := common.BytesToHash([]byte("block-hash"))
+	blobGasUsed := uint64(123)
+	excessBlobGas := uint64(456)
+	slotNumber := uint64(789)
+	newBlock := func(bal []byte) *pb.ExecutionBlock {
+		return &pb.ExecutionBlock{
+			Hash: hash,
+			Header: gethtypes.Header{
+				Number:        big.NewInt(1),
+				BaseFee:       big.NewInt(1),
+				BlobGasUsed:   &blobGasUsed,
+				ExcessBlobGas: &excessBlobGas,
+				SlotNumber:    &slotNumber,
 			},
-			ExecutionRequests:     &pb.ExecutionRequestsGloas{},
-			BuilderIndex:          primitives.BuilderIndex(42),
-			BeaconBlockRoot:       bytesutil.PadTo([]byte("beaconroot"), 32),
-			ParentBeaconBlockRoot: make([]byte, 32),
-		},
-		Signature: bytesutil.PadTo([]byte("envelope-signature"), 96),
-	}
-	require.NoError(t, beaconDB.SaveExecutionPayloadEnvelope(ctx, env))
-
-	// Assert that signature isn't modifed while saving.
-	blinded, err := beaconDB.ExecutionPayloadEnvelope(ctx, bytesutil.ToBytes32(env.Message.BeaconBlockRoot))
-	require.NoError(t, err)
-	require.DeepEqual(t, env.Signature, blinded.Signature)
-
-	blobGasUsed, excessBlobGas, slotNumber := uint64(131072), uint64(0), uint64(99)
-	elBlock := &pb.ExecutionBlock{
-		Hash: hash,
-		Header: gethtypes.Header{
-			Number:        big.NewInt(100),
-			BaseFee:       big.NewInt(1),
-			BlobGasUsed:   &blobGasUsed,
-			ExcessBlobGas: &excessBlobGas,
-			SlotNumber:    &slotNumber,
-		},
+			BlockAccessList: bal,
+		}
 	}
 
-	// EL returns a block with pruned BAL.
-	// This is possible as the spec (engine_getPayloadBodiesByHashV2) states:
-	// - Client software MUST set the blockAccessList field to null if the block access list has been pruned from storage.
-	t.Run("pruned BAL fails closed", func(t *testing.T) {
-		service := &Service{rpcClient: reconstructionRPCClient{
-			block: elBlock,
-			body:  &pb.ExecutionPayloadBodyV2{Transactions: []hexutil.Bytes{[]byte("tx1")}},
-		}}
-		_, err := service.ReconstructExecutionPayloadEnvelope(ctx, blinded)
+	t.Run("body BAL overrides block BAL", func(t *testing.T) {
+		bodyBal := hexutil.Bytes{0x0a, 0x0b}
+		txs := []hexutil.Bytes{{0x01}}
+		body := &pb.ExecutionPayloadBodyV2{Transactions: txs, BlockAccessList: &bodyBal}
+		payload, err := gloasPayloadFromBlockAndBody(hash, newBlock([]byte{0x01}), body)
+		require.NoError(t, err)
+		require.DeepEqual(t, []byte(bodyBal), payload.BlockAccessList)
+		require.Equal(t, 1, len(payload.Transactions))
+	})
+	t.Run("nil body errors", func(t *testing.T) {
+		_, err := gloasPayloadFromBlockAndBody(hash, newBlock([]byte{0x01}), nil)
+		require.ErrorContains(t, "execution payload body unavailable", err)
+	})
+	t.Run("nil BAL in both sources errors", func(t *testing.T) {
+		body := &pb.ExecutionPayloadBodyV2{}
+		_, err := gloasPayloadFromBlockAndBody(hash, newBlock(nil), body)
 		require.ErrorContains(t, "block access list unavailable", err)
 	})
-
-	t.Run("unavailable payload body fails closed", func(t *testing.T) {
-		service := &Service{rpcClient: reconstructionRPCClient{block: elBlock}}
-		_, err := service.ReconstructExecutionPayloadEnvelope(ctx, blinded)
-		require.ErrorContains(t, "payload body V2 not found", err)
-	})
-
-	t.Run("zero-length BAL fails closed", func(t *testing.T) {
-		zeroLengthBAL := hexutil.Bytes{}
-		service := &Service{rpcClient: reconstructionRPCClient{
-			block: elBlock,
-			body:  &pb.ExecutionPayloadBodyV2{BlockAccessList: &zeroLengthBAL},
-		}}
-		_, err := service.ReconstructExecutionPayloadEnvelope(ctx, blinded)
-		require.ErrorContains(t, "block access list unavailable", err)
-	})
-
-	t.Run("block BAL is used as fallback", func(t *testing.T) {
-		blockWithBAL := *elBlock
-		blockWithBAL.BlockAccessList = bal
-		service := &Service{rpcClient: reconstructionRPCClient{
-			block: &blockWithBAL,
-			body:  &pb.ExecutionPayloadBodyV2{Transactions: []hexutil.Bytes{[]byte("tx1")}},
-		}}
-		full, err := service.ReconstructExecutionPayloadEnvelope(ctx, blinded)
+	t.Run("block BAL used when body BAL is nil", func(t *testing.T) {
+		body := &pb.ExecutionPayloadBodyV2{}
+		payload, err := gloasPayloadFromBlockAndBody(hash, newBlock([]byte{0x01, 0x02}), body)
 		require.NoError(t, err)
-		require.DeepEqual(t, []byte(bal), full.Message.Payload.BlockAccessList)
-	})
-
-	// EL returns a block with the original, logically empty BAL encoded as RLP.
-	t.Run("available BAL reconstructs with original signature", func(t *testing.T) {
-		service := &Service{rpcClient: reconstructionRPCClient{
-			block: elBlock,
-			body:  &pb.ExecutionPayloadBodyV2{Transactions: []hexutil.Bytes{[]byte("tx1")}, BlockAccessList: &bal},
-		}}
-		full, err := service.ReconstructExecutionPayloadEnvelope(ctx, blinded)
-		require.NoError(t, err)
-		require.DeepEqual(t, []byte(bal), full.Message.Payload.BlockAccessList)
-		require.DeepEqual(t, env.Signature, full.Signature)
+		require.DeepEqual(t, []byte{0x01, 0x02}, payload.BlockAccessList)
 	})
 }
 
