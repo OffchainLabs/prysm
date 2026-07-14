@@ -440,7 +440,7 @@ func (s *Service) validatorEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
-			template: "/eth/v1/validator/payload_attestation_data/{slot}",
+			template: "/eth/v1/validator/payload_attestation_data",
 			name:     namespace + ".GetPayloadAttestationData",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),

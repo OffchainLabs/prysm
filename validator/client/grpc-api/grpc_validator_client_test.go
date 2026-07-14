@@ -148,7 +148,6 @@ func TestWaitForChainStart_StreamSetupFails(t *testing.T) {
 				return beaconNodeValidatorClient
 			},
 		),
-		isEventStreamRunning: true,
 	}
 	_, err := validatorClient.WaitForChainStart(t.Context(), &emptypb.Empty{})
 	want := "could not setup beacon chain ChainStart streaming client"
@@ -169,7 +168,6 @@ func TestStartEventStream(t *testing.T) {
 				return beaconNodeValidatorClient
 			},
 		),
-		isEventStreamRunning: true,
 	}
 	tests := []struct {
 		name    string
