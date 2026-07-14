@@ -27,6 +27,7 @@ import (
 type MockValidator struct {
 	ctrl     *gomock.Controller
 	recorder *MockValidatorMockRecorder
+	isgomock struct{}
 }
 
 // MockValidatorMockRecorder is the mock recorder for MockValidator.
@@ -61,31 +62,31 @@ func (mr *MockValidatorMockRecorder) AccountsChangedChan() *gomock.Call {
 }
 
 // CheckDoppelGanger mocks base method.
-func (m *MockValidator) CheckDoppelGanger(arg0 context.Context) error {
+func (m *MockValidator) CheckDoppelGanger(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CheckDoppelGanger", arg0)
+	ret := m.ctrl.Call(m, "CheckDoppelGanger", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CheckDoppelGanger indicates an expected call of CheckDoppelGanger.
-func (mr *MockValidatorMockRecorder) CheckDoppelGanger(arg0 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) CheckDoppelGanger(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckDoppelGanger", reflect.TypeOf((*MockValidator)(nil).CheckDoppelGanger), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckDoppelGanger", reflect.TypeOf((*MockValidator)(nil).CheckDoppelGanger), ctx)
 }
 
 // DeleteGraffiti mocks base method.
-func (m *MockValidator) DeleteGraffiti(arg0 context.Context, arg1 [48]byte) error {
+func (m *MockValidator) DeleteGraffiti(ctx context.Context, pubKey [48]byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteGraffiti", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteGraffiti", ctx, pubKey)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteGraffiti indicates an expected call of DeleteGraffiti.
-func (mr *MockValidatorMockRecorder) DeleteGraffiti(arg0, arg1 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) DeleteGraffiti(ctx, pubKey any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteGraffiti", reflect.TypeOf((*MockValidator)(nil).DeleteGraffiti), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteGraffiti", reflect.TypeOf((*MockValidator)(nil).DeleteGraffiti), ctx, pubKey)
 }
 
 // Done mocks base method.
@@ -98,6 +99,32 @@ func (m *MockValidator) Done() {
 func (mr *MockValidatorMockRecorder) Done() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Done", reflect.TypeOf((*MockValidator)(nil).Done))
+}
+
+// EnsureEventStream mocks base method.
+func (m *MockValidator) EnsureEventStream(ctx context.Context, topics []string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "EnsureEventStream", ctx, topics)
+}
+
+// EnsureEventStream indicates an expected call of EnsureEventStream.
+func (mr *MockValidatorMockRecorder) EnsureEventStream(ctx, topics any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureEventStream", reflect.TypeOf((*MockValidator)(nil).EnsureEventStream), ctx, topics)
+}
+
+// EnsureReady mocks base method.
+func (m *MockValidator) EnsureReady(ctx context.Context) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnsureReady", ctx)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// EnsureReady indicates an expected call of EnsureReady.
+func (mr *MockValidatorMockRecorder) EnsureReady(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureReady", reflect.TypeOf((*MockValidator)(nil).EnsureReady), ctx)
 }
 
 // EventStreamIsRunning mocks base method.
@@ -128,20 +155,6 @@ func (mr *MockValidatorMockRecorder) EventsChan() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EventsChan", reflect.TypeOf((*MockValidator)(nil).EventsChan))
 }
 
-// EnsureReady mocks base method.
-func (m *MockValidator) EnsureReady(arg0 context.Context) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnsureReady", arg0)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// EnsureReady indicates an expected call of EnsureReady.
-func (mr *MockValidatorMockRecorder) EnsureReady(arg0 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureReady", reflect.TypeOf((*MockValidator)(nil).EnsureReady), arg0)
-}
-
 // GenesisTime mocks base method.
 func (m *MockValidator) GenesisTime() time.Time {
 	m.ctrl.T.Helper()
@@ -157,33 +170,33 @@ func (mr *MockValidatorMockRecorder) GenesisTime() *gomock.Call {
 }
 
 // Graffiti mocks base method.
-func (m *MockValidator) Graffiti(arg0 context.Context, arg1 [48]byte) ([]byte, error) {
+func (m *MockValidator) Graffiti(ctx context.Context, pubKey [48]byte) ([]byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Graffiti", arg0, arg1)
+	ret := m.ctrl.Call(m, "Graffiti", ctx, pubKey)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Graffiti indicates an expected call of Graffiti.
-func (mr *MockValidatorMockRecorder) Graffiti(arg0, arg1 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) Graffiti(ctx, pubKey any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Graffiti", reflect.TypeOf((*MockValidator)(nil).Graffiti), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Graffiti", reflect.TypeOf((*MockValidator)(nil).Graffiti), ctx, pubKey)
 }
 
 // HandleKeyReload mocks base method.
-func (m *MockValidator) HandleKeyReload(arg0 context.Context, arg1 [][48]byte) (bool, error) {
+func (m *MockValidator) HandleKeyReload(ctx context.Context, currentKeys [][48]byte) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleKeyReload", arg0, arg1)
+	ret := m.ctrl.Call(m, "HandleKeyReload", ctx, currentKeys)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // HandleKeyReload indicates an expected call of HandleKeyReload.
-func (mr *MockValidatorMockRecorder) HandleKeyReload(arg0, arg1 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) HandleKeyReload(ctx, currentKeys any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleKeyReload", reflect.TypeOf((*MockValidator)(nil).HandleKeyReload), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleKeyReload", reflect.TypeOf((*MockValidator)(nil).HandleKeyReload), ctx, currentKeys)
 }
 
 // Host mocks base method.
@@ -216,29 +229,29 @@ func (mr *MockValidatorMockRecorder) Keymanager() *gomock.Call {
 }
 
 // LogSubmissions mocks base method.
-func (m *MockValidator) LogSubmissions(arg0 primitives.Slot) {
+func (m *MockValidator) LogSubmissions(slot primitives.Slot) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "LogSubmissions", arg0)
+	m.ctrl.Call(m, "LogSubmissions", slot)
 }
 
 // LogSubmissions indicates an expected call of LogSubmissions.
-func (mr *MockValidatorMockRecorder) LogSubmissions(arg0 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) LogSubmissions(slot any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LogSubmissions", reflect.TypeOf((*MockValidator)(nil).LogSubmissions), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LogSubmissions", reflect.TypeOf((*MockValidator)(nil).LogSubmissions), slot)
 }
 
 // LogValidatorGainsAndLosses mocks base method.
-func (m *MockValidator) LogValidatorGainsAndLosses(arg0 context.Context, arg1 primitives.Slot) error {
+func (m *MockValidator) LogValidatorGainsAndLosses(ctx context.Context, slot primitives.Slot) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LogValidatorGainsAndLosses", arg0, arg1)
+	ret := m.ctrl.Call(m, "LogValidatorGainsAndLosses", ctx, slot)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // LogValidatorGainsAndLosses indicates an expected call of LogValidatorGainsAndLosses.
-func (mr *MockValidatorMockRecorder) LogValidatorGainsAndLosses(arg0, arg1 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) LogValidatorGainsAndLosses(ctx, slot any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LogValidatorGainsAndLosses", reflect.TypeOf((*MockValidator)(nil).LogValidatorGainsAndLosses), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LogValidatorGainsAndLosses", reflect.TypeOf((*MockValidator)(nil).LogValidatorGainsAndLosses), ctx, slot)
 }
 
 // NextSlot mocks base method.
@@ -256,27 +269,27 @@ func (mr *MockValidatorMockRecorder) NextSlot() *gomock.Call {
 }
 
 // ProcessEvent mocks base method.
-func (m *MockValidator) ProcessEvent(arg0 context.Context, arg1 *event.Event) {
+func (m *MockValidator) ProcessEvent(ctx context.Context, arg1 *event.Event) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "ProcessEvent", arg0, arg1)
+	m.ctrl.Call(m, "ProcessEvent", ctx, arg1)
 }
 
 // ProcessEvent indicates an expected call of ProcessEvent.
-func (mr *MockValidatorMockRecorder) ProcessEvent(arg0, arg1 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) ProcessEvent(ctx, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessEvent", reflect.TypeOf((*MockValidator)(nil).ProcessEvent), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessEvent", reflect.TypeOf((*MockValidator)(nil).ProcessEvent), ctx, arg1)
 }
 
 // ProposeBlock mocks base method.
-func (m *MockValidator) ProposeBlock(arg0 context.Context, arg1 primitives.Slot, arg2 [48]byte) {
+func (m *MockValidator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubKey [48]byte) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "ProposeBlock", arg0, arg1, arg2)
+	m.ctrl.Call(m, "ProposeBlock", ctx, slot, pubKey)
 }
 
 // ProposeBlock indicates an expected call of ProposeBlock.
-func (mr *MockValidatorMockRecorder) ProposeBlock(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) ProposeBlock(ctx, slot, pubKey any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposeBlock", reflect.TypeOf((*MockValidator)(nil).ProposeBlock), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposeBlock", reflect.TypeOf((*MockValidator)(nil).ProposeBlock), ctx, slot, pubKey)
 }
 
 // ProposerSettings mocks base method.
@@ -294,46 +307,46 @@ func (mr *MockValidatorMockRecorder) ProposerSettings() *gomock.Call {
 }
 
 // PushProposerSettings mocks base method.
-func (m *MockValidator) PushProposerSettings(arg0 context.Context, arg1 primitives.Slot, arg2 bool) error {
+func (m *MockValidator) PushProposerSettings(ctx context.Context, slot primitives.Slot, forceFullPush bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PushProposerSettings", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "PushProposerSettings", ctx, slot, forceFullPush)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // PushProposerSettings indicates an expected call of PushProposerSettings.
-func (mr *MockValidatorMockRecorder) PushProposerSettings(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) PushProposerSettings(ctx, slot, forceFullPush any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushProposerSettings", reflect.TypeOf((*MockValidator)(nil).PushProposerSettings), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushProposerSettings", reflect.TypeOf((*MockValidator)(nil).PushProposerSettings), ctx, slot, forceFullPush)
 }
 
 // RolesAt mocks base method.
-func (m *MockValidator) RolesAt(arg0 context.Context, arg1 primitives.Slot) (map[[48]byte][]iface.ValidatorRole, error) {
+func (m *MockValidator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[48]byte][]iface.ValidatorRole, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RolesAt", arg0, arg1)
+	ret := m.ctrl.Call(m, "RolesAt", ctx, slot)
 	ret0, _ := ret[0].(map[[48]byte][]iface.ValidatorRole)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // RolesAt indicates an expected call of RolesAt.
-func (mr *MockValidatorMockRecorder) RolesAt(arg0, arg1 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) RolesAt(ctx, slot any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RolesAt", reflect.TypeOf((*MockValidator)(nil).RolesAt), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RolesAt", reflect.TypeOf((*MockValidator)(nil).RolesAt), ctx, slot)
 }
 
 // SetGraffiti mocks base method.
-func (m *MockValidator) SetGraffiti(arg0 context.Context, arg1 [48]byte, arg2 []byte) error {
+func (m *MockValidator) SetGraffiti(ctx context.Context, pubKey [48]byte, graffiti []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetGraffiti", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "SetGraffiti", ctx, pubKey, graffiti)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetGraffiti indicates an expected call of SetGraffiti.
-func (mr *MockValidatorMockRecorder) SetGraffiti(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) SetGraffiti(ctx, pubKey, graffiti any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetGraffiti", reflect.TypeOf((*MockValidator)(nil).SetGraffiti), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetGraffiti", reflect.TypeOf((*MockValidator)(nil).SetGraffiti), ctx, pubKey, graffiti)
 }
 
 // SetProposerSettings mocks base method.
@@ -363,9 +376,9 @@ func (mr *MockValidatorMockRecorder) SetTicker() *gomock.Call {
 }
 
 // SignValidatorRegistrationRequest mocks base method.
-func (m *MockValidator) SignValidatorRegistrationRequest(arg0 context.Context, arg1 iface.SigningFunc, arg2 *eth.ValidatorRegistrationV1) (*eth.SignedValidatorRegistrationV1, bool, error) {
+func (m *MockValidator) SignValidatorRegistrationRequest(ctx context.Context, signer iface.SigningFunc, newValidatorRegistration *eth.ValidatorRegistrationV1) (*eth.SignedValidatorRegistrationV1, bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SignValidatorRegistrationRequest", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "SignValidatorRegistrationRequest", ctx, signer, newValidatorRegistration)
 	ret0, _ := ret[0].(*eth.SignedValidatorRegistrationV1)
 	ret1, _ := ret[1].(bool)
 	ret2, _ := ret[2].(error)
@@ -373,175 +386,163 @@ func (m *MockValidator) SignValidatorRegistrationRequest(arg0 context.Context, a
 }
 
 // SignValidatorRegistrationRequest indicates an expected call of SignValidatorRegistrationRequest.
-func (mr *MockValidatorMockRecorder) SignValidatorRegistrationRequest(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) SignValidatorRegistrationRequest(ctx, signer, newValidatorRegistration any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignValidatorRegistrationRequest", reflect.TypeOf((*MockValidator)(nil).SignValidatorRegistrationRequest), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignValidatorRegistrationRequest", reflect.TypeOf((*MockValidator)(nil).SignValidatorRegistrationRequest), ctx, signer, newValidatorRegistration)
 }
 
 // SlotDeadline mocks base method.
-func (m *MockValidator) SlotDeadline(arg0 primitives.Slot) time.Time {
+func (m *MockValidator) SlotDeadline(slot primitives.Slot) time.Time {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SlotDeadline", arg0)
+	ret := m.ctrl.Call(m, "SlotDeadline", slot)
 	ret0, _ := ret[0].(time.Time)
 	return ret0
 }
 
 // SlotDeadline indicates an expected call of SlotDeadline.
-func (mr *MockValidatorMockRecorder) SlotDeadline(arg0 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) SlotDeadline(slot any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SlotDeadline", reflect.TypeOf((*MockValidator)(nil).SlotDeadline), arg0)
-}
-
-// StartEventStream mocks base method.
-func (m *MockValidator) StartEventStream(arg0 context.Context, arg1 []string) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "StartEventStream", arg0, arg1)
-}
-
-// StartEventStream indicates an expected call of StartEventStream.
-func (mr *MockValidatorMockRecorder) StartEventStream(arg0, arg1 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartEventStream", reflect.TypeOf((*MockValidator)(nil).StartEventStream), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SlotDeadline", reflect.TypeOf((*MockValidator)(nil).SlotDeadline), slot)
 }
 
 // SubmitAggregateAndProof mocks base method.
-func (m *MockValidator) SubmitAggregateAndProof(arg0 context.Context, arg1 primitives.Slot, arg2 [48]byte) {
+func (m *MockValidator) SubmitAggregateAndProof(ctx context.Context, slot primitives.Slot, pubKey [48]byte) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SubmitAggregateAndProof", arg0, arg1, arg2)
+	m.ctrl.Call(m, "SubmitAggregateAndProof", ctx, slot, pubKey)
 }
 
 // SubmitAggregateAndProof indicates an expected call of SubmitAggregateAndProof.
-func (mr *MockValidatorMockRecorder) SubmitAggregateAndProof(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) SubmitAggregateAndProof(ctx, slot, pubKey any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAggregateAndProof", reflect.TypeOf((*MockValidator)(nil).SubmitAggregateAndProof), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAggregateAndProof", reflect.TypeOf((*MockValidator)(nil).SubmitAggregateAndProof), ctx, slot, pubKey)
 }
 
 // SubmitAttestation mocks base method.
-func (m *MockValidator) SubmitAttestation(arg0 context.Context, arg1 primitives.Slot, arg2 [48]byte) {
+func (m *MockValidator) SubmitAttestation(ctx context.Context, slot primitives.Slot, pubKey [48]byte) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SubmitAttestation", arg0, arg1, arg2)
+	m.ctrl.Call(m, "SubmitAttestation", ctx, slot, pubKey)
 }
 
 // SubmitAttestation indicates an expected call of SubmitAttestation.
-func (mr *MockValidatorMockRecorder) SubmitAttestation(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) SubmitAttestation(ctx, slot, pubKey any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAttestation", reflect.TypeOf((*MockValidator)(nil).SubmitAttestation), arg0, arg1, arg2)
-}
-
-// SubmitSignedContributionAndProof mocks base method.
-func (m *MockValidator) SubmitSignedContributionAndProof(arg0 context.Context, arg1 primitives.Slot, arg2 [48]byte) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SubmitSignedContributionAndProof", arg0, arg1, arg2)
-}
-
-// SubmitSignedContributionAndProof indicates an expected call of SubmitSignedContributionAndProof.
-func (mr *MockValidatorMockRecorder) SubmitSignedContributionAndProof(arg0, arg1, arg2 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedContributionAndProof", reflect.TypeOf((*MockValidator)(nil).SubmitSignedContributionAndProof), arg0, arg1, arg2)
-}
-
-// SubmitSyncCommitteeMessage mocks base method.
-func (m *MockValidator) SubmitSyncCommitteeMessage(arg0 context.Context, arg1 primitives.Slot, arg2 [48]byte) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SubmitSyncCommitteeMessage", arg0, arg1, arg2)
-}
-
-// SubmitSyncCommitteeMessage indicates an expected call of SubmitSyncCommitteeMessage.
-func (mr *MockValidatorMockRecorder) SubmitSyncCommitteeMessage(arg0, arg1, arg2 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSyncCommitteeMessage", reflect.TypeOf((*MockValidator)(nil).SubmitSyncCommitteeMessage), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAttestation", reflect.TypeOf((*MockValidator)(nil).SubmitAttestation), ctx, slot, pubKey)
 }
 
 // SubmitPayloadAttestation mocks base method.
-func (m *MockValidator) SubmitPayloadAttestation(arg0 context.Context, arg1 primitives.Slot, arg2 [48]byte) {
+func (m *MockValidator) SubmitPayloadAttestation(ctx context.Context, slot primitives.Slot, pubKey [48]byte) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SubmitPayloadAttestation", arg0, arg1, arg2)
+	m.ctrl.Call(m, "SubmitPayloadAttestation", ctx, slot, pubKey)
 }
 
 // SubmitPayloadAttestation indicates an expected call of SubmitPayloadAttestation.
-func (mr *MockValidatorMockRecorder) SubmitPayloadAttestation(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) SubmitPayloadAttestation(ctx, slot, pubKey any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitPayloadAttestation", reflect.TypeOf((*MockValidator)(nil).SubmitPayloadAttestation), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitPayloadAttestation", reflect.TypeOf((*MockValidator)(nil).SubmitPayloadAttestation), ctx, slot, pubKey)
+}
+
+// SubmitSignedContributionAndProof mocks base method.
+func (m *MockValidator) SubmitSignedContributionAndProof(ctx context.Context, slot primitives.Slot, pubKey [48]byte) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SubmitSignedContributionAndProof", ctx, slot, pubKey)
+}
+
+// SubmitSignedContributionAndProof indicates an expected call of SubmitSignedContributionAndProof.
+func (mr *MockValidatorMockRecorder) SubmitSignedContributionAndProof(ctx, slot, pubKey any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedContributionAndProof", reflect.TypeOf((*MockValidator)(nil).SubmitSignedContributionAndProof), ctx, slot, pubKey)
+}
+
+// SubmitSyncCommitteeMessage mocks base method.
+func (m *MockValidator) SubmitSyncCommitteeMessage(ctx context.Context, slot primitives.Slot, pubKey [48]byte) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SubmitSyncCommitteeMessage", ctx, slot, pubKey)
+}
+
+// SubmitSyncCommitteeMessage indicates an expected call of SubmitSyncCommitteeMessage.
+func (mr *MockValidatorMockRecorder) SubmitSyncCommitteeMessage(ctx, slot, pubKey any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSyncCommitteeMessage", reflect.TypeOf((*MockValidator)(nil).SubmitSyncCommitteeMessage), ctx, slot, pubKey)
 }
 
 // UpdateDomainDataCaches mocks base method.
-func (m *MockValidator) UpdateDomainDataCaches(arg0 context.Context, arg1 primitives.Slot) {
+func (m *MockValidator) UpdateDomainDataCaches(ctx context.Context, slot primitives.Slot) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "UpdateDomainDataCaches", arg0, arg1)
+	m.ctrl.Call(m, "UpdateDomainDataCaches", ctx, slot)
 }
 
 // UpdateDomainDataCaches indicates an expected call of UpdateDomainDataCaches.
-func (mr *MockValidatorMockRecorder) UpdateDomainDataCaches(arg0, arg1 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) UpdateDomainDataCaches(ctx, slot any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDomainDataCaches", reflect.TypeOf((*MockValidator)(nil).UpdateDomainDataCaches), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDomainDataCaches", reflect.TypeOf((*MockValidator)(nil).UpdateDomainDataCaches), ctx, slot)
 }
 
 // UpdateDuties mocks base method.
-func (m *MockValidator) UpdateDuties(arg0 context.Context) error {
+func (m *MockValidator) UpdateDuties(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateDuties", arg0)
+	ret := m.ctrl.Call(m, "UpdateDuties", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UpdateDuties indicates an expected call of UpdateDuties.
-func (mr *MockValidatorMockRecorder) UpdateDuties(arg0 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) UpdateDuties(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDuties", reflect.TypeOf((*MockValidator)(nil).UpdateDuties), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDuties", reflect.TypeOf((*MockValidator)(nil).UpdateDuties), ctx)
 }
 
 // WaitForActivation mocks base method.
-func (m *MockValidator) WaitForActivation(arg0 context.Context) error {
+func (m *MockValidator) WaitForActivation(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WaitForActivation", arg0)
+	ret := m.ctrl.Call(m, "WaitForActivation", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // WaitForActivation indicates an expected call of WaitForActivation.
-func (mr *MockValidatorMockRecorder) WaitForActivation(arg0 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) WaitForActivation(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForActivation", reflect.TypeOf((*MockValidator)(nil).WaitForActivation), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForActivation", reflect.TypeOf((*MockValidator)(nil).WaitForActivation), ctx)
 }
 
 // WaitForChainStart mocks base method.
-func (m *MockValidator) WaitForChainStart(arg0 context.Context) error {
+func (m *MockValidator) WaitForChainStart(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WaitForChainStart", arg0)
+	ret := m.ctrl.Call(m, "WaitForChainStart", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // WaitForChainStart indicates an expected call of WaitForChainStart.
-func (mr *MockValidatorMockRecorder) WaitForChainStart(arg0 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) WaitForChainStart(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForChainStart", reflect.TypeOf((*MockValidator)(nil).WaitForChainStart), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForChainStart", reflect.TypeOf((*MockValidator)(nil).WaitForChainStart), ctx)
 }
 
 // WaitForKeymanagerInitialization mocks base method.
-func (m *MockValidator) WaitForKeymanagerInitialization(arg0 context.Context) error {
+func (m *MockValidator) WaitForKeymanagerInitialization(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WaitForKeymanagerInitialization", arg0)
+	ret := m.ctrl.Call(m, "WaitForKeymanagerInitialization", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // WaitForKeymanagerInitialization indicates an expected call of WaitForKeymanagerInitialization.
-func (mr *MockValidatorMockRecorder) WaitForKeymanagerInitialization(arg0 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) WaitForKeymanagerInitialization(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForKeymanagerInitialization", reflect.TypeOf((*MockValidator)(nil).WaitForKeymanagerInitialization), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForKeymanagerInitialization", reflect.TypeOf((*MockValidator)(nil).WaitForKeymanagerInitialization), ctx)
 }
 
 // WaitForSync mocks base method.
-func (m *MockValidator) WaitForSync(arg0 context.Context) error {
+func (m *MockValidator) WaitForSync(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WaitForSync", arg0)
+	ret := m.ctrl.Call(m, "WaitForSync", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // WaitForSync indicates an expected call of WaitForSync.
-func (mr *MockValidatorMockRecorder) WaitForSync(arg0 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) WaitForSync(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForSync", reflect.TypeOf((*MockValidator)(nil).WaitForSync), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForSync", reflect.TypeOf((*MockValidator)(nil).WaitForSync), ctx)
 }
