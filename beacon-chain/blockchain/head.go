@@ -164,7 +164,7 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 	}
 
 	if c := s.cfg.AttestationDataCache; c != nil {
-		c.Clear()
+		go c.Clear()
 	}
 
 	// Save the new head root to DB.
