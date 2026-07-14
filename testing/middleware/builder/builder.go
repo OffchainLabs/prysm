@@ -711,25 +711,10 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter, req *http.Re
 }
 
 func (p *Builder) handleBlindedBlock(w http.ResponseWriter, req *http.Request) {
-	// Decode blinded block based on the current fork version.
-	// The beacon node sends JSON using api/server/structs types.
-	var err error
-	switch p.currVersion {
-	case version.Electra:
-		var sb structs.SignedBlindedBeaconBlockElectra
-		err = json.NewDecoder(req.Body).Decode(&sb)
-	case version.Deneb:
-		var sb structs.SignedBlindedBeaconBlockDeneb
-		err = json.NewDecoder(req.Body).Decode(&sb)
-	case version.Capella:
-		var sb structs.SignedBlindedBeaconBlockCapella
-		err = json.NewDecoder(req.Body).Decode(&sb)
-	default:
-		var sb structs.SignedBlindedBeaconBlockBellatrix
-		err = json.NewDecoder(req.Body).Decode(&sb)
-	}
-	if err != nil {
+	if err := p.decodeBlindedBlockRequest(req); err != nil {
 		p.cfg.logger.WithError(err).WithField("version", version.String(p.currVersion)).Error("Could not decode blinded block")
+		http.Error(w, "could not decode blinded block", http.StatusBadRequest)
+		return
 	}
 	if p.currPayload == nil {
 		p.cfg.logger.Error("No payload is cached")
@@ -753,6 +738,41 @@ func (p *Builder) handleBlindedBlock(w http.ResponseWriter, req *http.Request) {
 		p.cfg.logger.WithError(err).Error("Could not encode full payload response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+}
+
+func (p *Builder) decodeBlindedBlockRequest(req *http.Request) error {
+	if httputil.IsRequestSsz(req) {
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			return err
+		}
+		switch p.currVersion {
+		case version.Electra:
+			return (&eth.SignedBlindedBeaconBlockElectra{}).UnmarshalSSZ(body)
+		case version.Deneb:
+			return (&eth.SignedBlindedBeaconBlockDeneb{}).UnmarshalSSZ(body)
+		case version.Capella:
+			return (&eth.SignedBlindedBeaconBlockCapella{}).UnmarshalSSZ(body)
+		default:
+			return (&eth.SignedBlindedBeaconBlockBellatrix{}).UnmarshalSSZ(body)
+		}
+	}
+
+	// JSON requests use the API structs rather than the consensus protobuf types.
+	switch p.currVersion {
+	case version.Electra:
+		var sb structs.SignedBlindedBeaconBlockElectra
+		return json.NewDecoder(req.Body).Decode(&sb)
+	case version.Deneb:
+		var sb structs.SignedBlindedBeaconBlockDeneb
+		return json.NewDecoder(req.Body).Decode(&sb)
+	case version.Capella:
+		var sb structs.SignedBlindedBeaconBlockCapella
+		return json.NewDecoder(req.Body).Decode(&sb)
+	default:
+		var sb structs.SignedBlindedBeaconBlockBellatrix
+		return json.NewDecoder(req.Body).Decode(&sb)
 	}
 }
 

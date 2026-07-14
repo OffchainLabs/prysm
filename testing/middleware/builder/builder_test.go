@@ -7,10 +7,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	builderClient "github.com/OffchainLabs/prysm/v7/api/client/builder"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -82,4 +86,60 @@ func TestGetHeaderReturnsSSZWithVersionHeader(t *testing.T) {
 
 	_, err = client.GetHeader(t.Context(), 1, [32]byte{1}, [48]byte{2})
 	require.NoError(t, err)
+}
+
+func TestHandleBlindedBlockAcceptsSSZ(t *testing.T) {
+	b, payload := denebBuilderWithPayload(t)
+	blindedBlock := util.NewBlindedBeaconBlockDeneb()
+	body, err := blindedBlock.MarshalSSZ()
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, "/eth/v1/builder/blinded_blocks", bytes.NewReader(body))
+	req.Header.Set("Content-Type", api.OctetStreamMediaType)
+	req.Header.Set("Accept", api.OctetStreamMediaType)
+	recorder := httptest.NewRecorder()
+
+	b.handleBlindedBlock(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, api.OctetStreamMediaType, recorder.Header().Get("Content-Type"))
+	require.Equal(t, version.String(version.Deneb), recorder.Header().Get(api.VersionHeader))
+	response := &v1.ExecutionPayloadDenebAndBlobsBundle{}
+	require.NoError(t, response.UnmarshalSSZ(recorder.Body.Bytes()))
+	require.DeepEqual(t, payload.BlockHash, response.Payload.BlockHash)
+}
+
+func TestHandleBlindedBlockRejectsMalformedSSZ(t *testing.T) {
+	b, _ := denebBuilderWithPayload(t)
+	req := httptest.NewRequest(http.MethodPost, "/eth/v1/builder/blinded_blocks", bytes.NewReader([]byte{1, 2, 3}))
+	req.Header.Set("Content-Type", api.OctetStreamMediaType)
+	recorder := httptest.NewRecorder()
+
+	b.handleBlindedBlock(recorder, req)
+
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+}
+
+func denebBuilderWithPayload(t *testing.T) (*Builder, *v1.ExecutionPayloadDeneb) {
+	t.Helper()
+	payload := &v1.ExecutionPayloadDeneb{
+		ParentHash:    bytes.Repeat([]byte{1}, 32),
+		FeeRecipient:  bytes.Repeat([]byte{2}, 20),
+		StateRoot:     bytes.Repeat([]byte{3}, 32),
+		ReceiptsRoot:  bytes.Repeat([]byte{4}, 32),
+		LogsBloom:     bytes.Repeat([]byte{5}, 256),
+		PrevRandao:    bytes.Repeat([]byte{6}, 32),
+		ExtraData:     []byte{},
+		BaseFeePerGas: bytes.Repeat([]byte{7}, 32),
+		BlockHash:     bytes.Repeat([]byte{8}, 32),
+		Transactions:  [][]byte{},
+		Withdrawals:   []*v1.Withdrawal{},
+	}
+	wrapped, err := blocks.WrappedExecutionPayloadDeneb(payload)
+	require.NoError(t, err)
+	return &Builder{
+		cfg:         &config{logger: logrus.New()},
+		currVersion: version.Deneb,
+		currPayload: wrapped,
+		blobBundle:  &v1.BlobsBundle{},
+	}, payload
 }
