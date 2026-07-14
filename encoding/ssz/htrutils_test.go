@@ -158,20 +158,56 @@ func TestTransactionsRoot(t *testing.T) {
 }
 
 func TestTransactionsRootProgressive(t *testing.T) {
-	txs := [][]byte{{0x01, 0x02, 0x03}}
+	tests := []struct {
+		name string
+		txs  [][]byte
+	}{
+		{
+			name: "nil",
+			txs:  nil,
+		},
+		{
+			name: "empty",
+			txs:  [][]byte{},
+		},
+		{
+			name: "one empty transaction",
+			txs:  [][]byte{{}},
+		},
+		{
+			name: "one transaction",
+			txs:  [][]byte{{0x01, 0x02, 0x03}},
+		},
+		{
+			name: "multiple transactions",
+			txs: [][]byte{
+				{0x01},
+				{},
+				make([]byte, fieldparams.RootLength+1),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ssz.TransactionsRootProgressive(tt.txs)
+			require.NoError(t, err)
 
-	got, err := ssz.TransactionsRootProgressive(txs)
-	require.NoError(t, err)
+			transactions := make([]ssz.Transaction, len(tt.txs))
+			for i, tx := range tt.txs {
+				transactions[i] = ssz.Transaction{
+					Data:        tx,
+					Progressive: true,
+				}
+			}
+			want, err := ssz.SliceRootProgressive(transactions)
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, want, got)
 
-	want, err := ssz.SliceRootProgressive([]ssz.ProgressiveTransaction{
-		ssz.ProgressiveTransaction(txs[0]),
-	})
-	require.NoError(t, err)
-	require.DeepSSZEqual(t, want, got)
-
-	legacy, err := ssz.TransactionsRoot(txs)
-	require.NoError(t, err)
-	require.DeepNotSSZEqual(t, legacy, got)
+			legacy, err := ssz.TransactionsRoot(tt.txs)
+			require.NoError(t, err)
+			require.DeepNotSSZEqual(t, legacy, got)
+		})
+	}
 }
 
 func TestByteSliceRoot(t *testing.T) {
@@ -300,7 +336,7 @@ func TestWithdrawalRoot(t *testing.T) {
 	}
 }
 
-func TestWithrawalSliceRoot(t *testing.T) {
+func TestWithdrawalSliceRoot(t *testing.T) {
 	tests := []struct {
 		name  string
 		input []*enginev1.Withdrawal
@@ -333,20 +369,62 @@ func TestWithrawalSliceRoot(t *testing.T) {
 }
 
 func TestWithdrawalSliceRootProgressive(t *testing.T) {
-	withdrawals := []*enginev1.Withdrawal{{
+	emptyWithdrawal := &enginev1.Withdrawal{
+		Address: make([]byte, fieldparams.FeeRecipientLength),
+	}
+	withdrawal := &enginev1.Withdrawal{
 		Index:          123,
 		ValidatorIndex: 123123,
 		Address:        []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0},
 		Amount:         50,
-	}}
-	got, err := ssz.WithdrawalSliceRootProgressive(withdrawals, 16)
-	require.NoError(t, err)
+	}
+	anotherWithdrawal := &enginev1.Withdrawal{
+		Index:          124,
+		ValidatorIndex: 123124,
+		Address:        []byte{2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1},
+		Amount:         51,
+	}
+	tests := []struct {
+		name        string
+		withdrawals []*enginev1.Withdrawal
+	}{
+		{
+			name:        "nil",
+			withdrawals: nil,
+		},
+		{
+			name:        "empty",
+			withdrawals: []*enginev1.Withdrawal{},
+		},
+		{
+			name:        "one empty withdrawal",
+			withdrawals: []*enginev1.Withdrawal{emptyWithdrawal},
+		},
+		{
+			name:        "one withdrawal",
+			withdrawals: []*enginev1.Withdrawal{withdrawal},
+		},
+		{
+			name:        "multiple withdrawals",
+			withdrawals: []*enginev1.Withdrawal{withdrawal, emptyWithdrawal, anotherWithdrawal},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ssz.WithdrawalSliceRootProgressive(tt.withdrawals, 16)
+			require.NoError(t, err)
 
-	want, err := ssz.SliceRootProgressive(withdrawals)
-	require.NoError(t, err)
-	require.DeepSSZEqual(t, want, got)
+			want, err := ssz.SliceRootProgressive(tt.withdrawals)
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, want, got)
 
-	_, err = ssz.WithdrawalSliceRootProgressive(withdrawals, 0)
+			legacy, err := ssz.WithdrawalSliceRoot(tt.withdrawals, 16)
+			require.NoError(t, err)
+			require.DeepNotSSZEqual(t, legacy, got)
+		})
+	}
+
+	_, err := ssz.WithdrawalSliceRootProgressive([]*enginev1.Withdrawal{withdrawal}, 0)
 	require.ErrorContains(t, "slice exceeds max length", err)
 }
 
