@@ -337,13 +337,13 @@ func (s *Service) Resync() error {
 func (s *Service) resyncCaughtUp() bool {
 	headEpoch := slots.ToEpoch(s.cfg.Chain.HeadSlot())
 	// Within one epoch of the wall clock: caught up, regardless of what peers claim.
-	if slots.ToEpoch(s.clock.CurrentSlot()) <= headEpoch+1 {
+	if slots.ToEpoch(s.clock.CurrentSlot()) <= headEpoch.Add(1) {
 		return true
 	}
 	// Behind the clock: behind the network only if a peer quorum claims a head
 	// more than one epoch ahead — the same gate resyncIfBehind uses.
-	highestEpoch, _ := s.cfg.P2P.Peers().BestNonFinalized(flags.Get().MinimumSyncPeers*2, headEpoch)
-	return highestEpoch <= headEpoch+1
+	highestEpoch, _ := s.cfg.P2P.Peers().BestNonFinalized(flags.Get().MinimumSyncPeers, headEpoch)
+	return highestEpoch <= headEpoch.Add(1)
 }
 
 func (s *Service) waitForMinimumPeers() ([]peer.ID, error) {
