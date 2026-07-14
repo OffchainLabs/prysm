@@ -129,7 +129,7 @@ func TestQueuePendingPayloadEnvelopeFromRootRequest_RootsCap(t *testing.T) {
 	p1 := p2ptest.NewTestP2P(t)
 	r := newEnvelopeFetchService(t, p1)
 
-	for i := 0; i < maxPendingPayloadRoots; i++ {
+	for i := range maxPendingPayloadRoots {
 		r.queuePendingPayloadEnvelopeFromRootRequest(makeSignedEnvelope([32]byte{byte(i), byte(i >> 8)}, 1))
 	}
 	r.queuePendingPayloadEnvelopeFromRootRequest(makeSignedEnvelope([32]byte{0xFF, 0xFF, 0xFF}, 1))
