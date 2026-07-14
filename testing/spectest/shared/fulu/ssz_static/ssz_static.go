@@ -5,12 +5,12 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	common "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/common/ssz_static"
-	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
 )
 
 // RunSSZStaticTests executes "ssz_static" tests.
