@@ -53,6 +53,7 @@ func TestValidator_EnsureEventStream_RebindsOnHostSwitch(t *testing.T) {
 	client := validatormock.NewMockValidatorClient(ctrl)
 	var connGen atomic.Uint64
 	client.EXPECT().ConnectionGeneration().DoAndReturn(connGen.Load).AnyTimes()
+	client.EXPECT().Host().Return("http://localhost:3500").AnyTimes()
 	v := &validator{validatorClient: client}
 	topics := []string{"head"}
 

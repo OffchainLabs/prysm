@@ -936,6 +936,7 @@ func (v *validator) EnsureEventStream(ctx context.Context, topics []string) {
 	}
 	v.connTracker.confirm(eventStreamBind, gen)
 	log.WithFields(logrus.Fields{
+		"host":   v.Host(),
 		"topics": topics,
 		"reason": reason,
 	}).Info("Starting event stream")
@@ -957,11 +958,19 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 			log.WithError(err).Error("Failed to unmarshal head Event into JSON")
 		}
 
-		log.WithFields(logrus.Fields{
-			"slot":                         head.Slot,
-			"previous_duty_dependent_root": head.PreviousDutyDependentRoot,
-			"current_duty_dependent_root":  head.CurrentDutyDependentRoot,
-		}).Debug("Received head event")
+		fields := logrus.Fields{
+			"slot":                      head.Slot,
+			"previousDutyDependentRoot": trim(head.PreviousDutyDependentRoot),
+			"currentDutyDependentRoot":  trim(head.CurrentDutyDependentRoot),
+			"version":                   "1",
+		}
+
+		// The gRPC event stream (`StreamSlots`) does not carry the head block root.
+		if head.Block != "" {
+			fields["blockRoot"] = trim(head.Block)
+		}
+
+		log.WithFields(fields).Debug("Received head event")
 
 		uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
 		if err != nil {
@@ -986,11 +995,12 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 		}
 
 		log.WithFields(logrus.Fields{
-			"slot":                         head.Data.Slot,
-			"block_root":                   head.Data.Block,
-			"current_epoch_dependent_root": head.Data.CurrentEpochDependentRoot,
-			"next_epoch_dependent_root":    head.Data.NextEpochDependentRoot,
-		}).Debug("Received head_v2 event")
+			"slot":                      head.Data.Slot,
+			"blockRoot":                 trim(head.Data.Block),
+			"currentEpochDependentRoot": trim(head.Data.CurrentEpochDependentRoot),
+			"nextEpochDependentRoot":    trim(head.Data.NextEpochDependentRoot),
+			"version":                   "2",
+		}).Debug("Received head event")
 
 		uintSlot, err := strconv.ParseUint(head.Data.Slot, 10, 64)
 		if err != nil {
@@ -1023,6 +1033,17 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 
 func (v *validator) EventStreamIsRunning() bool {
 	return v.validatorClient.EventStreamIsRunning()
+}
+
+// trim shortens a string (e.g. a hex-encoded root like "0x9927a089f167...") to
+// its first 14 characters.
+func trim(s string) string {
+	const maxLen = 14 // "0x" + 12 hex characters (6 bytes).
+	if len(s) <= maxLen {
+		return s
+	}
+
+	return s[:maxLen]
 }
 
 func (v *validator) Host() string {
