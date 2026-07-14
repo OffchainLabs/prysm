@@ -35,6 +35,12 @@ const txCount = 20
 
 var fundedAccount *keystore.Key
 
+// blobV0Account sends pre-Fulu V0 sidecar blob transactions when Fulu is
+// scheduled. V0 sidecars left in the pool at the Osaka boundary become invalid
+// under geth >= v1.17, so they must not share an account with post-Fulu V1
+// cell-proof transactions.
+var blobV0Account *keystore.Key
+
 type blobTransactionMode uint8
 
 const (
@@ -96,6 +102,11 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 		return err
 	}
 	fundedAccount = newKey
+	v0Key := keystore.NewKeyForDirectICAP(newGen)
+	if err := fundAccount(client, mineKey, v0Key); err != nil {
+		return err
+	}
+	blobV0Account = v0Key
 	// Ensure funding tx is mined before generating txs that rely on balance.
 	// Mine 1 block using the miner key to include the funding transfer.
 	backend := ethclient.NewClient(client)
@@ -109,6 +120,9 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 	minWei := new(big.Int).Mul(big.NewInt(1000), big.NewInt(0).SetUint64(params.BeaconConfig().GweiPerEth))
 	minWei.Mul(minWei, big.NewInt(1e9)) // 1000 ETH in wei
 	if err := ensureMinBalance(ctx, client, backend, mineKey, fundedAccount, minWei); err != nil {
+		return err
+	}
+	if err := ensureMinBalance(ctx, client, backend, mineKey, blobV0Account, minWei); err != nil {
 		return err
 	}
 	// Broadcast Transactions every slot
@@ -182,17 +196,25 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 			})
 		}
 	case blobTransactionsWithSidecars:
+		blobSender := fundedAccount
+		if useDedicatedBlobV0Account(blobMode, cfg) {
+			blobSender = blobV0Account
+			nonce, err = backend.PendingNonceAt(context.Background(), blobSender.Address)
+			if err != nil {
+				return err
+			}
+		}
 		logrus.Info("Sending blob transactions with sidecars")
 		txs = make([]*types.Transaction, 5)
 		for index := range uint64(5) {
 			g.Go(func() error {
-				tx, err := RandomBlobTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al, useLargeBlobs)
+				tx, err := RandomBlobTx(client, blobSender.Address, nonce+index, gasPrice, chainid, al, useLargeBlobs)
 				if err != nil {
 					logrus.WithError(err).Error("Could not create blob tx")
 					//nolint:nilerr
 					return nil
 				}
-				signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), fundedAccount.PrivateKey)
+				signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), blobSender.PrivateKey)
 				if err != nil {
 					logrus.WithError(err).Error("Could not sign blob tx")
 					//nolint:nilerr
@@ -278,10 +300,11 @@ func blobTransactionModeAtEpoch(epoch primitives.Epoch, cfg *params.BeaconChainC
 	if epoch >= cfg.FuluForkEpoch {
 		return blobTransactionsWithCellProofs
 	}
-	if cfg.FuluForkEpoch != cfg.FarFutureEpoch && epoch+1 == cfg.FuluForkEpoch {
-		return blobTransactionsDisabled
-	}
 	return blobTransactionsWithSidecars
+}
+
+func useDedicatedBlobV0Account(mode blobTransactionMode, cfg *params.BeaconChainConfig) bool {
+	return mode == blobTransactionsWithSidecars && cfg.FuluForkEpoch != cfg.FarFutureEpoch
 }
 
 // Pause pauses the component and its underlying process.

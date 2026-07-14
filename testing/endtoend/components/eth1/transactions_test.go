@@ -21,6 +21,19 @@ func TestBlobTransactionModeAtEpoch(t *testing.T) {
 	cfg.FuluForkEpoch = 16
 	require.Equal(t, blobTransactionsWithSidecars, blobTransactionModeAtEpoch(cfg.DenebForkEpoch, cfg))
 	require.Equal(t, blobTransactionsWithSidecars, blobTransactionModeAtEpoch(cfg.FuluForkEpoch-2, cfg))
-	require.Equal(t, blobTransactionsDisabled, blobTransactionModeAtEpoch(cfg.FuluForkEpoch-1, cfg))
+	require.Equal(t, blobTransactionsWithSidecars, blobTransactionModeAtEpoch(cfg.FuluForkEpoch-1, cfg))
 	require.Equal(t, blobTransactionsWithCellProofs, blobTransactionModeAtEpoch(cfg.FuluForkEpoch, cfg))
+}
+
+func TestUseDedicatedBlobV0Account(t *testing.T) {
+	cfg := &params.BeaconChainConfig{
+		FuluForkEpoch:  16,
+		FarFutureEpoch: math.MaxUint64,
+	}
+
+	require.Equal(t, true, useDedicatedBlobV0Account(blobTransactionsWithSidecars, cfg))
+	require.Equal(t, false, useDedicatedBlobV0Account(blobTransactionsWithCellProofs, cfg))
+
+	cfg.FuluForkEpoch = cfg.FarFutureEpoch
+	require.Equal(t, false, useDedicatedBlobV0Account(blobTransactionsWithSidecars, cfg))
 }
