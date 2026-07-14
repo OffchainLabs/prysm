@@ -17,10 +17,10 @@ func TestState_FieldCount(t *testing.T) {
 	count := params.BeaconConfig().BeaconStateFieldCount
 	typ := reflect.TypeFor[ethpb.BeaconState]()
 	numFields := 0
-	for i := 0; i < typ.NumField(); i++ {
-		if typ.Field(i).Name == "state" ||
-			typ.Field(i).Name == "sizeCache" ||
-			typ.Field(i).Name == "unknownFields" {
+	for field := range typ.Fields() {
+		if field.Name == "state" ||
+			field.Name == "sizeCache" ||
+			field.Name == "unknownFields" {
 			continue
 		}
 		numFields++

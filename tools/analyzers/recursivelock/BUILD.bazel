@@ -8,7 +8,6 @@ go_library(
     deps = [
         "@org_golang_x_tools//go/analysis:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/inspect:go_default_library",
-        "@org_golang_x_tools//go/ast/astutil:go_default_library",
         "@org_golang_x_tools//go/ast/inspector:go_default_library",
         "@org_golang_x_tools//go/types/typeutil:go_default_library",
     ],

@@ -159,8 +159,8 @@ func validateRawPath(rawPath string) error {
 // extractFieldName extracts the field name from a path element name (removes array indices)
 // For example: "field_name[5]" returns "field_name"
 func extractFieldName(name string) string {
-	if idx := strings.Index(name, "["); idx != -1 {
-		return name[:idx]
+	if before, _, ok := strings.Cut(name, "["); ok {
+		return before
 	}
 	return name
 }
