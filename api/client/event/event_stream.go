@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/client"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -86,8 +87,8 @@ func (h *EventStream) send(eventsChannel chan<- *Event, ev *Event) bool {
 // eventsChannel until the context is canceled or an error ends the stream.
 func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
 	allTopics := strings.Join(h.topics, ",")
-	log.WithField("topics", allTopics).Info("Listening to Beacon API events")
 	fullUrl := h.host + "/eth/v1/events?topics=" + allTopics
+	log.WithFields(logrus.Fields{"url": fullUrl, "topics": allTopics}).Info("Listening to Beacon API events")
 	req, err := http.NewRequestWithContext(h.ctx, http.MethodGet, fullUrl, nil)
 	if err != nil {
 		err = errors.Wrap(err, "failed to create HTTP request")
