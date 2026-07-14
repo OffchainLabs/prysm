@@ -1,0 +1,3 @@
+go test fuzz v1
+byte('0')
+[]byte("Yլ\x8f\x85\x1d\xec#\xe4I\x8c]~=\xe3yQ")
