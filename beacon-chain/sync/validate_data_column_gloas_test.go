@@ -24,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -134,6 +135,26 @@ func TestValidateDataColumnGloas(t *testing.T) {
 		require.NotNil(t, entry)
 		require.NotNil(t, entry.columns[sidecar.Index])
 		require.Equal(t, peer.ID("aDummyPID"), entry.columns[sidecar.Index].peer)
+	})
+
+	t.Run("ignores future slot without queueing", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.DenebForkEpoch = 0
+		cfg.ElectraForkEpoch = 0
+		cfg.FuluForkEpoch = 0
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		// A far-future slot must be dropped before the unseen-block path queues it, otherwise
+		// the entry is never pruned and 8 of them permanently exhaust the pending queue.
+		sidecar, _ := gloasFixture(t)
+		sidecar.Slot = ^primitives.Slot(0) - 1
+		service, message := serviceAndMessage(t, testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{ErrValidFields: genericError}), sidecar, sidecar.Index)
+		result, err := service.validateDataColumn(ctx, "aDummyPID", message)
+		require.NotNil(t, err)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+		require.Equal(t, 0, len(service.pendingGloasColumns))
 	})
 
 	t.Run("validates against bid commitments", func(t *testing.T) {
@@ -609,54 +630,29 @@ func TestPendingGloasColumns(t *testing.T) {
 		s.processPendingGloasColumns(context.Background(), root, blk)
 	})
 
-	t.Run("prune downscores fabricated root, spares known root", func(t *testing.T) {
-		ctx := t.Context()
-
+	t.Run("prune drops stale entries without penalizing peers", func(t *testing.T) {
 		p := p2ptest.NewTestP2P(t)
-		db := dbtest.SetupDB(t)
-
-		// A known root: a real block saved to the DB (e.g. an orphaned but seen block).
-		_, signedBlock := gloasFixture(t)
-		knownRoot, err := signedBlock.Block().HashTreeRoot()
-		require.NoError(t, err)
-		require.NoError(t, db.SaveBlock(ctx, signedBlock))
-
-		// A fabricated root the node never learned of.
-		fabricatedRoot := [32]byte{0x99}
-
 		s := &Service{
-			cfg:                 &config{p2p: p, clock: clock, chain: &mock.ChainService{DB: db}},
-			ctx:                 ctx,
+			cfg:                 &config{p2p: p, clock: clock},
+			ctx:                 t.Context(),
 			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
 		}
 
-		// Honest peer queued one column for the known root.
-		known := &pendingGloasEntry{slot: 0}
-		known.columns[0] = &pendingColumnEntry{peer: "honestpeer"}
-		s.pendingGloasColumns[knownRoot] = known
+		unknownRoot := [32]byte{0x99}
+		e := &pendingGloasEntry{slot: 0}
+		e.columns[0] = &pendingColumnEntry{peer: "peerA"}
+		e.columns[1] = &pendingColumnEntry{peer: "peerA"}
+		e.columns[2] = &pendingColumnEntry{peer: "peerB"}
+		s.pendingGloasColumns[unknownRoot] = e
 
-		// Evil peer queued three columns for the fabricated root.
-		fab := &pendingGloasEntry{slot: 0}
-		fab.columns[0] = &pendingColumnEntry{peer: "evilpeer"}
-		fab.columns[1] = &pendingColumnEntry{peer: "evilpeer"}
-		fab.columns[2] = &pendingColumnEntry{peer: "evilpeer"}
-		s.pendingGloasColumns[fabricatedRoot] = fab
-
-		// Both entries are stale relative to slot 5.
 		s.pruneStaleGloasColumns(5)
 
-		require.Equal(t, false, s.hasPendingGloasColumns(knownRoot))
-		require.Equal(t, false, s.hasPendingGloasColumns(fabricatedRoot))
+		require.Equal(t, false, s.hasPendingGloasColumns(unknownRoot))
 
 		scorer := p.Peers().Scorers().BadResponsesScorer()
-
-		// One increment for the fabricated root even though the peer forwarded three columns.
-		evilCount, err := scorer.Count("evilpeer")
-		require.NoError(t, err)
-		require.Equal(t, 1, evilCount)
-
-		// The peer on the known (orphaned) root is untouched.
-		_, err = scorer.Count("honestpeer")
+		_, err := scorer.Count("peerA")
+		require.NotNil(t, err)
+		_, err = scorer.Count("peerB")
 		require.NotNil(t, err)
 	})
 

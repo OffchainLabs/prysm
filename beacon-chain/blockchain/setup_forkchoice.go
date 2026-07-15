@@ -200,8 +200,12 @@ func (s *Service) markFinalizedRootFull(chain []*forkchoicetypes.BlockAndCheckpo
 	if err != nil || !builtOn {
 		return nil
 	}
+	fBid, err := fBlock.Block().Body().SignedExecutionPayloadBid()
+	if err != nil || fBid == nil || fBid.Message == nil {
+		return nil
+	}
 	// The finalized block's payload was delivered. Create the full node.
-	s.cfg.ForkChoiceStore.MarkFullNode(fRoot)
+	s.cfg.ForkChoiceStore.MarkFullNode(fRoot, fBid.Message.GasLimit)
 	return nil
 }
 

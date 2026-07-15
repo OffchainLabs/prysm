@@ -688,8 +688,13 @@ func (s *Service) insertBlockToPendingQueue(_ primitives.Slot, b interfaces.Read
 		return nil
 	}
 
-	if err := s.addPendingBlockToCache(b); err != nil {
+	stored, err := s.addPendingBlockToCache(b)
+	if err != nil {
 		return err
+	}
+	// Only mark seen when cached, so the seen root always has a cache entry whose eviction clears it.
+	if !stored {
+		return nil
 	}
 
 	s.seenPendingBlocks[r] = true
@@ -711,21 +716,21 @@ func (s *Service) pendingBlocksInCache(slot primitives.Slot) []interfaces.ReadOn
 }
 
 // This adds input signed beacon block to slotToPendingBlocks cache.
-func (s *Service) addPendingBlockToCache(b interfaces.ReadOnlySignedBeaconBlock) error {
+func (s *Service) addPendingBlockToCache(b interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
 	if err := blocks.BeaconBlockIsNil(b); err != nil {
-		return err
+		return false, err
 	}
 
 	blks := s.pendingBlocksInCache(b.Block().Slot())
 
 	if len(blks) >= maxBlocksPerSlot {
-		return nil
+		return false, nil
 	}
 
 	blks = append(blks, b)
 	k := slotToCacheKey(b.Block().Slot())
 	s.slotToPendingBlocks.Set(k, blks, pendingBlockExpTime)
-	return nil
+	return true, nil
 }
 
 // This converts input string to slot.
