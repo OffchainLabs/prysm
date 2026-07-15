@@ -85,6 +85,10 @@ func (s *Service) executionPayloadEnvelopesByRangeRPCHandler(ctx context.Context
 	}
 
 	if err := s.streamCanonicalEnvelopes(ctx, rp, stream); err != nil {
+		if errors.Is(err, p2ptypes.ErrResourceUnavailable) {
+			recordResult(executionPayloadEnvelopeRPCResultResourceUnavailable)
+			return nil
+		}
 		recordResult(executionPayloadEnvelopeRPCResultError)
 		tracing.AnnotateError(span, err)
 		return err
@@ -167,15 +171,21 @@ func (s *Service) streamCanonicalEnvelopes(ctx context.Context, rp rangeParams, 
 
 	payloadByHash, err := s.cfg.executionReconstructor.ReconstructFullGloasExecutionPayloadsByHash(ctx, batchHashes)
 	if err != nil {
-		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-		return errors.Wrap(err, "could not batch reconstruct full execution payload envelopes")
+		// Reconstruction fails when the execution client no longer holds the
+		// required data (e.g. pruned block access lists) or does not have the
+		// blocks yet. That is an availability condition of this node, not a
+		// protocol fault, so answer resource_unavailable instead of a server
+		// error that makes requesting peers score this node as a bad
+		// responder and disconnect.
+		s.writeErrorResponseToStream(responseCodeResourceUnavailable, p2ptypes.ErrResourceUnavailable.Error(), stream)
+		return errors.Wrapf(p2ptypes.ErrResourceUnavailable, "could not reconstruct full execution payload envelopes: %v", err)
 	}
 
 	for _, c := range collected {
 		payload := payloadByHash[c.blockHash]
 		if payload == nil {
-			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-			return errors.Errorf("missing reconstructed payload for block hash %#x", c.blockHash)
+			s.writeErrorResponseToStream(responseCodeResourceUnavailable, p2ptypes.ErrResourceUnavailable.Error(), stream)
+			return errors.Wrapf(p2ptypes.ErrResourceUnavailable, "missing reconstructed payload for block hash %#x", c.blockHash)
 		}
 		fullEnv := &pb.SignedExecutionPayloadEnvelope{
 			Message: &pb.ExecutionPayloadEnvelope{
