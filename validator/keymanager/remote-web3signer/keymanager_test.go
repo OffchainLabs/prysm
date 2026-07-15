@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/io/file"
@@ -217,8 +218,9 @@ func TestNewKeyManager_ChangingFileCreated(t *testing.T) {
 		keys[i] = hexutil.Encode(key[:])
 		require.Equal(t, slices.Contains(wantSlice, keys[i]), true)
 	}
-	// sleep needs to be at the front because of how watching the file works
-	time.Sleep(1 * time.Second)
+	pubKeysChan := make(chan [][fieldparams.BLSPubkeyLength]byte)
+	sub := km.SubscribeAccountChanges(pubKeysChan)
+	defer sub.Unsubscribe()
 
 	// Open the file for writing, create it if it does not exist, and truncate it if it does.
 	f, err := os.OpenFile(keyFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
@@ -235,8 +237,18 @@ func TestNewKeyManager_ChangingFileCreated(t *testing.T) {
 	require.Equal(t, 1, len(ks))
 	require.Equal(t, "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055", hexutil.Encode(ks[0][:]))
 
-	require.Equal(t, 1, len(km.providedPublicKeys))
-	require.Equal(t, "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055", hexutil.Encode(km.providedPublicKeys[0][:]))
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+	for {
+		select {
+		case updatedKeys := <-pubKeysChan:
+			if len(updatedKeys) == 1 && hexutil.Encode(updatedKeys[0][:]) == "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055" {
+				return
+			}
+		case <-timer.C:
+			t.Fatal("timed out waiting for the key file update")
+		}
+	}
 }
 
 func TestNewKeyManager_FileAndFlagsWithDifferentKeys(t *testing.T) {
@@ -300,7 +312,7 @@ func TestRefreshRemoteKeysFromFileChangesWithRetry(t *testing.T) {
 	require.NoError(t, err)
 	go func() {
 		km.keyFilePath = keyFilePath
-		require.NoError(t, km.refreshRemoteKeysFromFileChangesWithRetry(ctx, 1*time.Second))
+		require.NoError(t, km.refreshRemoteKeysFromFileChangesWithRetry(ctx, time.Second, func(error) {}))
 	}()
 	// wait for file detection
 	time.Sleep(1 * time.Second)
@@ -349,7 +361,7 @@ func TestRefreshRemoteKeysFromFileChangesWithRetry_maxRetryReached(t *testing.T)
 	require.NoError(t, err)
 	km.keyFilePath = keyFilePath
 	km.retriesRemaining = 1
-	err = km.refreshRemoteKeysFromFileChangesWithRetry(ctx, 1*time.Millisecond)
+	err = km.refreshRemoteKeysFromFileChangesWithRetry(ctx, time.Millisecond, func(error) {})
 	require.ErrorContains(t, "file check retries remaining exceeded", err)
 }
 
