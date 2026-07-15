@@ -79,7 +79,7 @@ func TestGetDecodedExecutionRequests(t *testing.T) {
 			"680000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
 		require.NoError(t, err)
 		ebe := &enginev1.ExecutionBundleElectra{
-			ExecutionRequests: [][]byte{append([]byte{}, []byte{}...), append([]byte{uint8(enginev1.ConsolidationRequestType)}, consolidationRequestBytes...)},
+			ExecutionRequests: [][]byte{{}, append([]byte{uint8(enginev1.ConsolidationRequestType)}, consolidationRequestBytes...)},
 		}
 		_, err = ebe.GetDecodedExecutionRequests(cfg.ExecutionRequestLimits())
 		require.ErrorContains(t, "invalid execution request, length less than 1", err)
