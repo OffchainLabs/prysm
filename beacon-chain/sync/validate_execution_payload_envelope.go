@@ -198,6 +198,11 @@ func (s *Service) queuePendingPayloadEnvelope(
 		return pubsub.ValidationIgnore, nil
 	}
 
+	// The failure budget is per slot, matching admission above, so a burst of bad signatures cannot disable self-build queueing beyond the current slot.
+	if isSelfBuild && s.selfBuildSigFailSlot != currentSlot {
+		s.selfBuildSigFailSlot = currentSlot
+		s.selfBuildSigFailures = 0
+	}
 	if isSelfBuild && s.selfBuildSigFailures >= maxSelfBuildSigFailures {
 		log.Debug("Ignoring self-built payload envelope because of too many signature failures")
 		return pubsub.ValidationIgnore, nil
@@ -209,9 +214,9 @@ func (s *Service) queuePendingPayloadEnvelope(
 				s.selfBuildSigFailures++
 				log.WithError(err).Debug("Ignoring self-built payload with invalid signature")
 				return pubsub.ValidationIgnore, nil
-			} else {
-				return pubsub.ValidationReject, err
 			}
+			// The envelope's block is unknown, so the head state used here may be on a different branch, do not penalize the peer.
+			return pubsub.ValidationIgnore, err
 		}
 	} else {
 		log.Debug("Ignoring payload envelope from self-build outside of the Lookahead window")

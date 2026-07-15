@@ -27,7 +27,6 @@ go_library(
         "propose_beacon_block.go",
         "propose_exit.go",
         "proposer_preferences.go",
-        "prysm_beacon_chain_client.go",
         "registration.go",
         "state_validators.go",
         "status.go",
@@ -101,7 +100,6 @@ go_test(
         "propose_beacon_block_test.go",
         "propose_exit_test.go",
         "proposer_preferences_test.go",
-        "prysm_beacon_chain_client_test.go",
         "registration_test.go",
         "rest_handler_client_test.go",
         "state_validators_test.go",
@@ -119,6 +117,7 @@ go_test(
     deps = [
         "//api:go_default_library",
         "//api/apiutil:go_default_library",
+        "//api/client/event:go_default_library",
         "//api/rest:go_default_library",
         "//api/server/structs:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",

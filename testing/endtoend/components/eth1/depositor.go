@@ -267,11 +267,23 @@ func (d *Depositor) txops(ctx context.Context) (*bind.TransactOpts, error) {
 		return nil, err
 	}
 	txo.Nonce = big.NewInt(0).SetUint64(nonce)
-	// Set a high gas price to ensure deposit transactions can replace any pending
-	// transactions from the transaction generator that may be using the same nonce.
-	// The transaction generator uses 1e11 (100 Gwei), so we use 2e11 (200 Gwei).
-	txo.GasPrice = big.NewInt(2e11)
+	gasPrice, err := d.Client.SuggestGasPrice(ctx)
+	if err != nil {
+		return nil, err
+	}
+	txo.GasPrice = depositGasPrice(gasPrice)
 	return txo, nil
+}
+
+// depositGasPrice keeps deposit txs ahead of the normal e2e traffic. WaitForBlocks
+// spams replacement txs from this same account while mining batches, and the tx
+// generator runs at 100 gwei, so bump well above the suggestion and hold a high floor.
+func depositGasPrice(suggested *big.Int) *big.Int {
+	gasPrice := new(big.Int).Mul(suggested, big.NewInt(10))
+	if gasPrice.Cmp(big.NewInt(1e12)) < 0 {
+		return big.NewInt(1e12)
+	}
+	return gasPrice
 }
 
 // contractDepositor is a little helper method that inits and caches a DepositContract value.

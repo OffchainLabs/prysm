@@ -31,28 +31,17 @@ Run these in order from the repo root before every commit. Stop and report if an
    ```
    If the diff is non-empty, run `bazel run //:gazelle -- fix`.
 
-5. **Regenerate protobuf** (when `.proto` files changed):
+5. **Regenerate code** (when `.proto`, SSZ-tagged structs, or proto service interfaces changed):
    ```bash
-   hack/update-go-pbs.sh
+   make gen
    ```
+   Regenerates proto/ssz/mocks and runs goimports+gofmt on the generated files. It's cached; if unsure which files changed, bypass the cache with `make gen mode=force`. Limit to one kind with e.g. `make gen proto`.
 
-6. **Regenerate SSZ** (when SSZ-tagged structs changed):
+6. **Build smoke check**:
    ```bash
-   hack/update-go-ssz.sh
+   make build
    ```
-
-7. **Regenerate mocks** (when proto service interfaces changed):
-   ```bash
-   hack/update-mockgen.sh
-   ```
-
-8. **Smoke run with Bazel**:
-   ```bash
-   bazel run //cmd/beacon-chain:beacon-chain  -- --help
-   bazel run //cmd/validator:validator  -- --help
-   ```
-
-Hack scripts are idempotent — if unsure which generated files are affected, run all three.
+   `make build` runs `gen` first, then builds all binaries.
 
 ## Report
 

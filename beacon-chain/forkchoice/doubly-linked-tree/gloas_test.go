@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -201,6 +202,68 @@ func TestInsertPayload_DuplicateIsNoop(t *testing.T) {
 	require.NoError(t, f.InsertPayload(pe))
 	assert.Equal(t, fn, f.store.fullNodeByRoot[root])
 	require.Equal(t, 2, len(f.store.fullNodeByRoot))
+}
+
+func TestMarkFullNode_SetsGasLimit(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	root := indexToHash(1)
+	blockHash := indexToHash(100)
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 1, root, params.BeaconConfig().ZeroHash, blockHash, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	f.MarkFullNode(root, 30_000_000)
+
+	fn := f.store.fullNodeByRoot[root]
+	require.NotNil(t, fn)
+	assert.Equal(t, uint64(30_000_000), fn.gasLimit)
+
+	gl, err := f.GasLimit(root)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(30_000_000), gl)
+}
+
+func TestInsertChain_SetsFullNodeGasLimit(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	root := indexToHash(1)
+	blockHash := indexToHash(100)
+	bid := util.HydrateSignedExecutionPayloadBid(&ethpb.SignedExecutionPayloadBid{
+		Message: &ethpb.ExecutionPayloadBid{
+			BlockHash:       blockHash[:],
+			ParentBlockHash: params.BeaconConfig().ZeroHash[:],
+			GasLimit:        36_000_000,
+		},
+	})
+	blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+		Block: &ethpb.BeaconBlockGloas{
+			Slot:       1,
+			ParentRoot: params.BeaconConfig().ZeroHash[:],
+			Body:       &ethpb.BeaconBlockBodyGloas{SignedExecutionPayloadBid: bid},
+		},
+	})
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	roblock, err := blocks.NewROBlockWithRoot(signed, root)
+	require.NoError(t, err)
+
+	require.NoError(t, f.InsertChain(ctx, []*forkchoicetypes.BlockAndCheckpoints{{
+		Block:               roblock,
+		JustifiedCheckpoint: &ethpb.Checkpoint{},
+		FinalizedCheckpoint: &ethpb.Checkpoint{},
+		HasPayload:          true,
+	}}))
+
+	fn := f.store.fullNodeByRoot[root]
+	require.NotNil(t, fn)
+	assert.Equal(t, uint64(36_000_000), fn.gasLimit)
+
+	gl, err := f.GasLimit(root)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(36_000_000), gl)
 }
 
 func TestInsertPayload_WithoutEmptyNode_Errors(t *testing.T) {
@@ -412,9 +475,11 @@ func TestGloasHeadComputation(t *testing.T) {
 	slotB := slotA + 1
 	driftGenesisTime(f, slotB, 0)
 	require.NoError(t, f.NewSlot(ctx, slotB))
-	headRoot, err = f.Head(ctx)
+	headRoot, headHash, full, err := f.FullHead(ctx)
 	require.NoError(t, err)
 	require.Equal(t, rootA, headRoot)
+	require.Equal(t, blockHashA, headHash)
+	require.Equal(t, true, full)
 	fullA = s.choosePayloadContent(s.headNode)
 	require.NotNil(t, fullA)
 	require.Equal(t, true, fullA.full)
@@ -623,6 +688,93 @@ func TestGloasHeadComputation(t *testing.T) {
 	assert.Equal(t, uint64(78), emptyC.node.weight)
 
 	assert.Equal(t, uint64(78), emptyB.weight)
+}
+
+func TestGloasHeadComputation_FullPayloadWithPTCBeatsEmptyChildBoost(t *testing.T) {
+	f := setupGloas(t, 1, 1)
+	s := f.store
+	ctx := t.Context()
+	balances := make([]uint64, 64)
+	for i := range balances {
+		balances[i] = 10
+	}
+	f.justifiedBalances = balances
+	s.committeeWeight = uint64(len(balances)*10) / uint64(params.BeaconConfig().SlotsPerEpoch)
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	headRoot, err := f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, zeroHash, headRoot)
+
+	slotA := primitives.Slot(32)
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	driftGenesisTime(f, slotA, 0)
+	st, blk, err := prepareGloasForkchoiceState(ctx, slotA, rootA, zeroHash, blockHashA, zeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootA, headRoot)
+	emptyA := s.emptyNodeByRoot[rootA]
+	require.NotNil(t, emptyA)
+	assert.Equal(t, emptyA, s.choosePayloadContent(s.headNode))
+	assert.Equal(t, uint64(8), s.headNode.weight)
+	assert.Equal(t, uint64(0), emptyA.weight)
+
+	payloadDelay := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
+	driftGenesisTime(f, slotA, payloadDelay)
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	headRoot, headHash, full, err := f.FullHead(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootA, headRoot)
+	require.Equal(t, blockHashA, headHash)
+	require.Equal(t, true, full)
+	fullA := s.fullNodeByRoot[rootA]
+	require.NotNil(t, fullA)
+	assert.Equal(t, fullA, s.choosePayloadContent(s.headNode))
+	assert.Equal(t, uint64(8), s.headNode.weight)
+	assert.Equal(t, uint64(0), fullA.weight)
+
+	for i := range uint64(fieldparams.PTCSize) {
+		f.SetPTCVote(rootA, i, true, true)
+	}
+	headRoot, headHash, full, err = f.FullHead(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootA, headRoot)
+	require.Equal(t, blockHashA, headHash)
+	require.Equal(t, true, full)
+	assert.Equal(t, fullA, s.choosePayloadContent(s.headNode))
+
+	slotB := slotA + 1
+	driftGenesisTime(f, slotB, 0)
+	require.NoError(t, f.NewSlot(ctx, slotB))
+
+	rootB := indexToHash(2)
+	blockHashB := indexToHash(200)
+	nonMatchingHash := indexToHash(999)
+	st, blk, err = prepareGloasForkchoiceState(ctx, slotB, rootB, rootA, blockHashB, nonMatchingHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	headRoot, headHash, full, err = f.FullHead(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootA, headRoot)
+	require.Equal(t, blockHashA, headHash)
+	require.Equal(t, true, full)
+	assert.Equal(t, fullA, s.choosePayloadContent(s.headNode))
+
+	emptyB := s.emptyNodeByRoot[rootB]
+	require.NotNil(t, emptyB)
+	assert.Equal(t, emptyA, emptyB.node.parent)
+	assert.Equal(t, uint64(0), emptyA.weight)
+	assert.Equal(t, uint64(0), fullA.weight)
+	assert.Equal(t, uint64(8), emptyA.node.weight)
+	assert.Equal(t, uint64(8), emptyB.node.weight)
 }
 
 // TestGloasProposerBoostWithParentWeight is similar to TestGloasHeadComputation

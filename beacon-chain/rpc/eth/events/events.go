@@ -27,7 +27,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	engine "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -270,8 +269,12 @@ func (es *eventStreamer) recvEventLoop(ctx context.Context, cancel context.Cance
 		case event := <-eventsChan:
 			lr, err := s.lazyReaderForEvent(ctx, event, req)
 			if err != nil {
-				if !errors.Is(err, errNotRequested) {
-					log.WithField("event_type", fmt.Sprintf("%v", event.Data)).WithError(err).Error("StreamEvents API endpoint received an event it was unable to handle.")
+				// errNotRequested (client didn't subscribe to this topic) and
+				// errPayloadAttributeExpired (the proposal slot has already started, so builders
+				// can no longer use it) are both expected, benign skips rather than failures, so
+				// they should not be logged as errors.
+				if !errors.Is(err, errNotRequested) && !errors.Is(err, errPayloadAttributeExpired) {
+					log.WithField("event_type", fmt.Sprintf("%T", event.Data)).WithError(err).Error("StreamEvents API endpoint received an event it was unable to handle.")
 				}
 				continue
 			}
@@ -477,17 +480,17 @@ func topicForEvent(event *feed.Event) string {
 		return ProposerSlashingTopic
 	case *operation.BlockGossipReceivedData:
 		return BlockGossipTopic
-	case *ethpb.EventHead:
+	case *statefeed.HeadData:
 		return HeadTopic
 	case *statefeed.HeadV2Data:
 		return HeadV2Topic
-	case *ethpb.EventFinalizedCheckpoint:
+	case *statefeed.FinalizedCheckpointData:
 		return FinalizedCheckpointTopic
 	case interfaces.LightClientFinalityUpdate:
 		return LightClientFinalityUpdateTopic
 	case interfaces.LightClientOptimisticUpdate:
 		return LightClientOptimisticUpdateTopic
-	case *ethpb.EventChainReorg:
+	case *statefeed.ChainReorgData:
 		return ChainReorgTopic
 	case *statefeed.BlockProcessedData:
 		return BlockTopic
@@ -523,11 +526,11 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 	switch v := event.Data.(type) {
 	case payloadattribute.EventData:
 		return s.payloadAttributesReader(ctx, v)
-	case *ethpb.EventHead:
+	case *statefeed.HeadData:
 		// The head event is a special case because, if the client requested the payload attributes topic,
 		// we send two event messages in reaction; the head event and the payload attributes.
 		return func() io.Reader {
-			return jsonMarshalReader(eventName, structs.HeadEventFromV1(v))
+			return jsonMarshalReader(eventName, structs.HeadEventFromData(v))
 		}, nil
 	case *statefeed.HeadV2Data:
 		return func() io.Reader {
@@ -638,9 +641,9 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, structs.ProposerSlashingFromConsensus(v.ProposerSlashing))
 		}, nil
-	case *ethpb.EventFinalizedCheckpoint:
+	case *statefeed.FinalizedCheckpointData:
 		return func() io.Reader {
-			return jsonMarshalReader(eventName, structs.FinalizedCheckpointEventFromV1(v))
+			return jsonMarshalReader(eventName, structs.FinalizedCheckpointEventFromData(v))
 		}, nil
 	case interfaces.LightClientFinalityUpdate:
 		cv, err := structs.LightClientFinalityUpdateFromConsensus(v)
@@ -666,9 +669,9 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, ev)
 		}, nil
-	case *ethpb.EventChainReorg:
+	case *statefeed.ChainReorgData:
 		return func() io.Reader {
-			return jsonMarshalReader(eventName, structs.EventChainReorgFromV1(v))
+			return jsonMarshalReader(eventName, structs.ChainReorgEventFromData(v))
 		}, nil
 	case *statefeed.BlockProcessedData:
 		blockRoot, err := v.SignedBlock.Block().HashTreeRoot()
@@ -685,7 +688,11 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 		}, nil
 	case *operation.PayloadAttestationMessageReceivedData:
 		return func() io.Reader {
-			return jsonMarshalReader(eventName, structs.PayloadAttestationMessageFromConsensus(v.Message))
+			epoch := slots.ToEpoch(v.Message.Data.Slot)
+			return jsonMarshalReader(eventName, &structs.PayloadAttestationMessageEvent{
+				Version: version.String(params.GetNetworkScheduleEntry(epoch).VersionEnum),
+				Data:    structs.PayloadAttestationMessageFromConsensus(v.Message),
+			})
 		}, nil
 	case *operation.ProposerPreferencesReceivedData:
 		return func() io.Reader {
@@ -825,7 +832,8 @@ var zeroRoot [32]byte
 // needsFill allows tests to provide filled EventData values. An ordinary event data value fired by the blockchain package will have
 // all of the checked fields empty, so the logical short circuit should hit immediately.
 func needsFill(ev payloadattribute.EventData) bool {
-	return len(ev.ParentBlockHash) == 0 ||
+	return ev.ProposerIndex == 0 ||
+		len(ev.ParentBlockHash) == 0 ||
 		ev.Attributer == nil || ev.Attributer.IsEmpty()
 }
 
@@ -878,19 +886,23 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 
 	ev.ProposerIndex = proposerIndex
 
-	if ev.HeadBlock.Version() >= version.Gloas {
-		h, err := rost.LatestBlockHash()
-		if err != nil {
-			return ev, errors.Wrap(err, "could not get latest block hash from head state")
+	// Real fire sites carry the exact hash sent to the engine's forkchoiceUpdated; only
+	// compute it here as a fallback when it wasn't provided.
+	if len(ev.ParentBlockHash) == 0 {
+		if ev.HeadBlock.Version() >= version.Gloas {
+			h, err := rost.LatestBlockHash()
+			if err != nil {
+				return ev, errors.Wrap(err, "could not get latest block hash from head state")
+			}
+			ev.ParentBlockHash = h[:]
+		} else {
+			payload, err := ev.HeadBlock.Block().Body().Execution()
+			if err != nil {
+				return ev, errors.Wrap(err, "could not get execution payload for head block")
+			}
+			ev.ParentBlockHash = payload.BlockHash()
+			ev.ParentBlockNumber = payload.BlockNumber()
 		}
-		ev.ParentBlockHash = h[:]
-	} else {
-		payload, err := ev.HeadBlock.Block().Body().Execution()
-		if err != nil {
-			return ev, errors.Wrap(err, "could not get execution payload for head block")
-		}
-		ev.ParentBlockHash = payload.BlockHash()
-		ev.ParentBlockNumber = payload.BlockNumber()
 	}
 
 	if ev.Attributer != nil && !ev.Attributer.IsEmpty() {
@@ -933,20 +945,26 @@ func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribut
 			d.err = errors.Wrap(err, "Could not fill event data")
 			return
 		}
-		d.version = version.String(ev.HeadBlock.Version())
+		// The event is keyed to the proposal slot's fork, not the head block's version.
+		pv := params.GetNetworkScheduleEntry(slots.ToEpoch(ev.ProposalSlot)).VersionEnum
+		d.version = version.String(pv)
 		attributesBytes, err := marshalAttributes(ev.Attributer)
 		if err != nil {
 			d.err = errors.Wrap(err, "errors marshaling payload attributes to json")
 			return
 		}
-		d.data, d.err = json.Marshal(structs.PayloadAttributesEventData{
+		attrData := structs.PayloadAttributesEventData{
 			ProposerIndex:     strconv.FormatUint(uint64(ev.ProposerIndex), 10),
 			ProposalSlot:      strconv.FormatUint(uint64(ev.ProposalSlot), 10),
-			ParentBlockNumber: strconv.FormatUint(ev.ParentBlockNumber, 10),
 			ParentBlockRoot:   hexutil.Encode(ev.HeadRoot[:]),
 			ParentBlockHash:   hexutil.Encode(ev.ParentBlockHash),
 			PayloadAttributes: attributesBytes,
-		})
+		}
+		// parent_block_number was removed from the payload_attributes event from gloas onwards.
+		if pv < version.Gloas {
+			attrData.ParentBlockNumber = strconv.FormatUint(ev.ParentBlockNumber, 10)
+		}
+		d.data, d.err = json.Marshal(attrData)
 		if d.err != nil {
 			d.err = errors.Wrap(d.err, "errors marshaling payload attributes event data to json")
 		}

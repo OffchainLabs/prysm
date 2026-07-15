@@ -99,6 +99,7 @@ func (s *Service) endpoints(
 	endpoints = append(endpoints, s.prysmBeaconEndpoints(ch, stater, blocker, coreService)...)
 	endpoints = append(endpoints, s.prysmNodeEndpoints()...)
 	endpoints = append(endpoints, s.prysmValidatorEndpoints(stater, coreService)...)
+	endpoints = append(endpoints, s.removedEndpoints()...)
 
 	if features.Get().EnableLightClient {
 		endpoints = append(endpoints, s.lightClientEndpoints()...)
@@ -106,6 +107,7 @@ func (s *Service) endpoints(
 
 	if enableDebug {
 		endpoints = append(endpoints, s.debugEndpoints(stater, blocker)...)
+		endpoints = append(endpoints, s.removedDebugEndpoints()...)
 	}
 
 	return endpoints
@@ -119,6 +121,7 @@ func (s *Service) rewardsEndpoints(blocker lookup.Blocker, stater lookup.Stater,
 		TimeFetcher:           s.cfg.GenesisTimeFetcher,
 		Stater:                stater,
 		HeadFetcher:           s.cfg.HeadFetcher,
+		ForkchoiceFetcher:     s.cfg.ForkchoiceFetcher,
 		BlockRewardFetcher:    rewardFetcher,
 	}
 
@@ -437,7 +440,7 @@ func (s *Service) validatorEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
-			template: "/eth/v1/validator/payload_attestation_data/{slot}",
+			template: "/eth/v1/validator/payload_attestation_data",
 			name:     namespace + ".GetPayloadAttestationData",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
@@ -590,6 +593,7 @@ func (s *Service) beaconEndpoints(
 		ExecutionReconstructor:        s.cfg.ExecutionReconstructor,
 		BLSChangesPool:                s.cfg.BLSChangesPool,
 		PayloadAttestationPool:        s.cfg.PayloadAttestationPool,
+		PayloadAttestationReceiver:    s.cfg.PayloadAttestationReceiver,
 		FinalizationFetcher:           s.cfg.FinalizationFetcher,
 		ForkchoiceFetcher:             s.cfg.ForkchoiceFetcher,
 		CoreService:                   coreService,
@@ -894,7 +898,7 @@ func (s *Service) beaconEndpoints(
 			name:     namespace + ".GetValidatorBalances",
 			middleware: []middleware.Middleware{
 				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetValidatorBalances,
@@ -1305,6 +1309,7 @@ func (s *Service) prysmNodeEndpoints() []endpoint {
 		PeersFetcher:              s.cfg.PeersFetcher,
 		PeerManager:               s.cfg.PeerManager,
 		MetadataProvider:          s.cfg.MetadataProvider,
+		CustodyManager:            s.cfg.CustodyManager,
 		HeadFetcher:               s.cfg.HeadFetcher,
 		ExecutionChainInfoFetcher: s.cfg.ExecutionChainInfoFetcher,
 	}
@@ -1372,6 +1377,16 @@ func (s *Service) prysmNodeEndpoints() []endpoint {
 			},
 			handler: server.RemoveTrustedPeer,
 			methods: []string{http.MethodDelete},
+		},
+		{
+			template: "/prysm/v1/node/custody",
+			name:     namespace + ".GetCustody",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetCustody,
+			methods: []string{http.MethodGet},
 		},
 	}
 }

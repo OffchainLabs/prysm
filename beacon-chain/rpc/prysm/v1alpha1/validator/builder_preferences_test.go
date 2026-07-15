@@ -34,8 +34,17 @@ func TestServer_SubmitBuilderPreferences(t *testing.T) {
 		require.ErrorContains(t, "request is empty", err)
 	})
 
-	t.Run("builder not configured errors", func(t *testing.T) {
+	t.Run("succeeds without the builder endpoint flag", func(t *testing.T) {
 		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: false}}
+		_, err := vs.SubmitBuilderPreferences(t.Context(), req)
+		require.NoError(t, err)
+		v, ok := vs.maxExecutionPayments.Load(pubkey)
+		require.Equal(t, true, ok)
+		require.Equal(t, uint64(1000), v.(uint64))
+	})
+
+	t.Run("nil block builder errors", func(t *testing.T) {
+		vs := &Server{}
 		_, err := vs.SubmitBuilderPreferences(t.Context(), req)
 		require.ErrorContains(t, "builder is not configured", err)
 	})

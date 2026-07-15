@@ -618,7 +618,9 @@ func TestService_BatchRootRequest(t *testing.T) {
 	p1.Connect(p2)
 	assert.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
 
+	st, keys := util.DeterministicGenesisState(t, 64)
 	chain := &mock.ChainService{
+		State: st,
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: 1,
 			Root:  make([]byte, 32),
@@ -673,6 +675,11 @@ func TestService_BatchRootRequest(t *testing.T) {
 	b4.Block.ParentRoot = b3Root[:]
 	b4Root, err := b4.Block.HashTreeRoot()
 	require.NoError(t, err)
+
+	for _, blk := range []*ethpb.SignedBeaconBlock{b2, b3, b4, b5} {
+		blk.Signature, err = signing.ComputeDomainAndSign(st, 0, blk.Block, params.BeaconConfig().DomainBeaconProposer, keys[0])
+		require.NoError(t, err)
+	}
 
 	// Send in duplicated roots to also test deduplication.
 	sentRoots := p2ptypes.BeaconBlockByRootsReq{b2Root, b2Root, b3Root, b3Root, b4Root, b5Root}

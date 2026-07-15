@@ -187,7 +187,7 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		"blockRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(root[:])),
 		"blockHash":  fmt.Sprintf("%#x", bytesutil.Trunc(execution.BlockHash())),
 		"parentHash": fmt.Sprintf("%#x", bytesutil.Trunc(execution.ParentHash())),
-	}).Info("Processed execution payload envelope")
+	}).Info("Synced execution payload envelope")
 	return nil
 }
 
@@ -250,7 +250,7 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 			var pId [8]byte
 			copy(pId[:], pid[:])
 			s.cfg.PayloadIDCache.Set(proposingSlot, root, true, pId)
-			s.firePayloadAttributesEventForHead(root, proposingSlot, attr)
+			s.firePayloadAttributesEventForHead(root, proposingSlot, attr, blockHash[:])
 		}
 	}()
 	return nil
@@ -430,7 +430,6 @@ func (s *Service) notifyForkchoiceUpdateGloas(ctx context.Context, blockHash [32
 			lastValidHash: bytesutil.ToBytes32(lastValidHash),
 		}
 	default:
-		log.WithError(err).Error(ErrUndefinedExecutionEngineError)
-		return nil, nil
+		return nil, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
 	}
 }

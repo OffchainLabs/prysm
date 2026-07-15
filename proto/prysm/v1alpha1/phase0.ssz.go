@@ -4130,3 +4130,63 @@ func (v *ValidatorIdentity) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.Merkleize(indx)
 	return
 }
+
+// MarshalSSZ ssz marshals the ValidatorBalance object
+func (v *ValidatorBalance) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(v)
+}
+
+// MarshalSSZTo ssz marshals the ValidatorBalance object to a target array
+func (v *ValidatorBalance) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'Index'
+	dst = ssz.MarshalUint(dst, v.Index)
+
+	// Field (1) 'Balance'
+	dst = ssz.MarshalUint(dst, v.Balance)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the ValidatorBalance object
+func (v *ValidatorBalance) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 16 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'Index'
+	v.Index = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[0:8])
+
+	// Field (1) 'Balance'
+	v.Balance = ssz.UnmarshallUint[uint64](buf[8:16])
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ValidatorBalance object
+func (v *ValidatorBalance) SizeSSZ() (size int) {
+	size = 16
+	return
+}
+
+// HashTreeRoot ssz hashes the ValidatorBalance object
+func (v *ValidatorBalance) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(v)
+}
+
+// HashTreeRootWith ssz hashes the ValidatorBalance object with a hasher
+func (v *ValidatorBalance) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Index'
+	ssz.PutUint(hh, v.Index)
+
+	// Field (1) 'Balance'
+	ssz.PutUint(hh, v.Balance)
+
+	hh.Merkleize(indx)
+	return
+}

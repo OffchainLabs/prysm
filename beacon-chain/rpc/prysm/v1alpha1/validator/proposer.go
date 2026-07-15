@@ -62,7 +62,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	}
 
 	log := log.WithField("slot", req.Slot)
-	log.WithField("sinceSlotStartTime", time.Since(t)).Info("Begin building block")
+	log.WithField("sinceSlotStartTime", time.Since(t)).Info("Building block")
 
 	// A syncing validator should not produce a block.
 	if vs.SyncChecker.Syncing() {
@@ -111,14 +111,14 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 		builderBoostFactor = primitives.Gwei(req.BuilderBoostFactor.Value)
 	}
 
-	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor, full, req.EagerPayloadStateRoot)
+	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor, full, req.EagerPayloadStateRoot, req.BuilderRequestAuths)
 	l := log.WithFields(logrus.Fields{
 		"sinceSlotStartTime": time.Since(t),
 		"validator":          sBlk.Block().ProposerIndex(),
 	})
 
 	if err != nil {
-		l.WithError(err).Error("Finished building block")
+		l.WithError(err).Error("Could not build block")
 		return nil, errors.Wrap(err, "could not build block in parallel")
 	}
 
@@ -191,9 +191,9 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 	return head, parentRoot, vs.ForkchoiceFetcher.FullBeatsEmpty(parentRoot), err
 }
 
-func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull, eagerPayloadStateRoot bool) (*ethpb.GenericBeaconBlock, error) {
+func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull, eagerPayloadStateRoot bool, builderRequestAuths []*ethpb.SignedRequestAuthV1) (*ethpb.GenericBeaconBlock, error) {
 	if sBlk.Version() >= version.Gloas {
-		return vs.buildBlockGloas(ctx, sBlk, head, skipMevBoost, parentFull, eagerPayloadStateRoot)
+		return vs.buildBlockGloas(ctx, sBlk, head, skipMevBoost, parentFull, eagerPayloadStateRoot, builderRequestAuths)
 	}
 	return vs.buildBlockFulu(ctx, sBlk, head, skipMevBoost, builderBoostFactor, parentFull)
 }
@@ -346,6 +346,13 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 			return nil, status.Errorf(codes.Internal, "Could not broadcast/receive sidecars: %v", err)
 		}
 	}
+
+	if block.Version() >= version.Gloas {
+		if src, builderURL := vs.bidSourceForSlot(block.Block().Slot()); src == bidSourceBuilderAPI {
+			go vs.submitBlockToBuilder(block, builderURL)
+		}
+	}
+
 	if err := <-errChan; err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive block: %v", err)
 	}
