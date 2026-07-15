@@ -131,6 +131,7 @@ ssz_proto_files(
 go_test(
     name = "go_default_test",
     srcs = [
+        "electra_test.go",
         "execution_engine_fuzz_test.go",
         "export_test.go",
         "json_marshal_unmarshal_test.go",
