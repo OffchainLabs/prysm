@@ -196,11 +196,26 @@ func (s *Service) setHeadFull(root [32]byte) interfaces.ReadOnlySignedBeaconBloc
 }
 
 func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope, st state.BeaconState) error {
-	if !s.inRegularSync() {
-		return nil
-	}
 	root := envelope.BeaconBlockRoot()
 	if headRoot, _ := s.HeadRootAndFull(); headRoot != root {
+		return nil
+	}
+	if !s.inRegularSync() {
+		// The envelope belongs to the current head block and was inserted
+		// into forkchoice before this call: notify the engine of the new
+		// head payload so the execution client can follow the chain while
+		// the beacon node is itself still syncing. Payload attributes are
+		// only computed in regular sync.
+		payload, err := envelope.Execution()
+		if err != nil {
+			return errors.Wrap(err, "could not get execution payload from envelope")
+		}
+		blockHash := bytesutil.ToBytes32(payload.BlockHash())
+		go func() {
+			if _, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, nil); err != nil {
+				log.WithError(err).Debug("Could not notify forkchoice update while syncing")
+			}
+		}()
 		return nil
 	}
 	proposingSlot := s.CurrentSlot() + 1

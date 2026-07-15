@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/async/event"
@@ -69,6 +70,7 @@ type Service struct {
 	syncCommitteeHeadState         *cache.SyncCommitteeHeadStateCache
 	payloadArrivals                *payloadArrivals
 	goroutineCounter               *goroutineCounter
+	lastBatchFailureFCUSlot        atomic.Uint64
 }
 
 // config options for the service.

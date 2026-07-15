@@ -182,9 +182,50 @@ type versionAndHeader struct {
 	header  interfaces.ExecutionData
 }
 
-func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlock, envelopes []interfaces.ROSignedExecutionPayloadEnvelope, avs das.AvailabilityChecker) error {
+// fcuHeadOnBatchFailure sends a plain forkchoice update for the current head
+// payload, using the same head derivation as the batch-end update in
+// saveHeadNoDB. It runs after a failed batch import so a syncing node keeps
+// supplying its execution client with a head target, and is limited to once
+// per slot.
+func (s *Service) fcuHeadOnBatchFailure(ctx context.Context) {
+	currentSlot := uint64(s.CurrentSlot())
+	last := s.lastBatchFailureFCUSlot.Load()
+	if currentSlot <= last || !s.lastBatchFailureFCUSlot.CompareAndSwap(last, currentSlot) {
+		return
+	}
+	headBlock, err := s.HeadBlock(ctx)
+	if err != nil || consensusblocks.BeaconBlockIsNil(headBlock) != nil || headBlock.Version() < version.Gloas {
+		return
+	}
+	sbid, err := headBlock.Block().Body().SignedExecutionPayloadBid()
+	if err != nil || sbid == nil || sbid.Message == nil || len(sbid.Message.ParentBlockHash) != 32 {
+		return
+	}
+	parentHash := bytesutil.ToBytes32(sbid.Message.ParentBlockHash)
+	go func() {
+		if _, err := s.notifyForkchoiceUpdateGloas(s.ctx, parentHash, nil); err != nil {
+			log.WithError(err).Debug("Could not notify forkchoice update after failed batch import")
+		}
+	}()
+}
+
+func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlock, envelopes []interfaces.ROSignedExecutionPayloadEnvelope, avs das.AvailabilityChecker) (err error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.onBlockBatch")
 	defer span.End()
+
+	// A failed batch sends no forkchoice update at all: the batch-end update
+	// in saveHeadNoDB only runs when the whole batch imports. When batches
+	// keep failing (e.g. unavailable sidecars during non-finality) the
+	// execution client hears nothing for as long as the failures last, and a
+	// lagging execution client never receives a sync target. Re-advertise the
+	// current head payload in that case. The head is already in forkchoice,
+	// so the engine is never told about anything the beacon node does not
+	// stand behind.
+	defer func() {
+		if err != nil {
+			s.fcuHeadOnBatchFailure(ctx)
+		}
+	}()
 
 	if len(blks) == 0 {
 		return errors.New("no blocks provided")
