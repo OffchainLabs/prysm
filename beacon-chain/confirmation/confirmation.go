@@ -29,10 +29,8 @@ type FastConfirmationRule struct {
 	prevSupportBuf *SupportMap
 	votesBuf       []forkchoicetypes.VoteData
 
-	// Assignment tables for epochs [current-2, current].
-	// Rebuilt at epoch boundaries.
-	tables      []*epochSlotTable
-	tablesEpoch primitives.Epoch
+	// Assignment tables for epochs [current-2, current], keyed by shuffling seed.
+	tables []*epochSlotTable
 
 	fc         ForkchoiceReader
 	committees CommitteeAccessor
@@ -175,13 +173,10 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 	))
 }
 
-// rebuildTables rebuilds the per-epoch assignment tables when the epoch changes.
+// rebuildTables refreshes the per-epoch assignment tables. The tables
+// are cached by shuffling seed.
 func (f *FastConfirmationRule) rebuildTables(ctx context.Context, currentSlot primitives.Slot, sizeHint int) error {
 	epoch := slots.ToEpoch(currentSlot)
-	// Current tables are built for the current epoch, no rebuild needed.
-	if f.tables != nil && f.tablesEpoch == epoch {
-		return nil
-	}
 
 	// Bound the start epoch to zero.
 	startEpoch := primitives.Epoch(0)
@@ -192,17 +187,36 @@ func (f *FastConfirmationRule) rebuildTables(ctx context.Context, currentSlot pr
 	// Build tables for epochs [current-2, current].
 	tables := make([]*epochSlotTable, 0, 3)
 	for e := startEpoch; e <= epoch; e++ {
-		t, err := newEpochSlotTable(ctx, f.committees, e, sizeHint)
+		// Compute seed, and check whether the table for this epoch is already cached.
+		seed, err := f.committees.Seed(ctx, e)
+		if err != nil {
+			return fmt.Errorf("failed to get shuffling seed for epoch %d: %w", e, err)
+		}
+		if existing := f.tableForSeed(seed); existing != nil {
+			tables = append(tables, existing)
+			continue
+		}
+
+		// Build a new table for this epoch.
+		t, err := newEpochSlotTable(ctx, f.committees, e, seed, sizeHint)
 		if err != nil {
 			return fmt.Errorf("failed to create epoch slot table: %w", err)
 		}
 		tables = append(tables, t)
 	}
 
-	// Update the tables and epoch after successful rebuild.
+	// Update the tables after successful rebuild.
 	f.tables = tables
-	f.tablesEpoch = epoch
+	return nil
+}
 
+// tableForSeed returns the cached table built from the given shuffling seed.
+func (f *FastConfirmationRule) tableForSeed(seed [32]byte) *epochSlotTable {
+	for _, t := range f.tables {
+		if t.seed == seed {
+			return t
+		}
+	}
 	return nil
 }
 

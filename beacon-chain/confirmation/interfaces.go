@@ -29,6 +29,7 @@ type ForkchoiceReader interface {
 // CommitteeAccessor implements the spec's get_slot_committee, it must support slots from current_epoch - 2 onward.
 type CommitteeAccessor interface {
 	Committee(ctx context.Context, slot primitives.Slot) ([]primitives.ValidatorIndex, error)
+	Seed(ctx context.Context, epoch primitives.Epoch) ([32]byte, error)
 }
 
 // BalanceAccessor maps to the spec's balance_source and get_pulled_up_head_state state reads.

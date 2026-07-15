@@ -79,6 +79,11 @@ func (m *mockCommitteeAccessor) Committee(_ context.Context, _ primitives.Slot) 
 	return nil, nil
 }
 
+func (m *mockCommitteeAccessor) Seed(_ context.Context, epoch primitives.Epoch) ([32]byte, error) {
+	// Derive different value per epoch.
+	return [32]byte{0x5E, byte(epoch), byte(epoch >> 8)}, nil
+}
+
 // mockBalanceAccessor is a minimal mock of BalanceAccessor.
 type mockBalanceAccessor struct{}
 

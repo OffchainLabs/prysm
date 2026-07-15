@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -81,17 +82,28 @@ func rebuildTotalSupportFromSlotRoot(sm *SupportMap, fc ForkchoiceReader) {
 // testCommitteeAccessor returns fixed committee assignments.
 type testCommitteeAccessor struct {
 	committees map[primitives.Slot][]primitives.ValidatorIndex
+	seeds      map[primitives.Epoch][32]byte
 }
 
 func (m *testCommitteeAccessor) Committee(_ context.Context, slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
 	return m.committees[slot], nil
 }
 
+func (m *testCommitteeAccessor) Seed(_ context.Context, epoch primitives.Epoch) ([32]byte, error) {
+	if s, ok := m.seeds[epoch]; ok {
+		return s, nil
+	}
+	// Derive a distinct default per epoch.
+	return [32]byte{0x5E, byte(epoch), byte(epoch >> 8)}, nil
+}
+
 // buildTestTables builds assignment tables for the given epochs from the accessor.
 func buildTestTables(t testing.TB, ca CommitteeAccessor, epochs []primitives.Epoch, sizeHint int) []*epochSlotTable {
 	tables := make([]*epochSlotTable, 0, len(epochs))
 	for _, e := range epochs {
-		table, err := newEpochSlotTable(context.Background(), ca, e, sizeHint)
+		seed, err := ca.Seed(context.Background(), e)
+		require.NoError(t, err)
+		table, err := newEpochSlotTable(context.Background(), ca, e, seed, sizeHint)
 		require.NoError(t, err)
 		tables = append(tables, table)
 	}
@@ -234,4 +246,45 @@ func TestSupportMap_EmptySlots(t *testing.T) {
 	require.Equal(t, uint64(0), sm.BlockSupportBetweenSlots([32]byte{1}, 5, 10))
 	require.Equal(t, uint64(0), sm.AttestationScore([32]byte{1}))
 	require.Equal(t, uint64(0), sm.EquivocationScore(5, 10))
+}
+
+func TestRebuildTables_SeedKeyed(t *testing.T) {
+	ctx := context.Background()
+	ca := &testCommitteeAccessor{
+		committees: map[primitives.Slot][]primitives.ValidatorIndex{},
+		seeds: map[primitives.Epoch][32]byte{
+			0: {1}, 1: {2}, 2: {3}, 3: {4},
+		},
+	}
+	fcr := New(&mockForkchoiceReader{}, ca, &mockBalanceAccessor{}, forkchoicetypes.Checkpoint{})
+	spe := primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
+
+	// Epoch 2: builds tables for epochs 0..2.
+	require.NoError(t, fcr.rebuildTables(ctx, 2*spe, 0))
+	require.Equal(t, 3, len(fcr.tables))
+	e1, e2 := fcr.tables[1], fcr.tables[2]
+
+	// Next slot, same seeds: every table is reused.
+	prev := fcr.tables
+	require.NoError(t, fcr.rebuildTables(ctx, 2*spe+1, 0))
+	require.Equal(t, 3, len(fcr.tables))
+	for i := range prev {
+		require.Equal(t, true, prev[i] == fcr.tables[i])
+	}
+
+	// Epoch rotation to epochs 1..3: 1 and 2 reused, 3 freshly built.
+	require.NoError(t, fcr.rebuildTables(ctx, 3*spe, 0))
+	require.Equal(t, 3, len(fcr.tables))
+	require.Equal(t, true, e1 == fcr.tables[0])
+	require.Equal(t, true, e2 == fcr.tables[1])
+	require.Equal(t, 3*spe, fcr.tables[2].start)
+
+	// A deep reorg changes epoch 2's shuffling: only that table is rebuilt.
+	e3 := fcr.tables[2]
+	ca.seeds[2] = [32]byte{9}
+	require.NoError(t, fcr.rebuildTables(ctx, 3*spe+1, 0))
+	require.Equal(t, true, e1 == fcr.tables[0])
+	require.Equal(t, true, e2 != fcr.tables[1])
+	require.Equal(t, 2*spe, fcr.tables[1].start)
+	require.Equal(t, true, e3 == fcr.tables[2])
 }

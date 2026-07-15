@@ -8,6 +8,7 @@ import (
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
@@ -41,6 +42,16 @@ func (a *fcrCommitteeAccessor) Committee(ctx context.Context, slot primitives.Sl
 		result = append(result, committee...)
 	}
 	return result, nil
+}
+
+func (a *fcrCommitteeAccessor) Seed(_ context.Context, epoch primitives.Epoch) ([32]byte, error) {
+	a.s.headLock.RLock()
+	headState := a.s.head.state
+	a.s.headLock.RUnlock()
+	if headState == nil || headState.IsNil() {
+		return [32]byte{}, errors.New("head state not available")
+	}
+	return helpers.Seed(headState, epoch, params.BeaconConfig().DomainBeaconAttester)
 }
 
 type fcrBalanceAccessor struct {

@@ -17,11 +17,12 @@ const noAssignment = uint8(0xFF)
 // epoch. This makes membership queries O(1).
 type epochSlotTable struct {
 	start      primitives.Slot
-	slotOffset []uint8 // val index -> slot offset
+	seed       [32]byte // attester shuffling seed
+	slotOffset []uint8  // val index -> slot offset
 }
 
-// newEpochSlotTable builds the table for one epoch.
-func newEpochSlotTable(ctx context.Context, committees CommitteeAccessor, epoch primitives.Epoch, sizeHint int) (*epochSlotTable, error) {
+// newEpochSlotTable builds the table for one epoch
+func newEpochSlotTable(ctx context.Context, committees CommitteeAccessor, epoch primitives.Epoch, seed [32]byte, sizeHint int) (*epochSlotTable, error) {
 	start, err := slots.EpochStart(epoch)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get epoch start: %w", err)
@@ -57,7 +58,7 @@ func newEpochSlotTable(ctx context.Context, committees CommitteeAccessor, epoch 
 			offs[v] = uint8(slot - start)
 		}
 	}
-	return &epochSlotTable{start: start, slotOffset: offs}, nil
+	return &epochSlotTable{start: start, seed: seed, slotOffset: offs}, nil
 }
 
 // assignedSlot computes the attestation slot assigned to a validator in this epoch, if any.
