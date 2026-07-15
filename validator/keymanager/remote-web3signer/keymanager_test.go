@@ -283,8 +283,7 @@ func TestNewKeyManager_FileAndFlagsWithDifferentKeys(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	// test fall back by clearing file
 	go func() {
-		err = file.WriteFile(keyFilePath, []byte(" "))
-		require.NoError(t, err)
+		require.NoError(t, file.WriteFile(keyFilePath, []byte(" ")))
 	}()
 	// waiting for writing to be done
 	time.Sleep(2 * time.Second)
@@ -319,10 +318,9 @@ func TestRefreshRemoteKeysFromFileChangesWithRetry(t *testing.T) {
 	require.LogsContain(t, logHook, "Could not refresh keys")
 	go func() {
 		bytesBuf := new(bytes.Buffer)
-		_, err = bytesBuf.WriteString("8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055") // test without 0x
-		require.NoError(t, err)
-		err = file.WriteFile(keyFilePath, bytesBuf.Bytes())
-		require.NoError(t, err)
+		_, wErr := bytesBuf.WriteString("8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055") // test without 0x
+		require.NoError(t, wErr)
+		require.NoError(t, file.WriteFile(keyFilePath, bytesBuf.Bytes()))
 	}()
 	// wait for file write to reinitialize
 	time.Sleep(2 * time.Second)
@@ -363,6 +361,25 @@ func TestRefreshRemoteKeysFromFileChangesWithRetry_maxRetryReached(t *testing.T)
 	km.retriesRemaining = 1
 	err = km.refreshRemoteKeysFromFileChangesWithRetry(ctx, time.Millisecond, func(error) {})
 	require.ErrorContains(t, "file check retries remaining exceeded", err)
+}
+
+func TestRefreshRemoteKeysFromFileChangesWithRetry_ctxCancelDuringRetryWait(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
+	require.NoError(t, err)
+	km, err := NewKeymanager(ctx, &SetupConfig{
+		BaseEndpoint:          "http://example.com",
+		GenesisValidatorsRoot: root,
+	})
+	require.NoError(t, err)
+	km.keyFilePath = filepath.Join(t.TempDir(), "missing.txt")
+
+	timer := time.AfterFunc(100*time.Millisecond, cancel)
+	defer timer.Stop()
+	// The hour-long retry delay would hang the test if cancellation did not interrupt the wait.
+	err = km.refreshRemoteKeysFromFileChangesWithRetry(ctx, time.Hour, func(error) {})
+	require.ErrorContains(t, context.Canceled.Error(), err)
 }
 
 func TestKeymanager_Sign(t *testing.T) {
