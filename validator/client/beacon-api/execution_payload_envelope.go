@@ -21,9 +21,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-// getExecutionPayloadEnvelope returns the envelope to sign for self-build. Stateless mode has the
-// full envelope cached locally (from the v4 block fetch); otherwise it is fetched from the BN,
-// which keeps the blobs and KZG proofs for the stateful publish.
+// getExecutionPayloadEnvelope returns the envelope to sign for self-build: the locally cached one
+// from the v4 block fetch (stateless) if present, otherwise fetched from the BN (stateful).
 func (c *beaconApiValidatorClient) getExecutionPayloadEnvelope(
 	ctx context.Context,
 	slot primitives.Slot,
@@ -62,10 +61,8 @@ func (c *beaconApiValidatorClient) getExecutionPayloadEnvelope(
 	return envelope, nil
 }
 
-// publishExecutionPayloadEnvelope publishes the signed envelope. With locally cached blobs/proofs
-// it posts SignedExecutionPayloadEnvelopeContents (stateless, Eth-Blob-Data-Included: true);
-// otherwise it posts the bare signed envelope and the BN attaches its cached blobs and KZG proofs
-// (stateful, Eth-Blob-Data-Included: false).
+// publishExecutionPayloadEnvelope posts contents (stateless) when blobs/proofs are cached locally,
+// otherwise the bare signed envelope (stateful; the BN attaches its cached blobs and proofs).
 func (c *beaconApiValidatorClient) publishExecutionPayloadEnvelope(
 	ctx context.Context,
 	envelope *ethpb.SignedExecutionPayloadEnvelope,

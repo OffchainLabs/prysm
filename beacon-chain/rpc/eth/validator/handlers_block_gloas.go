@@ -102,7 +102,7 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// A self-built block carries its payload inline as GloasContents. An external builder bid (or
-	// include_payload=false) yields the block alone; its payload is revealed separately (beacon-APIs #580).
+	// include_payload=false) yields the block alone; its payload is revealed separately.
 	var block *eth.BeaconBlockGloas
 	var contents *eth.BeaconBlockContentsGloas
 	switch b := v1alpha1resp.Block.(type) {
@@ -188,9 +188,8 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ExecutionPayloadEnvelope returns the cached execution payload envelope for the VC to sign
-// and publish via publishExecutionPayloadEnvelope.
-// Endpoint: GET /eth/v1/validator/execution_payload_envelopes/{slot}/{beacon_block_root}
+// ExecutionPayloadEnvelope returns the cached execution payload envelope for the VC to sign and
+// publish. Endpoint: GET /eth/v1/validator/execution_payload_envelopes/{slot}/{beacon_block_root}
 func (s *Server) ExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.ExecutionPayloadEnvelope")
 	defer span.End()

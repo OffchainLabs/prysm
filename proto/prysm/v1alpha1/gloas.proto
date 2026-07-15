@@ -560,9 +560,8 @@ message SignedBlindedExecutionPayloadEnvelope {
   bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 
-// GenericSignedExecutionPayloadEnvelope carries one of the two publish forms: the stateless
-// contents (full envelope + blobs + proofs) or the stateful bare envelope (the BN attaches its
-// cached blobs and KZG proofs). One publish RPC accepts both, mirroring GenericSignedBeaconBlock.
+// GenericSignedExecutionPayloadEnvelope carries either publish form: stateless contents (envelope
+// + blobs + proofs) or the stateful bare envelope (BN attaches cached blob data).
 message GenericSignedExecutionPayloadEnvelope {
   oneof envelope {
     SignedExecutionPayloadEnvelopeContents contents = 1;

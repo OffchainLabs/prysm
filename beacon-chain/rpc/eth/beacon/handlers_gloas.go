@@ -92,8 +92,7 @@ func (s *Server) GetExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Requ
 }
 
 // PublishExecutionPayloadEnvelope broadcasts a signed envelope. Eth-Blob-Data-Included selects the
-// body: true=contents (stateless, blobs+proofs included), false=bare signed envelope (stateful, BN
-// attaches cached blobs and KZG proofs). Endpoint: POST /eth/v1/beacon/execution_payload_envelopes
+// body: true=contents with blobs+proofs, false=bare signed envelope (BN attaches cached blob data).
 func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.PublishExecutionPayloadEnvelope")
 	defer span.End()

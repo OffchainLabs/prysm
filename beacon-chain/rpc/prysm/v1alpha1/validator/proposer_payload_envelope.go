@@ -80,10 +80,8 @@ func extractExecutionPayloadGloas(local *consensusblocks.GetPayloadResponse) *en
 	return nil
 }
 
-// GetExecutionPayloadEnvelope implements the gRPC endpoint:
-// /eth/v1alpha1/validator/execution_payload_envelope/{slot}/{builder_index}
-// It returns the stored execution payload envelope for a slot/builder and, for
-// self-build envelopes, computes the post-payload state root on demand.
+// GetExecutionPayloadEnvelope returns the cached execution payload envelope for the requested
+// slot so the proposer can sign and publish it.
 func (vs *Server) GetExecutionPayloadEnvelope(
 	ctx context.Context,
 	req *ethpb.ExecutionPayloadEnvelopeRequest,
@@ -112,10 +110,8 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 	}, nil
 }
 
-// PublishExecutionPayloadEnvelope validates and broadcasts a signed execution payload envelope.
-// This is called by validators after signing the envelope retrieved from GetExecutionPayloadEnvelope.
-//
-// gRPC endpoint: POST /eth/v1alpha1/validator/execution_payload_envelope
+// PublishExecutionPayloadEnvelope validates and broadcasts a signed execution payload envelope,
+// called by validators after signing the envelope from GetExecutionPayloadEnvelope.
 func (vs *Server) PublishExecutionPayloadEnvelope(
 	ctx context.Context,
 	req *ethpb.GenericSignedExecutionPayloadEnvelope,
@@ -175,7 +171,7 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 		return nil, status.Errorf(codes.Internal, "could not wrap signed envelope: %v", err)
 	}
 	if err := vs.ExecutionPayloadEnvelopeReceiver.ReceiveExecutionPayloadEnvelope(ctx, roSigned); err != nil {
-		// Broadcast already succeeded; import failed. REST maps Aborted -> 202 (beacon-APIs #580).
+		// Broadcast already succeeded; import failed. REST maps Aborted -> 202.
 		return nil, status.Errorf(codes.Aborted, "failed to receive execution payload envelope: %v", err)
 	}
 
@@ -184,9 +180,8 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	return &emptypb.Empty{}, nil
 }
 
-// resolveEnvelopeToPublish turns the generic publish request into the full signed envelope plus any
-// caller-supplied blobs. The bare signed_envelope (stateful) arm must match the cached envelope so
-// its precomputed data columns apply; the contents (stateless) arm carries everything in the request.
+// resolveEnvelopeToPublish extracts the signed envelope plus any caller-supplied blobs. The stateful
+// signed_envelope arm must match the cached envelope so its precomputed data columns apply.
 func (vs *Server) resolveEnvelopeToPublish(req *ethpb.GenericSignedExecutionPayloadEnvelope) (*ethpb.SignedExecutionPayloadEnvelope, [][]byte, [][]byte, error) {
 	switch {
 	case req.GetContents() != nil:
