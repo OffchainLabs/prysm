@@ -110,7 +110,7 @@ func GetGeneralizedIndexFromPath(info *SszInfo, path Path) (uint64, error) {
 // Used for computing relative gindex for proof collection.
 func ComputeRelativeGindex(parent, child uint64) (uint64, error) {
 	if parent == 0 || child == 0 {
-		return 0, fmt.Errorf("parent and child must be non-zero")
+		return 0, errors.New("parent and child must be non-zero")
 	}
 
 	pLen := bits.Len64(parent)

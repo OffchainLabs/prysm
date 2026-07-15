@@ -1,7 +1,7 @@
 package query
 
 import (
-	"fmt"
+	"errors"
 	"reflect"
 
 	fastssz "github.com/prysmaticlabs/fastssz"
@@ -15,15 +15,15 @@ import (
 // - error: any error encountered during proof generation.
 func (info *SszInfo) Prove(gindex uint64) (*fastssz.Proof, error) {
 	if info == nil {
-		return nil, fmt.Errorf("nil SszInfo")
+		return nil, errors.New("nil SszInfo")
 	}
 	if info.source == nil {
-		return nil, fmt.Errorf("SszInfo.source is nil")
+		return nil, errors.New("SszInfo.source is nil")
 	}
 
 	v := reflect.ValueOf(info.source)
 	if !v.IsValid() {
-		return nil, fmt.Errorf("proof value is invalid")
+		return nil, errors.New("proof value is invalid")
 	}
 
 	v = dereferencePointer(v)
