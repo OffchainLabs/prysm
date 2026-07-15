@@ -136,6 +136,7 @@ func Test_endpoints(t *testing.T) {
 		"/prysm/v1/node/trusted_peers":           {http.MethodGet, http.MethodPost},
 		"/prysm/node/trusted_peers/{peer_id}":    {http.MethodDelete},
 		"/prysm/v1/node/trusted_peers/{peer_id}": {http.MethodDelete},
+		"/prysm/v1/node/custody":                 {http.MethodGet},
 	}
 
 	prysmValidatorRoutes := map[string][]string{
