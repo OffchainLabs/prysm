@@ -279,14 +279,19 @@ func (s *Service) saveHeadIfNeeded(ctx context.Context, cfg *postBlockProcessCon
 
 // buildOnFull decides between keeping root's imported payload as head content or reorging it out, the caller must hold a forkchoice lock.
 func (s *Service) buildOnFull(root [32]byte, proposingSlot primitives.Slot, proposing bool) bool {
+	early, known := s.PayloadEarly(root)
+	if !known {
+		return false
+	}
+
 	hs, err := s.cfg.ForkChoiceStore.Slot(root)
 	if err != nil {
 		log.WithError(err).Error("Could not get slot for head root")
 		return true
 	}
-	// only the previous slot's payload is subject to timeliness reorgs, older content is settled by attestations
+
 	if hs+1 != proposingSlot {
-		return true // Full beats empty
+		return s.cfg.ForkChoiceStore.FullBeatsEmpty(root)
 	}
 	if s.cfg.ForkChoiceStore.PTCVotedLate(root) {
 		return false
@@ -297,9 +302,7 @@ func (s *Service) buildOnFull(root [32]byte, proposingSlot primitives.Slot, prop
 	if !proposing || !features.Get().ReorgLatePayloads {
 		return true
 	}
-	// no PTC verdict, the proposer bets against a payload it saw arrive late
-	early, known := s.PayloadEarly(root)
-	return !known || early
+	return early
 }
 
 func (s *Service) proposingAt(st state.ReadOnlyBeaconState, slot primitives.Slot) bool {

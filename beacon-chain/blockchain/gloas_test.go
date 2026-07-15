@@ -580,6 +580,14 @@ func TestBuildOnFull(t *testing.T) {
 
 	t.Run("only the previous slot is reorgable", func(t *testing.T) {
 		service, root, blockSlot := setup(t, "wrong-slot")
+		env := &ethpb.ExecutionPayloadEnvelope{
+			BeaconBlockRoot:       root[:],
+			ParentBeaconBlockRoot: make([]byte, 32),
+			Payload:               &enginev1.ExecutionPayloadGloas{},
+		}
+		envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
+		require.NoError(t, err)
+		require.NoError(t, service.InsertPayload(envelope))
 		recordTestPayloadArrival(t, service, root, blockSlot, false)
 		require.Equal(t, true, service.buildOnFull(root, blockSlot+2, true))
 	})
