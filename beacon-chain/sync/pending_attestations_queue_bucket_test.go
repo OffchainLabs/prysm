@@ -7,7 +7,6 @@ import (
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	logTest "github.com/sirupsen/logrus/hooks/test"
@@ -25,7 +24,8 @@ func TestProcessAttestationBucket(t *testing.T) {
 		}
 		s.processAttestationBucket(context.Background(), emptyBucket)
 
-		require.Equal(t, 0, len(hook.Entries), "Should not log any messages for empty buckets")
+		// The global hook can capture logs from other goroutines, so only assert this path stayed silent.
+		require.LogsDoNotContain(t, hook, "Failed forkchoice check for bucket")
 	})
 
 	t.Run("ForkchoiceFailure", func(t *testing.T) {
@@ -51,9 +51,7 @@ func TestProcessAttestationBucket(t *testing.T) {
 
 		s.processAttestationBucket(context.Background(), bucket)
 
-		require.Equal(t, 1, len(hook.Entries))
-		assert.StringContains(t, "Failed forkchoice check for bucket", hook.LastEntry().Message)
-		require.NotNil(t, hook.LastEntry().Data["error"])
+		require.LogsContain(t, hook, "Failed forkchoice check for bucket")
 	})
 
 	t.Run("CommitteeFailure", func(t *testing.T) {
@@ -92,8 +90,7 @@ func TestProcessAttestationBucket(t *testing.T) {
 
 		s.processAttestationBucket(context.Background(), bucket)
 
-		require.Equal(t, 1, len(hook.Entries))
-		assert.StringContains(t, "Failed to get committee from state", hook.LastEntry().Message)
+		require.LogsContain(t, hook, "Failed to get committee from state")
 	})
 
 	t.Run("FFGConsistencyFailure", func(t *testing.T) {
@@ -140,8 +137,7 @@ func TestProcessAttestationBucket(t *testing.T) {
 
 		s.processAttestationBucket(context.Background(), bucket)
 
-		require.Equal(t, 1, len(hook.Entries))
-		assert.StringContains(t, "Failed FFG consistency check for bucket", hook.LastEntry().Message)
+		require.LogsContain(t, hook, "Failed FFG consistency check for bucket")
 	})
 
 	t.Run("ProcessingSuccess", func(t *testing.T) {
@@ -221,18 +217,14 @@ func TestProcessAttestationBucket(t *testing.T) {
 
 func TestBucketAttestationsByData(t *testing.T) {
 	t.Run("EmptyInput", func(t *testing.T) {
-		hook := logTest.NewGlobal()
 		buckets := bucketAttestationsByData(nil)
 		require.Equal(t, 0, len(buckets))
-		require.Equal(t, 0, len(hook.Entries))
 
 		buckets = bucketAttestationsByData([]ethpb.Att{})
 		require.Equal(t, 0, len(buckets))
-		require.Equal(t, 0, len(hook.Entries))
 	})
 
 	t.Run("SingleAttestation", func(t *testing.T) {
-		hook := logTest.NewGlobal()
 		att := util.NewAttestation()
 		att.Data.Slot = 1
 		att.Data.CommitteeIndex = 0
@@ -249,12 +241,9 @@ func TestBucketAttestationsByData(t *testing.T) {
 		require.Equal(t, 1, len(bucket.attestations))
 		require.Equal(t, att, bucket.attestations[0])
 		require.Equal(t, att.GetData(), bucket.data)
-		require.Equal(t, 0, len(hook.Entries))
 	})
 
 	t.Run("MultipleAttestationsSameData", func(t *testing.T) {
-		hook := logTest.NewGlobal()
-
 		att1 := util.NewAttestation()
 		att1.Data.Slot = 1
 		att1.Data.CommitteeIndex = 0
@@ -274,12 +263,9 @@ func TestBucketAttestationsByData(t *testing.T) {
 		require.NotNil(t, bucket)
 		require.Equal(t, 2, len(bucket.attestations), "Should have both attestations in one bucket")
 		require.Equal(t, att1.GetData(), bucket.data)
-		require.Equal(t, 0, len(hook.Entries))
 	})
 
 	t.Run("MultipleAttestationsDifferentData", func(t *testing.T) {
-		hook := logTest.NewGlobal()
-
 		att1 := util.NewAttestation()
 		att1.Data.Slot = 1
 		att1.Data.CommitteeIndex = 0
@@ -297,12 +283,9 @@ func TestBucketAttestationsByData(t *testing.T) {
 			bucketCount++
 		}
 		require.Equal(t, 2, bucketCount, "Should have exactly two buckets")
-		require.Equal(t, 0, len(hook.Entries))
 	})
 
 	t.Run("MixedAttestationTypes", func(t *testing.T) {
-		hook := logTest.NewGlobal()
-
 		// Create Phase0 attestation
 		phase0Att := util.NewAttestation()
 		phase0Att.Data.Slot = 1
@@ -326,7 +309,6 @@ func TestBucketAttestationsByData(t *testing.T) {
 		require.NotNil(t, bucket)
 		require.Equal(t, 2, len(bucket.attestations), "Should have both attestations in one bucket")
 		require.Equal(t, phase0Att.GetData(), bucket.data)
-		require.Equal(t, 0, len(hook.Entries))
 	})
 }
 
@@ -403,15 +385,6 @@ func TestBatchVerifyAttestationSignatures(t *testing.T) {
 		result := s.batchVerifyAttestationSignatures(context.Background(), attestations, beaconState)
 
 		require.Equal(t, 0, len(result))
-
-		require.NotEqual(t, 0, len(hook.Entries), "Should have log entries")
-		found := false
-		for _, entry := range hook.Entries {
-			if entry.Message == "batch verification failed, using individual checks" {
-				found = true
-				break
-			}
-		}
-		require.Equal(t, true, found, "Should log fallback message")
+		require.LogsContain(t, hook, "batch verification failed, using individual checks")
 	})
 }

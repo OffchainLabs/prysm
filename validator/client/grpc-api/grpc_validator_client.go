@@ -26,10 +26,10 @@ import (
 
 type grpcValidatorClient struct {
 	*grpcClientManager[ethpb.BeaconNodeValidatorClient]
-	nodeClient           *grpcNodeClient
-	isEventStreamRunning bool
-	stateless            bool
-	envelopeCache        *cache.ExecutionPayloadEnvelopeCache
+	nodeClient       *grpcNodeClient
+	eventStreamGuard eventClient.StreamGuard
+	stateless        bool
+	envelopeCache    *cache.ExecutionPayloadEnvelopeCache
 }
 
 func (c *grpcValidatorClient) Duties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
@@ -357,7 +357,7 @@ func (*grpcValidatorClient) AggregatedSyncSelections(context.Context, []iface.Sy
 
 // NewGrpcValidatorClient creates a new gRPC validator client that supports
 // dynamic connection switching via the NodeConnection's GrpcConnectionProvider.
-func NewGrpcValidatorClient(conn validatorHelpers.NodeConnection, opts ...iface.Option) iface.ValidatorClient {
+func NewGrpcValidatorClient(conn *validatorHelpers.NodeConnection, opts ...iface.Option) iface.ValidatorClient {
 	var cfg iface.ClientConfig
 	for _, opt := range opts {
 		opt(&cfg)
@@ -375,71 +375,75 @@ func NewGrpcValidatorClient(conn validatorHelpers.NodeConnection, opts ...iface.
 	return c
 }
 
+// sendEvent forwards ev unless ctx is canceled, so a canceled (replaced)
+// stream can always exit even when the channel is full.
+func sendEvent(ctx context.Context, eventsChannel chan<- *eventClient.Event, ev *eventClient.Event) bool {
+	select {
+	case eventsChannel <- ev:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
 func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *eventClient.Event) {
 	ctx, span := trace.StartSpan(ctx, "validator.gRPCClient.StartEventStream")
 	defer span.End()
 	if len(topics) == 0 {
-		eventsChannel <- &eventClient.Event{
+		sendEvent(ctx, eventsChannel, &eventClient.Event{
 			EventType: eventClient.EventError,
 			Data:      []byte(errors.New("no topics were added").Error()),
-		}
+		})
 		return
 	}
 	// TODO(13563): ONLY WORKS WITH HEAD TOPIC.
 	containsHead := false
-	for i := range topics {
-		if topics[i] == eventClient.EventHead {
+
+	// Treat EventHeadV2 and EventHead as equivalent for the purpose of this check,
+	// since the gRPC API only supports the head topic, and head_v2 is a superset of head.
+	for _, topic := range topics {
+		if topic == eventClient.EventHead || topic == eventClient.EventHeadV2 {
 			containsHead = true
+			break
 		}
 	}
 	if !containsHead {
-		eventsChannel <- &eventClient.Event{
+		sendEvent(ctx, eventsChannel, &eventClient.Event{
 			EventType: eventClient.EventConnectionError,
 			Data:      []byte(errors.Wrap(client.ErrConnectionIssue, "gRPC only supports the head topic, and head topic was not passed").Error()),
-		}
+		})
 	}
 	if containsHead && len(topics) > 1 {
 		log.Warn("gRPC only supports the head topic, other topics will be ignored")
 	}
 
-	stream, err := c.getClient().StreamSlots(ctx, &ethpb.StreamSlotsRequest{VerifiedOnly: true})
+	// Replace any previous stream (e.g. bound to a pre-switch host) so two
+	// streams never feed the channel concurrently.
+	subCtx, finish := c.eventStreamGuard.Replace(ctx)
+	defer finish()
+
+	stream, err := c.getClient().StreamSlots(subCtx, &ethpb.StreamSlotsRequest{VerifiedOnly: true})
 	if err != nil {
-		eventsChannel <- &eventClient.Event{
+		sendEvent(subCtx, eventsChannel, &eventClient.Event{
 			EventType: eventClient.EventConnectionError,
 			Data:      []byte(errors.Wrap(client.ErrConnectionIssue, err.Error()).Error()),
-		}
+		})
 		return
 	}
-	c.isEventStreamRunning = true
+	c.eventStreamGuard.MarkRunning(true)
+	defer c.eventStreamGuard.MarkRunning(false)
 	for {
 		select {
-		case <-ctx.Done():
+		case <-subCtx.Done():
 			log.Info("Context canceled, stopping event stream")
-			c.isEventStreamRunning = false
 			return
 		default:
-			if ctx.Err() != nil {
-				c.isEventStreamRunning = false
-				if errors.Is(ctx.Err(), context.Canceled) {
-					eventsChannel <- &eventClient.Event{
-						EventType: eventClient.EventConnectionError,
-						Data:      []byte(errors.Wrap(client.ErrConnectionIssue, ctx.Err().Error()).Error()),
-					}
-					return
-				}
-				eventsChannel <- &eventClient.Event{
-					EventType: eventClient.EventError,
-					Data:      []byte(ctx.Err().Error()),
-				}
-				return
-			}
 			res, err := stream.Recv()
 			if err != nil {
-				c.isEventStreamRunning = false
-				eventsChannel <- &eventClient.Event{
+				sendEvent(subCtx, eventsChannel, &eventClient.Event{
 					EventType: eventClient.EventConnectionError,
 					Data:      []byte(errors.Wrap(client.ErrConnectionIssue, err.Error()).Error()),
-				}
+				})
 				return
 			}
 			if res == nil {
@@ -456,21 +460,25 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 				CurrentDutyDependentRoot:  hexutil.Encode(res.CurrentDutyDependentRoot),
 			})
 			if err != nil {
-				eventsChannel <- &eventClient.Event{
+				if !sendEvent(subCtx, eventsChannel, &eventClient.Event{
 					EventType: eventClient.EventError,
 					Data:      []byte(errors.Wrap(err, "failed to marshal Head Event").Error()),
+				}) {
+					return
 				}
 			}
-			eventsChannel <- &eventClient.Event{
+			if !sendEvent(subCtx, eventsChannel, &eventClient.Event{
 				EventType: eventClient.EventHead,
 				Data:      b,
+			}) {
+				return
 			}
 		}
 	}
 }
 
 func (c *grpcValidatorClient) EventStreamIsRunning() bool {
-	return c.isEventStreamRunning
+	return c.eventStreamGuard.IsRunning()
 }
 
 func (c *grpcValidatorClient) Host() string {
@@ -480,6 +488,16 @@ func (c *grpcValidatorClient) Host() string {
 func (c *grpcValidatorClient) EnsureReady(ctx context.Context) bool {
 	provider := c.grpcClientManager.conn.GetGrpcConnectionProvider()
 	return fallback.EnsureReady(ctx, provider, c.nodeClient)
+}
+
+// ConnectionGeneration returns a monotonic counter that advances on each
+// fallback host switch of this client's gRPC connection provider.
+func (c *grpcValidatorClient) ConnectionGeneration() uint64 {
+	provider := c.grpcClientManager.conn.GetGrpcConnectionProvider()
+	if provider == nil {
+		return 0
+	}
+	return provider.ConnectionCounter()
 }
 
 // Gloas Fork Methods

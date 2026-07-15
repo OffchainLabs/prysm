@@ -124,7 +124,7 @@ func TestValidateExecutionPayloadBidGossip_ErrorPathsWithMock(t *testing.T) {
 		{
 			name:      "fee recipient mismatch",
 			verifier:  mockExecutionPayloadBidVerifier{errFeeRecipientMismatch: errors.New("wrong fee recipient")},
-			result:    pubsub.ValidationReject,
+			result:    pubsub.ValidationIgnore,
 			wantError: true,
 		},
 		{
@@ -302,7 +302,7 @@ func TestValidateExecutionPayloadBidGossip_FeeRecipientMismatch(t *testing.T) {
 
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NotNil(t, err)
-	require.Equal(t, pubsub.ValidationReject, result)
+	require.Equal(t, pubsub.ValidationIgnore, result)
 	require.ErrorIs(t, err, verification.ErrBidFeeRecipientMismatch)
 }
 
@@ -402,6 +402,7 @@ func TestExecutionPayloadBidSubscriber_NilMessage(t *testing.T) {
 
 type mockExecutionPayloadBidVerifier struct {
 	errCurrentOrNextSlot    error
+	errSlotMatches          error
 	errBuilderActive        error
 	errBuilderVersion       error
 	errExecutionPayment     error
@@ -420,6 +421,10 @@ var _ verification.ExecutionPayloadBidVerifier = &mockExecutionPayloadBidVerifie
 
 func (m *mockExecutionPayloadBidVerifier) VerifyCurrentOrNextSlot() error {
 	return m.errCurrentOrNextSlot
+}
+
+func (m *mockExecutionPayloadBidVerifier) VerifyBidSlotMatches(primitives.Slot) error {
+	return m.errSlotMatches
 }
 
 func (m *mockExecutionPayloadBidVerifier) VerifyBuilderActive(state.ReadOnlyBeaconState) error {

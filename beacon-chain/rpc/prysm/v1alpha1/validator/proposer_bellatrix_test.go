@@ -85,12 +85,12 @@ func TestServer_setExecutionData(t *testing.T) {
 			GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed},
 			PayloadIDBytes:     id,
 		},
-		HeadFetcher:            &blockchainTest.ChainService{State: capellaTransitionState},
-		FinalizationFetcher:    &blockchainTest.ChainService{},
-		BeaconDB:               beaconDB,
-		PayloadIDCache:         cache.NewPayloadIDCache(),
-		BlockBuilder:           &builderTest.MockBuilderService{HasConfigured: true, Cfg: &builderTest.Config{BeaconDB: beaconDB}},
-		ForkchoiceFetcher:      &blockchainTest.ChainService{},
+		HeadFetcher:              &blockchainTest.ChainService{State: capellaTransitionState},
+		FinalizationFetcher:      &blockchainTest.ChainService{},
+		BeaconDB:                 beaconDB,
+		PayloadIDCache:           cache.NewPayloadIDCache(),
+		BlockBuilder:             &builderTest.MockBuilderService{HasConfigured: true, Cfg: &builderTest.Config{BeaconDB: beaconDB}},
+		ForkchoiceFetcher:        &blockchainTest.ChainService{},
 		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 	}
 	gasLimit := uint64(30000000)

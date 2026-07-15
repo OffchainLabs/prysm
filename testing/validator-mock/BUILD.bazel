@@ -7,7 +7,6 @@ go_library(
     srcs = [
         "chain_client_mock.go",
         "node_client_mock.go",
-        "prysm_chain_client_mock.go",
         "validator_client_mock.go",
         "validator_mock.go",
     ],

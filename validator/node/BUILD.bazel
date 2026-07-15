@@ -8,6 +8,7 @@ go_test(
     deps = [
         "//cmd:go_default_library",
         "//cmd/validator/flags:go_default_library",
+        "//config/features:go_default_library",
         "//io/file:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",

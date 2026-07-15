@@ -5,9 +5,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/client"
-	beaconChainClientFactory "github.com/OffchainLabs/prysm/v7/validator/client/beacon-chain-client-factory"
-	nodeClientFactory "github.com/OffchainLabs/prysm/v7/validator/client/node-client-factory"
-	validatorClientFactory "github.com/OffchainLabs/prysm/v7/validator/client/validator-client-factory"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpcretry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
@@ -55,8 +52,8 @@ func (s *Server) registerBeaconClient() error {
 		s.healthClient = ethpb.NewHealthClient(grpcConn)
 	}
 
-	s.chainClient = beaconChainClientFactory.NewChainClient(conn)
-	s.nodeClient = nodeClientFactory.NewNodeClient(conn)
-	s.beaconNodeValidatorClient = validatorClientFactory.NewValidatorClient(conn)
+	s.chainClient = client.NewChainClient(conn)
+	s.nodeClient = client.NewNodeClient(conn)
+	s.beaconNodeValidatorClient = client.NewValidatorClient(conn)
 	return nil
 }

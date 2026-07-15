@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition/interop"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -18,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -49,8 +49,15 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return errors.Wrap(err, "new ro block with root")
 	}
 
+	// Sidecar reconstruction runs in its own goroutine and outlives this handler, so
+	// derive its context from the service context rather than the pubsub message ctx
+	// (which is cancelled when the handler returns and would abort engine_getBlobs
+	// mid-flight). Using the service ctx keeps the work bound to the service lifecycle
+	// so it stops on shutdown, while the timeout prevents it leaking under load.
 	go func() {
-		if err := s.processSidecarsFromExecutionFromBlock(ctx, roBlock); err != nil {
+		sidecarCtx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
+		defer cancel()
+		if err := s.processSidecarsFromExecutionFromBlock(sidecarCtx, roBlock); err != nil {
 			log.WithError(err).WithFields(logrus.Fields{
 				"root": fmt.Sprintf("%#x", root),
 				"slot": block.Slot(),
@@ -85,6 +92,7 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 	go s.processPendingPayloadEnvelope(s.ctx, root)
 
 	s.processPendingGloasColumns(s.ctx, root, signed)
+	go s.processPendingPayloadAttestation(s.ctx, root)
 
 	return nil
 }
@@ -317,7 +325,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 					"iteration":     iteration,
 					"type":          source.Type(),
 					"count":         len(unseenIndices),
-					"indices":       helpers.SortedPrettySliceFromMap(unseenIndices),
+					"indices":       slice.SortedPrettySliceFromMap(unseenIndices),
 				}).Debug("Constructed data column sidecars from the execution client")
 
 				return nil, nil

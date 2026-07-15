@@ -10,11 +10,13 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/client"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/pkg/errors"
 )
 
 const (
 	EventHead                      = "head"
+	EventHeadV2                    = "head_v2"
 	EventExecutionPayloadAvailable = "execution_payload_available"
 
 	EventError           = "error"
@@ -23,12 +25,16 @@ const (
 
 var (
 	_ = EventStreamClient(&EventStream{})
+
+	// LegacyEventTopicMapping maps newer event topics to their legacy equivalents for fallback purposes.
+	LegacyEventTopicMapping = map[string]string{
+		EventHeadV2: EventHead,
+	}
+	DefaultEventTopics = []string{EventHeadV2, EventExecutionPayloadAvailable}
 )
 
-var DefaultEventTopics = []string{EventHead, EventExecutionPayloadAvailable}
-
 type EventStreamClient interface {
-	Subscribe(eventsChannel chan<- *Event)
+	Subscribe(eventsChannel chan<- *Event) error
 }
 
 type Event struct {
@@ -63,26 +69,44 @@ func NewEventStream(ctx context.Context, httpClient *http.Client, host string, t
 	}, nil
 }
 
-func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
+// send forwards ev unless the stream context is canceled, so a canceled
+// (replaced) stream can always exit even when the channel is full. The channel
+// is owned by the caller and may be reused by a replacement stream, so it is
+// never closed here.
+func (h *EventStream) send(eventsChannel chan<- *Event, ev *Event) bool {
+	select {
+	case eventsChannel <- ev:
+		return true
+	case <-h.ctx.Done():
+		return false
+	}
+}
+
+// Subscribe opens the events stream and dispatches received events on
+// eventsChannel until the context is canceled or an error ends the stream.
+func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
 	allTopics := strings.Join(h.topics, ",")
 	log.WithField("topics", allTopics).Info("Listening to Beacon API events")
 	fullUrl := h.host + "/eth/v1/events?topics=" + allTopics
 	req, err := http.NewRequestWithContext(h.ctx, http.MethodGet, fullUrl, nil)
 	if err != nil {
-		eventsChannel <- &Event{
+		err = errors.Wrap(err, "failed to create HTTP request")
+		h.send(eventsChannel, &Event{
 			EventType: EventConnectionError,
-			Data:      []byte(errors.Wrap(err, "failed to create HTTP request").Error()),
-		}
+			Data:      []byte(err.Error()),
+		})
+		return err
 	}
 	req.Header.Set("Accept", api.EventStreamMediaType)
 	req.Header.Set("Connection", api.KeepAlive)
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
-		eventsChannel <- &Event{
+		err = errors.Wrap(err, client.ErrConnectionIssue.Error())
+		h.send(eventsChannel, &Event{
 			EventType: EventConnectionError,
-			Data:      []byte(errors.Wrap(err, client.ErrConnectionIssue.Error()).Error()),
-		}
-		return
+			Data:      []byte(err.Error()),
+		})
+		return err
 	}
 
 	defer func() {
@@ -91,22 +115,12 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 		}
 	}()
 
-	// Check response status code and handle non-200 responses
-	// as connection errors.
-	// e.g., requesting unsupported topics.
+	// Check response status code and let callers decide whether the
+	// subscription failure is recoverable (e.g. fallback for unsupported topics).
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		wrapErr := errors.Wrapf(
-			client.ErrConnectionIssue,
-			"received status code %d subscribing to beacon node events: %q",
-			resp.StatusCode,
-			strings.TrimSpace(string(body)),
-		)
-		eventsChannel <- &Event{
-			EventType: EventConnectionError,
-			Data:      []byte(wrapErr.Error()),
-		}
-		return
+		bodyStr := strings.TrimSpace(string(body))
+		return &httputil.DefaultJsonError{Code: resp.StatusCode, Message: bodyStr}
 	}
 
 	// Create a new scanner to read lines from the response body
@@ -120,9 +134,10 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 	for scanner.Scan() {
 		select {
 		case <-h.ctx.Done():
+			// The channel is owned by the caller and may be reused by a
+			// replacement stream, so it is not closed here.
 			log.Info("Context canceled, stopping event stream")
-			close(eventsChannel)
-			return
+			return nil
 		default:
 			line := scanner.Text()
 			// Handle the event based on your specific format
@@ -130,7 +145,9 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 				// Empty line indicates the end of an event
 				if eventType != "" && data != "" {
 					// Process the event when both eventType and data are set
-					eventsChannel <- &Event{EventType: eventType, Data: []byte(data)}
+					if !h.send(eventsChannel, &Event{EventType: eventType, Data: []byte(data)}) {
+						return nil
+					}
 				}
 
 				// Reset eventType and data for the next event
@@ -151,9 +168,12 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		eventsChannel <- &Event{
+		err = errors.Wrap(err, errors.Wrap(client.ErrConnectionIssue, "scanner failed").Error())
+		h.send(eventsChannel, &Event{
 			EventType: EventConnectionError,
-			Data:      []byte(errors.Wrap(err, errors.Wrap(client.ErrConnectionIssue, "scanner failed").Error()).Error()),
-		}
+			Data:      []byte(err.Error()),
+		})
+		return err
 	}
+	return nil
 }

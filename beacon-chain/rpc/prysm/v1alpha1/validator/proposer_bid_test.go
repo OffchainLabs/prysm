@@ -54,9 +54,9 @@ func TestSetSelfBuildExecutionPayloadBid(t *testing.T) {
 
 	vs := &Server{}
 
-	isSelfBuild, err := vs.setExecutionPayloadBid(t.Context(), sBlk, local, false)
+	src, err := vs.setExecutionPayloadBid(t.Context(), sBlk, local, nil, 0, false)
 	require.NoError(t, err)
-	require.Equal(t, true, isSelfBuild)
+	require.Equal(t, bidSourceSelfBuild, src)
 
 	// Verify the signed bid was set on the block.
 	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
@@ -123,7 +123,7 @@ func TestSetSelfBuildExecutionPayloadBid_BlobCommitments(t *testing.T) {
 	}
 
 	vs := &Server{}
-	_, err = vs.setExecutionPayloadBid(t.Context(), sBlk, local, true)
+	_, err = vs.setExecutionPayloadBid(t.Context(), sBlk, local, nil, 0, true)
 	require.NoError(t, err)
 
 	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
@@ -147,10 +147,10 @@ func TestSetSelfBuildExecutionPayloadBid_NilPayload(t *testing.T) {
 
 	vs := &Server{}
 
-	_, err = vs.setExecutionPayloadBid(t.Context(), sBlk, nil, false)
+	_, err = vs.setExecutionPayloadBid(t.Context(), sBlk, nil, nil, 0, false)
 	require.ErrorContains(t, "local execution payload is nil", err)
 
-	_, err = vs.setExecutionPayloadBid(t.Context(), sBlk, &consensusblocks.GetPayloadResponse{}, false)
+	_, err = vs.setExecutionPayloadBid(t.Context(), sBlk, &consensusblocks.GetPayloadResponse{}, nil, 0, false)
 	require.ErrorContains(t, "local execution payload is nil", err)
 }
 
@@ -213,9 +213,9 @@ func TestSetExecutionPayloadBid_PrefersP2PBid(t *testing.T) {
 
 	vs := &Server{HighestBidCache: bidCache}
 
-	isSelfBuild, err := vs.setExecutionPayloadBid(t.Context(), sBlk, local, false)
+	src, err := vs.setExecutionPayloadBid(t.Context(), sBlk, local, nil, 0, false)
 	require.NoError(t, err)
-	require.Equal(t, false, isSelfBuild)
+	require.Equal(t, bidSourceP2P, src)
 
 	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
 	require.NoError(t, err)
@@ -287,9 +287,9 @@ func TestSetExecutionPayloadBid_PrefersLocalWhenHigherValue(t *testing.T) {
 
 	vs := &Server{HighestBidCache: bidCache}
 
-	isSelfBuild, err := vs.setExecutionPayloadBid(t.Context(), sBlk, local, false)
+	src, err := vs.setExecutionPayloadBid(t.Context(), sBlk, local, nil, 0, false)
 	require.NoError(t, err)
-	require.Equal(t, true, isSelfBuild)
+	require.Equal(t, bidSourceSelfBuild, src)
 
 	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
 	require.NoError(t, err)
@@ -360,9 +360,9 @@ func TestSetExecutionPayloadBid_SelfBuildOnlyIgnoresCache(t *testing.T) {
 
 	vs := &Server{HighestBidCache: bidCache}
 
-	isSelfBuild, err := vs.setExecutionPayloadBid(t.Context(), sBlk, local, true)
+	src, err := vs.setExecutionPayloadBid(t.Context(), sBlk, local, nil, 0, true)
 	require.NoError(t, err)
-	require.Equal(t, true, isSelfBuild)
+	require.Equal(t, bidSourceSelfBuild, src)
 
 	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
 	require.NoError(t, err)
@@ -412,9 +412,9 @@ func TestSetExecutionPayloadBid_FallsBackToSelfBuildWhenNoCachedBid(t *testing.T
 	bidCache := cache.NewHighestExecutionPayloadBidCache()
 	vs := &Server{HighestBidCache: bidCache}
 
-	isSelfBuild, err := vs.setExecutionPayloadBid(t.Context(), sBlk, local, false)
+	src, err := vs.setExecutionPayloadBid(t.Context(), sBlk, local, nil, 0, false)
 	require.NoError(t, err)
-	require.Equal(t, true, isSelfBuild)
+	require.Equal(t, bidSourceSelfBuild, src)
 
 	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
 	require.NoError(t, err)

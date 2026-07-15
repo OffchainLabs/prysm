@@ -53,6 +53,14 @@ Prysm maintains two permanent branches:
 
 Want to get involved? Check out our **[Contribution Guide](https://prysm.offchainlabs.com/docs/contribute/contribution-guidelines/)** to learn more!
 
+### 🤖 AI Coding Agents
+
+Shared agent instructions live in [`.agents/AGENTS.md`](.agents/AGENTS.md). To use them, point your agent's config file at it from the repo root:
+
+```sh
+echo '@.agents/AGENTS.md' > ./AGENTS.md   # or ./CLAUDE.md
+```
+
 ---
 
 ## 📜 License
