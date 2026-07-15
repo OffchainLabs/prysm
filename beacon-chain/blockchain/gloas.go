@@ -51,7 +51,7 @@ func (s *Service) runLatePayloadTasks() {
 	if err := s.waitUntilEpoch(cfg.GloasForkEpoch, cfg.SecondsPerSlot); err != nil {
 		return
 	}
-	offset := cfg.SlotComponentDuration(cfg.PayloadAttestationDueBPS)
+	offset := cfg.SlotComponentDuration(cfg.PayloadDueBPS)
 	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, offset, cfg.SecondsPerSlot)
 	defer ticker.Done()
 	for {
