@@ -364,11 +364,29 @@ func (s *Service) notifyEngineAndSaveData(
 	postVersionAndHeaders []*versionAndHeader,
 	jCheckpoints []*ethpb.Checkpoint,
 	fCheckpoints []*ethpb.Checkpoint,
-) ([]*forkchoicetypes.BlockAndCheckpoints, bool, error) {
+) (pendingNodes []*forkchoicetypes.BlockAndCheckpoints, isValidPayload bool, err error) {
 	span := trace.FromContext(ctx)
-	pendingNodes := make([]*forkchoicetypes.BlockAndCheckpoints, len(blks))
-	var isValidPayload bool
-	var err error
+	pendingNodes = make([]*forkchoicetypes.BlockAndCheckpoints, len(blks))
+
+	// If the batch fails after some payloads were already delivered to the
+	// execution client, still point the engine at the most recent imported
+	// payload. Without this, a node whose batches keep failing mid-way (e.g.
+	// unavailable sidecars during non-finality) never sends any forkchoice
+	// update: the execution client cannot start syncing and its head stays
+	// pinned to a stale block. Fully successful batches send the forkchoice
+	// update in saveHeadNoDB instead.
+	var lastPayloadHash [32]byte
+	defer func() {
+		if err == nil || lastPayloadHash == ([32]byte{}) {
+			return
+		}
+		hash := lastPayloadHash
+		go func() {
+			if _, err := s.notifyForkchoiceUpdateGloas(s.ctx, hash, nil); err != nil {
+				log.WithError(err).Debug("Could not notify forkchoice update after partial batch import")
+			}
+		}()
+	}()
 
 	envMap := make(map[[32]byte]int, len(envelopes))
 	for i, e := range envelopes {
@@ -410,6 +428,9 @@ func (s *Service) notifyEngineAndSaveData(
 				isValidPayload, err = s.notifyNewEnvelopeFromBlock(ctx, b, env)
 				if err != nil {
 					return nil, false, errors.Wrap(err, "could not notify new envelope from block")
+				}
+				if payload, perr := env.Execution(); perr == nil {
+					lastPayloadHash = bytesutil.ToBytes32(payload.BlockHash())
 				}
 				args.HasPayload = true
 			}
