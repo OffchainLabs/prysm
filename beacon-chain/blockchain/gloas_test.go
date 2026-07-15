@@ -544,55 +544,26 @@ func TestPostPayloadTasks_DoesNotMutateHead(t *testing.T) {
 	s.headLock.RUnlock()
 }
 
-func TestReorgingLatePayload(t *testing.T) {
-	service, _ := setupGloasService(t, &mockExecution.EngineClient{})
-	root := bytesutil.ToBytes32([]byte("root1"))
-
-	service.SetGenesisTime(time.Now().Add(-time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second))
-	slot := service.CurrentSlot()
+func recordTestPayloadArrival(t *testing.T, service *Service, root [32]byte, slot primitives.Slot, early bool) {
+	t.Helper()
 	slotStart, err := slots.StartTime(service.genesisTime, slot)
 	require.NoError(t, err)
 	due := slotStart.Add(params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().PayloadDueBPS))
-
-	resetCfg := features.InitWithReset(&features.Flags{})
+	if early {
+		service.recordPayloadArrival(root, slot, due.Add(-time.Millisecond))
+		return
+	}
 	service.recordPayloadArrival(root, slot, due.Add(time.Millisecond))
-	require.Equal(t, false, service.reorgingLatePayload(root, slot))
-	resetCfg()
-
-	resetCfg = features.InitWithReset(&features.Flags{ReorgLatePayloads: true})
-	defer resetCfg()
-
-	earlyRoot := bytesutil.ToBytes32([]byte("early"))
-	service.recordPayloadArrival(earlyRoot, slot, due.Add(-time.Millisecond))
-	require.Equal(t, false, service.reorgingLatePayload(earlyRoot, slot))
-
-	service.head = &head{root: root, full: true}
-	require.Equal(t, true, service.reorgingLatePayload(root, slot))
-	require.Equal(t, false, service.reorgingLatePayload(root, slot+1))
-
-	unknownRoot := bytesutil.ToBytes32([]byte("unknown"))
-	require.Equal(t, false, service.reorgingLatePayload(unknownRoot, slot))
 }
 
-func TestPTCForcedReorg(t *testing.T) {
-	service, _ := setupGloasService(t, &mockExecution.EngineClient{})
-	root := bytesutil.ToBytes32([]byte("ptc-forced-reorg"))
-	blockHash := bytesutil.ToBytes32([]byte("block-hash"))
-	blockSlot := primitives.Slot(1)
-	base, blk := testGloasState(t, blockSlot, params.BeaconConfig().ZeroHash, blockHash)
-	insertGloasBlock(t, service, base, blk, root)
-
-	require.Equal(t, false, service.ptcForcedReorg(root, blockSlot+1))
-	require.Equal(t, false, service.ptcForcedReorg(root, blockSlot+2))
-
+func setTestPTCVotes(service *Service, root [32]byte, payloadPresent, blobDataAvailable bool) {
 	majority := fieldparams.PTCSize/2 + 1
 	for i := range majority {
-		service.cfg.ForkChoiceStore.SetPTCVote(root, uint64(i), false, false)
+		service.cfg.ForkChoiceStore.SetPTCVote(root, uint64(i), payloadPresent, blobDataAvailable)
 	}
-	require.Equal(t, true, service.ptcForcedReorg(root, blockSlot+1))
 }
 
-func TestShouldReorgPayload(t *testing.T) {
+func TestBuildOnFull(t *testing.T) {
 	resetCfg := features.InitWithReset(&features.Flags{ReorgLatePayloads: true})
 	defer resetCfg()
 
@@ -606,81 +577,130 @@ func TestShouldReorgPayload(t *testing.T) {
 		insertGloasBlock(t, service, base, blk, root)
 		return service, root, blockSlot
 	}
-	recordPayloadArrival := func(t *testing.T, service *Service, root [32]byte, slot primitives.Slot, early bool) {
-		t.Helper()
-		slotStart, err := slots.StartTime(service.genesisTime, slot)
-		require.NoError(t, err)
-		due := slotStart.Add(params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().PayloadDueBPS))
-		if early {
-			service.recordPayloadArrival(root, slot, due.Add(-time.Millisecond))
-			return
-		}
-		service.recordPayloadArrival(root, slot, due.Add(time.Millisecond))
-	}
-	setPTCVotes := func(service *Service, root [32]byte, payloadPresent, blobDataAvailable bool) {
-		majority := fieldparams.PTCSize/2 + 1
-		for i := range majority {
-			service.cfg.ForkChoiceStore.SetPTCVote(root, uint64(i), payloadPresent, blobDataAvailable)
-		}
-	}
 
-	t.Run("only full payload heads can be reorged", func(t *testing.T) {
-		service, root, blockSlot := setup(t, "not-full")
-		require.Equal(t, false, service.shouldReorgPayload(root, false, blockSlot+1))
-	})
-
-	t.Run("requires previous slot head", func(t *testing.T) {
+	t.Run("only the previous slot is reorgable", func(t *testing.T) {
 		service, root, blockSlot := setup(t, "wrong-slot")
-		require.Equal(t, false, service.shouldReorgPayload(root, true, blockSlot+2))
+		recordTestPayloadArrival(t, service, root, blockSlot, false)
+		require.Equal(t, true, service.buildOnFull(root, blockSlot+2, true))
 	})
 
-	t.Run("unknown payload arrival keeps the reorg bet", func(t *testing.T) {
+	t.Run("unknown root is not reorgable", func(t *testing.T) {
+		service, _, blockSlot := setup(t, "known")
+		require.Equal(t, true, service.buildOnFull(bytesutil.ToBytes32([]byte("unknown")), blockSlot+1, true))
+	})
+
+	t.Run("ptc late verdict reorgs even an early payload", func(t *testing.T) {
+		service, root, blockSlot := setup(t, "ptc-late")
+		recordTestPayloadArrival(t, service, root, blockSlot, true)
+		setTestPTCVotes(service, root, false, false)
+		require.Equal(t, false, service.buildOnFull(root, blockSlot+1, true))
+		require.Equal(t, false, service.buildOnFull(root, blockSlot+1, false))
+	})
+
+	t.Run("ptc certification keeps even a late payload", func(t *testing.T) {
+		service, root, blockSlot := setup(t, "ptc-certified")
+		recordTestPayloadArrival(t, service, root, blockSlot, false)
+		setTestPTCVotes(service, root, true, true)
+		require.Equal(t, true, service.buildOnFull(root, blockSlot+1, true))
+	})
+
+	t.Run("no verdict early payload stays", func(t *testing.T) {
+		service, root, blockSlot := setup(t, "early")
+		recordTestPayloadArrival(t, service, root, blockSlot, true)
+		require.Equal(t, true, service.buildOnFull(root, blockSlot+1, true))
+	})
+
+	t.Run("no verdict late payload is bet against", func(t *testing.T) {
+		service, root, blockSlot := setup(t, "late")
+		recordTestPayloadArrival(t, service, root, blockSlot, false)
+		require.Equal(t, false, service.buildOnFull(root, blockSlot+1, true))
+		require.Equal(t, true, service.buildOnFull(root, blockSlot+1, false))
+	})
+
+	t.Run("no verdict late payload stays with flag off", func(t *testing.T) {
+		service, root, blockSlot := setup(t, "late-flag-off")
+		recordTestPayloadArrival(t, service, root, blockSlot, false)
+		reset := features.InitWithReset(&features.Flags{})
+		defer reset()
+		require.Equal(t, true, service.buildOnFull(root, blockSlot+1, true))
+	})
+
+	t.Run("no verdict unknown arrival stays", func(t *testing.T) {
 		service, root, blockSlot := setup(t, "unknown-arrival")
-		require.Equal(t, true, service.shouldReorgPayload(root, true, blockSlot+1))
+		require.Equal(t, true, service.buildOnFull(root, blockSlot+1, true))
 	})
 
-	t.Run("early payload requires PTC late vote", func(t *testing.T) {
-		service, root, blockSlot := setup(t, "early-late")
-		recordPayloadArrival(t, service, root, blockSlot, true)
-		require.Equal(t, false, service.shouldReorgPayload(root, true, blockSlot+1))
-
-		setPTCVotes(service, root, false, false)
-		require.Equal(t, true, service.shouldReorgPayload(root, true, blockSlot+1))
-	})
-
-	t.Run("late payload keeps reorg bet until PTC votes early and available", func(t *testing.T) {
-		service, root, blockSlot := setup(t, "late-early-available")
-		recordPayloadArrival(t, service, root, blockSlot, false)
-		require.Equal(t, true, service.shouldReorgPayload(root, true, blockSlot+1))
-
-		setPTCVotes(service, root, true, true)
-		require.Equal(t, false, service.shouldReorgPayload(root, true, blockSlot+1))
-	})
-
-	t.Run("late payload without data availability keeps the reorg bet", func(t *testing.T) {
+	t.Run("late without data availability is still bet against", func(t *testing.T) {
 		service, root, blockSlot := setup(t, "late-unavailable")
-		recordPayloadArrival(t, service, root, blockSlot, false)
-		setPTCVotes(service, root, true, false)
-		require.Equal(t, true, service.shouldReorgPayload(root, true, blockSlot+1))
+		recordTestPayloadArrival(t, service, root, blockSlot, false)
+		setTestPTCVotes(service, root, true, false)
+		require.Equal(t, false, service.buildOnFull(root, blockSlot+1, true))
 	})
 }
 
-func TestKeepReorgBetCurrentHead(t *testing.T) {
+func TestSetHeadFull(t *testing.T) {
 	service, _ := setupGloasService(t, &mockExecution.EngineClient{})
-	root := bytesutil.ToBytes32([]byte("current-head"))
-	blockHash := bytesutil.ToBytes32([]byte("block-hash"))
-	blockSlot := primitives.Slot(1)
-	base, blk := testGloasState(t, blockSlot, params.BeaconConfig().ZeroHash, blockHash)
-	insertGloasBlock(t, service, base, blk, root)
-	service.head = &head{root: root, slot: blockSlot}
-
-	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV4{PrevRandao: []byte{1}})
+	root := bytesutil.ToBytes32([]byte("head"))
+	_, blk := testGloasState(t, 1, params.BeaconConfig().ZeroHash, bytesutil.ToBytes32([]byte("hash")))
+	signed, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	empty := payloadattribute.EmptyWithVersion(version.Gloas)
 
-	require.Equal(t, false, service.keepReorgBet(empty, root, blockSlot+1, true))
-	require.Equal(t, false, service.keepReorgBet(attr, root, blockSlot+1, false))
-	require.Equal(t, true, service.keepReorgBet(attr, root, blockSlot+1, true))
+	headBlock, wasFull := service.setHeadFull(root)
+	require.IsNil(t, headBlock)
+	require.Equal(t, false, wasFull)
+
+	service.head = &head{root: bytesutil.ToBytes32([]byte("other")), block: signed}
+	headBlock, wasFull = service.setHeadFull(root)
+	require.IsNil(t, headBlock)
+	require.Equal(t, false, wasFull)
+
+	service.head = &head{root: root, block: signed}
+	headBlock, wasFull = service.setHeadFull(root)
+	require.NotNil(t, headBlock)
+	require.Equal(t, false, wasFull)
+	require.Equal(t, true, service.head.full)
+
+	headBlock, wasFull = service.setHeadFull(root)
+	require.NotNil(t, headBlock)
+	require.Equal(t, true, wasFull)
+}
+
+func TestPostPayloadTasks_BetsAgainstLatePayload(t *testing.T) {
+	logHook := logTest.NewGlobal()
+	service, _ := setupGloasService(t, &mockExecution.EngineClient{})
+	resetCfg := features.InitWithReset(&features.Flags{ReorgLatePayloads: true, PrepareAllPayloads: true})
+	defer resetCfg()
+
+	root := bytesutil.ToBytes32([]byte("late-head"))
+	blockHash := bytesutil.ToBytes32([]byte("hash1"))
+	service.SetGenesisTime(time.Now().Add(-time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second))
+	blockSlot := service.CurrentSlot()
+
+	base, blk := testGloasState(t, blockSlot, params.BeaconConfig().ZeroHash, blockHash)
+	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	require.NoError(t, err)
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	insertGloasBlock(t, service, base, blk, root)
+
+	env := &ethpb.ExecutionPayloadEnvelope{
+		BeaconBlockRoot:       root[:],
+		ParentBeaconBlockRoot: make([]byte, 32),
+		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:], ParentHash: make([]byte, 32)},
+	}
+	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
+	require.NoError(t, err)
+	require.NoError(t, service.InsertPayload(envelope))
+
+	service.head = &head{root: root, block: signed, state: st, slot: blockSlot}
+	recordTestPayloadArrival(t, service, root, blockSlot, false)
+
+	require.NoError(t, service.postPayloadTasks(t.Context(), envelope, st))
+
+	require.LogsContain(t, logHook, "Not building on late payload")
+	service.headLock.RLock()
+	require.Equal(t, false, service.head.full)
+	service.headLock.RUnlock()
 }
 
 func TestLatePayloadTasks_ReturnsEarlyWhenBlockLate(t *testing.T) {

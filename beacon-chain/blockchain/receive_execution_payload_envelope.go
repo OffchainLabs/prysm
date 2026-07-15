@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -186,98 +185,57 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	return nil
 }
 
-// checkAndSetPayloadIfHead reports whether the envelope's payload becomes the
-// head's content, marking the head full. wasFull is the head's status before
-// this call, so callers can detect the empty->full transition.
-func (s *Service) checkAndSetPayloadIfHead(envelope interfaces.ROExecutionPayloadEnvelope) (isHead, wasFull bool) {
-	if !s.inRegularSync() {
-		return false, false
-	}
-	root := envelope.BeaconBlockRoot()
-	if !s.FullBeatsEmpty(root) {
-		return false, false
-	}
+// wasFull lets callers emit head_v2 only on the empty to full transition.
+func (s *Service) setHeadFull(root [32]byte) (headBlock interfaces.ReadOnlySignedBeaconBlock, wasFull bool) {
 	s.headLock.Lock()
 	defer s.headLock.Unlock()
-	if s.head == nil {
-		return false, false
-	}
-	if s.head.root != root {
-		return false, false
+	if s.head == nil || s.head.root != root {
+		return nil, false
 	}
 	wasFull = s.head.full
 	s.head.full = true
-	return true, wasFull
-}
-
-func (s *Service) reorgingLatePayload(root [32]byte, slot primitives.Slot) bool {
-	if !features.Get().ReorgLatePayloads {
-		return false
-	}
-	if slot != s.CurrentSlot() {
-		return false
-	}
-	early, ok := s.PayloadEarly(root)
-	if !ok || early {
-		return false
-	}
-	// rollBack head insertion
-	s.headLock.Lock()
-	if s.head != nil && s.head.root == root {
-		s.head.full = false
-	}
-	s.headLock.Unlock()
-	return true
+	return s.head.block, wasFull
 }
 
 func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope, st state.BeaconState) error {
-	isHead, wasFull := s.checkAndSetPayloadIfHead(envelope)
-	if !isHead {
+	if !s.inRegularSync() {
 		return nil
 	}
+	root := envelope.BeaconBlockRoot()
+	if hr, _ := s.HeadRootAndFull(); hr != root {
+		return nil
+	}
+	if !s.FullBeatsEmpty(root) { // TODO: this is bad
+		return nil
+	}
+	proposingSlot := s.CurrentSlot() + 1
+	proposing := s.proposingAt(st, proposingSlot)
+	s.cfg.ForkChoiceStore.RLock()
+	full := s.buildOnFull(root, proposingSlot, proposing)
+	s.cfg.ForkChoiceStore.RUnlock()
+	if !full {
+		log.WithFields(logrus.Fields{
+			"blockRoot": fmt.Sprintf("%#x", root),
+			"slot":      envelope.Slot(),
+		}).Info("Not building on late payload")
+		return nil
+	}
+	headBlock, wasFull := s.setHeadFull(root)
+	if headBlock == nil {
+		return nil
+	}
+	if !wasFull {
+		if err := s.notifyNewHeadV2Event(ctx, headBlock.Block().Slot(), headBlock.Block().StateRoot(), root, headBlock.Version()); err != nil {
+			log.WithError(err).Error("Could not notify event feed of head_v2 payload update")
+		}
+	}
+
 	payload, err := envelope.Execution()
 	if err != nil {
 		return errors.Wrap(err, "could not get execution payload from envelope")
 	}
 	blockHash := bytesutil.ToBytes32(payload.BlockHash())
-	root := envelope.BeaconBlockRoot()
-
-	// The payload made the head's status transition empty->full, so emit a
-	// second head_v2 event for the transition. Skip it on re-import (already full).
-	var (
-		emitHeadV2    bool
-		headSlot      primitives.Slot
-		headStateRoot [32]byte
-		headVersion   int
-	)
-	if !wasFull {
-		s.headLock.Lock()
-		if s.head != nil && s.head.root == root {
-			headBlock := s.head.block.Block()
-			headSlot = headBlock.Slot()
-			headStateRoot = headBlock.StateRoot()
-			headVersion = s.head.block.Version()
-			emitHeadV2 = true
-		}
-		s.headLock.Unlock()
-	}
-
-	proposingSlot := s.CurrentSlot() + 1
 	attr := s.getPayloadAttribute(ctx, st, proposingSlot, root[:], true)
-	if !attr.IsEmpty() && s.reorgingLatePayload(root, envelope.Slot()) {
-		log.WithFields(logrus.Fields{
-			"blockRoot": fmt.Sprintf("%#x", root),
-			"slot":      proposingSlot - 1,
-		}).Info("Not notifying forkchoice update for late payload")
-		return nil
-	}
-
-	if emitHeadV2 {
-		if err := s.notifyNewHeadV2Event(ctx, headSlot, headStateRoot, root, headVersion); err != nil {
-			log.WithError(err).Error("Could not notify event feed of head_v2 payload update")
-		}
-	}
-
 	go func() {
 		pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)
 		if err != nil {

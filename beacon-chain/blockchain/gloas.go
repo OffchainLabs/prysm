@@ -66,8 +66,8 @@ func (s *Service) runLatePayloadTasks() {
 }
 
 // checkIfProposing does not advance st and only resolves the proposer correctly when st is
-// already advanced to at least slot's epoch. Its sole caller, getLatePayloadAttribute, satisfies
-// this by passing the head state for current slot + 1.
+// already advanced to at least slot's epoch. Callers satisfy this by passing a head or block
+// state for the following slot.
 //
 // WARNING: if called with a head lagging further behind (e.g. several empty epochs), the epoch
 // checks below fall through and it returns (nil, nil) — reported as "not proposing" — even when
@@ -277,42 +277,35 @@ func (s *Service) saveHeadIfNeeded(ctx context.Context, cfg *postBlockProcessCon
 	s.pruneAttsFromPool(ctx, cfg.postState, cfg.roblock)
 }
 
-func (s *Service) ptcForcedReorg(root [32]byte, proposingSlot primitives.Slot) bool {
+// buildOnFull decides between keeping root's imported payload as head content or reorging it out, the caller must hold a forkchoice lock.
+func (s *Service) buildOnFull(root [32]byte, proposingSlot primitives.Slot, proposing bool) bool {
 	hs, err := s.cfg.ForkChoiceStore.Slot(root)
 	if err != nil {
 		log.WithError(err).Error("Could not get slot for head root")
-		return false
-	}
-	if hs+1 != proposingSlot {
-		return false
-	}
-	return s.cfg.ForkChoiceStore.PTCVotedLate(root)
-}
-
-func (s *Service) shouldReorgPayload(root [32]byte, full bool, proposingSlot primitives.Slot) bool {
-	if !full {
-		// only way of moving from full to empty is on two paths:
-		// 1) because of attestations and this can only happen if the head root is from previous slots, we need to send FCU
-		// 2) because of PTC votes on a previously sent FCU, in this path we need to roll back the chain
-		return false
-	}
-	hs, err := s.cfg.ForkChoiceStore.Slot(root)
-	if err != nil {
-		log.WithError(err).Error("Could not get slot for head root")
-		return false
-	}
-	if hs+1 != proposingSlot {
-		return false
-	}
-	early, ok := s.PayloadEarly(root)
-	if !ok {
 		return true
 	}
-	if early {
-		return s.cfg.ForkChoiceStore.PTCVotedLate(root)
+	// only the previous slot's payload is subject to timeliness reorgs, older content is settled by attestations
+	if hs+1 != proposingSlot {
+		return true // Full beats empty
 	}
-	if !features.Get().ReorgLatePayloads {
+	if s.cfg.ForkChoiceStore.PTCVotedLate(root) {
 		return false
 	}
-	return !s.cfg.ForkChoiceStore.PTCVotedEarlyAndAvailable(root)
+	if s.cfg.ForkChoiceStore.PTCVotedEarlyAndAvailable(root) {
+		return true
+	}
+	if !proposing || !features.Get().ReorgLatePayloads {
+		return true
+	}
+	// no PTC verdict, the proposer bets against a payload it saw arrive late
+	early, known := s.PayloadEarly(root)
+	return !known || early
+}
+
+func (s *Service) proposingAt(st state.ReadOnlyBeaconState, slot primitives.Slot) bool {
+	p, err := s.checkIfProposing(st, slot)
+	if err != nil {
+		log.WithError(err).Error("Could not resolve tracked proposer")
+	}
+	return p != nil
 }
