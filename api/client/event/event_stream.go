@@ -69,6 +69,19 @@ func NewEventStream(ctx context.Context, httpClient *http.Client, host string, t
 	}, nil
 }
 
+// send forwards ev unless the stream context is canceled, so a canceled
+// (replaced) stream can always exit even when the channel is full. The channel
+// is owned by the caller and may be reused by a replacement stream, so it is
+// never closed here.
+func (h *EventStream) send(eventsChannel chan<- *Event, ev *Event) bool {
+	select {
+	case eventsChannel <- ev:
+		return true
+	case <-h.ctx.Done():
+		return false
+	}
+}
+
 // Subscribe opens the events stream and dispatches received events on
 // eventsChannel until the context is canceled or an error ends the stream.
 func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
@@ -78,10 +91,10 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
 	req, err := http.NewRequestWithContext(h.ctx, http.MethodGet, fullUrl, nil)
 	if err != nil {
 		err = errors.Wrap(err, "failed to create HTTP request")
-		eventsChannel <- &Event{
+		h.send(eventsChannel, &Event{
 			EventType: EventConnectionError,
 			Data:      []byte(err.Error()),
-		}
+		})
 		return err
 	}
 	req.Header.Set("Accept", api.EventStreamMediaType)
@@ -89,10 +102,10 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
 		err = errors.Wrap(err, client.ErrConnectionIssue.Error())
-		eventsChannel <- &Event{
+		h.send(eventsChannel, &Event{
 			EventType: EventConnectionError,
 			Data:      []byte(err.Error()),
-		}
+		})
 		return err
 	}
 
@@ -121,8 +134,9 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
 	for scanner.Scan() {
 		select {
 		case <-h.ctx.Done():
+			// The channel is owned by the caller and may be reused by a
+			// replacement stream, so it is not closed here.
 			log.Info("Context canceled, stopping event stream")
-			close(eventsChannel)
 			return nil
 		default:
 			line := scanner.Text()
@@ -131,7 +145,9 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
 				// Empty line indicates the end of an event
 				if eventType != "" && data != "" {
 					// Process the event when both eventType and data are set
-					eventsChannel <- &Event{EventType: eventType, Data: []byte(data)}
+					if !h.send(eventsChannel, &Event{EventType: eventType, Data: []byte(data)}) {
+						return nil
+					}
 				}
 
 				// Reset eventType and data for the next event
@@ -153,10 +169,10 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
 
 	if err := scanner.Err(); err != nil {
 		err = errors.Wrap(err, errors.Wrap(client.ErrConnectionIssue, "scanner failed").Error())
-		eventsChannel <- &Event{
+		h.send(eventsChannel, &Event{
 			EventType: EventConnectionError,
 			Data:      []byte(err.Error()),
-		}
+		})
 		return err
 	}
 	return nil

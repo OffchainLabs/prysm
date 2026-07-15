@@ -4,6 +4,7 @@ import (
 	"flag"
 	"testing"
 
+	validatorflags "github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/sirupsen/logrus/hooks/test"
@@ -36,6 +37,27 @@ func TestInitWithReset(t *testing.T) {
 	// Reset must get to previously set configuration (not to default config values).
 	resetCfg()
 	assert.Equal(t, true, Get().EnableDoppelGanger)
+}
+
+func TestConfigureValidator_RESTApiEnabledByEndpoint(t *testing.T) {
+	defer Init(&Flags{})
+	app := cli.App{}
+
+	// Explicitly setting the REST endpoint implies the REST API is enabled,
+	// even without --enable-beacon-rest-api.
+	set := flag.NewFlagSet("test", 0)
+	set.String(validatorflags.BeaconRESTApiProviderFlag.Name, "", "test")
+	require.NoError(t, set.Set(validatorflags.BeaconRESTApiProviderFlag.Name, "http://127.0.0.1:3500"))
+	context := cli.NewContext(&app, set, nil)
+	require.NoError(t, ConfigureValidator(context))
+	assert.Equal(t, true, Get().EnableBeaconRESTApi)
+
+	// Not setting the endpoint or the enable flag leaves REST disabled.
+	set = flag.NewFlagSet("test", 0)
+	set.String(validatorflags.BeaconRESTApiProviderFlag.Name, "http://127.0.0.1:3500", "test")
+	context = cli.NewContext(&app, set, nil)
+	require.NoError(t, ConfigureValidator(context))
+	assert.Equal(t, false, Get().EnableBeaconRESTApi)
 }
 
 func TestConfigureBeaconConfig(t *testing.T) {

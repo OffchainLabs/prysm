@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -252,6 +253,46 @@ func TestGloasCrossForkDiff(t *testing.T) {
 	require.NoError(t, err)
 
 	result, err := ApplyDiff(ctx, fuluSource, hdiffBytes)
+	require.NoError(t, err)
+	requireEqualState(t, gloasTarget, result)
+}
+
+func TestGloasCrossForkDiffOnboardsBuilderDeposit(t *testing.T) {
+	// A 0x03 builder deposit in the Fulu anchor is removed by Gloas onboarding, shortening
+	// pending_deposits. The diff indexes the pre-upgrade list, so applying it must not use the
+	// post-upgrade (shortened) list, which previously panicked with slice bounds out of range.
+	fuluSource, _ := util.DeterministicGenesisStateFulu(t, 64)
+
+	wc := make([]byte, fieldparams.RootLength)
+	wc[0] = params.BeaconConfig().BuilderWithdrawalPrefixByte
+	for i := 12; i < len(wc); i++ {
+		wc[i] = 0xAB
+	}
+	pubkey := make([]byte, fieldparams.BLSPubkeyLength)
+	for i := range pubkey {
+		pubkey[i] = 0xB1
+	}
+	require.NoError(t, fuluSource.SetPendingDeposits([]*ethpb.PendingDeposit{{
+		PublicKey:             pubkey,
+		WithdrawalCredentials: wc,
+		Amount:                params.BeaconConfig().MinActivationBalance,
+		Signature:             make([]byte, fieldparams.BLSSignatureLength),
+		Slot:                  0,
+	}}))
+
+	gloasTarget, err := gloas.UpgradeToGloas(fuluSource.Copy())
+	require.NoError(t, err)
+	require.NoError(t, gloasTarget.SetSlot(fuluSource.Slot()+1))
+
+	tPending, err := gloasTarget.PendingDeposits()
+	require.NoError(t, err)
+	require.Equal(t, 0, len(tPending))
+
+	ctx := t.Context()
+	hdiffBytes, err := Diff(fuluSource, gloasTarget)
+	require.NoError(t, err)
+
+	result, err := ApplyDiff(ctx, fuluSource.Copy(), hdiffBytes)
 	require.NoError(t, err)
 	requireEqualState(t, gloasTarget, result)
 }

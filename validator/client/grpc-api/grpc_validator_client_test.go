@@ -148,7 +148,6 @@ func TestWaitForChainStart_StreamSetupFails(t *testing.T) {
 				return beaconNodeValidatorClient
 			},
 		),
-		isEventStreamRunning: true,
 	}
 	_, err := validatorClient.WaitForChainStart(t.Context(), &emptypb.Empty{})
 	want := "could not setup beacon chain ChainStart streaming client"
@@ -169,7 +168,6 @@ func TestStartEventStream(t *testing.T) {
 				return beaconNodeValidatorClient
 			},
 		),
-		isEventStreamRunning: true,
 	}
 	tests := []struct {
 		name    string
@@ -519,4 +517,15 @@ func TestGetExecutionPayloadEnvelope(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGrpcValidatorClient_ConnectionGeneration(t *testing.T) {
+	conn, err := validatorHelpers.NewNodeConnection(
+		validatorHelpers.WithGRPCProvider(&grpcutil.MockGrpcProvider{MockHosts: []string{"mock:4000"}, ConnCounter: 7}),
+	)
+	require.NoError(t, err)
+	c := &grpcValidatorClient{
+		grpcClientManager: newGrpcClientManager(conn, func(_ grpc.ClientConnInterface) eth.BeaconNodeValidatorClient { return nil }),
+	}
+	require.Equal(t, uint64(7), c.ConnectionGeneration())
 }
