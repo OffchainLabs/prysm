@@ -303,11 +303,6 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			// No sidecars are retrieved from the EL, retry later
 			constructedCount := uint64(len(constructedSidecars))
 
-			// Boundary check: the EL returns either no sidecars or the full set.
-			if constructedCount > 0 && constructedCount != fieldparams.NumberOfColumns {
-				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", constructedCount, fieldparams.NumberOfColumns)
-			}
-
 			// Partial columns are published separately above (for all sampled indices), so do not
 			// re-broadcast them here.
 			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, source.Slot(), proposerIndex, columnIndicesToSample, constructedSidecars, false)
