@@ -514,7 +514,7 @@ func custodyColumnsBitmask(custodyColumns map[uint64]bool) []byte {
 func custodyColumnsRequest(custodyColumns map[uint64]bool) (requested []uint64, bitarray []byte) {
 	bitarray = custodyColumnsBitmask(custodyColumns)
 	numberOfColumns := uint64(fieldparams.NumberOfColumns)
-	for col := uint64(0); col < numberOfColumns; col++ {
+	for col := range numberOfColumns {
 		if bitarray[col/8]&(1<<(col%8)) != 0 {
 			requested = append(requested, col)
 		}

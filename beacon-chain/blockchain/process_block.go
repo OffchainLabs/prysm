@@ -1266,7 +1266,7 @@ func (s *Service) custodyColumnsForFCU(ctx context.Context) map[uint64]bool {
 	}
 
 	// Increase upcoming custody from the head state.
-	if s.cfg.SubscribedValidatorsCache != nil {
+	if headState != nil && s.cfg.SubscribedValidatorsCache != nil {
 		if indices := s.cfg.SubscribedValidatorsCache.Indices(); len(indices) > 0 {
 			if headReq, err := peerdas.ValidatorsCustodyRequirement(headState, indices); err != nil {
 				log.WithError(err).Debug("Could not compute head custody requirement")
@@ -1290,13 +1290,15 @@ func (s *Service) custodyColumnsForFCU(ctx context.Context) map[uint64]bool {
 	// If we are the upcoming proposer (this slot or the next two), add the first-half columns
 	// to the custody set. This allow the execution client to get enough full-blob data
 	// to include in the proposal.
-	currentSlot := s.CurrentSlot()
-	for i := primitives.Slot(0); i <= 2; i++ {
-		if pref, err := s.trackedProposer(headState, currentSlot+i); err == nil && pref != nil {
-			for j := range uint64(fieldparams.CellsPerBlob) {
-				cols[j] = true
+	if headState != nil {
+		currentSlot := s.CurrentSlot()
+		for i := primitives.Slot(0); i <= 2; i++ {
+			if pref, err := s.trackedProposer(headState, currentSlot+i); err == nil && pref != nil {
+				for j := range uint64(fieldparams.CellsPerBlob) {
+					cols[j] = true
+				}
+				break
 			}
-			break
 		}
 	}
 
