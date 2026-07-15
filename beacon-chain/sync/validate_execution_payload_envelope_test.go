@@ -135,9 +135,6 @@ func TestValidateExecutionPayloadEnvelope_HappyPath(t *testing.T) {
 	require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
 }
 
-// Regression test: the block root is treated as "seen" (VerifyBlockRootSeen passes; in production this
-// happens when chain.HasBlock finds the block in the init-sync cache) but the block is not yet in the DB,
-// so beaconDB.Block returns (nil, nil). The validator must not nil-deref block.Block().
 func TestValidateExecutionPayloadEnvelope_BlockSeenButNotInDB_NoPanic(t *testing.T) {
 	ctx := context.Background()
 	s, msg, _, _ := newEnvelopeServiceForTest(t, 1, 1, false /* saveBlockToDB */)
@@ -336,10 +333,6 @@ func setupExecutionPayloadEnvelopeService(t *testing.T, envelopeSlot, blockSlot 
 	return newEnvelopeServiceForTest(t, envelopeSlot, blockSlot, true /* saveBlockToDB */)
 }
 
-// newEnvelopeServiceForTest builds a sync Service and a gossip envelope message for tests. When
-// saveBlockToDB is false the referenced block is intentionally left out of the DB, reproducing the
-// init-sync-cache/DB divergence in production where chain.HasBlock reports the block as seen (from the
-// in-memory init-sync cache) but beaconDB.Block returns (nil, nil) because it has not been flushed yet.
 func newEnvelopeServiceForTest(t *testing.T, envelopeSlot, blockSlot primitives.Slot, saveBlockToDB bool) (*Service, *pubsub.Message, primitives.BuilderIndex, [32]byte) {
 	t.Helper()
 
