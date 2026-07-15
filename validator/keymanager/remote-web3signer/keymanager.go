@@ -178,14 +178,28 @@ func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
 }
 
 func (km *Keymanager) refreshRemoteKeysFromFileChangesWithRetry(ctx context.Context, retryDelay time.Duration, markReady func(error)) error {
-	if ctx.Err() != nil {
-		return ctx.Err()
+	initialized := false
+	markInitialized := func(err error) {
+		initialized = true
+		markReady(err)
 	}
-	if km.retriesRemaining == 0 {
-		return errors.New("file check retries remaining exceeded")
-	}
-	err := km.refreshRemoteKeysFromFileChanges(ctx, markReady)
-	if err != nil {
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if km.retriesRemaining == 0 {
+			return errors.New("file check retries remaining exceeded")
+		}
+		err := km.refreshRemoteKeysFromFileChanges(ctx, markInitialized)
+		if err == nil {
+			return nil
+		}
+		// Retries only make sense once the watcher has worked at least once.
+		// Before that, fail startup immediately instead of blocking NewKeymanager
+		// through the retry ladder.
+		if !initialized {
+			return err
+		}
 		km.updatePublicKeys(slices.Collect(maps.Values(km.flagLoadedKeysMap))) // update the keys to flag provided defaults
 		km.retriesRemaining--
 		log.WithError(err).Debug("Error occurred on key refresh")
@@ -195,9 +209,7 @@ func (km *Keymanager) refreshRemoteKeysFromFileChangesWithRetry(ctx context.Cont
 			return ctx.Err()
 		case <-time.After(retryDelay):
 		}
-		return km.refreshRemoteKeysFromFileChangesWithRetry(ctx, retryDelay, markReady)
 	}
-	return nil
 }
 
 func (km *Keymanager) readKeyFile() ([][48]byte, map[string][48]byte, error) {
@@ -287,12 +299,6 @@ func (km *Keymanager) savePublicKeysToFile(providedPublicKeys map[string][48]byt
 	return nil
 }
 
-func (km *Keymanager) arePublicKeysEmpty() bool {
-	km.lock.RLock()
-	defer km.lock.RUnlock()
-	return len(km.providedPublicKeys) == 0
-}
-
 func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context, markReady func(error)) error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -313,16 +319,23 @@ func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context, mark
 	}
 	log.WithField("path", km.keyFilePath).Info("Successfully initialized file watcher")
 	km.retriesRemaining = maxRetries // reset retries to default
-	if km.arePublicKeysEmpty() {
-		_, fk, err := km.readKeyFile()
-		if err != nil {
-			return errors.Wrap(err, "could not read key file")
-		}
-		maps.Copy(fk, km.flagLoadedKeysMap)
-		// savePublicKeysToFile updates the public keys and notifies subscribers.
-		if err = km.savePublicKeysToFile(fk); err != nil {
-			return errors.Wrap(err, "could not save public keys to file")
-		}
+	// Reload keys on every watcher (re)initialization: a failed refresh resets the
+	// in-memory keys to flag-provided defaults, so a recovery must restore the
+	// file-loaded set even when the flag-provided keys are not empty.
+	fileKeys, _, err := km.readKeyFile()
+	if err != nil {
+		return errors.Wrap(err, "could not read key file")
+	}
+	if len(fileKeys) == 0 {
+		log.Warnln("Remote signer key file no longer has keys, defaulting to flag provided keys")
+		fileKeys = slices.Collect(maps.Values(km.flagLoadedKeysMap))
+	}
+	currentKeys, err := km.FetchValidatingPublicKeys(ctx)
+	if err != nil {
+		return errors.Wrap(err, "could not fetch current keys")
+	}
+	if !slices.Equal(currentKeys, fileKeys) {
+		km.updatePublicKeys(fileKeys)
 	}
 	markReady(nil)
 	for {
