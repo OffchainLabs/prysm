@@ -799,6 +799,45 @@ func TestLatePayloadTasks_SendsFCU(t *testing.T) {
 	require.Equal(t, primitives.PayloadID(pid[:]), cachedPid)
 }
 
+func TestLatePayloadTasks_SendsFCUWhilePayloadSyncing(t *testing.T) {
+	resetCfg := features.InitWithReset(&features.Flags{
+		PrepareAllPayloads: true,
+	})
+	defer resetCfg()
+
+	pid := &enginev1.PayloadIDBytes{1, 2, 3, 4, 5, 6, 7, 8}
+	service, tr := setupGloasService(t, &mockExecution.EngineClient{PayloadIDBytes: pid})
+
+	blockHash := bytesutil.ToBytes32([]byte("hash1"))
+	base, blk := testGloasState(t, 1, params.BeaconConfig().ZeroHash, blockHash)
+	base.LatestBlockHash = blockHash[:]
+	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	require.NoError(t, err)
+
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	headRoot := bytesutil.ToBytes32([]byte("headroot"))
+	insertGloasBlock(t, service, base, blk, headRoot)
+	service.head = &head{
+		root:  headRoot,
+		block: signed,
+		state: st,
+		slot:  1,
+	}
+	service.SetGenesisTime(time.Now().Add(-3 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second / 2))
+	service.SetForkChoiceGenesisTime(service.genesisTime)
+
+	// The envelope validating past the 9s mark must not starve the proposer of the empty build.
+	require.NoError(t, service.payloadBeingSynced.set(headRoot))
+	defer service.payloadBeingSynced.unset(headRoot)
+
+	service.latePayloadTasks(tr.ctx)
+	cachedPid, has := service.cfg.PayloadIDCache.PayloadID(service.CurrentSlot()+1, headRoot, false)
+	require.Equal(t, true, has)
+	require.Equal(t, primitives.PayloadID(pid[:]), cachedPid)
+}
+
 func TestLateBlockTasks_GloasFCU(t *testing.T) {
 	logHook := logTest.NewGlobal()
 	resetCfg := features.InitWithReset(&features.Flags{
