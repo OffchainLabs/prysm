@@ -285,11 +285,6 @@ func (s *Service) shouldBuildOnFull(st state.ReadOnlyBeaconState, root [32]byte,
 }
 
 func (s *Service) shouldBuildOnFullLocked(root [32]byte, proposingSlot primitives.Slot, proposing bool) bool {
-	early, known := s.PayloadEarly(root)
-	if !known {
-		return false
-	}
-
 	hs, err := s.cfg.ForkChoiceStore.Slot(root)
 	if err != nil {
 		log.WithError(err).Error("Could not get slot for head root")
@@ -306,6 +301,10 @@ func (s *Service) shouldBuildOnFullLocked(root [32]byte, proposingSlot primitive
 		return true
 	}
 	if !proposing || !features.Get().ReorgLatePayloads {
+		return true
+	}
+	early, known := s.PayloadEarly(root)
+	if !known {
 		return true
 	}
 	return early
