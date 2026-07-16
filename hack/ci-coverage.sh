@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # Run coverage tests
 ./bazel.sh --bazelrc=.buildkite-bazelrc coverage --config=remote-cache --config=nostamp --features=norace --test_tag_filters="-race_on" --nocache_test_results -k  //...
 

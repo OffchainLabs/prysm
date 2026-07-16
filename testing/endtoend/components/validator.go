@@ -2,6 +2,8 @@ package components
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -16,12 +18,16 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/runtime/interop"
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -206,7 +212,7 @@ func (v *ValidatorNode) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	_, pubs, err := interop.DeterministicallyGenerateKeys(uint64(offset), uint64(validatorNum))
+	privs, pubs, err := interop.DeterministicallyGenerateKeys(uint64(offset), uint64(validatorNum))
 	if err != nil {
 		return err
 	}
@@ -254,6 +260,8 @@ func (v *ValidatorNode) Start(ctx context.Context) error {
 	if !v.config.UsePrysmShValidator {
 		args = append(args, features.E2EValidatorFlags...)
 	}
+	// Holds the wallet password file flag; appended just before exec and kept out of the logs below.
+	var walletPasswordArg string
 	if v.config.UseWeb3RemoteSigner {
 		// Write the pubkeys as comma separated hex strings with 0x prefix.
 		// See: https://docs.teku.consensys.net/en/latest/HowTo/External-Signer/Use-External-Signer/
@@ -270,11 +278,13 @@ func (v *ValidatorNode) Start(ctx context.Context) error {
 			args = append(args, fmt.Sprintf("--%s=%s", flags.Web3SignerPublicValidatorKeysFlag.Name, strings.Join(validatorHexPubKeys, ",")))
 		}
 	} else {
-		// When not using remote key signer, use interop keys.
-		args = append(args,
-			fmt.Sprintf("--%s=%d", flags.InteropNumValidators.Name, validatorNum),
-			fmt.Sprintf("--%s=%d", flags.InteropStartIndex.Name, offset),
-		)
+		walletDir := filepath.Join(e2e.TestParams.TestPath, fmt.Sprintf("validator-wallet-%d", index))
+		passwordFile, err := createValidatorWallet(ctx, walletDir, privs, pubs)
+		if err != nil {
+			return fmt.Errorf("failed to create validator wallet: %w", err)
+		}
+		args = append(args, fmt.Sprintf("--%s=%s", flags.WalletDirFlag.Name, walletDir))
+		walletPasswordArg = fmt.Sprintf("--%s=%s", flags.WalletPasswordFileFlag.Name, passwordFile)
 	}
 	if v.config.UseBuilder {
 		args = append(args, fmt.Sprintf("--%s", flags.EnableBuilderFlag.Name))
@@ -284,6 +294,12 @@ func (v *ValidatorNode) Start(ctx context.Context) error {
 	if v.config.UsePrysmShValidator {
 		args = append([]string{"validator"}, args...)
 		log.Warning("Using latest release validator via prysm.sh")
+	}
+
+	// Snapshot flags for logging before appending the wallet password file flag, keeping the secret path out of logs.
+	flagsForLog := strings.Join(args, " ")
+	if walletPasswordArg != "" {
+		args = append(args, walletPasswordArg)
 	}
 
 	cmd := exec.CommandContext(ctx, binaryPath, args...) // #nosec G204 -- Safe
@@ -308,7 +324,7 @@ func (v *ValidatorNode) Start(ctx context.Context) error {
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 
-	log.Infof("Starting validator client %d with flags: %s %s", index, binaryPath, strings.Join(args, " "))
+	log.Infof("Starting validator client %d with flags: %s %s", index, binaryPath, flagsForLog)
 	if err = cmd.Start(); err != nil {
 		return err
 	}
@@ -381,4 +397,42 @@ func createProposerSettingsPath(pubkeys []string, nodeIdx int) (string, error) {
 func FeeRecipientFromPubkey(key string) string {
 	// pubkey[:(2+fieldparams.FeeRecipientLength*2)] slicing 2 (for the 0x preamble) + 2 hex chars for each byte
 	return common.HexToAddress(key[:(2 + fieldparams.FeeRecipientLength*2)]).Hex()
+}
+
+// createValidatorWallet creates a new validator wallet with the provided keys
+// and returns the path to the password file.
+func createValidatorWallet(ctx context.Context, walletDir string, privKeys []bls.SecretKey, pubKeys []bls.PublicKey) (string, error) {
+	// Remove old encrypted wallet files if they exist, to ensure a clean state.
+	if err := os.RemoveAll(walletDir); err != nil {
+		return "", err
+	}
+
+	passwordBytes := make([]byte, 32)
+	if _, err := rand.Read(passwordBytes); err != nil {
+		return "", err
+	}
+	walletPassword := hex.EncodeToString(passwordBytes)
+	w := wallet.New(&wallet.Config{
+		WalletDir:      walletDir,
+		KeymanagerKind: keymanager.Local,
+		WalletPassword: walletPassword,
+	})
+	if err := w.SaveWallet(); err != nil {
+		return "", err
+	}
+	km, err := local.NewKeymanager(ctx, &local.SetupConfig{Wallet: w})
+	if err != nil {
+		return "", err
+	}
+	privKeyBytes := make([][]byte, len(privKeys))
+	pubKeyBytes := make([][]byte, len(pubKeys))
+	for i := range privKeys {
+		privKeyBytes[i] = privKeys[i].Marshal()
+		pubKeyBytes[i] = pubKeys[i].Marshal()
+	}
+	if err := km.ImportKeypairs(ctx, privKeyBytes, pubKeyBytes); err != nil {
+		return "", err
+	}
+	passwordFile := filepath.Join(walletDir, wallet.DefaultWalletPasswordFile)
+	return passwordFile, file.WriteFile(passwordFile, []byte(walletPassword))
 }

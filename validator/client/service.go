@@ -270,7 +270,7 @@ func (v *ValidatorService) Start() {
 				return
 			}
 
-			go v.validator.StartEventStream(runnerCtx, eventClient.DefaultEventTopics)
+			v.validator.EnsureEventStream(runnerCtx, eventClient.DefaultEventTopics)
 
 			runner.run(runnerCtx)
 			// run is finished if we get to this point
