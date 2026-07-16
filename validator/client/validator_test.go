@@ -42,7 +42,6 @@ import (
 	dbTest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
-	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/ethereum/go-ethereum/common"
@@ -994,32 +993,6 @@ func TestValidator_WaitForKeymanagerInitialization_Web(t *testing.T) {
 	}
 }
 
-func TestValidator_WaitForKeymanagerInitialization_Interop(t *testing.T) {
-	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
-		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
-			ctx := t.Context()
-			db := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
-			root := make([]byte, 32)
-			copy(root[2:], "a")
-			err := db.SaveGenesisValidatorsRoot(ctx, root)
-			require.NoError(t, err)
-			v := validator{
-				db:        db,
-				enableAPI: false,
-				interopKeysConfig: &local.InteropKeymanagerConfig{
-					NumValidatorKeys: 2,
-					Offset:           1,
-				},
-			}
-			err = v.WaitForKeymanagerInitialization(ctx)
-			require.NoError(t, err)
-			km, err := v.Keymanager()
-			require.NoError(t, err)
-			require.NotNil(t, km)
-		})
-	}
-}
-
 type PrepareBeaconProposerRequestMatcher struct {
 	expectedRecipients []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer
 }
@@ -1095,13 +1068,8 @@ func TestValidator_PushSettings(t *testing.T) {
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
 						enableAPI:                    false,
-						interopKeysConfig: &local.InteropKeymanagerConfig{
-							NumValidatorKeys: 2,
-							Offset:           1,
-						},
+						km:                           genMockKeymanager(t, 2),
 					}
-					err := v.WaitForKeymanagerInitialization(ctx)
-					require.NoError(t, err)
 					config := make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
 					km, err := v.Keymanager()
 					require.NoError(t, err)
@@ -1186,13 +1154,8 @@ func TestValidator_PushSettings(t *testing.T) {
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
 						enableAPI:                    false,
-						interopKeysConfig: &local.InteropKeymanagerConfig{
-							NumValidatorKeys: 2,
-							Offset:           1,
-						},
+						km:                           genMockKeymanager(t, 2),
 					}
-					err := v.WaitForKeymanagerInitialization(ctx)
-					require.NoError(t, err)
 					config := make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
 					km, err := v.Keymanager()
 					require.NoError(t, err)
@@ -1272,13 +1235,8 @@ func TestValidator_PushSettings(t *testing.T) {
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
 						enableAPI:                    false,
-						interopKeysConfig: &local.InteropKeymanagerConfig{
-							NumValidatorKeys: 2,
-							Offset:           1,
-						},
+						km:                           genMockKeymanager(t, 2),
 					}
-					err := v.WaitForKeymanagerInitialization(ctx)
-					require.NoError(t, err)
 					config := make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
 					km, err := v.Keymanager()
 					require.NoError(t, err)
@@ -1342,16 +1300,11 @@ func TestValidator_PushSettings(t *testing.T) {
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
 						enableAPI:                    false,
-						interopKeysConfig: &local.InteropKeymanagerConfig{
-							NumValidatorKeys: 1,
-							Offset:           1,
-						},
-						genesisTime: time.Unix(0, 0),
+						km:                           genMockKeymanager(t, 1),
+						genesisTime:                  time.Unix(0, 0),
 					}
 					// set bellatrix as current epoch
 					params.BeaconConfig().BellatrixForkEpoch = 0
-					err := v.WaitForKeymanagerInitialization(ctx)
-					require.NoError(t, err)
 					km, err := v.Keymanager()
 					require.NoError(t, err)
 					keys, err := km.FetchValidatingPublicKeys(ctx)
@@ -1415,13 +1368,8 @@ func TestValidator_PushSettings(t *testing.T) {
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
 						enableAPI:                    false,
-						interopKeysConfig: &local.InteropKeymanagerConfig{
-							NumValidatorKeys: 1,
-							Offset:           1,
-						},
+						km:                           genMockKeymanager(t, 1),
 					}
-					err := v.WaitForKeymanagerInitialization(ctx)
-					require.NoError(t, err)
 					err = v.SetProposerSettings(t.Context(), &proposer.Settings{
 						ProposeConfig: nil,
 						DefaultConfig: &proposer.Option{
@@ -1484,13 +1432,8 @@ func TestValidator_PushSettings(t *testing.T) {
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
 						enableAPI:                    false,
-						interopKeysConfig: &local.InteropKeymanagerConfig{
-							NumValidatorKeys: 1,
-							Offset:           1,
-						},
+						km:                           genMockKeymanager(t, 1),
 					}
-					err := v.WaitForKeymanagerInitialization(ctx)
-					require.NoError(t, err)
 					config := make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
 					km, err := v.Keymanager()
 					require.NoError(t, err)
@@ -1541,13 +1484,8 @@ func TestValidator_PushSettings(t *testing.T) {
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
 						enableAPI:                    false,
-						interopKeysConfig: &local.InteropKeymanagerConfig{
-							NumValidatorKeys: 1,
-							Offset:           1,
-						},
+						km:                           genMockKeymanager(t, 1),
 					}
-					err := v.WaitForKeymanagerInitialization(ctx)
-					require.NoError(t, err)
 					config := make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
 					km, err := v.Keymanager()
 					require.NoError(t, err)
@@ -1588,13 +1526,8 @@ func TestValidator_PushSettings(t *testing.T) {
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
 						enableAPI:                    false,
-						interopKeysConfig: &local.InteropKeymanagerConfig{
-							NumValidatorKeys: 1,
-							Offset:           1,
-						},
+						km:                           genMockKeymanager(t, 1),
 					}
-					err := v.WaitForKeymanagerInitialization(ctx)
-					require.NoError(t, err)
 					config := make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
 					km, err := v.Keymanager()
 					require.NoError(t, err)
@@ -3180,14 +3113,10 @@ func TestValidator_PushProposerSettings_SkipsBuilderRegistrationsPostGloas(t *te
 		db:                           db,
 		pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 		signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
-		interopKeysConfig: &local.InteropKeymanagerConfig{
-			NumValidatorKeys: 1,
-			Offset:           1,
-		},
-		duties:             &dutyStore{},
-		submittedPrefSlots: make(map[primitives.Slot]bool),
+		km:                           genMockKeymanager(t, 1),
+		duties:                       &dutyStore{},
+		submittedPrefSlots:           make(map[primitives.Slot]bool),
 	}
-	require.NoError(t, v.WaitForKeymanagerInitialization(ctx))
 	km, err := v.Keymanager()
 	require.NoError(t, err)
 	keys, err := km.FetchValidatingPublicKeys(ctx)

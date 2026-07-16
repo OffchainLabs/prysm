@@ -888,16 +888,17 @@ func TestServer_GetBeaconBlock_Optimistic(t *testing.T) {
 func getProposerServer(ctx context.Context, db db.HeadAccessDatabase, headState state.BeaconState, headRoot []byte) *Server {
 	mockChainService := &mock.ChainService{State: headState, Root: headRoot, ForkChoiceStore: doublylinkedtree.New()}
 	return &Server{
-		HeadFetcher:           mockChainService,
-		SyncChecker:           &mockSync.Sync{IsSyncing: false},
-		BlockReceiver:         mockChainService,
-		ChainStartFetcher:     &mockExecution.Chain{},
-		Eth1InfoFetcher:       &mockExecution.Chain{},
+		HeadFetcher:       mockChainService,
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		BlockReceiver:     mockChainService,
+		ChainStartFetcher: &mockExecution.Chain{},
+		// Report the execution client as disconnected so block production uses an
+		// empty deposit list and a self-contained eth1 data vote (no live EL needed).
+		Eth1InfoFetcher:       &mockExecution.Chain{NotConnected: true},
 		Eth1BlockFetcher:      &mockExecution.Chain{},
 		FinalizationFetcher:   mockChainService,
 		ForkFetcher:           mockChainService,
 		ForkchoiceFetcher:     mockChainService,
-		MockEth1Votes:         true,
 		AttPool:               attestations.NewPool(),
 		SlashingsPool:         slashings.NewPool(),
 		ExitPool:              voluntaryexits.NewPool(),
