@@ -3544,11 +3544,10 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 		Eth1InfoFetcher:   &mockExecution.Chain{},
 		Eth1BlockFetcher:  &mockExecution.Chain{},
 		ForkchoiceFetcher: &mock.ChainService{},
-		HeadFetcher:       &mock.ChainService{},
 		StateGen:          stategen.New(db, doublylinkedtree.New()),
 	}
 	t.Run("successful reorg", func(tt *testing.T) {
-		head, _, err := proposerServer.getParentStateFromReorgData(ctx, 1, parentRoot, parentRoot, headRoot)
+		head, err := proposerServer.getParentStateFromReorgData(ctx, 1, parentRoot, parentRoot, headRoot)
 		require.NoError(t, err)
 		st := parentState.Copy()
 		st, err = transition.ProcessSlots(ctx, st, st.Slot()+1)
@@ -3565,7 +3564,7 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 
 	t.Run("no reorg", func(tt *testing.T) {
 		require.NoError(t, transition.UpdateNextSlotCache(ctx, headRoot[:], headState))
-		head, _, err := proposerServer.getParentStateFromReorgData(ctx, 1, headRoot, headRoot, headRoot)
+		head, err := proposerServer.getParentStateFromReorgData(ctx, 1, headRoot, headRoot, headRoot)
 		require.NoError(t, err)
 		st := headState.Copy()
 		st, err = transition.ProcessSlots(ctx, st, st.Slot()+1)
@@ -3583,7 +3582,7 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 	t.Run("failed reorg", func(tt *testing.T) {
 		hook := logTest.NewGlobal()
 		require.NoError(t, transition.UpdateNextSlotCache(ctx, headRoot[:], headState))
-		head, _, err := proposerServer.getParentStateFromReorgData(ctx, 1, parentRoot, headRoot, headRoot)
+		head, err := proposerServer.getParentStateFromReorgData(ctx, 1, parentRoot, headRoot, headRoot)
 		require.NoError(t, err)
 		st := headState.Copy()
 		st, err = transition.ProcessSlots(ctx, st, st.Slot()+1)
@@ -3607,7 +3606,7 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 			StateGen:          stategen.New(db, doublylinkedtree.New()),
 		}
 
-		head, _, err := proposerServer.getParentStateFromReorgData(ctx, 1, parentRoot, parentRoot, headRoot)
+		head, err := proposerServer.getParentStateFromReorgData(ctx, 1, parentRoot, parentRoot, headRoot)
 		require.NoError(t, err)
 		st := parentState.Copy()
 		st, err = transition.ProcessSlots(ctx, st, st.Slot()+1)
@@ -3630,7 +3629,7 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 			},
 		}
 
-		head, _, err := proposerServer.getParentStateFromReorgData(ctx, 1, headRoot, headRoot, headRoot)
+		head, err := proposerServer.getParentStateFromReorgData(ctx, 1, headRoot, headRoot, headRoot)
 		require.NoError(t, err)
 		st := parentState.Copy()
 		st, err = transition.ProcessSlots(ctx, st, st.Slot()+1)
