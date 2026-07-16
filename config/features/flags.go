@@ -33,10 +33,6 @@ var (
 		Name:  "dev",
 		Usage: "Enables experimental features still in development. These features may not be stable.",
 	}
-	writeSSZStateTransitionsFlag = &cli.BoolFlag{
-		Name:  "interop-write-ssz-state-transitions",
-		Usage: "Writes SSZ states to disk after attempted state transitio.",
-	}
 	saveInvalidBlockTempFlag = &cli.BoolFlag{
 		Name:  "save-invalid-block-temp",
 		Usage: "Writes invalid blocks to temp directory.",
@@ -257,7 +253,6 @@ var E2EValidatorFlags = []string{
 // BeaconChainFlags contains a list of all the feature flags that apply to the beacon-chain client.
 var BeaconChainFlags = combinedFlags([]cli.Flag{
 	devModeFlag,
-	writeSSZStateTransitionsFlag,
 	saveInvalidBlockTempFlag,
 	saveInvalidBlobTempFlag,
 	disableGRPCConnectionLogging,

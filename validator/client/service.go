@@ -18,7 +18,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/graffiti"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
-	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
 	"github.com/dgraph-io/ristretto/v2"
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -44,7 +43,6 @@ type ValidatorService struct {
 	walletInitializedFeed   *event.Feed
 	graffiti                []byte
 	graffitiStruct          *graffiti.Graffiti
-	interopKeysConfig       *local.InteropKeymanagerConfig
 	web3SignerConfig        *remoteweb3signer.SetupConfig
 	proposerSettings        *proposer.Settings
 	maxHealthChecks         int
@@ -77,7 +75,6 @@ type Config struct {
 	BeaconApiTimeout        time.Duration
 	Graffiti                string
 	GraffitiStruct          *graffiti.Graffiti
-	InteropKmConfig         *local.InteropKeymanagerConfig
 	Web3SignerConfig        *remoteweb3signer.SetupConfig
 	ProposerSettings        *proposer.Settings
 	ValidatorsRegBatchSize  int
@@ -103,7 +100,6 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 		walletInitializedFeed:   cfg.WalletInitializedFeed,
 		graffiti:                []byte(cfg.Graffiti),
 		graffitiStruct:          cfg.GraffitiStruct,
-		interopKeysConfig:       cfg.InteropKmConfig,
 		web3SignerConfig:        cfg.Web3SignerConfig,
 		proposerSettings:        cfg.ProposerSettings,
 		validatorsRegBatchSize:  cfg.ValidatorsRegBatchSize,
@@ -212,7 +208,6 @@ func (v *ValidatorService) Start() {
 		proposerSettings:             v.proposerSettings,
 		signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
 		validatorsRegBatchSize:       v.validatorsRegBatchSize,
-		interopKeysConfig:            v.interopKeysConfig,
 		domainDataCache:              cache,
 		voteStats:                    voteStats{startEpoch: primitives.Epoch(^uint64(0))},
 		submittedAtts:                make(map[submittedAttKey]*submittedAtt),
@@ -292,11 +287,6 @@ func (v *ValidatorService) Status() error {
 		return errors.New("no connection to beacon RPC")
 	}
 	return nil
-}
-
-// InteropKeysConfig returns the useInteropKeys flag.
-func (v *ValidatorService) InteropKeysConfig() *local.InteropKeymanagerConfig {
-	return v.interopKeysConfig
 }
 
 // Keymanager returns the underlying keymanager in the validator

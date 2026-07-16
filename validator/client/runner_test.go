@@ -18,14 +18,17 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/interop"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/client/testutil"
 	testing2 "github.com/OffchainLabs/prysm/v7/validator/db/testing"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
@@ -38,6 +41,30 @@ func cancelledContext() context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	return ctx
+}
+
+// walletBackedKeymanager builds a local-keymanager wallet preloaded with numKeys
+// deterministic keys, so the runner's WaitForKeymanagerInitialization resolves a
+// real keymanager from the wallet path.
+func walletBackedKeymanager(t *testing.T, ctx context.Context, numKeys uint64) *wallet.Wallet {
+	privs, pubs, err := interop.DeterministicallyGenerateKeys(0, numKeys)
+	require.NoError(t, err)
+	w := wallet.New(&wallet.Config{
+		WalletDir:      t.TempDir(),
+		KeymanagerKind: keymanager.Local,
+		WalletPassword: "TestWalletPassword123!",
+	})
+	require.NoError(t, w.SaveWallet())
+	km, err := local.NewKeymanager(ctx, &local.SetupConfig{Wallet: w})
+	require.NoError(t, err)
+	privBytes := make([][]byte, numKeys)
+	pubBytes := make([][]byte, numKeys)
+	for i := range privs {
+		privBytes[i] = privs[i].Marshal()
+		pubBytes[i] = pubs[i].Marshal()
+	}
+	require.NoError(t, km.ImportKeypairs(ctx, privBytes, pubBytes))
+	return w
 }
 
 // Helper function to run the validator runner for tests
@@ -533,9 +560,7 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 		validatorClient: vcm,
 		nodeClient:      ncm,
 		db:              testing2.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false),
-		interopKeysConfig: &local.InteropKeymanagerConfig{
-			NumValidatorKeys: uint64(params.BeaconConfig().SlotsPerEpoch) * 4, // 4 Attesters per slot.
-		},
+		wallet:          walletBackedKeymanager(t, timedCtx, uint64(params.BeaconConfig().SlotsPerEpoch)*4),
 		proposerSettings: &proposer.Settings{
 			ProposeConfig: make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option),
 			DefaultConfig: &proposer.Option{

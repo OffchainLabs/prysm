@@ -55,8 +55,6 @@ var appFlags = []cli.Flag{
 	flags.CertFlag,
 	flags.GraffitiFlag,
 	flags.DisablePenaltyRewardLogFlag,
-	flags.InteropStartIndex,
-	flags.InteropNumValidators,
 	flags.EnableRPCFlag,
 	flags.RPCHost,
 	flags.RPCPort,
