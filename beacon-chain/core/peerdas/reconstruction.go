@@ -433,9 +433,6 @@ func CellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs []*pb.B
 	return buildStructuredCellsAndProofs(commitmentCount, perBlobCells, perBlobProofs), nil
 }
 
-// CellsAndProofsFromStructured computes the cells and proofs from blobs and cell proofs.
-// commitmentCount is required to return the correct sized bitlist even if we see a nil slice of blobsAndProofs.
-
 // CellsAndProofsFromStructuredV4 maps the getBlobsV4 response into a StructuredCellsAndProofs.
 // In the returned value, nil cells or proofs can exist to mark an absent entry.
 func CellsAndProofsFromStructuredV4(commitmentCount uint64, requested []uint64, result []*pb.BlobCellsAndProofsV1) StructuredCellsAndProofs {
