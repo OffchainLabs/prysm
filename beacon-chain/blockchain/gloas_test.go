@@ -590,6 +590,13 @@ func TestShouldBuildOnFull(t *testing.T) {
 		return service, root, blockSlot
 	}
 
+	assertBuild := func(t *testing.T, service *Service, root [32]byte, slot primitives.Slot, proposing, wantBuild bool, wantReason string) {
+		t.Helper()
+		buildFull, reason := service.shouldBuildOnFullLocked(root, slot, proposing)
+		require.Equal(t, wantBuild, buildFull)
+		require.Equal(t, wantReason, reason)
+	}
+
 	t.Run("only the previous slot is reorgable", func(t *testing.T) {
 		service, root, blockSlot := setup(t, "wrong-slot")
 		env := &ethpb.ExecutionPayloadEnvelope{
@@ -601,40 +608,46 @@ func TestShouldBuildOnFull(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, service.InsertPayload(envelope))
 		recordTestPayloadArrival(t, service, root, blockSlot, false)
-		require.Equal(t, true, service.shouldBuildOnFullLocked(root, blockSlot+2, true))
+		assertBuild(t, service, root, blockSlot+2, true, true, "")
 	})
 
-	t.Run("unknown root is not built on", func(t *testing.T) {
+	t.Run("settled slot follows forkchoice weight", func(t *testing.T) {
+		service, root, blockSlot := setup(t, "settled-empty")
+		recordTestPayloadArrival(t, service, root, blockSlot, false)
+		assertBuild(t, service, root, blockSlot+2, true, false, "forkchoice prefers empty")
+	})
+
+	t.Run("unknown root is not reorgable", func(t *testing.T) {
 		service, _, blockSlot := setup(t, "known")
-		require.Equal(t, false, service.shouldBuildOnFullLocked(bytesutil.ToBytes32([]byte("unknown")), blockSlot+1, true))
+		assertBuild(t, service, bytesutil.ToBytes32([]byte("unknown")), blockSlot+1, true, true, "")
 	})
 
 	t.Run("ptc late verdict reorgs even an early payload", func(t *testing.T) {
 		service, root, blockSlot := setup(t, "ptc-late")
 		recordTestPayloadArrival(t, service, root, blockSlot, true)
 		setTestPTCVotes(service, root, false, false)
-		require.Equal(t, false, service.shouldBuildOnFullLocked(root, blockSlot+1, true))
-		require.Equal(t, false, service.shouldBuildOnFullLocked(root, blockSlot+1, false))
+		assertBuild(t, service, root, blockSlot+1, true, false, "ptc voted payload missing")
+		assertBuild(t, service, root, blockSlot+1, false, false, "ptc voted payload missing")
 	})
 
 	t.Run("ptc certification keeps even a late payload", func(t *testing.T) {
 		service, root, blockSlot := setup(t, "ptc-certified")
 		recordTestPayloadArrival(t, service, root, blockSlot, false)
 		setTestPTCVotes(service, root, true, true)
-		require.Equal(t, true, service.shouldBuildOnFullLocked(root, blockSlot+1, true))
+		assertBuild(t, service, root, blockSlot+1, true, true, "")
 	})
 
 	t.Run("no verdict early payload stays", func(t *testing.T) {
 		service, root, blockSlot := setup(t, "early")
 		recordTestPayloadArrival(t, service, root, blockSlot, true)
-		require.Equal(t, true, service.shouldBuildOnFullLocked(root, blockSlot+1, true))
+		assertBuild(t, service, root, blockSlot+1, true, true, "")
 	})
 
 	t.Run("no verdict late payload is bet against", func(t *testing.T) {
 		service, root, blockSlot := setup(t, "late")
 		recordTestPayloadArrival(t, service, root, blockSlot, false)
-		require.Equal(t, false, service.shouldBuildOnFullLocked(root, blockSlot+1, true))
-		require.Equal(t, true, service.shouldBuildOnFullLocked(root, blockSlot+1, false))
+		assertBuild(t, service, root, blockSlot+1, true, false, "arrived late, betting on empty")
+		assertBuild(t, service, root, blockSlot+1, false, true, "")
 	})
 
 	t.Run("no verdict late payload stays with flag off", func(t *testing.T) {
@@ -642,19 +655,19 @@ func TestShouldBuildOnFull(t *testing.T) {
 		recordTestPayloadArrival(t, service, root, blockSlot, false)
 		reset := features.InitWithReset(&features.Flags{})
 		defer reset()
-		require.Equal(t, true, service.shouldBuildOnFullLocked(root, blockSlot+1, true))
+		assertBuild(t, service, root, blockSlot+1, true, true, "")
 	})
 
-	t.Run("unknown arrival is not built on", func(t *testing.T) {
+	t.Run("no verdict unknown arrival stays", func(t *testing.T) {
 		service, root, blockSlot := setup(t, "unknown-arrival")
-		require.Equal(t, false, service.shouldBuildOnFullLocked(root, blockSlot+1, true))
+		assertBuild(t, service, root, blockSlot+1, true, true, "")
 	})
 
 	t.Run("late without data availability is still bet against", func(t *testing.T) {
 		service, root, blockSlot := setup(t, "late-unavailable")
 		recordTestPayloadArrival(t, service, root, blockSlot, false)
 		setTestPTCVotes(service, root, true, false)
-		require.Equal(t, false, service.shouldBuildOnFullLocked(root, blockSlot+1, true))
+		assertBuild(t, service, root, blockSlot+1, true, false, "arrived late, betting on empty")
 	})
 }
 
@@ -714,7 +727,7 @@ func TestPostPayloadTasks_BetsAgainstLatePayload(t *testing.T) {
 
 	require.NoError(t, service.postPayloadTasks(t.Context(), envelope, st))
 
-	require.LogsContain(t, logHook, "Not building on late payload")
+	require.LogsContain(t, logHook, "Not building on payload")
 	service.headLock.RLock()
 	require.Equal(t, false, service.head.full)
 	service.headLock.RUnlock()

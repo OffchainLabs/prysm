@@ -277,37 +277,40 @@ func (s *Service) saveHeadIfNeeded(ctx context.Context, cfg *postBlockProcessCon
 	s.pruneAttsFromPool(ctx, cfg.postState, cfg.roblock)
 }
 
-func (s *Service) shouldBuildOnFull(st state.ReadOnlyBeaconState, root [32]byte, proposingSlot primitives.Slot) bool {
+func (s *Service) shouldBuildOnFull(st state.ReadOnlyBeaconState, root [32]byte, proposingSlot primitives.Slot) (bool, string) {
 	proposing := s.proposingAt(st, proposingSlot)
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.shouldBuildOnFullLocked(root, proposingSlot, proposing)
 }
 
-func (s *Service) shouldBuildOnFullLocked(root [32]byte, proposingSlot primitives.Slot, proposing bool) bool {
+func (s *Service) shouldBuildOnFullLocked(root [32]byte, proposingSlot primitives.Slot, proposing bool) (bool, string) {
 	hs, err := s.cfg.ForkChoiceStore.Slot(root)
 	if err != nil {
 		log.WithError(err).Error("Could not get slot for head root")
-		return true
+		return true, ""
 	}
 
 	if hs+1 != proposingSlot {
-		return s.cfg.ForkChoiceStore.FullBeatsEmpty(root)
+		if !s.cfg.ForkChoiceStore.FullBeatsEmpty(root) {
+			return false, "forkchoice prefers empty"
+		}
+		return true, ""
 	}
 	if s.cfg.ForkChoiceStore.PTCVotedLate(root) {
-		return false
+		return false, "ptc voted payload missing"
 	}
 	if s.cfg.ForkChoiceStore.PTCVotedEarlyAndAvailable(root) {
-		return true
+		return true, ""
 	}
 	if !proposing || !features.Get().ReorgLatePayloads {
-		return true
+		return true, ""
 	}
 	early, known := s.PayloadEarly(root)
-	if !known {
-		return true
+	if known && !early {
+		return false, "arrived late, betting on empty"
 	}
-	return early
+	return true, ""
 }
 
 func (s *Service) proposingAt(st state.ReadOnlyBeaconState, slot primitives.Slot) bool {
