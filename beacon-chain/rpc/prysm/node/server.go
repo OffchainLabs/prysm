@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/runtime/jobs"
 )
 
 type Server struct {
@@ -18,4 +19,5 @@ type Server struct {
 	GenesisTimeFetcher        blockchain.TimeFetcher
 	HeadFetcher               blockchain.HeadFetcher
 	ExecutionChainInfoFetcher execution.ChainInfoFetcher
+	JobsRegistry              *jobs.Registry
 }

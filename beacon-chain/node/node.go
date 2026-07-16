@@ -66,6 +66,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/genesis"
 	"github.com/OffchainLabs/prysm/v7/monitoring/prometheus"
 	"github.com/OffchainLabs/prysm/v7/runtime"
+	"github.com/OffchainLabs/prysm/v7/runtime/jobs"
 	"github.com/OffchainLabs/prysm/v7/runtime/prereqs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
@@ -134,6 +135,7 @@ type BeaconNode struct {
 	lcStore                   *lightclient.Store
 	ConfigOptions             []params.Option
 	SyncNeedsWaiter           func() (das.SyncNeeds, error)
+	jobsRegistry              *jobs.Registry
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -179,6 +181,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		initialSyncComplete:       make(chan struct{}),
 		syncChecker:               &initialsync.SyncChecker{},
 		slasherEnabled:            cliCtx.Bool(flags.SlasherFlag.Name),
+		jobsRegistry:              jobs.NewRegistry(),
 	}
 
 	for _, opt := range opts {
@@ -257,6 +260,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		backfill.WithVerifierWaiter(beacon.verifyInitWaiter),
 		backfill.WithInitSyncWaiter(initSyncWaiter(ctx, beacon.initialSyncComplete)),
 		backfill.WithSyncNeedsWaiter(beacon.SyncNeedsWaiter),
+		backfill.WithJobRegistry(beacon.jobsRegistry),
 	)
 
 	if err := registerServices(cliCtx, beacon, synchronizer, bfs); err != nil {
@@ -1045,6 +1049,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		LCStore:                          b.lcStore,
 		GraffitiInfo:                     web3Service.GraffitiInfo(),
 		VerifierWaiter:                   b.verifyInitWaiter,
+		JobsRegistry:                     b.jobsRegistry,
 	})
 
 	return b.services.RegisterService(rpcService)

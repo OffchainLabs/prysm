@@ -1311,6 +1311,7 @@ func (s *Service) prysmNodeEndpoints() []endpoint {
 		MetadataProvider:          s.cfg.MetadataProvider,
 		HeadFetcher:               s.cfg.HeadFetcher,
 		ExecutionChainInfoFetcher: s.cfg.ExecutionChainInfoFetcher,
+		JobsRegistry:              s.cfg.JobsRegistry,
 	}
 
 	const namespace = "prysm.node"
@@ -1376,6 +1377,26 @@ func (s *Service) prysmNodeEndpoints() []endpoint {
 			},
 			handler: server.RemoveTrustedPeer,
 			methods: []string{http.MethodDelete},
+		},
+		{
+			template: "/prysm/v1/node/jobs",
+			name:     namespace + ".GetJobs",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetJobs,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/prysm/v1/node/jobs/{job_id}",
+			name:     namespace + ".GetJob",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetJob,
+			methods: []string{http.MethodGet},
 		},
 	}
 }
