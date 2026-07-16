@@ -147,9 +147,13 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 		return
 	}
 
-	if full && !s.shouldBuildOnFullLocked(newHeadRoot, proposingSlot, s.proposingAt(headState, proposingSlot)) {
-		full = false
-		headHash = s.cfg.ForkChoiceStore.ParentHash(newHeadRoot)
+	var reason string
+	if full {
+		if buildFull, r := s.shouldBuildOnFullLocked(newHeadRoot, proposingSlot, s.proposingAt(headState, proposingSlot)); !buildFull {
+			full = false
+			headHash = s.cfg.ForkChoiceStore.ParentHash(newHeadRoot)
+			reason = r
+		}
 	}
 	if !s.isNewHead(newHeadRoot, full) {
 		return
@@ -158,7 +162,11 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 	if !attr.IsEmpty() && s.shouldOverrideFCU(newHeadRoot, proposingSlot) {
 		return
 	}
-	log.WithFields(logrus.Fields{"newHeadRoot": fmt.Sprintf("%#x", newHeadRoot), "full": full}).Debug("Head changed late in slot")
+	fields := logrus.Fields{"newHeadRoot": fmt.Sprintf("%#x", newHeadRoot), "full": full}
+	if reason != "" {
+		fields["reason"] = reason
+	}
+	log.WithFields(fields).Debug("Head changed late in slot")
 	postGloas := slots.ToEpoch(proposingSlot) >= params.BeaconConfig().GloasForkEpoch
 	if postGloas {
 		go s.fcuFromReorgData(headBlock, newHeadRoot, headHash, full, attr, proposingSlot)

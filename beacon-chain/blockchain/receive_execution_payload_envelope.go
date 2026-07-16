@@ -204,11 +204,14 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 		return nil
 	}
 	proposingSlot := s.CurrentSlot() + 1
-	if !s.shouldBuildOnFull(st, root, proposingSlot) {
+	if buildFull, reason := s.shouldBuildOnFull(st, root, proposingSlot); !buildFull {
+		bh := envelope.BlockHash()
 		log.WithFields(logrus.Fields{
-			"blockRoot": fmt.Sprintf("%#x", root),
+			"blockRoot": fmt.Sprintf("%#x", bytesutil.Trunc(root[:])),
+			"blockHash": fmt.Sprintf("%#x", bytesutil.Trunc(bh[:])),
 			"slot":      envelope.Slot(),
-		}).Info("Not building on late payload")
+			"reason":    reason,
+		}).Debug("Not building on payload")
 		return nil
 	}
 	headBlock := s.setHeadFull(root)
