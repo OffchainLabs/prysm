@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	builderAPI "github.com/OffchainLabs/prysm/v7/api/client/builder"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -26,6 +27,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/network"
 	"github.com/OffchainLabs/prysm/v7/network/authorization"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -40,10 +42,11 @@ import (
 )
 
 const (
-	statusPath   = "GET /eth/v1/builder/status"
-	registerPath = "POST /eth/v1/builder/validators"
-	headerPath   = "GET /eth/v1/builder/header/{slot}/{parent_hash}/{pubkey}"
-	blindedPath  = "POST /eth/v1/builder/blinded_blocks"
+	statusPath      = "GET /eth/v1/builder/status"
+	registerPath    = "POST /eth/v1/builder/validators"
+	headerPath      = "GET /eth/v1/builder/header/{slot}/{parent_hash}/{pubkey}"
+	blindedPath     = "POST /eth/v1/builder/blinded_blocks"
+	fuluBlindedPath = "POST /eth/v2/builder/blinded_blocks"
 
 	// ForkchoiceUpdatedMethod v1 request string for JSON-RPC.
 	ForkchoiceUpdatedMethod = "engine_forkchoiceUpdatedV1"
@@ -136,6 +139,7 @@ func New(opts ...Option) (*Builder, error) {
 	router.HandleFunc(registerPath, p.registerValidators)
 	router.HandleFunc(headerPath, p.handleHeaderRequest)
 	router.HandleFunc(blindedPath, p.handleBlindedBlock)
+	router.HandleFunc(fuluBlindedPath, p.handleBlindedBlockPostFulu)
 	addr := net.JoinHostPort(p.cfg.builderHost, strconv.Itoa(p.cfg.builderPort))
 	srv := &http.Server{
 		Handler:           router,
@@ -265,27 +269,97 @@ func (p *Builder) handleEngineCalls(req, resp []byte) {
 }
 
 func (*Builder) isBuilderCall(req *http.Request) bool {
-	return strings.Contains(req.URL.Path, "/eth/v1/builder/")
+	return strings.Contains(req.URL.Path, "/eth/v1/builder/") || strings.Contains(req.URL.Path, "/eth/v2/builder/")
 }
 
 func (p *Builder) registerValidators(w http.ResponseWriter, req *http.Request) {
-	var registrations []structs.SignedValidatorRegistration
-	if err := json.NewDecoder(req.Body).Decode(&registrations); err != nil {
+	registrations, err := decodeValidatorRegistrations(req)
+	if err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
-	for _, r := range registrations {
-		msg, err := r.Message.ToConsensus()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		p.valLock.Lock()
-		p.validatorMap[r.Message.Pubkey] = msg
-		p.valLock.Unlock()
+	p.valLock.Lock()
+	for _, registration := range registrations {
+		p.validatorMap[hexutil.Encode(registration.Message.Pubkey)] = registration.Message
 	}
+	p.valLock.Unlock()
 	// TODO: Verify Signatures from validators
 	w.WriteHeader(http.StatusOK)
+}
+
+func decodeValidatorRegistrations(req *http.Request) ([]*eth.SignedValidatorRegistrationV1, error) {
+	if httputil.IsRequestSsz(req) {
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			return nil, err
+		}
+		registrationSize := (&eth.SignedValidatorRegistrationV1{}).SizeSSZ()
+		if len(body) == 0 || len(body)%registrationSize != 0 {
+			return nil, errors.New("invalid validator registration SSZ framing")
+		}
+		registrations := make([]*eth.SignedValidatorRegistrationV1, 0, len(body)/registrationSize)
+		for offset := 0; offset < len(body); offset += registrationSize {
+			registration := &eth.SignedValidatorRegistrationV1{}
+			if err := registration.UnmarshalSSZ(body[offset : offset+registrationSize]); err != nil {
+				return nil, err
+			}
+			registrations = append(registrations, registration)
+		}
+		return registrations, nil
+	}
+
+	jsonRegistrations, err := decodeSingleJSON[[]structs.SignedValidatorRegistration](req.Body)
+	if err != nil {
+		return nil, err
+	}
+	if len(jsonRegistrations) == 0 {
+		return nil, errors.New("empty validator registration JSON batch")
+	}
+	registrations := make([]*eth.SignedValidatorRegistrationV1, 0, len(jsonRegistrations))
+	for _, registration := range jsonRegistrations {
+		consensusRegistration, err := registration.ToConsensus()
+		if err != nil {
+			return nil, err
+		}
+		registrations = append(registrations, consensusRegistration)
+	}
+	return registrations, nil
+}
+
+func decodeSingleJSON[T any](reader io.Reader) (T, error) {
+	var value T
+	decoder := json.NewDecoder(reader)
+	if err := decoder.Decode(&value); err != nil {
+		return value, err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err == nil {
+		return value, errors.New("multiple JSON documents")
+	} else if !errors.Is(err, io.EOF) {
+		return value, err
+	}
+	return value, nil
+}
+
+type sszMarshaler interface {
+	MarshalSSZ() ([]byte, error)
+}
+
+func writeBuilderResponse(w http.ResponseWriter, req *http.Request, forkVersion int, jsonResponse any, sszResponse sszMarshaler) error {
+	w.Header().Set(api.VersionHeader, version.String(forkVersion))
+	if httputil.RespondWithSsz(req) {
+		body, err := sszResponse.MarshalSSZ()
+		if err != nil {
+			return err
+		}
+		w.Header().Set("Content-Type", api.OctetStreamMediaType)
+		w.WriteHeader(http.StatusOK)
+		_, err = w.Write(body)
+		return err
+	}
+	w.Header().Set("Content-Type", api.JsonMediaType)
+	w.WriteHeader(http.StatusOK)
+	return json.NewEncoder(w).Encode(jsonResponse)
 }
 
 func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) {
@@ -322,17 +396,17 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 	ax := types.Slot(slot)
 	currEpoch := types.Epoch(ax / params.BeaconConfig().SlotsPerEpoch)
 	if currEpoch >= params.BeaconConfig().ElectraForkEpoch {
-		p.handleHeaderRequestElectra(w)
+		p.handleHeaderRequestElectra(w, req)
 		return
 	}
 
 	if currEpoch >= params.BeaconConfig().DenebForkEpoch {
-		p.handleHeaderRequestDeneb(w)
+		p.handleHeaderRequestDeneb(w, req)
 		return
 	}
 
 	if currEpoch >= params.BeaconConfig().CapellaForkEpoch {
-		p.handleHeaderRequestCapella(w)
+		p.handleHeaderRequestCapella(w, req)
 		return
 	}
 
@@ -405,8 +479,7 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 			Message:   bid,
 		},
 	}
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(hdrResp)
+	err = writeBuilderResponse(w, req, version.Bellatrix, hdrResp, &eth.SignedBuilderBid{Message: sszBid, Signature: sig.Marshal()})
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -416,7 +489,7 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 	p.currPayload = wObj
 }
 
-func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
+func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter, req *http.Request) {
 	b, err := p.retrievePendingBlockCapella()
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not retrieve pending block")
@@ -487,8 +560,7 @@ func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
 			Message:   bid,
 		},
 	}
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(hdrResp)
+	err = writeBuilderResponse(w, req, version.Capella, hdrResp, &eth.SignedBuilderBidCapella{Message: sszBid, Signature: sig.Marshal()})
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -498,7 +570,7 @@ func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
 	p.currPayload = wObj
 }
 
-func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
+func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter, req *http.Request) {
 	b, err := p.retrievePendingBlockDeneb()
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not retrieve pending block")
@@ -577,8 +649,7 @@ func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
 			Message:   bid,
 		},
 	}
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(hdrResp)
+	err = writeBuilderResponse(w, req, version.Deneb, hdrResp, &eth.SignedBuilderBidDeneb{Message: sszBid, Signature: sig.Marshal()})
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -589,7 +660,7 @@ func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
 	p.blobBundle = b.BlobsBundle
 }
 
-func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
+func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter, req *http.Request) {
 	b, err := p.retrievePendingBlockElectra()
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not retrieve pending block")
@@ -679,8 +750,7 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
 			Message:   bid,
 		},
 	}
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(hdrResp)
+	err = writeBuilderResponse(w, req, version.Electra, hdrResp, &eth.SignedBuilderBidElectra{Message: sszBid, Signature: sig.Marshal()})
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -692,25 +762,11 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
 }
 
 func (p *Builder) handleBlindedBlock(w http.ResponseWriter, req *http.Request) {
-	// Decode blinded block based on the current fork version.
-	// The beacon node sends JSON using api/server/structs types.
-	var err error
-	switch p.currVersion {
-	case version.Electra:
-		var sb structs.SignedBlindedBeaconBlockElectra
-		err = json.NewDecoder(req.Body).Decode(&sb)
-	case version.Deneb:
-		var sb structs.SignedBlindedBeaconBlockDeneb
-		err = json.NewDecoder(req.Body).Decode(&sb)
-	case version.Capella:
-		var sb structs.SignedBlindedBeaconBlockCapella
-		err = json.NewDecoder(req.Body).Decode(&sb)
-	default:
-		var sb structs.SignedBlindedBeaconBlockBellatrix
-		err = json.NewDecoder(req.Body).Decode(&sb)
-	}
+	err := p.decodeBlindedBlockRequest(req)
 	if err != nil {
 		p.cfg.logger.WithError(err).WithField("version", version.String(p.currVersion)).Error("Could not decode blinded block")
+		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 	if p.currPayload == nil {
 		p.cfg.logger.Error("No payload is cached")
@@ -724,12 +780,113 @@ func (p *Builder) handleBlindedBlock(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(resp)
+	sszResponse, err := executionPayloadSSZResponse(p.currVersion, p.currPayload, p.blobBundle)
 	if err != nil {
-		p.cfg.logger.WithError(err).Error("Could not encode full payload response")
+		p.cfg.logger.WithError(err).Error("Could not encode full payload SSZ response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if err = writeBuilderResponse(w, req, p.currVersion, resp, sszResponse); err != nil {
+		p.cfg.logger.WithError(err).Error("Could not encode full payload response")
+	}
+}
+
+func (p *Builder) handleBlindedBlockPostFulu(w http.ResponseWriter, req *http.Request) {
+	if err := decodeBlindedBlockFuluRequest(req); err != nil {
+		p.cfg.logger.WithError(err).Error("Could not decode Fulu blinded block")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (p *Builder) decodeBlindedBlockRequest(req *http.Request) error {
+	if httputil.IsRequestSsz(req) {
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			return err
+		}
+		switch p.currVersion {
+		case version.Electra:
+			return (&eth.SignedBlindedBeaconBlockElectra{}).UnmarshalSSZ(body)
+		case version.Deneb:
+			return (&eth.SignedBlindedBeaconBlockDeneb{}).UnmarshalSSZ(body)
+		case version.Capella:
+			return (&eth.SignedBlindedBeaconBlockCapella{}).UnmarshalSSZ(body)
+		default:
+			return (&eth.SignedBlindedBeaconBlockBellatrix{}).UnmarshalSSZ(body)
+		}
+	}
+	switch p.currVersion {
+	case version.Electra:
+		block, err := decodeSingleJSON[structs.SignedBlindedBeaconBlockElectra](req.Body)
+		if err != nil || block.Message == nil {
+			return errors.New("invalid blinded block")
+		}
+		_, err = block.ToConsensus()
+		return err
+	case version.Deneb:
+		block, err := decodeSingleJSON[structs.SignedBlindedBeaconBlockDeneb](req.Body)
+		if err != nil || block.Message == nil {
+			return errors.New("invalid blinded block")
+		}
+		_, err = block.ToConsensus()
+		return err
+	case version.Capella:
+		block, err := decodeSingleJSON[structs.SignedBlindedBeaconBlockCapella](req.Body)
+		if err != nil || block.Message == nil {
+			return errors.New("invalid blinded block")
+		}
+		_, err = block.ToGeneric()
+		return err
+	default:
+		block, err := decodeSingleJSON[structs.SignedBlindedBeaconBlockBellatrix](req.Body)
+		if err != nil || block.Message == nil {
+			return errors.New("invalid blinded block")
+		}
+		_, err = block.ToGeneric()
+		return err
+	}
+}
+
+func decodeBlindedBlockFuluRequest(req *http.Request) error {
+	if httputil.IsRequestSsz(req) {
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			return err
+		}
+		return (&eth.SignedBlindedBeaconBlockFulu{}).UnmarshalSSZ(body)
+	}
+	block, err := decodeSingleJSON[structs.SignedBlindedBeaconBlockFulu](req.Body)
+	if err != nil || block.Message == nil {
+		return errors.New("invalid Fulu blinded block")
+	}
+	_, err = block.ToConsensus()
+	return err
+}
+
+func executionPayloadSSZResponse(v int, data interfaces.ExecutionData, bundle *v1.BlobsBundle) (sszMarshaler, error) {
+	switch v {
+	case version.Bellatrix:
+		payload, ok := data.Proto().(*v1.ExecutionPayload)
+		if !ok {
+			return nil, errInvalidTypeConversion
+		}
+		return payload, nil
+	case version.Capella:
+		payload, ok := data.Proto().(*v1.ExecutionPayloadCapella)
+		if !ok {
+			return nil, errInvalidTypeConversion
+		}
+		return payload, nil
+	case version.Deneb, version.Electra:
+		payload, ok := data.Proto().(*v1.ExecutionPayloadDeneb)
+		if !ok {
+			return nil, errInvalidTypeConversion
+		}
+		return &v1.ExecutionPayloadDenebAndBlobsBundle{Payload: payload, BlobsBundle: bundle}, nil
+	default:
+		return nil, errInvalidTypeConversion
 	}
 }
 
