@@ -487,7 +487,10 @@ go_test(
         "eip_7521_fuzz_test.go",
         "export_test.go",
         "fuzz_test.go",
+        "gloas_test.go",
+        "partial_data_columns_proto_test.go",
     ],
+    data = ["partial_data_columns.proto"],
     embed = [":go_default_library"],
     deps = [
         "//testing/assert:go_default_library",

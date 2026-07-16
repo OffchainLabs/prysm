@@ -6,13 +6,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// pushKind identifies a category of data pushed to the beacon node that must
-// be re-pushed after a host switch.
+// pushKind identifies a category of per-connection beacon-node state (data
+// pushed to it, or a stream bound to it) that must be redone after a host switch.
 type pushKind string
 
 const (
 	proposerPrefsPush pushKind = "proposer-preferences"
 	registrationsPush pushKind = "validator-registrations"
+	eventStreamBind   pushKind = "event-stream"
 )
 
 // connTracker records, per push kind, the connection generation at which

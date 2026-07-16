@@ -23,7 +23,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
-	ethpbv1 "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -637,10 +636,10 @@ func (s *Service) sendNewFinalizedEvent(ctx context.Context, postState state.Bea
 	// Send an event regarding the new finalized checkpoint over a common event feed.
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.FinalizedCheckpoint,
-		Data: &ethpbv1.EventFinalizedCheckpoint{
+		Data: &statefeed.FinalizedCheckpointData{
 			Epoch:               postState.FinalizedCheckpoint().Epoch,
-			Block:               postState.FinalizedCheckpoint().Root,
-			State:               stateRoot[:],
+			Block:               bytesutil.ToBytes32(postState.FinalizedCheckpoint().Root),
+			State:               stateRoot,
 			ExecutionOptimistic: isValidPayload,
 		},
 	})
