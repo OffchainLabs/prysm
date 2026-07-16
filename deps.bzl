@@ -1884,8 +1884,8 @@ def prysm_deps():
         name = "com_github_libp2p_go_libp2p_pubsub",
         build_file_proto_mode = "disable_global",
         importpath = "github.com/libp2p/go-libp2p-pubsub",
-        sum = "h1:UMiJ408NqO9Sf2ANutEM3An8Em3K+qn78eoIgzY3PIY=",
-        version = "v0.16.1-0.20260611143718-41b11d5cb1a7",
+        sum = "h1:SNdvB6V0eYMXLRR95n+4vpxJKbFsbHhgjPdDiTpGoo0=",
+        version = "v0.17.0",
     )
     go_repository(
         name = "com_github_libp2p_go_libp2p_testing",
@@ -2564,12 +2564,6 @@ def prysm_deps():
         importpath = "github.com/pion/srtp/v3",
         sum = "h1:E2gyj1f5X10sB/qILUGIkL4C2CqK269Xq167PbGCc/4=",
         version = "v3.0.6",
-    )
-    go_repository(
-        name = "com_github_pion_stun",
-        importpath = "github.com/pion/stun",
-        sum = "h1:8lp6YejULeHBF8NmV8e2787BogQhduZugh5PdhDyyN4=",
-        version = "v0.6.1",
     )
     go_repository(
         name = "com_github_pion_stun_v2",
