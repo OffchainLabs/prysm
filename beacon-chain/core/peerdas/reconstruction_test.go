@@ -483,7 +483,7 @@ func TestComputeCellsAndProofsFromFlat(t *testing.T) {
 func TestComputeCellsAndProofsFromStructured(t *testing.T) {
 	t.Run("nil blob and proof", func(t *testing.T) {
 		// An in-range nil entry (a missing blob) is skipped without error.
-		result, err := peerdas.CellsAndProofsFromStructured(1, []*pb.BlobAndProofV2{nil})
+		result, err := peerdas.ComputeCellsAndProofsFromStructured(1, []*pb.BlobAndProofV2{nil})
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), result.Included.Count())
 	})
@@ -492,10 +492,10 @@ func TestComputeCellsAndProofsFromStructured(t *testing.T) {
 		// The slice is indexed by blob index, so it must not be longer than the commitment count.
 		// This holds even when the out-of-range entries are nil, which would otherwise be silently
 		// dropped from the included bitlist.
-		_, err := peerdas.CellsAndProofsFromStructured(0, []*pb.BlobAndProofV2{nil})
+		_, err := peerdas.ComputeCellsAndProofsFromStructured(0, []*pb.BlobAndProofV2{nil})
 		require.ErrorContains(t, "exceeds commitment count", err)
 
-		_, err = peerdas.CellsAndProofsFromStructured(1, []*pb.BlobAndProofV2{nil, {}})
+		_, err = peerdas.ComputeCellsAndProofsFromStructured(1, []*pb.BlobAndProofV2{nil, {}})
 		require.ErrorContains(t, "exceeds commitment count", err)
 	})
 
@@ -549,7 +549,7 @@ func TestComputeCellsAndProofsFromStructured(t *testing.T) {
 		require.NoError(t, err)
 
 		// Test ComputeCellsAndProofs
-		result, err := peerdas.CellsAndProofsFromStructured(uint64(len(blobsAndProofs)), blobsAndProofs)
+		result, err := peerdas.ComputeCellsAndProofsFromStructured(uint64(len(blobsAndProofs)), blobsAndProofs)
 		require.Equal(t, result.Included.Count(), uint64(len(result.CellsPerBlob)))
 		require.NoError(t, err)
 		require.Equal(t, blobCount, len(result.CellsPerBlob))

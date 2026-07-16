@@ -485,7 +485,7 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 		if len(result) == 0 {
 			return peerdas.StructuredCellsAndProofs{}, nil
 		}
-		return peerdas.CellsAndProofsFromStructuredV4(commitmentCount, requested, result), nil
+		return peerdas.CellsAndProofsFromStructured(commitmentCount, requested, result), nil
 	}
 
 	var blobAndProofs []*pb.BlobAndProofV2
@@ -509,7 +509,7 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	}
 
 	// Compute cells and proofs from the blobs and cell proofs.
-	result, err := peerdas.CellsAndProofsFromStructured(commitmentCount, blobAndProofs)
+	result, err := peerdas.ComputeCellsAndProofsFromStructured(commitmentCount, blobAndProofs)
 	if err != nil {
 		return peerdas.StructuredCellsAndProofs{}, errors.Wrap(err, "compute cells and proofs")
 	}

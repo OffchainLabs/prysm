@@ -366,9 +366,9 @@ func buildStructuredCellsAndProofs(commitmentCount uint64, perBlobCells [][]*kzg
 	}
 }
 
-// CellsAndProofsFromStructured computes the cells and proofs from blobs and cell proofs.
+// ComputeCellsAndProofsFromStructured computes the cells and proofs from blobs and cell proofs.
 // commitmentCount is required to return the correct sized bitlist even if we see a nil slice of blobsAndProofs.
-func CellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs []*pb.BlobAndProofV2) (_ StructuredCellsAndProofs, err error) {
+func ComputeCellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs []*pb.BlobAndProofV2) (_ StructuredCellsAndProofs, err error) {
 	start := time.Now()
 	defer func() {
 		// Only record the computation time on success, so error returns don't pollute the metric.
@@ -433,9 +433,9 @@ func CellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs []*pb.B
 	return buildStructuredCellsAndProofs(commitmentCount, perBlobCells, perBlobProofs), nil
 }
 
-// CellsAndProofsFromStructuredV4 maps the getBlobsV4 response into a StructuredCellsAndProofs.
+// CellsAndProofsFromStructured maps the getBlobsV4 response into a StructuredCellsAndProofs.
 // In the returned value, nil cells or proofs can exist to mark an absent entry.
-func CellsAndProofsFromStructuredV4(commitmentCount uint64, requested []uint64, result []*pb.BlobCellsAndProofsV1) StructuredCellsAndProofs {
+func CellsAndProofsFromStructured(commitmentCount uint64, requested []uint64, result []*pb.BlobCellsAndProofsV1) StructuredCellsAndProofs {
 	numberOfColumns := uint64(fieldparams.NumberOfColumns)
 	perBlobCells := make([][]*kzg.Cell, len(result))
 	perBlobProofs := make([][]*kzg.Proof, len(result))
