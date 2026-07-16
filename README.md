@@ -1,6 +1,7 @@
 <h1 align="left">Prysm: An Ethereum Consensus Implementation Written in Go</h1>
 
 <div align="left">
+
 [![Buildkite](https://badge.buildkite.com/b555891daf3614bae4284dcf365b2340cefc0089839526f096.svg?branch=develop)](https://buildkite.com/prysmatic-labs/prysm)
 [![Build status](https://github.com/OffchainLabs/prysm/actions/workflows/go.yml/badge.svg?branch=develop)](https://github.com/OffchainLabs/prysm/actions/workflows/go.yml)
 [![Consensus Spec Version](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2FOffchainLabs%2Fprysm%2Fdevelop%2FWORKSPACE&search=consensus_spec_version%20%3D%20%22%28%5B%5E%22%5D%2B%29%22&replace=%241&label=Consensus%20Spec%20Version&color=blue)](https://github.com/ethereum/consensus-specs/releases)
