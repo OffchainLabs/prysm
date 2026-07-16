@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
+	validatorflags "github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/urfave/cli/v2"
@@ -50,6 +51,7 @@ type Flags struct {
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
 	EnableStateDiff                     bool // EnableStateDiff enables the experimental state diff feature for the beacon node.
 	EnableProgressiveSSZ                bool // EnableProgressiveSSZ enables experimental progressive SSZ merkleization for converted consensus types.
+	ReorgLatePayloads                   bool // ReorgLatePayloads enables reorging late payloads in the beacon node.
 
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
@@ -314,6 +316,11 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(EnableProgressiveSSZ)
 		cfg.EnableProgressiveSSZ = true
 	}
+	
+	if ctx.Bool(reorgLatePayloads.Name) {
+		logEnabled(reorgLatePayloads)
+		cfg.ReorgLatePayloads = true
+	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}
 	Init(cfg)
@@ -362,7 +369,7 @@ func ConfigureValidator(ctx *cli.Context) error {
 		logEnabled(enableDoppelGangerProtection)
 		cfg.EnableDoppelGanger = true
 	}
-	if ctx.Bool(EnableBeaconRESTApi.Name) {
+	if ctx.Bool(EnableBeaconRESTApi.Name) || ctx.IsSet(validatorflags.BeaconRESTApiProviderFlag.Name) {
 		logEnabled(EnableBeaconRESTApi)
 		cfg.EnableBeaconRESTApi = true
 	}

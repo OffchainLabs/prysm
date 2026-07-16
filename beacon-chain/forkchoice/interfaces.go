@@ -96,7 +96,10 @@ type FastGetter interface {
 	Weight(root [32]byte) (uint64, error)
 	ConsensusNodeWeight(root [32]byte) (uint64, error)
 	PayloadWeights(root [32]byte) (emptyWeight, fullWeight uint64, err error)
+	PTCVotedEarlyAndAvailable(root [32]byte) bool
+	PTCVotedLate(root [32]byte) bool
 	ParentRoot(root [32]byte) ([32]byte, error)
+	ParentHash(root [32]byte) [32]byte
 	BlockHash(root [32]byte) ([32]byte, error)
 	GasLimit(root [32]byte) (uint64, error)
 	CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool)
@@ -115,5 +118,5 @@ type Setter interface {
 	InsertSlashedIndex(context.Context, primitives.ValidatorIndex)
 	RecordBlockForEquivocation(primitives.Slot, primitives.ValidatorIndex, [32]byte)
 	SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, blobDataAvailable bool)
-	MarkFullNode(root [32]byte)
+	MarkFullNode(root [32]byte, gasLimit uint64)
 }

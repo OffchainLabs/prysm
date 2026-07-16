@@ -114,6 +114,7 @@ type Config struct {
 	PeersFetcher                     p2p.PeersProvider
 	PeerManager                      p2p.PeerManager
 	MetadataProvider                 p2p.MetadataProvider
+	CustodyManager                   p2p.CustodyManager
 	DepositFetcher                   cache.DepositFetcher
 	PendingDepositFetcher            depositsnapshot.PendingDepositsFetcher
 	StateNotifier                    statefeed.Notifier

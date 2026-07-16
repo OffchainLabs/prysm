@@ -1824,6 +1824,14 @@ func applyBalancesDiff(source state.BeaconState, diff []int64) (state.BeaconStat
 // applyStateDiff applies the given diff to the source state in place.
 func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDiff) (state.BeaconState, error) {
 	var err error
+	// updateToVersion runs Gloas onboarding which drops builder deposits, so capture the pre-upgrade list the diff indexes.
+	var prevPendingDeposits []*ethpb.PendingDeposit
+	if source.Version() >= version.Electra {
+		prevPendingDeposits, err = source.PendingDeposits()
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get pending deposits")
+		}
+	}
 	if source, err = updateToVersion(ctx, source, diff.targetVersion); err != nil {
 		return nil, errors.Wrap(err, "failed to update state to target version")
 	}
@@ -1956,7 +1964,7 @@ func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDi
 	if err := source.SetEarliestConsolidationEpoch(diff.earliestConsolidationEpoch); err != nil {
 		return nil, errors.Wrap(err, "failed to set earliest consolidation epoch")
 	}
-	if err := applyPendingDepositsDiff(source, diff); err != nil {
+	if err := applyPendingDepositsDiff(source, diff, prevPendingDeposits); err != nil {
 		return nil, errors.Wrap(err, "failed to apply pending deposits diff")
 	}
 	if err := applyPendingPartialWithdrawalsDiff(source, diff); err != nil {
@@ -1980,13 +1988,12 @@ func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDi
 	return source, nil
 }
 
-// applyPendingDepositsDiff applies the pending deposits diff to the source state in place.
-func applyPendingDepositsDiff(source state.BeaconState, diff *stateDiff) error {
-	sPendingDeposits, err := source.PendingDeposits()
-	if err != nil {
-		return errors.Wrap(err, "failed to get pending deposits")
+// prevPendingDeposits is the anchor's pre-upgrade list the diff indexes, not source's post-upgrade list.
+func applyPendingDepositsDiff(source state.BeaconState, diff *stateDiff, prevPendingDeposits []*ethpb.PendingDeposit) error {
+	if int(diff.pendingDepositIndex) > len(prevPendingDeposits) {
+		return errors.Errorf("pending deposit index %d exceeds source length %d", diff.pendingDepositIndex, len(prevPendingDeposits))
 	}
-	sPendingDeposits = sPendingDeposits[int(diff.pendingDepositIndex):]
+	sPendingDeposits := prevPendingDeposits[int(diff.pendingDepositIndex):]
 	for _, t := range diff.pendingDepositDiff {
 		sPendingDeposits = append(sPendingDeposits, &ethpb.PendingDeposit{
 			PublicKey:             slices.Clone(t.PublicKey),

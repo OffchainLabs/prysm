@@ -101,8 +101,8 @@ var (
 	}
 	enableDoppelGangerProtection = &cli.BoolFlag{
 		Name: "enable-doppelganger",
-		Usage: `Enables the validator to perform a doppelganger check. 
-		This is not a foolproof method to find duplicate instances in the network. 
+		Usage: `Enables the validator to perform a doppelganger check.
+		This is not a foolproof method to find duplicate instances in the network.
 		Your validator will still be vulnerable if it is being run in unsafe configurations.`,
 	}
 	disableStakinContractCheck = &cli.BoolFlag{
@@ -130,8 +130,9 @@ var (
 		Usage: "Saves beacon blocks with full execution payloads instead of execution payload headers in the database.",
 	}
 	EnableBeaconRESTApi = &cli.BoolFlag{
-		Name:  "enable-beacon-rest-api",
-		Usage: "(Experimental): Enables of the beacon REST API when querying a beacon node.",
+		Name:    "enable-beacon-rest-api",
+		Aliases: []string{"enable-rest"},
+		Usage:   "(Experimental): Enables the beacon REST API when querying a beacon node. Optional: also enabled implicitly when --beacon-rest-api-provider is set.",
 	}
 	enableHashtree = &cli.BoolFlag{
 		Name:  "enable-hashtree",
@@ -188,6 +189,11 @@ var (
 	EnableProgressiveSSZ = &cli.BoolFlag{
 		Name:   "enable-progressive-ssz",
 		Usage:  "Enables experimental progressive SSZ merkleization for converted consensus types.",
+	}
+	reorgLatePayloads = &cli.BoolFlag{
+		Name:   "reorg-late-payloads",
+		Usage:  "Enables reorging late payloads.",
+		Value:  false,
 		Hidden: true,
 	}
 	// forceHeadFlag is a flag to force the head of the beacon chain to a specific block.
@@ -292,6 +298,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	enableExperimentalAttestationPool,
 	EnableStateDiff,
 	EnableProgressiveSSZ,
+	reorgLatePayloads,
 	forceHeadFlag,
 	blacklistRoots,
 	enableHashtree,

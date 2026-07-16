@@ -10,7 +10,6 @@ proto_library(
     srcs = [
         "attestation.proto",
         "beacon_chain.proto",
-        "events.proto",
         "node.proto",
         "validator.proto",
         ":ssz_proto_files",

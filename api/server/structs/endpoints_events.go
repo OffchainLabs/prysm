@@ -140,6 +140,11 @@ type ExecutionPayloadBidEvent struct {
 	Data    *SignedExecutionPayloadBid `json:"data"`
 }
 
+type PayloadAttestationMessageEvent struct {
+	Version string                     `json:"version"`
+	Data    *PayloadAttestationMessage `json:"data"`
+}
+
 type ExecutionPayloadAvailableEvent struct {
 	Slot      string `json:"slot"`
 	BlockRoot string `json:"block_root"`
