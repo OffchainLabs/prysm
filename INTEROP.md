@@ -40,9 +40,14 @@ for the full set of options (fork schedule, validator counts, extra flags, etc.)
 ## Using a local Prysm build
 
 By default `cl_type: prysm` pulls the published Prysm image. To test local
-changes, build and load a Docker image (see the `//cmd/beacon-chain:push_images`
-and `//cmd/validator:push_images` Bazel targets), then point the participant at
-it via `cl_image` in `network_params.yaml`.
+changes, build and load a Docker image into your local daemon with:
+
+```sh
+bazel run //cmd/beacon-chain:oci_image_tarball
+bazel run //cmd/validator:oci_image_tarball
+```
+
+Then point the participant at the built images via `cl_image` and `vc_image` in `network_params.yaml`.
 
 ## Generating a genesis state manually
 
