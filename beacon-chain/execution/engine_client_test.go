@@ -2822,8 +2822,8 @@ func createCellAndProof(pattern byte) (*hexutil.Bytes, *hexutil.Bytes) {
 // blob i's cell at column requested[j] (createCellAndProof expands the single byte into a full
 // cell). A 0 pattern is a missing cell (EL doesn't have that (blob, column)), and a nil
 // cellPatterns[i] is an absent blob.
-func mockV4Result(cellPatterns [][]byte) []*pb.BlobCellsAndProofsV1Json {
-	result := make([]*pb.BlobCellsAndProofsV1Json, len(cellPatterns))
+func mockV4Result(cellPatterns [][]byte) []*pb.BlobCellsAndProofsV1 {
+	result := make([]*pb.BlobCellsAndProofsV1, len(cellPatterns))
 	for i, blobPatterns := range cellPatterns {
 		if blobPatterns == nil {
 			continue
@@ -2836,13 +2836,13 @@ func mockV4Result(cellPatterns [][]byte) []*pb.BlobCellsAndProofsV1Json {
 			}
 			cells[j], proofs[j] = createCellAndProof(pattern)
 		}
-		result[i] = &pb.BlobCellsAndProofsV1Json{BlobCells: cells, Proofs: proofs}
+		result[i] = &pb.BlobCellsAndProofsV1{BlobCells: cells, Proofs: proofs}
 	}
 	return result
 }
 
 // newV4Client wires a Service to a mock engine that answers engine_getBlobsV4 with result.
-func newV4Client(t *testing.T, result []*pb.BlobCellsAndProofsV1Json, partialColumnsSupported bool) *Service {
+func newV4Client(t *testing.T, result []*pb.BlobCellsAndProofsV1, partialColumnsSupported bool) *Service {
 	cli, engine := newMockEngine(t)
 	t.Cleanup(cli.Close)
 	engine.register(GetBlobsV4, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
