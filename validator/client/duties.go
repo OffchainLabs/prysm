@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -199,6 +200,31 @@ const (
 	missingNextPtc
 	missingNextAttester
 )
+
+var missingNextNames = map[missingNextDuties]string{
+	missingNextProposer: "proposer",
+	missingNextSync:     "sync",
+	missingNextPtc:      "ptc",
+	missingNextAttester: "attester",
+}
+
+func (m missingNextDuties) String() string {
+	if m == 0 {
+		return "none"
+	}
+	var parts []string
+	for bit := missingNextDuties(1); bit != 0; bit <<= 1 {
+		if m&bit == 0 {
+			continue
+		}
+		name, ok := missingNextNames[bit]
+		if !ok { // bit exists in the const block but not in missingNextNames
+			name = fmt.Sprintf("unknown(%#b)", uint8(bit))
+		}
+		parts = append(parts, name)
+	}
+	return strings.Join(parts, "|")
+}
 
 // updateDutiesSplit fetches duties from the split V3 endpoints and
 // populates the duty store. When the epoch has advanced by exactly one
@@ -652,6 +678,11 @@ func (v *validator) RetryMissingNextDuties(ctx context.Context) error {
 	if !v.duties.replaceNextDuties(snap.revision, next, newMissing, currDepRoot) {
 		return nil
 	}
+	log.WithFields(logrus.Fields{
+		"epoch":        nextEpoch,
+		"recovered":    missing &^ newMissing,
+		"stillMissing": newMissing,
+	}).Debug("Recovered missing next-epoch duties mid-epoch")
 	return v.onDutiesUpdated(ctx)
 }
 

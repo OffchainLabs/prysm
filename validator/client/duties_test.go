@@ -1380,6 +1380,76 @@ func TestRetryMissingNextDuties(t *testing.T) {
 		assert.Equal(t, false, v.retryInFlight.Load()) // flag released for the next retry
 		assert.Equal(t, true, v.duties.canPromote(epoch+1, []primitives.ValidatorIndex{42}))
 	})
+
+	t.Run("retry result is discarded when the store was updated mid-retry", func(t *testing.T) {
+		v, client, keys := setup(t)
+		seed(v, keys, missingNextPtc)
+
+		// An UpdateDuties (boundary, head event, key reload) lands while the retry's
+		// fetch is in flight; the revision guard must drop the retry's write.
+		client.EXPECT().PTCDuties(gomock.Any(), epoch+1, gomock.Any()).DoAndReturn(
+			func(_ context.Context, _ primitives.Epoch, _ []primitives.ValidatorIndex) (*ethpb.PTCDutiesResponse, error) {
+				seed(v, keys, missingNextSync)
+				return &ethpb.PTCDutiesResponse{
+					Duties: []*ethpb.PTCDuty{{Pubkey: keys.pub[:], ValidatorIndex: 42, Slot: primitives.Slot(epoch+1)*spe + 2}},
+				}, nil
+			})
+
+		require.NoError(t, v.RetryMissingNextDuties(t.Context()))
+
+		snap := v.duties.snapshot()
+		assert.Equal(t, missingNextSync, snap.missingNext()) // the concurrent write won
+		for _, d := range snap.nextDuties() {
+			assert.Equal(t, 0, len(d.PtcSlots)) // stale PTC overlay was dropped
+		}
+	})
+
+	t.Run("MaybeRetry releases the in-flight flag when the slot deadline expires", func(t *testing.T) {
+		v, client, keys := setup(t)
+		// Genesis far enough back that SlotDeadline(0) already passed: the retry ctx
+		// is born expired, so even a hung fetch unblocks immediately.
+		v.genesisTime = time.Now().Add(-2 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+		seed(v, keys, missingNextPtc)
+
+		client.EXPECT().PTCDuties(gomock.Any(), epoch+1, gomock.Any()).DoAndReturn(
+			func(ctx context.Context, _ primitives.Epoch, _ []primitives.ValidatorIndex) (*ethpb.PTCDutiesResponse, error) {
+				<-ctx.Done() // hung fetch: only the deadline unblocks it
+				return nil, ctx.Err()
+			}).AnyTimes()
+
+		v.MaybeRetryMissingNextDuties(t.Context(), 0)
+
+		deadline := time.Now().Add(2 * time.Second)
+		for v.retryInFlight.Load() && time.Now().Before(deadline) {
+			time.Sleep(5 * time.Millisecond)
+		}
+		assert.Equal(t, false, v.retryInFlight.Load()) // a wedged retry must not block future slots
+		assert.Equal(t, missingNextPtc, v.duties.snapshot().missingNext())
+	})
+}
+
+func TestMissingNextDutiesString(t *testing.T) {
+	assert.Equal(t, "none", missingNextDuties(0).String())
+	assert.Equal(t, "proposer|sync|ptc|attester",
+		(missingNextProposer | missingNextSync | missingNextPtc | missingNextAttester).String())
+	// A bit without a missingNextNames entry self-reports instead of vanishing.
+	assert.Equal(t, "ptc|unknown(0b10000)", (missingNextPtc | missingNextDuties(1<<4)).String())
+}
+
+func TestDropIfDivergent(t *testing.T) {
+	root := bytesutil.PadTo([]byte{0xaa}, fieldparams.RootLength)
+	other := bytesutil.PadTo([]byte{0xbb}, fieldparams.RootLength)
+	resp := &ethpb.ProposerDutiesResponse{DependentRoot: root}
+	noRoot := &ethpb.ProposerDutiesResponse{}
+
+	assert.Equal(t, resp, dropIfDivergent(resp, root, "proposer"))
+	assert.Equal(t, true, dropIfDivergent(resp, other, "proposer") == nil)
+	// A response without a dependent root can't contradict anything: kept.
+	assert.Equal(t, noRoot, dropIfDivergent(noRoot, root, "proposer"))
+	var nilResp *ethpb.ProposerDutiesResponse
+	assert.Equal(t, true, dropIfDivergent(nilResp, root, "proposer") == nil)
+	// Unknown attester root with a set response root is contradictory: dropped.
+	assert.Equal(t, true, dropIfDivergent(resp, nil, "proposer") == nil)
 }
 
 func TestIsActiveForDuties(t *testing.T) {
