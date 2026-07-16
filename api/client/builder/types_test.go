@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -1776,6 +1777,15 @@ func TestErrorMessage_unexpectedStatusErr(t *testing.T) {
 			}(),
 			wantMessage: "did not receive 200 response from API",
 		},
+		{
+			name: "415 plain-text body",
+			args: &http.Response{
+				Request:    mockRequest,
+				StatusCode: http.StatusUnsupportedMediaType,
+				Body:       io.NopCloser(bytes.NewReader([]byte("Expected request with `Content-Type: " + api.JsonMediaType + "`"))),
+			},
+			wantMessage: "unsupported",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1785,6 +1795,46 @@ func TestErrorMessage_unexpectedStatusErr(t *testing.T) {
 			}
 		})
 	}
+}
+
+// isSSZRejection keys off the HTTP status, independent of the error body format, so a builder
+// returning plain text (Commit Boost) is detected the same as a spec-compliant JSON body.
+func TestUnexpectedStatusErr_SSZRejectionByStatus(t *testing.T) {
+	req := &http.Request{URL: &url.URL{Path: "example.com"}}
+	jsonBody, err := json.Marshal(ErrorMessage{Code: 415, Message: "send json"})
+	require.NoError(t, err)
+	bodies := map[string][]byte{
+		"json ErrorMessage": jsonBody,
+		"plain text":        []byte("Expected request with `Content-Type: application/json`"),
+		"empty":             nil,
+	}
+	rejections := map[int]error{
+		http.StatusUnsupportedMediaType: ErrUnsupportedMediaType,
+		http.StatusNotAcceptable:        ErrNotAcceptable,
+	}
+	for status, sentinel := range rejections {
+		for name, body := range bodies {
+			resp := &http.Response{Request: req, StatusCode: status, Body: io.NopCloser(bytes.NewReader(body))}
+			err := unexpectedStatusErr(resp, []int{http.StatusOK})
+			require.Equal(t, true, isSSZRejection(err), "status %d body %q", status, name)
+			require.ErrorIs(t, err, sentinel) // sentinel still reachable for errors.Is callers
+		}
+	}
+	// Other error statuses are never SSZ rejections, even with a non-JSON body.
+	for _, status := range []int{http.StatusBadRequest, http.StatusInternalServerError, http.StatusBadGateway} {
+		resp := &http.Response{Request: req, StatusCode: status, Body: io.NopCloser(bytes.NewReader([]byte("plain text")))}
+		require.Equal(t, false, isSSZRejection(unexpectedStatusErr(resp, []int{http.StatusOK})))
+	}
+}
+
+// errorMessageOrBody prefers the spec's JSON ErrorMessage.message, falling back to raw text.
+func TestErrorMessageOrBody(t *testing.T) {
+	jsonBody, err := json.Marshal(ErrorMessage{Code: 415, Message: "send json"})
+	require.NoError(t, err)
+	require.Equal(t, "send json", errorMessageOrBody(jsonBody))                // spec JSON path
+	require.Equal(t, "only json", errorMessageOrBody([]byte("  only json  "))) // non-JSON fallback, trimmed
+	require.Equal(t, "{}", errorMessageOrBody([]byte("{}")))                   // JSON without message -> raw
+	require.Equal(t, "", errorMessageOrBody(nil))                              // empty body
 }
 
 func TestEmptyResponseBody(t *testing.T) {

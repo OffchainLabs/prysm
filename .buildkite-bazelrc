@@ -42,6 +42,7 @@ build --keep_going
 build --test_output=errors
 build --flaky_test_attempts=5
 build --build_runfile_links=false # Only build runfile symlink forest when required by local action, test, or run command.
+coverage --build_runfile_links=true # The coverage report generator requires its runfiles symlink forest.
 # Disabled race detection due to unstable test results under constrained environment build kite
 # build --features=race
 
