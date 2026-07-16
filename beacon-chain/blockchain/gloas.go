@@ -182,9 +182,6 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 		return
 	}
 	hr := [32]byte(r)
-	if s.payloadBeingSynced.isSyncing(hr) {
-		return
-	}
 	if s.HasFullNode(hr) {
 		return
 	}
