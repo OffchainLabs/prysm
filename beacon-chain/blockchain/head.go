@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
-	ethpbv1 "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
@@ -133,13 +132,13 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 
 		s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 			Type: statefeed.Reorg,
-			Data: &ethpbv1.EventChainReorg{
+			Data: &statefeed.ChainReorgData{
 				Slot:                newHeadSlot,
 				Depth:               max(uint64(headSlot-forkSlot), uint64(newHeadSlot-forkSlot)),
-				OldHeadBlock:        oldHeadRoot[:],
-				NewHeadBlock:        newHeadRoot[:],
-				OldHeadState:        oldStateRoot[:],
-				NewHeadState:        newStateRoot[:],
+				OldHeadBlock:        oldHeadRoot,
+				NewHeadBlock:        newHeadRoot,
+				OldHeadState:        oldStateRoot,
+				NewHeadState:        newStateRoot,
 				Epoch:               slots.ToEpoch(newHeadSlot),
 				ExecutionOptimistic: isOptimistic,
 			},
@@ -172,7 +171,7 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 	// Forward an event capturing a new chain head over a common event feed
 	// done in a goroutine to avoid blocking the critical runtime main routine.
 	go func() {
-		if err := s.notifyNewHeadEvent(s.ctx, newHeadSlot, newStateRoot[:], newHeadRoot[:]); err != nil {
+		if err := s.notifyNewHeadEvent(s.ctx, newHeadSlot, newStateRoot, newHeadRoot); err != nil {
 			log.WithError(err).Error("Could not notify event feed of new chain head")
 		}
 
@@ -345,7 +344,7 @@ func (s *Service) notifyNewHeadEvent(
 	ctx context.Context,
 	newHeadSlot primitives.Slot,
 	newHeadStateRoot,
-	newHeadRoot []byte,
+	newHeadRoot [32]byte,
 ) error {
 	currEpoch := slots.ToEpoch(newHeadSlot)
 	previousDutyDependentRoot, currentDutyDependentRoot, err := s.headEventDependentRoots(currEpoch)
@@ -358,20 +357,20 @@ func (s *Service) notifyNewHeadEvent(
 		return errors.Wrap(err, "could not check if node is optimistically synced")
 	}
 
-	epochTransition, err := s.headEpochTransition(newHeadSlot, bytesutil.ToBytes32(newHeadRoot))
+	epochTransition, err := s.headEpochTransition(newHeadSlot, newHeadRoot)
 	if err != nil {
 		return err
 	}
 
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.NewHead,
-		Data: &ethpbv1.EventHead{
+		Data: &statefeed.HeadData{
 			Slot:                      newHeadSlot,
 			Block:                     newHeadRoot,
 			State:                     newHeadStateRoot,
 			EpochTransition:           epochTransition,
-			PreviousDutyDependentRoot: previousDutyDependentRoot[:],
-			CurrentDutyDependentRoot:  currentDutyDependentRoot[:],
+			PreviousDutyDependentRoot: previousDutyDependentRoot,
+			CurrentDutyDependentRoot:  currentDutyDependentRoot,
 			ExecutionOptimistic:       isOptimistic,
 		},
 	})
