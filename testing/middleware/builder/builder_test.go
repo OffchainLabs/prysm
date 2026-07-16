@@ -64,7 +64,6 @@ func TestGetHeaderBaselineJSON(t *testing.T) {
 }
 
 func TestHandleBlindedBlockBaselineJSON(t *testing.T) {
-	// Given
 	config := params.BeaconConfig().Copy()
 	params.SetActiveTestCleanup(t, config)
 	params.SetGenesisFork(t, config, version.Bellatrix)
@@ -76,10 +75,8 @@ func TestHandleBlindedBlockBaselineJSON(t *testing.T) {
 	block, err := blocks.NewSignedBeaconBlock(util.NewBlindedBeaconBlockBellatrix())
 	require.NoError(t, err)
 
-	// When
 	payload, _, err := client.SubmitBlindedBlock(t.Context(), block)
 
-	// Then
 	require.NoError(t, err)
 	require.NotNil(t, payload)
 	require.DeepEqual(t, builder.currPayload.BlockHash(), payload.BlockHash())
@@ -238,6 +235,14 @@ func (r testSSZResponse) MarshalSSZ() ([]byte, error) {
 	return r.body, nil
 }
 
+func (r testSSZResponse) MarshalSSZTo(dst []byte) ([]byte, error) {
+	return append(dst, r.body...), nil
+}
+
+func (r testSSZResponse) SizeSSZ() int {
+	return len(r.body)
+}
+
 func clientOptions(accept string) []builderClient.ClientOpt {
 	if accept == api.OctetStreamMediaType {
 		return []builderClient.ClientOpt{builderClient.WithSSZ()}
@@ -313,11 +318,11 @@ func headerTestServer(t *testing.T) (*Builder, *httptest.Server, *observedHeader
 	}
 	mux := http.NewServeMux()
 	observed := &observedHeaderResponse{}
-	mux.HandleFunc(headerPath, func(w http.ResponseWriter, req *http.Request) {
+	mux.HandleFunc(http.MethodGet+" "+headerPath, func(w http.ResponseWriter, req *http.Request) {
 		observed.reset(w, req)
 		builder.handleHeaderRequest(observed, req)
 	})
-	mux.HandleFunc(blindedPath, func(w http.ResponseWriter, req *http.Request) {
+	mux.HandleFunc(http.MethodPost+" "+blindedPath, func(w http.ResponseWriter, req *http.Request) {
 		observed.reset(w, req)
 		builder.handleBlindedBlock(observed, req)
 	})
@@ -327,16 +332,13 @@ func headerTestServer(t *testing.T) (*Builder, *httptest.Server, *observedHeader
 }
 
 func TestRegisterValidatorsBaselineJSON(t *testing.T) {
-	// Given
 	builder, server := registrationTestServer(t)
 	registrations := validRegistrations()
 	client, err := builderClient.NewClient(server.URL)
 	require.NoError(t, err)
 
-	// When
 	err = client.RegisterValidator(t.Context(), registrations)
 
-	// Then
 	require.NoError(t, err)
 	require.Equal(t, 2, len(builder.validatorMap))
 	for _, registration := range registrations {
@@ -349,30 +351,24 @@ func TestRegisterValidators(t *testing.T) {
 	registrations := validRegistrations()
 
 	t.Run("accepts two JSON registrations", func(t *testing.T) {
-		// Given
 		builder, server := registrationTestServer(t)
 		client, err := builderClient.NewClient(server.URL)
 		require.NoError(t, err)
 
-		// When
 		err = client.RegisterValidator(t.Context(), registrations)
 
-		// Then
 		require.NoError(t, err)
 		assertRegistrations(t, builder, registrations)
 		t.Logf("endpoint=%s encoding=json status=%d map_size=%d", registerPath, http.StatusOK, len(builder.validatorMap))
 	})
 
 	t.Run("accepts two concatenated SSZ registrations", func(t *testing.T) {
-		// Given
 		builder, server := registrationTestServer(t)
 		client, err := builderClient.NewClient(server.URL, builderClient.WithSSZ())
 		require.NoError(t, err)
 
-		// When
 		err = client.RegisterValidator(t.Context(), registrations)
 
-		// Then
 		require.NoError(t, err)
 		assertRegistrations(t, builder, registrations)
 		t.Logf("endpoint=%s encoding=ssz status=%d map_size=%d", registerPath, http.StatusOK, len(builder.validatorMap))
@@ -409,16 +405,13 @@ func TestRegisterValidators(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// Given
 			builder, server := registrationTestServer(t)
 			existing := validRegistration(0xff).Message
 			expected := map[string]*eth.ValidatorRegistrationV1{hexutil.Encode(existing.Pubkey): existing}
 			builder.validatorMap = map[string]*eth.ValidatorRegistrationV1{hexutil.Encode(existing.Pubkey): existing}
 
-			// When
 			status := postRegistration(t, server, test.contentType, test.body)
 
-			// Then
 			require.Equal(t, http.StatusBadRequest, status)
 			require.DeepEqual(t, expected, builder.validatorMap)
 			t.Logf("endpoint=%s encoding=%s status=%d map_size=%d", registerPath, test.contentType, status, len(builder.validatorMap))
@@ -430,7 +423,7 @@ func registrationTestServer(t *testing.T) (*Builder, *httptest.Server) {
 	t.Helper()
 	builder := &Builder{validatorMap: make(map[string]*eth.ValidatorRegistrationV1)}
 	mux := http.NewServeMux()
-	mux.HandleFunc(registerPath, builder.registerValidators)
+	mux.HandleFunc(http.MethodPost+" "+registerPath, builder.registerValidators)
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 	return builder, server
@@ -485,8 +478,7 @@ func marshalJSON(t *testing.T, value any) []byte {
 
 func postRegistration(t *testing.T, server *httptest.Server, contentType string, body []byte) int {
 	t.Helper()
-	endpoint := strings.TrimPrefix(registerPath, http.MethodPost+" ")
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, server.URL+endpoint, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, server.URL+registerPath, bytes.NewReader(body))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", contentType)
 	resp, err := server.Client().Do(req)
@@ -591,7 +583,7 @@ func TestHandleBlindedBlockRejectsMalformedInput(t *testing.T) {
 				t.Run(input.name, func(t *testing.T) {
 					builder := &Builder{cfg: &config{logger: logrus.New()}, currVersion: test.fork}
 					mux := http.NewServeMux()
-					mux.HandleFunc(blindedPath, builder.handleBlindedBlock)
+					mux.HandleFunc(http.MethodPost+" "+blindedPath, builder.handleBlindedBlock)
 					server := httptest.NewServer(mux)
 					t.Cleanup(server.Close)
 					status, response := postBlindedBlock(t, server.URL, blindedPath, input.contentType, input.body)
@@ -622,11 +614,84 @@ func TestSubmitBlindedBlockPostFulu(t *testing.T) {
 }
 
 func TestServeHTTPRoutesBuilderV2(t *testing.T) {
-	_, server, fallbackHits := fuluTestServer(t)
-	status, _ := postBlindedBlock(t, server.URL, "/not-builder", api.JsonMediaType, []byte(`{}`))
-	require.Equal(t, http.StatusOK, status)
-	require.Equal(t, int32(1), fallbackHits.Load())
-	t.Logf("endpoint=/not-builder status=%d fallback_hits=%d", status, fallbackHits.Load())
+	for _, test := range []struct {
+		path         string
+		wantStatus   int
+		wantFallback int32
+	}{
+		{"/eth/v2/builder/blinded_blocks", http.StatusAccepted, 0},
+		{"/eth/v2/builder/unknown", http.StatusOK, 1},
+		{"/not-builder", http.StatusOK, 1},
+		{"/eth/v1/builder/header/1/0x01", http.StatusOK, 1},
+	} {
+		t.Run(test.path, func(t *testing.T) {
+			_, server, fallbackHits := fuluTestServer(t)
+			body := []byte(`{}`)
+			if test.path == "/eth/v2/builder/blinded_blocks" {
+				body = blindedBlockJSON(t, blindedBlock(t, util.NewBlindedBeaconBlockFulu()))
+			}
+			status, _ := postBlindedBlock(t, server.URL, test.path, api.JsonMediaType, body)
+			require.Equal(t, test.wantStatus, status)
+			require.Equal(t, test.wantFallback, fallbackHits.Load())
+			t.Logf("endpoint=%s status=%d fallback_hits=%d", test.path, status, fallbackHits.Load())
+		})
+	}
+}
+
+func TestServeHTTPRoutesBuilderReturnsMethodNotAllowedForRegisteredPaths(t *testing.T) {
+	for _, test := range []struct {
+		name, method, path string
+	}{
+		{"status", http.MethodPost, "/eth/v1/builder/status"},
+		{"validators", http.MethodGet, "/eth/v1/builder/validators"},
+		{"header", http.MethodPost, "/eth/v1/builder/header/1/0x01/0x02"},
+		{"v1 blinded block", http.MethodGet, "/eth/v1/builder/blinded_blocks"},
+		{"v2 blinded block", http.MethodGet, "/eth/v2/builder/blinded_blocks"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, server, fallbackHits := fuluTestServer(t)
+			req, err := http.NewRequestWithContext(t.Context(), test.method, server.URL+test.path, bytes.NewReader([]byte(`{}`)))
+			require.NoError(t, err)
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer func() { require.NoError(t, resp.Body.Close()) }()
+			require.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
+			require.Equal(t, int32(0), fallbackHits.Load())
+			t.Logf("endpoint=%s method=%s status=%d fallback_hits=%d", test.path, test.method, resp.StatusCode, fallbackHits.Load())
+		})
+	}
+}
+
+func TestIsBuilderCall(t *testing.T) {
+	builder, _, _ := fuluTestServer(t)
+	for _, test := range []struct {
+		name, method, path string
+		want               bool
+	}{
+		{"status", http.MethodGet, "/eth/v1/builder/status", true},
+		{"status method mismatch", http.MethodPost, "/eth/v1/builder/status", true},
+		{"validators", http.MethodPost, "/eth/v1/builder/validators", true},
+		{"validators method mismatch", http.MethodGet, "/eth/v1/builder/validators", true},
+		{"header", http.MethodGet, "/eth/v1/builder/header/1/0x01/0x02", true},
+		{"header method mismatch", http.MethodPost, "/eth/v1/builder/header/1/0x01/0x02", true},
+		{"v1 blinded block", http.MethodPost, "/eth/v1/builder/blinded_blocks", true},
+		{"v1 blinded block method mismatch", http.MethodGet, "/eth/v1/builder/blinded_blocks", true},
+		{"v2 blinded block", http.MethodPost, "/eth/v2/builder/blinded_blocks", true},
+		{"v2 blinded block method mismatch", http.MethodGet, "/eth/v2/builder/blinded_blocks", true},
+		{"unknown v1 builder path", http.MethodGet, "/eth/v1/builder/unknown", false},
+		{"unknown v2 builder path", http.MethodPost, "/eth/v2/builder/unknown", false},
+		{"engine path", http.MethodPost, "/", false},
+		{"header missing segments", http.MethodGet, "/eth/v1/builder/header/1/0x01", false},
+		{"header extra segments", http.MethodGet, "/eth/v1/builder/header/1/0x01/0x02/extra", false},
+		{"header empty segment", http.MethodGet, "/eth/v1/builder/header/1//0x02", false},
+		{"header trailing slash", http.MethodGet, "/eth/v1/builder/header/1/0x01/0x02/", false},
+		{"header prefix only", http.MethodGet, "/eth/v1/builder/header/", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(test.method, test.path, nil)
+			require.Equal(t, test.want, builder.isBuilderCall(req))
+		})
+	}
 }
 
 func TestSubmitBlindedBlockPostFuluRejectsMalformedInput(t *testing.T) {

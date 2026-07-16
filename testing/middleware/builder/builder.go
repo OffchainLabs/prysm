@@ -38,15 +38,17 @@ import (
 	gethRPC "github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/pkg/errors"
+	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	statusPath      = "GET /eth/v1/builder/status"
-	registerPath    = "POST /eth/v1/builder/validators"
-	headerPath      = "GET /eth/v1/builder/header/{slot}/{parent_hash}/{pubkey}"
-	blindedPath     = "POST /eth/v1/builder/blinded_blocks"
-	fuluBlindedPath = "POST /eth/v2/builder/blinded_blocks"
+	statusPath       = "/eth/v1/builder/status"
+	registerPath     = "/eth/v1/builder/validators"
+	headerPath       = "/eth/v1/builder/header/{slot}/{parent_hash}/{pubkey}"
+	headerPathPrefix = "/eth/v1/builder/header/"
+	blindedPath      = "/eth/v1/builder/blinded_blocks"
+	fuluBlindedPath  = "/eth/v2/builder/blinded_blocks"
 
 	// ForkchoiceUpdatedMethod v1 request string for JSON-RPC.
 	ForkchoiceUpdatedMethod = "engine_forkchoiceUpdatedV1"
@@ -132,17 +134,16 @@ func New(opts ...Option) (*Builder, error) {
 		return nil, err
 	}
 	router := http.NewServeMux()
-	router.Handle("/", p)
-	router.HandleFunc(statusPath, func(writer http.ResponseWriter, request *http.Request) {
+	router.HandleFunc(http.MethodGet+" "+statusPath, func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
 	})
-	router.HandleFunc(registerPath, p.registerValidators)
-	router.HandleFunc(headerPath, p.handleHeaderRequest)
-	router.HandleFunc(blindedPath, p.handleBlindedBlock)
-	router.HandleFunc(fuluBlindedPath, p.handleBlindedBlockPostFulu)
+	router.HandleFunc(http.MethodPost+" "+registerPath, p.registerValidators)
+	router.HandleFunc(http.MethodGet+" "+headerPath, p.handleHeaderRequest)
+	router.HandleFunc(http.MethodPost+" "+blindedPath, p.handleBlindedBlock)
+	router.HandleFunc(http.MethodPost+" "+fuluBlindedPath, p.handleBlindedBlockPostFulu)
 	addr := net.JoinHostPort(p.cfg.builderHost, strconv.Itoa(p.cfg.builderPort))
 	srv := &http.Server{
-		Handler:           router,
+		Handler:           p,
 		Addr:              addr,
 		ReadHeaderTimeout: time.Second,
 	}
@@ -268,8 +269,31 @@ func (p *Builder) handleEngineCalls(req, resp []byte) {
 	}
 }
 
-func (*Builder) isBuilderCall(req *http.Request) bool {
-	return strings.Contains(req.URL.Path, "/eth/v1/builder/") || strings.Contains(req.URL.Path, "/eth/v2/builder/")
+func (p *Builder) isBuilderCall(req *http.Request) bool {
+	switch req.URL.Path {
+	case statusPath, registerPath, blindedPath, fuluBlindedPath:
+		return true
+	default:
+		return isHeaderCall(req.URL.Path)
+	}
+}
+
+// isHeaderCall requires all three header params so malformed header paths fall
+// through to the proxy, keeping unknown routes proxied once rather than 404'd.
+func isHeaderCall(path string) bool {
+	if !strings.HasPrefix(path, headerPathPrefix) {
+		return false
+	}
+	params := strings.Split(strings.TrimPrefix(path, headerPathPrefix), "/")
+	if len(params) != 3 {
+		return false
+	}
+	for _, seg := range params {
+		if seg == "" {
+			return false
+		}
+	}
+	return true
 }
 
 func (p *Builder) registerValidators(w http.ResponseWriter, req *http.Request) {
@@ -341,11 +365,7 @@ func decodeSingleJSON[T any](reader io.Reader) (T, error) {
 	return value, nil
 }
 
-type sszMarshaler interface {
-	MarshalSSZ() ([]byte, error)
-}
-
-func writeBuilderResponse(w http.ResponseWriter, req *http.Request, forkVersion int, jsonResponse any, sszResponse sszMarshaler) error {
+func writeBuilderResponse(w http.ResponseWriter, req *http.Request, forkVersion int, jsonResponse any, sszResponse ssz.Marshaler) error {
 	w.Header().Set(api.VersionHeader, version.String(forkVersion))
 	if httputil.RespondWithSsz(req) {
 		body, err := sszResponse.MarshalSSZ()
@@ -865,7 +885,7 @@ func decodeBlindedBlockFuluRequest(req *http.Request) error {
 	return err
 }
 
-func executionPayloadSSZResponse(v int, data interfaces.ExecutionData, bundle *v1.BlobsBundle) (sszMarshaler, error) {
+func executionPayloadSSZResponse(v int, data interfaces.ExecutionData, bundle *v1.BlobsBundle) (ssz.Marshaler, error) {
 	switch v {
 	case version.Bellatrix:
 		payload, ok := data.Proto().(*v1.ExecutionPayload)
