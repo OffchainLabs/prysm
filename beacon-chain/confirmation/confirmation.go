@@ -109,8 +109,7 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 	}
 
 	// Checkpoint state loads can replay from disk, keep them off the forkchoice lock.
-	ojcRoot := f.currentEpochObservedJustifiedCheckpoint.Root
-	balances, totalActiveBalance, err := f.balances.BalanceInfoByCheckpoint(ctx, ojcRoot)
+	balances, totalActiveBalance, err := f.balances.BalanceInfoByCheckpoint(ctx, f.currentEpochObservedJustifiedCheckpoint)
 	if err != nil {
 		return
 	}
@@ -118,8 +117,7 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 	var prevBalances []uint64
 	prevTotalActive := uint64(0)
 	if slots.IsEpochStart(currentSlot) {
-		pojcRoot := f.previousEpochObservedJustifiedCheckpoint.Root
-		prevBalances, prevTotalActive, err = f.balances.BalanceInfoByCheckpoint(ctx, pojcRoot)
+		prevBalances, prevTotalActive, err = f.balances.BalanceInfoByCheckpoint(ctx, f.previousEpochObservedJustifiedCheckpoint)
 		if err != nil {
 			prevBalances = nil
 		}

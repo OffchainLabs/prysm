@@ -82,7 +82,7 @@ func (m *mockCommitteeAccessor) Committee(_ context.Context, _ primitives.Slot) 
 // mockBalanceAccessor is a minimal mock of BalanceAccessor.
 type mockBalanceAccessor struct{}
 
-func (m *mockBalanceAccessor) BalanceInfoByCheckpoint(_ context.Context, _ [32]byte) ([]uint64, uint64, error) {
+func (m *mockBalanceAccessor) BalanceInfoByCheckpoint(_ context.Context, _ forkchoicetypes.Checkpoint) ([]uint64, uint64, error) {
 	return nil, 0, nil
 }
 func (m *mockBalanceAccessor) PulledUpHeadState(_ context.Context, _ [32]byte) (*FFGStateInfo, error) {

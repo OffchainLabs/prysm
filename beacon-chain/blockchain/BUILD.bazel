@@ -127,6 +127,7 @@ go_test(
         "checktags_test.go",
         "error_test.go",
         "execution_engine_test.go",
+        "fcr_accessors_test.go",
         "forkchoice_update_execution_test.go",
         "gloas_test.go",
         "goroutine_count_test.go",

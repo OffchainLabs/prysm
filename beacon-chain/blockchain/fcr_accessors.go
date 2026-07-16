@@ -7,8 +7,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
@@ -46,7 +48,7 @@ func (a *fcrCommitteeAccessor) Committee(ctx context.Context, slot primitives.Sl
 type fcrBalanceAccessor struct {
 	s *Service
 	// Checkpoint states are immutable, cached entries never go stale.
-	byRoot map[[32]byte]*confirmation.FFGStateInfo
+	byCheckpoint map[forkchoicetypes.Checkpoint]*confirmation.FFGStateInfo
 }
 
 func extractBalanceInfo(ctx context.Context, st state.ReadOnlyBeaconState) (*confirmation.FFGStateInfo, error) {
@@ -64,30 +66,47 @@ func extractBalanceInfo(ctx context.Context, st state.ReadOnlyBeaconState) (*con
 	return &confirmation.FFGStateInfo{TotalActiveBalance: total, Balances: balances}, nil
 }
 
-func (a *fcrBalanceAccessor) BalanceInfoByCheckpoint(ctx context.Context, root [32]byte) ([]uint64, uint64, error) {
-	if cached, ok := a.byRoot[root]; ok {
+func (a *fcrBalanceAccessor) BalanceInfoByCheckpoint(ctx context.Context, cp forkchoicetypes.Checkpoint) ([]uint64, uint64, error) {
+	if cached, ok := a.byCheckpoint[cp]; ok {
 		return cached.Balances, cached.TotalActiveBalance, nil
 	}
-	st, err := a.s.cfg.StateGen.StateByRoot(ctx, root)
+	epochStart, err := slots.EpochStart(cp.Epoch)
 	if err != nil {
-		return nil, 0, errors.Wrap(err, "could not get state for checkpoint root")
+		return nil, 0, err
 	}
-	if st == nil || st.IsNil() {
-		return nil, 0, errors.New("nil state for checkpoint root")
+	var st state.ReadOnlyBeaconState
+	// Attestation processing keeps these states in the checkpoint state cache, this is almost always a hit.
+	cached, err := a.s.checkpointStateCache.StateByCheckpoint(&ethpb.Checkpoint{Epoch: cp.Epoch, Root: cp.Root[:]})
+	if err == nil && cached != nil && !cached.IsNil() {
+		st = cached
+	} else {
+		base, err := a.s.cfg.StateGen.StateByRoot(ctx, cp.Root)
+		if err != nil {
+			return nil, 0, errors.Wrap(err, "could not get state for checkpoint root")
+		}
+		if base == nil || base.IsNil() {
+			return nil, 0, errors.New("nil state for checkpoint root")
+		}
+		// A skipped boundary slot leaves the root's state in the prior epoch, the spec's checkpoint state is advanced to the epoch start.
+		advanced, err := transition.ProcessSlotsIfPossible(ctx, base, epochStart)
+		if err != nil {
+			return nil, 0, errors.Wrap(err, "could not advance state to checkpoint epoch")
+		}
+		st = advanced
 	}
 	info, err := extractBalanceInfo(ctx, st)
 	if err != nil {
 		return nil, 0, err
 	}
-	if a.byRoot == nil {
-		a.byRoot = make(map[[32]byte]*confirmation.FFGStateInfo)
-	} else if len(a.byRoot) > 3 {
-		for k := range a.byRoot {
-			delete(a.byRoot, k)
+	if a.byCheckpoint == nil {
+		a.byCheckpoint = make(map[forkchoicetypes.Checkpoint]*confirmation.FFGStateInfo)
+	} else if len(a.byCheckpoint) > 3 {
+		for k := range a.byCheckpoint {
+			delete(a.byCheckpoint, k)
 			break
 		}
 	}
-	a.byRoot[root] = info
+	a.byCheckpoint[cp] = info
 	return info.Balances, info.TotalActiveBalance, nil
 }
 
