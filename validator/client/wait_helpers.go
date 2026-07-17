@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -11,6 +12,18 @@ import (
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
+
+// sinceSlotStartTime returns the elapsed time between the start of the provided slot and now.
+func (v *validator) sinceSlotStartTime(slot primitives.Slot) (time.Duration, error) {
+	startTime, err := slots.StartTime(v.genesisTime, slot)
+	if err != nil {
+		return 0, fmt.Errorf("start time: %w", err)
+	}
+
+	sinceSlotStartTime := prysmTime.Now().Sub(startTime).Round(time.Millisecond)
+
+	return sinceSlotStartTime, nil
+}
 
 // slotComponentDeadline returns the absolute time corresponding to the provided slot component.
 func (v *validator) slotComponentDeadline(slot primitives.Slot, component primitives.BP) (time.Time, error) {

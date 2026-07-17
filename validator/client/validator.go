@@ -958,14 +958,6 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 			log.WithError(err).Error("Failed to unmarshal head Event into JSON")
 		}
 
-		log.WithFields(logrus.Fields{
-			"slot":                      head.Slot,
-			"blockRoot":                 trim(head.Block),
-			"previousDutyDependentRoot": trim(head.PreviousDutyDependentRoot),
-			"currentDutyDependentRoot":  trim(head.CurrentDutyDependentRoot),
-			"version":                   "1",
-		}).Debug("Received head event")
-
 		uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
 		if err != nil {
 			log.WithError(err).Error("Failed to parse slot")
@@ -973,6 +965,21 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 		}
 
 		slot := primitives.Slot(uintSlot)
+
+		sinceSlotStartTime, err := v.sinceSlotStartTime(slot)
+		if err != nil {
+			log.WithError(err).WithField("slot", slot).Error("Failed to compute time since slot start")
+		}
+
+		log.WithFields(logrus.Fields{
+			"slot":                      head.Slot,
+			"sinceSlotStartTime":        sinceSlotStartTime,
+			"blockRoot":                 trim(head.Block),
+			"previousDutyDependentRoot": trim(head.PreviousDutyDependentRoot),
+			"currentDutyDependentRoot":  trim(head.CurrentDutyDependentRoot),
+			"version":                   "1",
+		}).Debug("Received head event")
+
 		v.setHighestSlot(slot)
 
 		// Update the head tracker.
@@ -996,20 +1003,27 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 			return
 		}
 
-		log.WithFields(logrus.Fields{
-			"slot":                      head.Data.Slot,
-			"blockRoot":                 trim(head.Data.Block),
-			"currentEpochDependentRoot": trim(head.Data.CurrentEpochDependentRoot),
-			"nextEpochDependentRoot":    trim(head.Data.NextEpochDependentRoot),
-			"version":                   "2",
-		}).Debug("Received head event")
-
 		uintSlot, err := strconv.ParseUint(head.Data.Slot, 10, 64)
 		if err != nil {
 			log.WithError(err).Error("Failed to parse slot")
 			return
 		}
 		slot := primitives.Slot(uintSlot)
+
+		sinceSlotStartTime, err := v.sinceSlotStartTime(slot)
+		if err != nil {
+			log.WithError(err).WithField("slot", slot).Error("Failed to compute time since slot start")
+		}
+
+		log.WithFields(logrus.Fields{
+			"slot":                      head.Data.Slot,
+			"sinceSlotStartTime":        sinceSlotStartTime,
+			"blockRoot":                 trim(head.Data.Block),
+			"currentEpochDependentRoot": trim(head.Data.CurrentEpochDependentRoot),
+			"nextEpochDependentRoot":    trim(head.Data.NextEpochDependentRoot),
+			"version":                   "2",
+		}).Debug("Received head event")
+
 		v.setHighestSlot(slot)
 
 		// Update the head tracker

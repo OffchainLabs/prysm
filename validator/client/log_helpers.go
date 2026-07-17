@@ -180,6 +180,11 @@ func (v *validator) LogSubmissions(slot primitives.Slot) {
 
 // logSubmittedAtts logs info about submitted attestations.
 func (v *validator) logSubmittedAtts(slot primitives.Slot) {
+	sinceSlotStartTime, err := v.sinceSlotStartTime(slot)
+	if err != nil {
+		log.WithError(err).WithField("slot", slot).Error("Failed to compute time since slot start")
+	}
+
 	for _, attLog := range v.submittedAtts {
 		pubkeys := make([]string, len(attLog.pubkeys))
 		for i, p := range attLog.pubkeys {
@@ -190,14 +195,15 @@ func (v *validator) logSubmittedAtts(slot primitives.Slot) {
 			committees[i] = strconv.FormatUint(uint64(c), 10)
 		}
 		log.WithFields(logrus.Fields{
-			"slot":             slot,
-			"committeeIndices": committees,
-			"pubkeys":          pubkeys,
-			"blockRoot":        fmt.Sprintf("%#x", bytesutil.Trunc(attLog.data.beaconBlockRoot)),
-			"sourceEpoch":      attLog.data.source.Epoch,
-			"sourceRoot":       fmt.Sprintf("%#x", bytesutil.Trunc(attLog.data.source.Root)),
-			"targetEpoch":      attLog.data.target.Epoch,
-			"targetRoot":       fmt.Sprintf("%#x", bytesutil.Trunc(attLog.data.target.Root)),
+			"slot":               slot,
+			"sinceSlotStartTime": sinceSlotStartTime,
+			"committeeIndices":   committees,
+			"pubkeys":            pubkeys,
+			"blockRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(attLog.data.beaconBlockRoot)),
+			"sourceEpoch":        attLog.data.source.Epoch,
+			"sourceRoot":         fmt.Sprintf("%#x", bytesutil.Trunc(attLog.data.source.Root)),
+			"targetEpoch":        attLog.data.target.Epoch,
+			"targetRoot":         fmt.Sprintf("%#x", bytesutil.Trunc(attLog.data.target.Root)),
 		}).Info("Submitted new attestations")
 	}
 	for _, attLog := range v.submittedAggregates {

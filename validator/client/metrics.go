@@ -329,22 +329,23 @@ func (v *validator) logForEachValidator(index int, pubKey []byte, resp *ethpb.Va
 	gweiPerEth := float64(params.BeaconConfig().GweiPerEth)
 	if v.prevEpochBalances[pubKeyBytes] > 0 {
 		newBalance := float64(balAfterEpoch) / gweiPerEth
-		prevBalance := float64(balBeforeEpoch) / gweiPerEth
+		diffGwei := int64(balAfterEpoch) - int64(balBeforeEpoch)
 
 		previousEpochSummaryFields := logrus.Fields{
-			"pubkey":                  truncatedKey,
-			"epoch":                   prevEpoch,
-			"correctlyVotedSource":    correctlyVotedSource,
-			"correctlyVotedTarget":    correctlyVotedTarget,
-			"correctlyVotedHead":      correctlyVotedHead,
-			"diff":                    newBalance - prevBalance,
-			"newBalance":              newBalance,
-			"slot":                    slot,
+			"pubkey":               truncatedKey,
+			"epoch":                prevEpoch,
+			"correctlyVotedSource": correctlyVotedSource,
+			"correctlyVotedTarget": correctlyVotedTarget,
+			"correctlyVotedHead":   correctlyVotedHead,
+			"diffGwei":             diffGwei,
+			"balanceEth":           newBalance,
 		}
 
 		if slots.ToEpoch(slot) >= params.BeaconConfig().AltairForkEpoch {
 			if index < len(resp.InactivityScores) {
-				previousEpochSummaryFields["inactivityScore"] = resp.InactivityScores[index]
+				if inactivityScore := resp.InactivityScores[index]; inactivityScore != 0 {
+					previousEpochSummaryFields["inactivityScore"] = inactivityScore
+				}
 			} else {
 				log.WithField("pubkey", truncatedKey).Warn("Missing inactivity score")
 			}
