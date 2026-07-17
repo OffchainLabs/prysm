@@ -845,12 +845,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 			log.Warnf("Could not locate valid validator indices. Skipping prepare proposer routine")
 			return nil
 		}
-		if len(proposerReqs) != len(pubkeys) {
-			log.WithFields(logrus.Fields{
-				"pubkeysCount":                 len(pubkeys),
-				"proposerSettingsRequestCount": len(proposerReqs),
-			}).Debugln("Request count did not match included validator count. Only keys that have been activated will be included in the request.")
-		}
+
 		if _, err := v.validatorClient.PrepareBeaconProposer(ctx, &ethpb.PrepareBeaconProposerRequest{
 			Recipients: proposerReqs,
 		}); err != nil {
