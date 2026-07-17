@@ -330,9 +330,6 @@ func (v *validator) logForEachValidator(index int, pubKey []byte, resp *ethpb.Va
 	if v.prevEpochBalances[pubKeyBytes] > 0 {
 		newBalance := float64(balAfterEpoch) / gweiPerEth
 		prevBalance := float64(balBeforeEpoch) / gweiPerEth
-		startBalance := float64(v.startBalances[pubKeyBytes]) / gweiPerEth
-		percentNet := (newBalance - prevBalance) / prevBalance
-		percentSinceStart := (newBalance - startBalance) / startBalance
 
 		previousEpochSummaryFields := logrus.Fields{
 			"pubkey":                  truncatedKey,
@@ -340,11 +337,9 @@ func (v *validator) logForEachValidator(index int, pubKey []byte, resp *ethpb.Va
 			"correctlyVotedSource":    correctlyVotedSource,
 			"correctlyVotedTarget":    correctlyVotedTarget,
 			"correctlyVotedHead":      correctlyVotedHead,
-			"startBalance":            startBalance,
-			"oldBalance":              prevBalance,
+			"diff":                    newBalance - prevBalance,
 			"newBalance":              newBalance,
-			"percentChange":           fmt.Sprintf("%.5f%%", percentNet*100),
-			"percentChangeSinceStart": fmt.Sprintf("%.5f%%", percentSinceStart*100),
+			"slot":                    slot,
 		}
 
 		if slots.ToEpoch(slot) >= params.BeaconConfig().AltairForkEpoch {
