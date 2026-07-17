@@ -953,8 +953,22 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 			log.WithError(err).Error("Failed to unmarshal head Event into JSON")
 		}
 
+		uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
+		if err != nil {
+			log.WithError(err).Error("Failed to parse slot")
+			return
+		}
+
+		slot := primitives.Slot(uintSlot)
+
+		sinceSlotStartTime, err := v.sinceSlotStartTime(slot)
+		if err != nil {
+			log.WithError(err).WithField("slot", slot).Error("Failed to compute time since slot start")
+		}
+
 		fields := logrus.Fields{
 			"slot":                      head.Slot,
+			"sinceSlotStartTime":        sinceSlotStartTime,
 			"previousDutyDependentRoot": trim(head.PreviousDutyDependentRoot),
 			"currentDutyDependentRoot":  trim(head.CurrentDutyDependentRoot),
 			"version":                   "1",
@@ -967,12 +981,8 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 
 		log.WithFields(fields).Debug("Received head event")
 
-		uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
-		if err != nil {
-			log.WithError(err).Error("Failed to parse slot")
-			return
-		}
-		v.setHighestSlot(primitives.Slot(uintSlot))
+		v.setHighestSlot(slot)
+
 		if !v.disableDutiesPolling {
 			if err := v.checkDependentRoots(ctx, head.PreviousDutyDependentRoot, head.CurrentDutyDependentRoot); err != nil {
 				log.WithError(err).Error("Failed to check dependent roots")
@@ -989,20 +999,30 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 			return
 		}
 
+		uintSlot, err := strconv.ParseUint(head.Data.Slot, 10, 64)
+		if err != nil {
+			log.WithError(err).Error("Failed to parse slot")
+			return
+		}
+
+		slot := primitives.Slot(uintSlot)
+
+		sinceSlotStartTime, err := v.sinceSlotStartTime(slot)
+		if err != nil {
+			log.WithError(err).WithField("slot", slot).Error("Failed to compute time since slot start")
+		}
+
 		log.WithFields(logrus.Fields{
 			"slot":                      head.Data.Slot,
+			"sinceSlotStartTime":        sinceSlotStartTime,
 			"blockRoot":                 trim(head.Data.Block),
 			"currentEpochDependentRoot": trim(head.Data.CurrentEpochDependentRoot),
 			"nextEpochDependentRoot":    trim(head.Data.NextEpochDependentRoot),
 			"version":                   "2",
 		}).Debug("Received head event")
 
-		uintSlot, err := strconv.ParseUint(head.Data.Slot, 10, 64)
-		if err != nil {
-			log.WithError(err).Error("Failed to parse slot")
-			return
-		}
-		v.setHighestSlot(primitives.Slot(uintSlot))
+		v.setHighestSlot(slot)
+
 		if !v.disableDutiesPolling {
 			if err := v.checkDependentRoots(ctx, head.Data.CurrentEpochDependentRoot, head.Data.NextEpochDependentRoot); err != nil {
 				log.WithError(err).Error("Failed to check dependent roots")
