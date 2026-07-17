@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -288,12 +289,7 @@ func isHeaderCall(path string) bool {
 	if len(params) != 3 {
 		return false
 	}
-	for _, seg := range params {
-		if seg == "" {
-			return false
-		}
-	}
-	return true
+	return !slices.Contains(params, "")
 }
 
 func (p *Builder) registerValidators(w http.ResponseWriter, req *http.Request) {
