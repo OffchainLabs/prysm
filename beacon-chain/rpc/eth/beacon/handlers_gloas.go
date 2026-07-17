@@ -176,15 +176,13 @@ func (s *Server) publishBareEnvelope(ctx context.Context, w http.ResponseWriter,
 	w.WriteHeader(http.StatusOK)
 }
 
-// writeEnvelopePublishError maps the v1alpha1 publish outcome to the spec status codes:
-// InvalidArgument/FailedPrecondition -> 400, Aborted -> 202 (broadcast ok, import failed).
+// writeEnvelopePublishError maps the v1alpha1 publish outcome to the spec status codes,
+// InvalidArgument/FailedPrecondition -> 400.
 func writeEnvelopePublishError(w http.ResponseWriter, err error) {
 	if st, ok := status.FromError(err); ok {
 		switch st.Code() {
 		case codes.InvalidArgument, codes.FailedPrecondition:
 			httputil.HandleError(w, st.Message(), http.StatusBadRequest)
-		case codes.Aborted:
-			httputil.HandleError(w, st.Message(), http.StatusAccepted)
 		default:
 			httputil.HandleError(w, st.Message(), http.StatusInternalServerError)
 		}

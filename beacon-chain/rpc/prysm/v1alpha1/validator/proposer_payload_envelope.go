@@ -145,8 +145,7 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	})
 	log.Debug("Publishing execution payload envelope")
 
-	// Broadcast sidecars BEFORE receiving the envelope so the DA check sees them. Stateless publishes
-	// carry blobs+proofs (this node may not have them cached); stateful publishes rely on the cache.
+	// KZG verification stays synchronous, never gossip unverified sidecars.
 	var sidecars []consensusblocks.RODataColumn
 	if len(blobs) > 0 {
 		sidecars, err = vs.sidecarsFromContents(blobs, kzgProofs, envSlot, beaconBlockRoot)
@@ -156,8 +155,19 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	} else if cached, ok := vs.ExecutionPayloadEnvelopeCache.Contents(); ok && cached.Envelope.Payload.SlotNumber == envSlot {
 		sidecars = cached.DataColumns
 	}
-	if len(sidecars) > 0 {
-		if err := vs.broadcastAndReceiveDataColumns(ctx, sidecars, nil); err != nil {
+
+	roSigned, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(signed)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "could not wrap signed envelope: %v", err)
+	}
+
+	// Locally built or verified above, safe to upgrade.
+	verifiedSidecars := make([]consensusblocks.VerifiedRODataColumn, 0, len(sidecars))
+	for _, sidecar := range sidecars {
+		verifiedSidecars = append(verifiedSidecars, consensusblocks.NewVerifiedRODataColumn(sidecar))
+	}
+	if len(verifiedSidecars) > 0 {
+		if err := vs.P2P.BroadcastDataColumnSidecars(ctx, verifiedSidecars, nil); err != nil {
 			log.WithError(err).Error("Failed to broadcast Gloas data column sidecars")
 		}
 	}
@@ -166,18 +176,27 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 		return nil, status.Errorf(codes.Internal, "failed to broadcast execution payload envelope: %v", err)
 	}
 
-	roSigned, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(signed)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "could not wrap signed envelope: %v", err)
-	}
-	if err := vs.ExecutionPayloadEnvelopeReceiver.ReceiveExecutionPayloadEnvelope(ctx, roSigned); err != nil {
-		// Broadcast already succeeded; import failed. REST maps Aborted -> 202.
-		return nil, status.Errorf(codes.Aborted, "failed to receive execution payload envelope: %v", err)
-	}
+	// Import in the background so the reveal is not delayed past the PTC deadline.
+	go vs.importPublishedEnvelope(log, verifiedSidecars, roSigned)
 
 	log.WithField("duration", time.Since(start)).Info("Published execution payload envelope")
 
 	return &emptypb.Empty{}, nil
+}
+
+// Sidecars first, the DA check needs them.
+func (vs *Server) importPublishedEnvelope(log *logrus.Entry, sidecars []consensusblocks.VerifiedRODataColumn, signed interfaces.ROSignedExecutionPayloadEnvelope) {
+	start := time.Now()
+	if len(sidecars) > 0 {
+		if err := vs.DataColumnReceiver.ReceiveDataColumns(sidecars); err != nil {
+			log.WithError(err).Error("Failed to receive data columns for published envelope")
+		}
+	}
+	if err := vs.ExecutionPayloadEnvelopeReceiver.ReceiveExecutionPayloadEnvelope(vs.Ctx, signed); err != nil {
+		log.WithError(err).Error("Failed to import published execution payload envelope")
+		return
+	}
+	log.WithField("duration", time.Since(start)).Debug("Imported published execution payload envelope")
 }
 
 // resolveEnvelopeToPublish extracts the signed envelope plus any caller-supplied blobs. The stateful
