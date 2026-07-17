@@ -329,7 +329,7 @@ func (v *validator) logForEachValidator(index int, pubKey []byte, resp *ethpb.Va
 	gweiPerEth := float64(params.BeaconConfig().GweiPerEth)
 	if v.prevEpochBalances[pubKeyBytes] > 0 {
 		newBalance := float64(balAfterEpoch) / gweiPerEth
-		diffGwei := int64(balAfterEpoch) - int64(balBeforeEpoch)
+		diffGwei := float64(balAfterEpoch) - float64(balBeforeEpoch)
 
 		previousEpochSummaryFields := logrus.Fields{
 			"pubkey":               truncatedKey,
@@ -339,6 +339,10 @@ func (v *validator) logForEachValidator(index int, pubKey []byte, resp *ethpb.Va
 			"correctlyVotedHead":   correctlyVotedHead,
 			"diffGwei":             diffGwei,
 			"balanceEth":           newBalance,
+		}
+
+		if votedSlot, ok := v.attestedSlot(prevEpoch, pubKeyBytes); ok {
+			previousEpochSummaryFields["slot"] = votedSlot
 		}
 
 		if slots.ToEpoch(slot) >= params.BeaconConfig().AltairForkEpoch {
