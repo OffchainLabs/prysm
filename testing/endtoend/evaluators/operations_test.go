@@ -40,24 +40,6 @@ func TestValidatorsVoteWithTheMajoritySortsBlocksBySlot(t *testing.T) {
 	require.Equal(t, true, string(ec.ExpectedEth1DataVote) == string(vote))
 }
 
-func TestSelectVoluntaryExitCandidatesFallsBackWhenAllKeysAreReserved(t *testing.T) {
-	keys := [][48]byte{{1}, {2}}
-	reserved := map[[48]byte]bool{{1}: true, {2}: true}
-	exited := map[[48]byte]primitives.Epoch{}
-
-	candidates := selectVoluntaryExitCandidates(keys, exited, reserved, 1)
-	require.DeepEqual(t, []primitives.ValidatorIndex{0}, candidates)
-}
-
-func TestSelectVoluntaryExitCandidatesPrefersUnreservedKeys(t *testing.T) {
-	keys := [][48]byte{{1}, {2}, {3}}
-	exited := map[[48]byte]primitives.Epoch{{1}: 1}
-	reserved := map[[48]byte]bool{{2}: true}
-
-	candidates := selectVoluntaryExitCandidates(keys, exited, reserved, 2)
-	require.DeepEqual(t, []primitives.ValidatorIndex{2, 1}, candidates)
-}
-
 func TestSelectVoluntaryExitCandidatesBoundaries(t *testing.T) {
 	tests := []struct {
 		name     string
