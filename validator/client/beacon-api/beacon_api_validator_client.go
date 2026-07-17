@@ -3,23 +3,19 @@ package beacon_api
 import (
 	"context"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/client/event"
-	"github.com/OffchainLabs/prysm/v7/api/fallback"
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/client/cache"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 type beaconApiValidatorClient struct {
@@ -28,6 +24,7 @@ type beaconApiValidatorClient struct {
 	stateValidatorsProvider StateValidatorsProvider
 	restProvider            rest.RestConnectionProvider
 	handler                 rest.Handler
+	eventStreamHosts        []string
 	nodeClient              *beaconApiNodeClient
 	beaconBlockConverter    BeaconBlockConverter
 	eventStreamGuard        event.StreamGuard
@@ -48,6 +45,7 @@ func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...i
 		stateValidatorsProvider: beaconApiStateValidatorsProvider{handler: handler},
 		restProvider:            provider,
 		handler:                 handler,
+		eventStreamHosts:        provider.Hosts(),
 		nodeClient:              nc,
 		beaconBlockConverter:    beaconApiBeaconBlockConverter{},
 		stateless:               cfg.Stateless,
@@ -349,53 +347,31 @@ func (c *beaconApiValidatorClient) StartEventStream(ctx context.Context, topics 
 	defer finish()
 
 	client := &http.Client{} // event stream should not be subject to the same settings as other api calls
-
 	c.eventStreamGuard.MarkRunning(true)
 	defer c.eventStreamGuard.MarkRunning(false)
 
-	for {
-		eventStream, err := event.NewEventStream(subCtx, client, c.handler.Host(), topics)
-		if err != nil {
-			select {
-			case eventsChannel <- &event.Event{
-				Type: event.EventError,
-				Data: []byte(errors.Wrap(err, "failed to start event stream").Error()),
-			}:
-			case <-subCtx.Done():
-			}
-			return
-		}
-
-		// Older beacon nodes reject the head_v2 topic with HTTP 400 (the whole
-		// request fails when any topic is unknown), so fallback with legacy topics
-		// before surfacing subscription failures to the validator event loop.
-		err = eventStream.Subscribe(eventsChannel)
-		var subErr *httputil.DefaultJsonError
-		if fallbackTopics, ok := event.LegacyTopicFallback(topics); ok &&
-			errors.As(err, &subErr) && subErr.Code == http.StatusBadRequest {
-
-			// Log the topics so that users can understand why the fallback is happening.
-			log.WithFields(logrus.Fields{
-				"topics":          strings.Join(topics, ","),
-				"fallback_topics": strings.Join(fallbackTopics, ","),
-			}).WithError(err).Warn("Beacon node does not support the given topics; falling back to the legacy topics")
-
-			topics = fallbackTopics
-			continue
-		}
-
-		// If the subscription failed for any other reason,
-		// surface the error to the validator event loop and exit the stream.
-		if errors.As(err, &subErr) {
-			select {
-			case eventsChannel <- &event.Event{
-				Type: event.EventConnectionError,
-				Data: []byte(err.Error()),
-			}:
-			case <-subCtx.Done():
-			}
+	// MultiEventStream fans out one reconnecting subscription per host,
+	// handling legacy-topic fallback and deduplication internally.
+	eventStream, err := event.NewMultiEventStream(subCtx, client, c.eventStreamHosts, topics)
+	if err != nil {
+		select {
+		case eventsChannel <- &event.Event{
+			Type: event.EventError,
+			Data: []byte(errors.Wrap(err, "failed to start event stream").Error()),
+		}:
+		case <-subCtx.Done():
 		}
 		return
+	}
+
+	if err := eventStream.Subscribe(eventsChannel); err != nil {
+		select {
+		case eventsChannel <- &event.Event{
+			Type: event.EventConnectionError,
+			Data: []byte(err.Error()),
+		}:
+		case <-subCtx.Done():
+		}
 	}
 }
 
@@ -442,7 +418,7 @@ func (c *beaconApiValidatorClient) Host() string {
 }
 
 func (c *beaconApiValidatorClient) EnsureReady(ctx context.Context) bool {
-	return fallback.EnsureReady(ctx, c.restProvider, c.nodeClient)
+	return c.nodeClient.IsReady(ctx)
 }
 
 // ConnectionGeneration returns a monotonic counter that advances on each

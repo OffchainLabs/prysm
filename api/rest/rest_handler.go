@@ -24,9 +24,9 @@ type reqOption func(*http.Request)
 
 // Handler defines the interface for making REST API requests.
 type Handler interface {
-	Get(ctx context.Context, endpoint string, resp any) error
+	Get(ctx context.Context, endpoint string, resp any, opts ...GetOption) error
 	GetStatusCode(ctx context.Context, endpoint string) (int, error)
-	GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Header, error)
+	GetSSZ(ctx context.Context, endpoint string, opts ...GetOption) ([]byte, http.Header, error)
 	Post(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp any) error
 	PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) ([]byte, http.Header, error)
 	Host() string
@@ -40,16 +40,6 @@ type handler struct {
 
 // newHandler returns a *handler for internal use within the rest package.
 func newHandler(client http.Client, host string) *handler {
-	rh := &handler{
-		client: client,
-	}
-	rh.host.Store(host)
-	rh.appendAcceptOverride()
-	return rh
-}
-
-// NewHandler returns a Handler
-func NewHandler(client http.Client, host string) Handler {
 	rh := &handler{
 		client: client,
 	}
@@ -76,7 +66,6 @@ func (c *handler) Host() string {
 }
 
 // Get sends a GET request and decodes the response body as a JSON object into the passed in object.
-// If an HTTP error is returned, the body is decoded as a DefaultJsonError JSON object and returned as the first return value.
 func (c *handler) Get(ctx context.Context, endpoint string, resp any) error {
 	url := c.Host() + endpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

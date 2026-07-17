@@ -103,6 +103,7 @@ type validator struct {
 	highestValidSlot             primitives.Slot
 	eventsChannel                chan *eventClient.Event
 	payloadAvailability          *payloadAvailability
+	head                         *headTracker
 	pubkeyToStatus               map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus
 	signedValidatorRegistrations map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
 	signedRequestAuths           map[requestAuthKey]*ethpb.SignedRequestAuthV1
@@ -733,6 +734,11 @@ func (v *validator) getAttestationData(ctx context.Context, slot primitives.Slot
 	epoch := slots.ToEpoch(slot)
 	postElectra := epoch >= params.BeaconConfig().ElectraForkEpoch
 
+	ctx, err := v.withHeadHint(ctx, slot, attestationDueComponent(slot))
+	if err != nil {
+		return nil, fmt.Errorf("attach freshness hint: %w", err)
+	}
+
 	// Pre-Electra: committee index varies per validator.
 	// Post-Gloas: index signals payload status.
 	if !postElectra {
@@ -970,7 +976,15 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 			log.WithError(err).Error("Failed to parse slot")
 			return
 		}
-		v.setHighestSlot(primitives.Slot(uintSlot))
+
+		slot := primitives.Slot(uintSlot)
+		v.setHighestSlot(slot)
+
+		// Update the head tracker.
+		if err := v.head.update(slot, head.Block); err != nil {
+			log.WithError(err).Error("Failed to record head event block root")
+		}
+
 		if !v.disableDutiesPolling {
 			if err := v.checkDependentRoots(ctx, head.PreviousDutyDependentRoot, head.CurrentDutyDependentRoot); err != nil {
 				log.WithError(err).Error("Failed to check dependent roots")
@@ -1000,7 +1014,14 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 			log.WithError(err).Error("Failed to parse slot")
 			return
 		}
-		v.setHighestSlot(primitives.Slot(uintSlot))
+		slot := primitives.Slot(uintSlot)
+		v.setHighestSlot(slot)
+
+		// Update the head tracker
+		if err := v.head.update(slot, head.Data.Block); err != nil {
+			log.WithError(err).Error("Failed to record head event block root")
+		}
+
 		if !v.disableDutiesPolling {
 			if err := v.checkDependentRoots(ctx, head.Data.CurrentEpochDependentRoot, head.Data.NextEpochDependentRoot); err != nil {
 				log.WithError(err).Error("Failed to check dependent roots")
@@ -1017,7 +1038,13 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 			log.WithError(err).Error("Failed to parse execution payload event slot")
 			return
 		}
-		v.payloadAvailability.notify(primitives.Slot(uintSlot))
+
+		root, err := decodePayloadBlockRoot(payloadEvent.BlockRoot)
+		if err != nil {
+			log.WithError(err).Error("Failed to decode execution payload event block root")
+		}
+
+		v.payloadAvailability.notify(primitives.Slot(uintSlot), root)
 	default:
 		// just keep going and log the error
 		log.WithField("type", event.Type).WithField("data", string(event.Data)).Warn("Received an unknown event")

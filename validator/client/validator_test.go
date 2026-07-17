@@ -3,6 +3,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -19,7 +20,9 @@ import (
 	"testing/synctest"
 	"time"
 
+	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -3924,4 +3927,57 @@ func TestGetAttestationData_PostElectraConcurrentAccess(t *testing.T) {
 		require.NoError(t, errs[i])
 		require.DeepEqual(t, expectedData, results[i])
 	}
+}
+
+func headValidator() *validator {
+	return &validator{
+		head:                 newHeadTracker(),
+		slotFeed:             &event.Feed{},
+		disableDutiesPolling: true, // skip checkDependentRoots (needs duties/clients)
+	}
+}
+
+func TestProcessEvent_Head(t *testing.T) {
+	t.Run("records the head root and slot", func(t *testing.T) {
+		v := headValidator()
+		root := "0x" + strings.Repeat("ab", 32)
+		data, err := json.Marshal(&structs.HeadEvent{Slot: "42", Block: root})
+		require.NoError(t, err)
+
+		v.ProcessEvent(t.Context(), &eventClient.Event{Type: eventClient.EventHead, Data: data})
+
+		gotRoot, gotSlot, ok := latestHead(v.head)
+		require.Equal(t, true, ok)
+		require.Equal(t, uint64(42), uint64(gotSlot))
+		require.Equal(t, byte(0xab), gotRoot[0])
+	})
+
+	t.Run("empty root (gRPC head event) updates the slot without error", func(t *testing.T) {
+		v := headValidator()
+		// The gRPC StreamSlots event carries no block root.
+		data, err := json.Marshal(&structs.HeadEvent{Slot: "42", Block: ""})
+		require.NoError(t, err)
+
+		v.ProcessEvent(t.Context(), &eventClient.Event{Type: eventClient.EventHead, Data: data})
+
+		// Head root not recorded because there is no block root to record...
+		_, _, ok := latestHead(v.head)
+		require.Equal(t, false, ok)
+		// ...but the highest slot update must not have been dropped.
+		require.Equal(t, uint64(42), uint64(v.highestSlot()))
+	})
+
+	t.Run("malformed root still updates the slot", func(t *testing.T) {
+		v := headValidator()
+		data, err := json.Marshal(&structs.HeadEvent{Slot: "42", Block: "0xnothex"})
+		require.NoError(t, err)
+
+		v.ProcessEvent(t.Context(), &eventClient.Event{Type: eventClient.EventHead, Data: data})
+
+		// Head root not recorded because the block root failed to decode...
+		_, _, ok := latestHead(v.head)
+		require.Equal(t, false, ok)
+		// ...but the highest slot update must not have been dropped.
+		require.Equal(t, uint64(42), uint64(v.highestSlot()))
+	})
 }

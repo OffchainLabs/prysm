@@ -15,6 +15,7 @@ import (
 	http "net/http"
 	reflect "reflect"
 
+	rest "github.com/OffchainLabs/prysm/v7/api/rest"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -43,23 +44,32 @@ func (m *MockHandler) EXPECT() *MockHandlerMockRecorder {
 }
 
 // Get mocks base method.
-func (m *MockHandler) Get(ctx context.Context, endpoint string, resp any) error {
+func (m *MockHandler) Get(ctx context.Context, endpoint string, resp any, opts ...rest.GetOption) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", ctx, endpoint, resp)
+	varargs := []any{ctx, endpoint, resp}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Get", varargs...)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockHandlerMockRecorder) Get(ctx, endpoint, resp any) *gomock.Call {
+func (mr *MockHandlerMockRecorder) Get(ctx, endpoint, resp any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockHandler)(nil).Get), ctx, endpoint, resp)
+	varargs := append([]any{ctx, endpoint, resp}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockHandler)(nil).Get), varargs...)
 }
 
 // GetSSZ mocks base method.
-func (m *MockHandler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Header, error) {
+func (m *MockHandler) GetSSZ(ctx context.Context, endpoint string, opts ...rest.GetOption) ([]byte, http.Header, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetSSZ", ctx, endpoint)
+	varargs := []any{ctx, endpoint}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetSSZ", varargs...)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(http.Header)
 	ret2, _ := ret[2].(error)
@@ -67,9 +77,10 @@ func (m *MockHandler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http
 }
 
 // GetSSZ indicates an expected call of GetSSZ.
-func (mr *MockHandlerMockRecorder) GetSSZ(ctx, endpoint any) *gomock.Call {
+func (mr *MockHandlerMockRecorder) GetSSZ(ctx, endpoint any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSSZ", reflect.TypeOf((*MockHandler)(nil).GetSSZ), ctx, endpoint)
+	varargs := append([]any{ctx, endpoint}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSSZ", reflect.TypeOf((*MockHandler)(nil).GetSSZ), varargs...)
 }
 
 // GetStatusCode mocks base method.

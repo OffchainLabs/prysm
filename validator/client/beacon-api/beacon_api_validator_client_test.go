@@ -672,7 +672,7 @@ func TestBeaconApiValidatorClient_StartEventStream_FallsBackToHead(t *testing.T)
 
 	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Host().Return(server.URL).AnyTimes()
-	c := &beaconApiValidatorClient{handler: handler}
+	c := &beaconApiValidatorClient{handler: handler, eventStreamHosts: []string{server.URL}}
 
 	ch := make(chan *eventClient.Event, 8)
 	ctx, cancel := context.WithCancel(t.Context())

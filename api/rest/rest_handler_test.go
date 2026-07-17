@@ -19,7 +19,7 @@ import (
 func TestHandler_ErrorsRedactCredentials(t *testing.T) {
 	const secret = "fake-token-not-real"
 	host := "https://eth:" + secret + "@127.0.0.1:1"
-	c := NewHandler(http.Client{}, host)
+	c := newHandler(http.Client{}, host)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // force client.Do to fail without touching the network
@@ -40,7 +40,7 @@ func TestPostSSZ_NonJSONErrorBodyIsTyped(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewHandler(http.Client{}, srv.URL)
+	c := newHandler(http.Client{}, srv.URL)
 	_, _, err := c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
 	require.NotNil(t, err)
 	errJson := &httputil.DefaultJsonError{}
@@ -54,7 +54,7 @@ func TestGetSSZ_NonJSONErrorBodyIsTyped(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewHandler(http.Client{}, srv.URL)
+	c := newHandler(http.Client{}, srv.URL)
 	_, _, err := c.GetSSZ(context.Background(), "/eth/v1/test")
 	require.NotNil(t, err)
 	errJson := &httputil.DefaultJsonError{}
@@ -71,7 +71,7 @@ func TestPostSSZ_JSONErrorBodyIsDecoded(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewHandler(http.Client{}, srv.URL)
+	c := newHandler(http.Client{}, srv.URL)
 	_, _, err := c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
 	require.NotNil(t, err)
 	errJson := &httputil.DefaultJsonError{}

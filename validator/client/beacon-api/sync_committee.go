@@ -37,7 +37,8 @@ func (c *beaconApiValidatorClient) submitSyncMessage(ctx context.Context, syncMe
 func (c *beaconApiValidatorClient) syncMessageBlockRoot(ctx context.Context) (*ethpb.SyncMessageBlockRootResponse, error) {
 	// Get head beacon block root.
 	var resp structs.BlockRootResponse
-	if err := c.handler.Get(ctx, "/eth/v1/beacon/blocks/head/root", &resp); err != nil {
+	opts := syncCommitteeFreshnessOptions(ctx)
+	if err := c.handler.Get(ctx, "/eth/v1/beacon/blocks/head/root", &resp, opts...); err != nil {
 		return nil, err
 	}
 
