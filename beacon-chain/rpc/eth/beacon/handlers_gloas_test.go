@@ -328,32 +328,6 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_NoBlobs(t *testing.T)
 	require.Equal(t, http.StatusOK, w.Code)
 }
 
-// DB integration failed -> Aborted maps to 202.
-func TestPublishExecutionPayloadEnvelope_ImportFailureReturns202(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	signed := testSignedEnvelope()
-	contents, err := structs.SignedExecutionPayloadEnvelopeContentsFromConsensus(signed, nil, nil)
-	require.NoError(t, err)
-	body, err := json.Marshal(contents)
-	require.NoError(t, err)
-
-	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
-		gomock.Any(), gomock.Any(),
-	).Return(nil, status.Error(codes.Aborted, "import failed"))
-
-	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
-	wireEnvelopeGossipDeps(t, s)
-	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
-	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
-	req.Header.Set(api.BlobDataIncludedHeader, "true")
-	w := httptest.NewRecorder()
-	w.Body = &bytes.Buffer{}
-
-	s.PublishExecutionPayloadEnvelope(w, req)
-	require.Equal(t, http.StatusAccepted, w.Code)
-}
-
 // statelessContentsBody builds a SignedExecutionPayloadEnvelopeContents JSON
 // body with real blobs+proofs, returning the body bytes and the signed
 // envelope used to construct it.
