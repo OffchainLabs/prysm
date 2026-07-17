@@ -301,19 +301,14 @@ func (p *BeaconDbBlocker) resolveBlobsContext(ctx context.Context, id string, op
 	indices := cfg.Indices
 	if len(cfg.VersionedHashes) > 0 {
 		// Build a map of requested versioned hashes for fast lookup and tracking.
-		// The map deduplicates repeated request values, so all found/missing
-		// accounting below is on unique hashes: a block may carry the same
-		// commitment (and thus versioned hash) at multiple indices, and a request
-		// may repeat a hash, so raw counts of matches and request values are not
-		// comparable.
+		// Accounting is on unique hashes: a block may carry the same commitment
+		// at multiple indices, and a request may repeat a hash.
 		requestedHashes := make(map[string]bool, len(cfg.VersionedHashes))
 		for _, versionedHash := range cfg.VersionedHashes {
 			requestedHashes[string(versionedHash)] = true
 		}
 
-		// Create indices array and track which hashes we found. Every commitment
-		// matching a requested hash contributes its index, so a duplicated
-		// commitment yields one index per occurrence.
+		// Create indices array and track which hashes we found
 		indices = make([]int, 0, len(commitments))
 		foundHashes := make(map[string]bool, len(requestedHashes))
 
@@ -340,7 +335,7 @@ func (p *BeaconDbBlocker) resolveBlobsContext(ctx context.Context, id string, op
 			}
 
 			// Create detailed error message
-			errMsg := fmt.Sprintf("versioned hash(es) not found in block (requested %d hashes, found %d, missing: %v)",
+			errMsg := fmt.Sprintf("versioned hash(es) not found in block (requested %d unique hashes, found %d, missing: %v)",
 				len(requestedHashes), len(foundHashes), missingHashes)
 
 			return nil, &core.RpcError{Err: errors.New(errMsg), Reason: core.NotFound}

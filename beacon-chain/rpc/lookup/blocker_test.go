@@ -878,7 +878,7 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 		require.StringContains(t, "versioned hash(es) not found in block", rpcErr.Err.Error())
-		require.StringContains(t, "requested 1 hashes, found 0", rpcErr.Err.Error())
+		require.StringContains(t, "requested 1 unique hashes, found 0", rpcErr.Err.Error())
 		require.StringContains(t, "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", rpcErr.Err.Error())
 	})
 
@@ -898,7 +898,7 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 		require.StringContains(t, "versioned hash(es) not found in block", rpcErr.Err.Error())
-		require.StringContains(t, "requested 3 hashes, found 1", rpcErr.Err.Error())
+		require.StringContains(t, "requested 3 unique hashes, found 1", rpcErr.Err.Error())
 		// Check that both missing hashes are reported
 		require.StringContains(t, "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", rpcErr.Err.Error())
 		require.StringContains(t, "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", rpcErr.Err.Error())
@@ -956,7 +956,7 @@ func TestResolveBlobsContext_DuplicateCommitments(t *testing.T) {
 		_, rpcErr := blocker.resolveBlobsContext(ctx, blockID, options.WithVersionedHashes(requestedHashes))
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
-		require.StringContains(t, "requested 2 hashes, found 1", rpcErr.Err.Error())
+		require.StringContains(t, "requested 2 unique hashes, found 1", rpcErr.Err.Error())
 		require.StringContains(t, hexutil.Encode(missingHash), rpcErr.Err.Error())
 	})
 
@@ -965,7 +965,7 @@ func TestResolveBlobsContext_DuplicateCommitments(t *testing.T) {
 		_, rpcErr := blocker.resolveBlobsContext(ctx, blockID, options.WithVersionedHashes(requestedHashes))
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
-		require.StringContains(t, "requested 1 hashes, found 0", rpcErr.Err.Error())
+		require.StringContains(t, "requested 1 unique hashes, found 0", rpcErr.Err.Error())
 		require.Equal(t, 1, strings.Count(rpcErr.Err.Error(), hexutil.Encode(missingHash)))
 	})
 }
