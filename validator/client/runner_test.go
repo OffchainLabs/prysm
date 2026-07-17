@@ -582,6 +582,7 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 		slotFeed:                     &event.Feed{},
 		submittedAtts:                make(map[submittedAttKey]*submittedAtt),
 		submittedAggregates:          make(map[submittedAttKey]*submittedAtt),
+		attestedSlotsByKeyByEpoch:    make(map[primitives.Epoch]map[[fieldparams.BLSPubkeyLength]byte]primitives.Slot),
 	}
 	v.aggSelector = testLocalSelector(t, v)
 

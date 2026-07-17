@@ -74,6 +74,7 @@ type validator struct {
 	highestValidSlotLock         sync.Mutex
 	blacklistedPubkeysLock       sync.RWMutex
 	prevEpochBalancesLock        sync.RWMutex
+	attestedSlotsLock            sync.RWMutex
 	cachedAttestationDataLock    sync.RWMutex
 	submittedPrefSlotsLock       sync.RWMutex
 	signedRequestAuthsLock       sync.Mutex
@@ -87,6 +88,7 @@ type validator struct {
 	blacklistedPubkeys           map[[fieldparams.BLSPubkeyLength]byte]bool
 	prevEpochBalances            map[[fieldparams.BLSPubkeyLength]byte]uint64
 	startBalances                map[[fieldparams.BLSPubkeyLength]byte]uint64
+	attestedSlotsByKeyByEpoch    map[primitives.Epoch]map[[fieldparams.BLSPubkeyLength]byte]primitives.Slot
 	web3SignerConfig             *remoteweb3signer.SetupConfig
 	proposerSettings             *proposer.Settings
 	submittedPrefSlots           map[primitives.Slot]bool

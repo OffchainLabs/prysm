@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -90,6 +91,7 @@ func (v *validator) saveSubmittedAtt(att ethpb.Att, pubkey []byte, isAggregate b
 		submittedAtts = v.submittedAggregates
 	} else {
 		submittedAtts = v.submittedAtts
+		v.setAttestedSlot(bytesutil.ToBytes48(pubkey), data.Slot)
 	}
 
 	if submittedAtts[key] == nil {
@@ -106,6 +108,34 @@ func (v *validator) saveSubmittedAtt(att ethpb.Att, pubkey []byte, isAggregate b
 	}
 
 	return nil
+}
+
+func (v *validator) setAttestedSlot(pubkey [fieldparams.BLSPubkeyLength]byte, slot primitives.Slot) {
+	epoch := slots.ToEpoch(slot)
+
+	v.attestedSlotsLock.Lock()
+	defer v.attestedSlotsLock.Unlock()
+
+	for attestedEpoch := range v.attestedSlotsByKeyByEpoch {
+		if attestedEpoch+1 < epoch {
+			delete(v.attestedSlotsByKeyByEpoch, attestedEpoch)
+		}
+	}
+
+	if v.attestedSlotsByKeyByEpoch[epoch] == nil {
+		v.attestedSlotsByKeyByEpoch[epoch] = make(map[[fieldparams.BLSPubkeyLength]byte]primitives.Slot)
+	}
+
+	v.attestedSlotsByKeyByEpoch[epoch][pubkey] = slot
+}
+
+func (v *validator) attestedSlot(epoch primitives.Epoch, pubkey [fieldparams.BLSPubkeyLength]byte) (primitives.Slot, bool) {
+	v.attestedSlotsLock.RLock()
+	defer v.attestedSlotsLock.RUnlock()
+
+	// Safe even if epoch is not in the map.
+	slot, ok := v.attestedSlotsByKeyByEpoch[epoch][pubkey]
+	return slot, ok
 }
 
 // saveSubmittedSyncMessage saves the submitted sync committee message along with the signer's
