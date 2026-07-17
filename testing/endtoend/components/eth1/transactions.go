@@ -102,13 +102,16 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 		return err
 	}
 	fundedAccount = newKey
-	v0Key := keystore.NewKeyForDirectICAP(newGen)
-	if err := fundAccount(client, mineKey, v0Key); err != nil {
-		return err
+	cfg := params.BeaconConfig()
+	needsBlobV0Account := needsDedicatedBlobV0Account(cfg)
+	if needsBlobV0Account {
+		v0Key := keystore.NewKeyForDirectICAP(newGen)
+		if err := fundAccount(client, mineKey, v0Key); err != nil {
+			return err
+		}
+		blobV0Account = v0Key
 	}
-	blobV0Account = v0Key
-	// Ensure funding tx is mined before generating txs that rely on balance.
-	// Mine 1 block using the miner key to include the funding transfer.
+	// Mine one block to confirm pending account funding before generating transactions.
 	backend := ethclient.NewClient(client)
 	defer backend.Close()
 
@@ -117,13 +120,15 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 	}
 
 	// Ensure the funded account has a comfortable minimum balance for blob and fuzzed txs.
-	minWei := new(big.Int).Mul(big.NewInt(1000), big.NewInt(0).SetUint64(params.BeaconConfig().GweiPerEth))
+	minWei := new(big.Int).Mul(big.NewInt(1000), big.NewInt(0).SetUint64(cfg.GweiPerEth))
 	minWei.Mul(minWei, big.NewInt(1e9)) // 1000 ETH in wei
 	if err := ensureMinBalance(ctx, client, backend, mineKey, fundedAccount, minWei); err != nil {
 		return err
 	}
-	if err := ensureMinBalance(ctx, client, backend, mineKey, blobV0Account, minWei); err != nil {
-		return err
+	if needsBlobV0Account {
+		if err := ensureMinBalance(ctx, client, backend, mineKey, blobV0Account, minWei); err != nil {
+			return err
+		}
 	}
 	// Broadcast Transactions every slot
 	txPeriod := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
@@ -304,7 +309,11 @@ func blobTransactionModeAtEpoch(epoch primitives.Epoch, cfg *params.BeaconChainC
 }
 
 func useDedicatedBlobV0Account(mode blobTransactionMode, cfg *params.BeaconChainConfig) bool {
-	return mode == blobTransactionsWithSidecars && cfg.FuluForkEpoch != cfg.FarFutureEpoch
+	return mode == blobTransactionsWithSidecars && needsDedicatedBlobV0Account(cfg)
+}
+
+func needsDedicatedBlobV0Account(cfg *params.BeaconChainConfig) bool {
+	return cfg.FuluForkEpoch != cfg.FarFutureEpoch
 }
 
 // Pause pauses the component and its underlying process.

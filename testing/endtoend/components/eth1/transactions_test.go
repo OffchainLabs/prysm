@@ -37,3 +37,15 @@ func TestUseDedicatedBlobV0Account(t *testing.T) {
 	cfg.FuluForkEpoch = cfg.FarFutureEpoch
 	require.Equal(t, false, useDedicatedBlobV0Account(blobTransactionsWithSidecars, cfg))
 }
+
+func TestNeedsDedicatedBlobV0Account(t *testing.T) {
+	cfg := &params.BeaconChainConfig{
+		FuluForkEpoch:  16,
+		FarFutureEpoch: math.MaxUint64,
+	}
+
+	require.Equal(t, true, needsDedicatedBlobV0Account(cfg))
+
+	cfg.FuluForkEpoch = cfg.FarFutureEpoch
+	require.Equal(t, false, needsDedicatedBlobV0Account(cfg))
+}
