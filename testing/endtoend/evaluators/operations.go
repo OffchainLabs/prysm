@@ -488,6 +488,7 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 		return err
 	}
 
+	exitsSubmitted := 0
 	var sendExit = func(exitedIndex primitives.ValidatorIndex) error {
 		voluntaryExit := &ethpb.VoluntaryExit{
 			Epoch:          chainHead.HeadEpoch,
@@ -516,6 +517,7 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 		}
 		pubk := bytesutil.ToBytes48(deposits[exitedIndex].Data.PublicKey)
 		ec.ExitedVals[pubk] = chainHead.HeadEpoch // Store submission epoch
+		exitsSubmitted++
 		return nil
 	}
 
@@ -536,6 +538,13 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 		}
 	}
 
+	return ensureVoluntaryExitSubmitted(exitsSubmitted)
+}
+
+func ensureVoluntaryExitSubmitted(count int) error {
+	if count == 0 {
+		return errors.New("no eligible validators available for voluntary exit")
+	}
 	return nil
 }
 

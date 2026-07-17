@@ -133,6 +133,37 @@ func TestSelectVoluntaryExitCandidatesBoundaries(t *testing.T) {
 	}
 }
 
+func TestEnsureVoluntaryExitSubmitted(t *testing.T) {
+	tests := []struct {
+		name      string
+		count     int
+		wantError string
+	}{
+		{
+			name:      "returns an error when no exits are submitted",
+			wantError: "no eligible validators available for voluntary exit",
+		},
+		{
+			name:  "allows one submitted exit",
+			count: 1,
+		},
+		{
+			name:  "allows multiple submitted exits",
+			count: 2,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := ensureVoluntaryExitSubmitted(test.count)
+			if test.wantError != "" {
+				require.ErrorContains(t, test.wantError, err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
 func phase0BlockContainer(slot primitives.Slot, vote []byte) *ethpb.BeaconBlockContainer {
 	return &ethpb.BeaconBlockContainer{
 		Block: &ethpb.BeaconBlockContainer_Phase0Block{
