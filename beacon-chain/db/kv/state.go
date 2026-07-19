@@ -31,7 +31,16 @@ func (s *Store) State(ctx context.Context, blockRoot [32]byte) (state.BeaconStat
 
 	// If state diff is enabled, we get the state from the state-diff db.
 	if features.Get().EnableStateDiff {
-		st, err := s.getStateUsingStateDiff(ctx, blockRoot)
+		st, err := s.HotStateSnapshot(ctx, blockRoot)
+		if err == nil {
+			stateReadingTime.Observe(float64(time.Since(startTime).Milliseconds()))
+			return st, nil
+		}
+		if !errors.Is(err, ErrNotFoundState) {
+			return nil, err
+		}
+
+		st, err = s.getStateUsingStateDiff(ctx, blockRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -441,6 +450,9 @@ func (s *Store) HasState(ctx context.Context, blockRoot [32]byte) bool {
 	defer span.End()
 
 	if features.Get().EnableStateDiff {
+		if s.HasHotStateSnapshot(ctx, blockRoot) {
+			return true
+		}
 		hasState, err := s.hasStateUsingStateDiff(ctx, blockRoot)
 		if err != nil {
 			log.WithError(err).Error(fmt.Sprintf("error checking state existence using state-diff"))

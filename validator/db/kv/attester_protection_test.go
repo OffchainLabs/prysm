@@ -557,7 +557,7 @@ func benchCheckSurroundVote(
 
 func TestStore_flushAttestationRecords_InProgress(t *testing.T) {
 	s := &Store{}
-	s.batchedAttestationsFlushInProgress.Set()
+	s.batchedAttestationsFlushInProgress.Store(true)
 
 	hook := logTest.NewGlobal()
 	s.flushAttestationRecords(t.Context(), nil)

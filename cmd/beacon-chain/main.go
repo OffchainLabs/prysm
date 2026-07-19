@@ -52,7 +52,6 @@ var appFlags = []cli.Flag{
 	flags.RPCPort,
 	flags.CertFlag,
 	flags.KeyFlag,
-	flags.HTTPModules,
 	flags.HTTPServerHost,
 	flags.HTTPServerPort,
 	flags.HTTPServerCorsDomain,
@@ -65,7 +64,6 @@ var appFlags = []cli.Flag{
 	flags.BlobBatchLimitBurstFactor,
 	flags.DataColumnBatchLimit,
 	flags.DataColumnBatchLimitBurstFactor,
-	flags.InteropMockEth1DataVotesFlag,
 	flags.SlotsPerArchivedPoint,
 	flags.DisableDebugRPCEndpoints,
 	flags.SubscribeToAllSubnets,
@@ -91,7 +89,7 @@ var appFlags = []cli.Flag{
 	flags.MinBuilderDiff,
 	flags.BeaconDBPruning,
 	flags.PrunerRetentionEpochs,
-	flags.EnableBuilderSSZ,
+	flags.DisableBuilderSSZ,
 	cmd.MinimalConfigFlag,
 	cmd.E2EConfigFlag,
 	cmd.RPCMaxPageSizeFlag,
@@ -164,6 +162,7 @@ var appFlags = []cli.Flag{
 	flags.BatchVerifierLimit,
 	flags.StateDiffExponents,
 	flags.DisableEphemeralLogFile,
+	flags.PartialDataColumns,
 }
 
 func init() {

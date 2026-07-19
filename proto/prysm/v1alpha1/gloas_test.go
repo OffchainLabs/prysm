@@ -139,6 +139,7 @@ func TestBuilderPendingPayment_Copy(t *testing.T) {
 					Amount:       primitives.Gwei(10000),
 					BuilderIndex: primitives.BuilderIndex(789),
 				},
+				ProposerIndex: primitives.ValidatorIndex(456),
 			},
 		},
 	}
@@ -155,6 +156,10 @@ func TestBuilderPendingPayment_Copy(t *testing.T) {
 
 			if !reflect.DeepEqual(tt.payment, copied) {
 				t.Errorf("Copy() = %v, want %v", copied, tt.payment)
+			}
+
+			if copied.ProposerIndex != tt.payment.ProposerIndex {
+				t.Errorf("Copy() ProposerIndex = %d, want %d", copied.ProposerIndex, tt.payment.ProposerIndex)
 			}
 
 			if tt.payment.Withdrawal != nil && len(tt.payment.Withdrawal.FeeRecipient) > 0 {

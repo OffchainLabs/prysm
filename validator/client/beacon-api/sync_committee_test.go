@@ -44,7 +44,7 @@ func TestSubmitSyncMessage_Valid(t *testing.T) {
 	marshalledJsonRegistrations, err := json.Marshal([]*structs.SyncCommitteeMessage{jsonSyncCommitteeMessage})
 	require.NoError(t, err)
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/beacon/pool/sync_committees",
@@ -73,7 +73,7 @@ func TestSubmitSyncMessage_BadRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/beacon/pool/sync_committees",
@@ -137,7 +137,7 @@ func TestGetSyncMessageBlockRoot(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := t.Context()
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 			handler.EXPECT().Get(
 				gomock.Any(),
 				"/eth/v1/beacon/blocks/head/root",
@@ -207,7 +207,7 @@ func TestGetSyncCommitteeContribution(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := t.Context()
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 			handler.EXPECT().Get(
 				gomock.Any(),
 				"/eth/v1/beacon/blocks/head/root",
@@ -314,7 +314,7 @@ func TestGetSyncSubCommitteeIndex(t *testing.T) {
 			}
 			valsReqBytes, err := json.Marshal(valsReq)
 			require.NoError(t, err)
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 			handler.EXPECT().Post(
 				gomock.Any(),
 				validatorsEndpoint,

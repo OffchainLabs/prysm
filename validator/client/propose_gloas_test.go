@@ -54,7 +54,7 @@ func testExecutionPayloadEnvelope(slot primitives.Slot, builderIndex primitives.
 			ExtraData:     make([]byte, 0),
 			SlotNumber:    slot,
 		},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 		BuilderIndex:          builderIndex,
 		BeaconBlockRoot:       make([]byte, 32),
 		ParentBeaconBlockRoot: make([]byte, 32),
@@ -72,7 +72,7 @@ func TestProposeSelfBuildEnvelope(t *testing.T) {
 
 	m.validatorClient.EXPECT().
 		GetExecutionPayloadEnvelope(gomock.Any(), slot, gomock.Any()).
-		Return(expectedEnvelope, nil, nil)
+		Return(expectedEnvelope, nil)
 
 	builderDomain := make([]byte, 32)
 	copy(builderDomain, params.BeaconConfig().DomainBeaconBuilder[:])
@@ -118,7 +118,7 @@ func TestProposeSelfBuildEnvelope_ClientError(t *testing.T) {
 
 	m.validatorClient.EXPECT().
 		GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(nil, nil, errors.New("connection refused"))
+		Return(nil, errors.New("connection refused"))
 
 	signedBlock := signedGloasBlock(t, 1, params.BeaconConfig().BuilderIndexSelfBuild)
 
@@ -293,7 +293,7 @@ func TestProposeBlock_Gloas_EnvelopeAfterBlock(t *testing.T) {
 
 	getEnvelopeCall := m.validatorClient.EXPECT().
 		GetExecutionPayloadEnvelope(gomock.Any(), primitives.Slot(1), gomock.Any()).
-		Return(envelope, nil, nil).
+		Return(envelope, nil).
 		After(proposeCall)
 
 	// DomainData for envelope signing.

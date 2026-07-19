@@ -2528,6 +2528,65 @@ func TestValidateConsensus(t *testing.T) {
 	}))
 }
 
+func TestValidateGossip(t *testing.T) {
+	ctx := t.Context()
+
+	parentState, privs := util.DeterministicGenesisState(t, params.MinimalSpecConfig().MinGenesisActiveValidatorCount)
+	parentBlock, err := util.GenerateFullBlock(parentState, privs, util.DefaultBlockGenConfig(), parentState.Slot())
+	require.NoError(t, err)
+	parentSbb, err := blocks.NewSignedBeaconBlock(parentBlock)
+	require.NoError(t, err)
+	st, err := transition.ExecuteStateTransition(ctx, parentState, parentSbb)
+	require.NoError(t, err)
+	block, err := util.GenerateFullBlock(st, privs, util.DefaultBlockGenConfig(), st.Slot())
+	require.NoError(t, err)
+	parentRoot, err := parentSbb.Block().HashTreeRoot()
+	require.NoError(t, err)
+	// ProcessSlots advances the head state in place, so each run needs a fresh copy.
+	newServer := func() *Server {
+		return &Server{
+			Blocker:     &testutil.MockBlocker{RootBlockMap: map[[32]byte]interfaces.ReadOnlySignedBeaconBlock{parentRoot: parentSbb}},
+			Stater:      &testutil.MockStater{StatesByRoot: map[[32]byte]state.BeaconState{bytesutil.ToBytes32(parentBlock.Block.StateRoot): parentState}},
+			HeadFetcher: &chainMock.ChainService{State: parentState.Copy(), Root: parentRoot[:]},
+		}
+	}
+	genericBlock := &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Phase0{
+			Phase0: block,
+		},
+	}
+
+	t.Run("valid signature", func(t *testing.T) {
+		require.NoError(t, newServer().validateGossip(ctx, genericBlock))
+	})
+	t.Run("routed via broadcast_validation=gossip", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "http://foo.example?broadcast_validation=gossip", nil)
+		require.NoError(t, newServer().validateBroadcast(ctx, r, genericBlock))
+	})
+	t.Run("invalid signature", func(t *testing.T) {
+		bad := &eth.SignedBeaconBlock{Block: block.Block, Signature: bytesutil.PadTo([]byte("bad"), 96)}
+		err := newServer().validateGossip(ctx, &eth.GenericSignedBeaconBlock{
+			Block: &eth.GenericSignedBeaconBlock_Phase0{Phase0: bad},
+		})
+		require.ErrorContains(t, "could not verify block signature", err)
+	})
+	t.Run("invalid signature routed via broadcast_validation=gossip", func(t *testing.T) {
+		bad := &eth.SignedBeaconBlock{Block: block.Block, Signature: bytesutil.PadTo([]byte("bad"), 96)}
+		r := httptest.NewRequest(http.MethodPost, "http://foo.example?broadcast_validation=gossip", nil)
+		err := newServer().validateBroadcast(ctx, r, &eth.GenericSignedBeaconBlock{
+			Block: &eth.GenericSignedBeaconBlock_Phase0{Phase0: bad},
+		})
+		require.ErrorContains(t, "gossip validation failed", err)
+	})
+	t.Run("no validation by default", func(t *testing.T) {
+		bad := &eth.SignedBeaconBlock{Block: block.Block, Signature: bytesutil.PadTo([]byte("bad"), 96)}
+		r := httptest.NewRequest(http.MethodPost, "http://foo.example", nil)
+		require.NoError(t, (&Server{}).validateBroadcast(ctx, r, &eth.GenericSignedBeaconBlock{
+			Block: &eth.GenericSignedBeaconBlock_Phase0{Phase0: bad},
+		}))
+	})
+}
+
 func TestValidateEquivocation(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		st, err := util.NewBeaconState()

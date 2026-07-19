@@ -40,7 +40,7 @@ func Verify(blobSidecars ...blocks.ROBlob) error {
 	cmts := make([]GoKZG.KZGCommitment, len(blobSidecars))
 	proofs := make([]GoKZG.KZGProof, len(blobSidecars))
 	for i, sidecar := range blobSidecars {
-		blobs[i] = *bytesToBlob(sidecar.Blob)
+		copy(blobs[i][:], sidecar.Blob)
 		cmts[i] = bytesToCommitment(sidecar.KzgCommitment)
 		proofs[i] = bytesToKZGProof(sidecar.KzgProof)
 	}

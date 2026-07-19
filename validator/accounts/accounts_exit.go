@@ -47,7 +47,7 @@ func (acm *CLIManager) Exit(ctx context.Context) error {
 	if nodeClient == nil {
 		return errors.New("could not prepare beacon node client")
 	}
-	syncStatus, err := (*nodeClient).SyncStatus(ctx, &emptypb.Empty{})
+	syncStatus, err := nodeClient.SyncStatus(ctx, &emptypb.Empty{})
 	if err != nil {
 		return err
 	}
@@ -60,8 +60,8 @@ func (acm *CLIManager) Exit(ctx context.Context) error {
 	}
 
 	cfg := PerformExitCfg{
-		*validatorClient,
-		*nodeClient,
+		validatorClient,
+		nodeClient,
 		acm.keymanager,
 		acm.rawPubKeys,
 		acm.formattedPubKeys,
@@ -71,7 +71,11 @@ func (acm *CLIManager) Exit(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	displayExitInfo(rawExitedKeys, trimmedExitedKeys)
+	if len(acm.exitJSONOutputPath) > 0 {
+		displayExitJSONInfo(trimmedExitedKeys, acm.exitJSONOutputPath)
+	} else {
+		displayExitInfo(rawExitedKeys, trimmedExitedKeys)
+	}
 
 	return nil
 }
@@ -170,6 +174,17 @@ func displayExitInfo(rawExitedKeys [][]byte, trimmedExitedKeys []string) {
 	}
 }
 
+func displayExitJSONInfo(trimmedExitedKeys []string, outputDirectory string) {
+	if len(trimmedExitedKeys) > 0 {
+		log.WithField("pubkeys", strings.Join(trimmedExitedKeys, ", ")).Infof(
+			"Signed voluntary exit files were written to %s. No exits were broadcast to the network. "+
+				"The validators listed will NOT exit until these files are submitted to a beacon node.",
+			outputDirectory)
+	} else {
+		log.Info("No signed voluntary exit files were written")
+	}
+}
+
 func formatBeaconChaURL(key []byte) string {
 	baseURL := "https://%sbeaconcha.in/validator/%s"
 	keyWithout0x := hexutil.Encode(key)[2:]
@@ -197,7 +212,7 @@ func writeSignedVoluntaryExitJSON(sve *eth.SignedVoluntaryExit, outputDirectory 
 
 	filepath := path.Join(outputDirectory, fmt.Sprintf("validator-exit-%s.json", jsve.Message.ValidatorIndex))
 	if err := file.WriteFile(filepath, b); err != nil {
-		return errors.Wrap(err, "failed to write validator exist json")
+		return errors.Wrap(err, "failed to write validator exit json")
 	}
 
 	log.Infof("Wrote signed validator exit JSON to %s", filepath)

@@ -896,7 +896,7 @@ func (s *Service) ValidatorActiveSetChanges(
 			activatedKeys = append(activatedKeys, publicKey[:])
 		}
 
-		maxWithdrawableEpoch := primitives.MaxEpoch(validator.WithdrawableEpoch(), requestedEpoch+slashingsVector)
+		maxWithdrawableEpoch := max(validator.WithdrawableEpoch(), requestedEpoch+slashingsVector)
 
 		if validator.Slashed() && validator.WithdrawableEpoch() == maxWithdrawableEpoch {
 			publicKey := validator.PublicKey()
@@ -1015,7 +1015,7 @@ func (s *Service) hasCanonicalShuffling(root [32]byte, slot primitives.Slot) boo
 func (s *Service) buildPayloadAttestationData(slot primitives.Slot) (*ethpb.PayloadAttestationData, *RpcError) {
 	highestReceivedSlot := s.ForkchoiceFetcher.HighestReceivedBlockSlot()
 	if highestReceivedSlot != slot {
-		return nil, &RpcError{Reason: Unavailable, Err: fmt.Errorf("no valid block root for slot %d, highest received block slot is %d", slot, highestReceivedSlot)}
+		return nil, &RpcError{Reason: NoContent, Err: fmt.Errorf("no block found at slot=%d", slot)}
 	}
 	root := s.ForkchoiceFetcher.HighestReceivedBlockRoot()
 	if root == [32]byte{} {

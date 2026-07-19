@@ -300,14 +300,44 @@ func TestReconstructionSource(t *testing.T) {
 		bidPI, err := src.ProposerIndex()
 		require.NoError(t, err)
 		require.Equal(t, primitives.ValidatorIndex(7), bidPI)
-
 		commitments, err := src.Commitments()
 		require.NoError(t, err)
 		require.Equal(t, 2, len(commitments))
-		require.DeepEqual(t, bidCommitment1, commitments[0])
-		require.DeepEqual(t, bidCommitment2, commitments[1])
+	})
+	t.Run("from partial header", func(t *testing.T) {
+		referenceSidecar := sidecars[0]
+		header, err := referenceSidecar.SignedBlockHeader()
+		require.NoError(t, err)
+		commitments, err := referenceSidecar.KzgCommitments()
+		require.NoError(t, err)
+		proof, err := referenceSidecar.KzgCommitmentsInclusionProof()
+		require.NoError(t, err)
+		partialHeader := &ethpb.PartialDataColumnHeader{
+			SignedBlockHeader:            header,
+			KzgCommitments:               commitments,
+			KzgCommitmentsInclusionProof: proof,
+		}
 
-		require.Equal(t, peerdas.BidType, src.Type())
+		src, err := peerdas.PopulateFromPartialHeader(partialHeader)
+		require.NoError(t, err)
+		require.Equal(t, header.Header.Slot, src.Slot())
+
+		// Compute expected root
+		expectedRoot, err := header.Header.HashTreeRoot()
+		require.NoError(t, err)
+		require.Equal(t, expectedRoot, src.Root())
+
+		proposer, err := src.ProposerIndex()
+		require.NoError(t, err)
+		require.Equal(t, header.Header.ProposerIndex, proposer)
+
+		commitments, err = src.Commitments()
+		require.NoError(t, err)
+		require.Equal(t, 2, len(commitments))
+		require.DeepEqual(t, commitment1, commitments[0])
+		require.DeepEqual(t, commitment2, commitments[1])
+
+		require.Equal(t, peerdas.PartialDataColumnHeaderType, src.Type())
 	})
 }
 

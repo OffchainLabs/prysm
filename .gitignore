@@ -1,6 +1,9 @@
 # Ignore bazel directories
 bazel-*
 
+# `make gen` content cache
+.gen-cache.json
+
 .DS_Store
 .swp
 
@@ -44,3 +47,14 @@ tmp
 
 # spectest coverage reports
 report.txt
+
+# Agent instructions (devs opt in locally; canonical copy lives in .agents/)
+AGENTS.md
+!.agents/AGENTS.md
+CLAUDE.md
+
+# Local CLAUDE instruction
+CLAUDE.local.md
+
+# Downloaded external test data (make testdata)
+third_party/testdata

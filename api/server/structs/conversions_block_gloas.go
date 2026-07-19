@@ -19,9 +19,9 @@ func ExecutionPayloadEnvelopeFromConsensus(e *eth.ExecutionPayloadEnvelope) (*Ex
 	if err != nil {
 		return nil, err
 	}
-	var requests *ExecutionRequests
+	var requests *ExecutionRequestsGloas
 	if e.ExecutionRequests != nil {
-		requests = ExecutionRequestsFromConsensus(e.ExecutionRequests)
+		requests = ExecutionRequestsGloasFromConsensus(e.ExecutionRequests)
 	}
 	return &ExecutionPayloadEnvelope{
 		Payload:               payload,
@@ -80,7 +80,7 @@ func (e *ExecutionPayloadEnvelope) ToConsensus() (*eth.ExecutionPayloadEnvelope,
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Payload")
 	}
-	var requests *enginev1.ExecutionRequests
+	var requests *enginev1.ExecutionRequestsGloas
 	if e.ExecutionRequests != nil {
 		requests, err = e.ExecutionRequests.ToConsensus()
 		if err != nil {
@@ -122,77 +122,6 @@ func (e *SignedExecutionPayloadEnvelope) ToConsensus() (*eth.SignedExecutionPayl
 		return nil, server.NewDecodeError(err, "Signature")
 	}
 	return &eth.SignedExecutionPayloadEnvelope{
-		Message:   msg,
-		Signature: sig,
-	}, nil
-}
-
-func BlindedExecutionPayloadEnvelopeFromConsensus(b *eth.WireBlindedExecutionPayloadEnvelope) (*BlindedExecutionPayloadEnvelope, error) {
-	if b == nil {
-		return nil, errNilValue
-	}
-	var requests *ExecutionRequests
-	if b.ExecutionRequests != nil {
-		requests = ExecutionRequestsFromConsensus(b.ExecutionRequests)
-	}
-	return &BlindedExecutionPayloadEnvelope{
-		PayloadRoot:           hexutil.Encode(b.PayloadRoot),
-		ExecutionRequests:     requests,
-		BuilderIndex:          fmt.Sprintf("%d", b.BuilderIndex),
-		BeaconBlockRoot:       hexutil.Encode(b.BeaconBlockRoot),
-		ParentBeaconBlockRoot: hexutil.Encode(b.ParentBeaconBlockRoot),
-	}, nil
-}
-
-func (b *BlindedExecutionPayloadEnvelope) ToConsensus() (*eth.WireBlindedExecutionPayloadEnvelope, error) {
-	if b == nil {
-		return nil, server.NewDecodeError(errNilValue, "BlindedExecutionPayloadEnvelope")
-	}
-	payloadRoot, err := bytesutil.DecodeHexWithLength(b.PayloadRoot, fieldparams.RootLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "PayloadRoot")
-	}
-	var requests *enginev1.ExecutionRequests
-	if b.ExecutionRequests != nil {
-		requests, err = b.ExecutionRequests.ToConsensus()
-		if err != nil {
-			return nil, server.NewDecodeError(err, "ExecutionRequests")
-		}
-	}
-	builderIndex, err := strconv.ParseUint(b.BuilderIndex, 10, 64)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "BuilderIndex")
-	}
-	beaconBlockRoot, err := bytesutil.DecodeHexWithLength(b.BeaconBlockRoot, fieldparams.RootLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "BeaconBlockRoot")
-	}
-	parentBeaconBlockRoot, err := bytesutil.DecodeHexWithLength(b.ParentBeaconBlockRoot, fieldparams.RootLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "ParentBeaconBlockRoot")
-	}
-	return &eth.WireBlindedExecutionPayloadEnvelope{
-		PayloadRoot:           payloadRoot,
-		ExecutionRequests:     requests,
-		BuilderIndex:          primitives.BuilderIndex(builderIndex),
-		BeaconBlockRoot:       beaconBlockRoot,
-		ParentBeaconBlockRoot: parentBeaconBlockRoot,
-	}, nil
-}
-
-func (s *SignedBlindedExecutionPayloadEnvelope) ToConsensus() (*eth.SignedWireBlindedExecutionPayloadEnvelope, error) {
-	if s == nil {
-		return nil, server.NewDecodeError(errNilValue, "SignedBlindedExecutionPayloadEnvelope")
-	}
-	msg, err := s.Message.ToConsensus()
-	if err != nil {
-		return nil, server.NewDecodeError(err, "Message")
-	}
-	sig, err := bytesutil.DecodeHexWithLength(s.Signature, fieldparams.BLSSignatureLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "Signature")
-	}
-	return &eth.SignedWireBlindedExecutionPayloadEnvelope{
 		Message:   msg,
 		Signature: sig,
 	}, nil
@@ -247,39 +176,4 @@ func (c *SignedExecutionPayloadEnvelopeContents) ToConsensus() (*eth.SignedExecu
 		blobs[i] = blob
 	}
 	return signed, proofs, blobs, nil
-}
-
-// WireBlindedFromFull derives the spec-wire blinded envelope from a full one: payload_root is
-// HashTreeRoot(payload), so HashTreeRoot(blinded) == HashTreeRoot(full) and a validator signature
-// over either form is valid against the other.
-func WireBlindedFromFull(full *eth.ExecutionPayloadEnvelope) (*eth.WireBlindedExecutionPayloadEnvelope, error) {
-	if full == nil {
-		return nil, nil
-	}
-	payloadRoot, err := full.Payload.HashTreeRoot()
-	if err != nil {
-		return nil, err
-	}
-	return &eth.WireBlindedExecutionPayloadEnvelope{
-		PayloadRoot:           payloadRoot[:],
-		ExecutionRequests:     full.ExecutionRequests,
-		BuilderIndex:          full.BuilderIndex,
-		BeaconBlockRoot:       bytesutil.SafeCopyBytes(full.BeaconBlockRoot),
-		ParentBeaconBlockRoot: bytesutil.SafeCopyBytes(full.ParentBeaconBlockRoot),
-	}, nil
-}
-
-// SignedWireBlindedFromFull lifts a signed envelope to its blinded form, preserving the signature.
-func SignedWireBlindedFromFull(full *eth.SignedExecutionPayloadEnvelope) (*eth.SignedWireBlindedExecutionPayloadEnvelope, error) {
-	if full == nil {
-		return nil, nil
-	}
-	msg, err := WireBlindedFromFull(full.Message)
-	if err != nil {
-		return nil, err
-	}
-	return &eth.SignedWireBlindedExecutionPayloadEnvelope{
-		Message:   msg,
-		Signature: bytesutil.SafeCopyBytes(full.Signature),
-	}, nil
 }

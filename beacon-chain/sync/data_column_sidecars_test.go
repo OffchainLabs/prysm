@@ -1119,49 +1119,39 @@ func TestComputeTotalCount(t *testing.T) {
 	require.Equal(t, expected, actual)
 }
 
-func TestSetBidCommitments(t *testing.T) {
+func TestVerifyByRootDataColumnSidecars_SeedsGloasBidCommitments(t *testing.T) {
 	root := [fieldparams.RootLength]byte{1}
-	comms := [][]byte{{0xaa}, {0xbb}}
+	commitments := [][]byte{{0xaa}, {0xbb}}
 
-	// Fulu column should be untouched.
-	fuluDC := &ethpb.DataColumnSidecar{
-		SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
-			Header: &ethpb.BeaconBlockHeader{
-				ParentRoot: make([]byte, 32),
-				StateRoot:  make([]byte, 32),
-				BodyRoot:   make([]byte, 32),
-			},
-			Signature: make([]byte, 96),
-		},
-	}
-	fuluCol := blocks.NewRODataColumnNoVerify(fuluDC)
+	// Gloas block whose bid carries the commitments.
+	pb := util.NewBeaconBlockGloas()
+	pb.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = commitments
+	signedBlock, err := blocks.NewSignedBeaconBlock(pb)
+	require.NoError(t, err)
+	roBlock, err := blocks.NewROBlockWithRoot(signedBlock, root)
+	require.NoError(t, err)
+	blockByRoot := map[[fieldparams.RootLength]byte]blocks.ROBlock{root: roBlock}
 
-	// Gloas column should get commitments set.
-	gloasDC := &ethpb.DataColumnSidecarGloas{
-		Index:           5,
-		BeaconBlockRoot: root[:],
-		Column:          [][]byte{make([]byte, 2048)},
-		KzgProofs:       [][]byte{make([]byte, 48)},
+	newVerifier := func(_ []blocks.RODataColumn, _ []verification.Requirement) verification.DataColumnsVerifier {
+		return &verification.MockDataColumnsVerifier{}
 	}
-	gloasCol, err := blocks.NewRODataColumnGloasWithRoot(gloasDC, root)
+
+	gloasSidecar := &ethpb.DataColumnSidecarGloas{Index: 5, BeaconBlockRoot: root[:]}
+	gloasColumn, err := blocks.NewRODataColumnGloasWithRoot(gloasSidecar, root)
 	require.NoError(t, err)
 
-	pid := peer.ID("test-peer")
-	columnsByPeer := map[peer.ID][]blocks.RODataColumn{
-		pid: {fuluCol, gloasCol},
-	}
-	commitmentsByRoot := map[[fieldparams.RootLength]byte][][]byte{
-		root: comms,
-	}
+	t.Run("seeds commitments from the local block", func(t *testing.T) {
+		columns := []blocks.RODataColumn{gloasColumn}
+		_, err := verifyByRootDataColumnSidecars(newVerifier, blockByRoot, columns)
+		require.NoError(t, err)
 
-	setBidCommitments(commitmentsByRoot, columnsByPeer)
+		got, err := columns[0].KzgCommitments()
+		require.NoError(t, err)
+		require.Equal(t, len(commitments), len(got))
+	})
 
-	// Fulu column should not have bid commitments.
-	_, err = columnsByPeer[pid][0].KzgCommitments()
-	require.NoError(t, err)
-
-	// Gloas column should now have bid commitments.
-	got, err := columnsByPeer[pid][1].KzgCommitments()
-	require.NoError(t, err)
-	require.Equal(t, 2, len(got))
+	t.Run("errors when the block is not local", func(t *testing.T) {
+		_, err := verifyByRootDataColumnSidecars(newVerifier, map[[fieldparams.RootLength]byte]blocks.ROBlock{}, []blocks.RODataColumn{gloasColumn})
+		require.ErrorIs(t, err, ErrSidecarHeaderMismatch)
+	})
 }

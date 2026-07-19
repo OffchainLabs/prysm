@@ -16,7 +16,7 @@ func (m *PoolMock) PendingPayloadAttestations(_ primitives.Slot) []*ethpb.Payloa
 }
 
 // InsertPayloadAttestation --
-func (m *PoolMock) InsertPayloadAttestation(msg *ethpb.PayloadAttestationMessage, _ uint64) error {
+func (m *PoolMock) InsertPayloadAttestation(msg *ethpb.PayloadAttestationMessage, _ []uint64) error {
 	m.Attestations = append(m.Attestations, &ethpb.PayloadAttestation{
 		Data:      msg.Data,
 		Signature: msg.Signature,

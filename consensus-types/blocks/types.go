@@ -59,7 +59,7 @@ type BeaconBlockBody struct {
 	executionRequests         *enginev1.ExecutionRequests
 	signedExecutionPayloadBid *eth.SignedExecutionPayloadBid
 	payloadAttestations       []*eth.PayloadAttestation
-	parentExecutionRequests   *enginev1.ExecutionRequests
+	parentExecutionRequests   *enginev1.ExecutionRequestsGloas
 }
 
 var _ interfaces.ReadOnlyBeaconBlockBody = &BeaconBlockBody{}

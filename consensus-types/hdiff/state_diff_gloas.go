@@ -18,7 +18,7 @@ import (
 
 const (
 	builderLength                      = 93 // fixed SSZ size: pubkey(48) + version(1) + execution_address(20) + balance(8) + deposit_epoch(8) + withdrawable_epoch(8)
-	builderPendingPaymentLength        = 44 // fixed SSZ size: weight(8) + fee_recipient(20) + amount(8) + builder_index(8)
+	builderPendingPaymentLength        = 52 // fixed SSZ size: weight(8) + withdrawal{fee_recipient(20) + amount(8) + builder_index(8)} + proposer_index(8)
 	builderPendingPaymentsCount        = 2 * fieldparams.SlotsPerEpoch
 	builderPendingPaymentsTotalLength  = builderPendingPaymentsCount * builderPendingPaymentLength
 	builderPendingWithdrawalLength     = 36 // fixed SSZ size: fee_recipient(20) + amount(8) + builder_index(8)

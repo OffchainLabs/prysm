@@ -3,12 +3,12 @@ package sync
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	beaconState "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
@@ -328,7 +328,7 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 		},
 		rateLimiter:                     newRateLimiter(p1),
 		clockWaiter:                     cw,
-		chainStarted:                    abool.New(),
+		chainStarted:                    &atomic.Bool{},
 		subHandler:                      newSubTopicHandler(),
 		proposerPreferencesCache:        cache.NewProposerPreferencesCache(),
 		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
@@ -878,8 +878,11 @@ func TestStatusRPCRequest_FinalizedBlockSkippedSlots(t *testing.T) {
 		r.rateLimiter.limiterMap[topic] = leakybucket.NewCollector(1, 1, time.Second, false)
 		var wg sync.WaitGroup
 		wg.Add(1)
+		// The stream handler may be invoked more than once (e.g. a duplicate
+		// stream on the connection).
+		var done sync.Once
 		p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
-			defer wg.Done()
+			defer done.Do(wg.Done)
 			out := &ethpb.Status{}
 			assert.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, out))
 			assert.Equal(t, tt.expectError, r2.validateStatusMessage(ctx, out) != nil)
@@ -947,7 +950,7 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 		ctx:                             ctx,
 		rateLimiter:                     newRateLimiter(p1),
 		clockWaiter:                     cw,
-		chainStarted:                    abool.New(),
+		chainStarted:                    &atomic.Bool{},
 		subHandler:                      newSubTopicHandler(),
 		proposerPreferencesCache:        cache.NewProposerPreferencesCache(),
 		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),

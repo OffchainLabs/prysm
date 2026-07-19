@@ -48,7 +48,7 @@ func makeSignedEnvelope(root [32]byte, slot primitives.Slot) *ethpb.SignedExecut
 func newEnvelopeFetchService(t *testing.T, p1 p2p.P2P) *Service {
 	chain := &mock.ChainService{
 		ValidatorsRoot: [32]byte{},
-		Genesis:        time.Now(),
+		Genesis:        time.Now().Add(-time.Hour),
 	}
 	r := &Service{
 		cfg: &config{
@@ -109,6 +109,51 @@ func TestFetchAndQueuePayloadEnvelopesForRoots_QueuesWithoutPendingBlock(t *test
 	require.Equal(t, true, ok)
 	require.Equal(t, 1, len(inner))
 	assert.NotNil(t, inner[0])
+}
+
+// A future slot must not defeat finalization based pruning by pinning memory.
+func TestQueuePendingPayloadEnvelopeFromRootRequest_RejectsFutureSlot(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	p1 := p2ptest.NewTestP2P(t)
+	r := newEnvelopeFetchService(t, p1)
+
+	r.queuePendingPayloadEnvelopeFromRootRequest(makeSignedEnvelope([32]byte{0xDD}, 1_000_000))
+
+	r.pendingEnvelopeLock.RLock()
+	defer r.pendingEnvelopeLock.RUnlock()
+	assert.Equal(t, 0, len(r.pendingPayloadEnvelopes))
+}
+
+func TestQueuePendingPayloadEnvelopeFromRootRequest_RootsCap(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	p1 := p2ptest.NewTestP2P(t)
+	r := newEnvelopeFetchService(t, p1)
+
+	for i := range maxPendingPayloadRoots {
+		r.queuePendingPayloadEnvelopeFromRootRequest(makeSignedEnvelope([32]byte{byte(i), byte(i >> 8)}, 1))
+	}
+	r.queuePendingPayloadEnvelopeFromRootRequest(makeSignedEnvelope([32]byte{0xFF, 0xFF, 0xFF}, 1))
+
+	r.pendingEnvelopeLock.RLock()
+	defer r.pendingEnvelopeLock.RUnlock()
+	assert.Equal(t, maxPendingPayloadRoots, len(r.pendingPayloadEnvelopes))
+}
+
+func TestQueuePendingPayloadEnvelopeFromRootRequest_BuildersPerRootCap(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	p1 := p2ptest.NewTestP2P(t)
+	r := newEnvelopeFetchService(t, p1)
+
+	root := [32]byte{0x01}
+	for i := 0; i <= maxPendingBuildersPerRoot; i++ {
+		env := makeSignedEnvelope(root, 1)
+		env.Message.BuilderIndex = primitives.BuilderIndex(i)
+		r.queuePendingPayloadEnvelopeFromRootRequest(env)
+	}
+
+	r.pendingEnvelopeLock.RLock()
+	defer r.pendingEnvelopeLock.RUnlock()
+	assert.Equal(t, maxPendingBuildersPerRoot, len(r.pendingPayloadEnvelopes[root]))
 }
 
 // Pre-Gloas: the chain-level CurrentSlot() < gloasStartSlot gate short-circuits

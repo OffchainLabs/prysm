@@ -4,6 +4,8 @@ go_library(
     name = "go_default_library",
     srcs = [
         "bid.go",
+        "builder_deposit_request.go",
+        "builder_exit.go",
         "deposit_request.go",
         "log.go",
         "metrics.go",
@@ -18,7 +20,6 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas",
     visibility = ["//visibility:public"],
     deps = [
-        "//beacon-chain/cache:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/requests:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
@@ -51,6 +52,8 @@ go_test(
     name = "go_default_test",
     srcs = [
         "bid_test.go",
+        "builder_deposit_request_test.go",
+        "builder_exit_request_test.go",
         "deposit_request_test.go",
         "payload_attestation_test.go",
         "payload_test.go",
@@ -61,7 +64,6 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
-        "//beacon-chain/cache:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/time:go_default_library",
