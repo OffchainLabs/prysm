@@ -105,10 +105,10 @@ func TestRateLimiter_ExceedRawCapacity(t *testing.T) {
 	}
 }
 
-func Test_limiter_retrieveCollector_requiresLock(t *testing.T) {
+func Test_limiter_retrieveCollector_unknownTopic(t *testing.T) {
 	l := limiter{}
 	_, err := l.retrieveCollector("")
-	require.ErrorContains(t, "caller must hold read/write lock", err)
+	require.ErrorContains(t, "collector does not exist for topic", err)
 }
 
 func TestRateLimiter_RemovePeer(t *testing.T) {
