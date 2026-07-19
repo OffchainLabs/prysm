@@ -105,9 +105,9 @@ func TestRateLimiter_ExceedRawCapacity(t *testing.T) {
 	}
 }
 
-func Test_limiter_retrieveCollector_unknownTopic(t *testing.T) {
+func Test_limiter_topicCollector_unknownTopic(t *testing.T) {
 	l := limiter{}
-	_, err := l.retrieveCollector("")
+	_, err := l.topicCollector("")
 	require.ErrorContains(t, "collector does not exist for topic", err)
 }
 

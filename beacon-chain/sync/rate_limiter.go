@@ -233,8 +233,7 @@ func (l *limiter) removePeer(pid peer.ID) {
 	}
 }
 
-// not to be used outside the rate limiter file as it is unsafe for concurrent usage
-// and is protected by a lock on all of its usages here.
+// Callers must hold l.RWMutex, the map is mutated by free.
 func (l *limiter) retrieveCollector(topic string) (*leakybucket.Collector, error) {
 	collector, ok := l.limiterMap[topic]
 	if !ok {
