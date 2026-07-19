@@ -16,7 +16,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
-	fastssz "github.com/prysmaticlabs/fastssz"
 )
 
 // eth1DataMajorityVote determines the appropriate eth1data for a block proposal using
@@ -45,9 +44,6 @@ func (vs *Server) eth1DataMajorityVote(ctx context.Context, beaconState state.Be
 	slot := beaconState.Slot()
 	votingPeriodStartTime := vs.slotStartTime(slot)
 
-	if vs.MockEth1Votes {
-		return vs.mockETH1DataVote(ctx, slot)
-	}
 	if !vs.Eth1InfoFetcher.ExecutionClientConnected() {
 		return vs.randomETH1DataVote(ctx)
 	}
@@ -131,36 +127,6 @@ func (vs *Server) canonicalEth1Data(
 		return nil, nil, errors.Wrap(err, "could not fetch eth1data height")
 	}
 	return canonicalEth1Data, canonicalEth1DataHeight, nil
-}
-
-func (vs *Server) mockETH1DataVote(ctx context.Context, slot primitives.Slot) (*ethpb.Eth1Data, error) {
-	if !eth1DataNotification {
-		log.Warn("Beacon Node is no longer connected to an ETH1 chain, so ETH1 data votes are now mocked.")
-		eth1DataNotification = true
-	}
-	// If a mock eth1 data votes is specified, we use the following for the
-	// eth1data we provide to every proposer based on https://github.com/ethereum/eth2.0-pm/issues/62:
-	//
-	// slot_in_voting_period = current_slot % SLOTS_PER_ETH1_VOTING_PERIOD
-	// Eth1Data(
-	//   DepositRoot = hash(current_epoch + slot_in_voting_period),
-	//   DepositCount = state.eth1_deposit_index,
-	//   BlockHash = hash(hash(current_epoch + slot_in_voting_period)),
-	// )
-	slotInVotingPeriod := slot.ModSlot(params.BeaconConfig().SlotsPerEpoch.Mul(uint64(params.BeaconConfig().EpochsPerEth1VotingPeriod)))
-	headState, err := vs.HeadFetcher.HeadStateReadOnly(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var enc []byte
-	enc = fastssz.MarshalUint64(enc, uint64(slots.ToEpoch(slot))+uint64(slotInVotingPeriod))
-	depRoot := hash.Hash(enc)
-	blockHash := hash.Hash(depRoot[:])
-	return &ethpb.Eth1Data{
-		DepositRoot:  depRoot[:],
-		DepositCount: headState.Eth1DepositIndex(),
-		BlockHash:    blockHash[:],
-	}, nil
 }
 
 func (vs *Server) randomETH1DataVote(ctx context.Context) (*ethpb.Eth1Data, error) {

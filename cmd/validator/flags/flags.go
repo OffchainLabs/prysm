@@ -33,7 +33,8 @@ var (
 	}
 	// BeaconRPCProviderFlag defines a beacon node RPC endpoint.
 	BeaconRPCProviderFlag = &cli.StringFlag{
-		Name: "beacon-rpc-provider",
+		Name:    "beacon-rpc-provider",
+		Aliases: []string{"beacon-grpc"},
 		Usage: `WARNING: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API..
 		Beacon node RPC provider endpoint.`,
 		Value: "127.0.0.1:4000",
@@ -41,9 +42,10 @@ var (
 
 	// BeaconRESTApiProviderFlag defines a beacon node REST API endpoint.
 	BeaconRESTApiProviderFlag = &cli.StringFlag{
-		Name:  "beacon-rest-api-provider",
-		Usage: "Beacon node REST API provider endpoint. Use a comma-separated list for ordered failover; the first endpoint is primary, and failover wraps back to the first after the last.",
-		Value: "http://127.0.0.1:3500",
+		Name:    "beacon-rest-api-provider",
+		Aliases: []string{"beacon-rest"},
+		Usage:   "Beacon node REST API provider endpoint. Setting this implicitly enables the beacon REST API (no need for --enable-beacon-rest-api). Use a comma-separated list for ordered failover; the first endpoint is primary, and failover wraps back to the first after the last.",
+		Value:   "http://127.0.0.1:3500",
 	}
 	// BeaconRESTApiHeaders defines a list of headers to send with all HTTP requests to the beacon node.
 	BeaconRESTApiHeaders = &cli.StringFlag{

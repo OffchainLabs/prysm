@@ -149,6 +149,9 @@ go_test(
     shard_count = 2,
     tags = [
         "e2e",
+        # E2E ports are derived only from the shard index, so same-index shards
+        # of different targets collide when run concurrently.
+        "exclusive",
         "manual",
         "minimal",
         "requires-network",
@@ -182,6 +185,9 @@ go_test(
     shard_count = 2,
     tags = [
         "e2e",
+        # E2E ports are derived only from the shard index, so same-index shards
+        # of different targets collide when run concurrently.
+        "exclusive",
         "manual",
         "minimal",
         "requires-network",

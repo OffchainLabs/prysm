@@ -186,37 +186,49 @@ func (s *Service) ReconstructFullGloasExecutionPayloadsByHash(
 	}
 
 	for i, h := range requestHashes {
-		blk := execBlocks[i]
-		payload, err := gloasPayloadFromExecutionBlock(h, blk)
+		payload, err := gloasPayloadFromBlockAndBody(h, execBlocks[i], bodiesV2[i])
 		if err != nil {
 			return nil, err
-		}
-
-		body := bodiesV2[i]
-		if body != nil {
-			transactions, err := body.Transactions()
-			if err != nil {
-				return nil, errors.Wrap(err, "could not get transactions from payload body")
-			}
-
-			withdrawals, err := body.Withdrawals()
-			if err != nil {
-				return nil, errors.Wrap(err, "could not get withdrawals from payload body")
-			}
-
-			payload.Transactions = transactions
-			payload.Withdrawals = withdrawals
-
-			blockAccessList, err := body.BlockAccessList()
-			if err != nil {
-				return nil, errors.Wrap(err, "could not get block access list from payload body")
-			}
-			payload.BlockAccessList = blockAccessList
 		}
 		payloads[h] = payload
 	}
 
 	return payloads, nil
+}
+
+// gloasPayloadFromBlockAndBody constructs a Gloas payload from an execution block and its corresponding payload body.
+func gloasPayloadFromBlockAndBody(
+	requestedHash [32]byte, blk *pb.ExecutionBlock, body interfaces.ExecutionPayloadBody,
+) (*pb.ExecutionPayloadGloas, error) {
+	payload, err := gloasPayloadFromExecutionBlock(requestedHash, blk)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not construct payload from execution block")
+	}
+	if body == nil {
+		return nil, errors.Errorf("execution payload body unavailable for block hash %#x", requestedHash)
+	}
+
+	// Extract transactions, withdrawals, and BAL from payload body.
+	payload.Transactions, err = body.Transactions()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get transactions from payload body")
+	}
+	payload.Withdrawals, err = body.Withdrawals()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get withdrawals from payload body")
+	}
+
+	blockAccessList, err := body.BlockAccessList()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get block access list from payload body")
+	}
+	if blockAccessList != nil {
+		payload.BlockAccessList = blockAccessList
+	}
+	if payload.BlockAccessList == nil {
+		return nil, errors.Errorf("block access list unavailable for block hash %#x", requestedHash)
+	}
+	return payload, nil
 }
 
 // gloasPayloadFromExecutionBlock extracts header fields from an execution block.

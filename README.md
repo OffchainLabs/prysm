@@ -1,13 +1,11 @@
 <h1 align="left">Prysm: An Ethereum Consensus Implementation Written in Go</h1>
 
 <div align="left">
-  
-[![Build status](https://badge.buildkite.com/b555891daf3614bae4284dcf365b2340cefc0089839526f096.svg?branch=master)](https://buildkite.com/prysmatic-labs/prysm)
-[![Go Report Card](https://goreportcard.com/badge/github.com/OffchainLabs/prysm)](https://goreportcard.com/report/github.com/OffchainLabs/prysm)
-[![Consensus_Spec_Version 1.4.0](https://img.shields.io/badge/Consensus%20Spec%20Version-v1.4.0-blue.svg)](https://github.com/ethereum/consensus-specs/tree/v1.4.0)
-[![Execution_API_Version 1.0.0-beta.2](https://img.shields.io/badge/Execution%20API%20Version-v1.0.0.beta.2-blue.svg)](https://github.com/ethereum/execution-apis/tree/v1.0.0-beta.2/src/engine)
-[![Discord](https://user-images.githubusercontent.com/7288322/34471967-1df7808a-efbb-11e7-9088-ed0b04151291.png)](https://discord.gg/qEZK94mFXP)
-[![GitPOAP Badge](https://public-api.gitpoap.io/v1/repo/OffchainLabs/prysm/badge)](https://www.gitpoap.io/gh/OffchainLabs/prysm)
+
+[![Buildkite](https://badge.buildkite.com/b555891daf3614bae4284dcf365b2340cefc0089839526f096.svg?branch=develop)](https://buildkite.com/prysmatic-labs/prysm)
+[![Build status](https://github.com/OffchainLabs/prysm/actions/workflows/go.yml/badge.svg?branch=develop)](https://github.com/OffchainLabs/prysm/actions/workflows/go.yml)
+[![Consensus Spec Version](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2FOffchainLabs%2Fprysm%2Fdevelop%2FWORKSPACE&search=consensus_spec_version%20%3D%20%22%28%5B%5E%22%5D%2B%29%22&replace=%241&label=Consensus%20Spec%20Version&color=blue)](https://github.com/ethereum/consensus-specs/releases)
+[![Discord](https://img.shields.io/discord/476244492043812875?logo=discord&label=Discord)](https://discord.gg/qEZK94mFXP)
 
 </div>
 

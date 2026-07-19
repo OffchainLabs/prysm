@@ -918,6 +918,17 @@ func (s *Service) isDataAvailable(
 		if len(kzgCommitments) == 0 {
 			return nil
 		}
+		// Initial sync fetches columns via range requests, so check availability synchronously rather than blocking on gossip; fail if missing.
+		if !s.inRegularSync() {
+			available, err := s.dataColumnsAvailableNow(ctx, root, block.Slot())
+			if err != nil {
+				return errors.Wrap(err, "data columns available now")
+			}
+			if !available {
+				return errors.Errorf("data columns unavailable for block slot %d root %#x", block.Slot(), root)
+			}
+			return nil
+		}
 		return s.areDataColumnsAvailable(ctx, root, block.Slot())
 	}
 

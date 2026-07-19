@@ -37,6 +37,7 @@ type Chain struct {
 	CurrError         error
 	Endpoints         []string
 	Errors            []error
+	NotConnected      bool
 }
 
 // GenesisTime represents a static past date - JAN 01 2000.
@@ -119,8 +120,8 @@ func (*Chain) ClearPreGenesisData() {
 	// no-op
 }
 
-func (*Chain) ExecutionClientConnected() bool {
-	return true
+func (m *Chain) ExecutionClientConnected() bool {
+	return !m.NotConnected
 }
 
 func (m *Chain) ExecutionClientEndpoint() string {

@@ -786,86 +786,6 @@ func TestValidateBeaconBlockPubSub_Syncing(t *testing.T) {
 	}
 }
 
-func TestValidateBeaconBlockPubSub_IgnoreAndQueueBlocksFromNearFuture(t *testing.T) {
-	db := dbtest.SetupDB(t)
-	p := p2ptest.NewTestP2P(t)
-	ctx := t.Context()
-
-	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
-	parentBlock := util.NewBeaconBlock()
-	util.SaveBlock(t, ctx, db, parentBlock)
-	bRoot, err := parentBlock.Block.HashTreeRoot()
-	require.NoError(t, err)
-	require.NoError(t, db.SaveState(ctx, beaconState, bRoot))
-	require.NoError(t, db.SaveStateSummary(ctx, &ethpb.StateSummary{Root: bRoot[:]}))
-	copied := beaconState.Copy()
-	require.NoError(t, copied.SetSlot(1))
-	proposerIdx, err := helpers.BeaconProposerIndex(ctx, copied)
-	require.NoError(t, err)
-
-	msg := util.NewBeaconBlock()
-	msg.Block.Slot = 2 // two slots in future
-	msg.Block.ParentRoot = bRoot[:]
-	msg.Block.ProposerIndex = proposerIdx
-	msg.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, msg.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
-	require.NoError(t, err)
-
-	stateGen := stategen.New(db, doublylinkedtree.New())
-	chainService := &mock.ChainService{Genesis: time.Now(),
-		FinalizedCheckPoint: &ethpb.Checkpoint{
-			Epoch: 0,
-			Root:  make([]byte, 32),
-		},
-		State: beaconState}
-	r := &Service{
-		cfg: &config{
-			p2p:               p,
-			beaconDB:          db,
-			initialSync:       &mockSync.Sync{IsSyncing: false},
-			chain:             chainService,
-			clock:             startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
-			blockNotifier:     chainService.BlockNotifier(),
-			operationNotifier: chainService.OperationNotifier(),
-			stateGen:          stateGen,
-		},
-		chainStarted:        &atomic.Bool{},
-		seenBlockCache:      lruwrpr.New(10),
-		badBlockCache:       lruwrpr.New(10),
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
-	}
-	opChannel := make(chan *feed.Event, 1)
-	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
-	defer opSub.Unsubscribe()
-
-	buf := new(bytes.Buffer)
-	_, err = p.Encoding().EncodeGossip(buf, msg)
-	require.NoError(t, err)
-	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlock]()]
-	digest, err := r.currentForkDigest()
-	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, digest)
-	m := &pubsub.Message{
-		Message: &pubsubpb.Message{
-			Data:  buf.Bytes(),
-			Topic: &topic,
-		},
-	}
-	res, err := r.validateBeaconBlockPubSub(ctx, "", m)
-	require.ErrorContains(t, "early block, with current slot", err)
-	assert.Equal(t, res, pubsub.ValidationIgnore, "early block should be ignored and queued")
-
-	// check if the block is inserted in the Queue
-	assert.Equal(t, true, len(r.pendingBlocksInCache(msg.Block.Slot)) == 1)
-
-	select {
-	case event := <-opChannel:
-		assert.NotEqual(t, opfeed.BlockGossipReceived, event.Type, "BlockGossipReceived event should not be sent")
-	default:
-		// this case is needed, otherwise the test will never finish
-	}
-}
-
 func TestValidateBeaconBlockPubSub_RejectBlocksFromFuture(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
@@ -1548,9 +1468,7 @@ func TestValidateBeaconBlockPubSub_RejectBlocksFromBadParent(t *testing.T) {
 	perSlot := params.BeaconConfig().SecondsPerSlot
 	// current slot time
 	slotsSinceGenesis := primitives.Slot(1000)
-	// max uint, divided by slot time. But avoid losing precision too much.
-	overflowBase := (1 << 63) / (perSlot >> 1)
-	msg.Block.Slot = slotsSinceGenesis.Add(overflowBase)
+	msg.Block.Slot = slotsSinceGenesis
 
 	// valid block
 	msg.Block.ParentRoot = bRoot[:]
@@ -1624,22 +1542,6 @@ func TestService_setBadBlock_DoesntSetWithContextErr(t *testing.T) {
 	if s.hasBadBlock(root) {
 		t.Error("Set bad root with cancelled context")
 	}
-}
-
-func TestService_isBlockQueueable(t *testing.T) {
-	currentTime := time.Now().Round(time.Second)
-	genesisTime := currentTime.Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
-	blockSlot := primitives.Slot(1)
-
-	// slot time within MAXIMUM_GOSSIP_CLOCK_DISPARITY, so don't queue the block.
-	receivedTime := currentTime.Add(-400 * time.Millisecond)
-	result := isBlockQueueable(genesisTime, blockSlot, receivedTime)
-	assert.Equal(t, false, result)
-
-	// slot time just above MAXIMUM_GOSSIP_CLOCK_DISPARITY, so queue the block.
-	receivedTime = currentTime.Add(-600 * time.Millisecond)
-	result = isBlockQueueable(genesisTime, blockSlot, receivedTime)
-	assert.Equal(t, true, result)
 }
 
 func TestValidateBeaconBlockPubSub_ValidExecutionPayload(t *testing.T) {
