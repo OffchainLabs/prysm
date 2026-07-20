@@ -164,12 +164,17 @@ func builderBeatsLocal(builderValue, localValue primitives.Gwei, boostFactor uin
 }
 
 // The proposer's total take, the execution payment counts only up to the proposer's max preference.
+// Saturates instead of wrapping: a malicious bid must not rank below honest ones by overflowing.
 func effectiveBidValue(bid *ethpb.SignedExecutionPayloadBid, maxExecutionPayment uint64) primitives.Gwei {
 	payment := bid.Message.ExecutionPayment
 	if uint64(payment) > maxExecutionPayment {
 		payment = primitives.Gwei(maxExecutionPayment)
 	}
-	return bid.Message.Value + payment
+	sum := bid.Message.Value + payment
+	if sum < bid.Message.Value {
+		return primitives.Gwei(math.MaxUint64)
+	}
+	return sum
 }
 
 // builderBidQuery carries the proposal context builder bids are requested and validated against.

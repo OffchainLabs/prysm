@@ -1488,6 +1488,12 @@ func (v *validator) buildBuilderPreferencesForSlot(pk pubkey, slot primitives.Sl
 		prefs = append(prefs, p)
 	}
 	if len(prefs) == 0 {
+		if len(targets) > 0 {
+			log.WithFields(logrus.Fields{
+				"pubkey": fmt.Sprintf("%#x", bytesutil.Trunc(pk[:])),
+				"slot":   slot,
+			}).Warn("Builder is enabled but no signed request auths are warmed for this slot; proposing without builder preferences")
+		}
 		return nil
 	}
 	return prefs

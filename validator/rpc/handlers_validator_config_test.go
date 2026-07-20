@@ -260,3 +260,19 @@ func TestServer_SetGetValidatorConfig_MaxExecutionPaymentZeroVsAbsent(t *testing
 	require.NotNil(t, absent.Builder)
 	assert.Equal(t, (*string)(nil), absent.Builder.MaxExecutionPayment)
 }
+
+func TestServer_SetValidatorConfig_InvalidBuilderURL(t *testing.T) {
+	srv, keys := setupConfigServer(t, 1)
+	pk := hexutil.Encode(keys[0][:])
+
+	w := postValidatorConfig(t, srv, `{"configs":{"`+pk+`":{"builder":{"enabled":true,"builders":[{"url":"not a url at all"}]}}}}`)
+	require.Equal(t, http.StatusOK, w.Code)
+	setResp := &SetValidatorConfigResponse{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), setResp))
+	require.Equal(t, configStatusError, setResp.Data[pk].Status)
+	assert.StringContains(t, "url is not a valid URL", setResp.Data[pk].Message)
+
+	// Nothing persisted for the key.
+	getResp := getValidatorConfig(t, srv, "")
+	require.Equal(t, 0, len(getResp.Data.Configs))
+}

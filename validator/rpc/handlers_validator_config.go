@@ -3,12 +3,14 @@ package rpc
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/io/logs"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/ethereum/go-ethereum/common"
@@ -302,6 +304,13 @@ func builderConfigFromJSON(in *BuilderConfigJson) (*proposer.BuilderConfig, erro
 func builderEntryFromJSON(in *BuilderEntryJson, i int) (*proposer.BuilderEntry, error) {
 	if in.Url == "" {
 		return nil, errors.Errorf("builder.builders[%d].url is required", i)
+	}
+	if u, err := url.Parse(in.Url); err != nil || u.Scheme == "" || u.Host == "" {
+		return nil, errors.Errorf("builder.builders[%d].url is not a valid URL", i)
+	}
+	if in.AuthData == nil {
+		log.WithField("builder", logs.MaskCredentialsLogging(in.Url)).Warn(
+			"Builder entry has no auth_data; builders requiring an out-of-band agreement will reject its requests")
 	}
 	be := &proposer.BuilderEntry{URL: in.Url, Proxy: in.Proxy}
 	if in.Pubkey != nil {

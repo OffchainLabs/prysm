@@ -115,3 +115,14 @@ func TestBuilderBeatsLocal(t *testing.T) {
 		})
 	}
 }
+
+// A bid whose value+payment would wrap uint64 must saturate, never rank below honest bids.
+func TestEffectiveBidValue_Saturates(t *testing.T) {
+	const builderIdx = primitives.BuilderIndex(3)
+	overflow := newBid(primitives.Gwei(math.MaxUint64-5), 100, builderIdx)
+	require.Equal(t, primitives.Gwei(math.MaxUint64), effectiveBidValue(overflow, math.MaxUint64))
+
+	honest := newBid(50, 25, builderIdx)
+	require.Equal(t, primitives.Gwei(75), effectiveBidValue(honest, math.MaxUint64))
+	require.Equal(t, primitives.Gwei(60), effectiveBidValue(honest, 10))
+}

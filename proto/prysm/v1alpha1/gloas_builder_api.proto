@@ -15,9 +15,8 @@ option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
 
 // RequestAuthV1 authenticates a proposer's bid request to a specific builder.
 message RequestAuthV1 {
-  // data carries the builder URL. ByteList[MAX_DATA_SIZE=4096] per the spec, the
-  // list limit feeds the hash tree root, so a different value breaks signature
-  // verification.
+  // Opaque auth data agreed with the builder out of band (builder-specs 5078eab);
+  // the ByteList[4096] limit feeds the hash tree root and thus the signature.
   bytes data = 1 [ (ethereum.eth.ext.ssz_max) = "4096" ];
   uint64 slot = 2 [
     (ethereum.eth.ext.cast_type) =
