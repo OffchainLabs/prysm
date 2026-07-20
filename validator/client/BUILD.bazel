@@ -129,6 +129,7 @@ go_test(
         "propose_gloas_test.go",
         "propose_test.go",
         "registration_test.go",
+        "request_auth_test.go",
         "runner_test.go",
         "service_test.go",
         "slashing_protection_interchange_test.go",

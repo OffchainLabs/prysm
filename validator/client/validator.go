@@ -1461,7 +1461,7 @@ func (v *validator) buildBuilderPreferencesForSlot(pk pubkey, slot primitives.Sl
 	targets := v.builderTargetsForKey(pk)
 	prefs := make([]*ethpb.BuilderPreferenceV1, 0, len(targets))
 	for _, t := range targets {
-		auth, ok := v.signedRequestAuthFor(pk, t.url, slot)
+		auth, ok := v.signedRequestAuthFor(pk, t.url, t.authData, slot)
 		if !ok {
 			continue
 		}

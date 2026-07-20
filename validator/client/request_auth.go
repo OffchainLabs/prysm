@@ -14,10 +14,13 @@ import (
 	"github.com/pkg/errors"
 )
 
+// authData is part of the key so a cached signature always covers exactly the
+// data configured for the builder; rotating auth_data can never serve a stale auth.
 type requestAuthKey struct {
-	pk    pubkey
-	slot  primitives.Slot
-	relay string
+	pk       pubkey
+	slot     primitives.Slot
+	relay    string
+	authData string
 }
 
 func (v *validator) pruneSignedRequestAuths(slot primitives.Slot) {
@@ -30,11 +33,11 @@ func (v *validator) pruneSignedRequestAuths(slot primitives.Slot) {
 	}
 }
 
-// signRequestAuthCached signs a request auth for the (pk, relay, slot) tuple. Per
-// builder-specs 5078eab the signed data is the opaque authData agreed with the
-// builder out of band, not the builder URL; the URL is keyed separately.
+// signRequestAuthCached signs a request auth for the (pk, relay, authData, slot)
+// tuple. Per builder-specs 5078eab the signed data is the opaque authData agreed
+// with the builder out of band, not the builder URL.
 func (v *validator) signRequestAuthCached(ctx context.Context, km keymanager.IKeymanager, pk pubkey, relay string, authData []byte, slot primitives.Slot) (*ethpb.SignedRequestAuthV1, error) {
-	key := requestAuthKey{pk: pk, slot: slot, relay: relay}
+	key := requestAuthKey{pk: pk, slot: slot, relay: relay, authData: string(authData)}
 	v.signedRequestAuthsLock.Lock()
 	signed, ok := v.signedRequestAuths[key]
 	v.signedRequestAuthsLock.Unlock()
@@ -54,11 +57,11 @@ func (v *validator) signRequestAuthCached(ctx context.Context, km keymanager.IKe
 	return signed, nil
 }
 
-// signedRequestAuthFor returns the cached signed auth for the (pk, relay, slot) tuple.
-func (v *validator) signedRequestAuthFor(pk pubkey, relay string, slot primitives.Slot) (*ethpb.SignedRequestAuthV1, bool) {
+// signedRequestAuthFor returns the cached signed auth for the (pk, relay, authData, slot) tuple.
+func (v *validator) signedRequestAuthFor(pk pubkey, relay string, authData []byte, slot primitives.Slot) (*ethpb.SignedRequestAuthV1, bool) {
 	v.signedRequestAuthsLock.Lock()
 	defer v.signedRequestAuthsLock.Unlock()
-	signed, ok := v.signedRequestAuths[requestAuthKey{pk: pk, slot: slot, relay: relay}]
+	signed, ok := v.signedRequestAuths[requestAuthKey{pk: pk, slot: slot, relay: relay, authData: string(authData)}]
 	return signed, ok
 }
 
