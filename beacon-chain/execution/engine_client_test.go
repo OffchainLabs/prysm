@@ -2917,7 +2917,7 @@ func TestFetchCellsAndProofsFromExecutionV4(t *testing.T) {
 						want[int(col)] = blobPatterns[j]
 					}
 				}
-				for col := 0; col < fieldparams.NumberOfColumns; col++ {
+				for col := range fieldparams.NumberOfColumns {
 					if pattern, ok := want[col]; ok {
 						require.NotNil(t, cells[col])
 						require.NotNil(t, proofs[col])
@@ -3239,4 +3239,15 @@ func TestExecutionBlock_MarshalUnmarshalJSON_BlockAccessList(t *testing.T) {
 	decoded := &pb.ExecutionBlock{}
 	require.NoError(t, decoded.UnmarshalJSON(enc))
 	require.DeepEqual(t, []byte(bal), []byte(decoded.BlockAccessList))
+}
+
+func TestCustodyColumnsBitmask(t *testing.T) {
+	mask := custodyColumnsBitmask(map[uint64]bool{0: true, 7: true, 8: true, 127: true})
+	require.Equal(t, 16, len(mask))
+	require.Equal(t, byte(0x81), mask[0])  // col 0, 7
+	require.Equal(t, byte(0x01), mask[1])  // col 8
+	require.Equal(t, byte(0x80), mask[15]) // col 127
+
+	// out-of-range columns are ignored
+	require.DeepEqual(t, make([]byte, 16), []byte(custodyColumnsBitmask(map[uint64]bool{128: true, 200: true})))
 }
