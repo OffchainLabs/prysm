@@ -481,7 +481,7 @@ func TestValidator_CheckDependentRoots_UnknownCurrentRootSkips(t *testing.T) {
 		ds.write(data)
 	}
 	require.Equal(t, true, ds.isInitialized())
-	require.Equal(t, true, ds.currDependentRoot() == nil)
+	require.IsNil(t, ds.currDependentRoot())
 
 	v := &validator{
 		km:              newMockKeymanager(t, randKeypair(t)),
