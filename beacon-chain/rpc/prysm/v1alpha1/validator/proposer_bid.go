@@ -128,7 +128,6 @@ func bestBid(
 }
 
 // The proposer's total take, the execution payment counts only up to the proposer's max preference.
-// The sum saturates rather than wrapping.
 func effectiveBidValue(bid *ethpb.SignedExecutionPayloadBid, maxExecutionPayment uint64) primitives.Gwei {
 	payment := bid.Message.ExecutionPayment
 	if uint64(payment) > maxExecutionPayment {
