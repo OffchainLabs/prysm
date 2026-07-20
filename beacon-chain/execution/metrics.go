@@ -57,6 +57,25 @@ var (
 			Buckets: prometheus.DefBuckets,
 		},
 	)
+	getBlobsV4RequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_engine_getBlobsV4_requests_total",
+		Help: "Total number of engine_getBlobsV4 requests sent",
+	})
+	getBlobsV4RequestedCellsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_engine_getBlobsV4_requested_cells_total",
+		Help: "Total number of cells requested via engine_getBlobsV4",
+	})
+	getBlobsV4ReceivedCellsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_engine_getBlobsV4_received_cells_total",
+		Help: "Total number of non-null cells returned by engine_getBlobsV4",
+	})
+	getBlobsV4Latency = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "beacon_engine_getBlobsV4_request_duration_seconds",
+			Help:    "Duration of engine_getBlobsV4 requests in seconds",
+			Buckets: prometheus.DefBuckets,
+		},
+	)
 	hasBlobsRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "beacon_engine_hasBlobs_requests_total",
 		Help: "Total number of engine_hasBlobs requests sent",

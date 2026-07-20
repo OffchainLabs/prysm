@@ -485,6 +485,19 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 		if len(result) == 0 {
 			return peerdas.StructuredCellsAndProofs{}, nil
 		}
+		received := 0
+		for _, bc := range result {
+			if bc == nil {
+				continue
+			}
+			for _, c := range bc.BlobCells {
+				if c != nil {
+					received++
+				}
+			}
+		}
+		getBlobsV4RequestedCellsTotal.Add(float64(len(requested) * len(result)))
+		getBlobsV4ReceivedCellsTotal.Add(float64(received))
 		return peerdas.CellsAndProofsFromStructured(commitmentCount, requested, result), nil
 	}
 
