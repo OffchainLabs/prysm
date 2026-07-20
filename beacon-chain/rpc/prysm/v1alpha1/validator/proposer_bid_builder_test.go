@@ -122,7 +122,7 @@ func TestBestBid(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, src := bestBid(tt.local, tt.p2p, tt.builder, tt.maxPayment)
+			got, src := bestBid(tt.local, tt.p2p, tt.builder, bidPreferences{maxPayment: tt.maxPayment, boostFactor: 100})
 			require.Equal(t, tt.wantSrc, src)
 			if tt.wantNil {
 				require.IsNil(t, got)
@@ -387,7 +387,7 @@ func TestSetExecutionPayloadBid_PrefersBuilderBid(t *testing.T) {
 
 	// No P2P cache, so the Builder-API bid is the only remote candidate.
 	vs := &Server{}
-	src, err := vs.setExecutionPayloadBid(t.Context(), sBlk, local, builderBid, 1000, false)
+	src, err := vs.setExecutionPayloadBid(t.Context(), sBlk, local, builderBid, bidPreferences{maxPayment: 1000, boostFactor: 100}, false)
 	require.NoError(t, err)
 	require.Equal(t, bidSourceBuilderAPI, src)
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	neturl "net/url"
 	"strconv"
 	"strings"
@@ -19,9 +20,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primitives.Slot, randaoReveal, graffiti []byte) (*ethpb.GenericBeaconBlock, error) {
+func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primitives.Slot, randaoReveal, graffiti []byte, builderBoostFactor *wrapperspb.UInt64Value, builderPreferences []*ethpb.BuilderPreferenceV1) (*ethpb.GenericBeaconBlock, error) {
 	queryParams := neturl.Values{}
 	queryParams.Add("randao_reveal", hexutil.Encode(randaoReveal))
 	if len(graffiti) > 0 {
@@ -29,9 +31,12 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 	}
 
 	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
-		return c.beaconBlockV4(ctx, slot, queryParams)
+		return c.beaconBlockV4(ctx, slot, queryParams, builderPreferences)
 	}
 
+	if builderBoostFactor != nil {
+		queryParams.Add("builder_boost_factor", strconv.FormatUint(builderBoostFactor.Value, 10))
+	}
 	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v3/validator/blocks/%d", slot), queryParams)
 	data, header, err := c.handler.GetSSZ(ctx, queryUrl)
 	if err != nil {
@@ -62,10 +67,24 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 	}
 }
 
-func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primitives.Slot, queryParams neturl.Values) (*ethpb.GenericBeaconBlock, error) {
+func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primitives.Slot, queryParams neturl.Values, builderPreferences []*ethpb.BuilderPreferenceV1) (*ethpb.GenericBeaconBlock, error) {
 	queryParams.Set("include_payload", strconv.FormatBool(c.stateless))
 	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v4/validator/blocks/%d", slot), queryParams)
-	data, header, err := c.handler.GetSSZ(ctx, queryUrl)
+
+	var data []byte
+	var header http.Header
+	var err error
+	if len(builderPreferences) > 0 {
+		// JIT (beacon-APIs #625): POST the per-builder preferences inline.
+		body, mErr := marshalBuilderPreferences(builderPreferences)
+		if mErr != nil {
+			return nil, errors.Wrap(mErr, "could not marshal builder preferences")
+		}
+		headers := map[string]string{"Content-Type": api.JsonMediaType}
+		data, header, err = c.handler.PostSSZ(ctx, queryUrl, headers, bytes.NewBuffer(body))
+	} else {
+		data, header, err = c.handler.GetSSZ(ctx, queryUrl)
+	}
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get v4 beacon block")
 	}

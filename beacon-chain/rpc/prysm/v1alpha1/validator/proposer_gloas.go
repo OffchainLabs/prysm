@@ -15,7 +15,7 @@ import (
 
 // buildBlockGloas builds a Gloas (ePBS) block, whose body carries an execution payload bid
 // rather than the payload itself. The payload is revealed separately via the envelope.
-func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipBuilder, parentFull, eagerPayloadStateRoot bool, builderRequestAuths []*ethpb.SignedRequestAuthV1) (*ethpb.GenericBeaconBlock, error) {
+func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipBuilder, parentFull, eagerPayloadStateRoot bool, builderPreferences []*ethpb.BuilderPreferenceV1) (*ethpb.GenericBeaconBlock, error) {
 	if parentFull {
 		if err := vs.applyParentExecutionPayloadToHead(ctx, head, sBlk.Block().ParentRoot()); err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not apply parent execution payload: %v", err)
@@ -45,8 +45,8 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 		selfBuildOnly := local.OverrideBuilder || skipBuilder
 		var builderBid *ethpb.SignedExecutionPayloadBid
 		var builderURL string
-		var maxExecutionPayment uint64
-		if !selfBuildOnly && len(builderRequestAuths) > 0 {
+		prefs := bidPreferences{boostFactor: neutralBuilderBoostFactor}
+		if !selfBuildOnly && len(builderPreferences) > 0 {
 			val, valErr := head.ValidatorAtIndexReadOnly(sBlk.Block().ProposerIndex())
 			parentGasLimit, glErr := vs.ForkchoiceFetcher.GasLimit(sBlk.Block().ParentRoot())
 			switch {
@@ -56,9 +56,8 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 				log.WithError(glErr).Error("Could not get parent gas limit for builder bid request")
 			default:
 				pubkey := val.PublicKey()
-				if v, ok := vs.maxExecutionPayments.Load(pubkey); ok {
-					maxExecutionPayment, _ = v.(uint64)
-				}
+				var auths []*ethpb.SignedRequestAuthV1
+				auths, prefs = builderAuthsAndPrefs(builderPreferences)
 				pref := vs.proposerPreferenceForProposal(ctx, head, sBlk.Block().Slot(), sBlk.Block().ProposerIndex())
 				feeRecipient := pref.FeeRecipientOrDefault()
 				builderBid, builderURL = vs.getBuilderExecutionPayloadBid(ctx, head, &builderBidQuery{
@@ -66,15 +65,15 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 					parentRoot:     sBlk.Block().ParentRoot(),
 					parentHash:     bytesutil.ToBytes32(local.ExecutionData.ParentHash()),
 					pubkey:         pubkey,
-					maxPayment:     maxExecutionPayment,
+					maxPayment:     prefs.maxPayment,
 					feeRecipient:   feeRecipient[:],
 					parentGasLimit: parentGasLimit,
 					targetGasLimit: pref.GasLimitOr(parentGasLimit),
-					auths:          builderRequestAuths,
+					auths:          auths,
 				})
 			}
 		}
-		src, bidErr := vs.setExecutionPayloadBid(ctx, sBlk, local, builderBid, maxExecutionPayment, selfBuildOnly)
+		src, bidErr := vs.setExecutionPayloadBid(ctx, sBlk, local, builderBid, prefs, selfBuildOnly)
 		if bidErr != nil {
 			return nil, status.Errorf(codes.Internal, "Could not set execution payload bid: %v", bidErr)
 		}
@@ -118,4 +117,32 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 		}}
 	}
 	return blk, nil
+}
+
+// builderAuthsAndPrefs extracts the signed request auths and the effective
+// proposer-local bid preferences from the inline builder preferences carried on
+// the block request. The effective preferences use the first valid entry as the
+// proposal baseline. The beacon node enforces the caps locally during bid
+// selection; communicating preferences to the builder is left to the bid request.
+func builderAuthsAndPrefs(prefs []*ethpb.BuilderPreferenceV1) ([]*ethpb.SignedRequestAuthV1, bidPreferences) {
+	auths := make([]*ethpb.SignedRequestAuthV1, 0, len(prefs))
+	bp := bidPreferences{boostFactor: neutralBuilderBoostFactor}
+	baselineSet := false
+	for _, p := range prefs {
+		if p == nil || p.Request == nil || p.Request.Auth == nil {
+			continue
+		}
+		auths = append(auths, p.Request.Auth)
+		if !baselineSet {
+			bp.maxPayment = uint64(p.Request.Preferences.GetMaxExecutionPayment())
+			if p.MinBid != nil {
+				bp.minBid = uint64(p.GetMinBid())
+			}
+			if p.BuilderBoostFactor != nil {
+				bp.boostFactor = p.GetBuilderBoostFactor()
+			}
+			baselineSet = true
+		}
+	}
+	return auths, bp
 }

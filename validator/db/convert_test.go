@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"google.golang.org/protobuf/proto"
+
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -15,7 +18,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/validator/db/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/db/kv"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 func getPubkeyFromString(t *testing.T, pubkeyString string) [fieldparams.BLSPubkeyLength]byte {
@@ -108,7 +110,7 @@ func TestDB_ConvertDatabase(t *testing.T) {
 									FeeRecipient: customFeeRecipient,
 								},
 								BuilderConfig: &proposer.BuilderConfig{
-									Enabled:  true,
+									Enabled:  proto.Bool(true),
 									GasLimit: 42,
 									Relays:   relays,
 								},
@@ -119,7 +121,7 @@ func TestDB_ConvertDatabase(t *testing.T) {
 								FeeRecipient: defaultFeeRecipient,
 							},
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  false,
+								Enabled:  proto.Bool(false),
 								GasLimit: 43,
 								Relays:   relays,
 							},

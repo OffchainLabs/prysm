@@ -1104,7 +1104,7 @@ func TestValidator_PushSettings(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0x055Fb65722E7b2455043BFEBf6177F1D2e9738D9"),
 						},
 						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  true,
+							Enabled:  proto.Bool(true),
 							GasLimit: 40000000,
 						},
 					}
@@ -1115,7 +1115,7 @@ func TestValidator_PushSettings(t *testing.T) {
 								FeeRecipient: common.HexToAddress(defaultFeeHex),
 							},
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
+								Enabled:  proto.Bool(true),
 								GasLimit: 35000000,
 							},
 						},
@@ -1190,7 +1190,7 @@ func TestValidator_PushSettings(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0x055Fb65722E7b2455043BFEBf6177F1D2e9738D9"),
 						},
 						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  true,
+							Enabled:  proto.Bool(true),
 							GasLimit: 40000000,
 						},
 					}
@@ -1201,7 +1201,7 @@ func TestValidator_PushSettings(t *testing.T) {
 								FeeRecipient: common.HexToAddress(defaultFeeHex),
 							},
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  false,
+								Enabled:  proto.Bool(false),
 								GasLimit: 35000000,
 							},
 						},
@@ -1316,7 +1316,7 @@ func TestValidator_PushSettings(t *testing.T) {
 								FeeRecipient: common.HexToAddress(defaultFeeHex),
 							},
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
+								Enabled:  proto.Bool(true),
 								GasLimit: validatorType.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 							},
 						},
@@ -1377,7 +1377,7 @@ func TestValidator_PushSettings(t *testing.T) {
 								FeeRecipient: common.HexToAddress(defaultFeeHex),
 							},
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
+								Enabled:  proto.Bool(true),
 								GasLimit: 40000000,
 							},
 						},
@@ -1552,7 +1552,7 @@ func TestValidator_PushSettings(t *testing.T) {
 							FeeRecipient: common.Address{},
 						},
 						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  true,
+							Enabled:  proto.Bool(true),
 							GasLimit: 40000000,
 						},
 					}
@@ -1563,7 +1563,7 @@ func TestValidator_PushSettings(t *testing.T) {
 								FeeRecipient: common.HexToAddress(defaultFeeHex),
 							},
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
+								Enabled:  proto.Bool(true),
 								GasLimit: 40000000,
 							},
 						},
@@ -2411,7 +2411,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					FeeRecipient: feeRecipient,
 				},
 				BuilderConfig: &proposer.BuilderConfig{
-					Enabled:  true,
+					Enabled:  proto.Bool(true),
 					GasLimit: 42000000,
 				},
 			},
@@ -2976,7 +2976,7 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 			settings: &proposer.Settings{
 				DefaultConfig: &proposer.Option{
 					FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: feeRecipient},
-					BuilderConfig:      &proposer.BuilderConfig{Enabled: true, GasLimit: 42000000},
+					BuilderConfig:      &proposer.BuilderConfig{Enabled: proto.Bool(true), GasLimit: 42000000},
 				},
 			},
 			needsDB:          true,
@@ -2992,7 +2992,7 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 			settings: &proposer.Settings{
 				DefaultConfig: &proposer.Option{
 					FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: feeRecipient},
-					BuilderConfig:      &proposer.BuilderConfig{Enabled: true, GasLimit: 42000000},
+					BuilderConfig:      &proposer.BuilderConfig{Enabled: proto.Bool(true), GasLimit: 42000000},
 				},
 			},
 			needsDB:      true,
@@ -3139,7 +3139,7 @@ func TestValidator_PushProposerSettings_SkipsBuilderRegistrationsPostGloas(t *te
 			FeeRecipientConfig: &proposer.FeeRecipientConfig{
 				FeeRecipient: common.HexToAddress("0x046Fb65722E7b2455043BFEBf6177F1D2e9738D9"),
 			},
-			BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 40000000},
+			BuilderConfig: &proposer.BuilderConfig{Enabled: proto.Bool(true), GasLimit: 40000000},
 		},
 	}))
 
@@ -3275,7 +3275,7 @@ func TestValidator_buildSignedRegReqs_DefaultConfigDisabled(t *testing.T) {
 					FeeRecipient: defaultFeeRecipient,
 				},
 				BuilderConfig: &proposer.BuilderConfig{
-					Enabled:  false,
+					Enabled:  proto.Bool(false),
 					GasLimit: 9999,
 				},
 			},
@@ -3285,7 +3285,7 @@ func TestValidator_buildSignedRegReqs_DefaultConfigDisabled(t *testing.T) {
 						FeeRecipient: feeRecipient1,
 					},
 					BuilderConfig: &proposer.BuilderConfig{
-						Enabled:  true,
+						Enabled:  proto.Bool(true),
 						GasLimit: 1111,
 					},
 				},
@@ -3294,14 +3294,14 @@ func TestValidator_buildSignedRegReqs_DefaultConfigDisabled(t *testing.T) {
 						FeeRecipient: feeRecipient2,
 					},
 					BuilderConfig: &proposer.BuilderConfig{
-						Enabled:  false,
+						Enabled:  proto.Bool(false),
 						GasLimit: 2222,
 					},
 				},
 				pubkey3: {
 					FeeRecipientConfig: nil,
 					BuilderConfig: &proposer.BuilderConfig{
-						Enabled:  true,
+						Enabled:  proto.Bool(true),
 						GasLimit: 3333,
 					},
 				},
@@ -3374,7 +3374,7 @@ func TestValidator_buildSignedRegReqs_DefaultConfigEnabled(t *testing.T) {
 					FeeRecipient: defaultFeeRecipient,
 				},
 				BuilderConfig: &proposer.BuilderConfig{
-					Enabled:  true,
+					Enabled:  proto.Bool(true),
 					GasLimit: 9999,
 				},
 			},
@@ -3384,7 +3384,7 @@ func TestValidator_buildSignedRegReqs_DefaultConfigEnabled(t *testing.T) {
 						FeeRecipient: feeRecipient1,
 					},
 					BuilderConfig: &proposer.BuilderConfig{
-						Enabled:  true,
+						Enabled:  proto.Bool(true),
 						GasLimit: 1111,
 					},
 				},
@@ -3393,14 +3393,14 @@ func TestValidator_buildSignedRegReqs_DefaultConfigEnabled(t *testing.T) {
 						FeeRecipient: feeRecipient2,
 					},
 					BuilderConfig: &proposer.BuilderConfig{
-						Enabled:  false,
+						Enabled:  proto.Bool(false),
 						GasLimit: 2222,
 					},
 				},
 				pubkey3: {
 					FeeRecipientConfig: nil,
 					BuilderConfig: &proposer.BuilderConfig{
-						Enabled:  true,
+						Enabled:  proto.Bool(true),
 						GasLimit: 3333,
 					},
 				},
@@ -3492,7 +3492,7 @@ func TestValidator_buildSignedRegReqs_V2Settings(t *testing.T) {
 					FeeRecipient: defaultFeeRecipient,
 				},
 				GasLimit:      8888,
-				BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 9999},
+				BuilderConfig: &proposer.BuilderConfig{Enabled: proto.Bool(true), GasLimit: 9999},
 			},
 			ProposeConfig: map[[48]byte]*proposer.Option{
 				pubkey1: {
@@ -3500,7 +3500,7 @@ func TestValidator_buildSignedRegReqs_V2Settings(t *testing.T) {
 						FeeRecipient: feeRecipient1,
 					},
 					GasLimit:      1111,
-					BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 7777},
+					BuilderConfig: &proposer.BuilderConfig{Enabled: proto.Bool(true), GasLimit: 7777},
 				},
 				pubkey2: {
 					FeeRecipientConfig: &proposer.FeeRecipientConfig{
@@ -3512,7 +3512,7 @@ func TestValidator_buildSignedRegReqs_V2Settings(t *testing.T) {
 					FeeRecipientConfig: &proposer.FeeRecipientConfig{
 						FeeRecipient: feeRecipient2,
 					},
-					BuilderConfig: &proposer.BuilderConfig{Enabled: false},
+					BuilderConfig: &proposer.BuilderConfig{Enabled: proto.Bool(false)},
 				},
 			},
 		},
@@ -3566,7 +3566,7 @@ func TestValidator_buildSignedRegReqs_SignerOnError(t *testing.T) {
 					FeeRecipient: defaultFeeRecipient,
 				},
 				BuilderConfig: &proposer.BuilderConfig{
-					Enabled:  true,
+					Enabled:  proto.Bool(true),
 					GasLimit: 9999,
 				},
 			},
@@ -3610,7 +3610,7 @@ func TestValidator_buildSignedRegReqs_TimestampBeforeGenesis(t *testing.T) {
 					FeeRecipient: defaultFeeRecipient,
 				},
 				BuilderConfig: &proposer.BuilderConfig{
-					Enabled:  true,
+					Enabled:  proto.Bool(true),
 					GasLimit: 9999,
 				},
 			},
@@ -3620,7 +3620,7 @@ func TestValidator_buildSignedRegReqs_TimestampBeforeGenesis(t *testing.T) {
 						FeeRecipient: feeRecipient1,
 					},
 					BuilderConfig: &proposer.BuilderConfig{
-						Enabled:  true,
+						Enabled:  proto.Bool(true),
 						GasLimit: 1111,
 					},
 				},

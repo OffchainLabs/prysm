@@ -542,17 +542,6 @@ service BeaconNodeValidator {
     };
   }
 
-  // SubmitBuilderPreferences forwards a proposer's builder preferences to the
-  // configured builder ahead of a future proposal slot.
-  rpc SubmitBuilderPreferences(SubmitBuilderPreferencesRequest)
-      returns (google.protobuf.Empty) {
-    option deprecated = true;
-    option (google.api.http) = {
-      post : "/eth/v1alpha1/validator/builder_preferences"
-      body : "*"
-    };
-  }
-
   // SubmitSignedExecutionPayloadBid broadcasts a signed execution payload bid
   // to the P2P gossip network.
   rpc SubmitSignedExecutionPayloadBid(SignedExecutionPayloadBid)
@@ -979,9 +968,12 @@ message BlockRequest {
   // populated state root.
   bool eager_payload_state_root = 6;
 
-  // Signed builder request auths for this slot, one per configured builder.
-  // The beacon node forwards the auth matching its builder when requesting a bid.
-  repeated SignedRequestAuthV1 builder_request_auths = 7;
+  reserved 7;  // was builder_request_auths; folded into builder_preferences.
+
+  // Per-builder preferences for this proposal (JIT model). Each entry carries the
+  // signed request/auth the beacon node forwards to its builder, plus the
+  // proposer-local min_bid and builder_boost_factor used for bid selection.
+  repeated BuilderPreferenceV1 builder_preferences = 8;
 }
 
 message ProposeResponse {

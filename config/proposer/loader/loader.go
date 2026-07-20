@@ -46,8 +46,9 @@ type SettingsLoaderOption func(cliCtx *cli.Context, psl *SettingsLoader) error
 func WithBuilderConfig() SettingsLoaderOption {
 	return func(cliCtx *cli.Context, psl *SettingsLoader) error {
 		if cliCtx.Bool(flags.EnableBuilderFlag.Name) {
+			enabled := true
 			psl.options.builderConfig = &proposer.BuilderConfig{
-				Enabled:  true,
+				Enabled:  &enabled,
 				GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 			}
 		}
@@ -331,7 +332,7 @@ func mergeProposerSettingsV1(merged, loaded, db *validatorpb.ProposerSettingsPay
 			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{Builder: builderConfig}
 		case gasLimitOnly != nil:
 			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{
-				Builder: &validatorpb.BuilderConfig{Enabled: false, GasLimit: *gasLimitOnly},
+				Builder: &validatorpb.BuilderConfig{GasLimit: *gasLimitOnly},
 			}
 		}
 	}
@@ -383,7 +384,7 @@ func processBuilderConfig(current *validatorpb.BuilderConfig, override *validato
 		return override
 	}
 	if gasLimitOnly != nil {
-		return &validatorpb.BuilderConfig{Enabled: false, GasLimit: *gasLimitOnly}
+		return &validatorpb.BuilderConfig{GasLimit: *gasLimitOnly}
 	}
 	return nil
 }

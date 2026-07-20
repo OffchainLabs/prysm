@@ -27,6 +27,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	validatortypes "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -885,15 +886,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		v.connTracker.confirm(proposerPrefsPush, connGen)
 	}
 
-	if reqs := v.buildBuilderPreferenceRequests(ctx, km, slot); len(reqs) > 0 {
-		delay := params.BeaconConfig().SlotDuration() / 2
-		time.AfterFunc(delay, func() {
-			// Detached from the slot context, which may expire before the delay elapses.
-			subCtx, cancel := context.WithTimeout(context.Background(), delay)
-			defer cancel()
-			v.submitBuilderPreferenceRequests(subCtx, reqs)
-		})
-	}
+	v.warmBuilderRequestAuths(ctx, km, slot)
 
 	// TODO: figure out what to do post gloas for builder apis
 	if !isPreGloas {
@@ -1356,10 +1349,19 @@ func (v *validator) submittedPrefSlotsCount() int {
 	return len(v.submittedPrefSlots)
 }
 
-func (v *validator) builderConfigForKey(pk pubkey) ([]string, uint64, bool) {
+// builderTarget is one resolved builder for a proposer: a URL plus the
+// preferences to submit for it, with per-entry overrides already applied.
+type builderTarget struct {
+	url         string
+	maxPayment  uint64
+	minBid      *uint64
+	boostFactor *uint64
+}
+
+func (v *validator) builderConfigForKey(pk pubkey) *proposer.BuilderConfig {
 	ps := v.ProposerSettings()
 	if ps == nil {
-		return nil, 0, false
+		return nil
 	}
 	var bc *proposer.BuilderConfig
 	if ps.DefaultConfig != nil {
@@ -1370,63 +1372,119 @@ func (v *validator) builderConfigForKey(pk pubkey) ([]string, uint64, bool) {
 			bc = c.BuilderConfig
 		}
 	}
-	if bc == nil {
-		return nil, 0, false
-	}
-	return bc.Relays, uint64(bc.MaxExecutionPayment), bc.Enabled
+	return bc
 }
 
-// Resubmitted every push to repopulate a restarted beacon node, using cached auths to avoid re-signing.
-func (v *validator) buildBuilderPreferenceRequests(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot) []*ethpb.SubmitBuilderPreferencesRequest {
-	if slots.ToEpoch(slot)+1 < params.BeaconConfig().GloasForkEpoch {
+// builderTargetsForKey resolves the enabled builder list for pk. Each Builders[]
+// entry overrides the config-level fallbacks; legacy Relays are url-only targets.
+func (v *validator) builderTargetsForKey(pk pubkey) []builderTarget {
+	bc := v.builderConfigForKey(pk)
+	if !bc.IsEnabled() {
 		return nil
+	}
+	fbMax := uint64(bc.MaxExecutionPayment)
+	fbMin := uint64Ptr(bc.MinBid)
+	fbBoost := uint64Ptr(bc.BuilderBoostFactor)
+
+	targets := make([]builderTarget, 0, len(bc.Builders)+len(bc.Relays))
+	for _, e := range bc.Builders {
+		if e == nil || e.URL == "" {
+			continue
+		}
+		t := builderTarget{url: e.URL, maxPayment: fbMax, minBid: fbMin, boostFactor: fbBoost}
+		if e.MaxExecutionPayment != nil {
+			t.maxPayment = uint64(*e.MaxExecutionPayment)
+		}
+		if e.MinBid != nil {
+			t.minBid = uint64Ptr(e.MinBid)
+		}
+		if e.BuilderBoostFactor != nil {
+			t.boostFactor = uint64Ptr(e.BuilderBoostFactor)
+		}
+		targets = append(targets, t)
+	}
+	for _, relay := range bc.Relays {
+		targets = append(targets, builderTarget{url: relay, maxPayment: fbMax, minBid: fbMin, boostFactor: fbBoost})
+	}
+	return targets
+}
+
+func uint64Ptr(v *validatortypes.Uint64) *uint64 {
+	if v == nil {
+		return nil
+	}
+	u := uint64(*v)
+	return &u
+}
+
+// warmBuilderRequestAuths pre-signs the builder request auths for upcoming
+// proposal slots so proposeBlock can attach them inline (JIT) without signing on
+// the hot path. It no longer submits to the beacon node: preferences now travel
+// with the block request.
+func (v *validator) warmBuilderRequestAuths(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot) {
+	if slots.ToEpoch(slot)+1 < params.BeaconConfig().GloasForkEpoch {
+		return
 	}
 	snap := v.duties.snapshot()
 	if !snap.isInitialized() {
-		return nil
+		return
 	}
 	v.pruneSignedRequestAuths(slot)
-
-	reqs := v.builderPreferenceRequestsForDuties(ctx, km, slot, snap.currentDuties())
-	return append(reqs, v.builderPreferenceRequestsForDuties(ctx, km, slot, snap.nextDuties())...)
+	v.warmBuilderRequestAuthsForDuties(ctx, km, slot, snap.currentDuties())
+	v.warmBuilderRequestAuthsForDuties(ctx, km, slot, snap.nextDuties())
 }
 
-func (v *validator) builderPreferenceRequestsForDuties(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, duties iter.Seq2[pubkey, *ethpb.ValidatorDuty]) []*ethpb.SubmitBuilderPreferencesRequest {
-	var reqs []*ethpb.SubmitBuilderPreferencesRequest
+func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, duties iter.Seq2[pubkey, *ethpb.ValidatorDuty]) {
 	for pk, duty := range duties {
-		relays, maxPayment, enabled := v.builderConfigForKey(pk)
-		if !enabled || len(relays) == 0 {
+		targets := v.builderTargetsForKey(pk)
+		if len(targets) == 0 {
 			continue
 		}
 		for _, proposalSlot := range duty.ProposerSlots {
 			if proposalSlot <= slot {
 				continue
 			}
-			for _, relay := range relays {
-				signed, err := v.signRequestAuthCached(ctx, km, pk, relay, proposalSlot)
-				if err != nil {
+			for _, t := range targets {
+				if _, err := v.signRequestAuthCached(ctx, km, pk, t.url, proposalSlot); err != nil {
 					log.WithError(err).Warn("Failed to sign builder request auth")
-					continue
 				}
-				reqs = append(reqs, &ethpb.SubmitBuilderPreferencesRequest{
-					ValidatorPubkey: pk[:],
-					Request: &ethpb.BuilderPreferencesRequestV1{
-						Preferences: &ethpb.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(maxPayment)},
-						Auth:        signed,
-					},
-				})
 			}
 		}
 	}
-	return reqs
 }
 
-func (v *validator) submitBuilderPreferenceRequests(ctx context.Context, reqs []*ethpb.SubmitBuilderPreferencesRequest) {
-	for _, req := range reqs {
-		if _, err := v.validatorClient.SubmitBuilderPreferences(ctx, req); err != nil {
-			log.WithError(err).Warn("Failed to submit builder preferences")
-		}
+// buildBuilderPreferencesForSlot assembles the per-builder preferences to carry
+// inline on the block request for pk's proposal at slot, pairing each cached
+// signed auth with its resolved caps.
+func (v *validator) buildBuilderPreferencesForSlot(pk pubkey, slot primitives.Slot) []*ethpb.BuilderPreferenceV1 {
+	auths := v.builderRequestAuthsForSlot(pk, slot)
+	if len(auths) == 0 {
+		return nil
 	}
+	capsByURL := make(map[string]builderTarget)
+	for _, t := range v.builderTargetsForKey(pk) {
+		capsByURL[t.url] = t
+	}
+	prefs := make([]*ethpb.BuilderPreferenceV1, 0, len(auths))
+	for _, auth := range auths {
+		t, ok := capsByURL[string(auth.GetMessage().GetData())]
+		if !ok {
+			continue
+		}
+		p := &ethpb.BuilderPreferenceV1{
+			Request: &ethpb.BuilderPreferencesRequestV1{
+				Preferences: &ethpb.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(t.maxPayment)},
+				Auth:        auth,
+			},
+			BuilderBoostFactor: t.boostFactor,
+		}
+		if t.minBid != nil {
+			g := primitives.Gwei(*t.minBid)
+			p.MinBid = &g
+		}
+		prefs = append(prefs, p)
+	}
+	return prefs
 }
 
 // submitProposerPreferences builds and submits proposer preferences for the
@@ -1503,7 +1561,7 @@ func (v *validator) buildSignedRegReqs(
 			feeRecipient = defaultConfig.FeeRecipientConfig.FeeRecipient // Use cli defaultBuilderConfig for fee recipient.
 			defaultBuilderConfig := defaultConfig.BuilderConfig
 
-			if defaultBuilderConfig != nil && defaultBuilderConfig.Enabled {
+			if defaultBuilderConfig.IsEnabled() {
 				gasLimit = uint64(defaultBuilderConfig.GasLimit) // Use cli config for gas limit.
 				enabled = true
 			}
@@ -1515,7 +1573,7 @@ func (v *validator) buildSignedRegReqs(
 				feeRecipient = config.FeeRecipientConfig.FeeRecipient // Use file config for fee recipient.
 				builderConfig := config.BuilderConfig
 				if builderConfig != nil {
-					if builderConfig.Enabled {
+					if builderConfig.IsEnabled() {
 						gasLimit = uint64(builderConfig.GasLimit) // Use file config for gas limit.
 						enabled = true
 					} else {

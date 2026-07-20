@@ -222,6 +222,7 @@ go_test(
         "proposer_attestations_electra_test.go",
         "proposer_attestations_test.go",
         "proposer_bid_builder_test.go",
+        "proposer_bid_prefs_test.go",
         "proposer_bid_test.go",
         "proposer_bellatrix_test.go",
         "proposer_builder_test.go",

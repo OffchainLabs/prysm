@@ -3,6 +3,8 @@ package validator
 import (
 	"context"
 	"fmt"
+	"math"
+	"math/big"
 	"strings"
 	"time"
 
@@ -51,7 +53,7 @@ func (vs *Server) setExecutionPayloadBid(
 	sBlk interfaces.SignedBeaconBlock,
 	local *consensusblocks.GetPayloadResponse,
 	builderBid *ethpb.SignedExecutionPayloadBid,
-	maxExecutionPayment uint64,
+	prefs bidPreferences,
 	selfBuildOnly bool,
 ) (bidSource, error) {
 	_, span := trace.StartSpan(ctx, "ProposerServer.setExecutionPayloadBid")
@@ -63,7 +65,7 @@ func (vs *Server) setExecutionPayloadBid(
 
 	if !selfBuildOnly {
 		p2pBid := vs.cachedP2PBid(sBlk, local)
-		if bestBid, src := bestBid(local, p2pBid, builderBid, maxExecutionPayment); bestBid != nil {
+		if bestBid, src := bestBid(local, p2pBid, builderBid, prefs); bestBid != nil {
 			if err := sBlk.SetSignedExecutionPayloadBid(bestBid); err != nil {
 				return bidSourceSelfBuild, errors.Wrap(err, "could not set remote execution payload bid")
 			}
@@ -71,7 +73,7 @@ func (vs *Server) setExecutionPayloadBid(
 				"slot":      sBlk.Block().Slot(),
 				"source":    src,
 				"builder":   bestBid.Message.BuilderIndex,
-				"valueGwei": uint64(effectiveBidValue(bestBid, maxExecutionPayment)),
+				"valueGwei": uint64(effectiveBidValue(bestBid, prefs.maxPayment)),
 			}).Info("Chose payload bid")
 			return src, nil
 		}
@@ -100,22 +102,43 @@ func (vs *Server) setExecutionPayloadBid(
 	return bidSourceSelfBuild, nil
 }
 
-// Returns a nil bid when the local self-build wins.
+// neutralBuilderBoostFactor is the 100% factor: builder bids compete on raw value.
+// Callers must default a missing preference to this so an explicit 0 keeps its
+// reserved "prefer local" meaning.
+const neutralBuilderBoostFactor = 100
+
+// bidPreferences carries the proposer's per-key builder bid-selection preferences.
+type bidPreferences struct {
+	maxPayment  uint64
+	minBid      uint64
+	boostFactor uint64
+}
+
+// Returns a nil bid when the local self-build wins. A non-local bid must clear the
+// min_bid floor and beat the local bid after the boost factor is applied.
 func bestBid(
 	local *consensusblocks.GetPayloadResponse,
 	p2pBid *ethpb.SignedExecutionPayloadBid,
 	builderBid *ethpb.SignedExecutionPayloadBid,
-	maxExecutionPayment uint64,
+	prefs bidPreferences,
 ) (*ethpb.SignedExecutionPayloadBid, bidSource) {
 	var bestBid *ethpb.SignedExecutionPayloadBid
-	bestValue := primitives.WeiToGwei(local.Bid)
+	var bestValue primitives.Gwei
+	localValue := primitives.WeiToGwei(local.Bid)
 	src := bidSourceSelfBuild
 
 	consider := func(bid *ethpb.SignedExecutionPayloadBid, from bidSource) {
 		if bid == nil {
 			return
 		}
-		if value := effectiveBidValue(bid, maxExecutionPayment); value > bestValue {
+		value := effectiveBidValue(bid, prefs.maxPayment)
+		if uint64(value) < prefs.minBid {
+			return
+		}
+		if !builderBeatsLocal(value, localValue, prefs.boostFactor) {
+			return
+		}
+		if bestBid == nil || value > bestValue {
 			bestBid, bestValue, src = bid, value, from
 		}
 	}
@@ -124,6 +147,20 @@ func bestBid(
 	consider(builderBid, bidSourceBuilderAPI)
 
 	return bestBid, src
+}
+
+// builderBeatsLocal reports whether a boosted non-local bid beats the local bid.
+// Reserved factors: 0 always prefers local, max always prefers the builder.
+func builderBeatsLocal(builderValue, localValue primitives.Gwei, boostFactor uint64) bool {
+	switch boostFactor {
+	case 0:
+		return false
+	case math.MaxUint64:
+		return true
+	}
+	lhs := new(big.Int).Mul(new(big.Int).SetUint64(uint64(builderValue)), new(big.Int).SetUint64(boostFactor))
+	rhs := new(big.Int).Mul(new(big.Int).SetUint64(uint64(localValue)), big.NewInt(100))
+	return lhs.Cmp(rhs) > 0
 }
 
 // The proposer's total take, the execution payment counts only up to the proposer's max preference.

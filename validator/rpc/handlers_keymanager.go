@@ -624,6 +624,8 @@ func (s *Server) SetFeeRecipientByPubkey(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	feeRecipient := common.BytesToAddress(ethAddress)
+	s.proposerSettingsLock.Lock()
+	defer s.proposerSettingsLock.Unlock()
 	settings := s.validatorService.ProposerSettings()
 	switch {
 	case settings == nil:
@@ -693,6 +695,8 @@ func (s *Server) DeleteFeeRecipientByPubkey(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	s.proposerSettingsLock.Lock()
+	defer s.proposerSettingsLock.Unlock()
 	settings := s.validatorService.ProposerSettings()
 	if settings != nil && settings.ProposeConfig != nil {
 		proposerOption, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
@@ -764,6 +768,8 @@ func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.proposerSettingsLock.Lock()
+	defer s.proposerSettingsLock.Unlock()
 	settings := s.validatorService.ProposerSettings()
 	if err := settings.SetGasLimit(bytesutil.ToBytes48(pubkey), validator.Uint64(gasLimit)); err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
@@ -791,6 +797,8 @@ func (s *Server) DeleteGasLimit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.proposerSettingsLock.Lock()
+	defer s.proposerSettingsLock.Unlock()
 	settings := s.validatorService.ProposerSettings()
 	if !settings.ResetGasLimit(bytesutil.ToBytes48(pubkey)) {
 		httputil.HandleError(w, fmt.Sprintf("No gas limit found for pubkey %q", rawPubkey), http.StatusNotFound)

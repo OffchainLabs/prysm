@@ -88,6 +88,17 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		graffiti = g
 	}
 
+	// JIT (beacon-APIs #625): a POST carries the proposer's per-builder preferences inline.
+	var builderPreferences []*eth.BuilderPreferenceV1
+	if r.Method == http.MethodPost {
+		prefs, err := parseBuilderPreferencesBody(r)
+		if err != nil {
+			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		builderPreferences = prefs
+	}
+
 	v1alpha1resp, err := s.V1Alpha1Server.GetBeaconBlock(ctx, &eth.BlockRequest{
 		Slot:                  primitives.Slot(slot),
 		RandaoReveal:          randaoReveal,
@@ -95,6 +106,7 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		SkipMevBoost:          false,
 		BuilderBoostFactor:    bbFactor,
 		EagerPayloadStateRoot: includePayload,
+		BuilderPreferences:    builderPreferences,
 	})
 	if err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)

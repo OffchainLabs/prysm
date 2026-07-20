@@ -109,6 +109,56 @@ type GraffitiData struct {
 	Graffiti string `json:"graffiti"`
 }
 
+// Validator config keymanager api (keymanager-APIs #87). All integers are
+// decimal strings and all byte values are 0x-prefixed hex, per keymanager conventions.
+type GetValidatorConfigResponse struct {
+	Data *ValidatorConfigData `json:"data"`
+}
+
+type ValidatorConfigData struct {
+	DefaultConfig *ValidatorConfig            `json:"default_config,omitempty"`
+	Configs       map[string]*ValidatorConfig `json:"configs"`
+}
+
+type SetValidatorConfigRequest struct {
+	Configs map[string]*ValidatorConfig `json:"configs"`
+}
+
+type SetValidatorConfigResponse struct {
+	Data map[string]*ValidatorConfigStatus `json:"data"`
+}
+
+type ValidatorConfigStatus struct {
+	Status  string `json:"status"`
+	Message string `json:"message,omitempty"`
+}
+
+type ValidatorConfig struct {
+	FeeRecipient   *string            `json:"fee_recipient,omitempty"`
+	TargetGasLimit *string            `json:"target_gas_limit,omitempty"`
+	Graffiti       *string            `json:"graffiti,omitempty"`
+	Builder        *BuilderConfigJson `json:"builder,omitempty"`
+}
+
+type BuilderConfigJson struct {
+	Enabled             *bool               `json:"enabled,omitempty"`
+	Builders            []*BuilderEntryJson `json:"builders,omitempty"`
+	MaxExecutionPayment *string             `json:"max_execution_payment,omitempty"`
+	MinBid              *string             `json:"min_bid,omitempty"`
+	BuilderBoostFactor  *string             `json:"builder_boost_factor,omitempty"`
+	Proxy               *string             `json:"proxy,omitempty"`
+}
+
+type BuilderEntryJson struct {
+	Url                 string  `json:"url"`
+	Pubkey              *string `json:"pubkey,omitempty"`
+	AuthData            *string `json:"auth_data,omitempty"`
+	Proxy               *string `json:"proxy,omitempty"`
+	MaxExecutionPayment *string `json:"max_execution_payment,omitempty"`
+	MinBid              *string `json:"min_bid,omitempty"`
+	BuilderBoostFactor  *string `json:"builder_boost_factor,omitempty"`
+}
+
 type BeaconStatusResponse struct {
 	BeaconNodeEndpoint     string     `json:"beacon_node_endpoint"`
 	Connected              bool       `json:"connected"`

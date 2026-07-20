@@ -418,7 +418,7 @@ func (s *Service) validatorEndpoints(
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.ProduceBlockV4,
-			methods: []string{http.MethodGet},
+			methods: []string{http.MethodGet, http.MethodPost},
 		},
 		{
 			template: "/eth/v1/validator/beacon_committee_selections",

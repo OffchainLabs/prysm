@@ -8,6 +8,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	logtest "github.com/sirupsen/logrus/hooks/test"
+	"github.com/urfave/cli/v2"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -19,10 +25,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/validator/db/iface"
 	dbTest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	logtest "github.com/sirupsen/logrus/hooks/test"
-	"github.com/urfave/cli/v2"
 )
 
 func TestProposerSettingsLoader(t *testing.T) {
@@ -108,7 +110,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 								Graffiti: "some graffiti",
 							},
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
+								Enabled:  proto.Bool(true),
 								GasLimit: validator.Uint64(30000000),
 							},
 						},
@@ -118,7 +120,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 						},
 						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  true,
+							Enabled:  proto.Bool(true),
 							GasLimit: validator.Uint64(40000000),
 						},
 					},
@@ -159,7 +161,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0xae967917c465db8578ca9024c205720b1a3651A9"),
 						},
 						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  true,
+							Enabled:  proto.Bool(true),
 							GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 						},
 					},
@@ -186,7 +188,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
 							},
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
+								Enabled:  proto.Bool(true),
 								GasLimit: validator.Uint64(40000000),
 							},
 						},
@@ -196,7 +198,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0xae967917c465db8578ca9024c205720b1a3651A9"),
 						},
 						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  true,
+							Enabled:  proto.Bool(true),
 							GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 						},
 					},
@@ -212,7 +214,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
 							},
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
+								Enabled:  proto.Bool(true),
 								GasLimit: validator.Uint64(40000000),
 							},
 						},
@@ -253,7 +255,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0xae967917c465db8578ca9024c205720b1a3651A9"),
 						},
 						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  true,
+							Enabled:  proto.Bool(true),
 							GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 						},
 					},
@@ -311,7 +313,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
 							},
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
+								Enabled:  proto.Bool(true),
 								GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 							},
 						},
@@ -320,7 +322,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 								FeeRecipient: common.HexToAddress("0x60155530FCE8a85ec7055A5F8b2bE214B3DaeFd4"),
 							},
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
+								Enabled:  proto.Bool(true),
 								GasLimit: validator.Uint64(35000000),
 							},
 						},
@@ -330,7 +332,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 						},
 						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  true,
+							Enabled:  proto.Bool(true),
 							GasLimit: validator.Uint64(40000000),
 						},
 					},
@@ -386,7 +388,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
 							},
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
+								Enabled:  proto.Bool(true),
 								GasLimit: 40000000,
 							},
 						},
@@ -396,7 +398,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 						},
 						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  false,
+							Enabled:  proto.Bool(false),
 							GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 						},
 					},
@@ -442,7 +444,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 						},
 						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  true,
+							Enabled:  proto.Bool(true),
 							GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 						},
 					},
@@ -469,7 +471,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 						},
 						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  true,
+							Enabled:  proto.Bool(true),
 							GasLimit: 50000000,
 						},
 					},
@@ -498,7 +500,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
 							},
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
+								Enabled:  proto.Bool(true),
 								GasLimit: 50000000,
 							},
 						},
@@ -508,7 +510,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 						},
 						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  false,
+							Enabled:  proto.Bool(false),
 							GasLimit: validator.Uint64(50000000),
 						},
 					},
@@ -564,7 +566,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
 							},
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
+								Enabled:  proto.Bool(true),
 								GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 							},
 						},
@@ -574,7 +576,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 						},
 						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  true,
+							Enabled:  proto.Bool(true),
 							GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 						},
 					},
@@ -602,7 +604,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
 							},
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
+								Enabled:  proto.Bool(true),
 								GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 							},
 						},
@@ -612,7 +614,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 						},
 						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  true,
+							Enabled:  proto.Bool(true),
 							GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 						},
 					},
@@ -639,7 +641,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
 							},
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
+								Enabled:  proto.Bool(true),
 								GasLimit: validator.Uint64(40000000),
 							},
 						},
@@ -649,7 +651,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 						},
 						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  true,
+							Enabled:  proto.Bool(true),
 							GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 						},
 					},
@@ -670,7 +672,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 				return &proposer.Settings{
 					DefaultConfig: &proposer.Option{
 						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  true,
+							Enabled:  proto.Bool(true),
 							GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 						},
 					},
@@ -716,7 +718,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
 							},
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
+								Enabled:  proto.Bool(true),
 								GasLimit: validator.Uint64(40000000),
 							},
 						},
@@ -726,7 +728,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 						},
 						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  true,
+							Enabled:  proto.Bool(true),
 							GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 						},
 					},
@@ -753,7 +755,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
 							},
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled:  true,
+								Enabled:  proto.Bool(true),
 								GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 							},
 						},
@@ -763,7 +765,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 						},
 						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  true,
+							Enabled:  proto.Bool(true),
 							GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 						},
 					},
@@ -993,7 +995,7 @@ func Test_ProposerSettingsLoaderWithOnlyBuilder_DoesNotSaveInDB(t *testing.T) {
 			want := &proposer.Settings{
 				DefaultConfig: &proposer.Option{
 					BuilderConfig: &proposer.BuilderConfig{
-						Enabled:  true,
+						Enabled:  proto.Bool(true),
 						GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 						Relays:   nil,
 					},
@@ -1027,7 +1029,7 @@ func Test_ProposerSettingsLoader_GasLimitWithoutBuilder(t *testing.T) {
 			require.NotNil(t, got)
 			require.NotNil(t, got.DefaultConfig)
 			require.NotNil(t, got.DefaultConfig.BuilderConfig)
-			require.Equal(t, false, got.DefaultConfig.BuilderConfig.Enabled)
+			require.Equal(t, false, got.DefaultConfig.BuilderConfig.IsEnabled())
 			require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.BuilderConfig.GasLimit)
 		})
 	}
@@ -1103,7 +1105,7 @@ func Test_ProposerSettingsLoader_DoesNotMigrateAtLoad(t *testing.T) {
 					FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 				},
 				BuilderConfig: &proposer.BuilderConfig{
-					Enabled:  false,
+					Enabled:  proto.Bool(false),
 					GasLimit: validator.Uint64(99000000),
 				},
 			},
@@ -1184,7 +1186,7 @@ func Test_mergeProposerSettings_VersionPrecedence(t *testing.T) {
 		merged := mergeProposerSettings(
 			&validatorpb.ProposerSettingsPayload{
 				DefaultConfig: &validatorpb.ProposerOptionPayload{
-					Builder: &validatorpb.BuilderConfig{Enabled: true, GasLimit: 30000000},
+					Builder: &validatorpb.BuilderConfig{Enabled: proto.Bool(true), GasLimit: 30000000},
 				},
 			},
 			&validatorpb.ProposerSettingsPayload{Version: proposer.SchemaV2},
@@ -1243,7 +1245,7 @@ func Test_mergeProposerSettings_CreatesDefaultFromGasLimitFlag(t *testing.T) {
 	)
 	require.NotNil(t, merged.DefaultConfig)
 	require.NotNil(t, merged.DefaultConfig.Builder)
-	require.Equal(t, false, merged.DefaultConfig.Builder.Enabled)
+	require.Equal(t, false, merged.DefaultConfig.Builder.GetEnabled())
 	require.Equal(t, gl, merged.DefaultConfig.Builder.GasLimit)
 }
 
@@ -1261,7 +1263,7 @@ func Test_mergeProposerSettings_V2GasLimitOnlyGoesToOption(t *testing.T) {
 
 func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
 	v1Builder := func() *validatorpb.BuilderConfig {
-		return &validatorpb.BuilderConfig{Enabled: true, GasLimit: 40000000, Relays: []string{"r"}}
+		return &validatorpb.BuilderConfig{Enabled: proto.Bool(true), GasLimit: 40000000, Relays: []string{"r"}}
 	}
 	t.Run("v1 db without enable-builder drops DB builder", func(t *testing.T) {
 		db := &validatorpb.ProposerSettingsPayload{

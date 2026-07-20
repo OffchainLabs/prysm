@@ -3,15 +3,17 @@ package proposer
 import (
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	logtest "github.com/sirupsen/logrus/hooks/test"
+	"google.golang.org/protobuf/proto"
+
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	logtest "github.com/sirupsen/logrus/hooks/test"
 )
 
 func Test_Proposer_Setting_Cloning(t *testing.T) {
@@ -25,7 +27,7 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 					FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
 				},
 				BuilderConfig: &BuilderConfig{
-					Enabled:             true,
+					Enabled:             proto.Bool(true),
 					GasLimit:            validator.Uint64(40000000),
 					Relays:              []string{"https://example-relay.com"},
 					MaxExecutionPayment: validator.Uint64(1000000000),
@@ -37,7 +39,7 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 				FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 			},
 			BuilderConfig: &BuilderConfig{
-				Enabled:             false,
+				Enabled:             proto.Bool(false),
 				GasLimit:            validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 				Relays:              []string{"https://example-relay.com"},
 				MaxExecutionPayment: validator.Uint64(2000000000),
@@ -67,7 +69,7 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 		clone := settings.DefaultConfig.BuilderConfig.Clone()
 		config := BuilderConfigFromConsensus(clone.ToConsensus())
 		require.DeepEqual(t, config.Relays, clone.Relays)
-		require.Equal(t, config.Enabled, clone.Enabled)
+		require.DeepEqual(t, config.Enabled, clone.Enabled)
 		require.Equal(t, config.GasLimit, clone.GasLimit)
 		require.Equal(t, config.MaxExecutionPayment, clone.MaxExecutionPayment)
 	})
@@ -80,7 +82,7 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 		require.Equal(t, true, pok)
 		require.Equal(t, option.FeeRecipientConfig.FeeRecipient.Hex(), potion.FeeRecipient)
 		require.Equal(t, settings.DefaultConfig.FeeRecipientConfig.FeeRecipient.Hex(), payload.DefaultConfig.FeeRecipient)
-		require.Equal(t, settings.DefaultConfig.BuilderConfig.Enabled, payload.DefaultConfig.Builder.Enabled)
+		require.DeepEqual(t, settings.DefaultConfig.BuilderConfig.Enabled, payload.DefaultConfig.Builder.Enabled)
 		potion.FeeRecipient = fee
 		newSettings, err := SettingFromConsensus(payload)
 		require.NoError(t, err)
@@ -114,7 +116,7 @@ func TestProposerSettings_ShouldBeSaved(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
 						},
 						BuilderConfig: &BuilderConfig{
-							Enabled:  true,
+							Enabled:  proto.Bool(true),
 							GasLimit: validator.Uint64(40000000),
 							Relays:   []string{"https://example-relay.com"},
 						},
@@ -133,7 +135,7 @@ func TestProposerSettings_ShouldBeSaved(t *testing.T) {
 						FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
 					},
 					BuilderConfig: &BuilderConfig{
-						Enabled:  true,
+						Enabled:  proto.Bool(true),
 						GasLimit: validator.Uint64(40000000),
 						Relays:   []string{"https://example-relay.com"},
 					},
@@ -150,7 +152,7 @@ func TestProposerSettings_ShouldBeSaved(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
 						},
 						BuilderConfig: &BuilderConfig{
-							Enabled:  true,
+							Enabled:  proto.Bool(true),
 							GasLimit: validator.Uint64(40000000),
 							Relays:   []string{"https://example-relay.com"},
 						},
@@ -161,7 +163,7 @@ func TestProposerSettings_ShouldBeSaved(t *testing.T) {
 						FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
 					},
 					BuilderConfig: &BuilderConfig{
-						Enabled:  true,
+						Enabled:  proto.Bool(true),
 						GasLimit: validator.Uint64(40000000),
 						Relays:   []string{"https://example-relay.com"},
 					},
@@ -194,7 +196,7 @@ func TestProposerSettings_ShouldBeSaved(t *testing.T) {
 				ProposeConfig: nil,
 				DefaultConfig: &Option{
 					BuilderConfig: &BuilderConfig{
-						Enabled:  true,
+						Enabled:  proto.Bool(true),
 						GasLimit: validator.Uint64(40000000),
 						Relays:   []string{"https://example-relay.com"},
 					},
@@ -280,7 +282,7 @@ func TestSettings_GasLimit(t *testing.T) {
 	t.Run("v1 per-validator zero BuilderConfig.GasLimit falls back to default", func(t *testing.T) {
 		ps := &Settings{
 			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
-				pk: {BuilderConfig: &BuilderConfig{Enabled: true}},
+				pk: {BuilderConfig: &BuilderConfig{Enabled: proto.Bool(true)}},
 			},
 			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{GasLimit: validator.Uint64(60_000_000)}},
 		}
@@ -289,7 +291,7 @@ func TestSettings_GasLimit(t *testing.T) {
 
 	t.Run("v1 zero default BuilderConfig.GasLimit falls back to chain default", func(t *testing.T) {
 		ps := &Settings{
-			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{Enabled: true}},
+			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{Enabled: proto.Bool(true)}},
 		}
 		require.Equal(t, chainDefault, ps.GasLimit(pk))
 	})
@@ -336,7 +338,7 @@ func TestSettings_SetGasLimit(t *testing.T) {
 
 	t.Run("v1 with disabled builder rejects", func(t *testing.T) {
 		ps := &Settings{
-			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{Enabled: false}},
+			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{Enabled: proto.Bool(false)}},
 		}
 		err := ps.SetGasLimit(pk, validator.Uint64(80_000_000))
 		require.ErrorContains(t, "Gas limit changes only apply when builder is enabled", err)
@@ -347,7 +349,7 @@ func TestSettings_SetGasLimit(t *testing.T) {
 		ps := &Settings{
 			DefaultConfig: &Option{
 				FeeRecipientConfig: &FeeRecipientConfig{FeeRecipient: feeRecipient},
-				BuilderConfig:      &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(30_000_000)},
+				BuilderConfig:      &BuilderConfig{Enabled: proto.Bool(true), GasLimit: validator.Uint64(30_000_000)},
 			},
 		}
 		require.NoError(t, ps.SetGasLimit(pk, validator.Uint64(90_000_000)))
@@ -359,7 +361,7 @@ func TestSettings_SetGasLimit(t *testing.T) {
 	t.Run("v1 updates existing enabled-builder per-validator entry", func(t *testing.T) {
 		ps := &Settings{
 			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
-				pk: {BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(10_000_000)}},
+				pk: {BuilderConfig: &BuilderConfig{Enabled: proto.Bool(true), GasLimit: validator.Uint64(10_000_000)}},
 			},
 		}
 		require.NoError(t, ps.SetGasLimit(pk, validator.Uint64(20_000_000)))
@@ -369,7 +371,7 @@ func TestSettings_SetGasLimit(t *testing.T) {
 	t.Run("v1 per-validator entry with disabled builder rejects", func(t *testing.T) {
 		ps := &Settings{
 			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
-				pk: {BuilderConfig: &BuilderConfig{Enabled: false}},
+				pk: {BuilderConfig: &BuilderConfig{Enabled: proto.Bool(false)}},
 			},
 		}
 		err := ps.SetGasLimit(pk, validator.Uint64(20_000_000))
@@ -456,7 +458,7 @@ func TestSettings_WarnDeprecatedSchema(t *testing.T) {
 	v1Settings := &Settings{
 		Version: SchemaV1,
 		DefaultConfig: &Option{
-			BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: 30000000},
+			BuilderConfig: &BuilderConfig{Enabled: proto.Bool(true), GasLimit: 30000000},
 		},
 	}
 
@@ -507,7 +509,7 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 	t.Run("v1 default lifts BuilderConfig.GasLimit to top-level and retains builder relays", func(t *testing.T) {
 		ps := &Settings{
 			DefaultConfig: &Option{
-				BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(42_000_000), Relays: []string{"http://b:8080"}},
+				BuilderConfig: &BuilderConfig{Enabled: proto.Bool(true), GasLimit: validator.Uint64(42_000_000), Relays: []string{"http://b:8080"}},
 			},
 		}
 		require.Equal(t, true, ps.UpgradeToV2())
@@ -536,8 +538,8 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		pk2 := bytesutil.ToBytes48(pubkey2)
 		ps := &Settings{
 			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
-				pk:  {BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(35_000_000)}},
-				pk2: {GasLimit: validator.Uint64(50_000_000), BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(40_000_000)}},
+				pk:  {BuilderConfig: &BuilderConfig{Enabled: proto.Bool(true), GasLimit: validator.Uint64(35_000_000)}},
+				pk2: {GasLimit: validator.Uint64(50_000_000), BuilderConfig: &BuilderConfig{Enabled: proto.Bool(true), GasLimit: validator.Uint64(40_000_000)}},
 			},
 		}
 		require.Equal(t, true, ps.UpgradeToV2())
@@ -554,7 +556,7 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		ps := &Settings{
 			Version: SchemaV2,
 			DefaultConfig: &Option{
-				BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(42_000_000)},
+				BuilderConfig: &BuilderConfig{Enabled: proto.Bool(true), GasLimit: validator.Uint64(42_000_000)},
 			},
 		}
 		require.Equal(t, false, ps.UpgradeToV2())
@@ -607,9 +609,9 @@ func TestSettings_TargetGasLimit(t *testing.T) {
 	t.Run("builder gas limits are never consulted", func(t *testing.T) {
 		ps := &Settings{
 			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
-				pk: {BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(35_000_000)}},
+				pk: {BuilderConfig: &BuilderConfig{Enabled: proto.Bool(true), GasLimit: validator.Uint64(35_000_000)}},
 			},
-			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(40_000_000)}},
+			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{Enabled: proto.Bool(true), GasLimit: validator.Uint64(40_000_000)}},
 		}
 		require.Equal(t, chainDefault, ps.TargetGasLimit(pk))
 	})

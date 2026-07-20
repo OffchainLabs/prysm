@@ -29,6 +29,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 const (
@@ -79,12 +80,16 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 	}
 
 	// Request block from beacon node
-	b, err := v.validatorClient.BeaconBlock(ctx, &ethpb.BlockRequest{
-		Slot:                slot,
-		RandaoReveal:        randaoReveal,
-		Graffiti:            g,
-		BuilderRequestAuths: v.builderRequestAuthsForSlot(pubKey, slot),
-	})
+	blockRequest := &ethpb.BlockRequest{
+		Slot:               slot,
+		RandaoReveal:       randaoReveal,
+		Graffiti:           g,
+		BuilderPreferences: v.buildBuilderPreferencesForSlot(pubKey, slot),
+	}
+	if bc := v.builderConfigForKey(pubKey); bc.IsEnabled() && bc.BuilderBoostFactor != nil {
+		blockRequest.BuilderBoostFactor = wrapperspb.UInt64(uint64(*bc.BuilderBoostFactor))
+	}
+	b, err := v.validatorClient.BeaconBlock(ctx, blockRequest)
 	if err != nil {
 		log.WithField("slot", slot).WithError(err).Error("Failed to request block from beacon node")
 		if v.emitAccountMetrics {

@@ -82,10 +82,32 @@ func verifyOption(key string, option *validatorpb.ProposerOptionPayload) error {
 // BuilderConfig is the struct representation of the JSON config file set in the validator through the CLI.
 // GasLimit is a number set to help the network decide on the maximum gas in each block.
 type BuilderConfig struct {
-	Enabled             bool             `json:"enabled" yaml:"enabled"`
-	GasLimit            validator.Uint64 `json:"gas_limit,omitempty" yaml:"gas_limit,omitempty"`
-	Relays              []string         `json:"relays,omitempty" yaml:"relays,omitempty"`
-	MaxExecutionPayment validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"`
+	Enabled             *bool             `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	GasLimit            validator.Uint64  `json:"gas_limit,omitempty" yaml:"gas_limit,omitempty"`
+	Relays              []string          `json:"relays,omitempty" yaml:"relays,omitempty"`
+	MaxExecutionPayment validator.Uint64  `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"`
+	Builders            []*BuilderEntry   `json:"builders,omitempty" yaml:"builders,omitempty"`
+	Proxy               *string           `json:"proxy,omitempty" yaml:"proxy,omitempty"`
+	MinBid              *validator.Uint64 `json:"min_bid,omitempty" yaml:"min_bid,omitempty"`
+	BuilderBoostFactor  *validator.Uint64 `json:"builder_boost_factor,omitempty" yaml:"builder_boost_factor,omitempty"`
+}
+
+// BuilderEntry is one builder in a proposer's per-key builder list. Unset fields
+// fall back to the enclosing BuilderConfig, then default_config.
+type BuilderEntry struct {
+	URL                 string            `json:"url" yaml:"url"`
+	Pubkey              []byte            `json:"pubkey,omitempty" yaml:"pubkey,omitempty"`
+	AuthData            []byte            `json:"auth_data,omitempty" yaml:"auth_data,omitempty"`
+	Proxy               *string           `json:"proxy,omitempty" yaml:"proxy,omitempty"`
+	MinBid              *validator.Uint64 `json:"min_bid,omitempty" yaml:"min_bid,omitempty"`
+	MaxExecutionPayment *validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"`
+	BuilderBoostFactor  *validator.Uint64 `json:"builder_boost_factor,omitempty" yaml:"builder_boost_factor,omitempty"`
+}
+
+// IsEnabled reports whether the builder path is explicitly enabled. A nil config
+// or unset enabled field is treated as disabled.
+func (bc *BuilderConfig) IsEnabled() bool {
+	return bc != nil && bc.Enabled != nil && *bc.Enabled
 }
 
 // BuilderConfigFromConsensus converts protobuf to a builder config used in in-memory storage
@@ -97,13 +119,42 @@ func BuilderConfigFromConsensus(from *validatorpb.BuilderConfig) *BuilderConfig 
 		Enabled:             from.Enabled,
 		GasLimit:            from.GasLimit,
 		MaxExecutionPayment: from.MaxExecutionPayment,
+		Proxy:               from.Proxy,
+		MinBid:              from.MinBid,
+		BuilderBoostFactor:  from.BuilderBoostFactor,
 	}
 	if from.Relays != nil {
 		relays := make([]string, len(from.Relays))
 		copy(relays, from.Relays)
 		c.Relays = relays
 	}
+	if len(from.Builders) > 0 {
+		c.Builders = make([]*BuilderEntry, 0, len(from.Builders))
+		for _, b := range from.Builders {
+			c.Builders = append(c.Builders, builderEntryFromConsensus(b))
+		}
+	}
 	return c
+}
+
+func builderEntryFromConsensus(from *validatorpb.BuilderEntry) *BuilderEntry {
+	if from == nil {
+		return nil
+	}
+	e := &BuilderEntry{
+		URL:                 from.Url,
+		Proxy:               from.Proxy,
+		MinBid:              from.MinBid,
+		MaxExecutionPayment: from.MaxExecutionPayment,
+		BuilderBoostFactor:  from.BuilderBoostFactor,
+	}
+	if from.Pubkey != nil {
+		e.Pubkey = bytesutil.SafeCopyBytes(from.Pubkey)
+	}
+	if from.AuthData != nil {
+		e.AuthData = bytesutil.SafeCopyBytes(from.AuthData)
+	}
+	return e
 }
 
 // Schema versions for proposer settings. SchemaV1Unset is the proto3 zero
@@ -239,16 +290,64 @@ func (bc *BuilderConfig) Clone() *BuilderConfig {
 		return nil
 	}
 	c := &BuilderConfig{}
-	c.Enabled = bc.Enabled
+	c.Enabled = cloneBool(bc.Enabled)
 	c.GasLimit = bc.GasLimit
 	c.MaxExecutionPayment = bc.MaxExecutionPayment
-	var relays []string
+	c.Proxy = cloneString(bc.Proxy)
+	c.MinBid = cloneUint64(bc.MinBid)
+	c.BuilderBoostFactor = cloneUint64(bc.BuilderBoostFactor)
 	if bc.Relays != nil {
-		relays = make([]string, len(bc.Relays))
+		relays := make([]string, len(bc.Relays))
 		copy(relays, bc.Relays)
 		c.Relays = relays
 	}
+	if len(bc.Builders) > 0 {
+		c.Builders = make([]*BuilderEntry, 0, len(bc.Builders))
+		for _, b := range bc.Builders {
+			c.Builders = append(c.Builders, b.Clone())
+		}
+	}
 	return c
+}
+
+// Clone creates a deep copy of a builder entry
+func (be *BuilderEntry) Clone() *BuilderEntry {
+	if be == nil {
+		return nil
+	}
+	return &BuilderEntry{
+		URL:                 be.URL,
+		Pubkey:              bytesutil.SafeCopyBytes(be.Pubkey),
+		AuthData:            bytesutil.SafeCopyBytes(be.AuthData),
+		Proxy:               cloneString(be.Proxy),
+		MinBid:              cloneUint64(be.MinBid),
+		MaxExecutionPayment: cloneUint64(be.MaxExecutionPayment),
+		BuilderBoostFactor:  cloneUint64(be.BuilderBoostFactor),
+	}
+}
+
+func cloneBool(v *bool) *bool {
+	if v == nil {
+		return nil
+	}
+	c := *v
+	return &c
+}
+
+func cloneString(v *string) *string {
+	if v == nil {
+		return nil
+	}
+	c := *v
+	return &c
+}
+
+func cloneUint64(v *validator.Uint64) *validator.Uint64 {
+	if v == nil {
+		return nil
+	}
+	c := *v
+	return &c
 }
 
 // Clone creates a deep copy of graffiti config
@@ -265,16 +364,39 @@ func (bc *BuilderConfig) ToConsensus() *validatorpb.BuilderConfig {
 		return nil
 	}
 	c := &validatorpb.BuilderConfig{}
-	c.Enabled = bc.Enabled
-	var relays []string
+	c.Enabled = cloneBool(bc.Enabled)
 	if bc.Relays != nil {
-		relays = make([]string, len(bc.Relays))
+		relays := make([]string, len(bc.Relays))
 		copy(relays, bc.Relays)
 		c.Relays = relays
 	}
 	c.GasLimit = bc.GasLimit
 	c.MaxExecutionPayment = bc.MaxExecutionPayment
+	c.Proxy = cloneString(bc.Proxy)
+	c.MinBid = cloneUint64(bc.MinBid)
+	c.BuilderBoostFactor = cloneUint64(bc.BuilderBoostFactor)
+	if len(bc.Builders) > 0 {
+		c.Builders = make([]*validatorpb.BuilderEntry, 0, len(bc.Builders))
+		for _, b := range bc.Builders {
+			c.Builders = append(c.Builders, b.toConsensus())
+		}
+	}
 	return c
+}
+
+func (be *BuilderEntry) toConsensus() *validatorpb.BuilderEntry {
+	if be == nil {
+		return nil
+	}
+	return &validatorpb.BuilderEntry{
+		Url:                 be.URL,
+		Pubkey:              bytesutil.SafeCopyBytes(be.Pubkey),
+		AuthData:            bytesutil.SafeCopyBytes(be.AuthData),
+		Proxy:               cloneString(be.Proxy),
+		MinBid:              cloneUint64(be.MinBid),
+		MaxExecutionPayment: cloneUint64(be.MaxExecutionPayment),
+		BuilderBoostFactor:  cloneUint64(be.BuilderBoostFactor),
+	}
 }
 
 func (ps *Settings) isV2() bool {
@@ -372,7 +494,7 @@ func (ps *Settings) SetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, gasLim
 		return nil
 	}
 	builderEnabled := func(o *Option) bool {
-		return o != nil && o.BuilderConfig != nil && o.BuilderConfig.Enabled
+		return o != nil && o.BuilderConfig.IsEnabled()
 	}
 	if ps.ProposeConfig == nil {
 		if !builderEnabled(ps.DefaultConfig) {

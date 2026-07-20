@@ -3,14 +3,16 @@ package kv
 import (
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"google.golang.org/protobuf/proto"
+
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 func TestStore_ProposerSettings_ReadAndWrite(t *testing.T) {
@@ -26,7 +28,7 @@ func TestStore_ProposerSettings_ReadAndWrite(t *testing.T) {
 						FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
 					},
 					BuilderConfig: &proposer.BuilderConfig{
-						Enabled:  true,
+						Enabled:  proto.Bool(true),
 						GasLimit: validator.Uint64(40000000),
 					},
 				},
@@ -36,7 +38,7 @@ func TestStore_ProposerSettings_ReadAndWrite(t *testing.T) {
 					FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 				},
 				BuilderConfig: &proposer.BuilderConfig{
-					Enabled:  false,
+					Enabled:  proto.Bool(false),
 					GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 				},
 			},
@@ -59,7 +61,7 @@ func TestStore_ProposerSettings_ReadAndWrite(t *testing.T) {
 					FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 				},
 				BuilderConfig: &proposer.BuilderConfig{
-					Enabled:  false,
+					Enabled:  proto.Bool(false),
 					GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 				},
 			},
@@ -71,7 +73,7 @@ func TestStore_ProposerSettings_ReadAndWrite(t *testing.T) {
 				FeeRecipient: common.HexToAddress("0x9995733c5af9B61374A128e6F85f553aF09ff89B"),
 			},
 			BuilderConfig: &proposer.BuilderConfig{
-				Enabled:  true,
+				Enabled:  proto.Bool(true),
 				GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 			},
 		}
@@ -88,7 +90,7 @@ func TestStore_ProposerSettings_ReadAndWrite(t *testing.T) {
 				FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
 			},
 			BuilderConfig: &proposer.BuilderConfig{
-				Enabled:  true,
+				Enabled:  proto.Bool(true),
 				GasLimit: validator.Uint64(40000000),
 			},
 		}

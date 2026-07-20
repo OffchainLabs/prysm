@@ -43,9 +43,15 @@ message BuilderPreferencesRequestV1 {
   SignedRequestAuthV1 auth = 2;
 }
 
-// SubmitBuilderPreferencesRequest is the validator-client gRPC request to forward
-// a proposer's builder preferences to the configured builder.
-message SubmitBuilderPreferencesRequest {
-  bytes validator_pubkey = 1;
-  BuilderPreferencesRequestV1 request = 2;
+// BuilderPreferenceV1 is one builder's preferences for a single block proposal,
+// carried inline on the block request (JIT model, beacon-APIs #625). request is
+// the signed preferences plus auth the beacon node forwards to the builder;
+// min_bid and builder_boost_factor are proposer-local and only gate bid selection.
+message BuilderPreferenceV1 {
+  BuilderPreferencesRequestV1 request = 1;
+  optional uint64 min_bid = 2 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
+  ];
+  optional uint64 builder_boost_factor = 3;
 }

@@ -13,6 +13,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/urfave/cli/v2"
+	"go.uber.org/mock/gomock"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -39,12 +47,6 @@ import (
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
 	"github.com/OffchainLabs/prysm/v7/validator/slashing-protection-history/format"
 	mocks "github.com/OffchainLabs/prysm/v7/validator/testing"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/urfave/cli/v2"
-	"go.uber.org/mock/gomock"
-	"google.golang.org/protobuf/types/known/emptypb"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestServer_ListKeystores(t *testing.T) {
@@ -1075,7 +1077,7 @@ func TestServer_SetGasLimit(t *testing.T) {
 				ProposeConfig: map[[48]byte]*proposer.Option{
 					bytesutil.ToBytes48(pubkey2): {
 						BuilderConfig: &proposer.BuilderConfig{
-							Enabled:  true,
+							Enabled:  proto.Bool(true),
 							GasLimit: 12345,
 						},
 					},
@@ -1100,7 +1102,7 @@ func TestServer_SetGasLimit(t *testing.T) {
 				},
 				DefaultConfig: &proposer.Option{
 					BuilderConfig: &proposer.BuilderConfig{
-						Enabled: true,
+						Enabled: proto.Bool(true),
 					},
 				},
 			},
