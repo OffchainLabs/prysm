@@ -3264,7 +3264,7 @@ func TestValidator_buildSignedRegReqs_DefaultConfigDisabled(t *testing.T) {
 	client := validatormock.NewMockValidatorClient(ctrl)
 
 	signature := blsmock.NewMockSignature(ctrl)
-	signature.EXPECT().Marshal().Return([]byte{})
+	signature.EXPECT().Marshal().Return([]byte{}).AnyTimes()
 
 	v := validator{
 		signedValidatorRegistrations: map[[48]byte]*ethpb.SignedValidatorRegistrationV1{},
@@ -3332,11 +3332,16 @@ func TestValidator_buildSignedRegReqs_DefaultConfigDisabled(t *testing.T) {
 	}
 	actual := v.buildSignedRegReqs(ctx, pubkeys, signer, 0, false)
 
-	assert.Equal(t, 1, len(actual))
+	assert.Equal(t, 2, len(actual))
 	assert.DeepEqual(t, feeRecipient1[:], actual[0].Message.FeeRecipient)
 	assert.Equal(t, uint64(1111), actual[0].Message.GasLimit)
 	assert.DeepEqual(t, pubkey1[:], actual[0].Message.Pubkey)
 
+	// Field-level inheritance: pubkey3's enabled builder registers with its own
+	// gas limit and the inherited default fee recipient.
+	assert.DeepEqual(t, defaultFeeRecipient[:], actual[1].Message.FeeRecipient)
+	assert.Equal(t, uint64(3333), actual[1].Message.GasLimit)
+	assert.DeepEqual(t, pubkey3[:], actual[1].Message.Pubkey)
 }
 
 func TestValidator_buildSignedRegReqs_DefaultConfigEnabled(t *testing.T) {
@@ -3438,7 +3443,8 @@ func TestValidator_buildSignedRegReqs_DefaultConfigEnabled(t *testing.T) {
 	assert.DeepEqual(t, pubkey1[:], actual[0].Message.Pubkey)
 
 	assert.DeepEqual(t, defaultFeeRecipient[:], actual[1].Message.FeeRecipient)
-	assert.Equal(t, uint64(9999), actual[1].Message.GasLimit)
+	// Field-level inheritance: pubkey3's explicit per-key gas limit wins over the default's.
+	assert.Equal(t, uint64(3333), actual[1].Message.GasLimit)
 	assert.DeepEqual(t, pubkey3[:], actual[1].Message.Pubkey)
 
 	t.Run("mid epoch only pushes newly added key", func(t *testing.T) {

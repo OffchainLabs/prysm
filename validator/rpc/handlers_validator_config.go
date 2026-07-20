@@ -209,7 +209,7 @@ func builderConfigJSONFromConsensus(bc *proposer.BuilderConfig) *BuilderConfigJs
 	out := &BuilderConfigJson{
 		Enabled:             bc.Enabled,
 		Proxy:               bc.Proxy,
-		MaxExecutionPayment: uintStrPtr(bc.MaxExecutionPayment),
+		MaxExecutionPayment: optUintStrPtr(bc.MaxExecutionPayment),
 		MinBid:              optUintStrPtr(bc.MinBid),
 		BuilderBoostFactor:  optUintStrPtr(bc.BuilderBoostFactor),
 	}
@@ -273,7 +273,7 @@ func builderConfigFromJSON(in *BuilderConfigJson) (*proposer.BuilderConfig, erro
 		if err != nil {
 			return nil, err
 		}
-		bc.MaxExecutionPayment = v
+		bc.MaxExecutionPayment = &v
 	}
 	if in.MinBid != nil {
 		v, err := parseUint(*in.MinBid, "builder.min_bid")
@@ -358,13 +358,6 @@ func formatUint(v validator.Uint64) string {
 }
 
 func strPtr(s string) *string { return &s }
-
-func uintStrPtr(v validator.Uint64) *string {
-	if v == 0 {
-		return nil
-	}
-	return strPtr(formatUint(v))
-}
 
 func optUintStrPtr(v *validator.Uint64) *string {
 	if v == nil {

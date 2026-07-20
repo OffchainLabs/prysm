@@ -6,6 +6,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	validatortypes "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"google.golang.org/protobuf/proto"
@@ -103,6 +104,119 @@ func TestSignRequestAuthCached_RotationRoundTrip(t *testing.T) {
 
 	v.pruneSignedRequestAuths(slot + 1)
 	require.Equal(t, 0, len(v.signedRequestAuths))
+}
+
+// Field-level inheritance vectors through target resolution (keymanager #87 discussion).
+func TestBuilderTargetsForKey_FieldLevelInheritance(t *testing.T) {
+	pk := [fieldparams.BLSPubkeyLength]byte{4}
+	minBid := validatortypes.Uint64(5000000)
+	zeroPayment := validatortypes.Uint64(0)
+	defaultOption := &proposer.Option{
+		BuilderConfig: &proposer.BuilderConfig{
+			Enabled:  proto.Bool(true),
+			Builders: []*proposer.BuilderEntry{{URL: "https://a"}, {URL: "https://b"}},
+			MinBid:   &minBid,
+		},
+	}
+
+	t.Run("per-key list replaces, min_bid inherits", func(t *testing.T) {
+		v := validator{proposerSettings: &proposer.Settings{
+			DefaultConfig: defaultOption,
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+				pk: {BuilderConfig: &proposer.BuilderConfig{
+					Enabled:  proto.Bool(true),
+					Builders: []*proposer.BuilderEntry{{URL: "https://c"}},
+				}},
+			},
+		}}
+		targets := v.builderTargetsForKey(pk)
+		require.Equal(t, 1, len(targets))
+		require.Equal(t, "https://c", targets[0].url)
+		require.NotNil(t, targets[0].minBid)
+		require.Equal(t, uint64(5000000), *targets[0].minBid)
+	})
+	t.Run("enabled-only per-key inherits the default builder list", func(t *testing.T) {
+		v := validator{proposerSettings: &proposer.Settings{
+			DefaultConfig: defaultOption,
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+				pk: {BuilderConfig: &proposer.BuilderConfig{Enabled: proto.Bool(true)}},
+			},
+		}}
+		require.Equal(t, 2, len(v.builderTargetsForKey(pk)))
+	})
+	t.Run("explicit zero max payment stays trustless-only", func(t *testing.T) {
+		defWithCap := &proposer.Option{BuilderConfig: &proposer.BuilderConfig{
+			Enabled:             proto.Bool(true),
+			Builders:            []*proposer.BuilderEntry{{URL: "https://a"}},
+			MaxExecutionPayment: uint64ValPtrClient(1000000000),
+		}}
+		v := validator{proposerSettings: &proposer.Settings{
+			DefaultConfig: defWithCap,
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+				pk: {BuilderConfig: &proposer.BuilderConfig{
+					Enabled:             proto.Bool(true),
+					MaxExecutionPayment: &zeroPayment,
+				}},
+			},
+		}}
+		targets := v.builderTargetsForKey(pk)
+		require.Equal(t, 1, len(targets))
+		require.Equal(t, uint64(0), targets[0].maxPayment)
+	})
+	// Pins the full resolution chain: entry field -> effective config -> default_config.
+	// Entry X overrides everything; entry Y inherits config-level values, which
+	// themselves came from default_config through the coalesce.
+	t.Run("entry overrides beat config level, unset entry fields inherit through the chain", func(t *testing.T) {
+		defBoost := validatortypes.Uint64(90)
+		defMax := validatortypes.Uint64(100)
+		entryMin := validatortypes.Uint64(7000000)
+		entryBoost := validatortypes.Uint64(120)
+		entryMax := validatortypes.Uint64(50)
+		v := validator{proposerSettings: &proposer.Settings{
+			DefaultConfig: &proposer.Option{BuilderConfig: &proposer.BuilderConfig{
+				MinBid:              &minBid, // 5000000
+				BuilderBoostFactor:  &defBoost,
+				MaxExecutionPayment: &defMax,
+			}},
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+				pk: {BuilderConfig: &proposer.BuilderConfig{
+					Enabled: proto.Bool(true),
+					Builders: []*proposer.BuilderEntry{
+						{URL: "https://x", MinBid: &entryMin, BuilderBoostFactor: &entryBoost, MaxExecutionPayment: &entryMax},
+						{URL: "https://y"},
+					},
+				}},
+			},
+		}}
+		targets := v.builderTargetsForKey(pk)
+		require.Equal(t, 2, len(targets))
+
+		x := targets[0]
+		require.Equal(t, "https://x", x.url)
+		require.Equal(t, uint64(7000000), *x.minBid)
+		require.Equal(t, uint64(120), *x.boostFactor)
+		require.Equal(t, uint64(50), x.maxPayment)
+
+		y := targets[1]
+		require.Equal(t, "https://y", y.url)
+		require.Equal(t, uint64(5000000), *y.minBid)
+		require.Equal(t, uint64(90), *y.boostFactor)
+		require.Equal(t, uint64(100), y.maxPayment)
+	})
+	t.Run("per-key disable wins over enabled default", func(t *testing.T) {
+		v := validator{proposerSettings: &proposer.Settings{
+			DefaultConfig: defaultOption,
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+				pk: {BuilderConfig: &proposer.BuilderConfig{Enabled: proto.Bool(false)}},
+			},
+		}}
+		require.Equal(t, 0, len(v.builderTargetsForKey(pk)))
+	})
+}
+
+func uint64ValPtrClient(v uint64) *validatortypes.Uint64 {
+	u := validatortypes.Uint64(v)
+	return &u
 }
 
 func TestSignedRequestAuthFor_KeyIncludesAuthData(t *testing.T) {

@@ -1127,8 +1127,10 @@ func (v *validator) buildProposerSettingsRequests(
 // upgradeProposerSettingsToV2 migrates v1 proposer settings to v2 and persists
 // them. Callers must gate this on gloas-active so the pre-gloas registration
 // path still sees BuilderConfig.
+// Upgrades a clone then swaps, so concurrent readers never observe a
+// half-migrated settings object.
 func (v *validator) upgradeProposerSettingsToV2(ctx context.Context) {
-	ps := v.ProposerSettings()
+	ps := v.ProposerSettings().Clone()
 	if !ps.UpgradeToV2() {
 		return
 	}
@@ -1359,21 +1361,23 @@ type builderTarget struct {
 	boostFactor *uint64
 }
 
+// builderConfigForKey returns pk's effective builder config: per-key fields win,
+// unset fields inherit from default_config (field-level inheritance).
 func (v *validator) builderConfigForKey(pk pubkey) *proposer.BuilderConfig {
 	ps := v.ProposerSettings()
 	if ps == nil {
 		return nil
 	}
-	var bc *proposer.BuilderConfig
+	var def, perKey *proposer.BuilderConfig
 	if ps.DefaultConfig != nil {
-		bc = ps.DefaultConfig.BuilderConfig
+		def = ps.DefaultConfig.BuilderConfig
 	}
 	if ps.ProposeConfig != nil {
-		if c, ok := ps.ProposeConfig[pk]; ok && c != nil && c.BuilderConfig != nil {
-			bc = c.BuilderConfig
+		if c, ok := ps.ProposeConfig[pk]; ok && c != nil {
+			perKey = c.BuilderConfig
 		}
 	}
-	return bc
+	return proposer.EffectiveBuilderConfig(perKey, def)
 }
 
 // builderTargetsForKey resolves the enabled builder list for pk. Each Builders[]
@@ -1383,7 +1387,11 @@ func (v *validator) builderTargetsForKey(pk pubkey) []builderTarget {
 	if !bc.IsEnabled() {
 		return nil
 	}
-	fbMax := uint64(bc.MaxExecutionPayment)
+	// Unset max payment resolves to 0 (trustless-only), the safe client default.
+	var fbMax uint64
+	if bc.MaxExecutionPayment != nil {
+		fbMax = uint64(*bc.MaxExecutionPayment)
+	}
 	fbMin := uint64Ptr(bc.MinBid)
 	fbBoost := uint64Ptr(bc.BuilderBoostFactor)
 
@@ -1540,7 +1548,7 @@ func (v *validator) buildSignedRegReqs(
 	}
 
 	if v.ProposerSettings().DefaultConfig != nil && v.ProposerSettings().DefaultConfig.FeeRecipientConfig == nil && v.ProposerSettings().DefaultConfig.BuilderConfig != nil {
-		log.Warn("Builder is `enabled` in default config but will be ignored because no fee recipient was provided!")
+		log.Warn("Default builder config has no default fee recipient; only keys with their own fee recipient can register")
 	}
 
 	for i, k := range activePubkeys {
@@ -1551,38 +1559,36 @@ func (v *validator) buildSignedRegReqs(
 		}
 
 		feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
-		gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
-		enabled := false
+		hasFeeRecipient := false
+		var defBC, perKeyBC *proposer.BuilderConfig
 
-		if v.ProposerSettings().DefaultConfig != nil && v.ProposerSettings().DefaultConfig.FeeRecipientConfig != nil {
+		if v.ProposerSettings().DefaultConfig != nil {
 			defaultConfig := v.ProposerSettings().DefaultConfig
-			feeRecipient = defaultConfig.FeeRecipientConfig.FeeRecipient // Use cli defaultBuilderConfig for fee recipient.
-			defaultBuilderConfig := defaultConfig.BuilderConfig
-
-			if defaultBuilderConfig.IsEnabled() {
-				gasLimit = uint64(defaultBuilderConfig.GasLimit) // Use cli config for gas limit.
-				enabled = true
+			defBC = defaultConfig.BuilderConfig
+			if defaultConfig.FeeRecipientConfig != nil {
+				feeRecipient = defaultConfig.FeeRecipientConfig.FeeRecipient
+				hasFeeRecipient = true
 			}
 		}
-
 		if v.ProposerSettings().ProposeConfig != nil {
-			config, ok := v.ProposerSettings().ProposeConfig[k]
-			if ok && config != nil && config.FeeRecipientConfig != nil {
-				feeRecipient = config.FeeRecipientConfig.FeeRecipient // Use file config for fee recipient.
-				builderConfig := config.BuilderConfig
-				if builderConfig != nil {
-					if builderConfig.IsEnabled() {
-						gasLimit = uint64(builderConfig.GasLimit) // Use file config for gas limit.
-						enabled = true
-					} else {
-						enabled = false // Custom config can disable validator from register.
-					}
+			if config, ok := v.ProposerSettings().ProposeConfig[k]; ok && config != nil {
+				perKeyBC = config.BuilderConfig
+				if config.FeeRecipientConfig != nil {
+					feeRecipient = config.FeeRecipientConfig.FeeRecipient
+					hasFeeRecipient = true
 				}
 			}
 		}
 
-		if !enabled {
+		// Field-level resolution: per-key builder fields inherit from the default;
+		// registration still requires a fee recipient configured at some level.
+		bc := proposer.EffectiveBuilderConfig(perKeyBC, defBC)
+		if !bc.IsEnabled() || !hasFeeRecipient {
 			continue
+		}
+		gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
+		if bc.GasLimit != 0 {
+			gasLimit = uint64(bc.GasLimit)
 		}
 
 		req := &ethpb.ValidatorRegistrationV1{

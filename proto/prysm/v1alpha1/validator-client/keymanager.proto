@@ -136,9 +136,9 @@ message BuilderConfig {
   ];
   repeated string relays = 3;
   // max_execution_payment is the maximum execution layer payment (in Gwei) the
-  // proposer will accept from a builder for the Gloas builder API. 0 means
-  // trustless-only; 2^64-1 means accept any amount.
-  uint64 max_execution_payment = 4 [
+  // proposer will accept from a builder for the Gloas builder API. Explicit 0
+  // means trustless-only; unset inherits; 2^64-1 means accept any amount.
+  optional uint64 max_execution_payment = 4 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
   ];

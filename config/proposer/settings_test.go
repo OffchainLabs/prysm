@@ -16,6 +16,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
+func uint64ValPtr(v uint64) *validator.Uint64 {
+	u := validator.Uint64(v)
+	return &u
+}
+
 func Test_Proposer_Setting_Cloning(t *testing.T) {
 	key1hex := "0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a"
 	key1, err := hexutil.Decode(key1hex)
@@ -30,7 +35,7 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 					Enabled:             proto.Bool(true),
 					GasLimit:            validator.Uint64(40000000),
 					Relays:              []string{"https://example-relay.com"},
-					MaxExecutionPayment: validator.Uint64(1000000000),
+					MaxExecutionPayment: uint64ValPtr(1000000000),
 				},
 			},
 		},
@@ -42,7 +47,7 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 				Enabled:             proto.Bool(false),
 				GasLimit:            validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 				Relays:              []string{"https://example-relay.com"},
-				MaxExecutionPayment: validator.Uint64(2000000000),
+				MaxExecutionPayment: uint64ValPtr(2000000000),
 			},
 		},
 	}
@@ -71,7 +76,7 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 		require.DeepEqual(t, config.Relays, clone.Relays)
 		require.DeepEqual(t, config.Enabled, clone.Enabled)
 		require.Equal(t, config.GasLimit, clone.GasLimit)
-		require.Equal(t, config.MaxExecutionPayment, clone.MaxExecutionPayment)
+		require.DeepEqual(t, config.MaxExecutionPayment, clone.MaxExecutionPayment)
 	})
 	t.Run("To Payload and SettingFromConsensus", func(t *testing.T) {
 		payload := settings.ToConsensus()
@@ -615,4 +620,67 @@ func TestSettings_TargetGasLimit(t *testing.T) {
 		}
 		require.Equal(t, chainDefault, ps.TargetGasLimit(pk))
 	})
+}
+
+// Legacy (pre-v2) payloads can't express presence: wire-absent enabled meant
+// disabled, and the filesystem backend wrote spurious explicit-0 max payments.
+func TestSettingFromConsensus_NormalizesLegacyPresence(t *testing.T) {
+	key := [fieldparams.BLSPubkeyLength]byte{9}
+	legacy := &Settings{
+		Version: SchemaV1,
+		DefaultConfig: &Option{BuilderConfig: &BuilderConfig{
+			GasLimit:            validator.Uint64(30000000),
+			MaxExecutionPayment: uint64ValPtr(0),
+		}},
+		ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+			key: {BuilderConfig: &BuilderConfig{GasLimit: validator.Uint64(25000000)}},
+		},
+	}
+
+	got, err := SettingFromConsensus(legacy.ToConsensus())
+	require.NoError(t, err)
+
+	def := got.DefaultConfig.BuilderConfig
+	require.NotNil(t, def.Enabled)
+	require.Equal(t, false, *def.Enabled)
+	require.Equal(t, (*validator.Uint64)(nil), def.MaxExecutionPayment)
+
+	perKey := got.ProposeConfig[key].BuilderConfig
+	require.NotNil(t, perKey.Enabled)
+	require.Equal(t, false, *perKey.Enabled)
+
+	// The normalized explicit false must survive the coalesce: a legacy disabled
+	// per-key section can never silently activate under an enabled default.
+	enabled := true
+	eff := EffectiveBuilderConfig(perKey, &BuilderConfig{Enabled: &enabled})
+	require.Equal(t, false, eff.IsEnabled())
+}
+
+func TestSettingFromConsensus_V2PresencePreserved(t *testing.T) {
+	v2 := &Settings{
+		Version: SchemaV2,
+		DefaultConfig: &Option{BuilderConfig: &BuilderConfig{
+			MaxExecutionPayment: uint64ValPtr(0),
+		}},
+	}
+	got, err := SettingFromConsensus(v2.ToConsensus())
+	require.NoError(t, err)
+	bc := got.DefaultConfig.BuilderConfig
+	require.Equal(t, (*bool)(nil), bc.Enabled)
+	require.NotNil(t, bc.MaxExecutionPayment)
+	require.Equal(t, validator.Uint64(0), *bc.MaxExecutionPayment)
+}
+
+func TestUpgradeToV2_NormalizesLegacyPresence(t *testing.T) {
+	ps := &Settings{
+		Version:       SchemaV1,
+		DefaultConfig: &Option{BuilderConfig: &BuilderConfig{MaxExecutionPayment: uint64ValPtr(0)}},
+	}
+	require.Equal(t, true, ps.UpgradeToV2())
+	bc := ps.DefaultConfig.BuilderConfig
+	require.NotNil(t, bc.Enabled)
+	require.Equal(t, false, *bc.Enabled)
+	require.Equal(t, (*validator.Uint64)(nil), bc.MaxExecutionPayment)
+	require.Equal(t, SchemaV2, ps.Version)
+	require.Equal(t, false, ps.UpgradeToV2())
 }

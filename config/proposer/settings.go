@@ -63,7 +63,33 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 		d.GasLimit = ps.DefaultConfig.GasLimit
 		settings.DefaultConfig = d
 	}
+	settings.normalizeLegacyPresence()
 	return settings, nil
+}
+
+// v1 payloads predate presence tracking: wire-absent enabled meant disabled, and
+// the filesystem backend persisted a spurious explicit 0 max execution payment.
+func (ps *Settings) normalizeLegacyPresence() {
+	if ps == nil || ps.isV2() {
+		return
+	}
+	normalize := func(opt *Option) {
+		if opt == nil || opt.BuilderConfig == nil {
+			return
+		}
+		bc := opt.BuilderConfig
+		if bc.Enabled == nil {
+			disabled := false
+			bc.Enabled = &disabled
+		}
+		if bc.MaxExecutionPayment != nil && *bc.MaxExecutionPayment == 0 {
+			bc.MaxExecutionPayment = nil
+		}
+	}
+	normalize(ps.DefaultConfig)
+	for _, opt := range ps.ProposeConfig {
+		normalize(opt)
+	}
 }
 
 func verifyOption(key string, option *validatorpb.ProposerOptionPayload) error {
@@ -85,7 +111,7 @@ type BuilderConfig struct {
 	Enabled             *bool             `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	GasLimit            validator.Uint64  `json:"gas_limit,omitempty" yaml:"gas_limit,omitempty"`
 	Relays              []string          `json:"relays,omitempty" yaml:"relays,omitempty"`
-	MaxExecutionPayment validator.Uint64  `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"`
+	MaxExecutionPayment *validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"` // explicit 0 = trustless-only; unset inherits
 	Builders            []*BuilderEntry   `json:"builders,omitempty" yaml:"builders,omitempty"`
 	Proxy               *string           `json:"proxy,omitempty" yaml:"proxy,omitempty"`
 	MinBid              *validator.Uint64 `json:"min_bid,omitempty" yaml:"min_bid,omitempty"`
@@ -110,18 +136,71 @@ func (bc *BuilderConfig) IsEnabled() bool {
 	return bc != nil && bc.Enabled != nil && *bc.Enabled
 }
 
+// EffectiveBuilderConfig resolves a key's builder config with field-level
+// inheritance from the default: fields unset on perKey inherit def's values, and
+// the builders/relays lists replace (never merge) when present on perKey.
+func EffectiveBuilderConfig(perKey, def *BuilderConfig) *BuilderConfig {
+	if perKey == nil {
+		return def
+	}
+	if def == nil {
+		return perKey
+	}
+	eff := &BuilderConfig{
+		Enabled:             coalesceBool(perKey.Enabled, def.Enabled),
+		GasLimit:            perKey.GasLimit,
+		MaxExecutionPayment: coalesceUint64(perKey.MaxExecutionPayment, def.MaxExecutionPayment),
+		MinBid:              coalesceUint64(perKey.MinBid, def.MinBid),
+		BuilderBoostFactor:  coalesceUint64(perKey.BuilderBoostFactor, def.BuilderBoostFactor),
+		Proxy:               coalesceString(perKey.Proxy, def.Proxy),
+		Builders:            perKey.Builders,
+		Relays:              perKey.Relays,
+	}
+	if eff.GasLimit == 0 {
+		eff.GasLimit = def.GasLimit
+	}
+	if len(eff.Builders) == 0 {
+		eff.Builders = def.Builders
+	}
+	if len(eff.Relays) == 0 {
+		eff.Relays = def.Relays
+	}
+	return eff
+}
+
+func coalesceBool(a, b *bool) *bool {
+	if a != nil {
+		return a
+	}
+	return b
+}
+
+func coalesceString(a, b *string) *string {
+	if a != nil {
+		return a
+	}
+	return b
+}
+
+func coalesceUint64(a, b *validator.Uint64) *validator.Uint64 {
+	if a != nil {
+		return a
+	}
+	return b
+}
+
 // BuilderConfigFromConsensus converts protobuf to a builder config used in in-memory storage
 func BuilderConfigFromConsensus(from *validatorpb.BuilderConfig) *BuilderConfig {
 	if from == nil {
 		return nil
 	}
 	c := &BuilderConfig{
-		Enabled:             from.Enabled,
+		Enabled:             cloneBool(from.Enabled),
 		GasLimit:            from.GasLimit,
-		MaxExecutionPayment: from.MaxExecutionPayment,
-		Proxy:               from.Proxy,
-		MinBid:              from.MinBid,
-		BuilderBoostFactor:  from.BuilderBoostFactor,
+		MaxExecutionPayment: cloneUint64(from.MaxExecutionPayment),
+		Proxy:               cloneString(from.Proxy),
+		MinBid:              cloneUint64(from.MinBid),
+		BuilderBoostFactor:  cloneUint64(from.BuilderBoostFactor),
 	}
 	if from.Relays != nil {
 		relays := make([]string, len(from.Relays))
@@ -292,7 +371,7 @@ func (bc *BuilderConfig) Clone() *BuilderConfig {
 	c := &BuilderConfig{}
 	c.Enabled = cloneBool(bc.Enabled)
 	c.GasLimit = bc.GasLimit
-	c.MaxExecutionPayment = bc.MaxExecutionPayment
+	c.MaxExecutionPayment = cloneUint64(bc.MaxExecutionPayment)
 	c.Proxy = cloneString(bc.Proxy)
 	c.MinBid = cloneUint64(bc.MinBid)
 	c.BuilderBoostFactor = cloneUint64(bc.BuilderBoostFactor)
@@ -371,7 +450,7 @@ func (bc *BuilderConfig) ToConsensus() *validatorpb.BuilderConfig {
 		c.Relays = relays
 	}
 	c.GasLimit = bc.GasLimit
-	c.MaxExecutionPayment = bc.MaxExecutionPayment
+	c.MaxExecutionPayment = cloneUint64(bc.MaxExecutionPayment)
 	c.Proxy = cloneString(bc.Proxy)
 	c.MinBid = cloneUint64(bc.MinBid)
 	c.BuilderBoostFactor = cloneUint64(bc.BuilderBoostFactor)
@@ -421,6 +500,7 @@ func (ps *Settings) UpgradeToV2() bool {
 	if ps == nil || ps.isV2() {
 		return false
 	}
+	ps.normalizeLegacyPresence()
 	migrate := func(opt *Option) {
 		if opt == nil || opt.BuilderConfig == nil {
 			return

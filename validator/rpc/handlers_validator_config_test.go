@@ -229,3 +229,34 @@ func TestServer_SetValidatorConfig_ValidatorServiceNil(t *testing.T) {
 	w := postValidatorConfig(t, s, `{"configs":{}}`)
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 }
+
+// Pins the presence semantics of max_execution_payment at the API layer:
+// explicit "0" (trustless-only) round-trips; unset stays absent from GET.
+func TestServer_SetGetValidatorConfig_MaxExecutionPaymentZeroVsAbsent(t *testing.T) {
+	srv, keys := setupConfigServer(t, 2)
+	pkZero := hexutil.Encode(keys[0][:])
+	pkAbsent := hexutil.Encode(keys[1][:])
+
+	body := `{"configs":{` +
+		`"` + pkZero + `":{"builder":{"enabled":true,"builders":[{"url":"http://a.example"}],"max_execution_payment":"0"}},` +
+		`"` + pkAbsent + `":{"builder":{"enabled":true,"builders":[{"url":"http://b.example"}]}}` +
+		`}}`
+	w := postValidatorConfig(t, srv, body)
+	require.Equal(t, http.StatusOK, w.Code)
+	setResp := &SetValidatorConfigResponse{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), setResp))
+	require.Equal(t, configStatusSet, setResp.Data[pkZero].Status)
+	require.Equal(t, configStatusSet, setResp.Data[pkAbsent].Status)
+
+	getResp := getValidatorConfig(t, srv, "")
+	zero := getResp.Data.Configs[pkZero]
+	require.NotNil(t, zero)
+	require.NotNil(t, zero.Builder)
+	require.NotNil(t, zero.Builder.MaxExecutionPayment)
+	require.Equal(t, "0", *zero.Builder.MaxExecutionPayment)
+
+	absent := getResp.Data.Configs[pkAbsent]
+	require.NotNil(t, absent)
+	require.NotNil(t, absent.Builder)
+	assert.Equal(t, (*string)(nil), absent.Builder.MaxExecutionPayment)
+}

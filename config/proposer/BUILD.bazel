@@ -24,7 +24,10 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["settings_test.go"],
+    srcs = [
+        "effective_builder_config_test.go",
+        "settings_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
         "//config/fieldparams:go_default_library",
