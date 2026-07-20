@@ -135,6 +135,15 @@ func TestValidateExecutionPayloadEnvelope_HappyPath(t *testing.T) {
 	require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
 }
 
+func TestValidateExecutionPayloadEnvelope_BlockSeenButNotInDB_NoPanic(t *testing.T) {
+	ctx := context.Background()
+	s, msg, _, _ := newEnvelopeServiceForTest(t, 1, 1, false /* saveBlockToDB */)
+	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
+	result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+}
+
 func TestValidateExecutionPayloadEnvelope_GossipEvent(t *testing.T) {
 	ctx := context.Background()
 	s, msg, builderIdx, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
@@ -321,6 +330,10 @@ func testNewExecutionPayloadEnvelopeVerifier(m mockExecutionPayloadEnvelopeVerif
 }
 
 func setupExecutionPayloadEnvelopeService(t *testing.T, envelopeSlot, blockSlot primitives.Slot) (*Service, *pubsub.Message, primitives.BuilderIndex, [32]byte) {
+	return newEnvelopeServiceForTest(t, envelopeSlot, blockSlot, true /* saveBlockToDB */)
+}
+
+func newEnvelopeServiceForTest(t *testing.T, envelopeSlot, blockSlot primitives.Slot, saveBlockToDB bool) (*Service, *pubsub.Message, primitives.BuilderIndex, [32]byte) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -354,7 +367,9 @@ func setupExecutionPayloadEnvelopeService(t *testing.T, envelopeSlot, blockSlot 
 	require.NoError(t, err)
 	root, err := signedBlock.Block().HashTreeRoot()
 	require.NoError(t, err)
-	require.NoError(t, db.SaveBlock(ctx, signedBlock))
+	if saveBlockToDB {
+		require.NoError(t, db.SaveBlock(ctx, signedBlock))
+	}
 
 	state, err := util.NewBeaconStateFulu()
 	require.NoError(t, err)

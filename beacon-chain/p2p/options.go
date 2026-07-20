@@ -85,7 +85,7 @@ func (s *Service) buildOptions(ip net.IP, priKey *ecdsa.PrivateKey) ([]libp2p.Op
 	if cfg.LocalIP != "" {
 		localIP := net.ParseIP(cfg.LocalIP)
 		if localIP == nil {
-			return nil, errors.Wrapf(err, "invalid local ip provided: %s:%d", cfg.LocalIP, cfg.TCPPort)
+			return nil, errors.Errorf("invalid local ip provided: %s", cfg.LocalIP)
 		}
 
 		multiaddrs, err = MultiAddressBuilder(localIP, cfg.TCPPort, cfg.QUICPort)
@@ -135,8 +135,12 @@ func (s *Service) buildOptions(ip net.IP, priKey *ecdsa.PrivateKey) ([]libp2p.Op
 	}
 
 	if cfg.HostAddress != "" {
+		hostIP := net.ParseIP(cfg.HostAddress)
+		if hostIP == nil {
+			return nil, errors.Errorf("invalid host address provided: %s", cfg.HostAddress)
+		}
 		options = append(options, libp2p.AddrsFactory(func(addrs []ma.Multiaddr) []ma.Multiaddr {
-			externalMultiaddrs, err := MultiAddressBuilder(net.ParseIP(cfg.HostAddress), cfg.TCPPort, cfg.QUICPort)
+			externalMultiaddrs, err := MultiAddressBuilder(hostIP, cfg.TCPPort, cfg.QUICPort)
 			if err != nil {
 				log.WithError(err).Error("Unable to create external multiaddress")
 			} else {

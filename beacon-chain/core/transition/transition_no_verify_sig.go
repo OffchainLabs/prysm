@@ -9,7 +9,6 @@ import (
 	b "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition/interop"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -59,9 +58,6 @@ func ExecuteStateTransitionNoVerifyAnySig(
 	ctx, span := trace.StartSpan(ctx, "core.state.ExecuteStateTransitionNoVerifyAnySig")
 	defer span.End()
 	var err error
-
-	interop.WriteBlockToDisk(signed, false /* Has the block failed */)
-	interop.WriteStateToDisk(st)
 
 	parentRoot := signed.Block().ParentRoot()
 	st, err = ProcessSlotsUsingNextSlotCache(ctx, st, parentRoot[:], signed.Block().Slot())

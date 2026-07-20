@@ -135,6 +135,20 @@ func (mr *MockValidatorClientMockRecorder) CheckDoppelGanger(ctx, in any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckDoppelGanger", reflect.TypeOf((*MockValidatorClient)(nil).CheckDoppelGanger), ctx, in)
 }
 
+// ConnectionGeneration mocks base method.
+func (m *MockValidatorClient) ConnectionGeneration() uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConnectionGeneration")
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
+// ConnectionGeneration indicates an expected call of ConnectionGeneration.
+func (mr *MockValidatorClientMockRecorder) ConnectionGeneration() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConnectionGeneration", reflect.TypeOf((*MockValidatorClient)(nil).ConnectionGeneration))
+}
+
 // DomainData mocks base method.
 func (m *MockValidatorClient) DomainData(ctx context.Context, in *eth.DomainRequest) (*eth.DomainResponse, error) {
 	m.ctrl.T.Helper()
@@ -209,13 +223,12 @@ func (mr *MockValidatorClientMockRecorder) FeeRecipientByPubKey(ctx, in any) *go
 }
 
 // GetExecutionPayloadEnvelope mocks base method.
-func (m *MockValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, beaconBlockRoot [32]byte) (*eth.ExecutionPayloadEnvelope, *eth.WireBlindedExecutionPayloadEnvelope, error) {
+func (m *MockValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, beaconBlockRoot [32]byte) (*eth.ExecutionPayloadEnvelope, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetExecutionPayloadEnvelope", ctx, slot, beaconBlockRoot)
 	ret0, _ := ret[0].(*eth.ExecutionPayloadEnvelope)
-	ret1, _ := ret[1].(*eth.WireBlindedExecutionPayloadEnvelope)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetExecutionPayloadEnvelope indicates an expected call of GetExecutionPayloadEnvelope.
@@ -371,21 +384,6 @@ func (m *MockValidatorClient) ProposerDuties(ctx context.Context, epoch primitiv
 func (mr *MockValidatorClientMockRecorder) ProposerDuties(ctx, epoch any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposerDuties", reflect.TypeOf((*MockValidatorClient)(nil).ProposerDuties), ctx, epoch)
-}
-
-// PublishBlindedExecutionPayloadEnvelope mocks base method.
-func (m *MockValidatorClient) PublishBlindedExecutionPayloadEnvelope(ctx context.Context, in *eth.SignedWireBlindedExecutionPayloadEnvelope) (*empty.Empty, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PublishBlindedExecutionPayloadEnvelope", ctx, in)
-	ret0, _ := ret[0].(*empty.Empty)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// PublishBlindedExecutionPayloadEnvelope indicates an expected call of PublishBlindedExecutionPayloadEnvelope.
-func (mr *MockValidatorClientMockRecorder) PublishBlindedExecutionPayloadEnvelope(ctx, in any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishBlindedExecutionPayloadEnvelope", reflect.TypeOf((*MockValidatorClient)(nil).PublishBlindedExecutionPayloadEnvelope), ctx, in)
 }
 
 // PublishExecutionPayloadEnvelope mocks base method.

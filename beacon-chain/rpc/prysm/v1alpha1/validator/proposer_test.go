@@ -1,3 +1,5 @@
+//go:build minimal
+
 package validator
 
 import (
@@ -21,6 +23,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	executionTypes "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
@@ -885,16 +888,17 @@ func TestServer_GetBeaconBlock_Optimistic(t *testing.T) {
 func getProposerServer(ctx context.Context, db db.HeadAccessDatabase, headState state.BeaconState, headRoot []byte) *Server {
 	mockChainService := &mock.ChainService{State: headState, Root: headRoot, ForkChoiceStore: doublylinkedtree.New()}
 	return &Server{
-		HeadFetcher:           mockChainService,
-		SyncChecker:           &mockSync.Sync{IsSyncing: false},
-		BlockReceiver:         mockChainService,
-		ChainStartFetcher:     &mockExecution.Chain{},
-		Eth1InfoFetcher:       &mockExecution.Chain{},
+		HeadFetcher:       mockChainService,
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		BlockReceiver:     mockChainService,
+		ChainStartFetcher: &mockExecution.Chain{},
+		// Report the execution client as disconnected so block production uses an
+		// empty deposit list and a self-contained eth1 data vote (no live EL needed).
+		Eth1InfoFetcher:       &mockExecution.Chain{NotConnected: true},
 		Eth1BlockFetcher:      &mockExecution.Chain{},
 		FinalizationFetcher:   mockChainService,
 		ForkFetcher:           mockChainService,
 		ForkchoiceFetcher:     mockChainService,
-		MockEth1Votes:         true,
 		AttPool:               attestations.NewPool(),
 		SlashingsPool:         slashings.NewPool(),
 		ExitPool:              voluntaryexits.NewPool(),
@@ -2453,6 +2457,15 @@ func TestProposer_Eth1Data_MajorityVote_SpansGenesis(t *testing.T) {
 	assert.DeepEqual(t, headBlockHash, majorityVoteEth1Data.BlockHash)
 }
 
+type errBlockByTimestampExecution struct {
+	*mockExecution.Chain
+	err error
+}
+
+func (e *errBlockByTimestampExecution) BlockByTimestamp(context.Context, uint64) (*executionTypes.HeaderInfo, error) {
+	return nil, e.err
+}
+
 func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 	followDistanceSecs := params.BeaconConfig().Eth1FollowDistance * params.BeaconConfig().SecondsPerETH1Block
 	followSlots := followDistanceSecs / params.BeaconConfig().SecondsPerSlot
@@ -2476,6 +2489,30 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 	root, err := depositTrie.HashTreeRoot()
 	require.NoError(t, err)
 	assert.NoError(t, depositCache.InsertDeposit(t.Context(), dc.Deposit, dc.Eth1BlockHeight, dc.Index, root))
+
+	t.Run("latest valid time later than eth1 head uses head eth1data", func(t *testing.T) {
+		headEth1Data := &ethpb.Eth1Data{BlockHash: []byte("head"), DepositCount: 3}
+		p := &errBlockByTimestampExecution{
+			Chain: mockExecution.New(),
+			err:   errors.New("provided time is later than the current eth1 head"),
+		}
+
+		beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: slot})
+		require.NoError(t, err)
+
+		ps := &Server{
+			ChainStartFetcher: p,
+			Eth1InfoFetcher:   p,
+			Eth1BlockFetcher:  p,
+			BlockFetcher:      p,
+			DepositFetcher:    depositCache,
+			HeadFetcher:       &mock.ChainService{ETH1Data: headEth1Data},
+		}
+
+		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(t.Context(), beaconState)
+		require.NoError(t, err)
+		require.DeepEqual(t, headEth1Data, majorityVoteEth1Data)
+	})
 
 	t.Run("choose highest count", func(t *testing.T) {
 		t.Skip()

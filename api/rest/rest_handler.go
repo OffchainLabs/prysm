@@ -69,11 +69,6 @@ func (c *handler) appendAcceptOverride() {
 	}
 }
 
-// HttpClient returns the underlying HTTP client of the handler
-func (c *handler) HttpClient() *http.Client {
-	return &c.client
-}
-
 // Host returns the underlying HTTP host
 func (c *handler) Host() string {
 	host, _ := c.host.Load().(string)

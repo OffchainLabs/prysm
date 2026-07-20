@@ -8,6 +8,7 @@ const (
 	ExecutionPayloadValueHeader    = "Eth-Execution-Payload-Value"
 	ConsensusBlockValueHeader      = "Eth-Consensus-Block-Value"
 	ExecutionPayloadIncludedHeader = "Eth-Execution-Payload-Included"
+	BlobDataIncludedHeader         = "Eth-Blob-Data-Included"
 	JsonMediaType                  = "application/json"
 	OctetStreamMediaType           = "application/octet-stream"
 	EventStreamMediaType           = "text/event-stream"

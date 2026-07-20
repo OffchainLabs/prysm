@@ -15,6 +15,7 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/validator/keymanager/local",
     visibility = [
         "//cmd/validator:__subpackages__",
+        "//testing/endtoend:__subpackages__",
         "//tools:__subpackages__",
         "//validator:__pkg__",
         "//validator:__subpackages__",
@@ -29,7 +30,6 @@ go_library(
         "//io/file:go_default_library",
         "//monitoring/tracing/trace:go_default_library",
         "//proto/prysm/v1alpha1/validator-client:go_default_library",
-        "//runtime/interop:go_default_library",
         "//validator/accounts/iface:go_default_library",
         "//validator/accounts/petnames:go_default_library",
         "//validator/keymanager:go_default_library",

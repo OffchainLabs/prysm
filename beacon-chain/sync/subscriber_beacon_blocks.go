@@ -9,7 +9,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition/interop"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -49,8 +48,15 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return errors.Wrap(err, "new ro block with root")
 	}
 
+	// Sidecar reconstruction runs in its own goroutine and outlives this handler, so
+	// derive its context from the service context rather than the pubsub message ctx
+	// (which is cancelled when the handler returns and would abort engine_getBlobs
+	// mid-flight). Using the service ctx keeps the work bound to the service lifecycle
+	// so it stops on shutdown, while the timeout prevents it leaking under load.
 	go func() {
-		if err := s.processSidecarsFromExecutionFromBlock(ctx, roBlock); err != nil {
+		sidecarCtx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
+		defer cancel()
+		if err := s.processSidecarsFromExecutionFromBlock(sidecarCtx, roBlock); err != nil {
 			log.WithError(err).WithFields(logrus.Fields{
 				"root": fmt.Sprintf("%#x", root),
 				"slot": block.Slot(),
@@ -64,9 +70,6 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 			if r != [32]byte{} {
 				s.setBadBlock(ctx, r) // Setting head block as bad.
 			} else {
-				// TODO(13721): Remove this once we can deprecate the flag.
-				interop.WriteBlockToDisk(signed, true /*failed*/)
-
 				saveInvalidBlockToTemp(signed)
 				s.setBadBlock(ctx, root)
 			}

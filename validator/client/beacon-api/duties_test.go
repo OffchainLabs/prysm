@@ -174,6 +174,57 @@ func TestGetProposerDuties_Valid(t *testing.T) {
 	assert.DeepEqual(t, expectedProposerDuties.Data, proposerDuties.Data)
 }
 
+func TestGetProposerDuties_V2PostGloas(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().GloasForkEpoch = 10
+
+	expectedProposerDuties := structs.GetProposerDutiesResponse{
+		Data: []*structs.ProposerDuty{
+			{
+				Pubkey:         hexutil.Encode([]byte{1}),
+				ValidatorIndex: "2",
+				Slot:           "3",
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := t.Context()
+
+	handler := mock.NewMockHandler(ctrl)
+	handler.EXPECT().Get(
+		gomock.Any(),
+		"/eth/v2/validator/duties/proposer/10",
+		&structs.GetProposerDutiesResponse{},
+	).Return(
+		nil,
+	).SetArg(
+		2,
+		expectedProposerDuties,
+	).Times(1)
+	handler.EXPECT().Get(
+		gomock.Any(),
+		"/eth/v1/validator/duties/proposer/9",
+		&structs.GetProposerDutiesResponse{},
+	).Return(
+		nil,
+	).SetArg(
+		2,
+		expectedProposerDuties,
+	).Times(1)
+
+	dutiesProvider := &beaconApiDutiesProvider{handler: handler}
+	proposerDuties, err := dutiesProvider.ProposerDuties(ctx, 10)
+	require.NoError(t, err)
+	assert.DeepEqual(t, expectedProposerDuties.Data, proposerDuties.Data)
+
+	proposerDuties, err = dutiesProvider.ProposerDuties(ctx, 9)
+	require.NoError(t, err)
+	assert.DeepEqual(t, expectedProposerDuties.Data, proposerDuties.Data)
+}
+
 func TestGetProposerDuties_HttpError(t *testing.T) {
 	const epoch = primitives.Epoch(1)
 
