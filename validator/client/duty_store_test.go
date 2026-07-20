@@ -311,17 +311,20 @@ func TestDutyStore_replaceNextDuties_revisionGuard(t *testing.T) {
 
 	staleRev := ds.snapshot().revision
 	ds.write(d) // a concurrent write advances the revision under the stale reader
+	assert.Equal(t, staleRev+1, ds.snapshot().revision)
 
 	newNext := []*ethpb.ValidatorDuty{{PublicKey: pk[:], ValidatorIndex: 7, AttesterSlot: 200}}
 
-	// Stale revision -> dropped, store left unchanged.
+	// Stale revision -> dropped, store left unchanged, revision not bumped.
 	assert.Equal(t, false, ds.replaceNextDuties(staleRev, newNext, 0, nil))
+	assert.Equal(t, staleRev+1, ds.snapshot().revision)
 	for _, nd := range ds.snapshot().nextDuties() {
 		assert.Equal(t, primitives.Slot(100), nd.AttesterSlot)
 	}
 
-	// Current revision -> applied.
+	// Current revision -> applied and revision bumped.
 	assert.Equal(t, true, ds.replaceNextDuties(ds.snapshot().revision, newNext, 0, nil))
+	assert.Equal(t, staleRev+2, ds.snapshot().revision)
 	for _, nd := range ds.snapshot().nextDuties() {
 		assert.Equal(t, primitives.Slot(200), nd.AttesterSlot)
 	}

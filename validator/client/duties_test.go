@@ -681,7 +681,7 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		spe := params.BeaconConfig().SlotsPerEpoch
 		seedDuty := &ethpb.ValidatorDuty{
 			PublicKey: keys.pub[:], ValidatorIndex: 42,
-			AttesterSlot: primitives.Slot(epoch)*spe + 3, Status: ethpb.ValidatorStatus_UNKNOWN_STATUS,
+			AttesterSlot: primitives.Slot(epoch)*spe + 3, Status: ethpb.ValidatorStatus_ACTIVE,
 		}
 		{
 			var data dutyStoreData
@@ -708,7 +708,7 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		spe := params.BeaconConfig().SlotsPerEpoch
 		seedDuty := &ethpb.ValidatorDuty{
 			PublicKey: keys.pub[:], ValidatorIndex: 42,
-			AttesterSlot: primitives.Slot(epoch)*spe + 3, Status: ethpb.ValidatorStatus_UNKNOWN_STATUS,
+			AttesterSlot: primitives.Slot(epoch)*spe + 3, Status: ethpb.ValidatorStatus_ACTIVE,
 		}
 		{
 			var data dutyStoreData
@@ -1093,15 +1093,26 @@ func TestRetryMissingNextDuties(t *testing.T) {
 		v := &validator{
 			validatorClient: client,
 			duties:          &dutyStore{},
-			// UNKNOWN status keeps the async subnet subscription from signing for
-			// these duties, which would need a keymanager this test doesn't wire up.
 			pubkeyToStatus: map[pubkey]*validatorStatus{
-				keys.pub: {publicKey: keys.pub[:], status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_UNKNOWN_STATUS}, index: 42},
+				keys.pub: {publicKey: keys.pub[:], status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}, index: 42},
 			},
 		}
-		v.aggSelector = testLocalSelector(t, v)
-		client.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any()).Return(&emptypb.Empty{}, nil).AnyTimes()
+		// Canned proofs let the async subnet subscription run without a keymanager.
+		v.aggSelector = &stubAggregatorSelector{proofs: map[pubkey][]byte{keys.pub: []byte("proof")}}
 		return v, client, keys
+	}
+
+	// expectResubscribe arms one SubscribeCommitteeSubnets call and waits for the
+	// async subscription goroutine at cleanup, so it can't leak into the next subtest.
+	expectResubscribe := func(t *testing.T, client *validatormock.MockValidatorClient) {
+		var wg sync.WaitGroup
+		wg.Add(1)
+		client.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(context.Context, *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
+				wg.Done()
+				return &emptypb.Empty{}, nil
+			})
+		t.Cleanup(func() { util.WaitTimeout(&wg, 2*time.Second) })
 	}
 
 	// seed writes current + next duties with the given missing mask.
@@ -1110,11 +1121,11 @@ func TestRetryMissingNextDuties(t *testing.T) {
 		data.setFromContainer(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{{
 				PublicKey: keys.pub[:], ValidatorIndex: 42,
-				AttesterSlot: primitives.Slot(epoch)*spe + 3, Status: ethpb.ValidatorStatus_UNKNOWN_STATUS,
+				AttesterSlot: primitives.Slot(epoch)*spe + 3, Status: ethpb.ValidatorStatus_ACTIVE,
 			}},
 			NextEpochDuties: []*ethpb.ValidatorDuty{{
 				PublicKey: keys.pub[:], ValidatorIndex: 42,
-				AttesterSlot: primitives.Slot(epoch+1)*spe + 7, Status: ethpb.ValidatorStatus_UNKNOWN_STATUS,
+				AttesterSlot: primitives.Slot(epoch+1)*spe + 7, Status: ethpb.ValidatorStatus_ACTIVE,
 			}},
 		})
 		data.epoch = epoch
@@ -1132,6 +1143,7 @@ func TestRetryMissingNextDuties(t *testing.T) {
 		client.EXPECT().PTCDuties(gomock.Any(), epoch+1, gomock.Any()).Return(&ethpb.PTCDutiesResponse{
 			Duties: []*ethpb.PTCDuty{{Pubkey: keys.pub[:], ValidatorIndex: 42, Slot: primitives.Slot(epoch+1)*spe + 2}},
 		}, nil)
+		expectResubscribe(t, client)
 
 		require.NoError(t, v.RetryMissingNextDuties(t.Context()))
 
@@ -1207,6 +1219,7 @@ func TestRetryMissingNextDuties(t *testing.T) {
 			Duties: []*ethpb.ProposerDutyV2{{Pubkey: keys.pub[:], ValidatorIndex: 42, Slot: primitives.Slot(epoch+1)*spe + 1}},
 		}, nil)
 		client.EXPECT().PTCDuties(gomock.Any(), epoch+1, gomock.Any()).Return(nil, errors.New("ptc still down"))
+		expectResubscribe(t, client)
 
 		require.NoError(t, v.RetryMissingNextDuties(t.Context()))
 
@@ -1227,11 +1240,11 @@ func TestRetryMissingNextDuties(t *testing.T) {
 			CurrDependentRoot: currDepRoot,
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{{
 				PublicKey: keys.pub[:], ValidatorIndex: 42,
-				AttesterSlot: primitives.Slot(epoch)*spe + 3, Status: ethpb.ValidatorStatus_UNKNOWN_STATUS,
+				AttesterSlot: primitives.Slot(epoch)*spe + 3, Status: ethpb.ValidatorStatus_ACTIVE,
 			}},
 			NextEpochDuties: []*ethpb.ValidatorDuty{{
 				PublicKey: keys.pub[:], ValidatorIndex: 42,
-				AttesterSlot: primitives.Slot(epoch+1)*spe + 7, Status: ethpb.ValidatorStatus_UNKNOWN_STATUS,
+				AttesterSlot: primitives.Slot(epoch+1)*spe + 7, Status: ethpb.ValidatorStatus_ACTIVE,
 			}},
 		})
 		data.epoch = epoch
@@ -1309,6 +1322,7 @@ func TestRetryMissingNextDuties(t *testing.T) {
 			DependentRoot: attRoot,
 			Duties:        []*ethpb.PTCDuty{{Pubkey: keys.pub[:], ValidatorIndex: 42, Slot: primitives.Slot(epoch+1)*spe + 2}},
 		}, nil)
+		expectResubscribe(t, client)
 
 		require.NoError(t, v.RetryMissingNextDuties(t.Context()))
 
@@ -1368,6 +1382,7 @@ func TestRetryMissingNextDuties(t *testing.T) {
 		client.EXPECT().PTCDuties(gomock.Any(), epoch+1, gomock.Any()).Return(&ethpb.PTCDutiesResponse{
 			Duties: []*ethpb.PTCDuty{{Pubkey: keys.pub[:], ValidatorIndex: 42, Slot: primitives.Slot(epoch+1)*spe + 2}},
 		}, nil).AnyTimes()
+		expectResubscribe(t, client)
 
 		v.MaybeRetryMissingNextDuties(t.Context(), 0)
 
@@ -1430,10 +1445,9 @@ func TestRetryMissingNextDuties(t *testing.T) {
 
 func TestMissingNextDutiesString(t *testing.T) {
 	assert.Equal(t, "none", missingNextDuties(0).String())
+	assert.Equal(t, "ptc", missingNextPtc.String())
 	assert.Equal(t, "proposer|sync|ptc|attester",
 		(missingNextProposer | missingNextSync | missingNextPtc | missingNextAttester).String())
-	// A bit without a missingNextNames entry self-reports instead of vanishing.
-	assert.Equal(t, "ptc|unknown(0b10000)", (missingNextPtc | missingNextDuties(1<<4)).String())
 }
 
 func TestDropIfDivergent(t *testing.T) {

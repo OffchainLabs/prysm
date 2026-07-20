@@ -201,27 +201,22 @@ const (
 	missingNextAttester
 )
 
-var missingNextNames = map[missingNextDuties]string{
-	missingNextProposer: "proposer",
-	missingNextSync:     "sync",
-	missingNextPtc:      "ptc",
-	missingNextAttester: "attester",
-}
-
 func (m missingNextDuties) String() string {
 	if m == 0 {
 		return "none"
 	}
 	var parts []string
-	for bit := missingNextDuties(1); bit != 0; bit <<= 1 {
-		if m&bit == 0 {
-			continue
-		}
-		name, ok := missingNextNames[bit]
-		if !ok { // bit exists in the const block but not in missingNextNames
-			name = fmt.Sprintf("unknown(%#b)", uint8(bit))
-		}
-		parts = append(parts, name)
+	if m&missingNextProposer != 0 {
+		parts = append(parts, "proposer")
+	}
+	if m&missingNextSync != 0 {
+		parts = append(parts, "sync")
+	}
+	if m&missingNextPtc != 0 {
+		parts = append(parts, "ptc")
+	}
+	if m&missingNextAttester != 0 {
+		parts = append(parts, "attester")
 	}
 	return strings.Join(parts, "|")
 }
@@ -608,8 +603,10 @@ func (v *validator) MaybeRetryMissingNextDuties(ctx context.Context, slot primit
 	}
 	retryCtx, cancel := context.WithDeadline(ctx, v.SlotDeadline(slot))
 	go func() {
-		defer cancel()
-		defer v.retryInFlight.Store(false)
+		defer func() {
+			cancel()
+			v.retryInFlight.Store(false)
+		}()
 		if err := v.RetryMissingNextDuties(retryCtx); err != nil {
 			log.WithError(err).Debug("Could not retry missing next-epoch duties")
 		}
