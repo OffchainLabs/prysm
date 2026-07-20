@@ -97,7 +97,6 @@ type validator struct {
 	submittedPayloadAtts         map[submittedPayloadAttKey][]uint64
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
-	interopKeysConfig            *local.InteropKeymanagerConfig
 	domainDataCache              *ristretto.Cache[string, proto.Message]
 	slotFeed                     *event.Feed
 	graffitiStruct               *graffiti.Graffiti
@@ -177,12 +176,6 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 			return errors.Wrap(err, "could not initialize key manager")
 		}
 		v.km = keyManager
-	case v.interopKeysConfig != nil:
-		keyManager, err := local.NewInteropKeymanager(ctx, v.interopKeysConfig.Offset, v.interopKeysConfig.NumValidatorKeys)
-		if err != nil {
-			return errors.Wrap(err, "could not generate interop keys for key manager")
-		}
-		v.km = keyManager
 	case v.enableAPI:
 		km, err := waitForWebWalletInitialization(ctx, v.walletInitializedFeed, v.walletInitializedChan)
 		if err != nil {
@@ -192,6 +185,7 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 	default:
 		return wallet.ErrNoWalletFound
 	}
+
 	if v.km == nil {
 		return errors.New("key manager not set")
 	}
@@ -924,13 +918,26 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 	return nil
 }
 
-func (v *validator) StartEventStream(ctx context.Context, topics []string) {
-	if v.EventStreamIsRunning() {
-		log.Debug("EventStream is already running")
+// EnsureEventStream reconciles the event stream with the current beacon host:
+// it starts the stream in a new goroutine when it is not running, replaces it
+// when the connection switched hosts since it was bound, and is a synchronous
+// no-op otherwise. Called every slot tick.
+func (v *validator) EnsureEventStream(ctx context.Context, topics []string) {
+	gen := v.connGeneration()
+	running := v.EventStreamIsRunning()
+	if running && !v.connTracker.changed(eventStreamBind, gen) {
 		return
 	}
-	log.WithField("topics", topics).Info("Starting event stream")
-	v.validatorClient.StartEventStream(ctx, topics, v.eventsChannel)
+	reason := "stream not running"
+	if running {
+		reason = "beacon host switched"
+	}
+	v.connTracker.confirm(eventStreamBind, gen)
+	log.WithFields(logrus.Fields{
+		"topics": topics,
+		"reason": reason,
+	}).Info("Starting event stream")
+	go v.validatorClient.StartEventStream(ctx, topics, v.eventsChannel)
 }
 
 func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) {

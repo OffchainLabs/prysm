@@ -91,12 +91,14 @@ func (s *Server) GetExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-// PublishExecutionPayloadEnvelope broadcasts a signed envelope. Eth-Execution-Payload-Blinded
-// selects the body: true=blinded (stateful, BN reconstructs from cache), false=contents (stateless).
-// Endpoint: POST /eth/v1/beacon/execution_payload_envelopes
+// PublishExecutionPayloadEnvelope broadcasts a signed envelope. Eth-Blob-Data-Included selects the
+// body: true=contents with blobs+proofs, false=bare signed envelope (BN attaches cached blob data).
 func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.PublishExecutionPayloadEnvelope")
 	defer span.End()
+	if shared.IsSyncing(ctx, w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
+		return
+	}
 	versionHeader := r.Header.Get(api.VersionHeader)
 	if versionHeader == "" {
 		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
@@ -107,14 +109,14 @@ func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.
 		httputil.HandleError(w, api.VersionHeader+" header must be gloas or later", http.StatusBadRequest)
 		return
 	}
-	blindedHeader := r.Header.Get(api.ExecutionPayloadBlindedHeader)
-	if blindedHeader == "" {
-		httputil.HandleError(w, api.ExecutionPayloadBlindedHeader+" header is required", http.StatusBadRequest)
+	blobDataHeader := r.Header.Get(api.BlobDataIncludedHeader)
+	if blobDataHeader == "" {
+		httputil.HandleError(w, api.BlobDataIncludedHeader+" header is required", http.StatusBadRequest)
 		return
 	}
-	isBlinded, err := strconv.ParseBool(blindedHeader)
+	blobDataIncluded, err := strconv.ParseBool(blobDataHeader)
 	if err != nil {
-		httputil.HandleError(w, "invalid "+api.ExecutionPayloadBlindedHeader+" value: "+err.Error(), http.StatusBadRequest)
+		httputil.HandleError(w, "invalid "+api.BlobDataIncludedHeader+" value: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -124,78 +126,48 @@ func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if isBlinded {
-		s.publishBlindedEnvelope(ctx, w, r, body)
+	if blobDataIncluded {
+		s.publishEnvelopeContents(ctx, w, r, body)
 		return
 	}
-	s.publishEnvelopeContents(ctx, w, r, body)
+	s.publishBareEnvelope(ctx, w, r, body)
 }
 
-// publishBlindedEnvelope reconstructs the full envelope from cache by beacon_block_root.
-// HTR(blinded) == HTR(full), so the validator signature stays valid.
-func (s *Server) publishBlindedEnvelope(ctx context.Context, w http.ResponseWriter, r *http.Request, body []byte) {
-	signedBlinded := &eth.SignedWireBlindedExecutionPayloadEnvelope{}
+// publishBareEnvelope handles the stateful flow (header=false): the body carries only the signed
+// envelope and the BN attaches the blobs and KZG proofs cached at block production.
+func (s *Server) publishBareEnvelope(ctx context.Context, w http.ResponseWriter, r *http.Request, body []byte) {
+	signed := &eth.SignedExecutionPayloadEnvelope{}
 	if httputil.IsRequestSsz(r) {
-		if err := signedBlinded.UnmarshalSSZ(body); err != nil {
-			httputil.HandleError(w, "could not decode SSZ blinded envelope: "+err.Error(), http.StatusBadRequest)
+		if err := signed.UnmarshalSSZ(body); err != nil {
+			httputil.HandleError(w, "could not decode SSZ envelope: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 	} else {
-		var jsonBlinded structs.SignedBlindedExecutionPayloadEnvelope
-		if err := json.Unmarshal(body, &jsonBlinded); err != nil {
-			httputil.HandleError(w, "could not decode JSON blinded envelope: "+err.Error(), http.StatusBadRequest)
+		var jsonEnvelope structs.SignedExecutionPayloadEnvelope
+		if err := json.Unmarshal(body, &jsonEnvelope); err != nil {
+			httputil.HandleError(w, "could not decode JSON envelope: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		consensus, err := jsonBlinded.ToConsensus()
+		consensus, err := jsonEnvelope.ToConsensus()
 		if err != nil {
-			httputil.HandleError(w, "invalid signed blinded envelope: "+err.Error(), http.StatusBadRequest)
+			httputil.HandleError(w, "invalid signed envelope: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		signedBlinded = consensus
+		signed = consensus
 	}
-	if signedBlinded.Message == nil {
-		httputil.HandleError(w, "blinded envelope message is nil", http.StatusBadRequest)
+	if signed.Message == nil || signed.Message.Payload == nil {
+		httputil.HandleError(w, "envelope message or payload is nil", http.StatusBadRequest)
 		return
 	}
 
-	cached, ok := s.ExecutionPayloadEnvelopeCache.Contents()
-	if !ok || cached.Envelope == nil {
-		httputil.HandleError(w, "no cached execution payload envelope to reconstruct from", http.StatusBadRequest)
-		return
-	}
-	if !bytes.Equal(cached.Envelope.BeaconBlockRoot, signedBlinded.Message.BeaconBlockRoot) {
-		httputil.HandleError(w, "cached envelope beacon_block_root does not match blinded envelope", http.StatusBadRequest)
-		return
-	}
-	blindedRoot, err := signedBlinded.Message.HashTreeRoot()
-	if err != nil {
-		httputil.HandleError(w, "could not hash blinded envelope: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	cachedRoot, err := cached.Envelope.HashTreeRoot()
-	if err != nil {
-		httputil.HandleError(w, "could not hash cached envelope: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if blindedRoot != cachedRoot {
-		httputil.HandleError(w, "cached envelope hash tree root does not match blinded envelope", http.StatusBadRequest)
+	if !s.validateEnvelopeBroadcast(ctx, w, r, signed) {
 		return
 	}
 
-	// Consensus-level broadcast_validation needs the full envelope; reconstruct it from cache for
-	// the check only. The publish-side reconstruction + sidecar broadcast happens in the v1alpha1
-	// server (shared with the gRPC path), so forward the blinded arm and let it rebuild the payload.
-	full := &eth.SignedExecutionPayloadEnvelope{
-		Message:   cached.Envelope,
-		Signature: signedBlinded.Signature,
-	}
-
-	if !s.validateEnvelopeBroadcast(ctx, w, r, full) {
-		return
-	}
-
+	// The cached-envelope match (and the cache-miss 400) happens in the v1alpha1 server, shared
+	// with the gRPC path.
 	generic := &eth.GenericSignedExecutionPayloadEnvelope{
-		Envelope: &eth.GenericSignedExecutionPayloadEnvelope_Blinded{Blinded: signedBlinded},
+		Envelope: &eth.GenericSignedExecutionPayloadEnvelope_SignedEnvelope{SignedEnvelope: signed},
 	}
 	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, generic); err != nil {
 		writeEnvelopePublishError(w, err)
@@ -204,15 +176,13 @@ func (s *Server) publishBlindedEnvelope(ctx context.Context, w http.ResponseWrit
 	w.WriteHeader(http.StatusOK)
 }
 
-// writeEnvelopePublishError maps the v1alpha1 publish outcome to the spec status
-// codes: InvalidArgument -> 400, Aborted -> 202 (broadcast ok, import failed).
+// writeEnvelopePublishError maps the v1alpha1 publish outcome to the spec status codes,
+// InvalidArgument/FailedPrecondition -> 400.
 func writeEnvelopePublishError(w http.ResponseWriter, err error) {
 	if st, ok := status.FromError(err); ok {
 		switch st.Code() {
-		case codes.InvalidArgument:
+		case codes.InvalidArgument, codes.FailedPrecondition:
 			httputil.HandleError(w, st.Message(), http.StatusBadRequest)
-		case codes.Aborted:
-			httputil.HandleError(w, st.Message(), http.StatusAccepted)
 		default:
 			httputil.HandleError(w, st.Message(), http.StatusInternalServerError)
 		}
@@ -221,7 +191,7 @@ func writeEnvelopePublishError(w http.ResponseWriter, err error) {
 	httputil.HandleError(w, "could not publish execution payload envelope: "+err.Error(), http.StatusInternalServerError)
 }
 
-// publishEnvelopeContents handles the stateless flow (header=false).
+// publishEnvelopeContents handles the stateless flow (header=true).
 func (s *Server) publishEnvelopeContents(ctx context.Context, w http.ResponseWriter, r *http.Request, body []byte) {
 	if httputil.IsRequestSsz(r) {
 		contents := &eth.SignedExecutionPayloadEnvelopeContents{}

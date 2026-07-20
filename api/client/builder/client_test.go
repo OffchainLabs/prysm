@@ -166,6 +166,57 @@ func TestClient_RegisterValidator(t *testing.T) {
 		}
 		require.NoError(t, c.RegisterValidator(ctx, []*eth.SignedValidatorRegistrationV1{reg}))
 	})
+	t.Run("SSZ rejected falls back to JSON", func(t *testing.T) {
+		var reqCount int
+		hc := &http.Client{
+			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				reqCount++
+				if reqCount == 1 {
+					// The builder does not support SSZ; reject the octet-stream body.
+					require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Content-Type"))
+					return &http.Response{
+						StatusCode: http.StatusUnsupportedMediaType,
+						Body:       io.NopCloser(bytes.NewBufferString("Expected request with `Content-Type: " + api.JsonMediaType + "`")),
+						Request:    r.Clone(ctx),
+					}, nil
+				}
+				// Retry must be JSON encoded.
+				require.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
+				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+				body, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
+				require.NoError(t, r.Body.Close())
+				require.Equal(t, expectedBody, string(body))
+				require.Equal(t, expectedPath, r.URL.Path)
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBuffer(nil)),
+					Request:    r.Clone(ctx),
+				}, nil
+			}),
+		}
+		c := &Client{
+			hc:         hc,
+			baseURL:    &url.URL{Host: "localhost:3500", Scheme: "http"},
+			sszEnabled: true,
+		}
+		reg := &eth.SignedValidatorRegistrationV1{
+			Message: &eth.ValidatorRegistrationV1{
+				FeeRecipient: ezDecode(t, params.BeaconConfig().EthBurnAddressHex),
+				GasLimit:     23,
+				Timestamp:    42,
+				Pubkey:       ezDecode(t, "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"),
+			},
+			Signature: ezDecode(t, "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"),
+		}
+		require.NoError(t, c.RegisterValidator(ctx, []*eth.SignedValidatorRegistrationV1{reg}))
+		require.Equal(t, 2, reqCount)
+		require.Equal(t, true, c.sszRejected.Load())
+
+		// A subsequent call skips SSZ entirely and goes straight to JSON.
+		require.NoError(t, c.RegisterValidator(ctx, []*eth.SignedValidatorRegistrationV1{reg}))
+		require.Equal(t, 3, reqCount)
+	})
 }
 
 func TestClient_GetHeader(t *testing.T) {
@@ -602,6 +653,43 @@ func TestClient_GetHeader(t *testing.T) {
 		_, err := c.GetHeader(ctx, slot, bytesutil.ToBytes32(parentHash), bytesutil.ToBytes48(pubkey))
 		require.ErrorContains(t, "unsupported header version", err)
 	})
+	t.Run("SSZ rejected falls back to JSON", func(t *testing.T) {
+		var reqCount int
+		hc := &http.Client{
+			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				reqCount++
+				if reqCount == 1 {
+					// The builder does not accept an SSZ response; reject the octet-stream Accept
+					// header with a PLAIN-TEXT body (matching real builders, not a JSON error).
+					require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+					return &http.Response{
+						StatusCode: http.StatusNotAcceptable,
+						Body:       io.NopCloser(bytes.NewBufferString("only " + api.JsonMediaType + " is supported")),
+						Request:    r.Clone(ctx),
+					}, nil
+				}
+				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+				require.Equal(t, expectedPath, r.URL.Path)
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(testExampleHeaderResponseDeneb)),
+					Request:    r.Clone(ctx),
+				}, nil
+			}),
+		}
+		c := &Client{
+			hc:         hc,
+			baseURL:    &url.URL{Host: "localhost:3500", Scheme: "http"},
+			sszEnabled: true,
+		}
+		h, err := c.GetHeader(ctx, slot, bytesutil.ToBytes32(parentHash), bytesutil.ToBytes48(pubkey))
+		require.NoError(t, err)
+		require.Equal(t, 2, reqCount)
+		require.Equal(t, true, c.sszRejected.Load())
+		bid, err := h.Message()
+		require.NoError(t, err)
+		require.NotNil(t, bid)
+	})
 }
 
 func TestSubmitBlindedBlock(t *testing.T) {
@@ -704,6 +792,40 @@ func TestSubmitBlindedBlock(t *testing.T) {
 		assert.Equal(t, primitives.ValidatorIndex(1), withdrawals[0].ValidatorIndex)
 		assert.DeepEqual(t, ezDecode(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943"), withdrawals[0].Address)
 		assert.Equal(t, uint64(1), withdrawals[0].Amount)
+	})
+	t.Run("capella SSZ rejected falls back to JSON", func(t *testing.T) {
+		var reqCount int
+		hc := &http.Client{
+			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				reqCount++
+				if reqCount == 1 {
+					// Builder rejects the SSZ block with a plain-text 415 (like Commit Boost).
+					require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Content-Type"))
+					return &http.Response{
+						StatusCode: http.StatusUnsupportedMediaType,
+						Body:       io.NopCloser(bytes.NewBufferString("Expected request with `Content-Type: " + api.JsonMediaType + "`")),
+						Request:    r.Clone(ctx),
+					}, nil
+				}
+				require.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
+				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(testExampleExecutionPayloadCapella)),
+					Request:    r.Clone(ctx),
+				}, nil
+			}),
+		}
+		c := &Client{hc: hc, baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"}, sszEnabled: true}
+		sbb, err := blocks.NewSignedBeaconBlock(testSignedBlindedBeaconBlockCapella(t))
+		require.NoError(t, err)
+		ep, _, err := c.SubmitBlindedBlock(ctx, sbb)
+		require.NoError(t, err)
+		require.Equal(t, 2, reqCount)
+		require.Equal(t, true, c.sszRejected.Load())
+		withdrawals, err := ep.Withdrawals()
+		require.NoError(t, err)
+		require.Equal(t, 1, len(withdrawals))
 	})
 	t.Run("capella ssz", func(t *testing.T) {
 		hc := &http.Client{
@@ -1610,6 +1732,37 @@ func TestSubmitBlindedBlockPostFulu(t *testing.T) {
 		require.NoError(t, err)
 		err = c.SubmitBlindedBlockPostFulu(ctx, sbbb)
 		require.NoError(t, err)
+	})
+
+	t.Run("SSZ rejected falls back to JSON", func(t *testing.T) {
+		var reqCount int
+		hc := &http.Client{
+			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				reqCount++
+				if reqCount == 1 {
+					// Builder rejects the SSZ block with a plain-text 415 (like Commit Boost).
+					require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Content-Type"))
+					return &http.Response{
+						StatusCode: http.StatusUnsupportedMediaType,
+						Body:       io.NopCloser(bytes.NewBufferString("Expected request with `Content-Type: " + api.JsonMediaType + "`")),
+						Request:    r.Clone(ctx),
+					}, nil
+				}
+				require.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
+				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+				return &http.Response{
+					StatusCode: http.StatusAccepted,
+					Body:       io.NopCloser(bytes.NewBufferString("")),
+					Request:    r.Clone(ctx),
+				}, nil
+			}),
+		}
+		c := &Client{hc: hc, baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"}, sszEnabled: true}
+		sbbb, err := blocks.NewSignedBeaconBlock(testSignedBlindedBeaconBlockBellatrix(t))
+		require.NoError(t, err)
+		require.NoError(t, c.SubmitBlindedBlockPostFulu(ctx, sbbb))
+		require.Equal(t, 2, reqCount)
+		require.Equal(t, true, c.sszRejected.Load())
 	})
 
 	t.Run("error_response", func(t *testing.T) {

@@ -28,7 +28,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"golang.org/x/exp/rand"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -95,7 +94,7 @@ var DepositedValidatorsAreActive = e2etypes.Evaluator{
 	Evaluation: depositedValidatorsAreActive,
 }
 
-// ProposeVoluntaryExit sends a voluntary exit from randomly selected validator in the genesis set.
+// ProposeVoluntaryExit submits voluntary exits for eligible validators in the genesis set.
 // Uses the default exit submission epoch (7).
 var ProposeVoluntaryExit = ProposeVoluntaryExitAtEpoch(defaultExitSubmissionEpoch)
 
@@ -489,6 +488,7 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 		return err
 	}
 
+	exitsSubmitted := 0
 	var sendExit = func(exitedIndex primitives.ValidatorIndex) error {
 		voluntaryExit := &ethpb.VoluntaryExit{
 			Epoch:          chainHead.HeadEpoch,
@@ -517,6 +517,7 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 		}
 		pubk := bytesutil.ToBytes48(deposits[exitedIndex].Data.PublicKey)
 		ec.ExitedVals[pubk] = chainHead.HeadEpoch // Store submission epoch
+		exitsSubmitted++
 		return nil
 	}
 
@@ -527,23 +528,55 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 		}
 	}
 
-	// Send an exit for a non-exited validator.
-	for i := 0; i < numOfExits; {
-		randIndex := primitives.ValidatorIndex(rand.Uint64() % params.BeaconConfig().MinGenesisActiveValidatorCount)
-		randKey := bytesutil.ToBytes48(privKeys[randIndex].PublicKey().Marshal())
-		if _, alreadyExited := ec.ExitedVals[randKey]; alreadyExited {
-			continue
-		}
-		if syncCommitteeKeys[randKey] {
-			continue
-		}
-		if err := sendExit(randIndex); err != nil {
+	keys := make([][48]byte, len(privKeys))
+	for i, key := range privKeys {
+		keys[i] = bytesutil.ToBytes48(key.PublicKey().Marshal())
+	}
+	for _, candidate := range selectVoluntaryExitCandidates(keys, ec.ExitedVals, syncCommitteeKeys, numOfExits) {
+		if err := sendExit(candidate); err != nil {
 			return err
 		}
-		i++
 	}
 
+	return ensureVoluntaryExitSubmitted(exitsSubmitted)
+}
+
+func ensureVoluntaryExitSubmitted(count int) error {
+	if count == 0 {
+		return errors.New("no eligible validators available for voluntary exit")
+	}
 	return nil
+}
+
+func selectVoluntaryExitCandidates(keys [][48]byte, exited map[[48]byte]primitives.Epoch, reserved map[[48]byte]bool, limit int) []primitives.ValidatorIndex {
+	if limit <= 0 {
+		return nil
+	}
+
+	preferred := make([]primitives.ValidatorIndex, 0, limit)
+	fallback := make([]primitives.ValidatorIndex, 0, limit)
+	for i, key := range keys {
+		if _, alreadyExited := exited[key]; alreadyExited {
+			continue
+		}
+		if reserved[key] {
+			fallback = append(fallback, primitives.ValidatorIndex(i))
+			continue
+		}
+		preferred = append(preferred, primitives.ValidatorIndex(i))
+		if len(preferred) == limit {
+			return preferred
+		}
+	}
+
+	// With the mainnet E2E configuration, the sync committee contains every
+	// validator. Prefer non-members when they exist, but fall back to committee
+	// members so the voluntary-exit scenario still exercises exits and withdrawals.
+	candidates := append(preferred, fallback...)
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+	return candidates
 }
 
 func validatorsHaveExited(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {

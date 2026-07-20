@@ -10,9 +10,11 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func testExecutionPayloadBid() *eth.SignedExecutionPayloadBid {
@@ -105,4 +107,129 @@ func TestClient_GetExecutionPayloadBid(t *testing.T) {
 		require.ErrorContains(t, "text/html", err)
 		require.ErrorContains(t, "Buildoor", err)
 	})
+
+	t.Run("ssz request auth body", func(t *testing.T) {
+		auth := &eth.SignedRequestAuthV1{
+			Message:   &eth.RequestAuthV1{Data: []byte("http://builder.example"), Slot: 5},
+			Signature: bytes.Repeat([]byte{9}, 96),
+		}
+		wantBody, err := auth.MarshalSSZ()
+		require.NoError(t, err)
+		sszBid, err := want.MarshalSSZ()
+		require.NoError(t, err)
+		hc := &http.Client{
+			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				body, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
+				require.NoError(t, r.Body.Close())
+				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Content-Type"))
+				require.DeepEqual(t, wantBody, body)
+				h := http.Header{}
+				h.Set("Content-Type", api.OctetStreamMediaType)
+				return &http.Response{StatusCode: http.StatusOK, Header: h, Body: io.NopCloser(bytes.NewReader(sszBid)), Request: r}, nil
+			}),
+		}
+		c := &Client{hc: hc, baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"}, sszEnabled: true}
+		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, auth)
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		require.Equal(t, want.Message.Value, got.Message.Value)
+	})
+
+	t.Run("SSZ rejected falls back to JSON", func(t *testing.T) {
+		jsonBody, err := json.Marshal(struct {
+			Data *structs.SignedExecutionPayloadBid `json:"data"`
+		}{Data: structs.SignedExecutionPayloadBidFromConsensus(want)})
+		require.NoError(t, err)
+		var reqCount int
+		hc := &http.Client{
+			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				if r.Body != nil {
+					require.NoError(t, r.Body.Close())
+				}
+				reqCount++
+				if reqCount == 1 {
+					// The builder cannot produce an SSZ response; reject the octet-stream Accept
+					// header with a PLAIN-TEXT body (matching real builders, not a JSON error).
+					require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+					return &http.Response{StatusCode: http.StatusNotAcceptable, Body: io.NopCloser(bytes.NewBufferString("only " + api.JsonMediaType)), Request: r}, nil
+				}
+				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+				h := http.Header{}
+				h.Set("Content-Type", api.JsonMediaType)
+				return &http.Response{StatusCode: http.StatusOK, Header: h, Body: io.NopCloser(bytes.NewReader(jsonBody)), Request: r}, nil
+			}),
+		}
+		c := &Client{hc: hc, baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"}, sszEnabled: true}
+		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, nil)
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		require.Equal(t, 2, reqCount)
+		require.Equal(t, true, c.sszRejected.Load())
+		require.Equal(t, want.Message.Value, got.Message.Value)
+	})
+}
+
+func TestClient_SubmitSignedBeaconBlock_SSZFallback(t *testing.T) {
+	ctx := t.Context()
+	sb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockGloas())
+	require.NoError(t, err)
+	var reqCount int
+	hc := &http.Client{
+		Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+			require.NoError(t, r.Body.Close())
+			reqCount++
+			if reqCount == 1 {
+				// The builder does not support SSZ; reject the octet-stream body.
+				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Content-Type"))
+				return &http.Response{StatusCode: http.StatusUnsupportedMediaType, Body: io.NopCloser(bytes.NewBufferString("ssz not supported")), Request: r}, nil
+			}
+			require.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
+			return &http.Response{StatusCode: http.StatusAccepted, Body: io.NopCloser(bytes.NewReader(nil)), Request: r}, nil
+		}),
+	}
+	c := &Client{hc: hc, baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"}, sszEnabled: true}
+	require.NoError(t, c.SubmitSignedBeaconBlock(ctx, sb))
+	require.Equal(t, 2, reqCount)
+	require.Equal(t, true, c.sszRejected.Load())
+}
+
+func TestClient_SubmitBuilderPreferences_SSZFallback(t *testing.T) {
+	ctx := t.Context()
+	var pubkey [48]byte
+	req := &eth.BuilderPreferencesRequestV1{
+		Preferences: &eth.BuilderPreferencesV1{MaxExecutionPayment: 1000},
+		Auth: &eth.SignedRequestAuthV1{
+			Message:   &eth.RequestAuthV1{Data: []byte("http://builder.example"), Slot: 5},
+			Signature: bytes.Repeat([]byte{9}, 96),
+		},
+	}
+	var reqCount int
+	hc := &http.Client{
+		Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			require.NoError(t, r.Body.Close())
+			reqCount++
+			if reqCount == 1 {
+				// The builder does not support SSZ; reject the octet-stream body with a
+				// PLAIN-TEXT body, matching real Commit Boost (not a JSON error object).
+				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Content-Type"))
+				return &http.Response{StatusCode: http.StatusUnsupportedMediaType, Body: io.NopCloser(bytes.NewBufferString("Expected request with `Content-Type: " + api.JsonMediaType + "`")), Request: r}, nil
+			}
+			require.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
+			var decoded struct {
+				Preferences struct {
+					MaxExecutionPayment string `json:"max_execution_payment"`
+				} `json:"preferences"`
+			}
+			require.NoError(t, json.Unmarshal(body, &decoded))
+			require.Equal(t, "1000", decoded.Preferences.MaxExecutionPayment)
+			return &http.Response{StatusCode: http.StatusAccepted, Body: io.NopCloser(bytes.NewReader(nil)), Request: r}, nil
+		}),
+	}
+	c := &Client{hc: hc, baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"}, sszEnabled: true}
+	require.NoError(t, c.SubmitBuilderPreferences(ctx, pubkey, req))
+	require.Equal(t, 2, reqCount)
+	require.Equal(t, true, c.sszRejected.Load())
 }

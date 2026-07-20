@@ -313,7 +313,7 @@ func (fv *FakeValidator) DeleteGraffiti(_ context.Context, _ [fieldparams.BLSPub
 	return nil
 }
 
-func (*FakeValidator) StartEventStream(_ context.Context, _ []string) {
+func (*FakeValidator) EnsureEventStream(_ context.Context, _ []string) {
 
 }
 

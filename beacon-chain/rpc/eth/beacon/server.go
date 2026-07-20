@@ -58,6 +58,4 @@ type Server struct {
 	AttestationStateFetcher    blockchain.AttestationStateFetcher
 	// PayloadEnvelopeVerifier runs gossip-level checks on published envelopes.
 	PayloadEnvelopeVerifier verification.NewExecutionPayloadEnvelopeVerifier
-	// ExecutionPayloadEnvelopeCache reconstructs the full envelope in the blinded publish flow.
-	ExecutionPayloadEnvelopeCache *cache.ExecutionPayloadEnvelopeCache
 }

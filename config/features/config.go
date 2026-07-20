@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
+	validatorflags "github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/urfave/cli/v2"
@@ -37,7 +38,6 @@ const disabledFeatureFlag = "Disabled feature flag"
 // Flags is a struct to represent which features the client will perform on runtime.
 type Flags struct {
 	// Feature related flags.
-	WriteSSZStateTransitions            bool // WriteSSZStateTransitions to tmp directory.
 	EnablePeerScorer                    bool // EnablePeerScorer enables experimental peer scoring in p2p.
 	EnableLightClient                   bool // EnableLightClient enables light client APIs.
 	EnableQUIC                          bool // EnableQUIC specifies whether to enable QUIC transport for libp2p.
@@ -188,11 +188,6 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	}
 	if err := configureTestnet(ctx); err != nil {
 		return err
-	}
-
-	if ctx.Bool(writeSSZStateTransitionsFlag.Name) {
-		logEnabled(writeSSZStateTransitionsFlag)
-		cfg.WriteSSZStateTransitions = true
 	}
 
 	if ctx.Bool(saveInvalidBlockTempFlag.Name) {
@@ -357,7 +352,7 @@ func ConfigureValidator(ctx *cli.Context) error {
 		logEnabled(enableDoppelGangerProtection)
 		cfg.EnableDoppelGanger = true
 	}
-	if ctx.Bool(EnableBeaconRESTApi.Name) {
+	if ctx.Bool(EnableBeaconRESTApi.Name) || ctx.IsSet(validatorflags.BeaconRESTApiProviderFlag.Name) {
 		logEnabled(EnableBeaconRESTApi)
 		cfg.EnableBeaconRESTApi = true
 	}

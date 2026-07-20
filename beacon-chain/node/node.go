@@ -97,6 +97,7 @@ type BeaconNode struct {
 	db                        db.Database
 	slasherDB                 db.SlasherDatabase
 	attestationCache          *cache.AttestationCache
+	attestationDataCache      *cache.AttestationDataCache
 	attestationPool           attestations.Pool
 	payloadAttestationPool    payloadattestation.PoolManager
 	exitPool                  voluntaryexits.PoolManager
@@ -163,6 +164,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		blockFeed:                 new(event.Feed),
 		opFeed:                    new(event.Feed),
 		attestationCache:          cache.NewAttestationCache(),
+		attestationDataCache:      cache.NewAttestationDataCache(),
 		attestationPool:           attestations.NewPool(),
 		payloadAttestationPool:    payloadattestation.NewPool(),
 		exitPool:                  voluntaryexits.NewPool(),
@@ -761,6 +763,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithChainStartFetcher(web3Service),
 		blockchain.WithExecutionEngineCaller(web3Service),
 		blockchain.WithAttestationCache(b.attestationCache),
+		blockchain.WithAttestationDataCache(b.attestationDataCache),
 		blockchain.WithAttestationPool(b.attestationPool),
 		blockchain.WithExitPool(b.exitPool),
 		blockchain.WithSlashingPool(b.slashingsPool),
@@ -978,7 +981,6 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 	beaconMonitoringPort := b.cliCtx.Int(flags.MonitoringPortFlag.Name)
 	cert := b.cliCtx.String(flags.CertFlag.Name)
 	key := b.cliCtx.String(flags.KeyFlag.Name)
-	mockEth1DataVotes := b.cliCtx.Bool(flags.InteropMockEth1DataVotesFlag.Name)
 	maxMsgSize := b.cliCtx.Int(cmd.GrpcMaxCallRecvMsgSizeFlag.Name)
 	enableDebugRPCEndpoints := !b.cliCtx.Bool(flags.DisableDebugRPCEndpoints.Name)
 
@@ -997,6 +999,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		PeersFetcher:                     p2pService,
 		PeerManager:                      p2pService,
 		MetadataProvider:                 p2pService,
+		CustodyManager:                   p2pService,
 		ChainInfoFetcher:                 chainService,
 		HeadFetcher:                      chainService,
 		CanonicalFetcher:                 chainService,
@@ -1013,6 +1016,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		GenesisFetcher:                   chainService,
 		OptimisticModeFetcher:            chainService,
 		AttestationCache:                 b.attestationCache,
+		AttestationDataCache:             b.attestationDataCache,
 		AttestationsPool:                 b.attestationPool,
 		PayloadAttestationPool:           b.payloadAttestationPool,
 		ExitPool:                         b.exitPool,
@@ -1022,7 +1026,6 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		ExecutionChainService:            web3Service,
 		ExecutionChainInfoFetcher:        web3Service,
 		ChainStartFetcher:                chainStartFetcher,
-		MockEth1Votes:                    mockEth1DataVotes,
 		SyncService:                      syncService,
 		DepositFetcher:                   depositFetcher,
 		PendingDepositFetcher:            b.depositCache,

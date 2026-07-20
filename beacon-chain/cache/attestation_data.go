@@ -40,3 +40,11 @@ func (c *AttestationDataCache) Put(a *AttestationConsensusData) error {
 	c.a = a
 	return nil
 }
+
+// Clear evicts the cached response.
+func (c *AttestationDataCache) Clear() {
+	c.Lock()
+	defer c.Unlock()
+
+	c.a = nil
+}

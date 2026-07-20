@@ -147,6 +147,45 @@ func SignedProposerPreferencesFromConsensus(s *ethpb.SignedProposerPreferences) 
 	}
 }
 
+func RequestAuthFromConsensus(m *ethpb.RequestAuthV1) *RequestAuth {
+	if m == nil {
+		return nil
+	}
+	return &RequestAuth{
+		Data: hexutil.Encode(m.Data),
+		Slot: fmt.Sprintf("%d", m.Slot),
+	}
+}
+
+func SignedRequestAuthFromConsensus(s *ethpb.SignedRequestAuthV1) *SignedRequestAuth {
+	if s == nil {
+		return nil
+	}
+	return &SignedRequestAuth{
+		Message:   RequestAuthFromConsensus(s.Message),
+		Signature: hexutil.Encode(s.Signature),
+	}
+}
+
+func BuilderPreferencesFromConsensus(p *ethpb.BuilderPreferencesV1) *BuilderPreferences {
+	if p == nil {
+		return nil
+	}
+	return &BuilderPreferences{
+		MaxExecutionPayment: fmt.Sprintf("%d", p.MaxExecutionPayment),
+	}
+}
+
+func BuilderPreferencesRequestFromConsensus(r *ethpb.BuilderPreferencesRequestV1) *BuilderPreferencesRequest {
+	if r == nil {
+		return nil
+	}
+	return &BuilderPreferencesRequest{
+		Preferences: BuilderPreferencesFromConsensus(r.Preferences),
+		Auth:        SignedRequestAuthFromConsensus(r.Auth),
+	}
+}
+
 func ProposerPreferencesFromConsensus(p *ethpb.ProposerPreferences) *ProposerPreferences {
 	if p == nil {
 		return nil

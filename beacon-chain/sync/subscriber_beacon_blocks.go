@@ -9,7 +9,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition/interop"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -71,9 +70,6 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 			if r != [32]byte{} {
 				s.setBadBlock(ctx, r) // Setting head block as bad.
 			} else {
-				// TODO(13721): Remove this once we can deprecate the flag.
-				interop.WriteBlockToDisk(signed, true /*failed*/)
-
 				saveInvalidBlockToTemp(signed)
 				s.setBadBlock(ctx, root)
 			}

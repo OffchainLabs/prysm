@@ -300,3 +300,22 @@ type SignedProposerPreferences struct {
 	Message   *ProposerPreferences `json:"message"`
 	Signature string               `json:"signature"`
 }
+
+type RequestAuth struct {
+	Data string `json:"data"`
+	Slot string `json:"slot"`
+}
+
+type SignedRequestAuth struct {
+	Message   *RequestAuth `json:"message"`
+	Signature string       `json:"signature"`
+}
+
+type BuilderPreferences struct {
+	MaxExecutionPayment string `json:"max_execution_payment"`
+}
+
+type BuilderPreferencesRequest struct {
+	Preferences *BuilderPreferences `json:"preferences"`
+	Auth        *SignedRequestAuth  `json:"auth"`
+}

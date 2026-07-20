@@ -30,7 +30,7 @@ type beaconApiValidatorClient struct {
 	handler                 rest.Handler
 	nodeClient              *beaconApiNodeClient
 	beaconBlockConverter    BeaconBlockConverter
-	isEventStreamRunning    bool
+	eventStreamGuard        event.StreamGuard
 	stateless               bool
 	envelopeCache           *cache.ExecutionPayloadEnvelopeCache
 }
@@ -50,7 +50,6 @@ func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...i
 		handler:                 handler,
 		nodeClient:              nc,
 		beaconBlockConverter:    beaconApiBeaconBlockConverter{},
-		isEventStreamRunning:    false,
 		stateless:               cfg.Stateless,
 	}
 	if cfg.Stateless {
@@ -344,17 +343,25 @@ func (c *beaconApiValidatorClient) WaitForChainStart(ctx context.Context, _ *emp
 }
 
 func (c *beaconApiValidatorClient) StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *event.Event) {
+	// Replace any previous stream (e.g. bound to a pre-switch host) so two
+	// streams never feed the channel concurrently.
+	subCtx, finish := c.eventStreamGuard.Replace(ctx)
+	defer finish()
+
 	client := &http.Client{} // event stream should not be subject to the same settings as other api calls
 
-	c.isEventStreamRunning = true
-	defer func() { c.isEventStreamRunning = false }()
+	c.eventStreamGuard.MarkRunning(true)
+	defer c.eventStreamGuard.MarkRunning(false)
 
 	for {
-		eventStream, err := event.NewEventStream(ctx, client, c.handler.Host(), topics)
+		eventStream, err := event.NewEventStream(subCtx, client, c.handler.Host(), topics)
 		if err != nil {
-			eventsChannel <- &event.Event{
+			select {
+			case eventsChannel <- &event.Event{
 				EventType: event.EventError,
 				Data:      []byte(errors.Wrap(err, "failed to start event stream").Error()),
+			}:
+			case <-subCtx.Done():
 			}
 			return
 		}
@@ -380,9 +387,12 @@ func (c *beaconApiValidatorClient) StartEventStream(ctx context.Context, topics 
 		// If the subscription failed for any other reason,
 		// surface the error to the validator event loop and exit the stream.
 		if errors.As(err, &subErr) {
-			eventsChannel <- &event.Event{
+			select {
+			case eventsChannel <- &event.Event{
 				EventType: event.EventConnectionError,
 				Data:      []byte(err.Error()),
+			}:
+			case <-subCtx.Done():
 			}
 		}
 		return
@@ -390,7 +400,7 @@ func (c *beaconApiValidatorClient) StartEventStream(ctx context.Context, topics 
 }
 
 func (c *beaconApiValidatorClient) EventStreamIsRunning() bool {
-	return c.isEventStreamRunning
+	return c.eventStreamGuard.IsRunning()
 }
 
 func (c *beaconApiValidatorClient) AggregatedSelections(ctx context.Context, selections []iface.BeaconCommitteeSelection) ([]iface.BeaconCommitteeSelection, error) {
@@ -416,13 +426,6 @@ func wrapInMetrics[Resp any](action string, f func() (Resp, error)) (Resp, error
 	resp, err := f()
 	recordMetrics(action, now, err)
 	return resp, err
-}
-
-func wrapInMetrics2[R1, R2 any](action string, f func() (R1, R2, error)) (R1, R2, error) {
-	now := time.Now()
-	r1, r2, err := f()
-	recordMetrics(action, now, err)
-	return r1, r2, err
 }
 
 func recordMetrics(action string, start time.Time, err error) {
@@ -453,11 +456,11 @@ func (c *beaconApiValidatorClient) ConnectionGeneration() uint64 {
 
 // Gloas Fork Methods
 
-func (c *beaconApiValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, beaconBlockRoot [32]byte) (*ethpb.ExecutionPayloadEnvelope, *ethpb.WireBlindedExecutionPayloadEnvelope, error) {
+func (c *beaconApiValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, beaconBlockRoot [32]byte) (*ethpb.ExecutionPayloadEnvelope, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.GetExecutionPayloadEnvelope")
 	defer span.End()
 
-	return wrapInMetrics2("GetExecutionPayloadEnvelope", func() (*ethpb.ExecutionPayloadEnvelope, *ethpb.WireBlindedExecutionPayloadEnvelope, error) {
+	return wrapInMetrics[*ethpb.ExecutionPayloadEnvelope]("GetExecutionPayloadEnvelope", func() (*ethpb.ExecutionPayloadEnvelope, error) {
 		return c.getExecutionPayloadEnvelope(ctx, slot, beaconBlockRoot)
 	})
 }
@@ -468,15 +471,6 @@ func (c *beaconApiValidatorClient) PublishExecutionPayloadEnvelope(ctx context.C
 
 	return wrapInMetrics[*empty.Empty]("PublishExecutionPayloadEnvelope", func() (*empty.Empty, error) {
 		return c.publishExecutionPayloadEnvelope(ctx, in)
-	})
-}
-
-func (c *beaconApiValidatorClient) PublishBlindedExecutionPayloadEnvelope(ctx context.Context, in *ethpb.SignedWireBlindedExecutionPayloadEnvelope) (*empty.Empty, error) {
-	ctx, span := trace.StartSpan(ctx, "beacon-api.PublishBlindedExecutionPayloadEnvelope")
-	defer span.End()
-
-	return wrapInMetrics[*empty.Empty]("PublishBlindedExecutionPayloadEnvelope", func() (*empty.Empty, error) {
-		return c.publishBlindedExecutionPayloadEnvelope(ctx, in)
 	})
 }
 
