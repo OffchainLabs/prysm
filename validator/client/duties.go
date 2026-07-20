@@ -942,8 +942,7 @@ func (v *validator) checkDependentRoots(ctx context.Context, prevRoot, currRoot 
 	// Only act as a correction layer over an already-known next-epoch root. An
 	// unknown (nil) root — e.g. after a soft next-epoch attester failure — is left
 	// to the epoch boundary and per-slot RetryMissingNextDuties to refetch, rather
-	// than triggering a full UpdateDuties on every head event. Matches Lodestar's
-	// onNewHead, which skips epochs with no cached dependent root.
+	// than triggering a full UpdateDuties on every head event.
 	storedCurr := v.duties.currDependentRoot()
 	needsCurrUpdate := storedCurr != nil && !bytes.Equal(currDependentRoot, storedCurr)
 	if !needsCurrUpdate {
