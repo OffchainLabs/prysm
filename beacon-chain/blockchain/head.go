@@ -181,7 +181,7 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 
 	}()
 	go func() {
-		if err := s.notifyNewHeadV2Event(s.ctx, newHeadSlot, newStateRoot, newHeadRoot, headBlock.Version()); err != nil {
+		if err := s.notifyNewHeadV2Event(s.ctx, newHeadSlot, newStateRoot, newHeadRoot, headBlock.Version(), full); err != nil {
 			log.WithError(err).Error("Could not notify event feed of new chain head_v2")
 		}
 	}()
@@ -383,14 +383,23 @@ func (s *Service) notifyNewHeadEvent(
 }
 
 // notifyNewHeadV2Event emits the head_v2 event for the head at newHeadRoot.
-// This event can be emitted twice for the same head root, depending on
-// delivery of the execution payload.
 func (s *Service) notifyNewHeadV2Event(
 	ctx context.Context,
 	newHeadSlot primitives.Slot,
 	newHeadStateRoot, newHeadRoot [32]byte,
 	headVersion int,
+	full bool,
 ) error {
+	var payloadStatus statefeed.PayloadStatus = statefeed.PayloadStatusFull
+	if headVersion >= version.Gloas && !full {
+		payloadStatus = statefeed.PayloadStatusEmpty
+
+	}
+	s.headV2EventLock.Lock()
+	defer s.headV2EventLock.Unlock()
+	if newHeadRoot == s.lastHeadV2Root && payloadStatus == s.lastHeadV2Status {
+		return nil
+	}
 	currEpoch := slots.ToEpoch(newHeadSlot)
 	currentEpochDependentRoot, nextEpochDependentRoot, err := s.headEventDependentRoots(currEpoch)
 	if err != nil {
@@ -407,16 +416,7 @@ func (s *Service) notifyNewHeadV2Event(
 		return err
 	}
 
-	// The payload status is full when fork choice selects the full payload variant
-	// for the head. Otherwise — a post-Gloas head whose full payload does not beat
-	// the empty one (not yet delivered, or delivered but not voted canonical) — it
-	// is empty.
-	var payloadStatus statefeed.PayloadStatus
-	payloadStatus = statefeed.PayloadStatusFull
-	if headVersion >= version.Gloas && !s.FullBeatsEmpty(newHeadRoot) {
-		payloadStatus = statefeed.PayloadStatusEmpty
-	}
-
+	s.lastHeadV2Root, s.lastHeadV2Status = newHeadRoot, payloadStatus
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.NewHeadV2,
 		Data: &statefeed.HeadV2Data{
