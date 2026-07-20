@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -496,28 +496,12 @@ func (s *Service) GetBlobsV4(ctx context.Context, versionedHashes []common.Hash,
 	return result, handleRPCError(err)
 }
 
-// custodyColumnsBitmask encodes a custody column set as a 16-byte little-endian uint128 bitarray
-// (bit i of byte (i/8), LSB-first within byte), as expected by engine_forkchoiceUpdatedV4.
-func custodyColumnsBitmask(custodyColumns map[uint64]bool) []byte {
-	numberOfColumns := uint64(fieldparams.NumberOfColumns)
-	mask := make([]byte, 16)
-	for colIdx := range custodyColumns {
-		if colIdx < numberOfColumns {
-			mask[colIdx/8] |= 1 << (colIdx % 8)
-		}
+// custodyColumnsBitmask encodes the custody column set as the 16-byte bitarray
+// expected by engine_forkchoiceUpdatedV4 and engine_getBlobsV4.
+func custodyColumnsBitmask(custodyColumns map[uint64]bool) bitfield.Bitvector128 {
+	mask := bitfield.NewBitvector128()
+	for col := range custodyColumns {
+		mask.SetBitAt(col, true)
 	}
 	return mask
-}
-
-// custodyColumnsRequest returns the ascending list of custody column indices along with the 16-byte
-// little-endian bitarray (custodyColumnsBitmask) that encodes them, as expected by engine_getBlobsV4.
-func custodyColumnsRequest(custodyColumns map[uint64]bool) (requested []uint64, bitarray []byte) {
-	bitarray = custodyColumnsBitmask(custodyColumns)
-	numberOfColumns := uint64(fieldparams.NumberOfColumns)
-	for col := range numberOfColumns {
-		if bitarray[col/8]&(1<<(col%8)) != 0 {
-			requested = append(requested, col)
-		}
-	}
-	return requested, bitarray
 }

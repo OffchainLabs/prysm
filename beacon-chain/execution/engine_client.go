@@ -477,8 +477,8 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	if s.capabilityCache.has(GetBlobsV4) {
 		// requested is the ascending list of absolute custody column indices; the EL's response is
 		// dense: BlobCells[j]/Proofs[j] correspond to requested[j], not to absolute column j.
-		requested, indicesBitarray := custodyColumnsRequest(custodyColumns)
-		result, err := s.GetBlobsV4(ctx, versionedHashes, indicesBitarray)
+		indices := custodyColumnsBitmask(custodyColumns)
+		result, err := s.GetBlobsV4(ctx, versionedHashes, indices)
 		if err != nil {
 			return peerdas.StructuredCellsAndProofs{}, errors.Wrap(err, "get blobs V4")
 		}
@@ -496,9 +496,9 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 				}
 			}
 		}
-		getBlobsV4RequestedCellsTotal.Add(float64(len(requested) * len(result)))
+		getBlobsV4RequestedCellsTotal.Add(float64(len(custodyColumns) * len(result)))
 		getBlobsV4ReceivedCellsTotal.Add(float64(received))
-		return peerdas.CellsAndProofsFromStructured(commitmentCount, requested, result), nil
+		return peerdas.CellsAndProofsFromStructured(commitmentCount, indices, result), nil
 	}
 
 	var blobAndProofs []*pb.BlobAndProofV2

@@ -435,8 +435,8 @@ func ComputeCellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs 
 
 // CellsAndProofsFromStructured maps the getBlobsV4 response into a StructuredCellsAndProofs.
 // In the returned value, nil cells or proofs can exist to mark an absent entry.
-func CellsAndProofsFromStructured(commitmentCount uint64, requested []uint64, result []*pb.BlobCellsAndProofsV1) StructuredCellsAndProofs {
-	numberOfColumns := uint64(fieldparams.NumberOfColumns)
+func CellsAndProofsFromStructured(commitmentCount uint64, requested bitfield.Bitvector128, result []*pb.BlobCellsAndProofsV1) StructuredCellsAndProofs {
+	numberOfColumns := fieldparams.NumberOfColumns
 	perBlobCells := make([][]*kzg.Cell, len(result))
 	perBlobProofs := make([][]*kzg.Proof, len(result))
 	for i, blobCells := range result {
@@ -445,7 +445,7 @@ func CellsAndProofsFromStructured(commitmentCount uint64, requested []uint64, re
 		}
 		cells := make([]*kzg.Cell, numberOfColumns)
 		proofs := make([]*kzg.Proof, numberOfColumns)
-		for j, col := range requested {
+		for j, col := range requested.BitIndices() {
 			if col >= numberOfColumns || j >= len(blobCells.BlobCells) || j >= len(blobCells.Proofs) {
 				continue
 			}
