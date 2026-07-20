@@ -92,6 +92,10 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
+	// A seen block may live in the init-sync cache but not yet in the DB, so Block can return (nil, nil).
+	if err := blocks.BeaconBlockIsNil(block); err != nil {
+		return pubsub.ValidationIgnore, nil
+	}
 	// [REJECT] block.slot equals envelope.slot.
 	if err := v.VerifySlotMatchesBlock(block.Block().Slot()); err != nil {
 		return pubsub.ValidationReject, err

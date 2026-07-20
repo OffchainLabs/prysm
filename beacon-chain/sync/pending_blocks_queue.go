@@ -518,8 +518,15 @@ func (s *Service) fetchAndQueuePayloadEnvelopesForRoots(
 	}
 }
 
+// Signature is not verified here, processing revalidates fully and the slot bound plus caps bound memory.
 func (s *Service) queuePendingPayloadEnvelopeFromRootRequest(signedEnvelope *ethpb.SignedExecutionPayloadEnvelope) {
-	if signedEnvelope == nil || signedEnvelope.Message == nil {
+	if signedEnvelope == nil || signedEnvelope.Message == nil || signedEnvelope.Message.Payload == nil {
+		return
+	}
+	// A future slot would never fall below the finalized epoch, defeating pruning and pinning memory.
+	slot := primitives.Slot(signedEnvelope.Message.Payload.SlotNumber)
+	if slot > s.cfg.clock.CurrentSlot() {
+		log.WithField("envelopeSlot", slot).Debug("Ignoring fetched payload envelope with future slot")
 		return
 	}
 
@@ -530,6 +537,17 @@ func (s *Service) queuePendingPayloadEnvelopeFromRootRequest(signedEnvelope *eth
 	defer s.pendingEnvelopeLock.Unlock()
 
 	inner, ok := s.pendingPayloadEnvelopes[root]
+	if !ok && len(s.pendingPayloadEnvelopes) >= maxPendingPayloadRoots {
+		log.Debug("Too many pending payload roots, ignoring fetched payload envelope")
+		return
+	}
+	if len(inner) >= maxPendingBuildersPerRoot {
+		log.Debug("Too many pending builders for root, ignoring fetched payload envelope")
+		return
+	}
+	if _, exists := inner[builderIdx]; exists {
+		return
+	}
 	if !ok {
 		inner = make(map[uint64]*ethpb.SignedExecutionPayloadEnvelope)
 		s.pendingPayloadEnvelopes[root] = inner

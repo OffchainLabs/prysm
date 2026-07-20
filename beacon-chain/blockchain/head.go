@@ -163,6 +163,10 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 		return errors.Wrap(err, "could not set head")
 	}
 
+	if c := s.cfg.AttestationDataCache; c != nil {
+		go c.Clear()
+	}
+
 	// Save the new head root to DB.
 	if err := s.cfg.BeaconDB.SaveHeadBlockRoot(ctx, newHeadRoot); err != nil {
 		return errors.Wrap(err, "could not save head root in DB")

@@ -307,7 +307,7 @@ func TestProduceBlockV4_SSZ_IncludePayloadTrue(t *testing.T) {
 	assert.Equal(t, true, writer.Body.Len() > 0)
 }
 
-// GET returns blinded SSZ that must roundtrip with HTR matching the full envelope.
+// GET returns the full envelope SSZ that must roundtrip with a matching HTR.
 func TestExecutionPayloadEnvelope_SSZ(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -316,11 +316,9 @@ func TestExecutionPayloadEnvelope_SSZ(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	envelope := testEnvelope()
-	wireBlinded, err := envelope.WireBlinded()
-	require.NoError(t, err)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 	v1alpha1Server.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).Return(
-		&eth.ExecutionPayloadEnvelopeResponse{Blinded: wireBlinded}, nil,
+		&eth.ExecutionPayloadEnvelopeResponse{Envelope: envelope}, nil,
 	)
 
 	server := &Server{V1Alpha1Server: v1alpha1Server}
@@ -336,11 +334,11 @@ func TestExecutionPayloadEnvelope_SSZ(t *testing.T) {
 	assert.Equal(t, "application/octet-stream", writer.Header().Get("Content-Type"))
 	assert.Equal(t, version.String(version.Gloas), writer.Header().Get("Eth-Consensus-Version"))
 
-	blinded := &eth.WireBlindedExecutionPayloadEnvelope{}
-	require.NoError(t, blinded.UnmarshalSSZ(writer.Body.Bytes()))
+	decoded := &eth.ExecutionPayloadEnvelope{}
+	require.NoError(t, decoded.UnmarshalSSZ(writer.Body.Bytes()))
 	wantHTR, err := envelope.HashTreeRoot()
 	require.NoError(t, err)
-	gotHTR, err := blinded.HashTreeRoot()
+	gotHTR, err := decoded.HashTreeRoot()
 	require.NoError(t, err)
 	assert.Equal(t, wantHTR, gotHTR)
 }
@@ -353,11 +351,9 @@ func TestExecutionPayloadEnvelope_BeaconBlockRootMismatch(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	envelope := testEnvelope()
-	wireBlinded, err := envelope.WireBlinded()
-	require.NoError(t, err)
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 	v1alpha1Server.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).Return(
-		&eth.ExecutionPayloadEnvelopeResponse{Blinded: wireBlinded}, nil,
+		&eth.ExecutionPayloadEnvelopeResponse{Envelope: envelope}, nil,
 	)
 
 	server := &Server{V1Alpha1Server: v1alpha1Server}

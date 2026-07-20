@@ -228,6 +228,38 @@ func TestValidateDataColumnGloas(t *testing.T) {
 		require.ErrorContains(t, "slot does not match block slot", err)
 	})
 
+	t.Run("block seen in cache but absent from db does not panic", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.DenebForkEpoch, cfg.ElectraForkEpoch, cfg.FuluForkEpoch, cfg.GloasForkEpoch = 0, 0, 0, 0
+		params.OverrideBeaconConfig(cfg)
+
+		sidecar, signedBlock := gloasFixture(t)
+		service, _ := serviceAndMessage(t, testVerifierReturnsAll(&verification.MockDataColumnsVerifier{}), sidecar, sidecar.Index)
+		blockRoot, err := signedBlock.Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		db := dbtest.SetupDB(t)
+		// HasBlock reports the root as seen (init-sync cache) but the block is not saved, so beaconDB.Block is nil.
+		chainService := &mock.ChainService{
+			Genesis:            time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+			DB:                 db,
+			InitSyncBlockRoots: map[[32]byte]bool{blockRoot: true},
+		}
+		service.cfg.beaconDB = db
+		service.cfg.chain = chainService
+
+		roDataColumn, err := blocks.NewRODataColumnGloasWithRoot(sidecar, blockRoot)
+		require.NoError(t, err)
+		digest, err := service.currentForkDigest()
+		require.NoError(t, err)
+		topic := service.addDigestAndIndexToTopic(p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.DataColumnSidecarGloas]()], digest, peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index))
+		msg := &pubsub.Message{Message: &pb.Message{Topic: &topic}}
+
+		_, err = service.validateDataColumnGloas(ctx, "aDummyPID", msg, roDataColumn, "/data_column_sidecar_%d/")
+		require.ErrorContains(t, "signed beacon block can't be nil", err)
+	})
+
 	t.Run("rejects oversize column on queue path", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig()

@@ -71,6 +71,10 @@ func (s *Service) validateDataColumnGloas(
 	if err != nil {
 		return blocks.VerifiedRODataColumn{}, ignoreValidation(err)
 	}
+	// A seen block may live in the init-sync cache but not yet in the DB, so Block can return (nil, nil).
+	if err := blocks.BeaconBlockIsNil(block); err != nil {
+		return blocks.VerifiedRODataColumn{}, ignoreValidation(err)
+	}
 	verifier := verification.NewGloasDataColumnVerifier(roDataColumn, block.Block(), verification.GossipDataColumnSidecarRequirementsGloas)
 	verifier.SatisfyRequirement(verification.RequireBlockSeenGloas)
 
