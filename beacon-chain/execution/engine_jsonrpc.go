@@ -482,7 +482,7 @@ func (s *Service) HasBlobs(ctx context.Context, versionedHashes []common.Hash) (
 
 // GetBlobsV4 calls the engine_getBlobsV4 method via JSON-RPC.
 // It fetches blob cells and KZG proofs for the given versioned hashes
-// and the bitarray of custody bitmap
+// and a bitarray of the custody columns.
 func (s *Service) GetBlobsV4(ctx context.Context, versionedHashes []common.Hash, indicesBitarray []byte) ([]*pb.BlobCellsAndProofsV1, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsV4")
 	defer span.End()

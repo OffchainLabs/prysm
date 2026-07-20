@@ -2856,7 +2856,7 @@ func newV4Client(t *testing.T, result []*pb.BlobCellsAndProofsV1, partialColumns
 }
 
 // TestFetchCellsAndProofsFromExecutionV4 tests the engine_getBlobsV4 path of
-// fetchCellsAndProofsFromExecutio.
+// fetchCellsAndProofsFromExecution.
 func TestFetchCellsAndProofsFromExecutionV4(t *testing.T) {
 	custodyColumns := map[uint64]bool{3: true, 7: true, 50: true}
 	requested := []uint64{3, 7, 50}

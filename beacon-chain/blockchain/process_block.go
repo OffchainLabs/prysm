@@ -1288,7 +1288,7 @@ func (s *Service) custodyColumnsForFCU(ctx context.Context) map[uint64]bool {
 	}
 
 	// If we are the upcoming proposer (this slot or the next two), add the first-half columns
-	// to the custody set. This allow the execution client to get enough full-blob data
+	// to the custody set. This allows the execution client to get enough full-blob data
 	// to include in the proposal.
 	if headState != nil {
 		currentSlot := s.CurrentSlot()
