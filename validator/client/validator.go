@@ -1353,6 +1353,7 @@ func (v *validator) submittedPrefSlotsCount() int {
 // preferences to submit for it, with per-entry overrides already applied.
 type builderTarget struct {
 	url         string
+	authData    []byte
 	maxPayment  uint64
 	minBid      *uint64
 	boostFactor *uint64
@@ -1391,7 +1392,7 @@ func (v *validator) builderTargetsForKey(pk pubkey) []builderTarget {
 		if e == nil || e.URL == "" {
 			continue
 		}
-		t := builderTarget{url: e.URL, maxPayment: fbMax, minBid: fbMin, boostFactor: fbBoost}
+		t := builderTarget{url: e.URL, authData: e.AuthData, maxPayment: fbMax, minBid: fbMin, boostFactor: fbBoost}
 		if e.MaxExecutionPayment != nil {
 			t.maxPayment = uint64(*e.MaxExecutionPayment)
 		}
@@ -1445,7 +1446,7 @@ func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km key
 				continue
 			}
 			for _, t := range targets {
-				if _, err := v.signRequestAuthCached(ctx, km, pk, t.url, proposalSlot); err != nil {
+				if _, err := v.signRequestAuthCached(ctx, km, pk, t.url, t.authData, proposalSlot); err != nil {
 					log.WithError(err).Warn("Failed to sign builder request auth")
 				}
 			}
@@ -1457,17 +1458,10 @@ func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km key
 // inline on the block request for pk's proposal at slot, pairing each cached
 // signed auth with its resolved caps.
 func (v *validator) buildBuilderPreferencesForSlot(pk pubkey, slot primitives.Slot) []*ethpb.BuilderPreferenceV1 {
-	auths := v.builderRequestAuthsForSlot(pk, slot)
-	if len(auths) == 0 {
-		return nil
-	}
-	capsByURL := make(map[string]builderTarget)
-	for _, t := range v.builderTargetsForKey(pk) {
-		capsByURL[t.url] = t
-	}
-	prefs := make([]*ethpb.BuilderPreferenceV1, 0, len(auths))
-	for _, auth := range auths {
-		t, ok := capsByURL[string(auth.GetMessage().GetData())]
+	targets := v.builderTargetsForKey(pk)
+	prefs := make([]*ethpb.BuilderPreferenceV1, 0, len(targets))
+	for _, t := range targets {
+		auth, ok := v.signedRequestAuthFor(pk, t.url, slot)
 		if !ok {
 			continue
 		}
@@ -1476,6 +1470,7 @@ func (v *validator) buildBuilderPreferencesForSlot(pk pubkey, slot primitives.Sl
 				Preferences: &ethpb.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(t.maxPayment)},
 				Auth:        auth,
 			},
+			Url:                t.url,
 			BuilderBoostFactor: t.boostFactor,
 		}
 		if t.minBid != nil {
@@ -1483,6 +1478,9 @@ func (v *validator) buildBuilderPreferencesForSlot(pk pubkey, slot primitives.Sl
 			p.MinBid = &g
 		}
 		prefs = append(prefs, p)
+	}
+	if len(prefs) == 0 {
+		return nil
 	}
 	return prefs
 }

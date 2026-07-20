@@ -20,18 +20,6 @@ type requestAuthKey struct {
 	relay string
 }
 
-func (v *validator) builderRequestAuthsForSlot(pk pubkey, slot primitives.Slot) []*ethpb.SignedRequestAuthV1 {
-	v.signedRequestAuthsLock.Lock()
-	defer v.signedRequestAuthsLock.Unlock()
-	var auths []*ethpb.SignedRequestAuthV1
-	for k, signed := range v.signedRequestAuths {
-		if k.pk == pk && k.slot == slot {
-			auths = append(auths, signed)
-		}
-	}
-	return auths
-}
-
 func (v *validator) pruneSignedRequestAuths(slot primitives.Slot) {
 	v.signedRequestAuthsLock.Lock()
 	defer v.signedRequestAuthsLock.Unlock()
@@ -42,7 +30,10 @@ func (v *validator) pruneSignedRequestAuths(slot primitives.Slot) {
 	}
 }
 
-func (v *validator) signRequestAuthCached(ctx context.Context, km keymanager.IKeymanager, pk pubkey, relay string, slot primitives.Slot) (*ethpb.SignedRequestAuthV1, error) {
+// signRequestAuthCached signs a request auth for the (pk, relay, slot) tuple. Per
+// builder-specs 5078eab the signed data is the opaque authData agreed with the
+// builder out of band, not the builder URL; the URL is keyed separately.
+func (v *validator) signRequestAuthCached(ctx context.Context, km keymanager.IKeymanager, pk pubkey, relay string, authData []byte, slot primitives.Slot) (*ethpb.SignedRequestAuthV1, error) {
 	key := requestAuthKey{pk: pk, slot: slot, relay: relay}
 	v.signedRequestAuthsLock.Lock()
 	signed, ok := v.signedRequestAuths[key]
@@ -50,7 +41,7 @@ func (v *validator) signRequestAuthCached(ctx context.Context, km keymanager.IKe
 	if ok {
 		return signed, nil
 	}
-	signed, err := v.signRequestAuth(ctx, km, pk, &ethpb.RequestAuthV1{Data: []byte(relay), Slot: slot})
+	signed, err := v.signRequestAuth(ctx, km, pk, &ethpb.RequestAuthV1{Data: authData, Slot: slot})
 	if err != nil {
 		return nil, err
 	}
@@ -61,6 +52,14 @@ func (v *validator) signRequestAuthCached(ctx context.Context, km keymanager.IKe
 	v.signedRequestAuths[key] = signed
 	v.signedRequestAuthsLock.Unlock()
 	return signed, nil
+}
+
+// signedRequestAuthFor returns the cached signed auth for the (pk, relay, slot) tuple.
+func (v *validator) signedRequestAuthFor(pk pubkey, relay string, slot primitives.Slot) (*ethpb.SignedRequestAuthV1, bool) {
+	v.signedRequestAuthsLock.Lock()
+	defer v.signedRequestAuthsLock.Unlock()
+	signed, ok := v.signedRequestAuths[requestAuthKey{pk: pk, slot: slot, relay: relay}]
+	return signed, ok
 }
 
 // Domain is fork-independent: compute_domain(DOMAIN_REQUEST_AUTH) with genesis fork version and zero genesis validators root.

@@ -56,8 +56,8 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 				log.WithError(glErr).Error("Could not get parent gas limit for builder bid request")
 			default:
 				pubkey := val.PublicKey()
-				var auths []*ethpb.SignedRequestAuthV1
-				auths, prefs = builderAuthsAndPrefs(builderPreferences)
+				var authsByURL map[string]*ethpb.SignedRequestAuthV1
+				authsByURL, prefs = builderAuthsAndPrefs(builderPreferences)
 				pref := vs.proposerPreferenceForProposal(ctx, head, sBlk.Block().Slot(), sBlk.Block().ProposerIndex())
 				feeRecipient := pref.FeeRecipientOrDefault()
 				builderBid, builderURL = vs.getBuilderExecutionPayloadBid(ctx, head, &builderBidQuery{
@@ -69,7 +69,7 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 					feeRecipient:   feeRecipient[:],
 					parentGasLimit: parentGasLimit,
 					targetGasLimit: pref.GasLimitOr(parentGasLimit),
-					auths:          auths,
+					authsByURL:     authsByURL,
 				})
 			}
 		}
@@ -124,15 +124,17 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 // the block request. The effective preferences use the first valid entry as the
 // proposal baseline. The beacon node enforces the caps locally during bid
 // selection; communicating preferences to the builder is left to the bid request.
-func builderAuthsAndPrefs(prefs []*ethpb.BuilderPreferenceV1) ([]*ethpb.SignedRequestAuthV1, bidPreferences) {
-	auths := make([]*ethpb.SignedRequestAuthV1, 0, len(prefs))
+func builderAuthsAndPrefs(prefs []*ethpb.BuilderPreferenceV1) (map[string]*ethpb.SignedRequestAuthV1, bidPreferences) {
+	authsByURL := make(map[string]*ethpb.SignedRequestAuthV1, len(prefs))
 	bp := bidPreferences{boostFactor: neutralBuilderBoostFactor}
 	baselineSet := false
 	for _, p := range prefs {
-		if p == nil || p.Request == nil || p.Request.Auth == nil {
+		if p == nil || p.Request == nil || p.Request.Auth == nil || p.Url == "" {
 			continue
 		}
-		auths = append(auths, p.Request.Auth)
+		if _, ok := authsByURL[p.Url]; !ok {
+			authsByURL[p.Url] = p.Request.Auth
+		}
 		if !baselineSet {
 			bp.maxPayment = uint64(p.Request.Preferences.GetMaxExecutionPayment())
 			if p.MinBid != nil {
@@ -144,5 +146,5 @@ func builderAuthsAndPrefs(prefs []*ethpb.BuilderPreferenceV1) ([]*ethpb.SignedRe
 			baselineSet = true
 		}
 	}
-	return auths, bp
+	return authsByURL, bp
 }

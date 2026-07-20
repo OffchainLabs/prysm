@@ -54,6 +54,14 @@ func newMultiplexService(t *testing.T, clients map[string]*fakeBuilderClient) *S
 	return s
 }
 
+func authsByURL(urls ...string) map[string]*eth.SignedRequestAuthV1 {
+	m := make(map[string]*eth.SignedRequestAuthV1, len(urls))
+	for _, u := range urls {
+		m[u] = authFor(u)
+	}
+	return m
+}
+
 func TestGetExecutionPayloadBid_FanOutAndDedup(t *testing.T) {
 	clients := map[string]*fakeBuilderClient{
 		"http://a": {url: "http://a", bid: bidWithValue(100)},
@@ -61,8 +69,7 @@ func TestGetExecutionPayloadBid_FanOutAndDedup(t *testing.T) {
 	}
 	s := newMultiplexService(t, clients)
 
-	auths := []*eth.SignedRequestAuthV1{authFor("http://a"), authFor("http://b"), authFor("http://a")}
-	bids, err := s.GetExecutionPayloadBid(t.Context(), 1, [32]byte{}, [32]byte{}, [48]byte{}, auths)
+	bids, err := s.GetExecutionPayloadBid(t.Context(), 1, [32]byte{}, [32]byte{}, [48]byte{}, authsByURL("http://a", "http://b"))
 	require.NoError(t, err)
 	require.Equal(t, 2, len(bids))
 
@@ -83,8 +90,7 @@ func TestGetExecutionPayloadBid_SkipsErrorsAndNil(t *testing.T) {
 	s := newMultiplexService(t, clients)
 
 	// http://nodial has no client; dialing it fails and is skipped.
-	auths := []*eth.SignedRequestAuthV1{authFor("http://ok"), authFor("http://err"), authFor("http://none"), authFor("http://nodial")}
-	bids, err := s.GetExecutionPayloadBid(t.Context(), 1, [32]byte{}, [32]byte{}, [48]byte{}, auths)
+	bids, err := s.GetExecutionPayloadBid(t.Context(), 1, [32]byte{}, [32]byte{}, [48]byte{}, authsByURL("http://ok", "http://err", "http://none", "http://nodial"))
 	require.NoError(t, err)
 	require.Equal(t, 1, len(bids))
 	require.Equal(t, "http://ok", bids[0].BuilderURL)

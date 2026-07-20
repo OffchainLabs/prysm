@@ -54,4 +54,7 @@ message BuilderPreferenceV1 {
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
   ];
   optional uint64 builder_boost_factor = 3;
+  // url identifies the builder. Per builder-specs 5078eab the signed request auth
+  // data is opaque, so the URL is no longer recoverable from it and is carried here.
+  string url = 4;
 }

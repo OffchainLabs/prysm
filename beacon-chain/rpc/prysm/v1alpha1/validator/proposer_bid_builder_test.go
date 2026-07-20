@@ -260,12 +260,16 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 		return &fakeBidVerifier{}
 	}
 	query := func(auths []*ethpb.SignedRequestAuthV1) *builderBidQuery {
+		byURL := make(map[string]*ethpb.SignedRequestAuthV1, len(auths))
+		for _, a := range auths {
+			byURL[string(a.GetMessage().GetData())] = a
+		}
 		return &builderBidQuery{
 			slot:       slot,
 			parentRoot: parentRoot,
 			parentHash: parentHash,
 			pubkey:     pubkey,
-			auths:      auths,
+			authsByURL: byURL,
 		}
 	}
 

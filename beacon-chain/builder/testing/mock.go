@@ -134,7 +134,7 @@ func (s *MockBuilderService) SubmitBlindedBlockPostFulu(_ context.Context, _ int
 }
 
 // GetExecutionPayloadBid for mocking.
-func (s *MockBuilderService) GetExecutionPayloadBid(_ context.Context, _ primitives.Slot, _, _ [32]byte, _ [48]byte, _ []*ethpb.SignedRequestAuthV1) ([]beaconbuilder.PayloadBid, error) {
+func (s *MockBuilderService) GetExecutionPayloadBid(_ context.Context, _ primitives.Slot, _, _ [32]byte, _ [48]byte, _ map[string]*ethpb.SignedRequestAuthV1) ([]beaconbuilder.PayloadBid, error) {
 	if s.PayloadBids != nil {
 		return s.PayloadBids, s.ErrGetExecutionPayloadBid
 	}

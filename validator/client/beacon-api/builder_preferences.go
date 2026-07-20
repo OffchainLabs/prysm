@@ -14,6 +14,7 @@ type builderPreferencesBody struct {
 }
 
 type builderPreferenceReq struct {
+	Url                 string                `json:"url"`
 	SignedRequestAuth   *signedRequestAuthReq `json:"signed_request_auth"`
 	MaxExecutionPayment string                `json:"max_execution_payment"`
 	MinBid              string                `json:"min_bid,omitempty"`
@@ -38,6 +39,7 @@ func marshalBuilderPreferences(prefs []*ethpb.BuilderPreferenceV1) ([]byte, erro
 			continue
 		}
 		req := &builderPreferenceReq{
+			Url:                 p.Url,
 			MaxExecutionPayment: strconv.FormatUint(uint64(p.Request.Preferences.GetMaxExecutionPayment()), 10),
 			SignedRequestAuth: &signedRequestAuthReq{
 				Message: &requestAuthReq{

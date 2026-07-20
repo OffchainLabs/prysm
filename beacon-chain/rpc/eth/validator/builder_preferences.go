@@ -19,6 +19,7 @@ type produceBlockV4Request struct {
 }
 
 type builderPreferenceJson struct {
+	Url                 string                 `json:"url"`
 	SignedRequestAuth   *signedRequestAuthJson `json:"signed_request_auth"`
 	MaxExecutionPayment string                 `json:"max_execution_payment"`
 	MinBid              string                 `json:"min_bid,omitempty"`
@@ -80,6 +81,7 @@ func (p *builderPreferenceJson) toConsensus(i int) (*eth.BuilderPreferenceV1, er
 		return nil, errors.Errorf("builder_preferences[%d].signed_request_auth.signature is not valid hex", i)
 	}
 	out := &eth.BuilderPreferenceV1{
+		Url: p.Url,
 		Request: &eth.BuilderPreferencesRequestV1{
 			Preferences: &eth.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(maxPayment)},
 			Auth: &eth.SignedRequestAuthV1{
