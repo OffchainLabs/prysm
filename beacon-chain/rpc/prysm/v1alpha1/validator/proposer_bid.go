@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -132,7 +133,11 @@ func effectiveBidValue(bid *ethpb.SignedExecutionPayloadBid, maxExecutionPayment
 	if uint64(payment) > maxExecutionPayment {
 		payment = primitives.Gwei(maxExecutionPayment)
 	}
-	return bid.Message.Value + payment
+	sum := bid.Message.Value + payment
+	if sum < bid.Message.Value {
+		return primitives.Gwei(math.MaxUint64)
+	}
+	return sum
 }
 
 // builderBidQuery carries the proposal context builder bids are requested and validated against.

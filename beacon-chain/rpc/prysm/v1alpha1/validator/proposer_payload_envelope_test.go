@@ -6,7 +6,9 @@ import (
 	"bytes"
 	"context"
 	"math/big"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
@@ -23,6 +25,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 func testGloasBlock(t *testing.T) (*consensusblocks.GetPayloadResponse, interfaces.SignedBeaconBlock) {
@@ -119,7 +122,7 @@ func TestGetExecutionPayloadEnvelopeRPC_PreFork(t *testing.T) {
 func TestPublishExecutionPayloadEnvelope_NilRequest(t *testing.T) {
 	vs := &Server{}
 	_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), nil)
-	require.ErrorContains(t, "must set contents or blinded", err)
+	require.ErrorContains(t, "must set contents or signed_envelope", err)
 
 	_, err = vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
 		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Contents{
@@ -232,13 +235,78 @@ func TestGetExecutionPayloadEnvelopeRPC_Success(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	// The RPC returns the blinded wire form; its HTR must equal the cached full envelope's HTR.
-	require.NotNil(t, resp.Blinded)
+	require.NotNil(t, resp.Envelope)
 	wantHTR, err := envelope.HashTreeRoot()
 	require.NoError(t, err)
-	gotHTR, err := resp.Blinded.HashTreeRoot()
+	gotHTR, err := resp.Envelope.HashTreeRoot()
 	require.NoError(t, err)
 	require.Equal(t, wantHTR, gotHTR)
+}
+
+// Stateful publish: bare signed_envelope arm must match the cached envelope by HTR.
+func TestPublishExecutionPayloadEnvelope_SignedEnvelopeArm(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	envelope := &ethpb.ExecutionPayloadEnvelope{
+		Payload: &enginev1.ExecutionPayloadGloas{
+			ParentHash:    make([]byte, 32),
+			FeeRecipient:  make([]byte, 20),
+			StateRoot:     make([]byte, 32),
+			ReceiptsRoot:  make([]byte, 32),
+			LogsBloom:     make([]byte, 256),
+			PrevRandao:    make([]byte, 32),
+			BaseFeePerGas: make([]byte, 32),
+			BlockHash:     make([]byte, 32),
+			ExtraData:     make([]byte, 0),
+			SlotNumber:    1,
+		},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
+		BuilderIndex:          0,
+		BeaconBlockRoot:       make([]byte, 32),
+		ParentBeaconBlockRoot: make([]byte, 32),
+	}
+	signed := &ethpb.SignedExecutionPayloadEnvelope{Message: envelope, Signature: make([]byte, 96)}
+	statefulReq := &ethpb.GenericSignedExecutionPayloadEnvelope{
+		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_SignedEnvelope{SignedEnvelope: signed},
+	}
+
+	t.Run("cache miss", func(t *testing.T) {
+		vs := &Server{ExecutionPayloadEnvelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
+		_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), statefulReq)
+		require.ErrorContains(t, "no cached blobs and KZG proofs", err)
+		require.Equal(t, codes.FailedPrecondition, status.Code(err))
+	})
+
+	t.Run("cached envelope mismatch", func(t *testing.T) {
+		tampered := proto.Clone(envelope).(*ethpb.ExecutionPayloadEnvelope)
+		tampered.BuilderIndex = envelope.BuilderIndex + 1
+		vs := &Server{ExecutionPayloadEnvelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
+		vs.ExecutionPayloadEnvelopeCache.Set(&cache.ExecutionPayloadContents{Envelope: tampered})
+		_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), statefulReq)
+		require.ErrorContains(t, "does not match submitted envelope", err)
+		require.Equal(t, codes.InvalidArgument, status.Code(err))
+	})
+
+	t.Run("success", func(t *testing.T) {
+		broadcaster := &mockp2p.MockBroadcaster{}
+		receiver := &mockExecutionPayloadEnvelopeReceiver{done: make(chan struct{})}
+		vs := &Server{
+			Ctx:                              t.Context(),
+			P2P:                              broadcaster,
+			ExecutionPayloadEnvelopeReceiver: receiver,
+			ExecutionPayloadEnvelopeCache:    cache.NewExecutionPayloadEnvelopeCache(),
+		}
+		vs.ExecutionPayloadEnvelopeCache.Set(&cache.ExecutionPayloadContents{Envelope: envelope})
+		resp, err := vs.PublishExecutionPayloadEnvelope(t.Context(), statefulReq)
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		require.Equal(t, true, broadcaster.BroadcastCalled.Load())
+		waitForEnvelopeImport(t, receiver)
+		require.Equal(t, int32(1), receiver.calls.Load())
+	})
 }
 
 func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
@@ -248,8 +316,9 @@ func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	broadcaster := &mockp2p.MockBroadcaster{}
-	receiver := &mockExecutionPayloadEnvelopeReceiver{}
+	receiver := &mockExecutionPayloadEnvelopeReceiver{done: make(chan struct{})}
 	vs := &Server{
+		Ctx:                              t.Context(),
 		P2P:                              broadcaster,
 		ExecutionPayloadEnvelopeReceiver: receiver,
 	}
@@ -285,18 +354,20 @@ func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
 	require.NotNil(t, resp)
 	require.Equal(t, true, broadcaster.BroadcastCalled.Load())
 	require.Equal(t, 1, len(broadcaster.BroadcastMessages))
-	require.Equal(t, 1, receiver.calls)
+	waitForEnvelopeImport(t, receiver)
+	require.Equal(t, int32(1), receiver.calls.Load())
 }
 
-func TestPublishExecutionPayloadEnvelope_ImportFailureIsAborted(t *testing.T) {
+func TestPublishExecutionPayloadEnvelope_ImportFailureDoesNotFailPublish(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
 	broadcaster := &mockp2p.MockBroadcaster{}
-	receiver := &mockExecutionPayloadEnvelopeReceiver{err: errors.New("import failed")}
+	receiver := &mockExecutionPayloadEnvelopeReceiver{err: errors.New("import failed"), done: make(chan struct{})}
 	vs := &Server{
+		Ctx:                              t.Context(),
 		P2P:                              broadcaster,
 		ExecutionPayloadEnvelopeReceiver: receiver,
 	}
@@ -322,23 +393,37 @@ func TestPublishExecutionPayloadEnvelope_ImportFailureIsAborted(t *testing.T) {
 		Signature: make([]byte, 96),
 	}
 
-	_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
+	resp, err := vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
 		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Contents{
 			Contents: &ethpb.SignedExecutionPayloadEnvelopeContents{SignedExecutionPayloadEnvelope: req},
 		},
 	})
-	require.NotNil(t, err)
-	// Broadcast must have happened before the import failure (spec 202).
+	// Background import failure must not fail the publish.
+	require.NoError(t, err)
+	require.NotNil(t, resp)
 	require.Equal(t, true, broadcaster.BroadcastCalled.Load())
-	require.Equal(t, codes.Aborted, status.Code(err))
+	waitForEnvelopeImport(t, receiver)
 }
 
 type mockExecutionPayloadEnvelopeReceiver struct {
-	calls int
+	calls atomic.Int32
 	err   error
+	done  chan struct{}
 }
 
 func (m *mockExecutionPayloadEnvelopeReceiver) ReceiveExecutionPayloadEnvelope(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
-	m.calls++
+	m.calls.Add(1)
+	if m.done != nil {
+		close(m.done)
+	}
 	return m.err
+}
+
+func waitForEnvelopeImport(t *testing.T, m *mockExecutionPayloadEnvelopeReceiver) {
+	t.Helper()
+	select {
+	case <-m.done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for background envelope import")
+	}
 }

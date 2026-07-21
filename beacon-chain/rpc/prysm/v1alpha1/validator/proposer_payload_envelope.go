@@ -80,10 +80,8 @@ func extractExecutionPayloadGloas(local *consensusblocks.GetPayloadResponse) *en
 	return nil
 }
 
-// GetExecutionPayloadEnvelope implements the gRPC endpoint:
-// /eth/v1alpha1/validator/execution_payload_envelope/{slot}/{builder_index}
-// It returns the stored execution payload envelope for a slot/builder and, for
-// self-build envelopes, computes the post-payload state root on demand.
+// GetExecutionPayloadEnvelope returns the cached execution payload envelope for the requested
+// slot so the proposer can sign and publish it.
 func (vs *Server) GetExecutionPayloadEnvelope(
 	ctx context.Context,
 	req *ethpb.ExecutionPayloadEnvelopeRequest,
@@ -107,21 +105,13 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 			"execution payload envelope not found for slot %d", req.Slot)
 	}
 
-	// Return the blinded wire form (payload_root); the signer validates over its HTR, which equals
-	// the full envelope's HTR, and the BN reconstructs the full payload from this cache on publish.
-	blinded, err := contents.Envelope.WireBlinded()
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "could not build blinded envelope: %v", err)
-	}
 	return &ethpb.ExecutionPayloadEnvelopeResponse{
-		Blinded: blinded,
+		Envelope: contents.Envelope,
 	}, nil
 }
 
-// PublishExecutionPayloadEnvelope validates and broadcasts a signed execution payload envelope.
-// This is called by validators after signing the envelope retrieved from GetExecutionPayloadEnvelope.
-//
-// gRPC endpoint: POST /eth/v1alpha1/validator/execution_payload_envelope
+// PublishExecutionPayloadEnvelope validates and broadcasts a signed execution payload envelope,
+// called by validators after signing the envelope from GetExecutionPayloadEnvelope.
 func (vs *Server) PublishExecutionPayloadEnvelope(
 	ctx context.Context,
 	req *ethpb.GenericSignedExecutionPayloadEnvelope,
@@ -155,8 +145,7 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	})
 	log.Debug("Publishing execution payload envelope")
 
-	// Broadcast sidecars BEFORE receiving the envelope so the DA check sees them. Stateless publishes
-	// carry blobs+proofs (this node may not have them cached); stateful publishes rely on the cache.
+	// KZG verification stays synchronous, never gossip unverified sidecars.
 	var sidecars []consensusblocks.RODataColumn
 	if len(blobs) > 0 {
 		sidecars, err = vs.sidecarsFromContents(blobs, kzgProofs, envSlot, beaconBlockRoot)
@@ -166,8 +155,19 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	} else if cached, ok := vs.ExecutionPayloadEnvelopeCache.Contents(); ok && cached.Envelope.Payload.SlotNumber == envSlot {
 		sidecars = cached.DataColumns
 	}
-	if len(sidecars) > 0 {
-		if err := vs.broadcastAndReceiveDataColumns(ctx, sidecars, nil); err != nil {
+
+	roSigned, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(signed)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "could not wrap signed envelope: %v", err)
+	}
+
+	// Locally built or verified above, safe to upgrade.
+	verifiedSidecars := make([]consensusblocks.VerifiedRODataColumn, 0, len(sidecars))
+	for _, sidecar := range sidecars {
+		verifiedSidecars = append(verifiedSidecars, consensusblocks.NewVerifiedRODataColumn(sidecar))
+	}
+	if len(verifiedSidecars) > 0 {
+		if err := vs.P2P.BroadcastDataColumnSidecars(ctx, verifiedSidecars, nil); err != nil {
 			log.WithError(err).Error("Failed to broadcast Gloas data column sidecars")
 		}
 	}
@@ -176,23 +176,31 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 		return nil, status.Errorf(codes.Internal, "failed to broadcast execution payload envelope: %v", err)
 	}
 
-	roSigned, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(signed)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "could not wrap signed envelope: %v", err)
-	}
-	if err := vs.ExecutionPayloadEnvelopeReceiver.ReceiveExecutionPayloadEnvelope(ctx, roSigned); err != nil {
-		// Broadcast already succeeded; import failed. REST maps Aborted -> 202 (beacon-APIs #580).
-		return nil, status.Errorf(codes.Aborted, "failed to receive execution payload envelope: %v", err)
-	}
+	// Import in the background so the reveal is not delayed past the PTC deadline.
+	go vs.importPublishedEnvelope(log, verifiedSidecars, roSigned)
 
 	log.WithField("duration", time.Since(start)).Info("Published execution payload envelope")
 
 	return &emptypb.Empty{}, nil
 }
 
-// resolveEnvelopeToPublish turns the generic publish request into the full signed envelope plus any
-// caller-supplied blobs. The blinded (stateful) arm reconstructs the full envelope from the cache by
-// matching beacon_block_root; the contents (stateless) arm carries everything in the request.
+// Sidecars first, the DA check needs them.
+func (vs *Server) importPublishedEnvelope(log *logrus.Entry, sidecars []consensusblocks.VerifiedRODataColumn, signed interfaces.ROSignedExecutionPayloadEnvelope) {
+	start := time.Now()
+	if len(sidecars) > 0 {
+		if err := vs.DataColumnReceiver.ReceiveDataColumns(sidecars); err != nil {
+			log.WithError(err).Error("Failed to receive data columns for published envelope")
+		}
+	}
+	if err := vs.ExecutionPayloadEnvelopeReceiver.ReceiveExecutionPayloadEnvelope(vs.Ctx, signed); err != nil {
+		log.WithError(err).Error("Failed to import published execution payload envelope")
+		return
+	}
+	log.WithField("duration", time.Since(start)).Debug("Imported published execution payload envelope")
+}
+
+// resolveEnvelopeToPublish extracts the signed envelope plus any caller-supplied blobs. The stateful
+// signed_envelope arm must match the cached envelope so its precomputed data columns apply.
 func (vs *Server) resolveEnvelopeToPublish(req *ethpb.GenericSignedExecutionPayloadEnvelope) (*ethpb.SignedExecutionPayloadEnvelope, [][]byte, [][]byte, error) {
 	switch {
 	case req.GetContents() != nil:
@@ -202,33 +210,29 @@ func (vs *Server) resolveEnvelopeToPublish(req *ethpb.GenericSignedExecutionPayl
 			return nil, nil, nil, status.Error(codes.InvalidArgument, "signed envelope or payload cannot be nil")
 		}
 		return c.SignedExecutionPayloadEnvelope, c.Blobs, c.KzgProofs, nil
-	case req.GetBlinded() != nil:
-		b := req.GetBlinded()
-		if b.Message == nil {
-			return nil, nil, nil, status.Error(codes.InvalidArgument, "blinded envelope message cannot be nil")
+	case req.GetSignedEnvelope() != nil:
+		signed := req.GetSignedEnvelope()
+		if signed.Message == nil || signed.Message.Payload == nil {
+			return nil, nil, nil, status.Error(codes.InvalidArgument, "signed envelope or payload cannot be nil")
 		}
 		cached, ok := vs.ExecutionPayloadEnvelopeCache.Contents()
 		if !ok || cached.Envelope == nil {
-			return nil, nil, nil, status.Error(codes.FailedPrecondition, "no cached execution payload envelope to reconstruct from")
+			return nil, nil, nil, status.Error(codes.FailedPrecondition, "envelope without blob data was submitted but the beacon node has no cached blobs and KZG proofs")
 		}
-		cachedBlinded, err := cached.Envelope.WireBlinded()
+		cachedRoot, err := cached.Envelope.HashTreeRoot()
 		if err != nil {
-			return nil, nil, nil, status.Errorf(codes.Internal, "could not derive blinded envelope from cache: %v", err)
+			return nil, nil, nil, status.Errorf(codes.Internal, "could not hash cached envelope: %v", err)
 		}
-		cachedRoot, err := cachedBlinded.HashTreeRoot()
+		submittedRoot, err := signed.Message.HashTreeRoot()
 		if err != nil {
-			return nil, nil, nil, status.Errorf(codes.Internal, "could not hash cached blinded envelope: %v", err)
+			return nil, nil, nil, status.Errorf(codes.Internal, "could not hash submitted envelope: %v", err)
 		}
-		blindedRoot, err := b.Message.HashTreeRoot()
-		if err != nil {
-			return nil, nil, nil, status.Errorf(codes.Internal, "could not hash blinded envelope: %v", err)
+		if cachedRoot != submittedRoot {
+			return nil, nil, nil, status.Error(codes.InvalidArgument, "cached execution payload envelope does not match submitted envelope")
 		}
-		if cachedRoot != blindedRoot {
-			return nil, nil, nil, status.Error(codes.InvalidArgument, "cached envelope does not match blinded envelope")
-		}
-		return &ethpb.SignedExecutionPayloadEnvelope{Message: cached.Envelope, Signature: b.Signature}, nil, nil, nil
+		return signed, nil, nil, nil
 	default:
-		return nil, nil, nil, status.Error(codes.InvalidArgument, "generic signed execution payload envelope must set contents or blinded")
+		return nil, nil, nil, status.Error(codes.InvalidArgument, "generic signed execution payload envelope must set contents or signed_envelope")
 	}
 }
 

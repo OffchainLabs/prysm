@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -877,7 +878,7 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 		require.StringContains(t, "versioned hash(es) not found in block", rpcErr.Err.Error())
-		require.StringContains(t, "requested 1 hashes, found 0", rpcErr.Err.Error())
+		require.StringContains(t, "requested 1 unique hashes, found 0", rpcErr.Err.Error())
 		require.StringContains(t, "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", rpcErr.Err.Error())
 	})
 
@@ -897,10 +898,75 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 		require.StringContains(t, "versioned hash(es) not found in block", rpcErr.Err.Error())
-		require.StringContains(t, "requested 3 hashes, found 1", rpcErr.Err.Error())
+		require.StringContains(t, "requested 3 unique hashes, found 1", rpcErr.Err.Error())
 		// Check that both missing hashes are reported
 		require.StringContains(t, "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", rpcErr.Err.Error())
 		require.StringContains(t, "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", rpcErr.Err.Error())
+	})
+}
+
+// TestResolveBlobsContext_DuplicateCommitments covers versioned-hash filtering
+// against a block that carries the same KZG commitment at multiple indices
+// (legal per consensus rules), as well as repeated hashes in the request.
+// Hash-to-index conversion happens before any blob storage access, so these
+// tests exercise resolveBlobsContext directly with only a block DB.
+func TestResolveBlobsContext_DuplicateCommitments(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.DenebForkEpoch = 1
+	cfg.FuluForkEpoch = primitives.Epoch(math.MaxUint64)
+	params.OverrideBeaconConfig(cfg)
+
+	db := testDB.SetupDB(t)
+	ctx := t.Context()
+
+	// Deneb block with the same commitment at indices 0 and 1.
+	commitment := bytesutil.PadTo([]byte("duplicate-commitment"), 48)
+	blk := util.NewBeaconBlockDeneb()
+	blk.Block.Slot = util.SlotAtEpoch(t, cfg.DenebForkEpoch)
+	blk.Block.Body.BlobKzgCommitments = [][]byte{commitment, commitment}
+	util.SaveBlock(t, ctx, db, blk)
+	root, err := blk.Block.HashTreeRoot()
+	require.NoError(t, err)
+	blockID := hexutil.Encode(root[:])
+
+	blocker := &BeaconDbBlocker{BeaconDB: db}
+
+	dupHash := primitives.ConvertKzgCommitmentToVersionedHash(commitment)
+	missingHash := make([]byte, 32)
+	for i := range missingHash {
+		missingHash[i] = 0xFF
+	}
+
+	t.Run("hash matching duplicate commitments resolves all indices", func(t *testing.T) {
+		bctx, rpcErr := blocker.resolveBlobsContext(ctx, blockID, options.WithVersionedHashes([][]byte{dupHash[:]}))
+		require.IsNil(t, rpcErr)
+		require.DeepEqual(t, []int{0, 1}, bctx.indices)
+	})
+
+	t.Run("repeated request hashes resolve without error", func(t *testing.T) {
+		requestedHashes := [][]byte{dupHash[:], dupHash[:], dupHash[:]}
+		bctx, rpcErr := blocker.resolveBlobsContext(ctx, blockID, options.WithVersionedHashes(requestedHashes))
+		require.IsNil(t, rpcErr)
+		require.DeepEqual(t, []int{0, 1}, bctx.indices)
+	})
+
+	t.Run("duplicate matches do not mask a missing hash", func(t *testing.T) {
+		requestedHashes := [][]byte{dupHash[:], missingHash}
+		_, rpcErr := blocker.resolveBlobsContext(ctx, blockID, options.WithVersionedHashes(requestedHashes))
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
+		require.StringContains(t, "requested 2 unique hashes, found 1", rpcErr.Err.Error())
+		require.StringContains(t, hexutil.Encode(missingHash), rpcErr.Err.Error())
+	})
+
+	t.Run("repeated missing hash is reported once", func(t *testing.T) {
+		requestedHashes := [][]byte{missingHash, missingHash}
+		_, rpcErr := blocker.resolveBlobsContext(ctx, blockID, options.WithVersionedHashes(requestedHashes))
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
+		require.StringContains(t, "requested 1 unique hashes, found 0", rpcErr.Err.Error())
+		require.Equal(t, 1, strings.Count(rpcErr.Err.Error(), hexutil.Encode(missingHash)))
 	})
 }
 

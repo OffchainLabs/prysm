@@ -1513,13 +1513,12 @@ message ExecutionPayloadEnvelopeRequest {
 }
 
 // ExecutionPayloadEnvelopeResponse is the response containing the cached
-// execution payload envelope in blinded wire form (payload_root). The signer
-// validates over the blinded HTR, which equals the full envelope's HTR.
+// execution payload envelope for the validator to sign and publish.
 message ExecutionPayloadEnvelopeResponse {
   option deprecated = true;
 
-  // The blinded execution payload envelope for the requested slot.
-  WireBlindedExecutionPayloadEnvelope blinded = 1;
+  // The execution payload envelope for the requested slot.
+  ExecutionPayloadEnvelope envelope = 1;
 }
 
 // PayloadAttestationDataRequest is the request for retrieving payload

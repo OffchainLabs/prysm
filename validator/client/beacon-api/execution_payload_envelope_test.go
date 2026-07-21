@@ -60,10 +60,9 @@ func TestGetExecutionPayloadEnvelope_CachedHit(t *testing.T) {
 	}
 	client.envelopeCache.Add(100, envelope, nil, nil)
 
-	full, blinded, err := client.getExecutionPayloadEnvelope(t.Context(), 100, bytesutil.ToBytes32(envelope.BeaconBlockRoot))
+	full, err := client.getExecutionPayloadEnvelope(t.Context(), 100, bytesutil.ToBytes32(envelope.BeaconBlockRoot))
 	require.NoError(t, err)
 	require.NotNil(t, full)
-	require.IsNil(t, blinded)
 	assert.Equal(t, primitives.BuilderIndex(42), full.BuilderIndex)
 
 	// Peek must leave the entry in the cache so the publish path can read blob data.
@@ -86,21 +85,18 @@ func TestGetExecutionPayloadEnvelope_CachedRootMismatch(t *testing.T) {
 	}
 	client.envelopeCache.Add(100, envelope, nil, nil)
 
-	full, blinded, err := client.getExecutionPayloadEnvelope(t.Context(), 100, [32]byte{})
+	full, err := client.getExecutionPayloadEnvelope(t.Context(), 100, [32]byte{})
 	require.ErrorContains(t, "does not match requested block", err)
 	require.IsNil(t, full)
-	require.IsNil(t, blinded)
 }
 
-// Stateful: on a local cache miss the VC fetches the blinded envelope from the BN.
-func TestGetExecutionPayloadEnvelope_StatefulFetchesBlinded(t *testing.T) {
+// Stateful: on a local cache miss the VC fetches the full envelope from the BN.
+func TestGetExecutionPayloadEnvelope_StatefulFetchesEnvelope(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	envelope := testProtoEnvelope()
-	blinded, err := envelope.WireBlinded()
-	require.NoError(t, err)
-	body, err := blinded.MarshalSSZ()
+	body, err := envelope.MarshalSSZ()
 	require.NoError(t, err)
 
 	root := bytesutil.ToBytes32(envelope.BeaconBlockRoot)
@@ -114,27 +110,25 @@ func TestGetExecutionPayloadEnvelope_StatefulFetchesBlinded(t *testing.T) {
 	).Return(body, respHeader, nil)
 
 	client := &beaconApiValidatorClient{handler: handler, envelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
-	full, gotBlinded, err := client.getExecutionPayloadEnvelope(t.Context(), 100, root)
+	full, err := client.getExecutionPayloadEnvelope(t.Context(), 100, root)
 	require.NoError(t, err)
-	require.IsNil(t, full)
-	require.NotNil(t, gotBlinded)
-	assert.Equal(t, primitives.BuilderIndex(42), gotBlinded.BuilderIndex)
+	require.NotNil(t, full)
+	assert.Equal(t, primitives.BuilderIndex(42), full.BuilderIndex)
 }
 
-// Stateful publish sends the blinded envelope with Eth-Execution-Payload-Blinded: true.
-func TestPublishBlindedExecutionPayloadEnvelope(t *testing.T) {
+// Stateful publish (local cache miss) sends the bare signed envelope with
+// Eth-Blob-Data-Included: false.
+func TestPublishExecutionPayloadEnvelope_StatefulSendsBareEnvelope(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	signed := &ethpb.SignedExecutionPayloadEnvelope{Message: testProtoEnvelope(), Signature: bytesutil.PadTo([]byte("sig"), 96)}
-	signedBlinded, err := signed.WireBlinded()
-	require.NoError(t, err)
-	expectedBody, err := signedBlinded.MarshalSSZ()
+	expectedBody, err := signed.MarshalSSZ()
 	require.NoError(t, err)
 
 	expectedHeaders := map[string]string{
-		api.VersionHeader:                 version.String(version.Gloas),
-		api.ExecutionPayloadBlindedHeader: "true",
+		api.VersionHeader:          version.String(version.Gloas),
+		api.BlobDataIncludedHeader: "false",
 	}
 	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().PostSSZ(
@@ -144,30 +138,25 @@ func TestPublishBlindedExecutionPayloadEnvelope(t *testing.T) {
 		bytes.NewBuffer(expectedBody),
 	).Return(nil, nil, nil)
 
-	client := &beaconApiValidatorClient{handler: handler}
-	resp, err := client.publishBlindedExecutionPayloadEnvelope(t.Context(), signedBlinded)
+	client := &beaconApiValidatorClient{handler: handler, envelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
+	resp, err := client.publishExecutionPayloadEnvelope(t.Context(), signed)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 }
 
-func TestPublishBlindedExecutionPayloadEnvelope_JSONFallbackOn406(t *testing.T) {
+func TestPublishExecutionPayloadEnvelope_StatefulJSONFallbackOn406(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	signed := &ethpb.SignedExecutionPayloadEnvelope{Message: testProtoEnvelope(), Signature: bytesutil.PadTo([]byte("sig"), 96)}
-	signedBlinded, err := signed.WireBlinded()
+	msg, err := structs.SignedExecutionPayloadEnvelopeFromConsensus(signed)
 	require.NoError(t, err)
-	msg, err := structs.BlindedExecutionPayloadEnvelopeFromConsensus(signedBlinded.Message)
-	require.NoError(t, err)
-	expectedJSON, err := json.Marshal(&structs.SignedBlindedExecutionPayloadEnvelope{
-		Message:   msg,
-		Signature: hexutil.Encode(signedBlinded.Signature),
-	})
+	expectedJSON, err := json.Marshal(msg)
 	require.NoError(t, err)
 
 	expectedHeaders := map[string]string{
-		api.VersionHeader:                 version.String(version.Gloas),
-		api.ExecutionPayloadBlindedHeader: "true",
+		api.VersionHeader:          version.String(version.Gloas),
+		api.BlobDataIncludedHeader: "false",
 	}
 	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().PostSSZ(
@@ -181,8 +170,8 @@ func TestPublishBlindedExecutionPayloadEnvelope_JSONFallbackOn406(t *testing.T) 
 		nil,
 	).Return(nil)
 
-	client := &beaconApiValidatorClient{handler: handler}
-	resp, err := client.publishBlindedExecutionPayloadEnvelope(t.Context(), signedBlinded)
+	client := &beaconApiValidatorClient{handler: handler, envelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
+	resp, err := client.publishExecutionPayloadEnvelope(t.Context(), signed)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 }
@@ -207,8 +196,8 @@ func TestPublishExecutionPayloadEnvelope_StatelessSendsContents(t *testing.T) {
 	require.NoError(t, err)
 
 	expectedHeaders := map[string]string{
-		api.VersionHeader:                 version.String(version.Gloas),
-		api.ExecutionPayloadBlindedHeader: "false",
+		api.VersionHeader:          version.String(version.Gloas),
+		api.BlobDataIncludedHeader: "true",
 	}
 	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().PostSSZ(
@@ -232,26 +221,6 @@ func TestPublishExecutionPayloadEnvelope_StatelessSendsContents(t *testing.T) {
 	// Cache must be drained after publish.
 	cached, _, _ := client.envelopeCache.Peek(primitives.Slot(envelope.Payload.SlotNumber))
 	assert.Equal(t, (*ethpb.ExecutionPayloadEnvelope)(nil), cached)
-}
-
-func TestPublishExecutionPayloadEnvelope_StatelessCacheMissErrors(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	signed := &ethpb.SignedExecutionPayloadEnvelope{
-		Message:   testProtoEnvelope(),
-		Signature: bytesutil.PadTo([]byte("sig"), 96),
-	}
-
-	// No PostSSZ/Post expectation — must error before any HTTP call.
-	handler := mock.NewMockHandler(ctrl)
-	client := &beaconApiValidatorClient{
-		handler:       handler,
-		envelopeCache: cache.NewExecutionPayloadEnvelopeCache(),
-	}
-
-	_, err := client.publishExecutionPayloadEnvelope(t.Context(), signed)
-	assert.ErrorContains(t, "stateless publish: envelope cache miss", err)
 }
 
 func TestPublishExecutionPayloadEnvelope_Error(t *testing.T) {
