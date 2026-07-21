@@ -3,6 +3,7 @@
 package validator
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -87,6 +88,8 @@ func TestEffectiveBidValue(t *testing.T) {
 		{"payment over cap is capped", 1000, 900, 500, 1500},
 		{"zero payment", 1000, 0, 500, 1000},
 		{"zero cap ignores payment", 1000, 900, 0, 1000},
+		{"sum past uint64 saturates", math.MaxUint64 - 5, 100, math.MaxUint64, math.MaxUint64},
+		{"max value zero payment unchanged", math.MaxUint64, 0, math.MaxUint64, math.MaxUint64},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -119,6 +122,7 @@ func TestBestBid(t *testing.T) {
 		{name: "tie prefers p2p", local: localWithGwei(0), p2p: newBid(1000, 0, p2pIdx), builder: newBid(1000, 0, builderIdx), maxPayment: 1000, wantSrc: bidSourceP2P},
 		{name: "payment cap keeps local ahead", local: localWithGwei(100), builder: newBid(50, 100, builderIdx), maxPayment: 40, wantSrc: bidSourceSelfBuild, wantNil: true},
 		{name: "payment within cap wins", local: localWithGwei(100), builder: newBid(50, 100, builderIdx), maxPayment: 60, wantSrc: bidSourceBuilderAPI},
+		{name: "saturated bid still beats local", local: localWithGwei(100), builder: newBid(math.MaxUint64-5, 100, builderIdx), maxPayment: math.MaxUint64, wantSrc: bidSourceBuilderAPI},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

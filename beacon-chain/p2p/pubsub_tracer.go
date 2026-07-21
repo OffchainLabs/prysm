@@ -8,6 +8,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/prometheus/client_golang/prometheus"
+	"google.golang.org/protobuf/proto"
 )
 
 var _ = pubsub.RawTracer(&gossipTracer{})
@@ -196,11 +197,11 @@ func (g *gossipTracer) setMetricFromRPC(act action, subCtr prometheus.Counter, p
 	}
 	for _, msg := range rpc.Publish {
 		pubCtr.WithLabelValues(msg.GetTopic()).Inc()
-		pubSizeCtr.WithLabelValues(msg.GetTopic(), "false").Add(float64(msg.Size()))
+		pubSizeCtr.WithLabelValues(msg.GetTopic(), "false").Add(float64(proto.Size(msg)))
 	}
 	if rpc.Partial != nil {
 		pubCtr.WithLabelValues(rpc.Partial.GetTopicID()).Inc()
-		pubSizeCtr.WithLabelValues(rpc.Partial.GetTopicID(), "true").Add(float64(rpc.Partial.Size()))
+		pubSizeCtr.WithLabelValues(rpc.Partial.GetTopicID(), "true").Add(float64(proto.Size(rpc.Partial)))
 	}
 }
 

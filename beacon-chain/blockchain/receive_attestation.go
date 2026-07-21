@@ -120,7 +120,9 @@ func (s *Service) spawnProcessAttestationsRoutine() {
 func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot) {
 	ctx, span := trace.StartSpan(ctx, "beacon-chain.blockchain.UpdateHead")
 	defer span.End()
-
+	if !s.inRegularSync() {
+		return
+	}
 	start := time.Now()
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()
@@ -139,33 +141,44 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 		return
 	}
 	newAttHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
-	if !s.isNewHead(newHeadRoot, full) {
-		return
-	}
-	log.WithField("newHeadRoot", fmt.Sprintf("%#x", newHeadRoot)).Debug("Head changed due to attestations")
 	headState, headBlock, err := s.getStateAndBlock(ctx, newHeadRoot)
 	if err != nil {
 		log.WithError(err).Error("Could not get head block and state")
 		return
 	}
-	if s.inRegularSync() {
-		attr := s.getPayloadAttribute(ctx, headState, proposingSlot, newHeadRoot[:], full)
-		if !attr.IsEmpty() && s.shouldOverrideFCU(newHeadRoot, proposingSlot) {
-			return
+
+	var reason string
+	if full {
+		if buildFull, r := s.shouldBuildOnFullLocked(newHeadRoot, proposingSlot, s.proposingAt(headState, proposingSlot)); !buildFull {
+			full = false
+			headHash = s.cfg.ForkChoiceStore.ParentHash(newHeadRoot)
+			reason = r
 		}
-		postGloas := slots.ToEpoch(proposingSlot) >= params.BeaconConfig().GloasForkEpoch
-		if postGloas {
-			go s.fcuFromReorgData(headBlock, newHeadRoot, headHash, full, attr, proposingSlot)
-		} else {
-			fcuArgs := &fcuConfig{
-				headState:     headState,
-				headRoot:      newHeadRoot,
-				headBlock:     headBlock,
-				proposingSlot: proposingSlot,
-				attributes:    attr,
-			}
-			go s.forkchoiceUpdateWithExecution(s.ctx, fcuArgs)
+	}
+	if !s.isNewHead(newHeadRoot, full) {
+		return
+	}
+	attr := s.getPayloadAttribute(ctx, headState, proposingSlot, newHeadRoot[:], full)
+	if !attr.IsEmpty() && s.shouldOverrideFCU(newHeadRoot, proposingSlot) {
+		return
+	}
+	fields := logrus.Fields{"newHeadRoot": fmt.Sprintf("%#x", newHeadRoot), "full": full}
+	if reason != "" {
+		fields["reason"] = reason
+	}
+	log.WithFields(fields).Debug("Head changed late in slot")
+	postGloas := slots.ToEpoch(proposingSlot) >= params.BeaconConfig().GloasForkEpoch
+	if postGloas {
+		go s.fcuFromReorgData(headBlock, newHeadRoot, headHash, full, attr, proposingSlot)
+	} else {
+		fcuArgs := &fcuConfig{
+			headState:     headState,
+			headRoot:      newHeadRoot,
+			headBlock:     headBlock,
+			proposingSlot: proposingSlot,
+			attributes:    attr,
 		}
+		go s.forkchoiceUpdateWithExecution(s.ctx, fcuArgs)
 	}
 	if err := s.saveHead(s.ctx, newHeadRoot, headBlock, headState, full); err != nil {
 		log.WithError(err).Error("Could not save head")
