@@ -44,6 +44,20 @@ func (ro *ROForkChoice) FullBeatsEmpty(root [32]byte) bool {
 	return ro.getter.FullBeatsEmpty(root)
 }
 
+// PTCVotedEarlyAndAvailable delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) PTCVotedEarlyAndAvailable(root [32]byte) bool {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.PTCVotedEarlyAndAvailable(root)
+}
+
+// PTCVotedLate delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) PTCVotedLate(root [32]byte) bool {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.PTCVotedLate(root)
+}
+
 // HasNode delegates to the underlying forkchoice call, under a lock.
 func (ro *ROForkChoice) HasNode(root [32]byte) bool {
 	ro.l.RLock()
@@ -210,6 +224,13 @@ func (ro *ROForkChoice) ParentRoot(root [32]byte) ([32]byte, error) {
 	ro.l.RLock()
 	defer ro.l.RUnlock()
 	return ro.getter.ParentRoot(root)
+}
+
+// ParentHash delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) ParentHash(root [32]byte) [32]byte {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.ParentHash(root)
 }
 
 // BlockHash delegates to the underlying forkchoice call, under a lock.

@@ -46,6 +46,9 @@ type Service struct {
 	genesisTime                    time.Time
 	head                           *head
 	headLock                       sync.RWMutex
+	headV2EventLock                sync.Mutex
+	lastHeadV2Root                 [32]byte
+	lastHeadV2Status               statefeed.PayloadStatus
 	originBlockRoot                [32]byte // genesis root, or weak subjectivity checkpoint root, depending on how the node is initialized
 	boundaryRoots                  [][32]byte
 	checkpointStateCache           *cache.CheckpointStateCache
@@ -78,6 +81,7 @@ type config struct {
 	ProposerPreferencesCache  *cache.ProposerPreferencesCache
 	SubscribedValidatorsCache *cache.SubscribedValidatorsCache
 	AttestationCache          *cache.AttestationCache
+	AttestationDataCache      *cache.AttestationDataCache
 	AttPool                   attestations.Pool
 	ExitPool                  voluntaryexits.PoolManager
 	SlashingPool              slashings.PoolManager
