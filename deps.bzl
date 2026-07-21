@@ -1908,8 +1908,14 @@ def prysm_deps():
         name = "com_github_libp2p_go_libp2p_pubsub",
         build_file_proto_mode = "disable_global",
         importpath = "github.com/libp2p/go-libp2p-pubsub",
-        sum = "h1:UMiJ408NqO9Sf2ANutEM3An8Em3K+qn78eoIgzY3PIY=",
-        version = "v0.16.1-0.20260611143718-41b11d5cb1a7",
+        # Replaces proto.CloneOf (needs protobuf-go >= v1.36.4) with proto.Clone,
+        # as rules_go pins org_golang_google_protobuf to v1.36.3 for bazel builds.
+        patch_args = ["-p1"],
+        patches = [
+            "//third_party:com_github_libp2p_go_libp2p_pubsub-cloneof.patch",
+        ],
+        sum = "h1:SNdvB6V0eYMXLRR95n+4vpxJKbFsbHhgjPdDiTpGoo0=",
+        version = "v0.17.0",
     )
     go_repository(
         name = "com_github_libp2p_go_libp2p_testing",
