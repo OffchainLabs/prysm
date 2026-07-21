@@ -163,6 +163,7 @@ var appFlags = []cli.Flag{
 	flags.StateDiffExponents,
 	flags.DisableEphemeralLogFile,
 	flags.PartialDataColumns,
+	flags.SimulatePartialELBlobs,
 }
 
 func init() {
