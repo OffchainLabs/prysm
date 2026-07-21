@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -76,4 +77,25 @@ func TestBuilderAuthsAndPrefs(t *testing.T) {
 		require.Equal(t, uint64(0), bp.minBid)
 		require.Equal(t, uint64(neutralBuilderBoostFactor), bp.boostFactor)
 	})
+}
+
+func TestValidBuilderURL(t *testing.T) {
+	valid := []string{"https://builder.example", "http://10.0.0.5:18550", "https://user@builder.example/path"}
+	for _, u := range valid {
+		require.Equal(t, true, validBuilderURL(u), u)
+	}
+	invalid := []string{"", "not a url", "file:///etc/passwd", "gopher://x", "https://", "//missing-scheme"}
+	for _, u := range invalid {
+		require.Equal(t, false, validBuilderURL(u), u)
+	}
+}
+
+// The masking fallback echoes raw input on parse failure, so unparseable values
+// must never reach it.
+func TestSafeURLForLog(t *testing.T) {
+	// Space in host is one of the few inputs url.Parse rejects outright.
+	unparseable := "http://user:secret@ho st"
+	require.Equal(t, "<unparseable>", safeURLForLog(unparseable))
+	require.Equal(t, false, strings.Contains(safeURLForLog(unparseable), "secret"))
+	require.Equal(t, false, strings.Contains(safeURLForLog("https://user:secret@builder.example/path"), "secret"))
 }

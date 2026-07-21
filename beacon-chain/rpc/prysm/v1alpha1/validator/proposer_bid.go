@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
+	"net/url"
 	"strings"
 	"time"
 
@@ -159,6 +161,20 @@ func builderBeatsLocal(builderValue, localValue primitives.Gwei, boostFactor uin
 	lhs := new(big.Int).Mul(new(big.Int).SetUint64(uint64(builderValue)), new(big.Int).SetUint64(boostFactor))
 	rhs := new(big.Int).Mul(new(big.Int).SetUint64(uint64(localValue)), big.NewInt(100))
 	return lhs.Cmp(rhs) > 0
+}
+
+func validBuilderURL(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
+}
+
+// safeURLForLog never echoes an unparseable value: MaskCredentialsLogging falls
+// back to the raw input on parse failure, which could leak embedded credentials.
+func safeURLForLog(raw string) string {
+	if _, err := url.Parse(raw); err != nil {
+		return "<unparseable>"
+	}
+	return logs.MaskCredentialsLogging(raw)
 }
 
 // The proposer's total take, the execution payment counts only up to the proposer's max preference.

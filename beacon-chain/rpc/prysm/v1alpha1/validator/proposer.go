@@ -357,7 +357,15 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 
 	// Empty means self-build or a P2P bid; the builder learns those via gossip.
 	if block.Version() >= version.Gloas && req.BuilderUrl != "" {
-		go vs.submitBlockToBuilder(block, req.BuilderUrl)
+		// The URL originates from the client; only dial well-formed http(s) targets.
+		if validBuilderURL(req.BuilderUrl) {
+			go vs.submitBlockToBuilder(block, req.BuilderUrl)
+		} else {
+			log.WithFields(logrus.Fields{
+				"slot":       block.Block().Slot(),
+				"builderUrl": safeURLForLog(req.BuilderUrl),
+			}).Warn("Ignoring malformed builder url on publish")
+		}
 	}
 
 	if err := <-errChan; err != nil {
