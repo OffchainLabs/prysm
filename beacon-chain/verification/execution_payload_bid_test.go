@@ -174,14 +174,15 @@ func TestBidVerifier_VerifyParentBlockHash(t *testing.T) {
 	require.NoError(t, err)
 
 	wantHash := [32]byte(signed.Message.ParentBlockHash)
+	wantRoot := [32]byte(signed.Message.ParentBlockRoot)
 	verifier := &BidVerifier{results: newResults(RequireBidParentBlockHashValid), b: wrapped}
-	require.NoError(t, verifier.VerifyParentBlockHash(func([32]byte) ([32]byte, error) {
-		return wantHash, nil
+	require.NoError(t, verifier.VerifyParentBlockHash(func(root, hash [32]byte) bool {
+		return root == wantRoot && hash == wantHash
 	}))
 
 	verifier = &BidVerifier{results: newResults(RequireBidParentBlockHashValid), b: wrapped}
-	require.ErrorIs(t, verifier.VerifyParentBlockHash(func([32]byte) ([32]byte, error) {
-		return [32]byte{0xFF}, nil
+	require.ErrorIs(t, verifier.VerifyParentBlockHash(func([32]byte, [32]byte) bool {
+		return false
 	}), ErrBidParentBlockHashMismatch)
 }
 

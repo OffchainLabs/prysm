@@ -177,6 +177,13 @@ func (ro *ROForkChoice) PayloadWeights(root [32]byte) (uint64, uint64, error) {
 	return ro.getter.PayloadWeights(root)
 }
 
+// HasPayloadBlockHash delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) HasPayloadBlockHash(root, blockHash [32]byte) bool {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.HasPayloadBlockHash(root, blockHash)
+}
+
 // IsOptimistic delegates to the underlying forkchoice call, under a lock.
 func (ro *ROForkChoice) IsOptimistic(root [32]byte) (bool, error) {
 	ro.l.RLock()

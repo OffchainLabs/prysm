@@ -635,6 +635,16 @@ func (s *ChainService) BlockHash(root [32]byte) ([32]byte, error) {
 	return [32]byte{}, errors.New("block hash not found")
 }
 
+// HasPayloadBlockHash mocks the same method in the chain service.
+func (s *ChainService) HasPayloadBlockHash(root, blockHash [32]byte) bool {
+	if s.ForkChoiceStore == nil {
+		return false
+	}
+	s.ForkChoiceStore.RLock()
+	defer s.ForkChoiceStore.RUnlock()
+	return s.ForkChoiceStore.HasPayloadBlockHash(root, blockHash)
+}
+
 // IsOptimisticForRoot mocks the same method in the chain service.
 func (s *ChainService) IsOptimisticForRoot(_ context.Context, root [32]byte) (bool, error) {
 	s.OptimisticCheckRootReceived = root
