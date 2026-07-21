@@ -1494,11 +1494,17 @@ func (v *validator) submitBuilderPreferenceRequests(ctx context.Context, reqs []
 func (v *validator) buildBuilderPreferencesForSlot(pk pubkey, slot primitives.Slot) []*ethpb.BuilderPreferenceV1 {
 	targets := v.builderTargetsForKey(pk)
 	prefs := make([]*ethpb.BuilderPreferenceV1, 0, len(targets))
+	seen := make(map[string]bool, len(targets))
 	for _, t := range targets {
+		// No two entries may share a url; the first configured entry wins.
+		if seen[t.url] {
+			continue
+		}
 		auth, ok := v.signedRequestAuthFor(pk, t.url, t.authData, slot)
 		if !ok {
 			continue
 		}
+		seen[t.url] = true
 		p := &ethpb.BuilderPreferenceV1{
 			Request: &ethpb.BuilderPreferencesRequestV1{
 				Preferences: &ethpb.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(t.maxPayment)},

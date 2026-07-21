@@ -55,12 +55,18 @@ func parseBuilderPreferencesBody(r *http.Request) ([]*eth.BuilderPreferenceV1, e
 		return nil, errors.Wrap(err, "could not decode builder preferences")
 	}
 	out := make([]*eth.BuilderPreferenceV1, 0, len(entries))
+	seen := make(map[string]bool, len(entries))
 	for _, p := range entries {
 		conv, err := p.toConsensus()
 		if err != nil {
 			log.WithError(err).Debug("Ignoring malformed builder entry")
 			continue
 		}
+		// Duplicate urls invalidate the whole request, unlike malformed entries.
+		if seen[conv.Url] {
+			return nil, errors.Errorf("two builder entries share the same url")
+		}
+		seen[conv.Url] = true
 		out = append(out, conv)
 	}
 	return out, nil

@@ -53,3 +53,11 @@ func repeatHex(n int) string {
 	}
 	return string(out)
 }
+
+// Two entries sharing a url invalidate the whole request, unlike malformed entries.
+func TestParseBuilderPreferencesBody_DuplicateURL(t *testing.T) {
+	entry := `{"url":"https://b","auth":{"message":{"data":"0x01","slot":"7"},"signature":"0x` + repeatHex(96) + `"}}`
+	r := httptest.NewRequest("POST", "/", bytes.NewBufferString(`[`+entry+`,`+entry+`]`))
+	_, err := parseBuilderPreferencesBody(r)
+	require.ErrorContains(t, "share the same url", err)
+}

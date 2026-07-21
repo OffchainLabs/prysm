@@ -47,8 +47,9 @@ func TestBuildBuilderPreferencesForSlot_StaleAuthNotServedAfterRotation(t *testi
 	require.DeepEqual(t, []byte("B"), prefs[0].Request.Auth.Message.Data)
 }
 
-// Duplicate URLs with distinct auth_data must each pair with their own signed auth.
-func TestBuildBuilderPreferencesForSlot_DuplicateURLDistinctAuthData(t *testing.T) {
+// No two emitted entries may share a url; the first configured entry wins and
+// pairs with the auth signed over its own auth_data.
+func TestBuildBuilderPreferencesForSlot_DuplicateURLFirstEntryWins(t *testing.T) {
 	pk := [fieldparams.BLSPubkeyLength]byte{2}
 	slot := primitives.Slot(7)
 	url := "https://builder.example"
@@ -65,9 +66,8 @@ func TestBuildBuilderPreferencesForSlot_DuplicateURLDistinctAuthData(t *testing.
 	}
 
 	prefs := v.buildBuilderPreferencesForSlot(pk, slot)
-	require.Equal(t, 2, len(prefs))
+	require.Equal(t, 1, len(prefs))
 	require.DeepEqual(t, []byte("A"), prefs[0].Request.Auth.Message.Data)
-	require.DeepEqual(t, []byte("B"), prefs[1].Request.Auth.Message.Data)
 }
 
 // Drives the real sign path (as warmBuilderRequestAuthsForDuties does) so a key-shape
