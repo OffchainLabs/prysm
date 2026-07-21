@@ -34,6 +34,18 @@ var (
 			Buckets: []float64{25, 50, 100, 200, 500, 1000, 2000, 4000},
 		},
 	)
+	getBlobsV2RequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_engine_getBlobsV2_requests_total",
+		Help: "Total number of engine_getBlobsV2 requests sent",
+	})
+	getBlobsV2CompleteResponsesTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_engine_getBlobsV2_complete_responses_total",
+		Help: "Total number of complete engine_getBlobsV2 successful responses received",
+	})
+	getBlobsV2EmptyResponsesTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_engine_getBlobsV2_empty_responses_total",
+		Help: "Total number of engine_getBlobsV2 responses received with no blobs",
+	})
 	getBlobsV3RequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "beacon_engine_getBlobsV3_requests_total",
 		Help: "Total number of engine_getBlobsV3 requests sent",
