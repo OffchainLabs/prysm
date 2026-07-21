@@ -1182,7 +1182,7 @@ func Test_mergeProposerSettings_VersionPrecedence(t *testing.T) {
 		)
 		require.Equal(t, uint32(proposer.SchemaV2), merged.Version)
 	})
-	t.Run("unversioned v1 content does not inherit v2 from db", func(t *testing.T) {
+	t.Run("v1 content merged into a v2 db is promoted, version never regresses", func(t *testing.T) {
 		merged := mergeProposerSettings(
 			&validatorpb.ProposerSettingsPayload{
 				DefaultConfig: &validatorpb.ProposerOptionPayload{
@@ -1192,13 +1192,36 @@ func Test_mergeProposerSettings_VersionPrecedence(t *testing.T) {
 			&validatorpb.ProposerSettingsPayload{Version: proposer.SchemaV2},
 			&flagOptions{},
 		)
-		require.Equal(t, uint32(0), merged.Version)
+		require.Equal(t, uint32(proposer.SchemaV2), merged.Version)
 		require.NotNil(t, merged.DefaultConfig.Builder)
+		// The builder gas limit is promoted so v2 reads see it at the top level.
+		require.Equal(t, validator.Uint64(30000000), merged.DefaultConfig.GasLimit)
+	})
+	t.Run("file wins only for keys it names", func(t *testing.T) {
+		dbPayload := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV2,
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xaa": {FeeRecipient: "0x1111111111111111111111111111111111111111"},
+				"0xbb": {FeeRecipient: "0x2222222222222222222222222222222222222222", GasLimit: 45000000},
+			},
+		}
+		filePayload := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV2,
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xaa": {FeeRecipient: "0x3333333333333333333333333333333333333333"},
+			},
+		}
+		merged := mergeProposerSettings(filePayload, dbPayload, &flagOptions{})
+		require.Equal(t, 2, len(merged.ProposerConfig))
+		require.Equal(t, "0x3333333333333333333333333333333333333333", merged.ProposerConfig["0xaa"].FeeRecipient)
+		// The key the file does not name keeps its DB-resident settings.
+		require.Equal(t, "0x2222222222222222222222222222222222222222", merged.ProposerConfig["0xbb"].FeeRecipient)
+		require.Equal(t, validator.Uint64(45000000), merged.ProposerConfig["0xbb"].GasLimit)
 	})
 }
 
-// Restarting with the same v1 file after migration persisted v2 to the DB must
-// reload in v1 form so the runtime upgrade re-applies the file's gas limits.
+// Restarting with the same v1 file after migration persisted v2 to the DB keeps
+// the v2 version and promotes the file's content so its gas limits stay readable.
 func TestSettingsLoader_V1FileAfterMigratedDB(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -1225,12 +1248,13 @@ func TestSettingsLoader_V1FileAfterMigratedDB(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, got)
 
-	require.Equal(t, uint32(0), got.Version)
+	require.Equal(t, proposer.SchemaV2, got.Version)
 	require.NotNil(t, got.DefaultConfig.BuilderConfig)
 	require.Equal(t, validator.Uint64(40000000), got.DefaultConfig.BuilderConfig.GasLimit)
-	assert.LogsContain(t, hook, "deprecated v1 schema")
+	assert.LogsDoNotContain(t, hook, "deprecated v1 schema")
 
-	require.Equal(t, true, got.UpgradeToV2())
+	// Already v2: the file's builder gas limits were promoted at merge time.
+	require.Equal(t, false, got.UpgradeToV2())
 	key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
 	require.NoError(t, err)
 	require.Equal(t, validator.Uint64(60000000), got.GasLimit(bytesutil.ToBytes48(key1)))

@@ -179,8 +179,8 @@ func jsonSignedBeaconBlock(sb interfaces.ReadOnlySignedBeaconBlock) ([]byte, err
 	return json.Marshal(jsonBlock)
 }
 
-// SubmitBuilderPreferences submits a proposer's per-builder preferences ahead of the bid request.
-// If the builder rejects the SSZ request, it retries once using JSON.
+// SubmitBuilderPreferences submits a proposer's per-builder preferences ahead of the bid request
+// (builder-specs preferences channel; currently unwired). Falls back to JSON if SSZ is rejected.
 func (c *Client) SubmitBuilderPreferences(ctx context.Context, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1) error {
 	if req == nil {
 		return errors.Wrap(errMalformedRequest, "nil builder preferences request")

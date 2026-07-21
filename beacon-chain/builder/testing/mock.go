@@ -40,11 +40,11 @@ type MockBuilderService struct {
 	RegistrationCache             *cache.RegistrationCache
 	ErrGetHeader                  error
 	ErrRegisterValidator          error
+	ErrSubmitBuilderPreferences   error
 	PayloadBid                    *ethpb.SignedExecutionPayloadBid
 	PayloadBids                   []beaconbuilder.PayloadBid
 	ErrGetExecutionPayloadBid     error
 	ErrSubmitSignedBeaconBlock    error
-	ErrSubmitBuilderPreferences   error
 	Cfg                           *Config
 }
 
@@ -123,11 +123,6 @@ func (s *MockBuilderService) RegisterValidator(context.Context, []*ethpb.SignedV
 	return s.ErrRegisterValidator
 }
 
-// SubmitBuilderPreferences for mocking.
-func (s *MockBuilderService) SubmitBuilderPreferences(_ context.Context, _ [48]byte, _ *ethpb.BuilderPreferencesRequestV1) error {
-	return s.ErrSubmitBuilderPreferences
-}
-
 // SubmitBlindedBlockPostFulu for mocking.
 func (s *MockBuilderService) SubmitBlindedBlockPostFulu(_ context.Context, _ interfaces.ReadOnlySignedBeaconBlock) error {
 	return s.ErrSubmitBlindedBlockPostFulu
@@ -147,4 +142,9 @@ func (s *MockBuilderService) GetExecutionPayloadBid(_ context.Context, _ primiti
 // SubmitSignedBeaconBlock for mocking.
 func (s *MockBuilderService) SubmitSignedBeaconBlock(_ context.Context, _ string, _ interfaces.ReadOnlySignedBeaconBlock) error {
 	return s.ErrSubmitSignedBeaconBlock
+}
+
+// SubmitBuilderPreferences for mocking.
+func (s *MockBuilderService) SubmitBuilderPreferences(_ context.Context, _ string, _ [48]byte, _ *ethpb.BuilderPreferencesRequestV1) error {
+	return s.ErrSubmitBuilderPreferences
 }

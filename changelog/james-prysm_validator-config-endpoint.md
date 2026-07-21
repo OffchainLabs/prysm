@@ -1,19 +1,20 @@
 ### Added
 
-- Add `GET`/`POST /eth/v1/validator/config` keymanager endpoints (keymanager-APIs #87), managing fee recipient, target gas limit, graffiti, and per-key builder preferences (builder list, `min_bid`, `max_execution_payment`, `builder_boost_factor`, proxy) as one atomic per-key document. POST replaces a key's fragment, an empty document clears it, and each key is applied independently with a `set`/`not_found`/`error` status.
-- Wire per-key `builder_boost_factor` and `min_bid` into Gloas builder-API bid selection, and `builder_boost_factor` into the pre-Gloas `builder_boost_factor` block-production query.
-- Accept `POST /eth/v4/validator/blocks/{slot}` carrying inline per-builder preferences (beacon-APIs #625 JIT model).
+- Add `GET`/`POST /eth/v1/validator/config` keymanager endpoints for managing per-key proposer and builder preferences as a single document (keymanager-APIs #87).
+- Add per-key `min_bid` and `builder_boost_factor` to Gloas bid selection, and per-key `builder_boost_factor` to pre-Gloas block requests.
+- Accept `POST /eth/v4/validator/blocks/{slot}` with inline builder preferences (beacon-APIs #625).
 
 ### Changed
 
-- Proposer builder config `enabled` and `max_execution_payment` are now presence-tracked: unset values inherit instead of defaulting (explicit `max_execution_payment: 0` still means trustless-only).
-- Per-key builder config now resolves with field-level inheritance from `default_config`: unset fields inherit the default's values, and a present `builders`/`relays` list replaces the default's. Per-key builder settings no longer require a per-key fee recipient for validator registration (the default fee recipient is inherited).
-- Builder preferences now travel inline with the block request (JIT) instead of being pushed ahead to a beacon-node cache; request auths sign the opaque per-builder `auth_data` (builder-specs #165) with the builder URL carried explicitly.
+- Resolve per-key builder config with field-level inheritance from `default_config`; `enabled` and `max_execution_payment` are presence-tracked so unset values inherit.
+- Per-key builder settings no longer require a per-key fee recipient to register; the default fee recipient is used.
+- Send builder preferences inline with the block request instead of caching them on the beacon node; request auths sign opaque `auth_data` per builder-specs #165, with the builder URL carried separately.
+- Merge file- or URL-loaded proposer settings per key: the file only overrides keys it names, and the settings schema version never regresses.
 
 ### Fixed
 
-- Normalize legacy (pre-v2) proposer settings on load and at the v2 upgrade: wire-absent builder `enabled` becomes an explicit `false` (a previously disabled per-key builder section can never silently activate through inheritance), and the filesystem backend's spurious explicit-0 `max_execution_payment` is cleared so both database backends decode legacy data identically.
+- Normalize legacy proposer settings on load so unset builder `enabled` stays disabled and both validator DB backends decode `max_execution_payment` identically.
 
 ### Removed
 
-- Remove the `SubmitBuilderPreferences` internal gRPC RPC and the beacon-node builder-preference caches; `BlockRequest` field `builder_request_auths` is replaced by `builder_preferences`.
+- Remove the beacon-node builder-preference caches; `BlockRequest.builder_request_auths` is replaced by `builder_preferences`.

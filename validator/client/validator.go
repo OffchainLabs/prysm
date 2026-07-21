@@ -886,7 +886,15 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		v.connTracker.confirm(proposerPrefsPush, connGen)
 	}
 
-	v.warmBuilderRequestAuths(ctx, km, slot)
+	if reqs := v.warmBuilderRequestAuths(ctx, km, slot); len(reqs) > 0 {
+		delay := params.BeaconConfig().SlotDuration() / 2
+		time.AfterFunc(delay, func() {
+			// Detached from the slot context, which may expire before the delay elapses.
+			subCtx, cancel := context.WithTimeout(context.Background(), delay)
+			defer cancel()
+			v.submitBuilderPreferenceRequests(subCtx, reqs)
+		})
+	}
 
 	// TODO: figure out what to do post gloas for builder apis
 	if !isPreGloas {
@@ -1428,22 +1436,24 @@ func uint64Ptr(v *validatortypes.Uint64) *uint64 {
 
 // warmBuilderRequestAuths pre-signs the builder request auths for upcoming
 // proposal slots so proposeBlock can attach them inline (JIT) without signing on
-// the hot path. It no longer submits to the beacon node: preferences now travel
-// with the block request.
-func (v *validator) warmBuilderRequestAuths(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot) {
+// the hot path, and returns the ahead-of-time submissions for the builder-specs
+// preferences channel. Rebuilt every push so builders learn preferences ahead of
+// the slot even across beacon node restarts.
+func (v *validator) warmBuilderRequestAuths(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot) []*ethpb.SubmitBuilderPreferencesRequest {
 	if slots.ToEpoch(slot)+1 < params.BeaconConfig().GloasForkEpoch {
-		return
+		return nil
 	}
 	snap := v.duties.snapshot()
 	if !snap.isInitialized() {
-		return
+		return nil
 	}
 	v.pruneSignedRequestAuths(slot)
-	v.warmBuilderRequestAuthsForDuties(ctx, km, slot, snap.currentDuties())
-	v.warmBuilderRequestAuthsForDuties(ctx, km, slot, snap.nextDuties())
+	reqs := v.warmBuilderRequestAuthsForDuties(ctx, km, slot, snap.currentDuties())
+	return append(reqs, v.warmBuilderRequestAuthsForDuties(ctx, km, slot, snap.nextDuties())...)
 }
 
-func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, duties iter.Seq2[pubkey, *ethpb.ValidatorDuty]) {
+func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, duties iter.Seq2[pubkey, *ethpb.ValidatorDuty]) []*ethpb.SubmitBuilderPreferencesRequest {
+	var reqs []*ethpb.SubmitBuilderPreferencesRequest
 	for pk, duty := range duties {
 		targets := v.builderTargetsForKey(pk)
 		if len(targets) == 0 {
@@ -1454,10 +1464,29 @@ func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km key
 				continue
 			}
 			for _, t := range targets {
-				if _, err := v.signRequestAuthCached(ctx, km, pk, t.url, t.authData, proposalSlot); err != nil {
+				signed, err := v.signRequestAuthCached(ctx, km, pk, t.url, t.authData, proposalSlot)
+				if err != nil {
 					log.WithError(err).Warn("Failed to sign builder request auth")
+					continue
 				}
+				reqs = append(reqs, &ethpb.SubmitBuilderPreferencesRequest{
+					ValidatorPubkey: pk[:],
+					Url:             t.url,
+					Request: &ethpb.BuilderPreferencesRequestV1{
+						Preferences: &ethpb.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(t.maxPayment)},
+						Auth:        signed,
+					},
+				})
 			}
+		}
+	}
+	return reqs
+}
+
+func (v *validator) submitBuilderPreferenceRequests(ctx context.Context, reqs []*ethpb.SubmitBuilderPreferencesRequest) {
+	for _, req := range reqs {
+		if _, err := v.validatorClient.SubmitBuilderPreferences(ctx, req); err != nil {
+			log.WithError(err).Warn("Failed to submit builder preferences")
 		}
 	}
 }

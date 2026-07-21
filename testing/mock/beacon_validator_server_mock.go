@@ -476,6 +476,21 @@ func (mr *MockBeaconNodeValidatorServerMockRecorder) SubmitAggregateSelectionPro
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAggregateSelectionProofElectra", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).SubmitAggregateSelectionProofElectra), arg0, arg1)
 }
 
+// SubmitBuilderPreferences mocks base method.
+func (m *MockBeaconNodeValidatorServer) SubmitBuilderPreferences(arg0 context.Context, arg1 *eth.SubmitBuilderPreferencesRequest) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitBuilderPreferences", arg0, arg1)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitBuilderPreferences indicates an expected call of SubmitBuilderPreferences.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) SubmitBuilderPreferences(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitBuilderPreferences", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).SubmitBuilderPreferences), arg0, arg1)
+}
+
 // SubmitPayloadAttestation mocks base method.
 func (m *MockBeaconNodeValidatorServer) SubmitPayloadAttestation(arg0 context.Context, arg1 *eth.PayloadAttestationMessage) (*emptypb.Empty, error) {
 	m.ctrl.T.Helper()

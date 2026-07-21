@@ -31,7 +31,7 @@ type BlockBuilder interface {
 	GetHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubKey [48]byte) (builder.SignedBid, error)
 	GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash, parentRoot [32]byte, proposerPubkey [48]byte, authsByURL map[string]*ethpb.SignedRequestAuthV1) ([]PayloadBid, error)
 	SubmitSignedBeaconBlock(ctx context.Context, builderURL string, block interfaces.ReadOnlySignedBeaconBlock) error
-	SubmitBuilderPreferences(ctx context.Context, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1) error
+	SubmitBuilderPreferences(ctx context.Context, builderURL string, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1) error
 	RegisterValidator(ctx context.Context, reg []*ethpb.SignedValidatorRegistrationV1) error
 	RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error)
 	Configured() bool
@@ -226,15 +226,15 @@ func (s *Service) SubmitSignedBeaconBlock(ctx context.Context, builderURL string
 	return c.SubmitSignedBeaconBlock(ctx, b)
 }
 
-// Routed to the builder named in the signed request auth.
-func (s *Service) SubmitBuilderPreferences(ctx context.Context, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1) error {
+// SubmitBuilderPreferences forwards a proposer's signed preferences to the builder
+// at builderURL (builder-specs preferences channel), ahead of the proposal slot.
+func (s *Service) SubmitBuilderPreferences(ctx context.Context, builderURL string, validatorPubkey [48]byte, req *ethpb.BuilderPreferencesRequestV1) error {
 	ctx, span := trace.StartSpan(ctx, "builder.SubmitBuilderPreferences")
 	defer span.End()
-	url := string(req.GetAuth().GetMessage().GetData())
-	if url == "" {
+	if builderURL == "" {
 		return errors.New("builder preferences missing builder url")
 	}
-	c, err := s.clientFor(url)
+	c, err := s.clientFor(builderURL)
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return err

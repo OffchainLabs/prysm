@@ -144,7 +144,9 @@ func TestServer_SetValidatorConfig_EmptyDocumentClearsKey(t *testing.T) {
 	require.Equal(t, false, present)
 }
 
-func TestServer_SetValidatorConfig_UnknownPubkeyNotFound(t *testing.T) {
+// Configs for keys the server does not yet manage are stored (pre-provisioning
+// per the spec) and take effect when the key is later added.
+func TestServer_SetValidatorConfig_UnknownPubkeyPreProvisions(t *testing.T) {
 	srv, _ := setupConfigServer(t, 1)
 	// 48-byte pubkey never recovered into the keymanager.
 	unknown := "0x" + "abcdef0011223344556677889900aabbccddeeff00112233445566778899aabbccddeeff001122334455667788990011"
@@ -154,24 +156,31 @@ func TestServer_SetValidatorConfig_UnknownPubkeyNotFound(t *testing.T) {
 	setResp := &SetValidatorConfigResponse{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), setResp))
 	require.NotNil(t, setResp.Data[unknown])
-	require.Equal(t, configStatusNotFound, setResp.Data[unknown].Status)
+	require.Equal(t, configStatusSet, setResp.Data[unknown].Status)
 
-	// Settings are untouched: no per-key config was written.
 	getResp := getValidatorConfig(t, srv, "")
-	require.Equal(t, 0, len(getResp.Data.Configs))
+	cfg := getResp.Data.Configs[unknown]
+	require.NotNil(t, cfg)
+	require.NotNil(t, cfg.Graffiti)
+	require.Equal(t, "x", *cfg.Graffiti)
 }
 
-func TestServer_SetValidatorConfig_UnknownJSONFieldRejected(t *testing.T) {
+// Unrecognized fields are ignored for forward compatibility, per the spec.
+func TestServer_SetValidatorConfig_UnknownJSONFieldIgnored(t *testing.T) {
 	srv, keys := setupConfigServer(t, 1)
 	pk := hexutil.Encode(keys[0][:])
 
-	// Unknown field in the per-key config document.
-	w := postValidatorConfig(t, srv, `{"configs":{"`+pk+`":{"not_a_field":"x"}}}`)
-	require.Equal(t, http.StatusBadRequest, w.Code)
+	// Unknown fields in the per-key document and the envelope are both ignored;
+	// recognized fields alongside them are still applied.
+	w := postValidatorConfig(t, srv, `{"configs":{"`+pk+`":{"not_a_field":"x","graffiti":"kept"}},"bogus":true}`)
+	require.Equal(t, http.StatusOK, w.Code)
+	setResp := &SetValidatorConfigResponse{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), setResp))
+	require.Equal(t, configStatusSet, setResp.Data[pk].Status)
 
-	// Unknown field in the top-level envelope.
-	w = postValidatorConfig(t, srv, `{"configs":{},"bogus":true}`)
-	require.Equal(t, http.StatusBadRequest, w.Code)
+	getResp := getValidatorConfig(t, srv, "")
+	require.NotNil(t, getResp.Data.Configs[pk])
+	require.Equal(t, "kept", *getResp.Data.Configs[pk].Graffiti)
 }
 
 func TestServer_SetValidatorConfig_PerKeyErrorsIsolated(t *testing.T) {

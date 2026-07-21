@@ -18,10 +18,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Per-key statuses; not_found is unused because Prysm supports pre-provisioning.
 const (
-	configStatusSet      = "set"
-	configStatusNotFound = "not_found"
-	configStatusError    = "error"
+	configStatusSet   = "set"
+	configStatusError = "error"
 )
 
 // GetValidatorConfig implements GET /eth/v1/validator/config from keymanager-APIs #87.
@@ -72,31 +72,15 @@ func (s *Server) SetValidatorConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Unrecognized fields are ignored for forward compatibility, per the spec.
 	var req SetValidatorConfigRequest
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	if req.Configs == nil {
 		httputil.HandleError(w, "No configs submitted", http.StatusBadRequest)
 		return
-	}
-
-	km, err := s.validatorService.Keymanager()
-	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	known, err := km.FetchValidatingPublicKeys(ctx)
-	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	knownSet := make(map[[fieldparams.BLSPubkeyLength]byte]bool, len(known))
-	for _, pk := range known {
-		knownSet[pk] = true
 	}
 
 	s.proposerSettingsLock.Lock()
@@ -121,10 +105,8 @@ func (s *Server) SetValidatorConfig(w http.ResponseWriter, r *http.Request) {
 			resp.Data[rawPubkey] = &ValidatorConfigStatus{Status: configStatusError, Message: err.Error()}
 			continue
 		}
-		if !knownSet[pubkey] {
-			resp.Data[rawPubkey] = &ValidatorConfigStatus{Status: configStatusNotFound}
-			continue
-		}
+		// Keys the server does not yet manage are stored anyway (pre-provisioning
+		// per the spec); the config takes effect when the key is later added.
 		if cfg == nil || cfg.isEmpty() {
 			delete(settings.ProposeConfig, pubkey)
 			resp.Data[rawPubkey] = &ValidatorConfigStatus{Status: configStatusSet}

@@ -128,17 +128,18 @@ func TestClientFor_SeedsFlagClientAndCachesDials(t *testing.T) {
 	require.Equal(t, 1, dialed)
 }
 
-func TestSubmitBuilderPreferences_DialsPerURL(t *testing.T) {
+func TestSubmitBuilderPreferences_DialsExplicitURL(t *testing.T) {
 	fc := &fakeBuilderClient{url: "http://b"}
 	s := newMultiplexService(t, map[string]*fakeBuilderClient{"http://b": fc})
 
 	req := &eth.BuilderPreferencesRequestV1{
 		Preferences: &eth.BuilderPreferencesV1{},
-		Auth:        authFor("http://b"),
+		Auth:        authFor("opaque-auth-data"),
 	}
-	require.NoError(t, s.SubmitBuilderPreferences(t.Context(), [48]byte{}, req))
+	require.NoError(t, s.SubmitBuilderPreferences(t.Context(), "http://b", [48]byte{}, req))
 	require.Equal(t, 1, fc.prefCount)
 
-	err := s.SubmitBuilderPreferences(t.Context(), [48]byte{}, &eth.BuilderPreferencesRequestV1{Auth: authFor("")})
+	// The URL comes from the explicit parameter, never from the opaque auth data.
+	err := s.SubmitBuilderPreferences(t.Context(), "", [48]byte{}, req)
 	require.ErrorContains(t, "missing builder url", err)
 }

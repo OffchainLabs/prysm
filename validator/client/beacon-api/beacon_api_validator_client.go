@@ -300,6 +300,12 @@ func (c *beaconApiValidatorClient) SubmitSignedProposerPreferences(ctx context.C
 	})
 }
 
+// TODO(gloas): no beacon-API endpoint exists for the builder preferences forward yet.
+func (c *beaconApiValidatorClient) SubmitBuilderPreferences(_ context.Context, _ *ethpb.SubmitBuilderPreferencesRequest) (*empty.Empty, error) {
+	log.Debug("SubmitBuilderPreferences not yet implemented for beacon API client, skipping")
+	return new(empty.Empty), nil
+}
+
 // TODO(gloas): Wire up actual REST call to POST /eth/v2/beacon/execution_payload/bid
 func (c *beaconApiValidatorClient) SubmitSignedExecutionPayloadBid(_ context.Context, _ *ethpb.SignedExecutionPayloadBid) (*empty.Empty, error) {
 	log.Debug("SubmitSignedExecutionPayloadBid not yet implemented for beacon API client, skipping")

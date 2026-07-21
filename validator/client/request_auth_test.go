@@ -219,6 +219,40 @@ func uint64ValPtrClient(v uint64) *validatortypes.Uint64 {
 	return &u
 }
 
+// Warm both signs auths for the inline path and emits the ahead-of-time
+// builder-specs preference submissions, pairing each builder URL with the auth
+// signed over ITS auth_data and its own max payment.
+func TestWarmBuilderRequestAuthsForDuties_EmitsPreferenceSubmissions(t *testing.T) {
+	kp := randKeypair(t)
+	km := newMockKeymanager(t, kp)
+	slot := primitives.Slot(30)
+	maxA := validatortypes.Uint64(100)
+	maxB := validatortypes.Uint64(200)
+
+	v := validator{proposerSettings: settingsWithBuilders(kp.pub,
+		&proposer.BuilderEntry{URL: "https://a", AuthData: []byte("A"), MaxExecutionPayment: &maxA},
+		&proposer.BuilderEntry{URL: "https://b", AuthData: []byte("B"), MaxExecutionPayment: &maxB},
+	)}
+	duties := func(yield func(pubkey, *ethpb.ValidatorDuty) bool) {
+		// One past slot (skipped) and one future proposal slot.
+		yield(kp.pub, &ethpb.ValidatorDuty{ProposerSlots: []primitives.Slot{slot, slot + 2}})
+	}
+
+	reqs := v.warmBuilderRequestAuthsForDuties(t.Context(), km, slot, duties)
+	require.Equal(t, 2, len(reqs))
+
+	byURL := map[string]*ethpb.SubmitBuilderPreferencesRequest{}
+	for _, r := range reqs {
+		byURL[r.Url] = r
+		require.DeepEqual(t, kp.pub[:], r.ValidatorPubkey)
+		require.Equal(t, slot+2, r.Request.Auth.Message.Slot)
+	}
+	require.DeepEqual(t, []byte("A"), byURL["https://a"].Request.Auth.Message.Data)
+	require.Equal(t, primitives.Gwei(100), byURL["https://a"].Request.Preferences.MaxExecutionPayment)
+	require.DeepEqual(t, []byte("B"), byURL["https://b"].Request.Auth.Message.Data)
+	require.Equal(t, primitives.Gwei(200), byURL["https://b"].Request.Preferences.MaxExecutionPayment)
+}
+
 func TestSignedRequestAuthFor_KeyIncludesAuthData(t *testing.T) {
 	pk := [fieldparams.BLSPubkeyLength]byte{3}
 	slot := primitives.Slot(4)

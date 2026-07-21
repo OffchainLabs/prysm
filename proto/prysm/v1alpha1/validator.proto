@@ -542,6 +542,17 @@ service BeaconNodeValidator {
     };
   }
 
+  // SubmitBuilderPreferences forwards a proposer's signed builder preferences to
+  // one builder ahead of a proposal slot (builder-specs preferences channel).
+  rpc SubmitBuilderPreferences(SubmitBuilderPreferencesRequest)
+      returns (google.protobuf.Empty) {
+    option deprecated = true;
+    option (google.api.http) = {
+      post : "/eth/v1alpha1/validator/builder_preferences"
+      body : "*"
+    };
+  }
+
   // SubmitSignedExecutionPayloadBid broadcasts a signed execution payload bid
   // to the P2P gossip network.
   rpc SubmitSignedExecutionPayloadBid(SignedExecutionPayloadBid)
