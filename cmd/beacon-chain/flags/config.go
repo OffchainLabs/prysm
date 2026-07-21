@@ -19,6 +19,7 @@ const (
 type GlobalFlags struct {
 	Supernode                       bool
 	DisableGetBlobsV2               bool
+	SimulatePartialELBlobs          bool
 	SemiSupernode                   bool
 	SubscribeToAllSubnets           bool
 	PostponeShutdownForProposals    bool
@@ -85,6 +86,11 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 	if ctx.Bool(PostponeShutdownForProposals.Name) {
 		log.Info("Graceful shutdown will be postponed while a connected validator client has a block proposal in the next 2 epochs")
 		cfg.PostponeShutdownForProposals = true
+	}
+
+	if ctx.Bool(SimulatePartialELBlobs.Name) {
+		log.Warning("Simulating partial engine_getBlobs responses: dropping a subset of blobs to force peer-to-peer partial-column cell exchange")
+		cfg.SimulatePartialELBlobs = true
 	}
 
 	// State-diff-exponents
