@@ -22,10 +22,23 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/sirupsen/logrus"
 )
 
 const builderBidTimeout = 300 * time.Millisecond
+
+var (
+	gloasBidSourceTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "gloas_bid_source_total",
+		Help: "Count of chosen execution payload bids by source.",
+	}, []string{"source"})
+	gloasBidValueGwei = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "gloas_bid_value_gwei",
+		Help: "Effective value in gwei of the most recently chosen execution payload bid.",
+	})
+)
 
 // bidSource indicates where the winning execution payload bid came from.
 type bidSource int
@@ -68,6 +81,8 @@ func (vs *Server) setExecutionPayloadBid(
 			if err := sBlk.SetSignedExecutionPayloadBid(bestBid); err != nil {
 				return bidSourceSelfBuild, errors.Wrap(err, "could not set remote execution payload bid")
 			}
+			gloasBidSourceTotal.WithLabelValues(src.String()).Inc()
+			gloasBidValueGwei.Set(float64(effectiveBidValue(bestBid, maxExecutionPayment)))
 			log.WithFields(logrus.Fields{
 				"slot":      sBlk.Block().Slot(),
 				"source":    src,
@@ -93,6 +108,8 @@ func (vs *Server) setExecutionPayloadBid(
 		return bidSourceSelfBuild, errors.Wrap(err, "could not set signed execution payload bid")
 	}
 
+	gloasBidSourceTotal.WithLabelValues(bidSourceSelfBuild.String()).Inc()
+	gloasBidValueGwei.Set(float64(primitives.WeiToGwei(local.Bid)))
 	log.WithFields(logrus.Fields{
 		"slot":      sBlk.Block().Slot(),
 		"source":    bidSourceSelfBuild,
