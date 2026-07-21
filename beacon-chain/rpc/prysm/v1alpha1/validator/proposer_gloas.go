@@ -46,7 +46,7 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 		selfBuildOnly := local.OverrideBuilder || skipBuilder
 		var builderBid *ethpb.SignedExecutionPayloadBid
 		var builderURL string
-		prefs := bidPreferences{boostFactor: neutralBuilderBoostFactor}
+		var builderEff primitives.Gwei
 		if !selfBuildOnly && len(builderPreferences) > 0 {
 			val, valErr := head.ValidatorAtIndexReadOnly(sBlk.Block().ProposerIndex())
 			parentGasLimit, glErr := vs.ForkchoiceFetcher.GasLimit(sBlk.Block().ParentRoot())
@@ -57,24 +57,22 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 				log.WithError(glErr).Error("Could not get parent gas limit for builder bid request")
 			default:
 				pubkey := val.PublicKey()
-				var authsByURL map[string]*ethpb.SignedRequestAuthV1
-				authsByURL, prefs = builderAuthsAndPrefs(builderPreferences)
 				pref := vs.proposerPreferenceForProposal(ctx, head, sBlk.Block().Slot(), sBlk.Block().ProposerIndex())
 				feeRecipient := pref.FeeRecipientOrDefault()
-				builderBid, builderURL = vs.getBuilderExecutionPayloadBid(ctx, head, &builderBidQuery{
+				builderBid, builderURL, builderEff = vs.getBuilderExecutionPayloadBid(ctx, head, &builderBidQuery{
 					slot:           sBlk.Block().Slot(),
 					parentRoot:     sBlk.Block().ParentRoot(),
 					parentHash:     bytesutil.ToBytes32(local.ExecutionData.ParentHash()),
 					pubkey:         pubkey,
-					maxPayment:     prefs.maxPayment,
+					localValue:     primitives.WeiToGwei(local.Bid),
 					feeRecipient:   feeRecipient[:],
 					parentGasLimit: parentGasLimit,
 					targetGasLimit: pref.GasLimitOr(parentGasLimit),
-					authsByURL:     authsByURL,
+					prefsByURL:     builderPrefsByURL(builderPreferences),
 				})
 			}
 		}
-		src, bidErr := vs.setExecutionPayloadBid(ctx, sBlk, local, builderBid, prefs, selfBuildOnly)
+		src, bidErr := vs.setExecutionPayloadBid(ctx, sBlk, local, builderBid, builderEff, selfBuildOnly)
 		if bidErr != nil {
 			return nil, status.Errorf(codes.Internal, "Could not set execution payload bid: %v", bidErr)
 		}
@@ -123,32 +121,28 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 	return blk, nil
 }
 
-// builderAuthsAndPrefs extracts the signed request auths and the effective
-// proposer-local bid preferences from the inline builder preferences carried on
-// the block request. The effective preferences use the first valid entry as the
-// proposal baseline. The beacon node enforces the caps locally during bid
-// selection; communicating preferences to the builder is left to the bid request.
-func builderAuthsAndPrefs(prefs []*ethpb.BuilderPreferenceV1) (map[string]*ethpb.SignedRequestAuthV1, bidPreferences) {
-	authsByURL := make(map[string]*ethpb.SignedRequestAuthV1, len(prefs))
-	bp := bidPreferences{boostFactor: neutralBuilderBoostFactor}
-	baselineSet := false
+// builderPrefsByURL indexes each builder entry's auth and bid preferences by
+// url; every builder's bid is later judged under its own entry's values.
+func builderPrefsByURL(prefs []*ethpb.BuilderPreferenceV1) map[string]builderPref {
+	out := make(map[string]builderPref, len(prefs))
 	for _, p := range prefs {
 		if p == nil || p.Request == nil || p.Request.Auth == nil || p.Url == "" {
 			continue
 		}
-		if _, ok := authsByURL[p.Url]; !ok {
-			authsByURL[p.Url] = p.Request.Auth
+		if _, ok := out[p.Url]; ok {
+			continue
 		}
-		if !baselineSet {
-			bp.maxPayment = uint64(p.Request.Preferences.GetMaxExecutionPayment())
-			if p.MinBid != nil {
-				bp.minBid = uint64(p.GetMinBid())
-			}
-			if p.BuilderBoostFactor != nil {
-				bp.boostFactor = p.GetBuilderBoostFactor()
-			}
-			baselineSet = true
+		bp := bidPreferences{
+			maxPayment:  uint64(p.Request.Preferences.GetMaxExecutionPayment()),
+			boostFactor: neutralBuilderBoostFactor,
 		}
+		if p.MinBid != nil {
+			bp.minBid = uint64(p.GetMinBid())
+		}
+		if p.BuilderBoostFactor != nil {
+			bp.boostFactor = p.GetBuilderBoostFactor()
+		}
+		out[p.Url] = builderPref{auth: p.Request.Auth, prefs: bp}
 	}
-	return authsByURL, bp
+	return out
 }

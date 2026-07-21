@@ -6,87 +6,32 @@ import (
 	"math"
 	"testing"
 
-	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
-// TestBestBid_BoostFactor exercises the boost-factor and min-bid preferences that
-// gate whether a builder bid can beat the local self-build.
-func TestBestBid_BoostFactor(t *testing.T) {
-	const builderIdx = primitives.BuilderIndex(2)
+// TestBuilderBidGate exercises the per-entry floor and boost gate each builder
+// bid must clear against the local self-build before ranking.
+func TestBuilderBidGate(t *testing.T) {
 	tests := []struct {
-		name    string
-		local   *consensusblocks.GetPayloadResponse
-		builder *ethpb.SignedExecutionPayloadBid
-		prefs   bidPreferences
-		wantSrc bidSource
-		wantNil bool
+		name  string
+		eff   primitives.Gwei
+		local primitives.Gwei
+		prefs bidPreferences
+		want  bool
 	}{
-		{
-			name:    "neutral 100 higher builder wins",
-			local:   localWithGwei(100),
-			builder: newBid(1000, 0, builderIdx),
-			prefs:   bidPreferences{maxPayment: 1000, boostFactor: 100},
-			wantSrc: bidSourceBuilderAPI,
-		},
-		{
-			name:    "neutral 100 lower builder loses",
-			local:   localWithGwei(1000),
-			builder: newBid(100, 0, builderIdx),
-			prefs:   bidPreferences{maxPayment: 1000, boostFactor: 100},
-			wantSrc: bidSourceSelfBuild,
-			wantNil: true,
-		},
-		{
-			name:    "boost 0 prefers local even when builder is higher",
-			local:   localWithGwei(0),
-			builder: newBid(1000, 0, builderIdx),
-			prefs:   bidPreferences{maxPayment: 1000, boostFactor: 0},
-			wantSrc: bidSourceSelfBuild,
-			wantNil: true,
-		},
-		{
-			name:    "boost max prefers builder even when local is higher",
-			local:   localWithGwei(1000),
-			builder: newBid(1, 0, builderIdx),
-			prefs:   bidPreferences{maxPayment: 1000, boostFactor: math.MaxUint64},
-			wantSrc: bidSourceBuilderAPI,
-		},
-		{
-			name:    "boost 200 lets 60 beat local 100",
-			local:   localWithGwei(100),
-			builder: newBid(60, 0, builderIdx),
-			prefs:   bidPreferences{maxPayment: 1000, boostFactor: 200},
-			wantSrc: bidSourceBuilderAPI,
-		},
-		{
-			name:    "min_bid rejects builder below floor",
-			local:   localWithGwei(0),
-			builder: newBid(50, 0, builderIdx),
-			prefs:   bidPreferences{maxPayment: 1000, boostFactor: 100, minBid: 100},
-			wantSrc: bidSourceSelfBuild,
-			wantNil: true,
-		},
-		{
-			name:    "min_bid allows builder at floor",
-			local:   localWithGwei(0),
-			builder: newBid(100, 0, builderIdx),
-			prefs:   bidPreferences{maxPayment: 1000, boostFactor: 100, minBid: 100},
-			wantSrc: bidSourceBuilderAPI,
-		},
+		{name: "neutral 100 higher wins", eff: 1000, local: 100, prefs: bidPreferences{boostFactor: 100}, want: true},
+		{name: "neutral 100 lower loses", eff: 100, local: 1000, prefs: bidPreferences{boostFactor: 100}, want: false},
+		{name: "boost 0 never wins", eff: 1000, local: 0, prefs: bidPreferences{boostFactor: 0}, want: false},
+		{name: "boost max always wins", eff: 1, local: 1000, prefs: bidPreferences{boostFactor: math.MaxUint64}, want: true},
+		{name: "boost 200 lets 60 beat 100", eff: 60, local: 100, prefs: bidPreferences{boostFactor: 200}, want: true},
+		{name: "below min_bid rejected", eff: 99, local: 0, prefs: bidPreferences{boostFactor: 100, minBid: 100}, want: false},
+		{name: "at min_bid accepted", eff: 100, local: 0, prefs: bidPreferences{boostFactor: 100, minBid: 100}, want: true},
+		{name: "min_bid gates max boost", eff: 99, local: 0, prefs: bidPreferences{boostFactor: math.MaxUint64, minBid: 100}, want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, src := bestBid(tt.local, nil, tt.builder, tt.prefs)
-			require.Equal(t, tt.wantSrc, src)
-			if tt.wantNil {
-				require.IsNil(t, got)
-				return
-			}
-			require.NotNil(t, got)
-			require.Equal(t, builderIdx, got.Message.BuilderIndex)
+			require.Equal(t, tt.want, builderBidQualifies(tt.eff, tt.local, tt.prefs))
 		})
 	}
 }
