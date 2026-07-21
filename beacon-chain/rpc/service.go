@@ -100,9 +100,9 @@ type Config struct {
 	ExecutionChainInfoFetcher        execution.ChainInfoFetcher
 	GenesisTimeFetcher               blockchain.TimeFetcher
 	GenesisFetcher                   blockchain.GenesisFetcher
-	MockEth1Votes                    bool
 	EnableDebugRPCEndpoints          bool
 	AttestationCache                 *cache.AttestationCache
+	AttestationDataCache             *cache.AttestationDataCache
 	AttestationsPool                 attestations.Pool
 	PayloadAttestationPool           payloadattestation.PoolManager
 	ExitPool                         voluntaryexits.PoolManager
@@ -114,6 +114,7 @@ type Config struct {
 	PeersFetcher                     p2p.PeersProvider
 	PeerManager                      p2p.PeerManager
 	MetadataProvider                 p2p.MetadataProvider
+	CustodyManager                   p2p.CustodyManager
 	DepositFetcher                   cache.DepositFetcher
 	PendingDepositFetcher            depositsnapshot.PendingDepositsFetcher
 	StateNotifier                    statefeed.Notifier
@@ -222,7 +223,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		Broadcaster:           s.cfg.Broadcaster,
 		SyncCommitteePool:     s.cfg.SyncCommitteeObjectPool,
 		OperationNotifier:     s.cfg.OperationNotifier,
-		AttestationCache:      cache.NewAttestationDataCache(),
+		AttestationCache:      s.cfg.AttestationDataCache,
 		StateGen:              s.cfg.StateGen,
 		P2P:                   s.cfg.Broadcaster,
 		FinalizedFetcher:      s.cfg.FinalizationFetcher,
@@ -256,7 +257,6 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		ExecutionPayloadEnvelopeReceiver: s.cfg.ExecutionPayloadEnvelopeReceiver,
 		BlobReceiver:                     s.cfg.BlobReceiver,
 		DataColumnReceiver:               s.cfg.DataColumnReceiver,
-		MockEth1Votes:                    s.cfg.MockEth1Votes,
 		Eth1BlockFetcher:                 s.cfg.ExecutionChainService,
 		PendingDepositsFetcher:           s.cfg.PendingDepositFetcher,
 		SlashingsPool:                    s.cfg.SlashingsPool,

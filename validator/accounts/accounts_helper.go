@@ -148,6 +148,12 @@ func FilterExitAccountsFromUserInput(
 	validatingPublicKeys [][fieldparams.BLSPubkeyLength]byte,
 	forceExit bool,
 ) (rawPubKeys [][]byte, formattedPubKeys []string, err error) {
+	writeToFile := len(cliCtx.String(flags.VoluntaryExitJSONOutputPathFlag.Name)) > 0
+	// With --exit-json-output-dir, exits are only written to files and never broadcast.
+	actionText := "perform a voluntary exit on"
+	if writeToFile {
+		actionText = "write a signed voluntary exit file (the exit will NOT be broadcast) for"
+	}
 	if !cliCtx.IsSet(flags.ExitAllFlag.Name) {
 		// Allow the user to interactively select the accounts to exit or optionally
 		// provide them via cli flags as a string of comma-separated, hex strings.
@@ -170,10 +176,8 @@ func FilterExitAccountsFromUserInput(
 		allAccountStr := strings.Join(formattedPubKeys, ", ")
 		if !cliCtx.IsSet(flags.VoluntaryExitPublicKeysFlag.Name) {
 			if len(filteredPubKeys) == 1 {
-				promptText := "Are you sure you want to perform a voluntary exit on 1 account? (%s) Y/N"
-				resp, err := prompt.ValidatePrompt(
-					r, fmt.Sprintf(promptText, au.BrightGreen(formattedPubKeys[0])), prompt.ValidateYesOrNo,
-				)
+				promptText := fmt.Sprintf("Are you sure you want to %s 1 account? (%s) Y/N", actionText, au.BrightGreen(formattedPubKeys[0]))
+				resp, err := prompt.ValidatePrompt(r, promptText, prompt.ValidateYesOrNo)
 				if err != nil {
 					return nil, nil, err
 				}
@@ -181,13 +185,15 @@ func FilterExitAccountsFromUserInput(
 					return nil, nil, nil
 				}
 			} else {
-				promptText := "Are you sure you want to perform a voluntary exit on %d accounts? (%s) Y/N"
+				var promptText string
 				if len(filteredPubKeys) == len(validatingPublicKeys) {
 					promptText = fmt.Sprintf(
-						"Are you sure you want to perform a voluntary exit on all accounts? Y/N (%s)",
-						au.BrightGreen(allAccountStr))
+						"Are you sure you want to %s all accounts? Y/N (%s)",
+						actionText, au.BrightGreen(allAccountStr))
 				} else {
-					promptText = fmt.Sprintf(promptText, len(filteredPubKeys), au.BrightGreen(allAccountStr))
+					promptText = fmt.Sprintf(
+						"Are you sure you want to %s %d accounts? (%s) Y/N",
+						actionText, len(filteredPubKeys), au.BrightGreen(allAccountStr))
 				}
 				resp, err := prompt.ValidatePrompt(r, promptText, prompt.ValidateYesOrNo)
 				if err != nil {
@@ -200,7 +206,11 @@ func FilterExitAccountsFromUserInput(
 		}
 	} else {
 		rawPubKeys, formattedPubKeys = prepareAllKeys(validatingPublicKeys)
-		fmt.Printf("About to perform a voluntary exit of %d accounts\n", len(rawPubKeys))
+		if writeToFile {
+			fmt.Printf("About to write signed voluntary exit files (no exits will be broadcast) for %d accounts\n", len(rawPubKeys))
+		} else {
+			fmt.Printf("About to perform a voluntary exit of %d accounts\n", len(rawPubKeys))
+		}
 	}
 
 	if forceExit {
@@ -209,6 +219,9 @@ func FilterExitAccountsFromUserInput(
 
 	promptHeader := au.Red("===============CONFIRMATION NEEDED===============")
 	promptQuestion := "continue with the voluntary exit? (y/n)"
+	if writeToFile {
+		promptQuestion = "continue writing signed voluntary exit files? No exits will be broadcast to the network. (y/n)"
+	}
 	promptText := fmt.Sprintf("%s\n%s", promptHeader, promptQuestion)
 	resp, err := prompt.ValidatePrompt(r, promptText, prompt.ValidateYesOrNo)
 	if err != nil {

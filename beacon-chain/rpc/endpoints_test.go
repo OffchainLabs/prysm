@@ -118,7 +118,7 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/validator/proposer_preferences":                                   {http.MethodPost},
 		"/eth/v1/validator/register_validator":                                     {http.MethodPost},
 		"/eth/v1/validator/liveness/{epoch}":                                       {http.MethodPost},
-		"/eth/v1/validator/payload_attestation_data/{slot}":                        {http.MethodGet},
+		"/eth/v1/validator/payload_attestation_data":                               {http.MethodGet},
 	}
 
 	prysmBeaconRoutes := map[string][]string{
@@ -136,6 +136,7 @@ func Test_endpoints(t *testing.T) {
 		"/prysm/v1/node/trusted_peers":           {http.MethodGet, http.MethodPost},
 		"/prysm/node/trusted_peers/{peer_id}":    {http.MethodDelete},
 		"/prysm/v1/node/trusted_peers/{peer_id}": {http.MethodDelete},
+		"/prysm/v1/node/custody":                 {http.MethodGet},
 	}
 
 	prysmValidatorRoutes := map[string][]string{
@@ -143,6 +144,28 @@ func Test_endpoints(t *testing.T) {
 		"/prysm/v1/validators/performance":                   {http.MethodPost},
 		"/prysm/v1/validators/{state_id}/participation":      {http.MethodGet},
 		"/prysm/v1/validators/{state_id}/active_set_changes": {http.MethodGet},
+	}
+
+	// Routes removed from the Beacon API specification, registered to respond with 410 Gone.
+	removedRoutes := map[string][]string{
+		"/eth/v1/beacon/blocks/{block_id}":                       {http.MethodGet},
+		"/eth/v1/beacon/blocks/{block_id}/attestations":          {http.MethodGet},
+		"/eth/v1/beacon/blocks":                                  {http.MethodPost},
+		"/eth/v1/beacon/blinded_blocks":                          {http.MethodPost},
+		"/eth/v1/beacon/pool/attestations":                       {http.MethodGet, http.MethodPost},
+		"/eth/v1/beacon/pool/attester_slashings":                 {http.MethodGet, http.MethodPost},
+		"/eth/v1/beacon/deposit_snapshot":                        {http.MethodGet},
+		"/eth/v1/builder/states/{state_id}/expected_withdrawals": {http.MethodGet},
+		"/eth/v1/validator/aggregate_attestation":                {http.MethodGet},
+		"/eth/v1/validator/aggregate_and_proofs":                 {http.MethodPost},
+		"/eth/v1/validator/blocks/{slot}":                        {http.MethodGet},
+		"/eth/v2/validator/blocks/{slot}":                        {http.MethodGet},
+		"/eth/v1/validator/blinded_blocks/{slot}":                {http.MethodGet},
+	}
+
+	removedDebugRoutes := map[string][]string{
+		"/eth/v1/debug/beacon/states/{state_id}": {http.MethodGet},
+		"/eth/v1/debug/beacon/heads":             {http.MethodGet},
 	}
 
 	testCases := []struct {
@@ -185,6 +208,7 @@ func Test_endpoints(t *testing.T) {
 				beaconRoutes, configRoutes, debugRoutes, eventsRoutes,
 				nodeRoutes, validatorRoutes, rewardsRoutes, blobRoutes,
 				prysmValidatorRoutes, prysmNodeRoutes, prysmBeaconRoutes,
+				removedRoutes, removedDebugRoutes,
 			} {
 				maps.Copy(expectedRoutes, m)
 			}

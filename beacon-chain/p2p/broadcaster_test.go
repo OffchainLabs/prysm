@@ -381,7 +381,9 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	require.NoError(t, err)
 
 	// Block until gossipsub is ready to deliver a published message to p2.
-	require.NoError(t, ps1Tracer.CanPublishToPeer(t.Context(), topic, p2.PeerID()))
+	canPublishCtx, canPublishCancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer canPublishCancel()
+	require.NoError(t, ps1Tracer.CanPublishToPeer(canPublishCtx, topic, p2.PeerID()))
 
 	// Async listen for the pubsub, must be before the broadcast.
 	var wg sync.WaitGroup

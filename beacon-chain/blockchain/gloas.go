@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
@@ -50,7 +51,7 @@ func (s *Service) runLatePayloadTasks() {
 	if err := s.waitUntilEpoch(cfg.GloasForkEpoch, cfg.SecondsPerSlot); err != nil {
 		return
 	}
-	offset := cfg.SlotComponentDuration(cfg.PayloadAttestationDueBPS)
+	offset := cfg.SlotComponentDuration(cfg.PayloadDueBPS)
 	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, offset, cfg.SecondsPerSlot)
 	defer ticker.Done()
 	for {
@@ -65,8 +66,8 @@ func (s *Service) runLatePayloadTasks() {
 }
 
 // checkIfProposing does not advance st and only resolves the proposer correctly when st is
-// already advanced to at least slot's epoch. Its sole caller, getLatePayloadAttribute, satisfies
-// this by passing the head state for current slot + 1.
+// already advanced to at least slot's epoch. Callers satisfy this by passing a head or block
+// state for the following slot.
 //
 // WARNING: if called with a head lagging further behind (e.g. several empty epochs), the epoch
 // checks below fall through and it returns (nil, nil) — reported as "not proposing" — even when
@@ -181,9 +182,6 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 		return
 	}
 	hr := [32]byte(r)
-	if s.payloadBeingSynced.isSyncing(hr) {
-		return
-	}
 	if s.HasFullNode(hr) {
 		return
 	}
@@ -274,4 +272,48 @@ func (s *Service) saveHeadIfNeeded(ctx context.Context, cfg *postBlockProcessCon
 		log.WithError(err).Error("Could not save head")
 	}
 	s.pruneAttsFromPool(ctx, cfg.postState, cfg.roblock)
+}
+
+func (s *Service) shouldBuildOnFull(st state.ReadOnlyBeaconState, root [32]byte, proposingSlot primitives.Slot) (bool, string) {
+	proposing := s.proposingAt(st, proposingSlot)
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.shouldBuildOnFullLocked(root, proposingSlot, proposing)
+}
+
+func (s *Service) shouldBuildOnFullLocked(root [32]byte, proposingSlot primitives.Slot, proposing bool) (bool, string) {
+	hs, err := s.cfg.ForkChoiceStore.Slot(root)
+	if err != nil {
+		log.WithError(err).Error("Could not get slot for head root")
+		return true, ""
+	}
+
+	if hs+1 != proposingSlot {
+		if !s.cfg.ForkChoiceStore.FullBeatsEmpty(root) {
+			return false, "forkchoice prefers empty"
+		}
+		return true, ""
+	}
+	if s.cfg.ForkChoiceStore.PTCVotedLate(root) {
+		return false, "ptc voted payload missing"
+	}
+	if s.cfg.ForkChoiceStore.PTCVotedEarlyAndAvailable(root) {
+		return true, ""
+	}
+	if !proposing || !features.Get().ReorgLatePayloads {
+		return true, ""
+	}
+	early, known := s.PayloadEarly(root)
+	if known && !early {
+		return false, "arrived late, betting on empty"
+	}
+	return true, ""
+}
+
+func (s *Service) proposingAt(st state.ReadOnlyBeaconState, slot primitives.Slot) bool {
+	p, err := s.checkIfProposing(st, slot)
+	if err != nil {
+		log.WithError(err).Error("Could not resolve tracked proposer")
+	}
+	return p != nil
 }

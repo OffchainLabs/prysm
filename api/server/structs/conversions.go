@@ -15,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/math"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
-	ethv1 "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
@@ -1531,15 +1530,15 @@ func PendingConsolidationsFromConsensus(cs []*eth.PendingConsolidation) []*Pendi
 	return consolidations
 }
 
-func HeadEventFromV1(event *ethv1.EventHead) *HeadEvent {
+func HeadEventFromData(data *statefeed.HeadData) *HeadEvent {
 	return &HeadEvent{
-		Slot:                      fmt.Sprintf("%d", event.Slot),
-		Block:                     hexutil.Encode(event.Block),
-		State:                     hexutil.Encode(event.State),
-		EpochTransition:           event.EpochTransition,
-		ExecutionOptimistic:       event.ExecutionOptimistic,
-		PreviousDutyDependentRoot: hexutil.Encode(event.PreviousDutyDependentRoot),
-		CurrentDutyDependentRoot:  hexutil.Encode(event.CurrentDutyDependentRoot),
+		Slot:                      fmt.Sprintf("%d", data.Slot),
+		Block:                     hexutil.Encode(data.Block[:]),
+		State:                     hexutil.Encode(data.State[:]),
+		EpochTransition:           data.EpochTransition,
+		PreviousDutyDependentRoot: hexutil.Encode(data.PreviousDutyDependentRoot[:]),
+		CurrentDutyDependentRoot:  hexutil.Encode(data.CurrentDutyDependentRoot[:]),
+		ExecutionOptimistic:       data.ExecutionOptimistic,
 	}
 }
 
@@ -1559,25 +1558,25 @@ func HeadEventFromDataV2(data *statefeed.HeadV2Data) *HeadEventV2 {
 	}
 }
 
-func FinalizedCheckpointEventFromV1(event *ethv1.EventFinalizedCheckpoint) *FinalizedCheckpointEvent {
+func FinalizedCheckpointEventFromData(data *statefeed.FinalizedCheckpointData) *FinalizedCheckpointEvent {
 	return &FinalizedCheckpointEvent{
-		Block:               hexutil.Encode(event.Block),
-		State:               hexutil.Encode(event.State),
-		Epoch:               fmt.Sprintf("%d", event.Epoch),
-		ExecutionOptimistic: event.ExecutionOptimistic,
+		Block:               hexutil.Encode(data.Block[:]),
+		State:               hexutil.Encode(data.State[:]),
+		Epoch:               fmt.Sprintf("%d", data.Epoch),
+		ExecutionOptimistic: data.ExecutionOptimistic,
 	}
 }
 
-func EventChainReorgFromV1(event *ethv1.EventChainReorg) *ChainReorgEvent {
+func ChainReorgEventFromData(data *statefeed.ChainReorgData) *ChainReorgEvent {
 	return &ChainReorgEvent{
-		Slot:                fmt.Sprintf("%d", event.Slot),
-		Depth:               fmt.Sprintf("%d", event.Depth),
-		OldHeadBlock:        hexutil.Encode(event.OldHeadBlock),
-		NewHeadBlock:        hexutil.Encode(event.NewHeadBlock),
-		OldHeadState:        hexutil.Encode(event.OldHeadState),
-		NewHeadState:        hexutil.Encode(event.NewHeadState),
-		Epoch:               fmt.Sprintf("%d", event.Epoch),
-		ExecutionOptimistic: event.ExecutionOptimistic,
+		Slot:                fmt.Sprintf("%d", data.Slot),
+		Depth:               fmt.Sprintf("%d", data.Depth),
+		OldHeadBlock:        hexutil.Encode(data.OldHeadBlock[:]),
+		NewHeadBlock:        hexutil.Encode(data.NewHeadBlock[:]),
+		OldHeadState:        hexutil.Encode(data.OldHeadState[:]),
+		NewHeadState:        hexutil.Encode(data.NewHeadState[:]),
+		Epoch:               fmt.Sprintf("%d", data.Epoch),
+		ExecutionOptimistic: data.ExecutionOptimistic,
 	}
 }
 

@@ -40,6 +40,112 @@ func TestValidatorsVoteWithTheMajoritySortsBlocksBySlot(t *testing.T) {
 	require.Equal(t, true, string(ec.ExpectedEth1DataVote) == string(vote))
 }
 
+func TestSelectVoluntaryExitCandidatesBoundaries(t *testing.T) {
+	tests := []struct {
+		name     string
+		keys     [][48]byte
+		exited   map[[48]byte]primitives.Epoch
+		reserved map[[48]byte]bool
+		limit    int
+		wantNil  bool
+		want     []primitives.ValidatorIndex
+	}{
+		{
+			name:    "returns nil for zero limit",
+			keys:    [][48]byte{{1}},
+			limit:   0,
+			wantNil: true,
+		},
+		{
+			name:    "returns nil for negative limit",
+			keys:    [][48]byte{{1}},
+			limit:   -1,
+			wantNil: true,
+		},
+		{
+			name:  "returns empty candidates for empty keys",
+			limit: 1,
+			want:  []primitives.ValidatorIndex{},
+		},
+		{
+			name:  "returns fewer eligible candidates than limit",
+			keys:  [][48]byte{{1}, {2}},
+			limit: 3,
+			want:  []primitives.ValidatorIndex{0, 1},
+		},
+		{
+			name:   "skips exited keys",
+			keys:   [][48]byte{{1}, {2}},
+			exited: map[[48]byte]primitives.Epoch{{1}: 1},
+			limit:  1,
+			want:   []primitives.ValidatorIndex{1},
+		},
+		{
+			name:     "falls back when all keys are reserved",
+			keys:     [][48]byte{{1}, {2}},
+			reserved: map[[48]byte]bool{{1}: true, {2}: true},
+			limit:    2,
+			want:     []primitives.ValidatorIndex{0, 1},
+		},
+		{
+			name:     "prefers unreserved keys before reserved keys",
+			keys:     [][48]byte{{1}, {2}, {3}},
+			exited:   map[[48]byte]primitives.Epoch{{1}: 1},
+			reserved: map[[48]byte]bool{{2}: true},
+			limit:    2,
+			want:     []primitives.ValidatorIndex{2, 1},
+		},
+		{
+			name:   "selects first and last indices",
+			keys:   [][48]byte{{1}, {2}, {3}},
+			exited: map[[48]byte]primitives.Epoch{{2}: 1},
+			limit:  2,
+			want:   []primitives.ValidatorIndex{0, 2},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			candidates := selectVoluntaryExitCandidates(test.keys, test.exited, test.reserved, test.limit)
+			if test.wantNil {
+				require.Equal(t, true, candidates == nil)
+				return
+			}
+			require.DeepEqual(t, test.want, candidates)
+		})
+	}
+}
+
+func TestEnsureVoluntaryExitSubmitted(t *testing.T) {
+	tests := []struct {
+		name      string
+		count     int
+		wantError string
+	}{
+		{
+			name:      "returns an error when no exits are submitted",
+			wantError: "no eligible validators available for voluntary exit",
+		},
+		{
+			name:  "allows one submitted exit",
+			count: 1,
+		},
+		{
+			name:  "allows multiple submitted exits",
+			count: 2,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := ensureVoluntaryExitSubmitted(test.count)
+			if test.wantError != "" {
+				require.ErrorContains(t, test.wantError, err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
 func phase0BlockContainer(slot primitives.Slot, vote []byte) *ethpb.BeaconBlockContainer {
 	return &ethpb.BeaconBlockContainer{
 		Block: &ethpb.BeaconBlockContainer_Phase0Block{

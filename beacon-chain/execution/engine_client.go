@@ -180,22 +180,36 @@ func (s *Service) ReconstructFullGloasExecutionPayloadsByHash(
 	}
 
 	for i, h := range requestHashes {
-		blk := execBlocks[i]
-		payload, err := gloasPayloadFromExecutionBlock(h, blk)
+		payload, err := gloasPayloadFromBlockAndBody(h, execBlocks[i], bodiesV2[i])
 		if err != nil {
 			return nil, err
-		}
-		if bodiesV2[i] != nil {
-			payload.Transactions = pb.RecastHexutilByteSlice(bodiesV2[i].Transactions)
-			payload.Withdrawals = bodiesV2[i].Withdrawals
-			if bodiesV2[i].BlockAccessList != nil {
-				payload.BlockAccessList = *bodiesV2[i].BlockAccessList
-			}
 		}
 		payloads[h] = payload
 	}
 
 	return payloads, nil
+}
+
+// gloasPayloadFromBlockAndBody constructs a Gloas payload from an execution block and its corresponding payload body.
+func gloasPayloadFromBlockAndBody(
+	requestedHash [32]byte, blk *pb.ExecutionBlock, body *pb.ExecutionPayloadBodyV2,
+) (*pb.ExecutionPayloadGloas, error) {
+	payload, err := gloasPayloadFromExecutionBlock(requestedHash, blk)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not construct payload from execution block")
+	}
+	if body == nil {
+		return nil, errors.Errorf("execution payload body unavailable for block hash %#x", requestedHash)
+	}
+	payload.Transactions = pb.RecastHexutilByteSlice(body.Transactions)
+	payload.Withdrawals = body.Withdrawals
+	if body.BlockAccessList != nil {
+		payload.BlockAccessList = *body.BlockAccessList
+	}
+	if payload.BlockAccessList == nil {
+		return nil, errors.Errorf("block access list unavailable for block hash %#x", requestedHash)
+	}
+	return payload, nil
 }
 
 // gloasPayloadFromExecutionBlock extracts header fields from an execution block.
