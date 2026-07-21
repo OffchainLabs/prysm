@@ -132,8 +132,17 @@ func TestManifestHashesMatchBazel(t *testing.T) {
 			continue
 		}
 
+		if a.name == Lighthouse {
+			// The lighthouse hash is platform-dependent and lives in the
+			// lighthouse_integrity map, paired with the host's target-triple key.
+			triple, _ := LighthouseTriple()
+			require.StringContains(t, `"`+triple+`": "`+a.sha256+`"`, e2eDepsContent(),
+				"lighthouse hash is not paired with triple %q in the lighthouse_integrity map", triple)
+			continue
+		}
+
 		content := workspaceContent()
-		if a.name == Lighthouse || a.name == Web3signer {
+		if a.name == Web3signer {
 			content = e2eDepsContent()
 		}
 		require.StringContains(t, a.sha256, bazelBlock(t, content, a.name),

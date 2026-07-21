@@ -63,6 +63,31 @@ func TestTestdataRoot(t *testing.T) {
 	})
 }
 
+func TestFindBinary(t *testing.T) {
+	t.Run("nominal", func(t *testing.T) {
+		dir := t.TempDir()
+		bin := filepath.Join(dir, "beacon-chain")
+		require.NoError(t, os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755))
+		t.Setenv("PRYSM_BIN", dir)
+
+		got, ok := FindBinary("", "beacon-chain")
+		require.Equal(t, true, ok)
+		require.Equal(t, bin, got)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		// PRYSM_BIN unset and a module root with no dist/ entry: nothing matches.
+		t.Setenv("PRYSM_BIN", "")
+		root := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(root, "go.mod"), []byte("module test\n"), 0o600))
+		t.Chdir(root)
+
+		got, ok := FindBinary("", "does-not-exist")
+		require.Equal(t, false, ok)
+		require.Equal(t, "", got)
+	})
+}
+
 func TestRunfile(t *testing.T) {
 	t.Run("absolute", func(t *testing.T) {
 		abs := filepath.Join(t.TempDir(), "file.txt")
