@@ -175,7 +175,7 @@ func (s *Server) SubmitBuilderPreferences(w http.ResponseWriter, r *http.Request
 	if len(failures) > 0 {
 		httputil.WriteError(w, &server.IndexedErrorContainer{
 			Code:     http.StatusBadRequest,
-			Message:  "One or more preference submissions were rejected",
+			Message:  "Errors with one or more preference submissions; well-formed entries were still submitted",
 			Failures: failures,
 		})
 		return
