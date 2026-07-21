@@ -347,7 +347,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 
 	commitments, err := populator.Commitments()
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "populator commitments")
+		return nil, nil, wrapWithBlockRoot(err, root, "populator commitments")
 	}
 	// A populator carrying zero commitments (e.g. a block with no blobs) has nothing to reconstruct.
 	if len(commitments) == 0 {
