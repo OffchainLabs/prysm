@@ -275,9 +275,11 @@ func (s *Service) callNewPayload(
 ) (bool, error) {
 	_, err := s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests)
 	if err == nil {
+		newPayloadValidNodeCount.Inc()
 		return true, nil
 	}
 	if errors.Is(err, execution.ErrAcceptedSyncingPayloadStatus) {
+		newPayloadOptimisticNodeCount.Inc()
 		log.WithFields(logrus.Fields{
 			"slot":             slot,
 			"payloadBlockHash": fmt.Sprintf("%#x", bytesutil.Trunc(payload.BlockHash())),
@@ -285,6 +287,7 @@ func (s *Service) callNewPayload(
 		return false, nil
 	}
 	if errors.Is(err, execution.ErrInvalidPayloadStatus) {
+		newPayloadInvalidNodeCount.Inc()
 		return false, invalidBlock{error: ErrInvalidPayload}
 	}
 	return false, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
