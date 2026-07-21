@@ -37,10 +37,14 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	ctx, span := trace.StartSpan(ctx, "blockChain.ReceiveExecutionPayloadEnvelope")
 	defer span.End()
 	start := time.Now()
+
+	var consensusInvalid bool
 	defer func() {
 		beaconExecutionPayloadEnvelopeProcessingDurationSeconds.Observe(time.Since(start).Seconds())
 		if err != nil {
-			beaconExecutionPayloadEnvelopeInvalidTotal.Inc()
+			if consensusInvalid || IsInvalidBlock(err) {
+				beaconExecutionPayloadEnvelopeInvalidTotal.Inc()
+			}
 			return
 		}
 		beaconExecutionPayloadEnvelopeValidTotal.Inc()
@@ -81,6 +85,7 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	availGroup, availCtx := errgroup.WithContext(ctx)
 	availGroup.Go(func() error {
 		if err := gloas.VerifyExecutionPayloadEnvelope(availCtx, blockState, signed); err != nil {
+			consensusInvalid = true
 			return err
 		}
 		s.recordPayloadArrival(root, envelope.Slot(), start)
