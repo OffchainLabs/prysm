@@ -2,10 +2,19 @@ package validator
 
 import (
 	"bytes"
+	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	blockchainTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	mock2 "github.com/OffchainLabs/prysm/v7/testing/mock"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/pkg/errors"
+	"go.uber.org/mock/gomock"
 )
 
 // The produce-block body is a bare BuilderEntry array; malformed entries are
@@ -60,4 +69,70 @@ func TestParseBuilderPreferencesBody_DuplicateURL(t *testing.T) {
 	r := httptest.NewRequest("POST", "/", bytes.NewBufferString(`[`+entry+`,`+entry+`]`))
 	_, err := parseBuilderPreferencesBody(r)
 	require.ErrorContains(t, "share the same url", err)
+}
+
+func TestSubmitBuilderPreferencesHandler(t *testing.T) {
+	pubkey := "0x" + repeatHex(48)
+	entry := func(url string) string {
+		return `{"url":"` + url + `","auth":{"message":{"data":"0x01","slot":"7"},"signature":"0x` + repeatHex(96) + `"},"max_execution_payment":"1000"}`
+	}
+	newServer := func(t *testing.T, v1alpha1 eth.BeaconNodeValidatorServer) *Server {
+		return &Server{
+			V1Alpha1Server:        v1alpha1,
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			OptimisticModeFetcher: &blockchainTesting.ChainService{},
+		}
+	}
+	post := func(t *testing.T, s *Server, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "http://foo.example/eth/v1/validator/builder_preferences/"+pubkey, bytes.NewBufferString(body))
+		r.SetPathValue("pubkey", pubkey)
+		w := httptest.NewRecorder()
+		w.Body = &bytes.Buffer{}
+		s.SubmitBuilderPreferences(w, r)
+		return w
+	}
+
+	t.Run("all entries forwarded", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		v1alpha1 := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+		v1alpha1.EXPECT().SubmitBuilderPreferences(gomock.Any(), gomock.Any()).Return(nil, nil).Times(2)
+		w := post(t, newServer(t, v1alpha1), `[`+entry("https://a")+`,`+entry("https://b")+`]`)
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+	t.Run("failures reported by index as IndexedErrorMessage", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		v1alpha1 := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+		gomock.InOrder(
+			v1alpha1.EXPECT().SubmitBuilderPreferences(gomock.Any(), gomock.Any()).Return(nil, errors.New("boom")),
+			v1alpha1.EXPECT().SubmitBuilderPreferences(gomock.Any(), gomock.Any()).Return(nil, nil),
+		)
+		w := post(t, newServer(t, v1alpha1), `[`+entry("https://a")+`,`+entry("https://b")+`]`)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var resp struct {
+			Code     int    `json:"code"`
+			Message  string `json:"message"`
+			Failures []struct {
+				Index   int    `json:"index"`
+				Message string `json:"message"`
+			} `json:"failures"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		require.Equal(t, http.StatusBadRequest, resp.Code)
+		require.Equal(t, 1, len(resp.Failures))
+		require.Equal(t, 0, resp.Failures[0].Index)
+		require.StringContains(t, "boom", resp.Failures[0].Message)
+	})
+	t.Run("malformed entry fails its own index only", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		v1alpha1 := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+		v1alpha1.EXPECT().SubmitBuilderPreferences(gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
+		w := post(t, newServer(t, v1alpha1), `[{"url":""},`+entry("https://b")+`]`)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+	t.Run("empty body is a 400", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		w := post(t, newServer(t, mock2.NewMockBeaconNodeValidatorServer(ctrl)), `[]`)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
 }

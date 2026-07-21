@@ -2,12 +2,11 @@ package validator
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
-	"strings"
 
+	"github.com/OffchainLabs/prysm/v7/api/server"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -163,18 +162,22 @@ func (s *Server) SubmitBuilderPreferences(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var failures []string
+	var failures []*server.IndexedError
 	for i, e := range entries {
 		req, err := e.toSubmitRequest(pubkey)
 		if err == nil {
 			_, err = s.V1Alpha1Server.SubmitBuilderPreferences(ctx, req)
 		}
 		if err != nil {
-			failures = append(failures, fmt.Sprintf("entry %d: %v", i, err))
+			failures = append(failures, &server.IndexedError{Index: i, Message: err.Error()})
 		}
 	}
 	if len(failures) > 0 {
-		httputil.HandleError(w, strings.Join(failures, "; "), http.StatusBadRequest)
+		httputil.WriteError(w, &server.IndexedErrorContainer{
+			Code:     http.StatusBadRequest,
+			Message:  "One or more preference submissions were rejected",
+			Failures: failures,
+		})
 		return
 	}
 	w.WriteHeader(http.StatusOK)
