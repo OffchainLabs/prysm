@@ -430,6 +430,15 @@ func (s *Service) validatorEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
+			template: "/eth/v1/validator/builder_preferences/{pubkey}",
+			name:     namespace + ".SubmitBuilderPreferences",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.SubmitBuilderPreferences,
+			methods: []string{http.MethodPost},
+		},
+		{
 			template: "/eth/v1/validator/sync_committee_selections",
 			name:     namespace + ".SyncCommittee Selections",
 			middleware: []middleware.Middleware{

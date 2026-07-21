@@ -868,8 +868,7 @@ func (s *Server) SetGraffiti(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Graffiti mutates proposer settings via a read-modify-write in the
-	// validator client, so it must serialize with the other settings writers.
+	// Graffiti writes proposer settings, so it serializes with the other writers.
 	s.proposerSettingsLock.Lock()
 	defer s.proposerSettingsLock.Unlock()
 	if err := s.validatorService.SetGraffiti(ctx, bytesutil.ToBytes48(pubkey), []byte(req.Graffiti)); err != nil {

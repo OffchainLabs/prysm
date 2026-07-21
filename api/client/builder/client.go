@@ -227,7 +227,7 @@ func (c *Client) doWithStatus(ctx context.Context, method string, path string, b
 
 	u := c.baseURL.ResolveReference(&url.URL{Path: path})
 
-	span.SetAttributes(trace.StringAttribute("url", u.String()),
+	span.SetAttributes(trace.StringAttribute("url", u.Redacted()),
 		trace.StringAttribute("method", method))
 
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
@@ -794,7 +794,7 @@ func unexpectedStatusErr(response *http.Response, expected []int) error {
 	} else {
 		body = "response body:\n" + string(bodyBytes)
 	}
-	msg := fmt.Sprintf("expected=%v, got=%d, url=%s, body=%s", expected, response.StatusCode, response.Request.URL, body)
+	msg := fmt.Sprintf("expected=%v, got=%d, url=%s, body=%s", expected, response.StatusCode, response.Request.URL.Redacted(), body)
 
 	var sentinel error
 	switch response.StatusCode {

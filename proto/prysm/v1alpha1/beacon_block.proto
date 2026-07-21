@@ -78,6 +78,9 @@ message GenericSignedBeaconBlock {
   }
   bool is_blinded = 100;
   reserved 101; // Deprecated fields
+  // Winning builder to forward the signed block to; set from the produce
+  // response (gRPC field, REST Eth-Builder-Url header).
+  string builder_url = 102;
 }
 
 message GenericBeaconBlock {
@@ -128,6 +131,9 @@ message GenericBeaconBlock {
   }
   bool is_blinded = 100;
   string payload_value = 101;
+  // Winning Builder-API builder, echoed at publish so any beacon node can
+  // forward the signed block to it. Empty for self-build and P2P bids.
+  string builder_url = 102;
 }
 
 // ----------------------------------------------------------------------------

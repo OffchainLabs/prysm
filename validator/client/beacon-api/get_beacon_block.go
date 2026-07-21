@@ -89,6 +89,7 @@ func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primi
 		return nil, errors.Wrap(err, "could not get v4 beacon block")
 	}
 
+	builderURL := header.Get(api.EthBuilderUrlHeader)
 	payloadIncluded := header.Get(api.ExecutionPayloadIncludedHeader) == "true"
 	isSSZ := strings.Contains(header.Get("Content-Type"), api.OctetStreamMediaType)
 
@@ -109,13 +110,13 @@ func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primi
 			if c.stateless && contents.ExecutionPayloadEnvelope != nil {
 				c.envelopeCache.Add(slot, contents.ExecutionPayloadEnvelope, contents.Blobs, contents.KzgProofs)
 			}
-			return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: contents.Block}}, nil
+			return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: contents.Block}, BuilderUrl: builderURL}, nil
 		}
 		block := &ethpb.BeaconBlockGloas{}
 		if err := block.UnmarshalSSZ(data); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal gloas block SSZ")
 		}
-		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: block}}, nil
+		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: block}, BuilderUrl: builderURL}, nil
 	}
 
 	// JSON, payload not included: parse the bare block.
@@ -131,6 +132,7 @@ func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primi
 	if err != nil {
 		return nil, errors.Wrap(err, "could not convert gloas block to generic")
 	}
+	blk.BuilderUrl = builderURL
 	return blk, nil
 }
 

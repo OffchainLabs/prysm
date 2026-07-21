@@ -34,8 +34,7 @@ func (v *validator) pruneSignedRequestAuths(slot primitives.Slot) {
 }
 
 // signRequestAuthCached signs a request auth for the (pk, relay, authData, slot)
-// tuple. Per builder-specs 5078eab the signed data is the opaque authData agreed
-// with the builder out of band, not the builder URL.
+// tuple; the signed data is the opaque authData, not the builder URL.
 func (v *validator) signRequestAuthCached(ctx context.Context, km keymanager.IKeymanager, pk pubkey, relay string, authData []byte, slot primitives.Slot) (*ethpb.SignedRequestAuthV1, error) {
 	key := requestAuthKey{pk: pk, slot: slot, relay: relay, authData: string(authData)}
 	v.signedRequestAuthsLock.Lock()

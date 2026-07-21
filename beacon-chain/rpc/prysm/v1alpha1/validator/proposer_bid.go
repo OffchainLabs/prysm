@@ -102,9 +102,8 @@ func (vs *Server) setExecutionPayloadBid(
 	return bidSourceSelfBuild, nil
 }
 
-// neutralBuilderBoostFactor is the 100% factor: builder bids compete on raw value.
-// Callers must default a missing preference to this so an explicit 0 keeps its
-// reserved "prefer local" meaning.
+// The 100% factor. Callers default a missing preference to this so an explicit
+// 0 keeps its reserved prefer-local meaning.
 const neutralBuilderBoostFactor = 100
 
 // bidPreferences carries the proposer's per-key builder bid-selection preferences.
@@ -302,22 +301,6 @@ func (vs *Server) proposerPreferenceForProposal(ctx context.Context, st state.Be
 		pref = p
 	}
 	return pref
-}
-
-func (vs *Server) recordBidSource(slot primitives.Slot, src bidSource, builderURL string) {
-	vs.lastBidLock.Lock()
-	defer vs.lastBidLock.Unlock()
-	vs.lastBidSlot, vs.lastBidSource, vs.lastBidBuilderURL = slot, src, builderURL
-}
-
-// Falls back to self-build when the record is for another slot.
-func (vs *Server) bidSourceForSlot(slot primitives.Slot) (bidSource, string) {
-	vs.lastBidLock.Lock()
-	defer vs.lastBidLock.Unlock()
-	if vs.lastBidSlot != slot {
-		return bidSourceSelfBuild, ""
-	}
-	return vs.lastBidSource, vs.lastBidBuilderURL
 }
 
 // Best-effort and detached from the propose RPC, the builder also learns of the block via P2P.

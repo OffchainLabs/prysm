@@ -300,9 +300,14 @@ func (c *beaconApiValidatorClient) SubmitSignedProposerPreferences(ctx context.C
 	})
 }
 
-// TODO(gloas): no beacon-API endpoint exists for the builder preferences forward yet.
-func (c *beaconApiValidatorClient) SubmitBuilderPreferences(_ context.Context, _ *ethpb.SubmitBuilderPreferencesRequest) (*empty.Empty, error) {
-	log.Debug("SubmitBuilderPreferences not yet implemented for beacon API client, skipping")
+// SubmitBuilderPreferences pushes signed builder preferences ahead of the
+// proposal slot (beacon-APIs #630).
+func (c *beaconApiValidatorClient) SubmitBuilderPreferences(ctx context.Context, in *ethpb.SubmitBuilderPreferencesRequest) (*empty.Empty, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.SubmitBuilderPreferences")
+	defer span.End()
+	if err := c.submitBuilderPreferences(ctx, in); err != nil {
+		return nil, err
+	}
 	return new(empty.Empty), nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/OffchainLabs/prysm/v7/api"
 	"net/http"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -167,6 +168,9 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 	}
 
 	headers := map[string]string{"Eth-Consensus-Version": res.consensusVersion}
+	if in.BuilderUrl != "" {
+		headers[api.EthBuilderUrlHeader] = in.BuilderUrl
+	}
 
 	// Try PostSSZ first with SSZ data
 	if res.marshalledSSZ != nil {

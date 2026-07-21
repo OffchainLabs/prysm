@@ -290,8 +290,7 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 }
 
 // promotePayloadToV2 mirrors Settings.UpgradeToV2 plus legacy presence
-// normalization at the payload level, so v1-shaped content merged into a v2
-// result is read correctly under v2 semantics.
+// normalization, so v1 content merged into a v2 result reads correctly.
 func promotePayloadToV2(p *validatorpb.ProposerSettingsPayload) {
 	promote := func(opt *validatorpb.ProposerOptionPayload) {
 		if opt == nil || opt.Builder == nil {

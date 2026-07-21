@@ -72,7 +72,7 @@ func (s *Server) SetValidatorConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Unrecognized fields are ignored for forward compatibility, per the spec.
+	// Unrecognized fields are ignored for forward compatibility.
 	var req SetValidatorConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
@@ -105,8 +105,7 @@ func (s *Server) SetValidatorConfig(w http.ResponseWriter, r *http.Request) {
 			resp.Data[rawPubkey] = &ValidatorConfigStatus{Status: configStatusError, Message: err.Error()}
 			continue
 		}
-		// Keys the server does not yet manage are stored anyway (pre-provisioning
-		// per the spec); the config takes effect when the key is later added.
+		// Unknown keys are stored too; the config applies once the key is added.
 		if cfg == nil || cfg.isEmpty() {
 			delete(settings.ProposeConfig, pubkey)
 			resp.Data[rawPubkey] = &ValidatorConfigStatus{Status: configStatusSet}

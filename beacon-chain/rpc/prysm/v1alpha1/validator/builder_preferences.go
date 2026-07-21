@@ -11,10 +11,8 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// SubmitBuilderPreferences forwards a proposer's signed builder preferences to the
-// named builder ahead of a proposal slot (builder-specs preferences channel). The
-// beacon node is a pure conduit: bid-selection preferences travel inline with the
-// block request instead.
+// SubmitBuilderPreferences forwards a proposer's signed preferences to the named
+// builder ahead of a proposal slot; bid-selection params travel with the block request.
 func (vs *Server) SubmitBuilderPreferences(ctx context.Context, req *ethpb.SubmitBuilderPreferencesRequest) (*emptypb.Empty, error) {
 	ctx, span := trace.StartSpan(ctx, "ValidatorServer.SubmitBuilderPreferences")
 	defer span.End()

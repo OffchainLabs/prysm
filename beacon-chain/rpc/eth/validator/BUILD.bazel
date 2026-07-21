@@ -60,6 +60,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "builder_preferences_test.go",
         "handlers_block_gloas_test.go",
         "handlers_block_test.go",
         "handlers_test.go",

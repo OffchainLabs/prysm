@@ -4,6 +4,7 @@ import "net/http"
 
 const (
 	VersionHeader                  = "Eth-Consensus-Version"
+	EthBuilderUrlHeader            = "Eth-Builder-Url"
 	ExecutionPayloadBlindedHeader  = "Eth-Execution-Payload-Blinded"
 	ExecutionPayloadValueHeader    = "Eth-Execution-Payload-Value"
 	ConsensusBlockValueHeader      = "Eth-Consensus-Block-Value"

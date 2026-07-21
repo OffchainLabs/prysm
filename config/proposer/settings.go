@@ -136,9 +136,8 @@ func (bc *BuilderConfig) IsEnabled() bool {
 	return bc != nil && bc.Enabled != nil && *bc.Enabled
 }
 
-// EffectiveBuilderConfig resolves a key's builder config with field-level
-// inheritance from the default: fields unset on perKey inherit def's values, and
-// the builders/relays lists replace (never merge) when present on perKey.
+// EffectiveBuilderConfig resolves per-key builder config with field-level
+// inheritance; the builders/relays lists replace rather than merge.
 func EffectiveBuilderConfig(perKey, def *BuilderConfig) *BuilderConfig {
 	if perKey == nil {
 		return def

@@ -42,20 +42,16 @@ message BuilderPreferencesRequestV1 {
   SignedRequestAuthV1 auth = 2;
 }
 
-// SubmitBuilderPreferencesRequest asks the beacon node to forward a proposer's
-// signed preferences to one builder ahead of a proposal slot (the builder-specs
-// preferences channel). url identifies the builder explicitly: per builder-specs
-// 5078eab the signed auth data is opaque and no longer carries the URL.
+// SubmitBuilderPreferencesRequest forwards a proposer's signed preferences to
+// one builder ahead of a proposal slot; url is explicit, the auth data is opaque.
 message SubmitBuilderPreferencesRequest {
   bytes validator_pubkey = 1;
   string url = 2;
   BuilderPreferencesRequestV1 request = 3;
 }
 
-// BuilderPreferenceV1 is one builder's preferences for a single block proposal,
-// carried inline on the block request (JIT model, beacon-APIs #625). request is
-// the signed preferences plus auth the beacon node forwards to the builder;
-// min_bid and builder_boost_factor are proposer-local and only gate bid selection.
+// BuilderPreferenceV1 is one builder's preferences for a single proposal, carried
+// inline on the block request. min_bid and builder_boost_factor never leave the node.
 message BuilderPreferenceV1 {
   BuilderPreferencesRequestV1 request = 1;
   optional uint64 min_bid = 2 [
@@ -63,7 +59,6 @@ message BuilderPreferenceV1 {
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
   ];
   optional uint64 builder_boost_factor = 3;
-  // url identifies the builder. Per builder-specs 5078eab the signed request auth
-  // data is opaque, so the URL is no longer recoverable from it and is carried here.
+  // The signed auth data is opaque, so the builder URL is carried explicitly.
   string url = 4;
 }

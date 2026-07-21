@@ -110,6 +110,7 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/validator/beacon_committee_subscriptions":                         {http.MethodPost},
 		"/eth/v1/validator/sync_committee_subscriptions":                           {http.MethodPost},
 		"/eth/v1/validator/beacon_committee_selections":                            {http.MethodPost},
+		"/eth/v1/validator/builder_preferences/{pubkey}":                           {http.MethodPost},
 		"/eth/v1/validator/sync_committee_selections":                              {http.MethodPost},
 		"/eth/v1/validator/execution_payload_envelopes/{slot}/{beacon_block_root}": {http.MethodGet},
 		"/eth/v1/validator/sync_committee_contribution":                            {http.MethodGet},

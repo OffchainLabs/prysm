@@ -415,7 +415,7 @@ func (s *Server) publishBlindedBlockSSZ(ctx context.Context, w http.ResponseWrit
 		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.proposeBlock(ctx, w, genericBlock)
+	s.proposeBlock(ctx, w, r, genericBlock)
 }
 
 // decodeBlindedBlockSSZ dispatches to the correct SSZ decoder based on versionHeader.
@@ -520,7 +520,7 @@ func (s *Server) publishBlindedBlock(ctx context.Context, w http.ResponseWriter,
 		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.proposeBlock(ctx, w, genericBlock)
+	s.proposeBlock(ctx, w, r, genericBlock)
 }
 
 // decodeBlindedBlockJSON dispatches to the correct JSON decoder based on versionHeader.
@@ -641,7 +641,7 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 		return
 	}
 
-	s.proposeBlock(ctx, w, genericBlock)
+	s.proposeBlock(ctx, w, r, genericBlock)
 }
 
 var sszDecoders = map[string]blockDecoder{
@@ -809,7 +809,7 @@ func (s *Server) publishBlock(ctx context.Context, w http.ResponseWriter, r *htt
 		return
 	}
 
-	s.proposeBlock(ctx, w, genericBlock)
+	s.proposeBlock(ctx, w, r, genericBlock)
 }
 
 var jsonDecoders = map[string]blockDecoder{
@@ -901,7 +901,8 @@ func broadcastSidecarsIfSupported(ctx context.Context, s *Server, b interfaces.S
 	}
 }
 
-func (s *Server) proposeBlock(ctx context.Context, w http.ResponseWriter, blk *eth.GenericSignedBeaconBlock) {
+func (s *Server) proposeBlock(ctx context.Context, w http.ResponseWriter, r *http.Request, blk *eth.GenericSignedBeaconBlock) {
+	blk.BuilderUrl = r.Header.Get(api.EthBuilderUrlHeader)
 	_, err := s.V1Alpha1ValidatorServer.ProposeBeaconBlock(ctx, blk)
 	if err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)

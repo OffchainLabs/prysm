@@ -1395,7 +1395,7 @@ func (v *validator) builderTargetsForKey(pk pubkey) []builderTarget {
 	if !bc.IsEnabled() {
 		return nil
 	}
-	// Unset max payment resolves to 0 (trustless-only), the safe client default.
+	// Unset resolves to 0, trustless-only.
 	var fbMax uint64
 	if bc.MaxExecutionPayment != nil {
 		fbMax = uint64(*bc.MaxExecutionPayment)
@@ -1434,11 +1434,8 @@ func uint64Ptr(v *validatortypes.Uint64) *uint64 {
 	return &u
 }
 
-// warmBuilderRequestAuths pre-signs the builder request auths for upcoming
-// proposal slots so proposeBlock can attach them inline (JIT) without signing on
-// the hot path, and returns the ahead-of-time submissions for the builder-specs
-// preferences channel. Rebuilt every push so builders learn preferences ahead of
-// the slot even across beacon node restarts.
+// warmBuilderRequestAuths pre-signs request auths for upcoming proposal slots and
+// returns the ahead-of-time preference submissions, rebuilt every push.
 func (v *validator) warmBuilderRequestAuths(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot) []*ethpb.SubmitBuilderPreferencesRequest {
 	if slots.ToEpoch(slot)+1 < params.BeaconConfig().GloasForkEpoch {
 		return nil

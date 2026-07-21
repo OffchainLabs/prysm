@@ -175,6 +175,9 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		}
 	}
 
+	// Echo the winning builder from the produce response.
+	genericSignedBlock.BuilderUrl = b.BuilderUrl
+
 	blkResp, err := v.validatorClient.ProposeBeaconBlock(ctx, genericSignedBlock)
 	if err != nil {
 		log.WithField("slot", slot).WithError(err).Error("Failed to propose block")

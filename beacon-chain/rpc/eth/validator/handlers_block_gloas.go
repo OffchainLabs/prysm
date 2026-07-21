@@ -138,6 +138,9 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(api.VersionHeader, version.String(version.Gloas))
 	w.Header().Set(api.ConsensusBlockValueHeader, consensusBlockValue)
 	w.Header().Set(api.ExecutionPayloadIncludedHeader, fmt.Sprintf("%v", includePayload))
+	if v1alpha1resp.BuilderUrl != "" {
+		w.Header().Set(api.EthBuilderUrlHeader, v1alpha1resp.BuilderUrl)
+	}
 
 	isSSZ := httputil.RespondWithSsz(r)
 

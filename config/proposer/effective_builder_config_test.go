@@ -107,8 +107,8 @@ func TestEffectiveBuilderConfig(t *testing.T) {
 		perKey := &BuilderConfig{Enabled: proto.Bool(true)}
 		require.Equal(t, 1, len(EffectiveBuilderConfig(perKey, def).Relays))
 	})
-	// Builders and relays are independent fields: setting one per-key does not
-	// suppress inheriting the other. Documented composite, pinned deliberately.
+	// Builders and relays are independent fields; setting one per-key does not
+	// suppress inheriting the other.
 	t.Run("per-key relays plus default builders compose", func(t *testing.T) {
 		def := &BuilderConfig{Builders: []*BuilderEntry{entryA}}
 		perKey := &BuilderConfig{Relays: []string{"https://r-key"}}

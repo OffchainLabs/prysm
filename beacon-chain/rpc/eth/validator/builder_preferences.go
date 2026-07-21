@@ -2,31 +2,36 @@ package validator
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 )
 
-// produceBlockV4Request is the POST body for the JIT produce-block endpoint
-// (beacon-APIs #625): the proposer's per-builder preferences for this proposal.
-type produceBlockV4Request struct {
-	BuilderPreferences []*builderPreferenceJson `json:"builder_preferences"`
+// builderEntryJson is one element of the produceBlockV4 POST body: a bare array
+// of per-builder entries (beacon-APIs #630). proxy and pubkey are accepted but
+// currently unused.
+type builderEntryJson struct {
+	Url                 string          `json:"url"`
+	Proxy               string          `json:"proxy,omitempty"`
+	Pubkey              string          `json:"pubkey,omitempty"`
+	Auth                *signedAuthJson `json:"auth"`
+	MaxExecutionPayment string          `json:"max_execution_payment,omitempty"`
+	MinBid              string          `json:"min_bid,omitempty"`
+	BuilderBoostFactor  string          `json:"builder_boost_factor,omitempty"`
 }
 
-type builderPreferenceJson struct {
-	Url                 string                 `json:"url"`
-	SignedRequestAuth   *signedRequestAuthJson `json:"signed_request_auth"`
-	MaxExecutionPayment string                 `json:"max_execution_payment"`
-	MinBid              string                 `json:"min_bid,omitempty"`
-	BuilderBoostFactor  string                 `json:"builder_boost_factor,omitempty"`
-}
-
-type signedRequestAuthJson struct {
+type signedAuthJson struct {
 	Message   *requestAuthJson `json:"message"`
 	Signature string           `json:"signature"`
 }
@@ -36,64 +41,57 @@ type requestAuthJson struct {
 	Slot string `json:"slot"`
 }
 
-// parseBuilderPreferencesBody decodes the JIT builder-preferences POST body into
-// consensus objects. An empty body yields no preferences.
+// parseBuilderPreferencesBody decodes the JIT produce-block POST body. Malformed
+// entries are ignored per the spec; an empty body yields no preferences.
 func parseBuilderPreferencesBody(r *http.Request) ([]*eth.BuilderPreferenceV1, error) {
 	if r.Body == nil {
 		return nil, nil
 	}
-	var req produceBlockV4Request
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var entries []*builderEntryJson
+	if err := json.NewDecoder(r.Body).Decode(&entries); err != nil {
 		if errors.Is(err, io.EOF) {
 			return nil, nil
 		}
 		return nil, errors.Wrap(err, "could not decode builder preferences")
 	}
-	out := make([]*eth.BuilderPreferenceV1, 0, len(req.BuilderPreferences))
-	for i, p := range req.BuilderPreferences {
-		conv, err := p.toConsensus(i)
+	out := make([]*eth.BuilderPreferenceV1, 0, len(entries))
+	for _, p := range entries {
+		conv, err := p.toConsensus()
 		if err != nil {
-			return nil, err
+			log.WithError(err).Debug("Ignoring malformed builder entry")
+			continue
 		}
 		out = append(out, conv)
 	}
 	return out, nil
 }
 
-func (p *builderPreferenceJson) toConsensus(i int) (*eth.BuilderPreferenceV1, error) {
-	if p == nil || p.SignedRequestAuth == nil || p.SignedRequestAuth.Message == nil {
-		return nil, errors.Errorf("builder_preferences[%d] missing signed_request_auth", i)
+func (p *builderEntryJson) toConsensus() (*eth.BuilderPreferenceV1, error) {
+	if p == nil || p.Url == "" {
+		return nil, errors.New("missing url")
 	}
-	maxPayment, err := strconv.ParseUint(p.MaxExecutionPayment, 10, 64)
-	if err != nil {
-		return nil, errors.Errorf("builder_preferences[%d].max_execution_payment is not a valid uint64", i)
+	if p.Auth == nil || p.Auth.Message == nil {
+		return nil, errors.New("missing auth")
 	}
-	data, err := hexutil.Decode(p.SignedRequestAuth.Message.Data)
+	auth, err := p.Auth.toConsensus()
 	if err != nil {
-		return nil, errors.Errorf("builder_preferences[%d].signed_request_auth.message.data is not valid hex", i)
-	}
-	slot, err := strconv.ParseUint(p.SignedRequestAuth.Message.Slot, 10, 64)
-	if err != nil {
-		return nil, errors.Errorf("builder_preferences[%d].signed_request_auth.message.slot is not a valid uint64", i)
-	}
-	sig, err := hexutil.Decode(p.SignedRequestAuth.Signature)
-	if err != nil {
-		return nil, errors.Errorf("builder_preferences[%d].signed_request_auth.signature is not valid hex", i)
+		return nil, err
 	}
 	out := &eth.BuilderPreferenceV1{
-		Url: p.Url,
-		Request: &eth.BuilderPreferencesRequestV1{
-			Preferences: &eth.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(maxPayment)},
-			Auth: &eth.SignedRequestAuthV1{
-				Message:   &eth.RequestAuthV1{Data: data, Slot: primitives.Slot(slot)},
-				Signature: sig,
-			},
-		},
+		Url:     p.Url,
+		Request: &eth.BuilderPreferencesRequestV1{Preferences: &eth.BuilderPreferencesV1{}, Auth: auth},
+	}
+	if p.MaxExecutionPayment != "" {
+		v, err := strconv.ParseUint(p.MaxExecutionPayment, 10, 64)
+		if err != nil {
+			return nil, errors.New("max_execution_payment is not a valid uint64")
+		}
+		out.Request.Preferences.MaxExecutionPayment = primitives.Gwei(v)
 	}
 	if p.MinBid != "" {
 		v, err := strconv.ParseUint(p.MinBid, 10, 64)
 		if err != nil {
-			return nil, errors.Errorf("builder_preferences[%d].min_bid is not a valid uint64", i)
+			return nil, errors.New("min_bid is not a valid uint64")
 		}
 		g := primitives.Gwei(v)
 		out.MinBid = &g
@@ -101,9 +99,102 @@ func (p *builderPreferenceJson) toConsensus(i int) (*eth.BuilderPreferenceV1, er
 	if p.BuilderBoostFactor != "" {
 		v, err := strconv.ParseUint(p.BuilderBoostFactor, 10, 64)
 		if err != nil {
-			return nil, errors.Errorf("builder_preferences[%d].builder_boost_factor is not a valid uint64", i)
+			return nil, errors.New("builder_boost_factor is not a valid uint64")
 		}
 		out.BuilderBoostFactor = &v
 	}
 	return out, nil
+}
+
+func (a *signedAuthJson) toConsensus() (*eth.SignedRequestAuthV1, error) {
+	data, err := hexutil.Decode(a.Message.Data)
+	if err != nil {
+		return nil, errors.New("auth.message.data is not valid hex")
+	}
+	slot, err := strconv.ParseUint(a.Message.Slot, 10, 64)
+	if err != nil {
+		return nil, errors.New("auth.message.slot is not a valid uint64")
+	}
+	sig, err := hexutil.Decode(a.Signature)
+	if err != nil {
+		return nil, errors.New("auth.signature is not valid hex")
+	}
+	return &eth.SignedRequestAuthV1{
+		Message:   &eth.RequestAuthV1{Data: data, Slot: primitives.Slot(slot)},
+		Signature: sig,
+	}, nil
+}
+
+// builderPreferenceEntryJson is one element of the ahead-of-time preferences POST
+// body (beacon-APIs #630): url, required auth, and the signed max payment.
+type builderPreferenceEntryJson struct {
+	Url                 string          `json:"url"`
+	Proxy               string          `json:"proxy,omitempty"`
+	Auth                *signedAuthJson `json:"auth"`
+	MaxExecutionPayment string          `json:"max_execution_payment"`
+}
+
+// SubmitBuilderPreferences implements POST /eth/v1/validator/builder_preferences/{pubkey}:
+// it forwards each entry's signed preferences to its builder ahead of the proposal slot.
+func (s *Server) SubmitBuilderPreferences(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.SubmitBuilderPreferences")
+	defer span.End()
+
+	if shared.IsSyncing(ctx, w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
+		return
+	}
+	_, pubkey, ok := shared.HexFromRoute(w, r, "pubkey", fieldparams.BLSPubkeyLength)
+	if !ok {
+		return
+	}
+	var entries []*builderPreferenceEntryJson
+	if err := json.NewDecoder(r.Body).Decode(&entries); err != nil {
+		httputil.HandleError(w, "Could not decode builder preference entries: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if len(entries) == 0 {
+		httputil.HandleError(w, "No builder preference entries submitted", http.StatusBadRequest)
+		return
+	}
+
+	var failures []string
+	for i, e := range entries {
+		req, err := e.toSubmitRequest(pubkey)
+		if err == nil {
+			_, err = s.V1Alpha1Server.SubmitBuilderPreferences(ctx, req)
+		}
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("entry %d: %v", i, err))
+		}
+	}
+	if len(failures) > 0 {
+		httputil.HandleError(w, strings.Join(failures, "; "), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (e *builderPreferenceEntryJson) toSubmitRequest(pubkey []byte) (*eth.SubmitBuilderPreferencesRequest, error) {
+	if e == nil || e.Url == "" {
+		return nil, errors.New("missing url")
+	}
+	if e.Auth == nil || e.Auth.Message == nil {
+		return nil, errors.New("missing auth")
+	}
+	auth, err := e.Auth.toConsensus()
+	if err != nil {
+		return nil, err
+	}
+	maxPayment, err := strconv.ParseUint(e.MaxExecutionPayment, 10, 64)
+	if err != nil {
+		return nil, errors.New("max_execution_payment is not a valid uint64")
+	}
+	return &eth.SubmitBuilderPreferencesRequest{
+		ValidatorPubkey: pubkey,
+		Url:             e.Url,
+		Request: &eth.BuilderPreferencesRequestV1{
+			Preferences: &eth.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(maxPayment)},
+			Auth:        auth,
+		},
+	}, nil
 }
