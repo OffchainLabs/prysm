@@ -541,7 +541,9 @@ func (f *ForkChoice) SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, bl
 	if n == nil {
 		return
 	}
-	ptcVoteCount.Inc()
+	if !n.node.payloadAttesters.BitAt(ptcIdx) {
+		ptcVoteCount.Inc()
+	}
 	n.node.payloadAttesters.SetBitAt(ptcIdx, true)
 	n.node.payloadAvailabilityVote.SetBitAt(ptcIdx, payloadPresent)
 	n.node.payloadDataAvailabilityVote.SetBitAt(ptcIdx, blobDataAvailable)
