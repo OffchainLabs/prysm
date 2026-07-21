@@ -4,6 +4,7 @@ package confirmation
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
@@ -28,8 +29,8 @@ type FastConfirmationRule struct {
 	prevSupportBuf *SupportMap
 	votesBuf       []forkchoicetypes.VoteData
 
-	committeeCache      *cachedCommittees
-	committeeCacheEpoch primitives.Epoch
+	// Assignment tables for epochs [current-2, current], keyed by shuffling seed.
+	tables []*epochSlotTable
 
 	fc         ForkchoiceReader
 	committees CommitteeAccessor
@@ -129,23 +130,20 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 		ffg = &FFGStateInfo{TotalActiveBalance: totalActiveBalance}
 	}
 
+	// Committee assignment tables read the head state, keep it off the forkchoice lock.
+	if err := f.rebuildTables(ctx, currentSlot, len(balances)); err != nil {
+		return
+	}
+
 	f.fc.RLock()
 	defer f.fc.RUnlock()
 
 	equivocating := f.fc.SlashedIndices()
-	// Committee shuffles are fixed within an epoch, reuse across slots and drop at the boundary.
-	if f.committeeCache == nil || f.committeeCacheEpoch != slots.ToEpoch(currentSlot) {
-		f.committeeCache = newCachedCommittees(f.committees)
-		f.committeeCacheEpoch = slots.ToEpoch(currentSlot)
-	}
-	committees := f.committeeCache
 	f.votesBuf = f.fc.VoteSnapshot(f.votesBuf[:0])
 	votes := f.votesBuf
-	if err := f.support.Build(ctx, votes, balances, committees, equivocating, currentSlot, f.fc); err != nil {
-		return
-	}
+	f.support.Build(votes, balances, f.tables, equivocating, f.fc)
 
-	equivScorer := newMemoizedEquivScorer(ctx, committees, equivocating, balances)
+	equivScorer := EquivocationScorer(f.support.EquivocationScore)
 
 	prevSupport := f.support
 	prevTotalActiveBalance := totalActiveBalance
@@ -155,11 +153,10 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 			f.prevSupportBuf = NewSupportMap()
 		}
 		ps := f.prevSupportBuf
-		if err := ps.Build(ctx, votes, prevBalances, committees, equivocating, currentSlot, f.fc); err == nil {
-			prevSupport = ps
-			prevTotalActiveBalance = prevTotalActive
-			prevEquivScorer = newMemoizedEquivScorer(ctx, committees, equivocating, prevBalances)
-		}
+		ps.Build(votes, prevBalances, f.tables, equivocating, f.fc)
+		prevSupport = ps
+		prevTotalActiveBalance = prevTotalActive
+		prevEquivScorer = EquivocationScorer(ps.EquivocationScore)
 	}
 
 	currentTarget := f.getCurrentTarget(ctx, slots.ToEpoch(currentSlot))
@@ -174,23 +171,51 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 	))
 }
 
-func newMemoizedEquivScorer(
-	ctx context.Context,
-	committees CommitteeAccessor,
-	equivocating map[primitives.ValidatorIndex]bool,
-	balances []uint64,
-) EquivocationScorer {
-	type slotRange struct{ start, end primitives.Slot }
-	cache := make(map[slotRange]uint64)
-	return func(startSlot, endSlot primitives.Slot) uint64 {
-		k := slotRange{startSlot, endSlot}
-		if v, ok := cache[k]; ok {
-			return v
-		}
-		v := EquivocationScoreByCommittee(ctx, committees, equivocating, balances, startSlot, endSlot)
-		cache[k] = v
-		return v
+// rebuildTables refreshes the per-epoch assignment tables. The tables
+// are cached by shuffling seed.
+func (f *FastConfirmationRule) rebuildTables(ctx context.Context, currentSlot primitives.Slot, sizeHint int) error {
+	epoch := slots.ToEpoch(currentSlot)
+
+	// Bound the start epoch to zero.
+	startEpoch := primitives.Epoch(0)
+	if epoch > 2 {
+		startEpoch = epoch - 2
 	}
+
+	// Build tables for epochs [current-2, current].
+	tables := make([]*epochSlotTable, 0, 3)
+	for e := startEpoch; e <= epoch; e++ {
+		// Compute seed, and check whether the table for this epoch is already cached.
+		seed, err := f.committees.Seed(ctx, e)
+		if err != nil {
+			return fmt.Errorf("failed to get shuffling seed for epoch %d: %w", e, err)
+		}
+		if existing := f.tableForSeed(seed); existing != nil {
+			tables = append(tables, existing)
+			continue
+		}
+
+		// Build a new table for this epoch.
+		t, err := newEpochSlotTable(ctx, f.committees, e, seed, sizeHint)
+		if err != nil {
+			return fmt.Errorf("failed to create epoch slot table: %w", err)
+		}
+		tables = append(tables, t)
+	}
+
+	// Update the tables after successful rebuild.
+	f.tables = tables
+	return nil
+}
+
+// tableForSeed returns the cached table built from the given shuffling seed.
+func (f *FastConfirmationRule) tableForSeed(seed [32]byte) *epochSlotTable {
+	for _, t := range f.tables {
+		if t.seed == seed {
+			return t
+		}
+	}
+	return nil
 }
 
 // getLatestConfirmed executes the FCR algorithm: revert, restart, then advance.

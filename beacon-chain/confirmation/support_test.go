@@ -5,8 +5,10 @@ import (
 	"testing"
 
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 // testForkchoiceReader extends the mock to support parent chain walking for TotalSupport.
@@ -23,26 +25,43 @@ func (m *testForkchoiceReader) ParentRoot(root [32]byte) ([32]byte, error) {
 	return p, nil
 }
 
-// addTestSupport registers a fresh synthetic validator voting for root in the given slot.
+// addTestSupport registers a fresh synthetic validator voting for root, assigned to
+// attest in the given slot.
 func addTestSupport(sm *SupportMap, slot primitives.Slot, root [32]byte, balance uint64) {
 	idx := primitives.ValidatorIndex(len(sm.balances))
 	sm.balances = append(sm.balances, balance)
-	if sm.slotRootVoters[slot] == nil {
-		sm.slotRootVoters[slot] = make(map[[32]byte][]primitives.ValidatorIndex)
+	sm.votes = append(sm.votes, forkchoicetypes.VoteData{Root: root, Slot: slot})
+
+	epochStart, err := slots.EpochStart(slots.ToEpoch(slot))
+	if err != nil {
+		panic(err)
 	}
-	sm.slotRootVoters[slot][root] = append(sm.slotRootVoters[slot][root], idx)
+	var table *epochSlotTable
+	for _, t := range sm.tables {
+		if t.start == epochStart {
+			table = t
+			break
+		}
+	}
+	if table == nil {
+		table = &epochSlotTable{start: epochStart}
+		sm.tables = append(sm.tables, table)
+	}
+	for int(idx) >= len(table.slotOffset) {
+		table.slotOffset = append(table.slotOffset, noAssignment)
+	}
+	table.slotOffset[idx] = uint8(slot - epochStart)
 }
 
-// rebuildTotalSupportFromSlotRoot rebuilds totalSupport from the registered voters by walking the ancestor chain.
+// rebuildTotalSupportFromSlotRoot rebuilds totalSupport from the registered votes by walking the ancestor chain.
 func rebuildTotalSupportFromSlotRoot(sm *SupportMap, fc ForkchoiceReader) {
 	sm.totalSupport = make(map[[32]byte]uint64)
 	globalVotes := make(map[[32]byte]uint64)
-	for _, rootMap := range sm.slotRootVoters {
-		for root, voters := range rootMap {
-			for _, idx := range voters {
-				globalVotes[root] += sm.balances[idx]
-			}
+	for i, vote := range sm.votes {
+		if vote.Root == ([32]byte{}) {
+			continue
 		}
+		globalVotes[vote.Root] += sm.balances[i]
 	}
 	for root, bal := range globalVotes {
 		if bal == 0 {
@@ -63,10 +82,32 @@ func rebuildTotalSupportFromSlotRoot(sm *SupportMap, fc ForkchoiceReader) {
 // testCommitteeAccessor returns fixed committee assignments.
 type testCommitteeAccessor struct {
 	committees map[primitives.Slot][]primitives.ValidatorIndex
+	seeds      map[primitives.Epoch][32]byte
 }
 
 func (m *testCommitteeAccessor) Committee(_ context.Context, slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
 	return m.committees[slot], nil
+}
+
+func (m *testCommitteeAccessor) Seed(_ context.Context, epoch primitives.Epoch) ([32]byte, error) {
+	if s, ok := m.seeds[epoch]; ok {
+		return s, nil
+	}
+	// Derive a distinct default per epoch.
+	return [32]byte{0x5E, byte(epoch), byte(epoch >> 8)}, nil
+}
+
+// buildTestTables builds assignment tables for the given epochs from the accessor.
+func buildTestTables(t testing.TB, ca CommitteeAccessor, epochs []primitives.Epoch, sizeHint int) []*epochSlotTable {
+	tables := make([]*epochSlotTable, 0, len(epochs))
+	for _, e := range epochs {
+		seed, err := ca.Seed(context.Background(), e)
+		require.NoError(t, err)
+		table, err := newEpochSlotTable(context.Background(), ca, e, seed, sizeHint)
+		require.NoError(t, err)
+		tables = append(tables, table)
+	}
+	return tables
 }
 
 // TestSupportMap_Build tests the full build path including ancestor-based TotalSupport.
@@ -118,9 +159,11 @@ func TestSupportMap_Build(t *testing.T) {
 	}
 	balances := []uint64{100, 200, 300, 400, 500}
 
+	// sizeHint 0 exercises the table's grow-on-demand path.
+	tables := buildTestTables(t, committees, []primitives.Epoch{0}, 0)
+
 	sm := NewSupportMap()
-	err := sm.Build(context.Background(), votes, balances, committees, nil, 4, fc)
-	require.NoError(t, err)
+	sm.Build(votes, balances, tables, nil, fc)
 
 	// --- BlockSupportBetweenSlots (direct votes) ---
 	// Slot 1: validator 0 (100) votes root1, validator 1 (200) votes root2
@@ -161,7 +204,7 @@ func TestSupportMap_Build(t *testing.T) {
 }
 
 // TestSupportMap_Equivocation tests that equivocating validators are excluded
-// from the support maps.
+// from the support maps and counted by the equivocation score.
 func TestSupportMap_Equivocation(t *testing.T) {
 	root1 := [32]byte{1}
 
@@ -183,13 +226,18 @@ func TestSupportMap_Equivocation(t *testing.T) {
 		1: true, // validator 1 is equivocating
 	}
 
+	tables := buildTestTables(t, committees, []primitives.Epoch{0}, len(balances))
+
 	sm := NewSupportMap()
-	err := sm.Build(context.Background(), votes, balances, committees, equivocating, 2, fc)
-	require.NoError(t, err)
+	sm.Build(votes, balances, tables, equivocating, fc)
 
 	// Validator 1 (200) is equivocating: excluded from support
 	require.Equal(t, uint64(400), sm.BlockSupportBetweenSlots(root1, 1, 1)) // 100 + 300
 	require.Equal(t, uint64(400), sm.AttestationScore(root1))
+
+	// ... but counted by the equivocation score in its assigned slot only.
+	require.Equal(t, uint64(200), sm.EquivocationScore(1, 1))
+	require.Equal(t, uint64(0), sm.EquivocationScore(2, 5))
 }
 
 // TestSupportMap_EmptySlots tests that querying slots with no committees returns 0.
@@ -197,4 +245,46 @@ func TestSupportMap_EmptySlots(t *testing.T) {
 	sm := NewSupportMap()
 	require.Equal(t, uint64(0), sm.BlockSupportBetweenSlots([32]byte{1}, 5, 10))
 	require.Equal(t, uint64(0), sm.AttestationScore([32]byte{1}))
+	require.Equal(t, uint64(0), sm.EquivocationScore(5, 10))
+}
+
+func TestRebuildTables_SeedKeyed(t *testing.T) {
+	ctx := context.Background()
+	ca := &testCommitteeAccessor{
+		committees: map[primitives.Slot][]primitives.ValidatorIndex{},
+		seeds: map[primitives.Epoch][32]byte{
+			0: {1}, 1: {2}, 2: {3}, 3: {4},
+		},
+	}
+	fcr := New(&mockForkchoiceReader{}, ca, &mockBalanceAccessor{}, forkchoicetypes.Checkpoint{})
+	spe := primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
+
+	// Epoch 2: builds tables for epochs 0..2.
+	require.NoError(t, fcr.rebuildTables(ctx, 2*spe, 0))
+	require.Equal(t, 3, len(fcr.tables))
+	e1, e2 := fcr.tables[1], fcr.tables[2]
+
+	// Next slot, same seeds: every table is reused.
+	prev := fcr.tables
+	require.NoError(t, fcr.rebuildTables(ctx, 2*spe+1, 0))
+	require.Equal(t, 3, len(fcr.tables))
+	for i := range prev {
+		require.Equal(t, true, prev[i] == fcr.tables[i])
+	}
+
+	// Epoch rotation to epochs 1..3: 1 and 2 reused, 3 freshly built.
+	require.NoError(t, fcr.rebuildTables(ctx, 3*spe, 0))
+	require.Equal(t, 3, len(fcr.tables))
+	require.Equal(t, true, e1 == fcr.tables[0])
+	require.Equal(t, true, e2 == fcr.tables[1])
+	require.Equal(t, 3*spe, fcr.tables[2].start)
+
+	// A deep reorg changes epoch 2's shuffling: only that table is rebuilt.
+	e3 := fcr.tables[2]
+	ca.seeds[2] = [32]byte{9}
+	require.NoError(t, fcr.rebuildTables(ctx, 3*spe+1, 0))
+	require.Equal(t, true, e1 == fcr.tables[0])
+	require.Equal(t, true, e2 != fcr.tables[1])
+	require.Equal(t, 2*spe, fcr.tables[1].start)
+	require.Equal(t, true, e3 == fcr.tables[2])
 }
