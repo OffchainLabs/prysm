@@ -41,14 +41,14 @@ func defaultNewWorker(p p2p.P2P) newWorker {
 const minReqInterval = time.Second
 
 type p2pBatchWorkerPool struct {
-	maxBatches     int
-	newWorker      newWorker
-	toWorkers      chan batch
-	fromWorkers    chan batch
-	toRouter       chan batch
-	fromRouter     chan batch
-	shutdownErr    chan error
-	endSeq         []batch
+	maxBatches  int
+	newWorker   newWorker
+	toWorkers   chan batch
+	fromWorkers chan batch
+	toRouter    chan batch
+	fromRouter  chan batch
+	shutdownErr chan error
+	endSeq      []batch
 	// outstanding counts real batches handed to todo() that complete() has not yet returned.
 	// Like endSeq it is only touched by the goroutine calling todo()/complete().
 	outstanding    int
