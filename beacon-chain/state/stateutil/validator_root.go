@@ -3,6 +3,7 @@ package stateutil
 import (
 	"encoding/binary"
 
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
@@ -59,26 +60,31 @@ func ValidatorFieldRoots(validator *ethpb.Validator) ([][32]byte, error) {
 	return fieldRoots, nil
 }
 
-// Uint64ListRootWithRegistryLimit computes the HashTreeRoot Merkleization of
-// a list of uint64 and mixed with registry limit.
-func Uint64ListRootWithRegistryLimit(balances []uint64) ([32]byte, error) {
-	balancesChunks, err := PackUint64IntoChunks(balances)
+// Uint64ListRoot computes the HashTreeRoot Merkleization of a list of uint64
+// values for the supplied state version.
+func Uint64ListRoot(stateVersion int, vals []uint64) ([32]byte, error) {
+	if features.ProgressiveSSZEnabled(stateVersion) {
+		return uint64ListRootProgressive(vals)
+	}
+	return uint64ListRootWithRegistryLimit(vals)
+}
+
+func uint64ListRootWithRegistryLimit(vals []uint64) ([32]byte, error) {
+	chunks, err := PackUint64IntoChunks(vals)
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not pack balances into chunks")
 	}
-	balancesRootsRoot, err := ssz.BitwiseMerkleize(balancesChunks, uint64(len(balancesChunks)), ValidatorLimitForBalancesChunks())
+	root, err := ssz.BitwiseMerkleize(chunks, uint64(len(chunks)), ValidatorLimitForBalancesChunks())
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not compute balances merkleization")
 	}
 
-	balancesLengthRoot := make([]byte, 32)
-	binary.LittleEndian.PutUint64(balancesLengthRoot, uint64(len(balances)))
-	return ssz.MixInLength(balancesRootsRoot, balancesLengthRoot), nil
+	lengthRoot := make([]byte, 32)
+	binary.LittleEndian.PutUint64(lengthRoot, uint64(len(vals)))
+	return ssz.MixInLength(root, lengthRoot), nil
 }
 
-// Uint64ListRootProgressive computes the HashTreeRoot Merkleization of
-// a progressive list of uint64 values.
-func Uint64ListRootProgressive(vals []uint64) ([32]byte, error) {
+func uint64ListRootProgressive(vals []uint64) ([32]byte, error) {
 	chunks, err := PackUint64IntoChunks(vals)
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not pack uint64 values into chunks")

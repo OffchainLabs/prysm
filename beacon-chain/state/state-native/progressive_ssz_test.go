@@ -20,12 +20,12 @@ import (
 func TestProgressiveSSZEnabled(t *testing.T) {
 	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
-	require.Equal(t, false, progressiveSSZEnabled(version.Gloas))
+	require.Equal(t, false, features.ProgressiveSSZEnabled(version.Gloas))
 
 	reset = features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
 	defer reset()
-	require.Equal(t, true, progressiveSSZEnabled(version.Gloas))
-	require.Equal(t, false, progressiveSSZEnabled(version.Fulu))
+	require.Equal(t, true, features.ProgressiveSSZEnabled(version.Gloas))
+	require.Equal(t, false, features.ProgressiveSSZEnabled(version.Fulu))
 }
 
 func TestRootSelector_ProgressiveSSZGate_ValidatorsAndBalances(t *testing.T) {
@@ -36,13 +36,13 @@ func TestRootSelector_ProgressiveSSZGate_ValidatorsAndBalances(t *testing.T) {
 
 	legacyValidatorsRoot, err := st.rootSelector(context.Background(), types.Validators)
 	require.NoError(t, err)
-	expectedLegacyValidatorsRoot, err := stateutil.ValidatorRegistryRoot(st.validatorsCompactVal())
+	expectedLegacyValidatorsRoot, err := stateutil.ValidatorRegistryRoot(st.version, st.validatorsCompactVal())
 	require.NoError(t, err)
 	require.Equal(t, expectedLegacyValidatorsRoot, legacyValidatorsRoot)
 
 	legacyBalancesRoot, err := st.rootSelector(context.Background(), types.Balances)
 	require.NoError(t, err)
-	expectedLegacyBalancesRoot, err := stateutil.Uint64ListRootWithRegistryLimit(st.balancesVal())
+	expectedLegacyBalancesRoot, err := stateutil.Uint64ListRoot(st.version, st.balancesVal())
 	require.NoError(t, err)
 	require.Equal(t, expectedLegacyBalancesRoot, legacyBalancesRoot)
 
@@ -51,14 +51,14 @@ func TestRootSelector_ProgressiveSSZGate_ValidatorsAndBalances(t *testing.T) {
 
 	progressiveValidatorsRoot, err := st.rootSelector(context.Background(), types.Validators)
 	require.NoError(t, err)
-	expectedProgressiveValidatorsRoot, err := stateutil.ValidatorRegistryRootProgressive(st.validatorsCompactVal())
+	expectedProgressiveValidatorsRoot, err := stateutil.ValidatorRegistryRoot(st.version, st.validatorsCompactVal())
 	require.NoError(t, err)
 	require.Equal(t, expectedProgressiveValidatorsRoot, progressiveValidatorsRoot)
 	require.DeepNotSSZEqual(t, legacyValidatorsRoot, progressiveValidatorsRoot)
 
 	progressiveBalancesRoot, err := st.rootSelector(context.Background(), types.Balances)
 	require.NoError(t, err)
-	expectedProgressiveBalancesRoot, err := stateutil.Uint64ListRootProgressive(st.balancesVal())
+	expectedProgressiveBalancesRoot, err := stateutil.Uint64ListRoot(st.version, st.balancesVal())
 	require.NoError(t, err)
 	require.Equal(t, expectedProgressiveBalancesRoot, progressiveBalancesRoot)
 	require.DeepNotSSZEqual(t, legacyBalancesRoot, progressiveBalancesRoot)
@@ -72,7 +72,7 @@ func TestComputeFieldRootsWithHasher_ProgressiveSSZGate_PendingDeposits(t *testi
 
 	legacyRoots, err := ComputeFieldRootsWithHasher(context.Background(), st)
 	require.NoError(t, err)
-	expectedLegacyPendingDepositsRoot, err := stateutil.PendingDepositsRoot(st.pendingDeposits)
+	expectedLegacyPendingDepositsRoot, err := stateutil.PendingDepositsRoot(st.version, st.pendingDeposits)
 	require.NoError(t, err)
 	require.DeepEqual(t, expectedLegacyPendingDepositsRoot[:], legacyRoots[types.PendingDeposits.RealPosition()])
 
@@ -81,7 +81,7 @@ func TestComputeFieldRootsWithHasher_ProgressiveSSZGate_PendingDeposits(t *testi
 
 	progressiveRoots, err := ComputeFieldRootsWithHasher(context.Background(), st)
 	require.NoError(t, err)
-	expectedProgressivePendingDepositsRoot, err := stateutil.PendingDepositsRootProgressive(st.pendingDeposits)
+	expectedProgressivePendingDepositsRoot, err := stateutil.PendingDepositsRoot(st.version, st.pendingDeposits)
 	require.NoError(t, err)
 	require.DeepEqual(t, expectedProgressivePendingDepositsRoot[:], progressiveRoots[types.PendingDeposits.RealPosition()])
 	require.DeepNotSSZEqual(t, legacyRoots[types.PendingDeposits.RealPosition()], progressiveRoots[types.PendingDeposits.RealPosition()])

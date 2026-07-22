@@ -28,6 +28,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/urfave/cli/v2"
 )
 
@@ -109,6 +110,12 @@ func Get() *Flags {
 		return &Flags{}
 	}
 	return featureConfig
+}
+
+// ProgressiveSSZEnabled reports whether progressive SSZ is enabled for the
+// supplied state version.
+func ProgressiveSSZEnabled(stateVersion int) bool {
+	return stateVersion >= version.Gloas && Get().EnableProgressiveSSZ
 }
 
 // Init sets the global config equal to the config that is passed in.
