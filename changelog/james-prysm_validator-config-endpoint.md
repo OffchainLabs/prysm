@@ -11,12 +11,15 @@
 - Send builder preferences inline with the block request instead of caching them on the beacon node; request auths sign opaque `auth_data` per builder-specs #165, with the builder URL carried separately.
 - Merge file- or URL-loaded proposer settings per key: the file only overrides keys it names, and the settings schema version never regresses.
 - Reject duplicate builder urls when setting the validator config; previously persisted duplicates keep the first entry for each url.
+- For v2 settings, `--enable-builder` sets the default builder toggle only when it is unset; an explicit `enabled` and per-key entries are left to field-level inheritance.
 
 - Enforce the per-builder `pubkey` from the validator config during bid selection: when set, only bids from that builder key are accepted for the entry's url.
 
 ### Fixed
 
 - Normalize legacy proposer settings on load so unset builder `enabled` stays disabled and both validator DB backends decode `max_execution_payment` identically.
+- Report the gas limit for v1 proposer settings via `GET /eth/v1/validator/config` instead of omitting it.
+- Decode empty builder `auth_data`/`pubkey` identically to unset across both validator DB backends.
 
 ### Removed
 

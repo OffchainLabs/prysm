@@ -177,6 +177,8 @@ func validatorConfigFromOption(opt *proposer.Option) *ValidatorConfig {
 	}
 	if opt.GasLimit != 0 {
 		cfg.TargetGasLimit = strPtr(formatUint(opt.GasLimit))
+	} else if opt.BuilderConfig != nil && opt.BuilderConfig.GasLimit != 0 {
+		cfg.TargetGasLimit = strPtr(formatUint(opt.BuilderConfig.GasLimit))
 	}
 	if opt.GraffitiConfig != nil {
 		g := opt.GraffitiConfig.Graffiti

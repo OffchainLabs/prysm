@@ -407,6 +407,46 @@ func TestProposerSettingsLoader(t *testing.T) {
 			wantErr: "",
 		},
 		{
+			name: "v2 file with builders list loads at v2 and dedups duplicate builder urls",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/good-v2-proposer-config.json",
+				},
+			},
+			want: func() *proposer.Settings {
+				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				require.NoError(t, err)
+				u64 := func(v uint64) *validator.Uint64 { u := validator.Uint64(v); return &u }
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key1): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{
+								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
+							},
+							GasLimit: 40000000,
+							BuilderConfig: &proposer.BuilderConfig{
+								Enabled: proto.Bool(true),
+								MinBid:  u64(500000000),
+								Builders: []*proposer.BuilderEntry{
+									{URL: "https://builder-a.example", MaxExecutionPayment: u64(1000000000)},
+									{URL: "https://builder-b.example"},
+								},
+							},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{
+							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
+						},
+						GasLimit:      30000000,
+						BuilderConfig: &proposer.BuilderConfig{Enabled: proto.Bool(false)},
+					},
+				}
+			},
+			wantErr: "",
+		},
+		{
 			name: "Happy Path Suggested Fee ",
 			args: args{
 				proposerSettingsFlagValues: &proposerSettingsFlag{
@@ -1304,6 +1344,44 @@ func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
 		merged := mergeProposerSettings(nil, db, &flagOptions{})
 		require.NotNil(t, merged.DefaultConfig.Builder)
 		require.Equal(t, validator.Uint64(40000000), merged.DefaultConfig.Builder.GasLimit)
+	})
+	t.Run("v2 --enable-builder fills the default toggle only when unset", func(t *testing.T) {
+		enabled := true
+		opts := &flagOptions{builderConfig: &proposer.BuilderConfig{Enabled: &enabled}}
+
+		// No default builder: the flag creates it enabled.
+		db := &validatorpb.ProposerSettingsPayload{
+			Version:       proposer.SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0x"},
+		}
+		merged := mergeProposerSettings(nil, db, opts)
+		require.NotNil(t, merged.DefaultConfig.Builder)
+		require.NotNil(t, merged.DefaultConfig.Builder.Enabled)
+		require.Equal(t, true, *merged.DefaultConfig.Builder.Enabled)
+
+		// An explicit default enabled=false is NOT overridden by the flag.
+		disabled := false
+		db2 := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{
+				FeeRecipient: "0x",
+				Builder:      &validatorpb.BuilderConfig{Enabled: &disabled},
+			},
+		}
+		merged2 := mergeProposerSettings(nil, db2, opts)
+		require.NotNil(t, merged2.DefaultConfig.Builder.Enabled)
+		require.Equal(t, false, *merged2.DefaultConfig.Builder.Enabled)
+
+		// Per-key entries are untouched by the flag.
+		db3 := &validatorpb.ProposerSettingsPayload{
+			Version:       proposer.SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0x"},
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xkey": {FeeRecipient: "0xk"},
+			},
+		}
+		merged3 := mergeProposerSettings(nil, db3, opts)
+		require.IsNil(t, merged3.ProposerConfig["0xkey"].Builder)
 	})
 }
 

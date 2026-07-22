@@ -290,7 +290,7 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 	}
 
 	if merged.Version == proposer.SchemaV2 {
-		return mergeProposerSettingsV2(merged, loaded, db, gasLimitOnly)
+		return mergeProposerSettingsV2(merged, loaded, db, builderConfig, gasLimitOnly)
 	}
 	return mergeProposerSettingsV1(merged, loaded, db, builderConfig, gasLimitOnly)
 }
@@ -382,7 +382,7 @@ func mergeProposerSettingsV1(merged, loaded, db *validatorpb.ProposerSettingsPay
 	return merged
 }
 
-func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPayload, gasLimitOnly *validator.Uint64) *validatorpb.ProposerSettingsPayload {
+func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.ProposerSettingsPayload {
 	if db != nil && db.DefaultConfig != nil {
 		merged.DefaultConfig = db.DefaultConfig
 	}
@@ -390,6 +390,21 @@ func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPay
 		merged.DefaultConfig = loaded.DefaultConfig
 	}
 	merged.ProposerConfig = overlayProposerConfig(db, loaded)
+
+	// --enable-builder fills in only the default builder toggle when unset; an
+	// explicit enabled and every per-key entry are left for field-level inheritance.
+	if builderConfig != nil {
+		if merged.DefaultConfig == nil {
+			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{}
+		}
+		if merged.DefaultConfig.Builder == nil {
+			merged.DefaultConfig.Builder = &validatorpb.BuilderConfig{}
+		}
+		if merged.DefaultConfig.Builder.Enabled == nil {
+			enabled := true
+			merged.DefaultConfig.Builder.Enabled = &enabled
+		}
+	}
 
 	if gasLimitOnly == nil {
 		return merged

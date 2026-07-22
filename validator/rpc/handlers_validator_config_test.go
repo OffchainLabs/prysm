@@ -14,6 +14,7 @@ import (
 	mocks "github.com/OffchainLabs/prysm/v7/validator/testing"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"google.golang.org/protobuf/proto"
 )
 
 // setupConfigServer builds a Server with a derived keymanager holding numKeys
@@ -268,6 +269,27 @@ func TestServer_SetGetValidatorConfig_MaxExecutionPaymentZeroVsAbsent(t *testing
 	require.NotNil(t, absent)
 	require.NotNil(t, absent.Builder)
 	assert.Equal(t, (*string)(nil), absent.Builder.MaxExecutionPayment)
+}
+
+// v1 settings keep the gas limit on the builder config; GET must still surface it
+// as target_gas_limit rather than dropping it.
+func TestServer_GetValidatorConfig_V1BuilderGasLimit(t *testing.T) {
+	srv, keys := setupConfigServer(t, 1)
+	require.NoError(t, srv.validatorService.SetProposerSettings(t.Context(), &proposer.Settings{
+		Version: proposer.SchemaV1,
+		ProposeConfig: map[[48]byte]*proposer.Option{
+			keys[0]: {
+				FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress("0xabcf8e0d4e9587369b2301d0790347320302cc09")},
+				BuilderConfig:      &proposer.BuilderConfig{Enabled: proto.Bool(true), GasLimit: 40000000},
+			},
+		},
+	}))
+
+	pk := hexutil.Encode(keys[0][:])
+	cfg := getValidatorConfig(t, srv, "").Data.Configs[pk]
+	require.NotNil(t, cfg)
+	require.NotNil(t, cfg.TargetGasLimit)
+	require.Equal(t, "40000000", *cfg.TargetGasLimit)
 }
 
 func TestServer_SetValidatorConfig_DuplicateBuilderURL(t *testing.T) {

@@ -244,10 +244,11 @@ func builderEntryFromConsensus(from *validatorpb.BuilderEntry) *BuilderEntry {
 		MaxExecutionPayment: from.MaxExecutionPayment,
 		BuilderBoostFactor:  from.BuilderBoostFactor,
 	}
-	if from.Pubkey != nil {
+	// Treat empty as absent so bolt (nil) and filesystem (empty) round-trips agree.
+	if len(from.Pubkey) != 0 {
 		e.Pubkey = bytesutil.SafeCopyBytes(from.Pubkey)
 	}
-	if from.AuthData != nil {
+	if len(from.AuthData) != 0 {
 		e.AuthData = bytesutil.SafeCopyBytes(from.AuthData)
 	}
 	return e
