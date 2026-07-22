@@ -51,6 +51,7 @@ type ForkchoiceFetcher interface {
 	HasNode([32]byte) bool
 	HasFullNode([32]byte) bool
 	PayloadEarly([32]byte) (bool, bool)
+	DataAvailable(context.Context, [32]byte, primitives.Slot) (bool, error)
 	FullBeatsEmpty([32]byte) bool
 	ReceivedBlocksLastEpoch() (uint64, error)
 	InsertNode(context.Context, state.BeaconState, consensus_blocks.ROBlock) error

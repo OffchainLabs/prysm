@@ -4100,7 +4100,7 @@ func TestGetPayloadAttestationData(t *testing.T) {
 			Slot:               &slot,
 			Root:               root,
 			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
-			MockCanonicalFull:  map[primitives.Slot]bool{slot: true},
+			MockDataAvailable:  map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 		}
 		s := &Server{

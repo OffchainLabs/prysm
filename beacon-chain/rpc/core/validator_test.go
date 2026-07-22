@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/binary"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -238,7 +239,7 @@ func TestPayloadAttestationData(t *testing.T) {
 			Slot:               &slot,
 			Root:               root,
 			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
-			MockCanonicalFull:  map[primitives.Slot]bool{slot: true},
+			MockDataAvailable:  map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 		}
 		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
@@ -249,6 +250,50 @@ func TestPayloadAttestationData(t *testing.T) {
 		assert.Equal(t, slot, data.Slot)
 		assert.Equal(t, true, data.PayloadPresent)
 		assert.Equal(t, true, data.BlobDataAvailable)
+	})
+	t.Run("data available while payload not yet inserted", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(5)
+		root := bytesutil.PadTo([]byte("head-root"), 32)
+		chain := &mockChain.ChainService{
+			Slot:               &slot,
+			Root:               root,
+			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
+			MockCanonicalFull:  map[primitives.Slot]bool{slot: false},
+			MockDataAvailable:  map[[32]byte]bool{bytesutil.ToBytes32(root): true},
+			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
+		}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
+
+		data, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.IsNil(t, rpcErr)
+		assert.Equal(t, true, data.PayloadPresent)
+		assert.Equal(t, true, data.BlobDataAvailable)
+	})
+	t.Run("data availability lookup error → Internal", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(5)
+		root := bytesutil.PadTo([]byte("head-root"), 32)
+		chain := &mockChain.ChainService{
+			Slot:                 &slot,
+			Root:                 root,
+			MockCanonicalRoots:   map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
+			MockDataAvailableErr: errors.New("block lookup failed"),
+		}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
+
+		_, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, ErrorReason(Internal), rpcErr.Reason)
+		assert.ErrorContains(t, "could not check data availability", rpcErr.Err)
 	})
 	t.Run("before PTC deadline and not final → Unavailable", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
@@ -283,7 +328,7 @@ func TestPayloadAttestationData(t *testing.T) {
 			Genesis:            time.Now(),
 			Root:               root,
 			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
-			MockCanonicalFull:  map[primitives.Slot]bool{slot: true},
+			MockDataAvailable:  map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 		}
 		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
@@ -416,7 +461,7 @@ func TestPayloadAttestationData(t *testing.T) {
 			Slot:               &slot,
 			Root:               root,
 			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
-			MockCanonicalFull:  map[primitives.Slot]bool{slot: true},
+			MockDataAvailable:  map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 			HeadDependentRoot:  dependent,
 			DependentRootCB: func(_ [32]byte, _ primitives.Epoch) ([32]byte, error) {

@@ -378,6 +378,27 @@ func (s *Service) PayloadEarly(root [32]byte) (bool, bool) {
 	return s.payloadArrivals.isEarly(root)
 }
 
+// DataAvailable reports whether all blob data committed to by the block at root is available now.
+func (s *Service) DataAvailable(ctx context.Context, root [32]byte, slot primitives.Slot) (bool, error) {
+	available, err := s.dataColumnsAvailableNow(ctx, root, slot)
+	if err != nil {
+		return false, errors.Wrap(err, "data columns available now")
+	}
+	if available {
+		return true, nil
+	}
+
+	b, err := s.getBlock(ctx, root)
+	if err != nil {
+		return false, errors.Wrap(err, "could not get block")
+	}
+	sbid, err := b.Block().Body().SignedExecutionPayloadBid()
+	if err != nil {
+		return false, errors.Wrap(err, "could not get signed execution payload bid from block")
+	}
+	return len(sbid.GetMessage().GetBlobKzgCommitments()) == 0, nil
+}
+
 // notifyForkchoiceUpdateGloas takes the block hash directly because Gloas
 // blocks don't carry an execution payload in the body.
 func (s *Service) notifyForkchoiceUpdateGloas(ctx context.Context, blockHash [32]byte, attributes payloadattribute.Attributer) (*enginev1.PayloadIDBytes, error) {
