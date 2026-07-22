@@ -520,7 +520,7 @@ func (s *Server) DeleteRemoteKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if kind, _ := s.keymanagerKind(); kind != keymanager.Web3Signer {
-		httputil.HandleError(w, "Prysm Wallet is not of type Web3Signer. Please execute validator client with web3signer flags.", http.StatusInternalServerError)
+		httputil.HandleError(w, "Validator client is not configured for Web3Signer. Please execute validator client with web3signer flags.", http.StatusInternalServerError)
 		return
 	}
 
