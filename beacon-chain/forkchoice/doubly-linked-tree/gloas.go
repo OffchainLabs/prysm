@@ -582,9 +582,10 @@ func (f *ForkChoice) HasPayloadBlockHash(root, blockHash [32]byte) bool {
 		return false
 	}
 	if blockHash == en.node.blockHash {
-		return f.HasFullNode(root)
+		_, ok := f.store.fullNodeByRoot[root]
+		return ok
 	}
-	return slots.ToEpoch(en.node.slot) >= params.BeaconConfig().GloasForkEpoch && blockHash == f.store.parentHash(en)
+	return blockHash == f.store.parentHash(en)
 }
 
 // FullBeatsEmpty returns whether fork choice would select the full payload variant

@@ -456,24 +456,6 @@ func TestHasPayloadBlockHash(t *testing.T) {
 	assert.Equal(t, false, f.HasPayloadBlockHash(indexToHash(999), fullHash))
 }
 
-func TestHasPayloadBlockHash_PreGloasHasNoEmptyBranch(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.GloasForkEpoch = 1
-	params.OverrideBeaconConfig(cfg)
-	f := setup(0, 0)
-
-	root := indexToHash(1)
-	fullHash := indexToHash(100)
-	st, roblock, err := prepareForkchoiceState(t.Context(), params.BeaconConfig().SlotsPerEpoch-1, root,
-		params.BeaconConfig().ZeroHash, fullHash, 0, 0)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(t.Context(), st, roblock))
-
-	assert.Equal(t, true, f.HasPayloadBlockHash(root, fullHash))
-	assert.Equal(t, false, f.HasPayloadBlockHash(root, f.ParentHash(root)))
-}
-
 func TestGloasBlock_ChildBuildsOnFull(t *testing.T) {
 	f := setupGloas(t, 0, 0)
 	ctx := t.Context()
