@@ -218,7 +218,7 @@ func TestPayloadAttestationData(t *testing.T) {
 		slot := primitives.Slot(5)
 		root := bytesutil.PadTo([]byte("head-root"), 32)
 		chain := &mockChain.ChainService{Slot: &slot, Root: root}
-		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain, ChainInfoFetcher: chain}
 
 		data, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 		require.IsNil(t, rpcErr)
@@ -242,7 +242,7 @@ func TestPayloadAttestationData(t *testing.T) {
 			MockDataAvailable:  map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 		}
-		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain, ChainInfoFetcher: chain}
 
 		data, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 		require.IsNil(t, rpcErr)
@@ -267,7 +267,7 @@ func TestPayloadAttestationData(t *testing.T) {
 			MockDataAvailable:  map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 		}
-		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain, ChainInfoFetcher: chain}
 
 		data, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 		require.IsNil(t, rpcErr)
@@ -288,7 +288,7 @@ func TestPayloadAttestationData(t *testing.T) {
 			MockCanonicalRoots:   map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
 			MockDataAvailableErr: errors.New("block lookup failed"),
 		}
-		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain, ChainInfoFetcher: chain}
 
 		_, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 		require.NotNil(t, rpcErr)
@@ -307,7 +307,7 @@ func TestPayloadAttestationData(t *testing.T) {
 			Genesis: time.Now(),
 			Root:    bytesutil.PadTo([]byte{0xAA}, 32),
 		}
-		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain, ChainInfoFetcher: chain}
 
 		_, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 		require.NotNil(t, rpcErr)
@@ -331,7 +331,7 @@ func TestPayloadAttestationData(t *testing.T) {
 			MockDataAvailable:  map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 		}
-		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain, ChainInfoFetcher: chain}
 
 		data, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 		require.IsNil(t, rpcErr)
@@ -354,7 +354,7 @@ func TestPayloadAttestationData(t *testing.T) {
 			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
 			MockCanonicalFull:  map[primitives.Slot]bool{slot: false},
 		}
-		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain, ChainInfoFetcher: chain}
 
 		first, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 		require.IsNil(t, rpcErr)
@@ -400,7 +400,7 @@ func TestPayloadAttestationData(t *testing.T) {
 			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
 			MockCanonicalFull:  map[primitives.Slot]bool{slot: false},
 		}
-		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain, ChainInfoFetcher: chain}
 
 		const callers = 16
 		results := make([]*ethpb.PayloadAttestationData, callers)
@@ -440,7 +440,7 @@ func TestPayloadAttestationData(t *testing.T) {
 				return bytesutil.ToBytes32(bytesutil.PadTo([]byte{0x02}, 32)), nil
 			},
 		}
-		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain, ChainInfoFetcher: chain}
 
 		_, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 		require.NotNil(t, rpcErr)
@@ -468,7 +468,7 @@ func TestPayloadAttestationData(t *testing.T) {
 				return dependent, nil
 			},
 		}
-		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain, ChainInfoFetcher: chain}
 
 		data, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 		require.IsNil(t, rpcErr)
@@ -498,7 +498,7 @@ func TestPayloadAttestationData(t *testing.T) {
 				return dependent, nil
 			},
 		}
-		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain, HeadFetcher: chain, ChainInfoFetcher: chain}
 
 		data, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 		require.IsNil(t, rpcErr)

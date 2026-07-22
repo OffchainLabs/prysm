@@ -1024,11 +1024,11 @@ func (s *Service) buildPayloadAttestationData(ctx context.Context, slot primitiv
 	if !s.hasCanonicalShuffling(root, slot) {
 		return nil, &RpcError{Reason: Unavailable, Err: fmt.Errorf("no canonical shuffling block for slot %d", slot)}
 	}
-	available, err := s.ForkchoiceFetcher.DataAvailable(ctx, root, slot)
+	available, err := s.ChainInfoFetcher.DataAvailable(ctx, root, slot)
 	if err != nil {
 		return nil, &RpcError{Reason: Internal, Err: fmt.Errorf("could not check data availability for block root %#x: %w", root, err)}
 	}
-	payloadEarly, _ := s.ForkchoiceFetcher.PayloadEarly(root)
+	payloadEarly, _ := s.ChainInfoFetcher.PayloadEarly(root)
 	return &ethpb.PayloadAttestationData{
 		BeaconBlockRoot:   root[:],
 		Slot:              slot,

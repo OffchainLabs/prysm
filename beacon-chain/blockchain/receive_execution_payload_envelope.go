@@ -388,9 +388,17 @@ func (s *Service) DataAvailable(ctx context.Context, root [32]byte, slot primiti
 		return true, nil
 	}
 
-	b, err := s.getBlock(ctx, root)
-	if err != nil {
-		return false, errors.Wrap(err, "could not get block")
+	s.headLock.RLock()
+	var b interfaces.ReadOnlySignedBeaconBlock
+	if s.head != nil && s.head.root == root {
+		b = s.head.block
+	}
+	s.headLock.RUnlock()
+	if b == nil {
+		b, err = s.getBlock(ctx, root)
+		if err != nil {
+			return false, errors.Wrap(err, "could not get block")
+		}
 	}
 	sbid, err := b.Block().Body().SignedExecutionPayloadBid()
 	if err != nil {
