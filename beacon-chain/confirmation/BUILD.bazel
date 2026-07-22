@@ -7,6 +7,7 @@ go_library(
         "ffg.go",
         "helpers.go",
         "interfaces.go",
+        "metrics.go",
         "safety.go",
         "support.go",
         "types.go",
@@ -19,6 +20,8 @@ go_library(
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//time/slots:go_default_library",
+        "@com_github_prometheus_client_golang//prometheus:go_default_library",
+        "@com_github_prometheus_client_golang//prometheus/promauto:go_default_library",
     ],
 )
 
