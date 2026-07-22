@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -88,6 +89,12 @@ func (f *FastConfirmationRule) PreviousEpochGreatestUnrealizedCheckpoint() forkc
 // OnFastConfirmation must run once per slot at slot start after attestations are applied.
 // The spec allows get_latest_confirmed at any point in the slot, so only tree reads hold the forkchoice read lock.
 func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSlot primitives.Slot) {
+	// path defaults to "full"; the stale-head branch flips it to "fallback".
+	path := "full"
+	defer func(start time.Time) {
+		fastConfirmationDuration.WithLabelValues(path).Observe(time.Since(start).Seconds())
+	}(time.Now())
+
 	f.fc.RLock()
 	f.updateFastConfirmationVariables(currentSlot)
 	headSlot, headSlotErr := f.fc.Slot(f.currentSlotHead)
@@ -100,6 +107,7 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 
 	// A head this stale always reverts to finalized, and the head state cannot compute committees past its next epoch.
 	if headSlotErr != nil || slots.ToEpoch(headSlot)+1 < slots.ToEpoch(currentSlot) {
+		path = "fallback"
 		oldConfirmedRoot := f.ConfirmedRoot()
 		f.fc.RLock()
 
