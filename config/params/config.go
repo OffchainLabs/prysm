@@ -267,6 +267,7 @@ type BeaconChainConfig struct {
 	LocalBlockValueBoost             uint64          // LocalBlockValueBoost is the value boost for local block construction. This is used to prioritize local block construction over relay/builder block construction.
 	MinBuilderBid                    uint64          // MinBuilderBid is the minimum value that the builder's block can have to be considered by this node.
 	MinBuilderDiff                   uint64          // MinBuilderDiff is the minimum value above the local block value that the builder has to bid to be considered by this node
+	BuilderGetHeaderTimeout          time.Duration   // BuilderGetHeaderTimeout is the maximum time to wait for a builder getHeader response (known as BUILDER_PROPOSAL_DELAY_TOLERANCE in the builder spec). Configurable to support proposer timing games.
 	// Execution engine timeout value
 	ExecutionEngineTimeoutValue uint64 // ExecutionEngineTimeoutValue defines the seconds to wait before timing out engine endpoints with execution payload execution semantics (newPayload, forkchoiceUpdated).
 

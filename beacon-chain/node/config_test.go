@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
@@ -37,6 +38,20 @@ func TestConfigureHistoricalSlasher(t *testing.T) {
 			params.BeaconConfig().SlotsPerArchivedPoint,
 			int(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().MaxAttestations))),
 	)
+}
+
+func TestConfigureBuilderGetHeaderTimeout(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+
+	app := cli.App{}
+	set := flag.NewFlagSet("test", 0)
+	set.Duration(flags.BuilderGetHeaderTimeout.Name, 0, "")
+	require.NoError(t, set.Set(flags.BuilderGetHeaderTimeout.Name, "950ms"))
+	cliCtx := cli.NewContext(&app, set, nil)
+
+	require.NoError(t, configureBuilderCircuitBreaker(cliCtx))
+
+	assert.Equal(t, 950*time.Millisecond, params.BeaconConfig().BuilderGetHeaderTimeout)
 }
 
 func TestConfigureSlotsPerArchivedPoint(t *testing.T) {

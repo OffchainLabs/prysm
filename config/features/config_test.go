@@ -3,6 +3,7 @@ package features
 import (
 	"flag"
 	"testing"
+	"time"
 
 	validatorflags "github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -58,6 +59,31 @@ func TestConfigureValidator_RESTApiEnabledByEndpoint(t *testing.T) {
 	context = cli.NewContext(&app, set, nil)
 	require.NoError(t, ConfigureValidator(context))
 	assert.Equal(t, false, Get().EnableBeaconRESTApi)
+}
+
+func TestConfigureValidator_ProposerTimingGames(t *testing.T) {
+	defer Init(&Flags{})
+	app := cli.App{}
+
+	// Enabling timing games reads the configured delay.
+	set := flag.NewFlagSet("test", 0)
+	set.Bool(enableProposerTimingGames.Name, true, "test")
+	set.Duration(proposerTimingGameDelay.Name, 2*time.Second, "test")
+	require.NoError(t, set.Set(enableProposerTimingGames.Name, "true"))
+	require.NoError(t, set.Set(proposerTimingGameDelay.Name, "2s"))
+	context := cli.NewContext(&app, set, nil)
+	require.NoError(t, ConfigureValidator(context))
+	assert.Equal(t, true, Get().EnableProposerTimingGames)
+	assert.Equal(t, 2*time.Second, Get().ProposerTimingGameDelay)
+
+	// Without the gate the delay is ignored and stays zero (behavior unchanged).
+	set = flag.NewFlagSet("test", 0)
+	set.Duration(proposerTimingGameDelay.Name, 2*time.Second, "test")
+	require.NoError(t, set.Set(proposerTimingGameDelay.Name, "2s"))
+	context = cli.NewContext(&app, set, nil)
+	require.NoError(t, ConfigureValidator(context))
+	assert.Equal(t, false, Get().EnableProposerTimingGames)
+	assert.Equal(t, time.Duration(0), Get().ProposerTimingGameDelay)
 }
 
 func TestConfigureBeaconConfig(t *testing.T) {

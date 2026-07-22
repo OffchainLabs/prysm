@@ -227,6 +227,24 @@ var (
 		Name:  "track-equivocations",
 		Usage: "Records proposer equivocations observed on gossip and marks the slot in forkchoice if the equivocation arrives before the configured early deadline.",
 	}
+	// enableProposerTimingGames opts the validator into proposer timing games:
+	// delaying the block proposal request within the slot so builders have more
+	// time to accrue MEV. Gated behind this experimental flag; off by default.
+	enableProposerTimingGames = &cli.BoolFlag{
+		Name: "enable-proposer-timing-games",
+		Usage: "(Experimental): Delays the block proposal request within the slot so builders have more time to accrue MEV (proposer timing games). " +
+			"Opt-in and off by default. Tune the delay with --proposer-timing-game-delay. WARNING: this increases the risk of orphaned/reorged blocks; " +
+			"the effective delay is clamped to remain before the attestation deadline.",
+		Value: false,
+	}
+	// proposerTimingGameDelay is the target time into the slot at which the block
+	// proposal request is released when timing games are enabled.
+	proposerTimingGameDelay = &cli.DurationFlag{
+		Name: "proposer-timing-game-delay",
+		Usage: "(Experimental): Target time into the slot at which the block proposal request is released when --enable-proposer-timing-games is set " +
+			"(e.g. 1500ms, 2s). Clamped to a safe maximum before the attestation deadline. Has no effect unless timing games are enabled.",
+		Value: 1500 * time.Millisecond,
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -249,6 +267,8 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	EnableBeaconRESTApi,
 	DisableDutiesV2,
 	EnableWebFlag,
+	enableProposerTimingGames,
+	proposerTimingGameDelay,
 }...)
 
 // E2EValidatorFlags contains a list of the validator feature flags to be tested in E2E.
