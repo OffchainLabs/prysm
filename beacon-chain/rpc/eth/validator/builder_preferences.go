@@ -86,6 +86,13 @@ func (p *builderEntryJson) toConsensus() (*eth.BuilderPreferenceV1, error) {
 		Url:     p.Url,
 		Request: &eth.BuilderPreferencesRequestV1{Preferences: &eth.BuilderPreferencesV1{}, Auth: auth},
 	}
+	if p.Pubkey != "" {
+		pk, err := hexutil.Decode(p.Pubkey)
+		if err != nil || len(pk) != fieldparams.BLSPubkeyLength {
+			return nil, errors.New("pubkey is not a valid BLS public key")
+		}
+		out.Pubkey = pk
+	}
 	if p.MaxExecutionPayment != "" {
 		v, err := strconv.ParseUint(p.MaxExecutionPayment, 10, 64)
 		if err != nil {

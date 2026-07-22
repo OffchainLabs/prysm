@@ -134,7 +134,8 @@ message BuilderConfig {
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
   ];
-  repeated string relays = 3;
+  reserved 3;
+  reserved "relays";
   // max_execution_payment is the maximum execution layer payment (in Gwei) the
   // proposer will accept from a builder for the Gloas builder API. Explicit 0
   // means trustless-only; unset inherits; 2^64-1 means accept any amount.

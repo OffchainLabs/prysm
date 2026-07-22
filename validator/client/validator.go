@@ -1366,6 +1366,7 @@ func (v *validator) submittedPrefSlotsCount() int {
 type builderTarget struct {
 	url         string
 	authData    []byte
+	pubkey      []byte
 	maxPayment  uint64
 	minBid      *uint64
 	boostFactor *uint64
@@ -1405,12 +1406,14 @@ func (v *validator) builderTargetsForKey(pk pubkey) []builderTarget {
 	fbMin := uint64Ptr(bc.MinBid)
 	fbBoost := uint64Ptr(bc.BuilderBoostFactor)
 
-	targets := make([]builderTarget, 0, len(bc.Builders)+len(bc.Relays))
+	targets := make([]builderTarget, 0, len(bc.Builders))
+	seen := make(map[string]bool, len(bc.Builders))
 	for _, e := range bc.Builders {
-		if e == nil || e.URL == "" {
+		if e == nil || e.URL == "" || seen[e.URL] {
 			continue
 		}
-		t := builderTarget{url: e.URL, authData: e.AuthData, maxPayment: fbMax, minBid: fbMin, boostFactor: fbBoost}
+		seen[e.URL] = true
+		t := builderTarget{url: e.URL, authData: e.AuthData, pubkey: e.Pubkey, maxPayment: fbMax, minBid: fbMin, boostFactor: fbBoost}
 		if e.MaxExecutionPayment != nil {
 			t.maxPayment = uint64(*e.MaxExecutionPayment)
 		}
@@ -1421,9 +1424,6 @@ func (v *validator) builderTargetsForKey(pk pubkey) []builderTarget {
 			t.boostFactor = uint64Ptr(e.BuilderBoostFactor)
 		}
 		targets = append(targets, t)
-	}
-	for _, relay := range bc.Relays {
-		targets = append(targets, builderTarget{url: relay, maxPayment: fbMax, minBid: fbMin, boostFactor: fbBoost})
 	}
 	return targets
 }
@@ -1494,6 +1494,9 @@ func (v *validator) submitBuilderPreferenceRequests(ctx context.Context, reqs []
 // inline on the block request for pk's proposal at slot, pairing each cached
 // signed auth with its resolved caps.
 func (v *validator) buildBuilderPreferencesForSlot(pk pubkey, slot primitives.Slot) []*ethpb.BuilderPreferenceV1 {
+	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
+		return nil
+	}
 	targets := v.builderTargetsForKey(pk)
 	prefs := make([]*ethpb.BuilderPreferenceV1, 0, len(targets))
 	seen := make(map[string]bool, len(targets))
@@ -1513,6 +1516,7 @@ func (v *validator) buildBuilderPreferencesForSlot(pk pubkey, slot primitives.Sl
 				Auth:        auth,
 			},
 			Url:                t.url,
+			Pubkey:             t.pubkey,
 			BuilderBoostFactor: t.boostFactor,
 		}
 		if t.minBid != nil {
@@ -1587,8 +1591,13 @@ func (v *validator) buildSignedRegReqs(
 		return signedValRegRequests
 	}
 
+	isV2 := v.ProposerSettings().Version == proposer.SchemaV2
 	if v.ProposerSettings().DefaultConfig != nil && v.ProposerSettings().DefaultConfig.FeeRecipientConfig == nil && v.ProposerSettings().DefaultConfig.BuilderConfig != nil {
-		log.Warn("Default builder config has no default fee recipient; only keys with their own fee recipient can register")
+		if isV2 {
+			log.Warn("Default builder config has no default fee recipient; only keys with their own fee recipient can register")
+		} else {
+			log.Warn("Builder is `enabled` in default config but will be ignored because no fee recipient was provided!")
+		}
 	}
 
 	for i, k := range activePubkeys {
@@ -1598,37 +1607,62 @@ func (v *validator) buildSignedRegReqs(
 			continue
 		}
 
+		var enabled bool
 		feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
-		hasFeeRecipient := false
-		var defBC, perKeyBC *proposer.BuilderConfig
+		gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
 
-		if v.ProposerSettings().DefaultConfig != nil {
-			defaultConfig := v.ProposerSettings().DefaultConfig
-			defBC = defaultConfig.BuilderConfig
-			if defaultConfig.FeeRecipientConfig != nil {
-				feeRecipient = defaultConfig.FeeRecipientConfig.FeeRecipient
-				hasFeeRecipient = true
-			}
-		}
-		if v.ProposerSettings().ProposeConfig != nil {
-			if config, ok := v.ProposerSettings().ProposeConfig[k]; ok && config != nil {
-				perKeyBC = config.BuilderConfig
-				if config.FeeRecipientConfig != nil {
-					feeRecipient = config.FeeRecipientConfig.FeeRecipient
+		if isV2 {
+			hasFeeRecipient := false
+			var defBC, perKeyBC *proposer.BuilderConfig
+			if defaultConfig := v.ProposerSettings().DefaultConfig; defaultConfig != nil {
+				defBC = defaultConfig.BuilderConfig
+				if defaultConfig.FeeRecipientConfig != nil {
+					feeRecipient = defaultConfig.FeeRecipientConfig.FeeRecipient
 					hasFeeRecipient = true
 				}
 			}
+			if v.ProposerSettings().ProposeConfig != nil {
+				if config, ok := v.ProposerSettings().ProposeConfig[k]; ok && config != nil {
+					perKeyBC = config.BuilderConfig
+					if config.FeeRecipientConfig != nil {
+						feeRecipient = config.FeeRecipientConfig.FeeRecipient
+						hasFeeRecipient = true
+					}
+				}
+			}
+			// Field-level resolution: per-key builder fields inherit from the default;
+			// registration still requires a fee recipient configured at some level.
+			bc := proposer.EffectiveBuilderConfig(perKeyBC, defBC)
+			enabled = bc.IsEnabled() && hasFeeRecipient
+			if bc.GasLimit != 0 {
+				gasLimit = uint64(bc.GasLimit)
+			}
+		} else {
+			// V1 settings keep the pre-v2 object-level semantics so existing
+			// registrations are unchanged; inheritance starts at SchemaV2.
+			if defaultConfig := v.ProposerSettings().DefaultConfig; defaultConfig != nil && defaultConfig.FeeRecipientConfig != nil {
+				feeRecipient = defaultConfig.FeeRecipientConfig.FeeRecipient
+				if defaultConfig.BuilderConfig.IsEnabled() {
+					gasLimit = uint64(defaultConfig.BuilderConfig.GasLimit)
+					enabled = true
+				}
+			}
+			if v.ProposerSettings().ProposeConfig != nil {
+				if config, ok := v.ProposerSettings().ProposeConfig[k]; ok && config != nil && config.FeeRecipientConfig != nil {
+					feeRecipient = config.FeeRecipientConfig.FeeRecipient
+					if bc := config.BuilderConfig; bc != nil {
+						if bc.IsEnabled() {
+							gasLimit = uint64(bc.GasLimit)
+							enabled = true
+						} else {
+							enabled = false
+						}
+					}
+				}
+			}
 		}
-
-		// Field-level resolution: per-key builder fields inherit from the default;
-		// registration still requires a fee recipient configured at some level.
-		bc := proposer.EffectiveBuilderConfig(perKeyBC, defBC)
-		if !bc.IsEnabled() || !hasFeeRecipient {
+		if !enabled {
 			continue
-		}
-		gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
-		if bc.GasLimit != 0 {
-			gasLimit = uint64(bc.GasLimit)
 		}
 
 		req := &ethpb.ValidatorRegistrationV1{

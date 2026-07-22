@@ -572,7 +572,6 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 				BuilderConfig: &proposer.BuilderConfig{
 					Enabled:  proto.Bool(true),
 					GasLimit: 60_000_000,
-					Relays:   []string{"https://example.com"},
 				},
 				GraffitiConfig: &proposer.GraffitiConfig{
 					Graffiti: "foobar",

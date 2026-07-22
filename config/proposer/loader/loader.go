@@ -1,8 +1,11 @@
 package loader
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
@@ -219,6 +222,9 @@ func (psl *SettingsLoader) loadFromFile(cliCtx *cli.Context, dbSettings *validat
 	}
 	if settingFromFile == nil {
 		return nil, errors.Errorf("proposer settings is empty after unmarshalling from file specified by %s flag", flags.ProposerSettingsFlag.Name)
+	}
+	if raw, err := os.ReadFile(filepath.Clean(cliCtx.String(flags.ProposerSettingsFlag.Name))); err == nil && bytes.Contains(raw, []byte("relays")) {
+		log.Warn("The relays field in proposer settings is no longer supported and was ignored; configure builders instead")
 	}
 	log.WithField(flags.ProposerSettingsFlag.Name, cliCtx.String(flags.ProposerSettingsFlag.Name)).Info("Proposer settings loaded from file")
 	return psl.processProposerSettings(settingFromFile, dbSettings), nil

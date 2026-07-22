@@ -16,6 +16,7 @@ import (
 type builderEntryReq struct {
 	Url                 string         `json:"url"`
 	Auth                *signedAuthReq `json:"auth"`
+	Pubkey              string         `json:"pubkey,omitempty"`
 	MaxExecutionPayment string         `json:"max_execution_payment,omitempty"`
 	MinBid              string         `json:"min_bid,omitempty"`
 	BuilderBoostFactor  string         `json:"builder_boost_factor,omitempty"`
@@ -61,6 +62,9 @@ func marshalBuilderPreferences(prefs []*ethpb.BuilderPreferenceV1) ([]byte, erro
 			Url:                 p.Url,
 			Auth:                signedAuthFromConsensus(p.Request.Auth),
 			MaxExecutionPayment: strconv.FormatUint(uint64(p.Request.Preferences.GetMaxExecutionPayment()), 10),
+		}
+		if len(p.Pubkey) > 0 {
+			entry.Pubkey = hexutil.Encode(p.Pubkey)
 		}
 		if p.MinBid != nil {
 			entry.MinBid = strconv.FormatUint(uint64(p.GetMinBid()), 10)

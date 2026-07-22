@@ -135,6 +135,7 @@ func builderPrefsByURL(prefs []*ethpb.BuilderPreferenceV1) map[string]builderPre
 		bp := bidPreferences{
 			maxPayment:  uint64(p.Request.Preferences.GetMaxExecutionPayment()),
 			boostFactor: neutralBuilderBoostFactor,
+			pubkey:      p.GetPubkey(),
 		}
 		if p.MinBid != nil {
 			bp.minBid = uint64(p.GetMinBid())

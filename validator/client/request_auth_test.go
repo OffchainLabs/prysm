@@ -4,13 +4,22 @@ import (
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	validatortypes "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	logTest "github.com/sirupsen/logrus/hooks/test"
 	"google.golang.org/protobuf/proto"
 )
+
+func setGloasForkEpoch(t *testing.T, epoch primitives.Epoch) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = epoch
+	params.OverrideBeaconConfig(cfg)
+}
 
 func cachedAuth(data []byte, slot primitives.Slot) *ethpb.SignedRequestAuthV1 {
 	return &ethpb.SignedRequestAuthV1{Message: &ethpb.RequestAuthV1{Data: data, Slot: slot}}
@@ -27,6 +36,7 @@ func settingsWithBuilders(pk [fieldparams.BLSPubkeyLength]byte, entries ...*prop
 
 // A cached auth signed over rotated-away auth_data must never be attached to a proposal.
 func TestBuildBuilderPreferencesForSlot_StaleAuthNotServedAfterRotation(t *testing.T) {
+	setGloasForkEpoch(t, 0)
 	pk := [fieldparams.BLSPubkeyLength]byte{1}
 	slot := primitives.Slot(10)
 	url := "https://builder.example"
@@ -50,6 +60,7 @@ func TestBuildBuilderPreferencesForSlot_StaleAuthNotServedAfterRotation(t *testi
 // No two emitted entries may share a url; the first configured entry wins and
 // pairs with the auth signed over its own auth_data.
 func TestBuildBuilderPreferencesForSlot_DuplicateURLFirstEntryWins(t *testing.T) {
+	setGloasForkEpoch(t, 0)
 	pk := [fieldparams.BLSPubkeyLength]byte{2}
 	slot := primitives.Slot(7)
 	url := "https://builder.example"
@@ -70,9 +81,43 @@ func TestBuildBuilderPreferencesForSlot_DuplicateURLFirstEntryWins(t *testing.T)
 	require.DeepEqual(t, []byte("A"), prefs[0].Request.Auth.Message.Data)
 }
 
+// Pre-gloas proposals carry no inline preferences and emit no warn, even with
+// builder targets configured.
+func TestBuildBuilderPreferencesForSlot_PreGloasInert(t *testing.T) {
+	setGloasForkEpoch(t, 100)
+	logHook := logTest.NewGlobal()
+	pk := [fieldparams.BLSPubkeyLength]byte{3}
+	v := validator{
+		proposerSettings: settingsWithBuilders(pk, &proposer.BuilderEntry{URL: "https://builder.example", AuthData: []byte("A")}),
+	}
+	require.Equal(t, 0, len(v.buildBuilderPreferencesForSlot(pk, primitives.Slot(10))))
+	require.LogsDoNotContain(t, logHook, "no signed request auths are warmed")
+}
+
+// The entry's builder pubkey rides the wire so the beacon node can enforce it.
+func TestBuildBuilderPreferencesForSlot_CarriesEntryPubkey(t *testing.T) {
+	setGloasForkEpoch(t, 0)
+	pk := [fieldparams.BLSPubkeyLength]byte{4}
+	slot := primitives.Slot(9)
+	url := "https://builder.example"
+	builderKey := make([]byte, 48)
+	builderKey[0] = 0xAB
+
+	v := validator{
+		proposerSettings: settingsWithBuilders(pk, &proposer.BuilderEntry{URL: url, AuthData: []byte("A"), Pubkey: builderKey}),
+		signedRequestAuths: map[requestAuthKey]*ethpb.SignedRequestAuthV1{
+			{pk: pk, slot: slot, relay: url, authData: "A"}: cachedAuth([]byte("A"), slot),
+		},
+	}
+	prefs := v.buildBuilderPreferencesForSlot(pk, slot)
+	require.Equal(t, 1, len(prefs))
+	require.DeepEqual(t, builderKey, prefs[0].Pubkey)
+}
+
 // Drives the real sign path (as warmBuilderRequestAuthsForDuties does) so a key-shape
 // mismatch between signRequestAuthCached and signedRequestAuthFor cannot go unnoticed.
 func TestSignRequestAuthCached_RotationRoundTrip(t *testing.T) {
+	setGloasForkEpoch(t, 0)
 	kp := randKeypair(t)
 	km := newMockKeymanager(t, kp)
 	ctx := t.Context()
@@ -107,6 +152,21 @@ func TestSignRequestAuthCached_RotationRoundTrip(t *testing.T) {
 }
 
 // Field-level inheritance vectors through target resolution (keymanager #87 discussion).
+// Duplicate urls collapse at the target level so the AOT and inline channels
+// always agree on the effective entry.
+func TestBuilderTargetsForKey_DuplicateURLFirstWins(t *testing.T) {
+	pk := [fieldparams.BLSPubkeyLength]byte{5}
+	v := validator{
+		proposerSettings: settingsWithBuilders(pk,
+			&proposer.BuilderEntry{URL: "https://builder.example", AuthData: []byte("A")},
+			&proposer.BuilderEntry{URL: "https://builder.example", AuthData: []byte("B")},
+		),
+	}
+	targets := v.builderTargetsForKey(pk)
+	require.Equal(t, 1, len(targets))
+	require.DeepEqual(t, []byte("A"), targets[0].authData)
+}
+
 func TestBuilderTargetsForKey_FieldLevelInheritance(t *testing.T) {
 	pk := [fieldparams.BLSPubkeyLength]byte{4}
 	minBid := validatortypes.Uint64(5000000)

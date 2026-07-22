@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
@@ -34,7 +35,6 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 				BuilderConfig: &BuilderConfig{
 					Enabled:             proto.Bool(true),
 					GasLimit:            validator.Uint64(40000000),
-					Relays:              []string{"https://example-relay.com"},
 					MaxExecutionPayment: uint64ValPtr(1000000000),
 				},
 			},
@@ -46,7 +46,6 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 			BuilderConfig: &BuilderConfig{
 				Enabled:             proto.Bool(false),
 				GasLimit:            validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
-				Relays:              []string{"https://example-relay.com"},
 				MaxExecutionPayment: uint64ValPtr(2000000000),
 			},
 		},
@@ -73,7 +72,6 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 	t.Run("Happy Path BuilderConfigFromConsensus", func(t *testing.T) {
 		clone := settings.DefaultConfig.BuilderConfig.Clone()
 		config := BuilderConfigFromConsensus(clone.ToConsensus())
-		require.DeepEqual(t, config.Relays, clone.Relays)
 		require.DeepEqual(t, config.Enabled, clone.Enabled)
 		require.Equal(t, config.GasLimit, clone.GasLimit)
 		require.DeepEqual(t, config.MaxExecutionPayment, clone.MaxExecutionPayment)
@@ -123,7 +121,6 @@ func TestProposerSettings_ShouldBeSaved(t *testing.T) {
 						BuilderConfig: &BuilderConfig{
 							Enabled:  proto.Bool(true),
 							GasLimit: validator.Uint64(40000000),
-							Relays:   []string{"https://example-relay.com"},
 						},
 					},
 				},
@@ -142,7 +139,6 @@ func TestProposerSettings_ShouldBeSaved(t *testing.T) {
 					BuilderConfig: &BuilderConfig{
 						Enabled:  proto.Bool(true),
 						GasLimit: validator.Uint64(40000000),
-						Relays:   []string{"https://example-relay.com"},
 					},
 				},
 			},
@@ -159,7 +155,6 @@ func TestProposerSettings_ShouldBeSaved(t *testing.T) {
 						BuilderConfig: &BuilderConfig{
 							Enabled:  proto.Bool(true),
 							GasLimit: validator.Uint64(40000000),
-							Relays:   []string{"https://example-relay.com"},
 						},
 					},
 				},
@@ -170,7 +165,6 @@ func TestProposerSettings_ShouldBeSaved(t *testing.T) {
 					BuilderConfig: &BuilderConfig{
 						Enabled:  proto.Bool(true),
 						GasLimit: validator.Uint64(40000000),
-						Relays:   []string{"https://example-relay.com"},
 					},
 				},
 			},
@@ -203,7 +197,6 @@ func TestProposerSettings_ShouldBeSaved(t *testing.T) {
 					BuilderConfig: &BuilderConfig{
 						Enabled:  proto.Bool(true),
 						GasLimit: validator.Uint64(40000000),
-						Relays:   []string{"https://example-relay.com"},
 					},
 				},
 			},
@@ -514,7 +507,7 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 	t.Run("v1 default lifts BuilderConfig.GasLimit to top-level and retains builder relays", func(t *testing.T) {
 		ps := &Settings{
 			DefaultConfig: &Option{
-				BuilderConfig: &BuilderConfig{Enabled: proto.Bool(true), GasLimit: validator.Uint64(42_000_000), Relays: []string{"http://b:8080"}},
+				BuilderConfig: &BuilderConfig{Enabled: proto.Bool(true), GasLimit: validator.Uint64(42_000_000)},
 			},
 		}
 		require.Equal(t, true, ps.UpgradeToV2())
@@ -522,8 +515,6 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		require.Equal(t, validator.Uint64(42_000_000), ps.DefaultConfig.GasLimit)
 		// BuilderConfig is retained so the gloas builder-API relays/enabled survive the upgrade.
 		require.NotNil(t, ps.DefaultConfig.BuilderConfig)
-		require.Equal(t, 1, len(ps.DefaultConfig.BuilderConfig.Relays))
-		require.Equal(t, "http://b:8080", ps.DefaultConfig.BuilderConfig.Relays[0])
 	})
 
 	t.Run("v1 top-level GasLimit already set is preserved", func(t *testing.T) {
@@ -624,6 +615,30 @@ func TestSettings_TargetGasLimit(t *testing.T) {
 
 // Legacy (pre-v2) payloads can't express presence: wire-absent enabled meant
 // disabled, and the filesystem backend wrote spurious explicit-0 max payments.
+// Persisted payloads may predate duplicate-url rejection at the API.
+func TestSettingFromConsensus_DedupsBuilders(t *testing.T) {
+	payload := &validatorpb.ProposerSettingsPayload{
+		Version: SchemaV2,
+		DefaultConfig: &validatorpb.ProposerOptionPayload{
+			Builder: &validatorpb.BuilderConfig{
+				Enabled: proto.Bool(true),
+				Builders: []*validatorpb.BuilderEntry{
+					{Url: "https://b.example", AuthData: []byte("first")},
+					{Url: "https://b.example", AuthData: []byte("second")},
+					{Url: "https://other.example"},
+				},
+			},
+		},
+	}
+	ps, err := SettingFromConsensus(payload)
+	require.NoError(t, err)
+	builders := ps.DefaultConfig.BuilderConfig.Builders
+	require.Equal(t, 2, len(builders))
+	require.Equal(t, "https://b.example", builders[0].URL)
+	require.DeepEqual(t, []byte("first"), builders[0].AuthData)
+	require.Equal(t, "https://other.example", builders[1].URL)
+}
+
 func TestSettingFromConsensus_NormalizesLegacyPresence(t *testing.T) {
 	key := [fieldparams.BLSPubkeyLength]byte{9}
 	legacy := &Settings{

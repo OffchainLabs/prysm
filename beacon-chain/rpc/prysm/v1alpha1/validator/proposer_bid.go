@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math"
@@ -112,6 +113,7 @@ type bidPreferences struct {
 	maxPayment  uint64
 	minBid      uint64
 	boostFactor uint64
+	pubkey      []byte
 }
 
 // Returns a nil bid when the local self-build wins. The builder-API bid arrives
@@ -237,7 +239,7 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 		if !ok {
 			continue
 		}
-		if err := vs.validateBuilderBid(head, pb.Bid, q, pref.prefs.maxPayment); err != nil {
+		if err := vs.validateBuilderBid(head, pb.Bid, q, pref.prefs); err != nil {
 			bidLog = append(bidLog, fmt.Sprintf("%s(builder=%d discarded: %v)", logs.MaskCredentialsLogging(pb.BuilderURL), pb.Bid.Message.BuilderIndex, err))
 			continue
 		}
@@ -266,13 +268,22 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 }
 
 // validateBuilderBid mirrors process_execution_payload_bid so a chosen bid never invalidates the proposer's own block.
-func (vs *Server) validateBuilderBid(head state.BeaconState, signed *ethpb.SignedExecutionPayloadBid, q *builderBidQuery, maxPayment uint64) error {
+func (vs *Server) validateBuilderBid(head state.BeaconState, signed *ethpb.SignedExecutionPayloadBid, q *builderBidQuery, prefs bidPreferences) error {
 	if signed == nil || signed.Message == nil {
 		return errors.New("nil builder bid")
 	}
 	bid := signed.Message
-	if uint64(bid.ExecutionPayment) > maxPayment {
-		return errors.Errorf("bid execution payment %d exceeds max %d", bid.ExecutionPayment, maxPayment)
+	if uint64(bid.ExecutionPayment) > prefs.maxPayment {
+		return errors.Errorf("bid execution payment %d exceeds max %d", bid.ExecutionPayment, prefs.maxPayment)
+	}
+	if len(prefs.pubkey) > 0 {
+		builderPubkey, err := head.BuilderPubkey(bid.BuilderIndex)
+		if err != nil {
+			return errors.Wrap(err, "could not get builder pubkey")
+		}
+		if !bytes.Equal(builderPubkey[:], prefs.pubkey) {
+			return errors.New("bid is not signed by the configured builder pubkey")
+		}
 	}
 
 	if vs.NewExecutionPayloadBidVerifier == nil {

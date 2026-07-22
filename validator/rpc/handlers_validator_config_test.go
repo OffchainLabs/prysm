@@ -270,6 +270,22 @@ func TestServer_SetGetValidatorConfig_MaxExecutionPaymentZeroVsAbsent(t *testing
 	assert.Equal(t, (*string)(nil), absent.Builder.MaxExecutionPayment)
 }
 
+func TestServer_SetValidatorConfig_DuplicateBuilderURL(t *testing.T) {
+	srv, keys := setupConfigServer(t, 1)
+	pk := hexutil.Encode(keys[0][:])
+
+	body := `{"configs":{"` + pk + `":{"builder":{"enabled":true,"builders":[{"url":"https://b.example"},{"url":"https://b.example","min_bid":"5"}]}}}}`
+	w := postValidatorConfig(t, srv, body)
+	require.Equal(t, http.StatusOK, w.Code)
+	setResp := &SetValidatorConfigResponse{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), setResp))
+	require.Equal(t, configStatusError, setResp.Data[pk].Status)
+	assert.StringContains(t, "share the same url", setResp.Data[pk].Message)
+
+	getResp := getValidatorConfig(t, srv, "")
+	require.Equal(t, 0, len(getResp.Data.Configs))
+}
+
 func TestServer_SetValidatorConfig_InvalidBuilderURL(t *testing.T) {
 	srv, keys := setupConfigServer(t, 1)
 	pk := hexutil.Encode(keys[0][:])

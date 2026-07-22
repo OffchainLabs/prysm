@@ -95,27 +95,6 @@ func TestEffectiveBuilderConfig(t *testing.T) {
 		perKey := &BuilderConfig{GasLimit: validator.Uint64(45000000)}
 		require.Equal(t, validator.Uint64(45000000), EffectiveBuilderConfig(perKey, def).GasLimit)
 	})
-	t.Run("present relays replace default relays", func(t *testing.T) {
-		def := &BuilderConfig{Relays: []string{"https://r-def"}}
-		perKey := &BuilderConfig{Relays: []string{"https://r-key"}}
-		eff := EffectiveBuilderConfig(perKey, def)
-		require.Equal(t, 1, len(eff.Relays))
-		require.Equal(t, "https://r-key", eff.Relays[0])
-	})
-	t.Run("absent relays inherit default relays", func(t *testing.T) {
-		def := &BuilderConfig{Relays: []string{"https://r-def"}}
-		perKey := &BuilderConfig{Enabled: proto.Bool(true)}
-		require.Equal(t, 1, len(EffectiveBuilderConfig(perKey, def).Relays))
-	})
-	// Builders and relays are independent fields; setting one per-key does not
-	// suppress inheriting the other.
-	t.Run("per-key relays plus default builders compose", func(t *testing.T) {
-		def := &BuilderConfig{Builders: []*BuilderEntry{entryA}}
-		perKey := &BuilderConfig{Relays: []string{"https://r-key"}}
-		eff := EffectiveBuilderConfig(perKey, def)
-		require.Equal(t, 1, len(eff.Builders))
-		require.Equal(t, 1, len(eff.Relays))
-	})
 	t.Run("nil nil is nil", func(t *testing.T) {
 		require.Equal(t, (*BuilderConfig)(nil), EffectiveBuilderConfig(nil, nil))
 	})

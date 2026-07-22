@@ -177,19 +177,46 @@ func TestValidateBuilderBid(t *testing.T) {
 
 	t.Run("nil bid", func(t *testing.T) {
 		vs := &Server{}
-		require.ErrorContains(t, "nil builder bid", vs.validateBuilderBid(head, nil, query(), 1000))
+		require.ErrorContains(t, "nil builder bid", vs.validateBuilderBid(head, nil, query(), bidPreferences{maxPayment: 1000}))
 	})
 
 	t.Run("payment exceeds max", func(t *testing.T) {
 		vs := &Server{}
-		err := vs.validateBuilderBid(head, fullBid(), query(), 50)
+		err := vs.validateBuilderBid(head, fullBid(), query(), bidPreferences{maxPayment: 50})
 		require.ErrorContains(t, "exceeds max", err)
 	})
 
 	t.Run("verifier not ready", func(t *testing.T) {
 		vs := &Server{}
-		err := vs.validateBuilderBid(head, fullBid(), query(), 1000)
+		err := vs.validateBuilderBid(head, fullBid(), query(), bidPreferences{maxPayment: 1000})
 		require.ErrorContains(t, "bid verifier not ready", err)
+	})
+
+	t.Run("pubkey binding", func(t *testing.T) {
+		key := make([]byte, 48)
+		key[0] = 0xAB
+		builders := make([]*ethpb.Builder, 4)
+		for i := range builders {
+			builders[i] = &ethpb.Builder{Pubkey: make([]byte, 48)}
+		}
+		builders[3] = &ethpb.Builder{Pubkey: key}
+		bound, err := util.NewBeaconStateGloas(func(st *ethpb.BeaconStateGloas) error {
+			st.Builders = builders
+			return nil
+		})
+		require.NoError(t, err)
+
+		vs := &Server{}
+		err = vs.validateBuilderBid(bound, fullBid(), query(), bidPreferences{maxPayment: 1000, pubkey: make([]byte, 48)})
+		require.ErrorContains(t, "not signed by the configured builder pubkey", err)
+
+		// A matching key passes the binding and proceeds to the verifier gate.
+		err = vs.validateBuilderBid(bound, fullBid(), query(), bidPreferences{maxPayment: 1000, pubkey: key})
+		require.ErrorContains(t, "bid verifier not ready", err)
+
+		// An index with no registry entry fails closed.
+		err = vs.validateBuilderBid(head, fullBid(), query(), bidPreferences{maxPayment: 1000, pubkey: key})
+		require.ErrorContains(t, "could not get builder pubkey", err)
 	})
 
 	t.Run("all checks pass", func(t *testing.T) {
@@ -198,7 +225,7 @@ func TestValidateBuilderBid(t *testing.T) {
 			captured = &fakeBidVerifier{}
 			return captured
 		}}
-		require.NoError(t, vs.validateBuilderBid(head, fullBid(), query(), 1000))
+		require.NoError(t, vs.validateBuilderBid(head, fullBid(), query(), bidPreferences{maxPayment: 1000}))
 
 		// The parent-linkage closures must match only the block being produced.
 		require.Equal(t, true, captured.rootSeenFn(parentRoot))
@@ -212,7 +239,7 @@ func TestValidateBuilderBid(t *testing.T) {
 		vs := &Server{NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
 			return &fakeBidVerifier{sigErr: errors.New("bad signature")}
 		}}
-		err := vs.validateBuilderBid(head, fullBid(), query(), 1000)
+		err := vs.validateBuilderBid(head, fullBid(), query(), bidPreferences{maxPayment: 1000})
 		require.ErrorContains(t, "bad signature", err)
 	})
 
@@ -220,7 +247,7 @@ func TestValidateBuilderBid(t *testing.T) {
 		vs := &Server{NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
 			return &fakeBidVerifier{feeErr: errors.New("fee recipient mismatch")}
 		}}
-		err := vs.validateBuilderBid(head, fullBid(), query(), 1000)
+		err := vs.validateBuilderBid(head, fullBid(), query(), bidPreferences{maxPayment: 1000})
 		require.ErrorContains(t, "fee recipient mismatch", err)
 	})
 
@@ -228,7 +255,7 @@ func TestValidateBuilderBid(t *testing.T) {
 		vs := &Server{NewExecutionPayloadBidVerifier: func(interfaces.ROSignedExecutionPayloadBid, []verification.Requirement) verification.ExecutionPayloadBidVerifier {
 			return &fakeBidVerifier{gasErr: errors.New("gas limit incompatible")}
 		}}
-		err := vs.validateBuilderBid(head, fullBid(), query(), 1000)
+		err := vs.validateBuilderBid(head, fullBid(), query(), bidPreferences{maxPayment: 1000})
 		require.ErrorContains(t, "gas limit incompatible", err)
 	})
 }

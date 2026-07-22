@@ -61,4 +61,6 @@ message BuilderPreferenceV1 {
   optional uint64 builder_boost_factor = 3;
   // The signed auth data is opaque, so the builder URL is carried explicitly.
   string url = 4;
+  // When set, only bids signed by this builder key are accepted from this url.
+  bytes pubkey = 5;
 }

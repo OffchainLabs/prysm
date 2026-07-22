@@ -64,7 +64,35 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 		settings.DefaultConfig = d
 	}
 	settings.normalizeLegacyPresence()
+	settings.dedupBuilders()
 	return settings, nil
+}
+
+// Persisted configs may predate duplicate-url rejection; the first entry wins,
+// matching inline preference assembly.
+func (ps *Settings) dedupBuilders() {
+	fix := func(opt *Option) {
+		if opt == nil || opt.BuilderConfig == nil || len(opt.BuilderConfig.Builders) < 2 {
+			return
+		}
+		seen := make(map[string]bool, len(opt.BuilderConfig.Builders))
+		kept := opt.BuilderConfig.Builders[:0]
+		for _, e := range opt.BuilderConfig.Builders {
+			if e == nil || seen[e.URL] {
+				continue
+			}
+			seen[e.URL] = true
+			kept = append(kept, e)
+		}
+		if len(kept) != len(opt.BuilderConfig.Builders) {
+			log.Warn("Duplicate builder urls in proposer settings; keeping the first entry for each url")
+			opt.BuilderConfig.Builders = kept
+		}
+	}
+	fix(ps.DefaultConfig)
+	for _, opt := range ps.ProposeConfig {
+		fix(opt)
+	}
 }
 
 // v1 payloads predate presence tracking: wire-absent enabled meant disabled, and
@@ -110,7 +138,6 @@ func verifyOption(key string, option *validatorpb.ProposerOptionPayload) error {
 type BuilderConfig struct {
 	Enabled             *bool             `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	GasLimit            validator.Uint64  `json:"gas_limit,omitempty" yaml:"gas_limit,omitempty"`
-	Relays              []string          `json:"relays,omitempty" yaml:"relays,omitempty"`
 	MaxExecutionPayment *validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"` // explicit 0 = trustless-only; unset inherits
 	Builders            []*BuilderEntry   `json:"builders,omitempty" yaml:"builders,omitempty"`
 	Proxy               *string           `json:"proxy,omitempty" yaml:"proxy,omitempty"`
@@ -137,7 +164,7 @@ func (bc *BuilderConfig) IsEnabled() bool {
 }
 
 // EffectiveBuilderConfig resolves per-key builder config with field-level
-// inheritance; the builders/relays lists replace rather than merge.
+// inheritance; the builders list replaces rather than merges.
 func EffectiveBuilderConfig(perKey, def *BuilderConfig) *BuilderConfig {
 	if perKey == nil {
 		return def
@@ -153,16 +180,12 @@ func EffectiveBuilderConfig(perKey, def *BuilderConfig) *BuilderConfig {
 		BuilderBoostFactor:  coalesceUint64(perKey.BuilderBoostFactor, def.BuilderBoostFactor),
 		Proxy:               coalesceString(perKey.Proxy, def.Proxy),
 		Builders:            perKey.Builders,
-		Relays:              perKey.Relays,
 	}
 	if eff.GasLimit == 0 {
 		eff.GasLimit = def.GasLimit
 	}
 	if len(eff.Builders) == 0 {
 		eff.Builders = def.Builders
-	}
-	if len(eff.Relays) == 0 {
-		eff.Relays = def.Relays
 	}
 	return eff
 }
@@ -200,11 +223,6 @@ func BuilderConfigFromConsensus(from *validatorpb.BuilderConfig) *BuilderConfig 
 		Proxy:               cloneString(from.Proxy),
 		MinBid:              cloneUint64(from.MinBid),
 		BuilderBoostFactor:  cloneUint64(from.BuilderBoostFactor),
-	}
-	if from.Relays != nil {
-		relays := make([]string, len(from.Relays))
-		copy(relays, from.Relays)
-		c.Relays = relays
 	}
 	if len(from.Builders) > 0 {
 		c.Builders = make([]*BuilderEntry, 0, len(from.Builders))
@@ -374,11 +392,6 @@ func (bc *BuilderConfig) Clone() *BuilderConfig {
 	c.Proxy = cloneString(bc.Proxy)
 	c.MinBid = cloneUint64(bc.MinBid)
 	c.BuilderBoostFactor = cloneUint64(bc.BuilderBoostFactor)
-	if bc.Relays != nil {
-		relays := make([]string, len(bc.Relays))
-		copy(relays, bc.Relays)
-		c.Relays = relays
-	}
 	if len(bc.Builders) > 0 {
 		c.Builders = make([]*BuilderEntry, 0, len(bc.Builders))
 		for _, b := range bc.Builders {
@@ -443,11 +456,6 @@ func (bc *BuilderConfig) ToConsensus() *validatorpb.BuilderConfig {
 	}
 	c := &validatorpb.BuilderConfig{}
 	c.Enabled = cloneBool(bc.Enabled)
-	if bc.Relays != nil {
-		relays := make([]string, len(bc.Relays))
-		copy(relays, bc.Relays)
-		c.Relays = relays
-	}
 	c.GasLimit = bc.GasLimit
 	c.MaxExecutionPayment = cloneUint64(bc.MaxExecutionPayment)
 	c.Proxy = cloneString(bc.Proxy)

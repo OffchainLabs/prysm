@@ -272,11 +272,16 @@ func builderConfigFromJSON(in *BuilderConfigJson) (*proposer.BuilderConfig, erro
 		}
 		bc.BuilderBoostFactor = &v
 	}
+	seen := make(map[string]bool, len(in.Builders))
 	for i, entry := range in.Builders {
 		be, err := builderEntryFromJSON(entry, i)
 		if err != nil {
 			return nil, err
 		}
+		if seen[be.URL] {
+			return nil, errors.Errorf("builder.builders[%d]: two builder entries share the same url", i)
+		}
+		seen[be.URL] = true
 		bc.Builders = append(bc.Builders, be)
 	}
 	return bc, nil

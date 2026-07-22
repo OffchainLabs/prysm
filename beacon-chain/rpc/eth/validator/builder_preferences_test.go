@@ -42,6 +42,16 @@ func TestParseBuilderPreferencesBody(t *testing.T) {
 		require.Equal(t, 1, len(prefs))
 		require.Equal(t, "https://b", prefs[0].Url)
 	})
+	t.Run("pubkey is parsed and bad pubkeys are skipped", func(t *testing.T) {
+		withKey := `{"url":"https://k","auth":{"message":{"data":"0x0102","slot":"7"},"signature":"0x` + repeatHex(96) + `"},"pubkey":"0x` + repeatHex(48) + `"}`
+		badKey := `{"url":"https://short","auth":{"message":{"data":"0x0102","slot":"7"},"signature":"0x` + repeatHex(96) + `"},"pubkey":"0x0102"}`
+		r := httptest.NewRequest("POST", "/", bytes.NewBufferString(`[`+withKey+`,`+badKey+`]`))
+		prefs, err := parseBuilderPreferencesBody(r)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(prefs))
+		require.Equal(t, "https://k", prefs[0].Url)
+		require.Equal(t, 48, len(prefs[0].Pubkey))
+	})
 	t.Run("empty body yields no preferences", func(t *testing.T) {
 		r := httptest.NewRequest("POST", "/", bytes.NewBuffer(nil))
 		prefs, err := parseBuilderPreferencesBody(r)

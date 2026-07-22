@@ -997,7 +997,6 @@ func Test_ProposerSettingsLoaderWithOnlyBuilder_DoesNotSaveInDB(t *testing.T) {
 					BuilderConfig: &proposer.BuilderConfig{
 						Enabled:  proto.Bool(true),
 						GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
-						Relays:   nil,
 					},
 				},
 			}
@@ -1287,7 +1286,7 @@ func Test_mergeProposerSettings_V2GasLimitOnlyGoesToOption(t *testing.T) {
 
 func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
 	v1Builder := func() *validatorpb.BuilderConfig {
-		return &validatorpb.BuilderConfig{Enabled: proto.Bool(true), GasLimit: 40000000, Relays: []string{"r"}}
+		return &validatorpb.BuilderConfig{Enabled: proto.Bool(true), GasLimit: 40000000}
 	}
 	t.Run("v1 db without enable-builder drops DB builder", func(t *testing.T) {
 		db := &validatorpb.ProposerSettingsPayload{

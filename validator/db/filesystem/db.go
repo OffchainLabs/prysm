@@ -239,23 +239,6 @@ func (s *Store) configuration() (*Configuration, error) {
 		return nil, errors.Wrapf(err, "could not unmarshal %s", cleanedConfigFilePath)
 	}
 
-	// yaml.Unmarshal converts nil array to empty array.
-	// To get the same behavior as the BoltDB implementation, we need to convert empty array to nil.
-	if config.ProposerSettings != nil &&
-		config.ProposerSettings.DefaultConfig != nil &&
-		config.ProposerSettings.DefaultConfig.Builder != nil &&
-		len(config.ProposerSettings.DefaultConfig.Builder.Relays) == 0 {
-		config.ProposerSettings.DefaultConfig.Builder.Relays = nil
-	}
-
-	if config.ProposerSettings != nil && config.ProposerSettings.ProposerConfig != nil {
-		for _, option := range config.ProposerSettings.ProposerConfig {
-			if option.Builder != nil && len(option.Builder.Relays) == 0 {
-				option.Builder.Relays = nil
-			}
-		}
-	}
-
 	return config, nil
 }
 
