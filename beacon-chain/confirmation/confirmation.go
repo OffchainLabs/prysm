@@ -130,6 +130,9 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 
 		if finalizedSlotOk {
 			fastConfirmationSlot.Set(float64(finalizedSlot))
+			if currentSlot >= finalizedSlot {
+				fastConfirmationDistance.Set(float64(currentSlot - finalizedSlot))
+			}
 		}
 
 		// Fallback only when the confirmed root regresses to finality
@@ -213,6 +216,9 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 	}
 
 	fastConfirmationSlot.Set(float64(newSlot))
+	if currentSlot >= newSlot {
+		fastConfirmationDistance.Set(float64(currentSlot - newSlot))
+	}
 
 	// Check whether the confirmed root regressed to the finalized checkpoint, which is a fallback.
 	finalizedCkpt := f.fc.FinalizedCheckpoint()

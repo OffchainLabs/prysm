@@ -6,6 +6,7 @@ import (
 )
 
 var (
+	// Standardized metrics for fast confirmation.
 	fastConfirmationSlot = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "beacon_fast_confirmation_slot",
 		Help: "Slot of the most recent confirmed block",
@@ -21,5 +22,11 @@ var (
 	fastConfirmationRestartsTotal = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "beacon_fast_confirmation_restarts_total",
 		Help: "Total number of restarts from a safe unrealized justified block",
+	})
+
+	// Prysm-specific metrics for fast confirmation.
+	fastConfirmationDistance = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "beacon_fast_confirmation_distance_slots",
+		Help: "Slots between the current slot and the most recent confirmed block",
 	})
 )
