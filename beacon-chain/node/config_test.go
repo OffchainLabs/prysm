@@ -49,7 +49,7 @@ func TestConfigureBuilderGetHeaderTimeout(t *testing.T) {
 	require.NoError(t, set.Set(flags.BuilderGetHeaderTimeout.Name, "950ms"))
 	cliCtx := cli.NewContext(&app, set, nil)
 
-	require.NoError(t, configureBuilderCircuitBreaker(cliCtx))
+	require.NoError(t, configureBuilderGetHeaderTimeout(cliCtx))
 
 	assert.Equal(t, 950*time.Millisecond, params.BeaconConfig().BuilderGetHeaderTimeout)
 }

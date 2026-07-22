@@ -129,6 +129,9 @@ func TestWaitUntilSlotOffset_ContextCancelReturnsImmediately(t *testing.T) {
 
 func TestProposalReleaseDelay(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
+	// Pin the mainnet config: the bounds below assume the pre-Gloas attestation
+	// deadline, and other tests in this package activate Gloas globally.
+	params.OverrideBeaconConfig(params.MainnetConfig().Copy())
 	cfg := params.BeaconConfig()
 
 	v := &validator{genesisTime: time.Now()}

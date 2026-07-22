@@ -317,6 +317,10 @@ func configureBeacon(cliCtx *cli.Context) error {
 		return errors.Wrap(err, "could not configure builder circuit breaker")
 	}
 
+	if err := configureBuilderGetHeaderTimeout(cliCtx); err != nil {
+		return errors.Wrap(err, "could not configure builder getHeader timeout")
+	}
+
 	if err := configureSlotsPerArchivedPoint(cliCtx); err != nil {
 		return errors.Wrap(err, "could not configure slots per archived point")
 	}

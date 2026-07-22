@@ -88,6 +88,11 @@ func configureBuilderCircuitBreaker(cliCtx *cli.Context) error {
 			return err
 		}
 	}
+
+	return nil
+}
+
+func configureBuilderGetHeaderTimeout(cliCtx *cli.Context) error {
 	if cliCtx.IsSet(flags.BuilderGetHeaderTimeout.Name) {
 		c := params.BeaconConfig().Copy()
 		c.BuilderGetHeaderTimeout = cliCtx.Duration(flags.BuilderGetHeaderTimeout.Name)
@@ -95,7 +100,6 @@ func configureBuilderCircuitBreaker(cliCtx *cli.Context) error {
 			return err
 		}
 	}
-
 	return nil
 }
 
