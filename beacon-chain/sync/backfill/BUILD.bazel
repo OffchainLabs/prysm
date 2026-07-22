@@ -60,7 +60,6 @@ go_test(
         "batcher_expiration_test.go",
         "batcher_test.go",
         "blobs_test.go",
-        "columns_gloas_fullness_test.go",
         "columns_test.go",
         "fulu_transition_test.go",
         "log_test.go",

@@ -57,7 +57,7 @@ func TestPoolNoPrematureCompletion(t *testing.T) {
 	pool := newP2PBatchWorkerPool(p2ptest.NewTestP2P(t), 2, nil)
 	pool.spawn(t.Context(), 0, &mockAssigner{}, nil)
 
-	real := batch{begin: 90, end: 100, state: batchSequenced}
+	realBatch := batch{begin: 90, end: 100, state: batchSequenced}
 	sentinel := batch{begin: 90, end: 90, state: batchEndSequence}
 
 	var (
@@ -65,13 +65,13 @@ func TestPoolNoPrematureCompletion(t *testing.T) {
 		firstErr, endErr error
 	)
 	poolTurns(t, func() {
-		pool.todo(real)
+		pool.todo(realBatch)
 		// The scheduling pass that hands out the sentinel runs while the real batch is
 		// still downloading.
 		pool.todo(sentinel)
 		// The worker finishes the real batch; the router forwards completed work on
 		// fromRouter, simulated directly here.
-		pool.fromRouter <- real.withState(batchImportable)
+		pool.fromRouter <- realBatch.withState(batchImportable)
 		// complete() must return the finished real batch, not end the sequence.
 		firstB, firstErr = pool.complete()
 		if firstErr != nil {
