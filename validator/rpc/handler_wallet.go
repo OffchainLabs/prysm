@@ -143,13 +143,14 @@ func (s *Server) WalletConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.wallet == nil || s.validatorService == nil {
+	kind, ok := s.keymanagerKind()
+	if !ok || s.validatorService == nil {
 		// If no wallet is found, we simply return an empty response.
 		httputil.WriteJson(w, &WalletResponse{})
 		return
 	}
 	var keymanagerKind KeymanagerKind
-	switch s.wallet.KeymanagerKind() {
+	switch kind {
 	case keymanager.Derived:
 		keymanagerKind = derivedKeymanagerKind
 	case keymanager.Local:
