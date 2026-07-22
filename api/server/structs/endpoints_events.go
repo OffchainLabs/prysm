@@ -42,6 +42,12 @@ type BlockGossipEvent struct {
 	Block string `json:"block"`
 }
 
+type FastConfirmationEvent struct {
+	Block       string `json:"block"`
+	Slot        string `json:"slot"`
+	CurrentSlot string `json:"current_slot"`
+}
+
 type DataColumnGossipEvent struct {
 	Slot           string   `json:"slot"`
 	Index          string   `json:"index"`

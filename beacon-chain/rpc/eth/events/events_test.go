@@ -481,6 +481,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 			BlockTopic,
 			ExecutionPayloadAvailableTopic,
 			ExecutionPayloadTopic,
+			FastConfirmationTopic,
 		})
 		require.NoError(t, err)
 		request := topics.testHttpRequest(testSync.ctx, t)
@@ -562,6 +563,14 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 					BlockHash:    [32]byte{0xbb},
 					BlockRoot:    [32]byte{0x9a},
 					Optimistic:   true,
+				},
+			},
+			{
+				Type: statefeed.FastConfirmation,
+				Data: &statefeed.FastConfirmationData{
+					Slot:        13,
+					BlockRoot:   [32]byte{0xcc},
+					CurrentSlot: 14,
 				},
 			},
 		}
