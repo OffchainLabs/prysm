@@ -4,10 +4,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
+
+// testPoolNeeds keeps every batch used by these tests inside the retention window, so the
+// router never expires them if it happens to process a queued batch.
+func testPoolNeeds() das.CurrentNeeds {
+	return das.CurrentNeeds{Block: das.NeedSpan{Begin: 1, End: 1 << 32}}
+}
 
 // poolTurns runs pool interactions on a single goroutine, mirroring the service runloop,
 // with a deadline so a regression shows up as a test failure instead of a hung test.
@@ -32,7 +39,7 @@ func poolTurns(t *testing.T, turns func()) {
 // never reported completion. With no work outstanding, a single sentinel must end the
 // sequence immediately.
 func TestPoolCompletesAfterFinalSentinel(t *testing.T) {
-	pool := newP2PBatchWorkerPool(p2ptest.NewTestP2P(t), 2, nil)
+	pool := newP2PBatchWorkerPool(p2ptest.NewTestP2P(t), 2, testPoolNeeds)
 	pool.spawn(t.Context(), 0, &mockAssigner{}, nil)
 
 	sentinel := batch{begin: 1, end: 1, state: batchEndSequence}
@@ -54,7 +61,7 @@ func TestPoolCompletesAfterFinalSentinel(t *testing.T) {
 // pool must keep draining worker results rather than declaring the end of the sequence
 // while work is outstanding.
 func TestPoolNoPrematureCompletion(t *testing.T) {
-	pool := newP2PBatchWorkerPool(p2ptest.NewTestP2P(t), 2, nil)
+	pool := newP2PBatchWorkerPool(p2ptest.NewTestP2P(t), 2, testPoolNeeds)
 	pool.spawn(t.Context(), 0, &mockAssigner{}, nil)
 
 	realBatch := batch{begin: 90, end: 100, state: batchSequenced}
