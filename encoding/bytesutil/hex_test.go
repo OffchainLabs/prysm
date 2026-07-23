@@ -108,3 +108,32 @@ func TestDecodeHex32(t *testing.T) {
 		})
 	}
 }
+
+func TestDecodeHex48(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		valid bool
+	}{
+		{"correct format", "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2aabbccddeeff00112233445566778899", true},
+		{"too small", "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2aabbccddeeff0011223344556677889", false},
+		{"too big", "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2aabbccddeeff0011223344556677889900", false},
+		{"empty", "", false},
+		{"no 0x prefix", "cf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", false},
+		{"invalid characters", "0xzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := bytesutil.DecodeHex48(tt.input)
+			if !tt.valid {
+				assert.Equal(t, true, err != nil)
+				assert.Equal(t, [48]byte{}, out, "the zero array should be returned on error")
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.input, "0x"+hex.EncodeToString(out[:]))
+		})
+	}
+}
