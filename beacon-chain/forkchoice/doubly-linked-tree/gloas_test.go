@@ -2,6 +2,7 @@ package doublylinkedtree
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -2119,4 +2120,80 @@ func BenchmarkConsensusChildrenLen(b *testing.B) {
 			_ = !s.hasConsensusChildren(n)
 		}
 	})
+}
+
+// TestGloasIsOptimisticConcurrentAccessWithInsertPayload races IsOptimistic
+// against InsertPayload's node-map mutation; both must hold the fork-choice lock
+// or the runtime throws a fatal "concurrent map read and map write".
+func TestGloasIsOptimisticConcurrentAccessWithInsertPayload(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := context.Background()
+
+	const roots = 32
+	prepared := make([][32]byte, 0, roots)
+	for i := 1; i <= roots; i++ {
+		root := indexToHash(uint64(i))
+		blockHash := indexToHash(uint64(1000 + i))
+		st, roblock, err := prepareGloasForkchoiceState(
+			ctx,
+			primitives.Slot(i),
+			root,
+			params.BeaconConfig().ZeroHash,
+			blockHash,
+			params.BeaconConfig().ZeroHash,
+			0,
+			0,
+		)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, st, roblock))
+		prepared = append(prepared, root)
+	}
+
+	start := make(chan struct{})
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Reader: reads optimistic status under the fork-choice read lock.
+	go func() {
+		defer wg.Done()
+		<-start
+		for {
+			select {
+			case <-done:
+				return
+			default:
+			}
+			for _, root := range prepared {
+				f.RLock()
+				_, _ = f.IsOptimistic(root)
+				f.RUnlock()
+			}
+		}
+	}()
+
+	// Writer: models Service.InsertPayload, which holds the fork-choice write lock.
+	go func() {
+		defer wg.Done()
+		<-start
+		for _, root := range prepared {
+			pe, err := prepareGloasForkchoicePayload(root)
+			if err != nil {
+				t.Error(err)
+				continue
+			}
+			f.Lock()
+			_ = f.InsertPayload(pe)
+			f.Unlock()
+		}
+		close(done)
+	}()
+
+	close(start)
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("timed out waiting for payload inserts")
+	}
+	wg.Wait()
 }
