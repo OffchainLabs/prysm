@@ -7,9 +7,11 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	prefixed "github.com/OffchainLabs/prysm/v7/runtime/logging/logrus-prefixed-formatter"
 	"github.com/pkg/errors"
@@ -162,4 +164,11 @@ func MaskCredentialsLogging(currUrl string) string {
 		MaskedUrl = strings.Replace(MaskedUrl, u.RawFragment, "***", 1)
 	}
 	return MaskedUrl
+}
+
+func BuilderIndexLabel(idx primitives.BuilderIndex) string {
+	if idx == params.BeaconConfig().BuilderIndexSelfBuild {
+		return "self-build"
+	}
+	return strconv.FormatUint(uint64(idx), 10)
 }

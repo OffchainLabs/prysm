@@ -50,6 +50,21 @@ func (MockClient) SubmitBlindedBlockPostFulu(_ context.Context, _ interfaces.Rea
 	return nil
 }
 
+// GetExecutionPayloadBid --
+func (MockClient) GetExecutionPayloadBid(_ context.Context, _ primitives.Slot, _, _ [32]byte, _ [48]byte, _ *ethpb.SignedRequestAuthV1) (*ethpb.SignedExecutionPayloadBid, error) {
+	return nil, nil
+}
+
+// SubmitSignedBeaconBlock --
+func (MockClient) SubmitSignedBeaconBlock(_ context.Context, _ interfaces.ReadOnlySignedBeaconBlock) error {
+	return nil
+}
+
+// SubmitBuilderPreferences --
+func (MockClient) SubmitBuilderPreferences(_ context.Context, _ [48]byte, _ *ethpb.BuilderPreferencesRequestV1) error {
+	return nil
+}
+
 // Status --
 func (MockClient) Status(_ context.Context) error {
 	return nil

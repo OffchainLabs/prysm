@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -114,8 +115,8 @@ func (p *executionPayloadEnvelope) Execution() (interfaces.ExecutionData, error)
 }
 
 // ExecutionRequests returns the execution requests attached to the envelope.
-func (p *executionPayloadEnvelope) ExecutionRequests() *enginev1.ExecutionRequests {
-	return ethpb.CopyExecutionRequests(p.p.ExecutionRequests)
+func (p *executionPayloadEnvelope) ExecutionRequests() *enginev1.ExecutionRequestsGloas {
+	return ethpb.CopyExecutionRequestsGloas(p.p.ExecutionRequests)
 }
 
 // BuilderIndex returns the proposer/builder index for the envelope.
@@ -176,8 +177,8 @@ func (p *blindedExecutionPayloadEnvelope) IsBlinded() bool {
 	return true
 }
 
-func (p *blindedExecutionPayloadEnvelope) ExecutionRequests() *enginev1.ExecutionRequests {
-	return ethpb.CopyExecutionRequests(p.p.ExecutionRequests)
+func (p *blindedExecutionPayloadEnvelope) ExecutionRequests() *enginev1.ExecutionRequestsGloas {
+	return ethpb.CopyExecutionRequestsGloas(p.p.ExecutionRequests)
 }
 
 func (p *blindedExecutionPayloadEnvelope) BuilderIndex() primitives.BuilderIndex {
@@ -198,6 +199,22 @@ func (p *blindedExecutionPayloadEnvelope) Slot() primitives.Slot {
 
 func (p *blindedExecutionPayloadEnvelope) BlockHash() [field_params.RootLength]byte {
 	return [field_params.RootLength]byte(p.p.BlockHash)
+}
+
+// Parent slot fullness is committed by the child bid, not recorded in the parent itself.
+func BlockBuiltOnParentPayload(parent, child interfaces.ReadOnlyBeaconBlock) (bool, error) {
+	parentBid, err := parent.Body().SignedExecutionPayloadBid()
+	if err != nil {
+		return false, err
+	}
+	childBid, err := child.Body().SignedExecutionPayloadBid()
+	if err != nil {
+		return false, err
+	}
+	if parentBid == nil || parentBid.Message == nil || childBid == nil || childBid.Message == nil {
+		return false, errors.New("nil execution payload bid")
+	}
+	return bytes.Equal(childBid.Message.ParentBlockHash, parentBid.Message.BlockHash), nil
 }
 
 // BlockBuiltOnEnvelope checks if the block's parent hash matches the envelope's execution block hash.

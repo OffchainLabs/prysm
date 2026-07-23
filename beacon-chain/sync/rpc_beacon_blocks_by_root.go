@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
@@ -15,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -46,6 +46,11 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 
 		if ok := requestedRoots[blkRoot]; !ok {
 			return fmt.Errorf("received unexpected block with root %x", blkRoot)
+		}
+
+		// Verify the signature before queueing, matching the gossip path, since a matched root does not cover it.
+		if _, err := s.verifyPendingBlockSignature(ctx, id, blk, blkRoot); err != nil {
+			return errors.Wrapf(err, "verify block signature for block with root %x", blkRoot)
 		}
 
 		s.pendingQueueLock.Lock()
@@ -99,7 +104,7 @@ func (s *Service) requestAndSaveMissingDataColumnSidecars(blks []blocks.ROBlock)
 
 	// Process any gossip columns queued before the block arrived.
 	for _, blk := range blks {
-		s.processPendingGloasColumns(blk.Root(), blk)
+		s.processPendingGloasColumns(s.ctx, blk.Root(), blk)
 	}
 
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
@@ -133,7 +138,7 @@ func (s *Service) requestAndSaveMissingDataColumnSidecars(blks []blocks.ROBlock)
 	if len(missingIndicesByRoot) > 0 {
 		prettyMissingIndicesByRoot := make(map[string]string, len(missingIndicesByRoot))
 		for root, indices := range missingIndicesByRoot {
-			prettyMissingIndicesByRoot[fmt.Sprintf("%#x", root)] = helpers.SortedPrettySliceFromMap(indices)
+			prettyMissingIndicesByRoot[fmt.Sprintf("%#x", root)] = slice.SortedPrettySliceFromMap(indices)
 		}
 		return errors.Errorf("some sidecars are still missing after fetch: %v", prettyMissingIndicesByRoot)
 	}

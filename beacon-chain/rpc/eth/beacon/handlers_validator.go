@@ -245,6 +245,72 @@ func (s *Server) GetValidatorBalances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var rawIds []string
+	if r.Method == http.MethodGet {
+		rawIds = r.URL.Query()["id"]
+	} else {
+		err = json.NewDecoder(r.Body).Decode(&rawIds)
+		if err != nil && !errors.Is(err, io.EOF) {
+			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	ids, ok := decodeIds(w, st, rawIds, true /* ignore unknown */)
+	if !ok {
+		return
+	}
+
+	if httputil.RespondWithSsz(r) {
+		s.getValidatorBalancesSSZ(w, st, rawIds, ids)
+	} else {
+		s.getValidatorBalancesJSON(ctx, w, st, stateId, rawIds, ids)
+	}
+}
+
+func (s *Server) getValidatorBalancesSSZ(w http.ResponseWriter, st state.BeaconState, rawIds []string, ids []primitives.ValidatorIndex) {
+	// return no data if all IDs are ignored
+	if len(rawIds) > 0 && len(ids) == 0 {
+		httputil.WriteSsz(w, []byte{})
+		return
+	}
+
+	bals := st.Balances()
+	var balances []*eth.ValidatorBalance
+	if len(ids) == 0 {
+		balances = make([]*eth.ValidatorBalance, len(bals))
+		for i, b := range bals {
+			balances[i] = &eth.ValidatorBalance{
+				Index:   primitives.ValidatorIndex(i),
+				Balance: b,
+			}
+		}
+	} else {
+		balances = make([]*eth.ValidatorBalance, len(ids))
+		for i, id := range ids {
+			balances[i] = &eth.ValidatorBalance{
+				Index:   id,
+				Balance: bals[id],
+			}
+		}
+	}
+
+	resp, err := serializeItems(balances)
+	if err != nil {
+		httputil.HandleError(w, "Could not marshal validator balances to SSZ: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	httputil.WriteSsz(w, resp)
+}
+
+func (s *Server) getValidatorBalancesJSON(
+	ctx context.Context,
+	w http.ResponseWriter,
+	st state.BeaconState,
+	stateId string,
+	rawIds []string,
+	ids []primitives.ValidatorIndex,
+) {
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
 		helpers.HandleIsOptimisticError(w, err)
@@ -257,25 +323,6 @@ func (s *Server) GetValidatorBalances(w http.ResponseWriter, r *http.Request) {
 	}
 	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
 
-	var rawIds []string
-	if r.Method == http.MethodGet {
-		rawIds = r.URL.Query()["id"]
-	} else {
-		err = json.NewDecoder(r.Body).Decode(&rawIds)
-		switch {
-		case errors.Is(err, io.EOF):
-			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-			return
-		case err != nil:
-			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-	}
-
-	ids, ok := decodeIds(w, st, rawIds, true /* ignore unknown */)
-	if !ok {
-		return
-	}
 	// return no data if all IDs are ignored
 	if len(rawIds) > 0 && len(ids) == 0 {
 		resp := &structs.GetValidatorBalancesResponse{
@@ -333,11 +380,7 @@ func (s *Server) GetValidatorIdentities(w http.ResponseWriter, r *http.Request) 
 
 	var rawIds []string
 	err = json.NewDecoder(r.Body).Decode(&rawIds)
-	switch {
-	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	case err != nil:
+	if err != nil && !errors.Is(err, io.EOF) {
 		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}

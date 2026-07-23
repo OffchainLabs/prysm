@@ -88,14 +88,6 @@ func WithPayloadIDCache(c *cache.PayloadIDCache) Option {
 	}
 }
 
-// WithTrackedValidatorsCache for tracked validators cache.
-func WithTrackedValidatorsCache(c *cache.TrackedValidatorsCache) Option {
-	return func(s *Service) error {
-		s.cfg.TrackedValidatorsCache = c
-		return nil
-	}
-}
-
 // WithProposerPreferencesCache sets the proposer preferences cache used to
 // look up fee recipient and gas limit from Gloas gossip preferences.
 func WithProposerPreferencesCache(c *cache.ProposerPreferencesCache) Option {
@@ -105,10 +97,27 @@ func WithProposerPreferencesCache(c *cache.ProposerPreferencesCache) Option {
 	}
 }
 
+// WithSubscribedValidatorsCache sets the cache of validator indices attached
+// to this BN, populated from beacon_committee_subscriptions.
+func WithSubscribedValidatorsCache(c *cache.SubscribedValidatorsCache) Option {
+	return func(s *Service) error {
+		s.cfg.SubscribedValidatorsCache = c
+		return nil
+	}
+}
+
 // WithAttestationCache for attestation lifecycle after chain inclusion.
 func WithAttestationCache(c *cache.AttestationCache) Option {
 	return func(s *Service) error {
 		s.cfg.AttestationCache = c
+		return nil
+	}
+}
+
+// WithAttestationDataCache for attestation data cache.
+func WithAttestationDataCache(c *cache.AttestationDataCache) Option {
+	return func(s *Service) error {
+		s.cfg.AttestationDataCache = c
 		return nil
 	}
 }

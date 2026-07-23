@@ -5,7 +5,6 @@ package(default_testonly = True)
 go_library(
     name = "go_default_library",
     srcs = [
-        "beacon_altair_validator_client_mock.go",
         "beacon_altair_validator_server_mock.go",
         "beacon_service_mock.go",
         "beacon_validator_client_mock.go",

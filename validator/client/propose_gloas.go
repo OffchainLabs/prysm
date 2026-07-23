@@ -85,7 +85,12 @@ func (v *validator) proposeSelfBuildEnvelope(
 		return nil
 	}
 
-	envelope, err := v.validatorClient.GetExecutionPayloadEnvelope(ctx, slot)
+	blockRoot, err := blk.Block().HashTreeRoot()
+	if err != nil {
+		return errors.Wrap(err, "could not compute beacon block root")
+	}
+
+	envelope, err := v.validatorClient.GetExecutionPayloadEnvelope(ctx, slot, blockRoot)
 	if err != nil {
 		validatorSelfBuildEnvelopeSubmissionTotal.WithLabelValues("failed").Inc()
 		return errors.Wrap(err, "failed to get execution payload envelope for self-build")

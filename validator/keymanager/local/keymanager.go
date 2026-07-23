@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
-	"github.com/OffchainLabs/prysm/v7/runtime/interop"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/petnames"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
@@ -102,38 +101,6 @@ func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
 		// all-accounts.keystore.json file in the wallet directory.
 		go k.listenForAccountChanges(ctx)
 	}
-	return k, nil
-}
-
-// InteropKeymanagerConfig is used on validator launch to initialize the keymanager.
-// InteropKeys are used for testing purposes.
-type InteropKeymanagerConfig struct {
-	Offset           uint64
-	NumValidatorKeys uint64
-}
-
-// NewInteropKeymanager instantiates a new imported keymanager with the deterministically generated interop keys.
-// InteropKeys are used for testing purposes.
-func NewInteropKeymanager(_ context.Context, offset, numValidatorKeys uint64) (*Keymanager, error) {
-	k := &Keymanager{
-		accountsChangedFeed: new(event.Feed),
-	}
-	if numValidatorKeys == 0 {
-		return k, nil
-	}
-	secretKeys, publicKeys, err := interop.DeterministicallyGenerateKeys(offset, numValidatorKeys)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not generate interop keys")
-	}
-	lock.Lock()
-	pubKeys := make([][fieldparams.BLSPubkeyLength]byte, numValidatorKeys)
-	for i := range numValidatorKeys {
-		publicKey := bytesutil.ToBytes48(publicKeys[i].Marshal())
-		pubKeys[i] = publicKey
-		secretKeysCache[publicKey] = secretKeys[i]
-	}
-	orderedPublicKeys = pubKeys
-	lock.Unlock()
 	return k, nil
 }
 

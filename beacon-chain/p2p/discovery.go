@@ -789,7 +789,8 @@ func PeersFromStringAddrs(addrs []string) ([]ma.Multiaddr, error) {
 		}
 		nodeAddrs, err := retrieveMultiAddrsFromNode(enodeAddr)
 		if err != nil {
-			return nil, errors.Wrapf(err, "Could not get multiaddr")
+			log.WithError(err).Errorf("Could not get multiaddr from peer %s", stringAddr)
+			continue
 		}
 		allAddrs = append(allAddrs, nodeAddrs...)
 	}
@@ -958,6 +959,11 @@ func getPort(node *enode.Node, protocol internetProtocol) (uint, bool, error) {
 		return 0, false, errors.Wrap(err, "could not get port")
 	}
 
+	// A zero port is not a usable endpoint; treat it as absent so callers do not build /tcp/0 dial addresses.
+	if port == 0 {
+		return port, false, nil
+	}
+
 	return port, true, nil
 }
 
@@ -999,6 +1005,10 @@ func peerIdsFromMultiAddrs(addrs []ma.Multiaddr) []peer.ID {
 		info, err := peer.AddrInfoFromP2pAddr(a)
 		if err != nil {
 			log.WithError(err).Errorf("Could not derive peer info from multiaddress %s", a.String())
+			continue
+		}
+		if len(info.Addrs) == 0 {
+			log.WithField("peerID", info.ID).Warn("Skipping peer with no transport address")
 			continue
 		}
 		peers = append(peers, info.ID)

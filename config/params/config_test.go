@@ -47,16 +47,13 @@ func TestConfig_DataRace(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	wg := new(sync.WaitGroup)
 	for range 10 {
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			cfg := params.BeaconConfig()
 			params.OverrideBeaconConfig(cfg)
-		}()
-		go func() uint64 {
-			defer wg.Done()
-			return params.BeaconConfig().MaxDeposits
-		}()
+		})
+		wg.Go(func() {
+			_ = params.BeaconConfig().MaxDeposits
+		})
 	}
 	wg.Wait()
 }

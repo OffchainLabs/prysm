@@ -91,7 +91,7 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 				"blobKzgCommitmentCount": len(bid.BlobKzgCommitments),
 				"payloadHash":            fmt.Sprintf("%#x", bytesutil.Trunc(bid.BlockHash)),
 				"parentHash":             fmt.Sprintf("%#x", bytesutil.Trunc(bid.ParentBlockHash)),
-				"builderIndex":           bid.BuilderIndex,
+				"builderIndex":           logs.BuilderIndexLabel(bid.BuilderIndex),
 			})
 		}
 	}
@@ -140,7 +140,7 @@ func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte
 		} else if signedBid != nil && signedBid.Message != nil {
 			moreFields["blockHash"] = fmt.Sprintf("%#x", bytesutil.Trunc(signedBid.Message.BlockHash))
 			moreFields["parentHash"] = fmt.Sprintf("%#x", bytesutil.Trunc(signedBid.Message.ParentBlockHash))
-			moreFields["builderIndex"] = signedBid.Message.BuilderIndex
+			moreFields["builderIndex"] = logs.BuilderIndexLabel(signedBid.Message.BuilderIndex)
 		}
 	}
 

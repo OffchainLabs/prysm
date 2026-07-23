@@ -8,6 +8,9 @@ on:
   merge_group:
     types: [checks_requested]
 
+permissions:
+  contents: read
+
 jobs:
   formatting:
     name: Formatting
@@ -16,9 +19,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Go 1.25.1
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.1'
+
       - name: Go mod tidy checker
-        id: gomodtidy
-        uses: ./.github/actions/gomodtidy
+        run: go mod tidy -diff
 
   gosec:
     name: Gosec scan
@@ -28,10 +35,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Set up Go 1.24
+      - name: Set up Go 1.26.4
         uses: actions/setup-go@v4
         with:
-          go-version: '1.25.1'
+          go-version: '1.26.4'
       - name: Run Gosec Security Scanner
         run: | # https://github.com/securego/gosec/issues/469
           export PATH=$PATH:$(go env GOPATH)/bin
@@ -47,24 +54,24 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Go 1.25.1
+      - name: Set up Go 1.26.4
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.1'
+          go-version: '1.26.4'
 
       - name: Golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.4
+          version: v2.12
 
   build:
     name: Build
     runs-on: ubuntu-4
     steps:
-      - name: Set up Go 1.25.1
+      - name: Set up Go 1.26.4
         uses: actions/setup-go@v4
         with:
-          go-version: '1.25.1'
+          go-version: '1.26.4'
         id: go
 
       - name: Check out code into the Go module directory
@@ -86,6 +93,54 @@ jobs:
         env:
            CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
 
-# Tests run via Bazel for now...
-#      - name: Test
-#        run: go test -v ./...
+
+  test-mainnet:
+    name: Test (mainnet, excluding spectests)
+    runs-on: ubuntu-4
+    # TODO: Remove `continue-on-error: true` when removing Bazel
+    continue-on-error: true
+    steps:
+      - name: Set up Go 1.26.4
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.4'
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run mainnet tests
+        run: make test mainnet
+        env:
+           CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
+
+  test-mainnet-spectest:
+    name: Test (mainnet spectests)
+    runs-on: ubuntu-4
+    # TODO: Remove `continue-on-error: true` when removing Bazel
+    continue-on-error: true
+    steps:
+      - name: Set up Go 1.26.4
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.4'
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run mainnet spectests
+        run: make test mainnet-spectest
+        env:
+           CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
+
+  test-minimal:
+    name: Test (minimal, including spectests)
+    runs-on: ubuntu-4
+    # TODO: Remove `continue-on-error: true` when removing Bazel
+    continue-on-error: true
+    steps:
+      - name: Set up Go 1.26.4
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.4'
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run minimal tests
+        run: make test minimal minimal-spectest
+        env:
+           CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
