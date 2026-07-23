@@ -254,6 +254,18 @@ func (mr *MockValidatorMockRecorder) LogValidatorGainsAndLosses(ctx, slot any) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LogValidatorGainsAndLosses", reflect.TypeOf((*MockValidator)(nil).LogValidatorGainsAndLosses), ctx, slot)
 }
 
+// MaybeRetryMissingNextDuties mocks base method.
+func (m *MockValidator) MaybeRetryMissingNextDuties(ctx context.Context, slot primitives.Slot) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "MaybeRetryMissingNextDuties", ctx, slot)
+}
+
+// MaybeRetryMissingNextDuties indicates an expected call of MaybeRetryMissingNextDuties.
+func (mr *MockValidatorMockRecorder) MaybeRetryMissingNextDuties(ctx, slot any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaybeRetryMissingNextDuties", reflect.TypeOf((*MockValidator)(nil).MaybeRetryMissingNextDuties), ctx, slot)
+}
+
 // NextSlot mocks base method.
 func (m *MockValidator) NextSlot() <-chan primitives.Slot {
 	m.ctrl.T.Helper()

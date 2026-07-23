@@ -49,6 +49,16 @@ var (
 	_ = EngineCaller(&mocks.EngineClient{})
 )
 
+func TestGetPayloadTimeout(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 2
+	params.OverrideBeaconConfig(cfg)
+
+	require.Equal(t, defaultEngineTimeout, getPayloadTimeout(cfg.SlotsPerEpoch))
+	require.Equal(t, gloasGetPayloadTimeout, getPayloadTimeout(2*cfg.SlotsPerEpoch))
+}
+
 type RPCClientBad struct {
 }
 

@@ -122,14 +122,14 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 	fieldRoots[types.Eth1DepositIndex.RealPosition()] = eth1DepositBuf[:]
 
 	// Validators slice root.
-	validatorsRoot, err := stateutil.ValidatorRegistryRoot(state.validatorsCompactVal())
+	validatorsRoot, err := stateutil.ValidatorRegistryRoot(state.version, state.validatorsCompactVal())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute validator registry merkleization")
 	}
 	fieldRoots[types.Validators.RealPosition()] = validatorsRoot[:]
 
 	// Balances slice root.
-	balancesRoot, err := stateutil.Uint64ListRootWithRegistryLimit(state.balancesVal())
+	balancesRoot, err := stateutil.Uint64ListRoot(state.version, state.balancesVal())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute validator balances merkleization")
 	}
@@ -167,14 +167,14 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 
 	if state.version >= version.Altair {
 		// PreviousEpochParticipation slice root.
-		prevParticipationRoot, err := stateutil.ParticipationBitsRoot(state.previousEpochParticipation)
+		prevParticipationRoot, err := stateutil.ParticipationBitsRoot(state.version, state.previousEpochParticipation)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute previous epoch participation merkleization")
 		}
 		fieldRoots[types.PreviousEpochParticipationBits.RealPosition()] = prevParticipationRoot[:]
 
 		// CurrentEpochParticipation slice root.
-		currParticipationRoot, err := stateutil.ParticipationBitsRoot(state.currentEpochParticipation)
+		currParticipationRoot, err := stateutil.ParticipationBitsRoot(state.version, state.currentEpochParticipation)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute current epoch participation merkleization")
 		}
@@ -208,7 +208,7 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 
 	if state.version >= version.Altair {
 		// Inactivity scores root.
-		inactivityScoresRoot, err := stateutil.Uint64ListRootWithRegistryLimit(state.inactivityScoresVal())
+		inactivityScoresRoot, err := stateutil.Uint64ListRoot(state.version, state.inactivityScoresVal())
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute inactivityScoreRoot")
 		}
@@ -311,21 +311,21 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		fieldRoots[types.EarliestConsolidationEpoch.RealPosition()] = eceRoot[:]
 
 		// PendingDeposits root.
-		pbdRoot, err := stateutil.PendingDepositsRoot(state.pendingDeposits)
+		pbdRoot, err := stateutil.PendingDepositsRoot(state.version, state.pendingDeposits)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute pending balance deposits merkleization")
 		}
 		fieldRoots[types.PendingDeposits.RealPosition()] = pbdRoot[:]
 
 		// PendingPartialWithdrawals root.
-		ppwRoot, err := stateutil.PendingPartialWithdrawalsRoot(state.pendingPartialWithdrawals)
+		ppwRoot, err := stateutil.PendingPartialWithdrawalsRoot(state.version, state.pendingPartialWithdrawals)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute pending partial withdrawals merkleization")
 		}
 		fieldRoots[types.PendingPartialWithdrawals.RealPosition()] = ppwRoot[:]
 
 		// PendingConsolidations root.
-		pcRoot, err := stateutil.PendingConsolidationsRoot(state.pendingConsolidations)
+		pcRoot, err := stateutil.PendingConsolidationsRoot(state.version, state.pendingConsolidations)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute pending consolidations merkleization")
 		}
