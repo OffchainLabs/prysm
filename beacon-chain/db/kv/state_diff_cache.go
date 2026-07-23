@@ -223,7 +223,9 @@ func (c *stateDiffCache) setAnchor(level int, anchor state.ReadOnlyBeaconState) 
 	if err != nil {
 		return err
 	}
-	compressed := snappy.Encode(nil, versionedAnchorBytes)
+	encoded := snappy.Encode(nil, versionedAnchorBytes)
+	compressed := make([]byte, len(encoded))
+	copy(compressed, encoded)
 
 	c.anchors[level] = compressed
 	stateDiffAnchorCacheBytes.WithLabelValues(strconv.Itoa(level)).Set(float64(len(compressed)))
