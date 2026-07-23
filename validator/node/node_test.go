@@ -201,6 +201,9 @@ func TestClearDB(t *testing.T) {
 
 // TestWeb3SignerConfig tests the web3 signer config returns the correct values.
 func TestWeb3SignerConfig(t *testing.T) {
+	existingKeyFile := filepath.Join(t.TempDir(), "keyfile.txt")
+	require.NoError(t, file.WriteFile(existingKeyFile, []byte("0x800077e04f8d7496099b3d30ac5430aea64873a45e5bcfe004d2095babcbf55e21138ff0d5691abc29da190aa32755c6\n")))
+
 	type args struct {
 		baseURL          string
 		publicKeysOrURLs []string
@@ -250,7 +253,7 @@ func TestWeb3SignerConfig(t *testing.T) {
 					"0xb89bebc699769726a318c8e9971bd3171297c61aea4a6578a7a4f94b547dcba5bac16a89108b6b6a1fe3695d1a874a0b"},
 			},
 			want:       nil,
-			wantErrMsg: "web3signer url 0xa99a76ed7796f7be22d5b7e85deeb7c5677e88, is invalid: parse \"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88,\": invalid URI for request",
+			wantErrMsg: "web3signer url 0xa99a76ed7796f7be22d5b7e85deeb7c5677e88, is invalid: invalid URL: parse \"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88,\": invalid URI for request",
 		},
 		{
 			name: "Base URL missing scheme or host",
@@ -259,18 +262,35 @@ func TestWeb3SignerConfig(t *testing.T) {
 				publicKeysOrURLs: []string{"localhost"},
 			},
 			want:       nil,
-			wantErrMsg: "web3signer url must be in the format of http(s)://host:port url used: localhost:8545",
+			wantErrMsg: "web3signer url localhost:8545 is invalid: invalid URL: missing scheme or host",
 		},
 		{
 			name: "happy path with persistentFile",
 			args: &args{
 				baseURL:        "http://localhost:8545",
-				persistentFile: "/remote/key/file.txt",
+				persistentFile: existingKeyFile,
 			},
 			want: &remoteweb3signer.SetupConfig{
 				BaseEndpoint: "http://localhost:8545",
-				KeyFilePath:  "/remote/key/file.txt",
+				KeyFilePath:  existingKeyFile,
 			},
+		},
+		{
+			name: "key file does not exist",
+			args: &args{
+				baseURL:        "http://localhost:8545",
+				persistentFile: "/remote/key/file.txt",
+			},
+			want:       nil,
+			wantErrMsg: "no file exists in remote signer key file path /remote/key/file.txt",
+		},
+		{
+			name: "no public keys or key file provided",
+			args: &args{
+				baseURL: "http://localhost:8545",
+			},
+			want:       nil,
+			wantErrMsg: "no web3signer public keys or key file path provided",
 		},
 	}
 	for _, tt := range tests {
