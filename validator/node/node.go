@@ -457,8 +457,8 @@ func Web3SignerConfig(cliCtx *cli.Context) (*remoteweb3signer.SetupConfig, error
 	// NOTE: Public keys can be seeded at start up in three ways.
 	// 1. --validators-external-signer-public-keys with static list of keys (comma separated)
 	// 2. --validators-external-signer-public-keys with a single URL (mostly /api/v1/eth2/publicKeys) to fetch keys from
-	// 3. --validators-external-signer-public-keys-file with a file containing a list of keys (one per line)
-	// Building the SetupConfig here only check whether each flag is set and valid.
+	// 3. --validators-external-signer-keys-file with a file containing a list of keys (one per line)
+	// Building the SetupConfig here only checks whether each flag is set and valid.
 
 	if cliCtx.IsSet(flags.Web3SignerPublicValidatorKeysFlag.Name) {
 		keys := cliCtx.StringSlice(flags.Web3SignerPublicValidatorKeysFlag.Name)

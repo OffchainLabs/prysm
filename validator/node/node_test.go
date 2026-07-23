@@ -262,7 +262,7 @@ func TestWeb3SignerConfig(t *testing.T) {
 				publicKeysOrURLs: []string{"localhost"},
 			},
 			want:       nil,
-			wantErrMsg: "web3signer url localhost:8545 is invalid: invalid URL: missing scheme or host",
+			wantErrMsg: "web3signer url localhost:8545 is invalid: missing scheme or host",
 		},
 		{
 			name: "happy path with persistentFile",
