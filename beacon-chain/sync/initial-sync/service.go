@@ -477,7 +477,6 @@ func (s *Service) fetchOriginDataColumnSidecars(roBlock blocks.ROBlock) error {
 		Storage:                 s.cfg.DataColumnStorage,
 		NewVerifier:             s.newDataColumnsVerifier,
 		DownscorePeerOnRPCFault: true,
-		RequestByRoot:           true,
 	}
 
 	for attempt := uint64(0); ; attempt++ {
