@@ -463,7 +463,7 @@ func (m *mockExecutionPayloadBidVerifier) VerifyBidSlotHigherThanParent(primitiv
 	return m.errSlotHigherThanParent
 }
 
-func (m *mockExecutionPayloadBidVerifier) VerifyParentBlockHash(func([32]byte) ([32]byte, error)) error {
+func (m *mockExecutionPayloadBidVerifier) VerifyParentBlockHash(func([32]byte, [32]byte) bool) error {
 	return m.errParentBlockHash
 }
 

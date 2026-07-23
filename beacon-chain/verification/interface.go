@@ -110,7 +110,7 @@ type ExecutionPayloadBidVerifier interface {
 	VerifyPrevRandao(state.ReadOnlyBeaconState) error
 	VerifyParentBlockRootSeen(func([32]byte) bool) error
 	VerifyBidSlotHigherThanParent(parentSlot primitives.Slot) error
-	VerifyParentBlockHash(func([32]byte) ([32]byte, error)) error
+	VerifyParentBlockHash(func([32]byte, [32]byte) bool) error
 	VerifyGasLimitTargetCompatible(parentGasLimit, targetGasLimit uint64) error
 	VerifyBuilderCanCoverBid(state.ReadOnlyBeaconState) error
 	VerifySignature(state.ReadOnlyBeaconState) error

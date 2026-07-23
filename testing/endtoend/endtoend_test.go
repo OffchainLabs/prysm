@@ -516,7 +516,7 @@ func (r *testRunner) defaultEndToEndRun() error {
 	nodeClient := eth.NewNodeClient(conns[0])
 	genesis, err := nodeClient.GetGenesis(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
-	tickingStartTime := helpers.EpochTickerStartTime(genesis)
+	tickingStartTime := helpers.EpochTickerStartTime(time.Unix(genesis.GenesisTime.Seconds, 0))
 
 	ec := e2etypes.NewEvaluationContext(r.depositor.History())
 	// Run assigned evaluators.
@@ -615,7 +615,7 @@ func (r *testRunner) scenarioRun() error {
 	nodeClient := eth.NewNodeClient(conns[0])
 	genesis, err := nodeClient.GetGenesis(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
-	tickingStartTime := helpers.EpochTickerStartTime(genesis)
+	tickingStartTime := helpers.EpochTickerStartTime(time.Unix(genesis.GenesisTime.Seconds, 0))
 
 	ec := e2etypes.NewEvaluationContext(r.depositor.History())
 	// Run assigned evaluators.

@@ -50,6 +50,8 @@ type ChainService struct {
 	MockCanonicalRoots          map[primitives.Slot][32]byte
 	InitSyncBlockRoots          map[[32]byte]bool
 	MockPayloadEarly            map[[32]byte]bool
+	MockDataAvailable           map[[32]byte]bool
+	MockDataAvailableErr        error
 	ParentPayloadReadyVal       *bool
 	ForkchoiceRoots             map[[32]byte]bool
 	ForkchoiceBlockHashes       map[[32]byte][32]byte
@@ -639,6 +641,16 @@ func (s *ChainService) BlockHash(root [32]byte) ([32]byte, error) {
 	return [32]byte{}, errors.New("block hash not found")
 }
 
+// HasPayloadBlockHash mocks the same method in the chain service.
+func (s *ChainService) HasPayloadBlockHash(root, blockHash [32]byte) bool {
+	if s.ForkChoiceStore == nil {
+		return false
+	}
+	s.ForkChoiceStore.RLock()
+	defer s.ForkChoiceStore.RUnlock()
+	return s.ForkChoiceStore.HasPayloadBlockHash(root, blockHash)
+}
+
 // IsOptimisticForRoot mocks the same method in the chain service.
 func (s *ChainService) IsOptimisticForRoot(_ context.Context, root [32]byte) (bool, error) {
 	s.OptimisticCheckRootReceived = root
@@ -811,6 +823,14 @@ func (s *ChainService) PayloadEarly(root [32]byte) (bool, bool) {
 	}
 	early, ok := s.MockPayloadEarly[root]
 	return early, ok
+}
+
+// DataAvailable mocks the same method in the chain service.
+func (s *ChainService) DataAvailable(_ context.Context, root [32]byte, _ primitives.Slot) (bool, error) {
+	if s.MockDataAvailableErr != nil {
+		return false, s.MockDataAvailableErr
+	}
+	return s.MockDataAvailable[root], nil
 }
 
 // FullBeatsEmpty mocks the same method in the chain service.

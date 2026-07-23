@@ -275,9 +275,11 @@ func (s *Service) callNewPayload(
 ) (bool, error) {
 	_, err := s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests)
 	if err == nil {
+		newPayloadValidNodeCount.Inc()
 		return true, nil
 	}
 	if errors.Is(err, execution.ErrAcceptedSyncingPayloadStatus) {
+		newPayloadOptimisticNodeCount.Inc()
 		log.WithFields(logrus.Fields{
 			"slot":             slot,
 			"payloadBlockHash": fmt.Sprintf("%#x", bytesutil.Trunc(payload.BlockHash())),
@@ -285,6 +287,7 @@ func (s *Service) callNewPayload(
 		return false, nil
 	}
 	if errors.Is(err, execution.ErrInvalidPayloadStatus) {
+		newPayloadInvalidNodeCount.Inc()
 		return false, invalidBlock{error: ErrInvalidPayload}
 	}
 	return false, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
@@ -376,6 +379,35 @@ func (s *Service) recordPayloadArrival(root [32]byte, slot primitives.Slot, arri
 // PayloadEarly reports whether the payload for root arrived early; second return is false when unknown.
 func (s *Service) PayloadEarly(root [32]byte) (bool, bool) {
 	return s.payloadArrivals.isEarly(root)
+}
+
+// DataAvailable reports whether all blob data committed to by the block at root is available now.
+func (s *Service) DataAvailable(ctx context.Context, root [32]byte, slot primitives.Slot) (bool, error) {
+	available, err := s.dataColumnsAvailableNow(ctx, root, slot)
+	if err != nil {
+		return false, errors.Wrap(err, "data columns available now")
+	}
+	if available {
+		return true, nil
+	}
+
+	s.headLock.RLock()
+	var b interfaces.ReadOnlySignedBeaconBlock
+	if s.head != nil && s.head.root == root {
+		b = s.head.block
+	}
+	s.headLock.RUnlock()
+	if b == nil {
+		b, err = s.getBlock(ctx, root)
+		if err != nil {
+			return false, errors.Wrap(err, "could not get block")
+		}
+	}
+	sbid, err := b.Block().Body().SignedExecutionPayloadBid()
+	if err != nil {
+		return false, errors.Wrap(err, "could not get signed execution payload bid from block")
+	}
+	return len(sbid.GetMessage().GetBlobKzgCommitments()) == 0, nil
 }
 
 // notifyForkchoiceUpdateGloas takes the block hash directly because Gloas
