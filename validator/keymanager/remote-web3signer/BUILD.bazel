@@ -3,6 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "key_source_file.go",
         "keymanager.go",
         "log.go",
         "metrics.go",
@@ -39,7 +40,10 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["keymanager_test.go"],
+    srcs = [
+        "key_source_file_test.go",
+        "keymanager_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
         "//config/fieldparams:go_default_library",
