@@ -72,7 +72,7 @@ func Uint64ListRoot(stateVersion int, vals []uint64) ([32]byte, error) {
 func uint64ListRootWithRegistryLimit(vals []uint64) ([32]byte, error) {
 	chunks, err := PackUint64IntoChunks(vals)
 	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "could not pack balances into chunks")
+		return [32]byte{}, errors.Wrap(err, "could not pack uint64 values into chunks")
 	}
 	root, err := ssz.BitwiseMerkleize(chunks, uint64(len(chunks)), ValidatorLimitForBalancesChunks())
 	if err != nil {
