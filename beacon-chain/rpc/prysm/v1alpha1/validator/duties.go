@@ -123,8 +123,7 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 			}
 		} else {
 			// If the validator isn't in the beacon state, try finding their deposit to determine their status.
-			// We don't need the lastActiveValidatorFn because we don't use the response in this.
-			vStatus, _ := vs.validatorStatus(ctx, s, pubKey, nil)
+			vStatus, _ := vs.validatorStatus(ctx, s, pubKey)
 			assignment.Status = vStatus.Status
 		}
 

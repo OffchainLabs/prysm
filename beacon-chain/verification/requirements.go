@@ -27,6 +27,7 @@ const (
 	RequireMessageNotSeen
 	RequireValidatorInPTC
 	RequireBlockRootSeen
+	RequireBlockSlotMatches
 	RequireBlockRootValid
 	RequireSignatureValid
 
@@ -41,13 +42,18 @@ const (
 	// Execution payload bid specific.
 	RequireBidCurrentOrNextSlot
 	RequireBidBuilderActive
+	RequireBidBuilderVersionValid
 	RequireBidExecutionPaymentZero
 	RequireBidFeeRecipientMatches
+	RequireBidBlobKzgCommitmentsLimit
+	RequireBidPrevRandaoValid
 	RequireBidGasLimitCompatible
 	RequireBidParentBlockRootSeen
+	RequireBidSlotHigherThanParent
 	RequireBidParentBlockHashValid
 	RequireBidBuilderCanCover
 	RequireBidSignatureValid
+	RequireBidSlotMatches
 
 	// Signed proposer preferences specific.
 	RequireProposerPreferencesCurrentOrNextEpoch

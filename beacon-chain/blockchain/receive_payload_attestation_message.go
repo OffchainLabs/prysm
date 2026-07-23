@@ -37,13 +37,15 @@ func (s *Service) ReceivePayloadAttestationMessage(ctx context.Context, a *ethpb
 	if st == nil {
 		return errors.New("unable to find state for payload attestation")
 	}
-	idx, err := gloas.PayloadCommitteeIndex(ctx, st, a.Data.Slot, a.ValidatorIndex)
+	indices, err := gloas.PayloadCommitteeIndices(ctx, st, a.Data.Slot, a.ValidatorIndex)
 	if err != nil {
 		return err
 	}
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()
-	s.cfg.ForkChoiceStore.SetPTCVote(root, idx, a.Data.PayloadPresent, a.Data.BlobDataAvailable)
+	for _, idx := range indices {
+		s.cfg.ForkChoiceStore.SetPTCVote(root, idx, a.Data.PayloadPresent, a.Data.BlobDataAvailable)
+	}
 	return nil
 }
 

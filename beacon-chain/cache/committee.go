@@ -5,8 +5,8 @@ package cache
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
-	"time"
 
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -17,6 +17,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -43,9 +44,10 @@ var (
 
 // CommitteeCache is a struct with 1 queue for looking up shuffled indices list by seed.
 type CommitteeCache struct {
+	Wg             sync.WaitGroup
+	Sf             singleflight.Group
 	CommitteeCache *lru.Cache
 	lock           sync.RWMutex
-	inProgress     map[string]bool
 	size           int
 }
 
@@ -67,10 +69,10 @@ func NewCommitteesCache() *CommitteeCache {
 
 // Clear resets the CommitteeCache to its initial state
 func (c *CommitteeCache) Clear() {
+	c.Wg.Wait()
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.CommitteeCache = lruwrpr.New(maxCommitteesCacheSize)
-	c.inProgress = make(map[string]bool)
 	c.size = maxCommitteesCacheSize
 }
 
@@ -103,13 +105,9 @@ func (c *CommitteeCache) CompressCommitteeCache() {
 // Committee fetches the shuffled indices by slot and committee index. Every list of indices
 // represent one committee. Returns true if the list exists with slot and committee index. Otherwise returns false, nil.
 func (c *CommitteeCache) Committee(ctx context.Context, slot primitives.Slot, seed [32]byte, index primitives.CommitteeIndex) ([]primitives.ValidatorIndex, error) {
-	ctx, span := trace.StartSpan(ctx, "committeeCache.Committee")
+	_, span := trace.StartSpan(ctx, "committeeCache.Committee")
 	defer span.End()
 	span.SetAttributes(trace.Int64Attribute("slot", int64(slot)), trace.Int64Attribute("index", int64(index))) // lint:ignore uintcast -- OK for tracing.
-
-	if err := c.checkInProgress(ctx, seed); err != nil {
-		return nil, err
-	}
 
 	obj, exists := c.CommitteeCache.Get(key(seed))
 	span.SetAttributes(trace.BoolAttribute("cache_hit", exists))
@@ -146,27 +144,31 @@ func (c *CommitteeCache) Committee(ctx context.Context, slot primitives.Slot, se
 // AddCommitteeShuffledList adds Committee shuffled list object to the cache. T
 // his method also trims the least recently list if the cache size has ready the max cache size limit.
 func (c *CommitteeCache) AddCommitteeShuffledList(ctx context.Context, committees *Committees) error {
+	ctx, span := trace.StartSpan(ctx, "committeeCache.AddCommitteeShuffledList")
+	defer span.End()
+
 	c.lock.Lock()
 	defer c.lock.Unlock()
+
 	if err := ctx.Err(); err != nil {
+		span.SetAttributes(trace.StringAttribute("context_error", err.Error()))
 		return err
 	}
+
 	key, err := committeeKeyFn(committees)
 	if err != nil {
-		return err
+		return fmt.Errorf("committee key fn: %w", err)
 	}
+
 	_ = c.CommitteeCache.Add(key, committees)
 	return nil
 }
 
 // ActiveIndices returns the active indices of a given seed stored in cache.
 func (c *CommitteeCache) ActiveIndices(ctx context.Context, seed [32]byte) ([]primitives.ValidatorIndex, error) {
-	ctx, span := trace.StartSpan(ctx, "committeeCache.ActiveIndices")
+	_, span := trace.StartSpan(ctx, "committeeCache.ActiveIndices")
 	defer span.End()
 
-	if err := c.checkInProgress(ctx, seed); err != nil {
-		return nil, err
-	}
 	obj, exists := c.CommitteeCache.Get(key(seed))
 	span.SetAttributes(trace.BoolAttribute("cache_hit", exists))
 	if exists {
@@ -185,11 +187,7 @@ func (c *CommitteeCache) ActiveIndices(ctx context.Context, seed [32]byte) ([]pr
 }
 
 // ActiveIndicesCount returns the active indices count of a given seed stored in cache.
-func (c *CommitteeCache) ActiveIndicesCount(ctx context.Context, seed [32]byte) (int, error) {
-	if err := c.checkInProgress(ctx, seed); err != nil {
-		return 0, err
-	}
-
+func (c *CommitteeCache) ActiveIndicesCount(seed [32]byte) (int, error) {
 	obj, exists := c.CommitteeCache.Get(key(seed))
 	if exists {
 		CommitteeCacheHit.Inc()
@@ -212,29 +210,6 @@ func (c *CommitteeCache) HasEntry(seed string) bool {
 	return ok
 }
 
-// MarkInProgress a request so that any other similar requests will block on
-// Get until MarkNotInProgress is called.
-func (c *CommitteeCache) MarkInProgress(seed [32]byte) error {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	s := key(seed)
-	if c.inProgress[s] {
-		return ErrAlreadyInProgress
-	}
-	c.inProgress[s] = true
-	return nil
-}
-
-// MarkNotInProgress will release the lock on a given request. This should be
-// called after put.
-func (c *CommitteeCache) MarkNotInProgress(seed [32]byte) error {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	s := key(seed)
-	delete(c.inProgress, s)
-	return nil
-}
-
 func startEndIndices(c *Committees, index uint64) (uint64, uint64) {
 	validatorCount := uint64(len(c.ShuffledIndices))
 	start := slice.SplitOffset(validatorCount, c.CommitteeCount, index)
@@ -248,29 +223,4 @@ func startEndIndices(c *Committees, index uint64) (uint64, uint64) {
 // https://github.com/ethereum/consensus-specs/blob/v0.9.3/specs/core/0_beacon-chain.md#get_seed
 func key(seed [32]byte) string {
 	return string(seed[:])
-}
-
-func (c *CommitteeCache) checkInProgress(ctx context.Context, seed [32]byte) error {
-	delay := minDelay
-	// Another identical request may be in progress already. Let's wait until
-	// any in progress request resolves or our timeout is exceeded.
-	for {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-
-		c.lock.RLock()
-		if !c.inProgress[key(seed)] {
-			c.lock.RUnlock()
-			break
-		}
-		c.lock.RUnlock()
-
-		// This increasing backoff is to decrease the CPU cycles while waiting
-		// for the in progress boolean to flip to false.
-		time.Sleep(time.Duration(delay) * time.Nanosecond)
-		delay *= delayFactor
-		delay = min(delay, maxDelay)
-	}
-	return nil
 }

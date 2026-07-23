@@ -11,9 +11,12 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/io/file"
@@ -217,8 +220,9 @@ func TestNewKeyManager_ChangingFileCreated(t *testing.T) {
 		keys[i] = hexutil.Encode(key[:])
 		require.Equal(t, slices.Contains(wantSlice, keys[i]), true)
 	}
-	// sleep needs to be at the front because of how watching the file works
-	time.Sleep(1 * time.Second)
+	pubKeysChan := make(chan [][fieldparams.BLSPubkeyLength]byte)
+	sub := km.SubscribeAccountChanges(pubKeysChan)
+	defer sub.Unsubscribe()
 
 	// Open the file for writing, create it if it does not exist, and truncate it if it does.
 	f, err := os.OpenFile(keyFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
@@ -235,8 +239,18 @@ func TestNewKeyManager_ChangingFileCreated(t *testing.T) {
 	require.Equal(t, 1, len(ks))
 	require.Equal(t, "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055", hexutil.Encode(ks[0][:]))
 
-	require.Equal(t, 1, len(km.providedPublicKeys))
-	require.Equal(t, "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055", hexutil.Encode(km.providedPublicKeys[0][:]))
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+	for {
+		select {
+		case updatedKeys := <-pubKeysChan:
+			if len(updatedKeys) == 1 && hexutil.Encode(updatedKeys[0][:]) == "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055" {
+				return
+			}
+		case <-timer.C:
+			t.Fatal("timed out waiting for the key file update")
+		}
+	}
 }
 
 func TestNewKeyManager_FileAndFlagsWithDifferentKeys(t *testing.T) {
@@ -271,8 +285,7 @@ func TestNewKeyManager_FileAndFlagsWithDifferentKeys(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	// test fall back by clearing file
 	go func() {
-		err = file.WriteFile(keyFilePath, []byte(" "))
-		require.NoError(t, err)
+		require.NoError(t, file.WriteFile(keyFilePath, []byte(" ")))
 	}()
 	// waiting for writing to be done
 	time.Sleep(2 * time.Second)
@@ -285,40 +298,46 @@ func TestNewKeyManager_FileAndFlagsWithDifferentKeys(t *testing.T) {
 	require.Equal(t, "0x800077e04f8d7496099b3d30ac5430aea64873a45e5bcfe004d2095babcbf55e21138ff0d5691abc29da190aa32755c6", hexutil.Encode(keys[0][:]))
 }
 
-func TestRefreshRemoteKeysFromFileChangesWithRetry(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	logHook := logTest.NewGlobal()
+func TestRefreshRemoteKeysFromFileChangesWithRetry_failsFastBeforeInitialized(t *testing.T) {
+	ctx := t.Context()
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
-	require.NoError(t, err)
-	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
-
 	require.NoError(t, err)
 	km, err := NewKeymanager(ctx, &SetupConfig{
 		BaseEndpoint:          "http://example.com",
 		GenesisValidatorsRoot: root,
 	})
 	require.NoError(t, err)
+	km.keyFilePath = filepath.Join(t.TempDir(), "missing.txt")
+
+	// The hour-long retry delay would hang the test if the first failure did not
+	// return immediately.
+	err = km.refreshRemoteKeysFromFileChangesWithRetry(ctx, time.Hour, func(error) {})
+	require.ErrorContains(t, "could not stat remote signer public key file", err)
+	require.Equal(t, maxRetries, km.retriesRemaining)
+}
+
+// startFailingWatcher starts the retry helper on a valid key file, waits for the
+// watcher to initialize, then removes the file so every subsequent refresh fails.
+func startFailingWatcher(t *testing.T, ctx context.Context, km *Keymanager, keyFilePath string, retryDelay time.Duration) chan error {
+	t.Helper()
+	require.NoError(t, file.WriteFile(keyFilePath, []byte("0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055\n")))
+	km.keyFilePath = keyFilePath
+
+	ready := make(chan struct{})
+	result := make(chan error, 1)
 	go func() {
-		km.keyFilePath = keyFilePath
-		require.NoError(t, km.refreshRemoteKeysFromFileChangesWithRetry(ctx, 1*time.Second))
+		var readyOnce sync.Once
+		result <- km.refreshRemoteKeysFromFileChangesWithRetry(ctx, retryDelay, func(error) {
+			readyOnce.Do(func() { close(ready) })
+		})
 	}()
-	// wait for file detection
-	time.Sleep(1 * time.Second)
-	require.LogsContain(t, logHook, "Could not refresh keys")
-	go func() {
-		bytesBuf := new(bytes.Buffer)
-		_, err = bytesBuf.WriteString("8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055") // test without 0x
-		require.NoError(t, err)
-		err = file.WriteFile(keyFilePath, bytesBuf.Bytes())
-		require.NoError(t, err)
-	}()
-	// wait for file write to reinitialize
-	time.Sleep(2 * time.Second)
-	cancel()
-	require.LogsContain(t, logHook, "Successfully initialized file watcher")
-	keys, err := km.FetchValidatingPublicKeys(ctx)
-	require.NoError(t, err)
-	require.Equal(t, 1, len(keys))
+	select {
+	case <-ready:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for the watcher to initialize")
+	}
+	require.NoError(t, os.Remove(keyFilePath))
+	return result
 }
 
 func TestReadKeyFile_PathMissing(t *testing.T) {
@@ -339,18 +358,60 @@ func TestRefreshRemoteKeysFromFileChangesWithRetry_maxRetryReached(t *testing.T)
 	ctx := t.Context()
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	require.NoError(t, err)
-	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+	km, err := NewKeymanager(ctx, &SetupConfig{
+		BaseEndpoint:          "http://example.com",
+		GenesisValidatorsRoot: root,
+	})
+	require.NoError(t, err)
 
+	result := startFailingWatcher(t, ctx, km, filepath.Join(t.TempDir(), "keyfile.txt"), time.Millisecond)
+	select {
+	case err := <-result:
+		require.ErrorContains(t, "file check retries remaining exceeded", err)
+	case <-time.After(30 * time.Second):
+		t.Fatal("timed out waiting for retries to be exhausted")
+	}
+}
+
+func TestRefreshRemoteKeysFromFileChangesWithRetry_ctxCancelDuringRetryWait(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	logHook := logTest.NewGlobal()
+	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	require.NoError(t, err)
 	km, err := NewKeymanager(ctx, &SetupConfig{
 		BaseEndpoint:          "http://example.com",
 		GenesisValidatorsRoot: root,
 	})
 	require.NoError(t, err)
-	km.keyFilePath = keyFilePath
-	km.retriesRemaining = 1
-	err = km.refreshRemoteKeysFromFileChangesWithRetry(ctx, 1*time.Millisecond)
-	require.ErrorContains(t, "file check retries remaining exceeded", err)
+
+	// The hour-long retry delay would hang the test if cancellation did not
+	// interrupt the wait.
+	result := startFailingWatcher(t, ctx, km, filepath.Join(t.TempDir(), "keyfile.txt"), time.Hour)
+	// Wait until the helper reaches the retry wait before cancelling.
+	deadline := time.Now().Add(5 * time.Second)
+	for !logsContain(logHook, "Could not refresh keys") {
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for the retry warning")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	select {
+	case err := <-result:
+		require.ErrorContains(t, context.Canceled.Error(), err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("cancellation did not interrupt the retry wait")
+	}
+}
+
+func logsContain(hook *logTest.Hook, substr string) bool {
+	for _, entry := range hook.AllEntries() {
+		if strings.Contains(entry.Message, substr) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestKeymanager_Sign(t *testing.T) {

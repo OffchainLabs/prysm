@@ -109,21 +109,6 @@ func ComputeColumnsForCustodyGroup(custodyGroup uint64) ([]uint64, error) {
 	return columns, nil
 }
 
-// ComputeCustodyGroupForColumn computes the custody group for a given column.
-// It is the reciprocal function of ComputeColumnsForCustodyGroup.
-func ComputeCustodyGroupForColumn(columnIndex uint64) (uint64, error) {
-	const numberOfColumns = fieldparams.NumberOfColumns
-
-	cfg := params.BeaconConfig()
-	numberOfCustodyGroups := cfg.NumberOfCustodyGroups
-
-	if columnIndex >= numberOfColumns {
-		return 0, ErrIndexTooLarge
-	}
-
-	return columnIndex % numberOfCustodyGroups, nil
-}
-
 // CustodyColumns computes the custody columns from the custody groups.
 func CustodyColumns(custodyGroups []uint64) (map[uint64]bool, error) {
 	numberOfCustodyGroups := params.BeaconConfig().NumberOfCustodyGroups

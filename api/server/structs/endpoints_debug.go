@@ -57,6 +57,41 @@ type ForkChoiceNodeExtraData struct {
 	Target                   string `json:"target"`
 }
 
+type GetForkChoiceDumpV2Response struct {
+	JustifiedCheckpoint *Checkpoint              `json:"justified_checkpoint"`
+	FinalizedCheckpoint *Checkpoint              `json:"finalized_checkpoint"`
+	ForkChoiceNodes     []*ForkChoiceNodeV2      `json:"fork_choice_nodes"`
+	ExtraData           *ForkChoiceDumpExtraData `json:"extra_data"`
+}
+
+type ForkChoiceNodeV2 struct {
+	PayloadStatus      string                     `json:"payload_status"`
+	Slot               string                     `json:"slot"`
+	BlockRoot          string                     `json:"block_root"`
+	ParentRoot         string                     `json:"parent_root"`
+	Weight             string                     `json:"weight"`
+	Validity           string                     `json:"validity"`
+	ExecutionBlockHash string                     `json:"execution_block_hash"`
+	ExtraData          *ForkChoiceNodeV2ExtraData `json:"extra_data"`
+}
+
+type ForkChoiceNodeV2ExtraData struct {
+	Balance             string `json:"balance"`
+	ExecutionOptimistic bool   `json:"execution_optimistic"`
+	TimeStamp           string `json:"timestamp"`
+
+	Target                          string `json:"target,omitempty"`
+	JustifiedEpoch                  string `json:"justified_epoch,omitempty"`
+	FinalizedEpoch                  string `json:"finalized_epoch,omitempty"`
+	UnrealizedJustifiedEpoch        string `json:"unrealized_justified_epoch,omitempty"`
+	UnrealizedFinalizedEpoch        string `json:"unrealized_finalized_epoch,omitempty"`
+	PayloadAttesterCount            string `json:"payload_attester_count,omitempty"`
+	PayloadAvailabilityYesCount     string `json:"payload_availability_yes_count,omitempty"`
+	PayloadDataAvailabilityYesCount string `json:"payload_data_availability_yes_count,omitempty"`
+
+	GasLimit string `json:"gas_limit,omitempty"`
+}
+
 type GetDebugDataColumnSidecarsResponse struct {
 	Version             string          `json:"version"`
 	ExecutionOptimistic bool            `json:"execution_optimistic"`

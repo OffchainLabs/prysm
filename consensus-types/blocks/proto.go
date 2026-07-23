@@ -1571,7 +1571,7 @@ func initBlockBodyFromProtoGloas(pb *eth.BeaconBlockBodyGloas) (*BeaconBlockBody
 
 	per := pb.ParentExecutionRequests
 	if per == nil {
-		per = &enginev1.ExecutionRequests{}
+		per = &enginev1.ExecutionRequestsGloas{}
 	}
 	b := &BeaconBlockBody{
 		version:                   version.Gloas,

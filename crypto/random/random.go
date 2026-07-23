@@ -1,27 +1,18 @@
 package random
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	GoKZG "github.com/crate-crypto/go-kzg-4844"
-	"github.com/sirupsen/logrus"
 )
 
 // DeterministicRandomness creates a deterministic 32 byte array from a seed
 func DeterministicRandomness(seed int64) [32]byte {
-	// Converts an int64 to a byte slice
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, seed)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to write int64 to bytes buffer")
-		return [32]byte{}
-	}
-	bytes := buf.Bytes()
-
-	return sha256.Sum256(bytes)
+	var seedBytes [8]byte
+	binary.BigEndian.PutUint64(seedBytes[:], uint64(seed))
+	return sha256.Sum256(seedBytes[:])
 }
 
 // GetRandFieldElement returns a serialized random field element in big-endian

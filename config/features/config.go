@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
+	validatorflags "github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -38,7 +39,6 @@ const disabledFeatureFlag = "Disabled feature flag"
 // Flags is a struct to represent which features the client will perform on runtime.
 type Flags struct {
 	// Feature related flags.
-	WriteSSZStateTransitions            bool // WriteSSZStateTransitions to tmp directory.
 	EnablePeerScorer                    bool // EnablePeerScorer enables experimental peer scoring in p2p.
 	EnableLightClient                   bool // EnableLightClient enables light client APIs.
 	EnableQUIC                          bool // EnableQUIC specifies whether to enable QUIC transport for libp2p.
@@ -51,6 +51,7 @@ type Flags struct {
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
 	EnableStateDiff                     bool // EnableStateDiff enables the experimental state diff feature for the beacon node.
 	EnableProgressiveSSZ                bool // EnableProgressiveSSZ enables experimental progressive SSZ merkleization for converted consensus types.
+	ReorgLatePayloads                   bool // ReorgLatePayloads enables reorging late payloads in the beacon node.
 
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
@@ -198,11 +199,6 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		return err
 	}
 
-	if ctx.Bool(writeSSZStateTransitionsFlag.Name) {
-		logEnabled(writeSSZStateTransitionsFlag)
-		cfg.WriteSSZStateTransitions = true
-	}
-
 	if ctx.Bool(saveInvalidBlockTempFlag.Name) {
 		logEnabled(saveInvalidBlockTempFlag)
 		cfg.SaveInvalidBlock = true
@@ -320,6 +316,9 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.IsSet(EnableProgressiveSSZ.Name) {
 		logEnabled(EnableProgressiveSSZ)
 		cfg.EnableProgressiveSSZ = true
+	if ctx.Bool(reorgLatePayloads.Name) {
+		logEnabled(reorgLatePayloads)
+		cfg.ReorgLatePayloads = true
 	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}
@@ -369,7 +368,7 @@ func ConfigureValidator(ctx *cli.Context) error {
 		logEnabled(enableDoppelGangerProtection)
 		cfg.EnableDoppelGanger = true
 	}
-	if ctx.Bool(EnableBeaconRESTApi.Name) {
+	if ctx.Bool(EnableBeaconRESTApi.Name) || ctx.IsSet(validatorflags.BeaconRESTApiProviderFlag.Name) {
 		logEnabled(EnableBeaconRESTApi)
 		cfg.EnableBeaconRESTApi = true
 	}

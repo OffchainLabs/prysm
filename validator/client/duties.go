@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"slices"
+	"strings"
+	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -19,8 +21,9 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// filterBlacklistedKeys returns validating keys with slashable keys removed.
-func (v *validator) filterBlacklistedKeys(ctx context.Context) ([][fieldparams.BLSPubkeyLength]byte, error) {
+// nonBlacklistedKeys returns the keymanager's validating keys with
+// slashing-protection-blacklisted keys removed.
+func (v *validator) nonBlacklistedKeys(ctx context.Context) ([][fieldparams.BLSPubkeyLength]byte, error) {
 	validatingKeys, err := v.km.FetchValidatingPublicKeys(ctx)
 	if err != nil {
 		return nil, err
@@ -41,6 +44,44 @@ func (v *validator) filterBlacklistedKeys(ctx context.Context) ([][fieldparams.B
 	return filtered, nil
 }
 
+// isActiveForDuties reports whether a validator status entry indicates the
+// validator currently has duties to perform — i.e. it is in (or about to be
+// in) the beacon-state active set. Shared by filteredKeysAndIndices and
+// filterAndCacheActiveKeys so both call sites agree on the same predicate.
+func isActiveForDuties(s *ethpb.ValidatorStatusResponse, currEpoch primitives.Epoch) bool {
+	if s == nil {
+		return false
+	}
+	switch s.Status {
+	case ethpb.ValidatorStatus_ACTIVE, ethpb.ValidatorStatus_EXITING:
+		return true
+	case ethpb.ValidatorStatus_PENDING:
+		// Cache may be stale: include validators whose activation epoch has
+		// already arrived but whose status hasn't been refreshed yet.
+		return currEpoch >= s.ActivationEpoch
+	}
+	return false
+}
+
+// filteredKeysAndIndices returns the subset of keys with duties to fetch for
+// the given epoch (see isActiveForDuties), and the corresponding sorted
+// validator indices. Sorted indices let callers compare against a previously
+// stored set to detect drift.
+func (v *validator) filteredKeysAndIndices(keys [][fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) ([][fieldparams.BLSPubkeyLength]byte, []primitives.ValidatorIndex) {
+	outKeys := make([][fieldparams.BLSPubkeyLength]byte, 0, len(keys))
+	indices := make([]primitives.ValidatorIndex, 0, len(keys))
+	for _, pk := range keys {
+		st, ok := v.pubkeyToStatus[pk]
+		if !ok || !isActiveForDuties(st.status, epoch) {
+			continue
+		}
+		outKeys = append(outKeys, pk)
+		indices = append(indices, st.index)
+	}
+	slices.Sort(indices)
+	return outKeys, indices
+}
+
 // UpdateDuties checks the slot number to determine if the validator's
 // list of upcoming assignments needs to be updated. For example, at the
 // beginning of a new epoch.
@@ -48,53 +89,684 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "validator.UpdateDuties")
 	defer span.End()
 
-	filteredKeys, err := v.filterBlacklistedKeys(ctx)
+	keys, err := v.nonBlacklistedKeys(ctx)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "could not filter blacklisted keys")
 	}
 
 	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
+
+	filteredKeys, filteredIndices := v.filteredKeysAndIndices(keys, epoch)
+	if epoch >= params.BeaconConfig().GloasForkEpoch {
+		err = v.updateDutiesSplit(ctx, epoch, filteredIndices)
+	} else {
+		err = v.updateDutiesCombined(ctx, epoch, filteredKeys)
+	}
+	if err != nil {
+		return errors.Wrap(err, "could not fetch duties")
+	}
+
+	if !v.duties.isInitialized() {
+		return nil
+	}
+
+	ss, err := slots.EpochStart(epoch)
+	if err != nil {
+		return errors.Wrap(err, "could not compute epoch start slot")
+	}
+	v.logDuties(ss)
+
+	return v.onDutiesUpdated(ctx)
+}
+
+// updateDutiesCombined uses the combined Duties() endpoint (pre-GLOAS).
+func (v *validator) updateDutiesCombined(ctx context.Context, epoch primitives.Epoch, filteredKeys [][fieldparams.BLSPubkeyLength]byte) error {
 	req := &ethpb.DutiesRequest{
 		Epoch:      epoch,
 		PublicKeys: bytesutil.FromBytes48Array(filteredKeys),
 	}
 
 	resp, err := v.validatorClient.Duties(ctx, req)
-	if err != nil || resp == nil {
-		v.dutiesLock.Lock()
-		v.duties.Reset()
-		v.dutiesLock.Unlock()
-		log.WithError(err).Error("Error getting validator duties")
-		return err
-	}
-
-	ss, err := slots.EpochStart(epoch)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "could not get validator duties")
 	}
-	v.dutiesLock.Lock()
-	v.duties.SetFromCombinedDutiesResponse(resp)
-	v.logDuties(ss)
-	v.dutiesLock.Unlock()
+	if resp == nil {
+		return errors.New("nil duties response from beacon node")
+	}
 
-	allExitedCounter := 0
-	for _, d := range resp.CurrentEpochDuties {
-		if d.Status == ethpb.ValidatorStatus_EXITED {
-			allExitedCounter++
-		}
-	}
-	if allExitedCounter != 0 && allExitedCounter == len(resp.CurrentEpochDuties) {
+	var data dutyStoreData
+	data.setFromContainer(resp)
+	data.missingNext = missingNextPtc
+	v.duties.write(data)
+
+	if allCurrentDutiesExited(resp.CurrentEpochDuties) {
 		return ErrValidatorsAllExited
 	}
+	return nil
+}
 
-	// Non-blocking call for beacon node to start subscriptions for aggregators.
+// dropIfDivergent treats a fetched duty response as missing (nil) when its
+// dependent root contradicts the next-epoch attester root, so it gets flagged
+// missing and re-fetched by the per-slot retry. Callers run >= gloas, where
+// all duty dependent roots coincide (pre-fulu proposer roots differ by design).
+func dropIfDivergent[T interface{ GetDependentRoot() []byte }](resp T, attRoot []byte, dutyType string) T {
+	root := resp.GetDependentRoot()
+	if len(root) == 0 || bytes.Equal(root, attRoot) {
+		return resp
+	}
+	log.WithFields(logrus.Fields{
+		"dutyType":              dutyType,
+		"dependentRoot":         fmt.Sprintf("%#x", bytesutil.Trunc(root)),
+		"attesterDependentRoot": fmt.Sprintf("%#x", bytesutil.Trunc(attRoot)),
+	}).Warn("Duties have divergent dependent root, treating them as missing")
+	var zero T
+	return zero
+}
+
+// allCurrentDutiesExited reports whether there is at least one duty and all are EXITED.
+func allCurrentDutiesExited(duties []*ethpb.ValidatorDuty) bool {
+	if len(duties) == 0 {
+		return false
+	}
+	for _, d := range duties {
+		if d.Status != ethpb.ValidatorStatus_EXITED {
+			return false
+		}
+	}
+	return true
+}
+
+// dutiesFetchResult holds the successful results from fetching or
+// promoting current-epoch duties plus raw next-epoch API responses.
+type dutiesFetchResult struct {
+	currentDuties []*ethpb.ValidatorDuty
+	prevDepRoot   []byte
+	currDepRoot   []byte
+	attNext       *ethpb.AttesterDutiesResponse
+	propNext      *ethpb.ProposerDutiesResponse
+	syncNext      *ethpb.SyncCommitteeDutiesResponse
+	ptcNext       *ethpb.PTCDutiesResponse
+	missingNext   missingNextDuties
+}
+
+// missingNextDuties is a bitmask of next-epoch duty types that were expected
+// but missing after a fetch (soft failures). Tracked so the next promotion
+// can fall back to a full fresh fetch instead of propagating incomplete data.
+type missingNextDuties uint8
+
+const (
+	missingNextProposer missingNextDuties = 1 << iota
+	missingNextSync
+	missingNextPtc
+	missingNextAttester
+)
+
+func (m missingNextDuties) String() string {
+	if m == 0 {
+		return "none"
+	}
+	var parts []string
+	if m&missingNextProposer != 0 {
+		parts = append(parts, "proposer")
+	}
+	if m&missingNextSync != 0 {
+		parts = append(parts, "sync")
+	}
+	if m&missingNextPtc != 0 {
+		parts = append(parts, "ptc")
+	}
+	if m&missingNextAttester != 0 {
+		parts = append(parts, "attester")
+	}
+	return strings.Join(parts, "|")
+}
+
+// updateDutiesSplit fetches duties from the split V3 endpoints and
+// populates the duty store. When the epoch has advanced by exactly one
+// and duties are already initialized, it promotes the cached next-epoch
+// duties to current and only fetches the new next-epoch. indices must be
+// sorted (see filteredKeysAndIndices).
+func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex) error {
+	if len(indices) == 0 {
+		// No active keys for this client; drop any previously cached duties so
+		// stale entries don't keep appearing in RolesAt etc.
+		v.duties.reset()
+		return nil
+	}
+
+	canPromote := v.duties.canPromote(epoch, indices)
+
+	var (
+		res dutiesFetchResult
+		err error
+	)
+	// On fetch failure, leave existing duties intact so the validator can
+	// continue serving the current epoch from cache while we retry next tick.
+	if canPromote {
+		log.WithField("epoch", epoch).Debug("Promoting cached next-epoch duties to current")
+		res, err = v.promoteDuties(ctx, epoch, indices)
+		if err != nil {
+			return errors.Wrap(err, "promote duties")
+		}
+	} else {
+		res, err = v.fetchAllDuties(ctx, epoch, indices)
+		if err != nil {
+			return errors.Wrap(err, "fetch all duties")
+		}
+	}
+
+	nextDuties := v.buildNextDuties(res)
+
+	var data dutyStoreData
+	data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+		PrevDependentRoot:  res.prevDepRoot,
+		CurrDependentRoot:  res.currDepRoot,
+		CurrentEpochDuties: res.currentDuties,
+		NextEpochDuties:    nextDuties,
+	})
+	data.epoch = epoch
+	data.missingNext = res.missingNext
+	data.indices = indices
+	v.duties.write(data)
+
+	if allCurrentDutiesExited(res.currentDuties) {
+		return ErrValidatorsAllExited
+	}
+	return nil
+}
+
+// promoteDuties promotes cached next-epoch duties to current and fetches the
+// new next-epoch duties. Cached duties already carry PtcSlots from the prior
+// fetch, so no current-epoch refetch is needed.
+func (v *validator) promoteDuties(ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex) (dutiesFetchResult, error) {
+	snap := v.duties.snapshot()
+	currentDuties := make([]*ethpb.ValidatorDuty, 0, snap.nextDutyCount())
+	for _, d := range snap.nextDuties() {
+		if d == nil {
+			continue
+		}
+		// nextDuties yields read-only aliases into the live store, so clone
+		// before refreshing the status to avoid mutating cached state in place.
+		promoted := cloneValidatorDuty(d)
+		promoted.Status = v.statusForPubkey(promoted.PublicKey)
+		currentDuties = append(currentDuties, promoted)
+	}
+	res := dutiesFetchResult{
+		currentDuties: currentDuties,
+		// On promotion, last cycle's currDependentRoot (which covered next-epoch
+		// duties) becomes this cycle's prevDepRoot (covering current-epoch
+		// duties).
+		prevDepRoot: snap.currDependentRoot(),
+	}
+
+	res.attNext, res.propNext, res.syncNext, res.ptcNext = v.fetchNextEpochDuties(ctx, epoch.Add(1), indices)
+	res.missingNext = missingNextMask(epoch.Add(1), res.attNext, res.propNext, res.syncNext, res.ptcNext)
+
+	// currDepRoot comes from the newly fetched next-epoch attester root,
+	// which matches the head event's CurrentDutyDependentRoot.
+	if res.attNext != nil {
+		res.currDepRoot = res.attNext.DependentRoot
+	}
+	return res, nil
+}
+
+// missingNextMask flags next-epoch duty types missing post-fetch (fork-gated).
+func missingNextMask(nextEpoch primitives.Epoch, att *ethpb.AttesterDutiesResponse, prop *ethpb.ProposerDutiesResponse, sync *ethpb.SyncCommitteeDutiesResponse, ptc *ethpb.PTCDutiesResponse) missingNextDuties {
+	var m missingNextDuties
+	if att == nil {
+		m |= missingNextAttester
+	}
+	if prop == nil && nextEpoch >= params.BeaconConfig().FuluForkEpoch {
+		m |= missingNextProposer
+	}
+	if sync == nil && nextEpoch >= params.BeaconConfig().AltairForkEpoch {
+		m |= missingNextSync
+	}
+	if ptc == nil && nextEpoch >= params.BeaconConfig().GloasForkEpoch {
+		m |= missingNextPtc
+	}
+	return m
+}
+
+// fetchAllDuties fetches both current and next epoch duties from all endpoints.
+func (v *validator) fetchAllDuties(ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex) (dutiesFetchResult, error) {
+	var (
+		res             dutiesFetchResult
+		attCurr         *ethpb.AttesterDutiesResponse
+		propCurr        *ethpb.ProposerDutiesResponse
+		syncCurr        *ethpb.SyncCommitteeDutiesResponse
+		ptcCurr         *ethpb.PTCDutiesResponse
+		attErr, propErr error
+		syncErr, ptcErr error
+		wg              sync.WaitGroup
+	)
+	wg.Go(func() {
+		attCurr, res.attNext, attErr = v.fetchAttesterDuties(ctx, epoch, indices)
+	})
+	wg.Go(func() {
+		propCurr, res.propNext, propErr = v.fetchProposerDuties(ctx, epoch)
+	})
+	wg.Go(func() {
+		syncCurr, res.syncNext, syncErr = v.fetchSyncDuties(ctx, epoch, indices)
+	})
+	wg.Go(func() {
+		ptcCurr, res.ptcNext, ptcErr = v.fetchPtcDuties(ctx, epoch, indices)
+	})
+	wg.Wait()
+
+	if attErr != nil {
+		return res, attErr
+	}
+	if propErr != nil {
+		return res, propErr
+	}
+	if syncErr != nil {
+		log.WithError(syncErr).Warn("Error getting sync committee duties")
+	}
+	if ptcErr != nil {
+		log.WithError(ptcErr).Warn("Error getting PTC duties")
+	}
+
+	if res.attNext != nil {
+		res.propNext = dropIfDivergent(res.propNext, res.attNext.DependentRoot, "proposer")
+		res.ptcNext = dropIfDivergent(res.ptcNext, res.attNext.DependentRoot, "ptc")
+	}
+	res.missingNext = missingNextMask(epoch.Add(1), res.attNext, res.propNext, res.syncNext, res.ptcNext)
+
+	if attCurr != nil {
+		res.prevDepRoot = attCurr.DependentRoot
+	}
+	// Use the next-epoch attester dependent root as currDepRoot.
+	// The head event's CurrentDutyDependentRoot = DependentRoot(epoch),
+	// and attester duties for epoch+1 have DependentRoot(epoch), so they match.
+	if res.attNext != nil {
+		res.currDepRoot = res.attNext.DependentRoot
+	}
+	res.currentDuties = v.assembleDuties(attCurr, propCurr, syncCurr, ptcCurr)
+	return res, nil
+}
+
+// buildNextDuties constructs next-epoch ValidatorDuty entries from
+// the raw API responses in the fetch result.
+func (v *validator) buildNextDuties(res dutiesFetchResult) []*ethpb.ValidatorDuty {
+	return v.assembleDuties(res.attNext, res.propNext, res.syncNext, res.ptcNext)
+}
+
+// assembleDuties stitches together the four per-duty-type API responses for
+// a single epoch into a slice of ValidatorDuty entries, one per attester
+// assignment. Used by fetchAllDuties (current epoch) and buildNextDuties
+// (next epoch).
+func (v *validator) assembleDuties(
+	att *ethpb.AttesterDutiesResponse,
+	prop *ethpb.ProposerDutiesResponse,
+	sync *ethpb.SyncCommitteeDutiesResponse,
+	ptc *ethpb.PTCDutiesResponse,
+) []*ethpb.ValidatorDuty {
+	proposerSlots := make(map[primitives.ValidatorIndex][]primitives.Slot)
+	if prop != nil {
+		for _, d := range prop.Duties {
+			proposerSlots[d.ValidatorIndex] = append(proposerSlots[d.ValidatorIndex], d.Slot)
+		}
+	}
+	ptcSlots := make(map[primitives.ValidatorIndex][]primitives.Slot)
+	if ptc != nil {
+		for _, d := range ptc.Duties {
+			ptcSlots[d.ValidatorIndex] = append(ptcSlots[d.ValidatorIndex], d.Slot)
+		}
+	}
+	syncSet := make(map[primitives.ValidatorIndex]bool)
+	if sync != nil {
+		for _, d := range sync.Duties {
+			syncSet[d.ValidatorIndex] = true
+		}
+	}
+	if att == nil {
+		return nil
+	}
+	duties := make([]*ethpb.ValidatorDuty, 0, len(att.Duties))
+	for _, d := range att.Duties {
+		duties = append(duties, &ethpb.ValidatorDuty{
+			PublicKey:               d.Pubkey,
+			ValidatorIndex:          d.ValidatorIndex,
+			CommitteeIndex:          d.CommitteeIndex,
+			CommitteeLength:         d.CommitteeLength,
+			CommitteesAtSlot:        d.CommitteesAtSlot,
+			ValidatorCommitteeIndex: d.ValidatorCommitteeIndex,
+			AttesterSlot:            d.Slot,
+			ProposerSlots:           proposerSlots[d.ValidatorIndex],
+			IsSyncCommittee:         syncSet[d.ValidatorIndex],
+			PtcSlots:                ptcSlots[d.ValidatorIndex],
+			Status:                  v.statusForPubkey(d.Pubkey),
+		})
+	}
+	return duties
+}
+
+// statusForPubkey returns the cached validator status for a pubkey.
+func (v *validator) statusForPubkey(pk []byte) ethpb.ValidatorStatus {
+	if v.pubkeyToStatus == nil {
+		return ethpb.ValidatorStatus_UNKNOWN_STATUS
+	}
+	st, ok := v.pubkeyToStatus[bytesutil.ToBytes48(pk)]
+	if !ok || st.status == nil {
+		return ethpb.ValidatorStatus_UNKNOWN_STATUS
+	}
+	return st.status.Status
+}
+
+// fetchAttesterDuties fetches current (required) and next (optional) epoch attester duties.
+func (v *validator) fetchAttesterDuties(
+	ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex,
+) (current, next *ethpb.AttesterDutiesResponse, err error) {
+	var (
+		currErr, nextErr error
+		wg               sync.WaitGroup
+	)
+	wg.Go(func() {
+		current, currErr = v.validatorClient.AttesterDuties(ctx, epoch, indices)
+	})
+	wg.Go(func() {
+		next, nextErr = v.validatorClient.AttesterDuties(ctx, epoch.Add(1), indices)
+	})
+	wg.Wait()
+
+	if currErr != nil {
+		return nil, nil, currErr
+	}
+	if nextErr != nil {
+		log.WithError(nextErr).Debug("Could not get next epoch attester duties")
+		return current, nil, nil
+	}
+	return current, next, nil
+}
+
+// fetchProposerDuties fetches proposer duties for the current epoch.
+// Post-fulu, also fetches next-epoch duties (deterministic via proposer_lookahead).
+// Pre-fulu, next-epoch proposer duties are not deterministic and not fetched.
+func (v *validator) fetchProposerDuties(
+	ctx context.Context, epoch primitives.Epoch,
+) (current, next *ethpb.ProposerDutiesResponse, err error) {
+	var (
+		currErr, nextErr error
+		wg               sync.WaitGroup
+	)
+	wg.Go(func() {
+		current, currErr = v.validatorClient.ProposerDuties(ctx, epoch)
+	})
+	if epoch >= params.BeaconConfig().FuluForkEpoch {
+		wg.Go(func() {
+			next, nextErr = v.validatorClient.ProposerDuties(ctx, epoch.Add(1))
+		})
+	}
+	wg.Wait()
+
+	if currErr != nil {
+		return nil, nil, currErr
+	}
+	if nextErr != nil {
+		log.WithError(nextErr).Debug("Could not get next epoch proposer duties")
+	}
+	return current, next, nil
+}
+
+// fetchSyncDuties fetches sync committee duties for current and next epoch.
+func (v *validator) fetchSyncDuties(
+	ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex,
+) (current, next *ethpb.SyncCommitteeDutiesResponse, err error) {
+	if epoch < params.BeaconConfig().AltairForkEpoch {
+		return nil, nil, nil
+	}
+
+	var (
+		currErr, nextErr error
+		wg               sync.WaitGroup
+	)
+	wg.Go(func() {
+		current, currErr = v.validatorClient.SyncCommitteeDuties(ctx, epoch, indices)
+	})
+	wg.Go(func() {
+		next, nextErr = v.validatorClient.SyncCommitteeDuties(ctx, epoch.Add(1), indices)
+	})
+	wg.Wait()
+
+	if currErr != nil {
+		return nil, nil, currErr
+	}
+	if nextErr != nil {
+		log.WithError(nextErr).Debug("Could not get next epoch sync committee duties")
+	}
+	return current, next, nil
+}
+
+// fetchPtcDuties fetches PTC duties for the current and next epoch in parallel.
+func (v *validator) fetchPtcDuties(
+	ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex,
+) (current, next *ethpb.PTCDutiesResponse, err error) {
+	if epoch < params.BeaconConfig().GloasForkEpoch {
+		return nil, nil, nil
+	}
+	var (
+		currErr, nextErr error
+		wg               sync.WaitGroup
+	)
+	wg.Go(func() {
+		current, currErr = v.validatorClient.PTCDuties(ctx, epoch, indices)
+	})
+	wg.Go(func() {
+		next, nextErr = v.validatorClient.PTCDuties(ctx, epoch.Add(1), indices)
+	})
+	wg.Wait()
+	if currErr != nil {
+		return nil, nil, currErr
+	}
+	if nextErr != nil {
+		log.WithError(nextErr).Debug("Could not get next epoch PTC duties")
+	}
+	return current, next, nil
+}
+
+// fetchNextEpochDuties fetches all next-epoch duty types in parallel, soft-
+// logging failures (a nil response marks that type missing). Responses whose
+// dependent root contradicts the attester's are dropped too. Shared by
+// promotion and retry; both run only post-Gloas, where every type applies.
+func (v *validator) fetchNextEpochDuties(ctx context.Context, nextEpoch primitives.Epoch, indices []primitives.ValidatorIndex) (
+	att *ethpb.AttesterDutiesResponse,
+	prop *ethpb.ProposerDutiesResponse,
+	syncResp *ethpb.SyncCommitteeDutiesResponse,
+	ptc *ethpb.PTCDutiesResponse,
+) {
+	var attErr, propErr, syncErr, ptcErr error
+	var wg sync.WaitGroup
+	wg.Go(func() { att, attErr = v.validatorClient.AttesterDuties(ctx, nextEpoch, indices) })
+	wg.Go(func() { prop, propErr = v.validatorClient.ProposerDuties(ctx, nextEpoch) })
+	wg.Go(func() { syncResp, syncErr = v.validatorClient.SyncCommitteeDuties(ctx, nextEpoch, indices) })
+	wg.Go(func() { ptc, ptcErr = v.validatorClient.PTCDuties(ctx, nextEpoch, indices) })
+	wg.Wait()
+	for _, e := range []error{attErr, propErr, syncErr, ptcErr} {
+		if e != nil {
+			log.WithError(e).Debug("Could not get a next epoch duty")
+		}
+	}
+	if att != nil {
+		prop = dropIfDivergent(prop, att.DependentRoot, "proposer")
+		ptc = dropIfDivergent(ptc, att.DependentRoot, "ptc")
+	}
+	return att, prop, syncResp, ptc
+}
+
+// MaybeRetryMissingNextDuties runs RetryMissingNextDuties in a goroutine, but
+// only when there's missing work and none is in flight — so the current slot
+// isn't blocked and goroutines aren't spawned for nothing. Bounded by the slot deadline.
+func (v *validator) MaybeRetryMissingNextDuties(ctx context.Context, slot primitives.Slot) {
+	if !v.duties.needsNextRetry() || !v.retryInFlight.CompareAndSwap(false, true) {
+		return
+	}
+	retryCtx, cancel := context.WithDeadline(ctx, v.SlotDeadline(slot))
+	go func() {
+		defer func() {
+			cancel()
+			v.retryInFlight.Store(false)
+		}()
+		if err := v.RetryMissingNextDuties(retryCtx); err != nil {
+			log.WithError(err).Debug("Could not retry missing next-epoch duties")
+		}
+	}()
+}
+
+// RetryMissingNextDuties re-fetches only the next-epoch duty types a prior fetch
+// left missing and merges them in, so promotion can resume without re-pulling the
+// current epoch. No-op when nothing is missing.
+func (v *validator) RetryMissingNextDuties(ctx context.Context) error {
+	ctx, span := trace.StartSpan(ctx, "validator.RetryMissingNextDuties")
+	defer span.End()
+
+	snap := v.duties.snapshot()
+	missing := snap.missingNext()
+	if !snap.isInitialized() || missing == 0 {
+		return nil
+	}
+	// Only the split duties path records indices; the combined pre-Gloas path
+	// leaves them empty, so this guard alone scopes the retry to split duties.
+	indices := snap.indices()
+	if len(indices) == 0 {
+		return nil
+	}
+	nextEpoch := snap.epoch().AddEpoch(1)
+
+	var (
+		next        []*ethpb.ValidatorDuty
+		newMissing  missingNextDuties
+		currDepRoot []byte
+	)
+	if missing&missingNextAttester != 0 {
+		// Attester is the spine: without it there are no rows to overlay onto, so
+		// rebuild the whole epoch. Retried each slot until the fetch succeeds.
+		att, prop, sync, ptc := v.fetchNextEpochDuties(ctx, nextEpoch, indices)
+		if att == nil { // spine still unavailable; try again next slot
+			return nil
+		}
+		next = v.assembleDuties(att, prop, sync, ptc)
+		newMissing = missingNextMask(nextEpoch, att, prop, sync, ptc)
+		currDepRoot = att.DependentRoot
+	} else {
+		// Spine intact: re-fetch only the missing types and overlay them, leaving
+		// the attester duties and dependent root untouched.
+		prop, sync, ptc := v.fetchMissingNextDuties(ctx, nextEpoch, indices, missing, snap.currDependentRoot())
+		existing := make([]*ethpb.ValidatorDuty, 0, snap.nextDutyCount())
+		for _, d := range snap.nextDuties() {
+			existing = append(existing, d)
+		}
+		next = overlayNextDuties(existing, prop, sync, ptc)
+		newMissing = missing
+		if prop != nil {
+			newMissing &^= missingNextProposer
+		}
+		if sync != nil {
+			newMissing &^= missingNextSync
+		}
+		if ptc != nil {
+			newMissing &^= missingNextPtc
+		}
+	}
+	if newMissing == missing { // no progress; avoid needless re-subscribe / proof re-sign
+		return nil
+	}
+	// Drop if the store advanced under us (a boundary/head-event update mid-fetch).
+	if !v.duties.replaceNextDuties(snap.revision, next, newMissing, currDepRoot) {
+		return nil
+	}
+	log.WithFields(logrus.Fields{
+		"epoch":        nextEpoch,
+		"recovered":    missing &^ newMissing,
+		"stillMissing": newMissing,
+	}).Debug("Recovered missing next-epoch duties mid-epoch")
+	return v.onDutiesUpdated(ctx)
+}
+
+// fetchMissingNextDuties re-fetches only the flagged next-epoch proposer/sync/PTC
+// types (attester handled separately). A nil return means not requested, failed,
+// or divergent from the stored attester dependent root attRoot.
+func (v *validator) fetchMissingNextDuties(ctx context.Context, nextEpoch primitives.Epoch, indices []primitives.ValidatorIndex, missing missingNextDuties, attRoot []byte) (
+	prop *ethpb.ProposerDutiesResponse,
+	syncResp *ethpb.SyncCommitteeDutiesResponse,
+	ptc *ethpb.PTCDutiesResponse,
+) {
+	var propErr, syncErr, ptcErr error
+	var wg sync.WaitGroup
+	if missing&missingNextProposer != 0 {
+		wg.Go(func() { prop, propErr = v.validatorClient.ProposerDuties(ctx, nextEpoch) })
+	}
+	if missing&missingNextSync != 0 {
+		wg.Go(func() { syncResp, syncErr = v.validatorClient.SyncCommitteeDuties(ctx, nextEpoch, indices) })
+	}
+	if missing&missingNextPtc != 0 {
+		wg.Go(func() { ptc, ptcErr = v.validatorClient.PTCDuties(ctx, nextEpoch, indices) })
+	}
+	wg.Wait()
+	for _, e := range []error{propErr, syncErr, ptcErr} {
+		if e != nil {
+			log.WithError(e).Debug("Could not get a missing next epoch duty")
+		}
+	}
+	return dropIfDivergent(prop, attRoot, "proposer"), syncResp, dropIfDivergent(ptc, attRoot, "ptc")
+}
+
+// overlayNextDuties clones existing next-epoch duties, overlaying re-fetched
+// proposer/sync/PTC responses; a nil response leaves that field untouched.
+func overlayNextDuties(
+	existing []*ethpb.ValidatorDuty,
+	prop *ethpb.ProposerDutiesResponse,
+	sync *ethpb.SyncCommitteeDutiesResponse,
+	ptc *ethpb.PTCDutiesResponse,
+) []*ethpb.ValidatorDuty {
+	var proposerSlots map[primitives.ValidatorIndex][]primitives.Slot
+	if prop != nil {
+		proposerSlots = make(map[primitives.ValidatorIndex][]primitives.Slot)
+		for _, d := range prop.Duties {
+			proposerSlots[d.ValidatorIndex] = append(proposerSlots[d.ValidatorIndex], d.Slot)
+		}
+	}
+	var ptcSlots map[primitives.ValidatorIndex][]primitives.Slot
+	if ptc != nil {
+		ptcSlots = make(map[primitives.ValidatorIndex][]primitives.Slot)
+		for _, d := range ptc.Duties {
+			ptcSlots[d.ValidatorIndex] = append(ptcSlots[d.ValidatorIndex], d.Slot)
+		}
+	}
+	var syncSet map[primitives.ValidatorIndex]bool
+	if sync != nil {
+		syncSet = make(map[primitives.ValidatorIndex]bool)
+		for _, d := range sync.Duties {
+			syncSet[d.ValidatorIndex] = true
+		}
+	}
+	out := make([]*ethpb.ValidatorDuty, 0, len(existing))
+	for _, d := range existing {
+		nd := cloneValidatorDuty(d)
+		if prop != nil {
+			nd.ProposerSlots = proposerSlots[d.ValidatorIndex]
+		}
+		if sync != nil {
+			nd.IsSyncCommittee = syncSet[d.ValidatorIndex]
+		}
+		if ptc != nil {
+			nd.PtcSlots = ptcSlots[d.ValidatorIndex]
+		}
+		out = append(out, nd)
+	}
+	return out
+}
+
+// onDutiesUpdated kicks off subnet subscriptions for the current duty set.
+func (v *validator) onDutiesUpdated(ctx context.Context) error {
 	md, exists := metadata.FromOutgoingContext(ctx)
 	ctx = context.Background()
 	if exists {
 		ctx = metadata.NewOutgoingContext(ctx, md)
 	}
+	container := v.duties.toContainer()
 	go func() {
-		if err := v.subscribeToSubnets(ctx, resp); err != nil {
+		if err := v.subscribeToSubnets(ctx, container); err != nil {
 			log.WithError(err).Error("Failed to subscribe to subnets")
 		}
 	}()
@@ -103,24 +775,22 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 }
 
 func (v *validator) logDuties(slot primitives.Slot) {
+	snap := v.duties.snapshot()
+	if !snap.isInitialized() {
+		return
+	}
+
 	epochStartSlot, err := slots.EpochStart(slots.ToEpoch(slot))
 	if err != nil {
 		log.WithError(err).Error("Could not calculate epoch start. Ignoring logging duties.")
 		return
 	}
 	attesterKeys := make([][]string, params.BeaconConfig().SlotsPerEpoch)
-	for i := range attesterKeys {
-		attesterKeys[i] = make([]string, 0)
-	}
 	proposerKeys := make([]string, params.BeaconConfig().SlotsPerEpoch)
 	ptcKeys := make([][]string, params.BeaconConfig().SlotsPerEpoch)
-	for i := range attesterKeys {
-		attesterKeys[i] = make([]string, 0)
-		ptcKeys[i] = make([]string, 0)
-	}
 	var totalProposingKeys, totalAttestingKeys, totalPTCKeys uint64
 
-	for _, duty := range v.duties.CurrentEpochDuties() {
+	for _, duty := range snap.currentDuties() {
 		pk := fmt.Sprintf("%#x", duty.PublicKey)
 		if v.emitAccountMetrics {
 			ValidatorStatusesGaugeVec.WithLabelValues(pk, fmt.Sprintf("%#x", duty.ValidatorIndex)).Set(float64(duty.Status))
@@ -171,7 +841,7 @@ func (v *validator) logDuties(slot primitives.Slot) {
 			}
 		}
 	}
-	for _, duty := range v.duties.NextEpochDuties() {
+	for _, duty := range snap.nextDuties() {
 		pk := fmt.Sprintf("%#x", duty.PublicKey)
 		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
 			continue
@@ -227,11 +897,12 @@ func (v *validator) logDuties(slot primitives.Slot) {
 	}
 }
 
-func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadEvent) error {
-	if head == nil {
-		return errors.New("received empty head event")
+func (v *validator) checkDependentRoots(ctx context.Context, prevRoot, currRoot string) error {
+	if prevRoot == "" || currRoot == "" {
+		return errors.New("dependent root missing from head event")
 	}
-	prevDependentRoot, err := bytesutil.DecodeHexWithLength(head.PreviousDutyDependentRoot, fieldparams.RootLength)
+
+	prevDependentRoot, err := bytesutil.DecodeHexWithLength(prevRoot, fieldparams.RootLength)
 	if err != nil {
 		return errors.Wrap(err, "failed to decode previous duty dependent root")
 	}
@@ -246,10 +917,8 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	dutiesCtx, cancel := context.WithDeadline(ctx, v.SlotDeadline(ss-1))
 	defer cancel()
 
-	v.dutiesLock.RLock()
-	storedPrev, _ := v.duties.DependentRoots()
+	storedPrev := v.duties.prevDependentRoot()
 	needsPrevUpdate := storedPrev == nil || !bytes.Equal(prevDependentRoot, storedPrev)
-	v.dutiesLock.RUnlock()
 
 	if needsPrevUpdate {
 		if err := v.UpdateDuties(dutiesCtx); err != nil {
@@ -260,17 +929,19 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 		return nil
 	}
 
-	currDependentRoot, err := bytesutil.DecodeHexWithLength(head.CurrentDutyDependentRoot, fieldparams.RootLength)
+	currDependentRoot, err := bytesutil.DecodeHexWithLength(currRoot, fieldparams.RootLength)
 	if err != nil {
 		return errors.Wrap(err, "failed to decode current duty dependent root")
 	}
 	if bytes.Equal(currDependentRoot, params.BeaconConfig().ZeroHash[:]) {
 		return nil
 	}
-	v.dutiesLock.RLock()
-	_, storedCurr := v.duties.DependentRoots()
-	v.dutiesLock.RUnlock()
-	needsCurrUpdate := storedCurr == nil || !bytes.Equal(currDependentRoot, storedCurr)
+	// Only act as a correction layer over an already-known next-epoch root. An
+	// unknown (nil) root — e.g. after a soft next-epoch attester failure — is left
+	// to the epoch boundary and per-slot RetryMissingNextDuties to refetch, rather
+	// than triggering a full UpdateDuties on every head event.
+	storedCurr := v.duties.currDependentRoot()
+	needsCurrUpdate := storedCurr != nil && !bytes.Equal(currDependentRoot, storedCurr)
 	if !needsCurrUpdate {
 		return nil
 	}

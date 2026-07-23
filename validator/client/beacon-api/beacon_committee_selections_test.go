@@ -89,7 +89,7 @@ func TestGetAggregatedSelections(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 
 			reqBody, err := json.Marshal(test.req)
 			require.NoError(t, err)

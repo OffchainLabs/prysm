@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -30,11 +31,11 @@ func runExecutionPayloadBidTest(t *testing.T, config string, fork string, objNam
 		t.Run(folder.Name(), func(t *testing.T) {
 			helpers.ClearCache()
 			folderPath := path.Join(testsFolderPath, folder.Name())
-			blockFile, err := util.BazelFileBytes(folderPath, "block.ssz_snappy")
+			bidFile, err := util.BazelFileBytes(folderPath, "execution_payload_bid.ssz_snappy")
 			require.NoError(t, err)
-			blockSSZ, err := snappy.Decode(nil /* dst */, blockFile)
+			bidSSZ, err := snappy.Decode(nil /* dst */, bidFile)
 			require.NoError(t, err, "Failed to decompress")
-			blk, err := block(blockSSZ)
+			blk, err := block(bidSSZ)
 			require.NoError(t, err)
 			RunBlockOperationTest(t, folderPath, blk, sszToState, operationFn)
 		})
@@ -43,7 +44,21 @@ func runExecutionPayloadBidTest(t *testing.T, config string, fork string, objNam
 
 func RunExecutionPayloadBidTest(t *testing.T, config string, fork string, block blockWithSSZObject, sszToState SSZToState) {
 	runExecutionPayloadBidTest(t, config, fork, "execution_payload_bid", block, sszToState, func(ctx context.Context, s state.BeaconState, b interfaces.ReadOnlySignedBeaconBlock) (state.BeaconState, error) {
-		err := gloas.ProcessExecutionPayloadBid(s, b.Block())
-		return s, err
+		signedBid, err := b.Block().Body().SignedExecutionPayloadBid()
+		if err != nil {
+			return nil, err
+		}
+		proposerIndex, err := helpers.BeaconProposerIndex(ctx, s)
+		if err != nil {
+			return nil, err
+		}
+		blk := util.NewBeaconBlockGloas()
+		blk.Block.ProposerIndex = proposerIndex
+		blk.Block.Body.SignedExecutionPayloadBid = signedBid
+		wsb, err := blocks.NewSignedBeaconBlock(blk)
+		if err != nil {
+			return nil, err
+		}
+		return s, gloas.ProcessExecutionPayloadBid(s, wsb.Block())
 	})
 }

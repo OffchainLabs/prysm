@@ -13,6 +13,7 @@ const (
 	Unavailable
 	BadRequest
 	NotFound
+	NoContent
 	// Add more errors as needed
 )
 
@@ -31,6 +32,8 @@ func ErrorReasonToGRPC(reason ErrorReason) codes.Code {
 		return codes.InvalidArgument
 	case NotFound:
 		return codes.NotFound
+	case NoContent:
+		return codes.NotFound
 	// Add more cases for other error reasons as needed
 	default:
 		return codes.Internal
@@ -47,6 +50,9 @@ func ErrorReasonToHTTP(reason ErrorReason) int {
 		return http.StatusBadRequest
 	case NotFound:
 		return http.StatusNotFound
+	// 204 responses must not carry a body; handlers should write this status directly.
+	case NoContent:
+		return http.StatusNoContent
 	// Add more cases for other error reasons as needed
 	default:
 		return http.StatusInternalServerError
