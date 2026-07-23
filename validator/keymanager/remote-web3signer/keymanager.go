@@ -189,22 +189,22 @@ func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
 	return km, nil
 }
 
-// equalKeySet reports whether a and b hold the same set of keys, ignoring order.
-// It assumes each slice is already de-duplicated, which holds for our key sets.
+// equalKeySet reports whether a and b contain the same set of keys, ignoring
+// order and duplicates.
 func equalKeySet(a, b [][fieldparams.BLSPubkeyLength]byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	seen := make(map[[fieldparams.BLSPubkeyLength]byte]struct{}, len(a))
+	setA := make(map[[fieldparams.BLSPubkeyLength]byte]struct{}, len(a))
 	for _, k := range a {
-		seen[k] = struct{}{}
+		setA[k] = struct{}{}
 	}
+	distinctB := make(map[[fieldparams.BLSPubkeyLength]byte]struct{}, len(b))
 	for _, k := range b {
-		if _, ok := seen[k]; !ok {
-			return false
+		if _, ok := setA[k]; !ok {
+			return false // b has a key that a does not.
 		}
+		distinctB[k] = struct{}{}
 	}
-	return true
+
+	return len(setA) == len(distinctB)
 }
 
 func (km *Keymanager) updatePublicKeys(keys [][48]byte) {

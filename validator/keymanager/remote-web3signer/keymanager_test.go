@@ -576,6 +576,10 @@ func TestEqualKeySet(t *testing.T) {
 		{name: "different length", x: [][48]byte{k1}, y: [][48]byte{k1, k2}, want: false},
 		{name: "same length different members", x: [][48]byte{k1}, y: [][48]byte{k2}, want: false},
 		{name: "empty vs non-empty", x: nil, y: [][48]byte{k1}, want: false},
+		{name: "duplicate entries keep same distinct set", x: [][48]byte{k1}, y: [][48]byte{k1, k1}, want: true},
+		{name: "duplicate on left is still equal", x: [][48]byte{k1, k1}, y: [][48]byte{k1}, want: true},
+		// A duplicate must not mask a removal: {k1,k2} -> {k1,k1} drops k2.
+		{name: "duplicate does not mask removal", x: [][48]byte{k1, k2}, y: [][48]byte{k1, k1}, want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
