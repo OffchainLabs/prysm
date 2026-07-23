@@ -2183,8 +2183,11 @@ func TestGloasIsOptimisticConcurrentAccessWithInsertPayload(t *testing.T) {
 				continue
 			}
 			f.Lock()
-			_ = f.InsertPayload(pe)
+			err = f.InsertPayload(pe)
 			f.Unlock()
+			if err != nil {
+				t.Error(err)
+			}
 		}
 		close(done)
 	}()
