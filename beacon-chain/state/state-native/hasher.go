@@ -7,7 +7,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -121,8 +120,6 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 	binary.LittleEndian.PutUint64(eth1DepositIndexBuf, state.eth1DepositIndex)
 	eth1DepositBuf := bytesutil.ToBytes32(eth1DepositIndexBuf)
 	fieldRoots[types.Eth1DepositIndex.RealPosition()] = eth1DepositBuf[:]
-
-	progressiveSSZ := progressiveSSZEnabled(state.version)
 
 	// Validators slice root.
 	validatorsRoot, err := stateutil.ValidatorRegistryRoot(state.version, state.validatorsCompactVal())
@@ -393,8 +390,4 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		fieldRoots[types.PTCWindow.RealPosition()] = ptcWindowRoot[:]
 	}
 	return fieldRoots, nil
-}
-
-func progressiveSSZEnabled(stateVersion int) bool {
-	return stateVersion >= version.Gloas && features.Get().EnableProgressiveSSZ
 }
