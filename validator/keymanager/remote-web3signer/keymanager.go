@@ -120,65 +120,96 @@ func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
 
 	// Populate the map with existing keys
 	for _, key := range ppk {
-		decodedKey, err := hexutil.Decode(key)
+		b, err := bytesutil.DecodeHex48(key)
 		if err != nil {
-			return nil, errors.Wrapf(err, "could not decode public key %s", key)
+			return nil, fmt.Errorf("decode public key %s: %w", key, err)
 		}
-		if len(decodedKey) != fieldparams.BLSPubkeyLength {
-			return nil, fmt.Errorf("public key %s has invalid length (expected %d, got %d)", decodedKey, fieldparams.BLSPubkeyLength, len(decodedKey))
-		}
-		flagLoadedKeys[key] = bytesutil.ToBytes48(decodedKey)
+		flagLoadedKeys[key] = b
 	}
 	km.flagLoadedKeysMap = flagLoadedKeys
 
-	// load from file
-	if keyFileExists {
-		log.WithField("file", km.keyFilePath).Info("Loading keys from file")
-		_, fileKeys, err := km.readKeyFile()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not read key file")
-		}
-		if len(flagLoadedKeys) != 0 {
-			log.WithField("flagLoadedKeyCount", len(flagLoadedKeys)).WithField("fileLoadedKeyCount", len(fileKeys)).Info("Combining flag loaded keys and file loaded keys.")
-			maps.Copy(fileKeys, flagLoadedKeys)
-			if err = km.savePublicKeysToFile(fileKeys); err != nil {
-				return nil, errors.Wrap(err, "could not save public keys to file")
-			}
-		}
-		km.lock.Lock()
-		km.providedPublicKeys = slices.Collect(maps.Values(fileKeys))
-		km.lock.Unlock()
-		watcherReady := make(chan error, 1)
-		var watcherReadyOnce sync.Once
-		markWatcherReady := func(err error) {
-			watcherReadyOnce.Do(func() { watcherReady <- err })
-		}
-		go func() {
-			watchErr := km.refreshRemoteKeysFromFileChangesWithRetry(ctx, retryDelay, markWatcherReady)
-			if watchErr != nil {
-				markWatcherReady(watchErr)
-				log.WithError(watchErr).Error("Could not refresh remote keys from file changes")
-			}
-		}()
-		select {
-		case err := <-watcherReady:
-			if err != nil {
-				return nil, errors.Wrap(err, "could not initialize remote signer key file watcher")
-			}
-		case <-ctx.Done():
-			return nil, errors.Wrap(ctx.Err(), "could not initialize remote signer key file watcher")
-		}
-	} else {
+	// File-based key source is not set here. Start polling from the URL if configured, and hot-reload from file if configured.
+	if !keyFileExists {
+		// Load provided public keys in memory.
 		km.lock.Lock()
 		km.providedPublicKeys = slices.Collect(maps.Values(flagLoadedKeys))
 		km.lock.Unlock()
+
+		go km.pollRemoteKeysFromURL(ctx, cfg.PublicKeysURL, cfg.PollInterval)
+
+		return km, nil
+	}
+
+	log.WithField("file", km.keyFilePath).Info("Loading keys from file")
+
+	// Notify users that poll interval flag is a no-op when a key file is provided.
+	if cfg.PollInterval > 0 {
+		log.Warn("Web3Signer key poll interval is set but key file is configured. " +
+			"The poll interval will be ignored since the key file takes precedence over the URL.")
+	}
+
+	_, fileKeys, err := km.readKeyFile()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not read key file")
+	}
+	if len(flagLoadedKeys) != 0 {
+		log.WithField("flagLoadedKeyCount", len(flagLoadedKeys)).WithField("fileLoadedKeyCount", len(fileKeys)).Info("Combining flag loaded keys and file loaded keys.")
+		maps.Copy(fileKeys, flagLoadedKeys)
+		if err = km.savePublicKeysToFile(fileKeys); err != nil {
+			return nil, errors.Wrap(err, "could not save public keys to file")
+		}
+	}
+	km.lock.Lock()
+	km.providedPublicKeys = slices.Collect(maps.Values(fileKeys))
+	km.lock.Unlock()
+	watcherReady := make(chan error, 1)
+	var watcherReadyOnce sync.Once
+	markWatcherReady := func(err error) {
+		watcherReadyOnce.Do(func() { watcherReady <- err })
+	}
+	go func() {
+		watchErr := km.refreshRemoteKeysFromFileChangesWithRetry(ctx, retryDelay, markWatcherReady)
+		if watchErr != nil {
+			markWatcherReady(watchErr)
+			log.WithError(watchErr).Error("Could not refresh remote keys from file changes")
+		}
+	}()
+	select {
+	case err := <-watcherReady:
+		if err != nil {
+			return nil, errors.Wrap(err, "could not initialize remote signer key file watcher")
+		}
+	case <-ctx.Done():
+		return nil, errors.Wrap(ctx.Err(), "could not initialize remote signer key file watcher")
 	}
 
 	return km, nil
 }
 
+// equalKeySet reports whether a and b hold the same set of keys, ignoring order.
+// It assumes each slice is already de-duplicated, which holds for our key sets.
+func equalKeySet(a, b [][fieldparams.BLSPubkeyLength]byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	seen := make(map[[fieldparams.BLSPubkeyLength]byte]struct{}, len(a))
+	for _, k := range a {
+		seen[k] = struct{}{}
+	}
+	for _, k := range b {
+		if _, ok := seen[k]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
 func (km *Keymanager) updatePublicKeys(keys [][48]byte) {
 	km.lock.Lock()
+	if equalKeySet(km.providedPublicKeys, keys) {
+		km.lock.Unlock()
+		return
+	}
 	km.providedPublicKeys = keys
 	km.lock.Unlock()
 	km.accountsChangedFeed.Send(keys)

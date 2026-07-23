@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/io/file"
@@ -96,7 +95,7 @@ func TestNewKeymanager(t *testing.T) {
 				GenesisValidatorsRoot: root,
 				ProvidedPublicKeys:    []string{"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820", "http://prysm.xyz/"},
 			},
-			wantErr: "could not decode public key",
+			wantErr: "is not a valid hex",
 		},
 		{
 			name: "path provided public keys, some bad hex for key",
@@ -105,7 +104,7 @@ func TestNewKeymanager(t *testing.T) {
 				GenesisValidatorsRoot: root,
 				ProvidedPublicKeys:    []string{"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937"},
 			},
-			wantErr: "has invalid length",
+			wantErr: "is not 48 bytes",
 		},
 		{
 			name: "happy path key file",
@@ -559,4 +558,28 @@ func TestKeymanager_DeletePublicKeys_WithFile(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(keys), 1)
 	require.Equal(t, hexutil.Encode(keys[0][:]), publicKeys[1])
+}
+
+func TestEqualKeySet(t *testing.T) {
+	k1 := [48]byte{1}
+	k2 := [48]byte{2}
+
+	tests := []struct {
+		name string
+		x    [][48]byte
+		y    [][48]byte
+		want bool
+	}{
+		{name: "both empty", x: nil, y: nil, want: true},
+		{name: "equal single", x: [][48]byte{k1}, y: [][48]byte{k1}, want: true},
+		{name: "same set different order", x: [][48]byte{k1, k2}, y: [][48]byte{k2, k1}, want: true},
+		{name: "different length", x: [][48]byte{k1}, y: [][48]byte{k1, k2}, want: false},
+		{name: "same length different members", x: [][48]byte{k1}, y: [][48]byte{k2}, want: false},
+		{name: "empty vs non-empty", x: nil, y: [][48]byte{k1}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, equalKeySet(tt.x, tt.y))
+		})
+	}
 }
