@@ -68,6 +68,9 @@ type Keymanager struct {
 	retriesRemaining      int
 	keyFilePath           string
 	lock                  sync.RWMutex
+	// serialize updatePublicKeys as we have multiple concurrent updaters
+	// - URL poller, file watcher, Keymanager API.
+	updateLock sync.Mutex
 }
 
 // NewKeymanager instantiates a new web3signer key manager.
@@ -205,6 +208,9 @@ func equalKeySet(a, b [][fieldparams.BLSPubkeyLength]byte) bool {
 }
 
 func (km *Keymanager) updatePublicKeys(keys [][48]byte) {
+	km.updateLock.Lock()
+	defer km.updateLock.Unlock()
+
 	km.lock.Lock()
 	if equalKeySet(km.providedPublicKeys, keys) {
 		km.lock.Unlock()
@@ -212,6 +218,7 @@ func (km *Keymanager) updatePublicKeys(keys [][48]byte) {
 	}
 	km.providedPublicKeys = keys
 	km.lock.Unlock()
+
 	km.accountsChangedFeed.Send(keys)
 	log.WithField("count", len(keys)).Debug("Updated public keys")
 }
