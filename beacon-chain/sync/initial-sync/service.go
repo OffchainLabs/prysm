@@ -259,6 +259,11 @@ func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
 
 	blockVersion := roBlock.Version()
 
+	// Gloas columns are only required once the payload envelope exists.
+	if blockVersion >= version.Gloas && !s.cfg.DB.HasExecutionPayloadEnvelope(s.ctx, blockRoot) {
+		return nil
+	}
+
 	if blockVersion >= version.Fulu {
 		if err := s.fetchOriginDataColumnSidecars(roBlock); err != nil {
 			return errors.Wrap(err, "fetch origin columns")

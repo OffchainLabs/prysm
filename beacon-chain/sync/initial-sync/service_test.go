@@ -701,6 +701,41 @@ func TestFetchOriginSidecars(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("gloas origin block without envelope", func(t *testing.T) {
+		// Origin block with bid commitments but no envelope in DB (payload never revealed).
+		block := util.NewBeaconBlockGloas()
+		block.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = [][]byte{make([]byte, 48)}
+		signedBlock, err := blocks.NewSignedBeaconBlock(block)
+		require.NoError(t, err)
+		roBlock, err := blocks.NewROBlock(signedBlock)
+		require.NoError(t, err)
+
+		// Save the block.
+		db := dbtest.SetupDB(t)
+		err = db.SaveOriginCheckpointBlockRoot(ctx, roBlock.Root())
+		require.NoError(t, err)
+		err = db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Define "now" to be after genesis time + retention period.
+		nowWrtGenesisSecs := retentionEpochs.Mul(secondsPerEpoch)
+		now := genesisTime.Add(time.Duration(nowWrtGenesisSecs) * time.Second)
+		nower := func() time.Time { return now }
+		clock := startup.NewClock(genesisTime, genesisValidatorRoot, startup.WithNower(nower))
+
+		service := &Service{
+			ctx: ctx,
+			cfg: &Config{
+				DB:  db,
+				P2P: p2ptest.NewTestP2P(t),
+			},
+			clock: clock,
+		}
+
+		err = service.fetchOriginSidecars(nil)
+		require.NoError(t, err)
+	})
+
 	t.Run("nominal", func(t *testing.T) {
 		samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 

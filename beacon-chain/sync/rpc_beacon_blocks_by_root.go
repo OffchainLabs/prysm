@@ -97,6 +97,8 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 
 // requestAndSaveMissingDataColumns checks if the data columns are missing for the given block.
 // If so, requests them and saves them to the storage.
+// Gloas blocks are drained from the pending gossip column queue but never fetched:
+// their DA is checked on the payload envelope, not at block import.
 func (s *Service) requestAndSaveMissingDataColumnSidecars(blks []blocks.ROBlock) error {
 	if len(blks) == 0 {
 		return nil
@@ -105,6 +107,23 @@ func (s *Service) requestAndSaveMissingDataColumnSidecars(blks []blocks.ROBlock)
 	// Process any gossip columns queued before the block arrived.
 	for _, blk := range blks {
 		s.processPendingGloasColumns(s.ctx, blk.Root(), blk)
+	}
+
+	preGloasBlocks := make([]blocks.ROBlock, 0, len(blks))
+	for _, blk := range blks {
+		if blk.Version() < version.Gloas {
+			preGloasBlocks = append(preGloasBlocks, blk)
+		}
+	}
+
+	return s.fetchAndSaveDataColumnSidecars(preGloasBlocks)
+}
+
+// fetchAndSaveDataColumnSidecars fetches the missing custody columns for the given blocks
+// and saves them to the storage, failing if any remain missing.
+func (s *Service) fetchAndSaveDataColumnSidecars(blks []blocks.ROBlock) error {
+	if len(blks) == 0 {
+		return nil
 	}
 
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
