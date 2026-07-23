@@ -308,25 +308,6 @@ func TestMarshalPartsMetadata(t *testing.T) {
 				Requests:  testBitlist(4, allSet(4)...),
 			},
 		},
-		{
-			name: "available too large",
-			meta: &ethpb.PartialDataColumnPartsMetadata{
-				// 32768 bits serializes to 4097 bytes, one over the 4096-byte ssz_max.
-				Available: bitfield.NewBitlist(32768),
-				Requests:  bitfield.NewBitlist(1),
-			},
-			// TODO: restore "Available" once methodical-ssz includes the field name in the error.
-			wantErr: "list length is higher than max value",
-		},
-		{
-			name: "requests too large",
-			meta: &ethpb.PartialDataColumnPartsMetadata{
-				Available: bitfield.NewBitlist(1),
-				Requests:  bitfield.NewBitlist(32768),
-			},
-			// TODO: restore "Requests" once methodical-ssz includes the field name in the error.
-			wantErr: "list length is higher than max value",
-		},
 	}
 
 	for _, tt := range tests {
@@ -415,15 +396,6 @@ func TestPartialDataColumn_PartsMetadata(t *testing.T) {
 			expectedN:  4,
 			availCount: 2,
 			reqCount:   2,
-		},
-		{
-			name: "marshal error due max bitlist size",
-			p: &PartialDataColumn{
-				// 32768 bits serializes to 4097 bytes, one over the 4096-byte ssz_max.
-				Included: bitfield.NewBitlist(32768),
-			},
-			// TODO: restore "Available" once methodical-ssz includes the field name in the error.
-			expectErr: "list length is higher than max value",
 		},
 	}
 

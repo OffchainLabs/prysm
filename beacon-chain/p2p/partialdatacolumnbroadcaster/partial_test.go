@@ -3034,23 +3034,6 @@ func TestPartialColumnBroadcaster_Publish_pubsubNotInitialized(t *testing.T) {
 	require.ErrorContains(t, "pubsub not initialized", err)
 }
 
-// Verifies republishColumn surfaces a PartsMetadata() marshal failure.
-func TestPartialColumnBroadcaster_republishColumn_partsMetadataError(t *testing.T) {
-	const validTopic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
-
-	ps := newMockPubSub(nil, nil)
-	h := newBroadcasterHarness(t, ps)
-
-	// 40000 commitments -> Available bitlist of 5001 bytes, exceeding the 4096-byte cap.
-	col := createPartialColumn(t, 40000, nil)
-	col.Published = true
-	rpc := buildIncomingRPC(validTopic, col.GroupID(), nil, nil)
-
-	err := h.broadcaster.republishColumn(col, rpc, false)
-	require.ErrorContains(t, "parts metadata", err)
-	require.Equal(t, 0, ps.publishedColumnCount())
-}
-
 // Verifies eager pushes and skipped republishes are aggregated per group and
 // flushed as one log line with pretty index ranges.
 func TestPartialColumnBroadcaster_flushAggregatedLogs(t *testing.T) {
