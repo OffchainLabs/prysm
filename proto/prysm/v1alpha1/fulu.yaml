@@ -1,0 +1,27 @@
+package: "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+types:
+  - name: "BeaconBlockContentsFulu"
+  - name: "BeaconStateFulu"
+  - name: "BlindedBeaconBlockFulu"
+  - name: "DataColumnSidecar"
+  - name: "DataColumnsByRootIdentifier"
+  - name: "PartialDataColumnHeader"
+    progressive: {}
+    fields:
+      KzgCommitments: {type: "ProgressiveList"}
+  - name: "PartialDataColumnPartsMetadata"
+    progressive: {}
+    fields:
+      Available: {type: "ProgressiveBitlist"}
+      Requests:  {type: "ProgressiveBitlist"}
+  - name: "PartialDataColumnSidecar"
+    progressive: {}
+    fields:
+      CellsPresentBitmap: {type: "ProgressiveBitlist"}
+      PartialColumn:      {type: "ProgressiveList"}
+      KzgProofs:          {type: "ProgressiveList"}
+      Header:             {type: "ProgressiveList"}
+  - name: "SignedBeaconBlockContentsFulu"
+  - name: "SignedBeaconBlockFulu"
+  - name: "SignedBlindedBeaconBlockFulu"
+  - name: "StatusV2"

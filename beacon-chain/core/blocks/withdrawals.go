@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
@@ -174,13 +175,13 @@ func ProcessWithdrawals(st state.BeaconState, executionData interfaces.Execution
 			return nil, fmt.Errorf("execution payload header has %d withdrawals when %d were expected", len(wds), len(expectedWithdrawals))
 		}
 
-		wdRoot, err = ssz.WithdrawalSliceRoot(wds, fieldparams.MaxWithdrawalsPerPayload)
+		wdRoot, err = wrappers.WithdrawalSliceRoot(wds, fieldparams.MaxWithdrawalsPerPayload)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get withdrawals root")
 		}
 	}
 
-	expectedRoot, err := ssz.WithdrawalSliceRoot(expectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+	expectedRoot, err := wrappers.WithdrawalSliceRoot(expectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get expected withdrawals root")
 	}

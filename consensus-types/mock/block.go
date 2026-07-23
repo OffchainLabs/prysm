@@ -3,6 +3,9 @@
 package mock
 
 import (
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+	"google.golang.org/protobuf/proto"
+
 	field_params "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -10,8 +13,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
-	ssz "github.com/prysmaticlabs/fastssz"
-	"google.golang.org/protobuf/proto"
 )
 
 type SignedBeaconBlock struct {
@@ -284,7 +285,7 @@ func (b *BeaconBlockBody) SignedExecutionPayloadBid() (*eth.SignedExecutionPaylo
 	panic("implement me")
 }
 
-func (b *BeaconBlockBody) ParentExecutionRequests() (*enginev1.ExecutionRequestsGloas, error) {
+func (b *BeaconBlockBody) ParentExecutionRequests() (interfaces.ExecutionRequests, error) {
 	panic("implement me")
 }
 

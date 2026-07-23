@@ -368,8 +368,7 @@ func (b *BeaconState) AddBuilderFromDeposit(pubkey [fieldparams.BLSPubkeyLength]
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	// process_builder_deposit_request sets version to withdrawal_credentials[0].
-	return b.addBuilderFromDepositAtEpoch(pubkey, withdrawalCredentials[0], withdrawalCredentials, amount, slots.ToEpoch(b.slot))
+	return b.addBuilderFromDepositAtEpoch(pubkey, params.BeaconConfig().PayloadBuilderVersion, withdrawalCredentials, amount, slots.ToEpoch(b.slot))
 }
 
 func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkeyLength]byte, builderVersion byte, withdrawalCredentials [fieldparams.RootLength]byte, amount uint64, depositEpoch primitives.Epoch) error {
@@ -607,6 +606,15 @@ func (b *BeaconState) DecreaseWithdrawalBalances(withdrawals []*enginev1.Withdra
 		balanceIndices  []uint64
 		buildersChanged bool
 	)
+	defer func() {
+		if len(balanceIndices) > 0 {
+			b.markFieldAsDirty(types.Balances)
+			b.addDirtyIndices(types.Balances, balanceIndices)
+		}
+		if buildersChanged {
+			b.markFieldAsDirty(types.Builders)
+		}
+	}()
 
 	for _, withdrawal := range withdrawals {
 		if withdrawal == nil {
@@ -634,17 +642,6 @@ func (b *BeaconState) DecreaseWithdrawalBalances(withdrawals []*enginev1.Withdra
 			return pkgerrors.Wrap(err, "could not update balances")
 		}
 		balanceIndices = append(balanceIndices, uint64(withdrawal.ValidatorIndex))
-	}
-
-	if len(balanceIndices) > 0 {
-		b.markFieldAsDirty(types.Balances)
-		b.addDirtyIndices(types.Balances, balanceIndices)
-	}
-
-	// NOTE: Field "Builders" is not in fieldMap so per-index dirty tracking with addDirtyIndices is a no-op.
-	// Only mark the entire field as dirty if any builder balances were changed.
-	if buildersChanged {
-		b.markFieldAsDirty(types.Builders)
 	}
 
 	return nil

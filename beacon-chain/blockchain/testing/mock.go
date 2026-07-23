@@ -42,6 +42,8 @@ type ChainService struct {
 	ValidAttestation            bool
 	Optimistic                  bool
 	ValidatorsRoot              [32]byte
+	OptimisticCheckRootReceived [32]byte
+	SyncingRoot                 [32]byte
 	TargetRoot                  [32]byte
 	HeadDependentRoot           [32]byte
 	PublicKey                   [fieldparams.BLSPubkeyLength]byte
@@ -53,6 +55,9 @@ type ChainService struct {
 	MockDataAvailable           map[[32]byte]bool
 	MockDataAvailableErr        error
 	ParentPayloadReadyVal       *bool
+	BlockSlot                   primitives.Slot
+	OptimisticRoots             map[[32]byte]bool
+	FinalizedRoots              map[[32]byte]bool
 	ForkchoiceRoots             map[[32]byte]bool
 	ForkchoiceBlockHashes       map[[32]byte][32]byte
 	ForkchoiceGasLimits         map[[32]byte]uint64
@@ -69,6 +74,7 @@ type ChainService struct {
 	RecordedEquivocations       map[EquivocationKey][][32]byte
 	MockCanonicalFull           map[primitives.Slot]bool
 	ETH1Data                    *ethpb.Eth1Data
+	ReceivePayloadEnvelopeErr   error
 	stateNotifier               statefeed.Notifier
 	VerifyBlkDescendantErr      error
 	Block                       interfaces.ReadOnlySignedBeaconBlock
@@ -78,19 +84,13 @@ type ChainService struct {
 	DB                          db.Database
 	blockNotifier               blockfeed.Notifier
 	opNotifier                  opfeed.Notifier
+	ReceiveBlockMockErr         error
+	ForkChoiceStore             forkchoice.ForkChoicer
 	SyncSelectionProofDomain    []byte
 	SyncContributionProofDomain []byte
 	SyncCommitteePubkeys        [][]byte
 	Genesis                     time.Time
-	ForkChoiceStore             forkchoice.ForkChoicer
-	ReceiveBlockMockErr         error
-	ReceivePayloadEnvelopeErr   error
-	OptimisticCheckRootReceived [32]byte
-	FinalizedRoots              map[[32]byte]bool
-	OptimisticRoots             map[[32]byte]bool
-	BlockSlot                   primitives.Slot
 	RecentBlockSlotErr          error
-	SyncingRoot                 [32]byte
 	SyncCommitteeIndices        []primitives.CommitteeIndex
 	Root                        []byte
 	BlocksReceived              []interfaces.ReadOnlySignedBeaconBlock

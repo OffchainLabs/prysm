@@ -85,8 +85,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_allegro_bigcache",
         importpath = "github.com/allegro/bigcache",
-        sum = "h1:eMwmnE/GDgah4HI848JfFxHt+iPb26b4zyfspmqY0/8=",
-        version = "v1.2.1-0.20190218064605-e24eb225f156",
+        sum = "h1:hg1sY1raCwic3Vnsvje6TT7/pnZba83LeFck5NrFKSc=",
+        version = "v1.2.1",
     )
     go_repository(
         name = "com_github_andybalholm_brotli",
@@ -607,6 +607,12 @@ def prysm_deps():
         importpath = "github.com/DataDog/zstd",
         sum = "h1:ybO8RBeh29qrxIhCA9E8gKY6xfONU9T6G6aP9DTKfLE=",
         version = "v1.5.7",
+    )
+    go_repository(
+        name = "com_github_dave_jennifer",
+        importpath = "github.com/dave/jennifer",
+        sum = "h1:B4jJJDHelWcDhlRQxWeo0Npa/pYKBLrirAQoTN45txo=",
+        version = "v1.7.1",
     )
     go_repository(
         name = "com_github_davecgh_go_spew",
@@ -1920,12 +1926,6 @@ def prysm_deps():
     )
     go_repository(
         name = "com_github_kurtosis_tech_kurtosis_portal_api_golang",
-        # Resolve the google.api annotations import to the same @googleapis target
-        # Prysm's own protos use, so a binary linking both (e.g. the Kurtosis E2E
-        # test) doesn't get two copies of genproto/googleapis/api/annotations.
-        build_directives = [
-            "gazelle:resolve go google.golang.org/genproto/googleapis/api/annotations @googleapis//google/api:annotations_go_proto",
-        ],
         importpath = "github.com/kurtosis-tech/kurtosis-portal/api/golang",
         sum = "h1:izciXrFyFR+ihJ7nLTOkoIX5GzBPIp8gVKlw94gIc98=",
         version = "v0.0.0-20230818182330-1a86869414d2",
@@ -2004,12 +2004,6 @@ def prysm_deps():
         name = "com_github_libp2p_go_libp2p_pubsub",
         build_file_proto_mode = "disable_global",
         importpath = "github.com/libp2p/go-libp2p-pubsub",
-        # Replaces proto.CloneOf (needs protobuf-go >= v1.36.4) with proto.Clone,
-        # as rules_go pins org_golang_google_protobuf to v1.36.3 for bazel builds.
-        patch_args = ["-p1"],
-        patches = [
-            "//third_party:com_github_libp2p_go_libp2p_pubsub-cloneof.patch",
-        ],
         sum = "h1:SNdvB6V0eYMXLRR95n+4vpxJKbFsbHhgjPdDiTpGoo0=",
         version = "v0.17.0",
     )
@@ -2480,6 +2474,23 @@ def prysm_deps():
         patches = ["//third_party:com_github_offchainlabs_hashtree.patch"],
         sum = "h1:nM8dBAQZzHLzzM14FaAHXnHTAXZIst69v5xWuS48y/c=",
         version = "v0.2.3",
+    )
+
+    #go_repository(
+    #    name = "com_github_offchainlabs_methodical_ssz",
+    #    importpath = "github.com/OffchainLabs/methodical-ssz",
+    #    build_file_generation = "on",
+    #    build_file_name = "BUILD.bazel",
+    #    remote = "file:///home/kasey/src/OffchainLabs/methodical-ssz",
+    #    vcs = "git",
+    #    commit = "4612ae87cb43f8eff50250ad60ec94ffcfd5186d",
+    #)
+    go_repository(
+        name = "com_github_offchainlabs_methodical_ssz",
+        importpath = "github.com/OffchainLabs/methodical-ssz",
+        replace = "github.com/kasey/methodical-ssz",
+        sum = "h1:lQdH1xJYlNJRv18R1EutPsVWLKMpMtkD8sq28zLD36E=",
+        version = "v0.0.0-20260703044252-f02d8c431d71",
     )
     go_repository(
         name = "com_github_oklog_oklog",
@@ -4599,14 +4610,14 @@ def prysm_deps():
     go_repository(
         name = "org_golang_google_genproto_googleapis_api",
         importpath = "google.golang.org/genproto/googleapis/api",
-        sum = "h1:tu/dtnW1o3wfaxCOjSLn5IRX4YDcJrtlpzYkhHhGaC4=",
-        version = "v0.0.0-20260226221140-a57be14db171",
+        sum = "h1:Kjn0N0tCrDgiAFW+lGO4JZ3ck44CehvJQMAwj9QF0G8=",
+        version = "v0.0.0-20260526163538-3dc84a4a5aaa",
     )
     go_repository(
         name = "org_golang_google_genproto_googleapis_rpc",
         importpath = "google.golang.org/genproto/googleapis/rpc",
-        sum = "h1:ggcbiqK8WWh6l1dnltU4BgWGIGo+EVYxCaAPih/zQXQ=",
-        version = "v0.0.0-20260226221140-a57be14db171",
+        sum = "h1:mZHHdPZl0dbGHCflZgAq/Q468DWVFcU2whhB2KAo8fk=",
+        version = "v0.0.0-20260526163538-3dc84a4a5aaa",
     )
     go_repository(
         name = "org_golang_google_grpc",

@@ -10,7 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	interfacestest "github.com/OffchainLabs/prysm/v7/consensus-types/interfaces/testing"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -18,15 +18,6 @@ import (
 	"github.com/golang/snappy"
 	bolt "go.etcd.io/bbolt"
 )
-
-func requireBlocksEqual(t testing.TB, want, got interfaces.ReadOnlySignedBeaconBlock) {
-	wantPb, err := want.Proto()
-	require.NoError(t, err)
-
-	gotPb, err := got.Proto()
-	require.NoError(t, err)
-	require.DeepEqual(t, wantPb, gotPb)
-}
 
 // setupDB instantiates and returns a Store instance.
 func setupDB(t testing.TB) *Store {
@@ -161,8 +152,14 @@ func Test_setupBlockStorageType(t *testing.T) {
 		require.NoError(t, store.SaveHeadBlockRoot(ctx, root))
 		retrievedBlk, err := store.Block(ctx, root)
 		require.NoError(t, err)
+		if retrievedBlk == nil {
+			t.Fatal("retrieved block is nil")
+		}
+		rRoot, err := retrievedBlk.Block().HashTreeRoot()
+		require.NoError(t, err)
+		require.Equal(t, root, rRoot)
 		require.Equal(t, false, retrievedBlk.IsBlinded())
-		requireBlocksEqual(t, wrappedBlock, retrievedBlk)
+		interfacestest.RequireBlocksEqual(t, wrappedBlock, retrievedBlk)
 	})
 	t.Run("fresh database with default settings should store blinded", func(t *testing.T) {
 		resetFn := features.InitWithReset(&features.Flags{
@@ -186,7 +183,7 @@ func Test_setupBlockStorageType(t *testing.T) {
 
 		wantedBlk, err := wrappedBlock.ToBlinded()
 		require.NoError(t, err)
-		requireBlocksEqual(t, wantedBlk, retrievedBlk)
+		interfacestest.RequireBlocksEqual(t, wantedBlk, retrievedBlk)
 	})
 	t.Run("existing database with blinded blocks but no key in metadata bucket should continue storing blinded blocks", func(t *testing.T) {
 		store := setupDB(t)
@@ -206,7 +203,7 @@ func Test_setupBlockStorageType(t *testing.T) {
 		retrievedBlk, err := store.Block(ctx, root)
 		require.NoError(t, err)
 		require.Equal(t, true, retrievedBlk.IsBlinded())
-		requireBlocksEqual(t, wrappedBlock, retrievedBlk)
+		interfacestest.RequireBlocksEqual(t, wrappedBlock, retrievedBlk)
 
 		// We then delete the key from the bucket.
 		require.NoError(t, store.db.Update(func(tx *bolt.Tx) error {
@@ -272,7 +269,7 @@ func Test_setupBlockStorageType(t *testing.T) {
 		retrievedBlk, err := store.Block(ctx, root)
 		require.NoError(t, err)
 		require.Equal(t, false, retrievedBlk.IsBlinded())
-		requireBlocksEqual(t, wrappedBlock, retrievedBlk)
+		interfacestest.RequireBlocksEqual(t, wrappedBlock, retrievedBlk)
 
 		// Not a fresh database, has full blocks already and should continue being that way.
 		err = store.setupBlockStorageType(ctx)
@@ -318,7 +315,7 @@ func Test_setupBlockStorageType(t *testing.T) {
 		require.Equal(t, true, retrievedBlk.IsBlinded())
 		wantedBlk, err := wrappedBlock.ToBlinded()
 		require.NoError(t, err)
-		requireBlocksEqual(t, wantedBlk, retrievedBlk)
+		interfacestest.RequireBlocksEqual(t, wantedBlk, retrievedBlk)
 
 		// Trying to enable full blocks with a database that is already storing blinded blocks should error.
 		resetFn := features.InitWithReset(&features.Flags{

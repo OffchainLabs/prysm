@@ -11,6 +11,10 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	blockchainTest "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
@@ -30,9 +34,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	ssz "github.com/prysmaticlabs/fastssz"
-	"google.golang.org/protobuf/proto"
 )
 
 func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
@@ -309,7 +310,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 
 					offset := 0
 					for i := 0; offset < writer.Body.Len(); i++ {
-						updateLen := int(ssz.UnmarshallUint64(writer.Body.Bytes()[offset:offset+8]) - 4)
+						updateLen := int(primitives.UnmarshalUint64(writer.Body.Bytes()[offset:offset+8]) - 4)
 						offset += 12
 
 						var resp proto.Message
@@ -423,7 +424,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 					require.Equal(t, http.StatusOK, writer.Code)
 
 					offset := 0
-					updateLen := int(ssz.UnmarshallUint64(writer.Body.Bytes()[offset:offset+8]) - 4)
+					updateLen := int(primitives.UnmarshalUint64(writer.Body.Bytes()[offset:offset+8]) - 4)
 					offset += 12
 					var resp proto.Message
 					switch testVersion {
@@ -448,7 +449,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 					require.DeepSSZEqual(t, u0ssz, writer.Body.Bytes()[offset:offset+updateLen])
 
 					offset += updateLen
-					updateLen = int(ssz.UnmarshallUint64(writer.Body.Bytes()[offset:offset+8]) - 4)
+					updateLen = int(primitives.UnmarshalUint64(writer.Body.Bytes()[offset:offset+8]) - 4)
 					offset += 12
 					var resp1 proto.Message
 					switch testVersion + 1 {

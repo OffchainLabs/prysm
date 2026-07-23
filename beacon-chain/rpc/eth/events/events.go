@@ -28,6 +28,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	engine "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -573,6 +574,11 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 				att := structs.AttElectraFromConsensus(att)
 				return jsonMarshalReader(eventName, att)
 			}, nil
+		case *eth.AttestationGloas:
+			return func() io.Reader {
+				return jsonMarshalReader(eventName, structs.AttElectraFromConsensus(
+					wrappers.AttestationGloasToElectra(att)))
+			}, nil
 		default:
 			return nil, errors.Wrapf(errUnhandledEventData, "Unexpected type %T for the .Attestation field of AggregatedAttReceivedData", v.Attestation)
 		}
@@ -587,6 +593,11 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 			return func() io.Reader {
 				att := structs.AttElectraFromConsensus(att)
 				return jsonMarshalReader(eventName, att)
+			}, nil
+		case *eth.AttestationGloas:
+			return func() io.Reader {
+				return jsonMarshalReader(eventName, structs.AttElectraFromConsensus(
+					wrappers.AttestationGloasToElectra(att)))
 			}, nil
 		default:
 			return nil, errors.Wrapf(errUnhandledEventData, "Unexpected type %T for the .Attestation field of UnAggregatedAttReceivedData", v.Attestation)

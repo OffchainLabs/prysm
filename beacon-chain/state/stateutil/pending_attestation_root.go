@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/pkg/errors"
 )
 
@@ -58,14 +59,14 @@ func attDataRootWithHasher(data *ethpb.AttestationData) ([32]byte, error) {
 		fieldRoots[2] = bytesutil.ToBytes32(data.BeaconBlockRoot)
 
 		// Source
-		sourceRoot, err := ssz.CheckpointRoot(data.Source)
+		sourceRoot, err := wrappers.CheckpointRoot(data.Source)
 		if err != nil {
 			return [32]byte{}, errors.Wrap(err, "could not compute source checkpoint merkleization")
 		}
 		fieldRoots[3] = sourceRoot
 
 		// Target
-		fieldRoots[4], err = ssz.CheckpointRoot(data.Target)
+		fieldRoots[4], err = wrappers.CheckpointRoot(data.Target)
 		if err != nil {
 			return [32]byte{}, errors.Wrap(err, "could not compute target checkpoint merkleization")
 		}

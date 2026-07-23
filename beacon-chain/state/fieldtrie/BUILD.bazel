@@ -7,6 +7,7 @@ go_library(
         "helpers.go",
         "log.go",
         "metrics.go",
+        "progressive.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/state/fieldtrie",
     visibility = ["//visibility:public"],
@@ -34,6 +35,7 @@ go_test(
     srcs = [
         "field_trie_test.go",
         "helpers_test.go",
+        "progressive_test.go",
     ],
     data = glob(["testdata/**"]),
     embed = [":go_default_library"],

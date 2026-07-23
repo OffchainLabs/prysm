@@ -1,0 +1,222 @@
+# Spec test relationships for Prysm SSZ types.
+#
+# Each fork lists only the types it introduces or overrides; the generator
+# (methodical-ssz RelationsAtFork) inherits every other type from the most
+# recent prior fork that defined it. `name` is the consensus-spec-tests
+# ssz_static container name; `type_name` is the Prysm Go type when it differs.
+#
+# Most types live in the default package below (proto/prysm/v1alpha1). Types
+# from other packages set `package:` explicitly — the execution-layer
+# containers (ExecutionPayload[Header], Withdrawal, the electra *Request types)
+# live in proto/engine/v1. The generated local-mode test imports each used
+# package under a distinct alias. Mappings are derived from the per-fork
+# proto/prysm/v1alpha1/*.yaml and proto/engine/v1/engine.yaml ssz_methodical
+# configs (canonical spec name = Go type minus fork suffix).
+package: github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1
+preset: mainnet
+defs:
+  - fork: phase0
+    types:
+      - name: AggregateAndProof
+        type_name: AggregateAttestationAndProof
+      - name: Attestation
+      - name: AttestationData
+      - name: AttesterSlashing
+      - name: BeaconBlock
+      - name: BeaconBlockBody
+      - name: BeaconBlockHeader
+      - name: BeaconState
+      - name: Checkpoint
+      - name: Deposit
+      - name: DepositData
+        type_name: Deposit_Data
+      - name: DepositMessage
+      - name: Eth1Data
+      - name: Fork
+      - name: ForkData
+      - name: HistoricalBatch
+      - name: IndexedAttestation
+      - name: PendingAttestation
+      - name: ProposerSlashing
+      - name: SignedAggregateAndProof
+        type_name: SignedAggregateAttestationAndProof
+      - name: SignedBeaconBlock
+      - name: SignedBeaconBlockHeader
+      - name: SignedVoluntaryExit
+      - name: SigningData
+      - name: Validator
+      - name: VoluntaryExit
+  - fork: altair
+    types:
+      - name: BeaconBlock
+        type_name: BeaconBlockAltair
+      - name: BeaconBlockBody
+        type_name: BeaconBlockBodyAltair
+      - name: BeaconState
+        type_name: BeaconStateAltair
+      - name: ContributionAndProof
+      - name: LightClientBootstrap
+        type_name: LightClientBootstrapAltair
+      - name: LightClientFinalityUpdate
+        type_name: LightClientFinalityUpdateAltair
+      - name: LightClientHeader
+        type_name: LightClientHeaderAltair
+      - name: LightClientOptimisticUpdate
+        type_name: LightClientOptimisticUpdateAltair
+      - name: LightClientUpdate
+        type_name: LightClientUpdateAltair
+      - name: SignedBeaconBlock
+        type_name: SignedBeaconBlockAltair
+      - name: SignedContributionAndProof
+      - name: SyncAggregate
+      - name: SyncAggregatorSelectionData
+      - name: SyncCommittee
+      - name: SyncCommitteeContribution
+      - name: SyncCommitteeMessage
+  - fork: bellatrix
+    types:
+      - name: BeaconBlock
+        type_name: BeaconBlockBellatrix
+      - name: BeaconBlockBody
+        type_name: BeaconBlockBodyBellatrix
+      - name: BeaconState
+        type_name: BeaconStateBellatrix
+      - name: ExecutionPayload
+        package: github.com/OffchainLabs/prysm/v7/proto/engine/v1
+      - name: ExecutionPayloadHeader
+        package: github.com/OffchainLabs/prysm/v7/proto/engine/v1
+      - name: PowBlock
+      - name: SignedBeaconBlock
+        type_name: SignedBeaconBlockBellatrix
+  - fork: capella
+    types:
+      - name: BeaconBlock
+        type_name: BeaconBlockCapella
+      - name: BeaconBlockBody
+        type_name: BeaconBlockBodyCapella
+      - name: BeaconState
+        type_name: BeaconStateCapella
+      - name: BLSToExecutionChange
+      - name: ExecutionPayload
+        type_name: ExecutionPayloadCapella
+        package: github.com/OffchainLabs/prysm/v7/proto/engine/v1
+      - name: ExecutionPayloadHeader
+        type_name: ExecutionPayloadHeaderCapella
+        package: github.com/OffchainLabs/prysm/v7/proto/engine/v1
+      - name: HistoricalSummary
+      - name: LightClientBootstrap
+        type_name: LightClientBootstrapCapella
+      - name: LightClientFinalityUpdate
+        type_name: LightClientFinalityUpdateCapella
+      - name: LightClientHeader
+        type_name: LightClientHeaderCapella
+      - name: LightClientOptimisticUpdate
+        type_name: LightClientOptimisticUpdateCapella
+      - name: LightClientUpdate
+        type_name: LightClientUpdateCapella
+      - name: SignedBeaconBlock
+        type_name: SignedBeaconBlockCapella
+      - name: SignedBLSToExecutionChange
+      - name: Withdrawal
+        package: github.com/OffchainLabs/prysm/v7/proto/engine/v1
+  - fork: deneb
+    types:
+      - name: BeaconBlock
+        type_name: BeaconBlockDeneb
+      - name: BeaconBlockBody
+        type_name: BeaconBlockBodyDeneb
+      - name: BeaconState
+        type_name: BeaconStateDeneb
+      - name: BlobIdentifier
+      - name: BlobSidecar
+      - name: ExecutionPayload
+        type_name: ExecutionPayloadDeneb
+        package: github.com/OffchainLabs/prysm/v7/proto/engine/v1
+      - name: ExecutionPayloadHeader
+        type_name: ExecutionPayloadHeaderDeneb
+        package: github.com/OffchainLabs/prysm/v7/proto/engine/v1
+      - name: LightClientBootstrap
+        type_name: LightClientBootstrapDeneb
+      - name: LightClientFinalityUpdate
+        type_name: LightClientFinalityUpdateDeneb
+      - name: LightClientHeader
+        type_name: LightClientHeaderDeneb
+      - name: LightClientOptimisticUpdate
+        type_name: LightClientOptimisticUpdateDeneb
+      - name: LightClientUpdate
+        type_name: LightClientUpdateDeneb
+      - name: SignedBeaconBlock
+        type_name: SignedBeaconBlockDeneb
+  - fork: electra
+    types:
+      - name: AggregateAndProof
+        type_name: AggregateAttestationAndProofElectra
+      - name: Attestation
+        type_name: AttestationElectra
+      - name: AttesterSlashing
+        type_name: AttesterSlashingElectra
+      - name: BeaconBlock
+        type_name: BeaconBlockElectra
+      - name: BeaconBlockBody
+        type_name: BeaconBlockBodyElectra
+      - name: BeaconState
+        type_name: BeaconStateElectra
+      - name: ConsolidationRequest
+        package: github.com/OffchainLabs/prysm/v7/proto/engine/v1
+      - name: DepositRequest
+        package: github.com/OffchainLabs/prysm/v7/proto/engine/v1
+      - name: ExecutionRequests
+        package: github.com/OffchainLabs/prysm/v7/proto/engine/v1
+      - name: IndexedAttestation
+        type_name: IndexedAttestationElectra
+      - name: LightClientBootstrap
+        type_name: LightClientBootstrapElectra
+      - name: LightClientFinalityUpdate
+        type_name: LightClientFinalityUpdateElectra
+      - name: LightClientUpdate
+        type_name: LightClientUpdateElectra
+      - name: PendingConsolidation
+      - name: PendingDeposit
+      - name: PendingPartialWithdrawal
+      - name: SignedAggregateAndProof
+        type_name: SignedAggregateAttestationAndProofElectra
+      - name: SignedBeaconBlock
+        type_name: SignedBeaconBlockElectra
+      - name: SingleAttestation
+      - name: WithdrawalRequest
+        package: github.com/OffchainLabs/prysm/v7/proto/engine/v1
+  - fork: fulu
+    types:
+      - name: BeaconState
+        type_name: BeaconStateFulu
+      - name: DataColumnSidecar
+      - name: DataColumnsByRootIdentifier
+      - name: SignedBeaconBlock
+        type_name: SignedBeaconBlockFulu
+  - fork: gloas
+    types:
+      - name: BeaconBlock
+        type_name: BeaconBlockGloas
+      - name: BeaconBlockBody
+        type_name: BeaconBlockBodyGloas
+      - name: BeaconState
+        type_name: BeaconStateGloas
+      - name: Builder
+      - name: BuilderPendingPayment
+      - name: BuilderPendingWithdrawal
+      - name: DataColumnSidecar
+        type_name: DataColumnSidecarGloas
+      - name: ExecutionPayload
+        type_name: ExecutionPayloadGloas
+        package: github.com/OffchainLabs/prysm/v7/proto/engine/v1
+      - name: ExecutionPayloadBid
+      - name: ExecutionPayloadEnvelope
+      - name: PayloadAttestation
+      - name: PayloadAttestationData
+      - name: PayloadAttestationMessage
+      - name: ProposerPreferences
+      - name: SignedBeaconBlock
+        type_name: SignedBeaconBlockGloas
+      - name: SignedExecutionPayloadBid
+      - name: SignedExecutionPayloadEnvelope
+      - name: SignedProposerPreferences

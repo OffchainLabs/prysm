@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"testing"
 
+	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -18,8 +21,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	fastssz "github.com/prysmaticlabs/fastssz"
-	"google.golang.org/protobuf/proto"
 )
 
 type stubBlockBody struct {
@@ -53,7 +54,7 @@ func (s stubBlockBody) PayloadAttestations() ([]*ethpb.PayloadAttestation, error
 func (s stubBlockBody) SignedExecutionPayloadBid() (*ethpb.SignedExecutionPayloadBid, error) {
 	return s.signedBid, nil
 }
-func (s stubBlockBody) ParentExecutionRequests() (*enginev1.ExecutionRequestsGloas, error) {
+func (s stubBlockBody) ParentExecutionRequests() (interfaces.ExecutionRequests, error) {
 	return nil, nil
 }
 func (s stubBlockBody) MarshalSSZ() ([]byte, error)         { return nil, nil }
@@ -91,7 +92,7 @@ func (s stubBlock) Version() int                             { return s.v }
 func (s stubBlock) AsSignRequestObject() (validatorpb.SignRequestObject, error) {
 	return nil, nil
 }
-func (s stubBlock) HashTreeRootWith(*fastssz.Hasher) error { return nil }
+func (s stubBlock) HashTreeRootWith(*ssz.Hasher) error { return nil }
 
 func buildGloasState(t *testing.T, slot primitives.Slot, proposerIdx primitives.ValidatorIndex, builderIdx primitives.BuilderIndex, balance uint64, randao [32]byte, latestHash [32]byte, builderPubkey [48]byte) *state_native.BeaconState {
 	t.Helper()

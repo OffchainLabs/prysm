@@ -3,22 +3,14 @@ package stateutil
 import (
 	"encoding/binary"
 
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/pkg/errors"
 )
 
 // ParticipationBitsRoot computes the HashTreeRoot merkleization of
-// participation roots for the supplied state version.
-func ParticipationBitsRoot(stateVersion int, bits []byte) ([32]byte, error) {
-	if features.ProgressiveSSZEnabled(stateVersion) {
-		return participationBitsRootProgressive(bits)
-	}
-	return participationBitsRoot(bits)
-}
-
-func participationBitsRoot(bits []byte) ([32]byte, error) {
+// participation roots.
+func ParticipationBitsRoot(bits []byte) ([32]byte, error) {
 	chunkedRoots, err := packParticipationBits(bits)
 	if err != nil {
 		return [32]byte{}, err
@@ -36,7 +28,9 @@ func participationBitsRoot(bits []byte) ([32]byte, error) {
 	return ssz.MixInLength(bytesRoot, bytesRootBufRoot), nil
 }
 
-func participationBitsRootProgressive(bits []byte) ([32]byte, error) {
+// ParticipationBitsRootProgressive computes the HashTreeRoot merkleization of
+// participation roots as a progressive byte list.
+func ParticipationBitsRootProgressive(bits []byte) ([32]byte, error) {
 	return ssz.ByteSliceRootProgressive(bits)
 }
 

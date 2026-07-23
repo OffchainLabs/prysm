@@ -4,96 +4,94 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
+	"strconv"
 	"strings"
 )
 
-type sszTarget struct {
-	pkg, out string
-	libInc   []string
-	protoInc []string
-	objs     []string
-	exclude  []string
-}
-
+// genSSZ runs the methodical SSZ generator for every ssz_methodical target
+// declared across proto/**/BUILD.bazel.
+//
+// The Bazel ssz_methodical rule (see //tools:methodical.bzl) hands methodical a
+// pre-built package inventory through the genception GOPACKAGESDRIVER because
+// the go toolchain is not usable inside the Bazel sandbox. Here we run outside
+// any sandbox, so methodical's golang.org/x/tools/go/packages loads resolve
+// against the real module via the standard `go list` driver -- none of the
+// genception plumbing (custom driver, JSON inventory, .pb.go staging) is
+// needed. methodical loads the package named by the config file's `package:`
+// field straight from the module.
+//
+// Each target is generated twice: once for mainnet (default build tags) and
+// once for minimal (--build-tags=minimal, which makes methodical's package
+// loader pick up the //go:build minimal .pb.go sources written by `make gen
+// proto`), and always written as a //go:build !minimal file plus a
+// <name>.minimal.ssz.go twin. This requires `make gen proto` to have run first
+// so both .pb.go variants are on disk.
 func genSSZ() error {
-	targets, err := loadSSZTargets()
+	targets, err := loadMethodicalTargets()
 	if err != nil {
-		return fmt.Errorf("load SSZ targets: %w", err)
+		return fmt.Errorf("load methodical targets: %w", err)
 	}
 
-	minPb, err := os.MkdirTemp("", "gen-minpb-")
-	if err != nil {
-		return fmt.Errorf("mkdirTemp: %w", err)
+	// Progressive merkleization is gated OFF by default so that generated
+	// hash_tree_root values match the current (non-progressive) spectest
+	// fixtures. This mirrors the //tools:disable_progressive_merkleization
+	// default set in .bazelrc. Set SSZ_PROGRESSIVE=1 to generate the
+	// progressive form once upstream fixtures move to it.
+	progressive, _ := strconv.ParseBool(os.Getenv("SSZ_PROGRESSIVE"))
+	if progressive {
+		fmt.Println("SSZ_PROGRESSIVE=1: generating with progressive merkleization ON")
 	}
-	defer func() { _ = os.RemoveAll(minPb) }()
 
-	if err := emitMinimalPbgo(minPb); err != nil {
-		return fmt.Errorf("emit minimal pb.go: %w", err)
-	}
-
-	for _, target := range targets {
-		if err := genSSZTarget(target, minPb); err != nil {
-			return fmt.Errorf("gen SSZ target: %w", err)
+	for _, t := range targets {
+		if err := genMethodical(t, !progressive); err != nil {
+			return fmt.Errorf("gen methodical %s/%s: %w", t.pkg, t.out, err)
 		}
 	}
 
 	return nil
 }
 
-func genSSZTarget(t sszTarget, minPb string) error {
-	fmt.Printf("generating %s/%s\n", t.pkg, t.out)
+// genMethodical generates a single target for both networks and always writes a
+// build-tagged mainnet/minimal pair.
+//
+// We deliberately do not collapse to one untagged file when the two outputs
+// match. Whether a target differs across networks depends on the progressive
+// flag (progressive collections merkleize size-independently, so a target that
+// differs under bounded merkleization can become identical under progressive)
+// and on the bounded sizes themselves. A compare-and-collapse would make the
+// .minimal.ssz.go twins appear and disappear as those inputs change; we accept
+// the duplication of an identical twin to keep the generated file set stable.
+func genMethodical(t methodicalTarget, disableProgressive bool) error {
+	out := filepath.Join(t.pkg, t.out)
+	fmt.Printf("generating %s\n", out)
 
-	mainnet, err := sszgenOne(t, "")
+	mainnet, err := methodicalOne(t, disableProgressive, nil)
 	if err != nil {
 		return fmt.Errorf("mainnet: %w", err)
 	}
 
-	minimal, err := sszgenOne(t, minPb)
+	minimal, err := methodicalOne(t, disableProgressive, []string{"minimal"})
 	if err != nil {
 		return fmt.Errorf("minimal: %w", err)
 	}
 
-	if mainnet == minimal {
-		if err := os.WriteFile(filepath.Join(t.pkg, t.out), []byte(mainnet), 0o600); err != nil {
-			return fmt.Errorf("writeFile: %w", err)
-		}
-
-		return nil
-	}
-
-	if err := os.WriteFile(filepath.Join(t.pkg, t.out), []byte("//go:build !minimal\n\n"+mainnet), 0o600); err != nil {
+	if err := os.WriteFile(out, []byte("//go:build !minimal\n\n"+mainnet), 0o600); err != nil {
 		return fmt.Errorf("writeFile: %w", err)
 	}
 
-	minOut := strings.TrimSuffix(t.out, ".ssz.go") + ".minimal.ssz.go"
-	if err := os.WriteFile(filepath.Join(t.pkg, minOut), []byte("//go:build minimal\n\n"+minimal), 0o600); err != nil {
+	minOut := filepath.Join(t.pkg, strings.TrimSuffix(t.out, ".ssz.go")+".minimal.ssz.go")
+	if err := os.WriteFile(minOut, []byte("//go:build minimal\n\n"+minimal), 0o600); err != nil {
 		return fmt.Errorf("writeFile: %w", err)
 	}
 
 	return nil
 }
 
-func sszgenOne(t sszTarget, root string) (string, error) {
-	stage := filepath.Join(root, t.pkg, ".sszgen_tmp")
-	if err := stagePbgo(filepath.Join(root, t.pkg), stage); err != nil {
-		return "", fmt.Errorf("stagePbgo: %w", err)
-	}
-
-	defer unstage(stage)
-
-	inc := slices.Clone(t.libInc)
-	for _, p := range t.protoInc {
-		istage := filepath.Join(root, p, ".sszinc_tmp")
-		if err := stagePbgo(filepath.Join(root, p), istage); err != nil {
-			return "", fmt.Errorf("stagePbgo: %w", err)
-		}
-
-		defer unstage(istage)
-		inc = append(inc, istage)
-	}
-
-	tmp, err := os.CreateTemp("", "sszgen-*.go")
+// methodicalOne runs `go tool ssz gen` for one target and build-tag set,
+// returning the generated source. buildTags selects which tag-gated .pb.go
+// variant methodical's package loader sees (nil for the default/mainnet build).
+func methodicalOne(t methodicalTarget, disableProgressive bool, buildTags []string) (string, error) {
+	tmp, err := os.CreateTemp("", "methodical-*.go")
 	if err != nil {
 		return "", fmt.Errorf("createTemp: %w", err)
 	}
@@ -105,16 +103,22 @@ func sszgenOne(t sszTarget, root string) (string, error) {
 
 	defer func() { _ = os.Remove(tmpName) }()
 
-	args := []string{"--output=" + tmpName, "--path=" + stage, "--objs=" + strings.Join(t.objs, ",")}
-	if len(inc) > 0 {
-		args = append(args, "--include="+strings.Join(inc, ","))
+	args := []string{
+		"tool", "ssz", "gen",
+		"--config=" + filepath.Join(t.pkg, t.configFile),
+		"--output=" + tmpName,
+	}
+	if t.overridePkg != "" {
+		args = append(args, "--override-package-name="+t.overridePkg)
+	}
+	if disableProgressive {
+		args = append(args, "--disable-progressive")
+	}
+	if len(buildTags) > 0 {
+		args = append(args, "--build-tags="+strings.Join(buildTags, ","))
 	}
 
-	if len(t.exclude) > 0 {
-		args = append(args, "--exclude-objs="+strings.Join(t.exclude, ","))
-	}
-
-	if err := sh("go", append([]string{"tool", "sszgen"}, args...)...); err != nil {
+	if err := sh("go", args...); err != nil {
 		return "", fmt.Errorf("sh: %w", err)
 	}
 
@@ -123,51 +127,5 @@ func sszgenOne(t sszTarget, root string) (string, error) {
 		return "", fmt.Errorf("readFile: %w", err)
 	}
 
-	var b strings.Builder
-	for _, line := range strings.SplitAfter(string(data), "\n") {
-		if strings.Contains(line, "// Hash: ") {
-			continue
-		}
-
-		b.WriteString(line)
-	}
-
-	return b.String(), nil
+	return string(data), nil
 }
-
-// stagePbgo copies pkgDir's .pb.go files into stageDir, skipping .minimal.pb.go
-// twins.
-//
-// The .minimal.pb.go twins are not fed to sszgen: the minimal variant is
-// regenerated from .proto files into a temp dir at gen time and they are proto
-// outputs already covered by the proto manifest.
-func stagePbgo(pkgDir, stageDir string) error {
-	if err := os.MkdirAll(stageDir, 0o750); err != nil {
-		return fmt.Errorf("mkdirAll: %w", err)
-	}
-
-	entries, err := os.ReadDir(pkgDir)
-	if err != nil {
-		return fmt.Errorf("readDir: %w", err)
-	}
-
-	for _, e := range entries {
-		name := e.Name()
-		if !strings.HasSuffix(name, ".pb.go") || strings.HasSuffix(name, ".minimal.pb.go") {
-			continue
-		}
-
-		data, err := os.ReadFile(filepath.Join(pkgDir, name)) // #nosec G304 -- pkgDir/name from a controlled ReadDir of repo proto packages
-		if err != nil {
-			return fmt.Errorf("readFile: %w", err)
-		}
-
-		if err := os.WriteFile(filepath.Join(stageDir, name), data, 0o600); err != nil {
-			return fmt.Errorf("writeFile: %w", err)
-		}
-	}
-
-	return nil
-}
-
-func unstage(dir string) { _ = os.RemoveAll(dir) }

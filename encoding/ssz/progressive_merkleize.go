@@ -29,7 +29,8 @@ func MerkleizeProgressiveChunks(chunks [][32]byte) [32]byte {
 	for start < n {
 		width := min(subtreeCapacity, n-start)
 
-		subtree := chunks[start : start+width : start+width]
+		subtree := make([][32]byte, width)
+		copy(subtree, chunks[start:start+width])
 		subtreeRoots = append(subtreeRoots, MerkleizeVector(subtree, uint64(subtreeCapacity)))
 
 		start += width
@@ -102,6 +103,32 @@ func ByteSliceRootProgressive(slice []byte) ([32]byte, error) {
 	var length [32]byte
 	binary.LittleEndian.PutUint64(length[:8], uint64(len(slice)))
 	return MixInLength(bytesRoot, length[:]), nil
+}
+
+// ContainerRootProgressive computes the progressive container root:
+// mix_in_active_fields(merkleize_progressive(fieldRoots), activeFields).
+func ContainerRootProgressive(fieldRoots [][32]byte, activeFields []bool) ([32]byte, error) {
+	if len(activeFields) == 0 {
+		return [32]byte{}, fmt.Errorf("active fields cannot be empty")
+	}
+
+	if len(activeFields) > maxProgressiveActiveFields {
+		return [32]byte{}, fmt.Errorf("active fields length %d exceeds maximum %d", len(activeFields), maxProgressiveActiveFields)
+	}
+
+	activeCount := 0
+	for _, active := range activeFields {
+		if active {
+			activeCount++
+		}
+	}
+
+	if activeCount != len(fieldRoots) {
+		return [32]byte{}, fmt.Errorf("active fields count %d does not match field roots count %d", activeCount, len(fieldRoots))
+	}
+
+	body := MerkleizeProgressiveChunks(fieldRoots)
+	return MixInActiveFields(body, activeFields)
 }
 
 // MixInActiveFields computes hash(root, pack_bits(activeFields)) where

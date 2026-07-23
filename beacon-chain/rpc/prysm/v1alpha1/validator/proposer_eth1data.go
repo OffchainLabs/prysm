@@ -4,6 +4,8 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/pkg/errors"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -15,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/pkg/errors"
 )
 
 // eth1DataMajorityVote determines the appropriate eth1data for a block proposal using

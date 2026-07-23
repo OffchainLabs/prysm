@@ -10,6 +10,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
@@ -24,11 +30,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 )
 
 const minimumPeersPerSubnetForBroadcast = 1

@@ -6,7 +6,6 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
@@ -28,14 +27,13 @@ const (
 // ValidatorRegistryRoot computes the HashTreeRoot Merkleization of
 // a list of compact validator structs according to the Ethereum
 // Simple Serialize specification.
-func ValidatorRegistryRoot(stateVersion int, vals []CompactValidator) ([32]byte, error) {
-	if features.ProgressiveSSZEnabled(stateVersion) {
-		return validatorRegistryRootProgressive(vals)
-	}
+func ValidatorRegistryRoot(vals []CompactValidator) ([32]byte, error) {
 	return validatorRegistryRoot(vals)
 }
 
-func validatorRegistryRootProgressive(vals []CompactValidator) ([32]byte, error) {
+// ValidatorRegistryRootProgressive computes the HashTreeRoot Merkleization of
+// a progressive list of CompactValidator structs.
+func ValidatorRegistryRootProgressive(vals []CompactValidator) ([32]byte, error) {
 	roots, err := OptimizedValidatorRoots(vals)
 	if err != nil {
 		return [32]byte{}, err
