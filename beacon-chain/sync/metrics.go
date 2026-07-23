@@ -283,13 +283,6 @@ var (
 		},
 	)
 
-	dataColumnSidecarsObtainedViaELCount = promauto.NewSummary(
-		prometheus.SummaryOpts{
-			Name: "data_column_obtained_via_el_count",
-			Help: "Count the number of data column sidecars obtained via the execution layer.",
-		},
-	)
-
 	ignoredPreJustifiedBlockCount = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "gossip_ignored_pre_justified_block_total",
 		Help: "Count of blocks ignored because their canonical parent is before the justified checkpoint.",

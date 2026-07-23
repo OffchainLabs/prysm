@@ -789,7 +789,8 @@ func PeersFromStringAddrs(addrs []string) ([]ma.Multiaddr, error) {
 		}
 		nodeAddrs, err := retrieveMultiAddrsFromNode(enodeAddr)
 		if err != nil {
-			return nil, errors.Wrapf(err, "Could not get multiaddr")
+			log.WithError(err).Errorf("Could not get multiaddr from peer %s", stringAddr)
+			continue
 		}
 		allAddrs = append(allAddrs, nodeAddrs...)
 	}
