@@ -252,17 +252,18 @@ func (s *Server) Status() error {
 }
 
 // keymanagerKind returns the kind of the configured keymanager.
+// Return boolean as well as the kind to indicate whether the wallet is ready or not.
 func (s *Server) keymanagerKind() (keymanager.Kind, bool) {
-	// If wallet is configured, return its kind.
-	if s.wallet != nil {
-		return s.wallet.KeymanagerKind(), true
-	}
-
 	// If remote signer is configured, return Web3Signer kind.
 	if s.validatorService != nil && s.validatorService.RemoteSignerConfig() != nil {
 		return keymanager.Web3Signer, true
 	}
 
-	// Fallback to local keymanager.
-	return keymanager.Local, false
+	// Prysm wallet is not set. This path is only reachable for Web/RPC path.
+	// Alert caller with false to indicate that the wallet is not initialized.
+	if s.wallet == nil {
+		return 0, false
+	}
+
+	return s.wallet.KeymanagerKind(), true
 }
