@@ -107,6 +107,23 @@ func (s *Service) requestAndSaveMissingDataColumnSidecars(blks []blocks.ROBlock)
 		s.processPendingGloasColumns(s.ctx, blk.Root(), blk)
 	}
 
+	preGloasBlocks := make([]blocks.ROBlock, 0, len(blks))
+	for _, blk := range blks {
+		if blk.Version() < version.Gloas {
+			preGloasBlocks = append(preGloasBlocks, blk)
+		}
+	}
+
+	return s.fetchAndSaveDataColumnSidecars(preGloasBlocks)
+}
+
+// fetchAndSaveDataColumnSidecars fetches the missing custody columns for the given blocks
+// and saves them to the storage, failing if any remain missing.
+func (s *Service) fetchAndSaveDataColumnSidecars(blks []blocks.ROBlock) error {
+	if len(blks) == 0 {
+		return nil
+	}
+
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
 	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount(s.ctx)
