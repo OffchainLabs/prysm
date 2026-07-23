@@ -122,12 +122,13 @@ func (s *Service) requestAndSaveMissingDataColumnSidecars(blks []blocks.ROBlock)
 
 	// Fetch missing data column sidecars.
 	params := DataColumnSidecarsParams{
-		Ctx:         s.ctx,
-		Tor:         s.cfg.clock,
-		P2P:         s.cfg.p2p,
-		CtxMap:      s.ctxMap,
-		Storage:     s.cfg.dataColumnStorage,
-		NewVerifier: s.newColumnsVerifier,
+		Ctx:           s.ctx,
+		Tor:           s.cfg.clock,
+		P2P:           s.cfg.p2p,
+		CtxMap:        s.ctxMap,
+		Storage:       s.cfg.dataColumnStorage,
+		NewVerifier:   s.newColumnsVerifier,
+		RequestByRoot: true,
 	}
 
 	sidecarsByRoot, missingIndicesByRoot, err := FetchDataColumnSidecars(params, blks, info.CustodyColumns)
