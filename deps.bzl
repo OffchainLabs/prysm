@@ -1205,8 +1205,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_golang_snappy",
         importpath = "github.com/golang/snappy",
-        sum = "h1:Oy607GVXHs7RtbggtPBnr2RmDArIsAefDwvrdWvRhGs=",
-        version = "v1.0.0",
+        sum = "h1:GpQQr4L8jsBtJSURCDqQboOdgpVMU6vR9REjc8nR4Qc=",
+        version = "v1.0.1-0.20260716114414-9ae09f520e93",
     )
     go_repository(
         name = "com_github_golangci_lint_1",
