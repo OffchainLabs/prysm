@@ -7,6 +7,7 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/common/merkle_proof",
     visibility = ["//visibility:public"],
     deps = [
+        "//build/bazel:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//container/trie:go_default_library",
@@ -16,6 +17,5 @@ go_library(
         "//testing/util:go_default_library",
         "@com_github_golang_snappy//:go_default_library",
         "@com_github_prysmaticlabs_fastssz//:go_default_library",
-        "@io_bazel_rules_go//go/tools/bazel:go_default_library",
     ],
 )

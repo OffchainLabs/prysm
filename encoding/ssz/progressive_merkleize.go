@@ -29,8 +29,7 @@ func MerkleizeProgressiveChunks(chunks [][32]byte) [32]byte {
 	for start < n {
 		width := min(subtreeCapacity, n-start)
 
-		subtree := make([][32]byte, width)
-		copy(subtree, chunks[start:start+width])
+		subtree := chunks[start : start+width : start+width]
 		subtreeRoots = append(subtreeRoots, MerkleizeVector(subtree, uint64(subtreeCapacity)))
 
 		start += width

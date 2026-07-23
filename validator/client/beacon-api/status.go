@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 )
@@ -82,24 +81,6 @@ func (c *beaconApiValidatorClient) validatorsStatusResponse(ctx context.Context,
 		return nil, nil, nil, errors.Wrap(err, "failed to get state validators")
 	}
 
-	// TODO: we should remove this API call
-	validatorsCountResponse, err := c.prysmChainClient.ValidatorCount(ctx, "head", nil)
-	if err != nil && !errors.Is(err, iface.ErrNotSupported) {
-		return nil, nil, nil, errors.Wrap(err, "failed to get total validator count")
-	}
-
-	var total, pending uint64
-	for _, valCount := range validatorsCountResponse {
-		if valCount.Status == "pending" {
-			pending = valCount.Count
-		} else {
-			total += valCount.Count
-		}
-	}
-
-	// Calculate last activated validator's index, it will be -1 whenever all validators are pending.
-	lastActivatedValidatorIndex := int(total - pending - 1)
-
 	for i, validatorContainer := range stateValidatorsResponse.Data {
 		validatorIndex, err := strconv.ParseUint(validatorContainer.Index, 10, 64)
 		if err != nil {
@@ -138,14 +119,6 @@ func (c *beaconApiValidatorClient) validatorsStatusResponse(ctx context.Context,
 		}
 
 		validatorStatus.ActivationEpoch = primitives.Epoch(activationEpoch)
-
-		// Set PositionInActivationQueue
-		switch status {
-		case ethpb.ValidatorStatus_PENDING, ethpb.ValidatorStatus_PARTIALLY_DEPOSITED, ethpb.ValidatorStatus_DEPOSITED:
-			if lastActivatedValidatorIndex >= 0 {
-				validatorStatus.PositionInActivationQueue = validatorIndex - uint64(lastActivatedValidatorIndex)
-			}
-		}
 
 		outValidatorsStatuses[i] = validatorStatus
 	}

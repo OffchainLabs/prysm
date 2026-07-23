@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	"github.com/ethereum/go-ethereum"
@@ -33,6 +34,20 @@ import (
 const txCount = 20
 
 var fundedAccount *keystore.Key
+
+// blobV0Account sends pre-Fulu V0 sidecar blob transactions when Fulu is
+// scheduled. V0 sidecars left in the pool at the Osaka boundary become invalid
+// under geth >= v1.17, so they must not share an account with post-Fulu V1
+// cell-proof transactions.
+var blobV0Account *keystore.Key
+
+type blobTransactionMode uint8
+
+const (
+	blobTransactionsDisabled blobTransactionMode = iota
+	blobTransactionsWithSidecars
+	blobTransactionsWithCellProofs
+)
 
 type TransactionGenerator struct {
 	keystore      string
@@ -87,8 +102,16 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 		return err
 	}
 	fundedAccount = newKey
-	// Ensure funding tx is mined before generating txs that rely on balance.
-	// Mine 1 block using the miner key to include the funding transfer.
+	cfg := params.BeaconConfig()
+	needsBlobV0Account := needsDedicatedBlobV0Account(cfg)
+	if needsBlobV0Account {
+		v0Key := keystore.NewKeyForDirectICAP(newGen)
+		if err := fundAccount(client, mineKey, v0Key); err != nil {
+			return err
+		}
+		blobV0Account = v0Key
+	}
+	// Mine one block to confirm pending account funding before generating transactions.
 	backend := ethclient.NewClient(client)
 	defer backend.Close()
 
@@ -97,10 +120,15 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 	}
 
 	// Ensure the funded account has a comfortable minimum balance for blob and fuzzed txs.
-	minWei := new(big.Int).Mul(big.NewInt(1000), big.NewInt(0).SetUint64(params.BeaconConfig().GweiPerEth))
+	minWei := new(big.Int).Mul(big.NewInt(1000), big.NewInt(0).SetUint64(cfg.GweiPerEth))
 	minWei.Mul(minWei, big.NewInt(1e9)) // 1000 ETH in wei
 	if err := ensureMinBalance(ctx, client, backend, mineKey, fundedAccount, minWei); err != nil {
 		return err
+	}
+	if needsBlobV0Account {
+		if err := ensureMinBalance(ctx, client, backend, mineKey, blobV0Account, minWei); err != nil {
+			return err
+		}
 	}
 	// Broadcast Transactions every slot
 	txPeriod := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
@@ -149,18 +177,13 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 
 	cfg := params.BeaconConfig()
 	clock := startup.NewClock(e2e.TestParams.CLGenesisTime, [32]byte{})
-	isPostFulu := clock.CurrentEpoch() >= cfg.FuluForkEpoch
-	// Skip pre-Fulu V0 sends only when Fulu is scheduled: V0 sidecars left in
-	// the pool at the Osaka boundary become invalid under geth >= v1.17 and
-	// occupy maxTxsPerAccount=16, blocking later V1 cell-proof txs. When Fulu
-	// is never scheduled (Deneb/Electra-only tests), V0 is the only path.
-	fuluScheduled := cfg.FuluForkEpoch != cfg.FarFutureEpoch
+	blobMode := blobTransactionModeAtEpoch(clock.CurrentEpoch(), cfg)
 
 	g, _ := errgroup.WithContext(context.Background())
 	var txs []*types.Transaction
 
-	switch {
-	case isPostFulu:
+	switch blobMode {
+	case blobTransactionsWithCellProofs:
 		logrus.Info("Sending blob transactions with cell proofs")
 		txs = make([]*types.Transaction, 5)
 		for index := range uint64(5) {
@@ -177,18 +200,26 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 				return nil
 			})
 		}
-	case !fuluScheduled:
+	case blobTransactionsWithSidecars:
+		blobSender := fundedAccount
+		if useDedicatedBlobV0Account(blobMode, cfg) {
+			blobSender = blobV0Account
+			nonce, err = backend.PendingNonceAt(context.Background(), blobSender.Address)
+			if err != nil {
+				return err
+			}
+		}
 		logrus.Info("Sending blob transactions with sidecars")
 		txs = make([]*types.Transaction, 5)
 		for index := range uint64(5) {
 			g.Go(func() error {
-				tx, err := RandomBlobTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al, useLargeBlobs)
+				tx, err := RandomBlobTx(client, blobSender.Address, nonce+index, gasPrice, chainid, al, useLargeBlobs)
 				if err != nil {
 					logrus.WithError(err).Error("Could not create blob tx")
 					//nolint:nilerr
 					return nil
 				}
-				signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), fundedAccount.PrivateKey)
+				signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), blobSender.PrivateKey)
 				if err != nil {
 					logrus.WithError(err).Error("Could not sign blob tx")
 					//nolint:nilerr
@@ -198,6 +229,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 				return nil
 			})
 		}
+	case blobTransactionsDisabled:
 	}
 
 	if err := g.Wait(); err != nil {
@@ -264,6 +296,24 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 		}
 	}
 	return nil
+}
+
+func blobTransactionModeAtEpoch(epoch primitives.Epoch, cfg *params.BeaconChainConfig) blobTransactionMode {
+	if epoch < cfg.DenebForkEpoch {
+		return blobTransactionsDisabled
+	}
+	if epoch >= cfg.FuluForkEpoch {
+		return blobTransactionsWithCellProofs
+	}
+	return blobTransactionsWithSidecars
+}
+
+func useDedicatedBlobV0Account(mode blobTransactionMode, cfg *params.BeaconChainConfig) bool {
+	return mode == blobTransactionsWithSidecars && needsDedicatedBlobV0Account(cfg)
+}
+
+func needsDedicatedBlobV0Account(cfg *params.BeaconChainConfig) bool {
+	return cfg.FuluForkEpoch != cfg.FarFutureEpoch
 }
 
 // Pause pauses the component and its underlying process.

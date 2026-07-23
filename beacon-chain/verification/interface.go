@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
@@ -72,6 +73,7 @@ type GloasDataColumnVerifier interface {
 type PayloadAttestationMsgVerifier interface {
 	VerifyCurrentSlot() error
 	VerifyBlockRootSeen(blockRootSeen func([32]byte) bool) error
+	VerifyBlockSlotMatches(blockSlot primitives.Slot) error
 	VerifyBlockRootValid(func([32]byte) bool) error
 	VerifyValidatorInPTC(context.Context, state.ReadOnlyBeaconState) error
 	VerifySignature(state.ReadOnlyBeaconState) error
@@ -99,11 +101,16 @@ type NewSignedProposerPreferencesVerifier func(p *ethpb.SignedProposerPreference
 // ExecutionPayloadBidVerifier defines the methods implemented by the ROSignedExecutionPayloadBid verifier.
 type ExecutionPayloadBidVerifier interface {
 	VerifyCurrentOrNextSlot() error
+	VerifyBidSlotMatches(slot primitives.Slot) error
 	VerifyBuilderActive(state.ReadOnlyBeaconState) error
+	VerifyBuilderVersion(state.ReadOnlyBeaconState) error
 	VerifyExecutionPaymentZero() error
 	VerifyFeeRecipientMatches([]byte) error
+	VerifyBlobKzgCommitmentsLimit() error
+	VerifyPrevRandao(state.ReadOnlyBeaconState) error
 	VerifyParentBlockRootSeen(func([32]byte) bool) error
-	VerifyParentBlockHash(func([32]byte) ([32]byte, error)) error
+	VerifyBidSlotHigherThanParent(parentSlot primitives.Slot) error
+	VerifyParentBlockHash(func([32]byte, [32]byte) bool) error
 	VerifyGasLimitTargetCompatible(parentGasLimit, targetGasLimit uint64) error
 	VerifyBuilderCanCoverBid(state.ReadOnlyBeaconState) error
 	VerifySignature(state.ReadOnlyBeaconState) error

@@ -9,7 +9,6 @@ import (
 	b "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition/interop"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -59,9 +58,6 @@ func ExecuteStateTransitionNoVerifyAnySig(
 	ctx, span := trace.StartSpan(ctx, "core.state.ExecuteStateTransitionNoVerifyAnySig")
 	defer span.End()
 	var err error
-
-	interop.WriteBlockToDisk(signed, false /* Has the block failed */)
-	interop.WriteStateToDisk(st)
 
 	parentRoot := signed.Block().ParentRoot()
 	st, err = ProcessSlotsUsingNextSlotCache(ctx, st, parentRoot[:], signed.Block().Slot())
@@ -442,7 +438,7 @@ func ProcessBlockForStateRoot(
 	}
 
 	if state.Version() >= version.Gloas {
-		// <spec fn="process_block" fork="gloas" hash="a911a43e">
+		// <spec fn="process_block" fork="gloas" hash="7d98b5a3">
 		// def process_block(state: BeaconState, block: BeaconBlock) -> None:
 		//     # [New in Gloas:EIP7732]
 		//     process_parent_execution_payload(state, block)
@@ -452,7 +448,7 @@ func ProcessBlockForStateRoot(
 		//     # [Modified in Gloas:EIP7732]
 		//     # Removed `process_execution_payload`
 		//     # [New in Gloas:EIP7732]
-		//     process_execution_payload_bid(state, block)
+		//     process_execution_payload_bid(state, block.body.signed_execution_payload_bid)
 		//     process_randao(state, block.body)
 		//     process_eth1_data(state, block.body)
 		//     # [Modified in Gloas:EIP7732]

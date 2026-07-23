@@ -478,7 +478,7 @@ func CreateDefaultLightClientUpdate(attestedBlock interfaces.ReadOnlySignedBeaco
 	return light_client.NewWrappedUpdate(m)
 }
 
-func ComputeTransactionsRoot(payload interfaces.ExecutionData) ([]byte, error) {
+func ComputeTransactionsRoot(blockVersion int, payload interfaces.ExecutionData) ([]byte, error) {
 	transactionsRoot, err := payload.TransactionsRoot()
 	if errors.Is(err, consensus_types.ErrUnsupportedField) {
 		transactions, err := payload.Transactions()
@@ -486,7 +486,7 @@ func ComputeTransactionsRoot(payload interfaces.ExecutionData) ([]byte, error) {
 			return nil, errors.Wrap(err, "could not get transactions")
 		}
 		var transactionsRootArray [32]byte
-		if progressiveExecutionPayloadSSZEnabled(payload) {
+		if features.ProgressiveSSZEnabled(blockVersion) {
 			transactionsRootArray, err = ssz.TransactionsRootProgressive(transactions)
 		} else {
 			transactionsRootArray, err = ssz.TransactionsRoot(transactions)
@@ -501,7 +501,7 @@ func ComputeTransactionsRoot(payload interfaces.ExecutionData) ([]byte, error) {
 	return transactionsRoot, nil
 }
 
-func ComputeWithdrawalsRoot(payload interfaces.ExecutionData) ([]byte, error) {
+func ComputeWithdrawalsRoot(blockVersion int, payload interfaces.ExecutionData) ([]byte, error) {
 	withdrawalsRoot, err := payload.WithdrawalsRoot()
 	if errors.Is(err, consensus_types.ErrUnsupportedField) {
 		withdrawals, err := payload.Withdrawals()
@@ -509,11 +509,7 @@ func ComputeWithdrawalsRoot(payload interfaces.ExecutionData) ([]byte, error) {
 			return nil, errors.Wrap(err, "could not get withdrawals")
 		}
 		var withdrawalsRootArray [32]byte
-		if progressiveExecutionPayloadSSZEnabled(payload) {
-			withdrawalsRootArray, err = ssz.WithdrawalSliceRootProgressive(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
-		} else {
-			withdrawalsRootArray, err = ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
-		}
+		withdrawalsRootArray, err = ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload, blockVersion)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get withdrawals root")
 		}
@@ -522,14 +518,6 @@ func ComputeWithdrawalsRoot(payload interfaces.ExecutionData) ([]byte, error) {
 		return nil, errors.Wrap(err, "could not get withdrawals root")
 	}
 	return withdrawalsRoot, nil
-}
-
-func progressiveExecutionPayloadSSZEnabled(payload interfaces.ExecutionData) bool {
-	if payload == nil || !features.Get().EnableProgressiveSSZ {
-		return false
-	}
-	_, ok := payload.Proto().(*enginev1.ExecutionPayloadGloas)
-	return ok
 }
 
 func BlockToLightClientHeader(

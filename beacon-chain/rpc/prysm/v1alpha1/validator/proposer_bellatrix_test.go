@@ -85,13 +85,13 @@ func TestServer_setExecutionData(t *testing.T) {
 			GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed},
 			PayloadIDBytes:     id,
 		},
-		HeadFetcher:            &blockchainTest.ChainService{State: capellaTransitionState},
-		FinalizationFetcher:    &blockchainTest.ChainService{},
-		BeaconDB:               beaconDB,
-		PayloadIDCache:         cache.NewPayloadIDCache(),
-		BlockBuilder:           &builderTest.MockBuilderService{HasConfigured: true, Cfg: &builderTest.Config{BeaconDB: beaconDB}},
-		ForkchoiceFetcher:      &blockchainTest.ChainService{},
-		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+		HeadFetcher:              &blockchainTest.ChainService{State: capellaTransitionState},
+		FinalizationFetcher:      &blockchainTest.ChainService{},
+		BeaconDB:                 beaconDB,
+		PayloadIDCache:           cache.NewPayloadIDCache(),
+		BlockBuilder:             &builderTest.MockBuilderService{HasConfigured: true, Cfg: &builderTest.Config{BeaconDB: beaconDB}},
+		ForkchoiceFetcher:        &blockchainTest.ChainService{},
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 	}
 	gasLimit := uint64(30000000)
 	t.Run("No builder configured. Use local block", func(t *testing.T) {

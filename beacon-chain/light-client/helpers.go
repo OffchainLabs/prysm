@@ -109,11 +109,11 @@ func makeExecutionAndProofDeneb(ctx context.Context, blk interfaces.ReadOnlySign
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not get execution payload")
 	}
-	transactionsRoot, err := ComputeTransactionsRoot(payload)
+	transactionsRoot, err := ComputeTransactionsRoot(blk.Version(), payload)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not get transactions root")
 	}
-	withdrawalsRoot, err := ComputeWithdrawalsRoot(payload)
+	withdrawalsRoot, err := ComputeWithdrawalsRoot(blk.Version(), payload)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not get withdrawals root")
 	}
@@ -182,11 +182,11 @@ func makeExecutionAndProofCapella(ctx context.Context, blk interfaces.ReadOnlySi
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not get execution payload")
 	}
-	transactionsRoot, err := ComputeTransactionsRoot(payload)
+	transactionsRoot, err := ComputeTransactionsRoot(blk.Version(), payload)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not get transactions root")
 	}
-	withdrawalsRoot, err := ComputeWithdrawalsRoot(payload)
+	withdrawalsRoot, err := ComputeWithdrawalsRoot(blk.Version(), payload)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not get withdrawals root")
 	}

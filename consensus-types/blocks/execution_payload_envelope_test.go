@@ -37,7 +37,7 @@ func validExecutionPayloadEnvelope() *ethpb.ExecutionPayloadEnvelope {
 
 	return &ethpb.ExecutionPayloadEnvelope{
 		Payload: payload,
-		ExecutionRequests: &enginev1.ExecutionRequests{
+		ExecutionRequests: &enginev1.ExecutionRequestsGloas{
 			Deposits: []*enginev1.DepositRequest{
 				{
 					Pubkey:                bytes.Repeat([]byte{0x09}, 48),

@@ -68,6 +68,29 @@ func TestRemoveBuilderPendingPayment_OlderThanTwoEpoch(t *testing.T) {
 	require.Equal(t, original.Withdrawal.Amount, after.Withdrawal.Amount)
 }
 
+func TestRemoveBuilderPendingPayment_OnlyClearsMatchingProposer(t *testing.T) {
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	stateSlot := slotsPerEpoch*2 + 1
+	headerSlot := slotsPerEpoch * 2
+	paymentIndex := int(slotsPerEpoch + headerSlot%slotsPerEpoch)
+
+	st := newGloasStateWithPayments(t, stateSlot)
+	require.NoError(t, st.SetBuilderPendingPayment(primitives.Slot(paymentIndex), &eth.BuilderPendingPayment{
+		Withdrawal:    &eth.BuilderPendingWithdrawal{FeeRecipient: bytes.Repeat([]byte{0x02}, 20), Amount: 123},
+		ProposerIndex: 5,
+	}))
+
+	// A slashing for a different proposer must not clear this payment.
+	require.NoError(t, RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot, ProposerIndex: 9}))
+	got := getPendingPayment(t, st, paymentIndex)
+	require.Equal(t, uint64(123), uint64(got.Withdrawal.Amount))
+
+	// A slashing for the matching proposer clears the payment.
+	require.NoError(t, RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot, ProposerIndex: 5}))
+	got = getPendingPayment(t, st, paymentIndex)
+	require.Equal(t, uint64(0), uint64(got.Withdrawal.Amount))
+}
+
 func newGloasStateWithPayments(t *testing.T, slot primitives.Slot) state.BeaconState {
 	t.Helper()
 

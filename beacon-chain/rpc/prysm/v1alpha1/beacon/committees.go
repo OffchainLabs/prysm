@@ -2,13 +2,10 @@ package beacon
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"google.golang.org/grpc/codes"
@@ -95,43 +92,6 @@ func (bs *Server) retrieveCommitteesForEpoch(
 			codes.InvalidArgument,
 			"Could not compute committees for epoch %d: %v",
 			slots.ToEpoch(startSlot),
-			err,
-		)
-	}
-	return committeesListsBySlot, activeIndices, nil
-}
-
-// retrieveCommitteesForRoot uses the provided state root to get the current epoch committees.
-// Note: This function is always recommended over retrieveCommitteesForEpoch as states are
-// retrieved from the DB for this function, rather than generated.
-func (bs *Server) retrieveCommitteesForRoot(
-	ctx context.Context,
-	root []byte,
-) (SlotToCommiteesMap, []primitives.ValidatorIndex, error) {
-	requestedState, err := bs.StateGen.StateByRootNoCopy(ctx, bytesutil.ToBytes32(root))
-	if err != nil {
-		return nil, nil, status.Error(codes.Internal, fmt.Sprintf("Could not get state: %v", err))
-	}
-	epoch := time.CurrentEpoch(requestedState)
-	seed, err := helpers.Seed(requestedState, epoch, params.BeaconConfig().DomainBeaconAttester)
-	if err != nil {
-		return nil, nil, status.Error(codes.Internal, "Could not get seed")
-	}
-	activeIndices, err := helpers.ActiveValidatorIndices(ctx, requestedState, epoch)
-	if err != nil {
-		return nil, nil, status.Error(codes.Internal, "Could not get active indices")
-	}
-
-	startSlot, err := slots.EpochStart(epoch)
-	if err != nil {
-		return nil, nil, err
-	}
-	committeesListsBySlot, err := computeCommittees(ctx, startSlot, activeIndices, seed)
-	if err != nil {
-		return nil, nil, status.Errorf(
-			codes.InvalidArgument,
-			"Could not compute committees for epoch %d: %v",
-			epoch,
 			err,
 		)
 	}

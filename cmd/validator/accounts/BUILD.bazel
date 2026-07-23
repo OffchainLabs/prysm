@@ -28,7 +28,6 @@ go_library(
         "//validator/accounts/wallet:go_default_library",
         "//validator/client:go_default_library",
         "//validator/keymanager:go_default_library",
-        "//validator/keymanager/local:go_default_library",
         "//validator/keymanager/remote-web3signer:go_default_library",
         "//validator/node:go_default_library",
         "@com_github_golang_protobuf//ptypes/empty",

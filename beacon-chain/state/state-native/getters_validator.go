@@ -43,9 +43,11 @@ func (b *BeaconState) validatorsReadOnlyVal() []state.ReadOnlyValidator {
 	}
 	v := b.validatorsMultiValue.Value(b)
 
+	backing := make([]readOnlyValidator, len(v))
 	res := make([]state.ReadOnlyValidator, len(v))
-	for i := range res {
-		res[i] = NewValidatorFromCompact(v[i])
+	for i := range v {
+		backing[i].validator = v[i]
+		res[i] = &backing[i]
 	}
 	return res
 }
@@ -181,12 +183,15 @@ func (b *BeaconState) AggregateKeyFromIndices(idxs []uint64) (bls.PublicKey, err
 	defer b.lock.RUnlock()
 
 	pubKeys := make([][]byte, len(idxs))
+	backing := make([]byte, len(idxs)*fieldparams.BLSPubkeyLength)
 	for i, idx := range idxs {
 		v, err := b.validatorsMultiValue.At(b, idx)
 		if err != nil {
 			return nil, err
 		}
-		pubKeys[i] = v.PublicKey[:]
+		buf := backing[i*fieldparams.BLSPubkeyLength : (i+1)*fieldparams.BLSPubkeyLength]
+		copy(buf, v.PublicKey[:])
+		pubKeys[i] = buf
 	}
 	return bls.AggregatePublicKeys(pubKeys)
 }
@@ -228,6 +233,7 @@ func (b *BeaconState) ValidatorsReadOnlySeq() iter.Seq2[primitives.ValidatorInde
 			return
 		}
 
+		rov := new(readOnlyValidator)
 		for i := range b.validatorsMultiValue.Len(b) {
 			v, err := b.validatorsMultiValue.At(b, uint64(i))
 			if err != nil {
@@ -235,7 +241,8 @@ func (b *BeaconState) ValidatorsReadOnlySeq() iter.Seq2[primitives.ValidatorInde
 				return
 			}
 
-			if !yield(primitives.ValidatorIndex(i), NewValidatorFromCompact(v)) {
+			rov.validator = v
+			if !yield(primitives.ValidatorIndex(i), rov) {
 				return
 			}
 		}

@@ -6,7 +6,6 @@ func init() {
 		MinimalSpecConfig(),
 		E2ETestConfig(),
 		E2EMainnetTestConfig(),
-		InteropConfig(),
 		HoleskyConfig(),
 		SepoliaConfig(),
 		HoodiConfig(),

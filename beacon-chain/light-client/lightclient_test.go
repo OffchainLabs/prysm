@@ -727,10 +727,10 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 			payload, err := l.Block.Block().Body().Execution()
 			require.NoError(t, err)
 
-			transactionsRoot, err := lightClient.ComputeTransactionsRoot(payload)
+			transactionsRoot, err := lightClient.ComputeTransactionsRoot(l.Block.Version(), payload)
 			require.NoError(t, err)
 
-			withdrawalsRoot, err := lightClient.ComputeWithdrawalsRoot(payload)
+			withdrawalsRoot, err := lightClient.ComputeWithdrawalsRoot(l.Block.Version(), payload)
 			require.NoError(t, err)
 
 			executionHeader := &v11.ExecutionPayloadHeaderCapella{
@@ -851,10 +851,10 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 			payload, err := l.Block.Block().Body().Execution()
 			require.NoError(t, err)
 
-			transactionsRoot, err := lightClient.ComputeTransactionsRoot(payload)
+			transactionsRoot, err := lightClient.ComputeTransactionsRoot(l.Block.Version(), payload)
 			require.NoError(t, err)
 
-			withdrawalsRoot, err := lightClient.ComputeWithdrawalsRoot(payload)
+			withdrawalsRoot, err := lightClient.ComputeWithdrawalsRoot(l.Block.Version(), payload)
 			require.NoError(t, err)
 
 			blobGasUsed, err := payload.BlobGasUsed()
@@ -987,10 +987,10 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 			payload, err := l.Block.Block().Body().Execution()
 			require.NoError(t, err)
 
-			transactionsRoot, err := lightClient.ComputeTransactionsRoot(payload)
+			transactionsRoot, err := lightClient.ComputeTransactionsRoot(l.Block.Version(), payload)
 			require.NoError(t, err)
 
-			withdrawalsRoot, err := lightClient.ComputeWithdrawalsRoot(payload)
+			withdrawalsRoot, err := lightClient.ComputeWithdrawalsRoot(l.Block.Version(), payload)
 			require.NoError(t, err)
 
 			blobGasUsed, err := payload.BlobGasUsed()
@@ -1119,10 +1119,10 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 			payload, err := l.Block.Block().Body().Execution()
 			require.NoError(t, err)
 
-			transactionsRoot, err := lightClient.ComputeTransactionsRoot(payload)
+			transactionsRoot, err := lightClient.ComputeTransactionsRoot(l.Block.Version(), payload)
 			require.NoError(t, err)
 
-			withdrawalsRoot, err := lightClient.ComputeWithdrawalsRoot(payload)
+			withdrawalsRoot, err := lightClient.ComputeWithdrawalsRoot(l.Block.Version(), payload)
 			require.NoError(t, err)
 
 			blobGasUsed, err := payload.BlobGasUsed()
@@ -1298,10 +1298,10 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 			payload, err := l.Block.Block().Body().Execution()
 			require.NoError(t, err)
 
-			transactionsRoot, err := lightClient.ComputeTransactionsRoot(payload)
+			transactionsRoot, err := lightClient.ComputeTransactionsRoot(l.Block.Version(), payload)
 			require.NoError(t, err)
 
-			withdrawalsRoot, err := lightClient.ComputeWithdrawalsRoot(payload)
+			withdrawalsRoot, err := lightClient.ComputeWithdrawalsRoot(l.Block.Version(), payload)
 			require.NoError(t, err)
 
 			executionHeader := &v11.ExecutionPayloadHeaderDeneb{

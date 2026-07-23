@@ -144,8 +144,25 @@ func (s *Service) syncToNonFinalizedEpoch(ctx context.Context) error {
 	return nil
 }
 
+// saveCarriedColumns persists data column sidecars fetched for payloads whose beacon block is
+// not part of the batch (e.g. the payload the first block builds on). The per-block save loops
+// only cover blocks present in bwb, so these must be saved separately.
+func (s *Service) saveCarriedColumns(data *blocksQueueFetchedData) error {
+	if len(data.columnsToSave) == 0 {
+		return nil
+	}
+	if err := s.cfg.DataColumnStorage.Save(data.columnsToSave); err != nil {
+		return errors.Wrap(err, "save carried data column sidecars")
+	}
+	return nil
+}
+
 // processFetchedData processes data received from queue.
 func (s *Service) processFetchedData(ctx context.Context, data *blocksQueueFetchedData) {
+	if err := s.saveCarriedColumns(data); err != nil {
+		log.WithError(err).Warn("Could not save carried data column sidecars")
+		return
+	}
 	// Use Batch Block Verify to process and verify batches directly.
 	count, err := s.processBatchedBlocks(ctx, data.bwb, data.envelopes, s.cfg.Chain.ReceiveBlockBatch)
 	if err != nil {
@@ -156,6 +173,9 @@ func (s *Service) processFetchedData(ctx context.Context, data *blocksQueueFetch
 
 // processFetchedDataRegSync processes data received from queue.
 func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQueueFetchedData) (uint64, error) {
+	if err := s.saveCarriedColumns(data); err != nil {
+		return 0, err
+	}
 	bwb, envelopes, err := validUnprocessed(ctx, data.bwb, data.envelopes, s.cfg.Chain.HeadSlot(), s.isProcessedBlock, s.isProcessedPayload)
 	if err != nil {
 		log.WithError(err).Debug("Batch did not contain a valid sequence of unprocessed blocks")

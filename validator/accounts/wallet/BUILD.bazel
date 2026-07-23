@@ -9,6 +9,7 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/validator/accounts/wallet",
     visibility = [
         "//cmd:__subpackages__",
+        "//testing/endtoend:__subpackages__",
         "//tools:__subpackages__",
         "//validator:__subpackages__",
     ],
