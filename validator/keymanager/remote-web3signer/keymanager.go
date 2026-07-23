@@ -50,6 +50,11 @@ type SetupConfig struct {
 	// a static list of public keys to be passed by the user to determine what accounts should sign.
 	// This will provide a layer of safety against slashing if the web3signer is shared across validators.
 	ProvidedPublicKeys []string
+
+	// PollInterval makes the keymanager re-fetch the URL (PublicKeysURL) on this interval to
+	// hot-reload the validating public key set.
+	// Note: Zero disables polling.
+	PollInterval time.Duration
 }
 
 // Keymanager defines the web3signer keymanager.
