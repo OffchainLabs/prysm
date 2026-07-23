@@ -30,8 +30,8 @@ var (
 		Help: "Slots between the current slot and the most recent confirmed block",
 	})
 	fastConfirmationDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "beacon_fast_confirmation_duration_seconds",
+		Name:    "beacon_fast_confirmation_duration_milliseconds",
 		Help:    "Time to run on_fast_confirmation per slot, by code path",
-		Buckets: []float64{.001, .005, .01, .05, .1, .25, .5, 1, 2},
+		Buckets: []float64{1, 5, 10, 50, 100, 250, 500, 1000, 2000},
 	}, []string{"path"})
 )

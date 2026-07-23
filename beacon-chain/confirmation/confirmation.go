@@ -92,7 +92,7 @@ func (f *FastConfirmationRule) OnFastConfirmation(ctx context.Context, currentSl
 	// path defaults to "full"; the stale-head branch flips it to "fallback".
 	path := "full"
 	defer func(start time.Time) {
-		fastConfirmationDuration.WithLabelValues(path).Observe(time.Since(start).Seconds())
+		fastConfirmationDuration.WithLabelValues(path).Observe(float64(time.Since(start).Milliseconds()))
 	}(time.Now())
 
 	f.fc.RLock()
