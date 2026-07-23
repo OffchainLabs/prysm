@@ -91,19 +91,10 @@ func SliceRootProgressive[T Hashable](slice []T) ([32]byte, error) {
 func ByteSliceRootProgressive(slice []byte) ([32]byte, error) {
 	var bytesRoot [32]byte
 	if len(slice) > 0 {
-		// Total chunks = ceil(length/32)
 		numChunks := (len(slice) + 31) / 32
-		// Count of full(complete) chunks = floor(length/32)
-		full := len(slice) / 32
-
 		chunks := make([][32]byte, numChunks)
-		for i := range full {
-			copy(chunks[i][:], slice[i*32:(i+1)*32])
-		}
-
-		// Handle trailing partial chunk if present.
-		if full < numChunks {
-			copy(chunks[full][:], slice[full*32:])
+		for i := range chunks {
+			copy(chunks[i][:], slice[i*BytesPerChunk:])
 		}
 		bytesRoot = MerkleizeProgressiveChunks(chunks)
 	}
