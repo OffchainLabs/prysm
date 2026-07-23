@@ -76,7 +76,7 @@ func uint64ListRootWithRegistryLimit(vals []uint64) ([32]byte, error) {
 	}
 	root, err := ssz.BitwiseMerkleize(chunks, uint64(len(chunks)), ValidatorLimitForBalancesChunks())
 	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "could not compute balances merkleization")
+		return [32]byte{}, errors.Wrap(err, "could not compute uint64 merkleization")
 	}
 
 	lengthRoot := make([]byte, 32)

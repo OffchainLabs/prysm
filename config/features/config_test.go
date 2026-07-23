@@ -80,6 +80,8 @@ func TestConfigureBeaconConfig_EnableProgressiveSSZ(t *testing.T) {
 	context := cli.NewContext(&app, set, nil)
 	require.NoError(t, ConfigureBeaconChain(context))
 	assert.Equal(t, true, Get().EnableProgressiveSSZ)
+}
+
 func TestConfigureBeaconConfig_ReorgLatePayloads(t *testing.T) {
 	app := cli.App{}
 	set := flag.NewFlagSet("test", 0)

@@ -316,6 +316,7 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.IsSet(EnableProgressiveSSZ.Name) {
 		logEnabled(EnableProgressiveSSZ)
 		cfg.EnableProgressiveSSZ = true
+	}
 	if ctx.Bool(reorgLatePayloads.Name) {
 		logEnabled(reorgLatePayloads)
 		cfg.ReorgLatePayloads = true
