@@ -446,9 +446,10 @@ func Web3SignerConfig(cliCtx *cli.Context) (*remoteweb3signer.SetupConfig, error
 
 	cfg := &remoteweb3signer.SetupConfig{}
 
-	baseEndpoint, err := validateURL(cliCtx.String(flags.Web3SignerURLFlag.Name))
+	urlStr := cliCtx.String(flags.Web3SignerURLFlag.Name)
+	baseEndpoint, err := validateURL(urlStr)
 	if err != nil {
-		return nil, fmt.Errorf("web3signer url %s is invalid: %v", cliCtx.String(flags.Web3SignerURLFlag.Name), err)
+		return nil, fmt.Errorf("web3signer url %s is invalid: %w", urlStr, err)
 	}
 
 	cfg.BaseEndpoint = baseEndpoint
