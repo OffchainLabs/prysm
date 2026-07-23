@@ -1116,7 +1116,7 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 func (b *BeaconState) progressiveHashTreeRoot(ctx context.Context) ([32]byte, error) {
 	fieldRoots, err := ComputeFieldRootsWithHasher(ctx, b)
 	if err != nil {
-		return [32]byte{}, err
+		return [32]byte{}, errors.Wrap(err, "failed to compute state field roots")
 	}
 
 	progressiveFieldRoots := make([][32]byte, len(fieldRoots))
