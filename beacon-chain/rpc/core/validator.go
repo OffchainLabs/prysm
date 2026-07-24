@@ -476,15 +476,9 @@ func (s *Service) GetAttestationData(
 		return nil, &RpcError{Reason: BadRequest, Err: errors.Errorf("invalid request: %v", err)}
 	}
 
-	headRoot, err := s.HeadFetcher.HeadRoot(ctx)
-	if err != nil {
-		return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get head root")}
-	}
-
 	s.AttestationCache.RLock()
 	res := s.AttestationCache.Get()
-	// Serve cached data only if it was computed for the node's current head.
-	if res != nil && res.Slot == req.Slot && bytes.Equal(res.HeadRoot, headRoot) {
+	if res != nil && res.Slot == req.Slot {
 		s.AttestationCache.RUnlock()
 		return &ethpb.AttestationData{
 			Slot:            res.Slot,
@@ -508,12 +502,8 @@ func (s *Service) GetAttestationData(
 	// We check the cache again as in the event there are multiple inflight requests for
 	// the same attestation data, the cache might have been filled while we were waiting
 	// to acquire the lock.
-	headRoot, err = s.HeadFetcher.HeadRoot(ctx)
-	if err != nil {
-		return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get head root")}
-	}
 	res = s.AttestationCache.Get()
-	if res != nil && res.Slot == req.Slot && bytes.Equal(res.HeadRoot, headRoot) {
+	if res != nil && res.Slot == req.Slot {
 		return &ethpb.AttestationData{
 			Slot:            res.Slot,
 			CommitteeIndex:  attestationDataIndex(req, res.IsPayloadFull),
@@ -537,6 +527,10 @@ func (s *Service) GetAttestationData(
 		return nil, &RpcError{Reason: Unavailable, Err: errOptimisticMode}
 	}
 
+	headRoot, err := s.HeadFetcher.HeadRoot(ctx)
+	if err != nil {
+		return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get head root")}
+	}
 	targetEpoch := slots.ToEpoch(req.Slot)
 	targetRoot, err := s.HeadFetcher.TargetRootForEpoch(bytesutil.ToBytes32(headRoot), targetEpoch)
 	if err != nil {
