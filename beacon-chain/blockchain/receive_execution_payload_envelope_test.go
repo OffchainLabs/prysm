@@ -304,7 +304,7 @@ func TestReceiveExecutionPayloadEnvelope_ConcurrentForkchoiceReadNoRace(t *testi
 	go func() {
 		defer wg.Done()
 		defer close(done)
-		for i := 0; i < 40; i++ {
+		for range 40 {
 			_ = s.ReceiveExecutionPayloadEnvelope(ctx, signed)
 		}
 	}()
@@ -318,7 +318,7 @@ func TestReceiveExecutionPayloadEnvelope_ConcurrentForkchoiceReadNoRace(t *testi
 				return
 			default:
 			}
-			root := bytesutil.ToBytes32([]byte(fmt.Sprintf("w-%d", i)))
+			root := bytesutil.ToBytes32(fmt.Appendf(nil, "w-%d", i))
 			roblock, err := blocks.NewROBlockWithRoot(wsigned, root)
 			if err != nil {
 				t.Error(err)

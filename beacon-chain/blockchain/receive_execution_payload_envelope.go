@@ -159,9 +159,7 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	}
 
 	// execution_payload is emitted when an execution payload is successfully imported.
-	s.cfg.ForkChoiceStore.RLock()
-	isOptimistic, err := s.cfg.ForkChoiceStore.IsOptimistic(root)
-	s.cfg.ForkChoiceStore.RUnlock()
+	isOptimistic, err := s.IsOptimisticForRoot(ctx, root)
 	if err != nil {
 		log.WithError(err).Error("Could not get optimistic status of block root")
 		isOptimistic = false
