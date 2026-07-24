@@ -114,6 +114,8 @@ const (
 	GetClientVersionV1 = "engine_getClientVersionV1"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
 	defaultEngineTimeout = time.Second
+	// gloasGetPayloadTimeout is the maximum time allowed for engine_getPayloadV6.
+	gloasGetPayloadTimeout = 300 * time.Millisecond
 )
 
 // NewPayload request calls the engine_newPayloadVX method via JSON-RPC.
@@ -295,6 +297,13 @@ func getPayloadMethodAndMessage(slot primitives.Slot) (string, proto.Message) {
 	return GetPayloadMethod, &pb.ExecutionPayload{}
 }
 
+func getPayloadTimeout(slot primitives.Slot) time.Duration {
+	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
+		return gloasGetPayloadTimeout
+	}
+	return defaultEngineTimeout
+}
+
 // GetPayload calls the engine_getPayloadVX method via JSON-RPC.
 // It returns the execution data as well as the blobs bundle.
 func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error) {
@@ -304,7 +313,7 @@ func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte, slot primit
 	defer func() {
 		getPayloadLatency.Observe(float64(time.Since(start).Milliseconds()))
 	}()
-	d := time.Now().Add(defaultEngineTimeout)
+	d := time.Now().Add(getPayloadTimeout(slot))
 	ctx, cancel := context.WithDeadline(ctx, d)
 	defer cancel()
 

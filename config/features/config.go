@@ -29,6 +29,7 @@ import (
 	validatorflags "github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/urfave/cli/v2"
 )
 
@@ -38,7 +39,6 @@ const disabledFeatureFlag = "Disabled feature flag"
 // Flags is a struct to represent which features the client will perform on runtime.
 type Flags struct {
 	// Feature related flags.
-	WriteSSZStateTransitions            bool // WriteSSZStateTransitions to tmp directory.
 	EnablePeerScorer                    bool // EnablePeerScorer enables experimental peer scoring in p2p.
 	EnableLightClient                   bool // EnableLightClient enables light client APIs.
 	EnableQUIC                          bool // EnableQUIC specifies whether to enable QUIC transport for libp2p.
@@ -50,6 +50,8 @@ type Flags struct {
 	DisableDutiesV2                     bool // DisableDutiesV2 sets validator client to use the get Duties endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
 	EnableStateDiff                     bool // EnableStateDiff enables the experimental state diff feature for the beacon node.
+	EnableProgressiveSSZ                bool // EnableProgressiveSSZ enables experimental progressive SSZ merkleization for converted consensus types.
+	ReorgLatePayloads                   bool // ReorgLatePayloads enables reorging late payloads in the beacon node.
 
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
@@ -109,6 +111,12 @@ func Get() *Flags {
 		return &Flags{}
 	}
 	return featureConfig
+}
+
+// ProgressiveSSZEnabled reports whether progressive SSZ is enabled for the
+// supplied state version.
+func ProgressiveSSZEnabled(stateVersion int) bool {
+	return stateVersion >= version.Gloas && Get().EnableProgressiveSSZ
 }
 
 // Init sets the global config equal to the config that is passed in.
@@ -189,11 +197,6 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	}
 	if err := configureTestnet(ctx); err != nil {
 		return err
-	}
-
-	if ctx.Bool(writeSSZStateTransitionsFlag.Name) {
-		logEnabled(writeSSZStateTransitionsFlag)
-		cfg.WriteSSZStateTransitions = true
 	}
 
 	if ctx.Bool(saveInvalidBlockTempFlag.Name) {
@@ -309,6 +312,14 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 			log.Warn("--enable-state-diff is enabled, ignoring --enable-historical-space-representation flag.")
 			cfg.EnableHistoricalSpaceRepresentation = false
 		}
+	}
+	if ctx.IsSet(EnableProgressiveSSZ.Name) {
+		logEnabled(EnableProgressiveSSZ)
+		cfg.EnableProgressiveSSZ = true
+	}
+	if ctx.Bool(reorgLatePayloads.Name) {
+		logEnabled(reorgLatePayloads)
+		cfg.ReorgLatePayloads = true
 	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}

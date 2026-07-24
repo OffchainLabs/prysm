@@ -40,6 +40,26 @@ var (
 		Usage:   deprecatedUsage,
 		Hidden:  true,
 	}
+	deprecatedInteropNumValidators = &cli.Uint64Flag{
+		Name:   "interop-num-validators",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
+	deprecatedInteropStartIndex = &cli.Uint64Flag{
+		Name:   "interop-start-index",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
+	deprecatedInteropEth1DataVotes = &cli.BoolFlag{
+		Name:   "interop-eth1data-votes",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
+	deprecatedInteropWriteSSZStateTransitions = &cli.BoolFlag{
+		Name:   "interop-write-ssz-state-transitions",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
 )
 
 // Deprecated flags for both the beacon node and validator client.
@@ -48,6 +68,10 @@ var deprecatedFlags = []cli.Flag{
 	deprecatedEnableDBBackupWebhook,
 	deprecatedSlasherRPCProvider,
 	deprecatedSlasherTLSCert,
+	deprecatedInteropNumValidators,
+	deprecatedInteropStartIndex,
+	deprecatedInteropEth1DataVotes,
+	deprecatedInteropWriteSSZStateTransitions,
 }
 
 var upcomingDeprecation = []cli.Flag{

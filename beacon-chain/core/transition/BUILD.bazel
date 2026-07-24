@@ -31,7 +31,6 @@ go_library(
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/requests:go_default_library",
         "//beacon-chain/core/time:go_default_library",
-        "//beacon-chain/core/transition/interop:go_default_library",
         "//beacon-chain/core/validators:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",

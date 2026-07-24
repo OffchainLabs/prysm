@@ -428,13 +428,6 @@ func wrapInMetrics[Resp any](action string, f func() (Resp, error)) (Resp, error
 	return resp, err
 }
 
-func wrapInMetrics2[R1, R2 any](action string, f func() (R1, R2, error)) (R1, R2, error) {
-	now := time.Now()
-	r1, r2, err := f()
-	recordMetrics(action, now, err)
-	return r1, r2, err
-}
-
 func recordMetrics(action string, start time.Time, err error) {
 	httpActionCount.WithLabelValues(action).Inc()
 	if err == nil {
@@ -463,11 +456,11 @@ func (c *beaconApiValidatorClient) ConnectionGeneration() uint64 {
 
 // Gloas Fork Methods
 
-func (c *beaconApiValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, beaconBlockRoot [32]byte) (*ethpb.ExecutionPayloadEnvelope, *ethpb.WireBlindedExecutionPayloadEnvelope, error) {
+func (c *beaconApiValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, beaconBlockRoot [32]byte) (*ethpb.ExecutionPayloadEnvelope, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.GetExecutionPayloadEnvelope")
 	defer span.End()
 
-	return wrapInMetrics2("GetExecutionPayloadEnvelope", func() (*ethpb.ExecutionPayloadEnvelope, *ethpb.WireBlindedExecutionPayloadEnvelope, error) {
+	return wrapInMetrics[*ethpb.ExecutionPayloadEnvelope]("GetExecutionPayloadEnvelope", func() (*ethpb.ExecutionPayloadEnvelope, error) {
 		return c.getExecutionPayloadEnvelope(ctx, slot, beaconBlockRoot)
 	})
 }
@@ -478,15 +471,6 @@ func (c *beaconApiValidatorClient) PublishExecutionPayloadEnvelope(ctx context.C
 
 	return wrapInMetrics[*empty.Empty]("PublishExecutionPayloadEnvelope", func() (*empty.Empty, error) {
 		return c.publishExecutionPayloadEnvelope(ctx, in)
-	})
-}
-
-func (c *beaconApiValidatorClient) PublishBlindedExecutionPayloadEnvelope(ctx context.Context, in *ethpb.SignedWireBlindedExecutionPayloadEnvelope) (*empty.Empty, error) {
-	ctx, span := trace.StartSpan(ctx, "beacon-api.PublishBlindedExecutionPayloadEnvelope")
-	defer span.End()
-
-	return wrapInMetrics[*empty.Empty]("PublishBlindedExecutionPayloadEnvelope", func() (*empty.Empty, error) {
-		return c.publishBlindedExecutionPayloadEnvelope(ctx, in)
 	})
 }
 

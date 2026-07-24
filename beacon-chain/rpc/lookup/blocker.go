@@ -300,15 +300,17 @@ func (p *BeaconDbBlocker) resolveBlobsContext(ctx context.Context, id string, op
 	// Convert versioned hashes to indices if provided
 	indices := cfg.Indices
 	if len(cfg.VersionedHashes) > 0 {
-		// Build a map of requested versioned hashes for fast lookup and tracking
-		requestedHashes := make(map[string]bool)
+		// Build a map of requested versioned hashes for fast lookup and tracking.
+		// Accounting is on unique hashes: a block may carry the same commitment
+		// at multiple indices, and a request may repeat a hash.
+		requestedHashes := make(map[string]bool, len(cfg.VersionedHashes))
 		for _, versionedHash := range cfg.VersionedHashes {
 			requestedHashes[string(versionedHash)] = true
 		}
 
 		// Create indices array and track which hashes we found
-		indices = make([]int, 0, len(cfg.VersionedHashes))
-		foundHashes := make(map[string]bool)
+		indices = make([]int, 0, len(commitments))
+		foundHashes := make(map[string]bool, len(requestedHashes))
 
 		for i, commitment := range commitments {
 			versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(commitment)
@@ -320,18 +322,21 @@ func (p *BeaconDbBlocker) resolveBlobsContext(ctx context.Context, id string, op
 		}
 
 		// Check if all requested hashes were found
-		if len(indices) != len(cfg.VersionedHashes) {
-			// Collect missing hashes
-			missingHashes := make([]string, 0, len(cfg.VersionedHashes)-len(indices))
+		if len(foundHashes) != len(requestedHashes) {
+			// Collect missing hashes in request order, reporting each hash once
+			missingHashes := make([]string, 0, len(requestedHashes)-len(foundHashes))
+			reported := make(map[string]bool, len(requestedHashes))
 			for _, requestedHash := range cfg.VersionedHashes {
-				if !foundHashes[string(requestedHash)] {
+				hashStr := string(requestedHash)
+				if !foundHashes[hashStr] && !reported[hashStr] {
 					missingHashes = append(missingHashes, hexutil.Encode(requestedHash))
+					reported[hashStr] = true
 				}
 			}
 
 			// Create detailed error message
-			errMsg := fmt.Sprintf("versioned hash(es) not found in block (requested %d hashes, found %d, missing: %v)",
-				len(cfg.VersionedHashes), len(indices), missingHashes)
+			errMsg := fmt.Sprintf("versioned hash(es) not found in block (requested %d unique hashes, found %d, missing: %v)",
+				len(requestedHashes), len(foundHashes), missingHashes)
 
 			return nil, &core.RpcError{Err: errors.New(errMsg), Reason: core.NotFound}
 		}

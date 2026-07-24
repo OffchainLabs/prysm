@@ -30,7 +30,6 @@ go_library(
         "//io/file:go_default_library",
         "//monitoring/tracing/trace:go_default_library",
         "//proto/prysm/v1alpha1/validator-client:go_default_library",
-        "//runtime/interop:go_default_library",
         "//validator/accounts/iface:go_default_library",
         "//validator/accounts/petnames:go_default_library",
         "//validator/keymanager:go_default_library",

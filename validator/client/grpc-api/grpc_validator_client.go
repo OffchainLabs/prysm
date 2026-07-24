@@ -500,62 +500,57 @@ func (c *grpcValidatorClient) ConnectionGeneration() uint64 {
 	return provider.ConnectionCounter()
 }
 
-// Gloas Fork Methods
-//
-// Mirrors the REST split: stateless self-build publishes the full envelope + blobs as the contents
-// arm; stateful self-build fetches the blinded envelope (the BN keeps the full payload) and
-// publishes the blinded arm, which the BN reconstructs from its cache.
-func (c *grpcValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, beaconBlockRoot [32]byte) (*ethpb.ExecutionPayloadEnvelope, *ethpb.WireBlindedExecutionPayloadEnvelope, error) {
+// Gloas fork methods mirror the REST split: stateless self-build publishes the contents arm
+// (envelope + blobs); stateful publishes the bare signed_envelope arm (BN attaches cached blob data).
+func (c *grpcValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, beaconBlockRoot [32]byte) (*ethpb.ExecutionPayloadEnvelope, error) {
 	// Stateless: the full envelope + blobs were cached during block production.
 	if envelope, _, _ := c.envelopeCache.Peek(slot); envelope != nil {
 		if bytesutil.ToBytes32(envelope.BeaconBlockRoot) != beaconBlockRoot {
-			return nil, nil, errors.New("cached execution payload envelope beacon_block_root does not match requested block")
+			return nil, errors.New("cached execution payload envelope beacon_block_root does not match requested block")
 		}
-		return envelope, nil, nil
+		return envelope, nil
 	}
-	// Stateful: the BN returns the blinded envelope and reconstructs the full payload on publish.
+	// Stateful: the BN returns the full envelope and attaches blobs/proofs on publish.
 	req := &ethpb.ExecutionPayloadEnvelopeRequest{
 		Slot: slot,
 	}
 	resp, err := c.getClient().GetExecutionPayloadEnvelope(ctx, req)
 	if err != nil {
-		return nil, nil, errors.Wrap(
+		return nil, errors.Wrap(
 			client.ErrConnectionIssue,
 			errors.Wrap(err, "GetExecutionPayloadEnvelope").Error(),
 		)
 	}
+	if resp.Envelope == nil {
+		return nil, errors.New("beacon node returned nil execution payload envelope")
+	}
 	// Mirror the REST handler's root check (the gRPC request carries only the slot): the returned
 	// envelope must be for the block we are proposing before the VC signs and publishes it.
-	if resp.Blinded == nil || bytesutil.ToBytes32(resp.Blinded.BeaconBlockRoot) != beaconBlockRoot {
-		return nil, nil, errors.New("blinded execution payload envelope beacon_block_root does not match requested block")
+	if bytesutil.ToBytes32(resp.Envelope.BeaconBlockRoot) != beaconBlockRoot {
+		return nil, errors.New("execution payload envelope beacon_block_root does not match requested block")
 	}
-	return nil, resp.Blinded, nil
+	return resp.Envelope, nil
 }
 
-// PublishExecutionPayloadEnvelope publishes the stateless contents arm: the full signed envelope
-// plus the blobs/proofs cached during block production.
+// PublishExecutionPayloadEnvelope publishes the contents arm when blobs/proofs were cached during
+// block production, and the bare signed_envelope arm otherwise (BN attaches cached blob data).
 func (c *grpcValidatorClient) PublishExecutionPayloadEnvelope(ctx context.Context, in *ethpb.SignedExecutionPayloadEnvelope) (*empty.Empty, error) {
+	var cachedEnv *ethpb.ExecutionPayloadEnvelope
 	var blobs, kzgProofs [][]byte
 	if in.GetMessage().GetPayload() != nil {
-		_, blobs, kzgProofs = c.envelopeCache.Take(primitives.Slot(in.Message.Payload.SlotNumber))
+		cachedEnv, blobs, kzgProofs = c.envelopeCache.Take(primitives.Slot(in.Message.Payload.SlotNumber))
 	}
-	generic := &ethpb.GenericSignedExecutionPayloadEnvelope{
-		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Contents{
+	generic := &ethpb.GenericSignedExecutionPayloadEnvelope{}
+	if cachedEnv == nil {
+		generic.Envelope = &ethpb.GenericSignedExecutionPayloadEnvelope_SignedEnvelope{SignedEnvelope: in}
+	} else {
+		generic.Envelope = &ethpb.GenericSignedExecutionPayloadEnvelope_Contents{
 			Contents: &ethpb.SignedExecutionPayloadEnvelopeContents{
 				SignedExecutionPayloadEnvelope: in,
 				KzgProofs:                      kzgProofs,
 				Blobs:                          blobs,
 			},
-		},
-	}
-	return c.getClient().PublishExecutionPayloadEnvelope(ctx, generic)
-}
-
-// PublishBlindedExecutionPayloadEnvelope publishes the stateful blinded arm; the BN reconstructs the
-// full envelope and data column sidecars from its own cache.
-func (c *grpcValidatorClient) PublishBlindedExecutionPayloadEnvelope(ctx context.Context, in *ethpb.SignedWireBlindedExecutionPayloadEnvelope) (*empty.Empty, error) {
-	generic := &ethpb.GenericSignedExecutionPayloadEnvelope{
-		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Blinded{Blinded: in},
+		}
 	}
 	return c.getClient().PublishExecutionPayloadEnvelope(ctx, generic)
 }

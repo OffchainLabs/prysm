@@ -55,3 +55,6 @@ CLAUDE.md
 
 # Local CLAUDE instruction
 CLAUDE.local.md
+
+# Downloaded external test data (make testdata)
+third_party/testdata

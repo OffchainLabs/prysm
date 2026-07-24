@@ -113,7 +113,7 @@ func (vs *Server) validateSubmittedBid(ctx context.Context, signed *ethpb.Signed
 	if err := v.VerifyBuilderCanCoverBid(st); err != nil {
 		return status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	if err := v.VerifyParentBlockHash(vs.ForkchoiceFetcher.BlockHash); err != nil {
+	if err := v.VerifyParentBlockHash(vs.ForkchoiceFetcher.HasPayloadBlockHash); err != nil {
 		return status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	parentGasLimit, err := vs.ForkchoiceFetcher.GasLimit(parentRoot)

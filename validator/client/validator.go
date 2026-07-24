@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/client"
@@ -97,7 +98,7 @@ type validator struct {
 	submittedPayloadAtts         map[submittedPayloadAttKey][]uint64
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
-	interopKeysConfig            *local.InteropKeymanagerConfig
+	retryInFlight                atomic.Bool
 	domainDataCache              *ristretto.Cache[string, proto.Message]
 	slotFeed                     *event.Feed
 	graffitiStruct               *graffiti.Graffiti
@@ -177,12 +178,6 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 			return errors.Wrap(err, "could not initialize key manager")
 		}
 		v.km = keyManager
-	case v.interopKeysConfig != nil:
-		keyManager, err := local.NewInteropKeymanager(ctx, v.interopKeysConfig.Offset, v.interopKeysConfig.NumValidatorKeys)
-		if err != nil {
-			return errors.Wrap(err, "could not generate interop keys for key manager")
-		}
-		v.km = keyManager
 	case v.enableAPI:
 		km, err := waitForWebWalletInitialization(ctx, v.walletInitializedFeed, v.walletInitializedChan)
 		if err != nil {
@@ -192,6 +187,7 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 	default:
 		return wallet.ErrNoWalletFound
 	}
+
 	if v.km == nil {
 		return errors.New("key manager not set")
 	}

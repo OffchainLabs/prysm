@@ -1,0 +1,12 @@
+diff -urN a/sign.go b/sign.go
+--- a/sign.go	2026-07-09 11:43:17
++++ b/sign.go	2026-07-09 11:43:17
+@@ -53,7 +53,7 @@
+ 		return err
+ 	}
+ 
+-	xm := proto.CloneOf(m)
++	xm := proto.Clone(m).(*pb.Message)
+ 	xm.Signature = nil
+ 	xm.Key = nil
+ 	bytes, err := proto.Marshal(xm)
