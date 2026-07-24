@@ -375,7 +375,7 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		lbhRoot := bytesutil.ToBytes32(state.latestBlockHash)
 		fieldRoots[types.LatestBlockHash.RealPosition()] = lbhRoot[:]
 
-		expectedWithdrawalsRoot, err := ssz.WithdrawalSliceRoot(state.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+		expectedWithdrawalsRoot, err := stateutil.PayloadExpectedWithdrawalsRoot(state.version, state.payloadExpectedWithdrawals)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute payload expected withdrawals root")
 		}

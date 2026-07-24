@@ -1,8 +1,6 @@
 package stateutil
 
 import (
-	"fmt"
-
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
@@ -10,9 +8,6 @@ import (
 )
 
 func PendingPartialWithdrawalsRoot(stateVersion int, slice []*ethpb.PendingPartialWithdrawal) ([32]byte, error) {
-	if uint64(len(slice)) > fieldparams.PendingPartialWithdrawalsLimit {
-		return [32]byte{}, fmt.Errorf("slice exceeds max length %d", fieldparams.PendingPartialWithdrawalsLimit)
-	}
 	if features.ProgressiveSSZEnabled(stateVersion) {
 		return pendingPartialWithdrawalsRootProgressive(slice)
 	}

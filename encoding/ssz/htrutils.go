@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -112,17 +111,16 @@ func TransactionsRootProgressive(txs [][]byte) ([32]byte, error) {
 	return SliceRootProgressive(transactions)
 }
 
-// WithdrawalSliceRoot computes the HTR of withdrawals for the supplied state version.
-//
-// IMPORTANT: for progressive merkleization you need to pass an additional appropriate stateVersion
-func WithdrawalSliceRoot(withdrawals []*enginev1.Withdrawal, limit uint64, stateVersion ...int) ([32]byte, error) {
-	if features.ProgressiveSSZEnabled(stateVersion[0]) {
-		return SliceRootProgressive(withdrawals)
-	}
-	if uint64(len(withdrawals)) > limit {
-		return [32]byte{}, errors.Errorf("slice exceeds max length %d", limit)
-	}
+// WithdrawalSliceRoot computes the HTR of a slice of withdrawals.
+// The limit parameter is used as input to the bitwise merkleization algorithm.
+func WithdrawalSliceRoot(withdrawals []*enginev1.Withdrawal, limit uint64) ([32]byte, error) {
 	return SliceRoot(withdrawals, limit)
+}
+
+// WithdrawalSliceRootProgressive computes the progressive HTR of a slice of
+// withdrawals.
+func WithdrawalSliceRootProgressive(withdrawals []*enginev1.Withdrawal) ([32]byte, error) {
+	return SliceRootProgressive(withdrawals)
 }
 
 // DepositRequestsSliceRoot computes the HTR of a slice of deposit requests.

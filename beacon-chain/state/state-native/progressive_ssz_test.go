@@ -30,56 +30,8 @@ func TestProgressiveSSZEnabled(t *testing.T) {
 	require.Equal(t, false, features.ProgressiveSSZEnabled(version.Fulu))
 }
 
-func TestRootSelector_ProgressiveSSZGate_ValidatorsBalancesAndExpectedWithdrawals(t *testing.T) {
-	st := newGloasStateForProgressiveSSZTests(t)
-
-	reset := features.InitWithReset(&features.Flags{})
-	defer reset()
-
-	legacyValidatorsRoot, err := st.rootSelector(context.Background(), types.Validators)
-	require.NoError(t, err)
-	expectedLegacyValidatorsRoot, err := stateutil.ValidatorRegistryRoot(st.version, st.validatorsCompactVal())
-	require.NoError(t, err)
-	require.Equal(t, expectedLegacyValidatorsRoot, legacyValidatorsRoot)
-
-	legacyBalancesRoot, err := st.rootSelector(context.Background(), types.Balances)
-	require.NoError(t, err)
-	expectedLegacyBalancesRoot, err := stateutil.Uint64ListRoot(st.version, st.balancesVal())
-	require.NoError(t, err)
-	require.Equal(t, expectedLegacyBalancesRoot, legacyBalancesRoot)
-
-	legacyExpectedWithdrawalsRoot, err := st.rootSelector(context.Background(), types.PayloadExpectedWithdrawals)
-	require.NoError(t, err)
-	expectedLegacyExpectedWithdrawalsRoot, err := ssz.SliceRoot(st.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
-	require.NoError(t, err)
-	require.Equal(t, expectedLegacyExpectedWithdrawalsRoot, legacyExpectedWithdrawalsRoot)
-
-	reset = features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
-	defer reset()
-
-	progressiveValidatorsRoot, err := st.rootSelector(context.Background(), types.Validators)
-	require.NoError(t, err)
-	expectedProgressiveValidatorsRoot, err := stateutil.ValidatorRegistryRoot(st.version, st.validatorsCompactVal())
-	require.NoError(t, err)
-	require.Equal(t, expectedProgressiveValidatorsRoot, progressiveValidatorsRoot)
-	require.DeepNotSSZEqual(t, legacyValidatorsRoot, progressiveValidatorsRoot)
-
-	progressiveBalancesRoot, err := st.rootSelector(context.Background(), types.Balances)
-	require.NoError(t, err)
-	expectedProgressiveBalancesRoot, err := stateutil.Uint64ListRoot(st.version, st.balancesVal())
-	require.NoError(t, err)
-	require.Equal(t, expectedProgressiveBalancesRoot, progressiveBalancesRoot)
-	require.DeepNotSSZEqual(t, legacyBalancesRoot, progressiveBalancesRoot)
-
-	progressiveExpectedWithdrawalsRoot, err := st.rootSelector(context.Background(), types.PayloadExpectedWithdrawals)
-	require.NoError(t, err)
-	expectedProgressiveExpectedWithdrawalsRoot, err := ssz.SliceRootProgressive(st.payloadExpectedWithdrawals)
-	require.NoError(t, err)
-	require.Equal(t, expectedProgressiveExpectedWithdrawalsRoot, progressiveExpectedWithdrawalsRoot)
-	require.DeepNotSSZEqual(t, legacyExpectedWithdrawalsRoot, progressiveExpectedWithdrawalsRoot)
-}
-
 func TestComputeFieldRootsWithHasher_ProgressiveSSZFields(t *testing.T) {
+	ctx := context.Background()
 	st := newGloasStateForProgressiveSSZTests(t)
 
 	tests := []struct {
@@ -122,6 +74,22 @@ func TestComputeFieldRootsWithHasher_ProgressiveSSZFields(t *testing.T) {
 			require.DeepEqual(t, pendingPartialWithdrawalsRoot[:], roots[types.PendingPartialWithdrawals.RealPosition()])
 			require.DeepEqual(t, pendingConsolidationsRoot[:], roots[types.PendingConsolidations.RealPosition()])
 			require.DeepEqual(t, expectedWithdrawalsRoot[:], roots[types.PayloadExpectedWithdrawals.RealPosition()])
+
+			rootSelectorPendingDepositsRoot, err := st.rootSelector(ctx, types.PendingDeposits)
+			require.NoError(t, err)
+			require.DeepEqual(t, rootSelectorPendingDepositsRoot[:], roots[types.PendingDeposits.RealPosition()])
+
+			rootSelectorPendingPartialWithdrawalsRoot, err := st.rootSelector(ctx, types.PendingPartialWithdrawals)
+			require.NoError(t, err)
+			require.DeepEqual(t, rootSelectorPendingPartialWithdrawalsRoot[:], roots[types.PendingPartialWithdrawals.RealPosition()])
+
+			rootSelectorPendingConsolidationsRoot, err := st.rootSelector(ctx, types.PendingConsolidations)
+			require.NoError(t, err)
+			require.DeepEqual(t, rootSelectorPendingConsolidationsRoot[:], roots[types.PendingConsolidations.RealPosition()])
+
+			rootSelectorExpectedWithdrawalsRoot, err := st.rootSelector(ctx, types.PayloadExpectedWithdrawals)
+			require.NoError(t, err)
+			require.DeepEqual(t, rootSelectorExpectedWithdrawalsRoot[:], roots[types.PayloadExpectedWithdrawals.RealPosition()])
 		})
 	}
 }

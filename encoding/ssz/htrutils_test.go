@@ -440,8 +440,15 @@ func TestWithdrawalSliceRoot_ProgressiveSSZGate(t *testing.T) {
 
 			for _, tt := range tests {
 				t.Run(tt.name, func(t *testing.T) {
-					got, err := ssz.WithdrawalSliceRoot(tt.withdrawals, 16)
-					require.NoError(t, err)
+					var got [32]byte
+					var err error
+					if gate.progressive {
+						got, err = ssz.WithdrawalSliceRootProgressive(tt.withdrawals)
+						require.NoError(t, err)
+					} else {
+						got, err = ssz.WithdrawalSliceRoot(tt.withdrawals, 16)
+						require.NoError(t, err)
+					}
 
 					var want [32]byte
 					if gate.progressive {
