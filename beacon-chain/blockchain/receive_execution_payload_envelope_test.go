@@ -2,6 +2,9 @@ package blockchain
 
 import (
 	"bytes"
+	"context"
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
@@ -260,4 +263,70 @@ func countStateEventsByType(ch chan *feed.Event) map[feed.EventType]int {
 			return got
 		}
 	}
+}
+
+// TestReceiveExecutionPayloadEnvelope_ConcurrentForkchoiceReadNoRace runs the real
+// receiver concurrently with fork-choice payload inserts. Without the read lock on
+// the optimistic-status read the race detector reports a concurrent map access.
+func TestReceiveExecutionPayloadEnvelope_ConcurrentForkchoiceReadNoRace(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	cfg.InitializeForkSchedule()
+	params.OverrideBeaconConfig(cfg)
+
+	s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+	ctx := context.Background()
+
+	readerRoot := bytesutil.ToBytes32([]byte("reader-root"))
+	base, blk, signedProto := gloasEnvelopeFixture(t, readerRoot)
+	insertGloasBlock(t, s, base, blk, readerRoot)
+	signed, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedProto)
+	require.NoError(t, err)
+
+	wbase, wblk := testGloasState(t, 6, readerRoot, bytesutil.ToBytes32([]byte("writer-hash")))
+	wstate, err := state_native.InitializeFromProtoUnsafeGloas(wbase)
+	require.NoError(t, err)
+	wsigned, err := blocks.NewSignedBeaconBlock(wblk)
+	require.NoError(t, err)
+
+	// Assert the happy path works
+	require.NoError(t, s.ReceiveExecutionPayloadEnvelope(ctx, signed))
+	firstWriter, err := blocks.NewROBlockWithRoot(wsigned, bytesutil.ToBytes32([]byte("w-init")))
+	require.NoError(t, err)
+	require.NoError(t, s.InsertNode(ctx, wstate, firstWriter))
+
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Reader
+	go func() {
+		defer wg.Done()
+		defer close(done)
+		for i := 0; i < 40; i++ {
+			_ = s.ReceiveExecutionPayloadEnvelope(ctx, signed)
+		}
+	}()
+
+	// Writer: continuously insert fork-choice nodes under the write lock.
+	go func() {
+		defer wg.Done()
+		for i := 0; ; i++ {
+			select {
+			case <-done:
+				return
+			default:
+			}
+			root := bytesutil.ToBytes32([]byte(fmt.Sprintf("w-%d", i)))
+			roblock, err := blocks.NewROBlockWithRoot(wsigned, root)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			_ = s.InsertNode(ctx, wstate, roblock)
+		}
+	}()
+
+	wg.Wait()
 }
