@@ -19,6 +19,7 @@ import (
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -307,6 +308,114 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestService_validateCommitteeIndexBeaconAttestationWaitsForBlock(t *testing.T) {
+	p := p2ptest.NewTestP2P(t)
+	db := dbtest.SetupDB(t)
+	chain := &mockChain.ChainService{
+		Genesis:          time.Now().Add(-time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+		ValidatorsRoot:   [32]byte{'A'},
+		ValidAttestation: true,
+		DB:               db,
+		Optimistic:       true,
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	s := &Service{
+		ctx: ctx,
+		cfg: &config{
+			initialSync:         &mockSync.Sync{IsSyncing: false},
+			p2p:                 p,
+			beaconDB:            db,
+			chain:               chain,
+			clock:               startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			attestationNotifier: (&mockChain.ChainService{}).OperationNotifier(),
+		},
+		blkRootToPendingAtts:             make(map[[32]byte][]any),
+		seenUnAggregatedAttestationCache: lruwrpr.New(10),
+		signatureChan:                    make(chan *signatureVerifier, verifierLimit),
+		attestationBlockWaiter:           newAttestationBlockWaiter(time.Second, 1, 1, 1),
+	}
+	s.initCaches()
+	go s.verifierRoutine()
+
+	block := util.NewBeaconBlock()
+	block.Block.Slot = 1
+	blockRoot, err := block.Block.HashTreeRoot()
+	require.NoError(t, err)
+	wrappedBlock, err := consensusblocks.NewSignedBeaconBlock(block)
+	require.NoError(t, err)
+
+	savedState, keys := util.DeterministicGenesisState(t, 64)
+	require.NoError(t, savedState.SetSlot(1))
+	chain.State = savedState
+	chain.FinalizedCheckPoint = &ethpb.Checkpoint{
+		Root:  blockRoot[:],
+		Epoch: 0,
+	}
+
+	att := &ethpb.Attestation{
+		AggregationBits: bitfield.Bitlist{0b101},
+		Data: &ethpb.AttestationData{
+			BeaconBlockRoot: blockRoot[:],
+			CommitteeIndex:  0,
+			Slot:            1,
+			Target: &ethpb.Checkpoint{
+				Epoch: 0,
+				Root:  blockRoot[:],
+			},
+			Source: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+		},
+	}
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), savedState, att.Data.Slot, att.Data.CommitteeIndex)
+	require.NoError(t, err)
+	domain, err := signing.Domain(
+		savedState.Fork(),
+		att.Data.Target.Epoch,
+		params.BeaconConfig().DomainBeaconAttester,
+		savedState.GenesisValidatorsRoot(),
+	)
+	require.NoError(t, err)
+	attRoot, err := signing.ComputeSigningRoot(att.Data, domain)
+	require.NoError(t, err)
+	att.Signature = keys[committee[0]].Sign(attRoot[:]).Marshal()
+
+	digest, err := s.currentForkDigest()
+	require.NoError(t, err)
+	topic := fmt.Sprintf("/eth2/%x/beacon_attestation_1", digest) + p.Encoding().ProtocolSuffix()
+	buf := new(bytes.Buffer)
+	_, err = p.Encoding().EncodeGossip(buf, att)
+	require.NoError(t, err)
+	msg := &pubsub.Message{
+		Message: &pubsubpb.Message{
+			Data:  buf.Bytes(),
+			Topic: &topic,
+		},
+	}
+
+	saved := make(chan error, 1)
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		if err := db.SaveBlock(ctx, wrappedBlock); err != nil {
+			saved <- err
+			return
+		}
+		if err := db.SaveState(ctx, savedState, blockRoot); err != nil {
+			saved <- err
+			return
+		}
+		s.attestationBlockWaiter.notify(blockRoot)
+		saved <- nil
+	}()
+
+	result, err := s.validateCommitteeIndexBeaconAttestation(ctx, "peer", msg)
+	require.NoError(t, <-saved)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, result)
+	require.Equal(t, true, msg.ValidatorData != nil)
+	require.Equal(t, 0, len(s.blkRootToPendingAtts))
 }
 
 func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {

@@ -125,6 +125,20 @@ var (
 		Name: "gossip_attestation_bad_signature_batch_total",
 		Help: "Increased when a gossip attestation has a bad signature batch",
 	})
+	attestationBlockWaitTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "gossip_attestation_block_wait_total",
+			Help: "Count of attestation block availability waits by outcome.",
+		},
+		[]string{"outcome"},
+	)
+	attestationBlockWaitDuration = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "gossip_attestation_block_wait_milliseconds",
+			Help:    "Time spent waiting for an attestation's referenced block and state.",
+			Buckets: []float64{10, 25, 50, 100, 200, 400, 600},
+		},
+	)
 
 	// Attestation and block gossip verification performance.
 	aggregateAttestationVerificationGossipSummary = promauto.NewSummary(

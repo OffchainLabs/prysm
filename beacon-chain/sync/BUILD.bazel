@@ -3,6 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "attestation_block_waiter.go",
         "batch_verifier.go",
         "block_batcher.go",
         "context.go",
@@ -181,6 +182,7 @@ go_test(
     name = "go_default_test",
     size = "small",
     srcs = [
+        "attestation_block_waiter_test.go",
         "batch_verifier_test.go",
         "blobs_test.go",
         "block_batcher_test.go",
