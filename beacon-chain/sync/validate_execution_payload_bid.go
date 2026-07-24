@@ -61,8 +61,7 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 
 	// [IGNORE] this is the first signed bid seen with a valid signature from the given builder for the tuple (bid.slot, bid.parent_block_hash, bid.parent_block_root).
 	// Cache is populated only after VerifySignature below; a hit here implies a valid-sig bid was already seen.
-	tupleKey := executionPayloadBidTupleKey(bid)
-	if s.hasSeenExecutionPayloadBidTuple(tupleKey) {
+	if s.hasSeenExecutionPayloadBidTuple(executionPayloadBidTupleKey(bid)) {
 		return pubsub.ValidationIgnore, nil
 	}
 	// [IGNORE] no more than MAX_BIDS_PER_BUILDER signed bids with a valid signature have been seen from the given builder for this slot.
@@ -118,7 +117,7 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifySignature(st); err != nil {
 		return pubsub.ValidationReject, err
 	}
-	s.setSeenExecutionPayloadBid(bid.Slot(), tupleKey, builderKey)
+	s.setSeenExecutionPayloadBid(bid.Slot(), executionPayloadBidTupleKey(bid), builderKey)
 	// [IGNORE] this bid is the highest value bid seen for the tuple (bid.slot, bid.parent_block_hash, bid.parent_block_root).
 	if !s.isHighestExecutionPayloadBid(bid) {
 		return pubsub.ValidationIgnore, nil
