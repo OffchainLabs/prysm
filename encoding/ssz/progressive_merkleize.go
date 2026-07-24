@@ -2,6 +2,7 @@ package ssz
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 
@@ -108,7 +109,7 @@ func ByteSliceRootProgressive(slice []byte) ([32]byte, error) {
 // mix_in_active_fields(merkleize_progressive(fieldRoots), activeFields).
 func ContainerRootProgressive(fieldRoots [][32]byte, activeFields []bool) ([32]byte, error) {
 	if len(activeFields) == 0 {
-		return [32]byte{}, fmt.Errorf("active fields cannot be empty")
+		return [32]byte{}, errors.New("active fields cannot be empty")
 	}
 
 	if len(activeFields) > maxProgressiveActiveFields {
