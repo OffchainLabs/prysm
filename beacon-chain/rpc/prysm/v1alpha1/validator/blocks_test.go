@@ -356,11 +356,13 @@ func TestServer_StreamSlotsVerified_OnHeadUpdated(t *testing.T) {
 	exitRoutine := make(chan bool)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+	prevRoot := [32]byte{1}
+	currRoot := [32]byte{2}
 	mockStream := mock.NewMockBeaconNodeValidator_StreamSlotsServer(ctrl)
 	mockStream.EXPECT().Send(&ethpb.StreamSlotsResponse{
 		Slot:                      123,
-		PreviousDutyDependentRoot: params.BeaconConfig().ZeroHash[:],
-		CurrentDutyDependentRoot:  params.BeaconConfig().ZeroHash[:],
+		PreviousDutyDependentRoot: prevRoot[:],
+		CurrentDutyDependentRoot:  currRoot[:],
 	}).Do(func(arg0 any) {
 		exitRoutine <- true
 	})
@@ -372,15 +374,18 @@ func TestServer_StreamSlotsVerified_OnHeadUpdated(t *testing.T) {
 			assert.NoError(tt, err)
 		}
 	}(t)
-	wrappedBlk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlock{Block: &ethpb.BeaconBlock{Slot: 123, Body: &ethpb.BeaconBlockBody{}}})
-	require.NoError(t, err)
-	// Send in a loop to ensure it is delivered (busy wait for the service to subscribe to the state feed).
+	// Busy wait for the subscription using an event type the stream must not forward;
+	// the strict mock fails the test if it triggers a Send.
 	for sent := 0; sent == 0; {
 		sent = server.StateNotifier.StateFeed().Send(&feed.Event{
 			Type: statefeed.BlockProcessed,
-			Data: &statefeed.BlockProcessedData{Slot: 123, BlockRoot: [32]byte{}, SignedBlock: wrappedBlk},
+			Data: &statefeed.BlockProcessedData{Slot: 123, BlockRoot: [32]byte{}},
 		})
 	}
+	server.StateNotifier.StateFeed().Send(&feed.Event{
+		Type: statefeed.NewHead,
+		Data: &statefeed.HeadData{Slot: 123, PreviousDutyDependentRoot: prevRoot, CurrentDutyDependentRoot: currRoot},
+	})
 	<-exitRoutine
 }
 

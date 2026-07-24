@@ -51,7 +51,8 @@ func (vs *Server) StreamBlocksAltair(req *ethpb.StreamBlocksRequest, stream ethp
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
-// StreamSlots sends a the block's slot and dependent roots to clients every single time a block is received by the beacon node.
+// StreamSlots sends the slot and duty dependent roots to clients on every new chain head
+// (VerifiedOnly) or every time a block is received by the beacon node.
 func (vs *Server) StreamSlots(req *ethpb.StreamSlotsRequest, stream ethpb.BeaconNodeValidator_StreamSlotsServer) error {
 	ch := make(chan *feed.Event, 1)
 	var sub event.Subscription
@@ -68,16 +69,16 @@ func (vs *Server) StreamSlots(req *ethpb.StreamSlotsRequest, stream ethpb.Beacon
 			var s primitives.Slot
 			var currDependentRoot, prevDependentRoot [32]byte
 			if req.VerifiedOnly {
-				if ev.Type != statefeed.BlockProcessed {
+				if ev.Type != statefeed.NewHead {
 					continue
 				}
-				data, ok := ev.Data.(*statefeed.BlockProcessedData)
+				data, ok := ev.Data.(*statefeed.HeadData)
 				if !ok || data == nil {
 					continue
 				}
 				s = data.Slot
-				currDependentRoot = data.CurrDependentRoot
-				prevDependentRoot = data.PrevDependentRoot
+				currDependentRoot = data.CurrentDutyDependentRoot
+				prevDependentRoot = data.PreviousDutyDependentRoot
 			} else {
 				if ev.Type != blockfeed.ReceivedBlock {
 					continue
