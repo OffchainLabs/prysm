@@ -137,6 +137,49 @@ func TestHashTreeRoot_ProgressiveSSZGate(t *testing.T) {
 	require.Equal(t, progressiveRoot, progressiveRootAgain)
 }
 
+func TestHashTreeRoot_ProgressiveSSZGate(t *testing.T) {
+	st := newGloasStateForProgressiveSSZTests(t)
+
+	reset := features.InitWithReset(&features.Flags{})
+	defer reset()
+
+	legacyRoot, err := st.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+
+	legacyFieldRoots, err := ComputeFieldRootsWithHasher(context.Background(), st)
+	require.NoError(t, err)
+	legacyLayers := stateutil.Merkleize(legacyFieldRoots)
+	expectedLegacyRoot := bytesutil.ToBytes32(legacyLayers[len(legacyLayers)-1][0])
+	require.Equal(t, expectedLegacyRoot, legacyRoot)
+
+	reset = features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	defer reset()
+
+	progressiveRoot, err := st.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+
+	progressiveFieldRootsBytes, err := ComputeFieldRootsWithHasher(context.Background(), st)
+	require.NoError(t, err)
+	progressiveFieldRoots := make([][32]byte, len(progressiveFieldRootsBytes))
+	for i := range progressiveFieldRootsBytes {
+		progressiveFieldRoots[i] = bytesutil.ToBytes32(progressiveFieldRootsBytes[i])
+	}
+
+	activeFields := make([]bool, len(progressiveFieldRoots))
+	for i := range activeFields {
+		activeFields[i] = true
+	}
+
+	expectedProgressiveRoot, err := ssz.ContainerRootProgressive(progressiveFieldRoots, activeFields)
+	require.NoError(t, err)
+	require.Equal(t, expectedProgressiveRoot, progressiveRoot)
+	require.DeepNotSSZEqual(t, legacyRoot, progressiveRoot)
+
+	progressiveRootAgain, err := st.HashTreeRoot(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, progressiveRoot, progressiveRootAgain)
+}
+
 func newGloasStateForProgressiveSSZTests(t *testing.T) *BeaconState {
 	t.Helper()
 
