@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -58,10 +59,15 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 		return pubsub.ValidationIgnore, err
 	}
 
-	// [IGNORE] this is the first signed bid seen with a valid signature from the given builder for this slot.
+	// [IGNORE] this is the first signed bid seen with a valid signature from the given builder for the tuple (bid.slot, bid.parent_block_hash, bid.parent_block_root).
 	// Cache is populated only after VerifySignature below; a hit here implies a valid-sig bid was already seen.
+	tupleKey := executionPayloadBidTupleKey(bid)
+	if s.hasSeenExecutionPayloadBidTuple(tupleKey) {
+		return pubsub.ValidationIgnore, nil
+	}
+	// [IGNORE] no more than MAX_BIDS_PER_BUILDER signed bids with a valid signature have been seen from the given builder for this slot.
 	builderKey := executionPayloadBidBuilderKey(bid.Slot(), bid.BuilderIndex())
-	if s.hasSeenExecutionPayloadBidBuilder(builderKey) {
+	if s.executionPayloadBidCount(builderKey) >= params.BeaconConfig().MaxBidsPerBuilder {
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -112,7 +118,7 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifySignature(st); err != nil {
 		return pubsub.ValidationReject, err
 	}
-	s.setSeenExecutionPayloadBidBuilder(bid.Slot(), builderKey)
+	s.setSeenExecutionPayloadBid(bid.Slot(), tupleKey, builderKey)
 	// [IGNORE] this bid is the highest value bid seen for the tuple (bid.slot, bid.parent_block_hash, bid.parent_block_root).
 	if !s.isHighestExecutionPayloadBid(bid) {
 		return pubsub.ValidationIgnore, nil
@@ -170,13 +176,32 @@ func executionPayloadBidBuilderKey(slot primitives.Slot, builderIndex primitives
 	return string(b)
 }
 
-func (s *Service) hasSeenExecutionPayloadBidBuilder(key string) bool {
+func executionPayloadBidTupleKey(bid interfaces.ROExecutionPayloadBid) string {
+	parentHash := bid.ParentBlockHash()
+	parentRoot := bid.ParentBlockRoot()
+	return executionPayloadBidBuilderKey(bid.Slot(), bid.BuilderIndex()) + string(parentHash[:]) + string(parentRoot[:])
+}
+
+func (s *Service) hasSeenExecutionPayloadBidTuple(key string) bool {
 	_, seen := s.seenExecutionPayloadBidCache.Get(key)
 	return seen
 }
 
-func (s *Service) setSeenExecutionPayloadBidBuilder(slot primitives.Slot, key string) {
-	s.seenExecutionPayloadBidCache.Add(slot, key, true)
+func (s *Service) executionPayloadBidCount(key string) uint64 {
+	v, ok := s.seenExecutionPayloadBidCache.Get(key)
+	if !ok {
+		return 0
+	}
+	count, ok := v.(uint64)
+	if !ok {
+		return 0
+	}
+	return count
+}
+
+func (s *Service) setSeenExecutionPayloadBid(slot primitives.Slot, tupleKey, builderKey string) {
+	s.seenExecutionPayloadBidCache.Add(slot, tupleKey, true)
+	s.seenExecutionPayloadBidCache.Add(slot, builderKey, s.executionPayloadBidCount(builderKey)+1)
 }
 
 // proposerDependentRoot returns the post-Fulu spec's proposer dep root for
