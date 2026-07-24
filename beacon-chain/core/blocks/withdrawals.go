@@ -183,8 +183,7 @@ func ProcessWithdrawals(st state.BeaconState, executionData interfaces.Execution
 		}
 	}
 
-	var expectedRoot [32]byte
-	expectedRoot, err = withdrawalSliceRoot(expectedWithdrawals, st.Version())
+	expectedRoot, err := withdrawalSliceRoot(expectedWithdrawals, st.Version())
 
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get expected withdrawals root")
