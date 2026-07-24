@@ -1020,10 +1020,7 @@ func verifyByRootDataColumnSidecars(
 		if !roDataColumns[i].IsGloas() {
 			continue
 		}
-		block, ok := blockByRoot[roDataColumns[i].BlockRoot()]
-		if !ok {
-			return nil, fmt.Errorf("no local block for sidecar root %#x: %w", roDataColumns[i].BlockRoot(), ErrSidecarHeaderMismatch)
-		}
+		block := blockByRoot[roDataColumns[i].BlockRoot()]
 		commitments, err := block.Block().Body().BlobKzgCommitments()
 		if err != nil {
 			return nil, errors.Wrap(err, "get bid blob kzg commitments")
@@ -1046,11 +1043,7 @@ func verifyByRootDataColumnSidecars(
 	}
 
 	for _, sidecar := range roDataColumns {
-		block, ok := blockByRoot[sidecar.BlockRoot()]
-		if !ok {
-			return nil, fmt.Errorf("no local block for sidecar root %#x: %w", sidecar.BlockRoot(), ErrSidecarHeaderMismatch)
-		}
-
+		block := blockByRoot[sidecar.BlockRoot()]
 		if err := verifySidecarHeaderMatchesBlock(sidecar, block); err != nil {
 			return nil, fmt.Errorf("root %#x: %w", sidecar.BlockRoot(), err)
 		}
