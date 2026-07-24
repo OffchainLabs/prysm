@@ -64,3 +64,21 @@ message BuilderPreferenceV1 {
   // When set, only bids signed by this builder key are accepted from this url.
   bytes pubkey = 5;
 }
+
+// ProduceBuilderEntryV1 is the SSZ-encodable form of one produceBlockV4 builder
+// entry; absent optionals collapse to sentinels (min_bid 0, boost 100, zero pubkey).
+message ProduceBuilderEntryV1 {
+  bytes url = 1 [ (ethereum.eth.ext.ssz_max) = "2048" ];
+  BuilderPreferencesRequestV1 request = 2;
+  uint64 min_bid = 3 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
+  ];
+  uint64 builder_boost_factor = 4;
+  bytes pubkey = 5 [ (ethereum.eth.ext.ssz_size) = "48" ];
+}
+
+message ProduceBuilderEntryListV1 {
+  repeated ProduceBuilderEntryV1 entries = 1
+      [ (ethereum.eth.ext.ssz_max) = "256" ];
+}

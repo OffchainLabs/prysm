@@ -5,7 +5,9 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -40,12 +42,20 @@ type requestAuthJson struct {
 	Slot string `json:"slot"`
 }
 
-// parseBuilderPreferencesBody decodes the JIT produce-block POST body. Malformed
-// entries are ignored per the spec; an empty body yields no preferences.
+// parseBuilderPreferencesBody decodes the JIT produce-block POST body, accepting
+// SSZ (octet-stream) or JSON. Malformed entries are ignored per the spec; an empty
+// body yields no preferences.
 func parseBuilderPreferencesBody(r *http.Request) ([]*eth.BuilderPreferenceV1, error) {
 	if r.Body == nil {
 		return nil, nil
 	}
+	if strings.Contains(r.Header.Get("Content-Type"), api.OctetStreamMediaType) {
+		return parseBuilderPreferencesSSZ(r)
+	}
+	return parseBuilderPreferencesJSON(r)
+}
+
+func parseBuilderPreferencesJSON(r *http.Request) ([]*eth.BuilderPreferenceV1, error) {
 	var entries []*builderEntryJson
 	if err := json.NewDecoder(r.Body).Decode(&entries); err != nil {
 		if errors.Is(err, io.EOF) {
@@ -53,20 +63,52 @@ func parseBuilderPreferencesBody(r *http.Request) ([]*eth.BuilderPreferenceV1, e
 		}
 		return nil, errors.Wrap(err, "could not decode builder preferences")
 	}
-	out := make([]*eth.BuilderPreferenceV1, 0, len(entries))
-	seen := make(map[string]bool, len(entries))
+	prefs := make([]*eth.BuilderPreferenceV1, 0, len(entries))
 	for _, p := range entries {
 		conv, err := p.toConsensus()
 		if err != nil {
 			log.WithError(err).Debug("Ignoring malformed builder entry")
 			continue
 		}
-		// Duplicate urls invalidate the whole request, unlike malformed entries.
-		if seen[conv.Url] {
+		prefs = append(prefs, conv)
+	}
+	return dedupeBuilderPreferences(prefs)
+}
+
+func parseBuilderPreferencesSSZ(r *http.Request) ([]*eth.BuilderPreferenceV1, error) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not read builder preferences")
+	}
+	if len(body) == 0 {
+		return nil, nil
+	}
+	list := &eth.ProduceBuilderEntryListV1{}
+	if err := list.UnmarshalSSZ(body); err != nil {
+		return nil, errors.Wrap(err, "could not decode builder preferences")
+	}
+	prefs := make([]*eth.BuilderPreferenceV1, 0)
+	for _, p := range eth.BuilderPreferencesFromSSZ(list) {
+		if p.Url == "" || p.Request == nil || p.Request.Auth == nil || p.Request.Auth.Message == nil {
+			log.Debug("Ignoring malformed builder entry")
+			continue
+		}
+		prefs = append(prefs, p)
+	}
+	return dedupeBuilderPreferences(prefs)
+}
+
+// dedupeBuilderPreferences enforces the unique-url rule: duplicates invalidate the
+// whole request, unlike malformed entries which were already skipped.
+func dedupeBuilderPreferences(prefs []*eth.BuilderPreferenceV1) ([]*eth.BuilderPreferenceV1, error) {
+	out := make([]*eth.BuilderPreferenceV1, 0, len(prefs))
+	seen := make(map[string]bool, len(prefs))
+	for _, p := range prefs {
+		if seen[p.Url] {
 			return nil, errors.Errorf("two builder entries share the same url")
 		}
-		seen[conv.Url] = true
-		out = append(out, conv)
+		seen[p.Url] = true
+		out = append(out, p)
 	}
 	return out, nil
 }

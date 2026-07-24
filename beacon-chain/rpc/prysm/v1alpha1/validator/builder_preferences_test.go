@@ -34,7 +34,12 @@ func TestSubmitBuilderPreferences(t *testing.T) {
 	t.Run("rejects missing url", func(t *testing.T) {
 		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{}}
 		_, err := vs.SubmitBuilderPreferences(t.Context(), aotPrefReq(""))
-		require.ErrorContains(t, "missing the builder url", err)
+		require.ErrorContains(t, "malformed builder url", err)
+	})
+	t.Run("rejects malformed url", func(t *testing.T) {
+		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{}}
+		_, err := vs.SubmitBuilderPreferences(t.Context(), aotPrefReq("ftp://nohost"))
+		require.ErrorContains(t, "malformed builder url", err)
 	})
 	t.Run("rejects empty request", func(t *testing.T) {
 		vs := &Server{BlockBuilder: &builderTest.MockBuilderService{}}

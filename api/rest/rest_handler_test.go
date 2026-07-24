@@ -48,6 +48,21 @@ func TestPostSSZ_NonJSONErrorBodyIsTyped(t *testing.T) {
 	require.Equal(t, http.StatusUnsupportedMediaType, errJson.Code)
 }
 
+// PostSSZ always sends an SSZ (octet-stream) request body.
+func TestPostSSZ_ContentType(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("Content-Type")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	c := NewHandler(http.Client{}, srv.URL)
+
+	_, _, err := c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
+	require.NoError(t, err)
+	require.Equal(t, api.OctetStreamMediaType, got)
+}
+
 func TestGetSSZ_NonJSONErrorBodyIsTyped(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "Not Acceptable", http.StatusNotAcceptable)

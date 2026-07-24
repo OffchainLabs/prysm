@@ -1529,6 +1529,28 @@ func TestVersionHeaderFromRequest(t *testing.T) {
 	})
 }
 
+// The winning builder url arrives as the Eth-Builder-Url request header on publish
+// and must be stamped onto the block forwarded to the v1alpha1 proposer.
+func TestPublishBlock_StampsBuilderUrlHeader(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	const url = "https://builder.example"
+	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+	v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
+		return req.BuilderUrl == url
+	}))
+	server := &Server{
+		V1Alpha1ValidatorServer: v1alpha1Server,
+		SyncChecker:             &mockSync.Sync{IsSyncing: false},
+	}
+	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.Phase0Block)))
+	request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+	request.Header.Set(api.EthBuilderUrlHeader, url)
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+	server.PublishBlockV2(writer, request)
+	assert.Equal(t, http.StatusOK, writer.Code)
+}
+
 func TestPublishBlockV2(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	t.Run("Phase 0", func(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
@@ -1795,6 +1796,23 @@ func TestErrorMessage_unexpectedStatusErr(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A builder URL carrying credentials as userinfo or a query token must never leak
+// into the error message; MaskCredentialsLogging masks both (url.Redacted did not).
+func TestUnexpectedStatusErr_RedactsCredentials(t *testing.T) {
+	const secret = "supersecrettoken"
+	req := &http.Request{URL: &url.URL{
+		Scheme:   "https",
+		User:     url.User(secret),
+		Host:     "builder.example",
+		Path:     "/eth/v1/builder/header",
+		RawQuery: "api_key=" + secret,
+	}}
+	resp := &http.Response{Request: req, StatusCode: http.StatusBadGateway, Body: io.NopCloser(bytes.NewReader([]byte("upstream down")))}
+	err := unexpectedStatusErr(resp, []int{http.StatusOK})
+	require.NotNil(t, err)
+	require.Equal(t, false, strings.Contains(err.Error(), secret), "error leaked credentials: %s", err.Error())
 }
 
 // isSSZRejection keys off the HTTP status, independent of the error body format, so a builder

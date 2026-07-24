@@ -225,7 +225,13 @@ func (c *grpcValidatorClient) BeaconBlock(ctx context.Context, in *ethpb.BlockRe
 	if c.stateless && gc.GetExecutionPayloadEnvelope() != nil {
 		c.envelopeCache.Add(in.Slot, gc.ExecutionPayloadEnvelope, gc.Blobs, gc.KzgProofs)
 	}
-	return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: gc.Block}}, nil
+	// Preserve the top-level routing fields; only the payload contents are unbundled.
+	return &ethpb.GenericBeaconBlock{
+		Block:        &ethpb.GenericBeaconBlock_Gloas{Gloas: gc.Block},
+		BuilderUrl:   resp.GetBuilderUrl(),
+		IsBlinded:    resp.GetIsBlinded(),
+		PayloadValue: resp.GetPayloadValue(),
+	}, nil
 }
 
 func (c *grpcValidatorClient) FeeRecipientByPubKey(ctx context.Context, in *ethpb.FeeRecipientByPubKeyRequest) (*ethpb.FeeRecipientByPubKeyResponse, error) {

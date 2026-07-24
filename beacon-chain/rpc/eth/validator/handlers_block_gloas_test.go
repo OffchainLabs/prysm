@@ -115,6 +115,35 @@ func TestProduceBlockV4_IncludePayloadTrue(t *testing.T) {
 	require.Equal(t, "true", writer.Header().Get(api.ExecutionPayloadIncludedHeader))
 }
 
+// A builder-API win returns the winning url on GenericBeaconBlock.BuilderUrl; the
+// handler must surface it as the Eth-Builder-Url response header for the publisher.
+func TestProduceBlockV4_SetsBuilderUrlHeader(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	ctrl := gomock.NewController(t)
+	resp := gloasGenericBlockWithBuilder(1)
+	resp.BuilderUrl = "https://builder.example"
+	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+	v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).Return(resp, nil)
+
+	server := &Server{
+		V1Alpha1Server:        v1alpha1Server,
+		SyncChecker:           &mockSync.Sync{IsSyncing: false},
+		OptimisticModeFetcher: &blockchainTesting.ChainService{},
+		BlockRewardFetcher:    &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
+	}
+	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s", testRandao, testGraffiti), nil)
+	request.SetPathValue("slot", "1")
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+	server.ProduceBlockV4(writer, request)
+	assert.Equal(t, http.StatusOK, writer.Code)
+	require.Equal(t, "https://builder.example", writer.Header().Get(api.EthBuilderUrlHeader))
+}
+
 // TestProduceBlockV4_IncludePayloadTrue_WithBlobs covers the blob path: the producer bundles
 // raw blobs and flat KZG proofs in GloasContents, which the v4 response embeds in the body.
 func TestProduceBlockV4_IncludePayloadTrue_WithBlobs(t *testing.T) {

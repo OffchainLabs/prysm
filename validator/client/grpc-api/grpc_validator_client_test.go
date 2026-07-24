@@ -416,6 +416,22 @@ func TestBeaconBlock(t *testing.T) {
 				require.IsNil(t, proofs)
 			},
 		},
+		{
+			name:      "top-level routing fields survive the contents unwrap",
+			stateless: true,
+			resp: &eth.GenericBeaconBlock{
+				Block:        gloasContentsResp.Block,
+				BuilderUrl:   "https://builder.example",
+				IsBlinded:    true,
+				PayloadValue: "1234",
+			},
+			verify: func(t *testing.T, _ *grpcValidatorClient, got *eth.GenericBeaconBlock, err error) {
+				require.NoError(t, err)
+				require.Equal(t, "https://builder.example", got.GetBuilderUrl())
+				require.Equal(t, true, got.GetIsBlinded())
+				require.Equal(t, "1234", got.GetPayloadValue())
+			},
+		},
 	}
 
 	for _, tt := range tests {

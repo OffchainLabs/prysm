@@ -11,17 +11,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// builderEntryReq is one element of the produceBlockV4 POST body (beacon-APIs
-// #630): a bare array of per-builder entries.
-type builderEntryReq struct {
-	Url                 string         `json:"url"`
-	Auth                *signedAuthReq `json:"auth"`
-	Pubkey              string         `json:"pubkey,omitempty"`
-	MaxExecutionPayment string         `json:"max_execution_payment,omitempty"`
-	MinBid              string         `json:"min_bid,omitempty"`
-	BuilderBoostFactor  string         `json:"builder_boost_factor,omitempty"`
-}
-
 // builderPreferenceEntryReq is one element of the ahead-of-time preferences POST
 // body for /eth/v1/validator/builder_preferences/{pubkey}.
 type builderPreferenceEntryReq struct {
@@ -50,31 +39,17 @@ func signedAuthFromConsensus(auth *ethpb.SignedRequestAuthV1) *signedAuthReq {
 	}
 }
 
-// marshalBuilderPreferences encodes inline builder preferences into the #630
-// produce-block body: a bare array of builder entries.
+// marshalBuilderPreferences SSZ-encodes inline builder preferences for the #630
+// produce-block body (octet-stream request variant).
 func marshalBuilderPreferences(prefs []*ethpb.BuilderPreferenceV1) ([]byte, error) {
-	entries := make([]*builderEntryReq, 0, len(prefs))
+	valid := make([]*ethpb.BuilderPreferenceV1, 0, len(prefs))
 	for _, p := range prefs {
 		if p == nil || p.Request == nil || p.Request.Auth == nil || p.Request.Auth.Message == nil {
 			continue
 		}
-		entry := &builderEntryReq{
-			Url:                 p.Url,
-			Auth:                signedAuthFromConsensus(p.Request.Auth),
-			MaxExecutionPayment: strconv.FormatUint(uint64(p.Request.Preferences.GetMaxExecutionPayment()), 10),
-		}
-		if len(p.Pubkey) > 0 {
-			entry.Pubkey = hexutil.Encode(p.Pubkey)
-		}
-		if p.MinBid != nil {
-			entry.MinBid = strconv.FormatUint(uint64(p.GetMinBid()), 10)
-		}
-		if p.BuilderBoostFactor != nil {
-			entry.BuilderBoostFactor = strconv.FormatUint(p.GetBuilderBoostFactor(), 10)
-		}
-		entries = append(entries, entry)
+		valid = append(valid, p)
 	}
-	return json.Marshal(entries)
+	return ethpb.BuilderPreferencesToSSZ(valid).MarshalSSZ()
 }
 
 // submitBuilderPreferences pushes one signed builder preference ahead of the

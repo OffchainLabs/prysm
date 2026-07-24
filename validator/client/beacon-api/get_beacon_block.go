@@ -75,13 +75,12 @@ func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primi
 	var header http.Header
 	var err error
 	if len(builderPreferences) > 0 {
-		// JIT (beacon-APIs #625): POST the per-builder preferences inline.
+		// JIT (beacon-APIs #625): POST the per-builder preferences inline as SSZ.
 		body, mErr := marshalBuilderPreferences(builderPreferences)
 		if mErr != nil {
 			return nil, errors.Wrap(mErr, "could not marshal builder preferences")
 		}
-		headers := map[string]string{"Content-Type": api.JsonMediaType}
-		data, header, err = c.handler.PostSSZ(ctx, queryUrl, headers, bytes.NewBuffer(body))
+		data, header, err = c.handler.PostSSZ(ctx, queryUrl, nil, bytes.NewBuffer(body))
 	} else {
 		data, header, err = c.handler.GetSSZ(ctx, queryUrl)
 	}

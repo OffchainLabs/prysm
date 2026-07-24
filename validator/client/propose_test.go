@@ -281,6 +281,36 @@ func TestProposeBlock_ProposeBlockFailed(t *testing.T) {
 	}
 }
 
+// The winning builder url from the produce response must ride the published block
+// so the beacon node can forward it to the builder.
+func TestProposeBlock_CopiesBuilderUrl(t *testing.T) {
+	validator, m, validatorKey, finish := setup(t, true)
+	defer finish()
+	var pubKey [fieldparams.BLSPubkeyLength]byte
+	copy(pubKey[:], validatorKey.PublicKey().Marshal())
+
+	m.validatorClient.EXPECT().DomainData(gomock.Any(), gomock.Any()).
+		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
+	m.validatorClient.EXPECT().BeaconBlock(gomock.Any(), gomock.AssignableToTypeOf(&ethpb.BlockRequest{})).
+		Return(&ethpb.GenericBeaconBlock{
+			Block:      &ethpb.GenericBeaconBlock_Phase0{Phase0: util.NewBeaconBlock().Block},
+			BuilderUrl: "https://builder.example",
+		}, nil)
+	m.validatorClient.EXPECT().DomainData(gomock.Any(), gomock.Any()).
+		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
+
+	var captured *ethpb.GenericSignedBeaconBlock
+	m.validatorClient.EXPECT().ProposeBeaconBlock(gomock.Any(), gomock.AssignableToTypeOf(&ethpb.GenericSignedBeaconBlock{})).
+		DoAndReturn(func(_ context.Context, block *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {
+			captured = block
+			return &ethpb.ProposeResponse{BlockRoot: make([]byte, 32)}, nil
+		})
+
+	validator.ProposeBlock(t.Context(), 1, pubKey)
+	require.NotNil(t, captured)
+	require.Equal(t, "https://builder.example", captured.BuilderUrl)
+}
+
 func TestProposeBlock_BlocksDoubleProposal(t *testing.T) {
 	slot := params.BeaconConfig().SlotsPerEpoch.Mul(5).Add(2)
 	var blockGraffiti [32]byte

@@ -20,6 +20,10 @@
 - Normalize legacy proposer settings on load so unset builder `enabled` stays disabled and both validator DB backends decode `max_execution_payment` identically.
 - Report the gas limit for v1 proposer settings via `GET /eth/v1/validator/config` instead of omitting it.
 - Decode empty builder `auth_data`/`pubkey` identically to unset across both validator DB backends.
+- Mask credentials in builder-client error messages and trace spans so a builder URL with userinfo or a query token cannot leak.
+- Send the inline builder-preferences produce-block body as SSZ; the beacon node accepts SSZ or JSON.
+- Validate the builder url on the ahead-of-time preferences endpoint before dialing.
+- Preserve the winning builder url when unwrapping a stateless self-build produce response.
 
 ### Removed
 

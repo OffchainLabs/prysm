@@ -226,6 +226,8 @@ ssz_gloas_builder_api_objs = [
     "SignedRequestAuthV1",
     "BuilderPreferencesV1",
     "BuilderPreferencesRequestV1",
+    "ProduceBuilderEntryV1",
+    "ProduceBuilderEntryListV1",
 ]
 
 ssz_gen_marshal(

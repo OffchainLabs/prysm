@@ -20,8 +20,8 @@ func (vs *Server) SubmitBuilderPreferences(ctx context.Context, req *ethpb.Submi
 	if req == nil || req.Request == nil {
 		return nil, status.Error(codes.InvalidArgument, "builder preferences request is empty")
 	}
-	if req.Url == "" {
-		return nil, status.Error(codes.InvalidArgument, "builder preferences request is missing the builder url")
+	if !validBuilderURL(req.Url) {
+		return nil, status.Error(codes.InvalidArgument, "builder preferences request has a malformed builder url")
 	}
 	// Not gated on Configured(): gloas builders are dialed per URL rather than the endpoint flag.
 	if vs.BlockBuilder == nil {

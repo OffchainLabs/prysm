@@ -377,3 +377,297 @@ func (b *BuilderPreferencesRequestV1) HashTreeRootWith(hh *ssz.Hasher) (err erro
 	hh.Merkleize(indx)
 	return
 }
+
+// MarshalSSZ ssz marshals the ProduceBuilderEntryV1 object
+func (p *ProduceBuilderEntryV1) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the ProduceBuilderEntryV1 object to a target array
+func (p *ProduceBuilderEntryV1) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(72)
+
+	// Offset (0) 'Url'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.Url)
+
+	// Offset (1) 'Request'
+	dst = ssz.WriteOffset(dst, offset)
+	if p.Request == nil {
+		p.Request = new(BuilderPreferencesRequestV1)
+	}
+	offset += p.Request.SizeSSZ()
+
+	// Field (2) 'MinBid'
+	dst = ssz.MarshalUint(dst, p.MinBid)
+
+	// Field (3) 'BuilderBoostFactor'
+	dst = ssz.MarshalUint(dst, p.BuilderBoostFactor)
+
+	// Field (4) 'Pubkey'
+	if size := len(p.Pubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.Pubkey", size, 48)
+		return
+	}
+	dst = append(dst, p.Pubkey...)
+
+	// Field (0) 'Url'
+	if size := len(p.Url); size > 2048 {
+		err = ssz.ErrBytesLengthFn("--.Url", size, 2048)
+		return
+	}
+	dst = append(dst, p.Url...)
+
+	// Field (1) 'Request'
+	if dst, err = p.Request.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the ProduceBuilderEntryV1 object
+func (p *ProduceBuilderEntryV1) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 72 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1 uint64
+
+	// Offset (0) 'Url'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 72 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (1) 'Request'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Field (2) 'MinBid'
+	p.MinBid = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei](buf[8:16])
+
+	// Field (3) 'BuilderBoostFactor'
+	p.BuilderBoostFactor = ssz.UnmarshallUint[uint64](buf[16:24])
+
+	// Field (4) 'Pubkey'
+	if cap(p.Pubkey) == 0 {
+		p.Pubkey = make([]byte, 0, len(buf[24:72]))
+	}
+	p.Pubkey = append(p.Pubkey, buf[24:72]...)
+
+	// Field (0) 'Url'
+	{
+		buf = tail[o0:o1]
+		if len(buf) > 2048 {
+			return ssz.ErrBytesLength
+		}
+		if cap(p.Url) == 0 {
+			p.Url = make([]byte, 0, len(buf))
+		}
+		p.Url = append(p.Url, buf...)
+	}
+
+	// Field (1) 'Request'
+	{
+		buf = tail[o1:]
+		if p.Request == nil {
+			p.Request = new(BuilderPreferencesRequestV1)
+		}
+		if err = p.Request.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ProduceBuilderEntryV1 object
+func (p *ProduceBuilderEntryV1) SizeSSZ() (size int) {
+	size = 72
+
+	// Field (0) 'Url'
+	size += len(p.Url)
+
+	// Field (1) 'Request'
+	if p.Request == nil {
+		p.Request = new(BuilderPreferencesRequestV1)
+	}
+	size += p.Request.SizeSSZ()
+
+	return
+}
+
+// HashTreeRoot ssz hashes the ProduceBuilderEntryV1 object
+func (p *ProduceBuilderEntryV1) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(p)
+}
+
+// HashTreeRootWith ssz hashes the ProduceBuilderEntryV1 object with a hasher
+func (p *ProduceBuilderEntryV1) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Url'
+	{
+		elemIndx := hh.Index()
+		byteLen := uint64(len(p.Url))
+		if byteLen > 2048 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		hh.AppendBytes32(p.Url)
+		hh.MerkleizeWithMixin(elemIndx, byteLen, (2048+31)/32)
+	}
+
+	// Field (1) 'Request'
+	if err = p.Request.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (2) 'MinBid'
+	ssz.PutUint(hh, p.MinBid)
+
+	// Field (3) 'BuilderBoostFactor'
+	ssz.PutUint(hh, p.BuilderBoostFactor)
+
+	// Field (4) 'Pubkey'
+	if size := len(p.Pubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.Pubkey", size, 48)
+		return
+	}
+	hh.PutBytes(p.Pubkey)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the ProduceBuilderEntryListV1 object
+func (p *ProduceBuilderEntryListV1) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the ProduceBuilderEntryListV1 object to a target array
+func (p *ProduceBuilderEntryListV1) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(4)
+
+	// Offset (0) 'Entries'
+	dst = ssz.WriteOffset(dst, offset)
+	for ii := 0; ii < len(p.Entries); ii++ {
+		offset += 4
+		offset += p.Entries[ii].SizeSSZ()
+	}
+
+	// Field (0) 'Entries'
+	if size := len(p.Entries); size > 256 {
+		err = ssz.ErrListTooBigFn("--.Entries", size, 256)
+		return
+	}
+	{
+		offset = 4 * len(p.Entries)
+		for ii := 0; ii < len(p.Entries); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += p.Entries[ii].SizeSSZ()
+		}
+	}
+	for ii := 0; ii < len(p.Entries); ii++ {
+		if dst, err = p.Entries[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the ProduceBuilderEntryListV1 object
+func (p *ProduceBuilderEntryListV1) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 4 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'Entries'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 4 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (0) 'Entries'
+	{
+		buf = tail[o0:]
+		num, err := ssz.DecodeDynamicLength(buf, 256)
+		if err != nil {
+			return err
+		}
+		p.Entries = make([]*ProduceBuilderEntryV1, num)
+		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+			if p.Entries[indx] == nil {
+				p.Entries[indx] = new(ProduceBuilderEntryV1)
+			}
+			if err = p.Entries[indx].UnmarshalSSZ(buf); err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ProduceBuilderEntryListV1 object
+func (p *ProduceBuilderEntryListV1) SizeSSZ() (size int) {
+	size = 4
+
+	// Field (0) 'Entries'
+	for ii := 0; ii < len(p.Entries); ii++ {
+		size += 4
+		size += p.Entries[ii].SizeSSZ()
+	}
+
+	return
+}
+
+// HashTreeRoot ssz hashes the ProduceBuilderEntryListV1 object
+func (p *ProduceBuilderEntryListV1) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(p)
+}
+
+// HashTreeRootWith ssz hashes the ProduceBuilderEntryListV1 object with a hasher
+func (p *ProduceBuilderEntryListV1) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Entries'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(p.Entries))
+		if num > 256 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range p.Entries {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 256)
+	}
+
+	hh.Merkleize(indx)
+	return
+}

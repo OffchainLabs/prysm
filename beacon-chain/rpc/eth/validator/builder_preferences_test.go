@@ -7,8 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	blockchainTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	mock2 "github.com/OffchainLabs/prysm/v7/testing/mock"
@@ -78,6 +80,57 @@ func TestParseBuilderPreferencesBody_DuplicateURL(t *testing.T) {
 	entry := `{"url":"https://b","auth":{"message":{"data":"0x01","slot":"7"},"signature":"0x` + repeatHex(96) + `"}}`
 	r := httptest.NewRequest("POST", "/", bytes.NewBufferString(`[`+entry+`,`+entry+`]`))
 	_, err := parseBuilderPreferencesBody(r)
+	require.ErrorContains(t, "share the same url", err)
+}
+
+// An octet-stream body is decoded as SSZ, and the sentinels round-trip back to the
+// same effective preferences the JSON path produces.
+func TestParseBuilderPreferencesBody_SSZ(t *testing.T) {
+	boost := uint64(200)
+	minBid := primitives.Gwei(5)
+	pubkey := make([]byte, 48)
+	pubkey[0] = 0xAB
+	prefs := []*eth.BuilderPreferenceV1{{
+		Url: "https://b.example",
+		Request: &eth.BuilderPreferencesRequestV1{
+			Preferences: &eth.BuilderPreferencesV1{MaxExecutionPayment: 1000},
+			Auth:        &eth.SignedRequestAuthV1{Message: &eth.RequestAuthV1{Data: []byte{1}, Slot: 7}, Signature: make([]byte, 96)},
+		},
+		MinBid:             &minBid,
+		BuilderBoostFactor: &boost,
+		Pubkey:             pubkey,
+	}}
+	body, err := eth.BuilderPreferencesToSSZ(prefs).MarshalSSZ()
+	require.NoError(t, err)
+
+	r := httptest.NewRequest("POST", "/", bytes.NewBuffer(body))
+	r.Header.Set("Content-Type", api.OctetStreamMediaType)
+	got, err := parseBuilderPreferencesBody(r)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(got))
+	require.Equal(t, "https://b.example", got[0].Url)
+	require.Equal(t, primitives.Gwei(5), got[0].GetMinBid())
+	require.Equal(t, uint64(200), got[0].GetBuilderBoostFactor())
+	require.DeepEqual(t, pubkey, got[0].Pubkey)
+	require.Equal(t, primitives.Gwei(1000), got[0].Request.Preferences.GetMaxExecutionPayment())
+}
+
+// Duplicate urls in an SSZ body invalidate the whole request, matching JSON.
+func TestParseBuilderPreferencesBody_SSZ_DuplicateURL(t *testing.T) {
+	entry := func() *eth.BuilderPreferenceV1 {
+		return &eth.BuilderPreferenceV1{
+			Url: "https://dup.example",
+			Request: &eth.BuilderPreferencesRequestV1{
+				Preferences: &eth.BuilderPreferencesV1{},
+				Auth:        &eth.SignedRequestAuthV1{Message: &eth.RequestAuthV1{Data: []byte{1}}, Signature: make([]byte, 96)},
+			},
+		}
+	}
+	body, err := eth.BuilderPreferencesToSSZ([]*eth.BuilderPreferenceV1{entry(), entry()}).MarshalSSZ()
+	require.NoError(t, err)
+	r := httptest.NewRequest("POST", "/", bytes.NewBuffer(body))
+	r.Header.Set("Content-Type", api.OctetStreamMediaType)
+	_, err = parseBuilderPreferencesBody(r)
 	require.ErrorContains(t, "share the same url", err)
 }
 
