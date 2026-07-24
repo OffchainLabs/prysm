@@ -4052,7 +4052,7 @@ func TestGetPayloadAttestationData(t *testing.T) {
 			HeadFetcher:           chainService,
 			TimeFetcher:           chainService,
 			OptimisticModeFetcher: chainService,
-			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService},
+			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService, ChainInfoFetcher: chainService},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/validator/payload_attestation_data?slot=0", nil)
@@ -4100,7 +4100,7 @@ func TestGetPayloadAttestationData(t *testing.T) {
 			Slot:               &slot,
 			Root:               root,
 			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
-			MockCanonicalFull:  map[primitives.Slot]bool{slot: true},
+			MockDataAvailable:  map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 		}
 		s := &Server{
@@ -4108,7 +4108,7 @@ func TestGetPayloadAttestationData(t *testing.T) {
 			HeadFetcher:           chainService,
 			TimeFetcher:           chainService,
 			OptimisticModeFetcher: chainService,
-			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService},
+			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService, ChainInfoFetcher: chainService},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/validator/payload_attestation_data?slot=5", nil)
@@ -4141,7 +4141,7 @@ func TestGetPayloadAttestationData(t *testing.T) {
 			HeadFetcher:           chainService,
 			TimeFetcher:           chainService,
 			OptimisticModeFetcher: chainService,
-			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService},
+			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService, ChainInfoFetcher: chainService},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/validator/payload_attestation_data?slot=5", nil)

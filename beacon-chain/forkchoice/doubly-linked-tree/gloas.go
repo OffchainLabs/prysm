@@ -541,7 +541,9 @@ func (f *ForkChoice) SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, bl
 	if n == nil {
 		return
 	}
-	ptcVoteCount.Inc()
+	if !n.node.payloadAttesters.BitAt(ptcIdx) {
+		ptcVoteCount.Inc()
+	}
 	n.node.payloadAttesters.SetBitAt(ptcIdx, true)
 	n.node.payloadAvailabilityVote.SetBitAt(ptcIdx, payloadPresent)
 	n.node.payloadDataAvailabilityVote.SetBitAt(ptcIdx, blobDataAvailable)
@@ -573,6 +575,19 @@ func (s *Store) resolveVoteNode(r [32]byte, slot primitives.Slot, payloadStatus 
 func (f *ForkChoice) HasFullNode(root [32]byte) bool {
 	_, ok := f.store.fullNodeByRoot[root]
 	return ok
+}
+
+// HasPayloadBlockHash reports whether blockHash is an available payload parent at root.
+func (f *ForkChoice) HasPayloadBlockHash(root, blockHash [32]byte) bool {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return false
+	}
+	if blockHash == en.node.blockHash {
+		_, ok := f.store.fullNodeByRoot[root]
+		return ok
+	}
+	return blockHash == f.store.parentHash(en)
 }
 
 // FullBeatsEmpty returns whether fork choice would select the full payload variant

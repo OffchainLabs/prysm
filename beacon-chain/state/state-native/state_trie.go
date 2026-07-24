@@ -13,6 +13,7 @@ import (
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -1384,9 +1385,9 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 		}
 		return b.recomputeFieldTrie(field, b.currentEpochAttestations)
 	case types.PreviousEpochParticipationBits:
-		return stateutil.ParticipationBitsRoot(b.previousEpochParticipation)
+		return stateutil.ParticipationBitsRoot(b.version, b.previousEpochParticipation)
 	case types.CurrentEpochParticipationBits:
-		return stateutil.ParticipationBitsRoot(b.currentEpochParticipation)
+		return stateutil.ParticipationBitsRoot(b.version, b.currentEpochParticipation)
 	case types.JustificationBits:
 		return bytesutil.ToBytes32(b.justificationBits), nil
 	case types.PreviousJustifiedCheckpoint:
@@ -1396,7 +1397,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.FinalizedCheckpoint:
 		return ssz.CheckpointRoot(b.finalizedCheckpoint)
 	case types.InactivityScores:
-		return stateutil.Uint64ListRootWithRegistryLimit(b.inactivityScoresMultiValue.Value(b))
+		return stateutil.Uint64ListRoot(b.version, b.inactivityScoresVal())
 	case types.CurrentSyncCommittee:
 		return stateutil.SyncCommitteeRoot(b.currentSyncCommittee)
 	case types.NextSyncCommittee:
@@ -1426,11 +1427,11 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.EarliestConsolidationEpoch:
 		return ssz.Uint64Root(uint64(b.earliestConsolidationEpoch)), nil
 	case types.PendingDeposits:
-		return stateutil.PendingDepositsRoot(b.pendingDeposits)
+		return stateutil.PendingDepositsRoot(b.version, b.pendingDeposits)
 	case types.PendingPartialWithdrawals:
-		return stateutil.PendingPartialWithdrawalsRoot(b.pendingPartialWithdrawals)
+		return stateutil.PendingPartialWithdrawalsRoot(b.version, b.pendingPartialWithdrawals)
 	case types.PendingConsolidations:
-		return stateutil.PendingConsolidationsRoot(b.pendingConsolidations)
+		return stateutil.PendingConsolidationsRoot(b.version, b.pendingConsolidations)
 	case types.ProposerLookahead:
 		return stateutil.ProposerLookaheadRoot(b.proposerLookahead)
 	case types.LatestExecutionPayloadBid:
@@ -1559,6 +1560,14 @@ func (b *BeaconState) stateRootsRootSelector(field types.FieldIndex) ([32]byte, 
 }
 
 func (b *BeaconState) validatorsRootSelector(field types.FieldIndex) ([32]byte, error) {
+	if features.ProgressiveSSZEnabled(b.version) {
+		// Field-trie indexing is based on legacy list merkleization.
+		// Use full progressive hashing for this field when enabled.
+		b.dirtyIndices[field] = []uint64{}
+		delete(b.rebuildTrie, field)
+		return stateutil.ValidatorRegistryRoot(b.version, b.validatorsCompactVal())
+	}
+
 	if b.rebuildTrie[field] {
 		err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[stateutil.CompactValidator]{
 			Identifiable:    b,
@@ -1578,6 +1587,14 @@ func (b *BeaconState) validatorsRootSelector(field types.FieldIndex) ([32]byte, 
 }
 
 func (b *BeaconState) balancesRootSelector(field types.FieldIndex) ([32]byte, error) {
+	if features.ProgressiveSSZEnabled(b.version) {
+		// Field-trie indexing is based on legacy list merkleization.
+		// Use full progressive hashing for this field when enabled.
+		b.dirtyIndices[field] = []uint64{}
+		delete(b.rebuildTrie, field)
+		return stateutil.Uint64ListRoot(b.version, b.balancesVal())
+	}
+
 	if b.rebuildTrie[field] {
 		err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[uint64]{
 			Identifiable:    b,

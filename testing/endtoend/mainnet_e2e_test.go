@@ -15,5 +15,25 @@ func TestEndToEnd_MainnetConfig_ValidatorAtCurrentRelease(t *testing.T) {
 }
 
 func TestEndToEnd_MainnetConfig_MultiClient(t *testing.T) {
-	e2eMainnet(t, false, true, types.InitForkCfg(version.Bellatrix, version.Electra, params.E2EMainnetTestConfig())).run()
+	const (
+		electraForkEpoch = 0
+		fuluForkEpoch    = 2
+
+		BPO1ForkEpoch        = fuluForkEpoch + 2
+		BPO1MaxBlobsPerBlock = 15
+
+		BPO2ForkEpoch        = fuluForkEpoch + 4
+		BPO2MaxBlobsPerBlock = 21
+	)
+
+	cfg := types.InitForkCfg(version.Electra, version.Fulu, params.E2EMainnetTestConfig())
+	cfg.FuluForkEpoch = fuluForkEpoch
+	cfg.BlobSchedule = []params.BlobScheduleEntry{
+		{Epoch: electraForkEpoch, MaxBlobsPerBlock: uint64(cfg.DeprecatedMaxBlobsPerBlockElectra)},
+		{Epoch: BPO1ForkEpoch, MaxBlobsPerBlock: BPO1MaxBlobsPerBlock},
+		{Epoch: BPO2ForkEpoch, MaxBlobsPerBlock: BPO2MaxBlobsPerBlock},
+	}
+	cfg.InitializeForkSchedule()
+
+	e2eMainnet(t, false, true, cfg, types.WithEpochs(8), types.WithLargeBlobs()).run()
 }

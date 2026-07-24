@@ -3,6 +3,7 @@
 package validator
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -26,7 +27,7 @@ type fakeBidVerifier struct {
 	slotErr, activeErr, versionErr, coverErr, blobErr, randaoErr, sigErr error
 	rootSeenErr, parentHashErr, feeErr, gasErr                           error
 	rootSeenFn                                                           func([32]byte) bool
-	resolveFn                                                            func([32]byte) ([32]byte, error)
+	hasPayloadFn                                                         func([32]byte, [32]byte) bool
 }
 
 func (v *fakeBidVerifier) VerifyCurrentOrNextSlot() error             { return nil }
@@ -48,8 +49,8 @@ func (v *fakeBidVerifier) VerifyParentBlockRootSeen(fn func([32]byte) bool) erro
 	return v.rootSeenErr
 }
 func (v *fakeBidVerifier) VerifyBidSlotHigherThanParent(primitives.Slot) error { return nil }
-func (v *fakeBidVerifier) VerifyParentBlockHash(fn func([32]byte) ([32]byte, error)) error {
-	v.resolveFn = fn
+func (v *fakeBidVerifier) VerifyParentBlockHash(fn func([32]byte, [32]byte) bool) error {
+	v.hasPayloadFn = fn
 	return v.parentHashErr
 }
 func (v *fakeBidVerifier) VerifyGasLimitTargetCompatible(uint64, uint64) error { return v.gasErr }
@@ -87,6 +88,8 @@ func TestEffectiveBidValue(t *testing.T) {
 		{"payment over cap is capped", 1000, 900, 500, 1500},
 		{"zero payment", 1000, 0, 500, 1000},
 		{"zero cap ignores payment", 1000, 900, 0, 1000},
+		{"sum past uint64 saturates", math.MaxUint64 - 5, 100, math.MaxUint64, math.MaxUint64},
+		{"max value zero payment unchanged", math.MaxUint64, 0, math.MaxUint64, math.MaxUint64},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -119,6 +122,7 @@ func TestBestBid(t *testing.T) {
 		{name: "tie prefers p2p", local: localWithGwei(0), p2p: newBid(1000, 0, p2pIdx), builder: newBid(1000, 0, builderIdx), maxPayment: 1000, wantSrc: bidSourceP2P},
 		{name: "payment cap keeps local ahead", local: localWithGwei(100), builder: newBid(50, 100, builderIdx), maxPayment: 40, wantSrc: bidSourceSelfBuild, wantNil: true},
 		{name: "payment within cap wins", local: localWithGwei(100), builder: newBid(50, 100, builderIdx), maxPayment: 60, wantSrc: bidSourceBuilderAPI},
+		{name: "saturated bid still beats local", local: localWithGwei(100), builder: newBid(math.MaxUint64-5, 100, builderIdx), maxPayment: math.MaxUint64, wantSrc: bidSourceBuilderAPI},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -199,9 +203,8 @@ func TestValidateBuilderBid(t *testing.T) {
 		// The parent-linkage closures must match only the block being produced.
 		require.Equal(t, true, captured.rootSeenFn(parentRoot))
 		require.Equal(t, false, captured.rootSeenFn([32]byte{7, 7, 7}))
-		gotHash, err := captured.resolveFn([32]byte{})
-		require.NoError(t, err)
-		require.Equal(t, parentHash, gotHash)
+		require.Equal(t, true, captured.hasPayloadFn(parentRoot, parentHash))
+		require.Equal(t, false, captured.hasPayloadFn(parentRoot, [32]byte{8, 8, 8}))
 	})
 
 	t.Run("verifier check fails", func(t *testing.T) {

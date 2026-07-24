@@ -455,9 +455,6 @@ func (c beaconApiDutiesProvider) AttesterDuties(ctx context.Context, epoch primi
 }
 
 // ProposerDuties retrieves the proposer duties for the given epoch.
-// Post-Gloas it uses the fork-aware v2 endpoint whose dependent root matches the
-// attester one (EIP-7917); pre-Gloas it keeps v1, whose (epoch_start - 1) root is
-// what checkDependentRoots matches against head events.
 func (c beaconApiDutiesProvider) ProposerDuties(ctx context.Context, epoch primitives.Epoch) (*structs.GetProposerDutiesResponse, error) {
 	apiVersion := "v1"
 	if epoch >= params.BeaconConfig().GloasForkEpoch {

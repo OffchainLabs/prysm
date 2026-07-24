@@ -29,6 +29,7 @@ import (
 	validatorflags "github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/urfave/cli/v2"
 )
 
@@ -49,6 +50,7 @@ type Flags struct {
 	DisableDutiesV2                     bool // DisableDutiesV2 sets validator client to use the get Duties endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
 	EnableStateDiff                     bool // EnableStateDiff enables the experimental state diff feature for the beacon node.
+	EnableProgressiveSSZ                bool // EnableProgressiveSSZ enables experimental progressive SSZ merkleization for converted consensus types.
 	ReorgLatePayloads                   bool // ReorgLatePayloads enables reorging late payloads in the beacon node.
 
 	// Logging related toggles.
@@ -109,6 +111,12 @@ func Get() *Flags {
 		return &Flags{}
 	}
 	return featureConfig
+}
+
+// ProgressiveSSZEnabled reports whether progressive SSZ is enabled for the
+// supplied state version.
+func ProgressiveSSZEnabled(stateVersion int) bool {
+	return stateVersion >= version.Gloas && Get().EnableProgressiveSSZ
 }
 
 // Init sets the global config equal to the config that is passed in.
@@ -304,6 +312,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 			log.Warn("--enable-state-diff is enabled, ignoring --enable-historical-space-representation flag.")
 			cfg.EnableHistoricalSpaceRepresentation = false
 		}
+	}
+	if ctx.IsSet(EnableProgressiveSSZ.Name) {
+		logEnabled(EnableProgressiveSSZ)
+		cfg.EnableProgressiveSSZ = true
 	}
 	if ctx.Bool(reorgLatePayloads.Name) {
 		logEnabled(reorgLatePayloads)

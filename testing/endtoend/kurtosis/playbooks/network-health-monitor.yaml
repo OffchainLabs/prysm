@@ -1,0 +1,88 @@
+# Basic stability and health monitoring of the network.
+# This playbook is intended to be run continuously in the background while other tests are running.
+
+# Replaces those evaluators from legacy E2E:
+# - HealthzCheck
+# - FinishedSyncing
+# - AllNodesHaveSameHead
+# - ValidatorsParticipatingAtEpoch
+# - FinalizationOccurs
+
+id: network-health-monitor
+name: "Network health monitoring"
+timeout: 60m
+
+config:
+  # NOTE: This assumes the main nodes are the 1st and 2nd participants in Kurtosis network config file.
+  mainNodePattern: "^[12]-geth-prysm$"
+
+tasks:
+- name: check_clients_are_healthy
+  title: "Check if at least one client is ready"
+  timeout: 5m
+  config:
+    minClientCount: 1
+
+- name: get_consensus_specs
+  id: specs
+  title: "Get consensus specs"
+
+- name: run_tasks_concurrent
+  title: "Monitor network health"
+  config:
+    tasks:
+      - name: check_clients_are_healthy
+        title: "Client health"
+        timeout: 5m
+        config:
+          clientPattern: "mainNodePattern"
+          continueOnPass: true
+          failOnCheckMiss: true
+      
+      - name: check_consensus_sync_status
+        title: "CL Sync status"
+        timeout: 60m
+        config:
+          clientPattern: "mainNodePattern"
+          continueOnPass: true
+
+      - name: check_execution_sync_status
+        title: "EL Sync status"
+        timeout: 60m
+        config:
+          clientPattern: "mainNodePattern"
+          continueOnPass: true
+
+      - name: check_consensus_finality
+        title: "Finality check"
+        timeout: 60m
+        config:
+          maxUnfinalizedEpochs: 4
+          failOnCheckMiss: true
+          continueOnPass: true
+
+      - name: check_consensus_attestation_stats
+        title: "Attestation quality"
+        timeout: 60m
+        config:
+          minHeadPercent: 80
+          failOnCheckMiss: true
+          continueOnPass: true
+        configVars:
+          # Note: At Electra fork, the target participation drops to ~85%, so relax to 82% there.
+          # If a network starts from Electra, then strictly check for 98% participation.
+          minTargetPercent: "| if (.tasks.specs.outputs.specs.ELECTRA_FORK_EPOCH | tonumber) == 0 then 98 else 82 end"
+
+      - name: check_consensus_forks
+        title: "Fork monitoring"
+        timeout: 60m
+        config:
+          maxForkDistance: 2
+          continueOnPass: true
+
+      - name: check_consensus_reorgs
+        title: "Reorg monitoring"
+        timeout: 60m
+        config:
+          maxReorgsPerEpoch: 2
+          continueOnPass: true

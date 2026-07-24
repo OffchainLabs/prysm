@@ -3,6 +3,7 @@
 package flags
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
@@ -44,14 +45,14 @@ var (
 	}
 
 	MaxBuilderConsecutiveMissedSlots = &cli.IntFlag{
-		Name:  "max-builder-consecutive-missed-slots",
-		Usage: "Number of consecutive skip slot to fallback from using relay/builder to local execution engine for block construction",
-		Value: 3,
+		Name:        "max-builder-consecutive-missed-slots",
+		Usage:       "Number of consecutive skip slot to fallback from using relay/builder to local execution engine for block construction",
+		DefaultText: fmt.Sprintf("%d", params.BeaconConfig().MaxBuilderConsecutiveMissedSlots),
 	}
 	MaxBuilderEpochMissedSlots = &cli.IntFlag{
-		Name: "max-builder-epoch-missed-slots",
-		Usage: "Number of total skip slot to fallback from using relay/builder to local execution engine for block construction in last epoch rolling window. " +
-			"The values are on the basis of the networks and the default value for mainnet is 5.",
+		Name:        "max-builder-epoch-missed-slots",
+		Usage:       "Number of total skip slot to fallback from using relay/builder to local execution engine for block construction in last epoch rolling window",
+		DefaultText: fmt.Sprintf("%d", params.BeaconConfig().MaxBuilderEpochMissedSlots),
 	}
 	// LocalBlockValueBoost sets a percentage boost for local block construction while using a custom builder.
 	LocalBlockValueBoost = &cli.Uint64Flag{
