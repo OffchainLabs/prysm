@@ -11,7 +11,10 @@ go_library(
         "wrapper.go",
     ],
     embedsrcs = [
+        "playbooks/metrics.yaml",
         "playbooks/network-health-monitor.yaml",
+        "playbooks/validators-active.yaml",
+        "playbooks/validators-sync-participation.yaml",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/testing/endtoend/kurtosis",
     visibility = ["//visibility:public"],
