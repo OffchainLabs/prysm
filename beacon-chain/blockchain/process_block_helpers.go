@@ -38,7 +38,7 @@ func (s *Service) CurrentSlot() primitives.Slot {
 	return slots.CurrentSlot(s.genesisTime)
 }
 
-// getFCUArgs returns the arguments to call forkchoice update.
+// getFCUArgs returns the arguments to call forkchoice update
 // this function is only called pre-gloas hence we pass in full to getPayloadAttribute
 func (s *Service) getFCUArgs(cfg *postBlockProcessConfig) *fcuConfig {
 	fcuArgs := &fcuConfig{

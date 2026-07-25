@@ -2414,17 +2414,12 @@ func Test_getFCUArgs(t *testing.T) {
 		ctx:            ctx,
 		roblock:        roblock,
 		postState:      st,
+		headRoot:       roblock.Root(),
 		isValidPayload: true,
 	}
-	// error branch
-	_, err = s.getFCUArgs(cfg)
-	require.ErrorContains(t, "block does not exist", err)
-
-	// canonical branch
-	cfg.headRoot = cfg.roblock.Root()
-	fcuArgs, err := s.getFCUArgs(cfg)
-	require.NoError(t, err)
+	fcuArgs := s.getFCUArgs(cfg)
 	require.Equal(t, cfg.roblock.Root(), fcuArgs.headRoot)
+	require.Equal(t, cfg.postState, fcuArgs.headState)
 }
 
 func TestRollbackBlock(t *testing.T) {
