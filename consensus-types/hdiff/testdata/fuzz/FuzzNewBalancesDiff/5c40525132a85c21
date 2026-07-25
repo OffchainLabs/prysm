@@ -1,0 +1,3 @@
+go test fuzz v1
+byte('f')
+[]byte("\x9f\x12\xa4\xe9%@3/J\xa7\xf6#\xf3n*(0")
