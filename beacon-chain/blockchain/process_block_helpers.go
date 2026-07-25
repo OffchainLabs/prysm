@@ -38,28 +38,17 @@ func (s *Service) CurrentSlot() primitives.Slot {
 	return slots.CurrentSlot(s.genesisTime)
 }
 
-// getFCUArgs returns the arguments to call forkchoice update
+// getFCUArgs returns the arguments to call forkchoice update.
 // this function is only called pre-gloas hence we pass in full to getPayloadAttribute
-func (s *Service) getFCUArgs(cfg *postBlockProcessConfig) (*fcuConfig, error) {
-	fcuArgs, err := s.getFCUArgsEarlyBlock(cfg)
-	if err != nil {
-		return nil, err
+func (s *Service) getFCUArgs(cfg *postBlockProcessConfig) *fcuConfig {
+	fcuArgs := &fcuConfig{
+		headState:     cfg.postState,
+		headBlock:     cfg.roblock,
+		headRoot:      cfg.headRoot,
+		proposingSlot: s.CurrentSlot() + 1,
 	}
-
 	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:], true)
-	return fcuArgs, nil
-}
-
-func (s *Service) getFCUArgsEarlyBlock(cfg *postBlockProcessConfig) (*fcuConfig, error) {
-	if cfg.roblock.Root() == cfg.headRoot {
-		return &fcuConfig{
-			headState:     cfg.postState,
-			headBlock:     cfg.roblock,
-			headRoot:      cfg.headRoot,
-			proposingSlot: s.CurrentSlot() + 1,
-		}, nil
-	}
-	return s.fcuArgsNonCanonicalBlock(cfg)
+	return fcuArgs
 }
 
 // logNonCanonicalBlockReceived prints a message informing that the received
@@ -86,21 +75,6 @@ func (s *Service) logNonCanonicalBlockReceived(blockRoot [32]byte, headRoot [32]
 		fields["headFullWeight"] = headFull
 	}
 	log.WithFields(fields).Debug("Head block is not the received block")
-}
-
-// fcuArgsNonCanonicalBlock returns the arguments to the FCU call when the
-// incoming block is non-canonical, that is, based on the head root.
-func (s *Service) fcuArgsNonCanonicalBlock(cfg *postBlockProcessConfig) (*fcuConfig, error) {
-	headState, headBlock, err := s.getStateAndBlock(cfg.ctx, cfg.headRoot)
-	if err != nil {
-		return nil, err
-	}
-	return &fcuConfig{
-		headState:     headState,
-		headBlock:     headBlock,
-		headRoot:      cfg.headRoot,
-		proposingSlot: s.CurrentSlot() + 1,
-	}, nil
 }
 
 // sendStateFeedOnBlock sends an event that a new block has been synced
