@@ -39,6 +39,8 @@ const (
 	ExecutionPayloadAvailable
 	// ExecutionPayloadProcessed is sent after a payload envelope has been processed.
 	ExecutionPayloadProcessed
+	// AttestationReady is sent when it is safe to attest for the current slot without waiting for the attestation deadline.
+	AttestationReady
 )
 
 // BlockProcessedData is the data sent with BlockProcessed events.
@@ -57,6 +59,16 @@ type BlockProcessedData struct {
 	Verified bool
 	// Optimistic is true if the block is optimistic.
 	Optimistic bool
+}
+
+// AttestationReadyData is the data sent with AttestationReady events.
+type AttestationReadyData struct {
+	// Slot to attest for.
+	Slot primitives.Slot
+	// BeaconBlockRoot is the fork choice head root to vote for.
+	BeaconBlockRoot [32]byte
+	// ExecutionOptimistic is true if the head is optimistic.
+	ExecutionOptimistic bool
 }
 
 // ChainStartedData is the data sent with ChainStarted events.

@@ -137,6 +137,36 @@ func (s *Service) sendStateFeedOnBlock(cfg *postBlockProcessConfig) {
 	})
 }
 
+func (s *Service) sendAttestationReadyOnBlock(cfg *postBlockProcessConfig) {
+	slot := cfg.roblock.Block().Slot()
+	if slot != s.CurrentSlot() {
+		return
+	}
+	isHead := cfg.headRoot == cfg.roblock.Root()
+	if !isHead && !s.isFinalizing() {
+		return
+	}
+	optimistic, err := s.cfg.ForkChoiceStore.IsOptimistic(cfg.headRoot)
+	if err != nil {
+		log.WithError(err).Debug("Could not check if head is optimistic")
+		optimistic = true
+	}
+	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
+		Type: statefeed.AttestationReady,
+		Data: &statefeed.AttestationReadyData{
+			Slot:                slot,
+			BeaconBlockRoot:     cfg.headRoot,
+			ExecutionOptimistic: optimistic,
+		},
+	})
+}
+
+// Caller must hold the forkchoice lock.
+func (s *Service) isFinalizing() bool {
+	finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
+	return finalized.Epoch+2 >= slots.ToEpoch(s.CurrentSlot())
+}
+
 // processLightClientUpdates saves the light client data in lcStore, when feature flag is enabled.
 func (s *Service) processLightClientUpdates(cfg *postBlockProcessConfig) {
 	attestedRoot := cfg.roblock.Block().ParentRoot()
