@@ -17,6 +17,7 @@ import (
 const (
 	EventHead                      = "head"
 	EventHeadV2                    = "head_v2"
+	EventAttestationReady          = "attestation_ready"
 	EventExecutionPayloadAvailable = "execution_payload_available"
 
 	EventError           = "error"
@@ -30,7 +31,11 @@ var (
 	LegacyEventTopicMapping = map[string]string{
 		EventHeadV2: EventHead,
 	}
-	DefaultEventTopics = []string{EventHeadV2, EventExecutionPayloadAvailable}
+	// OptionalEventTopics are dropped on subscription failure, beacon nodes that do not know them reject the whole request.
+	OptionalEventTopics = map[string]bool{
+		EventAttestationReady: true,
+	}
+	DefaultEventTopics = []string{EventHeadV2, EventAttestationReady, EventExecutionPayloadAvailable}
 )
 
 type EventStreamClient interface {

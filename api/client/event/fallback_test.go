@@ -18,3 +18,13 @@ func TestLegacyTopicFallback(t *testing.T) {
 	require.Equal(t, false, ok)
 	require.DeepEqual(t, []string{event.EventHead, event.EventExecutionPayloadAvailable}, got)
 }
+
+func TestDropOptionalTopics(t *testing.T) {
+	got, ok := event.DropOptionalTopics([]string{event.EventHeadV2, event.EventAttestationReady, event.EventExecutionPayloadAvailable})
+	require.Equal(t, true, ok)
+	require.DeepEqual(t, []string{event.EventHeadV2, event.EventExecutionPayloadAvailable}, got)
+
+	got, ok = event.DropOptionalTopics([]string{event.EventHeadV2, event.EventExecutionPayloadAvailable})
+	require.Equal(t, false, ok)
+	require.DeepEqual(t, []string{event.EventHeadV2, event.EventExecutionPayloadAvailable}, got)
+}

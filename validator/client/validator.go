@@ -1003,6 +1003,24 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 				log.WithError(err).Error("Failed to check dependent roots")
 			}
 		}
+	case eventClient.EventAttestationReady:
+		ready := &structs.AttestationReadyEvent{}
+		if err := json.Unmarshal(event.Data, ready); err != nil {
+			log.WithError(err).Error("Failed to unmarshal attestation_ready event into JSON")
+			return
+		}
+
+		log.WithFields(logrus.Fields{
+			"slot":              ready.Slot,
+			"beacon_block_root": ready.BeaconBlockRoot,
+		}).Debug("Received attestation_ready event")
+
+		uintSlot, err := strconv.ParseUint(ready.Slot, 10, 64)
+		if err != nil {
+			log.WithError(err).Error("Failed to parse slot")
+			return
+		}
+		v.setHighestSlot(primitives.Slot(uintSlot))
 	case eventClient.EventExecutionPayloadAvailable:
 		payloadEvent := &structs.ExecutionPayloadAvailableEvent{}
 		if err := json.Unmarshal(event.Data, payloadEvent); err != nil {

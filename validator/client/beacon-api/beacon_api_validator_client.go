@@ -366,22 +366,26 @@ func (c *beaconApiValidatorClient) StartEventStream(ctx context.Context, topics 
 			return
 		}
 
-		// Older beacon nodes reject the head_v2 topic with HTTP 400 (the whole
-		// request fails when any topic is unknown), so fallback with legacy topics
-		// before surfacing subscription failures to the validator event loop.
+		// Beacon nodes reject the whole request when any topic is unknown (HTTP 400),
+		// so retry first without optional topics, then with legacy topics, before
+		// surfacing subscription failures to the validator event loop.
 		err = eventStream.Subscribe(eventsChannel)
 		var subErr *httputil.DefaultJsonError
-		if fallbackTopics, ok := event.LegacyTopicFallback(topics); ok &&
-			errors.As(err, &subErr) && subErr.Code == http.StatusBadRequest {
+		if errors.As(err, &subErr) && subErr.Code == http.StatusBadRequest {
+			fallbackTopics, ok := event.DropOptionalTopics(topics)
+			if !ok {
+				fallbackTopics, ok = event.LegacyTopicFallback(topics)
+			}
+			if ok {
+				// Log the topics so that users can understand why the fallback is happening.
+				log.WithFields(logrus.Fields{
+					"topics":          strings.Join(topics, ","),
+					"fallback_topics": strings.Join(fallbackTopics, ","),
+				}).WithError(err).Warn("Beacon node does not support the given topics; falling back")
 
-			// Log the topics so that users can understand why the fallback is happening.
-			log.WithFields(logrus.Fields{
-				"topics":          strings.Join(topics, ","),
-				"fallback_topics": strings.Join(fallbackTopics, ","),
-			}).WithError(err).Warn("Beacon node does not support the given topics; falling back to the legacy topics")
-
-			topics = fallbackTopics
-			continue
+				topics = fallbackTopics
+				continue
+			}
 		}
 
 		// If the subscription failed for any other reason,

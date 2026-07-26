@@ -647,7 +647,8 @@ func generateSignedBlindedFuluBlock() *ethpb.GenericSignedBeaconBlock_BlindedFul
 
 // TestBeaconApiValidatorClient_StartEventStream_FallsBackToHead asserts that
 // when the beacon node rejects the head_v2 topic with HTTP 400 (older node),
-// StartEventStream retries with the legacy head topic set and delivers events.
+// StartEventStream retries first without optional topics, then with the legacy
+// head topic set, and delivers events.
 func TestBeaconApiValidatorClient_StartEventStream_FallsBackToHead(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -679,12 +680,18 @@ func TestBeaconApiValidatorClient_StartEventStream_FallsBackToHead(t *testing.T)
 	defer cancel()
 	go c.StartEventStream(ctx, eventClient.DefaultEventTopics, ch)
 
-	// First attempt subscribes with head_v2 (the new default).
-	require.StringContains(t, eventClient.EventHeadV2, <-topicCh)
-	// Retry swaps head_v2 for the legacy head topic, keeping the others.
+	// First attempt subscribes with the full default topic set.
+	firstTopics := <-topicCh
+	require.StringContains(t, eventClient.EventHeadV2, firstTopics)
+	require.StringContains(t, eventClient.EventAttestationReady, firstTopics)
+	// First retry drops the optional attestation_ready topic, keeping head_v2.
 	secondTopics := <-topicCh
-	require.Equal(t, false, strings.Contains(secondTopics, eventClient.EventHeadV2))
-	require.StringContains(t, eventClient.EventHead, secondTopics)
+	require.Equal(t, false, strings.Contains(secondTopics, eventClient.EventAttestationReady))
+	require.StringContains(t, eventClient.EventHeadV2, secondTopics)
+	// Second retry swaps head_v2 for the legacy head topic, keeping the others.
+	thirdTopics := <-topicCh
+	require.Equal(t, false, strings.Contains(thirdTopics, eventClient.EventHeadV2))
+	require.StringContains(t, eventClient.EventHead, thirdTopics)
 
 	e := <-ch
 	require.Equal(t, eventClient.EventHead, e.EventType)
