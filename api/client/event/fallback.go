@@ -16,3 +16,17 @@ func LegacyTopicFallback(topics []string) ([]string, bool) {
 	}
 	return out, replaced
 }
+
+// DropOptionalTopics returns topics with the optional ones removed, and whether any were dropped.
+func DropOptionalTopics(topics []string) ([]string, bool) {
+	out := make([]string, 0, len(topics))
+	dropped := false
+	for _, t := range topics {
+		if OptionalEventTopics[t] {
+			dropped = true
+			continue
+		}
+		out = append(out, t)
+	}
+	return out, dropped
+}
