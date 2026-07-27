@@ -103,6 +103,101 @@ func (q *pendingAttsQueue) blockImported(root [32]byte) {
 	}
 }
 
+// This defines how pending aggregates are saved in the map. The key is the
+// root of the missing block. The value is the list of pending attestations/aggregates
+// that voted for that block root. The caller of this function is responsible
+// for not sending repeated aggregates to the pending queue.
+func (q *pendingAttsQueue) saveAggregate(agg ethpb.SignedAggregateAttAndProof) {
+	root := bytesutil.ToBytes32(agg.AggregateAttestationAndProof().AggregateVal().GetData().BeaconBlockRoot)
+
+	q.save(root, agg, func(other any) bool {
+		a, ok := other.(ethpb.SignedAggregateAttAndProof)
+		return ok && pendingAggregatesAreEqual(agg, a, includeAggregatorIndex)
+	})
+}
+
+// This defines how pending attestations are saved in the map. The key is the
+// root of the missing block. The value is the list of pending attestations/aggregates
+// that voted for that block root. The caller of this function is responsible
+// for not sending repeated attestations to the pending queue.
+func (q *pendingAttsQueue) saveAtt(att ethpb.Att) {
+	root := bytesutil.ToBytes32(att.GetData().BeaconBlockRoot)
+
+	q.save(root, att, func(other any) bool {
+		a, ok := other.(ethpb.Att)
+		return ok && pendingAttsAreEqual(att, a)
+	})
+}
+
+// We want to avoid saving duplicate items, which is the purpose of the passed-in closure.
+// It is the responsibility of the caller to provide a function that correctly determines quality
+// in the context of the pending queue.
+func (q *pendingAttsQueue) save(root [32]byte, pending any, isEqual func(other any) bool) {
+	numOfPendingAtts := 0
+	for _, v := range q.pending {
+		numOfPendingAtts += len(v)
+	}
+	// Exit early if we exceed the pending attestations limit.
+	if numOfPendingAtts >= pendingAttsLimit {
+		return
+	}
+
+	_, ok := q.pending[root]
+	if !ok {
+		pendingAttCount.Inc()
+		q.pending[root] = []any{pending}
+		return
+	}
+
+	// Skip if the attestation/aggregate from the same validator already exists in
+	// the pending queue.
+	if slices.ContainsFunc(q.pending[root], isEqual) {
+		return
+	}
+
+	pendingAttCount.Inc()
+	q.pending[root] = append(q.pending[root], pending)
+}
+
+// This validates the pending attestations in the queue are still valid.
+// If not valid, a node will remove it from the queue in place. The validity
+// check specifies the pending attestation cannot fall one epoch behind
+// the current slot.
+func (q *pendingAttsQueue) prune(ctx context.Context, slot primitives.Slot) {
+	_, span := trace.StartSpan(ctx, "validatePendingAtts")
+	defer span.End()
+
+	for bRoot, atts := range q.pending {
+		for i := len(atts) - 1; i >= 0; i-- {
+			var attSlot primitives.Slot
+			switch t := atts[i].(type) {
+			case ethpb.Att:
+				attSlot = t.GetData().Slot
+			case ethpb.SignedAggregateAttAndProof:
+				attSlot = t.AggregateAttestationAndProof().AggregateVal().GetData().Slot
+			default:
+				log.Debugf("Unexpected item of type %T in pending attestation queue. Item will be removed", t)
+				// Remove the pending attestation from the map in place.
+				atts[i] = atts[len(atts)-1]
+				atts = atts[:len(atts)-1]
+				continue
+			}
+			if slot >= attSlot+params.BeaconConfig().SlotsPerEpoch {
+				// Remove the pending attestation from the map in place.
+				atts[i] = atts[len(atts)-1]
+				atts = atts[:len(atts)-1]
+			}
+		}
+		q.pending[bRoot] = atts
+
+		// If the pending attestations list of a given block root is empty,
+		// a node will remove the key from the map to avoid dangling keys.
+		if len(q.pending[bRoot]) == 0 {
+			delete(q.pending, bRoot)
+		}
+	}
+}
+
 // processPendingAttsQueue is the sole owner of the pending atts map.
 // every read and write of the map happens on this goroutine, so it needs no lock.
 func (s *Service) processPendingAttsQueue() {
@@ -473,62 +568,6 @@ func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAg
 	return nil
 }
 
-// This defines how pending aggregates are saved in the map. The key is the
-// root of the missing block. The value is the list of pending attestations/aggregates
-// that voted for that block root. The caller of this function is responsible
-// for not sending repeated aggregates to the pending queue.
-func (q *pendingAttsQueue) saveAggregate(agg ethpb.SignedAggregateAttAndProof) {
-	root := bytesutil.ToBytes32(agg.AggregateAttestationAndProof().AggregateVal().GetData().BeaconBlockRoot)
-
-	q.save(root, agg, func(other any) bool {
-		a, ok := other.(ethpb.SignedAggregateAttAndProof)
-		return ok && pendingAggregatesAreEqual(agg, a, includeAggregatorIndex)
-	})
-}
-
-// This defines how pending attestations are saved in the map. The key is the
-// root of the missing block. The value is the list of pending attestations/aggregates
-// that voted for that block root. The caller of this function is responsible
-// for not sending repeated attestations to the pending queue.
-func (q *pendingAttsQueue) saveAtt(att ethpb.Att) {
-	root := bytesutil.ToBytes32(att.GetData().BeaconBlockRoot)
-
-	q.save(root, att, func(other any) bool {
-		a, ok := other.(ethpb.Att)
-		return ok && pendingAttsAreEqual(att, a)
-	})
-}
-
-// We want to avoid saving duplicate items, which is the purpose of the passed-in closure.
-// It is the responsibility of the caller to provide a function that correctly determines quality
-// in the context of the pending queue.
-func (q *pendingAttsQueue) save(root [32]byte, pending any, isEqual func(other any) bool) {
-	numOfPendingAtts := 0
-	for _, v := range q.pending {
-		numOfPendingAtts += len(v)
-	}
-	// Exit early if we exceed the pending attestations limit.
-	if numOfPendingAtts >= pendingAttsLimit {
-		return
-	}
-
-	_, ok := q.pending[root]
-	if !ok {
-		pendingAttCount.Inc()
-		q.pending[root] = []any{pending}
-		return
-	}
-
-	// Skip if the attestation/aggregate from the same validator already exists in
-	// the pending queue.
-	if slices.ContainsFunc(q.pending[root], isEqual) {
-		return
-	}
-
-	pendingAttCount.Inc()
-	q.pending[root] = append(q.pending[root], pending)
-}
-
 // pendingAggregatesAreEqual checks if two pending aggregate attestations are equal.
 // The filter parameter controls whether aggregator index is considered in the equality check.
 func pendingAggregatesAreEqual(a, b ethpb.SignedAggregateAttAndProof, filter aggregatorIndexFilter) bool {
@@ -567,45 +606,6 @@ func pendingAttsAreEqual(a, b ethpb.Att) bool {
 		return false
 	}
 	return bytes.Equal(a.GetAggregationBits(), b.GetAggregationBits())
-}
-
-// This validates the pending attestations in the queue are still valid.
-// If not valid, a node will remove it from the queue in place. The validity
-// check specifies the pending attestation cannot fall one epoch behind
-// the current slot.
-func (q *pendingAttsQueue) prune(ctx context.Context, slot primitives.Slot) {
-	_, span := trace.StartSpan(ctx, "validatePendingAtts")
-	defer span.End()
-
-	for bRoot, atts := range q.pending {
-		for i := len(atts) - 1; i >= 0; i-- {
-			var attSlot primitives.Slot
-			switch t := atts[i].(type) {
-			case ethpb.Att:
-				attSlot = t.GetData().Slot
-			case ethpb.SignedAggregateAttAndProof:
-				attSlot = t.AggregateAttestationAndProof().AggregateVal().GetData().Slot
-			default:
-				log.Debugf("Unexpected item of type %T in pending attestation queue. Item will be removed", t)
-				// Remove the pending attestation from the map in place.
-				atts[i] = atts[len(atts)-1]
-				atts = atts[:len(atts)-1]
-				continue
-			}
-			if slot >= attSlot+params.BeaconConfig().SlotsPerEpoch {
-				// Remove the pending attestation from the map in place.
-				atts[i] = atts[len(atts)-1]
-				atts = atts[:len(atts)-1]
-			}
-		}
-		q.pending[bRoot] = atts
-
-		// If the pending attestations list of a given block root is empty,
-		// a node will remove the key from the map to avoid dangling keys.
-		if len(q.pending[bRoot]) == 0 {
-			delete(q.pending, bRoot)
-		}
-	}
 }
 
 // bucketAttestationsByData groups attestations by their AttestationData hash.
