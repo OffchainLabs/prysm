@@ -83,6 +83,8 @@ func (q *pendingAttsQueue) queueItem(item any) {
 	select {
 	case q.incoming <- item:
 	default:
+		// Pending atts are best effort; drop rather than block gossip validation.
+		pendingAttDroppedCount.Inc()
 	}
 }
 

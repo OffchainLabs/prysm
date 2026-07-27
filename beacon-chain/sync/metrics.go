@@ -180,6 +180,10 @@ var (
 		Name: "gossip_pending_attestations_total",
 		Help: "increased when receiving a new pending attestation",
 	})
+	pendingAttDroppedCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "gossip_pending_attestations_dropped_total",
+		Help: "increased when a pending attestation is dropped because the pending attestations queue is full",
+	})
 
 	// Sync committee verification performance.
 	syncMessagesForUnknownBlocks = promauto.NewCounter(
