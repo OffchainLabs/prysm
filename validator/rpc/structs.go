@@ -109,51 +109,24 @@ type GraffitiData struct {
 	Graffiti string `json:"graffiti"`
 }
 
-// Validator config keymanager api (keymanager-APIs #87). All integers are
-// decimal strings and all byte values are 0x-prefixed hex, per keymanager conventions.
-type GetValidatorConfigResponse struct {
-	Data *ValidatorConfigData `json:"data"`
-}
-
-type ValidatorConfigData struct {
-	DefaultConfig *ValidatorConfig            `json:"default_config,omitempty"`
-	Configs       map[string]*ValidatorConfig `json:"configs"`
-}
-
-type SetValidatorConfigRequest struct {
-	Configs map[string]*ValidatorConfig `json:"configs"`
-}
-
-type SetValidatorConfigResponse struct {
-	Data map[string]*ValidatorConfigStatus `json:"data"`
-}
-
-type ValidatorConfigStatus struct {
-	Status  string `json:"status"`
-	Message string `json:"message,omitempty"`
-}
-
-type ValidatorConfig struct {
-	FeeRecipient   *string            `json:"fee_recipient,omitempty"`
-	TargetGasLimit *string            `json:"target_gas_limit,omitempty"`
-	Graffiti       *string            `json:"graffiti,omitempty"`
-	Builder        *BuilderConfigJson `json:"builder,omitempty"`
-}
-
+// Per-key builders keymanager api (keymanager-APIs #88). All integers are decimal
+// strings and all byte values are 0x-prefixed hex, per keymanager conventions.
+// A nil Builders means "use the validator client's builders"; a non-nil empty
+// Builders means "use none" (p2p bids only).
+// Builders has no omitempty: on the resolved GET response an empty list ("use no
+// builders") must serialize as [] rather than be dropped. On POST input an absent
+// field still decodes to nil, which means "inherit the validator client's builders".
 type BuilderConfigJson struct {
-	Enabled             *bool               `json:"enabled,omitempty"`
-	Builders            []*BuilderEntryJson `json:"builders,omitempty"`
-	MaxExecutionPayment *string             `json:"max_execution_payment,omitempty"`
-	MinBid              *string             `json:"min_bid,omitempty"`
-	BuilderBoostFactor  *string             `json:"builder_boost_factor,omitempty"`
-	Proxy               *string             `json:"proxy,omitempty"`
+	Enabled                   *bool               `json:"enabled"`
+	Builders                  []*BuilderEntryJson `json:"builders"`
+	DefaultMinBid             *string             `json:"default_min_bid,omitempty"`
+	DefaultBuilderBoostFactor *string             `json:"default_builder_boost_factor,omitempty"`
 }
 
 type BuilderEntryJson struct {
-	Url                 string  `json:"url"`
-	Pubkey              *string `json:"pubkey,omitempty"`
+	Url                 *string `json:"url,omitempty"`
 	AuthData            *string `json:"auth_data,omitempty"`
-	Proxy               *string `json:"proxy,omitempty"`
+	BuilderPubkey       *string `json:"builder_pubkey,omitempty"`
 	MaxExecutionPayment *string `json:"max_execution_payment,omitempty"`
 	MinBid              *string `json:"min_bid,omitempty"`
 	BuilderBoostFactor  *string `json:"builder_boost_factor,omitempty"`

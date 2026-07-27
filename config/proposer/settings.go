@@ -184,7 +184,8 @@ func EffectiveBuilderConfig(perKey, def *BuilderConfig) *BuilderConfig {
 	if eff.GasLimit == 0 {
 		eff.GasLimit = def.GasLimit
 	}
-	if len(eff.Builders) == 0 {
+	// A nil list inherits the default's; a non-nil empty list means "use no builders".
+	if eff.Builders == nil {
 		eff.Builders = def.Builders
 	}
 	return eff

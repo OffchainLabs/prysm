@@ -2,84 +2,89 @@ package rpc
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v7/io/logs"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 )
 
-// Per-key statuses; not_found is unused because Prysm supports pre-provisioning.
-const (
-	configStatusSet   = "set"
-	configStatusError = "error"
-)
+const maxBuilderEntries = 64
 
-// GetValidatorConfig implements GET /eth/v1/validator/config from keymanager-APIs #87.
-// It returns the explicitly configured per-key fragments plus the read-only default_config.
-func (s *Server) GetValidatorConfig(w http.ResponseWriter, r *http.Request) {
-	_, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.GetValidatorConfig")
+// GetBuilders implements GET /eth/v1/validator/{pubkey}/builders (keymanager-APIs #88).
+// It returns the key's builder configuration resolved against default_config so
+// re-submitting the response reproduces the same behavior.
+func (s *Server) GetBuilders(w http.ResponseWriter, r *http.Request) {
+	_, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.GetBuilders")
 	defer span.End()
 
 	if s.validatorService == nil {
 		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
 	}
-
-	filter, ok := parsePubkeyFilter(w, r)
+	_, pubkey, ok := shared.HexFromRoute(w, r, "pubkey", fieldparams.BLSPubkeyLength)
 	if !ok {
 		return
 	}
 
-	settings := s.validatorService.ProposerSettings()
-	resp := &GetValidatorConfigResponse{Data: &ValidatorConfigData{Configs: map[string]*ValidatorConfig{}}}
-	if settings == nil {
-		httputil.WriteJson(w, resp)
-		return
+	eff := resolveBuilders(s.validatorService.ProposerSettings(), bytesutil.ToBytes48(pubkey))
+	out := builderConfigJSONFromConsensus(eff)
+	if out.Enabled == nil {
+		disabled := false
+		out.Enabled = &disabled
 	}
-	if settings.DefaultConfig != nil {
-		resp.Data.DefaultConfig = validatorConfigFromOption(settings.DefaultConfig)
+	// The resolved response always states a concrete builders list.
+	if out.Builders == nil {
+		out.Builders = []*BuilderEntryJson{}
 	}
-	for pk, opt := range settings.ProposeConfig {
-		if filter != nil {
-			if _, wanted := filter[pk]; !wanted {
-				continue
-			}
+	for _, e := range out.Builders {
+		if e.MinBid == nil {
+			e.MinBid = out.DefaultMinBid
 		}
-		resp.Data.Configs[hexutil.Encode(pk[:])] = validatorConfigFromOption(opt)
+		if e.BuilderBoostFactor == nil {
+			e.BuilderBoostFactor = out.DefaultBuilderBoostFactor
+		}
 	}
-	httputil.WriteJson(w, resp)
+	httputil.WriteJson(w, out)
 }
 
-// SetValidatorConfig implements POST /eth/v1/validator/config from keymanager-APIs #87.
-// Each submitted document REPLACES the key's configured fragment. An empty document
-// clears the key. Keys are applied independently with a per-key status.
-func (s *Server) SetValidatorConfig(w http.ResponseWriter, r *http.Request) {
-	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.SetValidatorConfig")
+// SetBuilders implements POST /eth/v1/validator/{pubkey}/builders. It replaces the
+// key's builder configuration in full, leaving fee recipient, gas limit and graffiti
+// untouched.
+func (s *Server) SetBuilders(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.SetBuilders")
 	defer span.End()
 
 	if s.validatorService == nil {
 		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
 	}
-
-	// Unrecognized fields are ignored for forward compatibility.
-	var req SetValidatorConfigRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+	_, pubkey, ok := shared.HexFromRoute(w, r, "pubkey", fieldparams.BLSPubkeyLength)
+	if !ok {
 		return
 	}
-	if req.Configs == nil {
-		httputil.HandleError(w, "No configs submitted", http.StatusBadRequest)
+
+	var body BuilderConfigJson
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		httputil.HandleError(w, "Could not decode builder config: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if body.Enabled == nil {
+		httputil.HandleError(w, "enabled is required", http.StatusBadRequest)
+		return
+	}
+	bc, err := builderConfigFromJSON(&body)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -96,124 +101,103 @@ func (s *Server) SetValidatorConfig(w http.ResponseWriter, r *http.Request) {
 	if settings.ProposeConfig == nil {
 		settings.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
 	}
-
-	resp := &SetValidatorConfigResponse{Data: make(map[string]*ValidatorConfigStatus, len(req.Configs))}
-	changed := false
-	for rawPubkey, cfg := range req.Configs {
-		pubkey, err := decodePubkey(rawPubkey)
-		if err != nil {
-			resp.Data[rawPubkey] = &ValidatorConfigStatus{Status: configStatusError, Message: err.Error()}
-			continue
-		}
-		// Unknown keys are stored too; the config applies once the key is added.
-		if cfg == nil || cfg.isEmpty() {
-			delete(settings.ProposeConfig, pubkey)
-			resp.Data[rawPubkey] = &ValidatorConfigStatus{Status: configStatusSet}
-			changed = true
-			continue
-		}
-		opt, err := optionFromValidatorConfig(cfg)
-		if err != nil {
-			resp.Data[rawPubkey] = &ValidatorConfigStatus{Status: configStatusError, Message: err.Error()}
-			continue
-		}
-		settings.ProposeConfig[pubkey] = opt
-		resp.Data[rawPubkey] = &ValidatorConfigStatus{Status: configStatusSet}
-		changed = true
-	}
-
-	if changed {
-		if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
-			httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-	httputil.WriteJson(w, resp)
-}
-
-func parsePubkeyFilter(w http.ResponseWriter, r *http.Request) (map[[fieldparams.BLSPubkeyLength]byte]bool, bool) {
-	raw := r.URL.Query()["pubkeys"]
-	if len(raw) == 0 {
-		return nil, true
-	}
-	filter := make(map[[fieldparams.BLSPubkeyLength]byte]bool, len(raw))
-	for _, p := range raw {
-		pubkey, err := decodePubkey(p)
-		if err != nil {
-			httputil.HandleError(w, "Invalid pubkey "+p+": "+err.Error(), http.StatusBadRequest)
-			return nil, false
-		}
-		filter[pubkey] = true
-	}
-	return filter, true
-}
-
-func decodePubkey(raw string) ([fieldparams.BLSPubkeyLength]byte, error) {
-	var out [fieldparams.BLSPubkeyLength]byte
-	decoded, err := hexutil.Decode(raw)
-	if err != nil {
-		return out, errors.Wrap(err, "invalid public key")
-	}
-	if len(decoded) != fieldparams.BLSPubkeyLength {
-		return out, errors.Errorf("public key %s is not %d bytes", raw, fieldparams.BLSPubkeyLength)
-	}
-	return bytesutil.ToBytes48(decoded), nil
-}
-
-func (c *ValidatorConfig) isEmpty() bool {
-	return c.FeeRecipient == nil && c.TargetGasLimit == nil && c.Graffiti == nil && c.Builder == nil
-}
-
-// validatorConfigFromOption serializes only the explicitly configured fields, so
-// tooling can tell an explicit value from an inherited one.
-func validatorConfigFromOption(opt *proposer.Option) *ValidatorConfig {
-	cfg := &ValidatorConfig{}
+	key := bytesutil.ToBytes48(pubkey)
+	opt := settings.ProposeConfig[key]
 	if opt == nil {
-		return cfg
+		opt = &proposer.Option{}
+		settings.ProposeConfig[key] = opt
 	}
-	if opt.FeeRecipientConfig != nil {
-		addr := opt.FeeRecipientConfig.FeeRecipient.Hex()
-		cfg.FeeRecipient = &addr
+	opt.BuilderConfig = bc
+
+	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
+		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
-	if opt.GasLimit != 0 {
-		cfg.TargetGasLimit = strPtr(formatUint(opt.GasLimit))
-	} else if opt.BuilderConfig != nil && opt.BuilderConfig.GasLimit != 0 {
-		cfg.TargetGasLimit = strPtr(formatUint(opt.BuilderConfig.GasLimit))
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// DeleteBuilders implements DELETE /eth/v1/validator/{pubkey}/builders. It removes
+// the key's builder configuration so the key follows the validator client defaults;
+// this differs from enabled:false.
+func (s *Server) DeleteBuilders(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.DeleteBuilders")
+	defer span.End()
+
+	if s.validatorService == nil {
+		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		return
 	}
-	if opt.GraffitiConfig != nil {
-		g := opt.GraffitiConfig.Graffiti
-		cfg.Graffiti = &g
+	rawPubkey, pubkey, ok := shared.HexFromRoute(w, r, "pubkey", fieldparams.BLSPubkeyLength)
+	if !ok {
+		return
 	}
-	if opt.BuilderConfig != nil {
-		cfg.Builder = builderConfigJSONFromConsensus(opt.BuilderConfig)
+
+	s.proposerSettingsLock.Lock()
+	defer s.proposerSettingsLock.Unlock()
+
+	settings := s.validatorService.ProposerSettings()
+	key := bytesutil.ToBytes48(pubkey)
+	if settings == nil || settings.ProposeConfig == nil {
+		httputil.HandleError(w, fmt.Sprintf("No builder configuration found for pubkey %q", rawPubkey), http.StatusNotFound)
+		return
 	}
-	return cfg
+	opt, found := settings.ProposeConfig[key]
+	if !found || opt == nil || opt.BuilderConfig == nil {
+		httputil.HandleError(w, fmt.Sprintf("No builder configuration found for pubkey %q", rawPubkey), http.StatusNotFound)
+		return
+	}
+
+	settings = settings.Clone()
+	settings.ProposeConfig[key].BuilderConfig = nil
+	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
+		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func resolveBuilders(settings *proposer.Settings, key [fieldparams.BLSPubkeyLength]byte) *proposer.BuilderConfig {
+	var perKey, def *proposer.BuilderConfig
+	if settings != nil {
+		if settings.DefaultConfig != nil {
+			def = settings.DefaultConfig.BuilderConfig
+		}
+		if opt, ok := settings.ProposeConfig[key]; ok && opt != nil {
+			perKey = opt.BuilderConfig
+		}
+	}
+	if eff := proposer.EffectiveBuilderConfig(perKey, def); eff != nil {
+		return eff
+	}
+	return &proposer.BuilderConfig{}
 }
 
 func builderConfigJSONFromConsensus(bc *proposer.BuilderConfig) *BuilderConfigJson {
 	out := &BuilderConfigJson{
-		Enabled:             bc.Enabled,
-		Proxy:               bc.Proxy,
-		MaxExecutionPayment: optUintStrPtr(bc.MaxExecutionPayment),
-		MinBid:              optUintStrPtr(bc.MinBid),
-		BuilderBoostFactor:  optUintStrPtr(bc.BuilderBoostFactor),
+		Enabled:                   bc.Enabled,
+		DefaultMinBid:             optUintStrPtr(bc.MinBid),
+		DefaultBuilderBoostFactor: optUintStrPtr(bc.BuilderBoostFactor),
 	}
-	for _, b := range bc.Builders {
-		out.Builders = append(out.Builders, builderEntryJSONFromConsensus(b))
+	if bc.Builders != nil {
+		out.Builders = make([]*BuilderEntryJson, 0, len(bc.Builders))
+		for _, b := range bc.Builders {
+			out.Builders = append(out.Builders, builderEntryJSONFromConsensus(b))
+		}
 	}
 	return out
 }
 
 func builderEntryJSONFromConsensus(be *proposer.BuilderEntry) *BuilderEntryJson {
 	out := &BuilderEntryJson{
-		Url:                 be.URL,
-		Proxy:               be.Proxy,
 		MaxExecutionPayment: optUintStrPtr(be.MaxExecutionPayment),
 		MinBid:              optUintStrPtr(be.MinBid),
 		BuilderBoostFactor:  optUintStrPtr(be.BuilderBoostFactor),
 	}
+	if be.URL != "" {
+		out.Url = strPtr(be.URL)
+	}
 	if len(be.Pubkey) != 0 {
-		out.Pubkey = strPtr(hexutil.Encode(be.Pubkey))
+		out.BuilderPubkey = strPtr(hexutil.Encode(be.Pubkey))
 	}
 	if len(be.AuthData) != 0 {
 		out.AuthData = strPtr(hexutil.Encode(be.AuthData))
@@ -221,119 +205,97 @@ func builderEntryJSONFromConsensus(be *proposer.BuilderEntry) *BuilderEntryJson 
 	return out
 }
 
-// optionFromValidatorConfig builds a fresh Option from a submitted document. Every
-// field is validated; unset fields stay nil so they inherit from default_config.
-func optionFromValidatorConfig(cfg *ValidatorConfig) (*proposer.Option, error) {
-	opt := &proposer.Option{}
-	if cfg.FeeRecipient != nil {
-		if !common.IsHexAddress(*cfg.FeeRecipient) {
-			return nil, errors.Errorf("fee_recipient %s is not a valid execution address", *cfg.FeeRecipient)
-		}
-		opt.FeeRecipientConfig = &proposer.FeeRecipientConfig{FeeRecipient: common.HexToAddress(*cfg.FeeRecipient)}
-	}
-	if cfg.TargetGasLimit != nil {
-		v, err := parseUint(*cfg.TargetGasLimit, "target_gas_limit")
-		if err != nil {
-			return nil, err
-		}
-		opt.GasLimit = v
-	}
-	if cfg.Graffiti != nil {
-		opt.GraffitiConfig = &proposer.GraffitiConfig{Graffiti: *cfg.Graffiti}
-	}
-	if cfg.Builder != nil {
-		bc, err := builderConfigFromJSON(cfg.Builder)
-		if err != nil {
-			return nil, err
-		}
-		opt.BuilderConfig = bc
-	}
-	return opt, nil
-}
-
 func builderConfigFromJSON(in *BuilderConfigJson) (*proposer.BuilderConfig, error) {
-	bc := &proposer.BuilderConfig{Enabled: in.Enabled, Proxy: in.Proxy}
-	if in.MaxExecutionPayment != nil {
-		v, err := parseUint(*in.MaxExecutionPayment, "builder.max_execution_payment")
-		if err != nil {
-			return nil, err
-		}
-		bc.MaxExecutionPayment = &v
-	}
-	if in.MinBid != nil {
-		v, err := parseUint(*in.MinBid, "builder.min_bid")
+	bc := &proposer.BuilderConfig{Enabled: in.Enabled}
+	if in.DefaultMinBid != nil {
+		v, err := parseUint(*in.DefaultMinBid, "default_min_bid")
 		if err != nil {
 			return nil, err
 		}
 		bc.MinBid = &v
 	}
-	if in.BuilderBoostFactor != nil {
-		v, err := parseUint(*in.BuilderBoostFactor, "builder.builder_boost_factor")
+	if in.DefaultBuilderBoostFactor != nil {
+		v, err := parseUint(*in.DefaultBuilderBoostFactor, "default_builder_boost_factor")
 		if err != nil {
 			return nil, err
 		}
 		bc.BuilderBoostFactor = &v
 	}
+	if in.Builders == nil {
+		return bc, nil
+	}
+	if len(in.Builders) > maxBuilderEntries {
+		return nil, errors.Errorf("builders exceeds %d entries", maxBuilderEntries)
+	}
+	// Non-nil (possibly empty) list means "use exactly these builders", not "inherit".
+	bc.Builders = make([]*proposer.BuilderEntry, 0, len(in.Builders))
 	seen := make(map[string]bool, len(in.Builders))
+	seenPubkey := make(map[string]bool, len(in.Builders))
 	for i, entry := range in.Builders {
 		be, err := builderEntryFromJSON(entry, i)
 		if err != nil {
 			return nil, err
 		}
-		if seen[be.URL] {
-			return nil, errors.Errorf("builder.builders[%d]: two builder entries share the same url", i)
+		tuple := fmt.Sprintf("%s|%x|%x", be.URL, be.AuthData, be.Pubkey)
+		if seen[tuple] {
+			return nil, errors.Errorf("builders[%d]: duplicate url, auth_data and builder_pubkey", i)
 		}
-		seen[be.URL] = true
+		seen[tuple] = true
+		if len(be.Pubkey) != 0 {
+			if seenPubkey[string(be.Pubkey)] {
+				return nil, errors.Errorf("builders[%d]: builder_pubkey appears on more than one entry", i)
+			}
+			seenPubkey[string(be.Pubkey)] = true
+		}
 		bc.Builders = append(bc.Builders, be)
 	}
 	return bc, nil
 }
 
 func builderEntryFromJSON(in *BuilderEntryJson, i int) (*proposer.BuilderEntry, error) {
-	if in.Url == "" {
-		return nil, errors.Errorf("builder.builders[%d].url is required", i)
+	be := &proposer.BuilderEntry{}
+	if in.Url != nil && *in.Url != "" {
+		if u, err := url.Parse(*in.Url); err != nil || u.Scheme == "" || u.Host == "" {
+			return nil, errors.Errorf("builders[%d].url is not a valid URL", i)
+		}
+		be.URL = *in.Url
 	}
-	if u, err := url.Parse(in.Url); err != nil || u.Scheme == "" || u.Host == "" {
-		return nil, errors.Errorf("builder.builders[%d].url is not a valid URL", i)
-	}
-	if in.AuthData == nil {
-		log.WithField("builder", logs.MaskCredentialsLogging(in.Url)).Warn(
-			"Builder entry has no auth_data; builders requiring an out-of-band agreement will reject its requests")
-	}
-	be := &proposer.BuilderEntry{URL: in.Url, Proxy: in.Proxy}
-	if in.Pubkey != nil {
-		pk, err := hexutil.Decode(*in.Pubkey)
+	if in.BuilderPubkey != nil {
+		pk, err := hexutil.Decode(*in.BuilderPubkey)
 		if err != nil || len(pk) != fieldparams.BLSPubkeyLength {
-			return nil, errors.Errorf("builder.builders[%d].pubkey is not a valid BLS public key", i)
+			return nil, errors.Errorf("builders[%d].builder_pubkey is not a valid BLS public key", i)
 		}
 		be.Pubkey = pk
+	}
+	if be.URL == "" && len(be.Pubkey) == 0 {
+		return nil, errors.Errorf("builders[%d]: at least one of url and builder_pubkey is required", i)
 	}
 	if in.AuthData != nil {
 		ad, err := hexutil.Decode(*in.AuthData)
 		if err != nil {
-			return nil, errors.Errorf("builder.builders[%d].auth_data is not valid hex", i)
+			return nil, errors.Errorf("builders[%d].auth_data is not valid hex", i)
 		}
 		if len(ad) > 4096 {
-			return nil, errors.Errorf("builder.builders[%d].auth_data exceeds 4096 bytes", i)
+			return nil, errors.Errorf("builders[%d].auth_data exceeds 4096 bytes", i)
 		}
 		be.AuthData = ad
 	}
 	if in.MaxExecutionPayment != nil {
-		v, err := parseUint(*in.MaxExecutionPayment, "builder.builders[].max_execution_payment")
+		v, err := parseUint(*in.MaxExecutionPayment, "builders[].max_execution_payment")
 		if err != nil {
 			return nil, err
 		}
 		be.MaxExecutionPayment = &v
 	}
 	if in.MinBid != nil {
-		v, err := parseUint(*in.MinBid, "builder.builders[].min_bid")
+		v, err := parseUint(*in.MinBid, "builders[].min_bid")
 		if err != nil {
 			return nil, err
 		}
 		be.MinBid = &v
 	}
 	if in.BuilderBoostFactor != nil {
-		v, err := parseUint(*in.BuilderBoostFactor, "builder.builders[].builder_boost_factor")
+		v, err := parseUint(*in.BuilderBoostFactor, "builders[].builder_boost_factor")
 		if err != nil {
 			return nil, err
 		}
