@@ -53,7 +53,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 			clock:               startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 			attestationNotifier: (&mockChain.ChainService{}).OperationNotifier(),
 		},
-		blkRootToPendingAtts:             make(map[[32]byte][]any),
+		pendingAtts:                      newPendingAttsQueue(),
 		seenUnAggregatedAttestationCache: lruwrpr.New(10),
 		signatureChan:                    make(chan *signatureVerifier, verifierLimit),
 	}
@@ -336,7 +336,7 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 			clock:               startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 			attestationNotifier: (&mockChain.ChainService{}).OperationNotifier(),
 		},
-		blkRootToPendingAtts:             make(map[[32]byte][]any),
+		pendingAtts:                      newPendingAttsQueue(),
 		seenUnAggregatedAttestationCache: lruwrpr.New(10),
 		signatureChan:                    make(chan *signatureVerifier, verifierLimit),
 	}

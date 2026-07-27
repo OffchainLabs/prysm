@@ -27,7 +27,108 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const pendingAttsLimit = 32768
+const (
+	pendingAttsLimit = 32768
+
+	// Fits one missed slot's worth of atts (~2-3k); dropped extras are metered and come back via aggregates.
+	pendingAttsIncomingSize = 4096
+
+	// Imports arrive ~1/slot, but a dropped root strands its waiting atts, so oversize to never fill.
+	pendingAttsImportedSize = 1024
+)
+
+// pendingAttsQueue holds attestations and aggregates waiting on a block root that has
+// not been imported yet.
+type pendingAttsQueue struct {
+	incoming chan any           // ethpb.Att or ethpb.SignedAggregateAttAndProof from gossip
+	imported chan [32]byte      // roots of imported blocks, releases waiting atts
+	pending  map[[32]byte][]any // owned by processPendingAttsQueue
+}
+
+func newPendingAttsQueue() *pendingAttsQueue {
+	return &pendingAttsQueue{
+		incoming: make(chan any, pendingAttsIncomingSize),
+		imported: make(chan [32]byte, pendingAttsImportedSize),
+		pending:  make(map[[32]byte][]any),
+	}
+}
+
+// queueAtt hands a gossip attestation with an unknown block root to the queue. Safe for any goroutine.
+func (q *pendingAttsQueue) queueAtt(att ethpb.Att) {
+	if q == nil {
+		return
+	}
+
+	if att.Version() >= version.Electra && !att.IsSingle() {
+		log.Debug("Non-single attestation sent to pending attestation pool. Attestation will be ignored")
+		return
+	}
+	q.queueItem(att)
+}
+
+// queueAggregate hands a gossip aggregate with an unknown block root to the queue. Safe for any goroutine.
+func (q *pendingAttsQueue) queueAggregate(agg ethpb.SignedAggregateAttAndProof) {
+	if q == nil {
+		return
+	}
+
+	q.queueItem(agg)
+}
+
+func (q *pendingAttsQueue) queueItem(item any) {
+	if q == nil {
+		return
+	}
+
+	select {
+	case q.incoming <- item:
+	default:
+	}
+}
+
+// blockImported wakes the queue to process attestations waiting on the imported root. Safe for any goroutine.
+func (q *pendingAttsQueue) blockImported(root [32]byte) {
+	if q == nil {
+		return
+	}
+
+	select {
+	case q.imported <- root:
+	default:
+		log.
+			WithField("root", fmt.Sprintf("%#x", bytesutil.Trunc(root[:]))).
+			Debug("Imported block root queue is full, skipping pending attestations")
+	}
+}
+
+// processPendingAttsQueue is the sole owner of the pending atts map.
+// every read and write of the map happens on this goroutine, so it needs no lock.
+func (s *Service) processPendingAttsQueue() {
+	q := s.pendingAtts
+	if q == nil {
+		return
+	}
+
+	for {
+		select {
+		case item := <-q.incoming:
+			switch v := item.(type) {
+			case ethpb.Att:
+				q.saveAtt(v)
+			case ethpb.SignedAggregateAttAndProof:
+				q.saveAggregate(v)
+			default:
+				log.Warnf("Unexpected pending attestation type %T", v)
+			}
+		case root := <-q.imported:
+			if err := s.processPendingAttsForBlock(s.ctx, root); err != nil {
+				log.WithError(err).Debug("Could not process pending attestations for block")
+			}
+		case <-s.ctx.Done():
+			return
+		}
+	}
+}
 
 // aggregatorIndexFilter defines how aggregator index should be handled in equality checks.
 type aggregatorIndexFilter int
@@ -54,27 +155,23 @@ func (s *Service) processPendingAttsForBlock(ctx context.Context, bRoot [32]byte
 	// Before a node processes pending attestations queue, it verifies
 	// the attestations in the queue are still valid. Attestations will
 	// be deleted from the queue if invalid (i.e. getting stalled from falling too many slots behind).
-	s.validatePendingAtts(ctx, s.cfg.clock.CurrentSlot())
+	s.pendingAtts.prune(ctx, s.cfg.clock.CurrentSlot())
 
-	s.pendingAttsLock.RLock()
-	attestations := s.blkRootToPendingAtts[bRoot]
-	s.pendingAttsLock.RUnlock()
+	attestations := s.pendingAtts.pending[bRoot]
 
 	s.processAttestations(ctx, attestations)
 
 	randGen := rand.NewGenerator()
 	// Delete the missing block root key from pending attestation queue so a node will not request for the block again.
-	s.pendingAttsLock.Lock()
-	delete(s.blkRootToPendingAtts, bRoot)
-	pendingRoots := make([][32]byte, 0, len(s.blkRootToPendingAtts))
+	delete(s.pendingAtts.pending, bRoot)
+	pendingRoots := make([][32]byte, 0, len(s.pendingAtts.pending))
 	s.pendingQueueLock.RLock()
-	for r := range s.blkRootToPendingAtts {
+	for r := range s.pendingAtts.pending {
 		if !s.seenPendingBlocks[r] && !s.cfg.chain.InForkchoice(r) && !s.cfg.chain.BlockBeingSynced(r) {
 			pendingRoots = append(pendingRoots, r)
 		}
 	}
 	s.pendingQueueLock.RUnlock()
-	s.pendingAttsLock.Unlock()
 
 	//  Request the blocks for the pending attestations that could not be processed.
 	return s.sendBatchRootRequest(ctx, pendingRoots, randGen)
@@ -378,10 +475,10 @@ func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAg
 // root of the missing block. The value is the list of pending attestations/aggregates
 // that voted for that block root. The caller of this function is responsible
 // for not sending repeated aggregates to the pending queue.
-func (s *Service) savePendingAggregate(agg ethpb.SignedAggregateAttAndProof) {
+func (q *pendingAttsQueue) saveAggregate(agg ethpb.SignedAggregateAttAndProof) {
 	root := bytesutil.ToBytes32(agg.AggregateAttestationAndProof().AggregateVal().GetData().BeaconBlockRoot)
 
-	s.savePending(root, agg, func(other any) bool {
+	q.save(root, agg, func(other any) bool {
 		a, ok := other.(ethpb.SignedAggregateAttAndProof)
 		return ok && pendingAggregatesAreEqual(agg, a, includeAggregatorIndex)
 	})
@@ -391,15 +488,10 @@ func (s *Service) savePendingAggregate(agg ethpb.SignedAggregateAttAndProof) {
 // root of the missing block. The value is the list of pending attestations/aggregates
 // that voted for that block root. The caller of this function is responsible
 // for not sending repeated attestations to the pending queue.
-func (s *Service) savePendingAtt(att ethpb.Att) {
-	if att.Version() >= version.Electra && !att.IsSingle() {
-		log.Debug("Non-single attestation sent to pending attestation pool. Attestation will be ignored")
-		return
-	}
-
+func (q *pendingAttsQueue) saveAtt(att ethpb.Att) {
 	root := bytesutil.ToBytes32(att.GetData().BeaconBlockRoot)
 
-	s.savePending(root, att, func(other any) bool {
+	q.save(root, att, func(other any) bool {
 		a, ok := other.(ethpb.Att)
 		return ok && pendingAttsAreEqual(att, a)
 	})
@@ -408,12 +500,9 @@ func (s *Service) savePendingAtt(att ethpb.Att) {
 // We want to avoid saving duplicate items, which is the purpose of the passed-in closure.
 // It is the responsibility of the caller to provide a function that correctly determines quality
 // in the context of the pending queue.
-func (s *Service) savePending(root [32]byte, pending any, isEqual func(other any) bool) {
-	s.pendingAttsLock.Lock()
-	defer s.pendingAttsLock.Unlock()
-
+func (q *pendingAttsQueue) save(root [32]byte, pending any, isEqual func(other any) bool) {
 	numOfPendingAtts := 0
-	for _, v := range s.blkRootToPendingAtts {
+	for _, v := range q.pending {
 		numOfPendingAtts += len(v)
 	}
 	// Exit early if we exceed the pending attestations limit.
@@ -421,21 +510,21 @@ func (s *Service) savePending(root [32]byte, pending any, isEqual func(other any
 		return
 	}
 
-	_, ok := s.blkRootToPendingAtts[root]
+	_, ok := q.pending[root]
 	if !ok {
 		pendingAttCount.Inc()
-		s.blkRootToPendingAtts[root] = []any{pending}
+		q.pending[root] = []any{pending}
 		return
 	}
 
 	// Skip if the attestation/aggregate from the same validator already exists in
 	// the pending queue.
-	if slices.ContainsFunc(s.blkRootToPendingAtts[root], isEqual) {
+	if slices.ContainsFunc(q.pending[root], isEqual) {
 		return
 	}
 
 	pendingAttCount.Inc()
-	s.blkRootToPendingAtts[root] = append(s.blkRootToPendingAtts[root], pending)
+	q.pending[root] = append(q.pending[root], pending)
 }
 
 // pendingAggregatesAreEqual checks if two pending aggregate attestations are equal.
@@ -482,14 +571,11 @@ func pendingAttsAreEqual(a, b ethpb.Att) bool {
 // If not valid, a node will remove it from the queue in place. The validity
 // check specifies the pending attestation cannot fall one epoch behind
 // the current slot.
-func (s *Service) validatePendingAtts(ctx context.Context, slot primitives.Slot) {
+func (q *pendingAttsQueue) prune(ctx context.Context, slot primitives.Slot) {
 	_, span := trace.StartSpan(ctx, "validatePendingAtts")
 	defer span.End()
 
-	s.pendingAttsLock.Lock()
-	defer s.pendingAttsLock.Unlock()
-
-	for bRoot, atts := range s.blkRootToPendingAtts {
+	for bRoot, atts := range q.pending {
 		for i := len(atts) - 1; i >= 0; i-- {
 			var attSlot primitives.Slot
 			switch t := atts[i].(type) {
@@ -510,12 +596,12 @@ func (s *Service) validatePendingAtts(ctx context.Context, slot primitives.Slot)
 				atts = atts[:len(atts)-1]
 			}
 		}
-		s.blkRootToPendingAtts[bRoot] = atts
+		q.pending[bRoot] = atts
 
 		// If the pending attestations list of a given block root is empty,
 		// a node will remove the key from the map to avoid dangling keys.
-		if len(s.blkRootToPendingAtts[bRoot]) == 0 {
-			delete(s.blkRootToPendingAtts, bRoot)
+		if len(q.pending[bRoot]) == 0 {
+			delete(q.pending, bRoot)
 		}
 	}
 }

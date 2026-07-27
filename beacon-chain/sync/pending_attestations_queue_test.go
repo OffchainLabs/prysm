@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
@@ -72,10 +73,10 @@ func TestProcessPendingAtts_NoBlockRequestBlock(t *testing.T) {
 	}
 
 	r := &Service{
-		cfg:                  &config{p2p: p1, beaconDB: db, chain: chain, clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot)},
-		blkRootToPendingAtts: make(map[[32]byte][]any),
-		seenPendingBlocks:    make(map[[32]byte]bool),
-		chainStarted:         &atomic.Bool{},
+		cfg:               &config{p2p: p1, beaconDB: db, chain: chain, clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot)},
+		pendingAtts:       newPendingAttsQueue(),
+		seenPendingBlocks: make(map[[32]byte]bool),
+		chainStarted:      &atomic.Bool{},
 	}
 
 	// Add pending attestations for OTHER block roots (not block A)
@@ -88,8 +89,8 @@ func TestProcessPendingAtts_NoBlockRequestBlock(t *testing.T) {
 		BeaconBlockRoot: bytesutil.PadTo([]byte{'C'}, 32),
 		Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
 	}}
-	r.blkRootToPendingAtts[[32]byte{'B'}] = []any{attB}
-	r.blkRootToPendingAtts[[32]byte{'C'}] = []any{attC}
+	r.pendingAtts.pending[[32]byte{'B'}] = []any{attB}
+	r.pendingAtts.pending[[32]byte{'C'}] = []any{attC}
 
 	// Process block A (which exists and has no pending attestations)
 	// This should skip processing attestations for A and request blocks B and C
@@ -159,7 +160,7 @@ func TestProcessPendingAtts_HasBlockSaveUnaggregatedAtt(t *testing.T) {
 			attPool:             attestations.NewPool(),
 			attestationNotifier: &mock.SimpleNotifier{Feed: opn},
 		},
-		blkRootToPendingAtts:             make(map[[32]byte][]any),
+		pendingAtts:                      newPendingAttsQueue(),
 		seenUnAggregatedAttestationCache: lruwrpr.New(10),
 		signatureChan:                    make(chan *signatureVerifier, verifierLimit),
 	}
@@ -171,7 +172,7 @@ func TestProcessPendingAtts_HasBlockSaveUnaggregatedAtt(t *testing.T) {
 
 	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, root))
 
-	r.blkRootToPendingAtts[root] = []any{att}
+	r.pendingAtts.pending[root] = []any{att}
 	require.NoError(t, r.processPendingAttsForBlock(t.Context(), root))
 
 	var wg sync.WaitGroup
@@ -251,7 +252,7 @@ func TestProcessPendingAtts_HasBlockSaveUnaggregatedAttElectra(t *testing.T) {
 			attPool:             attestations.NewPool(),
 			attestationNotifier: &mock.SimpleNotifier{Feed: opn},
 		},
-		blkRootToPendingAtts:             make(map[[32]byte][]any),
+		pendingAtts:                      newPendingAttsQueue(),
 		seenUnAggregatedAttestationCache: lruwrpr.New(10),
 		signatureChan:                    make(chan *signatureVerifier, verifierLimit),
 	}
@@ -263,7 +264,7 @@ func TestProcessPendingAtts_HasBlockSaveUnaggregatedAttElectra(t *testing.T) {
 
 	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, root))
 
-	r.blkRootToPendingAtts[root] = []any{att}
+	r.pendingAtts.pending[root] = []any{att}
 	require.NoError(t, r.processPendingAttsForBlock(t.Context(), root))
 	var wg sync.WaitGroup
 	wg.Go(func() {
@@ -371,7 +372,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen
 			attPool:             attestations.NewPool(),
 			attestationNotifier: &mock.SimpleNotifier{Feed: opn},
 		},
-		blkRootToPendingAtts:             make(map[[32]byte][]any),
+		pendingAtts:                      newPendingAttsQueue(),
 		seenUnAggregatedAttestationCache: lruwrpr.New(10),
 		signatureChan:                    make(chan *signatureVerifier, verifierLimit),
 	}
@@ -384,7 +385,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen
 	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, root))
 
 	// Add the pending attestation.
-	r.blkRootToPendingAtts[root] = []any{
+	r.pendingAtts.pending[root] = []any{
 		att,
 	}
 	require.NoError(t, r.processPendingAttsForBlock(t.Context(), root))
@@ -469,7 +470,7 @@ func TestProcessPendingAtts_NoBroadcastWithBadSignature(t *testing.T) {
 			clock:    startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 			attPool:  attestations.NewPool(),
 		},
-		blkRootToPendingAtts:           make(map[[32]byte][]any),
+		pendingAtts:                    newPendingAttsQueue(),
 		signatureChan:                  make(chan *signatureVerifier, verifierLimit),
 		seenAggregatedAttestationCache: lruwrpr.New(10),
 	}
@@ -495,7 +496,7 @@ func TestProcessPendingAtts_NoBroadcastWithBadSignature(t *testing.T) {
 		SelectionProof:  make([]byte, fieldparams.BLSSignatureLength),
 	}
 
-	s.blkRootToPendingAtts[r32] = []any{&ethpb.SignedAggregateAttestationAndProof{Message: a, Signature: make([]byte, fieldparams.BLSSignatureLength)}}
+	s.pendingAtts.pending[r32] = []any{&ethpb.SignedAggregateAttestationAndProof{Message: a, Signature: make([]byte, fieldparams.BLSSignatureLength)}}
 	require.NoError(t, s.processPendingAttsForBlock(t.Context(), r32))
 
 	assert.Equal(t, false, p2p.BroadcastCalled.Load(), "Broadcasted bad aggregate")
@@ -534,7 +535,7 @@ func TestProcessPendingAtts_NoBroadcastWithBadSignature(t *testing.T) {
 	aggreSig, err := signing.ComputeDomainAndSign(st, 0, aggregateAndProof, params.BeaconConfig().DomainAggregateAndProof, privKeys[aggregatorIndex])
 	require.NoError(t, err)
 
-	s.blkRootToPendingAtts[r32] = []any{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof, Signature: aggreSig}}
+	s.pendingAtts.pending[r32] = []any{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof, Signature: aggreSig}}
 	require.NoError(t, s.processPendingAttsForBlock(t.Context(), r32))
 
 	assert.Equal(t, true, p2p.BroadcastCalled.Load(), "The good aggregate was not broadcasted")
@@ -614,7 +615,7 @@ func TestProcessPendingAtts_HasBlockSaveAggregatedAtt(t *testing.T) {
 			clock:    startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 			attPool:  attestations.NewPool(),
 		},
-		blkRootToPendingAtts:           make(map[[32]byte][]any),
+		pendingAtts:                    newPendingAttsQueue(),
 		seenAggregatedAttestationCache: lruwrpr.New(10),
 		signatureChan:                  make(chan *signatureVerifier, verifierLimit),
 	}
@@ -625,7 +626,7 @@ func TestProcessPendingAtts_HasBlockSaveAggregatedAtt(t *testing.T) {
 
 	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, root))
 
-	r.blkRootToPendingAtts[root] = []any{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof, Signature: aggreSig}}
+	r.pendingAtts.pending[root] = []any{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof, Signature: aggreSig}}
 	require.NoError(t, r.processPendingAttsForBlock(t.Context(), root))
 
 	assert.Equal(t, 1, len(r.cfg.attPool.AggregatedAttestations()), "Did not save aggregated att")
@@ -711,7 +712,7 @@ func TestProcessPendingAtts_HasBlockSaveAggregatedAttElectra(t *testing.T) {
 			clock:    startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 			attPool:  attestations.NewPool(),
 		},
-		blkRootToPendingAtts:           make(map[[32]byte][]any),
+		pendingAtts:                    newPendingAttsQueue(),
 		seenAggregatedAttestationCache: lruwrpr.New(10),
 		signatureChan:                  make(chan *signatureVerifier, verifierLimit),
 	}
@@ -720,7 +721,7 @@ func TestProcessPendingAtts_HasBlockSaveAggregatedAttElectra(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, root))
 
-	r.blkRootToPendingAtts[root] = []any{&ethpb.SignedAggregateAttestationAndProofElectra{Message: aggregateAndProof, Signature: aggreSig}}
+	r.pendingAtts.pending[root] = []any{&ethpb.SignedAggregateAttestationAndProofElectra{Message: aggregateAndProof, Signature: aggreSig}}
 	require.NoError(t, r.processPendingAttsForBlock(t.Context(), root))
 
 	assert.Equal(t, 1, len(r.cfg.attPool.AggregatedAttestations()), "Did not save aggregated att")
@@ -795,7 +796,7 @@ func TestProcessPendingAtts_BlockNotInForkChoice(t *testing.T) {
 			clock:    startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 			attPool:  attestations.NewPool(),
 		},
-		blkRootToPendingAtts: make(map[[32]byte][]any),
+		pendingAtts: newPendingAttsQueue(),
 	}
 
 	s, err := util.NewBeaconState()
@@ -803,13 +804,13 @@ func TestProcessPendingAtts_BlockNotInForkChoice(t *testing.T) {
 	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, root))
 
 	// Add pending attestation
-	r.blkRootToPendingAtts[root] = []any{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof}}
+	r.pendingAtts.pending[root] = []any{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof}}
 
 	// Process pending attestations - should return error because block is not in fork choice
 	require.ErrorContains(t, "could not process unknown block root", r.processPendingAttsForBlock(t.Context(), root))
 
 	// Verify attestations were not processed (should still be pending)
-	assert.Equal(t, 1, len(r.blkRootToPendingAtts[root]), "Attestations should still be pending")
+	assert.Equal(t, 1, len(r.pendingAtts.pending[root]), "Attestations should still be pending")
 	assert.Equal(t, 0, len(r.cfg.attPool.UnaggregatedAttestations()), "Should not save attestation when block not in fork choice")
 	assert.Equal(t, 0, len(r.cfg.attPool.AggregatedAttestations()), "Should not save attestation when block not in fork choice")
 	require.LogsDoNotContain(t, hook, "Verified and saved pending attestations to pool")
@@ -817,7 +818,7 @@ func TestProcessPendingAtts_BlockNotInForkChoice(t *testing.T) {
 
 func TestValidatePendingAtts_CanPruneOldAtts(t *testing.T) {
 	s := &Service{
-		blkRootToPendingAtts: make(map[[32]byte][]any),
+		pendingAtts: newPendingAttsQueue(),
 	}
 
 	// 100 Attestations per block root.
@@ -826,69 +827,129 @@ func TestValidatePendingAtts_CanPruneOldAtts(t *testing.T) {
 	r3 := [32]byte{'C'}
 
 	for i := range primitives.Slot(100) {
-		s.savePendingAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: i, BeaconBlockRoot: r1[:]}})
-		s.savePendingAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: i, BeaconBlockRoot: r2[:]}})
-		s.savePendingAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: i, BeaconBlockRoot: r3[:]}})
+		s.pendingAtts.saveAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: i, BeaconBlockRoot: r1[:]}})
+		s.pendingAtts.saveAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: i, BeaconBlockRoot: r2[:]}})
+		s.pendingAtts.saveAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: i, BeaconBlockRoot: r3[:]}})
 	}
 
-	assert.Equal(t, 100, len(s.blkRootToPendingAtts[r1]), "Did not save pending atts")
-	assert.Equal(t, 100, len(s.blkRootToPendingAtts[r2]), "Did not save pending atts")
-	assert.Equal(t, 100, len(s.blkRootToPendingAtts[r3]), "Did not save pending atts")
+	assert.Equal(t, 100, len(s.pendingAtts.pending[r1]), "Did not save pending atts")
+	assert.Equal(t, 100, len(s.pendingAtts.pending[r2]), "Did not save pending atts")
+	assert.Equal(t, 100, len(s.pendingAtts.pending[r3]), "Did not save pending atts")
 
 	// Set current slot to 50, it should prune 19 attestations. (50 - 31)
-	s.validatePendingAtts(t.Context(), 50)
-	assert.Equal(t, 81, len(s.blkRootToPendingAtts[r1]), "Did not delete pending atts")
-	assert.Equal(t, 81, len(s.blkRootToPendingAtts[r2]), "Did not delete pending atts")
-	assert.Equal(t, 81, len(s.blkRootToPendingAtts[r3]), "Did not delete pending atts")
+	s.pendingAtts.prune(t.Context(), 50)
+	assert.Equal(t, 81, len(s.pendingAtts.pending[r1]), "Did not delete pending atts")
+	assert.Equal(t, 81, len(s.pendingAtts.pending[r2]), "Did not delete pending atts")
+	assert.Equal(t, 81, len(s.pendingAtts.pending[r3]), "Did not delete pending atts")
 
 	// Set current slot to 100 + slot_duration, it should prune all the attestations.
-	s.validatePendingAtts(t.Context(), 100+params.BeaconConfig().SlotsPerEpoch)
-	assert.Equal(t, 0, len(s.blkRootToPendingAtts[r1]), "Did not delete pending atts")
-	assert.Equal(t, 0, len(s.blkRootToPendingAtts[r2]), "Did not delete pending atts")
-	assert.Equal(t, 0, len(s.blkRootToPendingAtts[r3]), "Did not delete pending atts")
+	s.pendingAtts.prune(t.Context(), 100+params.BeaconConfig().SlotsPerEpoch)
+	assert.Equal(t, 0, len(s.pendingAtts.pending[r1]), "Did not delete pending atts")
+	assert.Equal(t, 0, len(s.pendingAtts.pending[r2]), "Did not delete pending atts")
+	assert.Equal(t, 0, len(s.pendingAtts.pending[r3]), "Did not delete pending atts")
 
 	// Verify the keys are deleted.
-	assert.Equal(t, 0, len(s.blkRootToPendingAtts), "Did not delete block keys")
+	assert.Equal(t, 0, len(s.pendingAtts.pending), "Did not delete block keys")
 }
 
 func TestValidatePendingAtts_NoDuplicatingAtts(t *testing.T) {
 	s := &Service{
-		blkRootToPendingAtts: make(map[[32]byte][]any),
+		pendingAtts: newPendingAttsQueue(),
 	}
 
 	r1 := [32]byte{'A'}
 	r2 := [32]byte{'B'}
-	s.savePendingAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, BeaconBlockRoot: r1[:]}})
-	s.savePendingAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 2, BeaconBlockRoot: r2[:]}})
-	s.savePendingAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 2, BeaconBlockRoot: r2[:]}})
+	s.pendingAtts.saveAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, BeaconBlockRoot: r1[:]}})
+	s.pendingAtts.saveAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 2, BeaconBlockRoot: r2[:]}})
+	s.pendingAtts.saveAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 2, BeaconBlockRoot: r2[:]}})
 
-	assert.Equal(t, 1, len(s.blkRootToPendingAtts[r1]), "Did not save pending atts")
-	assert.Equal(t, 1, len(s.blkRootToPendingAtts[r2]), "Did not save pending atts")
+	assert.Equal(t, 1, len(s.pendingAtts.pending[r1]), "Did not save pending atts")
+	assert.Equal(t, 1, len(s.pendingAtts.pending[r2]), "Did not save pending atts")
 }
 
 func TestSavePendingAtts_BeyondLimit(t *testing.T) {
 	s := &Service{
-		blkRootToPendingAtts: make(map[[32]byte][]any),
+		pendingAtts: newPendingAttsQueue(),
 	}
 
 	for i := range pendingAttsLimit {
-		s.savePendingAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, BeaconBlockRoot: bytesutil.Bytes32(uint64(i))}})
+		s.pendingAtts.saveAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, BeaconBlockRoot: bytesutil.Bytes32(uint64(i))}})
 	}
 	r1 := [32]byte(bytesutil.Bytes32(0))
 	r2 := [32]byte(bytesutil.Bytes32(uint64(pendingAttsLimit) - 1))
 
-	assert.Equal(t, 1, len(s.blkRootToPendingAtts[r1]), "Did not save pending atts")
-	assert.Equal(t, 1, len(s.blkRootToPendingAtts[r2]), "Did not save pending atts")
+	assert.Equal(t, 1, len(s.pendingAtts.pending[r1]), "Did not save pending atts")
+	assert.Equal(t, 1, len(s.pendingAtts.pending[r2]), "Did not save pending atts")
 
 	for i := pendingAttsLimit; i < pendingAttsLimit+20; i++ {
-		s.savePendingAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, BeaconBlockRoot: bytesutil.Bytes32(uint64(i))}})
+		s.pendingAtts.saveAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, BeaconBlockRoot: bytesutil.Bytes32(uint64(i))}})
 	}
 
 	r1 = [32]byte(bytesutil.Bytes32(uint64(pendingAttsLimit)))
 	r2 = [32]byte(bytesutil.Bytes32(uint64(pendingAttsLimit) + 10))
 
-	assert.Equal(t, 0, len(s.blkRootToPendingAtts[r1]), "Saved pending atts")
-	assert.Equal(t, 0, len(s.blkRootToPendingAtts[r2]), "Saved pending atts")
+	assert.Equal(t, 0, len(s.pendingAtts.pending[r1]), "Saved pending atts")
+	assert.Equal(t, 0, len(s.pendingAtts.pending[r2]), "Saved pending atts")
+}
+
+func TestProcessPendingAttsQueue(t *testing.T) {
+	t.Run("saves and processes", func(t *testing.T) {
+		hook := logTest.NewGlobal()
+		db := dbtest.SetupDB(t)
+		synctest.Test(t, func(t *testing.T) {
+			chain := &mock.ChainService{Genesis: prysmTime.Now(), FinalizedCheckPoint: &ethpb.Checkpoint{}}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			s := &Service{
+				ctx:         ctx,
+				cfg:         &config{beaconDB: db, chain: chain, clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot)},
+				pendingAtts: newPendingAttsQueue(),
+			}
+			go s.processPendingAttsQueue()
+
+			r1 := [32]byte{'A'}
+			s.pendingAtts.queueAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, BeaconBlockRoot: r1[:]}})
+
+			// Wait blocks until the owner goroutine is durably blocked back in its select,
+			// i.e. the queued attestation has been saved; it also orders the map read below.
+			synctest.Wait()
+			assert.Equal(t, 1, len(s.pendingAtts.pending[r1]), "Did not save queued pending att")
+
+			// An unknown root is rejected by processPendingAttsForBlock without touching the map.
+			s.pendingAtts.blockImported([32]byte{'B'})
+			synctest.Wait()
+			require.LogsContain(t, hook, "Could not process pending attestations for block")
+			assert.Equal(t, 1, len(s.pendingAtts.pending[r1]), "Pending att should survive unrelated import")
+		})
+	})
+}
+
+func TestPendingAttsQueue_ProducersNeverBlock(t *testing.T) {
+	// Capacity 1 stands in for the real buffer sizes; the drop branch is what matters.
+	q := &pendingAttsQueue{
+		incoming: make(chan any, 1),
+		imported: make(chan [32]byte, 1),
+	}
+	att := func(root byte) *ethpb.Attestation {
+		return &ethpb.Attestation{Data: &ethpb.AttestationData{BeaconBlockRoot: bytesutil.PadTo([]byte{root}, 32)}}
+	}
+
+	// Electra non-single attestations are filtered out before ever hitting the channel.
+	q.queueAtt(&ethpb.AttestationElectra{})
+	assert.Equal(t, 0, len(q.incoming), "Non-single Electra att should be ignored")
+
+	// The test not deadlocking proves the sends past capacity do not block.
+	q.queueAtt(att('A'))
+	q.queueAtt(att('B'))
+	assert.Equal(t, 1, len(q.incoming), "Overflow att should be dropped, not queued")
+
+	q.blockImported([32]byte{'A'})
+	q.blockImported([32]byte{'B'})
+	assert.Equal(t, 1, len(q.imported), "Overflow root should be dropped, not queued")
+
+	// Consumers tolerate a Service built without the queue.
+	var nilQ *pendingAttsQueue
+	nilQ.blockImported([32]byte{'A'})
 }
 
 func Test_pendingAggregatesAreEqual(t *testing.T) {

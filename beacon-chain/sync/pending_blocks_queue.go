@@ -186,10 +186,8 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 	}
 
 	for _, blkRoot := range blkRoots {
-		// Process pending attestations for this block.
-		if err := s.processPendingAttsForBlock(ctx, blkRoot); err != nil {
-			log.WithError(err).Debug("Failed to process pending attestations for block")
-		}
+		// Wake the pending attestations queue for this imported block.
+		s.pendingAtts.blockImported(blkRoot)
 	}
 
 	return s.sendBatchRootRequest(ctx, parentRoots, randGen)

@@ -122,7 +122,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	if !s.hasBlockAndState(ctx, blockRoot) {
 		// Block not yet available - save attestation to pending queue for later processing
 		// when the block arrives. Return ValidationIgnore so gossip doesn't potentially penalize the peer.
-		s.savePendingAtt(att)
+		s.pendingAtts.queueAtt(att)
 		return pubsub.ValidationIgnore, nil
 	}
 	// Block exists - verify it's in forkchoice (i.e., it's a descendant of the finalized checkpoint)

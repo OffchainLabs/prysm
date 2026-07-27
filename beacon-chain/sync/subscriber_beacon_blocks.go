@@ -81,9 +81,7 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return err
 	}
 
-	if err := s.processPendingAttsForBlock(ctx, root); err != nil {
-		return errors.Wrap(err, "process pending atts for block")
-	}
+	s.pendingAtts.blockImported(root)
 
 	go s.processPendingPayloadEnvelope(s.ctx, root)
 
