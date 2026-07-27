@@ -2,11 +2,13 @@ package builder
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -59,6 +61,35 @@ func gloasBidClient(t *testing.T, status int, contentType string, body []byte) *
 	return &Client{hc: hc, baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"}}
 }
 
+// builder-specs #165: auth is required, and the bid request carries Date-Milliseconds
+// and X-Timeout-Ms but not Eth-Consensus-Version.
+func TestClient_GetExecutionPayloadBid_AuthAndHeaders(t *testing.T) {
+	var pubkey [48]byte
+	var parentHash, parentRoot [32]byte
+
+	c := &Client{hc: &http.Client{}, baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"}}
+	_, err := c.GetExecutionPayloadBid(t.Context(), 1, parentHash, parentRoot, pubkey, nil)
+	require.ErrorContains(t, "request auth is required", err)
+
+	var got http.Header
+	hc := &http.Client{Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+		got = r.Header
+		return &http.Response{StatusCode: http.StatusNoContent, Header: http.Header{}, Body: io.NopCloser(bytes.NewReader(nil)), Request: r}, nil
+	})}
+	c = &Client{hc: hc, baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"}}
+	ctx, cancel := context.WithTimeout(t.Context(), 800*time.Millisecond)
+	defer cancel()
+	_, err = c.GetExecutionPayloadBid(ctx, 1, parentHash, parentRoot, pubkey, testBidAuth())
+	require.NoError(t, err)
+	require.NotEqual(t, "", got.Get(api.DateMillisecondsHeader))
+	require.NotEqual(t, "", got.Get(api.TimeoutMillisecondsHeader))
+	require.Equal(t, "", got.Get(api.VersionHeader))
+}
+
+func testBidAuth() *eth.SignedRequestAuthV1 {
+	return &eth.SignedRequestAuthV1{Message: &eth.RequestAuthV1{Data: []byte{1}, Slot: 1}, Signature: make([]byte, 96)}
+}
+
 func TestClient_GetExecutionPayloadBid(t *testing.T) {
 	ctx := t.Context()
 	slot := primitives.Slot(123)
@@ -72,7 +103,7 @@ func TestClient_GetExecutionPayloadBid(t *testing.T) {
 		}{Data: structs.SignedExecutionPayloadBidFromConsensus(want)})
 		require.NoError(t, err)
 		c := gloasBidClient(t, http.StatusOK, api.JsonMediaType, body)
-		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, nil)
+		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, testBidAuth())
 		require.NoError(t, err)
 		require.NotNil(t, got)
 		require.Equal(t, want.Message.Slot, got.Message.Slot)
@@ -84,7 +115,7 @@ func TestClient_GetExecutionPayloadBid(t *testing.T) {
 		body, err := want.MarshalSSZ()
 		require.NoError(t, err)
 		c := gloasBidClient(t, http.StatusOK, api.OctetStreamMediaType, body)
-		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, nil)
+		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, testBidAuth())
 		require.NoError(t, err)
 		require.NotNil(t, got)
 		require.Equal(t, want.Message.Value, got.Message.Value)
@@ -93,7 +124,7 @@ func TestClient_GetExecutionPayloadBid(t *testing.T) {
 
 	t.Run("no bid", func(t *testing.T) {
 		c := gloasBidClient(t, http.StatusNoContent, "", nil)
-		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, nil)
+		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, testBidAuth())
 		require.NoError(t, err)
 		require.IsNil(t, got)
 	})
@@ -101,7 +132,7 @@ func TestClient_GetExecutionPayloadBid(t *testing.T) {
 	t.Run("unexpected content type errors with status and body", func(t *testing.T) {
 		html := []byte("<!doctype html><html><head><title>Buildoor</title></head></html>")
 		c := gloasBidClient(t, http.StatusOK, "text/html; charset=utf-8", html)
-		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, nil)
+		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, testBidAuth())
 		require.IsNil(t, got)
 		require.ErrorContains(t, "unexpected Content-Type", err)
 		require.ErrorContains(t, "text/html", err)
@@ -161,7 +192,7 @@ func TestClient_GetExecutionPayloadBid(t *testing.T) {
 			}),
 		}
 		c := &Client{hc: hc, baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"}, sszEnabled: true}
-		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, nil)
+		got, err := c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, pubkey, testBidAuth())
 		require.NoError(t, err)
 		require.NotNil(t, got)
 		require.Equal(t, 2, reqCount)

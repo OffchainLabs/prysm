@@ -22,6 +22,8 @@
 - Decode empty builder `auth_data`/`pubkey` identically to unset across both validator DB backends.
 - Mask credentials in builder-client error messages and trace spans so a builder URL with userinfo or a query token cannot leak.
 - Send the inline builder-preferences produce-block body as SSZ; the beacon node accepts SSZ or JSON.
+- Send the required `Date-Milliseconds` and `X-Timeout-Ms` headers on builder bid requests and require the signed auth body (builder-specs #165); the request no longer carries `Eth-Consensus-Version`.
+- Accept up to 64 builder entries on the produce-block body and no longer reject duplicate builder urls there (beacon-APIs #630); the entry builder key is named `builder_pubkey`.
 - Validate the builder url on the ahead-of-time preferences endpoint before dialing.
 - Preserve the winning builder url when unwrapping a stateless self-build produce response.
 

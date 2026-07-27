@@ -10,6 +10,8 @@ const (
 	ConsensusBlockValueHeader      = "Eth-Consensus-Block-Value"
 	ExecutionPayloadIncludedHeader = "Eth-Execution-Payload-Included"
 	BlobDataIncludedHeader         = "Eth-Blob-Data-Included"
+	DateMillisecondsHeader         = "Date-Milliseconds"
+	TimeoutMillisecondsHeader      = "X-Timeout-Ms"
 	JsonMediaType                  = "application/json"
 	OctetStreamMediaType           = "application/octet-stream"
 	EventStreamMediaType           = "text/event-stream"

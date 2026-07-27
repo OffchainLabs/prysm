@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -57,34 +59,38 @@ func (c *Client) getExecutionPayloadBid(
 	auth *ethpb.SignedRequestAuthV1,
 	ssz bool,
 ) (*ethpb.SignedExecutionPayloadBid, error) {
-	accept := api.JsonMediaType
+	// builder-specs #165: the signed auth body is required and RequestAuthV1 is not
+	// fork-versioned, so no Eth-Consensus-Version header is sent on the request.
+	if auth == nil {
+		return nil, errors.New("request auth is required for the bid request")
+	}
+	accept, contentType := api.JsonMediaType, api.JsonMediaType
 	if ssz {
-		accept = api.OctetStreamMediaType
+		accept, contentType = api.OctetStreamMediaType, api.OctetStreamMediaType
 	}
 	var body []byte
+	var err error
+	if ssz {
+		body, err = auth.MarshalSSZ()
+	} else {
+		body, err = json.Marshal(structs.SignedRequestAuthFromConsensus(auth))
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "could not encode SignedRequestAuthV1")
+	}
+	now := time.Now()
 	opts := []reqOption{func(r *http.Request) {
 		r.Header.Set("Accept", accept)
-		r.Header.Set(api.VersionHeader, version.String(version.Gloas))
-	}}
-	if auth != nil {
-		var err error
-		contentType := api.JsonMediaType
-		if ssz {
-			contentType = api.OctetStreamMediaType
-			body, err = auth.MarshalSSZ()
-			if err != nil {
-				return nil, errors.Wrap(err, "could not ssz encode SignedRequestAuthV1")
+		r.Header.Set("Content-Type", contentType)
+		r.Header.Set(api.DateMillisecondsHeader, strconv.FormatInt(now.UnixMilli(), 10))
+		if deadline, ok := ctx.Deadline(); ok {
+			ms := deadline.Sub(now).Milliseconds()
+			if ms < 0 {
+				ms = 0
 			}
-		} else {
-			body, err = json.Marshal(structs.SignedRequestAuthFromConsensus(auth))
-			if err != nil {
-				return nil, errors.Wrap(err, "could not json encode SignedRequestAuthV1")
-			}
+			r.Header.Set(api.TimeoutMillisecondsHeader, strconv.FormatInt(ms, 10))
 		}
-		opts = append(opts, func(r *http.Request) {
-			r.Header.Set("Content-Type", contentType)
-		})
-	}
+	}}
 
 	path := executionPayloadBidPath(slot, parentHash, parentRoot, proposerPubkey)
 	raw, status, header, err := c.doWithStatus(ctx, http.MethodPost, path, bytes.NewReader(body), []int{http.StatusOK, http.StatusNoContent}, opts...)
@@ -94,9 +100,9 @@ func (c *Client) getExecutionPayloadBid(
 	if status == http.StatusNoContent {
 		return nil, nil
 	}
-	contentType := header.Get("Content-Type")
+	respContentType := header.Get("Content-Type")
 	switch {
-	case strings.Contains(contentType, api.JsonMediaType):
+	case strings.Contains(respContentType, api.JsonMediaType):
 		resp := &struct {
 			Data *structs.SignedExecutionPayloadBid `json:"data"`
 		}{}
@@ -107,14 +113,14 @@ func (c *Client) getExecutionPayloadBid(
 			return nil, errors.New("nil data in json SignedExecutionPayloadBid response")
 		}
 		return resp.Data.ToConsensus()
-	case strings.Contains(contentType, api.OctetStreamMediaType):
+	case strings.Contains(respContentType, api.OctetStreamMediaType):
 		bid := &ethpb.SignedExecutionPayloadBid{}
 		if err := bid.UnmarshalSSZ(raw); err != nil {
 			return nil, errors.Wrap(err, "could not ssz decode SignedExecutionPayloadBid")
 		}
 		return bid, nil
 	default:
-		return nil, errors.Errorf("builder returned status %d with unexpected Content-Type %q: %s", status, contentType, bodySnippet(raw))
+		return nil, errors.Errorf("builder returned status %d with unexpected Content-Type %q: %s", status, respContentType, bodySnippet(raw))
 	}
 }
 

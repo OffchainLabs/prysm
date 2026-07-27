@@ -45,8 +45,8 @@ func TestParseBuilderPreferencesBody(t *testing.T) {
 		require.Equal(t, "https://b", prefs[0].Url)
 	})
 	t.Run("pubkey is parsed and bad pubkeys are skipped", func(t *testing.T) {
-		withKey := `{"url":"https://k","auth":{"message":{"data":"0x0102","slot":"7"},"signature":"0x` + repeatHex(96) + `"},"pubkey":"0x` + repeatHex(48) + `"}`
-		badKey := `{"url":"https://short","auth":{"message":{"data":"0x0102","slot":"7"},"signature":"0x` + repeatHex(96) + `"},"pubkey":"0x0102"}`
+		withKey := `{"url":"https://k","auth":{"message":{"data":"0x0102","slot":"7"},"signature":"0x` + repeatHex(96) + `"},"builder_pubkey":"0x` + repeatHex(48) + `"}`
+		badKey := `{"url":"https://short","auth":{"message":{"data":"0x0102","slot":"7"},"signature":"0x` + repeatHex(96) + `"},"builder_pubkey":"0x0102"}`
 		r := httptest.NewRequest("POST", "/", bytes.NewBufferString(`[`+withKey+`,`+badKey+`]`))
 		prefs, err := parseBuilderPreferencesBody(r)
 		require.NoError(t, err)
@@ -76,11 +76,13 @@ func repeatHex(n int) string {
 }
 
 // Two entries sharing a url invalidate the whole request, unlike malformed entries.
-func TestParseBuilderPreferencesBody_DuplicateURL(t *testing.T) {
+// beacon-APIs #630 dropped the unique-url rule on the produce body; duplicates are kept.
+func TestParseBuilderPreferencesBody_DuplicateURLAllowed(t *testing.T) {
 	entry := `{"url":"https://b","auth":{"message":{"data":"0x01","slot":"7"},"signature":"0x` + repeatHex(96) + `"}}`
 	r := httptest.NewRequest("POST", "/", bytes.NewBufferString(`[`+entry+`,`+entry+`]`))
-	_, err := parseBuilderPreferencesBody(r)
-	require.ErrorContains(t, "share the same url", err)
+	prefs, err := parseBuilderPreferencesBody(r)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(prefs))
 }
 
 // An octet-stream body is decoded as SSZ, and the sentinels round-trip back to the
@@ -115,8 +117,8 @@ func TestParseBuilderPreferencesBody_SSZ(t *testing.T) {
 	require.Equal(t, primitives.Gwei(1000), got[0].Request.Preferences.GetMaxExecutionPayment())
 }
 
-// Duplicate urls in an SSZ body invalidate the whole request, matching JSON.
-func TestParseBuilderPreferencesBody_SSZ_DuplicateURL(t *testing.T) {
+// Duplicate urls in an SSZ body are kept, matching the JSON path.
+func TestParseBuilderPreferencesBody_SSZ_DuplicateURLAllowed(t *testing.T) {
 	entry := func() *eth.BuilderPreferenceV1 {
 		return &eth.BuilderPreferenceV1{
 			Url: "https://dup.example",
@@ -130,8 +132,9 @@ func TestParseBuilderPreferencesBody_SSZ_DuplicateURL(t *testing.T) {
 	require.NoError(t, err)
 	r := httptest.NewRequest("POST", "/", bytes.NewBuffer(body))
 	r.Header.Set("Content-Type", api.OctetStreamMediaType)
-	_, err = parseBuilderPreferencesBody(r)
-	require.ErrorContains(t, "share the same url", err)
+	prefs, err := parseBuilderPreferencesBody(r)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(prefs))
 }
 
 func TestSubmitBuilderPreferencesHandler(t *testing.T) {

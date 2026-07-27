@@ -80,5 +80,5 @@ message ProduceBuilderEntryV1 {
 
 message ProduceBuilderEntryListV1 {
   repeated ProduceBuilderEntryV1 entries = 1
-      [ (ethereum.eth.ext.ssz_max) = "256" ];
+      [ (ethereum.eth.ext.ssz_max) = "64" ];
 }

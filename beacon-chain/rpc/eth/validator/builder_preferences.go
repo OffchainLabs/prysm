@@ -20,17 +20,18 @@ import (
 )
 
 // builderEntryJson is one element of the produceBlockV4 POST body: a bare array
-// of per-builder entries (beacon-APIs #630). proxy and pubkey are accepted but
-// currently unused.
+// of per-builder entries (beacon-APIs #630).
 type builderEntryJson struct {
 	Url                 string          `json:"url"`
-	Proxy               string          `json:"proxy,omitempty"`
-	Pubkey              string          `json:"pubkey,omitempty"`
+	Pubkey              string          `json:"builder_pubkey,omitempty"`
 	Auth                *signedAuthJson `json:"auth"`
 	MaxExecutionPayment string          `json:"max_execution_payment,omitempty"`
 	MinBid              string          `json:"min_bid,omitempty"`
 	BuilderBoostFactor  string          `json:"builder_boost_factor,omitempty"`
 }
+
+// maxProduceBuilderEntries is MAX_BUILDER_ENTRIES from beacon-APIs #630.
+const maxProduceBuilderEntries = 64
 
 type signedAuthJson struct {
 	Message   *requestAuthJson `json:"message"`
@@ -63,6 +64,9 @@ func parseBuilderPreferencesJSON(r *http.Request) ([]*eth.BuilderPreferenceV1, e
 		}
 		return nil, errors.Wrap(err, "could not decode builder preferences")
 	}
+	if len(entries) > maxProduceBuilderEntries {
+		return nil, errors.Errorf("builder preferences exceeds %d entries", maxProduceBuilderEntries)
+	}
 	prefs := make([]*eth.BuilderPreferenceV1, 0, len(entries))
 	for _, p := range entries {
 		conv, err := p.toConsensus()
@@ -72,7 +76,7 @@ func parseBuilderPreferencesJSON(r *http.Request) ([]*eth.BuilderPreferenceV1, e
 		}
 		prefs = append(prefs, conv)
 	}
-	return dedupeBuilderPreferences(prefs)
+	return prefs, nil
 }
 
 func parseBuilderPreferencesSSZ(r *http.Request) ([]*eth.BuilderPreferenceV1, error) {
@@ -87,30 +91,19 @@ func parseBuilderPreferencesSSZ(r *http.Request) ([]*eth.BuilderPreferenceV1, er
 	if err := list.UnmarshalSSZ(body); err != nil {
 		return nil, errors.Wrap(err, "could not decode builder preferences")
 	}
-	prefs := make([]*eth.BuilderPreferenceV1, 0)
-	for _, p := range eth.BuilderPreferencesFromSSZ(list) {
+	all := eth.BuilderPreferencesFromSSZ(list)
+	if len(all) > maxProduceBuilderEntries {
+		return nil, errors.Errorf("builder preferences exceeds %d entries", maxProduceBuilderEntries)
+	}
+	prefs := make([]*eth.BuilderPreferenceV1, 0, len(all))
+	for _, p := range all {
 		if p.Url == "" || p.Request == nil || p.Request.Auth == nil || p.Request.Auth.Message == nil {
 			log.Debug("Ignoring malformed builder entry")
 			continue
 		}
 		prefs = append(prefs, p)
 	}
-	return dedupeBuilderPreferences(prefs)
-}
-
-// dedupeBuilderPreferences enforces the unique-url rule: duplicates invalidate the
-// whole request, unlike malformed entries which were already skipped.
-func dedupeBuilderPreferences(prefs []*eth.BuilderPreferenceV1) ([]*eth.BuilderPreferenceV1, error) {
-	out := make([]*eth.BuilderPreferenceV1, 0, len(prefs))
-	seen := make(map[string]bool, len(prefs))
-	for _, p := range prefs {
-		if seen[p.Url] {
-			return nil, errors.Errorf("two builder entries share the same url")
-		}
-		seen[p.Url] = true
-		out = append(out, p)
-	}
-	return out, nil
+	return prefs, nil
 }
 
 func (p *builderEntryJson) toConsensus() (*eth.BuilderPreferenceV1, error) {
