@@ -6,8 +6,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [v7.1.8](https://github.com/OffchainLabs/prysm/compare/v7.1.7...v7.1.8) - 2026-07-27
 
-This is a highly recommended patch release as it contains multiple bug fixes which will improve network-wide attestation propagation, enabling earlier attestations with better inclusion. Several other bugfixes and ux improvements are also included. Some highlights:
- - libp2p bug fixed, improving network-wide propagation of early attestations.
+This is a highly recommended patch release containing multiple bug fixes improving the handling of early attestations for better inclusion. Several other bugfixes and ux improvements are also included. Some highlights:
+ - libp2p bug fixed, improving network-wide propagation of early attestations. [[PR]](https://github.com/OffchainLabs/prysm/pull/17123)
  - Bug fix enabling validator clients using grpc to make timely attestations (resolving notification stream connection issues).
  - Builder client now automatically falls back to JSON when a remote builder rejects SSZ requests (415/406), so builders without SSZ support (e.g. Commit Boost) work without needing `--disable-builder-ssz`.
  - Numerous UX / quality of life improvements (see Added and Changed sections below).
