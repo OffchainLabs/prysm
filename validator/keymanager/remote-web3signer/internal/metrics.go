@@ -12,6 +12,6 @@ var (
 			Help:    "Time (in seconds) spent doing client HTTP requests",
 			Buckets: prometheus.DefBuckets,
 		},
-		[]string{"method", "status_code"},
+		[]string{"request_type", "method", "status_code"},
 	)
 )

@@ -3,12 +3,15 @@ package internal
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -47,7 +50,7 @@ type ApiClient struct {
 }
 
 // NewApiClient method instantiates a new ApiClient object.
-func NewApiClient(baseEndpoint string) (*ApiClient, error) {
+func NewApiClient(baseEndpoint string, timeout time.Duration, caCertPath, clientCertPath, clientKeyPath string) (*ApiClient, error) {
 	u, err := url.ParseRequestURI(baseEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid format, unable to parse url")
@@ -55,16 +58,54 @@ func NewApiClient(baseEndpoint string) (*ApiClient, error) {
 	if u.Scheme == "" || u.Host == "" {
 		return nil, fmt.Errorf("web3signer url must be in the format of http(s)://host:port url used: %v", baseEndpoint)
 	}
+	transport, err := newTransport(caCertPath, clientCertPath, clientKeyPath)
+	if err != nil {
+		return nil, err
+	}
 	return &ApiClient{
 		BaseURL:    u,
-		RestClient: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
+		RestClient: &http.Client{Transport: otelhttp.NewTransport(transport), Timeout: timeout},
 	}, nil
+}
+
+func newTransport(caCertPath, clientCertPath, clientKeyPath string) (*http.Transport, error) {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	if caCertPath == "" && clientCertPath == "" && clientKeyPath == "" {
+		return transport, nil
+	}
+	if (clientCertPath == "") != (clientKeyPath == "") {
+		return nil, errors.New("web3signer client certificate and key must be provided together")
+	}
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+	if caCertPath != "" {
+		roots, err := x509.SystemCertPool()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not load system CA certificates")
+		}
+		caCert, err := os.ReadFile(filepath.Clean(caCertPath)) // #nosec G304 -- path is supplied by the operator.
+		if err != nil {
+			return nil, errors.Wrap(err, "could not read web3signer CA certificate")
+		}
+		if !roots.AppendCertsFromPEM(caCert) {
+			return nil, errors.New("could not parse web3signer CA certificate")
+		}
+		tlsConfig.RootCAs = roots
+	}
+	if clientCertPath != "" {
+		certificate, err := tls.LoadX509KeyPair(filepath.Clean(clientCertPath), filepath.Clean(clientKeyPath))
+		if err != nil {
+			return nil, errors.Wrap(err, "could not load web3signer client certificate and key")
+		}
+		tlsConfig.Certificates = []tls.Certificate{certificate}
+	}
+	transport.TLSClientConfig = tlsConfig
+	return transport, nil
 }
 
 // Sign is a wrapper method around the web3signer sign api.
 func (client *ApiClient) Sign(ctx context.Context, pubKey string, request SignRequestJson) (bls.Signature, error) {
 	requestPath := ethApiNamespace + pubKey
-	resp, err := client.doRequest(ctx, http.MethodPost, client.BaseURL.String()+requestPath, bytes.NewBuffer(request))
+	resp, err := client.doRequest(ctx, "sign", http.MethodPost, client.BaseURL.String()+requestPath, bytes.NewBuffer(request))
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +129,7 @@ func (client *ApiClient) Sign(ctx context.Context, pubKey string, request SignRe
 
 // GetPublicKeys is a wrapper method around the web3signer publickeys api (this may be removed in the future or moved to another location due to its usage).
 func (client *ApiClient) GetPublicKeys(ctx context.Context, url string) ([]string, error) {
-	resp, err := client.doRequest(ctx, http.MethodGet, url, http.NoBody)
+	resp, err := client.doRequest(ctx, "public_keys", http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +155,7 @@ func (client *ApiClient) GetPublicKeys(ctx context.Context, url string) ([]strin
 // ReloadSignerKeys is a wrapper method around the web3signer reload api.
 func (client *ApiClient) ReloadSignerKeys(ctx context.Context) error {
 	const requestPath = "/reload"
-	if _, err := client.doRequest(ctx, http.MethodPost, client.BaseURL.String()+requestPath, nil); err != nil {
+	if _, err := client.doRequest(ctx, "reload", http.MethodPost, client.BaseURL.String()+requestPath, nil); err != nil {
 		return err
 	}
 	return nil
@@ -123,7 +164,7 @@ func (client *ApiClient) ReloadSignerKeys(ctx context.Context) error {
 // GetServerStatus is a wrapper method around the web3signer upcheck api
 func (client *ApiClient) GetServerStatus(ctx context.Context) (string, error) {
 	const requestPath = "/upcheck"
-	resp, err := client.doRequest(ctx, http.MethodGet, client.BaseURL.String()+requestPath, nil /* no body needed on get request */)
+	resp, err := client.doRequest(ctx, "upcheck", http.MethodGet, client.BaseURL.String()+requestPath, nil /* no body needed on get request */)
 	if err != nil {
 		return "", err
 	}
@@ -135,8 +176,7 @@ func (client *ApiClient) GetServerStatus(ctx context.Context) (string, error) {
 }
 
 // doRequest is a utility method for requests.
-func (client *ApiClient) doRequest(ctx context.Context, httpMethod, fullPath string, body io.Reader) (*http.Response, error) {
-	var requestDump []byte
+func (client *ApiClient) doRequest(ctx context.Context, requestType, httpMethod, fullPath string, body io.Reader) (*http.Response, error) {
 	ctx, span := trace.StartSpan(ctx, "remote_web3signer.Client.doRequest")
 	defer span.End()
 	span.SetAttributes(
@@ -154,26 +194,20 @@ func (client *ApiClient) doRequest(ctx context.Context, httpMethod, fullPath str
 	resp, err := client.RestClient.Do(req)
 	duration := time.Since(start)
 	if err != nil {
-		signRequestDurationSeconds.WithLabelValues(req.Method, "error").Observe(duration.Seconds())
+		status := requestStatus(err)
+		signRequestDurationSeconds.WithLabelValues(requestType, req.Method, status).Observe(duration.Seconds())
+		log.WithFields(logrus.Fields{"url": fullPath, "requestType": requestType, "status": status}).WithError(err).Error("Web3Signer request failed")
 		err = errors.Wrap(err, "failed to execute json request")
 		tracing.AnnotateError(span, err)
 		return resp, err
 	} else {
-		signRequestDurationSeconds.WithLabelValues(req.Method, strconv.Itoa(resp.StatusCode)).Observe(duration.Seconds())
+		signRequestDurationSeconds.WithLabelValues(requestType, req.Method, strconv.Itoa(resp.StatusCode)).Observe(duration.Seconds())
 	}
 	if resp.StatusCode != http.StatusOK {
-		requestDump, err = httputil.DumpRequestOut(req, true)
-		if err != nil {
-			return nil, err
-		}
-		responseDump, err := httputil.DumpResponse(resp, true)
-		if err != nil {
-			return nil, err
-		}
 		log.WithFields(logrus.Fields{
-			"status":   resp.StatusCode,
-			"request":  string(requestDump),
-			"response": string(responseDump),
+			"url":         fullPath,
+			"requestType": requestType,
+			"status":      resp.StatusCode,
 		}).Error("Web3signer request failed")
 	}
 	if resp.StatusCode == http.StatusInternalServerError {
@@ -186,6 +220,13 @@ func (client *ApiClient) doRequest(ctx context.Context, httpMethod, fullPath str
 		return nil, err
 	}
 	return resp, nil
+}
+
+func requestStatus(err error) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "timeout"
+	}
+	return "error"
 }
 
 // unmarshalResponse is a utility method for unmarshalling responses.

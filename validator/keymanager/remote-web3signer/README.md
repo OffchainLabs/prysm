@@ -16,6 +16,14 @@ detailed info found on https://docs.prylabs.network/docs/wallet/web3signer
 
 Flags used on validator client
 - `--validators-external-signer-url=http://localhost:9000`
+- `--validators-external-signer-timeout=10s`
+
+with a custom CA
+- `--validators-external-signer-ca-cert=/path/to/ca.pem`
+
+with mTLS
+- `--validators-external-signer-client-cert=/path/to/client.pem`
+- `--validators-external-signer-client-key=/path/to/client-key.pem`
 
 with hex keys
 - `--validators-external-signer-public-keys=0xa99a...e44c,0xb89b...4a0b`

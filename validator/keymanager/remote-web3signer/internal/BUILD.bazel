@@ -25,9 +25,13 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["client_test.go"],
+    srcs = [
+        "client_test.go",
+        "metrics_test.go",
+    ],
+    embed = [":go_default_library"],
     deps = [
-        ":go_default_library",
+        "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",

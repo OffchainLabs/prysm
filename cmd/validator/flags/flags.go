@@ -294,6 +294,31 @@ var (
 		Value:   "",
 		Aliases: []string{"remote-signer-url"},
 	}
+	// Web3SignerTimeoutFlag defines the timeout for Web3Signer HTTP requests.
+	Web3SignerTimeoutFlag = &cli.DurationFlag{
+		Name:    "validators-external-signer-timeout",
+		Usage:   "Timeout for requests to the Web3Signer server.",
+		Value:   10 * time.Second,
+		Aliases: []string{"remote-signer-timeout"},
+	}
+	// Web3SignerCACertFlag defines a CA certificate for Web3Signer TLS.
+	Web3SignerCACertFlag = &cli.StringFlag{
+		Name:    "validators-external-signer-ca-cert",
+		Usage:   "Path to a PEM-encoded CA certificate for the Web3Signer server.",
+		Aliases: []string{"remote-signer-ca-cert"},
+	}
+	// Web3SignerClientCertFlag defines a client certificate for Web3Signer mTLS.
+	Web3SignerClientCertFlag = &cli.StringFlag{
+		Name:    "validators-external-signer-client-cert",
+		Usage:   "Path to a PEM-encoded client certificate for Web3Signer mTLS.",
+		Aliases: []string{"remote-signer-client-cert"},
+	}
+	// Web3SignerClientKeyFlag defines a client key for Web3Signer mTLS.
+	Web3SignerClientKeyFlag = &cli.StringFlag{
+		Name:    "validators-external-signer-client-key",
+		Usage:   "Path to a PEM-encoded client key for Web3Signer mTLS.",
+		Aliases: []string{"remote-signer-client-key"},
+	}
 	// Web3SignerPublicValidatorKeysFlag defines a comma-separated list of hex string public keys or external url for web3signer to use for validator signing.
 	// example with external url: --validators-external-signer-public-keys= https://web3signer.com/api/v1/eth2/publicKeys
 	// example with public key: --validators-external-signer-public-keys=0xa99a...e44c,0xb89b...4a0b
