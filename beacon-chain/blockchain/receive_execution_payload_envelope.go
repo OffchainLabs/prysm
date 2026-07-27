@@ -37,10 +37,14 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	ctx, span := trace.StartSpan(ctx, "blockChain.ReceiveExecutionPayloadEnvelope")
 	defer span.End()
 	start := time.Now()
+
+	var consensusInvalid bool
 	defer func() {
 		beaconExecutionPayloadEnvelopeProcessingDurationSeconds.Observe(time.Since(start).Seconds())
 		if err != nil {
-			beaconExecutionPayloadEnvelopeInvalidTotal.Inc()
+			if consensusInvalid || IsInvalidBlock(err) {
+				beaconExecutionPayloadEnvelopeInvalidTotal.Inc()
+			}
 			return
 		}
 		beaconExecutionPayloadEnvelopeValidTotal.Inc()
@@ -81,6 +85,7 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	availGroup, availCtx := errgroup.WithContext(ctx)
 	availGroup.Go(func() error {
 		if err := gloas.VerifyExecutionPayloadEnvelope(availCtx, blockState, signed); err != nil {
+			consensusInvalid = true
 			return err
 		}
 		s.recordPayloadArrival(root, envelope.Slot(), start)
@@ -148,13 +153,7 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		s.cfg.ForkChoiceStore.Unlock()
 	}
 
-	headRootSlice, err := s.HeadRoot(ctx)
-	if err != nil {
-		log.WithError(err).Error("Could not get head root")
-		return nil
-	}
-	headRoot := bytesutil.ToBytes32(headRootSlice)
-	if err := s.postPayloadTasks(ctx, envelope, blockState, root, headRoot); err != nil {
+	if err := s.postPayloadTasks(ctx, envelope, blockState); err != nil {
 		return err
 	}
 
@@ -191,55 +190,49 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	return nil
 }
 
-func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope, st state.BeaconState, root, headRoot [32]byte) error {
-	if headRoot != root {
+func (s *Service) setHeadFull(root [32]byte) interfaces.ReadOnlySignedBeaconBlock {
+	s.headLock.Lock()
+	defer s.headLock.Unlock()
+	if s.head == nil || s.head.root != root {
 		return nil
 	}
+	s.head.full = true
+	return s.head.block
+}
+
+func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope, st state.BeaconState) error {
+	if !s.inRegularSync() {
+		return nil
+	}
+	root := envelope.BeaconBlockRoot()
+	if headRoot, _ := s.HeadRootAndFull(); headRoot != root {
+		return nil
+	}
+	proposingSlot := s.CurrentSlot() + 1
+	if buildFull, reason := s.shouldBuildOnFull(st, root, proposingSlot); !buildFull {
+		bh := envelope.BlockHash()
+		log.WithFields(logrus.Fields{
+			"blockRoot": fmt.Sprintf("%#x", bytesutil.Trunc(root[:])),
+			"blockHash": fmt.Sprintf("%#x", bytesutil.Trunc(bh[:])),
+			"slot":      envelope.Slot(),
+			"reason":    reason,
+		}).Debug("Not building on payload")
+		return nil
+	}
+	headBlock := s.setHeadFull(root)
+	if headBlock == nil {
+		return nil
+	}
+	if err := s.notifyNewHeadV2Event(ctx, headBlock.Block().Slot(), headBlock.Block().StateRoot(), root, headBlock.Version(), true); err != nil {
+		log.WithError(err).Error("Could not notify event feed of head_v2 payload update")
+	}
+
 	payload, err := envelope.Execution()
 	if err != nil {
 		return errors.Wrap(err, "could not get execution payload from envelope")
 	}
 	blockHash := bytesutil.ToBytes32(payload.BlockHash())
-
-	var (
-		emitHeadV2    bool
-		headSlot      primitives.Slot
-		headStateRoot [32]byte
-		headVersion   int
-	)
-
-	s.headLock.Lock()
-	if s.head != nil && s.head.root == root {
-		wasFull := s.head.full
-		s.head.full = true
-
-		// Capture head details for head_v2 event.
-		if !wasFull {
-			headBlock := s.head.block.Block()
-			headSlot = headBlock.Slot()
-			headStateRoot = headBlock.StateRoot()
-			headVersion = s.head.block.Version()
-			emitHeadV2 = true
-		}
-	}
-	s.headLock.Unlock()
-
-	// If the imported payload makes the current head's payload status full, emit a
-	// second head_v2 event for the empty->full transition.
-	if emitHeadV2 {
-		if err := s.notifyNewHeadV2Event(
-			ctx, headSlot, headStateRoot, root, headVersion,
-		); err != nil {
-			// Log the error but continue on (not returning error).
-			log.WithError(err).Error("Could not notify event feed of head_v2 payload update")
-		}
-	}
-
-	if !s.inRegularSync() {
-		return nil
-	}
-	proposingSlot := s.CurrentSlot() + 1
-	attr := s.getPayloadAttribute(ctx, st, proposingSlot, headRoot[:], true)
+	attr := s.getPayloadAttribute(ctx, st, proposingSlot, root[:], true)
 	go func() {
 		pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)
 		if err != nil {
@@ -287,9 +280,11 @@ func (s *Service) callNewPayload(
 ) (bool, error) {
 	_, err := s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests)
 	if err == nil {
+		newPayloadValidNodeCount.Inc()
 		return true, nil
 	}
 	if errors.Is(err, execution.ErrAcceptedSyncingPayloadStatus) {
+		newPayloadOptimisticNodeCount.Inc()
 		log.WithFields(logrus.Fields{
 			"slot":             slot,
 			"payloadBlockHash": fmt.Sprintf("%#x", bytesutil.Trunc(payload.BlockHash())),
@@ -297,6 +292,7 @@ func (s *Service) callNewPayload(
 		return false, nil
 	}
 	if errors.Is(err, execution.ErrInvalidPayloadStatus) {
+		newPayloadInvalidNodeCount.Inc()
 		return false, invalidBlock{error: ErrInvalidPayload}
 	}
 	return false, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
@@ -388,6 +384,35 @@ func (s *Service) recordPayloadArrival(root [32]byte, slot primitives.Slot, arri
 // PayloadEarly reports whether the payload for root arrived early; second return is false when unknown.
 func (s *Service) PayloadEarly(root [32]byte) (bool, bool) {
 	return s.payloadArrivals.isEarly(root)
+}
+
+// DataAvailable reports whether all blob data committed to by the block at root is available now.
+func (s *Service) DataAvailable(ctx context.Context, root [32]byte, slot primitives.Slot) (bool, error) {
+	available, err := s.dataColumnsAvailableNow(ctx, root, slot)
+	if err != nil {
+		return false, errors.Wrap(err, "data columns available now")
+	}
+	if available {
+		return true, nil
+	}
+
+	s.headLock.RLock()
+	var b interfaces.ReadOnlySignedBeaconBlock
+	if s.head != nil && s.head.root == root {
+		b = s.head.block
+	}
+	s.headLock.RUnlock()
+	if b == nil {
+		b, err = s.getBlock(ctx, root)
+		if err != nil {
+			return false, errors.Wrap(err, "could not get block")
+		}
+	}
+	sbid, err := b.Block().Body().SignedExecutionPayloadBid()
+	if err != nil {
+		return false, errors.Wrap(err, "could not get signed execution payload bid from block")
+	}
+	return len(sbid.GetMessage().GetBlobKzgCommitments()) == 0, nil
 }
 
 // notifyForkchoiceUpdateGloas takes the block hash directly because Gloas

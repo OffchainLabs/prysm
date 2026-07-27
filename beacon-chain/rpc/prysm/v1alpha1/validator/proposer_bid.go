@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -132,7 +133,11 @@ func effectiveBidValue(bid *ethpb.SignedExecutionPayloadBid, maxExecutionPayment
 	if uint64(payment) > maxExecutionPayment {
 		payment = primitives.Gwei(maxExecutionPayment)
 	}
-	return bid.Message.Value + payment
+	sum := bid.Message.Value + payment
+	if sum < bid.Message.Value {
+		return primitives.Gwei(math.MaxUint64)
+	}
+	return sum
 }
 
 // builderBidQuery carries the proposal context builder bids are requested and validated against.
@@ -218,7 +223,9 @@ func (vs *Server) validateBuilderBid(head state.BeaconState, signed *ethpb.Signe
 	if err := v.VerifyParentBlockRootSeen(func(root [32]byte) bool { return root == q.parentRoot }); err != nil {
 		return err
 	}
-	if err := v.VerifyParentBlockHash(func([32]byte) ([32]byte, error) { return q.parentHash, nil }); err != nil {
+	if err := v.VerifyParentBlockHash(func(root, hash [32]byte) bool {
+		return root == q.parentRoot && hash == q.parentHash
+	}); err != nil {
 		return err
 	}
 	if err := v.VerifyBuilderActive(head); err != nil {

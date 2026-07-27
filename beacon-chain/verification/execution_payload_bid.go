@@ -285,23 +285,19 @@ func (v *BidVerifier) VerifyBidSlotHigherThanParent(parentSlot primitives.Slot) 
 	return nil
 }
 
-// VerifyParentBlockHash verifies the parent execution block hash matches forkchoice for the bid parent root.
-func (v *BidVerifier) VerifyParentBlockHash(resolveBlockHash func([32]byte) ([32]byte, error)) (err error) {
+// VerifyParentBlockHash verifies that the bid references an available parent payload.
+func (v *BidVerifier) VerifyParentBlockHash(hasPayloadBlockHash func([32]byte, [32]byte) bool) (err error) {
 	defer v.record(RequireBidParentBlockHashValid, &err)
 
 	bid, err := v.b.Bid()
 	if err != nil {
 		return errors.Wrap(err, "failed to get bid")
 	}
-	if resolveBlockHash == nil {
-		return fmt.Errorf("%w: no parent block hash resolver", ErrBidParentBlockHashMismatch)
+	if hasPayloadBlockHash == nil {
+		return fmt.Errorf("%w: no parent block hash lookup", ErrBidParentBlockHashMismatch)
 	}
-	parentHash, err := resolveBlockHash(bid.ParentBlockRoot())
-	if err != nil {
-		return errors.Wrap(err, "failed to resolve parent block hash")
-	}
-	if parentHash != bid.ParentBlockHash() {
-		return fmt.Errorf("%w: bid=%#x forkchoice=%#x", ErrBidParentBlockHashMismatch, bid.ParentBlockHash(), parentHash)
+	if !hasPayloadBlockHash(bid.ParentBlockRoot(), bid.ParentBlockHash()) {
+		return fmt.Errorf("%w: root=%#x hash=%#x", ErrBidParentBlockHashMismatch, bid.ParentBlockRoot(), bid.ParentBlockHash())
 	}
 	return nil
 }

@@ -159,6 +159,7 @@ func TestProcessPendingPayloadEnvelope_DoesNotBroadcastOnReceiveError(t *testing
 
 	s.processPendingPayloadEnvelope(ctx, root)
 	require.Equal(t, false, broadcaster.BroadcastCalled.Load())
+	require.Equal(t, false, s.hasSeenPayloadEnvelope(root, builderIdx))
 }
 
 func TestProcessPendingPayloadEnvelopes_Sweep(t *testing.T) {

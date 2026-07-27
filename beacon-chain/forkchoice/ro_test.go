@@ -19,6 +19,8 @@ const (
 	runlockCalled
 	hasFullNodeCalled
 	isFullNodeCalled
+	ptcVotedEarlyAndAvailableCalled
+	ptcVotedLateCalled
 	hasNodeCalled
 	proposerBoostCalled
 	isCanonicalCalled
@@ -41,12 +43,14 @@ const (
 	lastRootCalled
 	targetRootForEpochCalled
 	parentRootCalled
+	parentHashCalled
 	blockHashCalled
 	gasLimitCalled
 	dependentRootCalled
 	dependentRootForEpochCalled
 	canonicalNodeAtSlotCalled
 	payloadWeightsCalled
+	hasPayloadBlockHashCalled
 )
 
 func _discard(t *testing.T, e error) {
@@ -73,6 +77,16 @@ func TestROLocking(t *testing.T) {
 			name: "isFullNodeCalled",
 			call: isFullNodeCalled,
 			cb:   func(g FastGetter) { g.FullBeatsEmpty([32]byte{}) },
+		},
+		{
+			name: "ptcVotedEarlyAndAvailableCalled",
+			call: ptcVotedEarlyAndAvailableCalled,
+			cb:   func(g FastGetter) { g.PTCVotedEarlyAndAvailable([32]byte{}) },
+		},
+		{
+			name: "ptcVotedLateCalled",
+			call: ptcVotedLateCalled,
+			cb:   func(g FastGetter) { g.PTCVotedLate([32]byte{}) },
 		},
 		{
 			name: "hasNodeCalled",
@@ -184,6 +198,16 @@ func TestROLocking(t *testing.T) {
 			call: gasLimitCalled,
 			cb:   func(g FastGetter) { _, err := g.GasLimit([32]byte{}); _discard(t, err) },
 		},
+		{
+			name: "hasPayloadBlockHashCalled",
+			call: hasPayloadBlockHashCalled,
+			cb:   func(g FastGetter) { g.HasPayloadBlockHash([32]byte{}, [32]byte{}) },
+		},
+		{
+			name: "parentHashCalled",
+			call: parentHashCalled,
+			cb:   func(g FastGetter) { g.ParentHash([32]byte{}) },
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -228,6 +252,16 @@ func (ro *mockROForkchoice) HasFullNode(_ [32]byte) bool {
 
 func (ro *mockROForkchoice) FullBeatsEmpty(_ [32]byte) bool {
 	ro.calls = append(ro.calls, isFullNodeCalled)
+	return false
+}
+
+func (ro *mockROForkchoice) PTCVotedEarlyAndAvailable(_ [32]byte) bool {
+	ro.calls = append(ro.calls, ptcVotedEarlyAndAvailableCalled)
+	return false
+}
+
+func (ro *mockROForkchoice) PTCVotedLate(_ [32]byte) bool {
+	ro.calls = append(ro.calls, ptcVotedLateCalled)
 	return false
 }
 
@@ -316,6 +350,11 @@ func (ro *mockROForkchoice) PayloadWeights(_ [32]byte) (uint64, uint64, error) {
 	return 0, 0, nil
 }
 
+func (ro *mockROForkchoice) HasPayloadBlockHash(_, _ [32]byte) bool {
+	ro.calls = append(ro.calls, hasPayloadBlockHashCalled)
+	return false
+}
+
 func (ro *mockROForkchoice) IsOptimistic(_ [32]byte) (bool, error) {
 	ro.calls = append(ro.calls, isOptimisticCalled)
 	return false, nil
@@ -352,6 +391,11 @@ func (ro *mockROForkchoice) TargetRootForEpoch(_ [32]byte, _ primitives.Epoch) (
 func (ro *mockROForkchoice) ParentRoot(_ [32]byte) ([32]byte, error) {
 	ro.calls = append(ro.calls, parentRootCalled)
 	return [32]byte{}, nil
+}
+
+func (ro *mockROForkchoice) ParentHash(_ [32]byte) [32]byte {
+	ro.calls = append(ro.calls, parentHashCalled)
+	return [32]byte{}
 }
 
 func (ro *mockROForkchoice) BlockHash(_ [32]byte) ([32]byte, error) {

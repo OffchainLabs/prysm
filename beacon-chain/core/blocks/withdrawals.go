@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -15,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
@@ -174,13 +176,15 @@ func ProcessWithdrawals(st state.BeaconState, executionData interfaces.Execution
 			return nil, fmt.Errorf("execution payload header has %d withdrawals when %d were expected", len(wds), len(expectedWithdrawals))
 		}
 
-		wdRoot, err = ssz.WithdrawalSliceRoot(wds, fieldparams.MaxWithdrawalsPerPayload)
+		wdRoot, err = withdrawalSliceRoot(wds, st.Version())
+
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get withdrawals root")
 		}
 	}
 
-	expectedRoot, err := ssz.WithdrawalSliceRoot(expectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+	expectedRoot, err := withdrawalSliceRoot(expectedWithdrawals, st.Version())
+
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get expected withdrawals root")
 	}
@@ -224,6 +228,13 @@ func ProcessWithdrawals(st state.BeaconState, executionData interfaces.Execution
 		return nil, errors.Wrap(err, "could not set next withdrawal validator index")
 	}
 	return st, nil
+}
+
+func withdrawalSliceRoot(withdrawals []*enginev1.Withdrawal, stateVersion int) ([32]byte, error) {
+	if features.ProgressiveSSZEnabled(stateVersion) {
+		return ssz.WithdrawalSliceRootProgressive(withdrawals)
+	}
+	return ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 }
 
 // BLSChangesSignatureBatch extracts the relevant signatures from the provided execution change

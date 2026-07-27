@@ -550,3 +550,54 @@ func TestFilterUnknownIndices(t *testing.T) {
 	require.Equal(t, expected[1].Index, actual[1].Index)
 	require.DeepEqual(t, actual[1].BlockRoot, expected[1].BlockRoot)
 }
+
+func TestRequestAndSaveMissingDataColumnSidecars_MissingColumns(t *testing.T) {
+	newService := func(t *testing.T) *Service {
+		return &Service{
+			ctx: t.Context(),
+			cfg: &config{
+				p2p:               p2ptest.NewTestP2P(t),
+				clock:             startup.NewClock(time.Now(), [fieldparams.RootLength]byte{}),
+				dataColumnStorage: filesystem.NewEphemeralDataColumnStorage(t),
+			},
+			newColumnsVerifier: func(_ []blocks.RODataColumn, _ []verification.Requirement) verification.DataColumnsVerifier {
+				return &verification.MockDataColumnsVerifier{}
+			},
+			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+		}
+	}
+
+	newGloasBlock := func(t *testing.T) blocks.ROBlock {
+		pb := util.NewBeaconBlockGloas()
+		pb.Block.Slot = 1
+		pb.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = [][]byte{make([]byte, 48)}
+		sb, err := blocks.NewSignedBeaconBlock(pb)
+		require.NoError(t, err)
+		roBlock, err := blocks.NewROBlockWithRoot(sb, [fieldparams.RootLength]byte{1})
+		require.NoError(t, err)
+		return roBlock
+	}
+
+	t.Run("gloas block imports without columns", func(t *testing.T) {
+		err := newService(t).requestAndSaveMissingDataColumnSidecars([]blocks.ROBlock{newGloasBlock(t)})
+		require.NoError(t, err)
+	})
+
+	t.Run("gloas block fails without columns on the strict path", func(t *testing.T) {
+		err := newService(t).fetchAndSaveDataColumnSidecars([]blocks.ROBlock{newGloasBlock(t)})
+		require.ErrorContains(t, "some sidecars are still missing after fetch", err)
+	})
+
+	t.Run("fulu block fails without columns", func(t *testing.T) {
+		pb := util.NewBeaconBlockFulu()
+		pb.Block.Slot = 1
+		pb.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, 48)}
+		sb, err := blocks.NewSignedBeaconBlock(pb)
+		require.NoError(t, err)
+		roBlock, err := blocks.NewROBlockWithRoot(sb, [fieldparams.RootLength]byte{2})
+		require.NoError(t, err)
+
+		err = newService(t).requestAndSaveMissingDataColumnSidecars([]blocks.ROBlock{roBlock})
+		require.ErrorContains(t, "some sidecars are still missing after fetch", err)
+	})
+}
