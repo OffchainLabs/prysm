@@ -7,7 +7,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -366,7 +365,7 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 
 		fieldRoots[types.BuilderPendingPayments.RealPosition()] = bppRoot[:]
 
-		bpwRoot, err := state.builderPendingWithdrawalsRoot()
+		bpwRoot, err := stateutil.BuilderPendingWithdrawalsRoot(state.version, state.builderPendingWithdrawals)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute builder pending withdrawals merkleization")
 		}
@@ -391,11 +390,4 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		fieldRoots[types.PTCWindow.RealPosition()] = ptcWindowRoot[:]
 	}
 	return fieldRoots, nil
-}
-
-func (b *BeaconState) builderPendingWithdrawalsRoot() ([32]byte, error) {
-	if progressiveSSZEnabled(b.version) {
-		return stateutil.BuilderPendingWithdrawalsRootProgressive(b.builderPendingWithdrawals)
-	}
-	return stateutil.BuilderPendingWithdrawalsRoot(b.builderPendingWithdrawals)
 }

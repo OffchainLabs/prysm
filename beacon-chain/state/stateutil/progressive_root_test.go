@@ -109,3 +109,21 @@ func TestPendingRootsProgressive(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expectedPC, pcRoot)
 }
+
+func TestBuilderPendingWithdrawalsRootProgressive(t *testing.T) {
+	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	defer reset()
+
+	withdrawals := []*ethpb.BuilderPendingWithdrawal{{
+		FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
+		Amount:       1,
+		BuilderIndex: 2,
+	}}
+
+	got, err := stateutil.BuilderPendingWithdrawalsRoot(version.Gloas, withdrawals)
+	require.NoError(t, err)
+
+	expected, err := ssz.SliceRootProgressive(withdrawals)
+	require.NoError(t, err)
+	require.Equal(t, expected, got)
+}

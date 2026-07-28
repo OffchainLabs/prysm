@@ -1,23 +1,22 @@
 package stateutil
 
 import (
-	"fmt"
-
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // BuilderPendingWithdrawalsRoot computes the SSZ root of a slice of BuilderPendingWithdrawal.
-func BuilderPendingWithdrawalsRoot(slice []*ethpb.BuilderPendingWithdrawal) ([32]byte, error) {
+func BuilderPendingWithdrawalsRoot(stateVersion int, slice []*ethpb.BuilderPendingWithdrawal) ([32]byte, error) {
+	if features.ProgressiveSSZEnabled(stateVersion) {
+		return builderPendingWithdrawalsRootProgressive(slice)
+	}
 	return ssz.SliceRoot(slice, fieldparams.BuilderPendingWithdrawalsLimit)
 }
 
-// BuilderPendingWithdrawalsRootProgressive computes the progressive SSZ root of
+// builderPendingWithdrawalsRootProgressive computes the progressive SSZ root of
 // a slice of BuilderPendingWithdrawal.
-func BuilderPendingWithdrawalsRootProgressive(slice []*ethpb.BuilderPendingWithdrawal) ([32]byte, error) {
-	if uint64(len(slice)) > fieldparams.BuilderPendingWithdrawalsLimit {
-		return [32]byte{}, fmt.Errorf("slice exceeds max length %d", fieldparams.BuilderPendingWithdrawalsLimit)
-	}
+func builderPendingWithdrawalsRootProgressive(slice []*ethpb.BuilderPendingWithdrawal) ([32]byte, error) {
 	return ssz.SliceRootProgressive(slice)
 }
