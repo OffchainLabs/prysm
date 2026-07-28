@@ -340,12 +340,18 @@ func (s *Service) updateMetrics() {
 		s.collectMetricForSubnet(p2p.BlobSubnetTopicFormat, digest, uint64(i))
 	}
 
+	dataColumnTopic := p2p.DataColumnSubnetTopicFormat + s.cfg.p2p.Encoding().ProtocolSuffix()
+	for i := uint64(0); i < params.BeaconConfig().DataColumnSidecarSubnetCount; i++ {
+		s.collectMetricForSubnet(dataColumnTopic, digest, i)
+	}
+
 	// We update all other gossip topics.
 	for _, topic := range p2p.AllTopics() {
 		// We already updated attestation subnet topics.
 		if strings.Contains(topic, p2p.GossipAttestationMessage) ||
 			strings.Contains(topic, p2p.GossipSyncCommitteeMessage) ||
-			strings.Contains(topic, p2p.GossipBlobSidecarMessage) {
+			strings.Contains(topic, p2p.GossipBlobSidecarMessage) ||
+			strings.Contains(topic, p2p.GossipDataColumnSidecarMessage) {
 			continue
 		}
 		topic += s.cfg.p2p.Encoding().ProtocolSuffix()
