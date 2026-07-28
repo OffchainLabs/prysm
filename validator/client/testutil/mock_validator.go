@@ -37,6 +37,7 @@ type FakeValidator struct {
 	ProposeBlockCalled                bool
 	UpdateProtectionsCalled           bool
 	UpdateDutiesCalled                bool
+	RetryMissingNextDutiesCalled      bool
 	WaitForWalletInitializationCalled bool
 	NextSlotCalled                    bool
 	WaitForActivationCalled           int
@@ -91,8 +92,8 @@ func (fv *FakeValidator) WaitForKeymanagerInitialization(_ context.Context) erro
 	return nil
 }
 
-// LogSubmittedSyncCommitteeMessages --
-func (fv *FakeValidator) LogSubmittedSyncCommitteeMessages() {}
+// LogSubmissions --
+func (fv *FakeValidator) LogSubmissions(_ primitives.Slot) {}
 
 // WaitForChainStart for mocking.
 func (fv *FakeValidator) WaitForChainStart(_ context.Context) error {
@@ -151,6 +152,11 @@ func (fv *FakeValidator) UpdateDuties(_ context.Context) error {
 	return fv.UpdateDutiesRet
 }
 
+// MaybeRetryMissingNextDuties for mocking.
+func (fv *FakeValidator) MaybeRetryMissingNextDuties(_ context.Context, _ primitives.Slot) {
+	fv.RetryMissingNextDutiesCalled = true
+}
+
 // UpdateProtections for mocking.
 func (fv *FakeValidator) UpdateProtections(_ context.Context, _ uint64) error {
 	fv.UpdateProtectionsCalled = true
@@ -204,9 +210,6 @@ func (*FakeValidator) SubmitAggregateAndProof(_ context.Context, _ primitives.Sl
 // SubmitSyncCommitteeMessage for mocking.
 func (*FakeValidator) SubmitSyncCommitteeMessage(_ context.Context, _ primitives.Slot, _ [fieldparams.BLSPubkeyLength]byte) {
 }
-
-// LogSubmittedAtts for mocking.
-func (*FakeValidator) LogSubmittedAtts(_ primitives.Slot) {}
 
 // UpdateDomainDataCaches for mocking.
 func (*FakeValidator) UpdateDomainDataCaches(context.Context, primitives.Slot) {}
@@ -316,7 +319,7 @@ func (fv *FakeValidator) DeleteGraffiti(_ context.Context, _ [fieldparams.BLSPub
 	return nil
 }
 
-func (*FakeValidator) StartEventStream(_ context.Context, _ []string) {
+func (*FakeValidator) EnsureEventStream(_ context.Context, _ []string) {
 
 }
 

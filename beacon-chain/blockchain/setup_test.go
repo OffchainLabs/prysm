@@ -89,7 +89,7 @@ func (mb *mockBroadcaster) BroadcastLightClientFinalityUpdate(_ context.Context,
 	return nil
 }
 
-func (mb *mockBroadcaster) BroadcastDataColumnSidecars(_ context.Context, _ []blocks.VerifiedRODataColumn) error {
+func (mb *mockBroadcaster) BroadcastDataColumnSidecars(_ context.Context, _ []blocks.VerifiedRODataColumn, _ []blocks.PartialDataColumn) error {
 	mb.broadcastCalled = true
 	return nil
 }
@@ -166,6 +166,9 @@ func minimalTestService(t *testing.T, opts ...Option) (*Service, *testServiceReq
 	ctx := t.Context()
 	genesis := time.Now().Add(-1 * 4 * time.Duration(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(params.BeaconConfig().SecondsPerSlot)) * time.Second) // Genesis was 4 epochs ago.
 	beaconDB := testDB.SetupDB(t)
+	// trackedProposer at slot 0 underflows to the genesis block root via
+	// ProposerDependentRootOrGenesis, which reads it from the db.
+	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, [32]byte{}))
 	fcs := doublylinkedtree.New()
 	fcs.SetGenesisTime(genesis)
 	sg := stategen.New(beaconDB, fcs)
@@ -199,7 +202,8 @@ func minimalTestService(t *testing.T, opts ...Option) (*Service, *testServiceReq
 		WithAttestationService(req.attSrv),
 		WithBLSToExecPool(req.blsPool),
 		WithDepositCache(dc),
-		WithTrackedValidatorsCache(cache.NewTrackedValidatorsCache()),
+		WithProposerPreferencesCache(cache.NewProposerPreferencesCache()),
+		WithSubscribedValidatorsCache(cache.NewSubscribedValidatorsCache()),
 		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
 		WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
 		WithSyncChecker(mock.MockChecker{}),

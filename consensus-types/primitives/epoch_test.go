@@ -7,15 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	mathprysm "github.com/OffchainLabs/prysm/v7/math"
-	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
-
-func TestMaxEpoch(t *testing.T) {
-	require.Equal(t, primitives.Epoch(0), primitives.MaxEpoch(0, 0))
-	require.Equal(t, primitives.Epoch(1), primitives.MaxEpoch(1, 0))
-	require.Equal(t, primitives.Epoch(1), primitives.MaxEpoch(0, 1))
-	require.Equal(t, primitives.Epoch(1000), primitives.MaxEpoch(100, 1000))
-}
 
 func TestEpoch_Mul(t *testing.T) {
 	tests := []struct {

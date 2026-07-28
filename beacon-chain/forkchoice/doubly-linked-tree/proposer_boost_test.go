@@ -476,6 +476,79 @@ func TestForkChoice_BoostProposerRoot(t *testing.T) {
 	})
 }
 
+// Regression: proposer boost is only applied when the incoming block's proposer
+// shuffling (its dependent root for the relevant epoch) matches the cached head's.
+func TestForkChoice_BoostProposerRoot_OnlySameShuffling(t *testing.T) {
+	ctx := t.Context()
+	zeroHash := params.BeaconConfig().ZeroHash
+	headEpochZero := indexToHash(1)
+	headEpochTwo := indexToHash(2)
+
+	t.Run("does not boost a block on a different shuffling than head", func(t *testing.T) {
+		f := setup(0, 0)
+
+		// Head chain: genesis <- headEpochZero (slot 20) <- headEpochTwo (slot 65).
+		state, blk, err := prepareForkchoiceState(ctx, 20, headEpochZero, zeroHash, zeroHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, state, blk))
+		state, blk, err = prepareForkchoiceState(ctx, 65, headEpochTwo, headEpochZero, zeroHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, state, blk))
+
+		headRoot, err := f.Head(ctx) // caches the head before the boosted insertion
+		require.NoError(t, err)
+		require.Equal(t, headEpochTwo, headRoot)
+		headDep, err := f.DependentRoot(1)
+		require.NoError(t, err)
+		require.Equal(t, headEpochZero, headDep)
+
+		// Competing epoch-0 block gives the fork a different dependent root.
+		forkEpochZero := indexToHash(3)
+		state, blk, err = prepareForkchoiceState(ctx, 21, forkEpochZero, zeroHash, zeroHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, state, blk))
+
+		newRoot := indexToHash(4)
+		f.store.proposerBoostRoot = [32]byte{}
+		driftGenesisTime(f, 66, 0)
+		state, blk, err = prepareForkchoiceState(ctx, 66, newRoot, forkEpochZero, zeroHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, state, blk))
+
+		blkDep, err := f.DependentRootForEpoch(newRoot, 1)
+		require.NoError(t, err)
+		require.Equal(t, forkEpochZero, blkDep)
+		require.NotEqual(t, headDep, blkDep)
+		require.Equal(t, [32]byte{}, f.store.proposerBoostRoot)
+	})
+	t.Run("boosts a block on the same shuffling as head", func(t *testing.T) {
+		f := setup(0, 0)
+
+		state, blk, err := prepareForkchoiceState(ctx, 20, headEpochZero, zeroHash, zeroHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, state, blk))
+		state, blk, err = prepareForkchoiceState(ctx, 65, headEpochTwo, headEpochZero, zeroHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, state, blk))
+
+		headRoot, err := f.Head(ctx)
+		require.NoError(t, err)
+		require.Equal(t, headEpochTwo, headRoot)
+
+		newRoot := indexToHash(5)
+		f.store.proposerBoostRoot = [32]byte{}
+		driftGenesisTime(f, 66, 0)
+		state, blk, err = prepareForkchoiceState(ctx, 66, newRoot, headEpochTwo, zeroHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, state, blk))
+
+		blkDep, err := f.DependentRootForEpoch(newRoot, 1)
+		require.NoError(t, err)
+		require.Equal(t, headEpochZero, blkDep)
+		require.Equal(t, newRoot, f.store.proposerBoostRoot)
+	})
+}
+
 // Regression test (11053)
 func TestForkChoice_missingProposerBoostRoots(t *testing.T) {
 	ctx := t.Context()

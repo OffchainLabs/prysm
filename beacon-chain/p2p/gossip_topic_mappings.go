@@ -1,7 +1,9 @@
 package p2p
 
 import (
+	"maps"
 	"reflect"
+	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -36,11 +38,11 @@ var gossipTopicMappings = map[string]func() proto.Message{
 func GossipTopicMappings(topic string, epoch primitives.Epoch) proto.Message {
 	switch topic {
 	case BlockSubnetTopicFormat:
-		if epoch >= params.BeaconConfig().FuluForkEpoch {
-			return &ethpb.SignedBeaconBlockFulu{}
-		}
 		if epoch >= params.BeaconConfig().GloasForkEpoch {
 			return &ethpb.SignedBeaconBlockGloas{}
+		}
+		if epoch >= params.BeaconConfig().FuluForkEpoch {
+			return &ethpb.SignedBeaconBlockFulu{}
 		}
 		if epoch >= params.BeaconConfig().ElectraForkEpoch {
 			return &ethpb.SignedBeaconBlockElectra{}
@@ -113,11 +115,7 @@ func gossipMessage(topic string) proto.Message {
 // AllTopics returns all topics stored in our
 // gossip mapping.
 func AllTopics() []string {
-	var topics []string
-	for k := range gossipTopicMappings {
-		topics = append(topics, k)
-	}
-	return topics
+	return slices.Collect(maps.Keys(gossipTopicMappings))
 }
 
 // GossipTypeMapping is the inverse of GossipTopicMappings so that an arbitrary protobuf message

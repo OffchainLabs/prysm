@@ -436,6 +436,23 @@ func TestMultiAddrConversion_OK(t *testing.T) {
 	require.LogsDoNotContain(t, hook, "Could not get multiaddr")
 }
 
+func TestPeersFromStringAddrs_SkipsUnusablePeer(t *testing.T) {
+	const validAddr = "/ip4/127.0.0.1/tcp/13000"
+	_, pkey := createAddrAndPrivKey(t)
+
+	db, err := enode.OpenDB("")
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	localNode := enode.NewLocalNode(db, pkey)
+	localNode.Set(enr.TCP(13001))
+
+	addrs, err := PeersFromStringAddrs([]string{validAddr, localNode.Node().String()})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(addrs))
+	assert.Equal(t, validAddr, addrs[0].String())
+}
+
 func TestStaticPeering_PeersAreAdded(t *testing.T) {
 	const port = uint(6000)
 	cs := startup.NewClockSynchronizer()
@@ -1291,4 +1308,15 @@ func TestFindPeers_received_bad_existing_node(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result))
+}
+
+func TestGetPort_ZeroPortTreatedAsAbsent(t *testing.T) {
+	localNode := createTestNodeRandom(t)
+	localNode.Set(enr.TCP(0))
+
+	port, ok, err := getPort(localNode.Node(), tcp)
+
+	require.NoError(t, err)
+	require.Equal(t, false, ok)
+	require.Equal(t, uint(0), port)
 }

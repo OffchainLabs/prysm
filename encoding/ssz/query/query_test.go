@@ -344,6 +344,67 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 	})
 }
 
+func TestLengthValue(t *testing.T) {
+	t.Run("returns runtime length for List and Bitlist", func(t *testing.T) {
+		info, err := query.AnalyzeObject(createVariableTestContainer())
+		require.NoError(t, err)
+
+		tests := []struct {
+			name     string
+			path     string
+			expected uint64
+		}{
+			{name: "list of uint64", path: ".field_list_uint64", expected: 5},
+			{name: "list of containers", path: ".field_list_container", expected: 3},
+			{name: "list of bytes32", path: ".field_list_bytes32", expected: 3},
+			{name: "nested list of uint64", path: ".nested.field_list_uint64", expected: 5},
+			{name: "bitlist (counted in bits)", path: ".bitlist_field", expected: 256},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				path, err := query.ParsePath(tt.path)
+				require.NoError(t, err)
+
+				finalInfo, _, _, err := query.CalculateOffsetAndLength(info, path)
+				require.NoError(t, err)
+
+				n, err := finalInfo.LengthValue()
+				require.NoError(t, err)
+				require.Equal(t, tt.expected, n, "Expected length to be %d", tt.expected)
+			})
+		}
+	})
+
+	t.Run("errors for non-List/Bitlist types", func(t *testing.T) {
+		info, err := query.AnalyzeObject(createFixedTestContainer())
+		require.NoError(t, err)
+
+		paths := []struct {
+			name string
+			path string
+		}{
+			{name: "vector", path: ".vector_field"},
+			{name: "bitvector", path: ".bitvector64_field"},
+			{name: "basic uint64", path: ".field_uint64"},
+			{name: "container", path: ".nested"},
+		}
+
+		for _, tt := range paths {
+			t.Run(tt.name, func(t *testing.T) {
+				path, err := query.ParsePath(tt.path)
+				require.NoError(t, err)
+
+				finalInfo, _, _, err := query.CalculateOffsetAndLength(info, path)
+				require.NoError(t, err)
+
+				_, err = finalInfo.LengthValue()
+				require.ErrorContains(t, "only supported for List and Bitlist", err)
+			})
+		}
+	})
+}
+
 func TestHashTreeRoot(t *testing.T) {
 	tests := []struct {
 		name string

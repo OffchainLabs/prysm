@@ -20,7 +20,7 @@ func ActiveFlags(flags []cli.Flag) []cli.Flag {
 
 func flagValue(f cli.Flag) reflect.Value {
 	fv := reflect.ValueOf(f)
-	for fv.Kind() == reflect.Ptr {
+	for fv.Kind() == reflect.Pointer {
 		fv = reflect.Indirect(fv)
 	}
 	return fv

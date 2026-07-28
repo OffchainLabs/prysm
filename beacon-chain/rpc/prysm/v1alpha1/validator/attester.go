@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -135,38 +134,44 @@ func (vs *Server) SubscribeCommitteeSubnets(ctx context.Context, req *ethpb.Comm
 	if len(req.Slots) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "no attester slots provided")
 	}
-
-	fetchValsLen := func(slot primitives.Slot) (uint64, error) {
-		wantedEpoch := slots.ToEpoch(slot)
-		vals, err := vs.HeadFetcher.HeadValidatorsIndices(ctx, wantedEpoch)
+	// validator_indices/committees_at_slot are newer optional gRPC fields, so old
+	// VCs omit them (empty = "no attached-set update"). The REST schema has always
+	// required validator_index, so that handler rejects missing values instead.
+	if len(req.ValidatorIndices) > 0 && len(req.ValidatorIndices) != len(req.Slots) {
+		return nil, status.Error(codes.InvalidArgument, "validator_indices length must match slots length when provided")
+	}
+	if len(req.CommitteesAtSlot) > 0 && len(req.CommitteesAtSlot) != len(req.Slots) {
+		return nil, status.Error(codes.InvalidArgument, "committees_at_slot length must match slots length when provided")
+	}
+	if len(req.ValidatorIndices) > 0 {
+		st, err := vs.HeadFetcher.HeadStateReadOnly(ctx)
 		if err != nil {
-			return 0, err
+			return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
 		}
-		return uint64(len(vals)), nil
+		numVals := uint64(st.NumValidators())
+		for _, idx := range req.ValidatorIndices {
+			if uint64(idx) >= numVals {
+				return nil, status.Errorf(codes.InvalidArgument, "validator index %d does not exist (validator count %d)", idx, numVals)
+			}
+		}
 	}
 
-	// Request the head validator indices of epoch represented by the first requested
-	// slot.
-	currValsLen, err := fetchValsLen(req.Slots[0])
-	if err != nil {
+	subs := make([]core.SubnetSubscription, len(req.Slots))
+	for i := range req.Slots {
+		subs[i] = core.SubnetSubscription{
+			Slot:           req.Slots[i],
+			CommitteeIndex: req.CommitteeIds[i],
+			IsAggregator:   req.IsAggregator[i],
+		}
+		if len(req.CommitteesAtSlot) == len(req.Slots) {
+			subs[i].CommitteesAtSlot = req.CommitteesAtSlot[i]
+		}
+	}
+	if err := core.ComputeAndCacheCommitteeSubnets(ctx, vs.HeadFetcher, subs); err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not retrieve head validator length: %v", err)
 	}
-	currEpoch := slots.ToEpoch(req.Slots[0])
-
-	for i := 0; i < len(req.Slots); i++ {
-		// If epoch has changed, re-request active validators length
-		if currEpoch != slots.ToEpoch(req.Slots[i]) {
-			currValsLen, err = fetchValsLen(req.Slots[i])
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "Could not retrieve head validator length: %v", err)
-			}
-			currEpoch = slots.ToEpoch(req.Slots[i])
-		}
-		subnet := helpers.ComputeSubnetFromCommitteeAndSlot(currValsLen, req.CommitteeIds[i], req.Slots[i])
-		cache.SubnetIDs.AddAttesterSubnetID(req.Slots[i], subnet)
-		if req.IsAggregator[i] {
-			cache.SubnetIDs.AddAggregatorSubnetID(req.Slots[i], subnet)
-		}
+	for _, idx := range req.ValidatorIndices {
+		vs.SubscribedValidatorsCache.Add(idx)
 	}
 
 	return &emptypb.Empty{}, nil

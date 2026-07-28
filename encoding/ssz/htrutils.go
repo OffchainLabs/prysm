@@ -12,16 +12,16 @@ import (
 	"github.com/pkg/errors"
 )
 
-type Transaction []byte
-
-func (t Transaction) HashTreeRoot() ([32]byte, error) {
-	return ByteSliceRoot(t, fieldparams.MaxBytesPerTxLength)
+type Transaction struct {
+	Data        []byte
+	Progressive bool
 }
 
-type ProgressiveTransaction []byte
-
-func (t ProgressiveTransaction) HashTreeRoot() ([32]byte, error) {
-	return ByteSliceRootProgressive(t)
+func (t Transaction) HashTreeRoot() ([32]byte, error) {
+	if t.Progressive {
+		return ByteSliceRootProgressive(t.Data)
+	}
+	return ByteSliceRoot(t.Data, fieldparams.MaxBytesPerTxLength)
 }
 
 // Uint64Root computes the HashTreeRoot Merkleization of
@@ -96,7 +96,7 @@ func SlashingsRoot(slashings []uint64) ([32]byte, error) {
 func TransactionsRoot(txs [][]byte) ([32]byte, error) {
 	transactions := make([]Transaction, len(txs))
 	for i, tx := range txs {
-		transactions[i] = tx
+		transactions[i] = Transaction{Data: tx}
 	}
 	return SliceRoot(transactions, fieldparams.MaxTxsPerPayloadLength)
 }
@@ -104,9 +104,9 @@ func TransactionsRoot(txs [][]byte) ([32]byte, error) {
 // TransactionsRootProgressive computes the progressive HTR for the Transactions
 // property of the ExecutionPayload.
 func TransactionsRootProgressive(txs [][]byte) ([32]byte, error) {
-	transactions := make([]ProgressiveTransaction, len(txs))
+	transactions := make([]Transaction, len(txs))
 	for i, tx := range txs {
-		transactions[i] = tx
+		transactions[i] = Transaction{Data: tx, Progressive: true}
 	}
 	return SliceRootProgressive(transactions)
 }
@@ -119,10 +119,7 @@ func WithdrawalSliceRoot(withdrawals []*enginev1.Withdrawal, limit uint64) ([32]
 
 // WithdrawalSliceRootProgressive computes the progressive HTR of a slice of
 // withdrawals.
-func WithdrawalSliceRootProgressive(withdrawals []*enginev1.Withdrawal, limit uint64) ([32]byte, error) {
-	if uint64(len(withdrawals)) > limit {
-		return [32]byte{}, errors.Errorf("slice exceeds max length %d", limit)
-	}
+func WithdrawalSliceRootProgressive(withdrawals []*enginev1.Withdrawal) ([32]byte, error) {
 	return SliceRootProgressive(withdrawals)
 }
 

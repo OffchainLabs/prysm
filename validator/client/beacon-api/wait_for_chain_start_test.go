@@ -21,7 +21,7 @@ func TestWaitForChainStart_ValidGenesis(t *testing.T) {
 
 	ctx := t.Context()
 	genesisResponseJson := structs.GetGenesisResponse{}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Get(
 		gomock.Any(),
 		"/eth/v1/beacon/genesis",
@@ -88,7 +88,7 @@ func TestWaitForChainStart_BadGenesis(t *testing.T) {
 
 			ctx := t.Context()
 			genesisResponseJson := structs.GetGenesisResponse{}
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 			handler.EXPECT().Get(
 				gomock.Any(),
 				"/eth/v1/beacon/genesis",
@@ -116,7 +116,7 @@ func TestWaitForChainStart_JsonResponseError(t *testing.T) {
 
 	ctx := t.Context()
 	genesisResponseJson := structs.GetGenesisResponse{}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Get(
 		gomock.Any(),
 		"/eth/v1/beacon/genesis",
@@ -139,7 +139,7 @@ func TestWaitForChainStart_JsonResponseError404(t *testing.T) {
 
 	ctx := t.Context()
 	genesisResponseJson := structs.GetGenesisResponse{}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	// First, mock a request that receives a 404 error (which means that the genesis data is not available yet)
 	handler.EXPECT().Get(

@@ -129,7 +129,7 @@ func TestValidateBlob_AlreadySeenInCache(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*eth.BlobSidecar]()]
 	digest, err := s.currentForkDigest()
 	require.NoError(t, err)
-	topic = s.addDigestAndIndexToTopic(topic, digest, 0)
+	topic = s.addDigestAndIndexToTopic(topic, digest, 0) + p.Encoding().ProtocolSuffix()
 
 	s.setSeenBlobIndex(sc.Slot(), sc.SignedBlockHeader.Header.ProposerIndex, 0)
 	result, err := s.validateBlob(ctx, "", &pubsub.Message{
@@ -159,7 +159,7 @@ func TestValidateBlob_InvalidTopicIndex(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*eth.BlobSidecar]()]
 	digest, err := s.currentForkDigest()
 	require.NoError(t, err)
-	topic = s.addDigestAndIndexToTopic(topic, digest, 1)
+	topic = s.addDigestAndIndexToTopic(topic, digest, 1) + p.Encoding().ProtocolSuffix()
 	result, err := s.validateBlob(ctx, "", &pubsub.Message{
 		Message: &pb.Message{
 			Data:  buf.Bytes(),
@@ -274,7 +274,7 @@ func TestValidateBlob_ErrorPathsWithMock(t *testing.T) {
 			topic := p2p.GossipTypeMapping[reflect.TypeFor[*eth.BlobSidecar]()]
 			digest, err := s.currentForkDigest()
 			require.NoError(t, err)
-			topic = s.addDigestAndIndexToTopic(topic, digest, 0)
+			topic = s.addDigestAndIndexToTopic(topic, digest, 0) + p.Encoding().ProtocolSuffix()
 			result, err := s.validateBlob(ctx, "", &pubsub.Message{
 				Message: &pb.Message{
 					Data:  buf.Bytes(),

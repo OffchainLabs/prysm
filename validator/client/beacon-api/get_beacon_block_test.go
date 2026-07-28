@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/mock"
 	testhelpers "github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/test-helpers"
+	"github.com/OffchainLabs/prysm/v7/validator/client/cache"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/mock/gomock"
 )
@@ -1392,7 +1393,7 @@ func TestGetBeaconBlock_GloasValid_SSZ_WithPayload(t *testing.T) {
 	validatorClient := &beaconApiValidatorClient{
 		handler:       handler,
 		stateless:     true,
-		envelopeCache: newExecutionPayloadEnvelopeCache(),
+		envelopeCache: cache.NewExecutionPayloadEnvelopeCache(),
 	}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
@@ -1440,7 +1441,7 @@ func TestGetBeaconBlock_GloasValid_SSZ_WithoutPayload(t *testing.T) {
 
 	validatorClient := &beaconApiValidatorClient{
 		handler:       handler,
-		envelopeCache: newExecutionPayloadEnvelopeCache(),
+		envelopeCache: cache.NewExecutionPayloadEnvelopeCache(),
 	}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
@@ -1487,7 +1488,7 @@ func TestGetBeaconBlock_GloasValid_JSON_WithoutPayload(t *testing.T) {
 
 	validatorClient := &beaconApiValidatorClient{
 		handler:       handler,
-		envelopeCache: newExecutionPayloadEnvelopeCache(),
+		envelopeCache: cache.NewExecutionPayloadEnvelopeCache(),
 	}
 	beaconBlock, err := validatorClient.beaconBlock(t.Context(), slot, randaoReveal, graffiti)
 	require.NoError(t, err)
@@ -1511,7 +1512,7 @@ func TestGetBeaconBlock_GloasRejectsJSONWithPayload(t *testing.T) {
 	).Return(
 		[]byte("{}"),
 		http.Header{
-			"Content-Type":                       []string{"application/json"},
+			"Content-Type":                     []string{"application/json"},
 			api.ExecutionPayloadIncludedHeader: []string{"true"},
 		},
 		nil,
@@ -1520,7 +1521,7 @@ func TestGetBeaconBlock_GloasRejectsJSONWithPayload(t *testing.T) {
 	validatorClient := &beaconApiValidatorClient{
 		handler:       handler,
 		stateless:     true,
-		envelopeCache: newExecutionPayloadEnvelopeCache(),
+		envelopeCache: cache.NewExecutionPayloadEnvelopeCache(),
 	}
 	_, err := validatorClient.beaconBlock(t.Context(), slot, randaoReveal, graffiti)
 	assert.ErrorContains(t, "must be SSZ", err)

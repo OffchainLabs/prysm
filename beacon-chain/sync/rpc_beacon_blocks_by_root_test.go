@@ -7,6 +7,7 @@ import (
 	"time"
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	db "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -28,6 +29,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -198,10 +200,13 @@ func TestRecentBeaconBlocks_RPCRequestSent(t *testing.T) {
 	require.NoError(t, err)
 	blockBRoot, err := blockB.Block.HashTreeRoot()
 	require.NoError(t, err)
-	genesisState, err := transition.GenesisBeaconState(t.Context(), nil, 0, &ethpb.Eth1Data{})
-	require.NoError(t, err)
+	genesisState, keys := util.DeterministicGenesisState(t, 64)
 	require.NoError(t, genesisState.SetSlot(111))
 	require.NoError(t, genesisState.UpdateBlockRootAtIndex(111%uint64(params.BeaconConfig().SlotsPerHistoricalRoot), blockARoot))
+	blockA.Signature, err = signing.ComputeDomainAndSign(genesisState, slots.ToEpoch(blockA.Block.Slot), blockA.Block, params.BeaconConfig().DomainBeaconProposer, keys[0])
+	require.NoError(t, err)
+	blockB.Signature, err = signing.ComputeDomainAndSign(genesisState, slots.ToEpoch(blockB.Block.Slot), blockB.Block, params.BeaconConfig().DomainBeaconProposer, keys[0])
+	require.NoError(t, err)
 	finalizedCheckpt := &ethpb.Checkpoint{
 		Epoch: 5,
 		Root:  blockBRoot[:],
@@ -327,6 +332,72 @@ func TestRecentBeaconBlocks_RPCRequestSent_IncorrectRoot(t *testing.T) {
 
 	p1.Connect(p2)
 	require.ErrorContains(t, "received unexpected block with root", r.sendBeaconBlocksRequest(t.Context(), &expectedRoots, p2.PeerID()))
+}
+
+func TestRecentBeaconBlocks_RPCRequestSent_InvalidSignature(t *testing.T) {
+	p1 := p2ptest.NewTestP2P(t)
+	p2 := p2ptest.NewTestP2P(t)
+	p1.DelaySend = true
+
+	blockA := util.NewBeaconBlock()
+	blockA.Block.Slot = 111
+	blockARoot, err := blockA.Block.HashTreeRoot()
+	require.NoError(t, err)
+	genesisState, keys := util.DeterministicGenesisState(t, 64)
+	require.NoError(t, genesisState.SetSlot(111))
+	require.NoError(t, genesisState.UpdateBlockRootAtIndex(111%uint64(params.BeaconConfig().SlotsPerHistoricalRoot), blockARoot))
+	// Sign with a key that does not match the proposer index so the root matches but the signature is invalid.
+	blockA.Signature, err = signing.ComputeDomainAndSign(genesisState, slots.ToEpoch(blockA.Block.Slot), blockA.Block, params.BeaconConfig().DomainBeaconProposer, keys[blockA.Block.ProposerIndex+1])
+	require.NoError(t, err)
+
+	expectedRoots := p2pTypes.BeaconBlockByRootsReq{blockARoot}
+
+	chain := &mock.ChainService{
+		State: genesisState,
+		FinalizedCheckPoint: &ethpb.Checkpoint{
+			Epoch: 5,
+			Root:  make([]byte, 32),
+		},
+		Root:           blockARoot[:],
+		Genesis:        time.Now(),
+		ValidatorsRoot: [32]byte{},
+	}
+	r := &Service{
+		cfg: &config{
+			p2p:   p1,
+			chain: chain,
+			clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+		},
+		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
+		seenPendingBlocks:   make(map[[32]byte]bool),
+		ctx:                 t.Context(),
+		rateLimiter:         newRateLimiter(p1),
+	}
+
+	pcl := protocol.ID("/eth2/beacon_chain/req/beacon_blocks_by_root/1/ssz_snappy")
+	topic := string(pcl)
+	r.rateLimiter.limiterMap[topic] = leakybucket.NewCollector(10000, 10000, time.Second, false)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
+		defer wg.Done()
+		out := new(p2pTypes.BeaconBlockByRootsReq)
+		assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, out))
+		_, err := stream.Write([]byte{responseCodeSuccess})
+		assert.NoError(t, err, "Could not write to stream")
+		_, err = p2.Encoding().EncodeWithMaxLength(stream, blockA)
+		assert.NoError(t, err, "Could not send response back")
+		assert.NoError(t, stream.Close())
+	})
+
+	p1.Connect(p2)
+	require.ErrorContains(t, "verify block signature", r.sendBeaconBlocksRequest(t.Context(), &expectedRoots, p2.PeerID()))
+	assert.Equal(t, 0, len(r.seenPendingBlocks), "Block with invalid signature should not be queued")
+
+	if util.WaitTimeout(&wg, 1*time.Second) {
+		t.Fatal("Did not receive stream within 1 sec")
+	}
 }
 
 func TestRecentBeaconBlocksRPCHandler_HandleZeroBlocks(t *testing.T) {
@@ -478,4 +549,55 @@ func TestFilterUnknownIndices(t *testing.T) {
 	require.DeepEqual(t, actual[0].BlockRoot, expected[0].BlockRoot)
 	require.Equal(t, expected[1].Index, actual[1].Index)
 	require.DeepEqual(t, actual[1].BlockRoot, expected[1].BlockRoot)
+}
+
+func TestRequestAndSaveMissingDataColumnSidecars_MissingColumns(t *testing.T) {
+	newService := func(t *testing.T) *Service {
+		return &Service{
+			ctx: t.Context(),
+			cfg: &config{
+				p2p:               p2ptest.NewTestP2P(t),
+				clock:             startup.NewClock(time.Now(), [fieldparams.RootLength]byte{}),
+				dataColumnStorage: filesystem.NewEphemeralDataColumnStorage(t),
+			},
+			newColumnsVerifier: func(_ []blocks.RODataColumn, _ []verification.Requirement) verification.DataColumnsVerifier {
+				return &verification.MockDataColumnsVerifier{}
+			},
+			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+		}
+	}
+
+	newGloasBlock := func(t *testing.T) blocks.ROBlock {
+		pb := util.NewBeaconBlockGloas()
+		pb.Block.Slot = 1
+		pb.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = [][]byte{make([]byte, 48)}
+		sb, err := blocks.NewSignedBeaconBlock(pb)
+		require.NoError(t, err)
+		roBlock, err := blocks.NewROBlockWithRoot(sb, [fieldparams.RootLength]byte{1})
+		require.NoError(t, err)
+		return roBlock
+	}
+
+	t.Run("gloas block imports without columns", func(t *testing.T) {
+		err := newService(t).requestAndSaveMissingDataColumnSidecars([]blocks.ROBlock{newGloasBlock(t)})
+		require.NoError(t, err)
+	})
+
+	t.Run("gloas block fails without columns on the strict path", func(t *testing.T) {
+		err := newService(t).fetchAndSaveDataColumnSidecars([]blocks.ROBlock{newGloasBlock(t)})
+		require.ErrorContains(t, "some sidecars are still missing after fetch", err)
+	})
+
+	t.Run("fulu block fails without columns", func(t *testing.T) {
+		pb := util.NewBeaconBlockFulu()
+		pb.Block.Slot = 1
+		pb.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, 48)}
+		sb, err := blocks.NewSignedBeaconBlock(pb)
+		require.NoError(t, err)
+		roBlock, err := blocks.NewROBlockWithRoot(sb, [fieldparams.RootLength]byte{2})
+		require.NoError(t, err)
+
+		err = newService(t).requestAndSaveMissingDataColumnSidecars([]blocks.ROBlock{roBlock})
+		require.ErrorContains(t, "some sidecars are still missing after fetch", err)
+	})
 }

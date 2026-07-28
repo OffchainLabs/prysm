@@ -92,3 +92,29 @@ type AddrRequest struct {
 type PeersResponse struct {
 	Peers []*Peer `json:"peers"`
 }
+
+type GetCustodyResponse struct {
+	Data *CustodyData `json:"data"`
+}
+
+type CustodyData struct {
+	CustodyGroupCount string   `json:"custody_group_count"`
+	CustodyGroups     []string `json:"custody_groups"`
+	CustodyColumns    []string `json:"custody_columns"`
+	// EarliestAvailableSlot is the earliest slot for which the node can serve the data it custodies.
+	EarliestAvailableSlot string `json:"earliest_available_slot"`
+	// IsSupernode is true when the node custodies all custody groups.
+	IsSupernode bool `json:"is_supernode"`
+	// IsSemiSupernode is true when the node custodies enough custody groups to reconstruct
+	// all data columns, but not all of them.
+	IsSemiSupernode bool `json:"is_semi_supernode"`
+	// Backfill reports historical backfill progress for checkpoint-synced nodes.
+	// It is omitted for nodes synced from genesis.
+	Backfill *BackfillStatus `json:"backfill,omitempty"`
+}
+
+type BackfillStatus struct {
+	OriginSlot string `json:"origin_slot"`
+	// LowSlot is the lowest slot that backfill has filled so far.
+	LowSlot string `json:"low_slot"`
+}

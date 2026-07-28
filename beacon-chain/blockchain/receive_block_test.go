@@ -20,7 +20,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	ethpbv1 "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -157,7 +156,8 @@ func TestService_ReceiveBlock(t *testing.T) {
 				WithFinalizedStateAtStartUp(genesis),
 				WithExitPool(voluntaryexits.NewPool()),
 				WithStateNotifier(&blockchainTesting.MockStateNotifier{RecordEvents: true}),
-				WithTrackedValidatorsCache(cache.NewTrackedValidatorsCache()),
+				WithProposerPreferencesCache(cache.NewProposerPreferencesCache()),
+				WithSubscribedValidatorsCache(cache.NewSubscribedValidatorsCache()),
 			)
 
 			beaconDB := tr.db
@@ -449,11 +449,11 @@ func Test_sendNewFinalizedEvent(t *testing.T) {
 	require.Equal(t, 1, len(notifier.ReceivedEvents()))
 	e := notifier.ReceivedEvents()[0]
 	assert.Equal(t, statefeed.FinalizedCheckpoint, int(e.Type))
-	fc, ok := e.Data.(*ethpbv1.EventFinalizedCheckpoint)
+	fc, ok := e.Data.(*statefeed.FinalizedCheckpointData)
 	require.Equal(t, true, ok, "event has wrong data type")
 	assert.Equal(t, primitives.Epoch(123), fc.Epoch)
-	assert.DeepEqual(t, sbbRoot[:], fc.Block)
-	assert.DeepEqual(t, finalizedStRoot[:], fc.State)
+	assert.DeepEqual(t, sbbRoot, fc.Block)
+	assert.DeepEqual(t, finalizedStRoot, fc.State)
 	assert.Equal(t, false, fc.ExecutionOptimistic)
 }
 
@@ -516,11 +516,11 @@ func Test_executePostFinalizationTasks(t *testing.T) {
 		}, 5*time.Second, 50*time.Millisecond, "Expected exactly 1 state notification")
 		e := notifier.ReceivedEvents()[0]
 		assert.Equal(t, statefeed.FinalizedCheckpoint, int(e.Type))
-		fc, ok := e.Data.(*ethpbv1.EventFinalizedCheckpoint)
+		fc, ok := e.Data.(*statefeed.FinalizedCheckpointData)
 		require.Equal(t, true, ok, "event has wrong data type")
 		assert.Equal(t, primitives.Epoch(123), fc.Epoch)
-		assert.DeepEqual(t, headRoot[:], fc.Block)
-		assert.DeepEqual(t, finalizedStRoot[:], fc.State)
+		assert.DeepEqual(t, headRoot, fc.Block)
+		assert.DeepEqual(t, finalizedStRoot, fc.State)
 		assert.Equal(t, false, fc.ExecutionOptimistic)
 
 		// check the cache
@@ -557,11 +557,11 @@ func Test_executePostFinalizationTasks(t *testing.T) {
 		}, 5*time.Second, 50*time.Millisecond, "Expected exactly 1 state notification")
 		e := notifier.ReceivedEvents()[0]
 		assert.Equal(t, statefeed.FinalizedCheckpoint, int(e.Type))
-		fc, ok := e.Data.(*ethpbv1.EventFinalizedCheckpoint)
+		fc, ok := e.Data.(*statefeed.FinalizedCheckpointData)
 		require.Equal(t, true, ok, "event has wrong data type")
 		assert.Equal(t, primitives.Epoch(123), fc.Epoch)
-		assert.DeepEqual(t, headRoot[:], fc.Block)
-		assert.DeepEqual(t, finalizedStRoot[:], fc.State)
+		assert.DeepEqual(t, headRoot, fc.Block)
+		assert.DeepEqual(t, finalizedStRoot, fc.State)
 		assert.Equal(t, false, fc.ExecutionOptimistic)
 
 		// check the cache

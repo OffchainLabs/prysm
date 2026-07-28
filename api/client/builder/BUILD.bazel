@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "bid.go",
         "client.go",
+        "client_gloas.go",
         "errors.go",
         "log.go",
         "types.go",
@@ -22,6 +23,7 @@ go_library(
         "//consensus-types/interfaces:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//encoding/bytesutil:go_default_library",
+        "//io/logs:go_default_library",
         "//math:go_default_library",
         "//monitoring/tracing:go_default_library",
         "//monitoring/tracing/trace:go_default_library",
@@ -40,6 +42,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "client_gloas_test.go",
         "client_test.go",
         "types_test.go",
     ],

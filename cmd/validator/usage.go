@@ -60,7 +60,6 @@ var appHelpFlagGroups = []flagGroup{
 			flags.WalletPasswordFileFlag,
 			cmd.ClearDB,
 			cmd.ForceClearDB,
-			cmd.EnableBackupWebhookFlag,
 			cmd.EnableTracingFlag,
 			cmd.TracingProcessNameFlag,
 			cmd.TracingEndpointFlag,
@@ -132,13 +131,6 @@ var appHelpFlagGroups = []flagGroup{
 		},
 	},
 	{
-		Name: "slasher",
-		Flags: []cli.Flag{
-			flags.SlasherRPCProviderFlag,
-			flags.SlasherCertFlag,
-		},
-	},
-	{
 		Name: "misc",
 		Flags: []cli.Flag{
 			flags.DisablePenaltyRewardLogFlag,
@@ -152,13 +144,6 @@ var appHelpFlagGroups = []flagGroup{
 	{
 		Name:  "features",
 		Flags: features.ActiveFlags(features.ValidatorFlags),
-	},
-	{
-		Name: "interop",
-		Flags: []cli.Flag{
-			flags.InteropNumValidators,
-			flags.InteropStartIndex,
-		},
 	},
 	{
 		Name:  "deprecated",

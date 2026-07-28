@@ -1301,6 +1301,7 @@ func TestCopyBuilderPendingPayment(t *testing.T) {
 				Amount:       primitives.Gwei(50),
 				BuilderIndex: primitives.BuilderIndex(7),
 			},
+			ProposerIndex: primitives.ValidatorIndex(3),
 		}
 
 		copied := v1alpha1.CopyBuilderPendingPayment(original)
@@ -1318,9 +1319,13 @@ func TestCopyBuilderPendingPayment(t *testing.T) {
 		original.Withdrawal.FeeRecipient[0] = 0xFF
 		original.Withdrawal.Amount = primitives.Gwei(75)
 		original.Withdrawal.BuilderIndex = primitives.BuilderIndex(9)
+		original.ProposerIndex = primitives.ValidatorIndex(11)
 
 		if copied.Weight != primitives.Gwei(5) {
 			t.Fatalf("weight mutated on copy: %d", copied.Weight)
+		}
+		if copied.ProposerIndex != primitives.ValidatorIndex(3) {
+			t.Fatalf("proposer index mutated on copy: %d", copied.ProposerIndex)
 		}
 		if copied.Withdrawal.FeeRecipient[0] == original.Withdrawal.FeeRecipient[0] {
 			t.Fatalf("withdrawal fee recipient was not deep copied")

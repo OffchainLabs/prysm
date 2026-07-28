@@ -2,10 +2,10 @@ package initialsync
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
@@ -309,11 +309,13 @@ func TestService_roundRobinSync(t *testing.T) {
 				ValidatorsRoot: vr,
 			} // no-op mock
 			clock := startup.NewClock(gt, vr)
+			chainStarted := &atomic.Bool{}
+			chainStarted.Store(true)
 			s := &Service{
 				ctx:          t.Context(),
 				cfg:          &Config{Chain: mc, P2P: p, DB: beaconDB},
-				synced:       abool.New(),
-				chainStarted: abool.NewBool(true),
+				synced:       &atomic.Bool{},
+				chainStarted: chainStarted,
 				clock:        clock,
 			}
 			s.genesisTime = makeGenesisTime(tt.currentSlot)
@@ -630,11 +632,13 @@ func TestService_blockProviderScoring(t *testing.T) {
 		ValidatorsRoot: vr,
 	} // no-op mock
 	clock := startup.NewClock(gt, vr)
+	chainStarted := &atomic.Bool{}
+	chainStarted.Store(true)
 	s := &Service{
 		ctx:          t.Context(),
 		cfg:          &Config{Chain: mc, P2P: p, DB: beaconDB},
-		synced:       abool.New(),
-		chainStarted: abool.NewBool(true),
+		synced:       &atomic.Bool{},
+		chainStarted: chainStarted,
 		clock:        clock,
 	}
 	scorer := s.cfg.P2P.Peers().Scorers().BlockProviderScorer()
@@ -699,11 +703,13 @@ func TestService_syncToFinalizedEpoch(t *testing.T) {
 		Genesis:        gt,
 		ValidatorsRoot: vr,
 	}
+	chainStarted := &atomic.Bool{}
+	chainStarted.Store(true)
 	s := &Service{
 		ctx:          t.Context(),
 		cfg:          &Config{Chain: mc, P2P: p, DB: beaconDB},
-		synced:       abool.New(),
-		chainStarted: abool.NewBool(true),
+		synced:       &atomic.Bool{},
+		chainStarted: chainStarted,
 		counter:      ratecounter.NewRateCounter(counterSeconds * time.Second),
 		clock:        clock,
 	}

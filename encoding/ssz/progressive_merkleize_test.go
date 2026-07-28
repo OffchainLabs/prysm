@@ -161,6 +161,7 @@ func TestByteSliceRootProgressive_EmptyReferenceRoot(t *testing.T) {
 	for _, input := range [][]byte{nil, {}} {
 		got, err := ssz.ByteSliceRootProgressive(input)
 		require.NoError(t, err)
+		// taken from remerkleable reference implementation:
 		require.Equal(t, "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b", fmt.Sprintf("%x", got))
 	}
 }
