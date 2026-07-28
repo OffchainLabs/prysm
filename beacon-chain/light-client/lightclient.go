@@ -510,7 +510,7 @@ func ComputeWithdrawalsRoot(payload interfaces.ExecutionData) ([]byte, error) {
 		}
 		var withdrawalsRootArray [32]byte
 		if progressiveExecutionPayloadSSZEnabled(payload) {
-			withdrawalsRootArray, err = ssz.WithdrawalSliceRootProgressive(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+			withdrawalsRootArray, err = ssz.WithdrawalSliceRootProgressive(withdrawals)
 		} else {
 			withdrawalsRootArray, err = ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 		}

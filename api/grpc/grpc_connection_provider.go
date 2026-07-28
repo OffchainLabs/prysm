@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -63,7 +64,7 @@ func NewGrpcConnectionProvider(
 	}
 
 	log.WithFields(logrus.Fields{
-		"endpoints": endpoints,
+		"endpoints": api.RedactEndpoints(endpoints),
 		"count":     len(endpoints),
 	}).Info("Initialized gRPC connection provider")
 
@@ -105,12 +106,12 @@ func (p *grpcConnectionProvider) CurrentConn() *grpc.ClientConn {
 	ep := p.endpoints[p.currentIndex]
 	conn, err := grpc.DialContext(p.ctx, ep, p.dialOpts...)
 	if err != nil {
-		log.WithError(err).WithField("endpoint", ep).Error("Failed to create gRPC connection")
+		log.WithError(err).WithField("endpoint", api.RedactEndpoint(ep)).Error("Failed to create gRPC connection")
 		return nil
 	}
 
 	p.conn = conn
-	log.WithField("endpoint", ep).Debug("Created gRPC connection")
+	log.WithField("endpoint", api.RedactEndpoint(ep)).Debug("Created gRPC connection")
 	return conn
 }
 
@@ -150,14 +151,14 @@ func (p *grpcConnectionProvider) SwitchHost(index int) error {
 	if oldConn != nil {
 		go func() {
 			if err := oldConn.Close(); err != nil {
-				log.WithError(err).WithField("endpoint", oldHost).Debug("Failed to close previous connection")
+				log.WithError(err).WithField("endpoint", api.RedactEndpoint(oldHost)).Debug("Failed to close previous connection")
 			}
 		}()
 	}
 
 	log.WithFields(logrus.Fields{
-		"previousHost": oldHost,
-		"newHost":      p.endpoints[index],
+		"previousHost": api.RedactEndpoint(oldHost),
+		"newHost":      api.RedactEndpoint(p.endpoints[index]),
 	}).Debug("Switched gRPC endpoint")
 	return nil
 }
@@ -179,7 +180,7 @@ func (p *grpcConnectionProvider) Close() {
 
 	if p.conn != nil {
 		if err := p.conn.Close(); err != nil {
-			log.WithError(err).WithField("endpoint", p.endpoints[p.currentIndex]).Debug("Failed to close gRPC connection")
+			log.WithError(err).WithField("endpoint", api.RedactEndpoint(p.endpoints[p.currentIndex])).Debug("Failed to close gRPC connection")
 		}
 		p.conn = nil
 	}

@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package ethereum.eth.v1alpha1;
+
+import "proto/eth/ext/options.proto";
+
+option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
+
+// =============================================================================
+// Gloas Builder-API (ePBS) types
+// =============================================================================
+// Types for the staked Builder-API used by a proposer to request bids from,
+// authenticate to, and submit preferences to an external builder.
+// Reference: https://github.com/ethereum/builder-specs/pull/138
+
+// RequestAuthV1 authenticates a proposer's bid request to a specific builder.
+message RequestAuthV1 {
+  // data carries the builder URL. ByteList[MAX_DATA_SIZE=4096] per the spec, the
+  // list limit feeds the hash tree root, so a different value breaks signature
+  // verification.
+  bytes data = 1 [ (ethereum.eth.ext.ssz_max) = "4096" ];
+  uint64 slot = 2 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+}
+
+message SignedRequestAuthV1 {
+  RequestAuthV1 message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// BuilderPreferencesV1 communicates a proposer's per-builder preferences.
+message BuilderPreferencesV1 {
+  uint64 max_execution_payment = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
+  ];
+}
+
+message BuilderPreferencesRequestV1 {
+  BuilderPreferencesV1 preferences = 1;
+  SignedRequestAuthV1 auth = 2;
+}
+
+// SubmitBuilderPreferencesRequest is the validator-client gRPC request to forward
+// a proposer's builder preferences to the configured builder.
+message SubmitBuilderPreferencesRequest {
+  bytes validator_pubkey = 1;
+  BuilderPreferencesRequestV1 request = 2;
+}

@@ -155,8 +155,6 @@ var Commands = []*cli.Command{
 					flags.BeaconRPCProviderFlag,
 					flags.Web3SignerURLFlag,
 					flags.Web3SignerPublicValidatorKeysFlag,
-					flags.InteropNumValidators,
-					flags.InteropStartIndex,
 					cmd.GrpcMaxCallRecvMsgSizeFlag,
 					flags.CertFlag,
 					flags.GRPCHeadersFlag,

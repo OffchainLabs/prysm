@@ -2,6 +2,7 @@ package ssz
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 
@@ -29,8 +30,7 @@ func MerkleizeProgressiveChunks(chunks [][32]byte) [32]byte {
 	for start < n {
 		width := min(subtreeCapacity, n-start)
 
-		subtree := make([][32]byte, width)
-		copy(subtree, chunks[start:start+width])
+		subtree := chunks[start : start+width : start+width]
 		subtreeRoots = append(subtreeRoots, MerkleizeVector(subtree, uint64(subtreeCapacity)))
 
 		start += width
@@ -90,16 +90,16 @@ func SliceRootProgressive[T Hashable](slice []T) ([32]byte, error) {
 // ByteSliceRootProgressive computes the progressive list root of a byte slice
 // interpreted as ProgressiveByteList (alias of ProgressiveList[byte]).
 func ByteSliceRootProgressive(slice []byte) ([32]byte, error) {
-	var chunks [][32]byte
+	var bytesRoot [32]byte
 	if len(slice) > 0 {
-		var err error
-		chunks, err = PackByChunk([][]byte{slice})
-		if err != nil {
-			return [32]byte{}, err
+		numChunks := (len(slice) + 31) / 32
+		chunks := make([][32]byte, numChunks)
+		for i := range chunks {
+			copy(chunks[i][:], slice[i*BytesPerChunk:])
 		}
+		bytesRoot = MerkleizeProgressiveChunks(chunks)
 	}
 
-	bytesRoot := MerkleizeProgressiveChunks(chunks)
 	var length [32]byte
 	binary.LittleEndian.PutUint64(length[:8], uint64(len(slice)))
 	return MixInLength(bytesRoot, length[:]), nil
@@ -109,7 +109,7 @@ func ByteSliceRootProgressive(slice []byte) ([32]byte, error) {
 // mix_in_active_fields(merkleize_progressive(fieldRoots), activeFields).
 func ContainerRootProgressive(fieldRoots [][32]byte, activeFields []bool) ([32]byte, error) {
 	if len(activeFields) == 0 {
-		return [32]byte{}, fmt.Errorf("active fields cannot be empty")
+		return [32]byte{}, errors.New("active fields cannot be empty")
 	}
 
 	if len(activeFields) > maxProgressiveActiveFields {

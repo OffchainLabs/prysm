@@ -39,6 +39,19 @@ func TestDisplayExitInfo_NoKeys(t *testing.T) {
 	assert.LogsContain(t, logHook, "No successful voluntary exits")
 }
 
+func TestDisplayExitJSONInfo(t *testing.T) {
+	logHook := test.NewGlobal()
+	displayExitJSONInfo([]string{"0x123456"}, "/tmp/exits")
+	assert.LogsContain(t, logHook, "No exits were broadcast to the network")
+	assert.LogsContain(t, logHook, "/tmp/exits")
+}
+
+func TestDisplayExitJSONInfo_NoKeys(t *testing.T) {
+	logHook := test.NewGlobal()
+	displayExitJSONInfo([]string{}, "/tmp/exits")
+	assert.LogsContain(t, logHook, "No signed voluntary exit files were written")
+}
+
 func TestPrepareAllKeys(t *testing.T) {
 	key1 := bytesutil.ToBytes48([]byte("key1"))
 	key2 := bytesutil.ToBytes48([]byte("key2"))

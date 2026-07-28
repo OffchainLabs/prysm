@@ -33,12 +33,13 @@ func (b *BeaconState) SetValidators(val []*ethpb.Validator) error {
 func (b *BeaconState) ApplyToEveryValidator(f func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error)) error {
 	var changedVals []uint64
 	l := b.validatorsMultiValue.Len(b)
+	ro := new(readOnlyValidator)
 	for i := range l {
 		v, err := b.validatorsMultiValue.At(b, uint64(i))
 		if err != nil {
 			return err
 		}
-		ro := NewValidatorFromCompact(v)
+		ro.validator = v
 		newVal, err := f(i, ro)
 		if err != nil {
 			return err

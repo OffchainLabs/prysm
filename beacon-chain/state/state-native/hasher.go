@@ -122,27 +122,15 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 	eth1DepositBuf := bytesutil.ToBytes32(eth1DepositIndexBuf)
 	fieldRoots[types.Eth1DepositIndex.RealPosition()] = eth1DepositBuf[:]
 
-	progressiveSSZ := progressiveSSZEnabled(state.version)
-
 	// Validators slice root.
-	var validatorsRoot [32]byte
-	if progressiveSSZ {
-		validatorsRoot, err = stateutil.ValidatorRegistryRootProgressive(state.validatorsCompactVal())
-	} else {
-		validatorsRoot, err = stateutil.ValidatorRegistryRoot(state.validatorsCompactVal())
-	}
+	validatorsRoot, err := stateutil.ValidatorRegistryRoot(state.version, state.validatorsCompactVal())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute validator registry merkleization")
 	}
 	fieldRoots[types.Validators.RealPosition()] = validatorsRoot[:]
 
 	// Balances slice root.
-	var balancesRoot [32]byte
-	if progressiveSSZ {
-		balancesRoot, err = stateutil.Uint64ListRootProgressive(state.balancesVal())
-	} else {
-		balancesRoot, err = stateutil.Uint64ListRootWithRegistryLimit(state.balancesVal())
-	}
+	balancesRoot, err := stateutil.Uint64ListRoot(state.version, state.balancesVal())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute validator balances merkleization")
 	}
@@ -180,24 +168,14 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 
 	if state.version >= version.Altair {
 		// PreviousEpochParticipation slice root.
-		var prevParticipationRoot [32]byte
-		if progressiveSSZ {
-			prevParticipationRoot, err = stateutil.ParticipationBitsRootProgressive(state.previousEpochParticipation)
-		} else {
-			prevParticipationRoot, err = stateutil.ParticipationBitsRoot(state.previousEpochParticipation)
-		}
+		prevParticipationRoot, err := stateutil.ParticipationBitsRoot(state.version, state.previousEpochParticipation)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute previous epoch participation merkleization")
 		}
 		fieldRoots[types.PreviousEpochParticipationBits.RealPosition()] = prevParticipationRoot[:]
 
 		// CurrentEpochParticipation slice root.
-		var currParticipationRoot [32]byte
-		if progressiveSSZ {
-			currParticipationRoot, err = stateutil.ParticipationBitsRootProgressive(state.currentEpochParticipation)
-		} else {
-			currParticipationRoot, err = stateutil.ParticipationBitsRoot(state.currentEpochParticipation)
-		}
+		currParticipationRoot, err := stateutil.ParticipationBitsRoot(state.version, state.currentEpochParticipation)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute current epoch participation merkleization")
 		}
@@ -231,12 +209,7 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 
 	if state.version >= version.Altair {
 		// Inactivity scores root.
-		var inactivityScoresRoot [32]byte
-		if progressiveSSZ {
-			inactivityScoresRoot, err = stateutil.Uint64ListRootProgressive(state.inactivityScoresVal())
-		} else {
-			inactivityScoresRoot, err = stateutil.Uint64ListRootWithRegistryLimit(state.inactivityScoresVal())
-		}
+		inactivityScoresRoot, err := stateutil.Uint64ListRoot(state.version, state.inactivityScoresVal())
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute inactivityScoreRoot")
 		}
@@ -339,36 +312,21 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		fieldRoots[types.EarliestConsolidationEpoch.RealPosition()] = eceRoot[:]
 
 		// PendingDeposits root.
-		var pbdRoot [32]byte
-		if progressiveSSZ {
-			pbdRoot, err = stateutil.PendingDepositsRootProgressive(state.pendingDeposits)
-		} else {
-			pbdRoot, err = stateutil.PendingDepositsRoot(state.pendingDeposits)
-		}
+		pbdRoot, err := stateutil.PendingDepositsRoot(state.version, state.pendingDeposits)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute pending balance deposits merkleization")
 		}
 		fieldRoots[types.PendingDeposits.RealPosition()] = pbdRoot[:]
 
 		// PendingPartialWithdrawals root.
-		var ppwRoot [32]byte
-		if progressiveSSZ {
-			ppwRoot, err = stateutil.PendingPartialWithdrawalsRootProgressive(state.pendingPartialWithdrawals)
-		} else {
-			ppwRoot, err = stateutil.PendingPartialWithdrawalsRoot(state.pendingPartialWithdrawals)
-		}
+		ppwRoot, err := stateutil.PendingPartialWithdrawalsRoot(state.version, state.pendingPartialWithdrawals)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute pending partial withdrawals merkleization")
 		}
 		fieldRoots[types.PendingPartialWithdrawals.RealPosition()] = ppwRoot[:]
 
 		// PendingConsolidations root.
-		var pcRoot [32]byte
-		if progressiveSSZ {
-			pcRoot, err = stateutil.PendingConsolidationsRootProgressive(state.pendingConsolidations)
-		} else {
-			pcRoot, err = stateutil.PendingConsolidationsRoot(state.pendingConsolidations)
-		}
+		pcRoot, err := stateutil.PendingConsolidationsRoot(state.version, state.pendingConsolidations)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute pending consolidations merkleization")
 		}
@@ -418,7 +376,7 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		lbhRoot := bytesutil.ToBytes32(state.latestBlockHash)
 		fieldRoots[types.LatestBlockHash.RealPosition()] = lbhRoot[:]
 
-		expectedWithdrawalsRoot, err := payloadExpectedWithdrawalsRoot(state)
+		expectedWithdrawalsRoot, err := stateutil.PayloadExpectedWithdrawalsRoot(state.version, state.payloadExpectedWithdrawals)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute payload expected withdrawals root")
 		}
@@ -433,17 +391,6 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		fieldRoots[types.PTCWindow.RealPosition()] = ptcWindowRoot[:]
 	}
 	return fieldRoots, nil
-}
-
-func progressiveSSZEnabled(stateVersion int) bool {
-	return stateVersion >= version.Gloas && features.Get().EnableProgressiveSSZ
-}
-
-func payloadExpectedWithdrawalsRoot(state *BeaconState) ([32]byte, error) {
-	if progressiveSSZEnabled(state.version) {
-		return ssz.WithdrawalSliceRootProgressive(state.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
-	}
-	return ssz.WithdrawalSliceRoot(state.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
 }
 
 func (b *BeaconState) builderPendingWithdrawalsRoot() ([32]byte, error) {

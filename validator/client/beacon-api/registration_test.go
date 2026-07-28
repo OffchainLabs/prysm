@@ -65,7 +65,7 @@ func TestRegistration_Valid(t *testing.T) {
 	marshalledJsonRegistrations, err := json.Marshal(jsonRegistrations)
 	require.NoError(t, err)
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/validator/register_validator",
@@ -140,7 +140,7 @@ func TestRegistration_BadRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/validator/register_validator",

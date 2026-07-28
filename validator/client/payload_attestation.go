@@ -31,16 +31,22 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 		return
 	}
 
-	v.waitUntilSlotComponent(ctx, slot, params.BeaconConfig().PayloadAttestationDueBPS)
+	v.waitForPayloadAvailableOrDeadline(ctx, slot)
 
 	data, err := v.validatorClient.PayloadAttestationData(ctx, slot)
 	if err != nil {
 		if status.Code(errors.Cause(err)) == codes.Unavailable {
-			validatorPayloadAttestationSubmissionTotal.WithLabelValues("skipped_no_block").Inc()
+			validatorPayloadAttestationSubmissionTotal.WithLabelValues("skipped_unavailable").Inc()
 			log.WithFields(logrus.Fields{
 				"slot":   slot,
 				"reason": status.Convert(errors.Cause(err)).Message(),
-			}).Info("Skipping payload attestation: beacon node has no head block for slot")
+			}).Info("Skipping payload attestation: data unavailable")
+			tracing.AnnotateError(span, err)
+			return
+		}
+		if status.Code(errors.Cause(err)) == codes.NotFound {
+			validatorPayloadAttestationSubmissionTotal.WithLabelValues("skipped_no_block").Inc()
+			log.WithField("slot", slot).Info("Skipping payload attestation: no block for slot")
 			tracing.AnnotateError(span, err)
 			return
 		}
@@ -110,5 +116,6 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 		"payloadPresent":     data.PayloadPresent,
 		"blobDataAvailable":  data.BlobDataAvailable,
 		"validatorIndex":     duty.ValidatorIndex,
-	}).Info("Submitted new payload attestation")
+	}).Debug("Submitted new payload attestation")
+	v.saveSubmittedPayloadAtt(data, duty.ValidatorIndex)
 }

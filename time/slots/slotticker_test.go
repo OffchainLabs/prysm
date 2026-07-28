@@ -2,6 +2,7 @@ package slots
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -115,54 +116,62 @@ func TestSlotTickerGenesis(t *testing.T) {
 }
 
 func TestGetSlotTickerWithOffset_OK(t *testing.T) {
-	genesisTime := time.Now()
-	secondsPerSlot := uint64(4)
-	offset := time.Duration(secondsPerSlot/2) * time.Second
+	synctest.Test(t, func(t *testing.T) {
+		genesisTime := time.Now()
+		secondsPerSlot := uint64(4)
+		offset := time.Duration(secondsPerSlot/2) * time.Second
 
-	offsetTicker := NewSlotTickerWithOffset(genesisTime, offset, secondsPerSlot)
-	normalTicker := NewSlotTicker(genesisTime, secondsPerSlot)
+		offsetTicker := NewSlotTickerWithOffset(genesisTime, offset, secondsPerSlot)
+		defer offsetTicker.Done()
+		normalTicker := NewSlotTicker(genesisTime, secondsPerSlot)
+		defer normalTicker.Done()
 
-	firstTicked := 0
-	for {
-		select {
-		case <-offsetTicker.C():
-			if firstTicked != 1 {
-				t.Fatal("Expected other ticker to tick first")
+		firstTicked := 0
+		for {
+			select {
+			case <-offsetTicker.C():
+				if firstTicked != 1 {
+					t.Fatal("Expected other ticker to tick first")
+				}
+				return
+			case <-normalTicker.C():
+				if firstTicked != 0 {
+					t.Fatal("Expected normal ticker to tick first")
+				}
+				firstTicked = 1
 			}
-			return
-		case <-normalTicker.C():
-			if firstTicked != 0 {
-				t.Fatal("Expected normal ticker to tick first")
-			}
-			firstTicked = 1
 		}
-	}
+	})
 }
 
 func TestGetSlotTickerWitIntervals(t *testing.T) {
-	genesisTime := time.Now()
-	offset := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second / 3
-	intervals := []time.Duration{offset, 2 * offset}
+	synctest.Test(t, func(t *testing.T) {
+		genesisTime := time.Now()
+		offset := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second / 3
+		intervals := []time.Duration{offset, 2 * offset}
 
-	intervalTicker := NewSlotTickerWithIntervals(genesisTime, intervals)
-	normalTicker := NewSlotTicker(genesisTime, params.BeaconConfig().SecondsPerSlot)
+		intervalTicker := NewSlotTickerWithIntervals(genesisTime, intervals)
+		defer intervalTicker.Done()
+		normalTicker := NewSlotTicker(genesisTime, params.BeaconConfig().SecondsPerSlot)
+		defer normalTicker.Done()
 
-	firstTicked := 0
-	for {
-		select {
-		case <-intervalTicker.C():
-			// interval ticks starts in second slot
-			if firstTicked < 2 {
-				t.Fatal("Expected other ticker to tick first")
+		firstTicked := 0
+		for {
+			select {
+			case <-intervalTicker.C():
+				// interval ticks starts in second slot
+				if firstTicked < 2 {
+					t.Fatal("Expected other ticker to tick first")
+				}
+				return
+			case <-normalTicker.C():
+				if firstTicked > 1 {
+					t.Fatal("Expected normal ticker to tick first")
+				}
+				firstTicked++
 			}
-			return
-		case <-normalTicker.C():
-			if firstTicked > 1 {
-				t.Fatal("Expected normal ticker to tick first")
-			}
-			firstTicked++
 		}
-	}
+	})
 }
 
 func TestSlotTickerWithIntervalsInputValidation(t *testing.T) {

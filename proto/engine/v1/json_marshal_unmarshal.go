@@ -360,20 +360,17 @@ type GetPayloadV6ResponseJson struct {
 	ExecutionRequests     []hexutil.Bytes            `json:"executionRequests"`
 }
 
+// ExecutionPayloadBodyV1 represents the engine API ExecutionPayloadV1 type.
+type ExecutionPayloadBodyV1 struct {
+	Transactions []hexutil.Bytes `json:"transactions"`
+	Withdrawals  []*Withdrawal   `json:"withdrawals"`
+}
+
 // ExecutionPayloadBodyV2 represents the engine API ExecutionPayloadBodyV2 type (Amsterdam).
 type ExecutionPayloadBodyV2 struct {
 	Transactions    []hexutil.Bytes `json:"transactions"`
 	Withdrawals     []*Withdrawal   `json:"withdrawals"`
 	BlockAccessList *hexutil.Bytes  `json:"blockAccessList"`
-}
-
-// ExecutionPayloadBody represents the engine API ExecutionPayloadV1 or ExecutionPayloadV2 type.
-type ExecutionPayloadBody struct {
-	Transactions          []hexutil.Bytes          `json:"transactions"`
-	Withdrawals           []*Withdrawal            `json:"withdrawals"`
-	WithdrawalRequests    []WithdrawalRequestV1    `json:"withdrawalRequests"`
-	DepositRequests       []DepositRequestV1       `json:"depositRequests"`
-	ConsolidationRequests []ConsolidationRequestV1 `json:"consolidationRequests"`
 }
 
 type ExecutionPayloadDenebJSON struct {
@@ -394,85 +391,6 @@ type ExecutionPayloadDenebJSON struct {
 	BlockHash     *common.Hash    `json:"blockHash"`
 	Transactions  []hexutil.Bytes `json:"transactions"`
 	Withdrawals   []*Withdrawal   `json:"withdrawals"`
-}
-
-// WithdrawalRequestV1 represents an execution engine WithdrawalRequestV1 value
-// https://github.com/ethereum/execution-apis/blob/main/src/engine/prague.md#withdrawalrequestv1
-type WithdrawalRequestV1 struct {
-	SourceAddress   *common.Address `json:"sourceAddress"`
-	ValidatorPubkey *BlsPubkey      `json:"validatorPubkey"`
-	Amount          *hexutil.Uint64 `json:"amount"`
-}
-
-func (r WithdrawalRequestV1) Validate() error {
-	if r.SourceAddress == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'sourceAddress' for WithdrawalRequestV1")
-	}
-	if r.ValidatorPubkey == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'validatorPubkey' for WithdrawalRequestV1")
-	}
-	if r.Amount == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'amount' for WithdrawalRequestV1")
-	}
-	return nil
-}
-
-// DepositRequestV1 represents an execution engine DepositRequestV1 value
-// https://github.com/ethereum/execution-apis/blob/main/src/engine/prague.md#depositrequestv1
-type DepositRequestV1 struct {
-	// pubkey: DATA, 48 Bytes
-	PubKey *BlsPubkey `json:"pubkey"`
-	// withdrawalCredentials: DATA, 32 Bytes
-	WithdrawalCredentials *common.Hash `json:"withdrawalCredentials"`
-	// amount: QUANTITY, 64 Bits
-	Amount *hexutil.Uint64 `json:"amount"`
-	// signature: DATA, 96 Bytes
-	Signature *BlsSig `json:"signature"`
-	// index: QUANTITY, 64 Bits
-	Index *hexutil.Uint64 `json:"index"`
-}
-
-func (r DepositRequestV1) Validate() error {
-	if r.PubKey == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'pubkey' for DepositRequestV1")
-	}
-	if r.WithdrawalCredentials == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'withdrawalCredentials' for DepositRequestV1")
-	}
-	if r.Amount == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'amount' for DepositRequestV1")
-	}
-	if r.Signature == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'signature' for DepositRequestV1")
-	}
-	if r.Index == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'index' for DepositRequestV1")
-	}
-	return nil
-}
-
-// ConsolidationRequestV1 represents an execution engine ConsolidationRequestV1 value
-// https://github.com/ethereum/execution-apis/blob/main/src/engine/prague.md#consolidationrequestv1
-type ConsolidationRequestV1 struct {
-	// sourceAddress: DATA, 20 Bytes
-	SourceAddress *common.Address `json:"sourceAddress"`
-	// sourcePubkey: DATA, 48 Bytes
-	SourcePubkey *BlsPubkey `json:"sourcePubkey"`
-	// targetPubkey: DATA, 48 Bytes
-	TargetPubkey *BlsPubkey `json:"targetPubkey"`
-}
-
-func (r ConsolidationRequestV1) Validate() error {
-	if r.SourceAddress == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'sourceAddress' for ConsolidationRequestV1")
-	}
-	if r.SourcePubkey == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'sourcePubkey' for ConsolidationRequestV1")
-	}
-	if r.TargetPubkey == nil {
-		return errors.Wrap(errJsonNilField, "missing required field 'targetPubkey' for ConsolidationRequestV1")
-	}
-	return nil
 }
 
 // MarshalJSON --
@@ -1011,119 +929,6 @@ func (e *ExecutionPayloadDeneb) MarshalJSON() ([]byte, error) {
 		BlobGasUsed:   &blobGasUsed,
 		ExcessBlobGas: &excessBlobGas,
 	})
-}
-
-func JsonDepositRequestsToProto(j []DepositRequestV1) ([]*DepositRequest, error) {
-	reqs := make([]*DepositRequest, len(j))
-
-	for i := range j {
-		req := j[i]
-		if err := req.Validate(); err != nil {
-			return nil, err
-		}
-		reqs[i] = &DepositRequest{
-			Pubkey:                req.PubKey.Bytes(),
-			WithdrawalCredentials: req.WithdrawalCredentials.Bytes(),
-			Amount:                uint64(*req.Amount),
-			Signature:             req.Signature.Bytes(),
-			Index:                 uint64(*req.Index),
-		}
-	}
-
-	return reqs, nil
-}
-
-func ProtoDepositRequestsToJson(reqs []*DepositRequest) []DepositRequestV1 {
-	j := make([]DepositRequestV1, len(reqs))
-	for i := range reqs {
-		r := reqs[i]
-		pk := BlsPubkey{}
-		copy(pk[:], r.Pubkey)
-		creds := common.BytesToHash(r.WithdrawalCredentials)
-		amt := hexutil.Uint64(r.Amount)
-		sig := BlsSig{}
-		copy(sig[:], r.Signature)
-		idx := hexutil.Uint64(r.Index)
-		j[i] = DepositRequestV1{
-			PubKey:                &pk,
-			WithdrawalCredentials: &creds,
-			Amount:                &amt,
-			Signature:             &sig,
-			Index:                 &idx,
-		}
-	}
-	return j
-}
-
-func JsonWithdrawalRequestsToProto(j []WithdrawalRequestV1) ([]*WithdrawalRequest, error) {
-	reqs := make([]*WithdrawalRequest, len(j))
-
-	for i := range j {
-		req := j[i]
-		if err := req.Validate(); err != nil {
-			return nil, err
-		}
-		reqs[i] = &WithdrawalRequest{
-			SourceAddress:   req.SourceAddress.Bytes(),
-			ValidatorPubkey: req.ValidatorPubkey.Bytes(),
-			Amount:          uint64(*req.Amount),
-		}
-	}
-
-	return reqs, nil
-}
-
-func ProtoWithdrawalRequestsToJson(reqs []*WithdrawalRequest) []WithdrawalRequestV1 {
-	j := make([]WithdrawalRequestV1, len(reqs))
-	for i := range reqs {
-		r := reqs[i]
-		pk := BlsPubkey{}
-		amt := hexutil.Uint64(r.Amount)
-		copy(pk[:], r.ValidatorPubkey)
-		address := common.BytesToAddress(r.SourceAddress)
-		j[i] = WithdrawalRequestV1{
-			SourceAddress:   &address,
-			ValidatorPubkey: &pk,
-			Amount:          &amt,
-		}
-	}
-	return j
-}
-
-func JsonConsolidationRequestsToProto(j []ConsolidationRequestV1) ([]*ConsolidationRequest, error) {
-	reqs := make([]*ConsolidationRequest, len(j))
-
-	for i := range j {
-		req := j[i]
-		if err := req.Validate(); err != nil {
-			return nil, err
-		}
-		reqs[i] = &ConsolidationRequest{
-			SourceAddress: req.SourceAddress.Bytes(),
-			SourcePubkey:  req.SourcePubkey.Bytes(),
-			TargetPubkey:  req.TargetPubkey.Bytes(),
-		}
-	}
-
-	return reqs, nil
-}
-
-func ProtoConsolidationRequestsToJson(reqs []*ConsolidationRequest) []ConsolidationRequestV1 {
-	j := make([]ConsolidationRequestV1, len(reqs))
-	for i := range reqs {
-		r := reqs[i]
-		spk := BlsPubkey{}
-		copy(spk[:], r.SourcePubkey)
-		tpk := BlsPubkey{}
-		copy(tpk[:], r.TargetPubkey)
-		address := common.BytesToAddress(r.SourceAddress)
-		j[i] = ConsolidationRequestV1{
-			SourceAddress: &address,
-			SourcePubkey:  &spk,
-			TargetPubkey:  &tpk,
-		}
-	}
-	return j
 }
 
 func (e *ExecutionPayloadDenebWithValueAndBlobsBundle) UnmarshalJSON(enc []byte) error {

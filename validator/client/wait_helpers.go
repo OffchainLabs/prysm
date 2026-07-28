@@ -46,6 +46,33 @@ func (v *validator) waitUntilSlotComponent(ctx context.Context, slot primitives.
 	}
 }
 
+// waitForPayloadAvailableOrDeadline blocks until the execution_payload_available
+// event for slot is received or the payload attestation deadline is reached,
+// whichever comes first.
+func (v *validator) waitForPayloadAvailableOrDeadline(ctx context.Context, slot primitives.Slot) {
+	ctx, span := trace.StartSpan(ctx, "validator.waitForPayloadAvailableOrDeadline")
+	defer span.End()
+
+	deadline, err := v.slotComponentDeadline(slot, params.BeaconConfig().PayloadAttestationDueBPS)
+	if err != nil {
+		log.WithError(err).WithField("slot", slot).Error("Slot overflows, unable to wait for payload attestation deadline")
+		return
+	}
+	available := v.payloadAvailability.waiter(slot)
+	wait := prysmTime.Until(deadline)
+	if wait <= 0 {
+		return
+	}
+	t := time.NewTimer(wait)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		tracing.AnnotateError(span, ctx.Err())
+	case <-available:
+	case <-t.C:
+	}
+}
+
 func (v *validator) slotComponentSpanName(component primitives.BP) string {
 	cfg := params.BeaconConfig()
 	switch component {

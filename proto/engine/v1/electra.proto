@@ -60,7 +60,7 @@ message ConsolidationRequest {
 }
 
 // ExecutionRequests is a container that contains all the requests from the
-// execution layer to be included in a block
+// execution layer to be included in a block (Electra/Fulu).
 message ExecutionRequests {
   repeated DepositRequest deposits = 1
       [ (ethereum.eth.ext.ssz_max) = "max_deposit_requests_per_payload.size" ];
