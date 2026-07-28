@@ -922,6 +922,119 @@ func TestProcessPendingAttsQueue(t *testing.T) {
 			assert.Equal(t, 1, len(s.pendingAtts.pending[r1]), "Pending att should survive unrelated import")
 		})
 	})
+
+	t.Run("import before att does not strand", func(t *testing.T) {
+		db := dbtest.SetupDB(t)
+		synctest.Test(t, func(t *testing.T) {
+			block := util.NewBeaconBlock()
+			util.SaveBlock(t, t.Context(), db, block)
+			root, err := block.Block.HashTreeRoot()
+			require.NoError(t, err)
+			state, err := util.NewBeaconState()
+			require.NoError(t, err)
+			require.NoError(t, db.SaveState(t.Context(), state, root))
+
+			chain := &mock.ChainService{
+				Genesis:             prysmTime.Now(),
+				FinalizedCheckPoint: &ethpb.Checkpoint{},
+				ForkchoiceRoots:     map[[32]byte]bool{root: true},
+				DB:                  db,
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			s := &Service{
+				ctx:         ctx,
+				cfg:         &config{beaconDB: db, chain: chain, clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot)},
+				pendingAtts: newPendingAttsQueue(),
+			}
+			go s.processPendingAttsQueue()
+
+			// Model the consumer handling the imported root before its pending attestation.
+			s.pendingAtts.blockImported(root)
+			synctest.Wait()
+			s.pendingAtts.queueAtt(&ethpb.Attestation{Data: util.HydrateAttestationData(&ethpb.AttestationData{BeaconBlockRoot: root[:]})})
+			synctest.Wait()
+
+			assert.Equal(t, 0, len(s.pendingAtts.pending[root]), "Known-root attestation was stranded after its import event")
+		})
+	})
+
+	t.Run("drain saves all buffered", func(t *testing.T) {
+		hook := logTest.NewGlobal()
+		db := dbtest.SetupDB(t)
+		synctest.Test(t, func(t *testing.T) {
+			chain := &mock.ChainService{Genesis: prysmTime.Now(), FinalizedCheckPoint: &ethpb.Checkpoint{}}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			s := &Service{
+				ctx:         ctx,
+				cfg:         &config{beaconDB: db, chain: chain, clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot)},
+				pendingAtts: newPendingAttsQueue(),
+			}
+
+			rA, rB := [32]byte{'A'}, [32]byte{'B'}
+			// Buffer several items before the consumer starts so a single wakeup drains them all.
+			s.pendingAtts.queueAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, BeaconBlockRoot: rA[:]}})
+			s.pendingAtts.queueAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 2, BeaconBlockRoot: rA[:]}})
+			s.pendingAtts.queueAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, BeaconBlockRoot: rB[:]}})
+
+			go s.processPendingAttsQueue()
+			synctest.Wait()
+
+			assert.Equal(t, 2, len(s.pendingAtts.pending[rA]), "Did not save all buffered atts for root A")
+			assert.Equal(t, 1, len(s.pendingAtts.pending[rB]), "Did not save all buffered atts for root B")
+
+			// One processing attempt per distinct root proves the batch drain;
+			// a per-attestation loop would log three failures instead of two.
+			attempts := 0
+			for _, e := range hook.AllEntries() {
+				if e.Message == "Could not process pending attestations for block" {
+					attempts++
+				}
+			}
+			assert.Equal(t, 2, attempts, "Expected one processing attempt per distinct root")
+		})
+	})
+
+	t.Run("import event drains saved att", func(t *testing.T) {
+		db := dbtest.SetupDB(t)
+		synctest.Test(t, func(t *testing.T) {
+			block := util.NewBeaconBlock()
+			root, err := block.Block.HashTreeRoot()
+			require.NoError(t, err)
+
+			chain := &mock.ChainService{
+				Genesis:             prysmTime.Now(),
+				FinalizedCheckPoint: &ethpb.Checkpoint{},
+				ForkchoiceRoots:     map[[32]byte]bool{},
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			s := &Service{
+				ctx:         ctx,
+				cfg:         &config{beaconDB: db, chain: chain, clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot)},
+				pendingAtts: newPendingAttsQueue(),
+			}
+			go s.processPendingAttsQueue()
+
+			// The root is unknown, so the incoming branch saves the attestation but cannot drain it.
+			s.pendingAtts.queueAtt(&ethpb.Attestation{Data: util.HydrateAttestationData(&ethpb.AttestationData{BeaconBlockRoot: root[:]})})
+			synctest.Wait()
+			require.Equal(t, 1, len(s.pendingAtts.pending[root]), "Attestation for unknown root was not saved")
+
+			// Import the block: the consumer is durably blocked, so these writes are ordered before the wakeup.
+			util.SaveBlock(t, t.Context(), db, block)
+			state, err := util.NewBeaconState()
+			require.NoError(t, err)
+			require.NoError(t, db.SaveState(t.Context(), state, root))
+			chain.ForkchoiceRoots[root] = true
+
+			// Only the imported branch can drain now; the incoming branch already ran and failed above.
+			s.pendingAtts.blockImported(root)
+			synctest.Wait()
+			assert.Equal(t, 0, len(s.pendingAtts.pending), "Import event did not drain the saved attestation")
+		})
+	})
 }
 
 func TestPendingAttsQueue_ProducersNeverBlock(t *testing.T) {

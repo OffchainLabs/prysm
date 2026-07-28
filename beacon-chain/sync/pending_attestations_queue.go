@@ -103,6 +103,25 @@ func (q *pendingAttsQueue) blockImported(root [32]byte) {
 	}
 }
 
+// saveItem saves an incoming attestation or aggregate into the pending map and
+// records the block root it is waiting on.
+func (q *pendingAttsQueue) saveItem(item any, roots map[[32]byte]struct{}) {
+	switch v := item.(type) {
+	case ethpb.Att:
+		q.saveAtt(v)
+
+		root := bytesutil.ToBytes32(v.GetData().BeaconBlockRoot)
+		roots[root] = struct{}{}
+	case ethpb.SignedAggregateAttAndProof:
+		q.saveAggregate(v)
+
+		root := bytesutil.ToBytes32(v.AggregateAttestationAndProof().AggregateVal().GetData().BeaconBlockRoot)
+		roots[root] = struct{}{}
+	default:
+		log.Warnf("Unexpected pending attestation type %T", v)
+	}
+}
+
 // This defines how pending aggregates are saved in the map. The key is the
 // root of the missing block. The value is the list of pending attestations/aggregates
 // that voted for that block root. The caller of this function is responsible
@@ -209,13 +228,18 @@ func (s *Service) processPendingAttsQueue() {
 	for {
 		select {
 		case item := <-q.incoming:
-			switch v := item.(type) {
-			case ethpb.Att:
-				q.saveAtt(v)
-			case ethpb.SignedAggregateAttAndProof:
-				q.saveAggregate(v)
-			default:
-				log.Warnf("Unexpected pending attestation type %T", v)
+			roots := make(map[[32]byte]struct{})
+			q.saveItem(item, roots)
+			// Drain what's already buffered so a flood of attestations is processed
+			// once per root instead of once per attestation.
+			for n := len(q.incoming); n > 0; n-- {
+				q.saveItem(<-q.incoming, roots)
+			}
+
+			for root := range roots {
+				if err := s.processPendingAttsForBlock(s.ctx, root); err != nil {
+					log.WithError(err).Debug("Could not process pending attestations for block")
+				}
 			}
 		case root := <-q.imported:
 			if err := s.processPendingAttsForBlock(s.ctx, root); err != nil {
