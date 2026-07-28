@@ -342,7 +342,7 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 	}
 
 	if state.version >= version.Gloas {
-		buildersRoot, err := state.buildersRoot()
+		buildersRoot, err := stateutil.BuildersRoot(state.version, state.builders)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute builders merkleization")
 		}

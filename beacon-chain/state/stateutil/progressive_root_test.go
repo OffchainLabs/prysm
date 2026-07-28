@@ -81,6 +81,9 @@ func TestParticipationBitsRootProgressive(t *testing.T) {
 }
 
 func TestBuildersRootProgressive(t *testing.T) {
+	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	defer reset()
+
 	builders := []*ethpb.Builder{{
 		Pubkey:           make([]byte, fieldparams.BLSPubkeyLength),
 		Version:          []byte{1},
@@ -89,7 +92,7 @@ func TestBuildersRootProgressive(t *testing.T) {
 		DepositEpoch:     3,
 	}}
 
-	got, err := stateutil.BuildersRootProgressive(builders)
+	got, err := stateutil.BuildersRoot(version.Gloas, builders)
 	require.NoError(t, err)
 
 	expected, err := ssz.SliceRootProgressive(builders)
