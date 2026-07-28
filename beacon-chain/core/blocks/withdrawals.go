@@ -158,7 +158,6 @@ func ProcessWithdrawals(st state.BeaconState, executionData interfaces.Execution
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get expected withdrawals")
 	}
-	progressiveSSZ := st.Version() >= version.Gloas && features.Get().EnableProgressiveSSZ
 
 	var wdRoot [32]byte
 	if executionData.IsBlinded() {
