@@ -96,7 +96,7 @@ func TestFromAttData(t *testing.T) {
 	require.NoError(t, key2.FromAttData(att2.Data))
 	assert.NotEqual(t, key, key2, "distinct att data must produce distinct keys")
 }
-  
+
 func TestLogSubmittedSyncCommitteeMessages(t *testing.T) {
 	logHook := logTest.NewGlobal()
 	v := validator{}

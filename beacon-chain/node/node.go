@@ -97,6 +97,7 @@ type BeaconNode struct {
 	db                        db.Database
 	slasherDB                 db.SlasherDatabase
 	attestationCache          *cache.AttestationCache
+	attestationDataCache      *cache.AttestationDataCache
 	attestationPool           attestations.Pool
 	payloadAttestationPool    payloadattestation.PoolManager
 	exitPool                  voluntaryexits.PoolManager
@@ -163,6 +164,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		blockFeed:                 new(event.Feed),
 		opFeed:                    new(event.Feed),
 		attestationCache:          cache.NewAttestationCache(),
+		attestationDataCache:      cache.NewAttestationDataCache(),
 		attestationPool:           attestations.NewPool(),
 		payloadAttestationPool:    payloadattestation.NewPool(),
 		exitPool:                  voluntaryexits.NewPool(),
@@ -761,6 +763,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithChainStartFetcher(web3Service),
 		blockchain.WithExecutionEngineCaller(web3Service),
 		blockchain.WithAttestationCache(b.attestationCache),
+		blockchain.WithAttestationDataCache(b.attestationDataCache),
 		blockchain.WithAttestationPool(b.attestationPool),
 		blockchain.WithExitPool(b.exitPool),
 		blockchain.WithSlashingPool(b.slashingsPool),
@@ -1013,6 +1016,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		GenesisFetcher:                   chainService,
 		OptimisticModeFetcher:            chainService,
 		AttestationCache:                 b.attestationCache,
+		AttestationDataCache:             b.attestationDataCache,
 		AttestationsPool:                 b.attestationPool,
 		PayloadAttestationPool:           b.payloadAttestationPool,
 		ExitPool:                         b.exitPool,

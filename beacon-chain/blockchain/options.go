@@ -114,6 +114,14 @@ func WithAttestationCache(c *cache.AttestationCache) Option {
 	}
 }
 
+// WithAttestationDataCache for attestation data cache.
+func WithAttestationDataCache(c *cache.AttestationDataCache) Option {
+	return func(s *Service) error {
+		s.cfg.AttestationDataCache = c
+		return nil
+	}
+}
+
 // WithAttestationPool for attestation lifecycle after chain inclusion.
 func WithAttestationPool(p attestations.Pool) Option {
 	return func(s *Service) error {

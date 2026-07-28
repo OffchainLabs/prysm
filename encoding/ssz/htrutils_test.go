@@ -4,11 +4,13 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
@@ -157,6 +159,59 @@ func TestTransactionsRoot(t *testing.T) {
 	}
 }
 
+func TestTransactionsRootProgressive(t *testing.T) {
+	tests := []struct {
+		name string
+		txs  [][]byte
+	}{
+		{
+			name: "nil",
+			txs:  nil,
+		},
+		{
+			name: "empty",
+			txs:  [][]byte{},
+		},
+		{
+			name: "one empty transaction",
+			txs:  [][]byte{{}},
+		},
+		{
+			name: "one transaction",
+			txs:  [][]byte{{0x01, 0x02, 0x03}},
+		},
+		{
+			name: "multiple transactions",
+			txs: [][]byte{
+				{0x01},
+				{},
+				make([]byte, fieldparams.RootLength+1),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ssz.TransactionsRootProgressive(tt.txs)
+			require.NoError(t, err)
+
+			transactions := make([]ssz.Transaction, len(tt.txs))
+			for i, tx := range tt.txs {
+				transactions[i] = ssz.Transaction{
+					Data:        tx,
+					Progressive: true,
+				}
+			}
+			want, err := ssz.SliceRootProgressive(transactions)
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, want, got)
+
+			legacy, err := ssz.TransactionsRoot(tt.txs)
+			require.NoError(t, err)
+			require.DeepNotSSZEqual(t, legacy, got)
+		})
+	}
+}
+
 func TestByteSliceRoot(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -283,7 +338,7 @@ func TestWithdrawalRoot(t *testing.T) {
 	}
 }
 
-func TestWithrawalSliceRoot(t *testing.T) {
+func TestWithdrawalSliceRoot(t *testing.T) {
 	tests := []struct {
 		name  string
 		input []*enginev1.Withdrawal
@@ -313,6 +368,105 @@ func TestWithrawalSliceRoot(t *testing.T) {
 			require.DeepSSZEqual(t, tt.want, got)
 		})
 	}
+}
+
+func TestWithdrawalSliceRoot_ProgressiveSSZGate(t *testing.T) {
+	emptyWithdrawal := &enginev1.Withdrawal{
+		Address: make([]byte, fieldparams.FeeRecipientLength),
+	}
+	withdrawal := &enginev1.Withdrawal{
+		Index:          123,
+		ValidatorIndex: 123123,
+		Address:        []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0},
+		Amount:         50,
+	}
+	anotherWithdrawal := &enginev1.Withdrawal{
+		Index:          124,
+		ValidatorIndex: 123124,
+		Address:        []byte{2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1},
+		Amount:         51,
+	}
+	tests := []struct {
+		name        string
+		withdrawals []*enginev1.Withdrawal
+	}{
+		{
+			name:        "nil",
+			withdrawals: nil,
+		},
+		{
+			name:        "empty",
+			withdrawals: []*enginev1.Withdrawal{},
+		},
+		{
+			name:        "one empty withdrawal",
+			withdrawals: []*enginev1.Withdrawal{emptyWithdrawal},
+		},
+		{
+			name:        "one withdrawal",
+			withdrawals: []*enginev1.Withdrawal{withdrawal},
+		},
+		{
+			name:        "multiple withdrawals",
+			withdrawals: []*enginev1.Withdrawal{withdrawal, emptyWithdrawal, anotherWithdrawal},
+		},
+	}
+	gates := []struct {
+		name         string
+		flags        features.Flags
+		stateVersion int
+		progressive  bool
+	}{
+		{
+			name:         "feature disabled",
+			stateVersion: version.Gloas,
+		},
+		{
+			name:         "pre-Gloas",
+			flags:        features.Flags{EnableProgressiveSSZ: true},
+			stateVersion: version.Fulu,
+		},
+		{
+			name:         "Gloas",
+			flags:        features.Flags{EnableProgressiveSSZ: true},
+			stateVersion: version.Gloas,
+			progressive:  true,
+		},
+	}
+	for _, gate := range gates {
+		t.Run(gate.name, func(t *testing.T) {
+			reset := features.InitWithReset(&gate.flags)
+			defer reset()
+
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					var got [32]byte
+					var err error
+					if gate.progressive {
+						got, err = ssz.WithdrawalSliceRootProgressive(tt.withdrawals)
+						require.NoError(t, err)
+					} else {
+						got, err = ssz.WithdrawalSliceRoot(tt.withdrawals, 16)
+						require.NoError(t, err)
+					}
+
+					var want [32]byte
+					if gate.progressive {
+						want, err = ssz.SliceRootProgressive(tt.withdrawals)
+					} else {
+						want, err = ssz.SliceRoot(tt.withdrawals, 16)
+					}
+					require.NoError(t, err)
+					require.DeepSSZEqual(t, want, got)
+				})
+			}
+		})
+	}
+
+	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	defer reset()
+	_, err := ssz.WithdrawalSliceRoot([]*enginev1.Withdrawal{withdrawal}, 0)
+	require.ErrorContains(t, "slice exceeds max length", err)
 }
 
 func TestDepositRequestsSliceRoot(t *testing.T) {

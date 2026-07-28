@@ -123,7 +123,7 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	}
 	// [IGNORE] bid.parent_block_hash is the block hash of a known execution payload in fork choice
 	// and bid.gas_limit is compatible with parent_gas_limit and the proposer's target.
-	if err := v.VerifyParentBlockHash(s.cfg.chain.BlockHash); err != nil {
+	if err := v.VerifyParentBlockHash(s.cfg.chain.HasPayloadBlockHash); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
 	parentGasLimit, err := s.cfg.chain.GasLimit(parentBlockRoot)

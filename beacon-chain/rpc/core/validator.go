@@ -939,7 +939,7 @@ func (s *Service) PayloadAttestationData(
 	ctx context.Context,
 	slot primitives.Slot,
 ) (*ethpb.PayloadAttestationData, *RpcError) {
-	_, span := trace.StartSpan(ctx, "coreService.PayloadAttestationData")
+	ctx, span := trace.StartSpan(ctx, "coreService.PayloadAttestationData")
 	defer span.End()
 
 	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
@@ -965,7 +965,7 @@ func (s *Service) PayloadAttestationData(
 		if cached := s.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
 			return cached, nil
 		}
-		data, rpcErr := s.buildPayloadAttestationData(slot)
+		data, rpcErr := s.buildPayloadAttestationData(ctx, slot)
 		if rpcErr != nil {
 			return rpcErr, nil
 		}
@@ -1012,7 +1012,7 @@ func (s *Service) hasCanonicalShuffling(root [32]byte, slot primitives.Slot) boo
 
 // buildPayloadAttestationData builds a payload attestation message for the validator to sign. It attempts first
 // to build from the highest received slot but only if it is compatible with the head view.
-func (s *Service) buildPayloadAttestationData(slot primitives.Slot) (*ethpb.PayloadAttestationData, *RpcError) {
+func (s *Service) buildPayloadAttestationData(ctx context.Context, slot primitives.Slot) (*ethpb.PayloadAttestationData, *RpcError) {
 	highestReceivedSlot := s.ForkchoiceFetcher.HighestReceivedBlockSlot()
 	if highestReceivedSlot != slot {
 		return nil, &RpcError{Reason: NoContent, Err: fmt.Errorf("no block found at slot=%d", slot)}
@@ -1024,11 +1024,15 @@ func (s *Service) buildPayloadAttestationData(slot primitives.Slot) (*ethpb.Payl
 	if !s.hasCanonicalShuffling(root, slot) {
 		return nil, &RpcError{Reason: Unavailable, Err: fmt.Errorf("no canonical shuffling block for slot %d", slot)}
 	}
-	payloadEarly, _ := s.ForkchoiceFetcher.PayloadEarly(root)
+	available, err := s.ChainInfoFetcher.DataAvailable(ctx, root, slot)
+	if err != nil {
+		return nil, &RpcError{Reason: Internal, Err: fmt.Errorf("could not check data availability for block root %#x: %w", root, err)}
+	}
+	payloadEarly, _ := s.ChainInfoFetcher.PayloadEarly(root)
 	return &ethpb.PayloadAttestationData{
 		BeaconBlockRoot:   root[:],
 		Slot:              slot,
 		PayloadPresent:    payloadEarly,
-		BlobDataAvailable: s.ForkchoiceFetcher.HasFullNode(root),
+		BlobDataAvailable: available,
 	}, nil
 }
