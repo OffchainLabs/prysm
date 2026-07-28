@@ -192,6 +192,10 @@ func TestGetSpec(t *testing.T) {
 	config.ChurnLimitQuotientGloas = 107
 	config.ConsolidationChurnLimitQuotient = 108
 	config.MaxPerEpochActivationChurnLimitGloas = 109
+	config.SaturationBalance = 220
+	config.TransitionBaseRewardFactor = 221
+	config.TransitionStartEpoch = 222
+	config.TransitionDurationEpochs = 223
 
 	var dbp [4]byte
 	copy(dbp[:], []byte{'0', '0', '0', '1'})
@@ -244,7 +248,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 211, len(data))
+	assert.Equal(t, 215, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -336,6 +340,14 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "113", v)
 			case "MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD":
 				assert.Equal(t, "114", v)
+			case "SATURATION_BALANCE":
+				assert.Equal(t, "220", v)
+			case "TRANSITION_BASE_REWARD_FACTOR":
+				assert.Equal(t, "221", v)
+			case "TRANSITION_START_EPOCH":
+				assert.Equal(t, "222", v)
+			case "TRANSITION_DURATION_EPOCHS":
+				assert.Equal(t, "223", v)
 			case "MIN_ANCHOR_POW_BLOCK_DIFFICULTY":
 				assert.Equal(t, "1000", v)
 			case "BLS_WITHDRAWAL_PREFIX":

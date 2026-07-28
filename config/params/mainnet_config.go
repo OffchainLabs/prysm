@@ -360,6 +360,12 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	MaxBuilderDepositRequestsPerPayload:  256, // 2**8 (= 256)
 	MaxBuilderExitRequestsPerPayload:     16,  // 2**4 (= 16)
 
+	// Values related to the tapered issuance burn
+	SaturationBalance:          60_250_000 * 1_000_000_000,
+	TransitionBaseRewardFactor: 128,
+	TransitionStartEpoch:       math.MaxUint64,
+	TransitionDurationEpochs:   123_300,
+
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB
 	AttestationSubnetCount:          64,

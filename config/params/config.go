@@ -321,6 +321,12 @@ type BeaconChainConfig struct {
 	MaxBuilderDepositRequestsPerPayload  uint64 `yaml:"MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD" spec:"true"`   // MaxBuilderDepositRequestsPerPayload is the maximum number of builder deposit requests in each payload (EIP-8282).
 	MaxBuilderExitRequestsPerPayload     uint64 `yaml:"MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD" spec:"true"`      // MaxBuilderExitRequestsPerPayload is the maximum number of builder exit requests in each payload (EIP-8282).
 
+	// Values introduced by the tapered issuance burn draft EIP
+	SaturationBalance          uint64           `yaml:"SATURATION_BALANCE" spec:"true"`            // SaturationBalance is the total active balance at which the issuance burn fraction reaches 100%.
+	TransitionBaseRewardFactor uint64           `yaml:"TRANSITION_BASE_REWARD_FACTOR" spec:"true"` // TransitionBaseRewardFactor is the effective base reward factor at the start of the issuance burn transition.
+	TransitionStartEpoch       primitives.Epoch `yaml:"TRANSITION_START_EPOCH" spec:"true"`        // TransitionStartEpoch is the activation epoch of the tapered issuance burn, far future epoch disables it.
+	TransitionDurationEpochs   primitives.Epoch `yaml:"TRANSITION_DURATION_EPOCHS" spec:"true"`    // TransitionDurationEpochs is the length of the linear decay back to BaseRewardFactor.
+
 	// Networking Specific Parameters
 	MaxPayloadSize                  uint64          `yaml:"MAX_PAYLOAD_SIZE" spec:"true"`                   // MAX_PAYLOAD_SIZE is the maximum allowed size of uncompressed payload in gossip messages and rpc chunks.
 	AttestationSubnetCount          uint64          `yaml:"ATTESTATION_SUBNET_COUNT" spec:"true"`           // AttestationSubnetCount is the number of attestation subnets used in the gossipsub protocol.

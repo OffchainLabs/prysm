@@ -186,7 +186,7 @@ func Test_BaseRewardPerIncrement(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := altair.BaseRewardPerIncrement(tt.activeBalance)
+			got, err := altair.BaseRewardPerIncrement(tt.activeBalance, 0)
 			if (err != nil) && (tt.errString != "") {
 				require.ErrorContains(t, tt.errString, err)
 				return
