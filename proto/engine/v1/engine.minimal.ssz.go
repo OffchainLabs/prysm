@@ -4340,8 +4340,8 @@ func (e *ExecutionRequestsGloas) MarshalSSZTo(buf []byte) (dst []byte, err error
 	}
 
 	// Field (3) 'BuilderDeposits'
-	if size := len(e.BuilderDeposits); size > 256 {
-		err = ssz.ErrListTooBigFn("--.BuilderDeposits", size, 256)
+	if size := len(e.BuilderDeposits); size > 64 {
+		err = ssz.ErrListTooBigFn("--.BuilderDeposits", size, 64)
 		return
 	}
 	for ii := 0; ii < len(e.BuilderDeposits); ii++ {
@@ -4461,7 +4461,7 @@ func (e *ExecutionRequestsGloas) UnmarshalSSZ(buf []byte) error {
 	// Field (3) 'BuilderDeposits'
 	{
 		buf = tail[o3:o4]
-		num, err := ssz.DivideInt2(len(buf), 184, 256)
+		num, err := ssz.DivideInt2(len(buf), 184, 64)
 		if err != nil {
 			return err
 		}
@@ -4579,7 +4579,7 @@ func (e *ExecutionRequestsGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	{
 		subIndx := hh.Index()
 		num := uint64(len(e.BuilderDeposits))
-		if num > 256 {
+		if num > 64 {
 			err = ssz.ErrIncorrectListSize
 			return
 		}
@@ -4588,7 +4588,7 @@ func (e *ExecutionRequestsGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 				return
 			}
 		}
-		hh.MerkleizeWithMixin(subIndx, num, 256)
+		hh.MerkleizeWithMixin(subIndx, num, 64)
 	}
 
 	// Field (4) 'BuilderExits'
