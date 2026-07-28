@@ -45,6 +45,22 @@ func AggregationBits() []byte {
 	}
 }
 
+func CommitteeBits() []byte {
+	currSize := new(eth.AttestationElectra).CommitteeBits.Len()
+	switch currSize {
+	case 64:
+		b := bitfield.NewBitvector64()
+		b.SetBitAt(0, true)
+		return b
+	case 4:
+		b := bitfield.NewBitvector4()
+		b.SetBitAt(0, true)
+		return b
+	default:
+		return nil
+	}
+}
+
 // GetMockSignRequest returns a mock SignRequest by type.
 func GetMockSignRequest(t string) *validatorpb.SignRequest {
 	switch t {
@@ -85,8 +101,6 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 			SigningSlot: 0,
 		}
 	case "AGGREGATE_AND_PROOF_V2":
-		committeeBits := bitfield.NewBitvector64()
-		committeeBits.SetBitAt(0, true)
 		return &validatorpb.SignRequest{
 			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
 			SigningRoot:     make([]byte, fieldparams.RootLength),
@@ -106,7 +120,7 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 							},
 						},
 						Signature:     make([]byte, 96),
-						CommitteeBits: committeeBits,
+						CommitteeBits: CommitteeBits(),
 					},
 					SelectionProof: make([]byte, fieldparams.BLSSignatureLength),
 				},

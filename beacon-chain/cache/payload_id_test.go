@@ -10,22 +10,22 @@ import (
 func TestValidatorPayloadIDsCache_GetAndSaveValidatorPayloadIDs(t *testing.T) {
 	cache := NewPayloadIDCache()
 	var r [32]byte
-	p, ok := cache.PayloadID(0, r)
+	p, ok := cache.PayloadID(0, r, false)
 	require.Equal(t, false, ok)
 	require.Equal(t, primitives.PayloadID{}, p)
 
 	slot := primitives.Slot(1234)
 	pid := primitives.PayloadID{1, 2, 3, 3, 7, 8, 7, 8}
 	r = [32]byte{1, 2, 3}
-	cache.Set(slot, r, pid)
-	p, ok = cache.PayloadID(slot, r)
+	cache.Set(slot, r, false, pid)
+	p, ok = cache.PayloadID(slot, r, false)
 	require.Equal(t, true, ok)
 	require.Equal(t, pid, p)
 
 	slot = primitives.Slot(9456456)
 	r = [32]byte{4, 5, 6}
-	cache.Set(slot, r, primitives.PayloadID{})
-	p, ok = cache.PayloadID(slot, r)
+	cache.Set(slot, r, false, primitives.PayloadID{})
+	p, ok = cache.PayloadID(slot, r, false)
 	require.Equal(t, true, ok)
 	require.Equal(t, primitives.PayloadID{}, p)
 
@@ -33,14 +33,14 @@ func TestValidatorPayloadIDsCache_GetAndSaveValidatorPayloadIDs(t *testing.T) {
 	slot = primitives.Slot(9456456)
 	r = [32]byte{7, 8, 9}
 	pid = [8]byte{3, 2, 3, 33, 72, 8, 7, 8}
-	cache.Set(slot, r, pid)
-	p, ok = cache.PayloadID(slot, r)
+	cache.Set(slot, r, false, pid)
+	p, ok = cache.PayloadID(slot, r, false)
 	require.Equal(t, true, ok)
 	require.Equal(t, pid, p)
 
 	// Forked chain
 	r = [32]byte{1, 2, 3}
-	p, ok = cache.PayloadID(slot, r)
+	p, ok = cache.PayloadID(slot, r, false)
 	require.Equal(t, false, ok)
 	require.Equal(t, primitives.PayloadID{}, p)
 
@@ -48,14 +48,34 @@ func TestValidatorPayloadIDsCache_GetAndSaveValidatorPayloadIDs(t *testing.T) {
 	slot = primitives.Slot(9456456)
 	r = [32]byte{7, 8, 9}
 	newPid := primitives.PayloadID{1, 2, 3, 33, 72, 8, 7, 1}
-	cache.Set(slot, r, newPid)
-	p, ok = cache.PayloadID(slot, r)
+	cache.Set(slot, r, false, newPid)
+	p, ok = cache.PayloadID(slot, r, false)
 	require.Equal(t, true, ok)
 	require.Equal(t, newPid, p)
 
 	// remove cache entry
 	cache.prune(slot + 1)
-	p, ok = cache.PayloadID(slot, r)
+	p, ok = cache.PayloadID(slot, r, false)
 	require.Equal(t, false, ok)
 	require.Equal(t, primitives.PayloadID{}, p)
+}
+
+func TestValidatorPayloadIDsCache_FullAndEmptyAreDistinct(t *testing.T) {
+	cache := NewPayloadIDCache()
+	slot := primitives.Slot(1234)
+	r := [32]byte{1, 2, 3}
+	emptyPid := primitives.PayloadID{1, 1, 1, 1, 1, 1, 1, 1}
+	fullPid := primitives.PayloadID{2, 2, 2, 2, 2, 2, 2, 2}
+
+	cache.Set(slot, r, false, emptyPid)
+	_, ok := cache.PayloadID(slot, r, true)
+	require.Equal(t, false, ok)
+
+	cache.Set(slot, r, true, fullPid)
+	p, ok := cache.PayloadID(slot, r, false)
+	require.Equal(t, true, ok)
+	require.Equal(t, emptyPid, p)
+	p, ok = cache.PayloadID(slot, r, true)
+	require.Equal(t, true, ok)
+	require.Equal(t, fullPid, p)
 }

@@ -28,12 +28,12 @@ func signedGloasBlock(t *testing.T, slot primitives.Slot, builderIndex primitive
 	if blk.Block.Body == nil {
 		blk.Block.Body = &ethpb.BeaconBlockBodyGloas{}
 	}
-	blk.Block.Body.SignedExecutionPayloadBid = &ethpb.SignedExecutionPayloadBid{
+	blk.Block.Body.SignedExecutionPayloadBid = util.HydrateSignedExecutionPayloadBid(&ethpb.SignedExecutionPayloadBid{
 		Message: &ethpb.ExecutionPayloadBid{
 			BuilderIndex: builderIndex,
 		},
 		Signature: make([]byte, 96),
-	}
+	})
 
 	signed, err := consensusblocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
@@ -54,7 +54,7 @@ func testExecutionPayloadEnvelope(slot primitives.Slot, builderIndex primitives.
 			ExtraData:     make([]byte, 0),
 			SlotNumber:    slot,
 		},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 		BuilderIndex:          builderIndex,
 		BeaconBlockRoot:       make([]byte, 32),
 		ParentBeaconBlockRoot: make([]byte, 32),
@@ -71,7 +71,7 @@ func TestProposeSelfBuildEnvelope(t *testing.T) {
 	expectedEnvelope := testExecutionPayloadEnvelope(slot, builderIndex)
 
 	m.validatorClient.EXPECT().
-		GetExecutionPayloadEnvelope(gomock.Any(), slot).
+		GetExecutionPayloadEnvelope(gomock.Any(), slot, gomock.Any()).
 		Return(expectedEnvelope, nil)
 
 	builderDomain := make([]byte, 32)
@@ -117,7 +117,7 @@ func TestProposeSelfBuildEnvelope_ClientError(t *testing.T) {
 	defer finish()
 
 	m.validatorClient.EXPECT().
-		GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).
+		GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil, errors.New("connection refused"))
 
 	signedBlock := signedGloasBlock(t, 1, params.BeaconConfig().BuilderIndexSelfBuild)
@@ -292,7 +292,7 @@ func TestProposeBlock_Gloas_EnvelopeAfterBlock(t *testing.T) {
 		Return(&ethpb.ProposeResponse{BlockRoot: make([]byte, 32)}, nil)
 
 	getEnvelopeCall := m.validatorClient.EXPECT().
-		GetExecutionPayloadEnvelope(gomock.Any(), primitives.Slot(1)).
+		GetExecutionPayloadEnvelope(gomock.Any(), primitives.Slot(1), gomock.Any()).
 		Return(envelope, nil).
 		After(proposeCall)
 

@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -90,6 +92,10 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
+	// A seen block may live in the init-sync cache but not yet in the DB, so Block can return (nil, nil).
+	if err := blocks.BeaconBlockIsNil(block); err != nil {
+		return pubsub.ValidationIgnore, nil
+	}
 	// [REJECT] block.slot equals envelope.slot.
 	if err := v.VerifySlotMatchesBlock(block.Block().Slot()); err != nil {
 		return pubsub.ValidationReject, err
@@ -130,7 +136,7 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	}
 
 	// [REJECT] signed_execution_payload_envelope.signature is valid with respect to the builder's public key.
-	if err := v.VerifySignature(st); err != nil {
+	if err := v.VerifySignature(ctx, st); err != nil {
 		return pubsub.ValidationReject, err
 	}
 	s.setSeenPayloadEnvelope(root, env.BuilderIndex())
@@ -141,6 +147,20 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	} else {
 		log.WithError(err).WithField("slot", env.Slot()).Debug("Could not compute execution payload envelope slot start time")
 	}
+
+	// execution_payload_gossip fires once the envelope passes gossip validation.
+	if s.cfg.operationNotifier != nil {
+		s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
+			Type: operation.ExecutionPayloadGossipReceived,
+			Data: &operation.ExecutionPayloadGossipReceivedData{
+				Slot:         env.Slot(),
+				BuilderIndex: env.BuilderIndex(),
+				BlockHash:    env.BlockHash(),
+				BlockRoot:    env.BeaconBlockRoot(),
+			},
+		})
+	}
+
 	return pubsub.ValidationAccept, nil
 }
 
@@ -154,6 +174,7 @@ func (s *Service) queuePendingPayloadEnvelope(
 ) (pubsub.ValidationResult, error) {
 	currentSlot := s.cfg.clock.CurrentSlot()
 	if env.Slot() != currentSlot {
+		log.WithField("envelopeSlot", env.Slot()).WithField("currentSlot", currentSlot).Debug("Ignoring payload envelope not for current slot")
 		return pubsub.ValidationIgnore, nil
 	}
 	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
@@ -181,20 +202,25 @@ func (s *Service) queuePendingPayloadEnvelope(
 		return pubsub.ValidationIgnore, nil
 	}
 
+	// The failure budget is per slot, matching admission above, so a burst of bad signatures cannot disable self-build queueing beyond the current slot.
+	if isSelfBuild && s.selfBuildSigFailSlot != currentSlot {
+		s.selfBuildSigFailSlot = currentSlot
+		s.selfBuildSigFailures = 0
+	}
 	if isSelfBuild && s.selfBuildSigFailures >= maxSelfBuildSigFailures {
 		log.Debug("Ignoring self-built payload envelope because of too many signature failures")
 		return pubsub.ValidationIgnore, nil
 	}
 
 	if !isSelfBuild || proposerInLookahead {
-		if err := v.VerifySignature(st); err != nil {
+		if err := v.VerifySignature(ctx, st); err != nil {
 			if isSelfBuild {
 				s.selfBuildSigFailures++
 				log.WithError(err).Debug("Ignoring self-built payload with invalid signature")
 				return pubsub.ValidationIgnore, nil
-			} else {
-				return pubsub.ValidationReject, err
 			}
+			// The envelope's block is unknown, so the head state used here may be on a different branch, do not penalize the peer.
+			return pubsub.ValidationIgnore, err
 		}
 	} else {
 		log.Debug("Ignoring payload envelope from self-build outside of the Lookahead window")

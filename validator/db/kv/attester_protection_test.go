@@ -382,15 +382,14 @@ func TestSaveAttestationForPubKey_BatchWrites_FullCapacity(t *testing.T) {
 	// For each public key, we attempt to save an attestation with signing root.
 	var wg sync.WaitGroup
 	for i, pubKey := range pubKeys {
-		wg.Add(1)
-		go func(j primitives.Epoch, pk [fieldparams.BLSPubkeyLength]byte, w *sync.WaitGroup) {
-			defer w.Done()
+		wg.Go(func() {
+			j := primitives.Epoch(i)
 			var signingRoot [32]byte
 			copy(signingRoot[:], fmt.Sprintf("%d", j))
 			att := createAttestation(j, j+1)
-			err := validatorDB.SaveAttestationForPubKey(ctx, pk, signingRoot, att)
+			err := validatorDB.SaveAttestationForPubKey(ctx, pubKey, signingRoot, att)
 			require.NoError(t, err)
-		}(primitives.Epoch(i), pubKey, &wg)
+		})
 	}
 	wg.Wait()
 
@@ -439,15 +438,14 @@ func TestSaveAttestationForPubKey_BatchWrites_LowCapacity_TimerReached(t *testin
 	// For each public key, we attempt to save an attestation with signing root.
 	var wg sync.WaitGroup
 	for i, pubKey := range pubKeys {
-		wg.Add(1)
-		go func(j primitives.Epoch, pk [fieldparams.BLSPubkeyLength]byte, w *sync.WaitGroup) {
-			defer w.Done()
+		wg.Go(func() {
+			j := primitives.Epoch(i)
 			var signingRoot [32]byte
 			copy(signingRoot[:], fmt.Sprintf("%d", j))
 			att := createAttestation(j, j+1)
-			err := validatorDB.SaveAttestationForPubKey(ctx, pk, signingRoot, att)
+			err := validatorDB.SaveAttestationForPubKey(ctx, pubKey, signingRoot, att)
 			require.NoError(t, err)
-		}(primitives.Epoch(i), pubKey, &wg)
+		})
 	}
 	wg.Wait()
 
@@ -559,7 +557,7 @@ func benchCheckSurroundVote(
 
 func TestStore_flushAttestationRecords_InProgress(t *testing.T) {
 	s := &Store{}
-	s.batchedAttestationsFlushInProgress.Set()
+	s.batchedAttestationsFlushInProgress.Store(true)
 
 	hook := logTest.NewGlobal()
 	s.flushAttestationRecords(t.Context(), nil)
@@ -599,15 +597,11 @@ func BenchmarkStore_SaveAttestationForPubKey(b *testing.B) {
 		err := validatorDB.ClearDB()
 		require.NoError(b, err)
 
-		for _, pubkey := range pubkeys {
-			wg.Add(1)
-
-			go func(pk [fieldparams.BLSPubkeyLength]byte) {
-				defer wg.Done()
-
+		for _, pk := range pubkeys {
+			wg.Go(func() {
 				err := validatorDB.SaveAttestationForPubKey(ctx, pk, signingRoot, attestation)
 				require.NoError(b, err)
-			}(pubkey)
+			})
 		}
 
 		b.StartTimer()

@@ -33,10 +33,6 @@ var (
 		Name:  "dev",
 		Usage: "Enables experimental features still in development. These features may not be stable.",
 	}
-	writeSSZStateTransitionsFlag = &cli.BoolFlag{
-		Name:  "interop-write-ssz-state-transitions",
-		Usage: "Writes SSZ states to disk after attempted state transitio.",
-	}
 	saveInvalidBlockTempFlag = &cli.BoolFlag{
 		Name:  "save-invalid-block-temp",
 		Usage: "Writes invalid blocks to temp directory.",
@@ -130,8 +126,9 @@ var (
 		Usage: "Saves beacon blocks with full execution payloads instead of execution payload headers in the database.",
 	}
 	EnableBeaconRESTApi = &cli.BoolFlag{
-		Name:  "enable-beacon-rest-api",
-		Usage: "(Experimental): Enables of the beacon REST API when querying a beacon node.",
+		Name:    "enable-beacon-rest-api",
+		Aliases: []string{"enable-rest"},
+		Usage:   "(Experimental): Enables the beacon REST API when querying a beacon node. Optional: also enabled implicitly when --beacon-rest-api-provider is set.",
 	}
 	enableHashtree = &cli.BoolFlag{
 		Name:  "enable-hashtree",
@@ -188,6 +185,12 @@ var (
 	EnableProgressiveSSZ = &cli.BoolFlag{
 		Name:   "enable-progressive-ssz",
 		Usage:  "Enables experimental progressive SSZ merkleization for converted consensus types.",
+		Hidden: true,
+	}
+	reorgLatePayloads = &cli.BoolFlag{
+		Name:   "reorg-late-payloads",
+		Usage:  "Enables reorging late payloads.",
+		Value:  false,
 		Hidden: true,
 	}
 	// forceHeadFlag is a flag to force the head of the beacon chain to a specific block.
@@ -261,7 +264,6 @@ var E2EValidatorFlags = []string{
 // BeaconChainFlags contains a list of all the feature flags that apply to the beacon-chain client.
 var BeaconChainFlags = combinedFlags([]cli.Flag{
 	devModeFlag,
-	writeSSZStateTransitionsFlag,
 	saveInvalidBlockTempFlag,
 	saveInvalidBlobTempFlag,
 	disableGRPCConnectionLogging,
@@ -292,6 +294,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	enableExperimentalAttestationPool,
 	EnableStateDiff,
 	EnableProgressiveSSZ,
+	reorgLatePayloads,
 	forceHeadFlag,
 	blacklistRoots,
 	enableHashtree,

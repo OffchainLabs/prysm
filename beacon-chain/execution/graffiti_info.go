@@ -8,9 +8,9 @@ import (
 )
 
 const (
-	// CLCode is the two-letter client code for Prysm.
-	CLCode = "PR"
-	Name   = "Prysm"
+	// PrysmClientCode is the two-letter client code for Prysm.
+	PrysmClientCode = "PM"
+	PrysmClientName = "Prysm"
 )
 
 // GraffitiInfo holds version information for generating block graffiti.
@@ -43,12 +43,12 @@ func (g *GraffitiInfo) UpdateFromEngine(code, commit string) {
 // fits without reducing the client version tier.
 //
 // Available Space | Format
-// ≥13 bytes       | user + space + EL(2)+commit(4)+CL(2)+commit(4)  e.g. "Sushi GEabcdPRe4f6"
-// 12 bytes        | user + EL(2)+commit(4)+CL(2)+commit(4)          e.g. "12345678901234567890GEabcdPRe4f6"
-// 9-11 bytes      | user + space + EL(2)+commit(2)+CL(2)+commit(2)  e.g. "12345678901234567890123 GEabPRe4"
-// 8 bytes         | user + EL(2)+commit(2)+CL(2)+commit(2)          e.g. "123456789012345678901234GEabPRe4"
-// 5-7 bytes       | user + space + EL(2)+CL(2)                      e.g. "123456789012345678901234567 GEPR"
-// 4 bytes         | user + EL(2)+CL(2)                              e.g. "1234567890123456789012345678GEPR"
+// ≥13 bytes       | user + space + EL(2)+commit(4)+CL(2)+commit(4)  e.g. "Sushi GEabcdPMe4f6"
+// 12 bytes        | user + EL(2)+commit(4)+CL(2)+commit(4)          e.g. "12345678901234567890GEabcdPMe4f6"
+// 9-11 bytes      | user + space + EL(2)+commit(2)+CL(2)+commit(2)  e.g. "12345678901234567890123 GEabPMe4"
+// 8 bytes         | user + EL(2)+commit(2)+CL(2)+commit(2)          e.g. "123456789012345678901234GEabPMe4"
+// 5-7 bytes       | user + space + EL(2)+CL(2)                      e.g. "123456789012345678901234567 GEPM"
+// 4 bytes         | user + EL(2)+CL(2)                              e.g. "1234567890123456789012345678GEPM"
 // 3 bytes         | user + space + code(2)                          e.g. "12345678901234567890123456789 GE"
 // 2 bytes         | user + code(2)                                  e.g. "123456789012345678901234567890GE"
 // <2 bytes        | user only                                       e.g. "1234567890123456789012345678901x"
@@ -89,19 +89,19 @@ func (g *GraffitiInfo) GenerateGraffiti(userGraffiti []byte) [32]byte {
 	switch {
 	case available >= 12:
 		// Full: user+EL(2)+commit(4)+CL(2)+commit(4)
-		graffiti = userStr + space(12) + g.elCode + elCommit4 + CLCode + clCommit4
+		graffiti = userStr + space(12) + g.elCode + elCommit4 + PrysmClientCode + clCommit4
 	case available >= 8:
 		// Reduced commits: user+EL(2)+commit(2)+CL(2)+commit(2)
-		graffiti = userStr + space(8) + g.elCode + elCommit2 + CLCode + clCommit2
+		graffiti = userStr + space(8) + g.elCode + elCommit2 + PrysmClientCode + clCommit2
 	case available >= 4:
 		// Codes only: user+EL(2)+CL(2)
-		graffiti = userStr + space(4) + g.elCode + CLCode
+		graffiti = userStr + space(4) + g.elCode + PrysmClientCode
 	case available >= 2:
 		// Single code: user+code(2)
 		if g.elCode != "" {
 			graffiti = userStr + space(2) + g.elCode
 		} else {
-			graffiti = userStr + space(2) + CLCode
+			graffiti = userStr + space(2) + PrysmClientCode
 		}
 	default:
 		// User graffiti only

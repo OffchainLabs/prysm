@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"strconv"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -107,21 +106,6 @@ func (s Uint256) MarshalText() ([]byte, error) {
 		return nil, errors.Wrapf(errInvalidUint256, "value=%s", s.Int)
 	}
 	return []byte(s.String()), nil
-}
-
-// Uint64String is a custom type that allows marshalling from text to uint64 and vice versa.
-type Uint64String uint64
-
-// UnmarshalText takes a byte array and unmarshals the text in Uint64String.
-func (s *Uint64String) UnmarshalText(t []byte) error {
-	u, err := strconv.ParseUint(string(t), 10, 64)
-	*s = Uint64String(u)
-	return err
-}
-
-// MarshalText returns a byte representation of the text from Uint64String.
-func (s Uint64String) MarshalText() ([]byte, error) {
-	return fmt.Appendf(nil, "%d", s), nil
 }
 
 // VersionResponse is a JSON representation of a field in the builder API header response.

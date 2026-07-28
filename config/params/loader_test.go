@@ -12,11 +12,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/build/bazel"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"gopkg.in/yaml.v2"
 )
 
@@ -112,6 +112,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.DeepEqual(t, expected.GenesisForkVersion, actual.GenesisForkVersion, "%s: GenesisForkVersion", name)
 	assert.DeepEqual(t, expected.BLSWithdrawalPrefixByte, actual.BLSWithdrawalPrefixByte, "%s: BLSWithdrawalPrefixByte", name)
 	assert.DeepEqual(t, expected.BuilderWithdrawalPrefixByte, actual.BuilderWithdrawalPrefixByte, "%s: BuilderWithdrawalPrefixByte", name)
+	assert.DeepEqual(t, expected.PayloadBuilderVersion, actual.PayloadBuilderVersion, "%s: PayloadBuilderVersion", name)
 	assert.DeepEqual(t, expected.ETH1AddressWithdrawalPrefixByte, actual.ETH1AddressWithdrawalPrefixByte, "%s: ETH1AddressWithdrawalPrefixByte", name)
 
 	// Time parameters.

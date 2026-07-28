@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
@@ -306,8 +306,8 @@ func TestService_waitForStateInitialization(t *testing.T) {
 			cfg:                  &Config{Chain: mc, StateNotifier: mc.StateNotifier(), ClockWaiter: cs, InitialSyncComplete: make(chan struct{})},
 			ctx:                  ctx,
 			cancel:               cancel,
-			synced:               abool.New(),
-			chainStarted:         abool.New(),
+			synced:               &atomic.Bool{},
+			chainStarted:         &atomic.Bool{},
 			counter:              ratecounter.NewRateCounter(counterSeconds * time.Second),
 			genesisChan:          make(chan time.Time),
 			blobRetentionChecker: func(primitives.Slot) bool { return true },
@@ -416,11 +416,11 @@ func TestService_markSynced(t *testing.T) {
 		InitialSyncComplete: make(chan struct{}),
 	})
 	require.NotNil(t, s)
-	assert.Equal(t, false, s.chainStarted.IsSet())
-	assert.Equal(t, false, s.synced.IsSet())
+	assert.Equal(t, false, s.chainStarted.Load())
+	assert.Equal(t, false, s.synced.Load())
 	assert.Equal(t, true, s.Syncing())
 	assert.NoError(t, s.Status())
-	s.chainStarted.Set()
+	s.chainStarted.Store(true)
 	assert.ErrorContains(t, "syncing", s.Status())
 
 	go func() {
@@ -521,17 +521,17 @@ func TestService_Initialized(t *testing.T) {
 	s := NewService(t.Context(), &Config{
 		StateNotifier: &mock.MockStateNotifier{},
 	})
-	s.chainStarted.Set()
+	s.chainStarted.Store(true)
 	assert.Equal(t, true, s.Initialized())
-	s.chainStarted.UnSet()
+	s.chainStarted.Store(false)
 	assert.Equal(t, false, s.Initialized())
 }
 
 func TestService_Synced(t *testing.T) {
 	s := NewService(t.Context(), &Config{})
-	s.synced.UnSet()
+	s.synced.Store(false)
 	assert.Equal(t, false, s.Synced())
-	s.synced.Set()
+	s.synced.Store(true)
 	assert.Equal(t, true, s.Synced())
 }
 

@@ -1,3 +1,3 @@
 ### Added
 
-- progressive merklization of beacon state.
+- progressive merkleization of beacon state.

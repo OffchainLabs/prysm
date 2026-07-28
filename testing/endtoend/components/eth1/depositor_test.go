@@ -2,6 +2,7 @@ package eth1
 
 import (
 	"fmt"
+	"math/big"
 	"strings"
 	"testing"
 
@@ -91,4 +92,12 @@ func TestComputeDeposits(t *testing.T) {
 			require.Equal(t, c.len, len(d))
 		})
 	}
+}
+
+func TestDepositGasPriceUsesFloor(t *testing.T) {
+	require.Equal(t, "1000000000000", depositGasPrice(big.NewInt(1e11)).String())
+}
+
+func TestDepositGasPriceBumpsSuggestedPrice(t *testing.T) {
+	require.Equal(t, "3000000000000", depositGasPrice(big.NewInt(3e11)).String())
 }

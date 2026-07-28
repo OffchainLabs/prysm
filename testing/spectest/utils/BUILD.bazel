@@ -10,12 +10,12 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/testing/spectest/utils",
     visibility = ["//testing/spectest:__subpackages__"],
     deps = [
+        "//build/bazel:go_default_library",
         "//config/params:go_default_library",
         "//io/file:go_default_library",
         "//testing/require:go_default_library",
         "@com_github_ghodss_yaml//:go_default_library",
         "@com_github_json_iterator_go//:go_default_library",
-        "@io_bazel_rules_go//go/tools/bazel:go_default_library",
     ],
 )
 

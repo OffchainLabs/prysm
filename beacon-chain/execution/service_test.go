@@ -559,13 +559,6 @@ func (mbs *mockBSUpdater) Update(bs clientstats.BeaconNodeStats) {
 
 var _ BeaconNodeStatsUpdater = &mockBSUpdater{}
 
-func TestDedupEndpoints(t *testing.T) {
-	assert.DeepEqual(t, []string{"A"}, dedupEndpoints([]string{"A"}), "did not dedup correctly")
-	assert.DeepEqual(t, []string{"A", "B"}, dedupEndpoints([]string{"A", "B"}), "did not dedup correctly")
-	assert.DeepEqual(t, []string{"A", "B"}, dedupEndpoints([]string{"A", "A", "A", "B"}), "did not dedup correctly")
-	assert.DeepEqual(t, []string{"A", "B"}, dedupEndpoints([]string{"A", "A", "A", "B", "B"}), "did not dedup correctly")
-}
-
 func Test_batchRequestHeaders_UnderflowChecks(t *testing.T) {
 	srv := &Service{}
 	start := uint64(101)

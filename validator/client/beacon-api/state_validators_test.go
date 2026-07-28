@@ -34,7 +34,7 @@ func TestGetStateValidators_Nominal_POST(t *testing.T) {
 	require.NoError(t, err)
 
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	wanted := []*structs.ValidatorContainer{
 		{
@@ -120,7 +120,7 @@ func TestGetStateValidators_Nominal_GET(t *testing.T) {
 	require.NoError(t, err)
 
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	wanted := []*structs.ValidatorContainer{
 		{
@@ -220,7 +220,7 @@ func TestGetStateValidators_GetRestJsonResponseOnError(t *testing.T) {
 	require.NoError(t, err)
 
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	ctx := t.Context()
 
@@ -277,7 +277,7 @@ func TestGetStateValidators_DataIsNil_POST(t *testing.T) {
 
 	ctx := t.Context()
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	handler.EXPECT().Post(
 		gomock.Any(),
@@ -316,7 +316,7 @@ func TestGetStateValidators_DataIsNil_GET(t *testing.T) {
 
 	ctx := t.Context()
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 
 	// First call POST which will return an error.
 	handler.EXPECT().Post(

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -25,6 +26,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 func TestQueryBeaconState(t *testing.T) {
@@ -90,6 +92,14 @@ func TestQueryBeaconState(t *testing.T) {
 				v, _ := st.ValidatorAtIndex(0)
 				b := make([]byte, 8)
 				binary.LittleEndian.PutUint64(b, uint64(v.EffectiveBalance))
+				return b
+			}(),
+		},
+		{
+			path: "len(validators)",
+			expectedValue: func() []byte {
+				b := make([]byte, 8)
+				binary.LittleEndian.PutUint64(b, uint64(len(st.Validators())))
 				return b
 			}(),
 		},
@@ -168,6 +178,18 @@ func TestQueryBeaconStateInvalidRequest(t *testing.T) {
 			errorString: "Could not calculate offset and length for path",
 		},
 		{
+			name:        "len() on a non-collection field",
+			stateId:     "head",
+			path:        "len(slot)",
+			errorString: "only supported for List and Bitlist",
+		},
+		{
+			name:        "len() on an non-collection field with index",
+			stateId:     "head",
+			path:        "len(validators[0])",
+			errorString: "only supported for List and Bitlist",
+		},
+		{
 			name:    "empty state ID",
 			stateId: "",
 			path:    "",
@@ -244,12 +266,14 @@ func TestQueryBeaconBlock(t *testing.T) {
 	tests := []struct {
 		name          string
 		path          string
+		includeProof  bool
 		block         interfaces.ReadOnlySignedBeaconBlock
 		expectedValue []byte
 	}{
 		{
-			name: "slot",
-			path: ".slot",
+			name:         "slot",
+			path:         ".slot",
+			includeProof: false,
 			block: func() interfaces.ReadOnlySignedBeaconBlock {
 				b := util.NewBeaconBlock()
 				b.Block.Slot = 123
@@ -264,8 +288,9 @@ func TestQueryBeaconBlock(t *testing.T) {
 			}(),
 		},
 		{
-			name: "randao_reveal",
-			path: ".body.randao_reveal",
+			name:         "randao_reveal",
+			path:         ".body.randao_reveal",
+			includeProof: false,
 			block: func() interfaces.ReadOnlySignedBeaconBlock {
 				b := util.NewBeaconBlock()
 				b.Block.Body.RandaoReveal = randaoReveal
@@ -276,8 +301,9 @@ func TestQueryBeaconBlock(t *testing.T) {
 			expectedValue: randaoReveal,
 		},
 		{
-			name: "attestations",
-			path: ".body.attestations",
+			name:         "attestations",
+			path:         ".body.attestations",
+			includeProof: false,
 			block: func() interfaces.ReadOnlySignedBeaconBlock {
 				b := util.NewBeaconBlock()
 				b.Block.Body.Attestations = []*eth.Attestation{
@@ -293,10 +319,97 @@ func TestQueryBeaconBlock(t *testing.T) {
 				return b
 			}(),
 		},
+		{
+			name:         "slot",
+			path:         ".slot",
+			includeProof: true,
+			block: func() interfaces.ReadOnlySignedBeaconBlock {
+				b := util.NewBeaconBlock()
+				b.Block.Slot = 123
+				sb, err := blocks.NewSignedBeaconBlock(b)
+				require.NoError(t, err)
+				return sb
+			}(),
+			expectedValue: func() []byte {
+				b := make([]byte, 8)
+				binary.LittleEndian.PutUint64(b, 123)
+				return b
+			}(),
+		},
+		{
+			name:         "randao_reveal",
+			path:         ".body.randao_reveal",
+			includeProof: true,
+			block: func() interfaces.ReadOnlySignedBeaconBlock {
+				b := util.NewBeaconBlock()
+				b.Block.Body.RandaoReveal = randaoReveal
+				sb, err := blocks.NewSignedBeaconBlock(b)
+				require.NoError(t, err)
+				return sb
+			}(),
+			expectedValue: randaoReveal,
+		},
+		{
+			name:         "attestations",
+			path:         ".body.attestations",
+			includeProof: true,
+			block: func() interfaces.ReadOnlySignedBeaconBlock {
+				b := util.NewBeaconBlock()
+				b.Block.Body.Attestations = []*eth.Attestation{
+					att,
+				}
+				sb, err := blocks.NewSignedBeaconBlock(b)
+				require.NoError(t, err)
+				return sb
+			}(),
+			expectedValue: func() []byte {
+				b, err := att.MarshalSSZ()
+				require.NoError(t, err)
+				return b
+			}(),
+		},
+		{
+			name:         "len(body.attestations)",
+			path:         "len(body.attestations)",
+			includeProof: false,
+			block: func() interfaces.ReadOnlySignedBeaconBlock {
+				b := util.NewBeaconBlock()
+				b.Block.Body.Attestations = []*eth.Attestation{att, att}
+				sb, err := blocks.NewSignedBeaconBlock(b)
+				require.NoError(t, err)
+				return sb
+			}(),
+			expectedValue: func() []byte {
+				b := make([]byte, 8)
+				binary.LittleEndian.PutUint64(b, 2)
+				return b
+			}(),
+		},
+		{
+			name:         "len(body.attestations)",
+			path:         "len(body.attestations)",
+			includeProof: true,
+			block: func() interfaces.ReadOnlySignedBeaconBlock {
+				b := util.NewBeaconBlock()
+				b.Block.Body.Attestations = []*eth.Attestation{att, att}
+				sb, err := blocks.NewSignedBeaconBlock(b)
+				require.NoError(t, err)
+				return sb
+			}(),
+			expectedValue: func() []byte {
+				b := make([]byte, 8)
+				binary.LittleEndian.PutUint64(b, 2)
+				return b
+			}(),
+		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		proofSuffix := "without proof"
+		if tt.includeProof {
+			proofSuffix = "with proof"
+		}
+		t.Run(fmt.Sprintf("%s %s", tt.path, proofSuffix), func(t *testing.T) {
 			mockBlockFetcher := &testutil.MockBlocker{BlockToReturn: tt.block}
 			mockChainService := &chainMock.ChainService{
 				FinalizedRoots: map[[32]byte]bool{},
@@ -306,7 +419,8 @@ func TestQueryBeaconBlock(t *testing.T) {
 				Blocker:             mockBlockFetcher,
 			}
 			requestBody := &structs.SSZQueryRequest{
-				Query: tt.path,
+				Query:        tt.path,
+				IncludeProof: tt.includeProof,
 			}
 			var buf bytes.Buffer
 			require.NoError(t, json.NewEncoder(&buf).Encode(requestBody))
@@ -323,13 +437,41 @@ func TestQueryBeaconBlock(t *testing.T) {
 			blockRoot, err := tt.block.Block().HashTreeRoot()
 			require.NoError(t, err)
 
-			expectedResponse := &sszquerypb.SSZQueryResponse{
-				Root:   blockRoot[:],
-				Result: tt.expectedValue,
+			if !tt.includeProof {
+				expectedResponse := &sszquerypb.SSZQueryResponse{
+					Root:   blockRoot[:],
+					Result: tt.expectedValue,
+				}
+				sszExpectedResponse, err := expectedResponse.MarshalSSZ()
+				require.NoError(t, err)
+				assert.DeepEqual(t, sszExpectedResponse, writer.Body.Bytes())
+				return
 			}
-			sszExpectedResponse, err := expectedResponse.MarshalSSZ()
+
+			// Decode the response to verify the proof
+			responseData := writer.Body.Bytes()
+			var response sszquerypb.SSZQueryResponseWithProof
+			require.NoError(t, response.UnmarshalSSZ(responseData))
+
+			// Verify the proof is included
+			require.NotNil(t, response.Proof)
+			require.Equal(t, true, len(response.Proof.Proofs) > 0, "merkle proof should not be empty")
+
+			// Verify the result matches expected value
+			require.DeepEqual(t, tt.expectedValue, response.Result)
+
+			// Verify root matches block root
+			require.DeepEqual(t, blockRoot[:], response.Root)
+
+			// Verify the merkle proof using VerifyProof
+			merkleProof := &ssz.Proof{
+				Index:  int(response.Proof.Gindex),
+				Leaf:   response.Proof.Leaf,
+				Hashes: response.Proof.Proofs,
+			}
+			isValid, err := ssz.VerifyProof(response.Root, merkleProof)
 			require.NoError(t, err)
-			assert.DeepEqual(t, sszExpectedResponse, writer.Body.Bytes())
+			require.Equal(t, true, isValid, "merkle proof verification failed")
 		})
 	}
 }

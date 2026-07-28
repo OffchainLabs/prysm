@@ -5,11 +5,11 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
@@ -75,7 +75,7 @@ func TestProcessPendingAtts_NoBlockRequestBlock(t *testing.T) {
 		cfg:                  &config{p2p: p1, beaconDB: db, chain: chain, clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot)},
 		blkRootToPendingAtts: make(map[[32]byte][]any),
 		seenPendingBlocks:    make(map[[32]byte]bool),
-		chainStarted:         abool.New(),
+		chainStarted:         &atomic.Bool{},
 	}
 
 	// Add pending attestations for OTHER block roots (not block A)

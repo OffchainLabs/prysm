@@ -4,7 +4,7 @@ import (
 	"path"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/fulu"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
@@ -25,7 +25,7 @@ func RunProposerLookaheadTests(t *testing.T, config string) {
 
 func processProposerLookaheadWrapper(t *testing.T, st state.BeaconState) (state.BeaconState, error) {
 	ctx := t.Context()
-	if err := fulu.ProcessProposerLookahead(ctx, st); err != nil {
+	if err := gloas.ProcessProposerLookahead(ctx, st); err != nil {
 		return nil, err
 	}
 	return st, nil

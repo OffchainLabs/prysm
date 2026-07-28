@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/client"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -97,6 +97,9 @@ func (r *runner) run(ctx context.Context) {
 				return
 			}
 
+			// Restart the event stream if it died, or rebind it after a fallback
+			v.EnsureEventStream(ctx, eventClient.DefaultEventTopics)
+
 			deadline := v.SlotDeadline(slot)
 			slotCtx, cancel := context.WithDeadline(ctx, deadline) //nolint:govet
 
@@ -120,6 +123,9 @@ func (r *runner) run(ctx context.Context) {
 					continue
 				}
 				dutiesCancel()
+			} else {
+				// Mid-epoch: retry any failed next-epoch duties
+				v.MaybeRetryMissingNextDuties(ctx, slot)
 			}
 
 			// call push proposer settings often to account for the following edge cases:
@@ -237,10 +243,8 @@ func initialize(ctx context.Context, v iface.Validator) error {
 
 func performRoles(slotCtx context.Context, allRoles map[[48]byte][]iface.ValidatorRole, v iface.Validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
 	for pubKey, roles := range allRoles {
-		wg.Add(len(roles))
 		for _, role := range roles {
-			go func(role iface.ValidatorRole, pubKey [fieldparams.BLSPubkeyLength]byte) {
-				defer wg.Done()
+			wg.Go(func() {
 				switch role {
 				case iface.RoleAttester:
 					v.SubmitAttestation(slotCtx, slot, pubKey)
@@ -259,7 +263,7 @@ func performRoles(slotCtx context.Context, allRoles map[[48]byte][]iface.Validat
 				default:
 					log.Warnf("Unhandled role %v", role)
 				}
-			}(role, pubKey)
+			})
 		}
 	}
 
@@ -274,9 +278,10 @@ func performRoles(slotCtx context.Context, allRoles map[[48]byte][]iface.Validat
 						" should never happen! Please file a report at github.com/prysmaticlabs/prysm/issues/new")
 			}
 		}()
+		// Log submissions from the current slot
+		v.LogSubmissions(slot)
+
 		// Log performance in the previous slot
-		v.LogSubmittedAtts(slot)
-		v.LogSubmittedSyncCommitteeMessages()
 		if err := v.LogValidatorGainsAndLosses(slotCtx, slot); err != nil {
 			log.WithError(err).Error("Could not report validator's rewards/penalties")
 		}

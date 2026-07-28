@@ -120,7 +120,7 @@ func TestGetGenesis(t *testing.T) {
 			)
 
 			depositContractJson := structs.GetDepositContractResponse{}
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 
 			if testCase.queriesDepositContract {
 				handler.EXPECT().Get(
@@ -201,7 +201,7 @@ func TestGetSyncStatus(t *testing.T) {
 			ctx := t.Context()
 
 			syncingResponse := structs.SyncStatusResponse{}
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 			handler.EXPECT().Get(
 				gomock.Any(),
 				syncingEndpoint,
@@ -265,7 +265,7 @@ func TestGetVersion(t *testing.T) {
 			ctx := t.Context()
 
 			var versionResponse structs.GetVersionResponse
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 			handler.EXPECT().Get(
 				gomock.Any(),
 				versionEndpoint,
@@ -331,7 +331,7 @@ func TestIsReady(t *testing.T) {
 			defer ctrl.Finish()
 			ctx := t.Context()
 
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 			handler.EXPECT().GetStatusCode(
 				gomock.Any(),
 				healthEndpoint,

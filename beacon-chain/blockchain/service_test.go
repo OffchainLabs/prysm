@@ -9,9 +9,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
@@ -183,50 +180,6 @@ func TestChainStartStop_GenesisZeroHashes(t *testing.T) {
 	// The context should have been canceled.
 	assert.Equal(t, context.Canceled, chainService.ctx.Err(), "Context was not canceled")
 	require.LogsContain(t, hook, "data already exists")
-}
-
-func TestChainService_InitializeBeaconChain(t *testing.T) {
-	helpers.ClearCache()
-	beaconDB := testDB.SetupDB(t)
-	ctx := t.Context()
-
-	bc := setupBeaconChain(t, beaconDB)
-	var err error
-
-	// Set up 10 deposits pre chain start for validators to register
-	count := uint64(10)
-	deposits, _, err := util.DeterministicDepositsAndKeys(count)
-	require.NoError(t, err)
-	dt, _, err := util.DepositTrieFromDeposits(deposits)
-	require.NoError(t, err)
-	hashTreeRoot, err := dt.HashTreeRoot()
-	require.NoError(t, err)
-	genState, err := transition.EmptyGenesisState()
-	require.NoError(t, err)
-	err = genState.SetEth1Data(&ethpb.Eth1Data{
-		DepositRoot:  hashTreeRoot[:],
-		DepositCount: uint64(len(deposits)),
-		BlockHash:    make([]byte, 32),
-	})
-	require.NoError(t, err)
-	genState, err = altair.ProcessPreGenesisDeposits(ctx, genState, deposits)
-	require.NoError(t, err)
-
-	_, err = bc.initializeBeaconChain(ctx, time.Unix(0, 0), genState, &ethpb.Eth1Data{DepositRoot: hashTreeRoot[:], BlockHash: make([]byte, 32)})
-	require.NoError(t, err)
-
-	_, err = bc.HeadState(ctx)
-	assert.NoError(t, err)
-	headBlk, err := bc.HeadBlock(ctx)
-	require.NoError(t, err)
-	if headBlk == nil {
-		t.Error("Head state can't be nil after initialize beacon chain")
-	}
-	r, err := bc.HeadRoot(ctx)
-	require.NoError(t, err)
-	if bytesutil.ToBytes32(r) == params.BeaconConfig().ZeroHash {
-		t.Error("Canonical root for slot 0 can't be zeros after initialize beacon chain")
-	}
 }
 
 func TestChainService_CorrectGenesisRoots(t *testing.T) {

@@ -625,6 +625,24 @@ func TestGetForkChoice(t *testing.T) {
 	require.Equal(t, "2", resp.FinalizedCheckpoint.Epoch)
 }
 
+func TestGetForkChoiceV2(t *testing.T) {
+	store := doublylinkedtree.New()
+	fRoot := [32]byte{'a'}
+	fc := &forkchoicetypes.Checkpoint{Epoch: 2, Root: fRoot}
+	require.NoError(t, store.UpdateFinalizedCheckpoint(fc))
+	s := &Server{ForkchoiceFetcher: &blockchainmock.ChainService{ForkChoiceStore: store}}
+
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/debug/fork_choice", nil)
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+
+	s.GetForkChoiceV2(writer, request)
+	require.Equal(t, http.StatusOK, writer.Code)
+	resp := &structs.GetForkChoiceDumpV2Response{}
+	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+	require.Equal(t, "2", resp.FinalizedCheckpoint.Epoch)
+}
+
 func TestDataColumnSidecars(t *testing.T) {
 	t.Run("Fulu fork not configured", func(t *testing.T) {
 		// Save the original config

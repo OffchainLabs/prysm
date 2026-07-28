@@ -66,9 +66,9 @@ func TestValidatePayloadAttestationMessage_ErrorPathsWithMock(t *testing.T) {
 			result: pubsub.ValidationIgnore,
 		},
 		{
-			error: errors.New("block root seen"),
+			error: errors.New("block slot mismatch"),
 			verifier: func(pa payloadattestation.ROMessage, reqs []verification.Requirement) verification.PayloadAttestationMsgVerifier {
-				return &verification.MockPayloadAttestation{ErrPayloadAttBlockRootNotSeen: errors.New("block root seen")}
+				return &verification.MockPayloadAttestation{ErrPayloadAttBlockSlotMismatch: errors.New("block slot mismatch")}
 			},
 			result: pubsub.ValidationIgnore,
 		},
