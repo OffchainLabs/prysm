@@ -1336,7 +1336,6 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	_, span := trace.StartSpan(ctx, "beaconState.rootSelector")
 	defer span.End()
 	span.SetAttributes(trace.StringAttribute("field", field.String()))
-	progressiveSSZ := progressiveSSZEnabled(b.version)
 
 	switch field {
 	case types.GenesisTime:
@@ -1378,22 +1377,8 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 		}
 		return b.recomputeFieldTrie(field, b.eth1DataVotes)
 	case types.Validators:
-		if progressiveSSZ {
-			// Field-trie indexing is based on legacy list merkleization.
-			// Use full progressive hashing for this field when enabled.
-			b.dirtyIndices[field] = []uint64{}
-			delete(b.rebuildTrie, field)
-			return stateutil.ValidatorRegistryRootProgressive(b.validatorsCompactVal())
-		}
 		return b.validatorsRootSelector(field)
 	case types.Balances:
-		if progressiveSSZ {
-			// Field-trie indexing is based on legacy list merkleization.
-			// Use full progressive hashing for this field when enabled.
-			b.dirtyIndices[field] = []uint64{}
-			delete(b.rebuildTrie, field)
-			return stateutil.Uint64ListRootProgressive(b.balancesVal())
-		}
 		return b.balancesRootSelector(field)
 	case types.RandaoMixes:
 		return b.randaoMixesRootSelector(field)
