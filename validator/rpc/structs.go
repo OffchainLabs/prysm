@@ -117,10 +117,10 @@ type GraffitiData struct {
 // builders") must serialize as [] rather than be dropped. On POST input an absent
 // field still decodes to nil, which means "inherit the validator client's builders".
 type BuilderConfigJson struct {
-	Enabled                   *bool               `json:"enabled"`
-	Builders                  []*BuilderEntryJson `json:"builders"`
-	DefaultMinBid             *string             `json:"default_min_bid,omitempty"`
-	DefaultBuilderBoostFactor *string             `json:"default_builder_boost_factor,omitempty"`
+	Enabled            *bool               `json:"enabled"`
+	Builders           []*BuilderEntryJson `json:"builders"`
+	MinBid             *string             `json:"min_bid,omitempty"`
+	BuilderBoostFactor *string             `json:"builder_boost_factor,omitempty"`
 }
 
 type BuilderEntryJson struct {

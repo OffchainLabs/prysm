@@ -48,10 +48,10 @@ func (s *Server) GetBuilders(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, e := range out.Builders {
 		if e.MinBid == nil {
-			e.MinBid = out.DefaultMinBid
+			e.MinBid = out.MinBid
 		}
 		if e.BuilderBoostFactor == nil {
-			e.BuilderBoostFactor = out.DefaultBuilderBoostFactor
+			e.BuilderBoostFactor = out.BuilderBoostFactor
 		}
 	}
 	httputil.WriteJson(w, out)
@@ -174,9 +174,9 @@ func resolveBuilders(settings *proposer.Settings, key [fieldparams.BLSPubkeyLeng
 
 func builderConfigJSONFromConsensus(bc *proposer.BuilderConfig) *BuilderConfigJson {
 	out := &BuilderConfigJson{
-		Enabled:                   bc.Enabled,
-		DefaultMinBid:             optUintStrPtr(bc.MinBid),
-		DefaultBuilderBoostFactor: optUintStrPtr(bc.BuilderBoostFactor),
+		Enabled:            bc.Enabled,
+		MinBid:             optUintStrPtr(bc.MinBid),
+		BuilderBoostFactor: optUintStrPtr(bc.BuilderBoostFactor),
 	}
 	if bc.Builders != nil {
 		out.Builders = make([]*BuilderEntryJson, 0, len(bc.Builders))
@@ -207,15 +207,15 @@ func builderEntryJSONFromConsensus(be *proposer.BuilderEntry) *BuilderEntryJson 
 
 func builderConfigFromJSON(in *BuilderConfigJson) (*proposer.BuilderConfig, error) {
 	bc := &proposer.BuilderConfig{Enabled: in.Enabled}
-	if in.DefaultMinBid != nil {
-		v, err := parseUint(*in.DefaultMinBid, "default_min_bid")
+	if in.MinBid != nil {
+		v, err := parseUint(*in.MinBid, "min_bid")
 		if err != nil {
 			return nil, err
 		}
 		bc.MinBid = &v
 	}
-	if in.DefaultBuilderBoostFactor != nil {
-		v, err := parseUint(*in.DefaultBuilderBoostFactor, "default_builder_boost_factor")
+	if in.BuilderBoostFactor != nil {
+		v, err := parseUint(*in.BuilderBoostFactor, "builder_boost_factor")
 		if err != nil {
 			return nil, err
 		}
@@ -228,24 +228,26 @@ func builderConfigFromJSON(in *BuilderConfigJson) (*proposer.BuilderConfig, erro
 		return nil, errors.Errorf("builders exceeds %d entries", maxBuilderEntries)
 	}
 	// Non-nil (possibly empty) list means "use exactly these builders", not "inherit".
+	// Uniqueness is scoped by role: url entries by (url, auth_data),
+	// url-less p2p-policy entries by builder_pubkey.
 	bc.Builders = make([]*proposer.BuilderEntry, 0, len(in.Builders))
-	seen := make(map[string]bool, len(in.Builders))
-	seenPubkey := make(map[string]bool, len(in.Builders))
+	seenURL := make(map[string]bool, len(in.Builders))
+	seenP2P := make(map[string]bool, len(in.Builders))
 	for i, entry := range in.Builders {
 		be, err := builderEntryFromJSON(entry, i)
 		if err != nil {
 			return nil, err
 		}
-		tuple := fmt.Sprintf("%s|%x|%x", be.URL, be.AuthData, be.Pubkey)
-		if seen[tuple] {
-			return nil, errors.Errorf("builders[%d]: duplicate url, auth_data and builder_pubkey", i)
-		}
-		seen[tuple] = true
-		if len(be.Pubkey) != 0 {
-			if seenPubkey[string(be.Pubkey)] {
-				return nil, errors.Errorf("builders[%d]: builder_pubkey appears on more than one entry", i)
+		if be.URL != "" {
+			key := fmt.Sprintf("%s|%x", be.URL, be.AuthData)
+			if seenURL[key] {
+				return nil, errors.Errorf("builders[%d]: two entries share the same url and auth_data", i)
 			}
-			seenPubkey[string(be.Pubkey)] = true
+			seenURL[key] = true
+		} else if seenP2P[string(be.Pubkey)] {
+			return nil, errors.Errorf("builders[%d]: two p2p-policy entries share the same builder_pubkey", i)
+		} else {
+			seenP2P[string(be.Pubkey)] = true
 		}
 		bc.Builders = append(bc.Builders, be)
 	}

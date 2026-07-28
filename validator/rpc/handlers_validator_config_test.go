@@ -66,7 +66,7 @@ func deleteBuilders(t *testing.T, s *Server, pubkey string) *httptest.ResponseRe
 func TestServer_SetGetBuilders_RoundTrip(t *testing.T) {
 	srv, keys := setupConfigServer(t, 1)
 	pk := hexutil.Encode(keys[0][:])
-	body := `{"enabled":true,"default_min_bid":"5","default_builder_boost_factor":"120",` +
+	body := `{"enabled":true,"min_bid":"5","builder_boost_factor":"120",` +
 		`"builders":[{"url":"https://b.example","auth_data":"0x0102","max_execution_payment":"1000"}]}`
 
 	w := postBuilders(t, srv, pk, body)
@@ -75,8 +75,8 @@ func TestServer_SetGetBuilders_RoundTrip(t *testing.T) {
 	_, cfg := getBuilders(t, srv, pk)
 	require.NotNil(t, cfg.Enabled)
 	require.Equal(t, true, *cfg.Enabled)
-	require.Equal(t, "5", *cfg.DefaultMinBid)
-	require.Equal(t, "120", *cfg.DefaultBuilderBoostFactor)
+	require.Equal(t, "5", *cfg.MinBid)
+	require.Equal(t, "120", *cfg.BuilderBoostFactor)
 	require.Equal(t, 1, len(cfg.Builders))
 	require.Equal(t, "https://b.example", *cfg.Builders[0].Url)
 	require.Equal(t, "1000", *cfg.Builders[0].MaxExecutionPayment)
@@ -130,11 +130,11 @@ func TestServer_SetBuilders_Rejects(t *testing.T) {
 	cases := map[string]struct {
 		body, contains string
 	}{
-		"missing enabled":         {`{"builders":[{"url":"https://a"}]}`, "enabled is required"},
-		"entry has neither":       {`{"enabled":true,"builders":[{"min_bid":"1"}]}`, "at least one of url and builder_pubkey"},
-		"duplicate tuple":         {`{"enabled":true,"builders":[{"url":"https://a"},{"url":"https://a"}]}`, "duplicate url, auth_data and builder_pubkey"},
-		"builder_pubkey repeated": {`{"enabled":true,"builders":[{"builder_pubkey":"` + bpk + `"},{"url":"https://a","builder_pubkey":"` + bpk + `"}]}`, "builder_pubkey appears on more than one"},
-		"invalid url":             {`{"enabled":true,"builders":[{"url":"not a url"}]}`, "url is not a valid URL"},
+		"missing enabled":        {`{"builders":[{"url":"https://a"}]}`, "enabled is required"},
+		"entry has neither":      {`{"enabled":true,"builders":[{"min_bid":"1"}]}`, "at least one of url and builder_pubkey"},
+		"same url and auth_data": {`{"enabled":true,"builders":[{"url":"https://a"},{"url":"https://a"}]}`, "share the same url and auth_data"},
+		"p2p pubkey repeated":    {`{"enabled":true,"builders":[{"builder_pubkey":"` + bpk + `"},{"builder_pubkey":"` + bpk + `"}]}`, "two p2p-policy entries share the same builder_pubkey"},
+		"invalid url":            {`{"enabled":true,"builders":[{"url":"not a url"}]}`, "url is not a valid URL"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
