@@ -154,9 +154,7 @@ func TestSyncHandlers_WaitTillSynced(t *testing.T) {
 	r.waitForChainStart()
 	require.Equal(t, true, r.chainStarted.Load(), "Did not receive chain start event.")
 
-	var err error
-	p2p.Digest, err = r.currentForkDigest()
-	require.NoError(t, err)
+	p2p.Digest = r.currentForkDigest()
 
 	syncCompleteCh := make(chan bool)
 	go func() {
@@ -225,9 +223,7 @@ func TestSyncService_StopCleanly(t *testing.T) {
 	require.NoError(t, gs.SetClock(startup.NewClock(time.Now(), vr)))
 	r.waitForChainStart()
 
-	var err error
-	p2p.Digest, err = r.currentForkDigest()
-	require.NoError(t, err)
+	p2p.Digest = r.currentForkDigest()
 
 	// Wait for chainstart and topics to be registered
 	require.Eventually(t, func() bool {
