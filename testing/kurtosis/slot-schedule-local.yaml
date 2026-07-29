@@ -1,0 +1,21 @@
+participants:
+  - el_type: geth
+    cl_type: prysm
+    cl_image: gcr.io/offchainlabs/prysm/beacon-chain:latest
+    vc_image: gcr.io/offchainlabs/prysm/validator:latest
+    count: 2
+network_params:
+  preset: minimal
+  electra_fork_epoch: 0
+  fulu_fork_epoch: 2
+  gloas_fork_epoch: 18446744073709551615
+  seconds_per_slot: 12
+  slot_duration_ms: 12000
+  slot_schedule:
+    - epoch: 0
+      slot_duration_ms: 12000
+    - epoch: 2
+      slot_duration_ms: 8000
+    - epoch: 3
+      slot_duration_ms: 6000
+additional_services: []

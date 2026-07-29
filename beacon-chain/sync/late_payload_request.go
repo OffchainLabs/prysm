@@ -20,8 +20,7 @@ func (s *Service) runLatePayloadRequest() {
 	if cfg.GloasForkEpoch == math.MaxUint64 {
 		return
 	}
-	offset := cfg.SlotComponentDuration(cfg.PayloadDueBPS)
-	ticker := slots.NewSlotTickerWithOffset(clock.GenesisTime(), offset, cfg.SlotDuration())
+	ticker := slots.NewSlotTickerWithOffsetFunc(clock.GenesisTime(), slots.ComponentInterval(cfg.PayloadDueBPS))
 	defer ticker.Done()
 	for {
 		select {

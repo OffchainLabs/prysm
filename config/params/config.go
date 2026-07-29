@@ -362,6 +362,9 @@ type BeaconChainConfig struct {
 	// Gas Limit Values (EIP-8261)
 	GasLimitSchedule []GasLimitScheduleEntry `yaml:"GAS_LIMIT_SCHEDULE" spec:"true"`
 
+	// SlotSchedule optionally varies the slot duration by epoch per EIP-7782, empty means a constant slot duration.
+	SlotSchedule SlotSchedule `yaml:"SLOT_SCHEDULE"`
+
 	// Deprecated_MaxBlobsPerBlock defines the max blobs that could exist in a block.
 	// Deprecated: This field is no longer supported. Avoid using it.
 	DeprecatedMaxBlobsPerBlock int `yaml:"MAX_BLOBS_PER_BLOCK" spec:"true"`
@@ -849,6 +852,14 @@ func (b *BeaconChainConfig) SlotDurationMillis() uint64 {
 	return b.SecondsPerSlot * 1000
 }
 
+// SlotDurationAt returns the duration of the given slot per the slot schedule.
+func (b *BeaconChainConfig) SlotDurationAt(slot primitives.Slot) time.Duration {
+	if len(b.SlotSchedule) == 0 {
+		return b.SlotDuration()
+	}
+	return b.SlotSchedule.DurationAt(slot, b.SlotsPerEpoch)
+}
+
 // SlotComponentDuration returns the duration representing the given portion (in basis points) of a slot.
 func (b *BeaconChainConfig) SlotComponentDuration(bp primitives.BP) time.Duration {
 	ms := uint64(bp) * b.SlotDurationMillis() / uint64(BasisPoints)
@@ -861,4 +872,13 @@ func (b *BeaconChainConfig) AttestationDueBPSAtSlot(slot primitives.Slot) primit
 		return b.AttestationDueBPSGloas
 	}
 	return b.AttestationDueBPS
+}
+
+// SlotComponentDurationAt returns the given portion (in basis points) of the given slot's duration.
+func (b *BeaconChainConfig) SlotComponentDurationAt(bp primitives.BP, slot primitives.Slot) time.Duration {
+	if len(b.SlotSchedule) == 0 {
+		return b.SlotComponentDuration(bp)
+	}
+	ms := uint64(bp) * uint64(b.SlotDurationAt(slot)/time.Millisecond) / uint64(BasisPoints)
+	return time.Duration(ms) * time.Millisecond
 }

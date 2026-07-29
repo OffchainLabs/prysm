@@ -112,6 +112,14 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 	}
 	// recompute SqrRootSlotsPerEpoch constant to handle non-standard values of SlotsPerEpoch
 	conf.SqrRootSlotsPerEpoch = primitives.Slot(math.IntegerSquareRoot(uint64(conf.SlotsPerEpoch)))
+	if len(conf.SlotSchedule) > 0 {
+		if err := conf.SlotSchedule.Validate(conf.SlotsPerEpoch); err != nil {
+			return nil, errors.Wrap(err, "invalid SLOT_SCHEDULE")
+		}
+		if conf.SlotSchedule[0].SlotDurationMillis != conf.SlotDurationMillis() {
+			return nil, errors.Errorf("SLOT_SCHEDULE entry at epoch 0 (%dms) does not match the configured slot duration (%dms)", conf.SlotSchedule[0].SlotDurationMillis, conf.SlotDurationMillis())
+		}
+	}
 	// Recompute the fork schedule
 	conf.InitializeForkSchedule()
 	log.Debugf("Config file values: %+v", conf)
@@ -324,6 +332,16 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 			lines = append(lines,
 				"  - EPOCH: "+strconv.FormatUint(uint64(entry.Epoch), 10),
 				"    GAS_LIMIT: "+strconv.FormatUint(entry.GasLimit, 10),
+			)
+		}
+	}
+
+	if len(cfg.SlotSchedule) > 0 {
+		lines = append(lines, "SLOT_SCHEDULE:")
+		for _, entry := range cfg.SlotSchedule {
+			lines = append(lines,
+				"  - EPOCH: "+strconv.FormatUint(uint64(entry.Epoch), 10),
+				"    SLOT_DURATION_MS: "+strconv.FormatUint(entry.SlotDurationMillis, 10),
 			)
 		}
 	}

@@ -29,7 +29,7 @@ func (v *validator) slotComponentDeadline(slot primitives.Slot, component primit
 	if err != nil {
 		return time.Time{}, err
 	}
-	delay := params.BeaconConfig().SlotComponentDuration(component)
+	delay := params.BeaconConfig().SlotComponentDurationAt(component, slot)
 	return startTime.Add(delay), nil
 }
 

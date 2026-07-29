@@ -388,7 +388,7 @@ func (s *Service) recordPayloadArrival(root [32]byte, slot primitives.Slot, arri
 		return
 	}
 	cfg := params.BeaconConfig()
-	due := slotStart.Add(cfg.SlotComponentDuration(cfg.PayloadDueBPS))
+	due := slotStart.Add(cfg.SlotComponentDurationAt(cfg.PayloadDueBPS, slot))
 	s.payloadArrivals.record(root, slot, arrivedAt.Before(due))
 }
 

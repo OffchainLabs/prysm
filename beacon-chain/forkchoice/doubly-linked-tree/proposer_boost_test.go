@@ -579,3 +579,39 @@ func TestForkChoice_missingProposerBoostRoots(t *testing.T) {
 	require.Equal(t, blk.Root(), headRoot)
 	require.Equal(t, [32]byte{'p'}, f.store.proposerBoostRoot)
 }
+
+func TestForkChoice_BoostProposerRoot_SlotSchedule(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.MainnetConfig().Copy()
+	cfg.SlotSchedule = params.SlotSchedule{
+		{Epoch: 0, SlotDurationMillis: 12000},
+		{Epoch: 1, SlotDurationMillis: 6000},
+	}
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := t.Context()
+	zeroHash := params.BeaconConfig().ZeroHash
+	// Slot 33 is in epoch 1 where slots last 6s, making the boost threshold ~2s instead of ~4s.
+	slot := primitives.Slot(33)
+	sinceGenesis, err := cfg.SlotSchedule.SinceGenesis(slot, cfg.SlotsPerEpoch)
+	require.NoError(t, err)
+
+	t.Run("boosted within the shortened threshold", func(t *testing.T) {
+		f := setup(0, 0)
+		f.SetGenesisTime(time.Now().Add(-sinceGenesis).Add(-time.Second))
+		st, root, err := prepareForkchoiceState(ctx, slot, indexToHash(33), zeroHash, zeroHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, st, root))
+		assert.Equal(t, indexToHash(33), f.store.proposerBoostRoot)
+	})
+
+	t.Run("not boosted past the shortened threshold", func(t *testing.T) {
+		f := setup(0, 0)
+		// 3s into the slot is within the constant 12s threshold but past the 6s one.
+		f.SetGenesisTime(time.Now().Add(-sinceGenesis).Add(-3 * time.Second))
+		st, root, err := prepareForkchoiceState(ctx, slot, indexToHash(33), zeroHash, zeroHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, st, root))
+		assert.Equal(t, [32]byte{}, f.store.proposerBoostRoot)
+	})
+}

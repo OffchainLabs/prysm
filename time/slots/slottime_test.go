@@ -756,3 +756,39 @@ func TestMaxEpoch(t *testing.T) {
 	_, err = EpochStart(maxEpoch)
 	require.NoError(t, err)
 }
+
+func TestStartTimeAndAtWithSlotSchedule(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.MainnetConfig().Copy()
+	cfg.SlotSchedule = params.SlotSchedule{
+		{Epoch: 0, SlotDurationMillis: 12000},
+		{Epoch: 1, SlotDurationMillis: 6000},
+	}
+	params.OverrideBeaconConfig(cfg)
+
+	genesis := time.Unix(1600000000, 0)
+	epochSpan := 32 * 12 * time.Second
+
+	cases := []struct {
+		slot  primitives.Slot
+		start time.Duration
+	}{
+		{slot: 0, start: 0},
+		{slot: 31, start: 31 * 12 * time.Second},
+		{slot: 32, start: epochSpan},
+		{slot: 33, start: epochSpan + 6*time.Second},
+		{slot: 96, start: epochSpan + 64*6*time.Second},
+	}
+	for _, tc := range cases {
+		st, err := StartTime(genesis, tc.slot)
+		require.NoError(t, err)
+		assert.Equal(t, genesis.Add(tc.start), st)
+		assert.Equal(t, tc.slot, At(genesis, st))
+		if tc.slot > 0 {
+			assert.Equal(t, tc.slot-1, At(genesis, st.Add(-time.Millisecond)))
+		}
+		since, err := SinceSlotStart(tc.slot, genesis, st.Add(time.Second))
+		require.NoError(t, err)
+		assert.Equal(t, time.Second, since)
+	}
+}

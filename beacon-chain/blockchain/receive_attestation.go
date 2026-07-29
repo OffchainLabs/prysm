@@ -89,8 +89,10 @@ func (s *Service) spawnProcessAttestationsRoutine() {
 			return
 		}
 
-		reorgInterval := params.BeaconConfig().SlotDuration() - reorgLateBlockCountAttestations
-		ticker := slots.NewSlotTickerWithIntervals(s.genesisTime, []time.Duration{0, reorgInterval})
+		reorgInterval := func(slot primitives.Slot) time.Duration {
+			return params.BeaconConfig().SlotDurationAt(slot) - reorgLateBlockCountAttestations
+		}
+		ticker := slots.NewSlotTickerWithIntervalFuncs(s.genesisTime, []slots.IntervalFunc{slots.FixedInterval(0), reorgInterval})
 		for {
 			select {
 			case <-s.ctx.Done():
