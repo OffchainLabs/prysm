@@ -21,6 +21,17 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// syncMessageDueComponent returns the slot-component basis points for the
+// sync committee message due time.
+func syncMessageDueComponent(slot primitives.Slot) primitives.BP {
+	cfg := params.BeaconConfig()
+	if slots.ToEpoch(slot) >= cfg.GloasForkEpoch {
+		return cfg.SyncMessageDueBPSGloas
+	}
+
+	return cfg.SyncMessageDueBPS
+}
+
 // SubmitSyncCommitteeMessage submits the sync committee message to the beacon chain.
 func (v *validator) SubmitSyncCommitteeMessage(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) {
 	ctx, span := trace.StartSpan(ctx, "validator.SubmitSyncCommitteeMessage")
@@ -29,7 +40,7 @@ func (v *validator) SubmitSyncCommitteeMessage(ctx context.Context, slot primiti
 
 	v.waitUntilAttestationDueOrValidBlock(ctx, slot)
 
-	ctx, err := v.withHeadHint(ctx, slot, attestationDueComponent(slot))
+	ctx, err := v.withHeadHint(ctx, slot, syncMessageDueComponent(slot))
 	if err != nil {
 		log.WithField("slot", slot).WithError(err).Error("Could not attach freshness hint")
 		tracing.AnnotateError(span, err)
