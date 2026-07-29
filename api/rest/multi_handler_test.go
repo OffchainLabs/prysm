@@ -237,6 +237,22 @@ func TestMultiHandlerPostSSZ(t *testing.T) {
 		_, _, err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
 		require.NotNil(t, err)
 	})
+
+	t.Run("returns the context error when canceled before any node accepts", func(t *testing.T) {
+		release := make(chan struct{})
+		srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			<-release
+		}))
+		t.Cleanup(srv.Close)
+		t.Cleanup(func() { close(release) })
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		mh := multi(t, srv.URL, srv.URL)
+		_, _, err := mh.PostSSZ(ctx, "/publish", nil, bytes.NewBufferString(body))
+		assert.Equal(t, true, errors.Is(err, context.Canceled))
+	})
 }
 
 func TestReadUntil(t *testing.T) {

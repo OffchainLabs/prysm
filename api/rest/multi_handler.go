@@ -579,6 +579,10 @@ func broadcastWriteAll[T any](ctx context.Context, handlers []*handler, fn func(
 				case r := <-results:
 					collect(r)
 				default:
+					if len(vals) == 0 && len(errs) == 0 {
+						errs = append(errs, ctx.Err())
+					}
+
 					return vals, errs
 				}
 			}
