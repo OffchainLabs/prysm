@@ -5,3 +5,4 @@
 ### Removed
 
 - Removed the validator client's `StreamBlocksAltair` implementations (`beacon-api` polling shim and `grpc-api` passthrough). The method was not part of `validator/client/iface` and had no callers.
+- Removed `BeaconBlockConverter` and its mock from `validator/client/beacon-api`. Its four `ConvertREST*BlockToProto` methods were only reachable from `StreamBlocksAltair`.

@@ -20,7 +20,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-var streamDeadline = 1 * time.Minute
+var forkDeadline = 1 * time.Minute
 
 // AltairForkTransition ensures that the Altair hard fork has occurred successfully.
 var AltairForkTransition = e2etypes.Evaluator{
@@ -141,7 +141,7 @@ func forkOccurs(forkEpoch primitives.Epoch, expectedFork int) error {
 
 	url := fmt.Sprintf("http://localhost:%d/eth/v2/beacon/blocks/head", e2e.TestParams.Ports.PrysmBeaconNodeHTTPPort)
 
-	ctx, cancel := context.WithTimeout(context.Background(), streamDeadline)
+	ctx, cancel := context.WithTimeout(context.Background(), forkDeadline)
 	defer cancel()
 	ticker := time.NewTicker(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
 	defer ticker.Stop()
