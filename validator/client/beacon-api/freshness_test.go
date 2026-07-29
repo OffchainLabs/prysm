@@ -251,7 +251,7 @@ func TestPayloadAttestationFreshnessOptions(t *testing.T) {
 	})
 }
 
-func TestAttestationBeaconBlockRoot(t *testing.T) {
+func TestPayloadAttestationBeaconBlockRoot(t *testing.T) {
 	root := [32]byte{0x11, 0x22, 0x33}
 
 	t.Run("decodes a JSON response when the content type is not octet-stream", func(t *testing.T) {
