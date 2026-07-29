@@ -320,7 +320,7 @@ func readUntil[T any](
 	}
 }
 
-// roundFor selects the query strategy/
+// roundFor selects the query strategy.
 func roundFor[T any](cfg getConfig) readRound[T] {
 	if cfg.race {
 		return raceRound[T]
