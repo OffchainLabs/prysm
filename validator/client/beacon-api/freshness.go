@@ -15,7 +15,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 )
 
-const readFreshnessBudget = 500 * time.Millisecond // Floor for a read's deadline.
+const (
+	readFreshnessBudget = 500 * time.Millisecond // Floor for a read's deadline.
+	blockPublishMargin  = 250 * time.Millisecond // Time reserved to sign, publish and gossip a block in hand before the committee votes if no accepted block is returned by the deadline.
+)
 
 var (
 	attestationRootExtractor = rootExtractor("beacon_block_root")
@@ -91,7 +94,9 @@ func readFreshnessOptions(ctx context.Context, extract func(json.RawMessage) ([3
 //     matches the announced head (decoded via decode).
 //   - WithRepoll(UntilAny2xx): keep re-polling until at least one node returns a
 //     block (any 2xx), then use it.
-//   - WithDeadline(: bound the read by the caller's context deadline.
+//   - WithDeadline: bound the read by the caller's context deadline.
+//   - WithFallbackDeadline: stop waiting on the nodes that have not answered at
+//     the hint deadline.
 func blockFreshnessOptions(ctx context.Context, decode func([]byte, http.Header) (*ethpb.GenericBeaconBlock, error)) []rest.GetOption {
 	hint, ok := freshnessHint(ctx)
 	if !ok {
@@ -129,6 +134,12 @@ func blockFreshnessOptions(ctx context.Context, decode func([]byte, http.Header)
 	// Bound the read (and the re-polling) by the caller's slot deadline.
 	if deadline, ok := ctx.Deadline(); ok {
 		opts = append(opts, rest.WithDeadline(deadline))
+	}
+
+	// Once a node has returned a block, only wait on the others up to
+	// blockPublishMargin before the hint deadline.
+	if !hint.Deadline.IsZero() {
+		opts = append(opts, rest.WithFallbackDeadline(hint.Deadline.Add(-blockPublishMargin)))
 	}
 
 	return opts

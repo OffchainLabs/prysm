@@ -29,7 +29,7 @@ type (
 	//   - matched=true: val is the first response satisfying accept.
 	//   - matched=false, ok=true: no response matched, val is a best-effort success.
 	//   - matched=false, ok=false: every handler failed; errs holds the failures.
-	readRound[T any] func(ctx context.Context, handlers []*handler, accept func(T) bool, fn queryFunc[T]) (val T, matched, ok bool, errs []error)
+	readRound[T any] func(ctx context.Context, handlers []*handler, fallbackDeadline time.Time, accept func(T) bool, fn queryFunc[T]) (val T, matched, ok bool, errs []error)
 )
 
 func newMultiHandler(handlers []*handler) (*multiHandler, error) {
@@ -277,7 +277,7 @@ func readUntil[T any](
 		}
 
 		// Run a round of queries.
-		val, matched, ok, errs := round(roundCtx, handlers, accept, fn)
+		val, matched, ok, errs := round(roundCtx, handlers, cfg.fallbackDeadline, accept, fn)
 		roundCancel()
 
 		// If a match was found, return it immediately.
@@ -339,7 +339,7 @@ func roundFor[T any](cfg getConfig) readRound[T] {
 //     handler failed).
 //   - errs: the per-handler failures collected this round (plus ctx.Err() when
 //     the context was cancelled mid-run).
-func raceRound[T any](ctx context.Context, handlers []*handler, accept func(T) bool, fn queryFunc[T]) (T, bool, bool, []error) {
+func raceRound[T any](ctx context.Context, handlers []*handler, fallbackDeadline time.Time, accept func(T) bool, fn queryFunc[T]) (T, bool, bool, []error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -358,14 +358,29 @@ func raceRound[T any](ctx context.Context, handlers []*handler, accept func(T) b
 	}
 
 	var (
-		fallback     T
-		haveFallback bool
-		errs         []error
+		fallback *T
+		errs     []error
 	)
+
+	var fallbackExpiry <-chan time.Time
 
 	// Pull results from the channel until either a match is found or every handler has returned.
 	for range handlers {
-		r := <-results
+		var r result
+		select {
+		case r = <-results:
+		case <-fallbackExpiry:
+			return *fallback, false, true, errs
+		case <-ctx.Done():
+			errs = append(errs, ctx.Err())
+			if fallback != nil {
+				return *fallback, false, true, errs
+			}
+
+			var zero T
+			return zero, false, false, errs
+		}
+
 		if r.err != nil {
 			errs = append(errs, r.err)
 			continue
@@ -376,14 +391,17 @@ func raceRound[T any](ctx context.Context, handlers []*handler, accept func(T) b
 			return r.val, true, true, errs
 		}
 
-		// If no fallback has been recorded yet, record this r.val as a best-effort fallback.
-		if !haveFallback {
-			fallback, haveFallback = r.val, true
+		if fallback == nil {
+			fallback = &r.val
+
+			if !fallbackDeadline.IsZero() {
+				fallbackExpiry = time.After(time.Until(fallbackDeadline))
+			}
 		}
 	}
 
-	if haveFallback {
-		return fallback, false, true, errs
+	if fallback != nil {
+		return *fallback, false, true, errs
 	}
 
 	var zero T
@@ -399,13 +417,12 @@ func raceRound[T any](ctx context.Context, handlers []*handler, accept func(T) b
 //     handler failed).
 //   - errs: the per-handler failures collected this round (plus ctx.Err() when
 //     the context was cancelled mid-run).
-func inOrderRound[T any](ctx context.Context, handlers []*handler, accept func(T) bool, fn queryFunc[T]) (T, bool, bool, []error) {
+func inOrderRound[T any](ctx context.Context, handlers []*handler, fallbackDeadline time.Time, accept func(T) bool, fn queryFunc[T]) (T, bool, bool, []error) {
 	var (
-		fallback T
+		fallback *T
 		errs     []error
 	)
 
-	haveFallback := false
 	for _, handler := range handlers {
 		// Stop if the context is on error.
 		if err := ctx.Err(); err != nil {
@@ -413,8 +430,21 @@ func inOrderRound[T any](ctx context.Context, handlers []*handler, accept func(T
 			break
 		}
 
+		// With a usable response already in hand, stop querying the remaining
+		// handlers once a better one is no longer worth waiting for, and bound
+		// the queries still worth trying so a hung handler cannot outlast it.
+		callCtx, cancel := ctx, func() {}
+		if fallback != nil && !fallbackDeadline.IsZero() {
+			if !time.Now().Before(fallbackDeadline) {
+				break
+			}
+
+			callCtx, cancel = context.WithDeadline(ctx, fallbackDeadline)
+		}
+
 		// Run the query function.
-		val, err := fn(ctx, handler)
+		val, err := fn(callCtx, handler)
+		cancel()
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -426,13 +456,13 @@ func inOrderRound[T any](ctx context.Context, handlers []*handler, accept func(T
 		}
 
 		// If no fallback has been recorded yet, record this val as a best-effort fallback.
-		if !haveFallback {
-			fallback, haveFallback = val, true
+		if fallback == nil {
+			fallback = &val
 		}
 	}
 
-	if haveFallback {
-		return fallback, false, true, errs
+	if fallback != nil {
+		return *fallback, false, true, errs
 	}
 
 	var zero T

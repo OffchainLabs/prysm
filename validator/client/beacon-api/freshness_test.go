@@ -170,17 +170,15 @@ func TestBlockFreshnessOptions(t *testing.T) {
 	})
 
 	t.Run("deadline comes from the caller context, not the hint", func(t *testing.T) {
-		// Unlike the read options, the block options do not turn the hint deadline
-		// into a read deadline: the caller's context deadline is used instead.
 		ctxDeadline := time.Now().Add(time.Minute)
 		base, cancel := context.WithDeadline(context.Background(), ctxDeadline)
 		defer cancel()
-		// The hint carries a different, earlier deadline; it must be ignored.
 		hintDeadline := time.Now().Add(time.Second)
 		ctx := iface.WithHint(base, headHint([32]byte{0x01}, 10, true, hintDeadline))
 
 		cfg := rest.ResolveOptions(blockFreshnessOptions(ctx, decodeWithParent([32]byte{0x01}))...)
 		require.Equal(t, ctxDeadline, cfg.Deadline)
+		require.Equal(t, hintDeadline.Add(-blockPublishMargin), cfg.FallbackDeadline)
 	})
 }
 

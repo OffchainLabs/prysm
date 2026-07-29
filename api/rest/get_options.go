@@ -18,12 +18,13 @@ const (
 
 // getConfig holds the per-call configuration.
 type getConfig struct {
-	race         bool                                    // When true, query all nodes concurrently. When false, try nodes in order.
-	accept       func(json.RawMessage) bool              // Acceptance criterion for a JSON Get.
-	sszAccept    func(body []byte, hdr http.Header) bool // Acceptance criterion for a GetSSZ.
-	pollInterval time.Duration                           // When > 0, keep re-polling all nodes until the deadline, waiting this long between rounds.
-	repollMode   RepollMode                              // When re-polling, the condition under which retrying stops.
-	deadline     time.Time                               // Absolute instant by which the read must finish
+	race             bool                                    // When true, query all nodes concurrently. When false, try nodes in order.
+	accept           func(json.RawMessage) bool              // Acceptance criterion for a JSON Get.
+	sszAccept        func(body []byte, hdr http.Header) bool // Acceptance criterion for a GetSSZ.
+	pollInterval     time.Duration                           // When > 0, keep re-polling all nodes until the deadline, waiting this long between rounds.
+	repollMode       RepollMode                              // When re-polling, the condition under which retrying stops.
+	deadline         time.Time                               // Absolute instant by which the read must finish
+	fallbackDeadline time.Time                               // If non-zero, bounds the wait for the nodes that have not answered yet once a usable response is in hand.
 }
 
 // GetOption customizes a Handler.Get call.
@@ -79,6 +80,15 @@ func WithDeadline(t time.Time) GetOption {
 	}
 }
 
+// WithFallbackDeadline bounds how long a read waits for the nodes that have not
+// answered yet, once another node has already returned a usable (but not
+// accepted) response.
+func WithFallbackDeadline(t time.Time) GetOption {
+	return func(c *getConfig) {
+		c.fallbackDeadline = t
+	}
+}
+
 // WithRepoll makes a read keep re-polling all nodes (at defaultPollInterval)
 // until the deadline fires. mode selects what stops the re-polling: an
 // accept-passing response (UntilAccepted) or any usable 2xx response
@@ -94,12 +104,13 @@ func WithRepoll(mode RepollMode) GetOption {
 // produces. It lets other packages unit-test the options they build without
 // exercising a full HTTP read (getConfig itself is unexported).
 type ResolvedConfig struct {
-	Race         bool
-	Accept       func(raw json.RawMessage) bool
-	SSZAccept    func(body []byte, hdr http.Header) bool
-	PollInterval time.Duration
-	RepollMode   RepollMode
-	Deadline     time.Time
+	Race             bool
+	Accept           func(raw json.RawMessage) bool
+	SSZAccept        func(body []byte, hdr http.Header) bool
+	PollInterval     time.Duration
+	RepollMode       RepollMode
+	Deadline         time.Time
+	FallbackDeadline time.Time
 }
 
 // ResolveOptions folds opts into a ResolvedConfig for inspection.
@@ -107,11 +118,12 @@ func ResolveOptions(opts ...GetOption) ResolvedConfig {
 	cfg := newGetConfig(opts)
 
 	return ResolvedConfig{
-		Race:         cfg.race,
-		Accept:       cfg.accept,
-		SSZAccept:    cfg.sszAccept,
-		PollInterval: cfg.pollInterval,
-		RepollMode:   cfg.repollMode,
-		Deadline:     cfg.deadline,
+		Race:             cfg.race,
+		Accept:           cfg.accept,
+		SSZAccept:        cfg.sszAccept,
+		PollInterval:     cfg.pollInterval,
+		RepollMode:       cfg.repollMode,
+		Deadline:         cfg.deadline,
+		FallbackDeadline: cfg.fallbackDeadline,
 	}
 }
