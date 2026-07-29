@@ -268,10 +268,6 @@ func (c *grpcValidatorClient) ProposeExit(ctx context.Context, in *ethpb.SignedV
 	return c.getClient().ProposeExit(ctx, in)
 }
 
-func (c *grpcValidatorClient) StreamBlocksAltair(ctx context.Context, in *ethpb.StreamBlocksRequest) (ethpb.BeaconNodeValidator_StreamBlocksAltairClient, error) {
-	return c.getClient().StreamBlocksAltair(ctx, in)
-}
-
 func (c *grpcValidatorClient) SubmitAggregateSelectionProof(ctx context.Context, in *ethpb.AggregateSelectionRequest, _ primitives.ValidatorIndex, _ uint64) (*ethpb.AggregateSelectionResponse, error) {
 	return c.getClient().SubmitAggregateSelectionProof(ctx, in)
 }

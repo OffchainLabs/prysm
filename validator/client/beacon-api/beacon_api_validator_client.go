@@ -224,10 +224,6 @@ func (c *beaconApiValidatorClient) ProposeExit(ctx context.Context, in *ethpb.Si
 	})
 }
 
-func (c *beaconApiValidatorClient) StreamBlocksAltair(ctx context.Context, in *ethpb.StreamBlocksRequest) (ethpb.BeaconNodeValidator_StreamBlocksAltairClient, error) {
-	return c.streamBlocks(ctx, in, time.Second), nil
-}
-
 func (c *beaconApiValidatorClient) SubmitAggregateSelectionProof(ctx context.Context, in *ethpb.AggregateSelectionRequest, index primitives.ValidatorIndex, committeeLength uint64) (*ethpb.AggregateSelectionResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.SubmitAggregateSelectionProof")
 	defer span.End()
