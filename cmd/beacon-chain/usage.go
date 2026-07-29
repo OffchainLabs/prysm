@@ -141,6 +141,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.LocalBlockValueBoost,
 			flags.MaxBuilderConsecutiveMissedSlots,
 			flags.MaxBuilderEpochMissedSlots,
+			flags.BuilderIndexDenylist,
 			flags.MevRelayEndpoint,
 			flags.MinBuilderBid,
 			flags.MinBuilderDiff,

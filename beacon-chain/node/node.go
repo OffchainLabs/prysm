@@ -107,6 +107,7 @@ type BeaconNode struct {
 	depositCache              cache.DepositCache
 	proposerPreferencesCache  *cache.ProposerPreferencesCache
 	subscribedValidatorsCache *cache.SubscribedValidatorsCache
+	builderCircuitBreaker     *cache.BuilderCircuitBreaker
 	payloadIDCache            *cache.PayloadIDCache
 	executionPayloadCache     *cache.ExecutionPayloadEnvelopeCache
 	stateFeed                 *event.Feed
@@ -154,6 +155,11 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 	}
 	ctx := cliCtx.Context
 
+	builderDenylist, err := builderIndexDenylist(cliCtx)
+	if err != nil {
+		return nil, err
+	}
+
 	beacon := &BeaconNode{
 		cliCtx:                    cliCtx,
 		ctx:                       ctx,
@@ -173,6 +179,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		blsToExecPool:             blstoexec.NewPool(),
 		proposerPreferencesCache:  cache.NewProposerPreferencesCache(),
 		subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
+		builderCircuitBreaker:     cache.NewBuilderCircuitBreaker(builderDenylist),
 		payloadIDCache:            cache.NewPayloadIDCache(),
 		executionPayloadCache:     cache.NewExecutionPayloadEnvelopeCache(),
 		slasherBlockHeadersFeed:   new(event.Feed),
@@ -780,6 +787,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithDataColumnStorage(b.DataColumnStorage),
 		blockchain.WithProposerPreferencesCache(b.proposerPreferencesCache),
 		blockchain.WithSubscribedValidatorsCache(b.subscribedValidatorsCache),
+		blockchain.WithBuilderCircuitBreaker(b.builderCircuitBreaker),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
 		blockchain.WithSyncChecker(b.syncChecker),
 		blockchain.WithSlasherEnabled(b.slasherEnabled),
@@ -880,6 +888,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithAvailableBlocker(bFillStore),
 		regularsync.WithProposerPreferencesCache(b.proposerPreferencesCache),
 		regularsync.WithSubscribedValidatorsCache(b.subscribedValidatorsCache),
+		regularsync.WithBuilderCircuitBreaker(b.builderCircuitBreaker),
 		regularsync.WithSlasherEnabled(b.slasherEnabled),
 		regularsync.WithLightClientStore(b.lcStore),
 		regularsync.WithBatchVerifierLimit(b.cliCtx.Int(flags.BatchVerifierLimit.Name)),
@@ -1042,6 +1051,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		DataColumnStorage:                b.DataColumnStorage,
 		ProposerPreferencesCache:         b.proposerPreferencesCache,
 		SubscribedValidatorsCache:        b.subscribedValidatorsCache,
+		BuilderCircuitBreaker:            b.builderCircuitBreaker,
 		HighestBidCache:                  regularSyncService.HighestExecutionPayloadBidCache(),
 		PayloadIDCache:                   b.payloadIDCache,
 		ExecutionPayloadEnvelopeCache:    b.executionPayloadCache,

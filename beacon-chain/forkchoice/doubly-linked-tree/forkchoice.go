@@ -750,6 +750,11 @@ func (f *ForkChoice) ConsensusNodeWeight(root [32]byte) (uint64, error) {
 	return n.node.weight, nil
 }
 
+// CommitteeWeight returns the total active balance per slot, as last computed at the justified checkpoint.
+func (f *ForkChoice) CommitteeWeight() uint64 {
+	return f.store.committeeWeight
+}
+
 // PayloadWeights returns the empty and full payload node weights for the given root.
 func (f *ForkChoice) PayloadWeights(root [32]byte) (emptyWeight, fullWeight uint64, err error) {
 	en, ok := f.store.emptyNodeByRoot[root]

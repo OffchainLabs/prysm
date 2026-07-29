@@ -275,6 +275,45 @@ func TestValidateExecutionPayloadBidGossip_HappyPath(t *testing.T) {
 	require.DeepEqual(t, signedBid, got)
 }
 
+// A blacklisted builder must be ignored before any verification runs, and must not be cached.
+func TestValidateExecutionPayloadBidGossip_BlacklistedBuilderIgnored(t *testing.T) {
+	ctx := context.Background()
+	s, msg, signedBid := setupExecutionPayloadBidService(t)
+	s.builderCircuitBreaker = cache.NewBuilderCircuitBreaker(
+		[]primitives.BuilderIndex{signedBid.Message.BuilderIndex})
+	// Every verifier method would reject if reached.
+	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{
+		errCurrentOrNextSlot: errors.New("slot"),
+		errBuilderActive:     errors.New("builder"),
+		errSignature:         errors.New("sig"),
+	})
+
+	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+
+	builderKey := executionPayloadBidBuilderKey(signedBid.Message.Slot, signedBid.Message.BuilderIndex)
+	require.Equal(t, false, s.hasSeenExecutionPayloadBidBuilder(builderKey))
+	_, cached := s.highestExecutionPayloadBidCache.Get(
+		signedBid.Message.Slot,
+		bytesutil.ToBytes32(signedBid.Message.ParentBlockHash),
+		bytesutil.ToBytes32(signedBid.Message.ParentBlockRoot))
+	require.Equal(t, false, cached)
+}
+
+// A bid from a builder that is not blacklisted is unaffected by the circuit breaker.
+func TestValidateExecutionPayloadBidGossip_OtherBuilderNotBlacklisted(t *testing.T) {
+	ctx := context.Background()
+	s, msg, signedBid := setupExecutionPayloadBidService(t)
+	s.builderCircuitBreaker = cache.NewBuilderCircuitBreaker(
+		[]primitives.BuilderIndex{signedBid.Message.BuilderIndex + 1})
+	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
+
+	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, result)
+}
+
 func TestValidateExecutionPayloadBidGossip_NextSlotStateMissIgnored(t *testing.T) {
 	ctx := context.Background()
 	s, msg, _ := setupExecutionPayloadBidService(t)

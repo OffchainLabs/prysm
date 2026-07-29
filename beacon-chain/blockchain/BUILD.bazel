@@ -3,6 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "builder_circuit_breaker.go",
         "chain_info.go",
         "chain_info_forkchoice.go",
         "currently_syncing_block.go",
@@ -119,6 +120,7 @@ go_test(
     size = "medium",
     srcs = [
         "blockchain_test.go",
+        "builder_circuit_breaker_test.go",
         "chain_info_norace_test.go",
         "chain_info_test.go",
         "checktags_test.go",

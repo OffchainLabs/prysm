@@ -87,8 +87,9 @@ func (s *Store) insert(ctx context.Context,
 	var parent *PayloadNode
 	blockHash := &[32]byte{}
 	var gasLimit uint64
+	var builderIndex primitives.BuilderIndex
 	if block.Version() >= version.Gloas {
-		if err := s.resolveParentPayloadStatus(block, &parent, blockHash); err != nil {
+		if err := s.resolveParentPayloadStatus(block, &parent, blockHash, &builderIndex); err != nil {
 			return nil, err
 		}
 	} else {
@@ -112,6 +113,7 @@ func (s *Store) insert(ctx context.Context,
 	n := &Node{
 		slot:                        slot,
 		proposerIndex:               block.ProposerIndex(),
+		builderIndex:                builderIndex,
 		root:                        root,
 		parent:                      parent,
 		justifiedEpoch:              justifiedEpoch,

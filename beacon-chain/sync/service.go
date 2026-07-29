@@ -204,6 +204,7 @@ type Service struct {
 	payloadAttestationCache              *cache.PayloadAttestationCache
 	proposerPreferencesCache             *cache.ProposerPreferencesCache
 	subscribedValidatorsCache            *cache.SubscribedValidatorsCache
+	builderCircuitBreaker                *cache.BuilderCircuitBreaker
 	digestActions                        perDigestSet
 	subscriptionSpawner                  func(func()) // see Service.spawn for details
 	newExecutionPayloadEnvelopeVerifier  verification.NewExecutionPayloadEnvelopeVerifier

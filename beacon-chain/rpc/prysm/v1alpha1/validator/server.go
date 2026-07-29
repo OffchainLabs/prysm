@@ -52,6 +52,7 @@ type Server struct {
 	ProposerPreferencesCache         *cache.ProposerPreferencesCache
 	SubscribedValidatorsCache        *cache.SubscribedValidatorsCache
 	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
+	BuilderCircuitBreaker            *cache.BuilderCircuitBreaker
 	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache
 	HeadFetcher                      blockchain.HeadFetcher
 	ForkFetcher                      blockchain.ForkFetcher

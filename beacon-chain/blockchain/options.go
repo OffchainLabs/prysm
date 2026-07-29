@@ -97,6 +97,14 @@ func WithProposerPreferencesCache(c *cache.ProposerPreferencesCache) Option {
 	}
 }
 
+// WithBuilderCircuitBreaker sets the tracker of builders that failed to reveal their payload.
+func WithBuilderCircuitBreaker(c *cache.BuilderCircuitBreaker) Option {
+	return func(s *Service) error {
+		s.cfg.BuilderCircuitBreaker = c
+		return nil
+	}
+}
+
 // WithSubscribedValidatorsCache sets the cache of validator indices attached
 // to this BN, populated from beacon_committee_subscriptions.
 func WithSubscribedValidatorsCache(c *cache.SubscribedValidatorsCache) Option {

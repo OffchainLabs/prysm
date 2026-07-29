@@ -229,6 +229,75 @@ func TestSetExecutionPayloadBid_PrefersP2PBid(t *testing.T) {
 	require.Equal(t, primitives.Gwei(500), signedBid.Message.ExecutionPayment)
 }
 
+// A cached P2P bid from a blacklisted builder must be ignored, even though it outbids the local
+// payload: bids can be cached before the ban lands.
+func TestSetExecutionPayloadBid_IgnoresBlacklistedP2PBid(t *testing.T) {
+	parentHash := [32]byte{10, 20, 30}
+	parentRoot := [32]byte{1, 2, 3}
+	slot := primitives.Slot(100)
+
+	sBlk, err := consensusblocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{
+		Block: &ethpb.BeaconBlockGloas{
+			Slot:       slot,
+			ParentRoot: parentRoot[:],
+			Body:       &ethpb.BeaconBlockBodyGloas{},
+		},
+	})
+	require.NoError(t, err)
+
+	payload := &enginev1.ExecutionPayloadDeneb{
+		ParentHash:    parentHash[:],
+		FeeRecipient:  make([]byte, 20),
+		StateRoot:     make([]byte, 32),
+		ReceiptsRoot:  make([]byte, 32),
+		LogsBloom:     make([]byte, 256),
+		PrevRandao:    make([]byte, 32),
+		BaseFeePerGas: make([]byte, 32),
+		BlockHash:     make([]byte, 32),
+		ExtraData:     make([]byte, 0),
+	}
+	ed, err := consensusblocks.WrappedExecutionPayloadDeneb(payload)
+	require.NoError(t, err)
+	local := &consensusblocks.GetPayloadResponse{
+		ExecutionData:          ed,
+		Bid:                    big.NewInt(0),
+		BlobsBundler:           &enginev1.BlobsBundle{},
+		ExecutionRequestsGloas: &enginev1.ExecutionRequestsGloas{},
+	}
+
+	bidCache := cache.NewHighestExecutionPayloadBidCache()
+	bidCache.SetIfHigher(&ethpb.SignedExecutionPayloadBid{
+		Message: &ethpb.ExecutionPayloadBid{
+			Slot:                  slot,
+			ParentBlockHash:       parentHash[:],
+			ParentBlockRoot:       parentRoot[:],
+			BlockHash:             make([]byte, 32),
+			BuilderIndex:          5,
+			Value:                 1000,
+			ExecutionPayment:      500,
+			FeeRecipient:          make([]byte, 20),
+			GasLimit:              30_000_000,
+			PrevRandao:            make([]byte, 32),
+			BlobKzgCommitments:    [][]byte{},
+			ExecutionRequestsRoot: make([]byte, 32),
+		},
+		Signature: make([]byte, 96),
+	})
+
+	vs := &Server{
+		HighestBidCache:       bidCache,
+		BuilderCircuitBreaker: cache.NewBuilderCircuitBreaker([]primitives.BuilderIndex{5}),
+	}
+
+	src, err := vs.setExecutionPayloadBid(t.Context(), sBlk, local, nil, 0, false)
+	require.NoError(t, err)
+	require.Equal(t, bidSourceSelfBuild, src)
+
+	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
+	require.NoError(t, err)
+	require.Equal(t, params.BeaconConfig().BuilderIndexSelfBuild, signedBid.Message.BuilderIndex)
+}
+
 func TestSetExecutionPayloadBid_PrefersLocalWhenHigherValue(t *testing.T) {
 	parentHash := [32]byte{10, 20, 30}
 	parentRoot := [32]byte{1, 2, 3}

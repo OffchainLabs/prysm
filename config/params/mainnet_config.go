@@ -303,6 +303,16 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	// Mevboost circuit breaker
 	MaxBuilderConsecutiveMissedSlots: 3,
 	MaxBuilderEpochMissedSlots:       5,
+
+	// Gloas builder circuit breaker
+	BuilderAllowedFailures:         0,
+	BuilderCriticalFailures:        2,
+	BuilderBlacklistPeriod:         1,
+	BuilderCriticalBlacklistPeriod: 256,
+	BuilderFailureBackOffPeriod:    5,
+	BuilderCriticalFailedBuilders:  7,
+	BuilderFailureWeightThreshold:  60,
+
 	// Execution engine timeout value
 	ExecutionEngineTimeoutValue: 8, // 8 seconds default based on: https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md#core
 

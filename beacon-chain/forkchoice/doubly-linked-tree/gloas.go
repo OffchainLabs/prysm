@@ -41,7 +41,7 @@ func (f *ForkChoice) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) 
 	return pn.node.root, pn.full
 }
 
-func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock, parent **PayloadNode, blockHash *[32]byte) error {
+func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock, parent **PayloadNode, blockHash *[32]byte, builderIndex *primitives.BuilderIndex) error {
 	sb, err := block.Body().SignedExecutionPayloadBid()
 	if err != nil {
 		return err
@@ -55,6 +55,7 @@ func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock,
 		return errors.Wrap(err, "failed to get bid from wrapped bid")
 	}
 	*blockHash = bid.BlockHash()
+	*builderIndex = bid.BuilderIndex()
 	parentRoot := block.ParentRoot()
 	*parent = s.emptyNodeByRoot[parentRoot]
 	if *parent == nil {
@@ -626,6 +627,15 @@ func (f *ForkChoice) ParentHash(root [32]byte) [32]byte {
 		return [32]byte{}
 	}
 	return f.store.parentHash(en)
+}
+
+// BuilderIndex returns the builder index committed in the given block's bid.
+func (f *ForkChoice) BuilderIndex(root [32]byte) (primitives.BuilderIndex, error) {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return 0, errors.Wrap(ErrNilNode, "could not get builder index for root")
+	}
+	return en.node.builderIndex, nil
 }
 
 // BlockHash returns the hash committed in the given block

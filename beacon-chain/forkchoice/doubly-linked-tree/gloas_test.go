@@ -360,6 +360,45 @@ func TestBlockHash_ReturnsBlockHash(t *testing.T) {
 	assert.Equal(t, blockHash, got)
 }
 
+func TestBuilderIndex(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	root := indexToHash(1)
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 1, root, params.BeaconConfig().ZeroHash, indexToHash(100), params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	// Rebuild the block with a non-default builder index.
+	blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+		Block: &ethpb.BeaconBlockGloas{
+			Slot: 1,
+			Body: &ethpb.BeaconBlockBodyGloas{
+				SignedExecutionPayloadBid: util.HydrateSignedExecutionPayloadBid(&ethpb.SignedExecutionPayloadBid{
+					Message: &ethpb.ExecutionPayloadBid{BuilderIndex: 42},
+				}),
+			},
+		},
+	})
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	roblock, err = blocks.NewROBlockWithRoot(signed, root)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	got, err := f.BuilderIndex(root)
+	require.NoError(t, err)
+	assert.Equal(t, primitives.BuilderIndex(42), got)
+
+	_, err = f.BuilderIndex(indexToHash(999))
+	require.ErrorContains(t, ErrNilNode.Error(), err)
+}
+
+func TestCommitteeWeight(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	assert.Equal(t, uint64(0), f.CommitteeWeight())
+	f.store.committeeWeight = 320
+	assert.Equal(t, uint64(320), f.CommitteeWeight())
+}
+
 func TestBlockHash_UnknownRoot(t *testing.T) {
 	f := setupGloas(t, 0, 0)
 
