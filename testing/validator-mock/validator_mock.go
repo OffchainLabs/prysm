@@ -17,9 +17,11 @@ import (
 	event "github.com/OffchainLabs/prysm/v7/api/client/event"
 	proposer "github.com/OffchainLabs/prysm/v7/config/proposer"
 	primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	validator "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	iface "github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	keymanager "github.com/OffchainLabs/prysm/v7/validator/keymanager"
+	common "github.com/ethereum/go-ethereum/common"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -73,6 +75,20 @@ func (m *MockValidator) CheckDoppelGanger(ctx context.Context) error {
 func (mr *MockValidatorMockRecorder) CheckDoppelGanger(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckDoppelGanger", reflect.TypeOf((*MockValidator)(nil).CheckDoppelGanger), ctx)
+}
+
+// DeleteFeeRecipient mocks base method.
+func (m *MockValidator) DeleteFeeRecipient(ctx context.Context, pubKey [48]byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteFeeRecipient", ctx, pubKey)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteFeeRecipient indicates an expected call of DeleteFeeRecipient.
+func (mr *MockValidatorMockRecorder) DeleteFeeRecipient(ctx, pubKey any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteFeeRecipient", reflect.TypeOf((*MockValidator)(nil).DeleteFeeRecipient), ctx, pubKey)
 }
 
 // DeleteGraffiti mocks base method.
@@ -332,6 +348,20 @@ func (mr *MockValidatorMockRecorder) PushProposerSettings(ctx, slot, forceFullPu
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushProposerSettings", reflect.TypeOf((*MockValidator)(nil).PushProposerSettings), ctx, slot, forceFullPush)
 }
 
+// ResetGasLimit mocks base method.
+func (m *MockValidator) ResetGasLimit(ctx context.Context, pubKey [48]byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResetGasLimit", ctx, pubKey)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ResetGasLimit indicates an expected call of ResetGasLimit.
+func (mr *MockValidatorMockRecorder) ResetGasLimit(ctx, pubKey any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetGasLimit", reflect.TypeOf((*MockValidator)(nil).ResetGasLimit), ctx, pubKey)
+}
+
 // RolesAt mocks base method.
 func (m *MockValidator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[48]byte][]iface.ValidatorRole, error) {
 	m.ctrl.T.Helper()
@@ -345,6 +375,34 @@ func (m *MockValidator) RolesAt(ctx context.Context, slot primitives.Slot) (map[
 func (mr *MockValidatorMockRecorder) RolesAt(ctx, slot any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RolesAt", reflect.TypeOf((*MockValidator)(nil).RolesAt), ctx, slot)
+}
+
+// SetFeeRecipient mocks base method.
+func (m *MockValidator) SetFeeRecipient(ctx context.Context, pubKey [48]byte, feeRecipient common.Address) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetFeeRecipient", ctx, pubKey, feeRecipient)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetFeeRecipient indicates an expected call of SetFeeRecipient.
+func (mr *MockValidatorMockRecorder) SetFeeRecipient(ctx, pubKey, feeRecipient any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetFeeRecipient", reflect.TypeOf((*MockValidator)(nil).SetFeeRecipient), ctx, pubKey, feeRecipient)
+}
+
+// SetGasLimit mocks base method.
+func (m *MockValidator) SetGasLimit(ctx context.Context, pubKey [48]byte, gasLimit validator.Uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetGasLimit", ctx, pubKey, gasLimit)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetGasLimit indicates an expected call of SetGasLimit.
+func (mr *MockValidatorMockRecorder) SetGasLimit(ctx, pubKey, gasLimit any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetGasLimit", reflect.TypeOf((*MockValidator)(nil).SetGasLimit), ctx, pubKey, gasLimit)
 }
 
 // SetGraffiti mocks base method.

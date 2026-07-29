@@ -12,10 +12,12 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	validatortypes "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
+	"github.com/ethereum/go-ethereum/common"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -298,6 +300,38 @@ func (fv *FakeValidator) ProposerSettings() *proposer.Settings {
 
 // SetProposerSettings for mocking
 func (fv *FakeValidator) SetProposerSettings(_ context.Context, settings *proposer.Settings) error {
+	fv.proposerSettings = settings
+	return nil
+}
+
+// SetFeeRecipient for mocking
+func (fv *FakeValidator) SetFeeRecipient(_ context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, feeRecipient common.Address) error {
+	fv.proposerSettings = fv.proposerSettings.Clone().SetFeeRecipient(pubKey, feeRecipient)
+	return nil
+}
+
+// DeleteFeeRecipient for mocking
+func (fv *FakeValidator) DeleteFeeRecipient(_ context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error {
+	fv.proposerSettings = fv.proposerSettings.Clone().DeleteFeeRecipient(pubKey)
+	return nil
+}
+
+// SetGasLimit for mocking
+func (fv *FakeValidator) SetGasLimit(_ context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, gasLimit validatortypes.Uint64) error {
+	settings := fv.proposerSettings.Clone()
+	if err := settings.SetGasLimit(pubKey, gasLimit); err != nil {
+		return err
+	}
+	fv.proposerSettings = settings
+	return nil
+}
+
+// ResetGasLimit for mocking
+func (fv *FakeValidator) ResetGasLimit(_ context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error {
+	settings := fv.proposerSettings.Clone()
+	if !settings.ResetGasLimit(pubKey) {
+		return iface.ErrNoGasLimitSet
+	}
 	fv.proposerSettings = settings
 	return nil
 }

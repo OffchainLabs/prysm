@@ -13,13 +13,13 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/OffchainLabs/prysm/v7/validator/client"
+	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/derived"
 	slashingprotection "github.com/OffchainLabs/prysm/v7/validator/slashing-protection-history"
@@ -624,54 +624,7 @@ func (s *Server) SetFeeRecipientByPubkey(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	feeRecipient := common.BytesToAddress(ethAddress)
-	settings := s.validatorService.ProposerSettings()
-	switch {
-	case settings == nil:
-		settings = &proposer.Settings{
-			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
-				bytesutil.ToBytes48(pubkey): {
-					FeeRecipientConfig: &proposer.FeeRecipientConfig{
-						FeeRecipient: feeRecipient,
-					},
-					BuilderConfig: nil,
-				},
-			},
-			DefaultConfig: nil,
-		}
-	case settings.ProposeConfig == nil:
-		var builderConfig *proposer.BuilderConfig
-		if settings.DefaultConfig != nil && settings.DefaultConfig.BuilderConfig != nil {
-			builderConfig = settings.DefaultConfig.BuilderConfig.Clone()
-		}
-		settings.ProposeConfig = map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
-			bytesutil.ToBytes48(pubkey): {
-				FeeRecipientConfig: &proposer.FeeRecipientConfig{
-					FeeRecipient: feeRecipient,
-				},
-				BuilderConfig: builderConfig,
-			},
-		}
-	default:
-		proposerOption, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
-		if found && proposerOption != nil {
-			proposerOption.FeeRecipientConfig = &proposer.FeeRecipientConfig{
-				FeeRecipient: feeRecipient,
-			}
-		} else {
-			var builderConfig = &proposer.BuilderConfig{}
-			if settings.DefaultConfig != nil && settings.DefaultConfig.BuilderConfig != nil {
-				builderConfig = settings.DefaultConfig.BuilderConfig.Clone()
-			}
-			settings.ProposeConfig[bytesutil.ToBytes48(pubkey)] = &proposer.Option{
-				FeeRecipientConfig: &proposer.FeeRecipientConfig{
-					FeeRecipient: feeRecipient,
-				},
-				BuilderConfig: builderConfig,
-			}
-		}
-	}
-	// save the settings
-	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
+	if err := s.validatorService.SetFeeRecipient(ctx, bytesutil.ToBytes48(pubkey), feeRecipient); err != nil {
 		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -693,16 +646,7 @@ func (s *Server) DeleteFeeRecipientByPubkey(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	settings := s.validatorService.ProposerSettings()
-	if settings != nil && settings.ProposeConfig != nil {
-		proposerOption, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
-		if found {
-			proposerOption.FeeRecipientConfig = nil
-		}
-	}
-
-	// save the settings
-	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
+	if err := s.validatorService.DeleteFeeRecipient(ctx, bytesutil.ToBytes48(pubkey)); err != nil {
 		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -764,14 +708,8 @@ func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	settings := s.validatorService.ProposerSettings()
-	if err := settings.SetGasLimit(bytesutil.ToBytes48(pubkey), validator.Uint64(gasLimit)); err != nil {
+	if err := s.validatorService.SetGasLimit(ctx, bytesutil.ToBytes48(pubkey), validator.Uint64(gasLimit)); err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
-		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
@@ -791,12 +729,12 @@ func (s *Server) DeleteGasLimit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	settings := s.validatorService.ProposerSettings()
-	if !settings.ResetGasLimit(bytesutil.ToBytes48(pubkey)) {
+	err := s.validatorService.ResetGasLimit(ctx, bytesutil.ToBytes48(pubkey))
+	switch {
+	case errors.Is(err, iface.ErrNoGasLimitSet):
 		httputil.HandleError(w, fmt.Sprintf("No gas limit found for pubkey %q", rawPubkey), http.StatusNotFound)
 		return
-	}
-	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
+	case err != nil:
 		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusBadRequest)
 		return
 	}

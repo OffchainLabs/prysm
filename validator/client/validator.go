@@ -28,6 +28,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	validatortypes "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -57,6 +58,8 @@ import (
 var (
 	ErrBuilderValidatorRegistration = errors.New("Builder API validator registration unsuccessful")
 	ErrValidatorsAllExited          = errors.New("All validators are exited, no more work to perform...")
+
+	errProposerSettingsUnchanged = errors.New("proposer settings unchanged")
 )
 
 var (
@@ -77,6 +80,7 @@ type validator struct {
 	cachedAttestationDataLock    sync.RWMutex
 	submittedPrefSlotsLock       sync.RWMutex
 	signedRequestAuthsLock       sync.Mutex
+	proposerSettingsLock         sync.RWMutex
 	domainDataLock               sync.RWMutex
 	cachedAttestationData        *ethpb.AttestationData
 	graffitiOrderedIndex         uint64
@@ -775,8 +779,12 @@ func (v *validator) getAttestationData(ctx context.Context, slot primitives.Slot
 	return data, nil
 }
 
-// ProposerSettings gets the current proposer settings saved in memory validator
+// ProposerSettings gets the current proposer settings saved in memory validator.
+// The returned settings are shared; treat them as read-only and use the named
+// mutators (SetFeeRecipient, SetGasLimit, ...) or SetProposerSettings to modify them.
 func (v *validator) ProposerSettings() *proposer.Settings {
+	v.proposerSettingsLock.RLock()
+	defer v.proposerSettingsLock.RUnlock()
 	return v.proposerSettings
 }
 
@@ -785,6 +793,66 @@ func (v *validator) SetProposerSettings(ctx context.Context, settings *proposer.
 	ctx, span := trace.StartSpan(ctx, "validator.SetProposerSettings")
 	defer span.End()
 
+	v.proposerSettingsLock.Lock()
+	defer v.proposerSettingsLock.Unlock()
+	return v.persistProposerSettingsLocked(ctx, settings)
+}
+
+// updateProposerSettings atomically applies mutate to a clone of the current settings
+// and persists the result. mutate must not call back into the proposer settings API.
+func (v *validator) updateProposerSettings(ctx context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
+	ctx, span := trace.StartSpan(ctx, "validator.updateProposerSettings")
+	defer span.End()
+
+	v.proposerSettingsLock.Lock()
+	defer v.proposerSettingsLock.Unlock()
+	var settings *proposer.Settings
+	if v.proposerSettings != nil {
+		settings = v.proposerSettings.Clone()
+	}
+	settings, err := mutate(settings)
+	if err != nil {
+		return err
+	}
+	return v.persistProposerSettingsLocked(ctx, settings)
+}
+
+// SetFeeRecipient sets and persists the fee recipient for pubKey.
+func (v *validator) SetFeeRecipient(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, feeRecipient common.Address) error {
+	return v.updateProposerSettings(ctx, func(ps *proposer.Settings) (*proposer.Settings, error) {
+		return ps.SetFeeRecipient(pubKey, feeRecipient), nil
+	})
+}
+
+// DeleteFeeRecipient clears and persists the fee recipient for pubKey.
+func (v *validator) DeleteFeeRecipient(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error {
+	return v.updateProposerSettings(ctx, func(ps *proposer.Settings) (*proposer.Settings, error) {
+		return ps.DeleteFeeRecipient(pubKey), nil
+	})
+}
+
+// SetGasLimit sets and persists the gas limit for pubKey.
+func (v *validator) SetGasLimit(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, gasLimit validatortypes.Uint64) error {
+	return v.updateProposerSettings(ctx, func(ps *proposer.Settings) (*proposer.Settings, error) {
+		if err := ps.SetGasLimit(pubKey, gasLimit); err != nil {
+			return nil, err
+		}
+		return ps, nil
+	})
+}
+
+// ResetGasLimit reverts pubKey's gas limit to the configured default and persists
+// the result; returns iface.ErrNoGasLimitSet when there is nothing to reset.
+func (v *validator) ResetGasLimit(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error {
+	return v.updateProposerSettings(ctx, func(ps *proposer.Settings) (*proposer.Settings, error) {
+		if !ps.ResetGasLimit(pubKey) {
+			return nil, iface.ErrNoGasLimitSet
+		}
+		return ps, nil
+	})
+}
+
+func (v *validator) persistProposerSettingsLocked(ctx context.Context, settings *proposer.Settings) error {
 	if v.db == nil {
 		return errors.New("db is not set")
 	}
@@ -1137,11 +1205,13 @@ func (v *validator) buildProposerSettingsRequests(
 // them. Callers must gate this on gloas-active so the pre-gloas registration
 // path still sees BuilderConfig.
 func (v *validator) upgradeProposerSettingsToV2(ctx context.Context) {
-	ps := v.ProposerSettings()
-	if !ps.UpgradeToV2() {
-		return
-	}
-	if err := v.SetProposerSettings(ctx, ps); err != nil {
+	err := v.updateProposerSettings(ctx, func(ps *proposer.Settings) (*proposer.Settings, error) {
+		if !ps.UpgradeToV2() {
+			return nil, errProposerSettingsUnchanged
+		}
+		return ps, nil
+	})
+	if err != nil && !errors.Is(err, errProposerSettingsUnchanged) {
 		log.WithError(err).Warn("Failed to persist v1->v2 proposer settings upgrade")
 	}
 }

@@ -8,11 +8,17 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	validatortypes "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
 )
+
+// ErrNoGasLimitSet is returned by ResetGasLimit when the pubkey has no gas limit to reset.
+var ErrNoGasLimitSet = errors.New("no gas limit set for pubkey")
 
 // ValidatorRole defines the validator role.
 type ValidatorRole int8
@@ -68,6 +74,10 @@ type Validator interface {
 	ProcessEvent(ctx context.Context, event *event.Event)
 	ProposerSettings() *proposer.Settings
 	SetProposerSettings(context.Context, *proposer.Settings) error
+	SetFeeRecipient(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, feeRecipient common.Address) error
+	DeleteFeeRecipient(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error
+	SetGasLimit(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, gasLimit validatortypes.Uint64) error
+	ResetGasLimit(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error
 	Graffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error)
 	SetGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, graffiti []byte) error
 	DeleteGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error

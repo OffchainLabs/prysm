@@ -11,6 +11,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	validatortypes "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
@@ -20,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
 	"github.com/dgraph-io/ristretto/v2"
+	"github.com/ethereum/go-ethereum/common"
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpcretry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	grpcopentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
@@ -317,6 +319,38 @@ func (v *ValidatorService) SetProposerSettings(ctx context.Context, settings *pr
 	// passes settings down to be updated in database and saved in memory.
 	// updates to validator proposer settings will be in the validator object and not validator service.
 	return v.validator.SetProposerSettings(ctx, settings)
+}
+
+// SetFeeRecipient sets and persists the fee recipient for pubKey.
+func (v *ValidatorService) SetFeeRecipient(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, feeRecipient common.Address) error {
+	return v.mutateProposerSettings(func() error { return v.validator.SetFeeRecipient(ctx, pubKey, feeRecipient) })
+}
+
+// DeleteFeeRecipient clears and persists the fee recipient for pubKey.
+func (v *ValidatorService) DeleteFeeRecipient(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error {
+	return v.mutateProposerSettings(func() error { return v.validator.DeleteFeeRecipient(ctx, pubKey) })
+}
+
+// SetGasLimit sets and persists the gas limit for pubKey.
+func (v *ValidatorService) SetGasLimit(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, gasLimit validatortypes.Uint64) error {
+	return v.mutateProposerSettings(func() error { return v.validator.SetGasLimit(ctx, pubKey, gasLimit) })
+}
+
+// ResetGasLimit reverts pubKey's gas limit to the configured default; returns
+// iface.ErrNoGasLimitSet when there is nothing to reset.
+func (v *ValidatorService) ResetGasLimit(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error {
+	return v.mutateProposerSettings(func() error { return v.validator.ResetGasLimit(ctx, pubKey) })
+}
+
+func (v *ValidatorService) mutateProposerSettings(mutate func() error) error {
+	if v.validator == nil {
+		return errors.New("validator is unavailable")
+	}
+	if err := mutate(); err != nil {
+		return err
+	}
+	v.proposerSettings = v.validator.ProposerSettings()
+	return nil
 }
 
 // ConstructDialOptions constructs a list of grpc dial options

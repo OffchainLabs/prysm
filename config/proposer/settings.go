@@ -400,6 +400,60 @@ func (ps *Settings) SetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, gasLim
 	return nil
 }
 
+// SetFeeRecipient sets the fee recipient for pubkey, creating settings or the
+// per-key option as needed. Safe on a nil receiver: returns the settings to keep.
+func (ps *Settings) SetFeeRecipient(pubkey [fieldparams.BLSPubkeyLength]byte, feeRecipient common.Address) *Settings {
+	switch {
+	case ps == nil:
+		return &Settings{
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				pubkey: {
+					FeeRecipientConfig: &FeeRecipientConfig{FeeRecipient: feeRecipient},
+					BuilderConfig:      nil,
+				},
+			},
+			DefaultConfig: nil,
+		}
+	case ps.ProposeConfig == nil:
+		var builderConfig *BuilderConfig
+		if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil {
+			builderConfig = ps.DefaultConfig.BuilderConfig.Clone()
+		}
+		ps.ProposeConfig = map[[fieldparams.BLSPubkeyLength]byte]*Option{
+			pubkey: {
+				FeeRecipientConfig: &FeeRecipientConfig{FeeRecipient: feeRecipient},
+				BuilderConfig:      builderConfig,
+			},
+		}
+	default:
+		option, found := ps.ProposeConfig[pubkey]
+		if found && option != nil {
+			option.FeeRecipientConfig = &FeeRecipientConfig{FeeRecipient: feeRecipient}
+		} else {
+			builderConfig := &BuilderConfig{}
+			if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil {
+				builderConfig = ps.DefaultConfig.BuilderConfig.Clone()
+			}
+			ps.ProposeConfig[pubkey] = &Option{
+				FeeRecipientConfig: &FeeRecipientConfig{FeeRecipient: feeRecipient},
+				BuilderConfig:      builderConfig,
+			}
+		}
+	}
+	return ps
+}
+
+// DeleteFeeRecipient clears pubkey's fee recipient. Safe on a nil receiver.
+func (ps *Settings) DeleteFeeRecipient(pubkey [fieldparams.BLSPubkeyLength]byte) *Settings {
+	if ps == nil || ps.ProposeConfig == nil {
+		return ps
+	}
+	if option, found := ps.ProposeConfig[pubkey]; found && option != nil {
+		option.FeeRecipientConfig = nil
+	}
+	return ps
+}
+
 // ResetGasLimit reverts pubkey's gas limit to the configured default (or chain
 // default). Returns false when there's nothing to reset.
 func (ps *Settings) ResetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) bool {

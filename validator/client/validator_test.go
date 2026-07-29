@@ -3925,3 +3925,128 @@ func TestGetAttestationData_PostElectraConcurrentAccess(t *testing.T) {
 		require.DeepEqual(t, expectedData, results[i])
 	}
 }
+
+func Test_validator_updateProposerSettings(t *testing.T) {
+	pubKey := [fieldparams.BLSPubkeyLength]byte{'a'}
+	newValidator := func(t *testing.T, settings *proposer.Settings) *validator {
+		return &validator{
+			db:               dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{pubKey}, false),
+			proposerSettings: settings,
+		}
+	}
+	optionFor := func(graffiti string) *proposer.Option {
+		return &proposer.Option{GraffitiConfig: &proposer.GraffitiConfig{Graffiti: graffiti}}
+	}
+
+	t.Run("applies mutation and persists", func(t *testing.T) {
+		v := newValidator(t, nil)
+		require.NoError(t, v.updateProposerSettings(t.Context(), func(ps *proposer.Settings) (*proposer.Settings, error) {
+			require.Equal(t, (*proposer.Settings)(nil), ps)
+			return &proposer.Settings{
+				ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{pubKey: optionFor("a")},
+			}, nil
+		}))
+		require.Equal(t, "a", v.ProposerSettings().ProposeConfig[pubKey].GraffitiConfig.Graffiti)
+		saved, err := v.db.ProposerSettings(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, "a", saved.ProposeConfig[pubKey].GraffitiConfig.Graffiti)
+	})
+
+	t.Run("mutate error leaves settings untouched", func(t *testing.T) {
+		initial := &proposer.Settings{
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{pubKey: optionFor("a")},
+		}
+		v := newValidator(t, initial)
+		require.NoError(t, v.db.SaveProposerSettings(t.Context(), initial))
+		err := v.updateProposerSettings(t.Context(), func(ps *proposer.Settings) (*proposer.Settings, error) {
+			ps.ProposeConfig[pubKey] = optionFor("mutated")
+			return nil, errors.New("mutate failed")
+		})
+		require.ErrorContains(t, "mutate failed", err)
+		require.Equal(t, "a", v.ProposerSettings().ProposeConfig[pubKey].GraffitiConfig.Graffiti)
+		saved, dbErr := v.db.ProposerSettings(t.Context())
+		require.NoError(t, dbErr)
+		require.Equal(t, "a", saved.ProposeConfig[pubKey].GraffitiConfig.Graffiti)
+	})
+
+	t.Run("mutate receives a clone of the live settings", func(t *testing.T) {
+		initial := &proposer.Settings{
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{pubKey: optionFor("a")},
+		}
+		v := newValidator(t, initial)
+		require.NoError(t, v.updateProposerSettings(t.Context(), func(ps *proposer.Settings) (*proposer.Settings, error) {
+			ps.ProposeConfig[pubKey] = optionFor("b")
+			require.Equal(t, "a", initial.ProposeConfig[pubKey].GraffitiConfig.Graffiti)
+			return ps, nil
+		}))
+		require.Equal(t, "b", v.ProposerSettings().ProposeConfig[pubKey].GraffitiConfig.Graffiti)
+	})
+
+	t.Run("concurrent updates are not lost", func(t *testing.T) {
+		v := newValidator(t, &proposer.Settings{
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{},
+		})
+		const writers = 16
+		var wg sync.WaitGroup
+		errs := make([]error, writers)
+		for i := range writers {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				key := [fieldparams.BLSPubkeyLength]byte{byte(i)}
+				errs[i] = v.updateProposerSettings(t.Context(), func(ps *proposer.Settings) (*proposer.Settings, error) {
+					ps.ProposeConfig[key] = optionFor("g")
+					return ps, nil
+				})
+			}()
+		}
+		wg.Wait()
+		for i := range writers {
+			require.NoError(t, errs[i])
+		}
+		require.Equal(t, writers, len(v.ProposerSettings().ProposeConfig))
+	})
+}
+
+func Test_validator_ProposerSettingsMutators(t *testing.T) {
+	pubKey := [fieldparams.BLSPubkeyLength]byte{'a'}
+	newValidator := func(t *testing.T, settings *proposer.Settings) *validator {
+		return &validator{
+			db:               dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{pubKey}, false),
+			proposerSettings: settings,
+		}
+	}
+	feeRecipient := common.HexToAddress("0x1111111111111111111111111111111111111111")
+
+	t.Run("SetFeeRecipient creates settings from nil and persists", func(t *testing.T) {
+		v := newValidator(t, nil)
+		require.NoError(t, v.SetFeeRecipient(t.Context(), pubKey, feeRecipient))
+		require.Equal(t, feeRecipient, v.ProposerSettings().ProposeConfig[pubKey].FeeRecipientConfig.FeeRecipient)
+		saved, err := v.db.ProposerSettings(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, feeRecipient, saved.ProposeConfig[pubKey].FeeRecipientConfig.FeeRecipient)
+	})
+
+	t.Run("DeleteFeeRecipient clears the option", func(t *testing.T) {
+		v := newValidator(t, &proposer.Settings{
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+				pubKey: {FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: feeRecipient}},
+			},
+		})
+		require.NoError(t, v.DeleteFeeRecipient(t.Context(), pubKey))
+		require.Equal(t, (*proposer.FeeRecipientConfig)(nil), v.ProposerSettings().ProposeConfig[pubKey].FeeRecipientConfig)
+	})
+
+	t.Run("ResetGasLimit returns typed error when nothing set", func(t *testing.T) {
+		v := newValidator(t, nil)
+		err := v.ResetGasLimit(t.Context(), pubKey)
+		require.Equal(t, true, errors.Is(err, iface.ErrNoGasLimitSet))
+	})
+
+	t.Run("SetGasLimit round-trips through ResetGasLimit", func(t *testing.T) {
+		v := newValidator(t, &proposer.Settings{Version: proposer.SchemaV2})
+		require.NoError(t, v.SetGasLimit(t.Context(), pubKey, validatorType.Uint64(123)))
+		require.Equal(t, validatorType.Uint64(123), v.ProposerSettings().GasLimit(pubKey))
+		require.NoError(t, v.ResetGasLimit(t.Context(), pubKey))
+	})
+}
