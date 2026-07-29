@@ -22,7 +22,6 @@ type beaconApiValidatorClient struct {
 	genesisProvider         GenesisProvider
 	dutiesProvider          dutiesProvider
 	stateValidatorsProvider StateValidatorsProvider
-	restProvider            rest.RestConnectionProvider
 	handler                 rest.Handler
 	eventStreamHosts        []string
 	nodeClient              *beaconApiNodeClient
@@ -43,7 +42,6 @@ func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...i
 		genesisProvider:         &beaconApiGenesisProvider{handler: handler},
 		dutiesProvider:          beaconApiDutiesProvider{handler: handler},
 		stateValidatorsProvider: beaconApiStateValidatorsProvider{handler: handler},
-		restProvider:            provider,
 		handler:                 handler,
 		eventStreamHosts:        provider.Hosts(),
 		nodeClient:              nc,
@@ -421,13 +419,11 @@ func (c *beaconApiValidatorClient) EnsureReady(ctx context.Context) bool {
 	return c.nodeClient.IsReady(ctx)
 }
 
-// ConnectionGeneration returns a monotonic counter that advances on each
-// fallback host switch of this client's REST connection provider.
-func (c *beaconApiValidatorClient) ConnectionGeneration() uint64 {
-	if c.restProvider == nil {
-		return 0
-	}
-	return c.restProvider.ConnectionCounter()
+// ConnectionGeneration always returns 0: the active-active REST client queries
+// every configured host instead of switching between them, so there is no host
+// switch for callers to react to. Only the gRPC client reports a real generation.
+func (*beaconApiValidatorClient) ConnectionGeneration() uint64 {
+	return 0
 }
 
 // Gloas Fork Methods

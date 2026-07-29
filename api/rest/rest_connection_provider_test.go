@@ -61,10 +61,6 @@ func TestRestConnectionProvider(t *testing.T) {
 		_, ok := h.(*multiHandler)
 		assert.Equal(t, true, ok, "the provider fans out over a *multiHandler")
 	})
-
-	t.Run("ConnectionCounter stays 0", func(t *testing.T) {
-		assert.Equal(t, uint64(0), provider.ConnectionCounter(), "active-active queries every host, so the counter never advances")
-	})
 }
 
 func TestRestConnectionProvider_WithOptions(t *testing.T) {

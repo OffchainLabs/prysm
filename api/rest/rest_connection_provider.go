@@ -21,10 +21,6 @@ type RestConnectionProvider interface {
 	Handler() Handler
 	// Hosts returns all configured REST API endpoint URLs.
 	Hosts() []string
-	// ConnectionCounter returns a monotonic counter that advances on each host
-	// switch. This always stays 0: it exists to satisfy the ValidatorClient
-	// connection-tracking API.
-	ConnectionCounter() uint64
 }
 
 // RestConnectionProviderOption is a functional option for configuring the REST connection provider.
@@ -145,10 +141,4 @@ func (p *restConnectionProvider) Hosts() []string {
 	hosts := make([]string, len(p.endpoints))
 	copy(hosts, p.endpoints)
 	return hosts
-}
-
-// ConnectionCounter always returns 0: the active-active handler queries every
-// configured host rather than switching between them.
-func (p *restConnectionProvider) ConnectionCounter() uint64 {
-	return 0
 }

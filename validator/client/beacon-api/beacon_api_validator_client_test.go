@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
-	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	rpctesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared/testing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -691,7 +690,5 @@ func TestBeaconApiValidatorClient_StartEventStream_FallsBackToHead(t *testing.T)
 }
 
 func TestBeaconApiValidatorClient_ConnectionGeneration(t *testing.T) {
-	c := &beaconApiValidatorClient{restProvider: &rest.MockRestProvider{ConnCounter: 4}}
-	assert.Equal(t, uint64(4), c.ConnectionGeneration())
 	assert.Equal(t, uint64(0), (&beaconApiValidatorClient{}).ConnectionGeneration())
 }
