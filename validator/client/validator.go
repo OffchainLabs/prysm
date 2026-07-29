@@ -28,6 +28,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	validatortypes "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -887,7 +888,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		v.connTracker.confirm(proposerPrefsPush, connGen)
 	}
 
-	if reqs := v.buildBuilderPreferenceRequests(ctx, km, slot); len(reqs) > 0 {
+	if reqs := v.warmBuilderRequestAuths(ctx, km, slot); len(reqs) > 0 {
 		delay := params.BeaconConfig().SlotDuration() / 2
 		time.AfterFunc(delay, func() {
 			// Detached from the slot context, which may expire before the delay elapses.
@@ -1136,8 +1137,10 @@ func (v *validator) buildProposerSettingsRequests(
 // upgradeProposerSettingsToV2 migrates v1 proposer settings to v2 and persists
 // them. Callers must gate this on gloas-active so the pre-gloas registration
 // path still sees BuilderConfig.
+// Upgrades a clone then swaps, so concurrent readers never observe a
+// half-migrated settings object.
 func (v *validator) upgradeProposerSettingsToV2(ctx context.Context) {
-	ps := v.ProposerSettings()
+	ps := v.ProposerSettings().Clone()
 	if !ps.UpgradeToV2() {
 		return
 	}
@@ -1358,28 +1361,86 @@ func (v *validator) submittedPrefSlotsCount() int {
 	return len(v.submittedPrefSlots)
 }
 
-func (v *validator) builderConfigForKey(pk pubkey) ([]string, uint64, bool) {
-	ps := v.ProposerSettings()
-	if ps == nil {
-		return nil, 0, false
-	}
-	var bc *proposer.BuilderConfig
-	if ps.DefaultConfig != nil {
-		bc = ps.DefaultConfig.BuilderConfig
-	}
-	if ps.ProposeConfig != nil {
-		if c, ok := ps.ProposeConfig[pk]; ok && c != nil && c.BuilderConfig != nil {
-			bc = c.BuilderConfig
-		}
-	}
-	if bc == nil {
-		return nil, 0, false
-	}
-	return bc.Relays, uint64(bc.MaxExecutionPayment), bc.Enabled
+// builderTarget is one resolved builder for a proposer: a URL plus the
+// preferences to submit for it, with per-entry overrides already applied.
+type builderTarget struct {
+	url         string
+	authData    []byte
+	pubkey      []byte
+	maxPayment  uint64
+	minBid      *uint64
+	boostFactor *uint64
 }
 
-// Resubmitted every push to repopulate a restarted beacon node, using cached auths to avoid re-signing.
-func (v *validator) buildBuilderPreferenceRequests(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot) []*ethpb.SubmitBuilderPreferencesRequest {
+// builderConfigForKey returns pk's effective builder config: per-key fields win,
+// unset fields inherit from default_config (field-level inheritance).
+func (v *validator) builderConfigForKey(pk pubkey) *proposer.BuilderConfig {
+	ps := v.ProposerSettings()
+	if ps == nil {
+		return nil
+	}
+	var def, perKey *proposer.BuilderConfig
+	if ps.DefaultConfig != nil {
+		def = ps.DefaultConfig.BuilderConfig
+	}
+	if ps.ProposeConfig != nil {
+		if c, ok := ps.ProposeConfig[pk]; ok && c != nil {
+			perKey = c.BuilderConfig
+		}
+	}
+	return proposer.EffectiveBuilderConfig(perKey, def)
+}
+
+// builderTargetsForKey resolves the enabled builder list for pk; each entry
+// overrides the config-level fallbacks.
+// TODO(gloas): resolved minBid/boostFactor/pubkey/authData and url-less entries
+// take effect with the inline produce-block preferences wire (beacon-APIs #630).
+func (v *validator) builderTargetsForKey(pk pubkey) []builderTarget {
+	bc := v.builderConfigForKey(pk)
+	if !bc.IsEnabled() {
+		return nil
+	}
+	// Unset resolves to 0, trustless-only.
+	var fbMax uint64
+	if bc.MaxExecutionPayment != nil {
+		fbMax = uint64(*bc.MaxExecutionPayment)
+	}
+	fbMin := uint64Ptr(bc.MinBid)
+	fbBoost := uint64Ptr(bc.BuilderBoostFactor)
+
+	targets := make([]builderTarget, 0, len(bc.Builders))
+	seen := make(map[string]bool, len(bc.Builders))
+	for _, e := range bc.Builders {
+		if e == nil || e.URL == "" || seen[e.URL] {
+			continue
+		}
+		seen[e.URL] = true
+		t := builderTarget{url: e.URL, authData: e.AuthData, pubkey: e.Pubkey, maxPayment: fbMax, minBid: fbMin, boostFactor: fbBoost}
+		if e.MaxExecutionPayment != nil {
+			t.maxPayment = uint64(*e.MaxExecutionPayment)
+		}
+		if e.MinBid != nil {
+			t.minBid = uint64Ptr(e.MinBid)
+		}
+		if e.BuilderBoostFactor != nil {
+			t.boostFactor = uint64Ptr(e.BuilderBoostFactor)
+		}
+		targets = append(targets, t)
+	}
+	return targets
+}
+
+func uint64Ptr(v *validatortypes.Uint64) *uint64 {
+	if v == nil {
+		return nil
+	}
+	u := uint64(*v)
+	return &u
+}
+
+// warmBuilderRequestAuths pre-signs request auths for upcoming proposal slots and
+// returns the ahead-of-time preference submissions, rebuilt every push.
+func (v *validator) warmBuilderRequestAuths(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot) []*ethpb.SubmitBuilderPreferencesRequest {
 	if slots.ToEpoch(slot)+1 < params.BeaconConfig().GloasForkEpoch {
 		return nil
 	}
@@ -1388,24 +1449,23 @@ func (v *validator) buildBuilderPreferenceRequests(ctx context.Context, km keyma
 		return nil
 	}
 	v.pruneSignedRequestAuths(slot)
-
-	reqs := v.builderPreferenceRequestsForDuties(ctx, km, slot, snap.currentDuties())
-	return append(reqs, v.builderPreferenceRequestsForDuties(ctx, km, slot, snap.nextDuties())...)
+	reqs := v.warmBuilderRequestAuthsForDuties(ctx, km, slot, snap.currentDuties())
+	return append(reqs, v.warmBuilderRequestAuthsForDuties(ctx, km, slot, snap.nextDuties())...)
 }
 
-func (v *validator) builderPreferenceRequestsForDuties(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, duties iter.Seq2[pubkey, *ethpb.ValidatorDuty]) []*ethpb.SubmitBuilderPreferencesRequest {
+func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, duties iter.Seq2[pubkey, *ethpb.ValidatorDuty]) []*ethpb.SubmitBuilderPreferencesRequest {
 	var reqs []*ethpb.SubmitBuilderPreferencesRequest
 	for pk, duty := range duties {
-		relays, maxPayment, enabled := v.builderConfigForKey(pk)
-		if !enabled || len(relays) == 0 {
+		targets := v.builderTargetsForKey(pk)
+		if len(targets) == 0 {
 			continue
 		}
 		for _, proposalSlot := range duty.ProposerSlots {
 			if proposalSlot <= slot {
 				continue
 			}
-			for _, relay := range relays {
-				signed, err := v.signRequestAuthCached(ctx, km, pk, relay, proposalSlot)
+			for _, t := range targets {
+				signed, err := v.signRequestAuthCached(ctx, km, pk, t.url, proposalSlot)
 				if err != nil {
 					log.WithError(err).Warn("Failed to sign builder request auth")
 					continue
@@ -1413,7 +1473,7 @@ func (v *validator) builderPreferenceRequestsForDuties(ctx context.Context, km k
 				reqs = append(reqs, &ethpb.SubmitBuilderPreferencesRequest{
 					ValidatorPubkey: pk[:],
 					Request: &ethpb.BuilderPreferencesRequestV1{
-						Preferences: &ethpb.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(maxPayment)},
+						Preferences: &ethpb.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(t.maxPayment)},
 						Auth:        signed,
 					},
 				})
@@ -1485,8 +1545,13 @@ func (v *validator) buildSignedRegReqs(
 		return signedValRegRequests
 	}
 
+	isV2 := v.ProposerSettings().Version == proposer.SchemaV2
 	if v.ProposerSettings().DefaultConfig != nil && v.ProposerSettings().DefaultConfig.FeeRecipientConfig == nil && v.ProposerSettings().DefaultConfig.BuilderConfig != nil {
-		log.Warn("Builder is `enabled` in default config but will be ignored because no fee recipient was provided!")
+		if isV2 {
+			log.Warn("Default builder config has no default fee recipient; only keys with their own fee recipient can register")
+		} else {
+			log.Warn("Builder is `enabled` in default config but will be ignored because no fee recipient was provided!")
+		}
 	}
 
 	for i, k := range activePubkeys {
@@ -1496,37 +1561,60 @@ func (v *validator) buildSignedRegReqs(
 			continue
 		}
 
+		var enabled bool
 		feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
 		gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
-		enabled := false
 
-		if v.ProposerSettings().DefaultConfig != nil && v.ProposerSettings().DefaultConfig.FeeRecipientConfig != nil {
-			defaultConfig := v.ProposerSettings().DefaultConfig
-			feeRecipient = defaultConfig.FeeRecipientConfig.FeeRecipient // Use cli defaultBuilderConfig for fee recipient.
-			defaultBuilderConfig := defaultConfig.BuilderConfig
-
-			if defaultBuilderConfig != nil && defaultBuilderConfig.Enabled {
-				gasLimit = uint64(defaultBuilderConfig.GasLimit) // Use cli config for gas limit.
-				enabled = true
+		if isV2 {
+			hasFeeRecipient := false
+			var defBC, perKeyBC *proposer.BuilderConfig
+			if defaultConfig := v.ProposerSettings().DefaultConfig; defaultConfig != nil {
+				defBC = defaultConfig.BuilderConfig
+				if defaultConfig.FeeRecipientConfig != nil {
+					feeRecipient = defaultConfig.FeeRecipientConfig.FeeRecipient
+					hasFeeRecipient = true
+				}
 			}
-		}
-
-		if v.ProposerSettings().ProposeConfig != nil {
-			config, ok := v.ProposerSettings().ProposeConfig[k]
-			if ok && config != nil && config.FeeRecipientConfig != nil {
-				feeRecipient = config.FeeRecipientConfig.FeeRecipient // Use file config for fee recipient.
-				builderConfig := config.BuilderConfig
-				if builderConfig != nil {
-					if builderConfig.Enabled {
-						gasLimit = uint64(builderConfig.GasLimit) // Use file config for gas limit.
-						enabled = true
-					} else {
-						enabled = false // Custom config can disable validator from register.
+			if v.ProposerSettings().ProposeConfig != nil {
+				if config, ok := v.ProposerSettings().ProposeConfig[k]; ok && config != nil {
+					perKeyBC = config.BuilderConfig
+					if config.FeeRecipientConfig != nil {
+						feeRecipient = config.FeeRecipientConfig.FeeRecipient
+						hasFeeRecipient = true
+					}
+				}
+			}
+			// Field-level resolution: per-key builder fields inherit from the default;
+			// registration still requires a fee recipient configured at some level.
+			bc := proposer.EffectiveBuilderConfig(perKeyBC, defBC)
+			enabled = bc.IsEnabled() && hasFeeRecipient
+			if bc.GasLimit != 0 {
+				gasLimit = uint64(bc.GasLimit)
+			}
+		} else {
+			// V1 settings keep the pre-v2 object-level semantics so existing
+			// registrations are unchanged; inheritance starts at SchemaV2.
+			if defaultConfig := v.ProposerSettings().DefaultConfig; defaultConfig != nil && defaultConfig.FeeRecipientConfig != nil {
+				feeRecipient = defaultConfig.FeeRecipientConfig.FeeRecipient
+				if defaultConfig.BuilderConfig.IsEnabled() {
+					gasLimit = uint64(defaultConfig.BuilderConfig.GasLimit)
+					enabled = true
+				}
+			}
+			if v.ProposerSettings().ProposeConfig != nil {
+				if config, ok := v.ProposerSettings().ProposeConfig[k]; ok && config != nil && config.FeeRecipientConfig != nil {
+					feeRecipient = config.FeeRecipientConfig.FeeRecipient
+					if bc := config.BuilderConfig; bc != nil {
+						if bc.IsEnabled() {
+							gasLimit = uint64(bc.GasLimit)
+							enabled = true
+						} else {
+							enabled = false
+						}
 					}
 				}
 			}
 		}
-
 		if !enabled {
 			continue
 		}

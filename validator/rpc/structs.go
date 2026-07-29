@@ -109,6 +109,29 @@ type GraffitiData struct {
 	Graffiti string `json:"graffiti"`
 }
 
+// Per-key builders keymanager api (keymanager-APIs #88). All integers are decimal
+// strings and all byte values are 0x-prefixed hex, per keymanager conventions.
+// A nil Builders means "use the validator client's builders"; a non-nil empty
+// Builders means "use none" (p2p bids only).
+// Builders has no omitempty: on the resolved GET response an empty list ("use no
+// builders") must serialize as [] rather than be dropped. On POST input an absent
+// field still decodes to nil, which means "inherit the validator client's builders".
+type BuilderConfigJson struct {
+	Enabled            *bool               `json:"enabled"`
+	Builders           []*BuilderEntryJson `json:"builders"`
+	MinBid             *string             `json:"min_bid,omitempty"`
+	BuilderBoostFactor *string             `json:"builder_boost_factor,omitempty"`
+}
+
+type BuilderEntryJson struct {
+	Url                 *string `json:"url,omitempty"`
+	AuthData            *string `json:"auth_data,omitempty"`
+	BuilderPubkey       *string `json:"builder_pubkey,omitempty"`
+	MaxExecutionPayment *string `json:"max_execution_payment,omitempty"`
+	MinBid              *string `json:"min_bid,omitempty"`
+	BuilderBoostFactor  *string `json:"builder_boost_factor,omitempty"`
+}
+
 type BeaconStatusResponse struct {
 	BeaconNodeEndpoint     string     `json:"beacon_node_endpoint"`
 	Connected              bool       `json:"connected"`

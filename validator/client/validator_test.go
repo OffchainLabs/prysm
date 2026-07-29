@@ -3264,7 +3264,7 @@ func TestValidator_buildSignedRegReqs_DefaultConfigDisabled(t *testing.T) {
 	client := validatormock.NewMockValidatorClient(ctrl)
 
 	signature := blsmock.NewMockSignature(ctrl)
-	signature.EXPECT().Marshal().Return([]byte{})
+	signature.EXPECT().Marshal().Return([]byte{}).AnyTimes()
 
 	v := validator{
 		signedValidatorRegistrations: map[[48]byte]*ethpb.SignedValidatorRegistrationV1{},
@@ -3336,7 +3336,51 @@ func TestValidator_buildSignedRegReqs_DefaultConfigDisabled(t *testing.T) {
 	assert.DeepEqual(t, feeRecipient1[:], actual[0].Message.FeeRecipient)
 	assert.Equal(t, uint64(1111), actual[0].Message.GasLimit)
 	assert.DeepEqual(t, pubkey1[:], actual[0].Message.Pubkey)
+}
 
+// The same settings shape registers differently by schema version: v1 keeps the
+// legacy object-level semantics, v2 applies field-level inheritance.
+func TestValidator_buildSignedRegReqs_VersionGatesInheritance(t *testing.T) {
+	pubkey1 := pubkeyFromString(t, "0x111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111")
+	defaultFeeRecipient := feeRecipientFromString(t, "0xdddddddddddddddddddddddddddddddddddddddd")
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	ctx := t.Context()
+
+	signature := blsmock.NewMockSignature(ctrl)
+	signature.EXPECT().Marshal().Return([]byte{}).AnyTimes()
+	signer := func(_ context.Context, _ *validatorpb.SignRequest) (bls.Signature, error) {
+		return signature, nil
+	}
+
+	newSettings := func(version uint32) *proposer.Settings {
+		return &proposer.Settings{
+			Version: version,
+			DefaultConfig: &proposer.Option{
+				FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: defaultFeeRecipient},
+				BuilderConfig:      &proposer.BuilderConfig{Enabled: true, GasLimit: 9999},
+			},
+			ProposeConfig: map[[48]byte]*proposer.Option{
+				// Per-key disable without a per-key fee recipient.
+				pubkey1: {BuilderConfig: &proposer.BuilderConfig{Enabled: false}},
+			},
+		}
+	}
+	v := validator{
+		signedValidatorRegistrations: map[[48]byte]*ethpb.SignedValidatorRegistrationV1{},
+		pubkeyToStatus: map[[48]byte]*validatorStatus{
+			pubkey1: {publicKey: pubkey1[:], status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}},
+		},
+	}
+	pubkeys := [][fieldparams.BLSPubkeyLength]byte{pubkey1}
+
+	v.proposerSettings = newSettings(0)
+	assert.Equal(t, 1, len(v.buildSignedRegReqs(ctx, pubkeys, signer, 0, false)))
+
+	v.proposerSettings = newSettings(proposer.SchemaV2)
+	v.signedValidatorRegistrations = map[[48]byte]*ethpb.SignedValidatorRegistrationV1{}
+	assert.Equal(t, 0, len(v.buildSignedRegReqs(ctx, pubkeys, signer, 0, false)))
 }
 
 func TestValidator_buildSignedRegReqs_DefaultConfigEnabled(t *testing.T) {

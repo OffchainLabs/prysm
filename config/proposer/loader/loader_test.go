@@ -8,6 +8,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	logtest "github.com/sirupsen/logrus/hooks/test"
+	"github.com/urfave/cli/v2"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -19,10 +25,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/validator/db/iface"
 	dbTest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	logtest "github.com/sirupsen/logrus/hooks/test"
-	"github.com/urfave/cli/v2"
 )
 
 func TestProposerSettingsLoader(t *testing.T) {
@@ -399,6 +401,46 @@ func TestProposerSettingsLoader(t *testing.T) {
 							Enabled:  false,
 							GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 						},
+					},
+				}
+			},
+			wantErr: "",
+		},
+		{
+			name: "v2 file with builders list loads at v2 and dedups duplicate builder urls",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/good-v2-proposer-config.json",
+				},
+			},
+			want: func() *proposer.Settings {
+				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				require.NoError(t, err)
+				u64 := func(v uint64) *validator.Uint64 { u := validator.Uint64(v); return &u }
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key1): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{
+								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
+							},
+							GasLimit: 40000000,
+							BuilderConfig: &proposer.BuilderConfig{
+								Enabled: true,
+								MinBid:  u64(500000000),
+								Builders: []*proposer.BuilderEntry{
+									{URL: "https://builder-a.example", MaxExecutionPayment: u64(1000000000)},
+									{URL: "https://builder-b.example"},
+								},
+							},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{
+							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
+						},
+						GasLimit:      30000000,
+						BuilderConfig: &proposer.BuilderConfig{Enabled: false},
 					},
 				}
 			},
@@ -995,7 +1037,6 @@ func Test_ProposerSettingsLoaderWithOnlyBuilder_DoesNotSaveInDB(t *testing.T) {
 					BuilderConfig: &proposer.BuilderConfig{
 						Enabled:  true,
 						GasLimit: validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
-						Relays:   nil,
 					},
 				},
 			}
@@ -1027,7 +1068,7 @@ func Test_ProposerSettingsLoader_GasLimitWithoutBuilder(t *testing.T) {
 			require.NotNil(t, got)
 			require.NotNil(t, got.DefaultConfig)
 			require.NotNil(t, got.DefaultConfig.BuilderConfig)
-			require.Equal(t, false, got.DefaultConfig.BuilderConfig.Enabled)
+			require.Equal(t, false, got.DefaultConfig.BuilderConfig.IsEnabled())
 			require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.BuilderConfig.GasLimit)
 		})
 	}
@@ -1180,23 +1221,46 @@ func Test_mergeProposerSettings_VersionPrecedence(t *testing.T) {
 		)
 		require.Equal(t, uint32(proposer.SchemaV2), merged.Version)
 	})
-	t.Run("unversioned v1 content does not inherit v2 from db", func(t *testing.T) {
+	t.Run("v1 content merged into a v2 db is promoted, version never regresses", func(t *testing.T) {
 		merged := mergeProposerSettings(
 			&validatorpb.ProposerSettingsPayload{
 				DefaultConfig: &validatorpb.ProposerOptionPayload{
-					Builder: &validatorpb.BuilderConfig{Enabled: true, GasLimit: 30000000},
+					Builder: &validatorpb.BuilderConfig{Enabled: proto.Bool(true), GasLimit: 30000000},
 				},
 			},
 			&validatorpb.ProposerSettingsPayload{Version: proposer.SchemaV2},
 			&flagOptions{},
 		)
-		require.Equal(t, uint32(0), merged.Version)
+		require.Equal(t, uint32(proposer.SchemaV2), merged.Version)
 		require.NotNil(t, merged.DefaultConfig.Builder)
+		// The builder gas limit is promoted so v2 reads see it at the top level.
+		require.Equal(t, validator.Uint64(30000000), merged.DefaultConfig.GasLimit)
+	})
+	t.Run("file wins only for keys it names", func(t *testing.T) {
+		dbPayload := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV2,
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xaa": {FeeRecipient: "0x1111111111111111111111111111111111111111"},
+				"0xbb": {FeeRecipient: "0x2222222222222222222222222222222222222222", GasLimit: 45000000},
+			},
+		}
+		filePayload := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV2,
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xaa": {FeeRecipient: "0x3333333333333333333333333333333333333333"},
+			},
+		}
+		merged := mergeProposerSettings(filePayload, dbPayload, &flagOptions{})
+		require.Equal(t, 2, len(merged.ProposerConfig))
+		require.Equal(t, "0x3333333333333333333333333333333333333333", merged.ProposerConfig["0xaa"].FeeRecipient)
+		// The key the file does not name keeps its DB-resident settings.
+		require.Equal(t, "0x2222222222222222222222222222222222222222", merged.ProposerConfig["0xbb"].FeeRecipient)
+		require.Equal(t, validator.Uint64(45000000), merged.ProposerConfig["0xbb"].GasLimit)
 	})
 }
 
-// Restarting with the same v1 file after migration persisted v2 to the DB must
-// reload in v1 form so the runtime upgrade re-applies the file's gas limits.
+// Restarting with the same v1 file after migration persisted v2 to the DB keeps
+// the v2 version and promotes the file's content so its gas limits stay readable.
 func TestSettingsLoader_V1FileAfterMigratedDB(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -1223,12 +1287,13 @@ func TestSettingsLoader_V1FileAfterMigratedDB(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, got)
 
-	require.Equal(t, uint32(0), got.Version)
+	require.Equal(t, proposer.SchemaV2, got.Version)
 	require.NotNil(t, got.DefaultConfig.BuilderConfig)
 	require.Equal(t, validator.Uint64(40000000), got.DefaultConfig.BuilderConfig.GasLimit)
-	assert.LogsContain(t, hook, "deprecated v1 schema")
+	assert.LogsDoNotContain(t, hook, "deprecated v1 schema")
 
-	require.Equal(t, true, got.UpgradeToV2())
+	// Already v2: the file's builder gas limits were promoted at merge time.
+	require.Equal(t, false, got.UpgradeToV2())
 	key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
 	require.NoError(t, err)
 	require.Equal(t, validator.Uint64(60000000), got.GasLimit(bytesutil.ToBytes48(key1)))
@@ -1243,7 +1308,7 @@ func Test_mergeProposerSettings_CreatesDefaultFromGasLimitFlag(t *testing.T) {
 	)
 	require.NotNil(t, merged.DefaultConfig)
 	require.NotNil(t, merged.DefaultConfig.Builder)
-	require.Equal(t, false, merged.DefaultConfig.Builder.Enabled)
+	require.Equal(t, false, merged.DefaultConfig.Builder.GetEnabled())
 	require.Equal(t, gl, merged.DefaultConfig.Builder.GasLimit)
 }
 
@@ -1261,7 +1326,7 @@ func Test_mergeProposerSettings_V2GasLimitOnlyGoesToOption(t *testing.T) {
 
 func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
 	v1Builder := func() *validatorpb.BuilderConfig {
-		return &validatorpb.BuilderConfig{Enabled: true, GasLimit: 40000000, Relays: []string{"r"}}
+		return &validatorpb.BuilderConfig{Enabled: proto.Bool(true), GasLimit: 40000000}
 	}
 	t.Run("v1 db without enable-builder drops DB builder", func(t *testing.T) {
 		db := &validatorpb.ProposerSettingsPayload{
@@ -1279,6 +1344,43 @@ func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
 		merged := mergeProposerSettings(nil, db, &flagOptions{})
 		require.NotNil(t, merged.DefaultConfig.Builder)
 		require.Equal(t, validator.Uint64(40000000), merged.DefaultConfig.Builder.GasLimit)
+	})
+	t.Run("v2 --enable-builder fills the default toggle only when unset", func(t *testing.T) {
+		opts := &flagOptions{builderConfig: &proposer.BuilderConfig{Enabled: true}}
+
+		// No default builder: the flag creates it enabled.
+		db := &validatorpb.ProposerSettingsPayload{
+			Version:       proposer.SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0x"},
+		}
+		merged := mergeProposerSettings(nil, db, opts)
+		require.NotNil(t, merged.DefaultConfig.Builder)
+		require.NotNil(t, merged.DefaultConfig.Builder.Enabled)
+		require.Equal(t, true, *merged.DefaultConfig.Builder.Enabled)
+
+		// An explicit default enabled=false is NOT overridden by the flag.
+		disabled := false
+		db2 := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{
+				FeeRecipient: "0x",
+				Builder:      &validatorpb.BuilderConfig{Enabled: &disabled},
+			},
+		}
+		merged2 := mergeProposerSettings(nil, db2, opts)
+		require.NotNil(t, merged2.DefaultConfig.Builder.Enabled)
+		require.Equal(t, false, *merged2.DefaultConfig.Builder.Enabled)
+
+		// Per-key entries are untouched by the flag.
+		db3 := &validatorpb.ProposerSettingsPayload{
+			Version:       proposer.SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0x"},
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xkey": {FeeRecipient: "0xk"},
+			},
+		}
+		merged3 := mergeProposerSettings(nil, db3, opts)
+		require.IsNil(t, merged3.ProposerConfig["0xkey"].Builder)
 	})
 }
 

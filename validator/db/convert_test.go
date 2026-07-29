@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -15,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/validator/db/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/db/kv"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 func getPubkeyFromString(t *testing.T, pubkeyString string) [fieldparams.BLSPubkeyLength]byte {
@@ -97,7 +98,6 @@ func TestDB_ConvertDatabase(t *testing.T) {
 				require.NoError(t, err, "could not save graffiti ordered index")
 
 				// Save the proposer settings.
-				var relays []string = nil
 				expectedProposerSettings := &proposer.Settings{}
 
 				if withProposerSettings {
@@ -110,7 +110,6 @@ func TestDB_ConvertDatabase(t *testing.T) {
 								BuilderConfig: &proposer.BuilderConfig{
 									Enabled:  true,
 									GasLimit: 42,
-									Relays:   relays,
 								},
 							},
 						},
@@ -121,7 +120,6 @@ func TestDB_ConvertDatabase(t *testing.T) {
 							BuilderConfig: &proposer.BuilderConfig{
 								Enabled:  false,
 								GasLimit: 43,
-								Relays:   relays,
 							},
 						},
 					}

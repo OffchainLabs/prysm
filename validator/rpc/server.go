@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api"
@@ -80,6 +81,7 @@ type Server struct {
 	walletDir                 string
 	jwtSecret                 []byte
 	grpcHeaders               []string
+	proposerSettingsLock      sync.Mutex
 }
 
 // NewServer instantiates a new HTTP server.
@@ -198,6 +200,9 @@ func (s *Server) InitializeRoutes() error {
 	s.router.HandleFunc("GET /eth/v1/validator/{pubkey}/graffiti", s.GetGraffiti)
 	s.router.HandleFunc("POST /eth/v1/validator/{pubkey}/graffiti", s.SetGraffiti)
 	s.router.HandleFunc("DELETE /eth/v1/validator/{pubkey}/graffiti", s.DeleteGraffiti)
+	s.router.HandleFunc("GET /eth/v1/validator/{pubkey}/builders", s.GetBuilders)
+	s.router.HandleFunc("POST /eth/v1/validator/{pubkey}/builders", s.SetBuilders)
+	s.router.HandleFunc("DELETE /eth/v1/validator/{pubkey}/builders", s.DeleteBuilders)
 
 	// auth endpoint
 	s.router.HandleFunc("GET "+api.WebUrlPrefix+"initialize", s.Initialize)

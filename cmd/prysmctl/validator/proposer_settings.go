@@ -69,8 +69,9 @@ func getProposerSettings(c *cli.Context, r io.Reader) error {
 		log.Infof("The default fee recipient is set to %s", defaultFeeRecipient)
 		var builderSettings *validatorpb.BuilderConfig
 		if c.Bool(WithBuilderFlag.Name) {
+			enabled := true
 			builderSettings = &validatorpb.BuilderConfig{
-				Enabled:  true,
+				Enabled:  &enabled,
 				GasLimit: validatorType.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
 			}
 		} else {

@@ -1,8 +1,11 @@
 package loader
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
@@ -186,18 +189,6 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 	return ps, nil
 }
 
-func hasBuilderShape(p *validatorpb.ProposerSettingsPayload) bool {
-	if p.DefaultConfig != nil && p.DefaultConfig.Builder != nil {
-		return true
-	}
-	for _, o := range p.ProposerConfig {
-		if o != nil && o.Builder != nil {
-			return true
-		}
-	}
-	return false
-}
-
 func (psl *SettingsLoader) applyOverrides() {
 	if psl.options.builderConfig != nil && psl.options.gasLimit != nil {
 		psl.options.builderConfig.GasLimit = *psl.options.gasLimit
@@ -230,6 +221,9 @@ func (psl *SettingsLoader) loadFromFile(cliCtx *cli.Context, dbSettings *validat
 	}
 	if settingFromFile == nil {
 		return nil, errors.Errorf("proposer settings is empty after unmarshalling from file specified by %s flag", flags.ProposerSettingsFlag.Name)
+	}
+	if raw, err := os.ReadFile(filepath.Clean(cliCtx.String(flags.ProposerSettingsFlag.Name))); err == nil && bytes.Contains(raw, []byte("relays")) {
+		log.Warn("The relays field in proposer settings is no longer supported and was ignored; configure builders instead")
 	}
 	log.WithField(flags.ProposerSettingsFlag.Name, cliCtx.String(flags.ProposerSettingsFlag.Name)).Info("Proposer settings loaded from file")
 	return psl.processProposerSettings(settingFromFile, dbSettings), nil
@@ -268,12 +262,21 @@ func (psl *SettingsLoader) processProposerSettings(loadedSettings, dbSettings *v
 // through Builder; v2 lives on Option directly.
 func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, options *flagOptions) *validatorpb.ProposerSettingsPayload {
 	merged := &validatorpb.ProposerSettingsPayload{}
+	// The schema version never regresses: the highest version wins and the
+	// lower-version side's content is promoted before merging.
 	if db != nil {
 		merged.Version = db.Version
 	}
-	// v1-shaped source content must not inherit DB's v2, else the runtime upgrade is skipped.
-	if loaded != nil && (loaded.Version != 0 || hasBuilderShape(loaded)) {
+	if loaded != nil && loaded.Version > merged.Version {
 		merged.Version = loaded.Version
+	}
+	if merged.Version == proposer.SchemaV2 {
+		if db != nil && db.Version < proposer.SchemaV2 {
+			promotePayloadToV2(db)
+		}
+		if loaded != nil && loaded.Version < proposer.SchemaV2 {
+			promotePayloadToV2(loaded)
+		}
 	}
 
 	var builderConfig *validatorpb.BuilderConfig
@@ -286,9 +289,54 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 	}
 
 	if merged.Version == proposer.SchemaV2 {
-		return mergeProposerSettingsV2(merged, loaded, db, gasLimitOnly)
+		return mergeProposerSettingsV2(merged, loaded, db, builderConfig, gasLimitOnly)
 	}
 	return mergeProposerSettingsV1(merged, loaded, db, builderConfig, gasLimitOnly)
+}
+
+// promotePayloadToV2 mirrors Settings.UpgradeToV2 plus legacy presence
+// normalization, so v1 content merged into a v2 result reads correctly.
+func promotePayloadToV2(p *validatorpb.ProposerSettingsPayload) {
+	promote := func(opt *validatorpb.ProposerOptionPayload) {
+		if opt == nil || opt.Builder == nil {
+			return
+		}
+		if opt.GasLimit == 0 {
+			opt.GasLimit = opt.Builder.GasLimit
+		}
+		if opt.Builder.Enabled == nil {
+			disabled := false
+			opt.Builder.Enabled = &disabled
+		}
+		if opt.Builder.MaxExecutionPayment != nil && *opt.Builder.MaxExecutionPayment == 0 {
+			opt.Builder.MaxExecutionPayment = nil
+		}
+	}
+	promote(p.DefaultConfig)
+	for _, opt := range p.ProposerConfig {
+		promote(opt)
+	}
+}
+
+// overlayProposerConfig merges per-key options: the loaded source wins only for
+// keys it names; DB-resident keys it does not name are retained.
+func overlayProposerConfig(db, loaded *validatorpb.ProposerSettingsPayload) map[string]*validatorpb.ProposerOptionPayload {
+	var out map[string]*validatorpb.ProposerOptionPayload
+	if db != nil && len(db.ProposerConfig) > 0 {
+		out = make(map[string]*validatorpb.ProposerOptionPayload, len(db.ProposerConfig))
+		for k, v := range db.ProposerConfig {
+			out[k] = v
+		}
+	}
+	if loaded != nil && len(loaded.ProposerConfig) > 0 {
+		if out == nil {
+			out = make(map[string]*validatorpb.ProposerOptionPayload, len(loaded.ProposerConfig))
+		}
+		for k, v := range loaded.ProposerConfig {
+			out[k] = v
+		}
+	}
+	return out
 }
 
 func mergeProposerSettingsV1(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.ProposerSettingsPayload {
@@ -304,17 +352,12 @@ func mergeProposerSettingsV1(merged, loaded, db *validatorpb.ProposerSettingsPay
 		merged.DefaultConfig = loaded.DefaultConfig
 	}
 
-	if db != nil && len(db.ProposerConfig) > 0 {
-		merged.ProposerConfig = db.ProposerConfig
-		if stripDBBuilder {
-			for _, option := range db.ProposerConfig {
-				option.Builder = nil
-			}
+	if db != nil && stripDBBuilder {
+		for _, option := range db.ProposerConfig {
+			option.Builder = nil
 		}
 	}
-	if loaded != nil && len(loaded.ProposerConfig) > 0 {
-		merged.ProposerConfig = loaded.ProposerConfig
-	}
+	merged.ProposerConfig = overlayProposerConfig(db, loaded)
 
 	if merged.DefaultConfig != nil {
 		merged.DefaultConfig.Builder = processBuilderConfig(merged.DefaultConfig.Builder, builderConfig, gasLimitOnly)
@@ -331,25 +374,35 @@ func mergeProposerSettingsV1(merged, loaded, db *validatorpb.ProposerSettingsPay
 			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{Builder: builderConfig}
 		case gasLimitOnly != nil:
 			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{
-				Builder: &validatorpb.BuilderConfig{Enabled: false, GasLimit: *gasLimitOnly},
+				Builder: &validatorpb.BuilderConfig{GasLimit: *gasLimitOnly},
 			}
 		}
 	}
 	return merged
 }
 
-func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPayload, gasLimitOnly *validator.Uint64) *validatorpb.ProposerSettingsPayload {
+func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.ProposerSettingsPayload {
 	if db != nil && db.DefaultConfig != nil {
 		merged.DefaultConfig = db.DefaultConfig
 	}
 	if loaded != nil && loaded.DefaultConfig != nil {
 		merged.DefaultConfig = loaded.DefaultConfig
 	}
-	if db != nil && len(db.ProposerConfig) > 0 {
-		merged.ProposerConfig = db.ProposerConfig
-	}
-	if loaded != nil && len(loaded.ProposerConfig) > 0 {
-		merged.ProposerConfig = loaded.ProposerConfig
+	merged.ProposerConfig = overlayProposerConfig(db, loaded)
+
+	// --enable-builder fills in only the default builder toggle when unset; an
+	// explicit enabled and every per-key entry are left for field-level inheritance.
+	if builderConfig != nil {
+		if merged.DefaultConfig == nil {
+			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{}
+		}
+		if merged.DefaultConfig.Builder == nil {
+			merged.DefaultConfig.Builder = &validatorpb.BuilderConfig{}
+		}
+		if merged.DefaultConfig.Builder.Enabled == nil {
+			enabled := true
+			merged.DefaultConfig.Builder.Enabled = &enabled
+		}
 	}
 
 	if gasLimitOnly == nil {
@@ -383,7 +436,7 @@ func processBuilderConfig(current *validatorpb.BuilderConfig, override *validato
 		return override
 	}
 	if gasLimitOnly != nil {
-		return &validatorpb.BuilderConfig{Enabled: false, GasLimit: *gasLimitOnly}
+		return &validatorpb.BuilderConfig{GasLimit: *gasLimitOnly}
 	}
 	return nil
 }
