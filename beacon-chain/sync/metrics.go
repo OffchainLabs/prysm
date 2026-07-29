@@ -341,7 +341,7 @@ func (s *Service) updateMetrics() {
 	}
 
 	dataColumnTopic := p2p.DataColumnSubnetTopicFormat + s.cfg.p2p.Encoding().ProtocolSuffix()
-	for i := uint64(0); i < params.BeaconConfig().DataColumnSidecarSubnetCount; i++ {
+	for i := range params.BeaconConfig().DataColumnSidecarSubnetCount {
 		s.collectMetricForSubnet(dataColumnTopic, digest, i)
 	}
 
