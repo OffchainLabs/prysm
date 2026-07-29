@@ -25,6 +25,12 @@ func newHeadTracker() *headTracker {
 	return &headTracker{}
 }
 
+// update records blockRoot as the expected head, keeping the highest slot.
+//
+// A reorg moving the head backwards in slot is dropped, pinning a root no node
+// will report again. This is benign: the freshness criterion then never matches,
+// so the read falls back to the freshest response at its deadline, and the next
+// event at a slot >= the pinned one heals the tracker.
 func (h *headTracker) update(slot primitives.Slot, blockRoot string) error {
 	if blockRoot == "" {
 		return nil
