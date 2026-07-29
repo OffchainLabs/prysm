@@ -15,14 +15,12 @@ import (
 
 // sinceSlotStartTime returns the elapsed time between the start of the provided slot and now.
 func (v *validator) sinceSlotStartTime(slot primitives.Slot) (time.Duration, error) {
-	startTime, err := slots.StartTime(v.genesisTime, slot)
+	sinceSlotStartTime, err := slots.SinceSlotStart(slot, v.genesisTime, prysmTime.Now())
 	if err != nil {
-		return 0, fmt.Errorf("start time: %w", err)
+		return 0, fmt.Errorf("since slot start: %w", err)
 	}
 
-	sinceSlotStartTime := prysmTime.Now().Sub(startTime).Round(time.Millisecond)
-
-	return sinceSlotStartTime, nil
+	return sinceSlotStartTime.Round(time.Millisecond), nil
 }
 
 // slotComponentDeadline returns the absolute time corresponding to the provided slot component.
