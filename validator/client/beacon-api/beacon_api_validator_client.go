@@ -139,10 +139,6 @@ func (c *beaconApiValidatorClient) BeaconBlock(ctx context.Context, in *ethpb.Bl
 	})
 }
 
-func (c *beaconApiValidatorClient) FeeRecipientByPubKey(_ context.Context, _ *ethpb.FeeRecipientByPubKeyRequest) (*ethpb.FeeRecipientByPubKeyResponse, error) {
-	return nil, nil
-}
-
 func (c *beaconApiValidatorClient) SyncCommitteeContribution(ctx context.Context, in *ethpb.SyncCommitteeContributionRequest) (*ethpb.SyncCommitteeContribution, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.SyncCommitteeContribution")
 	defer span.End()
