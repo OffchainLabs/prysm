@@ -93,13 +93,13 @@ func (c *handler) getRaw(ctx context.Context, endpoint string) (json.RawMessage,
 	url := c.Host() + endpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to create request for endpoint %s", url)
+		return nil, errors.Wrapf(err, "failed to create request for endpoint %s", api.RedactEndpoint(url))
 	}
 
 	req.Header.Set("User-Agent", version.BuildData())
 	httpResp, err := c.client.Do(req)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to perform request for endpoint %s", url)
+		return nil, errors.Wrapf(err, "failed to perform request for endpoint %s", api.RedactEndpoint(url))
 	}
 
 	defer func() {
@@ -110,7 +110,7 @@ func (c *handler) getRaw(ctx context.Context, endpoint string) (json.RawMessage,
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL)
+		return nil, errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL.Redacted())
 	}
 
 	if !strings.Contains(httpResp.Header.Get("Content-Type"), api.JsonMediaType) {
@@ -125,14 +125,14 @@ func (c *handler) getRaw(ctx context.Context, endpoint string) (json.RawMessage,
 	if !strings.HasPrefix(httpResp.Status, "2") {
 		errorJson := &httputil.DefaultJsonError{}
 		if err := json.Unmarshal(body, errorJson); err != nil {
-			return nil, errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL)
+			return nil, errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL.Redacted())
 		}
 
 		return nil, errorJson
 	}
 
 	if len(body) == 0 {
-		return nil, errors.Errorf("empty response body for %s", httpResp.Request.URL)
+		return nil, errors.Errorf("empty response body for %s", httpResp.Request.URL.Redacted())
 	}
 
 	return json.RawMessage(body), nil

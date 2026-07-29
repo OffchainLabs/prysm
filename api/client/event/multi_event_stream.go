@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	lru "github.com/hashicorp/golang-lru"
@@ -144,7 +145,7 @@ func (m *MultiEventStream) runHost(host string, merged chan<- *Event) {
 		if fallbackTopics, ok := LegacyTopicFallback(topics); ok && errors.As(err, &subErr) && subErr.Code == http.StatusBadRequest {
 			log.
 				WithFields(logrus.Fields{
-					"host":            host,
+					"host":            api.RedactEndpoint(host),
 					"topics":          strings.Join(topics, ","),
 					"fallback_topics": strings.Join(fallbackTopics, ","),
 				}).
@@ -162,7 +163,7 @@ func (m *MultiEventStream) runHost(host string, merged chan<- *Event) {
 		}
 
 		log.
-			WithFields(logrus.Fields{"host": host, "backoff": backoff}).
+			WithFields(logrus.Fields{"host": api.RedactEndpoint(host), "backoff": backoff}).
 			Warning("Beacon node event stream disconnected, reconnecting")
 
 		select {
