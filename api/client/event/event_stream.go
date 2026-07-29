@@ -88,7 +88,7 @@ func (h *EventStream) send(eventsChannel chan<- *Event, ev *Event) bool {
 func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
 	allTopics := strings.Join(h.topics, ",")
 	fullUrl := h.host + "/eth/v1/events?topics=" + allTopics
-	log.WithFields(logrus.Fields{"url": fullUrl, "topics": allTopics}).Info("Listening to Beacon API events")
+	log.WithFields(logrus.Fields{"url": api.RedactEndpoint(fullUrl), "topics": allTopics}).Info("Listening to Beacon API events")
 	req, err := http.NewRequestWithContext(h.ctx, http.MethodGet, fullUrl, nil)
 	if err != nil {
 		err = errors.Wrap(err, "failed to create HTTP request")
