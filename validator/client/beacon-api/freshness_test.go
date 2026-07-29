@@ -184,7 +184,7 @@ func TestBlockFreshnessOptions(t *testing.T) {
 	})
 }
 
-func TestAttestationFreshnessOptions(t *testing.T) {
+func TestPayloadAttestationFreshnessOptions(t *testing.T) {
 	octetHeader := http.Header{"Content-Type": {api.OctetStreamMediaType}}
 
 	t.Run("no hint yields no options", func(t *testing.T) {
