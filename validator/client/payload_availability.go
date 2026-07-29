@@ -74,9 +74,9 @@ func (p *payloadAvailability) notify(slot primitives.Slot, root *[32]byte) {
 		}
 	}
 
-	for root := range p.roots {
-		if root < slot {
-			delete(p.roots, root)
+	for s := range p.roots {
+		if s < slot {
+			delete(p.roots, s)
 		}
 	}
 }
