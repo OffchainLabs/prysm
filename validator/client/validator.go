@@ -975,14 +975,19 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 			log.WithError(err).WithField("slot", slot).Error("Failed to compute time since slot start")
 		}
 
-		log.WithFields(logrus.Fields{
+		fields := logrus.Fields{
 			"slot":                      head.Slot,
 			"sinceSlotStartTime":        sinceSlotStartTime,
-			"blockRoot":                 trim(head.Block),
 			"previousDutyDependentRoot": trim(head.PreviousDutyDependentRoot),
 			"currentDutyDependentRoot":  trim(head.CurrentDutyDependentRoot),
 			"version":                   "1",
-		}).Debug("Received head event")
+		}
+
+		if head.Block != "" {
+			fields["blockRoot"] = trim(head.Block)
+		}
+
+		log.WithFields(fields).Debug("Received head event")
 
 		v.setHighestSlot(slot)
 
