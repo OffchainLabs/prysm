@@ -144,13 +144,6 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 				},
 			).Return(activeResp, nil))
 
-		chainClient.EXPECT().ChainHead(
-			gomock.Any(),
-			gomock.Any(),
-		).Return(
-			&ethpb.ChainHead{HeadEpoch: 0},
-			nil,
-		).AnyTimes()
 		assert.NoError(t, v.WaitForActivation(t.Context()))
 		assert.LogsContain(t, hook, "Waiting for deposit to be observed by beacon node")
 		assert.LogsContain(t, hook, "Validator activated")
@@ -221,13 +214,6 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 				},
 			).Return(activeResp, nil))
 
-		chainClient.EXPECT().ChainHead(
-			gomock.Any(),
-			gomock.Any(),
-		).Return(
-			&ethpb.ChainHead{HeadEpoch: 0},
-			nil,
-		).AnyTimes()
 		assert.NoError(t, v.WaitForActivation(t.Context()))
 		assert.LogsContain(t, hook, "Waiting for deposit to be observed by beacon node")
 		assert.LogsContain(t, hook, "Validator activated")
@@ -264,12 +250,5 @@ func TestWaitForActivation_AttemptsReconnectionOnFailure(t *testing.T) {
 			gomock.Any(),
 			gomock.Any(),
 		).Return(activeResp, nil))
-	chainClient.EXPECT().ChainHead(
-		gomock.Any(),
-		gomock.Any(),
-	).Return(
-		&ethpb.ChainHead{HeadEpoch: 0},
-		nil,
-	).AnyTimes()
 	assert.NoError(t, v.WaitForActivation(t.Context()))
 }

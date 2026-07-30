@@ -9,20 +9,17 @@ import (
 )
 
 func NewNodeClient(validatorConn *validatorHelpers.NodeConnection) iface.NodeClient {
-	grpcClient := grpcApi.NewNodeClient(validatorConn)
 	if features.Get().EnableBeaconRESTApi && validatorConn.GetRestConnectionProvider() != nil {
-		restProvider := validatorConn.GetRestConnectionProvider()
-		return beaconApi.NewNodeClientWithFallback(restProvider, grpcClient)
+		return beaconApi.NewNodeClient(validatorConn.GetRestConnectionProvider())
 	}
-	return grpcClient
+	return grpcApi.NewNodeClient(validatorConn)
 }
 
 func NewChainClient(validatorConn *validatorHelpers.NodeConnection) iface.ChainClient {
-	grpcClient := grpcApi.NewGrpcChainClient(validatorConn)
 	if features.Get().EnableBeaconRESTApi && validatorConn.GetRestConnectionProvider() != nil {
-		return beaconApi.NewBeaconApiChainClientWithFallback(validatorConn.GetRestConnectionProvider(), grpcClient)
+		return beaconApi.NewChainClient(validatorConn.GetRestConnectionProvider())
 	}
-	return grpcClient
+	return grpcApi.NewGrpcChainClient(validatorConn)
 }
 
 func NewValidatorClient(validatorConn *validatorHelpers.NodeConnection, opts ...iface.Option) iface.ValidatorClient {

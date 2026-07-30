@@ -26,14 +26,6 @@ func (c *grpcNodeClient) Genesis(ctx context.Context, in *empty.Empty) (*ethpb.G
 	return c.getClient().GetGenesis(ctx, in)
 }
 
-func (c *grpcNodeClient) Version(ctx context.Context, in *empty.Empty) (*ethpb.Version, error) {
-	return c.getClient().GetVersion(ctx, in)
-}
-
-func (c *grpcNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethpb.Peers, error) {
-	return c.getClient().ListPeers(ctx, in)
-}
-
 func (c *grpcNodeClient) IsReady(ctx context.Context) bool {
 	// GetHealth returns 200 OK only if node is synced and not optimistic.
 	// otherwise it will throw an error
