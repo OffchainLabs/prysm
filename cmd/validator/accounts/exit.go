@@ -4,19 +4,16 @@ import (
 	"io"
 	"strings"
 
-	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
 	"github.com/OffchainLabs/prysm/v7/validator/client"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v7/validator/node"
-	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
-	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func Exit(c *cli.Context, r io.Reader) error {
@@ -39,19 +36,27 @@ func Exit(c *cli.Context, r io.Reader) error {
 			flags.Web3SignerPublicValidatorKeysFlag,
 		)
 	}
+
+	opts := []accounts.Option{
+		accounts.WithGRPCDialOpts(dialOpts),
+		accounts.WithBeaconRPCProvider(beaconRPCProvider),
+		accounts.WithBeaconRESTApiProvider(c.String(flags.BeaconRESTApiProviderFlag.Name)),
+		accounts.WithGRPCHeaders(grpcHeaders),
+		accounts.WithExitJSONOutputPath(c.String(flags.VoluntaryExitJSONOutputPathFlag.Name)),
+	}
+
 	if c.IsSet(flags.Web3SignerURLFlag.Name) {
-		ctx := grpcutil.AppendHeaders(c.Context, grpcHeaders)
-		conn, err := grpc.DialContext(ctx, beaconRPCProvider, dialOpts...)
+		acc, err := accounts.NewCLIManager(opts...)
 		if err != nil {
-			return errors.Wrapf(err, "could not dial endpoint %s", beaconRPCProvider)
+			return err
 		}
-		nodeClient := ethpb.NewNodeClient(conn)
-		resp, err := nodeClient.GetGenesis(c.Context, &empty.Empty{})
+		_, nodeClient, err := acc.PrepareBeaconClients(c.Context)
+		if err != nil {
+			return err
+		}
+		resp, err := nodeClient.Genesis(c.Context, &emptypb.Empty{})
 		if err != nil {
 			return errors.Wrapf(err, "failed to get genesis info")
-		}
-		if err := conn.Close(); err != nil {
-			log.WithError(err).Error("Failed to close connection")
 		}
 		config, err := node.Web3SignerConfig(c)
 		if err != nil {
@@ -69,15 +74,7 @@ func Exit(c *cli.Context, r io.Reader) error {
 		}
 	}
 
-	opts := []accounts.Option{
-		accounts.WithWallet(w),
-		accounts.WithKeymanager(km),
-		accounts.WithGRPCDialOpts(dialOpts),
-		accounts.WithBeaconRPCProvider(beaconRPCProvider),
-		accounts.WithBeaconRESTApiProvider(c.String(flags.BeaconRESTApiProviderFlag.Name)),
-		accounts.WithGRPCHeaders(grpcHeaders),
-		accounts.WithExitJSONOutputPath(c.String(flags.VoluntaryExitJSONOutputPathFlag.Name)),
-	}
+	opts = append(opts, accounts.WithWallet(w), accounts.WithKeymanager(km))
 	// Get full set of public keys from the keymanager.
 	validatingPublicKeys, err := km.FetchValidatingPublicKeys(c.Context)
 	if err != nil {
