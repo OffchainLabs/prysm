@@ -39,8 +39,7 @@ func TestValidatePayloadAttestationMessage_IncorrectTopic(t *testing.T) {
 	require.NoError(t, err)
 
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.PayloadAttestation]()]
-	digest, err := s.currentForkDigest()
-	require.NoError(t, err)
+	digest := s.currentForkDigest()
 	topic = s.addDigestToTopic(topic, digest)
 
 	result, err := s.validatePayloadAttestation(ctx, "", &pubsub.Message{
@@ -62,13 +61,6 @@ func TestValidatePayloadAttestationMessage_ErrorPathsWithMock(t *testing.T) {
 			error: errors.New("incorrect slot"),
 			verifier: func(pa payloadattestation.ROMessage, reqs []verification.Requirement) verification.PayloadAttestationMsgVerifier {
 				return &verification.MockPayloadAttestation{ErrIncorrectPayloadAttSlot: errors.New("incorrect slot")}
-			},
-			result: pubsub.ValidationIgnore,
-		},
-		{
-			error: errors.New("block root seen"),
-			verifier: func(pa payloadattestation.ROMessage, reqs []verification.Requirement) verification.PayloadAttestationMsgVerifier {
-				return &verification.MockPayloadAttestation{ErrPayloadAttBlockRootNotSeen: errors.New("block root seen")}
 			},
 			result: pubsub.ValidationIgnore,
 		},
@@ -119,8 +111,7 @@ func TestValidatePayloadAttestationMessage_ErrorPathsWithMock(t *testing.T) {
 			require.NoError(t, err)
 
 			topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.PayloadAttestationMessage]()]
-			digest, err := s.currentForkDigest()
-			require.NoError(t, err)
+			digest := s.currentForkDigest()
 			topic = s.addDigestToTopic(topic, digest)
 
 			result, err := s.validatePayloadAttestation(ctx, "", &pubsub.Message{
@@ -154,8 +145,7 @@ func TestValidatePayloadAttestationMessage_Accept(t *testing.T) {
 	require.NoError(t, err)
 
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.PayloadAttestationMessage]()]
-	digest, err := s.currentForkDigest()
-	require.NoError(t, err)
+	digest := s.currentForkDigest()
 	topic = s.addDigestToTopic(topic, digest)
 
 	result, err := s.validatePayloadAttestation(ctx, "", &pubsub.Message{

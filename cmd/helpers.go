@@ -46,33 +46,6 @@ func ConfirmAction(actionText, deniedText string) (bool, error) {
 	return confirmed, nil
 }
 
-// EnterPassword queries the user for their password through the terminal, in order to make sure it is
-// not passed in a visible way to the terminal.
-func EnterPassword(confirmPassword bool, pr PasswordReader) (string, error) {
-	var passphrase string
-	log.Info("Enter a password:")
-	bytePassword, err := pr.ReadPassword()
-	if err != nil {
-		return "", errors.Wrap(err, "could not read account password")
-	}
-	text := bytePassword
-	passphrase = strings.ReplaceAll(text, "\n", "")
-	if confirmPassword {
-		log.Info("Please re-enter your password:")
-		bytePassword, err := pr.ReadPassword()
-		if err != nil {
-			return "", errors.Wrap(err, "could not read account password")
-		}
-		text := bytePassword
-		confirmedPass := strings.ReplaceAll(text, "\n", "")
-		if passphrase != confirmedPass {
-			log.Info("Passwords did not match, please try again")
-			return EnterPassword(true, pr)
-		}
-	}
-	return passphrase, nil
-}
-
 // ExpandSingleEndpointIfFile expands the path for --execution-provider if specified as a file.
 func ExpandSingleEndpointIfFile(ctx *cli.Context, flag *cli.StringFlag) error {
 	// Return early if no flag value is set.

@@ -688,7 +688,7 @@ func hydrateBeaconBlockBodyGloas() *eth.BeaconBlockBodyGloas {
 			},
 			Signature: make([]byte, fieldparams.BLSSignatureLength),
 		},
-		ParentExecutionRequests: &pb.ExecutionRequests{},
+		ParentExecutionRequests: &pb.ExecutionRequestsGloas{},
 		PayloadAttestations: []*eth.PayloadAttestation{
 			{
 				AggregationBits: bits,

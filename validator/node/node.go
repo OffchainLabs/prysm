@@ -37,7 +37,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/db/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/db/kv"
 	g "github.com/OffchainLabs/prysm/v7/validator/graffiti"
-	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
 	"github.com/OffchainLabs/prysm/v7/validator/rpc"
 	"github.com/pkg/errors"
@@ -165,7 +164,6 @@ func (c *ValidatorClient) Close() {
 // If it does not, it checks if a database exists in the legacy location.
 // If it does, it returns the legacy location.
 func (c *ValidatorClient) getLegacyDatabaseLocation(
-	isInteropNumValidatorsSet bool,
 	isWeb3SignerURLFlagSet bool,
 	dataDir string,
 	dataFile string,
@@ -176,7 +174,7 @@ func (c *ValidatorClient) getLegacyDatabaseLocation(
 		return "", "", errors.Wrapf(err, "could not check if file exists: %s", dataFile)
 	}
 
-	if isInteropNumValidatorsSet || dataDir != cmd.DefaultDataDir() || exists || c.wallet == nil {
+	if dataDir != cmd.DefaultDataDir() || exists || c.wallet == nil {
 		return dataDir, dataFile, nil
 	}
 
@@ -212,10 +210,6 @@ func (c *ValidatorClient) getLegacyDatabaseLocation(
 }
 
 func getWallet(cliCtx *cli.Context) (*wallet.Wallet, error) {
-	if cliCtx.IsSet(flags.InteropNumValidators.Name) {
-		log.Info("No wallet required for interop validation")
-		return nil, nil
-	}
 	if cliCtx.IsSet(flags.Web3SignerURLFlag.Name) {
 		return wallet.NewWalletForWeb3Signer(cliCtx), nil
 	}
@@ -253,14 +247,12 @@ func (c *ValidatorClient) initializeDB(cliCtx *cli.Context) error {
 	kvDataDir := cliCtx.String(cmd.DataDirFlag.Name)
 	kvDataFile := filepath.Join(kvDataDir, kv.ProtectionDbFileName)
 	walletDir := cliCtx.String(flags.WalletDirFlag.Name)
-	isInteropNumValidatorsSet := cliCtx.IsSet(flags.InteropNumValidators.Name)
 	isWeb3SignerURLFlagSet := cliCtx.IsSet(flags.Web3SignerURLFlag.Name)
 	clearFlag := cliCtx.Bool(cmd.ClearDB.Name)
 	forceClearFlag := cliCtx.Bool(cmd.ForceClearDB.Name)
 
 	// Workaround for https://github.com/prysmaticlabs/prysm/issues/13391
 	kvDataDir, _, err := c.getLegacyDatabaseLocation(
-		isInteropNumValidatorsSet,
 		isWeb3SignerURLFlagSet,
 		kvDataDir,
 		kvDataFile,
@@ -376,18 +368,12 @@ func (c *ValidatorClient) registerPrometheusService(cliCtx *cli.Context) error {
 }
 
 func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
-	var (
-		interopKmConfig *local.InteropKeymanagerConfig
-		err             error
-	)
-
-	// Configure interop.
-	if cliCtx.IsSet(flags.InteropNumValidators.Name) {
-		interopKmConfig = &local.InteropKeymanagerConfig{
-			Offset:           cliCtx.Uint64(flags.InteropStartIndex.Name),
-			NumValidatorKeys: cliCtx.Uint64(flags.InteropNumValidators.Name),
-		}
+	distributed := cliCtx.Bool(flags.EnableDistributed.Name)
+	if distributed && !features.Get().EnableBeaconRESTApi {
+		return errors.New("--distributed requires --enable-beacon-rest-api")
 	}
+
+	var err error
 
 	// Configure graffiti.
 	graffitiStruct := &g.Graffiti{}
@@ -411,9 +397,6 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 	}
 
 	stateless := cliCtx.Bool(flags.EnableStatelessFlag.Name)
-	if stateless && !features.Get().EnableBeaconRESTApi {
-		log.Warnf("--%s requires --%s; the flag will be ignored.", flags.EnableStatelessFlag.Name, features.EnableBeaconRESTApi.Name)
-	}
 
 	validatorService, err := client.NewValidatorService(cliCtx.Context, &client.Config{
 		DB:                      c.db,
@@ -430,14 +413,13 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		BeaconApiTimeout:        time.Second * 30,
 		Graffiti:                g.ParseHexGraffiti(cliCtx.String(flags.GraffitiFlag.Name)),
 		GraffitiStruct:          graffitiStruct,
-		InteropKmConfig:         interopKmConfig,
 		Web3SignerConfig:        web3signerConfig,
 		ProposerSettings:        ps,
 		ValidatorsRegBatchSize:  cliCtx.Int(flags.ValidatorsRegistrationBatchSizeFlag.Name),
 		EnableAPI:               features.Get().EnableWeb || cliCtx.Bool(flags.EnableRPCFlag.Name),
 		LogValidatorPerformance: !cliCtx.Bool(flags.DisablePenaltyRewardLogFlag.Name),
 		EmitAccountMetrics:      !cliCtx.Bool(flags.DisableAccountMetricsFlag.Name),
-		Distributed:             cliCtx.Bool(flags.EnableDistributed.Name),
+		Distributed:             distributed,
 		Stateless:               stateless,
 		CloseClientFunc:         c.Close,
 		MaxHealthChecks:         cliCtx.Int(flags.MaxHealthChecksFlag.Name),

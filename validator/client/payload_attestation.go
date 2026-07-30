@@ -44,6 +44,12 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 			tracing.AnnotateError(span, err)
 			return
 		}
+		if status.Code(errors.Cause(err)) == codes.NotFound {
+			validatorPayloadAttestationSubmissionTotal.WithLabelValues("skipped_no_block").Inc()
+			log.WithField("slot", slot).Info("Skipping payload attestation: no block for slot")
+			tracing.AnnotateError(span, err)
+			return
+		}
 		validatorPayloadAttestationSubmissionTotal.WithLabelValues("failed").Inc()
 		log.WithError(err).Error("Could not request payload attestation data")
 		tracing.AnnotateError(span, err)
@@ -110,5 +116,6 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 		"payloadPresent":     data.PayloadPresent,
 		"blobDataAvailable":  data.BlobDataAvailable,
 		"validatorIndex":     duty.ValidatorIndex,
-	}).Info("Submitted new payload attestation")
+	}).Debug("Submitted new payload attestation")
+	v.saveSubmittedPayloadAtt(data, duty.ValidatorIndex)
 }

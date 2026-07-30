@@ -123,6 +123,14 @@ func (s *Store) allConsensusChildren(n *Node) []*Node {
 	return en.children
 }
 
+// hasConsensusChildren reports whether any consensus block builds on the given node.
+// It avoids the allocation allConsensusChildren makes when only the count is needed.
+func (s *Store) hasConsensusChildren(n *Node) bool {
+	en := s.emptyNodeByRoot[n.root]
+	fn, ok := s.fullNodeByRoot[n.root]
+	return len(en.children) > 0 || (ok && len(fn.children) > 0)
+}
+
 // setNodeAndParentValidated sets the current node and all the ancestors as validated (i.e. non-optimistic).
 func (s *Store) setNodeAndParentValidated(ctx context.Context, pn *PayloadNode) error {
 	if ctx.Err() != nil {
@@ -230,7 +238,7 @@ func (s *Store) updateBestDescendantConsensusNode(ctx context.Context, n *Node, 
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if len(s.allConsensusChildren(n)) == 0 {
+	if !s.hasConsensusChildren(n) {
 		n.bestDescendant = nil
 		return nil
 	}
@@ -260,7 +268,7 @@ func (s *Store) shouldExtendPayload(fn *PayloadNode) bool {
 		return false
 	}
 	n := fn.node
-	if n.payloadAvailabilityVote.Count() > fieldparams.PTCSize/2 && n.payloadDataAvailabilityVote.Count() > fieldparams.PTCSize/2 {
+	if ptcVotedEarlyAndAvailable(n) {
 		return true
 	}
 	if s.proposerBoostRoot == [32]byte{} {
@@ -274,6 +282,24 @@ func (s *Store) shouldExtendPayload(fn *PayloadNode) bool {
 		return true
 	}
 	return pn.node.parent.full
+}
+
+func ptcVotedEarlyAndAvailable(n *Node) bool {
+	return n != nil &&
+		n.payloadAvailabilityVote.Count() > fieldparams.PTCSize/2 &&
+		n.payloadDataAvailabilityVote.Count() > fieldparams.PTCSize/2
+}
+
+func ptcVotedLate(n *Node) bool {
+	if n == nil {
+		return false
+	}
+	attesters := n.payloadAttesters.Count()
+	payloadPresent := n.payloadAvailabilityVote.Count()
+	if payloadPresent >= attesters {
+		return false
+	}
+	return attesters-payloadPresent > fieldparams.PTCSize/2
 }
 
 // choosePayloadContent chooses between empty or full for the passed consensus node.
@@ -445,11 +471,9 @@ func (s *Store) nodeTreeDumpV2(ctx context.Context, n *Node, nodes []*forkchoice
 	return nodes, nil
 }
 
-// MarkFullNode creates a full payload node for an existing empty node at the
-// given beacon block root. This is used during forkchoice tree reconstruction on
-// startup to mark blocks whose execution payload was delivered. The caller must
-// hold the forkchoice write lock.
-func (f *ForkChoice) MarkFullNode(root [32]byte) {
+// MarkFullNode creates a full payload node for an existing empty node during
+// tree reconstruction, the caller must hold the forkchoice write lock.
+func (f *ForkChoice) MarkFullNode(root [32]byte, gasLimit uint64) {
 	s := f.store
 	en := s.emptyNodeByRoot[root]
 	if en == nil {
@@ -463,6 +487,7 @@ func (f *ForkChoice) MarkFullNode(root [32]byte) {
 		optimistic: true,
 		timestamp:  time.Now(),
 		full:       true,
+		gasLimit:   gasLimit,
 		children:   make([]*Node, 0),
 	}
 }
@@ -516,7 +541,9 @@ func (f *ForkChoice) SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, bl
 	if n == nil {
 		return
 	}
-	ptcVoteCount.Inc()
+	if !n.node.payloadAttesters.BitAt(ptcIdx) {
+		ptcVoteCount.Inc()
+	}
 	n.node.payloadAttesters.SetBitAt(ptcIdx, true)
 	n.node.payloadAvailabilityVote.SetBitAt(ptcIdx, payloadPresent)
 	n.node.payloadDataAvailabilityVote.SetBitAt(ptcIdx, blobDataAvailable)
@@ -550,6 +577,19 @@ func (f *ForkChoice) HasFullNode(root [32]byte) bool {
 	return ok
 }
 
+// HasPayloadBlockHash reports whether blockHash is an available payload parent at root.
+func (f *ForkChoice) HasPayloadBlockHash(root, blockHash [32]byte) bool {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return false
+	}
+	if blockHash == en.node.blockHash {
+		_, ok := f.store.fullNodeByRoot[root]
+		return ok
+	}
+	return blockHash == f.store.parentHash(en)
+}
+
 // FullBeatsEmpty returns whether fork choice would select the full payload variant
 // for the given beacon block root. The caller MUST hold the forkchoice lock.
 func (f *ForkChoice) FullBeatsEmpty(root [32]byte) bool {
@@ -557,11 +597,35 @@ func (f *ForkChoice) FullBeatsEmpty(root [32]byte) bool {
 	if en == nil || en.node == nil {
 		return false
 	}
-	if slots.ToEpoch(en.node.slot) < params.BeaconConfig().GloasForkEpoch {
-		return false
-	}
 	pn := f.store.choosePayloadContent(en.node)
 	return pn != nil && pn.full
+}
+
+// PTCVotedEarlyAndAvailable returns whether the PTC has majority-voted that the payload and blob data are available.
+func (f *ForkChoice) PTCVotedEarlyAndAvailable(root [32]byte) bool {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return false
+	}
+	return ptcVotedEarlyAndAvailable(en.node)
+}
+
+// PTCVotedLate returns whether the PTC has majority-voted that the payload is not present.
+func (f *ForkChoice) PTCVotedLate(root [32]byte) bool {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return false
+	}
+	return ptcVotedLate(en.node)
+}
+
+// ParentHash returns the payload hash of the latest full parent that the given block builds on.
+func (f *ForkChoice) ParentHash(root [32]byte) [32]byte {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return [32]byte{}
+	}
+	return f.store.parentHash(en)
 }
 
 // BlockHash returns the hash committed in the given block

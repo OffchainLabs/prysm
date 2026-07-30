@@ -28,7 +28,7 @@ func TestGetAttestationData_ValidAttestation(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	produceAttestationDataResponseJson := structs.GetAttestationDataResponse{}
 
 	handler.EXPECT().Get(
@@ -180,7 +180,7 @@ func TestGetAttestationData_InvalidData(t *testing.T) {
 			defer ctrl.Finish()
 
 			produceAttestationDataResponseJson := structs.GetAttestationDataResponse{}
-			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockHandler(ctrl)
 			handler.EXPECT().Get(
 				gomock.Any(),
 				"/eth/v1/validator/attestation_data?committee_index=2&slot=1",
@@ -208,7 +208,7 @@ func TestGetAttestationData_JsonResponseError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
 	produceAttestationDataResponseJson := structs.GetAttestationDataResponse{}
 	handler.EXPECT().Get(
 		gomock.Any(),

@@ -1,3 +1,0 @@
-### Changed
-
-- Update signature batch.

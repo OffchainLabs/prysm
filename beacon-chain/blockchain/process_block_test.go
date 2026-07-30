@@ -3006,6 +3006,97 @@ func TestIsDataAvailable(t *testing.T) {
 	})
 }
 
+// Reproduces the checkpoint sync stall, during initial sync a block with missing columns must fail fast instead of waiting for gossip that never comes.
+func TestIsDataAvailable_InitSync(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.AltairForkEpoch, cfg.BellatrixForkEpoch, cfg.CapellaForkEpoch, cfg.DenebForkEpoch, cfg.ElectraForkEpoch, cfg.FuluForkEpoch = 0, 0, 0, 0, 0, 0
+	params.OverrideBeaconConfig(cfg)
+
+	t.Run("missing columns fail instead of blocking", func(t *testing.T) {
+		testParams := testIsAvailableParams{
+			options:                 []Option{WithSyncChecker(&mock.MockSyncChecker{})},
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, cancel, service, root, signed := testIsAvailableSetup(t, testParams)
+		defer cancel()
+
+		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
+		require.NoError(t, err)
+
+		done := make(chan error, 1)
+		go func() {
+			done <- service.isDataAvailable(ctx, roBlock)
+		}()
+
+		bound := time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second + 2*time.Second
+		select {
+		case err := <-done:
+			require.NotNil(t, err)
+		case <-time.After(bound):
+			t.Fatal("isDataAvailable did not return for a block with missing data columns, the init-sync consumer stalls forever on this path")
+		}
+	})
+
+	t.Run("stored columns pass", func(t *testing.T) {
+		testParams := testIsAvailableParams{
+			options:                 []Option{WithSyncChecker(&mock.MockSyncChecker{})},
+			columnsToSave:           []uint64{1, 17, 19, 42, 75, 87, 102, 117},
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, cancel, service, root, signed := testIsAvailableSetup(t, testParams)
+		defer cancel()
+
+		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
+		require.NoError(t, err)
+		require.NoError(t, service.isDataAvailable(ctx, roBlock))
+	})
+}
+
+func TestDataColumnsAvailableNow(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.AltairForkEpoch, cfg.BellatrixForkEpoch, cfg.CapellaForkEpoch, cfg.DenebForkEpoch, cfg.ElectraForkEpoch, cfg.FuluForkEpoch = 0, 0, 0, 0, 0, 0
+	params.OverrideBeaconConfig(cfg)
+
+	t.Run("all custody columns present", func(t *testing.T) {
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testIsAvailableParams{
+			columnsToSave:           []uint64{1, 17, 19, 42, 75, 87, 102, 117, 119},
+			blobKzgCommitmentsCount: 3,
+		})
+		available, err := service.dataColumnsAvailableNow(ctx, root, signed.Block().Slot())
+		require.NoError(t, err)
+		require.Equal(t, true, available)
+	})
+
+	t.Run("enough columns to reconstruct", func(t *testing.T) {
+		minimum := peerdas.MinimumColumnCountToReconstruct()
+		indices := make([]uint64, 0, minimum)
+		for i := range minimum {
+			indices = append(indices, i)
+		}
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testIsAvailableParams{
+			columnsToSave:           indices,
+			blobKzgCommitmentsCount: 3,
+		})
+		available, err := service.dataColumnsAvailableNow(ctx, root, signed.Block().Slot())
+		require.NoError(t, err)
+		require.Equal(t, true, available)
+	})
+
+	t.Run("missing columns returns false", func(t *testing.T) {
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testIsAvailableParams{
+			columnsToSave:           []uint64{1},
+			blobKzgCommitmentsCount: 3,
+		})
+		available, err := service.dataColumnsAvailableNow(ctx, root, signed.Block().Slot())
+		require.NoError(t, err)
+		require.Equal(t, false, available)
+	})
+}
+
 // Test_postBlockProcess_EventSending tests that block processed events are only sent
 // when block processing succeeds according to the decision tree:
 //

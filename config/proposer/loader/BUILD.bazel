@@ -13,6 +13,7 @@ go_test(
         "//config/proposer:go_default_library",
         "//consensus-types/validator:go_default_library",
         "//encoding/bytesutil:go_default_library",
+        "//proto/prysm/v1alpha1/validator-client:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "//validator/db/iface:go_default_library",

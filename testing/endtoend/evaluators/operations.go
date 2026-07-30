@@ -2,13 +2,16 @@ package evaluators
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/api/client/beacon"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	corehelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -25,7 +28,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"golang.org/x/exp/rand"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -92,7 +94,7 @@ var DepositedValidatorsAreActive = e2etypes.Evaluator{
 	Evaluation: depositedValidatorsAreActive,
 }
 
-// ProposeVoluntaryExit sends a voluntary exit from randomly selected validator in the genesis set.
+// ProposeVoluntaryExit submits voluntary exits for eligible validators in the genesis set.
 // Uses the default exit submission epoch (7).
 var ProposeVoluntaryExit = ProposeVoluntaryExitAtEpoch(defaultExitSubmissionEpoch)
 
@@ -450,8 +452,29 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 	if err != nil {
 		return errors.Wrap(err, "could not get state")
 	}
+
+	// Exclude validators that will serve in an upcoming sync committee from being
+	// exited. An exit submitted now is still active when the next sync committee is
+	// sampled (one period ahead), so an exited validator can be selected into a
+	// committee that only begins serving after the validator is no longer active,
+	// leaving it unable to sign and causing a permanent sync-participation deficit
+	// for that whole period. altair.NextSyncCommittee computes that upcoming committee
+	// from the current state; the stored state.NextSyncCommittee field is the already
+	// active next committee and is not the one sampled here.
+	upcomingSyncCommittee, err := altair.NextSyncCommittee(ctx, st)
+	if err != nil {
+		return err
+	}
+	syncCommitteeKeys := make(map[[48]byte]bool)
+	for _, pk := range upcomingSyncCommittee.Pubkeys {
+		syncCommitteeKeys[bytesutil.ToBytes48(pk)] = true
+	}
+
 	var execIndices []primitives.ValidatorIndex
 	for idx, val := range st.ValidatorsReadOnlySeq() {
+		if syncCommitteeKeys[val.PublicKey()] {
+			continue
+		}
 		if val.GetWithdrawalCredentials()[0] == params.BeaconConfig().ETH1AddressWithdrawalPrefixByte {
 			execIndices = append(execIndices, idx)
 		}
@@ -465,6 +488,7 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 		return err
 	}
 
+	exitsSubmitted := 0
 	var sendExit = func(exitedIndex primitives.ValidatorIndex) error {
 		voluntaryExit := &ethpb.VoluntaryExit{
 			Epoch:          chainHead.HeadEpoch,
@@ -493,6 +517,7 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 		}
 		pubk := bytesutil.ToBytes48(deposits[exitedIndex].Data.PublicKey)
 		ec.ExitedVals[pubk] = chainHead.HeadEpoch // Store submission epoch
+		exitsSubmitted++
 		return nil
 	}
 
@@ -503,19 +528,55 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 		}
 	}
 
-	// Send an exit for a non-exited validator.
-	for i := 0; i < numOfExits; {
-		randIndex := primitives.ValidatorIndex(rand.Uint64() % params.BeaconConfig().MinGenesisActiveValidatorCount)
-		if _, alreadyExited := ec.ExitedVals[bytesutil.ToBytes48(privKeys[randIndex].PublicKey().Marshal())]; alreadyExited {
-			continue
-		}
-		if err := sendExit(randIndex); err != nil {
+	keys := make([][48]byte, len(privKeys))
+	for i, key := range privKeys {
+		keys[i] = bytesutil.ToBytes48(key.PublicKey().Marshal())
+	}
+	for _, candidate := range selectVoluntaryExitCandidates(keys, ec.ExitedVals, syncCommitteeKeys, numOfExits) {
+		if err := sendExit(candidate); err != nil {
 			return err
 		}
-		i++
 	}
 
+	return ensureVoluntaryExitSubmitted(exitsSubmitted)
+}
+
+func ensureVoluntaryExitSubmitted(count int) error {
+	if count == 0 {
+		return errors.New("no eligible validators available for voluntary exit")
+	}
 	return nil
+}
+
+func selectVoluntaryExitCandidates(keys [][48]byte, exited map[[48]byte]primitives.Epoch, reserved map[[48]byte]bool, limit int) []primitives.ValidatorIndex {
+	if limit <= 0 {
+		return nil
+	}
+
+	preferred := make([]primitives.ValidatorIndex, 0, limit)
+	fallback := make([]primitives.ValidatorIndex, 0, limit)
+	for i, key := range keys {
+		if _, alreadyExited := exited[key]; alreadyExited {
+			continue
+		}
+		if reserved[key] {
+			fallback = append(fallback, primitives.ValidatorIndex(i))
+			continue
+		}
+		preferred = append(preferred, primitives.ValidatorIndex(i))
+		if len(preferred) == limit {
+			return preferred
+		}
+	}
+
+	// With the mainnet E2E configuration, the sync committee contains every
+	// validator. Prefer non-members when they exist, but fall back to committee
+	// members so the voluntary-exit scenario still exercises exits and withdrawals.
+	candidates := append(preferred, fallback...)
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+	return candidates
 }
 
 func validatorsHaveExited(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
@@ -539,8 +600,10 @@ func validatorsHaveExited(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 }
 
 func validatorsVoteWithTheMajority(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
-	conn := conns[0]
-	client := ethpb.NewBeaconChainClient(conn)
+	return validatorsVoteWithTheMajorityForClient(ec, ethpb.NewBeaconChainClient(conns[0]))
+}
+
+func validatorsVoteWithTheMajorityForClient(ec *e2etypes.EvaluationContext, client ethpb.BeaconChainClient) error {
 	chainHead, err := client.GetChainHead(context.Background(), &emptypb.Empty{})
 	if err != nil {
 		return errors.Wrap(err, "failed to get chain head")
@@ -556,61 +619,16 @@ func validatorsVoteWithTheMajority(ec *e2etypes.EvaluationContext, conns ...*grp
 	if err != nil {
 		return errors.Wrap(err, "failed to get blocks from beacon-chain")
 	}
+	slices.SortFunc(blks.BlockContainers, func(a, b *ethpb.BeaconBlockContainer) int {
+		aSlot, _ := blockContainerSlotAndVote(a)
+		bSlot, _ := blockContainerSlotAndVote(b)
+		return cmp.Compare(aSlot, bSlot)
+	})
 
 	slotsPerVotingPeriod := params.E2ETestConfig().SlotsPerEpoch.Mul(uint64(params.E2ETestConfig().EpochsPerEth1VotingPeriod))
 	for _, blk := range blks.BlockContainers {
-		var slot primitives.Slot
-		var vote []byte
-		switch blk.Block.(type) {
-		case *ethpb.BeaconBlockContainer_Phase0Block:
-			b := blk.GetPhase0Block().Block
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_AltairBlock:
-			b := blk.GetAltairBlock().Block
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_BellatrixBlock:
-			b := blk.GetBellatrixBlock().Block
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_BlindedBellatrixBlock:
-			b := blk.GetBlindedBellatrixBlock().Block
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_CapellaBlock:
-			b := blk.GetCapellaBlock().Block
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_BlindedCapellaBlock:
-			b := blk.GetBlindedCapellaBlock().Block
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_DenebBlock:
-			b := blk.GetDenebBlock().Block
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_BlindedDenebBlock:
-			b := blk.GetBlindedDenebBlock().Message
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_ElectraBlock:
-			b := blk.GetElectraBlock().Block
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_BlindedElectraBlock:
-			b := blk.GetBlindedElectraBlock().Message
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_FuluBlock:
-			b := blk.GetFuluBlock().Block
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		case *ethpb.BeaconBlockContainer_BlindedFuluBlock:
-			b := blk.GetBlindedFuluBlock().Message
-			slot = b.Slot
-			vote = b.Body.Eth1Data.BlockHash
-		default:
+		slot, vote := blockContainerSlotAndVote(blk)
+		if vote == nil {
 			return fmt.Errorf("block of type %T is unknown", blk.Block)
 		}
 		ec.SeenVotes[slot] = vote
@@ -641,7 +659,7 @@ func validatorsVoteWithTheMajority(ec *e2etypes.EvaluationContext, conns ...*grp
 			ec.Eth1DataMismatchCount++
 			// Allow up to 2 mismatches per voting period before failing.
 			if ec.Eth1DataMismatchCount > 2 {
-				for i := primitives.Slot(0); i < slot; i++ {
+				for i := range slot {
 					v, ok := ec.SeenVotes[i]
 					if ok {
 						fmt.Printf("vote at slot=%d = %#x\n", i, v)
@@ -655,6 +673,49 @@ func validatorsVoteWithTheMajority(ec *e2etypes.EvaluationContext, conns ...*grp
 		}
 	}
 	return nil
+}
+
+func blockContainerSlotAndVote(blk *ethpb.BeaconBlockContainer) (primitives.Slot, []byte) {
+	switch blk.Block.(type) {
+	case *ethpb.BeaconBlockContainer_Phase0Block:
+		b := blk.GetPhase0Block().Block
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_AltairBlock:
+		b := blk.GetAltairBlock().Block
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_BellatrixBlock:
+		b := blk.GetBellatrixBlock().Block
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_BlindedBellatrixBlock:
+		b := blk.GetBlindedBellatrixBlock().Block
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_CapellaBlock:
+		b := blk.GetCapellaBlock().Block
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_BlindedCapellaBlock:
+		b := blk.GetBlindedCapellaBlock().Block
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_DenebBlock:
+		b := blk.GetDenebBlock().Block
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_BlindedDenebBlock:
+		b := blk.GetBlindedDenebBlock().Message
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_ElectraBlock:
+		b := blk.GetElectraBlock().Block
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_BlindedElectraBlock:
+		b := blk.GetBlindedElectraBlock().Message
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_FuluBlock:
+		b := blk.GetFuluBlock().Block
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	case *ethpb.BeaconBlockContainer_BlindedFuluBlock:
+		b := blk.GetBlindedFuluBlock().Message
+		return b.Slot, b.Body.Eth1Data.BlockHash
+	default:
+		return 0, nil
+	}
 }
 
 func submitWithdrawal(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
@@ -694,18 +755,12 @@ func submitWithdrawal(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientConn)
 		return err
 	}
 	changes := make([]*structs.SignedBLSToExecutionChange, 0)
-	// Only send half the number of changes each time, to allow us to test
-	// at the fork boundary. When starting from Deneb+ at genesis, there's no
-	// fork boundary to test so we send all changes.
-	wantedChanges := numOfExits / 2
-	if e2etypes.GenesisFork() >= version.Deneb {
-		wantedChanges = numOfExits
-	}
+	// Submit a BLS-to-execution change for every exited validator that still has
+	// BLS withdrawal credentials. This evaluator runs each epoch and the pool dedups
+	// by validator index, so resubmitting is idempotent and self-heals if a change
+	// was not included on a prior attempt (which previously left validators stuck on
+	// 0x00 credentials and never swept by the withdrawal sweep).
 	for _, idx := range exitedIndices {
-		// Exit sending more change messages.
-		if len(changes) >= wantedChanges {
-			break
-		}
 		val, err := st.ValidatorAtIndex(idx)
 		if err != nil {
 			return err
@@ -735,6 +790,10 @@ func submitWithdrawal(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientConn)
 			Message:   structs.BLSChangeFromConsensus(message),
 			Signature: hexutil.Encode(signature),
 		})
+	}
+
+	if len(changes) == 0 {
+		return nil
 	}
 
 	beaconAPIClient, err := beacon.NewClient(fmt.Sprintf("http://localhost:%d/eth/v1", e2e.TestParams.Ports.PrysmBeaconNodeHTTPPort)) // only uses the first node so no updates to port

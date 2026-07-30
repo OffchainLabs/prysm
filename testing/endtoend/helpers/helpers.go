@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -111,6 +110,10 @@ func WaitForTextInFile(src *os.File, match string) error {
 					return
 				}
 				lineScanner := bufio.NewScanner(f)
+				// E2E process logs can include long flag and JSON lines; keep the
+				// scanner from failing before it reaches the startup marker.
+				buf := make([]byte, 0, fileBufferSize)
+				lineScanner.Buffer(buf, maxFileBufferSize)
 				// Scan will return true until it hits EOF or another error.
 				// If .Close is called on the underlying file, Scan will return false, causing this goroutine to exit.
 				for lineScanner.Scan() {
@@ -345,13 +348,12 @@ func ComponentsStarted(ctx context.Context, comps []e2etypes.ComponentRunner) er
 	return nil
 }
 
-// EpochTickerStartTime calculates the best time to start epoch ticker for a given genesis.
-func EpochTickerStartTime(genesis *eth.Genesis) time.Time {
+// EpochTickerStartTime calculates the best time to start epoch ticker for a given genesis time.
+func EpochTickerStartTime(genesisTime time.Time) time.Time {
 	epochSeconds := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
 	epochSecondsHalf := time.Duration(int64(epochSeconds*1000)/2) * time.Millisecond
 	// Adding a half slot here to ensure the requests are in the middle of an epoch.
 	middleOfEpoch := epochSecondsHalf + slots.DivideSlotBy(2 /* half a slot */)
-	genesisTime := time.Unix(genesis.GenesisTime.Seconds, 0)
 	// Offsetting the ticker from genesis so it ticks in the middle of an epoch, in order to keep results consistent.
 	return genesisTime.Add(middleOfEpoch)
 }

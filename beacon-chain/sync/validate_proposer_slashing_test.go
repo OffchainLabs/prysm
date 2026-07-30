@@ -130,8 +130,7 @@ func TestValidateProposerSlashing_ValidSlashing(t *testing.T) {
 	_, err := p.Encoding().EncodeGossip(buf, slashing)
 	require.NoError(t, err)
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.ProposerSlashing]()]
-	d, err := r.currentForkDigest()
-	assert.NoError(t, err)
+	d := r.currentForkDigest()
 	topic = r.addDigestToTopic(topic, d)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
@@ -173,8 +172,7 @@ func TestValidateProposerSlashing_ValidOldSlashing(t *testing.T) {
 	_, err = p.Encoding().EncodeGossip(buf, slashing)
 	require.NoError(t, err)
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.ProposerSlashing]()]
-	d, err := r.currentForkDigest()
-	assert.NoError(t, err)
+	d := r.currentForkDigest()
 	topic = r.addDigestToTopic(topic, d)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{

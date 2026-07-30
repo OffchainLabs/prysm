@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	prysmP2P "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -21,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	goPeer "github.com/libp2p/go-libp2p/core/peer"
@@ -41,6 +41,7 @@ type DataColumnSidecarsParams struct {
 	Storage                 filesystem.DataColumnStorageReader  // Data columns storage
 	NewVerifier             verification.NewDataColumnsVerifier // Data columns verifier to check to conformity of incoming data column sidecars
 	DownscorePeerOnRPCFault bool                                // Downscore a peer if it commits an RPC fault. Not responding sidecars at all is considered as a fault.
+	RequestByRoot           bool
 }
 
 // FetchDataColumnSidecars retrieves data column sidecars for the given blocks and indices
@@ -81,7 +82,6 @@ func FetchDataColumnSidecars(
 	slotByRoot := make(map[[fieldparams.RootLength]byte]primitives.Slot, blockCount)
 	storedIndicesByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool, blockCount)
 
-	commitmentsByRoot := make(map[[fieldparams.RootLength]byte][][]byte, blockCount)
 	blockByRoot := make(map[[fieldparams.RootLength]byte]blocks.ROBlock, blockCount)
 
 	for _, roBlock := range roBlocks {
@@ -102,7 +102,6 @@ func FetchDataColumnSidecars(
 		incompleteRoots[root] = true
 		slotByRoot[root] = slot
 		slotsWithCommitments[slot] = true
-		commitmentsByRoot[root] = commitments
 		blockByRoot[root] = roBlock
 
 		storedIndices := params.Storage.Summary(root).Stored()
@@ -127,7 +126,7 @@ func FetchDataColumnSidecars(
 	}
 
 	// Request direct sidecars from peers.
-	directSidecarsByRoot, err := requestDirectSidecarsFromPeers(params, slotByRoot, requestedIndices, slotsWithCommitments, storedIndicesByRoot, incompleteRoots, commitmentsByRoot, blockByRoot)
+	directSidecarsByRoot, err := requestDirectSidecarsFromPeers(params, slotByRoot, requestedIndices, slotsWithCommitments, storedIndicesByRoot, incompleteRoots, blockByRoot)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "request direct sidecars from peers")
 	}
@@ -146,7 +145,7 @@ func FetchDataColumnSidecars(
 	}
 
 	// Request all possible indirect sidecars from peers which are neither stored nor in `directSidecarsByRoot`
-	indirectSidecarsByRoot, err := requestIndirectSidecarsFromPeers(params, slotByRoot, slotsWithCommitments, storedIndicesByRoot, directSidecarsByRoot, requestedIndices, incompleteRoots, commitmentsByRoot, blockByRoot)
+	indirectSidecarsByRoot, err := requestIndirectSidecarsFromPeers(params, slotByRoot, slotsWithCommitments, storedIndicesByRoot, directSidecarsByRoot, requestedIndices, incompleteRoots, blockByRoot)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "request all sidecars from peers")
 	}
@@ -190,7 +189,7 @@ func requestSidecarsFromStorage(
 	requestedIndicesMap map[uint64]bool,
 	roots map[[fieldparams.RootLength]byte]bool,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
-	requestedIndices := helpers.SortedSliceFromMap(requestedIndicesMap)
+	requestedIndices := slice.SortedSliceFromMap(requestedIndicesMap)
 
 	result := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, len(roots))
 
@@ -237,7 +236,6 @@ func requestDirectSidecarsFromPeers(
 	slotsWithCommitments map[primitives.Slot]bool,
 	storedIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
 	incompleteRoots map[[fieldparams.RootLength]byte]bool,
-	commitmentsByRoot map[[fieldparams.RootLength]byte][][]byte,
 	blockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
 	start := time.Now()
@@ -295,9 +293,6 @@ func requestDirectSidecarsFromPeers(
 		// Fetch the sidecars from the chosen peers.
 		roDataColumnsByPeer := fetchDataColumnSidecarsFromPeers(params, slotByRoot, slotsWithCommitments, indicesByRootByPeerToQuery)
 
-		// Set bid commitments on Gloas columns before verification.
-		setBidCommitments(commitmentsByRoot, roDataColumnsByPeer)
-
 		// Verify the received data column sidecars.
 		verifiedRoDataColumnSidecars, err := verifyDataColumnSidecarsByPeer(params.P2P, params.NewVerifier, blockByRoot, roDataColumnsByPeer)
 		if err != nil {
@@ -348,7 +343,6 @@ func requestIndirectSidecarsFromPeers(
 	alreadyAvailableByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn,
 	requestedIndices map[uint64]bool,
 	roots map[[fieldparams.RootLength]byte]bool,
-	commitmentsByRoot map[[fieldparams.RootLength]byte][][]byte,
 	blockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
 	start := time.Now()
@@ -417,9 +411,6 @@ func requestIndirectSidecarsFromPeers(
 
 		// Fetch the sidecars from the chosen peers.
 		roDataColumnsByPeer := fetchDataColumnSidecarsFromPeers(p, slotByRoot, slotsWithCommitments, indicesByRootByPeerToQuery)
-
-		// Set bid commitments on Gloas columns before verification.
-		setBidCommitments(commitmentsByRoot, roDataColumnsByPeer)
 
 		// Verify the received data column sidecars.
 		verifiedRoDataColumnSidecars, err := verifyDataColumnSidecarsByPeer(p.P2P, p.NewVerifier, blockByRoot, roDataColumnsByPeer)
@@ -623,7 +614,7 @@ func assembleAvailableSidecarsForRoot(
 	root [fieldparams.RootLength]byte,
 	indices map[uint64]bool,
 ) ([]blocks.VerifiedRODataColumn, error) {
-	stored, err := storage.Get(root, helpers.SortedSliceFromMap(indices))
+	stored, err := storage.Get(root, slice.SortedSliceFromMap(indices))
 	if err != nil {
 		return nil, errors.Wrapf(err, "storage get for root %#x", root)
 	}
@@ -795,10 +786,14 @@ func sendDataColumnSidecarsRequest(
 		"requestedSidecars": requestedSidecarsCount,
 	})
 
-	// Try to build a by range byRangeRequest first.
-	byRangeRequests, err := buildByRangeRequests(slotByRoot, slotsWithCommitments, indicesByRoot, batchSize)
-	if err != nil {
-		return nil, errors.Wrap(err, "craft by range request")
+	var byRangeRequests []*ethpb.DataColumnSidecarsByRangeRequest
+	if !params.RequestByRoot {
+		// Try to build a by range byRangeRequest first.
+		requests, err := buildByRangeRequests(slotByRoot, slotsWithCommitments, indicesByRoot, batchSize)
+		if err != nil {
+			return nil, errors.Wrap(err, "craft by range request")
+		}
+		byRangeRequests = requests
 	}
 
 	// If we have a valid by range request, send it.
@@ -829,7 +824,7 @@ func sendDataColumnSidecarsRequest(
 				prettyRequest := map[string]any{
 					"startSlot": request.StartSlot,
 					"count":     request.Count,
-					"columns":   helpers.PrettySlice(request.Columns),
+					"columns":   slice.PrettySlice(request.Columns),
 				}
 
 				prettyByRangeRequests = append(prettyByRangeRequests, prettyRequest)
@@ -918,7 +913,7 @@ func buildByRangeRequests(
 		}
 	}
 
-	columns := helpers.SortedSliceFromMap(reference)
+	columns := slice.SortedSliceFromMap(reference)
 	startSlot, endSlot := slots[0], slots[len(slots)-1]
 	totalCount := uint64(endSlot - startSlot + 1)
 
@@ -943,7 +938,7 @@ func buildByRootRequest(indicesByRoot map[[fieldparams.RootLength]byte]map[uint6
 	for root, indices := range indicesByRoot {
 		identifier := &ethpb.DataColumnsByRootIdentifier{
 			BlockRoot: root[:],
-			Columns:   helpers.SortedSliceFromMap(indices),
+			Columns:   slice.SortedSliceFromMap(indices),
 		}
 		identifiers = append(identifiers, identifier)
 	}
@@ -1011,6 +1006,28 @@ func verifyByRootDataColumnSidecars(
 	blockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
 	roDataColumns []blocks.RODataColumn,
 ) ([]blocks.VerifiedRODataColumn, error) {
+	n := 0
+	for i := range roDataColumns {
+		if _, ok := blockByRoot[roDataColumns[i].BlockRoot()]; ok {
+			roDataColumns[n] = roDataColumns[i]
+			n++
+		}
+	}
+	roDataColumns = roDataColumns[:n]
+
+	// Gloas sidecars carry no commitments; seed them from the block's bid before the Fulu verifier runs.
+	for i := range roDataColumns {
+		if !roDataColumns[i].IsGloas() {
+			continue
+		}
+		block := blockByRoot[roDataColumns[i].BlockRoot()]
+		commitments, err := block.Block().Body().BlobKzgCommitments()
+		if err != nil {
+			return nil, errors.Wrap(err, "get bid blob kzg commitments")
+		}
+		roDataColumns[i].SetBidCommitments(commitments)
+	}
+
 	verifier := newVerifier(roDataColumns, verification.ByRootRequestDataColumnSidecarRequirements)
 
 	if err := verifier.ValidFields(); err != nil {
@@ -1026,11 +1043,7 @@ func verifyByRootDataColumnSidecars(
 	}
 
 	for _, sidecar := range roDataColumns {
-		block, ok := blockByRoot[sidecar.BlockRoot()]
-		if !ok {
-			return nil, fmt.Errorf("no local block for sidecar root %#x: %w", sidecar.BlockRoot(), ErrSidecarHeaderMismatch)
-		}
-
+		block := blockByRoot[sidecar.BlockRoot()]
 		if err := verifySidecarHeaderMatchesBlock(sidecar, block); err != nil {
 			return nil, fmt.Errorf("root %#x: %w", sidecar.BlockRoot(), err)
 		}
@@ -1042,23 +1055,6 @@ func verifyByRootDataColumnSidecars(
 	}
 
 	return verifiedRoDataColumns, nil
-}
-
-// setBidCommitments sets bid KZG commitments on Gloas data columns so verification can proceed.
-func setBidCommitments(commitmentsByRoot map[[fieldparams.RootLength]byte][][]byte, columnsByPeer map[goPeer.ID][]blocks.RODataColumn) {
-	if len(commitmentsByRoot) == 0 {
-		return
-	}
-	for _, columns := range columnsByPeer {
-		for i := range columns {
-			if !columns[i].IsGloas() {
-				continue
-			}
-			if comms, ok := commitmentsByRoot[columns[i].BlockRoot()]; ok {
-				columns[i].SetBidCommitments(comms)
-			}
-		}
-	}
 }
 
 // computeIndicesByRootByPeer returns a peers->root->indices map only for

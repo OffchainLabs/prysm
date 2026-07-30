@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
@@ -135,6 +135,15 @@ func TestValidateExecutionPayloadEnvelope_HappyPath(t *testing.T) {
 	require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
 }
 
+func TestValidateExecutionPayloadEnvelope_BlockSeenButNotInDB_NoPanic(t *testing.T) {
+	ctx := context.Background()
+	s, msg, _, _ := newEnvelopeServiceForTest(t, 1, 1, false /* saveBlockToDB */)
+	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
+	result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+}
+
 func TestValidateExecutionPayloadEnvelope_GossipEvent(t *testing.T) {
 	ctx := context.Background()
 	s, msg, builderIdx, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
@@ -189,7 +198,7 @@ func TestExecutionPayloadEnvelopeSubscriber_WrongMessage(t *testing.T) {
 func TestExecutionPayloadEnvelopeSubscriber_HappyPath(t *testing.T) {
 	s := &Service{
 		cfg:          &config{chain: &mock.ChainService{}},
-		chainStarted: abool.New(),
+		chainStarted: &atomic.Bool{},
 	}
 	root := [32]byte{0x01}
 	blockHash := [32]byte{0x02}
@@ -245,6 +254,74 @@ func (m *mockExecutionPayloadEnvelopeVerifier) VerifySignature(_ context.Context
 
 func (*mockExecutionPayloadEnvelopeVerifier) SatisfyRequirement(_ verification.Requirement) {}
 
+// recordingEnvelopeVerifier tracks which requirements the validator exercises.
+type recordingEnvelopeVerifier struct {
+	mockExecutionPayloadEnvelopeVerifier
+	recorded map[verification.Requirement]bool
+}
+
+func (r *recordingEnvelopeVerifier) VerifyBlockRootSeen(_ func([32]byte) bool) error {
+	r.recorded[verification.RequireBlockRootSeen] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) VerifyBlockRootValid(_ func([32]byte) bool) error {
+	r.recorded[verification.RequireBlockRootValid] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) VerifySlotAboveFinalized(_ primitives.Epoch) error {
+	r.recorded[verification.RequireEnvelopeSlotAboveFinalized] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) VerifySlotMatchesBlock(_ primitives.Slot) error {
+	r.recorded[verification.RequireEnvelopeSlotMatchesBlock] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) VerifyBuilderValid(_ interfaces.ROExecutionPayloadBid) error {
+	r.recorded[verification.RequireBuilderValid] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) VerifyPayloadHash(_ interfaces.ROExecutionPayloadBid) error {
+	r.recorded[verification.RequirePayloadHashValid] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) VerifyExecutionRequestsRoot(_ interfaces.ROExecutionPayloadBid) error {
+	r.recorded[verification.RequireExecutionRequestsRootValid] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) VerifySignature(_ context.Context, _ state.ReadOnlyBeaconState) error {
+	r.recorded[verification.RequireBuilderSignatureValid] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) SatisfyRequirement(req verification.Requirement) {
+	r.recorded[req] = true
+}
+
+// A successful gossip validation must exercise every requirement in the gossip
+// list — catches a requirement being added without a matching check.
+func TestValidateExecutionPayloadEnvelope_CoversAllGossipRequirements(t *testing.T) {
+	ctx := context.Background()
+	s, msg, _, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	rec := &recordingEnvelopeVerifier{recorded: map[verification.Requirement]bool{}}
+	s.newExecutionPayloadEnvelopeVerifier = func(_ interfaces.ROSignedExecutionPayloadEnvelope, _ []verification.Requirement) verification.ExecutionPayloadEnvelopeVerifier {
+		return rec
+	}
+
+	result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, result)
+	for _, req := range verification.ExecutionPayloadEnvelopeGossipRequirements {
+		require.Equal(t, true, rec.recorded[req], "requirement %s is in the gossip list but never checked", req)
+	}
+}
+
 func testNewExecutionPayloadEnvelopeVerifier(m mockExecutionPayloadEnvelopeVerifier) verification.NewExecutionPayloadEnvelopeVerifier {
 	return func(_ interfaces.ROSignedExecutionPayloadEnvelope, _ []verification.Requirement) verification.ExecutionPayloadEnvelopeVerifier {
 		clone := m
@@ -253,6 +330,10 @@ func testNewExecutionPayloadEnvelopeVerifier(m mockExecutionPayloadEnvelopeVerif
 }
 
 func setupExecutionPayloadEnvelopeService(t *testing.T, envelopeSlot, blockSlot primitives.Slot) (*Service, *pubsub.Message, primitives.BuilderIndex, [32]byte) {
+	return newEnvelopeServiceForTest(t, envelopeSlot, blockSlot, true /* saveBlockToDB */)
+}
+
+func newEnvelopeServiceForTest(t *testing.T, envelopeSlot, blockSlot primitives.Slot, saveBlockToDB bool) (*Service, *pubsub.Message, primitives.BuilderIndex, [32]byte) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -286,7 +367,9 @@ func setupExecutionPayloadEnvelopeService(t *testing.T, envelopeSlot, blockSlot 
 	require.NoError(t, err)
 	root, err := signedBlock.Block().HashTreeRoot()
 	require.NoError(t, err)
-	require.NoError(t, db.SaveBlock(ctx, signedBlock))
+	if saveBlockToDB {
+		require.NoError(t, db.SaveBlock(ctx, signedBlock))
+	}
 
 	state, err := util.NewBeaconStateFulu()
 	require.NoError(t, err)
@@ -308,8 +391,7 @@ func envelopeToPubsub(t *testing.T, s *Service, p p2p.P2P, env *ethpb.SignedExec
 	require.NoError(t, err)
 
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedExecutionPayloadEnvelope]()]
-	digest, err := s.currentForkDigest()
-	require.NoError(t, err)
+	digest := s.currentForkDigest()
 	topic = s.addDigestToTopic(topic, digest)
 
 	return &pubsub.Message{
@@ -334,9 +416,9 @@ func TestQueuePendingPayloadEnvelope_SelfBuildInvalidSignature(t *testing.T) {
 			result:     pubsub.ValidationIgnore,
 		},
 		{
-			name:       "non-self-build with invalid signature is rejected",
+			name:       "non-self-build with invalid signature is ignored",
 			builderIdx: 42,
-			result:     pubsub.ValidationReject,
+			result:     pubsub.ValidationIgnore,
 			wantError:  true,
 		},
 	}
@@ -408,7 +490,7 @@ func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, buil
 	return &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
 			Payload: payload,
-			ExecutionRequests: &enginev1.ExecutionRequests{
+			ExecutionRequests: &enginev1.ExecutionRequestsGloas{
 				Deposits: []*enginev1.DepositRequest{},
 			},
 			BuilderIndex:          builderIdx,

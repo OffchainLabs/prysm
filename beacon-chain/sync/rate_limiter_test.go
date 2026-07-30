@@ -85,7 +85,7 @@ func TestRateLimiter_ExceedRawCapacity(t *testing.T) {
 	stream, err := p1.BHost.NewStream(t.Context(), p2.PeerID(), protocol.ID(topic))
 	require.NoError(t, err, "could not create stream")
 
-	for range 2 * defaultBurstLimit {
+	for range 4 * defaultBurstLimit {
 		err = rlimiter.validateRawRpcRequest(stream, 1)
 		rlimiter.addRawStream(stream)
 		require.NoError(t, err, "could not validate incoming request")

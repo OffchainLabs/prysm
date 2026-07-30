@@ -83,7 +83,7 @@ func privKey(cfg *Config) (*ecdsa.PrivateKey, error) {
 
 	// If the StaticPeerID flag is not set or the Fulu epoch is not set, return the private key.
 	// Starting at Fulu, we don't want to generate a new key every time, to avoid custody columns changes.
-	if !(cfg.StaticPeerID || params.FuluEnabled()) {
+	if cfg.DataDir == "" || !(cfg.StaticPeerID || params.FuluEnabled()) {
 		return ecdsaprysm.ConvertFromInterfacePrivKey(priv)
 	}
 

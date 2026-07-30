@@ -19,6 +19,7 @@ import (
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -112,6 +113,12 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		return pubsub.ValidationIgnore, nil
 	}
 
+	genesisTime := s.cfg.clock.GenesisTime()
+	if err := slots.VerifyTime(genesisTime, blk.Block().Slot(), earlyBlockProcessingTolerance); err != nil {
+		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Ignored block: could not verify slot time")
+		return pubsub.ValidationIgnore, nil
+	}
+
 	blockRoot, err := blk.Block().HashTreeRoot()
 	if err != nil {
 		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Ignored block")
@@ -138,15 +145,6 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 	}
 	s.pendingQueueLock.RUnlock()
 
-	// Be lenient in handling early blocks. Instead of discarding blocks arriving later than
-	// MAXIMUM_GOSSIP_CLOCK_DISPARITY in future, we tolerate blocks arriving at max two slots
-	// earlier (SECONDS_PER_SLOT * 2 seconds). Queue such blocks and process them at the right slot.
-	genesisTime := s.cfg.clock.GenesisTime()
-	if err := slots.VerifyTime(genesisTime, blk.Block().Slot(), earlyBlockProcessingTolerance); err != nil {
-		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Ignored block: could not verify slot time")
-		return pubsub.ValidationIgnore, nil
-	}
-
 	// Add metrics for block arrival time subtracts slot start time.
 	if err := captureArrivalTimeMetric(genesisTime, blk.Block().Slot()); err != nil {
 		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Ignored block: could not capture arrival time metric")
@@ -165,34 +163,16 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		return pubsub.ValidationIgnore, err
 	}
 
-	if s.cfg.chain.ShouldIgnoreData(blk.Block().ParentRoot(), blk.Block().Slot()) {
+	parentRoot := blk.Block().ParentRoot()
+	if s.cfg.chain.ShouldIgnoreData(parentRoot, blk.Block().Slot()) {
 		log.WithFields(getBlockFields(blk)).Debug("Ignoring block with canonical parent before justified checkpoint")
 		ignoredPreJustifiedBlockCount.Inc()
 		return pubsub.ValidationIgnore, nil
 	}
 
-	// Process the block if the clock jitter is less than MAXIMUM_GOSSIP_CLOCK_DISPARITY.
-	// Otherwise queue it for processing in the right slot.
-	if isBlockQueueable(genesisTime, blk.Block().Slot(), receivedTime) {
-		if res, err := s.verifyPendingBlockSignature(ctx, blk, blockRoot); err != nil {
-			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not verify block signature")
-			return res, err
-		}
-		s.pendingQueueLock.Lock()
-		if err := s.insertBlockToPendingQueue(blk.Block().Slot(), blk, blockRoot); err != nil {
-			s.pendingQueueLock.Unlock()
-			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not insert block to pending queue")
-			return pubsub.ValidationIgnore, err
-		}
-		s.pendingQueueLock.Unlock()
-		err := fmt.Errorf("early block, with current slot %d < block slot %d", s.cfg.clock.CurrentSlot(), blk.Block().Slot())
-		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not process early block")
-		return pubsub.ValidationIgnore, err
-	}
-
 	// Handle block when the parent is unknown.
-	if !s.cfg.chain.HasBlock(ctx, blk.Block().ParentRoot()) {
-		if res, err := s.verifyPendingBlockSignature(ctx, blk, blockRoot); err != nil {
+	if !s.cfg.chain.HasBlock(ctx, parentRoot) {
+		if res, err := s.verifyPendingBlockSignature(ctx, pid, blk, blockRoot); err != nil {
 			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not verify block signature")
 			return res, err
 		}
@@ -203,12 +183,17 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 			return pubsub.ValidationIgnore, err
 		}
 		s.pendingQueueLock.Unlock()
-		err := errors.Errorf("unknown parent for block with slot %d and parent root %#x", blk.Block().Slot(), blk.Block().ParentRoot())
+		go func() {
+			if err := s.sendBatchRootRequest(s.ctx, [][32]byte{parentRoot}, rand.NewGenerator()); err != nil {
+				log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not request unknown parent block")
+			}
+		}()
+		err := errors.Errorf("unknown parent for block with slot %d and parent root %#x", blk.Block().Slot(), parentRoot)
 		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not identify parent for block")
 		return pubsub.ValidationIgnore, err
 	}
 	if res, err := s.validateExecutionPayloadBidParentSeen(ctx, blk.Block()); res == pubsub.ValidationIgnore {
-		if sigRes, sigErr := s.verifyPendingBlockSignature(ctx, blk, blockRoot); sigErr != nil {
+		if sigRes, sigErr := s.verifyPendingBlockSignature(ctx, pid, blk, blockRoot); sigErr != nil {
 			log.WithError(sigErr).WithFields(getBlockFields(blk)).Debug("Could not verify block signature")
 			return sigRes, sigErr
 		}
@@ -233,6 +218,10 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 
 	err = s.validateBeaconBlock(ctx, blk, blockRoot)
 	if err != nil {
+		if errors.Is(err, blocks.ErrInvalidSignature) {
+			s.downscorePeer(pid, "invalidBlockSignature")
+			return pubsub.ValidationReject, err
+		}
 		if s.hasBadBlock(blockRoot) || errors.Is(err, blocks.ErrInvalidProposerIndex) {
 			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not validate beacon block")
 			return pubsub.ValidationReject, err
@@ -330,9 +319,6 @@ func (s *Service) validatePhase0Block(ctx context.Context, blk interfaces.ReadOn
 		return nil, err
 	}
 	if err := blocks.VerifyBlockSignatureUsingCurrentFork(verifyingState, blk, blockRoot); err != nil {
-		if errors.Is(err, blocks.ErrInvalidSignature) {
-			s.setBadBlock(ctx, blockRoot)
-		}
 		return nil, err
 	}
 	idx, err := helpers.BeaconProposerIndexAtSlot(ctx, verifyingState, blk.Block().Slot())
@@ -480,7 +466,7 @@ func (s *Service) validateBellatrixBeaconBlock(ctx context.Context, verifyingSta
 }
 
 // Verifies the signature of the pending block with respect to the current head state.
-func (s *Service) verifyPendingBlockSignature(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock, blkRoot [32]byte) (pubsub.ValidationResult, error) {
+func (s *Service) verifyPendingBlockSignature(ctx context.Context, pid peer.ID, blk interfaces.ReadOnlySignedBeaconBlock, blkRoot [32]byte) (pubsub.ValidationResult, error) {
 	roState, err := s.cfg.chain.HeadStateReadOnly(ctx)
 	if err != nil {
 		return pubsub.ValidationIgnore, err
@@ -491,7 +477,9 @@ func (s *Service) verifyPendingBlockSignature(ctx context.Context, blk interface
 		return pubsub.ValidationIgnore, err
 	}
 	if err := blocks.VerifyBlockSignatureUsingCurrentFork(roState, blk, blkRoot); err != nil {
-		s.setBadBlock(ctx, blkRoot)
+		if errors.Is(err, blocks.ErrInvalidSignature) {
+			s.downscorePeer(pid, "invalidBlockSignature")
+		}
 		return pubsub.ValidationReject, err
 	}
 	return pubsub.ValidationAccept, nil
@@ -566,20 +554,6 @@ func captureArrivalTimeMetric(genesis time.Time, currentSlot primitives.Slot) er
 	arrivalBlockPropagationGauge.Set(float64(ms))
 
 	return nil
-}
-
-// isBlockQueueable checks if the slot_time in the block is greater than
-// current_time +  MAXIMUM_GOSSIP_CLOCK_DISPARITY. in short, this function
-// returns true if the corresponding block should be queued and false if
-// the block should be processed immediately.
-func isBlockQueueable(genesisTime time.Time, slot primitives.Slot, receivedTime time.Time) bool {
-	slotTime, err := slots.StartTime(genesisTime, slot)
-	if err != nil {
-		return false
-	}
-
-	currentTimeWithDisparity := receivedTime.Add(params.BeaconConfig().MaximumGossipClockDisparityDuration())
-	return currentTimeWithDisparity.Unix() < slotTime.Unix()
 }
 
 func getBlockFields(b interfaces.ReadOnlySignedBeaconBlock) logrus.Fields {

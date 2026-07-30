@@ -3,82 +3,93 @@ package beacon_api
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/mock"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"go.uber.org/mock/gomock"
 )
 
-const proposerPreferencesEndpoint = "/eth/v1/validator/proposer_preferences"
+func testSignedProposerPreferences() *ethpb.SignedProposerPreferences {
+	return &ethpb.SignedProposerPreferences{
+		Message: &ethpb.ProposerPreferences{
+			DependentRoot:  bytes.Repeat([]byte{0xcc}, 32),
+			ProposalSlot:   32,
+			ValidatorIndex: 2,
+			FeeRecipient:   bytes.Repeat([]byte{0xab}, 20),
+			TargetGasLimit: 30_000_000,
+		},
+		Signature: bytes.Repeat([]byte{0x01}, 96),
+	}
+}
 
 func TestSubmitSignedProposerPreferences_Valid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	dependentRoot := bytes.Repeat([]byte{0xcc}, 32)
-	feeRecipient := bytes.Repeat([]byte{0xab}, 20)
-	signature := bytes.Repeat([]byte{0x01}, 96)
-
-	expected := []*structs.SignedProposerPreferences{{
-		Message: &structs.ProposerPreferences{
-			DependentRoot:  hexutil.Encode(dependentRoot),
-			ProposalSlot:   "32",
-			ValidatorIndex: "2",
-			FeeRecipient:   hexutil.Encode(feeRecipient),
-			TargetGasLimit: "30000000",
-		},
-		Signature: hexutil.Encode(signature),
-	}}
-	body, err := json.Marshal(expected)
+	pref := testSignedProposerPreferences()
+	sszBody, err := pref.MarshalSSZ()
 	require.NoError(t, err)
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockHandler(ctrl)
+	handler.EXPECT().PostSSZ(
+		gomock.Any(),
+		proposerPreferencesEndpoint,
+		map[string]string{"Eth-Consensus-Version": "gloas"},
+		bytes.NewBuffer(sszBody),
+	).Return(nil, nil, nil).Times(1)
+
+	client := &beaconApiValidatorClient{handler: handler}
+	require.NoError(t, client.submitSignedProposerPreferences(t.Context(), []*ethpb.SignedProposerPreferences{pref}))
+}
+
+func TestSubmitSignedProposerPreferences_FallsBackToJSONOn415(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	pref := testSignedProposerPreferences()
+	jsonBody, err := json.Marshal([]*structs.SignedProposerPreferences{structs.SignedProposerPreferencesFromConsensus(pref)})
+	require.NoError(t, err)
+
+	handler := mock.NewMockHandler(ctrl)
+	handler.EXPECT().PostSSZ(
+		gomock.Any(),
+		proposerPreferencesEndpoint,
+		gomock.Any(),
+		gomock.Any(),
+	).Return(nil, nil, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType, Message: "unsupported media type"}).Times(1)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		proposerPreferencesEndpoint,
 		map[string]string{"Eth-Consensus-Version": "gloas"},
-		bytes.NewBuffer(body),
+		bytes.NewBuffer(jsonBody),
 		nil,
 	).Return(nil).Times(1)
 
 	client := &beaconApiValidatorClient{handler: handler}
-	err = client.submitSignedProposerPreferences(t.Context(), []*ethpb.SignedProposerPreferences{{
-		Message: &ethpb.ProposerPreferences{
-			DependentRoot:  dependentRoot,
-			ProposalSlot:   32,
-			ValidatorIndex: 2,
-			FeeRecipient:   feeRecipient,
-			TargetGasLimit: 30_000_000,
-		},
-		Signature: signature,
-	}})
-	require.NoError(t, err)
+	require.NoError(t, client.submitSignedProposerPreferences(t.Context(), []*ethpb.SignedProposerPreferences{pref}))
 }
 
-func TestSubmitSignedProposerPreferences_HandlerError(t *testing.T) {
+func TestSubmitSignedProposerPreferences_NonMediaTypeErrorNoFallback(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	handler := mock.NewMockJsonRestHandler(ctrl)
-	handler.EXPECT().Post(
+	handler := mock.NewMockHandler(ctrl)
+	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		proposerPreferencesEndpoint,
 		map[string]string{"Eth-Consensus-Version": "gloas"},
 		gomock.Any(),
-		nil,
-	).Return(errors.New("foo error")).Times(1)
+	).Return(nil, nil, errors.New("foo error")).Times(1)
 
 	client := &beaconApiValidatorClient{handler: handler}
-	err := client.submitSignedProposerPreferences(t.Context(), []*ethpb.SignedProposerPreferences{{
-		Message:   &ethpb.ProposerPreferences{DependentRoot: bytes.Repeat([]byte{0xcc}, 32), FeeRecipient: bytes.Repeat([]byte{0xab}, 20)},
-		Signature: bytes.Repeat([]byte{0x01}, 96),
-	}})
+	err := client.submitSignedProposerPreferences(t.Context(), []*ethpb.SignedProposerPreferences{testSignedProposerPreferences()})
 	assert.ErrorContains(t, "foo error", err)
 }
 

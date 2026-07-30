@@ -248,7 +248,7 @@ func SlashValidator(
 		return nil, err
 	}
 	validator.Slashed = true
-	maxWithdrawableEpoch := primitives.MaxEpoch(validator.WithdrawableEpoch, currentEpoch+params.BeaconConfig().EpochsPerSlashingsVector)
+	maxWithdrawableEpoch := max(validator.WithdrawableEpoch, currentEpoch+params.BeaconConfig().EpochsPerSlashingsVector)
 	validator.WithdrawableEpoch = maxWithdrawableEpoch
 
 	if err := s.UpdateValidatorAtIndex(slashedIdx, validator); err != nil {

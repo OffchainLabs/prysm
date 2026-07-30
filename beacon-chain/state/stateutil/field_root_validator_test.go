@@ -8,6 +8,7 @@ import (
 
 	mathutil "github.com/OffchainLabs/prysm/v7/math"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
@@ -30,7 +31,7 @@ func TestValidatorConstants(t *testing.T) {
 	assert.Equal(t, uint64(validatorFieldRoots), mathutil.PowerOf2(validatorTreeDepth))
 
 	cv := CompactValidatorFromProto(v)
-	_, err := ValidatorRegistryRoot([]CompactValidator{cv})
+	_, err := ValidatorRegistryRoot(version.Phase0, []CompactValidator{cv})
 	assert.NoError(t, err)
 }
 

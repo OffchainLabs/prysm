@@ -1,10 +1,12 @@
 package stategen
 
 import (
+	"context"
 	"testing"
 
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -229,4 +231,61 @@ func TestEnableSaveHotStateToDB_AlreadyDisabled(t *testing.T) {
 	require.NoError(t, service.DisableSaveHotStateToDB(ctx))
 	require.LogsDoNotContain(t, hook, "Exiting mode to save hot states in DB")
 	require.Equal(t, false, service.saveHotStateDB.enabled)
+}
+
+func TestSaveState_CanSaveHotStateToDB_StateDiff(t *testing.T) {
+	hook := logTest.NewGlobal()
+	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
+	defer resetCfg()
+
+	ctx := t.Context()
+	beaconDB := testDB.SetupDB(t)
+	service := New(beaconDB, doublylinkedtree.New())
+	service.EnableSaveHotStateToDB(ctx)
+	beaconState, _ := util.DeterministicGenesisState(t, 32)
+	require.NoError(t, beaconState.SetSlot(defaultHotStateDBInterval))
+
+	r := [32]byte{'A'}
+	require.NoError(t, service.saveStateByRoot(ctx, r, beaconState))
+
+	require.LogsContain(t, hook, "Saving hot state to DB")
+
+	snapshots, ok := beaconDB.(interface {
+		HasHotStateSnapshot(context.Context, [32]byte) bool
+	})
+	require.Equal(t, true, ok)
+	require.Equal(t, true, snapshots.HasHotStateSnapshot(ctx, r))
+
+	readSt, err := beaconDB.State(ctx, r)
+	require.NoError(t, err)
+	require.NotNil(t, readSt)
+	require.Equal(t, beaconState.Slot(), readSt.Slot())
+}
+
+func TestEnableSaveHotStateToDB_Disabled_StateDiffClearsSnapshots(t *testing.T) {
+	hook := logTest.NewGlobal()
+	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
+	defer resetCfg()
+
+	ctx := t.Context()
+	beaconDB := testDB.SetupDB(t)
+	service := New(beaconDB, doublylinkedtree.New())
+	service.EnableSaveHotStateToDB(ctx)
+
+	beaconState, _ := util.DeterministicGenesisState(t, 32)
+	require.NoError(t, beaconState.SetSlot(defaultHotStateDBInterval))
+	r := [32]byte{'A'}
+	require.NoError(t, service.saveStateByRoot(ctx, r, beaconState))
+
+	snapshots, ok := beaconDB.(interface {
+		HasHotStateSnapshot(context.Context, [32]byte) bool
+	})
+	require.Equal(t, true, ok)
+	require.Equal(t, true, snapshots.HasHotStateSnapshot(ctx, r))
+
+	require.NoError(t, service.DisableSaveHotStateToDB(ctx))
+	require.LogsContain(t, hook, "Exiting mode to save hot states in DB")
+	require.Equal(t, false, service.saveHotStateDB.enabled)
+	require.Equal(t, false, snapshots.HasHotStateSnapshot(ctx, r))
+	require.Equal(t, 0, len(service.saveHotStateDB.blockRootsOfSavedStates))
 }

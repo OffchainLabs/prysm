@@ -37,7 +37,7 @@ func testEnvelope(t *testing.T) *ethpb.SignedExecutionPayloadEnvelope {
 				ExcessBlobGas: 0,
 				SlotNumber:    99,
 			},
-			ExecutionRequests:     &enginev1.ExecutionRequests{},
+			ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 			BuilderIndex:          primitives.BuilderIndex(42),
 			BeaconBlockRoot:       bytesutil.PadTo([]byte("beaconroot"), 32),
 			ParentBeaconBlockRoot: make([]byte, 32),

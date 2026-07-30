@@ -283,13 +283,6 @@ var (
 		},
 	)
 
-	dataColumnSidecarsObtainedViaELCount = promauto.NewSummary(
-		prometheus.SummaryOpts{
-			Name: "data_column_obtained_via_el_count",
-			Help: "Count the number of data column sidecars obtained via the execution layer.",
-		},
-	)
-
 	ignoredPreJustifiedBlockCount = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "gossip_ignored_pre_justified_block_total",
 		Help: "Count of blocks ignored because their canonical parent is before the justified checkpoint.",
@@ -299,6 +292,15 @@ var (
 		Name: "gossip_ignored_pre_justified_data_column_total",
 		Help: "Count of data column sidecars ignored because their canonical parent is before the justified checkpoint.",
 	})
+	usefulFullColumnsReceivedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "beacon_useful_full_columns_received_total",
+		Help: "Number of useful full columns (any cell being useful) received",
+	}, []string{"column_index"})
+
+	partialMessageColumnCompletionsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "beacon_partial_message_column_completions_total",
+		Help: "How often the partial message first completed the column",
+	}, []string{"column_index"})
 )
 
 func (s *Service) updateMetrics() {
@@ -308,10 +310,7 @@ func (s *Service) updateMetrics() {
 		return
 	}
 	// We update the dynamic subnet topics.
-	digest, err := s.currentForkDigest()
-	if err != nil {
-		log.WithError(err).Debugf("Could not compute fork digest")
-	}
+	digest := s.currentForkDigest()
 	indices := aggregatorSubnetIndices(s.cfg.clock.CurrentSlot())
 	syncIndices := cache.SyncSubnetIDs.GetAllSubnets(slots.ToEpoch(s.cfg.clock.CurrentSlot()))
 	attTopic := p2p.GossipTypeMapping[reflect.TypeFor[*pb.Attestation]()]

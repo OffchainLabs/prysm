@@ -62,6 +62,7 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 	// Remove old blocks from our expiration cache.
 	s.deleteExpiredBlocksFromCache()
 	s.prunePendingPayloadEnvelopes()
+	s.prunePendingPayloadAttestations()
 
 	// Validate pending slots before processing.
 	if err := s.validatePendingSlots(); err != nil {
@@ -161,7 +162,8 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 
 			// Process synchronously because it's likely that the next pending block depends on it.
 			s.processPendingPayloadEnvelope(ctx, blkRoot)
-			s.processPendingGloasColumns(blkRoot, b)
+			s.processPendingGloasColumns(s.ctx, blkRoot, b)
+			s.processPendingPayloadAttestation(ctx, blkRoot)
 			blkRoots = append(blkRoots, blkRoot)
 
 			// Remove the processed block from the queue.
@@ -516,8 +518,15 @@ func (s *Service) fetchAndQueuePayloadEnvelopesForRoots(
 	}
 }
 
+// Signature is not verified here, processing revalidates fully and the slot bound plus caps bound memory.
 func (s *Service) queuePendingPayloadEnvelopeFromRootRequest(signedEnvelope *ethpb.SignedExecutionPayloadEnvelope) {
-	if signedEnvelope == nil || signedEnvelope.Message == nil {
+	if signedEnvelope == nil || signedEnvelope.Message == nil || signedEnvelope.Message.Payload == nil {
+		return
+	}
+	// A future slot would never fall below the finalized epoch, defeating pruning and pinning memory.
+	slot := primitives.Slot(signedEnvelope.Message.Payload.SlotNumber)
+	if slot > s.cfg.clock.CurrentSlot() {
+		log.WithField("envelopeSlot", slot).Debug("Ignoring fetched payload envelope with future slot")
 		return
 	}
 
@@ -528,6 +537,17 @@ func (s *Service) queuePendingPayloadEnvelopeFromRootRequest(signedEnvelope *eth
 	defer s.pendingEnvelopeLock.Unlock()
 
 	inner, ok := s.pendingPayloadEnvelopes[root]
+	if !ok && len(s.pendingPayloadEnvelopes) >= maxPendingPayloadRoots {
+		log.Debug("Too many pending payload roots, ignoring fetched payload envelope")
+		return
+	}
+	if len(inner) >= maxPendingBuildersPerRoot {
+		log.Debug("Too many pending builders for root, ignoring fetched payload envelope")
+		return
+	}
+	if _, exists := inner[builderIdx]; exists {
+		return
+	}
 	if !ok {
 		inner = make(map[uint64]*ethpb.SignedExecutionPayloadEnvelope)
 		s.pendingPayloadEnvelopes[root] = inner
@@ -686,8 +706,13 @@ func (s *Service) insertBlockToPendingQueue(_ primitives.Slot, b interfaces.Read
 		return nil
 	}
 
-	if err := s.addPendingBlockToCache(b); err != nil {
+	stored, err := s.addPendingBlockToCache(b)
+	if err != nil {
 		return err
+	}
+	// Only mark seen when cached, so the seen root always has a cache entry whose eviction clears it.
+	if !stored {
+		return nil
 	}
 
 	s.seenPendingBlocks[r] = true
@@ -709,21 +734,21 @@ func (s *Service) pendingBlocksInCache(slot primitives.Slot) []interfaces.ReadOn
 }
 
 // This adds input signed beacon block to slotToPendingBlocks cache.
-func (s *Service) addPendingBlockToCache(b interfaces.ReadOnlySignedBeaconBlock) error {
+func (s *Service) addPendingBlockToCache(b interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
 	if err := blocks.BeaconBlockIsNil(b); err != nil {
-		return err
+		return false, err
 	}
 
 	blks := s.pendingBlocksInCache(b.Block().Slot())
 
 	if len(blks) >= maxBlocksPerSlot {
-		return nil
+		return false, nil
 	}
 
 	blks = append(blks, b)
 	k := slotToCacheKey(b.Block().Slot())
 	s.slotToPendingBlocks.Set(k, blks, pendingBlockExpTime)
-	return nil
+	return true, nil
 }
 
 // This converts input string to slot.

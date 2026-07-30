@@ -3,12 +3,12 @@ package sync
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	beaconState "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 
-	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
@@ -161,8 +161,7 @@ func TestStatusRPCHandler_ConnectsOnGenesis(t *testing.T) {
 
 	stream1, err := p1.BHost.NewStream(ctx, p2.BHost.ID(), pcl)
 	require.NoError(t, err)
-	digest, err := r.currentForkDigest()
-	require.NoError(t, err)
+	digest := r.currentForkDigest()
 
 	err = r.statusRPCHandler(ctx, &ethpb.Status{ForkDigest: digest[:], FinalizedRoot: params.BeaconConfig().ZeroHash[:]}, stream1)
 	assert.NoError(t, err)
@@ -230,8 +229,7 @@ func TestStatusRPCHandler_ReturnsHelloMessage(t *testing.T) {
 		},
 		rateLimiter: newRateLimiter(p1),
 	}
-	digest, err := r.currentForkDigest()
-	require.NoError(t, err)
+	digest := r.currentForkDigest()
 
 	// Setup streams
 	pcl := protocol.ID(p2p.RPCStatusTopicV1)
@@ -328,7 +326,7 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 		},
 		rateLimiter:                     newRateLimiter(p1),
 		clockWaiter:                     cw,
-		chainStarted:                    abool.New(),
+		chainStarted:                    &atomic.Bool{},
 		subHandler:                      newSubTopicHandler(),
 		proposerPreferencesCache:        cache.NewProposerPreferencesCache(),
 		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
@@ -337,8 +335,7 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 	clock := startup.NewClockSynchronizer()
 	require.NoError(t, clock.SetClock(startup.NewClock(time.Now(), [32]byte{})))
 	r.verifierWaiter = verification.NewInitializerWaiter(clock, chain.ForkChoiceStore, r.cfg.stateGen, chain)
-	p1.Digest, err = r.currentForkDigest()
-	require.NoError(t, err)
+	p1.Digest = r.currentForkDigest()
 
 	chain2 := &mock.ChainService{
 		FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: 0, Root: finalizedRoot[:]},
@@ -360,8 +357,7 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 	require.NoError(t, clock.SetClock(startup.NewClock(time.Now(), [32]byte{})))
 	r2.verifierWaiter = verification.NewInitializerWaiter(clock, chain2.ForkChoiceStore, r2.cfg.stateGen, chain2)
 
-	p2.Digest, err = r.currentForkDigest()
-	require.NoError(t, err)
+	p2.Digest = r.currentForkDigest()
 
 	go r.Start()
 
@@ -466,8 +462,7 @@ func TestStatusRPCRequest_RequestSent(t *testing.T) {
 				out := &ethpb.Status{}
 				require.NoError(t, service.cfg.p2p.Encoding().DecodeWithMaxLength(stream, out))
 
-				digest, err := service.currentForkDigest()
-				require.NoError(t, err)
+				digest := service.currentForkDigest()
 
 				expected := &ethpb.Status{
 					ForkDigest:     digest[:],
@@ -481,7 +476,7 @@ func TestStatusRPCRequest_RequestSent(t *testing.T) {
 					t.Errorf("Did not receive expected message. Got %+v wanted %+v", out, expected)
 				}
 
-				err = service.respondWithStatus(ctx, stream)
+				err := service.respondWithStatus(ctx, stream)
 				require.NoError(t, err)
 			},
 		},
@@ -493,8 +488,7 @@ func TestStatusRPCRequest_RequestSent(t *testing.T) {
 				out := &ethpb.StatusV2{}
 				assert.NoError(t, service.cfg.p2p.Encoding().DecodeWithMaxLength(stream, out))
 
-				digest, err := service.currentForkDigest()
-				assert.NoError(t, err)
+				digest := service.currentForkDigest()
 
 				expected := &ethpb.StatusV2{
 					ForkDigest:            digest[:],
@@ -509,7 +503,7 @@ func TestStatusRPCRequest_RequestSent(t *testing.T) {
 					t.Errorf("Did not receive expected message. Got %+v wanted %+v", out, expected)
 				}
 
-				err = service.respondWithStatus(ctx, stream)
+				err := service.respondWithStatus(ctx, stream)
 				require.NoError(t, err)
 			},
 		},
@@ -878,8 +872,11 @@ func TestStatusRPCRequest_FinalizedBlockSkippedSlots(t *testing.T) {
 		r.rateLimiter.limiterMap[topic] = leakybucket.NewCollector(1, 1, time.Second, false)
 		var wg sync.WaitGroup
 		wg.Add(1)
+		// The stream handler may be invoked more than once (e.g. a duplicate
+		// stream on the connection).
+		var done sync.Once
 		p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
-			defer wg.Done()
+			defer done.Do(wg.Done)
 			out := &ethpb.Status{}
 			assert.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, out))
 			assert.Equal(t, tt.expectError, r2.validateStatusMessage(ctx, out) != nil)
@@ -947,7 +944,7 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 		ctx:                             ctx,
 		rateLimiter:                     newRateLimiter(p1),
 		clockWaiter:                     cw,
-		chainStarted:                    abool.New(),
+		chainStarted:                    &atomic.Bool{},
 		subHandler:                      newSubTopicHandler(),
 		proposerPreferencesCache:        cache.NewProposerPreferencesCache(),
 		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
@@ -1040,8 +1037,7 @@ func TestStatusRPC_ValidGenesisMessage(t *testing.T) {
 		},
 		ctx: ctx,
 	}
-	digest, err := r.currentForkDigest()
-	require.NoError(t, err)
+	digest := r.currentForkDigest()
 	// There should be no error for a status message
 	// with a genesis checkpoint.
 	err = r.validateStatusMessage(r.ctx, &ethpb.Status{
@@ -1073,8 +1069,7 @@ func TestStatusRPC_RejectsFutureHeadSlot(t *testing.T) {
 		},
 		ctx: ctx,
 	}
-	digest, err := r.currentForkDigest()
-	require.NoError(t, err)
+	digest := r.currentForkDigest()
 
 	status := func(headSlot primitives.Slot) *ethpb.Status {
 		return &ethpb.Status{

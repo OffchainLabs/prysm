@@ -38,6 +38,7 @@ type EngineClient struct {
 	NumReconstructedPayloads    uint64
 	TerminalBlockHash           []byte
 	TerminalBlockHashExists     bool
+	PartialColumnsSupportedFlag bool
 	OverrideValidHash           [32]byte
 	GetPayloadResponse          *blocks.GetPayloadResponse
 	ErrGetPayload               error
@@ -45,19 +46,27 @@ type EngineClient struct {
 	ErrorBlobSidecars           error
 	DataColumnSidecars          []blocks.VerifiedRODataColumn
 	ErrorDataColumnSidecars     error
+	HasBlobsPartialColumns      []blocks.PartialDataColumn
 	ClientVersion               []*structs.ClientVersionV1
 	ErrorClientVersion          error
+	FetchedAttributes           payloadattribute.Attributer
+}
+
+// PartialColumnsSupported --
+func (e *EngineClient) PartialColumnsSupported() bool {
+	return e.PartialColumnsSupportedFlag
 }
 
 // NewPayload --
-func (e *EngineClient) NewPayload(_ context.Context, _ interfaces.ExecutionData, _ []common.Hash, _ *common.Hash, _ *pb.ExecutionRequests) ([]byte, error) {
+func (e *EngineClient) NewPayload(_ context.Context, _ interfaces.ExecutionData, _ []common.Hash, _ *common.Hash, _ pb.ExecutionRequester) ([]byte, error) {
 	return e.NewPayloadResp, e.ErrNewPayload
 }
 
 // ForkchoiceUpdated --
 func (e *EngineClient) ForkchoiceUpdated(
-	_ context.Context, fcs *pb.ForkchoiceState, _ payloadattribute.Attributer,
+	_ context.Context, fcs *pb.ForkchoiceState, attr payloadattribute.Attributer,
 ) (*pb.PayloadIDBytes, []byte, error) {
+	e.FetchedAttributes = attr
 	if e.OverrideValidHash != [32]byte{} && bytesutil.ToBytes32(fcs.HeadBlockHash) == e.OverrideValidHash {
 		return e.PayloadIDBytes, e.ForkChoiceUpdatedResp, nil
 	}
@@ -162,8 +171,16 @@ func (e *EngineClient) ReconstructBlobSidecars(context.Context, interfaces.ReadO
 }
 
 // ConstructDataColumnSidecars is a mock implementation of the ConstructDataColumnSidecars method.
-func (e *EngineClient) ConstructDataColumnSidecars(context.Context, peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, error) {
-	return e.DataColumnSidecars, e.ErrorDataColumnSidecars
+func (e *EngineClient) ConstructDataColumnSidecars(context.Context, peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
+	return e.DataColumnSidecars, nil, e.ErrorDataColumnSidecars
+}
+
+// ConstructPartialDataColumnSidecarsFromHasBlobs is a mock implementation of the ConstructPartialDataColumnSidecarsFromHasBlobs method.
+func (e *EngineClient) ConstructPartialDataColumnSidecarsFromHasBlobs(context.Context, peerdas.ConstructionPopulator) ([]blocks.PartialDataColumn, bool, error) {
+	if e.HasBlobsPartialColumns == nil {
+		return nil, false, nil
+	}
+	return e.HasBlobsPartialColumns, true, nil
 }
 
 // ReconstructExecutionPayloadEnvelope --
