@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
@@ -37,25 +36,8 @@ func TestServer_AuthTokenHandler_ProtectsRoutes(t *testing.T) {
 			wantCode:   http.StatusOK,
 		},
 		{
-			name:          "requires token on web api endpoint",
-			path:          "/api/v2/validator/beacon/status",
-			wantCode:      http.StatusUnauthorized,
-			wantErrSubstr: "Unauthorized",
-		},
-		{
-			name:          "requires token on direct web endpoint",
-			path:          "/v2/validator/beacon/status",
-			wantCode:      http.StatusUnauthorized,
-			wantErrSubstr: "Unauthorized",
-		},
-		{
-			name:     "allows initialize without auth",
-			path:     api.WebUrlPrefix + "initialize",
-			wantCode: http.StatusOK,
-		},
-		{
-			name:     "allows health without auth",
-			path:     api.WebUrlPrefix + "health/logs",
+			name:     "leaves non-keymanager endpoints unauthenticated",
+			path:     "/healthz",
 			wantCode: http.StatusOK,
 		},
 	}

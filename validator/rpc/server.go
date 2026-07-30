@@ -11,11 +11,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/httprest"
 	"github.com/OffchainLabs/prysm/v7/api/server/middleware"
-	"github.com/OffchainLabs/prysm/v7/async/event"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
-	"github.com/OffchainLabs/prysm/v7/io/logs"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
 	iface "github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/db"
@@ -51,7 +48,6 @@ type Config struct {
 	DB                     db.Database
 	Wallet                 *wallet.Wallet
 	WalletDir              string
-	WalletInitializedFeed  *event.Feed
 	ValidatorService       ValidatorService
 	AuthTokenPath          string
 	Middlewares            []middleware.Middleware
@@ -61,9 +57,7 @@ type Config struct {
 // Server defining a HTTP server for the remote signer API and registering clients
 type Server struct {
 	walletInitialized         bool
-	logStreamerBufferSize     int
 	grpcMaxCallRecvMsgSize    int
-	walletInitializedFeed     *event.Feed
 	beaconApiTimeout          time.Duration
 	wallet                    *wallet.Wallet
 	validatorService          ValidatorService
@@ -78,14 +72,11 @@ type Server struct {
 	beaconApiEndpoint         string
 	beaconApiHeaders          map[string][]string
 	beaconNodeEndpoint        string
-	healthClient              ethpb.HealthClient
 	nodeClient                iface.NodeClient
-	chainClient               iface.ChainClient
 	beaconNodeValidatorClient iface.ValidatorClient
 	httpHost                  string
 	authToken                 string
 	db                        db.Database
-	logStreamer               logs.Streamer
 	startFailure              error
 	ctx                       context.Context
 	walletDir                 string
@@ -107,8 +98,6 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 	server := &Server{
 		ctx:                    ctx,
 		cancel:                 cancel,
-		logStreamer:            logs.NewStreamServer(),
-		logStreamerBufferSize:  1000, // Enough to handle most bursts of logs in the validator client.
 		httpHost:               cfg.HTTPHost,
 		httpPort:               cfg.HTTPPort,
 		grpcMaxCallRecvMsgSize: cfg.GRPCMaxCallRecvMsgSize,
@@ -119,7 +108,6 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 		authTokenPath:          cfg.AuthTokenPath,
 		db:                     cfg.DB,
 		walletDir:              cfg.WalletDir,
-		walletInitializedFeed:  cfg.WalletInitializedFeed,
 		walletInitialized:      walletInitialized,
 		wallet:                 cfg.Wallet,
 		beaconApiTimeout:       cfg.BeaconApiTimeout,
@@ -198,31 +186,6 @@ func (s *Server) InitializeRoutes() error {
 	s.router.HandleFunc("GET /eth/v1/validator/{pubkey}/graffiti", s.GetGraffiti)
 	s.router.HandleFunc("POST /eth/v1/validator/{pubkey}/graffiti", s.SetGraffiti)
 	s.router.HandleFunc("DELETE /eth/v1/validator/{pubkey}/graffiti", s.DeleteGraffiti)
-
-	// auth endpoint
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"initialize", s.Initialize)
-	// accounts endpoints
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"accounts", s.ListAccounts)
-	s.router.HandleFunc("POST "+api.WebUrlPrefix+"accounts/backup", s.BackupAccounts)
-	s.router.HandleFunc("POST "+api.WebUrlPrefix+"accounts/voluntary-exit", s.VoluntaryExit)
-	// web health endpoints
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"health/version", s.GetVersion)
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"health/logs/validator/stream", s.StreamValidatorLogs)
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"health/logs/beacon/stream", s.StreamBeaconLogs)
-	// Beacon calls
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"beacon/status", s.GetBeaconStatus)
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"beacon/summary", s.GetValidatorPerformance)
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"beacon/validators", s.GetValidators)
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"beacon/balances", s.GetValidatorBalances)
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"beacon/peers", s.GetPeers)
-	// web wallet endpoints
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"wallet", s.WalletConfig)
-	s.router.HandleFunc("POST "+api.WebUrlPrefix+"wallet/create", s.CreateWallet)
-	s.router.HandleFunc("POST "+api.WebUrlPrefix+"wallet/keystores/validate", s.ValidateKeystores)
-	s.router.HandleFunc("POST "+api.WebUrlPrefix+"wallet/recover", s.RecoverWallet)
-	// slashing protection endpoints
-	s.router.HandleFunc("GET "+api.WebUrlPrefix+"slashing-protection/export", s.ExportSlashingProtection)
-	s.router.HandleFunc("POST "+api.WebUrlPrefix+"slashing-protection/import", s.ImportSlashingProtection)
 
 	log.Info("Initialized REST API routes")
 	return nil

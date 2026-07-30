@@ -50,11 +50,6 @@ var (
 		Name:  "disable-peer-scorer",
 		Usage: "(Danger): Disables P2P peer scorer. Do NOT use this in production!",
 	}
-	writeWalletPasswordOnWebOnboarding = &cli.BoolFlag{
-		Name: "write-wallet-password-on-web-onboarding",
-		Usage: `(Danger): Writes the wallet password to the wallet directory on completing Prysm web onboarding.
-	We recommend against this flag unless you are an advanced user.`,
-	}
 	aggregateFirstInterval = &cli.DurationFlag{
 		Name:   "aggregate-first-interval",
 		Usage:  "(Advanced): Specifies the first interval in which attestations are aggregated in the slot (typically unnaggregated attestations are aggregated in this interval).",
@@ -235,7 +230,6 @@ var devModeFlags = []cli.Flag{
 
 // ValidatorFlags contains a list of all the feature flags that apply to the validator client.
 var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
-	writeWalletPasswordOnWebOnboarding,
 	HoleskyTestnet,
 	SepoliaTestnet,
 	HoodiTestnet,

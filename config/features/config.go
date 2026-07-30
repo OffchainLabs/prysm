@@ -42,7 +42,6 @@ type Flags struct {
 	EnablePeerScorer                    bool // EnablePeerScorer enables experimental peer scoring in p2p.
 	EnableLightClient                   bool // EnableLightClient enables light client APIs.
 	EnableQUIC                          bool // EnableQUIC specifies whether to enable QUIC transport for libp2p.
-	WriteWalletPasswordOnWebOnboarding  bool // WriteWalletPasswordOnWebOnboarding writes the password to disk after Prysm web signup.
 	EnableDoppelGanger                  bool // EnableDoppelGanger enables doppelganger protection on startup for the validator.
 	EnableHistoricalSpaceRepresentation bool // EnableHistoricalSpaceRepresentation enables the saving of registry validators in separate buckets to save space
 	EnableBeaconRESTApi                 bool // EnableBeaconRESTApi enables experimental usage of the beacon REST API by the validator when querying a beacon node
@@ -338,10 +337,6 @@ func ConfigureValidator(ctx *cli.Context) error {
 	cfg := &Flags{}
 	if err := configureTestnet(ctx); err != nil {
 		return err
-	}
-	if ctx.Bool(writeWalletPasswordOnWebOnboarding.Name) {
-		logEnabled(writeWalletPasswordOnWebOnboarding)
-		cfg.WriteWalletPasswordOnWebOnboarding = true
 	}
 	cfg.AttestTimely = true
 	if ctx.Bool(disableAttestTimely.Name) {
