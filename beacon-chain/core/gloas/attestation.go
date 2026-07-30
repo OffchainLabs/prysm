@@ -20,20 +20,21 @@ import (
 //	    assert data.index == 0
 //	    payload_matches = True
 //	else:
-//	    slot_index = data.slot % SLOTS_PER_HISTORICAL_ROOT
+//	    slot_index = parent_slot % SLOTS_PER_HISTORICAL_ROOT
 //	    payload_index = state.execution_payload_availability[slot_index]
 //	    payload_matches = data.index == payload_index
 func MatchingPayload(
 	beaconState state.ReadOnlyBeaconState,
 	beaconBlockRoot [32]byte,
-	slot primitives.Slot,
+	dataSlot primitives.Slot,
+	parentSlot primitives.Slot,
 	committeeIndex uint64,
 ) (bool, error) {
 	if beaconState.Version() < version.Gloas {
 		return true, nil
 	}
 
-	sameSlot, err := beaconState.IsAttestationSameSlot(beaconBlockRoot, slot)
+	sameSlot, err := beaconState.IsAttestationSameSlot(beaconBlockRoot, dataSlot)
 	if err != nil {
 		return false, errors.Wrap(err, "failed to get same slot attestation status")
 	}
@@ -44,9 +45,27 @@ func MatchingPayload(
 		return true, nil
 	}
 
-	executionPayloadAvail, err := beaconState.ExecutionPayloadAvailability(slot)
+	// The attested block is the parent whenever the head flag can apply, so its availability bit lives at parentSlot, not at a skipped dataSlot.
+	executionPayloadAvail, err := beaconState.ExecutionPayloadAvailability(parentSlot)
 	if err != nil {
 		return false, errors.Wrap(err, "failed to get execution payload availability status")
 	}
 	return executionPayloadAvail == committeeIndex, nil
+}
+
+// ParentSlotFromBid returns the parent block's slot from the bid cached in state.
+// Not valid inside block processing, ProcessExecutionPayloadBid replaces the bid with the current block's.
+func ParentSlotFromBid(beaconState state.ReadOnlyBeaconState) (primitives.Slot, error) {
+	if beaconState.Version() < version.Gloas {
+		return 0, nil
+	}
+
+	bid, err := beaconState.LatestExecutionPayloadBid()
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to get latest execution payload bid")
+	}
+	if bid == nil {
+		return 0, nil
+	}
+	return bid.Slot(), nil
 }
