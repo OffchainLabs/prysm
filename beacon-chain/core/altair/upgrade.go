@@ -154,7 +154,8 @@ func TranslateParticipation(ctx context.Context, state state.BeaconState, atts [
 	}
 
 	for _, att := range atts {
-		participatedFlags, err := AttestationParticipationFlagIndices(state, att.Data, att.InclusionDelay)
+		// The parent slot is unused, the phase0 state being upgraded has no payload availability.
+		participatedFlags, err := AttestationParticipationFlagIndices(state, att.Data, att.InclusionDelay, 0)
 		if err != nil {
 			return nil, err
 		}
