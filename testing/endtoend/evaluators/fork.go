@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/policies"
 	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
@@ -138,7 +137,6 @@ func forkOccurs(forkEpoch primitives.Epoch, expectedFork int) error {
 		return err
 	}
 	wantVersion := version.String(expectedFork)
-
 	url := fmt.Sprintf("http://localhost:%d/eth/v2/beacon/blocks/head", e2e.TestParams.Ports.PrysmBeaconNodeHTTPPort)
 
 	ctx, cancel := context.WithTimeout(context.Background(), forkDeadline)
@@ -153,14 +151,14 @@ func forkOccurs(forkEpoch primitives.Epoch, expectedFork int) error {
 		}
 		if slot >= forkSlot {
 			if gotVersion != wantVersion {
-				return errors.Errorf("wanted a %s block at slot %d but received %s", wantVersion, slot, gotVersion)
+				return fmt.Errorf("wanted a %s block at slot %d but received %s", wantVersion, slot, gotVersion)
 			}
 			return nil
 		}
 		select {
 		case <-ticker.C:
 		case <-ctx.Done():
-			return errors.Errorf("timed out waiting for a %s block at slot >= %d, head is at slot %d", wantVersion, forkSlot, slot)
+			return fmt.Errorf("timed out waiting for a %s block at slot >= %d, head is at slot %d", wantVersion, forkSlot, slot)
 		}
 	}
 }
@@ -177,14 +175,16 @@ func headBlockVersionAndSlot(ctx context.Context, url string) (string, primitive
 		return "", 0, err
 	}
 	defer func() { _ = httpResp.Body.Close() }()
+
 	if httpResp.StatusCode != http.StatusOK {
 		e := httputil.DefaultJsonError{}
 		if err = json.NewDecoder(httpResp.Body).Decode(&e); err != nil {
 			return "", 0, err
 		}
-		return "", 0, errors.Errorf("%s (status code %d)", e.Message, e.Code)
+		return "", 0, fmt.Errorf("%s (status code %d)", e.Message, e.Code)
 	}
 
+	// Minimal decoding of the head block response to get the slot and version.
 	resp := struct {
 		Version string `json:"version"`
 		Data    struct {
@@ -196,9 +196,11 @@ func headBlockVersionAndSlot(ctx context.Context, url string) (string, primitive
 	if err = json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
 		return "", 0, err
 	}
+
 	slot, err := strconv.ParseUint(resp.Data.Message.Slot, 10, 64)
 	if err != nil {
-		return "", 0, errors.Wrapf(err, "could not parse head block slot %q", resp.Data.Message.Slot)
+		return "", 0, fmt.Errorf("could not parse head block slot %q: %w", resp.Data.Message.Slot, err)
 	}
+
 	return resp.Version, primitives.Slot(slot), nil
 }
