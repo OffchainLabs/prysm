@@ -1256,18 +1256,19 @@ func diffToVals(source, target state.ReadOnlyBeaconState) ([]validatorDiff, erro
 			ExitEpoch:                  ti.ExitEpoch(),
 			WithdrawableEpoch:          ti.WithdrawableEpoch(),
 		}
-		if !bytes.Equal(s.GetWithdrawalCredentials(), tVals[i].GetWithdrawalCredentials()) {
-			d.WithdrawalCredentials = slices.Clone(tVals[i].GetWithdrawalCredentials())
+		if sCreds, tCreds := s.WithdrawalCredentials(), ti.WithdrawalCredentials(); sCreds != tCreds {
+			d.WithdrawalCredentials = tCreds[:]
 		}
 		diffs = append(diffs, d)
 	}
 	for i, ti := range tVals[len(sVals):] {
 		pubkey := ti.PublicKey()
+		creds := ti.WithdrawalCredentials()
 		diffs = append(diffs, validatorDiff{
 			Slashed:                    ti.Slashed(),
 			index:                      uint32(i + len(sVals)),
 			PublicKey:                  pubkey[:],
-			WithdrawalCredentials:      slices.Clone(ti.GetWithdrawalCredentials()),
+			WithdrawalCredentials:      creds[:],
 			EffectiveBalance:           ti.EffectiveBalance(),
 			ActivationEligibilityEpoch: ti.ActivationEligibilityEpoch(),
 			ActivationEpoch:            ti.ActivationEpoch(),
@@ -1287,7 +1288,7 @@ func validatorsEqual(s, t state.ReadOnlyValidator) bool {
 	if s == nil || t == nil {
 		return false
 	}
-	if !bytes.Equal(s.GetWithdrawalCredentials(), t.GetWithdrawalCredentials()) {
+	if s.WithdrawalCredentials() != t.WithdrawalCredentials() {
 		return false
 	}
 	if s.EffectiveBalance() != t.EffectiveBalance() {

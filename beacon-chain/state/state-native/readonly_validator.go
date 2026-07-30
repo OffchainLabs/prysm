@@ -85,6 +85,13 @@ func (v readOnlyValidator) GetWithdrawalCredentials() []byte {
 	return creds
 }
 
+// WithdrawalCredentials returns the withdrawal credentials of the read only validator as an
+// array. Unlike GetWithdrawalCredentials, it does not allocate, which matters for callers that
+// walk the whole validator registry.
+func (v readOnlyValidator) WithdrawalCredentials() [32]byte {
+	return v.validator.WithdrawalCredentials
+}
+
 // Slashed returns the read only validator is slashed.
 func (v readOnlyValidator) Slashed() bool {
 	return v.validator.Slashed

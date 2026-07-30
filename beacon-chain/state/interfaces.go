@@ -126,6 +126,7 @@ type ReadOnlyValidator interface {
 	ExitEpoch() primitives.Epoch
 	PublicKey() [fieldparams.BLSPubkeyLength]byte
 	GetWithdrawalCredentials() []byte
+	WithdrawalCredentials() [32]byte
 	Copy() *ethpb.Validator
 	Slashed() bool
 	HasETH1WithdrawalCredentials() bool

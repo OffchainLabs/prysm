@@ -64,6 +64,7 @@ func TestReadOnlyValidator_WithdrawalCredentials(t *testing.T) {
 	v, err := statenative.NewValidator(&ethpb.Validator{WithdrawalCredentials: creds[:]})
 	require.NoError(t, err)
 	assert.DeepEqual(t, creds[:], v.GetWithdrawalCredentials())
+	assert.Equal(t, creds, v.WithdrawalCredentials())
 }
 
 func TestReadOnlyValidator_Slashed(t *testing.T) {
