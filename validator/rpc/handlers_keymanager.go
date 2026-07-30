@@ -407,7 +407,7 @@ func (s *Server) ListRemoteKeys(w http.ResponseWriter, r *http.Request) {
 	}
 	kind, _ := s.keymanagerKind()
 	if kind != keymanager.Web3Signer {
-		log.Debugf("List remote keys keymanager api expected wallet type %s but got %s", keymanager.Web3Signer.String(), kind.String())
+		log.Debugf("List remote keys keymanager api expected keymanager type %s but got %s", keymanager.Web3Signer.String(), kind.String())
 		response := &ListKeystoresResponse{
 			Data: make([]*Keystore, 0),
 		}
