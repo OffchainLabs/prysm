@@ -993,6 +993,15 @@ func SendExecutionPayloadEnvelopesByRangeRequest(
 		}
 		envSlot, blockHash, err := validateExecutionPayloadEnvelopeByRangeResponse(env, req, prevSlot, prevHash, i > 0)
 		if err != nil {
+			if errors.Is(err, errEnvelopeChainDiscontinuity) && len(envelopes) > 0 {
+				// The remaining envelopes no longer chain onto what was
+				// already received. This is expected when the serving peer
+				// reorgs mid-response during non-finality and is not proof
+				// of a faulty peer: keep the contiguous prefix instead of
+				// discarding the response and downscoring the peer.
+				log.WithError(err).Debug("Envelope range response discontinuous, using contiguous prefix")
+				break
+			}
 			return nil, err
 		}
 		prevHash = blockHash
@@ -1002,6 +1011,11 @@ func SendExecutionPayloadEnvelopesByRangeRequest(
 
 	return envelopes, nil
 }
+
+// errEnvelopeChainDiscontinuity marks a by-range envelope response whose
+// payloads stop chaining onto the previously received envelope, e.g. because
+// the serving peer reorged mid-response during non-finality.
+var errEnvelopeChainDiscontinuity = errors.New("execution payload envelope chain discontinuity")
 
 func validateExecutionPayloadEnvelopeByRangeResponse(
 	env *ethpb.SignedExecutionPayloadEnvelope,
@@ -1023,7 +1037,7 @@ func validateExecutionPayloadEnvelopeByRangeResponse(
 		return 0, nil, errors.Wrapf(ErrInvalidFetchedData, "envelope slot %d not greater than previous slot %d", envSlot, prevSlot)
 	}
 	if len(prevHash) != 0 && !bytes.Equal(env.Message.Payload.ParentHash, prevHash) {
-		return 0, nil, errors.Wrapf(ErrInvalidFetchedData, "envelope parent hash %x does not match previous hash %x", env.Message.Payload.ParentHash, prevHash)
+		return 0, nil, errors.Wrapf(errEnvelopeChainDiscontinuity, "envelope parent hash %x does not match previous hash %x", env.Message.Payload.ParentHash, prevHash)
 	}
 	return envSlot, env.Message.Payload.BlockHash, nil
 }

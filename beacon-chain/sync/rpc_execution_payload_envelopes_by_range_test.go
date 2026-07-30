@@ -18,6 +18,7 @@ import (
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -329,6 +330,178 @@ func TestExecutionPayloadEnvelopesByRangeRPCHandler(t *testing.T) {
 		assert.Equal(t, primitives.Slot(30), receivedSlots[2])
 	})
 
+	t.Run("responds resource unavailable when reconstruction fails mid-range", func(t *testing.T) {
+		beaconDB := testDB.SetupDB(t)
+		localP2P, remoteP2P := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+		protocolID := protocol.ID(topicFmt)
+
+		currentSlot := primitives.Slot(50)
+		clock := startup.NewClock(time.Now(), params.BeaconConfig().GenesisValidatorsRoot, startup.WithSlotAsNow(currentSlot))
+
+		blockSlots := []primitives.Slot{10, 20, 30, 40}
+		roots := make([][32]byte, len(blockSlots))
+		var prevRoot [32]byte
+
+		for i, sl := range blockSlots {
+			parentRoot := prevRoot
+			blk := util.NewBeaconBlockGloas()
+			blk.Block.Slot = sl
+			copy(blk.Block.ParentRoot, parentRoot[:])
+			copy(blk.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockHash, parentRoot[:])
+			wsb := util.SaveBlock(t, ctx, beaconDB, blk)
+			htr, hErr := wsb.Block().HashTreeRoot()
+			require.NoError(t, hErr)
+			roots[i] = htr
+			prevRoot = htr
+
+			if sl <= 30 {
+				env := testSignedEnvelope(sl, htr[:])
+				copy(env.Message.Payload.ParentHash, parentRoot[:])
+				require.NoError(t, beaconDB.SaveExecutionPayloadEnvelope(ctx, env))
+			}
+		}
+
+		// The execution client can only reconstruct the payloads of the first
+		// two blocks; the third one is gone (e.g. pruned block access list).
+		mockEngine := &mockExecution.EngineClient{
+			ExecutionPayloadByBlockHash: make(map[[32]byte]*engpb.ExecutionPayload, 2),
+			SlotByBlockHash:             make(map[[32]byte]primitives.Slot, 2),
+		}
+		for i, root := range roots[:2] {
+			mockEngine.ExecutionPayloadByBlockHash[root] = &engpb.ExecutionPayload{
+				ParentHash:    make([]byte, 32),
+				FeeRecipient:  make([]byte, 20),
+				StateRoot:     make([]byte, 32),
+				ReceiptsRoot:  make([]byte, 32),
+				LogsBloom:     make([]byte, 256),
+				PrevRandao:    make([]byte, 32),
+				BaseFeePerGas: make([]byte, 32),
+				BlockHash:     root[:],
+			}
+			mockEngine.SlotByBlockHash[root] = blockSlots[i]
+		}
+
+		svc := &Service{
+			cfg: &config{
+				p2p:                    localP2P,
+				beaconDB:               beaconDB,
+				chain:                  &chainMock.ChainService{},
+				clock:                  clock,
+				executionReconstructor: mockEngine,
+			},
+			availableBlocker: mockBlocker{avail: true},
+			rateLimiter:      newRateLimiter(localP2P),
+		}
+
+		receivedSlots := make([]primitives.Slot, 0)
+		var readErrs []error
+		var wg sync.WaitGroup
+		wg.Add(1)
+		remoteP2P.BHost.SetStreamHandler(protocolID, func(stream network.Stream) {
+			defer wg.Done()
+			for {
+				env, readErr := readChunkedExecutionPayloadEnvelope(stream, remoteP2P.Encoding(), ctxMap)
+				if readErr != nil {
+					if !errors.Is(readErr, io.EOF) {
+						readErrs = append(readErrs, readErr)
+					}
+					break
+				}
+				if env != nil {
+					receivedSlots = append(receivedSlots, primitives.Slot(env.Message.Payload.SlotNumber))
+				}
+			}
+		})
+
+		localP2P.Connect(remoteP2P)
+		stream, streamErr := localP2P.BHost.NewStream(ctx, remoteP2P.BHost.ID(), protocolID)
+		require.NoError(t, streamErr)
+
+		msg := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: 5, Count: 31}
+		handlerErr := svc.executionPayloadEnvelopesByRangeRPCHandler(ctx, msg, stream)
+		require.NoError(t, handlerErr)
+
+		if util.WaitTimeout(&wg, 2*time.Second) {
+			t.Fatal("timed out waiting for remote stream handler")
+		}
+
+		// A gap in the range means the node cannot serve a contiguous
+		// response: the request is answered with resource_unavailable
+		// instead of a server error, so requesters do not penalize the peer.
+		assert.Equal(t, 0, len(receivedSlots))
+		require.Equal(t, 1, len(readErrs))
+		assert.StringContains(t, p2ptypes.ErrResourceUnavailable.Error(), readErrs[0].Error())
+	})
+
+	t.Run("responds resource unavailable when nothing is reconstructable", func(t *testing.T) {
+		beaconDB := testDB.SetupDB(t)
+		localP2P, remoteP2P := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+		protocolID := protocol.ID(topicFmt)
+
+		currentSlot := primitives.Slot(50)
+		clock := startup.NewClock(time.Now(), params.BeaconConfig().GenesisValidatorsRoot, startup.WithSlotAsNow(currentSlot))
+
+		blockSlots := []primitives.Slot{10, 20, 30, 40}
+		var prevRoot [32]byte
+
+		for _, sl := range blockSlots {
+			parentRoot := prevRoot
+			blk := util.NewBeaconBlockGloas()
+			blk.Block.Slot = sl
+			copy(blk.Block.ParentRoot, parentRoot[:])
+			copy(blk.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockHash, parentRoot[:])
+			wsb := util.SaveBlock(t, ctx, beaconDB, blk)
+			htr, hErr := wsb.Block().HashTreeRoot()
+			require.NoError(t, hErr)
+			prevRoot = htr
+
+			if sl <= 30 {
+				env := testSignedEnvelope(sl, htr[:])
+				copy(env.Message.Payload.ParentHash, parentRoot[:])
+				require.NoError(t, beaconDB.SaveExecutionPayloadEnvelope(ctx, env))
+			}
+		}
+
+		// The execution client cannot reconstruct any payload at all.
+		mockEngine := &mockExecution.EngineClient{
+			ExecutionPayloadByBlockHash: make(map[[32]byte]*engpb.ExecutionPayload),
+			SlotByBlockHash:             make(map[[32]byte]primitives.Slot),
+		}
+
+		svc := &Service{
+			cfg: &config{
+				p2p:                    localP2P,
+				beaconDB:               beaconDB,
+				chain:                  &chainMock.ChainService{},
+				clock:                  clock,
+				executionReconstructor: mockEngine,
+			},
+			availableBlocker: mockBlocker{avail: true},
+			rateLimiter:      newRateLimiter(localP2P),
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		remoteP2P.BHost.SetStreamHandler(protocolID, func(stream network.Stream) {
+			defer wg.Done()
+			code, _, readErr := readStatusCodeNoDeadline(stream, localP2P.Encoding())
+			assert.NoError(t, readErr)
+			assert.Equal(t, responseCodeResourceUnavailable, code)
+		})
+
+		localP2P.Connect(remoteP2P)
+		stream, streamErr := localP2P.BHost.NewStream(ctx, remoteP2P.BHost.ID(), protocolID)
+		require.NoError(t, streamErr)
+
+		msg := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: 5, Count: 31}
+		handlerErr := svc.executionPayloadEnvelopesByRangeRPCHandler(ctx, msg, stream)
+		require.NoError(t, handlerErr)
+
+		if util.WaitTimeout(&wg, 2*time.Second) {
+			t.Fatal("timed out waiting for remote stream handler")
+		}
+	})
+
 	t.Run("skips envelopes where payload was empty", func(t *testing.T) {
 		beaconDB := testDB.SetupDB(t)
 		localP2P, remoteP2P := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
@@ -561,6 +734,36 @@ func TestSendExecutionPayloadEnvelopesByRangeRequest(t *testing.T) {
 		_, recvErr := SendExecutionPayloadEnvelopesByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxMap, req)
 		require.NotNil(t, recvErr)
 		assert.ErrorContains(t, "not greater than previous slot", recvErr)
+	})
+
+	t.Run("chain discontinuity returns contiguous prefix", func(t *testing.T) {
+		p1 := p2ptest.NewTestP2P(t)
+		p2 := p2ptest.NewTestP2P(t)
+		p1.Connect(p2)
+
+		startSlot := primitives.Slot(5)
+
+		p2.SetStreamHandler(topic, func(stream network.Stream) {
+			defer func() {
+				assert.NoError(t, stream.Close())
+			}()
+			req := &pb.ExecutionPayloadEnvelopesByRangeRequest{}
+			assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+			// The second envelope does not chain onto the first envelope's
+			// block hash, emulating a peer that reorged mid-response during
+			// non-finality.
+			env1 := testSignedEnvelope(startSlot, make([]byte, 32))
+			env2 := testSignedEnvelope(startSlot+1, make([]byte, 32))
+			env2.Message.Payload.ParentHash[0] = 0xde
+			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2.Encoding(), env1))
+			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2.Encoding(), env2))
+		})
+
+		req := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: startSlot, Count: 10}
+		envelopes, recvErr := SendExecutionPayloadEnvelopesByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxMap, req)
+		require.NoError(t, recvErr)
+		require.Equal(t, 1, len(envelopes))
+		assert.Equal(t, startSlot, primitives.Slot(envelopes[0].Message.Payload.SlotNumber))
 	})
 
 	t.Run("peer exceeds requested count returns error", func(t *testing.T) {
