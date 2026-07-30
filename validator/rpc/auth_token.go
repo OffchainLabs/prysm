@@ -159,8 +159,8 @@ func readAuthTokenFile(r io.Reader) (string, error) {
 	if err := api.ValidateAuthToken(token); err != nil {
 		log.WithError(err).Warn("Auth token does not follow our standards and should be regenerated either \n" +
 			"1. by removing the current token file and restarting \n" +
-			"2. using the `validator web generate-auth-token` command. \n" +
-			"Tokens can be generated through the `validator web generate-auth-token` command")
+			"2. using the `validator generate-auth-token` command. \n" +
+			"Tokens can be generated through the `validator generate-auth-token` command")
 	}
 	return token, nil
 }

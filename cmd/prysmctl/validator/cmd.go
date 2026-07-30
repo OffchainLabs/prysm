@@ -67,7 +67,7 @@ var (
 	TokenFlag = &cli.StringFlag{
 		Name:    "token",
 		Aliases: []string{"t"},
-		Usage:   "keymanager API bearer token, note: currently required but may be removed in the future, this is the same token as the web ui token.",
+		Usage:   "keymanager API bearer token, note: currently required but may be removed in the future, this is the validator client auth token.",
 	}
 )
 
