@@ -32,6 +32,14 @@ type ChainInfoFetcher interface {
 	ForkFetcher
 	HeadDomainFetcher
 	ForkchoiceFetcher
+	PayloadAvailabilityFetcher
+}
+
+// PayloadAvailabilityFetcher provides the payload arrival and blob data availability status
+// used to build payload attestations.
+type PayloadAvailabilityFetcher interface {
+	PayloadEarly([32]byte) (bool, bool)
+	DataAvailable(context.Context, [32]byte, primitives.Slot) (bool, error)
 }
 
 // ForkchoiceFetcher defines a common interface for methods that access directly
@@ -41,6 +49,7 @@ type ChainInfoFetcher interface {
 type ForkchoiceFetcher interface {
 	Ancestor(context.Context, []byte, primitives.Slot) ([]byte, error)
 	BlockHash(root [32]byte) ([32]byte, error)
+	HasPayloadBlockHash(root, blockHash [32]byte) bool
 	GasLimit(root [32]byte) (uint64, error)
 	CachedHeadRoot() [32]byte
 	GetProposerHead() [32]byte
@@ -50,7 +59,6 @@ type ForkchoiceFetcher interface {
 	HighestReceivedBlockRoot() [32]byte
 	HasNode([32]byte) bool
 	HasFullNode([32]byte) bool
-	PayloadEarly([32]byte) (bool, bool)
 	FullBeatsEmpty([32]byte) bool
 	ReceivedBlocksLastEpoch() (uint64, error)
 	InsertNode(context.Context, state.BeaconState, consensus_blocks.ROBlock) error

@@ -434,6 +434,28 @@ func TestParentHash_UnknownRoot(t *testing.T) {
 	assert.Equal(t, [32]byte{}, f.ParentHash(indexToHash(999)))
 }
 
+func TestHasPayloadBlockHash(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	root := indexToHash(1)
+	fullHash := indexToHash(100)
+	emptyHash := params.BeaconConfig().ZeroHash
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 1, root, emptyHash, fullHash, emptyHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	assert.Equal(t, true, f.HasPayloadBlockHash(root, emptyHash))
+	assert.Equal(t, false, f.HasPayloadBlockHash(root, fullHash))
+	assert.Equal(t, false, f.HasPayloadBlockHash(root, indexToHash(999)))
+
+	pe, err := prepareGloasForkchoicePayload(root)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+	assert.Equal(t, true, f.HasPayloadBlockHash(root, fullHash))
+	assert.Equal(t, false, f.HasPayloadBlockHash(indexToHash(999), fullHash))
+}
+
 func TestGloasBlock_ChildBuildsOnFull(t *testing.T) {
 	f := setupGloas(t, 0, 0)
 	ctx := t.Context()

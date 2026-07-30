@@ -50,6 +50,7 @@ const (
 	dependentRootForEpochCalled
 	canonicalNodeAtSlotCalled
 	payloadWeightsCalled
+	hasPayloadBlockHashCalled
 )
 
 func _discard(t *testing.T, e error) {
@@ -198,6 +199,11 @@ func TestROLocking(t *testing.T) {
 			cb:   func(g FastGetter) { _, err := g.GasLimit([32]byte{}); _discard(t, err) },
 		},
 		{
+			name: "hasPayloadBlockHashCalled",
+			call: hasPayloadBlockHashCalled,
+			cb:   func(g FastGetter) { g.HasPayloadBlockHash([32]byte{}, [32]byte{}) },
+		},
+		{
 			name: "parentHashCalled",
 			call: parentHashCalled,
 			cb:   func(g FastGetter) { g.ParentHash([32]byte{}) },
@@ -342,6 +348,11 @@ func (ro *mockROForkchoice) ConsensusNodeWeight(_ [32]byte) (uint64, error) {
 func (ro *mockROForkchoice) PayloadWeights(_ [32]byte) (uint64, uint64, error) {
 	ro.calls = append(ro.calls, payloadWeightsCalled)
 	return 0, 0, nil
+}
+
+func (ro *mockROForkchoice) HasPayloadBlockHash(_, _ [32]byte) bool {
+	ro.calls = append(ro.calls, hasPayloadBlockHashCalled)
+	return false
 }
 
 func (ro *mockROForkchoice) IsOptimistic(_ [32]byte) (bool, error) {

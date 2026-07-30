@@ -58,7 +58,6 @@ func mockSpecsList() mockSpecs {
 		{beaconAPIMockPath + "/genesis_mock.go", "mock", "validator/client/beacon-api/genesis.go", nil},
 		{beaconAPIMockPath + "/duties_mock.go", "mock", "validator/client/beacon-api/duties.go", nil},
 		{beaconAPIMockPath + "/state_validators_mock.go", "mock", "validator/client/beacon-api/state_validators.go", nil},
-		{beaconAPIMockPath + "/beacon_block_converter_mock.go", "mock", "validator/client/beacon-api/beacon_block_converter.go", nil},
 		{beaconAPIMockPath + "/json_rest_handler_mock.go", "mock", "api/rest/rest_handler.go", []string{"Handler"}},
 	}
 

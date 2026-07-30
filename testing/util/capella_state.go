@@ -117,7 +117,7 @@ func buildGenesisBeaconStateCapella(genesisTime uint64, preState state.BeaconSta
 	slashings := make([]uint64, params.BeaconConfig().EpochsPerSlashingsVector)
 
 	compactValidators := stateutil.CompactValidatorsFromProto(preState.Validators())
-	genesisValidatorsRoot, err := stateutil.ValidatorRegistryRoot(compactValidators)
+	genesisValidatorsRoot, err := stateutil.ValidatorRegistryRoot(preState.Version(), compactValidators)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not hash tree root genesis validators %v", err)
 	}

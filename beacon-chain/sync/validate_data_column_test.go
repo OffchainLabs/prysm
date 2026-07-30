@@ -85,8 +85,7 @@ func TestValidateDataColumn(t *testing.T) {
 		require.NoError(t, err)
 
 		topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
-		digest, err := service.currentForkDigest()
-		require.NoError(t, err)
+		digest := service.currentForkDigest()
 
 		if dc, ok := msg.(*ethpb.DataColumnSidecar); ok {
 			subnet := peerdas.ComputeSubnetForDataColumnSidecar(dc.Index)
