@@ -338,7 +338,7 @@ func (v *validator) logForEachValidator(index int, pubKey []byte, resp *ethpb.Va
 			"correctlyVotedTarget": correctlyVotedTarget,
 			"correctlyVotedHead":   correctlyVotedHead,
 			"diffGwei":             diffGwei,
-			"balanceEth":           newBalance,
+			"balanceEth":           fmt.Sprintf("%.9f", newBalance),
 		}
 
 		if votedSlot, ok := v.attestedSlot(prevEpoch, pubKeyBytes); ok {
