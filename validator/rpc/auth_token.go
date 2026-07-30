@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"net/url"
@@ -14,16 +13,13 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/config/features"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/fsnotify/fsnotify"
-	"github.com/golang-jwt/jwt/v4"
 	"github.com/pkg/errors"
 )
 
-// CreateAuthToken generates a new jwt key, token and writes them
-// to a file in the specified directory. Also, it logs out a prepared URL
-// for the user to navigate to and authenticate with the Prysm web interface.
+// CreateAuthToken generates a new auth token and writes it to a file
+// in the specified directory.
 func CreateAuthToken(authPath, validatorWebAddr string) error {
 	token, err := api.GenerateRandomHexString()
 	if err != nil {
@@ -38,10 +34,8 @@ func CreateAuthToken(authPath, validatorWebAddr string) error {
 }
 
 // Upon launch of the validator client, we initialize an auth token by either creating
-// one from scratch or reading it from a file. This token can then be shown to the
-// user via stdout and the validator client should then attempt to open the default
-// browser. The web interface authenticates by looking for this token in the query parameters
-// of the URL. This token is then used as the bearer token for jwt auth.
+// one from scratch or reading it from a file. Callers of the validator client APIs
+// authenticate by passing this token as a bearer token.
 func (s *Server) initializeAuthToken() error {
 	if s.authTokenPath == "" {
 		return errors.New("auth token path is empty")
@@ -60,11 +54,10 @@ func (s *Server) initializeAuthToken() error {
 				log.Error(err)
 			}
 		}()
-		secret, token, err := readAuthTokenFile(f)
+		token, err := readAuthTokenFile(f)
 		if err != nil {
 			return err
 		}
-		s.jwtSecret = secret
 		s.authToken = token
 		return nil
 	}
@@ -150,10 +143,9 @@ func saveAuthToken(tokenPath string, token string) error {
 	return nil
 }
 
-func readAuthTokenFile(r io.Reader) ([]byte, string, error) {
+func readAuthTokenFile(r io.Reader) (string, error) {
 	scanner := bufio.NewScanner(r)
 	var lines []string
-	var secret []byte
 	var token string
 	// Scan the file and collect lines, excluding empty lines
 	for scanner.Scan() {
@@ -165,7 +157,7 @@ func readAuthTokenFile(r io.Reader) ([]byte, string, error) {
 
 	// Check for scanning errors
 	if err := scanner.Err(); err != nil {
-		return nil, "", err
+		return "", err
 	}
 
 	// Process based on the number of lines, excluding empty ones
@@ -174,19 +166,11 @@ func readAuthTokenFile(r io.Reader) ([]byte, string, error) {
 		// If there is only one line, interpret it as the token
 		token = strings.TrimSpace(lines[0])
 	case 2:
-		// TODO: Deprecate after a few releases
-		// For legacy files
-		// If there are two lines, the first is the jwt key and the second is the token
-		jwtKeyHex := strings.TrimSpace(lines[0])
-		s, err := hex.DecodeString(jwtKeyHex)
-		if err != nil {
-			return nil, "", errors.Wrapf(err, "could not decode JWT secret")
-		}
-		secret = bytesutil.SafeCopyBytes(s)
+		// For legacy files the first line is an unused jwt key and the second is the token.
 		token = strings.TrimSpace(lines[1])
 		log.Warn("Auth token is a legacy file and should be regenerated.")
 	default:
-		return nil, "", errors.New("Auth token file format has multiple lines, please update the auth token to a single line that is a 256 bit hex string")
+		return "", errors.New("Auth token file format has multiple lines, please update the auth token to a single line that is a 256 bit hex string")
 	}
 	if err := api.ValidateAuthToken(token); err != nil {
 		log.WithError(err).Warn("Auth token does not follow our standards and should be regenerated either \n" +
@@ -194,16 +178,5 @@ func readAuthTokenFile(r io.Reader) ([]byte, string, error) {
 			"2. using the `validator web generate-auth-token` command. \n" +
 			"Tokens can be generated through the `validator web generate-auth-token` command")
 	}
-	return secret, token, nil
-}
-
-// Creates a JWT token string using the JWT key.
-func createTokenString(jwtKey []byte) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{})
-	// Sign and get the complete encoded token as a string using the secret
-	tokenString, err := token.SignedString(jwtKey)
-	if err != nil {
-		return "", err
-	}
-	return tokenString, nil
+	return token, nil
 }
