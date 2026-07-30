@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"iter"
 	"slices"
 
 	"github.com/OffchainLabs/go-bitfield"
@@ -1236,46 +1237,52 @@ func (h *hdiff) serialize() HdiffBytes {
 
 // diffToVals computes the difference between two BeaconStates and returns a slice of validatorDiffs.
 func diffToVals(source, target state.ReadOnlyBeaconState) ([]validatorDiff, error) {
-	sVals := source.ValidatorsReadOnly()
-	tVals := target.ValidatorsReadOnly()
-	if len(tVals) < len(sVals) {
-		return nil, errors.Errorf("target validators length %d is less than source %d", len(tVals), len(sVals))
+	sourceLen, targetLen := source.NumValidators(), target.NumValidators()
+	if targetLen < sourceLen {
+		return nil, errors.Errorf("target validators length %d is less than source %d", targetLen, sourceLen)
 	}
+
+	nextSourceVal, stopSourceVals := iter.Pull2(source.ValidatorsReadOnlySeq())
+	defer stopSourceVals()
+
 	diffs := make([]validatorDiff, 0)
-	for i, s := range sVals {
-		ti := tVals[i]
-		if validatorsEqual(s, ti) {
+	for i, tv := range target.ValidatorsReadOnlySeq() {
+		_, sv, ok := nextSourceVal()
+		if !ok {
+			pubkey := tv.PublicKey()
+			creds := tv.WithdrawalCredentials()
+			diffs = append(diffs, validatorDiff{
+				Slashed:                    tv.Slashed(),
+				index:                      uint32(i),
+				PublicKey:                  pubkey[:],
+				WithdrawalCredentials:      creds[:],
+				EffectiveBalance:           tv.EffectiveBalance(),
+				ActivationEligibilityEpoch: tv.ActivationEligibilityEpoch(),
+				ActivationEpoch:            tv.ActivationEpoch(),
+				ExitEpoch:                  tv.ExitEpoch(),
+				WithdrawableEpoch:          tv.WithdrawableEpoch(),
+			})
+			continue
+		}
+
+		if validatorsEqual(sv, tv) {
 			continue
 		}
 		d := validatorDiff{
-			Slashed:                    ti.Slashed(),
+			Slashed:                    tv.Slashed(),
 			index:                      uint32(i),
-			EffectiveBalance:           ti.EffectiveBalance(),
-			ActivationEligibilityEpoch: ti.ActivationEligibilityEpoch(),
-			ActivationEpoch:            ti.ActivationEpoch(),
-			ExitEpoch:                  ti.ExitEpoch(),
-			WithdrawableEpoch:          ti.WithdrawableEpoch(),
+			EffectiveBalance:           tv.EffectiveBalance(),
+			ActivationEligibilityEpoch: tv.ActivationEligibilityEpoch(),
+			ActivationEpoch:            tv.ActivationEpoch(),
+			ExitEpoch:                  tv.ExitEpoch(),
+			WithdrawableEpoch:          tv.WithdrawableEpoch(),
 		}
-		if sCreds, tCreds := s.WithdrawalCredentials(), ti.WithdrawalCredentials(); sCreds != tCreds {
+		if sCreds, tCreds := sv.WithdrawalCredentials(), tv.WithdrawalCredentials(); sCreds != tCreds {
 			d.WithdrawalCredentials = tCreds[:]
 		}
 		diffs = append(diffs, d)
 	}
-	for i, ti := range tVals[len(sVals):] {
-		pubkey := ti.PublicKey()
-		creds := ti.WithdrawalCredentials()
-		diffs = append(diffs, validatorDiff{
-			Slashed:                    ti.Slashed(),
-			index:                      uint32(i + len(sVals)),
-			PublicKey:                  pubkey[:],
-			WithdrawalCredentials:      creds[:],
-			EffectiveBalance:           ti.EffectiveBalance(),
-			ActivationEligibilityEpoch: ti.ActivationEligibilityEpoch(),
-			ActivationEpoch:            ti.ActivationEpoch(),
-			ExitEpoch:                  ti.ExitEpoch(),
-			WithdrawableEpoch:          ti.WithdrawableEpoch(),
-		})
-	}
+
 	return diffs, nil
 }
 
