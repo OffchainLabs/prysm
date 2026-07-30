@@ -49,6 +49,7 @@ type p2pBatchWorkerPool struct {
 	fromRouter     chan batch
 	shutdownErr    chan error
 	endSeq         []batch
+	outstanding    int // number of batches handed to the router that have not come back yet
 	ctx            context.Context
 	cancel         func()
 	earliest       primitives.Slot // earliest is the earliest slot a worker is processing
@@ -96,16 +97,23 @@ func (p *p2pBatchWorkerPool) todo(b batch) {
 		p.endSeq = append(p.endSeq, b)
 		return
 	}
+	p.outstanding += 1
 	p.toRouter <- b
 }
 
 func (p *p2pBatchWorkerPool) complete() (batch, error) {
-	if len(p.endSeq) == p.maxBatches {
+	if len(p.endSeq) > 0 && p.outstanding == 0 {
 		return p.endSeq[0], errEndSequence
 	}
 
 	select {
 	case b := <-p.fromRouter:
+		if p.outstanding > 0 {
+			p.outstanding -= 1
+			return b, nil
+		}
+
+		log.WithFields(b.logFields()).Error("Backfill pool received a batch it did not dispatch. This should never happen.")
 		return b, nil
 	case err := <-p.shutdownErr:
 		return batch{}, errors.Wrap(err, "fatal error from backfill worker pool")
@@ -188,7 +196,7 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 	for i, b := range todo {
 		needs := p.needs()
 		if b.expired(needs) {
-			p.endSeq = append(p.endSeq, b.withState(batchEndSequence))
+			p.fromRouter <- b.withState(batchEndSequence)
 			continue
 		}
 		excludePeers := busy
