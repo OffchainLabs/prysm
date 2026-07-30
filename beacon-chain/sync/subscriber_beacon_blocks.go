@@ -370,12 +370,9 @@ func (s *Service) publishPartialColumns(ctx context.Context, indices map[uint64]
 		return nil
 	}
 
-	digest, err := s.currentForkDigest()
-	if err != nil {
-		return errors.Wrap(err, "current fork digest")
-	}
+	digest := s.currentForkDigest()
 
-	err = partialBroadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
+	err := partialBroadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
 		for i := range uint64(len(partialColumns)) {
 			if !indices[i] {
 				continue

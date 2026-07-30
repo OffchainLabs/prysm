@@ -51,23 +51,19 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 			// re-publish the full column on the partial column extension as we don't send full columns to peers
 			// who have explicitly requested for partial columns. This method is idempotent so this is fine.
 			if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
-				digest, err := s.currentForkDigest()
-				if err != nil {
-					log.Error("Failed to get current fork digest")
-				} else {
-					err := broadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
-						subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index())
-						topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
-						partialColumn, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar)
-						if err != nil {
-							log.WithError(err).Error("Failed to create partial data column from verified RO data column")
-							return
-						}
-						yield(topic, partialColumn)
-					})
+				digest := s.currentForkDigest()
+				err := broadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
+					subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index())
+					topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
+					partialColumn, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar)
 					if err != nil {
-						log.WithError(err).Error("Failed to publish partial column on getting data column sidecar")
+						log.WithError(err).Error("Failed to create partial data column from verified RO data column")
+						return
 					}
+					yield(topic, partialColumn)
+				})
+				if err != nil {
+					log.WithError(err).Error("Failed to publish partial column on getting data column sidecar")
 				}
 			}
 		}

@@ -41,6 +41,7 @@ type DataColumnSidecarsParams struct {
 	Storage                 filesystem.DataColumnStorageReader  // Data columns storage
 	NewVerifier             verification.NewDataColumnsVerifier // Data columns verifier to check to conformity of incoming data column sidecars
 	DownscorePeerOnRPCFault bool                                // Downscore a peer if it commits an RPC fault. Not responding sidecars at all is considered as a fault.
+	RequestByRoot           bool
 }
 
 // FetchDataColumnSidecars retrieves data column sidecars for the given blocks and indices
@@ -785,10 +786,14 @@ func sendDataColumnSidecarsRequest(
 		"requestedSidecars": requestedSidecarsCount,
 	})
 
-	// Try to build a by range byRangeRequest first.
-	byRangeRequests, err := buildByRangeRequests(slotByRoot, slotsWithCommitments, indicesByRoot, batchSize)
-	if err != nil {
-		return nil, errors.Wrap(err, "craft by range request")
+	var byRangeRequests []*ethpb.DataColumnSidecarsByRangeRequest
+	if !params.RequestByRoot {
+		// Try to build a by range byRangeRequest first.
+		requests, err := buildByRangeRequests(slotByRoot, slotsWithCommitments, indicesByRoot, batchSize)
+		if err != nil {
+			return nil, errors.Wrap(err, "craft by range request")
+		}
+		byRangeRequests = requests
 	}
 
 	// If we have a valid by range request, send it.
@@ -1001,15 +1006,21 @@ func verifyByRootDataColumnSidecars(
 	blockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
 	roDataColumns []blocks.RODataColumn,
 ) ([]blocks.VerifiedRODataColumn, error) {
+	n := 0
+	for i := range roDataColumns {
+		if _, ok := blockByRoot[roDataColumns[i].BlockRoot()]; ok {
+			roDataColumns[n] = roDataColumns[i]
+			n++
+		}
+	}
+	roDataColumns = roDataColumns[:n]
+
 	// Gloas sidecars carry no commitments; seed them from the block's bid before the Fulu verifier runs.
 	for i := range roDataColumns {
 		if !roDataColumns[i].IsGloas() {
 			continue
 		}
-		block, ok := blockByRoot[roDataColumns[i].BlockRoot()]
-		if !ok {
-			return nil, fmt.Errorf("no local block for sidecar root %#x: %w", roDataColumns[i].BlockRoot(), ErrSidecarHeaderMismatch)
-		}
+		block := blockByRoot[roDataColumns[i].BlockRoot()]
 		commitments, err := block.Block().Body().BlobKzgCommitments()
 		if err != nil {
 			return nil, errors.Wrap(err, "get bid blob kzg commitments")
@@ -1032,11 +1043,7 @@ func verifyByRootDataColumnSidecars(
 	}
 
 	for _, sidecar := range roDataColumns {
-		block, ok := blockByRoot[sidecar.BlockRoot()]
-		if !ok {
-			return nil, fmt.Errorf("no local block for sidecar root %#x: %w", sidecar.BlockRoot(), ErrSidecarHeaderMismatch)
-		}
-
+		block := blockByRoot[sidecar.BlockRoot()]
 		if err := verifySidecarHeaderMatchesBlock(sidecar, block); err != nil {
 			return nil, fmt.Errorf("root %#x: %w", sidecar.BlockRoot(), err)
 		}

@@ -182,6 +182,11 @@ var (
 		Name:  "enable-state-diff",
 		Usage: "Enables the experimental state diff feature.",
 	}
+	EnableProgressiveSSZ = &cli.BoolFlag{
+		Name:   "enable-progressive-ssz",
+		Usage:  "Enables experimental progressive SSZ merkleization for converted consensus types.",
+		Hidden: true,
+	}
 	reorgLatePayloads = &cli.BoolFlag{
 		Name:   "reorg-late-payloads",
 		Usage:  "Enables reorging late payloads.",
@@ -288,6 +293,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
 	EnableStateDiff,
+	EnableProgressiveSSZ,
 	reorgLatePayloads,
 	forceHeadFlag,
 	blacklistRoots,

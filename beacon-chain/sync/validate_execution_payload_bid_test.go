@@ -548,8 +548,7 @@ func executionPayloadBidToPubsub(t *testing.T, s *Service, p p2p.P2P, bid *ethpb
 	require.NoError(t, err)
 
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedExecutionPayloadBid]()]
-	digest, err := s.currentForkDigest()
-	require.NoError(t, err)
+	digest := s.currentForkDigest()
 	topic = s.addDigestToTopic(topic, digest)
 
 	return &pubsub.Message{

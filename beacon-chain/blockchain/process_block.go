@@ -1197,12 +1197,12 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	s.refreshCaches(ctx, currentSlot, headRoot, headState)
 	// return early if we already started building a block for the current
 	// head root
-	_, has := s.cfg.PayloadIDCache.PayloadID(s.CurrentSlot()+1, headRoot, full)
+	_, has := s.cfg.PayloadIDCache.PayloadID(currentSlot+1, headRoot, full)
 	if has {
 		return
 	}
 
-	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:], full)
+	attribute := s.getPayloadAttribute(ctx, headState, currentSlot+1, headRoot[:], full)
 	// return early if we are not proposing next slot
 	if attribute.IsEmpty() {
 		return
@@ -1223,7 +1223,14 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 			log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
 		}
 		if id != nil {
-			s.cfg.PayloadIDCache.Set(s.CurrentSlot()+1, headRoot, full, [8]byte(*id))
+			s.cfg.PayloadIDCache.Set(currentSlot+1, headRoot, full, [8]byte(*id))
+			log.WithFields(logrus.Fields{
+				"blockRoot": fmt.Sprintf("%#x", bytesutil.Trunc(headRoot[:])),
+				"headSlot":  s.HeadSlot(),
+				"nextSlot":  currentSlot + 1,
+				"payloadID": fmt.Sprintf("%#x", bytesutil.Trunc(id[:])),
+			}).Info("Forkchoice updated with payload attributes for proposal")
+			s.firePayloadAttributesEventForHead(headRoot, currentSlot+1, attribute, bh[:])
 		}
 		return
 	}

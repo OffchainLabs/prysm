@@ -991,11 +991,6 @@ func TestServer_SetGasLimit(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, err2)
 
-	type beaconResp struct {
-		resp  *eth.FeeRecipientByPubKeyResponse
-		error error
-	}
-
 	type want struct {
 		pubkey   []byte
 		gaslimit uint64
@@ -1007,7 +1002,6 @@ func TestServer_SetGasLimit(t *testing.T) {
 		newGasLimit      uint64
 		proposerSettings *proposer.Settings
 		w                []*want
-		beaconReturn     *beaconResp
 		wantErr          string
 	}{
 		{
@@ -1129,13 +1123,6 @@ func TestServer_SetGasLimit(t *testing.T) {
 					validatorService:          vs,
 					beaconNodeValidatorClient: beaconClient,
 					db:                        validatorDB,
-				}
-
-				if tt.beaconReturn != nil {
-					beaconClient.EXPECT().FeeRecipientByPubKey(
-						gomock.Any(),
-						gomock.Any(),
-					).Return(tt.beaconReturn.resp, tt.beaconReturn.error)
 				}
 
 				request := &SetGasLimitRequest{
@@ -1654,10 +1641,9 @@ func TestServer_ListFeeRecipientByPubkey(t *testing.T) {
 	}
 
 	tests := []struct {
-		name   string
-		args   *proposer.Settings
-		want   *want
-		cached *eth.FeeRecipientByPubKeyResponse
+		name string
+		args *proposer.Settings
+		want *want
 	}{
 		{
 			name: "ProposerSettings.ProposeConfig.FeeRecipientConfig defined for pubkey (and ProposerSettings.DefaultConfig.FeeRecipientConfig defined)",
@@ -1782,17 +1768,12 @@ func TestServer_FeeRecipientByPubkey(t *testing.T) {
 		valEthAddress     string
 		defaultEthaddress string
 	}
-	type beaconResp struct {
-		resp  *eth.FeeRecipientByPubKeyResponse
-		error error
-	}
 	tests := []struct {
 		name             string
 		args             string
 		proposerSettings *proposer.Settings
 		want             *want
 		wantErr          bool
-		beaconReturn     *beaconResp
 	}{
 		{
 			name:             "ProposerSetting is nil",
@@ -1802,10 +1783,6 @@ func TestServer_FeeRecipientByPubkey(t *testing.T) {
 				valEthAddress: "0x046Fb65722E7b2455012BFEBf6177F1D2e9738D9",
 			},
 			wantErr: false,
-			beaconReturn: &beaconResp{
-				resp:  nil,
-				error: nil,
-			},
 		},
 		{
 			name: "ProposerSetting.ProposeConfig is nil",
@@ -1817,10 +1794,6 @@ func TestServer_FeeRecipientByPubkey(t *testing.T) {
 				valEthAddress: "0x046Fb65722E7b2455012BFEBf6177F1D2e9738D9",
 			},
 			wantErr: false,
-			beaconReturn: &beaconResp{
-				resp:  nil,
-				error: nil,
-			},
 		},
 		{
 			name: "ProposerSetting.ProposeConfig is nil AND ProposerSetting.Defaultconfig is defined",
@@ -1833,10 +1806,6 @@ func TestServer_FeeRecipientByPubkey(t *testing.T) {
 				valEthAddress: "0x046Fb65722E7b2455012BFEBf6177F1D2e9738D9",
 			},
 			wantErr: false,
-			beaconReturn: &beaconResp{
-				resp:  nil,
-				error: nil,
-			},
 		},
 		{
 			name: "ProposerSetting.ProposeConfig is defined for pubkey",
@@ -1850,10 +1819,6 @@ func TestServer_FeeRecipientByPubkey(t *testing.T) {
 				valEthAddress: "0x046Fb65722E7b2455012BFEBf6177F1D2e9738D9",
 			},
 			wantErr: false,
-			beaconReturn: &beaconResp{
-				resp:  nil,
-				error: nil,
-			},
 		},
 		{
 			name: "ProposerSetting.ProposeConfig not defined for pubkey",
@@ -1865,10 +1830,6 @@ func TestServer_FeeRecipientByPubkey(t *testing.T) {
 				valEthAddress: "0x046Fb65722E7b2455012BFEBf6177F1D2e9738D9",
 			},
 			wantErr: false,
-			beaconReturn: &beaconResp{
-				resp:  nil,
-				error: nil,
-			},
 		},
 		{
 			name: "ProposerSetting.ProposeConfig is nil for pubkey",
@@ -1882,10 +1843,6 @@ func TestServer_FeeRecipientByPubkey(t *testing.T) {
 				valEthAddress: "0x046Fb65722E7b2455012BFEBf6177F1D2e9738D9",
 			},
 			wantErr: false,
-			beaconReturn: &beaconResp{
-				resp:  nil,
-				error: nil,
-			},
 		},
 		{
 			name: "ProposerSetting.ProposeConfig is nil for pubkey AND DefaultConfig is not nil",
@@ -1900,10 +1857,6 @@ func TestServer_FeeRecipientByPubkey(t *testing.T) {
 				valEthAddress: "0x046Fb65722E7b2455012BFEBf6177F1D2e9738D9",
 			},
 			wantErr: false,
-			beaconReturn: &beaconResp{
-				resp:  nil,
-				error: nil,
-			},
 		},
 	}
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
