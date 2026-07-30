@@ -4,14 +4,22 @@ import (
 	"context"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
 type hintKey struct{}
 
+// Head is the head a read is expected to report.
+type Head struct {
+	Root          [32]byte
+	Slot          primitives.Slot
+	PayloadStatus api.PayloadStatus
+}
+
 // Hint is the request-scoped freshness expectation.
 type Hint struct {
-	Head     func() (root [32]byte, slot primitives.Slot, ok bool)
+	Head     func() (Head, bool)
 	Deadline time.Time
 }
 

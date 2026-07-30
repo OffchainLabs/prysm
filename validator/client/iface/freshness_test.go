@@ -16,7 +16,7 @@ func TestWithHint(t *testing.T) {
 		deadline := time.Now().Add(time.Hour)
 
 		hint := Hint{
-			Head:     func() ([32]byte, primitives.Slot, bool) { return want, wantSlot, true },
+			Head:     func() (Head, bool) { return Head{Root: want, Slot: wantSlot}, true },
 			Deadline: deadline,
 		}
 		ctx := WithHint(context.Background(), hint)
@@ -25,9 +25,9 @@ func TestWithHint(t *testing.T) {
 		require.Equal(t, true, ok)
 		require.Equal(t, deadline, got.Deadline)
 
-		gotRoot, gotSlot, gotOK := got.Head()
-		require.Equal(t, want, gotRoot)
-		require.Equal(t, wantSlot, gotSlot)
+		gotHead, gotOK := got.Head()
+		require.Equal(t, want, gotHead.Root)
+		require.Equal(t, wantSlot, gotHead.Slot)
 		require.Equal(t, true, gotOK)
 	})
 

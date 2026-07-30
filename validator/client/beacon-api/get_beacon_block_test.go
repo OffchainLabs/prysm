@@ -51,7 +51,7 @@ func TestBeaconBlockV4_DecodeClosureCachesWinningResponse(t *testing.T) {
 	// A freshness hint announcing the block's parent root wires the decode
 	// closure into the SSZ acceptance check.
 	ctx := iface.WithHint(t.Context(), iface.Hint{
-		Head:     func() ([32]byte, primitives.Slot, bool) { return parentRoot, slot, true },
+		Head:     func() (iface.Head, bool) { return iface.Head{Root: parentRoot, Slot: slot}, true },
 		Deadline: time.Time{},
 	})
 
@@ -106,7 +106,7 @@ func TestBeaconBlock_DecodeClosureCachesWinningResponse(t *testing.T) {
 
 	// A freshness hint wires the decode closure into the SSZ acceptance check.
 	ctx := iface.WithHint(t.Context(), iface.Hint{
-		Head:     func() ([32]byte, primitives.Slot, bool) { return parentRoot, slot, true },
+		Head:     func() (iface.Head, bool) { return iface.Head{Root: parentRoot, Slot: slot}, true },
 		Deadline: time.Time{},
 	})
 

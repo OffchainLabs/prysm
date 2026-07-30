@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
@@ -390,9 +391,9 @@ func (s *Service) notifyNewHeadV2Event(
 	headVersion int,
 	full bool,
 ) error {
-	var payloadStatus statefeed.PayloadStatus = statefeed.PayloadStatusFull
+	var payloadStatus api.PayloadStatus = api.PayloadStatusFull
 	if headVersion >= version.Gloas && !full {
-		payloadStatus = statefeed.PayloadStatusEmpty
+		payloadStatus = api.PayloadStatusEmpty
 
 	}
 	s.headV2EventLock.Lock()

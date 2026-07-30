@@ -18,6 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/client"
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -991,8 +992,8 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 
 		v.setHighestSlot(slot)
 
-		// Update the head tracker.
-		if err := v.head.update(slot, head.Block); err != nil {
+		// Update the head tracker. The v1 event announces no payload status.
+		if err := v.head.update(slot, head.Block, api.PayloadStatusUnknown); err != nil {
 			log.WithError(err).Error("Failed to record head event block root")
 		}
 
@@ -1028,6 +1029,7 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 			"slot":                      head.Data.Slot,
 			"sinceSlotStartTime":        sinceSlotStartTime,
 			"blockRoot":                 trim(head.Data.Block),
+			"payloadStatus":             head.Data.PayloadStatus,
 			"currentEpochDependentRoot": trim(head.Data.CurrentEpochDependentRoot),
 			"nextEpochDependentRoot":    trim(head.Data.NextEpochDependentRoot),
 			"version":                   "2",
@@ -1036,7 +1038,7 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 		v.setHighestSlot(slot)
 
 		// Update the head tracker
-		if err := v.head.update(slot, head.Data.Block); err != nil {
+		if err := v.head.update(slot, head.Data.Block, api.PayloadStatus(head.Data.PayloadStatus)); err != nil {
 			log.WithError(err).Error("Failed to record head event block root")
 		}
 

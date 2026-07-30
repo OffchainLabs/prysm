@@ -4,14 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/rest"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 )
 
@@ -23,47 +26,91 @@ const (
 var (
 	attestationRootExtractor = rootExtractor("beacon_block_root")
 	syncBlockRootExtractor   = rootExtractor("root")
+
+	attestationMatcher   = attestationMatches
+	syncCommitteeMatcher = rootMatcher(syncBlockRootExtractor)
 )
 
 // attestationFreshnessOptions builds the read options that steer an attestation
 // data read toward a node that already imported the head announced on ctx, or nil
 // if ctx has no hint. See readFreshnessOptions.
 func attestationFreshnessOptions(ctx context.Context) []rest.GetOption {
-	return readFreshnessOptions(ctx, attestationRootExtractor)
+	return readFreshnessOptions(ctx, attestationMatcher)
 }
 
 // syncCommitteeFreshnessOptions builds the read options that steer a sync
 // committee read toward a node that already imported the head announced on ctx, or
 // nil if ctx has no hint. See readFreshnessOptions.
 func syncCommitteeFreshnessOptions(ctx context.Context) []rest.GetOption {
-	return readFreshnessOptions(ctx, syncBlockRootExtractor)
+	return readFreshnessOptions(ctx, syncCommitteeMatcher)
+}
+
+// rootMatcher builds a matcher accepting a response whose extracted root is the
+// announced head.
+func rootMatcher(extract func(json.RawMessage) ([32]byte, bool)) func(json.RawMessage, iface.Head) bool {
+	return func(raw json.RawMessage, want iface.Head) bool {
+		got, ok := extract(raw)
+		return ok && got == want.Root
+	}
+}
+
+// attestationMatches accepts an attestation data response reporting the
+// announced head.
+func attestationMatches(raw json.RawMessage, want iface.Head) bool {
+	if !rootMatcher(attestationRootExtractor)(raw, want) {
+		return false
+	}
+
+	wantIndex, known := attestationIndexFor(want)
+	if !known {
+		// No payload status criterion applies to the head: the root alone is the criterion.
+		return true
+	}
+
+	gotIndex, ok := attestationIndexExtractor(raw)
+
+	return ok && gotIndex == wantIndex
+}
+
+func attestationIndexFor(head iface.Head) (uint64, bool) {
+	if slots.ToEpoch(head.Slot) < params.BeaconConfig().GloasForkEpoch {
+		return 0, false
+	}
+
+	switch head.PayloadStatus {
+	case api.PayloadStatusFull:
+		return 1, true
+	case api.PayloadStatusEmpty:
+		return 0, true
+	default:
+		return 0, false
+	}
 }
 
 // readFreshnessOptions builds the read options that steer a JSON read toward a node
 // that already imported the head announced on ctx, or nil if ctx has no hint. It
 // uses:
 //   - WithRace: query every node concurrently.
-//   - WithAccept: among those responses, prefer the one whose extracted root
-//     matches the announced head.
+//   - WithAccept: among those responses, prefer the one matches reports as the
+//     announced head.
 //   - WithDeadline: bound the read by the hint deadline (floored by
 //     readFreshnessBudget so a lagging node still gets time to catch up).
 //   - WithRepoll (UntilAccepted): keep re-polling every node until one
 //     reports the announced head or the deadline fires.
-func readFreshnessOptions(ctx context.Context, extract func(json.RawMessage) ([32]byte, bool)) []rest.GetOption {
+func readFreshnessOptions(ctx context.Context, matches func(json.RawMessage, iface.Head) bool) []rest.GetOption {
 	hint, ok := freshnessHint(ctx)
 	if !ok {
 		return nil
 	}
 
 	accept := func(raw json.RawMessage) bool {
-		wantRoot, _, known := hint.Head()
+		want, known := hint.Head()
 		if !known {
 			// No head expectation yet: we cannot do better than first-success.
 			return true
 		}
 
-		gotRoot, ok := extract(raw)
-		return ok && gotRoot == wantRoot
+		return matches(raw, want)
 	}
 
 	// Race the nodes to select the one that already imported the announced head.
@@ -104,7 +151,7 @@ func blockFreshnessOptions(ctx context.Context, decode func([]byte, http.Header)
 	}
 
 	accept := func(body []byte, hdr http.Header) bool {
-		wantRoot, _, known := hint.Head()
+		want, known := hint.Head()
 		if !known {
 			// No head expectation yet: we cannot do better than first-success.
 			return true
@@ -120,7 +167,7 @@ func blockFreshnessOptions(ctx context.Context, decode func([]byte, http.Header)
 			return false
 		}
 
-		return wrapped.ParentRoot() == wantRoot
+		return wrapped.ParentRoot() == want.Root
 	}
 
 	// Race the nodes to select the one whose block builds on the announced head,
@@ -162,14 +209,14 @@ func payloadAttestationFreshnessOptions(ctx context.Context) []rest.GetOption {
 	}
 
 	accept := func(body []byte, hdr http.Header) bool {
-		wantRoot, _, known := hint.Head()
+		want, known := hint.Head()
 		if !known {
 			// No head expectation yet: we cannot do better than first-success.
 			return true
 		}
 
 		gotRoot, ok := payloadAttestationBeaconBlockRoot(body, hdr)
-		return ok && gotRoot == wantRoot
+		return ok && gotRoot == want.Root
 	}
 
 	// Race the nodes to select the one that already imported the announced head.
@@ -239,4 +286,24 @@ func rootExtractor(field string) func(json.RawMessage) ([32]byte, bool) {
 
 		return root, true
 	}
+}
+
+// attestationIndexExtractor reads data.index from an attestation data response.
+func attestationIndexExtractor(raw json.RawMessage) (uint64, bool) {
+	var body struct {
+		Data struct {
+			Index string `json:"index"`
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return 0, false
+	}
+
+	index, err := strconv.ParseUint(body.Data.Index, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+
+	return index, true
 }

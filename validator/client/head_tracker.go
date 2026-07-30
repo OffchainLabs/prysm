@@ -5,19 +5,19 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 )
 
-// headTracker holds the latest head (block root and its slot) the validator has
-// learned about from beacon-node head events.
+// headTracker holds the latest head (block root, its slot and its payload
+// status) the validator has learned about from beacon-node head events.
 type headTracker struct {
 	mu sync.RWMutex
 
-	slot primitives.Slot
-	root [32]byte
+	head iface.Head
 	set  bool
 }
 
@@ -31,7 +31,7 @@ func newHeadTracker() *headTracker {
 // will report again. This is benign: the freshness criterion then never matches,
 // so the read falls back to the freshest response at its deadline, and the next
 // event at a slot >= the pinned one heals the tracker.
-func (h *headTracker) update(slot primitives.Slot, blockRoot string) error {
+func (h *headTracker) update(slot primitives.Slot, blockRoot string, payloadStatus api.PayloadStatus) error {
 	if blockRoot == "" {
 		return nil
 	}
@@ -44,11 +44,11 @@ func (h *headTracker) update(slot primitives.Slot, blockRoot string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if h.set && slot < h.slot {
+	if h.set && slot < h.head.Slot {
 		return nil
 	}
 
-	h.slot, h.root, h.set = slot, root, true
+	h.head, h.set = iface.Head{Root: root, Slot: slot, PayloadStatus: payloadStatus}, true
 
 	return nil
 }
@@ -56,13 +56,13 @@ func (h *headTracker) update(slot primitives.Slot, blockRoot string) error {
 // withHeadHint attaches a freshness hint carrying the latest tracked head. It
 // errors if the slot deadline cannot be computed; see withHint.
 func (v *validator) withHeadHint(ctx context.Context, slot primitives.Slot, component primitives.BP) (context.Context, error) {
-	head := func() ([32]byte, primitives.Slot, bool) {
+	head := func() (iface.Head, bool) {
 		h := v.head
 
 		h.mu.RLock()
 		defer h.mu.RUnlock()
 
-		return h.root, h.slot, h.set
+		return h.head, h.set
 	}
 
 	hint, err := v.withHint(ctx, slot, component, head)
@@ -76,9 +76,10 @@ func (v *validator) withHeadHint(ctx context.Context, slot primitives.Slot, comp
 // withPayloadHeadHint attaches a freshness hint carrying the payload block root
 // known for slot.
 func (v *validator) withPayloadHeadHint(ctx context.Context, slot primitives.Slot) (context.Context, error) {
-	head := func() ([32]byte, primitives.Slot, bool) {
+	head := func() (iface.Head, bool) {
 		root, ok := v.payloadAvailability.payloadRoot(slot)
-		return root, slot, ok
+		// A known payload root is by definition a full payload.
+		return iface.Head{Root: root, Slot: slot, PayloadStatus: api.PayloadStatusFull}, ok
 	}
 
 	hint, err := v.withHint(ctx, slot, params.BeaconConfig().PayloadAttestationDueBPS, head)
@@ -97,7 +98,7 @@ func (v *validator) withHint(
 	ctx context.Context,
 	slot primitives.Slot,
 	component primitives.BP,
-	head func() (root [32]byte, slot primitives.Slot, ok bool),
+	head func() (iface.Head, bool),
 ) (context.Context, error) {
 	deadline, err := v.slotComponentDeadline(slot, component)
 	if err != nil {

@@ -20,6 +20,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -3946,10 +3947,12 @@ func TestProcessEvent_Head(t *testing.T) {
 
 		v.ProcessEvent(t.Context(), &eventClient.Event{Type: eventClient.EventHead, Data: data})
 
-		gotRoot, gotSlot, ok := latestHead(v.head)
+		got, ok := latestHead(v.head)
 		require.Equal(t, true, ok)
-		require.Equal(t, uint64(42), uint64(gotSlot))
-		require.Equal(t, byte(0xab), gotRoot[0])
+		require.Equal(t, uint64(42), uint64(got.Slot))
+		require.Equal(t, byte(0xab), got.Root[0])
+		// The v1 head event announces no payload status.
+		require.Equal(t, api.PayloadStatusUnknown, got.PayloadStatus)
 	})
 
 	t.Run("empty root (gRPC head event) updates the slot without error", func(t *testing.T) {
@@ -3961,7 +3964,7 @@ func TestProcessEvent_Head(t *testing.T) {
 		v.ProcessEvent(t.Context(), &eventClient.Event{Type: eventClient.EventHead, Data: data})
 
 		// Head root not recorded because there is no block root to record...
-		_, _, ok := latestHead(v.head)
+		_, ok := latestHead(v.head)
 		require.Equal(t, false, ok)
 		// ...but the highest slot update must not have been dropped.
 		require.Equal(t, uint64(42), uint64(v.highestSlot()))
@@ -3975,9 +3978,39 @@ func TestProcessEvent_Head(t *testing.T) {
 		v.ProcessEvent(t.Context(), &eventClient.Event{Type: eventClient.EventHead, Data: data})
 
 		// Head root not recorded because the block root failed to decode...
-		_, _, ok := latestHead(v.head)
+		_, ok := latestHead(v.head)
 		require.Equal(t, false, ok)
 		// ...but the highest slot update must not have been dropped.
 		require.Equal(t, uint64(42), uint64(v.highestSlot()))
 	})
+}
+
+func TestProcessEvent_HeadV2_PayloadStatus(t *testing.T) {
+	// Post-Gloas an attestation's index encodes the payload status of the attested
+	// head, so the status the event announces is part of the expected head.
+	for _, tt := range []struct {
+		announced string
+		want      api.PayloadStatus
+	}{
+		{announced: "full", want: api.PayloadStatusFull},
+		{announced: "empty", want: api.PayloadStatusEmpty},
+		{announced: "", want: api.PayloadStatusUnknown},
+	} {
+		t.Run("records payload status "+tt.announced, func(t *testing.T) {
+			v := headValidator()
+			root := "0x" + strings.Repeat("ab", 32)
+			data, err := json.Marshal(&structs.HeadEventV2{
+				Data: &structs.HeadEventV2Data{Slot: "42", Block: root, PayloadStatus: tt.announced},
+			})
+			require.NoError(t, err)
+
+			v.ProcessEvent(t.Context(), &eventClient.Event{Type: eventClient.EventHeadV2, Data: data})
+
+			got, ok := latestHead(v.head)
+			require.Equal(t, true, ok)
+			require.Equal(t, uint64(42), uint64(got.Slot))
+			require.Equal(t, byte(0xab), got.Root[0])
+			require.Equal(t, tt.want, got.PayloadStatus)
+		})
+	}
 }
