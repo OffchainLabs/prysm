@@ -977,6 +977,41 @@ func TestStateDiff_InitializeRefusesOffsetRegression(t *testing.T) {
 	require.Equal(t, uint64(offset+512), db.getOffset())
 }
 
+func TestStateDiff_AnchorCacheMemoizesDecodedAnchor(t *testing.T) {
+	setDefaultStateDiffExponents()
+	exponents := flags.Get().StateDiffExponents
+
+	db := setupDB(t)
+	require.NoError(t, setOffsetInDB(db, 0))
+
+	st, _ := createState(t, 0, version.Fulu)
+	require.NoError(t, db.saveStateByDiff(context.Background(), st))
+	cache := db.stateDiffCache
+
+	// Reading the same level twice must hand back the very same state, not decode it again.
+	first := cache.getAnchor(0)
+	require.NotNil(t, first)
+	require.Equal(t, true, first == cache.getAnchor(0), "repeated read should reuse the decoded anchor")
+
+	// Replacing a different level must leave the memoized one alone.
+	otherLevel := len(exponents) - 2
+	otherSlot := primitives.Slot(math.PowerOf2(uint64(exponents[otherLevel])))
+	otherState, _ := createState(t, otherSlot, version.Fulu)
+	require.NoError(t, cache.setAnchor(otherLevel, otherState))
+	require.Equal(t, true, first == cache.getAnchor(0), "write to another level should not drop the memo")
+
+	// Replacing the memoized level must drop it, so that the new anchor is returned.
+	require.NoError(t, cache.setAnchor(0, otherState))
+	refreshed := cache.getAnchor(0)
+	require.NotNil(t, refreshed)
+	require.Equal(t, false, first == refreshed, "write to the memoized level should drop the memo")
+	require.Equal(t, otherSlot, refreshed.Slot())
+
+	// Clearing the anchors must drop the memo as well.
+	cache.clearAnchors()
+	require.IsNil(t, cache.getAnchor(0))
+}
+
 func TestStateDiff_EncodingAndDecoding(t *testing.T) {
 	for v := range version.All() {
 		t.Run(version.String(v), func(t *testing.T) {

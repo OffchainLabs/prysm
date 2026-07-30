@@ -20,6 +20,15 @@ type stateDiffCache struct {
 	anchors        [][]byte
 	levelsWithData []bool
 	offset         uint64
+
+	// Decoding an anchor is a full SSZ unmarshal of a beacon state, which allocates around a
+	// gigabyte on mainnet. Every save at a deeper level reads the same anchor until that anchor is
+	// replaced, so the last decoded one is kept around. Only one is kept, because a decoded mainnet
+	// state holds a few hundred megabytes resident. decodedAnchorLevel is only meaningful while
+	// decodedAnchor is non-nil. Repeated reads share one instance, which is safe because it is only
+	// ever handed out as a ReadOnlyBeaconState.
+	decodedAnchor      state.ReadOnlyBeaconState
+	decodedAnchorLevel int
 }
 
 func populateStateDiffCacheFromDB(s *Store, offset uint64) (*stateDiffCache, error) {
@@ -182,16 +191,33 @@ func newStateDiffCache(s *Store) (*stateDiffCache, error) {
 	}, nil
 }
 
-func (c *stateDiffCache) getAnchor(level int) state.ReadOnlyBeaconState {
+// anchorForLevel returns the decoded anchor for the level when one is memoized, and otherwise the
+// compressed bytes that it has to be decoded from.
+func (c *stateDiffCache) anchorForLevel(level int) (state.ReadOnlyBeaconState, []byte) {
 	c.RLock()
 	defer c.RUnlock()
 
-	compressed := c.anchors[level]
+	if level < 0 || level >= len(c.anchors) {
+		return nil, nil
+	}
+	if c.decodedAnchor != nil && c.decodedAnchorLevel == level {
+		return c.decodedAnchor, nil
+	}
+	return nil, c.anchors[level]
+}
+
+func (c *stateDiffCache) getAnchor(level int) state.ReadOnlyBeaconState {
+	decoded, compressed := c.anchorForLevel(level)
+	if decoded != nil {
+		return decoded
+	}
 
 	if len(compressed) == 0 {
 		return nil
 	}
 
+	// Decoding is deliberately done without holding the lock: it takes seconds on mainnet, and
+	// blocking every other cache reader for that long would stall unrelated state reads.
 	uncompressed, err := snappy.Decode(nil, compressed)
 	if err != nil {
 		return nil
@@ -201,6 +227,14 @@ func (c *stateDiffCache) getAnchor(level int) state.ReadOnlyBeaconState {
 	if err != nil {
 		return nil
 	}
+
+	// Memoize, so that the following saves at deeper levels reuse this state instead of decoding it
+	// again. Should setAnchor have replaced this level while the decode was running, the memo is one
+	// generation stale; callers validate the anchor's slot and fall back to the database, so that
+	// costs a reload rather than correctness.
+	c.Lock()
+	c.decodedAnchor, c.decodedAnchorLevel = st, level
+	c.Unlock()
 
 	return st
 }
@@ -226,6 +260,9 @@ func (c *stateDiffCache) setAnchor(level int, anchor state.ReadOnlyBeaconState) 
 	compressed := snappy.Encode(nil, versionedAnchorBytes)
 
 	c.anchors[level] = compressed
+	if c.decodedAnchorLevel == level {
+		c.decodedAnchor = nil
+	}
 	stateDiffAnchorCacheBytes.WithLabelValues(strconv.Itoa(level)).Set(float64(len(compressed)))
 	return nil
 }
@@ -265,6 +302,7 @@ func (c *stateDiffCache) clearAnchors() {
 	c.Lock()
 	defer c.Unlock()
 	c.anchors = make([][]byte, len(flags.Get().StateDiffExponents)-1) // -1 because last level doesn't need to be cached
+	c.decodedAnchor = nil
 	for level := range len(c.anchors) {
 		stateDiffAnchorCacheBytes.WithLabelValues(strconv.Itoa(level)).Set(0)
 	}
