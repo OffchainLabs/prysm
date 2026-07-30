@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/proto/dbval"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -96,6 +97,104 @@ func TestServiceInit(t *testing.T) {
 		require.Equal(t, batchEndSequence, todo[i].state)
 	}
 }
+
+func TestServiceReportsCompletion(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*300)
+	defer cancel()
+
+	db := &mockBackfillDB{}
+	store, err := NewUpdater(ctx, db)
+	require.NoError(t, err)
+
+	const (
+		nWorkers = 5
+		nBatches = nWorkers - 3
+	)
+
+	batchSize := uint64(4)
+	high := 1 + batchSize*uint64(nBatches) // extra 1 because upper bound is exclusive
+
+	originRoot := [32]byte{}
+	origin, err := util.NewBeaconState()
+	require.NoError(t, err)
+
+	db.states = map[[32]byte]state.BeaconState{originRoot: origin}
+	store.bs = &dbval.BackfillStatus{
+		LowSlot:    high,
+		OriginRoot: originRoot[:],
+	}
+
+	clockSynchronizer := startup.NewClockSynchronizer()
+	clock := startup.NewClock(time.Now(), [32]byte{}, startup.WithSlotAsNow(primitives.Slot(high)+1))
+	require.NoError(t, clockSynchronizer.SetClock(clock))
+
+	p2pt := p2ptest.NewTestP2P(t)
+	blobStorage := filesystem.NewEphemeralBlobStorage(t)
+	dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
+	syncNeedsWaiter := func() (das.SyncNeeds, error) {
+		return das.NewSyncNeeds(clock.CurrentSlot, nil, primitives.Epoch(0))
+	}
+
+	service, err := NewService(
+		ctx, store, blobStorage, dataColumnStorage, clockSynchronizer, p2pt, &mockAssigner{},
+		WithBatchSize(batchSize), WithWorkerCount(nWorkers), WithEnableBackfill(true), WithVerifierWaiter(&mockInitalizerWaiter{}), WithSyncNeedsWaiter(syncNeedsWaiter),
+	)
+	require.NoError(t, err)
+
+	// The importer is stubbed out, so a single block is enough to keep batches out of the
+	// "batch with no results" error path.
+	blk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
+	require.NoError(t, err)
+
+	rob, err := blocks.NewROBlock(blk)
+	require.NoError(t, err)
+
+	needs, err := syncNeedsWaiter()
+	require.NoError(t, err)
+
+	service.pool = &stubRoutedPool{
+		p2pBatchWorkerPool: newP2PBatchWorkerPool(p2pt, nWorkers, needs.Currently),
+		blocks:             verifiedROBlocks{rob},
+	}
+
+	service.batchImporter = func(context.Context, primitives.Slot, batch, *Store) (*dbval.BackfillStatus, error) {
+		return &dbval.BackfillStatus{}, nil
+	}
+	go service.Start()
+
+	done := make(chan error, 1)
+	go func() { done <- service.WaitForCompletion() }()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(30 * time.Second):
+		t.Fatal("backfill reached the end of the sequence but never reported completion")
+	}
+}
+
+// stubRoutedPool exercises the real pool bookkeeping in todo() and complete(), standing in for the
+// p2p worker fleet with a router that hands every batch straight back as importable.
+type stubRoutedPool struct {
+	*p2pBatchWorkerPool
+	blocks verifiedROBlocks
+}
+
+func (p *stubRoutedPool) spawn(ctx context.Context, _ int, _ PeerAssigner, _ *workerCfg) {
+	p.ctx, p.cancel = context.WithCancel(ctx)
+	go func() {
+		for {
+			select {
+			case b := <-p.toRouter:
+				b.blocks = p.blocks
+				p.fromRouter <- b.withState(batchImportable)
+			case <-p.ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
+var _ batchWorkerPool = &stubRoutedPool{}
 
 func testReadN(ctx context.Context, t *testing.T, c chan batch, n int, into []batch) []batch {
 	for range n {
