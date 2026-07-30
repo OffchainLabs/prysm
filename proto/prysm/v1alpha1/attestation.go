@@ -348,6 +348,19 @@ func AttestationElectraToGloas(a *AttestationElectra) *AttestationGloas {
 	}
 }
 
+// AttestationGloasToElectra copies a Gloas attestation into the wire-compatible Electra type.
+func AttestationGloasToElectra(a *AttestationGloas) *AttestationElectra {
+	if a == nil {
+		return nil
+	}
+	return &AttestationElectra{
+		AggregationBits: bytesutil.SafeCopyBytes(a.AggregationBits),
+		CommitteeBits:   bytesutil.SafeCopyBytes(a.CommitteeBits),
+		Data:            a.Data.Copy(),
+		Signature:       bytesutil.SafeCopyBytes(a.Signature),
+	}
+}
+
 // AttestationGloasFromAtt converts supported post-Electra attestations into the Gloas concrete type.
 func AttestationGloasFromAtt(att Att) (*AttestationGloas, bool) {
 	switch a := att.(type) {
@@ -355,6 +368,18 @@ func AttestationGloasFromAtt(att Att) (*AttestationGloas, bool) {
 		return a, true
 	case *AttestationElectra:
 		return AttestationElectraToGloas(a), true
+	default:
+		return nil, false
+	}
+}
+
+// AttestationElectraFromAtt converts supported post-Electra attestations into the Electra concrete type.
+func AttestationElectraFromAtt(att Att) (*AttestationElectra, bool) {
+	switch a := att.(type) {
+	case *AttestationElectra:
+		return a, true
+	case *AttestationGloas:
+		return AttestationGloasToElectra(a), true
 	default:
 		return nil, false
 	}

@@ -175,6 +175,16 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 				return nil, err
 			}
 			headState = genState
+		case version.Gloas:
+			pbState, err := state_native.ProtobufBeaconStateGloas(bState.ToProto())
+			if err != nil {
+				return nil, err
+			}
+			genState, err := state_native.InitializeFromProtoUnsafeGloas(pbState)
+			if err != nil {
+				return nil, err
+			}
+			headState = genState
 		default:
 			return nil, fmt.Errorf("state version %s isn't supported", version.String(bState.Version()))
 		}
@@ -284,7 +294,16 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			}
 
 			var att ethpb.Att
-			if bState.Version() >= version.Electra {
+			if bState.Version() >= version.Gloas {
+				cb := primitives.NewAttestationCommitteeBits()
+				cb.SetBitAt(uint64(c), true)
+				att = &ethpb.AttestationGloas{
+					Data:            attData,
+					CommitteeBits:   cb,
+					AggregationBits: aggregationBits,
+					Signature:       bls.AggregateSignatures(sigs).Marshal(),
+				}
+			} else if bState.Version() >= version.Electra {
 				cb := primitives.NewAttestationCommitteeBits()
 				cb.SetBitAt(uint64(c), true)
 				att = &ethpb.AttestationElectra{
