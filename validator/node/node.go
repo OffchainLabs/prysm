@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/middleware"
-	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -47,16 +46,15 @@ import (
 // ValidatorClient defines an instance of an Ethereum validator that manages
 // the entire lifecycle of services attached to it participating in proof of stake.
 type ValidatorClient struct {
-	cliCtx                *cli.Context
-	ctx                   context.Context
-	cancel                context.CancelFunc
-	db                    iface.ValidatorDB
-	services              *runtime.ServiceRegistry // Lifecycle and service store.
-	lock                  sync.RWMutex
-	wallet                *wallet.Wallet
-	walletInitializedFeed *event.Feed
-	stop                  chan struct{} // Channel to wait for termination notifications.
-	once                  sync.Once
+	cliCtx   *cli.Context
+	ctx      context.Context
+	cancel   context.CancelFunc
+	db       iface.ValidatorDB
+	services *runtime.ServiceRegistry // Lifecycle and service store.
+	lock     sync.RWMutex
+	wallet   *wallet.Wallet
+	stop     chan struct{} // Channel to wait for termination notifications.
+	once     sync.Once
 }
 
 // NewValidatorClient creates a new instance of the Prysm validator client.
@@ -98,13 +96,12 @@ func NewValidatorClient(cliCtx *cli.Context) (*ValidatorClient, error) {
 	registry := runtime.NewServiceRegistry()
 	ctx, cancel := context.WithCancel(cliCtx.Context)
 	validatorClient := &ValidatorClient{
-		cliCtx:                cliCtx,
-		ctx:                   ctx,
-		cancel:                cancel,
-		services:              registry,
-		wallet:                w,
-		walletInitializedFeed: new(event.Feed),
-		stop:                  make(chan struct{}),
+		cliCtx:   cliCtx,
+		ctx:      ctx,
+		cancel:   cancel,
+		services: registry,
+		wallet:   w,
+		stop:     make(chan struct{}),
 	}
 
 	if err := validatorClient.initializeDB(cliCtx); err != nil {
@@ -219,8 +216,7 @@ func getWallet(cliCtx *cli.Context) (*wallet.Wallet, error) {
 		return nil, errors.Wrap(err, "could not read wallet password file")
 	}
 	w, err := wallet.OpenWalletOrElseCli(cliCtx, func(cliCtx *cli.Context) (*wallet.Wallet, error) {
-		// handle nil wallet in key manager initialization, give a chance for user to create a wallet
-		return nil, nil
+		return nil, wallet.ErrNoWalletFound
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "could not open wallet")
@@ -403,7 +399,6 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 	validatorService, err := client.NewValidatorService(cliCtx.Context, &client.Config{
 		DB:                      c.db,
 		Wallet:                  c.wallet,
-		WalletInitializedFeed:   c.walletInitializedFeed,
 		GRPCMaxCallRecvMsgSize:  cliCtx.Int(cmd.GrpcMaxCallRecvMsgSizeFlag.Name),
 		GRPCRetries:             cliCtx.Uint(flags.GRPCRetriesFlag.Name),
 		GRPCRetryDelay:          cliCtx.Duration(flags.GRPCRetryDelayFlag.Name),
@@ -418,7 +413,6 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		Web3SignerConfig:        web3signerConfig,
 		ProposerSettings:        ps,
 		ValidatorsRegBatchSize:  cliCtx.Int(flags.ValidatorsRegistrationBatchSizeFlag.Name),
-		EnableAPI:               cliCtx.Bool(flags.EnableRPCFlag.Name),
 		LogValidatorPerformance: !cliCtx.Bool(flags.DisablePenaltyRewardLogFlag.Name),
 		EmitAccountMetrics:      !cliCtx.Bool(flags.DisableAccountMetricsFlag.Name),
 		Distributed:             distributed,

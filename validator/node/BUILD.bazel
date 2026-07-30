@@ -35,7 +35,6 @@ go_library(
     ],
     deps = [
         "//api/server/middleware:go_default_library",
-        "//async/event:go_default_library",
         "//cmd:go_default_library",
         "//cmd/validator/flags:go_default_library",
         "//config/features:go_default_library",

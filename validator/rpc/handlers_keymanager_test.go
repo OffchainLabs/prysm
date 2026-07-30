@@ -81,7 +81,7 @@ func TestServer_ListKeystores(t *testing.T) {
 		w.Body = &bytes.Buffer{}
 		s.ListKeystores(w, req)
 		require.NotEqual(t, http.StatusOK, w.Code)
-		require.StringContains(t, "Prysm Wallet not initialized. Please create a new wallet.", w.Body.String())
+		require.StringContains(t, "Prysm Wallet not initialized.", w.Body.String())
 	})
 
 	localWalletDir := setupWalletDir(t)
@@ -740,8 +740,8 @@ func TestServer_SetVoluntaryExit(t *testing.T) {
 		validatorService:          vs,
 		beaconNodeValidatorClient: beaconClient,
 		wallet:                    w,
-		nodeClient:                mockNodeClient,
 		walletInitialized:         w != nil,
+		nodeClient:                mockNodeClient,
 	}
 
 	type want struct {
