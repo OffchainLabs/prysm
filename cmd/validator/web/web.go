@@ -1,7 +1,6 @@
 package web
 
 import (
-	"fmt"
 	"path/filepath"
 
 	"github.com/OffchainLabs/prysm/v7/api"
@@ -43,15 +42,12 @@ var Commands = &cli.Command{
 				if walletDirPath == "" {
 					log.Fatal("--wallet-dir not specified")
 				}
-				host := cliCtx.String(flags.HTTPServerHost.Name)
-				port := cliCtx.Int(flags.HTTPServerPort.Name)
-				validatorWebAddr := fmt.Sprintf("%s:%d", host, port)
 				authTokenPath := filepath.Join(walletDirPath, api.AuthTokenFileName)
 				tempAuthTokenPath := cliCtx.String(flags.AuthTokenPathFlag.Name)
 				if tempAuthTokenPath != "" {
 					authTokenPath = tempAuthTokenPath
 				}
-				if err := rpc.CreateAuthToken(authTokenPath, validatorWebAddr); err != nil {
+				if err := rpc.CreateAuthToken(authTokenPath); err != nil {
 					log.WithError(err).Fatal("Could not create web auth token")
 				}
 				return nil

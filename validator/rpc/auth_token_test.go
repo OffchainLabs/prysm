@@ -83,7 +83,7 @@ func TestServer_RefreshAuthTokenOnFileChange(t *testing.T) {
 	time.Sleep(time.Millisecond * 250)
 
 	// Update the auth token file with a new secret.
-	require.NoError(t, CreateAuthToken(srv.authTokenPath, "localhost:7500"))
+	require.NoError(t, CreateAuthToken(srv.authTokenPath))
 
 	// The service should have picked up the file change and set the jwt secret to the new one.
 	time.Sleep(time.Millisecond * 500)

@@ -59,10 +59,10 @@ var (
 		Name:  "tls-cert",
 		Usage: "Certificate for secure gRPC. Pass this and the tls-key flag in order to use gRPC securely.",
 	}
-	// EnableRPCFlag enables controlling the validator client via gRPC (without web UI).
+	// EnableRPCFlag enables controlling the validator client via its HTTP APIs.
 	EnableRPCFlag = &cli.BoolFlag{
 		Name:  "rpc",
-		Usage: "Enables the RPC server for the validator client (without Web UI).",
+		Usage: "Enables the RPC server for the validator client.",
 		Value: false,
 	}
 	// RPCHost defines the host on which the RPC server should listen.
@@ -126,7 +126,7 @@ var (
 	HTTPServerCorsDomain = &cli.StringFlag{
 		Name:    "http-cors-domain",
 		Usage:   `Comma separated list of domains from which to accept cross origin requests (browser enforced).`,
-		Value:   "http://localhost:7500,http://127.0.0.1:7500,http://0.0.0.0:7500,http://localhost:4242,http://127.0.0.1:4242,http://localhost:4200,http://0.0.0.0:4242,http://127.0.0.1:4200,http://0.0.0.0:4200,http://localhost:3000,http://0.0.0.0:3000,http://127.0.0.1:3000",
+		Value:   "http://localhost:7500,http://127.0.0.1:7500,http://0.0.0.0:7500",
 		Aliases: []string{"grpc-gateway-corsdomain"},
 	}
 	// MonitoringPortFlag defines the http port used to serve prometheus metrics.

@@ -6,14 +6,12 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/httprest"
 	"github.com/OffchainLabs/prysm/v7/api/server/middleware"
 	"github.com/OffchainLabs/prysm/v7/async/event"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/io/logs"
@@ -23,7 +21,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/db"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
-	"github.com/OffchainLabs/prysm/v7/validator/web"
 	"github.com/pkg/errors"
 )
 
@@ -139,10 +136,9 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 
 	if server.authTokenPath != "" {
 		if err := server.initializeAuthToken(); err != nil {
-			log.WithError(err).Error("Could not initialize web auth token")
+			log.WithError(err).Error("Could not initialize auth token")
 		}
-		validatorWebAddr := fmt.Sprintf("%s:%d", server.httpHost, server.httpPort)
-		logValidatorWebAuth(validatorWebAddr, server.authToken, server.authTokenPath)
+		logAuthTokenPath(server.authTokenPath)
 		go server.refreshAuthTokenFromFileChanges(server.ctx, server.authTokenPath)
 	}
 
@@ -160,8 +156,8 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 		httprest.WithMiddlewares(cfg.Middlewares),
 	}
 
-	if err := server.InitializeRoutesWithWebHandler(); err != nil {
-		log.WithError(err).Fatal("Could not initialize routes with web handler")
+	if err := server.InitializeRoutes(); err != nil {
+		log.WithError(err).Fatal("Could not initialize routes")
 	}
 	// create and set a new http server
 	s, err := httprest.New(server.ctx, opts...)
@@ -176,24 +172,6 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 // Start the HTTP server and registers clients that can communicate via HTTP or gRPC.
 func (s *Server) Start() {
 	s.server.Start()
-}
-
-// InitializeRoutesWithWebHandler adds a catchall wrapper for web handling
-func (s *Server) InitializeRoutesWithWebHandler() error {
-	if err := s.InitializeRoutes(); err != nil {
-		return err
-	}
-	s.router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api") {
-			r.URL.Path = strings.Replace(r.URL.Path, "/api", "", 1) // used to redirect apis to standard rest APIs
-			s.router.ServeHTTP(w, r)
-			return
-		}
-		if features.Get().EnableWeb {
-			web.Handler(w, r)
-		}
-	})
-	return nil
 }
 
 // InitializeRoutes initializes pure HTTP REST endpoints for the validator client.

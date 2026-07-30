@@ -60,6 +60,11 @@ var (
 		Usage:  deprecatedUsage,
 		Hidden: true,
 	}
+	deprecatedWeb = &cli.BoolFlag{
+		Name:   "web",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
 )
 
 // Deprecated flags for both the beacon node and validator client.
@@ -72,6 +77,7 @@ var deprecatedFlags = []cli.Flag{
 	deprecatedInteropStartIndex,
 	deprecatedInteropEth1DataVotes,
 	deprecatedInteropWriteSSZStateTransitions,
+	deprecatedWeb,
 }
 
 var upcomingDeprecation = []cli.Flag{

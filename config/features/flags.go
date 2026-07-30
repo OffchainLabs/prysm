@@ -212,12 +212,6 @@ var (
 		Usage: "Forces use of get duties endpoint instead of v2.",
 	}
 
-	// EnableWebFlag enables controlling the validator client via the Prysm web ui. This is a work in progress.
-	EnableWebFlag = &cli.BoolFlag{
-		Name:  "web",
-		Usage: "(Work in progress): Enables the web portal for the validator client.",
-		Value: false,
-	}
 	// deprecatedDisableLastEpochTargets is a flag to disable processing of attestations for old blocks.
 	deprecatedDisableLastEpochTargets = &cli.BoolFlag{
 		Name:  "disable-last-epoch-targets",
@@ -253,7 +247,6 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	enableDoppelGangerProtection,
 	EnableBeaconRESTApi,
 	DisableDutiesV2,
-	EnableWebFlag,
 }...)
 
 // E2EValidatorFlags contains a list of the validator feature flags to be tested in E2E.

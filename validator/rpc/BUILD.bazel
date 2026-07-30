@@ -63,7 +63,6 @@ go_library(
         "//validator/keymanager/remote-web3signer:go_default_library",
         "//validator/slashing-protection-history:go_default_library",
         "//validator/slashing-protection-history/format:go_default_library",
-        "//validator/web:go_default_library",
         "@com_github_ethereum_go_ethereum//common:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_fsnotify_fsnotify//:go_default_library",

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Continuous integration script to check that TODOs are in the correct format
-OUTPUT="$(grep -PrinH '(?<!context\.)todo(?!\(#{0,1}\d+\))' --include ./**/*.go --exclude ./*site_data.go --exclude ./*mainnet_config.go)";
+OUTPUT="$(grep -PrinH '(?<!context\.)todo(?!\(#{0,1}\d+\))' --include ./**/*.go --exclude ./*mainnet_config.go)";
 if [ "$OUTPUT" != "" ] ;
 then
     echo "Invalid TODOs found. Failing." >&2;

@@ -418,7 +418,7 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		Web3SignerConfig:        web3signerConfig,
 		ProposerSettings:        ps,
 		ValidatorsRegBatchSize:  cliCtx.Int(flags.ValidatorsRegistrationBatchSizeFlag.Name),
-		EnableAPI:               features.Get().EnableWeb || cliCtx.Bool(flags.EnableRPCFlag.Name),
+		EnableAPI:               cliCtx.Bool(flags.EnableRPCFlag.Name),
 		LogValidatorPerformance: !cliCtx.Bool(flags.DisablePenaltyRewardLogFlag.Name),
 		EmitAccountMetrics:      !cliCtx.Bool(flags.DisableAccountMetricsFlag.Name),
 		Distributed:             distributed,
@@ -517,8 +517,7 @@ func proposerSettings(cliCtx *cli.Context, db iface.ValidatorDB) (*proposer.Sett
 }
 
 func (c *ValidatorClient) registerRPCService(cliCtx *cli.Context) error {
-	serveWebUI := features.Get().EnableWeb
-	if !cliCtx.IsSet(flags.EnableRPCFlag.Name) && !serveWebUI {
+	if !cliCtx.IsSet(flags.EnableRPCFlag.Name) {
 		return nil
 	}
 	host := cliCtx.String(flags.HTTPServerHost.Name)
@@ -531,15 +530,9 @@ func (c *ValidatorClient) registerRPCService(cliCtx *cli.Context) error {
 		return err
 	}
 
-	if serveWebUI {
-		if cliCtx.IsSet(flags.Web3SignerURLFlag.Name) || cliCtx.IsSet(flags.Web3SignerPublicValidatorKeysFlag.Name) {
-			log.Warn("Remote Keymanager API enabled. Prysm web does not properly support web3signer at this time")
-		}
-	}
-
 	if host != flags.DefaultHTTPServerHost {
-		log.WithField("webHost", host).Warn(
-			"You are using a non-default web host. Web traffic is served by HTTP, so be wary of " +
+		log.WithField("httpHost", host).Warn(
+			"You are using a non-default HTTP host. API traffic is served by HTTP, so be wary of " +
 				"changing this parameter if you are exposing this host to the Internet!",
 		)
 	}

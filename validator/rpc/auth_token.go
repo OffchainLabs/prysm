@@ -4,15 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/api"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/fsnotify/fsnotify"
 	"github.com/pkg/errors"
@@ -20,7 +17,7 @@ import (
 
 // CreateAuthToken generates a new auth token and writes it to a file
 // in the specified directory.
-func CreateAuthToken(authPath, validatorWebAddr string) error {
+func CreateAuthToken(authPath string) error {
 	token, err := api.GenerateRandomHexString()
 	if err != nil {
 		return err
@@ -29,7 +26,7 @@ func CreateAuthToken(authPath, validatorWebAddr string) error {
 	if err := saveAuthToken(authPath, token); err != nil {
 		return err
 	}
-	logValidatorWebAuth(validatorWebAddr, token, authPath)
+	logAuthTokenPath(authPath)
 	return nil
 }
 
@@ -98,8 +95,7 @@ func (s *Server) refreshAuthTokenFromFileChanges(ctx context.Context, authTokenP
 				log.WithError(err).Errorf("Could not watch for file changes for: %s", authTokenPath)
 				continue
 			}
-			validatorWebAddr := fmt.Sprintf("%s:%d", s.httpHost, s.httpPort)
-			logValidatorWebAuth(validatorWebAddr, s.authToken, authTokenPath)
+			logAuthTokenPath(authTokenPath)
 		case err := <-watcher.Errors:
 			log.WithError(err).Errorf("Could not watch for file changes for: %s", authTokenPath)
 		case <-ctx.Done():
@@ -108,20 +104,8 @@ func (s *Server) refreshAuthTokenFromFileChanges(ctx context.Context, authTokenP
 	}
 }
 
-func logValidatorWebAuth(validatorWebAddr, token, tokenPath string) {
-	if features.Get().EnableWeb {
-		webAuthURLTemplate := "http://%s/initialize?token=%s"
-		webAuthURL := fmt.Sprintf(
-			webAuthURLTemplate,
-			validatorWebAddr,
-			url.QueryEscape(token),
-		)
-		log.Infof(
-			"Starting Prysm WebUI, once your validator process is running, navigate to the link below to authenticate",
-		)
-		log.Info(webAuthURL)
-	}
-	log.Infof("Validator Client auth token for gRPC and REST authentication set at %s", tokenPath)
+func logAuthTokenPath(tokenPath string) {
+	log.Infof("Validator Client auth token for API authentication set at %s", tokenPath)
 }
 
 func saveAuthToken(tokenPath string, token string) error {
