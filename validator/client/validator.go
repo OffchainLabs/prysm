@@ -98,7 +98,7 @@ type validator struct {
 	submittedPayloadAtts         map[submittedPayloadAttKey][]uint64
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
-	retryInFlight                atomic.Bool
+	nextFetchInFlight            atomic.Bool
 	domainDataCache              *ristretto.Cache[string, proto.Message]
 	slotFeed                     *event.Feed
 	graffitiStruct               *graffiti.Graffiti
@@ -106,6 +106,7 @@ type validator struct {
 	eventsChannel                chan *eventClient.Event
 	payloadAvailability          *payloadAvailability
 	pubkeyToStatus               map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus
+	pubkeyToStatusLock           sync.RWMutex // guards pubkeyToStatus vs the background next-epoch fetch
 	signedValidatorRegistrations map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
 	signedRequestAuths           map[requestAuthKey]*ethpb.SignedRequestAuthV1
 	aggSelector                  aggregatorSelector
@@ -1066,7 +1067,9 @@ func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fie
 // updateValidatorStatusCache updates the validator statuses cache, a map of keys currently used by the validator client
 func (v *validator) updateValidatorStatusCache(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte) error {
 	if len(pubkeys) == 0 {
+		v.pubkeyToStatusLock.Lock()
 		v.pubkeyToStatus = make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus, 0)
+		v.pubkeyToStatusLock.Unlock()
 		return nil
 	}
 	statusRequestKeys := make([][]byte, 0)
@@ -1097,7 +1100,9 @@ func (v *validator) updateValidatorStatusCache(ctx context.Context, pubkeys [][f
 			index:     resp.Indices[i],
 		}
 	}
+	v.pubkeyToStatusLock.Lock()
 	v.pubkeyToStatus = pubkeyToStatus
+	v.pubkeyToStatusLock.Unlock()
 
 	return nil
 }

@@ -170,6 +170,38 @@ func TestUpdateDuties_HandlesError(t *testing.T) {
 	require.LogsContain(t, hook, "Failed to update assignments")
 }
 
+func TestMaybeFetchNextDuties_Gating(t *testing.T) {
+	spe := params.BeaconConfig().SlotsPerEpoch
+	tests := []struct {
+		name     string
+		slot     primitives.Slot
+		wantNext bool
+	}{
+		{"first-half slot 1 skips next fetch", 1, false},
+		{"first-half slot 2 skips next fetch", 2, false},
+		{"slot 3 fetches next", nextDutiesFetchSlot, true},
+		{"mid-epoch slot fetches next", spe/2 + 3, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}}
+			ctx, cancel := context.WithCancel(t.Context())
+			ticker := make(chan primitives.Slot)
+			v.NextSlotRet = ticker
+			go func() {
+				ticker <- tt.slot
+				cancel()
+			}()
+
+			runTest(t, ctx, v)
+
+			assert.Equal(t, tt.wantNext, v.MaybeFetchNextDutiesCalled)
+		})
+	}
+}
+
 func TestRoleAt_NextSlot(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

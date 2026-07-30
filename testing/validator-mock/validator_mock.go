@@ -254,16 +254,16 @@ func (mr *MockValidatorMockRecorder) LogValidatorGainsAndLosses(ctx, slot any) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LogValidatorGainsAndLosses", reflect.TypeOf((*MockValidator)(nil).LogValidatorGainsAndLosses), ctx, slot)
 }
 
-// MaybeRetryMissingNextDuties mocks base method.
-func (m *MockValidator) MaybeRetryMissingNextDuties(ctx context.Context, slot primitives.Slot) {
+// MaybeFetchNextDuties mocks base method.
+func (m *MockValidator) MaybeFetchNextDuties(ctx context.Context, slot primitives.Slot) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "MaybeRetryMissingNextDuties", ctx, slot)
+	m.ctrl.Call(m, "MaybeFetchNextDuties", ctx, slot)
 }
 
-// MaybeRetryMissingNextDuties indicates an expected call of MaybeRetryMissingNextDuties.
-func (mr *MockValidatorMockRecorder) MaybeRetryMissingNextDuties(ctx, slot any) *gomock.Call {
+// MaybeFetchNextDuties indicates an expected call of MaybeFetchNextDuties.
+func (mr *MockValidatorMockRecorder) MaybeFetchNextDuties(ctx, slot any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaybeRetryMissingNextDuties", reflect.TypeOf((*MockValidator)(nil).MaybeRetryMissingNextDuties), ctx, slot)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaybeFetchNextDuties", reflect.TypeOf((*MockValidator)(nil).MaybeFetchNextDuties), ctx, slot)
 }
 
 // NextSlot mocks base method.

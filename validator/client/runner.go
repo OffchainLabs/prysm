@@ -23,6 +23,10 @@ import (
 // Time to wait before trying to reconnect with beacon node.
 var backOffPeriod = 10 * time.Second
 
+// nextDutiesFetchSlot is the slot-in-epoch from which next-epoch duties are
+// fetched in the background: past the transition, with a stable dependent root.
+const nextDutiesFetchSlot = 3
+
 // runner encapsulates the main validator routine.
 type runner struct {
 	validator     iface.Validator
@@ -110,8 +114,8 @@ func (r *runner) run(ctx context.Context) {
 			log := log.WithField("slot", slot)
 			log.WithField("deadline", deadline).Debug("Set deadline for proposals and attestations")
 
-			// Keep trying to update assignments if they are nil or if we are past an
-			// epoch transition in the beacon node's state.
+			// Refresh assignments at the boundary; post-Gloas, fetch the deferred
+			// next-epoch duties in the background from slot 3 on.
 			if slots.IsEpochStart(slot) {
 				deadline = v.SlotDeadline(slot + params.BeaconConfig().SlotsPerEpoch - 1)
 				dutiesCtx, dutiesCancel := context.WithDeadline(ctx, deadline)
@@ -123,9 +127,10 @@ func (r *runner) run(ctx context.Context) {
 					continue
 				}
 				dutiesCancel()
-			} else {
-				// Mid-epoch: retry any failed next-epoch duties
-				v.MaybeRetryMissingNextDuties(ctx, slot)
+			} else if slot%params.BeaconConfig().SlotsPerEpoch >= nextDutiesFetchSlot {
+				// Fetch deferred next-epoch duties in the background from slot 3 on:
+				// the transition is done and the next-epoch dependent root is stable.
+				v.MaybeFetchNextDuties(ctx, slot)
 			}
 
 			// call push proposer settings often to account for the following edge cases:
