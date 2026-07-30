@@ -274,13 +274,29 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 		return errors.New("cannot initialize state diff with a non epoch boundary offset")
 	}
 
-	// Only reinitialize if the offset is different
-	if s.stateDiffCache != nil {
-		if s.stateDiffCache.getOffset() == uint64(slot) {
+	hasOffset, err := s.hasStateDiffOffset()
+	if err != nil {
+		return fmt.Errorf("has state diff offset: %w", err)
+	}
+
+	if hasOffset {
+		currentOffset, err := s.loadOffset()
+		if err != nil {
+			return fmt.Errorf("load offset: %w", err)
+		}
+
+		slotUint64 := uint64(slot)
+
+		if currentOffset == slotUint64 {
 			log.WithField("offset", slot).Debug("Ignoring state diff cache reinitialization")
 			return nil
 		}
+
+		if currentOffset > slotUint64 {
+			return fmt.Errorf("refusing to re-anchor the state diff tree from offset %d back to slot %d", currentOffset, slot)
+		}
 	}
+
 	exponentsBytes, err := encodeStateDiffExponents(flags.Get().StateDiffExponents)
 	if err != nil {
 		return pkgerrors.Wrap(err, "failed to encode state diff exponents")
