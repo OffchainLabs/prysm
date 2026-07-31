@@ -174,15 +174,15 @@ func (c *ValidatorClient) getLegacyDatabaseLocation(
 		return "", "", errors.Wrapf(err, "could not check if file exists: %s", dataFile)
 	}
 
-	if dataDir != cmd.DefaultDataDir() || exists || c.wallet == nil {
+	if dataDir != cmd.DefaultDataDir() || exists || (c.wallet == nil && !isWeb3SignerURLFlagSet) {
 		return dataDir, dataFile, nil
 	}
 
 	// We look in the previous, legacy directories.
 	// See https://github.com/prysmaticlabs/prysm/issues/13391
-	legacyDataDir := c.wallet.AccountsDir()
-	if isWeb3SignerURLFlagSet {
-		legacyDataDir = walletDir
+	legacyDataDir := walletDir
+	if !isWeb3SignerURLFlagSet {
+		legacyDataDir = c.wallet.AccountsDir()
 	}
 
 	legacyDataFile := filepath.Join(legacyDataDir, kv.ProtectionDbFileName)
@@ -211,8 +211,10 @@ func (c *ValidatorClient) getLegacyDatabaseLocation(
 
 func getWallet(cliCtx *cli.Context) (*wallet.Wallet, error) {
 	if cliCtx.IsSet(flags.Web3SignerURLFlag.Name) {
-		return wallet.NewWalletForWeb3Signer(cliCtx), nil
+		log.Info("No Prysm wallet required for web3signer validation")
+		return nil, nil
 	}
+
 	if err := setWalletPasswordFilePath(cliCtx); err != nil {
 		return nil, errors.Wrap(err, "could not read wallet password file")
 	}
