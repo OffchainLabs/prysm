@@ -144,3 +144,37 @@ jobs:
         run: make test minimal minimal-spectest
         env:
            CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
+
+  test-mainnet-spectest-fake-crypto:
+    name: Test (mainnet spectests, fake crypto)
+    runs-on: ubuntu-4
+    # TODO: Remove `continue-on-error: true` when removing Bazel
+    continue-on-error: true
+    steps:
+      - name: Set up Go 1.26.5
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run mainnet spectests with the fake BLS backend
+        run: make test mainnet-spectest bls=fake
+        env:
+           CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
+
+  test-minimal-spectest-fake-crypto:
+    name: Test (minimal spectests, fake crypto)
+    runs-on: ubuntu-4
+    # TODO: Remove `continue-on-error: true` when removing Bazel
+    continue-on-error: true
+    steps:
+      - name: Set up Go 1.26.5
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run minimal spectests with the fake BLS backend
+        run: make test minimal-spectest bls=fake
+        env:
+           CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
