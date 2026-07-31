@@ -114,8 +114,7 @@ func (r *runner) run(ctx context.Context) {
 			log := log.WithField("slot", slot)
 			log.WithField("deadline", deadline).Debug("Set deadline for proposals and attestations")
 
-			// Refresh assignments at the boundary; post-Gloas, fetch the deferred
-			// next-epoch duties in the background later in the epoch.
+			// Refresh assignments at the epoch boundary.
 			if slots.IsEpochStart(slot) {
 				deadline = v.SlotDeadline(slot + params.BeaconConfig().SlotsPerEpoch - 1)
 				dutiesCtx, dutiesCancel := context.WithDeadline(ctx, deadline)
@@ -127,7 +126,10 @@ func (r *runner) run(ctx context.Context) {
 					continue
 				}
 				dutiesCancel()
-			} else if slots.SinceEpochStarts(slot) >= nextDutiesFetchSlot {
+			}
+
+			// Post-Gloas: fetch the deferred next-epoch duties in the background.
+			if slots.SinceEpochStarts(slot) >= nextDutiesFetchSlot {
 				v.MaybeFetchNextDuties(ctx, slot)
 			}
 
