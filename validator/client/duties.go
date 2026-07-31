@@ -309,42 +309,60 @@ func missingNextMask(nextEpoch primitives.Epoch, att *ethpb.AttesterDutiesRespon
 	return m
 }
 
+// dutyResponses holds the per-type duty responses for one epoch; a nil
+// response means the type was not requested, failed, or was dropped.
+type dutyResponses struct {
+	att  *ethpb.AttesterDutiesResponse
+	prop *ethpb.ProposerDutiesResponse
+	sync *ethpb.SyncCommitteeDutiesResponse
+	ptc  *ethpb.PTCDutiesResponse
+
+	attErr, propErr, syncErr, ptcErr error
+}
+
+// fetchDutyResponses requests the duty types flagged in wanted, in parallel.
+func (v *validator) fetchDutyResponses(ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex, wanted missingNextDuties) dutyResponses {
+	var r dutyResponses
+	var wg sync.WaitGroup
+	if wanted&missingNextAttester != 0 {
+		wg.Go(func() { r.att, r.attErr = v.validatorClient.AttesterDuties(ctx, epoch, indices) })
+	}
+	if wanted&missingNextProposer != 0 {
+		wg.Go(func() { r.prop, r.propErr = v.validatorClient.ProposerDuties(ctx, epoch) })
+	}
+	if wanted&missingNextSync != 0 {
+		wg.Go(func() { r.sync, r.syncErr = v.validatorClient.SyncCommitteeDuties(ctx, epoch, indices) })
+	}
+	if wanted&missingNextPtc != 0 {
+		wg.Go(func() { r.ptc, r.ptcErr = v.validatorClient.PTCDuties(ctx, epoch, indices) })
+	}
+	wg.Wait()
+	return r
+}
+
 // fetchAllDuties fetches the current-epoch duties from all endpoints. Next-epoch
 // duties are deferred to ensureNextEpochDuties, keeping the boundary off them.
 func (v *validator) fetchAllDuties(ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex) (dutiesFetchResult, error) {
-	var (
-		res             dutiesFetchResult
-		attCurr         *ethpb.AttesterDutiesResponse
-		propCurr        *ethpb.ProposerDutiesResponse
-		syncCurr        *ethpb.SyncCommitteeDutiesResponse
-		ptcCurr         *ethpb.PTCDutiesResponse
-		attErr, propErr error
-		syncErr, ptcErr error
-		wg              sync.WaitGroup
-	)
-	wg.Go(func() { attCurr, attErr = v.validatorClient.AttesterDuties(ctx, epoch, indices) })
-	wg.Go(func() { propCurr, propErr = v.validatorClient.ProposerDuties(ctx, epoch) })
-	wg.Go(func() { syncCurr, syncErr = v.validatorClient.SyncCommitteeDuties(ctx, epoch, indices) })
-	wg.Go(func() { ptcCurr, ptcErr = v.validatorClient.PTCDuties(ctx, epoch, indices) })
-	wg.Wait()
+	var res dutiesFetchResult
+	r := v.fetchDutyResponses(ctx, epoch, indices, missingNextAll)
 
-	if attErr != nil {
-		return res, attErr
+	if r.attErr != nil {
+		return res, r.attErr
 	}
-	if propErr != nil {
-		return res, propErr
+	if r.propErr != nil {
+		return res, r.propErr
 	}
-	if syncErr != nil {
-		log.WithError(syncErr).Warn("Error getting sync committee duties")
+	if r.syncErr != nil {
+		log.WithError(r.syncErr).Warn("Error getting sync committee duties")
 	}
-	if ptcErr != nil {
-		log.WithError(ptcErr).Warn("Error getting PTC duties")
+	if r.ptcErr != nil {
+		log.WithError(r.ptcErr).Warn("Error getting PTC duties")
 	}
 
-	if attCurr != nil {
-		res.prevDepRoot = attCurr.DependentRoot
+	if r.att != nil {
+		res.prevDepRoot = r.att.DependentRoot
 	}
-	res.currentDuties = v.assembleDuties(attCurr, propCurr, syncCurr, ptcCurr)
+	res.currentDuties = v.assembleDuties(r.att, r.prop, r.sync, r.ptc)
 	// Next epoch left for the mid-epoch fetch; currDepRoot stays nil until then.
 	res.missingNext = missingNextAll
 	return res, nil
@@ -414,33 +432,23 @@ func (v *validator) statusForPubkey(pk []byte) ethpb.ValidatorStatus {
 	return st.status.Status
 }
 
-// fetchNextEpochDuties fetches all next-epoch duty types in parallel, soft-
-// logging failures (a nil response marks that type missing). Responses whose
-// dependent root contradicts the attester's are dropped too. Shared by
-// promotion and retry; both run only post-Gloas, where every type applies.
-func (v *validator) fetchNextEpochDuties(ctx context.Context, nextEpoch primitives.Epoch, indices []primitives.ValidatorIndex) (
-	att *ethpb.AttesterDutiesResponse,
-	prop *ethpb.ProposerDutiesResponse,
-	syncResp *ethpb.SyncCommitteeDutiesResponse,
-	ptc *ethpb.PTCDutiesResponse,
-) {
-	var attErr, propErr, syncErr, ptcErr error
-	var wg sync.WaitGroup
-	wg.Go(func() { att, attErr = v.validatorClient.AttesterDuties(ctx, nextEpoch, indices) })
-	wg.Go(func() { prop, propErr = v.validatorClient.ProposerDuties(ctx, nextEpoch) })
-	wg.Go(func() { syncResp, syncErr = v.validatorClient.SyncCommitteeDuties(ctx, nextEpoch, indices) })
-	wg.Go(func() { ptc, ptcErr = v.validatorClient.PTCDuties(ctx, nextEpoch, indices) })
-	wg.Wait()
-	for _, e := range []error{attErr, propErr, syncErr, ptcErr} {
+// fetchNextEpochDuties fetches the wanted next-epoch duty types, dropping
+// proposer/PTC responses that diverge from the attester dependent root attRoot.
+func (v *validator) fetchNextEpochDuties(ctx context.Context, nextEpoch primitives.Epoch, indices []primitives.ValidatorIndex, wanted missingNextDuties, attRoot []byte) dutyResponses {
+	r := v.fetchDutyResponses(ctx, nextEpoch, indices, wanted)
+	for _, e := range []error{r.attErr, r.propErr, r.syncErr, r.ptcErr} {
 		if e != nil {
 			log.WithError(e).Debug("Could not get a next epoch duty")
 		}
 	}
-	if att != nil {
-		prop = dropIfDivergent(prop, att.DependentRoot, "proposer")
-		ptc = dropIfDivergent(ptc, att.DependentRoot, "ptc")
+	if r.att != nil {
+		attRoot = r.att.DependentRoot
 	}
-	return att, prop, syncResp, ptc
+	if len(attRoot) != 0 {
+		r.prop = dropIfDivergent(r.prop, attRoot, "proposer")
+		r.ptc = dropIfDivergent(r.ptc, attRoot, "ptc")
+	}
+	return r
 }
 
 // MaybeFetchNextDuties runs ensureNextEpochDuties in a goroutine when next-epoch
@@ -488,30 +496,30 @@ func (v *validator) ensureNextEpochDuties(ctx context.Context) error {
 	if missing&missingNextAttester != 0 {
 		// Attester is the spine: without it there are no rows to overlay onto, so
 		// rebuild the whole epoch. Fetched again each slot until it succeeds.
-		att, prop, sync, ptc := v.fetchNextEpochDuties(ctx, nextEpoch, indices)
-		if att == nil { // spine still unavailable; try again next slot
+		r := v.fetchNextEpochDuties(ctx, nextEpoch, indices, missingNextAll, nil)
+		if r.att == nil { // spine still unavailable; try again next slot
 			return nil
 		}
-		next = v.assembleDuties(att, prop, sync, ptc)
-		newMissing = missingNextMask(nextEpoch, att, prop, sync, ptc)
-		currDepRoot = att.DependentRoot
+		next = v.assembleDuties(r.att, r.prop, r.sync, r.ptc)
+		newMissing = missingNextMask(nextEpoch, r.att, r.prop, r.sync, r.ptc)
+		currDepRoot = r.att.DependentRoot
 	} else {
 		// Spine intact: re-fetch only the missing types and overlay them, leaving
 		// the attester duties and dependent root untouched.
-		prop, sync, ptc := v.fetchMissingNextDuties(ctx, nextEpoch, indices, missing, snap.currDependentRoot())
+		r := v.fetchNextEpochDuties(ctx, nextEpoch, indices, missing, snap.currDependentRoot())
 		existing := make([]*ethpb.ValidatorDuty, 0, snap.nextDutyCount())
 		for _, d := range snap.nextDuties() {
 			existing = append(existing, d)
 		}
-		next = overlayNextDuties(existing, prop, sync, ptc)
+		next = overlayNextDuties(existing, r.prop, r.sync, r.ptc)
 		newMissing = missing
-		if prop != nil {
+		if r.prop != nil {
 			newMissing &^= missingNextProposer
 		}
-		if sync != nil {
+		if r.sync != nil {
 			newMissing &^= missingNextSync
 		}
-		if ptc != nil {
+		if r.ptc != nil {
 			newMissing &^= missingNextPtc
 		}
 	}
@@ -528,34 +536,6 @@ func (v *validator) ensureNextEpochDuties(ctx context.Context) error {
 		"stillMissing": newMissing,
 	}).Debug("Fetched next-epoch duties")
 	return v.onDutiesUpdated(ctx)
-}
-
-// fetchMissingNextDuties re-fetches only the flagged next-epoch proposer/sync/PTC
-// types (attester handled separately). A nil return means not requested, failed,
-// or divergent from the stored attester dependent root attRoot.
-func (v *validator) fetchMissingNextDuties(ctx context.Context, nextEpoch primitives.Epoch, indices []primitives.ValidatorIndex, missing missingNextDuties, attRoot []byte) (
-	prop *ethpb.ProposerDutiesResponse,
-	syncResp *ethpb.SyncCommitteeDutiesResponse,
-	ptc *ethpb.PTCDutiesResponse,
-) {
-	var propErr, syncErr, ptcErr error
-	var wg sync.WaitGroup
-	if missing&missingNextProposer != 0 {
-		wg.Go(func() { prop, propErr = v.validatorClient.ProposerDuties(ctx, nextEpoch) })
-	}
-	if missing&missingNextSync != 0 {
-		wg.Go(func() { syncResp, syncErr = v.validatorClient.SyncCommitteeDuties(ctx, nextEpoch, indices) })
-	}
-	if missing&missingNextPtc != 0 {
-		wg.Go(func() { ptc, ptcErr = v.validatorClient.PTCDuties(ctx, nextEpoch, indices) })
-	}
-	wg.Wait()
-	for _, e := range []error{propErr, syncErr, ptcErr} {
-		if e != nil {
-			log.WithError(e).Debug("Could not get a missing next epoch duty")
-		}
-	}
-	return dropIfDivergent(prop, attRoot, "proposer"), syncResp, dropIfDivergent(ptc, attRoot, "ptc")
 }
 
 // overlayNextDuties clones existing next-epoch duties, overlaying re-fetched

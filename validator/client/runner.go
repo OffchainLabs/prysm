@@ -24,7 +24,7 @@ import (
 var backOffPeriod = 10 * time.Second
 
 // nextDutiesFetchSlot is the slot-in-epoch from which next-epoch duties are
-// fetched in the background: past the transition, with a stable dependent root.
+// fetched in the background, past the boundary-heavy, reorg-prone first slots.
 const nextDutiesFetchSlot = 3
 
 // runner encapsulates the main validator routine.
@@ -115,7 +115,7 @@ func (r *runner) run(ctx context.Context) {
 			log.WithField("deadline", deadline).Debug("Set deadline for proposals and attestations")
 
 			// Refresh assignments at the boundary; post-Gloas, fetch the deferred
-			// next-epoch duties in the background from slot 3 on.
+			// next-epoch duties in the background later in the epoch.
 			if slots.IsEpochStart(slot) {
 				deadline = v.SlotDeadline(slot + params.BeaconConfig().SlotsPerEpoch - 1)
 				dutiesCtx, dutiesCancel := context.WithDeadline(ctx, deadline)
@@ -127,9 +127,7 @@ func (r *runner) run(ctx context.Context) {
 					continue
 				}
 				dutiesCancel()
-			} else if slot%params.BeaconConfig().SlotsPerEpoch >= nextDutiesFetchSlot {
-				// Fetch deferred next-epoch duties in the background from slot 3 on:
-				// the transition is done and the next-epoch dependent root is stable.
+			} else if slots.SinceEpochStarts(slot) >= nextDutiesFetchSlot {
 				v.MaybeFetchNextDuties(ctx, slot)
 			}
 
