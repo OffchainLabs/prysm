@@ -75,6 +75,10 @@ func (v *validator) filteredKeysAndIndices(keys [][fieldparams.BLSPubkeyLength]b
 		if !ok || !isActiveForDuties(st.status, epoch) {
 			continue
 		}
+		// Reloaded keys stay out of duties until their doppelganger check clears.
+		if v.isDoppelGangerPending(pk) {
+			continue
+		}
 		outKeys = append(outKeys, pk)
 		indices = append(indices, st.index)
 	}

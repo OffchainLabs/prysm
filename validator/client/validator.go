@@ -99,6 +99,7 @@ type validator struct {
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
 	retryInFlight                atomic.Bool
+	doppelGanger                 doppelGangerTracker
 	domainDataCache              *ristretto.Cache[string, proto.Message]
 	slotFeed                     *event.Feed
 	graffitiStruct               *graffiti.Graffiti
@@ -454,19 +455,33 @@ func (v *validator) CheckDoppelGanger(ctx context.Context) error {
 	}
 	pubkeys, err := v.km.FetchValidatingPublicKeys(ctx)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "could not fetch validating keys for doppelganger check")
 	}
 	log.WithField("keyCount", len(pubkeys)).Info("Running doppelganger check")
 	// Exit early if no validating pub keys are found.
 	if len(pubkeys) == 0 {
 		return nil
 	}
+	resp, err := v.checkDoppelGangerForKeys(ctx, pubkeys)
+	if err != nil {
+		return err
+	}
+	if err := buildDuplicateError(resp.Responses); err != nil {
+		return err
+	}
+	v.markDoppelGangerChecked(pubkeys)
+	return nil
+}
+
+// checkDoppelGangerForKeys queries the beacon node's doppelganger check for the
+// given keys, using each key's latest local attestation record as its watermark.
+func (v *validator) checkDoppelGangerForKeys(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte) (*ethpb.DoppelGangerResponse, error) {
 	req := &ethpb.DoppelGangerRequest{ValidatorRequests: []*ethpb.DoppelGangerRequest_ValidatorRequest{}}
 	for _, pkey := range pubkeys {
 		copiedKey := pkey
 		attRec, err := v.db.AttestationHistoryForPubKey(ctx, copiedKey)
 		if err != nil {
-			return err
+			return nil, errors.Wrapf(err, "could not get attestation history for pubkey %#x", bytesutil.Trunc(copiedKey[:]))
 		}
 		if len(attRec) == 0 {
 			// If no history exists we simply send in a zero
@@ -481,7 +496,7 @@ func (v *validator) CheckDoppelGanger(ctx context.Context) error {
 		}
 		r := retrieveLatestRecord(attRec)
 		if copiedKey != r.PubKey {
-			return errors.New("attestation record mismatched public key")
+			return nil, errors.Errorf("attestation record mismatched public key %#x", bytesutil.Trunc(copiedKey[:]))
 		}
 		req.ValidatorRequests = append(req.ValidatorRequests,
 			&ethpb.DoppelGangerRequest_ValidatorRequest{
@@ -492,14 +507,14 @@ func (v *validator) CheckDoppelGanger(ctx context.Context) error {
 	}
 	resp, err := v.validatorClient.CheckDoppelGanger(ctx, req)
 	if err != nil {
-		return err
+		return nil, errors.Wrap(err, "doppelganger check request to beacon node failed")
 	}
 	// If nothing is returned by the beacon node, we return an
 	// error as it is unsafe for us to proceed.
 	if resp == nil || resp.Responses == nil || len(resp.Responses) == 0 {
-		return errors.New("beacon node returned 0 responses for doppelganger check")
+		return nil, errors.New("beacon node returned 0 responses for doppelganger check")
 	}
-	return buildDuplicateError(resp.Responses)
+	return resp, nil
 }
 
 func buildDuplicateError(response []*ethpb.DoppelGangerResponse_ValidatorResponse) error {

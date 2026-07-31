@@ -579,9 +579,9 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		flgs := features.Get()
+		flgs := *features.Get() // copy: mutating the live pointer would leak past reset
 		flgs.EnableDoppelGanger = true
-		reset := features.InitWithReset(flgs)
+		reset := features.InitWithReset(&flgs)
 		defer reset()
 		tests := []struct {
 			name            string

@@ -254,6 +254,18 @@ func (mr *MockValidatorMockRecorder) LogValidatorGainsAndLosses(ctx, slot any) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LogValidatorGainsAndLosses", reflect.TypeOf((*MockValidator)(nil).LogValidatorGainsAndLosses), ctx, slot)
 }
 
+// MaybeCheckDoppelGanger mocks base method.
+func (m *MockValidator) MaybeCheckDoppelGanger(ctx context.Context, slot primitives.Slot) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "MaybeCheckDoppelGanger", ctx, slot)
+}
+
+// MaybeCheckDoppelGanger indicates an expected call of MaybeCheckDoppelGanger.
+func (mr *MockValidatorMockRecorder) MaybeCheckDoppelGanger(ctx, slot any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaybeCheckDoppelGanger", reflect.TypeOf((*MockValidator)(nil).MaybeCheckDoppelGanger), ctx, slot)
+}
+
 // MaybeRetryMissingNextDuties mocks base method.
 func (m *MockValidator) MaybeRetryMissingNextDuties(ctx context.Context, slot primitives.Slot) {
 	m.ctrl.T.Helper()

@@ -48,6 +48,7 @@ type Validator interface {
 	LogValidatorGainsAndLosses(ctx context.Context, slot primitives.Slot) error
 	UpdateDuties(ctx context.Context) error
 	MaybeRetryMissingNextDuties(ctx context.Context, slot primitives.Slot)
+	MaybeCheckDoppelGanger(ctx context.Context, slot primitives.Slot)
 	RolesAt(ctx context.Context, slot primitives.Slot) (map[[fieldparams.BLSPubkeyLength]byte][]ValidatorRole, error) // validator pubKey -> roles
 	SubmitAttestation(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte)
 	ProposeBlock(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte)

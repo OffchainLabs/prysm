@@ -38,6 +38,7 @@ type FakeValidator struct {
 	UpdateProtectionsCalled           bool
 	UpdateDutiesCalled                bool
 	RetryMissingNextDutiesCalled      bool
+	MaybeCheckDoppelGangerCalled      bool
 	WaitForWalletInitializationCalled bool
 	NextSlotCalled                    bool
 	WaitForActivationCalled           int
@@ -155,6 +156,11 @@ func (fv *FakeValidator) UpdateDuties(_ context.Context) error {
 // MaybeRetryMissingNextDuties for mocking.
 func (fv *FakeValidator) MaybeRetryMissingNextDuties(_ context.Context, _ primitives.Slot) {
 	fv.RetryMissingNextDutiesCalled = true
+}
+
+// MaybeCheckDoppelGanger for mocking.
+func (fv *FakeValidator) MaybeCheckDoppelGanger(_ context.Context, _ primitives.Slot) {
+	fv.MaybeCheckDoppelGangerCalled = true
 }
 
 // UpdateProtections for mocking.
