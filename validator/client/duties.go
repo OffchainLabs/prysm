@@ -352,8 +352,7 @@ func (v *validator) fetchAllDuties(ctx context.Context, epoch primitives.Epoch, 
 
 // assembleDuties stitches together the four per-duty-type API responses for
 // a single epoch into a slice of ValidatorDuty entries, one per attester
-// assignment. Used by fetchAllDuties (current epoch) and ensureNextEpochDuties
-// (next epoch).
+// assignment.
 func (v *validator) assembleDuties(
 	att *ethpb.AttesterDutiesResponse,
 	prop *ethpb.ProposerDutiesResponse,
