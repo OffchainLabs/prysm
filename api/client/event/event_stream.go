@@ -53,9 +53,13 @@ type EventStream struct {
 
 func NewEventStream(ctx context.Context, httpClient *http.Client, host string, topics []string) (*EventStream, error) {
 	// Check if the host is a valid URL
-	_, err := url.ParseRequestURI(host)
-	if err != nil {
-		return nil, err
+	if _, err := url.ParseRequestURI(host); err != nil {
+		// url.Error carries the unredacted host, so only its cause is surfaced.
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			err = urlErr.Err
+		}
+		return nil, errors.Wrapf(err, "invalid event stream host %s", api.RedactEndpoint(host))
 	}
 	if len(topics) == 0 {
 		return nil, errors.New("no topics provided")

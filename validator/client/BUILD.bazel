@@ -35,6 +35,7 @@ go_library(
         "//validator:__subpackages__",
     ],
     deps = [
+        "//api:go_default_library",
         "//api/client:go_default_library",
         "//api/client/event:go_default_library",
         "//api/grpc:go_default_library",
