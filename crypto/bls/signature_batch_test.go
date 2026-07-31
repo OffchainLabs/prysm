@@ -1,3 +1,5 @@
+//go:build !fake_crypto
+
 package bls
 
 import (
