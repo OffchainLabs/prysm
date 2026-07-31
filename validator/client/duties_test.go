@@ -753,7 +753,11 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		}
 
 		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, nil))
-		assert.Equal(t, false, v.duties.isInitialized())
+		// Store stays initialized-but-empty for this epoch so a keyless client
+		// isn't treated as stale every slot; the cached duty is gone.
+		assert.Equal(t, true, v.duties.isInitialized())
+		assert.Equal(t, 0, v.duties.snapshot().currentDutyCount())
+		assert.Equal(t, false, v.CurrentDutiesStale(primitives.Slot(epoch)*params.BeaconConfig().SlotsPerEpoch+1))
 	})
 
 	t.Run("dirty missing mask forces a fetch instead of promote", func(t *testing.T) {
@@ -954,6 +958,28 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		}
 		assert.Equal(t, missingNextAll, snap.missingNext())
 	})
+}
+
+func TestCurrentDutiesStale(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	spe := params.BeaconConfig().SlotsPerEpoch
+	v := &validator{duties: &dutyStore{}}
+
+	// Uninitialized store is stale.
+	assert.Equal(t, true, v.CurrentDutiesStale(primitives.Slot(5)*spe+2))
+
+	// Duties for epoch 5 are fresh for any slot in epoch 5.
+	var data dutyStoreData
+	data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{{PublicKey: make([]byte, 48), ValidatorIndex: 1}},
+	})
+	data.epoch = 5
+	v.duties.write(data)
+	assert.Equal(t, false, v.CurrentDutiesStale(primitives.Slot(5)*spe))
+	assert.Equal(t, false, v.CurrentDutiesStale(primitives.Slot(5)*spe+spe-1))
+
+	// A slot in a later epoch (a failed boundary fetch left epoch-5 duties) is stale.
+	assert.Equal(t, true, v.CurrentDutiesStale(primitives.Slot(6)*spe))
 }
 
 func TestEnsureNextEpochDuties(t *testing.T) {

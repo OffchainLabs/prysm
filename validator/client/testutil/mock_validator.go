@@ -37,6 +37,7 @@ type FakeValidator struct {
 	ProposeBlockCalled                bool
 	UpdateProtectionsCalled           bool
 	UpdateDutiesCalled                bool
+	CurrentDutiesStaleRet             bool
 	MaybeFetchNextDutiesCalled        bool
 	WaitForWalletInitializationCalled bool
 	NextSlotCalled                    bool
@@ -150,6 +151,11 @@ func (fv *FakeValidator) NextSlot() <-chan primitives.Slot {
 func (fv *FakeValidator) UpdateDuties(_ context.Context) error {
 	fv.UpdateDutiesCalled = true
 	return fv.UpdateDutiesRet
+}
+
+// CurrentDutiesStale for mocking.
+func (fv *FakeValidator) CurrentDutiesStale(_ primitives.Slot) bool {
+	return fv.CurrentDutiesStaleRet
 }
 
 // MaybeFetchNextDuties for mocking.

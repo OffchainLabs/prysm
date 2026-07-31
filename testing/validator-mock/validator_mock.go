@@ -75,6 +75,20 @@ func (mr *MockValidatorMockRecorder) CheckDoppelGanger(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckDoppelGanger", reflect.TypeOf((*MockValidator)(nil).CheckDoppelGanger), ctx)
 }
 
+// CurrentDutiesStale mocks base method.
+func (m *MockValidator) CurrentDutiesStale(slot primitives.Slot) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CurrentDutiesStale", slot)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// CurrentDutiesStale indicates an expected call of CurrentDutiesStale.
+func (mr *MockValidatorMockRecorder) CurrentDutiesStale(slot any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentDutiesStale", reflect.TypeOf((*MockValidator)(nil).CurrentDutiesStale), slot)
+}
+
 // DeleteGraffiti mocks base method.
 func (m *MockValidator) DeleteGraffiti(ctx context.Context, pubKey [48]byte) error {
 	m.ctrl.T.Helper()

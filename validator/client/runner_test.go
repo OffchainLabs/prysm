@@ -171,22 +171,31 @@ func TestUpdateDuties_HandlesError(t *testing.T) {
 }
 
 func TestMaybeFetchNextDuties_Gating(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	spe := params.BeaconConfig().SlotsPerEpoch
 	tests := []struct {
 		name     string
 		slot     primitives.Slot
+		stale    bool
 		wantNext bool
 	}{
-		{"first-half slot 1 skips next fetch", 1, false},
-		{"first-half slot 2 skips next fetch", 2, false},
-		{"slot 3 fetches next", nextDutiesFetchSlot, true},
-		{"mid-epoch slot fetches next", spe/2 + 3, true},
+		{"first-half slot 1 skips next fetch", 1, false, false},
+		{"first-half slot 2 skips next fetch", 2, false, false},
+		{"slot 3 fetches next", nextDutiesFetchSlot, false, true},
+		{"mid-epoch slot fetches next", spe/2 + 3, false, true},
+		{"stale current takes priority over next", spe/2 + 3, true, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}}
+			v := &testutil.FakeValidator{
+				Km:                    &mockKeymanager{accountsChangedFeed: &event.Feed{}},
+				CurrentDutiesStaleRet: tt.stale,
+			}
 			ctx, cancel := context.WithCancel(t.Context())
 			ticker := make(chan primitives.Slot)
 			v.NextSlotRet = ticker

@@ -82,6 +82,12 @@ func (v *validator) filteredKeysAndIndices(keys [][fieldparams.BLSPubkeyLength]b
 	return outKeys, indices
 }
 
+// CurrentDutiesStale reports whether the store is missing current-epoch duties for
+// slot's epoch — the trigger to refetch every slot until they land.
+func (v *validator) CurrentDutiesStale(slot primitives.Slot) bool {
+	return v.duties.currentEpochStale(slots.ToEpoch(slot))
+}
+
 // UpdateDuties checks the slot number to determine if the validator's
 // list of upcoming assignments needs to be updated. For example, at the
 // beginning of a new epoch.
@@ -227,9 +233,12 @@ func (m missingNextDuties) String() string {
 // retry. indices must be sorted (see filteredKeysAndIndices).
 func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex) error {
 	if len(indices) == 0 {
-		// No active keys for this client; drop any previously cached duties so
-		// stale entries don't keep appearing in RolesAt etc.
-		v.duties.reset()
+		// No active keys: clear any cached duties but keep the store initialized for
+		// this epoch, so CurrentDutiesStale doesn't refetch every slot.
+		var data dutyStoreData
+		data.setFromContainer(&ethpb.ValidatorDutiesContainer{})
+		data.epoch = epoch
+		v.duties.write(data)
 		return nil
 	}
 

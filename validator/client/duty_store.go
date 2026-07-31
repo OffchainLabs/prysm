@@ -317,6 +317,17 @@ func (ds *dutyStore) needsNextFetch() bool {
 	return ds.data.initialized && ds.data.missingNext != 0 && len(ds.data.indices) > 0
 }
 
+// currentEpochStale reports whether the store lacks current-epoch duties for
+// epoch, without materializing a full snapshot.
+func (ds *dutyStore) currentEpochStale(epoch primitives.Epoch) bool {
+	if ds == nil {
+		return false
+	}
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	return !ds.data.initialized || ds.data.epoch != epoch
+}
+
 func (ds *dutyStore) reset() {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()

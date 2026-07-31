@@ -114,8 +114,8 @@ func (r *runner) run(ctx context.Context) {
 			log := log.WithField("slot", slot)
 			log.WithField("deadline", deadline).Debug("Set deadline for proposals and attestations")
 
-			// Refresh assignments at the boundary; post-Gloas, fetch the deferred
-			// next-epoch duties in the background from slot 3 on.
+			// Refresh assignments at the boundary; between boundaries, keep the
+			// post-Gloas split duties fresh (see maybeRefreshDuties).
 			if slots.IsEpochStart(slot) {
 				deadline = v.SlotDeadline(slot + params.BeaconConfig().SlotsPerEpoch - 1)
 				dutiesCtx, dutiesCancel := context.WithDeadline(ctx, deadline)
@@ -127,10 +127,8 @@ func (r *runner) run(ctx context.Context) {
 					continue
 				}
 				dutiesCancel()
-			} else if slot%params.BeaconConfig().SlotsPerEpoch >= nextDutiesFetchSlot {
-				// Fetch deferred next-epoch duties in the background from slot 3 on:
-				// the transition is done and the next-epoch dependent root is stable.
-				v.MaybeFetchNextDuties(ctx, slot)
+			} else {
+				maybeRefreshDuties(ctx, v, slot, deadline)
 			}
 
 			// call push proposer settings often to account for the following edge cases:
@@ -295,6 +293,29 @@ func performRoles(slotCtx context.Context, allRoles map[[48]byte][]iface.Validat
 
 func isConnectionError(err error) bool {
 	return err != nil && errors.Is(err, client.ErrConnectionIssue)
+}
+
+// maybeRefreshDuties keeps post-Gloas split duties fresh between epoch
+// boundaries: on a stale store (a failed boundary fetch) it blocks to refetch the
+// current epoch, otherwise it fetches next-epoch duties in the background from slot 3.
+func maybeRefreshDuties(ctx context.Context, v iface.Validator, slot primitives.Slot, deadline time.Time) {
+	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
+		return
+	}
+	// Retry a failed boundary fetch each stale slot (blocking; RolesAt needs current
+	// duties). Skip the last slot; while stale, the block can delay head-event handling.
+	if v.CurrentDutiesStale(slot) && !slots.IsEpochEnd(slot) {
+		dutiesCtx, cancel := context.WithDeadline(ctx, deadline)
+		defer cancel()
+		if err := v.UpdateDuties(dutiesCtx); err != nil {
+			handleAssignmentError(err, slot)
+		}
+		return
+	}
+	// By slot 3 the transition is done and the next-epoch dependent root is stable.
+	if slot%params.BeaconConfig().SlotsPerEpoch >= nextDutiesFetchSlot {
+		v.MaybeFetchNextDuties(ctx, slot)
+	}
 }
 
 func handleAssignmentError(err error, slot primitives.Slot) {
