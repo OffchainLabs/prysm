@@ -4,12 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"math"
-	"os"
-	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -21,7 +18,6 @@ import (
 
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/async/event"
-	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -49,7 +45,6 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
-	"github.com/urfave/cli/v2"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -935,16 +930,9 @@ func TestValidator_WaitForKeymanagerInitialization_web3Signer(t *testing.T) {
 			copy(root[2:], "a")
 			err := db.SaveGenesisValidatorsRoot(ctx, root)
 			require.NoError(t, err)
-			app := cli.App{}
-			set := flag.NewFlagSet("test", 0)
-			newDir := filepath.Join(t.TempDir(), "new")
-			require.NoError(t, os.MkdirAll(newDir, 0700))
-			set.String(flags.WalletDirFlag.Name, newDir, "")
-			w := wallet.NewWalletForWeb3Signer(cli.NewContext(&app, set, nil))
 			v := validator{
 				db:        db,
 				enableAPI: false,
-				wallet:    w,
 				web3SignerConfig: &remoteweb3signer.SetupConfig{
 					BaseEndpoint:       "http://localhost:8545",
 					ProvidedPublicKeys: []string{"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"},

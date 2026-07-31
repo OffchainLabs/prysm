@@ -533,11 +533,7 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 			log.WithField("topic", topic).Errorf("Invalid topic format of pubsub topic: %v", err)
 			return pubsub.ValidationIgnore
 		}
-		currDigest, err := s.currentForkDigest()
-		if err != nil {
-			log.WithField("topic", topic).Errorf("Unable to retrieve fork data: %v", err)
-			return pubsub.ValidationIgnore
-		}
+		currDigest := s.currentForkDigest()
 		if currDigest != retDigest {
 			// Only proposer preferences are accepted from the next epoch's fork
 			// digest, allowing them to arrive before a fork activates.
@@ -820,11 +816,7 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 		return pids
 	}
 
-	digest, err := s.currentForkDigest()
-	if err != nil {
-		log.WithError(err).Error("Could not compute fork digest")
-		return pids
-	}
+	digest := s.currentForkDigest()
 
 	wantedSubnets := make(map[uint64]bool)
 	for subnet := range s.persistentAndAggregatorSubnetIndices(currentSlot) {
@@ -903,8 +895,8 @@ func (*Service) addDigestAndIndexToTopic(topic string, digest [4]byte, idx uint6
 	return fmt.Sprintf(topic, digest, idx)
 }
 
-func (s *Service) currentForkDigest() ([4]byte, error) {
-	return params.ForkDigest(s.cfg.clock.CurrentEpoch()), nil
+func (s *Service) currentForkDigest() [4]byte {
+	return params.ForkDigest(s.cfg.clock.CurrentEpoch())
 }
 
 // computeAllNeededSubnets computes the subnets we want to join
