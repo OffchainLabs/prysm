@@ -172,14 +172,15 @@ func TestUpdateDuties_HandlesError(t *testing.T) {
 
 func TestMaybeFetchNextDuties_Gating(t *testing.T) {
 	spe := params.BeaconConfig().SlotsPerEpoch
+	fetchSlot := nextDutiesFetchSlot()
 	tests := []struct {
 		name     string
 		slot     primitives.Slot
 		wantNext bool
 	}{
-		{"first-half slot 1 skips next fetch", 1, false},
-		{"first-half slot 2 skips next fetch", 2, false},
-		{"slot 3 fetches next", nextDutiesFetchSlot, true},
+		{"early slot skips next fetch", 1, false},
+		{"slot before threshold skips next fetch", fetchSlot - 1, false},
+		{"threshold slot fetches next", fetchSlot, true},
 		{"mid-epoch slot fetches next", spe/2 + 3, true},
 	}
 	for _, tt := range tests {

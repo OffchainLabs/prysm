@@ -451,8 +451,8 @@ func (v *validator) fetchNextEpochDuties(ctx context.Context, nextEpoch primitiv
 	return r
 }
 
-// MaybeFetchNextDuties runs ensureNextEpochDuties in a goroutine when next-epoch
-// duties are still needed and no fetch is in flight, bounded by the slot deadline.
+// MaybeFetchNextDuties runs ensureNextEpochDuties in a goroutine at mid-slot when
+// next-epoch duties are still needed and no fetch is in flight, bounded by the slot deadline.
 func (v *validator) MaybeFetchNextDuties(ctx context.Context, slot primitives.Slot) {
 	if !v.duties.needsNextFetch() || !v.nextFetchInFlight.CompareAndSwap(false, true) {
 		return
@@ -463,6 +463,9 @@ func (v *validator) MaybeFetchNextDuties(ctx context.Context, slot primitives.Sl
 			cancel()
 			v.nextFetchInFlight.Store(false)
 		}()
+		if !v.waitUntilNextDutiesDue(fetchCtx, slot) {
+			return
+		}
 		if err := v.ensureNextEpochDuties(fetchCtx); err != nil {
 			log.WithError(err).Debug("Could not fetch next-epoch duties")
 		}

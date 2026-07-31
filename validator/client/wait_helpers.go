@@ -73,6 +73,28 @@ func (v *validator) waitForPayloadAvailableOrDeadline(ctx context.Context, slot 
 	}
 }
 
+// waitUntilNextDutiesDue blocks until the next-duties fetch point of slot
+// (immediately if already past), reporting false when ctx is done first.
+func (v *validator) waitUntilNextDutiesDue(ctx context.Context, slot primitives.Slot) bool {
+	finalTime, err := v.slotComponentDeadline(slot, nextDutiesFetchBPS)
+	if err != nil {
+		log.WithError(err).WithField("slot", slot).Error("Slot overflows, unable to wait for next duties fetch time")
+		return true
+	}
+	wait := prysmTime.Until(finalTime)
+	if wait <= 0 {
+		return true
+	}
+	t := time.NewTimer(wait)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
+}
+
 func (v *validator) slotComponentSpanName(component primitives.BP) string {
 	cfg := params.BeaconConfig()
 	switch component {

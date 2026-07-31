@@ -1298,7 +1298,8 @@ func TestEnsureNextEpochDuties(t *testing.T) {
 
 	t.Run("MaybeRetry spawns a retry that fills missing duties", func(t *testing.T) {
 		v, client, keys := setup(t)
-		v.genesisTime = time.Now()
+		// Mid-slot of slot 0 already passed, slot deadline not: fetch fires at once.
+		v.genesisTime = time.Now().Add(-3 * params.BeaconConfig().SlotDuration() / 4)
 		seed(v, keys, missingNextPtc)
 
 		// Targeted overlay: only the flagged PTC type is re-fetched.
