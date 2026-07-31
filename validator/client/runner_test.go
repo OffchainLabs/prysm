@@ -176,15 +176,16 @@ func TestMaybeFetchNextDuties_Gating(t *testing.T) {
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 	spe := params.BeaconConfig().SlotsPerEpoch
+	fetchSlot := nextDutiesFetchSlot()
 	tests := []struct {
 		name     string
 		slot     primitives.Slot
 		stale    bool
 		wantNext bool
 	}{
-		{"first-half slot 1 skips next fetch", 1, false, false},
-		{"first-half slot 2 skips next fetch", 2, false, false},
-		{"slot 3 fetches next", nextDutiesFetchSlot, false, true},
+		{"early slot skips next fetch", 1, false, false},
+		{"slot before threshold skips next fetch", fetchSlot - 1, false, false},
+		{"threshold slot fetches next", fetchSlot, false, true},
 		{"mid-epoch slot fetches next", spe/2 + 3, false, true},
 		{"stale current takes priority over next", spe/2 + 3, true, false},
 	}
