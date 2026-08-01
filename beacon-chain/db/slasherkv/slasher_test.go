@@ -14,7 +14,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 func TestStore_AttestationRecordForValidator_SaveRetrieve(t *testing.T) {
@@ -217,7 +216,7 @@ func TestStore_SlasherChunk_SaveRetrieve(t *testing.T) {
 
 	for i := range totalChunks {
 		// Create chunk key.
-		chunkKey := ssz.MarshalUint64(make([]byte, 0), uint64(i))
+		chunkKey := binary.LittleEndian.AppendUint64(make([]byte, 0), uint64(i))
 		minChunkKeys[i] = chunkKey
 
 		// Create chunk.
@@ -236,7 +235,7 @@ func TestStore_SlasherChunk_SaveRetrieve(t *testing.T) {
 
 	for i := range totalChunks {
 		// Create chunk key.
-		chunkKey := ssz.MarshalUint64(make([]byte, 0), uint64(i+1))
+		chunkKey := binary.LittleEndian.AppendUint64(make([]byte, 0), uint64(i+1))
 		maxChunkKeys[i] = chunkKey
 
 		// Create chunk.
@@ -317,7 +316,7 @@ func TestStore_SlasherChunk_PreventsSavingWrongLength(t *testing.T) {
 	chunks := make([][]uint16, totalChunks)
 	for i := range totalChunks {
 		chunks[i] = []uint16{}
-		chunkKeys[i] = ssz.MarshalUint64(make([]byte, 0), uint64(i))
+		chunkKeys[i] = binary.LittleEndian.AppendUint64(make([]byte, 0), uint64(i))
 	}
 	// We should get an error if saving empty chunks.
 	err := beaconDB.SaveSlasherChunks(ctx, slashertypes.MinSpan, chunkKeys, chunks)
@@ -456,12 +455,15 @@ func Test_encodeDecodeAttestationRecord(t *testing.T) {
 				t.Fatalf("encodeAttestationRecord() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			decoded, err := decodeAttestationRecord(got)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("decodeAttestationRecord() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("decodeAttestationRecord() error = %v, wantErr %v", err, tt.wantErr)
+				}
+				return
 			}
-
-			if !tt.wantErr && !reflect.DeepEqual(tt.attWrapper, decoded) {
-				t.Errorf("Did not match got = %v, want %v", tt.attWrapper, decoded)
+			if !tt.wantErr {
+				require.DeepSSZEqual(t, tt.attWrapper.IndexedAttestation, decoded.IndexedAttestation)
+				require.Equal(t, tt.attWrapper.DataRoot, decoded.DataRoot)
 			}
 		})
 	}

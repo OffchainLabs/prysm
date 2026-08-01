@@ -38,14 +38,10 @@ go_test(
     deps = [
         ":go_default_library",
         "//config/fieldparams:go_default_library",
-        "//config/params:go_default_library",
         "//crypto/hash:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
-        "//proto/prysm/wrappers:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
-        "@com_github_pkg_errors//:go_default_library",
-        "@com_github_prysmaticlabs_fastssz//:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
     ],
 )

@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/capella"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/deneb"
@@ -25,7 +26,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
