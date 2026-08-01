@@ -200,6 +200,8 @@ ssz_fulu_objs = [
 
 ssz_gloas_objs = [
     "AggregateAttestationAndProofGloas",
+    "AttesterSlashingGloas",
+    "IndexedAttestationGloas",
     "BlindedExecutionPayloadEnvelope",
     "BuilderPendingPayment",
     "BuilderPendingWithdrawal",
