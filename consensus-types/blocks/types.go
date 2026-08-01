@@ -47,6 +47,7 @@ type BeaconBlockBody struct {
 	proposerSlashings         []*eth.ProposerSlashing
 	attesterSlashings         []*eth.AttesterSlashing
 	attesterSlashingsElectra  []*eth.AttesterSlashingElectra
+	attesterSlashingsGloas    []*eth.AttesterSlashingGloas
 	attestations              []*eth.Attestation
 	attestationsElectra       []*eth.AttestationElectra
 	attestationsGloas         []*eth.AttestationGloas
