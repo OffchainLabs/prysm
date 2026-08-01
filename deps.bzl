@@ -85,8 +85,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_allegro_bigcache",
         importpath = "github.com/allegro/bigcache",
-        sum = "h1:eMwmnE/GDgah4HI848JfFxHt+iPb26b4zyfspmqY0/8=",
-        version = "v1.2.1-0.20190218064605-e24eb225f156",
+        sum = "h1:hg1sY1raCwic3Vnsvje6TT7/pnZba83LeFck5NrFKSc=",
+        version = "v1.2.1",
     )
     go_repository(
         name = "com_github_andybalholm_brotli",
@@ -607,6 +607,12 @@ def prysm_deps():
         importpath = "github.com/DataDog/zstd",
         sum = "h1:ybO8RBeh29qrxIhCA9E8gKY6xfONU9T6G6aP9DTKfLE=",
         version = "v1.5.7",
+    )
+    go_repository(
+        name = "com_github_dave_jennifer",
+        importpath = "github.com/dave/jennifer",
+        sum = "h1:B4jJJDHelWcDhlRQxWeo0Npa/pYKBLrirAQoTN45txo=",
+        version = "v1.7.1",
     )
     go_repository(
         name = "com_github_davecgh_go_spew",
@@ -2480,6 +2486,13 @@ def prysm_deps():
         patches = ["//third_party:com_github_offchainlabs_hashtree.patch"],
         sum = "h1:nM8dBAQZzHLzzM14FaAHXnHTAXZIst69v5xWuS48y/c=",
         version = "v0.2.3",
+    )
+    go_repository(
+        name = "com_github_offchainlabs_methodical_ssz",
+        importpath = "github.com/OffchainLabs/methodical-ssz",
+        replace = "github.com/kasey/methodical-ssz",
+        sum = "h1:lQdH1xJYlNJRv18R1EutPsVWLKMpMtkD8sq28zLD36E=",
+        version = "v0.0.0-20260703044252-f02d8c431d71",
     )
     go_repository(
         name = "com_github_oklog_oklog",
