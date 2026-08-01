@@ -13,6 +13,12 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/pkg/errors"
+	logTest "github.com/sirupsen/logrus/hooks/test"
+	"github.com/stretchr/testify/mock"
+	"go.uber.org/mock/gomock"
+
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
@@ -34,6 +40,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ssz "github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -42,12 +49,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
-	logTest "github.com/sirupsen/logrus/hooks/test"
-	"github.com/stretchr/testify/mock"
-	"go.uber.org/mock/gomock"
 )
 
 // fillGloasBlockTestData populates a Gloas block with non-zero test values for the
@@ -4755,7 +4756,7 @@ func TestGetProposerLookahead(t *testing.T) {
 			start := i * validatorIndexSize
 			end := start + validatorIndexSize
 
-			idx := ssz.UnmarshallUint64(responseBytes[start:end])
+			idx := ssz.UnmarshalUint64(responseBytes[start:end])
 			recoveredIndices[i] = primitives.ValidatorIndex(idx)
 		}
 		require.DeepEqual(t, lookahead, recoveredIndices)

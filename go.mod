@@ -5,6 +5,7 @@ go 1.26.5
 require (
 	github.com/OffchainLabs/go-bitfield v0.0.0-20260504143531-5cbb6d0f5f2e
 	github.com/OffchainLabs/hashtree v0.2.3
+	github.com/OffchainLabs/methodical-ssz v0.0.0-20260702045436-4612ae87cb43
 	github.com/aristanetworks/goarista v0.0.0-20200805130819-fd197cf57d96
 	github.com/bazelbuild/buildtools v0.0.0-20260528135316-84fa6c32aee6
 	github.com/bazelbuild/rules_go v0.23.2
@@ -136,6 +137,7 @@ require (
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/crate-crypto/go-eth-kzg v1.5.0 // indirect
+	github.com/dave/jennifer v1.7.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
 	github.com/dchest/siphash v1.2.3 // indirect
@@ -314,8 +316,10 @@ replace github.com/json-iterator/go => github.com/prestonvanloon/go v1.1.7-0.201
 replace github.com/tyler-smith/go-bip39 => ./third_party/go-bip39
 
 tool (
-	github.com/prysmaticlabs/fastssz/sszgen
+	github.com/OffchainLabs/methodical-ssz/cmd/ssz
 	github.com/prysmaticlabs/protoc-gen-go-cast
 	go.uber.org/mock/mockgen
 	gotest.tools/gotestsum
 )
+
+replace github.com/OffchainLabs/methodical-ssz => github.com/kasey/methodical-ssz v0.0.0-20260703044252-f02d8c431d71

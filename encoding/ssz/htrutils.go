@@ -24,6 +24,12 @@ func (t Transaction) HashTreeRoot() ([32]byte, error) {
 	return ByteSliceRoot(t.Data, fieldparams.MaxBytesPerTxLength)
 }
 
+type ProgressiveTransaction []byte
+
+func (t ProgressiveTransaction) HashTreeRoot() ([32]byte, error) {
+	return ByteSliceRootProgressive(t)
+}
+
 // Uint64Root computes the HashTreeRoot Merkleization of
 // a simple uint64 value according to the Ethereum
 // Simple Serialize specification.
