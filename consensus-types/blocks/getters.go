@@ -1190,6 +1190,14 @@ func (b *BeaconBlockBody) AttesterSlashings() []eth.AttSlashing {
 		for i, s := range b.attesterSlashings {
 			slashings[i] = s
 		}
+	} else if b.version == version.Gloas {
+		if b.attesterSlashingsGloas == nil {
+			return nil
+		}
+		slashings = make([]eth.AttSlashing, len(b.attesterSlashingsGloas))
+		for i, s := range b.attesterSlashingsGloas {
+			slashings[i] = s
+		}
 	} else {
 		if b.attesterSlashingsElectra == nil {
 			return nil
