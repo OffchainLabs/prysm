@@ -97,7 +97,6 @@ go_library(
         "//crypto/hash:go_default_library",
         "//crypto/rand:go_default_library",
         "//encoding/bytesutil:go_default_library",
-        "//encoding/ssz:go_default_library",
         "//genesis:go_default_library",
         "//io/logs:go_default_library",
         "//math:go_default_library",
@@ -110,6 +109,7 @@ go_library(
         "//proto/prysm/v1alpha1/attestation/aggregation:go_default_library",
         "//proto/prysm/v1alpha1/attestation/aggregation/attestations:go_default_library",
         "//proto/prysm/v1alpha1/attestation/aggregation/sync_contribution:go_default_library",
+        "//proto/prysm/wrappers:go_default_library",
         "//runtime/version:go_default_library",
         "//time:go_default_library",
         "//time/slots:go_default_library",
@@ -178,7 +178,6 @@ common_deps = [
     "//crypto/bls/blst:go_default_library",
     "//crypto/bls/common:go_default_library",
     "//encoding/bytesutil:go_default_library",
-    "//encoding/ssz:go_default_library",
     "//genesis:go_default_library",
     "//proto/engine/v1:go_default_library",
     "//proto/eth/v1:go_default_library",
@@ -268,5 +267,6 @@ go_test(
     embed = [":go_default_library"],
     deps = common_deps + [
         "//proto/prysm/v1alpha1/attestation/aggregation/testing:go_default_library",
+    "//proto/prysm/wrappers:go_default_library",
     ],
 )

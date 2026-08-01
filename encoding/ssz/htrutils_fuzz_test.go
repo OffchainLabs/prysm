@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/pkg/errors"
 	fssz "github.com/prysmaticlabs/fastssz"
 )
@@ -39,7 +40,7 @@ func FuzzForkRoot(f *testing.F) {
 			t.Fatal(err)
 		}
 
-		if _, err := ssz.ForkRoot(frk); err != nil {
+		if _, err := wrappers.ForkRoot(frk); err != nil {
 			t.Fatal(err)
 		}
 	})

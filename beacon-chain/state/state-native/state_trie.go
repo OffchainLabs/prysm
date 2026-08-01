@@ -22,6 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -1344,7 +1345,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.Eth1DepositIndex:
 		return ssz.Uint64Root(b.eth1DepositIndex), nil
 	case types.Fork:
-		return ssz.ForkRoot(b.fork)
+		return wrappers.ForkRoot(b.fork)
 	case types.LatestBlockHeader:
 		return stateutil.BlockHeaderRoot(b.latestBlockHeader)
 	case types.BlockRoots:
@@ -1416,11 +1417,11 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.JustificationBits:
 		return bytesutil.ToBytes32(b.justificationBits), nil
 	case types.PreviousJustifiedCheckpoint:
-		return ssz.CheckpointRoot(b.previousJustifiedCheckpoint)
+		return wrappers.CheckpointRoot(b.previousJustifiedCheckpoint)
 	case types.CurrentJustifiedCheckpoint:
-		return ssz.CheckpointRoot(b.currentJustifiedCheckpoint)
+		return wrappers.CheckpointRoot(b.currentJustifiedCheckpoint)
 	case types.FinalizedCheckpoint:
-		return ssz.CheckpointRoot(b.finalizedCheckpoint)
+		return wrappers.CheckpointRoot(b.finalizedCheckpoint)
 	case types.InactivityScores:
 		return stateutil.Uint64ListRoot(b.version, b.inactivityScoresVal())
 	case types.CurrentSyncCommittee:
