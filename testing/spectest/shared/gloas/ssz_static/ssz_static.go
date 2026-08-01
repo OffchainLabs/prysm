@@ -3,19 +3,34 @@ package ssz_static
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	// enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	common "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/common/ssz_static"
-	fssz "github.com/prysmaticlabs/fastssz"
 )
 
 // RunSSZStaticTests executes "ssz_static" tests.
+//
+// The native-state (`custom`) HashTreeRoot uses progressive merkleization only
+// when features.EnableProgressiveSSZ is set (and version >= Gloas). That runtime
+// flag is independent of the --//tools:disable_progressive_merkleization codegen
+// flag, so when running gloas against progressive fixtures set PROGRESSIVE_SSZ=1
+// to align the native-state root with the generated one. Leave it unset for the
+// non-progressive fixture set.
 func RunSSZStaticTests(t *testing.T, config string) {
+	if os.Getenv("PROGRESSIVE_SSZ") != "" {
+		cfg := *features.Get() // nil-safe; copy so other flags are preserved
+		cfg.EnableProgressiveSSZ = true
+		reset := features.InitWithReset(&cfg)
+		defer reset()
+	}
 	common.RunSSZStaticTests(t, config, "gloas", unmarshalledSSZ, customHtr)
 }
 
@@ -86,7 +101,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 	case "AttestationData":
 		obj = &ethpb.AttestationData{}
 	case "AttesterSlashing":
-		obj = &ethpb.AttesterSlashingElectra{}
+		obj = &ethpb.AttesterSlashingGloas{}
 	case "AggregateAndProof":
 		obj = &ethpb.AggregateAttestationAndProofGloas{}
 	case "BeaconBlockHeader":
@@ -110,7 +125,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 	case "HistoricalBatch":
 		obj = &ethpb.HistoricalBatch{}
 	case "IndexedAttestation":
-		obj = &ethpb.IndexedAttestationElectra{}
+		obj = &ethpb.IndexedAttestationGloas{}
 	case "PendingAttestation":
 		obj = &ethpb.PendingAttestation{}
 	case "ProposerSlashing":
@@ -190,7 +205,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 	}
 
 	var err error
-	if o, ok := obj.(fssz.Unmarshaler); ok {
+	if o, ok := obj.(ssz.Unmarshaler); ok {
 		err = o.UnmarshalSSZ(serializedBytes)
 	} else {
 		err = errors.New("could not unmarshal object, not a fastssz compatible object")
