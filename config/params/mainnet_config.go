@@ -96,7 +96,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BLSWithdrawalPrefixByte:         byte(0),
 	ETH1AddressWithdrawalPrefixByte: byte(1),
 	CompoundingWithdrawalPrefixByte: byte(2),
-	BuilderWithdrawalPrefixByte:     byte(3),
+	BuilderWithdrawalPrefixByte:     byte(0xB0),
 	PayloadBuilderVersion:           byte(0),
 	BuilderIndexSelfBuild:           primitives.BuilderIndex(math.MaxUint64),
 	ZeroHash:                        [32]byte{},
