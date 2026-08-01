@@ -15,10 +15,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
@@ -42,7 +42,7 @@ var (
 	})
 )
 
-// emptyTransactionsRoot represents the returned value of ssz.TransactionsRoot([][]byte{}) and
+// emptyTransactionsRoot represents the returned value of wrappers.TransactionsRoot([][]byte{}) and
 // can be used as a constant to avoid recomputing this value in every call.
 var emptyTransactionsRoot = [32]byte{127, 254, 36, 30, 166, 1, 135, 253, 176, 24, 123, 250, 34, 222, 53, 209, 249, 190, 215, 171, 6, 29, 148, 1, 253, 71, 227, 74, 84, 251, 237, 225}
 
@@ -350,7 +350,7 @@ func matchingWithdrawalsRoot(local, builder interfaces.ExecutionData) (bool, err
 	if err != nil {
 		return false, errors.Wrap(err, "could not get builder withdrawals root")
 	}
-	wr, err := ssz.WithdrawalSliceRoot(wds, fieldparams.MaxWithdrawalsPerPayload)
+	wr, err := wrappers.WithdrawalSliceRoot(wds, fieldparams.MaxWithdrawalsPerPayload)
 	if err != nil {
 		return false, errors.Wrap(err, "could not compute local withdrawals root")
 	}

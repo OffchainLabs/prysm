@@ -157,7 +157,8 @@ func ByteSliceRoot(slice []byte, maxLength uint64) ([32]byte, error) {
 	return MixInLength(bytesRoot, bytesRootBufRoot), nil
 }
 
-func withdrawalRoot(w *enginev1.Withdrawal) ([32]byte, error) {
+// WithdrawalRoot computes the HTR of a single withdrawal.
+func WithdrawalRoot(w *enginev1.Withdrawal) ([32]byte, error) {
 	if w == nil {
 		fieldRoots := make([][32]byte, 4)
 		return BitwiseMerkleize(fieldRoots, uint64(len(fieldRoots)), uint64(len(fieldRoots)))

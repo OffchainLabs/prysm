@@ -13,9 +13,9 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensustypes "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	v11 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/pkg/errors"
@@ -135,7 +135,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			if errors.Is(err, consensustypes.ErrUnsupportedField) {
 				transactions, err := payloadInterface.Transactions()
 				require.NoError(t, err)
-				transactionsRootArray, err := ssz.TransactionsRoot(transactions)
+				transactionsRootArray, err := wrappers.TransactionsRoot(transactions)
 				require.NoError(t, err)
 				transactionsRoot = transactionsRootArray[:]
 			} else {
@@ -145,7 +145,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			if errors.Is(err, consensustypes.ErrUnsupportedField) {
 				withdrawals, err := payloadInterface.Withdrawals()
 				require.NoError(t, err)
-				withdrawalsRootArray, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+				withdrawalsRootArray, err := wrappers.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 				require.NoError(t, err)
 				withdrawalsRoot = withdrawalsRootArray[:]
 			} else {
@@ -243,7 +243,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			if errors.Is(err, consensustypes.ErrUnsupportedField) {
 				transactions, err := payloadInterface.Transactions()
 				require.NoError(t, err)
-				transactionsRootArray, err := ssz.TransactionsRoot(transactions)
+				transactionsRootArray, err := wrappers.TransactionsRoot(transactions)
 				require.NoError(t, err)
 				transactionsRoot = transactionsRootArray[:]
 			} else {
@@ -253,7 +253,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			if errors.Is(err, consensustypes.ErrUnsupportedField) {
 				withdrawals, err := payloadInterface.Withdrawals()
 				require.NoError(t, err)
-				withdrawalsRootArray, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+				withdrawalsRootArray, err := wrappers.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 				require.NoError(t, err)
 				withdrawalsRoot = withdrawalsRootArray[:]
 			} else {
@@ -318,7 +318,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			if errors.Is(err, consensustypes.ErrUnsupportedField) {
 				transactions, err := payloadInterface.Transactions()
 				require.NoError(t, err)
-				transactionsRootArray, err := ssz.TransactionsRoot(transactions)
+				transactionsRootArray, err := wrappers.TransactionsRoot(transactions)
 				require.NoError(t, err)
 				transactionsRoot = transactionsRootArray[:]
 			} else {
@@ -328,7 +328,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			if errors.Is(err, consensustypes.ErrUnsupportedField) {
 				withdrawals, err := payloadInterface.Withdrawals()
 				require.NoError(t, err)
-				withdrawalsRootArray, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+				withdrawalsRootArray, err := wrappers.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 				require.NoError(t, err)
 				withdrawalsRoot = withdrawalsRootArray[:]
 			} else {
@@ -395,7 +395,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			if errors.Is(err, consensustypes.ErrUnsupportedField) {
 				transactions, err := payloadInterface.Transactions()
 				require.NoError(t, err)
-				transactionsRootArray, err := ssz.TransactionsRoot(transactions)
+				transactionsRootArray, err := wrappers.TransactionsRoot(transactions)
 				require.NoError(t, err)
 				transactionsRoot = transactionsRootArray[:]
 			} else {
@@ -405,7 +405,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			if errors.Is(err, consensustypes.ErrUnsupportedField) {
 				withdrawals, err := payloadInterface.Withdrawals()
 				require.NoError(t, err)
-				withdrawalsRootArray, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+				withdrawalsRootArray, err := wrappers.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 				require.NoError(t, err)
 				withdrawalsRoot = withdrawalsRootArray[:]
 			} else {
@@ -469,7 +469,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			if errors.Is(err, consensustypes.ErrUnsupportedField) {
 				transactions, err := payloadInterface.Transactions()
 				require.NoError(t, err)
-				transactionsRootArray, err := ssz.TransactionsRoot(transactions)
+				transactionsRootArray, err := wrappers.TransactionsRoot(transactions)
 				require.NoError(t, err)
 				transactionsRoot = transactionsRootArray[:]
 			} else {
@@ -479,7 +479,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			if errors.Is(err, consensustypes.ErrUnsupportedField) {
 				withdrawals, err := payloadInterface.Withdrawals()
 				require.NoError(t, err)
-				withdrawalsRootArray, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+				withdrawalsRootArray, err := wrappers.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 				require.NoError(t, err)
 				withdrawalsRoot = withdrawalsRootArray[:]
 			} else {
@@ -546,7 +546,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			if errors.Is(err, consensustypes.ErrUnsupportedField) {
 				transactions, err := payloadInterface.Transactions()
 				require.NoError(t, err)
-				transactionsRootArray, err := ssz.TransactionsRoot(transactions)
+				transactionsRootArray, err := wrappers.TransactionsRoot(transactions)
 				require.NoError(t, err)
 				transactionsRoot = transactionsRootArray[:]
 			} else {
@@ -556,7 +556,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			if errors.Is(err, consensustypes.ErrUnsupportedField) {
 				withdrawals, err := payloadInterface.Withdrawals()
 				require.NoError(t, err)
-				withdrawalsRootArray, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+				withdrawalsRootArray, err := wrappers.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 				require.NoError(t, err)
 				withdrawalsRoot = withdrawalsRootArray[:]
 			} else {
@@ -620,7 +620,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			if errors.Is(err, consensustypes.ErrUnsupportedField) {
 				transactions, err := payloadInterface.Transactions()
 				require.NoError(t, err)
-				transactionsRootArray, err := ssz.TransactionsRoot(transactions)
+				transactionsRootArray, err := wrappers.TransactionsRoot(transactions)
 				require.NoError(t, err)
 				transactionsRoot = transactionsRootArray[:]
 			} else {
@@ -630,7 +630,7 @@ func TestLightClient_NewLightClientFinalityUpdateFromBeaconState(t *testing.T) {
 			if errors.Is(err, consensustypes.ErrUnsupportedField) {
 				withdrawals, err := payloadInterface.Withdrawals()
 				require.NoError(t, err)
-				withdrawalsRootArray, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+				withdrawalsRootArray, err := wrappers.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 				require.NoError(t, err)
 				withdrawalsRoot = withdrawalsRootArray[:]
 			} else {

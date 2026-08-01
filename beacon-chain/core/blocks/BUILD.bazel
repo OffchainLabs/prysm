@@ -99,6 +99,7 @@ go_test(
         "//proto/prysm/v1alpha1/attestation:go_default_library",
         "//proto/prysm/v1alpha1/attestation/aggregation:go_default_library",
         "//proto/prysm/v1alpha1/attestation/aggregation/attestations:go_default_library",
+        "//proto/prysm/wrappers:go_default_library",
         "//runtime/version:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/fuzz:go_default_library",
