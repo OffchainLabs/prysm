@@ -276,3 +276,23 @@ func TestEmptyExecutionRequestsHashTreeRoot(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, want, got)
 }
+
+func TestEmptyExecutionRequestsGloasHashTreeRoot(t *testing.T) {
+	want, err := (&enginev1.ExecutionRequestsGloas{}).HashTreeRoot()
+	require.NoError(t, err)
+	got, err := enginev1.EmptyExecutionRequestsHashTreeRoot()
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+}
+
+func TestGetDecodedExecutionRequestsGloas_NoDepositLimit(t *testing.T) {
+	cfg := params.BeaconConfig()
+	count := int(cfg.MaxDepositRequestsPerPayload) + 1
+	depositRequestBytes := make([]byte, count*(&enginev1.DepositRequest{}).SizeSSZ())
+	ebg := &enginev1.ExecutionBundleGloas{
+		ExecutionRequests: [][]byte{append([]byte{uint8(enginev1.DepositRequestType)}, depositRequestBytes...)},
+	}
+	requests, err := ebg.GetDecodedExecutionRequests(cfg.ExecutionRequestLimits())
+	require.NoError(t, err)
+	require.Equal(t, count, len(requests.Deposits))
+}
