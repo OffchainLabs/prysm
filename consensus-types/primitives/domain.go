@@ -3,23 +3,23 @@ package primitives
 import (
 	"fmt"
 
-	fssz "github.com/prysmaticlabs/fastssz"
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 )
 
-var _ fssz.HashRoot = (Domain)([]byte{})
-var _ fssz.Marshaler = (*Domain)(nil)
-var _ fssz.Unmarshaler = (*Domain)(nil)
+var _ ssz.HashRoot = (Domain)([]byte{})
+var _ ssz.Marshaler = (*Domain)(nil)
+var _ ssz.Unmarshaler = (*Domain)(nil)
 
 // Domain represents a 32 bytes domain object in Ethereum beacon chain consensus.
 type Domain []byte
 
 // HashTreeRoot --
 func (d Domain) HashTreeRoot() ([32]byte, error) {
-	return fssz.HashWithDefaultHasher(d)
+	return ssz.HashWithDefaultHasher(d)
 }
 
 // HashTreeRootWith --
-func (d Domain) HashTreeRootWith(hh *fssz.Hasher) error {
+func (d Domain) HashTreeRootWith(hh *ssz.Hasher) error {
 	hh.PutBytes(d[:])
 	return nil
 }
