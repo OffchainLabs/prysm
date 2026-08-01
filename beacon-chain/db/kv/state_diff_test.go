@@ -911,6 +911,12 @@ func TestStateDiff_EnsureEmbeddedGenesisKeepsCheckpointSyncedTree(t *testing.T) 
 			name:             "origin checkpoint block root available",
 			hasOriginBlkRoot: true,
 		},
+		{
+			// Pruning ran long enough to delete the origin block, and with it the origin checkpoint
+			// block root. Only the anchor is left to tell that this database was not synced from genesis.
+			name:             "origin checkpoint block root pruned",
+			hasOriginBlkRoot: false,
+		},
 	}
 
 	for _, tc := range testCases {
