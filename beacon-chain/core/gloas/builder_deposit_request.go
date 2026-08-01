@@ -27,7 +27,7 @@ func ProcessBuilderDepositRequests(ctx context.Context, st state.BeaconState, re
 	newDeposits := make([]*enginev1.BuilderDepositRequest, 0, len(requests))
 	newIdx := make([]int, 0, len(requests))
 	for i, request := range requests {
-		if request == nil {
+		if request == nil || !helpers.IsBuilderWithdrawalCredential(request.WithdrawalCredentials) {
 			continue
 		}
 		if _, isBuilder := st.BuilderIndexByPubkey(bytesutil.ToBytes48(request.Pubkey)); !isBuilder {
@@ -84,6 +84,11 @@ func ProcessBuilderDepositRequests(ctx context.Context, st state.BeaconState, re
 func processBuilderDepositRequest(ctx context.Context, st state.BeaconState, request *enginev1.BuilderDepositRequest, status sigStatus) error {
 	if request == nil {
 		return errors.New("nil builder deposit request")
+	}
+
+	// Deposits without BUILDER_WITHDRAWAL_PREFIX are dropped and the funds are lost.
+	if !helpers.IsBuilderWithdrawalCredential(request.WithdrawalCredentials) {
+		return nil
 	}
 
 	pubkey := bytesutil.ToBytes48(request.Pubkey)
