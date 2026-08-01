@@ -58,3 +58,5 @@ CLAUDE.local.md
 
 # Downloaded external test data (make testdata)
 third_party/testdata
+# methodical generated tests, which include large fixtures
+testing/spectest/methodical
