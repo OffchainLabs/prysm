@@ -58,6 +58,7 @@ go_test(
         "builder_deposit_request_test.go",
         "builder_exit_request_test.go",
         "deposit_request_test.go",
+        "parent_payload_test.go",
         "payload_attestation_test.go",
         "payload_test.go",
         "pending_payment_test.go",
