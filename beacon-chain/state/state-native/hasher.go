@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
@@ -63,7 +64,7 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 	fieldRoots[types.Slot.RealPosition()] = slotRoot[:]
 
 	// Fork data structure root.
-	forkHashTreeRoot, err := ssz.ForkRoot(state.fork)
+	forkHashTreeRoot, err := wrappers.ForkRoot(state.fork)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute fork merkleization")
 	}
@@ -186,21 +187,21 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 	fieldRoots[types.JustificationBits.RealPosition()] = justifiedBitsRoot[:]
 
 	// PreviousJustifiedCheckpoint data structure root.
-	prevCheckRoot, err := ssz.CheckpointRoot(state.previousJustifiedCheckpoint)
+	prevCheckRoot, err := wrappers.CheckpointRoot(state.previousJustifiedCheckpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute previous justified checkpoint merkleization")
 	}
 	fieldRoots[types.PreviousJustifiedCheckpoint.RealPosition()] = prevCheckRoot[:]
 
 	// CurrentJustifiedCheckpoint data structure root.
-	currJustRoot, err := ssz.CheckpointRoot(state.currentJustifiedCheckpoint)
+	currJustRoot, err := wrappers.CheckpointRoot(state.currentJustifiedCheckpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute current justified checkpoint merkleization")
 	}
 	fieldRoots[types.CurrentJustifiedCheckpoint.RealPosition()] = currJustRoot[:]
 
 	// FinalizedCheckpoint data structure root.
-	finalRoot, err := ssz.CheckpointRoot(state.finalizedCheckpoint)
+	finalRoot, err := wrappers.CheckpointRoot(state.finalizedCheckpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute finalized checkpoint merkleization")
 	}
