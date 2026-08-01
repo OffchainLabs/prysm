@@ -112,7 +112,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	EpochsPerEth1VotingPeriod:        64,
 	SlotsPerHistoricalRoot:           8192,
 	MinValidatorWithdrawabilityDelay: 256,
-	MinBuilderWithdrawabilityDelay:   8192,
+	MinBuilderWithdrawabilityDelay:   64,
 	ShardCommitteePeriod:             256,
 	MinEpochsToInactivityPenalty:     4,
 	Eth1FollowDistance:               2048,
@@ -357,8 +357,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	ChurnLimitQuotientGloas:              32_768,
 	ConsolidationChurnLimitQuotient:      65_536,
 	MaxPerEpochActivationChurnLimitGloas: 256_000_000_000,
-	MaxBuilderDepositRequestsPerPayload:  256, // 2**8 (= 256)
-	MaxBuilderExitRequestsPerPayload:     16,  // 2**4 (= 16)
+	MaxBuilderDepositRequestsPerPayload:  64, // 2**6 (= 64)
+	MaxBuilderExitRequestsPerPayload:     16, // 2**4 (= 16)
 
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB
