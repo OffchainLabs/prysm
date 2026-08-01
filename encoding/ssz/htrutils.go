@@ -7,22 +7,8 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
-
-type Transaction struct {
-	Data        []byte
-	Progressive bool
-}
-
-func (t Transaction) HashTreeRoot() ([32]byte, error) {
-	if t.Progressive {
-		return ByteSliceRootProgressive(t.Data)
-	}
-	return ByteSliceRoot(t.Data, fieldparams.MaxBytesPerTxLength)
-}
 
 // Uint64Root computes the HashTreeRoot Merkleization of
 // a simple uint64 value according to the Ethereum
@@ -32,24 +18,6 @@ func Uint64Root(val uint64) [32]byte {
 	binary.LittleEndian.PutUint64(buf, val)
 	root := bytesutil.ToBytes32(buf)
 	return root
-}
-
-// ForkRoot computes the HashTreeRoot Merkleization of Fork
-func ForkRoot(fork *ethpb.Fork) ([32]byte, error) {
-	if fork == nil {
-		fieldRoots := make([][32]byte, 3)
-		return BitwiseMerkleize(fieldRoots, uint64(len(fieldRoots)), uint64(len(fieldRoots)))
-	}
-	return fork.HashTreeRoot()
-}
-
-// CheckpointRoot computes the HashTreeRoot Merkleization of Checkpoint
-func CheckpointRoot(checkpoint *ethpb.Checkpoint) ([32]byte, error) {
-	if checkpoint == nil {
-		fieldRoots := make([][32]byte, 2)
-		return BitwiseMerkleize(fieldRoots, uint64(len(fieldRoots)), uint64(len(fieldRoots)))
-	}
-	return checkpoint.HashTreeRoot()
 }
 
 // ByteArrayRootWithLimit computes the HashTreeRoot Merkleization of
@@ -92,49 +60,6 @@ func SlashingsRoot(slashings []uint64) ([32]byte, error) {
 	return BitwiseMerkleize(slashingChunks, uint64(len(slashingChunks)), uint64(len(slashingChunks)))
 }
 
-// TransactionsRoot computes the HTR for the Transactions' property of the ExecutionPayload
-func TransactionsRoot(txs [][]byte) ([32]byte, error) {
-	transactions := make([]Transaction, len(txs))
-	for i, tx := range txs {
-		transactions[i] = Transaction{Data: tx}
-	}
-	return SliceRoot(transactions, fieldparams.MaxTxsPerPayloadLength)
-}
-
-// TransactionsRootProgressive computes the progressive HTR for the Transactions
-// property of the ExecutionPayload.
-func TransactionsRootProgressive(txs [][]byte) ([32]byte, error) {
-	transactions := make([]Transaction, len(txs))
-	for i, tx := range txs {
-		transactions[i] = Transaction{Data: tx, Progressive: true}
-	}
-	return SliceRootProgressive(transactions)
-}
-
-// WithdrawalSliceRoot computes the HTR of a slice of withdrawals.
-// The limit parameter is used as input to the bitwise merkleization algorithm.
-func WithdrawalSliceRoot(withdrawals []*enginev1.Withdrawal, limit uint64) ([32]byte, error) {
-	return SliceRoot(withdrawals, limit)
-}
-
-// WithdrawalSliceRootProgressive computes the progressive HTR of a slice of
-// withdrawals.
-func WithdrawalSliceRootProgressive(withdrawals []*enginev1.Withdrawal) ([32]byte, error) {
-	return SliceRootProgressive(withdrawals)
-}
-
-// DepositRequestsSliceRoot computes the HTR of a slice of deposit requests.
-// The limit parameter is used as input to the bitwise merkleization algorithm.
-func DepositRequestsSliceRoot(depositRequests []*enginev1.DepositRequest, limit uint64) ([32]byte, error) {
-	return SliceRoot(depositRequests, limit)
-}
-
-// WithdrawalRequestsSliceRoot computes the HTR of a slice of withdrawal requests from the EL.
-// The limit parameter is used as input to the bitwise merkleization algorithm.
-func WithdrawalRequestsSliceRoot(withdrawalRequests []*enginev1.WithdrawalRequest, limit uint64) ([32]byte, error) {
-	return SliceRoot(withdrawalRequests, limit)
-}
-
 // ByteSliceRoot is a helper func to merkleize an arbitrary List[Byte, N]
 // this func runs Chunkify + MerkleizeVector
 // max length is dividable by 32 ( root length )
@@ -155,14 +80,6 @@ func ByteSliceRoot(slice []byte, maxLength uint64) ([32]byte, error) {
 	bytesRootBufRoot := make([]byte, 32)
 	copy(bytesRootBufRoot, bytesRootBuf.Bytes())
 	return MixInLength(bytesRoot, bytesRootBufRoot), nil
-}
-
-func withdrawalRoot(w *enginev1.Withdrawal) ([32]byte, error) {
-	if w == nil {
-		fieldRoots := make([][32]byte, 4)
-		return BitwiseMerkleize(fieldRoots, uint64(len(fieldRoots)), uint64(len(fieldRoots)))
-	}
-	return w.HashTreeRoot()
 }
 
 // KzgCommitmentsRoot computes the HTR for a list of KZG commitments
