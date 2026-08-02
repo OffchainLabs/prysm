@@ -246,6 +246,7 @@ func pruneStartSlotFunc(retentionEpochs primitives.Epoch) func(primitives.Slot) 
 		if offset >= current {
 			return 0
 		}
-		return current - offset
+
+		return slots.UnsafeEpochStart(slots.ToEpoch(current - offset))
 	}
 }
