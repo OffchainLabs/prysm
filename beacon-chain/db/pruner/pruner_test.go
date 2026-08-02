@@ -3,6 +3,7 @@ package pruner
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	slottest "github.com/OffchainLabs/prysm/v7/time/slots/testing"
 	"github.com/sirupsen/logrus"
 
@@ -309,6 +311,40 @@ func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPruneStartSlotFunc(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.OverrideBeaconConfig(params.MinimalSpecConfig())
+
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	retentionEpochs := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests + 1)
+	retentionSlots := primitives.Slot(retentionEpochs) * slotsPerEpoch
+
+	t.Run("clamps an overflowing retention period", func(t *testing.T) {
+		for _, epochs := range []primitives.Epoch{slots.MaxSafeEpoch(), slots.MaxSafeEpoch() + 1, math.MaxUint64} {
+			ps := pruneStartSlotFunc(epochs)
+			require.Equal(t, primitives.Slot(0), ps(1_000_000))
+		}
+	})
+
+	t.Run("aligns the cutoff on an epoch start", func(t *testing.T) {
+		ps := pruneStartSlotFunc(retentionEpochs)
+
+		epochStart := retentionSlots + 10*slotsPerEpoch
+		for offsetInEpoch := primitives.Slot(0); offsetInEpoch < slotsPerEpoch; offsetInEpoch++ {
+			require.Equal(t, epochStart-retentionSlots, ps(epochStart+offsetInEpoch))
+		}
+
+		require.Equal(t, epochStart-retentionSlots+slotsPerEpoch, ps(epochStart+slotsPerEpoch))
+	})
+
+	t.Run("prunes nothing before the retention period has elapsed", func(t *testing.T) {
+		ps := pruneStartSlotFunc(retentionEpochs)
+
+		require.Equal(t, primitives.Slot(0), ps(retentionSlots))
+		require.Equal(t, primitives.Slot(0), ps(retentionSlots-1))
+	})
 }
 
 func TestPruner_UpdateEarliestSlotError(t *testing.T) {
