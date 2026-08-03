@@ -1205,15 +1205,7 @@ func (b *BeaconBlockBody) AttesterSlashings() []eth.AttSlashing {
 // Attestations returns the stored attestations in the block.
 func (b *BeaconBlockBody) Attestations() []eth.Att {
 	var atts []eth.Att
-	if b.version < version.Electra {
-		if b.attestations == nil {
-			return nil
-		}
-		atts = make([]eth.Att, len(b.attestations))
-		for i, a := range b.attestations {
-			atts[i] = a
-		}
-	} else if b.version == version.Gloas {
+	if b.version >= version.Gloas {
 		if b.attestationsGloas == nil {
 			return nil
 		}
@@ -1221,12 +1213,20 @@ func (b *BeaconBlockBody) Attestations() []eth.Att {
 		for i, a := range b.attestationsGloas {
 			atts[i] = a
 		}
-	} else {
+	} else if b.version >= version.Electra {
 		if b.attestationsElectra == nil {
 			return nil
 		}
 		atts = make([]eth.Att, len(b.attestationsElectra))
 		for i, a := range b.attestationsElectra {
+			atts[i] = a
+		}
+	} else {
+		if b.attestations == nil {
+			return nil
+		}
+		atts = make([]eth.Att, len(b.attestations))
+		for i, a := range b.attestations {
 			atts[i] = a
 		}
 	}

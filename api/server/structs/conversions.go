@@ -1405,6 +1405,8 @@ func AttsElectraFromConsensus(src []*eth.AttestationElectra) []*AttestationElect
 	return atts
 }
 
+// AttsGloasFromConsensus returns AttestationElectra because Gloas retains the
+// same attestation representation in the beacon API. This is needed for JSON marshaling.
 func AttsGloasFromConsensus(src []*eth.AttestationGloas) []*AttestationElectra {
 	atts := make([]*AttestationElectra, len(src))
 	for i, a := range src {

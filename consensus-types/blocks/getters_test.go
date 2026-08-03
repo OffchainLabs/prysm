@@ -3,7 +3,7 @@ package blocks
 import (
 	"testing"
 
-	bitfield "github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -390,6 +390,19 @@ func Test_BeaconBlockBody_ElectraAttestations(t *testing.T) {
 	a := bb.Block().Body().Attestations()
 	require.Equal(t, 1, len(a))
 	require.DeepEqual(t, a[0].GetSignature(), []byte("electra"))
+}
+
+func Test_BeaconBlockBody_GloasAttestations(t *testing.T) {
+	bb := &SignedBeaconBlock{
+		block: &BeaconBlock{body: &BeaconBlockBody{
+			version: version.Gloas,
+			attestationsGloas: []*eth.AttestationGloas{{
+				Signature: []byte("gloas"),
+			}},
+		}}}
+	a := bb.Block().Body().Attestations()
+	require.Equal(t, 1, len(a))
+	require.DeepEqual(t, a[0].GetSignature(), []byte("gloas"))
 }
 
 func Test_BeaconBlockBody_Deposits(t *testing.T) {
