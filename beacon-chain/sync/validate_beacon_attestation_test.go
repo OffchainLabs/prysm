@@ -63,8 +63,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 	invalidRoot := [32]byte{'A', 'B', 'C', 'D'}
 	s.setBadBlock(ctx, invalidRoot)
 
-	digest, err := s.currentForkDigest()
-	require.NoError(t, err)
+	digest := s.currentForkDigest()
 
 	blk := util.NewBeaconBlock()
 	blk.Block.Slot = 1
@@ -344,8 +343,7 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 	s.initCaches()
 	go s.verifierRoutine()
 
-	digest, err := s.currentForkDigest()
-	require.NoError(t, err)
+	digest := s.currentForkDigest()
 
 	blk := util.NewBeaconBlock()
 	blk.Block.Slot = s.cfg.clock.CurrentSlot()

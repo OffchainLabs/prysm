@@ -104,7 +104,8 @@ func (s *Service) requestDataColumnsForEnvelope(root [32]byte) {
 		log.WithError(err).Debug("Could not wrap block for payload envelope data columns")
 		return
 	}
-	if err := s.requestAndSaveMissingDataColumnSidecars([]consensusblocks.ROBlock{roBlock}); err != nil {
+	s.processPendingGloasColumns(s.ctx, root, blk)
+	if err := s.fetchAndSaveDataColumnSidecars([]consensusblocks.ROBlock{roBlock}); err != nil {
 		log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Debug("Could not fetch data column sidecars for payload envelope")
 	}
 }

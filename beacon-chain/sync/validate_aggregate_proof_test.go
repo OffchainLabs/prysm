@@ -486,8 +486,7 @@ func TestValidateAggregateAndProof_CanValidate(t *testing.T) {
 	require.NoError(t, err)
 
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedAggregateAttestationAndProof]()]
-	d, err := r.currentForkDigest()
-	assert.NoError(t, err)
+	d := r.currentForkDigest()
 	topic = r.addDigestToTopic(topic, d)
 	msg := &pubsub.Message{
 		Message: &pubsubpb.Message{
@@ -589,8 +588,7 @@ func TestVerifyIndexInCommittee_SeenAggregatorEpoch(t *testing.T) {
 	require.NoError(t, err)
 
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedAggregateAttestationAndProof]()]
-	d, err := r.currentForkDigest()
-	assert.NoError(t, err)
+	d := r.currentForkDigest()
 	topic = r.addDigestToTopic(topic, d)
 	msg := &pubsub.Message{
 		Message: &pubsubpb.Message{

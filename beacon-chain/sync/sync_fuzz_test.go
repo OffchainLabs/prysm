@@ -21,7 +21,6 @@ import (
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -80,8 +79,7 @@ func FuzzValidateBeaconBlockPubSub_Phase0(f *testing.F) {
 	_, err = p.Encoding().EncodeGossip(buf, msg)
 	require.NoError(f, err)
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlock]()]
-	digest, err := r.currentForkDigest()
-	assert.NoError(f, err)
+	digest := r.currentForkDigest()
 	topic = r.addDigestToTopic(topic, digest)
 
 	f.Add("junk", []byte("junk"), buf.Bytes(), []byte(topic))
@@ -164,8 +162,7 @@ func FuzzValidateBeaconBlockPubSub_Altair(f *testing.F) {
 	_, err = p.Encoding().EncodeGossip(buf, msg)
 	require.NoError(f, err)
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlock]()]
-	digest, err := r.currentForkDigest()
-	assert.NoError(f, err)
+	digest := r.currentForkDigest()
 	topic = r.addDigestToTopic(topic, digest)
 
 	f.Add("junk", []byte("junk"), buf.Bytes(), []byte(topic))
@@ -248,8 +245,7 @@ func FuzzValidateBeaconBlockPubSub_Bellatrix(f *testing.F) {
 	_, err = p.Encoding().EncodeGossip(buf, msg)
 	require.NoError(f, err)
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlock]()]
-	digest, err := r.currentForkDigest()
-	assert.NoError(f, err)
+	digest := r.currentForkDigest()
 	topic = r.addDigestToTopic(topic, digest)
 
 	f.Add("junk", []byte("junk"), buf.Bytes(), []byte(topic))

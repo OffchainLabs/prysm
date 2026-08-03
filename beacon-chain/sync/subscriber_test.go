@@ -608,8 +608,7 @@ func TestFilterSubnetPeers(t *testing.T) {
 	markInitSyncComplete(t, &r)
 	// Empty cache at the end of the test.
 	defer cache.SubnetIDs.EmptyAllCaches()
-	digest, err := r.currentForkDigest()
-	assert.NoError(t, err)
+	digest := r.currentForkDigest()
 	defaultTopic := "/eth2/%x/beacon_attestation_%d" + r.cfg.p2p.Encoding().ProtocolSuffix()
 	subnet10 := r.addDigestAndIndexToTopic(defaultTopic, digest, 10)
 	cache.SubnetIDs.AddAggregatorSubnetID(currSlot, 10)
@@ -617,7 +616,7 @@ func TestFilterSubnetPeers(t *testing.T) {
 	subnet20 := r.addDigestAndIndexToTopic(defaultTopic, digest, 20)
 	cache.SubnetIDs.AddAttesterSubnetID(currSlot, 20)
 
-	_, err = tracer.JoinAndWatchTopic(t.Context(), subnet10, p)
+	_, err := tracer.JoinAndWatchTopic(t.Context(), subnet10, p)
 	require.NoError(t, err)
 	_, err = tracer.JoinAndWatchTopic(t.Context(), subnet20, p)
 	require.NoError(t, err)

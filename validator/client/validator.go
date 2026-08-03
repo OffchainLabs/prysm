@@ -163,17 +163,22 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "validator.WaitForKeymanagerInitialization")
 	defer span.End()
 
-	genesisRoot, err := v.db.GenesisValidatorsRoot(ctx)
-	if err != nil {
-		return errors.Wrap(err, "unable to retrieve valid genesis validators root while initializing key manager")
-	}
-
 	switch {
-	case v.wallet != nil:
-		if v.web3SignerConfig != nil {
-			v.web3SignerConfig.GenesisValidatorsRoot = genesisRoot
+	// When Web3Signer is configured, initialize the keymanager separately.
+	case v.web3SignerConfig != nil:
+		gvr, err := v.db.GenesisValidatorsRoot(ctx)
+		if err != nil {
+			return errors.Wrap(err, "unable to retrieve valid genesis validators root while initializing web3signer keymanager")
 		}
-		keyManager, err := v.wallet.InitializeKeymanager(ctx, accountsiface.InitKeymanagerConfig{ListenForChanges: true, Web3SignerConfig: v.web3SignerConfig})
+
+		v.web3SignerConfig.GenesisValidatorsRoot = gvr
+		keyManager, err := remoteweb3signer.NewKeymanager(ctx, v.web3SignerConfig)
+		if err != nil {
+			return errors.Wrap(err, "could not initialize web3signer keymanager")
+		}
+		v.km = keyManager
+	case v.wallet != nil:
+		keyManager, err := v.wallet.InitializeKeymanager(ctx, accountsiface.InitKeymanagerConfig{ListenForChanges: true})
 		if err != nil {
 			return errors.Wrap(err, "could not initialize key manager")
 		}

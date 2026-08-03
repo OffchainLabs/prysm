@@ -80,9 +80,9 @@ func (vs *Server) GetSyncCommitteeContribution(
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get sync subcommittee messages: %v", err)
 	}
-	headRoot, err := vs.HeadFetcher.HeadRoot(ctx)
+	root, err := vs.aggregatorSyncMessageRoot(ctx, req.PublicKey, msgs)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get head root: %v", err)
+		return nil, status.Errorf(codes.Internal, "Could not get aggregator sync message root: %v", err)
 	}
 	sig, aggregatedBits, err := vs.CoreService.AggregatedSigAndAggregationBits(
 		ctx,
@@ -90,20 +90,32 @@ func (vs *Server) GetSyncCommitteeContribution(
 			Msgs:      msgs,
 			Slot:      req.Slot,
 			SubnetId:  req.SubnetId,
-			BlockRoot: headRoot,
+			BlockRoot: root,
 		})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get contribution data: %v", err)
 	}
 	contribution := &ethpb.SyncCommitteeContribution{
 		Slot:              req.Slot,
-		BlockRoot:         headRoot,
+		BlockRoot:         root,
 		SubcommitteeIndex: req.SubnetId,
 		AggregationBits:   aggregatedBits,
 		Signature:         sig,
 	}
 
 	return contribution, nil
+}
+
+func (vs *Server) aggregatorSyncMessageRoot(ctx context.Context, pubkey []byte, msgs []*ethpb.SyncCommitteeMessage) ([]byte, error) {
+	index, exists := vs.HeadFetcher.HeadPublicKeyToValidatorIndex(bytesutil.ToBytes48(pubkey))
+	if exists {
+		for _, msg := range msgs {
+			if msg.ValidatorIndex == index {
+				return msg.BlockRoot, nil
+			}
+		}
+	}
+	return vs.HeadFetcher.HeadRoot(ctx)
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.

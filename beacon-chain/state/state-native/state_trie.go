@@ -1100,6 +1100,11 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 
 	b.lock.Lock()
 	defer b.lock.Unlock()
+
+	if features.ProgressiveSSZEnabled(b.version) {
+		return b.progressiveHashTreeRoot(ctx)
+	}
+
 	if err := b.initializeMerkleLayers(ctx); err != nil {
 		return [32]byte{}, err
 	}
@@ -1107,6 +1112,29 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 		return [32]byte{}, err
 	}
 	return bytesutil.ToBytes32(b.merkleLayers[len(b.merkleLayers)-1][0]), nil
+}
+
+func (b *BeaconState) progressiveHashTreeRoot(ctx context.Context) ([32]byte, error) {
+	fieldRoots, err := ComputeFieldRootsWithHasher(ctx, b)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "failed to compute state field roots")
+	}
+
+	progressiveFieldRoots := make([][32]byte, len(fieldRoots))
+	for i, fieldRoot := range fieldRoots {
+		progressiveFieldRoots[i] = bytesutil.ToBytes32(fieldRoot)
+	}
+
+	activeFields := make([]bool, len(fieldRoots))
+	for i := range activeFields {
+		activeFields[i] = true
+	}
+
+	root, err := ssz.ContainerRootProgressive(progressiveFieldRoots, activeFields)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("could not compute progressive container root: %w", err)
+	}
+	return root, nil
 }
 
 // Initializes the Merkle layers for the beacon state if they are empty.
@@ -1437,7 +1465,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.LatestExecutionPayloadBid:
 		return b.latestExecutionPayloadBid.HashTreeRoot()
 	case types.Builders:
-		return stateutil.BuildersRoot(b.builders)
+		return stateutil.BuildersRoot(b.version, b.builders)
 	case types.NextWithdrawalBuilderIndex:
 		return ssz.Uint64Root(uint64(b.nextWithdrawalBuilderIndex)), nil
 	case types.ExecutionPayloadAvailability:
@@ -1446,11 +1474,11 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.BuilderPendingPayments:
 		return stateutil.BuilderPendingPaymentsRoot(b.builderPendingPayments)
 	case types.BuilderPendingWithdrawals:
-		return stateutil.BuilderPendingWithdrawalsRoot(b.builderPendingWithdrawals)
+		return stateutil.BuilderPendingWithdrawalsRoot(b.version, b.builderPendingWithdrawals)
 	case types.LatestBlockHash:
 		return bytesutil.ToBytes32(b.latestBlockHash), nil
 	case types.PayloadExpectedWithdrawals:
-		return ssz.WithdrawalSliceRoot(b.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+		return stateutil.PayloadExpectedWithdrawalsRoot(b.version, b.payloadExpectedWithdrawals)
 	case types.PTCWindow:
 		return stateutil.PTCWindowRoot(b.ptcWindow)
 	}

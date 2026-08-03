@@ -102,8 +102,7 @@ func TestValidateVoluntaryExit_ValidExit(t *testing.T) {
 	_, err := p.Encoding().EncodeGossip(buf, exit)
 	require.NoError(t, err)
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedVoluntaryExit]()]
-	d, err := r.currentForkDigest()
-	assert.NoError(t, err)
+	d := r.currentForkDigest()
 	topic = r.addDigestToTopic(topic, d)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
