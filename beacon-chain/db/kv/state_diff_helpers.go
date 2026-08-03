@@ -21,6 +21,9 @@ import (
 	"go.etcd.io/bbolt"
 )
 
+// stateDiffTreeKeyLength is the length of a state-diff tree key, before any suffix.
+const stateDiffTreeKeyLength = 16
+
 var (
 	offsetKey                   = []byte("offset")
 	exponentsKey                = []byte("exponents")
@@ -112,7 +115,7 @@ func (s *Store) loadStateDiffExponents() ([]int, error) {
 }
 
 func makeKeyForStateDiffTree(level int, slot uint64) []byte {
-	buf := make([]byte, 16)
+	buf := make([]byte, stateDiffTreeKeyLength)
 	buf[0] = byte(level)
 	binary.LittleEndian.PutUint64(buf[1:], slot)
 	return buf

@@ -230,6 +230,19 @@ func (c *stateDiffCache) setAnchor(level int, anchor state.ReadOnlyBeaconState) 
 	return nil
 }
 
+// reanchor points the cache at a new offset and drops the cached anchors
+func (c *stateDiffCache) reanchor(offset uint64, levelsWithData []bool) {
+	c.Lock()
+	defer c.Unlock()
+
+	c.offset = offset
+	c.levelsWithData = levelsWithData
+
+	for level := range c.anchors {
+		c.anchors[level] = nil
+	}
+}
+
 func (c *stateDiffCache) levelHasData(level int) bool {
 	c.RLock()
 	defer c.RUnlock()

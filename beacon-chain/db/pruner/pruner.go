@@ -2,6 +2,7 @@ package pruner
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
@@ -20,6 +21,8 @@ const (
 	defaultPruningWindow = time.Second * 3
 	// defaultNumBatchesToPrune is the number of batches to prune in one pruning window.
 	defaultNumBatchesToPrune = 15
+	// defaultPrunableStateDiffEntries is the number of state-diff tree entries deleted at once.
+	defaultPrunableStateDiffEntries = 512
 )
 
 // custodyUpdater is a tiny interface that p2p service implements; kept here to avoid
@@ -152,6 +155,16 @@ func (p *Service) prune(slot primitives.Slot) error {
 		return nil
 	}
 
+	pruneUpto, err := p.db.LastStateDiffBoundary(pruneUpto)
+	if err != nil {
+		return errors.Wrap(err, "last state diff boundary")
+	}
+
+	// Can't prune beyond genesis.
+	if pruneUpto == 0 {
+		return nil
+	}
+
 	// Skip if already pruned up to this slot.
 	if pruneUpto <= p.prunedUpto {
 		return nil
@@ -177,6 +190,11 @@ func (p *Service) prune(slot primitives.Slot) error {
 		return errors.Wrap(err, "update earliest available slot")
 	}
 
+	deletedStateDiffKeys, err := p.pruneStateDiff(pruneUpto)
+	if err != nil {
+		return fmt.Errorf("prune state diff: %w", err)
+	}
+
 	log.WithFields(logrus.Fields{
 		"prunedUpto":            pruneUpto,
 		"earliestAvailableSlot": earliestAvailableSlot,
@@ -184,9 +202,37 @@ func (p *Service) prune(slot primitives.Slot) error {
 		"currentSlot":           slot,
 		"batchSize":             defaultPrunableBatchSize,
 		"numBatches":            numBatches,
+		"stateDiffKeys":         deletedStateDiffKeys,
 	}).Debug("Successfully pruned chain data")
 
 	return nil
+}
+
+// pruneStateDiff deletes the state-diff entries up to pruneUpto.
+// The work is spread over batches, and over as many pruning runs as needed.
+func (p *Service) pruneStateDiff(pruneUpto primitives.Slot) (int, error) {
+	ctx, cancel := context.WithTimeout(p.ctx, defaultPruningWindow)
+	defer cancel()
+
+	deleted := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return deleted, nil
+		default:
+			batch, err := p.db.DeleteStateDiffBeforeSlot(ctx, pruneUpto, defaultPrunableStateDiffEntries)
+			if err != nil {
+				return deleted, err
+			}
+
+			// Nothing left to delete.
+			if batch == 0 {
+				return deleted, nil
+			}
+
+			deleted += batch
+		}
+	}
 }
 
 // updateEarliestAvailableSlot updates the earliest available slot via the injected custody updater
