@@ -365,7 +365,7 @@ func TestBuilderIndex(t *testing.T) {
 	ctx := t.Context()
 
 	root := indexToHash(1)
-	st, roblock, err := prepareGloasForkchoiceState(ctx, 1, root, params.BeaconConfig().ZeroHash, indexToHash(100), params.BeaconConfig().ZeroHash, 0, 0)
+	st, _, err := prepareGloasForkchoiceState(ctx, 1, root, params.BeaconConfig().ZeroHash, indexToHash(100), params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
 	// Rebuild the block with a non-default builder index.
 	blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
@@ -380,7 +380,7 @@ func TestBuilderIndex(t *testing.T) {
 	})
 	signed, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	roblock, err = blocks.NewROBlockWithRoot(signed, root)
+	roblock, err := blocks.NewROBlockWithRoot(signed, root)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
