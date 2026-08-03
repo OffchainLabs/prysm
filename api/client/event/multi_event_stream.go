@@ -122,7 +122,7 @@ func (m *MultiEventStream) runHost(host string, merged chan<- *Event) {
 			select {
 			case merged <- &Event{
 				Type: EventConnectionError,
-				Data: []byte(errors.Wrapf(err, "invalid event stream host %s", host).Error()),
+				Data: []byte(err.Error()),
 			}:
 			case <-m.ctx.Done():
 			}

@@ -26,8 +26,21 @@ func TestNewMultiHandler(t *testing.T) {
 }
 
 func TestHost(t *testing.T) {
-	mh := multi(t, "http://first:3500", "http://second:3500")
-	require.Equal(t, "http://first:3500", mh.Host())
+	t.Run("single endpoint", func(t *testing.T) {
+		mh := multi(t, "http://first:3500")
+		require.Equal(t, "http://first:3500", mh.Host())
+	})
+
+	t.Run("all endpoints, comma-separated", func(t *testing.T) {
+		mh := multi(t, "http://first:3500", "http://second:3500")
+		require.Equal(t, "http://first:3500,http://second:3500", mh.Host())
+	})
+
+	t.Run("endpoints are raw, redaction is the caller's job", func(t *testing.T) {
+		mh := multi(t, "http://user:password@first:3500", "http://second:3500")
+		require.Equal(t, "http://user:password@first:3500,http://second:3500", mh.Host())
+		require.Equal(t, "http://user:xxxxx@first:3500,http://second:3500", api.RedactEndpointList(mh.Host()))
+	})
 }
 
 func TestMultiHandlerGet(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -40,10 +41,15 @@ func newMultiHandler(handlers []*handler) (*multiHandler, error) {
 	return &multiHandler{handlers: handlers}, nil
 }
 
-// Host returns the first endpoint.
+// Host returns every endpoint the handler queries, comma-separated
 func (m *multiHandler) Host() string {
 	// Safe when `multiHandler` is constructed with `newMultiHandler`.
-	return m.handlers[0].Host()
+	hosts := make([]string, 0, len(m.handlers))
+	for _, handler := range m.handlers {
+		hosts = append(hosts, handler.Host())
+	}
+
+	return strings.Join(hosts, ",")
 }
 
 // Get reads a GET from the nodes.
