@@ -170,7 +170,9 @@ func (c *beaconApiValidatorClient) checkDoppelGanger(ctx context.Context, in *et
 	for _, spk := range notRecentStringPubKeys {
 		index, ok := stringPubKeyToIndex[spk]
 		if !ok {
-			// if !ok, the validator corresponding to `stringPubKey` does not exist onchain.
+			// Not onchain, so liveness cannot be evaluated: omit the key from the
+			// response rather than report an unevaluated "no duplicate".
+			delete(stringPubKeyToDoppelGangerInfo, spk)
 			continue
 		}
 
@@ -206,10 +208,14 @@ func buildResponse(
 	stringPubKeys []string,
 	stringPubKeyToDoppelGangerHelper map[string]DoppelGangerInfo,
 ) *ethpb.DoppelGangerResponse {
-	responses := make([]*ethpb.DoppelGangerResponse_ValidatorResponse, len(stringPubKeys))
+	responses := make([]*ethpb.DoppelGangerResponse_ValidatorResponse, 0, len(stringPubKeys))
 
-	for i, spk := range stringPubKeys {
-		responses[i] = stringPubKeyToDoppelGangerHelper[spk].response
+	for _, spk := range stringPubKeys {
+		info, ok := stringPubKeyToDoppelGangerHelper[spk]
+		if !ok {
+			continue
+		}
+		responses = append(responses, info.response)
 	}
 
 	return &ethpb.DoppelGangerResponse{

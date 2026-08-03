@@ -182,7 +182,7 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 					{PublicKey: pubKey2, DuplicateExists: true},  // not recent - duplicate on previous epoch
 					{PublicKey: pubKey3, DuplicateExists: true},  // not recent - duplicate on current epoch
 					{PublicKey: pubKey4, DuplicateExists: true},  // not recent - duplicate on both previous and current epoch
-					{PublicKey: pubKey5, DuplicateExists: false}, // non existing validator
+					// pubKey5 omitted: non existing validator cannot be evaluated
 					{PublicKey: pubKey6, DuplicateExists: false}, // not recent - not duplicate
 				},
 			},

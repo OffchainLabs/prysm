@@ -27,6 +27,10 @@ func (v *validator) WaitForActivation(ctx context.Context) error {
 		return errors.Wrap(err, msgCouldNotFetchKeys)
 	}
 
+	// Keys can arrive via accounts-changed events consumed below, which bypass
+	// HandleKeyReload; track them here so none escape the doppelganger check.
+	v.trackReloadedKeysForDoppelGanger(validatingKeys)
+
 	// Step 2: If no keys, wait for accounts change or context cancellation.
 	if len(validatingKeys) == 0 {
 		log.Warn(msgNoKeysFetched)

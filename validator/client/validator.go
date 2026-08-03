@@ -457,14 +457,16 @@ func (v *validator) CheckDoppelGanger(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "could not fetch validating keys for doppelganger check")
 	}
-	log.WithField("keyCount", len(pubkeys)).Info("Running doppelganger check")
-	// Exit early if no validating pub keys are found.
+	log.WithField("keyCount", len(pubkeys)).Debug("Running doppelganger check")
 	if len(pubkeys) == 0 {
 		return nil
 	}
 	resp, err := v.checkDoppelGangerForKeys(ctx, pubkeys)
 	if err != nil {
 		return err
+	}
+	if len(resp.Responses) == 0 {
+		return errors.New("beacon node returned 0 responses for doppelganger check")
 	}
 	if err := buildDuplicateError(resp.Responses); err != nil {
 		return err
@@ -509,10 +511,9 @@ func (v *validator) checkDoppelGangerForKeys(ctx context.Context, pubkeys [][fie
 	if err != nil {
 		return nil, errors.Wrap(err, "doppelganger check request to beacon node failed")
 	}
-	// If nothing is returned by the beacon node, we return an
-	// error as it is unsafe for us to proceed.
-	if resp == nil || resp.Responses == nil || len(resp.Responses) == 0 {
-		return nil, errors.New("beacon node returned 0 responses for doppelganger check")
+	// Empty responses are legal (keys unknown to the node); callers decide policy.
+	if resp == nil {
+		return nil, errors.New("nil doppelganger response from beacon node")
 	}
 	return resp, nil
 }
@@ -576,6 +577,10 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		var roles []iface.ValidatorRole
 
 		if duty == nil {
+			continue
+		}
+		// The store may predate a reload; quarantined keys get no roles at all.
+		if v.isDoppelGangerPending(pk) {
 			continue
 		}
 		if len(duty.ProposerSlots) > 0 {

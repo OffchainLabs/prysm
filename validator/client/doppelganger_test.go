@@ -55,16 +55,14 @@ func TestTrackReloadedKeysForDoppelGanger(t *testing.T) {
 	assert.Equal(t, true, v.isDoppelGangerPending(keyB))
 }
 
-func TestTrackReloadedKeysForDoppelGanger_GenesisEpochSkipsQuarantine(t *testing.T) {
+func TestTrackReloadedKeysForDoppelGanger_GenesisEpochQuarantines(t *testing.T) {
 	enableDoppelGanger(t)
 	v := doppelTestValidator(0) // current epoch is the genesis epoch
 	keyA := bytesutil.ToBytes48([]byte{0xaa})
 	v.trackReloadedKeysForDoppelGanger([][fieldparams.BLSPubkeyLength]byte{keyA})
-	// No prior liveness can exist at genesis: the key is cleared immediately.
-	assert.Equal(t, false, v.isDoppelGangerPending(keyA))
-	v.doppelGanger.mu.RLock()
-	assert.Equal(t, true, v.doppelGanger.checked[keyA])
-	v.doppelGanger.mu.RUnlock()
+	// A duplicate can already be attesting within the genesis epoch, so keys
+	// added mid-epoch-0 are quarantined like any other reload.
+	assert.Equal(t, true, v.isDoppelGangerPending(keyA))
 }
 
 func TestTrackReloadedKeysForDoppelGanger_FlagOff(t *testing.T) {
@@ -105,6 +103,14 @@ func waitForDoppelCheck(t *testing.T, v *validator) {
 	require.Equal(t, false, v.doppelGanger.inFlight.Load(), "doppelganger check did not finish")
 }
 
+// mockSyncedChainHead points the validator at a chain whose head is at headEpoch,
+// so clearElapsed sees an up-to-date beacon node.
+func mockSyncedChainHead(ctrl *gomock.Controller, v *validator, headEpoch primitives.Epoch) {
+	chain := validatormock.NewMockChainClient(ctrl)
+	chain.EXPECT().ChainHead(gomock.Any(), gomock.Any()).Return(&ethpb.ChainHead{HeadEpoch: headEpoch}, nil).AnyTimes()
+	v.chainClient = chain
+}
+
 func TestMaybeCheckDoppelGanger_ClearsAndBlocks(t *testing.T) {
 	enableDoppelGanger(t)
 	ctrl := gomock.NewController(t)
@@ -122,6 +128,7 @@ func TestMaybeCheckDoppelGanger_ClearsAndBlocks(t *testing.T) {
 		keyB: {addedEpoch: 1},
 	}
 	v.doppelGanger.pendingCount.Store(2)
+	mockSyncedChainHead(ctrl, v, 4)
 
 	client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).Return(&ethpb.DoppelGangerResponse{
 		Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{
@@ -154,6 +161,7 @@ func TestMaybeCheckDoppelGanger_EarlyPoll(t *testing.T) {
 	// before the quarantine elapses.
 	v.doppelGanger.pending = map[pubkey]*doppelGangerPendingKey{keyA: {addedEpoch: 4}}
 	v.doppelGanger.pendingCount.Store(1)
+	mockSyncedChainHead(ctrl, v, 4)
 
 	client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).Return(&ethpb.DoppelGangerResponse{
 		Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{
@@ -212,6 +220,7 @@ func TestMaybeCheckDoppelGanger_FailureRetriesSameEpoch(t *testing.T) {
 	v.db = db
 	v.doppelGanger.pending = map[pubkey]*doppelGangerPendingKey{keyA: {addedEpoch: 1}}
 	v.doppelGanger.pendingCount.Store(1)
+	mockSyncedChainHead(ctrl, v, 4)
 
 	// First check fails: the poll epoch must NOT be consumed, so the very next
 	// slot retries and the second (successful) check clears the key.
@@ -249,6 +258,7 @@ func TestMaybeCheckDoppelGanger_PartialResponseKeepsQuarantine(t *testing.T) {
 		keyB: {addedEpoch: 1},
 	}
 	v.doppelGanger.pendingCount.Store(2)
+	mockSyncedChainHead(ctrl, v, 4)
 
 	// Response omits keyB entirely: only the explicitly-clean keyA may clear.
 	client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).Return(&ethpb.DoppelGangerResponse{
@@ -294,6 +304,123 @@ func TestMaybeCheckDoppelGanger_SkipsEarlyEpochSlots(t *testing.T) {
 	v.MaybeCheckDoppelGanger(t.Context(), earlySlot)
 	assert.Equal(t, false, v.doppelGanger.inFlight.Load())
 	assert.Equal(t, true, v.isDoppelGangerPending(keyA))
+}
+
+func TestMaybeCheckDoppelGanger_LaggingHeadDefersClear(t *testing.T) {
+	enableDoppelGanger(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	keyA := bytesutil.ToBytes48([]byte{0xaa})
+	db := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{keyA}, false)
+	v := doppelTestValidator(4)
+	v.validatorClient = client
+	v.db = db
+	v.doppelGanger.pending = map[pubkey]*doppelGangerPendingKey{keyA: {addedEpoch: 1}}
+	v.doppelGanger.pendingCount.Store(1)
+	// Head stalled inside the wait: its clean answers are unevaluated defaults.
+	mockSyncedChainHead(ctrl, v, 3)
+
+	client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).Return(&ethpb.DoppelGangerResponse{
+		Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{{PublicKey: keyA[:], DuplicateExists: false}},
+	}, nil)
+
+	v.MaybeCheckDoppelGanger(t.Context(), slots.CurrentSlot(v.genesisTime))
+	waitForDoppelCheck(t, v)
+	assert.Equal(t, true, v.isDoppelGangerPending(keyA)) // clear deferred until the head catches up
+}
+
+func TestMaybeCheckDoppelGanger_HeadErrorDefersClear(t *testing.T) {
+	enableDoppelGanger(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	keyA := bytesutil.ToBytes48([]byte{0xaa})
+	db := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{keyA}, false)
+	v := doppelTestValidator(4)
+	v.validatorClient = client
+	v.db = db
+	v.doppelGanger.pending = map[pubkey]*doppelGangerPendingKey{keyA: {addedEpoch: 1}}
+	v.doppelGanger.pendingCount.Store(1)
+	chain := validatormock.NewMockChainClient(ctrl)
+	chain.EXPECT().ChainHead(gomock.Any(), gomock.Any()).Return(nil, errors.New("bn down"))
+	v.chainClient = chain
+
+	client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).Return(&ethpb.DoppelGangerResponse{
+		Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{{PublicKey: keyA[:], DuplicateExists: false}},
+	}, nil)
+
+	v.MaybeCheckDoppelGanger(t.Context(), slots.CurrentSlot(v.genesisTime))
+	waitForDoppelCheck(t, v)
+	assert.Equal(t, true, v.isDoppelGangerPending(keyA)) // unknown head: fail-closed, no clear
+}
+
+func TestMaybeCheckDoppelGanger_EmptyResponseCountsPoll(t *testing.T) {
+	enableDoppelGanger(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	keyA := bytesutil.ToBytes48([]byte{0xaa})
+	db := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{keyA}, false)
+	v := doppelTestValidator(4)
+	v.validatorClient = client
+	v.db = db
+	v.doppelGanger.pending = map[pubkey]*doppelGangerPendingKey{keyA: {addedEpoch: 1}}
+	v.doppelGanger.pendingCount.Store(1)
+
+	// Key unknown to the node: a definitive empty answer, not a failure. The
+	// single EXPECT proves the same epoch does not re-poll every slot.
+	client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).Return(&ethpb.DoppelGangerResponse{
+		Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{},
+	}, nil)
+
+	slot := slots.CurrentSlot(v.genesisTime)
+	v.MaybeCheckDoppelGanger(t.Context(), slot)
+	waitForDoppelCheck(t, v)
+	assert.Equal(t, true, v.isDoppelGangerPending(keyA)) // stays quarantined
+
+	v.MaybeCheckDoppelGanger(t.Context(), slot) // same epoch: no second RPC
+	assert.Equal(t, false, v.doppelGanger.inFlight.Load())
+}
+
+func TestRolesAt_ExcludesDoppelGangerPending(t *testing.T) {
+	enableDoppelGanger(t)
+	v := doppelTestValidator(4)
+	v.duties = &dutyStore{}
+	v.aggSelector = &distributedSelector{}
+	keyA := bytesutil.ToBytes48([]byte{0xaa})
+	keyB := bytesutil.ToBytes48([]byte{0xbb})
+	var data dutyStoreData
+	data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			{PublicKey: keyA[:], ValidatorIndex: 1},
+			{PublicKey: keyB[:], ValidatorIndex: 2},
+		},
+	})
+	v.duties.write(data)
+	v.trackReloadedKeysForDoppelGanger([][fieldparams.BLSPubkeyLength]byte{keyA, keyB})
+	v.markDoppelGangerChecked([][fieldparams.BLSPubkeyLength]byte{keyB})
+
+	// Duties fetched before the reload must not grant the quarantined key roles.
+	roles, err := v.RolesAt(t.Context(), 1)
+	require.NoError(t, err)
+	_, hasA := roles[keyA]
+	assert.Equal(t, false, hasA)
+	_, hasB := roles[keyB]
+	assert.Equal(t, true, hasB)
+}
+
+func TestDoppelGangerTracker_BlockIgnoresUntrackedKeys(t *testing.T) {
+	d := &doppelGangerTracker{}
+	keyA := bytesutil.ToBytes48([]byte{0x01})
+	// A key removed mid-check must not be resurrected or logged as excluded.
+	d.block([][fieldparams.BLSPubkeyLength]byte{keyA})
+	d.mu.RLock()
+	assert.Equal(t, 0, len(d.pending))
+	d.mu.RUnlock()
 }
 
 func TestDoppelGangerTracker_ClearElapsedFilters(t *testing.T) {

@@ -18,7 +18,6 @@ import (
 
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/async/event"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
@@ -579,10 +578,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		flgs := *features.Get() // copy: mutating the live pointer would leak past reset
-		flgs.EnableDoppelGanger = true
-		reset := features.InitWithReset(&flgs)
-		defer reset()
+		enableDoppelGanger(t)
 		tests := []struct {
 			name            string
 			validatorSetter func(t *testing.T) *validator

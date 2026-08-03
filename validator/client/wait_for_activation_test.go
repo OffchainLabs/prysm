@@ -97,6 +97,43 @@ func TestWaitForActivation_RefetchKeys(t *testing.T) {
 	assert.LogsContain(t, hook, "Validator activated")
 }
 
+func TestWaitForActivation_TracksKeysForDoppelGanger(t *testing.T) {
+	enableDoppelGanger(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	validatorClient := validatormock.NewMockValidatorClient(ctrl)
+
+	kp := randKeypair(t)
+	km := newMockKeymanager(t)
+	v := validator{
+		validatorClient: validatorClient,
+		km:              km,
+		pubkeyToStatus:  make(map[[48]byte]*validatorStatus),
+	}
+	resp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{kp.pub[:]})
+	resp.Statuses[0].Status = ethpb.ValidatorStatus_ACTIVE
+	validatorClient.EXPECT().MultipleValidatorStatus(gomock.Any(), gomock.Any()).Return(resp, nil)
+
+	accountChan := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
+	sub := km.SubscribeAccountChanges(accountChan)
+	defer func() {
+		sub.Unsubscribe()
+		close(accountChan)
+	}()
+	v.accountsChangedChannel = accountChan
+	// Import a key while WaitForActivation is blocked on the accounts channel:
+	// this path bypasses HandleKeyReload entirely.
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		require.NoError(t, km.add(kp))
+		km.SimulateAccountChanges([][48]byte{kp.pub})
+	}()
+	require.NoError(t, v.WaitForActivation(t.Context()))
+
+	// The key must be quarantined even though no HandleKeyReload ran.
+	assert.Equal(t, true, v.isDoppelGangerPending(kp.pub))
+}
+
 func TestWaitForActivation_AccountsChanged(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	hook := logTest.NewGlobal()

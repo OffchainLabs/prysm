@@ -14,6 +14,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // doppelGangerWaitEpochs is how long a reloaded key sits out before its check:
@@ -32,13 +33,13 @@ type doppelGangerTracker struct {
 	pending       map[pubkey]*doppelGangerPendingKey
 	checked       map[pubkey]bool
 	lastPollEpoch primitives.Epoch // last epoch a check succeeded; one poll per epoch
+	lastWarnEpoch primitives.Epoch // rate-limits the failure warning to one per epoch
 	pendingCount  atomic.Int64     // mirrors len(pending) for lock-free empty checks
 	inFlight      atomic.Bool      // single-flight guard for the background check
 }
 
-// trackReload diffs a key reload against keys already cleared: new keys are
-// quarantined from duties as of epoch, removed keys are forgotten so a later
-// re-add is checked again.
+// trackReload quarantines never-checked keys as of epoch and forgets removed
+// keys so a later re-add is checked again.
 func (d *doppelGangerTracker) trackReload(currentKeys [][fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) {
 	current := make(map[pubkey]bool, len(currentKeys))
 	for _, pk := range currentKeys {
@@ -55,15 +56,6 @@ func (d *doppelGangerTracker) trackReload(currentKeys [][fieldparams.BLSPubkeyLe
 			continue
 		}
 		if _, ok := d.pending[pk]; ok {
-			continue
-		}
-		// Genesis epoch: no prior liveness can exist, so quarantine adds delay
-		// without protection (matches Lighthouse).
-		if epoch == 0 {
-			if d.checked == nil {
-				d.checked = make(map[pubkey]bool)
-			}
-			d.checked[pk] = true
 			continue
 		}
 		d.pending[pk] = &doppelGangerPendingKey{addedEpoch: epoch}
@@ -115,9 +107,8 @@ func (d *doppelGangerTracker) isPending(pk pubkey) bool {
 	return ok
 }
 
-// pollDue returns the pending, unblocked keys to check at epoch — at most one
-// successful poll per epoch, so a live duplicate is caught before the
-// quarantine ends (clearing still waits for clearElapsed).
+// pollDue returns the pending, unblocked keys to check at epoch, at most once
+// per epoch; duplicates are blocked at any poll, clearing waits for clearElapsed.
 func (d *doppelGangerTracker) pollDue(epoch primitives.Epoch) [][fieldparams.BLSPubkeyLength]byte {
 	if d.pendingCount.Load() == 0 {
 		return nil
@@ -145,10 +136,19 @@ func (d *doppelGangerTracker) markPolled(epoch primitives.Epoch) {
 	}
 }
 
-// clearElapsed clears the given clean keys whose quarantine has elapsed at
-// epoch and returns them; keys still inside the wait stay pending. Strictly
-// beyond the wait: the clearing poll must postdate the BN's cannot-determine
-// band, so an unevaluated default-clean can never clear a key.
+// shouldWarnFailure reports whether a check failure at epoch was not yet warned.
+func (d *doppelGangerTracker) shouldWarnFailure(epoch primitives.Epoch) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if epoch <= d.lastWarnEpoch {
+		return false
+	}
+	d.lastWarnEpoch = epoch
+	return true
+}
+
+// clearElapsed clears and returns the given clean keys strictly past their
+// quarantine at epoch; the rest stay pending. epoch must not exceed the BN head.
 func (d *doppelGangerTracker) clearElapsed(keys [][fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) [][fieldparams.BLSPubkeyLength]byte {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -169,14 +169,16 @@ func (d *doppelGangerTracker) clearElapsed(keys [][fieldparams.BLSPubkeyLength]b
 	return cleared
 }
 
-// block permanently excludes keys with a detected duplicate.
+// block permanently excludes still-tracked keys with a detected duplicate.
 func (d *doppelGangerTracker) block(keys [][fieldparams.BLSPubkeyLength]byte) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	for _, pk := range keys {
-		if p, ok := d.pending[pk]; ok {
-			p.blocked = true
+		p, ok := d.pending[pk]
+		if !ok {
+			continue
 		}
+		p.blocked = true
 		log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pk[:]))).Error(
 			"Doppelganger detected for reloaded key; key remains excluded from duties")
 	}
@@ -187,7 +189,7 @@ func (v *validator) trackReloadedKeysForDoppelGanger(currentKeys [][fieldparams.
 	if !features.Get().EnableDoppelGanger {
 		return
 	}
-	v.doppelGanger.trackReload(currentKeys, slots.ToEpoch(slots.CurrentSlot(v.genesisTime)))
+	v.doppelGanger.trackReload(currentKeys, slots.EpochsSinceGenesis(v.genesisTime))
 }
 
 // markDoppelGangerChecked records keys that passed a doppelganger check.
@@ -200,15 +202,14 @@ func (v *validator) isDoppelGangerPending(pk pubkey) bool {
 	return v.doppelGanger.isPending(pk)
 }
 
-// MaybeCheckDoppelGanger polls quarantined keys once per epoch in the
-// background: a live duplicate is blocked as soon as it is seen, while clean
-// keys are cleared only after their quarantine elapses.
+// MaybeCheckDoppelGanger polls quarantined keys in the background: duplicates
+// are blocked as soon as seen, clean keys clear only after the quarantine.
 func (v *validator) MaybeCheckDoppelGanger(ctx context.Context, slot primitives.Slot) {
 	if !features.Get().EnableDoppelGanger {
 		return
 	}
-	// Poll late in the epoch (Lighthouse's 3/4 offset): the beacon node has seen
-	// this epoch's activity, and its head epoch cannot trail the poll epoch.
+	// Poll late in the epoch (Lighthouse's 3/4 offset) so the beacon node has
+	// seen most of this epoch's activity.
 	if slots.SinceEpochStarts(slot) < params.BeaconConfig().SlotsPerEpoch*3/4 {
 		return
 	}
@@ -227,48 +228,59 @@ func (v *validator) MaybeCheckDoppelGanger(ctx context.Context, slot primitives.
 	}()
 }
 
-// checkReloadedKeys runs one scoped doppelganger check: keys with a live
-// duplicate are blocked permanently; clean keys whose quarantine elapsed are
-// cleared to rejoin duties, the rest stay quarantined for the next poll.
+// checkReloadedKeys runs one scoped check: duplicates are blocked permanently,
+// elapsed clean keys are cleared to rejoin duties, the rest stay quarantined.
 func (v *validator) checkReloadedKeys(ctx context.Context, due [][fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) {
 	resp, err := v.checkDoppelGangerForKeys(ctx, due)
 	if err != nil {
-		log.WithError(err).Debug("Could not run doppelganger check for reloaded keys; will retry")
+		if v.doppelGanger.shouldWarnFailure(epoch) {
+			log.WithError(err).Warn("Doppelganger check for reloaded keys failed; keys stay out of duties until it succeeds")
+		} else {
+			log.WithError(err).Debug("Could not run doppelganger check for reloaded keys; will retry")
+		}
 		return
 	}
-	duplicates := duplicateKeysFromResponse(resp.Responses)
+	// Empty response is definitive: none of the keys are known to the beacon
+	// node yet. Count the poll and keep them quarantined (fail-closed).
+	if len(resp.Responses) == 0 {
+		log.Debug("Reloaded keys not known to beacon node yet; doppelganger quarantine continues")
+		v.doppelGanger.markPolled(epoch)
+		return
+	}
+	clean, duplicates := splitByDuplicate(resp.Responses)
 	if len(duplicates) > 0 {
 		v.doppelGanger.block(duplicates)
 	}
-	// Only keys the beacon node explicitly reported clean may clear; a key absent
-	// from the response stays quarantined for the next poll (fail-closed).
-	if cleared := v.doppelGanger.clearElapsed(cleanKeysFromResponse(resp.Responses), epoch); len(cleared) > 0 {
-		log.WithField("keyCount", len(cleared)).Info(
-			"Reloaded keys passed doppelganger check and will receive duties at the next update")
+	// Keys absent from the response stay quarantined for the next poll (fail-closed).
+	if len(clean) > 0 {
+		if cleared := v.doppelGanger.clearElapsed(clean, v.clearingEpoch(ctx, epoch)); len(cleared) > 0 {
+			log.WithField("keyCount", len(cleared)).Info(
+				"Reloaded keys passed doppelganger check and will receive duties at the next update")
+		}
 	}
 	v.doppelGanger.markPolled(epoch)
 }
 
-// cleanKeysFromResponse extracts the keys the beacon node explicitly reported
-// as having no live duplicate.
-func cleanKeysFromResponse(responses []*ethpb.DoppelGangerResponse_ValidatorResponse) [][fieldparams.BLSPubkeyLength]byte {
-	var clean [][fieldparams.BLSPubkeyLength]byte
-	for _, r := range responses {
-		if !r.DuplicateExists {
-			clean = append(clean, bytesutil.ToBytes48(r.PublicKey))
-		}
+// clearingEpoch caps the wall-clock epoch at the beacon node's head epoch: a
+// lagging head returns unevaluated defaults, which must not end a quarantine.
+func (v *validator) clearingEpoch(ctx context.Context, epoch primitives.Epoch) primitives.Epoch {
+	head, err := v.chainClient.ChainHead(ctx, &emptypb.Empty{})
+	if err != nil || head == nil {
+		log.WithError(err).Debug("Could not get chain head; deferring doppelganger clearing")
+		return 0
 	}
-	return clean
+	return min(epoch, head.HeadEpoch)
 }
 
-// duplicateKeysFromResponse extracts the keys the beacon node flagged as having
-// a live duplicate.
-func duplicateKeysFromResponse(responses []*ethpb.DoppelGangerResponse_ValidatorResponse) [][fieldparams.BLSPubkeyLength]byte {
-	var dups [][fieldparams.BLSPubkeyLength]byte
+// splitByDuplicate partitions responses into keys the beacon node reported
+// clean and keys with a live duplicate.
+func splitByDuplicate(responses []*ethpb.DoppelGangerResponse_ValidatorResponse) (clean, dups [][fieldparams.BLSPubkeyLength]byte) {
 	for _, r := range responses {
 		if r.DuplicateExists {
 			dups = append(dups, bytesutil.ToBytes48(r.PublicKey))
+		} else {
+			clean = append(clean, bytesutil.ToBytes48(r.PublicKey))
 		}
 	}
-	return dups
+	return clean, dups
 }
