@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -55,6 +56,18 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 		return nil
 	}
 
+	// While an archive walk is filling the tree from the offset upwards, only the walk may write. A write
+	// further above its frontier has no anchor chain beneath it, and it becomes that level's maximum slot,
+	// which makes the integrity check in startStateDiff fail on the next boot. The walk itself always writes
+	// the next boundary above the frontier, so that one slot stays open.
+	if frontier, pending := s.archivePending(); pending && uint64(slot) > uint64(frontier)+deepestDiffSpan() {
+		log.WithFields(logrus.Fields{
+			"slot":     slot,
+			"frontier": frontier,
+		}).Debug("Skipping state-diff write above the archive regeneration frontier")
+		return nil
+	}
+
 	// Save full state if level is 0.
 	if lvl == 0 {
 		return s.saveFullSnapshot(st)
@@ -67,6 +80,13 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 	}
 
 	return s.saveHdiff(lvl, anchorState, st)
+}
+
+// StateBySlotFromDiffTree returns the state at the given slot directly from the state-diff tree. The slot must
+// be a saving point in the tree (see SlotInDiffTree). Unlike State, it addresses the tree by slot, so it can
+// reach boundary states whose slot had no block and which therefore have no root that commits to them.
+func (s *Store) StateBySlotFromDiffTree(ctx context.Context, slot primitives.Slot) (state.BeaconState, error) {
+	return s.stateByDiff(ctx, slot)
 }
 
 // stateByDiff retrieves the full state for a given slot.

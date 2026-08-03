@@ -3,6 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "archive.go",
         "clear_db.go",
         "config.go",
         "log.go",
@@ -20,6 +21,7 @@ go_library(
         "//api/server/httprest:go_default_library",
         "//api/server/middleware:go_default_library",
         "//async/event:go_default_library",
+        "//beacon-chain/archive:go_default_library",
         "//beacon-chain/blockchain:go_default_library",
         "//beacon-chain/builder:go_default_library",
         "//beacon-chain/cache:go_default_library",
@@ -62,7 +64,9 @@ go_library(
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//container/slice:go_default_library",
+        "//encoding/ssz/detect:go_default_library",
         "//genesis:go_default_library",
+        "//io/file:go_default_library",
         "//monitoring/prometheus:go_default_library",
         "//monitoring/tracing:go_default_library",
         "//runtime:go_default_library",
@@ -80,6 +84,7 @@ go_test(
     name = "go_default_test",
     size = "small",
     srcs = [
+        "archive_test.go",
         "config_test.go",
         "node_test.go",
         "shutdown_proposals_test.go",
@@ -103,6 +108,7 @@ go_test(
         "//config/features:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
+        "//genesis:go_default_library",
         "//runtime:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
