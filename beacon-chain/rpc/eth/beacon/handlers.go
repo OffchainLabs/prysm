@@ -80,7 +80,9 @@ func versionHeaderFromRequest(body []byte) (string, error) {
 		return "", errors.Wrap(err, "unable to peek slot from block")
 	}
 	ce := slots.ToEpoch(sp.Block.Slot)
-	if ce >= params.BeaconConfig().FuluForkEpoch {
+	if ce >= params.BeaconConfig().GloasForkEpoch {
+		return version.String(version.Gloas), nil
+	} else if ce >= params.BeaconConfig().FuluForkEpoch {
 		return version.String(version.Fulu), nil
 	} else if ce >= params.BeaconConfig().ElectraForkEpoch {
 		return version.String(version.Electra), nil
@@ -306,11 +308,20 @@ func (s *Server) GetBlockAttestationsV2(w http.ResponseWriter, r *http.Request) 
 
 	v := blk.Block().Version()
 	attStructs := make([]any, len(consensusAtts))
-	if v >= version.Electra {
+	if v >= version.Gloas {
+		for index, att := range consensusAtts {
+			a, ok := att.(*eth.AttestationGloas)
+			if !ok {
+				httputil.HandleError(w, fmt.Sprintf("unable to convert consensus Gloas attestation of type %T", att), http.StatusInternalServerError)
+				return
+			}
+			attStructs[index] = structs.AttGloasFromConsensus(a)
+		}
+	} else if v >= version.Electra {
 		for index, att := range consensusAtts {
 			a, ok := att.(*eth.AttestationElectra)
 			if !ok {
-				httputil.HandleError(w, fmt.Sprintf("unable to convert consensus attestations electra of type %T", att), http.StatusInternalServerError)
+				httputil.HandleError(w, fmt.Sprintf("unable to convert consensus Electra attestation of type %T", att), http.StatusInternalServerError)
 				return
 			}
 			attStruct := structs.AttElectraFromConsensus(a)

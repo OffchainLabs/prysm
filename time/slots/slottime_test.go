@@ -571,6 +571,19 @@ func testCurrentSlot(t testing.TB, slot primitives.Slot) {
 }
 
 func TestToForkVersion(t *testing.T) {
+	t.Run("Gloas fork version", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig()
+		config.GloasForkEpoch = 100
+		params.OverrideBeaconConfig(config)
+
+		slot, err := EpochStart(params.BeaconConfig().GloasForkEpoch)
+		require.NoError(t, err)
+
+		result := ToForkVersion(slot)
+		require.Equal(t, version.Gloas, result)
+	})
+
 	t.Run("Fulu fork version", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		config := params.BeaconConfig()

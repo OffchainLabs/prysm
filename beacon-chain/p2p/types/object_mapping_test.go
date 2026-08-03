@@ -112,4 +112,12 @@ func TestInitializeDataMaps_Gloas(t *testing.T) {
 	require.NoError(t, err)
 	_, ok = att.(*ethpb.SingleAttestation)
 	assert.Equal(t, true, ok)
+
+	aggFunc, ok := AggregateAttestationMap[gloasVersion]
+	require.Equal(t, true, ok)
+	agg, err := aggFunc()
+	require.NoError(t, err)
+	_, ok = agg.(*ethpb.SignedAggregateAttestationAndProofGloas)
+	assert.Equal(t, true, ok)
+	assert.Equal(t, version.Gloas, agg.Version())
 }

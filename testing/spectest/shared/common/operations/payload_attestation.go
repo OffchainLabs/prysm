@@ -112,7 +112,7 @@ func createMockBlockBodyWithPayloadAttestation(att *eth.PayloadAttestation) (*et
 		Graffiti:              make([]byte, 32),
 		ProposerSlashings:     []*eth.ProposerSlashing{},
 		AttesterSlashings:     []*eth.AttesterSlashingElectra{},
-		Attestations:          []*eth.AttestationElectra{},
+		Attestations:          []*eth.AttestationGloas{},
 		Deposits:              []*eth.Deposit{},
 		VoluntaryExits:        []*eth.SignedVoluntaryExit{},
 		SyncAggregate:         &eth.SyncAggregate{},
