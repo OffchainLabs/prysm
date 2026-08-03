@@ -23,16 +23,6 @@ import (
 // Time to wait before trying to reconnect with beacon node.
 var backOffPeriod = 10 * time.Second
 
-// nextDutiesFetchSlot returns the slot-in-epoch from which next-epoch duties are
-// fetched in the background, past the boundary-heavy, reorg-prone first slots.
-func nextDutiesFetchSlot() primitives.Slot {
-	return max(1, params.BeaconConfig().SlotsPerEpoch/4)
-}
-
-// nextDutiesFetchBPS delays each background fetch to halfway into the slot,
-// off the slot-start rush on the beacon node.
-const nextDutiesFetchBPS = params.BasisPoints / 2
-
 // runner encapsulates the main validator routine.
 type runner struct {
 	validator     iface.Validator
@@ -134,7 +124,8 @@ func (r *runner) run(ctx context.Context) {
 				dutiesCancel()
 			}
 
-			// Post-Gloas: fetch the deferred next-epoch duties in the background at mid-slot.
+			// Fetch the deferred next-epoch duties in the background at mid-slot. Pre-Gloas
+			// this no-ops: only the split path records the indices needsNextFetch requires.
 			if slots.SinceEpochStarts(slot) >= nextDutiesFetchSlot() {
 				v.MaybeFetchNextDuties(ctx, slot)
 			}

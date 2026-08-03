@@ -451,6 +451,16 @@ func (v *validator) fetchNextEpochDuties(ctx context.Context, nextEpoch primitiv
 	return r
 }
 
+// nextDutiesFetchSlot returns the slot-in-epoch from which next-epoch duties are
+// fetched in the background, past the boundary-heavy, reorg-prone first slots.
+func nextDutiesFetchSlot() primitives.Slot {
+	return max(1, params.BeaconConfig().SlotsPerEpoch/4)
+}
+
+// nextDutiesFetchBPS delays each background fetch to halfway into the slot,
+// off the slot-start rush on the beacon node.
+const nextDutiesFetchBPS = params.BasisPoints / 2
+
 // MaybeFetchNextDuties runs ensureNextEpochDuties in a goroutine at mid-slot when
 // next-epoch duties are still needed and no fetch is in flight, bounded by the slot deadline.
 func (v *validator) MaybeFetchNextDuties(ctx context.Context, slot primitives.Slot) {
@@ -463,9 +473,7 @@ func (v *validator) MaybeFetchNextDuties(ctx context.Context, slot primitives.Sl
 			cancel()
 			v.nextFetchInFlight.Store(false)
 		}()
-		if !v.waitUntilNextDutiesDue(fetchCtx, slot) {
-			return
-		}
+		v.waitUntilSlotComponent(fetchCtx, slot, nextDutiesFetchBPS)
 		if err := v.ensureNextEpochDuties(fetchCtx); err != nil {
 			log.WithError(err).Debug("Could not fetch next-epoch duties")
 		}
