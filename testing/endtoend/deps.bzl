@@ -6,6 +6,9 @@ lighthouse_version = "v8.2.0"
 # supports, keyed by the release target-triple suffix. Bazel builds on linux/amd64 and uses
 # the x86_64-unknown-linux-gnu entry; the Make e2e harness (build/externaldata) reads this
 # map to fetch the binary matching the host platform. Keep in sync with lighthouse_version.
+#
+# To bump lighthouse, let `hack/update-lighthouse.sh [version]` rewrite both
+# lighthouse_version and this map (defaults to the latest upstream release).
 lighthouse_integrity = {
     "x86_64-unknown-linux-gnu": "sha256-w3IY/v+yoiVYtfDFGPzxS+i8PVUTMWLH014+UZNFFS0=",
     "aarch64-unknown-linux-gnu": "sha256-5ArnsUOk17YedRx8BWQZ2v4uOAcRkxkzmzRW1GYa2Hs=",
