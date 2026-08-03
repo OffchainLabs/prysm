@@ -132,13 +132,13 @@ type BeaconNode struct {
 	lhsp                      *verification.LazyHeadStateProvider
 	syncChecker               *initialsync.SyncChecker
 	slasherEnabled            bool
+	archiveRegenPending       bool
 	lcStore                   *lightclient.Store
 	ConfigOptions             []params.Option
 	SyncNeedsWaiter           func() (das.SyncNeeds, error)
 	// ArchiveOriginSlot is the slot of the archive origin state, set only in archive mode. It is the
 	// state-diff tree offset and the slot backfill stops at.
-	ArchiveOriginSlot   *primitives.Slot
-	archiveRegenPending bool
+	ArchiveOriginSlot *primitives.Slot
 }
 
 // New creates a new node instance, sets up configuration options, and registers

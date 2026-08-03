@@ -197,8 +197,8 @@ func setStateDiffExponents(exponents []int) {
 }
 
 type mockStateManager struct {
-	pending bool
 	nextArg primitives.Slot
+	pending bool
 	handoff bool
 }
 
