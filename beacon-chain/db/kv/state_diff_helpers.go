@@ -262,6 +262,26 @@ func (s *Store) hasStateDiffOffset() (bool, error) {
 	return hasOffset, err
 }
 
+// stateDiffAnchoredAfterGenesis returns true if the state-diff tree is anchored on a slot after
+// genesis (which only happens on a database synced from a checkpoint).
+func (s *Store) stateDiffAnchoredAfterGenesis() (bool, error) {
+	hasOffset, err := s.hasStateDiffOffset()
+	if err != nil {
+		return false, fmt.Errorf("has state diff offset: %w", err)
+	}
+
+	if !hasOffset {
+		return false, nil
+	}
+
+	offset, err := s.loadOffset()
+	if err != nil {
+		return false, fmt.Errorf("load offset: %w", err)
+	}
+
+	return offset != 0, nil
+}
+
 // initializeStateDiff sets up the state-diff schema for a new database.
 // This should be called during checkpoint sync or genesis sync.
 func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.ReadOnlyBeaconState) error {

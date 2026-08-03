@@ -43,24 +43,41 @@ func TestValidateExecutionPayloadBidGossip_InvalidTopic(t *testing.T) {
 	require.Equal(t, pubsub.ValidationReject, result)
 }
 
-func TestValidateExecutionPayloadBidGossip_AlreadySeenBuilder(t *testing.T) {
+func TestValidateExecutionPayloadBidGossip_AlreadySeenTuple(t *testing.T) {
 	ctx := context.Background()
 	s, msg, signedBid := setupExecutionPayloadBidService(t)
 	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
 
-	key := executionPayloadBidBuilderKey(signedBid.Message.Slot, signedBid.Message.BuilderIndex)
-	s.setSeenExecutionPayloadBidBuilder(signedBid.Message.Slot, key)
+	key := executionPayloadBidTupleKey(mustBid(t, signedBid))
+	s.setSeenExecutionPayloadBid(signedBid.Message.Slot, key)
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
+}
+
+func TestValidateExecutionPayloadBidGossip_SameBuilderDifferentParentAccepted(t *testing.T) {
+	ctx := context.Background()
+	s, msg, signedBid := setupExecutionPayloadBidService(t)
+	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
+
+	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, result)
+
+	other := proto.Clone(signedBid).(*ethpb.SignedExecutionPayloadBid)
+	other.Message.ParentBlockHash = bytesutil.PadTo([]byte{0x09}, 32)
+	msg = executionPayloadBidToPubsub(t, s, s.cfg.p2p, other)
+	result, err = s.validateExecutionPayloadBidGossip(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, result)
 }
 
 // Dedup must short-circuit before every later check; duplicates pay only the cache lookup.
 func TestValidateExecutionPayloadBidGossip_DedupShortCircuitsAllLaterChecks(t *testing.T) {
 	ctx := context.Background()
 	s, msg, signedBid := setupExecutionPayloadBidService(t)
-	key := executionPayloadBidBuilderKey(signedBid.Message.Slot, signedBid.Message.BuilderIndex)
-	s.setSeenExecutionPayloadBidBuilder(signedBid.Message.Slot, key)
+	key := executionPayloadBidTupleKey(mustBid(t, signedBid))
+	s.setSeenExecutionPayloadBid(signedBid.Message.Slot, key)
 	// Every subsequent verifier method would Reject/Ignore if it ran; the cache hit must skip them all.
 	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{
 		errCurrentOrNextSlot:    errors.New("slot"),
@@ -134,8 +151,8 @@ func TestValidateExecutionPayloadBidGossip_ErrorPathsWithMock(t *testing.T) {
 			wantError: true,
 		},
 		{
-			name:      "parent root unknown",
-			verifier:  mockExecutionPayloadBidVerifier{errParentBlockRootSeen: errors.New("unknown root")},
+			name:      "bid not compatible with head",
+			verifier:  mockExecutionPayloadBidVerifier{errBidCompatibleWithHead: errors.New("incompatible branch")},
 			result:    pubsub.ValidationIgnore,
 			wantError: true,
 		},
@@ -214,11 +231,10 @@ func TestValidateExecutionPayloadBidGossip_LowerOrEqualBidIgnored(t *testing.T) 
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
-	builderKey := executionPayloadBidBuilderKey(signedBid.Message.Slot, signedBid.Message.BuilderIndex)
-	require.Equal(t, true, s.hasSeenExecutionPayloadBidBuilder(builderKey))
+	require.Equal(t, true, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustBid(t, signedBid))))
 }
 
-func TestValidateExecutionPayloadBidGossip_LowerBidIgnoredStillMarksBuilderSeen(t *testing.T) {
+func TestValidateExecutionPayloadBidGossip_LowerBidIgnoredStillMarksTupleSeen(t *testing.T) {
 	ctx := context.Background()
 	s, msg, signedBid := setupExecutionPayloadBidService(t)
 	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
@@ -231,7 +247,7 @@ func TestValidateExecutionPayloadBidGossip_LowerBidIgnoredStillMarksBuilderSeen(
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
 
-	// If the lower valid bid did not mark the builder as seen, the same bid would
+	// If the lower valid bid did not mark the tuple as seen, the same bid would
 	// be accepted once the highest-bid cache is cleared.
 	s.highestExecutionPayloadBidCache = cache.NewHighestExecutionPayloadBidCache()
 	msg = executionPayloadBidToPubsub(t, s, s.cfg.p2p, signedBid)
@@ -268,8 +284,7 @@ func TestValidateExecutionPayloadBidGossip_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationAccept, result)
 
-	builderKey := executionPayloadBidBuilderKey(signedBid.Message.Slot, signedBid.Message.BuilderIndex)
-	require.Equal(t, true, s.hasSeenExecutionPayloadBidBuilder(builderKey))
+	require.Equal(t, true, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustBid(t, signedBid))))
 	got, ok := msg.ValidatorData.(*ethpb.SignedExecutionPayloadBid)
 	require.Equal(t, true, ok)
 	require.DeepEqual(t, signedBid, got)
@@ -401,20 +416,21 @@ func TestExecutionPayloadBidSubscriber_NilMessage(t *testing.T) {
 }
 
 type mockExecutionPayloadBidVerifier struct {
-	errCurrentOrNextSlot    error
-	errSlotMatches          error
-	errBuilderActive        error
-	errBuilderVersion       error
-	errExecutionPayment     error
-	errFeeRecipientMismatch error
-	errBlobKzgCommitments   error
-	errPrevRandao           error
-	errGasLimitIncompatible error
-	errParentBlockRootSeen  error
-	errSlotHigherThanParent error
-	errParentBlockHash      error
-	errBuilderCanCoverBid   error
-	errSignature            error
+	errCurrentOrNextSlot     error
+	errSlotMatches           error
+	errBuilderActive         error
+	errBuilderVersion        error
+	errExecutionPayment      error
+	errFeeRecipientMismatch  error
+	errBlobKzgCommitments    error
+	errPrevRandao            error
+	errGasLimitIncompatible  error
+	errParentBlockRootSeen   error
+	errBidCompatibleWithHead error
+	errSlotHigherThanParent  error
+	errParentBlockHash       error
+	errBuilderCanCoverBid    error
+	errSignature             error
 }
 
 var _ verification.ExecutionPayloadBidVerifier = &mockExecutionPayloadBidVerifier{}
@@ -457,6 +473,10 @@ func (m *mockExecutionPayloadBidVerifier) VerifyGasLimitTargetCompatible(uint64,
 
 func (m *mockExecutionPayloadBidVerifier) VerifyParentBlockRootSeen(func([32]byte) bool) error {
 	return m.errParentBlockRootSeen
+}
+
+func (m *mockExecutionPayloadBidVerifier) VerifyBidCompatibleWithHead(func(interfaces.ROExecutionPayloadBid) bool) error {
+	return m.errBidCompatibleWithHead
 }
 
 func (m *mockExecutionPayloadBidVerifier) VerifyBidSlotHigherThanParent(primitives.Slot) error {

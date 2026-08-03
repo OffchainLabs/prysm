@@ -515,6 +515,15 @@ func AttElectraFromConsensus(a *eth.AttestationElectra) *AttestationElectra {
 	}
 }
 
+func AttGloasFromConsensus(a *eth.AttestationGloas) *AttestationElectra {
+	return &AttestationElectra{
+		AggregationBits: hexutil.Encode(a.AggregationBits),
+		Data:            AttDataFromConsensus(a.Data),
+		Signature:       hexutil.Encode(a.Signature),
+		CommitteeBits:   hexutil.Encode(a.CommitteeBits),
+	}
+}
+
 func (a *AttestationData) ToConsensus() (*eth.AttestationData, error) {
 	slot, err := strconv.ParseUint(a.Slot, 10, 64)
 	if err != nil {
@@ -1365,10 +1374,43 @@ func AttsElectraToConsensus(src []*AttestationElectra) ([]*eth.AttestationElectr
 	return atts, nil
 }
 
+func AttsGloasToConsensus(src []*AttestationElectra) ([]*eth.AttestationGloas, error) {
+	if src == nil {
+		return nil, server.NewDecodeError(errNilValue, "AttestationsGloas")
+	}
+	err := slice.VerifyMaxLength(src, 8)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "AttestationsGloas")
+	}
+
+	atts := make([]*eth.AttestationGloas, len(src))
+	for i, a := range src {
+		if a == nil {
+			return nil, server.NewDecodeError(errNilValue, fmt.Sprintf("[%d]", i))
+		}
+		att, err := a.ToConsensus()
+		if err != nil {
+			return nil, server.NewDecodeError(err, fmt.Sprintf("[%d]", i))
+		}
+		atts[i] = eth.AttestationElectraToGloas(att)
+	}
+	return atts, nil
+}
+
 func AttsElectraFromConsensus(src []*eth.AttestationElectra) []*AttestationElectra {
 	atts := make([]*AttestationElectra, len(src))
 	for i, a := range src {
 		atts[i] = AttElectraFromConsensus(a)
+	}
+	return atts
+}
+
+// AttsGloasFromConsensus returns AttestationElectra because Gloas retains the
+// same attestation representation in the beacon API. This is needed for JSON marshaling.
+func AttsGloasFromConsensus(src []*eth.AttestationGloas) []*AttestationElectra {
+	atts := make([]*AttestationElectra, len(src))
+	for i, a := range src {
+		atts[i] = AttGloasFromConsensus(a)
 	}
 	return atts
 }

@@ -199,6 +199,7 @@ ssz_fulu_objs = [
 ]
 
 ssz_gloas_objs = [
+    "AggregateAttestationAndProofGloas",
     "BlindedExecutionPayloadEnvelope",
     "BuilderPendingPayment",
     "BuilderPendingWithdrawal",
@@ -207,6 +208,7 @@ ssz_gloas_objs = [
     "PTCs",
     "ProposerPreferences",
     "SignedProposerPreferences",
+    "SignedAggregateAttestationAndProofGloas",
     "PayloadAttestation",
     "PayloadAttestationData",
     "PayloadAttestationMessage",
@@ -479,6 +481,7 @@ ssz_proto_files(
 go_test(
     name = "go_default_test",
     srcs = [
+        "attestation_gloas_test.go",
         "attestation_fuzz_test.go",
         "beacon_block_fuzz_test.go",
         "cloners_test.go",
@@ -493,6 +496,7 @@ go_test(
     deps = [
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
+        "//testing/util:go_default_library",
         "@com_github_google_gofuzz//:go_default_library",
     ],
 )
