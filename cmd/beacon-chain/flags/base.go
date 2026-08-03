@@ -82,7 +82,7 @@ var (
 	// before giving up and using the locally built block.
 	BuilderHeaderTimeout = &cli.DurationFlag{
 		Name:  "builder-header-timeout",
-		Usage: "Timeout to use when fetching a block header from the builder API, as a duration (e.g. 1s, 2s, 2500ms). Must be greater than 0",
+		Usage: "Timeout to use when fetching a block header from the builder API, as a duration (e.g. 1s, 2s, 2500ms). Must be greater than 0. Only effective up to the Fulu fork.",
 		Value: params.BeaconConfig().BuilderHeaderTimeout,
 	}
 	// ExecutionEngineEndpoint provides an HTTP access endpoint to connect to an execution client on the execution layer
