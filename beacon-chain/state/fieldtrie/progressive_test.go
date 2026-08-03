@@ -16,7 +16,7 @@ import (
 // stateutil reference helpers return the progressive form.
 func progressiveRootsEnabled(t *testing.T) {
 	t.Helper()
-	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset := features.InitWithReset(&features.Flags{})
 	t.Cleanup(reset)
 }
 

@@ -423,12 +423,12 @@ func TestWithdrawalSliceRoot_ProgressiveSSZGate(t *testing.T) {
 		},
 		{
 			name:         "pre-Gloas",
-			flags:        features.Flags{EnableProgressiveSSZ: true},
+			flags:        features.Flags{},
 			stateVersion: version.Fulu,
 		},
 		{
 			name:         "Gloas",
-			flags:        features.Flags{EnableProgressiveSSZ: true},
+			flags:        features.Flags{},
 			stateVersion: version.Gloas,
 			progressive:  true,
 		},
@@ -463,7 +463,7 @@ func TestWithdrawalSliceRoot_ProgressiveSSZGate(t *testing.T) {
 		})
 	}
 
-	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
 	_, err := ssz.WithdrawalSliceRoot([]*enginev1.Withdrawal{withdrawal}, 0)
 	require.ErrorContains(t, "slice exceeds max length", err)
