@@ -158,6 +158,233 @@ func (a *AttestationGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
+// MarshalSSZ ssz marshals the SignedAggregateAttestationAndProofGloas object
+func (s *SignedAggregateAttestationAndProofGloas) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(s)
+}
+
+// MarshalSSZTo ssz marshals the SignedAggregateAttestationAndProofGloas object to a target array
+func (s *SignedAggregateAttestationAndProofGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(100)
+
+	// Offset (0) 'Message'
+	dst = ssz.WriteOffset(dst, offset)
+	if s.Message == nil {
+		s.Message = new(AggregateAttestationAndProofGloas)
+	}
+	offset += s.Message.SizeSSZ()
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	dst = append(dst, s.Signature...)
+
+	// Field (0) 'Message'
+	if dst, err = s.Message.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the SignedAggregateAttestationAndProofGloas object
+func (s *SignedAggregateAttestationAndProofGloas) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 100 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'Message'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 100 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (1) 'Signature'
+	if cap(s.Signature) == 0 {
+		s.Signature = make([]byte, 0, len(buf[4:100]))
+	}
+	s.Signature = append(s.Signature, buf[4:100]...)
+
+	// Field (0) 'Message'
+	{
+		buf = tail[o0:]
+		if s.Message == nil {
+			s.Message = new(AggregateAttestationAndProofGloas)
+		}
+		if err = s.Message.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the SignedAggregateAttestationAndProofGloas object
+func (s *SignedAggregateAttestationAndProofGloas) SizeSSZ() (size int) {
+	size = 100
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(AggregateAttestationAndProofGloas)
+	}
+	size += s.Message.SizeSSZ()
+
+	return
+}
+
+// HashTreeRoot ssz hashes the SignedAggregateAttestationAndProofGloas object
+func (s *SignedAggregateAttestationAndProofGloas) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(s)
+}
+
+// HashTreeRootWith ssz hashes the SignedAggregateAttestationAndProofGloas object with a hasher
+func (s *SignedAggregateAttestationAndProofGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Message'
+	if err = s.Message.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	hh.PutBytes(s.Signature)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the AggregateAttestationAndProofGloas object
+func (a *AggregateAttestationAndProofGloas) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(a)
+}
+
+// MarshalSSZTo ssz marshals the AggregateAttestationAndProofGloas object to a target array
+func (a *AggregateAttestationAndProofGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(108)
+
+	// Field (0) 'AggregatorIndex'
+	dst = ssz.MarshalUint(dst, a.AggregatorIndex)
+
+	// Offset (1) 'Aggregate'
+	dst = ssz.WriteOffset(dst, offset)
+	if a.Aggregate == nil {
+		a.Aggregate = new(AttestationGloas)
+	}
+	offset += a.Aggregate.SizeSSZ()
+
+	// Field (2) 'SelectionProof'
+	if size := len(a.SelectionProof); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.SelectionProof", size, 96)
+		return
+	}
+	dst = append(dst, a.SelectionProof...)
+
+	// Field (1) 'Aggregate'
+	if dst, err = a.Aggregate.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the AggregateAttestationAndProofGloas object
+func (a *AggregateAttestationAndProofGloas) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 108 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o1 uint64
+
+	// Field (0) 'AggregatorIndex'
+	a.AggregatorIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[0:8])
+
+	// Offset (1) 'Aggregate'
+	if o1 = ssz.ReadOffset(buf[8:12]); o1 > size {
+		return ssz.ErrOffset
+	}
+
+	if o1 != 108 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (2) 'SelectionProof'
+	if cap(a.SelectionProof) == 0 {
+		a.SelectionProof = make([]byte, 0, len(buf[12:108]))
+	}
+	a.SelectionProof = append(a.SelectionProof, buf[12:108]...)
+
+	// Field (1) 'Aggregate'
+	{
+		buf = tail[o1:]
+		if a.Aggregate == nil {
+			a.Aggregate = new(AttestationGloas)
+		}
+		if err = a.Aggregate.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the AggregateAttestationAndProofGloas object
+func (a *AggregateAttestationAndProofGloas) SizeSSZ() (size int) {
+	size = 108
+
+	// Field (1) 'Aggregate'
+	if a.Aggregate == nil {
+		a.Aggregate = new(AttestationGloas)
+	}
+	size += a.Aggregate.SizeSSZ()
+
+	return
+}
+
+// HashTreeRoot ssz hashes the AggregateAttestationAndProofGloas object
+func (a *AggregateAttestationAndProofGloas) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(a)
+}
+
+// HashTreeRootWith ssz hashes the AggregateAttestationAndProofGloas object with a hasher
+func (a *AggregateAttestationAndProofGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'AggregatorIndex'
+	ssz.PutUint(hh, a.AggregatorIndex)
+
+	// Field (1) 'Aggregate'
+	if err = a.Aggregate.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (2) 'SelectionProof'
+	if size := len(a.SelectionProof); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.SelectionProof", size, 96)
+		return
+	}
+	hh.PutBytes(a.SelectionProof)
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the ExecutionPayloadBid object
 func (e *ExecutionPayloadBid) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(e)

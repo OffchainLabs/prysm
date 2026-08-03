@@ -385,6 +385,56 @@ func AttestationElectraFromAtt(att Att) (*AttestationElectra, bool) {
 	}
 }
 
+// AggregateAttestationAndProofElectraToGloas copies an Electra aggregate and
+// proof into the wire-compatible Gloas type.
+func AggregateAttestationAndProofElectraToGloas(a *AggregateAttestationAndProofElectra) *AggregateAttestationAndProofGloas {
+	if a == nil {
+		return nil
+	}
+	return &AggregateAttestationAndProofGloas{
+		AggregatorIndex: a.AggregatorIndex,
+		Aggregate:       AttestationElectraToGloas(a.Aggregate),
+		SelectionProof:  bytesutil.SafeCopyBytes(a.SelectionProof),
+	}
+}
+
+// AggregateAttestationAndProofGloasToElectra copies a Gloas aggregate and
+// proof into the wire-compatible Electra type.
+func AggregateAttestationAndProofGloasToElectra(a *AggregateAttestationAndProofGloas) *AggregateAttestationAndProofElectra {
+	if a == nil {
+		return nil
+	}
+	return &AggregateAttestationAndProofElectra{
+		AggregatorIndex: a.AggregatorIndex,
+		Aggregate:       AttestationGloasToElectra(a.Aggregate),
+		SelectionProof:  bytesutil.SafeCopyBytes(a.SelectionProof),
+	}
+}
+
+// SignedAggregateAttestationAndProofElectraToGloas copies a signed Electra
+// aggregate and proof into the wire-compatible Gloas type.
+func SignedAggregateAttestationAndProofElectraToGloas(a *SignedAggregateAttestationAndProofElectra) *SignedAggregateAttestationAndProofGloas {
+	if a == nil {
+		return nil
+	}
+	return &SignedAggregateAttestationAndProofGloas{
+		Message:   AggregateAttestationAndProofElectraToGloas(a.Message),
+		Signature: bytesutil.SafeCopyBytes(a.Signature),
+	}
+}
+
+// SignedAggregateAttestationAndProofGloasToElectra copies a signed Gloas
+// aggregate and proof into the wire-compatible Electra type.
+func SignedAggregateAttestationAndProofGloasToElectra(a *SignedAggregateAttestationAndProofGloas) *SignedAggregateAttestationAndProofElectra {
+	if a == nil {
+		return nil
+	}
+	return &SignedAggregateAttestationAndProofElectra{
+		Message:   AggregateAttestationAndProofGloasToElectra(a.Message),
+		Signature: bytesutil.SafeCopyBytes(a.Signature),
+	}
+}
+
 // GetAttestingIndex --
 func (*AttestationGloas) GetAttestingIndex() primitives.ValidatorIndex {
 	return 0
@@ -648,6 +698,21 @@ func (a *AggregateAttestationAndProofElectra) AggregateVal() Att {
 }
 
 // Version --
+func (a *AggregateAttestationAndProofGloas) Version() int {
+	return version.Gloas
+}
+
+// IsNil --
+func (a *AggregateAttestationAndProofGloas) IsNil() bool {
+	return a == nil || a.Aggregate == nil || a.Aggregate.IsNil()
+}
+
+// AggregateVal --
+func (a *AggregateAttestationAndProofGloas) AggregateVal() Att {
+	return a.Aggregate
+}
+
+// Version --
 func (a *SignedAggregateAttestationAndProof) Version() int {
 	return version.Phase0
 }
@@ -674,5 +739,20 @@ func (a *SignedAggregateAttestationAndProofElectra) IsNil() bool {
 
 // AggregateAttestationAndProof --
 func (a *SignedAggregateAttestationAndProofElectra) AggregateAttestationAndProof() AggregateAttAndProof {
+	return a.Message
+}
+
+// Version --
+func (a *SignedAggregateAttestationAndProofGloas) Version() int {
+	return version.Gloas
+}
+
+// IsNil --
+func (a *SignedAggregateAttestationAndProofGloas) IsNil() bool {
+	return a == nil || a.Message == nil || a.Message.IsNil()
+}
+
+// AggregateAttestationAndProof --
+func (a *SignedAggregateAttestationAndProofGloas) AggregateAttestationAndProof() AggregateAttAndProof {
 	return a.Message
 }
