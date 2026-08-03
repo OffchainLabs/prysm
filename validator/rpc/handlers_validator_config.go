@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -18,7 +17,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-const maxBuilderEntries = 64
+const (
+	maxBuilderEntries = 64   // MAX_BUILDER_ENTRIES
+	maxBuilderURLSize = 2048 // MAX_BUILDER_URL_SIZE
+	maxAuthDataSize   = 4096 // MAX_DATA_SIZE
+)
 
 // GetBuilders implements GET /eth/v1/validator/{pubkey}/builders (keymanager-APIs #88).
 // It returns the key's builder configuration resolved against default_config so
@@ -41,14 +44,6 @@ func (s *Server) GetBuilders(w http.ResponseWriter, r *http.Request) {
 	// The resolved response always states a concrete builders list.
 	if out.Builders == nil {
 		out.Builders = []*BuilderEntryJson{}
-	}
-	for _, e := range out.Builders {
-		if e.MinBid == nil {
-			e.MinBid = out.MinBid
-		}
-		if e.BuilderBoostFactor == nil {
-			e.BuilderBoostFactor = out.BuilderBoostFactor
-		}
 	}
 	httputil.WriteJson(w, out)
 }
@@ -123,7 +118,7 @@ func (s *Server) DeleteBuilders(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
 	}
-	rawPubkey, pubkey, ok := shared.HexFromRoute(w, r, "pubkey", fieldparams.BLSPubkeyLength)
+	_, pubkey, ok := shared.HexFromRoute(w, r, "pubkey", fieldparams.BLSPubkeyLength)
 	if !ok {
 		return
 	}
@@ -133,13 +128,14 @@ func (s *Server) DeleteBuilders(w http.ResponseWriter, r *http.Request) {
 
 	settings := s.validatorService.ProposerSettings()
 	key := bytesutil.ToBytes48(pubkey)
+	// Removing an absent configuration succeeds; the key already follows the defaults.
 	if settings == nil || settings.ProposeConfig == nil {
-		httputil.HandleError(w, fmt.Sprintf("No builder configuration found for pubkey %q", rawPubkey), http.StatusNotFound)
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	opt, found := settings.ProposeConfig[key]
 	if !found || opt == nil || opt.BuilderConfig == nil {
-		httputil.HandleError(w, fmt.Sprintf("No builder configuration found for pubkey %q", rawPubkey), http.StatusNotFound)
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
@@ -152,6 +148,8 @@ func (s *Server) DeleteBuilders(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// resolveBuilders returns the key's effective builder config; the Effective*
+// getters resolve unset values (no floor, neutral boost, trustless-only).
 func resolveBuilders(settings *proposer.Settings, key [fieldparams.BLSPubkeyLength]byte) *proposer.BuilderConfig {
 	var perKey, def *proposer.BuilderConfig
 	if settings != nil {
@@ -172,32 +170,30 @@ func builderConfigJSONFromConsensus(bc *proposer.BuilderConfig) *BuilderConfigJs
 	enabled := bc.Enabled
 	out := &BuilderConfigJson{
 		Enabled:            &enabled,
-		MinBid:             optUintStrPtr(bc.MinBid),
-		BuilderBoostFactor: optUintStrPtr(bc.BuilderBoostFactor),
+		MinBid:             new(formatUint(bc.EffectiveMinBid())),
+		BuilderBoostFactor: new(formatUint(bc.EffectiveBuilderBoostFactor())),
 	}
 	if bc.Builders != nil {
 		out.Builders = make([]*BuilderEntryJson, 0, len(bc.Builders))
 		for _, b := range bc.Builders {
-			out.Builders = append(out.Builders, builderEntryJSONFromConsensus(b))
+			out.Builders = append(out.Builders, builderEntryJSONFromConsensus(b, bc))
 		}
 	}
 	return out
 }
 
-func builderEntryJSONFromConsensus(be *proposer.BuilderEntry) *BuilderEntryJson {
+func builderEntryJSONFromConsensus(be *proposer.BuilderEntry, bc *proposer.BuilderConfig) *BuilderEntryJson {
 	out := &BuilderEntryJson{
-		MaxExecutionPayment: optUintStrPtr(be.MaxExecutionPayment),
-		MinBid:              optUintStrPtr(be.MinBid),
-		BuilderBoostFactor:  optUintStrPtr(be.BuilderBoostFactor),
+		MaxExecutionPayment: new(formatUint(be.EffectiveMaxExecutionPayment(bc))),
+		MinBid:              new(formatUint(be.EffectiveMinBid(bc))),
+		BuilderBoostFactor:  new(formatUint(be.EffectiveBuilderBoostFactor(bc))),
 	}
 	if be.URL != "" {
-		out.Url = strPtr(be.URL)
+		out.Url = be.URL
+		out.AuthData = new(hexutil.Encode(be.EffectiveAuthData()))
 	}
 	if len(be.Pubkey) != 0 {
-		out.BuilderPubkey = strPtr(hexutil.Encode(be.Pubkey))
-	}
-	if len(be.AuthData) != 0 {
-		out.AuthData = strPtr(hexutil.Encode(be.AuthData))
+		out.BuilderPubkey = new(hexutil.Encode(be.Pubkey))
 	}
 	return out
 }
@@ -225,27 +221,18 @@ func builderConfigFromJSON(in *BuilderConfigJson) (*proposer.BuilderConfig, erro
 		return nil, errors.Errorf("builders exceeds %d entries", maxBuilderEntries)
 	}
 	// Non-nil (possibly empty) list means "use exactly these builders", not "inherit".
-	// Uniqueness is scoped by role: url entries by (url, auth_data),
-	// url-less p2p-policy entries by builder_pubkey.
+	// Omitted auth_data compares as its derived value, so it collides with the explicit form.
 	bc.Builders = make([]*proposer.BuilderEntry, 0, len(in.Builders))
-	seenURL := make(map[string]bool, len(in.Builders))
-	seenP2P := make(map[string]bool, len(in.Builders))
+	seen := make(map[proposer.EntryIdentity]bool, len(in.Builders))
 	for i, entry := range in.Builders {
 		be, err := builderEntryFromJSON(entry, i)
 		if err != nil {
 			return nil, err
 		}
-		if be.URL != "" {
-			key := fmt.Sprintf("%s|%x", be.URL, be.AuthData)
-			if seenURL[key] {
-				return nil, errors.Errorf("builders[%d]: two entries share the same url and auth_data", i)
-			}
-			seenURL[key] = true
-		} else if seenP2P[string(be.Pubkey)] {
-			return nil, errors.Errorf("builders[%d]: two p2p-policy entries share the same builder_pubkey", i)
-		} else {
-			seenP2P[string(be.Pubkey)] = true
+		if seen[be.Identity()] {
+			return nil, errors.Errorf("builders[%d]: two entries share the same url and auth_data", i)
 		}
+		seen[be.Identity()] = true
 		bc.Builders = append(bc.Builders, be)
 	}
 	return bc, nil
@@ -253,12 +240,16 @@ func builderConfigFromJSON(in *BuilderConfigJson) (*proposer.BuilderConfig, erro
 
 func builderEntryFromJSON(in *BuilderEntryJson, i int) (*proposer.BuilderEntry, error) {
 	be := &proposer.BuilderEntry{}
-	if in.Url != nil && *in.Url != "" {
-		if u, err := url.Parse(*in.Url); err != nil || u.Scheme == "" || u.Host == "" {
-			return nil, errors.Errorf("builders[%d].url is not a valid URL", i)
-		}
-		be.URL = *in.Url
+	if in.Url == "" {
+		return nil, errors.Errorf("builders[%d].url is required", i)
 	}
+	if len(in.Url) > maxBuilderURLSize {
+		return nil, errors.Errorf("builders[%d].url exceeds %d bytes", i, maxBuilderURLSize)
+	}
+	if u, err := url.Parse(in.Url); err != nil || u.Scheme == "" || u.Host == "" {
+		return nil, errors.Errorf("builders[%d].url is not a valid URL", i)
+	}
+	be.URL = in.Url
 	if in.BuilderPubkey != nil {
 		pk, err := hexutil.Decode(*in.BuilderPubkey)
 		if err != nil || len(pk) != fieldparams.BLSPubkeyLength {
@@ -266,16 +257,13 @@ func builderEntryFromJSON(in *BuilderEntryJson, i int) (*proposer.BuilderEntry, 
 		}
 		be.Pubkey = pk
 	}
-	if be.URL == "" && len(be.Pubkey) == 0 {
-		return nil, errors.Errorf("builders[%d]: at least one of url and builder_pubkey is required", i)
-	}
 	if in.AuthData != nil {
 		ad, err := hexutil.Decode(*in.AuthData)
 		if err != nil {
 			return nil, errors.Errorf("builders[%d].auth_data is not valid hex", i)
 		}
-		if len(ad) > 4096 {
-			return nil, errors.Errorf("builders[%d].auth_data exceeds 4096 bytes", i)
+		if len(ad) > maxAuthDataSize {
+			return nil, errors.Errorf("builders[%d].auth_data exceeds %d bytes", i, maxAuthDataSize)
 		}
 		be.AuthData = ad
 	}
@@ -316,10 +304,3 @@ func formatUint(v validator.Uint64) string {
 }
 
 func strPtr(s string) *string { return &s }
-
-func optUintStrPtr(v *validator.Uint64) *string {
-	if v == nil {
-		return nil
-	}
-	return strPtr(formatUint(*v))
-}

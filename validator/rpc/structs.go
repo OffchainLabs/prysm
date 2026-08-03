@@ -118,13 +118,13 @@ type GraffitiData struct {
 // field still decodes to nil, which means "inherit the validator client's builders".
 type BuilderConfigJson struct {
 	Enabled            *bool               `json:"enabled"`
-	Builders           []*BuilderEntryJson `json:"builders"`
 	MinBid             *string             `json:"min_bid,omitempty"`
 	BuilderBoostFactor *string             `json:"builder_boost_factor,omitempty"`
+	Builders           []*BuilderEntryJson `json:"builders"`
 }
 
 type BuilderEntryJson struct {
-	Url                 *string `json:"url,omitempty"`
+	Url                 string  `json:"url,omitempty"`
 	AuthData            *string `json:"auth_data,omitempty"`
 	BuilderPubkey       *string `json:"builder_pubkey,omitempty"`
 	MaxExecutionPayment *string `json:"max_execution_payment,omitempty"`

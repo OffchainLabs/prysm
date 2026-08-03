@@ -68,6 +68,11 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 		settings.DefaultConfig.BuilderConfig.GasLimit = 1
 		require.NotEqual(t, settings.DefaultConfig.BuilderConfig.GasLimit, clone.GasLimit)
 	})
+	t.Run("Cloning preserves the use-none builders marker", func(t *testing.T) {
+		clone := (&BuilderConfig{Enabled: true, Builders: []*BuilderEntry{}}).Clone()
+		require.NotNil(t, clone.Builders)
+		require.Equal(t, 0, len(clone.Builders))
+	})
 
 	t.Run("Happy Path BuilderConfigFromConsensus", func(t *testing.T) {
 		clone := settings.DefaultConfig.BuilderConfig.Clone()
@@ -613,9 +618,9 @@ func TestSettings_TargetGasLimit(t *testing.T) {
 	})
 }
 
-// Legacy (pre-v2) payloads can't express presence: wire-absent enabled meant
-// disabled, and the filesystem backend wrote spurious explicit-0 max payments.
-// Persisted payloads may predate duplicate-url rejection at the API.
+// Persisted payloads may predate url-required and (url, auth_data) uniqueness:
+// url-less entries drop, (url, auth) duplicates keep the first, and an omitted
+// auth_data compares as its derived value (the url's UTF-8 bytes).
 func TestSettingFromConsensus_DedupsBuilders(t *testing.T) {
 	payload := &validatorpb.ProposerSettingsPayload{
 		Version: SchemaV2,
@@ -625,7 +630,10 @@ func TestSettingFromConsensus_DedupsBuilders(t *testing.T) {
 				Builders: []*validatorpb.BuilderEntry{
 					{Url: "https://b.example", AuthData: []byte("first")},
 					{Url: "https://b.example", AuthData: []byte("second")},
+					{Url: "https://b.example", AuthData: []byte("first")},
 					{Url: "https://other.example"},
+					{Url: "https://other.example", AuthData: []byte("https://other.example")},
+					{AuthData: []byte("url-less")},
 				},
 			},
 		},
@@ -633,10 +641,10 @@ func TestSettingFromConsensus_DedupsBuilders(t *testing.T) {
 	ps, err := SettingFromConsensus(payload)
 	require.NoError(t, err)
 	builders := ps.DefaultConfig.BuilderConfig.Builders
-	require.Equal(t, 2, len(builders))
-	require.Equal(t, "https://b.example", builders[0].URL)
+	require.Equal(t, 3, len(builders))
 	require.DeepEqual(t, []byte("first"), builders[0].AuthData)
-	require.Equal(t, "https://other.example", builders[1].URL)
+	require.DeepEqual(t, []byte("second"), builders[1].AuthData)
+	require.Equal(t, "https://other.example", builders[2].URL)
 }
 
 func TestSettingFromConsensus_NormalizesLegacyPresence(t *testing.T) {

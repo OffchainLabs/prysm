@@ -1398,29 +1398,29 @@ func (v *validator) builderConfigForKey(pk pubkey) *proposer.BuilderConfig {
 
 // builderTargetsForKey resolves the enabled builder list for pk; each entry
 // overrides the config-level fallbacks.
-// TODO(gloas): resolved minBid/boostFactor/pubkey/authData and url-less entries
-// take effect with the inline produce-block preferences wire (beacon-APIs #630).
+// TODO(gloas): resolved minBid/boostFactor/pubkey take effect with the inline
+// produce-block preferences wire (beacon-APIs #630).
 func (v *validator) builderTargetsForKey(pk pubkey) []builderTarget {
 	bc := v.builderConfigForKey(pk)
 	if !bc.IsEnabled() {
 		return nil
 	}
-	// Unset resolves to 0, trustless-only.
-	var fbMax uint64
-	if bc.MaxExecutionPayment != nil {
-		fbMax = uint64(*bc.MaxExecutionPayment)
-	}
+	fbMax := uint64(bc.EffectiveMaxExecutionPayment())
 	fbMin := uint64Ptr(bc.MinBid)
 	fbBoost := uint64Ptr(bc.BuilderBoostFactor)
 
 	targets := make([]builderTarget, 0, len(bc.Builders))
-	seen := make(map[string]bool, len(bc.Builders))
+	seen := make(map[proposer.EntryIdentity]bool, len(bc.Builders))
 	for _, e := range bc.Builders {
-		if e == nil || e.URL == "" || seen[e.URL] {
+		if e == nil || e.URL == "" {
 			continue
 		}
-		seen[e.URL] = true
-		t := builderTarget{url: e.URL, authData: e.AuthData, pubkey: e.Pubkey, maxPayment: fbMax, minBid: fbMin, boostFactor: fbBoost}
+		// One request per entry: entries may share a url with different auth_data.
+		if seen[e.Identity()] {
+			continue
+		}
+		seen[e.Identity()] = true
+		t := builderTarget{url: e.URL, authData: e.EffectiveAuthData(), pubkey: e.Pubkey, maxPayment: fbMax, minBid: fbMin, boostFactor: fbBoost}
 		if e.MaxExecutionPayment != nil {
 			t.maxPayment = uint64(*e.MaxExecutionPayment)
 		}

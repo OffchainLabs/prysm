@@ -68,24 +68,24 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 	return settings, nil
 }
 
-// Persisted configs may predate duplicate-url rejection; the first entry wins,
-// matching inline preference assembly.
+// Persisted configs may predate url-required and (url, auth_data) uniqueness;
+// url-less entries are dropped and the first entry wins, matching POST validation.
 func (ps *Settings) dedupBuilders() {
 	fix := func(opt *Option) {
-		if opt == nil || opt.BuilderConfig == nil || len(opt.BuilderConfig.Builders) < 2 {
+		if opt == nil || opt.BuilderConfig == nil || len(opt.BuilderConfig.Builders) == 0 {
 			return
 		}
-		seen := make(map[string]bool, len(opt.BuilderConfig.Builders))
+		seen := make(map[EntryIdentity]bool, len(opt.BuilderConfig.Builders))
 		kept := opt.BuilderConfig.Builders[:0]
 		for _, e := range opt.BuilderConfig.Builders {
-			if e == nil || seen[e.URL] {
+			if e == nil || e.URL == "" || seen[e.Identity()] {
 				continue
 			}
-			seen[e.URL] = true
+			seen[e.Identity()] = true
 			kept = append(kept, e)
 		}
 		if len(kept) != len(opt.BuilderConfig.Builders) {
-			log.Warn("Duplicate builder urls in proposer settings; keeping the first entry for each url")
+			log.Warn("Removed url-less or duplicate builder entries from proposer settings")
 			opt.BuilderConfig.Builders = kept
 		}
 	}
@@ -151,6 +151,78 @@ type BuilderEntry struct {
 	MinBid              *validator.Uint64 `json:"min_bid,omitempty" yaml:"min_bid,omitempty"`
 	MaxExecutionPayment *validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"`
 	BuilderBoostFactor  *validator.Uint64 `json:"builder_boost_factor,omitempty" yaml:"builder_boost_factor,omitempty"`
+}
+
+// EffectiveAuthData resolves omitted auth_data to the spec convention:
+// the UTF-8 bytes of the builder's URL.
+func (be *BuilderEntry) EffectiveAuthData() []byte {
+	if len(be.AuthData) != 0 {
+		return be.AuthData
+	}
+	return []byte(be.URL)
+}
+
+// EntryIdentity is what makes a builder entry unique: its url compared as the
+// exact string and its auth_data as the resolved bytes.
+type EntryIdentity struct {
+	URL  string
+	Auth string
+}
+
+func (be *BuilderEntry) Identity() EntryIdentity {
+	return EntryIdentity{URL: be.URL, Auth: string(be.EffectiveAuthData())}
+}
+
+// NeutralBuilderBoostFactor is the resolved boost when none is configured:
+// pure profit maximization between builder and local payloads.
+const NeutralBuilderBoostFactor = 100
+
+// EffectiveMinBid resolves the config-level floor; unset means no floor.
+func (bc *BuilderConfig) EffectiveMinBid() validator.Uint64 {
+	if bc == nil || bc.MinBid == nil {
+		return 0
+	}
+	return *bc.MinBid
+}
+
+// EffectiveBuilderBoostFactor resolves the config-level boost; unset means neutral.
+func (bc *BuilderConfig) EffectiveBuilderBoostFactor() validator.Uint64 {
+	if bc == nil || bc.BuilderBoostFactor == nil {
+		return NeutralBuilderBoostFactor
+	}
+	return *bc.BuilderBoostFactor
+}
+
+// EffectiveMaxExecutionPayment resolves the ceiling; unset means trustless-only.
+func (bc *BuilderConfig) EffectiveMaxExecutionPayment() validator.Uint64 {
+	if bc == nil || bc.MaxExecutionPayment == nil {
+		return 0
+	}
+	return *bc.MaxExecutionPayment
+}
+
+// EffectiveMinBid resolves this entry's floor, falling back to the enclosing config.
+func (be *BuilderEntry) EffectiveMinBid(bc *BuilderConfig) validator.Uint64 {
+	if be.MinBid != nil {
+		return *be.MinBid
+	}
+	return bc.EffectiveMinBid()
+}
+
+// EffectiveBuilderBoostFactor resolves this entry's boost, falling back to the enclosing config.
+func (be *BuilderEntry) EffectiveBuilderBoostFactor(bc *BuilderConfig) validator.Uint64 {
+	if be.BuilderBoostFactor != nil {
+		return *be.BuilderBoostFactor
+	}
+	return bc.EffectiveBuilderBoostFactor()
+}
+
+// EffectiveMaxExecutionPayment resolves this entry's ceiling, falling back to the enclosing config.
+func (be *BuilderEntry) EffectiveMaxExecutionPayment(bc *BuilderConfig) validator.Uint64 {
+	if be.MaxExecutionPayment != nil {
+		return *be.MaxExecutionPayment
+	}
+	return bc.EffectiveMaxExecutionPayment()
 }
 
 // IsEnabled reports whether the builder path is explicitly enabled. A nil config
@@ -383,7 +455,8 @@ func (bc *BuilderConfig) Clone() *BuilderConfig {
 	c.Proxy = cloneString(bc.Proxy)
 	c.MinBid = cloneUint64(bc.MinBid)
 	c.BuilderBoostFactor = cloneUint64(bc.BuilderBoostFactor)
-	if len(bc.Builders) > 0 {
+	// Preserve nil vs empty: an empty list is the "use no builders" marker.
+	if bc.Builders != nil {
 		c.Builders = make([]*BuilderEntry, 0, len(bc.Builders))
 		for _, b := range bc.Builders {
 			c.Builders = append(c.Builders, b.Clone())
