@@ -49,7 +49,7 @@ func TestComputeFieldRootsWithHasher_ProgressiveSSZFields(t *testing.T) {
 			roots, err := ComputeFieldRootsWithHasher(context.Background(), st)
 			require.NoError(t, err)
 
-			var pendingDepositsRoot, pendingPartialWithdrawalsRoot, pendingConsolidationsRoot, expectedWithdrawalsRoot [32]byte
+			var pendingDepositsRoot, pendingPartialWithdrawalsRoot, pendingConsolidationsRoot, expectedWithdrawalsRoot, buildersRoot [32]byte
 			if tt.progressive {
 				pendingDepositsRoot, err = ssz.SliceRootProgressive(st.pendingDeposits)
 				require.NoError(t, err)
@@ -58,6 +58,8 @@ func TestComputeFieldRootsWithHasher_ProgressiveSSZFields(t *testing.T) {
 				pendingConsolidationsRoot, err = ssz.SliceRootProgressive(st.pendingConsolidations)
 				require.NoError(t, err)
 				expectedWithdrawalsRoot, err = ssz.SliceRootProgressive(st.payloadExpectedWithdrawals)
+				require.NoError(t, err)
+				buildersRoot, err = stateutil.BuildersRoot(version.Gloas, st.builders)
 				require.NoError(t, err)
 			} else {
 				pendingDepositsRoot, err = ssz.SliceRoot(st.pendingDeposits, fieldparams.PendingDepositsLimit)
@@ -68,12 +70,15 @@ func TestComputeFieldRootsWithHasher_ProgressiveSSZFields(t *testing.T) {
 				require.NoError(t, err)
 				expectedWithdrawalsRoot, err = ssz.SliceRoot(st.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
 				require.NoError(t, err)
+				buildersRoot, err = ssz.SliceRoot(st.builders, fieldparams.BuilderRegistryLimit)
+				require.NoError(t, err)
 			}
 
 			require.DeepEqual(t, pendingDepositsRoot[:], roots[types.PendingDeposits.RealPosition()])
 			require.DeepEqual(t, pendingPartialWithdrawalsRoot[:], roots[types.PendingPartialWithdrawals.RealPosition()])
 			require.DeepEqual(t, pendingConsolidationsRoot[:], roots[types.PendingConsolidations.RealPosition()])
 			require.DeepEqual(t, expectedWithdrawalsRoot[:], roots[types.PayloadExpectedWithdrawals.RealPosition()])
+			require.DeepEqual(t, buildersRoot[:], roots[types.Builders.RealPosition()])
 
 			rootSelectorPendingDepositsRoot, err := st.rootSelector(ctx, types.PendingDeposits)
 			require.NoError(t, err)
@@ -90,6 +95,10 @@ func TestComputeFieldRootsWithHasher_ProgressiveSSZFields(t *testing.T) {
 			rootSelectorExpectedWithdrawalsRoot, err := st.rootSelector(ctx, types.PayloadExpectedWithdrawals)
 			require.NoError(t, err)
 			require.DeepEqual(t, rootSelectorExpectedWithdrawalsRoot[:], roots[types.PayloadExpectedWithdrawals.RealPosition()])
+
+			rootSelectorBuildersRoot, err := st.rootSelector(ctx, types.Builders)
+			require.NoError(t, err)
+			require.DeepEqual(t, rootSelectorBuildersRoot[:], roots[types.Builders.RealPosition()])
 		})
 	}
 }
@@ -232,7 +241,14 @@ func newGloasStateForProgressiveSSZTests(t *testing.T) *BeaconState {
 			BlobKzgCommitments:    [][]byte{make([]byte, fieldparams.BLSPubkeyLength)},
 			ExecutionRequestsRoot: make([]byte, fieldparams.RootLength),
 		},
-		Builders:                     make([]*ethpb.Builder, 0),
+		Builders: []*ethpb.Builder{{
+			Pubkey:            pubkey1,
+			Version:           []byte{1},
+			ExecutionAddress:  make([]byte, fieldparams.FeeRecipientLength),
+			Balance:           11,
+			DepositEpoch:      12,
+			WithdrawableEpoch: 13,
+		}},
 		ExecutionPayloadAvailability: make([]byte, 1024),
 		BuilderPendingPayments:       builderPendingPayments,
 		BuilderPendingWithdrawals:    make([]*ethpb.BuilderPendingWithdrawal, 0),

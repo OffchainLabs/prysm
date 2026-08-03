@@ -25,7 +25,6 @@ type beaconApiValidatorClient struct {
 	handler                 rest.Handler
 	eventStreamHosts        []string
 	nodeClient              *beaconApiNodeClient
-	beaconBlockConverter    BeaconBlockConverter
 	eventStreamGuard        event.StreamGuard
 	stateless               bool
 	envelopeCache           *cache.ExecutionPayloadEnvelopeCache
@@ -45,7 +44,6 @@ func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...i
 		handler:                 handler,
 		eventStreamHosts:        provider.Hosts(),
 		nodeClient:              nc,
-		beaconBlockConverter:    beaconApiBeaconBlockConverter{},
 		stateless:               cfg.Stateless,
 	}
 	if cfg.Stateless {
@@ -135,10 +133,6 @@ func (c *beaconApiValidatorClient) BeaconBlock(ctx context.Context, in *ethpb.Bl
 	})
 }
 
-func (c *beaconApiValidatorClient) FeeRecipientByPubKey(_ context.Context, _ *ethpb.FeeRecipientByPubKeyRequest) (*ethpb.FeeRecipientByPubKeyResponse, error) {
-	return nil, nil
-}
-
 func (c *beaconApiValidatorClient) SyncCommitteeContribution(ctx context.Context, in *ethpb.SyncCommitteeContributionRequest) (*ethpb.SyncCommitteeContribution, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.SyncCommitteeContribution")
 	defer span.End()
@@ -218,10 +212,6 @@ func (c *beaconApiValidatorClient) ProposeExit(ctx context.Context, in *ethpb.Si
 	return wrapInMetrics[*ethpb.ProposeExitResponse]("ProposeExit", func() (*ethpb.ProposeExitResponse, error) {
 		return c.proposeExit(ctx, in)
 	})
-}
-
-func (c *beaconApiValidatorClient) StreamBlocksAltair(ctx context.Context, in *ethpb.StreamBlocksRequest) (ethpb.BeaconNodeValidator_StreamBlocksAltairClient, error) {
-	return c.streamBlocks(ctx, in, time.Second), nil
 }
 
 func (c *beaconApiValidatorClient) SubmitAggregateSelectionProof(ctx context.Context, in *ethpb.AggregateSelectionRequest, index primitives.ValidatorIndex, committeeLength uint64) (*ethpb.AggregateSelectionResponse, error) {

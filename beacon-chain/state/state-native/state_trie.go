@@ -1465,7 +1465,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.LatestExecutionPayloadBid:
 		return b.latestExecutionPayloadBid.HashTreeRoot()
 	case types.Builders:
-		return stateutil.BuildersRoot(b.builders)
+		return stateutil.BuildersRoot(b.version, b.builders)
 	case types.NextWithdrawalBuilderIndex:
 		return ssz.Uint64Root(uint64(b.nextWithdrawalBuilderIndex)), nil
 	case types.ExecutionPayloadAvailability:
@@ -1474,7 +1474,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.BuilderPendingPayments:
 		return stateutil.BuilderPendingPaymentsRoot(b.builderPendingPayments)
 	case types.BuilderPendingWithdrawals:
-		return stateutil.BuilderPendingWithdrawalsRoot(b.builderPendingWithdrawals)
+		return stateutil.BuilderPendingWithdrawalsRoot(b.version, b.builderPendingWithdrawals)
 	case types.LatestBlockHash:
 		return bytesutil.ToBytes32(b.latestBlockHash), nil
 	case types.PayloadExpectedWithdrawals:

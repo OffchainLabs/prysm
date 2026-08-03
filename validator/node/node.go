@@ -174,15 +174,15 @@ func (c *ValidatorClient) getLegacyDatabaseLocation(
 		return "", "", errors.Wrapf(err, "could not check if file exists: %s", dataFile)
 	}
 
-	if dataDir != cmd.DefaultDataDir() || exists || c.wallet == nil {
+	if dataDir != cmd.DefaultDataDir() || exists || (c.wallet == nil && !isWeb3SignerURLFlagSet) {
 		return dataDir, dataFile, nil
 	}
 
 	// We look in the previous, legacy directories.
 	// See https://github.com/prysmaticlabs/prysm/issues/13391
-	legacyDataDir := c.wallet.AccountsDir()
-	if isWeb3SignerURLFlagSet {
-		legacyDataDir = walletDir
+	legacyDataDir := walletDir
+	if !isWeb3SignerURLFlagSet {
+		legacyDataDir = c.wallet.AccountsDir()
 	}
 
 	legacyDataFile := filepath.Join(legacyDataDir, kv.ProtectionDbFileName)
@@ -211,8 +211,10 @@ func (c *ValidatorClient) getLegacyDatabaseLocation(
 
 func getWallet(cliCtx *cli.Context) (*wallet.Wallet, error) {
 	if cliCtx.IsSet(flags.Web3SignerURLFlag.Name) {
-		return wallet.NewWalletForWeb3Signer(cliCtx), nil
+		log.Info("No Prysm wallet required for web3signer validation")
+		return nil, nil
 	}
+
 	if err := setWalletPasswordFilePath(cliCtx); err != nil {
 		return nil, errors.Wrap(err, "could not read wallet password file")
 	}
@@ -431,42 +433,74 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 	return c.services.RegisterService(validatorService)
 }
 
+// Web3SignerConfig returns a SetupConfig for the remote web3signer key manager
+// after validating the provided CLI flags.
 func Web3SignerConfig(cliCtx *cli.Context) (*remoteweb3signer.SetupConfig, error) {
-	var web3signerConfig *remoteweb3signer.SetupConfig
-	if cliCtx.IsSet(flags.Web3SignerURLFlag.Name) {
-		urlStr := cliCtx.String(flags.Web3SignerURLFlag.Name)
-		u, err := url.ParseRequestURI(urlStr)
-		if err != nil {
-			return nil, errors.Wrapf(err, "web3signer url %s is invalid", urlStr)
-		}
-		if u.Scheme == "" || u.Host == "" {
-			return nil, fmt.Errorf("web3signer url must be in the format of http(s)://host:port url used: %v", urlStr)
-		}
-		web3signerConfig = &remoteweb3signer.SetupConfig{
-			BaseEndpoint:          u.String(),
-			GenesisValidatorsRoot: nil,
-		}
-		if cliCtx.IsSet(flags.WalletPasswordFileFlag.Name) {
-			log.Warnf("%s was provided while using web3signer and will be ignored", flags.WalletPasswordFileFlag.Name)
-		}
-		if cliCtx.IsSet(flags.Web3SignerPublicValidatorKeysFlag.Name) {
-			publicKeysSlice := cliCtx.StringSlice(flags.Web3SignerPublicValidatorKeysFlag.Name)
-			if len(publicKeysSlice) == 1 {
-				pURL, err := url.ParseRequestURI(publicKeysSlice[0])
-				if err == nil && pURL.Scheme != "" && pURL.Host != "" {
-					web3signerConfig.PublicKeysURL = publicKeysSlice[0]
-				} else {
-					web3signerConfig.ProvidedPublicKeys = strings.Split(publicKeysSlice[0], ",")
-				}
+	// Return early if Web3Signer URL is not set.
+	if !cliCtx.IsSet(flags.Web3SignerURLFlag.Name) {
+		return nil, nil
+	}
+
+	// Warn if the user has provided password file as it is no-op.
+	if cliCtx.IsSet(flags.WalletPasswordFileFlag.Name) {
+		log.Warnf("%s was provided while using web3signer and will be ignored", flags.WalletPasswordFileFlag.Name)
+	}
+
+	cfg := &remoteweb3signer.SetupConfig{}
+
+	urlStr := cliCtx.String(flags.Web3SignerURLFlag.Name)
+	baseEndpoint, err := validateURL(urlStr)
+	if err != nil {
+		return nil, fmt.Errorf("web3signer url %s is invalid: %w", urlStr, err)
+	}
+
+	cfg.BaseEndpoint = baseEndpoint
+	cfg.GenesisValidatorsRoot = nil // will be populated after the validator service is started and the beacon node is connected.
+
+	// NOTE: Public keys can be seeded at start up in three ways.
+	// 1. --validators-external-signer-public-keys with static list of keys (comma separated)
+	// 2. --validators-external-signer-public-keys with a single URL (mostly /api/v1/eth2/publicKeys) to fetch keys from
+	// 3. --validators-external-signer-keys-file with a file containing a list of keys (one per line)
+	// Building the SetupConfig here only checks whether each flag is set and valid.
+
+	if cliCtx.IsSet(flags.Web3SignerPublicValidatorKeysFlag.Name) {
+		keys := cliCtx.StringSlice(flags.Web3SignerPublicValidatorKeysFlag.Name)
+		switch {
+		case len(keys) == 1:
+			key := keys[0]
+			url, err := validateURL(key)
+			if err == nil {
+				cfg.PublicKeysURL = url
 			} else {
-				web3signerConfig.ProvidedPublicKeys = publicKeysSlice
+				cfg.ProvidedPublicKeys = strings.Split(key, ",")
 			}
-		}
-		if cliCtx.IsSet(flags.Web3SignerKeyFileFlag.Name) {
-			web3signerConfig.KeyFilePath = cliCtx.String(flags.Web3SignerKeyFileFlag.Name)
+		default:
+			cfg.ProvidedPublicKeys = keys
 		}
 	}
-	return web3signerConfig, nil
+
+	if cliCtx.IsSet(flags.Web3SignerKeyFileFlag.Name) {
+		keyFilePath := cliCtx.String(flags.Web3SignerKeyFileFlag.Name)
+		if keyFilePath == "" {
+			return nil, errors.New("web3signer key file path is empty")
+		}
+		exists, err := file.Exists(keyFilePath, file.Regular)
+		if err != nil {
+			return nil, fmt.Errorf("could not check if remote signer persistent keys exist in %s: %v", keyFilePath, err)
+		}
+		if !exists {
+			return nil, fmt.Errorf("no file exists in remote signer key file path %s", keyFilePath)
+		}
+
+		cfg.KeyFilePath = cliCtx.String(flags.Web3SignerKeyFileFlag.Name)
+	}
+
+	// If none of the three ways are provided, return an error.
+	if cfg.PublicKeysURL == "" && len(cfg.ProvidedPublicKeys) == 0 && cfg.KeyFilePath == "" {
+		return nil, errors.New("no web3signer public keys or key file path provided")
+	}
+
+	return cfg, nil
 }
 
 func proposerSettings(cliCtx *cli.Context, db iface.ValidatorDB) (*proposer.Settings, error) {
@@ -633,4 +667,17 @@ func parseBeaconApiHeaders(rawHeaders string) map[string][]string {
 		result[key] = append(result[key], value)
 	}
 	return result
+}
+
+func validateURL(s string) (string, error) {
+	u, err := url.ParseRequestURI(s)
+	if err != nil {
+		return "", fmt.Errorf("invalid URL: %v", err)
+	}
+
+	if u.Scheme == "" || u.Host == "" {
+		return "", errors.New("missing scheme or host")
+	}
+
+	return u.String(), nil
 }

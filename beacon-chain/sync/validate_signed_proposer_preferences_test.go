@@ -316,8 +316,7 @@ func signedProposerPreferencesToPubsub(t *testing.T, s *Service, p p2p.P2P, pref
 	buf := new(bytes.Buffer)
 	_, err := p.Encoding().EncodeGossip(buf, preferences)
 	require.NoError(t, err)
-	digest, err := s.currentForkDigest()
-	require.NoError(t, err)
+	digest := s.currentForkDigest()
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedProposerPreferences]()]
 	topic = s.addDigestToTopic(topic, digest)
 	return &pubsub.Message{
