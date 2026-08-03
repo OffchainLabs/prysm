@@ -32,6 +32,7 @@ func newHeadTracker() *headTracker {
 // so the read falls back to the freshest response at its deadline, and the next
 // event at a slot >= the pinned one heals the tracker.
 func (h *headTracker) update(slot primitives.Slot, blockRoot string, payloadStatus api.PayloadStatus) error {
+	// The gRPC client announces no block root, leaving the tracker unset.
 	if blockRoot == "" {
 		return nil
 	}
