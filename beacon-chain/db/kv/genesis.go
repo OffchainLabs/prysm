@@ -104,6 +104,22 @@ func (s *Store) EnsureEmbeddedGenesis(ctx context.Context) error {
 	if gb != nil && !gb.IsNil() {
 		return nil
 	}
+
+	if _, err := s.OriginCheckpointBlockRoot(ctx); err == nil {
+		return nil
+	} else if !errors.Is(err, ErrNotFoundOriginBlockRoot) {
+		return fmt.Errorf("could not read the origin checkpoint block root: %w", err)
+	}
+
+	anchoredAfterGenesis, err := s.stateDiffAnchoredAfterGenesis()
+	if err != nil {
+		return fmt.Errorf("state diff anchored after genesis: %w", err)
+	}
+
+	if anchoredAfterGenesis {
+		return nil
+	}
+
 	gs, err := s.GenesisState(ctx)
 	if err != nil {
 		return err

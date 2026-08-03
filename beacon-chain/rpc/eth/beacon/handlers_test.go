@@ -750,6 +750,15 @@ func TestGetBlockAttestationsV2(t *testing.T) {
 	esb, err := blocks.NewSignedBeaconBlock(eb)
 	require.NoError(t, err)
 
+	gloasAtts := make([]*eth.AttestationGloas, len(electraAtts))
+	for i, att := range electraAtts {
+		gloasAtts[i] = eth.AttestationElectraToGloas(att)
+	}
+	gb := util.NewBeaconBlockGloas()
+	gb.Block.Body.Attestations = gloasAtts
+	gsb, err := blocks.NewSignedBeaconBlock(gb)
+	require.NoError(t, err)
+
 	t.Run("ok-pre-electra", func(t *testing.T) {
 		mockChainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{},
@@ -820,6 +829,34 @@ func TestGetBlockAttestationsV2(t *testing.T) {
 
 		assert.DeepEqual(t, eb.Block.Body.Attestations, atts)
 		assert.Equal(t, "electra", resp.Version)
+	})
+	t.Run("ok-gloas", func(t *testing.T) {
+		mockChainService := &chainMock.ChainService{
+			FinalizedRoots: map[[32]byte]bool{},
+		}
+		s := &Server{
+			OptimisticModeFetcher: mockChainService,
+			FinalizationFetcher:   mockChainService,
+			Blocker:               &testutil.MockBlocker{BlockToReturn: gsb},
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}/attestations", nil)
+		request.SetPathValue("block_id", "head")
+		writer := httptest.NewRecorder()
+
+		s.GetBlockAttestationsV2(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+
+		resp := &structs.GetBlockAttestationsV2Response{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.Equal(t, version.String(version.Gloas), resp.Version)
+
+		var attStructs []structs.AttestationElectra
+		require.NoError(t, json.Unmarshal(resp.Data, &attStructs))
+		require.Equal(t, len(gloasAtts), len(attStructs))
+		for i := range attStructs {
+			assert.DeepEqual(t, structs.AttGloasFromConsensus(gloasAtts[i]), &attStructs[i])
+		}
 	})
 	t.Run("execution-optimistic", func(t *testing.T) {
 		r, err := bsb.Block().HashTreeRoot()
@@ -1359,6 +1396,19 @@ func TestGetBlindedBlockSSZ(t *testing.T) {
 }
 
 func TestVersionHeaderFromRequest(t *testing.T) {
+	t.Run("Gloas block returns gloas header", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 8
+		params.OverrideBeaconConfig(cfg)
+
+		slot := uint64(params.BeaconConfig().SlotsPerEpoch) * uint64(params.BeaconConfig().GloasForkEpoch)
+		block := []byte(fmt.Sprintf(`{"message":{"slot":"%d"}}`, slot))
+		versionHead, err := versionHeaderFromRequest(block)
+		require.NoError(t, err)
+		require.Equal(t, version.String(version.Gloas), versionHead)
+	})
+
 	t.Run("Fulu block contents returns fulu header", func(t *testing.T) {
 		cfg := params.BeaconConfig().Copy()
 		cfg.FuluForkEpoch = 7

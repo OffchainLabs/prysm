@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -172,6 +173,55 @@ func TestSubmitAggregateAndProof_Ok(t *testing.T) {
 			validator.SubmitAggregateAndProof(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(electraForkEpoch), pubKey)
 		})
 	}
+	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
+		t.Run(fmt.Sprintf("Gloas (SlashingProtectionMinimal:%v)", isSlashingProtectionMinimal), func(t *testing.T) {
+			gloasForkEpoch := uint64(1)
+			params.SetupTestConfigCleanup(t)
+			cfg := params.BeaconConfig().Copy()
+			cfg.ElectraForkEpoch = primitives.Epoch(gloasForkEpoch)
+			cfg.FuluForkEpoch = primitives.Epoch(gloasForkEpoch)
+			cfg.GloasForkEpoch = primitives.Epoch(gloasForkEpoch)
+			params.OverrideBeaconConfig(cfg)
+
+			validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
+			defer finish()
+			var pubKey [fieldparams.BLSPubkeyLength]byte
+			copy(pubKey[:], validatorKey.PublicKey().Marshal())
+			validator.duties = testDutyStore(&ethpb.ValidatorDuty{
+				PublicKey: validatorKey.PublicKey().Marshal(),
+			})
+
+			m.validatorClient.EXPECT().DomainData(gomock.Any(), gomock.Any()).
+				Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
+
+			electraAggregate := &ethpb.AggregateAttestationAndProofElectra{
+				AggregatorIndex: 1,
+				Aggregate: util.HydrateAttestationElectra(&ethpb.AttestationElectra{
+					AggregationBits: bitfield.NewBitlist(1),
+				}),
+				SelectionProof: make([]byte, 96),
+			}
+			m.validatorClient.EXPECT().SubmitAggregateSelectionProofElectra(
+				gomock.Any(),
+				gomock.AssignableToTypeOf(&ethpb.AggregateSelectionRequest{}),
+				gomock.Any(),
+				gomock.Any(),
+			).Return(&ethpb.AggregateSelectionElectraResponse{AggregateAndProof: electraAggregate}, nil)
+
+			m.validatorClient.EXPECT().DomainData(gomock.Any(), gomock.Any()).
+				Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
+
+			m.validatorClient.EXPECT().SubmitSignedAggregateSelectionProofElectra(
+				gomock.Any(),
+				gomock.Any(),
+			).DoAndReturn(func(_ context.Context, req *ethpb.SignedAggregateSubmitElectraRequest) (*ethpb.SignedAggregateSubmitResponse, error) {
+				require.DeepEqual(t, electraAggregate, req.SignedAggregateAndProof.Message)
+				return &ethpb.SignedAggregateSubmitResponse{AttestationDataRoot: make([]byte, 32)}, nil
+			})
+
+			validator.SubmitAggregateAndProof(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(gloasForkEpoch), pubKey)
+		})
+	}
 }
 
 func TestSubmitAggregateAndProof_Distributed(t *testing.T) {
@@ -329,6 +379,56 @@ func TestAggregateAndProofSignature_CanSignValidSignature(t *testing.T) {
 			require.NoError(t, err)
 			_, err = bls.SignatureFromBytes(sig)
 			require.NoError(t, err)
+		})
+	}
+	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
+		t.Run(fmt.Sprintf("Gloas (SlashingProtectionMinimal:%v)", isSlashingProtectionMinimal), func(t *testing.T) {
+			gloasForkEpoch := uint64(1)
+			params.SetupTestConfigCleanup(t)
+			cfg := params.BeaconConfig().Copy()
+			cfg.ElectraForkEpoch = primitives.Epoch(gloasForkEpoch)
+			cfg.FuluForkEpoch = primitives.Epoch(gloasForkEpoch)
+			cfg.GloasForkEpoch = primitives.Epoch(gloasForkEpoch)
+			params.OverrideBeaconConfig(cfg)
+
+			validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
+			defer finish()
+
+			var pubKey [fieldparams.BLSPubkeyLength]byte
+			copy(pubKey[:], validatorKey.PublicKey().Marshal())
+			domain := make([]byte, 32)
+			m.validatorClient.EXPECT().DomainData(
+				gomock.Any(),
+				&ethpb.DomainRequest{Epoch: 0, Domain: params.BeaconConfig().DomainAggregateAndProof[:]},
+			).Return(&ethpb.DomainResponse{SignatureDomain: domain}, nil)
+
+			electraAggregate := &ethpb.AggregateAttestationAndProofElectra{
+				AggregatorIndex: 1,
+				Aggregate: util.HydrateAttestationElectra(&ethpb.AttestationElectra{
+					AggregationBits: bitfield.NewBitlist(1),
+				}),
+				SelectionProof: make([]byte, 96),
+			}
+			gloasAggregate := ethpb.AggregateAttestationAndProofElectraToGloas(electraAggregate)
+			sig, err := validator.aggregateAndProofSig(
+				t.Context(),
+				pubKey,
+				gloasAggregate,
+				params.BeaconConfig().SlotsPerEpoch.Mul(gloasForkEpoch),
+			)
+			require.NoError(t, err)
+
+			parsedSig, err := bls.SignatureFromBytes(sig)
+			require.NoError(t, err)
+			gloasRoot, err := signing.ComputeSigningRoot(gloasAggregate, domain)
+			require.NoError(t, err)
+			require.Equal(t, true, parsedSig.Verify(validatorKey.PublicKey(), gloasRoot[:]))
+
+			electraRoot, err := signing.ComputeSigningRoot(electraAggregate, domain)
+			require.NoError(t, err)
+			if electraRoot != gloasRoot {
+				require.Equal(t, false, parsedSig.Verify(validatorKey.PublicKey(), electraRoot[:]))
+			}
 		})
 	}
 }
