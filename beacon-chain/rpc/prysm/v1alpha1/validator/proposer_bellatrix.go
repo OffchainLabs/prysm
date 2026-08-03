@@ -46,9 +46,6 @@ var (
 // can be used as a constant to avoid recomputing this value in every call.
 var emptyTransactionsRoot = [32]byte{127, 254, 36, 30, 166, 1, 135, 253, 176, 24, 123, 250, 34, 222, 53, 209, 249, 190, 215, 171, 6, 29, 148, 1, 253, 71, 227, 74, 84, 251, 237, 225}
 
-// blockBuilderTimeout is the maximum amount of time allowed for a block builder to respond to a
-// block request. This value is known as `BUILDER_PROPOSAL_DELAY_TOLERANCE` in builder spec.
-const blockBuilderTimeout = 1 * time.Second
 const gasLimitAdjustmentFactor = 1024
 
 // Sets the execution data for the block. Execution data can come from local EL client or remote builder depends on validator registration and circuit breaker conditions.
@@ -208,7 +205,7 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, blockBuilderTimeout)
+	ctx, cancel := context.WithTimeout(ctx, params.BeaconConfig().BuilderHeaderTimeout)
 	defer cancel()
 
 	signedBid, err := vs.BlockBuilder.GetHeader(ctx, slot, bytesutil.ToBytes32(h.BlockHash()), pk)
