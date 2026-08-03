@@ -32,7 +32,6 @@ go_library(
         "//config/params:go_default_library",
         "//crypto/bls:go_default_library",
         "//io/file:go_default_library",
-        "//network:go_default_library",
         "//proto/prysm/v1alpha1/validator-client:go_default_library",
         "//runtime/interop:go_default_library",
         "//runtime/logging/logrus-prefixed-formatter:go_default_library",
