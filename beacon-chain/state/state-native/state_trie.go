@@ -1015,7 +1015,7 @@ func (b *BeaconState) Copy() state.BeaconState {
 		rebuildTrie:      make(map[types.FieldIndex]bool, fieldCount),
 		stateFieldLeaves: make(map[types.FieldIndex]*fieldtrie.FieldTrie, len(fieldMap)),
 
-		// Share the reference to validator index map.
+		// Shared and mutated in place, lookups are bounded by each state's validator count.
 		valMapHandler: b.valMapHandler,
 
 		builderIdxMap: maps.Clone(b.builderIdxMap),
@@ -1053,9 +1053,6 @@ func (b *BeaconState) Copy() state.BeaconState {
 		ref.AddRef()
 		dst.sharedFieldReferences[field] = ref
 	}
-
-	// Increment ref for validator map
-	b.valMapHandler.AddRef()
 
 	for i := range b.dirtyFields {
 		dst.dirtyFields[i] = true
