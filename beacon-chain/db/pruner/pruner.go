@@ -30,16 +30,17 @@ type custodyUpdater interface {
 
 type ServiceOption func(*Service)
 
-// WithRetentionPeriod allows the user to specify a different data retention period than the spec default.
-// The retention period is specified in epochs, and must be >= MIN_EPOCHS_FOR_BLOCK_REQUESTS.
+// WithRetentionPeriod allows the user to specify a different data retention period than the spec
+// default. The retention period is specified in epochs, and is used as is, even below
+// MIN_EPOCHS_FOR_BLOCK_REQUESTS: this build is meant to reach, in minutes, the state a node is in
+// after months of pruning.
 func WithRetentionPeriod(retentionEpochs primitives.Epoch) ServiceOption {
 	return func(s *Service) {
 		defaultRetentionEpochs := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests) + 1
 		if retentionEpochs < defaultRetentionEpochs {
 			log.WithField("userEpochs", retentionEpochs).
 				WithField("minRequired", defaultRetentionEpochs).
-				Warn("Retention period too low, ignoring and using minimum required value")
-			retentionEpochs = defaultRetentionEpochs
+				Warning("TESTING BUILD: retention period below the minimum required by the specification, using it anyway")
 		}
 
 		s.ps = pruneStartSlotFunc(retentionEpochs)

@@ -238,7 +238,7 @@ func (m *mockCustodyUpdaterWithUpdateError) UpdateEarliestAvailableSlot(earliest
 	return errors.New("failed to update earliest available slot")
 }
 
-func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {
+func TestWithRetentionPeriod_UsesTheGivenValue(t *testing.T) {
 	// Use minimal config for testing
 	params.SetupTestConfigCleanup(t)
 	config := params.MinimalSpecConfig()
@@ -260,10 +260,10 @@ func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {
 		description         string
 	}{
 		{
-			name:                "User value below minimum - should use minimum",
+			name:                "User value below minimum - should be used as is",
 			userRetentionEpochs: 2, // Way below minimum
-			expectedPruneSlot:   currentSlot - primitives.Slot(minRequiredEpochs)*params.BeaconConfig().SlotsPerEpoch,
-			description:         "Should use minimum when user value is too low",
+			expectedPruneSlot:   currentSlot - 2*params.BeaconConfig().SlotsPerEpoch,
+			description:         "Should use the user value even when it is below the minimum",
 		},
 		{
 			name:                "User value at minimum",
@@ -305,7 +305,7 @@ func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {
 
 			// Check if warning was logged when value was too low
 			if tt.userRetentionEpochs < minRequiredEpochs {
-				assert.LogsContain(t, hook, "Retention period too low, ignoring and using minimum required value")
+				assert.LogsContain(t, hook, "TESTING BUILD: retention period below the minimum required by the specification")
 			}
 		})
 	}
