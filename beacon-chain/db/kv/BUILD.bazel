@@ -3,6 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "archive.go",
         "archived_point.go",
         "backfill.go",
         "backup.go",
@@ -89,6 +90,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "archive_test.go",
         "archived_point_test.go",
         "backfill_test.go",
         "backup_test.go",

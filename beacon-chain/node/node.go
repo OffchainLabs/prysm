@@ -135,6 +135,10 @@ type BeaconNode struct {
 	lcStore                   *lightclient.Store
 	ConfigOptions             []params.Option
 	SyncNeedsWaiter           func() (das.SyncNeeds, error)
+	// ArchiveOriginSlot is the slot of the archive origin state, set only in archive mode. It is the
+	// state-diff tree offset and the slot backfill stops at.
+	ArchiveOriginSlot   *primitives.Slot
+	archiveRegenPending bool
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -336,9 +340,18 @@ func configureBeacon(cliCtx *cli.Context) error {
 
 func startBaseServices(cliCtx *cli.Context, beacon *BeaconNode, depositAddress string, clearer *dbClearer) (*backfill.Store, error) {
 	ctx := cliCtx.Context
+	// Must precede startDB: whichever caller sets the state-diff tree offset first wins, and in archive mode
+	// that has to be the archive origin rather than genesis or the checkpoint block.
+	if err := beacon.initArchiveOrigin(cliCtx); err != nil {
+		return nil, errors.Wrap(err, "could not initialize archive origin")
+	}
+
 	log.Debugln("Starting DB")
 	if err := beacon.startDB(cliCtx, depositAddress); err != nil {
 		return nil, errors.Wrap(err, "could not start DB")
+	}
+	if err := beacon.checkArchiveOriginBelowOrigin(ctx); err != nil {
+		return nil, err
 	}
 
 	beacon.BlobStorage.WarmCache()
@@ -381,6 +394,13 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 	log.Debugln("Registering Backfill Service")
 	if err := beacon.RegisterBackfillService(cliCtx, bfs); err != nil {
 		return errors.Wrap(err, "could not register Back Fill service")
+	}
+
+	if beacon.archiveRegenPending {
+		log.Debugln("Registering Archive State Regeneration Service")
+		if err := beacon.registerArchiveService(); err != nil {
+			return errors.Wrap(err, "could not register archive service")
+		}
 	}
 
 	log.Debugln("Registering POW Chain Service")
@@ -632,6 +652,12 @@ func (b *BeaconNode) startSlasherDB(cliCtx *cli.Context, clearer *dbClearer) err
 func (b *BeaconNode) startStateGen(ctx context.Context, bfs coverage.AvailableBlocker, fc forkchoice.ForkChoicer) error {
 	opts := []stategen.Option{stategen.WithAvailableBlocker(bfs)}
 	sg := stategen.New(b.db, fc, opts...)
+
+	// Must be set before the finalized state is loaded below: that load may have to replay, and the replay
+	// base is only kept alive by the archive-mode snapshot handling this flag turns on.
+	if b.archiveRegenPending {
+		sg.SetArchivePending(true)
+	}
 
 	cp, err := b.db.FinalizedCheckpoint(ctx)
 	if err != nil {

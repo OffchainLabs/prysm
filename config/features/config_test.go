@@ -166,3 +166,32 @@ func Test_parseBlacklistedRoots(t *testing.T) {
 		require.Equal(t, true, BlacklistedBlock(root))
 	}
 }
+
+// --enable-archive is meaningless without the state-diff layout, so it turns it on rather than requiring the
+// operator to pass both.
+func TestConfigureBeaconChain_ArchiveImpliesStateDiff(t *testing.T) {
+	resetCfg := InitWithReset(&Flags{})
+	defer resetCfg()
+
+	app := cli.App{}
+	set := flag.NewFlagSet("test", 0)
+	set.Bool(EnableArchive.Name, true, "")
+	require.NoError(t, ConfigureBeaconChain(cli.NewContext(&app, set, nil)))
+
+	require.Equal(t, true, Get().EnableArchive)
+	require.Equal(t, true, Get().EnableStateDiff)
+}
+
+func TestConfigureBeaconChain_StateDiffWithoutArchive(t *testing.T) {
+	resetCfg := InitWithReset(&Flags{})
+	defer resetCfg()
+
+	app := cli.App{}
+	set := flag.NewFlagSet("test", 0)
+	set.Bool(EnableStateDiff.Name, true, "")
+	require.NoError(t, set.Set(EnableStateDiff.Name, "true"))
+	require.NoError(t, ConfigureBeaconChain(cli.NewContext(&app, set, nil)))
+
+	require.Equal(t, false, Get().EnableArchive)
+	require.Equal(t, true, Get().EnableStateDiff)
+}

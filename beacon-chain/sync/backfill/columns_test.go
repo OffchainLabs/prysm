@@ -1783,7 +1783,7 @@ func TestRetentionCheckWithOverride(t *testing.T) {
 			current, err := slots.EpochStart(tc.currentEpoch)
 			require.NoError(t, err)
 			cs := func() primitives.Slot { return current }
-			sn, err := das.NewSyncNeeds(cs, tc.oldestSlot, tc.retentionFlag)
+			sn, err := das.NewSyncNeeds(cs, tc.oldestSlot, nil, tc.retentionFlag)
 			require.NoError(t, err)
 
 			sr := func(slot primitives.Slot) bool {

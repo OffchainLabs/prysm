@@ -69,7 +69,15 @@ func (s *Store) SaveOrigin(ctx context.Context, serState, serBlock []byte) error
 		return errors.Wrap(err, "save block")
 	}
 
-	if features.Get().EnableStateDiff {
+	if features.Get().EnableArchive && features.Get().EnableStateDiff {
+		// The archive origin owns the tree offset, and the checkpoint slot is generally not a boundary of
+		// that tree, so the origin state cannot go into the tree. Keep it addressable by root instead:
+		// State/HasState consult the hot snapshot bucket first, which is what lets stategen and backfill
+		// find it until the forward walk has regenerated states above it.
+		if err := s.SaveHotStateSnapshot(ctx, state, blockRoot); err != nil {
+			return errors.Wrap(err, "save checkpoint origin state snapshot")
+		}
+	} else if features.Get().EnableStateDiff {
 		// initializeStateDiff will save the state, so we don't need to call SaveState here
 		if err := s.initializeStateDiff(state.Slot(), state); err != nil {
 			return errors.Wrap(err, "failed to initialize state diff")

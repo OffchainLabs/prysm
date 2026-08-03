@@ -18,6 +18,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	pkgerrors "github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"go.etcd.io/bbolt"
 )
 
@@ -173,6 +174,16 @@ func (s *Store) getAnchorState(ctx context.Context, offset uint64, lvl int, slot
 	return anchor, nil
 }
 
+// deepestDiffSpan is the slot distance between adjacent boundaries of the deepest level, which is also the
+// spacing of the full set of boundary slots since every shallower span is a multiple of it.
+func deepestDiffSpan() uint64 {
+	exponents := flags.Get().StateDiffExponents
+	if len(exponents) == 0 {
+		return 0
+	}
+	return math.PowerOf2(uint64(exponents[len(exponents)-1]))
+}
+
 // computeLevel computes the level in the diff tree. Returns -1 in case slot should not be in tree.
 func computeLevel(offset uint64, slot primitives.Slot) int {
 	if uint64(slot) < offset {
@@ -278,6 +289,28 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 	if s.stateDiffCache != nil {
 		if s.stateDiffCache.getOffset() == uint64(slot) {
 			log.WithField("offset", slot).Debug("Ignoring state diff cache reinitialization")
+			return nil
+		}
+	}
+
+	// In archive mode the offset belongs to the archive origin, which is set up before genesis or
+	// checkpoint data is written. Later callers must not move it: everything below the offset becomes
+	// unrepresentable, which would discard the tree built so far.
+	if features.Get().EnableArchive {
+		hasOffset, err := s.hasStateDiffOffset()
+		if err != nil {
+			return err
+		}
+		if hasOffset {
+			offset, err := s.loadOffset()
+			if err != nil {
+				return err
+			}
+			log.WithFields(logrus.Fields{
+				"offset":         offset,
+				"requestedSlot":  slot,
+				"archiveEnabled": true,
+			}).Debug("Keeping archive origin as the state-diff offset")
 			return nil
 		}
 	}

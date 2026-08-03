@@ -455,7 +455,12 @@ func (s *Store) HasState(ctx context.Context, blockRoot [32]byte) bool {
 		}
 		hasState, err := s.hasStateUsingStateDiff(ctx, blockRoot)
 		if err != nil {
-			log.WithError(err).Error(fmt.Sprintf("error checking state existence using state-diff"))
+			// Roots below the tree offset are expected on an archive node while it backfills.
+			if errors.Is(err, ErrSlotBeforeOffset) {
+				log.WithError(err).Debug("State not representable in the state-diff tree")
+				return false
+			}
+			log.WithError(err).Error("Error checking state existence using state-diff")
 			return false
 		}
 		return hasState

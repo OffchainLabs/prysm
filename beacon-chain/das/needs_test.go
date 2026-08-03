@@ -257,7 +257,7 @@ func TestSyncNeedsInitialize(t *testing.T) {
 			if tc.current == nil {
 				tc.current = currentFunc
 			}
-			result, err := NewSyncNeeds(tc.current, tc.oldestSlotFlagPtr, tc.blobRetentionFlag)
+			result, err := NewSyncNeeds(tc.current, tc.oldestSlotFlagPtr, nil, tc.blobRetentionFlag)
 			require.NoError(t, err)
 
 			// Check retention calculations
@@ -690,4 +690,42 @@ func TestCurrentNeedsIntegration(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The archive origin is a hard floor: unlike --backfill-oldest-slot it is not validated against
+// MIN_EPOCHS_FOR_BLOCK_REQUESTS, because an archive node needs every block above its origin however young
+// the chain is.
+func TestSyncNeeds_ArchiveOriginTakesPrecedence(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	current := func() primitives.Slot { return 10 * slotsPerEpoch }
+
+	archiveOrigin := primitives.Slot(2 * slotsPerEpoch)
+	oldest := primitives.Slot(5 * slotsPerEpoch)
+
+	// On a young chain the spec minimum collapses to slot 1, so --backfill-oldest-slot alone is ignored.
+	withoutArchive, err := NewSyncNeeds(current, &oldest, nil, 0)
+	require.NoError(t, err)
+	require.IsNil(t, withoutArchive.validOldestSlotPtr)
+	require.Equal(t, primitives.Slot(1), withoutArchive.Currently().Block.Begin)
+
+	// The archive origin is honored regardless, and outranks the flag.
+	sn, err := NewSyncNeeds(current, &oldest, &archiveOrigin, 0)
+	require.NoError(t, err)
+	needs := sn.Currently()
+	require.Equal(t, archiveOrigin, needs.Block.Begin)
+	require.Equal(t, current(), needs.Block.End)
+	require.Equal(t, false, needs.Block.At(archiveOrigin-1))
+	require.Equal(t, true, needs.Block.At(archiveOrigin))
+}
+
+// Slot 0 must never be requested: the genesis block has no valid proposer signature.
+func TestSyncNeeds_ArchiveOriginAtGenesisClampsToSlotOne(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	current := func() primitives.Slot { return 10 * params.BeaconConfig().SlotsPerEpoch }
+	origin := primitives.Slot(0)
+
+	sn, err := NewSyncNeeds(current, nil, &origin, 0)
+	require.NoError(t, err)
+	require.Equal(t, primitives.Slot(1), sn.Currently().Block.Begin)
 }

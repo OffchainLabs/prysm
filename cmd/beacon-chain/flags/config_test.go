@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/urfave/cli/v2"
 )
@@ -92,4 +93,22 @@ func TestConfigureGlobalFlags_SupernodeMutualExclusivity(t *testing.T) {
 			}
 		})
 	}
+}
+
+// --archive-origin-state only means something in archive mode; a silent no-op would be a footgun.
+func TestConfigureGlobalFlags_ArchiveOriginStateRequiresArchive(t *testing.T) {
+	resetCfg := features.InitWithReset(&features.Flags{})
+	defer resetCfg()
+
+	app := cli.NewApp()
+	set := flag.NewFlagSet("test", 0)
+	set.String(ArchiveOriginState.Name, "", "")
+	set.Var(cli.NewIntSlice(11, 9, 5), StateDiffExponents.Name, "")
+	require.NoError(t, set.Set(ArchiveOriginState.Name, "/tmp/state.ssz"))
+	err := ConfigureGlobalFlags(cli.NewContext(app, set, nil))
+	require.ErrorContains(t, "requires --enable-archive", err)
+
+	resetArchive := features.InitWithReset(&features.Flags{EnableArchive: true, EnableStateDiff: true})
+	defer resetArchive()
+	require.NoError(t, ConfigureGlobalFlags(cli.NewContext(app, set, nil)))
 }

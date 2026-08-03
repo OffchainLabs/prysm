@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -21,7 +22,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
+
+var log = logrus.WithField("prefix", "lookup")
 
 type FetchStateError struct {
 	message string
@@ -315,6 +319,12 @@ func (p *BeaconDbStater) StateBySlot(ctx context.Context, target primitives.Slot
 		}
 	}
 
+	// An archive node holds a state at every state-diff tree boundary. Serve those directly: addressing the
+	// tree by slot also reaches boundaries whose slot had no block, which no root can identify.
+	if st, ok := p.stateFromDiffTree(ctx, target); ok {
+		return st, nil
+	}
+
 	st, err := p.ReplayerBuilder.ReplayerForSlot(target).ReplayBlocks(ctx)
 	if err != nil {
 		if errors.Is(err, stategen.ErrNoDataForSlot) {
@@ -326,6 +336,27 @@ func (p *BeaconDbStater) StateBySlot(ctx context.Context, target primitives.Slot
 		return nil, errors.Wrap(err, msg)
 	}
 	return st, nil
+}
+
+// stateFromDiffTree returns the state at the given slot if it is a state-diff tree boundary that has been
+// written. A miss is not an error: the caller falls back to replaying.
+func (p *BeaconDbStater) stateFromDiffTree(ctx context.Context, target primitives.Slot) (state.BeaconState, bool) {
+	if p.BeaconDB == nil || !features.Get().EnableStateDiff {
+		return nil, false
+	}
+	_, lvl, err := p.BeaconDB.SlotInDiffTree(target)
+	if err != nil || lvl < 0 {
+		return nil, false
+	}
+	st, err := p.BeaconDB.StateBySlotFromDiffTree(ctx, target)
+	if err != nil {
+		log.WithError(err).WithField("slot", target).Debug("Could not read state from the state-diff tree")
+		return nil, false
+	}
+	if st == nil || st.IsNil() {
+		return nil, false
+	}
+	return st, true
 }
 
 // StateByEpoch returns the state for the start of the requested epoch.

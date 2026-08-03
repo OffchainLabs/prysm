@@ -3,6 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "archive.go",
         "cacher.go",
         "epoch_boundary_state_cache.go",
         "errors.go",
@@ -52,6 +53,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "archive_test.go",
         "epoch_boundary_state_cache_test.go",
         "getter_test.go",
         "history_test.go",

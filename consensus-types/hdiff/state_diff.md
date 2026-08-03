@@ -109,7 +109,9 @@ Starting up from a clean database and from genesis will set o = 0 and start sync
 
 ### Backfill
 
-The following is added as an configurable option, pass the flag `--backfill-origin-state ssz`, in this case the node will download the state `ssz` and set as offset this state's slot. Will download the checkpoint state and start syncing forward as usual but will not call `MigrateToCold` until the backfill service is finished. In the background the node will download all blocks all the way up to the state ssz, then start forward syncing those blocks regenerating the finalized states and when they are of the form o + k λ_h. Once the forward syncing has caught up with the finalized checkpoint, we can start calling `MigrateToCold` again. This backfill mechanism is much faster than the current foward syncing to regenerate the states: we do not need to do any checks on the EL since the blocks are already finalized and trusted, the hashes are already confirmed. 
+This is implemented as `--enable-archive`, optionally combined with `--archive-origin-state <path.ssz>`; see [Archive mode](#archive-mode) below for the details of what was built. `--enable-archive` implies `--enable-state-diff` and `--enable-backfill`.
+
+The node uses the archive origin state's slot as the offset *o*, then syncs forward from the checkpoint as usual but does not call `MigrateToCold` until historical regeneration is finished. In the background it backfills all blocks down to the origin, then replays them forward, saving a state at every slot of the form o + k λ_h. Once that walk has caught up with the finalized checkpoint, `MigrateToCold` resumes. This is much faster than forward syncing to regenerate the states: no EL checks are needed since the blocks are already finalized and trusted, and the hashes are already confirmed. 
 
 ### Database Prunning
 
@@ -434,3 +436,49 @@ The exported function
 func Diff(source, target state.ReadOnlyBeaconState) (HdiffBytes, error)
 ```
 Takes two states and returns the corresponding diff bytes. This function calls the function `diffInternal` which in turn calls `diffToState`, `diffToVals` and `diffToBalances` that each return the corresponding component of an internal `hdiff` structure. Then we call `serialize()` on the correponding `hdiff` structure. The function `serialize` constructs the `data` byte slice as described above in the [Deserialization](#deserialization) section and finally it calls `snappy.Encode()` on each of the three slices. 
+
+## Archive mode
+
+`--enable-archive` makes a checkpoint-synced node hold every historical state from an origin state up to the
+head. `--archive-origin-state <path.ssz>` names that origin; without it the origin is the genesis state the
+`genesis` package already loads. The origin slot must be an epoch boundary and a multiple of 32, which is what
+the tree requires of its offset.
+
+### Why the offset moves
+
+`getBaseAndDiffChain` reconstructs slot *s* from the level 0 snapshot at *s - (s-o) mod 2^λ_0*, and slots below
+*o* have no representation at all. A checkpoint-synced node normally sets *o* to the checkpoint slot, so it can
+never represent anything older. Archive mode instead anchors the tree at the archive origin, which means:
+
+- `initArchiveOrigin` (in `beacon-chain/node/archive.go`) runs before `startDB`, so it sets the offset before
+  `SaveGenesisData` or `SaveOrigin` can. Those two are then no-ops for the offset in archive mode.
+- The checkpoint origin state's slot is generally not a boundary of the re-anchored tree, so `SaveOrigin`
+  persists it as a hot state snapshot instead. `State`/`HasState` consult that bucket first, which is what lets
+  stategen and backfill find it.
+- The live chain's level 0 anchor lies in the not yet regenerated past, so `MigrateToCold` genuinely cannot
+  write until the walk reaches it. Suppression is a correctness requirement, not a simplification.
+
+### The walk
+
+`beacon-chain/archive` waits for backfill to finish, then replays forward from the origin state, carrying the
+working state in memory and persisting one state per tree boundary. It never reads the tree back, which is what
+keeps it tractable. Progress lives in the `ArchiveStatus` record next to the offset metadata, so a restart
+resumes at the last written boundary. Every boundary is written, including those whose slot had no block: a
+hole in a level makes every deeper read inside that span unresolvable.
+
+The state root of the first replayed block is checked against what the block commits to. That is the only
+verification of the operator-supplied origin state, which is otherwise trust input exactly like
+`--checkpoint-state`; a wrong origin means deleting the database.
+
+When the walk has written every boundary at or below the finalized checkpoint, it hands migration back to the
+normal finalization-driven path. While it runs, a full state is snapshotted by root every
+`archiveResumeSnapshotInterval` slots so a restart does not replay from the sync origin.
+
+### Sizing
+
+Disk and CPU are dominated by the last exponent. At the default of 5 a mainnet archive stores roughly 410k
+per-epoch diffs, and each diff allocates a `len(balances)`-sized `[]int64`. Operators who do not need per-epoch
+resolution should raise it, for example `--state-diff-exponents=21,18,16,13,11,9,8`.
+
+Archive mode cannot be combined with `--beacon-db-pruning`: the pruner deletes the history the archive is built
+from.

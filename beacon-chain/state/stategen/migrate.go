@@ -29,6 +29,13 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 	s.migrationLock.Lock()
 	defer s.migrationLock.Unlock()
 
+	// While an archive node is regenerating history, the tree levels above the walk's frontier have no
+	// anchors yet, so the live chain cannot write diffs. The archive service takes over migration until it
+	// catches up with finalization.
+	if s.ArchivePending() {
+		return nil
+	}
+
 	if features.Get().EnableStateDiff {
 		return s.migrateToColdHdiff(ctx, fRoot)
 	}

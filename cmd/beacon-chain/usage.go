@@ -74,6 +74,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.RPCPort,
 			flags.BatchVerifierLimit,
 			flags.StateDiffExponents,
+			flags.ArchiveOriginState,
 			flags.PostponeShutdownForProposals,
 		},
 	},

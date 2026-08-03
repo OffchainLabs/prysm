@@ -36,6 +36,7 @@ type SyncNeeds struct {
 
 	oldestSlotFlagPtr  *primitives.Slot
 	validOldestSlotPtr *primitives.Slot
+	archiveOriginSlot  *primitives.Slot
 	blockRetention     primitives.Epoch
 
 	blobRetentionFlag primitives.Epoch
@@ -45,7 +46,11 @@ type SyncNeeds struct {
 
 type CurrentSlotter func() primitives.Slot
 
-func NewSyncNeeds(current CurrentSlotter, oldestSlotFlagPtr *primitives.Slot, blobRetentionFlag primitives.Epoch) (SyncNeeds, error) {
+// NewSyncNeeds builds the SyncNeeds used by backfill to decide what to download. archiveOriginSlot, when
+// non-nil, is the slot of an archive node's origin state and overrides every other block floor; unlike
+// oldestSlotFlagPtr it is not validated against MIN_EPOCHS_FOR_BLOCK_REQUESTS, because an archive node needs
+// every block above its origin no matter how young the chain is.
+func NewSyncNeeds(current CurrentSlotter, oldestSlotFlagPtr, archiveOriginSlot *primitives.Slot, blobRetentionFlag primitives.Epoch) (SyncNeeds, error) {
 	deneb, err := slots.EpochStart(params.BeaconConfig().DenebForkEpoch)
 	if err != nil {
 		return SyncNeeds{}, errors.Wrap(err, "deneb fork slot")
@@ -59,6 +64,7 @@ func NewSyncNeeds(current CurrentSlotter, oldestSlotFlagPtr *primitives.Slot, bl
 		current:           func() primitives.Slot { return current() },
 		deneb:             deneb,
 		fulu:              fulu,
+		archiveOriginSlot: archiveOriginSlot,
 		blobRetentionFlag: blobRetentionFlag,
 	}
 	// We apply the --blob-retention-epochs flag to both blob and column retention.
@@ -99,6 +105,10 @@ func (n SyncNeeds) Currently() CurrentNeeds {
 }
 
 func (n SyncNeeds) blockSpan(current primitives.Slot) NeedSpan {
+	if n.archiveOriginSlot != nil {
+		// Slot 0 is never requested: the genesis block has no valid proposer signature.
+		return NeedSpan{Begin: max(*n.archiveOriginSlot, 1), End: current}
+	}
 	if n.validOldestSlotPtr != nil { // assumes validation done in initialize()
 		return NeedSpan{Begin: *n.validOldestSlotPtr, End: current}
 	}
