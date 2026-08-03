@@ -22,10 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
-
-var log = logrus.WithField("prefix", "lookup")
 
 type FetchStateError struct {
 	message string
@@ -350,7 +347,6 @@ func (p *BeaconDbStater) stateFromDiffTree(ctx context.Context, target primitive
 	}
 	st, err := p.BeaconDB.StateBySlotFromDiffTree(ctx, target)
 	if err != nil {
-		log.WithError(err).WithField("slot", target).Debug("Could not read state from the state-diff tree")
 		return nil, false
 	}
 	if st == nil || st.IsNil() {
