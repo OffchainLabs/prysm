@@ -46,10 +46,6 @@ func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 		return
 	}
 
-	// Do not reorg on epoch boundaries
-	if (consensusHead.slot+1)%params.BeaconConfig().SlotsPerEpoch == 0 {
-		return
-	}
 	head := f.store.choosePayloadContent(consensusHead)
 	// Only reorg blocks that arrive late
 	early, err := head.arrivedEarly(f.store.genesisTime)
@@ -114,10 +110,6 @@ func (f *ForkChoice) GetProposerHead() [32]byte {
 	// Only reorg blocks from the previous slot.
 	currentSlot := slots.CurrentSlot(f.store.genesisTime)
 	if consensusHead.slot+1 != currentSlot {
-		return consensusHead.root
-	}
-	// Do not reorg on epoch boundaries
-	if (consensusHead.slot+1)%params.BeaconConfig().SlotsPerEpoch == 0 {
 		return consensusHead.root
 	}
 	// Only reorg blocks that arrive late
