@@ -113,7 +113,7 @@ func configureBuilderHeaderTimeout(cliCtx *cli.Context) error {
 	log.WithFields(logrus.Fields{
 		"timeout": timeout,
 		"default": params.BuilderProposalDelayTolerance,
-	}).Warning("Overriding the builder API `getHeader` timeout. A too high value may cause the node to miss blocks. Use with caution")
+	}).Warning("Overriding the builder API `getHeader` timeout. A too high value may cause the node to miss blocks. Only effective up to the Fulu fork. Use with caution")
 
 	return nil
 }
