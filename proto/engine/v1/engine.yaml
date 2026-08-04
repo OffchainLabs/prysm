@@ -10,12 +10,29 @@ types:
   - name: "ExecutionPayloadCapella"
   - name: "ExecutionPayloadDeneb"
   - name: "ExecutionPayloadGloas"
+    progressive: {}
+    fields:
+      Transactions:    {type: "ProgressiveList", element: {type: "ProgressiveByteList"}}
+      Withdrawals:     {type: "ProgressiveList"}
+      BlockAccessList: {type: "ProgressiveList"}
   - name: "ExecutionPayloadDenebAndBlobsBundle"
   - name: "ExecutionPayloadDenebAndBlobsBundleV2"
   - name: "ExecutionPayloadHeader"
   - name: "ExecutionPayloadHeaderCapella"
   - name: "ExecutionPayloadHeaderDeneb"
+  # Base ExecutionRequests is the electra/fulu (pre-gloas) type: bounded lists,
+  # NOT progressive. Progressive merkleization is introduced only at gloas
+  # (EIP-7688), and gloas uses the distinct ExecutionRequestsGloas message
+  # below. Annotating this base type progressive leaks into electra/fulu and
+  # breaks pre-gloas containment.
   - name: "ExecutionRequests"
   - name: "ExecutionRequestsGloas"
+    progressive: {}
+    fields:
+      Deposits: {type: "ProgressiveList"}
+      Withdrawals: {type: "ProgressiveList"}
+      Consolidations: {type: "ProgressiveList"}
+      BuilderDeposits: {type: "ProgressiveList"}
+      BuilderExits: {type: "ProgressiveList"}
   - name: "Withdrawal"
   - name: "WithdrawalRequest"
