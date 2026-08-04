@@ -16,6 +16,8 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 )
 
 // gloasBlockWithBid builds a Gloas block committing to blockHash and extending parentBlockHash.
@@ -176,6 +178,43 @@ func TestInsertRejectsBuildsOnFullChildWithoutPayload(t *testing.T) {
 	require.NoError(t, err)
 
 	require.ErrorContains(t, "invalid parent root", service.InsertNode(t.Context(), st, roblock))
+}
+
+// gaugeValue reads the current value of a prometheus gauge.
+func gaugeValue(t *testing.T, g prometheus.Gauge) float64 {
+	t.Helper()
+	var m dto.Metric
+	require.NoError(t, g.Write(&m))
+	return m.GetGauge().GetValue()
+}
+
+// The gauges must track the breaker's current state, not the state at the last detected failure,
+// otherwise they keep reporting a tripped breaker long after the bans have expired.
+func TestCheckBuilderPayloadFailure_GaugesFollowExpiry(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.BuilderAllowedFailures = 0
+	cfg.BuilderBlacklistPeriod = 1
+	cfg.BuilderCriticalFailedBuilders = 1
+	require.NoError(t, params.SetActive(cfg))
+
+	service, parentRoot, parentHash := setupBuilderFailureTest(t, 5, []uint64{100})
+
+	service.checkBuilderPayloadFailure(childOnEmpty(t, parentRoot, 2, 1))
+	require.Equal(t, float64(1), gaugeValue(t, builderBlacklistedCount))
+	require.Equal(t, float64(1), gaugeValue(t, builderSelfBuildOnly))
+
+	// A later block that is not a failure candidate: the parent's payload is present, so every
+	// early return in recordBuilderPayloadFailure fires. The gauges must still be refreshed.
+	env, err := blocks.WrappedROExecutionPayloadEnvelope(
+		testSignedEnvelope(t, parentRoot, 1, parentHash[:]).Message)
+	require.NoError(t, err)
+	require.NoError(t, service.InsertPayload(env))
+
+	healthy := childOnEmpty(t, parentRoot, params.BeaconConfig().SlotsPerEpoch+2, 3)
+	service.checkBuilderPayloadFailure(healthy)
+	require.Equal(t, float64(0), gaugeValue(t, builderBlacklistedCount))
+	require.Equal(t, float64(0), gaugeValue(t, builderSelfBuildOnly))
 }
 
 func TestCheckBuilderPayloadFailure_NoBreakerConfigured(t *testing.T) {
