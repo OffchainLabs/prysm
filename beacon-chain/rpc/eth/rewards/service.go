@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	coreblocks "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
@@ -54,7 +55,17 @@ func (rs *BlockRewardService) GetBlockRewardsData(ctx context.Context, blk inter
 			Code:    http.StatusInternalServerError,
 		}
 	}
-	st, err = altair.ProcessAttestationsNoVerifySignature(ctx, st, blk)
+	// The block's bid has not been applied to st, so the state's latest bid is
+	// still the parent block's — its slot is the parent slot required by Gloas
+	// attestation processing.
+	parentSlot, err := gloas.ParentSlotFromState(st)
+	if err != nil {
+		return nil, &httputil.DefaultJsonError{
+			Message: "Could not get parent slot: " + err.Error(),
+			Code:    http.StatusInternalServerError,
+		}
+	}
+	st, err = altair.ProcessAttestationsNoVerifySignature(ctx, st, blk, parentSlot)
 	if err != nil {
 		return nil, &httputil.DefaultJsonError{
 			Message: "Could not get attestation rewards: " + err.Error(),
