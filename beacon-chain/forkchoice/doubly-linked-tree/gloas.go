@@ -655,6 +655,23 @@ func (f *ForkChoice) GasLimit(root [32]byte) (uint64, error) {
 	return fp.gasLimit, nil
 }
 
+// isEarlyBlock reports whether a block for the given slot, processed at the
+// given time, is from the current slot and arrived before the early
+// equivocation deadline. This mirrors the spec's PTC timeliness condition on
+// the equivocations considered by should_apply_proposer_boost: late or
+// out-of-slot blocks are not equivocation candidates.
+func (s *Store) isEarlyBlock(slot primitives.Slot, processedAt time.Time) bool {
+	if slot != s.currentSlot() {
+		return false
+	}
+	// genesisTime has seconds granularity, so truncate like arrivedEarly does.
+	sss, err := slots.SinceSlotStart(slot, s.genesisTime, processedAt.Truncate(time.Second))
+	if err != nil {
+		return false
+	}
+	return sss < params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().EquivocationEarlyDueBPS)
+}
+
 func (s *Store) shouldApplyProposerBoost() bool {
 	if s.proposerBoostRoot == [32]byte{} {
 		return false
