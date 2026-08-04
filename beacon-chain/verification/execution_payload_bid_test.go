@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -136,6 +137,23 @@ func TestBidVerifier_VerifyParentBlockRootSeen(t *testing.T) {
 
 	verifier = &BidVerifier{results: newResults(RequireBidParentBlockRootSeen), b: wrapped}
 	require.ErrorIs(t, verifier.VerifyParentBlockRootSeen(func([32]byte) bool { return false }), ErrBidParentBlockRootNotSeen)
+}
+
+func TestBidVerifier_VerifyBidCompatibleWithHead(t *testing.T) {
+	signed := testSignedExecutionPayloadBid(t, 1)
+	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
+	require.NoError(t, err)
+
+	verifier := &BidVerifier{results: newResults(RequireBidCompatibleWithHead), b: wrapped}
+	require.NoError(t, verifier.VerifyBidCompatibleWithHead(func(bid interfaces.ROExecutionPayloadBid) bool {
+		return bid.ParentBlockRoot() == [32]byte(signed.Message.ParentBlockRoot)
+	}))
+
+	verifier = &BidVerifier{results: newResults(RequireBidCompatibleWithHead), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyBidCompatibleWithHead(func(interfaces.ROExecutionPayloadBid) bool { return false }), ErrBidNotCompatibleWithHead)
+
+	verifier = &BidVerifier{results: newResults(RequireBidCompatibleWithHead), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyBidCompatibleWithHead(nil), ErrBidNotCompatibleWithHead)
 }
 
 func TestBidVerifier_VerifyBidSlotMatches(t *testing.T) {
