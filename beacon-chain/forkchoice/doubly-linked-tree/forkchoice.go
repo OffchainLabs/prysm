@@ -138,7 +138,13 @@ func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, ro
 	if err != nil {
 		return err
 	}
-	f.RecordBlockForEquivocation(roblock.Block().Slot(), roblock.Block().ProposerIndex(), roblock.Root())
+	// Only blocks processed early in their own slot count as equivocation
+	// candidates for should_apply_proposer_boost, mirroring the spec's PTC
+	// timeliness condition. Blocks received via gossip are also recorded, with
+	// a more accurate arrival time, by sync's recordEarlyEquivocation.
+	if f.store.isEarlyBlock(roblock.Block().Slot(), pn.timestamp) {
+		f.RecordBlockForEquivocation(roblock.Block().Slot(), roblock.Block().ProposerIndex(), roblock.Root())
+	}
 	jc, fc = f.store.pullTips(state, pn.node, jc, fc)
 	if err := f.updateCheckpoints(ctx, jc, fc); err != nil {
 		_, remErr := f.store.removeNode(ctx, pn)
