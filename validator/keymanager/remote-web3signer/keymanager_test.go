@@ -432,6 +432,28 @@ func TestKeymanager_FetchValidatingPublicKeys_WithExternalURL_ThrowsError(t *tes
 	assert.Nil(t, km)
 }
 
+func TestKeymanager_ExternalURLUnreachable_StartsWhenPolling(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "mock error", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
+	require.NoError(t, err)
+	km, err := NewKeymanager(ctx, &SetupConfig{
+		BaseEndpoint:          srv.URL,
+		GenesisValidatorsRoot: root,
+		PublicKeysURL:         srv.URL + "/api/v1/eth2/publicKeys",
+		PollInterval:          time.Hour,
+	})
+	require.NoError(t, err)
+	keys, err := km.FetchValidatingPublicKeys(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(keys))
+}
+
 func TestKeymanager_AddPublicKeys(t *testing.T) {
 	ctx := t.Context()
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")

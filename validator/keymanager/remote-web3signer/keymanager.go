@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
@@ -110,11 +111,20 @@ func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
 	// load key values
 	if cfg.PublicKeysURL != "" {
 		providedPublicKeys, err := km.client.GetPublicKeys(ctx, cfg.PublicKeysURL)
-		if err != nil {
+		switch {
+		case err == nil:
+			ppk = providedPublicKeys
+		case cfg.PollInterval > 0 && !keyFileExists:
+			// Polling will retry, so start with no keys rather than refusing to start.
+			erroredResponsesTotal.Inc()
+			log.
+				WithError(err).
+				WithField("url", api.RedactEndpoint(cfg.PublicKeysURL)).
+				Warn("Could not get public keys from the remote signer URL, starting with no validating keys and retrying on the next poll")
+		default:
 			erroredResponsesTotal.Inc()
 			return nil, errors.Wrapf(err, "could not get public keys from remote server URL %v", cfg.PublicKeysURL)
 		}
-		ppk = providedPublicKeys
 	} else if len(cfg.ProvidedPublicKeys) != 0 {
 		ppk = cfg.ProvidedPublicKeys
 	}
