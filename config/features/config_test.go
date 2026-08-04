@@ -70,16 +70,14 @@ func TestConfigureBeaconConfig(t *testing.T) {
 	assert.Equal(t, true, c.SaveInvalidBlock)
 }
 
-func TestConfigureBeaconConfig_EnableProgressiveSSZ(t *testing.T) {
-	defer Init(&Flags{})
-
+func TestConfigureBeaconConfig_DisableProgressiveSSZ(t *testing.T) {
 	app := cli.App{}
 	set := flag.NewFlagSet("test", 0)
-	set.Bool(EnableProgressiveSSZ.Name, false, "test")
-	require.NoError(t, set.Set(EnableProgressiveSSZ.Name, "true"))
-	context := cli.NewContext(&app, set, nil)
-	require.NoError(t, ConfigureBeaconChain(context))
-	assert.Equal(t, true, Get().EnableProgressiveSSZ)
+	ctx := cli.NewContext(&app, set, nil)
+	set.Bool(DisableProgressiveSSZ.Name, false, "test")
+	require.NoError(t, set.Set(DisableProgressiveSSZ.Name, "true"))
+	require.NoError(t, ConfigureBeaconChain(ctx))
+	assert.Equal(t, true, Get().DisableProgressiveSSZ)
 }
 
 func TestConfigureBeaconConfig_ReorgLatePayloads(t *testing.T) {

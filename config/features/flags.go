@@ -182,9 +182,9 @@ var (
 		Name:  "enable-state-diff",
 		Usage: "Enables the experimental state diff feature.",
 	}
-	EnableProgressiveSSZ = &cli.BoolFlag{
-		Name:   "enable-progressive-ssz",
-		Usage:  "Enables experimental progressive SSZ merkleization for converted consensus types.",
+	DisableProgressiveSSZ = &cli.BoolFlag{
+		Name:   "disable-progressive-ssz",
+		Usage:  "Disables progressive SSZ merkleization for Gloas consensus types. Gloas (EIP-7688) mandates it, so this is an escape hatch for debugging only.",
 		Hidden: true,
 	}
 	reorgLatePayloads = &cli.BoolFlag{
@@ -293,7 +293,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
 	EnableStateDiff,
-	EnableProgressiveSSZ,
+	DisableProgressiveSSZ,
 	reorgLatePayloads,
 	forceHeadFlag,
 	blacklistRoots,
