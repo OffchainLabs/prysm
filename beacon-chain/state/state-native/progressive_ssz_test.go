@@ -24,11 +24,11 @@ import (
 )
 
 func TestProgressiveSSZEnabled(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{})
+	reset := features.InitWithReset(&features.Flags{DisableProgressiveSSZ: true})
 	defer reset()
 	require.Equal(t, false, features.ProgressiveSSZEnabled(version.Gloas))
 
-	reset = features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset = features.InitWithReset(&features.Flags{})
 	defer reset()
 	require.Equal(t, true, features.ProgressiveSSZEnabled(version.Gloas))
 	require.Equal(t, false, features.ProgressiveSSZEnabled(version.Fulu))
@@ -37,7 +37,7 @@ func TestProgressiveSSZEnabled(t *testing.T) {
 func TestRootSelector_ProgressiveSSZGate(t *testing.T) {
 	st := newGloasStateForProgressiveSSZTests(t)
 
-	reset := features.InitWithReset(&features.Flags{})
+	reset := features.InitWithReset(&features.Flags{DisableProgressiveSSZ: true})
 	defer reset()
 
 	legacyValidatorsRoot, err := st.rootSelector(context.Background(), types.Validators)
@@ -72,7 +72,7 @@ func TestRootSelector_ProgressiveSSZGate(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expectedLegacyBuildersRoot, legacyBuildersRoot)
 
-	reset = features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset = features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	progressiveValidatorsRoot, err := st.rootSelector(context.Background(), types.Validators)
@@ -116,7 +116,7 @@ func TestRootSelector_ProgressiveSSZGate(t *testing.T) {
 func TestComputeFieldRootsWithHasher_ProgressiveSSZGate(t *testing.T) {
 	st := newGloasStateForProgressiveSSZTests(t)
 
-	reset := features.InitWithReset(&features.Flags{})
+	reset := features.InitWithReset(&features.Flags{DisableProgressiveSSZ: true})
 	defer reset()
 
 	legacyRoots, err := ComputeFieldRootsWithHasher(context.Background(), st)
@@ -134,7 +134,7 @@ func TestComputeFieldRootsWithHasher_ProgressiveSSZGate(t *testing.T) {
 	require.NoError(t, err)
 	require.DeepEqual(t, expectedLegacyBuildersRoot[:], legacyRoots[types.Builders.RealPosition()])
 
-	reset = features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset = features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	progressiveRoots, err := ComputeFieldRootsWithHasher(context.Background(), st)
@@ -160,7 +160,7 @@ func TestComputeFieldRootsWithHasher_ProgressiveSSZGate(t *testing.T) {
 func TestHashTreeRoot_ProgressiveSSZGate(t *testing.T) {
 	st := newGloasStateForProgressiveSSZTests(t)
 
-	reset := features.InitWithReset(&features.Flags{})
+	reset := features.InitWithReset(&features.Flags{DisableProgressiveSSZ: true})
 	defer reset()
 
 	legacyRoot, err := st.HashTreeRoot(context.Background())
@@ -172,7 +172,7 @@ func TestHashTreeRoot_ProgressiveSSZGate(t *testing.T) {
 	expectedLegacyRoot := bytesutil.ToBytes32(legacyLayers[len(legacyLayers)-1][0])
 	require.Equal(t, expectedLegacyRoot, legacyRoot)
 
-	reset = features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset = features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	progressiveRoot, err := st.HashTreeRoot(context.Background())
@@ -201,7 +201,7 @@ func TestHashTreeRoot_ProgressiveSSZGate(t *testing.T) {
 }
 
 func TestHashTreeRoot_ProgressiveSSZIncremental(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	st := newGloasStateForProgressiveSSZTests(t)
@@ -241,7 +241,7 @@ func TestHashTreeRoot_ProgressiveSSZIncremental(t *testing.T) {
 }
 
 func TestHashTreeRoot_ProgressiveSSZFieldTrieUpdates(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	st := newGloasStateForProgressiveSSZTests(t)
@@ -271,7 +271,7 @@ func TestHashTreeRoot_ProgressiveSSZFieldTrieUpdates(t *testing.T) {
 }
 
 func TestHashTreeRoot_ProgressiveSSZFieldTrieCopyOnWrite(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	st := newGloasStateForProgressiveSSZTests(t)
@@ -303,7 +303,7 @@ func TestHashTreeRoot_ProgressiveSSZFieldTrieCopyOnWrite(t *testing.T) {
 }
 
 func TestHashTreeRoot_ProgressiveSSZFieldTrieRebuild(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	st := newGloasStateForProgressiveSSZTests(t)
@@ -329,7 +329,7 @@ func TestHashTreeRoot_ProgressiveSSZFieldTrieRebuild(t *testing.T) {
 }
 
 func TestHashTreeRoot_ProgressiveSSZApplyToEveryValidatorMarksDirtyOnError(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	st := newGloasStateForProgressiveSSZTests(t)
@@ -357,7 +357,7 @@ func TestHashTreeRoot_ProgressiveSSZApplyToEveryValidatorMarksDirtyOnError(t *te
 }
 
 func TestHashTreeRoot_ProgressiveSSZDecreaseWithdrawalBalancesMarksDirtyOnError(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	st := newGloasStateForProgressiveSSZTests(t)
@@ -380,7 +380,7 @@ func TestHashTreeRoot_ProgressiveSSZDecreaseWithdrawalBalancesMarksDirtyOnError(
 }
 
 func TestHashTreeRoot_ProgressiveSSZCopy(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	st := newGloasStateForProgressiveSSZTests(t)
