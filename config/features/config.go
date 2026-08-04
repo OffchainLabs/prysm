@@ -94,6 +94,14 @@ type Flags struct {
 	// AggregateIntervals specifies the time durations at which we aggregate attestations preparing for forkchoice.
 	AggregateIntervals [3]time.Duration
 
+	// EnableProposerTimingGames delays the block proposal request within the slot so
+	// builders have more time to accrue MEV (proposer timing games). Off by default.
+	EnableProposerTimingGames bool
+	// ProposerTimingGameDelay is the target time into the slot at which the block
+	// proposal request is released when EnableProposerTimingGames is set. Only read
+	// when EnableProposerTimingGames is true; the effective value is clamped at use.
+	ProposerTimingGameDelay time.Duration
+
 	// Feature related flags (alignment forced in the end)
 	ForceHead        string                // ForceHead forces the head block to be a specific block root, the last head block, or the last finalized block.
 	BlacklistedRoots map[[32]byte]struct{} // BlacklistedRoots is a list of roots that are blacklisted from processing.
@@ -383,6 +391,11 @@ func ConfigureValidator(ctx *cli.Context) error {
 	}
 
 	cfg.KeystoreImportDebounceInterval = ctx.Duration(dynamicKeyReloadDebounceInterval.Name)
+	if ctx.Bool(enableProposerTimingGames.Name) {
+		logEnabled(enableProposerTimingGames)
+		cfg.EnableProposerTimingGames = true
+		cfg.ProposerTimingGameDelay = ctx.Duration(proposerTimingGameDelay.Name)
+	}
 	Init(cfg)
 	return nil
 }

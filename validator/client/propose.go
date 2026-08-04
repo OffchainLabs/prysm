@@ -8,6 +8,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
@@ -58,6 +59,16 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 	fmtKey := fmt.Sprintf("%#x", pubKey[:])
 	span.SetAttributes(trace.StringAttribute("validator", fmtKey))
 	log := log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:])))
+
+	// Proposer timing games: optionally delay the block request into the slot so
+	// builders have more time to accrue MEV. Gated behind an experimental flag and
+	// clamped to remain before the attestation deadline (see proposalReleaseDelay).
+	if features.Get().EnableProposerTimingGames {
+		if delay := v.proposalReleaseDelay(slot); delay > 0 {
+			log.WithField("slot", slot).WithField("delay", delay).Debug("Delaying block proposal for timing games")
+			v.waitUntilSlotOffset(ctx, slot, delay)
+		}
+	}
 
 	// Sign randao reveal, it's used to request block from beacon node
 	epoch := primitives.Epoch(slot / params.BeaconConfig().SlotsPerEpoch)

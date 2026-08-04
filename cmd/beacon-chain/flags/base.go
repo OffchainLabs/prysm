@@ -78,6 +78,13 @@ var (
 			" and the beacon will revert to local building.",
 		Value: 0,
 	}
+	// BuilderGetHeaderTimeout bounds how long the beacon node waits for a builder relay getHeader response.
+	BuilderGetHeaderTimeout = &cli.DurationFlag{
+		Name: "builder-getheader-timeout",
+		Usage: "Maximum time to wait for a builder relay getHeader response before falling back to local block building (e.g. 1s, 950ms). " +
+			"Lower values reduce missed-slot risk when using proposer timing games; higher values tolerate slower relays.",
+		DefaultText: params.BeaconConfig().BuilderGetHeaderTimeout.String(),
+	}
 	// ExecutionEngineEndpoint provides an HTTP access endpoint to connect to an execution client on the execution layer
 	ExecutionEngineEndpoint = &cli.StringFlag{
 		Name:  "execution-endpoint",

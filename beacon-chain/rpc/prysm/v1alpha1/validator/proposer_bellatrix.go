@@ -208,7 +208,13 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, blockBuilderTimeout)
+	// Bound the getHeader call by the configurable builder timeout, falling back
+	// to the default BUILDER_PROPOSAL_DELAY_TOLERANCE when unset.
+	timeout := blockBuilderTimeout
+	if t := params.BeaconConfig().BuilderGetHeaderTimeout; t > 0 {
+		timeout = t
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	signedBid, err := vs.BlockBuilder.GetHeader(ctx, slot, bytesutil.ToBytes32(h.BlockHash()), pk)

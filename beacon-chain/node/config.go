@@ -92,6 +92,17 @@ func configureBuilderCircuitBreaker(cliCtx *cli.Context) error {
 	return nil
 }
 
+func configureBuilderGetHeaderTimeout(cliCtx *cli.Context) error {
+	if cliCtx.IsSet(flags.BuilderGetHeaderTimeout.Name) {
+		c := params.BeaconConfig().Copy()
+		c.BuilderGetHeaderTimeout = cliCtx.Duration(flags.BuilderGetHeaderTimeout.Name)
+		if err := params.SetActive(c); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func configureSlotsPerArchivedPoint(cliCtx *cli.Context) error {
 	if cliCtx.IsSet(flags.SlotsPerArchivedPoint.Name) {
 		c := params.BeaconConfig().Copy()
