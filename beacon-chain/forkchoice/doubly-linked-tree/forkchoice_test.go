@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
@@ -430,7 +431,10 @@ func TestForkChoice_RecordBlockForEquivocation_DedupesRoot(t *testing.T) {
 }
 
 func TestForkChoice_InsertNode_RecordsFirstSeen(t *testing.T) {
+	// A block inserted early in its own slot is recorded as an equivocation
+	// candidate.
 	f := setup(0, 0)
+	f.SetGenesisTime(time.Now().Add(time.Duration(-1*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
 	blockRoot := indexToHash(1)
 	st, roblock, err := prepareForkchoiceState(t.Context(), 1, blockRoot, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
@@ -440,6 +444,21 @@ func TestForkChoice_InsertNode_RecordsFirstSeen(t *testing.T) {
 	roots := f.store.blockRootsBySlotProposer[key]
 	require.Equal(t, 1, len(roots))
 	require.Equal(t, blockRoot, roots[0])
+}
+
+func TestForkChoice_InsertNode_LateBlockNotRecorded(t *testing.T) {
+	// A block from a past slot is not an equivocation candidate for
+	// should_apply_proposer_boost, mirroring the spec's PTC timeliness
+	// condition.
+	f := setup(0, 0)
+	f.SetGenesisTime(time.Now().Add(time.Duration(-2*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
+	blockRoot := indexToHash(1)
+	st, roblock, err := prepareForkchoiceState(t.Context(), 1, blockRoot, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(t.Context(), st, roblock))
+
+	key := proposerSlotKey{slot: 1, proposer: roblock.Block().ProposerIndex()}
+	require.Equal(t, 0, len(f.store.blockRootsBySlotProposer[key]))
 }
 
 func TestForkChoice_RecordBlockForEquivocation_PrunedOnFinalization(t *testing.T) {
