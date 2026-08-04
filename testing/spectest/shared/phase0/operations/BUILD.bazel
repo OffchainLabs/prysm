@@ -21,6 +21,7 @@ go_library(
         "//beacon-chain/state/state-native:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/interfaces:go_default_library",
+        "//consensus-types/primitives:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/version:go_default_library",
         "//testing/spectest/shared/common/operations:go_default_library",

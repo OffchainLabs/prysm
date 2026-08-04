@@ -36,7 +36,7 @@ func TestMatchingPayload(t *testing.T) {
 		stIface, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
 		require.NoError(t, err)
 
-		ok, err := MatchingPayload(stIface, [32]byte{}, 0, 123)
+		ok, err := MatchingPayload(stIface, [32]byte{}, 0, 0, 123)
 		require.NoError(t, err)
 		require.Equal(t, true, ok)
 	})
@@ -51,7 +51,7 @@ func TestMatchingPayload(t *testing.T) {
 		var rootArr [32]byte
 		copy(rootArr[:], root)
 
-		ok, err := MatchingPayload(state, rootArr, 4, 1)
+		ok, err := MatchingPayload(state, rootArr, 4, 3, 1)
 		require.ErrorContains(t, "committee index", err)
 		require.Equal(t, false, ok)
 	})
@@ -66,7 +66,7 @@ func TestMatchingPayload(t *testing.T) {
 		var rootArr [32]byte
 		copy(rootArr[:], root)
 
-		ok, err := MatchingPayload(state, rootArr, 4, 0)
+		ok, err := MatchingPayload(state, rootArr, 4, 3, 0)
 		require.NoError(t, err)
 		require.Equal(t, true, ok)
 	})
@@ -99,11 +99,22 @@ func TestMatchingPayload(t *testing.T) {
 		var rootArr [32]byte
 		copy(rootArr[:], root)
 
-		ok, err := MatchingPayload(state, rootArr, 4, 1)
+		ok, err := MatchingPayload(state, rootArr, 4, 4, 1)
 		require.NoError(t, err)
 		require.Equal(t, true, ok)
 
-		ok, err = MatchingPayload(state, rootArr, 4, 0)
+		ok, err = MatchingPayload(state, rootArr, 4, 4, 0)
+		require.NoError(t, err)
+		require.Equal(t, false, ok)
+
+		// The availability lookup uses the parent block's slot, not the
+		// attestation's slot: with the bit set at slot 4 but the parent at
+		// slot 3, index 0 matches and index 1 does not.
+		ok, err = MatchingPayload(state, rootArr, 4, 3, 0)
+		require.NoError(t, err)
+		require.Equal(t, true, ok)
+
+		ok, err = MatchingPayload(state, rootArr, 4, 3, 1)
 		require.NoError(t, err)
 		require.Equal(t, false, ok)
 	})

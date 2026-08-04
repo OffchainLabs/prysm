@@ -26,6 +26,7 @@ func ProcessAttestationsNoVerifySignature(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	b interfaces.ReadOnlyBeaconBlock,
+	parentSlot primitives.Slot,
 ) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "altair.ProcessAttestationsNoVerifySignature")
 	defer span.End()
@@ -42,7 +43,7 @@ func ProcessAttestationsNoVerifySignature(
 		return nil, err
 	}
 	for idx, att := range body.Attestations() {
-		beaconState, err = ProcessAttestationNoVerifySignature(ctx, beaconState, att, totalBalance)
+		beaconState, err = ProcessAttestationNoVerifySignature(ctx, beaconState, att, totalBalance, parentSlot)
 		if err != nil {
 			return nil, errors.Wrapf(err, "could not verify attestation at index %d in block", idx)
 		}
@@ -57,6 +58,7 @@ func ProcessAttestationNoVerifySignature(
 	beaconState state.BeaconState,
 	att ethpb.Att,
 	totalBalance uint64,
+	parentSlot primitives.Slot,
 ) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "altair.ProcessAttestationNoVerifySignature")
 	defer span.End()
@@ -69,7 +71,7 @@ func ProcessAttestationNoVerifySignature(
 	if err != nil {
 		return nil, fmt.Errorf("att slot %d can't be greater than state slot %d", att.GetData().Slot, beaconState.Slot())
 	}
-	participatedFlags, err := AttestationParticipationFlagIndices(beaconState, att.GetData(), delay)
+	participatedFlags, err := AttestationParticipationFlagIndices(beaconState, att.GetData(), delay, parentSlot)
 	if err != nil {
 		return nil, err
 	}
@@ -252,35 +254,63 @@ func RewardProposer(ctx context.Context, beaconState state.BeaconState, proposer
 // AttestationParticipationFlagIndices retrieves a map of attestation scoring based on Altair's participation flag indices.
 // This is used to facilitate process attestation during state transition and during upgrade to altair state.
 //
-// Spec code:
-// def get_attestation_participation_flag_indices(state: BeaconState,
+// The parentSlot argument is only used for Gloas and later states: it is the
+// slot of the parent block of the block being processed, where the payload
+// availability of the attested block is looked up. Pre-Gloas callers pass 0.
 //
-//	                                           data: AttestationData,
-//	                                           inclusion_delay: uint64) -> Sequence[int]:
+// Spec code (v1.7.0-alpha.13, gloas):
+// def get_attestation_participation_flag_indices(
+//
+//	state: BeaconState,
+//	data: AttestationData,
+//	inclusion_delay: Uint64,
+//	# [New in Gloas:EIP7732]
+//	parent_slot: Slot,
+//
+// ) -> Sequence[int]:
+//
 //	"""
 //	Return the flag indices that are satisfied by an attestation.
 //	"""
+//	# Matching source
 //	if data.target.epoch == get_current_epoch(state):
 //	    justified_checkpoint = state.current_justified_checkpoint
 //	else:
 //	    justified_checkpoint = state.previous_justified_checkpoint
-//
-//	# Matching roots
 //	is_matching_source = data.source == justified_checkpoint
-//	is_matching_target = is_matching_source and data.target.root == get_block_root(state, data.target.epoch)
-//	is_matching_head = is_matching_target and data.beacon_block_root == get_block_root_at_slot(state, data.slot)
+//
+//	# Matching target
+//	target_root = get_block_root(state, data.target.epoch)
+//	target_root_matches = data.target.root == target_root
+//	is_matching_target = is_matching_source and target_root_matches
+//
+//	# [New in Gloas:EIP7732]
+//	if is_attestation_same_slot(state, data):
+//	    assert data.index == 0
+//	    payload_matches = True
+//	else:
+//	    slot_index = parent_slot % SLOTS_PER_HISTORICAL_ROOT
+//	    payload_index = state.execution_payload_availability[slot_index]
+//	    payload_matches = data.index == payload_index
+//
+//	# Matching head
+//	head_root = get_block_root_at_slot(state, data.slot)
+//	head_root_matches = data.beacon_block_root == head_root
+//	# [Modified in Gloas:EIP7732]
+//	is_matching_head = is_matching_target and head_root_matches and payload_matches
+//
 //	assert is_matching_source
 //
 //	participation_flag_indices = []
 //	if is_matching_source and inclusion_delay <= integer_squareroot(SLOTS_PER_EPOCH):
 //	    participation_flag_indices.append(TIMELY_SOURCE_FLAG_INDEX)
-//	if is_matching_target and inclusion_delay <= SLOTS_PER_EPOCH:
+//	if is_matching_target:
 //	    participation_flag_indices.append(TIMELY_TARGET_FLAG_INDEX)
 //	if is_matching_head and inclusion_delay == MIN_ATTESTATION_INCLUSION_DELAY:
 //	    participation_flag_indices.append(TIMELY_HEAD_FLAG_INDEX)
 //
 //	return participation_flag_indices
-func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, data *ethpb.AttestationData, delay primitives.Slot) (map[uint8]bool, error) {
+func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, data *ethpb.AttestationData, delay primitives.Slot, parentSlot primitives.Slot) (map[uint8]bool, error) {
 	currEpoch := time.CurrentEpoch(beaconState)
 	var justifiedCheckpt *ethpb.Checkpoint
 	if data.Target.Epoch == currEpoch {
@@ -319,6 +349,7 @@ func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, 
 		beaconState,
 		beaconBlockRoot,
 		data.Slot,
+		parentSlot,
 		uint64(data.CommitteeIndex),
 	)
 	if err != nil {

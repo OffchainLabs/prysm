@@ -52,7 +52,7 @@ func TestProcessAttestations_InclusionDelayFailure(t *testing.T) {
 	)
 	wsb, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
-	_, err = altair.ProcessAttestationsNoVerifySignature(t.Context(), beaconState, wsb.Block())
+	_, err = altair.ProcessAttestationsNoVerifySignature(t.Context(), beaconState, wsb.Block(), 0)
 	require.ErrorContains(t, want, err)
 }
 
@@ -83,7 +83,7 @@ func TestProcessAttestations_NeitherCurrentNorPrevEpoch(t *testing.T) {
 	)
 	wsb, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
-	_, err = altair.ProcessAttestationsNoVerifySignature(t.Context(), beaconState, wsb.Block())
+	_, err = altair.ProcessAttestationsNoVerifySignature(t.Context(), beaconState, wsb.Block(), 0)
 	require.ErrorContains(t, want, err)
 }
 
@@ -112,13 +112,13 @@ func TestProcessAttestations_CurrentEpochFFGDataMismatches(t *testing.T) {
 	want := "source check point not equal to current justified checkpoint"
 	wsb, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
-	_, err = altair.ProcessAttestationsNoVerifySignature(t.Context(), beaconState, wsb.Block())
+	_, err = altair.ProcessAttestationsNoVerifySignature(t.Context(), beaconState, wsb.Block(), 0)
 	require.ErrorContains(t, want, err)
 	b.Block.Body.Attestations[0].Data.Source.Epoch = time.CurrentEpoch(beaconState)
 	b.Block.Body.Attestations[0].Data.Source.Root = []byte{}
 	wsb, err = blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
-	_, err = altair.ProcessAttestationsNoVerifySignature(t.Context(), beaconState, wsb.Block())
+	_, err = altair.ProcessAttestationsNoVerifySignature(t.Context(), beaconState, wsb.Block(), 0)
 	require.ErrorContains(t, want, err)
 }
 
@@ -153,14 +153,14 @@ func TestProcessAttestations_PrevEpochFFGDataMismatches(t *testing.T) {
 	want := "source check point not equal to previous justified checkpoint"
 	wsb, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
-	_, err = altair.ProcessAttestationsNoVerifySignature(t.Context(), beaconState, wsb.Block())
+	_, err = altair.ProcessAttestationsNoVerifySignature(t.Context(), beaconState, wsb.Block(), 0)
 	require.ErrorContains(t, want, err)
 	b.Block.Body.Attestations[0].Data.Source.Epoch = time.PrevEpoch(beaconState)
 	b.Block.Body.Attestations[0].Data.Target.Epoch = time.PrevEpoch(beaconState)
 	b.Block.Body.Attestations[0].Data.Source.Root = []byte{}
 	wsb, err = blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
-	_, err = altair.ProcessAttestationsNoVerifySignature(t.Context(), beaconState, wsb.Block())
+	_, err = altair.ProcessAttestationsNoVerifySignature(t.Context(), beaconState, wsb.Block(), 0)
 	require.ErrorContains(t, want, err)
 }
 
@@ -192,7 +192,7 @@ func TestProcessAttestations_InvalidAggregationBitsLength(t *testing.T) {
 	expected := "failed to verify aggregation bitfield: wanted participants bitfield length 3, got: 4"
 	wsb, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
-	_, err = altair.ProcessAttestationsNoVerifySignature(t.Context(), beaconState, wsb.Block())
+	_, err = altair.ProcessAttestationsNoVerifySignature(t.Context(), beaconState, wsb.Block(), 0)
 	require.ErrorContains(t, expected, err)
 }
 
@@ -237,7 +237,7 @@ func TestProcessAttestations_OK(t *testing.T) {
 		require.NoError(t, err)
 		wsb, err := blocks.NewSignedBeaconBlock(block)
 		require.NoError(t, err)
-		_, err = altair.ProcessAttestationsNoVerifySignature(t.Context(), beaconState, wsb.Block())
+		_, err = altair.ProcessAttestationsNoVerifySignature(t.Context(), beaconState, wsb.Block(), 0)
 		require.NoError(t, err)
 	})
 	t.Run("post-Electra", func(t *testing.T) {
@@ -283,7 +283,7 @@ func TestProcessAttestations_OK(t *testing.T) {
 		require.NoError(t, err)
 		wsb, err := blocks.NewSignedBeaconBlock(block)
 		require.NoError(t, err)
-		_, err = altair.ProcessAttestationsNoVerifySignature(t.Context(), beaconState, wsb.Block())
+		_, err = altair.ProcessAttestationsNoVerifySignature(t.Context(), beaconState, wsb.Block(), 0)
 		require.NoError(t, err)
 	})
 }
@@ -315,7 +315,7 @@ func TestProcessAttestationNoVerify_SourceTargetHead(t *testing.T) {
 
 	b, err := helpers.TotalActiveBalance(t.Context(), beaconState)
 	require.NoError(t, err)
-	beaconState, err = altair.ProcessAttestationNoVerifySignature(t.Context(), beaconState, att, b)
+	beaconState, err = altair.ProcessAttestationNoVerifySignature(t.Context(), beaconState, att, b, 0)
 	require.NoError(t, err)
 
 	p, err := beaconState.CurrentEpochParticipation()
@@ -476,7 +476,7 @@ func TestFuzzProcessAttestationsNoVerify_10000(t *testing.T) {
 		}
 		wsb, err := blocks.NewSignedBeaconBlock(b)
 		require.NoError(t, err)
-		r, err := altair.ProcessAttestationsNoVerifySignature(t.Context(), s, wsb.Block())
+		r, err := altair.ProcessAttestationsNoVerifySignature(t.Context(), s, wsb.Block(), 0)
 		if err != nil && r != nil {
 			t.Fatalf("return value should be nil on err. found: %v on error: %v for state: %v and block: %v", r, err, s, b)
 		}
@@ -689,6 +689,7 @@ func TestAttestationParticipationFlagIndices(t *testing.T) {
 		inputState           state.BeaconState
 		inputData            *ethpb.AttestationData
 		inputDelay           primitives.Slot
+		parentSlot           primitives.Slot
 		participationIndices map[uint8]bool
 	}{
 		{
@@ -821,6 +822,9 @@ func TestAttestationParticipationFlagIndices(t *testing.T) {
 				},
 			},
 			inputDelay: 1,
+			// Payload availability is looked up at the parent block's slot,
+			// which is the attested block's slot here.
+			parentSlot: 3,
 			participationIndices: map[uint8]bool{
 				sourceFlagIndex: true,
 				targetFlagIndex: true,
@@ -829,7 +833,7 @@ func TestAttestationParticipationFlagIndices(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		flagIndices, err := altair.AttestationParticipationFlagIndices(test.inputState, test.inputData, test.inputDelay)
+		flagIndices, err := altair.AttestationParticipationFlagIndices(test.inputState, test.inputData, test.inputDelay, test.parentSlot)
 		if test.participationIndices == nil {
 			require.ErrorContains(t, "committee index", err)
 			continue

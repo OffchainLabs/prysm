@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -21,7 +22,7 @@ import (
 //	<spec fn="process_execution_payload_bid" fork="gloas" hash="ba18a784">
 //	def process_execution_payload_bid(
 //	    state: BeaconState, signed_bid: SignedExecutionPayloadBid
-//	) -> None:
+//	) -> Slot:
 //	    bid = signed_bid.message
 //	    builder_index = bid.builder_index
 //	    amount = bid.value
@@ -69,23 +70,28 @@ import (
 //	            pending_payment
 //	        )
 //
+//	    # Cache the parent block's slot before overwriting the bid
+//	    parent_slot = state.latest_execution_payload_bid.slot
+//
 //	    # Cache the signed execution payload bid
 //	    state.latest_execution_payload_bid = bid
+//
+//	    return parent_slot
 //	</spec>
-func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyBeaconBlock) error {
+func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyBeaconBlock) (primitives.Slot, error) {
 	signedBid, err := block.Body().SignedExecutionPayloadBid()
 	if err != nil {
-		return errors.Wrap(err, "failed to get signed execution payload bid")
+		return 0, errors.Wrap(err, "failed to get signed execution payload bid")
 	}
 
 	wrappedBid, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
 	if err != nil {
-		return errors.Wrap(err, "failed to wrap signed bid")
+		return 0, errors.Wrap(err, "failed to wrap signed bid")
 	}
 
 	bid, err := wrappedBid.Bid()
 	if err != nil {
-		return errors.Wrap(err, "failed to get bid from wrapped bid")
+		return 0, errors.Wrap(err, "failed to get bid from wrapped bid")
 	}
 
 	builderIndex := bid.BuilderIndex()
@@ -93,49 +99,49 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 
 	if builderIndex == params.BeaconConfig().BuilderIndexSelfBuild {
 		if amount != 0 {
-			return fmt.Errorf("self-build amount must be zero, got %d", amount)
+			return 0, fmt.Errorf("self-build amount must be zero, got %d", amount)
 		}
 		if wrappedBid.Signature() != common.InfiniteSignature {
-			return errors.New("self-build signature must be point at infinity")
+			return 0, errors.New("self-build signature must be point at infinity")
 		}
 	} else {
 		ok, err := st.IsActiveBuilder(builderIndex)
 		if err != nil {
-			return errors.Wrap(err, "builder active check failed")
+			return 0, errors.Wrap(err, "builder active check failed")
 		}
 		if !ok {
-			return fmt.Errorf("builder %d is not active", builderIndex)
+			return 0, fmt.Errorf("builder %d is not active", builderIndex)
 		}
 
 		builder, err := st.Builder(builderIndex)
 		if err != nil {
-			return errors.Wrap(err, "could not get builder")
+			return 0, errors.Wrap(err, "could not get builder")
 		}
 		if len(builder.Version) == 0 || builder.Version[0] != params.BeaconConfig().PayloadBuilderVersion {
-			return fmt.Errorf("builder %d is not a payload builder", builderIndex)
+			return 0, fmt.Errorf("builder %d is not a payload builder", builderIndex)
 		}
 
 		ok, err = st.CanBuilderCoverBid(builderIndex, amount)
 		if err != nil {
-			return errors.Wrap(err, "builder balance check failed")
+			return 0, errors.Wrap(err, "builder balance check failed")
 		}
 		if !ok {
-			return fmt.Errorf("builder %d cannot cover bid amount %d", builderIndex, amount)
+			return 0, fmt.Errorf("builder %d cannot cover bid amount %d", builderIndex, amount)
 		}
 
 		if err := ValidatePayloadBidSignature(st, wrappedBid); err != nil {
-			return errors.Wrap(err, "bid signature validation failed")
+			return 0, errors.Wrap(err, "bid signature validation failed")
 		}
 	}
 
 	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(slots.ToEpoch(st.Slot()))
 	commitmentCount := bid.BlobKzgCommitmentCount()
 	if commitmentCount > uint64(maxBlobsPerBlock) {
-		return fmt.Errorf("bid has %d blob KZG commitments over max %d", commitmentCount, maxBlobsPerBlock)
+		return 0, fmt.Errorf("bid has %d blob KZG commitments over max %d", commitmentCount, maxBlobsPerBlock)
 	}
 
 	if err := validateBidConsistency(st, bid); err != nil {
-		return errors.Wrap(err, "bid consistency validation failed")
+		return 0, errors.Wrap(err, "bid consistency validation failed")
 	}
 
 	if amount > 0 {
@@ -151,15 +157,25 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 		}
 		slotIndex := params.BeaconConfig().SlotsPerEpoch + (bid.Slot() % params.BeaconConfig().SlotsPerEpoch)
 		if err := st.SetBuilderPendingPayment(slotIndex, pendingPayment); err != nil {
-			return errors.Wrap(err, "failed to set pending payment")
+			return 0, errors.Wrap(err, "failed to set pending payment")
 		}
 	}
 
-	if err := st.SetExecutionPayloadBid(bid); err != nil {
-		return errors.Wrap(err, "failed to cache execution payload bid")
+	// Cache the parent block's slot before overwriting the bid.
+	parentBid, err := st.LatestExecutionPayloadBid()
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to get latest execution payload bid")
+	}
+	var parentSlot primitives.Slot
+	if parentBid != nil {
+		parentSlot = parentBid.Slot()
 	}
 
-	return nil
+	if err := st.SetExecutionPayloadBid(bid); err != nil {
+		return 0, errors.Wrap(err, "failed to cache execution payload bid")
+	}
+
+	return parentSlot, nil
 }
 
 // validateBidConsistency checks that the bid is consistent with the current beacon state.
