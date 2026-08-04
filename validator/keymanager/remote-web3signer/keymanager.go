@@ -52,8 +52,9 @@ type SetupConfig struct {
 	ProvidedPublicKeys []string
 
 	// PollInterval makes the keymanager re-fetch the URL (PublicKeysURL) on this interval to
-	// hot-reload the validating public key set.
-	// Note: Zero disables polling.
+	// hot-reload the validating public key set. A failed or empty response keeps the current
+	// keys, and while polling the Keymanager API cannot add or delete remote keys.
+	// Note: Zero or negative disables polling.
 	PollInterval time.Duration
 }
 

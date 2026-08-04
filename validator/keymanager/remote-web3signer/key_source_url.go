@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 )
@@ -32,7 +33,10 @@ func (km *Keymanager) pollRemoteKeysFromURL(ctx context.Context, url string, int
 			cancel()
 			if err != nil {
 				erroredResponsesTotal.Inc()
-				log.WithError(err).Warn("Could not refresh Web3Signer public keys from URL; keeping current keys")
+				log.
+					WithError(err).
+					WithField("url", api.RedactEndpoint(url)).
+					Warn("Could not refresh Web3Signer public keys from URL; keeping current keys")
 				continue
 			}
 
