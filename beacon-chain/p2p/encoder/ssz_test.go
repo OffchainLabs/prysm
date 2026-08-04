@@ -37,8 +37,10 @@ type AttestationCreator struct{}
 type AttestationElectraCreator struct{}
 type AggregateAttestationAndProofCreator struct{}
 type AggregateAttestationAndProofElectraCreator struct{}
+type AggregateAttestationAndProofGloasCreator struct{}
 type SignedAggregateAttestationAndProofCreator struct{}
 type SignedAggregateAttestationAndProofElectraCreator struct{}
+type SignedAggregateAttestationAndProofGloasCreator struct{}
 type AttestationDataCreator struct{}
 type CheckpointCreator struct{}
 type BeaconBlockCreator struct{}
@@ -136,11 +138,17 @@ func (AggregateAttestationAndProofCreator) Create() MarshalerProtoMessage {
 func (AggregateAttestationAndProofElectraCreator) Create() MarshalerProtoMessage {
 	return &ethpb.AggregateAttestationAndProofElectra{}
 }
+func (AggregateAttestationAndProofGloasCreator) Create() MarshalerProtoMessage {
+	return &ethpb.AggregateAttestationAndProofGloas{}
+}
 func (SignedAggregateAttestationAndProofCreator) Create() MarshalerProtoMessage {
 	return &ethpb.SignedAggregateAttestationAndProof{}
 }
 func (SignedAggregateAttestationAndProofElectraCreator) Create() MarshalerProtoMessage {
 	return &ethpb.SignedAggregateAttestationAndProofElectra{}
+}
+func (SignedAggregateAttestationAndProofGloasCreator) Create() MarshalerProtoMessage {
+	return &ethpb.SignedAggregateAttestationAndProofGloas{}
 }
 func (AttestationDataCreator) Create() MarshalerProtoMessage   { return &ethpb.AttestationData{} }
 func (CheckpointCreator) Create() MarshalerProtoMessage        { return &ethpb.Checkpoint{} }
@@ -324,8 +332,10 @@ var creators = []MarshalerProtoCreator{
 	AttestationElectraCreator{},
 	AggregateAttestationAndProofCreator{},
 	AggregateAttestationAndProofElectraCreator{},
+	AggregateAttestationAndProofGloasCreator{},
 	SignedAggregateAttestationAndProofCreator{},
 	SignedAggregateAttestationAndProofElectraCreator{},
+	SignedAggregateAttestationAndProofGloasCreator{},
 	AttestationDataCreator{},
 	CheckpointCreator{},
 	BeaconBlockCreator{},

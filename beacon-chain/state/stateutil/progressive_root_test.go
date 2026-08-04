@@ -80,6 +80,26 @@ func TestParticipationBitsRootProgressive(t *testing.T) {
 	require.Equal(t, expected, got)
 }
 
+func TestBuildersRootProgressive(t *testing.T) {
+	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	defer reset()
+
+	builders := []*ethpb.Builder{{
+		Pubkey:           make([]byte, fieldparams.BLSPubkeyLength),
+		Version:          []byte{1},
+		ExecutionAddress: make([]byte, fieldparams.FeeRecipientLength),
+		Balance:          2,
+		DepositEpoch:     3,
+	}}
+
+	got, err := stateutil.BuildersRoot(version.Gloas, builders)
+	require.NoError(t, err)
+
+	expected, err := ssz.SliceRootProgressive(builders)
+	require.NoError(t, err)
+	require.Equal(t, expected, got)
+}
+
 func TestPendingRootsProgressive(t *testing.T) {
 	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
 	defer reset()
@@ -108,4 +128,22 @@ func TestPendingRootsProgressive(t *testing.T) {
 	expectedPC, err := ssz.SliceRootProgressive(pendingConsolidations)
 	require.NoError(t, err)
 	require.Equal(t, expectedPC, pcRoot)
+}
+
+func TestBuilderPendingWithdrawalsRootProgressive(t *testing.T) {
+	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	defer reset()
+
+	withdrawals := []*ethpb.BuilderPendingWithdrawal{{
+		FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
+		Amount:       1,
+		BuilderIndex: 2,
+	}}
+
+	got, err := stateutil.BuilderPendingWithdrawalsRoot(version.Gloas, withdrawals)
+	require.NoError(t, err)
+
+	expected, err := ssz.SliceRootProgressive(withdrawals)
+	require.NoError(t, err)
+	require.Equal(t, expected, got)
 }

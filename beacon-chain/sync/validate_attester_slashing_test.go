@@ -99,8 +99,7 @@ func TestValidateAttesterSlashing_ValidSlashing(t *testing.T) {
 	require.NoError(t, err)
 
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
-	d, err := r.currentForkDigest()
-	assert.NoError(t, err)
+	d := r.currentForkDigest()
 	topic = r.addDigestToTopic(topic, d)
 	msg := &pubsub.Message{
 		Message: &pubsubpb.Message{
@@ -144,8 +143,7 @@ func TestValidateAttesterSlashing_ValidOldSlashing(t *testing.T) {
 	require.NoError(t, err)
 
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
-	d, err := r.currentForkDigest()
-	assert.NoError(t, err)
+	d := r.currentForkDigest()
 	topic = r.addDigestToTopic(topic, d)
 	msg := &pubsub.Message{
 		Message: &pubsubpb.Message{
@@ -189,8 +187,7 @@ func TestValidateAttesterSlashing_InvalidSlashing_WithdrawableEpoch(t *testing.T
 	require.NoError(t, err)
 
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
-	d, err := r.currentForkDigest()
-	assert.NoError(t, err)
+	d := r.currentForkDigest()
 	topic = r.addDigestToTopic(topic, d)
 	msg := &pubsub.Message{
 		Message: &pubsubpb.Message{
@@ -238,11 +235,10 @@ func TestValidateAttesterSlashing_CanFilter(t *testing.T) {
 
 	// The below attestations should be filtered hence bad signature is ok.
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
-	d, err := r.currentForkDigest()
-	assert.NoError(t, err)
+	d := r.currentForkDigest()
 	topic = r.addDigestToTopic(topic, d)
 	buf := new(bytes.Buffer)
-	_, err = p.Encoding().EncodeGossip(buf, &ethpb.AttesterSlashing{
+	_, err := p.Encoding().EncodeGossip(buf, &ethpb.AttesterSlashing{
 		Attestation_1: util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
 			AttestingIndices: []uint64{3},
 		}),

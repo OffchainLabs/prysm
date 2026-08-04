@@ -582,6 +582,37 @@ func TestListAttestationsV2(t *testing.T) {
 			})
 		})
 	})
+	t.Run("Gloas", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig().Copy()
+		config.ElectraForkEpoch = 0
+		config.FuluForkEpoch = 0
+		config.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+
+		att := util.NewAttestationGloas()
+		att.Data.Slot = 1
+		att.CommitteeBits = primitives.NewAttestationCommitteeBits()
+		att.CommitteeBits.SetBitAt(1, true)
+
+		pool := attestations.NewPool()
+		require.NoError(t, pool.SaveAggregatedAttestation(att))
+		s := &Server{AttestationsPool: pool}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com?slot=1&committee_index=1", nil)
+		writer := httptest.NewRecorder()
+		s.ListAttestationsV2(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+
+		resp := &structs.ListAttestationsResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.Equal(t, version.String(version.Gloas), resp.Version)
+
+		var got []*structs.AttestationElectra
+		require.NoError(t, json.Unmarshal(resp.Data, &got))
+		require.Equal(t, 1, len(got))
+		assert.DeepEqual(t, structs.AttGloasFromConsensus(att), got[0])
+	})
 }
 
 func TestSubmitAttestationsV2(t *testing.T) {

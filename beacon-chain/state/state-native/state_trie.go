@@ -1015,7 +1015,7 @@ func (b *BeaconState) Copy() state.BeaconState {
 		rebuildTrie:      make(map[types.FieldIndex]bool, fieldCount),
 		stateFieldLeaves: make(map[types.FieldIndex]*fieldtrie.FieldTrie, len(fieldMap)),
 
-		// Share the reference to validator index map.
+		// Shared and mutated in place, lookups are bounded by each state's validator count.
 		valMapHandler: b.valMapHandler,
 
 		builderIdxMap: maps.Clone(b.builderIdxMap),
@@ -1053,9 +1053,6 @@ func (b *BeaconState) Copy() state.BeaconState {
 		ref.AddRef()
 		dst.sharedFieldReferences[field] = ref
 	}
-
-	// Increment ref for validator map
-	b.valMapHandler.AddRef()
 
 	for i := range b.dirtyFields {
 		dst.dirtyFields[i] = true
@@ -1465,7 +1462,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.LatestExecutionPayloadBid:
 		return b.latestExecutionPayloadBid.HashTreeRoot()
 	case types.Builders:
-		return stateutil.BuildersRoot(b.builders)
+		return stateutil.BuildersRoot(b.version, b.builders)
 	case types.NextWithdrawalBuilderIndex:
 		return ssz.Uint64Root(uint64(b.nextWithdrawalBuilderIndex)), nil
 	case types.ExecutionPayloadAvailability:
@@ -1474,7 +1471,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.BuilderPendingPayments:
 		return stateutil.BuilderPendingPaymentsRoot(b.builderPendingPayments)
 	case types.BuilderPendingWithdrawals:
-		return stateutil.BuilderPendingWithdrawalsRoot(b.builderPendingWithdrawals)
+		return stateutil.BuilderPendingWithdrawalsRoot(b.version, b.builderPendingWithdrawals)
 	case types.LatestBlockHash:
 		return bytesutil.ToBytes32(b.latestBlockHash), nil
 	case types.PayloadExpectedWithdrawals:

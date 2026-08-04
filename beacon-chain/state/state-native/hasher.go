@@ -342,7 +342,7 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 	}
 
 	if state.version >= version.Gloas {
-		buildersRoot, err := stateutil.BuildersRoot(state.builders)
+		buildersRoot, err := stateutil.BuildersRoot(state.version, state.builders)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute builders merkleization")
 		}
@@ -365,7 +365,7 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 
 		fieldRoots[types.BuilderPendingPayments.RealPosition()] = bppRoot[:]
 
-		bpwRoot, err := stateutil.BuilderPendingWithdrawalsRoot(state.builderPendingWithdrawals)
+		bpwRoot, err := stateutil.BuilderPendingWithdrawalsRoot(state.version, state.builderPendingWithdrawals)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute builder pending withdrawals merkleization")
 		}

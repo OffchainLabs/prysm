@@ -143,10 +143,7 @@ func (s *Service) sendRPCStatusRequest(ctx context.Context, peer peer.ID) error 
 		return errors.Wrap(err, "chain head root")
 	}
 
-	forkDigest, err := s.currentForkDigest()
-	if err != nil {
-		return errors.Wrap(err, "current fork digest")
-	}
+	forkDigest := s.currentForkDigest()
 
 	// Compute the current epoch.
 	currentSlot := s.cfg.clock.CurrentSlot()
@@ -308,10 +305,7 @@ func (s *Service) respondWithStatus(ctx context.Context, stream network.Stream) 
 		return errors.Wrap(err, "chain head root")
 	}
 
-	forkDigest, err := s.currentForkDigest()
-	if err != nil {
-		return errors.Wrap(err, "current fork digest")
-	}
+	forkDigest := s.currentForkDigest()
 
 	cp := s.cfg.chain.FinalizedCheckpt()
 	status, err := s.buildStatusFromStream(ctx, stream, forkDigest, cp.Root, cp.Epoch, headRoot)
@@ -433,10 +427,7 @@ func (s *Service) validateStatusMessage(ctx context.Context, genericMsg any) err
 		return errors.Wrap(p2ptypes.ErrInvalidRequest, "head slot too far in the future")
 	}
 
-	forkDigest, err := s.currentForkDigest()
-	if err != nil {
-		return err
-	}
+	forkDigest := s.currentForkDigest()
 	if !bytes.Equal(forkDigest[:], msg.ForkDigest) {
 		return fmt.Errorf("mismatch fork digest: expected %#x, got %#x: %w", forkDigest[:], msg.ForkDigest, p2ptypes.ErrWrongForkDigestVersion)
 	}

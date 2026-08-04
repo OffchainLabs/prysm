@@ -66,6 +66,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "fork_test.go",
         "node_test.go",
         "operations_test.go",
         "validator_test.go",
