@@ -125,8 +125,8 @@ func (r *runner) run(ctx context.Context) {
 				dutiesCancel()
 			}
 
-			// Fetch the deferred next-epoch duties in the background at mid-slot. Pre-Gloas
-			// this no-ops: only the split path records the indices needsNextFetch requires.
+			// Fetch the deferred next-epoch duties in the background. Pre-Gloas this
+			// no-ops: only the split path records the indices needsNextFetch requires.
 			if slots.SinceEpochStarts(slot) >= nextDutiesFetchSlot() {
 				v.MaybeFetchNextDuties(ctx, slot)
 			}

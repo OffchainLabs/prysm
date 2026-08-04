@@ -77,10 +77,20 @@ func (p *localSelector) cacheProof(key attSelectionKey, proof []byte) {
 	p.proofCache[key] = proof
 }
 
+// RefreshSelectionProofs prunes proofs from past epochs. Proofs sign only the
+// slot, so keeping current/future ones avoids a mid-epoch re-sign burst.
 func (p *localSelector) RefreshSelectionProofs(context.Context) error {
+	epochStart, err := slots.EpochStart(slots.ToEpoch(slots.CurrentSlot(p.v.genesisTime)))
+	if err != nil {
+		return err
+	}
 	p.proofLock.Lock()
 	defer p.proofLock.Unlock()
-	p.proofCache = make(map[attSelectionKey][]byte)
+	for k := range p.proofCache {
+		if k.slot < epochStart {
+			delete(p.proofCache, k)
+		}
+	}
 	return nil
 }
 

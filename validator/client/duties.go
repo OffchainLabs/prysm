@@ -70,8 +70,9 @@ func isActiveForDuties(s *ethpb.ValidatorStatusResponse, currEpoch primitives.Ep
 func (v *validator) filteredKeysAndIndices(keys [][fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) ([][fieldparams.BLSPubkeyLength]byte, []primitives.ValidatorIndex) {
 	outKeys := make([][fieldparams.BLSPubkeyLength]byte, 0, len(keys))
 	indices := make([]primitives.ValidatorIndex, 0, len(keys))
+	statuses := v.statusCache()
 	for _, pk := range keys {
-		st, ok := v.pubkeyToStatus[pk]
+		st, ok := statuses[pk]
 		if !ok || !isActiveForDuties(st.status, epoch) {
 			continue
 		}
@@ -417,15 +418,9 @@ func (v *validator) assembleDuties(
 	return duties
 }
 
-// statusForPubkey returns the cached validator status for a pubkey. Locked
-// because it runs in the background next-epoch fetch off the main goroutine.
+// statusForPubkey returns the cached validator status for a pubkey.
 func (v *validator) statusForPubkey(pk []byte) ethpb.ValidatorStatus {
-	v.pubkeyToStatusLock.RLock()
-	defer v.pubkeyToStatusLock.RUnlock()
-	if v.pubkeyToStatus == nil {
-		return ethpb.ValidatorStatus_UNKNOWN_STATUS
-	}
-	st, ok := v.pubkeyToStatus[bytesutil.ToBytes48(pk)]
+	st, ok := v.statusCache()[bytesutil.ToBytes48(pk)]
 	if !ok || st.status == nil {
 		return ethpb.ValidatorStatus_UNKNOWN_STATUS
 	}
@@ -457,11 +452,11 @@ func nextDutiesFetchSlot() primitives.Slot {
 	return max(1, params.BeaconConfig().SlotsPerEpoch/4)
 }
 
-// nextDutiesFetchBPS delays each background fetch to halfway into the slot,
-// off the slot-start rush on the beacon node.
-const nextDutiesFetchBPS = params.BasisPoints / 2
+// nextDutiesFetchBPS delays each background fetch to just after the Gloas
+// aggregate broadcast (5000 BPS) and clear of PTC duties (7500 BPS).
+const nextDutiesFetchBPS = primitives.BP(6000)
 
-// MaybeFetchNextDuties runs ensureNextEpochDuties in a goroutine at mid-slot when
+// MaybeFetchNextDuties runs ensureNextEpochDuties in a goroutine at nextDutiesFetchBPS when
 // next-epoch duties are still needed and no fetch is in flight, bounded by the slot deadline.
 func (v *validator) MaybeFetchNextDuties(ctx context.Context, slot primitives.Slot) {
 	if !v.duties.needsNextFetch() || !v.nextFetchInFlight.CompareAndSwap(false, true) {
@@ -508,7 +503,8 @@ func (v *validator) ensureNextEpochDuties(ctx context.Context) error {
 		// Attester is the spine: without it there are no rows to overlay onto, so
 		// rebuild the whole epoch. Fetched again each slot until it succeeds.
 		r := v.fetchNextEpochDuties(ctx, nextEpoch, indices, missingNextAll, nil)
-		if r.att == nil { // spine still unavailable; try again next slot
+		// Empty duties are guaranteed wrong with active validators; retry next slot.
+		if r.att == nil || len(r.att.Duties) == 0 {
 			return nil
 		}
 		next = v.assembleDuties(r.att, r.prop, r.sync, r.ptc)
@@ -546,7 +542,28 @@ func (v *validator) ensureNextEpochDuties(ctx context.Context) error {
 		"fetched":      missing &^ newMissing,
 		"stillMissing": newMissing,
 	}).Debug("Fetched next-epoch duties")
+	// logDuties only sees the deferred next-epoch set while still empty, so
+	// next-epoch metrics are emitted here, once the fetch lands.
+	v.emitNextEpochMetrics(next)
 	return v.onDutiesUpdated(ctx)
+}
+
+// emitNextEpochMetrics records next-epoch duty metrics for active validators.
+func (v *validator) emitNextEpochMetrics(next []*ethpb.ValidatorDuty) {
+	if !v.emitAccountMetrics {
+		return
+	}
+	for _, duty := range next {
+		if duty == nil || (duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING) {
+			continue
+		}
+		pk := fmt.Sprintf("%#x", duty.PublicKey)
+		if duty.IsSyncCommittee {
+			ValidatorInNextSyncCommitteeGaugeVec.WithLabelValues(pk).Set(float64(1))
+		} else {
+			ValidatorInNextSyncCommitteeGaugeVec.WithLabelValues(pk).Set(float64(0))
+		}
+	}
 }
 
 // overlayNextDuties clones existing next-epoch duties, overlaying re-fetched
@@ -679,17 +696,11 @@ func (v *validator) logDuties(slot primitives.Slot) {
 			}
 		}
 	}
+	nextDuties := make([]*ethpb.ValidatorDuty, 0, snap.nextDutyCount())
 	for _, duty := range snap.nextDuties() {
-		pk := fmt.Sprintf("%#x", duty.PublicKey)
-		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
-			continue
-		}
-		if v.emitAccountMetrics && duty.IsSyncCommittee {
-			ValidatorInNextSyncCommitteeGaugeVec.WithLabelValues(pk).Set(float64(1))
-		} else if v.emitAccountMetrics && !duty.IsSyncCommittee {
-			ValidatorInNextSyncCommitteeGaugeVec.WithLabelValues(pk).Set(float64(0))
-		}
+		nextDuties = append(nextDuties, duty)
 	}
+	v.emitNextEpochMetrics(nextDuties)
 
 	log.WithFields(logrus.Fields{
 		"proposerCount": totalProposingKeys,

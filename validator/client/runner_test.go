@@ -185,8 +185,6 @@ func TestMaybeFetchNextDuties_Gating(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}}
 			ctx, cancel := context.WithCancel(t.Context())
 			ticker := make(chan primitives.Slot)
