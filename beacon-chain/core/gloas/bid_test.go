@@ -246,7 +246,8 @@ func TestProcessExecutionPayloadBid_SelfBuildSuccess(t *testing.T) {
 		v:          version.Gloas,
 	}
 
-	require.NoError(t, ProcessExecutionPayloadBid(state, block))
+	_, err := ProcessExecutionPayloadBid(state, block)
+	require.NoError(t, err)
 
 	stateProto, ok := state.ToProto().(*ethpb.BeaconStateGloas)
 	require.Equal(t, true, ok)
@@ -287,7 +288,7 @@ func TestProcessExecutionPayloadBid_SelfBuildNonZeroAmountFails(t *testing.T) {
 		v:          version.Gloas,
 	}
 
-	err := ProcessExecutionPayloadBid(state, block)
+	_, err := ProcessExecutionPayloadBid(state, block)
 	require.ErrorContains(t, "self-build amount must be zero", err)
 }
 
@@ -337,7 +338,8 @@ func TestProcessExecutionPayloadBid_PendingPaymentAndCacheBid(t *testing.T) {
 		v:          version.Gloas,
 	}
 
-	require.NoError(t, ProcessExecutionPayloadBid(state, block))
+	_, err = ProcessExecutionPayloadBid(state, block)
+	require.NoError(t, err)
 
 	stateProto, ok := state.ToProto().(*ethpb.BeaconStateGloas)
 	require.Equal(t, true, ok)
@@ -394,7 +396,7 @@ func TestProcessExecutionPayloadBid_BuilderNotActive(t *testing.T) {
 		v:          version.Gloas,
 	}
 
-	err = ProcessExecutionPayloadBid(state, block)
+	_, err = ProcessExecutionPayloadBid(state, block)
 	require.ErrorContains(t, "is not active", err)
 }
 
@@ -448,7 +450,7 @@ func TestProcessExecutionPayloadBid_CannotCoverBid(t *testing.T) {
 		v:          version.Gloas,
 	}
 
-	err = ProcessExecutionPayloadBid(state, block)
+	_, err = ProcessExecutionPayloadBid(state, block)
 	require.ErrorContains(t, "cannot cover bid amount", err)
 }
 
@@ -491,7 +493,7 @@ func TestProcessExecutionPayloadBid_InvalidSignature(t *testing.T) {
 		v:          version.Gloas,
 	}
 
-	err = ProcessExecutionPayloadBid(state, block)
+	_, err = ProcessExecutionPayloadBid(state, block)
 	require.ErrorContains(t, "bid signature validation failed", err)
 }
 
@@ -528,7 +530,7 @@ func TestProcessExecutionPayloadBid_TooManyBlobCommitments(t *testing.T) {
 		v:          version.Gloas,
 	}
 
-	err := ProcessExecutionPayloadBid(state, block)
+	_, err := ProcessExecutionPayloadBid(state, block)
 	require.ErrorContains(t, "blob KZG commitments over max", err)
 }
 
@@ -571,7 +573,7 @@ func TestProcessExecutionPayloadBid_SlotMismatch(t *testing.T) {
 		v:          version.Gloas,
 	}
 
-	err = ProcessExecutionPayloadBid(state, block)
+	_, err = ProcessExecutionPayloadBid(state, block)
 	require.ErrorContains(t, "bid slot", err)
 }
 
@@ -614,7 +616,7 @@ func TestProcessExecutionPayloadBid_ParentHashMismatch(t *testing.T) {
 		v:          version.Gloas,
 	}
 
-	err = ProcessExecutionPayloadBid(state, block)
+	_, err = ProcessExecutionPayloadBid(state, block)
 	require.ErrorContains(t, "parent block hash mismatch", err)
 }
 
@@ -658,7 +660,7 @@ func TestProcessExecutionPayloadBid_ParentRootMismatch(t *testing.T) {
 		v:          version.Gloas,
 	}
 
-	err = ProcessExecutionPayloadBid(state, block)
+	_, err = ProcessExecutionPayloadBid(state, block)
 	require.ErrorContains(t, "parent block root mismatch", err)
 }
 
@@ -701,6 +703,6 @@ func TestProcessExecutionPayloadBid_PrevRandaoMismatch(t *testing.T) {
 		v:          version.Gloas,
 	}
 
-	err = ProcessExecutionPayloadBid(state, block)
+	_, err = ProcessExecutionPayloadBid(state, block)
 	require.ErrorContains(t, "prev randao mismatch", err)
 }

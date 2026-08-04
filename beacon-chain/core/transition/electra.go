@@ -77,7 +77,7 @@ func electraOperations(ctx context.Context, st state.BeaconState, block interfac
 	if err != nil {
 		return nil, errors.Wrap(ErrProcessAttesterSlashingsFailed, err.Error())
 	}
-	st, err = electra.ProcessAttestationsNoVerifySignature(ctx, st, block)
+	st, err = electra.ProcessAttestationsNoVerifySignature(ctx, st, block, 0 /* parentSlot, unused pre-Gloas */)
 	if err != nil {
 		return nil, errors.Wrap(ErrProcessAttestationsFailed, err.Error())
 	}

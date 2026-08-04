@@ -59,6 +59,7 @@ func RunExecutionPayloadBidTest(t *testing.T, config string, fork string, block 
 		if err != nil {
 			return nil, err
 		}
-		return s, gloas.ProcessExecutionPayloadBid(s, wsb.Block())
+		_, err = gloas.ProcessExecutionPayloadBid(s, wsb.Block())
+		return s, err
 	})
 }

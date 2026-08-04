@@ -1,11 +1,14 @@
 package operations
 
 import (
+	"context"
 	"testing"
 
 	b "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	common "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/common/operations"
@@ -24,5 +27,8 @@ func blockWithAttestation(attestationSSZ []byte) (interfaces.SignedBeaconBlock, 
 
 // RunAttestationTest executes "operations/attestation" tests.
 func RunAttestationTest(t *testing.T, config string) {
-	common.RunAttestationTest(t, config, version.String(version.Phase0), blockWithAttestation, b.ProcessAttestationsNoVerifySignature, sszToState)
+	processAttestations := func(ctx context.Context, st state.BeaconState, blk interfaces.ReadOnlyBeaconBlock, _ primitives.Slot) (state.BeaconState, error) {
+		return b.ProcessAttestationsNoVerifySignature(ctx, st, blk)
+	}
+	common.RunAttestationTest(t, config, version.String(version.Phase0), blockWithAttestation, processAttestations, sszToState)
 }
