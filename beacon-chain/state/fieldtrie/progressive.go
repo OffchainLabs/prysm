@@ -25,14 +25,14 @@ type (
 
 	progressiveNodePosition struct {
 		subtree int
-		level   uint64
-		index   uint64
+		level   uint64 // level in the subtree
+		index   uint64 // local index in the subtree
 	}
 
 	progressiveOverridesData struct {
 		nodes   map[progressiveNodePosition][32]byte
-		spine   map[int][32]byte
-		leaves  map[uint64]struct{}
+		spine   map[int][32]byte // keyed by subtree index
+		leaves  map[uint64]bool  // keyed by global index
 		metrics *entriesMetric
 	}
 )
@@ -163,14 +163,16 @@ func (f *FieldTrie) recomputeProgressiveOwned(elements any, indices []uint64) ([
 		return [32]byte{}, fmt.Errorf("field converters: %w", err)
 	}
 
+	highestSubtreeIndex := -1
 	for i, globalIndex := range chunkIndices {
 		subtreeIndex, localIndex := progressiveSubtreeForIndex(globalIndex)
+		highestSubtreeIndex = max(highestSubtreeIndex, subtreeIndex)
 		f.progressiveData.ensureLeafCapacity(subtreeIndex, localIndex+1)
 		subtree := f.progressiveData.subtrees[subtreeIndex]
 		subtree.nodes[subtree.offsets[0]+localIndex] = fieldRoots[i]
 		subtree.recomputeBranch(localIndex)
-		f.progressiveData.recomputeSpineFrom(subtreeIndex)
 	}
+	f.progressiveData.recomputeSpineFrom(highestSubtreeIndex)
 	f.progressiveData.updateMetrics()
 
 	rootWithMixin, err := f.rootWithMixin(f.progressiveData.root())
@@ -192,12 +194,14 @@ func (f *FieldTrie) recomputeProgressiveOverlay(elements any, indices []uint64) 
 		return [32]byte{}, fmt.Errorf("field converters: %w", err)
 	}
 
+	highestSubtreeIndex := -1
 	for i, globalIndex := range chunkIndices {
 		subtreeIndex, localIndex := progressiveSubtreeForIndex(globalIndex)
+		highestSubtreeIndex = max(highestSubtreeIndex, subtreeIndex)
 		depth := progressiveSubtreeDepth(subtreeIndex)
 		position := progressiveNodePosition{subtree: subtreeIndex, level: 0, index: localIndex}
 		f.progressiveOverridesData.nodes[position] = fieldRoots[i]
-		f.progressiveOverridesData.leaves[globalIndex] = struct{}{}
+		f.progressiveOverridesData.leaves[globalIndex] = true
 
 		currentIndex := localIndex
 		var pair [64]byte
@@ -217,9 +221,8 @@ func (f *FieldTrie) recomputeProgressiveOverlay(elements any, indices []uint64) 
 				index:   parentIndex,
 			}] = parent
 		}
-
-		f.recomputeProgressiveOverlaySpine(subtreeIndex)
 	}
+	f.recomputeProgressiveOverlaySpine(highestSubtreeIndex)
 	f.progressiveOverridesData.updateMetrics()
 
 	rootWithMixin, err := f.rootWithMixin(f.readProgressiveOverlaySpine(0))
@@ -424,7 +427,7 @@ func newProgressiveOverridesData(field types.FieldIndex) *progressiveOverridesDa
 	data := &progressiveOverridesData{
 		nodes:   make(map[progressiveNodePosition][32]byte),
 		spine:   make(map[int][32]byte),
-		leaves:  make(map[uint64]struct{}),
+		leaves:  make(map[uint64]bool),
 		metrics: &entriesMetric{field: field},
 	}
 	fieldTrieCountGauge.WithLabelValues(field.String(), string(trieModeOverlay)).Inc()
@@ -452,7 +455,7 @@ func (p *progressiveOverridesData) updateMetrics() {
 }
 
 func progressiveSubtreeCapacity(level int) uint64 {
-	return uint64(1) << (2 * level)
+	return uint64(1) << (2 * level) // equivalent to 4^level
 }
 
 func progressiveSubtreeDepth(level int) uint64 {
@@ -460,7 +463,7 @@ func progressiveSubtreeDepth(level int) uint64 {
 }
 
 func progressiveSubtreeStart(level int) uint64 {
-	var start uint64
+	start := uint64(0)
 	for i := range level {
 		start += progressiveSubtreeCapacity(i)
 	}
@@ -477,6 +480,7 @@ func progressiveNumLevels(numLeaves uint64) int {
 	return levels
 }
 
+// returns the subtree index and the local index within that subtree for a given global index in the progressive tree.
 func progressiveSubtreeForIndex(globalIndex uint64) (int, uint64) {
 	level := progressiveNumLevels(globalIndex+1) - 1
 	return level, globalIndex - progressiveSubtreeStart(level)
