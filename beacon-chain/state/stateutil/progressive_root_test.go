@@ -14,7 +14,7 @@ import (
 )
 
 func TestValidatorRegistryRootProgressive(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	pubkey := make([]byte, fieldparams.BLSPubkeyLength)
@@ -49,7 +49,7 @@ func TestValidatorRegistryRootProgressive(t *testing.T) {
 }
 
 func TestUint64ListRootProgressive(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	vals := []uint64{1, 2, 3, 4, 5, 6, 7}
@@ -67,7 +67,7 @@ func TestUint64ListRootProgressive(t *testing.T) {
 }
 
 func TestParticipationBitsRootProgressive(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	bits := []byte{0x01, 0x02, 0x03, 0x04}
@@ -81,7 +81,7 @@ func TestParticipationBitsRootProgressive(t *testing.T) {
 }
 
 func TestBuildersRootProgressive(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	builders := []*ethpb.Builder{{
@@ -101,7 +101,7 @@ func TestBuildersRootProgressive(t *testing.T) {
 }
 
 func TestPendingRootsProgressive(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	pendingDeposits := []*ethpb.PendingDeposit{{
@@ -131,7 +131,7 @@ func TestPendingRootsProgressive(t *testing.T) {
 }
 
 func TestBuilderPendingWithdrawalsRootProgressive(t *testing.T) {
-	reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+	reset := features.InitWithReset(&features.Flags{})
 	defer reset()
 
 	withdrawals := []*ethpb.BuilderPendingWithdrawal{{

@@ -205,7 +205,7 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 }
 
 func blockBodyListRoot[T ssz.Hashable](bodyVersion int, elements []T, limit uint64) ([32]byte, error) {
-	if bodyVersion >= version.Gloas && features.Get().EnableProgressiveSSZ {
+	if features.ProgressiveSSZEnabled(bodyVersion) {
 		if uint64(len(elements)) > limit {
 			return [32]byte{}, fmt.Errorf("slice exceeds max length %d", limit)
 		}
