@@ -1625,6 +1625,14 @@ func (b *BeaconState) stateRootsRootSelector(field types.FieldIndex) ([32]byte, 
 }
 
 func (b *BeaconState) validatorsRootSelector(field types.FieldIndex) ([32]byte, error) {
+	if features.ProgressiveSSZEnabled(b.version) {
+		// Field-trie indexing is based on legacy list merkleization.
+		// Use full progressive hashing for this field when enabled.
+		b.dirtyIndices[field] = []uint64{}
+		delete(b.rebuildTrie, field)
+		return stateutil.ValidatorRegistryRoot(b.version, b.validatorsCompactVal())
+	}
+
 	if b.rebuildTrie[field] {
 		err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[stateutil.CompactValidator]{
 			Identifiable:    b,
@@ -1644,6 +1652,14 @@ func (b *BeaconState) validatorsRootSelector(field types.FieldIndex) ([32]byte, 
 }
 
 func (b *BeaconState) balancesRootSelector(field types.FieldIndex) ([32]byte, error) {
+	if features.ProgressiveSSZEnabled(b.version) {
+		// Field-trie indexing is based on legacy list merkleization.
+		// Use full progressive hashing for this field when enabled.
+		b.dirtyIndices[field] = []uint64{}
+		delete(b.rebuildTrie, field)
+		return stateutil.Uint64ListRoot(b.version, b.balancesVal())
+	}
+
 	if b.rebuildTrie[field] {
 		err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[uint64]{
 			Identifiable:    b,
