@@ -896,6 +896,50 @@ func TestGloasHeadComputation_FullPayloadWithPTCBeatsEmptyChildBoost(t *testing.
 	assert.Equal(t, uint64(8), emptyB.node.weight)
 }
 
+func TestGloasCouldBuilderWithhold(t *testing.T) {
+	f := setupGloas(t, 1, 1)
+	cfg := params.BeaconConfig()
+	cfg.BuilderFailureWeightThreshold = 60
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := t.Context()
+	root := indexToHash(1)
+	st, blk, err := prepareGloasForkchoiceState(
+		ctx, 1, root, params.BeaconConfig().ZeroHash, indexToHash(100), params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	en := f.store.emptyNodeByRoot[root]
+
+	t.Run("unknown root", func(t *testing.T) {
+		require.Equal(t, true, f.CouldBuilderWithhold(indexToHash(99)))
+	})
+
+	t.Run("zero committee weight", func(t *testing.T) {
+		en.node.balance = 100
+		require.Equal(t, true, f.CouldBuilderWithhold(root))
+	})
+
+	f.store.committeeWeight = 100
+
+	t.Run("at the threshold", func(t *testing.T) {
+		en.node.balance = 60
+		require.Equal(t, true, f.CouldBuilderWithhold(root))
+	})
+
+	t.Run("above the threshold", func(t *testing.T) {
+		en.node.balance = 61
+		require.Equal(t, false, f.CouldBuilderWithhold(root))
+	})
+
+	// Subtree weight is where proposer boost lands, so it must not lift a weak block over the bar.
+	t.Run("ignores subtree weight", func(t *testing.T) {
+		en.node.balance = 10
+		en.node.weight = 1000
+		en.weight = 1000
+		require.Equal(t, true, f.CouldBuilderWithhold(root))
+	})
+}
+
 // TestGloasProposerBoostWithParentWeight is similar to TestGloasHeadComputation
 // but adds an attestation on the parent so that shouldApplyProposerBoost
 // passes at consecutive slots (parent.weight >= committeeWeight * threshold / 100).

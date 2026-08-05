@@ -38,6 +38,7 @@ const (
 	weightCalled
 	consensusNodeWeightCalled
 	committeeWeightCalled
+	couldBuilderWithholdCalled
 	builderIndexCalled
 	isOptimisticCalled
 	shouldOverrideFCUCalled
@@ -169,6 +170,11 @@ func TestROLocking(t *testing.T) {
 			name: "committeeWeightCalled",
 			call: committeeWeightCalled,
 			cb:   func(g FastGetter) { g.CommitteeWeight() },
+		},
+		{
+			name: "couldBuilderWithholdCalled",
+			call: couldBuilderWithholdCalled,
+			cb:   func(g FastGetter) { g.CouldBuilderWithhold([32]byte{}) },
 		},
 		{
 			name: "builderIndexCalled",
@@ -360,6 +366,11 @@ func (ro *mockROForkchoice) ConsensusNodeWeight(_ [32]byte) (uint64, error) {
 func (ro *mockROForkchoice) CommitteeWeight() uint64 {
 	ro.calls = append(ro.calls, committeeWeightCalled)
 	return 0
+}
+
+func (ro *mockROForkchoice) CouldBuilderWithhold(_ [32]byte) bool {
+	ro.calls = append(ro.calls, couldBuilderWithholdCalled)
+	return false
 }
 
 func (ro *mockROForkchoice) BuilderIndex(_ [32]byte) (primitives.BuilderIndex, error) {

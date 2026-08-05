@@ -571,6 +571,19 @@ func (s *Store) resolveVoteNode(r [32]byte, slot primitives.Slot, payloadStatus 
 	return en, slot == en.node.slot
 }
 
+// CouldBuilderWithhold reports whether root drew too little committee support to blame its builder
+// for a missing payload. The node balance holds the same-slot votes and carries no proposer boost.
+func (f *ForkChoice) CouldBuilderWithhold(root [32]byte) bool {
+	en, ok := f.store.emptyNodeByRoot[root]
+	if !ok || en == nil || en.node == nil {
+		return true
+	}
+	if f.store.committeeWeight == 0 {
+		return true
+	}
+	return en.node.balance*100 <= f.store.committeeWeight*params.BeaconConfig().BuilderFailureWeightThreshold
+}
+
 // HasFullNode returns true if a full (payload) node exists for the given beacon block root.
 func (f *ForkChoice) HasFullNode(root [32]byte) bool {
 	_, ok := f.store.fullNodeByRoot[root]

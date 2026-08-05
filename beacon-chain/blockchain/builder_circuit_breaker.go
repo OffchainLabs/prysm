@@ -76,21 +76,8 @@ func (s *Service) recordBuilderPayloadFailure(
 		entry.Debug("Not charging builder, parent was self-built")
 		return false
 	}
-	weight, err := fc.ConsensusNodeWeight(parentRoot)
-	if err != nil {
-		entry.WithError(err).Debug("Not charging builder, parent weight unknown")
-		return false
-	}
-	committeeWeight := fc.CommitteeWeight()
-	if committeeWeight == 0 {
-		entry.Debug("Not charging builder, committee weight is zero")
-		return false
-	}
-	if weight*100 <= committeeWeight*params.BeaconConfig().BuilderFailureWeightThreshold {
-		entry.WithFields(logrus.Fields{
-			"weight":          weight,
-			"committeeWeight": committeeWeight,
-		}).Debug("Not charging builder, parent below the weight threshold")
+	if fc.CouldBuilderWithhold(parentRoot) {
+		entry.Debug("Not charging builder, parent drew too little committee support")
 		return false
 	}
 
