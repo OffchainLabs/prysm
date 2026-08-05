@@ -41,32 +41,31 @@ func (f *ForkChoice) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) 
 	return pn.node.root, pn.full
 }
 
-func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock, parent **PayloadNode, blockHash *[32]byte, builderIndex *primitives.BuilderIndex) error {
+func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock) (*PayloadNode, [32]byte, primitives.BuilderIndex, error) {
 	sb, err := block.Body().SignedExecutionPayloadBid()
 	if err != nil {
-		return err
+		return nil, [32]byte{}, 0, err
 	}
 	wb, err := blocks.WrappedROSignedExecutionPayloadBid(sb)
 	if err != nil {
-		return errors.Wrap(err, "failed to wrap signed bid")
+		return nil, [32]byte{}, 0, errors.Wrap(err, "failed to wrap signed bid")
 	}
 	bid, err := wb.Bid()
 	if err != nil {
-		return errors.Wrap(err, "failed to get bid from wrapped bid")
+		return nil, [32]byte{}, 0, errors.Wrap(err, "failed to get bid from wrapped bid")
 	}
-	*blockHash = bid.BlockHash()
-	*builderIndex = bid.BuilderIndex()
-	parentRoot := block.ParentRoot()
-	*parent = s.emptyNodeByRoot[parentRoot]
-	if *parent == nil {
+	blockHash := bid.BlockHash()
+	builderIndex := bid.BuilderIndex()
+	parent := s.emptyNodeByRoot[block.ParentRoot()]
+	if parent == nil {
 		// This is the tree root node.
-		return nil
+		return nil, blockHash, builderIndex, nil
 	}
-	if bid.ParentBlockHash() == (*parent).node.blockHash {
+	if bid.ParentBlockHash() == parent.node.blockHash {
 		// block builds on full
-		*parent = s.fullNodeByRoot[(*parent).node.root]
+		parent = s.fullNodeByRoot[parent.node.root]
 	}
-	return nil
+	return parent, blockHash, builderIndex, nil
 }
 
 // applyWeightChangesConsensusNode recomputes the weight of the node passed as an argument and all of its descendants,
