@@ -99,6 +99,8 @@ type mockKeymanager struct {
 var errMockKeyExists = errors.New("key already in mockKeymanager map")
 
 func (m *mockKeymanager) add(pairs ...keypair) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	for _, kp := range pairs {
 		if _, exists := m.keysMap[kp.pub]; exists {
 			return errMockKeyExists
