@@ -40,46 +40,48 @@ type doppelGangerTracker struct {
 }
 
 // trackReload quarantines never-checked keys as of epoch and forgets removed
-// keys so a later re-add is checked again.
+// keys so a later re-add is checked again. Logs outside the tracker lock.
 func (d *doppelGangerTracker) trackReload(currentKeys [][fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) {
-	current := make(map[pubkey]bool, len(currentKeys))
-	for _, pk := range currentKeys {
-		current[pk] = true
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if d.pending == nil {
-		d.pending = make(map[pubkey]*doppelGangerPendingKey)
-	}
-	added := 0
-	for _, pk := range currentKeys {
-		if d.checked[pk] {
-			continue
-		}
-		if _, ok := d.pending[pk]; ok {
-			continue
-		}
-		d.pending[pk] = &doppelGangerPendingKey{addedEpoch: epoch}
-		added++
+	addedKeys := d.rebuildFromReload(currentKeys, epoch)
+	for _, pk := range addedKeys {
 		log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pk[:]))).Debug("Key held out of duties pending doppelganger check")
 	}
-	if added > 0 {
+	if len(addedKeys) > 0 {
 		log.WithFields(logrus.Fields{
-			"keyCount":      added,
+			"keyCount":      len(addedKeys),
 			"eligibleEpoch": epoch + doppelGangerWaitEpochs + 1,
 		}).Info("Reloaded keys held out of duties pending doppelganger check")
 	}
-	for pk := range d.pending {
-		if !current[pk] {
-			delete(d.pending, pk)
+}
+
+// rebuildFromReload rebuilds both maps in one pass: keys absent from currentKeys
+// drop out, surviving pending entries keep their state, unseen keys quarantine.
+func (d *doppelGangerTracker) rebuildFromReload(
+	currentKeys [][fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch,
+) (addedKeys [][fieldparams.BLSPubkeyLength]byte) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	newChecked := make(map[pubkey]bool, len(d.checked))
+	newPending := make(map[pubkey]*doppelGangerPendingKey, len(d.pending))
+	for _, pk := range currentKeys {
+		if d.checked[pk] {
+			newChecked[pk] = true
+			continue
 		}
-	}
-	for pk := range d.checked {
-		if !current[pk] {
-			delete(d.checked, pk)
+		if p, ok := d.pending[pk]; ok {
+			newPending[pk] = p
+			continue
 		}
+		if _, ok := newPending[pk]; ok { // duplicate input key
+			continue
+		}
+		newPending[pk] = &doppelGangerPendingKey{addedEpoch: epoch}
+		addedKeys = append(addedKeys, pk)
 	}
-	d.pendingCount.Store(int64(len(d.pending)))
+	d.checked = newChecked
+	d.pending = newPending
+	d.pendingCount.Store(int64(len(newPending)))
+	return addedKeys
 }
 
 // markChecked records keys that passed a doppelganger check.
