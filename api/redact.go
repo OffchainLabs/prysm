@@ -1,6 +1,9 @@
 package api
 
-import "net/url"
+import (
+	"net/url"
+	"strings"
+)
 
 // RedactEndpoint returns a loggable form of a beacon node endpoint with any
 // basic-auth credentials masked. If the endpoint cannot be parsed it returns a
@@ -11,6 +14,18 @@ func RedactEndpoint(endpoint string) string {
 		return "[invalid endpoint]"
 	}
 	return u.Redacted()
+}
+
+// RedactEndpointList applies RedactEndpoint to a comma-separated list of
+// endpoints, and re-joins the result. A single endpoint is redacted
+// as-is.
+func RedactEndpointList(endpoints string) string {
+	redacted := strings.Split(endpoints, ",")
+	for i, endpoint := range redacted {
+		redacted[i] = RedactEndpoint(strings.TrimSpace(endpoint))
+	}
+
+	return strings.Join(redacted, ",")
 }
 
 // RedactEndpoints applies RedactEndpoint to every endpoint in the slice.

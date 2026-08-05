@@ -1,9 +1,9 @@
 package rest
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api"
@@ -13,20 +13,14 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-// RestConnectionProvider manages HTTP client configuration for REST API with failover support.
-// It allows switching between different beacon node REST endpoints when the current one becomes unavailable.
+// RestConnectionProvider manages HTTP client configuration for the REST API.
 type RestConnectionProvider interface {
+	// HttpClient returns the configured HTTP client with headers, timeout, and optional tracing.
+	HttpClient() *http.Client
 	// Handler returns the REST handler for making API requests.
 	Handler() Handler
-	// CurrentHost returns the current REST API endpoint URL.
-	CurrentHost() string
 	// Hosts returns all configured REST API endpoint URLs.
 	Hosts() []string
-	// SwitchHost switches to the endpoint at the given index.
-	SwitchHost(index int) error
-	// ConnectionCounter returns a monotonic counter that advances on each host
-	// switch, distinguishing a host0 → host1 → host0 bounce from no change.
-	ConnectionCounter() uint64
 }
 
 // RestConnectionProviderOption is a functional option for configuring the REST connection provider.
@@ -60,10 +54,9 @@ type restConnectionProviderConfig struct {
 }
 
 type restConnectionProvider struct {
-	endpoints    []string
-	handler      *handler
-	currentIndex atomic.Uint64
-	connCounter  atomic.Uint64
+	endpoints   []string
+	httpClient  *http.Client
+	restHandler Handler
 }
 
 // NewRestConnectionProvider creates a new REST connection provider that manages HTTP client configuration.
@@ -91,14 +84,26 @@ func NewRestConnectionProvider(endpoint string, opts ...RestConnectionProviderOp
 		transport = otelhttp.NewTransport(transport)
 	}
 
-	httpClient := http.Client{
+	httpClient := &http.Client{
 		Timeout:   cfg.timeout,
 		Transport: transport,
 	}
+
+	// Build one handler per endpoint and fan out reads/writes across all of them.
+	handlers := make([]*handler, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		handlers = append(handlers, newHandler(*httpClient, endpoint))
+	}
+
+	restHandler, err := newMultiHandler(handlers)
+	if err != nil {
+		return nil, fmt.Errorf("new multi handler: %w", err)
+	}
+
 	p := &restConnectionProvider{
-		endpoints: endpoints,
-		// Create the REST handler with the HTTP client and initial host
-		handler: newHandler(httpClient, endpoints[0]),
+		endpoints:   endpoints,
+		httpClient:  httpClient,
+		restHandler: restHandler,
 	}
 
 	log.WithFields(logrus.Fields{
@@ -123,12 +128,12 @@ func parseEndpoints(endpoint string) []string {
 	return endpoints
 }
 
-func (p *restConnectionProvider) Handler() Handler {
-	return p.handler
+func (p *restConnectionProvider) HttpClient() *http.Client {
+	return p.httpClient
 }
 
-func (p *restConnectionProvider) CurrentHost() string {
-	return p.endpoints[p.currentIndex.Load()]
+func (p *restConnectionProvider) Handler() Handler {
+	return p.restHandler
 }
 
 func (p *restConnectionProvider) Hosts() []string {
@@ -136,30 +141,4 @@ func (p *restConnectionProvider) Hosts() []string {
 	hosts := make([]string, len(p.endpoints))
 	copy(hosts, p.endpoints)
 	return hosts
-}
-
-func (p *restConnectionProvider) SwitchHost(index int) error {
-	if index < 0 || index >= len(p.endpoints) {
-		return errors.Errorf("invalid host index %d, must be between 0 and %d", index, len(p.endpoints)-1)
-	}
-
-	oldIdx := p.currentIndex.Load()
-	if oldIdx == uint64(index) {
-		return nil // already on this host
-	}
-	p.currentIndex.Store(uint64(index))
-	p.connCounter.Add(1)
-
-	// Update the rest handler's host
-	p.handler.SwitchHost(p.endpoints[index])
-
-	log.WithFields(logrus.Fields{
-		"previousHost": api.RedactEndpoint(p.endpoints[oldIdx]),
-		"newHost":      api.RedactEndpoint(p.endpoints[index]),
-	}).Debug("Switched REST endpoint")
-	return nil
-}
-
-func (p *restConnectionProvider) ConnectionCounter() uint64 {
-	return p.connCounter.Load()
 }

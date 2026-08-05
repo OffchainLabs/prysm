@@ -153,6 +153,7 @@ common_deps = [
     "//beacon-chain/execution/testing:go_default_library",
     "//beacon-chain/execution/types:go_default_library",
     "//beacon-chain/forkchoice/doubly-linked-tree:go_default_library",
+    "//beacon-chain/forkchoice/types:go_default_library",
     "//beacon-chain/operations/attestations:go_default_library",
 	"//beacon-chain/operations/payloadattestation:go_default_library",
     "//beacon-chain/operations/slashings:go_default_library",

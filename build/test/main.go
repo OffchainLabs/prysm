@@ -101,7 +101,7 @@ func run() error {
 	}
 
 	fmt.Printf(
-		"✅ All tests passed (%s%s; any test in the `=== FAIL` section above was a flake recovered within %d attempts)\n",
+		"✅ All tests passed (%s%s -  any test in the `=== Failed` section above was a flake recovered within %d attempts)\n",
 		joinKinds(kinds), suffix, totalRuns,
 	)
 

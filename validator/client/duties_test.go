@@ -427,7 +427,7 @@ func TestProcessEvent_HeadV2(t *testing.T) {
 	emit := func(d *structs.HeadEventV2Data) {
 		data, err := json.Marshal(&structs.HeadEventV2{Version: "deneb", Data: d})
 		require.NoError(t, err)
-		v.ProcessEvent(ctx, &eventClient.Event{EventType: eventClient.EventHeadV2, Data: data})
+		v.ProcessEvent(ctx, &eventClient.Event{Type: eventClient.EventHeadV2, Data: data})
 	}
 
 	t.Run("refetches when current_epoch_dependent_root diverges", func(t *testing.T) {

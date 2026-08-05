@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -30,28 +31,28 @@ func TestHeadEventFromDataV2(t *testing.T) {
 
 	tests := []struct {
 		name              string
-		payloadStatus     statefeed.PayloadStatus
+		payloadStatus     api.PayloadStatus
 		headVersion       int
 		wantVersion       string
 		wantPayloadStatus string
 	}{
 		{
 			name:              "gloas head with full payload",
-			payloadStatus:     statefeed.PayloadStatusFull,
+			payloadStatus:     api.PayloadStatusFull,
 			headVersion:       version.Gloas,
 			wantVersion:       "gloas",
 			wantPayloadStatus: "full",
 		},
 		{
 			name:              "gloas head with empty payload",
-			payloadStatus:     statefeed.PayloadStatusEmpty,
+			payloadStatus:     api.PayloadStatusEmpty,
 			headVersion:       version.Gloas,
 			wantVersion:       "gloas",
 			wantPayloadStatus: "empty",
 		},
 		{
 			name:              "pre-gloas head reports full",
-			payloadStatus:     statefeed.PayloadStatusFull,
+			payloadStatus:     api.PayloadStatusFull,
 			headVersion:       version.Fulu,
 			wantVersion:       "fulu",
 			wantPayloadStatus: "full",
