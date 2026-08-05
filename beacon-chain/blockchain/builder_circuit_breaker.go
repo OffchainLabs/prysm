@@ -50,38 +50,57 @@ func (s *Service) recordBuilderPayloadFailure(
 	if fc.HasFullNode(parentRoot) {
 		return false
 	}
+	// The parent revealed no payload, so every bail out below is logged: after the fact the question
+	// is always "this builder clearly failed at slot N, why was it not charged".
+	entry := log.WithFields(logrus.Fields{
+		"slot":       blk.Slot(),
+		"parentRoot": fmt.Sprintf("%#x", parentRoot),
+	})
 	parentSlot, err := fc.Slot(parentRoot)
 	if err != nil {
+		entry.WithError(err).Debug("Not charging builder, parent slot unknown")
 		return false
 	}
 	if parentSlot+1 != blk.Slot() {
+		entry.WithField("parentSlot", parentSlot).Debug("Not charging builder, slots skipped after parent")
 		return false
 	}
 	builderIndex, err := fc.BuilderIndex(parentRoot)
 	if err != nil {
+		entry.WithError(err).Debug("Not charging builder, builder index unknown")
 		return false
 	}
+	entry = entry.WithField("builderIndex", builderIndex)
 	if builderIndex == params.BeaconConfig().BuilderIndexSelfBuild {
+		entry.Debug("Not charging builder, parent was self-built")
 		return false
 	}
 	// A denied builder is already permanently banned, so charging it would only inflate the failure
 	// metric and the SelfBuildOnly count, which is meant to track the health of the payload market.
 	if cb.Denied(builderIndex) {
+		entry.Debug("Not charging builder, already on the operator denylist")
 		return false
 	}
 	weight, err := fc.ConsensusNodeWeight(parentRoot)
 	if err != nil {
+		entry.WithError(err).Debug("Not charging builder, parent weight unknown")
 		return false
 	}
 	committeeWeight := fc.CommitteeWeight()
 	if committeeWeight == 0 {
+		entry.Debug("Not charging builder, committee weight is zero")
 		return false
 	}
 	if weight*100 <= committeeWeight*params.BeaconConfig().BuilderFailureWeightThreshold {
+		entry.WithFields(logrus.Fields{
+			"weight":          weight,
+			"committeeWeight": committeeWeight,
+		}).Debug("Not charging builder, parent below the weight threshold")
 		return false
 	}
 
 	if !cb.RecordFailure(builderIndex, parentRoot, epoch) {
+		entry.Debug("Builder not blacklisted for this failure")
 		return false
 	}
 	builderPayloadFailuresTotal.Inc()
