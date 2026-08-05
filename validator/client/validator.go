@@ -465,8 +465,12 @@ func (v *validator) CheckDoppelGanger(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// Keys unknown to the beacon node have no validator index yet, so no
+	// duplicate can exist anywhere; start normally instead of refusing.
 	if len(resp.Responses) == 0 {
-		return errors.New("beacon node returned 0 responses for doppelganger check")
+		log.Debug("Validating keys are not in the beacon state yet; doppelganger check has nothing to evaluate")
+		v.markDoppelGangerChecked(pubkeys)
+		return nil
 	}
 	if err := buildDuplicateError(resp.Responses); err != nil {
 		return err

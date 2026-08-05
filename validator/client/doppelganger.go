@@ -13,12 +13,13 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// doppelGangerWaitEpochs is how long a reloaded key sits out before its check:
-// attestations can take a full epoch to appear, so the add window must age out.
+// doppelGangerWaitEpochs is how long a reloaded key sits out before clearing.
+// Must cover the BN CheckDoppelGanger 2-epoch determination band (status.go).
 const doppelGangerWaitEpochs = 2
 
 type doppelGangerPendingKey struct {
@@ -253,7 +254,17 @@ func (v *validator) checkReloadedKeys(ctx context.Context, due [][fieldparams.BL
 	}
 	// Keys absent from the response stay quarantined for the next poll (fail-closed).
 	if len(clean) > 0 {
-		if cleared := v.doppelGanger.clearElapsed(clean, v.clearingEpoch(ctx, epoch)); len(cleared) > 0 {
+		clearEpoch, err := v.clearingEpoch(ctx, epoch)
+		if err != nil {
+			// Leave the poll unconsumed so the next slot retries within this epoch.
+			if v.doppelGanger.shouldWarnFailure(epoch) {
+				log.WithError(err).Warn("Could not get chain head; doppelganger clearing deferred")
+			} else {
+				log.WithError(err).Debug("Could not get chain head; deferring doppelganger clearing")
+			}
+			return
+		}
+		if cleared := v.doppelGanger.clearElapsed(clean, clearEpoch); len(cleared) > 0 {
 			log.WithField("keyCount", len(cleared)).Info(
 				"Reloaded keys passed doppelganger check and will receive duties at the next update")
 		}
@@ -263,13 +274,15 @@ func (v *validator) checkReloadedKeys(ctx context.Context, due [][fieldparams.BL
 
 // clearingEpoch caps the wall-clock epoch at the beacon node's head epoch: a
 // lagging head returns unevaluated defaults, which must not end a quarantine.
-func (v *validator) clearingEpoch(ctx context.Context, epoch primitives.Epoch) primitives.Epoch {
+func (v *validator) clearingEpoch(ctx context.Context, epoch primitives.Epoch) (primitives.Epoch, error) {
 	head, err := v.chainClient.ChainHead(ctx, &emptypb.Empty{})
-	if err != nil || head == nil {
-		log.WithError(err).Debug("Could not get chain head; deferring doppelganger clearing")
-		return 0
+	if err != nil {
+		return 0, errors.Wrap(err, "chain head unavailable")
 	}
-	return min(epoch, head.HeadEpoch)
+	if head == nil {
+		return 0, errors.New("nil chain head from beacon node")
+	}
+	return min(epoch, head.HeadEpoch), nil
 }
 
 // splitByDuplicate partitions responses into keys the beacon node reported

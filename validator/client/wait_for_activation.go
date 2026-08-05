@@ -18,6 +18,12 @@ import (
 //
 // If the channel parameter is nil, WaitForActivation creates and manages its own channel.
 func (v *validator) WaitForActivation(ctx context.Context) error {
+	return v.waitForActivation(ctx, false)
+}
+
+// waitForActivation implements WaitForActivation. reloaded marks re-entries after
+// an accounts-changed event, whose keys bypassed HandleKeyReload.
+func (v *validator) waitForActivation(ctx context.Context, reloaded bool) error {
 	ctx, span := trace.StartSpan(ctx, "validator.WaitForActivation")
 	defer span.End()
 
@@ -27,9 +33,10 @@ func (v *validator) WaitForActivation(ctx context.Context) error {
 		return errors.Wrap(err, msgCouldNotFetchKeys)
 	}
 
-	// Keys can arrive via accounts-changed events consumed below, which bypass
-	// HandleKeyReload; track them here so none escape the doppelganger check.
-	v.trackReloadedKeysForDoppelGanger(validatingKeys)
+	// Startup keys are vetted by the startup doppelganger check instead.
+	if reloaded {
+		v.trackReloadedKeysForDoppelGanger(validatingKeys)
+	}
 
 	// Step 2: If no keys, wait for accounts change or context cancellation.
 	if len(validatingKeys) == 0 {
@@ -52,12 +59,12 @@ func (v *validator) WaitForActivation(ctx context.Context) error {
 			return ctx.Err()
 		case <-v.accountsChangedChannel:
 			// Accounts (keys) changed, restart the process.
-			return v.WaitForActivation(ctx)
+			return v.waitForActivation(ctx, true)
 		default:
 			if err := v.waitForNextEpoch(ctx, v.genesisTime); err != nil {
 				return v.retryWaitForActivation(ctx, span, err, "Failed to wait for next epoch. Reconnecting...")
 			}
-			return v.WaitForActivation(incrementRetries(ctx))
+			return v.waitForActivation(incrementRetries(ctx), reloaded)
 		}
 	}
 	return nil
@@ -70,7 +77,7 @@ func (v *validator) retryWaitForActivation(ctx context.Context, span octrace.Spa
 	// Reconnection attempt backoff, up to 60s.
 	time.Sleep(time.Second * time.Duration(min(uint64(attempts), 60)))
 	// TODO: refactor this to use the health tracker instead for reattempt
-	return v.WaitForActivation(incrementRetries(ctx))
+	return v.waitForActivation(incrementRetries(ctx), false)
 }
 
 func (v *validator) waitForAccountsChange(ctx context.Context) error {
@@ -80,7 +87,7 @@ func (v *validator) waitForAccountsChange(ctx context.Context) error {
 		return ctx.Err()
 	case <-v.accountsChangedChannel:
 		// If the accounts changed, try again.
-		return v.WaitForActivation(ctx)
+		return v.waitForActivation(ctx, true)
 	}
 }
 
@@ -97,7 +104,7 @@ func (v *validator) waitForNextEpoch(ctx context.Context, genesis time.Time) err
 		return ctx.Err()
 	case <-v.accountsChangedChannel:
 		// Accounts (keys) changed, restart the process.
-		return v.WaitForActivation(ctx)
+		return v.waitForActivation(ctx, true)
 	case <-time.After(time.Duration(waitTime) * time.Second):
 		log.Debug("Done waiting for epoch start")
 		// The ticker has ticked, indicating we've reached the next epoch

@@ -355,6 +355,9 @@ func TestMaybeCheckDoppelGanger_HeadErrorDefersClear(t *testing.T) {
 	v.MaybeCheckDoppelGanger(t.Context(), slots.CurrentSlot(v.genesisTime))
 	waitForDoppelCheck(t, v)
 	assert.Equal(t, true, v.isDoppelGangerPending(keyA)) // unknown head: fail-closed, no clear
+	// The poll is left unconsumed so the next slot in this epoch retries.
+	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime))
+	assert.Equal(t, 1, len(v.doppelGanger.pollDue(epoch)))
 }
 
 func TestMaybeCheckDoppelGanger_EmptyResponseCountsPoll(t *testing.T) {
@@ -495,6 +498,34 @@ func TestHandleKeyReload_QuarantinesNewKeys(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, false, v.isDoppelGangerPending(keyOld))
 	assert.Equal(t, true, v.isDoppelGangerPending(keyNew))
+}
+
+func TestCheckDoppelGanger_StartupProceedsWhenKeysUnknown(t *testing.T) {
+	enableDoppelGanger(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	km := genMockKeymanager(t, 2)
+	keys, err := km.FetchValidatingPublicKeys(t.Context())
+	require.NoError(t, err)
+	db := dbTest.SetupDB(t, t.TempDir(), keys, false)
+	v := doppelTestValidator(4)
+	v.validatorClient = client
+	v.km = km
+	v.db = db
+
+	// Keys with no validator index yet: the node has nothing to evaluate, and no
+	// duplicate can exist for an index-less key, so startup must proceed.
+	client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).Return(&ethpb.DoppelGangerResponse{
+		Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{},
+	}, nil)
+
+	require.NoError(t, v.CheckDoppelGanger(t.Context()))
+	v.trackReloadedKeysForDoppelGanger(keys)
+	for _, k := range keys {
+		assert.Equal(t, false, v.isDoppelGangerPending(k))
+	}
 }
 
 func TestCheckDoppelGanger_MarksKeysChecked(t *testing.T) {

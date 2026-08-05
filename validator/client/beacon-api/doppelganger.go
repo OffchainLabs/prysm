@@ -167,12 +167,15 @@ func (c *beaconApiValidatorClient) checkDoppelGanger(ctx context.Context, in *et
 	}
 
 	// Set `DuplicateExists` to `true` if needed.
+	var skipped int
 	for _, spk := range notRecentStringPubKeys {
 		index, ok := stringPubKeyToIndex[spk]
 		if !ok {
 			// Not onchain, so liveness cannot be evaluated: omit the key from the
 			// response rather than report an unevaluated "no duplicate".
+			log.WithField("pubkey", spk).Debug("Skipping doppelganger check: validator not found on chain")
 			delete(stringPubKeyToDoppelGangerInfo, spk)
+			skipped++
 			continue
 		}
 
@@ -199,6 +202,10 @@ func (c *beaconApiValidatorClient) checkDoppelGanger(ctx context.Context, in *et
 		if globalLiveness {
 			stringPubKeyToDoppelGangerInfo[spk].response.DuplicateExists = true
 		}
+	}
+
+	if skipped > 0 {
+		log.WithField("count", skipped).Info("Doppelganger check skipped for validators not found on chain")
 	}
 
 	return buildResponse(stringPubKeys, stringPubKeyToDoppelGangerInfo), nil

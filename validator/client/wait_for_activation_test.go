@@ -97,6 +97,28 @@ func TestWaitForActivation_RefetchKeys(t *testing.T) {
 	assert.LogsContain(t, hook, "Validator activated")
 }
 
+func TestWaitForActivation_StartupKeysNotTracked(t *testing.T) {
+	enableDoppelGanger(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	validatorClient := validatormock.NewMockValidatorClient(ctrl)
+
+	kp := randKeypair(t)
+	v := validator{
+		validatorClient: validatorClient,
+		km:              newMockKeymanager(t, kp),
+		pubkeyToStatus:  make(map[[48]byte]*validatorStatus),
+	}
+	resp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{kp.pub[:]})
+	resp.Statuses[0].Status = ethpb.ValidatorStatus_ACTIVE
+	validatorClient.EXPECT().MultipleValidatorStatus(gomock.Any(), gomock.Any()).Return(resp, nil)
+
+	// Initial startup call: keys are vetted by the startup doppelganger check,
+	// not quarantined here.
+	require.NoError(t, v.WaitForActivation(t.Context()))
+	assert.Equal(t, false, v.isDoppelGangerPending(kp.pub))
+}
+
 func TestWaitForActivation_TracksKeysForDoppelGanger(t *testing.T) {
 	enableDoppelGanger(t)
 	ctrl := gomock.NewController(t)

@@ -45,6 +45,7 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 		name                        string
 		doppelGangerInput           *ethpb.DoppelGangerRequest
 		doppelGangerExpectedOutput  *ethpb.DoppelGangerResponse
+		omittedPubKeys              [][]byte
 		getSyncingOutput            *structs.SyncStatusResponse
 		getForkOutput               *structs.GetStateForkResponse
 		getHeadersOutput            *structs.GetBlockHeadersResponse
@@ -186,6 +187,7 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 					{PublicKey: pubKey6, DuplicateExists: false}, // not recent - not duplicate
 				},
 			},
+			omittedPubKeys: [][]byte{pubKey5},
 			getSyncingOutput: &structs.SyncStatusResponse{
 				Data: &structs.SyncStatusResponseData{
 					IsSyncing: false,
@@ -383,6 +385,12 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 
 			require.DeepEqual(t, testCase.doppelGangerExpectedOutput, doppelGangerActualOutput)
 			assert.NoError(t, err)
+
+			for _, omitted := range testCase.omittedPubKeys {
+				for _, r := range doppelGangerActualOutput.Responses {
+					require.Equal(t, false, bytes.Equal(r.PublicKey, omitted), "pubkey %#x should be omitted from the response", omitted)
+				}
+			}
 		})
 	}
 }
