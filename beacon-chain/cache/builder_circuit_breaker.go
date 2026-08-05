@@ -136,6 +136,26 @@ func (c *BuilderCircuitBreaker) BlacklistedCount(epoch primitives.Epoch) uint64 
 	return c.blacklistedCount(epoch)
 }
 
+// DropInactiveBuilders clears the records of builders that can no longer bid, so that a recycled
+// index does not punish its newcomer. Unresolvable indices keep their record.
+func (c *BuilderCircuitBreaker) DropInactiveBuilders(isActive func(primitives.BuilderIndex) (bool, error)) {
+	if c == nil {
+		return
+	}
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	for idx := range c.failures {
+		active, err := isActive(idx)
+		if err != nil {
+			continue
+		}
+		if !active {
+			delete(c.failures, idx)
+		}
+	}
+}
+
 // Prune drops records whose blacklist and back off periods have both elapsed, along with recorded
 // roots that can no longer be revisited.
 func (c *BuilderCircuitBreaker) Prune(epoch primitives.Epoch) {

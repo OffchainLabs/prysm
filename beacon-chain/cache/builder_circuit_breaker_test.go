@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -12,6 +13,17 @@ func root(b byte) [32]byte {
 	var r [32]byte
 	r[0] = b
 	return r
+}
+
+// registry returns an isActive resolver. An absent index is unknown to the registry.
+func registry(active map[primitives.BuilderIndex]bool) func(primitives.BuilderIndex) (bool, error) {
+	return func(idx primitives.BuilderIndex) (bool, error) {
+		isActive, ok := active[idx]
+		if !ok {
+			return false, errors.New("index out of range")
+		}
+		return isActive, nil
+	}
 }
 
 func TestBuilderCircuitBreaker_NilSafe(t *testing.T) {
@@ -188,6 +200,51 @@ func TestBuilderCircuitBreaker_SelfBuildOnlyThreshold(t *testing.T) {
 
 	// Bans expire and the breaker re-opens.
 	require.Equal(t, false, c.SelfBuildOnly(10))
+}
+
+// An exit clears the record, so a recycled index starts clean.
+func TestBuilderCircuitBreaker_DropInactiveBuilders(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.BuilderAllowedFailures = 0
+	cfg.BuilderCriticalFailures = 2
+	cfg.BuilderCriticalBlacklistPeriod = 256
+	require.NoError(t, params.SetActive(cfg))
+
+	c := NewBuilderCircuitBreaker(nil)
+	require.Equal(t, true, c.RecordFailure(1, root(1), 10))
+	require.Equal(t, true, c.RecordFailure(1, root(2), 10))
+	require.Equal(t, true, c.Blacklisted(1, 100))
+
+	// Still active, so the ban stands.
+	c.DropInactiveBuilders(registry(map[primitives.BuilderIndex]bool{1: true}))
+	require.Equal(t, true, c.Blacklisted(1, 100))
+
+	c.DropInactiveBuilders(registry(map[primitives.BuilderIndex]bool{1: false}))
+	require.Equal(t, false, c.Blacklisted(1, 100))
+	require.Equal(t, uint64(0), c.BlacklistedCount(100))
+}
+
+// A lookup failure must not become a way to shed a ban.
+func TestBuilderCircuitBreaker_DropInactiveBuildersKeepsUnresolved(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.BuilderAllowedFailures = 0
+	cfg.BuilderBlacklistPeriod = 10
+	require.NoError(t, params.SetActive(cfg))
+
+	c := NewBuilderCircuitBreaker(nil)
+	require.Equal(t, true, c.RecordFailure(1, root(1), 10))
+
+	c.DropInactiveBuilders(registry(nil))
+	require.Equal(t, true, c.Blacklisted(1, 10))
+}
+
+// An exit must not lift an operator denylist entry.
+func TestBuilderCircuitBreaker_DropInactiveBuildersKeepsDenylist(t *testing.T) {
+	c := NewBuilderCircuitBreaker([]primitives.BuilderIndex{7})
+	c.DropInactiveBuilders(registry(map[primitives.BuilderIndex]bool{7: false}))
+	require.Equal(t, true, c.Blacklisted(7, 0))
 }
 
 func TestBuilderCircuitBreaker_Prune(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -13,7 +14,7 @@ import (
 )
 
 // The caller MUST hold the forkchoice write lock.
-func (s *Service) checkBuilderPayloadFailure(blk interfaces.ReadOnlyBeaconBlock) {
+func (s *Service) checkBuilderPayloadFailure(blk interfaces.ReadOnlyBeaconBlock, st state.ReadOnlyBeaconState) {
 	cb := s.cfg.BuilderCircuitBreaker
 	if cb == nil || blk.Version() < version.Gloas {
 		return
@@ -21,9 +22,9 @@ func (s *Service) checkBuilderPayloadFailure(blk interfaces.ReadOnlyBeaconBlock)
 	epoch := slots.ToEpoch(blk.Slot())
 	blacklisted := s.recordBuilderPayloadFailure(cb, blk, epoch)
 
-	// Pruning and the gauges below run on every block: driving them from the failure path alone
-	// leaves them reporting the last failure epoch long after the bans have expired.
+	// Upkeep runs on every block, not just on failures, so bans and gauges expire on time.
 	cb.Prune(epoch)
+	cb.DropInactiveBuilders(st.IsActiveBuilder)
 	count := cb.BlacklistedCount(epoch)
 	builderBlacklistedCount.Set(float64(count))
 	if !cb.SelfBuildOnly(epoch) {
