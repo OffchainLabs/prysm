@@ -3,8 +3,11 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "backend.go",
+        "backend_ckzg.go",
         "kzg.go",
         "trusted_setup.go",
+        "types.go",
         "validation.go",
     ],
     embedsrcs = ["trusted_setup_4096.json"],

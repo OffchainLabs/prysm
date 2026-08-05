@@ -3,10 +3,9 @@ package kzg
 import (
 	_ "embed"
 	"encoding/json"
+	"fmt"
 
 	GoKZG "github.com/crate-crypto/go-kzg-4844"
-	CKZG "github.com/ethereum/c-kzg-4844/v2/bindings/go"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 )
 
@@ -15,7 +14,6 @@ var (
 	//go:embed trusted_setup_4096.json
 	embeddedTrustedSetup []byte // 1.2Mb
 	kzgContext           *GoKZG.Context
-	kzgLoaded            bool
 )
 
 type TrustedSetup struct {
@@ -39,37 +37,8 @@ func Start() error {
 		return errors.Wrap(err, "could not initialize go-kzg context")
 	}
 
-	// Length of a G1 point, converted from hex to binary.
-	g1MonomialBytes := make([]byte, len(trustedSetup.G1Monomial)*(len(trustedSetup.G1Monomial[0])-2)/2)
-	for i, g1 := range &trustedSetup.G1Monomial {
-		copy(g1MonomialBytes[i*(len(g1)-2)/2:], hexutil.MustDecode(g1))
-	}
-
-	// Length of a G1 point, converted from hex to binary.
-	g1LagrangeBytes := make([]byte, len(trustedSetup.G1Lagrange)*(len(trustedSetup.G1Lagrange[0])-2)/2)
-	for i, g1 := range &trustedSetup.G1Lagrange {
-		copy(g1LagrangeBytes[i*(len(g1)-2)/2:], hexutil.MustDecode(g1))
-	}
-
-	// Length of a G2 point, converted from hex to binary.
-	g2MonomialBytes := make([]byte, len(trustedSetup.G2Monomial)*(len(trustedSetup.G2Monomial[0])-2)/2)
-	for i, g2 := range &trustedSetup.G2Monomial {
-		copy(g2MonomialBytes[i*(len(g2)-2)/2:], hexutil.MustDecode(g2))
-	}
-
-	if !kzgLoaded {
-		const precompute uint = 8
-
-		// Free the current trusted setup before running this method.
-		// CKZG panics if the same setup is run multiple times.
-		if err = CKZG.LoadTrustedSetup(g1MonomialBytes, g1LagrangeBytes, g2MonomialBytes, precompute); err != nil {
-			return errors.Wrap(err, "load trust setup")
-		}
-
-		// Set only once the load succeeded, so that this mirrors the `loaded`
-		// flag CKZG keeps internally: CKZG sets that flag on success only, and
-		// panics if a load is attempted while it is set.
-		kzgLoaded = true
+	if err := activeBackend.LoadTrustedSetup(trustedSetup); err != nil {
+		return fmt.Errorf("load trusted setup: %w", err)
 	}
 
 	return nil
