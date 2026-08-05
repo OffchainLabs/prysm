@@ -2490,7 +2490,6 @@ def prysm_deps():
     go_repository(
         name = "com_github_offchainlabs_methodical_ssz",
         importpath = "github.com/OffchainLabs/methodical-ssz",
-        replace = "github.com/kasey/methodical-ssz",
         sum = "h1:lQdH1xJYlNJRv18R1EutPsVWLKMpMtkD8sq28zLD36E=",
         version = "v0.0.0-20260703044252-f02d8c431d71",
     )
