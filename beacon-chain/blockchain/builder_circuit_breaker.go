@@ -64,6 +64,11 @@ func (s *Service) recordBuilderPayloadFailure(
 	if builderIndex == params.BeaconConfig().BuilderIndexSelfBuild {
 		return false
 	}
+	// A denied builder is already permanently banned, so charging it would only inflate the failure
+	// metric and the SelfBuildOnly count, which is meant to track the health of the payload market.
+	if cb.Denied(builderIndex) {
+		return false
+	}
 	weight, err := fc.ConsensusNodeWeight(parentRoot)
 	if err != nil {
 		return false

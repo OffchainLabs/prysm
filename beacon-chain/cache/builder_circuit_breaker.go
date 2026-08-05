@@ -104,6 +104,16 @@ func (c *BuilderCircuitBreaker) Blacklisted(idx primitives.BuilderIndex, epoch p
 	return c.blacklistedAtEpoch(idx, epoch)
 }
 
+// Denied reports whether the builder is on the operator supplied denylist.
+func (c *BuilderCircuitBreaker) Denied(idx primitives.BuilderIndex) bool {
+	if c == nil {
+		return false
+	}
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.denied[idx]
+}
+
 // SelfBuildOnly reports whether enough builders are concurrently blacklisted that the node should
 // stop taking foreign bids altogether. The operator denylist is excluded: it expresses operator
 // intent, not a signal about the health of the payload market.
