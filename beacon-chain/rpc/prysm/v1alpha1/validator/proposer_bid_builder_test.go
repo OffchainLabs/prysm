@@ -48,6 +48,9 @@ func (v *fakeBidVerifier) VerifyParentBlockRootSeen(fn func([32]byte) bool) erro
 	v.rootSeenFn = fn
 	return v.rootSeenErr
 }
+func (v *fakeBidVerifier) VerifyBidCompatibleWithHead(func(interfaces.ROExecutionPayloadBid) bool) error {
+	return nil
+}
 func (v *fakeBidVerifier) VerifyBidSlotHigherThanParent(primitives.Slot) error { return nil }
 func (v *fakeBidVerifier) VerifyParentBlockHash(fn func([32]byte, [32]byte) bool) error {
 	v.hasPayloadFn = fn
