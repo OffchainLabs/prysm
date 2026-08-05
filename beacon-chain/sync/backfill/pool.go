@@ -158,6 +158,10 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 	if len(todo) == 0 {
 		return todo, nil
 	}
+	todo = p.completeExpiredColumnWork(todo)
+	if len(todo) == 0 {
+		return todo, nil
+	}
 	notBusy, err := pa.Assign(peers.NotBusy(busy))
 	if err != nil {
 		if errors.Is(err, peers.ErrInsufficientSuitable) {
@@ -226,6 +230,37 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 		p.updateEarliest(b.begin)
 	}
 	return []batch{}, nil
+}
+
+// completeExpiredColumnWork prunes column downloads that left the retention window while their
+// batch waited in the column-sync state. A batch left with no column work is transitioned and,
+// when importable, handed back to the service without requiring any peer or column request.
+func (p *p2pBatchWorkerPool) completeExpiredColumnWork(todo []batch) []batch {
+	needs := p.needs()
+	kept := todo[:0]
+	for _, b := range todo {
+		if b.state != batchSyncColumns || b.expired(needs) {
+			kept = append(kept, b)
+			continue
+		}
+		// A batch in batchSyncColumns always has initialized column state, but stay defensive.
+		if b.columns == nil || b.columns.columnBatch == nil {
+			kept = append(kept, b)
+			continue
+		}
+		b.columns.pruneExpired(needs, nil)
+		if len(b.columns.columnsNeeded()) > 0 {
+			kept = append(kept, b)
+			continue
+		}
+		b = b.transitionToNext()
+		if b.workComplete() {
+			p.fromRouter <- b
+			continue
+		}
+		kept = append(kept, b)
+	}
+	return kept
 }
 
 func busyCopy(busy map[peer.ID]bool) map[peer.ID]bool {

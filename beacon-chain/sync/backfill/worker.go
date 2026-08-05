@@ -30,6 +30,9 @@ type workerCfg struct {
 	colStore     *filesystem.DataColumnStorage
 	downscore    peerDownscorer
 	currentNeeds func() das.CurrentNeeds
+	// boundaryChild is a best-effort lookup used to resolve batch-tail payload fullness at
+	// build time; the importer remains the authoritative resolver.
+	boundaryChild boundaryChildFn
 }
 
 func initWorkerCfg(ctx context.Context, cfg *workerCfg, vw InitializerWaiter, store *Store) error {
@@ -58,6 +61,7 @@ func initWorkerCfg(ctx context.Context, cfg *workerCfg, vw InitializerWaiter, st
 	cfg.ctxMap = cm
 	cfg.newVB = newBlobVerifierFromInitializer(vi)
 	cfg.newVC = newDataColumnVerifierFromInitializer(vi)
+	cfg.boundaryChild = store.boundaryChild
 	return nil
 }
 

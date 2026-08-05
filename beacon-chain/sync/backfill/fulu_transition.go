@@ -6,16 +6,19 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
 
 var errMissingAvailabilityChecker = errors.Wrap(errUnrecoverable, "batch is missing required availability checker")
 var errUnsafeRange = errors.Wrap(errUnrecoverable, "invalid slice indices")
+var errUnresolvedPayloadFullness = errors.New("gloas block with unresolved payload fullness cannot be imported")
 
 type checkMultiplexer struct {
 	blobCheck    das.AvailabilityChecker
 	colCheck     das.AvailabilityChecker
 	currentNeeds das.CurrentNeeds
+	columns      *columnSync
 }
 
 // Persist implements das.AvailabilityStore.
@@ -24,7 +27,7 @@ var _ das.AvailabilityChecker = &checkMultiplexer{}
 // newCheckMultiplexer initializes an AvailabilityChecker that multiplexes to the BlobSidecar and DataColumnSidecar
 // AvailabilityCheckers present in the batch.
 func newCheckMultiplexer(needs das.CurrentNeeds, b batch) *checkMultiplexer {
-	s := &checkMultiplexer{currentNeeds: needs}
+	s := &checkMultiplexer{currentNeeds: needs, columns: b.columns}
 	if b.blobs != nil && b.blobs.store != nil {
 		s.blobCheck = b.blobs.store
 	}
@@ -39,6 +42,10 @@ func newCheckMultiplexer(needs das.CurrentNeeds, b batch) *checkMultiplexer {
 func (m *checkMultiplexer) IsDataAvailable(ctx context.Context, current primitives.Slot, blks ...blocks.ROBlock) error {
 	needs, err := m.divideByChecker(blks)
 	if err != nil {
+		// An unresolved gloas tail is retryable; the importer settles it against the canonical child.
+		if errors.Is(err, errUnresolvedPayloadFullness) {
+			return err
+		}
 		return errors.Wrap(errUnrecoverable, "failed to slice blocks by DA type")
 	}
 	if err := doAvailabilityCheck(ctx, m.blobCheck, current, needs.blobs); err != nil {
@@ -67,9 +74,10 @@ type daGroups struct {
 	cols  []blocks.ROBlock
 }
 
-// blocksByDaType slices the given blocks into two slices: one for deneb blocks (BlobSidecar)
+// divideByChecker slices the given blocks into two slices: one for deneb blocks (BlobSidecar)
 // and one for fulu blocks (DataColumnSidecar). Blocks that are pre-deneb or have no
-// blob commitments are skipped.
+// blob commitments are skipped, as are gloas blocks whose payload was withheld, since no
+// columns exist for them. A gloas block with unresolved fullness must not be imported on a guess.
 func (m *checkMultiplexer) divideByChecker(blks []blocks.ROBlock) (daGroups, error) {
 	needs := daGroups{}
 	for _, blk := range blks {
@@ -86,6 +94,14 @@ func (m *checkMultiplexer) divideByChecker(blks []blocks.ROBlock) (daGroups, err
 			continue
 		}
 		if m.currentNeeds.Col.At(slot) {
+			if blk.Block().Version() >= version.Gloas {
+				switch m.columns.fullness(blk.Root()) {
+				case fullnessWithheld:
+					continue
+				case fullnessUnknown:
+					return needs, errors.Wrapf(errUnresolvedPayloadFullness, "root=%#x, slot=%d", blk.Root(), slot)
+				}
+			}
 			needs.cols = append(needs.cols, blk)
 			continue
 		}

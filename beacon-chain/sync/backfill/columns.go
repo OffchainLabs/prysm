@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -33,6 +34,23 @@ var (
 // requesting so much at once.
 const columnRequestLimit = 128 * 4
 
+// payloadFullness classifies whether a block's execution payload was revealed on chain.
+// Pre-gloas payloads are always revealed. A gloas payload may be withheld, in which case no
+// data columns exist for the block; the canonical child's bid testifies either way.
+type payloadFullness int
+
+const (
+	// fullnessUnknown means no canonical child was available to testify; only the batch tail can stay unknown.
+	fullnessUnknown payloadFullness = iota
+	// fullnessRevealed means the payload was revealed, so custody columns are required.
+	fullnessRevealed
+	// fullnessWithheld means the payload was withheld, so there are no columns to require.
+	fullnessWithheld
+)
+
+// boundaryChildFn looks up the already-imported canonical child of the given root, returning nil when it isn't known.
+type boundaryChildFn func(ctx context.Context, parentRoot [32]byte) (interfaces.ReadOnlySignedBeaconBlock, error)
+
 type columnBatch struct {
 	first         primitives.Slot
 	last          primitives.Slot
@@ -45,6 +63,7 @@ type toDownload struct {
 	commitments    [][]byte
 	slot           primitives.Slot
 	blockSignature [fieldparams.BLSSignatureLength]byte
+	fullness       payloadFullness
 }
 
 func (cs *columnBatch) needed() peerdas.ColumnIndices {
@@ -115,7 +134,7 @@ func newColumnSync(ctx context.Context, b batch, blks verifiedROBlocks, current 
 	if err != nil {
 		return nil, errors.Wrap(err, "custody group count")
 	}
-	cb, err := buildColumnBatch(ctx, b, blks, p, cfg.colStore, cfg.currentNeeds())
+	cb, err := buildColumnBatch(ctx, b, blks, p, cfg.colStore, cfg.currentNeeds(), cfg.boundaryChild)
 	if err != nil {
 		return nil, err
 	}
@@ -137,14 +156,23 @@ func newColumnSync(ctx context.Context, b batch, blks verifiedROBlocks, current 
 }
 
 func (cs *columnSync) blockColumns(root [32]byte) *toDownload {
-	if cs.columnBatch == nil {
+	if cs == nil || cs.columnBatch == nil {
 		return nil
 	}
 	return cs.columnBatch.toDownload[root]
 }
 
+// fullness returns the payload fullness recorded for the given block root, or unknown if untracked.
+func (cs *columnSync) fullness(root [32]byte) payloadFullness {
+	td := cs.blockColumns(root)
+	if td == nil {
+		return fullnessUnknown
+	}
+	return td.fullness
+}
+
 func (cs *columnSync) columnsNeeded() peerdas.ColumnIndices {
-	if cs.columnBatch == nil {
+	if cs == nil || cs.columnBatch == nil {
 		return peerdas.ColumnIndices{}
 	}
 	return cs.columnBatch.needed()
@@ -261,7 +289,7 @@ func currentCustodiedColumns(ctx context.Context, p p2p.P2P) (peerdas.ColumnIndi
 	return peerdas.NewColumnIndicesFromMap(peerInfo.CustodyColumns), nil
 }
 
-func buildColumnBatch(ctx context.Context, b batch, blks verifiedROBlocks, p p2p.P2P, store *filesystem.DataColumnStorage, needs das.CurrentNeeds) (*columnBatch, error) {
+func buildColumnBatch(ctx context.Context, b batch, blks verifiedROBlocks, p p2p.P2P, store *filesystem.DataColumnStorage, needs das.CurrentNeeds, child boundaryChildFn) (*columnBatch, error) {
 	if len(blks) == 0 {
 		return nil, nil
 	}
@@ -290,19 +318,16 @@ func buildColumnBatch(ctx context.Context, b batch, blks verifiedROBlocks, p p2p
 		if len(cmts) == 0 {
 			continue
 		}
-		// Adjacent blocks are parent linked by verify, so the direct child is at i+1 when present.
-		full := true
-		if b.Block().Version() >= version.Gloas && i+1 < len(blks) {
-			full, err = blocks.BlockBuiltOnParentPayload(b.Block(), blks[i+1].Block())
-			if err != nil {
-				return nil, errors.Wrap(err, "block built on parent payload")
-			}
+		fullness, err := blockFullness(ctx, blks, i, child)
+		if err != nil {
+			return nil, err
 		}
 		var remaining peerdas.ColumnIndices
-		if full {
+		if fullness == fullnessRevealed {
 			remaining = das.IndicesNotStored(store.Summary(b.Root()), indices)
 		} else {
-			// Empty slots have no canonical columns to require, but keep the root known so peers still serving them are not penalized.
+			// Withheld and unresolved payloads have no columns to require, but keep the root known
+			// so peers still serving columns for them are not penalized.
 			remaining = peerdas.ColumnIndices{}
 		}
 		// The last block this part of the loop sees will be the last one
@@ -317,8 +342,48 @@ func buildColumnBatch(ctx context.Context, b batch, blks verifiedROBlocks, p p2p
 			commitments:    cmts,
 			slot:           slot,
 			blockSignature: b.Signature(),
+			fullness:       fullness,
 		}
 	}
 
 	return summary, nil
+}
+
+// blockFullness classifies the payload fullness of blks[i]. Batch blocks are parent-linked by
+// verify, so blks[i+1] is the direct child even across skipped slots. The batch tail has no
+// in-batch child; the boundary child (the already-imported block just above the batch) may
+// testify, otherwise the tail stays unknown until import time rather than defaulting to revealed.
+func blockFullness(ctx context.Context, blks verifiedROBlocks, i int, child boundaryChildFn) (payloadFullness, error) {
+	blk := blks[i]
+	if blk.Block().Version() < version.Gloas {
+		return fullnessRevealed, nil
+	}
+	if i+1 < len(blks) {
+		return fullnessFromChild(blk.Block(), blks[i+1].Block())
+	}
+	if child == nil {
+		return fullnessUnknown, nil
+	}
+	cb, err := child(ctx, blk.Root())
+	if err != nil {
+		// The build-time lookup is best-effort; the importer authoritatively resolves the tail.
+		log.WithError(err).WithField("root", fmt.Sprintf("%#x", blk.Root())).Debug("Boundary child lookup failed, leaving tail fullness unknown")
+		return fullnessUnknown, nil
+	}
+	if cb == nil {
+		return fullnessUnknown, nil
+	}
+	return fullnessFromChild(blk.Block(), cb.Block())
+}
+
+// fullnessFromChild classifies a gloas parent's payload fullness from its direct child's bid.
+func fullnessFromChild(parent, child interfaces.ReadOnlyBeaconBlock) (payloadFullness, error) {
+	full, err := blocks.BlockBuiltOnParentPayload(parent, child)
+	if err != nil {
+		return fullnessUnknown, errors.Wrap(err, "block built on parent payload")
+	}
+	if full {
+		return fullnessRevealed, nil
+	}
+	return fullnessWithheld, nil
 }

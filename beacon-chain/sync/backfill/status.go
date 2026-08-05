@@ -112,6 +112,28 @@ func (s *Store) fillBack(ctx context.Context, current primitives.Slot, blocks []
 	return status, s.saveStatus(ctx, status)
 }
 
+// boundaryChild returns the lowest imported block when it is the direct child of the given root.
+// During backfill, the block at BackfillStatus.LowRoot is the canonical child of the next batch's
+// tail block; for gloas its bid testifies whether the tail's payload was revealed or withheld.
+func (s *Store) boundaryChild(ctx context.Context, parentRoot [32]byte) (interfaces.ReadOnlySignedBeaconBlock, error) {
+	status := s.status()
+	if bytesutil.ToBytes32(status.LowParentRoot) != parentRoot {
+		return nil, nil
+	}
+	child, err := s.store.Block(ctx, bytesutil.ToBytes32(status.LowRoot))
+	if err != nil {
+		return nil, errors.Wrapf(err, "block at backfill low root %#x", status.LowRoot)
+	}
+	if err := blocks.BeaconBlockIsNil(child); err != nil {
+		return nil, errors.Wrapf(err, "block at backfill low root %#x", status.LowRoot)
+	}
+	if child.Block().ParentRoot() != parentRoot {
+		return nil, errors.Wrapf(errBatchDisconnected, "block at low root %#x has parent_root=%#x, expected %#x",
+			status.LowRoot, child.Block().ParentRoot(), parentRoot)
+	}
+	return child, nil
+}
+
 // recoverLegacy will check to see if the db is from a legacy checkpoint sync, and either build a new BackfillStatus
 // or label the node as synced from genesis.
 func (s *Store) recoverLegacy(ctx context.Context) error {
