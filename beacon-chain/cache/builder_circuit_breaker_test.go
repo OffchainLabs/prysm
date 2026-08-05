@@ -36,20 +36,6 @@ func TestBuilderCircuitBreaker_NilSafe(t *testing.T) {
 	c.Prune(0)
 }
 
-func TestBuilderCircuitBreaker_Denylist(t *testing.T) {
-	c := NewBuilderCircuitBreaker([]primitives.BuilderIndex{7, 9})
-	require.Equal(t, true, c.Blacklisted(7, 0))
-	require.Equal(t, true, c.Blacklisted(9, 1000))
-	require.Equal(t, false, c.Blacklisted(8, 0))
-
-	// A success cannot lift an operator denylist entry.
-	c.RecordSuccess(7)
-	require.Equal(t, true, c.Blacklisted(7, 0))
-
-	// The denylist is operator intent, not a systemic signal.
-	require.Equal(t, uint64(0), c.BlacklistedCount(0))
-}
-
 func TestBuilderCircuitBreaker_AllowedFailures(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -59,7 +45,7 @@ func TestBuilderCircuitBreaker_AllowedFailures(t *testing.T) {
 	cfg.BuilderFailureBackOffPeriod = 5
 	require.NoError(t, params.SetActive(cfg))
 
-	c := NewBuilderCircuitBreaker(nil)
+	c := NewBuilderCircuitBreaker()
 
 	// First failure is within tolerance.
 	require.Equal(t, false, c.RecordFailure(1, root(1), 10))
@@ -83,7 +69,7 @@ func TestBuilderCircuitBreaker_CriticalFailuresBanLonger(t *testing.T) {
 	cfg.BuilderFailureBackOffPeriod = 5
 	require.NoError(t, params.SetActive(cfg))
 
-	c := NewBuilderCircuitBreaker(nil)
+	c := NewBuilderCircuitBreaker()
 	require.Equal(t, true, c.RecordFailure(1, root(1), 10))
 	require.Equal(t, false, c.Blacklisted(1, 11)) // short ban expired
 
@@ -106,7 +92,7 @@ func TestBuilderCircuitBreaker_WhitelistedBeforeCounterResets(t *testing.T) {
 	cfg.BuilderCriticalBlacklistPeriod = 256
 	require.NoError(t, params.SetActive(cfg))
 
-	c := NewBuilderCircuitBreaker(nil)
+	c := NewBuilderCircuitBreaker()
 	require.Equal(t, true, c.RecordFailure(1, root(1), 5))
 	require.Equal(t, true, c.Blacklisted(1, 5))
 	require.Equal(t, false, c.Blacklisted(1, 6))
@@ -134,7 +120,7 @@ func TestBuilderCircuitBreaker_BackOffResetsCounter(t *testing.T) {
 	cfg.BuilderFailureBackOffPeriod = 5
 	require.NoError(t, params.SetActive(cfg))
 
-	c := NewBuilderCircuitBreaker(nil)
+	c := NewBuilderCircuitBreaker()
 	require.Equal(t, true, c.RecordFailure(1, root(1), 10))
 
 	// Failing again after the back off period is a first offense again, so only a short ban.
@@ -151,7 +137,7 @@ func TestBuilderCircuitBreaker_RecordSuccessClearsBan(t *testing.T) {
 	cfg.BuilderCriticalBlacklistPeriod = 256
 	require.NoError(t, params.SetActive(cfg))
 
-	c := NewBuilderCircuitBreaker(nil)
+	c := NewBuilderCircuitBreaker()
 	require.Equal(t, true, c.RecordFailure(1, root(1), 10))
 	require.Equal(t, true, c.RecordFailure(1, root(2), 10))
 	require.Equal(t, true, c.Blacklisted(1, 100))
@@ -170,7 +156,7 @@ func TestBuilderCircuitBreaker_IdempotentPerRoot(t *testing.T) {
 	cfg.BuilderCriticalBlacklistPeriod = 256
 	require.NoError(t, params.SetActive(cfg))
 
-	c := NewBuilderCircuitBreaker(nil)
+	c := NewBuilderCircuitBreaker()
 	r := root(1)
 	require.Equal(t, true, c.RecordFailure(1, r, 10))
 	// Two children building on the same empty parent must not escalate to a critical ban.
@@ -186,7 +172,7 @@ func TestBuilderCircuitBreaker_SelfBuildOnlyThreshold(t *testing.T) {
 	cfg.BuilderCriticalFailedBuilders = 3
 	require.NoError(t, params.SetActive(cfg))
 
-	c := NewBuilderCircuitBreaker([]primitives.BuilderIndex{99})
+	c := NewBuilderCircuitBreaker()
 	require.Equal(t, false, c.SelfBuildOnly(0))
 
 	for i := 0; i < 2; i++ {
@@ -211,7 +197,7 @@ func TestBuilderCircuitBreaker_DropInactiveBuilders(t *testing.T) {
 	cfg.BuilderCriticalBlacklistPeriod = 256
 	require.NoError(t, params.SetActive(cfg))
 
-	c := NewBuilderCircuitBreaker(nil)
+	c := NewBuilderCircuitBreaker()
 	require.Equal(t, true, c.RecordFailure(1, root(1), 10))
 	require.Equal(t, true, c.RecordFailure(1, root(2), 10))
 	require.Equal(t, true, c.Blacklisted(1, 100))
@@ -233,18 +219,11 @@ func TestBuilderCircuitBreaker_DropInactiveBuildersKeepsUnresolved(t *testing.T)
 	cfg.BuilderBlacklistPeriod = 10
 	require.NoError(t, params.SetActive(cfg))
 
-	c := NewBuilderCircuitBreaker(nil)
+	c := NewBuilderCircuitBreaker()
 	require.Equal(t, true, c.RecordFailure(1, root(1), 10))
 
 	c.DropInactiveBuilders(registry(nil))
 	require.Equal(t, true, c.Blacklisted(1, 10))
-}
-
-// An exit must not lift an operator denylist entry.
-func TestBuilderCircuitBreaker_DropInactiveBuildersKeepsDenylist(t *testing.T) {
-	c := NewBuilderCircuitBreaker([]primitives.BuilderIndex{7})
-	c.DropInactiveBuilders(registry(map[primitives.BuilderIndex]bool{7: false}))
-	require.Equal(t, true, c.Blacklisted(7, 0))
 }
 
 func TestBuilderCircuitBreaker_Prune(t *testing.T) {
@@ -255,7 +234,7 @@ func TestBuilderCircuitBreaker_Prune(t *testing.T) {
 	cfg.BuilderFailureBackOffPeriod = 2
 	require.NoError(t, params.SetActive(cfg))
 
-	c := NewBuilderCircuitBreaker(nil)
+	c := NewBuilderCircuitBreaker()
 	require.Equal(t, true, c.RecordFailure(1, root(1), 10))
 
 	// Still inside the back off window, the record must survive so a repeat offense escalates.

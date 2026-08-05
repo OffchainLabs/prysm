@@ -2,8 +2,6 @@ package node
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
@@ -11,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 )
 
@@ -53,20 +50,6 @@ func configureHistoricalSlasher(cliCtx *cli.Context) error {
 		)
 	}
 	return nil
-}
-
-// builderIndexDenylist parses the operator supplied list of permanently blacklisted builder indices.
-func builderIndexDenylist(cliCtx *cli.Context) ([]primitives.BuilderIndex, error) {
-	raw := cliCtx.StringSlice(flags.BuilderIndexDenylist.Name)
-	indices := make([]primitives.BuilderIndex, 0, len(raw))
-	for _, entry := range raw {
-		idx, err := strconv.ParseUint(strings.TrimSpace(entry), 10, 64)
-		if err != nil {
-			return nil, errors.Wrapf(err, "invalid builder index %q in --%s", entry, flags.BuilderIndexDenylist.Name)
-		}
-		indices = append(indices, primitives.BuilderIndex(idx))
-	}
-	return indices, nil
 }
 
 func configureBuilderCircuitBreaker(cliCtx *cli.Context) error {

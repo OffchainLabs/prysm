@@ -76,12 +76,6 @@ func (s *Service) recordBuilderPayloadFailure(
 		entry.Debug("Not charging builder, parent was self-built")
 		return false
 	}
-	// A denied builder is already permanently banned, so charging it would only inflate the failure
-	// metric and the SelfBuildOnly count, which is meant to track the health of the payload market.
-	if cb.Denied(builderIndex) {
-		entry.Debug("Not charging builder, already on the operator denylist")
-		return false
-	}
 	weight, err := fc.ConsensusNodeWeight(parentRoot)
 	if err != nil {
 		entry.WithError(err).Debug("Not charging builder, parent weight unknown")

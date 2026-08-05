@@ -84,7 +84,7 @@ func setupBuilderFailureTest(
 	cfg.GloasForkEpoch = 0
 	require.NoError(t, params.SetActive(cfg))
 
-	cb := cache.NewBuilderCircuitBreaker(nil)
+	cb := cache.NewBuilderCircuitBreaker()
 	service, tr := setupGloasService(t, &mockExecution.EngineClient{})
 	require.NoError(t, WithBuilderCircuitBreaker(cb)(service))
 	service.cfg.ForkChoiceStore.SetBalancesByRooter(
@@ -209,7 +209,7 @@ func TestCheckBuilderPayloadFailure_NotBlacklistedForSelfBuild(t *testing.T) {
 // and rejects it when that node is absent. If this ever stops holding, the circuit breaker would
 // start blacklisting builders whose payload was actually delivered.
 func TestInsertRejectsBuildsOnFullChildWithoutPayload(t *testing.T) {
-	service, parentRoot, parentHash, st := setupBuilderFailureTest(t, 5, []uint64{100})
+	service, parentRoot, parentHash, _ := setupBuilderFailureTest(t, 5, []uint64{100})
 	require.Equal(t, false, service.cfg.ForkChoiceStore.HasFullNode(parentRoot))
 
 	childHash := bytesutil.ToBytes32([]byte("childhash"))

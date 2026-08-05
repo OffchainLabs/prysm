@@ -22,20 +22,12 @@ type builderFailure struct {
 type BuilderCircuitBreaker struct {
 	lock     sync.RWMutex
 	failures map[primitives.BuilderIndex]*builderFailure
-	denied   map[primitives.BuilderIndex]bool
 	recorded map[[32]byte]primitives.Epoch // parent roots whose failure was already recorded, and when
 }
 
-// NewBuilderCircuitBreaker initializes a circuit breaker with an operator supplied denylist of
-// permanently blacklisted builder indices.
-func NewBuilderCircuitBreaker(denylist []primitives.BuilderIndex) *BuilderCircuitBreaker {
-	denied := make(map[primitives.BuilderIndex]bool, len(denylist))
-	for _, idx := range denylist {
-		denied[idx] = true
-	}
+func NewBuilderCircuitBreaker() *BuilderCircuitBreaker {
 	return &BuilderCircuitBreaker{
 		failures: make(map[primitives.BuilderIndex]*builderFailure),
-		denied:   denied,
 		recorded: make(map[[32]byte]primitives.Epoch),
 	}
 }
@@ -84,7 +76,6 @@ func (c *BuilderCircuitBreaker) RecordFailure(
 }
 
 // RecordSuccess clears a builder's failure record after it reveals a valid payload.
-// The operator denylist is not affected.
 func (c *BuilderCircuitBreaker) RecordSuccess(idx primitives.BuilderIndex) {
 	if c == nil {
 		return
@@ -104,19 +95,8 @@ func (c *BuilderCircuitBreaker) Blacklisted(idx primitives.BuilderIndex, epoch p
 	return c.blacklistedAtEpoch(idx, epoch)
 }
 
-// Denied reports whether the builder is on the operator supplied denylist.
-func (c *BuilderCircuitBreaker) Denied(idx primitives.BuilderIndex) bool {
-	if c == nil {
-		return false
-	}
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.denied[idx]
-}
-
 // SelfBuildOnly reports whether enough builders are concurrently blacklisted that the node should
-// stop taking foreign bids altogether. The operator denylist is excluded: it expresses operator
-// intent, not a signal about the health of the payload market.
+// stop taking foreign bids altogether.
 func (c *BuilderCircuitBreaker) SelfBuildOnly(epoch primitives.Epoch) bool {
 	if c == nil {
 		return false
@@ -190,9 +170,6 @@ func (c *BuilderCircuitBreaker) blacklistedCount(epoch primitives.Epoch) uint64 
 
 // blacklistedAtEpoch requires the caller to hold the lock.
 func (c *BuilderCircuitBreaker) blacklistedAtEpoch(idx primitives.BuilderIndex, epoch primitives.Epoch) bool {
-	if c.denied[idx] {
-		return true
-	}
 	f, ok := c.failures[idx]
 	return ok && f.blacklistUntilEpoch > epoch
 }

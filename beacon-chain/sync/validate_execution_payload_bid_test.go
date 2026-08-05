@@ -294,8 +294,9 @@ func TestValidateExecutionPayloadBidGossip_HappyPath(t *testing.T) {
 func TestValidateExecutionPayloadBidGossip_BlacklistedBuilderIgnored(t *testing.T) {
 	ctx := context.Background()
 	s, msg, signedBid := setupExecutionPayloadBidService(t)
-	s.builderCircuitBreaker = cache.NewBuilderCircuitBreaker(
-		[]primitives.BuilderIndex{signedBid.Message.BuilderIndex})
+	s.builderCircuitBreaker = cache.NewBuilderCircuitBreaker()
+	// The bid is at slot 1, so the failure has to be charged in epoch 0.
+	require.Equal(t, true, s.builderCircuitBreaker.RecordFailure(signedBid.Message.BuilderIndex, [32]byte{0xff}, 0))
 	// Every verifier method would reject if reached.
 	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{
 		errCurrentOrNextSlot: errors.New("slot"),
@@ -319,8 +320,8 @@ func TestValidateExecutionPayloadBidGossip_BlacklistedBuilderIgnored(t *testing.
 func TestValidateExecutionPayloadBidGossip_OtherBuilderNotBlacklisted(t *testing.T) {
 	ctx := context.Background()
 	s, msg, signedBid := setupExecutionPayloadBidService(t)
-	s.builderCircuitBreaker = cache.NewBuilderCircuitBreaker(
-		[]primitives.BuilderIndex{signedBid.Message.BuilderIndex + 1})
+	s.builderCircuitBreaker = cache.NewBuilderCircuitBreaker()
+	require.Equal(t, true, s.builderCircuitBreaker.RecordFailure(signedBid.Message.BuilderIndex+1, [32]byte{0xff}, 0))
 	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
 
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)

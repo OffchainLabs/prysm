@@ -14,7 +14,19 @@ import (
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
+
+// blacklistedBreaker returns a circuit breaker that bans idx for the epoch of slot.
+func blacklistedBreaker(t *testing.T, idx primitives.BuilderIndex, slot primitives.Slot) *cache.BuilderCircuitBreaker {
+	c := cache.NewBuilderCircuitBreaker()
+	epoch := slots.ToEpoch(slot)
+	for i := uint64(0); i <= params.BeaconConfig().BuilderAllowedFailures; i++ {
+		c.RecordFailure(idx, [32]byte{byte(idx), byte(i)}, epoch)
+	}
+	require.Equal(t, true, c.Blacklisted(idx, epoch))
+	return c
+}
 
 func TestSetSelfBuildExecutionPayloadBid(t *testing.T) {
 	parentRoot := [32]byte{1, 2, 3}
@@ -286,7 +298,7 @@ func TestSetExecutionPayloadBid_IgnoresBlacklistedP2PBid(t *testing.T) {
 
 	vs := &Server{
 		HighestBidCache:       bidCache,
-		BuilderCircuitBreaker: cache.NewBuilderCircuitBreaker([]primitives.BuilderIndex{5}),
+		BuilderCircuitBreaker: blacklistedBreaker(t, 5, slot),
 	}
 
 	src, err := vs.setExecutionPayloadBid(t.Context(), sBlk, local, nil, 0, false)

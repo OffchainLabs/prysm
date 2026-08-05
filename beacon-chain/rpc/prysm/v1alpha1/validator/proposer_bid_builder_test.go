@@ -9,7 +9,6 @@ import (
 
 	beaconbuilder "github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	builderTest "github.com/OffchainLabs/prysm/v7/beacon-chain/builder/testing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -321,7 +320,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 		vs := &Server{
 			BlockBuilder:                   &builderTest.MockBuilderService{PayloadBids: []beaconbuilder.PayloadBid{bid(1, 500), bid(2, 1500)}},
 			NewExecutionPayloadBidVerifier: passAll,
-			BuilderCircuitBreaker:          cache.NewBuilderCircuitBreaker([]primitives.BuilderIndex{2}),
+			BuilderCircuitBreaker:          blacklistedBreaker(t, 2, slot),
 		}
 		got, _ := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(auths))
 		require.NotNil(t, got)
@@ -332,7 +331,7 @@ func TestGetBuilderExecutionPayloadBid(t *testing.T) {
 		vs := &Server{
 			BlockBuilder:                   &builderTest.MockBuilderService{PayloadBids: []beaconbuilder.PayloadBid{bid(1, 500)}},
 			NewExecutionPayloadBidVerifier: passAll,
-			BuilderCircuitBreaker:          cache.NewBuilderCircuitBreaker([]primitives.BuilderIndex{1}),
+			BuilderCircuitBreaker:          blacklistedBreaker(t, 1, slot),
 		}
 		got, url := vs.getBuilderExecutionPayloadBid(t.Context(), head, query(auths))
 		require.IsNil(t, got)

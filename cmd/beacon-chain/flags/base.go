@@ -54,12 +54,6 @@ var (
 		Usage:       "Number of total skip slot to fallback from using relay/builder to local execution engine for block construction in last epoch rolling window",
 		DefaultText: fmt.Sprintf("%d", params.BeaconConfig().MaxBuilderEpochMissedSlots),
 	}
-	// BuilderIndexDenylist permanently blacklists the given Gloas builder indices.
-	BuilderIndexDenylist = &cli.StringSliceFlag{
-		Name: "builder-index-denylist",
-		Usage: "Comma separated list of Gloas builder indices whose bids this node will always ignore. Builder indices are " +
-			"reused when a builder exits, so keep this list up to date or restrict it to builders you never intend to use.",
-	}
 	// LocalBlockValueBoost sets a percentage boost for local block construction while using a custom builder.
 	LocalBlockValueBoost = &cli.Uint64Flag{
 		Name: "local-block-value-boost",

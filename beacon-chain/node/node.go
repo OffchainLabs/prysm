@@ -155,11 +155,6 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 	}
 	ctx := cliCtx.Context
 
-	builderDenylist, err := builderIndexDenylist(cliCtx)
-	if err != nil {
-		return nil, err
-	}
-
 	beacon := &BeaconNode{
 		cliCtx:                    cliCtx,
 		ctx:                       ctx,
@@ -179,7 +174,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		blsToExecPool:             blstoexec.NewPool(),
 		proposerPreferencesCache:  cache.NewProposerPreferencesCache(),
 		subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(),
-		builderCircuitBreaker:     cache.NewBuilderCircuitBreaker(builderDenylist),
+		builderCircuitBreaker:     cache.NewBuilderCircuitBreaker(),
 		payloadIDCache:            cache.NewPayloadIDCache(),
 		executionPayloadCache:     cache.NewExecutionPayloadEnvelopeCache(),
 		slasherBlockHeadersFeed:   new(event.Feed),
