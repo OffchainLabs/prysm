@@ -1382,6 +1382,20 @@ func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
 		merged3 := mergeProposerSettings(nil, db3, opts)
 		require.IsNil(t, merged3.ProposerConfig["0xkey"].Builder)
 	})
+	t.Run("v1-promoted wire-absent enabled stays disabled under --enable-builder", func(t *testing.T) {
+		opts := &flagOptions{builderConfig: &proposer.BuilderConfig{Enabled: true}}
+		// v1 file: no enabled key in the builder block meant disabled.
+		file := &validatorpb.ProposerSettingsPayload{
+			DefaultConfig: &validatorpb.ProposerOptionPayload{
+				FeeRecipient: "0x",
+				Builder:      &validatorpb.BuilderConfig{GasLimit: 30000000},
+			},
+		}
+		db := &validatorpb.ProposerSettingsPayload{Version: proposer.SchemaV2}
+		merged := mergeProposerSettings(file, db, opts)
+		require.NotNil(t, merged.DefaultConfig.Builder.Enabled)
+		require.Equal(t, false, *merged.DefaultConfig.Builder.Enabled)
+	})
 }
 
 func Test_mergeProposerSettings_V2LoadedOverridesDB(t *testing.T) {

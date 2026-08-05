@@ -17,16 +17,16 @@ func TestEffectiveBuilderConfig(t *testing.T) {
 
 	t.Run("nil per-key returns default", func(t *testing.T) {
 		def := &BuilderConfig{Enabled: true}
-		require.Equal(t, def, EffectiveBuilderConfig(nil, def))
+		require.Equal(t, def, effectiveBuilderConfig(nil, def))
 	})
 	t.Run("nil default returns per-key", func(t *testing.T) {
 		perKey := &BuilderConfig{Enabled: true}
-		require.Equal(t, perKey, EffectiveBuilderConfig(perKey, nil))
+		require.Equal(t, perKey, effectiveBuilderConfig(perKey, nil))
 	})
 	t.Run("min_bid inherits when per-key omits it", func(t *testing.T) {
 		def := &BuilderConfig{Enabled: true, Builders: []*BuilderEntry{entryA, entryB}, MinBid: uint64ValPtr(5000000)}
 		perKey := &BuilderConfig{Enabled: true, Builders: []*BuilderEntry{entryC}}
-		eff := EffectiveBuilderConfig(perKey, def)
+		eff := effectiveBuilderConfig(perKey, def)
 		require.NotNil(t, eff.MinBid)
 		require.Equal(t, validator.Uint64(5000000), *eff.MinBid)
 		require.Equal(t, 1, len(eff.Builders))
@@ -35,70 +35,70 @@ func TestEffectiveBuilderConfig(t *testing.T) {
 	t.Run("explicit zero max payment is preserved, not inherited over", func(t *testing.T) {
 		def := &BuilderConfig{MaxExecutionPayment: uint64ValPtr(1000000000)}
 		perKey := &BuilderConfig{Enabled: true, MaxExecutionPayment: uint64ValPtr(0)}
-		eff := EffectiveBuilderConfig(perKey, def)
+		eff := effectiveBuilderConfig(perKey, def)
 		require.NotNil(t, eff.MaxExecutionPayment)
 		require.Equal(t, validator.Uint64(0), *eff.MaxExecutionPayment)
 	})
 	t.Run("unset max payment inherits default", func(t *testing.T) {
 		def := &BuilderConfig{MaxExecutionPayment: uint64ValPtr(1000000000)}
 		perKey := &BuilderConfig{Enabled: true}
-		eff := EffectiveBuilderConfig(perKey, def)
+		eff := effectiveBuilderConfig(perKey, def)
 		require.NotNil(t, eff.MaxExecutionPayment)
 		require.Equal(t, validator.Uint64(1000000000), *eff.MaxExecutionPayment)
 	})
 	t.Run("explicit per-key disable wins over enabled default", func(t *testing.T) {
 		def := &BuilderConfig{Enabled: true}
 		perKey := &BuilderConfig{Enabled: false, MinBid: uint64ValPtr(1)}
-		require.Equal(t, false, EffectiveBuilderConfig(perKey, def).IsEnabled())
+		require.Equal(t, false, effectiveBuilderConfig(perKey, def).IsEnabled())
 	})
 	t.Run("present per-key builder config is authoritative on enabled", func(t *testing.T) {
 		// A per-key config with enabled false does not inherit an enabled default;
 		// whole-config inheritance happens only when the per-key builder config is nil.
 		def := &BuilderConfig{Enabled: true}
 		perKey := &BuilderConfig{MinBid: uint64ValPtr(1)}
-		require.Equal(t, false, EffectiveBuilderConfig(perKey, def).IsEnabled())
-		require.Equal(t, true, EffectiveBuilderConfig(nil, def).IsEnabled())
+		require.Equal(t, false, effectiveBuilderConfig(perKey, def).IsEnabled())
+		require.Equal(t, true, effectiveBuilderConfig(nil, def).IsEnabled())
 	})
 	t.Run("present builders list replaces, never unions", func(t *testing.T) {
 		def := &BuilderConfig{Builders: []*BuilderEntry{entryA, entryB}}
 		perKey := &BuilderConfig{Builders: []*BuilderEntry{entryC}}
-		eff := EffectiveBuilderConfig(perKey, def)
+		eff := effectiveBuilderConfig(perKey, def)
 		require.Equal(t, 1, len(eff.Builders))
 		require.Equal(t, "https://c", eff.Builders[0].URL)
 	})
 	t.Run("absent builders list inherits default list", func(t *testing.T) {
 		def := &BuilderConfig{Builders: []*BuilderEntry{entryA, entryB}}
 		perKey := &BuilderConfig{Enabled: true}
-		require.Equal(t, 2, len(EffectiveBuilderConfig(perKey, def).Builders))
+		require.Equal(t, 2, len(effectiveBuilderConfig(perKey, def).Builders))
 	})
 	t.Run("zero gas limit inherits default gas limit", func(t *testing.T) {
 		def := &BuilderConfig{GasLimit: validator.Uint64(30000000)}
 		perKey := &BuilderConfig{Enabled: true}
-		require.Equal(t, validator.Uint64(30000000), EffectiveBuilderConfig(perKey, def).GasLimit)
+		require.Equal(t, validator.Uint64(30000000), effectiveBuilderConfig(perKey, def).GasLimit)
 	})
 	t.Run("proxy and boost inherit per field", func(t *testing.T) {
 		def := &BuilderConfig{Proxy: proto.String("http://side-car:9001"), BuilderBoostFactor: uint64ValPtr(90)}
 		perKey := &BuilderConfig{Enabled: true, BuilderBoostFactor: uint64ValPtr(120)}
-		eff := EffectiveBuilderConfig(perKey, def)
+		eff := effectiveBuilderConfig(perKey, def)
 		require.Equal(t, "http://side-car:9001", *eff.Proxy)
 		require.Equal(t, validator.Uint64(120), *eff.BuilderBoostFactor)
 	})
 	t.Run("both-set min_bid: per-key wins", func(t *testing.T) {
 		def := &BuilderConfig{MinBid: uint64ValPtr(5000000)}
 		perKey := &BuilderConfig{MinBid: uint64ValPtr(7000000)}
-		require.Equal(t, validator.Uint64(7000000), *EffectiveBuilderConfig(perKey, def).MinBid)
+		require.Equal(t, validator.Uint64(7000000), *effectiveBuilderConfig(perKey, def).MinBid)
 	})
 	t.Run("both-set proxy: per-key wins", func(t *testing.T) {
 		def := &BuilderConfig{Proxy: proto.String("http://default:1")}
 		perKey := &BuilderConfig{Proxy: proto.String("http://mine:2")}
-		require.Equal(t, "http://mine:2", *EffectiveBuilderConfig(perKey, def).Proxy)
+		require.Equal(t, "http://mine:2", *effectiveBuilderConfig(perKey, def).Proxy)
 	})
 	t.Run("nonzero per-key gas limit wins over default", func(t *testing.T) {
 		def := &BuilderConfig{GasLimit: validator.Uint64(30000000)}
 		perKey := &BuilderConfig{GasLimit: validator.Uint64(45000000)}
-		require.Equal(t, validator.Uint64(45000000), EffectiveBuilderConfig(perKey, def).GasLimit)
+		require.Equal(t, validator.Uint64(45000000), effectiveBuilderConfig(perKey, def).GasLimit)
 	})
 	t.Run("nil nil is nil", func(t *testing.T) {
-		require.Equal(t, (*BuilderConfig)(nil), EffectiveBuilderConfig(nil, nil))
+		require.Equal(t, (*BuilderConfig)(nil), effectiveBuilderConfig(nil, nil))
 	})
 }

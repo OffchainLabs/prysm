@@ -672,7 +672,7 @@ func TestSettingFromConsensus_NormalizesLegacyPresence(t *testing.T) {
 
 	// A disabled per-key section can never silently activate under an enabled default:
 	// EffectiveBuilderConfig takes the per-key enabled, not the default's.
-	eff := EffectiveBuilderConfig(perKey, &BuilderConfig{Enabled: true})
+	eff := effectiveBuilderConfig(perKey, &BuilderConfig{Enabled: true})
 	require.Equal(t, false, eff.IsEnabled())
 }
 

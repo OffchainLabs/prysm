@@ -1377,31 +1377,12 @@ type builderTarget struct {
 	boostFactor *uint64
 }
 
-// builderConfigForKey returns pk's effective builder config: per-key fields win,
-// unset fields inherit from default_config (field-level inheritance).
-func (v *validator) builderConfigForKey(pk pubkey) *proposer.BuilderConfig {
-	ps := v.ProposerSettings()
-	if ps == nil {
-		return nil
-	}
-	var def, perKey *proposer.BuilderConfig
-	if ps.DefaultConfig != nil {
-		def = ps.DefaultConfig.BuilderConfig
-	}
-	if ps.ProposeConfig != nil {
-		if c, ok := ps.ProposeConfig[pk]; ok && c != nil {
-			perKey = c.BuilderConfig
-		}
-	}
-	return proposer.EffectiveBuilderConfig(perKey, def)
-}
-
 // builderTargetsForKey resolves the enabled builder list for pk; each entry
 // overrides the config-level fallbacks.
 // TODO(gloas): resolved minBid/boostFactor/pubkey take effect with the inline
 // produce-block preferences wire (beacon-APIs #630).
 func (v *validator) builderTargetsForKey(pk pubkey) []builderTarget {
-	bc := v.builderConfigForKey(pk)
+	bc := v.ProposerSettings().EffectiveBuilderConfig(pk)
 	if !bc.IsEnabled() {
 		return nil
 	}
@@ -1572,26 +1553,17 @@ func (v *validator) buildSignedRegReqs(
 
 		if isV2 {
 			hasFeeRecipient := false
-			var defBC, perKeyBC *proposer.BuilderConfig
-			if defaultConfig := v.ProposerSettings().DefaultConfig; defaultConfig != nil {
-				defBC = defaultConfig.BuilderConfig
-				if defaultConfig.FeeRecipientConfig != nil {
-					feeRecipient = defaultConfig.FeeRecipientConfig.FeeRecipient
-					hasFeeRecipient = true
-				}
+			if defaultConfig := v.ProposerSettings().DefaultConfig; defaultConfig != nil && defaultConfig.FeeRecipientConfig != nil {
+				feeRecipient = defaultConfig.FeeRecipientConfig.FeeRecipient
+				hasFeeRecipient = true
 			}
-			if v.ProposerSettings().ProposeConfig != nil {
-				if config, ok := v.ProposerSettings().ProposeConfig[k]; ok && config != nil {
-					perKeyBC = config.BuilderConfig
-					if config.FeeRecipientConfig != nil {
-						feeRecipient = config.FeeRecipientConfig.FeeRecipient
-						hasFeeRecipient = true
-					}
-				}
+			if config, ok := v.ProposerSettings().ProposeConfig[k]; ok && config != nil && config.FeeRecipientConfig != nil {
+				feeRecipient = config.FeeRecipientConfig.FeeRecipient
+				hasFeeRecipient = true
 			}
 			// Field-level resolution: per-key builder fields inherit from the default;
 			// registration still requires a fee recipient configured at some level.
-			bc := proposer.EffectiveBuilderConfig(perKeyBC, defBC)
+			bc := v.ProposerSettings().EffectiveBuilderConfig(k)
 			enabled = bc.IsEnabled() && hasFeeRecipient
 			if bc.GasLimit != 0 {
 				gasLimit = uint64(bc.GasLimit)

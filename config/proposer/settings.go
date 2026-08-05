@@ -162,6 +162,22 @@ func (be *BuilderEntry) EffectiveAuthData() []byte {
 	return []byte(be.URL)
 }
 
+// EffectiveBuilderConfig resolves key's builder config against default_config;
+// nil when neither level configures a builder.
+func (ps *Settings) EffectiveBuilderConfig(key [fieldparams.BLSPubkeyLength]byte) *BuilderConfig {
+	if ps == nil {
+		return nil
+	}
+	var perKey, def *BuilderConfig
+	if ps.DefaultConfig != nil {
+		def = ps.DefaultConfig.BuilderConfig
+	}
+	if opt, ok := ps.ProposeConfig[key]; ok && opt != nil {
+		perKey = opt.BuilderConfig
+	}
+	return effectiveBuilderConfig(perKey, def)
+}
+
 // EntryIdentity is what makes a builder entry unique: its url compared as the
 // exact string and its auth_data as the resolved bytes.
 type EntryIdentity struct {
@@ -231,9 +247,9 @@ func (bc *BuilderConfig) IsEnabled() bool {
 	return bc != nil && bc.Enabled
 }
 
-// EffectiveBuilderConfig resolves per-key builder config with field-level
-// inheritance; the builders list replaces rather than merges.
-func EffectiveBuilderConfig(perKey, def *BuilderConfig) *BuilderConfig {
+// effectiveBuilderConfig merges two config levels with field-level inheritance;
+// the builders list replaces rather than merges.
+func effectiveBuilderConfig(perKey, def *BuilderConfig) *BuilderConfig {
 	if perKey == nil {
 		return def
 	}

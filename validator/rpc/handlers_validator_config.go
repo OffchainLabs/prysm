@@ -39,7 +39,11 @@ func (s *Server) GetBuilders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	eff := resolveBuilders(s.validatorService.ProposerSettings(), bytesutil.ToBytes48(pubkey))
+	// The Effective* getters resolve unset values (no floor, neutral boost, trustless-only).
+	eff := s.validatorService.ProposerSettings().EffectiveBuilderConfig(bytesutil.ToBytes48(pubkey))
+	if eff == nil {
+		eff = &proposer.BuilderConfig{}
+	}
 	out := builderConfigJSONFromConsensus(eff)
 	// The resolved response always states a concrete builders list.
 	if out.Builders == nil {
@@ -146,24 +150,6 @@ func (s *Server) DeleteBuilders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// resolveBuilders returns the key's effective builder config; the Effective*
-// getters resolve unset values (no floor, neutral boost, trustless-only).
-func resolveBuilders(settings *proposer.Settings, key [fieldparams.BLSPubkeyLength]byte) *proposer.BuilderConfig {
-	var perKey, def *proposer.BuilderConfig
-	if settings != nil {
-		if settings.DefaultConfig != nil {
-			def = settings.DefaultConfig.BuilderConfig
-		}
-		if opt, ok := settings.ProposeConfig[key]; ok && opt != nil {
-			perKey = opt.BuilderConfig
-		}
-	}
-	if eff := proposer.EffectiveBuilderConfig(perKey, def); eff != nil {
-		return eff
-	}
-	return &proposer.BuilderConfig{}
 }
 
 func builderConfigJSONFromConsensus(bc *proposer.BuilderConfig) *BuilderConfigJson {

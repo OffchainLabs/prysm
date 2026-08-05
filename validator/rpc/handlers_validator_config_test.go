@@ -9,7 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/derived"
 	mocks "github.com/OffchainLabs/prysm/v7/validator/testing"
@@ -127,6 +129,26 @@ func TestServer_SetBuilders_PreservesOtherKeysUseNone(t *testing.T) {
 	require.Equal(t, 0, len(cfg.Builders))
 }
 
+// POST upgrades v1 settings in place: the version bumps and builder gas limits
+// migrate to the option before the key's builder config is replaced.
+func TestServer_SetBuilders_UpgradesV1Settings(t *testing.T) {
+	srv, keys := setupConfigServer(t, 1)
+	pk := hexutil.Encode(keys[0][:])
+	require.NoError(t, srv.validatorService.SetProposerSettings(t.Context(), &proposer.Settings{
+		Version: proposer.SchemaV1,
+		ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+			keys[0]: {BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 999}},
+		},
+	}))
+	require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, `{"enabled":true,"builders":[{"url":"https://a.example"}]}`).Code)
+
+	got := srv.validatorService.ProposerSettings()
+	require.Equal(t, proposer.SchemaV2, got.Version)
+	opt := got.ProposeConfig[keys[0]]
+	require.Equal(t, validator.Uint64(999), opt.GasLimit)
+	require.Equal(t, 1, len(opt.BuilderConfig.Builders))
+}
+
 // builder_pubkey rides along as the entry's response filter.
 func TestServer_SetBuilders_BuilderPubkeyFilter(t *testing.T) {
 	srv, keys := setupConfigServer(t, 1)
@@ -155,8 +177,12 @@ func TestServer_SetBuilders_Rejects(t *testing.T) {
 		"pubkey-only entry":      {`{"enabled":true,"builders":[{"builder_pubkey":"` + bpk + `"}]}`, "url is required"},
 		"same url and auth_data": {`{"enabled":true,"builders":[{"url":"https://a"},{"url":"https://a"}]}`, "share the same url and auth_data"},
 		"omitted auth_data collides with its derived value": {`{"enabled":true,"builders":[{"url":"https://a"},{"url":"https://a","auth_data":"` + hexutil.Encode([]byte("https://a")) + `"}]}`, "share the same url and auth_data"},
-		"invalid url":  {`{"enabled":true,"builders":[{"url":"not a url"}]}`, "url is not a valid URL"},
-		"url too long": {`{"enabled":true,"builders":[{"url":"` + longURL + `"}]}`, "url exceeds 2048 bytes"},
+		"invalid url":            {`{"enabled":true,"builders":[{"url":"not a url"}]}`, "url is not a valid URL"},
+		"url too long":           {`{"enabled":true,"builders":[{"url":"` + longURL + `"}]}`, "url exceeds 2048 bytes"},
+		"invalid builder_pubkey": {`{"enabled":true,"builders":[{"url":"https://a","builder_pubkey":"0x1234"}]}`, "builder_pubkey is not a valid BLS public key"},
+		"invalid auth_data hex":  {`{"enabled":true,"builders":[{"url":"https://a","auth_data":"0xzz"}]}`, "auth_data is not valid hex"},
+		"auth_data too long":     {`{"enabled":true,"builders":[{"url":"https://a","auth_data":"0x` + strings.Repeat("ab", 4097) + `"}]}`, "auth_data exceeds 4096 bytes"},
+		"non-numeric min_bid":    {`{"enabled":true,"min_bid":"abc","builders":[]}`, "min_bid is not a valid uint64"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

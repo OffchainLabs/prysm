@@ -304,6 +304,8 @@ func promotePayloadToV2(p *validatorpb.ProposerSettingsPayload) {
 		if opt.GasLimit == 0 {
 			opt.GasLimit = opt.Builder.GasLimit
 		}
+		// In v1 an absent enabled meant disabled; make that explicit, else the
+		// --enable-builder fill (which only applies when unset) would turn it on.
 		if opt.Builder.Enabled == nil {
 			disabled := false
 			opt.Builder.Enabled = &disabled
