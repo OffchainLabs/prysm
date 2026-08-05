@@ -113,14 +113,7 @@ func (c *BuilderCircuitBreaker) SelfBuildOnly(epoch primitives.Epoch) bool {
 	}
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-
-	var count uint64
-	for _, f := range c.failures {
-		if f.blacklistUntilEpoch > epoch {
-			count++
-		}
-	}
-	return count >= params.BeaconConfig().BuilderCriticalFailedBuilders
+	return c.blacklistedCount(epoch) >= params.BeaconConfig().BuilderCriticalFailedBuilders
 }
 
 // BlacklistedCount returns the number of builders currently blacklisted by failure tracking.
@@ -130,14 +123,7 @@ func (c *BuilderCircuitBreaker) BlacklistedCount(epoch primitives.Epoch) uint64 
 	}
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-
-	var count uint64
-	for _, f := range c.failures {
-		if f.blacklistUntilEpoch > epoch {
-			count++
-		}
-	}
-	return count
+	return c.blacklistedCount(epoch)
 }
 
 // Prune drops records whose blacklist and back off periods have both elapsed, along with recorded
@@ -159,6 +145,17 @@ func (c *BuilderCircuitBreaker) Prune(epoch primitives.Epoch) {
 			delete(c.recorded, root)
 		}
 	}
+}
+
+// blacklistedCount requires the caller to hold the lock.
+func (c *BuilderCircuitBreaker) blacklistedCount(epoch primitives.Epoch) uint64 {
+	var count uint64
+	for _, f := range c.failures {
+		if f.blacklistUntilEpoch > epoch {
+			count++
+		}
+	}
+	return count
 }
 
 // blacklistedAtEpoch requires the caller to hold the lock.
