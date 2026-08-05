@@ -392,13 +392,6 @@ func TestBuilderIndex(t *testing.T) {
 	require.ErrorContains(t, ErrNilNode.Error(), err)
 }
 
-func TestCommitteeWeight(t *testing.T) {
-	f := setupGloas(t, 0, 0)
-	assert.Equal(t, uint64(0), f.CommitteeWeight())
-	f.store.committeeWeight = 320
-	assert.Equal(t, uint64(320), f.CommitteeWeight())
-}
-
 func TestBlockHash_UnknownRoot(t *testing.T) {
 	f := setupGloas(t, 0, 0)
 

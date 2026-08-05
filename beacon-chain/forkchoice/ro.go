@@ -170,13 +170,6 @@ func (ro *ROForkChoice) ConsensusNodeWeight(root [32]byte) (uint64, error) {
 	return ro.getter.ConsensusNodeWeight(root)
 }
 
-// CommitteeWeight delegates to the underlying forkchoice call, under a lock.
-func (ro *ROForkChoice) CommitteeWeight() uint64 {
-	ro.l.RLock()
-	defer ro.l.RUnlock()
-	return ro.getter.CommitteeWeight()
-}
-
 // CouldBuilderWithhold delegates to the underlying forkchoice call, under a lock.
 func (ro *ROForkChoice) CouldBuilderWithhold(root [32]byte) bool {
 	ro.l.RLock()
