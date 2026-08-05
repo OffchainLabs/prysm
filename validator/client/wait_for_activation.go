@@ -21,9 +21,9 @@ func (v *validator) WaitForActivation(ctx context.Context) error {
 	return v.waitForActivation(ctx, false)
 }
 
-// waitForActivation implements WaitForActivation. reloaded marks re-entries after
-// an accounts-changed event, whose keys bypassed HandleKeyReload.
-func (v *validator) waitForActivation(ctx context.Context, reloaded bool) error {
+// waitForActivation implements WaitForActivation. accountsChanged marks calls
+// re-entered after a key change, whose keys HandleKeyReload never saw.
+func (v *validator) waitForActivation(ctx context.Context, accountsChanged bool) error {
 	ctx, span := trace.StartSpan(ctx, "validator.WaitForActivation")
 	defer span.End()
 
@@ -34,7 +34,7 @@ func (v *validator) waitForActivation(ctx context.Context, reloaded bool) error 
 	}
 
 	// Startup keys are vetted by the startup doppelganger check instead.
-	if reloaded {
+	if accountsChanged {
 		v.trackReloadedKeysForDoppelGanger(validatingKeys)
 	}
 
@@ -64,7 +64,7 @@ func (v *validator) waitForActivation(ctx context.Context, reloaded bool) error 
 			if err := v.waitForNextEpoch(ctx, v.genesisTime); err != nil {
 				return v.retryWaitForActivation(ctx, span, err, "Failed to wait for next epoch. Reconnecting...")
 			}
-			return v.waitForActivation(incrementRetries(ctx), reloaded)
+			return v.waitForActivation(incrementRetries(ctx), accountsChanged)
 		}
 	}
 	return nil
