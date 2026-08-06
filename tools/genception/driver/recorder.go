@@ -49,12 +49,12 @@ func (r *recorder) recordRequest(args []string, req *packages.DriverRequest) err
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path.Join(r.dir(), "request.json"), b, 0644)
+	return os.WriteFile(path.Join(r.dir(), "request.json"), b, 0600)
 }
 
 func (r *recorder) recordResponse(resp []byte) error {
 	if r.env.recorderPath == "" {
 		return nil
 	}
-	return os.WriteFile(path.Join(r.dir(), "response.json"), resp, 0644)
+	return os.WriteFile(path.Join(r.dir(), "response.json"), resp, 0600)
 }
