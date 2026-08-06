@@ -20,13 +20,21 @@ import (
 //
 // Spec definition:
 //
-//	<spec fn="process_operations" fork="gloas" hash="4864d8ef">
+//	<spec fn="process_operations" fork="gloas" hash="5009f53b">
 //	def process_operations(state: BeaconState, body: BeaconBlockBody) -> None:
 //	    assert len(body.deposits) == 0
 //
 //	    def for_ops(operations: Sequence[Any], fn: Callable[[BeaconState, Any], None]) -> None:
 //	        for operation in operations:
 //	            fn(state, operation)
+//
+//	    # [New in Gloas:EIP7688]
+//	    assert len(body.proposer_slashings) <= MAX_PROPOSER_SLASHINGS
+//	    assert len(body.attester_slashings) <= MAX_ATTESTER_SLASHINGS_ELECTRA
+//	    assert len(body.attestations) <= MAX_ATTESTATIONS_ELECTRA
+//	    assert len(body.voluntary_exits) <= MAX_VOLUNTARY_EXITS
+//	    assert len(body.bls_to_execution_changes) <= MAX_BLS_TO_EXECUTION_CHANGES
+//	    assert len(body.payload_attestations) <= MAX_PAYLOAD_ATTESTATIONS
 //
 //	    # [Modified in Gloas:EIP7732]
 //	    for_ops(body.proposer_slashings, process_proposer_slashing)
