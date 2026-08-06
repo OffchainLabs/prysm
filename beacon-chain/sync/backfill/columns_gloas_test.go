@@ -510,75 +510,96 @@ func TestDefaultBatchImporterGloasTail(t *testing.T) {
 	})
 }
 
-// TestPromotedTailColumnExpiryInPool verifies the batchSyncColumns state-machine path: when the
-// column retention window advances past a promoted tail while its block is still required, the
-// pool prunes the expired column work and hands the batch back as importable without needing any
-// suitable peer or column RPC, and the batch subsequently imports.
+// TestPromotedTailColumnExpiryInPool verifies the column state-machine path: when the column
+// retention window advances past a promoted tail while its block is still required, the pool
+// prunes the expired column work and hands the batch back as importable without needing any
+// suitable peer or column RPC, and the batch subsequently imports. This must hold both for a
+// batch waiting in batchSyncColumns and for one parked in batchErrRetryable by a failed fetch.
 func TestPromotedTailColumnExpiryInPool(t *testing.T) {
 	gloasSlot := setupGloasFullnessConfig(t)
 	ctx := t.Context()
 	tail := gloasBlockWithBid(t, gloasSlot+2, [32]byte{0x99}, 0xcc, 0x99, 1)
 	tailRoot := tail.Root()
 
-	p, custody := testCustodyP2P(t)
-	store := filesystem.NewEphemeralDataColumnStorage(t)
-	bt := batch{begin: gloasSlot, end: gloasSlot + 10, blocks: verifiedROBlocks{tail}}
-	// The batch was built while the tail was still inside the column retention window.
-	cb, err := buildColumnBatch(ctx, bt, bt.blocks, p, store, mockCurrentSpecNeeds(), nil)
-	require.NoError(t, err)
-	bt.columns = &columnSync{columnBatch: cb}
-	// The tail was proven revealed and promoted with outstanding column work.
-	td := cb.toDownload[tailRoot]
-	td.fullness = fullnessRevealed
-	td.remaining = custody.Copy()
-	bt.state = batchSyncColumns
-	require.Equal(t, true, len(bt.columns.columnsNeeded()) > 0)
-
 	// Column retention advances past the tail slot while the block itself remains required.
 	retentionSlots := slots.UnsafeEpochStart(params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest)
 	expiredCurrent := tail.Block().Slot() + retentionSlots + 100
 	sn, err := das.NewSyncNeeds(func() primitives.Slot { return expiredCurrent }, nil, 0)
 	require.NoError(t, err)
-	needs := sn.Currently()
-	require.Equal(t, true, needs.Block.At(bt.end-1))
-	require.Equal(t, false, needs.Col.At(tail.Block().Slot()))
 
-	// No suitable peer exists and none is needed: the state machine completes the batch itself.
-	pool := newP2PBatchWorkerPool(p, 2, sn.Currently)
-	remaining, err := pool.processTodo([]batch{bt}, &mockAssigner{err: peers.ErrInsufficientSuitable}, make(map[peer.ID]bool))
-	require.NoError(t, err)
-	require.Equal(t, 0, len(remaining))
-
-	var got batch
-	select {
-	case got = <-pool.fromRouter:
-		require.Equal(t, batchImportable, got.state)
-		require.Equal(t, 0, len(got.columns.columnsNeeded()))
-	default:
-		t.Fatal("expected the expired-column batch to be handed back as importable")
+	// newPromotedBatch builds a batch, constructed while the tail was still retained, whose
+	// revealed tail was promoted with outstanding column work.
+	newPromotedBatch := func(t *testing.T) (batch, *p2ptest.TestP2P) {
+		p, custody := testCustodyP2P(t)
+		store := filesystem.NewEphemeralDataColumnStorage(t)
+		bt := batch{begin: gloasSlot, end: gloasSlot + 10, blocks: verifiedROBlocks{tail}}
+		cb, err := buildColumnBatch(ctx, bt, bt.blocks, p, store, mockCurrentSpecNeeds(), nil)
+		require.NoError(t, err)
+		bt.columns = &columnSync{columnBatch: cb}
+		td := cb.toDownload[tailRoot]
+		td.fullness = fullnessRevealed
+		td.remaining = custody.Copy()
+		bt.state = batchSyncColumns
+		require.Equal(t, true, len(bt.columns.columnsNeeded()) > 0)
+		needs := sn.Currently()
+		require.Equal(t, true, needs.Block.At(bt.end-1))
+		require.Equal(t, false, needs.Col.At(tail.Block().Slot()))
+		return bt, p
 	}
 
-	// The batch subsequently imports through the service using the real importer. The empty db
-	// also proves no boundary child lookup is attempted for the expired tail.
-	child := gloasBlockWithBid(t, gloasSlot+3, tailRoot, 0xdd, 0xcc, 0)
-	mdb := &mockBackfillDB{}
-	su := &Store{store: mdb, bs: &dbval.BackfillStatus{LowSlot: uint64(gloasSlot + 3), LowRoot: child.RootSlice(), LowParentRoot: tailRoot[:]}}
-	seqr := newBatchSequencer(1, gloasSlot+10, 10, sn.Currently)
-	seqr.seq[0] = got
-	svc := &Service{
-		clock:     startup.NewClock(time.Now(), [32]byte{}),
-		pool:      &mockPool{todoChan: make(chan batch, 1)},
-		batchSeq:  seqr,
-		store:     su,
-		syncNeeds: sn,
-		dcStore:   filesystem.NewEphemeralDataColumnStorage(t),
+	// completesWithoutPeers runs the state-machine step with no suitable peers and requires the
+	// batch to come back importable with no column work left.
+	completesWithoutPeers := func(t *testing.T, p *p2ptest.TestP2P, bt batch) batch {
+		pool := newP2PBatchWorkerPool(p, 2, sn.Currently)
+		remaining, err := pool.processTodo([]batch{bt}, &mockAssigner{err: peers.ErrInsufficientSuitable}, make(map[peer.ID]bool))
+		require.NoError(t, err)
+		require.Equal(t, 0, len(remaining))
+		select {
+		case got := <-pool.fromRouter:
+			require.Equal(t, batchImportable, got.state)
+			require.Equal(t, 0, len(got.columns.columnsNeeded()))
+			return got
+		default:
+			t.Fatal("expected the expired-column batch to be handed back as importable")
+			return batch{}
+		}
 	}
-	svc.batchImporter = svc.defaultBatchImporter
-	svc.importBatches(ctx)
 
-	require.Equal(t, uint64(gloasSlot+2), su.status().LowSlot)
-	_, saved := mdb.blocks[tailRoot]
-	require.Equal(t, true, saved)
+	t.Run("waiting in column sync", func(t *testing.T) {
+		bt, p := newPromotedBatch(t)
+		got := completesWithoutPeers(t, p, bt)
+
+		// The batch subsequently imports through the service using the real importer. The empty
+		// db also proves no boundary child lookup is attempted for the expired tail.
+		child := gloasBlockWithBid(t, gloasSlot+3, tailRoot, 0xdd, 0xcc, 0)
+		mdb := &mockBackfillDB{}
+		su := &Store{store: mdb, bs: &dbval.BackfillStatus{LowSlot: uint64(gloasSlot + 3), LowRoot: child.RootSlice(), LowParentRoot: tailRoot[:]}}
+		seqr := newBatchSequencer(1, gloasSlot+10, 10, sn.Currently)
+		seqr.seq[0] = got
+		svc := &Service{
+			clock:     startup.NewClock(time.Now(), [32]byte{}),
+			pool:      &mockPool{todoChan: make(chan batch, 1)},
+			batchSeq:  seqr,
+			store:     su,
+			syncNeeds: sn,
+			dcStore:   filesystem.NewEphemeralDataColumnStorage(t),
+		}
+		svc.batchImporter = svc.defaultBatchImporter
+		svc.importBatches(ctx)
+
+		require.Equal(t, uint64(gloasSlot+2), su.status().LowSlot)
+		_, saved := mdb.blocks[tailRoot]
+		require.Equal(t, true, saved)
+	})
+
+	t.Run("parked retryable by a failed column fetch", func(t *testing.T) {
+		bt, p := newPromotedBatch(t)
+		bt = bt.withRetryableError(errors.New("column RPC timeout"))
+		require.Equal(t, batchErrRetryable, bt.state)
+		require.Equal(t, batchSyncColumns, bt.retryFrom)
+
+		completesWithoutPeers(t, p, bt)
+	})
 }
 
 // TestImportBatchesTailPromotion verifies that a batch failing import with errTailColumnsNeeded

@@ -233,13 +233,27 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 }
 
 // completeExpiredColumnWork prunes column downloads that left the retention window while their
-// batch waited in the column-sync state. A batch left with no column work is transitioned and,
-// when importable, handed back to the service without requiring any peer or column request.
+// batch waited in the column-sync state, including column fetches parked in the retryable state.
+// A batch left with no column work is transitioned and, when importable, handed back to the
+// service without requiring any peer or column request.
 func (p *p2pBatchWorkerPool) completeExpiredColumnWork(todo []batch) []batch {
 	needs := p.needs()
 	kept := todo[:0]
 	for _, b := range todo {
-		if b.state != batchSyncColumns || b.expired(needs) {
+		if b.expired(needs) {
+			kept = append(kept, b)
+			continue
+		}
+		// Failed column fetches must reset their retry bookkeeping before expired work can be
+		// pruned; retries from other states keep their own semantics and are left alone.
+		if b.state == batchErrRetryable && b.retryFrom == batchSyncColumns {
+			b = resetToRetryColumns(b, needs)
+			if b.workComplete() {
+				p.fromRouter <- b
+				continue
+			}
+		}
+		if b.state != batchSyncColumns {
 			kept = append(kept, b)
 			continue
 		}
