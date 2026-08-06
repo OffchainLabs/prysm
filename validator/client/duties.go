@@ -113,6 +113,11 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 	if !v.duties.isInitialized() {
 		return nil
 	}
+	snap := v.duties.snapshot()
+	if snap.currentDutyCount() == 0 && snap.nextDutyCount() == 0 {
+		// A known-empty schedule: skip duty logging and subnet subscriptions.
+		return nil
+	}
 
 	ss, err := slots.EpochStart(epoch)
 	if err != nil {
@@ -125,6 +130,12 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 
 // updateDutiesCombined uses the combined Duties() endpoint (pre-GLOAS).
 func (v *validator) updateDutiesCombined(ctx context.Context, epoch primitives.Epoch, filteredKeys [][fieldparams.BLSPubkeyLength]byte) error {
+	if len(filteredKeys) == 0 {
+		// No eligible keys (none active, or all quarantined): duties for this
+		// epoch are known to be none, which also drops any stale entries.
+		v.duties.writeEmpty(epoch)
+		return nil
+	}
 	req := &ethpb.DutiesRequest{
 		Epoch:      epoch,
 		PublicKeys: bytesutil.FromBytes48Array(filteredKeys),
@@ -232,9 +243,9 @@ func (m missingNextDuties) String() string {
 // sorted (see filteredKeysAndIndices).
 func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex) error {
 	if len(indices) == 0 {
-		// No active keys for this client; drop any previously cached duties so
-		// stale entries don't keep appearing in RolesAt etc.
-		v.duties.reset()
+		// No eligible keys (none active, or all quarantined): duties for this
+		// epoch are known to be none, which also drops any stale entries.
+		v.duties.writeEmpty(epoch)
 		return nil
 	}
 

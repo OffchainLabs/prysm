@@ -781,7 +781,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(fmt.Sprintf("%s/isSlashingProtectionMinimal:%v", tt.name, isSlashingProtectionMinimal), func(t *testing.T) {
 				v := tt.validatorSetter(t)
-				if err := v.CheckDoppelGanger(t.Context()); tt.err != "" {
+				if err := v.CheckDoppelGangerAtStartup(t.Context()); tt.err != "" {
 					assert.ErrorContains(t, tt.err, err)
 				}
 			})

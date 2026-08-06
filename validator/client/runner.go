@@ -130,7 +130,7 @@ func (r *runner) run(ctx context.Context) {
 			}
 
 			// Background doppelganger check for keys quarantined by a key reload.
-			v.MaybeCheckDoppelGanger(ctx, slot)
+			v.CheckDoppelGangerMidEpoch(ctx, slot)
 
 			// call push proposer settings often to account for the following edge cases:
 			// proposer is activated at the start of epoch and tries to propose immediately
@@ -231,7 +231,7 @@ func initialize(ctx context.Context, v iface.Validator) error {
 			return errors.Wrap(err, "could not wait for validator activation")
 		}
 
-		if err := v.CheckDoppelGanger(ctx); err != nil {
+		if err := v.CheckDoppelGangerAtStartup(ctx); err != nil {
 			if isConnectionError(err) {
 				log.WithError(err).Warn("Could not wait for checking doppelganger")
 				continue

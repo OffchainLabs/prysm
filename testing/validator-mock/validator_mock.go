@@ -61,18 +61,30 @@ func (mr *MockValidatorMockRecorder) AccountsChangedChan() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AccountsChangedChan", reflect.TypeOf((*MockValidator)(nil).AccountsChangedChan))
 }
 
-// CheckDoppelGanger mocks base method.
-func (m *MockValidator) CheckDoppelGanger(ctx context.Context) error {
+// CheckDoppelGangerAtStartup mocks base method.
+func (m *MockValidator) CheckDoppelGangerAtStartup(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CheckDoppelGanger", ctx)
+	ret := m.ctrl.Call(m, "CheckDoppelGangerAtStartup", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// CheckDoppelGanger indicates an expected call of CheckDoppelGanger.
-func (mr *MockValidatorMockRecorder) CheckDoppelGanger(ctx any) *gomock.Call {
+// CheckDoppelGangerAtStartup indicates an expected call of CheckDoppelGangerAtStartup.
+func (mr *MockValidatorMockRecorder) CheckDoppelGangerAtStartup(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckDoppelGanger", reflect.TypeOf((*MockValidator)(nil).CheckDoppelGanger), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckDoppelGangerAtStartup", reflect.TypeOf((*MockValidator)(nil).CheckDoppelGangerAtStartup), ctx)
+}
+
+// CheckDoppelGangerMidEpoch mocks base method.
+func (m *MockValidator) CheckDoppelGangerMidEpoch(ctx context.Context, slot primitives.Slot) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "CheckDoppelGangerMidEpoch", ctx, slot)
+}
+
+// CheckDoppelGangerMidEpoch indicates an expected call of CheckDoppelGangerMidEpoch.
+func (mr *MockValidatorMockRecorder) CheckDoppelGangerMidEpoch(ctx, slot any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckDoppelGangerMidEpoch", reflect.TypeOf((*MockValidator)(nil).CheckDoppelGangerMidEpoch), ctx, slot)
 }
 
 // DeleteGraffiti mocks base method.
@@ -252,18 +264,6 @@ func (m *MockValidator) LogValidatorGainsAndLosses(ctx context.Context, slot pri
 func (mr *MockValidatorMockRecorder) LogValidatorGainsAndLosses(ctx, slot any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LogValidatorGainsAndLosses", reflect.TypeOf((*MockValidator)(nil).LogValidatorGainsAndLosses), ctx, slot)
-}
-
-// MaybeCheckDoppelGanger mocks base method.
-func (m *MockValidator) MaybeCheckDoppelGanger(ctx context.Context, slot primitives.Slot) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "MaybeCheckDoppelGanger", ctx, slot)
-}
-
-// MaybeCheckDoppelGanger indicates an expected call of MaybeCheckDoppelGanger.
-func (mr *MockValidatorMockRecorder) MaybeCheckDoppelGanger(ctx, slot any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaybeCheckDoppelGanger", reflect.TypeOf((*MockValidator)(nil).MaybeCheckDoppelGanger), ctx, slot)
 }
 
 // MaybeRetryMissingNextDuties mocks base method.

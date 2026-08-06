@@ -38,7 +38,7 @@ type FakeValidator struct {
 	UpdateProtectionsCalled           bool
 	UpdateDutiesCalled                bool
 	RetryMissingNextDutiesCalled      bool
-	MaybeCheckDoppelGangerCalled      bool
+	CheckDoppelGangerMidEpochCalled   bool
 	WaitForWalletInitializationCalled bool
 	NextSlotCalled                    bool
 	WaitForActivationCalled           int
@@ -158,9 +158,9 @@ func (fv *FakeValidator) MaybeRetryMissingNextDuties(_ context.Context, _ primit
 	fv.RetryMissingNextDutiesCalled = true
 }
 
-// MaybeCheckDoppelGanger for mocking.
-func (fv *FakeValidator) MaybeCheckDoppelGanger(_ context.Context, _ primitives.Slot) {
-	fv.MaybeCheckDoppelGangerCalled = true
+// CheckDoppelGangerMidEpoch for mocking.
+func (fv *FakeValidator) CheckDoppelGangerMidEpoch(_ context.Context, _ primitives.Slot) {
+	fv.CheckDoppelGangerMidEpochCalled = true
 }
 
 // UpdateProtections for mocking.
@@ -245,8 +245,8 @@ func (fv *FakeValidator) Keymanager() (keymanager.IKeymanager, error) {
 	return fv.Km, nil
 }
 
-// CheckDoppelGanger for mocking
-func (*FakeValidator) CheckDoppelGanger(_ context.Context) error {
+// CheckDoppelGangerAtStartup for mocking
+func (*FakeValidator) CheckDoppelGangerAtStartup(_ context.Context) error {
 	return nil
 }
 

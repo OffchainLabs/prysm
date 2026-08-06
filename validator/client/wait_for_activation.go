@@ -46,7 +46,7 @@ func (v *validator) waitForActivation(ctx context.Context, accountsChanged bool)
 
 	// Step 3: update validator statuses in cache.
 	if err := v.updateValidatorStatusCache(ctx, validatingKeys); err != nil {
-		return v.retryWaitForActivation(ctx, span, err, "Connection broken while waiting for activation. Reconnecting...")
+		return v.retryWaitForActivation(ctx, span, err, "Connection broken while waiting for activation. Reconnecting...", accountsChanged)
 	}
 
 	// Step 4: Check and log validator statuses.
@@ -62,7 +62,7 @@ func (v *validator) waitForActivation(ctx context.Context, accountsChanged bool)
 			return v.waitForActivation(ctx, true)
 		default:
 			if err := v.waitForNextEpoch(ctx, v.genesisTime); err != nil {
-				return v.retryWaitForActivation(ctx, span, err, "Failed to wait for next epoch. Reconnecting...")
+				return v.retryWaitForActivation(ctx, span, err, "Failed to wait for next epoch. Reconnecting...", accountsChanged)
 			}
 			return v.waitForActivation(incrementRetries(ctx), accountsChanged)
 		}
@@ -70,14 +70,14 @@ func (v *validator) waitForActivation(ctx context.Context, accountsChanged bool)
 	return nil
 }
 
-func (v *validator) retryWaitForActivation(ctx context.Context, span octrace.Span, err error, message string) error {
+func (v *validator) retryWaitForActivation(ctx context.Context, span octrace.Span, err error, message string, accountsChanged bool) error {
 	tracing.AnnotateError(span, err)
 	attempts := activationAttempts(ctx)
 	log.WithError(err).WithField("attempts", attempts).Error(message)
 	// Reconnection attempt backoff, up to 60s.
 	time.Sleep(time.Second * time.Duration(min(uint64(attempts), 60)))
 	// TODO: refactor this to use the health tracker instead for reattempt
-	return v.waitForActivation(incrementRetries(ctx), false)
+	return v.waitForActivation(incrementRetries(ctx), accountsChanged)
 }
 
 func (v *validator) waitForAccountsChange(ctx context.Context) error {

@@ -48,7 +48,7 @@ type Validator interface {
 	LogValidatorGainsAndLosses(ctx context.Context, slot primitives.Slot) error
 	UpdateDuties(ctx context.Context) error
 	MaybeRetryMissingNextDuties(ctx context.Context, slot primitives.Slot)
-	MaybeCheckDoppelGanger(ctx context.Context, slot primitives.Slot)
+	CheckDoppelGangerMidEpoch(ctx context.Context, slot primitives.Slot)
 	RolesAt(ctx context.Context, slot primitives.Slot) (map[[fieldparams.BLSPubkeyLength]byte][]ValidatorRole, error) // validator pubKey -> roles
 	SubmitAttestation(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte)
 	ProposeBlock(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte)
@@ -61,7 +61,7 @@ type Validator interface {
 	WaitForKeymanagerInitialization(ctx context.Context) error
 	Keymanager() (keymanager.IKeymanager, error)
 	HandleKeyReload(ctx context.Context, currentKeys [][fieldparams.BLSPubkeyLength]byte) (bool, error)
-	CheckDoppelGanger(ctx context.Context) error
+	CheckDoppelGangerAtStartup(ctx context.Context) error
 	PushProposerSettings(ctx context.Context, slot primitives.Slot, forceFullPush bool) error
 	SignValidatorRegistrationRequest(ctx context.Context, signer SigningFunc, newValidatorRegistration *ethpb.ValidatorRegistrationV1) (*ethpb.SignedValidatorRegistrationV1, bool /* isCached */, error)
 	EnsureEventStream(ctx context.Context, topics []string)

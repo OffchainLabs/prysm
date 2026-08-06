@@ -145,7 +145,7 @@ func TestUpdateDuties_NextSlot(t *testing.T) {
 	runTest(t, ctx, v)
 
 	require.Equal(t, true, v.UpdateDutiesCalled, "Expected UpdateAssignments(%d) to be called", slot)
-	assert.Equal(t, true, v.MaybeCheckDoppelGangerCalled, "Expected the per-slot doppelganger check hook to run")
+	assert.Equal(t, true, v.CheckDoppelGangerMidEpochCalled, "Expected the per-slot doppelganger check hook to run")
 }
 
 func TestUpdateDuties_HandlesError(t *testing.T) {

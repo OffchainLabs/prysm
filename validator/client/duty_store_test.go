@@ -132,15 +132,19 @@ func TestDutyStore_Write(t *testing.T) {
 	assert.Equal(t, true, ds.isNextSyncCommittee(20))
 }
 
-func TestDutyStore_Reset(t *testing.T) {
+func TestDutyStore_WriteEmpty(t *testing.T) {
 	ds := testDutyStore(&ethpb.ValidatorDuty{PublicKey: make([]byte, 48)})
 	ds.data.prevDependentRoot = []byte("prev")
 	ds.data.currDependentRoot = []byte("curr")
 	assert.Equal(t, true, ds.isInitialized())
 
-	ds.reset()
-	assert.Equal(t, false, ds.isInitialized())
+	ds.writeEmpty(7)
+	// Still initialized — the emptiness is a known result, not a missing fetch —
+	// and every prior entry is gone.
+	assert.Equal(t, true, ds.isInitialized())
 	assert.Equal(t, 0, ds.snapshot().currentDutyCount())
+	assert.Equal(t, primitives.Epoch(7), ds.snapshot().epoch())
+	assert.Equal(t, true, ds.snapshot().prevDependentRoot() == nil)
 }
 
 func TestDutyStoreData_Reset(t *testing.T) {
