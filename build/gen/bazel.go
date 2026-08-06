@@ -6,7 +6,7 @@ package main
 //   - proto/ssz_proto_library.bzl  -> the mainnet/minimal SSZ substitution dicts
 //   - proto/**/BUILD.bazel         -> the proto package list + plugin mode
 //                                     (go_proto_library) and the SSZ targets
-//                                     (ssz_gen_marshal)
+//                                     (ssz_methodical)
 //
 // Nothing else in build/gen hardcodes this config. When Bazel is eventually
 // removed, only this file needs to change.

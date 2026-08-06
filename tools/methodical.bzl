@@ -52,10 +52,21 @@ def _ssz_methodical_impl(ctx):
     ctx.actions.write(all_pkg_list, content = json.encode(json_out))
     out_base = ctx.outputs.out.root.path
 
+    # The //proto:network build setting (mainnet|minimal) -- the same flag the
+    # ssz_proto_files select() keys on -- determines which .pb.go sizes the
+    # go_proto dep was built with, and therefore which //go:build constraint
+    # methodical must stamp so the output matches the mainnet/minimal pair that
+    # //build/gen writes. methodical emits no header on its own; both codegen
+    # paths drive it through --go-build-constraint.
+    go_build_constraint = "!minimal"
+    if ctx.attr._network[BuildSettingInfo].value == "minimal":
+        go_build_constraint = "minimal"
+
     args = [
         "gen",
         "--config=" + ctx.file.config_file.path,
         "--output=" + ctx.outputs.out.path,
+        "--go-build-constraint=" + go_build_constraint,
     ]
     if ctx.attr.override_package_name != "":
         args.append("--override-package-name=" + ctx.attr.override_package_name)
@@ -105,6 +116,13 @@ ssz_methodical = rule(
         # ssz_methodical target to --disable-progressive with no per-call edits.
         "_disable_progressive": attr.label(
             default = "//tools:disable_progressive_merkleization",
+        ),
+        # The //proto:network string_flag (mainnet|minimal) that ssz_proto_files
+        # selects on. Read here to pick the //go:build constraint methodical
+        # stamps, so --//proto:network=minimal yields a `//go:build minimal`
+        # file matching //build/gen's minimal twin, with no per-call edits.
+        "_network": attr.label(
+            default = "//proto:network",
         ),
         "deps": attr.label_list(aspects = [go_pkg_info_aspect]),
         # provides access to the go toolchain via go_context(), enabling package driver indexing.
