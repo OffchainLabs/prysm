@@ -1,9 +1,10 @@
-load("@prysm//tools/go:def.bzl", "go_library")
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
     srcs = [
         "chain_client.go",
+        "freshness.go",
         "node_client.go",
         "options.go",
         "validator.go",
@@ -12,6 +13,7 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/validator/client/iface",
     visibility = ["//visibility:public"],
     deps = [
+        "//api:go_default_library",
         "//api/client/event:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/proposer:go_default_library",
@@ -23,5 +25,15 @@ go_library(
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_golang_protobuf//ptypes/empty",
         "@com_github_pkg_errors//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["freshness_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//consensus-types/primitives:go_default_library",
+        "//testing/require:go_default_library",
     ],
 )

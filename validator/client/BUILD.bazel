@@ -10,6 +10,7 @@ go_library(
         "duties.go",
         "duty_store.go",
         "factory.go",
+        "head_tracker.go",
         "health_monitor.go",
         "key_reload.go",
         "log.go",
@@ -119,6 +120,7 @@ go_test(
         "duties_test.go",
         "duty_store_test.go",
         "factory_test.go",
+        "head_tracker_test.go",
         "health_monitor_test.go",
         "key_reload_test.go",
         "log_test.go",
@@ -142,6 +144,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//api:go_default_library",
         "//api/client/event:go_default_library",
         "//api/grpc:go_default_library",
         "//api/rest:go_default_library",

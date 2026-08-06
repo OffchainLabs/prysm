@@ -127,12 +127,8 @@ func (c *beaconApiValidatorClient) postEnvelope(ctx context.Context, endpoint st
 	if err == nil {
 		return nil
 	}
-	errJson := &httputil.DefaultJsonError{}
-	if !errors.As(err, &errJson) {
+	if !errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusNotAcceptable}) {
 		return err
-	}
-	if errJson.Code != http.StatusNotAcceptable {
-		return errJson
 	}
 	log.WithError(err).Warn("Envelope SSZ publish rejected, falling back to JSON")
 	body, jerr := jsonFn()

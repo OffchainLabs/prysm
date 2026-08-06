@@ -3,6 +3,7 @@ package httputil
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,6 +28,12 @@ func (e *DefaultJsonError) StatusCode() int {
 
 func (e *DefaultJsonError) Error() string {
 	return fmt.Sprintf("HTTP request unsuccessful (%d: %s)", e.Code, e.Message)
+}
+
+// Is allows comparison of DefaultJsonError values by their Code field.
+func (e *DefaultJsonError) Is(target error) bool {
+	var t *DefaultJsonError
+	return errors.As(target, &t) && t.Code == e.Code
 }
 
 // WriteJson writes the response message in JSON format.

@@ -44,7 +44,7 @@ var (
 	BeaconRESTApiProviderFlag = &cli.StringFlag{
 		Name:    "beacon-rest-api-provider",
 		Aliases: []string{"beacon-rest"},
-		Usage:   "Beacon node REST API provider endpoint. Setting this implicitly enables the beacon REST API (no need for --enable-beacon-rest-api). Use a comma-separated list for ordered failover; the first endpoint is primary, and failover wraps back to the first after the last.",
+		Usage:   "Beacon node REST API provider endpoint. Setting this implicitly enables the beacon REST API (no need for --enable-beacon-rest-api). Use a comma-separated list to connect to several beacon nodes: the validator client listens to the event stream of every node and queries all of them, keeping the best suited response.",
 		Value:   "http://127.0.0.1:3500",
 	}
 	// BeaconRESTApiHeaders defines a list of headers to send with all HTTP requests to the beacon node.
@@ -405,7 +405,7 @@ var (
 	// MaxHealthChecksFlag sets a maximum amount of times to check for beacon node health before validator client times out and shuts down
 	MaxHealthChecksFlag = &cli.IntFlag{
 		Name:  "max-health-checks",
-		Usage: "Maximum number of health checks to perform before exiting if not healthy. Set to 0 or a negative number for indefinite checks.",
+		Usage: "Maximum number of consecutive failed health checks before exiting. A health check fails when no connected beacon node is ready. Set to 0 or a negative number for indefinite checks.",
 		Value: DefaultMaxHealthChecks,
 	}
 	// DisableEphemeralLogFile disables the 24 hour debug log file.
