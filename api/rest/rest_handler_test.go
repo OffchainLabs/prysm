@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httptrace"
 	"strings"
 	"sync"
 	"testing"
@@ -79,6 +80,25 @@ func TestPostSSZ_JSONErrorBodyIsDecoded(t *testing.T) {
 	require.Equal(t, true, errors.As(err, &errJson), "expected DefaultJsonError, got %T", err)
 	require.Equal(t, http.StatusBadRequest, errJson.Code)
 	require.Equal(t, "bad request", errJson.Message)
+}
+
+func TestPostSSZ_DrainsSuccessBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"message":"accepted"}`))
+	}))
+	defer srv.Close()
+
+	var reused bool
+	ctx := httptrace.WithClientTrace(t.Context(), &httptrace.ClientTrace{
+		GotConn: func(info httptrace.GotConnInfo) {
+			reused = info.Reused
+		},
+	})
+	c := newHandler(http.Client{}, srv.URL)
+	require.NoError(t, c.PostSSZ(ctx, "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01})))
+	require.NoError(t, c.PostSSZ(ctx, "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01})))
+	require.Equal(t, true, reused, "expected the second request to reuse the drained connection")
 }
 
 func TestHandler_getRaw(t *testing.T) {

@@ -286,8 +286,12 @@ func (c *handler) PostSSZ(
 		}
 	}()
 
-	// 2XX is a success, and the body is empty by spec, so there is nothing to read.
+	// Success bodies are empty by spec, but drain any body so net/http can reuse the connection.
 	if httpResp.StatusCode/100 == 2 {
+		if _, err := io.Copy(io.Discard, httpResp.Body); err != nil {
+			return errors.Wrapf(err, "failed to drain response body for %s", httpResp.Request.URL.Redacted())
+		}
+
 		return nil
 	}
 
