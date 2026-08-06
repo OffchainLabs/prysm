@@ -276,10 +276,6 @@ func (c *handler) PostSSZ(
 		req.Header.Set(headerKey, headerValue)
 	}
 
-	for _, o := range c.reqOverrides {
-		o(req)
-	}
-
 	httpResp, err := c.client.Do(req)
 	if err != nil {
 		return errors.Wrapf(err, "failed to perform request for endpoint %s", api.RedactEndpoint(url))
