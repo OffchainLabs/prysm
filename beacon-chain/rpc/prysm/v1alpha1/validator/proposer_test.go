@@ -43,11 +43,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
 	attaggregation "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation/aggregation/attestations"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -985,9 +985,9 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 				blockToPropose := util.NewBlindedBeaconBlockCapella()
 				blockToPropose.Block.Slot = 5
 				blockToPropose.Block.ParentRoot = parent[:]
-				txRoot, err := ssz.TransactionsRoot([][]byte{})
+				txRoot, err := wrappers.TransactionsRoot([][]byte{})
 				require.NoError(t, err)
-				withdrawalsRoot, err := ssz.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
+				withdrawalsRoot, err := wrappers.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
 				require.NoError(t, err)
 				blockToPropose.Block.Body.ExecutionPayloadHeader.TransactionsRoot = txRoot[:]
 				blockToPropose.Block.Body.ExecutionPayloadHeader.WithdrawalsRoot = withdrawalsRoot[:]
@@ -1002,9 +1002,9 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 				blockToPropose := util.NewBlindedBeaconBlockCapella()
 				blockToPropose.Block.Slot = 5
 				blockToPropose.Block.ParentRoot = parent[:]
-				txRoot, err := ssz.TransactionsRoot([][]byte{})
+				txRoot, err := wrappers.TransactionsRoot([][]byte{})
 				require.NoError(t, err)
-				withdrawalsRoot, err := ssz.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
+				withdrawalsRoot, err := wrappers.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
 				require.NoError(t, err)
 				blockToPropose.Block.Body.ExecutionPayloadHeader.TransactionsRoot = txRoot[:]
 				blockToPropose.Block.Body.ExecutionPayloadHeader.WithdrawalsRoot = withdrawalsRoot[:]
@@ -1065,9 +1065,9 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 				blockToPropose := util.NewBlindedBeaconBlockDeneb()
 				blockToPropose.Message.Slot = 5
 				blockToPropose.Message.ParentRoot = parent[:]
-				txRoot, err := ssz.TransactionsRoot([][]byte{})
+				txRoot, err := wrappers.TransactionsRoot([][]byte{})
 				require.NoError(t, err)
-				withdrawalsRoot, err := ssz.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
+				withdrawalsRoot, err := wrappers.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
 				require.NoError(t, err)
 				blockToPropose.Message.Body.ExecutionPayloadHeader.TransactionsRoot = txRoot[:]
 				blockToPropose.Message.Body.ExecutionPayloadHeader.WithdrawalsRoot = withdrawalsRoot[:]
@@ -1083,9 +1083,9 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 				blockToPropose := util.NewBlindedBeaconBlockDeneb()
 				blockToPropose.Message.Slot = 5
 				blockToPropose.Message.ParentRoot = parent[:]
-				txRoot, err := ssz.TransactionsRoot([][]byte{})
+				txRoot, err := wrappers.TransactionsRoot([][]byte{})
 				require.NoError(t, err)
-				withdrawalsRoot, err := ssz.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
+				withdrawalsRoot, err := wrappers.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
 				require.NoError(t, err)
 				blockToPropose.Message.Body.ExecutionPayloadHeader.TransactionsRoot = txRoot[:]
 				blockToPropose.Message.Body.ExecutionPayloadHeader.WithdrawalsRoot = withdrawalsRoot[:]
@@ -1259,9 +1259,9 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 				blockToPropose := util.NewBlindedBeaconBlockFulu()
 				blockToPropose.Message.Slot = 5
 				blockToPropose.Message.ParentRoot = parent[:]
-				txRoot, err := ssz.TransactionsRoot([][]byte{})
+				txRoot, err := wrappers.TransactionsRoot([][]byte{})
 				require.NoError(t, err)
-				withdrawalsRoot, err := ssz.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
+				withdrawalsRoot, err := wrappers.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
 				require.NoError(t, err)
 				blockToPropose.Message.Body.ExecutionPayloadHeader.TransactionsRoot = txRoot[:]
 				blockToPropose.Message.Body.ExecutionPayloadHeader.WithdrawalsRoot = withdrawalsRoot[:]
