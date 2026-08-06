@@ -187,6 +187,12 @@ var (
 		Usage:  "Enables experimental progressive SSZ merkleization for converted consensus types.",
 		Hidden: true,
 	}
+	constantineKZG = &cli.BoolFlag{
+		Name:   "constantine",
+		Usage:  "Uses the Constantine library instead of c-kzg for KZG operations. Experimental: Constantine has not been independently audited.",
+		Value:  false,
+		Hidden: true,
+	}
 	reorgLatePayloads = &cli.BoolFlag{
 		Name:   "reorg-late-payloads",
 		Usage:  "Enables reorging late payloads.",
@@ -295,6 +301,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	EnableStateDiff,
 	EnableProgressiveSSZ,
 	reorgLatePayloads,
+	constantineKZG,
 	forceHeadFlag,
 	blacklistRoots,
 	enableHashtree,

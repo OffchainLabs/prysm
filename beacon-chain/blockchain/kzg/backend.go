@@ -1,5 +1,12 @@
 package kzg
 
+import (
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/sirupsen/logrus"
+)
+
+var log = logrus.WithField("prefix", "kzg")
+
 // backend is the set of KZG operations that Prysm delegates to an external
 // cryptography library. Every call into such a library goes through this
 // interface, so that the implementation can be swapped without touching the
@@ -36,5 +43,19 @@ type backend interface {
 }
 
 // activeBackend is the backend that the exported functions of this package route
-// through.
+// through. selectBackend sets it from the feature flags. Until then, and for the
+// tests that never call Start, it is c-kzg.
 var activeBackend backend = ckzgBackend{}
+
+// selectBackend picks the backend the feature flags ask for.
+func selectBackend() {
+	if !features.Get().ConstantineKZG {
+		activeBackend = ckzgBackend{}
+
+		return
+	}
+
+	log.Warning("Using Constantine instead of c-kzg for KZG operations. This is experimental: Constantine's EIP-7594 implementation has not been independently audited.")
+
+	activeBackend = &constantineBackend{}
+}

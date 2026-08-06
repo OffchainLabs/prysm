@@ -2401,6 +2401,19 @@ def prysm_deps():
         version = "v0.0.0-20140419014527-cca7078d478f",
     )
     go_repository(
+        name = "com_github_nalepae_go_constantine",
+        # The cgo directives in this module use ${SRCDIR}, which gazelle copies
+        # verbatim into copts where it does not resolve. The patch supplies hand
+        # written build files instead, which keeps the directives in the sources
+        # for cgo to expand itself.
+        build_file_generation = "off",
+        importpath = "github.com/nalepae/go-constantine",
+        patch_args = ["-p1"],
+        patches = ["//third_party:com_github_nalepae_go_constantine.patch"],
+        sum = "h1:W1ywAvKHLp2xjYsmXXOytIFzO9KxkqwqggI3Z0U1U7c=",
+        version = "v0.0.0-20260806095448-a4e15830bfc4",
+    )
+    go_repository(
         name = "com_github_naoina_go_stringutil",
         importpath = "github.com/naoina/go-stringutil",
         sum = "h1:rCUeRUHjBjGTSHl0VC00jUPLz8/F9dDzYI70Hzifhks=",

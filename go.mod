@@ -56,6 +56,7 @@ require (
 	github.com/minio/sha256-simd v1.0.1
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 	github.com/multiformats/go-multiaddr v0.16.0
+	github.com/nalepae/go-constantine v0.0.0-20260806095448-a4e15830bfc4
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/paulbellamy/ratecounter v0.2.0
 	github.com/pborman/uuid v1.2.1

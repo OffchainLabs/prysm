@@ -50,6 +50,7 @@ type Flags struct {
 	DisableDutiesV2                     bool // DisableDutiesV2 sets validator client to use the get Duties endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
 	EnableStateDiff                     bool // EnableStateDiff enables the experimental state diff feature for the beacon node.
+	ConstantineKZG                      bool // ConstantineKZG uses the Constantine library for KZG operations.
 	EnableProgressiveSSZ                bool // EnableProgressiveSSZ enables experimental progressive SSZ merkleization for converted consensus types.
 	ReorgLatePayloads                   bool // ReorgLatePayloads enables reorging late payloads in the beacon node.
 
@@ -303,6 +304,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.IsSet(trackEquivocations.Name) && ctx.Bool(trackEquivocations.Name) {
 		logEnabled(trackEquivocations)
 		cfg.TrackEquivocations = true
+	}
+	if ctx.IsSet(constantineKZG.Name) && ctx.Bool(constantineKZG.Name) {
+		logEnabled(constantineKZG)
+		cfg.ConstantineKZG = true
 	}
 	if ctx.IsSet(EnableStateDiff.Name) {
 		logEnabled(EnableStateDiff)

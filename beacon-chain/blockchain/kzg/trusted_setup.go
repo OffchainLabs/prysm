@@ -37,6 +37,8 @@ func Start() error {
 		return errors.Wrap(err, "could not initialize go-kzg context")
 	}
 
+	selectBackend()
+
 	if err := activeBackend.LoadTrustedSetup(trustedSetup); err != nil {
 		return fmt.Errorf("load trusted setup: %w", err)
 	}
