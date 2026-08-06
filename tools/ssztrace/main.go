@@ -109,7 +109,7 @@ func newObject(name string) (traceable, error) {
 }
 
 func fixtureRoot(caseDir string) (string, bool) {
-	b, err := os.ReadFile(filepath.Join(caseDir, "roots.yaml"))
+	b, err := os.ReadFile(filepath.Join(caseDir, "roots.yaml")) // #nosec G304 -- debugging tool that reads outputs from test toolchain / other debugging tools
 	if err != nil {
 		return "", false
 	}
@@ -141,7 +141,7 @@ func main() {
 		fatal(err)
 	}
 
-	compressed, err := os.ReadFile(filepath.Join(caseDir, "serialized.ssz_snappy"))
+	compressed, err := os.ReadFile(filepath.Join(caseDir, "serialized.ssz_snappy")) // #nosec G304 -- debugging tool that reads outputs from test toolchain / other debugging tools
 	if err != nil {
 		fatal(fmt.Errorf("read fixture: %w", err))
 	}
