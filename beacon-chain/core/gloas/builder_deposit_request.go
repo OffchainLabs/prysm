@@ -56,15 +56,19 @@ func ProcessBuilderDepositRequests(ctx context.Context, st state.BeaconState, re
 
 // processBuilderDepositRequest registers a new builder or tops up an existing one.
 //
-//	<spec fn="process_builder_deposit_request" fork="gloas" hash="c3ba5adf">
+//	<spec fn="process_builder_deposit_request" fork="gloas" hash="1d458f9c">
 //	def process_builder_deposit_request(state: BeaconState, request: BuilderDepositRequest) -> None:
+//	    # Ignore deposits with unexpected withdrawal credential prefixes
+//	    if not is_builder_withdrawal_credential(request.withdrawal_credentials):
+//	        return
+//
 //	    builder_pubkeys = [b.pubkey for b in state.builders]
 //	    if request.pubkey not in builder_pubkeys:
 //	        if is_valid_builder_deposit_signature(request):
 //	            add_builder_to_registry(
 //	                state,
 //	                request.pubkey,
-//	                uint8(request.withdrawal_credentials[0]),
+//	                PAYLOAD_BUILDER_VERSION,
 //	                ExecutionAddress(request.withdrawal_credentials[12:]),
 //	                request.amount,
 //	                state.slot,
@@ -73,13 +77,13 @@ func ProcessBuilderDepositRequests(ctx context.Context, st state.BeaconState, re
 //	        builder_index = BuilderIndex(builder_pubkeys.index(request.pubkey))
 //	        builder = state.builders[builder_index]
 //
-//	        # Increase balance by deposit amount
-//	        builder.balance += request.amount
-//
-//	        # If exited, reset the withdrawable epoch
-//	        if builder.withdrawable_epoch != FAR_FUTURE_EPOCH:
+//	        # If exited and swept, reset the withdrawable epoch
+//	        if builder.withdrawable_epoch != FAR_FUTURE_EPOCH and builder.balance == 0:
 //	            epoch = get_current_epoch(state)
 //	            builder.withdrawable_epoch = epoch + MIN_BUILDER_WITHDRAWABILITY_DELAY
+//
+//	        # Increase balance by deposit amount
+//	        builder.balance += request.amount
 //	</spec>
 func processBuilderDepositRequest(ctx context.Context, st state.BeaconState, request *enginev1.BuilderDepositRequest, status sigStatus) error {
 	if request == nil {
