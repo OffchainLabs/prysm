@@ -66,9 +66,6 @@ func UnmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.Deposit_Data{}
 	case "Eth1Data":
 		obj = &ethpb.Eth1Data{}
-	case "Eth1Block":
-		t.Skip("Unused type")
-		return nil, nil
 	case "Fork":
 		obj = &ethpb.Fork{}
 	case "ForkData":
@@ -153,10 +150,8 @@ func UnmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.DataColumnSidecar{}
 	case "DataColumnsByRootIdentifier":
 		obj = &ethpb.DataColumnsByRootIdentifier{}
-	case "MatrixEntry":
+	case "MatrixEntry", "Eth1Block", "PartialDataColumnHeader", "PartialDataColumnPartsMetadata", "PartialDataColumnSidecar", "PartialDataColumnGroupID":
 		t.Skip("Unused type")
-	case "PartialDataColumnHeader", "PartialDataColumnPartsMetadata", "PartialDataColumnSidecar":
-		t.Skip("Not yet implemented")
 	default:
 		return nil, errors.New("type not found")
 	}
