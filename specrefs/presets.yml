@@ -8,20 +8,6 @@
     BASE_REWARD_FACTOR: uint64 = 64
     </spec>
 
-- name: BUILDER_PENDING_WITHDRAWALS_LIMIT#gloas
-  sources: []
-  spec: |
-    <spec preset_var="BUILDER_PENDING_WITHDRAWALS_LIMIT" fork="gloas" hash="40b31377">
-    BUILDER_PENDING_WITHDRAWALS_LIMIT: uint64 = 1048576
-    </spec>
-
-- name: BUILDER_REGISTRY_LIMIT#gloas
-  sources: []
-  spec: |
-    <spec preset_var="BUILDER_REGISTRY_LIMIT" fork="gloas" hash="e951ff73">
-    BUILDER_REGISTRY_LIMIT: uint64 = 1099511627776
-    </spec>
-
 - name: BYTES_PER_LOGS_BLOOM#bellatrix
   sources:
     - file: config/params/config.go
@@ -225,8 +211,8 @@
       search: MaxAttestations\s+.*yaml:"MAX_ATTESTATIONS"
       regex: true
   spec: |
-    <spec preset_var="MAX_ATTESTATIONS" fork="phase0" hash="afe55d3f">
-    MAX_ATTESTATIONS = 128
+    <spec preset_var="MAX_ATTESTATIONS" fork="phase0" hash="8ee7f084">
+    MAX_ATTESTATIONS: uint64 = 128
     </spec>
 
 - name: MAX_ATTESTATIONS_ELECTRA#electra
@@ -235,8 +221,8 @@
       search: MaxAttestationsElectra\s+.*yaml:"MAX_ATTESTATIONS_ELECTRA"
       regex: true
   spec: |
-    <spec preset_var="MAX_ATTESTATIONS_ELECTRA" fork="electra" hash="4dbaf2dd">
-    MAX_ATTESTATIONS_ELECTRA = 8
+    <spec preset_var="MAX_ATTESTATIONS_ELECTRA" fork="electra" hash="f5ced7c7">
+    MAX_ATTESTATIONS_ELECTRA: uint64 = 8
     </spec>
 
 - name: MAX_ATTESTER_SLASHINGS#phase0
@@ -245,8 +231,8 @@
       search: MaxAttesterSlashings\s+.*yaml:"MAX_ATTESTER_SLASHINGS"
       regex: true
   spec: |
-    <spec preset_var="MAX_ATTESTER_SLASHINGS" fork="phase0" hash="c1416d33">
-    MAX_ATTESTER_SLASHINGS = 2
+    <spec preset_var="MAX_ATTESTER_SLASHINGS" fork="phase0" hash="a026f81c">
+    MAX_ATTESTER_SLASHINGS: uint64 = 2
     </spec>
 
 - name: MAX_ATTESTER_SLASHINGS_ELECTRA#electra
@@ -255,8 +241,15 @@
       search: MaxAttesterSlashingsElectra\s+.*yaml:"MAX_ATTESTER_SLASHINGS_ELECTRA"
       regex: true
   spec: |
-    <spec preset_var="MAX_ATTESTER_SLASHINGS_ELECTRA" fork="electra" hash="fc70c923">
-    MAX_ATTESTER_SLASHINGS_ELECTRA = 1
+    <spec preset_var="MAX_ATTESTER_SLASHINGS_ELECTRA" fork="electra" hash="cb7ff972">
+    MAX_ATTESTER_SLASHINGS_ELECTRA: uint64 = 1
+    </spec>
+
+- name: MAX_ATTESTER_SLASHING_SIZE#gloas
+  sources: []
+  spec: |
+    <spec preset_var="MAX_ATTESTER_SLASHING_SIZE" fork="gloas" hash="35df66c7">
+    MAX_ATTESTER_SLASHING_SIZE: uint64 = 2097616
     </spec>
 
 - name: MAX_BLOB_COMMITMENTS_PER_BLOCK#deneb
@@ -275,22 +268,22 @@
       search: MaxBlsToExecutionChanges\s+.*yaml:"MAX_BLS_TO_EXECUTION_CHANGES"
       regex: true
   spec: |
-    <spec preset_var="MAX_BLS_TO_EXECUTION_CHANGES" fork="capella" hash="1eee2f2f">
-    MAX_BLS_TO_EXECUTION_CHANGES = 16
+    <spec preset_var="MAX_BLS_TO_EXECUTION_CHANGES" fork="capella" hash="a7430c88">
+    MAX_BLS_TO_EXECUTION_CHANGES: uint64 = 16
     </spec>
 
 - name: MAX_BUILDERS_PER_WITHDRAWALS_SWEEP#gloas
   sources: []
   spec: |
-    <spec preset_var="MAX_BUILDERS_PER_WITHDRAWALS_SWEEP" fork="gloas" hash="1556b314">
-    MAX_BUILDERS_PER_WITHDRAWALS_SWEEP = 16384
+    <spec preset_var="MAX_BUILDERS_PER_WITHDRAWALS_SWEEP" fork="gloas" hash="ab42a68a">
+    MAX_BUILDERS_PER_WITHDRAWALS_SWEEP: uint64 = 16384
     </spec>
 
 - name: MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD#gloas
   sources: []
   spec: |
-    <spec preset_var="MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD" fork="gloas" hash="81a08140">
-    MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD: uint64 = 256
+    <spec preset_var="MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD" fork="gloas" hash="fdb8276d">
+    MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD: uint64 = 64
     </spec>
 
 - name: MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD#gloas
@@ -340,14 +333,21 @@
     MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD: uint64 = 2
     </spec>
 
+- name: MAX_DATA_COLUMN_SIDECAR_SIZE#gloas
+  sources: []
+  spec: |
+    <spec preset_var="MAX_DATA_COLUMN_SIDECAR_SIZE" fork="gloas" hash="ecb9550a">
+    MAX_DATA_COLUMN_SIDECAR_SIZE: uint64 = 8585272
+    </spec>
+
 - name: MAX_DEPOSITS#phase0
   sources:
     - file: config/params/config.go
       search: MaxDeposits\s+.*yaml:"MAX_DEPOSITS"
       regex: true
   spec: |
-    <spec preset_var="MAX_DEPOSITS" fork="phase0" hash="542a0f96">
-    MAX_DEPOSITS = 16
+    <spec preset_var="MAX_DEPOSITS" fork="phase0" hash="8c07fc09">
+    MAX_DEPOSITS: uint64 = 16
     </spec>
 
 - name: MAX_DEPOSIT_REQUESTS_PER_PAYLOAD#electra
@@ -386,15 +386,22 @@
       search: MaxExtraDataBytes\s+.*yaml:"MAX_EXTRA_DATA_BYTES"
       regex: true
   spec: |
-    <spec preset_var="MAX_EXTRA_DATA_BYTES" fork="bellatrix" hash="9d278744">
-    MAX_EXTRA_DATA_BYTES = 32
+    <spec preset_var="MAX_EXTRA_DATA_BYTES" fork="bellatrix" hash="a37eed77">
+    MAX_EXTRA_DATA_BYTES: uint64 = 32
+    </spec>
+
+- name: MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE#gloas
+  sources: []
+  spec: |
+    <spec preset_var="MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE" fork="gloas" hash="c2570655">
+    MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE: uint64 = 8585741
     </spec>
 
 - name: MAX_PAYLOAD_ATTESTATIONS#gloas
   sources: []
   spec: |
-    <spec preset_var="MAX_PAYLOAD_ATTESTATIONS" fork="gloas" hash="fc24e7ea">
-    MAX_PAYLOAD_ATTESTATIONS = 4
+    <spec preset_var="MAX_PAYLOAD_ATTESTATIONS" fork="gloas" hash="c91cfe07">
+    MAX_PAYLOAD_ATTESTATIONS: uint64 = 4
     </spec>
 
 - name: MAX_PENDING_DEPOSITS_PER_EPOCH#electra
@@ -423,8 +430,8 @@
       search: MaxProposerSlashings\s+.*yaml:"MAX_PROPOSER_SLASHINGS"
       regex: true
   spec: |
-    <spec preset_var="MAX_PROPOSER_SLASHINGS" fork="phase0" hash="87bfd9ed">
-    MAX_PROPOSER_SLASHINGS = 16
+    <spec preset_var="MAX_PROPOSER_SLASHINGS" fork="phase0" hash="26182947">
+    MAX_PROPOSER_SLASHINGS: uint64 = 16
     </spec>
 
 - name: MAX_SEED_LOOKAHEAD#phase0
@@ -435,6 +442,34 @@
   spec: |
     <spec preset_var="MAX_SEED_LOOKAHEAD" fork="phase0" hash="b7ae8929">
     MAX_SEED_LOOKAHEAD: uint64 = 4
+    </spec>
+
+- name: MAX_SIGNED_AGGREGATE_AND_PROOF_SIZE#gloas
+  sources: []
+  spec: |
+    <spec preset_var="MAX_SIGNED_AGGREGATE_AND_PROOF_SIZE" fork="gloas" hash="9dd832f2">
+    MAX_SIGNED_AGGREGATE_AND_PROOF_SIZE: uint64 = 16829
+    </spec>
+
+- name: MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE#gloas
+  sources: []
+  spec: |
+    <spec preset_var="MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE" fork="gloas" hash="d78deb32">
+    MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE: uint64 = 196932
+    </spec>
+
+- name: MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE_HEZE#heze
+  sources: []
+  spec: |
+    <spec preset_var="MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE_HEZE" fork="heze" hash="718df6de">
+    MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE_HEZE: uint64 = 196934
+    </spec>
+
+- name: MAX_SIGNED_INCLUSION_LIST_SIZE#heze
+  sources: []
+  spec: |
+    <spec preset_var="MAX_SIGNED_INCLUSION_LIST_SIZE" fork="heze" hash="917f47cb">
+    MAX_SIGNED_INCLUSION_LIST_SIZE: uint64 = 8348
     </spec>
 
 - name: MAX_TRANSACTIONS_PER_PAYLOAD#bellatrix
@@ -473,8 +508,8 @@
       search: MaxValidatorsPerWithdrawalsSweep\s+.*yaml:"MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP"
       regex: true
   spec: |
-    <spec preset_var="MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP" fork="capella" hash="ac61940c">
-    MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP = 16384
+    <spec preset_var="MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP" fork="capella" hash="1becfc15">
+    MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP: uint64 = 16384
     </spec>
 
 - name: MAX_VOLUNTARY_EXITS#phase0
@@ -483,8 +518,8 @@
       search: MaxVoluntaryExits\s+.*yaml:"MAX_VOLUNTARY_EXITS"
       regex: true
   spec: |
-    <spec preset_var="MAX_VOLUNTARY_EXITS" fork="phase0" hash="a0a7ac5e">
-    MAX_VOLUNTARY_EXITS = 16
+    <spec preset_var="MAX_VOLUNTARY_EXITS" fork="phase0" hash="8fdacd5d">
+    MAX_VOLUNTARY_EXITS: uint64 = 16
     </spec>
 
 - name: MAX_WITHDRAWALS_PER_PAYLOAD#capella
@@ -613,8 +648,8 @@
       search: NumberOfColumns\s*=
       regex: true
   spec: |
-    <spec preset_var="NUMBER_OF_COLUMNS" fork="fulu" hash="f6441e62">
-    NUMBER_OF_COLUMNS: uint64 = 128
+    <spec preset_var="NUMBER_OF_COLUMNS" fork="fulu" hash="8b6dad29">
+    NUMBER_OF_COLUMNS = 128
     </spec>
 
 - name: PENDING_CONSOLIDATIONS_LIMIT#electra
