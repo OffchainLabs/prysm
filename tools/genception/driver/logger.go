@@ -17,7 +17,7 @@ var Logger = log
 // driver construction rather than from init() so that importing the package has no
 // filesystem side effects.
 func configureLog(env environment) {
-	file, err := os.OpenFile(env.logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	file, err := os.OpenFile(env.logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		log.Info("Failed to log to file, using default stderr")
 		return

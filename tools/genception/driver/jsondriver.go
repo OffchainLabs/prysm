@@ -51,7 +51,7 @@ func NewJSONDriver() (*JSONDriver, error) {
 }
 
 func (d *JSONDriver) load(path string) error {
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- trusted input at build time from our own Bazel machinery
 	if err != nil {
 		return fmt.Errorf("unable to open package JSON file: %w", err)
 	}

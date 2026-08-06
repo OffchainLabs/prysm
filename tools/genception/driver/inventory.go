@@ -10,7 +10,7 @@ import (
 // This list is serialized as a []string paths, relative to the bazel exec root.
 func loadJsonListing(env environment) ([]string, error) {
 	path := env.inventoryIndexPath
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) // #nosec G304 -- path comes from the GOPACKAGESDRIVER env, set by our own Bazel rule
 	if err != nil {
 		return nil, err
 	}
