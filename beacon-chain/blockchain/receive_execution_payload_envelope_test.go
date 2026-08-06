@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
@@ -20,6 +21,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
@@ -245,6 +247,39 @@ func TestReceiveExecutionPayloadEnvelope_EmitsHeadV2Event(t *testing.T) {
 		require.Equal(t, 1, len(headV2))
 		require.Equal(t, blockRoot, headV2[0].Block)
 		require.Equal(t, "full", headV2[0].PayloadStatus.String())
+	})
+}
+
+func TestDataAvailable(t *testing.T) {
+	saveGloasBlock := func(t *testing.T, service *Service, commitments [][]byte) [32]byte {
+		b := util.NewBeaconBlockGloas()
+		b.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = commitments
+		sb, err := blocks.NewSignedBeaconBlock(b)
+		require.NoError(t, err)
+		root, err := sb.Block().HashTreeRoot()
+		require.NoError(t, err)
+		require.NoError(t, service.cfg.BeaconDB.SaveBlock(t.Context(), sb))
+		return root
+	}
+
+	t.Run("unknown block returns error", func(t *testing.T) {
+		service, _ := minimalTestService(t, WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)))
+		_, err := service.DataAvailable(t.Context(), [32]byte{'a'}, 0)
+		require.NotNil(t, err)
+	})
+	t.Run("no blob commitments", func(t *testing.T) {
+		service, _ := minimalTestService(t, WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)))
+		root := saveGloasBlock(t, service, nil)
+		available, err := service.DataAvailable(t.Context(), root, 0)
+		require.NoError(t, err)
+		require.Equal(t, true, available)
+	})
+	t.Run("commitments with no columns stored", func(t *testing.T) {
+		service, _ := minimalTestService(t, WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)))
+		root := saveGloasBlock(t, service, [][]byte{bytesutil.PadTo([]byte{0x01}, 48)})
+		available, err := service.DataAvailable(t.Context(), root, 0)
+		require.NoError(t, err)
+		require.Equal(t, false, available)
 	})
 }
 
