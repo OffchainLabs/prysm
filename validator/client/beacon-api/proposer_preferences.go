@@ -30,7 +30,7 @@ func (c *beaconApiValidatorClient) submitSignedProposerPreferences(ctx context.C
 	if err != nil {
 		return err
 	}
-	if _, _, err = c.handler.PostSSZ(ctx, proposerPreferencesEndpoint, headers, bytes.NewBuffer(sszBody)); err == nil {
+	if err = c.handler.PostSSZ(ctx, proposerPreferencesEndpoint, headers, bytes.NewBuffer(sszBody)); err == nil {
 		return nil
 	}
 	errJson := &httputil.DefaultJsonError{}

@@ -41,7 +41,7 @@ func TestPostSSZ_NonJSONErrorBodyIsTyped(t *testing.T) {
 	defer srv.Close()
 
 	c := newHandler(http.Client{}, srv.URL)
-	_, _, err := c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
+	err := c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
 	require.NotNil(t, err)
 	errJson := &httputil.DefaultJsonError{}
 	require.Equal(t, true, errors.As(err, &errJson), "expected DefaultJsonError, got %T", err)
@@ -64,7 +64,8 @@ func TestGetSSZ_NonJSONErrorBodyIsTyped(t *testing.T) {
 
 // A JSON error body is decoded into the typed error's fields.
 func TestPostSSZ_JSONErrorBodyIsDecoded(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
 		w.Header().Set("Content-Type", api.JsonMediaType)
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"code":400,"message":"bad request"}`))
@@ -72,7 +73,7 @@ func TestPostSSZ_JSONErrorBodyIsDecoded(t *testing.T) {
 	defer srv.Close()
 
 	c := newHandler(http.Client{}, srv.URL)
-	_, _, err := c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
+	err := c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
 	require.NotNil(t, err)
 	errJson := &httputil.DefaultJsonError{}
 	require.Equal(t, true, errors.As(err, &errJson), "expected DefaultJsonError, got %T", err)
