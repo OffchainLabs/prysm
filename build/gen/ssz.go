@@ -65,32 +65,38 @@ func genMethodical(t methodicalTarget, disableProgressive bool) error {
 	out := filepath.Join(t.pkg, t.out)
 	fmt.Printf("generating %s\n", out)
 
-	mainnet, err := methodicalOne(t, disableProgressive, nil)
+	// methodical stamps the //go:build header itself (--go-build-constraint), so
+	// both this harness and the Bazel ssz_methodical rule produce byte-identical
+	// files. The mainnet variant loads the default sources and is constrained to
+	// !minimal; the minimal variant loads -tags minimal sources and is
+	// constrained to minimal.
+	mainnet, err := methodicalOne(t, disableProgressive, nil, "!minimal")
 	if err != nil {
 		return fmt.Errorf("mainnet: %w", err)
 	}
 
-	minimal, err := methodicalOne(t, disableProgressive, []string{"minimal"})
+	minimal, err := methodicalOne(t, disableProgressive, []string{"minimal"}, "minimal")
 	if err != nil {
 		return fmt.Errorf("minimal: %w", err)
 	}
 
-	if err := os.WriteFile(out, []byte("//go:build !minimal\n\n"+mainnet), 0o600); err != nil {
+	if err := os.WriteFile(out, []byte(mainnet), 0o600); err != nil {
 		return fmt.Errorf("writeFile: %w", err)
 	}
 
 	minOut := filepath.Join(t.pkg, strings.TrimSuffix(t.out, ".ssz.go")+".minimal.ssz.go")
-	if err := os.WriteFile(minOut, []byte("//go:build minimal\n\n"+minimal), 0o600); err != nil {
+	if err := os.WriteFile(minOut, []byte(minimal), 0o600); err != nil {
 		return fmt.Errorf("writeFile: %w", err)
 	}
 
 	return nil
 }
 
-// methodicalOne runs `go tool ssz gen` for one target and build-tag set,
-// returning the generated source. buildTags selects which tag-gated .pb.go
-// variant methodical's package loader sees (nil for the default/mainnet build).
-func methodicalOne(t methodicalTarget, disableProgressive bool, buildTags []string) (string, error) {
+// methodicalOne runs `go tool ssz gen` for one target and returns the generated
+// source. buildTags selects which tag-gated .pb.go variant methodical's package
+// loader sees (nil for the default/mainnet build); buildConstraint is the
+// //go:build header methodical stamps on the output ("" for none).
+func methodicalOne(t methodicalTarget, disableProgressive bool, buildTags []string, buildConstraint string) (string, error) {
 	tmp, err := os.CreateTemp("", "methodical-*.go")
 	if err != nil {
 		return "", fmt.Errorf("createTemp: %w", err)
@@ -116,6 +122,9 @@ func methodicalOne(t methodicalTarget, disableProgressive bool, buildTags []stri
 	}
 	if len(buildTags) > 0 {
 		args = append(args, "--build-tags="+strings.Join(buildTags, ","))
+	}
+	if buildConstraint != "" {
+		args = append(args, "--go-build-constraint="+buildConstraint)
 	}
 
 	if err := sh("go", args...); err != nil {
