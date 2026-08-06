@@ -32,7 +32,7 @@ func (r *recorder) dir() string {
 }
 
 func (r *recorder) mkdir() error {
-	return os.MkdirAll(r.dir(), 0755)
+	return os.MkdirAll(r.dir(), 0750)
 }
 
 func (r *recorder) recordRequest(args []string, req *packages.DriverRequest) error {
