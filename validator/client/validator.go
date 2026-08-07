@@ -1377,7 +1377,13 @@ type builderTarget struct {
 // builderTargetsForKey resolves the enabled builder list for pk; entries override
 // config-level fallbacks. TODO(gloas): minBid/boost/pubkey ride the #630 wire.
 func (v *validator) builderTargetsForKey(pk pubkey) []builderTarget {
-	bc := v.ProposerSettings().EffectiveBuilderConfig(pk)
+	ps := v.ProposerSettings()
+	// Builder entries imply v2: the API upgrades on write and v2 files declare it,
+	// so v1 settings have nothing legitimate to warm.
+	if ps == nil || ps.Version != proposer.SchemaV2 {
+		return nil
+	}
+	bc := ps.EffectiveBuilderConfig(pk)
 	if !bc.IsEnabled() {
 		return nil
 	}
@@ -1441,20 +1447,30 @@ func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km key
 		if len(targets) == 0 {
 			continue
 		}
+		// The v1 preference wire identifies a builder only by url, so same-url
+		// entries collapse to the safest (lowest) payment ceiling for now.
+		ceilings := make(map[string]uint64, len(targets))
+		for _, t := range targets {
+			if cur, ok := ceilings[t.url]; !ok || t.maxPayment < cur {
+				ceilings[t.url] = t.maxPayment
+			}
+		}
 		for _, proposalSlot := range duty.ProposerSlots {
 			if proposalSlot <= slot {
 				continue
 			}
-			for _, t := range targets {
-				signed, err := v.signRequestAuthCached(ctx, km, pk, t.url, proposalSlot)
+			for url, maxPayment := range ceilings {
+				signed, err := v.signRequestAuthCached(ctx, km, pk, url, proposalSlot)
 				if err != nil {
 					log.WithError(err).Warn("Failed to sign builder request auth")
 					continue
 				}
+				// TODO(gloas): only maxPayment fits BuilderPreferencesV1; per-entry
+				// authData, minBid, boostFactor and pubkey ship with the #630 inline wire.
 				reqs = append(reqs, &ethpb.SubmitBuilderPreferencesRequest{
 					ValidatorPubkey: pk[:],
 					Request: &ethpb.BuilderPreferencesRequestV1{
-						Preferences: &ethpb.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(t.maxPayment)},
+						Preferences: &ethpb.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(maxPayment)},
 						Auth:        signed,
 					},
 				})
@@ -1518,7 +1534,10 @@ func (v *validator) buildSignedRegReqs(
 	defer span.End()
 
 	var signedValRegRequests []*ethpb.SignedValidatorRegistrationV1
-	if v.ProposerSettings() == nil {
+	// One snapshot for the whole batch: concurrent keymanager writes swap the
+	// settings pointer, and mixing objects would tear version vs content.
+	ps := v.ProposerSettings()
+	if ps == nil {
 		return signedValRegRequests
 	}
 	// if the timestamp is pre-genesis, don't create registrations
@@ -1526,9 +1545,8 @@ func (v *validator) buildSignedRegReqs(
 		return signedValRegRequests
 	}
 
-	isV2 := v.ProposerSettings().Version == proposer.SchemaV2
-	if v.ProposerSettings().DefaultConfig != nil && v.ProposerSettings().DefaultConfig.FeeRecipientConfig == nil && v.ProposerSettings().DefaultConfig.BuilderConfig != nil {
-		if isV2 {
+	if ps.DefaultConfig != nil && ps.DefaultConfig.FeeRecipientConfig == nil && ps.DefaultConfig.BuilderConfig != nil {
+		if ps.Version == proposer.SchemaV2 {
 			log.Warn("Default builder config has no default fee recipient; only keys with their own fee recipient can register")
 		} else {
 			log.Warn("Builder is `enabled` in default config but will be ignored because no fee recipient was provided!")
@@ -1542,58 +1560,14 @@ func (v *validator) buildSignedRegReqs(
 			continue
 		}
 
-		var enabled bool
-		feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
-		gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
-
-		if isV2 {
-			hasFeeRecipient := false
-			if defaultConfig := v.ProposerSettings().DefaultConfig; defaultConfig != nil && defaultConfig.FeeRecipientConfig != nil {
-				feeRecipient = defaultConfig.FeeRecipientConfig.FeeRecipient
-				hasFeeRecipient = true
-			}
-			if config, ok := v.ProposerSettings().ProposeConfig[k]; ok && config != nil && config.FeeRecipientConfig != nil {
-				feeRecipient = config.FeeRecipientConfig.FeeRecipient
-				hasFeeRecipient = true
-			}
-			// Field-level resolution: per-key builder fields inherit from the default;
-			// registration still requires a fee recipient configured at some level.
-			bc := v.ProposerSettings().EffectiveBuilderConfig(k)
-			enabled = bc.IsEnabled() && hasFeeRecipient
-			if bc.GasLimit != 0 {
-				gasLimit = uint64(bc.GasLimit)
-			}
-		} else {
-			// V1 settings keep the pre-v2 object-level semantics so existing
-			// registrations are unchanged; inheritance starts at SchemaV2.
-			if defaultConfig := v.ProposerSettings().DefaultConfig; defaultConfig != nil && defaultConfig.FeeRecipientConfig != nil {
-				feeRecipient = defaultConfig.FeeRecipientConfig.FeeRecipient
-				if defaultConfig.BuilderConfig.IsEnabled() {
-					gasLimit = uint64(defaultConfig.BuilderConfig.GasLimit)
-					enabled = true
-				}
-			}
-			if v.ProposerSettings().ProposeConfig != nil {
-				if config, ok := v.ProposerSettings().ProposeConfig[k]; ok && config != nil && config.FeeRecipientConfig != nil {
-					feeRecipient = config.FeeRecipientConfig.FeeRecipient
-					if bc := config.BuilderConfig; bc != nil {
-						if bc.IsEnabled() {
-							gasLimit = uint64(bc.GasLimit)
-							enabled = true
-						} else {
-							enabled = false
-						}
-					}
-				}
-			}
-		}
+		feeRecipient, gasLimit, enabled := ps.RegistrationFor(k)
 		if !enabled {
 			continue
 		}
 
 		req := &ethpb.ValidatorRegistrationV1{
 			FeeRecipient: feeRecipient[:],
-			GasLimit:     gasLimit,
+			GasLimit:     uint64(gasLimit),
 			Timestamp:    uint64(time.Now().UTC().Unix()),
 			Pubkey:       activePubkeys[i][:],
 		}

@@ -1,11 +1,7 @@
 package loader
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
@@ -135,13 +131,9 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 			return nil, err
 		}
 		dbSettings = dbps.ToConsensus()
-		log.Debugf("DB loaded proposer settings: %s", func() string {
-			b, err := json.Marshal(dbSettings)
-			if err != nil {
-				return err.Error()
-			}
-			return string(b)
-		}())
+		log.WithField("version", dbSettings.Version).
+			WithField("proposerKeys", len(dbSettings.ProposerConfig)).
+			Debug("Loaded proposer settings from DB")
 	}
 
 	// start to process based on load method
@@ -222,9 +214,6 @@ func (psl *SettingsLoader) loadFromFile(cliCtx *cli.Context, dbSettings *validat
 	if settingFromFile == nil {
 		return nil, errors.Errorf("proposer settings is empty after unmarshalling from file specified by %s flag", flags.ProposerSettingsFlag.Name)
 	}
-	if raw, err := os.ReadFile(filepath.Clean(cliCtx.String(flags.ProposerSettingsFlag.Name))); err == nil && bytes.Contains(raw, []byte("relays")) {
-		log.Warn("The relays field in proposer settings is no longer supported and was ignored; configure builders instead")
-	}
 	log.WithField(flags.ProposerSettingsFlag.Name, cliCtx.String(flags.ProposerSettingsFlag.Name)).Info("Proposer settings loaded from file")
 	return psl.processProposerSettings(settingFromFile, dbSettings), nil
 }
@@ -303,9 +292,6 @@ func promotePayloadToV2(p *validatorpb.ProposerSettingsPayload) {
 		}
 		if opt.GasLimit == 0 {
 			opt.GasLimit = opt.Builder.GasLimit
-		}
-		if opt.Builder.MaxExecutionPayment != nil && *opt.Builder.MaxExecutionPayment == 0 {
-			opt.Builder.MaxExecutionPayment = nil
 		}
 	}
 	promote(p.DefaultConfig)

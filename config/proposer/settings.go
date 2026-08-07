@@ -63,7 +63,6 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 		d.GasLimit = ps.DefaultConfig.GasLimit
 		settings.DefaultConfig = d
 	}
-	settings.normalizeLegacyPresence()
 	settings.dedupBuilders()
 	return settings, nil
 }
@@ -92,27 +91,6 @@ func (ps *Settings) dedupBuilders() {
 	fix(ps.DefaultConfig)
 	for _, opt := range ps.ProposeConfig {
 		fix(opt)
-	}
-}
-
-// v1 payloads predate presence tracking: wire-absent enabled meant disabled, and
-// the filesystem backend persisted a spurious explicit 0 max execution payment.
-func (ps *Settings) normalizeLegacyPresence() {
-	if ps == nil || ps.isV2() {
-		return
-	}
-	normalize := func(opt *Option) {
-		if opt == nil || opt.BuilderConfig == nil {
-			return
-		}
-		bc := opt.BuilderConfig
-		if bc.MaxExecutionPayment != nil && *bc.MaxExecutionPayment == 0 {
-			bc.MaxExecutionPayment = nil
-		}
-	}
-	normalize(ps.DefaultConfig)
-	for _, opt := range ps.ProposeConfig {
-		normalize(opt)
 	}
 }
 
@@ -176,6 +154,69 @@ func (ps *Settings) EffectiveBuilderConfig(key [fieldparams.BLSPubkeyLength]byte
 		perKey = opt.BuilderConfig
 	}
 	return effectiveBuilderConfig(perKey, def)
+}
+
+// RegistrationFor resolves pubkey's validator registration: fee recipient, gas
+// limit, and whether to register with the builder at all.
+func (ps *Settings) RegistrationFor(pubkey [fieldparams.BLSPubkeyLength]byte) (common.Address, validator.Uint64, bool) {
+	feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
+	gasLimit := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+	if ps == nil {
+		return feeRecipient, gasLimit, false
+	}
+	if ps.isV2() {
+		hasFeeRecipient := false
+		if ps.DefaultConfig != nil && ps.DefaultConfig.FeeRecipientConfig != nil {
+			feeRecipient = ps.DefaultConfig.FeeRecipientConfig.FeeRecipient
+			hasFeeRecipient = true
+		}
+		if opt, ok := ps.ProposeConfig[pubkey]; ok && opt != nil && opt.FeeRecipientConfig != nil {
+			feeRecipient = opt.FeeRecipientConfig.FeeRecipient
+			hasFeeRecipient = true
+		}
+		// Per-key builder fields inherit from the default, but registration still
+		// requires a fee recipient configured at some level.
+		bc := ps.EffectiveBuilderConfig(pubkey)
+		// v2 gas limits live on the option (where UpgradeToV2 and the gas-limit
+		// API write them); the builder-level value is a legacy fallback.
+		switch {
+		case ps.ProposeConfig[pubkey] != nil && ps.ProposeConfig[pubkey].GasLimit != 0:
+			gasLimit = ps.ProposeConfig[pubkey].GasLimit
+		case ps.DefaultConfig != nil && ps.DefaultConfig.GasLimit != 0:
+			gasLimit = ps.DefaultConfig.GasLimit
+		case bc != nil && bc.GasLimit != 0:
+			gasLimit = bc.GasLimit
+		}
+		return feeRecipient, gasLimit, bc.IsEnabled() && hasFeeRecipient
+	}
+	// v1 keeps object-level semantics: a per-key builder config wins wholesale,
+	// so a disabled one opts the key out even under an enabled default.
+	enabled := false
+	if ps.DefaultConfig != nil && ps.DefaultConfig.FeeRecipientConfig != nil {
+		feeRecipient = ps.DefaultConfig.FeeRecipientConfig.FeeRecipient
+		if ps.DefaultConfig.BuilderConfig.IsEnabled() {
+			// Zero means unset (API-created configs): keep the chain default,
+			// matching the loader's reviewGasLimit normalization.
+			if ps.DefaultConfig.BuilderConfig.GasLimit != 0 {
+				gasLimit = ps.DefaultConfig.BuilderConfig.GasLimit
+			}
+			enabled = true
+		}
+	}
+	if opt, ok := ps.ProposeConfig[pubkey]; ok && opt != nil && opt.FeeRecipientConfig != nil {
+		feeRecipient = opt.FeeRecipientConfig.FeeRecipient
+		if bc := opt.BuilderConfig; bc != nil {
+			if bc.IsEnabled() {
+				if bc.GasLimit != 0 {
+					gasLimit = bc.GasLimit
+				}
+				enabled = true
+			} else {
+				enabled = false
+			}
+		}
+	}
+	return feeRecipient, gasLimit, enabled
 }
 
 // EntryIdentity is what makes a builder entry unique: its url compared as the
@@ -307,6 +348,9 @@ func BuilderConfigFromConsensus(from *validatorpb.BuilderConfig) *BuilderConfig 
 		for _, b := range from.Builders {
 			c.Builders = append(c.Builders, builderEntryFromConsensus(b))
 		}
+	} else if from.GetBuildersSet() {
+		// An explicitly configured empty list means "use no builders".
+		c.Builders = []*BuilderEntry{}
 	}
 	return c
 }
@@ -533,6 +577,9 @@ func (bc *BuilderConfig) ToConsensus() *validatorpb.BuilderConfig {
 	c.Proxy = cloneString(bc.Proxy)
 	c.MinBid = cloneUint64(bc.MinBid)
 	c.BuilderBoostFactor = cloneUint64(bc.BuilderBoostFactor)
+	// BuildersSet preserves nil-vs-empty across the wire: an explicit empty
+	// list is the "use no builders" marker and must survive persistence.
+	c.BuildersSet = bc.Builders != nil
 	if len(bc.Builders) > 0 {
 		c.Builders = make([]*validatorpb.BuilderEntry, 0, len(bc.Builders))
 		for _, b := range bc.Builders {
@@ -567,7 +614,24 @@ func (ps *Settings) WarnDeprecatedSchema() {
 	if ps == nil || ps.Version == SchemaV2 || !params.GloasEnabled() {
 		return
 	}
+	// Fee recipients and graffiti behave identically across schemas; only
+	// builder content gives the migration something to change.
+	if !ps.hasBuilderContent() {
+		return
+	}
 	log.Warn("Proposer settings use the deprecated v1 schema; they are upgraded automatically at the gloas fork. Please migrate your settings source to v2.")
+}
+
+func (ps *Settings) hasBuilderContent() bool {
+	if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil {
+		return true
+	}
+	for _, opt := range ps.ProposeConfig {
+		if opt != nil && opt.BuilderConfig != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // UpgradeToV2 migrates v1 settings in place: builder gas limits are promoted to
@@ -576,7 +640,6 @@ func (ps *Settings) UpgradeToV2() bool {
 	if ps == nil || ps.isV2() {
 		return false
 	}
-	ps.normalizeLegacyPresence()
 	migrate := func(opt *Option) {
 		if opt == nil || opt.BuilderConfig == nil {
 			return

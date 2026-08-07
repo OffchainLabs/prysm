@@ -141,9 +141,10 @@ func TestServer_SetBuilders(t *testing.T) {
 		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, `{"enabled":true,"builders":[{"url":"https://a.example"}]}`).Code)
 
 		got := srv.validatorService.ProposerSettings()
+		// Builder lists are v2 content: POST migrates the schema in place.
 		require.Equal(t, proposer.SchemaV2, got.Version)
 		opt := got.ProposeConfig[keys[0]]
-		// The version bumps and the builder gas limit migrates to the option.
+		// The builder gas limit is hoisted to the option by the upgrade.
 		require.Equal(t, validator.Uint64(999), opt.GasLimit)
 		require.Equal(t, 1, len(opt.BuilderConfig.Builders))
 	})
@@ -181,6 +182,8 @@ func TestServer_SetBuilders(t *testing.T) {
 			"invalid auth_data hex":  {`{"enabled":true,"builders":[{"url":"https://a","auth_data":"0xzz"}]}`, "auth_data is not valid hex"},
 			"auth_data too long":     {`{"enabled":true,"builders":[{"url":"https://a","auth_data":"0x` + strings.Repeat("ab", 4097) + `"}]}`, "auth_data exceeds 4096 bytes"},
 			"non-numeric min_bid":    {`{"enabled":true,"min_bid":"abc","builders":[]}`, "min_bid is not a valid uint64"},
+			"null entry":             {`{"enabled":true,"builders":[null]}`, "builders[0] is null"},
+			"non-numeric entry max":  {`{"enabled":true,"builders":[{"url":"https://a"},{"url":"https://b","max_execution_payment":"x"}]}`, "builders[1].max_execution_payment is not a valid uint64"},
 		}
 		for name, tc := range cases {
 			t.Run(name, func(t *testing.T) {

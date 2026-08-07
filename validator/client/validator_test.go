@@ -3568,11 +3568,12 @@ func TestValidator_buildSignedRegReqs_V2Settings(t *testing.T) {
 	assert.Equal(t, 2, len(actual))
 
 	assert.DeepEqual(t, feeRecipient1[:], actual[0].Message.FeeRecipient)
-	assert.Equal(t, uint64(7777), actual[0].Message.GasLimit, "per-key builder gas limit, not top-level")
+	// v2 gas limits live on the option, where UpgradeToV2 and the gas-limit API write them.
+	assert.Equal(t, uint64(1111), actual[0].Message.GasLimit, "per-key option gas limit wins")
 	assert.DeepEqual(t, pubkey1[:], actual[0].Message.Pubkey)
 
 	assert.DeepEqual(t, feeRecipient2[:], actual[1].Message.FeeRecipient)
-	assert.Equal(t, uint64(9999), actual[1].Message.GasLimit, "default builder gas limit, not top-level")
+	assert.Equal(t, uint64(2222), actual[1].Message.GasLimit, "per-key option gas limit wins over default builder")
 	assert.DeepEqual(t, pubkey2[:], actual[1].Message.Pubkey)
 }
 
@@ -3956,4 +3957,71 @@ func TestGetAttestationData_PostElectraConcurrentAccess(t *testing.T) {
 		require.NoError(t, errs[i])
 		require.DeepEqual(t, expectedData, results[i])
 	}
+}
+
+func TestBuilderTargetsForKey(t *testing.T) {
+	pk := pubkeyFromString(t, "0x111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111")
+	u64 := func(v uint64) *validatorType.Uint64 { u := validatorType.Uint64(v); return &u }
+	proposeConfig := map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+		pk: {BuilderConfig: &proposer.BuilderConfig{
+			Enabled:             true,
+			MaxExecutionPayment: u64(500),
+			Builders: []*proposer.BuilderEntry{
+				{URL: "https://a.example", MaxExecutionPayment: u64(100)},
+				{URL: "https://b.example"},
+			},
+		}},
+	}
+
+	t.Run("v1 settings produce no targets", func(t *testing.T) {
+		// Builder entries imply v2: the API upgrades on write and v2 files declare
+		// it, so entries on v1 settings are a malformed hybrid and stay inert.
+		v := &validator{proposerSettings: &proposer.Settings{Version: proposer.SchemaV1, ProposeConfig: proposeConfig}}
+		require.Equal(t, 0, len(v.builderTargetsForKey(pk)))
+	})
+
+	t.Run("disabled config produces no targets", func(t *testing.T) {
+		disabled := map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+			pk: {BuilderConfig: &proposer.BuilderConfig{Enabled: false, Builders: proposeConfig[pk].BuilderConfig.Builders}},
+		}
+		v := &validator{proposerSettings: &proposer.Settings{Version: proposer.SchemaV2, ProposeConfig: disabled}}
+		require.Equal(t, 0, len(v.builderTargetsForKey(pk)))
+	})
+
+	t.Run("entries resolve with config-level fallbacks", func(t *testing.T) {
+		v := &validator{proposerSettings: &proposer.Settings{Version: proposer.SchemaV2, ProposeConfig: proposeConfig}}
+		targets := v.builderTargetsForKey(pk)
+		require.Equal(t, 2, len(targets))
+		require.Equal(t, uint64(100), targets[0].maxPayment)
+		require.Equal(t, uint64(500), targets[1].maxPayment)
+	})
+}
+
+func TestWarmBuilderRequestAuthsForDuties_CollapsesSameURL(t *testing.T) {
+	v, _, validatorKey, finish := setup(t, false)
+	defer finish()
+	var pk [fieldparams.BLSPubkeyLength]byte
+	copy(pk[:], validatorKey.PublicKey().Marshal())
+	u64 := func(val uint64) *validatorType.Uint64 { u := validatorType.Uint64(val); return &u }
+	v.proposerSettings = &proposer.Settings{
+		Version: proposer.SchemaV2,
+		ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+			pk: {BuilderConfig: &proposer.BuilderConfig{
+				Enabled: true,
+				Builders: []*proposer.BuilderEntry{
+					{URL: "https://a.example", AuthData: []byte{1}, MaxExecutionPayment: u64(200)},
+					{URL: "https://a.example", AuthData: []byte{2}, MaxExecutionPayment: u64(100)},
+				},
+			}},
+		},
+	}
+	km, err := v.Keymanager()
+	require.NoError(t, err)
+	duties := func(yield func(pubkey, *ethpb.ValidatorDuty) bool) {
+		yield(pk, &ethpb.ValidatorDuty{PublicKey: pk[:], ProposerSlots: []primitives.Slot{10}})
+	}
+	reqs := v.warmBuilderRequestAuthsForDuties(t.Context(), km, 5, duties)
+	// Same-url entries collapse to one request carrying the safest (lowest) ceiling.
+	require.Equal(t, 1, len(reqs))
+	require.Equal(t, primitives.Gwei(100), reqs[0].Request.Preferences.MaxExecutionPayment)
 }

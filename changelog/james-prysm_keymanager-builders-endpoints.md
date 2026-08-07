@@ -13,4 +13,4 @@
 
 ### Removed
 
-- Remove the unused `relays` field from the builder config; a settings file that still contains it logs a warning and is otherwise unaffected.
+- Remove the unused `relays` field from the builder config; a settings file that still contains it is unaffected.

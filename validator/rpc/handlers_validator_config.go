@@ -78,8 +78,10 @@ func (s *Server) SetBuilders(w http.ResponseWriter, r *http.Request) {
 		settings = &proposer.Settings{Version: proposer.SchemaV2}
 	} else {
 		settings = settings.Clone()
+		// Builder lists are v2 content: writing them migrates v1 settings in place.
 		settings.UpgradeToV2()
 	}
+
 	if settings.ProposeConfig == nil {
 		settings.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
 	}

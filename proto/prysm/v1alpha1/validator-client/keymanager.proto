@@ -146,12 +146,15 @@ message BuilderConfig {
   // builders is the per-key builder list from the keymanager validator config
   // endpoint. Each entry may override the builder-level fallbacks below.
   repeated BuilderEntry builders = 5;
-  optional string proxy = 6;
-  optional uint64 min_bid = 7 [
+  // builders_set preserves an explicitly configured empty builders list
+  // ("use no builders"), which proto3 cannot distinguish from absent.
+  bool builders_set = 6;
+  optional string proxy = 7;
+  optional uint64 min_bid = 8 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
   ];
-  optional uint64 builder_boost_factor = 8 [
+  optional uint64 builder_boost_factor = 9 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
   ];

@@ -263,4 +263,13 @@ func TestStore_ProposerSettings_V2BuildersRoundTrip(t *testing.T) {
 
 	// The entry without auth_data must load back as nil, not empty-non-nil.
 	require.IsNil(t, got.ProposeConfig[key].BuilderConfig.Builders[1].AuthData)
+
+	// An explicit empty list (use no builders) must survive the round-trip
+	// rather than reloading as nil (inherit).
+	in.ProposeConfig[key].BuilderConfig.Builders = []*proposer.BuilderEntry{}
+	require.NoError(t, store.SaveProposerSettings(ctx, in))
+	got, err = store.ProposerSettings(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, got.ProposeConfig[key].BuilderConfig.Builders)
+	require.Equal(t, 0, len(got.ProposeConfig[key].BuilderConfig.Builders))
 }

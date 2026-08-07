@@ -196,6 +196,9 @@ func (in *BuilderConfig) ToConsensus() (*proposer.BuilderConfig, error) {
 	bc.Builders = make([]*proposer.BuilderEntry, 0, len(in.Builders))
 	seen := make(map[proposer.EntryIdentity]bool, len(in.Builders))
 	for i, entry := range in.Builders {
+		if entry == nil {
+			return nil, errors.Errorf("builders[%d] is null", i)
+		}
 		be, err := entry.ToConsensus(i)
 		if err != nil {
 			return nil, err
@@ -239,21 +242,21 @@ func (in *BuilderEntry) ToConsensus(i int) (*proposer.BuilderEntry, error) {
 		be.AuthData = ad
 	}
 	if in.MaxExecutionPayment != nil {
-		v, err := parseUint(*in.MaxExecutionPayment, "builders[].max_execution_payment")
+		v, err := parseUint(*in.MaxExecutionPayment, fmt.Sprintf("builders[%d].max_execution_payment", i))
 		if err != nil {
 			return nil, err
 		}
 		be.MaxExecutionPayment = &v
 	}
 	if in.MinBid != nil {
-		v, err := parseUint(*in.MinBid, "builders[].min_bid")
+		v, err := parseUint(*in.MinBid, fmt.Sprintf("builders[%d].min_bid", i))
 		if err != nil {
 			return nil, err
 		}
 		be.MinBid = &v
 	}
 	if in.BuilderBoostFactor != nil {
-		v, err := parseUint(*in.BuilderBoostFactor, "builders[].builder_boost_factor")
+		v, err := parseUint(*in.BuilderBoostFactor, fmt.Sprintf("builders[%d].builder_boost_factor", i))
 		if err != nil {
 			return nil, err
 		}
