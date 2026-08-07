@@ -301,13 +301,15 @@ func (c *handler) PostSSZ(
 	}
 
 	// A non-JSON error body is still surfaced as a typed error so the status code survives.
+	errorJson := &httputil.DefaultJsonError{Code: httpResp.StatusCode}
 	if !strings.Contains(httpResp.Header.Get("Content-Type"), api.JsonMediaType) {
-		return &httputil.DefaultJsonError{Code: httpResp.StatusCode, Message: string(body)}
+		errorJson.Message = string(body)
+		return errorJson
 	}
 
-	errorJson := &httputil.DefaultJsonError{}
-	if err = json.NewDecoder(bytes.NewBuffer(body)).Decode(errorJson); err != nil {
-		return errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL.Redacted())
+	decoded := &httputil.DefaultJsonError{}
+	if err = json.Unmarshal(body, decoded); err == nil && decoded.Message != "" {
+		errorJson.Message = decoded.Message
 	}
 
 	return errorJson

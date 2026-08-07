@@ -83,6 +83,19 @@ func TestPostSSZ_JSONErrorBodyIsDecoded(t *testing.T) {
 	require.Equal(t, "bad request", errJson.Message)
 }
 
+func TestPostSSZ_MalformedJSONErrorBodyKeepsStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", api.JsonMediaType)
+		w.WriteHeader(http.StatusUnsupportedMediaType)
+		_, _ = w.Write([]byte(`not json`))
+	}))
+	defer srv.Close()
+
+	c := newHandler(http.Client{}, srv.URL)
+	err := c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
+	require.Equal(t, true, errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}), "expected 415 to survive, got %v", err)
+}
+
 func TestPostSSZ_DrainsSuccessBody(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
