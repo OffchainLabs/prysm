@@ -441,7 +441,7 @@ func ProcessBlockForStateRoot(
 
 	var parentSlot primitives.Slot
 	if state.Version() >= version.Gloas {
-		// <spec fn="process_block" fork="gloas" hash="7d98b5a3">
+		// <spec fn="process_block" fork="gloas" hash="fda2f095">
 		// def process_block(state: BeaconState, block: BeaconBlock) -> None:
 		//     # [New in Gloas:EIP7732]
 		//     process_parent_execution_payload(state, block)
@@ -451,11 +451,11 @@ func ProcessBlockForStateRoot(
 		//     # [Modified in Gloas:EIP7732]
 		//     # Removed `process_execution_payload`
 		//     # [New in Gloas:EIP7732]
-		//     process_execution_payload_bid(state, block.body.signed_execution_payload_bid)
+		//     parent_slot = process_execution_payload_bid(state, block.body.signed_execution_payload_bid)
 		//     process_randao(state, block.body)
 		//     process_eth1_data(state, block.body)
 		//     # [Modified in Gloas:EIP7732]
-		//     process_operations(state, block.body)
+		//     process_operations(state, block.body, parent_slot)
 		//     process_sync_aggregate(state, block.body.sync_aggregate)
 		// </spec>
 		if err := gloas.ProcessWithdrawals(state); err != nil {

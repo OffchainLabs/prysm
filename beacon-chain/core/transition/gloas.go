@@ -21,13 +21,19 @@ import (
 //
 // Spec definition:
 //
-//	<spec fn="process_operations" fork="gloas" hash="5009f53b">
-//	def process_operations(state: BeaconState, body: BeaconBlockBody) -> None:
+//	<spec fn="process_operations" fork="gloas" hash="52aee81b">
+//	def process_operations(
+//	    state: BeaconState,
+//	    body: BeaconBlockBody,
+//	    # [New in Gloas:EIP7732]
+//	    parent_slot: Slot,
+//	) -> None:
 //	    assert len(body.deposits) == 0
 //
-//	    def for_ops(operations: Sequence[Any], fn: Callable[[BeaconState, Any], None]) -> None:
+//	    # [Modified in Gloas:EIP7732]
+//	    def for_ops(operations: Sequence[Any], fn: Callable[..., None], *args: Any) -> None:
 //	        for operation in operations:
-//	            fn(state, operation)
+//	            fn(state, operation, *args)
 //
 //	    # [New in Gloas:EIP7688]
 //	    assert len(body.proposer_slashings) <= MAX_PROPOSER_SLASHINGS
@@ -41,7 +47,7 @@ import (
 //	    for_ops(body.proposer_slashings, process_proposer_slashing)
 //	    for_ops(body.attester_slashings, process_attester_slashing)
 //	    # [Modified in Gloas:EIP7732]
-//	    for_ops(body.attestations, process_attestation)
+//	    for_ops(body.attestations, process_attestation, parent_slot)
 //	    for_ops(body.voluntary_exits, process_voluntary_exit)
 //	    for_ops(body.bls_to_execution_changes, process_bls_to_execution_change)
 //	    # [Modified in Gloas:EIP7732]

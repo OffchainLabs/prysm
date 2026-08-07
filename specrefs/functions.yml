@@ -1,13 +1,13 @@
 - name: add_builder_to_registry#gloas
   sources: []
   spec: |
-    <spec fn="add_builder_to_registry" fork="gloas" hash="21ceace9">
+    <spec fn="add_builder_to_registry" fork="gloas" hash="41b49d46">
     def add_builder_to_registry(
         state: BeaconState,
         pubkey: BLSPubkey,
-        version: uint8,
+        version: Uint8,
         execution_address: ExecutionAddress,
-        amount: uint64,
+        amount: Uint64,
         slot: Slot,
     ) -> None:
         set_or_append_list(
@@ -43,9 +43,9 @@
     - file: beacon-chain/core/altair/deposit.go
       search: func AddValidatorToRegistry(
   spec: |
-    <spec fn="add_validator_to_registry" fork="phase0" hash="53699dc0">
+    <spec fn="add_validator_to_registry" fork="phase0" hash="a560c497">
     def add_validator_to_registry(
-        state: BeaconState, pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: uint64
+        state: BeaconState, pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: Uint64
     ) -> None:
         state.validators.append(get_validator_from_deposit(pubkey, withdrawal_credentials, amount))
         state.balances.append(amount)
@@ -56,9 +56,9 @@
     - file: beacon-chain/core/altair/deposit.go
       search: func AddValidatorToRegistry(
   spec: |
-    <spec fn="add_validator_to_registry" fork="altair" hash="18054f42">
+    <spec fn="add_validator_to_registry" fork="altair" hash="af19a79a">
     def add_validator_to_registry(
-        state: BeaconState, pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: uint64
+        state: BeaconState, pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: Uint64
     ) -> None:
         index = get_index_for_new_validator(state)
         validator = get_validator_from_deposit(pubkey, withdrawal_credentials, amount)
@@ -67,7 +67,7 @@
         # [New in Altair]
         set_or_append_list(state.previous_epoch_participation, index, ParticipationFlags(0b0000_0000))
         set_or_append_list(state.current_epoch_participation, index, ParticipationFlags(0b0000_0000))
-        set_or_append_list(state.inactivity_scores, index, uint64(0))
+        set_or_append_list(state.inactivity_scores, index, Uint64(0))
     </spec>
 
 - name: add_validator_to_registry#electra
@@ -75,9 +75,9 @@
     - file: beacon-chain/core/electra/deposits.go
       search: func AddValidatorToRegistry(
   spec: |
-    <spec fn="add_validator_to_registry" fork="electra" hash="7970ce24">
+    <spec fn="add_validator_to_registry" fork="electra" hash="ae623765">
     def add_validator_to_registry(
-        state: BeaconState, pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: uint64
+        state: BeaconState, pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: Uint64
     ) -> None:
         index = get_index_for_new_validator(state)
         # [Modified in Electra:EIP7251]
@@ -86,7 +86,7 @@
         set_or_append_list(state.balances, index, amount)
         set_or_append_list(state.previous_epoch_participation, index, ParticipationFlags(0b0000_0000))
         set_or_append_list(state.current_epoch_participation, index, ParticipationFlags(0b0000_0000))
-        set_or_append_list(state.inactivity_scores, index, uint64(0))
+        set_or_append_list(state.inactivity_scores, index, Uint64(0))
     </spec>
 
 - name: adjust_committee_weight_estimate_to_ensure_safety#phase0
@@ -107,12 +107,12 @@
     - file: beacon-chain/core/altair/deposit.go
       search: func ApplyDeposit(
   spec: |
-    <spec fn="apply_deposit" fork="phase0" hash="a53ef920">
+    <spec fn="apply_deposit" fork="phase0" hash="e1dde87c">
     def apply_deposit(
         state: BeaconState,
         pubkey: BLSPubkey,
         withdrawal_credentials: Bytes32,
-        amount: uint64,
+        amount: Uint64,
         signature: BLSSignature,
     ) -> None:
         validator_pubkeys = [v.pubkey for v in state.validators]
@@ -139,12 +139,12 @@
     - file: beacon-chain/core/electra/deposits.go
       search: func ApplyDeposit(
   spec: |
-    <spec fn="apply_deposit" fork="electra" hash="6259bfc5">
+    <spec fn="apply_deposit" fork="electra" hash="28ef20ed">
     def apply_deposit(
         state: BeaconState,
         pubkey: BLSPubkey,
         withdrawal_credentials: Bytes32,
-        amount: uint64,
+        amount: Uint64,
         signature: BLSSignature,
     ) -> None:
         validator_pubkeys = [v.pubkey for v in state.validators]
@@ -481,19 +481,19 @@
     - file: encoding/bytesutil/integers.go
       search: func FromBytes8(
   spec: |
-    <spec fn="bytes_to_uint64" fork="phase0" hash="3099d397">
-    def bytes_to_uint64(data: bytes) -> uint64:
+    <spec fn="bytes_to_uint64" fork="phase0" hash="bfd0e8ff">
+    def bytes_to_uint64(data: bytes) -> Uint64:
         """
         Return the integer deserialization of ``data`` interpreted as ``ENDIANNESS``-endian.
         """
-        return uint64(int.from_bytes(data, ENDIANNESS))
+        return Uint64(int.from_bytes(data, ENDIANNESS))
     </spec>
 
 - name: calculate_committee_fraction#phase0
   sources: []
   spec: |
-    <spec fn="calculate_committee_fraction" fork="phase0" hash="782b50e9">
-    def calculate_committee_fraction(state: BeaconState, committee_percent: uint64) -> Gwei:
+    <spec fn="calculate_committee_fraction" fork="phase0" hash="9c7034ee">
+    def calculate_committee_fraction(state: BeaconState, committee_percent: Uint64) -> Gwei:
         committee_weight = get_total_active_balance(state) // SLOTS_PER_EPOCH
         return Gwei((committee_weight * committee_percent) // 100)
     </spec>
@@ -568,23 +568,23 @@
 - name: compute_attestation_subnet_prefix_bits#phase0
   sources: []
   spec: |
-    <spec fn="compute_attestation_subnet_prefix_bits" fork="phase0" hash="5adb201b">
-    def compute_attestation_subnet_prefix_bits() -> uint64:
+    <spec fn="compute_attestation_subnet_prefix_bits" fork="phase0" hash="e5f8c95b">
+    def compute_attestation_subnet_prefix_bits() -> Uint64:
         """
         Return the number of NodeId bits to use when mapping to a subscribed subnet.
         """
-        return uint64(ceillog2(ATTESTATION_SUBNET_COUNT) + ATTESTATION_SUBNET_EXTRA_BITS)
+        return Uint64(ceillog2(ATTESTATION_SUBNET_COUNT) + ATTESTATION_SUBNET_EXTRA_BITS)
     </spec>
 
 - name: compute_balance_weighted_selection#gloas
   sources: []
   spec: |
-    <spec fn="compute_balance_weighted_selection" fork="gloas" hash="e5dff16e">
+    <spec fn="compute_balance_weighted_selection" fork="gloas" hash="1338c915">
     def compute_balance_weighted_selection(
         state: BeaconState,
         indices: Sequence[ValidatorIndex],
         seed: Bytes32,
-        size: uint64,
+        size: Uint64,
         shuffle_indices: bool,
     ) -> Sequence[ValidatorIndex]:
         """
@@ -594,11 +594,11 @@
         ``indices`` is traversed in order. The returned list can contain duplicates.
         """
         MAX_RANDOM_VALUE = 2**16 - 1
-        total = uint64(len(indices))
+        total = Uint64(len(indices))
         assert total > 0
         effective_balances = [state.validators[index].effective_balance for index in indices]
         selected: List[ValidatorIndex] = []
-        i = uint64(0)
+        i = Uint64(0)
         while len(selected) < size:
             offset = i % 16 * 2
             if offset == 0:
@@ -634,17 +634,17 @@
     - file: beacon-chain/core/helpers/beacon_committee.go
       search: func ComputeCommittee(
   spec: |
-    <spec fn="compute_committee" fork="phase0" hash="eb55fdd0">
+    <spec fn="compute_committee" fork="phase0" hash="23ad35aa">
     def compute_committee(
-        indices: Sequence[ValidatorIndex], seed: Bytes32, index: uint64, count: uint64
+        indices: Sequence[ValidatorIndex], seed: Bytes32, index: Uint64, count: Uint64
     ) -> Sequence[ValidatorIndex]:
         """
         Return the committee corresponding to ``indices``, ``seed``, ``index``, and committee ``count``.
         """
         start = (len(indices) * index) // count
-        end = (len(indices) * uint64(index + 1)) // count
+        end = (len(indices) * Uint64(index + 1)) // count
         return [
-            indices[compute_shuffled_index(uint64(i), uint64(len(indices)), seed)]
+            indices[compute_shuffled_index(Uint64(i), Uint64(len(indices)), seed)]
             for i in range(start, end)
         ]
     </spec>
@@ -862,7 +862,7 @@
     - file: config/params/config.go
       search: func entryWithForkDigest(
   spec: |
-    <spec fn="compute_fork_digest" fork="fulu" hash="14f1febd">
+    <spec fn="compute_fork_digest" fork="fulu" hash="49e03649">
     def compute_fork_digest(
         genesis_validators_root: Root,
         epoch: Epoch,
@@ -888,8 +888,8 @@
                 xor(
                     base_digest,
                     hash(
-                        uint_to_bytes(uint64(blob_parameters.epoch))
-                        + uint_to_bytes(uint64(blob_parameters.max_blobs_per_block))
+                        uint_to_bytes(Uint64(blob_parameters.epoch))
+                        + uint_to_bytes(Uint64(blob_parameters.max_blobs_per_block))
                     ),
                 )
             )[:4]
@@ -1134,7 +1134,7 @@
 - name: compute_matrix#fulu
   sources: []
   spec: |
-    <spec fn="compute_matrix" fork="fulu" hash="87e3f29c">
+    <spec fn="compute_matrix" fork="fulu" hash="fe9651c4">
     def compute_matrix(blobs: Sequence[Blob]) -> Sequence[MatrixEntry]:
         """
         Return the full, flattened sequence of matrix entries.
@@ -1144,7 +1144,7 @@
         """
         matrix = []
         for blob_index, blob in enumerate(blobs):
-            cells, proofs = compute_cells_and_kzg_proofs(blob)
+            cells, proofs = kzg.compute_cells_and_kzg_proofs(blob)
             for cell_index, (cell, proof) in enumerate(zip(cells, proofs, strict=True)):
                 matrix.append(
                     MatrixEntry(
@@ -1160,43 +1160,43 @@
 - name: compute_max_request_blob_sidecars#deneb
   sources: []
   spec: |
-    <spec fn="compute_max_request_blob_sidecars" fork="deneb" hash="c05cd1d6">
-    def compute_max_request_blob_sidecars() -> uint64:
+    <spec fn="compute_max_request_blob_sidecars" fork="deneb" hash="1da7d02f">
+    def compute_max_request_blob_sidecars() -> Uint64:
         """
         Return the maximum number of blob sidecars in a single request.
         """
-        return uint64(MAX_REQUEST_BLOCKS_DENEB * MAX_BLOBS_PER_BLOCK)
+        return Uint64(MAX_REQUEST_BLOCKS_DENEB * MAX_BLOBS_PER_BLOCK)
     </spec>
 
 - name: compute_max_request_blob_sidecars#electra
   sources: []
   spec: |
-    <spec fn="compute_max_request_blob_sidecars" fork="electra" hash="38243cb4">
-    def compute_max_request_blob_sidecars() -> uint64:
+    <spec fn="compute_max_request_blob_sidecars" fork="electra" hash="55ed3dd7">
+    def compute_max_request_blob_sidecars() -> Uint64:
         """
         Return the maximum number of blob sidecars in a single request.
         """
         # [Modified in Electra:EIP7691]
-        return uint64(MAX_REQUEST_BLOCKS_DENEB * MAX_BLOBS_PER_BLOCK_ELECTRA)
+        return Uint64(MAX_REQUEST_BLOCKS_DENEB * MAX_BLOBS_PER_BLOCK_ELECTRA)
     </spec>
 
 - name: compute_max_request_data_column_sidecars#fulu
   sources: []
   spec: |
-    <spec fn="compute_max_request_data_column_sidecars" fork="fulu" hash="5f2f149d">
-    def compute_max_request_data_column_sidecars() -> uint64:
+    <spec fn="compute_max_request_data_column_sidecars" fork="fulu" hash="f04fc25b">
+    def compute_max_request_data_column_sidecars() -> Uint64:
         """
         Return the maximum number of data column sidecars in a single request.
         """
-        return uint64(MAX_REQUEST_BLOCKS_DENEB * NUMBER_OF_COLUMNS)
+        return Uint64(MAX_REQUEST_BLOCKS_DENEB * NUMBER_OF_COLUMNS)
     </spec>
 
 - name: compute_merkle_branch_root#phase0
   sources: []
   spec: |
-    <spec fn="compute_merkle_branch_root" fork="phase0" hash="ff67a3de">
+    <spec fn="compute_merkle_branch_root" fork="phase0" hash="f05490d6">
     def compute_merkle_branch_root(
-        leaf: Bytes32, branch: Sequence[Bytes32], depth: uint64, index: uint64
+        leaf: Bytes32, branch: Sequence[Bytes32], depth: Uint64, index: Uint64
     ) -> Root:
         """
         Return the Merkle root obtained by hashing ``leaf`` at ``index`` with ``branch``.
@@ -1220,12 +1220,12 @@
 - name: compute_min_epochs_for_block_requests#phase0
   sources: []
   spec: |
-    <spec fn="compute_min_epochs_for_block_requests" fork="phase0" hash="90b21de3">
-    def compute_min_epochs_for_block_requests() -> uint64:
+    <spec fn="compute_min_epochs_for_block_requests" fork="phase0" hash="bfc43a5c">
+    def compute_min_epochs_for_block_requests() -> Uint64:
         """
         Return the minimum epoch range over which a node must serve blocks.
         """
-        return uint64(MIN_VALIDATOR_WITHDRAWABILITY_DELAY + CHURN_LIMIT_QUOTIENT // 2)
+        return Uint64(MIN_VALIDATOR_WITHDRAWABILITY_DELAY + CHURN_LIMIT_QUOTIENT // 2)
     </spec>
 
 - name: compute_new_state_root#phase0
@@ -1246,7 +1246,7 @@
     - file: beacon-chain/rpc/prysm/v1alpha1/validator/proposer_attestations_electra.go
       search: func computeOnChainAggregate(
   spec: |
-    <spec fn="compute_on_chain_aggregate" fork="electra" hash="70c27acf">
+    <spec fn="compute_on_chain_aggregate" fork="electra" hash="a1d5aa73">
     def compute_on_chain_aggregate(network_aggregates: Sequence[Attestation]) -> Attestation:
         aggregates = sorted(
             network_aggregates, key=lambda a: get_committee_indices(a.committee_bits)[0]
@@ -1262,7 +1262,7 @@
 
         committee_indices = [get_committee_indices(a.committee_bits)[0] for a in aggregates]
         committee_flags = [(index in committee_indices) for index in range(MAX_COMMITTEES_PER_SLOT)]
-        committee_bits = Bitvector[MAX_COMMITTEES_PER_SLOT](committee_flags)
+        committee_bits = BitVector[MAX_COMMITTEES_PER_SLOT](committee_flags)
 
         return Attestation(
             aggregation_bits=aggregation_bits,
@@ -1277,7 +1277,7 @@
     - file: beacon-chain/core/helpers/validators.go
       search: func ComputeProposerIndex(
   spec: |
-    <spec fn="compute_proposer_index" fork="phase0" hash="865ac464">
+    <spec fn="compute_proposer_index" fork="phase0" hash="744c1f45">
     def compute_proposer_index(
         state: BeaconState, indices: Sequence[ValidatorIndex], seed: Bytes32
     ) -> ValidatorIndex:
@@ -1286,11 +1286,11 @@
         """
         assert len(indices) > 0
         MAX_RANDOM_BYTE = 2**8 - 1
-        i = uint64(0)
-        total = uint64(len(indices))
+        i = Uint64(0)
+        total = Uint64(len(indices))
         while True:
             candidate_index = indices[compute_shuffled_index(i % total, total, seed)]
-            random_byte = hash(seed + uint_to_bytes(uint64(i // 32)))[i % 32]
+            random_byte = hash(seed + uint_to_bytes(Uint64(i // 32)))[i % 32]
             effective_balance = state.validators[candidate_index].effective_balance
             if effective_balance * MAX_RANDOM_BYTE >= MAX_EFFECTIVE_BALANCE * random_byte:
                 return candidate_index
@@ -1304,7 +1304,7 @@
     - file: beacon-chain/core/helpers/validators.go
       search: if bState.Version() >= version.Electra {
   spec: |
-    <spec fn="compute_proposer_index" fork="electra" hash="b54f4930">
+    <spec fn="compute_proposer_index" fork="electra" hash="a0261e7d">
     def compute_proposer_index(
         state: BeaconState, indices: Sequence[ValidatorIndex], seed: Bytes32
     ) -> ValidatorIndex:
@@ -1314,8 +1314,8 @@
         assert len(indices) > 0
         # [Modified in Electra]
         MAX_RANDOM_VALUE = 2**16 - 1
-        i = uint64(0)
-        total = uint64(len(indices))
+        i = Uint64(0)
+        total = Uint64(len(indices))
         while True:
             candidate_index = indices[compute_shuffled_index(i % total, total, seed)]
             # [Modified in Electra]
@@ -1449,8 +1449,8 @@
     - file: beacon-chain/core/helpers/shuffle.go
       search: func ComputeShuffledIndex(
   spec: |
-    <spec fn="compute_shuffled_index" fork="phase0" hash="f85577f7">
-    def compute_shuffled_index(index: uint64, index_count: uint64, seed: Bytes32) -> uint64:
+    <spec fn="compute_shuffled_index" fork="phase0" hash="8f95af5d">
+    def compute_shuffled_index(index: Uint64, index_count: Uint64, seed: Bytes32) -> Uint64:
         """
         Return the shuffled index corresponding to ``seed`` (and ``index_count``).
         """
@@ -1461,18 +1461,18 @@
 - name: compute_shuffled_permutation#phase0
   sources: []
   spec: |
-    <spec fn="compute_shuffled_permutation" fork="phase0" hash="48fcb874">
-    def compute_shuffled_permutation(index_count: uint64, seed: Bytes32) -> Sequence[uint64]:
+    <spec fn="compute_shuffled_permutation" fork="phase0" hash="067c0a89">
+    def compute_shuffled_permutation(index_count: Uint64, seed: Bytes32) -> Sequence[Uint64]:
         """
         Return the full shuffled permutation corresponding to ``seed`` (and ``index_count``).
         """
         # Swap or not (https://link.springer.com/content/pdf/10.1007%2F978-3-642-32009-5_1.pdf)
         # See the 'generalized domain' algorithm on page 3
-        indices = [uint64(i) for i in range(index_count)]
+        indices = [Uint64(i) for i in range(index_count)]
         for current_round in range(SHUFFLE_ROUND_COUNT):
             round_bytes = current_round.to_bytes(1, "little")
             pivot = int.from_bytes(hash(seed + round_bytes)[0:8], "little") % index_count
-            source_by_bucket: Dict[uint64, Bytes32] = {}
+            source_by_bucket: Dict[Uint64, Bytes32] = {}
             for i in range(index_count):
                 flip = (pivot + index_count - indices[i]) % index_count
                 position = max(indices[i], flip)
@@ -1552,15 +1552,15 @@
     - file: beacon-chain/core/helpers/attestation.go
       search: func ComputeSubnetForAttestation(
   spec: |
-    <spec fn="compute_subnet_for_attestation" fork="phase0" hash="2e9cf65d">
+    <spec fn="compute_subnet_for_attestation" fork="phase0" hash="f68bbbac">
     def compute_subnet_for_attestation(
-        committees_per_slot: uint64, slot: Slot, committee_index: CommitteeIndex
+        committees_per_slot: Uint64, slot: Slot, committee_index: CommitteeIndex
     ) -> SubnetID:
         """
         Compute the correct subnet for an attestation for Phase 0.
         Note, this mimics expected future behavior where attestations will be mapped to their shard subnet.
         """
-        slots_since_epoch_start = uint64(slot % SLOTS_PER_EPOCH)
+        slots_since_epoch_start = Uint64(slot % SLOTS_PER_EPOCH)
         committees_since_epoch_start = committees_per_slot * slots_since_epoch_start
 
         return SubnetID((committees_since_epoch_start + committee_index) % ATTESTATION_SUBNET_COUNT)
@@ -1630,13 +1630,13 @@
     - file: beacon-chain/p2p/subnets.go
       search: func computeSubscribedSubnet(
   spec: |
-    <spec fn="compute_subscribed_subnet" fork="phase0" hash="83f860b8">
+    <spec fn="compute_subscribed_subnet" fork="phase0" hash="5618c1df">
     def compute_subscribed_subnet(node_id: NodeID, epoch: Epoch, index: int) -> SubnetID:
         prefix_bits = int(compute_attestation_subnet_prefix_bits())
-        node_id_prefix = node_id >> (NODE_ID_BITS - prefix_bits)
-        node_offset = node_id % EPOCHS_PER_SUBNET_SUBSCRIPTION
+        node_id_prefix = node_id >> int(NODE_ID_BITS - prefix_bits)
+        node_offset = Uint64(node_id % Uint256(EPOCHS_PER_SUBNET_SUBSCRIPTION))
         permutation_seed = hash(
-            uint_to_bytes(uint64((epoch + node_offset) // EPOCHS_PER_SUBNET_SUBSCRIPTION))
+            uint_to_bytes(Uint64((epoch + node_offset) // EPOCHS_PER_SUBNET_SUBSCRIPTION))
         )
         permutated_prefix = compute_shuffled_index(
             node_id_prefix,
@@ -1661,16 +1661,16 @@
     - file: time/slots/slottime.go
       search: func SyncCommitteePeriod(
   spec: |
-    <spec fn="compute_sync_committee_period" fork="altair" hash="c5bb031f">
-    def compute_sync_committee_period(epoch: Epoch) -> uint64:
+    <spec fn="compute_sync_committee_period" fork="altair" hash="13b7b958">
+    def compute_sync_committee_period(epoch: Epoch) -> Uint64:
         return epoch // EPOCHS_PER_SYNC_COMMITTEE_PERIOD
     </spec>
 
 - name: compute_sync_committee_period_at_slot#altair
   sources: []
   spec: |
-    <spec fn="compute_sync_committee_period_at_slot" fork="altair" hash="6ad449b8">
-    def compute_sync_committee_period_at_slot(slot: Slot) -> uint64:
+    <spec fn="compute_sync_committee_period_at_slot" fork="altair" hash="610ba396">
+    def compute_sync_committee_period_at_slot(slot: Slot) -> Uint64:
         return compute_sync_committee_period(compute_epoch_at_slot(slot))
     </spec>
 
@@ -1679,22 +1679,22 @@
     - file: time/slots/slottime.go
       search: func StartTime(
   spec: |
-    <spec fn="compute_time_at_slot" fork="phase0" hash="70962a0c">
-    def compute_time_at_slot(state: BeaconState, slot: Slot) -> uint64:
+    <spec fn="compute_time_at_slot" fork="phase0" hash="c654b2ca">
+    def compute_time_at_slot(state: BeaconState, slot: Slot) -> Uint64:
         slots_since_genesis = slot - GENESIS_SLOT
-        return uint64(state.genesis_time + slots_since_genesis * SLOT_DURATION_MS // 1000)
+        return Uint64(state.genesis_time + slots_since_genesis * SLOT_DURATION_MS // 1000)
     </spec>
 
 - name: compute_time_at_slot_ms#phase0
   sources: []
   spec: |
-    <spec fn="compute_time_at_slot_ms" fork="phase0" hash="9e51db2a">
-    def compute_time_at_slot_ms(state: BeaconState, slot: Slot) -> uint64:
+    <spec fn="compute_time_at_slot_ms" fork="phase0" hash="1ec2646a">
+    def compute_time_at_slot_ms(state: BeaconState, slot: Slot) -> Uint64:
         """
         Return the time in milliseconds at the start of the given slot.
         """
         slots_since_genesis = slot - GENESIS_SLOT
-        return uint64(state.genesis_time * 1000 + slots_since_genesis * SLOT_DURATION_MS)
+        return Uint64(state.genesis_time * 1000 + slots_since_genesis * SLOT_DURATION_MS)
     </spec>
 
 - name: compute_weak_subjectivity_period#phase0
@@ -1702,8 +1702,8 @@
     - file: beacon-chain/core/helpers/weak_subjectivity.go
       search: func ComputeWeakSubjectivityPeriod(
   spec: |
-    <spec fn="compute_weak_subjectivity_period" fork="phase0" hash="d151e9de">
-    def compute_weak_subjectivity_period(state: BeaconState) -> uint64:
+    <spec fn="compute_weak_subjectivity_period" fork="phase0" hash="73699619">
+    def compute_weak_subjectivity_period(state: BeaconState) -> Uint64:
         """
         Returns the weak subjectivity period for the current ``state``.
         This computation takes into account the effect of:
@@ -1735,8 +1735,8 @@
 - name: compute_weak_subjectivity_period#electra
   sources: []
   spec: |
-    <spec fn="compute_weak_subjectivity_period" fork="electra" hash="8d95104c">
-    def compute_weak_subjectivity_period(state: BeaconState) -> uint64:
+    <spec fn="compute_weak_subjectivity_period" fork="electra" hash="58b3e6e0">
+    def compute_weak_subjectivity_period(state: BeaconState) -> Uint64:
         """
         Returns the weak subjectivity period for the current ``state``.
         This computation takes into account the effect of:
@@ -1753,8 +1753,8 @@
 - name: compute_weak_subjectivity_period#gloas
   sources: []
   spec: |
-    <spec fn="compute_weak_subjectivity_period" fork="gloas" hash="8b1ddc92">
-    def compute_weak_subjectivity_period(state: BeaconState) -> uint64:
+    <spec fn="compute_weak_subjectivity_period" fork="gloas" hash="687b7a35">
+    def compute_weak_subjectivity_period(state: BeaconState) -> Uint64:
         """
         Returns the weak subjectivity period for the current ``state``.
         This computation takes into account the effect of:
@@ -2335,16 +2335,16 @@
 - name: get_aggregate_due_ms#phase0
   sources: []
   spec: |
-    <spec fn="get_aggregate_due_ms" fork="phase0" hash="fe8c736c">
-    def get_aggregate_due_ms() -> uint64:
+    <spec fn="get_aggregate_due_ms" fork="phase0" hash="f04ecc41">
+    def get_aggregate_due_ms() -> Uint64:
         return get_slot_component_duration_ms(AGGREGATE_DUE_BPS)
     </spec>
 
 - name: get_aggregate_due_ms#gloas
   sources: []
   spec: |
-    <spec fn="get_aggregate_due_ms" fork="gloas" hash="c3dccba7">
-    def get_aggregate_due_ms() -> uint64:
+    <spec fn="get_aggregate_due_ms" fork="gloas" hash="055e3209">
+    def get_aggregate_due_ms() -> Uint64:
         # [Modified in Gloas]
         return get_slot_component_duration_ms(AGGREGATE_DUE_BPS_GLOAS)
     </spec>
@@ -2415,7 +2415,7 @@
 - name: get_attestation_component_deltas#phase0
   sources: []
   spec: |
-    <spec fn="get_attestation_component_deltas" fork="phase0" hash="c6d7c444">
+    <spec fn="get_attestation_component_deltas" fork="phase0" hash="dffb146e">
     def get_attestation_component_deltas(
         state: BeaconState, attestations: Sequence[PendingAttestation]
     ) -> Tuple[Sequence[Gwei], Sequence[Gwei]]:
@@ -2429,7 +2429,7 @@
         attesting_balance = get_total_balance(state, unslashed_attesting_indices)
         for index in get_eligible_validator_indices(state):
             if index in unslashed_attesting_indices:
-                increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from balance totals to avoid uint64 overflow
+                increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from balance totals to avoid Uint64 overflow
                 if is_in_inactivity_leak(state):
                     # Since full base reward will be canceled out by inactivity penalty deltas,
                     # optimal participation receives full base reward compensation here.
@@ -2474,16 +2474,16 @@
 - name: get_attestation_due_ms#phase0
   sources: []
   spec: |
-    <spec fn="get_attestation_due_ms" fork="phase0" hash="e611ff37">
-    def get_attestation_due_ms() -> uint64:
+    <spec fn="get_attestation_due_ms" fork="phase0" hash="acadb6c3">
+    def get_attestation_due_ms() -> Uint64:
         return get_slot_component_duration_ms(ATTESTATION_DUE_BPS)
     </spec>
 
 - name: get_attestation_due_ms#gloas
   sources: []
   spec: |
-    <spec fn="get_attestation_due_ms" fork="gloas" hash="90627c02">
-    def get_attestation_due_ms() -> uint64:
+    <spec fn="get_attestation_due_ms" fork="gloas" hash="6bfa8f84">
+    def get_attestation_due_ms() -> Uint64:
         # [Modified in Gloas]
         return get_slot_component_duration_ms(ATTESTATION_DUE_BPS_GLOAS)
     </spec>
@@ -2493,9 +2493,9 @@
     - file: beacon-chain/core/altair/attestation.go
       search: func AttestationParticipationFlagIndices(
   spec: |
-    <spec fn="get_attestation_participation_flag_indices" fork="altair" hash="d697ae39">
+    <spec fn="get_attestation_participation_flag_indices" fork="altair" hash="28f72fdf">
     def get_attestation_participation_flag_indices(
-        state: BeaconState, data: AttestationData, inclusion_delay: uint64
+        state: BeaconState, data: AttestationData, inclusion_delay: Uint64
     ) -> Sequence[int]:
         """
         Return the flag indices that are satisfied by an attestation.
@@ -2535,9 +2535,9 @@
     - file: beacon-chain/core/altair/attestation.go
       search: func AttestationParticipationFlagIndices(
   spec: |
-    <spec fn="get_attestation_participation_flag_indices" fork="deneb" hash="7b46fd38">
+    <spec fn="get_attestation_participation_flag_indices" fork="deneb" hash="5a59415f">
     def get_attestation_participation_flag_indices(
-        state: BeaconState, data: AttestationData, inclusion_delay: uint64
+        state: BeaconState, data: AttestationData, inclusion_delay: Uint64
     ) -> Sequence[int]:
         """
         Return the flag indices that are satisfied by an attestation.
@@ -2576,9 +2576,13 @@
 - name: get_attestation_participation_flag_indices#gloas
   sources: []
   spec: |
-    <spec fn="get_attestation_participation_flag_indices" fork="gloas" hash="aeb30d51">
+    <spec fn="get_attestation_participation_flag_indices" fork="gloas" hash="6c629ef4">
     def get_attestation_participation_flag_indices(
-        state: BeaconState, data: AttestationData, inclusion_delay: uint64
+        state: BeaconState,
+        data: AttestationData,
+        inclusion_delay: Uint64,
+        # [New in Gloas:EIP7732]
+        parent_slot: Slot,
     ) -> Sequence[int]:
         """
         Return the flag indices that are satisfied by an attestation.
@@ -2600,7 +2604,7 @@
             assert data.index == 0
             payload_matches = True
         else:
-            slot_index = data.slot % SLOTS_PER_HISTORICAL_ROOT
+            slot_index = parent_slot % SLOTS_PER_HISTORICAL_ROOT
             payload_index = state.execution_payload_availability[slot_index]
             payload_matches = data.index == payload_index
 
@@ -3056,29 +3060,29 @@
 - name: get_builder_payment_quorum_threshold#gloas
   sources: []
   spec: |
-    <spec fn="get_builder_payment_quorum_threshold" fork="gloas" hash="a64b7ffb">
-    def get_builder_payment_quorum_threshold(state: BeaconState) -> uint64:
+    <spec fn="get_builder_payment_quorum_threshold" fork="gloas" hash="cd87415a">
+    def get_builder_payment_quorum_threshold(state: BeaconState) -> Uint64:
         """
         Calculate the quorum threshold for builder payments.
         """
         per_slot_balance = get_total_active_balance(state) // SLOTS_PER_EPOCH
         quorum = per_slot_balance * BUILDER_PAYMENT_THRESHOLD_NUMERATOR
-        return uint64(quorum // BUILDER_PAYMENT_THRESHOLD_DENOMINATOR)
+        return Uint64(quorum // BUILDER_PAYMENT_THRESHOLD_DENOMINATOR)
     </spec>
 
 - name: get_builder_withdrawals#gloas
   sources: []
   spec: |
-    <spec fn="get_builder_withdrawals" fork="gloas" hash="d54dd146">
+    <spec fn="get_builder_withdrawals" fork="gloas" hash="e816787f">
     def get_builder_withdrawals(
         state: BeaconState,
         withdrawal_index: WithdrawalIndex,
         prior_withdrawals: Sequence[Withdrawal],
-    ) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, uint64]:
+    ) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, Uint64]:
         withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD - 1
         assert len(prior_withdrawals) <= withdrawals_limit
 
-        processed_count: uint64 = 0
+        processed_count: Uint64 = 0
         withdrawals: List[Withdrawal] = []
         for withdrawal in state.builder_pending_withdrawals:
             all_withdrawals = prior_withdrawals + withdrawals
@@ -3104,18 +3108,18 @@
 - name: get_builders_sweep_withdrawals#gloas
   sources: []
   spec: |
-    <spec fn="get_builders_sweep_withdrawals" fork="gloas" hash="04c1cb10">
+    <spec fn="get_builders_sweep_withdrawals" fork="gloas" hash="67af411a">
     def get_builders_sweep_withdrawals(
         state: BeaconState,
         withdrawal_index: WithdrawalIndex,
         prior_withdrawals: Sequence[Withdrawal],
-    ) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, uint64]:
+    ) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, Uint64]:
         epoch = get_current_epoch(state)
         builders_limit = min(len(state.builders), MAX_BUILDERS_PER_WITHDRAWALS_SWEEP)
         withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD - 1
         assert len(prior_withdrawals) <= withdrawals_limit
 
-        processed_count: uint64 = 0
+        processed_count: Uint64 = 0
         withdrawals: List[Withdrawal] = []
         builder_index = state.next_withdrawal_builder_index
         for _ in range(builders_limit):
@@ -3215,16 +3219,16 @@
     - file: beacon-chain/core/helpers/beacon_committee.go
       search: func SlotCommitteeCount(
   spec: |
-    <spec fn="get_committee_count_per_slot" fork="phase0" hash="3238e1ea">
-    def get_committee_count_per_slot(state: BeaconState, epoch: Epoch) -> uint64:
+    <spec fn="get_committee_count_per_slot" fork="phase0" hash="3968cc71">
+    def get_committee_count_per_slot(state: BeaconState, epoch: Epoch) -> Uint64:
         """
         Return the number of committees in each slot for the given ``epoch``.
         """
         return max(
-            uint64(1),
+            Uint64(1),
             min(
                 MAX_COMMITTEES_PER_SLOT,
-                uint64(len(get_active_validator_indices(state, epoch)))
+                Uint64(len(get_active_validator_indices(state, epoch)))
                 // SLOTS_PER_EPOCH
                 // TARGET_COMMITTEE_SIZE,
             ),
@@ -3236,8 +3240,8 @@
     - file: beacon-chain/core/helpers/beacon_committee.go
       search: func CommitteeIndices(
   spec: |
-    <spec fn="get_committee_indices" fork="electra" hash="fa701795">
-    def get_committee_indices(committee_bits: Bitvector) -> Sequence[CommitteeIndex]:
+    <spec fn="get_committee_indices" fork="electra" hash="33edfd80">
+    def get_committee_indices(committee_bits: BitVector) -> Sequence[CommitteeIndex]:
         return [CommitteeIndex(index) for index, bit in enumerate(committee_bits) if bit]
     </spec>
 
@@ -3308,16 +3312,16 @@
 - name: get_contribution_due_ms#altair
   sources: []
   spec: |
-    <spec fn="get_contribution_due_ms" fork="altair" hash="34ba156a">
-    def get_contribution_due_ms() -> uint64:
+    <spec fn="get_contribution_due_ms" fork="altair" hash="05255480">
+    def get_contribution_due_ms() -> Uint64:
         return get_slot_component_duration_ms(CONTRIBUTION_DUE_BPS)
     </spec>
 
 - name: get_contribution_due_ms#gloas
   sources: []
   spec: |
-    <spec fn="get_contribution_due_ms" fork="gloas" hash="9d9baa98">
-    def get_contribution_due_ms() -> uint64:
+    <spec fn="get_contribution_due_ms" fork="gloas" hash="31d7c1c3">
+    def get_contribution_due_ms() -> Uint64:
         # [Modified in Gloas]
         return get_slot_component_duration_ms(CONTRIBUTION_DUE_BPS_GLOAS)
     </spec>
@@ -3413,15 +3417,15 @@
     - file: beacon-chain/core/peerdas/das_core.go
       search: func CustodyGroups(
   spec: |
-    <spec fn="get_custody_groups" fork="fulu" hash="2e6b71d3">
-    def get_custody_groups(node_id: NodeID, custody_group_count: uint64) -> Sequence[CustodyIndex]:
+    <spec fn="get_custody_groups" fork="fulu" hash="aad37e2f">
+    def get_custody_groups(node_id: NodeID, custody_group_count: Uint64) -> Sequence[CustodyIndex]:
         assert custody_group_count <= NUMBER_OF_CUSTODY_GROUPS
 
         # Skip computation if all groups are custodied
         if custody_group_count == NUMBER_OF_CUSTODY_GROUPS:
             return [CustodyIndex(i) for i in range(NUMBER_OF_CUSTODY_GROUPS)]
 
-        current_id = uint256(node_id)
+        current_id = Uint256(node_id)
         custody_groups: List[CustodyIndex] = []
         while len(custody_groups) < custody_group_count:
             custody_group = CustodyIndex(
@@ -3431,7 +3435,7 @@
                 custody_groups.append(custody_group)
             if current_id == UINT256_MAX:
                 # Overflow prevention
-                current_id = uint256(0)
+                current_id = Uint256(0)
             else:
                 current_id += 1
 
@@ -3697,15 +3701,15 @@
     - file: beacon-chain/rpc/prysm/v1alpha1/validator/proposer_deposits.go
       search: func (vs *Server) deposits(
   spec: |
-    <spec fn="get_eth1_pending_deposit_count" fork="electra" hash="5dc54930">
-    def get_eth1_pending_deposit_count(state: BeaconState) -> uint64:
+    <spec fn="get_eth1_pending_deposit_count" fork="electra" hash="3418399a">
+    def get_eth1_pending_deposit_count(state: BeaconState) -> Uint64:
         eth1_deposit_index_limit = min(
             state.eth1_data.deposit_count, state.deposit_requests_start_index
         )
         if state.eth1_deposit_index < eth1_deposit_index_limit:
             return min(MAX_DEPOSITS, eth1_deposit_index_limit - state.eth1_deposit_index)
         else:
-            return uint64(0)
+            return Uint64(0)
     </spec>
 
 - name: get_eth1_vote#phase0
@@ -4122,8 +4126,8 @@
     - file: beacon-chain/core/helpers/rewards_penalties.go
       search: func FinalityDelay(
   spec: |
-    <spec fn="get_finality_delay" fork="phase0" hash="df3ca52e">
-    def get_finality_delay(state: BeaconState) -> uint64:
+    <spec fn="get_finality_delay" fork="phase0" hash="475d0afa">
+    def get_finality_delay(state: BeaconState) -> Uint64:
         return get_previous_epoch(state) - state.finalized_checkpoint.epoch
     </spec>
 
@@ -4165,7 +4169,7 @@
 - name: get_forkchoice_store#phase0
   sources: []
   spec: |
-    <spec fn="get_forkchoice_store" fork="phase0" hash="1c381b74">
+    <spec fn="get_forkchoice_store" fork="phase0" hash="8e0e5f17">
     def get_forkchoice_store(anchor_state: BeaconState, anchor_block: BeaconBlock) -> Store:
         assert anchor_block.state_root == hash_tree_root(anchor_state)
         anchor_root = hash_tree_root(anchor_block)
@@ -4174,7 +4178,7 @@
         finalized_checkpoint = Checkpoint(epoch=anchor_epoch, root=anchor_root)
         proposer_boost_root = Root()
         return Store(
-            time=uint64(anchor_state.genesis_time + SLOT_DURATION_MS * anchor_state.slot // 1000),
+            time=Uint64(anchor_state.genesis_time + SLOT_DURATION_MS * anchor_state.slot // 1000),
             genesis_time=anchor_state.genesis_time,
             justified_checkpoint=justified_checkpoint,
             finalized_checkpoint=finalized_checkpoint,
@@ -4192,7 +4196,7 @@
 - name: get_forkchoice_store#gloas
   sources: []
   spec: |
-    <spec fn="get_forkchoice_store" fork="gloas" hash="91d69dde">
+    <spec fn="get_forkchoice_store" fork="gloas" hash="94300183">
     def get_forkchoice_store(anchor_state: BeaconState, anchor_block: BeaconBlock) -> Store:
         assert anchor_block.state_root == hash_tree_root(anchor_state)
         anchor_root = hash_tree_root(anchor_block)
@@ -4201,7 +4205,7 @@
         finalized_checkpoint = Checkpoint(epoch=anchor_epoch, root=anchor_root)
         proposer_boost_root = Root()
         return Store(
-            time=uint64(anchor_state.genesis_time + SLOT_DURATION_MS * anchor_state.slot // 1000),
+            time=Uint64(anchor_state.genesis_time + SLOT_DURATION_MS * anchor_state.slot // 1000),
             genesis_time=anchor_state.genesis_time,
             justified_checkpoint=justified_checkpoint,
             finalized_checkpoint=finalized_checkpoint,
@@ -4227,7 +4231,7 @@
 - name: get_forkchoice_store#heze
   sources: []
   spec: |
-    <spec fn="get_forkchoice_store" fork="heze" hash="9c12c5ad">
+    <spec fn="get_forkchoice_store" fork="heze" hash="72e4155e">
     def get_forkchoice_store(anchor_state: BeaconState, anchor_block: BeaconBlock) -> Store:
         assert anchor_block.state_root == hash_tree_root(anchor_state)
         anchor_root = hash_tree_root(anchor_block)
@@ -4236,7 +4240,7 @@
         finalized_checkpoint = Checkpoint(epoch=anchor_epoch, root=anchor_root)
         proposer_boost_root = Root()
         return Store(
-            time=uint64(anchor_state.genesis_time + SLOT_DURATION_MS * anchor_state.slot // 1000),
+            time=Uint64(anchor_state.genesis_time + SLOT_DURATION_MS * anchor_state.slot // 1000),
             genesis_time=anchor_state.genesis_time,
             justified_checkpoint=justified_checkpoint,
             finalized_checkpoint=finalized_checkpoint,
@@ -4442,12 +4446,12 @@
 - name: get_inclusion_list_bits#heze
   sources: []
   spec: |
-    <spec fn="get_inclusion_list_bits" fork="heze" hash="b044f014">
+    <spec fn="get_inclusion_list_bits" fork="heze" hash="b0ea4eab">
     def get_inclusion_list_bits(
         store: InclusionListStore, state: BeaconState, slot: Slot, only_timely: bool = True
-    ) -> Bitvector[INCLUSION_LIST_COMMITTEE_SIZE]:
+    ) -> BitVector[INCLUSION_LIST_COMMITTEE_SIZE]:
         """
-        Return a ``Bitvector`` over inclusion list committee indices with bits set
+        Return a ``BitVector`` over inclusion list committee indices with bits set
         for those who provided valid, non-equivocating inclusion lists for the given ``slot``.
         """
         committee = get_inclusion_list_committee(state, slot)
@@ -4458,13 +4462,13 @@
         timeliness = store.inclusion_list_timeliness
 
         validator_indices = [
-            inclusion_lists[inclusion_list_root].validator_index
+            inclusion_lists[inclusion_list_root].message.validator_index
             for inclusion_list_root in inclusion_lists
-            if inclusion_lists[inclusion_list_root].validator_index not in equivocators
+            if inclusion_lists[inclusion_list_root].message.validator_index not in equivocators
             if not only_timely or timeliness[inclusion_list_root]
         ]
 
-        return Bitvector[INCLUSION_LIST_COMMITTEE_SIZE](
+        return BitVector[INCLUSION_LIST_COMMITTEE_SIZE](
             validator_index in validator_indices for validator_index in committee
         )
     </spec>
@@ -4516,8 +4520,8 @@
 - name: get_inclusion_list_due_ms#heze
   sources: []
   spec: |
-    <spec fn="get_inclusion_list_due_ms" fork="heze" hash="d9b6a3e5">
-    def get_inclusion_list_due_ms() -> uint64:
+    <spec fn="get_inclusion_list_due_ms" fork="heze" hash="48bbb794">
+    def get_inclusion_list_due_ms() -> Uint64:
         return get_slot_component_duration_ms(INCLUSION_LIST_DUE_BPS)
     </spec>
 
@@ -4551,7 +4555,7 @@
 - name: get_inclusion_list_transactions#heze
   sources: []
   spec: |
-    <spec fn="get_inclusion_list_transactions" fork="heze" hash="d0a6ae16">
+    <spec fn="get_inclusion_list_transactions" fork="heze" hash="6d7217f3">
     def get_inclusion_list_transactions(
         store: InclusionListStore, state: BeaconState, slot: Slot, only_timely: bool = True
     ) -> Sequence[Transaction]:
@@ -4565,9 +4569,9 @@
         transactions = [
             transaction
             for inclusion_list_root in inclusion_lists
-            if inclusion_lists[inclusion_list_root].validator_index not in equivocators
+            if inclusion_lists[inclusion_list_root].message.validator_index not in equivocators
             if not only_timely or timeliness[inclusion_list_root]
-            for transaction in inclusion_lists[inclusion_list_root].transactions
+            for transaction in inclusion_lists[inclusion_list_root].message.transactions
         ]
 
         # Deduplicate inclusion list transactions. Order does not need to be preserved.
@@ -4911,7 +4915,7 @@
     - file: beacon-chain/core/altair/sync_committee.go
       search: func NextSyncCommitteeIndices(
   spec: |
-    <spec fn="get_next_sync_committee_indices" fork="altair" hash="29891ee8">
+    <spec fn="get_next_sync_committee_indices" fork="altair" hash="6ed6661f">
     def get_next_sync_committee_indices(state: BeaconState) -> Sequence[ValidatorIndex]:
         """
         Return the sync committee indices, with possible duplicates, for the next sync committee.
@@ -4920,16 +4924,16 @@
 
         MAX_RANDOM_BYTE = 2**8 - 1
         active_validator_indices = get_active_validator_indices(state, epoch)
-        active_validator_count = uint64(len(active_validator_indices))
+        active_validator_count = Uint64(len(active_validator_indices))
         seed = get_seed(state, epoch, DOMAIN_SYNC_COMMITTEE)
         i = 0
         sync_committee_indices: List[ValidatorIndex] = []
         while len(sync_committee_indices) < SYNC_COMMITTEE_SIZE:
             shuffled_index = compute_shuffled_index(
-                uint64(i % active_validator_count), active_validator_count, seed
+                Uint64(i % active_validator_count), active_validator_count, seed
             )
             candidate_index = active_validator_indices[shuffled_index]
-            random_byte = hash(seed + uint_to_bytes(uint64(i // 32)))[i % 32]
+            random_byte = hash(seed + uint_to_bytes(Uint64(i // 32)))[i % 32]
             effective_balance = state.validators[candidate_index].effective_balance
             if effective_balance * MAX_RANDOM_BYTE >= MAX_EFFECTIVE_BALANCE * random_byte:
                 sync_committee_indices.append(candidate_index)
@@ -4944,7 +4948,7 @@
     - file: beacon-chain/core/altair/sync_committee.go
       search: if s.Version() >= version.Electra {
   spec: |
-    <spec fn="get_next_sync_committee_indices" fork="electra" hash="2ecaf5da">
+    <spec fn="get_next_sync_committee_indices" fork="electra" hash="41a80dac">
     def get_next_sync_committee_indices(state: BeaconState) -> Sequence[ValidatorIndex]:
         """
         Return the sync committee indices, with possible duplicates, for the next sync committee.
@@ -4954,13 +4958,13 @@
         # [Modified in Electra]
         MAX_RANDOM_VALUE = 2**16 - 1
         active_validator_indices = get_active_validator_indices(state, epoch)
-        active_validator_count = uint64(len(active_validator_indices))
+        active_validator_count = Uint64(len(active_validator_indices))
         seed = get_seed(state, epoch, DOMAIN_SYNC_COMMITTEE)
-        i = uint64(0)
+        i = Uint64(0)
         sync_committee_indices: List[ValidatorIndex] = []
         while len(sync_committee_indices) < SYNC_COMMITTEE_SIZE:
             shuffled_index = compute_shuffled_index(
-                uint64(i % active_validator_count), active_validator_count, seed
+                Uint64(i % active_validator_count), active_validator_count, seed
             )
             candidate_index = active_validator_indices[shuffled_index]
             # [Modified in Electra]
@@ -5057,8 +5061,8 @@
 - name: get_payload_attestation_due_ms#gloas
   sources: []
   spec: |
-    <spec fn="get_payload_attestation_due_ms" fork="gloas" hash="cab71114">
-    def get_payload_attestation_due_ms() -> uint64:
+    <spec fn="get_payload_attestation_due_ms" fork="gloas" hash="268cc3e0">
+    def get_payload_attestation_due_ms() -> Uint64:
         return get_slot_component_duration_ms(PAYLOAD_ATTESTATION_DUE_BPS)
     </spec>
 
@@ -5077,16 +5081,16 @@
 - name: get_payload_due_ms#gloas
   sources: []
   spec: |
-    <spec fn="get_payload_due_ms" fork="gloas" hash="6ccf7f5c">
-    def get_payload_due_ms() -> uint64:
+    <spec fn="get_payload_due_ms" fork="gloas" hash="492ee49c">
+    def get_payload_due_ms() -> Uint64:
         return get_slot_component_duration_ms(PAYLOAD_DUE_BPS)
     </spec>
 
 - name: get_payload_status_tiebreaker#gloas
   sources: []
   spec: |
-    <spec fn="get_payload_status_tiebreaker" fork="gloas" hash="55e656e3">
-    def get_payload_status_tiebreaker(store: Store, node: ForkChoiceNode) -> uint8:
+    <spec fn="get_payload_status_tiebreaker" fork="gloas" hash="68bd690c">
+    def get_payload_status_tiebreaker(store: Store, node: ForkChoiceNode) -> Uint8:
         if is_previous_slot_payload_decision(store, node):
             # To decide on a payload from the previous slot, choose
             # between FULL and EMPTY based on `should_extend_payload`
@@ -5136,12 +5140,12 @@
 - name: get_pending_partial_withdrawals#electra
   sources: []
   spec: |
-    <spec fn="get_pending_partial_withdrawals" fork="electra" hash="306047e9">
+    <spec fn="get_pending_partial_withdrawals" fork="electra" hash="31f145b3">
     def get_pending_partial_withdrawals(
         state: BeaconState,
         withdrawal_index: WithdrawalIndex,
         prior_withdrawals: Sequence[Withdrawal],
-    ) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, uint64]:
+    ) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, Uint64]:
         epoch = get_current_epoch(state)
         withdrawals_limit = min(
             len(prior_withdrawals) + MAX_PENDING_PARTIALS_PER_WITHDRAWALS_SWEEP,
@@ -5149,7 +5153,7 @@
         )
         assert len(prior_withdrawals) <= withdrawals_limit
 
-        processed_count: uint64 = 0
+        processed_count: Uint64 = 0
         withdrawals: List[Withdrawal] = []
         for withdrawal in state.pending_partial_withdrawals:
             all_withdrawals = prior_withdrawals + withdrawals
@@ -5346,8 +5350,8 @@
 - name: get_proposer_reorg_cutoff_ms#phase0
   sources: []
   spec: |
-    <spec fn="get_proposer_reorg_cutoff_ms" fork="phase0" hash="cf363b52">
-    def get_proposer_reorg_cutoff_ms() -> uint64:
+    <spec fn="get_proposer_reorg_cutoff_ms" fork="phase0" hash="3dae8607">
+    def get_proposer_reorg_cutoff_ms() -> Uint64:
         return get_slot_component_duration_ms(PROPOSER_REORG_CUTOFF_BPS)
     </spec>
 
@@ -5463,8 +5467,8 @@
 - name: get_safety_threshold#altair
   sources: []
   spec: |
-    <spec fn="get_safety_threshold" fork="altair" hash="72f3d7ff">
-    def get_safety_threshold(store: LightClientStore) -> uint64:
+    <spec fn="get_safety_threshold" fork="altair" hash="4444150c">
+    def get_safety_threshold(store: LightClientStore) -> Uint64:
         return (
             max(
                 store.previous_max_active_participants,
@@ -5510,8 +5514,8 @@
 - name: get_slot_component_duration_ms#phase0
   sources: []
   spec: |
-    <spec fn="get_slot_component_duration_ms" fork="phase0" hash="b81504df">
-    def get_slot_component_duration_ms(basis_points: uint64) -> uint64:
+    <spec fn="get_slot_component_duration_ms" fork="phase0" hash="9decf51d">
+    def get_slot_component_duration_ms(basis_points: Uint64) -> Uint64:
         """
         Calculate the duration of a slot component in milliseconds.
         """
@@ -5557,9 +5561,9 @@
 - name: get_subtree_index#altair
   sources: []
   spec: |
-    <spec fn="get_subtree_index" fork="altair" hash="74962089">
-    def get_subtree_index(generalized_index: GeneralizedIndex) -> uint64:
-        return uint64(generalized_index % 2 ** (floorlog2(generalized_index)))
+    <spec fn="get_subtree_index" fork="altair" hash="78c851f8">
+    def get_subtree_index(generalized_index: GeneralizedIndex) -> Uint64:
+        return Uint64(generalized_index % 2 ** (floorlog2(generalized_index)))
     </spec>
 
 - name: get_support_discount#phase0
@@ -5632,9 +5636,9 @@
 - name: get_sync_committee_selection_proof#altair
   sources: []
   spec: |
-    <spec fn="get_sync_committee_selection_proof" fork="altair" hash="fa4e7704">
+    <spec fn="get_sync_committee_selection_proof" fork="altair" hash="7e3c59ba">
     def get_sync_committee_selection_proof(
-        state: BeaconState, slot: Slot, subcommittee_index: uint64, privkey: int
+        state: BeaconState, slot: Slot, subcommittee_index: Uint64, privkey: int
     ) -> BLSSignature:
         domain = get_domain(state, DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF, compute_epoch_at_slot(slot))
         signing_data = SyncAggregatorSelectionData(
@@ -5648,16 +5652,16 @@
 - name: get_sync_message_due_ms#altair
   sources: []
   spec: |
-    <spec fn="get_sync_message_due_ms" fork="altair" hash="0b972849">
-    def get_sync_message_due_ms() -> uint64:
+    <spec fn="get_sync_message_due_ms" fork="altair" hash="6d2c769f">
+    def get_sync_message_due_ms() -> Uint64:
         return get_slot_component_duration_ms(SYNC_MESSAGE_DUE_BPS)
     </spec>
 
 - name: get_sync_message_due_ms#gloas
   sources: []
   spec: |
-    <spec fn="get_sync_message_due_ms" fork="gloas" hash="e66d68bc">
-    def get_sync_message_due_ms() -> uint64:
+    <spec fn="get_sync_message_due_ms" fork="gloas" hash="74a07556">
+    def get_sync_message_due_ms() -> Uint64:
         # [Modified in Gloas]
         return get_slot_component_duration_ms(SYNC_MESSAGE_DUE_BPS_GLOAS)
     </spec>
@@ -5667,9 +5671,9 @@
     - file: beacon-chain/core/altair/sync_committee.go
       search: func SyncSubCommitteePubkeys(
   spec: |
-    <spec fn="get_sync_subcommittee_pubkeys" fork="altair" hash="772addda">
+    <spec fn="get_sync_subcommittee_pubkeys" fork="altair" hash="fda27f73">
     def get_sync_subcommittee_pubkeys(
-        state: BeaconState, subcommittee_index: uint64
+        state: BeaconState, subcommittee_index: Uint64
     ) -> Sequence[BLSPubkey]:
         # Committees assigned to `slot` sign for `slot - 1`
         # This creates the exceptional logic below when transitioning between sync committee periods
@@ -5741,12 +5745,12 @@
     - file: beacon-chain/core/helpers/rewards_penalties.go
       search: func TotalBalance(
   spec: |
-    <spec fn="get_total_balance" fork="phase0" hash="32fd5ad7">
+    <spec fn="get_total_balance" fork="phase0" hash="8227088d">
     def get_total_balance(state: BeaconState, indices: Set[ValidatorIndex]) -> Gwei:
         """
         Return the combined effective balance of the ``indices``.
         ``EFFECTIVE_BALANCE_INCREMENT`` Gwei minimum to avoid divisions by zero.
-        Math safe up to ~10B ETH, after which this overflows uint64.
+        Math safe up to ~10B ETH, after which this overflows Uint64.
         """
         return Gwei(
             max(
@@ -5818,8 +5822,8 @@
     - file: beacon-chain/core/helpers/validators.go
       search: func ValidatorActivationChurnLimitDeneb(
   spec: |
-    <spec fn="get_validator_activation_churn_limit" fork="deneb" hash="cfc9e54a">
-    def get_validator_activation_churn_limit(state: BeaconState) -> uint64:
+    <spec fn="get_validator_activation_churn_limit" fork="deneb" hash="4b6d6bb5">
+    def get_validator_activation_churn_limit(state: BeaconState) -> Uint64:
         """
         Return the validator activation churn limit for the current epoch.
         """
@@ -5831,14 +5835,14 @@
     - file: beacon-chain/core/helpers/validators.go
       search: func ValidatorExitChurnLimit(
   spec: |
-    <spec fn="get_validator_churn_limit" fork="phase0" hash="76f815b3">
-    def get_validator_churn_limit(state: BeaconState) -> uint64:
+    <spec fn="get_validator_churn_limit" fork="phase0" hash="1aaf615c">
+    def get_validator_churn_limit(state: BeaconState) -> Uint64:
         """
         Return the validator churn limit for the current epoch.
         """
         active_validator_indices = get_active_validator_indices(state, get_current_epoch(state))
         return max(
-            MIN_PER_EPOCH_CHURN_LIMIT, uint64(len(active_validator_indices)) // CHURN_LIMIT_QUOTIENT
+            MIN_PER_EPOCH_CHURN_LIMIT, Uint64(len(active_validator_indices)) // CHURN_LIMIT_QUOTIENT
         )
     </spec>
 
@@ -5847,9 +5851,9 @@
     - file: beacon-chain/core/altair/deposit.go
       search: func GetValidatorFromDeposit(
   spec: |
-    <spec fn="get_validator_from_deposit" fork="phase0" hash="d267aa31">
+    <spec fn="get_validator_from_deposit" fork="phase0" hash="4de4438c">
     def get_validator_from_deposit(
-        pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: uint64
+        pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: Uint64
     ) -> Validator:
         effective_balance = min(amount - amount % EFFECTIVE_BALANCE_INCREMENT, MAX_EFFECTIVE_BALANCE)
 
@@ -5870,9 +5874,9 @@
     - file: beacon-chain/core/electra/deposits.go
       search: func GetValidatorFromDeposit(
   spec: |
-    <spec fn="get_validator_from_deposit" fork="electra" hash="b1164a28">
+    <spec fn="get_validator_from_deposit" fork="electra" hash="ca05d992">
     def get_validator_from_deposit(
-        pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: uint64
+        pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: Uint64
     ) -> Validator:
         validator = Validator(
             pubkey=pubkey,
@@ -5899,10 +5903,10 @@
     - file: beacon-chain/core/peerdas/validator.go
       search: func ValidatorsCustodyRequirement(
   spec: |
-    <spec fn="get_validators_custody_requirement" fork="fulu" hash="b2f47d03">
+    <spec fn="get_validators_custody_requirement" fork="fulu" hash="0f12230b">
     def get_validators_custody_requirement(
         state: BeaconState, validator_indices: Sequence[ValidatorIndex]
-    ) -> uint64:
+    ) -> Uint64:
         total_node_balance = sum(
             state.validators[index].effective_balance for index in validator_indices
         )
@@ -5913,19 +5917,19 @@
 - name: get_validators_sweep_withdrawals#capella
   sources: []
   spec: |
-    <spec fn="get_validators_sweep_withdrawals" fork="capella" hash="59563c2a">
+    <spec fn="get_validators_sweep_withdrawals" fork="capella" hash="63669fe1">
     def get_validators_sweep_withdrawals(
         state: BeaconState,
         withdrawal_index: WithdrawalIndex,
         prior_withdrawals: Sequence[Withdrawal],
-    ) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, uint64]:
+    ) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, Uint64]:
         epoch = get_current_epoch(state)
         validators_limit = min(len(state.validators), MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP)
         withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD
         # There must be at least one space reserved for validator sweep withdrawals
         assert len(prior_withdrawals) < withdrawals_limit
 
-        processed_count: uint64 = 0
+        processed_count: Uint64 = 0
         withdrawals: List[Withdrawal] = []
         validator_index = state.next_withdrawal_validator_index
         for _ in range(validators_limit):
@@ -5966,19 +5970,19 @@
 - name: get_validators_sweep_withdrawals#electra
   sources: []
   spec: |
-    <spec fn="get_validators_sweep_withdrawals" fork="electra" hash="034093ad">
+    <spec fn="get_validators_sweep_withdrawals" fork="electra" hash="9d487c12">
     def get_validators_sweep_withdrawals(
         state: BeaconState,
         withdrawal_index: WithdrawalIndex,
         prior_withdrawals: Sequence[Withdrawal],
-    ) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, uint64]:
+    ) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, Uint64]:
         epoch = get_current_epoch(state)
         validators_limit = min(len(state.validators), MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP)
         withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD
         # There must be at least one space reserved for validator sweep withdrawals
         assert len(prior_withdrawals) < withdrawals_limit
 
-        processed_count: uint64 = 0
+        processed_count: Uint64 = 0
         withdrawals: List[Withdrawal] = []
         validator_index = state.next_withdrawal_validator_index
         for _ in range(validators_limit):
@@ -6163,9 +6167,9 @@
     - file: beacon-chain/core/transition/state.go
       search: func GenesisBeaconState(
   spec: |
-    <spec fn="initialize_beacon_state_from_eth1" fork="phase0" hash="7c0b0251">
+    <spec fn="initialize_beacon_state_from_eth1" fork="phase0" hash="af20d2eb">
     def initialize_beacon_state_from_eth1(
-        eth1_block_hash: Hash32, eth1_timestamp: uint64, deposits: Sequence[Deposit]
+        eth1_block_hash: Hash32, eth1_timestamp: Uint64, deposits: Sequence[Deposit]
     ) -> BeaconState:
         fork = Fork(
             previous_version=GENESIS_FORK_VERSION,
@@ -6175,7 +6179,7 @@
         state = BeaconState(
             genesis_time=eth1_timestamp + GENESIS_DELAY,
             fork=fork,
-            eth1_data=Eth1Data(deposit_count=uint64(len(deposits)), block_hash=eth1_block_hash),
+            eth1_data=Eth1Data(deposit_count=Uint64(len(deposits)), block_hash=eth1_block_hash),
             latest_block_header=BeaconBlockHeader(body_root=hash_tree_root(BeaconBlockBody())),
             randao_mixes=[eth1_block_hash]
             * EPOCHS_PER_HISTORICAL_VECTOR,  # Seed RANDAO with Eth1 entropy
@@ -6350,8 +6354,8 @@
     - file: math/math_helper.go
       search: func IntegerSquareRoot(
   spec: |
-    <spec fn="integer_squareroot" fork="phase0" hash="f99da6e7">
-    def integer_squareroot(n: uint64) -> uint64:
+    <spec fn="integer_squareroot" fork="phase0" hash="1c1fe0a6">
+    def integer_squareroot(n: Uint64) -> Uint64:
         """
         Return the largest integer ``x`` such that ``x**2 <= n``.
         """
@@ -6530,6 +6534,35 @@
         return new_update.signature_slot < old_update.signature_slot
     </spec>
 
+- name: is_bid_compatible_with_head#gloas
+  sources: []
+  spec: |
+    <spec fn="is_bid_compatible_with_head" fork="gloas" hash="8918e061">
+    def is_bid_compatible_with_head(store: Store, bid: ExecutionPayloadBid) -> bool:
+        """
+        Check if ``bid`` is compatible with the head branch.
+        """
+        head_node = get_head(store)
+        head_block = store.blocks[head_node.root]
+        head_bid = head_block.body.signed_execution_payload_bid.message
+
+        builds_on_parent_block = bid.parent_block_root == head_block.parent_root
+        builds_on_parent_payload = bid.parent_block_hash == head_bid.parent_block_hash
+
+        if builds_on_parent_block and builds_on_parent_payload:
+            return True
+
+        if bid.parent_block_root != head_node.root:
+            return False
+
+        builds_on_head_payload = bid.parent_block_hash == head_bid.block_hash
+
+        if should_build_on_full(store, head_node, bid.slot):
+            return builds_on_head_payload
+
+        return builds_on_parent_payload
+    </spec>
+
 - name: is_builder_index#gloas
   sources: []
   spec: |
@@ -6549,8 +6582,8 @@
 - name: is_candidate_block#phase0
   sources: []
   spec: |
-    <spec fn="is_candidate_block" fork="phase0" hash="c588dc0a">
-    def is_candidate_block(block: Eth1Block, period_start: uint64) -> bool:
+    <spec fn="is_candidate_block" fork="phase0" hash="781fcefe">
+    def is_candidate_block(block: Eth1Block, period_start: Uint64) -> bool:
         return (
             block.timestamp + SECONDS_PER_ETH1_BLOCK * ETH1_FOLLOW_DISTANCE <= period_start
             and block.timestamp + SECONDS_PER_ETH1_BLOCK * ETH1_FOLLOW_DISTANCE * 2 >= period_start
@@ -6609,14 +6642,32 @@
         )
     </spec>
 
+- name: is_current_or_previous_epoch#deneb
+  sources: []
+  spec: |
+    <spec fn="is_current_or_previous_epoch" fork="deneb" hash="b9a9edf6">
+    def is_current_or_previous_epoch(
+        state: BeaconState,
+        epoch: Epoch,
+        current_time_ms: Uint64,
+    ) -> bool:
+        """
+        Check if the given epoch is the current or previous epoch
+        (with MAXIMUM_GOSSIP_CLOCK_DISPARITY allowance).
+        """
+        is_current = is_within_epoch(state, epoch, current_time_ms)
+        is_previous = is_within_epoch(state, Epoch(epoch + 1), current_time_ms)
+        return is_current or is_previous
+    </spec>
+
 - name: is_current_slot#altair
   sources: []
   spec: |
-    <spec fn="is_current_slot" fork="altair" hash="cc76de78">
+    <spec fn="is_current_slot" fork="altair" hash="8748e6f0">
     def is_current_slot(
         state: BeaconState,
         slot: Slot,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
     ) -> bool:
         """
         Check if the given slot is the current slot
@@ -6632,7 +6683,7 @@
     - file: beacon-chain/blockchain/process_block.go
       search: func (s *Service) areBlobsAvailable(
   spec: |
-    <spec fn="is_data_available" fork="deneb" hash="98ad45cf">
+    <spec fn="is_data_available" fork="deneb" hash="120fd761">
     def is_data_available(
         beacon_block_root: Root, blob_kzg_commitments: Sequence[KZGCommitment]
     ) -> bool:
@@ -6642,7 +6693,7 @@
         # `MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS`
         blobs, proofs = retrieve_blobs_and_proofs(beacon_block_root)
 
-        return verify_blob_kzg_proof_batch(blobs, blob_kzg_commitments, proofs)
+        return kzg.verify_blob_kzg_proof_batch(blobs, blob_kzg_commitments, proofs)
     </spec>
 
 - name: is_data_available#fulu
@@ -6785,13 +6836,13 @@
 - name: is_full_validator_set_covered#phase0
   sources: []
   spec: |
-    <spec fn="is_full_validator_set_covered" fork="phase0" hash="d83c05cd">
+    <spec fn="is_full_validator_set_covered" fork="phase0" hash="a9e47901">
     def is_full_validator_set_covered(start_slot: Slot, end_slot: Slot) -> bool:
         """
         Return ``True`` if the range between ``start_slot`` and ``end_slot`` (inclusive of both) includes an entire epoch.
         """
-        start_full_epoch = compute_epoch_at_slot(start_slot + (SLOTS_PER_EPOCH - 1))
-        end_full_epoch = compute_epoch_at_slot(Slot(end_slot + 1))
+        start_full_epoch = compute_epoch_at_slot(start_slot + SLOTS_PER_EPOCH - Slot(1))
+        end_full_epoch = compute_epoch_at_slot(end_slot + Slot(1))
         return start_full_epoch < end_full_epoch
     </spec>
 
@@ -6835,9 +6886,9 @@
 - name: is_gas_limit_target_compatible#gloas
   sources: []
   spec: |
-    <spec fn="is_gas_limit_target_compatible" fork="gloas" hash="3fa22023">
+    <spec fn="is_gas_limit_target_compatible" fork="gloas" hash="6dffbd1d">
     def is_gas_limit_target_compatible(
-        parent_gas_limit: uint64, gas_limit: uint64, target_gas_limit: uint64
+        parent_gas_limit: Uint64, gas_limit: Uint64, target_gas_limit: Uint64
     ) -> bool:
         """
         Check if ``gas_limit`` is compatible with ``target_gas_limit`` under the
@@ -6873,18 +6924,7 @@
 - name: is_head_weak#phase0
   sources: []
   spec: |
-    <spec fn="is_head_weak" fork="phase0" hash="ac0fb917">
-    def is_head_weak(store: Store, head_root: Root) -> bool:
-        justified_state = store.checkpoint_states[store.justified_checkpoint]
-        reorg_threshold = calculate_committee_fraction(justified_state, REORG_HEAD_WEIGHT_THRESHOLD)
-        head_weight = get_weight(store, ForkChoiceNode(root=head_root))
-        return head_weight < reorg_threshold
-    </spec>
-
-- name: is_head_weak#gloas
-  sources: []
-  spec: |
-    <spec fn="is_head_weak" fork="gloas" hash="a763a3db">
+    <spec fn="is_head_weak" fork="phase0" hash="08f7dac6">
     def is_head_weak(store: Store, head_root: Root) -> bool:
         # Calculate weight threshold for weak head
         justified_state = store.checkpoint_states[store.justified_checkpoint]
@@ -6894,6 +6934,35 @@
         head_state = store.block_states[head_root]
         head_block = store.blocks[head_root]
         epoch = compute_epoch_at_slot(head_block.slot)
+        head_node = ForkChoiceNode(root=head_root)
+        head_weight = get_attestation_score(store, head_node, justified_state)
+        for index in range(get_committee_count_per_slot(head_state, epoch)):
+            committee = get_beacon_committee(head_state, head_block.slot, CommitteeIndex(index))
+            head_weight += Gwei(
+                sum(
+                    justified_state.validators[i].effective_balance
+                    for i in committee
+                    if i in store.equivocating_indices
+                )
+            )
+
+        return head_weight < reorg_threshold
+    </spec>
+
+- name: is_head_weak#gloas
+  sources: []
+  spec: |
+    <spec fn="is_head_weak" fork="gloas" hash="5b81945a">
+    def is_head_weak(store: Store, head_root: Root) -> bool:
+        # Calculate weight threshold for weak head
+        justified_state = store.checkpoint_states[store.justified_checkpoint]
+        reorg_threshold = calculate_committee_fraction(justified_state, REORG_HEAD_WEIGHT_THRESHOLD)
+
+        # Compute head weight including equivocations
+        head_state = store.block_states[head_root]
+        head_block = store.blocks[head_root]
+        epoch = compute_epoch_at_slot(head_block.slot)
+        # [Modified in Gloas:EIP7732]
         head_node = ForkChoiceNode(root=head_root, payload_status=PAYLOAD_STATUS_PENDING)
         head_weight = get_attestation_score(store, head_node, justified_state)
         for index in range(get_committee_count_per_slot(head_state, epoch)):
@@ -6922,12 +6991,12 @@
 - name: is_inclusion_list_bits_inclusive#heze
   sources: []
   spec: |
-    <spec fn="is_inclusion_list_bits_inclusive" fork="heze" hash="f8e537b8">
+    <spec fn="is_inclusion_list_bits_inclusive" fork="heze" hash="5d803543">
     def is_inclusion_list_bits_inclusive(
         store: InclusionListStore,
         state: BeaconState,
         slot: Slot,
-        inclusion_list_bits: Bitvector[INCLUSION_LIST_COMMITTEE_SIZE],
+        inclusion_list_bits: BitVector[INCLUSION_LIST_COMMITTEE_SIZE],
         only_timely: bool = True,
     ) -> bool:
         """
@@ -6973,10 +7042,10 @@
 - name: is_non_strict_superset#phase0
   sources: []
   spec: |
-    <spec fn="is_non_strict_superset" fork="phase0" hash="636b4456">
+    <spec fn="is_non_strict_superset" fork="phase0" hash="7cb1d56e">
     def is_non_strict_superset(
-        seen_bits_set: Set[Tuple[boolean, ...]],
-        new_bits: Tuple[boolean, ...],
+        seen_bits_set: Set[Tuple[Boolean, ...]],
+        new_bits: Tuple[Boolean, ...],
     ) -> bool:
         """
         Return True if any prior bitset in ``seen_bits_set`` is a non-strict
@@ -6996,11 +7065,11 @@
 - name: is_not_from_future_slot#phase0
   sources: []
   spec: |
-    <spec fn="is_not_from_future_slot" fork="phase0" hash="7e35ef32">
+    <spec fn="is_not_from_future_slot" fork="phase0" hash="04d389ee">
     def is_not_from_future_slot(
         state: BeaconState,
         slot: Slot,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
     ) -> bool:
         """
         Check if the given slot is not from the future
@@ -7060,13 +7129,13 @@
 - name: is_parent_strong#phase0
   sources: []
   spec: |
-    <spec fn="is_parent_strong" fork="phase0" hash="a23d498f">
+    <spec fn="is_parent_strong" fork="phase0" hash="f7f4e624">
     def is_parent_strong(store: Store, root: Root) -> bool:
         justified_state = store.checkpoint_states[store.justified_checkpoint]
         parent_threshold = calculate_committee_fraction(justified_state, REORG_PARENT_WEIGHT_THRESHOLD)
         parent_root = store.blocks[root].parent_root
         parent_node = ForkChoiceNode(root=parent_root)
-        parent_weight = get_weight(store, parent_node)
+        parent_weight = get_attestation_score(store, parent_node, justified_state)
         return parent_weight > parent_threshold
     </spec>
 
@@ -7316,6 +7385,25 @@
         return bls.Verify(request.pubkey, signing_root, request.signature)
     </spec>
 
+- name: is_valid_dependent_root#gloas
+  sources: []
+  spec: |
+    <spec fn="is_valid_dependent_root" fork="gloas" hash="2b049531">
+    def is_valid_dependent_root(store: Store, root: Root, epoch: Epoch) -> bool:
+        """
+        Check if the block with the given ``root`` is a possible dependent block
+        for the given ``epoch``, meaning that on some branch it is, or could
+        become, the latest block prior to the start of the epoch.
+        """
+        epoch_start_slot = compute_start_slot_at_epoch(epoch)
+        if store.blocks[root].slot >= epoch_start_slot:
+            return False
+        for block in store.blocks.values():
+            if block.parent_root == root and block.slot >= epoch_start_slot:
+                return True
+        return root == get_head(store).root
+    </spec>
+
 - name: is_valid_deposit_signature#electra
   sources:
     - file: beacon-chain/core/electra/deposits.go
@@ -7323,9 +7411,9 @@
     - file: beacon-chain/core/helpers/deposit.go
       search: func IsValidDepositSignature(
   spec: |
-    <spec fn="is_valid_deposit_signature" fork="electra" hash="7347b754">
+    <spec fn="is_valid_deposit_signature" fork="electra" hash="3d27f174">
     def is_valid_deposit_signature(
-        pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: uint64, signature: BLSSignature
+        pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: Uint64, signature: BLSSignature
     ) -> bool:
         deposit_message = DepositMessage(
             pubkey=pubkey,
@@ -7477,15 +7565,15 @@
 - name: is_valid_light_client_header#deneb
   sources: []
   spec: |
-    <spec fn="is_valid_light_client_header" fork="deneb" hash="f458ba78">
+    <spec fn="is_valid_light_client_header" fork="deneb" hash="89259a0e">
     def is_valid_light_client_header(header: LightClientHeader) -> bool:
         epoch = compute_epoch_at_slot(header.beacon.slot)
 
         # [New in Deneb:EIP4844]
         if epoch < DENEB_FORK_EPOCH:
-            if header.execution.blob_gas_used != uint64(0):
+            if header.execution.blob_gas_used != Uint64(0):
                 return False
-            if header.execution.excess_blob_gas != uint64(0):
+            if header.execution.excess_blob_gas != Uint64(0):
                 return False
 
         if epoch < CAPELLA_FORK_EPOCH:
@@ -7544,9 +7632,9 @@
 - name: is_valid_merkle_branch#phase0
   sources: []
   spec: |
-    <spec fn="is_valid_merkle_branch" fork="phase0" hash="19db92a5">
+    <spec fn="is_valid_merkle_branch" fork="phase0" hash="356dc6b1">
     def is_valid_merkle_branch(
-        leaf: Bytes32, branch: Sequence[Bytes32], depth: uint64, index: uint64, root: Root
+        leaf: Bytes32, branch: Sequence[Bytes32], depth: Uint64, index: Uint64, root: Root
     ) -> bool:
         """
         Check if ``leaf`` at ``index`` verifies against the Merkle ``root`` and ``branch``.
@@ -7646,15 +7734,36 @@
         return is_total_difficulty_reached and is_parent_total_difficulty_valid
     </spec>
 
+- name: is_within_epoch#deneb
+  sources: []
+  spec: |
+    <spec fn="is_within_epoch" fork="deneb" hash="276fb799">
+    def is_within_epoch(
+        state: BeaconState,
+        epoch: Epoch,
+        current_time_ms: Uint64,
+    ) -> bool:
+        """
+        Check if the current time is within the given epoch
+        (with MAXIMUM_GOSSIP_CLOCK_DISPARITY allowance on both ends).
+        """
+        return is_within_slot_range(
+            state,
+            compute_start_slot_at_epoch(epoch),
+            SLOTS_PER_EPOCH - 1,
+            current_time_ms,
+        )
+    </spec>
+
 - name: is_within_slot_range#phase0
   sources: []
   spec: |
-    <spec fn="is_within_slot_range" fork="phase0" hash="7a6f6f51">
+    <spec fn="is_within_slot_range" fork="phase0" hash="9e470870">
     def is_within_slot_range(
         state: BeaconState,
         slot: Slot,
-        slot_range: uint64,
-        current_time_ms: uint64,
+        slot_range: Uint64,
+        current_time_ms: Uint64,
     ) -> bool:
         """
         Check if the current time is within the inclusive slot range ``[slot, slot + slot_range]``
@@ -7733,11 +7842,11 @@
     - file: beacon-chain/p2p/encoder/ssz.go
       search: func MaxCompressedLen(
   spec: |
-    <spec fn="max_compressed_len" fork="phase0" hash="2e531709">
-    def max_compressed_len(n: uint64) -> uint64:
+    <spec fn="max_compressed_len" fork="phase0" hash="8dfe50b2">
+    def max_compressed_len(n: Uint64) -> Uint64:
         # Worst-case compressed length for a given payload of size n when using snappy:
         # https://github.com/google/snappy/blob/32ded457c0b1fe78ceb8397632c416568d6714a0/snappy.cc#L218C1-L218C47
-        return uint64(32 + n + n / 6)
+        return Uint64(32 + n + n / 6)
     </spec>
 
 - name: max_message_size#phase0
@@ -7745,8 +7854,8 @@
     - file: beacon-chain/p2p/pubsub.go
       search: func MaxMessageSize(
   spec: |
-    <spec fn="max_message_size" fork="phase0" hash="8abedfdb">
-    def max_message_size() -> uint64:
+    <spec fn="max_message_size" fork="phase0" hash="ae51ac93">
+    def max_message_size() -> Uint64:
         # Allow 1024 bytes for framing and encoding overhead but at least 1MiB in case MAX_PAYLOAD_SIZE is small.
         return max(max_compressed_len(MAX_PAYLOAD_SIZE) + 1024, 1024 * 1024)
     </spec>
@@ -7882,9 +7991,15 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="phase0" hash="36ebb320">
+    <spec fn="on_block" fork="phase0" hash="fd507f39">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         block = signed_block.message
+        block_root = hash_tree_root(block)
+
+        # Return early if the block is already known
+        if block_root in store.blocks:
+            return
+
         # Parent block must be known
         assert block.parent_root in store.block_states
         # Make a copy of the state to avoid mutability issues
@@ -7905,7 +8020,6 @@
 
         # Check the block is valid and compute the post-state
         state = pre_state.copy()
-        block_root = hash_tree_root(block)
         state_transition(state, signed_block, validate_result=True)
 
         # Compute head before applying the block
@@ -7930,7 +8044,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="bellatrix" hash="317c8053">
+    <spec fn="on_block" fork="bellatrix" hash="12ce22a6">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
@@ -7939,6 +8053,12 @@
         consider scheduling it for later processing in such case.
         """
         block = signed_block.message
+        block_root = hash_tree_root(block)
+
+        # Return early if the block is already known
+        if block_root in store.blocks:
+            return
+
         # Parent block must be known
         assert block.parent_root in store.block_states
         # Make a copy of the state to avoid mutability issues
@@ -7959,7 +8079,6 @@
 
         # Check the block is valid and compute the post-state
         state = pre_state.copy()
-        block_root = hash_tree_root(block)
         state_transition(state, signed_block, validate_result=True)
 
         # [New in Bellatrix]
@@ -7988,12 +8107,18 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="capella" hash="7e879033">
+    <spec fn="on_block" fork="capella" hash="3f558bc8">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
         """
         block = signed_block.message
+        block_root = hash_tree_root(block)
+
+        # Return early if the block is already known
+        if block_root in store.blocks:
+            return
+
         # Parent block must be known
         assert block.parent_root in store.block_states
         # Blocks cannot be in the future. If they are, their consideration must be delayed until they are in the past.
@@ -8013,7 +8138,6 @@
         # Check the block is valid and compute the post-state
         # Make a copy of the state to avoid mutability issues
         state = copy(store.block_states[block.parent_root])
-        block_root = hash_tree_root(block)
         state_transition(state, signed_block, validate_result=True)
 
         # Compute head before applying the block
@@ -8038,12 +8162,18 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="deneb" hash="12aa50be">
+    <spec fn="on_block" fork="deneb" hash="e7ccb392">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
         """
         block = signed_block.message
+        block_root = hash_tree_root(block)
+
+        # Return early if the block is already known
+        if block_root in store.blocks:
+            return
+
         # Parent block must be known
         assert block.parent_root in store.block_states
         # Blocks cannot be in the future. If they are, their consideration must be delayed until they are in the past.
@@ -8063,12 +8193,11 @@
         # [New in Deneb:EIP4844]
         # Check if blob data is available
         # If not, this payload MAY be queued and subsequently considered when blob data becomes available
-        assert is_data_available(hash_tree_root(block), block.body.blob_kzg_commitments)
+        assert is_data_available(block_root, block.body.blob_kzg_commitments)
 
         # Check the block is valid and compute the post-state
         # Make a copy of the state to avoid mutability issues
         state = copy(store.block_states[block.parent_root])
-        block_root = hash_tree_root(block)
         state_transition(state, signed_block, validate_result=True)
 
         # Compute head before applying the block
@@ -8093,12 +8222,18 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="fulu" hash="7a1448fc">
+    <spec fn="on_block" fork="fulu" hash="86d1a522">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
         """
         block = signed_block.message
+        block_root = hash_tree_root(block)
+
+        # Return early if the block is already known
+        if block_root in store.blocks:
+            return
+
         # Parent block must be known
         assert block.parent_root in store.block_states
         # Make a copy of the state to avoid mutability issues
@@ -8120,10 +8255,9 @@
         # [Modified in Fulu:EIP7594]
         # Check if blob data is available
         # If not, this payload MAY be queued and subsequently considered when blob data becomes available
-        assert is_data_available(hash_tree_root(block))
+        assert is_data_available(block_root)
 
         # Check the block is valid and compute the post-state
-        block_root = hash_tree_root(block)
         state_transition(state, signed_block, validate_result=True)
 
         # Compute head before applying the block
@@ -8146,12 +8280,18 @@
 - name: on_block#gloas
   sources: []
   spec: |
-    <spec fn="on_block" fork="gloas" hash="c370389d">
+    <spec fn="on_block" fork="gloas" hash="dfd77120">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
         """
         block = signed_block.message
+        block_root = hash_tree_root(block)
+
+        # Return early if the block is already known
+        if block_root in store.blocks:
+            return
+
         # Parent block must be known
         assert block.parent_root in store.block_states
 
@@ -8179,7 +8319,6 @@
         state = copy(store.block_states[block.parent_root])
 
         # Check the block is valid and compute the post-state
-        block_root = hash_tree_root(block)
         state_transition(state, signed_block, validate_result=True)
 
         # Compute head before applying the block
@@ -8278,19 +8417,17 @@
 - name: on_inclusion_list#heze
   sources: []
   spec: |
-    <spec fn="on_inclusion_list" fork="heze" hash="472f02eb">
+    <spec fn="on_inclusion_list" fork="heze" hash="ff3548fe">
     def on_inclusion_list(store: Store, signed_inclusion_list: SignedInclusionList) -> None:
         """
         Run ``on_inclusion_list`` upon receiving a new inclusion list.
         """
-        inclusion_list = signed_inclusion_list.message
-
         seconds_since_genesis = store.time - store.genesis_time
         time_into_slot_ms = seconds_to_milliseconds(seconds_since_genesis) % SLOT_DURATION_MS
         inclusion_list_due_ms = get_inclusion_list_due_ms()
         is_timely = time_into_slot_ms < inclusion_list_due_ms
 
-        process_inclusion_list(get_inclusion_list_store(), inclusion_list, is_timely)
+        process_inclusion_list(get_inclusion_list_store(), signed_inclusion_list, is_timely)
     </spec>
 
 - name: on_payload_attestation_message#gloas
@@ -8349,8 +8486,8 @@
 - name: on_tick#phase0
   sources: []
   spec: |
-    <spec fn="on_tick" fork="phase0" hash="741c4913">
-    def on_tick(store: Store, time: uint64) -> None:
+    <spec fn="on_tick" fork="phase0" hash="8ec6b435">
+    def on_tick(store: Store, time: Uint64) -> None:
         # If the ``store.time`` falls behind, while loop catches up slot by slot
         # to ensure that every previous slot is processed with ``on_tick_per_slot``
         tick_slot = (time - store.genesis_time) * 1000 // SLOT_DURATION_MS
@@ -8365,8 +8502,8 @@
 - name: on_tick_per_slot#phase0
   sources: []
   spec: |
-    <spec fn="on_tick_per_slot" fork="phase0" hash="ae9ef172">
-    def on_tick_per_slot(store: Store, time: uint64) -> None:
+    <spec fn="on_tick_per_slot" fork="phase0" hash="8bda5b76">
+    def on_tick_per_slot(store: Store, time: Uint64) -> None:
         previous_slot = get_current_slot(store)
 
         # Update store time
@@ -8573,7 +8710,7 @@
 - name: prepare_execution_payload#heze
   sources: []
   spec: |
-    <spec fn="prepare_execution_payload" fork="heze" hash="3531eee1">
+    <spec fn="prepare_execution_payload" fork="heze" hash="c245b0c9">
     def prepare_execution_payload(
         store: Store,
         head: ForkChoiceNode,
@@ -8581,11 +8718,11 @@
         safe_block_hash: Hash32,
         finalized_block_hash: Hash32,
         suggested_fee_recipient: ExecutionAddress,
-        target_gas_limit: uint64,
+        target_gas_limit: Uint64,
         execution_engine: ExecutionEngine,
     ) -> Optional[PayloadId]:
         parent_bid = state.latest_execution_payload_bid
-        if should_build_on_full(store, head):
+        if should_build_on_full(store, head, get_current_slot(store)):
             envelope = store.payloads[head.root]
             # Make a copy of the state to avoid mutability issues
             state = copy(state)
@@ -8812,8 +8949,13 @@
 - name: process_attestation#gloas
   sources: []
   spec: |
-    <spec fn="process_attestation" fork="gloas" hash="169ef683">
-    def process_attestation(state: BeaconState, attestation: Attestation) -> None:
+    <spec fn="process_attestation" fork="gloas" hash="788ac81e">
+    def process_attestation(
+        state: BeaconState,
+        attestation: Attestation,
+        # [New in Gloas:EIP7732]
+        parent_slot: Slot,
+    ) -> None:
         data = attestation.data
         assert data.target.epoch in (get_previous_epoch(state), get_current_epoch(state))
         assert data.target.epoch == compute_epoch_at_slot(data.slot)
@@ -8838,8 +8980,9 @@
         assert len(attestation.aggregation_bits) == committee_offset
 
         # Participation flag indices
+        # [Modified in Gloas:EIP7732]
         participation_flag_indices = get_attestation_participation_flag_indices(
-            state, data, state.slot - data.slot
+            state, data, state.slot - data.slot, parent_slot
         )
 
         # Verify signature
@@ -9022,7 +9165,7 @@
 - name: process_block#gloas
   sources: []
   spec: |
-    <spec fn="process_block" fork="gloas" hash="7d98b5a3">
+    <spec fn="process_block" fork="gloas" hash="fda2f095">
     def process_block(state: BeaconState, block: BeaconBlock) -> None:
         # [New in Gloas:EIP7732]
         process_parent_execution_payload(state, block)
@@ -9032,11 +9175,11 @@
         # [Modified in Gloas:EIP7732]
         # Removed `process_execution_payload`
         # [New in Gloas:EIP7732]
-        process_execution_payload_bid(state, block.body.signed_execution_payload_bid)
+        parent_slot = process_execution_payload_bid(state, block.body.signed_execution_payload_bid)
         process_randao(state, block.body)
         process_eth1_data(state, block.body)
         # [Modified in Gloas:EIP7732]
-        process_operations(state, block.body)
+        process_operations(state, block.body, parent_slot)
         process_sync_aggregate(state, block.body.sync_aggregate)
     </spec>
 
@@ -9371,12 +9514,12 @@
     - file: beacon-chain/core/epoch/epoch_processing.go
       search: func ProcessEffectiveBalanceUpdates(
   spec: |
-    <spec fn="process_effective_balance_updates" fork="phase0" hash="678d0327">
+    <spec fn="process_effective_balance_updates" fork="phase0" hash="bd6c1c47">
     def process_effective_balance_updates(state: BeaconState) -> None:
         # Update effective balances with hysteresis
         for index, validator in enumerate(state.validators):
             balance = state.balances[index]
-            HYSTERESIS_INCREMENT = uint64(EFFECTIVE_BALANCE_INCREMENT // HYSTERESIS_QUOTIENT)
+            HYSTERESIS_INCREMENT = Uint64(EFFECTIVE_BALANCE_INCREMENT // HYSTERESIS_QUOTIENT)
             DOWNWARD_THRESHOLD = HYSTERESIS_INCREMENT * HYSTERESIS_DOWNWARD_MULTIPLIER
             UPWARD_THRESHOLD = HYSTERESIS_INCREMENT * HYSTERESIS_UPWARD_MULTIPLIER
             if (
@@ -9393,12 +9536,12 @@
     - file: beacon-chain/core/electra/effective_balance_updates.go
       search: func ProcessEffectiveBalanceUpdates(
   spec: |
-    <spec fn="process_effective_balance_updates" fork="electra" hash="6b447363">
+    <spec fn="process_effective_balance_updates" fork="electra" hash="838d8754">
     def process_effective_balance_updates(state: BeaconState) -> None:
         # Update effective balances with hysteresis
         for index, validator in enumerate(state.validators):
             balance = state.balances[index]
-            HYSTERESIS_INCREMENT = uint64(EFFECTIVE_BALANCE_INCREMENT // HYSTERESIS_QUOTIENT)
+            HYSTERESIS_INCREMENT = Uint64(EFFECTIVE_BALANCE_INCREMENT // HYSTERESIS_QUOTIENT)
             DOWNWARD_THRESHOLD = HYSTERESIS_INCREMENT * HYSTERESIS_DOWNWARD_MULTIPLIER
             UPWARD_THRESHOLD = HYSTERESIS_INCREMENT * HYSTERESIS_UPWARD_MULTIPLIER
             # [Modified in Electra:EIP7251]
@@ -9927,10 +10070,10 @@
 - name: process_execution_payload_bid#gloas
   sources: []
   spec: |
-    <spec fn="process_execution_payload_bid" fork="gloas" hash="ba18a784">
+    <spec fn="process_execution_payload_bid" fork="gloas" hash="ccd70022">
     def process_execution_payload_bid(
         state: BeaconState, signed_bid: SignedExecutionPayloadBid
-    ) -> None:
+    ) -> Slot:
         bid = signed_bid.message
         builder_index = bid.builder_index
         amount = bid.value
@@ -9978,8 +10121,13 @@
                 pending_payment
             )
 
+        # Cache the parent block's slot before overwriting the bid
+        parent_slot = state.latest_execution_payload_bid.slot
+
         # Cache the signed execution payload bid
         state.latest_execution_payload_bid = bid
+
+        return parent_slot
     </spec>
 
 - name: process_historical_roots_update#phase0
@@ -10044,12 +10192,13 @@
 - name: process_inclusion_list#heze
   sources: []
   spec: |
-    <spec fn="process_inclusion_list" fork="heze" hash="da9e2308">
+    <spec fn="process_inclusion_list" fork="heze" hash="6478d176">
     def process_inclusion_list(
         store: InclusionListStore,
-        inclusion_list: InclusionList,
+        signed_inclusion_list: SignedInclusionList,
         is_timely: bool,
     ) -> None:
+        inclusion_list = signed_inclusion_list.message
         key = inclusion_list.inclusion_list_committee_root
 
         # Ignore `inclusion_list` from equivocators.
@@ -10057,7 +10206,7 @@
             return
 
         for stored_root in store.inclusion_lists[key]:
-            stored_inclusion_list = store.inclusion_lists[key][stored_root]
+            stored_inclusion_list = store.inclusion_lists[key][stored_root].message
             if stored_inclusion_list.validator_index != inclusion_list.validator_index:
                 continue
 
@@ -10067,9 +10216,9 @@
             # Whether it was an equivocation or not, we have processed this `inclusion_list`.
             return
 
-        # Store `inclusion_list` and its timeliness.
+        # Store `signed_inclusion_list` and its timeliness.
         inclusion_list_root = hash_tree_root(inclusion_list)
-        store.inclusion_lists[key][inclusion_list_root] = inclusion_list
+        store.inclusion_lists[key][inclusion_list_root] = signed_inclusion_list
         store.inclusion_list_timeliness[inclusion_list_root] = is_timely
     </spec>
 
@@ -10353,13 +10502,19 @@
 - name: process_operations#gloas
   sources: []
   spec: |
-    <spec fn="process_operations" fork="gloas" hash="5009f53b">
-    def process_operations(state: BeaconState, body: BeaconBlockBody) -> None:
+    <spec fn="process_operations" fork="gloas" hash="52aee81b">
+    def process_operations(
+        state: BeaconState,
+        body: BeaconBlockBody,
+        # [New in Gloas:EIP7732]
+        parent_slot: Slot,
+    ) -> None:
         assert len(body.deposits) == 0
 
-        def for_ops(operations: Sequence[Any], fn: Callable[[BeaconState, Any], None]) -> None:
+        # [Modified in Gloas:EIP7732]
+        def for_ops(operations: Sequence[Any], fn: Callable[..., None], *args: Any) -> None:
             for operation in operations:
-                fn(state, operation)
+                fn(state, operation, *args)
 
         # [New in Gloas:EIP7688]
         assert len(body.proposer_slashings) <= MAX_PROPOSER_SLASHINGS
@@ -10373,7 +10528,7 @@
         for_ops(body.proposer_slashings, process_proposer_slashing)
         for_ops(body.attester_slashings, process_attester_slashing)
         # [Modified in Gloas:EIP7732]
-        for_ops(body.attestations, process_attestation)
+        for_ops(body.attestations, process_attestation, parent_slot)
         for_ops(body.voluntary_exits, process_voluntary_exit)
         for_ops(body.bls_to_execution_changes, process_bls_to_execution_change)
         # [Modified in Gloas:EIP7732]
@@ -10956,7 +11111,7 @@
     - file: beacon-chain/core/epoch/epoch_processing.go
       search: func ProcessSlashings(
   spec: |
-    <spec fn="process_slashings" fork="phase0" hash="a18a9045">
+    <spec fn="process_slashings" fork="phase0" hash="cec229a2">
     def process_slashings(state: BeaconState) -> None:
         epoch = get_current_epoch(state)
         total_balance = get_total_active_balance(state)
@@ -10968,7 +11123,7 @@
                 validator.slashed
                 and epoch + EPOCHS_PER_SLASHINGS_VECTOR // 2 == validator.withdrawable_epoch
             ):
-                increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from penalty numerator to avoid uint64 overflow
+                increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from penalty numerator to avoid Uint64 overflow
                 penalty_numerator = (
                     validator.effective_balance // increment * adjusted_total_slashing_balance
                 )
@@ -10981,7 +11136,7 @@
     - file: beacon-chain/core/epoch/epoch_processing.go
       search: func ProcessSlashings(
   spec: |
-    <spec fn="process_slashings" fork="altair" hash="96cce87d">
+    <spec fn="process_slashings" fork="altair" hash="acf32b34">
     def process_slashings(state: BeaconState) -> None:
         epoch = get_current_epoch(state)
         total_balance = get_total_active_balance(state)
@@ -10993,7 +11148,7 @@
                 validator.slashed
                 and epoch + EPOCHS_PER_SLASHINGS_VECTOR // 2 == validator.withdrawable_epoch
             ):
-                increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from penalty numerator to avoid uint64 overflow
+                increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from penalty numerator to avoid Uint64 overflow
                 penalty_numerator = (
                     validator.effective_balance // increment * adjusted_total_slashing_balance
                 )
@@ -11006,7 +11161,7 @@
     - file: beacon-chain/core/epoch/epoch_processing.go
       search: func ProcessSlashings(
   spec: |
-    <spec fn="process_slashings" fork="bellatrix" hash="0c8f6e6e">
+    <spec fn="process_slashings" fork="bellatrix" hash="4880d29b">
     def process_slashings(state: BeaconState) -> None:
         epoch = get_current_epoch(state)
         total_balance = get_total_active_balance(state)
@@ -11021,7 +11176,7 @@
                 validator.slashed
                 and epoch + EPOCHS_PER_SLASHINGS_VECTOR // 2 == validator.withdrawable_epoch
             ):
-                increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from penalty numerator to avoid uint64 overflow
+                increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from penalty numerator to avoid Uint64 overflow
                 penalty_numerator = (
                     validator.effective_balance // increment * adjusted_total_slashing_balance
                 )
@@ -11034,7 +11189,7 @@
     - file: beacon-chain/core/epoch/epoch_processing.go
       search: func ProcessSlashings(
   spec: |
-    <spec fn="process_slashings" fork="electra" hash="a948faff">
+    <spec fn="process_slashings" fork="electra" hash="d3b2c93b">
     def process_slashings(state: BeaconState) -> None:
         epoch = get_current_epoch(state)
         total_balance = get_total_active_balance(state)
@@ -11042,7 +11197,7 @@
             sum(state.slashings) * PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX, total_balance
         )
         increment = (
-            EFFECTIVE_BALANCE_INCREMENT  # Factored out from total balance to avoid uint64 overflow
+            EFFECTIVE_BALANCE_INCREMENT  # Factored out from total balance to avoid Uint64 overflow
         )
         penalty_per_effective_balance_increment = adjusted_total_slashing_balance // (
             total_balance // increment
@@ -11552,7 +11707,7 @@
 - name: record_payload_inclusion_list_satisfaction#heze
   sources: []
   spec: |
-    <spec fn="record_payload_inclusion_list_satisfaction" fork="heze" hash="da6e9709">
+    <spec fn="record_payload_inclusion_list_satisfaction" fork="heze" hash="49a9cc89">
     def record_payload_inclusion_list_satisfaction(
         store: Store,
         state: BeaconState,
@@ -11561,7 +11716,7 @@
         execution_engine: ExecutionEngine,
     ) -> None:
         inclusion_list_transactions = get_inclusion_list_transactions(
-            get_inclusion_list_store(), state, Slot(state.slot - 1)
+            get_inclusion_list_store(), state, Slot(state.slot - 1), only_timely=True
         )
         is_inclusion_list_satisfied = execution_engine.is_inclusion_list_satisfied(
             payload, inclusion_list_transactions
@@ -11572,21 +11727,21 @@
 - name: recover_matrix#fulu
   sources: []
   spec: |
-    <spec fn="recover_matrix" fork="fulu" hash="d21e29e7">
+    <spec fn="recover_matrix" fork="fulu" hash="7876eaca">
     def recover_matrix(
-        partial_matrix: Sequence[MatrixEntry], blob_count: uint64
+        partial_matrix: Sequence[MatrixEntry], blob_count: Uint64
     ) -> Sequence[MatrixEntry]:
         """
         Recover the full, flattened sequence of matrix entries.
 
-        This helper demonstrates how to apply ``recover_cells_and_kzg_proofs``.
+        This helper demonstrates how to apply ``kzg.recover_cells_and_kzg_proofs``.
         The data structure for storing cells/proofs is implementation-dependent.
         """
         matrix = []
         for blob_index in range(blob_count):
             cell_indices = [e.column_index for e in partial_matrix if e.row_index == blob_index]
             cells = [e.cell for e in partial_matrix if e.row_index == blob_index]
-            recovered_cells, recovered_proofs = recover_cells_and_kzg_proofs(cell_indices, cells)
+            recovered_cells, recovered_proofs = kzg.recover_cells_and_kzg_proofs(cell_indices, cells)
             for cell_index, (cell, proof) in enumerate(
                 zip(recovered_cells, recovered_proofs, strict=True)
             ):
@@ -11604,8 +11759,8 @@
 - name: seconds_to_milliseconds#phase0
   sources: []
   spec: |
-    <spec fn="seconds_to_milliseconds" fork="phase0" hash="b2cc9743">
-    def seconds_to_milliseconds(seconds: uint64) -> uint64:
+    <spec fn="seconds_to_milliseconds" fork="phase0" hash="3eff10ea">
+    def seconds_to_milliseconds(seconds: Uint64) -> Uint64:
         """
         Convert seconds to milliseconds with overflow protection.
         Returns ``UINT64_MAX`` if the result would overflow.
@@ -11629,8 +11784,8 @@
 - name: settle_builder_payment#gloas
   sources: []
   spec: |
-    <spec fn="settle_builder_payment" fork="gloas" hash="42ebaa70">
-    def settle_builder_payment(state: BeaconState, payment_index: uint64) -> None:
+    <spec fn="settle_builder_payment" fork="gloas" hash="2e5e5de6">
+    def settle_builder_payment(state: BeaconState, payment_index: Uint64) -> None:
         assert payment_index < len(state.builder_pending_payments)
         payment = state.builder_pending_payments[payment_index]
         if payment.withdrawal.amount > 0:
@@ -11678,10 +11833,10 @@
 - name: should_build_on_full#gloas
   sources: []
   spec: |
-    <spec fn="should_build_on_full" fork="gloas" hash="c93c17f0">
-    def should_build_on_full(store: Store, head: ForkChoiceNode) -> bool:
+    <spec fn="should_build_on_full" fork="gloas" hash="759005a1">
+    def should_build_on_full(store: Store, head: ForkChoiceNode, slot: Slot) -> bool:
         assert head.payload_status != PAYLOAD_STATUS_PENDING
-        if store.blocks[head.root].slot + 1 != get_current_slot(store):
+        if store.blocks[head.root].slot + 1 != slot:
             return head.payload_status == PAYLOAD_STATUS_FULL
         if head.payload_status == PAYLOAD_STATUS_EMPTY:
             return False
@@ -11956,9 +12111,9 @@
 - name: update_builder_pending_withdrawals#gloas
   sources: []
   spec: |
-    <spec fn="update_builder_pending_withdrawals" fork="gloas" hash="0cbba9bd">
+    <spec fn="update_builder_pending_withdrawals" fork="gloas" hash="d9882622">
     def update_builder_pending_withdrawals(
-        state: BeaconState, processed_builder_withdrawals_count: uint64
+        state: BeaconState, processed_builder_withdrawals_count: Uint64
     ) -> None:
         state.builder_pending_withdrawals = state.builder_pending_withdrawals[
             processed_builder_withdrawals_count:
@@ -12055,9 +12210,9 @@
 - name: update_next_withdrawal_builder_index#gloas
   sources: []
   spec: |
-    <spec fn="update_next_withdrawal_builder_index" fork="gloas" hash="652c72b5">
+    <spec fn="update_next_withdrawal_builder_index" fork="gloas" hash="be78d479">
     def update_next_withdrawal_builder_index(
-        state: BeaconState, processed_builders_sweep_count: uint64
+        state: BeaconState, processed_builders_sweep_count: Uint64
     ) -> None:
         if len(state.builders) > 0:
             # Update the next builder index to start the next withdrawal sweep
@@ -12111,9 +12266,9 @@
 - name: update_pending_partial_withdrawals#electra
   sources: []
   spec: |
-    <spec fn="update_pending_partial_withdrawals" fork="electra" hash="dcdd6c8f">
+    <spec fn="update_pending_partial_withdrawals" fork="electra" hash="ab8f3216">
     def update_pending_partial_withdrawals(
-        state: BeaconState, processed_partial_withdrawals_count: uint64
+        state: BeaconState, processed_partial_withdrawals_count: Uint64
     ) -> None:
         state.pending_partial_withdrawals = state.pending_partial_withdrawals[
             processed_partial_withdrawals_count:
@@ -12353,7 +12508,7 @@
 - name: upgrade_lc_header_to_deneb#deneb
   sources: []
   spec: |
-    <spec fn="upgrade_lc_header_to_deneb" fork="deneb" hash="7dc12b61">
+    <spec fn="upgrade_lc_header_to_deneb" fork="deneb" hash="e7b827f1">
     def upgrade_lc_header_to_deneb(pre: capella.LightClientHeader) -> LightClientHeader:
         return LightClientHeader(
             beacon=pre.beacon,
@@ -12374,9 +12529,9 @@
                 transactions_root=pre.execution.transactions_root,
                 withdrawals_root=pre.execution.withdrawals_root,
                 # [New in Deneb:EIP4844]
-                blob_gas_used=uint64(0),
+                blob_gas_used=Uint64(0),
                 # [New in Deneb:EIP4844]
-                excess_blob_gas=uint64(0),
+                excess_blob_gas=Uint64(0),
             ),
             execution_branch=pre.execution_branch,
         )
@@ -12661,7 +12816,7 @@
     - file: beacon-chain/core/altair/upgrade.go
       search: func UpgradeToAltair(
   spec: |
-    <spec fn="upgrade_to_altair" fork="altair" hash="45bb04f7">
+    <spec fn="upgrade_to_altair" fork="altair" hash="10e7fa01">
     def upgrade_to_altair(pre: phase0.BeaconState) -> BeaconState:
         epoch = phase0.get_current_epoch(pre)
         post = BeaconState(
@@ -12695,7 +12850,7 @@
             previous_justified_checkpoint=pre.previous_justified_checkpoint,
             current_justified_checkpoint=pre.current_justified_checkpoint,
             finalized_checkpoint=pre.finalized_checkpoint,
-            inactivity_scores=[uint64(0) for _ in range(len(pre.validators))],
+            inactivity_scores=[Uint64(0) for _ in range(len(pre.validators))],
         )
         # Fill in previous epoch participation from the pre state's pending attestations
         translate_participation(post, pre.previous_epoch_attestations)
@@ -12825,7 +12980,7 @@
     - file: beacon-chain/core/deneb/upgrade.go
       search: func UpgradeToDeneb(
   spec: |
-    <spec fn="upgrade_to_deneb" fork="deneb" hash="0c371849">
+    <spec fn="upgrade_to_deneb" fork="deneb" hash="9eecb1a3">
     def upgrade_to_deneb(pre: capella.BeaconState) -> BeaconState:
         epoch = capella.get_current_epoch(pre)
         latest_execution_payload_header = ExecutionPayloadHeader(
@@ -12845,9 +13000,9 @@
             transactions_root=pre.latest_execution_payload_header.transactions_root,
             withdrawals_root=pre.latest_execution_payload_header.withdrawals_root,
             # [New in Deneb:EIP4844]
-            blob_gas_used=uint64(0),
+            blob_gas_used=Uint64(0),
             # [New in Deneb:EIP4844]
-            excess_blob_gas=uint64(0),
+            excess_blob_gas=Uint64(0),
         )
         post = BeaconState(
             genesis_time=pre.genesis_time,
@@ -13059,7 +13214,7 @@
 - name: upgrade_to_gloas#gloas
   sources: []
   spec: |
-    <spec fn="upgrade_to_gloas" fork="gloas" hash="571abe9a">
+    <spec fn="upgrade_to_gloas" fork="gloas" hash="013b8366">
     def upgrade_to_gloas(pre: fulu.BeaconState) -> BeaconState:
         epoch = fulu.get_current_epoch(pre)
 
@@ -13099,7 +13254,7 @@
             current_justified_checkpoint=pre.current_justified_checkpoint,
             finalized_checkpoint=pre.finalized_checkpoint,
             # [Modified in Gloas:EIP7688]
-            inactivity_scores=ProgressiveList[uint64](list(pre.inactivity_scores)),
+            inactivity_scores=ProgressiveList[Uint64](list(pre.inactivity_scores)),
             current_sync_committee=pre.current_sync_committee,
             next_sync_committee=pre.next_sync_committee,
             # [Modified in Gloas:EIP7732]
@@ -13157,7 +13312,7 @@
 - name: upgrade_to_heze#heze
   sources: []
   spec: |
-    <spec fn="upgrade_to_heze" fork="heze" hash="390f5e3c">
+    <spec fn="upgrade_to_heze" fork="heze" hash="db6fc133">
     def upgrade_to_heze(pre: gloas.BeaconState) -> BeaconState:
         epoch = gloas.get_current_epoch(pre)
         latest_execution_payload_bid = ExecutionPayloadBid(
@@ -13174,7 +13329,7 @@
             blob_kzg_commitments=pre.latest_execution_payload_bid.blob_kzg_commitments,
             execution_requests_root=pre.latest_execution_payload_bid.execution_requests_root,
             # [New in Heze:EIP7805]
-            inclusion_list_bits=Bitvector[INCLUSION_LIST_COMMITTEE_SIZE](),
+            inclusion_list_bits=BitVector[INCLUSION_LIST_COMMITTEE_SIZE](),
         )
 
         post = BeaconState(
@@ -13297,13 +13452,13 @@
 - name: validate_beacon_aggregate_and_proof_gossip#phase0
   sources: []
   spec: |
-    <spec fn="validate_beacon_aggregate_and_proof_gossip" fork="phase0" hash="dd1babcc">
+    <spec fn="validate_beacon_aggregate_and_proof_gossip" fork="phase0" hash="8a8eed9d">
     def validate_beacon_aggregate_and_proof_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         signed_aggregate_and_proof: SignedAggregateAndProof,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
     ) -> None:
         """
         Validate a SignedAggregateAndProof for gossip propagation.
@@ -13411,13 +13566,13 @@
 - name: validate_beacon_aggregate_and_proof_gossip#deneb
   sources: []
   spec: |
-    <spec fn="validate_beacon_aggregate_and_proof_gossip" fork="deneb" hash="ec1dcf12">
+    <spec fn="validate_beacon_aggregate_and_proof_gossip" fork="deneb" hash="4a576fc4">
     def validate_beacon_aggregate_and_proof_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         signed_aggregate_and_proof: SignedAggregateAndProof,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
     ) -> None:
         """
         Validate a SignedAggregateAndProof for gossip propagation.
@@ -13442,20 +13597,8 @@
         # [Modified in Deneb:EIP7045]
         # [IGNORE] The aggregate attestation's epoch is either the current or previous epoch
         attestation_epoch = compute_epoch_at_slot(aggregate.data.slot)
-        is_previous_epoch_attestation = is_within_slot_range(
-            state,
-            compute_start_slot_at_epoch(Epoch(attestation_epoch + 1)),
-            SLOTS_PER_EPOCH - 1,
-            current_time_ms,
-        )
-        is_current_epoch_attestation = is_within_slot_range(
-            state,
-            compute_start_slot_at_epoch(attestation_epoch),
-            SLOTS_PER_EPOCH - 1,
-            current_time_ms,
-        )
-        if not (is_previous_epoch_attestation or is_current_epoch_attestation):
-            raise GossipIgnore("aggregate epoch is not previous or current epoch")
+        if not is_current_or_previous_epoch(state, attestation_epoch, current_time_ms):
+            raise GossipIgnore("aggregate epoch is not current or previous epoch")
 
         # [REJECT] The aggregate attestation's epoch matches its target
         if aggregate.data.target.epoch != compute_epoch_at_slot(aggregate.data.slot):
@@ -13542,13 +13685,13 @@
 - name: validate_beacon_aggregate_and_proof_gossip#electra
   sources: []
   spec: |
-    <spec fn="validate_beacon_aggregate_and_proof_gossip" fork="electra" hash="fd4d3e8f">
+    <spec fn="validate_beacon_aggregate_and_proof_gossip" fork="electra" hash="573a95ef">
     def validate_beacon_aggregate_and_proof_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         signed_aggregate_and_proof: SignedAggregateAndProof,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
     ) -> None:
         """
         Validate a SignedAggregateAndProof for gossip propagation.
@@ -13582,20 +13725,8 @@
 
         # [IGNORE] The aggregate attestation's epoch is either the current or previous epoch
         attestation_epoch = compute_epoch_at_slot(aggregate.data.slot)
-        is_previous_epoch_attestation = is_within_slot_range(
-            state,
-            compute_start_slot_at_epoch(Epoch(attestation_epoch + 1)),
-            SLOTS_PER_EPOCH - 1,
-            current_time_ms,
-        )
-        is_current_epoch_attestation = is_within_slot_range(
-            state,
-            compute_start_slot_at_epoch(attestation_epoch),
-            SLOTS_PER_EPOCH - 1,
-            current_time_ms,
-        )
-        if not (is_previous_epoch_attestation or is_current_epoch_attestation):
-            raise GossipIgnore("aggregate epoch is not previous or current epoch")
+        if not is_current_or_previous_epoch(state, attestation_epoch, current_time_ms):
+            raise GossipIgnore("aggregate epoch is not current or previous epoch")
 
         # [REJECT] The aggregate attestation's epoch matches its target
         if aggregate.data.target.epoch != compute_epoch_at_slot(aggregate.data.slot):
@@ -13684,13 +13815,13 @@
 - name: validate_beacon_attestation_gossip#phase0
   sources: []
   spec: |
-    <spec fn="validate_beacon_attestation_gossip" fork="phase0" hash="b7375ab1">
+    <spec fn="validate_beacon_attestation_gossip" fork="phase0" hash="cbf9fcf3">
     def validate_beacon_attestation_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         attestation: Attestation,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
         subnet_id: SubnetID,
     ) -> None:
         """
@@ -13774,13 +13905,13 @@
 - name: validate_beacon_attestation_gossip#deneb
   sources: []
   spec: |
-    <spec fn="validate_beacon_attestation_gossip" fork="deneb" hash="bc9dda54">
+    <spec fn="validate_beacon_attestation_gossip" fork="deneb" hash="e75305a8">
     def validate_beacon_attestation_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         attestation: Attestation,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
         subnet_id: SubnetID,
     ) -> None:
         """
@@ -13813,20 +13944,8 @@
         # [Modified in Deneb:EIP7045]
         # [IGNORE] The attestation's epoch is either the current or previous epoch
         attestation_epoch = compute_epoch_at_slot(data.slot)
-        is_previous_epoch_attestation = is_within_slot_range(
-            state,
-            compute_start_slot_at_epoch(Epoch(attestation_epoch + 1)),
-            SLOTS_PER_EPOCH - 1,
-            current_time_ms,
-        )
-        is_current_epoch_attestation = is_within_slot_range(
-            state,
-            compute_start_slot_at_epoch(attestation_epoch),
-            SLOTS_PER_EPOCH - 1,
-            current_time_ms,
-        )
-        if not (is_previous_epoch_attestation or is_current_epoch_attestation):
-            raise GossipIgnore("attestation epoch is not previous or current epoch")
+        if not is_current_or_previous_epoch(state, attestation_epoch, current_time_ms):
+            raise GossipIgnore("attestation epoch is not current or previous epoch")
 
         # [REJECT] The attestation's epoch matches its target
         if target_epoch != compute_epoch_at_slot(data.slot):
@@ -13881,14 +14000,14 @@
 - name: validate_beacon_attestation_gossip#electra
   sources: []
   spec: |
-    <spec fn="validate_beacon_attestation_gossip" fork="electra" hash="214a283d">
+    <spec fn="validate_beacon_attestation_gossip" fork="electra" hash="3b002df3">
     def validate_beacon_attestation_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         # [Modified in Electra:EIP7549]
         attestation: SingleAttestation,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
         subnet_id: SubnetID,
     ) -> None:
         """
@@ -13925,20 +14044,8 @@
 
         # [IGNORE] The attestation's epoch is either the current or previous epoch
         attestation_epoch = compute_epoch_at_slot(data.slot)
-        is_previous_epoch_attestation = is_within_slot_range(
-            state,
-            compute_start_slot_at_epoch(Epoch(attestation_epoch + 1)),
-            SLOTS_PER_EPOCH - 1,
-            current_time_ms,
-        )
-        is_current_epoch_attestation = is_within_slot_range(
-            state,
-            compute_start_slot_at_epoch(attestation_epoch),
-            SLOTS_PER_EPOCH - 1,
-            current_time_ms,
-        )
-        if not (is_previous_epoch_attestation or is_current_epoch_attestation):
-            raise GossipIgnore("attestation epoch is not previous or current epoch")
+        if not is_current_or_previous_epoch(state, attestation_epoch, current_time_ms):
+            raise GossipIgnore("attestation epoch is not current or previous epoch")
 
         # [REJECT] The attestation's epoch matches its target
         if target_epoch != compute_epoch_at_slot(data.slot):
@@ -13992,13 +14099,13 @@
 - name: validate_beacon_block_gossip#phase0
   sources: []
   spec: |
-    <spec fn="validate_beacon_block_gossip" fork="phase0" hash="1368bba8">
+    <spec fn="validate_beacon_block_gossip" fork="phase0" hash="31f56a5c">
     def validate_beacon_block_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         signed_beacon_block: SignedBeaconBlock,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
     ) -> None:
         """
         Validate a SignedBeaconBlock for gossip propagation.
@@ -14068,13 +14175,13 @@
 - name: validate_beacon_block_gossip#bellatrix
   sources: []
   spec: |
-    <spec fn="validate_beacon_block_gossip" fork="bellatrix" hash="6b2b6629">
+    <spec fn="validate_beacon_block_gossip" fork="bellatrix" hash="31da1c6c">
     def validate_beacon_block_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         signed_beacon_block: SignedBeaconBlock,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
         # [New in Bellatrix]
         block_payload_statuses: Dict[Root, PayloadValidationStatus],
     ) -> None:
@@ -14129,15 +14236,15 @@
 
             if block.parent_root not in store.block_states:
                 if parent_payload_status == PAYLOAD_STATUS_NOT_VALIDATED:
-                    # [REJECT] The block's parent passes validation
-                    raise GossipReject("block's parent is invalid and EL result is unknown")
+                    # [REJECT] The block's parent failed validation and its execution payload is optimistic
+                    raise GossipReject("block's parent is invalid and its payload is optimistic")
 
-                # [IGNORE] The block's parent passes validation
-                raise GossipIgnore("block's parent is invalid and EL result is known")
+                # [IGNORE] The block's parent failed validation and its execution payload is processed
+                raise GossipIgnore("block's parent is invalid and its payload is processed")
 
-            # [IGNORE] The block's parent's execution payload passes validation
+            # [IGNORE] The block's parent passed validation but its execution payload is invalid
             if parent_payload_status == PAYLOAD_STATUS_INVALIDATED:
-                raise GossipIgnore("block's parent is valid and EL result is invalid")
+                raise GossipIgnore("block's parent is valid and its payload is invalid")
 
         # [REJECT] The block's parent passes validation
         elif block.parent_root not in store.block_states:
@@ -14170,13 +14277,13 @@
 - name: validate_beacon_block_gossip#capella
   sources: []
   spec: |
-    <spec fn="validate_beacon_block_gossip" fork="capella" hash="18ed1bc4">
+    <spec fn="validate_beacon_block_gossip" fork="capella" hash="9d2a397e">
     def validate_beacon_block_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         signed_beacon_block: SignedBeaconBlock,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
         block_payload_statuses: Dict[Root, PayloadValidationStatus],
     ) -> None:
         """
@@ -14228,15 +14335,15 @@
 
         if block.parent_root not in store.block_states:
             if parent_payload_status == PAYLOAD_STATUS_NOT_VALIDATED:
-                # [REJECT] The block's parent passes validation
-                raise GossipReject("block's parent is invalid and EL result is unknown")
+                # [REJECT] The block's parent failed validation and its execution payload is optimistic
+                raise GossipReject("block's parent is invalid and its payload is optimistic")
 
-            # [IGNORE] The block's parent passes validation
-            raise GossipIgnore("block's parent is invalid and EL result is known")
+            # [IGNORE] The block's parent failed validation and its execution payload is processed
+            raise GossipIgnore("block's parent is invalid and its payload is processed")
 
-        # [IGNORE] The block's parent's execution payload passes validation
+        # [IGNORE] The block's parent passed validation but its execution payload is invalid
         if parent_payload_status == PAYLOAD_STATUS_INVALIDATED:
-            raise GossipIgnore("block's parent is valid and EL result is invalid")
+            raise GossipIgnore("block's parent is valid and its payload is invalid")
 
         # [REJECT] The block is from a higher slot than its parent
         if block.slot <= store.blocks[block.parent_root].slot:
@@ -14264,13 +14371,13 @@
 - name: validate_beacon_block_gossip#deneb
   sources: []
   spec: |
-    <spec fn="validate_beacon_block_gossip" fork="deneb" hash="679f5b63">
+    <spec fn="validate_beacon_block_gossip" fork="deneb" hash="85275293">
     def validate_beacon_block_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         signed_beacon_block: SignedBeaconBlock,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
         block_payload_statuses: Dict[Root, PayloadValidationStatus],
     ) -> None:
         """
@@ -14322,15 +14429,15 @@
 
         if block.parent_root not in store.block_states:
             if parent_payload_status == PAYLOAD_STATUS_NOT_VALIDATED:
-                # [REJECT] The block's parent passes validation
-                raise GossipReject("block's parent is invalid and EL result is unknown")
+                # [REJECT] The block's parent failed validation and its execution payload is optimistic
+                raise GossipReject("block's parent is invalid and its payload is optimistic")
 
-            # [IGNORE] The block's parent passes validation
-            raise GossipIgnore("block's parent is invalid and EL result is known")
+            # [IGNORE] The block's parent failed validation and its execution payload is processed
+            raise GossipIgnore("block's parent is invalid and its payload is processed")
 
-        # [IGNORE] The block's parent's execution payload passes validation
+        # [IGNORE] The block's parent passed validation but its execution payload is invalid
         if parent_payload_status == PAYLOAD_STATUS_INVALIDATED:
-            raise GossipIgnore("block's parent is valid and EL result is invalid")
+            raise GossipIgnore("block's parent is valid and its payload is invalid")
 
         # [REJECT] The block is from a higher slot than its parent
         if block.slot <= store.blocks[block.parent_root].slot:
@@ -14363,13 +14470,13 @@
 - name: validate_beacon_block_gossip#electra
   sources: []
   spec: |
-    <spec fn="validate_beacon_block_gossip" fork="electra" hash="b4939435">
+    <spec fn="validate_beacon_block_gossip" fork="electra" hash="b5e31e17">
     def validate_beacon_block_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         signed_beacon_block: SignedBeaconBlock,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
         block_payload_statuses: Dict[Root, PayloadValidationStatus],
     ) -> None:
         """
@@ -14421,15 +14528,15 @@
 
         if block.parent_root not in store.block_states:
             if parent_payload_status == PAYLOAD_STATUS_NOT_VALIDATED:
-                # [REJECT] The block's parent passes validation
-                raise GossipReject("block's parent is invalid and EL result is unknown")
+                # [REJECT] The block's parent failed validation and its execution payload is optimistic
+                raise GossipReject("block's parent is invalid and its payload is optimistic")
 
-            # [IGNORE] The block's parent passes validation
-            raise GossipIgnore("block's parent is invalid and EL result is known")
+            # [IGNORE] The block's parent failed validation and its execution payload is processed
+            raise GossipIgnore("block's parent is invalid and its payload is processed")
 
-        # [IGNORE] The block's parent's execution payload passes validation
+        # [IGNORE] The block's parent passed validation but its execution payload is invalid
         if parent_payload_status == PAYLOAD_STATUS_INVALIDATED:
-            raise GossipIgnore("block's parent is valid and EL result is invalid")
+            raise GossipIgnore("block's parent is valid and its payload is invalid")
 
         # [REJECT] The block is from a higher slot than its parent
         if block.slot <= store.blocks[block.parent_root].slot:
@@ -14462,13 +14569,13 @@
 - name: validate_beacon_block_gossip#fulu
   sources: []
   spec: |
-    <spec fn="validate_beacon_block_gossip" fork="fulu" hash="58934408">
+    <spec fn="validate_beacon_block_gossip" fork="fulu" hash="aeb637f6">
     def validate_beacon_block_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         signed_beacon_block: SignedBeaconBlock,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
         block_payload_statuses: Optional[Dict[Root, PayloadValidationStatus]] = None,
     ) -> None:
         """
@@ -14522,15 +14629,15 @@
 
         if block.parent_root not in store.block_states:
             if parent_payload_status == PAYLOAD_STATUS_NOT_VALIDATED:
-                # [REJECT] The block's parent passes validation
-                raise GossipReject("block's parent is invalid and EL result is unknown")
+                # [REJECT] The block's parent failed validation and its execution payload is optimistic
+                raise GossipReject("block's parent is invalid and its payload is optimistic")
 
-            # [IGNORE] The block's parent passes validation
-            raise GossipIgnore("block's parent is invalid and EL result is known")
+            # [IGNORE] The block's parent failed validation and its execution payload is processed
+            raise GossipIgnore("block's parent is invalid and its payload is processed")
 
-        # [IGNORE] The block's parent's execution payload passes validation
+        # [IGNORE] The block's parent passed validation but its execution payload is invalid
         if parent_payload_status == PAYLOAD_STATUS_INVALIDATED:
-            raise GossipIgnore("block's parent is valid and EL result is invalid")
+            raise GossipIgnore("block's parent is valid and its payload is invalid")
 
         # [REJECT] The block is from a higher slot than its parent
         if block.slot <= store.blocks[block.parent_root].slot:
@@ -14564,13 +14671,13 @@
 - name: validate_blob_sidecar_gossip#deneb
   sources: []
   spec: |
-    <spec fn="validate_blob_sidecar_gossip" fork="deneb" hash="2a9319ce">
+    <spec fn="validate_blob_sidecar_gossip" fork="deneb" hash="2ad40697">
     def validate_blob_sidecar_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         blob_sidecar: BlobSidecar,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
         subnet_id: SubnetID,
     ) -> None:
         """
@@ -14633,7 +14740,7 @@
             raise GossipReject("invalid blob sidecar inclusion proof")
 
         # [REJECT] The sidecar's blob is valid as verified by verify_blob_kzg_proof
-        if not verify_blob_kzg_proof(
+        if not kzg.verify_blob_kzg_proof(
             blob_sidecar.blob, blob_sidecar.kzg_commitment, blob_sidecar.kzg_proof
         ):
             raise GossipReject("invalid blob kzg proof")
@@ -14659,13 +14766,13 @@
 - name: validate_blob_sidecar_gossip#electra
   sources: []
   spec: |
-    <spec fn="validate_blob_sidecar_gossip" fork="electra" hash="2240dacc">
+    <spec fn="validate_blob_sidecar_gossip" fork="electra" hash="23259565">
     def validate_blob_sidecar_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         blob_sidecar: BlobSidecar,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
         subnet_id: SubnetID,
     ) -> None:
         """
@@ -14729,7 +14836,7 @@
             raise GossipReject("invalid blob sidecar inclusion proof")
 
         # [REJECT] The sidecar's blob is valid as verified by verify_blob_kzg_proof
-        if not verify_blob_kzg_proof(
+        if not kzg.verify_blob_kzg_proof(
             blob_sidecar.blob, blob_sidecar.kzg_commitment, blob_sidecar.kzg_proof
         ):
             raise GossipReject("invalid blob kzg proof")
@@ -14755,12 +14862,12 @@
 - name: validate_bls_to_execution_change_gossip#capella
   sources: []
   spec: |
-    <spec fn="validate_bls_to_execution_change_gossip" fork="capella" hash="dc7d042d">
+    <spec fn="validate_bls_to_execution_change_gossip" fork="capella" hash="1e6b274d">
     def validate_bls_to_execution_change_gossip(
         seen: Seen,
         state: BeaconState,
         signed_bls_to_execution_change: SignedBLSToExecutionChange,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
     ) -> None:
         """
         Validate a SignedBLSToExecutionChange for gossip propagation.
@@ -14814,13 +14921,13 @@
 - name: validate_data_column_sidecar_gossip#fulu
   sources: []
   spec: |
-    <spec fn="validate_data_column_sidecar_gossip" fork="fulu" hash="57a6f229">
+    <spec fn="validate_data_column_sidecar_gossip" fork="fulu" hash="ec896133">
     def validate_data_column_sidecar_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         sidecar: DataColumnSidecar,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
         subnet_id: SubnetID,
     ) -> None:
         """
@@ -15104,13 +15211,13 @@
 - name: validate_partial_data_column_sidecar_gossip#fulu
   sources: []
   spec: |
-    <spec fn="validate_partial_data_column_sidecar_gossip" fork="fulu" hash="aaad7df2">
+    <spec fn="validate_partial_data_column_sidecar_gossip" fork="fulu" hash="53eac7ee">
     def validate_partial_data_column_sidecar_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         sidecar: PartialDataColumnSidecar,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
         group_id: PartialDataColumnGroupID,
         column_index: ColumnIndex,
     ) -> None:
@@ -15296,12 +15403,12 @@
 - name: validate_sync_committee_contribution_and_proof_gossip#altair
   sources: []
   spec: |
-    <spec fn="validate_sync_committee_contribution_and_proof_gossip" fork="altair" hash="36521201">
+    <spec fn="validate_sync_committee_contribution_and_proof_gossip" fork="altair" hash="6dd060ef">
     def validate_sync_committee_contribution_and_proof_gossip(
         seen: Seen,
         state: BeaconState,
         signed_contribution_and_proof: SignedContributionAndProof,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
     ) -> None:
         """
         Validate a SignedContributionAndProof for gossip propagation.
@@ -15404,12 +15511,12 @@
 - name: validate_sync_committee_message_gossip#altair
   sources: []
   spec: |
-    <spec fn="validate_sync_committee_message_gossip" fork="altair" hash="f3ed28bd">
+    <spec fn="validate_sync_committee_message_gossip" fork="altair" hash="01f56b45">
     def validate_sync_committee_message_gossip(
         seen: Seen,
         state: BeaconState,
         sync_committee_message: SyncCommitteeMessage,
-        current_time_ms: uint64,
+        current_time_ms: Uint64,
         subnet_id: SubnetID,
     ) -> None:
         """
@@ -15699,7 +15806,7 @@
     - file: beacon-chain/core/peerdas/p2p_interface.go
       search: func VerifyDataColumnsCellsKZGProofs(
   spec: |
-    <spec fn="verify_data_column_sidecar_kzg_proofs" fork="fulu" hash="1cd21395">
+    <spec fn="verify_data_column_sidecar_kzg_proofs" fork="fulu" hash="34fa68b5">
     def verify_data_column_sidecar_kzg_proofs(sidecar: DataColumnSidecar) -> bool:
         """
         Verify if the KZG proofs are correct.
@@ -15708,7 +15815,7 @@
         cell_indices = [CellIndex(sidecar.index)] * len(sidecar.column)
 
         # Batch verify that the cells match the corresponding commitments and proofs
-        return verify_cell_kzg_proof_batch(
+        return kzg.verify_cell_kzg_proof_batch(
             commitments_bytes=sidecar.kzg_commitments,
             cell_indices=cell_indices,
             cells=sidecar.column,
@@ -15819,7 +15926,7 @@
 - name: verify_partial_data_column_sidecar_kzg_proofs#fulu
   sources: []
   spec: |
-    <spec fn="verify_partial_data_column_sidecar_kzg_proofs" fork="fulu" hash="5adfce90">
+    <spec fn="verify_partial_data_column_sidecar_kzg_proofs" fork="fulu" hash="5098d2d6">
     def verify_partial_data_column_sidecar_kzg_proofs(
         sidecar: PartialDataColumnSidecar,
         all_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK],
@@ -15835,7 +15942,7 @@
         cell_indices = [CellIndex(column_index)] * len(blob_indices)
 
         # Batch verify that the cells match the corresponding commitments and proofs
-        return verify_cell_kzg_proof_batch(
+        return kzg.verify_cell_kzg_proof_batch(
             commitments_bytes=[all_commitments[i] for i in blob_indices],
             cell_indices=cell_indices,
             cells=sidecar.partial_column,
@@ -15848,8 +15955,8 @@
     - file: time/slots/slottime.go
       search: func VotingPeriodStartTime(
   spec: |
-    <spec fn="voting_period_start_time" fork="phase0" hash="4eb8d0ca">
-    def voting_period_start_time(state: BeaconState) -> uint64:
+    <spec fn="voting_period_start_time" fork="phase0" hash="3d2f8ab7">
+    def voting_period_start_time(state: BeaconState) -> Uint64:
         eth1_voting_period_start_slot = Slot(
             state.slot - state.slot % (EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH)
         )

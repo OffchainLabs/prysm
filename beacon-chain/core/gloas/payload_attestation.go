@@ -219,12 +219,12 @@ func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitiv
 
 // selectByBalance selects a balance-weighted subset of input candidates.
 //
-//	<spec fn="compute_balance_weighted_selection" fork="gloas" hash="e5dff16e">
+//	<spec fn="compute_balance_weighted_selection" fork="gloas" hash="1338c915">
 //	def compute_balance_weighted_selection(
 //	    state: BeaconState,
 //	    indices: Sequence[ValidatorIndex],
 //	    seed: Bytes32,
-//	    size: uint64,
+//	    size: Uint64,
 //	    shuffle_indices: bool,
 //	) -> Sequence[ValidatorIndex]:
 //	    """
@@ -234,11 +234,11 @@ func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitiv
 //	    ``indices`` is traversed in order. The returned list can contain duplicates.
 //	    """
 //	    MAX_RANDOM_VALUE = 2**16 - 1
-//	    total = uint64(len(indices))
+//	    total = Uint64(len(indices))
 //	    assert total > 0
 //	    effective_balances = [state.validators[index].effective_balance for index in indices]
 //	    selected: List[ValidatorIndex] = []
-//	    i = uint64(0)
+//	    i = Uint64(0)
 //	    while len(selected) < size:
 //	        offset = i % 16 * 2
 //	        if offset == 0:

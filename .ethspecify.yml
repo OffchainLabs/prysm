@@ -1,4 +1,4 @@
-version: v1.7.0-alpha.12
+version: v1.7.0-alpha.13
 style: full
 
 specrefs:
@@ -40,19 +40,8 @@ exceptions:
     - PAYLOAD_STATUS_VALID#bellatrix
     - SAFE_SLOTS_TO_IMPORT_OPTIMISTICALLY#bellatrix
     # deneb
-    - BLS_MODULUS#deneb
-    - BYTES_PER_COMMITMENT#deneb
     - BYTES_PER_FIELD_ELEMENT#deneb
-    - BYTES_PER_PROOF#deneb
-    - FIAT_SHAMIR_PROTOCOL_DOMAIN#deneb
-    - G1_POINT_AT_INFINITY#deneb
     - G2_POINT_AT_INFINITY#deneb
-    - KZG_ENDIANNESS#deneb
-    - KZG_SETUP_G2_LENGTH#deneb
-    - KZG_SETUP_G2_MONOMIAL#deneb
-    - PRIMITIVE_ROOT_OF_UNITY#deneb
-    - RANDOM_CHALLENGE_KZG_BATCH_DOMAIN#deneb
-    - RANDOM_CHALLENGE_KZG_CELL_BATCH_DOMAIN#fulu
     # fulu
     - UINT256_MAX#fulu
     # gloas
@@ -94,6 +83,7 @@ exceptions:
     - INCLUSION_LIST_DUE_BPS#heze
     - MAX_BYTES_PER_INCLUSION_LIST#heze
     - MAX_REQUEST_INCLUSION_LIST#heze
+    - MIN_SLOTS_FOR_INCLUSION_LISTS_REQUESTS#heze
 
   ssz_objects:
     # phase0
@@ -182,59 +172,6 @@ exceptions:
     - Store#heze
 
   functions:
-    # Functions implemented by KZG library for EIP-4844
-    - bit_reversal_permutation#deneb
-    - blob_to_kzg_commitment#deneb
-    - blob_to_polynomial#deneb
-    - bls_field_to_bytes#deneb
-    - bytes_to_bls_field#deneb
-    - bytes_to_kzg_commitment#deneb
-    - bytes_to_kzg_proof#deneb
-    - compute_blob_kzg_proof#deneb
-    - compute_challenge#deneb
-    - compute_kzg_proof#deneb
-    - compute_kzg_proof_impl#deneb
-    - compute_powers#deneb
-    - compute_quotient_eval_within_domain#deneb
-    - compute_roots_of_unity#deneb
-    - evaluate_polynomial_in_evaluation_form#deneb
-    - g1_lincomb#deneb
-    - hash_to_bls_field#deneb
-    - is_power_of_two#deneb
-    - reverse_bits#deneb
-    - validate_kzg_g1#deneb
-    - verify_blob_kzg_proof#deneb
-    - verify_blob_kzg_proof_batch#deneb
-    - verify_kzg_proof#deneb
-    - verify_kzg_proof_batch#deneb
-    - verify_kzg_proof_impl#deneb
-
-    # Functions implemented by KZG library for EIP-7594
-    - _fft_field#fulu
-    - add_polynomialcoeff#fulu
-    - cell_to_coset_evals#fulu
-    - compute_cells#fulu
-    - compute_cells_and_kzg_proofs#fulu
-    - compute_cells_and_kzg_proofs_polynomialcoeff#fulu
-    - compute_kzg_proof_multi_impl#fulu
-    - compute_verify_cell_kzg_proof_batch_challenge#fulu
-    - construct_vanishing_polynomial#fulu
-    - coset_evals_to_cell#fulu
-    - coset_fft_field#fulu
-    - coset_for_cell#fulu
-    - coset_shift_for_cell#fulu
-    - divide_polynomialcoeff#fulu
-    - evaluate_polynomialcoeff#fulu
-    - fft_field#fulu
-    - interpolate_polynomialcoeff#fulu
-    - multiply_polynomialcoeff#fulu
-    - polynomial_eval_to_coeff#fulu
-    - recover_cells_and_kzg_proofs#fulu
-    - recover_polynomialcoeff#fulu
-    - vanishing_polynomialcoeff#fulu
-    - verify_cell_kzg_proof_batch#fulu
-    - verify_cell_kzg_proof_batch_impl#fulu
-
     # phase0
     - adjust_committee_weight_estimate_to_ensure_safety#phase0
     - compute_adversarial_weight#phase0
@@ -390,7 +327,9 @@ exceptions:
     # deneb
     - compute_max_request_blob_sidecars#deneb
     - get_lc_execution_root#deneb
+    - is_current_or_previous_epoch#deneb
     - is_valid_light_client_header#deneb
+    - is_within_epoch#deneb
     - prepare_execution_payload#deneb
     - upgrade_lc_bootstrap_to_deneb#deneb
     - upgrade_lc_finality_update_to_deneb#deneb
@@ -448,8 +387,10 @@ exceptions:
     # gloas
     - get_latest_message_epoch#gloas
     - get_payload_due_ms#gloas
+    - is_bid_compatible_with_head#gloas
     - is_gas_limit_target_compatible#gloas
     - is_payload_verified#gloas
+    - is_valid_dependent_root#gloas
     - on_execution_payload_envelope#gloas
     - payload_data_availability#gloas
     - payload_timeliness#gloas

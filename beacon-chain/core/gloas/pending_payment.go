@@ -61,14 +61,14 @@ func ProcessBuilderPendingPayments(ctx context.Context, state state.BeaconState)
 
 // builderQuorumThreshold calculates the quorum threshold for builder payments.
 //
-//	<spec fn="get_builder_payment_quorum_threshold" fork="gloas" hash="a64b7ffb">
-//	def get_builder_payment_quorum_threshold(state: BeaconState) -> uint64:
+//	<spec fn="get_builder_payment_quorum_threshold" fork="gloas" hash="cd87415a">
+//	def get_builder_payment_quorum_threshold(state: BeaconState) -> Uint64:
 //	    """
 //	    Calculate the quorum threshold for builder payments.
 //	    """
 //	    per_slot_balance = get_total_active_balance(state) // SLOTS_PER_EPOCH
 //	    quorum = per_slot_balance * BUILDER_PAYMENT_THRESHOLD_NUMERATOR
-//	    return uint64(quorum // BUILDER_PAYMENT_THRESHOLD_DENOMINATOR)
+//	    return Uint64(quorum // BUILDER_PAYMENT_THRESHOLD_DENOMINATOR)
 //	</spec>
 func builderQuorumThreshold(ctx context.Context, state state.ReadOnlyBeaconState) (primitives.Gwei, error) {
 	activeBalance, err := helpers.TotalActiveBalance(ctx, state)
