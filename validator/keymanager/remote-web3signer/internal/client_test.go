@@ -186,3 +186,18 @@ func TestClient_GetServerStatus_HappyPath(t *testing.T) {
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 }
+
+func TestClient_GetPublicKeys_MalformedJsonReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, err := w.Write([]byte(`{not json`))
+		require.NoError(t, err)
+	}))
+	defer srv.Close()
+	u, err := url.Parse(srv.URL)
+	require.NoError(t, err)
+	cl := internal.ApiClient{BaseURL: u, RestClient: srv.Client()}
+	keys, err := cl.GetPublicKeys(t.Context(), srv.URL+"/api/v1/eth2/publicKeys")
+	assert.NotNil(t, err)
+	assert.Equal(t, 0, len(keys))
+}
