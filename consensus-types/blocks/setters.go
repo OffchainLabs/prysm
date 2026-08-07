@@ -68,17 +68,17 @@ func (b *SignedBeaconBlock) SetProposerSlashings(p []*eth.ProposerSlashing) {
 // SetAttesterSlashings sets the attester slashings in the block.
 // This function is not thread safe, it is only used during block creation.
 func (b *SignedBeaconBlock) SetAttesterSlashings(slashings []eth.AttSlashing) error {
-	if b.version < version.Electra {
-		blockSlashings := make([]*eth.AttesterSlashing, 0, len(slashings))
+	if b.version >= version.Gloas {
+		blockSlashings := make([]*eth.AttesterSlashingGloas, 0, len(slashings))
 		for _, slashing := range slashings {
-			s, ok := slashing.(*eth.AttesterSlashing)
+			s, ok := eth.AttesterSlashingGloasFromAttSlashing(slashing)
 			if !ok {
-				return fmt.Errorf("slashing of type %T is not *eth.AttesterSlashing", slashing)
+				return fmt.Errorf("slashing of type %T is not *eth.AttesterSlashingGloas or *eth.AttesterSlashingElectra", slashing)
 			}
 			blockSlashings = append(blockSlashings, s)
 		}
-		b.block.body.attesterSlashings = blockSlashings
-	} else {
+		b.block.body.attesterSlashingsGloas = blockSlashings
+	} else if b.version >= version.Electra {
 		blockSlashings := make([]*eth.AttesterSlashingElectra, 0, len(slashings))
 		for _, slashing := range slashings {
 			s, ok := slashing.(*eth.AttesterSlashingElectra)
@@ -88,6 +88,16 @@ func (b *SignedBeaconBlock) SetAttesterSlashings(slashings []eth.AttSlashing) er
 			blockSlashings = append(blockSlashings, s)
 		}
 		b.block.body.attesterSlashingsElectra = blockSlashings
+	} else {
+		blockSlashings := make([]*eth.AttesterSlashing, 0, len(slashings))
+		for _, slashing := range slashings {
+			s, ok := slashing.(*eth.AttesterSlashing)
+			if !ok {
+				return fmt.Errorf("slashing of type %T is not *eth.AttesterSlashing", slashing)
+			}
+			blockSlashings = append(blockSlashings, s)
+		}
+		b.block.body.attesterSlashings = blockSlashings
 	}
 	return nil
 }

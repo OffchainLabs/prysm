@@ -34,9 +34,11 @@ go_test(
         "htrutils_test.go",
         "merkleize_test.go",
         "progressive_merkleize_test.go",
+        "slice_root_bench_test.go",
     ],
     deps = [
         ":go_default_library",
+        "//config/features:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//crypto/hash:go_default_library",
