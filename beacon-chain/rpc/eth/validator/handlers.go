@@ -28,6 +28,7 @@ import (
 	validator2 "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpbalpha "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -37,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -540,28 +540,24 @@ func decodeSignedAggregatesSSZ(body io.Reader, v int) ([]ethpbalpha.SignedAggreg
 	}
 
 	cfg := params.BeaconConfig()
-	n, err := ssz.DecodeDynamicLength(b, int(cfg.MaxCommitteesPerSlot*cfg.TargetAggregatorsPerCommittee))
+	raw, err := ssz.SplitVariableList(b, int(cfg.MaxCommitteesPerSlot*cfg.TargetAggregatorsPerCommittee))
 	if err != nil {
-		return nil, nil, fmt.Errorf("decode dynamic length: %w", err)
+		return nil, nil, fmt.Errorf("split SSZ list: %w", err)
 	}
 
 	var (
-		aggregates = make([]ethpbalpha.SignedAggregateAttAndProof, n)
+		aggregates = make([]ethpbalpha.SignedAggregateAttAndProof, len(raw))
 		failures   []*server.IndexedError
 	)
 
-	if err = ssz.UnmarshalDynamic(b, n, func(i int, elem []byte) error {
+	for i, elem := range raw {
 		aggregate, err := unmarshalSignedAggregateSSZ(elem, v)
 		if err != nil {
 			failures = append(failures, &server.IndexedError{Index: i, Message: err.Error()})
-			return nil
+			continue
 		}
 		aggregates[i] = aggregate
-		return nil
-	}); err != nil {
-		return nil, nil, fmt.Errorf("unmarshal dynamic: %w", err)
 	}
-
 	return aggregates, failures, nil
 }
 

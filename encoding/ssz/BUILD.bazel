@@ -6,6 +6,7 @@ go_library(
         "hashers.go",
         "helpers.go",
         "htrutils.go",
+        "list.go",
         "merkleize.go",
         "progressive_merkleize.go",
         "slice_root.go",
@@ -22,6 +23,7 @@ go_library(
         "//proto/prysm/v1alpha1:go_default_library",
         "@com_github_minio_sha256_simd//:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
+        "@com_github_prysmaticlabs_fastssz//:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
     ],
 )
@@ -35,6 +37,7 @@ go_test(
         "helpers_test.go",
         "htrutils_fuzz_test.go",
         "htrutils_test.go",
+        "list_test.go",
         "merkleize_test.go",
         "progressive_merkleize_test.go",
     ],
