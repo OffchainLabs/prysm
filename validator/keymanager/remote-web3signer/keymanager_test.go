@@ -424,7 +424,6 @@ func TestKeymanager_Sign(t *testing.T) {
 	config := &SetupConfig{
 		BaseEndpoint:          "http://example.com",
 		GenesisValidatorsRoot: root,
-		PublicKeysURL:         "http://example2.com/api/v1/eth2/publicKeys",
 	}
 	km, err := NewKeymanager(ctx, config)
 	require.NoError(t, err)
