@@ -1,16 +1,16 @@
 ### Added
 
-- Add `GET`/`POST`/`DELETE /eth/v1/validator/{pubkey}/builders` keymanager endpoints (keymanager-APIs #88).
+- Add `GET`/`POST`/`DELETE /eth/v1/validator/{pubkey}/builders` keymanager endpoints for per-key builder configuration (keymanager-APIs #88).
 
 ### Changed
 
-- Add v2 proposer settings: per-key builder fields inherit from `default_config`; `--enable-builder` forces the default builder on, and per-key `enabled: false` still opts a key out.
-- Setting a fee recipient, gas limit, or graffiti no longer copies `default_config`'s builder settings onto the key.
+- Add v2 proposer settings (`"version": 2`): builder fields a key does not set inherit from `default_config`. `--enable-builder` still forces the default builder on; a key with explicit `enabled: false` stays opted out.
+- Setting a fee recipient, gas limit, or graffiti no longer snapshots `default_config`'s builder settings onto that key; the key keeps following the default as it changes.
 
 ### Fixed
 
-- Decode unset builder settings fields identically across both validator DB backends.
+- Fix the minimal slashing protection database decoding unset builder settings fields as explicit zero values; both validator DB backends now read the same stored settings identically.
 
 ### Removed
 
-- Remove the unused `relays` field from the builder config; a file that still contains it logs a warning and the field is ignored.
+- Remove the unused `relays` field from the builder config; a settings file that still contains it logs a warning and is otherwise unaffected.
