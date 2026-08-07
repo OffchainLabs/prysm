@@ -111,8 +111,7 @@ func (r *runner) run(ctx context.Context) {
 			log := log.WithField("slot", slot)
 			log.WithField("deadline", deadline).Debug("Set deadline for proposals and attestations")
 
-			// Keep trying to update assignments if they are nil or if we are past an
-			// epoch transition in the beacon node's state.
+			// Refresh assignments at the epoch boundary.
 			if slots.IsEpochStart(slot) {
 				deadline = v.SlotDeadline(slot + params.BeaconConfig().SlotsPerEpoch - 1)
 				dutiesCtx, dutiesCancel := context.WithDeadline(ctx, deadline)
@@ -124,9 +123,12 @@ func (r *runner) run(ctx context.Context) {
 					continue
 				}
 				dutiesCancel()
-			} else {
-				// Mid-epoch: retry any failed next-epoch duties
-				v.MaybeRetryMissingNextDuties(ctx, slot)
+			}
+
+			// Fetch the deferred next-epoch duties in the background. Pre-Gloas this
+			// no-ops: only the split path records the indices needsNextFetch requires.
+			if slots.SinceEpochStarts(slot) >= nextDutiesFetchSlot() {
+				v.MaybeFetchNextDuties(ctx, slot)
 			}
 
 			// Background doppelganger check for keys quarantined by a key reload.

@@ -99,7 +99,7 @@ type validator struct {
 	submittedPayloadAtts         map[submittedPayloadAttKey][]uint64
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
-	retryInFlight                atomic.Bool
+	nextFetchInFlight            atomic.Bool
 	doppelGanger                 doppelGangerTracker
 	domainDataCache              *ristretto.Cache[string, proto.Message]
 	slotFeed                     *event.Feed
@@ -109,6 +109,7 @@ type validator struct {
 	payloadAvailability          *payloadAvailability
 	head                         *headTracker
 	pubkeyToStatus               map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus
+	pubkeyToStatusLock           sync.RWMutex // guards pubkeyToStatus; all readers go through statusCache
 	signedValidatorRegistrations map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
 	signedRequestAuths           map[requestAuthKey]*ethpb.SignedRequestAuthV1
 	aggSelector                  aggregatorSelector
@@ -131,8 +132,16 @@ type validatorStatus struct {
 	index     primitives.ValidatorIndex
 }
 
+// statusCache returns pubkeyToStatus for lock-free reads: entries are never
+// mutated in place, updateValidatorStatusCache replaces the map wholesale.
+func (v *validator) statusCache() map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus {
+	v.pubkeyToStatusLock.RLock()
+	defer v.pubkeyToStatusLock.RUnlock()
+	return v.pubkeyToStatus
+}
+
 func (v *validator) indexFromPubkey(pubKey [fieldparams.BLSPubkeyLength]byte) (primitives.ValidatorIndex, error) {
-	s, ok := v.pubkeyToStatus[pubKey]
+	s, ok := v.statusCache()[pubKey]
 	if !ok {
 		return 0, fmt.Errorf("validator index not found for pubkey %#x", pubKey)
 	}
@@ -400,7 +409,7 @@ func (v *validator) WaitForSync(ctx context.Context) error {
 func (v *validator) checkAndLogValidatorStatus() bool {
 	nonexistentIndex := primitives.ValidatorIndex(^uint64(0))
 	var someAreActive bool
-	for _, s := range v.pubkeyToStatus {
+	for _, s := range v.statusCache() {
 		fields := logrus.Fields{
 			"pubkey": fmt.Sprintf("%#x", bytesutil.Trunc(s.publicKey)),
 			"status": s.status.Status.String(),
@@ -1018,13 +1027,13 @@ func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fie
 	}
 	var err error
 	// repopulate the statuses if epoch start or if a new key is added missing the cache
-	if isEpochStart || len(v.pubkeyToStatus) != len(pubkeys) /* cache not populated or updated correctly */ {
+	if isEpochStart || len(v.statusCache()) != len(pubkeys) /* cache not populated or updated correctly */ {
 		if err = v.updateValidatorStatusCache(ctx, pubkeys); err != nil {
 			return nil, errors.Wrap(err, "failed to update validator status cache")
 		}
 	}
 	currEpoch := slots.ToEpoch(slot)
-	for k, s := range v.pubkeyToStatus {
+	for k, s := range v.statusCache() {
 		if isActiveForDuties(s.status, currEpoch) {
 			filteredKeys = append(filteredKeys, k)
 		} else {
@@ -1041,7 +1050,9 @@ func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fie
 // updateValidatorStatusCache updates the validator statuses cache, a map of keys currently used by the validator client
 func (v *validator) updateValidatorStatusCache(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte) error {
 	if len(pubkeys) == 0 {
+		v.pubkeyToStatusLock.Lock()
 		v.pubkeyToStatus = make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus, 0)
+		v.pubkeyToStatusLock.Unlock()
 		return nil
 	}
 	statusRequestKeys := make([][]byte, 0)
@@ -1072,7 +1083,9 @@ func (v *validator) updateValidatorStatusCache(ctx context.Context, pubkeys [][f
 			index:     resp.Indices[i],
 		}
 	}
+	v.pubkeyToStatusLock.Lock()
 	v.pubkeyToStatus = pubkeyToStatus
+	v.pubkeyToStatusLock.Unlock()
 
 	return nil
 }
@@ -1084,8 +1097,9 @@ func (v *validator) buildProposerSettingsRequests(
 ) []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer {
 	var prepareProposerReqs []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer
 	ps := v.ProposerSettings()
+	statuses := v.statusCache()
 	for _, k := range activePubkeys {
-		s, ok := v.pubkeyToStatus[k]
+		s, ok := statuses[k]
 		if !ok {
 			continue
 		}
@@ -1464,9 +1478,10 @@ func (v *validator) buildSignedRegReqs(
 		log.Warn("Builder is `enabled` in default config but will be ignored because no fee recipient was provided!")
 	}
 
+	statuses := v.statusCache()
 	for i, k := range activePubkeys {
 		// map is populated before this function in buildPrepProposerReq
-		_, ok := v.pubkeyToStatus[k]
+		_, ok := statuses[k]
 		if !ok {
 			continue
 		}
