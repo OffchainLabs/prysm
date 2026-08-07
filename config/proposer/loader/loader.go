@@ -314,25 +314,16 @@ func promotePayloadToV2(p *validatorpb.ProposerSettingsPayload) {
 	}
 }
 
-// overlayProposerConfig merges per-key options: the loaded source wins only for
-// keys it names; DB-resident keys it does not name are retained.
-func overlayProposerConfig(db, loaded *validatorpb.ProposerSettingsPayload) map[string]*validatorpb.ProposerOptionPayload {
-	var out map[string]*validatorpb.ProposerOptionPayload
-	if db != nil && len(db.ProposerConfig) > 0 {
-		out = make(map[string]*validatorpb.ProposerOptionPayload, len(db.ProposerConfig))
-		for k, v := range db.ProposerConfig {
-			out[k] = v
-		}
-	}
+// selectProposerConfig keeps the pre-v2 source precedence: a loaded per-key
+// section replaces the DB's entirely, so restarting with a file resets the DB.
+func selectProposerConfig(db, loaded *validatorpb.ProposerSettingsPayload) map[string]*validatorpb.ProposerOptionPayload {
 	if loaded != nil && len(loaded.ProposerConfig) > 0 {
-		if out == nil {
-			out = make(map[string]*validatorpb.ProposerOptionPayload, len(loaded.ProposerConfig))
-		}
-		for k, v := range loaded.ProposerConfig {
-			out[k] = v
-		}
+		return loaded.ProposerConfig
 	}
-	return out
+	if db != nil && len(db.ProposerConfig) > 0 {
+		return db.ProposerConfig
+	}
+	return nil
 }
 
 func mergeProposerSettingsV1(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.ProposerSettingsPayload {
@@ -353,7 +344,7 @@ func mergeProposerSettingsV1(merged, loaded, db *validatorpb.ProposerSettingsPay
 			option.Builder = nil
 		}
 	}
-	merged.ProposerConfig = overlayProposerConfig(db, loaded)
+	merged.ProposerConfig = selectProposerConfig(db, loaded)
 
 	if merged.DefaultConfig != nil {
 		merged.DefaultConfig.Builder = processBuilderConfig(merged.DefaultConfig.Builder, builderConfig, gasLimitOnly)
@@ -384,7 +375,7 @@ func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPay
 	if loaded != nil && loaded.DefaultConfig != nil {
 		merged.DefaultConfig = loaded.DefaultConfig
 	}
-	merged.ProposerConfig = overlayProposerConfig(db, loaded)
+	merged.ProposerConfig = selectProposerConfig(db, loaded)
 
 	// --enable-builder forces the default toggle on, matching v1; per-key
 	// enabled is untouched so a single key can still opt out (keymanager #88).

@@ -1236,7 +1236,7 @@ func Test_mergeProposerSettings_VersionPrecedence(t *testing.T) {
 		// The builder gas limit is promoted so v2 reads see it at the top level.
 		require.Equal(t, validator.Uint64(30000000), merged.DefaultConfig.GasLimit)
 	})
-	t.Run("file wins only for keys it names", func(t *testing.T) {
+	t.Run("file per-key section replaces the DB's entirely", func(t *testing.T) {
 		dbPayload := &validatorpb.ProposerSettingsPayload{
 			Version: proposer.SchemaV2,
 			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
@@ -1251,11 +1251,25 @@ func Test_mergeProposerSettings_VersionPrecedence(t *testing.T) {
 			},
 		}
 		merged := mergeProposerSettings(filePayload, dbPayload, &flagOptions{})
-		require.Equal(t, 2, len(merged.ProposerConfig))
+		require.Equal(t, 1, len(merged.ProposerConfig))
 		require.Equal(t, "0x3333333333333333333333333333333333333333", merged.ProposerConfig["0xaa"].FeeRecipient)
-		// The key the file does not name keeps its DB-resident settings.
-		require.Equal(t, "0x2222222222222222222222222222222222222222", merged.ProposerConfig["0xbb"].FeeRecipient)
-		require.Equal(t, validator.Uint64(45000000), merged.ProposerConfig["0xbb"].GasLimit)
+		// Restarting with a file resets DB-resident keys the file does not name.
+		require.IsNil(t, merged.ProposerConfig["0xbb"])
+	})
+	t.Run("db per-key section kept when the file has none", func(t *testing.T) {
+		dbPayload := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV2,
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xaa": {FeeRecipient: "0x1111111111111111111111111111111111111111"},
+			},
+		}
+		filePayload := &validatorpb.ProposerSettingsPayload{
+			Version:       proposer.SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0x4444444444444444444444444444444444444444"},
+		}
+		merged := mergeProposerSettings(filePayload, dbPayload, &flagOptions{})
+		require.Equal(t, 1, len(merged.ProposerConfig))
+		require.Equal(t, "0x1111111111111111111111111111111111111111", merged.ProposerConfig["0xaa"].FeeRecipient)
 	})
 }
 
