@@ -312,6 +312,23 @@ filegroup(
     url = "https://github.com/ethereum/consensus-specs/archive/refs/tags/%s.tar.gz" % consensus_spec_version,
 )
 
+cryptography_spec_tests_version = "v0.1.0"
+
+http_archive(
+    name = "cryptography_spec_tests",
+    build_file_content = """
+filegroup(
+    name = "test_data",
+    srcs = glob([
+        "**/*.yaml",
+    ]),
+    visibility = ["//visibility:public"],
+)
+    """,
+    integrity = "sha256-7rSJPrVE93CBDZSZAH67C5MZQx6kEr1Uc24cJ02j0Dc=",
+    url = "https://github.com/ethereum/cryptography-specs/releases/download/%s/tests.zip" % cryptography_spec_tests_version,
+)
+
 bls_test_version = "v0.1.1"
 
 http_archive(

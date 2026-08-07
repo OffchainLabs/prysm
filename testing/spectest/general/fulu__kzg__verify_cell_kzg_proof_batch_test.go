@@ -26,9 +26,9 @@ func TestVerifyCellKZGProofBatch(t *testing.T) {
 		Output bool  `json:"output"`
 	}
 	require.NoError(t, kzgPrysm.Start())
-	testFolders, testFolderPath := utils.TestFolders(t, "general", "fulu", "kzg/verify_cell_kzg_proof_batch/kzg-mainnet")
+	testFolders, testFolderPath := utils.TestFolders(t, "kzg", "verify_cell_kzg_proof_batch", "")
 	if len(testFolders) == 0 {
-		t.Fatalf("No test folders found for %s/%s/%s", "general", "fulu", "kzg/verify_cell_kzg_proof_batch/kzg-mainnet")
+		t.Fatalf("No test folders found for kzg/verify_cell_kzg_proof_batch")
 	}
 	for _, folder := range testFolders {
 		t.Run(folder.Name(), func(t *testing.T) {
