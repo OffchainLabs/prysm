@@ -4,7 +4,7 @@
 
 ### Changed
 
-- Add v2 proposer settings: per-key builder fields inherit from `default_config`, and `--enable-builder` fills the default toggle only when unset.
+- Add v2 proposer settings: per-key builder fields inherit from `default_config`; `--enable-builder` forces the default builder on, and per-key `enabled: false` still opts a key out.
 - Merge file- or URL-loaded proposer settings per key; the file only overrides keys it names.
 - Setting a fee recipient, gas limit, or graffiti no longer copies `default_config`'s builder settings onto the key.
 

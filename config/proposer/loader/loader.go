@@ -304,12 +304,6 @@ func promotePayloadToV2(p *validatorpb.ProposerSettingsPayload) {
 		if opt.GasLimit == 0 {
 			opt.GasLimit = opt.Builder.GasLimit
 		}
-		// In v1 an absent enabled meant disabled; make that explicit, else the
-		// --enable-builder fill (which only applies when unset) would turn it on.
-		if opt.Builder.Enabled == nil {
-			disabled := false
-			opt.Builder.Enabled = &disabled
-		}
 		if opt.Builder.MaxExecutionPayment != nil && *opt.Builder.MaxExecutionPayment == 0 {
 			opt.Builder.MaxExecutionPayment = nil
 		}
@@ -392,8 +386,8 @@ func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPay
 	}
 	merged.ProposerConfig = overlayProposerConfig(db, loaded)
 
-	// --enable-builder fills in only the default builder toggle when unset; an
-	// explicit enabled and every per-key entry are left for field-level inheritance.
+	// --enable-builder forces the default toggle on, matching v1; per-key
+	// enabled is untouched so a single key can still opt out (keymanager #88).
 	if builderConfig != nil {
 		if merged.DefaultConfig == nil {
 			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{}
@@ -401,10 +395,8 @@ func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPay
 		if merged.DefaultConfig.Builder == nil {
 			merged.DefaultConfig.Builder = &validatorpb.BuilderConfig{}
 		}
-		if merged.DefaultConfig.Builder.Enabled == nil {
-			enabled := true
-			merged.DefaultConfig.Builder.Enabled = &enabled
-		}
+		enabled := true
+		merged.DefaultConfig.Builder.Enabled = &enabled
 	}
 
 	if gasLimitOnly == nil {
