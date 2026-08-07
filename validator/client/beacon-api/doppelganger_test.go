@@ -283,6 +283,51 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "none of the checked keys exist on chain",
+			doppelGangerInput: &ethpb.DoppelGangerRequest{
+				ValidatorRequests: []*ethpb.DoppelGangerRequest_ValidatorRequest{
+					{PublicKey: pubKey1, Epoch: 80},
+					{PublicKey: pubKey2, Epoch: 80},
+				},
+			},
+			doppelGangerExpectedOutput: &ethpb.DoppelGangerResponse{
+				Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{},
+			},
+			omittedPubKeys: [][]byte{pubKey1, pubKey2},
+			getSyncingOutput: &structs.SyncStatusResponse{
+				Data: &structs.SyncStatusResponseData{
+					IsSyncing: false,
+				},
+			},
+			getForkOutput: &structs.GetStateForkResponse{
+				Data: &structs.Fork{
+					PreviousVersion: "0x01000000",
+					CurrentVersion:  "0x02000000",
+					Epoch:           "2",
+				},
+			},
+			getHeadersOutput: &structs.GetBlockHeadersResponse{
+				Data: []*structs.SignedBeaconBlockHeaderContainer{
+					{
+						Header: &structs.SignedBeaconBlockHeader{
+							Message: &structs.BeaconBlockHeader{
+								Slot: "3201",
+							},
+						},
+					},
+				},
+			},
+			getStateValidatorsInterface: &struct {
+				input  []string
+				output *structs.GetValidatorsResponse
+			}{
+				input: []string{stringPubKey1, stringPubKey2},
+				output: &structs.GetValidatorsResponse{
+					Data: []*structs.ValidatorContainer{},
+				},
+			},
+		},
 	}
 
 	for _, testCase := range testCases {

@@ -150,6 +150,16 @@ func (c *beaconApiValidatorClient) checkDoppelGanger(ctx context.Context, in *et
 		indexes[i] = index
 	}
 
+	// No not-recent key is onchain: the liveness endpoint rejects an empty index
+	// set, so omit them (as the per-key path below does) and return.
+	if len(indexes) == 0 {
+		for _, spk := range notRecentStringPubKeys {
+			delete(stringPubKeyToDoppelGangerInfo, spk)
+		}
+		log.WithField("count", len(notRecentStringPubKeys)).Info("Doppelganger check skipped for validators not found on chain")
+		return buildResponse(stringPubKeys, stringPubKeyToDoppelGangerInfo), nil
+	}
+
 	// Get validators liveness for the last epoch.
 	// We request a state 1 epoch ago. We are guaranteed to have currentEpoch > 2
 	// since we assume that we are not in phase0.
