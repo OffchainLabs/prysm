@@ -228,9 +228,9 @@ var (
 		Name:  "ignore-unviable-attestations",
 		Usage: "Ignores attestations whose target state is not viable with respect to the current head (avoid expensive state replay from lagging attesters).",
 	}
-	trackEquivocations = &cli.BoolFlag{
-		Name:  "track-equivocations",
-		Usage: "Records proposer equivocations observed on gossip and marks the slot in forkchoice if the equivocation arrives before the configured early deadline.",
+	disableTrackEquivocations = &cli.BoolFlag{
+		Name:  "disable-track-equivocations",
+		Usage: "Disables recording proposer equivocations observed on gossip into forkchoice.",
 	}
 )
 
@@ -277,7 +277,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	SaveFullExecutionPayloads,
 	enableStartupOptimistic,
 	ignoreUnviableAttestations,
-	trackEquivocations,
+	disableTrackEquivocations,
 	enableFullSSZDataLogging,
 	disableVerboseSigVerification,
 	enableProposerPreprocessing,

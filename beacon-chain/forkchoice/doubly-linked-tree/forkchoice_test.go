@@ -9,6 +9,7 @@ import (
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -430,6 +431,8 @@ func TestForkChoice_RecordBlockForEquivocation_DedupesRoot(t *testing.T) {
 }
 
 func TestForkChoice_InsertNode_RecordsFirstSeen(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{TrackEquivocations: true})
+	defer resetFn()
 	f := setup(0, 0)
 	blockRoot := indexToHash(1)
 	st, roblock, err := prepareForkchoiceState(t.Context(), 1, blockRoot, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)

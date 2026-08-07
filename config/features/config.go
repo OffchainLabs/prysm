@@ -291,10 +291,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(ignoreUnviableAttestations)
 		cfg.IgnoreUnviableAttestations = true
 	}
-	cfg.TrackEquivocations = false
-	if ctx.IsSet(trackEquivocations.Name) && ctx.Bool(trackEquivocations.Name) {
-		logEnabled(trackEquivocations)
-		cfg.TrackEquivocations = true
+	cfg.TrackEquivocations = true
+	if ctx.IsSet(disableTrackEquivocations.Name) && ctx.Bool(disableTrackEquivocations.Name) {
+		logDisabled(disableTrackEquivocations)
+		cfg.TrackEquivocations = false
 	}
 	if ctx.IsSet(EnableStateDiff.Name) {
 		logEnabled(EnableStateDiff)
