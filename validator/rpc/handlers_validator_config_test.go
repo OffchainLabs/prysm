@@ -43,13 +43,13 @@ func postBuilders(t *testing.T, s *Server, pubkey, body string) *httptest.Respon
 	return w
 }
 
-func getBuilders(t *testing.T, s *Server, pubkey string) (*httptest.ResponseRecorder, *BuilderConfigJson) {
+func getBuilders(t *testing.T, s *Server, pubkey string) (*httptest.ResponseRecorder, *BuilderConfig) {
 	req := httptest.NewRequest(http.MethodGet, "/eth/v1/validator/"+pubkey+"/builders", nil)
 	req.SetPathValue("pubkey", pubkey)
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 	s.GetBuilders(w, req)
-	cfg := &BuilderConfigJson{}
+	cfg := &BuilderConfig{}
 	if w.Code == http.StatusOK {
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), cfg))
 	}
@@ -65,172 +65,196 @@ func deleteBuilders(t *testing.T, s *Server, pubkey string) *httptest.ResponseRe
 	return w
 }
 
-func TestServer_SetGetBuilders_RoundTrip(t *testing.T) {
-	srv, keys := setupConfigServer(t, 1)
-	pk := hexutil.Encode(keys[0][:])
-	body := `{"enabled":true,"min_bid":"5","builder_boost_factor":"120",` +
-		`"builders":[{"url":"https://b.example","auth_data":"0x0102","max_execution_payment":"1000"}]}`
+func TestServer_SetBuilders(t *testing.T) {
+	t.Run("round trip via GET", func(t *testing.T) {
+		srv, keys := setupConfigServer(t, 1)
+		pk := hexutil.Encode(keys[0][:])
+		body := `{"enabled":true,"min_bid":"5","builder_boost_factor":"120",` +
+			`"builders":[{"url":"https://b.example","auth_data":"0x0102","max_execution_payment":"1000"}]}`
 
-	w := postBuilders(t, srv, pk, body)
-	require.Equal(t, http.StatusAccepted, w.Code)
+		w := postBuilders(t, srv, pk, body)
+		require.Equal(t, http.StatusAccepted, w.Code)
 
-	_, cfg := getBuilders(t, srv, pk)
-	require.NotNil(t, cfg.Enabled)
-	require.Equal(t, true, *cfg.Enabled)
-	require.Equal(t, "5", *cfg.MinBid)
-	require.Equal(t, "120", *cfg.BuilderBoostFactor)
-	require.Equal(t, 1, len(cfg.Builders))
-	require.Equal(t, "https://b.example", cfg.Builders[0].Url)
-	require.Equal(t, "1000", *cfg.Builders[0].MaxExecutionPayment)
-	// Resolved: the entry omitted min_bid/boost, so GET fills them from the defaults.
-	require.Equal(t, "5", *cfg.Builders[0].MinBid)
-	require.Equal(t, "120", *cfg.Builders[0].BuilderBoostFactor)
+		_, cfg := getBuilders(t, srv, pk)
+		require.NotNil(t, cfg.Enabled)
+		require.Equal(t, true, *cfg.Enabled)
+		require.Equal(t, "5", *cfg.MinBid)
+		require.Equal(t, "120", *cfg.BuilderBoostFactor)
+		require.Equal(t, 1, len(cfg.Builders))
+		require.Equal(t, "https://b.example", cfg.Builders[0].Url)
+		require.Equal(t, "1000", *cfg.Builders[0].MaxExecutionPayment)
+		// Resolved: the entry omitted min_bid/boost, so GET fills them from the defaults.
+		require.Equal(t, "5", *cfg.Builders[0].MinBid)
+		require.Equal(t, "120", *cfg.Builders[0].BuilderBoostFactor)
+	})
+
+	t.Run("full replace", func(t *testing.T) {
+		srv, keys := setupConfigServer(t, 1)
+		pk := hexutil.Encode(keys[0][:])
+
+		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk,
+			`{"enabled":true,"builders":[{"url":"https://a.example"},{"url":"https://b.example"}]}`).Code)
+		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk,
+			`{"enabled":true,"builders":[{"url":"https://c.example"}]}`).Code)
+
+		_, cfg := getBuilders(t, srv, pk)
+		require.Equal(t, 1, len(cfg.Builders))
+		require.Equal(t, "https://c.example", cfg.Builders[0].Url)
+	})
+
+	t.Run("empty array is use-none", func(t *testing.T) {
+		srv, keys := setupConfigServer(t, 1)
+		pk := hexutil.Encode(keys[0][:])
+		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, `{"enabled":true,"builders":[]}`).Code)
+
+		_, cfg := getBuilders(t, srv, pk)
+		require.NotNil(t, cfg.Builders)
+		require.Equal(t, 0, len(cfg.Builders))
+	})
+
+	t.Run("preserves another key's use-none marker", func(t *testing.T) {
+		srv, keys := setupConfigServer(t, 2)
+		pkA := hexutil.Encode(keys[0][:])
+		pkB := hexutil.Encode(keys[1][:])
+		require.NoError(t, srv.validatorService.SetProposerSettings(t.Context(), &proposer.Settings{
+			Version: proposer.SchemaV2,
+			DefaultConfig: &proposer.Option{
+				BuilderConfig: &proposer.BuilderConfig{Enabled: true, Builders: []*proposer.BuilderEntry{{URL: "https://default.example"}}},
+			},
+		}))
+		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pkA, `{"enabled":true,"builders":[]}`).Code)
+		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pkB, `{"enabled":true,"builders":[{"url":"https://b.example"}]}`).Code)
+
+		_, cfg := getBuilders(t, srv, pkA)
+		require.Equal(t, 0, len(cfg.Builders))
+	})
+
+	t.Run("upgrades v1 settings in place", func(t *testing.T) {
+		srv, keys := setupConfigServer(t, 1)
+		pk := hexutil.Encode(keys[0][:])
+		require.NoError(t, srv.validatorService.SetProposerSettings(t.Context(), &proposer.Settings{
+			Version: proposer.SchemaV1,
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+				keys[0]: {BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 999}},
+			},
+		}))
+		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, `{"enabled":true,"builders":[{"url":"https://a.example"}]}`).Code)
+
+		got := srv.validatorService.ProposerSettings()
+		require.Equal(t, proposer.SchemaV2, got.Version)
+		opt := got.ProposeConfig[keys[0]]
+		// The version bumps and the builder gas limit migrates to the option.
+		require.Equal(t, validator.Uint64(999), opt.GasLimit)
+		require.Equal(t, 1, len(opt.BuilderConfig.Builders))
+	})
+
+	t.Run("builder_pubkey rides along as the entry's response filter", func(t *testing.T) {
+		srv, keys := setupConfigServer(t, 1)
+		pk := hexutil.Encode(keys[0][:])
+		bpk := "0x" + strings.Repeat("ab", 48)
+		body := `{"enabled":true,"builders":[{"url":"https://a.example","builder_pubkey":"` + bpk + `"}]}`
+
+		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, body).Code)
+		_, cfg := getBuilders(t, srv, pk)
+		require.Equal(t, 1, len(cfg.Builders))
+		require.Equal(t, "https://a.example", cfg.Builders[0].Url)
+		require.Equal(t, bpk, *cfg.Builders[0].BuilderPubkey)
+	})
+
+	t.Run("rejects invalid input", func(t *testing.T) {
+		srv, keys := setupConfigServer(t, 1)
+		pk := hexutil.Encode(keys[0][:])
+		bpk := "0x" + strings.Repeat("ab", 48)
+
+		longURL := "https://a.example/" + strings.Repeat("x", 2048)
+		cases := map[string]struct {
+			body, contains string
+		}{
+			"missing enabled":        {`{"builders":[{"url":"https://a"}]}`, "enabled is required"},
+			"entry without url":      {`{"enabled":true,"builders":[{"min_bid":"1"}]}`, "url is required"},
+			"pubkey-only entry":      {`{"enabled":true,"builders":[{"builder_pubkey":"` + bpk + `"}]}`, "url is required"},
+			"same url and auth_data": {`{"enabled":true,"builders":[{"url":"https://a"},{"url":"https://a"}]}`, "share the same url and auth_data"},
+			"omitted auth_data collides with its derived value": {`{"enabled":true,"builders":[{"url":"https://a"},{"url":"https://a","auth_data":"` + hexutil.Encode([]byte("https://a")) + `"}]}`, "share the same url and auth_data"},
+			"invalid url":            {`{"enabled":true,"builders":[{"url":"not a url"}]}`, "url is not a valid URL"},
+			"url too long":           {`{"enabled":true,"builders":[{"url":"` + longURL + `"}]}`, "url exceeds 2048 bytes"},
+			"invalid builder_pubkey": {`{"enabled":true,"builders":[{"url":"https://a","builder_pubkey":"0x1234"}]}`, "builder_pubkey is not a valid BLS public key"},
+			"invalid auth_data hex":  {`{"enabled":true,"builders":[{"url":"https://a","auth_data":"0xzz"}]}`, "auth_data is not valid hex"},
+			"auth_data too long":     {`{"enabled":true,"builders":[{"url":"https://a","auth_data":"0x` + strings.Repeat("ab", 4097) + `"}]}`, "auth_data exceeds 4096 bytes"},
+			"non-numeric min_bid":    {`{"enabled":true,"min_bid":"abc","builders":[]}`, "min_bid is not a valid uint64"},
+		}
+		for name, tc := range cases {
+			t.Run(name, func(t *testing.T) {
+				w := postBuilders(t, srv, pk, tc.body)
+				require.Equal(t, http.StatusBadRequest, w.Code)
+				require.Equal(t, true, strings.Contains(w.Body.String(), tc.contains), "body: %s", w.Body.String())
+			})
+		}
+	})
+
+	t.Run("same url with distinct auth_data is a legal pair", func(t *testing.T) {
+		srv, keys := setupConfigServer(t, 1)
+		pk := hexutil.Encode(keys[0][:])
+		body := `{"enabled":true,"builders":[{"url":"https://a","auth_data":"0x01"},{"url":"https://a","auth_data":"0x02"}]}`
+		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, body).Code)
+		_, cfg := getBuilders(t, srv, pk)
+		require.Equal(t, 2, len(cfg.Builders))
+	})
+
+	t.Run("max entries", func(t *testing.T) {
+		srv, keys := setupConfigServer(t, 1)
+		pk := hexutil.Encode(keys[0][:])
+		entries := make([]string, 0, maxBuilderEntries+1)
+		for i := 0; i <= maxBuilderEntries; i++ {
+			entries = append(entries, `{"url":"https://b`+strconv.Itoa(i)+`.example"}`)
+		}
+		body := `{"enabled":true,"builders":[` + strings.Join(entries, ",") + `]}`
+		w := postBuilders(t, srv, pk, body)
+		require.Equal(t, http.StatusBadRequest, w.Code)
+		require.Equal(t, true, strings.Contains(w.Body.String(), "exceeds 64 entries"))
+	})
+
+	t.Run("validator service nil", func(t *testing.T) {
+		srv, keys := setupConfigServer(t, 1)
+		srv.validatorService = nil
+		w := postBuilders(t, srv, hexutil.Encode(keys[0][:]), `{"enabled":true}`)
+		require.Equal(t, http.StatusServiceUnavailable, w.Code)
+	})
 }
 
-func TestServer_SetBuilders_FullReplace(t *testing.T) {
-	srv, keys := setupConfigServer(t, 1)
-	pk := hexutil.Encode(keys[0][:])
+func TestServer_GetBuilders(t *testing.T) {
+	// GET is fully resolved: omitted auth_data becomes the url's UTF-8 bytes, and
+	// unset values become the runtime fallbacks (no floor, neutral boost, trustless-only).
+	t.Run("resolves omitted values", func(t *testing.T) {
+		srv, keys := setupConfigServer(t, 1)
+		pk := hexutil.Encode(keys[0][:])
+		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk,
+			`{"enabled":true,"builders":[{"url":"https://a.example"}]}`).Code)
+		_, cfg := getBuilders(t, srv, pk)
+		require.Equal(t, "0", *cfg.MinBid)
+		require.Equal(t, "100", *cfg.BuilderBoostFactor)
+		require.Equal(t, 1, len(cfg.Builders))
+		require.Equal(t, hexutil.Encode([]byte("https://a.example")), *cfg.Builders[0].AuthData)
+		require.Equal(t, "0", *cfg.Builders[0].MinBid)
+		require.Equal(t, "100", *cfg.Builders[0].BuilderBoostFactor)
+		require.Equal(t, "0", *cfg.Builders[0].MaxExecutionPayment)
+	})
 
-	require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk,
-		`{"enabled":true,"builders":[{"url":"https://a.example"},{"url":"https://b.example"}]}`).Code)
-	require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk,
-		`{"enabled":true,"builders":[{"url":"https://c.example"}]}`).Code)
+	t.Run("resolves default_config for an unconfigured key", func(t *testing.T) {
+		srv, keys := setupConfigServer(t, 1)
+		pk := hexutil.Encode(keys[0][:])
+		require.NoError(t, srv.validatorService.SetProposerSettings(t.Context(), &proposer.Settings{
+			Version: proposer.SchemaV2,
+			DefaultConfig: &proposer.Option{
+				BuilderConfig: &proposer.BuilderConfig{Enabled: true, Builders: []*proposer.BuilderEntry{{URL: "https://default.example"}}},
+			},
+		}))
 
-	_, cfg := getBuilders(t, srv, pk)
-	require.Equal(t, 1, len(cfg.Builders))
-	require.Equal(t, "https://c.example", cfg.Builders[0].Url)
-}
-
-func TestServer_SetBuilders_EmptyArrayIsUseNone(t *testing.T) {
-	srv, keys := setupConfigServer(t, 1)
-	pk := hexutil.Encode(keys[0][:])
-	require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, `{"enabled":true,"builders":[]}`).Code)
-
-	_, cfg := getBuilders(t, srv, pk)
-	require.NotNil(t, cfg.Builders)
-	require.Equal(t, 0, len(cfg.Builders))
-}
-
-// A POST for one key must not flip another key's use-none marker back to inherit.
-func TestServer_SetBuilders_PreservesOtherKeysUseNone(t *testing.T) {
-	srv, keys := setupConfigServer(t, 2)
-	pkA := hexutil.Encode(keys[0][:])
-	pkB := hexutil.Encode(keys[1][:])
-	require.NoError(t, srv.validatorService.SetProposerSettings(t.Context(), &proposer.Settings{
-		Version: proposer.SchemaV2,
-		DefaultConfig: &proposer.Option{
-			BuilderConfig: &proposer.BuilderConfig{Enabled: true, Builders: []*proposer.BuilderEntry{{URL: "https://default.example"}}},
-		},
-	}))
-	require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pkA, `{"enabled":true,"builders":[]}`).Code)
-	require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pkB, `{"enabled":true,"builders":[{"url":"https://b.example"}]}`).Code)
-
-	_, cfg := getBuilders(t, srv, pkA)
-	require.Equal(t, 0, len(cfg.Builders))
-}
-
-// POST upgrades v1 settings in place: the version bumps and builder gas limits
-// migrate to the option before the key's builder config is replaced.
-func TestServer_SetBuilders_UpgradesV1Settings(t *testing.T) {
-	srv, keys := setupConfigServer(t, 1)
-	pk := hexutil.Encode(keys[0][:])
-	require.NoError(t, srv.validatorService.SetProposerSettings(t.Context(), &proposer.Settings{
-		Version: proposer.SchemaV1,
-		ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
-			keys[0]: {BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 999}},
-		},
-	}))
-	require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, `{"enabled":true,"builders":[{"url":"https://a.example"}]}`).Code)
-
-	got := srv.validatorService.ProposerSettings()
-	require.Equal(t, proposer.SchemaV2, got.Version)
-	opt := got.ProposeConfig[keys[0]]
-	require.Equal(t, validator.Uint64(999), opt.GasLimit)
-	require.Equal(t, 1, len(opt.BuilderConfig.Builders))
-}
-
-// builder_pubkey rides along as the entry's response filter.
-func TestServer_SetBuilders_BuilderPubkeyFilter(t *testing.T) {
-	srv, keys := setupConfigServer(t, 1)
-	pk := hexutil.Encode(keys[0][:])
-	bpk := "0x" + strings.Repeat("ab", 48)
-	body := `{"enabled":true,"builders":[{"url":"https://a.example","builder_pubkey":"` + bpk + `"}]}`
-
-	require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, body).Code)
-	_, cfg := getBuilders(t, srv, pk)
-	require.Equal(t, 1, len(cfg.Builders))
-	require.Equal(t, "https://a.example", cfg.Builders[0].Url)
-	require.Equal(t, bpk, *cfg.Builders[0].BuilderPubkey)
-}
-
-func TestServer_SetBuilders_Rejects(t *testing.T) {
-	srv, keys := setupConfigServer(t, 1)
-	pk := hexutil.Encode(keys[0][:])
-	bpk := "0x" + strings.Repeat("ab", 48)
-
-	longURL := "https://a.example/" + strings.Repeat("x", 2048)
-	cases := map[string]struct {
-		body, contains string
-	}{
-		"missing enabled":        {`{"builders":[{"url":"https://a"}]}`, "enabled is required"},
-		"entry without url":      {`{"enabled":true,"builders":[{"min_bid":"1"}]}`, "url is required"},
-		"pubkey-only entry":      {`{"enabled":true,"builders":[{"builder_pubkey":"` + bpk + `"}]}`, "url is required"},
-		"same url and auth_data": {`{"enabled":true,"builders":[{"url":"https://a"},{"url":"https://a"}]}`, "share the same url and auth_data"},
-		"omitted auth_data collides with its derived value": {`{"enabled":true,"builders":[{"url":"https://a"},{"url":"https://a","auth_data":"` + hexutil.Encode([]byte("https://a")) + `"}]}`, "share the same url and auth_data"},
-		"invalid url":            {`{"enabled":true,"builders":[{"url":"not a url"}]}`, "url is not a valid URL"},
-		"url too long":           {`{"enabled":true,"builders":[{"url":"` + longURL + `"}]}`, "url exceeds 2048 bytes"},
-		"invalid builder_pubkey": {`{"enabled":true,"builders":[{"url":"https://a","builder_pubkey":"0x1234"}]}`, "builder_pubkey is not a valid BLS public key"},
-		"invalid auth_data hex":  {`{"enabled":true,"builders":[{"url":"https://a","auth_data":"0xzz"}]}`, "auth_data is not valid hex"},
-		"auth_data too long":     {`{"enabled":true,"builders":[{"url":"https://a","auth_data":"0x` + strings.Repeat("ab", 4097) + `"}]}`, "auth_data exceeds 4096 bytes"},
-		"non-numeric min_bid":    {`{"enabled":true,"min_bid":"abc","builders":[]}`, "min_bid is not a valid uint64"},
-	}
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			w := postBuilders(t, srv, pk, tc.body)
-			require.Equal(t, http.StatusBadRequest, w.Code)
-			require.Equal(t, true, strings.Contains(w.Body.String(), tc.contains), "body: %s", w.Body.String())
-		})
-	}
-}
-
-// Same url with distinct auth_data is a legal pair, not a duplicate.
-func TestServer_SetBuilders_SharedURLDistinctAuth(t *testing.T) {
-	srv, keys := setupConfigServer(t, 1)
-	pk := hexutil.Encode(keys[0][:])
-	body := `{"enabled":true,"builders":[{"url":"https://a","auth_data":"0x01"},{"url":"https://a","auth_data":"0x02"}]}`
-	require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, body).Code)
-	_, cfg := getBuilders(t, srv, pk)
-	require.Equal(t, 2, len(cfg.Builders))
-}
-
-// GET is fully resolved: omitted auth_data becomes the url's UTF-8 bytes, and
-// unset values become the runtime fallbacks (no floor, neutral boost, trustless-only).
-func TestServer_GetBuilders_ResolvesOmittedValues(t *testing.T) {
-	srv, keys := setupConfigServer(t, 1)
-	pk := hexutil.Encode(keys[0][:])
-	require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk,
-		`{"enabled":true,"builders":[{"url":"https://a.example"}]}`).Code)
-	_, cfg := getBuilders(t, srv, pk)
-	require.Equal(t, "0", *cfg.MinBid)
-	require.Equal(t, "100", *cfg.BuilderBoostFactor)
-	require.Equal(t, 1, len(cfg.Builders))
-	require.Equal(t, hexutil.Encode([]byte("https://a.example")), *cfg.Builders[0].AuthData)
-	require.Equal(t, "0", *cfg.Builders[0].MinBid)
-	require.Equal(t, "100", *cfg.Builders[0].BuilderBoostFactor)
-	require.Equal(t, "0", *cfg.Builders[0].MaxExecutionPayment)
-}
-
-func TestServer_SetBuilders_MaxEntries(t *testing.T) {
-	srv, keys := setupConfigServer(t, 1)
-	pk := hexutil.Encode(keys[0][:])
-	entries := make([]string, 0, maxBuilderEntries+1)
-	for i := 0; i <= maxBuilderEntries; i++ {
-		entries = append(entries, `{"url":"https://b`+strconv.Itoa(i)+`.example"}`)
-	}
-	body := `{"enabled":true,"builders":[` + strings.Join(entries, ",") + `]}`
-	w := postBuilders(t, srv, pk, body)
-	require.Equal(t, http.StatusBadRequest, w.Code)
-	require.Equal(t, true, strings.Contains(w.Body.String(), "exceeds 64 entries"))
+		_, cfg := getBuilders(t, srv, pk)
+		require.NotNil(t, cfg.Enabled)
+		require.Equal(t, true, *cfg.Enabled)
+		require.Equal(t, 1, len(cfg.Builders))
+		require.Equal(t, "https://default.example", cfg.Builders[0].Url)
+	})
 }
 
 func TestServer_DeleteBuilders(t *testing.T) {
@@ -248,29 +272,4 @@ func TestServer_DeleteBuilders(t *testing.T) {
 	require.NotNil(t, cfg.Enabled)
 	require.Equal(t, false, *cfg.Enabled)
 	require.Equal(t, 0, len(cfg.Builders))
-}
-
-// GET on an unconfigured key resolves against default_config.
-func TestServer_GetBuilders_ResolvesDefault(t *testing.T) {
-	srv, keys := setupConfigServer(t, 1)
-	pk := hexutil.Encode(keys[0][:])
-	require.NoError(t, srv.validatorService.SetProposerSettings(t.Context(), &proposer.Settings{
-		Version: proposer.SchemaV2,
-		DefaultConfig: &proposer.Option{
-			BuilderConfig: &proposer.BuilderConfig{Enabled: true, Builders: []*proposer.BuilderEntry{{URL: "https://default.example"}}},
-		},
-	}))
-
-	_, cfg := getBuilders(t, srv, pk)
-	require.NotNil(t, cfg.Enabled)
-	require.Equal(t, true, *cfg.Enabled)
-	require.Equal(t, 1, len(cfg.Builders))
-	require.Equal(t, "https://default.example", cfg.Builders[0].Url)
-}
-
-func TestServer_SetBuilders_ValidatorServiceNil(t *testing.T) {
-	srv, keys := setupConfigServer(t, 1)
-	srv.validatorService = nil
-	w := postBuilders(t, srv, hexutil.Encode(keys[0][:]), `{"enabled":true}`)
-	require.Equal(t, http.StatusServiceUnavailable, w.Code)
 }

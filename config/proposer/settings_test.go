@@ -618,77 +618,79 @@ func TestSettings_TargetGasLimit(t *testing.T) {
 	})
 }
 
-// Persisted payloads may predate url-required and (url, auth_data) uniqueness:
-// url-less entries drop, (url, auth) duplicates keep the first, and an omitted
-// auth_data compares as its derived value (the url's UTF-8 bytes).
-func TestSettingFromConsensus_DedupsBuilders(t *testing.T) {
-	payload := &validatorpb.ProposerSettingsPayload{
-		Version: SchemaV2,
-		DefaultConfig: &validatorpb.ProposerOptionPayload{
-			Builder: &validatorpb.BuilderConfig{
-				Enabled: proto.Bool(true),
-				Builders: []*validatorpb.BuilderEntry{
-					{Url: "https://b.example", AuthData: []byte("first")},
-					{Url: "https://b.example", AuthData: []byte("second")},
-					{Url: "https://b.example", AuthData: []byte("first")},
-					{Url: "https://other.example"},
-					{Url: "https://other.example", AuthData: []byte("https://other.example")},
-					{AuthData: []byte("url-less")},
+func TestSettingFromConsensus(t *testing.T) {
+	// Persisted payloads may predate url-required and (url, auth_data) uniqueness:
+	// url-less entries drop, (url, auth) duplicates keep the first, and an omitted
+	// auth_data compares as its derived value (the url's UTF-8 bytes).
+	t.Run("dedups builders", func(t *testing.T) {
+		payload := &validatorpb.ProposerSettingsPayload{
+			Version: SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{
+				Builder: &validatorpb.BuilderConfig{
+					Enabled: proto.Bool(true),
+					Builders: []*validatorpb.BuilderEntry{
+						{Url: "https://b.example", AuthData: []byte("first")},
+						{Url: "https://b.example", AuthData: []byte("second")},
+						{Url: "https://b.example", AuthData: []byte("first")},
+						{Url: "https://other.example"},
+						{Url: "https://other.example", AuthData: []byte("https://other.example")},
+						{AuthData: []byte("url-less")},
+					},
 				},
 			},
-		},
-	}
-	ps, err := SettingFromConsensus(payload)
-	require.NoError(t, err)
-	builders := ps.DefaultConfig.BuilderConfig.Builders
-	require.Equal(t, 3, len(builders))
-	require.DeepEqual(t, []byte("first"), builders[0].AuthData)
-	require.DeepEqual(t, []byte("second"), builders[1].AuthData)
-	require.Equal(t, "https://other.example", builders[2].URL)
-}
+		}
+		ps, err := SettingFromConsensus(payload)
+		require.NoError(t, err)
+		builders := ps.DefaultConfig.BuilderConfig.Builders
+		require.Equal(t, 3, len(builders))
+		require.DeepEqual(t, []byte("first"), builders[0].AuthData)
+		require.DeepEqual(t, []byte("second"), builders[1].AuthData)
+		require.Equal(t, "https://other.example", builders[2].URL)
+	})
 
-func TestSettingFromConsensus_NormalizesLegacyPresence(t *testing.T) {
-	key := [fieldparams.BLSPubkeyLength]byte{9}
-	legacy := &Settings{
-		Version: SchemaV1,
-		DefaultConfig: &Option{BuilderConfig: &BuilderConfig{
-			GasLimit:            validator.Uint64(30000000),
-			MaxExecutionPayment: uint64ValPtr(0),
-		}},
-		ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
-			key: {BuilderConfig: &BuilderConfig{GasLimit: validator.Uint64(25000000)}},
-		},
-	}
+	t.Run("normalizes legacy v1 presence", func(t *testing.T) {
+		key := [fieldparams.BLSPubkeyLength]byte{9}
+		legacy := &Settings{
+			Version: SchemaV1,
+			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{
+				GasLimit:            validator.Uint64(30000000),
+				MaxExecutionPayment: uint64ValPtr(0),
+			}},
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				key: {BuilderConfig: &BuilderConfig{GasLimit: validator.Uint64(25000000)}},
+			},
+		}
 
-	got, err := SettingFromConsensus(legacy.ToConsensus())
-	require.NoError(t, err)
+		got, err := SettingFromConsensus(legacy.ToConsensus())
+		require.NoError(t, err)
 
-	def := got.DefaultConfig.BuilderConfig
-	require.Equal(t, false, def.Enabled)
-	require.Equal(t, (*validator.Uint64)(nil), def.MaxExecutionPayment)
+		def := got.DefaultConfig.BuilderConfig
+		require.Equal(t, false, def.Enabled)
+		require.Equal(t, (*validator.Uint64)(nil), def.MaxExecutionPayment)
 
-	perKey := got.ProposeConfig[key].BuilderConfig
-	require.Equal(t, false, perKey.Enabled)
+		perKey := got.ProposeConfig[key].BuilderConfig
+		require.Equal(t, false, perKey.Enabled)
 
-	// A disabled per-key section can never silently activate under an enabled default:
-	// EffectiveBuilderConfig takes the per-key enabled, not the default's.
-	eff := effectiveBuilderConfig(perKey, &BuilderConfig{Enabled: true})
-	require.Equal(t, false, eff.IsEnabled())
-}
+		// A disabled per-key section can never silently activate under an enabled default:
+		// EffectiveBuilderConfig takes the per-key enabled, not the default's.
+		eff := effectiveBuilderConfig(perKey, &BuilderConfig{Enabled: true})
+		require.Equal(t, false, eff.IsEnabled())
+	})
 
-func TestSettingFromConsensus_V2PresencePreserved(t *testing.T) {
-	v2 := &Settings{
-		Version: SchemaV2,
-		DefaultConfig: &Option{BuilderConfig: &BuilderConfig{
-			MaxExecutionPayment: uint64ValPtr(0),
-		}},
-	}
-	got, err := SettingFromConsensus(v2.ToConsensus())
-	require.NoError(t, err)
-	bc := got.DefaultConfig.BuilderConfig
-	require.Equal(t, false, bc.Enabled)
-	require.NotNil(t, bc.MaxExecutionPayment)
-	require.Equal(t, validator.Uint64(0), *bc.MaxExecutionPayment)
+	t.Run("v2 presence preserved", func(t *testing.T) {
+		v2 := &Settings{
+			Version: SchemaV2,
+			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{
+				MaxExecutionPayment: uint64ValPtr(0),
+			}},
+		}
+		got, err := SettingFromConsensus(v2.ToConsensus())
+		require.NoError(t, err)
+		bc := got.DefaultConfig.BuilderConfig
+		require.Equal(t, false, bc.Enabled)
+		require.NotNil(t, bc.MaxExecutionPayment)
+		require.Equal(t, validator.Uint64(0), *bc.MaxExecutionPayment)
+	})
 }
 
 func TestUpgradeToV2_NormalizesLegacyPresence(t *testing.T) {
