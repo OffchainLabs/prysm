@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/client"
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -93,7 +94,7 @@ func (r *runner) run(ctx context.Context) {
 			return // Exit if context is canceled.
 		case slot := <-v.NextSlot():
 			if !r.healthMonitor.IsHealthy() {
-				log.WithField("url", r.validator.Host()).Warn("Beacon node unhealthy, stopping runner")
+				log.WithField("url", api.RedactEndpointList(r.validator.Host())).Warning("Beacon node unhealthy, stopping runner")
 				return
 			}
 
@@ -123,6 +124,9 @@ func (r *runner) run(ctx context.Context) {
 					continue
 				}
 				dutiesCancel()
+			} else {
+				// Mid-epoch: retry any failed next-epoch duties
+				v.MaybeRetryMissingNextDuties(ctx, slot)
 			}
 
 			// call push proposer settings often to account for the following edge cases:

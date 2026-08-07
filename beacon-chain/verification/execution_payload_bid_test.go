@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -138,6 +139,23 @@ func TestBidVerifier_VerifyParentBlockRootSeen(t *testing.T) {
 	require.ErrorIs(t, verifier.VerifyParentBlockRootSeen(func([32]byte) bool { return false }), ErrBidParentBlockRootNotSeen)
 }
 
+func TestBidVerifier_VerifyBidCompatibleWithHead(t *testing.T) {
+	signed := testSignedExecutionPayloadBid(t, 1)
+	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
+	require.NoError(t, err)
+
+	verifier := &BidVerifier{results: newResults(RequireBidCompatibleWithHead), b: wrapped}
+	require.NoError(t, verifier.VerifyBidCompatibleWithHead(func(bid interfaces.ROExecutionPayloadBid) bool {
+		return bid.ParentBlockRoot() == [32]byte(signed.Message.ParentBlockRoot)
+	}))
+
+	verifier = &BidVerifier{results: newResults(RequireBidCompatibleWithHead), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyBidCompatibleWithHead(func(interfaces.ROExecutionPayloadBid) bool { return false }), ErrBidNotCompatibleWithHead)
+
+	verifier = &BidVerifier{results: newResults(RequireBidCompatibleWithHead), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyBidCompatibleWithHead(nil), ErrBidNotCompatibleWithHead)
+}
+
 func TestBidVerifier_VerifyBidSlotMatches(t *testing.T) {
 	signed := testSignedExecutionPayloadBid(t, 10)
 	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
@@ -174,14 +192,15 @@ func TestBidVerifier_VerifyParentBlockHash(t *testing.T) {
 	require.NoError(t, err)
 
 	wantHash := [32]byte(signed.Message.ParentBlockHash)
+	wantRoot := [32]byte(signed.Message.ParentBlockRoot)
 	verifier := &BidVerifier{results: newResults(RequireBidParentBlockHashValid), b: wrapped}
-	require.NoError(t, verifier.VerifyParentBlockHash(func([32]byte) ([32]byte, error) {
-		return wantHash, nil
+	require.NoError(t, verifier.VerifyParentBlockHash(func(root, hash [32]byte) bool {
+		return root == wantRoot && hash == wantHash
 	}))
 
 	verifier = &BidVerifier{results: newResults(RequireBidParentBlockHashValid), b: wrapped}
-	require.ErrorIs(t, verifier.VerifyParentBlockHash(func([32]byte) ([32]byte, error) {
-		return [32]byte{0xFF}, nil
+	require.ErrorIs(t, verifier.VerifyParentBlockHash(func([32]byte, [32]byte) bool {
+		return false
 	}), ErrBidParentBlockHashMismatch)
 }
 

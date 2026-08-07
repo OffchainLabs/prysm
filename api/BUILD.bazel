@@ -6,6 +6,7 @@ go_library(
         "constants.go",
         "headers.go",
         "jwt.go",
+        "payload_status.go",
         "redact.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/api",

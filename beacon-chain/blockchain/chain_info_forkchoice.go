@@ -56,6 +56,13 @@ func (s *Service) BlockHash(root [32]byte) ([32]byte, error) {
 	return s.cfg.ForkChoiceStore.BlockHash(root)
 }
 
+// HasPayloadBlockHash reports whether blockHash is an available payload parent at root.
+func (s *Service) HasPayloadBlockHash(root, blockHash [32]byte) bool {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.HasPayloadBlockHash(root, blockHash)
+}
+
 // GasLimit returns the gas limit of the latest full payload at or before the given beacon block root from forkchoice.
 func (s *Service) GasLimit(root [32]byte) (uint64, error) {
 	s.cfg.ForkChoiceStore.RLock()

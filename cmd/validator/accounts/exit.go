@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
 	"github.com/OffchainLabs/prysm/v7/validator/client"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
+	remote_web3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
 	"github.com/OffchainLabs/prysm/v7/validator/node"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
@@ -58,10 +59,11 @@ func Exit(c *cli.Context, r io.Reader) error {
 			return errors.Wrapf(err, "could not configure remote signer")
 		}
 		config.GenesisValidatorsRoot = resp.GenesisValidatorsRoot
-		w, km, err = walletWithWeb3SignerKeymanager(c, config)
+		km, err = remote_web3signer.NewKeymanager(c.Context, config)
 		if err != nil {
 			return err
 		}
+		w = &wallet.Wallet{}
 	} else {
 		w, km, err = walletWithKeymanager(c)
 		if err != nil {

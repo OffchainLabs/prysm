@@ -13,6 +13,7 @@ import (
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -21,6 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -1014,7 +1016,7 @@ func (b *BeaconState) Copy() state.BeaconState {
 		rebuildTrie:      make(map[types.FieldIndex]bool, fieldCount),
 		stateFieldLeaves: make(map[types.FieldIndex]*fieldtrie.FieldTrie, len(fieldMap)),
 
-		// Share the reference to validator index map.
+		// Shared and mutated in place, lookups are bounded by each state's validator count.
 		valMapHandler: b.valMapHandler,
 
 		builderIdxMap: maps.Clone(b.builderIdxMap),
@@ -1052,9 +1054,6 @@ func (b *BeaconState) Copy() state.BeaconState {
 		ref.AddRef()
 		dst.sharedFieldReferences[field] = ref
 	}
-
-	// Increment ref for validator map
-	b.valMapHandler.AddRef()
 
 	for i := range b.dirtyFields {
 		dst.dirtyFields[i] = true
@@ -1099,6 +1098,11 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 
 	b.lock.Lock()
 	defer b.lock.Unlock()
+
+	if features.ProgressiveSSZEnabled(b.version) {
+		return b.progressiveHashTreeRoot(ctx)
+	}
+
 	if err := b.initializeMerkleLayers(ctx); err != nil {
 		return [32]byte{}, err
 	}
@@ -1106,6 +1110,29 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 		return [32]byte{}, err
 	}
 	return bytesutil.ToBytes32(b.merkleLayers[len(b.merkleLayers)-1][0]), nil
+}
+
+func (b *BeaconState) progressiveHashTreeRoot(ctx context.Context) ([32]byte, error) {
+	fieldRoots, err := ComputeFieldRootsWithHasher(ctx, b)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "failed to compute state field roots")
+	}
+
+	progressiveFieldRoots := make([][32]byte, len(fieldRoots))
+	for i, fieldRoot := range fieldRoots {
+		progressiveFieldRoots[i] = bytesutil.ToBytes32(fieldRoot)
+	}
+
+	activeFields := make([]bool, len(fieldRoots))
+	for i := range activeFields {
+		activeFields[i] = true
+	}
+
+	root, err := ssz.ContainerRootProgressive(progressiveFieldRoots, activeFields)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("could not compute progressive container root: %w", err)
+	}
+	return root, nil
 }
 
 // Initializes the Merkle layers for the beacon state if they are empty.
@@ -1318,7 +1345,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.Eth1DepositIndex:
 		return ssz.Uint64Root(b.eth1DepositIndex), nil
 	case types.Fork:
-		return ssz.ForkRoot(b.fork)
+		return wrappers.ForkRoot(b.fork)
 	case types.LatestBlockHeader:
 		return stateutil.BlockHeaderRoot(b.latestBlockHeader)
 	case types.BlockRoots:
@@ -1384,19 +1411,19 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 		}
 		return b.recomputeFieldTrie(field, b.currentEpochAttestations)
 	case types.PreviousEpochParticipationBits:
-		return stateutil.ParticipationBitsRoot(b.previousEpochParticipation)
+		return stateutil.ParticipationBitsRoot(b.version, b.previousEpochParticipation)
 	case types.CurrentEpochParticipationBits:
-		return stateutil.ParticipationBitsRoot(b.currentEpochParticipation)
+		return stateutil.ParticipationBitsRoot(b.version, b.currentEpochParticipation)
 	case types.JustificationBits:
 		return bytesutil.ToBytes32(b.justificationBits), nil
 	case types.PreviousJustifiedCheckpoint:
-		return ssz.CheckpointRoot(b.previousJustifiedCheckpoint)
+		return wrappers.CheckpointRoot(b.previousJustifiedCheckpoint)
 	case types.CurrentJustifiedCheckpoint:
-		return ssz.CheckpointRoot(b.currentJustifiedCheckpoint)
+		return wrappers.CheckpointRoot(b.currentJustifiedCheckpoint)
 	case types.FinalizedCheckpoint:
-		return ssz.CheckpointRoot(b.finalizedCheckpoint)
+		return wrappers.CheckpointRoot(b.finalizedCheckpoint)
 	case types.InactivityScores:
-		return stateutil.Uint64ListRootWithRegistryLimit(b.inactivityScoresMultiValue.Value(b))
+		return stateutil.Uint64ListRoot(b.version, b.inactivityScoresVal())
 	case types.CurrentSyncCommittee:
 		return stateutil.SyncCommitteeRoot(b.currentSyncCommittee)
 	case types.NextSyncCommittee:
@@ -1426,17 +1453,17 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.EarliestConsolidationEpoch:
 		return ssz.Uint64Root(uint64(b.earliestConsolidationEpoch)), nil
 	case types.PendingDeposits:
-		return stateutil.PendingDepositsRoot(b.pendingDeposits)
+		return stateutil.PendingDepositsRoot(b.version, b.pendingDeposits)
 	case types.PendingPartialWithdrawals:
-		return stateutil.PendingPartialWithdrawalsRoot(b.pendingPartialWithdrawals)
+		return stateutil.PendingPartialWithdrawalsRoot(b.version, b.pendingPartialWithdrawals)
 	case types.PendingConsolidations:
-		return stateutil.PendingConsolidationsRoot(b.pendingConsolidations)
+		return stateutil.PendingConsolidationsRoot(b.version, b.pendingConsolidations)
 	case types.ProposerLookahead:
 		return stateutil.ProposerLookaheadRoot(b.proposerLookahead)
 	case types.LatestExecutionPayloadBid:
 		return b.latestExecutionPayloadBid.HashTreeRoot()
 	case types.Builders:
-		return stateutil.BuildersRoot(b.builders)
+		return stateutil.BuildersRoot(b.version, b.builders)
 	case types.NextWithdrawalBuilderIndex:
 		return ssz.Uint64Root(uint64(b.nextWithdrawalBuilderIndex)), nil
 	case types.ExecutionPayloadAvailability:
@@ -1445,11 +1472,11 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.BuilderPendingPayments:
 		return stateutil.BuilderPendingPaymentsRoot(b.builderPendingPayments)
 	case types.BuilderPendingWithdrawals:
-		return stateutil.BuilderPendingWithdrawalsRoot(b.builderPendingWithdrawals)
+		return stateutil.BuilderPendingWithdrawalsRoot(b.version, b.builderPendingWithdrawals)
 	case types.LatestBlockHash:
 		return bytesutil.ToBytes32(b.latestBlockHash), nil
 	case types.PayloadExpectedWithdrawals:
-		return ssz.WithdrawalSliceRoot(b.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+		return stateutil.PayloadExpectedWithdrawalsRoot(b.version, b.payloadExpectedWithdrawals)
 	case types.PTCWindow:
 		return stateutil.PTCWindowRoot(b.ptcWindow)
 	}
@@ -1559,6 +1586,14 @@ func (b *BeaconState) stateRootsRootSelector(field types.FieldIndex) ([32]byte, 
 }
 
 func (b *BeaconState) validatorsRootSelector(field types.FieldIndex) ([32]byte, error) {
+	if features.ProgressiveSSZEnabled(b.version) {
+		// Field-trie indexing is based on legacy list merkleization.
+		// Use full progressive hashing for this field when enabled.
+		b.dirtyIndices[field] = []uint64{}
+		delete(b.rebuildTrie, field)
+		return stateutil.ValidatorRegistryRoot(b.version, b.validatorsCompactVal())
+	}
+
 	if b.rebuildTrie[field] {
 		err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[stateutil.CompactValidator]{
 			Identifiable:    b,
@@ -1578,6 +1613,14 @@ func (b *BeaconState) validatorsRootSelector(field types.FieldIndex) ([32]byte, 
 }
 
 func (b *BeaconState) balancesRootSelector(field types.FieldIndex) ([32]byte, error) {
+	if features.ProgressiveSSZEnabled(b.version) {
+		// Field-trie indexing is based on legacy list merkleization.
+		// Use full progressive hashing for this field when enabled.
+		b.dirtyIndices[field] = []uint64{}
+		delete(b.rebuildTrie, field)
+		return stateutil.Uint64ListRoot(b.version, b.balancesVal())
+	}
+
 	if b.rebuildTrie[field] {
 		err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[uint64]{
 			Identifiable:    b,

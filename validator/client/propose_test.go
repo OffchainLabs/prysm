@@ -90,14 +90,15 @@ func setupWithKey(t *testing.T, validatorKey bls.SecretKey, isSlashingProtection
 		},
 	}
 	validator := &validator{
-		db:                  valDB,
-		km:                  newMockKeymanager(t, keypair{pub: pubKey, pri: validatorKey}),
-		validatorClient:     m.validatorClient,
-		graffiti:            []byte{},
-		duties:              &dutyStore{},
-		payloadAvailability: newPayloadAvailability(),
-		submittedAtts:       make(map[submittedAttKey]*submittedAtt),
-		submittedAggregates: make(map[submittedAttKey]*submittedAtt),
+		db:                        valDB,
+		km:                        newMockKeymanager(t, keypair{pub: pubKey, pri: validatorKey}),
+		validatorClient:           m.validatorClient,
+		graffiti:                  []byte{},
+		duties:                    &dutyStore{},
+		payloadAvailability:       newPayloadAvailability(),
+		submittedAtts:             make(map[submittedAttKey]*submittedAtt),
+		submittedAggregates:       make(map[submittedAttKey]*submittedAtt),
+		attestedSlotsByKeyByEpoch: make(map[primitives.Epoch]map[[fieldparams.BLSPubkeyLength]byte]primitives.Slot),
 		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
 			pubKey: {publicKey: validatorKey.PublicKey().Marshal(), index: 0},
 		},

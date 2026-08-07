@@ -102,6 +102,7 @@ type Config struct {
 	GenesisFetcher                   blockchain.GenesisFetcher
 	EnableDebugRPCEndpoints          bool
 	AttestationCache                 *cache.AttestationCache
+	AttestationDataCache             *cache.AttestationDataCache
 	AttestationsPool                 attestations.Pool
 	PayloadAttestationPool           payloadattestation.PoolManager
 	ExitPool                         voluntaryexits.PoolManager
@@ -222,7 +223,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		Broadcaster:           s.cfg.Broadcaster,
 		SyncCommitteePool:     s.cfg.SyncCommitteeObjectPool,
 		OperationNotifier:     s.cfg.OperationNotifier,
-		AttestationCache:      cache.NewAttestationDataCache(),
+		AttestationCache:      s.cfg.AttestationDataCache,
 		StateGen:              s.cfg.StateGen,
 		P2P:                   s.cfg.Broadcaster,
 		FinalizedFetcher:      s.cfg.FinalizationFetcher,

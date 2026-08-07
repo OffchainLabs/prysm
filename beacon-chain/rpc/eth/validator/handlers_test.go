@@ -460,6 +460,52 @@ func TestGetAggregateAttestationV2(t *testing.T) {
 
 		})
 	})
+	t.Run("gloas", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig().Copy()
+		config.ElectraForkEpoch = 0
+		config.FuluForkEpoch = 0
+		config.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+
+		att := util.NewAttestationGloas()
+		att.Data.Slot = 1
+		root, err := att.Data.HashTreeRoot()
+		require.NoError(t, err)
+
+		pool := attestations.NewPool()
+		require.NoError(t, pool.SaveAggregatedAttestation(att))
+		s := &Server{AttestationsPool: pool}
+		url := fmt.Sprintf(
+			"http://example.com?attestation_data_root=%s&slot=1&committee_index=0",
+			hexutil.Encode(root[:]),
+		)
+
+		t.Run("json", func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, url, nil)
+			writer := httptest.NewRecorder()
+			s.GetAggregateAttestationV2(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+
+			resp := &structs.AggregateAttestationResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			require.Equal(t, version.String(version.Gloas), resp.Version)
+			var got structs.AttestationElectra
+			require.NoError(t, json.Unmarshal(resp.Data, &got))
+			assert.DeepEqual(t, structs.AttGloasFromConsensus(att), &got)
+		})
+		t.Run("ssz", func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, url, nil)
+			request.Header.Set("Accept", "application/octet-stream")
+			writer := httptest.NewRecorder()
+			s.GetAggregateAttestationV2(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+
+			got := &ethpbalpha.AttestationGloas{}
+			require.NoError(t, got.UnmarshalSSZ(writer.Body.Bytes()))
+			assert.DeepEqual(t, att, got)
+		})
+	})
 }
 
 func createAttestationData(slot primitives.Slot, committeeIndex primitives.CommitteeIndex, root []byte) *ethpbalpha.AttestationData {
@@ -4052,7 +4098,7 @@ func TestGetPayloadAttestationData(t *testing.T) {
 			HeadFetcher:           chainService,
 			TimeFetcher:           chainService,
 			OptimisticModeFetcher: chainService,
-			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService},
+			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService, ChainInfoFetcher: chainService},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/validator/payload_attestation_data?slot=0", nil)
@@ -4100,7 +4146,7 @@ func TestGetPayloadAttestationData(t *testing.T) {
 			Slot:               &slot,
 			Root:               root,
 			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
-			MockCanonicalFull:  map[primitives.Slot]bool{slot: true},
+			MockDataAvailable:  map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 		}
 		s := &Server{
@@ -4108,7 +4154,7 @@ func TestGetPayloadAttestationData(t *testing.T) {
 			HeadFetcher:           chainService,
 			TimeFetcher:           chainService,
 			OptimisticModeFetcher: chainService,
-			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService},
+			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService, ChainInfoFetcher: chainService},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/validator/payload_attestation_data?slot=5", nil)
@@ -4141,7 +4187,7 @@ func TestGetPayloadAttestationData(t *testing.T) {
 			HeadFetcher:           chainService,
 			TimeFetcher:           chainService,
 			OptimisticModeFetcher: chainService,
-			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService},
+			CoreService:           &core.Service{GenesisTimeFetcher: chainService, ForkchoiceFetcher: chainService, HeadFetcher: chainService, ChainInfoFetcher: chainService},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/validator/payload_attestation_data?slot=5", nil)

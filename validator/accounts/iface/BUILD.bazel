@@ -9,8 +9,5 @@ go_library(
         "//validator:__pkg__",
         "//validator:__subpackages__",
     ],
-    deps = [
-        "//validator/keymanager:go_default_library",
-        "//validator/keymanager/remote-web3signer:go_default_library",
-    ],
+    deps = ["//validator/keymanager:go_default_library"],
 )

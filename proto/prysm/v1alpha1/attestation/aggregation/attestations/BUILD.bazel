@@ -28,6 +28,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//config/params:go_default_library",
+        "//consensus-types/primitives:go_default_library",
         "//crypto/bls:go_default_library",
         "//encoding/ssz/equality:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",

@@ -103,8 +103,7 @@ func TestValidateDataColumnGloas(t *testing.T) {
 		require.NoError(t, err)
 
 		topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
-		digest, err := service.currentForkDigest()
-		require.NoError(t, err)
+		digest := service.currentForkDigest()
 
 		subnet := peerdas.ComputeSubnetForDataColumnSidecar(columnIndex)
 		topic = service.addDigestAndIndexToTopic(topic, digest, subnet)
@@ -219,8 +218,7 @@ func TestValidateDataColumnGloas(t *testing.T) {
 		roDataColumn, err := blocks.NewRODataColumnGloasWithRoot(sidecar, blockRoot)
 		require.NoError(t, err)
 
-		digest, err := service.currentForkDigest()
-		require.NoError(t, err)
+		digest := service.currentForkDigest()
 		topic := service.addDigestAndIndexToTopic(p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.DataColumnSidecarGloas]()], digest, peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index))
 		msg := &pubsub.Message{Message: &pb.Message{Topic: &topic}}
 
@@ -251,8 +249,7 @@ func TestValidateDataColumnGloas(t *testing.T) {
 
 		roDataColumn, err := blocks.NewRODataColumnGloasWithRoot(sidecar, blockRoot)
 		require.NoError(t, err)
-		digest, err := service.currentForkDigest()
-		require.NoError(t, err)
+		digest := service.currentForkDigest()
 		topic := service.addDigestAndIndexToTopic(p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.DataColumnSidecarGloas]()], digest, peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index))
 		msg := &pubsub.Message{Message: &pb.Message{Topic: &topic}}
 

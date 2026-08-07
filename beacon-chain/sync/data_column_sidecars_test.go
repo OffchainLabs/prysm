@@ -633,6 +633,64 @@ func TestSendDataColumnSidecarsRequest(t *testing.T) {
 		require.NoError(t, err)
 		require.DeepSSZEqual(t, expectedResponse.DataColumnSidecar(), actualResponse[0].DataColumnSidecar())
 	})
+
+	t.Run("recovery forces by root", func(t *testing.T) {
+		// A contiguous, uniform-index set would normally be sent as a by-range request;
+		// with RequestByRoot set it must be sent by root instead.
+		indicesByRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
+			expectedResponse.BlockRoot(): {1: true, 2: true},
+			{3}:                          {1: true, 2: true},
+			{4}:                          {1: true, 2: true},
+			{7}:                          {1: true, 2: true},
+		}
+
+		slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+			expectedResponse.BlockRoot(): 1,
+			{3}:                          3,
+			{4}:                          4,
+			{7}:                          7,
+		}
+
+		slotsWithCommitments := map[primitives.Slot]bool{1: true, 3: true, 4: true, 7: true}
+
+		byRootProtocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRootTopicV1)
+		byRangeProtocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRangeTopicV1)
+		p2p, other := testp2p.NewTestP2P(t), testp2p.NewTestP2P(t)
+		p2p.Connect(other)
+
+		byRootCalled := false
+		other.SetStreamHandler(byRootProtocol, func(stream network.Stream) {
+			byRootCalled = true
+			receivedRequest := new(p2ptypes.DataColumnsByRootIdentifiers)
+			err := other.Encoding().DecodeWithMaxLength(stream, receivedRequest)
+			assert.NoError(t, err)
+			assert.Equal(t, 4, len(*receivedRequest))
+
+			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), expectedResponse)
+			assert.NoError(t, err)
+
+			err = stream.CloseWrite()
+			assert.NoError(t, err)
+		})
+		other.SetStreamHandler(byRangeProtocol, func(stream network.Stream) {
+			t.Error("by-range request must not be sent when RequestByRoot is set")
+			_ = stream.CloseWrite()
+		})
+
+		params := DataColumnSidecarsParams{
+			Ctx:           t.Context(),
+			Tor:           clock,
+			P2P:           p2p,
+			CtxMap:        ctxMap,
+			RateLimiter:   leakybucket.NewCollector(1., 1, time.Second, false /* deleteEmptyBuckets */),
+			RequestByRoot: true,
+		}
+
+		actualResponse, err := sendDataColumnSidecarsRequest(params, slotByRoot, slotsWithCommitments, other.PeerID(), indicesByRoot)
+		require.NoError(t, err)
+		require.Equal(t, true, byRootCalled)
+		require.DeepSSZEqual(t, expectedResponse.DataColumnSidecar(), actualResponse[0].DataColumnSidecar())
+	})
 }
 
 func TestBuildByRangeRequests(t *testing.T) {
@@ -865,6 +923,10 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 			expectedSidecar := expected[index]
 			require.DeepSSZEqual(t, expectedSidecar.DataColumnSidecar(), actualSidecar.DataColumnSidecar())
 		}
+
+		scorer := p2p.Peers().Scorers().BadResponsesScorer()
+		require.Equal(t, true, scorer.Score("peer3") < 0)   // genuine KZG-proof fault is downscored
+		require.Equal(t, float64(0), scorer.Score("peer1")) // honest peer is not penalized
 	})
 
 	t.Run("rogue peer with junk header signature", func(t *testing.T) {
@@ -943,6 +1005,45 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blockByRoot, roDataColumnsByPeer)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(actual))
+		// The peer is NOT downscored for returning sidecars whose block we don't hold locally.
+		require.Equal(t, float64(0), p2p.Peers().Scorers().BadResponsesScorer().Score("peer1"))
+	})
+
+	t.Run("foreign roots dropped without downscore", func(t *testing.T) {
+		const blobCount = 1
+
+		p2p := testp2p.NewTestP2P(t)
+
+		roBlock, localSidecars, expected := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
+		// A second block at a different slot yields a different root that we do NOT hold locally.
+		_, foreignSidecars, _ := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(1))
+
+		// One peer returns valid local-root sidecars mixed with sidecars for the foreign block.
+		mixed := append([]blocks.RODataColumn{}, localSidecars[0:5]...)
+		mixed = append(mixed, foreignSidecars[0:5]...)
+		roDataColumnsByPeer := map[peer.ID][]blocks.RODataColumn{"peer1": mixed}
+
+		gs := startup.NewClockSynchronizer()
+		err := gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
+		require.NoError(t, err)
+
+		waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
+		initializer, err := waiter.WaitForInitializer(t.Context())
+		require.NoError(t, err)
+
+		blockByRoot := map[[fieldparams.RootLength]byte]blocks.ROBlock{roBlock.Root(): roBlock}
+
+		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
+		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blockByRoot, roDataColumnsByPeer)
+		require.NoError(t, err)
+
+		// Only the local-root sidecars are returned; foreign ones are silently dropped.
+		require.Equal(t, 5, len(actual))
+		for i := range actual {
+			require.DeepSSZEqual(t, expected[actual[i].Index()].DataColumnSidecar(), actual[i].DataColumnSidecar())
+		}
+		// The peer is not penalized for the foreign-root sidecars.
+		require.Equal(t, float64(0), p2p.Peers().Scorers().BadResponsesScorer().Score("peer1"))
 	})
 }
 
@@ -1150,8 +1251,11 @@ func TestVerifyByRootDataColumnSidecars_SeedsGloasBidCommitments(t *testing.T) {
 		require.Equal(t, len(commitments), len(got))
 	})
 
-	t.Run("errors when the block is not local", func(t *testing.T) {
-		_, err := verifyByRootDataColumnSidecars(newVerifier, map[[fieldparams.RootLength]byte]blocks.ROBlock{}, []blocks.RODataColumn{gloasColumn})
-		require.ErrorIs(t, err, ErrSidecarHeaderMismatch)
+	t.Run("drops sidecar without error when the block is not local", func(t *testing.T) {
+		// A sidecar for a block we do not hold locally (e.g. a by-range response for a slot
+		// where our local block differs) is dropped, not treated as a peer fault.
+		verified, err := verifyByRootDataColumnSidecars(newVerifier, map[[fieldparams.RootLength]byte]blocks.ROBlock{}, []blocks.RODataColumn{gloasColumn})
+		require.NoError(t, err)
+		require.Equal(t, 0, len(verified))
 	})
 }
