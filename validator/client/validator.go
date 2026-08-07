@@ -1139,11 +1139,8 @@ func (v *validator) buildProposerSettingsRequests(
 	return prepareProposerReqs
 }
 
-// upgradeProposerSettingsToV2 migrates v1 proposer settings to v2 and persists
-// them. Callers must gate this on gloas-active so the pre-gloas registration
-// path still sees BuilderConfig.
-// Upgrades a clone then swaps, so concurrent readers never observe a
-// half-migrated settings object.
+// upgradeProposerSettingsToV2 migrates v1 settings to v2 and persists them; callers
+// gate on gloas-active. Upgrades a clone then swaps so readers never see a half state.
 func (v *validator) upgradeProposerSettingsToV2(ctx context.Context) {
 	ps := v.ProposerSettings().Clone()
 	if !ps.UpgradeToV2() {
@@ -1377,10 +1374,8 @@ type builderTarget struct {
 	boostFactor *uint64
 }
 
-// builderTargetsForKey resolves the enabled builder list for pk; each entry
-// overrides the config-level fallbacks.
-// TODO(gloas): resolved minBid/boostFactor/pubkey take effect with the inline
-// produce-block preferences wire (beacon-APIs #630).
+// builderTargetsForKey resolves the enabled builder list for pk; entries override
+// config-level fallbacks. TODO(gloas): minBid/boost/pubkey ride the #630 wire.
 func (v *validator) builderTargetsForKey(pk pubkey) []builderTarget {
 	bc := v.ProposerSettings().EffectiveBuilderConfig(pk)
 	if !bc.IsEnabled() {

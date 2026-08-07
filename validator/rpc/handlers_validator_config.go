@@ -23,9 +23,8 @@ const (
 	maxAuthDataSize   = 4096 // MAX_DATA_SIZE
 )
 
-// GetBuilders implements GET /eth/v1/validator/{pubkey}/builders (keymanager-APIs #88).
-// It returns the key's builder configuration resolved against default_config so
-// re-submitting the response reproduces the same behavior.
+// GetBuilders implements GET /eth/v1/validator/{pubkey}/builders (keymanager-APIs
+// #88): the key's config resolved against default_config, safe to re-submit.
 func (s *Server) GetBuilders(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.GetBuilders")
 	defer span.End()
@@ -52,9 +51,8 @@ func (s *Server) GetBuilders(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, out)
 }
 
-// SetBuilders implements POST /eth/v1/validator/{pubkey}/builders. It replaces the
-// key's builder configuration in full, leaving fee recipient, gas limit and graffiti
-// untouched.
+// SetBuilders implements POST /eth/v1/validator/{pubkey}/builders, replacing the
+// key's builder config in full; fee recipient, gas limit and graffiti are untouched.
 func (s *Server) SetBuilders(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.SetBuilders")
 	defer span.End()
@@ -111,9 +109,8 @@ func (s *Server) SetBuilders(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-// DeleteBuilders implements DELETE /eth/v1/validator/{pubkey}/builders. It removes
-// the key's builder configuration so the key follows the validator client defaults;
-// this differs from enabled:false.
+// DeleteBuilders implements DELETE /eth/v1/validator/{pubkey}/builders: the key
+// follows the validator client defaults again; not the same as enabled:false.
 func (s *Server) DeleteBuilders(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.DeleteBuilders")
 	defer span.End()

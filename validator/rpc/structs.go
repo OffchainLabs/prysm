@@ -109,13 +109,8 @@ type GraffitiData struct {
 	Graffiti string `json:"graffiti"`
 }
 
-// Per-key builders keymanager api (keymanager-APIs #88). All integers are decimal
-// strings and all byte values are 0x-prefixed hex, per keymanager conventions.
-// A nil Builders means "use the validator client's builders"; a non-nil empty
-// Builders means "use none" (p2p bids only).
-// Builders has no omitempty: on the resolved GET response an empty list ("use no
-// builders") must serialize as [] rather than be dropped. On POST input an absent
-// field still decodes to nil, which means "inherit the validator client's builders".
+// BuilderConfigJson is the keymanager-APIs #88 wire form: integers are decimal
+// strings, bytes 0x-hex. Builders nil = inherit, [] = use none (kept by no omitempty).
 type BuilderConfigJson struct {
 	Enabled            *bool               `json:"enabled"`
 	MinBid             *string             `json:"min_bid,omitempty"`

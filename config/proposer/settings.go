@@ -332,9 +332,8 @@ func builderEntryFromConsensus(from *validatorpb.BuilderEntry) *BuilderEntry {
 	return e
 }
 
-// Schema versions for proposer settings. SchemaV1Unset is the proto3 zero
-// value — every existing v1 user has it, since the version field is new.
-// Both SchemaV1Unset and SchemaV1 are legacy v1 inputs to the migration.
+// Schema versions for proposer settings. SchemaV1Unset is the proto3 zero value
+// every pre-versioning user has; both it and SchemaV1 are legacy v1 inputs.
 const (
 	SchemaV1Unset uint32 = 0
 	SchemaV1      uint32 = 1
@@ -571,11 +570,8 @@ func (ps *Settings) WarnDeprecatedSchema() {
 	log.Warn("Proposer settings use the deprecated v1 schema; they are upgraded automatically at the gloas fork. Please migrate your settings source to v2.")
 }
 
-// UpgradeToV2 migrates v1 settings to v2 in place: builder gas limits are
-// promoted to the top-level preferences gas limit (unless one is already set).
-// BuilderConfig is retained because it carries the gloas builder-API relays /
-// enabled / max_execution_payment, which have no top-level v2 field. Settings
-// already on v2 are left untouched. Returns true if changed.
+// UpgradeToV2 migrates v1 settings in place: builder gas limits are promoted to
+// the option level unless one is set. Returns true if anything changed.
 func (ps *Settings) UpgradeToV2() bool {
 	if ps == nil || ps.isV2() {
 		return false
@@ -597,10 +593,8 @@ func (ps *Settings) UpgradeToV2() bool {
 	return true
 }
 
-// TargetGasLimit returns the proposer preferences gas limit for pubkey from
-// the top-level fields only: the per-pubkey override, else the default config
-// value, else the chain default. Builder gas limits are registration-only and
-// intentionally not consulted.
+// TargetGasLimit resolves pubkey's gas limit from top-level fields only: per-key,
+// else default config, else chain default. Builder gas limits are registration-only.
 func (ps *Settings) TargetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) validator.Uint64 {
 	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
 	if ps == nil {
@@ -615,9 +609,8 @@ func (ps *Settings) TargetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) val
 	return chainDefault
 }
 
-// GasLimit returns the gas limit (gwei) for pubkey: the per-pubkey override,
-// else the default config value, else the chain default. v1 reads the builder
-// gas limit; v2 reads the top-level fields.
+// GasLimit resolves pubkey's gas limit: per-key, else default config, else chain
+// default. v1 reads builder gas limits; v2 reads the top-level fields.
 func (ps *Settings) GasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) validator.Uint64 {
 	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
 	if ps == nil {
@@ -635,11 +628,8 @@ func (ps *Settings) GasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) validator
 	return chainDefault
 }
 
-// SetGasLimit writes the per-pubkey gas limit. v1 requires existing settings
-// with builder enabled.
-// UpsertProposeOption returns the per-key proposer option, creating the ProposeConfig
-// map and the option if absent. A newly created option has a nil BuilderConfig so it
-// inherits default_config rather than snapshotting it.
+// UpsertProposeOption returns pubkey's option, creating it if absent. A new
+// option keeps BuilderConfig nil so it inherits default_config.
 func (ps *Settings) UpsertProposeOption(pubkey [fieldparams.BLSPubkeyLength]byte) *Option {
 	if ps.ProposeConfig == nil {
 		ps.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
@@ -652,6 +642,8 @@ func (ps *Settings) UpsertProposeOption(pubkey [fieldparams.BLSPubkeyLength]byte
 	return opt
 }
 
+// SetGasLimit writes the per-pubkey gas limit. v1 requires existing settings
+// with builder enabled.
 func (ps *Settings) SetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, gasLimit validator.Uint64) error {
 	if ps == nil {
 		return errors.New("No proposer settings were found to update")
