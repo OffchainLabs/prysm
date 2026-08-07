@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
@@ -161,10 +162,6 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 	}
 	if err := s.setHead(newHead); err != nil {
 		return errors.Wrap(err, "could not set head")
-	}
-
-	if c := s.cfg.AttestationDataCache; c != nil {
-		go c.Clear()
 	}
 
 	// Save the new head root to DB.
@@ -390,9 +387,9 @@ func (s *Service) notifyNewHeadV2Event(
 	headVersion int,
 	full bool,
 ) error {
-	var payloadStatus statefeed.PayloadStatus = statefeed.PayloadStatusFull
+	var payloadStatus api.PayloadStatus = api.PayloadStatusFull
 	if headVersion >= version.Gloas && !full {
-		payloadStatus = statefeed.PayloadStatusEmpty
+		payloadStatus = api.PayloadStatusEmpty
 
 	}
 	s.headV2EventLock.Lock()

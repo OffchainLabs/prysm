@@ -60,6 +60,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//api:go_default_library",
         "//beacon-chain/core/feed/state:go_default_library",
         "//config/fieldparams:go_default_library",
         "//consensus-types/blocks:go_default_library",

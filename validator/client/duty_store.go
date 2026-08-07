@@ -306,9 +306,9 @@ func (ds *dutyStore) snapshot() roDutySnapshot {
 	return roDutySnapshot{d: ds.data, revision: ds.revision}
 }
 
-// needsNextRetry reports whether a next-epoch retry has work to do — a cheap
-// pre-check so callers don't spawn a retry that would no-op.
-func (ds *dutyStore) needsNextRetry() bool {
+// needsNextFetch reports whether next-epoch duties still need fetching — a cheap
+// pre-check so callers don't spawn a fetch that would no-op.
+func (ds *dutyStore) needsNextFetch() bool {
 	if ds == nil {
 		return false
 	}

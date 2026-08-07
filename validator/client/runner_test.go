@@ -171,6 +171,37 @@ func TestUpdateDuties_HandlesError(t *testing.T) {
 	require.LogsContain(t, hook, "Failed to update assignments")
 }
 
+func TestMaybeFetchNextDuties_Gating(t *testing.T) {
+	spe := params.BeaconConfig().SlotsPerEpoch
+	fetchSlot := nextDutiesFetchSlot()
+	tests := []struct {
+		name     string
+		slot     primitives.Slot
+		wantNext bool
+	}{
+		{"early slot skips next fetch", 1, false},
+		{"slot before threshold skips next fetch", fetchSlot - 1, false},
+		{"threshold slot fetches next", fetchSlot, true},
+		{"mid-epoch slot fetches next", spe/2 + 3, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}}
+			ctx, cancel := context.WithCancel(t.Context())
+			ticker := make(chan primitives.Slot)
+			v.NextSlotRet = ticker
+			go func() {
+				ticker <- tt.slot
+				cancel()
+			}()
+
+			runTest(t, ctx, v)
+
+			assert.Equal(t, tt.wantNext, v.MaybeFetchNextDutiesCalled)
+		})
+	}
+}
+
 func TestRoleAt_NextSlot(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -582,6 +613,7 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 		slotFeed:                     &event.Feed{},
 		submittedAtts:                make(map[submittedAttKey]*submittedAtt),
 		submittedAggregates:          make(map[submittedAttKey]*submittedAtt),
+		attestedSlotsByKeyByEpoch:    make(map[primitives.Epoch]map[[fieldparams.BLSPubkeyLength]byte]primitives.Slot),
 	}
 	v.aggSelector = testLocalSelector(t, v)
 

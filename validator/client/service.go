@@ -191,6 +191,7 @@ func (v *ValidatorService) Start() {
 		slotFeed:                     new(event.Feed),
 		startBalances:                make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
 		prevEpochBalances:            make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
+		attestedSlotsByKeyByEpoch:    make(map[primitives.Epoch]map[[fieldparams.BLSPubkeyLength]byte]primitives.Slot),
 		blacklistedPubkeys:           slashablePublicKeys,
 		pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 		wallet:                       v.wallet,
@@ -226,6 +227,7 @@ func (v *ValidatorService) Start() {
 		accountsChangedChannel:       make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
 		eventsChannel:                make(chan *eventClient.Event, 1),
 		payloadAvailability:          newPayloadAvailability(),
+		head:                         newHeadTracker(),
 	}
 
 	val := v.validator.(*validator)
@@ -252,7 +254,7 @@ func (v *ValidatorService) Start() {
 		case isHealthy := <-hm.HealthyChan():
 			if !isHealthy {
 				// wait until the next health tracker update
-				log.WithField("url", api.RedactEndpoint(v.validator.Host())).Warn("Validator service health check failed, waiting for healthy beacon node...")
+				log.WithField("url", api.RedactEndpointList(v.validator.Host())).Warning("Validator service health check failed, waiting for healthy beacon node...")
 				continue
 			}
 

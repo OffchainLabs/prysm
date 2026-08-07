@@ -58,13 +58,9 @@ func MerkleizeProgressiveChunks(chunks [][32]byte) [32]byte {
 // MerkleizeVectorSSZProgressive hashes each element and computes the
 // merkleize_progressive body root over the resulting field roots.
 func MerkleizeVectorSSZProgressive[T Hashable](elements []T) ([32]byte, error) {
-	roots := make([][32]byte, len(elements))
-	for i, el := range elements {
-		r, err := el.HashTreeRoot()
-		if err != nil {
-			return [32]byte{}, err
-		}
-		roots[i] = r
+	roots, err := ElementRoots(elements)
+	if err != nil {
+		return [32]byte{}, err
 	}
 	return MerkleizeProgressiveChunks(roots), nil
 }

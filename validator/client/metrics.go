@@ -329,27 +329,27 @@ func (v *validator) logForEachValidator(index int, pubKey []byte, resp *ethpb.Va
 	gweiPerEth := float64(params.BeaconConfig().GweiPerEth)
 	if v.prevEpochBalances[pubKeyBytes] > 0 {
 		newBalance := float64(balAfterEpoch) / gweiPerEth
-		prevBalance := float64(balBeforeEpoch) / gweiPerEth
-		startBalance := float64(v.startBalances[pubKeyBytes]) / gweiPerEth
-		percentNet := (newBalance - prevBalance) / prevBalance
-		percentSinceStart := (newBalance - startBalance) / startBalance
+		diffGwei := float64(balAfterEpoch) - float64(balBeforeEpoch)
 
 		previousEpochSummaryFields := logrus.Fields{
-			"pubkey":                  truncatedKey,
-			"epoch":                   prevEpoch,
-			"correctlyVotedSource":    correctlyVotedSource,
-			"correctlyVotedTarget":    correctlyVotedTarget,
-			"correctlyVotedHead":      correctlyVotedHead,
-			"startBalance":            startBalance,
-			"oldBalance":              prevBalance,
-			"newBalance":              newBalance,
-			"percentChange":           fmt.Sprintf("%.5f%%", percentNet*100),
-			"percentChangeSinceStart": fmt.Sprintf("%.5f%%", percentSinceStart*100),
+			"pubkey":               truncatedKey,
+			"epoch":                prevEpoch,
+			"correctlyVotedSource": correctlyVotedSource,
+			"correctlyVotedTarget": correctlyVotedTarget,
+			"correctlyVotedHead":   correctlyVotedHead,
+			"diffGwei":             diffGwei,
+			"balanceEth":           fmt.Sprintf("%.9f", newBalance),
+		}
+
+		if votedSlot, ok := v.attestedSlot(prevEpoch, pubKeyBytes); ok {
+			previousEpochSummaryFields["slot"] = votedSlot
 		}
 
 		if slots.ToEpoch(slot) >= params.BeaconConfig().AltairForkEpoch {
 			if index < len(resp.InactivityScores) {
-				previousEpochSummaryFields["inactivityScore"] = resp.InactivityScores[index]
+				if inactivityScore := resp.InactivityScores[index]; inactivityScore != 0 {
+					previousEpochSummaryFields["inactivityScore"] = inactivityScore
+				}
 			} else {
 				log.WithField("pubkey", truncatedKey).Warn("Missing inactivity score")
 			}

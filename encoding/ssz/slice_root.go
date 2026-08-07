@@ -15,13 +15,9 @@ func SliceRoot[T Hashable](slice []T, limit uint64) ([32]byte, error) {
 		return [32]byte{}, fmt.Errorf("slice exceeds max length %d", max)
 	}
 
-	roots := make([][32]byte, len(slice))
-	for i := range slice {
-		r, err := slice[i].HashTreeRoot()
-		if err != nil {
-			return [32]byte{}, errors.Wrap(err, "could not merkleize object")
-		}
-		roots[i] = r
+	roots, err := ElementRoots(slice)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "could not merkleize object")
 	}
 
 	sliceRoot, err := BitwiseMerkleize(roots, uint64(len(roots)), limit)
