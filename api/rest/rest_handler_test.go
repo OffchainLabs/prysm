@@ -13,6 +13,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
@@ -66,7 +67,7 @@ func TestGetSSZ_NonJSONErrorBodyIsTyped(t *testing.T) {
 // A JSON error body is decoded into the typed error's fields.
 func TestPostSSZ_JSONErrorBodyIsDecoded(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+		assert.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
 		w.Header().Set("Content-Type", api.JsonMediaType)
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"code":400,"message":"bad request"}`))
