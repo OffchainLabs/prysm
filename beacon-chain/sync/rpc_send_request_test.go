@@ -485,6 +485,71 @@ func TestSendRequest_SendBeaconBlocksByRootRequest(t *testing.T) {
 	})
 }
 
+func TestSendBeaconBlocksByRoot_RootValidation(t *testing.T) {
+	pcl := fmt.Sprintf("%s/ssz_snappy", p2p.RPCBlocksByRootTopicV1)
+
+	blkA := util.NewBeaconBlock()
+	blkA.Block.Slot = 1
+	rootA, err := blkA.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	blkB := util.NewBeaconBlock()
+	blkB.Block.Slot = 99
+	rootB, err := blkB.Block.HashTreeRoot()
+	require.NoError(t, err)
+	require.NotEqual(t, rootA, rootB)
+
+	cases := []struct {
+		name       string
+		requested  p2ptypes.BeaconBlockByRootsReq
+		sendBlock  *ethpb.SignedBeaconBlock
+		wantErr    error
+		wantBlocks int
+	}{
+		{
+			name:       "correct root returned",
+			requested:  p2ptypes.BeaconBlockByRootsReq{rootA},
+			sendBlock:  blkA,
+			wantBlocks: 1,
+		},
+		{
+			name:       "wrong root returned",
+			requested:  p2ptypes.BeaconBlockByRootsReq{rootA},
+			sendBlock:  blkB,
+			wantErr:    ErrInvalidFetchedData,
+			wantBlocks: 0,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
+
+			p2.SetStreamHandler(pcl, func(stream network.Stream) {
+				defer func() { assert.NoError(t, stream.Close()) }()
+				req := new(p2ptypes.BeaconBlockByRootsReq)
+				assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+				_, err := stream.Write([]byte{0x00})
+				assert.NoError(t, err)
+				_, err = p2.Encoding().EncodeWithMaxLength(stream, c.sendBlock)
+				assert.NoError(t, err)
+			})
+
+			got, err := SendBeaconBlocksByRootRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), &c.requested, nil)
+			if c.wantErr != nil {
+				require.ErrorIs(t, err, c.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			assert.Equal(t, c.wantBlocks, len(got))
+		})
+	}
+}
+
 func TestBlobValidatorFromRootReq(t *testing.T) {
 	rootA := bytesutil.PadTo([]byte("valid"), 32)
 	rootB := bytesutil.PadTo([]byte("invalid"), 32)
