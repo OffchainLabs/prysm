@@ -467,6 +467,62 @@ func TestRoundTripSszInfo(t *testing.T) {
 	}
 }
 
+// TestListInfo_ElementValue_VariableTestContainer tests whether sliceValue in listInfo
+// is correctly populated for variable-length lists, and whether ElementValue can access
+// elements in those lists.
+func TestListInfo_ElementValue_VariableTestContainer(t *testing.T) {
+	// Setup with VariableTestContainer.
+	container := createVariableTestContainer()
+
+	info, err := query.AnalyzeObject(container)
+	require.NoError(t, err)
+
+	cinfo, err := info.ContainerInfo()
+	require.NoError(t, err)
+
+	t.Run("Access List of Basic Types (uint64)", func(t *testing.T) {
+		field, err := cinfo.FieldInfo("field_list_uint64")
+		require.NoError(t, err)
+
+		li, err := field.ListInfo()
+		require.NoError(t, err)
+
+		val, err := li.ElementValue(2)
+		require.NoError(t, err)
+
+		expectedVal := container.FieldListUint64[2]
+		require.Equal(t, expectedVal, val.Interface())
+	})
+
+	t.Run("Access List of Containers (FixedNestedContainer)", func(t *testing.T) {
+		field, err := cinfo.FieldInfo("field_list_container")
+		require.NoError(t, err)
+
+		li, err := field.ListInfo()
+		require.NoError(t, err)
+
+		val, err := li.ElementValue(1)
+		require.NoError(t, err)
+
+		expectedVal := container.FieldListContainer[1]
+		// Use DeepSSZEqual to compare containers.
+		require.DeepSSZEqual(t, expectedVal, val.Interface())
+	})
+
+	t.Run("Error - Index Out of Bounds", func(t *testing.T) {
+		field, err := cinfo.FieldInfo("field_list_uint64")
+		require.NoError(t, err)
+
+		li, err := field.ListInfo()
+		require.NoError(t, err)
+
+		length := li.Length()
+		_, err = li.ElementValue(int(length))
+		require.NotNil(t, err)
+		require.ErrorContains(t, "out of bounds", err)
+	})
+}
+
 func createFixedTestContainer() *sszquerypb.FixedTestContainer {
 	fieldBytes32 := make([]byte, 32)
 	for i := range fieldBytes32 {

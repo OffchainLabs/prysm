@@ -37,6 +37,7 @@ go_test(
     name = "go_default_test",
     srcs = [
         "generalized_index_test.go",
+        "list_test.go",
         "merkle_proof_test.go",
         "path_test.go",
         "proof_collector_test.go",

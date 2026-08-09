@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
@@ -336,6 +337,17 @@ func TestDuplicateDirtyIndices(t *testing.T) {
 	// We would trigger above the threshold.
 	newState.addDirtyIndices(types.Balances, []uint64{21000, 21001, 21002, 21003})
 	assert.Equal(t, true, newState.rebuildTrie[types.Balances])
+}
+
+func TestValidateFieldPosition_AllVersionsSupported(t *testing.T) {
+	for _, v := range version.All() {
+		t.Run(version.String(v), func(t *testing.T) {
+			st := &BeaconState{version: v}
+			// NOTE: Position 0 is always valid,
+			// make sure this test fails when one of the cases is not supported.
+			require.NoError(t, st.validateFieldPosition(0))
+		})
+	}
 }
 
 func generateState(t *testing.T) state.BeaconState {

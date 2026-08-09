@@ -11,7 +11,6 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -44,7 +43,14 @@ type Prover interface {
 	CurrentSyncCommitteeProof(ctx context.Context) ([][]byte, error)
 	NextSyncCommitteeProof(ctx context.Context) ([][]byte, error)
 
-	ProofByFieldIndex(ctx context.Context, f types.FieldIndex) ([][]byte, error)
+	// ProofByFieldPosition returns the field root (leaf) and the proof hashes for the field
+	// at the given position in the beacon state container.
+	ProofByFieldPosition(ctx context.Context, pos int) ([]byte, [][]byte, error)
+
+	// ProofForFieldElement returns the element root (leaf) and proof hashes for a specific
+	// element within a list/vector field, identified by its position in the beacon state container.
+	// The returned proof reaches up to the beacon state root.
+	ProofForFieldElement(ctx context.Context, pos int, index uint64) ([]byte, [][]byte, error)
 }
 
 // ReadOnlyBeaconState defines a struct which only has read access to beacon state methods.

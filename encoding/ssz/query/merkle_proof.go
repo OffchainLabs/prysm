@@ -1,7 +1,7 @@
 package query
 
 import (
-	"fmt"
+	"errors"
 	"reflect"
 
 	fastssz "github.com/prysmaticlabs/fastssz"
@@ -15,14 +15,21 @@ import (
 // - error: any error encountered during proof generation.
 func (info *SszInfo) Prove(gindex uint64) (*fastssz.Proof, error) {
 	if info == nil {
-		return nil, fmt.Errorf("nil SszInfo")
+		return nil, errors.New("nil SszInfo")
 	}
+	if info.source == nil {
+		return nil, errors.New("SszInfo.source is nil")
+	}
+
+	v := reflect.ValueOf(info.source)
+	if !v.IsValid() {
+		return nil, errors.New("proof value is invalid")
+	}
+
+	v = dereferencePointer(v)
 
 	collector := newProofCollector()
 	collector.addTarget(gindex)
-
-	// info.source is guaranteed to be valid and dereferenced by AnalyzeObject
-	v := reflect.ValueOf(info.source).Elem()
 
 	// Start the merkleization and proof collection process.
 	// In SSZ generalized indices, the root is always at index 1.
