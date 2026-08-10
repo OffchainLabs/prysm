@@ -420,6 +420,29 @@ func TestPublishExecutionPayloadEnvelope_ServerError(t *testing.T) {
 	require.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
+func TestWriteEnvelopePublishError(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantBody   string
+	}{
+		{name: "invalid argument", err: status.Error(codes.InvalidArgument, "invalid envelope"), wantStatus: http.StatusBadRequest, wantBody: "invalid envelope"},
+		{name: "failed precondition", err: status.Error(codes.FailedPrecondition, "cache miss"), wantStatus: http.StatusBadRequest, wantBody: "cache miss"},
+		{name: "internal", err: status.Error(codes.Internal, "broadcast failed"), wantStatus: http.StatusInternalServerError, wantBody: "broadcast failed"},
+		{name: "non-status error", err: errors.New("plain error"), wantStatus: http.StatusInternalServerError, wantBody: "could not publish execution payload envelope: plain error"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			writeEnvelopePublishError(w, tt.err)
+			require.Equal(t, tt.wantStatus, w.Code)
+			require.StringContains(t, tt.wantBody, w.Body.String())
+		})
+	}
+}
+
 // SSZ stateful: send the bare SignedExecutionPayloadEnvelope, header=false.
 func TestPublishExecutionPayloadEnvelope_SSZ_StatefulBareEnvelope(t *testing.T) {
 	params.SetupTestConfigCleanup(t)

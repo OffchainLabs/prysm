@@ -123,6 +123,7 @@ func TestPublishExecutionPayloadEnvelope_NilRequest(t *testing.T) {
 	vs := &Server{}
 	_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), nil)
 	require.ErrorContains(t, "must set contents or signed_envelope", err)
+	require.Equal(t, codes.InvalidArgument, status.Code(err))
 
 	_, err = vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
 		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Contents{
@@ -130,6 +131,7 @@ func TestPublishExecutionPayloadEnvelope_NilRequest(t *testing.T) {
 		},
 	})
 	require.ErrorContains(t, "signed envelope or payload cannot be nil", err)
+	require.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestPublishExecutionPayloadEnvelope_PreFork(t *testing.T) {
@@ -151,16 +153,14 @@ func TestPublishExecutionPayloadEnvelope_PreFork(t *testing.T) {
 		},
 	})
 	require.ErrorContains(t, "not supported before Gloas fork", err)
+	require.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
-func TestPublishExecutionPayloadEnvelope_StatelessContents_RejectsBadProofs(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
+func statelessEnvelopeRequest(t *testing.T) *ethpb.GenericSignedExecutionPayloadEnvelope {
+	t.Helper()
 	require.NoError(t, kzg.Start())
 
-	blobCount := 2
+	blobCount := 1
 	rawBlobs := make([]kzg.Blob, blobCount)
 	for i := range rawBlobs {
 		rawBlobs[i] = kzg.Blob{uint8(i + 1)}
@@ -177,12 +177,20 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_RejectsBadProofs(t *t
 			flatProofs = append(flatProofs, p[:])
 		}
 	}
-	// Corrupt the first proof — verifyCellProofs must reject before any P2P/cache/receiver is touched.
-	flatProofs[0] = bytes.Repeat([]byte{0xff}, 48)
-
 	signed := &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
-			Payload:               &enginev1.ExecutionPayloadGloas{SlotNumber: 1},
+			Payload: &enginev1.ExecutionPayloadGloas{
+				ParentHash:    make([]byte, 32),
+				FeeRecipient:  make([]byte, 20),
+				StateRoot:     make([]byte, 32),
+				ReceiptsRoot:  make([]byte, 32),
+				LogsBloom:     make([]byte, 256),
+				PrevRandao:    make([]byte, 32),
+				BaseFeePerGas: make([]byte, 32),
+				BlockHash:     make([]byte, 32),
+				ExtraData:     make([]byte, 0),
+				SlotNumber:    1,
+			},
 			ExecutionRequests:     &enginev1.ExecutionRequestsGloas{},
 			BeaconBlockRoot:       make([]byte, 32),
 			ParentBeaconBlockRoot: make([]byte, 32),
@@ -190,8 +198,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_RejectsBadProofs(t *t
 		Signature: make([]byte, 96),
 	}
 
-	vs := &Server{}
-	_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
+	return &ethpb.GenericSignedExecutionPayloadEnvelope{
 		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Contents{
 			Contents: &ethpb.SignedExecutionPayloadEnvelopeContents{
 				SignedExecutionPayloadEnvelope: signed,
@@ -199,8 +206,24 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_RejectsBadProofs(t *t
 				KzgProofs:                      flatProofs,
 			},
 		},
-	})
+	}
+}
+
+func TestPublishExecutionPayloadEnvelope_StatelessContents_RejectsBadProofs(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	req := statelessEnvelopeRequest(t)
+	contents := req.Envelope.(*ethpb.GenericSignedExecutionPayloadEnvelope_Contents).Contents
+	// Corrupt the first proof — verifyCellProofs must reject before any P2P/cache/receiver is touched.
+	contents.KzgProofs[0] = bytes.Repeat([]byte{0xff}, 48)
+
+	vs := &Server{}
+	_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), req)
 	require.ErrorContains(t, "kzg verification failed", err)
+	require.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestGetExecutionPayloadEnvelopeRPC_Success(t *testing.T) {
@@ -358,6 +381,106 @@ func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
 	require.Equal(t, int32(1), receiver.calls.Load())
 }
 
+func TestPublishExecutionPayloadEnvelope_SideEffectOrder(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	events := make(chan string, 4)
+	releaseImport := make(chan struct{})
+	contexts := make(chan context.Context, 1)
+	receiver := &mockExecutionPayloadEnvelopeReceiver{
+		done:     make(chan struct{}),
+		events:   events,
+		contexts: contexts,
+		release:  releaseImport,
+	}
+	dataReceiver := &mockDataColumnReceiver{events: events}
+	broadcaster := &mockPublishEnvelopeBroadcaster{
+		MockBroadcaster: &mockp2p.MockBroadcaster{},
+		events:          events,
+		dataColumnErr:   errors.New("data column broadcast failed"),
+	}
+	serviceCtx, cancelService := context.WithCancel(t.Context())
+	defer cancelService()
+	requestCtx, cancelRequest := context.WithCancel(t.Context())
+	vs := &Server{
+		Ctx:                              serviceCtx,
+		P2P:                              broadcaster,
+		DataColumnReceiver:               dataReceiver,
+		ExecutionPayloadEnvelopeReceiver: receiver,
+	}
+	req := statelessEnvelopeRequest(t)
+
+	result := make(chan error, 1)
+	go func() {
+		_, err := vs.PublishExecutionPayloadEnvelope(requestCtx, req)
+		result <- err
+	}()
+
+	// Publishing returns even while the background import is blocked.
+	select {
+	case err := <-result:
+		require.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("publish waited for background import")
+	}
+
+	var importCtx context.Context
+	select {
+	case importCtx = <-contexts:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for background import")
+	}
+	cancelRequest()
+	require.NoError(t, importCtx.Err())
+
+	for _, want := range []string{"broadcast data columns", "broadcast envelope", "import data columns", "import envelope"} {
+		select {
+		case got := <-events:
+			require.Equal(t, want, got)
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for %q", want)
+		}
+	}
+
+	close(releaseImport)
+	waitForEnvelopeImport(t, receiver)
+	require.Equal(t, int32(1), dataReceiver.calls.Load())
+}
+
+func TestPublishExecutionPayloadEnvelope_EnvelopeBroadcastFailure(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	events := make(chan string, 2)
+	receiver := &mockExecutionPayloadEnvelopeReceiver{}
+	dataReceiver := &mockDataColumnReceiver{}
+	broadcaster := &mockPublishEnvelopeBroadcaster{
+		MockBroadcaster: &mockp2p.MockBroadcaster{},
+		events:          events,
+		envelopeErr:     errors.New("envelope broadcast failed"),
+	}
+	vs := &Server{
+		Ctx:                              t.Context(),
+		P2P:                              broadcaster,
+		DataColumnReceiver:               dataReceiver,
+		ExecutionPayloadEnvelopeReceiver: receiver,
+	}
+
+	_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), statelessEnvelopeRequest(t))
+	require.ErrorContains(t, "failed to broadcast execution payload envelope", err)
+	require.Equal(t, codes.Internal, status.Code(err))
+	require.Equal(t, int32(0), dataReceiver.calls.Load())
+	require.Equal(t, int32(0), receiver.calls.Load())
+	for _, want := range []string{"broadcast data columns", "broadcast envelope"} {
+		require.Equal(t, want, <-events)
+	}
+}
+
 func TestPublishExecutionPayloadEnvelope_ImportFailureDoesNotFailPublish(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -406,17 +529,74 @@ func TestPublishExecutionPayloadEnvelope_ImportFailureDoesNotFailPublish(t *test
 }
 
 type mockExecutionPayloadEnvelopeReceiver struct {
-	calls atomic.Int32
-	err   error
-	done  chan struct{}
+	calls    atomic.Int32
+	err      error
+	done     chan struct{}
+	events   chan<- string
+	contexts chan<- context.Context
+	release  <-chan struct{}
 }
 
-func (m *mockExecutionPayloadEnvelopeReceiver) ReceiveExecutionPayloadEnvelope(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
+func (m *mockExecutionPayloadEnvelopeReceiver) ReceiveExecutionPayloadEnvelope(ctx context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
 	m.calls.Add(1)
+	if m.events != nil {
+		m.events <- "import envelope"
+	}
+	if m.contexts != nil {
+		m.contexts <- ctx
+	}
+	if m.release != nil {
+		<-m.release
+	}
 	if m.done != nil {
 		close(m.done)
 	}
 	return m.err
+}
+
+type mockDataColumnReceiver struct {
+	calls  atomic.Int32
+	events chan<- string
+}
+
+func (m *mockDataColumnReceiver) ReceiveDataColumn(_ consensusblocks.VerifiedRODataColumn) error {
+	m.calls.Add(1)
+	return nil
+}
+
+func (m *mockDataColumnReceiver) ReceiveDataColumns(_ []consensusblocks.VerifiedRODataColumn) error {
+	m.calls.Add(1)
+	if m.events != nil {
+		m.events <- "import data columns"
+	}
+	return nil
+}
+
+type mockPublishEnvelopeBroadcaster struct {
+	*mockp2p.MockBroadcaster
+	events        chan<- string
+	dataColumnErr error
+	envelopeErr   error
+}
+
+func (m *mockPublishEnvelopeBroadcaster) Broadcast(ctx context.Context, msg proto.Message) error {
+	m.events <- "broadcast envelope"
+	if m.envelopeErr != nil {
+		return m.envelopeErr
+	}
+	return m.MockBroadcaster.Broadcast(ctx, msg)
+}
+
+func (m *mockPublishEnvelopeBroadcaster) BroadcastDataColumnSidecars(
+	ctx context.Context,
+	verified []consensusblocks.VerifiedRODataColumn,
+	partial []consensusblocks.PartialDataColumn,
+) error {
+	m.events <- "broadcast data columns"
+	if m.dataColumnErr != nil {
+		return m.dataColumnErr
+	}
+	return m.MockBroadcaster.BroadcastDataColumnSidecars(ctx, verified, partial)
 }
 
 func waitForEnvelopeImport(t *testing.T, m *mockExecutionPayloadEnvelopeReceiver) {
