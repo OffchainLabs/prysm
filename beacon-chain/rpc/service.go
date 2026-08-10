@@ -231,6 +231,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		OptimisticModeFetcher:            s.cfg.OptimisticModeFetcher,
 		Ctx:                              s.ctx,
 		ExecutionPayloadEnvelopeCache:    s.cfg.ExecutionPayloadEnvelopeCache,
+		ProposerPreferencesCache:         s.cfg.ProposerPreferencesCache,
 		DataColumnReceiver:               s.cfg.DataColumnReceiver,
 		ExecutionPayloadEnvelopeReceiver: s.cfg.ExecutionPayloadEnvelopeReceiver,
 	}

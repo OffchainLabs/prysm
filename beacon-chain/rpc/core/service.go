@@ -34,6 +34,7 @@ type Service struct {
 	OptimisticModeFetcher            blockchain.OptimisticModeFetcher
 	Ctx                              context.Context
 	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache
+	ProposerPreferencesCache         *cache.ProposerPreferencesCache
 	DataColumnReceiver               blockchain.DataColumnReceiver
 	ExecutionPayloadEnvelopeReceiver blockchain.ExecutionPayloadEnvelopeReceiver
 

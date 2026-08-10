@@ -2,6 +2,7 @@ package validator
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -27,7 +28,6 @@ import (
 	p2pmock "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
-	validatorv1alpha1 "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/v1alpha1/validator"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
@@ -42,7 +42,6 @@ import (
 	ethpbalpha "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
-	mock2 "github.com/OffchainLabs/prysm/v7/testing/mock"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -50,9 +49,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
-	"go.uber.org/mock/gomock"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestGetAggregateAttestationV2(t *testing.T) {
@@ -4668,15 +4665,16 @@ func TestSubmitSignedProposerPreferences_OK(t *testing.T) {
 	currentSlot := primitives.Slot(31)
 	proposalSlot := primitives.Slot(32)
 	c := cache.NewProposerPreferencesCache()
-	v1alpha1Server := &validatorv1alpha1.Server{
-		SyncChecker:              &mockSync.Sync{IsSyncing: false},
-		TimeFetcher:              &mockChain.ChainService{Slot: &currentSlot},
+	chain := &mockChain.ChainService{Slot: &currentSlot}
+	coreService := &core.Service{
+		SyncChecker:              &mockSync.Sync{},
+		GenesisTimeFetcher:       chain,
 		P2P:                      &p2pmock.MockBroadcaster{},
 		ProposerPreferencesCache: c,
-		OperationNotifier:        (&mockChain.ChainService{}).OperationNotifier(),
+		OperationNotifier:        chain.OperationNotifier(),
 	}
 
-	s := &Server{V1Alpha1Server: v1alpha1Server}
+	s := &Server{CoreService: coreService}
 	req := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/validator/proposer_preferences", bytes.NewBufferString(validProposerPreferencesBody()))
 	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
 	w := httptest.NewRecorder()
@@ -4700,12 +4698,13 @@ func TestSubmitSignedProposerPreferences_SSZ_OK(t *testing.T) {
 	currentSlot := primitives.Slot(31)
 	proposalSlot := primitives.Slot(32)
 	c := cache.NewProposerPreferencesCache()
-	v1alpha1Server := &validatorv1alpha1.Server{
-		SyncChecker:              &mockSync.Sync{IsSyncing: false},
-		TimeFetcher:              &mockChain.ChainService{Slot: &currentSlot},
+	chain := &mockChain.ChainService{Slot: &currentSlot}
+	coreService := &core.Service{
+		SyncChecker:              &mockSync.Sync{},
+		GenesisTimeFetcher:       chain,
 		P2P:                      &p2pmock.MockBroadcaster{},
 		ProposerPreferencesCache: c,
-		OperationNotifier:        (&mockChain.ChainService{}).OperationNotifier(),
+		OperationNotifier:        chain.OperationNotifier(),
 	}
 
 	pref := &ethpbalpha.SignedProposerPreferences{
@@ -4721,7 +4720,7 @@ func TestSubmitSignedProposerPreferences_SSZ_OK(t *testing.T) {
 	body, err := pref.MarshalSSZ()
 	require.NoError(t, err)
 
-	s := &Server{V1Alpha1Server: v1alpha1Server}
+	s := &Server{CoreService: coreService}
 	req := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/validator/proposer_preferences", bytes.NewBuffer(body))
 	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
 	req.Header.Set("Content-Type", api.OctetStreamMediaType)
@@ -4789,34 +4788,64 @@ func TestSubmitSignedProposerPreferences_InvalidJSON(t *testing.T) {
 	assert.Equal(t, 0, e.Failures[0].Index)
 }
 
-func runWithGRPCError(t *testing.T, code codes.Code) int {
-	t.Helper()
-	ctrl := gomock.NewController(t)
-	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().
-		SubmitSignedProposerPreferences(gomock.Any(), gomock.Any()).
-		Return(nil, status.Error(code, "boom"))
+func TestSubmitSignedProposerPreferences_ErrorMapping(t *testing.T) {
+	t.Run("bad request", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 2
+		params.OverrideBeaconConfig(cfg)
+		currentSlot := primitives.Slot(31)
+		server := &Server{CoreService: &core.Service{
+			SyncChecker:        &mockSync.Sync{},
+			GenesisTimeFetcher: &mockChain.ChainService{Slot: &currentSlot},
+		}}
+		req := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewBufferString(validProposerPreferencesBody()))
+		req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+		response := httptest.NewRecorder()
 
-	s := &Server{V1Alpha1Server: v1alpha1Server}
-	req := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewBufferString(validProposerPreferencesBody()))
-	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
-	w := httptest.NewRecorder()
-	w.Body = &bytes.Buffer{}
+		server.SubmitSignedProposerPreferences(response, req)
+		assert.Equal(t, http.StatusBadRequest, response.Code)
+	})
 
-	s.SubmitSignedProposerPreferences(w, req)
-	return w.Code
+	t.Run("unavailable", func(t *testing.T) {
+		server := &Server{CoreService: &core.Service{SyncChecker: &mockSync.Sync{IsSyncing: true}}}
+		req := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewBufferString(validProposerPreferencesBody()))
+		req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+		response := httptest.NewRecorder()
+
+		server.SubmitSignedProposerPreferences(response, req)
+		assert.Equal(t, http.StatusServiceUnavailable, response.Code)
+	})
+
+	t.Run("internal", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 1
+		params.OverrideBeaconConfig(cfg)
+		currentSlot := primitives.Slot(31)
+		chain := &mockChain.ChainService{Slot: &currentSlot}
+		server := &Server{CoreService: &core.Service{
+			SyncChecker:              &mockSync.Sync{},
+			GenesisTimeFetcher:       chain,
+			P2P:                      &failingProposerPreferencesBroadcaster{MockBroadcaster: &p2pmock.MockBroadcaster{}},
+			ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+			OperationNotifier:        chain.OperationNotifier(),
+		}}
+		req := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewBufferString(validProposerPreferencesBody()))
+		req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+		response := httptest.NewRecorder()
+
+		server.SubmitSignedProposerPreferences(response, req)
+		assert.Equal(t, http.StatusInternalServerError, response.Code)
+	})
 }
 
-func TestSubmitSignedProposerPreferences_InvalidArgumentMapsTo400(t *testing.T) {
-	assert.Equal(t, http.StatusBadRequest, runWithGRPCError(t, codes.InvalidArgument))
+type failingProposerPreferencesBroadcaster struct {
+	*p2pmock.MockBroadcaster
 }
 
-func TestSubmitSignedProposerPreferences_UnavailableMapsTo503(t *testing.T) {
-	assert.Equal(t, http.StatusServiceUnavailable, runWithGRPCError(t, codes.Unavailable))
-}
-
-func TestSubmitSignedProposerPreferences_InternalMapsTo500(t *testing.T) {
-	assert.Equal(t, http.StatusInternalServerError, runWithGRPCError(t, codes.Internal))
+func (*failingProposerPreferencesBroadcaster) BroadcastForEpoch(context.Context, proto.Message, primitives.Epoch) error {
+	return errors.New("boom")
 }
 
 func TestSubmitSignedProposerPreferences_MissingVersionHeader(t *testing.T) {
