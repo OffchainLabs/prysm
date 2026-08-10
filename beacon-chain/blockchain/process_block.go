@@ -820,7 +820,7 @@ func (s *Service) runLateBlockTasks() {
 		attDueBPS = cfg.AttestationDueBPSGloas
 	}
 	attThreshold := cfg.SlotComponentDuration(attDueBPS)
-	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SecondsPerSlot)
+	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SlotDuration())
 	for {
 		select {
 		case slot := <-ticker.C():
@@ -828,7 +828,7 @@ func (s *Service) runLateBlockTasks() {
 				ticker.Done()
 				attDueBPS = cfg.AttestationDueBPSGloas
 				attThreshold = cfg.SlotComponentDuration(attDueBPS)
-				ticker = slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SecondsPerSlot)
+				ticker = slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SlotDuration())
 			}
 			s.goroutineCounter.sample(slot)
 			s.lateBlockTasks(s.ctx)

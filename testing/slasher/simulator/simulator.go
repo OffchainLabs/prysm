@@ -168,7 +168,7 @@ func (s *Simulator) Stop() error {
 
 func (s *Simulator) simulateBlocksAndAttestations(ctx context.Context) {
 	// Add a small offset to producing blocks and attestations a little bit after a slot starts.
-	ticker := slots.NewSlotTicker(s.genesisTime.Add(time.Millisecond*500), params.BeaconConfig().SecondsPerSlot)
+	ticker := slots.NewSlotTicker(s.genesisTime.Add(time.Millisecond*500), params.BeaconConfig().SlotDuration())
 	defer ticker.Done()
 	for {
 		select {

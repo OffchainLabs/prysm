@@ -369,7 +369,7 @@ func (v *validator) SetTicker() {
 	}
 	// Once the ChainStart log is received, we update the genesis time of the validator client
 	// and begin a slot ticker used to track the current slot the beacon node is in.
-	v.ticker = slots.NewSlotTicker(v.genesisTime, params.BeaconConfig().SecondsPerSlot)
+	v.ticker = slots.NewSlotTicker(v.genesisTime, params.BeaconConfig().SlotDuration())
 	log.WithField("genesisTime", v.genesisTime).Info("Beacon chain started")
 }
 
@@ -452,8 +452,7 @@ func (v *validator) NextSlot() <-chan primitives.Slot {
 
 // SlotDeadline is the start time of the next slot.
 func (v *validator) SlotDeadline(slot primitives.Slot) time.Time {
-	secs := time.Duration((slot + 1).Mul(params.BeaconConfig().SecondsPerSlot))
-	return v.genesisTime.Add(secs * time.Second)
+	return v.genesisTime.Add(params.SlotsDuration(slot+1, params.BeaconConfig()))
 }
 
 // CheckDoppelGanger checks if the current actively provided keys have
