@@ -28,24 +28,18 @@ func isMinimal(lines []string) bool {
 // reconcileSlotDuration keeps SecondsPerSlot and SlotDurationMilliseconds in agreement.
 //
 // The two fields describe one quantity: SLOT_DURATION_MS replaced SECONDS_PER_SLOT in the specification
-// config, and Prysm kept the older field because much of the codebase still reads it. A config
+// config, and Prysm keeps the older field so that configs still setting it keep working. A config
 // file sets one or the other, and whichever it omits keeps the value inherited from the preset
-// base.
+// base, so the omitted one has to be derived here.
+//
+// SecondsPerSlot cannot represent a sub-second slot duration, so it truncates. Nothing outside this
+// package reads it, and ConfigToYaml only writes it back out when it round-trips faithfully.
 func reconcileSlotDuration(conf *BeaconChainConfig, hasSecondsPerSlot, hasSlotDurationMs bool) error {
 	// The only way both values are tolerated is if they represent the same duration.
 	if hasSecondsPerSlot && hasSlotDurationMs && conf.SecondsPerSlot*1000 != conf.SlotDurationMilliseconds {
 		return errors.Errorf(
 			"config sets contradictory slot durations: SECONDS_PER_SLOT: %d (%d ms) != SLOT_DURATION_MS: %d",
 			conf.SecondsPerSlot, conf.SecondsPerSlot*1000, conf.SlotDurationMilliseconds)
-	}
-
-	// Prysm still reads the slot duration at second granularity in places, so a duration that is
-	// not a whole number of seconds cannot be represented faithfully. Reject it rather than
-	// rounding, which would leave those code paths disagreeing with the millisecond value.
-	if hasSlotDurationMs && conf.SlotDurationMilliseconds%1000 != 0 {
-		return errors.Errorf(
-			"SLOT_DURATION_MS: %d is not a whole number of seconds, which Prysm does not support yet",
-			conf.SlotDurationMilliseconds)
 	}
 
 	// Derive whichever field the config file left at its preset base value. When the file sets both,
@@ -58,9 +52,9 @@ func reconcileSlotDuration(conf *BeaconChainConfig, hasSecondsPerSlot, hasSlotDu
 		conf.SecondsPerSlot = conf.SlotDurationMilliseconds / 1000
 	}
 
-	// A zero slot duration stalls every ticker and divides by zero in the second-granularity paths.
+	// A zero slot duration makes every ticker panic and divides by zero in the slot arithmetic.
 	if conf.SlotDurationMilliseconds == 0 {
-		return errors.New("slot duration cannot be zero: set SLOT_DURATION_MS to a positive whole number of seconds")
+		return errors.New("slot duration cannot be zero: set a positive SLOT_DURATION_MS")
 	}
 
 	return nil
@@ -238,8 +232,7 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("MIN_GENESIS_TIME: %d", cfg.MinGenesisTime),
 		fmt.Sprintf("GENESIS_FORK_VERSION: %#x", cfg.GenesisForkVersion),
 		fmt.Sprintf("CHURN_LIMIT_QUOTIENT: %d", cfg.ChurnLimitQuotient),
-		fmt.Sprintf("SECONDS_PER_SLOT: %d", cfg.SecondsPerSlot),
-		fmt.Sprintf("SLOT_DURATION_MS: %d", cfg.SlotDurationMilliseconds),
+		fmt.Sprintf("SLOT_DURATION_MS: %d", cfg.SlotDurationMillis()),
 		fmt.Sprintf("SLOTS_PER_EPOCH: %d", cfg.SlotsPerEpoch),
 		fmt.Sprintf("SECONDS_PER_ETH1_BLOCK: %d", cfg.SecondsPerETH1Block),
 		fmt.Sprintf("ETH1_FOLLOW_DISTANCE: %d", cfg.Eth1FollowDistance),
@@ -308,6 +301,10 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("CONTRIBUTION_DUE_BPS_GLOAS: %d", cfg.ContributionDueBPSGloas),
 		fmt.Sprintf("PAYLOAD_ATTESTATION_DUE_BPS: %d", cfg.PayloadAttestationDueBPS),
 		fmt.Sprintf("PAYLOAD_DUE_BPS: %d", cfg.PayloadDueBPS),
+	}
+
+	if ms := cfg.SlotDurationMillis(); ms%1000 == 0 {
+		lines = append(lines, fmt.Sprintf("SECONDS_PER_SLOT: %d", ms/1000))
 	}
 
 	if len(cfg.BlobSchedule) > 0 {

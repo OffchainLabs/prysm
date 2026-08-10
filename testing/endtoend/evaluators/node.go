@@ -135,7 +135,7 @@ func finishedSyncing(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) e
 func waitForMidEpoch(ctx context.Context, conn *grpc.ClientConn) error {
 	beaconClient := eth.NewBeaconChainClient(conn)
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
-	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
+	slotDuration := params.BeaconConfig().SlotDuration()
 	midEpochSlot := slotsPerEpoch / 2
 
 	for {
@@ -150,14 +150,14 @@ func waitForMidEpoch(ctx context.Context, conn *grpc.ClientConn) error {
 		// If we're at least halfway into the epoch, we're safe
 		if slotInEpoch >= midEpochSlot {
 			// Wait 3/4 into the slot to ensure block propagation
-			if err := sleepWithContext(ctx, time.Duration(secondsPerSlot)*time.Second*3/4); err != nil {
+			if err := sleepWithContext(ctx, slotDuration*3/4); err != nil {
 				return err
 			}
 			return nil
 		}
 		// Wait for the remaining slots until mid-epoch
 		slotsToWait := midEpochSlot - slotInEpoch
-		if err := sleepWithContext(ctx, time.Duration(slotsToWait)*time.Duration(secondsPerSlot)*time.Second); err != nil {
+		if err := sleepWithContext(ctx, time.Duration(slotsToWait)*slotDuration); err != nil {
 			return err
 		}
 	}

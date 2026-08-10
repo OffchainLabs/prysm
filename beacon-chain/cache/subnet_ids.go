@@ -32,9 +32,9 @@ func newSubnetIDs() *subnetIDs {
 	cacheSize := int(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().MaxCommitteesPerSlot * 2)) // lint:ignore uintcast -- constant values that would panic on startup if negative.
 	attesterCache := lruwrpr.New(cacheSize)
 	aggregatorCache := lruwrpr.New(cacheSize)
-	epochDuration := time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	epochDuration := params.EpochsDuration(1, params.BeaconConfig())
 	subLength := epochDuration * time.Duration(params.BeaconConfig().EpochsPerRandomSubnetSubscription)
-	persistentCache := cache.New(subLength*time.Second, epochDuration*time.Second)
+	persistentCache := cache.New(subLength, epochDuration)
 	return &subnetIDs{attester: attesterCache, aggregator: aggregatorCache, persistentSubnets: persistentCache}
 }
 

@@ -481,9 +481,16 @@ func TestUnmarshalConfig_SlotDurationReconciliation(t *testing.T) {
 			wantMillis:  12000,
 		},
 		{
-			name:         "non-whole second slot duration",
-			yaml:         "PRESET_BASE: 'mainnet'\nSLOT_DURATION_MS: 6500\n",
-			wantErrParts: "not a whole number of seconds",
+			name:        "non-whole second slot duration",
+			yaml:        "PRESET_BASE: 'mainnet'\nSLOT_DURATION_MS: 6500\n",
+			wantSeconds: 6,
+			wantMillis:  6500,
+		},
+		{
+			name:        "sub-second slot duration",
+			yaml:        "PRESET_BASE: 'mainnet'\nSLOT_DURATION_MS: 250\n",
+			wantSeconds: 0,
+			wantMillis:  250,
 		},
 		{
 			name:         "zero slot duration",
@@ -515,4 +522,35 @@ func TestUnmarshalConfig_SlotDurationReconciliation(t *testing.T) {
 			require.Equal(t, time.Duration(tt.wantMillis)*time.Millisecond, cfg.SlotDuration())
 		})
 	}
+}
+
+func TestConfigToYaml_SlotDuration(t *testing.T) {
+	t.Run("whole seconds emit both keys and round-trip", func(t *testing.T) {
+		cfg := params.MainnetConfig().Copy()
+		cfg.SlotDurationMilliseconds = 6000
+		cfg.SecondsPerSlot = 6
+
+		yaml := string(params.ConfigToYaml(cfg))
+		require.StringContains(t, "SLOT_DURATION_MS: 6000", yaml)
+		require.StringContains(t, "SECONDS_PER_SLOT: 6", yaml)
+
+		got, err := params.UnmarshalConfig([]byte(yaml), nil)
+		require.NoError(t, err)
+		require.Equal(t, uint64(6000), got.SlotDurationMillis())
+	})
+
+	t.Run("sub-second omits the legacy key so the output still round-trips", func(t *testing.T) {
+		cfg := params.MainnetConfig().Copy()
+		cfg.SlotDurationMilliseconds = 500
+		cfg.SecondsPerSlot = 0
+
+		yaml := string(params.ConfigToYaml(cfg))
+		require.StringContains(t, "SLOT_DURATION_MS: 500", yaml)
+		require.Equal(t, false, strings.Contains(yaml, "SECONDS_PER_SLOT:"))
+
+		got, err := params.UnmarshalConfig([]byte(yaml), nil)
+		require.NoError(t, err)
+		require.Equal(t, uint64(500), got.SlotDurationMillis())
+		require.Equal(t, 500*time.Millisecond, got.SlotDuration())
+	})
 }
