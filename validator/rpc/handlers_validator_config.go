@@ -12,8 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 )
 
-// GetBuilders implements GET /eth/v1/validator/{pubkey}/builders (keymanager-APIs
-// #88): the key's config resolved against default_config, safe to re-submit.
+// GetBuilders implements GET /eth/v1/validator/{pubkey}/builders: the key's config resolved against default_config, safe to re-submit.
 func (s *Server) GetBuilders(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.GetBuilders")
 	defer span.End()
