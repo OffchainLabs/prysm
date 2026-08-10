@@ -9,6 +9,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -21,8 +22,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -215,33 +214,17 @@ func (s *Server) ExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	resp, err := s.V1Alpha1Server.GetExecutionPayloadEnvelope(ctx, &eth.ExecutionPayloadEnvelopeRequest{
+	envelope, rpcErr := s.CoreService.GetExecutionPayloadEnvelope(ctx, &eth.ExecutionPayloadEnvelopeRequest{
 		Slot: primitives.Slot(slot),
 	})
-	if err != nil {
-		if st, ok := status.FromError(err); ok {
-			switch st.Code() {
-			case codes.NotFound:
-				httputil.HandleError(w, st.Message(), http.StatusNotFound)
-			case codes.InvalidArgument:
-				httputil.HandleError(w, st.Message(), http.StatusBadRequest)
-			default:
-				httputil.HandleError(w, st.Message(), http.StatusInternalServerError)
-			}
-			return
-		}
-		httputil.HandleError(w, "could not get execution payload envelope: "+err.Error(), http.StatusInternalServerError)
+	if rpcErr != nil {
+		httputil.HandleError(w, rpcErr.Err.Error(), core.ErrorReasonToHTTP(rpcErr.Reason))
 		return
 	}
-	if resp.Envelope == nil {
-		httputil.HandleError(w, "execution payload envelope not found", http.StatusNotFound)
-		return
-	}
-	if !bytes.Equal(resp.Envelope.BeaconBlockRoot, beaconBlockRoot) {
+	if !bytes.Equal(envelope.BeaconBlockRoot, beaconBlockRoot) {
 		httputil.HandleError(w, "cached envelope beacon_block_root does not match request", http.StatusNotFound)
 		return
 	}
-	envelope := resp.Envelope
 
 	w.Header().Set(api.VersionHeader, version.String(version.Gloas))
 

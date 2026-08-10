@@ -47,57 +47,55 @@ import (
 // and committees in which particular validators need to perform their responsibilities,
 // and more.
 type Server struct {
-	Ctx                              context.Context
-	PayloadIDCache                   *cache.PayloadIDCache
-	ProposerPreferencesCache         *cache.ProposerPreferencesCache
-	SubscribedValidatorsCache        *cache.SubscribedValidatorsCache
-	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
-	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache
-	HeadFetcher                      blockchain.HeadFetcher
-	ForkFetcher                      blockchain.ForkFetcher
-	ForkchoiceFetcher                blockchain.ForkchoiceFetcher
-	GenesisFetcher                   blockchain.GenesisFetcher
-	FinalizationFetcher              blockchain.FinalizationFetcher
-	TimeFetcher                      blockchain.TimeFetcher
-	BlockFetcher                     execution.POWBlockFetcher
-	DepositFetcher                   cache.DepositFetcher
-	ChainStartFetcher                execution.ChainStartFetcher
-	Eth1InfoFetcher                  execution.ChainInfoFetcher
-	OptimisticModeFetcher            blockchain.OptimisticModeFetcher
-	SyncChecker                      prysmSync.Checker
-	StateNotifier                    statefeed.Notifier
-	BlockNotifier                    blockfeed.Notifier
-	P2P                              p2p.Broadcaster
-	AttestationCache                 *cache.AttestationCache
-	AttPool                          attestations.Pool
-	PayloadAttestationPool           payloadattestation.PoolManager
-	SlashingsPool                    slashings.PoolManager
-	ExitPool                         voluntaryexits.PoolManager
-	SyncCommitteePool                synccommittee.Pool
-	BlockReceiver                    blockchain.BlockReceiver
-	PayloadAttestationReceiver       blockchain.PayloadAttestationReceiver
-	ExecutionPayloadEnvelopeReceiver blockchain.ExecutionPayloadEnvelopeReceiver
-	BlobReceiver                     blockchain.BlobReceiver
-	DataColumnReceiver               blockchain.DataColumnReceiver
-	Eth1BlockFetcher                 execution.POWBlockFetcher
-	PendingDepositsFetcher           depositsnapshot.PendingDepositsFetcher
-	OperationNotifier                opfeed.Notifier
-	StateGen                         stategen.StateManager
-	ReplayerBuilder                  stategen.ReplayerBuilder
-	BeaconDB                         db.HeadAccessDatabase
-	ExecutionEngineCaller            execution.EngineCaller
-	BlockBuilder                     builder.BlockBuilder
-	BLSChangesPool                   blstoexec.PoolManager
-	ClockWaiter                      startup.ClockWaiter
-	CoreService                      *core.Service
-	AttestationStateFetcher          blockchain.AttestationStateFetcher
-	NewExecutionPayloadBidVerifier   verification.NewExecutionPayloadBidVerifier
-	GraffitiInfo                     *execution.GraffitiInfo
-	lastBidLock                      sync.Mutex
-	lastBidSlot                      primitives.Slot
-	lastBidSource                    bidSource // Guarded by lastBidLock, set during Gloas block build, read when proposing.
-	lastBidBuilderURL                string    // Guarded by lastBidLock, winning Builder-API URL for lastBidSlot.
-	maxExecutionPayments             sync.Map  // validator pubkey [48]byte -> max execution payment (Gwei uint64).
+	Ctx                            context.Context
+	PayloadIDCache                 *cache.PayloadIDCache
+	ProposerPreferencesCache       *cache.ProposerPreferencesCache
+	SubscribedValidatorsCache      *cache.SubscribedValidatorsCache
+	HighestBidCache                *cache.HighestExecutionPayloadBidCache
+	HeadFetcher                    blockchain.HeadFetcher
+	ForkFetcher                    blockchain.ForkFetcher
+	ForkchoiceFetcher              blockchain.ForkchoiceFetcher
+	GenesisFetcher                 blockchain.GenesisFetcher
+	FinalizationFetcher            blockchain.FinalizationFetcher
+	TimeFetcher                    blockchain.TimeFetcher
+	BlockFetcher                   execution.POWBlockFetcher
+	DepositFetcher                 cache.DepositFetcher
+	ChainStartFetcher              execution.ChainStartFetcher
+	Eth1InfoFetcher                execution.ChainInfoFetcher
+	OptimisticModeFetcher          blockchain.OptimisticModeFetcher
+	SyncChecker                    prysmSync.Checker
+	StateNotifier                  statefeed.Notifier
+	BlockNotifier                  blockfeed.Notifier
+	P2P                            p2p.Broadcaster
+	AttestationCache               *cache.AttestationCache
+	AttPool                        attestations.Pool
+	PayloadAttestationPool         payloadattestation.PoolManager
+	SlashingsPool                  slashings.PoolManager
+	ExitPool                       voluntaryexits.PoolManager
+	SyncCommitteePool              synccommittee.Pool
+	BlockReceiver                  blockchain.BlockReceiver
+	PayloadAttestationReceiver     blockchain.PayloadAttestationReceiver
+	BlobReceiver                   blockchain.BlobReceiver
+	DataColumnReceiver             blockchain.DataColumnReceiver
+	Eth1BlockFetcher               execution.POWBlockFetcher
+	PendingDepositsFetcher         depositsnapshot.PendingDepositsFetcher
+	OperationNotifier              opfeed.Notifier
+	StateGen                       stategen.StateManager
+	ReplayerBuilder                stategen.ReplayerBuilder
+	BeaconDB                       db.HeadAccessDatabase
+	ExecutionEngineCaller          execution.EngineCaller
+	BlockBuilder                   builder.BlockBuilder
+	BLSChangesPool                 blstoexec.PoolManager
+	ClockWaiter                    startup.ClockWaiter
+	CoreService                    *core.Service
+	AttestationStateFetcher        blockchain.AttestationStateFetcher
+	NewExecutionPayloadBidVerifier verification.NewExecutionPayloadBidVerifier
+	GraffitiInfo                   *execution.GraffitiInfo
+	lastBidLock                    sync.Mutex
+	lastBidSlot                    primitives.Slot
+	lastBidSource                  bidSource // Guarded by lastBidLock, set during Gloas block build, read when proposing.
+	lastBidBuilderURL              string    // Guarded by lastBidLock, winning Builder-API URL for lastBidSlot.
+	maxExecutionPayments           sync.Map  // validator pubkey [48]byte -> max execution payment (Gwei uint64).
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.

@@ -13,9 +13,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	executiontesting "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -31,13 +33,9 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
-	mock2 "github.com/OffchainLabs/prysm/v7/testing/mock"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"go.uber.org/mock/gomock"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/proto"
 )
 
 type mockEnvelopeVerifier struct {
@@ -101,6 +99,31 @@ func wireEnvelopeGossipDeps(t *testing.T, s *Server) {
 	s.PayloadEnvelopeVerifier = func(_ interfaces.ROSignedExecutionPayloadEnvelope, _ []verification.Requirement) verification.ExecutionPayloadEnvelopeVerifier {
 		return &mockEnvelopeVerifier{}
 	}
+	if s.CoreService == nil {
+		s.CoreService = envelopeCoreService(t)
+	}
+}
+
+func envelopeCoreService(t *testing.T) *core.Service {
+	t.Helper()
+	envelopeCache := cache.NewExecutionPayloadEnvelopeCache()
+	envelopeCache.Set(&cache.ExecutionPayloadContents{Envelope: testSignedEnvelope().Message})
+	receiver := &chainMock.ChainService{}
+	return &core.Service{
+		Ctx:                              t.Context(),
+		P2P:                              &mockp2p.MockBroadcaster{},
+		ExecutionPayloadEnvelopeCache:    envelopeCache,
+		DataColumnReceiver:               receiver,
+		ExecutionPayloadEnvelopeReceiver: receiver,
+	}
+}
+
+type failingEnvelopeBroadcaster struct {
+	*mockp2p.MockBroadcaster
+}
+
+func (*failingEnvelopeBroadcaster) Broadcast(context.Context, proto.Message) error {
+	return errors.New("broadcast failed")
 }
 
 func bareEnvelopeJSONBody(t *testing.T, signed *ethpb.SignedExecutionPayloadEnvelope) []byte {
@@ -230,19 +253,11 @@ func TestPublishExecutionPayloadEnvelope_StatefulBareEnvelope_OK(t *testing.T) {
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
-	ctrl := gomock.NewController(t)
 	signed := testSignedEnvelope()
-
-	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
-		gomock.Any(), gomock.Any(),
-	).Return(&emptypb.Empty{}, nil)
 
 	body := bareEnvelopeJSONBody(t, signed)
 
-	s := &Server{
-		V1Alpha1ValidatorServer: v1alpha1Server,
-	}
+	s := &Server{}
 	wireEnvelopeGossipDeps(t, s)
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
 	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
@@ -302,21 +317,13 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_NoBlobs(t *testing.T)
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
-	ctrl := gomock.NewController(t)
 	signed := testSignedEnvelope()
 	contents, err := structs.SignedExecutionPayloadEnvelopeContentsFromConsensus(signed, nil, nil)
 	require.NoError(t, err)
 	body, err := json.Marshal(contents)
 	require.NoError(t, err)
 
-	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
-		gomock.Any(), gomock.Any(),
-	).Return(&emptypb.Empty{}, nil)
-
-	// With no blobs in the request, the sidecar broadcast/receive branch is
-	// skipped, so the handler does not need a Broadcaster or DataColumnReceiver.
-	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
+	s := &Server{}
 	wireEnvelopeGossipDeps(t, s)
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
 	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
@@ -368,17 +375,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_WithBlobs(t *testing.
 
 	body, _ := statelessContentsBody(t, 2)
 
-	ctrl := gomock.NewController(t)
-	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
-		gomock.Any(), gomock.Any(),
-	).Return(&emptypb.Empty{}, nil)
-
-	s := &Server{
-		V1Alpha1ValidatorServer: v1alpha1Server,
-		Broadcaster:             &mockp2p.MockBroadcaster{},
-		DataColumnReceiver:      &chainMock.ChainService{},
-	}
+	s := &Server{}
 	wireEnvelopeGossipDeps(t, s)
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
 	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
@@ -396,19 +393,13 @@ func TestPublishExecutionPayloadEnvelope_ServerError(t *testing.T) {
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
-	ctrl := gomock.NewController(t)
-
-	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
-		gomock.Any(), gomock.Any(),
-	).Return(nil, status.Error(codes.Internal, "broadcast failed"))
-
 	signed := testSignedEnvelope()
 	body := bareEnvelopeJSONBody(t, signed)
 
 	s := &Server{
-		V1Alpha1ValidatorServer: v1alpha1Server,
+		CoreService: envelopeCoreService(t),
 	}
+	s.CoreService.P2P = &failingEnvelopeBroadcaster{MockBroadcaster: &mockp2p.MockBroadcaster{}}
 	wireEnvelopeGossipDeps(t, s)
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
 	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
@@ -420,29 +411,6 @@ func TestPublishExecutionPayloadEnvelope_ServerError(t *testing.T) {
 	require.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
-func TestWriteEnvelopePublishError(t *testing.T) {
-	tests := []struct {
-		name       string
-		err        error
-		wantStatus int
-		wantBody   string
-	}{
-		{name: "invalid argument", err: status.Error(codes.InvalidArgument, "invalid envelope"), wantStatus: http.StatusBadRequest, wantBody: "invalid envelope"},
-		{name: "failed precondition", err: status.Error(codes.FailedPrecondition, "cache miss"), wantStatus: http.StatusBadRequest, wantBody: "cache miss"},
-		{name: "internal", err: status.Error(codes.Internal, "broadcast failed"), wantStatus: http.StatusInternalServerError, wantBody: "broadcast failed"},
-		{name: "non-status error", err: errors.New("plain error"), wantStatus: http.StatusInternalServerError, wantBody: "could not publish execution payload envelope: plain error"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			w := httptest.NewRecorder()
-			writeEnvelopePublishError(w, tt.err)
-			require.Equal(t, tt.wantStatus, w.Code)
-			require.StringContains(t, tt.wantBody, w.Body.String())
-		})
-	}
-}
-
 // SSZ stateful: send the bare SignedExecutionPayloadEnvelope, header=false.
 func TestPublishExecutionPayloadEnvelope_SSZ_StatefulBareEnvelope(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
@@ -450,19 +418,11 @@ func TestPublishExecutionPayloadEnvelope_SSZ_StatefulBareEnvelope(t *testing.T) 
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
-	ctrl := gomock.NewController(t)
 	signed := testSignedEnvelope()
 	sszBody, err := signed.MarshalSSZ()
 	require.NoError(t, err)
 
-	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
-		gomock.Any(), gomock.Any(),
-	).Return(&emptypb.Empty{}, nil)
-
-	s := &Server{
-		V1Alpha1ValidatorServer: v1alpha1Server,
-	}
+	s := &Server{}
 	wireEnvelopeGossipDeps(t, s)
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(sszBody))
 	req.Header.Set("Content-Type", "application/octet-stream")
@@ -475,28 +435,21 @@ func TestPublishExecutionPayloadEnvelope_SSZ_StatefulBareEnvelope(t *testing.T) 
 	require.Equal(t, http.StatusOK, w.Code)
 }
 
-// Stateful publish with no cached blobs/proofs: the v1alpha1 server's
-// FailedPrecondition must surface as the spec 400.
+// Stateful publish with no cached blobs/proofs: FailedPrecondition must surface as the spec 400.
 func TestPublishExecutionPayloadEnvelope_StatefulBareEnvelope_CacheMiss(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
-	ctrl := gomock.NewController(t)
 	signed := testSignedEnvelope()
 	sszBody, err := signed.MarshalSSZ()
 	require.NoError(t, err)
 
-	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
-		gomock.Any(), gomock.Any(),
-	).Return(nil, status.Error(codes.FailedPrecondition,
-		"envelope without blob data was submitted but the beacon node has no cached blobs and KZG proofs"))
-
 	s := &Server{
-		V1Alpha1ValidatorServer: v1alpha1Server,
+		CoreService: envelopeCoreService(t),
 	}
+	s.CoreService.ExecutionPayloadEnvelopeCache = cache.NewExecutionPayloadEnvelopeCache()
 	wireEnvelopeGossipDeps(t, s)
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(sszBody))
 	req.Header.Set("Content-Type", "application/octet-stream")
@@ -516,7 +469,6 @@ func TestPublishExecutionPayloadEnvelope_SSZ_Contents(t *testing.T) {
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
-	ctrl := gomock.NewController(t)
 	signed := testSignedEnvelope()
 	contents := &ethpb.SignedExecutionPayloadEnvelopeContents{
 		SignedExecutionPayloadEnvelope: signed,
@@ -524,12 +476,7 @@ func TestPublishExecutionPayloadEnvelope_SSZ_Contents(t *testing.T) {
 	sszBody, err := contents.MarshalSSZ()
 	require.NoError(t, err)
 
-	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
-		gomock.Any(), gomock.Any(),
-	).Return(&emptypb.Empty{}, nil)
-
-	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
+	s := &Server{}
 	wireEnvelopeGossipDeps(t, s)
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(sszBody))
 	req.Header.Set("Content-Type", "application/octet-stream")
@@ -567,12 +514,11 @@ func TestPublishExecutionPayloadEnvelope_BroadcastValidation(t *testing.T) {
 		headState         state.BeaconState
 		headStateErr      error
 		canonicalAtEnvSlt *[32]byte // nil → CanonicalNodeAtSlot returns a zero root
-		expectPublish     bool
 		expectedStatus    int
 		expectedBody      string
 	}{
-		{name: "default (gossip)", query: "", headRoot: envRoot, expectPublish: true, expectedStatus: http.StatusOK},
-		{name: "explicit gossip", query: "?broadcast_validation=gossip", headRoot: envRoot, expectPublish: true, expectedStatus: http.StatusOK},
+		{name: "default (gossip)", query: "", headRoot: envRoot, expectedStatus: http.StatusOK},
+		{name: "explicit gossip", query: "?broadcast_validation=gossip", headRoot: envRoot, expectedStatus: http.StatusOK},
 		{
 			name:           "consensus envRoot not head",
 			query:          "?broadcast_validation=consensus",
@@ -621,14 +567,6 @@ func TestPublishExecutionPayloadEnvelope_BroadcastValidation(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-			if tc.expectPublish {
-				v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
-					gomock.Any(), gomock.Any(),
-				).Return(&emptypb.Empty{}, nil)
-			}
-
 			chainSvc := &chainMock.ChainService{
 				Root:                tc.headRoot[:],
 				State:               tc.headState,
@@ -641,10 +579,9 @@ func TestPublishExecutionPayloadEnvelope_BroadcastValidation(t *testing.T) {
 				chainSvc.MockCanonicalFull = map[primitives.Slot]bool{envSlot: false}
 			}
 			s := &Server{
-				V1Alpha1ValidatorServer: v1alpha1Server,
-				ForkchoiceFetcher:       chainSvc,
-				HeadFetcher:             chainSvc,
-				FinalizationFetcher:     chainSvc,
+				ForkchoiceFetcher:   chainSvc,
+				HeadFetcher:         chainSvc,
+				FinalizationFetcher: chainSvc,
 			}
 			wireEnvelopeGossipDeps(t, s)
 			req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope"+tc.query, bytes.NewReader(body))

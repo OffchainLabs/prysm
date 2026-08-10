@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -164,31 +165,14 @@ func (s *Server) publishBareEnvelope(ctx context.Context, w http.ResponseWriter,
 		return
 	}
 
-	// The cached-envelope match (and the cache-miss 400) happens in the v1alpha1 server, shared
-	// with the gRPC path.
 	generic := &eth.GenericSignedExecutionPayloadEnvelope{
 		Envelope: &eth.GenericSignedExecutionPayloadEnvelope_SignedEnvelope{SignedEnvelope: signed},
 	}
-	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, generic); err != nil {
-		writeEnvelopePublishError(w, err)
+	if rpcErr := s.CoreService.PublishExecutionPayloadEnvelope(ctx, generic); rpcErr != nil {
+		httputil.HandleError(w, rpcErr.Err.Error(), core.ErrorReasonToHTTP(rpcErr.Reason))
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-}
-
-// writeEnvelopePublishError maps the v1alpha1 publish outcome to the spec status codes,
-// InvalidArgument/FailedPrecondition -> 400.
-func writeEnvelopePublishError(w http.ResponseWriter, err error) {
-	if st, ok := status.FromError(err); ok {
-		switch st.Code() {
-		case codes.InvalidArgument, codes.FailedPrecondition:
-			httputil.HandleError(w, st.Message(), http.StatusBadRequest)
-		default:
-			httputil.HandleError(w, st.Message(), http.StatusInternalServerError)
-		}
-		return
-	}
-	httputil.HandleError(w, "could not publish execution payload envelope: "+err.Error(), http.StatusInternalServerError)
 }
 
 // publishEnvelopeContents handles the stateless flow (header=true).
@@ -229,8 +213,7 @@ func (s *Server) publishExecutionPayloadEnvelopeContentsSSZ(ctx context.Context,
 	s.processEnvelopeContents(ctx, w, r, contents.SignedExecutionPayloadEnvelope, contents.KzgProofs, contents.Blobs)
 }
 
-// processEnvelopeContents delegates the signed envelope + blobs/proofs to the v1alpha1 publish path,
-// which verifies the blobs, broadcasts the data column sidecars, and publishes the envelope.
+// processEnvelopeContents verifies the blobs, broadcasts the data column sidecars, and publishes the envelope.
 func (s *Server) processEnvelopeContents(ctx context.Context, w http.ResponseWriter, r *http.Request, signed *eth.SignedExecutionPayloadEnvelope, kzgProofs, blobs [][]byte) {
 	if !s.validateEnvelopeBroadcast(ctx, w, r, signed) {
 		return
@@ -245,8 +228,8 @@ func (s *Server) processEnvelopeContents(ctx context.Context, w http.ResponseWri
 			},
 		},
 	}
-	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, generic); err != nil {
-		writeEnvelopePublishError(w, err)
+	if rpcErr := s.CoreService.PublishExecutionPayloadEnvelope(ctx, generic); rpcErr != nil {
+		httputil.HandleError(w, rpcErr.Err.Error(), core.ErrorReasonToHTTP(rpcErr.Reason))
 		return
 	}
 	w.WriteHeader(http.StatusOK)
