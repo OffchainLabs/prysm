@@ -784,7 +784,7 @@ func TestCheckDoppelGangerAtStartup(t *testing.T) {
 		client := validatormock.NewMockValidatorClient(ctrl)
 		v, keys := startupDoppelValidator(t, client, 2)
 
-		// First boot: the wallet held only keys[0], and it was vetted clean.
+		// First boot: the wallet held only keys[0], and the startup check cleared it.
 		v.doppelGanger.beginStartup(keys[:1], 2)
 		v.markDoppelGangerChecked(keys[:1])
 		v.doppelGanger.completeStartup()
@@ -806,6 +806,26 @@ func TestCheckDoppelGangerAtStartup(t *testing.T) {
 		require.NoError(t, v.CheckDoppelGangerAtStartup(t.Context()))
 		assert.Equal(t, false, v.isDoppelGangerPending(keys[0]))
 		assert.Equal(t, true, v.isDoppelGangerPending(keys[1]))
+	})
+
+	t.Run("blocked key re-imported while the runner was down stays blocked", func(t *testing.T) {
+		enableDoppelGanger(t)
+		v := doppelTestValidator(4)
+		keyA := bytesutil.ToBytes48([]byte{0xaa})
+		// Startup completed on an earlier boot; keyA was later blocked as a duplicate.
+		v.doppelGanger.completeStartup()
+		v.doppelGanger.pending = map[pubkey]*doppelGangerPendingKey{keyA: {addedEpoch: 1, blocked: true}}
+		v.doppelGanger.pendingCount.Store(1)
+
+		// Runner restart: the wallet still contains keyA, so the reload cannot
+		// tell a remove+re-import apart from the key having been there all along.
+		v.doppelGanger.beginStartup([]pubkey{keyA}, 4)
+
+		assert.Equal(t, true, v.isDoppelGangerPending(keyA))
+		v.doppelGanger.mu.RLock()
+		assert.Equal(t, true, v.doppelGanger.pending[keyA].blocked)
+		assert.Equal(t, 1, int(v.doppelGanger.pending[keyA].addedEpoch))
+		v.doppelGanger.mu.RUnlock()
 	})
 
 	t.Run("rerun fail-stops when a checked key turns duplicate", func(t *testing.T) {
