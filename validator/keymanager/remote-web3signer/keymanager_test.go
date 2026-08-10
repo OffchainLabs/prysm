@@ -219,7 +219,7 @@ func TestNewKeyManager_FileAndFlagsWithDifferentKeys(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(keys))
 	require.Equal(t, "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055", hexutil.Encode(keys[0][:]))
-	// Clearing the file falls back to the flag provided keys.
+	// Clearing the file empties its source, leaving only the flag provided keys.
 	require.NoError(t, file.WriteFile(keyFilePath, []byte(" ")))
 	deadline := time.Now().Add(5 * time.Second)
 	for len(km.keys.all()) != 1 {
@@ -228,7 +228,7 @@ func TestNewKeyManager_FileAndFlagsWithDifferentKeys(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	require.LogsContain(t, logHook, "Remote signer key file no longer has keys, defaulting to flag provided keys")
+	require.LogsContain(t, logHook, "Remote signer key file has no keys, so the key file no longer contributes any validating keys")
 
 	keys, err = km.FetchValidatingPublicKeys(context.TODO())
 	require.NoError(t, err)

@@ -67,7 +67,7 @@ func (km *Keymanager) reloadKeyFile() error {
 		return fmt.Errorf("read key file: %w", err)
 	}
 	if len(fileKeys) == 0 {
-		log.Warnln("Remote signer key file no longer has keys, defaulting to flag provided keys")
+		log.Warnln("Remote signer key file has no keys, so the key file no longer contributes any validating keys. Keys from the flag and the public keys URL are unaffected")
 	}
 	km.replaceKeysLocked(sourceFile, fileKeys)
 	return nil
@@ -121,9 +121,6 @@ func (km *Keymanager) readKeyFile() ([]pubkey, error) {
 	// Check for scanning errors
 	if err := scanner.Err(); err != nil {
 		return nil, errors.Wrap(err, "could not scan remote signer public key file")
-	}
-	if len(keys) == 0 {
-		log.Warn("Remote signer key file: no valid public keys found. Defaulting to flag provided keys if any exist.")
 	}
 	return keys, nil
 }
