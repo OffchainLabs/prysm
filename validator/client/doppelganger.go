@@ -32,8 +32,8 @@ type doppelGangerPendingKey struct {
 // doppelGangerTracker quarantines keys added after startup until a scoped
 // doppelganger check clears them. All methods are concurrency-safe.
 type doppelGangerTracker struct {
-	startupDone  bool             // startup check completed once; later beginStartup calls are runner restarts
-	inFlight     atomic.Bool      // single-flight guard for the background check
+	startupDone  bool        // startup check completed once; later beginStartup calls are runner restarts
+	inFlight     atomic.Bool // single-flight guard for the background check
 	mu           sync.RWMutex
 	pendingCount atomic.Int64     // mirrors len(pending) for lock-free empty checks
 	lastWarnMark primitives.Epoch // last warned failure epoch + 1, rate-limiting to one per epoch
