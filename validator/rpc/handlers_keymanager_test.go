@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/io/file"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -1453,10 +1455,12 @@ func TestServer_ImportRemoteKeys(t *testing.T) {
 	ctx := t.Context()
 	root := make([]byte, fieldparams.RootLength)
 	root[0] = 1
+	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+	require.NoError(t, file.WriteFile(keyFilePath, nil))
 	config := &remoteweb3signer.SetupConfig{
 		BaseEndpoint:          "http://example.com",
 		GenesisValidatorsRoot: root,
-		ProvidedPublicKeys:    nil,
+		KeyFilePath:           keyFilePath,
 	}
 	km, err := remoteweb3signer.NewKeymanager(ctx, config)
 	require.NoError(t, err)
@@ -1504,10 +1508,12 @@ func TestServer_DeleteRemoteKeys(t *testing.T) {
 	root := make([]byte, fieldparams.RootLength)
 	root[0] = 1
 	pkey := "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"
+	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+	require.NoError(t, file.WriteFile(keyFilePath, []byte(pkey+"\n")))
 	config := &remoteweb3signer.SetupConfig{
 		BaseEndpoint:          "http://example.com",
 		GenesisValidatorsRoot: root,
-		ProvidedPublicKeys:    []string{pkey},
+		KeyFilePath:           keyFilePath,
 	}
 	km, err := remoteweb3signer.NewKeymanager(ctx, config)
 	require.NoError(t, err)

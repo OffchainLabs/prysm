@@ -45,11 +45,10 @@ func TestNewKeyManager_ChangingFileCreated(t *testing.T) {
 	})
 	require.NoError(t, err)
 	wantSlice := []string{"0x800077e04f8d7496099b3d30ac5430aea64873a45e5bcfe004d2095babcbf55e21138ff0d5691abc29da190aa32755c6", "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055", "0x800057e262bfe42413c2cfce948ff77f11efeea19721f590c8b5b2f32fecb0e164cafba987c80465878408d05b97c9be"}
-	keys := make([]string, len(km.providedPublicKeys))
-	require.Equal(t, 3, len(km.providedPublicKeys))
-	for i, key := range km.providedPublicKeys {
-		keys[i] = hexutil.Encode(key[:])
-		require.Equal(t, slices.Contains(wantSlice, keys[i]), true)
+	all := km.keys.all()
+	require.Equal(t, 3, len(all))
+	for _, key := range all {
+		require.Equal(t, slices.Contains(wantSlice, hexutil.Encode(key[:])), true)
 	}
 	pubKeysChan := make(chan [][fieldparams.BLSPubkeyLength]byte)
 	sub := km.SubscribeAccountChanges(pubKeysChan)
@@ -65,17 +64,29 @@ func TestNewKeyManager_ChangingFileCreated(t *testing.T) {
 	require.NoError(t, f.Sync())
 	require.NoError(t, f.Close())
 
-	ks, _, err := km.readKeyFile()
+	ks, err := km.readKeyFile()
 	require.NoError(t, err)
 	require.Equal(t, 1, len(ks))
 	require.Equal(t, "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055", hexutil.Encode(ks[0][:]))
 
+	// The flag key is owned by the flag source, so dropping it from the file keeps it validating.
+	want := []string{
+		"0x800077e04f8d7496099b3d30ac5430aea64873a45e5bcfe004d2095babcbf55e21138ff0d5691abc29da190aa32755c6",
+		"0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055",
+	}
 	timer := time.NewTimer(5 * time.Second)
 	defer timer.Stop()
 	for {
 		select {
 		case updatedKeys := <-pubKeysChan:
-			if len(updatedKeys) == 1 && hexutil.Encode(updatedKeys[0][:]) == "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055" {
+			if len(updatedKeys) != len(want) {
+				continue
+			}
+			matched := true
+			for _, key := range updatedKeys {
+				matched = matched && slices.Contains(want, hexutil.Encode(key[:]))
+			}
+			if matched {
 				return
 			}
 		case <-timer.C:
@@ -94,7 +105,7 @@ func TestReadKeyFile_PathMissing(t *testing.T) {
 		GenesisValidatorsRoot: root,
 	})
 	require.NoError(t, err)
-	_, _, err = km.readKeyFile()
+	_, err = km.readKeyFile()
 	require.ErrorContains(t, "no key file path provided", err)
 }
 
@@ -138,6 +149,47 @@ func startFailingWatcher(t *testing.T, ctx context.Context, km *Keymanager, keyF
 	}
 	require.NoError(t, os.Remove(keyFilePath))
 	return result
+}
+
+func TestRefreshRemoteKeysFromFileChangesWithRetry_recoveryRestoresFileKeys(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	flagKey := "0x800077e04f8d7496099b3d30ac5430aea64873a45e5bcfe004d2095babcbf55e21138ff0d5691abc29da190aa32755c6"
+	fileKey := "0x800057e262bfe42413c2cfce948ff77f11efeea19721f590c8b5b2f32fecb0e164cafba987c80465878408d05b97c9be"
+	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
+	require.NoError(t, err)
+	km, err := NewKeymanager(ctx, &SetupConfig{
+		BaseEndpoint:          "http://example.com",
+		GenesisValidatorsRoot: root,
+		ProvidedPublicKeys:    []string{flagKey},
+	})
+	require.NoError(t, err)
+
+	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+	result := startFailingWatcher(t, ctx, km, keyFilePath, time.Millisecond)
+
+	// A failed refresh drops the file keys, so putting the file back has to restore them
+	// even though the flag keys kept the validating set non-empty in the meantime.
+	require.NoError(t, file.WriteFile(keyFilePath, []byte(fileKey+"\n")))
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		keys := km.keys.all()
+		if len(keys) == 2 && slices.Contains(encodeKeys(keys), fileKey) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for the recovered watcher to restore the file keys")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	// The recovered watcher is back in its event loop, so cancelling is a clean shutdown.
+	cancel()
+	select {
+	case err := <-result:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("watcher did not stop on cancellation")
+	}
 }
 
 func TestRefreshRemoteKeysFromFileChangesWithRetry_maxRetryReached(t *testing.T) {

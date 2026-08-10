@@ -53,7 +53,7 @@ func (km *Keymanager) pollRemoteKeysFromURL(ctx context.Context, url string, int
 				continue
 			}
 
-			km.updatePublicKeys(keys)
+			km.replaceKeys(sourceURL, keys)
 		}
 	}
 }

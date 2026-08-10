@@ -52,11 +52,12 @@ func decodeKeysMust(t *testing.T, hexes ...string) [][fieldparams.BLSPubkeyLengt
 }
 
 func newPollTestKeymanager(client internal.HttpSignerClient, initial [][fieldparams.BLSPubkeyLength]byte) *Keymanager {
-	return &Keymanager{
+	km := &Keymanager{
 		client:              client,
 		accountsChangedFeed: new(event.Feed),
-		providedPublicKeys:  initial,
 	}
+	km.keys.replace(sourceURL, initial)
+	return km
 }
 
 func TestPollRemoteKeysFromURL(t *testing.T) {
