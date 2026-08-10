@@ -123,7 +123,7 @@ type BuilderConfig struct {
 }
 
 type BuilderEntry struct {
-	Url                 string  `json:"url,omitempty"`
+	Url                 string  `json:"url"`
 	AuthData            *string `json:"auth_data,omitempty"`
 	BuilderPubkey       *string `json:"builder_pubkey,omitempty"`
 	MaxExecutionPayment *string `json:"max_execution_payment,omitempty"`
