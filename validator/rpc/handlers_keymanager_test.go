@@ -1501,6 +1501,33 @@ func TestServer_ImportRemoteKeys(t *testing.T) {
 			require.Equal(t, fmt.Sprintf("%v", expectedStatuses[i].Status), strings.ToLower(string(resp.Data[i].Status)))
 		}
 	})
+
+	t.Run("no key file", func(t *testing.T) {
+		config := &remoteweb3signer.SetupConfig{
+			BaseEndpoint:          "http://example.com",
+			GenesisValidatorsRoot: root,
+		}
+		km, err := remoteweb3signer.NewKeymanager(ctx, config)
+		require.NoError(t, err)
+		vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+		vs.EXPECT().Keymanager().Return(km, nil).AnyTimes()
+		vs.EXPECT().RemoteSignerConfig().Return(config).AnyTimes()
+		s := &Server{walletInitialized: true, validatorService: vs}
+
+		b, err := json.Marshal(&ImportRemoteKeysRequest{RemoteKeys: []*RemoteKey{{Pubkey: pubkey}}})
+		require.NoError(t, err)
+		req := httptest.NewRequest("POST", "/eth/v1/remotekeys", bytes.NewReader(b))
+		w := httptest.NewRecorder()
+		w.Body = &bytes.Buffer{}
+		s.ImportRemoteKeys(w, req)
+
+		// Per-key statuses in a 200, never an HTTP error.
+		require.Equal(t, http.StatusOK, w.Code)
+		resp := &RemoteKeysResponse{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), resp))
+		require.Equal(t, 1, len(resp.Data))
+		require.Equal(t, keymanager.StatusError, resp.Data[0].Status)
+	})
 }
 
 func TestServer_DeleteRemoteKeys(t *testing.T) {
@@ -1552,6 +1579,40 @@ func TestServer_DeleteRemoteKeys(t *testing.T) {
 		expectedKeys, err := km.FetchValidatingPublicKeys(ctx)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(expectedKeys))
+	})
+
+	t.Run("unknown and derived keys", func(t *testing.T) {
+		unknownKey := "0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"
+		// pkey comes from the flag, not the key file, so it is not deletable.
+		keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+		require.NoError(t, file.WriteFile(keyFilePath, nil))
+		config := &remoteweb3signer.SetupConfig{
+			BaseEndpoint:          "http://example.com",
+			GenesisValidatorsRoot: root,
+			KeyFilePath:           keyFilePath,
+			ProvidedPublicKeys:    []string{pkey},
+		}
+		km, err := remoteweb3signer.NewKeymanager(ctx, config)
+		require.NoError(t, err)
+		vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+		vs.EXPECT().Keymanager().Return(km, nil).AnyTimes()
+		vs.EXPECT().RemoteSignerConfig().Return(config).AnyTimes()
+		s := &Server{walletInitialized: true, validatorService: vs}
+
+		b, err := json.Marshal(&DeleteRemoteKeysRequest{Pubkeys: []string{pkey, unknownKey}})
+		require.NoError(t, err)
+		req := httptest.NewRequest("DELETE", "/eth/v1/remotekeys", bytes.NewReader(b))
+		w := httptest.NewRecorder()
+		w.Body = &bytes.Buffer{}
+		s.DeleteRemoteKeys(w, req)
+
+		// Nothing matched, but the spec still wants a 200 with statuses in request order.
+		require.Equal(t, http.StatusOK, w.Code)
+		resp := &RemoteKeysResponse{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), resp))
+		require.Equal(t, 2, len(resp.Data))
+		require.Equal(t, keymanager.StatusError, resp.Data[0].Status)
+		require.Equal(t, keymanager.StatusNotFound, resp.Data[1].Status)
 	})
 }
 
