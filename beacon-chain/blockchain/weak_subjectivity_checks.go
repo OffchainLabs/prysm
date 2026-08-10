@@ -16,6 +16,7 @@ import (
 
 type weakSubjectivityDB interface {
 	HasBlock(ctx context.Context, blockRoot [32]byte) bool
+	IsFinalizedBlock(ctx context.Context, blockRoot [32]byte) bool
 	BlockRoots(ctx context.Context, f *filters.QueryFilter) ([][32]byte, error)
 }
 
@@ -66,7 +67,7 @@ func (v *WeakSubjectivityVerifier) VerifyWeakSubjectivity(ctx context.Context, f
 	// IF epoch_number <= store.finalized_checkpoint.epoch,
 	// then ASSERT that the block in the canonical chain at epoch epoch_number has root block_root.
 	// Emit descriptive critical error if this assert fails, then exit client process.
-	if v.epoch > finalizedEpoch {
+	if v.epoch >= finalizedEpoch {
 		return nil
 	}
 	log.Infof("Performing weak subjectivity check for root %#x in epoch %d", v.root, v.epoch)
@@ -74,7 +75,10 @@ func (v *WeakSubjectivityVerifier) VerifyWeakSubjectivity(ctx context.Context, f
 	if !v.db.HasBlock(ctx, v.root) {
 		return errors.Wrap(errWSBlockNotFound, fmt.Sprintf("missing root %#x", v.root))
 	}
-	endSlot := v.slot + params.BeaconConfig().SlotsPerEpoch
+	if !v.db.IsFinalizedBlock(ctx, v.root) {
+		return errors.Wrap(errWSBlockNotCanonical, fmt.Sprintf("root=%#x, epoch=%d", v.root, v.epoch))
+	}
+	endSlot := v.slot + params.BeaconConfig().SlotsPerEpoch - 1
 	filter := filters.NewFilter().SetStartSlot(v.slot).SetEndSlot(endSlot)
 	// A node should have the weak subjectivity block corresponds to the correct epoch in the DB.
 	log.Infof("Searching block roots for weak subjectivity root=%#x, between slots %d-%d", v.root, v.slot, endSlot)

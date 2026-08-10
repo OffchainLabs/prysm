@@ -36,7 +36,6 @@ go_test(
         "bazel_test.go",
         "cache_test.go",
         "proto_test.go",
-        "ssz_test.go",
     ],
     embed = [":go_default_library"],
     deps = [

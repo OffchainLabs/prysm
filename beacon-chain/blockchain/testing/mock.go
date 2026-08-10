@@ -41,6 +41,7 @@ type ChainService struct {
 	Full                        bool
 	ValidAttestation            bool
 	Optimistic                  bool
+	BidCompatibleWithHead       bool
 	ValidatorsRoot              [32]byte
 	TargetRoot                  [32]byte
 	HeadDependentRoot           [32]byte
@@ -629,6 +630,11 @@ func (s *ChainService) InForkchoice(root [32]byte) bool {
 		return s.ForkchoiceRoots[root]
 	}
 	return !s.NotFinalized
+}
+
+// IsBidCompatibleWithHead mocks the same method in the chain service.
+func (s *ChainService) IsBidCompatibleWithHead(_ interfaces.ROExecutionPayloadBid) bool {
+	return s.BidCompatibleWithHead
 }
 
 // BlockHash mocks the execution payload block hash lookup for a beacon block root.

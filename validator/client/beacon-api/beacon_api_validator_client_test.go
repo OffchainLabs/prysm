@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
-	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	rpctesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared/testing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -93,16 +92,6 @@ func TestBeaconApiValidatorClient_GetAttestationDataError(t *testing.T) {
 
 	assert.ErrorContains(t, expectedErr.Error(), err)
 	assert.DeepEqual(t, expectedResp, resp)
-}
-
-func TestBeaconApiValidatorClient_GetFeeRecipientByPubKey(t *testing.T) {
-	ctx := t.Context()
-	validatorClient := beaconApiValidatorClient{}
-	var expected *ethpb.FeeRecipientByPubKeyResponse = nil
-
-	resp, err := validatorClient.FeeRecipientByPubKey(ctx, nil)
-	require.NoError(t, err)
-	require.Equal(t, expected, resp)
 }
 
 func TestBeaconApiValidatorClient_DomainDataValid(t *testing.T) {
@@ -672,7 +661,7 @@ func TestBeaconApiValidatorClient_StartEventStream_FallsBackToHead(t *testing.T)
 
 	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().Host().Return(server.URL).AnyTimes()
-	c := &beaconApiValidatorClient{handler: handler}
+	c := &beaconApiValidatorClient{handler: handler, eventStreamHosts: []string{server.URL}}
 
 	ch := make(chan *eventClient.Event, 8)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -687,11 +676,9 @@ func TestBeaconApiValidatorClient_StartEventStream_FallsBackToHead(t *testing.T)
 	require.StringContains(t, eventClient.EventHead, secondTopics)
 
 	e := <-ch
-	require.Equal(t, eventClient.EventHead, e.EventType)
+	require.Equal(t, eventClient.EventHead, e.Type)
 }
 
 func TestBeaconApiValidatorClient_ConnectionGeneration(t *testing.T) {
-	c := &beaconApiValidatorClient{restProvider: &rest.MockRestProvider{ConnCounter: 4}}
-	assert.Equal(t, uint64(4), c.ConnectionGeneration())
 	assert.Equal(t, uint64(0), (&beaconApiValidatorClient{}).ConnectionGeneration())
 }

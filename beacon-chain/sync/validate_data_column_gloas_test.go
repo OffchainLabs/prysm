@@ -8,6 +8,11 @@ import (
 	"testing"
 	"time"
 
+	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	pb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/libp2p/go-libp2p/core/peer"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
@@ -29,10 +34,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	pb "github.com/libp2p/go-libp2p-pubsub/pb"
-	"github.com/libp2p/go-libp2p/core/peer"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 func gloasFixture(t *testing.T) (*ethpb.DataColumnSidecarGloas, interfaces.ReadOnlySignedBeaconBlock) {
@@ -103,8 +104,7 @@ func TestValidateDataColumnGloas(t *testing.T) {
 		require.NoError(t, err)
 
 		topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
-		digest, err := service.currentForkDigest()
-		require.NoError(t, err)
+		digest := service.currentForkDigest()
 
 		subnet := peerdas.ComputeSubnetForDataColumnSidecar(columnIndex)
 		topic = service.addDigestAndIndexToTopic(topic, digest, subnet)
@@ -219,8 +219,7 @@ func TestValidateDataColumnGloas(t *testing.T) {
 		roDataColumn, err := blocks.NewRODataColumnGloasWithRoot(sidecar, blockRoot)
 		require.NoError(t, err)
 
-		digest, err := service.currentForkDigest()
-		require.NoError(t, err)
+		digest := service.currentForkDigest()
 		topic := service.addDigestAndIndexToTopic(p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.DataColumnSidecarGloas]()], digest, peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index))
 		msg := &pubsub.Message{Message: &pb.Message{Topic: &topic}}
 
@@ -251,8 +250,7 @@ func TestValidateDataColumnGloas(t *testing.T) {
 
 		roDataColumn, err := blocks.NewRODataColumnGloasWithRoot(sidecar, blockRoot)
 		require.NoError(t, err)
-		digest, err := service.currentForkDigest()
-		require.NoError(t, err)
+		digest := service.currentForkDigest()
 		topic := service.addDigestAndIndexToTopic(p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.DataColumnSidecarGloas]()], digest, peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index))
 		msg := &pubsub.Message{Message: &pb.Message{Topic: &topic}}
 

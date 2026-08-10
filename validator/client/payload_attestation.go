@@ -33,6 +33,14 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 
 	v.waitForPayloadAvailableOrDeadline(ctx, slot)
 
+	ctx, err := v.withPayloadHeadHint(ctx, slot)
+	if err != nil {
+		validatorPayloadAttestationSubmissionTotal.WithLabelValues("failed").Inc()
+		log.WithField("slot", slot).WithError(err).Error("Could not attach freshness hint")
+		tracing.AnnotateError(span, err)
+		return
+	}
+
 	data, err := v.validatorClient.PayloadAttestationData(ctx, slot)
 	if err != nil {
 		if status.Code(errors.Cause(err)) == codes.Unavailable {

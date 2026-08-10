@@ -400,7 +400,7 @@ func blockAttestations[T ethpb.Att](blocks []interfaces.ReadOnlySignedBeaconBloc
 
 	atts := make([]T, 0, len(blockAtts))
 	for _, att := range blockAtts {
-		a, ok := att.(T)
+		a, ok := attestationAs[T](att)
 		if !ok {
 			var expected T
 			return nil, status.Errorf(codes.Internal, "Attestation is of the wrong type (expected %T, got %T)", expected, att)
@@ -484,7 +484,7 @@ func attestationsFromPool[T ethpb.Att](pageSize int32, pool attestations.Pool) (
 	poolAtts := pool.AggregatedAttestations()
 	atts := make([]T, 0, len(poolAtts))
 	for _, att := range poolAtts {
-		a, ok := att.(T)
+		a, ok := attestationAs[T](att)
 		if !ok {
 			var expected T
 			return nil, status.Errorf(codes.Internal, "Attestation is of the wrong type (expected %T, got %T)", expected, att)
@@ -506,7 +506,7 @@ func attestationsFromCache[T ethpb.Att](pageSize int32, c *cache.AttestationCach
 	cacheAtts := c.GetAll()
 	atts := make([]T, 0, len(cacheAtts))
 	for _, att := range cacheAtts {
-		a, ok := att.(T)
+		a, ok := attestationAs[T](att)
 		if !ok {
 			var expected T
 			return nil, status.Errorf(codes.Internal, "Attestation is of the wrong type (expected %T, got %T)", expected, att)
@@ -514,4 +514,28 @@ func attestationsFromCache[T ethpb.Att](pageSize int32, c *cache.AttestationCach
 		atts = append(atts, a)
 	}
 	return atts, nil
+}
+
+func attestationAs[T ethpb.Att](att ethpb.Att) (T, bool) {
+	if a, ok := att.(T); ok {
+		return a, true
+	}
+
+	var zero T
+	switch any(zero).(type) {
+	case *ethpb.AttestationElectra:
+		a, ok := ethpb.AttestationElectraFromAtt(att)
+		if !ok {
+			return zero, false
+		}
+		return any(a).(T), true
+	case *ethpb.AttestationGloas:
+		a, ok := ethpb.AttestationGloasFromAtt(att)
+		if !ok {
+			return zero, false
+		}
+		return any(a).(T), true
+	default:
+		return zero, false
+	}
 }

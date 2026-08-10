@@ -582,6 +582,37 @@ func TestListAttestationsV2(t *testing.T) {
 			})
 		})
 	})
+	t.Run("Gloas", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig().Copy()
+		config.ElectraForkEpoch = 0
+		config.FuluForkEpoch = 0
+		config.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+
+		att := util.NewAttestationGloas()
+		att.Data.Slot = 1
+		att.CommitteeBits = primitives.NewAttestationCommitteeBits()
+		att.CommitteeBits.SetBitAt(1, true)
+
+		pool := attestations.NewPool()
+		require.NoError(t, pool.SaveAggregatedAttestation(att))
+		s := &Server{AttestationsPool: pool}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com?slot=1&committee_index=1", nil)
+		writer := httptest.NewRecorder()
+		s.ListAttestationsV2(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+
+		resp := &structs.ListAttestationsResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.Equal(t, version.String(version.Gloas), resp.Version)
+
+		var got []*structs.AttestationElectra
+		require.NoError(t, json.Unmarshal(resp.Data, &got))
+		require.Equal(t, 1, len(got))
+		assert.DeepEqual(t, structs.AttGloasFromConsensus(att), got[0])
+	})
 }
 
 func TestSubmitAttestationsV2(t *testing.T) {
@@ -809,6 +840,59 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			require.Eventually(t, func() bool {
 				return s.AttestationsPool.UnaggregatedAttestationCount() == 1
 			}, time.Second, 10*time.Millisecond, "Expected 1 attestation in pool")
+		})
+		t.Run("ssz", func(t *testing.T) {
+			broadcaster := &p2pMock.MockBroadcaster{}
+			s.Broadcaster = broadcaster
+			s.AttestationsPool = attestations.NewPool()
+
+			blockRoot := hexutil.MustDecode("0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2")
+			sourceRoot := bytesutil.PadTo([]byte("sourceroot1"), 32)
+			data0 := &ethpbv1alpha1.AttestationData{
+				BeaconBlockRoot: blockRoot,
+				Source:          &ethpbv1alpha1.Checkpoint{Epoch: 0, Root: sourceRoot},
+				Target:          &ethpbv1alpha1.Checkpoint{Epoch: 0, Root: bytesutil.PadTo([]byte("targetroot1"), 32)},
+			}
+			data1 := &ethpbv1alpha1.AttestationData{
+				BeaconBlockRoot: blockRoot,
+				Source:          &ethpbv1alpha1.Checkpoint{Epoch: 0, Root: sourceRoot},
+				Target:          &ethpbv1alpha1.Checkpoint{Epoch: 0, Root: bytesutil.PadTo([]byte("targetroot2"), 32)},
+			}
+			var sszBody []byte
+			for _, a := range []*structs.SingleAttestation{
+				signedSingleAttElectra(t, bs.Fork(), bs.GenesisValidatorsRoot(), keys[0], 0, data0),
+				signedSingleAttElectra(t, bs.Fork(), bs.GenesisValidatorsRoot(), keys[1], 1, data1),
+			} {
+				att, err := a.ToConsensus()
+				require.NoError(t, err)
+				b, err := att.MarshalSSZ()
+				require.NoError(t, err)
+				sszBody = append(sszBody, b...)
+			}
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewReader(sszBody))
+			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			request.Header.Set("Content-Type", api.OctetStreamMediaType)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.SubmitAttestationsV2(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
+			assert.Equal(t, 2, broadcaster.NumAttestations())
+			require.Eventually(t, func() bool {
+				return s.AttestationsPool.UnaggregatedAttestationCount() == 2
+			}, time.Second, 10*time.Millisecond, "Expected 2 attestations in pool")
+		})
+		t.Run("ssz invalid size", func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewReader([]byte{0x01, 0x02, 0x03}))
+			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			request.Header.Set("Content-Type", api.OctetStreamMediaType)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.SubmitAttestationsV2(writer, request)
+			assert.Equal(t, http.StatusBadRequest, writer.Code)
+			assert.Equal(t, true, strings.Contains(writer.Body.String(), "invalid SSZ single attestation list size"))
 		})
 		t.Run("invalid signature not added to pool", func(t *testing.T) {
 			broadcaster := &p2pMock.MockBroadcaster{}

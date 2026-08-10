@@ -315,7 +315,8 @@ func TestMarshalPartsMetadata(t *testing.T) {
 				Available: bitfield.NewBitlist(32768),
 				Requests:  bitfield.NewBitlist(1),
 			},
-			wantErr: "Available",
+			// TODO: restore "Available" once methodical-ssz includes the field name in the error.
+			wantErr: "list length is higher than max value",
 		},
 		{
 			name: "requests too large",
@@ -323,7 +324,8 @@ func TestMarshalPartsMetadata(t *testing.T) {
 				Available: bitfield.NewBitlist(1),
 				Requests:  bitfield.NewBitlist(32768),
 			},
-			wantErr: "Requests",
+			// TODO: restore "Requests" once methodical-ssz includes the field name in the error.
+			wantErr: "list length is higher than max value",
 		},
 	}
 
@@ -420,7 +422,8 @@ func TestPartialDataColumn_PartsMetadata(t *testing.T) {
 				// 32768 bits serializes to 4097 bytes, one over the 4096-byte ssz_max.
 				Included: bitfield.NewBitlist(32768),
 			},
-			expectErr: "Available",
+			// TODO: restore "Available" once methodical-ssz includes the field name in the error.
+			expectErr: "list length is higher than max value",
 		},
 	}
 
@@ -489,7 +492,8 @@ func TestPartialDataColumn_cellsToSendToPeer(t *testing.T) {
 				p := mustNewPartialColumn(t, 1, 0)
 				p.Column()[0] = []byte{1}
 				_, _, err := p.cellsToSendToPeer(testPeerMeta(1, nil, []uint64{0}))
-				require.ErrorContains(t, "PartialColumn", err)
+				// TODO: restore "PartialColumn" once methodical-ssz includes the field name in the error.
+				require.ErrorContains(t, "bytes array does not have the correct length", err)
 			},
 		},
 		{
@@ -498,7 +502,8 @@ func TestPartialDataColumn_cellsToSendToPeer(t *testing.T) {
 				p := mustNewPartialColumn(t, 1, 0)
 				p.KzgProofs()[0] = []byte{1}
 				_, _, err := p.cellsToSendToPeer(testPeerMeta(1, nil, []uint64{0}))
-				require.ErrorContains(t, "KzgProofs", err)
+				// TODO: restore "KzgProofs" once methodical-ssz includes the field name in the error.
+				require.ErrorContains(t, "bytes array does not have the correct length", err)
 			},
 		},
 	}
@@ -533,7 +538,8 @@ func TestPartialDataColumn_buildPartialColumnHeader(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
 				p.DataColumnSidecar().KzgCommitments[0] = []byte{1}
 				_, err := p.buildPartialColumnHeader()
-				require.ErrorContains(t, "KzgCommitments", err)
+				// TODO: restore "KzgCommitments" once methodical-ssz includes the field name in the error.
+				require.ErrorContains(t, "bytes array does not have the correct length", err)
 			},
 		},
 		{
@@ -543,7 +549,8 @@ func TestPartialDataColumn_buildPartialColumnHeader(t *testing.T) {
 				sidecar := p.DataColumnSidecar()
 				sidecar.KzgCommitmentsInclusionProof = sidecar.KzgCommitmentsInclusionProof[:3]
 				_, err := p.buildPartialColumnHeader()
-				require.ErrorContains(t, "KzgCommitmentsInclusionProof", err)
+				// TODO: restore "KzgCommitmentsInclusionProof" once methodical-ssz includes the field name in the error.
+				require.ErrorContains(t, "bytes array does not have the correct length", err)
 			},
 		},
 	}

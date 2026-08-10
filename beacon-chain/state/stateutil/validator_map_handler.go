@@ -9,11 +9,9 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
-// ValidatorMapHandler is a container to hold the map and a reference tracker for how many
-// states shared this.
+// ValidatorMapHandler holds the pubkey to index map shared by every state copied from a common ancestor.
 type ValidatorMapHandler struct {
 	valIdxMap map[[fieldparams.BLSPubkeyLength]byte]primitives.ValidatorIndex
-	mapRef    *Reference
 	*sync.RWMutex
 }
 
@@ -21,19 +19,13 @@ type ValidatorMapHandler struct {
 func NewValMapHandler(vals []*ethpb.Validator) *ValidatorMapHandler {
 	return &ValidatorMapHandler{
 		valIdxMap: coreutils.ValidatorIndexMap(vals),
-		mapRef:    &Reference{refs: 1},
 		RWMutex:   new(sync.RWMutex),
 	}
 }
 
-// AddRef copies the whole map and returns a map handler with the copied map.
-func (v *ValidatorMapHandler) AddRef() {
-	v.mapRef.AddRef()
-}
-
 // IsNil returns true if the underlying validator index map is nil.
 func (v *ValidatorMapHandler) IsNil() bool {
-	return v.mapRef == nil || v.valIdxMap == nil
+	return v == nil || v.valIdxMap == nil
 }
 
 // Get the validator index using the corresponding public key.

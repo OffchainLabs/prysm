@@ -95,11 +95,7 @@ func (s *Service) publishColumnAsPartial(ctx context.Context, sidecar blocks.Ver
 		return
 	}
 
-	digest, err := s.currentForkDigest()
-	if err != nil {
-		log.WithError(err).Error("Failed to get current fork digest")
-		return
-	}
+	digest := s.currentForkDigest()
 
 	if err := broadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
 		subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index())

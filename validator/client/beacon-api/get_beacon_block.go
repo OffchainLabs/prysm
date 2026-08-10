@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	neturl "net/url"
 	"strconv"
 	"strings"
@@ -33,43 +34,113 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 	}
 
 	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v3/validator/blocks/%d", slot), queryParams)
-	data, header, err := c.handler.GetSSZ(ctx, queryUrl)
+
+	var (
+		decodedData  []byte
+		decodedBlock *ethpb.GenericBeaconBlock
+	)
+
+	decode := func(data []byte, header http.Header) (*ethpb.GenericBeaconBlock, error) {
+		block, err := decodeBlockV3Response(data, header, queryUrl)
+		if err != nil {
+			return nil, fmt.Errorf("decode block v3 response: %w", err)
+		}
+
+		decodedData, decodedBlock = data, block
+
+		return block, nil
+	}
+
+	opts := blockFreshnessOptions(ctx, decode)
+	data, header, err := c.handler.GetSSZ(ctx, queryUrl, opts...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get ssz: %w", err)
 	}
-	if strings.Contains(header.Get("Content-Type"), api.OctetStreamMediaType) {
-		ver, err := version.FromString(header.Get(api.VersionHeader))
-		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("unsupported header version %s", header.Get(api.VersionHeader)))
-		}
-		isBlindedRaw := header.Get(api.ExecutionPayloadBlindedHeader)
-		isBlinded, err := strconv.ParseBool(isBlindedRaw)
-		if err != nil {
-			return nil, err
-		}
-		return processBlockSSZResponse(ver, data, isBlinded)
-	} else {
-		decoder := json.NewDecoder(bytes.NewBuffer(data))
-		produceBlockV3ResponseJson := structs.ProduceBlockV3Response{}
-		if err = decoder.Decode(&produceBlockV3ResponseJson); err != nil {
-			return nil, errors.Wrapf(err, "failed to decode response body into json for %s", queryUrl)
-		}
-		return processBlockJSONResponse(
-			produceBlockV3ResponseJson.Version,
-			produceBlockV3ResponseJson.ExecutionPayloadBlinded,
-			json.NewDecoder(bytes.NewReader(produceBlockV3ResponseJson.Data)),
-		)
+
+	if decodedBlock != nil && bytes.Equal(data, decodedData) {
+		return decodedBlock, nil
 	}
+
+	block, err := decodeBlockV3Response(data, header, queryUrl)
+	if err != nil {
+		return nil, fmt.Errorf("decode block v3 response: %w", err)
+	}
+
+	return block, nil
 }
 
 func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primitives.Slot, queryParams neturl.Values) (*ethpb.GenericBeaconBlock, error) {
 	queryParams.Set("include_payload", strconv.FormatBool(c.stateless))
 	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v4/validator/blocks/%d", slot), queryParams)
-	data, header, err := c.handler.GetSSZ(ctx, queryUrl)
+
+	var (
+		decodedData     []byte
+		decodedBlock    *ethpb.GenericBeaconBlock
+		decodedContents *ethpb.BeaconBlockContentsGloas
+	)
+
+	decode := func(data []byte, header http.Header) (*ethpb.GenericBeaconBlock, error) {
+		block, contents, err := decodeBlockV4Response(data, header, queryUrl)
+		if err == nil {
+			decodedData, decodedBlock, decodedContents = data, block, contents
+		}
+		return block, err
+	}
+
+	opts := blockFreshnessOptions(ctx, decode)
+	data, header, err := c.handler.GetSSZ(ctx, queryUrl, opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get v4 beacon block")
 	}
 
+	block, contents := decodedBlock, decodedContents
+	if block == nil || !bytes.Equal(data, decodedData) {
+		block, contents, err = decodeBlockV4Response(data, header, queryUrl)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Cache the envelope only for the winning response.
+	if c.stateless && contents != nil && contents.ExecutionPayloadEnvelope != nil {
+		c.envelopeCache.Add(slot, contents.ExecutionPayloadEnvelope, contents.Blobs, contents.KzgProofs)
+	}
+
+	return block, nil
+}
+
+// decodeBlockV3Response turns a raw V3 response (SSZ or JSON) into a generic block.
+func decodeBlockV3Response(data []byte, header http.Header, queryUrl string) (*ethpb.GenericBeaconBlock, error) {
+	if strings.Contains(header.Get("Content-Type"), api.OctetStreamMediaType) {
+		ver, err := version.FromString(header.Get(api.VersionHeader))
+		if err != nil {
+			return nil, fmt.Errorf("unsupported header version %s: %w", header.Get(api.VersionHeader), err)
+		}
+
+		isBlindedRaw := header.Get(api.ExecutionPayloadBlindedHeader)
+		isBlinded, err := strconv.ParseBool(isBlindedRaw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid execution payload blinded header %s: %w", isBlindedRaw, err)
+		}
+
+		return processBlockSSZResponse(ver, data, isBlinded)
+	}
+
+	decoder := json.NewDecoder(bytes.NewBuffer(data))
+	produceBlockV3ResponseJson := structs.ProduceBlockV3Response{}
+	if err := decoder.Decode(&produceBlockV3ResponseJson); err != nil {
+		return nil, fmt.Errorf("failed to decode response body into json for %s: %w", queryUrl, err)
+	}
+
+	return processBlockJSONResponse(
+		produceBlockV3ResponseJson.Version,
+		produceBlockV3ResponseJson.ExecutionPayloadBlinded,
+		json.NewDecoder(bytes.NewReader(produceBlockV3ResponseJson.Data)),
+	)
+}
+
+// decodeBlockV4Response turns a raw V4 response into a generic block.
+func decodeBlockV4Response(data []byte, header http.Header, queryUrl string) (*ethpb.GenericBeaconBlock, *ethpb.BeaconBlockContentsGloas, error) {
 	payloadIncluded := header.Get(api.ExecutionPayloadIncludedHeader) == "true"
 	isSSZ := strings.Contains(header.Get("Content-Type"), api.OctetStreamMediaType)
 
@@ -78,41 +149,44 @@ func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primi
 	// multi-MB and impractical over JSON, so payload-included responses must
 	// be SSZ.
 	if payloadIncluded && !isSSZ {
-		return nil, errors.Errorf("v4 payload-included response must be SSZ, got content-type %q", header.Get("Content-Type"))
+		return nil, nil, errors.Errorf("v4 payload-included response must be SSZ, got content-type %q", header.Get("Content-Type"))
 	}
 
 	if isSSZ {
 		if payloadIncluded {
 			contents := &ethpb.BeaconBlockContentsGloas{}
 			if err := contents.UnmarshalSSZ(data); err != nil {
-				return nil, errors.Wrap(err, "failed to unmarshal gloas block contents SSZ")
+				return nil, nil, fmt.Errorf("contents unmarshal SSZ: %w", err)
 			}
-			if c.stateless && contents.ExecutionPayloadEnvelope != nil {
-				c.envelopeCache.Add(slot, contents.ExecutionPayloadEnvelope, contents.Blobs, contents.KzgProofs)
-			}
-			return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: contents.Block}}, nil
+
+			return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: contents.Block}}, contents, nil
 		}
+
 		block := &ethpb.BeaconBlockGloas{}
 		if err := block.UnmarshalSSZ(data); err != nil {
-			return nil, errors.Wrap(err, "failed to unmarshal gloas block SSZ")
+			return nil, nil, fmt.Errorf("block unmarshal SSZ: %w", err)
 		}
-		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: block}}, nil
+
+		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: block}}, nil, nil
 	}
 
 	// JSON, payload not included: parse the bare block.
 	resp := structs.ProduceBlockV4Response{}
 	if err := json.Unmarshal(data, &resp); err != nil {
-		return nil, errors.Wrapf(err, "failed to decode v4 response body for %s", queryUrl)
+		return nil, nil, fmt.Errorf("json unmarshal: %w", err)
 	}
+
 	block := &structs.BeaconBlockGloas{}
 	if err := json.Unmarshal(resp.Data, block); err != nil {
-		return nil, errors.Wrap(err, "failed to decode gloas block")
+		return nil, nil, fmt.Errorf("json unmarshal: %w", err)
 	}
+
 	blk, err := block.ToGeneric()
 	if err != nil {
-		return nil, errors.Wrap(err, "could not convert gloas block to generic")
+		return nil, nil, fmt.Errorf("to generic: %w", err)
 	}
-	return blk, nil
+
+	return blk, nil, nil
 }
 
 // sszBlockCodec defines SSZ unmarshalers for a fork's block and blinded block types.

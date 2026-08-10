@@ -39,8 +39,7 @@ func TestValidatePayloadAttestationMessage_IncorrectTopic(t *testing.T) {
 	require.NoError(t, err)
 
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.PayloadAttestation]()]
-	digest, err := s.currentForkDigest()
-	require.NoError(t, err)
+	digest := s.currentForkDigest()
 	topic = s.addDigestToTopic(topic, digest)
 
 	result, err := s.validatePayloadAttestation(ctx, "", &pubsub.Message{
@@ -112,8 +111,7 @@ func TestValidatePayloadAttestationMessage_ErrorPathsWithMock(t *testing.T) {
 			require.NoError(t, err)
 
 			topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.PayloadAttestationMessage]()]
-			digest, err := s.currentForkDigest()
-			require.NoError(t, err)
+			digest := s.currentForkDigest()
 			topic = s.addDigestToTopic(topic, digest)
 
 			result, err := s.validatePayloadAttestation(ctx, "", &pubsub.Message{
@@ -147,8 +145,7 @@ func TestValidatePayloadAttestationMessage_Accept(t *testing.T) {
 	require.NoError(t, err)
 
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.PayloadAttestationMessage]()]
-	digest, err := s.currentForkDigest()
-	require.NoError(t, err)
+	digest := s.currentForkDigest()
 	topic = s.addDigestToTopic(topic, digest)
 
 	result, err := s.validatePayloadAttestation(ctx, "", &pubsub.Message{

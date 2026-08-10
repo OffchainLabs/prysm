@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation/aggregation"
@@ -433,4 +434,32 @@ func TestAggregateAttestations_aggregateAttestations(t *testing.T) {
 			assert.DeepEqual(t, extractBitlists(tt.atts), extractBitlists(tt.wantAtts))
 		})
 	}
+}
+
+func TestAggregateAttestations_PreservesGloasType(t *testing.T) {
+	signature := bls.NewAggregateSignature().Marshal()
+	committeeBits := primitives.NewAttestationCommitteeBits()
+	committeeBits.SetBitAt(0, true)
+	atts := []ethpb.Att{
+		&ethpb.AttestationGloas{
+			AggregationBits: bitfield.Bitlist{0b00000001, 0b1},
+			CommitteeBits:   committeeBits,
+			Data:            &ethpb.AttestationData{},
+			Signature:       signature,
+		},
+		&ethpb.AttestationGloas{
+			AggregationBits: bitfield.Bitlist{0b00000010, 0b1},
+			CommitteeBits:   committeeBits,
+			Data:            &ethpb.AttestationData{},
+			Signature:       signature,
+		},
+	}
+	coverage, err := bitfield.NewBitlist64FromBytes(8, []byte{0b00000011})
+	assert.NoError(t, err)
+
+	targetIdx, err := attestations.AggregateAttestations(atts, []int{0, 1}, coverage)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, targetIdx)
+	_, ok := atts[targetIdx].(*ethpb.AttestationGloas)
+	assert.Equal(t, true, ok)
 }

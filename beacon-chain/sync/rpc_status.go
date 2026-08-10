@@ -7,6 +7,13 @@ import (
 	"sync"
 	"time"
 
+	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
+	libp2pcore "github.com/libp2p/go-libp2p/core"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+
 	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
@@ -19,12 +26,6 @@ import (
 	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	libp2pcore "github.com/libp2p/go-libp2p/core"
-	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/sirupsen/logrus"
 )
 
 const maxFutureStatusHeadSlot = 1
@@ -143,10 +144,7 @@ func (s *Service) sendRPCStatusRequest(ctx context.Context, peer peer.ID) error 
 		return errors.Wrap(err, "chain head root")
 	}
 
-	forkDigest, err := s.currentForkDigest()
-	if err != nil {
-		return errors.Wrap(err, "current fork digest")
-	}
+	forkDigest := s.currentForkDigest()
 
 	// Compute the current epoch.
 	currentSlot := s.cfg.clock.CurrentSlot()
@@ -308,10 +306,7 @@ func (s *Service) respondWithStatus(ctx context.Context, stream network.Stream) 
 		return errors.Wrap(err, "chain head root")
 	}
 
-	forkDigest, err := s.currentForkDigest()
-	if err != nil {
-		return errors.Wrap(err, "current fork digest")
-	}
+	forkDigest := s.currentForkDigest()
 
 	cp := s.cfg.chain.FinalizedCheckpt()
 	status, err := s.buildStatusFromStream(ctx, stream, forkDigest, cp.Root, cp.Epoch, headRoot)
@@ -433,10 +428,7 @@ func (s *Service) validateStatusMessage(ctx context.Context, genericMsg any) err
 		return errors.Wrap(p2ptypes.ErrInvalidRequest, "head slot too far in the future")
 	}
 
-	forkDigest, err := s.currentForkDigest()
-	if err != nil {
-		return err
-	}
+	forkDigest := s.currentForkDigest()
 	if !bytes.Equal(forkDigest[:], msg.ForkDigest) {
 		return fmt.Errorf("mismatch fork digest: expected %#x, got %#x: %w", forkDigest[:], msg.ForkDigest, p2ptypes.ErrWrongForkDigestVersion)
 	}

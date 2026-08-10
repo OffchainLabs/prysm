@@ -22,7 +22,7 @@ package features
 import (
 	"fmt"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
@@ -50,7 +50,7 @@ type Flags struct {
 	DisableDutiesV2                     bool // DisableDutiesV2 sets validator client to use the get Duties endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
 	EnableStateDiff                     bool // EnableStateDiff enables the experimental state diff feature for the beacon node.
-	EnableProgressiveSSZ                bool // EnableProgressiveSSZ enables experimental progressive SSZ merkleization for converted consensus types.
+	DisableProgressiveSSZ               bool // DisableProgressiveSSZ turns off progressive SSZ merkleization for Gloas consensus types.
 	ReorgLatePayloads                   bool // ReorgLatePayloads enables reorging late payloads in the beacon node.
 
 	// Logging related toggles.
@@ -99,41 +99,33 @@ type Flags struct {
 	BlacklistedRoots map[[32]byte]struct{} // BlacklistedRoots is a list of roots that are blacklisted from processing.
 }
 
-var featureConfig *Flags
-var featureConfigLock sync.RWMutex
+// Read on hot paths, so kept lock-free: an RWMutex read lock does not scale.
+var featureConfig atomic.Pointer[Flags]
 
 // Get retrieves feature config.
 func Get() *Flags {
-	featureConfigLock.RLock()
-	defer featureConfigLock.RUnlock()
-
-	if featureConfig == nil {
-		return &Flags{}
+	if c := featureConfig.Load(); c != nil {
+		return c
 	}
-	return featureConfig
+	return &Flags{}
 }
 
 // ProgressiveSSZEnabled reports whether progressive SSZ is enabled for the
 // supplied state version.
 func ProgressiveSSZEnabled(stateVersion int) bool {
-	return stateVersion >= version.Gloas && Get().EnableProgressiveSSZ
+	return stateVersion >= version.Gloas && !Get().DisableProgressiveSSZ
 }
 
 // Init sets the global config equal to the config that is passed in.
 func Init(c *Flags) {
-	featureConfigLock.Lock()
-	defer featureConfigLock.Unlock()
-
-	featureConfig = c
+	featureConfig.Store(c)
 }
 
 // InitWithReset sets the global config and returns function that is used to reset configuration.
 func InitWithReset(c *Flags) func() {
 	var prevConfig Flags
-	if featureConfig != nil {
-		prevConfig = *featureConfig
-	} else {
-		prevConfig = Flags{}
+	if p := featureConfig.Load(); p != nil {
+		prevConfig = *p
 	}
 	resetFunc := func() {
 		Init(&prevConfig)
@@ -313,9 +305,9 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 			cfg.EnableHistoricalSpaceRepresentation = false
 		}
 	}
-	if ctx.IsSet(EnableProgressiveSSZ.Name) {
-		logEnabled(EnableProgressiveSSZ)
-		cfg.EnableProgressiveSSZ = true
+	if ctx.IsSet(DisableProgressiveSSZ.Name) {
+		logDisabled(DisableProgressiveSSZ)
+		cfg.DisableProgressiveSSZ = true
 	}
 	if ctx.Bool(reorgLatePayloads.Name) {
 		logEnabled(reorgLatePayloads)
