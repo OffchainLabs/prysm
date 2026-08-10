@@ -89,14 +89,30 @@ func (cs *columnBatch) needed() peerdas.ColumnIndices {
 // pruneExpired removes any columns from the batch that are no longer needed.
 // If `pruned` is non-nil, it is populated with the roots that were removed.
 func (cs *columnBatch) pruneExpired(needs das.CurrentNeeds, pruned map[[32]byte]struct{}) {
+	var first, last primitives.Slot
+	hasTrackedBlock := false
 	for root, td := range cs.toDownload {
 		if !needs.Col.At(td.slot) {
 			delete(cs.toDownload, root)
 			if pruned != nil {
 				pruned[root] = struct{}{}
 			}
+			continue
 		}
+		if !hasTrackedBlock || td.slot < first {
+			first = td.slot
+		}
+		if !hasTrackedBlock || td.slot > last {
+			last = td.slot
+		}
+		hasTrackedBlock = true
 	}
+	// Keep the request range aligned with toDownload. In particular, do not request roots
+	// that were just deleted: a peer may still serve them and the validator would reject them
+	// as unexpected. The zero values are harmless when every tracked block was pruned because
+	// no column request will be made.
+	cs.first = first
+	cs.last = last
 }
 
 // neededSidecarCount returns the total number of sidecars still needed to complete the batch.

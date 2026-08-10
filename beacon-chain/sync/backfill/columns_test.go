@@ -1381,6 +1381,46 @@ func TestNeededSidecarCount(t *testing.T) {
 	}
 }
 
+// TestColumnBatchPruneExpiredUpdatesRequestRange verifies that pruning only part of a
+// column batch also advances the range used for subsequent RPC requests. Otherwise a
+// peer can legitimately return an expired root that is still covered by the stale range,
+// which the response validator rejects because the root was removed from toDownload.
+func TestColumnBatchPruneExpiredUpdatesRequestRange(t *testing.T) {
+	const (
+		expiredSlot       = primitives.Slot(100)
+		firstRetainedSlot = primitives.Slot(101)
+		lastRetainedSlot  = primitives.Slot(102)
+	)
+	remaining := func(slot primitives.Slot) *toDownload {
+		return &toDownload{
+			remaining: peerdas.NewColumnIndicesFromSlice([]uint64{0}),
+			slot:      slot,
+		}
+	}
+	cb := &columnBatch{
+		first:         expiredSlot,
+		last:          lastRetainedSlot,
+		custodyGroups: peerdas.NewColumnIndicesFromSlice([]uint64{0}),
+		toDownload: map[[32]byte]*toDownload{
+			{0x01}: remaining(expiredSlot),
+			{0x02}: remaining(firstRetainedSlot),
+			{0x03}: remaining(lastRetainedSlot),
+		},
+	}
+
+	cb.pruneExpired(das.CurrentNeeds{Col: das.NeedSpan{
+		Begin: firstRetainedSlot,
+		End:   lastRetainedSlot + 1,
+	}}, nil)
+	require.Equal(t, 2, len(cb.toDownload))
+
+	cs := &columnSync{columnBatch: cb}
+	req, err := cs.request([]uint64{0}, columnRequestLimit)
+	require.NoError(t, err)
+	require.Equal(t, firstRetainedSlot, req.StartSlot)
+	require.Equal(t, uint64(2), req.Count)
+}
+
 // TestColumnSyncRequest is a table-driven test that verifies the request method
 // correctly applies fast path (no truncation) and slow path (with truncation) logic
 // based on whether the total sidecar count exceeds the limit.
