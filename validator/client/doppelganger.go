@@ -32,15 +32,15 @@ type doppelGangerPendingKey struct {
 // doppelGangerTracker quarantines keys added after startup until a scoped
 // doppelganger check clears them. All methods are concurrency-safe.
 type doppelGangerTracker struct {
-	mu           sync.RWMutex
-	pending      map[pubkey]*doppelGangerPendingKey
-	checked      map[pubkey]bool
-	bootSet      map[pubkey]bool  // wallet snapshot at boot; non-nil only until the startup check completes
 	startupDone  bool             // startup check completed once; later beginStartup calls are runner restarts
-	lastPollMark primitives.Epoch // last successful poll epoch + 1; zero means never polled
-	lastWarnMark primitives.Epoch // last warned failure epoch + 1, rate-limiting to one per epoch
-	pendingCount atomic.Int64     // mirrors len(pending) for lock-free empty checks
 	inFlight     atomic.Bool      // single-flight guard for the background check
+	mu           sync.RWMutex
+	pendingCount atomic.Int64     // mirrors len(pending) for lock-free empty checks
+	lastWarnMark primitives.Epoch // last warned failure epoch + 1, rate-limiting to one per epoch
+	lastPollMark primitives.Epoch // last successful poll epoch + 1; zero means never polled
+	bootSet      map[pubkey]bool  // wallet snapshot at boot; non-nil only until the startup check completes
+	checked      map[pubkey]bool
+	pending      map[pubkey]*doppelGangerPendingKey
 }
 
 // beginStartup snapshots the wallet at boot: these keys belong to the one-shot
