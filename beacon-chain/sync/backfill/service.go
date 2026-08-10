@@ -23,30 +23,37 @@ import (
 )
 
 type Service struct {
-	ctx             context.Context
-	enabled         bool // service is disabled by default
-	clock           *startup.Clock
-	store           *Store
-	syncNeeds       das.SyncNeeds
-	syncNeedsWaiter func() (das.SyncNeeds, error)
-	ms              minimumSlotter
-	cw              startup.ClockWaiter
-	verifierWaiter  InitializerWaiter
-	nWorkers        int
-	batchSeq        *batchSequencer
-	batchSize       uint64
-	pool            batchWorkerPool
-	p2p             p2p.P2P
-	pa              PeerAssigner
-	batchImporter   batchImporter
-	blobStore       *filesystem.BlobStorage
-	dcStore         *filesystem.DataColumnStorage
-	initSyncWaiter  func() error
-	complete        chan struct{}
-	workerCfg       *workerCfg
-	fuluStart       primitives.Slot
-	denebStart      primitives.Slot
-	progressLogger  *intervalLogger
+	ctx     context.Context
+	enabled bool // service is disabled by default
+	// easAllowed is set by configureEASUpdates when it is safe for backfill to progressively
+	// lower the earliest available slot, based on the custody group count snapshotted in
+	// easCustodyGroupCount.
+	easAllowed           bool
+	easCgcWarned         bool
+	clock                *startup.Clock
+	store                *Store
+	syncNeeds            das.SyncNeeds
+	syncNeedsWaiter      func() (das.SyncNeeds, error)
+	ms                   minimumSlotter
+	cw                   startup.ClockWaiter
+	verifierWaiter       InitializerWaiter
+	nWorkers             int
+	batchSeq             *batchSequencer
+	batchSize            uint64
+	pool                 batchWorkerPool
+	p2p                  p2p.P2P
+	pa                   PeerAssigner
+	batchImporter        batchImporter
+	blobStore            *filesystem.BlobStorage
+	dcStore              *filesystem.DataColumnStorage
+	initSyncWaiter       func() error
+	complete             chan struct{}
+	workerCfg            *workerCfg
+	fuluStart            primitives.Slot
+	denebStart           primitives.Slot
+	progressLogger       *intervalLogger
+	custody              easCustody
+	easCustodyGroupCount uint64
 }
 
 const progressLogInterval = 60
@@ -138,6 +145,7 @@ func NewService(ctx context.Context, su *Store, bStore *filesystem.BlobStorage, 
 		p2p:        p,
 		pa:         pa,
 		complete:   make(chan struct{}),
+		custody:    p,
 		fuluStart:  slots.SafeEpochStartOrMax(params.BeaconConfig().FuluForkEpoch),
 		denebStart: slots.SafeEpochStartOrMax(params.BeaconConfig().DenebForkEpoch),
 	}
@@ -177,7 +185,7 @@ func (s *Service) importBatches(ctx context.Context) {
 			// This batch needs to be retried before we can continue importing subsequent batches.
 			break
 		}
-		_, err := s.batchImporter(ctx, current, ib, s.store)
+		bs, err := s.batchImporter(ctx, current, ib, s.store)
 		if err != nil {
 			log.WithError(err).WithFields(ib.logFields()).Debug("Backfill batch failed to import")
 			s.batchSeq.update(ib.withError(err))
@@ -187,6 +195,12 @@ func (s *Service) importBatches(ctx context.Context) {
 		// Calling update with state=batchImportComplete will advance the batch list.
 		s.batchSeq.update(ib.withState(batchImportComplete))
 		imported += 1
+		// The batch is durably committed at this point, so the earliest available slot can be
+		// lowered to the actual lowest imported slot. Update failures are logged inside and do
+		// not affect batch sequencing.
+		if bs != nil {
+			s.updateEarliestAvailableSlot(ctx, primitives.Slot(bs.LowSlot))
+		}
 		log.WithFields(ib.logFields()).WithField("batchesRemaining", s.batchSeq.numTodo()).Debug("Imported batch")
 	}
 
@@ -305,6 +319,10 @@ func (s *Service) Start() {
 			return
 		}
 	}
+
+	// Custody info is initialized by the regular sync service, which is required for
+	// initial-sync to complete, so the custody reads below won't block at this point.
+	s.configureEASUpdates(ctx)
 
 	if s.workerCfg == nil {
 		s.workerCfg = &workerCfg{

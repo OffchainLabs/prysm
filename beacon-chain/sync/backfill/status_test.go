@@ -21,15 +21,17 @@ import (
 var errEmptyMockDBMethod = errors.New("uninitialized mock db method called")
 
 type mockBackfillDB struct {
-	saveBackfillBlockRoot     func(ctx context.Context, blockRoot [32]byte) error
-	originCheckpointBlockRoot func(ctx context.Context) ([32]byte, error)
-	block                     func(ctx context.Context, blockRoot [32]byte) (interfaces.ReadOnlySignedBeaconBlock, error)
-	saveBackfillStatus        func(ctx context.Context, status *dbval.BackfillStatus) error
-	backfillStatus            func(context.Context) (*dbval.BackfillStatus, error)
-	status                    *dbval.BackfillStatus
-	err                       error
-	states                    map[[32]byte]state.BeaconState
-	blocks                    map[[32]byte]blocks.ROBlock
+	saveBackfillBlockRoot       func(ctx context.Context, blockRoot [32]byte) error
+	originCheckpointBlockRoot   func(ctx context.Context) ([32]byte, error)
+	block                       func(ctx context.Context, blockRoot [32]byte) (interfaces.ReadOnlySignedBeaconBlock, error)
+	saveBackfillStatus          func(ctx context.Context, status *dbval.BackfillStatus) error
+	backfillStatus              func(context.Context) (*dbval.BackfillStatus, error)
+	updateEarliestAvailableSlot func(ctx context.Context, earliestAvailableSlot primitives.Slot) error
+	status                      *dbval.BackfillStatus
+	err                         error
+	states                      map[[32]byte]state.BeaconState
+	blocks                      map[[32]byte]blocks.ROBlock
+	easUpdates                  []primitives.Slot
 }
 
 var _ BeaconDB = &mockBackfillDB{}
@@ -86,6 +88,14 @@ func (d *mockBackfillDB) SaveROBlocks(ctx context.Context, blks []blocks.ROBlock
 }
 
 func (d *mockBackfillDB) BackfillFinalizedIndex(ctx context.Context, blocks []blocks.ROBlock, finalizedChildRoot [32]byte) error {
+	return nil
+}
+
+func (d *mockBackfillDB) UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailableSlot primitives.Slot) error {
+	if d.updateEarliestAvailableSlot != nil {
+		return d.updateEarliestAvailableSlot(ctx, earliestAvailableSlot)
+	}
+	d.easUpdates = append(d.easUpdates, earliestAvailableSlot)
 	return nil
 }
 
