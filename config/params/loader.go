@@ -25,9 +25,53 @@ func isMinimal(lines []string) bool {
 	return false
 }
 
+// reconcileSlotDuration keeps SecondsPerSlot and SlotDurationMilliseconds in agreement.
+//
+// The two fields describe one quantity: SLOT_DURATION_MS replaced SECONDS_PER_SLOT in the specification
+// config, and Prysm kept the older field because much of the codebase still reads it. A config
+// file sets one or the other, and whichever it omits keeps the value inherited from the preset
+// base.
+func reconcileSlotDuration(conf *BeaconChainConfig, hasSecondsPerSlot, hasSlotDurationMs bool) error {
+	// The only way both values are tolerated is if they represent the same duration.
+	if hasSecondsPerSlot && hasSlotDurationMs && conf.SecondsPerSlot*1000 != conf.SlotDurationMilliseconds {
+		return errors.Errorf(
+			"config sets contradictory slot durations: SECONDS_PER_SLOT: %d (%d ms) != SLOT_DURATION_MS: %d",
+			conf.SecondsPerSlot, conf.SecondsPerSlot*1000, conf.SlotDurationMilliseconds)
+	}
+
+	// Prysm still reads the slot duration at second granularity in places, so a duration that is
+	// not a whole number of seconds cannot be represented faithfully. Reject it rather than
+	// rounding, which would leave those code paths disagreeing with the millisecond value.
+	if hasSlotDurationMs && conf.SlotDurationMilliseconds%1000 != 0 {
+		return errors.Errorf(
+			"SLOT_DURATION_MS: %d is not a whole number of seconds, which Prysm does not support yet",
+			conf.SlotDurationMilliseconds)
+	}
+
+	// Derive whichever field the config file left at its preset base value. When the file sets both,
+	// they agree by now and both assignments are no-ops.
+	if hasSecondsPerSlot {
+		conf.SlotDurationMilliseconds = conf.SecondsPerSlot * 1000
+	}
+
+	if hasSlotDurationMs {
+		conf.SecondsPerSlot = conf.SlotDurationMilliseconds / 1000
+	}
+
+	// A zero slot duration stalls every ticker and divides by zero in the second-granularity paths.
+	if conf.SlotDurationMilliseconds == 0 {
+		return errors.New("slot duration cannot be zero: set SLOT_DURATION_MS to a positive whole number of seconds")
+	}
+
+	return nil
+}
+
 func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConfig, error) {
 	// To track if config name is defined inside config file.
 	hasConfigName := false
+	// SECONDS_PER_SLOT and SLOT_DURATION_MS express the same value. Track which ones the file
+	// sets so the one left at its preset default can be derived from the other.
+	hasSecondsPerSlot, hasSlotDurationMs := false, false
 	// Convert 0x hex inputs to fixed bytes arrays
 	lines := strings.Split(string(yamlFile), "\n")
 	if conf == nil {
@@ -46,6 +90,12 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 		if strings.HasPrefix(line, "CONFIG_NAME") {
 			hasConfigName = true
 		}
+		if strings.HasPrefix(line, "SECONDS_PER_SLOT:") {
+			hasSecondsPerSlot = true
+		}
+		if strings.HasPrefix(line, "SLOT_DURATION_MS:") {
+			hasSlotDurationMs = true
+		}
 		if !strings.HasPrefix(line, "#") && strings.Contains(line, "0x") {
 			parts := ReplaceHexStringWithYAMLFormat(line)
 			lines[i] = strings.Join(parts, "\n")
@@ -62,6 +112,9 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 	}
 	if !hasConfigName {
 		conf.ConfigName = DevnetName
+	}
+	if err := reconcileSlotDuration(conf, hasSecondsPerSlot, hasSlotDurationMs); err != nil {
+		return nil, err
 	}
 	// recompute SqrRootSlotsPerEpoch constant to handle non-standard values of SlotsPerEpoch
 	conf.SqrRootSlotsPerEpoch = primitives.Slot(math.IntegerSquareRoot(uint64(conf.SlotsPerEpoch)))

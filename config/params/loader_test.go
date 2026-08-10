@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/build/bazel"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -443,4 +444,75 @@ func assertYamlFieldsMatch(t *testing.T, name string, fields []string, c1, c2 *p
 
 func isPlaceholderField(field string) bool {
 	return slices.Contains(placeholderFields, field)
+}
+
+func TestUnmarshalConfig_SlotDurationReconciliation(t *testing.T) {
+	// A config file may set either SECONDS_PER_SLOT or SLOT_DURATION_MS. Whichever it omits keeps
+	// the preset base value, so the omitted one has to be derived from the one that is present.
+	tests := []struct {
+		name         string
+		yaml         string
+		wantSeconds  uint64
+		wantMillis   uint64
+		wantErrParts string
+	}{
+		{
+			name:        "only SLOT_DURATION_MS, as written by the ethereum-package",
+			yaml:        "PRESET_BASE: 'mainnet'\nSLOT_DURATION_MS: 6000\n",
+			wantSeconds: 6,
+			wantMillis:  6000,
+		},
+		{
+			name:        "only SECONDS_PER_SLOT",
+			yaml:        "PRESET_BASE: 'mainnet'\nSECONDS_PER_SLOT: 6\n",
+			wantSeconds: 6,
+			wantMillis:  6000,
+		},
+		{
+			name:        "both, consistent",
+			yaml:        "PRESET_BASE: 'mainnet'\nSECONDS_PER_SLOT: 6\nSLOT_DURATION_MS: 6000\n",
+			wantSeconds: 6,
+			wantMillis:  6000,
+		},
+		{
+			name:        "neither, preset defaults kept",
+			yaml:        "PRESET_BASE: 'mainnet'\n",
+			wantSeconds: 12,
+			wantMillis:  12000,
+		},
+		{
+			name:         "non-whole second slot duration",
+			yaml:         "PRESET_BASE: 'mainnet'\nSLOT_DURATION_MS: 6500\n",
+			wantErrParts: "not a whole number of seconds",
+		},
+		{
+			name:         "zero slot duration",
+			yaml:         "PRESET_BASE: 'mainnet'\nSLOT_DURATION_MS: 0\n",
+			wantErrParts: "slot duration cannot be zero",
+		},
+		{
+			name:         "zero seconds per slot",
+			yaml:         "PRESET_BASE: 'mainnet'\nSECONDS_PER_SLOT: 0\n",
+			wantErrParts: "slot duration cannot be zero",
+		},
+		{
+			name:         "both, contradictory",
+			yaml:         "PRESET_BASE: 'mainnet'\nSECONDS_PER_SLOT: 6\nSLOT_DURATION_MS: 12000\n",
+			wantErrParts: "contradictory slot durations",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := params.UnmarshalConfig([]byte(tt.yaml), nil)
+			if tt.wantErrParts != "" {
+				require.ErrorContains(t, tt.wantErrParts, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.wantSeconds, cfg.SecondsPerSlot)
+			require.Equal(t, tt.wantMillis, cfg.SlotDurationMillis())
+			require.Equal(t, time.Duration(tt.wantMillis)*time.Millisecond, cfg.SlotDuration())
+		})
+	}
 }
