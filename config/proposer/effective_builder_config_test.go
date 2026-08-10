@@ -5,7 +5,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"google.golang.org/protobuf/proto"
 )
 
 // These cases mirror the test vectors proposed upstream on keymanager-APIs #87
@@ -76,22 +75,17 @@ func TestEffectiveBuilderConfig(t *testing.T) {
 		perKey := &BuilderConfig{Enabled: true}
 		require.Equal(t, validator.Uint64(30000000), effectiveBuilderConfig(perKey, def).GasLimit)
 	})
-	t.Run("proxy and boost inherit per field", func(t *testing.T) {
-		def := &BuilderConfig{Proxy: proto.String("http://side-car:9001"), BuilderBoostFactor: uint64ValPtr(90)}
+	t.Run("boost factor inherits per field", func(t *testing.T) {
+		def := &BuilderConfig{MinBid: uint64ValPtr(5000000), BuilderBoostFactor: uint64ValPtr(90)}
 		perKey := &BuilderConfig{Enabled: true, BuilderBoostFactor: uint64ValPtr(120)}
 		eff := effectiveBuilderConfig(perKey, def)
-		require.Equal(t, "http://side-car:9001", *eff.Proxy)
+		require.Equal(t, validator.Uint64(5000000), *eff.MinBid)
 		require.Equal(t, validator.Uint64(120), *eff.BuilderBoostFactor)
 	})
 	t.Run("both-set min_bid: per-key wins", func(t *testing.T) {
 		def := &BuilderConfig{MinBid: uint64ValPtr(5000000)}
 		perKey := &BuilderConfig{MinBid: uint64ValPtr(7000000)}
 		require.Equal(t, validator.Uint64(7000000), *effectiveBuilderConfig(perKey, def).MinBid)
-	})
-	t.Run("both-set proxy: per-key wins", func(t *testing.T) {
-		def := &BuilderConfig{Proxy: proto.String("http://default:1")}
-		perKey := &BuilderConfig{Proxy: proto.String("http://mine:2")}
-		require.Equal(t, "http://mine:2", *effectiveBuilderConfig(perKey, def).Proxy)
 	})
 	t.Run("nonzero per-key gas limit wins over default", func(t *testing.T) {
 		def := &BuilderConfig{GasLimit: validator.Uint64(30000000)}

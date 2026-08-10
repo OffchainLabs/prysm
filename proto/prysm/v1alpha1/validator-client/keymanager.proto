@@ -149,12 +149,11 @@ message BuilderConfig {
   // builders_set preserves an explicitly configured empty builders list
   // ("use no builders"), which proto3 cannot distinguish from absent.
   bool builders_set = 6;
-  optional string proxy = 7;
-  optional uint64 min_bid = 8 [
+  optional uint64 min_bid = 7 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
   ];
-  optional uint64 builder_boost_factor = 9 [
+  optional uint64 builder_boost_factor = 8 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
   ];
@@ -166,16 +165,15 @@ message BuilderEntry {
   string url = 1;
   optional bytes pubkey = 2;
   optional bytes auth_data = 3;
-  optional string proxy = 4;
-  optional uint64 min_bid = 5 [
+  optional uint64 min_bid = 4 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
   ];
-  optional uint64 max_execution_payment = 6 [
+  optional uint64 max_execution_payment = 5 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
   ];
-  optional uint64 builder_boost_factor = 7 [
+  optional uint64 builder_boost_factor = 6 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
   ];

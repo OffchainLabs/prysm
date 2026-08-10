@@ -114,7 +114,6 @@ type BuilderConfig struct {
 	GasLimit            validator.Uint64  `json:"gas_limit,omitempty" yaml:"gas_limit,omitempty"`
 	MaxExecutionPayment *validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"` // explicit 0 = trustless-only; unset inherits
 	Builders            []*BuilderEntry   `json:"builders,omitempty" yaml:"builders,omitempty"`
-	Proxy               *string           `json:"proxy,omitempty" yaml:"proxy,omitempty"`
 	MinBid              *validator.Uint64 `json:"min_bid,omitempty" yaml:"min_bid,omitempty"`
 	BuilderBoostFactor  *validator.Uint64 `json:"builder_boost_factor,omitempty" yaml:"builder_boost_factor,omitempty"`
 }
@@ -125,7 +124,6 @@ type BuilderEntry struct {
 	URL                 string            `json:"url" yaml:"url"`
 	Pubkey              []byte            `json:"pubkey,omitempty" yaml:"pubkey,omitempty"`
 	AuthData            []byte            `json:"auth_data,omitempty" yaml:"auth_data,omitempty"`
-	Proxy               *string           `json:"proxy,omitempty" yaml:"proxy,omitempty"`
 	MinBid              *validator.Uint64 `json:"min_bid,omitempty" yaml:"min_bid,omitempty"`
 	MaxExecutionPayment *validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"`
 	BuilderBoostFactor  *validator.Uint64 `json:"builder_boost_factor,omitempty" yaml:"builder_boost_factor,omitempty"`
@@ -303,7 +301,6 @@ func effectiveBuilderConfig(perKey, def *BuilderConfig) *BuilderConfig {
 		MaxExecutionPayment: coalesceUint64(perKey.MaxExecutionPayment, def.MaxExecutionPayment),
 		MinBid:              coalesceUint64(perKey.MinBid, def.MinBid),
 		BuilderBoostFactor:  coalesceUint64(perKey.BuilderBoostFactor, def.BuilderBoostFactor),
-		Proxy:               coalesceString(perKey.Proxy, def.Proxy),
 		Builders:            perKey.Builders,
 	}
 	if eff.GasLimit == 0 {
@@ -314,13 +311,6 @@ func effectiveBuilderConfig(perKey, def *BuilderConfig) *BuilderConfig {
 		eff.Builders = def.Builders
 	}
 	return eff
-}
-
-func coalesceString(a, b *string) *string {
-	if a != nil {
-		return a
-	}
-	return b
 }
 
 func coalesceUint64(a, b *validator.Uint64) *validator.Uint64 {
@@ -339,7 +329,6 @@ func BuilderConfigFromConsensus(from *validatorpb.BuilderConfig) *BuilderConfig 
 		Enabled:             from.GetEnabled(),
 		GasLimit:            from.GasLimit,
 		MaxExecutionPayment: cloneUint64(from.MaxExecutionPayment),
-		Proxy:               cloneString(from.Proxy),
 		MinBid:              cloneUint64(from.MinBid),
 		BuilderBoostFactor:  cloneUint64(from.BuilderBoostFactor),
 	}
@@ -361,7 +350,6 @@ func builderEntryFromConsensus(from *validatorpb.BuilderEntry) *BuilderEntry {
 	}
 	e := &BuilderEntry{
 		URL:                 from.Url,
-		Proxy:               from.Proxy,
 		MinBid:              from.MinBid,
 		MaxExecutionPayment: from.MaxExecutionPayment,
 		BuilderBoostFactor:  from.BuilderBoostFactor,
@@ -511,7 +499,6 @@ func (bc *BuilderConfig) Clone() *BuilderConfig {
 	c.Enabled = bc.Enabled
 	c.GasLimit = bc.GasLimit
 	c.MaxExecutionPayment = cloneUint64(bc.MaxExecutionPayment)
-	c.Proxy = cloneString(bc.Proxy)
 	c.MinBid = cloneUint64(bc.MinBid)
 	c.BuilderBoostFactor = cloneUint64(bc.BuilderBoostFactor)
 	// Preserve nil vs empty: an empty list is the "use no builders" marker.
@@ -533,19 +520,10 @@ func (be *BuilderEntry) Clone() *BuilderEntry {
 		URL:                 be.URL,
 		Pubkey:              bytesutil.SafeCopyBytes(be.Pubkey),
 		AuthData:            bytesutil.SafeCopyBytes(be.AuthData),
-		Proxy:               cloneString(be.Proxy),
 		MinBid:              cloneUint64(be.MinBid),
 		MaxExecutionPayment: cloneUint64(be.MaxExecutionPayment),
 		BuilderBoostFactor:  cloneUint64(be.BuilderBoostFactor),
 	}
-}
-
-func cloneString(v *string) *string {
-	if v == nil {
-		return nil
-	}
-	c := *v
-	return &c
 }
 
 func cloneUint64(v *validator.Uint64) *validator.Uint64 {
@@ -574,7 +552,6 @@ func (bc *BuilderConfig) ToConsensus() *validatorpb.BuilderConfig {
 	c.Enabled = &enabled
 	c.GasLimit = bc.GasLimit
 	c.MaxExecutionPayment = cloneUint64(bc.MaxExecutionPayment)
-	c.Proxy = cloneString(bc.Proxy)
 	c.MinBid = cloneUint64(bc.MinBid)
 	c.BuilderBoostFactor = cloneUint64(bc.BuilderBoostFactor)
 	// BuildersSet preserves nil-vs-empty across the wire: an explicit empty
@@ -597,7 +574,6 @@ func (be *BuilderEntry) toConsensus() *validatorpb.BuilderEntry {
 		Url:                 be.URL,
 		Pubkey:              bytesutil.SafeCopyBytes(be.Pubkey),
 		AuthData:            bytesutil.SafeCopyBytes(be.AuthData),
-		Proxy:               cloneString(be.Proxy),
 		MinBid:              cloneUint64(be.MinBid),
 		MaxExecutionPayment: cloneUint64(be.MaxExecutionPayment),
 		BuilderBoostFactor:  cloneUint64(be.BuilderBoostFactor),
