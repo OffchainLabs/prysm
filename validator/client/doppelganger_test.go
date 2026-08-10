@@ -126,7 +126,7 @@ func TestTrackReloadedKeysForDoppelGanger(t *testing.T) {
 	t.Run("boot keys are left for the startup check", func(t *testing.T) {
 		enableDoppelGanger(t)
 		v := doppelTestValidator(4)
-		v.doppelGanger.beginStartup([][fieldparams.BLSPubkeyLength]byte{keyA})
+		v.doppelGanger.beginStartup([]pubkey{keyA}, 4)
 
 		// While the boot snapshot is active, only keys outside it quarantine;
 		// the snapshot's keys belong to the one-shot startup check.
@@ -650,7 +650,7 @@ func TestCheckDoppelGangerAtStartup(t *testing.T) {
 		v, keys := startupDoppelValidator(t, client, 3)
 		// Boot snapshot covers keys[0] and keys[1]; keys[2] arrived mid-boot and
 		// must be quarantined, not one-shot vetted with a zero watermark.
-		v.doppelGanger.beginStartup(keys[:2])
+		v.doppelGanger.beginStartup(keys[:2], 4)
 
 		client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).DoAndReturn(
 			func(_ context.Context, req *ethpb.DoppelGangerRequest) (*ethpb.DoppelGangerResponse, error) {
@@ -751,7 +751,7 @@ func TestCheckDoppelGangerAtStartup(t *testing.T) {
 		defer ctrl.Finish()
 		client := validatormock.NewMockValidatorClient(ctrl)
 		v, keys := startupDoppelValidator(t, client, 2)
-		v.doppelGanger.beginStartup(keys[:1]) // keys[1] arrived mid-boot
+		v.doppelGanger.beginStartup(keys[:1], 4) // keys[1] arrived mid-boot
 
 		gomock.InOrder(
 			client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).Return(nil, errors.New("bn down")),
@@ -773,6 +773,39 @@ func TestCheckDoppelGangerAtStartup(t *testing.T) {
 		v.doppelGanger.mu.RLock()
 		assert.Equal(t, true, v.doppelGanger.bootSet == nil) // success closes the snapshot
 		v.doppelGanger.mu.RUnlock()
+	})
+
+	// A health flap restarts the runner and re-runs initialize on the same tracker;
+	// a fresh boot snapshot must not admit outage-imported keys to the one-shot check.
+	t.Run("key imported while the runner was down is quarantined", func(t *testing.T) {
+		enableDoppelGanger(t)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := validatormock.NewMockValidatorClient(ctrl)
+		v, keys := startupDoppelValidator(t, client, 2)
+
+		// First boot: the wallet held only keys[0], and it was vetted clean.
+		v.doppelGanger.beginStartup(keys[:1], 2)
+		v.markDoppelGangerChecked(keys[:1])
+		v.doppelGanger.completeStartup()
+
+		// Runner restart: keys[1] was imported during the outage, so the wallet
+		// the new keymanager reads now contains both.
+		v.doppelGanger.beginStartup(keys, 4)
+
+		client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, req *ethpb.DoppelGangerRequest) (*ethpb.DoppelGangerResponse, error) {
+				// Only the original boot key belongs to the one-shot check.
+				require.Equal(t, 1, len(req.ValidatorRequests))
+				require.DeepEqual(t, keys[0][:], req.ValidatorRequests[0].PublicKey)
+				return &ethpb.DoppelGangerResponse{Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{
+					{PublicKey: keys[0][:], DuplicateExists: false},
+				}}, nil
+			})
+
+		require.NoError(t, v.CheckDoppelGangerAtStartup(t.Context()))
+		assert.Equal(t, false, v.isDoppelGangerPending(keys[0]))
+		assert.Equal(t, true, v.isDoppelGangerPending(keys[1]))
 	})
 
 	t.Run("rerun fail-stops when a checked key turns duplicate", func(t *testing.T) {

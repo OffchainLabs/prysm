@@ -63,10 +63,9 @@ func isActiveForDuties(s *ethpb.ValidatorStatusResponse, currEpoch primitives.Ep
 	return false
 }
 
-// filteredKeysAndIndices returns the subset of keys with duties to fetch for
-// the given epoch (see isActiveForDuties), and the corresponding sorted
-// validator indices. Sorted indices let callers compare against a previously
-// stored set to detect drift.
+// filteredKeysAndIndices returns the keys eligible for duties at the given epoch —
+// active (see isActiveForDuties) and not held pending a doppelganger check — and the
+// corresponding sorted indices, which let callers detect drift against a stored set.
 func (v *validator) filteredKeysAndIndices(keys [][fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) ([][fieldparams.BLSPubkeyLength]byte, []primitives.ValidatorIndex) {
 	outKeys := make([][fieldparams.BLSPubkeyLength]byte, 0, len(keys))
 	indices := make([]primitives.ValidatorIndex, 0, len(keys))

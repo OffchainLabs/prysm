@@ -20,8 +20,8 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// doppelGangerWaitEpochs is how long a reloaded key sits out before clearing.
-// Must cover the BN CheckDoppelGanger 2-epoch determination band (status.go).
+// doppelGangerWaitEpochs is how long a reloaded key sits out before clearing: it must cover
+// the 2-epoch band in CheckDoppelGanger (beacon-chain/rpc/prysm/v1alpha1/validator/status.go).
 const doppelGangerWaitEpochs = 2
 
 type doppelGangerPendingKey struct {
@@ -36,6 +36,7 @@ type doppelGangerTracker struct {
 	pending      map[pubkey]*doppelGangerPendingKey
 	checked      map[pubkey]bool
 	bootSet      map[pubkey]bool  // wallet snapshot at boot; non-nil only until the startup check completes
+	startupDone  bool             // startup check completed once; later beginStartup calls are runner restarts
 	lastPollMark primitives.Epoch // last successful poll epoch + 1; zero means never polled
 	lastWarnMark primitives.Epoch // last warned failure epoch + 1, rate-limiting to one per epoch
 	pendingCount atomic.Int64     // mirrors len(pending) for lock-free empty checks
@@ -44,16 +45,28 @@ type doppelGangerTracker struct {
 
 // beginStartup snapshots the wallet at boot: these keys belong to the one-shot
 // startup check; anything arriving later is a reload. Retries keep the first snapshot.
-func (d *doppelGangerTracker) beginStartup(keys [][fieldparams.BLSPubkeyLength]byte) {
+func (d *doppelGangerTracker) beginStartup(keys []pubkey, epoch primitives.Epoch) {
+	if !d.trySnapshotBoot(keys) {
+		// Runner restart: keys imported while it was down missed their reload
+		// event, so quarantine them rather than re-snapshotting the wallet.
+		d.trackReload(keys, epoch)
+	}
+}
+
+// trySnapshotBoot claims the boot snapshot; false once startup has completed.
+func (d *doppelGangerTracker) trySnapshotBoot(keys []pubkey) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.bootSet != nil {
-		return
+	if d.startupDone {
+		return false
 	}
-	d.bootSet = make(map[pubkey]bool, len(keys))
-	for _, pk := range keys {
-		d.bootSet[pk] = true
+	if d.bootSet == nil {
+		d.bootSet = make(map[pubkey]bool, len(keys))
+		for _, pk := range keys {
+			d.bootSet[pk] = true
+		}
 	}
+	return true
 }
 
 // completeStartup closes the boot phase after a successful vetting; a failed
@@ -62,15 +75,16 @@ func (d *doppelGangerTracker) completeStartup() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.bootSet = nil
+	d.startupDone = true
 }
 
 // partitionStartup classifies keys for the startup check: checkable boot keys
 // and lateAdds that appeared mid-initialization. Pending keys are omitted, and
 // with no active snapshot every key is checkable (reruns re-vet checked keys).
-func (d *doppelGangerTracker) partitionStartup(keys [][fieldparams.BLSPubkeyLength]byte) (checkable, lateAdds [][fieldparams.BLSPubkeyLength]byte) {
+func (d *doppelGangerTracker) partitionStartup(keys []pubkey) (checkable, lateAdds []pubkey) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	checkable = make([][fieldparams.BLSPubkeyLength]byte, 0, len(keys))
+	checkable = make([]pubkey, 0, len(keys))
 	for _, pk := range keys {
 		switch {
 		case d.pending[pk] != nil:
@@ -99,7 +113,7 @@ func (d *doppelGangerTracker) pendingAddedEpoch(pk pubkey) (primitives.Epoch, bo
 
 // trackReload quarantines never-checked keys as of epoch and forgets removed
 // keys so a later re-add is checked again. Logs outside the tracker lock.
-func (d *doppelGangerTracker) trackReload(currentKeys [][fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) {
+func (d *doppelGangerTracker) trackReload(currentKeys []pubkey, epoch primitives.Epoch) {
 	addedKeys := d.rebuildFromReload(currentKeys, epoch)
 	for _, pk := range addedKeys {
 		log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pk[:]))).Debug("Key held out of duties pending doppelganger check")
@@ -114,9 +128,7 @@ func (d *doppelGangerTracker) trackReload(currentKeys [][fieldparams.BLSPubkeyLe
 
 // rebuildFromReload rebuilds both maps in one pass: keys absent from currentKeys
 // drop out, surviving pending entries keep their state, unseen keys quarantine.
-func (d *doppelGangerTracker) rebuildFromReload(
-	currentKeys [][fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch,
-) (addedKeys [][fieldparams.BLSPubkeyLength]byte) {
+func (d *doppelGangerTracker) rebuildFromReload(currentKeys []pubkey, epoch primitives.Epoch) (addedKeys []pubkey) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	newChecked := make(map[pubkey]bool, len(d.checked))
@@ -148,7 +160,7 @@ func (d *doppelGangerTracker) rebuildFromReload(
 // vetStartup settles a startup check in one pass: evaluated keys become checked
 // (a blocked verdict is never overwritten), the rest are quarantined unless
 // already tracked. Returns how many keys were newly quarantined.
-func (d *doppelGangerTracker) vetStartup(keys [][fieldparams.BLSPubkeyLength]byte, evaluated map[pubkey]bool, epoch primitives.Epoch) int {
+func (d *doppelGangerTracker) vetStartup(keys []pubkey, evaluated map[pubkey]bool, epoch primitives.Epoch) int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.checked == nil {
@@ -192,7 +204,7 @@ func (v *validator) snapshotBootKeysForDoppelGanger(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "could not fetch validating keys for doppelganger startup snapshot")
 	}
-	v.doppelGanger.beginStartup(keys)
+	v.doppelGanger.beginStartup(keys, slots.EpochsSinceGenesis(v.genesisTime))
 	return nil
 }
 
@@ -240,33 +252,32 @@ func (v *validator) runStartupCheck(ctx context.Context) error {
 
 // checkDoppelGangerForKeys queries the beacon node's doppelganger check for the
 // given keys, using each key's latest local attestation record as its watermark.
-func (v *validator) checkDoppelGangerForKeys(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte) (*ethpb.DoppelGangerResponse, error) {
+func (v *validator) checkDoppelGangerForKeys(ctx context.Context, pubkeys []pubkey) (*ethpb.DoppelGangerResponse, error) {
 	req := &ethpb.DoppelGangerRequest{ValidatorRequests: []*ethpb.DoppelGangerRequest_ValidatorRequest{}}
 	for _, pkey := range pubkeys {
-		copiedKey := pkey
-		attRec, err := v.db.AttestationHistoryForPubKey(ctx, copiedKey)
+		attRec, err := v.db.AttestationHistoryForPubKey(ctx, pkey)
 		if err != nil {
-			return nil, errors.Wrapf(err, "could not get attestation history for pubkey %#x", bytesutil.Trunc(copiedKey[:]))
+			return nil, errors.Wrapf(err, "could not get attestation history for pubkey %#x", bytesutil.Trunc(pkey[:]))
 		}
 		if len(attRec) == 0 {
 			// If no history exists we simply send in a zero
 			// value for the request epoch and root.
 			req.ValidatorRequests = append(req.ValidatorRequests,
 				&ethpb.DoppelGangerRequest_ValidatorRequest{
-					PublicKey:  copiedKey[:],
+					PublicKey:  pkey[:],
 					Epoch:      0,
 					SignedRoot: make([]byte, fieldparams.RootLength),
 				})
 			continue
 		}
 		r := retrieveLatestRecord(attRec)
-		if copiedKey != r.PubKey {
-			return nil, errors.Errorf("attestation record mismatched public key %#x", bytesutil.Trunc(copiedKey[:]))
+		if pkey != r.PubKey {
+			return nil, errors.Errorf("attestation record mismatched public key %#x", bytesutil.Trunc(pkey[:]))
 		}
 		watermark := r.Target
 		// Cap a pending key's watermark at its quarantine clock: the node's
 		// recency band must expire before the wait, or answers stay unevaluated.
-		if added, ok := v.doppelGanger.pendingAddedEpoch(copiedKey); ok && watermark > added {
+		if added, ok := v.doppelGanger.pendingAddedEpoch(pkey); ok && watermark > added {
 			watermark = added
 		}
 		req.ValidatorRequests = append(req.ValidatorRequests,
@@ -280,7 +291,6 @@ func (v *validator) checkDoppelGangerForKeys(ctx context.Context, pubkeys [][fie
 	if err != nil {
 		return nil, errors.Wrap(err, "doppelganger check request to beacon node failed")
 	}
-	// Empty responses are legal (keys unknown to the node); callers decide policy.
 	if resp == nil {
 		return nil, errors.New("nil doppelganger response from beacon node")
 	}
@@ -291,8 +301,7 @@ func buildDuplicateError(response []*ethpb.DoppelGangerResponse_ValidatorRespons
 	duplicates := make([][]byte, 0)
 	for _, valRes := range response {
 		if valRes.DuplicateExists {
-			var copiedKey [fieldparams.BLSPubkeyLength]byte
-			copy(copiedKey[:], valRes.PublicKey)
+			copiedKey := bytesutil.ToBytes48(valRes.PublicKey)
 			duplicates = append(duplicates, copiedKey[:])
 		}
 	}
@@ -327,7 +336,7 @@ func retrieveLatestRecord(recs []*dbCommon.AttestationRecord) *dbCommon.Attestat
 
 // vetStartupKeys marks keys the startup doppelganger check explicitly evaluated
 // as checked; the rest are held pending for the per-epoch polls to vet later.
-func (v *validator) vetStartupKeys(pubkeys [][fieldparams.BLSPubkeyLength]byte, responses []*ethpb.DoppelGangerResponse_ValidatorResponse) {
+func (v *validator) vetStartupKeys(pubkeys []pubkey, responses []*ethpb.DoppelGangerResponse_ValidatorResponse) {
 	evaluated := make(map[pubkey]bool, len(responses))
 	for _, r := range responses {
 		evaluated[bytesutil.ToBytes48(r.PublicKey)] = true
@@ -359,16 +368,16 @@ func (d *doppelGangerTracker) isPending(pk pubkey) bool {
 
 // pollDue returns the pending, unblocked keys to check at epoch, at most once
 // per epoch; duplicates are blocked at any poll, clearing waits for clearElapsed.
-func (d *doppelGangerTracker) pollDue(epoch primitives.Epoch) [][fieldparams.BLSPubkeyLength]byte {
+func (d *doppelGangerTracker) pollDue(epoch primitives.Epoch) []pubkey {
 	if d.pendingCount.Load() == 0 {
 		return nil
 	}
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	if epoch.Add(1) <= d.lastPollMark {
+	if epoch < d.lastPollMark {
 		return nil
 	}
-	var due [][fieldparams.BLSPubkeyLength]byte
+	var due []pubkey
 	for pk, p := range d.pending {
 		if !p.blocked {
 			due = append(due, pk)
@@ -381,16 +390,14 @@ func (d *doppelGangerTracker) pollDue(epoch primitives.Epoch) [][fieldparams.BLS
 func (d *doppelGangerTracker) markPolled(epoch primitives.Epoch) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if epoch+1 > d.lastPollMark {
-		d.lastPollMark = epoch + 1
-	}
+	d.lastPollMark = max(d.lastPollMark, epoch+1)
 }
 
 // shouldWarnFailure reports whether a check failure at epoch was not yet warned.
 func (d *doppelGangerTracker) shouldWarnFailure(epoch primitives.Epoch) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if epoch+1 <= d.lastWarnMark {
+	if epoch < d.lastWarnMark {
 		return false
 	}
 	d.lastWarnMark = epoch + 1
@@ -399,13 +406,13 @@ func (d *doppelGangerTracker) shouldWarnFailure(epoch primitives.Epoch) bool {
 
 // clearElapsed clears and returns the given clean keys strictly past their
 // quarantine at epoch; the rest stay pending. epoch must not exceed the BN head.
-func (d *doppelGangerTracker) clearElapsed(keys [][fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) [][fieldparams.BLSPubkeyLength]byte {
+func (d *doppelGangerTracker) clearElapsed(keys []pubkey, epoch primitives.Epoch) []pubkey {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.checked == nil {
 		d.checked = make(map[pubkey]bool, len(keys))
 	}
-	var cleared [][fieldparams.BLSPubkeyLength]byte
+	var cleared []pubkey
 	for _, pk := range keys {
 		p, ok := d.pending[pk]
 		if !ok || p.blocked || p.addedEpoch+doppelGangerWaitEpochs >= epoch {
@@ -421,9 +428,9 @@ func (d *doppelGangerTracker) clearElapsed(keys [][fieldparams.BLSPubkeyLength]b
 
 // block permanently excludes still-tracked keys with a detected duplicate.
 // Logs outside the tracker lock.
-func (d *doppelGangerTracker) block(keys [][fieldparams.BLSPubkeyLength]byte) {
+func (d *doppelGangerTracker) block(keys []pubkey) {
 	d.mu.Lock()
-	var flagged [][fieldparams.BLSPubkeyLength]byte
+	var flagged []pubkey
 	for _, pk := range keys {
 		p, ok := d.pending[pk]
 		if !ok {
@@ -440,7 +447,7 @@ func (d *doppelGangerTracker) block(keys [][fieldparams.BLSPubkeyLength]byte) {
 }
 
 // trackReloadedKeysForDoppelGanger quarantines never-checked keys from a reload.
-func (v *validator) trackReloadedKeysForDoppelGanger(currentKeys [][fieldparams.BLSPubkeyLength]byte) {
+func (v *validator) trackReloadedKeysForDoppelGanger(currentKeys []pubkey) {
 	if !features.Get().EnableDoppelGanger {
 		return
 	}
@@ -484,7 +491,7 @@ func (v *validator) CheckDoppelGangerMidEpoch(ctx context.Context, slot primitiv
 
 // checkReloadedKeys runs one scoped check: duplicates are blocked permanently,
 // elapsed clean keys are cleared to rejoin duties, the rest stay quarantined.
-func (v *validator) checkReloadedKeys(ctx context.Context, due [][fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) {
+func (v *validator) checkReloadedKeys(ctx context.Context, due []pubkey, epoch primitives.Epoch) {
 	resp, err := v.checkDoppelGangerForKeys(ctx, due)
 	if err != nil {
 		if v.doppelGanger.shouldWarnFailure(epoch) {
@@ -540,7 +547,7 @@ func (v *validator) clearingEpoch(ctx context.Context, epoch primitives.Epoch) (
 
 // splitByDuplicate partitions responses into keys the beacon node reported
 // clean and keys with a live duplicate.
-func splitByDuplicate(responses []*ethpb.DoppelGangerResponse_ValidatorResponse) (clean, dups [][fieldparams.BLSPubkeyLength]byte) {
+func splitByDuplicate(responses []*ethpb.DoppelGangerResponse_ValidatorResponse) (clean, dups []pubkey) {
 	for _, r := range responses {
 		if r.DuplicateExists {
 			dups = append(dups, bytesutil.ToBytes48(r.PublicKey))
