@@ -232,6 +232,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		Ctx:                              s.ctx,
 		ExecutionPayloadEnvelopeCache:    s.cfg.ExecutionPayloadEnvelopeCache,
 		ProposerPreferencesCache:         s.cfg.ProposerPreferencesCache,
+		HighestBidCache:                  s.cfg.HighestBidCache,
 		DataColumnReceiver:               s.cfg.DataColumnReceiver,
 		ExecutionPayloadEnvelopeReceiver: s.cfg.ExecutionPayloadEnvelopeReceiver,
 	}
@@ -368,9 +369,11 @@ func (s *Service) Start() {
 				log.WithError(err).Error("Could not get verification initializer for validator server")
 				return
 			}
-			s.validatorServer.NewExecutionPayloadBidVerifier = func(b interfaces.ROSignedExecutionPayloadBid, reqs []verification.Requirement) verification.ExecutionPayloadBidVerifier {
+			newBidVerifier := func(b interfaces.ROSignedExecutionPayloadBid, reqs []verification.Requirement) verification.ExecutionPayloadBidVerifier {
 				return ini.NewExecutionPayloadBidVerifier(b, reqs)
 			}
+			s.validatorServer.NewExecutionPayloadBidVerifier = newBidVerifier
+			s.validatorServer.CoreService.NewExecutionPayloadBidVerifier = newBidVerifier
 		}()
 	}
 	go func() {

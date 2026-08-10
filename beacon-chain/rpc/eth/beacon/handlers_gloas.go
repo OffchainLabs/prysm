@@ -23,8 +23,6 @@ import (
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // GetExecutionPayloadEnvelope retrieves a full execution payload envelope by beacon block root.
@@ -419,22 +417,7 @@ func (s *Server) PublishSignedExecutionPayloadBid(w http.ResponseWriter, r *http
 		}
 	}
 
-	// Delegate to the v1alpha1 server, which verifies the bid with the gossip rules, records it in
-	// the local highest-bid cache, broadcasts it, and emits the operation feed event.
-	if _, err := s.V1Alpha1ValidatorServer.SubmitSignedExecutionPayloadBid(ctx, signedBid); err != nil {
-		if st, ok := status.FromError(err); ok {
-			switch st.Code() {
-			case codes.InvalidArgument:
-				httputil.HandleError(w, st.Message(), http.StatusBadRequest)
-			case codes.FailedPrecondition:
-				httputil.HandleError(w, st.Message(), http.StatusBadRequest)
-			case codes.Unavailable:
-				httputil.HandleError(w, st.Message(), http.StatusServiceUnavailable)
-			default:
-				httputil.HandleError(w, st.Message(), http.StatusInternalServerError)
-			}
-			return
-		}
-		httputil.HandleError(w, "Could not submit execution payload bid: "+err.Error(), http.StatusInternalServerError)
+	if rpcErr := s.CoreService.SubmitSignedExecutionPayloadBid(ctx, signedBid); rpcErr != nil {
+		httputil.HandleError(w, rpcErr.Err.Error(), core.ErrorReasonToHTTP(rpcErr.Reason))
 	}
 }
