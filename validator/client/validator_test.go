@@ -2944,8 +2944,8 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 		name           string
 		gloasForkEpoch primitives.Epoch
 		settings       *proposer.Settings
-		needsDB        bool
 		wantGasLimit   uint64
+		needsDB        bool
 		// asserts the cutover ran and persisted v2 with builder content dropped.
 		wantMigrated bool
 	}{
