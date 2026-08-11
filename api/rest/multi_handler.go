@@ -295,7 +295,7 @@ func (m *multiHandler) PostSSZWithFallback(
 			if _, loaded := m.sszUnsupported.LoadOrStore(key, true); !loaded {
 				log.WithError(err).
 					WithField("host", api.RedactEndpoint(key.host)).
-					WithField("endpoint", api.RedactEndpoint(endpoint)).
+					WithField("endpoint", endpoint).
 					Warn("Beacon node does not accept SSZ request bodies, falling back to JSON")
 			}
 		}
