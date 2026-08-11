@@ -3,8 +3,8 @@ package testutil
 import (
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 // MockGenesisTimeFetcher is a fake implementation of the blockchain.TimeFetcher
@@ -17,5 +17,5 @@ func (m *MockGenesisTimeFetcher) GenesisTime() time.Time {
 }
 
 func (m *MockGenesisTimeFetcher) CurrentSlot() primitives.Slot {
-	return primitives.Slot(uint64(time.Now().Unix()-m.Genesis.Unix()) / params.BeaconConfig().SecondsPerSlot)
+	return slots.CurrentSlot(m.Genesis)
 }

@@ -30,6 +30,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
@@ -481,7 +482,7 @@ func (s *ChainService) CurrentSlot() primitives.Slot {
 	if s.Slot != nil {
 		return *s.Slot
 	}
-	return primitives.Slot(uint64(time.Now().Unix()-s.Genesis.Unix()) / params.BeaconConfig().SecondsPerSlot)
+	return slots.CurrentSlot(s.Genesis)
 }
 
 // Participation mocks the same method in the chain service.

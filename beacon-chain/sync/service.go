@@ -79,8 +79,8 @@ const (
 )
 
 var (
-	// Seconds in one epoch.
-	pendingBlockExpTime = time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second
+	// Duration of one epoch.
+	pendingBlockExpTime = params.EpochsDuration(1, params.BeaconConfig())
 	// time to allow processing early blocks.
 	earlyBlockProcessingTolerance = params.BeaconConfig().MaximumGossipClockDisparityDuration()
 	// time to allow processing early attestations.

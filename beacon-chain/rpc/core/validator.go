@@ -749,8 +749,8 @@ func registerSyncSubnetInternal(
 	if err != nil {
 		epochsToWatch = 0
 	}
-	epochDuration := time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
-	totalDuration := epochDuration * time.Duration(epochsToWatch) * time.Second
+	epochDuration := params.EpochsDuration(1, params.BeaconConfig())
+	totalDuration := epochDuration * time.Duration(epochsToWatch)
 	cache.SyncSubnetIDs.AddSyncCommitteeSubnets(pubkey, startEpoch, subs, totalDuration)
 }
 

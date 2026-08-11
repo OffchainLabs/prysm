@@ -681,7 +681,7 @@ func (s *Service) ensurePeers(ctx context.Context, tracker *subnetTracker) {
 }
 
 func (s *Service) tryEnsurePeers(ctx context.Context, tracker *subnetTracker) {
-	timeout := (time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second) - 100*time.Millisecond
+	timeout := (params.BeaconConfig().SlotDuration()) - 100*time.Millisecond
 	minPeers := flags.Get().MinimumPeersPerSubnet
 	neededSubnets := computeAllNeededSubnets(s.cfg.clock.CurrentSlot(), tracker.getSubnetsToJoin, tracker.getSubnetsRequiringPeers)
 	ctx, cancel := context.WithTimeout(ctx, timeout)
