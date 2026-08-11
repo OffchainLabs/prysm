@@ -316,19 +316,19 @@ func TestSettings_SetGasLimit(t *testing.T) {
 	require.NoError(t, err)
 	pk := bytesutil.ToBytes48(pubkey)
 
-	t.Run("nil settings rejects with v1 error message", func(t *testing.T) {
+	t.Run("nil settings rejects", func(t *testing.T) {
 		var ps *Settings
 		err := ps.SetGasLimit(pk, validator.Uint64(70_000_000))
 		require.ErrorContains(t, "No proposer settings were found to update", err)
 	})
 
-	t.Run("v2 writes per-validator GasLimit", func(t *testing.T) {
+	t.Run("writes per-validator option-level GasLimit", func(t *testing.T) {
 		ps := &Settings{Version: SchemaV2}
 		require.NoError(t, ps.SetGasLimit(pk, validator.Uint64(70_000_000)))
 		require.Equal(t, validator.Uint64(70_000_000), ps.ProposeConfig[pk].GasLimit)
 	})
 
-	t.Run("v2 updates existing per-validator entry", func(t *testing.T) {
+	t.Run("updates existing per-validator entry", func(t *testing.T) {
 		ps := &Settings{
 			Version: SchemaV2,
 			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
@@ -339,52 +339,28 @@ func TestSettings_SetGasLimit(t *testing.T) {
 		require.Equal(t, validator.Uint64(20_000_000), ps.ProposeConfig[pk].GasLimit)
 	})
 
-	t.Run("v1 with no builder rejects", func(t *testing.T) {
-		ps := &Settings{}
-		err := ps.SetGasLimit(pk, validator.Uint64(80_000_000))
-		require.ErrorContains(t, "Gas limit changes only apply when builder is enabled", err)
-	})
-
-	t.Run("v1 with disabled builder rejects", func(t *testing.T) {
+	t.Run("v1 settings accept option-level writes without builder gating", func(t *testing.T) {
+		// The option-level value feeds pre-gloas registrations first, so the
+		// write no longer requires an enabled builder.
 		ps := &Settings{
 			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{Enabled: false}},
 		}
-		err := ps.SetGasLimit(pk, validator.Uint64(80_000_000))
-		require.ErrorContains(t, "Gas limit changes only apply when builder is enabled", err)
+		require.NoError(t, ps.SetGasLimit(pk, validator.Uint64(80_000_000)))
+		require.Equal(t, validator.Uint64(80_000_000), ps.ProposeConfig[pk].GasLimit)
+		require.IsNil(t, ps.ProposeConfig[pk].BuilderConfig)
 	})
 
-	t.Run("v1 clones enabled-builder default into new per-validator entry", func(t *testing.T) {
-		feeRecipient := common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")
-		ps := &Settings{
-			DefaultConfig: &Option{
-				FeeRecipientConfig: &FeeRecipientConfig{FeeRecipient: feeRecipient},
-				BuilderConfig:      &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(30_000_000)},
-			},
-		}
-		require.NoError(t, ps.SetGasLimit(pk, validator.Uint64(90_000_000)))
-		opt := ps.ProposeConfig[pk]
-		require.Equal(t, feeRecipient, opt.FeeRecipientConfig.FeeRecipient)
-		require.Equal(t, validator.Uint64(90_000_000), opt.BuilderConfig.GasLimit)
-	})
-
-	t.Run("v1 updates existing enabled-builder per-validator entry", func(t *testing.T) {
+	t.Run("v1 per-key builder entry keeps its builder config untouched", func(t *testing.T) {
 		ps := &Settings{
 			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
 				pk: {BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(10_000_000)}},
 			},
 		}
 		require.NoError(t, ps.SetGasLimit(pk, validator.Uint64(20_000_000)))
-		require.Equal(t, validator.Uint64(20_000_000), ps.ProposeConfig[pk].BuilderConfig.GasLimit)
-	})
-
-	t.Run("v1 per-validator entry with disabled builder rejects", func(t *testing.T) {
-		ps := &Settings{
-			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
-				pk: {BuilderConfig: &BuilderConfig{Enabled: false}},
-			},
-		}
-		err := ps.SetGasLimit(pk, validator.Uint64(20_000_000))
-		require.ErrorContains(t, "Gas limit changes only apply when builder is enabled", err)
+		require.Equal(t, validator.Uint64(20_000_000), ps.ProposeConfig[pk].GasLimit)
+		// The legacy builder-level value stays; option-level wins on every read.
+		require.Equal(t, validator.Uint64(10_000_000), ps.ProposeConfig[pk].BuilderConfig.GasLimit)
+		require.Equal(t, validator.Uint64(20_000_000), ps.GasLimit(pk))
 	})
 }
 
@@ -416,7 +392,7 @@ func TestSettings_ResetGasLimit(t *testing.T) {
 		require.Equal(t, validator.Uint64(40_000_000), ps.ProposeConfig[pk].GasLimit)
 	})
 
-	t.Run("v2 resets per-validator to chain default when no default", func(t *testing.T) {
+	t.Run("v2 resets per-validator to unset when no default", func(t *testing.T) {
 		ps := &Settings{
 			Version: SchemaV2,
 			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
@@ -424,7 +400,10 @@ func TestSettings_ResetGasLimit(t *testing.T) {
 			},
 		}
 		require.Equal(t, true, ps.ResetGasLimit(pk))
-		require.Equal(t, chainDefault, ps.ProposeConfig[pk].GasLimit)
+		// Unset rather than pinned to today's chain default, so the key follows
+		// future default gas limit increases.
+		require.Equal(t, validator.Uint64(0), ps.ProposeConfig[pk].GasLimit)
+		require.Equal(t, chainDefault, ps.GasLimit(pk))
 	})
 
 	t.Run("v1 returns false for missing per-validator entry", func(t *testing.T) {
@@ -734,7 +713,9 @@ func TestRegistrationFor(t *testing.T) {
 		require.Equal(t, false, enabled)
 	})
 
-	t.Run("v2 config without builders does not register", func(t *testing.T) {
+	t.Run("legacy enabled content registers regardless of version stamp", func(t *testing.T) {
+		// Semantics are fork-keyed, not version-keyed: registrations exist only
+		// pre-gloas, where legacy enabled content stays authoritative.
 		ps := &Settings{
 			Version: SchemaV2,
 			DefaultConfig: &Option{
@@ -742,7 +723,18 @@ func TestRegistrationFor(t *testing.T) {
 				BuilderConfig:      &BuilderConfig{Enabled: true, MinBid: uint64ValPtr(1)},
 			},
 		}
-		// enabled is legacy v1 content and is ignored by v2 resolution.
+		_, _, enabled := ps.RegistrationFor(key)
+		require.Equal(t, true, enabled)
+	})
+
+	t.Run("no builder content anywhere does not register", func(t *testing.T) {
+		ps := &Settings{
+			Version: SchemaV2,
+			DefaultConfig: &Option{
+				FeeRecipientConfig: &FeeRecipientConfig{FeeRecipient: recipient},
+				BuilderConfig:      &BuilderConfig{MinBid: uint64ValPtr(1)},
+			},
+		}
 		_, _, enabled := ps.RegistrationFor(key)
 		require.Equal(t, false, enabled)
 	})

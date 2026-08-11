@@ -215,6 +215,7 @@ func (psl *SettingsLoader) loadFromFile(cliCtx *cli.Context, dbSettings *validat
 		return nil, errors.Errorf("proposer settings is empty after unmarshalling from file specified by %s flag", flags.ProposerSettingsFlag.Name)
 	}
 	markExplicitEmptyBuilders(settingFromFile)
+	inferSchemaVersion(settingFromFile)
 	log.WithField(flags.ProposerSettingsFlag.Name, cliCtx.String(flags.ProposerSettingsFlag.Name)).Info("Proposer settings loaded from file")
 	return psl.processProposerSettings(settingFromFile, dbSettings), nil
 }
@@ -228,6 +229,7 @@ func (psl *SettingsLoader) loadFromURL(cliCtx *cli.Context, dbSettings *validato
 		return nil, errors.Errorf("proposer settings is empty after unmarshalling from url specified by %s flag", flags.ProposerSettingsURLFlag.Name)
 	}
 	markExplicitEmptyBuilders(settingFromURL)
+	inferSchemaVersion(settingFromURL)
 	log.WithField(flags.ProposerSettingsURLFlag.Name, cliCtx.String(flags.ProposerSettingsURLFlag.Name)).Infof("Proposer settings loaded from URL")
 	return psl.processProposerSettings(settingFromURL, dbSettings), nil
 }
@@ -258,14 +260,6 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 	}
 	if loaded != nil && loaded.Version > merged.Version {
 		merged.Version = loaded.Version
-	}
-	if merged.Version == proposer.SchemaV2 {
-		if db != nil && db.Version < proposer.SchemaV2 {
-			promotePayloadToV2(db)
-		}
-		if loaded != nil && loaded.Version < proposer.SchemaV2 {
-			promotePayloadToV2(loaded)
-		}
 	}
 
 	var builderConfig *validatorpb.BuilderConfig
@@ -300,24 +294,32 @@ func markExplicitEmptyBuilders(p *validatorpb.ProposerSettingsPayload) {
 	}
 }
 
-// promotePayloadToV2 mirrors Settings.UpgradeToV2: v1 builder content, including
-// its gas limits, does not apply to v2 and is dropped.
-func promotePayloadToV2(p *validatorpb.ProposerSettingsPayload) {
-	dropped := false
-	promote := func(opt *validatorpb.ProposerOptionPayload) {
+// inferSchemaVersion stamps version 2 on an unversioned source carrying v2-only
+// builder fields, so a forgotten "version" cannot get gloas content dropped as v1.
+func inferSchemaVersion(p *validatorpb.ProposerSettingsPayload) {
+	if p.Version != proposer.SchemaV1Unset {
+		return
+	}
+	hasV2 := func(opt *validatorpb.ProposerOptionPayload) bool {
 		if opt == nil || opt.Builder == nil {
-			return
+			return false
 		}
-		opt.Builder = nil
-		dropped = true
+		b := opt.Builder
+		return len(b.Builders) > 0 || b.BuildersSet || b.MinBid != nil ||
+			b.BuilderBoostFactor != nil || b.MaxExecutionPayment != nil
 	}
-	promote(p.DefaultConfig)
+	found := hasV2(p.DefaultConfig)
 	for _, opt := range p.ProposerConfig {
-		promote(opt)
+		if found {
+			break
+		}
+		found = hasV2(opt)
 	}
-	if dropped {
-		log.Warn("v1 builder settings, including gas limits, do not apply to the v2 schema and were replaced with defaults; provide v2 proposer settings to configure builders")
+	if !found {
+		return
 	}
+	p.Version = proposer.SchemaV2
+	log.Info("Proposer settings contain v2 builder fields but no version; treating the source as version 2")
 }
 
 // selectProposerConfig keeps the pre-v2 source precedence: a loaded per-key
@@ -383,10 +385,17 @@ func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPay
 	}
 	merged.ProposerConfig = selectProposerConfig(db, loaded)
 
-	// v2 has no enabled toggle: participation follows the configured builders
-	// list, so --enable-builder has nothing to force on.
+	// --enable-builder is legacy content: it still forces the default mev-boost
+	// toggle on for pre-gloas registrations, and is inert from the fork onward.
 	if builderConfig != nil {
-		log.Warnf("--%s has no effect with v2 proposer settings; configure builders via the settings source or keymanager API", flags.EnableBuilderFlag.Name)
+		if merged.DefaultConfig == nil {
+			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{}
+		}
+		if merged.DefaultConfig.Builder == nil {
+			merged.DefaultConfig.Builder = &validatorpb.BuilderConfig{}
+		}
+		merged.DefaultConfig.Builder.Enabled = true
+		log.Warnf("--%s is legacy (pre-gloas) mev-boost content and has no effect after the gloas fork; configure builders via the settings source or keymanager API", flags.EnableBuilderFlag.Name)
 	}
 
 	if gasLimitOnly == nil {

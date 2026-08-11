@@ -577,7 +577,8 @@ func (v *validator) SetGraffiti(ctx context.Context, pubkey [fieldparams.BLSPubk
 	if graffiti == nil {
 		return nil
 	}
-	settings := &proposer.Settings{}
+	// API-created settings carry no v1 content: v2 once gloas is scheduled.
+	settings := &proposer.Settings{Version: proposer.FreshSettingsVersion()}
 	if v.proposerSettings != nil {
 		settings = v.proposerSettings.Clone()
 	}

@@ -1220,11 +1220,17 @@ func (v *validator) buildProposerSettingsRequests(
 	return prepareProposerReqs
 }
 
-// upgradeProposerSettingsToV2 migrates v1 settings to v2 and persists them; callers
-// gate on gloas-active. Upgrades a clone then swaps so readers never see a half state.
+// upgradeProposerSettingsToV2 is idempotent post-fork cleanup: it strips dead v1
+// builder content from a clone and swaps; callers gate on gloas-active.
 func (v *validator) upgradeProposerSettingsToV2(ctx context.Context) {
-	ps := v.ProposerSettings().Clone()
+	snapshot := v.ProposerSettings()
+	ps := snapshot.Clone()
 	if !ps.UpgradeToV2() {
+		return
+	}
+	// Pointer changed = a keymanager write landed after our snapshot; swapping
+	// our stale clone would erase it. This cleanup simply reruns next cycle.
+	if v.ProposerSettings() != snapshot {
 		return
 	}
 	if err := v.SetProposerSettings(ctx, ps); err != nil {
@@ -1459,9 +1465,7 @@ type builderTarget struct {
 // config-level fallbacks. TODO(gloas): minBid/boost/pubkeys ride the #630 wire.
 func (v *validator) builderTargetsForKey(pk pubkey) []builderTarget {
 	ps := v.ProposerSettings()
-	// Builder entries imply v2: the API upgrades on write and v2 files declare it,
-	// so v1 settings have nothing legitimate to warm.
-	if ps == nil || ps.Version != proposer.SchemaV2 {
+	if ps == nil {
 		return nil
 	}
 	bc := ps.EffectiveBuilderConfig(pk)

@@ -3325,14 +3325,19 @@ func TestValidator_buildSignedRegReqs_DefaultConfigDisabled(t *testing.T) {
 	}
 	actual := v.buildSignedRegReqs(ctx, pubkeys, signer, 0, false)
 
-	assert.Equal(t, 1, len(actual))
+	assert.Equal(t, 2, len(actual))
 	assert.DeepEqual(t, feeRecipient1[:], actual[0].Message.FeeRecipient)
 	assert.Equal(t, uint64(1111), actual[0].Message.GasLimit)
 	assert.DeepEqual(t, pubkey1[:], actual[0].Message.Pubkey)
+	// Fee recipient and participation resolve independently: an explicitly
+	// enabled key without its own fee recipient registers with the default's.
+	assert.DeepEqual(t, defaultFeeRecipient[:], actual[1].Message.FeeRecipient)
+	assert.Equal(t, uint64(3333), actual[1].Message.GasLimit)
+	assert.DeepEqual(t, pubkey3[:], actual[1].Message.Pubkey)
 }
 
-// The same settings shape registers differently by schema version: v1 keeps the
-// legacy object-level semantics, v2 applies field-level inheritance.
+// Semantics are fork-keyed, not version-keyed: the same settings shape registers
+// identically whatever the stored schema version says.
 func TestValidator_buildSignedRegReqs_VersionGatesInheritance(t *testing.T) {
 	pubkey1 := pubkeyFromString(t, "0x111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111")
 	defaultFeeRecipient := feeRecipientFromString(t, "0xdddddddddddddddddddddddddddddddddddddddd")
@@ -3368,8 +3373,9 @@ func TestValidator_buildSignedRegReqs_VersionGatesInheritance(t *testing.T) {
 	}
 	pubkeys := [][fieldparams.BLSPubkeyLength]byte{pubkey1}
 
+	// The per-key disable is honored regardless of the stored version stamp.
 	v.proposerSettings = newSettings(0)
-	assert.Equal(t, 1, len(v.buildSignedRegReqs(ctx, pubkeys, signer, 0, false)))
+	assert.Equal(t, 0, len(v.buildSignedRegReqs(ctx, pubkeys, signer, 0, false)))
 
 	v.proposerSettings = newSettings(proposer.SchemaV2)
 	v.signedValidatorRegistrations = map[[48]byte]*ethpb.SignedValidatorRegistrationV1{}
@@ -3475,7 +3481,8 @@ func TestValidator_buildSignedRegReqs_DefaultConfigEnabled(t *testing.T) {
 	assert.DeepEqual(t, pubkey1[:], actual[0].Message.Pubkey)
 
 	assert.DeepEqual(t, defaultFeeRecipient[:], actual[1].Message.FeeRecipient)
-	assert.Equal(t, uint64(9999), actual[1].Message.GasLimit)
+	// The per-key builder gas limit outranks the default's builder value.
+	assert.Equal(t, uint64(3333), actual[1].Message.GasLimit)
 	assert.DeepEqual(t, pubkey3[:], actual[1].Message.Pubkey)
 
 	t.Run("mid epoch only pushes newly added key", func(t *testing.T) {
@@ -3978,11 +3985,9 @@ func TestBuilderTargetsForKey(t *testing.T) {
 		}},
 	}
 
-	t.Run("v1 settings produce no targets", func(t *testing.T) {
-		// Builder entries imply v2: the API upgrades on write and v2 files declare
-		// it, so entries on v1 settings are a malformed hybrid and stay inert.
+	t.Run("targets resolve regardless of the stored version stamp", func(t *testing.T) {
 		v := &validator{proposerSettings: &proposer.Settings{Version: proposer.SchemaV1, ProposeConfig: proposeConfig}}
-		require.Equal(t, 0, len(v.builderTargetsForKey(pk)))
+		require.Equal(t, 2, len(v.builderTargetsForKey(pk)))
 	})
 
 	t.Run("explicit empty builders list produces no targets", func(t *testing.T) {

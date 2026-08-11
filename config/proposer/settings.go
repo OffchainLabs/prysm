@@ -153,67 +153,48 @@ func (ps *Settings) EffectiveBuilderConfig(key [fieldparams.BLSPubkeyLength]byte
 	return effectiveBuilderConfig(perKey, def)
 }
 
-// RegistrationFor resolves pubkey's validator registration: fee recipient, gas
-// limit, and whether to register with the builder at all.
+// RegistrationFor resolves pubkey's mev-boost registration: fee recipient, gas
+// limit, and participation. Registrations are pushed pre-gloas only.
 func (ps *Settings) RegistrationFor(pubkey [fieldparams.BLSPubkeyLength]byte) (common.Address, validator.Uint64, bool) {
 	feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
 	gasLimit := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
 	if ps == nil {
 		return feeRecipient, gasLimit, false
 	}
-	if ps.isV2() {
-		hasFeeRecipient := false
-		if ps.DefaultConfig != nil && ps.DefaultConfig.FeeRecipientConfig != nil {
-			feeRecipient = ps.DefaultConfig.FeeRecipientConfig.FeeRecipient
-			hasFeeRecipient = true
-		}
-		if opt, ok := ps.ProposeConfig[pubkey]; ok && opt != nil && opt.FeeRecipientConfig != nil {
-			feeRecipient = opt.FeeRecipientConfig.FeeRecipient
-			hasFeeRecipient = true
-		}
-		// Per-key builder fields inherit from the default, but registration still
-		// requires a fee recipient configured at some level.
-		bc := ps.EffectiveBuilderConfig(pubkey)
-		// v2 reads only explicitly set option-level gas limits (the gas-limit
-		// API writes there); legacy builder-level values are never consulted.
-		switch {
-		case ps.ProposeConfig[pubkey] != nil && ps.ProposeConfig[pubkey].GasLimit != 0:
-			gasLimit = ps.ProposeConfig[pubkey].GasLimit
-		case ps.DefaultConfig != nil && ps.DefaultConfig.GasLimit != 0:
-			gasLimit = ps.DefaultConfig.GasLimit
-		}
-		// v2 has no enabled flag: a key participates in builder registration
-		// exactly when its resolved builders list names at least one builder.
-		return feeRecipient, gasLimit, bc != nil && len(bc.Builders) > 0 && hasFeeRecipient
-	}
-	// v1 keeps object-level semantics: a per-key builder config wins wholesale,
-	// so a disabled one opts the key out even under an enabled default.
-	enabled := false
+	hasFeeRecipient := false
 	if ps.DefaultConfig != nil && ps.DefaultConfig.FeeRecipientConfig != nil {
 		feeRecipient = ps.DefaultConfig.FeeRecipientConfig.FeeRecipient
-		if ps.DefaultConfig.BuilderConfig.IsEnabled() {
-			// Zero means unset (API-created configs): keep the chain default,
-			// matching the loader's reviewGasLimit normalization.
-			if ps.DefaultConfig.BuilderConfig.GasLimit != 0 {
-				gasLimit = ps.DefaultConfig.BuilderConfig.GasLimit
-			}
-			enabled = true
-		}
+		hasFeeRecipient = true
 	}
-	if opt, ok := ps.ProposeConfig[pubkey]; ok && opt != nil && opt.FeeRecipientConfig != nil {
+	opt := ps.ProposeConfig[pubkey]
+	if opt != nil && opt.FeeRecipientConfig != nil {
 		feeRecipient = opt.FeeRecipientConfig.FeeRecipient
-		if bc := opt.BuilderConfig; bc != nil {
-			if bc.IsEnabled() {
-				if bc.GasLimit != 0 {
-					gasLimit = bc.GasLimit
-				}
-				enabled = true
-			} else {
-				enabled = false
-			}
-		}
+		hasFeeRecipient = true
 	}
-	return feeRecipient, gasLimit, enabled
+	// Legacy enabled is object-level: a per-key builder config wins wholesale,
+	// so a disabled one opts the key out even under an enabled default.
+	enabled := ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig.IsEnabled()
+	if opt != nil && opt.BuilderConfig != nil {
+		enabled = opt.BuilderConfig.IsEnabled()
+	}
+	// v2 content opts in independently: a resolved nonempty builders list
+	// participates; an explicit empty list stays opted out.
+	if bc := ps.EffectiveBuilderConfig(pubkey); bc != nil && len(bc.Builders) > 0 {
+		enabled = true
+	}
+	// Explicitly set option-level gas limits win; legacy builder-level values
+	// are the pre-gloas fallback.
+	switch {
+	case opt != nil && opt.GasLimit != 0:
+		gasLimit = opt.GasLimit
+	case ps.DefaultConfig != nil && ps.DefaultConfig.GasLimit != 0:
+		gasLimit = ps.DefaultConfig.GasLimit
+	case opt != nil && opt.BuilderConfig != nil && opt.BuilderConfig.GasLimit != 0:
+		gasLimit = opt.BuilderConfig.GasLimit
+	case ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil && ps.DefaultConfig.BuilderConfig.GasLimit != 0:
+		gasLimit = ps.DefaultConfig.BuilderConfig.GasLimit
+	}
+	return feeRecipient, gasLimit, enabled && hasFeeRecipient
 }
 
 // EntryIdentity is what makes a builder entry unique: its url compared as the
@@ -369,6 +350,15 @@ const (
 	SchemaV1      uint32 = 1
 	SchemaV2      uint32 = 2
 )
+
+// FreshSettingsVersion is the schema stamped on settings the keymanager APIs
+// create from nothing: v2 once the network schedules gloas, legacy before.
+func FreshSettingsVersion() uint32 {
+	if params.GloasEnabled() {
+		return SchemaV2
+	}
+	return SchemaV1Unset
+}
 
 // Settings is a Prysm internal representation of the fee recipient config on the validator client.
 // validatorpb.ProposerSettingsPayload maps to Settings on import through the CLI.
@@ -650,20 +640,22 @@ func (ps *Settings) TargetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) val
 	return chainDefault
 }
 
-// GasLimit resolves pubkey's gas limit: per-key, else default config, else chain
-// default. v1 reads builder gas limits; v2 reads the top-level fields.
+// GasLimit resolves pubkey's gas limit: explicitly set option-level values win,
+// legacy builder-level values are the fallback, else the chain default.
 func (ps *Settings) GasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) validator.Uint64 {
 	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
 	if ps == nil {
 		return chainDefault
 	}
-	if ps.isV2() {
-		return ps.TargetGasLimit(pubkey)
-	}
-	if opt, ok := ps.ProposeConfig[pubkey]; ok && opt != nil && opt.BuilderConfig != nil && opt.BuilderConfig.GasLimit != 0 {
+	opt := ps.ProposeConfig[pubkey]
+	switch {
+	case opt != nil && opt.GasLimit != 0:
+		return opt.GasLimit
+	case ps.DefaultConfig != nil && ps.DefaultConfig.GasLimit != 0:
+		return ps.DefaultConfig.GasLimit
+	case opt != nil && opt.BuilderConfig != nil && opt.BuilderConfig.GasLimit != 0:
 		return opt.BuilderConfig.GasLimit
-	}
-	if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil && ps.DefaultConfig.BuilderConfig.GasLimit != 0 {
+	case ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil && ps.DefaultConfig.BuilderConfig.GasLimit != 0:
 		return ps.DefaultConfig.BuilderConfig.GasLimit
 	}
 	return chainDefault
@@ -683,42 +675,13 @@ func (ps *Settings) UpsertProposeOption(pubkey [fieldparams.BLSPubkeyLength]byte
 	return opt
 }
 
-// SetGasLimit writes the per-pubkey gas limit. v1 requires existing settings
-// with builder enabled.
+// SetGasLimit writes the per-pubkey gas limit at the option level, where both
+// pre-gloas registrations and post-gloas preferences read it first.
 func (ps *Settings) SetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, gasLimit validator.Uint64) error {
 	if ps == nil {
 		return errors.New("No proposer settings were found to update")
 	}
-	if ps.isV2() {
-		ps.UpsertProposeOption(pubkey).GasLimit = gasLimit
-		return nil
-	}
-	builderEnabled := func(o *Option) bool {
-		return o != nil && o.BuilderConfig.IsEnabled()
-	}
-	if ps.ProposeConfig == nil {
-		if !builderEnabled(ps.DefaultConfig) {
-			return errors.New("Gas limit changes only apply when builder is enabled")
-		}
-		ps.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
-		opt := ps.DefaultConfig.Clone()
-		opt.BuilderConfig.GasLimit = gasLimit
-		ps.ProposeConfig[pubkey] = opt
-		return nil
-	}
-	if opt, found := ps.ProposeConfig[pubkey]; found {
-		if !builderEnabled(opt) {
-			return errors.New("Gas limit changes only apply when builder is enabled")
-		}
-		opt.BuilderConfig.GasLimit = gasLimit
-		return nil
-	}
-	if !builderEnabled(ps.DefaultConfig) {
-		return errors.New("Gas limit changes only apply when builder is enabled")
-	}
-	opt := ps.DefaultConfig.Clone()
-	opt.BuilderConfig.GasLimit = gasLimit
-	ps.ProposeConfig[pubkey] = opt
+	ps.UpsertProposeOption(pubkey).GasLimit = gasLimit
 	return nil
 }
 
@@ -729,26 +692,27 @@ func (ps *Settings) ResetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) bool
 		return false
 	}
 	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
-	if ps.isV2() {
-		opt, found := ps.ProposeConfig[pubkey]
-		if !found || opt == nil || opt.GasLimit == 0 {
-			return false
-		}
+	opt, found := ps.ProposeConfig[pubkey]
+	if !found || opt == nil {
+		return false
+	}
+	reset := false
+	if opt.GasLimit != 0 {
 		if ps.DefaultConfig != nil && ps.DefaultConfig.GasLimit != 0 {
 			opt.GasLimit = ps.DefaultConfig.GasLimit
 		} else {
-			opt.GasLimit = chainDefault
+			opt.GasLimit = 0
 		}
-		return true
+		reset = true
 	}
-	opt, found := ps.ProposeConfig[pubkey]
-	if !found || opt == nil || opt.BuilderConfig == nil {
-		return false
+	// Legacy per-key builder gas limits reset to the default's builder value.
+	if opt.BuilderConfig != nil && opt.BuilderConfig.GasLimit != 0 {
+		if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil {
+			opt.BuilderConfig.GasLimit = ps.DefaultConfig.BuilderConfig.GasLimit
+		} else {
+			opt.BuilderConfig.GasLimit = chainDefault
+		}
+		reset = true
 	}
-	if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil {
-		opt.BuilderConfig.GasLimit = ps.DefaultConfig.BuilderConfig.GasLimit
-	} else {
-		opt.BuilderConfig.GasLimit = chainDefault
-	}
-	return true
+	return reset
 }

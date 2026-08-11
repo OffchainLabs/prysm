@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -20,7 +21,12 @@ import (
 
 // setupConfigServer builds a Server with a derived keymanager holding numKeys
 // recovered accounts, and returns the server plus the known validating pubkeys.
+// The builders endpoints require a gloas-scheduled network, so one is configured.
 func setupConfigServer(t *testing.T, numKeys int) (*Server, [][48]byte) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 100
+	params.OverrideBeaconConfig(cfg)
 	ctx := t.Context()
 	srv := setupServerWithWallet(t)
 	km, err := srv.validatorService.Keymanager()
@@ -262,6 +268,29 @@ func TestServer_GetBuilders(t *testing.T) {
 		require.Equal(t, 1, len(cfg.Builders))
 		require.Equal(t, "https://default.example", cfg.Builders[0].Url)
 	})
+}
+
+func TestServer_Builders_RequireGloasScheduled(t *testing.T) {
+	// The default test config has no gloas fork epoch: all three endpoints refuse.
+	srv := &Server{}
+	pk := "0x" + strings.Repeat("ab", 48)
+	for name, w := range map[string]*httptest.ResponseRecorder{
+		"get":    getBuildersRecorder(srv, pk),
+		"post":   postBuilders(t, srv, pk, `{"builders":[]}`),
+		"delete": deleteBuilders(t, srv, pk),
+	} {
+		require.Equal(t, http.StatusNotImplemented, w.Code, "endpoint: %s", name)
+		require.Equal(t, true, strings.Contains(w.Body.String(), "gloas fork scheduled"), "endpoint: %s", name)
+	}
+}
+
+func getBuildersRecorder(s *Server, pubkey string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, "/eth/v1/validator/"+pubkey+"/builders", nil)
+	req.SetPathValue("pubkey", pubkey)
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+	s.GetBuilders(w, req)
+	return w
 }
 
 func TestServer_DeleteBuilders(t *testing.T) {

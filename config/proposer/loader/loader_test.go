@@ -406,6 +406,41 @@ func TestProposerSettingsLoader(t *testing.T) {
 			wantErr: "",
 		},
 		{
+			name: "unversioned file with v2 builder fields is inferred as v2",
+			args: args{
+				proposerSettingsFlagValues: &proposerSettingsFlag{
+					dir: "./testdata/good-v2-proposer-config-unversioned.json",
+				},
+			},
+			want: func() *proposer.Settings {
+				key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+				require.NoError(t, err)
+				u64 := func(v uint64) *validator.Uint64 { u := validator.Uint64(v); return &u }
+				return &proposer.Settings{
+					Version: proposer.SchemaV2,
+					ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+						bytesutil.ToBytes48(key1): {
+							FeeRecipientConfig: &proposer.FeeRecipientConfig{
+								FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
+							},
+							BuilderConfig: &proposer.BuilderConfig{
+								MinBid: u64(500000000),
+								Builders: []*proposer.BuilderEntry{
+									{URL: "https://builder-a.example"},
+								},
+							},
+						},
+					},
+					DefaultConfig: &proposer.Option{
+						FeeRecipientConfig: &proposer.FeeRecipientConfig{
+							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
+						},
+					},
+				}
+			},
+			wantErr: "",
+		},
+		{
 			name: "v2 file with builders list loads at v2 and dedups duplicate builder urls",
 			args: args{
 				proposerSettingsFlagValues: &proposerSettingsFlag{
@@ -1219,7 +1254,7 @@ func Test_mergeProposerSettings_VersionPrecedence(t *testing.T) {
 		)
 		require.Equal(t, uint32(proposer.SchemaV2), merged.Version)
 	})
-	t.Run("v1 content merged into a v2 db is promoted, version never regresses", func(t *testing.T) {
+	t.Run("v1 content merged into a v2 db coexists; version never regresses", func(t *testing.T) {
 		merged := mergeProposerSettings(
 			&validatorpb.ProposerSettingsPayload{
 				DefaultConfig: &validatorpb.ProposerOptionPayload{
@@ -1230,9 +1265,10 @@ func Test_mergeProposerSettings_VersionPrecedence(t *testing.T) {
 			&flagOptions{},
 		)
 		require.Equal(t, uint32(proposer.SchemaV2), merged.Version)
-		// v1 builder content, including its gas limit, does not carry into v2.
-		require.IsNil(t, merged.DefaultConfig.Builder)
-		require.Equal(t, validator.Uint64(0), merged.DefaultConfig.GasLimit)
+		// Semantics are fork-keyed: legacy content stays for pre-gloas reads and
+		// is stripped by the post-fork cleanup, not by the merge.
+		require.NotNil(t, merged.DefaultConfig.Builder)
+		require.Equal(t, true, merged.DefaultConfig.Builder.Enabled)
 	})
 	t.Run("file per-key section replaces the DB's entirely", func(t *testing.T) {
 		dbPayload := &validatorpb.ProposerSettingsPayload{
@@ -1300,16 +1336,16 @@ func TestSettingsLoader_V1FileAfterMigratedDB(t *testing.T) {
 	require.NotNil(t, got)
 
 	require.Equal(t, proposer.SchemaV2, got.Version)
-	// The v1 file's builder content, including gas limits, is dropped at merge time.
-	require.IsNil(t, got.DefaultConfig.BuilderConfig)
-	require.Equal(t, validator.Uint64(0), got.DefaultConfig.GasLimit)
+	// The v1 file's builder content survives the merge for pre-gloas reads;
+	// the post-fork cleanup is what strips it.
+	require.NotNil(t, got.DefaultConfig.BuilderConfig)
 	assert.LogsDoNotContain(t, hook, "deprecated v1 schema")
 
 	require.Equal(t, false, got.UpgradeToV2())
 	key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
 	require.NoError(t, err)
-	// The key follows the chain default rather than its stale v1 builder gas limit.
-	require.Equal(t, validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit), got.GasLimit(bytesutil.ToBytes48(key1)))
+	// Pre-gloas reads still resolve the v1 builder gas limit as a fallback.
+	require.Equal(t, validator.Uint64(60000000), got.GasLimit(bytesutil.ToBytes48(key1)))
 }
 
 func Test_mergeProposerSettings_CreatesDefaultFromGasLimitFlag(t *testing.T) {
@@ -1358,7 +1394,7 @@ func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
 		require.NotNil(t, merged.DefaultConfig.Builder)
 		require.Equal(t, validator.Uint64(40000000), merged.DefaultConfig.Builder.GasLimit)
 	})
-	t.Run("v2 --enable-builder has no effect and warns", func(t *testing.T) {
+	t.Run("v2 --enable-builder still forces the legacy toggle and warns", func(t *testing.T) {
 		hook := logtest.NewGlobal()
 		opts := &flagOptions{builderConfig: &proposer.BuilderConfig{Enabled: true}}
 		db := &validatorpb.ProposerSettingsPayload{
@@ -1366,10 +1402,11 @@ func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
 			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0x"},
 		}
 		merged := mergeProposerSettings(nil, db, opts)
-		require.IsNil(t, merged.DefaultConfig.Builder)
-		assert.LogsContain(t, hook, "has no effect with v2 proposer settings")
+		require.NotNil(t, merged.DefaultConfig.Builder)
+		require.Equal(t, true, merged.DefaultConfig.Builder.Enabled)
+		assert.LogsContain(t, hook, "no effect after the gloas fork")
 	})
-	t.Run("v1 builder content merged into v2 is dropped including its gas limit", func(t *testing.T) {
+	t.Run("v1 builder content merged into v2 coexists until the post-fork cleanup", func(t *testing.T) {
 		file := &validatorpb.ProposerSettingsPayload{
 			DefaultConfig: &validatorpb.ProposerOptionPayload{
 				FeeRecipient: "0x",
@@ -1378,8 +1415,8 @@ func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
 		}
 		db := &validatorpb.ProposerSettingsPayload{Version: proposer.SchemaV2}
 		merged := mergeProposerSettings(file, db, &flagOptions{})
-		require.IsNil(t, merged.DefaultConfig.Builder)
-		require.Equal(t, validator.Uint64(0), merged.DefaultConfig.GasLimit)
+		require.NotNil(t, merged.DefaultConfig.Builder)
+		require.Equal(t, validator.Uint64(30000000), merged.DefaultConfig.Builder.GasLimit)
 	})
 }
 

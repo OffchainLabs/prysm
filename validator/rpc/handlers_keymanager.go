@@ -630,7 +630,11 @@ func (s *Server) SetFeeRecipientByPubkey(w http.ResponseWriter, r *http.Request)
 	defer s.proposerSettingsLock.Unlock()
 	settings := s.validatorService.ProposerSettings()
 	if settings == nil {
-		settings = &proposer.Settings{}
+		// API-created settings carry no v1 content: v2 once gloas is scheduled.
+		settings = &proposer.Settings{Version: proposer.FreshSettingsVersion()}
+	} else {
+		// Clone-then-swap: lock-free readers must never see in-place mutation.
+		settings = settings.Clone()
 	}
 	// A newly created option leaves BuilderConfig nil so the key inherits default_config.
 	settings.UpsertProposeOption(bytesutil.ToBytes48(pubkey)).FeeRecipientConfig = &proposer.FeeRecipientConfig{FeeRecipient: feeRecipient}
@@ -660,6 +664,7 @@ func (s *Server) DeleteFeeRecipientByPubkey(w http.ResponseWriter, r *http.Reque
 	defer s.proposerSettingsLock.Unlock()
 	settings := s.validatorService.ProposerSettings()
 	if settings != nil && settings.ProposeConfig != nil {
+		settings = settings.Clone()
 		proposerOption, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
 		if found {
 			proposerOption.FeeRecipientConfig = nil
@@ -731,7 +736,12 @@ func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 
 	s.proposerSettingsLock.Lock()
 	defer s.proposerSettingsLock.Unlock()
-	settings := s.validatorService.ProposerSettings()
+	// Clone-then-swap: lock-free readers must never see in-place mutation.
+	settings := s.validatorService.ProposerSettings().Clone()
+	if settings == nil {
+		// API-created settings carry no v1 content: v2 once gloas is scheduled.
+		settings = &proposer.Settings{Version: proposer.FreshSettingsVersion()}
+	}
 	if err := settings.SetGasLimit(bytesutil.ToBytes48(pubkey), validator.Uint64(gasLimit)); err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -760,7 +770,8 @@ func (s *Server) DeleteGasLimit(w http.ResponseWriter, r *http.Request) {
 
 	s.proposerSettingsLock.Lock()
 	defer s.proposerSettingsLock.Unlock()
-	settings := s.validatorService.ProposerSettings()
+	// Clone-then-swap: lock-free readers must never see in-place mutation.
+	settings := s.validatorService.ProposerSettings().Clone()
 	if !settings.ResetGasLimit(bytesutil.ToBytes48(pubkey)) {
 		httputil.HandleError(w, fmt.Sprintf("No gas limit found for pubkey %q", rawPubkey), http.StatusNotFound)
 		return

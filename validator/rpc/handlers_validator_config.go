@@ -6,17 +6,31 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 )
 
+// requireGloasScheduled rejects builders configuration on networks that never
+// activate it; the endpoints are meaningless without a gloas fork epoch.
+func requireGloasScheduled(w http.ResponseWriter) bool {
+	if params.GloasEnabled() {
+		return true
+	}
+	httputil.HandleError(w, "Builders configuration requires a network with the gloas fork scheduled", http.StatusNotImplemented)
+	return false
+}
+
 // GetBuilders implements GET /eth/v1/validator/{pubkey}/builders: the key's config resolved against default_config, safe to re-submit.
 func (s *Server) GetBuilders(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.GetBuilders")
 	defer span.End()
 
+	if !requireGloasScheduled(w) {
+		return
+	}
 	if s.validatorService == nil {
 		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
@@ -45,6 +59,9 @@ func (s *Server) SetBuilders(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.SetBuilders")
 	defer span.End()
 
+	if !requireGloasScheduled(w) {
+		return
+	}
 	if s.validatorService == nil {
 		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
@@ -70,11 +87,12 @@ func (s *Server) SetBuilders(w http.ResponseWriter, r *http.Request) {
 
 	settings := s.validatorService.ProposerSettings()
 	if settings == nil {
-		settings = &proposer.Settings{Version: proposer.SchemaV2}
+		settings = &proposer.Settings{Version: proposer.FreshSettingsVersion()}
 	} else {
 		settings = settings.Clone()
-		// Builder lists are v2 content: writing them migrates v1 settings in place.
-		settings.UpgradeToV2()
+		// Stamp the storage format only: semantics are fork-keyed, so writing
+		// builders never drops v1 content or changes other keys' behavior.
+		settings.Version = proposer.SchemaV2
 	}
 
 	if settings.ProposeConfig == nil {
@@ -101,6 +119,9 @@ func (s *Server) DeleteBuilders(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.DeleteBuilders")
 	defer span.End()
 
+	if !requireGloasScheduled(w) {
+		return
+	}
 	if s.validatorService == nil {
 		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
 		return
