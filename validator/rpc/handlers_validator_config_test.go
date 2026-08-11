@@ -145,8 +145,8 @@ func TestServer_SetBuilders(t *testing.T) {
 		// Builder lists are v2 content: POST migrates the schema in place.
 		require.Equal(t, proposer.SchemaV2, got.Version)
 		opt := got.ProposeConfig[keys[0]]
-		// The builder gas limit is hoisted to the option by the upgrade.
-		require.Equal(t, validator.Uint64(999), opt.GasLimit)
+		// The v1 builder gas limit is dropped with the rest of the v1 builder content.
+		require.Equal(t, validator.Uint64(0), opt.GasLimit)
 		require.Equal(t, 1, len(opt.BuilderConfig.Builders))
 	})
 

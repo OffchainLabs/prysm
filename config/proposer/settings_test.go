@@ -515,7 +515,7 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		require.Equal(t, false, ps.UpgradeToV2())
 	})
 
-	t.Run("v1 default lifts BuilderConfig.GasLimit to top-level and drops the builder config", func(t *testing.T) {
+	t.Run("v1 builder gas limit is not promoted; the builder config is dropped", func(t *testing.T) {
 		ps := &Settings{
 			DefaultConfig: &Option{
 				BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(42_000_000)},
@@ -523,8 +523,8 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		}
 		require.Equal(t, true, ps.UpgradeToV2())
 		require.Equal(t, SchemaV2, ps.Version)
-		require.Equal(t, validator.Uint64(42_000_000), ps.DefaultConfig.GasLimit)
-		// v1 builder opinions are about mev-boost and do not carry into v2.
+		// v1 gas limits are not carried over: the key follows the chain default.
+		require.Equal(t, validator.Uint64(0), ps.DefaultConfig.GasLimit)
 		require.IsNil(t, ps.DefaultConfig.BuilderConfig)
 	})
 
@@ -539,7 +539,7 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		require.Equal(t, validator.Uint64(70_000_000), ps.DefaultConfig.GasLimit)
 	})
 
-	t.Run("per-validator builder gas limits promoted and builder configs dropped", func(t *testing.T) {
+	t.Run("per-validator builder gas limits are dropped, explicit top-level ones kept", func(t *testing.T) {
 		pubkey2, err := hexutil.Decode("0xbedefeaa94e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2cdddddddddddddddddddddddd")
 		require.NoError(t, err)
 		pk2 := bytesutil.ToBytes48(pubkey2)
@@ -552,9 +552,9 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		require.Equal(t, true, ps.UpgradeToV2())
 		require.Equal(t, SchemaV2, ps.Version)
 		require.Equal(t, true, ps.DefaultConfig == nil)
-		require.Equal(t, validator.Uint64(35_000_000), ps.ProposeConfig[pk].GasLimit)
+		require.Equal(t, validator.Uint64(0), ps.ProposeConfig[pk].GasLimit)
 		require.IsNil(t, ps.ProposeConfig[pk].BuilderConfig)
-		// An explicit top-level gas limit wins over the builder value.
+		// An explicitly set top-level gas limit is not builder content and survives.
 		require.Equal(t, validator.Uint64(50_000_000), ps.ProposeConfig[pk2].GasLimit)
 		require.IsNil(t, ps.ProposeConfig[pk2].BuilderConfig)
 	})
@@ -714,12 +714,14 @@ func TestRegistrationFor(t *testing.T) {
 			Version: SchemaV2,
 			DefaultConfig: &Option{
 				FeeRecipientConfig: &FeeRecipientConfig{FeeRecipient: recipient},
-				BuilderConfig:      &BuilderConfig{GasLimit: 123, Builders: []*BuilderEntry{{URL: "https://b.example"}}},
+				GasLimit:           123,
+				BuilderConfig:      &BuilderConfig{GasLimit: 456, Builders: []*BuilderEntry{{URL: "https://b.example"}}},
 			},
 		}
 		fr, gl, enabled := ps.RegistrationFor(key)
 		require.Equal(t, true, enabled)
 		require.Equal(t, recipient, fr)
+		// Only the explicitly set option-level gas limit is read; never the builder's.
 		require.Equal(t, validator.Uint64(123), gl)
 	})
 

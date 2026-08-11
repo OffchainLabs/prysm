@@ -253,8 +253,6 @@ func (psl *SettingsLoader) processProposerSettings(loadedSettings, dbSettings *v
 // through Builder; v2 lives on Option directly.
 func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, options *flagOptions) *validatorpb.ProposerSettingsPayload {
 	merged := &validatorpb.ProposerSettingsPayload{}
-	// The schema version never regresses: the highest version wins and the
-	// lower-version side's content is promoted before merging.
 	if db != nil {
 		merged.Version = db.Version
 	}
@@ -302,16 +300,13 @@ func markExplicitEmptyBuilders(p *validatorpb.ProposerSettingsPayload) {
 	}
 }
 
-// promotePayloadToV2 mirrors Settings.UpgradeToV2: gas limits are promoted to
-// the option level and v1 builder content, which does not apply to v2, is dropped.
+// promotePayloadToV2 mirrors Settings.UpgradeToV2: v1 builder content, including
+// its gas limits, does not apply to v2 and is dropped.
 func promotePayloadToV2(p *validatorpb.ProposerSettingsPayload) {
 	dropped := false
 	promote := func(opt *validatorpb.ProposerOptionPayload) {
 		if opt == nil || opt.Builder == nil {
 			return
-		}
-		if opt.GasLimit == 0 {
-			opt.GasLimit = opt.Builder.GasLimit
 		}
 		opt.Builder = nil
 		dropped = true
@@ -321,7 +316,7 @@ func promotePayloadToV2(p *validatorpb.ProposerSettingsPayload) {
 		promote(opt)
 	}
 	if dropped {
-		log.Warn("v1 builder settings do not apply to the v2 schema and were replaced with defaults; provide v2 proposer settings to configure builders")
+		log.Warn("v1 builder settings, including gas limits, do not apply to the v2 schema and were replaced with defaults; provide v2 proposer settings to configure builders")
 	}
 }
 

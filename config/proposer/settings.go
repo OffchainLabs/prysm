@@ -70,7 +70,7 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 // Persisted configs may predate url-required and (url, auth_data) uniqueness;
 // url-less entries are dropped and the first entry wins, matching POST validation.
 func (ps *Settings) dedupBuilders() {
-	fix := func(opt *Option) {
+	dedup := func(opt *Option) {
 		if opt == nil || opt.BuilderConfig == nil || len(opt.BuilderConfig.Builders) == 0 {
 			return
 		}
@@ -88,9 +88,9 @@ func (ps *Settings) dedupBuilders() {
 			opt.BuilderConfig.Builders = kept
 		}
 	}
-	fix(ps.DefaultConfig)
+	dedup(ps.DefaultConfig)
 	for _, opt := range ps.ProposeConfig {
-		fix(opt)
+		dedup(opt)
 	}
 }
 
@@ -107,13 +107,12 @@ func verifyOption(key string, option *validatorpb.ProposerOptionPayload) error {
 	return nil
 }
 
-// BuilderConfig is the struct representation of the JSON config file set in the validator through the CLI.
-// GasLimit is a number set to help the network decide on the maximum gas in each block.
+// BuilderConfig is the in-memory builder settings.
 type BuilderConfig struct {
-	Enabled             bool              `json:"enabled,omitempty" yaml:"enabled,omitempty"`
-	GasLimit            validator.Uint64  `json:"gas_limit,omitempty" yaml:"gas_limit,omitempty"`
+	Enabled             bool              `json:"enabled" yaml:"enabled"`                                                 // legacy v1 (mev-boost); ignored by v2, dropped at the gloas cutover
+	GasLimit            validator.Uint64  `json:"gas_limit,omitempty" yaml:"gas_limit,omitempty"`                         // legacy v1; v2 gas limits live on the option
 	MaxExecutionPayment *validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"` // explicit 0 = trustless-only; unset inherits
-	Builders            []*BuilderEntry   `json:"builders,omitempty" yaml:"builders,omitempty"`
+	Builders            []*BuilderEntry   `json:"builders" yaml:"builders"`                                               // nil = inherit, [] = use none; no omitempty so the marker survives marshal
 	MinBid              *validator.Uint64 `json:"min_bid,omitempty" yaml:"min_bid,omitempty"`
 	BuilderBoostFactor  *validator.Uint64 `json:"builder_boost_factor,omitempty" yaml:"builder_boost_factor,omitempty"`
 }
@@ -175,15 +174,13 @@ func (ps *Settings) RegistrationFor(pubkey [fieldparams.BLSPubkeyLength]byte) (c
 		// Per-key builder fields inherit from the default, but registration still
 		// requires a fee recipient configured at some level.
 		bc := ps.EffectiveBuilderConfig(pubkey)
-		// v2 gas limits live on the option (where UpgradeToV2 and the gas-limit
-		// API write them); the builder-level value is a legacy fallback.
+		// v2 reads only explicitly set option-level gas limits (the gas-limit
+		// API writes there); legacy builder-level values are never consulted.
 		switch {
 		case ps.ProposeConfig[pubkey] != nil && ps.ProposeConfig[pubkey].GasLimit != 0:
 			gasLimit = ps.ProposeConfig[pubkey].GasLimit
 		case ps.DefaultConfig != nil && ps.DefaultConfig.GasLimit != 0:
 			gasLimit = ps.DefaultConfig.GasLimit
-		case bc != nil && bc.GasLimit != 0:
-			gasLimit = bc.GasLimit
 		}
 		// v2 has no enabled flag: a key participates in builder registration
 		// exactly when its resolved builders list names at least one builder.
@@ -595,7 +592,7 @@ func (ps *Settings) WarnDeprecatedSchema() {
 	if !ps.HasBuilderContent() {
 		return
 	}
-	log.Warn("Proposer settings use the deprecated v1 schema; v1 builder settings do not apply to gloas and are replaced with defaults at the fork (fee recipients, gas limits and graffiti carry over). Please migrate your settings source to v2.")
+	log.Warn("Proposer settings use the deprecated v1 schema; v1 builder settings, including gas limits, are replaced with defaults at the gloas fork (fee recipients and graffiti carry over). Please migrate your settings source to v2.")
 }
 
 // HasBuilderContent reports whether any level carries a builder config, i.e.
@@ -612,30 +609,27 @@ func (ps *Settings) HasBuilderContent() bool {
 	return false
 }
 
-// UpgradeToV2 is the v1 cutover: gas limits are promoted to the option level and
-// v1 builder configs, which do not apply to gloas, are dropped. Returns true if changed.
+// UpgradeToV2 is the v1 cutover: v1 builder configs, including their gas limits,
+// do not apply to gloas and are dropped. Returns true if anything changed.
 func (ps *Settings) UpgradeToV2() bool {
 	if ps == nil || ps.isV2() {
 		return false
 	}
 	dropped := false
-	migrate := func(opt *Option) {
+	drop := func(opt *Option) {
 		if opt == nil || opt.BuilderConfig == nil {
 			return
-		}
-		if opt.GasLimit == 0 {
-			opt.GasLimit = opt.BuilderConfig.GasLimit
 		}
 		opt.BuilderConfig = nil
 		dropped = true
 	}
-	migrate(ps.DefaultConfig)
+	drop(ps.DefaultConfig)
 	for _, opt := range ps.ProposeConfig {
-		migrate(opt)
+		drop(opt)
 	}
 	ps.Version = SchemaV2
 	if dropped {
-		log.Warn("v1 builder settings do not apply to gloas and were replaced with defaults; provide v2 proposer settings to configure builders")
+		log.Warn("v1 builder settings, including gas limits, do not apply to gloas and were replaced with defaults; provide v2 proposer settings to configure builders")
 	}
 	return true
 }

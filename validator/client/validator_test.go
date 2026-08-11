@@ -2946,8 +2946,8 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 		settings       *proposer.Settings
 		needsDB        bool
 		wantGasLimit   uint64
-		// >0 asserts migration ran and persisted; 0 asserts shape preserved.
-		upgradedGasLimit validatorType.Uint64
+		// asserts the cutover ran and persisted v2 with builder content dropped.
+		wantMigrated bool
 	}{
 		{
 			name:           "v2 top-level GasLimit wins over legacy BuilderConfig.GasLimit",
@@ -2963,7 +2963,7 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 			wantGasLimit: 55555555,
 		},
 		{
-			name:           "gloas active: v1 settings upgraded; BuilderConfig.GasLimit promoted to Option.GasLimit",
+			name:           "gloas active: v1 settings cut over; builder gas limit dropped, chain default used",
 			gloasForkEpoch: 0,
 			settings: &proposer.Settings{
 				DefaultConfig: &proposer.Option{
@@ -2971,9 +2971,9 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 					BuilderConfig:      &proposer.BuilderConfig{Enabled: true, GasLimit: 42000000},
 				},
 			},
-			needsDB:          true,
-			wantGasLimit:     42000000,
-			upgradedGasLimit: validatorType.Uint64(42000000),
+			needsDB:      true,
+			wantGasLimit: chainDefault,
+			wantMigrated: true,
 		},
 		{
 			// Migration must not fire while pre-gloas registration path still
@@ -3058,7 +3058,7 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 			require.Equal(t, tt.wantGasLimit, prefs[0].Message.TargetGasLimit)
 
 			ps := v.ProposerSettings()
-			if tt.upgradedGasLimit == 0 {
+			if !tt.wantMigrated {
 				require.Equal(t, tt.settings.Version, ps.Version)
 				if tt.settings.DefaultConfig != nil && tt.settings.DefaultConfig.BuilderConfig != nil {
 					require.NotNil(t, ps.DefaultConfig.BuilderConfig)
@@ -3066,14 +3066,14 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 				return
 			}
 			require.Equal(t, proposer.SchemaV2, ps.Version)
-			require.Equal(t, tt.upgradedGasLimit, ps.DefaultConfig.GasLimit)
-			// The cutover drops v1 builder content after promoting its gas limit.
+			// The cutover drops v1 builder content including its gas limit.
+			require.Equal(t, validatorType.Uint64(0), ps.DefaultConfig.GasLimit)
 			require.IsNil(t, ps.DefaultConfig.BuilderConfig)
 
 			dbps, err := v.db.ProposerSettings(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, proposer.SchemaV2, dbps.Version)
-			require.Equal(t, tt.upgradedGasLimit, dbps.DefaultConfig.GasLimit)
+			require.Equal(t, validatorType.Uint64(0), dbps.DefaultConfig.GasLimit)
 		})
 	}
 }

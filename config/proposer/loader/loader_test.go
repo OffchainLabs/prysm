@@ -1230,9 +1230,9 @@ func Test_mergeProposerSettings_VersionPrecedence(t *testing.T) {
 			&flagOptions{},
 		)
 		require.Equal(t, uint32(proposer.SchemaV2), merged.Version)
-		// v1 builder content does not carry into v2; the gas limit is promoted first.
+		// v1 builder content, including its gas limit, does not carry into v2.
 		require.IsNil(t, merged.DefaultConfig.Builder)
-		require.Equal(t, validator.Uint64(30000000), merged.DefaultConfig.GasLimit)
+		require.Equal(t, validator.Uint64(0), merged.DefaultConfig.GasLimit)
 	})
 	t.Run("file per-key section replaces the DB's entirely", func(t *testing.T) {
 		dbPayload := &validatorpb.ProposerSettingsPayload{
@@ -1300,16 +1300,16 @@ func TestSettingsLoader_V1FileAfterMigratedDB(t *testing.T) {
 	require.NotNil(t, got)
 
 	require.Equal(t, proposer.SchemaV2, got.Version)
-	// The v1 file's builder content is dropped; its gas limit is promoted first.
+	// The v1 file's builder content, including gas limits, is dropped at merge time.
 	require.IsNil(t, got.DefaultConfig.BuilderConfig)
-	require.Equal(t, validator.Uint64(40000000), got.DefaultConfig.GasLimit)
+	require.Equal(t, validator.Uint64(0), got.DefaultConfig.GasLimit)
 	assert.LogsDoNotContain(t, hook, "deprecated v1 schema")
 
-	// Already v2: the file's builder gas limits were promoted at merge time.
 	require.Equal(t, false, got.UpgradeToV2())
 	key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
 	require.NoError(t, err)
-	require.Equal(t, validator.Uint64(60000000), got.GasLimit(bytesutil.ToBytes48(key1)))
+	// The key follows the chain default rather than its stale v1 builder gas limit.
+	require.Equal(t, validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit), got.GasLimit(bytesutil.ToBytes48(key1)))
 }
 
 func Test_mergeProposerSettings_CreatesDefaultFromGasLimitFlag(t *testing.T) {
@@ -1369,7 +1369,7 @@ func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
 		require.IsNil(t, merged.DefaultConfig.Builder)
 		assert.LogsContain(t, hook, "has no effect with v2 proposer settings")
 	})
-	t.Run("v1 builder content merged into v2 is dropped with gas limit promoted", func(t *testing.T) {
+	t.Run("v1 builder content merged into v2 is dropped including its gas limit", func(t *testing.T) {
 		file := &validatorpb.ProposerSettingsPayload{
 			DefaultConfig: &validatorpb.ProposerOptionPayload{
 				FeeRecipient: "0x",
@@ -1379,7 +1379,7 @@ func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
 		db := &validatorpb.ProposerSettingsPayload{Version: proposer.SchemaV2}
 		merged := mergeProposerSettings(file, db, &flagOptions{})
 		require.IsNil(t, merged.DefaultConfig.Builder)
-		require.Equal(t, validator.Uint64(30000000), merged.DefaultConfig.GasLimit)
+		require.Equal(t, validator.Uint64(0), merged.DefaultConfig.GasLimit)
 	})
 }
 
