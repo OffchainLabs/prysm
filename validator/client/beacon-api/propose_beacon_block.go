@@ -1,14 +1,12 @@
 package beacon_api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"net/http"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
-	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
@@ -16,9 +14,9 @@ import (
 type blockProcessingResult struct {
 	consensusVersion string
 	beaconBlockRoot  [32]byte
-	marshalledSSZ    []byte
 	blinded          bool
-	// Function to marshal JSON on demand
+	// Functions to marshal on demand
+	marshalSSZ  func() ([]byte, error)
 	marshalJSON func() ([]byte, error)
 }
 
@@ -38,17 +36,18 @@ func buildBlockResult(
 		return nil, errors.Wrapf(err, "failed to compute block root for %s beacon block", versionName)
 	}
 
-	marshaledSSZ, err := sszObj.MarshalSSZ()
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to serialize %s beacon block", versionName)
-	}
-
 	return &blockProcessingResult{
 		consensusVersion: versionName,
 		blinded:          blinded,
 		beaconBlockRoot:  beaconBlockRoot,
-		marshalledSSZ:    marshaledSSZ,
-		marshalJSON:      jsonFn,
+		marshalSSZ: func() ([]byte, error) {
+			b, err := sszObj.MarshalSSZ()
+			if err != nil {
+				return nil, fmt.Errorf("failed to serialize %s beacon block: %w", versionName, err)
+			}
+			return b, nil
+		},
+		marshalJSON: jsonFn,
 	}, nil
 }
 
@@ -168,48 +167,8 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 
 	headers := map[string]string{"Eth-Consensus-Version": res.consensusVersion}
 
-	// Try PostSSZ first with SSZ data
-	if res.marshalledSSZ != nil {
-		if err = c.handler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(res.marshalledSSZ)); err != nil {
-			if !errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}) || res.marshalJSON == nil {
-				return nil, errors.Wrap(err, "failed to submit block ssz")
-			}
-
-			log.WithError(err).Warning("Failed to submit block ssz, falling back to JSON")
-			jsonData, jsonErr := res.marshalJSON()
-			if jsonErr != nil {
-				return nil, errors.Wrap(jsonErr, "failed to marshal JSON")
-			}
-
-			// Reset headers for JSON
-			err = c.handler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonData), nil)
-
-			// If JSON also fails, return that error
-			if err != nil {
-				return nil, errors.Wrap(err, "failed to submit block via JSON fallback")
-			}
-		}
-	} else if res.marshalJSON == nil {
-		return nil, errors.New("no marshalling functions available")
-	} else {
-		// No SSZ data available, marshal and use JSON
-		jsonData, jsonErr := res.marshalJSON()
-		if jsonErr != nil {
-			return nil, errors.Wrap(jsonErr, "failed to marshal JSON")
-		}
-		// Reset headers for JSON
-		err = c.handler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonData), nil)
-		errJson := &httputil.DefaultJsonError{}
-		if err != nil {
-			if !errors.As(err, &errJson) {
-				return nil, err
-			}
-			// Error 202 means that the block was successfully broadcast, but validation failed
-			if errJson.Code == http.StatusAccepted {
-				return nil, errors.New("block was successfully broadcast but failed validation")
-			}
-			return nil, errJson
-		}
+	if err := c.handler.PostSSZWithFallback(ctx, endpoint, headers, res.marshalSSZ, res.marshalJSON); err != nil {
+		return nil, fmt.Errorf("failed to submit block: %w", err)
 	}
 
 	return &ethpb.ProposeResponse{BlockRoot: res.beaconBlockRoot[:]}, nil
