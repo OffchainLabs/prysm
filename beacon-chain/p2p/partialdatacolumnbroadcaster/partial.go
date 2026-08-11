@@ -1138,13 +1138,13 @@ func (p *PartialColumnBroadcaster) Unsubscribe(ctx context.Context, topic string
 	}
 	return req.waitForResponse()
 }
+
 func (p *PartialColumnBroadcaster) unsubscribe(topic string) error {
-	t, ok := p.topics[topic]
-	if !ok {
+	if _, ok := p.topics[topic]; !ok {
 		return errors.New("topic not found")
 	}
 	delete(p.topics, topic)
 	p.subscribedTopics.Delete(topic)
 	delete(p.partialMsgStore, topic)
-	return t.Close()
+	return nil
 }
