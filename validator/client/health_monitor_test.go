@@ -17,19 +17,14 @@ import (
 
 // TestHealthMonitor_IsHealthy_Concurrency tests thread-safety of IsHealthy.
 func TestHealthMonitor_IsHealthy_Concurrency(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockValidator := validatormock.NewMockValidator(ctrl)
-	// inside the test
+	v, vc := healthTestValidator(t)
 	parentCtx, parentCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	t.Cleanup(parentCancel)
 
 	// Expectation for newHealthMonitor's EnsureReady call
-	mockValidator.EXPECT().EnsureReady(gomock.Any()).Return(true).Times(1)
-	mockValidator.EXPECT().Host().Return("http://localhost:3500").AnyTimes()
+	vc.EXPECT().EnsureReady(gomock.Any()).Return(true).Times(1)
 
-	monitor := newHealthMonitor(parentCtx, parentCancel, 3, mockValidator)
+	monitor := newHealthMonitor(parentCtx, parentCancel, 3, v)
 	require.NotNil(t, monitor)
 	monitor.Start()
 	time.Sleep(100 * time.Millisecond)
@@ -59,11 +54,6 @@ func TestHealthMonitor_IsHealthy_Concurrency(t *testing.T) {
 
 // TestHealthMonitor_PerformHealthCheck tests the core logic of a single health check.
 func TestHealthMonitor_PerformHealthCheck(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockValidator := validatormock.NewMockValidator(ctrl)
-
 	tests := []struct {
 		expectStatusUpdate bool // true if healthyCh should receive a new, different status
 		expectCancelCalled bool
@@ -152,10 +142,11 @@ func TestHealthMonitor_PerformHealthCheck(t *testing.T) {
 				monitorCancelFunc() // Propagate to monitorCtx if needed for other parts
 			}
 
+			v, vc := healthTestValidator(t)
 			monitor := &healthMonitor{
 				ctx:             monitorCtx,         // Context for the monitor's operations
 				cancel:          testCancelCallback, // This is m.cancel()
-				v:               mockValidator,
+				v:               v,
 				maxFails:        tt.maxFails,
 				healthyCh:       make(chan bool, 1),
 				fails:           tt.initialFails,
@@ -164,8 +155,7 @@ func TestHealthMonitor_PerformHealthCheck(t *testing.T) {
 			}
 			monitor.healthEventFeed.Subscribe(monitor.healthyCh)
 
-			mockValidator.EXPECT().EnsureReady(gomock.Any()).Return(tt.ensureReadyReturns)
-			mockValidator.EXPECT().Host().Return("http://localhost:3500").AnyTimes()
+			vc.EXPECT().EnsureReady(gomock.Any()).Return(tt.ensureReadyReturns)
 
 			monitor.performHealthCheck()
 
@@ -201,10 +191,7 @@ func TestHealthMonitor_PerformHealthCheck(t *testing.T) {
 
 // TestHealthMonitor_HealthyChan_ReceivesUpdates tests channel behavior.
 func TestHealthMonitor_HealthyChan_ReceivesUpdates(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockValidator := validatormock.NewMockValidator(ctrl)
+	v, vc := healthTestValidator(t)
 	monitorCtx, monitorCancelFunc := context.WithCancel(context.Background())
 
 	originalSlotDurationMs := params.BeaconConfig().SlotDurationMilliseconds
@@ -214,19 +201,17 @@ func TestHealthMonitor_HealthyChan_ReceivesUpdates(t *testing.T) {
 		monitorCancelFunc() // Ensure monitor context is cleaned up
 	}()
 
-	monitor := newHealthMonitor(monitorCtx, monitorCancelFunc, 3, mockValidator)
+	monitor := newHealthMonitor(monitorCtx, monitorCancelFunc, 3, v)
 	require.NotNil(t, monitor)
 
 	ch := monitor.HealthyChan()
 	require.NotNil(t, ch)
 
-	mockValidator.EXPECT().Host().Return("http://localhost:3500").AnyTimes()
-
-	first := mockValidator.EXPECT().
+	first := vc.EXPECT().
 		EnsureReady(gomock.Any()).
 		Return(true).Times(1)
 
-	mockValidator.EXPECT().
+	vc.EXPECT().
 		EnsureReady(gomock.Any()).
 		Return(false).
 		AnyTimes().
@@ -252,4 +237,10 @@ func TestHealthMonitor_HealthyChan_ReceivesUpdates(t *testing.T) {
 
 	// 4. Stop the monitor
 	monitor.Stop() // This calls monitorCancelFunc
+}
+
+func healthTestValidator(t *testing.T) (*validator, *validatormock.MockValidatorClient) {
+	vc := validatormock.NewMockValidatorClient(gomock.NewController(t))
+	vc.EXPECT().Host().Return("http://localhost:3500").AnyTimes()
+	return &validator{validatorClient: vc}, vc
 }

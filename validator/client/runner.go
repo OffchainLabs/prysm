@@ -26,7 +26,7 @@ var backOffPeriod = 10 * time.Second
 
 // runner encapsulates the main validator routine.
 type runner struct {
-	validator     iface.Validator
+	validator     *validator
 	healthMonitor *healthMonitor
 }
 
@@ -36,7 +36,7 @@ type runner struct {
 // Order of operations:
 // 1 - Initialize validator data
 // 2 - Wait for validator activation
-func newRunner(ctx context.Context, v iface.Validator, monitor *healthMonitor) (*runner, error) {
+func newRunner(ctx context.Context, v *validator, monitor *healthMonitor) (*runner, error) {
 	// Initialize validator and get head slot
 	err := initialize(ctx, v)
 	if err != nil {
@@ -164,7 +164,7 @@ func (r *runner) run(ctx context.Context) {
 	}
 }
 
-func onAccountsChanged(ctx context.Context, v iface.Validator, current [][48]byte) {
+func onAccountsChanged(ctx context.Context, v *validator, current [][48]byte) {
 	ctx, span := prysmTrace.StartSpan(ctx, "validator.accountsChanged")
 	defer span.End()
 
@@ -184,7 +184,7 @@ func onAccountsChanged(ctx context.Context, v iface.Validator, current [][48]byt
 	}
 }
 
-func initialize(ctx context.Context, v iface.Validator) error {
+func initialize(ctx context.Context, v *validator) error {
 	ctx, span := prysmTrace.StartSpan(ctx, "validator.initialize")
 	defer span.End()
 
@@ -244,7 +244,7 @@ func initialize(ctx context.Context, v iface.Validator) error {
 	return nil
 }
 
-func performRoles(slotCtx context.Context, allRoles map[[48]byte][]iface.ValidatorRole, v iface.Validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
+func performRoles(slotCtx context.Context, allRoles map[[48]byte][]iface.ValidatorRole, v *validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
 	for pubKey, roles := range allRoles {
 		for _, role := range roles {
 			wg.Go(func() {
