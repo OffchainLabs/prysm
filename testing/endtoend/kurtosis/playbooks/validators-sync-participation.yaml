@@ -7,6 +7,10 @@ id: validator-sync-participation
 name: "Validator sync committee participation check"
 timeout: 60m
 
+config:
+  # Overridden at schedule time by the Go harness (see RegisterPlaybooks).
+  epochsToRun: 15
+
 tasks:
   - name: check_clients_are_healthy
     id: clients
@@ -39,6 +43,7 @@ tasks:
       envVars:
         CL_URL: "| .tasks.clients.outputs.goodClients[0].clRpcUrl"
         SPECS: "tasks.specs.outputs.specs"
+        MAX_EPOCH: "epochsToRun"
       script: |
         const clUrl = env.CL_URL;
         const spec = env.SPECS;
@@ -61,7 +66,7 @@ tasks:
         }
 
         // Limit the number of epochs to scan.
-        const maxEpoch = 20;
+        const maxEpoch = num(env.MAX_EPOCH, "MAX_EPOCH");
 
         let head = await getJson(clUrl + "/eth/v2/beacon/blocks/head");
         let headSlot = num(head.data.message.slot, "head slot");
@@ -95,6 +100,9 @@ tasks:
           }
 
           console.log(`sync participation ok across ${checked} blocks from epochs ${firstEpoch}-${ep}`);
+
+          // Last epoch scanned: don't wait for another one we will never check.
+          if (ep >= maxEpoch) break;
 
           // Wait for the next epoch to be produced before checking again.
           const nextEpoch = ep + 1;

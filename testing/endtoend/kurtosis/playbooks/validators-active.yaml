@@ -9,6 +9,8 @@ id: validators-active
 name: "Validators are active"
 timeout: 60m
 config:
+  # Overridden at schedule time by the Go harness (see RegisterPlaybooks).
+  epochsToRun: 15
   # Excluded: 0-1 exit, 2-3 withdraw, 4-6 slashed.
   expectedExitValidatorIndices:
     - 0
@@ -40,19 +42,30 @@ tasks:
       outputFormat: "indices"
       maxResults: 100000           # default is 100 — must exceed genesis count
 
-  - name: run_task_matrix
-    title: "Assert every validator stays active_ongoing each epoch"
-    configVars:
-      matrixValues: "| .expectedExitValidatorIndices as $excluded | [.tasks.all_validators.outputs.indices[] | select(. as $idx | ($excluded | index($idx) | not))]"
+  - name: run_task_background
+    title: "Assert every validator stays active_ongoing until the target epoch"
     config:
-      runConcurrent: true
-      matrixVar: "validatorIndex"
-      task:
-        name: check_consensus_validator_status
-        title: "Validator ${validatorIndex} active"
+      exitOnForegroundSuccess: true
+      onBackgroundComplete: failOrIgnore
+      foregroundTask:
+        name: check_consensus_slot_range
+        title: "Run until the target epoch"
         configVars:
-          validatorIndex: "validatorIndex"
+          minEpochNumber: "epochsToRun"
+      backgroundTask:
+        name: run_task_matrix
+        title: "Assert every validator stays active_ongoing each epoch"
+        configVars:
+          matrixValues: "| .expectedExitValidatorIndices as $excluded | [.tasks.all_validators.outputs.indices[] | select(. as $idx | ($excluded | index($idx) | not))]"
         config:
-          validatorStatus: ["active_ongoing"]
-          failOnCheckMiss: true
-          continueOnPass: true
+          runConcurrent: true
+          matrixVar: "validatorIndex"
+          task:
+            name: check_consensus_validator_status
+            title: "Validator ${validatorIndex} active"
+            configVars:
+              validatorIndex: "validatorIndex"
+            config:
+              validatorStatus: ["active_ongoing"]
+              failOnCheckMiss: true
+              continueOnPass: true
