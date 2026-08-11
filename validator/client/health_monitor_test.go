@@ -207,10 +207,10 @@ func TestHealthMonitor_HealthyChan_ReceivesUpdates(t *testing.T) {
 	mockValidator := validatormock.NewMockValidator(ctrl)
 	monitorCtx, monitorCancelFunc := context.WithCancel(context.Background())
 
-	originalSecPerSlot := params.BeaconConfig().SecondsPerSlot
-	params.BeaconConfig().SecondsPerSlot = 1 // 1 sec interval for test
+	originalSlotDurationMs := params.BeaconConfig().SlotDurationMilliseconds
+	params.BeaconConfig().SlotDurationMilliseconds = 1000 // 1 sec interval for test
 	defer func() {
-		params.BeaconConfig().SecondsPerSlot = originalSecPerSlot
+		params.BeaconConfig().SlotDurationMilliseconds = originalSlotDurationMs
 		monitorCancelFunc() // Ensure monitor context is cleaned up
 	}()
 

@@ -11,13 +11,13 @@ import (
 )
 
 func blockWithAttesterSlashing(asSSZ []byte) (interfaces.SignedBeaconBlock, error) {
-	as := &ethpb.AttesterSlashingElectra{}
+	as := &ethpb.AttesterSlashingGloas{}
 	if err := as.UnmarshalSSZ(asSSZ); err != nil {
 		return nil, err
 	}
 	b := &ethpb.SignedBeaconBlockGloas{
 		Block: &ethpb.BeaconBlockGloas{
-			Body: &ethpb.BeaconBlockBodyGloas{AttesterSlashings: []*ethpb.AttesterSlashingElectra{as}},
+			Body: &ethpb.BeaconBlockBodyGloas{AttesterSlashings: []*ethpb.AttesterSlashingGloas{as}},
 		},
 	}
 	return blocks.NewSignedBeaconBlock(b)

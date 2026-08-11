@@ -1182,20 +1182,29 @@ func (b *BeaconBlockBody) ProposerSlashings() []*eth.ProposerSlashing {
 // AttesterSlashings returns the attester slashings in the block.
 func (b *BeaconBlockBody) AttesterSlashings() []eth.AttSlashing {
 	var slashings []eth.AttSlashing
-	if b.version < version.Electra {
-		if b.attesterSlashings == nil {
+
+	if b.version >= version.Gloas {
+		if b.attesterSlashingsGloas == nil {
 			return nil
 		}
-		slashings = make([]eth.AttSlashing, len(b.attesterSlashings))
-		for i, s := range b.attesterSlashings {
+		slashings = make([]eth.AttSlashing, len(b.attesterSlashingsGloas))
+		for i, s := range b.attesterSlashingsGloas {
 			slashings[i] = s
 		}
-	} else {
+	} else if b.version >= version.Electra {
 		if b.attesterSlashingsElectra == nil {
 			return nil
 		}
 		slashings = make([]eth.AttSlashing, len(b.attesterSlashingsElectra))
 		for i, s := range b.attesterSlashingsElectra {
+			slashings[i] = s
+		}
+	} else {
+		if b.attesterSlashings == nil {
+			return nil
+		}
+		slashings = make([]eth.AttSlashing, len(b.attesterSlashings))
+		for i, s := range b.attesterSlashings {
 			slashings[i] = s
 		}
 	}
@@ -1205,20 +1214,28 @@ func (b *BeaconBlockBody) AttesterSlashings() []eth.AttSlashing {
 // Attestations returns the stored attestations in the block.
 func (b *BeaconBlockBody) Attestations() []eth.Att {
 	var atts []eth.Att
-	if b.version < version.Electra {
-		if b.attestations == nil {
+	if b.version >= version.Gloas {
+		if b.attestationsGloas == nil {
 			return nil
 		}
-		atts = make([]eth.Att, len(b.attestations))
-		for i, a := range b.attestations {
+		atts = make([]eth.Att, len(b.attestationsGloas))
+		for i, a := range b.attestationsGloas {
 			atts[i] = a
 		}
-	} else {
+	} else if b.version >= version.Electra {
 		if b.attestationsElectra == nil {
 			return nil
 		}
 		atts = make([]eth.Att, len(b.attestationsElectra))
 		for i, a := range b.attestationsElectra {
+			atts[i] = a
+		}
+	} else {
+		if b.attestations == nil {
+			return nil
+		}
+		atts = make([]eth.Att, len(b.attestations))
+		for i, a := range b.attestations {
 			atts[i] = a
 		}
 	}

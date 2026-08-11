@@ -42,7 +42,7 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 
 	if cfg.pruneInterval == 0 {
 		// Prune expired attestations from the pool every slot interval.
-		cfg.pruneInterval = time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+		cfg.pruneInterval = params.BeaconConfig().SlotDuration()
 	}
 
 	ctx, cancel := context.WithCancel(ctx)

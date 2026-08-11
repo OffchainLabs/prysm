@@ -43,7 +43,7 @@ func TestSubmitSignedProposerPreferences_Valid(t *testing.T) {
 		proposerPreferencesEndpoint,
 		map[string]string{"Eth-Consensus-Version": "gloas"},
 		bytes.NewBuffer(sszBody),
-	).Return(nil, nil, nil).Times(1)
+	).Return(nil).Times(1)
 
 	client := &beaconApiValidatorClient{handler: handler}
 	require.NoError(t, client.submitSignedProposerPreferences(t.Context(), []*ethpb.SignedProposerPreferences{pref}))
@@ -63,7 +63,7 @@ func TestSubmitSignedProposerPreferences_FallsBackToJSONOn415(t *testing.T) {
 		proposerPreferencesEndpoint,
 		gomock.Any(),
 		gomock.Any(),
-	).Return(nil, nil, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType, Message: "unsupported media type"}).Times(1)
+	).Return(&httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType, Message: "unsupported media type"}).Times(1)
 	handler.EXPECT().Post(
 		gomock.Any(),
 		proposerPreferencesEndpoint,
@@ -86,7 +86,7 @@ func TestSubmitSignedProposerPreferences_NonMediaTypeErrorNoFallback(t *testing.
 		proposerPreferencesEndpoint,
 		map[string]string{"Eth-Consensus-Version": "gloas"},
 		gomock.Any(),
-	).Return(nil, nil, errors.New("foo error")).Times(1)
+	).Return(errors.New("foo error")).Times(1)
 
 	client := &beaconApiValidatorClient{handler: handler}
 	err := client.submitSignedProposerPreferences(t.Context(), []*ethpb.SignedProposerPreferences{testSignedProposerPreferences()})

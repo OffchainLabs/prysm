@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -143,6 +144,54 @@ func TestGetSyncCommitteeContribution_FiltersDuplicates(t *testing.T) {
 			PublicKey: val.PublicKey,
 			SubnetId:  1})
 	require.NoError(t, err)
+	assert.DeepEqual(t, sig, contr.Signature)
+}
+
+func TestGetSyncCommitteeContribution_UsesAggregatorRootNotHead(t *testing.T) {
+	votedRoot := bytesutil.PadTo([]byte("A"), 32)
+	lateBlockRoot := bytesutil.PadTo([]byte("B"), 32)
+
+	st, _ := util.DeterministicGenesisStateAltair(t, 10)
+	syncCommitteePool := synccommittee.NewStore()
+	headFetcher := &mock.ChainService{
+		State:                st,
+		SyncCommitteeIndices: []primitives.CommitteeIndex{10},
+		Root:                 lateBlockRoot,
+	}
+	server := &Server{
+		CoreService: &core.Service{
+			SyncCommitteePool: syncCommitteePool,
+			HeadFetcher:       headFetcher,
+			P2P:               &mockp2p.MockBroadcaster{},
+		},
+		SyncCommitteePool: syncCommitteePool,
+		HeadFetcher:       headFetcher,
+		P2P:               &mockp2p.MockBroadcaster{},
+		TimeFetcher:       &mock.ChainService{Genesis: time.Now()},
+	}
+
+	secKey, err := bls.RandKey()
+	require.NoError(t, err)
+	sig := secKey.Sign([]byte{'A'}).Marshal()
+	_, err = server.SubmitSyncMessage(t.Context(), &ethpb.SyncCommitteeMessage{
+		Slot:           1,
+		ValidatorIndex: 0,
+		BlockRoot:      votedRoot,
+		Signature:      sig,
+	})
+	require.NoError(t, err)
+
+	val, err := st.ValidatorAtIndex(0)
+	require.NoError(t, err)
+	contr, err := server.GetSyncCommitteeContribution(t.Context(),
+		&ethpb.SyncCommitteeContributionRequest{
+			Slot:      1,
+			PublicKey: val.PublicKey,
+			SubnetId:  1})
+	require.NoError(t, err)
+
+	assert.DeepEqual(t, votedRoot, contr.BlockRoot)
+	assert.Equal(t, uint64(1), contr.AggregationBits.Count())
 	assert.DeepEqual(t, sig, contr.Signature)
 }
 

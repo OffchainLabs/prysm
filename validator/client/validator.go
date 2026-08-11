@@ -18,6 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/client"
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -74,6 +75,7 @@ type validator struct {
 	highestValidSlotLock         sync.Mutex
 	blacklistedPubkeysLock       sync.RWMutex
 	prevEpochBalancesLock        sync.RWMutex
+	attestedSlotsLock            sync.RWMutex
 	cachedAttestationDataLock    sync.RWMutex
 	submittedPrefSlotsLock       sync.RWMutex
 	signedRequestAuthsLock       sync.Mutex
@@ -87,6 +89,7 @@ type validator struct {
 	blacklistedPubkeys           map[[fieldparams.BLSPubkeyLength]byte]bool
 	prevEpochBalances            map[[fieldparams.BLSPubkeyLength]byte]uint64
 	startBalances                map[[fieldparams.BLSPubkeyLength]byte]uint64
+	attestedSlotsByKeyByEpoch    map[primitives.Epoch]map[[fieldparams.BLSPubkeyLength]byte]primitives.Slot
 	web3SignerConfig             *remoteweb3signer.SetupConfig
 	proposerSettings             *proposer.Settings
 	submittedPrefSlots           map[primitives.Slot]bool
@@ -98,14 +101,16 @@ type validator struct {
 	submittedPayloadAtts         map[submittedPayloadAttKey][]uint64
 	validatorsRegBatchSize       int
 	duties                       *dutyStore
-	retryInFlight                atomic.Bool
+	nextFetchInFlight            atomic.Bool
 	domainDataCache              *ristretto.Cache[string, proto.Message]
 	slotFeed                     *event.Feed
 	graffitiStruct               *graffiti.Graffiti
 	highestValidSlot             primitives.Slot
 	eventsChannel                chan *eventClient.Event
 	payloadAvailability          *payloadAvailability
+	head                         *headTracker
 	pubkeyToStatus               map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus
+	pubkeyToStatusLock           sync.RWMutex // guards pubkeyToStatus; all readers go through statusCache
 	signedValidatorRegistrations map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
 	signedRequestAuths           map[requestAuthKey]*ethpb.SignedRequestAuthV1
 	aggSelector                  aggregatorSelector
@@ -128,8 +133,16 @@ type validatorStatus struct {
 	index     primitives.ValidatorIndex
 }
 
+// statusCache returns pubkeyToStatus for lock-free reads: entries are never
+// mutated in place, updateValidatorStatusCache replaces the map wholesale.
+func (v *validator) statusCache() map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus {
+	v.pubkeyToStatusLock.RLock()
+	defer v.pubkeyToStatusLock.RUnlock()
+	return v.pubkeyToStatus
+}
+
 func (v *validator) indexFromPubkey(pubKey [fieldparams.BLSPubkeyLength]byte) (primitives.ValidatorIndex, error) {
-	s, ok := v.pubkeyToStatus[pubKey]
+	s, ok := v.statusCache()[pubKey]
 	if !ok {
 		return 0, fmt.Errorf("validator index not found for pubkey %#x", pubKey)
 	}
@@ -163,17 +176,22 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "validator.WaitForKeymanagerInitialization")
 	defer span.End()
 
-	genesisRoot, err := v.db.GenesisValidatorsRoot(ctx)
-	if err != nil {
-		return errors.Wrap(err, "unable to retrieve valid genesis validators root while initializing key manager")
-	}
-
 	switch {
-	case v.wallet != nil:
-		if v.web3SignerConfig != nil {
-			v.web3SignerConfig.GenesisValidatorsRoot = genesisRoot
+	// When Web3Signer is configured, initialize the keymanager separately.
+	case v.web3SignerConfig != nil:
+		gvr, err := v.db.GenesisValidatorsRoot(ctx)
+		if err != nil {
+			return errors.Wrap(err, "unable to retrieve valid genesis validators root while initializing web3signer keymanager")
 		}
-		keyManager, err := v.wallet.InitializeKeymanager(ctx, accountsiface.InitKeymanagerConfig{ListenForChanges: true, Web3SignerConfig: v.web3SignerConfig})
+
+		v.web3SignerConfig.GenesisValidatorsRoot = gvr
+		keyManager, err := remoteweb3signer.NewKeymanager(ctx, v.web3SignerConfig)
+		if err != nil {
+			return errors.Wrap(err, "could not initialize web3signer keymanager")
+		}
+		v.km = keyManager
+	case v.wallet != nil:
+		keyManager, err := v.wallet.InitializeKeymanager(ctx, accountsiface.InitKeymanagerConfig{ListenForChanges: true})
 		if err != nil {
 			return errors.Wrap(err, "could not initialize key manager")
 		}
@@ -351,7 +369,7 @@ func (v *validator) SetTicker() {
 	}
 	// Once the ChainStart log is received, we update the genesis time of the validator client
 	// and begin a slot ticker used to track the current slot the beacon node is in.
-	v.ticker = slots.NewSlotTicker(v.genesisTime, params.BeaconConfig().SecondsPerSlot)
+	v.ticker = slots.NewSlotTicker(v.genesisTime, params.BeaconConfig().SlotDuration())
 	log.WithField("genesisTime", v.genesisTime).Info("Beacon chain started")
 }
 
@@ -389,7 +407,7 @@ func (v *validator) WaitForSync(ctx context.Context) error {
 func (v *validator) checkAndLogValidatorStatus() bool {
 	nonexistentIndex := primitives.ValidatorIndex(^uint64(0))
 	var someAreActive bool
-	for _, s := range v.pubkeyToStatus {
+	for _, s := range v.statusCache() {
 		fields := logrus.Fields{
 			"pubkey": fmt.Sprintf("%#x", bytesutil.Trunc(s.publicKey)),
 			"status": s.status.Status.String(),
@@ -434,8 +452,7 @@ func (v *validator) NextSlot() <-chan primitives.Slot {
 
 // SlotDeadline is the start time of the next slot.
 func (v *validator) SlotDeadline(slot primitives.Slot) time.Time {
-	secs := time.Duration((slot + 1).Mul(params.BeaconConfig().SecondsPerSlot))
-	return v.genesisTime.Add(secs * time.Second)
+	return v.genesisTime.Add(params.SlotsDuration(slot+1, params.BeaconConfig()))
 }
 
 // CheckDoppelGanger checks if the current actively provided keys have
@@ -735,6 +752,11 @@ func (v *validator) getAttestationData(ctx context.Context, slot primitives.Slot
 	epoch := slots.ToEpoch(slot)
 	postElectra := epoch >= params.BeaconConfig().ElectraForkEpoch
 
+	ctx, err := v.withHeadHint(ctx, slot, attestationDueComponent(slot))
+	if err != nil {
+		return nil, fmt.Errorf("attach freshness hint: %w", err)
+	}
+
 	// Pre-Electra: committee index varies per validator.
 	// Post-Gloas: index signals payload status.
 	if !postElectra {
@@ -845,12 +867,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 			log.Warnf("Could not locate valid validator indices. Skipping prepare proposer routine")
 			return nil
 		}
-		if len(proposerReqs) != len(pubkeys) {
-			log.WithFields(logrus.Fields{
-				"pubkeysCount":                 len(pubkeys),
-				"proposerSettingsRequestCount": len(proposerReqs),
-			}).Debugln("Request count did not match included validator count. Only keys that have been activated will be included in the request.")
-		}
+
 		if _, err := v.validatorClient.PrepareBeaconProposer(ctx, &ethpb.PrepareBeaconProposerRequest{
 			Recipients: proposerReqs,
 		}); err != nil {
@@ -945,8 +962,10 @@ func (v *validator) EnsureEventStream(ctx context.Context, topics []string) {
 func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) {
 	if event == nil || event.Data == nil {
 		log.Warn("Received empty event")
+		return
 	}
-	switch event.EventType {
+
+	switch event.Type {
 	case eventClient.EventError:
 		log.Error(string(event.Data))
 	case eventClient.EventConnectionError:
@@ -957,18 +976,40 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 			log.WithError(err).Error("Failed to unmarshal head Event into JSON")
 		}
 
-		log.WithFields(logrus.Fields{
-			"slot":                         head.Slot,
-			"previous_duty_dependent_root": head.PreviousDutyDependentRoot,
-			"current_duty_dependent_root":  head.CurrentDutyDependentRoot,
-		}).Debug("Received head event")
-
 		uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
 		if err != nil {
 			log.WithError(err).Error("Failed to parse slot")
 			return
 		}
-		v.setHighestSlot(primitives.Slot(uintSlot))
+
+		slot := primitives.Slot(uintSlot)
+
+		sinceSlotStartTime, err := v.sinceSlotStartTime(slot)
+		if err != nil {
+			log.WithError(err).WithField("slot", slot).Error("Failed to compute time since slot start")
+		}
+
+		fields := logrus.Fields{
+			"slot":                      head.Slot,
+			"sinceSlotStartTime":        sinceSlotStartTime,
+			"previousDutyDependentRoot": trim(head.PreviousDutyDependentRoot),
+			"currentDutyDependentRoot":  trim(head.CurrentDutyDependentRoot),
+			"version":                   "1",
+		}
+
+		if head.Block != "" {
+			fields["blockRoot"] = trim(head.Block)
+		}
+
+		log.WithFields(fields).Debug("Received head event")
+
+		v.setHighestSlot(slot)
+
+		// Update the head tracker. The v1 event announces no payload status.
+		if err := v.head.update(slot, head.Block, api.PayloadStatusUnknown); err != nil {
+			log.WithError(err).Error("Failed to record head event block root")
+		}
+
 		if !v.disableDutiesPolling {
 			if err := v.checkDependentRoots(ctx, head.PreviousDutyDependentRoot, head.CurrentDutyDependentRoot); err != nil {
 				log.WithError(err).Error("Failed to check dependent roots")
@@ -985,19 +1026,35 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 			return
 		}
 
-		log.WithFields(logrus.Fields{
-			"slot":                         head.Data.Slot,
-			"block_root":                   head.Data.Block,
-			"current_epoch_dependent_root": head.Data.CurrentEpochDependentRoot,
-			"next_epoch_dependent_root":    head.Data.NextEpochDependentRoot,
-		}).Debug("Received head_v2 event")
-
 		uintSlot, err := strconv.ParseUint(head.Data.Slot, 10, 64)
 		if err != nil {
 			log.WithError(err).Error("Failed to parse slot")
 			return
 		}
-		v.setHighestSlot(primitives.Slot(uintSlot))
+		slot := primitives.Slot(uintSlot)
+
+		sinceSlotStartTime, err := v.sinceSlotStartTime(slot)
+		if err != nil {
+			log.WithError(err).WithField("slot", slot).Error("Failed to compute time since slot start")
+		}
+
+		log.WithFields(logrus.Fields{
+			"slot":                      head.Data.Slot,
+			"sinceSlotStartTime":        sinceSlotStartTime,
+			"blockRoot":                 trim(head.Data.Block),
+			"payloadStatus":             head.Data.PayloadStatus,
+			"currentEpochDependentRoot": trim(head.Data.CurrentEpochDependentRoot),
+			"nextEpochDependentRoot":    trim(head.Data.NextEpochDependentRoot),
+			"version":                   "2",
+		}).Debug("Received head event")
+
+		v.setHighestSlot(slot)
+
+		// Update the head tracker
+		if err := v.head.update(slot, head.Data.Block, api.PayloadStatus(head.Data.PayloadStatus)); err != nil {
+			log.WithError(err).Error("Failed to record head event block root")
+		}
+
 		if !v.disableDutiesPolling {
 			if err := v.checkDependentRoots(ctx, head.Data.CurrentEpochDependentRoot, head.Data.NextEpochDependentRoot); err != nil {
 				log.WithError(err).Error("Failed to check dependent roots")
@@ -1014,15 +1071,32 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 			log.WithError(err).Error("Failed to parse execution payload event slot")
 			return
 		}
-		v.payloadAvailability.notify(primitives.Slot(uintSlot))
+
+		root, err := decodePayloadBlockRoot(payloadEvent.BlockRoot)
+		if err != nil {
+			log.WithError(err).Error("Failed to decode execution payload event block root")
+		}
+
+		v.payloadAvailability.notify(primitives.Slot(uintSlot), root)
 	default:
 		// just keep going and log the error
-		log.WithField("type", event.EventType).WithField("data", string(event.Data)).Warn("Received an unknown event")
+		log.WithField("type", event.Type).WithField("data", string(event.Data)).Warn("Received an unknown event")
 	}
 }
 
 func (v *validator) EventStreamIsRunning() bool {
 	return v.validatorClient.EventStreamIsRunning()
+}
+
+// trim shortens a string (e.g. a hex-encoded root like "0x9927a089f167...") to
+// its first 14 characters.
+func trim(s string) string {
+	const maxLen = 14 // "0x" + 12 hex characters (6 bytes).
+	if len(s) <= maxLen {
+		return s
+	}
+
+	return s[:maxLen]
 }
 
 func (v *validator) Host() string {
@@ -1043,13 +1117,13 @@ func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fie
 	}
 	var err error
 	// repopulate the statuses if epoch start or if a new key is added missing the cache
-	if isEpochStart || len(v.pubkeyToStatus) != len(pubkeys) /* cache not populated or updated correctly */ {
+	if isEpochStart || len(v.statusCache()) != len(pubkeys) /* cache not populated or updated correctly */ {
 		if err = v.updateValidatorStatusCache(ctx, pubkeys); err != nil {
 			return nil, errors.Wrap(err, "failed to update validator status cache")
 		}
 	}
 	currEpoch := slots.ToEpoch(slot)
-	for k, s := range v.pubkeyToStatus {
+	for k, s := range v.statusCache() {
 		if isActiveForDuties(s.status, currEpoch) {
 			filteredKeys = append(filteredKeys, k)
 		} else {
@@ -1066,7 +1140,9 @@ func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fie
 // updateValidatorStatusCache updates the validator statuses cache, a map of keys currently used by the validator client
 func (v *validator) updateValidatorStatusCache(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte) error {
 	if len(pubkeys) == 0 {
+		v.pubkeyToStatusLock.Lock()
 		v.pubkeyToStatus = make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus, 0)
+		v.pubkeyToStatusLock.Unlock()
 		return nil
 	}
 	statusRequestKeys := make([][]byte, 0)
@@ -1097,7 +1173,9 @@ func (v *validator) updateValidatorStatusCache(ctx context.Context, pubkeys [][f
 			index:     resp.Indices[i],
 		}
 	}
+	v.pubkeyToStatusLock.Lock()
 	v.pubkeyToStatus = pubkeyToStatus
+	v.pubkeyToStatusLock.Unlock()
 
 	return nil
 }
@@ -1109,8 +1187,9 @@ func (v *validator) buildProposerSettingsRequests(
 ) []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer {
 	var prepareProposerReqs []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer
 	ps := v.ProposerSettings()
+	statuses := v.statusCache()
 	for _, k := range activePubkeys {
-		s, ok := v.pubkeyToStatus[k]
+		s, ok := statuses[k]
 		if !ok {
 			continue
 		}
@@ -1489,9 +1568,10 @@ func (v *validator) buildSignedRegReqs(
 		log.Warn("Builder is `enabled` in default config but will be ignored because no fee recipient was provided!")
 	}
 
+	statuses := v.statusCache()
 	for i, k := range activePubkeys {
 		// map is populated before this function in buildPrepProposerReq
-		_, ok := v.pubkeyToStatus[k]
+		_, ok := statuses[k]
 		if !ok {
 			continue
 		}

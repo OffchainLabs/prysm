@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
@@ -58,13 +59,13 @@ func (m *healthMonitor) performHealthCheck() {
 		log.WithFields(logrus.Fields{
 			"fails":    m.fails,
 			"maxFails": m.maxFails,
-			"url":      m.v.Host(),
+			"url":      api.RedactEndpointList(m.v.Host()),
 		}).Warn("Failed health check, beacon node is unresponsive")
 		m.fails++
 	} else if m.maxFails > 0 && m.fails >= m.maxFails {
 		log.WithFields(logrus.Fields{
 			"maxFails": m.maxFails,
-			"url":      m.v.Host(),
+			"url":      api.RedactEndpointList(m.v.Host()),
 		}).Warn("Maximum health checks reached. Stopping health check routine")
 		m.isHealthy = ishealthy
 		m.cancel()
@@ -74,14 +75,14 @@ func (m *healthMonitor) performHealthCheck() {
 		// is not a new status so skip update
 		log.WithFields(logrus.Fields{
 			"isHealthy": m.isHealthy,
-			"url":       m.v.Host(),
+			"url":       api.RedactEndpointList(m.v.Host()),
 		}).Debug("Health status did not change")
 		return
 	}
 	log.WithFields(logrus.Fields{
 		"current":  ishealthy,
 		"previous": m.isHealthy,
-		"url":      m.v.Host(),
+		"url":      api.RedactEndpointList(m.v.Host()),
 	}).Info("Health status changed")
 	m.isHealthy = ishealthy
 	go m.healthEventFeed.Send(ishealthy) // non blocking send
@@ -89,8 +90,7 @@ func (m *healthMonitor) performHealthCheck() {
 
 func (m *healthMonitor) loop() {
 	log.Debug("Starting health check routine for beacon node apis")
-	interval := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
-	ticker := time.NewTicker(interval)
+	ticker := time.NewTicker(params.BeaconConfig().SlotDuration())
 
 	for ; true; <-ticker.C { // check immediately
 		if m.ctx.Err() != nil {

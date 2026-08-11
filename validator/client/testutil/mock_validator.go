@@ -37,7 +37,7 @@ type FakeValidator struct {
 	ProposeBlockCalled                bool
 	UpdateProtectionsCalled           bool
 	UpdateDutiesCalled                bool
-	RetryMissingNextDutiesCalled      bool
+	MaybeFetchNextDutiesCalled        bool
 	WaitForWalletInitializationCalled bool
 	NextSlotCalled                    bool
 	WaitForActivationCalled           int
@@ -135,7 +135,7 @@ func (fv *FakeValidator) SlasherReady(_ context.Context) error {
 func (fv *FakeValidator) SlotDeadline(_ primitives.Slot) time.Time {
 	fv.SlotDeadlineCalled = true
 	if fv.IsRegularDeadline {
-		return prysmTime.Now().Add(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+		return prysmTime.Now().Add(params.BeaconConfig().SlotDuration())
 	}
 	return prysmTime.Now()
 }
@@ -152,9 +152,9 @@ func (fv *FakeValidator) UpdateDuties(_ context.Context) error {
 	return fv.UpdateDutiesRet
 }
 
-// MaybeRetryMissingNextDuties for mocking.
-func (fv *FakeValidator) MaybeRetryMissingNextDuties(_ context.Context, _ primitives.Slot) {
-	fv.RetryMissingNextDutiesCalled = true
+// MaybeFetchNextDuties for mocking.
+func (fv *FakeValidator) MaybeFetchNextDuties(_ context.Context, _ primitives.Slot) {
+	fv.MaybeFetchNextDutiesCalled = true
 }
 
 // UpdateProtections for mocking.

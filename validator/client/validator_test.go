@@ -3,13 +3,11 @@ package client
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"math"
-	"os"
-	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -19,9 +17,11 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
+	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/async/event"
-	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -49,7 +49,6 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
-	"github.com/urfave/cli/v2"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -935,16 +934,9 @@ func TestValidator_WaitForKeymanagerInitialization_web3Signer(t *testing.T) {
 			copy(root[2:], "a")
 			err := db.SaveGenesisValidatorsRoot(ctx, root)
 			require.NoError(t, err)
-			app := cli.App{}
-			set := flag.NewFlagSet("test", 0)
-			newDir := filepath.Join(t.TempDir(), "new")
-			require.NoError(t, os.MkdirAll(newDir, 0700))
-			set.String(flags.WalletDirFlag.Name, newDir, "")
-			w := wallet.NewWalletForWeb3Signer(cli.NewContext(&app, set, nil))
 			v := validator{
 				db:        db,
 				enableAPI: false,
-				wallet:    w,
 				web3SignerConfig: &remoteweb3signer.SetupConfig{
 					BaseEndpoint:       "http://localhost:8545",
 					ProvidedPublicKeys: []string{"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"},
@@ -3923,5 +3915,90 @@ func TestGetAttestationData_PostElectraConcurrentAccess(t *testing.T) {
 	for i := range numGoroutines {
 		require.NoError(t, errs[i])
 		require.DeepEqual(t, expectedData, results[i])
+	}
+}
+
+func headValidator() *validator {
+	return &validator{
+		head:                 newHeadTracker(),
+		slotFeed:             &event.Feed{},
+		disableDutiesPolling: true, // skip checkDependentRoots (needs duties/clients)
+	}
+}
+
+func TestProcessEvent_Head(t *testing.T) {
+	t.Run("records the head root and slot", func(t *testing.T) {
+		v := headValidator()
+		root := "0x" + strings.Repeat("ab", 32)
+		data, err := json.Marshal(&structs.HeadEvent{Slot: "42", Block: root})
+		require.NoError(t, err)
+
+		v.ProcessEvent(t.Context(), &eventClient.Event{Type: eventClient.EventHead, Data: data})
+
+		got, ok := latestHead(v.head)
+		require.Equal(t, true, ok)
+		require.Equal(t, uint64(42), uint64(got.Slot))
+		require.Equal(t, byte(0xab), got.Root[0])
+		// The v1 head event announces no payload status.
+		require.Equal(t, api.PayloadStatusUnknown, got.PayloadStatus)
+	})
+
+	t.Run("empty root (gRPC head event) updates the slot without error", func(t *testing.T) {
+		v := headValidator()
+		// The gRPC StreamSlots event carries no block root.
+		data, err := json.Marshal(&structs.HeadEvent{Slot: "42", Block: ""})
+		require.NoError(t, err)
+
+		v.ProcessEvent(t.Context(), &eventClient.Event{Type: eventClient.EventHead, Data: data})
+
+		// Head root not recorded because there is no block root to record...
+		_, ok := latestHead(v.head)
+		require.Equal(t, false, ok)
+		// ...but the highest slot update must not have been dropped.
+		require.Equal(t, uint64(42), uint64(v.highestSlot()))
+	})
+
+	t.Run("malformed root still updates the slot", func(t *testing.T) {
+		v := headValidator()
+		data, err := json.Marshal(&structs.HeadEvent{Slot: "42", Block: "0xnothex"})
+		require.NoError(t, err)
+
+		v.ProcessEvent(t.Context(), &eventClient.Event{Type: eventClient.EventHead, Data: data})
+
+		// Head root not recorded because the block root failed to decode...
+		_, ok := latestHead(v.head)
+		require.Equal(t, false, ok)
+		// ...but the highest slot update must not have been dropped.
+		require.Equal(t, uint64(42), uint64(v.highestSlot()))
+	})
+}
+
+func TestProcessEvent_HeadV2_PayloadStatus(t *testing.T) {
+	// Post-Gloas an attestation's index encodes the payload status of the attested
+	// head, so the status the event announces is part of the expected head.
+	for _, tt := range []struct {
+		announced string
+		want      api.PayloadStatus
+	}{
+		{announced: "full", want: api.PayloadStatusFull},
+		{announced: "empty", want: api.PayloadStatusEmpty},
+		{announced: "", want: api.PayloadStatusUnknown},
+	} {
+		t.Run("records payload status "+tt.announced, func(t *testing.T) {
+			v := headValidator()
+			root := "0x" + strings.Repeat("ab", 32)
+			data, err := json.Marshal(&structs.HeadEventV2{
+				Data: &structs.HeadEventV2Data{Slot: "42", Block: root, PayloadStatus: tt.announced},
+			})
+			require.NoError(t, err)
+
+			v.ProcessEvent(t.Context(), &eventClient.Event{Type: eventClient.EventHeadV2, Data: data})
+
+			got, ok := latestHead(v.head)
+			require.Equal(t, true, ok)
+			require.Equal(t, uint64(42), uint64(got.Slot))
+			require.Equal(t, byte(0xab), got.Root[0])
+			require.Equal(t, tt.want, got.PayloadStatus)
+		})
 	}
 }

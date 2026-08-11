@@ -178,11 +178,7 @@ func (s *Service) rejectIncorrectSyncCommittee(
 		_, span := trace.StartSpan(ctx, "sync.rejectIncorrectSyncCommittee")
 		defer span.End()
 		isValid := false
-		digest, err := s.currentForkDigest()
-		if err != nil {
-			tracing.AnnotateError(span, err)
-			return pubsub.ValidationIgnore, err
-		}
+		digest := s.currentForkDigest()
 
 		format := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SyncCommitteeMessage]()]
 		// Validate that the validator is in the correct committee.

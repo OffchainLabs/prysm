@@ -207,21 +207,6 @@ func (mr *MockValidatorClientMockRecorder) EventStreamIsRunning() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EventStreamIsRunning", reflect.TypeOf((*MockValidatorClient)(nil).EventStreamIsRunning))
 }
 
-// FeeRecipientByPubKey mocks base method.
-func (m *MockValidatorClient) FeeRecipientByPubKey(ctx context.Context, in *eth.FeeRecipientByPubKeyRequest) (*eth.FeeRecipientByPubKeyResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FeeRecipientByPubKey", ctx, in)
-	ret0, _ := ret[0].(*eth.FeeRecipientByPubKeyResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// FeeRecipientByPubKey indicates an expected call of FeeRecipientByPubKey.
-func (mr *MockValidatorClientMockRecorder) FeeRecipientByPubKey(ctx, in any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FeeRecipientByPubKey", reflect.TypeOf((*MockValidatorClient)(nil).FeeRecipientByPubKey), ctx, in)
-}
-
 // GetExecutionPayloadEnvelope mocks base method.
 func (m *MockValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, beaconBlockRoot [32]byte) (*eth.ExecutionPayloadEnvelope, error) {
 	m.ctrl.T.Helper()
