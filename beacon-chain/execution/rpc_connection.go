@@ -18,7 +18,7 @@ import (
 )
 
 func (s *Service) setupExecutionClientConnections(ctx context.Context, currEndpoint network.Endpoint) error {
-	client, err := s.newRPCClientWithAuth(ctx, currEndpoint)
+	client, err := s.dialExecutionNode(ctx, currEndpoint)
 	if err != nil {
 		return errors.Wrap(err, "could not dial execution node")
 	}
@@ -117,6 +117,21 @@ func (s *Service) retryExecutionClientConnection(ctx context.Context, err error)
 	}
 	// Reset run error in the event of a successful connection.
 	s.runError = nil
+}
+
+// Initializes the execution node RPC client, using the injected dialer when one is configured.
+func (s *Service) dialExecutionNode(ctx context.Context, currEndpoint network.Endpoint) (*gethRPC.Client, error) {
+	if s.cfg.rpcClientDialer == nil {
+		return s.newRPCClientWithAuth(ctx, currEndpoint)
+	}
+	client, err := s.cfg.rpcClientDialer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if client == nil {
+		return nil, errors.New("rpc client dialer returned a nil client")
+	}
+	return client, nil
 }
 
 // Initializes an RPC connection with authentication headers.
