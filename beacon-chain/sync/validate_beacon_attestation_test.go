@@ -315,7 +315,7 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 	p := p2ptest.NewTestP2P(t)
 	db := dbtest.SetupDB(t)
 	currentSlot := 1 + (primitives.Slot(params.BeaconConfig().ElectraForkEpoch) * params.BeaconConfig().SlotsPerEpoch)
-	genesisOffset := time.Duration(currentSlot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	genesisOffset := time.Duration(currentSlot) * params.BeaconConfig().SlotDuration()
 	chain := &mockChain.ChainService{
 		Genesis:          time.Now().Add(-1 * genesisOffset),
 		ValidatorsRoot:   params.BeaconConfig().GenesisValidatorsRoot,

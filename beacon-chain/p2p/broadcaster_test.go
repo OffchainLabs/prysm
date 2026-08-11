@@ -566,7 +566,7 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 		pubsub:                p1.PubSub(),
 		joinedTopics:          map[string]*pubsub.Topic{},
 		cfg:                   &Config{},
-		genesisTime:           time.Now().Add(-33 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second), // the signature slot of the mock update is 33
+		genesisTime:           time.Now().Add(-33 * params.BeaconConfig().SlotDuration()), // the signature slot of the mock update is 33
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
@@ -643,7 +643,7 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 		pubsub:                p1.PubSub(),
 		joinedTopics:          map[string]*pubsub.Topic{},
 		cfg:                   &Config{},
-		genesisTime:           time.Now().Add(-33 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second), // the signature slot of the mock update is 33
+		genesisTime:           time.Now().Add(-33 * params.BeaconConfig().SlotDuration()), // the signature slot of the mock update is 33
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},

@@ -188,7 +188,7 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 
 		service := &Service{
 			// Set genesis time in the past so currentSlot is the "current" slot
-			genesisTime: time.Now().Add(-time.Duration(currentSlot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+			genesisTime: time.Now().Add(-time.Duration(currentSlot) * params.BeaconConfig().SlotDuration()),
 			custodyInfo: &custodyInfo{
 				earliestAvailableSlot: initialSlot,
 				groupCount:            groupCount,
@@ -234,7 +234,7 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 		attemptedSlot := minRequiredSlot + 1000 // Within the mandatory retention period
 
 		service := &Service{
-			genesisTime: time.Now().Add(-time.Duration(currentSlot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+			genesisTime: time.Now().Add(-time.Duration(currentSlot) * params.BeaconConfig().SlotDuration()),
 			custodyInfo: &custodyInfo{
 				earliestAvailableSlot: minRequiredSlot - 100, // Current value is before the min required
 				groupCount:            5,
@@ -259,7 +259,7 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 		attemptedSlot := primitives.Slot(minRequiredEpoch)*primitives.Slot(params.BeaconConfig().SlotsPerEpoch) + 8
 
 		service := &Service{
-			genesisTime: time.Now().Add(-time.Duration(currentSlot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+			genesisTime: time.Now().Add(-time.Duration(currentSlot) * params.BeaconConfig().SlotDuration()),
 			custodyInfo: &custodyInfo{
 				earliestAvailableSlot: storedEarliestSlot,
 				groupCount:            5,
@@ -284,7 +284,7 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 		attemptedSlot := primitives.Slot(1000)
 
 		service := &Service{
-			genesisTime: time.Now().Add(-time.Duration(currentSlot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+			genesisTime: time.Now().Add(-time.Duration(currentSlot) * params.BeaconConfig().SlotDuration()),
 			custodyInfo: &custodyInfo{
 				earliestAvailableSlot: currentEarliestSlot,
 				groupCount:            5,

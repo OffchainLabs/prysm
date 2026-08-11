@@ -618,7 +618,7 @@ func TestSubmitContributionAndProofs(t *testing.T) {
 
 func TestSubmitAggregateAndProofsV2(t *testing.T) {
 	slot := primitives.Slot(0)
-	mock := &mockChain.ChainService{Slot: &slot, Genesis: time.Now().Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)}
+	mock := &mockChain.ChainService{Slot: &slot, Genesis: time.Now().Add(-1 * params.BeaconConfig().SlotDuration())}
 	s := &Server{
 		CoreService: &core.Service{GenesisTimeFetcher: mock},
 		TimeFetcher: mock,
@@ -1178,10 +1178,10 @@ func TestGetAttestationData(t *testing.T) {
 			Root:  justifiedRoot[:],
 		}
 		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
-		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		offset := time.Duration(slot) * params.BeaconConfig().SlotDuration()
 		chain := &mockChain.ChainService{
 			Optimistic:                 false,
-			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Genesis:                    time.Now().Add(-1 * offset),
 			Root:                       blockRoot[:],
 			CurrentJustifiedCheckPoint: justifiedCheckpoint,
 			TargetRoot:                 blockRoot,
@@ -1252,10 +1252,10 @@ func TestGetAttestationData(t *testing.T) {
 			Root:  justifiedRoot[:],
 		}
 		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
-		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		offset := time.Duration(slot) * params.BeaconConfig().SlotDuration()
 		chain := &mockChain.ChainService{
 			Optimistic:                 false,
-			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Genesis:                    time.Now().Add(-1 * offset),
 			Root:                       blockRoot[:],
 			CurrentJustifiedCheckPoint: justifiedCheckpoint,
 			TargetRoot:                 blockRoot,
@@ -1386,10 +1386,10 @@ func TestGetAttestationData(t *testing.T) {
 
 	t.Run("invalid slot", func(t *testing.T) {
 		slot := 3*params.BeaconConfig().SlotsPerEpoch + 1
-		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		offset := time.Duration(slot) * params.BeaconConfig().SlotDuration()
 		chain := &mockChain.ChainService{
 			Optimistic:                 false,
-			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Genesis:                    time.Now().Add(-1 * offset),
 			CurrentJustifiedCheckPoint: &ethpbalpha.Checkpoint{},
 		}
 
@@ -1444,10 +1444,10 @@ func TestGetAttestationData(t *testing.T) {
 			Root:  justifiedRoot[:],
 		}
 
-		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		offset := time.Duration(slot) * params.BeaconConfig().SlotDuration()
 		chain := &mockChain.ChainService{
 			Root:                       blockRoot[:],
-			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Genesis:                    time.Now().Add(-1 * offset),
 			CurrentJustifiedCheckPoint: justifiedCheckpoint,
 			TargetRoot:                 blockRoot2,
 		}
@@ -1497,10 +1497,10 @@ func TestGetAttestationData(t *testing.T) {
 		}
 		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpt))
 		require.NoError(t, err)
-		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		offset := time.Duration(slot) * params.BeaconConfig().SlotDuration()
 		chain := &mockChain.ChainService{
 			Root:                       blockRoot[:],
-			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Genesis:                    time.Now().Add(-1 * offset),
 			CurrentJustifiedCheckPoint: justifiedCheckpt,
 			TargetRoot:                 blockRoot,
 			State:                      beaconState,
@@ -1572,10 +1572,10 @@ func TestGetAttestationData(t *testing.T) {
 		}
 		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpt))
 		require.NoError(t, err)
-		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		offset := time.Duration(slot) * params.BeaconConfig().SlotDuration()
 		chain := &mockChain.ChainService{
 			Root:                       blockRoot[:],
-			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Genesis:                    time.Now().Add(-1 * offset),
 			CurrentJustifiedCheckPoint: justifiedCheckpt,
 			TargetRoot:                 blockRoot,
 			State:                      beaconState,
@@ -1667,10 +1667,10 @@ func TestGetAttestationData(t *testing.T) {
 		}
 		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpt))
 
-		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		offset := time.Duration(slot) * params.BeaconConfig().SlotDuration()
 		chain := &mockChain.ChainService{
 			Root:                       blockRoot[:],
-			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Genesis:                    time.Now().Add(-1 * offset),
 			CurrentJustifiedCheckPoint: justifiedCheckpt,
 			TargetRoot:                 blockRoot,
 			State:                      beaconState,
@@ -1761,10 +1761,10 @@ func TestGetAttestationData(t *testing.T) {
 		}
 		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpt))
 
-		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		offset := time.Duration(slot) * params.BeaconConfig().SlotDuration()
 		chain := &mockChain.ChainService{
 			Root:                       blockRoot[:],
-			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Genesis:                    time.Now().Add(-1 * offset),
 			CurrentJustifiedCheckPoint: justifiedCheckpt,
 			TargetRoot:                 blockRoot,
 			State:                      beaconState,
@@ -1840,10 +1840,10 @@ func TestGetAttestationData(t *testing.T) {
 			Root:  justifiedRoot[:],
 		}
 		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
-		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		offset := time.Duration(slot) * params.BeaconConfig().SlotDuration()
 		chain := &mockChain.ChainService{
 			Optimistic:                 false,
-			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Genesis:                    time.Now().Add(-1 * offset),
 			Root:                       blockRoot[:],
 			CurrentJustifiedCheckPoint: justifiedCheckpoint,
 			TargetRoot:                 blockRoot,

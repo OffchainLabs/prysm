@@ -1236,7 +1236,7 @@ func TestGetDataColumns(t *testing.T) {
 
 		// Mock genesis time to make current slot much later than the block slot
 		// This simulates being outside retention period
-		genesisTime := time.Now().Add(-time.Duration(fuluForkSlot+1000) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+		genesisTime := time.Now().Add(-time.Duration(fuluForkSlot+1000) * params.BeaconConfig().SlotDuration())
 		blocker := &BeaconDbBlocker{
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: genesisTime,

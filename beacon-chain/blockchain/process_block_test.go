@@ -2250,7 +2250,7 @@ func TestFillMissingBlockPayloadId_PrepareAllPayloads(t *testing.T) {
 // boost. It alters the genesisTime tracked by the store.
 func driftGenesisTime(s *Service, slot primitives.Slot, delay time.Duration) {
 	now := time.Now()
-	slotDuration := time.Duration(slot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	slotDuration := time.Duration(slot) * params.BeaconConfig().SlotDuration()
 	genesis := now.Add(-slotDuration - delay)
 	s.SetGenesisTime(genesis)
 	s.cfg.ForkChoiceStore.SetGenesisTime(genesis)
@@ -3030,7 +3030,7 @@ func TestIsDataAvailable_InitSync(t *testing.T) {
 			done <- service.isDataAvailable(ctx, roBlock)
 		}()
 
-		bound := time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second + 2*time.Second
+		bound := params.BeaconConfig().SlotDuration() + 2*time.Second
 		select {
 		case err := <-done:
 			require.NotNil(t, err)

@@ -1347,7 +1347,7 @@ func TestEnsureNextEpochDuties(t *testing.T) {
 		v, client, keys := setup(t)
 		// Genesis far enough back that SlotDeadline(0) already passed: the retry ctx
 		// is born expired, so even a hung fetch unblocks immediately.
-		v.genesisTime = time.Now().Add(-2 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+		v.genesisTime = time.Now().Add(-2 * params.BeaconConfig().SlotDuration())
 		seed(v, keys, missingNextPtc)
 
 		client.EXPECT().PTCDuties(gomock.Any(), epoch+1, gomock.Any()).DoAndReturn(

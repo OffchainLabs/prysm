@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -120,7 +119,7 @@ func TestServer_GetValidatorParticipation_CurrentAndPrevEpoch(t *testing.T) {
 	require.NoError(t, beaconDB.SaveState(ctx, headState, params.BeaconConfig().ZeroHash))
 
 	m := &mock.ChainService{State: headState}
-	offset := int64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	offset := params.EpochsDuration(1, params.BeaconConfig())
 
 	var st state.BeaconState
 	st, _ = util.DeterministicGenesisState(t, 4)
@@ -134,7 +133,7 @@ func TestServer_GetValidatorParticipation_CurrentAndPrevEpoch(t *testing.T) {
 			HeadFetcher: m,
 			StateGen:    stategen.New(beaconDB, doublylinkedtree.New()),
 			GenesisTimeFetcher: &mock.ChainService{
-				Genesis: prysmTime.Now().Add(time.Duration(-1*offset) * time.Second),
+				Genesis: prysmTime.Now().Add(-1 * offset),
 			},
 			FinalizedFetcher: &mock.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: 100}},
 		},
@@ -221,7 +220,7 @@ func TestServer_GetValidatorParticipation_OrphanedUntilGenesis(t *testing.T) {
 	require.NoError(t, beaconDB.SaveState(ctx, headState, params.BeaconConfig().ZeroHash))
 
 	m := &mock.ChainService{State: headState}
-	offset := int64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	offset := params.EpochsDuration(1, params.BeaconConfig())
 
 	var st state.BeaconState
 	st, _ = util.DeterministicGenesisState(t, 4)
@@ -234,7 +233,7 @@ func TestServer_GetValidatorParticipation_OrphanedUntilGenesis(t *testing.T) {
 			HeadFetcher: m,
 			StateGen:    stategen.New(beaconDB, doublylinkedtree.New()),
 			GenesisTimeFetcher: &mock.ChainService{
-				Genesis: prysmTime.Now().Add(time.Duration(-1*offset) * time.Second),
+				Genesis: prysmTime.Now().Add(-1 * offset),
 			},
 			FinalizedFetcher: &mock.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: 100}},
 		},
@@ -358,7 +357,7 @@ func runGetValidatorParticipationCurrentEpoch(t *testing.T, genState state.Beaco
 	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, gRoot))
 
 	m := &mock.ChainService{State: genState}
-	offset := int64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	offset := params.EpochsDuration(1, params.BeaconConfig())
 
 	s := &Server{
 		BeaconDB: beaconDB,
@@ -369,7 +368,7 @@ func runGetValidatorParticipationCurrentEpoch(t *testing.T, genState state.Beaco
 			HeadFetcher: m,
 			StateGen:    stategen.New(beaconDB, doublylinkedtree.New()),
 			GenesisTimeFetcher: &mock.ChainService{
-				Genesis: prysmTime.Now().Add(time.Duration(-1*offset) * time.Second),
+				Genesis: prysmTime.Now().Add(-1 * offset),
 			},
 			FinalizedFetcher: &mock.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: 100}},
 		},

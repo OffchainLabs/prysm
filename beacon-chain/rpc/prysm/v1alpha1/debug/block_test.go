@@ -50,11 +50,11 @@ func TestServer_GetBlock(t *testing.T) {
 func TestServer_GetAttestationInclusionSlot(t *testing.T) {
 	db := dbTest.SetupDB(t)
 	ctx := t.Context()
-	offset := int64(2 * params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	offset := 2 * params.EpochsDuration(1, params.BeaconConfig())
 	bs := &Server{
 		BeaconDB:           db,
 		StateGen:           stategen.New(db, doublylinkedtree.New()),
-		GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+		GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now().Add(-1 * offset)},
 	}
 
 	s, _ := util.DeterministicGenesisState(t, 2048)

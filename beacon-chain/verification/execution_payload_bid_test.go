@@ -378,7 +378,7 @@ func signBidForState(t *testing.T, sk bls.SecretKey, bid *ethpb.ExecutionPayload
 func testClockAtSlot(t *testing.T, slot primitives.Slot) *startup.Clock {
 	t.Helper()
 
-	secondsPerSlot := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	secondsPerSlot := params.BeaconConfig().SlotDuration()
 	genesis := time.Now().Add(-time.Duration(slot)*secondsPerSlot - secondsPerSlot/2)
 	return startup.NewClock(genesis, [32]byte{})
 }

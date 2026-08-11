@@ -776,7 +776,7 @@ func TestPostPayloadTasks_BetsAgainstLatePayload(t *testing.T) {
 
 	root := bytesutil.ToBytes32([]byte("late-head"))
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
-	service.SetGenesisTime(time.Now().Add(-time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second))
+	service.SetGenesisTime(time.Now().Add(-params.BeaconConfig().SlotDuration()))
 	blockSlot := service.CurrentSlot()
 
 	base, blk := testGloasState(t, blockSlot, params.BeaconConfig().ZeroHash, blockHash)
@@ -823,7 +823,7 @@ func TestLatePayloadTasks_ReturnsEarlyWhenBlockLate(t *testing.T) {
 		slot:  1,
 	}
 	// Set genesis time so CurrentSlot > HeadSlot.
-	service.SetGenesisTime(time.Now().Add(-2 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second))
+	service.SetGenesisTime(time.Now().Add(-2 * params.BeaconConfig().SlotDuration()))
 
 	service.latePayloadTasks(tr.ctx)
 	require.LogsDoNotContain(t, logHook, "Could not notify forkchoice update")
@@ -860,7 +860,7 @@ func TestLatePayloadTasks_SendsFCU(t *testing.T) {
 		slot:  1,
 	}
 	// CurrentSlot == HeadSlot == 1: place genesis 1.5 slots ago so we're solidly in slot 1.
-	service.SetGenesisTime(time.Now().Add(-3 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second / 2))
+	service.SetGenesisTime(time.Now().Add(-3 * params.BeaconConfig().SlotDuration() / 2))
 	service.SetForkChoiceGenesisTime(service.genesisTime)
 
 	service.latePayloadTasks(tr.ctx)
@@ -898,7 +898,7 @@ func TestLatePayloadTasks_SendsFCUWhilePayloadSyncing(t *testing.T) {
 		state: st,
 		slot:  1,
 	}
-	service.SetGenesisTime(time.Now().Add(-3 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second / 2))
+	service.SetGenesisTime(time.Now().Add(-3 * params.BeaconConfig().SlotDuration() / 2))
 	service.SetForkChoiceGenesisTime(service.genesisTime)
 
 	// The envelope validating past the 9s mark must not starve the proposer of the empty build.
@@ -936,7 +936,7 @@ func TestLateBlockTasks_GloasFCU(t *testing.T) {
 	}
 
 	// Set genesis time so CurrentSlot > HeadSlot, triggering late block logic.
-	service.SetGenesisTime(time.Now().Add(-2 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second))
+	service.SetGenesisTime(time.Now().Add(-2 * params.BeaconConfig().SlotDuration()))
 	service.SetForkChoiceGenesisTime(service.genesisTime)
 
 	service.lateBlockTasks(tr.ctx)
@@ -984,7 +984,7 @@ func TestLateBlockTasks_GloasForkBoundary_PreforkBidUsesHeadRoot(t *testing.T) {
 	}
 
 	// Trigger late block logic: CurrentSlot > HeadSlot.
-	service.SetGenesisTime(time.Now().Add(-2 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second))
+	service.SetGenesisTime(time.Now().Add(-2 * params.BeaconConfig().SlotDuration()))
 	service.SetForkChoiceGenesisTime(service.genesisTime)
 
 	service.lateBlockTasks(tr.ctx)

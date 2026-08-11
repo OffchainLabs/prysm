@@ -68,9 +68,9 @@ func TestProcessAttestations_Ok(t *testing.T) {
 	hook := logTest.NewGlobal()
 	ctx := tr.ctx
 
-	service.genesisTime = prysmTime.Now().Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	service.genesisTime = prysmTime.Now().Add(-1 * params.BeaconConfig().SlotDuration())
 	genesisState, pks := util.DeterministicGenesisState(t, 64)
-	require.NoError(t, genesisState.SetGenesisTime(time.Now().Add(-1*time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second)))
+	require.NoError(t, genesisState.SetGenesisTime(time.Now().Add(-1*params.BeaconConfig().SlotDuration())))
 	require.NoError(t, service.saveGenesisData(ctx, genesisState))
 	atts, err := util.GenerateAttestations(genesisState, pks, 1, 0, false)
 	require.NoError(t, err)
@@ -96,7 +96,7 @@ func TestService_ProcessAttestationsAndUpdateHead(t *testing.T) {
 	service, tr := minimalTestService(t)
 	ctx, fcs := tr.ctx, tr.fcs
 
-	service.genesisTime = prysmTime.Now().Add(-2 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	service.genesisTime = prysmTime.Now().Add(-2 * params.BeaconConfig().SlotDuration())
 	genesisState, pks := util.DeterministicGenesisState(t, 64)
 	require.NoError(t, service.saveGenesisData(ctx, genesisState))
 	ojc := &ethpb.Checkpoint{Epoch: 0, Root: service.originBlockRoot[:]}
@@ -159,7 +159,7 @@ func TestService_UpdateHead_NoAtts(t *testing.T) {
 	service, tr := minimalTestService(t)
 	ctx, fcs := tr.ctx, tr.fcs
 
-	service.genesisTime = prysmTime.Now().Add(-2 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	service.genesisTime = prysmTime.Now().Add(-2 * params.BeaconConfig().SlotDuration())
 	genesisState, pks := util.DeterministicGenesisState(t, 64)
 	require.NoError(t, service.saveGenesisData(ctx, genesisState))
 	require.NoError(t, fcs.UpdateJustifiedCheckpoint(ctx, &forkchoicetypes.Checkpoint{Epoch: 0, Root: service.originBlockRoot}))

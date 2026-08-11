@@ -24,7 +24,7 @@ import (
 func TestPayloadAttestationVerifyCurrentSlot(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	now := time.Unix(1000, 0)
-	genesis := now.Add(-time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	genesis := now.Add(-params.BeaconConfig().SlotDuration())
 	clock := startup.NewClock(genesis, [32]byte{}, startup.WithNower(func() time.Time { return now }))
 	ini := &Initializer{shared: &sharedResources{clock: clock}}
 

@@ -584,8 +584,8 @@ func TestValidateBeaconBlockPubSub_WithLookahead(t *testing.T) {
 	require.NoError(t, err)
 
 	stateGen := stategen.New(db, doublylinkedtree.New())
-	offset := int64(blkSlot.Mul(params.BeaconConfig().SecondsPerSlot))
-	chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-offset, 0),
+	offset := time.Duration(blkSlot) * params.BeaconConfig().SlotDuration()
+	chainService := &mock.ChainService{Genesis: time.Now().Add(-offset),
 		DB:    db,
 		State: beaconState,
 		FinalizedCheckPoint: &ethpb.Checkpoint{
@@ -668,8 +668,8 @@ func TestValidateBeaconBlockPubSub_AdvanceEpochsForState(t *testing.T) {
 	require.NoError(t, err)
 
 	stateGen := stategen.New(db, doublylinkedtree.New())
-	offset := int64(blkSlot.Mul(params.BeaconConfig().SecondsPerSlot))
-	chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-offset, 0),
+	offset := time.Duration(blkSlot) * params.BeaconConfig().SlotDuration()
+	chainService := &mock.ChainService{Genesis: time.Now().Add(-offset),
 		DB:    db,
 		State: beaconState,
 		FinalizedCheckPoint: &ethpb.Checkpoint{
@@ -1561,7 +1561,7 @@ func TestValidateBeaconBlockPubSub_ValidExecutionPayload(t *testing.T) {
 	require.NoError(t, err)
 
 	stateGen := stategen.New(db, doublylinkedtree.New())
-	chainService := &mock.ChainService{Genesis: now.Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+	chainService := &mock.ChainService{Genesis: now.Add(-1 * params.BeaconConfig().SlotDuration()),
 		ValidatorsRoot: params.BeaconConfig().GenesisValidatorsRoot,
 		DB:             db,
 		FinalizedCheckPoint: &ethpb.Checkpoint{
@@ -1756,7 +1756,7 @@ func Test_validateBellatrixBeaconBlockParentValidation(t *testing.T) {
 	msg.Block.ParentRoot = bRoot[:]
 	msg.Block.Slot = 1
 	msg.Block.ProposerIndex = proposerIdx
-	msg.Block.Body.ExecutionPayload.Timestamp = uint64(beaconState.GenesisTime().Add(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second).Unix())
+	msg.Block.Body.ExecutionPayload.Timestamp = uint64(beaconState.GenesisTime().Add(params.BeaconConfig().SlotDuration()).Unix())
 	msg.Block.Body.ExecutionPayload.GasUsed = 10
 	msg.Block.Body.ExecutionPayload.GasLimit = 11
 	msg.Block.Body.ExecutionPayload.BlockHash = bytesutil.PadTo([]byte("blockHash"), 32)
@@ -1815,7 +1815,7 @@ func Test_validateBeaconBlockProcessingWhenParentIsOptimistic(t *testing.T) {
 	msg.Block.ParentRoot = bRoot[:]
 	msg.Block.Slot = 1
 	msg.Block.ProposerIndex = proposerIdx
-	msg.Block.Body.ExecutionPayload.Timestamp = uint64(beaconState.GenesisTime().Add(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second).Unix())
+	msg.Block.Body.ExecutionPayload.Timestamp = uint64(beaconState.GenesisTime().Add(params.BeaconConfig().SlotDuration()).Unix())
 	msg.Block.Body.ExecutionPayload.GasUsed = 10
 	msg.Block.Body.ExecutionPayload.GasLimit = 11
 	msg.Block.Body.ExecutionPayload.BlockHash = bytesutil.PadTo([]byte("blockHash"), 32)
@@ -2226,7 +2226,7 @@ func TestDetectAndBroadcastEquivocation(t *testing.T) {
 		slotStart, err := slots.StartTime(genesis, 1)
 		require.NoError(t, err)
 		// Past the early deadline (75% of slot at default mainnet config).
-		lateReceived := slotStart.Add(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+		lateReceived := slotStart.Add(params.BeaconConfig().SlotDuration())
 		require.NoError(t, r.detectAndBroadcastEquivocation(ctx, signedNewBlock, lateReceived))
 
 		require.Equal(t, 0, len(chainService.RecordedEquivocations))
