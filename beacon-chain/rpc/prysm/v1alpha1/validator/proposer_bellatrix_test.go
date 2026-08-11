@@ -761,7 +761,7 @@ func TestServer_setExecutionData(t *testing.T) {
 }
 
 func TestServer_getPayloadHeader(t *testing.T) {
-	genesis := time.Now().Add(-time.Duration(params.BeaconConfig().SlotsPerEpoch) * params.BeaconConfig().SlotDuration())
+	genesis := time.Now().Add(-params.EpochsDuration(1, params.BeaconConfig()))
 	params.SetupTestConfigCleanup(t)
 	bc := params.BeaconConfig()
 	bc.BellatrixForkEpoch = 1

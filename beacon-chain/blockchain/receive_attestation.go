@@ -89,10 +89,6 @@ func (s *Service) spawnProcessAttestationsRoutine() {
 			return
 		}
 
-		// Slots shorter than reorgLateBlockCountAttestations would give a negative offset, which
-		// NewSlotTickerWithIntervals panics on. Clamp to zero: the late-block branch is keyed on
-		// Interval > 0, so a zero offset disables late-block attestation counting rather than
-		// crashing the node on an accelerated devnet.
 		reorgInterval := max(params.BeaconConfig().SlotDuration()-reorgLateBlockCountAttestations, 0)
 		ticker := slots.NewSlotTickerWithIntervals(s.genesisTime, []time.Duration{0, reorgInterval})
 		for {

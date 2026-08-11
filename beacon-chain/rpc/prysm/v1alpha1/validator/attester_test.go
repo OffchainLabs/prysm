@@ -295,7 +295,7 @@ func TestGetAttestationData_OK(t *testing.T) {
 		Root:  justifiedRoot[:],
 	}
 	require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
-	offset := time.Duration(slot) * params.BeaconConfig().SlotDuration()
+	offset := params.SlotsDuration(slot, params.BeaconConfig())
 	attesterServer := &Server{
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
@@ -360,7 +360,7 @@ func TestGetAttestationData_CachedDataFromPreviousHead(t *testing.T) {
 	require.NoError(t, beaconState.SetSlot(slot))
 	require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
 
-	offset := time.Duration(slot) * params.BeaconConfig().SlotDuration()
+	offset := params.SlotsDuration(slot, params.BeaconConfig())
 	genesis := time.Now().Add(-1 * offset)
 
 	// A server whose head is headRoot, serving attestation data out of attCache.
@@ -431,7 +431,7 @@ func BenchmarkGetAttestationDataConcurrent(b *testing.B) {
 		Epoch: 2,
 		Root:  justifiedRoot[:],
 	}
-	offset := time.Duration(slot) * params.BeaconConfig().SlotDuration()
+	offset := params.SlotsDuration(slot, params.BeaconConfig())
 	attesterServer := &Server{
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
@@ -520,7 +520,7 @@ func TestServer_GetAttestationData_InvalidRequestSlot(t *testing.T) {
 	ctx := t.Context()
 
 	slot := 3*params.BeaconConfig().SlotsPerEpoch + 1
-	offset := time.Duration(slot) * params.BeaconConfig().SlotDuration()
+	offset := params.SlotsDuration(slot, params.BeaconConfig())
 	attesterServer := &Server{
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
@@ -562,7 +562,7 @@ func TestServer_GetAttestationData_RequestSlotIsDifferentThanCurrentSlot(t *test
 		Epoch: 2,
 		Root:  justifiedRoot[:],
 	}
-	offset := time.Duration(slot) * params.BeaconConfig().SlotDuration()
+	offset := params.SlotsDuration(slot, params.BeaconConfig())
 	attesterServer := &Server{
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
@@ -609,7 +609,7 @@ func TestGetAttestationData_SucceedsInFirstEpoch(t *testing.T) {
 	}
 	require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
 
-	offset := time.Duration(slot) * params.BeaconConfig().SlotDuration()
+	offset := params.SlotsDuration(slot, params.BeaconConfig())
 	attesterServer := &Server{
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
@@ -678,7 +678,7 @@ func TestGetAttestationData_CommitteeIndexIsZeroPostElectra(t *testing.T) {
 		Root:  justifiedRoot[:],
 	}
 	require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
-	offset := time.Duration(slot) * params.BeaconConfig().SlotDuration()
+	offset := params.SlotsDuration(slot, params.BeaconConfig())
 	attesterServer := &Server{
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
@@ -747,7 +747,7 @@ func TestGetAttestationData_CommitteeIndexGloas(t *testing.T) {
 		Root:  justifiedRoot[:],
 	}
 	require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
-	offset := time.Duration(slot) * params.BeaconConfig().SlotDuration()
+	offset := params.SlotsDuration(slot, params.BeaconConfig())
 
 	t.Run("full payload returns index 1", func(t *testing.T) {
 		headSlot := slot

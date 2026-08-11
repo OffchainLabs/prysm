@@ -185,7 +185,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 				msg.Message.Contribution.AggregationBits.SetBitAt(1, true)
 
 				s.setSyncContributionIndexSlotSeen(1, 1, 1)
-				gt := time.Now().Add(-params.BeaconConfig().SlotDuration() * time.Duration(msg.Message.Contribution.Slot))
+				gt := time.Now().Add(-params.SlotsDuration(msg.Message.Contribution.Slot, params.BeaconConfig()))
 				return s, startup.NewClock(gt, [32]byte{'A'})
 			},
 			args: args{
@@ -226,7 +226,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 				msg.Message.Contribution.AggregationBits.SetBitAt(1, true)
 				msg.Message.Contribution.SubcommitteeIndex = 20
 
-				gt := time.Now().Add(-params.BeaconConfig().SlotDuration() * time.Duration(msg.Message.Contribution.Slot))
+				gt := time.Now().Add(-params.SlotsDuration(msg.Message.Contribution.Slot, params.BeaconConfig()))
 				return s, startup.NewClock(gt, [32]byte{'A'})
 			},
 			args: args{
@@ -268,7 +268,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 				msg.Message.SelectionProof = incorrectProof[:]
 				msg.Message.Contribution.AggregationBits.SetBitAt(1, true)
 
-				gt := time.Now().Add(-params.BeaconConfig().SlotDuration() * time.Duration(msg.Message.Contribution.Slot))
+				gt := time.Now().Add(-params.SlotsDuration(msg.Message.Contribution.Slot, params.BeaconConfig()))
 				return s, startup.NewClock(gt, [32]byte{'A'})
 			},
 			args: args{
@@ -328,7 +328,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 					}
 				}
 				msg.Message.Contribution.AggregationBits.SetBitAt(1, true)
-				gt := time.Now().Add(-params.BeaconConfig().SlotDuration() * time.Duration(msg.Message.Contribution.Slot))
+				gt := time.Now().Add(-params.SlotsDuration(msg.Message.Contribution.Slot, params.BeaconConfig()))
 				return s, startup.NewClock(gt, [32]byte{'A'})
 			},
 			args: args{
@@ -391,7 +391,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 				msg.Message.Contribution.AggregationBits.SetBitAt(1, true)
 
 				s.initCaches()
-				gt := time.Now().Add(-params.BeaconConfig().SlotDuration() * time.Duration(msg.Message.Contribution.Slot))
+				gt := time.Now().Add(-params.SlotsDuration(msg.Message.Contribution.Slot, params.BeaconConfig()))
 				return s, startup.NewClock(gt, [32]byte{'A'})
 			},
 			args: args{
@@ -469,7 +469,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 				}
 
 				s.initCaches()
-				gt := time.Now().Add(-params.BeaconConfig().SlotDuration() * time.Duration(msg.Message.Contribution.Slot))
+				gt := time.Now().Add(-params.SlotsDuration(msg.Message.Contribution.Slot, params.BeaconConfig()))
 				return s, startup.NewClock(gt, [32]byte{'A'})
 			},
 			args: args{
@@ -549,7 +549,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 				}
 
 				s.initCaches()
-				gt := time.Now().Add(-params.BeaconConfig().SlotDuration() * time.Duration(msg.Message.Contribution.Slot))
+				gt := time.Now().Add(-params.SlotsDuration(msg.Message.Contribution.Slot, params.BeaconConfig()))
 				return s, startup.NewClock(gt, [32]byte{'A'})
 			},
 			args: args{
@@ -631,7 +631,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 					Genesis:                     time.Now(),
 				}
 				s.initCaches()
-				gt := time.Now().Add(-params.BeaconConfig().SlotDuration() * time.Duration(msg.Message.Contribution.Slot))
+				gt := time.Now().Add(-params.SlotsDuration(msg.Message.Contribution.Slot, params.BeaconConfig()))
 				return s, startup.NewClock(gt, [32]byte{'A'})
 			},
 			args: args{
@@ -725,7 +725,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 					Genesis:                     time.Now(),
 				}
 				s.initCaches()
-				gt := time.Now().Add(-params.BeaconConfig().SlotDuration() * time.Duration(msg.Message.Contribution.Slot))
+				gt := time.Now().Add(-params.SlotsDuration(msg.Message.Contribution.Slot, params.BeaconConfig()))
 				return s, startup.NewClock(gt, [32]byte{'A'})
 			},
 			args: args{
@@ -820,7 +820,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 					SyncCommitteePubkeys:        pubkeys,
 					Genesis:                     time.Now(),
 				}
-				gt := time.Now().Add(-params.BeaconConfig().SlotDuration() * time.Duration(msg.Message.Contribution.Slot))
+				gt := time.Now().Add(-params.SlotsDuration(msg.Message.Contribution.Slot, params.BeaconConfig()))
 
 				s.initCaches()
 				return s, startup.NewClock(gt, [32]byte{'A'})

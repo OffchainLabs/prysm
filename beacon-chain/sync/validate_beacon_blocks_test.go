@@ -584,7 +584,7 @@ func TestValidateBeaconBlockPubSub_WithLookahead(t *testing.T) {
 	require.NoError(t, err)
 
 	stateGen := stategen.New(db, doublylinkedtree.New())
-	offset := time.Duration(blkSlot) * params.BeaconConfig().SlotDuration()
+	offset := params.SlotsDuration(blkSlot, params.BeaconConfig())
 	chainService := &mock.ChainService{Genesis: time.Now().Add(-offset),
 		DB:    db,
 		State: beaconState,
@@ -668,7 +668,7 @@ func TestValidateBeaconBlockPubSub_AdvanceEpochsForState(t *testing.T) {
 	require.NoError(t, err)
 
 	stateGen := stategen.New(db, doublylinkedtree.New())
-	offset := time.Duration(blkSlot) * params.BeaconConfig().SlotDuration()
+	offset := params.SlotsDuration(blkSlot, params.BeaconConfig())
 	chainService := &mock.ChainService{Genesis: time.Now().Add(-offset),
 		DB:    db,
 		State: beaconState,

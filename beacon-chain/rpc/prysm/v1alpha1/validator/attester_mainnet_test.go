@@ -60,7 +60,7 @@ func TestAttestationDataAtSlot_HandlesFarAwayJustifiedEpoch(t *testing.T) {
 	}
 	require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
 
-	offset := time.Duration(slot) * params.BeaconConfig().SlotDuration()
+	offset := params.SlotsDuration(slot, params.BeaconConfig())
 	attesterServer := &Server{
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: false},

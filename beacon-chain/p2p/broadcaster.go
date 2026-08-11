@@ -43,7 +43,7 @@ func (s *Service) Broadcast(ctx context.Context, msg proto.Message) error {
 	ctx, span := trace.StartSpan(ctx, "p2p.Broadcast")
 	defer span.End()
 
-	twoSlots := 2 * params.BeaconConfig().SlotDuration()
+	twoSlots := params.SlotsDuration(2, params.BeaconConfig())
 	ctx, cancel := context.WithTimeout(ctx, twoSlots)
 	defer cancel()
 
@@ -73,7 +73,7 @@ func (s *Service) BroadcastForEpoch(ctx context.Context, msg proto.Message, epoc
 	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastForEpoch")
 	defer span.End()
 
-	twoSlots := 2 * params.BeaconConfig().SlotDuration()
+	twoSlots := params.SlotsDuration(2, params.BeaconConfig())
 	ctx, cancel := context.WithTimeout(ctx, twoSlots)
 	defer cancel()
 

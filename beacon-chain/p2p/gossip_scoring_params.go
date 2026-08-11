@@ -582,7 +582,7 @@ func oneSlotDuration() time.Duration {
 }
 
 func oneEpochDuration() time.Duration {
-	return time.Duration(params.BeaconConfig().SlotsPerEpoch) * oneSlotDuration()
+	return params.EpochsDuration(1, params.BeaconConfig())
 }
 
 // determines the decay rate from the provided time period till

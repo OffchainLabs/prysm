@@ -50,7 +50,7 @@ func TestServer_GetBlock(t *testing.T) {
 func TestServer_GetAttestationInclusionSlot(t *testing.T) {
 	db := dbTest.SetupDB(t)
 	ctx := t.Context()
-	offset := 2 * params.EpochsDuration(1, params.BeaconConfig())
+	offset := params.EpochsDuration(2, params.BeaconConfig())
 	bs := &Server{
 		BeaconDB:           db,
 		StateGen:           stategen.New(db, doublylinkedtree.New()),

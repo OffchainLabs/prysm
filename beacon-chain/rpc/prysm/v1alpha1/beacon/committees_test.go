@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"math"
 	"testing"
-	"time"
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -34,7 +33,7 @@ func TestServer_ListBeaconCommittees_CurrentEpoch(t *testing.T) {
 	ctx := t.Context()
 	headState := setupActiveValidators(t, numValidators)
 
-	offset := time.Duration(headState.Slot()) * params.BeaconConfig().SlotDuration()
+	offset := params.SlotsDuration(headState.Slot(), params.BeaconConfig())
 	m := &mock.ChainService{
 		Genesis: prysmTime.Now().Add(-1 * offset),
 	}
@@ -109,7 +108,7 @@ func TestServer_ListBeaconCommittees_PreviousEpoch(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.SaveState(ctx, headState, gRoot))
 
-	offset := time.Duration(headState.Slot()) * params.BeaconConfig().SlotDuration()
+	offset := params.SlotsDuration(headState.Slot(), params.BeaconConfig())
 	m := &mock.ChainService{
 		State:   headState,
 		Genesis: prysmTime.Now().Add(-1 * offset),

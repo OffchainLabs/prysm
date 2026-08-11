@@ -455,7 +455,7 @@ func TestValidateAggregateAndProof_CanValidate(t *testing.T) {
 	require.NoError(t, beaconState.SetGenesisTime(time.Now()))
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	chain := &mock.ChainService{Genesis: time.Now().Add(-oneEpoch()),
+	chain := &mock.ChainService{Genesis: time.Now().Add(-params.EpochsDuration(1, params.BeaconConfig())),
 		Optimistic:       true,
 		DB:               db,
 		State:            beaconState,
@@ -557,7 +557,7 @@ func TestVerifyIndexInCommittee_SeenAggregatorEpoch(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	chain := &mock.ChainService{Genesis: time.Now().Add(-oneEpoch()),
+	chain := &mock.ChainService{Genesis: time.Now().Add(-params.EpochsDuration(1, params.BeaconConfig())),
 		DB:               db,
 		ValidatorsRoot:   [32]byte{'A'},
 		State:            beaconState,

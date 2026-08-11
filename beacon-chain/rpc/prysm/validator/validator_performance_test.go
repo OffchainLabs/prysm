@@ -57,7 +57,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		headState = setHeadState(t, headState, publicKeys)
 		require.NoError(t, headState.SetBalances([]uint64{100, 101, 102}))
 
-		offset := time.Duration(headState.Slot()) * params.BeaconConfig().SlotDuration()
+		offset := params.SlotsDuration(headState.Slot(), params.BeaconConfig())
 		vs := &Server{
 			CoreService: &core.Service{
 				HeadFetcher: &mock.ChainService{
@@ -113,7 +113,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		require.NoError(t, err)
 		headState = setHeadState(t, headState, publicKeys)
 
-		offset := time.Duration(headState.Slot()) * params.BeaconConfig().SlotDuration()
+		offset := params.SlotsDuration(headState.Slot(), params.BeaconConfig())
 		vs := &Server{
 			CoreService: &core.Service{
 				HeadFetcher: &mock.ChainService{
@@ -178,7 +178,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		require.NoError(t, err)
 		headState = setHeadState(t, headState, publicKeys)
 
-		offset := time.Duration(headState.Slot()) * params.BeaconConfig().SlotDuration()
+		offset := params.SlotsDuration(headState.Slot(), params.BeaconConfig())
 		vs := &Server{
 			CoreService: &core.Service{
 				HeadFetcher: &mock.ChainService{
@@ -249,7 +249,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 
 		require.NoError(t, headState.SetInactivityScores([]uint64{0, 0, 0}))
 		require.NoError(t, headState.SetBalances([]uint64{100, 101, 102}))
-		offset := time.Duration(headState.Slot()) * params.BeaconConfig().SlotDuration()
+		offset := params.SlotsDuration(headState.Slot(), params.BeaconConfig())
 		vs := &Server{
 			CoreService: &core.Service{
 				HeadFetcher: &mock.ChainService{
@@ -311,7 +311,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 
 		require.NoError(t, headState.SetInactivityScores([]uint64{0, 0, 0}))
 		require.NoError(t, headState.SetBalances([]uint64{100, 101, 102}))
-		offset := time.Duration(headState.Slot()) * params.BeaconConfig().SlotDuration()
+		offset := params.SlotsDuration(headState.Slot(), params.BeaconConfig())
 		vs := &Server{
 			CoreService: &core.Service{
 				HeadFetcher: &mock.ChainService{
@@ -373,7 +373,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 
 		require.NoError(t, headState.SetInactivityScores([]uint64{0, 0, 0}))
 		require.NoError(t, headState.SetBalances([]uint64{100, 101, 102}))
-		offset := time.Duration(headState.Slot()) * params.BeaconConfig().SlotDuration()
+		offset := params.SlotsDuration(headState.Slot(), params.BeaconConfig())
 		vs := &Server{
 			CoreService: &core.Service{
 				HeadFetcher: &mock.ChainService{

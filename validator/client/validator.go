@@ -452,7 +452,7 @@ func (v *validator) NextSlot() <-chan primitives.Slot {
 
 // SlotDeadline is the start time of the next slot.
 func (v *validator) SlotDeadline(slot primitives.Slot) time.Time {
-	return v.genesisTime.Add(time.Duration(slot+1) * params.BeaconConfig().SlotDuration())
+	return v.genesisTime.Add(params.SlotsDuration(slot+1, params.BeaconConfig()))
 }
 
 // CheckDoppelGanger checks if the current actively provided keys have

@@ -246,11 +246,6 @@ func attachSpawner(s *Service) *sync.WaitGroup {
 	return wg
 }
 
-// oneEpoch returns the duration of one epoch.
-func oneEpoch() time.Duration {
-	return params.EpochsDuration(1, params.BeaconConfig())
-}
-
 type fakePartialBroadcaster struct {
 	mu           sync.Mutex
 	unsubscribed []string

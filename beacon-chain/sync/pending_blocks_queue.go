@@ -149,7 +149,7 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 			}
 
 			// Calculate the deadline time by adding three slots duration to the current time
-			threeSlotDuration := 3 * params.BeaconConfig().SlotDuration()
+			threeSlotDuration := params.SlotsDuration(3, params.BeaconConfig())
 			ctxWithTimeout, cancelFunction := context.WithTimeout(ctx, threeSlotDuration)
 			// Process and broadcast the block.
 			if err := s.processAndBroadcastBlock(ctxWithTimeout, b, blkRoot); err != nil {

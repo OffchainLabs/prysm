@@ -679,7 +679,7 @@ func TestRPCBeaconBlocksByRange_RPCHandlerRateLimitOverflow(t *testing.T) {
 
 func TestRPCBeaconBlocksByRange_validateRangeRequest(t *testing.T) {
 	slotsSinceGenesis := primitives.Slot(1000)
-	offset := time.Duration(slotsSinceGenesis) * params.BeaconConfig().SlotDuration()
+	offset := params.SlotsDuration(slotsSinceGenesis, params.BeaconConfig())
 	clock := startup.NewClock(time.Now().Add(-offset), [32]byte{})
 
 	tests := []struct {

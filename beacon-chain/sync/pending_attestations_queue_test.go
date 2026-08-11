@@ -298,7 +298,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen
 	p1 := p2ptest.NewTestP2P(t)
 	validators := uint64(256)
 	currentSlot := 1 + (primitives.Slot(params.BeaconConfig().ElectraForkEpoch) * params.BeaconConfig().SlotsPerEpoch)
-	genesisOffset := time.Duration(currentSlot) * params.BeaconConfig().SlotDuration()
+	genesisOffset := params.SlotsDuration(currentSlot, params.BeaconConfig())
 	clock := startup.NewClock(time.Now().Add(-1*genesisOffset), params.BeaconConfig().GenesisValidatorsRoot)
 
 	// Create genesis state and associated keys.

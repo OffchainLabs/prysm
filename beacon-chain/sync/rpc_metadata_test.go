@@ -108,8 +108,7 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 	params.OverrideBeaconConfig(beaconChainConfig)
 	params.BeaconConfig().InitializeForkSchedule()
 
-	// Compute the number of seconds in an epoch.
-	secondsPerEpoch := oneEpoch()
+	epochDuration := params.EpochsDuration(1, params.BeaconConfig())
 
 	testCases := []struct {
 		name                                             string
@@ -278,8 +277,8 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 			require.Equal(t, 1, peersCount, "Expected peers to be connected")
 
 			// Setup sync services.
-			genesisPeer1 := time.Now().Add(-time.Duration(tc.epochsSinceGenesisPeer1) * secondsPerEpoch)
-			genesisPeer2 := time.Now().Add(-time.Duration(tc.epochsSinceGenesisPeer2) * secondsPerEpoch)
+			genesisPeer1 := time.Now().Add(-time.Duration(tc.epochsSinceGenesisPeer1) * epochDuration)
+			genesisPeer2 := time.Now().Add(-time.Duration(tc.epochsSinceGenesisPeer2) * epochDuration)
 
 			chainPeer1 := &mock.ChainService{Genesis: genesisPeer1, ValidatorsRoot: [32]byte{}}
 			chainPeer2 := &mock.ChainService{Genesis: genesisPeer2, ValidatorsRoot: [32]byte{}}
@@ -336,7 +335,7 @@ func TestMetadataRPCHandler_SendsMetadataQUIC(t *testing.T) {
 
 	// Set up a head state in the database with data we expect.
 	d := db.SetupDB(t)
-	chain := &mock.ChainService{Genesis: time.Now().Add(-5 * oneEpoch()), ValidatorsRoot: [32]byte{}}
+	chain := &mock.ChainService{Genesis: time.Now().Add(-params.EpochsDuration(5, params.BeaconConfig())), ValidatorsRoot: [32]byte{}}
 	r := &Service{
 		cfg: &config{
 			beaconDB: d,
@@ -347,7 +346,7 @@ func TestMetadataRPCHandler_SendsMetadataQUIC(t *testing.T) {
 		rateLimiter: newRateLimiter(p1),
 	}
 
-	chain2 := &mock.ChainService{Genesis: time.Now().Add(-5 * oneEpoch()), ValidatorsRoot: [32]byte{}}
+	chain2 := &mock.ChainService{Genesis: time.Now().Add(-params.EpochsDuration(5, params.BeaconConfig())), ValidatorsRoot: [32]byte{}}
 	r2 := &Service{
 		cfg: &config{
 			beaconDB: d,
