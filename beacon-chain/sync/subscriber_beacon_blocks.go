@@ -7,6 +7,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -238,6 +239,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 		root := source.Root()
 
 		var hasBlobsColumns []blocks.PartialDataColumn
+		partialsPublished := false
 		for iteration := uint64(0); ; /*no stop condition*/ iteration++ {
 			log = log.WithField("iteration", iteration)
 
@@ -282,6 +284,8 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				// should publish to help our peers.
 				if err := s.publishPartialColumns(ctx, columnIndicesToSample, partialColumns); err != nil {
 					log.WithError(err).Error("Failed to publish partial columns")
+				} else {
+					partialsPublished = true
 				}
 				hasBlobsColumns = nil
 			} else if isPartialEnabled && len(hasBlobsColumns) > 0 {
@@ -292,9 +296,20 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				if err := s.publishPartialColumns(ctx, columnIndicesToSample, hasBlobsColumns); err != nil {
 					log.WithError(err).Error("Failed to publish partial columns after clearing HasBlobs parts requests")
 				} else {
+					partialsPublished = true
 					log.WithField("count", len(hasBlobsColumns)).Debug("Republished partial columns with HasBlobs parts requests cleared")
 				}
 				hasBlobsColumns = nil
+			} else if isPartialEnabled && count == 0 && !partialsPublished {
+				emptyColumns, err := emptyPartialColumnsRequestingAll(source, len(commitments))
+				if err != nil {
+					log.WithError(err).Error("Failed to construct empty partial columns")
+				} else if err := s.publishPartialColumns(ctx, columnIndicesToSample, emptyColumns); err != nil {
+					log.WithError(err).Error("Failed to publish empty partial columns")
+				} else {
+					partialsPublished = true
+					log.WithField("commitments", len(commitments)).Debug("Published empty partial columns requesting all cells")
+				}
 			}
 
 			// No sidecars are retrieved from the EL, retry later
@@ -336,6 +351,22 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 	}
 
 	return nil
+}
+
+func emptyPartialColumnsRequestingAll(source peerdas.ConstructionPopulator, commitmentCount int) ([]blocks.PartialDataColumn, error) {
+	included := bitfield.NewBitlist(uint64(commitmentCount))
+	requests := bitfield.NewBitlist(uint64(commitmentCount)).Not()
+
+	partialColumns, err := peerdas.PartialColumns(included, nil, nil, source)
+	if err != nil {
+		return nil, errors.Wrap(err, "construct partial columns")
+	}
+	for i := range partialColumns {
+		if err := partialColumns[i].SetPartsRequests(requests); err != nil {
+			return nil, errors.Wrap(err, "set parts requests")
+		}
+	}
+	return partialColumns, nil
 }
 
 func (s *Service) publishHasBlobsPartialColumns(ctx context.Context, source peerdas.ConstructionPopulator, indices map[uint64]bool) ([]blocks.PartialDataColumn, error) {
