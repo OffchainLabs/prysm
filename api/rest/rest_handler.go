@@ -29,6 +29,13 @@ type Handler interface {
 	GetSSZ(ctx context.Context, endpoint string, opts ...GetOption) ([]byte, http.Header, error)
 	Post(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp any) error
 	PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) error
+	PostSSZWithFallback(
+		ctx context.Context,
+		endpoint string,
+		headers map[string]string,
+		sszFn func() ([]byte, error),
+		jsonFn func() ([]byte, error),
+	) error
 	Host() string
 }
 
