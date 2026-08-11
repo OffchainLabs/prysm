@@ -1,0 +1,3 @@
+### Fixed
+
+- Drive slot tickers from `SLOT_DURATION_MS` instead of the raw `SECONDS_PER_SLOT` field. Configs that only set `SLOT_DURATION_MS` (as ethereum-genesis-generator v6.1.5+ now generates) left `SecondsPerSlot` at its preset default, so `slots.NewSlotTicker` ran at the wrong rate while `time/slots` slot-time math used the correct duration. On a network with a non-default slot time this made the validator client propose blocks early and drift, and the beacon node rejected every one of them as "could not process slot from the future". `NewSlotTicker` and `NewSlotTickerWithOffset` now take a `time.Duration`.

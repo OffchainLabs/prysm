@@ -605,7 +605,7 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 	go s.logMinimumPeersPerSubnet(ctx, p)
 
 	s.trySubscribeSubnets(ctx, tracker)
-	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
+	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SlotDuration())
 	defer slotTicker.Done()
 	for {
 		select {
@@ -668,7 +668,7 @@ func (s *Service) ensurePeers(ctx context.Context, tracker *subnetTracker) {
 	// Try once immediately so we don't have to wait until the next slot.
 	s.tryEnsurePeers(ctx, tracker)
 
-	oncePerSlot := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
+	oncePerSlot := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SlotDuration())
 	defer oncePerSlot.Done()
 	for {
 		select {

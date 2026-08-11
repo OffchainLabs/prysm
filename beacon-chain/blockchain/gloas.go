@@ -3,11 +3,12 @@ package blockchain
 import (
 	"context"
 	"math"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	coregloas "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -54,11 +55,11 @@ func (s *Service) IsBidCompatibleWithHead(bid interfaces.ROExecutionPayloadBid) 
 	return buildsOnParentPayload
 }
 
-func (s *Service) waitUntilEpoch(target primitives.Epoch, secondsPerSlot uint64) error {
+func (s *Service) waitUntilEpoch(target primitives.Epoch, slotDuration time.Duration) error {
 	if slots.ToEpoch(s.CurrentSlot()) >= target {
 		return nil
 	}
-	ticker := slots.NewSlotTicker(s.genesisTime, secondsPerSlot)
+	ticker := slots.NewSlotTicker(s.genesisTime, slotDuration)
 	defer ticker.Done()
 	for {
 		select {
@@ -81,11 +82,11 @@ func (s *Service) runLatePayloadTasks() {
 	if cfg.GloasForkEpoch == math.MaxUint64 {
 		return
 	}
-	if err := s.waitUntilEpoch(cfg.GloasForkEpoch, cfg.SecondsPerSlot); err != nil {
+	if err := s.waitUntilEpoch(cfg.GloasForkEpoch, cfg.SlotDuration()); err != nil {
 		return
 	}
 	offset := cfg.SlotComponentDuration(cfg.PayloadDueBPS)
-	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, offset, cfg.SecondsPerSlot)
+	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, offset, cfg.SlotDuration())
 	defer ticker.Done()
 	for {
 		select {
@@ -164,7 +165,7 @@ func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnly
 		return emptyAttri
 	}
 
-	prevRando, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
+	prevRando, err := helpers.RandaoMix(st, coreTime.CurrentEpoch(st))
 	if err != nil {
 		log.WithError(err).Error("Could not get randao mix to get payload attribute")
 		return emptyAttri
