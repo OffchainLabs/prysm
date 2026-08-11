@@ -46,8 +46,8 @@ func WithHttpEndpointAndJWTSecret(endpointString string, secret []byte) Option {
 }
 
 // WithRPCClientDialer supplies a dialer used to create the execution node RPC
-// client (e.g. via gethRPC.DialInProc), taking precedence over any configured
-// endpoint, JWT secret, and headers.
+// client (e.g. one from go-ethereum's rpc.DialInProc), taking precedence over
+// any configured endpoint, JWT secret, and headers.
 func WithRPCClientDialer(dialer RPCClientDialer) Option {
 	return func(s *Service) error {
 		s.cfg.rpcClientDialer = dialer

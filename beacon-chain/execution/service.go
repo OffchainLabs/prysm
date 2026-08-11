@@ -120,7 +120,8 @@ func (RPCClientEmpty) CallContext(context.Context, any, string, ...any) error {
 
 // RPCClientDialer creates the RPC client used to communicate with the execution
 // node. It is re-invoked on every reconnection attempt and must return a new,
-// ready-to-use client on each call.
+// ready-to-use client on each call. Returned clients are owned and eventually
+// closed by the service.
 type RPCClientDialer func(ctx context.Context) (*gethRPC.Client, error)
 
 // config defines a config struct for dependencies into the service.
