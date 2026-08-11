@@ -514,6 +514,17 @@ func TestServer_ListAttestationsElectra(t *testing.T) {
 	require.DeepSSZEqual(t, wanted, res)
 }
 
+func TestAttestationAs_ConvertsBetweenElectraAndGloas(t *testing.T) {
+	gloas := util.NewAttestationGloas()
+	electra, ok := attestationAs[*ethpb.AttestationElectra](gloas)
+	require.Equal(t, true, ok)
+	assert.DeepEqual(t, ethpb.AttestationGloasToElectra(gloas), electra)
+
+	converted, ok := attestationAs[*ethpb.AttestationGloas](electra)
+	require.Equal(t, true, ok)
+	assert.DeepEqual(t, gloas, converted)
+}
+
 func TestServer_mapAttestationToTargetRoot(t *testing.T) {
 	count := primitives.Slot(100)
 	atts := make([]ethpb.Att, count)

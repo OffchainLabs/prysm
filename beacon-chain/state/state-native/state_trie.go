@@ -22,6 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/wrappers"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -1015,7 +1016,7 @@ func (b *BeaconState) Copy() state.BeaconState {
 		rebuildTrie:      make(map[types.FieldIndex]bool, fieldCount),
 		stateFieldLeaves: make(map[types.FieldIndex]*fieldtrie.FieldTrie, len(fieldMap)),
 
-		// Share the reference to validator index map.
+		// Shared and mutated in place, lookups are bounded by each state's validator count.
 		valMapHandler: b.valMapHandler,
 
 		builderIdxMap: maps.Clone(b.builderIdxMap),
@@ -1053,9 +1054,6 @@ func (b *BeaconState) Copy() state.BeaconState {
 		ref.AddRef()
 		dst.sharedFieldReferences[field] = ref
 	}
-
-	// Increment ref for validator map
-	b.valMapHandler.AddRef()
 
 	for i := range b.dirtyFields {
 		dst.dirtyFields[i] = true
@@ -1347,7 +1345,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.Eth1DepositIndex:
 		return ssz.Uint64Root(b.eth1DepositIndex), nil
 	case types.Fork:
-		return ssz.ForkRoot(b.fork)
+		return wrappers.ForkRoot(b.fork)
 	case types.LatestBlockHeader:
 		return stateutil.BlockHeaderRoot(b.latestBlockHeader)
 	case types.BlockRoots:
@@ -1419,11 +1417,11 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.JustificationBits:
 		return bytesutil.ToBytes32(b.justificationBits), nil
 	case types.PreviousJustifiedCheckpoint:
-		return ssz.CheckpointRoot(b.previousJustifiedCheckpoint)
+		return wrappers.CheckpointRoot(b.previousJustifiedCheckpoint)
 	case types.CurrentJustifiedCheckpoint:
-		return ssz.CheckpointRoot(b.currentJustifiedCheckpoint)
+		return wrappers.CheckpointRoot(b.currentJustifiedCheckpoint)
 	case types.FinalizedCheckpoint:
-		return ssz.CheckpointRoot(b.finalizedCheckpoint)
+		return wrappers.CheckpointRoot(b.finalizedCheckpoint)
 	case types.InactivityScores:
 		return stateutil.Uint64ListRoot(b.version, b.inactivityScoresVal())
 	case types.CurrentSyncCommittee:
@@ -1465,7 +1463,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.LatestExecutionPayloadBid:
 		return b.latestExecutionPayloadBid.HashTreeRoot()
 	case types.Builders:
-		return stateutil.BuildersRoot(b.builders)
+		return stateutil.BuildersRoot(b.version, b.builders)
 	case types.NextWithdrawalBuilderIndex:
 		return ssz.Uint64Root(uint64(b.nextWithdrawalBuilderIndex)), nil
 	case types.ExecutionPayloadAvailability:
@@ -1474,11 +1472,11 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.BuilderPendingPayments:
 		return stateutil.BuilderPendingPaymentsRoot(b.builderPendingPayments)
 	case types.BuilderPendingWithdrawals:
-		return stateutil.BuilderPendingWithdrawalsRoot(b.builderPendingWithdrawals)
+		return stateutil.BuilderPendingWithdrawalsRoot(b.version, b.builderPendingWithdrawals)
 	case types.LatestBlockHash:
 		return bytesutil.ToBytes32(b.latestBlockHash), nil
 	case types.PayloadExpectedWithdrawals:
-		return ssz.WithdrawalSliceRoot(b.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+		return stateutil.PayloadExpectedWithdrawalsRoot(b.version, b.payloadExpectedWithdrawals)
 	case types.PTCWindow:
 		return stateutil.PTCWindowRoot(b.ptcWindow)
 	}

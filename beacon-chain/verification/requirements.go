@@ -54,6 +54,7 @@ const (
 	RequireBidBuilderCanCover
 	RequireBidSignatureValid
 	RequireBidSlotMatches
+	RequireBidCompatibleWithHead
 
 	// Signed proposer preferences specific.
 	RequireProposerPreferencesCurrentOrNextEpoch

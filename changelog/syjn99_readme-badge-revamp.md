@@ -1,3 +1,0 @@
-### Ignored
-
-- Update README badges.

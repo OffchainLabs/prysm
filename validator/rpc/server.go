@@ -20,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/client"
 	iface "github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/db"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v7/validator/web"
 	"github.com/pkg/errors"
 )
@@ -85,6 +86,15 @@ type Server struct {
 // NewServer instantiates a new HTTP server.
 func NewServer(ctx context.Context, cfg *Config) *Server {
 	ctx, cancel := context.WithCancel(ctx)
+
+	// TODO(17165): walletInitialized should be removed anyway.
+	walletInitialized := cfg.Wallet != nil
+	if cfg.ValidatorService != nil && cfg.ValidatorService.RemoteSignerConfig() != nil {
+		// Consider the wallet initialized when remote signer is configured,
+		// as this flag blocks the VC from starting up and serving requests, even though the keymanager is ready.
+		walletInitialized = true
+	}
+
 	server := &Server{
 		ctx:                    ctx,
 		cancel:                 cancel,
@@ -101,7 +111,7 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 		db:                     cfg.DB,
 		walletDir:              cfg.WalletDir,
 		walletInitializedFeed:  cfg.WalletInitializedFeed,
-		walletInitialized:      cfg.Wallet != nil,
+		walletInitialized:      walletInitialized,
 		wallet:                 cfg.Wallet,
 		beaconApiTimeout:       cfg.BeaconApiTimeout,
 		beaconApiEndpoint:      cfg.BeaconApiEndpoint,
@@ -239,4 +249,21 @@ func (s *Server) Status() error {
 		return s.startFailure
 	}
 	return nil
+}
+
+// keymanagerKind returns the kind of the configured keymanager.
+// Return boolean as well as the kind to indicate whether the wallet is ready or not.
+func (s *Server) keymanagerKind() (keymanager.Kind, bool) {
+	// If remote signer is configured, return Web3Signer kind.
+	if s.validatorService != nil && s.validatorService.RemoteSignerConfig() != nil {
+		return keymanager.Web3Signer, true
+	}
+
+	// Prysm wallet is not set. This path is only reachable for Web/RPC path.
+	// Alert caller with false to indicate that the wallet is not initialized.
+	if s.wallet == nil {
+		return 0, false
+	}
+
+	return s.wallet.KeymanagerKind(), true
 }

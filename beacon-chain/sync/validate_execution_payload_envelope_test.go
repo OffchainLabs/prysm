@@ -391,8 +391,7 @@ func envelopeToPubsub(t *testing.T, s *Service, p p2p.P2P, env *ethpb.SignedExec
 	require.NoError(t, err)
 
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedExecutionPayloadEnvelope]()]
-	digest, err := s.currentForkDigest()
-	require.NoError(t, err)
+	digest := s.currentForkDigest()
 	topic = s.addDigestToTopic(topic, digest)
 
 	return &pubsub.Message{

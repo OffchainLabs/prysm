@@ -228,10 +228,6 @@ func (c *grpcValidatorClient) BeaconBlock(ctx context.Context, in *ethpb.BlockRe
 	return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: gc.Block}}, nil
 }
 
-func (c *grpcValidatorClient) FeeRecipientByPubKey(ctx context.Context, in *ethpb.FeeRecipientByPubKeyRequest) (*ethpb.FeeRecipientByPubKeyResponse, error) {
-	return c.getClient().GetFeeRecipientByPubKey(ctx, in)
-}
-
 func (c *grpcValidatorClient) SyncCommitteeContribution(ctx context.Context, in *ethpb.SyncCommitteeContributionRequest) (*ethpb.SyncCommitteeContribution, error) {
 	return c.getClient().GetSyncCommitteeContribution(ctx, in)
 }
@@ -266,10 +262,6 @@ func (c *grpcValidatorClient) ProposeBeaconBlock(ctx context.Context, in *ethpb.
 
 func (c *grpcValidatorClient) ProposeExit(ctx context.Context, in *ethpb.SignedVoluntaryExit) (*ethpb.ProposeExitResponse, error) {
 	return c.getClient().ProposeExit(ctx, in)
-}
-
-func (c *grpcValidatorClient) StreamBlocksAltair(ctx context.Context, in *ethpb.StreamBlocksRequest) (ethpb.BeaconNodeValidator_StreamBlocksAltairClient, error) {
-	return c.getClient().StreamBlocksAltair(ctx, in)
 }
 
 func (c *grpcValidatorClient) SubmitAggregateSelectionProof(ctx context.Context, in *ethpb.AggregateSelectionRequest, _ primitives.ValidatorIndex, _ uint64) (*ethpb.AggregateSelectionResponse, error) {
@@ -391,8 +383,8 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 	defer span.End()
 	if len(topics) == 0 {
 		sendEvent(ctx, eventsChannel, &eventClient.Event{
-			EventType: eventClient.EventError,
-			Data:      []byte(errors.New("no topics were added").Error()),
+			Type: eventClient.EventError,
+			Data: []byte(errors.New("no topics were added").Error()),
 		})
 		return
 	}
@@ -409,8 +401,8 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 	}
 	if !containsHead {
 		sendEvent(ctx, eventsChannel, &eventClient.Event{
-			EventType: eventClient.EventConnectionError,
-			Data:      []byte(errors.Wrap(client.ErrConnectionIssue, "gRPC only supports the head topic, and head topic was not passed").Error()),
+			Type: eventClient.EventConnectionError,
+			Data: []byte(errors.Wrap(client.ErrConnectionIssue, "gRPC only supports the head topic, and head topic was not passed").Error()),
 		})
 	}
 	if containsHead && len(topics) > 1 {
@@ -425,8 +417,8 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 	stream, err := c.getClient().StreamSlots(subCtx, &ethpb.StreamSlotsRequest{VerifiedOnly: true})
 	if err != nil {
 		sendEvent(subCtx, eventsChannel, &eventClient.Event{
-			EventType: eventClient.EventConnectionError,
-			Data:      []byte(errors.Wrap(client.ErrConnectionIssue, err.Error()).Error()),
+			Type: eventClient.EventConnectionError,
+			Data: []byte(errors.Wrap(client.ErrConnectionIssue, err.Error()).Error()),
 		})
 		return
 	}
@@ -441,8 +433,8 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 			res, err := stream.Recv()
 			if err != nil {
 				sendEvent(subCtx, eventsChannel, &eventClient.Event{
-					EventType: eventClient.EventConnectionError,
-					Data:      []byte(errors.Wrap(client.ErrConnectionIssue, err.Error()).Error()),
+					Type: eventClient.EventConnectionError,
+					Data: []byte(errors.Wrap(client.ErrConnectionIssue, err.Error()).Error()),
 				})
 				return
 			}
@@ -461,15 +453,15 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 			})
 			if err != nil {
 				if !sendEvent(subCtx, eventsChannel, &eventClient.Event{
-					EventType: eventClient.EventError,
-					Data:      []byte(errors.Wrap(err, "failed to marshal Head Event").Error()),
+					Type: eventClient.EventError,
+					Data: []byte(errors.Wrap(err, "failed to marshal Head Event").Error()),
 				}) {
 					return
 				}
 			}
 			if !sendEvent(subCtx, eventsChannel, &eventClient.Event{
-				EventType: eventClient.EventHead,
-				Data:      b,
+				Type: eventClient.EventHead,
+				Data: b,
 			}) {
 				return
 			}

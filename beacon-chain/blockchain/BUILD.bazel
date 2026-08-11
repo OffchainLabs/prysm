@@ -45,6 +45,7 @@ go_library(
         "//testing/spectest:__subpackages__",
     ],
     deps = [
+        "//api:go_default_library",
         "//async:go_default_library",
         "//async/event:go_default_library",
         "//beacon-chain/blockchain/kzg:go_default_library",

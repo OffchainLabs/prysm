@@ -68,7 +68,18 @@ func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Reques
 	if httputil.RespondWithSsz(r) {
 		var data []byte
 		var err error
-		if v >= version.Electra {
+		if v >= version.Gloas {
+			typedAgg, ok := ethpbalpha.AttestationGloasFromAtt(agg)
+			if !ok {
+				httputil.HandleError(w, fmt.Sprintf("Attestation cannot be converted to type %T", &ethpbalpha.AttestationGloas{}), http.StatusInternalServerError)
+				return
+			}
+			data, err = typedAgg.MarshalSSZ()
+			if err != nil {
+				httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		} else if v >= version.Electra {
 			typedAgg, ok := agg.(*ethpbalpha.AttestationElectra)
 			if !ok {
 				httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.AttestationElectra{}), http.StatusInternalServerError)
@@ -100,7 +111,19 @@ func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Reques
 	resp := &structs.AggregateAttestationResponse{
 		Version: version.String(v),
 	}
-	if v >= version.Electra {
+	if v >= version.Gloas {
+		typedAgg, ok := ethpbalpha.AttestationGloasFromAtt(agg)
+		if !ok {
+			httputil.HandleError(w, fmt.Sprintf("Attestation cannot be converted to type %T", &ethpbalpha.AttestationGloas{}), http.StatusInternalServerError)
+			return
+		}
+		data, err := json.Marshal(structs.AttGloasFromConsensus(typedAgg))
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		resp.Data = data
+	} else if v >= version.Electra {
 		typedAgg, ok := agg.(*ethpbalpha.AttestationElectra)
 		if !ok {
 			httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.AttestationElectra{}), http.StatusInternalServerError)

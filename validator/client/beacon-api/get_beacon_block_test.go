@@ -1,13 +1,17 @@
 package beacon_api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	neturl "net/url"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -15,12 +19,117 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/mock"
 	testhelpers "github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/test-helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/client/cache"
+	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/mock/gomock"
 )
+
+// TestBeaconBlockV4_DecodeClosureCachesWinningResponse exercises the decode
+// closure passed to blockFreshnessOptions: when the racing SSZ read accepts a
+// candidate, that closure records the decoded block so beaconBlockV4 can reuse
+// it instead of decoding the winning response a second time.
+func TestBeaconBlockV4_DecodeClosureCachesWinningResponse(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	const slot = primitives.Slot(1)
+
+	parentRoot := [32]byte{0x42}
+	block := util.HydrateBeaconBlockGloas(&ethpb.BeaconBlockGloas{Slot: slot, ParentRoot: parentRoot[:]})
+	sszData, err := block.MarshalSSZ()
+	require.NoError(t, err)
+
+	respHeader := http.Header{
+		"Content-Type":                     []string{api.OctetStreamMediaType},
+		api.ExecutionPayloadIncludedHeader: []string{"false"},
+	}
+
+	// A freshness hint announcing the block's parent root wires the decode
+	// closure into the SSZ acceptance check.
+	ctx := iface.WithHint(t.Context(), iface.Hint{
+		Head:     func() (iface.Head, bool) { return iface.Head{Root: parentRoot, Slot: slot}, true },
+		Deadline: time.Time{},
+	})
+
+	handler := mock.NewMockHandler(ctrl)
+	handler.EXPECT().GetSSZ(
+		gomock.Any(),
+		fmt.Sprintf("/eth/v4/validator/blocks/%d?include_payload=false", slot),
+		gomock.Any(),
+	).DoAndReturn(func(_ context.Context, _ string, opts ...rest.GetOption) ([]byte, http.Header, error) {
+		// Simulate the racing handler applying the acceptance check to a
+		// candidate response, which runs the decode closure under test.
+		cfg := rest.ResolveOptions(opts...)
+		require.Equal(t, true, cfg.SSZAccept(sszData, respHeader))
+		return sszData, respHeader, nil
+	}).Times(1)
+
+	validatorClient := &beaconApiValidatorClient{handler: handler}
+	got, err := validatorClient.beaconBlockV4(ctx, slot, neturl.Values{})
+	require.NoError(t, err)
+
+	want := &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: block}}
+	assert.DeepEqual(t, want, got)
+}
+
+// TestBeaconBlock_DecodeClosureCachesWinningResponse exercises the decode
+// closure passed to blockFreshnessOptions on the pre-Gloas (v3) path: when the
+// racing SSZ read runs the acceptance check, that closure records the decoded
+// block so beaconBlock can reuse it instead of decoding the winning response
+// a second time.
+func TestBeaconBlock_DecodeClosureCachesWinningResponse(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	proto := testhelpers.GenerateProtoElectraBeaconBlockContents()
+	sszData, err := proto.MarshalSSZ()
+	require.NoError(t, err)
+
+	const slot = primitives.Slot(1)
+	randaoReveal := []byte{2}
+	graffiti := []byte{3}
+
+	respHeader := http.Header{
+		"Content-Type":                    []string{api.OctetStreamMediaType},
+		api.VersionHeader:                 []string{"electra"},
+		api.ExecutionPayloadBlindedHeader: []string{"false"},
+	}
+
+	// The generated block builds on this parent root; announcing it as the head
+	// makes the SSZ acceptance check match the candidate.
+	var parentRoot [32]byte
+	copy(parentRoot[:], proto.Block.ParentRoot)
+
+	// A freshness hint wires the decode closure into the SSZ acceptance check.
+	ctx := iface.WithHint(t.Context(), iface.Hint{
+		Head:     func() (iface.Head, bool) { return iface.Head{Root: parentRoot, Slot: slot}, true },
+		Deadline: time.Time{},
+	})
+
+	handler := mock.NewMockHandler(ctrl)
+	handler.EXPECT().GetSSZ(
+		gomock.Any(),
+		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
+		gomock.Any(),
+	).DoAndReturn(func(_ context.Context, _ string, opts ...rest.GetOption) ([]byte, http.Header, error) {
+		// Simulate the racing handler applying the acceptance check, which runs
+		// the decode closure under test and records the decoded block. The block
+		// builds on the announced head, so the candidate must be accepted.
+		require.Equal(t, true, rest.ResolveOptions(opts...).SSZAccept(sszData, respHeader))
+		return sszData, respHeader, nil
+	}).Times(1)
+
+	validatorClient := &beaconApiValidatorClient{handler: handler}
+	got, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
+	require.NoError(t, err)
+
+	want := &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Electra{Electra: proto}}
+	assert.DeepEqual(t, want, got)
+}
 
 func TestGetBeaconBlock_RequestFailed(t *testing.T) {
 	ctrl := gomock.NewController(t)

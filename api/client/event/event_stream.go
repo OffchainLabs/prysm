@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/client"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -38,8 +39,8 @@ type EventStreamClient interface {
 }
 
 type Event struct {
-	EventType string
-	Data      []byte
+	Type string
+	Data []byte
 }
 
 // EventStream is responsible for subscribing to the Beacon API events endpoint
@@ -53,9 +54,13 @@ type EventStream struct {
 
 func NewEventStream(ctx context.Context, httpClient *http.Client, host string, topics []string) (*EventStream, error) {
 	// Check if the host is a valid URL
-	_, err := url.ParseRequestURI(host)
-	if err != nil {
-		return nil, err
+	if _, err := url.ParseRequestURI(host); err != nil {
+		// url.Error carries the unredacted host, so only its cause is surfaced.
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			err = urlErr.Err
+		}
+		return nil, errors.Wrapf(err, "invalid event stream host %s", api.RedactEndpoint(host))
 	}
 	if len(topics) == 0 {
 		return nil, errors.New("no topics provided")
@@ -86,14 +91,14 @@ func (h *EventStream) send(eventsChannel chan<- *Event, ev *Event) bool {
 // eventsChannel until the context is canceled or an error ends the stream.
 func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
 	allTopics := strings.Join(h.topics, ",")
-	log.WithField("topics", allTopics).Info("Listening to Beacon API events")
 	fullUrl := h.host + "/eth/v1/events?topics=" + allTopics
+	log.WithFields(logrus.Fields{"url": api.RedactEndpoint(fullUrl), "topics": allTopics}).Info("Listening to Beacon API events")
 	req, err := http.NewRequestWithContext(h.ctx, http.MethodGet, fullUrl, nil)
 	if err != nil {
 		err = errors.Wrap(err, "failed to create HTTP request")
 		h.send(eventsChannel, &Event{
-			EventType: EventConnectionError,
-			Data:      []byte(err.Error()),
+			Type: EventConnectionError,
+			Data: []byte(err.Error()),
 		})
 		return err
 	}
@@ -103,8 +108,8 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
 	if err != nil {
 		err = errors.Wrap(err, client.ErrConnectionIssue.Error())
 		h.send(eventsChannel, &Event{
-			EventType: EventConnectionError,
-			Data:      []byte(err.Error()),
+			Type: EventConnectionError,
+			Data: []byte(err.Error()),
 		})
 		return err
 	}
@@ -145,7 +150,7 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
 				// Empty line indicates the end of an event
 				if eventType != "" && data != "" {
 					// Process the event when both eventType and data are set
-					if !h.send(eventsChannel, &Event{EventType: eventType, Data: []byte(data)}) {
+					if !h.send(eventsChannel, &Event{Type: eventType, Data: []byte(data)}) {
 						return nil
 					}
 				}
@@ -170,8 +175,8 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) error {
 	if err := scanner.Err(); err != nil {
 		err = errors.Wrap(err, errors.Wrap(client.ErrConnectionIssue, "scanner failed").Error())
 		h.send(eventsChannel, &Event{
-			EventType: EventConnectionError,
-			Data:      []byte(err.Error()),
+			Type: EventConnectionError,
+			Data: []byte(err.Error()),
 		})
 		return err
 	}

@@ -3,8 +3,10 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "get_options.go",
         "log.go",
         "mock_rest_provider.go",
+        "multi_handler.go",
         "rest_connection_provider.go",
         "rest_handler.go",
     ],
@@ -26,14 +28,21 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "get_options_test.go",
+        "multi_handler_test.go",
         "rest_connection_provider_test.go",
+        "rest_handler_client_test.go",
         "rest_handler_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
         "//api:go_default_library",
+        "//config/params:go_default_library",
         "//network/httputil:go_default_library",
+        "//runtime/version:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
+        "@com_github_sirupsen_logrus//:go_default_library",
+        "@com_github_sirupsen_logrus//hooks/test:go_default_library",
     ],
 )

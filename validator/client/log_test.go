@@ -17,7 +17,8 @@ func TestLogSubmittedAtts(t *testing.T) {
 	t.Run("phase0 attestations", func(t *testing.T) {
 		logHook := logTest.NewGlobal()
 		v := validator{
-			submittedAtts: make(map[submittedAttKey]*submittedAtt),
+			submittedAtts:             make(map[submittedAttKey]*submittedAtt),
+			attestedSlotsByKeyByEpoch: make(map[primitives.Epoch]map[[field_params.BLSPubkeyLength]byte]primitives.Slot),
 		}
 		att := util.HydrateAttestation(&ethpb.Attestation{})
 		att.Data.CommitteeIndex = 12
@@ -28,7 +29,8 @@ func TestLogSubmittedAtts(t *testing.T) {
 	t.Run("electra attestations", func(t *testing.T) {
 		logHook := logTest.NewGlobal()
 		v := validator{
-			submittedAtts: make(map[submittedAttKey]*submittedAtt),
+			submittedAtts:             make(map[submittedAttKey]*submittedAtt),
+			attestedSlotsByKeyByEpoch: make(map[primitives.Epoch]map[[field_params.BLSPubkeyLength]byte]primitives.Slot),
 		}
 		att := util.HydrateAttestationElectra(&ethpb.AttestationElectra{})
 		att.Data.CommitteeIndex = 0
@@ -41,7 +43,8 @@ func TestLogSubmittedAtts(t *testing.T) {
 	t.Run("electra attestations multiple saved", func(t *testing.T) {
 		logHook := logTest.NewGlobal()
 		v := validator{
-			submittedAtts: make(map[submittedAttKey]*submittedAtt),
+			submittedAtts:             make(map[submittedAttKey]*submittedAtt),
+			attestedSlotsByKeyByEpoch: make(map[primitives.Epoch]map[[field_params.BLSPubkeyLength]byte]primitives.Slot),
 		}
 		att := util.HydrateAttestationElectra(&ethpb.AttestationElectra{})
 		att.Data.CommitteeIndex = 0

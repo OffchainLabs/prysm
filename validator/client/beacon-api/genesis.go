@@ -30,9 +30,7 @@ func (c *beaconApiValidatorClient) waitForChainStart(ctx context.Context) (*ethp
 	genesis, err := c.genesisProvider.Genesis(ctx)
 
 	for err != nil {
-		jsonErr := &httputil.DefaultJsonError{}
-		httpNotFound := errors.As(err, &jsonErr) && jsonErr.Code == http.StatusNotFound
-		if !httpNotFound {
+		if !errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusNotFound}) {
 			return nil, errors.Wrap(err, "failed to get genesis data")
 		}
 

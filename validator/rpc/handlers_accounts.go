@@ -75,13 +75,14 @@ func (s *Server) ListAccounts(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, errors.Errorf("Could not retrieve public keys: %v", err).Error(), http.StatusInternalServerError)
 		return
 	}
+	kind, _ := s.keymanagerKind()
 	accs := make([]*Account, len(keys))
 	for i := range keys {
 		accs[i] = &Account{
 			ValidatingPublicKey: hexutil.Encode(keys[i][:]),
 			AccountName:         petnames.DeterministicName(keys[i][:], "-"),
 		}
-		if s.wallet.KeymanagerKind() == keymanager.Derived {
+		if kind == keymanager.Derived {
 			accs[i].DerivationPath = fmt.Sprintf(derived.ValidatingKeyDerivationPathTemplate, i)
 		}
 	}
