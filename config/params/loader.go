@@ -317,6 +317,16 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		}
 	}
 
+	if len(cfg.GasLimitSchedule) > 0 {
+		lines = append(lines, "GAS_LIMIT_SCHEDULE:")
+		for _, entry := range cfg.GasLimitSchedule {
+			lines = append(lines,
+				"  - EPOCH: "+strconv.FormatUint(uint64(entry.Epoch), 10),
+				"    GAS_LIMIT: "+strconv.FormatUint(entry.GasLimit, 10),
+			)
+		}
+	}
+
 	yamlFile := []byte(strings.Join(lines, "\n"))
 	return yamlFile
 }

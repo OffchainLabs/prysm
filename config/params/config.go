@@ -341,6 +341,9 @@ type BeaconChainConfig struct {
 	// Blobs Values
 	BlobSchedule []BlobScheduleEntry `yaml:"BLOB_SCHEDULE" spec:"true"`
 
+	// Gas Limit Values (EIP-8261)
+	GasLimitSchedule []GasLimitScheduleEntry `yaml:"GAS_LIMIT_SCHEDULE" spec:"true"`
+
 	// Deprecated_MaxBlobsPerBlock defines the max blobs that could exist in a block.
 	// Deprecated: This field is no longer supported. Avoid using it.
 	DeprecatedMaxBlobsPerBlock int `yaml:"MAX_BLOBS_PER_BLOCK" spec:"true"`
@@ -414,6 +417,24 @@ func (e NetworkScheduleEntry) LogFields() logrus.Fields {
 
 type BlobScheduleEntry NetworkScheduleEntry
 
+type GasLimitScheduleEntry struct {
+	GasLimit uint64           `yaml:"GAS_LIMIT" json:"GAS_LIMIT"`
+	Epoch    primitives.Epoch `yaml:"EPOCH" json:"EPOCH"`
+}
+
+// ScheduledGasLimit returns the EIP-8261 recommended gas limit active at epoch, false pre-gloas or when no entry is active.
+func (b *BeaconChainConfig) ScheduledGasLimit(epoch primitives.Epoch) (uint64, bool) {
+	if epoch < b.GloasForkEpoch {
+		return 0, false
+	}
+	for i := len(b.GasLimitSchedule) - 1; i >= 0; i-- {
+		if b.GasLimitSchedule[i].Epoch <= epoch {
+			return b.GasLimitSchedule[i].GasLimit, true
+		}
+	}
+	return 0, false
+}
+
 func (b *BeaconChainConfig) ApplyOptions(opts ...Option) {
 	for _, opt := range opts {
 		opt(b)
@@ -430,6 +451,9 @@ func (b *BeaconChainConfig) InitializeForkSchedule() {
 	b.ForkVersionNames = configForkNames(b)
 	b.forkSchedule = initForkSchedule(b)
 	b.bpoSchedule = initBPOSchedule(b)
+	sort.Slice(b.GasLimitSchedule, func(i, j int) bool {
+		return b.GasLimitSchedule[i].Epoch < b.GasLimitSchedule[j].Epoch
+	})
 	combined := b.forkSchedule.merge(b.bpoSchedule)
 	if err := combined.prepare(b); err != nil {
 		log.WithError(err).Error("Failed to prepare network schedule")

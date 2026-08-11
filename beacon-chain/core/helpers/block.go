@@ -37,16 +37,20 @@ func ProposerDependentRootOrGenesis(ctx context.Context, db GenesisBlockRootRead
 
 // ParentTargetGasLimit returns the parent execution payload's gas limit, used
 // as the payload-attributes fallback when the proposer has no signed
-// preference. Falls back to DefaultBuilderGasLimit on pre-Gloas states or
-// when no bid is cached (e.g. at genesis).
+// preference. Falls back to the EIP-8261 scheduled gas limit, else
+// DefaultBuilderGasLimit, on pre-Gloas states or when no bid is cached
 func ParentTargetGasLimit(st state.ReadOnlyBeaconState) uint64 {
 	bid, err := st.LatestExecutionPayloadBid()
 	if err != nil || bid == nil {
+		fallback := params.BeaconConfig().DefaultBuilderGasLimit
+		if scheduled, ok := params.BeaconConfig().ScheduledGasLimit(slots.ToEpoch(st.Slot())); ok {
+			fallback = scheduled
+		}
 		// No cached bid (e.g. the gloas fork boundary): EL ratchets toward this
 		// default, briefly nudging gas limit away from the parent's value.
-		log.WithField("default", params.BeaconConfig().DefaultBuilderGasLimit).
-			Debug("No parent execution payload bid; gas limit falls back to DefaultBuilderGasLimit")
-		return params.BeaconConfig().DefaultBuilderGasLimit
+		log.WithField("default", fallback).
+			Debug("No parent execution payload bid; gas limit falls back to the default")
+		return fallback
 	}
 	return bid.GasLimit()
 }

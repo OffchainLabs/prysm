@@ -1342,7 +1342,6 @@ func (v *validator) processProposerDuties(
 			continue
 		}
 
-		feeRecipient, gasLimit := v.proposerConfigForKey(pk)
 		for _, proposalSlot := range duty.ProposerSlots {
 			// Skip slots that have passed or are too close. Preferences are
 			// submitted at mid-slot, so the proposer needs to be at least 1
@@ -1354,6 +1353,8 @@ func (v *validator) processProposerDuties(
 				continue
 			}
 
+			// Keyed on the proposal slot's own epoch, the duty store can hold next-epoch duties as current in the last slot of an epoch.
+			feeRecipient, gasLimit := v.proposerConfigForKey(pk, slots.ToEpoch(proposalSlot))
 			pref := &ethpb.ProposerPreferences{
 				DependentRoot:  dependentRoot,
 				ProposalSlot:   proposalSlot,
@@ -1410,13 +1411,10 @@ func (v *validator) releasePrefSlots(prefs []*ethpb.SignedProposerPreferences) {
 	log.WithField("proposalSlots", slots).Debug("Released proposer preference reservations for retry")
 }
 
-// proposerConfigForKey returns the fee recipient and target gas limit for pk.
-// The target gas limit comes from the top-level v2 fields only; builder gas
-// limits are registration-only.
-func (v *validator) proposerConfigForKey(pk pubkey) (common.Address, uint64) {
+func (v *validator) proposerConfigForKey(pk pubkey, epoch primitives.Epoch) (common.Address, uint64) {
 	feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
 	ps := v.ProposerSettings()
-	gasLimit := uint64(ps.TargetGasLimit(pk))
+	gasLimit := uint64(ps.TargetGasLimit(pk, epoch))
 	if ps == nil {
 		return feeRecipient, gasLimit
 	}
