@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -32,7 +31,7 @@ const maxFutureStatusHeadSlot = 1
 // maintainPeerStatuses maintains peer statuses by polling peers for their latest status twice per epoch.
 func (s *Service) maintainPeerStatuses() {
 	// Run twice per epoch.
-	interval := time.Duration(params.BeaconConfig().SlotsPerEpoch.Div(2).Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second
+	interval := params.SlotsDuration(params.BeaconConfig().SlotsPerEpoch.Div(2), params.BeaconConfig())
 	async.RunEvery(s.ctx, interval, func() {
 		wg := new(sync.WaitGroup)
 		for _, id := range s.cfg.p2p.Peers().Connected() {
@@ -95,9 +94,8 @@ func (s *Service) maintainPeerStatuses() {
 // resyncIfBehind checks periodically to see if we are in normal sync but have fallen behind our peers
 // by more than an epoch, in which case we attempt a resync using the initial sync method to catch up.
 func (s *Service) resyncIfBehind() {
-	millisecondsPerEpoch := params.BeaconConfig().SlotsPerEpoch.Mul(1000).Mul(params.BeaconConfig().SecondsPerSlot)
 	// Run sixteen times per epoch.
-	interval := time.Duration(millisecondsPerEpoch/16) * time.Millisecond
+	interval := params.EpochsDuration(1, params.BeaconConfig()) / 16
 	async.RunEvery(s.ctx, interval, func() {
 		if s.shouldReSync() {
 			syncedEpoch := slots.ToEpoch(s.cfg.chain.HeadSlot())

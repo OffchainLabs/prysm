@@ -103,47 +103,138 @@ func TestComputeFieldRootsWithHasher_ProgressiveSSZFields(t *testing.T) {
 	}
 }
 
-func TestHashTreeRoot_ProgressiveSSZGate(t *testing.T) {
-	st := newGloasStateForProgressiveSSZTests(t)
+func TestHashTreeRoot(t *testing.T) {
+	t.Run("ProgressiveSSZGate", func(t *testing.T) {
+		st := newGloasStateForProgressiveSSZTests(t)
 
-	reset := features.InitWithReset(&features.Flags{})
-	defer reset()
+		reset := features.InitWithReset(&features.Flags{})
+		defer reset()
 
-	legacyRoot, err := st.HashTreeRoot(context.Background())
+		legacyRoot, err := st.HashTreeRoot(context.Background())
+		require.NoError(t, err)
+
+		legacyFieldRoots, err := ComputeFieldRootsWithHasher(context.Background(), st)
+		require.NoError(t, err)
+		legacyLayers := stateutil.Merkleize(legacyFieldRoots)
+		expectedLegacyRoot := bytesutil.ToBytes32(legacyLayers[len(legacyLayers)-1][0])
+		require.Equal(t, expectedLegacyRoot, legacyRoot)
+
+		reset = features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+		defer reset()
+
+		progressiveRoot, err := st.HashTreeRoot(context.Background())
+		require.NoError(t, err)
+
+		progressiveFieldRootsBytes, err := ComputeFieldRootsWithHasher(context.Background(), st)
+		require.NoError(t, err)
+		progressiveFieldRoots := make([][32]byte, len(progressiveFieldRootsBytes))
+		for i := range progressiveFieldRootsBytes {
+			progressiveFieldRoots[i] = bytesutil.ToBytes32(progressiveFieldRootsBytes[i])
+		}
+
+		activeFields := make([]bool, len(progressiveFieldRoots))
+		for i := range activeFields {
+			activeFields[i] = true
+		}
+
+		expectedProgressiveRoot, err := ssz.ContainerRootProgressive(progressiveFieldRoots, activeFields)
+		require.NoError(t, err)
+		require.Equal(t, expectedProgressiveRoot, progressiveRoot)
+		require.DeepNotSSZEqual(t, legacyRoot, progressiveRoot)
+
+		progressiveRootAgain, err := st.HashTreeRoot(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, progressiveRoot, progressiveRootAgain)
+	})
+
+	t.Run("ProgressiveSSZIncremental", func(t *testing.T) {
+		reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+		defer reset()
+
+		st := newGloasStateForProgressiveSSZTests(t)
+		initialRoot, err := st.HashTreeRoot(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, 0, len(st.dirtyFields))
+		if st.progressiveMerkleTree == nil {
+			t.Fatal("progressive Merkle tree was not initialized")
+		}
+		cachedTree := st.progressiveMerkleTree
+
+		// Initial progressive merkleization warms the validators field trie.
+		// Updating only the slot must not replace that unrelated trie.
+		require.Equal(t, false, st.rebuildTrie[types.Validators])
+		validatorsTrie := st.stateFieldLeaves[types.Validators]
+		require.NoError(t, st.SetSlot(st.slot+1))
+		require.Equal(t, true, st.dirtyFields[types.Slot])
+
+		updatedRoot, err := st.HashTreeRoot(context.Background())
+		require.NoError(t, err)
+		require.DeepNotSSZEqual(t, initialRoot, updatedRoot)
+		require.Equal(t, progressiveRootFromScratch(t, st), updatedRoot)
+		require.Equal(t, 0, len(st.dirtyFields))
+		require.Equal(t, validatorsTrie, st.stateFieldLeaves[types.Validators])
+		if cachedTree != st.progressiveMerkleTree {
+			t.Fatal("progressive Merkle tree was rebuilt instead of updated in place")
+		}
+
+		unchangedRoot, err := st.HashTreeRoot(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, updatedRoot, unchangedRoot)
+		if cachedTree != st.progressiveMerkleTree {
+			t.Fatal("unchanged progressive Merkle tree was rebuilt")
+		}
+	})
+
+	t.Run("ProgressiveSSZCopy", func(t *testing.T) {
+		reset := features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
+		defer reset()
+
+		st := newGloasStateForProgressiveSSZTests(t)
+		originalRoot, err := st.HashTreeRoot(context.Background())
+		require.NoError(t, err)
+
+		copied, ok := st.Copy().(*BeaconState)
+		require.Equal(t, true, ok)
+		if copied.progressiveMerkleTree == nil {
+			t.Fatal("copied state did not retain the progressive Merkle cache")
+		}
+		if copied.progressiveMerkleTree == st.progressiveMerkleTree {
+			t.Fatal("copied state shares its mutable progressive Merkle cache")
+		}
+
+		copiedRoot, err := copied.HashTreeRoot(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, originalRoot, copiedRoot)
+
+		require.NoError(t, copied.SetSlot(copied.slot+1))
+		mutatedCopyRoot, err := copied.HashTreeRoot(context.Background())
+		require.NoError(t, err)
+		require.DeepNotSSZEqual(t, originalRoot, mutatedCopyRoot)
+		require.Equal(t, progressiveRootFromScratch(t, copied), mutatedCopyRoot)
+
+		originalRootAgain, err := st.HashTreeRoot(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, originalRoot, originalRootAgain)
+	})
+}
+
+func progressiveRootFromScratch(t *testing.T, st *BeaconState) [32]byte {
+	t.Helper()
+
+	fieldRootsBytes, err := ComputeFieldRootsWithHasher(context.Background(), st)
 	require.NoError(t, err)
-
-	legacyFieldRoots, err := ComputeFieldRootsWithHasher(context.Background(), st)
-	require.NoError(t, err)
-	legacyLayers := stateutil.Merkleize(legacyFieldRoots)
-	expectedLegacyRoot := bytesutil.ToBytes32(legacyLayers[len(legacyLayers)-1][0])
-	require.Equal(t, expectedLegacyRoot, legacyRoot)
-
-	reset = features.InitWithReset(&features.Flags{EnableProgressiveSSZ: true})
-	defer reset()
-
-	progressiveRoot, err := st.HashTreeRoot(context.Background())
-	require.NoError(t, err)
-
-	progressiveFieldRootsBytes, err := ComputeFieldRootsWithHasher(context.Background(), st)
-	require.NoError(t, err)
-	progressiveFieldRoots := make([][32]byte, len(progressiveFieldRootsBytes))
-	for i := range progressiveFieldRootsBytes {
-		progressiveFieldRoots[i] = bytesutil.ToBytes32(progressiveFieldRootsBytes[i])
+	fieldRoots := make([][32]byte, len(fieldRootsBytes))
+	for i := range fieldRootsBytes {
+		fieldRoots[i] = bytesutil.ToBytes32(fieldRootsBytes[i])
 	}
 
-	activeFields := make([]bool, len(progressiveFieldRoots))
+	activeFields := make([]bool, len(fieldRoots))
 	for i := range activeFields {
 		activeFields[i] = true
 	}
-
-	expectedProgressiveRoot, err := ssz.ContainerRootProgressive(progressiveFieldRoots, activeFields)
+	root, err := ssz.ContainerRootProgressive(fieldRoots, activeFields)
 	require.NoError(t, err)
-	require.Equal(t, expectedProgressiveRoot, progressiveRoot)
-	require.DeepNotSSZEqual(t, legacyRoot, progressiveRoot)
-
-	progressiveRootAgain, err := st.HashTreeRoot(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, progressiveRoot, progressiveRootAgain)
+	return root
 }
 
 func newGloasStateForProgressiveSSZTests(t *testing.T) *BeaconState {

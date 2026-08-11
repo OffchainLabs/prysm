@@ -25,9 +25,47 @@ func isMinimal(lines []string) bool {
 	return false
 }
 
+// reconcileSlotDuration keeps SecondsPerSlot and SlotDurationMilliseconds in agreement.
+//
+// The two fields describe one quantity: SLOT_DURATION_MS replaced SECONDS_PER_SLOT in the specification
+// config, and Prysm keeps the older field so that configs still setting it keep working. A config
+// file sets one or the other, and whichever it omits keeps the value inherited from the preset
+// base, so the omitted one has to be derived here.
+//
+// SecondsPerSlot cannot represent a sub-second slot duration, so it truncates. Nothing outside this
+// package reads it, and ConfigToYaml only writes it back out when it round-trips faithfully.
+func reconcileSlotDuration(conf *BeaconChainConfig, hasSecondsPerSlot, hasSlotDurationMs bool) error {
+	// The only way both values are tolerated is if they represent the same duration.
+	if hasSecondsPerSlot && hasSlotDurationMs && conf.SecondsPerSlot*1000 != conf.SlotDurationMilliseconds {
+		return errors.Errorf(
+			"config sets contradictory slot durations: SECONDS_PER_SLOT: %d (%d ms) != SLOT_DURATION_MS: %d",
+			conf.SecondsPerSlot, conf.SecondsPerSlot*1000, conf.SlotDurationMilliseconds)
+	}
+
+	// Derive whichever field the config file left at its preset base value. When the file sets both,
+	// they agree by now and both assignments are no-ops.
+	if hasSecondsPerSlot {
+		conf.SlotDurationMilliseconds = conf.SecondsPerSlot * 1000
+	}
+
+	if hasSlotDurationMs {
+		conf.SecondsPerSlot = conf.SlotDurationMilliseconds / 1000
+	}
+
+	// A zero slot duration makes every ticker panic and divides by zero in the slot arithmetic.
+	if conf.SlotDurationMilliseconds == 0 {
+		return errors.New("slot duration cannot be zero: set a positive SLOT_DURATION_MS")
+	}
+
+	return nil
+}
+
 func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConfig, error) {
 	// To track if config name is defined inside config file.
 	hasConfigName := false
+	// SECONDS_PER_SLOT and SLOT_DURATION_MS express the same value. Track which ones the file
+	// sets so the one left at its preset default can be derived from the other.
+	hasSecondsPerSlot, hasSlotDurationMs := false, false
 	// Convert 0x hex inputs to fixed bytes arrays
 	lines := strings.Split(string(yamlFile), "\n")
 	if conf == nil {
@@ -46,6 +84,12 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 		if strings.HasPrefix(line, "CONFIG_NAME") {
 			hasConfigName = true
 		}
+		if strings.HasPrefix(line, "SECONDS_PER_SLOT:") {
+			hasSecondsPerSlot = true
+		}
+		if strings.HasPrefix(line, "SLOT_DURATION_MS:") {
+			hasSlotDurationMs = true
+		}
 		if !strings.HasPrefix(line, "#") && strings.Contains(line, "0x") {
 			parts := ReplaceHexStringWithYAMLFormat(line)
 			lines[i] = strings.Join(parts, "\n")
@@ -62,6 +106,9 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 	}
 	if !hasConfigName {
 		conf.ConfigName = DevnetName
+	}
+	if err := reconcileSlotDuration(conf, hasSecondsPerSlot, hasSlotDurationMs); err != nil {
+		return nil, err
 	}
 	// recompute SqrRootSlotsPerEpoch constant to handle non-standard values of SlotsPerEpoch
 	conf.SqrRootSlotsPerEpoch = primitives.Slot(math.IntegerSquareRoot(uint64(conf.SlotsPerEpoch)))
@@ -185,8 +232,7 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("MIN_GENESIS_TIME: %d", cfg.MinGenesisTime),
 		fmt.Sprintf("GENESIS_FORK_VERSION: %#x", cfg.GenesisForkVersion),
 		fmt.Sprintf("CHURN_LIMIT_QUOTIENT: %d", cfg.ChurnLimitQuotient),
-		fmt.Sprintf("SECONDS_PER_SLOT: %d", cfg.SecondsPerSlot),
-		fmt.Sprintf("SLOT_DURATION_MS: %d", cfg.SlotDurationMilliseconds),
+		fmt.Sprintf("SLOT_DURATION_MS: %d", cfg.SlotDurationMillis()),
 		fmt.Sprintf("SLOTS_PER_EPOCH: %d", cfg.SlotsPerEpoch),
 		fmt.Sprintf("SECONDS_PER_ETH1_BLOCK: %d", cfg.SecondsPerETH1Block),
 		fmt.Sprintf("ETH1_FOLLOW_DISTANCE: %d", cfg.Eth1FollowDistance),
@@ -255,6 +301,10 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("CONTRIBUTION_DUE_BPS_GLOAS: %d", cfg.ContributionDueBPSGloas),
 		fmt.Sprintf("PAYLOAD_ATTESTATION_DUE_BPS: %d", cfg.PayloadAttestationDueBPS),
 		fmt.Sprintf("PAYLOAD_DUE_BPS: %d", cfg.PayloadDueBPS),
+	}
+
+	if ms := cfg.SlotDurationMillis(); ms%1000 == 0 {
+		lines = append(lines, fmt.Sprintf("SECONDS_PER_SLOT: %d", ms/1000))
 	}
 
 	if len(cfg.BlobSchedule) > 0 {
