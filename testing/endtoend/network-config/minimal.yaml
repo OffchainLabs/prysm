@@ -68,6 +68,9 @@ additional_services:
   - dora
   - spamoor
 
+spamoor_params:
+  image: "ethpandaops/spamoor:master"
+
 assertoor_params:
   # Use the pinned assertoor image for testing, that has the fix below:
   # https://github.com/ethpandaops/assertoor/pull/202
