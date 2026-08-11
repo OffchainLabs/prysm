@@ -1,3 +1,5 @@
+[![MCP Toplist](https://mcptoplist.com/badge/mcp.so%2Freleases%2Fprysm.svg)](https://mcptoplist.com/server/mcp.so%2Freleases%2Fprysm)
+
 <h1 align="left">Prysm: An Ethereum Consensus Implementation Written in Go</h1>
 
 <div align="left">
