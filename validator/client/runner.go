@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	prysmTrace "github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
@@ -244,24 +243,24 @@ func initialize(ctx context.Context, v *validator) error {
 	return nil
 }
 
-func performRoles(slotCtx context.Context, allRoles map[[48]byte][]iface.ValidatorRole, v *validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
+func performRoles(slotCtx context.Context, allRoles map[[48]byte][]ValidatorRole, v *validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
 	for pubKey, roles := range allRoles {
 		for _, role := range roles {
 			wg.Go(func() {
 				switch role {
-				case iface.RoleAttester:
+				case RoleAttester:
 					v.SubmitAttestation(slotCtx, slot, pubKey)
-				case iface.RoleProposer:
+				case RoleProposer:
 					v.ProposeBlock(slotCtx, slot, pubKey)
-				case iface.RoleAggregator:
+				case RoleAggregator:
 					v.SubmitAggregateAndProof(slotCtx, slot, pubKey)
-				case iface.RoleSyncCommittee:
+				case RoleSyncCommittee:
 					v.SubmitSyncCommitteeMessage(slotCtx, slot, pubKey)
-				case iface.RoleSyncCommitteeAggregator:
+				case RoleSyncCommitteeAggregator:
 					v.SubmitSignedContributionAndProof(slotCtx, slot, pubKey)
-				case iface.RolePTCMember:
+				case RolePTCMember:
 					v.SubmitPayloadAttestation(slotCtx, slot, pubKey)
-				case iface.RoleUnknown:
+				case RoleUnknown:
 					log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:]))).Trace("No active roles, doing nothing")
 				default:
 					log.Warnf("Unhandled role %v", role)

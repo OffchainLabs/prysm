@@ -38,7 +38,6 @@ import (
 	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
-	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	dbTest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
@@ -394,10 +393,10 @@ func TestRolesAt_OK(t *testing.T) {
 			require.NoError(t, err)
 
 			pk := bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())
-			assert.Equal(t, iface.RoleAttester, roleMap[pk][0])
-			assert.Equal(t, iface.RoleAggregator, roleMap[pk][1])
-			assert.Equal(t, iface.RoleSyncCommittee, roleMap[pk][2])
-			assert.Equal(t, iface.RolePTCMember, roleMap[pk][3])
+			assert.Equal(t, RoleAttester, roleMap[pk][0])
+			assert.Equal(t, RoleAggregator, roleMap[pk][1])
+			assert.Equal(t, RoleSyncCommittee, roleMap[pk][2])
+			assert.Equal(t, RolePTCMember, roleMap[pk][3])
 
 			// Test sync committee role at epoch boundary.
 			v.duties = testDutyStore(&ethpb.ValidatorDuty{
@@ -424,7 +423,7 @@ func TestRolesAt_OK(t *testing.T) {
 
 			roleMap, err = v.RolesAt(t.Context(), params.BeaconConfig().SlotsPerEpoch-1)
 			require.NoError(t, err)
-			assert.Equal(t, iface.RoleSyncCommittee, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
+			assert.Equal(t, RoleSyncCommittee, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
 		})
 	}
 }
@@ -450,7 +449,7 @@ func TestRolesAt_DoesNotAssignProposer_Slot0(t *testing.T) {
 			roleMap, err := v.RolesAt(t.Context(), 0)
 			require.NoError(t, err)
 
-			assert.Equal(t, iface.RoleAttester, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
+			assert.Equal(t, RoleAttester, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
 		})
 	}
 }

@@ -29,10 +29,12 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	accountsiface "github.com/OffchainLabs/prysm/v7/validator/accounts/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
@@ -132,6 +134,9 @@ type validatorStatus struct {
 	status    *ethpb.ValidatorStatusResponse
 	index     primitives.ValidatorIndex
 }
+
+// SigningFunc defines a type for the function that signs a message.
+type SigningFunc func(context.Context, *validatorpb.SignRequest) (bls.Signature, error)
 
 // statusCache returns pubkeyToStatus for lock-free reads: entries are never
 // mutated in place, updateValidatorStatusCache replaces the map wholesale.
@@ -555,7 +560,7 @@ func retrieveLatestRecord(recs []*dbCommon.AttestationRecord) *dbCommon.Attestat
 // RolesAt slot returns the validator roles at the given slot. Returns nil if the
 // validator is known to not have a roles at the slot. Returns UNKNOWN if the
 // validator assignments are unknown. Otherwise, returns a valid ValidatorRole map.
-func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fieldparams.BLSPubkeyLength]byte][]iface.ValidatorRole, error) {
+func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fieldparams.BLSPubkeyLength]byte][]ValidatorRole, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.RolesAt")
 	defer span.End()
 
@@ -565,12 +570,12 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 	}
 
 	var (
-		rolesAt              = make(map[[fieldparams.BLSPubkeyLength]byte][]iface.ValidatorRole)
+		rolesAt              = make(map[[fieldparams.BLSPubkeyLength]byte][]ValidatorRole)
 		syncCommitteePubkeys [][fieldparams.BLSPubkeyLength]byte
 	)
 
 	for pk, duty := range snap.currentDuties() {
-		var roles []iface.ValidatorRole
+		var roles []ValidatorRole
 
 		if duty == nil {
 			continue
@@ -578,14 +583,14 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		if len(duty.ProposerSlots) > 0 {
 			for _, proposerSlot := range duty.ProposerSlots {
 				if proposerSlot != 0 && proposerSlot == slot {
-					roles = append(roles, iface.RoleProposer)
+					roles = append(roles, RoleProposer)
 					break
 				}
 			}
 		}
 
 		if duty.AttesterSlot == slot {
-			roles = append(roles, iface.RoleAttester)
+			roles = append(roles, RoleAttester)
 
 			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, slot, pk)
 			if err != nil {
@@ -593,7 +598,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 				log.WithError(err).Errorf("Could not check if validator %#x is an aggregator", bytesutil.Trunc(duty.PublicKey))
 			}
 			if aggregator {
-				roles = append(roles, iface.RoleAggregator)
+				roles = append(roles, RoleAggregator)
 			}
 		}
 
@@ -603,12 +608,12 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		inSyncCommittee := false
 		if slots.IsEpochEnd(slot) {
 			if snap.isNextSyncCommittee(duty.ValidatorIndex) {
-				roles = append(roles, iface.RoleSyncCommittee)
+				roles = append(roles, RoleSyncCommittee)
 				inSyncCommittee = true
 			}
 		} else {
 			if duty.IsSyncCommittee {
-				roles = append(roles, iface.RoleSyncCommittee)
+				roles = append(roles, RoleSyncCommittee)
 				inSyncCommittee = true
 			}
 		}
@@ -618,11 +623,11 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		}
 
 		if slices.Contains(snap.ptcSlots(duty.ValidatorIndex), slot) {
-			roles = append(roles, iface.RolePTCMember)
+			roles = append(roles, RolePTCMember)
 		}
 
 		if len(roles) == 0 {
-			roles = append(roles, iface.RoleUnknown)
+			roles = append(roles, RoleUnknown)
 		}
 
 		rolesAt[pk] = roles
@@ -634,7 +639,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		return rolesAt, nil
 	}
 	for _, pk := range aggPubkeys {
-		rolesAt[pk] = append(rolesAt[pk], iface.RoleSyncCommitteeAggregator)
+		rolesAt[pk] = append(rolesAt[pk], RoleSyncCommitteeAggregator)
 	}
 
 	return rolesAt, nil
@@ -1546,7 +1551,7 @@ func (v *validator) submitProposerPreferences(ctx context.Context) {
 func (v *validator) buildSignedRegReqs(
 	ctx context.Context,
 	activePubkeys [][fieldparams.BLSPubkeyLength]byte,
-	signer iface.SigningFunc,
+	signer SigningFunc,
 	slot primitives.Slot,
 	forceFullPush bool,
 ) []*ethpb.SignedValidatorRegistrationV1 {

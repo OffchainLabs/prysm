@@ -1,11 +1,4 @@
-package iface
-
-import (
-	"context"
-
-	"github.com/OffchainLabs/prysm/v7/crypto/bls"
-	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
-)
+package client
 
 // ValidatorRole defines the validator role.
 type ValidatorRole int8
@@ -26,6 +19,3 @@ const (
 	// RolePTCMember means the validator should submit a payload attestation.
 	RolePTCMember
 )
-
-// SigningFunc interface defines a type for the function that signs a message
-type SigningFunc func(context.Context, *validatorpb.SignRequest) (bls.Signature, error)
