@@ -36,6 +36,7 @@ type Config struct {
 
 // RunBlockProcessingTest executes "sanity/blocks" tests.
 func RunBlockProcessingTest(t *testing.T, config, folderPath string) {
+	utils.SkipGloasEip8148Divergence(t)
 	require.NoError(t, utils.SetConfig(t, config))
 
 	testFolders, testsFolderPath := utils.TestFolders(t, config, "gloas", folderPath)

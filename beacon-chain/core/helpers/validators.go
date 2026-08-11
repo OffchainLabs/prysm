@@ -469,16 +469,44 @@ func IsFullyWithdrawableValidator(val state.ReadOnlyValidator, balance uint64, e
 // IsPartiallyWithdrawableValidator returns whether the validator is able to perform a
 // partial withdrawal. This function assumes that the caller has a lock on the state.
 // This method conditionally calls the fork appropriate implementation based on the epoch argument.
-func IsPartiallyWithdrawableValidator(val state.ReadOnlyValidator, balance uint64, epoch primitives.Epoch, fork int) bool {
+//
+// sweepThreshold is the validator's entry in state.validator_sweep_thresholds (EIP-8148) and is
+// only consulted from Gloas onwards. Pass 0 for earlier forks, or for a validator with no custom
+// threshold configured.
+func IsPartiallyWithdrawableValidator(val state.ReadOnlyValidator, balance uint64, epoch primitives.Epoch, fork int, sweepThreshold uint64) bool {
 	if val == nil {
 		return false
 	}
 
-	if fork < version.Electra {
-		return isPartiallyWithdrawableValidatorCapella(val, balance, epoch)
+	if fork >= version.Gloas {
+		return isPartiallyWithdrawableValidatorEip8148(val, balance, sweepThreshold)
 	}
 
-	return isPartiallyWithdrawableValidatorElectra(val, balance, epoch)
+	if fork >= version.Electra {
+		return isPartiallyWithdrawableValidatorElectra(val, balance, epoch)
+	}
+
+	return isPartiallyWithdrawableValidatorCapella(val, balance, epoch)
+}
+
+// isPartiallyWithdrawableValidatorEip8148 implements is_partially_withdrawable_validator in the
+// gloas fork.
+// https://github.com/ethereum/consensus-specs/blob/master/specs/_features/eip8148/beacon-chain.md#modified-is_partially_withdrawable_validator
+func isPartiallyWithdrawableValidatorEip8148(val state.ReadOnlyValidator, balance, sweepThreshold uint64) bool {
+	effectiveSweepThreshold := EffectiveSweepThreshold(val, sweepThreshold)
+	hasEffectiveSweepThreshold := val.EffectiveBalance() >= effectiveSweepThreshold
+	hasExcessBalance := balance > effectiveSweepThreshold
+
+	return val.HasExecutionWithdrawalCredentials() && hasEffectiveSweepThreshold && hasExcessBalance
+}
+
+// SetSweepThreshold processes a validator's custom withdrawal sweep threshold request.
+// https://github.com/ethereum/consensus-specs/blob/master/specs/_features/eip8148/beacon-chain.md#new-get_effective_sweep_threshold
+func EffectiveSweepThreshold(val state.ReadOnlyValidator, sweepThreshold uint64) uint64 {
+	if sweepThreshold != 0 {
+		return sweepThreshold
+	}
+	return ValidatorMaxEffectiveBalance(val)
 }
 
 // isPartiallyWithdrawableValidatorElectra implements is_partially_withdrawable_validator in the

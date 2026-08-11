@@ -9,16 +9,18 @@ import (
 )
 
 var (
-	drExample  = &DepositRequest{}
-	drSize     = drExample.SizeSSZ()
-	wrExample  = &WithdrawalRequest{}
-	wrSize     = wrExample.SizeSSZ()
-	crExample  = &ConsolidationRequest{}
-	crSize     = crExample.SizeSSZ()
-	bdrExample = &BuilderDepositRequest{}
-	bdrSize    = bdrExample.SizeSSZ()
-	berExample = &BuilderExitRequest{}
-	berSize    = berExample.SizeSSZ()
+	drExample   = &DepositRequest{}
+	drSize      = drExample.SizeSSZ()
+	wrExample   = &WithdrawalRequest{}
+	wrSize      = wrExample.SizeSSZ()
+	crExample   = &ConsolidationRequest{}
+	crSize      = crExample.SizeSSZ()
+	bdrExample  = &BuilderDepositRequest{}
+	bdrSize     = bdrExample.SizeSSZ()
+	berExample  = &BuilderExitRequest{}
+	berSize     = berExample.SizeSSZ()
+	sstrExample = &SetSweepThresholdRequest{}
+	sstrSize    = sstrExample.SizeSSZ()
 )
 
 // emptyRequestsRootOnce merkleizes a zero-value gloas ExecutionRequests.
@@ -37,6 +39,7 @@ const (
 	ConsolidationRequestType
 	BuilderDepositRequestType
 	BuilderExitRequestType
+	SetSweepThresholdRequestType
 )
 
 // ExecutionRequestConfig ensures that we don't mix up the execution request params
@@ -46,6 +49,7 @@ type ExecutionRequestLimits struct {
 	Consolidations  uint64
 	BuilderDeposits uint64
 	BuilderExits    uint64
+	SweepThresholds uint64
 }
 
 func (ebe *ExecutionBundleElectra) GetDecodedExecutionRequests(limits ExecutionRequestLimits) (*ExecutionRequests, error) {
@@ -135,6 +139,12 @@ func decodeExecutionRequestListGloas(raw [][]byte, limits ExecutionRequestLimits
 				return nil, err
 			}
 			requests.BuilderExits = bes
+		case SetSweepThresholdRequestType:
+			sts, err := unmarshalSweepThresholds(requestListInSSZBytes, limits.SweepThresholds)
+			if err != nil {
+				return nil, err
+			}
+			requests.SweepThresholds = sts
 		default:
 			return nil, errors.Errorf("unsupported request type %d", requestType)
 		}
@@ -195,6 +205,19 @@ func unmarshalBuilderExits(requestListInSSZBytes []byte, maxBuilderExits uint64)
 		return nil, fmt.Errorf("invalid builder exit requests SSZ size, requests should not be more than the max per payload, got %d max %d", len(requestListInSSZBytes), maxSSZsize)
 	}
 	return unmarshalItems(requestListInSSZBytes, berSize, func() *BuilderExitRequest { return &BuilderExitRequest{} })
+}
+
+func unmarshalSweepThresholds(requestListInSSZBytes []byte, maxSweepThresholds uint64) ([]*SetSweepThresholdRequest, error) {
+	if len(requestListInSSZBytes) < sstrSize {
+		return nil, fmt.Errorf("invalid set sweep threshold requests SSZ size, got %d expected at least %d", len(requestListInSSZBytes), sstrSize)
+	}
+
+	maxSSZsize := uint64(sstrSize) * maxSweepThresholds
+	if uint64(len(requestListInSSZBytes)) > maxSSZsize {
+		return nil, fmt.Errorf("invalid set sweep threshold requests SSZ size, requests should not be more than the max per payload, got %d max %d", len(requestListInSSZBytes), maxSSZsize)
+	}
+
+	return unmarshalItems(requestListInSSZBytes, sstrSize, func() *SetSweepThresholdRequest { return &SetSweepThresholdRequest{} })
 }
 
 func decodeExecutionRequest(req []byte) (typ uint8, data []byte, err error) {
@@ -298,6 +321,16 @@ func EncodeExecutionRequestsGloas(requests *ExecutionRequestsGloas) ([]hexutil.B
 		requestData = append(requestData, beBytes...)
 		requestsData = append(requestsData, requestData)
 	}
+	if len(requests.SweepThresholds) > 0 {
+		stBytes, err := marshalItems(requests.SweepThresholds)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to marshal set sweep threshold requests")
+		}
+
+		requestData := []byte{SetSweepThresholdRequestType}
+		requestData = append(requestData, stBytes...)
+		requestsData = append(requestsData, requestData)
+	}
 
 	return requestsData, nil
 }
@@ -315,8 +348,29 @@ func (e *ExecutionRequests) FlattenRequests() ([]hexutil.Bytes, error) {
 
 // FlattenRequests encodes the Gloas execution requests (including builder
 // requests) for the engine API.
+//
+// DEVNET ONLY: set sweep threshold requests (EIP-8148, type 0x05) are dropped before
+// the list reaches the execution client. They are mocked on the consensus side because
+// no execution client emits them yet, so the execution block header's requests_hash
+// does not commit to them. Passing them to newPayload would make the engine recompute
+// a different block hash and reject the payload as INVALID.
+//
+// Remove this filter once an execution client actually produces type 0x05 requests;
+// at that point the engine must see them for requests_hash to match.
 func (e *ExecutionRequestsGloas) FlattenRequests() ([]hexutil.Bytes, error) {
-	return EncodeExecutionRequestsGloas(e)
+	if e == nil || len(e.SweepThresholds) == 0 {
+		return EncodeExecutionRequestsGloas(e)
+	}
+
+	forEngine := &ExecutionRequestsGloas{
+		Deposits:        e.Deposits,
+		Withdrawals:     e.Withdrawals,
+		Consolidations:  e.Consolidations,
+		BuilderDeposits: e.BuilderDeposits,
+		BuilderExits:    e.BuilderExits,
+	}
+
+	return EncodeExecutionRequestsGloas(forEngine)
 }
 
 type sszUnmarshaler interface {

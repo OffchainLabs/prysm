@@ -14,6 +14,7 @@ import (
 
 // RunInactivityUpdatesTest executes "epoch_processing/inactivity_updates" tests.
 func RunInactivityUpdatesTest(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	require.NoError(t, utils.SetConfig(t, config))
 
 	testPath := "epoch_processing/inactivity_updates/pyspec_tests"

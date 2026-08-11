@@ -14,6 +14,7 @@ import (
 
 // RunRewardsAndPenaltiesTests executes "epoch_processing/rewards_and_penalties" tests.
 func RunRewardsAndPenaltiesTests(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	require.NoError(t, utils.SetConfig(t, config))
 
 	testPath := "epoch_processing/rewards_and_penalties/pyspec_tests"

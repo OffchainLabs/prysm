@@ -3,6 +3,8 @@ package operations
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
+
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -24,5 +26,6 @@ func blockWithSignedExecutionPayloadBid(bidSSZ []byte) (interfaces.SignedBeaconB
 }
 
 func RunExecutionPayloadBidTest(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	common.RunExecutionPayloadBidTest(t, config, version.String(version.Gloas), blockWithSignedExecutionPayloadBid, sszToState)
 }

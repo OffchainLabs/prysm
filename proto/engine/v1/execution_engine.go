@@ -91,6 +91,18 @@ func (ber *BuilderExitRequest) Copy() *BuilderExitRequest {
 	}
 }
 
+// Copy --
+func (sstr *SetSweepThresholdRequest) Copy() *SetSweepThresholdRequest {
+	if sstr == nil {
+		return nil
+	}
+	return &SetSweepThresholdRequest{
+		SourceAddress:   bytesutil.SafeCopyBytes(sstr.SourceAddress),
+		ValidatorPubkey: bytesutil.SafeCopyBytes(sstr.ValidatorPubkey),
+		Threshold:       sstr.Threshold,
+	}
+}
+
 // Copy -- Deneb
 func (payload *ExecutionPayloadDeneb) Copy() *ExecutionPayloadDeneb {
 	if payload == nil {

@@ -112,6 +112,23 @@ func NewMultiValueInactivityScores(scores []uint64) *MultiValueInactivityScores 
 	return mv
 }
 
+// MultiValueSweepThresholds is a multi-value slice of custom withdrawal sweep thresholds (EIP-8148).
+type MultiValueSweepThresholds = multi_value_slice.Slice[uint64]
+
+// NewMultiValueSweepThresholds creates a new slice whose shared items will be populated with copies of input values.
+func NewMultiValueSweepThresholds(thresholds []uint64) *MultiValueSweepThresholds {
+	items := make([]uint64, len(thresholds))
+	copy(items, thresholds)
+
+	mv := new(MultiValueSweepThresholds)
+	mv.Init(items)
+
+	multiValueCountGauge.WithLabelValues(types.ValidatorSweepThresholds.String()).Inc()
+	runtime.SetFinalizer(mv, sweepThresholdsFinalizer)
+
+	return mv
+}
+
 // MultiValueValidators is a multi-value slice of compact validators.
 type MultiValueValidators = multi_value_slice.Slice[stateutil.CompactValidator]
 
@@ -173,6 +190,13 @@ func (b *BeaconState) Defragment() {
 		multiValueCountGauge.WithLabelValues(types.InactivityScores.String()).Inc()
 		runtime.SetFinalizer(b.inactivityScoresMultiValue, inactivityScoresFinalizer)
 	}
+	if b.validatorSweepThresholdsMultiValue != nil && b.validatorSweepThresholdsMultiValue.IsFragmented() {
+		initialMVslice := b.validatorSweepThresholdsMultiValue
+		b.validatorSweepThresholdsMultiValue = b.validatorSweepThresholdsMultiValue.Reset(b)
+		initialMVslice.Detach(b)
+		multiValueCountGauge.WithLabelValues(types.ValidatorSweepThresholds.String()).Inc()
+		runtime.SetFinalizer(b.validatorSweepThresholdsMultiValue, sweepThresholdsFinalizer)
+	}
 }
 
 func randaoMixesFinalizer(m *MultiValueRandaoMixes) {
@@ -197,4 +221,8 @@ func validatorsFinalizer(m *MultiValueValidators) {
 
 func inactivityScoresFinalizer(m *MultiValueInactivityScores) {
 	multiValueCountGauge.WithLabelValues(types.InactivityScores.String()).Dec()
+}
+
+func sweepThresholdsFinalizer(m *MultiValueSweepThresholds) {
+	multiValueCountGauge.WithLabelValues(types.ValidatorSweepThresholds.String()).Dec()
 }

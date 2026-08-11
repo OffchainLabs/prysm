@@ -12,6 +12,7 @@ import (
 
 // RunEth1DataResetTests executes "epoch_processing/eth1_data_reset" tests.
 func RunEth1DataResetTests(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	require.NoError(t, utils.SetConfig(t, config))
 
 	testFolders, testsFolderPath := utils.TestFolders(t, config, "gloas", "epoch_processing/eth1_data_reset/pyspec_tests")

@@ -23,6 +23,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/sweepthreshold"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -53,6 +54,7 @@ type Server struct {
 	SubscribedValidatorsCache        *cache.SubscribedValidatorsCache
 	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
 	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache
+	MockSweepThresholdPool           *sweepthreshold.MockPool
 	HeadFetcher                      blockchain.HeadFetcher
 	ForkFetcher                      blockchain.ForkFetcher
 	ForkchoiceFetcher                blockchain.ForkchoiceFetcher

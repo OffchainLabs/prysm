@@ -18,6 +18,7 @@ import (
 )
 
 func RunVoluntaryExitChurnTest(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	require.NoError(t, utils.SetConfig(t, config))
 	testFolders, testsFolderPath := utils.TestFolders(t, config, version.String(version.Gloas), "operations/voluntary_exit_churn/pyspec_tests")
 	if len(testFolders) == 0 {

@@ -389,6 +389,14 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		}
 
 		fieldRoots[types.PTCWindow.RealPosition()] = ptcWindowRoot[:]
+
+		// [New in EIP-8148]
+		sweepThresholdsRoot, err := stateutil.Uint64ListRoot(state.version, state.validatorSweepThresholdsVal())
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute validator sweep thresholds merkleization")
+		}
+
+		fieldRoots[types.ValidatorSweepThresholds.RealPosition()] = sweepThresholdsRoot[:]
 	}
 	return fieldRoots, nil
 }

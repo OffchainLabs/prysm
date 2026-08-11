@@ -31,6 +31,7 @@ mainnet = {
     "max_deposit_requests_per_payload.size": "8192",
     "max_builder_deposit_requests_per_payload.size": "256",  # MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD (2**8)
     "max_builder_exit_requests_per_payload.size": "16",  # MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD (2**4)
+    "max_set_sweep_threshold_requests_per_payload.size": "16",  # MAX_SET_SWEEP_THRESHOLD_REQUESTS_PER_PAYLOAD (2**4)
     "max_attesting_indices.size": "131072",
     "max_committees_per_slot.size": "64",
     "committee_bits.size": "8",
@@ -53,6 +54,7 @@ mainnet = {
     "execution_payload_availability.size": "1024",  # Gloas: SLOTS_PER_HISTORICAL_ROOT
     "builder_pending_payments.size": "64",  # Gloas: vector length (2 * SLOTS_PER_EPOCH)
     "builder_registry_limit": "1099511627776",  # Gloas: BUILDER_REGISTRY_LIMIT (same for mainnet/minimal)
+    "validator_registry_limit": "1099511627776",  # VALIDATOR_REGISTRY_LIMIT (2**40, same for mainnet/minimal)
 }
 
 minimal = {
@@ -80,6 +82,7 @@ minimal = {
     "max_deposit_requests_per_payload.size": "8192",
     "max_builder_deposit_requests_per_payload.size": "256",  # MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD (2**8)
     "max_builder_exit_requests_per_payload.size": "16",  # MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD (2**4)
+    "max_set_sweep_threshold_requests_per_payload.size": "16",  # MAX_SET_SWEEP_THRESHOLD_REQUESTS_PER_PAYLOAD (2**4)
     "max_attesting_indices.size": "8192",
     "max_committees_per_slot.size": "4",
     "committee_bits.size": "1",
@@ -102,6 +105,7 @@ minimal = {
     "execution_payload_availability.size": "8",  # Gloas: SLOTS_PER_HISTORICAL_ROOT
     "builder_pending_payments.size": "16",  # Gloas: vector length (2 * SLOTS_PER_EPOCH)
     "builder_registry_limit": "1099511627776",  # Gloas: BUILDER_REGISTRY_LIMIT (same for mainnet/minimal)
+    "validator_registry_limit": "1099511627776",  # VALIDATOR_REGISTRY_LIMIT (2**40, same for mainnet/minimal)
 }
 
 ###### Rules definitions #######

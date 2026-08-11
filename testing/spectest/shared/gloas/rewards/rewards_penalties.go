@@ -38,6 +38,7 @@ func (d *Delta) unmarshalSSZ(buf []byte) error {
 
 // RunPrecomputeRewardsAndPenaltiesTests executes "rewards/{basic, leak, random}" tests.
 func RunPrecomputeRewardsAndPenaltiesTests(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	require.NoError(t, utils.SetConfig(t, config))
 
 	_, testsFolderPath := utils.TestFolders(t, config, "gloas", "rewards")

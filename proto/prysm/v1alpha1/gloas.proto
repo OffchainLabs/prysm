@@ -388,6 +388,8 @@ message BeaconStateGloas {
       [ (ethereum.eth.ext.ssz_max) = "withdrawal.size" ];
   repeated PTCs ptc_window = 14008
       [ (ethereum.eth.ext.ssz_size) = "ptc_window.size" ];
+  repeated uint64 validator_sweep_thresholds = 15001
+      [ (ethereum.eth.ext.ssz_max) = "validator_registry_limit" ];
 }
 
 // PTCs represents the payload timeliness committee for a single slot.

@@ -682,6 +682,10 @@ func CopyExecutionRequestsGloas(e *enginev1.ExecutionRequestsGloas) *enginev1.Ex
 	for i, b := range e.BuilderExits {
 		be[i] = b.Copy()
 	}
+	st := make([]*enginev1.SetSweepThresholdRequest, len(e.SweepThresholds))
+	for i, s := range e.SweepThresholds {
+		st[i] = s.Copy()
+	}
 
 	return &enginev1.ExecutionRequestsGloas{
 		Deposits:        dr,
@@ -689,6 +693,7 @@ func CopyExecutionRequestsGloas(e *enginev1.ExecutionRequestsGloas) *enginev1.Ex
 		Consolidations:  cr,
 		BuilderDeposits: bd,
 		BuilderExits:    be,
+		SweepThresholds: st,
 	}
 }
 

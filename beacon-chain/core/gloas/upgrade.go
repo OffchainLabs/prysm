@@ -264,6 +264,17 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 		return nil, errors.Wrap(err, "could not compute empty execution requests root")
 	}
 
+	maxEffectiveBalanceElectra := params.BeaconConfig().MaxEffectiveBalanceElectra
+	validatorSweepThresholds := make([]uint64, 0, beaconState.NumValidators())
+	for _, val := range beaconState.ValidatorsReadOnlySeq() {
+		threshold := uint64(0)
+		if val.HasCompoundingWithdrawalCredentials() {
+			threshold = maxEffectiveBalanceElectra
+		}
+
+		validatorSweepThresholds = append(validatorSweepThresholds, threshold)
+	}
+
 	s := &ethpb.BeaconStateGloas{
 		GenesisTime:           uint64(beaconState.GenesisTime().Unix()),
 		GenesisValidatorsRoot: beaconState.GenesisValidatorsRoot(),
@@ -322,6 +333,7 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 		BuilderPendingWithdrawals:     []*ethpb.BuilderPendingWithdrawal{},
 		LatestBlockHash:               payloadHeader.BlockHash(),
 		PayloadExpectedWithdrawals:    []*enginev1.Withdrawal{},
+		ValidatorSweepThresholds:      validatorSweepThresholds,
 	}
 	return state_native.InitializeFromProtoUnsafeGloas(s)
 }

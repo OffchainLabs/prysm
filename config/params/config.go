@@ -312,14 +312,15 @@ type BeaconChainConfig struct {
 	BalancePerAdditionalCustodyGroup      uint64           `yaml:"BALANCE_PER_ADDITIONAL_CUSTODY_GROUP" spec:"true"`         // BalancePerAdditionalCustodyGroup is the balance increment corresponding to one additional group to custody.
 
 	// Values introduced in Gloas upgrade
-	BuilderPaymentThresholdNumerator     uint64 `yaml:"BUILDER_PAYMENT_THRESHOLD_NUMERATOR" spec:"true"`        // BuilderPaymentThresholdNumerator is the numerator for builder payment quorum threshold calculation.
-	BuilderPaymentThresholdDenominator   uint64 `yaml:"BUILDER_PAYMENT_THRESHOLD_DENOMINATOR" spec:"true"`      // BuilderPaymentThresholdDenominator is the denominator for builder payment quorum threshold calculation.
-	MaxRequestPayloads                   uint64 `yaml:"MAX_REQUEST_PAYLOADS" spec:"true"`                       // MaxRequestPayloads is the maximum number of execution payload envelopes in a single request.
-	ChurnLimitQuotientGloas              uint64 `yaml:"CHURN_LIMIT_QUOTIENT_GLOAS" spec:"true"`                 // ChurnLimitQuotientGloas is the divisor used to compute per-epoch churn from total active balance in Gloas (EIP-8061).
-	ConsolidationChurnLimitQuotient      uint64 `yaml:"CONSOLIDATION_CHURN_LIMIT_QUOTIENT" spec:"true"`         // ConsolidationChurnLimitQuotient is the divisor used to compute the per-epoch consolidation churn limit in Gloas (EIP-8061).
-	MaxPerEpochActivationChurnLimitGloas uint64 `yaml:"MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT_GLOAS" spec:"true"` // MaxPerEpochActivationChurnLimitGloas is the per-epoch cap on activation churn in Gloas (EIP-8061).
-	MaxBuilderDepositRequestsPerPayload  uint64 `yaml:"MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD" spec:"true"`   // MaxBuilderDepositRequestsPerPayload is the maximum number of builder deposit requests in each payload (EIP-8282).
-	MaxBuilderExitRequestsPerPayload     uint64 `yaml:"MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD" spec:"true"`      // MaxBuilderExitRequestsPerPayload is the maximum number of builder exit requests in each payload (EIP-8282).
+	BuilderPaymentThresholdNumerator       uint64 `yaml:"BUILDER_PAYMENT_THRESHOLD_NUMERATOR" spec:"true"`          // BuilderPaymentThresholdNumerator is the numerator for builder payment quorum threshold calculation.
+	BuilderPaymentThresholdDenominator     uint64 `yaml:"BUILDER_PAYMENT_THRESHOLD_DENOMINATOR" spec:"true"`        // BuilderPaymentThresholdDenominator is the denominator for builder payment quorum threshold calculation.
+	MaxRequestPayloads                     uint64 `yaml:"MAX_REQUEST_PAYLOADS" spec:"true"`                         // MaxRequestPayloads is the maximum number of execution payload envelopes in a single request.
+	ChurnLimitQuotientGloas                uint64 `yaml:"CHURN_LIMIT_QUOTIENT_GLOAS" spec:"true"`                   // ChurnLimitQuotientGloas is the divisor used to compute per-epoch churn from total active balance in Gloas (EIP-8061).
+	ConsolidationChurnLimitQuotient        uint64 `yaml:"CONSOLIDATION_CHURN_LIMIT_QUOTIENT" spec:"true"`           // ConsolidationChurnLimitQuotient is the divisor used to compute the per-epoch consolidation churn limit in Gloas (EIP-8061).
+	MaxPerEpochActivationChurnLimitGloas   uint64 `yaml:"MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT_GLOAS" spec:"true"`   // MaxPerEpochActivationChurnLimitGloas is the per-epoch cap on activation churn in Gloas (EIP-8061).
+	MaxBuilderDepositRequestsPerPayload    uint64 `yaml:"MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD" spec:"true"`     // MaxBuilderDepositRequestsPerPayload is the maximum number of builder deposit requests in each payload (EIP-8282).
+	MaxBuilderExitRequestsPerPayload       uint64 `yaml:"MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD" spec:"true"`        // MaxBuilderExitRequestsPerPayload is the maximum number of builder exit requests in each payload (EIP-8282).
+	MaxSetSweepThresholdRequestsPerPayload uint64 `yaml:"MAX_SET_SWEEP_THRESHOLD_REQUESTS_PER_PAYLOAD" spec:"true"` // MaxSetSweepThresholdRequestsPerPayload is the maximum number of set sweep threshold requests in each payload (EIP-8282).
 
 	// Networking Specific Parameters
 	MaxPayloadSize                  uint64          `yaml:"MAX_PAYLOAD_SIZE" spec:"true"`                   // MAX_PAYLOAD_SIZE is the maximum allowed size of uncompressed payload in gossip messages and rpc chunks.
@@ -377,7 +378,17 @@ func (b *BeaconChainConfig) ExecutionRequestLimits() enginev1.ExecutionRequestLi
 		Consolidations:  b.MaxConsolidationsRequestsPerPayload,
 		BuilderDeposits: b.MaxBuilderDepositRequestsPerPayload,
 		BuilderExits:    b.MaxBuilderExitRequestsPerPayload,
+		SweepThresholds: b.MaxSetSweepThresholdRequestsPerPayload,
 	}
+}
+
+// MinSweepThreshold returns the smallest custom sweep threshold a validator may set (EIP-8148).
+//
+// Spec definition:
+//
+//	MIN_SWEEP_THRESHOLD = MIN_ACTIVATION_BALANCE + Gwei(2**0 * 10**9)
+func (b *BeaconChainConfig) MinSweepThreshold() uint64 {
+	return b.MinActivationBalance + b.EffectiveBalanceIncrement
 }
 
 type NetworkScheduleEntry struct {

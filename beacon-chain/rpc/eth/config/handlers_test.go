@@ -91,6 +91,7 @@ func TestGetSpec(t *testing.T) {
 	config.MaxBuildersPerWithdrawalsSweep = 112
 	config.MaxBuilderDepositRequestsPerPayload = 113
 	config.MaxBuilderExitRequestsPerPayload = 114
+	config.MaxSetSweepThresholdRequestsPerPayload = 115
 	config.BLSWithdrawalPrefixByte = byte('b')
 	config.ETH1AddressWithdrawalPrefixByte = byte('c')
 	config.BuilderWithdrawalPrefixByte = byte('e')
@@ -244,7 +245,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 211, len(data))
+	assert.Equal(t, 212, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -336,6 +337,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "113", v)
 			case "MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD":
 				assert.Equal(t, "114", v)
+			case "MAX_SET_SWEEP_THRESHOLD_REQUESTS_PER_PAYLOAD":
+				assert.Equal(t, "115", v)
 			case "MIN_ANCHOR_POW_BLOCK_DIFFICULTY":
 				assert.Equal(t, "1000", v)
 			case "BLS_WITHDRAWAL_PREFIX":

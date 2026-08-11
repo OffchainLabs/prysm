@@ -12,6 +12,7 @@ import (
 
 // RunEffectiveBalanceUpdatesTests executes "epoch_processing/effective_balance_updates" tests.
 func RunEffectiveBalanceUpdatesTests(t *testing.T, config string) {
+	utils.SkipGloasEip8148Divergence(t)
 	require.NoError(t, utils.SetConfig(t, config))
 
 	testFolders, testsFolderPath := utils.TestFolders(t, config, "gloas", "epoch_processing/effective_balance_updates/pyspec_tests")

@@ -24,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/sweepthreshold"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -134,6 +135,7 @@ type Config struct {
 	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
 	PayloadIDCache                   *cache.PayloadIDCache
 	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache
+	MockSweepThresholdPool           *sweepthreshold.MockPool
 	LCStore                          *lightClient.Store
 	GraffitiInfo                     *execution.GraffitiInfo
 	VerifierWaiter                   *verification.InitializerWaiter
@@ -274,6 +276,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		HighestBidCache:                  s.cfg.HighestBidCache,
 		PayloadIDCache:                   s.cfg.PayloadIDCache,
 		ExecutionPayloadEnvelopeCache:    s.cfg.ExecutionPayloadEnvelopeCache,
+		MockSweepThresholdPool:           s.cfg.MockSweepThresholdPool,
 		AttestationStateFetcher:          s.cfg.AttestationReceiver,
 		GraffitiInfo:                     s.cfg.GraffitiInfo,
 	}

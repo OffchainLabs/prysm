@@ -2427,7 +2427,7 @@ func (b *BeaconStateGloas) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the BeaconStateGloas object to a target array
 func (b *BeaconStateGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(14405)
+	offset := int(14409)
 
 	// Field (0) 'GenesisTime'
 	dst = ssz.MarshalUint(dst, b.GenesisTime)
@@ -2699,6 +2699,10 @@ func (b *BeaconStateGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		}
 	}
 
+	// Offset (46) 'ValidatorSweepThresholds'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.ValidatorSweepThresholds) * 8
+
 	// Field (7) 'HistoricalRoots'
 	if size := len(b.HistoricalRoots); size > 16777216 {
 		err = ssz.ErrListTooBigFn("--.HistoricalRoots", size, 16777216)
@@ -2848,6 +2852,15 @@ func (b *BeaconStateGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		}
 	}
 
+	// Field (46) 'ValidatorSweepThresholds'
+	if size := len(b.ValidatorSweepThresholds); size > 1099511627776 {
+		err = ssz.ErrListTooBigFn("--.ValidatorSweepThresholds", size, 1099511627776)
+		return
+	}
+	for ii := 0; ii < len(b.ValidatorSweepThresholds); ii++ {
+		dst = ssz.MarshalUint(dst, b.ValidatorSweepThresholds[ii])
+	}
+
 	return
 }
 
@@ -2855,12 +2868,12 @@ func (b *BeaconStateGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 14405 {
+	if size < 14409 {
 		return ssz.ErrSize
 	}
 
 	tail := buf
-	var o7, o9, o11, o12, o15, o16, o21, o27, o34, o35, o36, o38, o42, o43, o44 uint64
+	var o7, o9, o11, o12, o15, o16, o21, o27, o34, o35, o36, o38, o42, o43, o44, o46 uint64
 
 	// Field (0) 'GenesisTime'
 	b.GenesisTime = ssz.UnmarshallUint[uint64](buf[0:8])
@@ -2913,7 +2926,7 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	if o7 != 14405 {
+	if o7 != 14409 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
@@ -3124,6 +3137,11 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 		if err = b.PtcWindow[ii].UnmarshalSSZ(buf[11333:14405][ii*128 : (ii+1)*128]); err != nil {
 			return err
 		}
+	}
+
+	// Offset (46) 'ValidatorSweepThresholds'
+	if o46 = ssz.ReadOffset(buf[14405:14409]); o46 > size || o44 > o46 {
+		return ssz.ErrOffset
 	}
 
 	// Field (7) 'HistoricalRoots'
@@ -3349,7 +3367,7 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 
 	// Field (44) 'PayloadExpectedWithdrawals'
 	{
-		buf = tail[o44:]
+		buf = tail[o44:o46]
 		num, err := ssz.DivideInt2(len(buf), 44, 4)
 		if err != nil {
 			return err
@@ -3364,12 +3382,25 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			}
 		}
 	}
+
+	// Field (46) 'ValidatorSweepThresholds'
+	{
+		buf = tail[o46:]
+		num, err := ssz.DivideInt2(len(buf), 8, 1099511627776)
+		if err != nil {
+			return err
+		}
+		b.ValidatorSweepThresholds = ssz.ExtendUint(b.ValidatorSweepThresholds, num)
+		for ii := 0; ii < num; ii++ {
+			b.ValidatorSweepThresholds[ii] = ssz.UnmarshallUint[uint64](buf[ii*8 : (ii+1)*8])
+		}
+	}
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the BeaconStateGloas object
 func (b *BeaconStateGloas) SizeSSZ() (size int) {
-	size = 14405
+	size = 14409
 
 	// Field (7) 'HistoricalRoots'
 	size += len(b.HistoricalRoots) * 32
@@ -3418,6 +3449,9 @@ func (b *BeaconStateGloas) SizeSSZ() (size int) {
 
 	// Field (44) 'PayloadExpectedWithdrawals'
 	size += len(b.PayloadExpectedWithdrawals) * 44
+
+	// Field (46) 'ValidatorSweepThresholds'
+	size += len(b.ValidatorSweepThresholds) * 8
 
 	return
 }
@@ -3856,6 +3890,22 @@ func (b *BeaconStateGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 			}
 		}
 		hh.Merkleize(subIndx)
+	}
+
+	// Field (46) 'ValidatorSweepThresholds'
+	{
+		if size := len(b.ValidatorSweepThresholds); size > 1099511627776 {
+			err = ssz.ErrListTooBigFn("--.ValidatorSweepThresholds", size, 1099511627776)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.ValidatorSweepThresholds {
+			ssz.AppendUint(hh, i)
+		}
+		hh.FillUpTo32()
+
+		numItems := uint64(len(b.ValidatorSweepThresholds))
+		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(1099511627776, numItems, 8))
 	}
 
 	hh.Merkleize(indx)

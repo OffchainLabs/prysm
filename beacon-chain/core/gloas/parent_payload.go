@@ -3,6 +3,7 @@ package gloas
 import (
 	"bytes"
 	"context"
+	"fmt"
 
 	requests "github.com/OffchainLabs/prysm/v7/beacon-chain/core/requests"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -110,7 +111,16 @@ func processExecutionRequests(ctx context.Context, st state.BeaconState, rqs *en
 	if err := ProcessBuilderDepositRequests(ctx, st, rqs.BuilderDeposits); err != nil {
 		return errors.Wrap(err, "could not process builder deposit requests")
 	}
-	return ProcessBuilderExitRequests(ctx, st, rqs.BuilderExits)
+	if err := ProcessBuilderExitRequests(ctx, st, rqs.BuilderExits); err != nil {
+		return fmt.Errorf("process builder exit requests: %w", err)
+	}
+
+	// [New in EIP-8148]
+	if err := ProcessSetSweepThresholdRequests(ctx, st, rqs.SweepThresholds); err != nil {
+		return fmt.Errorf("process set sweep threshold requests: %w", err)
+	}
+
+	return nil
 }
 
 // IsEmptyExecutionRequests returns true if the execution requests contain no entries.
@@ -119,5 +129,5 @@ func IsEmptyExecutionRequests(r *enginev1.ExecutionRequestsGloas) bool {
 		return true
 	}
 	return len(r.Deposits) == 0 && len(r.Withdrawals) == 0 && len(r.Consolidations) == 0 &&
-		len(r.BuilderDeposits) == 0 && len(r.BuilderExits) == 0
+		len(r.BuilderDeposits) == 0 && len(r.BuilderExits) == 0 && len(r.SweepThresholds) == 0
 }

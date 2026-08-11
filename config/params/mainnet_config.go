@@ -225,7 +225,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BeaconStateDenebFieldCount:     28,
 	BeaconStateElectraFieldCount:   37,
 	BeaconStateFuluFieldCount:      38,
-	BeaconStateGloasFieldCount:     46,
+	BeaconStateGloasFieldCount:     47,
 
 	// Slasher related values.
 	WeakSubjectivityPeriod:          54000,
@@ -359,6 +359,9 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	MaxPerEpochActivationChurnLimitGloas: 256_000_000_000,
 	MaxBuilderDepositRequestsPerPayload:  256, // 2**8 (= 256)
 	MaxBuilderExitRequestsPerPayload:     16,  // 2**4 (= 16)
+
+	// Values related to EIP-8148 (custom sweep threshold), shipped as part of Gloas.
+	MaxSetSweepThresholdRequestsPerPayload: 16, // 2**4 (= 16)
 
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB
