@@ -129,7 +129,8 @@ message ProposerOptionPayload {
 
 // BuilderConfig is a property of ProposerOptionPayload
 message BuilderConfig {
-  optional bool enabled = 1;
+  // enabled is legacy v1 (mev-boost) content; v2 settings ignore it.
+  bool enabled = 1;
   uint64 gas_limit = 2 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
@@ -163,7 +164,8 @@ message BuilderConfig {
 // left unset inherit from the enclosing BuilderConfig, then default_config.
 message BuilderEntry {
   string url = 1;
-  optional bytes pubkey = 2;
+  // pubkeys filters accepted bids to these builder keys; empty accepts any.
+  repeated bytes pubkeys = 2;
   optional bytes auth_data = 3;
   optional uint64 min_bid = 4 [
     (ethereum.eth.ext.cast_type) =

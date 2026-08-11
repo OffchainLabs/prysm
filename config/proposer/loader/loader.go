@@ -214,6 +214,7 @@ func (psl *SettingsLoader) loadFromFile(cliCtx *cli.Context, dbSettings *validat
 	if settingFromFile == nil {
 		return nil, errors.Errorf("proposer settings is empty after unmarshalling from file specified by %s flag", flags.ProposerSettingsFlag.Name)
 	}
+	markExplicitEmptyBuilders(settingFromFile)
 	log.WithField(flags.ProposerSettingsFlag.Name, cliCtx.String(flags.ProposerSettingsFlag.Name)).Info("Proposer settings loaded from file")
 	return psl.processProposerSettings(settingFromFile, dbSettings), nil
 }
@@ -226,6 +227,7 @@ func (psl *SettingsLoader) loadFromURL(cliCtx *cli.Context, dbSettings *validato
 	if settingFromURL == nil {
 		return nil, errors.Errorf("proposer settings is empty after unmarshalling from url specified by %s flag", flags.ProposerSettingsURLFlag.Name)
 	}
+	markExplicitEmptyBuilders(settingFromURL)
 	log.WithField(flags.ProposerSettingsURLFlag.Name, cliCtx.String(flags.ProposerSettingsURLFlag.Name)).Infof("Proposer settings loaded from URL")
 	return psl.processProposerSettings(settingFromURL, dbSettings), nil
 }
@@ -283,9 +285,27 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 	return mergeProposerSettingsV1(merged, loaded, db, builderConfig, gasLimitOnly)
 }
 
-// promotePayloadToV2 mirrors Settings.UpgradeToV2 plus legacy presence
-// normalization, so v1 content merged into a v2 result reads correctly.
+// markExplicitEmptyBuilders stamps the persistence marker for a user source's
+// explicit "builders": [] (opt-out), which yaml keeps distinct from absent.
+func markExplicitEmptyBuilders(p *validatorpb.ProposerSettingsPayload) {
+	mark := func(opt *validatorpb.ProposerOptionPayload) {
+		if opt == nil || opt.Builder == nil {
+			return
+		}
+		if opt.Builder.Builders != nil {
+			opt.Builder.BuildersSet = true
+		}
+	}
+	mark(p.DefaultConfig)
+	for _, opt := range p.ProposerConfig {
+		mark(opt)
+	}
+}
+
+// promotePayloadToV2 mirrors Settings.UpgradeToV2: gas limits are promoted to
+// the option level and v1 builder content, which does not apply to v2, is dropped.
 func promotePayloadToV2(p *validatorpb.ProposerSettingsPayload) {
+	dropped := false
 	promote := func(opt *validatorpb.ProposerOptionPayload) {
 		if opt == nil || opt.Builder == nil {
 			return
@@ -293,10 +313,15 @@ func promotePayloadToV2(p *validatorpb.ProposerSettingsPayload) {
 		if opt.GasLimit == 0 {
 			opt.GasLimit = opt.Builder.GasLimit
 		}
+		opt.Builder = nil
+		dropped = true
 	}
 	promote(p.DefaultConfig)
 	for _, opt := range p.ProposerConfig {
 		promote(opt)
+	}
+	if dropped {
+		log.Warn("v1 builder settings do not apply to the v2 schema and were replaced with defaults; provide v2 proposer settings to configure builders")
 	}
 }
 
@@ -363,17 +388,10 @@ func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPay
 	}
 	merged.ProposerConfig = selectProposerConfig(db, loaded)
 
-	// --enable-builder forces the default toggle on, matching v1; per-key
-	// enabled is untouched so a single key can still opt out (keymanager #88).
+	// v2 has no enabled toggle: participation follows the configured builders
+	// list, so --enable-builder has nothing to force on.
 	if builderConfig != nil {
-		if merged.DefaultConfig == nil {
-			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{}
-		}
-		if merged.DefaultConfig.Builder == nil {
-			merged.DefaultConfig.Builder = &validatorpb.BuilderConfig{}
-		}
-		enabled := true
-		merged.DefaultConfig.Builder.Enabled = &enabled
+		log.Warnf("--%s has no effect with v2 proposer settings; configure builders via the settings source or keymanager API", flags.EnableBuilderFlag.Name)
 	}
 
 	if gasLimitOnly == nil {

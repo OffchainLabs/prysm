@@ -122,7 +122,7 @@ type BuilderConfig struct {
 // fall back to the enclosing BuilderConfig, then default_config.
 type BuilderEntry struct {
 	URL                 string            `json:"url" yaml:"url"`
-	Pubkey              []byte            `json:"pubkey,omitempty" yaml:"pubkey,omitempty"`
+	Pubkeys             [][]byte          `json:"builder_pubkeys,omitempty" yaml:"builder_pubkeys,omitempty"`
 	AuthData            []byte            `json:"auth_data,omitempty" yaml:"auth_data,omitempty"`
 	MinBid              *validator.Uint64 `json:"min_bid,omitempty" yaml:"min_bid,omitempty"`
 	MaxExecutionPayment *validator.Uint64 `json:"max_execution_payment,omitempty" yaml:"max_execution_payment,omitempty"`
@@ -185,7 +185,9 @@ func (ps *Settings) RegistrationFor(pubkey [fieldparams.BLSPubkeyLength]byte) (c
 		case bc != nil && bc.GasLimit != 0:
 			gasLimit = bc.GasLimit
 		}
-		return feeRecipient, gasLimit, bc.IsEnabled() && hasFeeRecipient
+		// v2 has no enabled flag: a key participates in builder registration
+		// exactly when its resolved builders list names at least one builder.
+		return feeRecipient, gasLimit, bc != nil && len(bc.Builders) > 0 && hasFeeRecipient
 	}
 	// v1 keeps object-level semantics: a per-key builder config wins wholesale,
 	// so a disabled one opts the key out even under an enabled default.
@@ -280,8 +282,8 @@ func (be *BuilderEntry) EffectiveMaxExecutionPayment(bc *BuilderConfig) validato
 	return bc.EffectiveMaxExecutionPayment()
 }
 
-// IsEnabled reports whether the builder path is explicitly enabled. A nil config
-// or unset enabled field is treated as disabled.
+// IsEnabled reports whether the legacy v1 builder path is explicitly enabled.
+// v2 settings ignore the enabled field entirely.
 func (bc *BuilderConfig) IsEnabled() bool {
 	return bc != nil && bc.Enabled
 }
@@ -296,7 +298,6 @@ func effectiveBuilderConfig(perKey, def *BuilderConfig) *BuilderConfig {
 		return perKey
 	}
 	eff := &BuilderConfig{
-		Enabled:             perKey.Enabled,
 		GasLimit:            perKey.GasLimit,
 		MaxExecutionPayment: coalesceUint64(perKey.MaxExecutionPayment, def.MaxExecutionPayment),
 		MinBid:              coalesceUint64(perKey.MinBid, def.MinBid),
@@ -326,7 +327,7 @@ func BuilderConfigFromConsensus(from *validatorpb.BuilderConfig) *BuilderConfig 
 		return nil
 	}
 	c := &BuilderConfig{
-		Enabled:             from.GetEnabled(),
+		Enabled:             from.Enabled,
 		GasLimit:            from.GasLimit,
 		MaxExecutionPayment: cloneUint64(from.MaxExecutionPayment),
 		MinBid:              cloneUint64(from.MinBid),
@@ -355,8 +356,8 @@ func builderEntryFromConsensus(from *validatorpb.BuilderEntry) *BuilderEntry {
 		BuilderBoostFactor:  from.BuilderBoostFactor,
 	}
 	// Treat empty as absent so bolt (nil) and filesystem (empty) round-trips agree.
-	if len(from.Pubkey) != 0 {
-		e.Pubkey = bytesutil.SafeCopyBytes(from.Pubkey)
+	if len(from.Pubkeys) != 0 {
+		e.Pubkeys = bytesutil.SafeCopy2dBytes(from.Pubkeys)
 	}
 	if len(from.AuthData) != 0 {
 		e.AuthData = bytesutil.SafeCopyBytes(from.AuthData)
@@ -518,7 +519,7 @@ func (be *BuilderEntry) Clone() *BuilderEntry {
 	}
 	return &BuilderEntry{
 		URL:                 be.URL,
-		Pubkey:              bytesutil.SafeCopyBytes(be.Pubkey),
+		Pubkeys:             bytesutil.SafeCopy2dBytes(be.Pubkeys),
 		AuthData:            bytesutil.SafeCopyBytes(be.AuthData),
 		MinBid:              cloneUint64(be.MinBid),
 		MaxExecutionPayment: cloneUint64(be.MaxExecutionPayment),
@@ -548,8 +549,7 @@ func (bc *BuilderConfig) ToConsensus() *validatorpb.BuilderConfig {
 		return nil
 	}
 	c := &validatorpb.BuilderConfig{}
-	enabled := bc.Enabled
-	c.Enabled = &enabled
+	c.Enabled = bc.Enabled
 	c.GasLimit = bc.GasLimit
 	c.MaxExecutionPayment = cloneUint64(bc.MaxExecutionPayment)
 	c.MinBid = cloneUint64(bc.MinBid)
@@ -572,7 +572,7 @@ func (be *BuilderEntry) toConsensus() *validatorpb.BuilderEntry {
 	}
 	return &validatorpb.BuilderEntry{
 		Url:                 be.URL,
-		Pubkey:              bytesutil.SafeCopyBytes(be.Pubkey),
+		Pubkeys:             bytesutil.SafeCopy2dBytes(be.Pubkeys),
 		AuthData:            bytesutil.SafeCopyBytes(be.AuthData),
 		MinBid:              cloneUint64(be.MinBid),
 		MaxExecutionPayment: cloneUint64(be.MaxExecutionPayment),
@@ -591,14 +591,16 @@ func (ps *Settings) WarnDeprecatedSchema() {
 		return
 	}
 	// Fee recipients and graffiti behave identically across schemas; only
-	// builder content gives the migration something to change.
-	if !ps.hasBuilderContent() {
+	// builder content gives the cutover something to drop.
+	if !ps.HasBuilderContent() {
 		return
 	}
-	log.Warn("Proposer settings use the deprecated v1 schema; they are upgraded automatically at the gloas fork. Please migrate your settings source to v2.")
+	log.Warn("Proposer settings use the deprecated v1 schema; v1 builder settings do not apply to gloas and are replaced with defaults at the fork (fee recipients, gas limits and graffiti carry over). Please migrate your settings source to v2.")
 }
 
-func (ps *Settings) hasBuilderContent() bool {
+// HasBuilderContent reports whether any level carries a builder config, i.e.
+// whether the v1 cutover has anything to drop.
+func (ps *Settings) HasBuilderContent() bool {
 	if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil {
 		return true
 	}
@@ -610,12 +612,13 @@ func (ps *Settings) hasBuilderContent() bool {
 	return false
 }
 
-// UpgradeToV2 migrates v1 settings in place: builder gas limits are promoted to
-// the option level unless one is set. Returns true if anything changed.
+// UpgradeToV2 is the v1 cutover: gas limits are promoted to the option level and
+// v1 builder configs, which do not apply to gloas, are dropped. Returns true if changed.
 func (ps *Settings) UpgradeToV2() bool {
 	if ps == nil || ps.isV2() {
 		return false
 	}
+	dropped := false
 	migrate := func(opt *Option) {
 		if opt == nil || opt.BuilderConfig == nil {
 			return
@@ -623,12 +626,17 @@ func (ps *Settings) UpgradeToV2() bool {
 		if opt.GasLimit == 0 {
 			opt.GasLimit = opt.BuilderConfig.GasLimit
 		}
+		opt.BuilderConfig = nil
+		dropped = true
 	}
 	migrate(ps.DefaultConfig)
 	for _, opt := range ps.ProposeConfig {
 		migrate(opt)
 	}
 	ps.Version = SchemaV2
+	if dropped {
+		log.Warn("v1 builder settings do not apply to gloas and were replaced with defaults; provide v2 proposer settings to configure builders")
+	}
 	return true
 }
 

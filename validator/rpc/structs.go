@@ -113,34 +113,36 @@ type GraffitiData struct {
 	Graffiti string `json:"graffiti"`
 }
 
+type GetBuildersResponse struct {
+	Data *BuilderConfig `json:"data"`
+}
+
 // BuilderConfig is the keymanager-APIs #88 wire form: integers are decimal
 // strings, bytes 0x-hex. Builders nil = inherit, [] = use none (kept by no omitempty).
 type BuilderConfig struct {
-	Enabled            *bool           `json:"enabled"`
 	MinBid             *string         `json:"min_bid,omitempty"`
 	BuilderBoostFactor *string         `json:"builder_boost_factor,omitempty"`
 	Builders           []*BuilderEntry `json:"builders"`
 }
 
 type BuilderEntry struct {
-	Url                 string  `json:"url"`
-	AuthData            *string `json:"auth_data,omitempty"`
-	BuilderPubkey       *string `json:"builder_pubkey,omitempty"`
-	MaxExecutionPayment *string `json:"max_execution_payment,omitempty"`
-	MinBid              *string `json:"min_bid,omitempty"`
-	BuilderBoostFactor  *string `json:"builder_boost_factor,omitempty"`
+	Url                 string   `json:"url"`
+	AuthData            *string  `json:"auth_data,omitempty"`
+	BuilderPubkeys      []string `json:"builder_pubkeys"`
+	MaxExecutionPayment *string  `json:"max_execution_payment,omitempty"`
+	MinBid              *string  `json:"min_bid,omitempty"`
+	BuilderBoostFactor  *string  `json:"builder_boost_factor,omitempty"`
 }
 
 const (
 	maxBuilderEntries = 64   // MAX_BUILDER_ENTRIES
 	maxBuilderURLSize = 2048 // MAX_BUILDER_URL_SIZE
 	maxAuthDataSize   = 4096 // MAX_DATA_SIZE
+	maxBuilderPubkeys = 64   // MAX_BUILDER_PUBKEYS
 )
 
 func builderConfigFromConsensus(bc *proposer.BuilderConfig) *BuilderConfig {
-	enabled := bc.Enabled
 	out := &BuilderConfig{
-		Enabled:            &enabled,
 		MinBid:             new(strconv.FormatUint(uint64(bc.EffectiveMinBid()), 10)),
 		BuilderBoostFactor: new(strconv.FormatUint(uint64(bc.EffectiveBuilderBoostFactor()), 10)),
 	}
@@ -155,6 +157,8 @@ func builderConfigFromConsensus(bc *proposer.BuilderConfig) *BuilderConfig {
 
 func builderEntryFromConsensus(be *proposer.BuilderEntry, bc *proposer.BuilderConfig) *BuilderEntry {
 	out := &BuilderEntry{
+		// Omitted builder_pubkeys resolves to the empty list (accept any builder).
+		BuilderPubkeys:      make([]string, 0, len(be.Pubkeys)),
 		MaxExecutionPayment: new(strconv.FormatUint(uint64(be.EffectiveMaxExecutionPayment(bc)), 10)),
 		MinBid:              new(strconv.FormatUint(uint64(be.EffectiveMinBid(bc)), 10)),
 		BuilderBoostFactor:  new(strconv.FormatUint(uint64(be.EffectiveBuilderBoostFactor(bc)), 10)),
@@ -163,14 +167,14 @@ func builderEntryFromConsensus(be *proposer.BuilderEntry, bc *proposer.BuilderCo
 		out.Url = be.URL
 		out.AuthData = new(hexutil.Encode(be.EffectiveAuthData()))
 	}
-	if len(be.Pubkey) != 0 {
-		out.BuilderPubkey = new(hexutil.Encode(be.Pubkey))
+	for _, pk := range be.Pubkeys {
+		out.BuilderPubkeys = append(out.BuilderPubkeys, hexutil.Encode(pk))
 	}
 	return out
 }
 
 func (in *BuilderConfig) ToConsensus() (*proposer.BuilderConfig, error) {
-	bc := &proposer.BuilderConfig{Enabled: in.Enabled != nil && *in.Enabled}
+	bc := &proposer.BuilderConfig{}
 	if in.MinBid != nil {
 		v, err := parseUint(*in.MinBid, "min_bid")
 		if err != nil {
@@ -224,20 +228,23 @@ func (in *BuilderEntry) ToConsensus(i int) (*proposer.BuilderEntry, error) {
 		return nil, errors.Errorf("builders[%d].url is not a valid URL", i)
 	}
 	be.URL = in.Url
-	if in.BuilderPubkey != nil {
-		pk, err := hexutil.Decode(*in.BuilderPubkey)
+	if len(in.BuilderPubkeys) > maxBuilderPubkeys {
+		return nil, errors.Errorf("builders[%d].builder_pubkeys exceeds %d keys", i, maxBuilderPubkeys)
+	}
+	for _, raw := range in.BuilderPubkeys {
+		pk, err := hexutil.Decode(raw)
 		if err != nil || len(pk) != fieldparams.BLSPubkeyLength {
-			return nil, errors.Errorf("builders[%d].builder_pubkey is not a valid BLS public key", i)
+			return nil, errors.Errorf("builders[%d].builder_pubkeys contains an invalid BLS public key", i)
 		}
-		be.Pubkey = pk
+		be.Pubkeys = append(be.Pubkeys, pk)
 	}
 	if in.AuthData != nil {
 		ad, err := hexutil.Decode(*in.AuthData)
 		if err != nil {
 			return nil, errors.Errorf("builders[%d].auth_data is not valid hex", i)
 		}
-		if len(ad) > maxAuthDataSize {
-			return nil, errors.Errorf("builders[%d].auth_data exceeds %d bytes", i, maxAuthDataSize)
+		if len(ad) == 0 || len(ad) > maxAuthDataSize {
+			return nil, errors.Errorf("builders[%d].auth_data must be 1 to %d bytes", i, maxAuthDataSize)
 		}
 		be.AuthData = ad
 	}

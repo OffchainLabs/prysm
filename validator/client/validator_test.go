@@ -3067,7 +3067,8 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 			}
 			require.Equal(t, proposer.SchemaV2, ps.Version)
 			require.Equal(t, tt.upgradedGasLimit, ps.DefaultConfig.GasLimit)
-			require.NotNil(t, ps.DefaultConfig.BuilderConfig)
+			// The cutover drops v1 builder content after promoting its gas limit.
+			require.IsNil(t, ps.DefaultConfig.BuilderConfig)
 
 			dbps, err := v.db.ProposerSettings(t.Context())
 			require.NoError(t, err)
@@ -3528,7 +3529,7 @@ func TestValidator_buildSignedRegReqs_V2Settings(t *testing.T) {
 					FeeRecipient: defaultFeeRecipient,
 				},
 				GasLimit:      8888,
-				BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 9999},
+				BuilderConfig: &proposer.BuilderConfig{GasLimit: 9999, Builders: []*proposer.BuilderEntry{{URL: "https://default.example"}}},
 			},
 			ProposeConfig: map[[48]byte]*proposer.Option{
 				pubkey1: {
@@ -3536,7 +3537,7 @@ func TestValidator_buildSignedRegReqs_V2Settings(t *testing.T) {
 						FeeRecipient: feeRecipient1,
 					},
 					GasLimit:      1111,
-					BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 7777},
+					BuilderConfig: &proposer.BuilderConfig{GasLimit: 7777, Builders: []*proposer.BuilderEntry{{URL: "https://b.example"}}},
 				},
 				pubkey2: {
 					FeeRecipientConfig: &proposer.FeeRecipientConfig{
@@ -3548,7 +3549,7 @@ func TestValidator_buildSignedRegReqs_V2Settings(t *testing.T) {
 					FeeRecipientConfig: &proposer.FeeRecipientConfig{
 						FeeRecipient: feeRecipient2,
 					},
-					BuilderConfig: &proposer.BuilderConfig{Enabled: false},
+					BuilderConfig: &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{}},
 				},
 			},
 		},
@@ -3984,11 +3985,11 @@ func TestBuilderTargetsForKey(t *testing.T) {
 		require.Equal(t, 0, len(v.builderTargetsForKey(pk)))
 	})
 
-	t.Run("disabled config produces no targets", func(t *testing.T) {
-		disabled := map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
-			pk: {BuilderConfig: &proposer.BuilderConfig{Enabled: false, Builders: proposeConfig[pk].BuilderConfig.Builders}},
+	t.Run("explicit empty builders list produces no targets", func(t *testing.T) {
+		optedOut := map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+			pk: {BuilderConfig: &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{}}},
 		}
-		v := &validator{proposerSettings: &proposer.Settings{Version: proposer.SchemaV2, ProposeConfig: disabled}}
+		v := &validator{proposerSettings: &proposer.Settings{Version: proposer.SchemaV2, ProposeConfig: optedOut}}
 		require.Equal(t, 0, len(v.builderTargetsForKey(pk)))
 	})
 

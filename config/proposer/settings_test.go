@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	logtest "github.com/sirupsen/logrus/hooks/test"
-	"google.golang.org/protobuf/proto"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -516,7 +515,7 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		require.Equal(t, false, ps.UpgradeToV2())
 	})
 
-	t.Run("v1 default lifts BuilderConfig.GasLimit to top-level and retains builder relays", func(t *testing.T) {
+	t.Run("v1 default lifts BuilderConfig.GasLimit to top-level and drops the builder config", func(t *testing.T) {
 		ps := &Settings{
 			DefaultConfig: &Option{
 				BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(42_000_000)},
@@ -525,8 +524,8 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		require.Equal(t, true, ps.UpgradeToV2())
 		require.Equal(t, SchemaV2, ps.Version)
 		require.Equal(t, validator.Uint64(42_000_000), ps.DefaultConfig.GasLimit)
-		// BuilderConfig is retained so the gloas builder-API relays/enabled survive the upgrade.
-		require.NotNil(t, ps.DefaultConfig.BuilderConfig)
+		// v1 builder opinions are about mev-boost and do not carry into v2.
+		require.IsNil(t, ps.DefaultConfig.BuilderConfig)
 	})
 
 	t.Run("v1 top-level GasLimit already set is preserved", func(t *testing.T) {
@@ -540,7 +539,7 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		require.Equal(t, validator.Uint64(70_000_000), ps.DefaultConfig.GasLimit)
 	})
 
-	t.Run("per-validator builder gas limits promoted and builders retained", func(t *testing.T) {
+	t.Run("per-validator builder gas limits promoted and builder configs dropped", func(t *testing.T) {
 		pubkey2, err := hexutil.Decode("0xbedefeaa94e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2cdddddddddddddddddddddddd")
 		require.NoError(t, err)
 		pk2 := bytesutil.ToBytes48(pubkey2)
@@ -554,10 +553,10 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		require.Equal(t, SchemaV2, ps.Version)
 		require.Equal(t, true, ps.DefaultConfig == nil)
 		require.Equal(t, validator.Uint64(35_000_000), ps.ProposeConfig[pk].GasLimit)
-		require.NotNil(t, ps.ProposeConfig[pk].BuilderConfig)
+		require.IsNil(t, ps.ProposeConfig[pk].BuilderConfig)
 		// An explicit top-level gas limit wins over the builder value.
 		require.Equal(t, validator.Uint64(50_000_000), ps.ProposeConfig[pk2].GasLimit)
-		require.NotNil(t, ps.ProposeConfig[pk2].BuilderConfig)
+		require.IsNil(t, ps.ProposeConfig[pk2].BuilderConfig)
 	})
 
 	t.Run("already v2 is left untouched", func(t *testing.T) {
@@ -634,7 +633,6 @@ func TestSettingFromConsensus(t *testing.T) {
 			Version: SchemaV2,
 			DefaultConfig: &validatorpb.ProposerOptionPayload{
 				Builder: &validatorpb.BuilderConfig{
-					Enabled: proto.Bool(true),
 					Builders: []*validatorpb.BuilderEntry{
 						{Url: "https://b.example", AuthData: []byte("first")},
 						{Url: "https://b.example", AuthData: []byte("second")},
@@ -679,11 +677,6 @@ func TestSettingFromConsensus(t *testing.T) {
 		perKey := got.ProposeConfig[key].BuilderConfig
 		require.Equal(t, false, perKey.Enabled)
 		require.Equal(t, (*validator.Uint64)(nil), perKey.MaxExecutionPayment)
-
-		// A disabled per-key section can never silently activate under an enabled default:
-		// EffectiveBuilderConfig takes the per-key enabled, not the default's.
-		eff := effectiveBuilderConfig(perKey, &BuilderConfig{Enabled: true})
-		require.Equal(t, false, eff.IsEnabled())
 	})
 
 	t.Run("v2 presence preserved", func(t *testing.T) {
@@ -716,12 +709,12 @@ func TestRegistrationFor(t *testing.T) {
 		require.Equal(t, recipient, fr)
 	})
 
-	t.Run("v2 inherits the default builder and fee recipient", func(t *testing.T) {
+	t.Run("v2 inherits the default builders and fee recipient", func(t *testing.T) {
 		ps := &Settings{
 			Version: SchemaV2,
 			DefaultConfig: &Option{
 				FeeRecipientConfig: &FeeRecipientConfig{FeeRecipient: recipient},
-				BuilderConfig:      &BuilderConfig{Enabled: true, GasLimit: 123},
+				BuilderConfig:      &BuilderConfig{GasLimit: 123, Builders: []*BuilderEntry{{URL: "https://b.example"}}},
 			},
 		}
 		fr, gl, enabled := ps.RegistrationFor(key)
@@ -733,8 +726,21 @@ func TestRegistrationFor(t *testing.T) {
 	t.Run("v2 without a fee recipient at any level does not register", func(t *testing.T) {
 		ps := &Settings{
 			Version:       SchemaV2,
-			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{Enabled: true}},
+			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{Builders: []*BuilderEntry{{URL: "https://b.example"}}}},
 		}
+		_, _, enabled := ps.RegistrationFor(key)
+		require.Equal(t, false, enabled)
+	})
+
+	t.Run("v2 config without builders does not register", func(t *testing.T) {
+		ps := &Settings{
+			Version: SchemaV2,
+			DefaultConfig: &Option{
+				FeeRecipientConfig: &FeeRecipientConfig{FeeRecipient: recipient},
+				BuilderConfig:      &BuilderConfig{Enabled: true, MinBid: uint64ValPtr(1)},
+			},
+		}
+		// enabled is legacy v1 content and is ignored by v2 resolution.
 		_, _, enabled := ps.RegistrationFor(key)
 		require.Equal(t, false, enabled)
 	})
@@ -759,17 +765,17 @@ func TestRegistrationFor(t *testing.T) {
 
 	perKeyRecipient := common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A")
 
-	t.Run("v2 per-key fee recipient and enabled:false both win over the default", func(t *testing.T) {
+	t.Run("v2 per-key fee recipient and explicit empty builders both win over the default", func(t *testing.T) {
 		ps := &Settings{
 			Version: SchemaV2,
 			DefaultConfig: &Option{
 				FeeRecipientConfig: &FeeRecipientConfig{FeeRecipient: recipient},
-				BuilderConfig:      &BuilderConfig{Enabled: true},
+				BuilderConfig:      &BuilderConfig{Builders: []*BuilderEntry{{URL: "https://b.example"}}},
 			},
 			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
 				key: {
 					FeeRecipientConfig: &FeeRecipientConfig{FeeRecipient: perKeyRecipient},
-					BuilderConfig:      &BuilderConfig{Enabled: false},
+					BuilderConfig:      &BuilderConfig{Builders: []*BuilderEntry{}},
 				},
 			},
 		}
@@ -783,7 +789,7 @@ func TestRegistrationFor(t *testing.T) {
 			Version: SchemaV2,
 			DefaultConfig: &Option{
 				FeeRecipientConfig: &FeeRecipientConfig{FeeRecipient: recipient},
-				BuilderConfig:      &BuilderConfig{Enabled: true, GasLimit: 123},
+				BuilderConfig:      &BuilderConfig{GasLimit: 123, Builders: []*BuilderEntry{{URL: "https://b.example"}}},
 			},
 			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
 				key: {GasLimit: 999},
@@ -800,7 +806,7 @@ func TestRegistrationFor(t *testing.T) {
 			Version: SchemaV2,
 			DefaultConfig: &Option{
 				FeeRecipientConfig: &FeeRecipientConfig{FeeRecipient: recipient},
-				BuilderConfig:      &BuilderConfig{Enabled: true},
+				BuilderConfig:      &BuilderConfig{Builders: []*BuilderEntry{{URL: "https://b.example"}}},
 			},
 		}
 		_, gl, enabled := ps.RegistrationFor(key)
@@ -884,14 +890,14 @@ func TestHasBuilderContent(t *testing.T) {
 			key: {GraffitiConfig: &GraffitiConfig{Graffiti: "hi"}},
 		},
 	}
-	require.Equal(t, false, neutral.hasBuilderContent())
+	require.Equal(t, false, neutral.HasBuilderContent())
 	neutral.ProposeConfig[key].BuilderConfig = &BuilderConfig{}
-	require.Equal(t, true, neutral.hasBuilderContent())
+	require.Equal(t, true, neutral.HasBuilderContent())
 }
 
-// An explicit trustless-only ceiling survives the v2 upgrade untouched; an
-// absent one stays absent and follows v2 inheritance.
-func TestUpgradeToV2_PreservesExplicitMaxPayment(t *testing.T) {
+// The cutover drops all v1 builder content, including gloas knobs like
+// max_execution_payment; v2 settings are the only source of builder opinions.
+func TestUpgradeToV2_DropsBuilderContent(t *testing.T) {
 	key := [fieldparams.BLSPubkeyLength]byte{9}
 	ps := &Settings{
 		Version:       SchemaV1,
@@ -902,7 +908,7 @@ func TestUpgradeToV2_PreservesExplicitMaxPayment(t *testing.T) {
 	}
 	require.Equal(t, true, ps.UpgradeToV2())
 	require.Equal(t, SchemaV2, ps.Version)
-	require.Equal(t, validator.Uint64(0), *ps.DefaultConfig.BuilderConfig.MaxExecutionPayment)
-	require.IsNil(t, ps.ProposeConfig[key].BuilderConfig.MaxExecutionPayment)
+	require.IsNil(t, ps.DefaultConfig.BuilderConfig)
+	require.IsNil(t, ps.ProposeConfig[key].BuilderConfig)
 	require.Equal(t, false, ps.UpgradeToV2())
 }

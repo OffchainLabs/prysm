@@ -36,7 +36,7 @@ func (s *Server) GetBuilders(w http.ResponseWriter, r *http.Request) {
 	if out.Builders == nil {
 		out.Builders = []*BuilderEntry{}
 	}
-	httputil.WriteJson(w, out)
+	httputil.WriteJson(w, &GetBuildersResponse{Data: out})
 }
 
 // SetBuilders implements POST /eth/v1/validator/{pubkey}/builders, replacing the
@@ -57,10 +57,6 @@ func (s *Server) SetBuilders(w http.ResponseWriter, r *http.Request) {
 	var body BuilderConfig
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		httputil.HandleError(w, "Could not decode builder config: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if body.Enabled == nil {
-		httputil.HandleError(w, "enabled is required", http.StatusBadRequest)
 		return
 	}
 	bc, err := body.ToConsensus()
@@ -100,7 +96,7 @@ func (s *Server) SetBuilders(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteBuilders implements DELETE /eth/v1/validator/{pubkey}/builders: the key
-// follows the validator client defaults again; not the same as enabled:false.
+// follows the validator client defaults again; not the same as builders: [].
 func (s *Server) DeleteBuilders(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.DeleteBuilders")
 	defer span.End()

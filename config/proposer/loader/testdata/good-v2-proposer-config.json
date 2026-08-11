@@ -4,7 +4,6 @@
       "fee_recipient": "0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3",
       "gas_limit": "40000000",
       "builder": {
-        "enabled": true,
         "min_bid": "500000000",
         "builders": [
           { "url": "https://builder-a.example", "max_execution_payment": "1000000000" },
@@ -18,7 +17,7 @@
     "fee_recipient": "0x6e35733c5af9B61374A128e6F85f553aF09ff89A",
     "gas_limit": "30000000",
     "builder": {
-      "enabled": false
+      "builders": []
     }
   },
   "version": 2

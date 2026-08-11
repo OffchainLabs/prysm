@@ -875,6 +875,12 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		}); err != nil {
 			return err
 		}
+		// Gloas preferences start being prepared one epoch ahead; v1 builder
+		// settings do not apply to them, so warn while there is time to act.
+		if ps := v.ProposerSettings(); currentEpoch+1 >= params.BeaconConfig().GloasForkEpoch &&
+			ps != nil && ps.Version != proposer.SchemaV2 && ps.HasBuilderContent() && slots.IsEpochStart(slot) {
+			log.Warn("Proposer settings still use the v1 schema; gloas proposer preferences are prepared with defaults. Provide v2 proposer settings.")
+		}
 	} else {
 		v.upgradeProposerSettingsToV2(ctx)
 	}
@@ -1443,14 +1449,14 @@ func (v *validator) submittedPrefSlotsCount() int {
 type builderTarget struct {
 	url         string
 	authData    []byte
-	pubkey      []byte
+	pubkeys     [][]byte
 	maxPayment  uint64
 	minBid      *uint64
 	boostFactor *uint64
 }
 
-// builderTargetsForKey resolves the enabled builder list for pk; entries override
-// config-level fallbacks. TODO(gloas): minBid/boost/pubkey ride the #630 wire.
+// builderTargetsForKey resolves the configured builder list for pk; entries override
+// config-level fallbacks. TODO(gloas): minBid/boost/pubkeys ride the #630 wire.
 func (v *validator) builderTargetsForKey(pk pubkey) []builderTarget {
 	ps := v.ProposerSettings()
 	// Builder entries imply v2: the API upgrades on write and v2 files declare it,
@@ -1459,7 +1465,7 @@ func (v *validator) builderTargetsForKey(pk pubkey) []builderTarget {
 		return nil
 	}
 	bc := ps.EffectiveBuilderConfig(pk)
-	if !bc.IsEnabled() {
+	if bc == nil {
 		return nil
 	}
 	fbMax := uint64(bc.EffectiveMaxExecutionPayment())
@@ -1477,7 +1483,7 @@ func (v *validator) builderTargetsForKey(pk pubkey) []builderTarget {
 			continue
 		}
 		seen[e.Identity()] = true
-		t := builderTarget{url: e.URL, authData: e.EffectiveAuthData(), pubkey: e.Pubkey, maxPayment: fbMax, minBid: fbMin, boostFactor: fbBoost}
+		t := builderTarget{url: e.URL, authData: e.EffectiveAuthData(), pubkeys: e.Pubkeys, maxPayment: fbMax, minBid: fbMin, boostFactor: fbBoost}
 		if e.MaxExecutionPayment != nil {
 			t.maxPayment = uint64(*e.MaxExecutionPayment)
 		}
@@ -1541,7 +1547,7 @@ func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km key
 					continue
 				}
 				// TODO(gloas): only maxPayment fits BuilderPreferencesV1; per-entry
-				// authData, minBid, boostFactor and pubkey ship with the #630 inline wire.
+				// authData, minBid, boostFactor and pubkeys ship with the #630 inline wire.
 				reqs = append(reqs, &ethpb.SubmitBuilderPreferencesRequest{
 					ValidatorPubkey: pk[:],
 					Request: &ethpb.BuilderPreferencesRequestV1{

@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/urfave/cli/v2"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -426,8 +425,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 							},
 							GasLimit: 40000000,
 							BuilderConfig: &proposer.BuilderConfig{
-								Enabled: true,
-								MinBid:  u64(500000000),
+								MinBid: u64(500000000),
 								Builders: []*proposer.BuilderEntry{
 									{URL: "https://builder-a.example", MaxExecutionPayment: u64(1000000000)},
 									{URL: "https://builder-b.example"},
@@ -440,7 +438,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 							FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
 						},
 						GasLimit:      30000000,
-						BuilderConfig: &proposer.BuilderConfig{Enabled: false},
+						BuilderConfig: &proposer.BuilderConfig{Builders: []*proposer.BuilderEntry{}},
 					},
 				}
 			},
@@ -1225,15 +1223,15 @@ func Test_mergeProposerSettings_VersionPrecedence(t *testing.T) {
 		merged := mergeProposerSettings(
 			&validatorpb.ProposerSettingsPayload{
 				DefaultConfig: &validatorpb.ProposerOptionPayload{
-					Builder: &validatorpb.BuilderConfig{Enabled: proto.Bool(true), GasLimit: 30000000},
+					Builder: &validatorpb.BuilderConfig{Enabled: true, GasLimit: 30000000},
 				},
 			},
 			&validatorpb.ProposerSettingsPayload{Version: proposer.SchemaV2},
 			&flagOptions{},
 		)
 		require.Equal(t, uint32(proposer.SchemaV2), merged.Version)
-		require.NotNil(t, merged.DefaultConfig.Builder)
-		// The builder gas limit is promoted so v2 reads see it at the top level.
+		// v1 builder content does not carry into v2; the gas limit is promoted first.
+		require.IsNil(t, merged.DefaultConfig.Builder)
 		require.Equal(t, validator.Uint64(30000000), merged.DefaultConfig.GasLimit)
 	})
 	t.Run("file per-key section replaces the DB's entirely", func(t *testing.T) {
@@ -1302,8 +1300,9 @@ func TestSettingsLoader_V1FileAfterMigratedDB(t *testing.T) {
 	require.NotNil(t, got)
 
 	require.Equal(t, proposer.SchemaV2, got.Version)
-	require.NotNil(t, got.DefaultConfig.BuilderConfig)
-	require.Equal(t, validator.Uint64(40000000), got.DefaultConfig.BuilderConfig.GasLimit)
+	// The v1 file's builder content is dropped; its gas limit is promoted first.
+	require.IsNil(t, got.DefaultConfig.BuilderConfig)
+	require.Equal(t, validator.Uint64(40000000), got.DefaultConfig.GasLimit)
 	assert.LogsDoNotContain(t, hook, "deprecated v1 schema")
 
 	// Already v2: the file's builder gas limits were promoted at merge time.
@@ -1340,7 +1339,7 @@ func Test_mergeProposerSettings_V2GasLimitOnlyGoesToOption(t *testing.T) {
 
 func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
 	v1Builder := func() *validatorpb.BuilderConfig {
-		return &validatorpb.BuilderConfig{Enabled: proto.Bool(true), GasLimit: 40000000}
+		return &validatorpb.BuilderConfig{Enabled: true, GasLimit: 40000000}
 	}
 	t.Run("v1 db without enable-builder drops DB builder", func(t *testing.T) {
 		db := &validatorpb.ProposerSettingsPayload{
@@ -1359,49 +1358,18 @@ func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
 		require.NotNil(t, merged.DefaultConfig.Builder)
 		require.Equal(t, validator.Uint64(40000000), merged.DefaultConfig.Builder.GasLimit)
 	})
-	t.Run("v2 --enable-builder forces the default toggle on", func(t *testing.T) {
+	t.Run("v2 --enable-builder has no effect and warns", func(t *testing.T) {
+		hook := logtest.NewGlobal()
 		opts := &flagOptions{builderConfig: &proposer.BuilderConfig{Enabled: true}}
-
-		// No default builder: the flag creates it enabled.
 		db := &validatorpb.ProposerSettingsPayload{
 			Version:       proposer.SchemaV2,
 			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0x"},
 		}
 		merged := mergeProposerSettings(nil, db, opts)
-		require.NotNil(t, merged.DefaultConfig.Builder)
-		require.NotNil(t, merged.DefaultConfig.Builder.Enabled)
-		require.Equal(t, true, *merged.DefaultConfig.Builder.Enabled)
-
-		// An explicit default enabled=false IS overridden by the flag, matching v1.
-		disabled := false
-		db2 := &validatorpb.ProposerSettingsPayload{
-			Version: proposer.SchemaV2,
-			DefaultConfig: &validatorpb.ProposerOptionPayload{
-				FeeRecipient: "0x",
-				Builder:      &validatorpb.BuilderConfig{Enabled: &disabled},
-			},
-		}
-		merged2 := mergeProposerSettings(nil, db2, opts)
-		require.NotNil(t, merged2.DefaultConfig.Builder.Enabled)
-		require.Equal(t, true, *merged2.DefaultConfig.Builder.Enabled)
-
-		// Per-key entries are untouched: explicit enabled=false still opts the key out.
-		keyDisabled := false
-		db3 := &validatorpb.ProposerSettingsPayload{
-			Version:       proposer.SchemaV2,
-			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0x"},
-			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
-				"0xkey":  {FeeRecipient: "0xk"},
-				"0xkey2": {FeeRecipient: "0xk2", Builder: &validatorpb.BuilderConfig{Enabled: &keyDisabled}},
-			},
-		}
-		merged3 := mergeProposerSettings(nil, db3, opts)
-		require.IsNil(t, merged3.ProposerConfig["0xkey"].Builder)
-		require.Equal(t, false, *merged3.ProposerConfig["0xkey2"].Builder.Enabled)
+		require.IsNil(t, merged.DefaultConfig.Builder)
+		assert.LogsContain(t, hook, "has no effect with v2 proposer settings")
 	})
-	t.Run("v1-promoted default under --enable-builder stays enabled, matching v1", func(t *testing.T) {
-		opts := &flagOptions{builderConfig: &proposer.BuilderConfig{Enabled: true}}
-		// v1 file with a builder block and no enabled key: the v1 flag turned it on.
+	t.Run("v1 builder content merged into v2 is dropped with gas limit promoted", func(t *testing.T) {
 		file := &validatorpb.ProposerSettingsPayload{
 			DefaultConfig: &validatorpb.ProposerOptionPayload{
 				FeeRecipient: "0x",
@@ -1409,9 +1377,9 @@ func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
 			},
 		}
 		db := &validatorpb.ProposerSettingsPayload{Version: proposer.SchemaV2}
-		merged := mergeProposerSettings(file, db, opts)
-		require.NotNil(t, merged.DefaultConfig.Builder.Enabled)
-		require.Equal(t, true, *merged.DefaultConfig.Builder.Enabled)
+		merged := mergeProposerSettings(file, db, &flagOptions{})
+		require.IsNil(t, merged.DefaultConfig.Builder)
+		require.Equal(t, validator.Uint64(30000000), merged.DefaultConfig.GasLimit)
 	})
 }
 
