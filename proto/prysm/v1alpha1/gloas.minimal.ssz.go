@@ -4130,16 +4130,16 @@ func (c *PartialDataColumnGroupID) MarshalSSZ() ([]byte, error) {
 func (c *PartialDataColumnGroupID) MarshalSSZTo(dst []byte) ([]byte, error) {
 	var err error
 
-	// Field 0: Slot
-	if dst, err = c.Slot.MarshalSSZTo(dst); err != nil {
-		return nil, fmt.Errorf("Slot: %w", err)
-	}
-
-	// Field 1: BeaconBlockRoot
+	// Field 0: BeaconBlockRoot
 	if len(c.BeaconBlockRoot) != 32 {
 		return nil, ssz.ErrBytesLength
 	}
 	dst = append(dst, c.BeaconBlockRoot...)
+
+	// Field 1: Slot
+	if dst, err = c.Slot.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("Slot: %w", err)
+	}
 
 	return dst, err
 }
@@ -4151,17 +4151,17 @@ func (c *PartialDataColumnGroupID) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrSize
 	}
 
-	sszSlice0 := buf[0:8]  // c.Slot
-	sszSlice1 := buf[8:40] // c.BeaconBlockRoot
+	sszSlice0 := buf[0:32]  // c.BeaconBlockRoot
+	sszSlice1 := buf[32:40] // c.Slot
 
-	// Field 0: Slot
-	if err = c.Slot.UnmarshalSSZ(sszSlice0); err != nil {
+	// Field 0: BeaconBlockRoot
+	c.BeaconBlockRoot = make([]byte, 0, 32)
+	c.BeaconBlockRoot = append(c.BeaconBlockRoot, sszSlice0...)
+
+	// Field 1: Slot
+	if err = c.Slot.UnmarshalSSZ(sszSlice1); err != nil {
 		return fmt.Errorf("Slot: %w", err)
 	}
-
-	// Field 1: BeaconBlockRoot
-	c.BeaconBlockRoot = make([]byte, 0, 32)
-	c.BeaconBlockRoot = append(c.BeaconBlockRoot, sszSlice1...)
 	return err
 }
 
@@ -4178,15 +4178,15 @@ func (c *PartialDataColumnGroupID) HashTreeRoot() ([32]byte, error) {
 
 func (c *PartialDataColumnGroupID) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
-	// Field 0: Slot
-	if err := c.Slot.HashTreeRootWith(hh); err != nil {
-		return fmt.Errorf("Slot: %w", err)
-	}
-	// Field 1: BeaconBlockRoot
+	// Field 0: BeaconBlockRoot
 	if len(c.BeaconBlockRoot) != 32 {
 		return ssz.ErrBytesLength
 	}
 	hh.PutBytes(c.BeaconBlockRoot)
+	// Field 1: Slot
+	if err := c.Slot.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("Slot: %w", err)
+	}
 	hh.Merkleize(indx)
 	return nil
 }
