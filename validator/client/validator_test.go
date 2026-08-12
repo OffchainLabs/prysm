@@ -4104,6 +4104,27 @@ func TestWarmBuilderRequestAuthsForDuties_CollapsesSameURL(t *testing.T) {
 	// Same-url entries collapse to one request carrying the safest (lowest) ceiling.
 	require.Equal(t, 1, len(reqs))
 	require.Equal(t, primitives.Gwei(100), reqs[0].Request.Preferences.MaxExecutionPayment)
+
+	t.Run("distinct urls all submit the lowest max_execution_payment", func(t *testing.T) {
+		// The beacon node holds one max_execution_payment per validator, so every
+		// url's submission carries the lowest entry until #630 adds builder identity.
+		v.proposerSettings = &proposer.Settings{
+			Version: proposer.SchemaV2,
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+				pk: {BuilderConfig: &proposer.BuilderConfig{
+					Builders: []*proposer.BuilderEntry{
+						{URL: "https://a.example", MaxExecutionPayment: u64(0)},
+						{URL: "https://b.example", MaxExecutionPayment: u64(250)},
+					},
+				}},
+			},
+		}
+		reqs := v.warmBuilderRequestAuthsForDuties(t.Context(), km, 5, duties)
+		require.Equal(t, 2, len(reqs))
+		for _, r := range reqs {
+			require.Equal(t, primitives.Gwei(0), r.Request.Preferences.MaxExecutionPayment)
+		}
+	})
 }
 
 func headValidator() *validator {

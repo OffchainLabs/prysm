@@ -1529,30 +1529,32 @@ func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km key
 		if len(targets) == 0 {
 			continue
 		}
-		// The v1 preference wire identifies a builder only by url, so same-url
-		// entries collapse to the safest (lowest) payment ceiling for now.
-		ceilings := make(map[string]uint64, len(targets))
+		// The v1 wire holds one max_execution_payment per validator (no builder
+		// identity), so the lowest configured value is submitted for every builder.
+		minPayment := targets[0].maxPayment
+		urls := make(map[string]bool, len(targets))
 		for _, t := range targets {
-			if cur, ok := ceilings[t.url]; !ok || t.maxPayment < cur {
-				ceilings[t.url] = t.maxPayment
+			if t.maxPayment < minPayment {
+				minPayment = t.maxPayment
 			}
+			urls[t.url] = true
 		}
 		for _, proposalSlot := range duty.ProposerSlots {
 			if proposalSlot <= slot {
 				continue
 			}
-			for url, maxPayment := range ceilings {
+			for url := range urls {
 				signed, err := v.signRequestAuthCached(ctx, km, pk, url, proposalSlot)
 				if err != nil {
 					log.WithError(err).Warn("Failed to sign builder request auth")
 					continue
 				}
-				// TODO(gloas): only maxPayment fits BuilderPreferencesV1; per-entry
-				// authData, minBid, boostFactor and pubkeys ship with the #630 inline wire.
+				// TODO(gloas): per-entry max_execution_payment, authData, minBid, boost
+				// and pubkeys need the beacon-APIs #630 inline wire's builder identity.
 				reqs = append(reqs, &ethpb.SubmitBuilderPreferencesRequest{
 					ValidatorPubkey: pk[:],
 					Request: &ethpb.BuilderPreferencesRequestV1{
-						Preferences: &ethpb.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(maxPayment)},
+						Preferences: &ethpb.BuilderPreferencesV1{MaxExecutionPayment: primitives.Gwei(minPayment)},
 						Auth:        signed,
 					},
 				})

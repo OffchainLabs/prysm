@@ -1484,3 +1484,88 @@ func Test_mergeProposerSettings_V2GasLimitOverwritesPerValidator(t *testing.T) {
 	require.Equal(t, gl, merged.DefaultConfig.GasLimit)
 	require.Equal(t, gl, merged.ProposerConfig["0xkey"].GasLimit)
 }
+
+func Test_markExplicitEmptyBuilders(t *testing.T) {
+	entry := &validatorpb.BuilderEntry{Url: "https://a.example"}
+	t.Run("explicit empty list gains the marker", func(t *testing.T) {
+		p := &validatorpb.ProposerSettingsPayload{
+			DefaultConfig: &validatorpb.ProposerOptionPayload{
+				Builder: &validatorpb.BuilderConfig{Builders: []*validatorpb.BuilderEntry{}},
+			},
+		}
+		markExplicitEmptyBuilders(p)
+		require.Equal(t, true, p.DefaultConfig.Builder.BuildersSet)
+	})
+	t.Run("nonempty list gains the marker too", func(t *testing.T) {
+		p := &validatorpb.ProposerSettingsPayload{
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xaa": {Builder: &validatorpb.BuilderConfig{Builders: []*validatorpb.BuilderEntry{entry}}},
+			},
+		}
+		markExplicitEmptyBuilders(p)
+		require.Equal(t, true, p.ProposerConfig["0xaa"].Builder.BuildersSet)
+	})
+	t.Run("absent list stays unmarked", func(t *testing.T) {
+		p := &validatorpb.ProposerSettingsPayload{
+			DefaultConfig:  &validatorpb.ProposerOptionPayload{Builder: &validatorpb.BuilderConfig{Enabled: true}},
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{"0xaa": {}, "0xbb": nil},
+		}
+		markExplicitEmptyBuilders(p)
+		require.Equal(t, false, p.DefaultConfig.Builder.BuildersSet)
+	})
+}
+
+func Test_inferSchemaVersion(t *testing.T) {
+	u64 := func(v uint64) *validator.Uint64 { u := validator.Uint64(v); return &u }
+	v2Cases := map[string]*validatorpb.BuilderConfig{
+		"builders list":         {Builders: []*validatorpb.BuilderEntry{{Url: "https://a.example"}}},
+		"builders set marker":   {BuildersSet: true},
+		"min_bid":               {MinBid: u64(1)},
+		"builder_boost_factor":  {BuilderBoostFactor: u64(100)},
+		"max_execution_payment": {MaxExecutionPayment: u64(0)},
+	}
+	for name, bc := range v2Cases {
+		t.Run("unversioned with "+name+" infers v2", func(t *testing.T) {
+			p := &validatorpb.ProposerSettingsPayload{
+				DefaultConfig: &validatorpb.ProposerOptionPayload{Builder: bc},
+			}
+			inferSchemaVersion(p)
+			require.Equal(t, uint32(proposer.SchemaV2), p.Version)
+		})
+	}
+	t.Run("per-key v2 content infers v2", func(t *testing.T) {
+		p := &validatorpb.ProposerSettingsPayload{
+			ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
+				"0xaa": {Builder: &validatorpb.BuilderConfig{MinBid: u64(1)}},
+			},
+		}
+		inferSchemaVersion(p)
+		require.Equal(t, uint32(proposer.SchemaV2), p.Version)
+	})
+	t.Run("pure v1 content stays unversioned", func(t *testing.T) {
+		p := &validatorpb.ProposerSettingsPayload{
+			DefaultConfig: &validatorpb.ProposerOptionPayload{
+				Builder: &validatorpb.BuilderConfig{Enabled: true, GasLimit: 30000000},
+			},
+		}
+		inferSchemaVersion(p)
+		require.Equal(t, uint32(proposer.SchemaV1Unset), p.Version)
+	})
+	t.Run("explicit version is never overridden", func(t *testing.T) {
+		p := &validatorpb.ProposerSettingsPayload{
+			Version: proposer.SchemaV1,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{
+				Builder: &validatorpb.BuilderConfig{MinBid: u64(1)},
+			},
+		}
+		inferSchemaVersion(p)
+		require.Equal(t, uint32(proposer.SchemaV1), p.Version)
+	})
+	t.Run("no builder content stays unversioned", func(t *testing.T) {
+		p := &validatorpb.ProposerSettingsPayload{
+			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0x"},
+		}
+		inferSchemaVersion(p)
+		require.Equal(t, uint32(proposer.SchemaV1Unset), p.Version)
+	})
+}

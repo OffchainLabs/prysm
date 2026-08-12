@@ -139,9 +139,9 @@ func (be *BuilderEntry) EffectiveAuthData() []byte {
 	return []byte(be.URL)
 }
 
-// EffectiveBuilderConfig resolves key's builder config against default_config;
+// EffectiveBuilderConfig resolves pubkey's builder config against default_config;
 // nil when neither level configures a builder.
-func (ps *Settings) EffectiveBuilderConfig(key [fieldparams.BLSPubkeyLength]byte) *BuilderConfig {
+func (ps *Settings) EffectiveBuilderConfig(pubkey [fieldparams.BLSPubkeyLength]byte) *BuilderConfig {
 	if ps == nil {
 		return nil
 	}
@@ -149,7 +149,7 @@ func (ps *Settings) EffectiveBuilderConfig(key [fieldparams.BLSPubkeyLength]byte
 	if ps.DefaultConfig != nil {
 		def = ps.DefaultConfig.BuilderConfig
 	}
-	if opt, ok := ps.ProposeConfig[key]; ok && opt != nil {
+	if opt, ok := ps.ProposeConfig[pubkey]; ok && opt != nil {
 		perKey = opt.BuilderConfig
 	}
 	return effectiveBuilderConfig(perKey, def)

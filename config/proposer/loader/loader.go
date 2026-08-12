@@ -135,7 +135,7 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 		}
 		dbSettings = dbps.ToConsensus()
 		log.WithField("version", dbSettings.Version).
-			WithField("proposerKeys", len(dbSettings.ProposerConfig)).
+			WithField("proposerConfigCount", len(dbSettings.ProposerConfig)).
 			Debug("Loaded proposer settings from DB")
 	}
 
