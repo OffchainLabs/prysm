@@ -239,6 +239,19 @@ func TestServer_SetBuilders(t *testing.T) {
 func TestServer_GetBuilders(t *testing.T) {
 	// GET is fully resolved: omitted auth_data becomes the url's UTF-8 bytes, and
 	// unset values become the runtime fallbacks (no floor, neutral boost, trustless-only).
+	t.Run("nil proposer settings resolve to runtime defaults", func(t *testing.T) {
+		srv, keys := setupConfigServer(t, 1)
+		pk := hexutil.Encode(keys[0][:])
+		// No settings were ever created: the nil-receiver chain must still
+		// produce a fully resolved response rather than panic or error.
+		w, cfg := getBuilders(t, srv, pk)
+		require.Equal(t, http.StatusOK, w.Code)
+		require.Equal(t, "0", *cfg.MinBid)
+		require.Equal(t, "100", *cfg.BuilderBoostFactor)
+		require.NotNil(t, cfg.Builders)
+		require.Equal(t, 0, len(cfg.Builders))
+	})
+
 	t.Run("resolves omitted values", func(t *testing.T) {
 		srv, keys := setupConfigServer(t, 1)
 		pk := hexutil.Encode(keys[0][:])
