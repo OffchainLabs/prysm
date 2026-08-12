@@ -243,7 +243,7 @@ func initialize(ctx context.Context, v *validator) error {
 	return nil
 }
 
-func performRoles(slotCtx context.Context, allRoles map[[48]byte][]ValidatorRole, v *validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
+func performRoles(slotCtx context.Context, allRoles map[[48]byte][]validatorRole, v *validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
 	for pubKey, roles := range allRoles {
 		for _, role := range roles {
 			wg.Go(func() {

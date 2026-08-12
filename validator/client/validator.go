@@ -135,8 +135,8 @@ type validatorStatus struct {
 	index     primitives.ValidatorIndex
 }
 
-// SigningFunc defines a type for the function that signs a message.
-type SigningFunc func(context.Context, *validatorpb.SignRequest) (bls.Signature, error)
+// signingFunc defines a type for the function that signs a message.
+type signingFunc func(context.Context, *validatorpb.SignRequest) (bls.Signature, error)
 
 // statusCache returns pubkeyToStatus for lock-free reads: entries are never
 // mutated in place, updateValidatorStatusCache replaces the map wholesale.
@@ -560,7 +560,7 @@ func retrieveLatestRecord(recs []*dbCommon.AttestationRecord) *dbCommon.Attestat
 // RolesAt slot returns the validator roles at the given slot. Returns nil if the
 // validator is known to not have a roles at the slot. Returns UNKNOWN if the
 // validator assignments are unknown. Otherwise, returns a valid ValidatorRole map.
-func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fieldparams.BLSPubkeyLength]byte][]ValidatorRole, error) {
+func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fieldparams.BLSPubkeyLength]byte][]validatorRole, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.RolesAt")
 	defer span.End()
 
@@ -570,12 +570,12 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 	}
 
 	var (
-		rolesAt              = make(map[[fieldparams.BLSPubkeyLength]byte][]ValidatorRole)
+		rolesAt              = make(map[[fieldparams.BLSPubkeyLength]byte][]validatorRole)
 		syncCommitteePubkeys [][fieldparams.BLSPubkeyLength]byte
 	)
 
 	for pk, duty := range snap.currentDuties() {
-		var roles []ValidatorRole
+		var roles []validatorRole
 
 		if duty == nil {
 			continue
@@ -1551,7 +1551,7 @@ func (v *validator) submitProposerPreferences(ctx context.Context) {
 func (v *validator) buildSignedRegReqs(
 	ctx context.Context,
 	activePubkeys [][fieldparams.BLSPubkeyLength]byte,
-	signer SigningFunc,
+	signer signingFunc,
 	slot primitives.Slot,
 	forceFullPush bool,
 ) []*ethpb.SignedValidatorRegistrationV1 {

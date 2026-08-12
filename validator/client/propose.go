@@ -338,7 +338,7 @@ func buildGenericSignedBlockFuluWithBlobs(pb proto.Message, b *ethpb.GenericBeac
 func ProposeExit(
 	ctx context.Context,
 	validatorClient iface.ValidatorClient,
-	signer SigningFunc,
+	signer signingFunc,
 	pubKey []byte,
 	epoch primitives.Epoch,
 ) error {
@@ -369,7 +369,7 @@ func CurrentEpoch(genesisTime *timestamp.Timestamp) (primitives.Epoch, error) {
 func CreateSignedVoluntaryExit(
 	ctx context.Context,
 	validatorClient iface.ValidatorClient,
-	signer SigningFunc,
+	signer signingFunc,
 	pubKey []byte,
 	epoch primitives.Epoch,
 ) (*ethpb.SignedVoluntaryExit, error) {
@@ -464,7 +464,7 @@ func (v *validator) signBlock(ctx context.Context, pubKey [fieldparams.BLSPubkey
 func signVoluntaryExit(
 	ctx context.Context,
 	validatorClient iface.ValidatorClient,
-	signer SigningFunc,
+	signer signingFunc,
 	pubKey []byte,
 	exit *ethpb.VoluntaryExit,
 	slot primitives.Slot,

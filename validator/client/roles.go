@@ -1,11 +1,11 @@
 package client
 
-// ValidatorRole defines the validator role.
-type ValidatorRole int8
+// validatorRole defines the validator role.
+type validatorRole int8
 
 const (
 	// RoleUnknown means that the role of the validator cannot be determined.
-	RoleUnknown ValidatorRole = iota
+	RoleUnknown validatorRole = iota
 	// RoleAttester means that the validator should submit an attestation.
 	RoleAttester
 	// RoleProposer means that the validator should propose a block.
