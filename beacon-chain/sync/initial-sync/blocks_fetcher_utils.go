@@ -35,10 +35,11 @@ func (f *blocksFetcher) forkDataFromBlocks(ctx context.Context, pid peer.ID, bwb
 	}
 	lastSlot := bwb[len(bwb)-1].Block.Block().Slot()
 	start := bwb[0].Block.Block().Slot()
-	if f.db != nil {
-		if parent, err := f.db.Block(ctx, bwb[0].Block.Block().ParentRoot()); err == nil && blocks.BeaconBlockIsNil(parent) == nil {
-			start = parent.Block().Slot() + 1
-		}
+	parentRoot := bwb[0].Block.Block().ParentRoot()
+	if slot, err := f.chain.RecentBlockSlot(parentRoot); err == nil {
+		start = slot + 1
+	} else if parent, err := f.db.Block(ctx, parentRoot); err == nil && blocks.BeaconBlockIsNil(parent) == nil {
+		start = parent.Block().Slot() + 1
 	}
 	r := &fetchRequestResponse{
 		blocksFrom: pid,
