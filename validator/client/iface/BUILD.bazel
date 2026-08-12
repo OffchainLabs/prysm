@@ -24,7 +24,6 @@ go_library(
         "//validator/keymanager:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_golang_protobuf//ptypes/empty",
-        "@com_github_pkg_errors//:go_default_library",
     ],
 )
 
