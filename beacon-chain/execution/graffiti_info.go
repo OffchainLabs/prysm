@@ -16,15 +16,17 @@ const (
 // GraffitiInfo holds version information for generating block graffiti.
 // It is thread-safe and can be updated by the execution service and read by the validator server.
 type GraffitiInfo struct {
-	mu       sync.RWMutex
-	elCode   string // From engine_getClientVersionV1
-	elCommit string // From engine_getClientVersionV1
-	logOnce  sync.Once
+	mu                  sync.RWMutex
+	elCode              string // From engine_getClientVersionV1
+	elCommit            string // From engine_getClientVersionV1
+	logOnce             sync.Once
+	appendClientVersion bool
 }
 
 // NewGraffitiInfo creates a new GraffitiInfo.
-func NewGraffitiInfo() *GraffitiInfo {
-	return &GraffitiInfo{}
+// When appendClientVersion is false, no client version info is appended.
+func NewGraffitiInfo(appendClientVersion bool) *GraffitiInfo {
+	return &GraffitiInfo{appendClientVersion: appendClientVersion}
 }
 
 // UpdateFromEngine updates the EL client information.
@@ -61,6 +63,11 @@ func (g *GraffitiInfo) GenerateGraffiti(userGraffiti []byte) [32]byte {
 	// Trim trailing null bytes
 	for len(userStr) > 0 && userStr[len(userStr)-1] == 0 {
 		userStr = userStr[:len(userStr)-1]
+	}
+
+	if !g.appendClientVersion {
+		copy(result[:], userStr)
+		return result
 	}
 
 	available := 32 - len(userStr)
