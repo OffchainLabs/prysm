@@ -12,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
 	walletMock "github.com/OffchainLabs/prysm/v7/validator/accounts/testing"
-	"github.com/OffchainLabs/prysm/v7/validator/client/testutil"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/derived"
 	constant "github.com/OffchainLabs/prysm/v7/validator/testing"
 	"github.com/pkg/errors"
@@ -35,7 +34,7 @@ func TestWaitActivation_Exiting_OK(t *testing.T) {
 		accountsChangedChannel: make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
 	}
 	ctx := t.Context()
-	resp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{kp.pub[:]})
+	resp := generateMultipleValidatorStatusResponse([][]byte{kp.pub[:]})
 	resp.Statuses[0].Status = ethpb.ValidatorStatus_EXITING
 	validatorClient.EXPECT().MultipleValidatorStatus(
 		gomock.Any(),
@@ -69,7 +68,7 @@ func TestWaitForActivation_RefetchKeys(t *testing.T) {
 		chainClient:     chainClient,
 		pubkeyToStatus:  make(map[[48]byte]*validatorStatus),
 	}
-	resp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{kp.pub[:]})
+	resp := generateMultipleValidatorStatusResponse([][]byte{kp.pub[:]})
 	resp.Statuses[0].Status = ethpb.ValidatorStatus_ACTIVE
 
 	validatorClient.EXPECT().MultipleValidatorStatus(
@@ -122,10 +121,10 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 			v.accountChangedSub.Unsubscribe()
 		}()
 
-		inactiveResp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{inactive.pub[:]})
+		inactiveResp := generateMultipleValidatorStatusResponse([][]byte{inactive.pub[:]})
 		inactiveResp.Statuses[0].Status = ethpb.ValidatorStatus_UNKNOWN_STATUS
 
-		activeResp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{inactive.pub[:], active.pub[:]})
+		activeResp := generateMultipleValidatorStatusResponse([][]byte{inactive.pub[:], active.pub[:]})
 		activeResp.Statuses[0].Status = ethpb.ValidatorStatus_UNKNOWN_STATUS
 		activeResp.Statuses[1].Status = ethpb.ValidatorStatus_ACTIVE
 		gomock.InOrder(
@@ -192,10 +191,10 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 			pubkeyToStatus:  make(map[[48]byte]*validatorStatus),
 		}
 
-		inactiveResp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{inactivePubKey[:]})
+		inactiveResp := generateMultipleValidatorStatusResponse([][]byte{inactivePubKey[:]})
 		inactiveResp.Statuses[0].Status = ethpb.ValidatorStatus_UNKNOWN_STATUS
 
-		activeResp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{inactivePubKey[:], activePubKey[:]})
+		activeResp := generateMultipleValidatorStatusResponse([][]byte{inactivePubKey[:], activePubKey[:]})
 		activeResp.Statuses[0].Status = ethpb.ValidatorStatus_UNKNOWN_STATUS
 		activeResp.Statuses[1].Status = ethpb.ValidatorStatus_ACTIVE
 		channel := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
@@ -254,7 +253,7 @@ func TestWaitForActivation_AttemptsReconnectionOnFailure(t *testing.T) {
 		accountsChangedChannel: make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
 	}
 	active := randKeypair(t)
-	activeResp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{active.pub[:]})
+	activeResp := generateMultipleValidatorStatusResponse([][]byte{active.pub[:]})
 	activeResp.Statuses[0].Status = ethpb.ValidatorStatus_ACTIVE
 	gomock.InOrder(
 		validatorClient.EXPECT().MultipleValidatorStatus(

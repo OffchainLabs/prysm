@@ -62,6 +62,20 @@ const cancelledCtx = "context has been canceled"
 
 var unknownIndex = primitives.ValidatorIndex(^uint64(0))
 
+func generateMultipleValidatorStatusResponse(pubkeys [][]byte) *ethpb.MultipleValidatorStatusResponse {
+	resp := &ethpb.MultipleValidatorStatusResponse{
+		PublicKeys: make([][]byte, len(pubkeys)),
+		Statuses:   make([]*ethpb.ValidatorStatusResponse, len(pubkeys)),
+		Indices:    make([]primitives.ValidatorIndex, len(pubkeys)),
+	}
+	for i, key := range pubkeys {
+		resp.PublicKeys[i] = key
+		resp.Statuses[i] = &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_UNKNOWN_STATUS}
+		resp.Indices[i] = primitives.ValidatorIndex(i)
+	}
+	return resp
+}
+
 func genMockKeymanager(t *testing.T, numKeys int) *mockKeymanager {
 	pairs := make([]keypair, numKeys)
 	for i := range numKeys {
