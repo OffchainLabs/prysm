@@ -515,7 +515,7 @@ func TestPerformRolesDispatch(t *testing.T) {
 	}{
 		{
 			name: "attester",
-			role: RoleAttester,
+			role: roleAttester,
 			slot: 1,
 			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
 				m.validatorClient.EXPECT().AttestationData(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
@@ -523,7 +523,7 @@ func TestPerformRolesDispatch(t *testing.T) {
 		},
 		{
 			name: "proposer",
-			role: RoleProposer,
+			role: roleProposer,
 			slot: 1,
 			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
 				m.validatorClient.EXPECT().DomainData(gomock.Any(), gomock.Any()).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, fieldparams.RootLength)}, nil).Times(1)
@@ -532,7 +532,7 @@ func TestPerformRolesDispatch(t *testing.T) {
 		},
 		{
 			name: "aggregator",
-			role: RoleAggregator,
+			role: roleAggregator,
 			slot: 1,
 			expect: func(v *validator, m *mocks, pubKey [fieldparams.BLSPubkeyLength]byte) {
 				v.aggSelector = &stubAggregatorSelector{proofs: map[[fieldparams.BLSPubkeyLength]byte][]byte{pubKey: {1}}}
@@ -541,7 +541,7 @@ func TestPerformRolesDispatch(t *testing.T) {
 		},
 		{
 			name: "sync committee",
-			role: RoleSyncCommittee,
+			role: roleSyncCommittee,
 			slot: 1,
 			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
 				m.validatorClient.EXPECT().SyncMessageBlockRoot(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
@@ -549,7 +549,7 @@ func TestPerformRolesDispatch(t *testing.T) {
 		},
 		{
 			name: "sync committee aggregator",
-			role: RoleSyncCommitteeAggregator,
+			role: roleSyncCommitteeAggregator,
 			slot: 1,
 			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
 				m.validatorClient.EXPECT().SyncSubcommitteeIndex(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
@@ -557,7 +557,7 @@ func TestPerformRolesDispatch(t *testing.T) {
 		},
 		{
 			name: "PTC member",
-			role: RolePTCMember,
+			role: rolePTCMember,
 			slot: cfg.SlotsPerEpoch.Mul(uint64(cfg.GloasForkEpoch)),
 			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
 				m.validatorClient.EXPECT().PayloadAttestationData(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
@@ -565,7 +565,7 @@ func TestPerformRolesDispatch(t *testing.T) {
 		},
 		{
 			name: "unknown",
-			role: RoleUnknown,
+			role: roleUnknown,
 			slot: 1,
 		},
 	}

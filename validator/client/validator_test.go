@@ -407,10 +407,10 @@ func TestRolesAt_OK(t *testing.T) {
 			require.NoError(t, err)
 
 			pk := bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())
-			assert.Equal(t, RoleAttester, roleMap[pk][0])
-			assert.Equal(t, RoleAggregator, roleMap[pk][1])
-			assert.Equal(t, RoleSyncCommittee, roleMap[pk][2])
-			assert.Equal(t, RolePTCMember, roleMap[pk][3])
+			assert.Equal(t, roleAttester, roleMap[pk][0])
+			assert.Equal(t, roleAggregator, roleMap[pk][1])
+			assert.Equal(t, roleSyncCommittee, roleMap[pk][2])
+			assert.Equal(t, rolePTCMember, roleMap[pk][3])
 
 			// Test sync committee role at epoch boundary.
 			v.duties = testDutyStore(&ethpb.ValidatorDuty{
@@ -437,7 +437,7 @@ func TestRolesAt_OK(t *testing.T) {
 
 			roleMap, err = v.RolesAt(t.Context(), params.BeaconConfig().SlotsPerEpoch-1)
 			require.NoError(t, err)
-			assert.Equal(t, RoleSyncCommittee, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
+			assert.Equal(t, roleSyncCommittee, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
 		})
 	}
 }
@@ -463,7 +463,7 @@ func TestRolesAt_DoesNotAssignProposer_Slot0(t *testing.T) {
 			roleMap, err := v.RolesAt(t.Context(), 0)
 			require.NoError(t, err)
 
-			assert.Equal(t, RoleAttester, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
+			assert.Equal(t, roleAttester, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
 		})
 	}
 }

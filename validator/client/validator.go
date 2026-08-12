@@ -583,14 +583,14 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		if len(duty.ProposerSlots) > 0 {
 			for _, proposerSlot := range duty.ProposerSlots {
 				if proposerSlot != 0 && proposerSlot == slot {
-					roles = append(roles, RoleProposer)
+					roles = append(roles, roleProposer)
 					break
 				}
 			}
 		}
 
 		if duty.AttesterSlot == slot {
-			roles = append(roles, RoleAttester)
+			roles = append(roles, roleAttester)
 
 			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, slot, pk)
 			if err != nil {
@@ -598,7 +598,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 				log.WithError(err).Errorf("Could not check if validator %#x is an aggregator", bytesutil.Trunc(duty.PublicKey))
 			}
 			if aggregator {
-				roles = append(roles, RoleAggregator)
+				roles = append(roles, roleAggregator)
 			}
 		}
 
@@ -608,12 +608,12 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		inSyncCommittee := false
 		if slots.IsEpochEnd(slot) {
 			if snap.isNextSyncCommittee(duty.ValidatorIndex) {
-				roles = append(roles, RoleSyncCommittee)
+				roles = append(roles, roleSyncCommittee)
 				inSyncCommittee = true
 			}
 		} else {
 			if duty.IsSyncCommittee {
-				roles = append(roles, RoleSyncCommittee)
+				roles = append(roles, roleSyncCommittee)
 				inSyncCommittee = true
 			}
 		}
@@ -623,11 +623,11 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		}
 
 		if slices.Contains(snap.ptcSlots(duty.ValidatorIndex), slot) {
-			roles = append(roles, RolePTCMember)
+			roles = append(roles, rolePTCMember)
 		}
 
 		if len(roles) == 0 {
-			roles = append(roles, RoleUnknown)
+			roles = append(roles, roleUnknown)
 		}
 
 		rolesAt[pk] = roles
@@ -639,7 +639,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		return rolesAt, nil
 	}
 	for _, pk := range aggPubkeys {
-		rolesAt[pk] = append(rolesAt[pk], RoleSyncCommitteeAggregator)
+		rolesAt[pk] = append(rolesAt[pk], roleSyncCommitteeAggregator)
 	}
 
 	return rolesAt, nil

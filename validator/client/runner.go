@@ -252,19 +252,19 @@ func performRoles(slotCtx context.Context, allRoles map[[48]byte][]validatorRole
 		for _, role := range roles {
 			wg.Go(func() {
 				switch role {
-				case RoleAttester:
+				case roleAttester:
 					v.SubmitAttestation(slotCtx, slot, pubKey)
-				case RoleProposer:
+				case roleProposer:
 					v.ProposeBlock(slotCtx, slot, pubKey)
-				case RoleAggregator:
+				case roleAggregator:
 					v.SubmitAggregateAndProof(slotCtx, slot, pubKey)
-				case RoleSyncCommittee:
+				case roleSyncCommittee:
 					v.SubmitSyncCommitteeMessage(slotCtx, slot, pubKey)
-				case RoleSyncCommitteeAggregator:
+				case roleSyncCommitteeAggregator:
 					v.SubmitSignedContributionAndProof(slotCtx, slot, pubKey)
-				case RolePTCMember:
+				case rolePTCMember:
 					v.SubmitPayloadAttestation(slotCtx, slot, pubKey)
-				case RoleUnknown:
+				case roleUnknown:
 					log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:]))).Trace("No active roles, doing nothing")
 				default:
 					log.Warnf("Unhandled role %v", role)
