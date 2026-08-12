@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What damage can an attacker do?</title>
+<style>
+  :root {
+    --paper: #f3f5f7;
+    --card: #ffffff;
+    --ink: #1b2833;
+    --mut: #5a6b78;
+    --line: #d7dee4;
+    --accent: #0b7285;
+    --accent-soft: #e0f0f3;
+    --danger: #b23a22;
+    --danger-soft: #f7e6e1;
+    --ok: #2f7d3b;
+    --ok-soft: #e4f0e5;
+    --warn: #a87413;
+    --warn-soft: #f5ecd8;
+    --code-bg: #eaeef1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #10161b;
+      --card: #171f26;
+      --ink: #d9e3ea;
+      --mut: #8ca0ad;
+      --line: #2a3641;
+      --accent: #53c9db;
+      --accent-soft: #12333a;
+      --danger: #ff8266;
+      --danger-soft: #3a2019;
+      --ok: #7ccb86;
+      --ok-soft: #1a3320;
+      --warn: #e3b457;
+      --warn-soft: #38300f;
+      --code-bg: #1f2933;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: "Avenir Next", "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 16px; line-height: 1.6; margin: 0;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 56px 24px 96px; }
+  h1, h2, h3 { text-wrap: balance; line-height: 1.2; }
+  h1 { font-size: 2.1rem; font-weight: 650; letter-spacing: -0.015em; margin: 8px 0 12px; }
+  h2 { font-size: 1.3rem; font-weight: 650; letter-spacing: -0.01em; margin: 0 0 10px; }
+  h3 { font-size: 1rem; font-weight: 650; margin: 0 0 6px; }
+  p { margin: 0 0 14px; max-width: 66ch; }
+  section { margin-top: 68px; }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 10px;
+  }
+  .lede { font-size: 1.06rem; color: var(--mut); max-width: 62ch; }
+  code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    font-size: 0.86em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px;
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 20px 22px;
+  }
+  .diagram { overflow-x: auto; }
+  .diagram > .inner { min-width: 600px; }
+  .caption { color: var(--mut); font-size: 0.8rem; margin-top: 12px; max-width: 66ch; }
+
+  .chip {
+    display: inline-block; font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 2px 9px; border-radius: 999px; white-space: nowrap;
+  }
+  .chip.free  { background: var(--ok-soft); color: var(--ok); }
+  .chip.cheap { background: var(--accent-soft); color: var(--accent); }
+  .chip.heavy { background: var(--danger-soft); color: var(--danger); }
+  .chip.hold  { background: var(--warn-soft); color: var(--warn); }
+
+  /* slot row (harm 1) */
+  .slots { display: flex; gap: 6px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+  .slot {
+    width: 34px; height: 34px; border-radius: 6px;
+    border: 1px dashed var(--line); background: transparent;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem;
+  }
+  .slot.junk { border-style: solid; border-color: var(--danger); background: var(--danger-soft); }
+  .slot.wait { border-style: solid; border-color: var(--warn); background: var(--warn-soft); }
+  .slot.good { border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
+  .rowlabel {
+    flex: 0 0 92px; font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 0.7rem; color: var(--mut);
+  }
+  .bounced { color: var(--danger); font-size: 0.78rem; }
+  .kept { color: var(--ok); font-size: 0.78rem; }
+
+  /* gate rail (harm 2 / defense) */
+  .rail { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+  .rail .who {
+    flex: 0 0 92px; font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 0.7rem; color: var(--mut);
+  }
+  .gate {
+    border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px;
+    font-size: 0.78rem; background: var(--card); line-height: 1.4;
+  }
+  .gate .cost { display: block; margin-top: 2px; }
+  .gate.bad { border-color: var(--danger); background: var(--danger-soft); }
+  .gate.good { border-color: var(--ok); }
+  .arr { color: var(--mut); font-family: ui-monospace, Menlo, monospace; }
+  .verdict { font-size: 0.78rem; font-weight: 650; }
+  .verdict.dead { color: var(--ok); }
+  .verdict.leak { color: var(--danger); }
+
+  /* verdict trichotomy */
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
+  @media (max-width: 720px) { .grid3 { grid-template-columns: 1fr; } }
+  .grid3 .card { padding: 16px 18px; border-top: 3px solid var(--line); }
+  .grid3 .card.accept { border-top-color: var(--accent); }
+  .grid3 .card.reject { border-top-color: var(--danger); }
+  .grid3 .card.undec  { border-top-color: var(--warn); }
+  .grid3 h3 { font-size: 0.92rem; }
+  .grid3 p { font-size: 0.85rem; color: var(--mut); margin: 0; }
+
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 18px 0; }
+  @media (max-width: 720px) { .duo { grid-template-columns: 1fr; } }
+  .duo .card h3 { display: flex; align-items: center; gap: 10px; }
+
+  .note {
+    border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; color: var(--mut);
+    font-size: 0.92rem; margin: 18px 0; max-width: 62ch;
+  }
+
+  footer {
+    margin-top: 80px; padding-top: 20px; border-top: 1px solid var(--line);
+    color: var(--mut); font-size: 0.8rem;
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Bundled attestation propagation · threat analysis</div>
+    <h1>What damage can an attacker do?</h1>
+    <p class="lede">
+      Peers exchange attestations keyed by their <code>attestation_data</code>. That data is
+      free to fabricate — every field tweak mints a fresh identity, and fabricating it is not
+      slashable. Whether a given data is real is decidable only against chain state, and
+      sometimes not decidable <em>yet</em>: it may name a block that is honestly a few seconds
+      behind. This page walks the attacks abstractly, independent of any implementation.
+    </p>
+  </header>
+
+  <section>
+    <div class="eyebrow">Attack · random attestation data spam</div>
+    <h2>Spam us with messages carrying fabricated attestation data</h2>
+    <p>
+      The attacker sends well-formed messages whose <code>attestation_data</code> is random.
+      Structurally they are indistinguishable from honest traffic. Two distinct harms follow.
+    </p>
+  </section>
+
+  <section>
+    <div class="eyebrow">Harm 1 · slot theft</div>
+    <h2>Junk crowds out data we cannot judge yet</h2>
+    <p>
+      Every admission structure is finite: queue positions, cache entries, tracked keys —
+      call them <em>slots</em>. The dangerous collision is not junk against validated data
+      (validated data is already proven and easy to protect). It is junk against
+      <strong>honest-but-undecidable</strong> data: an attestation naming a block we have not
+      seen only because of ordinary propagation delay. At arrival the two are
+      indistinguishable, and if junk may hold slots, the honest racer loses its place.
+    </p>
+    <div class="card diagram"><div class="inner">
+      <div class="slots">
+        <span class="rowlabel">naive</span>
+        <div class="slot junk"></div><div class="slot junk"></div><div class="slot junk"></div>
+        <div class="slot junk"></div><div class="slot junk"></div><div class="slot junk"></div>
+        <span class="arr">&larr;</span>
+        <div class="slot wait">?</div>
+        <span class="bounced">honest data racing its block finds no slot</span>
+      </div>
+      <div class="slots">
+        <span class="rowlabel">designed</span>
+        <div class="slot wait">?</div><div class="slot wait">?</div>
+        <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+        <span class="kept">provable junk rejected before allocation; the rest held briefly, bounded per peer</span>
+      </div>
+    </div>
+      <p class="caption">
+        Junk slots (red) vs. undecidable slots (amber “?”). Anything provably bad is rejected
+        before a slot is allocated; what remains undecidable — including junk we cannot
+        expose yet — is admitted only into a pool that is small, short-lived, and bounded per
+        peer, so it can never squeeze honest traffic out.
+      </p>
+    </div>
+    <p style="margin-top:16px">
+      The lever is the verdict system. Two verdicts (valid / invalid) are not enough — the
+      whole attack lives in the gap between them:
+    </p>
+    <div class="grid3">
+      <div class="card accept">
+        <h3>Accept <span class="chip cheap">proven</span></h3>
+        <p>Fully validated. Protected by its own proof — never competes for slots again.</p>
+      </div>
+      <div class="card reject">
+        <h3>Reject <span class="chip heavy">proven bad</span></h3>
+        <p>Provably inconsistent with the chain. Never occupies a slot, and the proof
+        implicates the direct sender — this is the punishable verdict.</p>
+      </div>
+      <div class="card undec">
+        <h3>Undecidable <span class="chip hold">wait</span></h3>
+        <p>Names a root we do not hold — indistinguishable from junk at arrival, no test
+        exists. The <em>only</em> thing slots are for. Must stay retryable, must never be
+        punished — honest peers race block propagation constantly.</p>
+      </div>
+    </div>
+    <h3 style="margin-top:22px">But how do we know the data is junk?</h3>
+    <p>
+      For the decisive case, <strong>we don&rsquo;t — no test exists.</strong> Split by what
+      the data names:
+    </p>
+    <p>
+      — a <strong>block we hold</strong>: every other field is now pinned — the checkpoints it
+      names must be that block&rsquo;s ancestors in our in-memory view of the chain. Any
+      mismatch is provably bad, cheaply.<br>
+      — an <strong>out-of-window slot</strong>: worthless whether or not it is real. Free
+      discard.<br>
+      — a <strong>root we do not hold</strong>: indistinguishable from the root of a real
+      block that is two seconds behind. This is the attacker&rsquo;s best move, and it lands
+      in the same bucket as the honest race.
+    </p>
+    <p>
+      So for unknown roots the defense cannot be detection — it must be economics. Junk is
+      never exposed, it is <em>outlived</em>: an honest race resolves within seconds when its
+      block arrives and the data moves to the provable buckets; junk never resolves, and its
+      slot simply expires. Three properties make this safe to run cheaply:
+    </p>
+    <p>
+      1. <strong>Expiry replaces detection.</strong> Undecidable slots carry a short lifetime;
+      past it, the data either became judgeable or stopped mattering.<br>
+      2. <strong>The hold is necessary, not optional.</strong> The network does not re-offer:
+      senders forward an attestation once and mark us covered, and validated copies stop
+      being advertised or servable within seconds. A racer that outlives its in-flight
+      duplicates is recoverable only from our own hold — so the pool must exist, and its
+      bounds (short lifetime, per-peer caps) are what keep it from becoming the attack
+      surface of harm&nbsp;1.<br>
+      3. <strong>Never punish, never work.</strong> No penalty for undecidables (that would
+      grief honest racers), and no expensive work on their behalf — an unknown root must not
+      trigger unbounded fetching.
+    </p>
+
+    <h3 style="margin-top:22px">But the hold is finite — can&rsquo;t the attacker just fill it?</h3>
+    <p>
+      Yes — holding the undecidable only <em>relocates</em> the slot theft into the pending
+      pool, which is exactly harm&nbsp;1 again. And losing an honest racer is <em>not</em>
+      cheap: a dropped unaggregated attestation is a missed vote — the attester&rsquo;s reward
+      and its participation weight, gone. So we cannot argue the harm away; the goal is to
+      never evict an honest racer in the first place. A shared buffer with global eviction
+      fails that. A <strong>hard per-peer allowance</strong> achieves it structurally.
+    </p>
+    <div class="card diagram"><div class="inner">
+      <div class="slots">
+        <span class="rowlabel">peer A</span>
+        <div class="slot good">?</div><div class="slot good">?</div><div class="slot"></div>
+        <span class="kept">honest racer — its own 2–3 slots, untouchable by anyone else</span>
+      </div>
+      <div class="slots">
+        <span class="rowlabel">attacker</span>
+        <div class="slot junk"></div><div class="slot junk"></div><div class="slot junk"></div>
+        <span class="bounced">fills its <em>own</em> 3 slots and stops — cannot reach peer A&rsquo;s</span>
+      </div>
+      <div class="slots">
+        <span class="rowlabel">peer C</span>
+        <div class="slot good">?</div><div class="slot"></div><div class="slot"></div>
+        <span class="kept">unaffected — isolation is per identity</span>
+      </div>
+      <p class="caption">
+        The slot unit is one distinct unknown <code>attestation_data</code>, not one signature:
+        a bundle with many positions under one unknown data occupies a single slot, so a
+        peer&rsquo;s entire pending footprint is at most 2–3 entries no matter how much it packs.
+      </p>
+    </div>
+    <p style="margin-top:16px">
+      An attacker on one identity can only ever fill its own 2–3 slots and cannot touch any
+      other peer&rsquo;s — so a spammer <strong>never</strong> causes an honest racer to be
+      dropped. There is no cross-peer contention to reason about. Spam collapses into Sybil
+      (many identities for volume), governed by connection admission — the same endgame as
+      every other branch here.
+    </p>
+    <p>
+      Why 2–3 is enough: a peer holds an undecidable only while it has seen a block we have
+      not — a brief, narrow condition — so an honest peer&rsquo;s working set of racing data is
+      one or two at a time, and a short lifetime recycles the slots as races resolve.
+    </p>
+  </section>
+
+  <section>
+    <div class="eyebrow">Harm 2 · forced disk access</div>
+    <h2>Cheap messages that buy expensive work</h2>
+    <p>
+      Validation cost is tiered: structural checks are free; consistency against in-memory
+      chain knowledge is cheap; resolving historical state can mean disk reads or replaying
+      state — <em>seconds</em> of work; signature checks cost real CPU. The attack is
+      asymmetry: if any attacker-chosen field can select disk-tier work before the data is
+      pinned to the chain, one small message buys seconds of our time, repeatable forever.
+    </p>
+    <div class="card diagram"><div class="inner">
+      <div class="rail">
+        <span class="who">exposed</span>
+        <div class="gate">structure<span class="cost"><span class="chip free">free</span></span></div>
+        <span class="arr">&rarr;</span>
+        <div class="gate">block known?<span class="cost"><span class="chip free">free</span></span></div>
+        <span class="arr">&rarr;</span>
+        <div class="gate bad">resolve state<span class="cost"><span class="chip heavy">disk · seconds</span></span></div>
+        <span class="arr">&rarr;</span>
+        <span class="verdict leak">crafted data reaches the expensive tier first</span>
+      </div>
+      <div class="rail">
+        <span class="who">designed</span>
+        <div class="gate">structure<span class="cost"><span class="chip free">free</span></span></div>
+        <span class="arr">&rarr;</span>
+        <div class="gate good">pin to chain<span class="cost"><span class="chip cheap">in-memory</span></span></div>
+        <span class="arr">&rarr;</span>
+        <span class="verdict dead">&#10005; junk dies here — Reject, attributable</span>
+        <span class="arr">&rarr;</span>
+        <div class="gate">resolve state<span class="cost"><span class="chip free">cache hit</span></span></div>
+        <span class="arr">&rarr;</span>
+        <div class="gate">signatures<span class="cost"><span class="chip cheap">CPU</span></span></div>
+      </div>
+    </div>
+      <p class="caption">
+        “Pin to chain” means: every attacker-chosen field is checked against what we already
+        hold in memory — the named block must be known, and the named checkpoints must be its
+        ancestors — before any state resolution. Data that passes can only name the canonical
+        chain, where state lookups are cache hits. The expensive tier becomes unreachable
+        with attacker-chosen values.
+      </p>
+    </div>
+    <p style="margin-top:16px">
+      Ordering is the whole defense. Each tier may only be entered by messages the previous
+      tier could not condemn, and the expensive tiers must be reachable only by data already
+      proven to live on our chain. A useful invariant to state in the spec:
+      <strong>no attacker-chosen value selects disk work</strong>.
+    </p>
+  </section>
+
+  <section>
+    <div class="eyebrow">Stress test · a long fork resolves</div>
+    <h2>Fork length is irrelevant here — it lands on block sync</h2>
+    <p>
+      The worst case for “hold the undecidable” sounds like a long fork resolving: suddenly a
+      whole competing chain to reconcile. But almost none of that reaches attestation
+      propagation. Slots are wall-clock, so a validity window of the current plus previous
+      epoch admits at most ~2 epochs of attestations <em>no matter how long the fork ran</em>.
+      Everything older is rejected for free and arrives instead as votes already baked into
+      the blocks we sync.
+    </p>
+    <div class="card diagram"><div class="inner">
+      <div class="slots">
+        <span class="rowlabel">the fork</span>
+        <div class="slot junk"></div><div class="slot junk"></div><div class="slot junk"></div>
+        <div class="slot junk"></div><div class="slot junk"></div><div class="slot junk"></div>
+        <div class="slot good">?</div><div class="slot good">?</div>
+        <span class="qlabel">many epochs of divergence &rarr; but only the last two are in-window</span>
+      </div>
+      <div class="slots">
+        <span class="rowlabel">reaches us</span>
+        <div class="slot" style="border:none;background:transparent"></div>
+        <div class="slot" style="border:none;background:transparent"></div>
+        <div class="slot" style="border:none;background:transparent"></div>
+        <div class="slot" style="border:none;background:transparent"></div>
+        <div class="slot" style="border:none;background:transparent"></div>
+        <div class="slot" style="border:none;background:transparent"></div>
+        <div class="slot good">?</div><div class="slot good">?</div>
+        <span class="kept">the rest arrives as votes inside synced blocks — block sync&rsquo;s job, not ours</span>
+      </div>
+      <p class="caption">
+        The old slots (red) never enter attestation propagation; only the in-window tail
+        (amber) does. Fork length is absorbed entirely by the block/state path — download,
+        replay, reorg — which was never this component&rsquo;s duty.
+      </p>
+    </div>
+    <p style="margin-top:16px">
+      And the in-window burst has exactly the shape the per-peer allowance handles: <strong>many
+      peers pointing at the same few winning-fork heads</strong>, not one peer inventing many
+      data. Each honest peer holds one or two undecidable heads — inside 2–3 with margin. As the
+      fork&rsquo;s blocks arrive, that data crosses from undecidable to proven and drains
+      naturally; junk checkpoints still match nothing and still reject. The stress test mostly
+      just <em>confirms</em> the three choices already made: the window bound, the per-peer
+      hold, and not fetching on an undecidable&rsquo;s word.
+    </p>
+    <p class="note">
+      One honest tension the fork exposes: “many validators vote for a head I have never seen”
+      is also how a node legitimately <em>discovers</em> a missed head and goes to fetch it.
+      That self-healing hint and the fetch-amplifier attack are the same mechanism — which is
+      why letting block sync drive discovery, and never fetching on an unproven root, is a
+      deliberate tradeoff rather than a free win.
+    </p>
+  </section>
+
+  <section>
+    <div class="eyebrow">Synthesis</div>
+    <h2>One rule covers both harms</h2>
+    <p>
+      Classify every message as early as possible into <em>provably&nbsp;bad</em> /
+      <em>undecidable</em> / <em>proven</em>, using only checks cheaper than what the next
+      tier would spend. Then:
+    </p>
+    <p>
+      — spend <strong>slots</strong> only on the undecidable,<br>
+      — spend <strong>disk</strong> only on the pinned,<br>
+      — spend <strong>punishment</strong> only on the provable.
+    </p>
+    <p>
+      Punishment closes the loop: every provable reject implicates the direct sender (honest
+      peers forward only what they validated themselves, so there is no innocent relay), and
+      a punished sender must return with a fresh identity. Sustained spam degenerates into
+      identity churn, which connection admission already governs.
+    </p>
+    <p class="note">
+      Everything above is independent of implementation. The concrete mapping — which checks
+      pin the data, which structures are the slots, how punishment is delivered — lives in
+      <code>dos_protection.md</code>.
+    </p>
+  </section>
+
+  <footer>
+    Companion to <code>dos_protection.md</code> · recommendations to migrate into the
+    EIP / specs once settled.
+  </footer>
+</main>
+</body>
+</html>

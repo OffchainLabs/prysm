@@ -994,7 +994,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 
 func runPublishActions(
 	p *PartialDataColumn,
-	peerStates map[peer.ID]PartialDataColumnPeerState,
+	peerStates map[peer.ID]PartialMessagePeerState,
 	headerSentCache map[peer.ID]bool,
 	requests map[peer.ID]bool,
 ) map[peer.ID]partialmessages.PublishAction {
@@ -1011,7 +1011,7 @@ func TestPartialDataColumn_PublishActionsFn(t *testing.T) {
 			name: "every requesting peer is yielded with state and header cache updated",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
-				peerStates := map[peer.ID]PartialDataColumnPeerState{
+				peerStates := map[peer.ID]PartialMessagePeerState{
 					"peer-a": {},
 					"peer-b": {},
 				}
@@ -1027,8 +1027,8 @@ func TestPartialDataColumn_PublishActionsFn(t *testing.T) {
 					require.NotNil(t, action.EncodedPartialMessage)
 					require.Equal(t, 1, len(mustDecodeSidecar(t, action.EncodedPartialMessage).Header))
 					// State is committed back into peerStates.
-					require.NotNil(t, peerStates[pid].Recvd)
-					require.NotNil(t, peerStates[pid].Sent)
+					require.NotNil(t, peerStates[pid].Column.Recvd)
+					require.NotNil(t, peerStates[pid].Column.Sent)
 					// Header is recorded as sent so it is not sent again.
 					require.Equal(t, true, headerSentCache[pid])
 				}
@@ -1038,7 +1038,7 @@ func TestPartialDataColumn_PublishActionsFn(t *testing.T) {
 			name: "breaking out of the iterator early leaves unconsumed peers untouched",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
-				peerStates := map[peer.ID]PartialDataColumnPeerState{
+				peerStates := map[peer.ID]PartialMessagePeerState{
 					"peer-a": {},
 					"peer-b": {},
 				}
@@ -1058,7 +1058,7 @@ func TestPartialDataColumn_PublishActionsFn(t *testing.T) {
 				// Order-independent because we only assert the counts, not which peer.
 				committed := 0
 				for _, pid := range []peer.ID{"peer-a", "peer-b"} {
-					if peerStates[pid].Recvd != nil {
+					if peerStates[pid].Column.Recvd != nil {
 						committed++
 					}
 				}
@@ -1070,7 +1070,7 @@ func TestPartialDataColumn_PublishActionsFn(t *testing.T) {
 			name: "header is omitted when headerSentCache already records it",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
-				peerStates := map[peer.ID]PartialDataColumnPeerState{"peer-a": {}}
+				peerStates := map[peer.ID]PartialMessagePeerState{"peer-a": {}}
 				// Header already sent to this peer on a previous round.
 				headerSentCache := map[peer.ID]bool{"peer-a": true}
 				actions := runPublishActions(p, peerStates, headerSentCache, map[peer.ID]bool{"peer-a": true})
@@ -1081,7 +1081,7 @@ func TestPartialDataColumn_PublishActionsFn(t *testing.T) {
 				require.IsNil(t, action.EncodedPartialMessage)
 				// Parts metadata is still sent and Recvd is initialized so we don't eager push again.
 				require.NotNil(t, action.EncodedPartsMetadata)
-				require.NotNil(t, peerStates["peer-a"].Recvd)
+				require.NotNil(t, peerStates["peer-a"].Column.Recvd)
 				require.Equal(t, true, headerSentCache["peer-a"])
 			},
 		},
@@ -1089,11 +1089,11 @@ func TestPartialDataColumn_PublishActionsFn(t *testing.T) {
 			name: "onEagerPush fires only for eager pushed peers",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 3, 0, 1, 2)
-				peerStates := map[peer.ID]PartialDataColumnPeerState{
+				peerStates := map[peer.ID]PartialMessagePeerState{
 					// Fresh state and requests partial → eager push.
 					"peer-a": {},
 					// Known state → normal path.
-					"peer-b": {Recvd: testPeerMeta(3, nil, allSet(3))},
+					"peer-b": {Column: PartialDataColumnPeerState{Recvd: testPeerMeta(3, nil, allSet(3))}},
 					// Fresh state but does not request partial → no eager push.
 					"peer-c": {},
 				}
@@ -1116,16 +1116,16 @@ func TestPartialDataColumn_PublishActionsFn(t *testing.T) {
 					Available: testBitlist(2),
 					Requests:  testBitlist(2, 0, 1),
 				}
-				peerStates := map[peer.ID]PartialDataColumnPeerState{
-					"peer-a": {Recvd: badRecvd},
+				peerStates := map[peer.ID]PartialMessagePeerState{
+					"peer-a": {Column: PartialDataColumnPeerState{Recvd: badRecvd}},
 				}
 				headerSentCache := map[peer.ID]bool{}
 				actions := runPublishActions(p, peerStates, headerSentCache, map[peer.ID]bool{"peer-a": true})
 
 				require.ErrorContains(t, "peer metadata bitmap length mismatch", actions["peer-a"].Err)
 				// State is left untouched on error: still the original mismatched Recvd, no Sent.
-				require.Equal(t, uint64(2), bitfield.Bitlist(peerStates["peer-a"].Recvd.Requests).Len())
-				require.IsNil(t, peerStates["peer-a"].Sent)
+				require.Equal(t, uint64(2), bitfield.Bitlist(peerStates["peer-a"].Column.Recvd.Requests).Len())
+				require.IsNil(t, peerStates["peer-a"].Column.Sent)
 				// Header is not recorded for a failed action.
 				require.Equal(t, 0, len(headerSentCache))
 			},
@@ -1134,7 +1134,7 @@ func TestPartialDataColumn_PublishActionsFn(t *testing.T) {
 			name: "empty peerStates yields no actions",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
-				peerStates := map[peer.ID]PartialDataColumnPeerState{}
+				peerStates := map[peer.ID]PartialMessagePeerState{}
 				headerSentCache := map[peer.ID]bool{}
 				actions := runPublishActions(p, peerStates, headerSentCache, map[peer.ID]bool{})
 				require.Equal(t, 0, len(actions))

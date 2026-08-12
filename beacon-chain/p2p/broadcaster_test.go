@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialmsgmux"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
@@ -34,6 +35,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	pubsub_pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -825,8 +827,12 @@ func (f *fakePartialColumnBroadcaster) publishedColumns() []publishedPartial {
 }
 
 func (*fakePartialColumnBroadcaster) Start(partialdatacolumnbroadcaster.ColumnCallbacks) {}
-func (*fakePartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubsub.Option {
-	return opts
+func (*fakePartialColumnBroadcaster) OnIncomingRPC(peer.ID, map[peer.ID]blocks.PartialMessagePeerState, *pubsub_pb.PartialMessagesExtension) error {
+	return nil
+}
+func (*fakePartialColumnBroadcaster) OnEmitGossip(string, []byte, []peer.ID, map[peer.ID]blocks.PartialMessagePeerState) {
+}
+func (*fakePartialColumnBroadcaster) InitPubSub(partialmsgmux.PeerFeedbackFn, partialmsgmux.PublishPartialFn) {
 }
 func (*fakePartialColumnBroadcaster) Subscribe(context.Context, *pubsub.Topic) error { return nil }
 func (*fakePartialColumnBroadcaster) Unsubscribe(context.Context, string) error      { return nil }

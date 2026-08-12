@@ -10,6 +10,7 @@ go_library(
         "getters.go",
         "kzg.go",
         "log.go",
+        "partialattestation.go",
         "partialdatacolumn.go",
         "proofs.go",
         "proto.go",

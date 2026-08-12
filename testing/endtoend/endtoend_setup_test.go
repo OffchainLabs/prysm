@@ -16,9 +16,15 @@ import (
 )
 
 func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2EConfigOpt) *testRunner {
+	return e2eMinimalNodes(t, cfg, e2eParams.StandardBeaconCount, cfgo...)
+}
+
+// e2eMinimalNodes is e2eMinimal with a custom beacon node count. The genesis
+// validator count must divide evenly across the nodes.
+func e2eMinimalNodes(t *testing.T, cfg *params.BeaconChainConfig, beaconNodeCount int, cfgo ...types.E2EConfigOpt) *testRunner {
 	params.SetupTestConfigCleanup(t)
 	require.NoError(t, params.SetActive(cfg))
-	require.NoError(t, e2eParams.Init(t, e2eParams.StandardBeaconCount))
+	require.NoError(t, e2eParams.Init(t, beaconNodeCount))
 
 	var err error
 	epochsToRun := 18

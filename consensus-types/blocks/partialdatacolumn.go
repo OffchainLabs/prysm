@@ -28,6 +28,16 @@ type PartialDataColumnPeerState struct {
 	Recvd *ethpb.PartialDataColumnPartsMetadata
 }
 
+// PartialMessagePeerState is the per-peer state of the gossipsub
+// partial-messages extension. The extension supports a single state type per
+// host, so every topic family sharing the extension owns one field of it.
+// Handlers never see this type: the partialmsgmux hands each family a view
+// of its own field.
+type PartialMessagePeerState struct {
+	Column PartialDataColumnPeerState
+	Att    PartialAttestationPeerState
+}
+
 // PartialDataColumn is a partially populated DataColumnSidecar used for
 // exchanging cells with peers.
 type PartialDataColumn struct {
@@ -299,8 +309,8 @@ func MergeAvailableIntoPartsMetadata(base *ethpb.PartialDataColumnPartsMetadata,
 // tracks whether the block header has already been sent to a peer so it is only
 // included once; it is updated as actions are produced. onEagerPush, if non-nil,
 // is invoked for each peer that was eager pushed to.
-func (p *PartialDataColumn) PublishActionsFn(headerSentCache map[peer.ID]bool, onEagerPush func(peer.ID)) partialmessages.PublishActionsFn[PartialDataColumnPeerState] {
-	return func(peerStates map[peer.ID]PartialDataColumnPeerState, peerRequestsPartial func(peer.ID) bool) iter.Seq2[peer.ID, partialmessages.PublishAction] {
+func (p *PartialDataColumn) PublishActionsFn(headerSentCache map[peer.ID]bool, onEagerPush func(peer.ID)) partialmessages.PublishActionsFn[PartialMessagePeerState] {
+	return func(peerStates map[peer.ID]PartialMessagePeerState, peerRequestsPartial func(peer.ID) bool) iter.Seq2[peer.ID, partialmessages.PublishAction] {
 		return p.publishActions(peerStates, peerRequestsPartial, headerSentCache, onEagerPush)
 	}
 }
@@ -309,7 +319,7 @@ func (p *PartialDataColumn) PublishActionsFn(headerSentCache map[peer.ID]bool, o
 // successful action it updates peerStates with the next state and records sent
 // headers in headerSentCache.
 func (p *PartialDataColumn) publishActions(
-	peerStates map[peer.ID]PartialDataColumnPeerState,
+	peerStates map[peer.ID]PartialMessagePeerState,
 	peerRequestsPartial func(peer.ID) bool,
 	headerSentCache map[peer.ID]bool,
 	onEagerPush func(peer.ID),
@@ -317,14 +327,15 @@ func (p *PartialDataColumn) publishActions(
 	return func(yield func(peer.ID, partialmessages.PublishAction) bool) {
 		for peerID, peerState := range peerStates {
 			requested := peerRequestsPartial(peerID)
-			nextState, action, includeHeader := p.forPeer(peerID, requested, peerState, !headerSentCache[peerID])
+			nextState, action, includeHeader := p.forPeer(peerID, requested, peerState.Column, !headerSentCache[peerID])
 			// Only update state if there was no error.
 			if action.Err == nil {
-				if onEagerPush != nil && isEagerPush(requested, peerState) {
+				if onEagerPush != nil && isEagerPush(requested, peerState.Column) {
 					onEagerPush(peerID)
 				}
 				p.recordHeaderSent(peerID, includeHeader, headerSentCache)
-				peerStates[peerID] = nextState
+				peerState.Column = nextState
+				peerStates[peerID] = peerState
 			}
 			if !yield(peerID, action) {
 				return

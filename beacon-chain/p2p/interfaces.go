@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialattestationbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -30,6 +31,7 @@ type (
 		SetStreamHandler
 		PubSubProvider
 		PartialColumnBroadcasterProvider
+		PartialAttestationBroadcasterProvider
 		PubSubTopicUser
 		SenderEncoder
 		PeerManager
@@ -98,6 +100,11 @@ type (
 	// PartialColumnBroadcasterProvider provides the broadcaster for partial messages.
 	PartialColumnBroadcasterProvider interface {
 		PartialColumnBroadcaster() partialdatacolumnbroadcaster.Broadcaster
+	}
+
+	// PartialAttestationBroadcasterProvider provides the broadcaster for partial attestation messages.
+	PartialAttestationBroadcasterProvider interface {
+		PartialAttestationBroadcaster() *partialattestationbroadcaster.Broadcaster
 	}
 
 	// PeerManager abstracts some peer management methods from libp2p.

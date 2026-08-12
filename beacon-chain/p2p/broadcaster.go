@@ -185,6 +185,15 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 		log.WithError(err).Error("Failed to broadcast attestation")
 		tracing.AnnotateError(span, err)
 	}
+
+	// Partial peers never see the classic copy above; they get the
+	// attestation through this ingress instead.
+	if b := s.partialAttBroadcaster; b != nil {
+		if single, ok := att.(*ethpb.SingleAttestation); ok {
+			topic := attestationToTopic(subnet, forkDigest) + s.Encoding().ProtocolSuffix()
+			b.Submit(topic, single)
+		}
+	}
 }
 
 func (s *Service) broadcastSyncCommittee(ctx context.Context, subnet uint64, sMsg *ethpb.SyncCommitteeMessage, forkDigest [fieldparams.VersionLength]byte) {

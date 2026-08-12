@@ -58,6 +58,11 @@ func (s *Service) JoinTopic(topic string, opts ...pubsub.TopicOpt) (*pubsub.Topi
 			log.WithField("topic", topic).Debug("Joining data column sidecar topic with partial messages")
 		}
 
+		if strings.Contains(topic, GossipAttestationMessage) && s.partialAttBroadcaster != nil {
+			opts = append(opts, pubsub.RequestPartialMessages())
+			log.WithField("topic", topic).Debug("Joining attestation topic with partial messages")
+		}
+
 		topicHandle, err := s.pubsub.Join(topic, opts...)
 		if err != nil {
 			return nil, err
@@ -186,8 +191,8 @@ func (s *Service) pubsubOptions() []pubsub.Option {
 		}
 		psOpts = append(psOpts, pubsub.WithDirectPeers(directPeersAddrInfos))
 	}
-	if s.partialColumnBroadcaster != nil {
-		psOpts = s.partialColumnBroadcaster.AppendPubSubOpts(psOpts)
+	if s.partialMsgMux != nil {
+		psOpts = s.partialMsgMux.AppendPubSubOpts(psOpts)
 	}
 
 	return psOpts

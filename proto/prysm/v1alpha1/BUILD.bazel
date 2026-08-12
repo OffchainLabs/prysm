@@ -184,9 +184,11 @@ ssz_electra_objs = [
 ]
 
 ssz_fulu_objs = [
+    "AttestationBundle",
     "BeaconBlockContentsFulu",
     "BeaconStateFulu",
     "BlindedBeaconBlockFulu",
+    "CommitteeAttestationPartsMetadata",
     "DataColumnIdentifier",
     "DataColumnsByRootIdentifier",
     "DataColumnSidecar",
@@ -469,6 +471,7 @@ ssz_proto_files(
         "gloas.proto",
         "gloas_builder_api.proto",
         "light_client.proto",
+        "partial_attestations.proto",
         "partial_data_columns.proto",
         "sync_committee.proto",
         "withdrawals.proto",

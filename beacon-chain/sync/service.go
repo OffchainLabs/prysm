@@ -213,6 +213,9 @@ type Service struct {
 	selfBuildSigFailSlot                 primitives.Slot
 	pendingPayloadAttestations           map[[32]byte][]*ethpb.PayloadAttestationMessage
 	pendingPayloadAttestationLock        sync.RWMutex
+	// submitPartialAtt feeds a classic-gossip-accepted attestation into the
+	// partial broadcaster; nil unless --partial-attestations is enabled.
+	submitPartialAtt func(topic string, att *ethpb.SingleAttestation)
 }
 
 // NewService initializes new regular sync service.
@@ -320,6 +323,10 @@ func (s *Service) Start() {
 
 	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
 		go broadcaster.Start(&partialColumnCallbacks{service: s})
+	}
+	if broadcaster := s.cfg.p2p.PartialAttestationBroadcaster(); broadcaster != nil {
+		s.submitPartialAtt = broadcaster.Submit
+		go broadcaster.Start(s.processPartialAttestation)
 	}
 
 	go s.startDiscoveryAndSubscriptions()

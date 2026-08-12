@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialattestationbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -106,6 +107,11 @@ func (*FakeP2P) Send(_ context.Context, _ any, _ string, _ peer.ID) (network.Str
 
 // PubSub -- fake.
 func (*FakeP2P) PubSub() *pubsub.PubSub {
+	return nil
+}
+
+// PartialAttestationBroadcaster -- fake.
+func (*FakeP2P) PartialAttestationBroadcaster() *partialattestationbroadcaster.Broadcaster {
 	return nil
 }
 
