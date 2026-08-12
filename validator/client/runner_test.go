@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"runtime/debug"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -33,6 +34,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -476,4 +478,95 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 	r, err := newRunner(timedCtx, v, &healthMonitor{isHealthy: true})
 	require.NoError(t, err)
 	r.run(timedCtx)
+}
+
+func TestPerformRolesDispatch(t *testing.T) {
+	cfg := params.BeaconConfig()
+	cfg.ElectraForkEpoch = 1
+	cfg.GloasForkEpoch = 2
+	params.SetActiveTestCleanup(t, cfg)
+
+	stop := errors.New("stop after dispatch")
+	tests := []struct {
+		name   string
+		role   validatorRole
+		slot   primitives.Slot
+		expect func(*validator, *mocks, [fieldparams.BLSPubkeyLength]byte)
+	}{
+		{
+			name: "attester",
+			role: RoleAttester,
+			slot: 1,
+			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
+				m.validatorClient.EXPECT().AttestationData(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
+			},
+		},
+		{
+			name: "proposer",
+			role: RoleProposer,
+			slot: 1,
+			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
+				m.validatorClient.EXPECT().DomainData(gomock.Any(), gomock.Any()).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, fieldparams.RootLength)}, nil).Times(1)
+				m.validatorClient.EXPECT().BeaconBlock(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
+			},
+		},
+		{
+			name: "aggregator",
+			role: RoleAggregator,
+			slot: 1,
+			expect: func(v *validator, m *mocks, pubKey [fieldparams.BLSPubkeyLength]byte) {
+				v.aggSelector = &stubAggregatorSelector{proofs: map[[fieldparams.BLSPubkeyLength]byte][]byte{pubKey: {1}}}
+				m.validatorClient.EXPECT().SubmitAggregateSelectionProof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
+			},
+		},
+		{
+			name: "sync committee",
+			role: RoleSyncCommittee,
+			slot: 1,
+			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
+				m.validatorClient.EXPECT().SyncMessageBlockRoot(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
+			},
+		},
+		{
+			name: "sync committee aggregator",
+			role: RoleSyncCommitteeAggregator,
+			slot: 1,
+			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
+				m.validatorClient.EXPECT().SyncSubcommitteeIndex(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
+			},
+		},
+		{
+			name: "PTC member",
+			role: RolePTCMember,
+			slot: cfg.SlotsPerEpoch.Mul(uint64(cfg.GloasForkEpoch)),
+			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
+				m.validatorClient.EXPECT().PayloadAttestationData(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
+			},
+		},
+		{
+			name: "unknown",
+			role: RoleUnknown,
+			slot: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v, m, validatorKey, finish := setup(t, false)
+			defer finish()
+			pubKey := bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())
+			v.duties = testDutyStore(&ethpb.ValidatorDuty{
+				PublicKey:       pubKey[:],
+				ValidatorIndex:  1,
+				CommitteeLength: 1,
+			})
+			if tt.expect != nil {
+				tt.expect(v, m, pubKey)
+			}
+
+			var wg sync.WaitGroup
+			performRoles(t.Context(), map[[fieldparams.BLSPubkeyLength]byte][]validatorRole{pubKey: {tt.role}}, v, tt.slot, &wg, trace.SpanFromContext(t.Context()))
+			wg.Wait()
+		})
+	}
 }
