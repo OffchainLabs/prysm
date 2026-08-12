@@ -6,12 +6,14 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httptrace"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
@@ -41,7 +43,7 @@ func TestPostSSZ_NonJSONErrorBodyIsTyped(t *testing.T) {
 	defer srv.Close()
 
 	c := newHandler(http.Client{}, srv.URL)
-	_, _, err := c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
+	err := c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
 	require.NotNil(t, err)
 	errJson := &httputil.DefaultJsonError{}
 	require.Equal(t, true, errors.As(err, &errJson), "expected DefaultJsonError, got %T", err)
@@ -64,7 +66,8 @@ func TestGetSSZ_NonJSONErrorBodyIsTyped(t *testing.T) {
 
 // A JSON error body is decoded into the typed error's fields.
 func TestPostSSZ_JSONErrorBodyIsDecoded(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
 		w.Header().Set("Content-Type", api.JsonMediaType)
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"code":400,"message":"bad request"}`))
@@ -72,12 +75,44 @@ func TestPostSSZ_JSONErrorBodyIsDecoded(t *testing.T) {
 	defer srv.Close()
 
 	c := newHandler(http.Client{}, srv.URL)
-	_, _, err := c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
+	err := c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
 	require.NotNil(t, err)
 	errJson := &httputil.DefaultJsonError{}
 	require.Equal(t, true, errors.As(err, &errJson), "expected DefaultJsonError, got %T", err)
 	require.Equal(t, http.StatusBadRequest, errJson.Code)
 	require.Equal(t, "bad request", errJson.Message)
+}
+
+func TestPostSSZ_MalformedJSONErrorBodyKeepsStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", api.JsonMediaType)
+		w.WriteHeader(http.StatusUnsupportedMediaType)
+		_, _ = w.Write([]byte(`not json`))
+	}))
+	defer srv.Close()
+
+	c := newHandler(http.Client{}, srv.URL)
+	err := c.PostSSZ(context.Background(), "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01}))
+	require.Equal(t, true, errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}), "expected 415 to survive, got %v", err)
+}
+
+func TestPostSSZ_DrainsSuccessBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"message":"accepted"}`))
+	}))
+	defer srv.Close()
+
+	var reused bool
+	ctx := httptrace.WithClientTrace(t.Context(), &httptrace.ClientTrace{
+		GotConn: func(info httptrace.GotConnInfo) {
+			reused = info.Reused
+		},
+	})
+	c := newHandler(http.Client{}, srv.URL)
+	require.NoError(t, c.PostSSZ(ctx, "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01})))
+	require.NoError(t, c.PostSSZ(ctx, "/eth/v1/test", nil, bytes.NewBuffer([]byte{0x01})))
+	require.Equal(t, true, reused, "expected the second request to reuse the drained connection")
 }
 
 func TestHandler_getRaw(t *testing.T) {

@@ -207,39 +207,32 @@ func TestMultiHandlerPostSSZ(t *testing.T) {
 		srv := sszServer(t, "accepted")
 
 		mh := multi(t, srv.URL)
-		got, header, err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
-		require.NoError(t, err)
-		assert.Equal(t, "accepted", string(got))
-		assert.Equal(t, api.OctetStreamMediaType, header.Get("Content-Type"))
+		require.NoError(t, mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body)))
 	})
 
-	t.Run("returns the first successful response across the fleet", func(t *testing.T) {
-		a := sszServer(t, "accepted")
-		b := sszServer(t, "accepted")
+	t.Run("succeeds when any node accepts", func(t *testing.T) {
+		bad := jsonServer(t, 0, http.StatusInternalServerError, nil)
+		good := sszServer(t, "accepted")
 
-		mh := multi(t, a.URL, b.URL)
-		got, _, err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
-		require.NoError(t, err)
-		assert.Equal(t, "accepted", string(got))
+		mh := multi(t, bad.URL, good.URL)
+		require.NoError(t, mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body)))
 	})
 
-	// In a mixed fleet where one node accepts SSZ and another rejects it with 406,
-	// PostSSZ must surface the 406 so the caller can re-broadcast via JSON, rather
-	// than hiding it behind the accepting node's success.
-	t.Run("surfaces a 406 so the caller can fall back to JSON", func(t *testing.T) {
+	// In a mixed fleet where one node accepts SSZ and another rejects the body with 415,
+	// PostSSZ must surface the 415 so the caller can re-broadcast via JSON, rather than
+	// hiding it behind the accepting node's success and never reaching the rejecting node.
+	t.Run("surfaces a 415 so the caller can fall back to JSON", func(t *testing.T) {
 		accepts := sszServer(t, "accepted")
 		rejects := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", api.JsonMediaType)
-			w.WriteHeader(http.StatusNotAcceptable)
-			_, _ = w.Write([]byte(`{"code":406,"message":"needs json"}`))
+			http.Error(w, "Unsupported media type: application/octet-stream", http.StatusUnsupportedMediaType)
 		}))
 		t.Cleanup(rejects.Close)
 
 		mh := multi(t, accepts.URL, rejects.URL)
-		_, _, err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
+		err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
 		require.NotNil(t, err)
-		assert.Equal(t, true, errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusNotAcceptable}),
-			"a node's 406 must surface so the caller falls back to JSON")
+		assert.Equal(t, true, errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}),
+			"a node's 415 must surface so the caller falls back to JSON")
 	})
 
 	t.Run("returns the joined error when every node fails", func(t *testing.T) {
@@ -247,7 +240,7 @@ func TestMultiHandlerPostSSZ(t *testing.T) {
 		bad2 := jsonServer(t, 0, http.StatusBadGateway, nil)
 
 		mh := multi(t, bad1.URL, bad2.URL)
-		_, _, err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
+		err := mh.PostSSZ(context.Background(), "/publish", nil, bytes.NewBufferString(body))
 		require.NotNil(t, err)
 	})
 
@@ -263,7 +256,7 @@ func TestMultiHandlerPostSSZ(t *testing.T) {
 		cancel()
 
 		mh := multi(t, srv.URL, srv.URL)
-		_, _, err := mh.PostSSZ(ctx, "/publish", nil, bytes.NewBufferString(body))
+		err := mh.PostSSZ(ctx, "/publish", nil, bytes.NewBufferString(body))
 		assert.Equal(t, true, errors.Is(err, context.Canceled))
 	})
 }

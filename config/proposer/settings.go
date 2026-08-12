@@ -2,10 +2,12 @@ package proposer
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"github.com/OffchainLabs/prysm/v7/config"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
@@ -624,20 +626,50 @@ func (ps *Settings) UpgradeToV2() bool {
 	return true
 }
 
-// TargetGasLimit resolves pubkey's gas limit from top-level fields only: per-key,
-// else default config, else chain default. Builder gas limits are registration-only.
-func (ps *Settings) TargetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) validator.Uint64 {
-	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+// TargetGasLimit resolves pubkey's proposer-preference gas limit at epoch: the
+// explicit operator value, else the EIP-8261 schedule, else the chain default.
+func (ps *Settings) TargetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) validator.Uint64 {
+	scheduled, active := params.BeaconConfig().ScheduledGasLimit(epoch)
+	operator, ok := ps.operatorGasLimit(pubkey)
+	if !ok {
+		if active {
+			return validator.Uint64(scheduled)
+		}
+		return validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+	}
+	if active && uint64(operator) > scheduled {
+		warnGasLimitExceedsSchedule(uint64(operator), scheduled, epoch)
+	}
+	return operator
+}
+
+func (ps *Settings) operatorGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) (validator.Uint64, bool) {
 	if ps == nil {
-		return chainDefault
+		return 0, false
 	}
 	if opt, ok := ps.ProposeConfig[pubkey]; ok && opt != nil && opt.GasLimit != 0 {
-		return opt.GasLimit
+		return opt.GasLimit, true
 	}
 	if ps.DefaultConfig != nil && ps.DefaultConfig.GasLimit != 0 {
-		return ps.DefaultConfig.GasLimit
+		return ps.DefaultConfig.GasLimit, true
 	}
-	return chainDefault
+	return 0, false
+}
+
+var warnedGasLimitScheduleEpoch atomic.Uint64
+
+func warnGasLimitExceedsSchedule(operator, scheduled uint64, epoch primitives.Epoch) {
+	e := uint64(epoch) + 1
+	for {
+		prev := warnedGasLimitScheduleEpoch.Load()
+		if e <= prev {
+			return
+		}
+		if warnedGasLimitScheduleEpoch.CompareAndSwap(prev, e) {
+			break
+		}
+	}
+	log.Warnf("Configured gas limit %d exceeds the recommended maximum of %d at epoch %d", operator, scheduled, epoch)
 }
 
 // GasLimit resolves pubkey's gas limit: explicitly set option-level values win,

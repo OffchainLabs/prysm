@@ -121,13 +121,13 @@ func envelopeHeaders(blobDataIncluded bool) map[string]string {
 	}
 }
 
-// postEnvelope publishes SSZ first; on 406 Not Acceptable falls back to JSON.
+// postEnvelope publishes SSZ first; on 415 Unsupported Media Type falls back to JSON.
 func (c *beaconApiValidatorClient) postEnvelope(ctx context.Context, endpoint string, headers map[string]string, ssz []byte, jsonFn func() ([]byte, error)) error {
-	_, _, err := c.handler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(ssz))
+	err := c.handler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(ssz))
 	if err == nil {
 		return nil
 	}
-	if !errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusNotAcceptable}) {
+	if !errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}) {
 		return err
 	}
 	log.WithError(err).Warn("Envelope SSZ publish rejected, falling back to JSON")

@@ -129,7 +129,7 @@ func TestSubmitPayloadAttestation(t *testing.T) {
 			payloadAttestationsEndpoint,
 			headers,
 			bytes.NewBuffer(sszBody),
-		).Return(nil, nil, nil).Times(1)
+		).Return(nil).Times(1)
 
 		client := &beaconApiValidatorClient{handler: handler}
 		require.NoError(t, client.submitPayloadAttestation(t.Context(), msg))
@@ -140,7 +140,7 @@ func TestSubmitPayloadAttestation(t *testing.T) {
 		defer ctrl.Finish()
 		handler := mock.NewMockHandler(ctrl)
 		handler.EXPECT().PostSSZ(gomock.Any(), payloadAttestationsEndpoint, gomock.Any(), gomock.Any()).
-			Return(nil, nil, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType, Message: "unsupported media type"}).Times(1)
+			Return(&httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType, Message: "unsupported media type"}).Times(1)
 		handler.EXPECT().Post(
 			gomock.Any(),
 			payloadAttestationsEndpoint,
@@ -158,7 +158,7 @@ func TestSubmitPayloadAttestation(t *testing.T) {
 		defer ctrl.Finish()
 		handler := mock.NewMockHandler(ctrl)
 		handler.EXPECT().PostSSZ(gomock.Any(), payloadAttestationsEndpoint, gomock.Any(), gomock.Any()).
-			Return(nil, nil, errors.New("bad request")).Times(1)
+			Return(errors.New("bad request")).Times(1)
 
 		client := &beaconApiValidatorClient{handler: handler}
 		require.ErrorContains(t, "bad request", client.submitPayloadAttestation(t.Context(), msg))

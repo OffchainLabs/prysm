@@ -290,7 +290,7 @@ func (vs *Server) submitBlockToBuilder(block interfaces.ReadOnlySignedBeaconBloc
 	if vs.BlockBuilder == nil || builderURL == "" {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), params.BeaconConfig().SlotDuration())
 	defer cancel()
 	if err := vs.BlockBuilder.SubmitSignedBeaconBlock(ctx, builderURL, block); err != nil {
 		log.WithError(err).Error("Could not submit signed beacon block to builder")

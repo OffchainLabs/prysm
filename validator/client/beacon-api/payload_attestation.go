@@ -56,7 +56,7 @@ func (c *beaconApiValidatorClient) submitPayloadAttestation(ctx context.Context,
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal payload attestation message ssz")
 	}
-	if _, _, err = c.handler.PostSSZ(ctx, payloadAttestationsEndpoint, headers, bytes.NewBuffer(sszBody)); err == nil {
+	if err = c.handler.PostSSZ(ctx, payloadAttestationsEndpoint, headers, bytes.NewBuffer(sszBody)); err == nil {
 		return nil
 	}
 	errJson := &httputil.DefaultJsonError{}
