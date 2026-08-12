@@ -225,6 +225,26 @@ func TestRun_ExitsOnCancelledContext(t *testing.T) {
 	assert.Equal(t, true, v.ticker != nil, "Expected the slot ticker to have been set")
 }
 
+func TestMaybeFetchNextDuties_Gating(t *testing.T) {
+	spe := params.BeaconConfig().SlotsPerEpoch
+	fetchSlot := nextDutiesFetchSlot()
+	tests := []struct {
+		name string
+		slot primitives.Slot
+		want bool
+	}{
+		{"early slot skips next fetch", 1, false},
+		{"slot before threshold skips next fetch", fetchSlot - 1, false},
+		{"threshold slot fetches next", fetchSlot, true},
+		{"mid-epoch slot fetches next", spe/2 + 3, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, shouldFetchNextDuties(tt.slot))
+		})
+	}
+}
+
 // TestKeyReload drives onAccountsChanged. The status lookup decides whether the
 // reloaded key is active, so the key bytes themselves do not matter.
 func TestKeyReload(t *testing.T) {

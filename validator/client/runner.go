@@ -126,7 +126,7 @@ func (r *runner) run(ctx context.Context) {
 
 			// Fetch the deferred next-epoch duties in the background. Pre-Gloas this
 			// no-ops: only the split path records the indices needsNextFetch requires.
-			if slots.SinceEpochStarts(slot) >= nextDutiesFetchSlot() {
+			if shouldFetchNextDuties(slot) {
 				v.MaybeFetchNextDuties(ctx, slot)
 			}
 
@@ -161,6 +161,10 @@ func (r *runner) run(ctx context.Context) {
 			onAccountsChanged(ctx, v, currentKeys)
 		}
 	}
+}
+
+func shouldFetchNextDuties(slot primitives.Slot) bool {
+	return slots.SinceEpochStarts(slot) >= nextDutiesFetchSlot()
 }
 
 func onAccountsChanged(ctx context.Context, v *validator, current [][48]byte) {
