@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -28,11 +29,11 @@ func run(_ context.Context, in io.Reader, out io.Writer, args []string) error {
 	if err != nil {
 		log.WithError(err).Error("unable to handle driver request")
 	}
-	_, err = out.Write(resp)
-	if err != nil {
-		log.WithError(err).Error("unable to write driver response")
+	_, writeErr := out.Write(resp)
+	if writeErr != nil {
+		log.WithError(writeErr).Error("unable to write driver response")
 	}
-	return err
+	return errors.Join(err, writeErr)
 }
 
 func main() {
