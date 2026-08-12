@@ -6,6 +6,7 @@ go_library(
     srcs = [
         "bazel.go",
         "cache.go",
+        "logs.go",
         "main.go",
         "mocks.go",
         "proto.go",
@@ -35,6 +36,7 @@ go_test(
     srcs = [
         "bazel_test.go",
         "cache_test.go",
+        "logs_test.go",
         "proto_test.go",
         "ssz_test.go",
     ],
