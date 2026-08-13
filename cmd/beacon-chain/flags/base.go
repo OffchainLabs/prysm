@@ -381,4 +381,9 @@ var (
 		Name:  "partial-data-columns",
 		Usage: "Enable cell-level dissemination for PeerDAS data columns",
 	}
+	// DisableGraffitiClientAppend disables appending consensus and execution client version info to the block graffiti.
+	DisableGraffitiClientAppend = &cli.BoolFlag{
+		Name:  "disable-graffiti-client-append",
+		Usage: "Disables appending consensus and execution client version information to the block graffiti",
+	}
 )

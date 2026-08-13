@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"runtime"
 	"slices"
 
 	"path/filepath"
@@ -76,9 +77,32 @@ func buildManifest() []archive {
 }
 
 func buildE2EArchives() []archive {
+	triple, _ := LighthouseTriple()
+	lighthouseURL := fmt.Sprintf("https://github.com/sigp/lighthouse/releases/download/%s/lighthouse-%s-%s.tar.gz",
+		lighthouseVersion(), lighthouseVersion(), triple)
+
 	return []archive{
-		{Lighthouse, "https://github.com/sigp/lighthouse/releases/download/" + lighthouseVersion() + "/lighthouse-" + lighthouseVersion() + "-x86_64-unknown-linux-gnu.tar.gz", archiveHash(e2eDepsContent(), e2eDepsFile, Lighthouse), "external/lighthouse", 0, ""},
+		{Lighthouse, lighthouseURL, bazelMapValue(e2eDepsContent(), e2eDepsFile, "lighthouse_integrity", triple), "external/lighthouse", 0, ""},
 		{Web3signer, archiveURL(e2eDepsContent(), e2eDepsFile, Web3signer), archiveHash(e2eDepsContent(), e2eDepsFile, Web3signer), "external/web3signer", 1, ""},
+	}
+}
+
+// LighthouseTriple returns the lighthouse release target-triple for the host platform and
+// whether upstream publishes a binary for it at the pinned version (see the
+// lighthouse_integrity map in testing/endtoend/deps.bzl). Unsupported hosts get the
+// linux/amd64 triple as a fallback so the manifest stays buildable; callers should gate on
+// the boolean before fetching. This is the single source of truth for lighthouse platform
+// support, shared with the e2e harness.
+func LighthouseTriple() (string, bool) {
+	switch runtime.GOOS + "/" + runtime.GOARCH {
+	case "linux/amd64":
+		return "x86_64-unknown-linux-gnu", true
+	case "linux/arm64":
+		return "aarch64-unknown-linux-gnu", true
+	case "darwin/arm64":
+		return "aarch64-apple-darwin", true
+	default:
+		return "x86_64-unknown-linux-gnu", false
 	}
 }
 
