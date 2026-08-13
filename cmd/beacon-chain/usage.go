@@ -75,6 +75,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.BatchVerifierLimit,
 			flags.StateDiffExponents,
 			flags.PostponeShutdownForProposals,
+			flags.DisableGraffitiClientAppend,
 		},
 	},
 	{
