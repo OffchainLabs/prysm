@@ -585,7 +585,7 @@ func TestSettings_TargetGasLimit(t *testing.T) {
 
 	t.Run("nil settings returns chain default", func(t *testing.T) {
 		var ps *Settings
-		require.Equal(t, chainDefault, ps.TargetGasLimit(pk))
+		require.Equal(t, chainDefault, ps.TargetGasLimit(pk, 0))
 	})
 
 	t.Run("per-validator wins over default", func(t *testing.T) {
@@ -595,13 +595,13 @@ func TestSettings_TargetGasLimit(t *testing.T) {
 			},
 			DefaultConfig: &Option{GasLimit: validator.Uint64(42_000_000)},
 		}
-		require.Equal(t, validator.Uint64(55_000_000), ps.TargetGasLimit(pk))
+		require.Equal(t, validator.Uint64(55_000_000), ps.TargetGasLimit(pk, 0))
 	})
 
 	t.Run("falls back to default then chain default", func(t *testing.T) {
 		ps := &Settings{DefaultConfig: &Option{GasLimit: validator.Uint64(42_000_000)}}
-		require.Equal(t, validator.Uint64(42_000_000), ps.TargetGasLimit(pk))
-		require.Equal(t, chainDefault, (&Settings{}).TargetGasLimit(pk))
+		require.Equal(t, validator.Uint64(42_000_000), ps.TargetGasLimit(pk, 0))
+		require.Equal(t, chainDefault, (&Settings{}).TargetGasLimit(pk, 0))
 	})
 
 	t.Run("builder gas limits are never consulted", func(t *testing.T) {
@@ -611,6 +611,52 @@ func TestSettings_TargetGasLimit(t *testing.T) {
 			},
 			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(40_000_000)}},
 		}
-		require.Equal(t, chainDefault, ps.TargetGasLimit(pk))
+		require.Equal(t, chainDefault, ps.TargetGasLimit(pk, 0))
+	})
+}
+
+func TestSettings_TargetGasLimit_Schedule(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 100
+	cfg.GasLimitSchedule = []params.GasLimitScheduleEntry{
+		{Epoch: 100, GasLimit: 60_000_000},
+		{Epoch: 200, GasLimit: 90_000_000},
+	}
+	params.OverrideBeaconConfig(cfg)
+
+	pubkey, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+	require.NoError(t, err)
+	pk := bytesutil.ToBytes48(pubkey)
+
+	t.Run("scheduled value used when unconfigured", func(t *testing.T) {
+		var ps *Settings
+		require.Equal(t, validator.Uint64(60_000_000), ps.TargetGasLimit(pk, 100))
+		require.Equal(t, validator.Uint64(60_000_000), ps.TargetGasLimit(pk, 199))
+		require.Equal(t, validator.Uint64(90_000_000), ps.TargetGasLimit(pk, 200))
+	})
+
+	t.Run("pre-gloas ignores the schedule", func(t *testing.T) {
+		var ps *Settings
+		require.Equal(t, validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit), ps.TargetGasLimit(pk, 99))
+	})
+
+	t.Run("operator value is honored above the schedule with a warning", func(t *testing.T) {
+		hook := logtest.NewGlobal()
+		warnedGasLimitScheduleEpoch.Store(0)
+		ps := &Settings{DefaultConfig: &Option{GasLimit: validator.Uint64(100_000_000)}}
+		require.Equal(t, validator.Uint64(100_000_000), ps.TargetGasLimit(pk, 200))
+		require.LogsContain(t, hook, "exceeds the recommended maximum")
+		hook.Reset()
+		require.Equal(t, validator.Uint64(100_000_000), ps.TargetGasLimit(pk, 200))
+		require.LogsDoNotContain(t, hook, "exceeds the recommended maximum")
+	})
+
+	t.Run("operator value below the schedule is honored silently", func(t *testing.T) {
+		hook := logtest.NewGlobal()
+		warnedGasLimitScheduleEpoch.Store(0)
+		ps := &Settings{DefaultConfig: &Option{GasLimit: validator.Uint64(50_000_000)}}
+		require.Equal(t, validator.Uint64(50_000_000), ps.TargetGasLimit(pk, 200))
+		require.LogsDoNotContain(t, hook, "exceeds the recommended maximum")
 	})
 }

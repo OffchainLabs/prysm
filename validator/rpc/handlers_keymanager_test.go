@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -23,7 +24,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/accounts"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/client"
-	"github.com/OffchainLabs/prysm/v7/validator/client/testutil"
 	dbCommon "github.com/OffchainLabs/prysm/v7/validator/db/common"
 	"github.com/OffchainLabs/prysm/v7/validator/db/filesystem"
 	DBIface "github.com/OffchainLabs/prysm/v7/validator/db/iface"
@@ -44,12 +44,8 @@ import (
 func TestServer_ListKeystores(t *testing.T) {
 	ctx := t.Context()
 	t.Run("wallet not ready", func(t *testing.T) {
-		m := &testutil.FakeValidator{}
-		vs, err := client.NewValidatorService(ctx, &client.Config{
-			Conn:      mocks.MockNodeConnection(),
-			Validator: m,
-		})
-		require.NoError(t, err)
+		vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+		vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
 		s := Server{
 			validatorService: vs,
 		}
@@ -75,14 +71,9 @@ func TestServer_ListKeystores(t *testing.T) {
 	require.NoError(t, err)
 	km, err := w.InitializeKeymanager(ctx, iface.InitKeymanagerConfig{ListenForChanges: false})
 	require.NoError(t, err)
-	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn:   mocks.MockNodeConnection(),
-		Wallet: w,
-		Validator: &testutil.FakeValidator{
-			Km: km,
-		},
-	})
-	require.NoError(t, err)
+	vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+	vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
+	vs.EXPECT().Keymanager().Return(km, nil).AnyTimes()
 	s := &Server{
 		walletInitialized: true,
 		wallet:            w,
@@ -142,14 +133,9 @@ func TestServer_ImportKeystores(t *testing.T) {
 	require.NoError(t, err)
 	km, err := w.InitializeKeymanager(ctx, iface.InitKeymanagerConfig{ListenForChanges: false})
 	require.NoError(t, err)
-	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn:   mocks.MockNodeConnection(),
-		Wallet: w,
-		Validator: &testutil.FakeValidator{
-			Km: km,
-		},
-	})
-	require.NoError(t, err)
+	vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+	vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
+	vs.EXPECT().Keymanager().Return(km, nil).AnyTimes()
 	s := &Server{
 		walletInitialized: true,
 		wallet:            w,
@@ -359,14 +345,9 @@ func TestServer_ImportKeystores_WrongKeymanagerKind(t *testing.T) {
 	}
 	km, err := remoteweb3signer.NewKeymanager(ctx, config)
 	require.NoError(t, err)
-	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn: mocks.MockNodeConnection(),
-		Validator: &testutil.FakeValidator{
-			Km: km,
-		},
-		Web3SignerConfig: config,
-	})
-	require.NoError(t, err)
+	vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+	vs.EXPECT().Keymanager().Return(km, nil).AnyTimes()
+	vs.EXPECT().RemoteSignerConfig().Return(config).AnyTimes()
 	s := &Server{
 		walletInitialized: true,
 		validatorService:  vs,
@@ -637,14 +618,9 @@ func TestServer_DeleteKeystores_WrongKeymanagerKind(t *testing.T) {
 	}
 	km, err := remoteweb3signer.NewKeymanager(ctx, config)
 	require.NoError(t, err)
-	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn: mocks.MockNodeConnection(),
-		Validator: &testutil.FakeValidator{
-			Km: km,
-		},
-		Web3SignerConfig: config,
-	})
-	require.NoError(t, err)
+	vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+	vs.EXPECT().Keymanager().Return(km, nil).AnyTimes()
+	vs.EXPECT().RemoteSignerConfig().Return(config).AnyTimes()
 	s := &Server{
 		walletInitialized: true,
 		validatorService:  vs,
@@ -680,14 +656,9 @@ func setupServerWithWallet(t testing.TB) *Server {
 	require.NoError(t, err)
 	km, err := w.InitializeKeymanager(ctx, iface.InitKeymanagerConfig{ListenForChanges: false})
 	require.NoError(t, err)
-	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn:   mocks.MockNodeConnection(),
-		Wallet: w,
-		Validator: &testutil.FakeValidator{
-			Km: km,
-		},
-	})
-	require.NoError(t, err)
+	vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+	vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
+	vs.EXPECT().Keymanager().Return(km, nil).AnyTimes()
 
 	return &Server{
 		walletInitialized: true,
@@ -715,12 +686,9 @@ func TestServer_SetVoluntaryExit(t *testing.T) {
 	km, err := w.InitializeKeymanager(ctx, iface.InitKeymanagerConfig{ListenForChanges: false})
 	require.NoError(t, err)
 
-	m := &testutil.FakeValidator{Km: km}
-	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn:      mocks.MockNodeConnection(),
-		Validator: m,
-	})
-	require.NoError(t, err)
+	vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+	vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
+	vs.EXPECT().Keymanager().Return(km, nil).AnyTimes()
 
 	dr, ok := km.(*derived.Keymanager)
 	require.Equal(t, true, ok)
@@ -885,7 +853,6 @@ func TestServer_SetVoluntaryExit(t *testing.T) {
 }
 
 func TestServer_GetGasLimit(t *testing.T) {
-	ctx := t.Context()
 	byteval, err := hexutil.Decode("0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493")
 	byteval2, err2 := hexutil.Decode("0x1234567878903438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493")
 	require.NoError(t, err)
@@ -937,14 +904,9 @@ func TestServer_GetGasLimit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := &testutil.FakeValidator{}
-			err := m.SetProposerSettings(ctx, tt.args)
-			require.NoError(t, err)
-			vs, err := client.NewValidatorService(ctx, &client.Config{
-				Conn:      mocks.MockNodeConnection(),
-				Validator: m,
-			})
-			require.NoError(t, err)
+			vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+			vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
+			vs.EXPECT().ProposerSettings().Return(tt.args).AnyTimes()
 			s := &Server{
 				validatorService: vs,
 			}
@@ -965,7 +927,6 @@ func TestServer_SetGasLimit(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	beaconClient := validatormock.NewMockValidatorClient(ctrl)
-	ctx := t.Context()
 
 	pubkey1, err := hexutil.Decode("0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493")
 	pubkey2, err2 := hexutil.Decode("0xbedefeaa94e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2cdddddddddddddddddddddddd")
@@ -1089,16 +1050,18 @@ func TestServer_SetGasLimit(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		for _, tt := range tests {
 			t.Run(fmt.Sprintf("%s/isSlashingProtectionMinimal:%v", tt.name, isSlashingProtectionMinimal), func(t *testing.T) {
-				m := &testutil.FakeValidator{}
-				err := m.SetProposerSettings(ctx, tt.proposerSettings)
-				require.NoError(t, err)
 				validatorDB := dbtest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
-				vs, err := client.NewValidatorService(ctx, &client.Config{
-					Conn:      mocks.MockNodeConnection(),
-					Validator: m,
-					DB:        validatorDB,
-				})
-				require.NoError(t, err)
+				vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+				vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
+				vs.EXPECT().ProposerSettings().DoAndReturn(func() *proposer.Settings {
+					return tt.proposerSettings.Clone()
+				}).AnyTimes()
+				var written *proposer.Settings
+				vs.EXPECT().SetProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, s *proposer.Settings) error {
+					written = s
+					return nil
+				}).AnyTimes()
+				_ = written
 
 				s := &Server{
 					validatorService:          vs,
@@ -1127,7 +1090,7 @@ func TestServer_SetGasLimit(t *testing.T) {
 				} else {
 					assert.Equal(t, http.StatusAccepted, w.Code)
 					for _, wantObj := range tt.w {
-						assert.Equal(t, wantObj.gaslimit, uint64(s.validatorService.ProposerSettings().ProposeConfig[bytesutil.ToBytes48(wantObj.pubkey)].BuilderConfig.GasLimit))
+						assert.Equal(t, wantObj.gaslimit, uint64(written.ProposeConfig[bytesutil.ToBytes48(wantObj.pubkey)].BuilderConfig.GasLimit))
 					}
 				}
 			})
@@ -1161,19 +1124,13 @@ func TestServer_SetGasLimit_InvalidPubKey(t *testing.T) {
 }
 
 func TestServer_SetGasLimit_NilSettings(t *testing.T) {
-	ctx := t.Context()
 	pubkey, err := hexutil.Decode("0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493")
 	require.NoError(t, err)
 
-	m := &testutil.FakeValidator{}
-	require.NoError(t, m.SetProposerSettings(ctx, nil))
 	validatorDB := dbtest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false)
-	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn:      mocks.MockNodeConnection(),
-		Validator: m,
-		DB:        validatorDB,
-	})
-	require.NoError(t, err)
+	vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+	vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
+	vs.EXPECT().ProposerSettings().Return(nil).AnyTimes()
 	s := &Server{validatorService: vs, db: validatorDB}
 
 	body, err := json.Marshal(&SetGasLimitRequest{GasLimit: "9999"})
@@ -1189,7 +1146,6 @@ func TestServer_SetGasLimit_NilSettings(t *testing.T) {
 }
 
 func TestServer_DeleteGasLimit(t *testing.T) {
-	ctx := t.Context()
 	pubkey1, err := hexutil.Decode("0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493")
 	pubkey2, err2 := hexutil.Decode("0xbedefeaa94e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2cdddddddddddddddddddddddd")
 	require.NoError(t, err)
@@ -1300,16 +1256,19 @@ func TestServer_DeleteGasLimit(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		for _, tt := range tests {
 			t.Run(fmt.Sprintf("%s/isSlashingProtectionMinimal:%v", tt.name, isSlashingProtectionMinimal), func(t *testing.T) {
-				m := &testutil.FakeValidator{}
-				err := m.SetProposerSettings(ctx, tt.proposerSettings)
-				require.NoError(t, err)
 				validatorDB := dbtest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
-				vs, err := client.NewValidatorService(ctx, &client.Config{
-					Conn:      mocks.MockNodeConnection(),
-					Validator: m,
-					DB:        validatorDB,
-				})
-				require.NoError(t, err)
+				vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+				vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
+				vs.EXPECT().ProposerSettings().DoAndReturn(func() *proposer.Settings {
+					return tt.proposerSettings.Clone()
+				}).AnyTimes()
+				var written *proposer.Settings
+				if tt.wantError == nil {
+					vs.EXPECT().SetProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, s *proposer.Settings) error {
+						written = s
+						return nil
+					})
+				}
 				s := &Server{
 					validatorService: vs,
 					db:               validatorDB,
@@ -1329,8 +1288,10 @@ func TestServer_DeleteGasLimit(t *testing.T) {
 				} else {
 					assert.Equal(t, http.StatusNoContent, w.Code)
 				}
-				for _, wantedObj := range tt.w {
-					assert.Equal(t, wantedObj.gaslimit, s.validatorService.ProposerSettings().ProposeConfig[bytesutil.ToBytes48(wantedObj.pubkey)].BuilderConfig.GasLimit)
+				if tt.wantError == nil {
+					for _, wantedObj := range tt.w {
+						assert.Equal(t, wantedObj.gaslimit, written.ProposeConfig[bytesutil.ToBytes48(wantedObj.pubkey)].BuilderConfig.GasLimit)
+					}
 				}
 			})
 		}
@@ -1338,7 +1299,6 @@ func TestServer_DeleteGasLimit(t *testing.T) {
 }
 
 func TestServer_GasLimit_V2Schema(t *testing.T) {
-	ctx := t.Context()
 	pubkey1, err := hexutil.Decode("0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493")
 	require.NoError(t, err)
 
@@ -1347,24 +1307,24 @@ func TestServer_GasLimit_V2Schema(t *testing.T) {
 		params.BeaconConfig().DefaultBuilderGasLimit = originBeaconChainGasLimit
 	}()
 
-	setupServer := func(t *testing.T, settings *proposer.Settings) *Server {
-		m := &testutil.FakeValidator{}
-		require.NoError(t, m.SetProposerSettings(ctx, settings))
+	setupServer := func(t *testing.T, settings *proposer.Settings) (*Server, func() *proposer.Settings) {
 		validatorDB := dbtest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false)
-		vs, err := client.NewValidatorService(ctx, &client.Config{
-			Conn:      mocks.MockNodeConnection(),
-			Validator: m,
-			DB:        validatorDB,
-		})
-		require.NoError(t, err)
+		vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+		vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
+		vs.EXPECT().ProposerSettings().Return(settings).AnyTimes()
+		var written *proposer.Settings
+		vs.EXPECT().SetProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, s *proposer.Settings) error {
+			written = s
+			return nil
+		}).AnyTimes()
 		return &Server{
 			validatorService: vs,
 			db:               validatorDB,
-		}
+		}, func() *proposer.Settings { return written }
 	}
 
 	t.Run("SetGasLimit on v2 writes per-validator GasLimit", func(t *testing.T) {
-		s := setupServer(t, &proposer.Settings{Version: 2})
+		s, written := setupServer(t, &proposer.Settings{Version: 2})
 		body, err := json.Marshal(&SetGasLimitRequest{GasLimit: "12345678"})
 		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/eth/v1/validator/{pubkey}/gas_limit", bytes.NewReader(body))
@@ -1374,7 +1334,7 @@ func TestServer_GasLimit_V2Schema(t *testing.T) {
 
 		s.SetGasLimit(w, req)
 		assert.Equal(t, http.StatusAccepted, w.Code)
-		settings := s.validatorService.ProposerSettings()
+		settings := written()
 		opt, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey1)]
 		require.Equal(t, true, found)
 		assert.Equal(t, validator.Uint64(12345678), opt.GasLimit)
@@ -1382,7 +1342,7 @@ func TestServer_GasLimit_V2Schema(t *testing.T) {
 	})
 
 	t.Run("GetGasLimit returns top-level DefaultConfig.GasLimit on v2", func(t *testing.T) {
-		s := setupServer(t, &proposer.Settings{
+		s, _ := setupServer(t, &proposer.Settings{
 			Version: 2,
 			DefaultConfig: &proposer.Option{
 				GasLimit: validator.Uint64(42424242),
@@ -1402,7 +1362,7 @@ func TestServer_GasLimit_V2Schema(t *testing.T) {
 
 	t.Run("DeleteGasLimit resets per-validator GasLimit to chain default on v2", func(t *testing.T) {
 		params.BeaconConfig().DefaultBuilderGasLimit = uint64(0xbbdd)
-		s := setupServer(t, &proposer.Settings{
+		s, written := setupServer(t, &proposer.Settings{
 			Version: 2,
 			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
 				bytesutil.ToBytes48(pubkey1): {GasLimit: validator.Uint64(99887766)},
@@ -1415,11 +1375,11 @@ func TestServer_GasLimit_V2Schema(t *testing.T) {
 
 		s.DeleteGasLimit(w, req)
 		assert.Equal(t, http.StatusNoContent, w.Code)
-		assert.Equal(t, validator.Uint64(0xbbdd), s.validatorService.ProposerSettings().ProposeConfig[bytesutil.ToBytes48(pubkey1)].GasLimit)
+		assert.Equal(t, validator.Uint64(0xbbdd), written().ProposeConfig[bytesutil.ToBytes48(pubkey1)].GasLimit)
 	})
 
 	t.Run("DeleteGasLimit returns 404 on v2 when no per-validator entry exists", func(t *testing.T) {
-		s := setupServer(t, nil)
+		s, _ := setupServer(t, nil)
 		req := httptest.NewRequest(http.MethodDelete, "/eth/v1/validator/{pubkey}/gas_limit", nil)
 		req.SetPathValue("pubkey", hexutil.Encode(pubkey1))
 		w := httptest.NewRecorder()
@@ -1441,14 +1401,9 @@ func TestServer_ListRemoteKeys(t *testing.T) {
 	}
 	km, err := remoteweb3signer.NewKeymanager(ctx, config)
 	require.NoError(t, err)
-	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn: mocks.MockNodeConnection(),
-		Validator: &testutil.FakeValidator{
-			Km: km,
-		},
-		Web3SignerConfig: config,
-	})
-	require.NoError(t, err)
+	vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+	vs.EXPECT().Keymanager().Return(km, nil).AnyTimes()
+	vs.EXPECT().RemoteSignerConfig().Return(config).AnyTimes()
 	s := &Server{
 		walletInitialized: true,
 		validatorService:  vs,
@@ -1491,14 +1446,9 @@ func TestServer_ImportRemoteKeys(t *testing.T) {
 	}
 	km, err := remoteweb3signer.NewKeymanager(ctx, config)
 	require.NoError(t, err)
-	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn: mocks.MockNodeConnection(),
-		Validator: &testutil.FakeValidator{
-			Km: km,
-		},
-		Web3SignerConfig: config,
-	})
-	require.NoError(t, err)
+	vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+	vs.EXPECT().Keymanager().Return(km, nil).AnyTimes()
+	vs.EXPECT().RemoteSignerConfig().Return(config).AnyTimes()
 	s := &Server{
 		walletInitialized: true,
 		validatorService:  vs,
@@ -1547,14 +1497,9 @@ func TestServer_DeleteRemoteKeys(t *testing.T) {
 	}
 	km, err := remoteweb3signer.NewKeymanager(ctx, config)
 	require.NoError(t, err)
-	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn: mocks.MockNodeConnection(),
-		Validator: &testutil.FakeValidator{
-			Km: km,
-		},
-		Web3SignerConfig: config,
-	})
-	require.NoError(t, err)
+	vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+	vs.EXPECT().Keymanager().Return(km, nil).AnyTimes()
+	vs.EXPECT().RemoteSignerConfig().Return(config).AnyTimes()
 	s := &Server{
 		walletInitialized: true,
 		validatorService:  vs,
@@ -1591,7 +1536,6 @@ func TestServer_DeleteRemoteKeys(t *testing.T) {
 }
 
 func TestServer_ListFeeRecipientByPubkey(t *testing.T) {
-	ctx := t.Context()
 	pubkey := "0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493"
 	byteval, err := hexutil.Decode(pubkey)
 	require.NoError(t, err)
@@ -1642,16 +1586,9 @@ func TestServer_ListFeeRecipientByPubkey(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := &testutil.FakeValidator{}
-			err := m.SetProposerSettings(ctx, tt.args)
-			require.NoError(t, err)
-
-			vs, err := client.NewValidatorService(ctx, &client.Config{
-				Conn:      mocks.MockNodeConnection(),
-				Validator: m,
-			})
-			require.NoError(t, err)
-
+			vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+			vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
+			vs.EXPECT().ProposerSettings().Return(tt.args).AnyTimes()
 			s := &Server{
 				validatorService: vs,
 			}
@@ -1669,13 +1606,9 @@ func TestServer_ListFeeRecipientByPubkey(t *testing.T) {
 }
 
 func TestServer_ListFeeRecipientByPubKey_NoFeeRecipientSet(t *testing.T) {
-	ctx := t.Context()
-
-	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn:      mocks.MockNodeConnection(),
-		Validator: &testutil.FakeValidator{},
-	})
-	require.NoError(t, err)
+	vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+	vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
+	vs.EXPECT().ProposerSettings().Return(nil)
 
 	s := &Server{
 		validatorService: vs,
@@ -1719,7 +1652,6 @@ func TestServer_FeeRecipientByPubkey(t *testing.T) {
 	defer ctrl.Finish()
 
 	beaconClient := validatormock.NewMockValidatorClient(ctrl)
-	ctx := t.Context()
 	pubkey := "0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493"
 	byteval, err := hexutil.Decode(pubkey)
 	require.NoError(t, err)
@@ -1822,18 +1754,20 @@ func TestServer_FeeRecipientByPubkey(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		for _, tt := range tests {
 			t.Run(fmt.Sprintf("%s/isSlashingProtectionMinimal:%v", tt.name, isSlashingProtectionMinimal), func(t *testing.T) {
-				m := &testutil.FakeValidator{}
-				err := m.SetProposerSettings(ctx, tt.proposerSettings)
-				require.NoError(t, err)
 				validatorDB := dbtest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
 
 				// save a default here
-				vs, err := client.NewValidatorService(ctx, &client.Config{
-					Conn:      mocks.MockNodeConnection(),
-					Validator: m,
-					DB:        validatorDB,
-				})
-				require.NoError(t, err)
+				vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+				vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
+				vs.EXPECT().ProposerSettings().DoAndReturn(func() *proposer.Settings {
+					return tt.proposerSettings.Clone()
+				}).AnyTimes()
+				var written *proposer.Settings
+				vs.EXPECT().SetProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, s *proposer.Settings) error {
+					written = s
+					return nil
+				}).AnyTimes()
+				_ = written
 				s := &Server{
 					validatorService:          vs,
 					beaconNodeValidatorClient: beaconClient,
@@ -1854,7 +1788,7 @@ func TestServer_FeeRecipientByPubkey(t *testing.T) {
 				s.SetFeeRecipientByPubkey(w, req)
 				assert.Equal(t, http.StatusAccepted, w.Code)
 
-				assert.Equal(t, tt.want.valEthAddress, s.validatorService.ProposerSettings().ProposeConfig[bytesutil.ToBytes48(byteval)].FeeRecipientConfig.FeeRecipient.Hex())
+				assert.Equal(t, tt.want.valEthAddress, written.ProposeConfig[bytesutil.ToBytes48(byteval)].FeeRecipientConfig.FeeRecipient.Hex())
 			})
 		}
 	}
@@ -1897,7 +1831,6 @@ func TestServer_SetFeeRecipientByPubkey_InvalidFeeRecipient(t *testing.T) {
 }
 
 func TestServer_DeleteFeeRecipientByPubkey(t *testing.T) {
-	ctx := t.Context()
 	pubkey := "0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493"
 	byteval, err := hexutil.Decode(pubkey)
 	require.NoError(t, err)
@@ -1935,16 +1868,18 @@ func TestServer_DeleteFeeRecipientByPubkey(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		for _, tt := range tests {
 			t.Run(fmt.Sprintf("%s/isSlashingProtectionMinimal:%v", tt.name, isSlashingProtectionMinimal), func(t *testing.T) {
-				m := &testutil.FakeValidator{}
-				err := m.SetProposerSettings(ctx, tt.proposerSettings)
-				require.NoError(t, err)
 				validatorDB := dbtest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
-				vs, err := client.NewValidatorService(ctx, &client.Config{
-					Conn:      mocks.MockNodeConnection(),
-					Validator: m,
-					DB:        validatorDB,
-				})
-				require.NoError(t, err)
+				vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+				vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
+				vs.EXPECT().ProposerSettings().DoAndReturn(func() *proposer.Settings {
+					return tt.proposerSettings.Clone()
+				}).AnyTimes()
+				var written *proposer.Settings
+				vs.EXPECT().SetProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, s *proposer.Settings) error {
+					written = s
+					return nil
+				}).AnyTimes()
+				_ = written
 				s := &Server{
 					validatorService: vs,
 					db:               validatorDB,
@@ -1955,7 +1890,7 @@ func TestServer_DeleteFeeRecipientByPubkey(t *testing.T) {
 				w.Body = &bytes.Buffer{}
 				s.DeleteFeeRecipientByPubkey(w, req)
 				assert.Equal(t, http.StatusNoContent, w.Code)
-				assert.Equal(t, true, s.validatorService.ProposerSettings().ProposeConfig[bytesutil.ToBytes48(byteval)].FeeRecipientConfig == nil)
+				assert.Equal(t, true, written.ProposeConfig[bytesutil.ToBytes48(byteval)].FeeRecipientConfig == nil)
 			})
 		}
 	}
@@ -1989,12 +1924,16 @@ func TestServer_DeleteFeeRecipientByPubkey_InvalidPubKey(t *testing.T) {
 
 func TestServer_Graffiti(t *testing.T) {
 	graffiti := "graffiti"
-	m := &testutil.FakeValidator{}
-	vs, err := client.NewValidatorService(t.Context(), &client.Config{
-		Conn:      mocks.MockNodeConnection(),
-		Validator: m,
-	})
+	pubkey := "0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493"
+	pubkeyBytes, err := hexutil.Decode(pubkey)
 	require.NoError(t, err)
+	key := bytesutil.ToBytes48(pubkeyBytes)
+
+	vs := validatormock.NewMockValidatorService(gomock.NewController(t))
+	vs.EXPECT().RemoteSignerConfig().Return(nil).AnyTimes()
+	vs.EXPECT().SetGraffiti(gomock.Any(), key, []byte(graffiti)).Return(nil)
+	vs.EXPECT().Graffiti(gomock.Any(), key).Return([]byte(graffiti), nil)
+	vs.EXPECT().DeleteGraffiti(gomock.Any(), key).Return(nil)
 	s := &Server{
 		validatorService: vs,
 	}
@@ -2003,7 +1942,6 @@ func TestServer_Graffiti(t *testing.T) {
 		Graffiti string `json:"graffiti"`
 	}
 	request.Graffiti = graffiti
-	pubkey := "0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493"
 	var buf bytes.Buffer
 	err = json.NewEncoder(&buf).Encode(request)
 	require.NoError(t, err)

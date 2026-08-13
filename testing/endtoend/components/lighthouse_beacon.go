@@ -11,13 +11,12 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/OffchainLabs/prysm/v7/build/bazel"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/io/file"
-	prysmnetwork "github.com/OffchainLabs/prysm/v7/network"
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/pkg/errors"
 )
 
@@ -174,17 +173,11 @@ func (node *LighthouseBeaconNode) Start(ctx context.Context) error {
 	jwtPath := path.Join(e2e.TestParams.TestPath, "eth1data/"+strconv.Itoa(node.index+prysmNodeCount)+"/")
 	jwtPath = path.Join(jwtPath, "geth/jwtsecret")
 
-	enrAddress, err := prysmnetwork.ExternalIPv4()
-	if err != nil {
-		return fmt.Errorf("external ip v4: %w", err)
-	}
-
 	args := []string{
 		"beacon_node",
 		fmt.Sprintf("--datadir=%s/lighthouse-beacon-node-%d", e2e.TestParams.TestPath, index),
 		fmt.Sprintf("--testnet-dir=%s", testDir),
 		"--staking",
-		fmt.Sprintf("--enr-address=%s", enrAddress),
 		fmt.Sprintf("--enr-udp-port=%d", e2e.TestParams.Ports.LighthouseBeaconNodeP2PPort+index*2), // multiply by 2 because LH adds 1 for quic4 port
 		fmt.Sprintf("--enr-tcp-port=%d", e2e.TestParams.Ports.LighthouseBeaconNodeP2PPort+index*2), // multiply by 2 because LH adds 1 for quic4 port
 		fmt.Sprintf("--port=%d", e2e.TestParams.Ports.LighthouseBeaconNodeP2PPort+index*2),         // multiply by 2 because LH adds 1 for quic4 port

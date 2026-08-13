@@ -225,7 +225,7 @@ func pubsubGossipParam() pubsub.GossipSubParams {
 // to configure our message id time-cache rather than instantiating
 // it with a router instance.
 func setPubSubParameters() {
-	seenTtl := 2 * time.Second * time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	seenTtl := 2 * params.EpochsDuration(1, params.BeaconConfig())
 	pubsub.TimeCacheDuration = seenTtl
 }
 

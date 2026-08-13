@@ -37,7 +37,6 @@ import (
 	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
-	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	dbTest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
@@ -58,11 +57,23 @@ func init() {
 	logrus.SetOutput(io.Discard)
 }
 
-var _ iface.Validator = (*validator)(nil)
-
 const cancelledCtx = "context has been canceled"
 
 var unknownIndex = primitives.ValidatorIndex(^uint64(0))
+
+func generateMultipleValidatorStatusResponse(pubkeys [][]byte) *ethpb.MultipleValidatorStatusResponse {
+	resp := &ethpb.MultipleValidatorStatusResponse{
+		PublicKeys: make([][]byte, len(pubkeys)),
+		Statuses:   make([]*ethpb.ValidatorStatusResponse, len(pubkeys)),
+		Indices:    make([]primitives.ValidatorIndex, len(pubkeys)),
+	}
+	for i, key := range pubkeys {
+		resp.PublicKeys[i] = key
+		resp.Statuses[i] = &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_UNKNOWN_STATUS}
+		resp.Indices[i] = primitives.ValidatorIndex(i)
+	}
+	return resp
+}
 
 func genMockKeymanager(t *testing.T, numKeys int) *mockKeymanager {
 	pairs := make([]keypair, numKeys)
@@ -397,10 +408,10 @@ func TestRolesAt_OK(t *testing.T) {
 			require.NoError(t, err)
 
 			pk := bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())
-			assert.Equal(t, iface.RoleAttester, roleMap[pk][0])
-			assert.Equal(t, iface.RoleAggregator, roleMap[pk][1])
-			assert.Equal(t, iface.RoleSyncCommittee, roleMap[pk][2])
-			assert.Equal(t, iface.RolePTCMember, roleMap[pk][3])
+			assert.Equal(t, roleAttester, roleMap[pk][0])
+			assert.Equal(t, roleAggregator, roleMap[pk][1])
+			assert.Equal(t, roleSyncCommittee, roleMap[pk][2])
+			assert.Equal(t, rolePTCMember, roleMap[pk][3])
 
 			// Test sync committee role at epoch boundary.
 			v.duties = testDutyStore(&ethpb.ValidatorDuty{
@@ -427,7 +438,7 @@ func TestRolesAt_OK(t *testing.T) {
 
 			roleMap, err = v.RolesAt(t.Context(), params.BeaconConfig().SlotsPerEpoch-1)
 			require.NoError(t, err)
-			assert.Equal(t, iface.RoleSyncCommittee, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
+			assert.Equal(t, roleSyncCommittee, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
 		})
 	}
 }
@@ -453,7 +464,7 @@ func TestRolesAt_DoesNotAssignProposer_Slot0(t *testing.T) {
 			roleMap, err := v.RolesAt(t.Context(), 0)
 			require.NoError(t, err)
 
-			assert.Equal(t, iface.RoleAttester, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
+			assert.Equal(t, roleAttester, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
 		})
 	}
 }
@@ -3073,6 +3084,76 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 			require.Equal(t, tt.upgradedGasLimit, dbps.DefaultConfig.GasLimit)
 		})
 	}
+}
+
+// In the last slot of an epoch the duty store already holds next-epoch duties
+// as current, so the schedule must be resolved per proposal slot, not from the
+// wall-clock slot.
+func TestValidator_buildProposerPreferences_ScheduleUsesProposalSlotEpoch(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	cfg.GasLimitSchedule = []params.GasLimitScheduleEntry{
+		{Epoch: 0, GasLimit: 60_000_000},
+		{Epoch: 1, GasLimit: 90_000_000},
+	}
+	params.OverrideBeaconConfig(cfg)
+
+	feeRecipient := feeRecipientFromString(t, "0x1111111111111111111111111111111111111111")
+	kp := randKeypair(t)
+	km := newMockKeymanager(t, kp)
+	ctrl := gomock.NewController(t)
+	client := validatormock.NewMockValidatorClient(ctrl)
+	domainCache, err := ristretto.NewCache(&ristretto.Config[string, proto.Message]{
+		NumCounters: 1920,
+		MaxCost:     192,
+		BufferItems: 64,
+	})
+	require.NoError(t, err)
+	client.EXPECT().
+		DomainData(gomock.Any(), gomock.Any()).
+		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).
+		AnyTimes()
+
+	lastSlotOfEpoch0 := primitives.Slot(params.BeaconConfig().SlotsPerEpoch) - 1
+	epoch1ProposerSlot := params.BeaconConfig().SlotsPerEpoch + 3
+
+	v := validator{
+		validatorClient: client,
+		domainDataCache: domainCache,
+		proposerSettings: &proposer.Settings{
+			Version: 2,
+			DefaultConfig: &proposer.Option{
+				FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: feeRecipient},
+			},
+		},
+		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
+			kp.pub: {
+				publicKey: kp.pub[:],
+				status:    &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE},
+				index:     1,
+			},
+		},
+		duties:             &dutyStore{},
+		submittedPrefSlots: make(map[primitives.Slot]bool),
+	}
+	root := make([]byte, fieldparams.RootLength)
+	root[0] = 1
+	var data dutyStoreData
+	data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+		PrevDependentRoot: root,
+		CurrDependentRoot: root,
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{{
+			PublicKey: kp.pub[:], ValidatorIndex: 1, Status: ethpb.ValidatorStatus_ACTIVE,
+			ProposerSlots: []primitives.Slot{epoch1ProposerSlot},
+		}},
+	})
+	v.duties.write(data)
+
+	prefs := v.buildProposerPreferences(t.Context(), km, lastSlotOfEpoch0, true)
+	require.Equal(t, 1, len(prefs))
+	require.Equal(t, epoch1ProposerSlot, prefs[0].Message.ProposalSlot)
+	require.Equal(t, uint64(90_000_000), prefs[0].Message.TargetGasLimit)
 }
 
 // Post-fork, PushProposerSettings must not call SubmitValidatorRegistrations
