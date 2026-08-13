@@ -155,6 +155,15 @@ func (s *Service) validateDataColumnFulu(
 	roDataColumn blocks.RODataColumn,
 	dataColumnSidecarSubTopic string,
 ) (blocks.VerifiedRODataColumn, error) {
+	// [IGNORE] The sidecar is the first sidecar for the tuple `(block_header.slot, block_header.proposer_index, sidecar.index)`.
+	proposerIndex, err := roDataColumn.ProposerIndex()
+	if err != nil {
+		return blocks.VerifiedRODataColumn{}, errors.Wrap(err, "fulu data column validation")
+	}
+	if s.hasSeenDataColumnIndex(roDataColumn.Slot(), proposerIndex, roDataColumn.Index()) {
+		return blocks.VerifiedRODataColumn{}, ignoreValidation(nil)
+	}
+
 	roDataColumns := []blocks.RODataColumn{roDataColumn}
 	verifier := s.newColumnsVerifier(roDataColumns, verification.GossipDataColumnSidecarRequirements)
 
@@ -231,16 +240,6 @@ func (s *Service) validateDataColumnFulu(
 	// [REJECT] The sidecar's column data is valid as verified by `verify_data_column_sidecar_kzg_proofs(sidecar)`.
 	if err := verifier.SidecarKzgProofVerified(); err != nil {
 		return blocks.VerifiedRODataColumn{}, errors.Wrap(err, "fulu data column validation")
-	}
-
-	// [IGNORE] The sidecar is the first sidecar for the tuple `(block_header.slot, block_header.proposer_index, sidecar.index)`
-	// with valid header signature, sidecar inclusion proof, and kzg proof.
-	proposerIndex, err := roDataColumn.ProposerIndex()
-	if err != nil {
-		return blocks.VerifiedRODataColumn{}, errors.Wrap(err, "fulu data column validation")
-	}
-	if s.hasSeenDataColumnIndex(roDataColumn.Slot(), proposerIndex, roDataColumn.Index()) {
-		return blocks.VerifiedRODataColumn{}, ignoreValidation(nil)
 	}
 
 	// [REJECT] The sidecar is proposed by the expected `proposer_index` for the block's slot in the context of the current shuffling (defined by `block_header.parent_root`/`block_header.slot`).

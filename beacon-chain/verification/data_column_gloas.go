@@ -18,7 +18,6 @@ var GossipDataColumnSidecarRequirementsGloas = []Requirement{
 	RequireValidFieldsGloas,
 	RequireCorrectSubnet,
 	RequireSidecarKzgProofVerifiedGloas,
-	RequireNotSeenGloas,
 }
 
 // PendingGloasColumnRequirements defines the requirements for columns queued before their block arrived.
