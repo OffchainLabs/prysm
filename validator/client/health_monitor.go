@@ -90,8 +90,7 @@ func (m *healthMonitor) performHealthCheck() {
 
 func (m *healthMonitor) loop() {
 	log.Debug("Starting health check routine for beacon node apis")
-	interval := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
-	ticker := time.NewTicker(interval)
+	ticker := time.NewTicker(params.BeaconConfig().SlotDuration())
 
 	for ; true; <-ticker.C { // check immediately
 		if m.ctx.Err() != nil {

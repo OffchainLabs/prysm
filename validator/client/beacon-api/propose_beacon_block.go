@@ -170,9 +170,8 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 
 	// Try PostSSZ first with SSZ data
 	if res.marshalledSSZ != nil {
-		_, _, err = c.handler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(res.marshalledSSZ))
-		if err != nil {
-			if !errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusNotAcceptable}) || res.marshalJSON == nil {
+		if err = c.handler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(res.marshalledSSZ)); err != nil {
+			if !errors.Is(err, &httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType}) || res.marshalJSON == nil {
 				return nil, errors.Wrap(err, "failed to submit block ssz")
 			}
 

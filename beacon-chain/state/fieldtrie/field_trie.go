@@ -232,6 +232,10 @@ func (f *FieldTrie) TrieRoot() ([32]byte, error) {
 
 // ProveField returns leaf and proof for the given field index.
 func (f *FieldTrie) ProveField(fieldIndex uint64) ([32]byte, [][32]byte, error) {
+	if f.merkleMode == MerkleModeProgressive {
+		return [32]byte{}, nil, errors.New("prove field not supported for progressive Merkle mode")
+	}
+
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
@@ -463,10 +467,10 @@ func (f *FieldTrie) fork() *FieldTrie {
 		forked.dataRefCleanup = runtime.AddCleanup(forked, cleanupRef, f.dataRef)
 		if f.merkleMode == MerkleModeProgressive {
 			forked.progressiveOverridesData = newProgressiveOverridesData(f.field)
-		} else {
-			forked.overridesData = newOverridesData(f.field, make([]map[uint64][32]byte, f.depth()+1))
+			return forked
 		}
 
+		forked.overridesData = newOverridesData(f.field, make([]map[uint64][32]byte, f.depth()+1))
 		return forked
 	}
 

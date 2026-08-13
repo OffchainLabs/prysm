@@ -86,15 +86,22 @@ func TestProgressiveFieldTrie(t *testing.T) {
 		})
 
 		t.Run("overlay", func(t *testing.T) {
-			validators := progressiveTestValidators(6)
+			validators := progressiveTestValidators(22)
 			base := newProgressiveTestFieldTrie(t, types.Validators, types.CompositeArray, validators)
 			copied := base.CopyTrie()
 
+			validators[20].EffectiveBalance++
 			validators[5].EffectiveBalance++
+			validators[6].EffectiveBalance++
+			validators[7].EffectiveBalance++
 			validators[1].EffectiveBalance++
-			overlay, recomputedRoot, err := base.RecomputeTrie([]uint64{5, 1}, validators)
+			overlay, recomputedRoot, err := base.RecomputeTrie([]uint64{20, 5, 6, 7, 1}, validators)
 			require.NoError(t, err)
 			runtime.KeepAlive(copied)
+
+			require.Equal(t, 15, len(overlay.progressiveOverridesData.nodes))
+			require.Equal(t, 3, len(overlay.progressiveOverridesData.spine))
+			require.Equal(t, 5, len(overlay.progressiveOverridesData.leaves))
 
 			root, err := overlay.TrieRoot()
 			require.NoError(t, err)

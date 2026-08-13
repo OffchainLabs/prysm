@@ -147,10 +147,10 @@ func (s *Service) run() {
 	s.wg.Add(1)
 	go s.receiveBlocks(s.ctx, beaconBlockHeadersChan)
 
-	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
-	s.attsSlotTicker = slots.NewSlotTicker(s.genesisTime, secondsPerSlot)
-	s.blocksSlotTicker = slots.NewSlotTicker(s.genesisTime, secondsPerSlot)
-	s.pruningSlotTicker = slots.NewSlotTicker(s.genesisTime, secondsPerSlot)
+	slotDuration := params.BeaconConfig().SlotDuration()
+	s.attsSlotTicker = slots.NewSlotTicker(s.genesisTime, slotDuration)
+	s.blocksSlotTicker = slots.NewSlotTicker(s.genesisTime, slotDuration)
+	s.pruningSlotTicker = slots.NewSlotTicker(s.genesisTime, slotDuration)
 
 	s.wg.Add(1)
 	go s.processQueuedAttestations(s.ctx, s.attsSlotTicker.C())
@@ -213,7 +213,7 @@ func (s *Service) waitForSync(genesisTime time.Time) {
 	if slots.CurrentSlot(genesisTime) < params.BeaconConfig().SlotsPerEpoch || !s.serviceCfg.SyncChecker.Syncing() {
 		return
 	}
-	slotTicker := slots.NewSlotTicker(s.genesisTime, params.BeaconConfig().SecondsPerSlot)
+	slotTicker := slots.NewSlotTicker(s.genesisTime, params.BeaconConfig().SlotDuration())
 	defer slotTicker.Done()
 	for {
 		select {

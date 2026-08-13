@@ -84,6 +84,9 @@ func canonicalizeID(path, id string, pkg *flatPackage) string {
 // is a superset of b). It relies on both slices being in the same sorted order, which
 // holds for the GoFiles lists Bazel emits in the package JSON.
 func isSuperset(a, b []string) bool {
+	if len(b) == 0 {
+		return true
+	}
 	if len(a) < len(b) {
 		return false
 	}
@@ -108,6 +111,7 @@ func isSuperset(a, b []string) bool {
 //   - We need to process all the bazel file paths to replace symbolic path names with
 //     fully qualified paths. This is done by the path resolver func.
 func (r *registry) resolvePackages() error {
+	testPackages := make([]*flatPackage, 0)
 	for _, pkg := range r.packages {
 		pkg.resolvePaths(r.resolve, r.tagFilter)
 		if err := pkg.resolveStdlib(r.stdlibPkgID); err != nil {
@@ -116,8 +120,11 @@ func (r *registry) resolvePackages() error {
 		// extract test sources and imports into their own flatPackage
 		testFp := pkg.deriveTestPackage()
 		if testFp != nil {
-			r.packages[testFp.ID] = testFp
+			testPackages = append(testPackages, testFp)
 		}
+	}
+	for _, pkg := range testPackages {
+		r.packages[pkg.ID] = pkg
 	}
 
 	// Build the file->package index once paths are absolute and test packages exist,

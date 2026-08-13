@@ -115,10 +115,10 @@ func TestProposeBeaconBlock_SSZ_Error(t *testing.T) {
 					headers,
 					gomock.Any(),
 				).Return(
-					nil, nil, testSuite.returnedError,
+					testSuite.returnedError,
 				).Times(1)
 
-				// No JSON fallback expected for non-406 errors
+				// No JSON fallback expected for non-415 errors
 
 				validatorClient := &beaconApiValidatorClient{handler: handler}
 				_, err := validatorClient.proposeBeaconBlock(ctx, testCase.block)
@@ -177,7 +177,7 @@ func TestProposeBeaconBlock_SSZSuccess_NoFallback(t *testing.T) {
 				headers,
 				gomock.Any(),
 			).Return(
-				nil, nil, nil,
+				nil,
 			).Times(1)
 
 			// Post should NOT be called when PostSSZ succeeds
@@ -565,7 +565,7 @@ func generateSignedBlindedCapellaBlock() *ethpb.GenericSignedBeaconBlock_Blinded
 	}
 }
 
-func TestProposeBeaconBlock_SSZFails_406_FallbackToJSON(t *testing.T) {
+func TestProposeBeaconBlock_SSZFails_415_FallbackToJSON(t *testing.T) {
 	testCases := []struct {
 		name             string
 		consensusVersion string
@@ -597,8 +597,8 @@ func TestProposeBeaconBlock_SSZFails_406_FallbackToJSON(t *testing.T) {
 				gomock.Any(),
 				gomock.Any(),
 			).Return(
-				nil, nil, &httputil.DefaultJsonError{
-					Code:    http.StatusNotAcceptable,
+				&httputil.DefaultJsonError{
+					Code:    http.StatusUnsupportedMediaType,
 					Message: "SSZ not supported",
 				},
 			).Times(1)
@@ -620,7 +620,7 @@ func TestProposeBeaconBlock_SSZFails_406_FallbackToJSON(t *testing.T) {
 	}
 }
 
-func TestProposeBeaconBlock_SSZFails_406_JSONFallbackFails(t *testing.T) {
+func TestProposeBeaconBlock_SSZFails_415_JSONFallbackFails(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -633,8 +633,8 @@ func TestProposeBeaconBlock_SSZFails_406_JSONFallbackFails(t *testing.T) {
 		gomock.Any(),
 		gomock.Any(),
 	).Return(
-		nil, nil, &httputil.DefaultJsonError{
-			Code:    http.StatusNotAcceptable,
+		&httputil.DefaultJsonError{
+			Code:    http.StatusUnsupportedMediaType,
 			Message: "SSZ not supported",
 		},
 	).Times(1)
@@ -656,7 +656,7 @@ func TestProposeBeaconBlock_SSZFails_406_JSONFallbackFails(t *testing.T) {
 	assert.ErrorContains(t, "failed to submit block via JSON fallback", err)
 }
 
-func TestProposeBeaconBlock_SSZFails_Non406_NoFallback(t *testing.T) {
+func TestProposeBeaconBlock_SSZFails_Non415_NoFallback(t *testing.T) {
 	testCases := []struct {
 		name             string
 		consensusVersion string
@@ -681,7 +681,7 @@ func TestProposeBeaconBlock_SSZFails_Non406_NoFallback(t *testing.T) {
 			ctx := t.Context()
 			handler := mock.NewMockHandler(ctrl)
 
-			// Expect PostSSZ to be called first and fail with non-406 error
+			// Expect PostSSZ to be called first and fail with non-415 error
 			sszHeaders := map[string]string{
 				"Eth-Consensus-Version": testCase.consensusVersion,
 			}
@@ -691,13 +691,13 @@ func TestProposeBeaconBlock_SSZFails_Non406_NoFallback(t *testing.T) {
 				sszHeaders,
 				gomock.Any(),
 			).Return(
-				nil, nil, &httputil.DefaultJsonError{
+				&httputil.DefaultJsonError{
 					Code:    http.StatusInternalServerError,
 					Message: "Internal server error",
 				},
 			).Times(1)
 
-			// Post should NOT be called for non-406 errors
+			// Post should NOT be called for non-415 errors
 			handler.EXPECT().Post(
 				gomock.Any(),
 				gomock.Any(),

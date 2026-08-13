@@ -63,7 +63,7 @@ func (d *JSONDriver) load(path string) error {
 
 	decoder := json.NewDecoder(f)
 	for decoder.More() {
-		pkg := &flatPackage{}
+		pkg := newFlatPackage()
 		if err := decoder.Decode(&pkg); err != nil {
 			return fmt.Errorf("unable to decode package in %s: %w", f.Name(), err)
 		}

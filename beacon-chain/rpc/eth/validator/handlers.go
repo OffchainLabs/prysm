@@ -644,8 +644,7 @@ func (s *Server) SubmitSyncCommitteeSubscription(w http.ResponseWriter, r *http.
 		if err != nil {
 			epochsToWatch = 0
 		}
-		epochDuration := time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second
-		totalDuration := epochDuration * time.Duration(epochsToWatch)
+		totalDuration := params.EpochsDuration(1, params.BeaconConfig()) * time.Duration(epochsToWatch)
 
 		subcommitteeSize := params.BeaconConfig().SyncCommitteeSize / params.BeaconConfig().SyncCommitteeSubnetCount
 		seen := make(map[uint64]bool)

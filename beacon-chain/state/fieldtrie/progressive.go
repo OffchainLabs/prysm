@@ -194,32 +194,49 @@ func (f *FieldTrie) recomputeProgressiveOverlay(elements any, indices []uint64) 
 		return [32]byte{}, fmt.Errorf("field converters: %w", err)
 	}
 
+	// Store all dirty leaves before walking upward so shared parents are hashed only once.
+	dirtyBySubtree := make(map[int]map[uint64]bool)
 	highestSubtreeIndex := -1
 	for i, globalIndex := range chunkIndices {
 		subtreeIndex, localIndex := progressiveSubtreeForIndex(globalIndex)
 		highestSubtreeIndex = max(highestSubtreeIndex, subtreeIndex)
-		depth := progressiveSubtreeDepth(subtreeIndex)
+		if dirtyBySubtree[subtreeIndex] == nil {
+			dirtyBySubtree[subtreeIndex] = make(map[uint64]bool)
+		}
+		dirtyBySubtree[subtreeIndex][localIndex] = true
+
 		position := progressiveNodePosition{subtree: subtreeIndex, level: 0, index: localIndex}
 		f.progressiveOverridesData.nodes[position] = fieldRoots[i]
 		f.progressiveOverridesData.leaves[globalIndex] = true
+	}
 
-		currentIndex := localIndex
-		var pair [64]byte
-		hasher := hash.CustomSHA256Hasher()
+	var pair [64]byte
+	hasher := hash.CustomSHA256Hasher()
+	// Recompute each affected subtree level by level, deduplicating parents at every level.
+	for subtreeIndex, currentDirty := range dirtyBySubtree {
+		depth := progressiveSubtreeDepth(subtreeIndex)
 		for level := range depth {
-			parentIndex := currentIndex / 2
-			leftIndex := parentIndex * 2
-			left := f.readProgressiveOverlayNode(subtreeIndex, level, leftIndex)
-			right := f.readProgressiveOverlayNode(subtreeIndex, level, leftIndex+1)
-			copy(pair[:32], left[:])
-			copy(pair[32:], right[:])
-			parent := hasher(pair[:])
-			currentIndex = parentIndex
-			f.progressiveOverridesData.nodes[progressiveNodePosition{
-				subtree: subtreeIndex,
-				level:   level + 1,
-				index:   parentIndex,
-			}] = parent
+			parentDirty := make(map[uint64]bool, len(currentDirty)/2+1)
+			for currentIndex := range currentDirty {
+				parentIndex := currentIndex / 2
+				if parentDirty[parentIndex] {
+					continue
+				}
+
+				leftIndex := parentIndex * 2
+				left := f.readProgressiveOverlayNode(subtreeIndex, level, leftIndex)
+				right := f.readProgressiveOverlayNode(subtreeIndex, level, leftIndex+1)
+				copy(pair[:32], left[:])
+				copy(pair[32:], right[:])
+				parent := hasher(pair[:])
+				f.progressiveOverridesData.nodes[progressiveNodePosition{
+					subtree: subtreeIndex,
+					level:   level + 1,
+					index:   parentIndex,
+				}] = parent
+				parentDirty[parentIndex] = true
+			}
+			currentDirty = parentDirty
 		}
 	}
 	f.recomputeProgressiveOverlaySpine(highestSubtreeIndex)

@@ -104,6 +104,15 @@ func TestComputeFieldRootsWithHasher_ProgressiveSSZFields(t *testing.T) {
 }
 
 func TestHashTreeRoot(t *testing.T) {
+	t.Run("UnsupportedVersion", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		err := st.initializeProgressiveMerkleTree(t.Context())
+		require.ErrorContains(t, "unsupported version: fulu", err)
+
+		_, err = st.progressiveHashTreeRoot(t.Context())
+		require.ErrorContains(t, "progressive SSZ is not supported for version: fulu", err)
+	})
+
 	t.Run("ProgressiveSSZGate", func(t *testing.T) {
 		st := newGloasStateForProgressiveSSZTests(t)
 
@@ -157,9 +166,10 @@ func TestHashTreeRoot(t *testing.T) {
 		}
 		cachedTree := st.progressiveMerkleTree
 
-		// Validators still require a field-trie rebuild. Updating only the slot
-		// must not touch that unrelated field while recomputing the state root.
-		require.Equal(t, true, st.rebuildTrie[types.Validators])
+		// Initial progressive merkleization warms the validators field trie.
+		// Updating only the slot must not replace that unrelated trie.
+		require.Equal(t, false, st.rebuildTrie[types.Validators])
+		validatorsTrie := st.stateFieldLeaves[types.Validators]
 		require.NoError(t, st.SetSlot(st.slot+1))
 		require.Equal(t, true, st.dirtyFields[types.Slot])
 
@@ -168,7 +178,7 @@ func TestHashTreeRoot(t *testing.T) {
 		require.DeepNotSSZEqual(t, initialRoot, updatedRoot)
 		require.Equal(t, progressiveRootFromScratch(t, st), updatedRoot)
 		require.Equal(t, 0, len(st.dirtyFields))
-		require.Equal(t, true, st.rebuildTrie[types.Validators])
+		require.Equal(t, validatorsTrie, st.stateFieldLeaves[types.Validators])
 		if cachedTree != st.progressiveMerkleTree {
 			t.Fatal("progressive Merkle tree was rebuilt instead of updated in place")
 		}

@@ -28,6 +28,12 @@ type flatPackage struct {
 	Standard        bool              `json:",omitempty"`
 }
 
+func newFlatPackage() *flatPackage {
+	return &flatPackage{
+		Imports: make(map[string]string),
+	}
+}
+
 func resolvePathsInPlace(prf pathResolverFunc, paths []string) {
 	for i, path := range paths {
 		paths[i] = prf(path)
@@ -45,13 +51,16 @@ func (fp *flatPackage) resolvePaths(prf pathResolverFunc, tagFilter tagFilterFun
 	fp.CompiledGoFiles = tagFilter(fp.CompiledGoFiles)
 }
 
-func (fp *flatPackage) groupTestFiles(files []string) (testFiles, xTestFiles, nonTestFiles []string, err error) {
+const fileParseWarning = "unable to parse source file package name; file dropped from inventory"
+
+func (fp *flatPackage) groupTestFiles(files []string) (testFiles, xTestFiles, nonTestFiles []string) {
 	for _, filename := range files {
 		if strings.HasSuffix(filename, "_test.go") {
 			fset := token.NewFileSet()
 			f, err := parser.ParseFile(fset, filename, nil, parser.PackageClauseOnly)
 			if err != nil {
-				return nil, nil, nil, err
+				log.WithError(err).WithField("package", fp.PkgPath).WithField("filename", filename).Warn(fileParseWarning)
+				continue
 			}
 			if f.Name.Name == fp.Name {
 				testFiles = append(testFiles, filename)
@@ -66,11 +75,7 @@ func (fp *flatPackage) groupTestFiles(files []string) (testFiles, xTestFiles, no
 }
 
 func (fp *flatPackage) deriveTestPackage() *flatPackage {
-	internalTests, externalTests, nonTests, err := fp.groupTestFiles(fp.GoFiles)
-	if err != nil {
-		log.WithError(err).WithField("package", fp.PkgPath).Warn("unable to group test files; skipping test package derivation")
-		return nil
-	}
+	internalTests, externalTests, nonTests := fp.groupTestFiles(fp.GoFiles)
 	// Internal test files compile into the package itself; recombine them once and
 	// share the slice between GoFiles and CompiledGoFiles (they are identical here).
 	compiled := slices.Concat(nonTests, internalTests)
