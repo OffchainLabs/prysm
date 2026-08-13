@@ -66,7 +66,10 @@ func startChainService(t testing.TB,
 
 	fc := doublylinkedtree.New()
 	fc.SetGenesisTime(genesis)
-	sg := stategen.New(db, fc)
+	sg := stategen.New(db)
+	fc.Lock()
+	fc.SetBalancesByRooter(sg.ActiveNonSlashedBalancesByRoot)
+	fc.Unlock()
 	opts := append([]blockchain.Option{},
 		blockchain.WithExecutionEngineCaller(engineMock),
 		blockchain.WithFinalizedStateAtStartUp(st),

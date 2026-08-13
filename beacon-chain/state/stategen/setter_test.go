@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -19,7 +18,7 @@ func TestSaveState_HotStateCanBeSaved(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	service.slotsPerArchivedPoint = 1
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	// This goes to hot section, verify it can save on epoch boundary.
@@ -40,7 +39,7 @@ func TestSaveState_HotStateCached(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	service.slotsPerArchivedPoint = 1
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	require.NoError(t, beaconState.SetSlot(params.BeaconConfig().SlotsPerEpoch))
@@ -60,7 +59,7 @@ func TestState_ForceCheckpoint_SavesStateToDatabase(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
-	svc := New(beaconDB, doublylinkedtree.New())
+	svc := New(beaconDB)
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	require.NoError(t, beaconState.SetSlot(params.BeaconConfig().SlotsPerEpoch))
 
@@ -79,7 +78,7 @@ func TestSaveState_Alreadyhas(t *testing.T) {
 	hook := logTest.NewGlobal()
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	require.NoError(t, beaconState.SetSlot(params.BeaconConfig().SlotsPerEpoch))
@@ -98,7 +97,7 @@ func TestSaveState_Alreadyhas(t *testing.T) {
 func TestSaveState_CanSaveOnEpochBoundary(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	require.NoError(t, beaconState.SetSlot(params.BeaconConfig().SlotsPerEpoch))
@@ -119,7 +118,7 @@ func TestSaveState_NoSaveNotEpochBoundary(t *testing.T) {
 	hook := logTest.NewGlobal()
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	require.NoError(t, beaconState.SetSlot(params.BeaconConfig().SlotsPerEpoch-1))
@@ -142,7 +141,7 @@ func TestSaveState_NoSaveNotEpochBoundary(t *testing.T) {
 func TestSaveState_RecoverForEpochBoundary(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	require.NoError(t, beaconState.SetSlot(params.BeaconConfig().SlotsPerEpoch-1))
@@ -171,7 +170,7 @@ func TestSaveState_CanSaveHotStateToDB(t *testing.T) {
 	hook := logTest.NewGlobal()
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	service.EnableSaveHotStateToDB(ctx)
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	require.NoError(t, beaconState.SetSlot(defaultHotStateDBInterval))
@@ -188,7 +187,7 @@ func TestEnableSaveHotStateToDB_Enabled(t *testing.T) {
 	hook := logTest.NewGlobal()
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 
 	service.EnableSaveHotStateToDB(ctx)
 	require.LogsContain(t, hook, "Entering mode to save hot states in DB")
@@ -199,7 +198,7 @@ func TestEnableSaveHotStateToDB_AlreadyEnabled(t *testing.T) {
 	hook := logTest.NewGlobal()
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	service.saveHotStateDB.enabled = true
 	service.EnableSaveHotStateToDB(ctx)
 	require.LogsDoNotContain(t, hook, "Entering mode to save hot states in DB")
@@ -210,7 +209,7 @@ func TestEnableSaveHotStateToDB_Disabled(t *testing.T) {
 	hook := logTest.NewGlobal()
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	service.saveHotStateDB.enabled = true
 	b := util.NewBeaconBlock()
 	util.SaveBlock(t, ctx, beaconDB, b)
@@ -227,7 +226,7 @@ func TestEnableSaveHotStateToDB_AlreadyDisabled(t *testing.T) {
 	hook := logTest.NewGlobal()
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	require.NoError(t, service.DisableSaveHotStateToDB(ctx))
 	require.LogsDoNotContain(t, hook, "Exiting mode to save hot states in DB")
 	require.Equal(t, false, service.saveHotStateDB.enabled)
@@ -240,7 +239,7 @@ func TestSaveState_CanSaveHotStateToDB_StateDiff(t *testing.T) {
 
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	service.EnableSaveHotStateToDB(ctx)
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	require.NoError(t, beaconState.SetSlot(defaultHotStateDBInterval))
@@ -269,7 +268,7 @@ func TestEnableSaveHotStateToDB_Disabled_StateDiffClearsSnapshots(t *testing.T) 
 
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	service.EnableSaveHotStateToDB(ctx)
 
 	beaconState, _ := util.DeterministicGenesisState(t, 32)

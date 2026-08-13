@@ -8,7 +8,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	blt "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -24,7 +23,7 @@ func TestStateByRoot_GenesisState(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	b := util.NewBeaconBlock()
 	bRoot, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
@@ -41,7 +40,7 @@ func TestStateByRoot_ColdState(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	service.finalizedInfo.slot = 2
 	service.slotsPerArchivedPoint = 1
 
@@ -80,7 +79,7 @@ func TestStateByRootIfCachedNoCopy_HotState(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	r := [32]byte{'A'}
@@ -95,7 +94,7 @@ func TestStateByRootIfCachedNoCopy_ColdState(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	service.finalizedInfo.slot = 2
 	service.slotsPerArchivedPoint = 1
 
@@ -118,7 +117,7 @@ func TestDeleteStateFromCaches(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	r := [32]byte{'A'}
 
@@ -240,7 +239,7 @@ func TestStateByRoot_FallsBackToReplayOnNotFoundStateFromDirectRead(t *testing.T
 	rob10, err := blt.NewROBlock(ib10)
 	require.NoError(t, err)
 
-	service := New(&notFoundOnRootDB{NoHeadAccessDatabase: beaconDB, target: rob10.Root()}, doublylinkedtree.New())
+	service := New(&notFoundOnRootDB{NoHeadAccessDatabase: beaconDB, target: rob10.Root()})
 
 	got, err := service.StateByRoot(ctx, rob10.Root())
 	require.NoError(t, err)
@@ -504,7 +503,7 @@ func TestLoadStateByRoot(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			helpers.ClearCache()
 			beaconDB := testDB.SetupDB(t)
-			service := New(beaconDB, doublylinkedtree.New())
+			service := New(beaconDB)
 			r := testChain{
 				t:   t,
 				ctx: ctx,
@@ -556,7 +555,7 @@ func TestLoadStateByRoot(t *testing.T) {
 func TestLastAncestorState_CanGetUsingDB(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 
 	b0 := util.NewBeaconBlock()
 	b0.Block.ParentRoot = bytesutil.PadTo([]byte{'a'}, 32)
@@ -621,7 +620,7 @@ func TestLastAncestorState_FallsBackOnNotFoundStateFromDB(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, b1State.SetSlot(1))
 
-	service := New(&notFoundOnRootDB{NoHeadAccessDatabase: beaconDB, target: r2}, doublylinkedtree.New())
+	service := New(&notFoundOnRootDB{NoHeadAccessDatabase: beaconDB, target: r2})
 
 	util.SaveBlock(t, ctx, service.beaconDB, b0)
 	util.SaveBlock(t, ctx, service.beaconDB, b1)
@@ -637,7 +636,7 @@ func TestLastAncestorState_FallsBackOnNotFoundStateFromDB(t *testing.T) {
 func TestLastAncestorState_CanGetUsingCache(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 
 	b0 := util.NewBeaconBlock()
 	b0.Block.ParentRoot = bytesutil.PadTo([]byte{'a'}, 32)
@@ -677,7 +676,7 @@ func TestLastAncestorState_CanGetUsingCache(t *testing.T) {
 func TestState_HasState(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	s, err := util.NewBeaconState()
 	require.NoError(t, err)
 	rHit1 := [32]byte{1}
@@ -709,7 +708,7 @@ func TestState_HasState(t *testing.T) {
 func TestState_HasStateInCache(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
-	service := New(beaconDB, doublylinkedtree.New())
+	service := New(beaconDB)
 	s, err := util.NewBeaconState()
 	require.NoError(t, err)
 	rHit1 := [32]byte{1}

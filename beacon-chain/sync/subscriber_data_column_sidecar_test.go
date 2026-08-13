@@ -6,7 +6,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
@@ -43,7 +42,7 @@ func TestAllDataColumnSubnets(t *testing.T) {
 		require.NoError(t, beaconDB.SaveGenesisData(ctx, genesisState))
 
 		// Create stategen and initialize with genesis state
-		stateGen := stategen.New(beaconDB, doublylinkedtree.New())
+		stateGen := stategen.New(beaconDB)
 		_, err := stateGen.Resume(ctx, genesisState)
 		require.NoError(t, err)
 

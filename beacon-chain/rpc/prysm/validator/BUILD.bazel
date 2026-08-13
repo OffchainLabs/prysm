@@ -41,7 +41,6 @@ go_test(
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/transition:go_default_library",
         "//beacon-chain/db/testing:go_default_library",
-        "//beacon-chain/forkchoice/doubly-linked-tree:go_default_library",
         "//beacon-chain/rpc/core:go_default_library",
         "//beacon-chain/rpc/testutil:go_default_library",
         "//beacon-chain/state:go_default_library",

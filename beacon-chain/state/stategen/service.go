@@ -11,7 +11,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync/backfill/coverage"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -64,7 +63,6 @@ type State struct {
 	saveHotStateDB          *saveHotStateDbConfig
 	avb                     coverage.AvailableBlocker
 	migrationLock           *sync.Mutex
-	fc                      forkchoice.ForkChoicer
 }
 
 // This tracks the config in the event of long non-finality,
@@ -98,7 +96,7 @@ func WithAvailableBlocker(avb coverage.AvailableBlocker) Option {
 }
 
 // New returns a new state management object.
-func New(beaconDB db.NoHeadAccessDatabase, fc forkchoice.ForkChoicer, opts ...Option) *State {
+func New(beaconDB db.NoHeadAccessDatabase, opts ...Option) *State {
 	s := &State{
 		beaconDB:                beaconDB,
 		hotStateCache:           newHotStateCache(),
@@ -109,14 +107,10 @@ func New(beaconDB db.NoHeadAccessDatabase, fc forkchoice.ForkChoicer, opts ...Op
 			duration: defaultHotStateDBInterval,
 		},
 		migrationLock: new(sync.Mutex),
-		fc:            fc,
 	}
 	for _, o := range opts {
 		o(s)
 	}
-	fc.Lock()
-	defer fc.Unlock()
-	fc.SetBalancesByRooter(s.ActiveNonSlashedBalancesByRoot)
 	return s
 }
 

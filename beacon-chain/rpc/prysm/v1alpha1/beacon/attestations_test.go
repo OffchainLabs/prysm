@@ -11,7 +11,6 @@ import (
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
@@ -632,7 +631,7 @@ func TestServer_ListIndexedAttestations_GenesisEpoch(t *testing.T) {
 		BeaconDB:           db,
 		GenesisTimeFetcher: &chainMock.ChainService{State: state},
 		HeadFetcher:        &chainMock.ChainService{State: state},
-		StateGen:           stategen.New(db, doublylinkedtree.New()),
+		StateGen:           stategen.New(db),
 	}
 	err := db.SaveStateSummary(ctx, &ethpb.StateSummary{
 		Root: targetRoot1[:],
@@ -732,7 +731,7 @@ func TestServer_ListIndexedAttestations_OldEpoch(t *testing.T) {
 		GenesisTimeFetcher: &chainMock.ChainService{
 			Genesis: time.Now(),
 		},
-		StateGen: stategen.New(db, doublylinkedtree.New()),
+		StateGen: stategen.New(db),
 	}
 	err = db.SaveStateSummary(ctx, &ethpb.StateSummary{
 		Root: blockRoot[:],
@@ -834,7 +833,7 @@ func TestServer_ListIndexedAttestationsElectra(t *testing.T) {
 		BeaconDB:           db,
 		GenesisTimeFetcher: &chainMock.ChainService{State: state},
 		HeadFetcher:        &chainMock.ChainService{State: state},
-		StateGen:           stategen.New(db, doublylinkedtree.New()),
+		StateGen:           stategen.New(db),
 	}
 	err := db.SaveStateSummary(ctx, &ethpb.StateSummary{
 		Root: targetRoot1[:],

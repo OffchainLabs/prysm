@@ -171,7 +171,7 @@ func minimalTestService(t *testing.T, opts ...Option) (*Service, *testServiceReq
 	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, [32]byte{}))
 	fcs := doublylinkedtree.New()
 	fcs.SetGenesisTime(genesis)
-	sg := stategen.New(beaconDB, fcs)
+	sg := stategen.New(beaconDB)
 	notif := &mockBeaconNode{}
 	fcs.SetBalancesByRooter(sg.ActiveNonSlashedBalancesByRoot)
 	cs := startup.NewClockSynchronizer()

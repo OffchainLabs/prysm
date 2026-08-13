@@ -21,7 +21,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	p2pmock "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
@@ -1461,7 +1460,7 @@ func TestGetAttestationData(t *testing.T) {
 				HeadFetcher:           chain,
 				GenesisTimeFetcher:    chain,
 				OptimisticModeFetcher: chain,
-				StateGen:              stategen.New(db, doublylinkedtree.New()),
+				StateGen:              stategen.New(db),
 				FinalizedFetcher:      chain,
 			},
 		}

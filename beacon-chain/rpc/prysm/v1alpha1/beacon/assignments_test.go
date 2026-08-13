@@ -9,7 +9,6 @@ import (
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	mockstategen "github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen/mock"
 	"github.com/OffchainLabs/prysm/v7/cmd"
@@ -83,7 +82,7 @@ func TestServer_ListAssignments_Pagination_InputOutOfRange(t *testing.T) {
 			},
 		},
 		GenesisTimeFetcher: &mock.ChainService{},
-		StateGen:           stategen.New(db, doublylinkedtree.New()),
+		StateGen:           stategen.New(db),
 		ReplayerBuilder:    mockstategen.NewReplayerBuilder(mockstategen.WithMockState(s)),
 	}
 
@@ -159,7 +158,7 @@ func TestServer_ListAssignments_Pagination_DefaultPageSize_NoArchive(t *testing.
 			},
 		},
 		GenesisTimeFetcher: &mock.ChainService{},
-		StateGen:           stategen.New(db, doublylinkedtree.New()),
+		StateGen:           stategen.New(db),
 		ReplayerBuilder:    mockstategen.NewReplayerBuilder(mockstategen.WithMockState(s)),
 	}
 
@@ -228,7 +227,7 @@ func TestServer_ListAssignments_FilterPubkeysIndices_NoPagination(t *testing.T) 
 			},
 		},
 		GenesisTimeFetcher: &mock.ChainService{},
-		StateGen:           stategen.New(db, doublylinkedtree.New()),
+		StateGen:           stategen.New(db),
 		ReplayerBuilder:    mockstategen.NewReplayerBuilder(mockstategen.WithMockState(s)),
 	}
 
@@ -301,7 +300,7 @@ func TestServer_ListAssignments_CanFilterPubkeysIndices_WithPagination(t *testin
 			},
 		},
 		GenesisTimeFetcher: &mock.ChainService{},
-		StateGen:           stategen.New(db, doublylinkedtree.New()),
+		StateGen:           stategen.New(db),
 	}
 
 	addDefaultReplayerBuilder(bs, db)

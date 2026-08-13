@@ -18,7 +18,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -132,7 +131,7 @@ func TestServer_GetValidatorParticipation_CurrentAndPrevEpoch(t *testing.T) {
 		BeaconDB: beaconDB,
 		CoreService: &core.Service{
 			HeadFetcher: m,
-			StateGen:    stategen.New(beaconDB, doublylinkedtree.New()),
+			StateGen:    stategen.New(beaconDB),
 			GenesisTimeFetcher: &mock.ChainService{
 				Genesis: prysmTime.Now().Add(time.Duration(-1*offset) * time.Second),
 			},
@@ -232,7 +231,7 @@ func TestServer_GetValidatorParticipation_OrphanedUntilGenesis(t *testing.T) {
 		},
 		CoreService: &core.Service{
 			HeadFetcher: m,
-			StateGen:    stategen.New(beaconDB, doublylinkedtree.New()),
+			StateGen:    stategen.New(beaconDB),
 			GenesisTimeFetcher: &mock.ChainService{
 				Genesis: prysmTime.Now().Add(time.Duration(-1*offset) * time.Second),
 			},
@@ -367,7 +366,7 @@ func runGetValidatorParticipationCurrentEpoch(t *testing.T, genState state.Beaco
 		},
 		CoreService: &core.Service{
 			HeadFetcher: m,
-			StateGen:    stategen.New(beaconDB, doublylinkedtree.New()),
+			StateGen:    stategen.New(beaconDB),
 			GenesisTimeFetcher: &mock.ChainService{
 				Genesis: prysmTime.Now().Add(time.Duration(-1*offset) * time.Second),
 			},

@@ -14,10 +14,12 @@ import (
 func testServiceOptsWithDB(t testing.TB) []Option {
 	beaconDB := testDB.SetupDB(t)
 	fcs := doublylinkedtree.New()
+	sg := stategen.New(beaconDB)
+	fcs.SetBalancesByRooter(sg.ActiveNonSlashedBalancesByRoot)
 	cs := startup.NewClockSynchronizer()
 	return []Option{
 		WithDatabase(beaconDB),
-		WithStateGen(stategen.New(beaconDB, fcs)),
+		WithStateGen(sg),
 		WithForkChoiceStore(fcs),
 		WithClockSynchronizer(cs),
 		WithStateNotifier(&mock.MockStateNotifier{RecordEvents: true}),

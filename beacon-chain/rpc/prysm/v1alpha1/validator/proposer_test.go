@@ -902,7 +902,7 @@ func getProposerServer(ctx context.Context, db db.HeadAccessDatabase, headState 
 		AttPool:               attestations.NewPool(),
 		SlashingsPool:         slashings.NewPool(),
 		ExitPool:              voluntaryexits.NewPool(),
-		StateGen:              stategen.New(db, doublylinkedtree.New()),
+		StateGen:              stategen.New(db),
 		SyncCommitteePool:     synccommittee.NewStore(),
 		OptimisticModeFetcher: &mock.ChainService{},
 		TimeFetcher: &testutil.MockGenesisTimeFetcher{
@@ -1392,7 +1392,7 @@ func TestProposer_ComputeStateRoot_OK(t *testing.T) {
 		ChainStartFetcher: &mockExecution.Chain{},
 		Eth1InfoFetcher:   &mockExecution.Chain{},
 		Eth1BlockFetcher:  &mockExecution.Chain{},
-		StateGen:          stategen.New(db, doublylinkedtree.New()),
+		StateGen:          stategen.New(db),
 		BlockReceiver: &mock.ChainService{
 			State:           beaconState.Copy(),
 			Root:            parentRoot[:],
@@ -1449,7 +1449,7 @@ func TestHandlePostBlockStateError_IncrementsAttempts(t *testing.T) {
 
 	beaconState, parentRoot, _ := util.DeterministicGenesisStateWithGenesisBlock(t, ctx, db, 100)
 
-	stateGen := stategen.New(db, doublylinkedtree.New())
+	stateGen := stategen.New(db)
 	vs := &Server{
 		StateGen:      stateGen,
 		BlockReceiver: &mock.ChainService{State: beaconState},
@@ -3547,7 +3547,7 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 		Eth1InfoFetcher:   &mockExecution.Chain{},
 		Eth1BlockFetcher:  &mockExecution.Chain{},
 		ForkchoiceFetcher: &mock.ChainService{},
-		StateGen:          stategen.New(db, doublylinkedtree.New()),
+		StateGen:          stategen.New(db),
 	}
 	t.Run("successful reorg", func(tt *testing.T) {
 		head, err := proposerServer.getParentStateFromReorgData(ctx, 1, parentRoot, parentRoot, headRoot)
@@ -3606,7 +3606,7 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 
 		proposerServer := &Server{
 			ForkchoiceFetcher: &mock.ChainService{},
-			StateGen:          stategen.New(db, doublylinkedtree.New()),
+			StateGen:          stategen.New(db),
 		}
 
 		head, err := proposerServer.getParentStateFromReorgData(ctx, 1, parentRoot, parentRoot, headRoot)
@@ -3687,7 +3687,7 @@ func TestServer_ProposeBeaconBlock_PostFuluBlindedBlock(t *testing.T) {
 			HeadFetcher:       c,
 			BlockNotifier:     c.BlockNotifier(),
 			OperationNotifier: c.OperationNotifier(),
-			StateGen:          stategen.New(db, doublylinkedtree.New()),
+			StateGen:          stategen.New(db),
 			TimeFetcher:       c,
 			SyncChecker:       &mockSync.Sync{IsSyncing: false},
 			BeaconDB:          db,
@@ -3736,7 +3736,7 @@ func TestServer_ProposeBeaconBlock_PostFuluBlindedBlock(t *testing.T) {
 			HeadFetcher:       c,
 			BlockNotifier:     c.BlockNotifier(),
 			OperationNotifier: c.OperationNotifier(),
-			StateGen:          stategen.New(db, doublylinkedtree.New()),
+			StateGen:          stategen.New(db),
 			TimeFetcher:       c,
 			SyncChecker:       &mockSync.Sync{IsSyncing: false},
 			BeaconDB:          db,
@@ -3784,7 +3784,7 @@ func TestServer_ProposeBeaconBlock_PostFuluBlindedBlock(t *testing.T) {
 			HeadFetcher:       c,
 			BlockNotifier:     c.BlockNotifier(),
 			OperationNotifier: c.OperationNotifier(),
-			StateGen:          stategen.New(db, doublylinkedtree.New()),
+			StateGen:          stategen.New(db),
 			TimeFetcher:       c,
 			SyncChecker:       &mockSync.Sync{IsSyncing: false},
 			BeaconDB:          db,
@@ -3833,7 +3833,7 @@ func TestServer_ProposeBeaconBlock_PostFuluBlindedBlock(t *testing.T) {
 			HeadFetcher:       c,
 			BlockNotifier:     c.BlockNotifier(),
 			OperationNotifier: c.OperationNotifier(),
-			StateGen:          stategen.New(db, doublylinkedtree.New()),
+			StateGen:          stategen.New(db),
 			TimeFetcher:       c,
 			SyncChecker:       &mockSync.Sync{IsSyncing: false},
 			BeaconDB:          db,
@@ -3876,7 +3876,7 @@ func TestServer_ProposeBeaconBlock_PostFuluBlindedBlock(t *testing.T) {
 			HeadFetcher:       c,
 			BlockNotifier:     c.BlockNotifier(),
 			OperationNotifier: c.OperationNotifier(),
-			StateGen:          stategen.New(db, doublylinkedtree.New()),
+			StateGen:          stategen.New(db),
 			TimeFetcher:       c,
 			SyncChecker:       &mockSync.Sync{IsSyncing: false},
 			BeaconDB:          db,
@@ -3928,7 +3928,7 @@ func TestServer_ProposeBeaconBlock_PostFuluBlindedBlock(t *testing.T) {
 			HeadFetcher:       c,
 			BlockNotifier:     c.BlockNotifier(),
 			OperationNotifier: c.OperationNotifier(),
-			StateGen:          stategen.New(db, doublylinkedtree.New()),
+			StateGen:          stategen.New(db),
 			TimeFetcher:       c,
 			SyncChecker:       &mockSync.Sync{IsSyncing: false},
 			BeaconDB:          db,

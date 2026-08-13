@@ -7,7 +7,6 @@ import (
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	slashingsmock "github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings/mock"
 	slashertypes "github.com/OffchainLabs/prysm/v7/beacon-chain/slasher/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
@@ -107,7 +106,7 @@ func Test_processQueuedBlocks_DetectsDoubleProposals(t *testing.T) {
 					Database:             slasherDB,
 					StateNotifier:        &mock.MockStateNotifier{},
 					HeadStateFetcher:     mockChain,
-					StateGen:             stategen.New(beaconDB, doublylinkedtree.New()),
+					StateGen:             stategen.New(beaconDB),
 					SlashingPoolInserter: &slashingsmock.PoolMock{},
 					ClockWaiter:          startup.NewClockSynchronizer(),
 				},

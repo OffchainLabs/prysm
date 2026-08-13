@@ -9,7 +9,6 @@ import (
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	testingdb "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
@@ -64,7 +63,7 @@ func TestService_ValidateBlsToExecutionChange(t *testing.T) {
 				WithStateNotifier(chainService.StateNotifier()),
 			},
 			setupSvc: func(s *Service, msg *ethpb.SignedBLSToExecutionChange, topic string) (*Service, string) {
-				s.cfg.stateGen = stategen.New(beaconDB, doublylinkedtree.New())
+				s.cfg.stateGen = stategen.New(beaconDB)
 				s.cfg.beaconDB = beaconDB
 				s.cfg.clock = startup.NewClock(time.Now(), [32]byte{'A'})
 				s.initCaches()
@@ -93,7 +92,7 @@ func TestService_ValidateBlsToExecutionChange(t *testing.T) {
 				WithStateNotifier(chainService.StateNotifier()),
 			},
 			setupSvc: func(s *Service, msg *ethpb.SignedBLSToExecutionChange, topic string) (*Service, string) {
-				s.cfg.stateGen = stategen.New(beaconDB, doublylinkedtree.New())
+				s.cfg.stateGen = stategen.New(beaconDB)
 				s.cfg.beaconDB = beaconDB
 				s.cfg.clock = startup.NewClock(time.Now(), [32]byte{'A'})
 				s.initCaches()
@@ -123,7 +122,7 @@ func TestService_ValidateBlsToExecutionChange(t *testing.T) {
 				WithStateNotifier(chainService.StateNotifier()),
 			},
 			setupSvc: func(s *Service, msg *ethpb.SignedBLSToExecutionChange, topic string) (*Service, string) {
-				s.cfg.stateGen = stategen.New(beaconDB, doublylinkedtree.New())
+				s.cfg.stateGen = stategen.New(beaconDB)
 				s.cfg.beaconDB = beaconDB
 				s.cfg.clock = startup.NewClock(time.Now(), [32]byte{'A'})
 				s.initCaches()
@@ -163,7 +162,7 @@ func TestService_ValidateBlsToExecutionChange(t *testing.T) {
 			},
 			clock: startup.NewClock(time.Now().Add(-time.Second*time.Duration(params.BeaconConfig().SecondsPerSlot*10)), [32]byte{'A'}),
 			setupSvc: func(s *Service, msg *ethpb.SignedBLSToExecutionChange, topic string) (*Service, string) {
-				s.cfg.stateGen = stategen.New(beaconDB, doublylinkedtree.New())
+				s.cfg.stateGen = stategen.New(beaconDB)
 				s.cfg.beaconDB = beaconDB
 				s.cfg.clock = startup.NewClock(time.Now(), [32]byte{'A'})
 				s.initCaches()
@@ -210,7 +209,7 @@ func TestService_ValidateBlsToExecutionChange(t *testing.T) {
 			},
 			clock: startup.NewClock(time.Now().Add(-time.Second*time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Duration(10)), [32]byte{'A'}),
 			setupSvc: func(s *Service, msg *ethpb.SignedBLSToExecutionChange, topic string) (*Service, string) {
-				s.cfg.stateGen = stategen.New(beaconDB, doublylinkedtree.New())
+				s.cfg.stateGen = stategen.New(beaconDB)
 				s.cfg.beaconDB = beaconDB
 				s.cfg.clock = startup.NewClock(time.Now(), [32]byte{'A'})
 				s.initCaches()
@@ -248,7 +247,7 @@ func TestService_ValidateBlsToExecutionChange(t *testing.T) {
 			},
 			clock: startup.NewClock(time.Now().Add(-time.Second*time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Duration(10)), [32]byte{'A'}),
 			setupSvc: func(s *Service, msg *ethpb.SignedBLSToExecutionChange, topic string) (*Service, string) {
-				s.cfg.stateGen = stategen.New(beaconDB, doublylinkedtree.New())
+				s.cfg.stateGen = stategen.New(beaconDB)
 				s.cfg.beaconDB = beaconDB
 				s.cfg.clock = startup.NewClock(time.Now(), [32]byte{'A'})
 				s.initCaches()
@@ -289,7 +288,7 @@ func TestService_ValidateBlsToExecutionChange(t *testing.T) {
 			},
 			clock: startup.NewClock(time.Now().Add(-time.Second*time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Duration(10)), [32]byte{'A'}),
 			setupSvc: func(s *Service, msg *ethpb.SignedBLSToExecutionChange, topic string) (*Service, string) {
-				s.cfg.stateGen = stategen.New(beaconDB, doublylinkedtree.New())
+				s.cfg.stateGen = stategen.New(beaconDB)
 				s.cfg.beaconDB = beaconDB
 				s.cfg.clock = startup.NewClock(time.Now(), [32]byte{'A'})
 				s.initCaches()
@@ -338,7 +337,7 @@ func TestService_ValidateBlsToExecutionChange(t *testing.T) {
 			},
 			clock: startup.NewClock(time.Now().Add(-time.Second*time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Duration(10)), [32]byte{'A'}),
 			setupSvc: func(s *Service, msg *ethpb.SignedBLSToExecutionChange, topic string) (*Service, string) {
-				s.cfg.stateGen = stategen.New(beaconDB, doublylinkedtree.New())
+				s.cfg.stateGen = stategen.New(beaconDB)
 				s.cfg.beaconDB = beaconDB
 				s.cfg.clock = startup.NewClock(time.Now(), [32]byte{'A'})
 				s.initCaches()
@@ -382,7 +381,7 @@ func TestService_ValidateBlsToExecutionChange(t *testing.T) {
 			},
 			clock: startup.NewClock(time.Now().Add(-time.Second*time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Duration(10)), [32]byte{'A'}),
 			setupSvc: func(s *Service, msg *ethpb.SignedBLSToExecutionChange, topic string) (*Service, string) {
-				s.cfg.stateGen = stategen.New(beaconDB, doublylinkedtree.New())
+				s.cfg.stateGen = stategen.New(beaconDB)
 				s.cfg.beaconDB = beaconDB
 				s.cfg.clock = startup.NewClock(time.Now(), [32]byte{'A'})
 				s.initCaches()

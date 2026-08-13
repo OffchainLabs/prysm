@@ -15,7 +15,6 @@ import (
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	rpctesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/testing"
@@ -109,7 +108,7 @@ func TestServer_GetIndividualVotes_ValidatorsDontExist(t *testing.T) {
 	util.SaveBlock(t, ctx, beaconDB, b)
 	gRoot, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
-	gen := stategen.New(beaconDB, doublylinkedtree.New())
+	gen := stategen.New(beaconDB)
 	require.NoError(t, gen.SaveState(ctx, gRoot, beaconState))
 	require.NoError(t, beaconDB.SaveState(ctx, beaconState, gRoot))
 	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, gRoot))
@@ -247,7 +246,7 @@ func TestServer_GetIndividualVotes_Working(t *testing.T) {
 	util.SaveBlock(t, ctx, beaconDB, b)
 	gRoot, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
-	gen := stategen.New(beaconDB, doublylinkedtree.New())
+	gen := stategen.New(beaconDB)
 	require.NoError(t, gen.SaveState(ctx, gRoot, beaconState))
 	require.NoError(t, beaconDB.SaveState(ctx, beaconState, gRoot))
 	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, gRoot))
@@ -317,7 +316,7 @@ func TestServer_GetIndividualVotes_WorkingAltair(t *testing.T) {
 	util.SaveBlock(t, ctx, beaconDB, b)
 	gRoot, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
-	gen := stategen.New(beaconDB, doublylinkedtree.New())
+	gen := stategen.New(beaconDB)
 	require.NoError(t, gen.SaveState(ctx, gRoot, beaconState))
 	require.NoError(t, beaconDB.SaveState(ctx, beaconState, gRoot))
 	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, gRoot))
@@ -392,7 +391,7 @@ func TestServer_GetIndividualVotes_AltairEndOfEpoch(t *testing.T) {
 	util.SaveBlock(t, ctx, beaconDB, b)
 	gRoot, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
-	gen := stategen.New(beaconDB, doublylinkedtree.New())
+	gen := stategen.New(beaconDB)
 	require.NoError(t, gen.SaveState(ctx, gRoot, beaconState))
 	require.NoError(t, beaconDB.SaveState(ctx, beaconState, gRoot))
 	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, gRoot))
@@ -489,7 +488,7 @@ func TestServer_GetIndividualVotes_BellatrixEndOfEpoch(t *testing.T) {
 	util.SaveBlock(t, ctx, beaconDB, b)
 	gRoot, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
-	gen := stategen.New(beaconDB, doublylinkedtree.New())
+	gen := stategen.New(beaconDB)
 	require.NoError(t, gen.SaveState(ctx, gRoot, beaconState))
 	require.NoError(t, beaconDB.SaveState(ctx, beaconState, gRoot))
 	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, gRoot))
@@ -586,7 +585,7 @@ func TestServer_GetIndividualVotes_CapellaEndOfEpoch(t *testing.T) {
 	util.SaveBlock(t, ctx, beaconDB, b)
 	gRoot, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
-	gen := stategen.New(beaconDB, doublylinkedtree.New())
+	gen := stategen.New(beaconDB)
 	require.NoError(t, gen.SaveState(ctx, gRoot, beaconState))
 	require.NoError(t, beaconDB.SaveState(ctx, beaconState, gRoot))
 	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, gRoot))
