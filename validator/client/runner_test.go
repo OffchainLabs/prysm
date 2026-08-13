@@ -153,7 +153,7 @@ func TestInitialize(t *testing.T) {
 
 func TestRetry_On_ConnectionError(t *testing.T) {
 	retry := 10
-	ctx, cancel := context.WithCancel(t.Context())
+	ctx := t.Context()
 	v, vc, nc := runnerTestValidator(t, ctx)
 
 	// Each failure sends initialize() back to the top of its loop, so the steps before
@@ -180,12 +180,6 @@ func TestRetry_On_ConnectionError(t *testing.T) {
 	expectStatuses(vc, ethpb.ValidatorStatus_ACTIVE).Do(func(any, any) { activation.Add(1) }).AnyTimes()
 
 	backOffPeriod = 10 * time.Millisecond
-	go func() {
-		// each step will fail (retry times)=10 this sleep times will wait more then
-		// the time it takes for all steps to succeed before main loop.
-		time.Sleep(time.Duration(retry*6) * backOffPeriod)
-		cancel()
-	}()
 	require.NoError(t, initialize(ctx, v))
 
 	// every call will fail retry=10 times so first one will be called 2 * retry=10 + 1.
