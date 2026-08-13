@@ -1,6 +1,8 @@
 package helpers_test
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"testing"
 
@@ -1053,6 +1055,77 @@ func TestIsPartiallyWithdrawableValidator(t *testing.T) {
 			v, err := state_native.NewValidator(tt.validator)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, helpers.IsPartiallyWithdrawableValidator(v, tt.balance, tt.epoch, tt.fork, 0))
+		})
+	}
+}
+
+func TestCredentialSweepThreshold(t *testing.T) {
+	const gwei = 1_000_000_000
+
+	// credentialsWithIncrements builds 0x02 credentials carrying the given threshold, in
+	// EFFECTIVE_BALANCE_INCREMENT units, at SweepThresholdCredentialOffset.
+	credentialsWithIncrements := func(increments uint16) []byte {
+		creds := make([]byte, 32)
+		creds[0] = params.BeaconConfig().CompoundingWithdrawalPrefixByte
+		binary.BigEndian.PutUint16(creds[helpers.SweepThresholdCredentialOffset:], increments)
+		return creds
+	}
+
+	tests := []struct {
+		name        string
+		credentials []byte
+		want        uint64
+	}{
+		{
+			name:        "Unset",
+			credentials: credentialsWithIncrements(0),
+			want:        0,
+		},
+		{
+			name:        "MIN_SWEEP_THRESHOLD",
+			credentials: credentialsWithIncrements(33),
+			want:        33 * gwei,
+		},
+		{
+			name:        "Just below MIN_SWEEP_THRESHOLD",
+			credentials: credentialsWithIncrements(32),
+			want:        0,
+		},
+		{
+			name:        "Big-endian byte order",
+			credentials: credentialsWithIncrements(256),
+			want:        256 * gwei,
+		},
+		{
+			name:        "MAX_EFFECTIVE_BALANCE_ELECTRA",
+			credentials: credentialsWithIncrements(2048),
+			want:        2048 * gwei,
+		},
+		{
+			name:        "Above MAX_EFFECTIVE_BALANCE_ELECTRA",
+			credentials: credentialsWithIncrements(2049),
+			want:        0,
+		},
+		{
+			name:        "Largest encodable value",
+			credentials: credentialsWithIncrements(65535),
+			want:        0,
+		},
+		{
+			name:        "Reserved bytes are not read",
+			credentials: append(append([]byte{params.BeaconConfig().CompoundingWithdrawalPrefixByte}, bytes.Repeat([]byte{0xFF}, 9)...), make([]byte, 22)...),
+			want:        0,
+		},
+		{
+			name:        "Truncated credentials",
+			credentials: []byte{params.BeaconConfig().CompoundingWithdrawalPrefixByte, 0xCC},
+			want:        0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, helpers.CredentialSweepThreshold(tt.credentials))
 		})
 	}
 }

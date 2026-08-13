@@ -2,6 +2,7 @@ package electra_test
 
 import (
 	"context"
+	"encoding/binary"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
@@ -588,4 +589,93 @@ func TestApplyPendingDeposit_InvalidSignature(t *testing.T) {
 	require.Equal(t, 0, len(st.Validators()))
 	// no topup either
 	require.Equal(t, 0, len(st.Balances()))
+}
+
+func TestAddValidatorToRegistry_SweepThreshold(t *testing.T) {
+	const gwei = 1_000_000_000
+
+	// compoundingCredentialsWithIncrements builds 0x02 credentials carrying the given
+	// threshold, in EFFECTIVE_BALANCE_INCREMENT units, at SweepThresholdCredentialOffset.
+	compoundingCredentialsWithIncrements := func(increments uint16) []byte {
+		creds := make([]byte, 32)
+		creds[0] = params.BeaconConfig().CompoundingWithdrawalPrefixByte
+		binary.BigEndian.PutUint16(creds[helpers.SweepThresholdCredentialOffset:], increments)
+		return creds
+	}
+
+	eth1Credentials := func() []byte {
+		creds := make([]byte, 32)
+		creds[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
+		binary.BigEndian.PutUint16(creds[helpers.SweepThresholdCredentialOffset:], 100)
+		return creds
+	}
+
+	tests := []struct {
+		name        string
+		credentials []byte
+		amount      uint64
+		want        uint64
+	}{
+		{
+			name:        "Compounding with no embedded threshold gets the default",
+			credentials: compoundingCredentialsWithIncrements(0),
+			amount:      params.BeaconConfig().MinActivationBalance,
+			want:        params.BeaconConfig().MaxEffectiveBalanceElectra,
+		},
+		{
+			// The eth1 bridge deposit path registers the validator with an amount of 0 and
+			// credits the balance later, so the fallback to the default does not trigger. A
+			// stored 0 resolves to the same 2048 ETH default in get_effective_sweep_threshold.
+			name:        "Compounding with no embedded threshold and a zero amount stores zero",
+			credentials: compoundingCredentialsWithIncrements(0),
+			amount:      0,
+			want:        0,
+		},
+		{
+			name:        "Compounding with an embedded threshold",
+			credentials: compoundingCredentialsWithIncrements(100),
+			amount:      params.BeaconConfig().MinActivationBalance,
+			want:        100 * gwei,
+		},
+		{
+			name:        "Embedded threshold out of range falls back to the default",
+			credentials: compoundingCredentialsWithIncrements(2049),
+			amount:      params.BeaconConfig().MinActivationBalance,
+			want:        params.BeaconConfig().MaxEffectiveBalanceElectra,
+		},
+		{
+			name:        "Embedded threshold at least the deposited amount is kept",
+			credentials: compoundingCredentialsWithIncrements(100),
+			amount:      100 * gwei,
+			want:        100 * gwei,
+		},
+		{
+			name:        "Embedded threshold below the deposited amount falls back to the default",
+			credentials: compoundingCredentialsWithIncrements(100),
+			amount:      100*gwei + 1,
+			want:        params.BeaconConfig().MaxEffectiveBalanceElectra,
+		},
+		{
+			name:        "Non-compounding credentials ignore the embedded threshold",
+			credentials: eth1Credentials(),
+			amount:      params.BeaconConfig().MinActivationBalance,
+			want:        0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st, err := util.NewBeaconStateGloas()
+			require.NoError(t, err)
+
+			sk, err := bls.RandKey()
+			require.NoError(t, err)
+
+			require.NoError(t, electra.AddValidatorToRegistry(st, sk.PublicKey().Marshal(), tt.credentials, tt.amount))
+
+			threshold, err := st.ValidatorSweepThreshold(0)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, threshold)
+		})
+	}
 }

@@ -20,6 +20,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+// SweepThresholdCredentialOffset is the byte offset, inside `0x02` compounding withdrawal
+// credentials, of the sweep threshold a validator asks for at deposit time (EIP-8148). The
+// two bytes there hold the threshold in EFFECTIVE_BALANCE_INCREMENT units, big-endian:
+//
+//	byte  0     COMPOUNDING_WITHDRAWAL_PREFIX (0x02)
+//	bytes 1..9  reserved, must be zero
+//	bytes 10..11 threshold in EFFECTIVE_BALANCE_INCREMENT units, big-endian
+//	bytes 12..31 execution address
+const SweepThresholdCredentialOffset = 10
+
 var CommitteeCacheInProgressHit = promauto.NewCounter(prometheus.CounterOpts{
 	Name: "committee_cache_in_progress_hit",
 	Help: "The number of committee requests that are present in the cache.",
@@ -507,6 +517,24 @@ func EffectiveSweepThreshold(val state.ReadOnlyValidator, sweepThreshold uint64)
 		return sweepThreshold
 	}
 	return ValidatorMaxEffectiveBalance(val)
+}
+
+// CredentialSweepThreshold gets the sweep threshold embedded in compounding withdrawalCredentials, or 0 if it is unset or out of range.
+// https://github.com/nalepae/consensus-specs/blob/master/specs/_features/eip8148/beacon-chain.md#new-get_credential_sweep_threshold
+func CredentialSweepThreshold(withdrawalCredentials []byte) uint64 {
+	if len(withdrawalCredentials) < SweepThresholdCredentialOffset+2 {
+		return 0
+	}
+
+	increments := binary.BigEndian.Uint16(withdrawalCredentials[SweepThresholdCredentialOffset : SweepThresholdCredentialOffset+2])
+
+	cfg := params.BeaconConfig()
+	threshold := uint64(increments) * cfg.EffectiveBalanceIncrement
+	if threshold < cfg.MinSweepThreshold() || threshold > cfg.MaxEffectiveBalanceElectra {
+		return 0
+	}
+
+	return threshold
 }
 
 // isPartiallyWithdrawableValidatorElectra implements is_partially_withdrawable_validator in the
