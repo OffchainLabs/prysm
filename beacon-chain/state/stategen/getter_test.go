@@ -43,7 +43,6 @@ func TestStateByRoot_ColdState(t *testing.T) {
 
 	service := New(beaconDB, doublylinkedtree.New())
 	service.finalizedInfo.slot = 2
-	service.slotsPerArchivedPoint = 1
 
 	b := util.NewBeaconBlock()
 	b.Block.Slot = 1
@@ -97,7 +96,6 @@ func TestStateByRootIfCachedNoCopy_ColdState(t *testing.T) {
 
 	service := New(beaconDB, doublylinkedtree.New())
 	service.finalizedInfo.slot = 2
-	service.slotsPerArchivedPoint = 1
 
 	b := util.NewBeaconBlock()
 	b.Block.Slot = 1

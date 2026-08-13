@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -1004,7 +1005,7 @@ func createStateIndicesFromStateSlot(ctx context.Context, slot primitives.Slot) 
 // 3.) state with current finalized root
 // 4.) unfinalized States
 // 5.) not origin root
-func (s *Store) CleanUpDirtyStates(ctx context.Context, slotsPerArchivedPoint primitives.Slot) error {
+func (s *Store) CleanUpDirtyStates(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB. CleanUpDirtyStates")
 	defer span.End()
 
@@ -1024,6 +1025,8 @@ func (s *Store) CleanUpDirtyStates(ctx context.Context, slotsPerArchivedPoint pr
 		// Use zero hash which will never match any actual state root
 		return err
 	}
+
+	slotsPerArchivedPoint := params.BeaconConfig().SlotsPerArchivedPoint
 
 	err = s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(stateSlotIndicesBucket)

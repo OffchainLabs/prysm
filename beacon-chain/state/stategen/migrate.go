@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -46,19 +47,21 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 		return nil
 	}
 
+	slotsPerArchivedPoint := params.BeaconConfig().SlotsPerArchivedPoint
+
 	// Calculate the first archived point slot >= oldFSlot (but > 0).
 	// This avoids iterating through every slot and only visits archived points directly.
 	var startSlot primitives.Slot
 	if oldFSlot == 0 {
-		startSlot = s.slotsPerArchivedPoint
+		startSlot = slotsPerArchivedPoint
 	} else {
 		// Round up to the next archived point
-		startSlot = (oldFSlot + s.slotsPerArchivedPoint - 1) / s.slotsPerArchivedPoint * s.slotsPerArchivedPoint
+		startSlot = (oldFSlot + slotsPerArchivedPoint - 1) / slotsPerArchivedPoint * slotsPerArchivedPoint
 	}
 
 	// Start at the first archived point after old finalized slot, stop before current finalized slot.
 	// Jump directly between archived points.
-	for slot := startSlot; slot < fSlot; slot += s.slotsPerArchivedPoint {
+	for slot := startSlot; slot < fSlot; slot += slotsPerArchivedPoint {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}

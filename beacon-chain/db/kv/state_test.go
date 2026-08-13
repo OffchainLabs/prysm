@@ -695,6 +695,12 @@ func TestStore_GenesisState_CanGetHighestBelow(t *testing.T) {
 }
 
 func TestStore_CleanUpDirtyStates_AboveThreshold(t *testing.T) {
+	slotsPerArchivedPoint := primitives.Slot(128)
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.SlotsPerArchivedPoint = slotsPerArchivedPoint
+	params.OverrideBeaconConfig(cfg)
+
 	db := setupDB(t)
 
 	genesisState, err := util.NewBeaconState()
@@ -705,7 +711,6 @@ func TestStore_CleanUpDirtyStates_AboveThreshold(t *testing.T) {
 	require.NoError(t, db.SaveOriginCheckpointBlockRoot(t.Context(), [32]byte{'a'}))
 
 	bRoots := make([][32]byte, 0)
-	slotsPerArchivedPoint := primitives.Slot(128)
 	prevRoot := genesisRoot
 	for i := primitives.Slot(1); i <= slotsPerArchivedPoint; i++ {
 		b := util.NewBeaconBlock()
@@ -729,7 +734,7 @@ func TestStore_CleanUpDirtyStates_AboveThreshold(t *testing.T) {
 		Root:  bRoots[len(bRoots)-1][:],
 		Epoch: primitives.Epoch(slotsPerArchivedPoint / params.BeaconConfig().SlotsPerEpoch),
 	}))
-	require.NoError(t, db.CleanUpDirtyStates(t.Context(), slotsPerArchivedPoint))
+	require.NoError(t, db.CleanUpDirtyStates(t.Context()))
 
 	for i, root := range bRoots {
 		if primitives.Slot(i) >= slotsPerArchivedPoint.SubSlot(slotsPerArchivedPoint.Div(3)) {
@@ -741,6 +746,11 @@ func TestStore_CleanUpDirtyStates_AboveThreshold(t *testing.T) {
 }
 
 func TestStore_CleanUpDirtyStates_Finalized(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.SlotsPerArchivedPoint = cfg.SlotsPerEpoch
+	params.OverrideBeaconConfig(cfg)
+
 	db := setupDB(t)
 
 	genesisState, err := util.NewBeaconState()
@@ -766,11 +776,16 @@ func TestStore_CleanUpDirtyStates_Finalized(t *testing.T) {
 	}
 
 	require.NoError(t, db.SaveFinalizedCheckpoint(t.Context(), &ethpb.Checkpoint{Root: genesisRoot[:]}))
-	require.NoError(t, db.CleanUpDirtyStates(t.Context(), params.BeaconConfig().SlotsPerEpoch))
+	require.NoError(t, db.CleanUpDirtyStates(t.Context()))
 	require.Equal(t, true, db.HasState(t.Context(), genesisRoot))
 }
 
 func TestStore_CleanUpDirtyStates_OriginRoot(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.SlotsPerArchivedPoint = cfg.SlotsPerEpoch
+	params.OverrideBeaconConfig(cfg)
+
 	db := setupDB(t)
 
 	genesisState, err := util.NewBeaconState()
@@ -795,11 +810,16 @@ func TestStore_CleanUpDirtyStates_OriginRoot(t *testing.T) {
 	}
 
 	require.NoError(t, db.SaveOriginCheckpointBlockRoot(t.Context(), r))
-	require.NoError(t, db.CleanUpDirtyStates(t.Context(), params.BeaconConfig().SlotsPerEpoch))
+	require.NoError(t, db.CleanUpDirtyStates(t.Context()))
 	require.Equal(t, true, db.HasState(t.Context(), r))
 }
 
 func TestStore_CleanUpDirtyStates_DontDeleteNonFinalized(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.SlotsPerArchivedPoint = cfg.SlotsPerEpoch
+	params.OverrideBeaconConfig(cfg)
+
 	db := setupDB(t)
 
 	genesisState, err := util.NewBeaconState()
@@ -827,7 +847,7 @@ func TestStore_CleanUpDirtyStates_DontDeleteNonFinalized(t *testing.T) {
 	}
 
 	require.NoError(t, db.SaveFinalizedCheckpoint(t.Context(), &ethpb.Checkpoint{Root: genesisRoot[:]}))
-	require.NoError(t, db.CleanUpDirtyStates(t.Context(), params.BeaconConfig().SlotsPerEpoch))
+	require.NoError(t, db.CleanUpDirtyStates(t.Context()))
 
 	for _, rt := range unfinalizedRoots {
 		require.Equal(t, true, db.HasState(t.Context(), rt))
@@ -1290,6 +1310,12 @@ func BenchmarkState_CheckStateReadTime_10(b *testing.B) { checkStateReadTime(b, 
 func TestStore_CleanUpDirtyStates_NoOriginRoot(t *testing.T) {
 	// This test verifies that CleanUpDirtyStates does not fail when the origin block root is not set,
 	// which can happen when starting from genesis or in certain fork scenarios like Fulu.
+	slotsPerArchivedPoint := primitives.Slot(128)
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.SlotsPerArchivedPoint = slotsPerArchivedPoint
+	params.OverrideBeaconConfig(cfg)
+
 	db := setupDB(t)
 	genesisState, err := util.NewBeaconState()
 	require.NoError(t, err)
@@ -1298,7 +1324,6 @@ func TestStore_CleanUpDirtyStates_NoOriginRoot(t *testing.T) {
 	require.NoError(t, db.SaveState(t.Context(), genesisState, genesisRoot))
 	// Note: We intentionally do NOT call SaveOriginCheckpointBlockRoot here
 	// to simulate the scenario where origin block root is not set
-	slotsPerArchivedPoint := primitives.Slot(128)
 	bRoots := make([][fieldparams.RootLength]byte, 0)
 	prevRoot := genesisRoot
 	for i := primitives.Slot(1); i <= slotsPerArchivedPoint; i++ { // skip slot 0
@@ -1322,7 +1347,7 @@ func TestStore_CleanUpDirtyStates_NoOriginRoot(t *testing.T) {
 		Epoch: primitives.Epoch(slotsPerArchivedPoint / params.BeaconConfig().SlotsPerEpoch),
 	}))
 	// This should not fail even though origin block root is not set
-	err = db.CleanUpDirtyStates(t.Context(), slotsPerArchivedPoint)
+	err = db.CleanUpDirtyStates(t.Context())
 	require.NoError(t, err)
 	// Verify that cleanup still works correctly
 	for i, root := range bRoots {

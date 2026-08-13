@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -43,12 +44,16 @@ func TestMigrateToCold_CanSaveFinalizedInfo(t *testing.T) {
 }
 
 func TestMigrateToCold_HappyPath(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.SlotsPerArchivedPoint = 1
+	params.OverrideBeaconConfig(cfg)
+
 	hook := logTest.NewGlobal()
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
 	service := New(beaconDB, doublylinkedtree.New())
-	service.slotsPerArchivedPoint = 1
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	stateSlot := primitives.Slot(1)
 	require.NoError(t, beaconState.SetSlot(stateSlot))
@@ -63,7 +68,7 @@ func TestMigrateToCold_HappyPath(t *testing.T) {
 	gotState, err := service.beaconDB.State(ctx, fRoot)
 	require.NoError(t, err)
 	assert.DeepSSZEqual(t, beaconState.ToProtoUnsafe(), gotState.ToProtoUnsafe(), "Did not save state")
-	gotRoot := service.beaconDB.ArchivedPointRoot(ctx, stateSlot/service.slotsPerArchivedPoint)
+	gotRoot := service.beaconDB.ArchivedPointRoot(ctx, stateSlot/params.BeaconConfig().SlotsPerArchivedPoint)
 	assert.Equal(t, fRoot, gotRoot, "Did not save archived root")
 	lastIndex, err := service.beaconDB.LastArchivedSlot(ctx)
 	require.NoError(t, err)
@@ -73,12 +78,16 @@ func TestMigrateToCold_HappyPath(t *testing.T) {
 }
 
 func TestMigrateToCold_RegeneratePath(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.SlotsPerArchivedPoint = 1
+	params.OverrideBeaconConfig(cfg)
+
 	hook := logTest.NewGlobal()
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
 	service := New(beaconDB, doublylinkedtree.New())
-	service.slotsPerArchivedPoint = 1
 	beaconState, pks := util.DeterministicGenesisState(t, 32)
 	genesisStateRoot, err := beaconState.HashTreeRoot(ctx)
 	require.NoError(t, err)
@@ -113,7 +122,7 @@ func TestMigrateToCold_RegeneratePath(t *testing.T) {
 	s1, err := service.beaconDB.State(ctx, r1)
 	require.NoError(t, err)
 	assert.Equal(t, s1.Slot(), primitives.Slot(1), "Did not save state")
-	gotRoot := service.beaconDB.ArchivedPointRoot(ctx, 1/service.slotsPerArchivedPoint)
+	gotRoot := service.beaconDB.ArchivedPointRoot(ctx, 1/params.BeaconConfig().SlotsPerArchivedPoint)
 	assert.Equal(t, r1, gotRoot, "Did not save archived root")
 	lastIndex, err := service.beaconDB.LastArchivedSlot(ctx)
 	require.NoError(t, err)
@@ -123,12 +132,16 @@ func TestMigrateToCold_RegeneratePath(t *testing.T) {
 }
 
 func TestMigrateToCold_StateExistsInDB(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.SlotsPerArchivedPoint = 1
+	params.OverrideBeaconConfig(cfg)
+
 	hook := logTest.NewGlobal()
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
 	service := New(beaconDB, doublylinkedtree.New())
-	service.slotsPerArchivedPoint = 1
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
 	stateSlot := primitives.Slot(1)
 	require.NoError(t, beaconState.SetSlot(stateSlot))
@@ -147,12 +160,16 @@ func TestMigrateToCold_StateExistsInDB(t *testing.T) {
 }
 
 func TestMigrateToCold_ParallelCalls(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.SlotsPerArchivedPoint = 1
+	params.OverrideBeaconConfig(cfg)
+
 	hook := logTest.NewGlobal()
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
 	service := New(beaconDB, doublylinkedtree.New())
-	service.slotsPerArchivedPoint = 1
 	beaconState, pks := util.DeterministicGenesisState(t, 32)
 	genState := beaconState.Copy()
 	genesisStateRoot, err := beaconState.HashTreeRoot(ctx)
@@ -218,7 +235,7 @@ func TestMigrateToCold_ParallelCalls(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, s4.Slot(), primitives.Slot(4), "Did not save state")
 
-	gotRoot := service.beaconDB.ArchivedPointRoot(ctx, 1/service.slotsPerArchivedPoint)
+	gotRoot := service.beaconDB.ArchivedPointRoot(ctx, 1/params.BeaconConfig().SlotsPerArchivedPoint)
 	assert.Equal(t, r1, gotRoot, "Did not save archived root")
 	gotRoot = service.beaconDB.ArchivedPointRoot(ctx, 4)
 	assert.Equal(t, r4, gotRoot, "Did not save archived root")
