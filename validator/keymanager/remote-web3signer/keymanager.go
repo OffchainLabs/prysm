@@ -309,11 +309,9 @@ func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context, mark
 			log.WithError(err).Error("Could not close file watcher")
 		}
 	}()
-	initialFileInfo, err := os.Stat(km.keyFilePath)
-	if err != nil {
+	if _, err := os.Stat(km.keyFilePath); err != nil {
 		return errors.Wrap(err, "could not stat remote signer public key file")
 	}
-	initialFileSize := initialFileInfo.Size()
 	if err := watcher.Add(km.keyFilePath); err != nil {
 		return errors.Wrap(err, "could not add file to file watcher")
 	}
@@ -352,29 +350,22 @@ func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context, mark
 			if e.Has(fsnotify.Remove) {
 				return errors.New("remote signer key file was removed")
 			}
-			currentFileInfo, err := os.Stat(km.keyFilePath)
+			fileKeys, _, err := km.readKeyFile()
 			if err != nil {
-				return errors.Wrap(err, "could not stat remote signer public key file")
+				return errors.New("could not read key file")
 			}
-			if currentFileInfo.Size() != initialFileSize {
+			// prioritize file keys over flag keys
+			if len(fileKeys) == 0 {
+				log.Warnln("Remote signer key file no longer has keys, defaulting to flag provided keys")
+				fileKeys = slices.Collect(maps.Values(km.flagLoadedKeysMap))
+			}
+			currentKeys, err := km.FetchValidatingPublicKeys(ctx)
+			if err != nil {
+				return errors.Wrap(err, "could not fetch current keys")
+			}
+			if !slices.Equal(currentKeys, fileKeys) {
 				log.Info("Remote signer key file updated")
-				fileKeys, _, err := km.readKeyFile()
-				if err != nil {
-					return errors.New("could not read key file")
-				}
-				// prioritize file keys over flag keys
-				if len(fileKeys) == 0 {
-					log.Warnln("Remote signer key file no longer has keys, defaulting to flag provided keys")
-					fileKeys = slices.Collect(maps.Values(km.flagLoadedKeysMap))
-				}
-				currentKeys, err := km.FetchValidatingPublicKeys(ctx)
-				if err != nil {
-					return errors.Wrap(err, "could not fetch current keys")
-				}
-				if !slices.Equal(currentKeys, fileKeys) {
-					km.updatePublicKeys(fileKeys)
-				}
-				initialFileSize = currentFileInfo.Size()
+				km.updatePublicKeys(fileKeys)
 			}
 		case err, ok := <-watcher.Errors:
 			if !ok { // Channel was closed (i.e. Watcher.Close() was called).

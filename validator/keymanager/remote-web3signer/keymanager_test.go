@@ -253,6 +253,53 @@ func TestNewKeyManager_ChangingFileCreated(t *testing.T) {
 	}
 }
 
+func TestNewKeyManager_ReloadsSameSizeKeyFileUpdate(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	const keyA = "0x800077e04f8d7496099b3d30ac5430aea64873a45e5bcfe004d2095babcbf55e21138ff0d5691abc29da190aa32755c6"
+	const keyB = "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055"
+	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
+	require.NoError(t, file.WriteFile(keyFilePath, []byte(keyA+"\n")))
+
+	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
+	require.NoError(t, err)
+	km, err := NewKeymanager(ctx, &SetupConfig{
+		BaseEndpoint:          "http://example.com",
+		GenesisValidatorsRoot: root,
+		KeyFilePath:           keyFilePath,
+	})
+	require.NoError(t, err)
+
+	before, err := os.Stat(keyFilePath)
+	require.NoError(t, err)
+	pubKeysChan := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
+	sub := km.SubscribeAccountChanges(pubKeysChan)
+	defer sub.Unsubscribe()
+
+	// Do not truncate the file: overwrite it in place so its size never changes.
+	f, err := os.OpenFile(keyFilePath, os.O_WRONLY, 0600)
+	require.NoError(t, err)
+	_, err = f.WriteString(keyB + "\n")
+	require.NoError(t, err)
+	require.NoError(t, f.Sync())
+	require.NoError(t, f.Close())
+
+	after, err := os.Stat(keyFilePath)
+	require.NoError(t, err)
+	require.Equal(t, before.Size(), after.Size())
+
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+	select {
+	case updatedKeys := <-pubKeysChan:
+		require.Equal(t, 1, len(updatedKeys))
+		require.Equal(t, keyB, hexutil.Encode(updatedKeys[0][:]))
+	case <-timer.C:
+		t.Fatal("timed out waiting for the same-size key file update")
+	}
+}
+
 func TestNewKeyManager_FileAndFlagsWithDifferentKeys(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
