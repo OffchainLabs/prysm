@@ -427,6 +427,29 @@ func TestMultiHandlerPostSSZWithFallback(t *testing.T) {
 		assert.Equal(t, int32(1), atomic.LoadInt32(&sszMarshals))
 		assert.Equal(t, int32(2), atomic.LoadInt32(&jsonHits))
 	})
+
+	t.Run("retries SSZ after cache expires", func(t *testing.T) {
+		var sszHits int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Content-Type") == api.OctetStreamMediaType {
+				atomic.AddInt32(&sszHits, 1)
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(srv.Close)
+
+		mh := multi(t, srv.URL)
+		mh.sszUnsupported.Store(sszSupportKey{host: srv.URL, endpoint: "/publish"}, time.Now().Add(-sszUnsupportedTTL))
+		require.NoError(t, mh.PostSSZWithFallback(
+			context.Background(),
+			"/publish",
+			nil,
+			func() ([]byte, error) { return []byte("ssz"), nil },
+			func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+		))
+
+		assert.Equal(t, int32(1), atomic.LoadInt32(&sszHits))
+	})
 }
 
 func TestReadUntil(t *testing.T) {

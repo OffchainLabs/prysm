@@ -15,10 +15,12 @@ import (
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 )
 
+const sszUnsupportedTTL = 24 * time.Hour
+
 type (
 	multiHandler struct {
 		handlers       []*handler
-		sszUnsupported sync.Map
+		sszUnsupported sync.Map // sszSupportKey -> time.Time
 	}
 
 	sszSupportKey struct {
@@ -278,7 +280,8 @@ func (m *multiHandler) PostSSZWithFallback(
 
 	post := func(ctx context.Context, h *handler) error {
 		key := sszSupportKey{host: h.Host(), endpoint: endpoint}
-		if _, unsupported := m.sszUnsupported.Load(key); !unsupported {
+		unsupportedAt, unsupported := m.sszUnsupported.Load(key)
+		if !unsupported || time.Since(unsupportedAt.(time.Time)) >= sszUnsupportedTTL {
 			body, err := sszBody()
 			if err != nil {
 				return fmt.Errorf("marshal SSZ body: %w", err)
@@ -292,7 +295,9 @@ func (m *multiHandler) PostSSZWithFallback(
 				return nil
 			}
 
-			if _, loaded := m.sszUnsupported.LoadOrStore(key, true); !loaded {
+			if unsupported {
+				m.sszUnsupported.Store(key, time.Now())
+			} else if _, loaded := m.sszUnsupported.LoadOrStore(key, time.Now()); !loaded {
 				log.WithError(err).
 					WithField("host", api.RedactEndpoint(key.host)).
 					WithField("endpoint", endpoint).
