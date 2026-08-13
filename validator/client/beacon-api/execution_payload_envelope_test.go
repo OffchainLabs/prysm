@@ -136,7 +136,7 @@ func TestPublishExecutionPayloadEnvelope_StatefulSendsBareEnvelope(t *testing.T)
 		"/eth/v1/beacon/execution_payload_envelopes",
 		expectedHeaders,
 		bytes.NewBuffer(expectedBody),
-	).Return(nil, nil, nil)
+	).Return(nil)
 
 	client := &beaconApiValidatorClient{handler: handler, envelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
 	resp, err := client.publishExecutionPayloadEnvelope(t.Context(), signed)
@@ -144,7 +144,7 @@ func TestPublishExecutionPayloadEnvelope_StatefulSendsBareEnvelope(t *testing.T)
 	require.NotNil(t, resp)
 }
 
-func TestPublishExecutionPayloadEnvelope_StatefulJSONFallbackOn406(t *testing.T) {
+func TestPublishExecutionPayloadEnvelope_StatefulJSONFallbackOn415(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -161,7 +161,7 @@ func TestPublishExecutionPayloadEnvelope_StatefulJSONFallbackOn406(t *testing.T)
 	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
-	).Return(nil, nil, &httputil.DefaultJsonError{Code: http.StatusNotAcceptable, Message: "not acceptable"})
+	).Return(&httputil.DefaultJsonError{Code: http.StatusUnsupportedMediaType, Message: "unsupported media type"})
 	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/beacon/execution_payload_envelopes",
@@ -205,7 +205,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessSendsContents(t *testing.T) {
 		"/eth/v1/beacon/execution_payload_envelopes",
 		expectedHeaders,
 		bytes.NewBuffer(expectedBody),
-	).Return(nil, nil, nil)
+	).Return(nil)
 
 	client := &beaconApiValidatorClient{
 		handler:       handler,
@@ -236,7 +236,7 @@ func TestPublishExecutionPayloadEnvelope_Error(t *testing.T) {
 	handler := mock.NewMockHandler(ctrl)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
-	).Return(nil, nil, errors.New("server error"))
+	).Return(errors.New("server error"))
 
 	client := &beaconApiValidatorClient{handler: handler, envelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
 	client.envelopeCache.Add(primitives.Slot(envelope.Payload.SlotNumber), envelope, nil, nil)

@@ -68,7 +68,7 @@ func isSSZStorageFormat(obj any) bool {
 		return true
 	case *ethpb.BeaconBlock:
 		return true
-	case *ethpb.Attestation, *ethpb.AttestationElectra:
+	case *ethpb.Attestation, *ethpb.AttestationElectra, *ethpb.AttestationGloas:
 		return true
 	case *ethpb.Deposit:
 		return true

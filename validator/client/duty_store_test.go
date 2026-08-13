@@ -261,12 +261,12 @@ func TestDutyStoreData_CanPromote(t *testing.T) {
 	})
 }
 
-func TestDutyStore_needsNextRetry(t *testing.T) {
+func TestDutyStore_needsNextFetch(t *testing.T) {
 	var nilStore *dutyStore
-	assert.Equal(t, false, nilStore.needsNextRetry())
+	assert.Equal(t, false, nilStore.needsNextFetch())
 
 	ds := &dutyStore{}
-	assert.Equal(t, false, ds.needsNextRetry()) // uninitialized
+	assert.Equal(t, false, ds.needsNextFetch()) // uninitialized
 
 	pk := pubkey{0x1}
 	build := func(missing missingNextDuties, indices []primitives.ValidatorIndex) dutyStoreData {
@@ -280,16 +280,16 @@ func TestDutyStore_needsNextRetry(t *testing.T) {
 	}
 
 	ds.write(build(0, []primitives.ValidatorIndex{7}))
-	assert.Equal(t, false, ds.needsNextRetry()) // nothing missing
+	assert.Equal(t, false, ds.needsNextFetch()) // nothing missing
 
 	ds.write(build(missingNextPtc, nil))
-	assert.Equal(t, false, ds.needsNextRetry()) // missing but no indices (combined path)
+	assert.Equal(t, false, ds.needsNextFetch()) // missing but no indices (combined path)
 
 	ds.write(build(missingNextPtc, []primitives.ValidatorIndex{7}))
-	assert.Equal(t, true, ds.needsNextRetry()) // missing + indices
+	assert.Equal(t, true, ds.needsNextFetch()) // missing + indices
 
 	ds.write(build(missingNextAttester, []primitives.ValidatorIndex{7}))
-	assert.Equal(t, true, ds.needsNextRetry()) // attester is retried like any other missing type
+	assert.Equal(t, true, ds.needsNextFetch()) // attester is retried like any other missing type
 }
 
 func TestDutyStore_replaceNextDuties_revisionGuard(t *testing.T) {

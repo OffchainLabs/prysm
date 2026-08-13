@@ -244,7 +244,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 211, len(data))
+	assert.Equal(t, 212, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -672,6 +672,10 @@ func TestGetSpec(t *testing.T) {
 				blobSchedule, ok := v.([]any)
 				assert.Equal(t, true, ok)
 				assert.Equal(t, 2, len(blobSchedule))
+			case "GAS_LIMIT_SCHEDULE":
+				gasLimitSchedule, ok := v.([]any)
+				assert.Equal(t, true, ok)
+				assert.Equal(t, 0, len(gasLimitSchedule))
 			case "FIELD_ELEMENTS_PER_CELL":
 				assert.Equal(t, "64", v) // From fieldparams.CellsPerBlob
 			case "FIELD_ELEMENTS_PER_EXT_BLOB":
@@ -845,6 +849,66 @@ func TestGetSpec_BlobSchedule_NotFulu(t *testing.T) {
 	require.Equal(t, true, ok)
 
 	_, exists := data["BLOB_SCHEDULE"]
+	require.Equal(t, false, exists)
+}
+
+func TestGetSpec_GasLimitSchedule(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig().Copy()
+	config.GloasForkEpoch = 1
+	config.GasLimitSchedule = []params.GasLimitScheduleEntry{
+		{Epoch: primitives.Epoch(100), GasLimit: 60_000_000},
+		{Epoch: primitives.Epoch(200), GasLimit: 90_000_000},
+	}
+	params.OverrideBeaconConfig(config)
+
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/config/spec", nil)
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+
+	GetSpec(writer, request)
+	require.Equal(t, http.StatusOK, writer.Code)
+	resp := structs.GetSpecResponse{}
+	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
+	data, ok := resp.Data.(map[string]any)
+	require.Equal(t, true, ok)
+
+	scheduleValue, exists := data["GAS_LIMIT_SCHEDULE"]
+	require.Equal(t, true, exists)
+	scheduleSlice, ok := scheduleValue.([]any)
+	require.Equal(t, true, ok)
+	require.Equal(t, 2, len(scheduleSlice))
+	first, ok := scheduleSlice[0].(map[string]any)
+	require.Equal(t, true, ok)
+	assert.Equal(t, "100", first["EPOCH"])
+	assert.Equal(t, "60000000", first["GAS_LIMIT"])
+	second, ok := scheduleSlice[1].(map[string]any)
+	require.Equal(t, true, ok)
+	assert.Equal(t, "200", second["EPOCH"])
+	assert.Equal(t, "90000000", second["GAS_LIMIT"])
+}
+
+func TestGetSpec_GasLimitSchedule_NotGloas(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig().Copy()
+	config.GloasForkEpoch = math.MaxUint64
+	config.GasLimitSchedule = []params.GasLimitScheduleEntry{
+		{Epoch: primitives.Epoch(100), GasLimit: 60_000_000},
+	}
+	params.OverrideBeaconConfig(config)
+
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/config/spec", nil)
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+
+	GetSpec(writer, request)
+	require.Equal(t, http.StatusOK, writer.Code)
+	resp := structs.GetSpecResponse{}
+	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
+	data, ok := resp.Data.(map[string]any)
+	require.Equal(t, true, ok)
+
+	_, exists := data["GAS_LIMIT_SCHEDULE"]
 	require.Equal(t, false, exists)
 }
 

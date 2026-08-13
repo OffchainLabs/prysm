@@ -10,6 +10,7 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer",
     visibility = [
         "//cmd/validator:__subpackages__",
+        "//testing/validator-mock:__pkg__",
         "//validator:__subpackages__",
     ],
     deps = [

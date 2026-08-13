@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,13 +27,13 @@ func TestPayloadAvailability_WaiterThenNotify(t *testing.T) {
 	p := newPayloadAvailability()
 	ch := p.waiter(1)
 	require.Equal(t, false, isClosed(ch))
-	p.notify(1)
+	p.notify(1, nil)
 	require.Equal(t, true, isClosed(ch))
 }
 
 func TestPayloadAvailability_NotifyThenWaiter(t *testing.T) {
 	p := newPayloadAvailability()
-	p.notify(1)
+	p.notify(1, nil)
 	require.Equal(t, true, isClosed(p.waiter(1)), "waiter registered after notify should observe availability")
 }
 
@@ -40,7 +41,7 @@ func TestPayloadAvailability_MultipleWaitersSameSlot(t *testing.T) {
 	p := newPayloadAvailability()
 	a := p.waiter(1)
 	b := p.waiter(1)
-	p.notify(1)
+	p.notify(1, nil)
 	require.Equal(t, true, isClosed(a))
 	require.Equal(t, true, isClosed(b))
 }
@@ -48,15 +49,15 @@ func TestPayloadAvailability_MultipleWaitersSameSlot(t *testing.T) {
 func TestPayloadAvailability_NotifyIsIdempotent(t *testing.T) {
 	p := newPayloadAvailability()
 	p.waiter(1)
-	p.notify(1)
-	p.notify(1) // must not panic by double-closing.
+	p.notify(1, nil)
+	p.notify(1, nil) // must not panic by double-closing.
 }
 
 func TestPayloadAvailability_PrunesOlderSlots(t *testing.T) {
 	p := newPayloadAvailability()
 	p.waiter(1)
 	p.waiter(2)
-	p.notify(3)
+	p.notify(3, nil)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	_, has1 := p.chans[1]
@@ -73,9 +74,37 @@ func TestProcessEvent_ExecutionPayloadAvailableNotifiesWaiter(t *testing.T) {
 
 	data, err := json.Marshal(&structs.ExecutionPayloadAvailableEvent{Slot: "42", BlockRoot: "0xabc"})
 	require.NoError(t, err)
-	v.ProcessEvent(t.Context(), &eventClient.Event{EventType: eventClient.EventExecutionPayloadAvailable, Data: data})
+	v.ProcessEvent(t.Context(), &eventClient.Event{Type: eventClient.EventExecutionPayloadAvailable, Data: data})
 
 	require.Equal(t, true, isClosed(ch))
+}
+
+func TestPayloadAvailability_StoresAndPrunesRoot(t *testing.T) {
+	p := newPayloadAvailability()
+	p.notify(2, &[32]byte{0xaa})
+	r, ok := p.payloadRoot(2)
+	require.Equal(t, true, ok)
+	require.Equal(t, byte(0xaa), r[0])
+
+	// A newer notify prunes the older slot's root.
+	p.notify(3, &[32]byte{0xbb})
+	_, ok = p.payloadRoot(2)
+	require.Equal(t, false, ok)
+	r, ok = p.payloadRoot(3)
+	require.Equal(t, true, ok)
+	require.Equal(t, byte(0xbb), r[0])
+}
+
+func TestProcessEvent_ExecutionPayloadStoresRoot(t *testing.T) {
+	v := &validator{payloadAvailability: newPayloadAvailability()}
+	rootHex := "0x" + strings.Repeat("cd", 32)
+	data, err := json.Marshal(&structs.ExecutionPayloadAvailableEvent{Slot: "42", BlockRoot: rootHex})
+	require.NoError(t, err)
+	v.ProcessEvent(t.Context(), &eventClient.Event{Type: eventClient.EventExecutionPayloadAvailable, Data: data})
+
+	r, ok := v.payloadAvailability.payloadRoot(42)
+	require.Equal(t, true, ok)
+	require.Equal(t, byte(0xcd), r[0])
 }
 
 func TestProcessEvent_ExecutionPayloadBadSlotDoesNotNotify(t *testing.T) {
@@ -84,7 +113,7 @@ func TestProcessEvent_ExecutionPayloadBadSlotDoesNotNotify(t *testing.T) {
 
 	data, err := json.Marshal(&structs.ExecutionPayloadAvailableEvent{Slot: "not-a-number", BlockRoot: "0xabc"})
 	require.NoError(t, err)
-	v.ProcessEvent(t.Context(), &eventClient.Event{EventType: eventClient.EventExecutionPayloadAvailable, Data: data})
+	v.ProcessEvent(t.Context(), &eventClient.Event{Type: eventClient.EventExecutionPayloadAvailable, Data: data})
 
 	require.Equal(t, false, isClosed(ch))
 }
@@ -103,7 +132,7 @@ func TestWaitForPayloadAvailableOrDeadline_ReturnsOnEvent(t *testing.T) {
 	}()
 
 	time.Sleep(20 * time.Millisecond)
-	v.payloadAvailability.notify(0)
+	v.payloadAvailability.notify(0, nil)
 
 	select {
 	case <-done:

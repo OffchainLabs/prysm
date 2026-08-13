@@ -15,6 +15,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -669,6 +670,78 @@ func TestShouldBuildOnFull(t *testing.T) {
 		setTestPTCVotes(service, root, true, false)
 		assertBuild(t, service, root, blockSlot+1, true, false, "arrived late, betting on empty")
 	})
+}
+
+func testROBid(t *testing.T, slot primitives.Slot, parentRoot, parentHash [32]byte) interfaces.ROExecutionPayloadBid {
+	t.Helper()
+	signed := util.HydrateSignedExecutionPayloadBid(&ethpb.SignedExecutionPayloadBid{
+		Message: &ethpb.ExecutionPayloadBid{
+			Slot:            slot,
+			ParentBlockRoot: parentRoot[:],
+			ParentBlockHash: parentHash[:],
+		},
+	})
+	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
+	require.NoError(t, err)
+	bid, err := wrapped.Bid()
+	require.NoError(t, err)
+	return bid
+}
+
+func TestIsBidCompatibleWithHead(t *testing.T) {
+	headParentRoot := bytesutil.ToBytes32([]byte("head-parent-root"))
+	headRoot := bytesutil.ToBytes32([]byte("compat-head-root"))
+	headBlockHash := bytesutil.ToBytes32([]byte("compat-head-hash"))
+	headParentHash := bytesutil.ToBytes32([]byte("compat-parent-hash"))
+	headSlot := primitives.Slot(1)
+
+	setup := func(t *testing.T) *Service {
+		service, _ := setupGloasService(t, &mockExecution.EngineClient{})
+		base, blk := testGloasState(t, headSlot, headParentRoot, headBlockHash)
+		blk.Block.Body.SignedExecutionPayloadBid.Message.ParentBlockHash = headParentHash[:]
+		insertGloasBlock(t, service, base, blk, headRoot)
+		st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+		require.NoError(t, err)
+		signed, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		service.head = &head{root: headRoot, block: signed, state: st, slot: headSlot}
+		return service
+	}
+
+	t.Run("no head", func(t *testing.T) {
+		service, _ := setupGloasService(t, &mockExecution.EngineClient{})
+		require.Equal(t, false, service.IsBidCompatibleWithHead(testROBid(t, headSlot+1, headRoot, headBlockHash)))
+	})
+
+	t.Run("builds on head parent block and payload", func(t *testing.T) {
+		service := setup(t)
+		require.Equal(t, true, service.IsBidCompatibleWithHead(testROBid(t, headSlot+1, headParentRoot, headParentHash)))
+	})
+
+	t.Run("builds on head parent block with wrong payload", func(t *testing.T) {
+		service := setup(t)
+		other := bytesutil.ToBytes32([]byte("other-hash"))
+		require.Equal(t, false, service.IsBidCompatibleWithHead(testROBid(t, headSlot+1, headParentRoot, other)))
+	})
+
+	t.Run("unknown parent root", func(t *testing.T) {
+		service := setup(t)
+		other := bytesutil.ToBytes32([]byte("other-root"))
+		require.Equal(t, false, service.IsBidCompatibleWithHead(testROBid(t, headSlot+1, other, headParentHash)))
+	})
+
+	t.Run("builds on head full payload when full expected", func(t *testing.T) {
+		service := setup(t)
+		require.Equal(t, true, service.IsBidCompatibleWithHead(testROBid(t, headSlot+1, headRoot, headBlockHash)))
+		require.Equal(t, false, service.IsBidCompatibleWithHead(testROBid(t, headSlot+1, headRoot, headParentHash)))
+	})
+
+	t.Run("builds on head empty variant when forkchoice prefers empty", func(t *testing.T) {
+		service := setup(t)
+		require.Equal(t, true, service.IsBidCompatibleWithHead(testROBid(t, headSlot+2, headRoot, headParentHash)))
+		require.Equal(t, false, service.IsBidCompatibleWithHead(testROBid(t, headSlot+2, headRoot, headBlockHash)))
+	})
+
 }
 
 func TestSetHeadFull(t *testing.T) {

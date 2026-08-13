@@ -206,5 +206,9 @@ func shouldSkip(tField reflect.StructField) bool {
 		tField.Type == reflect.TypeOf(params.BeaconConfig().BlobSchedule) {
 		return true
 	}
+	if params.BeaconConfig().GloasForkEpoch == math.MaxUint64 &&
+		tField.Type == reflect.TypeOf(params.BeaconConfig().GasLimitSchedule) {
+		return true
+	}
 	return false
 }

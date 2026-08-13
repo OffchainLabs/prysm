@@ -35,7 +35,7 @@ func TestSlotTicker(t *testing.T) {
 	}
 
 	genesisTime := time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
-	secondsPerSlot := uint64(8)
+	slotDuration := 8 * time.Second
 
 	// Test when the ticker starts immediately after genesis time.
 	sinceDuration = 1 * time.Second
@@ -43,7 +43,7 @@ func TestSlotTicker(t *testing.T) {
 	// Make this a buffered channel to prevent a deadlock since
 	// the other goroutine calls a function in this goroutine.
 	tick = make(chan time.Time, 2)
-	ticker.start(genesisTime, secondsPerSlot, since, until, after)
+	ticker.start(genesisTime, slotDuration, since, until, after)
 
 	// Tick once.
 	tick <- time.Now()
@@ -90,7 +90,7 @@ func TestSlotTickerGenesis(t *testing.T) {
 	}
 
 	genesisTime := time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
-	secondsPerSlot := uint64(8)
+	slotDuration := 8 * time.Second
 
 	// Test when the ticker starts before genesis time.
 	sinceDuration = -1 * time.Second
@@ -98,7 +98,7 @@ func TestSlotTickerGenesis(t *testing.T) {
 	// Make this a buffered channel to prevent a deadlock since
 	// the other goroutine calls a function in this goroutine.
 	tick = make(chan time.Time, 2)
-	ticker.start(genesisTime, secondsPerSlot, since, until, after)
+	ticker.start(genesisTime, slotDuration, since, until, after)
 
 	// Tick once.
 	tick <- time.Now()
@@ -118,12 +118,12 @@ func TestSlotTickerGenesis(t *testing.T) {
 func TestGetSlotTickerWithOffset_OK(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		genesisTime := time.Now()
-		secondsPerSlot := uint64(4)
-		offset := time.Duration(secondsPerSlot/2) * time.Second
+		slotDuration := 4 * time.Second
+		offset := slotDuration / 2
 
-		offsetTicker := NewSlotTickerWithOffset(genesisTime, offset, secondsPerSlot)
+		offsetTicker := NewSlotTickerWithOffset(genesisTime, offset, slotDuration)
 		defer offsetTicker.Done()
-		normalTicker := NewSlotTicker(genesisTime, secondsPerSlot)
+		normalTicker := NewSlotTicker(genesisTime, slotDuration)
 		defer normalTicker.Done()
 
 		firstTicked := 0
@@ -147,12 +147,12 @@ func TestGetSlotTickerWithOffset_OK(t *testing.T) {
 func TestGetSlotTickerWitIntervals(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		genesisTime := time.Now()
-		offset := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second / 3
+		offset := params.BeaconConfig().SlotDuration() / 3
 		intervals := []time.Duration{offset, 2 * offset}
 
 		intervalTicker := NewSlotTickerWithIntervals(genesisTime, intervals)
 		defer intervalTicker.Done()
-		normalTicker := NewSlotTicker(genesisTime, params.BeaconConfig().SecondsPerSlot)
+		normalTicker := NewSlotTicker(genesisTime, params.BeaconConfig().SlotDuration())
 		defer normalTicker.Done()
 
 		firstTicked := 0
@@ -176,7 +176,7 @@ func TestGetSlotTickerWitIntervals(t *testing.T) {
 
 func TestSlotTickerWithIntervalsInputValidation(t *testing.T) {
 	var genesisTime time.Time
-	offset := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second / 3
+	offset := params.BeaconConfig().SlotDuration() / 3
 	intervals := make([]time.Duration, 0)
 	panicCall := func() {
 		NewSlotTickerWithIntervals(genesisTime, intervals)

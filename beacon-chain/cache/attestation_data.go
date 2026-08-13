@@ -6,6 +6,7 @@ import (
 
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 )
 
 type AttestationConsensusData struct {
@@ -13,7 +14,14 @@ type AttestationConsensusData struct {
 	HeadRoot      []byte
 	Target        forkchoicetypes.Checkpoint
 	Source        forkchoicetypes.Checkpoint
-	IsPayloadFull bool
+	HeadFull      bool // payload status of the head this data was produced from, part of the freshness key
+	IsPayloadFull bool // payload status the attestation votes for
+}
+
+// IsFreshFor reports whether a holds attestation data produced for slot from the
+// head identified by headRoot and headFull.
+func (a *AttestationConsensusData) IsFreshFor(slot primitives.Slot, headRoot [32]byte, headFull bool) bool {
+	return a != nil && a.Slot == slot && a.HeadFull == headFull && bytesutil.ToBytes32(a.HeadRoot) == headRoot
 }
 
 // AttestationDataCache stores cached results of AttestationData requests.
@@ -39,12 +47,4 @@ func (c *AttestationDataCache) Put(a *AttestationConsensusData) error {
 	}
 	c.a = a
 	return nil
-}
-
-// Clear evicts the cached response.
-func (c *AttestationDataCache) Clear() {
-	c.Lock()
-	defer c.Unlock()
-
-	c.a = nil
 }

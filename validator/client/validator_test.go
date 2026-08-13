@@ -3,13 +3,11 @@ package client
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"math"
-	"os"
-	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -19,9 +17,11 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
+	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/async/event"
-	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -38,7 +38,6 @@ import (
 	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
-	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	dbTest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
@@ -49,7 +48,6 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
-	"github.com/urfave/cli/v2"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -60,11 +58,23 @@ func init() {
 	logrus.SetOutput(io.Discard)
 }
 
-var _ iface.Validator = (*validator)(nil)
-
 const cancelledCtx = "context has been canceled"
 
 var unknownIndex = primitives.ValidatorIndex(^uint64(0))
+
+func generateMultipleValidatorStatusResponse(pubkeys [][]byte) *ethpb.MultipleValidatorStatusResponse {
+	resp := &ethpb.MultipleValidatorStatusResponse{
+		PublicKeys: make([][]byte, len(pubkeys)),
+		Statuses:   make([]*ethpb.ValidatorStatusResponse, len(pubkeys)),
+		Indices:    make([]primitives.ValidatorIndex, len(pubkeys)),
+	}
+	for i, key := range pubkeys {
+		resp.PublicKeys[i] = key
+		resp.Statuses[i] = &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_UNKNOWN_STATUS}
+		resp.Indices[i] = primitives.ValidatorIndex(i)
+	}
+	return resp
+}
 
 func genMockKeymanager(t *testing.T, numKeys int) *mockKeymanager {
 	pairs := make([]keypair, numKeys)
@@ -397,10 +407,10 @@ func TestRolesAt_OK(t *testing.T) {
 			require.NoError(t, err)
 
 			pk := bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())
-			assert.Equal(t, iface.RoleAttester, roleMap[pk][0])
-			assert.Equal(t, iface.RoleAggregator, roleMap[pk][1])
-			assert.Equal(t, iface.RoleSyncCommittee, roleMap[pk][2])
-			assert.Equal(t, iface.RolePTCMember, roleMap[pk][3])
+			assert.Equal(t, roleAttester, roleMap[pk][0])
+			assert.Equal(t, roleAggregator, roleMap[pk][1])
+			assert.Equal(t, roleSyncCommittee, roleMap[pk][2])
+			assert.Equal(t, rolePTCMember, roleMap[pk][3])
 
 			// Test sync committee role at epoch boundary.
 			v.duties = testDutyStore(&ethpb.ValidatorDuty{
@@ -427,7 +437,7 @@ func TestRolesAt_OK(t *testing.T) {
 
 			roleMap, err = v.RolesAt(t.Context(), params.BeaconConfig().SlotsPerEpoch-1)
 			require.NoError(t, err)
-			assert.Equal(t, iface.RoleSyncCommittee, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
+			assert.Equal(t, roleSyncCommittee, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
 		})
 	}
 }
@@ -453,7 +463,7 @@ func TestRolesAt_DoesNotAssignProposer_Slot0(t *testing.T) {
 			roleMap, err := v.RolesAt(t.Context(), 0)
 			require.NoError(t, err)
 
-			assert.Equal(t, iface.RoleAttester, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
+			assert.Equal(t, roleAttester, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
 		})
 	}
 }
@@ -935,16 +945,9 @@ func TestValidator_WaitForKeymanagerInitialization_web3Signer(t *testing.T) {
 			copy(root[2:], "a")
 			err := db.SaveGenesisValidatorsRoot(ctx, root)
 			require.NoError(t, err)
-			app := cli.App{}
-			set := flag.NewFlagSet("test", 0)
-			newDir := filepath.Join(t.TempDir(), "new")
-			require.NoError(t, os.MkdirAll(newDir, 0700))
-			set.String(flags.WalletDirFlag.Name, newDir, "")
-			w := wallet.NewWalletForWeb3Signer(cli.NewContext(&app, set, nil))
 			v := validator{
 				db:        db,
 				enableAPI: false,
-				wallet:    w,
 				web3SignerConfig: &remoteweb3signer.SetupConfig{
 					BaseEndpoint:       "http://localhost:8545",
 					ProvidedPublicKeys: []string{"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"},
@@ -3085,6 +3088,76 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 	}
 }
 
+// In the last slot of an epoch the duty store already holds next-epoch duties
+// as current, so the schedule must be resolved per proposal slot, not from the
+// wall-clock slot.
+func TestValidator_buildProposerPreferences_ScheduleUsesProposalSlotEpoch(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	cfg.GasLimitSchedule = []params.GasLimitScheduleEntry{
+		{Epoch: 0, GasLimit: 60_000_000},
+		{Epoch: 1, GasLimit: 90_000_000},
+	}
+	params.OverrideBeaconConfig(cfg)
+
+	feeRecipient := feeRecipientFromString(t, "0x1111111111111111111111111111111111111111")
+	kp := randKeypair(t)
+	km := newMockKeymanager(t, kp)
+	ctrl := gomock.NewController(t)
+	client := validatormock.NewMockValidatorClient(ctrl)
+	domainCache, err := ristretto.NewCache(&ristretto.Config[string, proto.Message]{
+		NumCounters: 1920,
+		MaxCost:     192,
+		BufferItems: 64,
+	})
+	require.NoError(t, err)
+	client.EXPECT().
+		DomainData(gomock.Any(), gomock.Any()).
+		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).
+		AnyTimes()
+
+	lastSlotOfEpoch0 := primitives.Slot(params.BeaconConfig().SlotsPerEpoch) - 1
+	epoch1ProposerSlot := params.BeaconConfig().SlotsPerEpoch + 3
+
+	v := validator{
+		validatorClient: client,
+		domainDataCache: domainCache,
+		proposerSettings: &proposer.Settings{
+			Version: 2,
+			DefaultConfig: &proposer.Option{
+				FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: feeRecipient},
+			},
+		},
+		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
+			kp.pub: {
+				publicKey: kp.pub[:],
+				status:    &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE},
+				index:     1,
+			},
+		},
+		duties:             &dutyStore{},
+		submittedPrefSlots: make(map[primitives.Slot]bool),
+	}
+	root := make([]byte, fieldparams.RootLength)
+	root[0] = 1
+	var data dutyStoreData
+	data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+		PrevDependentRoot: root,
+		CurrDependentRoot: root,
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{{
+			PublicKey: kp.pub[:], ValidatorIndex: 1, Status: ethpb.ValidatorStatus_ACTIVE,
+			ProposerSlots: []primitives.Slot{epoch1ProposerSlot},
+		}},
+	})
+	v.duties.write(data)
+
+	prefs := v.buildProposerPreferences(t.Context(), km, lastSlotOfEpoch0, true)
+	require.Equal(t, 1, len(prefs))
+	require.Equal(t, epoch1ProposerSlot, prefs[0].Message.ProposalSlot)
+	require.Equal(t, uint64(90_000_000), prefs[0].Message.TargetGasLimit)
+}
+
 // Post-fork, PushProposerSettings must not call SubmitValidatorRegistrations
 // (builder API path is pre-Gloas only).
 func TestValidator_PushProposerSettings_SkipsBuilderRegistrationsPostGloas(t *testing.T) {
@@ -3923,5 +3996,90 @@ func TestGetAttestationData_PostElectraConcurrentAccess(t *testing.T) {
 	for i := range numGoroutines {
 		require.NoError(t, errs[i])
 		require.DeepEqual(t, expectedData, results[i])
+	}
+}
+
+func headValidator() *validator {
+	return &validator{
+		head:                 newHeadTracker(),
+		slotFeed:             &event.Feed{},
+		disableDutiesPolling: true, // skip checkDependentRoots (needs duties/clients)
+	}
+}
+
+func TestProcessEvent_Head(t *testing.T) {
+	t.Run("records the head root and slot", func(t *testing.T) {
+		v := headValidator()
+		root := "0x" + strings.Repeat("ab", 32)
+		data, err := json.Marshal(&structs.HeadEvent{Slot: "42", Block: root})
+		require.NoError(t, err)
+
+		v.ProcessEvent(t.Context(), &eventClient.Event{Type: eventClient.EventHead, Data: data})
+
+		got, ok := latestHead(v.head)
+		require.Equal(t, true, ok)
+		require.Equal(t, uint64(42), uint64(got.Slot))
+		require.Equal(t, byte(0xab), got.Root[0])
+		// The v1 head event announces no payload status.
+		require.Equal(t, api.PayloadStatusUnknown, got.PayloadStatus)
+	})
+
+	t.Run("empty root (gRPC head event) updates the slot without error", func(t *testing.T) {
+		v := headValidator()
+		// The gRPC StreamSlots event carries no block root.
+		data, err := json.Marshal(&structs.HeadEvent{Slot: "42", Block: ""})
+		require.NoError(t, err)
+
+		v.ProcessEvent(t.Context(), &eventClient.Event{Type: eventClient.EventHead, Data: data})
+
+		// Head root not recorded because there is no block root to record...
+		_, ok := latestHead(v.head)
+		require.Equal(t, false, ok)
+		// ...but the highest slot update must not have been dropped.
+		require.Equal(t, uint64(42), uint64(v.highestSlot()))
+	})
+
+	t.Run("malformed root still updates the slot", func(t *testing.T) {
+		v := headValidator()
+		data, err := json.Marshal(&structs.HeadEvent{Slot: "42", Block: "0xnothex"})
+		require.NoError(t, err)
+
+		v.ProcessEvent(t.Context(), &eventClient.Event{Type: eventClient.EventHead, Data: data})
+
+		// Head root not recorded because the block root failed to decode...
+		_, ok := latestHead(v.head)
+		require.Equal(t, false, ok)
+		// ...but the highest slot update must not have been dropped.
+		require.Equal(t, uint64(42), uint64(v.highestSlot()))
+	})
+}
+
+func TestProcessEvent_HeadV2_PayloadStatus(t *testing.T) {
+	// Post-Gloas an attestation's index encodes the payload status of the attested
+	// head, so the status the event announces is part of the expected head.
+	for _, tt := range []struct {
+		announced string
+		want      api.PayloadStatus
+	}{
+		{announced: "full", want: api.PayloadStatusFull},
+		{announced: "empty", want: api.PayloadStatusEmpty},
+		{announced: "", want: api.PayloadStatusUnknown},
+	} {
+		t.Run("records payload status "+tt.announced, func(t *testing.T) {
+			v := headValidator()
+			root := "0x" + strings.Repeat("ab", 32)
+			data, err := json.Marshal(&structs.HeadEventV2{
+				Data: &structs.HeadEventV2Data{Slot: "42", Block: root, PayloadStatus: tt.announced},
+			})
+			require.NoError(t, err)
+
+			v.ProcessEvent(t.Context(), &eventClient.Event{Type: eventClient.EventHeadV2, Data: data})
+
+			got, ok := latestHead(v.head)
+			require.Equal(t, true, ok)
+			require.Equal(t, uint64(42), uint64(got.Slot))
+			require.Equal(t, byte(0xab), got.Root[0])
+			require.Equal(t, tt.want, got.PayloadStatus)
+		})
 	}
 }

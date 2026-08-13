@@ -51,7 +51,7 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 	ctx, span := trace.StartSpan(ctx, "validator.ProposeBlock")
 	defer span.End()
 
-	lock := async.NewMultilock(fmt.Sprint(iface.RoleProposer), string(pubKey[:]))
+	lock := async.NewMultilock(fmt.Sprint(roleProposer), string(pubKey[:]))
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -76,6 +76,16 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		// validator to miss block reward. When failed, validator should continue
 		// to produce the block.
 		log.WithError(err).Warn("Could not get graffiti")
+	}
+
+	ctx, err = v.withHeadHint(ctx, slot, attestationDueComponent(slot))
+	if err != nil {
+		log.WithField("slot", slot).WithError(err).Error("Could not attach freshness hint")
+		if v.emitAccountMetrics {
+			ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
+		}
+
+		return
 	}
 
 	// Request block from beacon node
@@ -328,7 +338,7 @@ func buildGenericSignedBlockFuluWithBlobs(pb proto.Message, b *ethpb.GenericBeac
 func ProposeExit(
 	ctx context.Context,
 	validatorClient iface.ValidatorClient,
-	signer iface.SigningFunc,
+	signer signingFunc,
 	pubKey []byte,
 	epoch primitives.Epoch,
 ) error {
@@ -359,7 +369,7 @@ func CurrentEpoch(genesisTime *timestamp.Timestamp) (primitives.Epoch, error) {
 func CreateSignedVoluntaryExit(
 	ctx context.Context,
 	validatorClient iface.ValidatorClient,
-	signer iface.SigningFunc,
+	signer signingFunc,
 	pubKey []byte,
 	epoch primitives.Epoch,
 ) (*ethpb.SignedVoluntaryExit, error) {
@@ -454,7 +464,7 @@ func (v *validator) signBlock(ctx context.Context, pubKey [fieldparams.BLSPubkey
 func signVoluntaryExit(
 	ctx context.Context,
 	validatorClient iface.ValidatorClient,
-	signer iface.SigningFunc,
+	signer signingFunc,
 	pubKey []byte,
 	exit *ethpb.VoluntaryExit,
 	slot primitives.Slot,

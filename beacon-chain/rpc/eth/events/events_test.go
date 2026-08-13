@@ -437,6 +437,30 @@ func TestStreamEvents_ProposerPreferencesWrappedWithVersion(t *testing.T) {
 	require.Equal(t, "7", got.Data.Message.ValidatorIndex)
 }
 
+func TestStreamEvents_GloasAttestation(t *testing.T) {
+	s := &Server{}
+	topics, err := newTopicRequest([]string{AttestationTopic})
+	require.NoError(t, err)
+	att := util.NewAttestationGloas()
+	ev := &feed.Event{
+		Type: operation.UnaggregatedAttReceived,
+		Data: &operation.UnAggregatedAttReceivedData{Attestation: att},
+	}
+
+	lr, err := s.lazyReaderForEvent(t.Context(), ev, topics)
+	require.NoError(t, err)
+	out, err := io.ReadAll(lr())
+	require.NoError(t, err)
+
+	_, payload, found := strings.Cut(string(out), "data: ")
+	require.Equal(t, true, found)
+	var got structs.AttestationElectra
+	require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(payload)), &got))
+	expected := structs.AttGloasFromConsensus(att)
+	require.Equal(t, expected.AggregationBits, got.AggregationBits)
+	require.Equal(t, expected.CommitteeBits, got.CommitteeBits)
+}
+
 func TestStreamEvents_PayloadAttestationMessageWrappedWithVersion(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()

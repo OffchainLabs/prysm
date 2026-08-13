@@ -7,8 +7,18 @@ DIST ?= dist
 BINARIES := $(notdir $(patsubst %/,%,$(dir $(wildcard cmd/*/main.go))))
 GEN_KINDS := proto ssz mocks
 TEST_KINDS := mainnet mainnet-spectest minimal minimal-spectest
-POSITIONAL := $(sort $(GEN_KINDS) $(TEST_KINDS) $(BINARIES))
-COMMANDS := run build gen clean help test testdata
+
+E2E_SCENARIOS := minimal builder web3signer slasher slashing scenario scenario-multiclient postmerge statediff mainnet multiclient
+E2E_SUITES    := presubmit postsubmit scenario_tests
+E2E_KINDS     := $(E2E_SCENARIOS) $(E2E_SUITES)
+
+# Suite -> scenario(s) mapping (keep in sync with the `suites` map in build/e2e/main.go).
+E2E_SUITE_presubmit      := minimal statediff slashing slasher
+E2E_SUITE_postsubmit     := builder postmerge mainnet multiclient
+E2E_SUITE_scenario_tests := scenario scenario-multiclient
+
+POSITIONAL := $(sort $(GEN_KINDS) $(TEST_KINDS) $(E2E_KINDS) $(BINARIES))
+COMMANDS := run build gen clean help test testdata e2e
 
 TAGS ?=
 TAGFLAG := $(if $(TAGS),-tags=$(TAGS),)
@@ -28,6 +38,9 @@ TEST_MODE     := $(or $(mode),no-race)
 TEST_MODE_BAD := $(filter-out no-race race,$(TEST_MODE))
 TEST_ARGS     := $(filter-out $(COMMANDS),$(MAKECMDGOALS))
 TEST_BAD      := $(filter-out $(TEST_KINDS),$(TEST_ARGS))
+
+E2E_ARGS := $(filter-out $(COMMANDS),$(MAKECMDGOALS))
+E2E_BAD  := $(filter-out $(E2E_KINDS),$(E2E_ARGS))
 
 # Goals left over after `run` and the binary name are the program's arguments.
 # A leading `--` ends make's option parsing so `--flag value` reaches us as goals
@@ -104,6 +117,14 @@ testdata:
 	$(GO) run ./tools/cmd/fetch-testdata
 
 # ---------------------------------------------------------------------------
+# End-to-end tests
+# ---------------------------------------------------------------------------
+.PHONY: e2e
+e2e:
+	@$(if $(E2E_BAD),echo "❌ e2e: unknown target(s): $(E2E_BAD)  (scenarios: $(E2E_SCENARIOS) - suites: $(E2E_SUITES))" >&2; exit 1;) \
+	GO="$(GO)" DIST="$(DIST)" $(GO) run ./build/e2e $(filter $(E2E_KINDS),$(MAKECMDGOALS))
+
+# ---------------------------------------------------------------------------
 # Help (default target)
 # ---------------------------------------------------------------------------
 .DEFAULT_GOAL := help
@@ -119,14 +140,20 @@ help: ## Show this help
 	@printf "  \033[36m%-44s\033[0m %s\n" "make build [<bin>...] [flags=...]"          "Build a binary (default: all)"
 	@printf "  \033[36m%-44s\033[0m %s\n" "make gen [<kind>...] [mode=force|no-force]" "Create generated code (default: all,no-force)"
 	@printf "  \033[36m%-44s\033[0m %s\n" "make test [<kind>...] [mode=no-race|race]"  "Run unit tests (default: all,no-race)"
+	@printf "  \033[36m%-44s\033[0m %s\n" "make e2e [<scenario>|<suite>...]"           "Run end-to-end tests (default: presubmit)"
 	@printf "  \033[36m%-44s\033[0m %s\n" "make testdata"                              "Pre-fetch external spec-test data"
 	@printf "  \033[36m%-44s\033[0m %s\n" "make clean"                                 "Clean everything"
 	@printf "  \033[36m%-44s\033[0m %s\n" "make help"                                  "Show this help"
 	@echo ""
 	@printf '\033[1mOptions:\033[0m\n'
-	@printf "  \033[36m%-14s\033[0m %s\n" "<bin>:"       "$(BINARIES)"
-	@printf "  \033[36m%-14s\033[0m %s\n" "gen <kind>:"  "$(GEN_KINDS)"
-	@printf "  \033[36m%-14s\033[0m %s\n" "test <kind>:" "$(TEST_KINDS)"
+	@printf "  \033[36m%-16s\033[0m %s\n" "<bin>:"          "$(BINARIES)"
+	@printf "  \033[36m%-16s\033[0m %s\n" "gen <kind>:"     "$(GEN_KINDS)"
+	@printf "  \033[36m%-16s\033[0m %s\n" "test <kind>:"    "$(TEST_KINDS)"
+	@printf "  \033[36m%-16s\033[0m %s\n" "e2e <scenario>:" "$(E2E_SCENARIOS)"
+	@printf "  \033[36m%-16s\033[0m\n" "e2e <suite>:"
+	@printf "    \033[36m%-16s\033[0m %s\n" "presubmit:"      "$(E2E_SUITE_presubmit)"
+	@printf "    \033[36m%-16s\033[0m %s\n" "postsubmit:"     "$(E2E_SUITE_postsubmit)"
+	@printf "    \033[36m%-16s\033[0m %s\n" "scenario_tests:" "$(E2E_SUITE_scenario_tests)"
 	@echo ""
 	@printf '\033[1mNotes:\033[0m\n'
 	@echo "  After '--', pass '--flag value' (not '--flag=value')"

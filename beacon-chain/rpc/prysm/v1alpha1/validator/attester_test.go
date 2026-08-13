@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
@@ -333,6 +334,82 @@ func TestGetAttestationData_OK(t *testing.T) {
 	if !proto.Equal(res, expectedInfo) {
 		t.Errorf("Expected attestation info to match, received %v, wanted %v", res, expectedInfo)
 	}
+}
+
+func TestGetAttestationData_CachedDataFromPreviousHead(t *testing.T) {
+	slot := 3*params.BeaconConfig().SlotsPerEpoch + 1
+
+	headBlock := util.NewBeaconBlock()
+	headBlock.Block.Slot = slot
+	headRoot, err := headBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	targetBlock := util.NewBeaconBlock()
+	targetBlock.Block.Slot = 1 * params.BeaconConfig().SlotsPerEpoch
+	targetRoot, err := targetBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	justifiedBlock := util.NewBeaconBlock()
+	justifiedBlock.Block.Slot = 2 * params.BeaconConfig().SlotsPerEpoch
+	justifiedRoot, err := justifiedBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	justifiedCheckpoint := &ethpb.Checkpoint{Epoch: 2, Root: justifiedRoot[:]}
+	beaconState, err := util.NewBeaconState()
+	require.NoError(t, err)
+	require.NoError(t, beaconState.SetSlot(slot))
+	require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
+
+	offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+	genesis := time.Now().Add(time.Duration(-1*offset) * time.Second)
+
+	// A server whose head is headRoot, serving attestation data out of attCache.
+	newServer := func(attCache *cache.AttestationDataCache) *Server {
+		return &Server{
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
+			TimeFetcher:           &mock.ChainService{Genesis: genesis},
+			CoreService: &core.Service{
+				HeadFetcher:           &mock.ChainService{TargetRoot: targetRoot, Root: headRoot[:], State: beaconState},
+				GenesisTimeFetcher:    &mock.ChainService{Genesis: genesis},
+				FinalizedFetcher:      &mock.ChainService{CurrentJustifiedCheckPoint: justifiedCheckpoint},
+				AttestationCache:      attCache,
+				OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
+			},
+		}
+	}
+	req := &ethpb.AttestationDataRequest{CommitteeIndex: 0, Slot: slot}
+
+	t.Run("data from a previous head is recomputed", func(t *testing.T) {
+		previousHeadRoot := [32]byte{'p', 'r', 'e', 'v'}
+		attCache := cache.NewAttestationDataCache()
+		require.NoError(t, attCache.Put(&cache.AttestationConsensusData{
+			Slot:     slot,
+			HeadRoot: previousHeadRoot[:],
+			Target:   forkchoicetypes.Checkpoint{Epoch: 3, Root: targetRoot},
+			Source:   forkchoicetypes.Checkpoint{Epoch: 2, Root: justifiedRoot},
+		}))
+
+		res, err := newServer(attCache).GetAttestationData(t.Context(), req)
+		require.NoError(t, err)
+		require.DeepEqual(t, headRoot[:], res.BeaconBlockRoot)
+	})
+
+	t.Run("data from the current head is served from the cache", func(t *testing.T) {
+		cachedTargetRoot := [32]byte{'c', 'a', 'c', 'h', 'e', 'd'}
+		attCache := cache.NewAttestationDataCache()
+		require.NoError(t, attCache.Put(&cache.AttestationConsensusData{
+			Slot:     slot,
+			HeadRoot: headRoot[:],
+			Target:   forkchoicetypes.Checkpoint{Epoch: 3, Root: cachedTargetRoot},
+			Source:   forkchoicetypes.Checkpoint{Epoch: 2, Root: justifiedRoot},
+		}))
+
+		res, err := newServer(attCache).GetAttestationData(t.Context(), req)
+		require.NoError(t, err)
+		require.DeepEqual(t, headRoot[:], res.BeaconBlockRoot)
+		require.DeepEqual(t, cachedTargetRoot[:], res.Target.Root, "response was not served from the cache")
+	})
 }
 
 func BenchmarkGetAttestationDataConcurrent(b *testing.B) {

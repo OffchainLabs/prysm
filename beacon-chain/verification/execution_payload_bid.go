@@ -23,7 +23,7 @@ var ExecutionPayloadBidGossipRequirements = []Requirement{
 	RequireBidFeeRecipientMatches,
 	RequireBidBlobKzgCommitmentsLimit,
 	RequireBidPrevRandaoValid,
-	RequireBidParentBlockRootSeen,
+	RequireBidCompatibleWithHead,
 	RequireBidSlotHigherThanParent,
 	RequireBidParentBlockHashValid,
 	RequireBidGasLimitCompatible,
@@ -62,6 +62,7 @@ var (
 	ErrBidPrevRandaoMismatch        = errors.New("bid prev randao does not match state randao mix")
 	ErrBidGasLimitIncompatible      = errors.New("bid gas limit is incompatible with parent and target")
 	ErrBidParentBlockRootNotSeen    = errors.New("parent block root not seen")
+	ErrBidNotCompatibleWithHead     = errors.New("bid is not compatible with the head branch")
 	ErrBidSlotNotHigherThanParent   = errors.New("bid slot is not higher than parent block slot")
 	ErrBidParentBlockHashMismatch   = errors.New("parent block hash does not match forkchoice")
 	ErrBidBuilderCannotCover        = errors.New("builder cannot cover bid")
@@ -269,6 +270,19 @@ func (v *BidVerifier) VerifyParentBlockRootSeen(parentSeen func([32]byte) bool) 
 		return nil
 	}
 	return fmt.Errorf("%w: root=%#x", ErrBidParentBlockRootNotSeen, root)
+}
+
+func (v *BidVerifier) VerifyBidCompatibleWithHead(compatible func(interfaces.ROExecutionPayloadBid) bool) (err error) {
+	defer v.record(RequireBidCompatibleWithHead, &err)
+
+	bid, err := v.b.Bid()
+	if err != nil {
+		return errors.Wrap(err, "failed to get bid")
+	}
+	if compatible != nil && compatible(bid) {
+		return nil
+	}
+	return fmt.Errorf("%w: root=%#x hash=%#x", ErrBidNotCompatibleWithHead, bid.ParentBlockRoot(), bid.ParentBlockHash())
 }
 
 // VerifyBidSlotHigherThanParent verifies the bid slot is greater than the slot of its parent block.
