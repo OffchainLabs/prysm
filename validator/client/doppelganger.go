@@ -260,12 +260,13 @@ func (v *validator) checkDoppelGangerForKeys(ctx context.Context, pubkeys []pubk
 			return nil, errors.Wrapf(err, "could not get attestation history for pubkey %#x", bytesutil.Trunc(pkey[:]))
 		}
 		if len(attRec) == 0 {
-			// If no history exists we simply send in a zero
-			// value for the request epoch and root.
+			// Reloaded keys are checked from their import epoch, so attestations
+			// made before the import are not flagged as duplicates; boot keys check from 0.
+			epoch, _ := v.doppelGanger.pendingAddedEpoch(pkey)
 			req.ValidatorRequests = append(req.ValidatorRequests,
 				&ethpb.DoppelGangerRequest_ValidatorRequest{
 					PublicKey:  pkey[:],
-					Epoch:      0,
+					Epoch:      epoch,
 					SignedRoot: make([]byte, fieldparams.RootLength),
 				})
 			continue

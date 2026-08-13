@@ -407,6 +407,32 @@ func TestCheckDoppelGangerMidEpoch(t *testing.T) {
 		assert.Equal(t, false, v.isDoppelGangerPending(keyA))
 	})
 
+	t.Run("key with no attestation history is checked from its import epoch", func(t *testing.T) {
+		enableDoppelGanger(t)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := validatormock.NewMockValidatorClient(ctrl)
+		// keyA was imported at epoch 1 and has an empty slashing-protection DB,
+		// as a key migrated from another client would.
+		v := pendingDoppelValidator(t, client, 1, keyA)
+		mockSyncedChainHead(ctrl, v, 4)
+
+		// Requesting epoch 0 would have the node scan epochs before the import,
+		// where the previous client's last attestations register as a duplicate.
+		client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, req *ethpb.DoppelGangerRequest) (*ethpb.DoppelGangerResponse, error) {
+				require.Equal(t, 1, len(req.ValidatorRequests))
+				assert.Equal(t, primitives.Epoch(1), req.ValidatorRequests[0].Epoch, "request must carry the import epoch")
+				return &ethpb.DoppelGangerResponse{Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{
+					{PublicKey: keyA[:], DuplicateExists: false},
+				}}, nil
+			})
+
+		v.CheckDoppelGangerMidEpoch(t.Context(), slots.CurrentSlot(v.genesisTime))
+		waitForDoppelCheck(t, v)
+		assert.Equal(t, false, v.isDoppelGangerPending(keyA))
+	})
+
 	t.Run("empty response counts the poll", func(t *testing.T) {
 		enableDoppelGanger(t)
 		ctrl := gomock.NewController(t)
