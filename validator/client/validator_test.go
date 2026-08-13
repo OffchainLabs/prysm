@@ -4222,3 +4222,54 @@ func TestProcessEvent_HeadV2_PayloadStatus(t *testing.T) {
 		})
 	}
 }
+
+// The post-fork settings cleanup runs concurrently with keymanager writes; the
+// transactional update must serialize them so no write is ever lost.
+func TestValidator_UpdateProposerSettings_Concurrency(t *testing.T) {
+	ctx := t.Context()
+	db := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false)
+	v := &validator{
+		db: db,
+		proposerSettings: &proposer.Settings{
+			Version: proposer.SchemaV1,
+			DefaultConfig: &proposer.Option{
+				BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 30_000_000},
+			},
+		},
+	}
+
+	const writers = 16
+	errs := make(chan error, writers)
+	var wg sync.WaitGroup
+	for i := range writers {
+		key := [fieldparams.BLSPubkeyLength]byte{byte(i + 1)}
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			errs <- v.UpdateProposerSettings(ctx, func(ps *proposer.Settings) (*proposer.Settings, error) {
+				if ps == nil {
+					ps = &proposer.Settings{Version: proposer.SchemaV2}
+				}
+				ps.UpsertProposeOption(key).GasLimit = 1
+				return ps, nil
+			})
+		}()
+		go func() {
+			defer wg.Done()
+			v.upgradeProposerSettingsToV2(ctx)
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		require.NoError(t, err)
+	}
+
+	ps := v.ProposerSettings()
+	require.NotNil(t, ps)
+	// Every keymanager write survived the concurrent cleanup passes.
+	require.Equal(t, writers, len(ps.ProposeConfig))
+	require.Equal(t, proposer.SchemaV2, ps.Version)
+	// A final cleanup pass leaves nothing to scrub.
+	require.Equal(t, false, v.ProposerSettings().Clone().UpgradeToV2())
+}
