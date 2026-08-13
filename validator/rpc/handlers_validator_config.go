@@ -82,31 +82,27 @@ func (s *Server) SetBuilders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.proposerSettingsLock.Lock()
-	defer s.proposerSettingsLock.Unlock()
-
-	settings := s.validatorService.ProposerSettings()
-	if settings == nil {
-		settings = &proposer.Settings{Version: proposer.FreshSettingsVersion()}
-	} else {
-		settings = settings.Clone()
-		// Stamp the storage format only: semantics are fork-keyed, so writing
-		// builders never drops v1 content or changes other keys' behavior.
-		settings.Version = proposer.SchemaV2
-	}
-
-	if settings.ProposeConfig == nil {
-		settings.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
-	}
-	key := bytesutil.ToBytes48(pubkey)
-	opt := settings.ProposeConfig[key]
-	if opt == nil {
-		opt = &proposer.Option{}
-		settings.ProposeConfig[key] = opt
-	}
-	opt.BuilderConfig = bc
-
-	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
+	err = s.validatorService.UpdateProposerSettings(ctx, func(settings *proposer.Settings) (*proposer.Settings, error) {
+		if settings == nil {
+			settings = &proposer.Settings{Version: proposer.FreshSettingsVersion()}
+		} else {
+			// Stamp the storage format only: semantics are fork-keyed, so writing
+			// builders never drops v1 content or changes other keys' behavior.
+			settings.Version = proposer.SchemaV2
+		}
+		if settings.ProposeConfig == nil {
+			settings.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
+		}
+		key := bytesutil.ToBytes48(pubkey)
+		opt := settings.ProposeConfig[key]
+		if opt == nil {
+			opt = &proposer.Option{}
+			settings.ProposeConfig[key] = opt
+		}
+		opt.BuilderConfig = bc
+		return settings, nil
+	})
+	if err != nil {
 		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -131,25 +127,19 @@ func (s *Server) DeleteBuilders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.proposerSettingsLock.Lock()
-	defer s.proposerSettingsLock.Unlock()
-
-	settings := s.validatorService.ProposerSettings()
-	key := bytesutil.ToBytes48(pubkey)
-	// Removing an absent configuration succeeds; the key already follows the defaults.
-	if settings == nil || settings.ProposeConfig == nil {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	opt, found := settings.ProposeConfig[key]
-	if !found || opt == nil || opt.BuilderConfig == nil {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-
-	settings = settings.Clone()
-	settings.ProposeConfig[key].BuilderConfig = nil
-	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
+	err := s.validatorService.UpdateProposerSettings(ctx, func(settings *proposer.Settings) (*proposer.Settings, error) {
+		// Removing an absent configuration succeeds; the key already follows the defaults.
+		if settings == nil || settings.ProposeConfig == nil {
+			return nil, nil
+		}
+		opt, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
+		if !found || opt == nil || opt.BuilderConfig == nil {
+			return nil, nil
+		}
+		opt.BuilderConfig = nil
+		return settings, nil
+	})
+	if err != nil {
 		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

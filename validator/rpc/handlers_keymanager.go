@@ -626,19 +626,15 @@ func (s *Server) SetFeeRecipientByPubkey(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	feeRecipient := common.BytesToAddress(ethAddress)
-	s.proposerSettingsLock.Lock()
-	defer s.proposerSettingsLock.Unlock()
-	settings := s.validatorService.ProposerSettings()
-	if settings == nil {
-		// API-created settings carry no v1 content: v2 once gloas is scheduled.
-		settings = &proposer.Settings{Version: proposer.FreshSettingsVersion()}
-	} else {
-		// Clone-then-swap: lock-free readers must never see in-place mutation.
-		settings = settings.Clone()
-	}
-	// A newly created option leaves BuilderConfig nil so the key inherits default_config.
-	settings.UpsertProposeOption(bytesutil.ToBytes48(pubkey)).FeeRecipientConfig = &proposer.FeeRecipientConfig{FeeRecipient: feeRecipient}
-	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
+	if err := s.validatorService.UpdateProposerSettings(ctx, func(settings *proposer.Settings) (*proposer.Settings, error) {
+		if settings == nil {
+			// API-created settings carry no v1 content: v2 once gloas is scheduled.
+			settings = &proposer.Settings{Version: proposer.FreshSettingsVersion()}
+		}
+		// A newly created option leaves BuilderConfig nil so the key inherits default_config.
+		settings.UpsertProposeOption(bytesutil.ToBytes48(pubkey)).FeeRecipientConfig = &proposer.FeeRecipientConfig{FeeRecipient: feeRecipient}
+		return settings, nil
+	}); err != nil {
 		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -660,19 +656,16 @@ func (s *Server) DeleteFeeRecipientByPubkey(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	s.proposerSettingsLock.Lock()
-	defer s.proposerSettingsLock.Unlock()
-	settings := s.validatorService.ProposerSettings()
-	if settings != nil && settings.ProposeConfig != nil {
-		settings = settings.Clone()
+	if err := s.validatorService.UpdateProposerSettings(ctx, func(settings *proposer.Settings) (*proposer.Settings, error) {
+		if settings == nil || settings.ProposeConfig == nil {
+			return nil, nil
+		}
 		proposerOption, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
 		if found {
 			proposerOption.FeeRecipientConfig = nil
 		}
-	}
-
-	// save the settings
-	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
+		return settings, nil
+	}); err != nil {
 		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -734,20 +727,16 @@ func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.proposerSettingsLock.Lock()
-	defer s.proposerSettingsLock.Unlock()
-	// Clone-then-swap: lock-free readers must never see in-place mutation.
-	settings := s.validatorService.ProposerSettings().Clone()
-	if settings == nil {
-		// API-created settings carry no v1 content: v2 once gloas is scheduled.
-		settings = &proposer.Settings{Version: proposer.FreshSettingsVersion()}
-	}
-	if err := settings.SetGasLimit(bytesutil.ToBytes48(pubkey), validator.Uint64(gasLimit)); err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
+	if err := s.validatorService.UpdateProposerSettings(ctx, func(settings *proposer.Settings) (*proposer.Settings, error) {
+		if settings == nil {
+			// API-created settings carry no v1 content: v2 once gloas is scheduled.
+			settings = &proposer.Settings{Version: proposer.FreshSettingsVersion()}
+		}
+		if err := settings.SetGasLimit(bytesutil.ToBytes48(pubkey), validator.Uint64(gasLimit)); err != nil {
+			return nil, err
+		}
+		return settings, nil
+	}); err != nil {
 		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -768,16 +757,19 @@ func (s *Server) DeleteGasLimit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.proposerSettingsLock.Lock()
-	defer s.proposerSettingsLock.Unlock()
-	// Clone-then-swap: lock-free readers must never see in-place mutation.
-	settings := s.validatorService.ProposerSettings().Clone()
-	if !settings.ResetGasLimit(bytesutil.ToBytes48(pubkey)) {
-		httputil.HandleError(w, fmt.Sprintf("No gas limit found for pubkey %q", rawPubkey), http.StatusNotFound)
+	reset := false
+	if err := s.validatorService.UpdateProposerSettings(ctx, func(settings *proposer.Settings) (*proposer.Settings, error) {
+		if !settings.ResetGasLimit(bytesutil.ToBytes48(pubkey)) {
+			return nil, nil
+		}
+		reset = true
+		return settings, nil
+	}); err != nil {
+		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
-		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusBadRequest)
+	if !reset {
+		httputil.HandleError(w, fmt.Sprintf("No gas limit found for pubkey %q", rawPubkey), http.StatusNotFound)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -840,9 +832,6 @@ func (s *Server) SetGraffiti(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Graffiti writes proposer settings, so it serializes with the other writers.
-	s.proposerSettingsLock.Lock()
-	defer s.proposerSettingsLock.Unlock()
 	if err := s.validatorService.SetGraffiti(ctx, bytesutil.ToBytes48(pubkey), []byte(req.Graffiti)); err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -863,8 +852,6 @@ func (s *Server) DeleteGraffiti(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.proposerSettingsLock.Lock()
-	defer s.proposerSettingsLock.Unlock()
 	if err := s.validatorService.DeleteGraffiti(ctx, bytesutil.ToBytes48(pubkey)); err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusNotFound)
 		return

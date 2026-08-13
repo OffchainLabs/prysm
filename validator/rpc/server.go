@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api"
@@ -82,7 +81,6 @@ type Server struct {
 	walletDir                 string
 	jwtSecret                 []byte
 	grpcHeaders               []string
-	proposerSettingsLock      sync.Mutex
 }
 
 // NewServer instantiates a new HTTP server.

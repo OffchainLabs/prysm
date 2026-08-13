@@ -302,6 +302,19 @@ func (fv *FakeValidator) SetProposerSettings(_ context.Context, settings *propos
 	return nil
 }
 
+// UpdateProposerSettings for mocking
+func (fv *FakeValidator) UpdateProposerSettings(_ context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
+	next, err := mutate(fv.proposerSettings.Clone())
+	if err != nil {
+		return err
+	}
+	if next == nil {
+		return nil
+	}
+	fv.proposerSettings = next
+	return nil
+}
+
 // Graffiti for mocking
 func (fv *FakeValidator) Graffiti(_ context.Context, _ [fieldparams.BLSPubkeyLength]byte) ([]byte, error) {
 	return []byte(fv.graffiti), nil

@@ -68,6 +68,7 @@ type Validator interface {
 	ProcessEvent(ctx context.Context, event *event.Event)
 	ProposerSettings() *proposer.Settings
 	SetProposerSettings(context.Context, *proposer.Settings) error
+	UpdateProposerSettings(context.Context, func(*proposer.Settings) (*proposer.Settings, error)) error
 	Graffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error)
 	SetGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, graffiti []byte) error
 	DeleteGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error

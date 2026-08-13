@@ -401,18 +401,17 @@ func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPay
 		log.Warnf("--%s is legacy (pre-gloas) mev-boost content and has no effect after the gloas fork; configure builders via the settings source or keymanager API", flags.EnableBuilderFlag.Name)
 	}
 
-	if gasLimitOnly == nil {
-		return merged
-	}
-	if merged.DefaultConfig == nil {
-		merged.DefaultConfig = &validatorpb.ProposerOptionPayload{GasLimit: *gasLimitOnly}
-	} else {
-		merged.DefaultConfig.GasLimit = *gasLimitOnly
-	}
-	for _, option := range merged.ProposerConfig {
-		if option != nil {
-			option.GasLimit = *gasLimitOnly
+	// --suggested-gas-limit is likewise legacy content: it applies to the
+	// pre-gloas builder gas limit and never overrides v2 or schedule values.
+	if gasLimitOnly != nil {
+		if merged.DefaultConfig == nil {
+			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{}
 		}
+		if merged.DefaultConfig.Builder == nil {
+			merged.DefaultConfig.Builder = &validatorpb.BuilderConfig{}
+		}
+		merged.DefaultConfig.Builder.GasLimit = *gasLimitOnly
+		log.Warnf("--%s is legacy (pre-gloas) content and has no effect after the gloas fork; set gas limits in v2 proposer settings or via the keymanager API", flags.BuilderGasLimitFlag.Name)
 	}
 	return merged
 }

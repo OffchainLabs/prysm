@@ -92,7 +92,8 @@ type validator struct {
 	startBalances                map[[fieldparams.BLSPubkeyLength]byte]uint64
 	attestedSlotsByKeyByEpoch    map[primitives.Epoch]map[[fieldparams.BLSPubkeyLength]byte]primitives.Slot
 	web3SignerConfig             *remoteweb3signer.SetupConfig
-	proposerSettings             *proposer.Settings
+	proposerSettings             *proposer.Settings // clone-then-swap under proposerSettingsMu; reads are lock-free
+	proposerSettingsMu           sync.Mutex
 	submittedPrefSlots           map[primitives.Slot]bool
 	connTracker                  connTracker // per push kind, the conn generation last confirmed pushed
 	submittedAtts                map[submittedAttKey]*submittedAtt
@@ -805,6 +806,12 @@ func (v *validator) ProposerSettings() *proposer.Settings {
 
 // SetProposerSettings sets and saves the passed in proposer settings overriding the in memory one
 func (v *validator) SetProposerSettings(ctx context.Context, settings *proposer.Settings) error {
+	v.proposerSettingsMu.Lock()
+	defer v.proposerSettingsMu.Unlock()
+	return v.setProposerSettingsLocked(ctx, settings)
+}
+
+func (v *validator) setProposerSettingsLocked(ctx context.Context, settings *proposer.Settings) error {
 	ctx, span := trace.StartSpan(ctx, "validator.SetProposerSettings")
 	defer span.End()
 
@@ -816,6 +823,21 @@ func (v *validator) SetProposerSettings(ctx context.Context, settings *proposer.
 	}
 	v.proposerSettings = settings
 	return nil
+}
+
+// UpdateProposerSettings atomically mutates the proposer settings: mutate gets a
+// deep copy (nil when unset) and returns what to persist, or nil for a no-op.
+func (v *validator) UpdateProposerSettings(ctx context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
+	v.proposerSettingsMu.Lock()
+	defer v.proposerSettingsMu.Unlock()
+	next, err := mutate(v.proposerSettings.Clone())
+	if err != nil {
+		return err
+	}
+	if next == nil {
+		return nil
+	}
+	return v.setProposerSettingsLocked(ctx, next)
 }
 
 // PushProposerSettings calls the prepareBeaconProposer RPC to set the fee recipient and also the register validator API if using a custom builder.
@@ -1219,20 +1241,16 @@ func (v *validator) buildProposerSettingsRequests(
 	return prepareProposerReqs
 }
 
-// upgradeProposerSettingsToV2 is idempotent post-fork cleanup: it strips dead v1
-// builder content from a clone and swaps; callers gate on gloas-active.
+// upgradeProposerSettingsToV2 is idempotent post-fork cleanup: it scrubs dead v1
+// builder content transactionally; callers gate on gloas-active.
 func (v *validator) upgradeProposerSettingsToV2(ctx context.Context) {
-	snapshot := v.ProposerSettings()
-	ps := snapshot.Clone()
-	if !ps.UpgradeToV2() {
-		return
-	}
-	// Pointer changed = a keymanager write landed after our snapshot; swapping
-	// our stale clone would erase it. This cleanup simply reruns next cycle.
-	if v.ProposerSettings() != snapshot {
-		return
-	}
-	if err := v.SetProposerSettings(ctx, ps); err != nil {
+	err := v.UpdateProposerSettings(ctx, func(ps *proposer.Settings) (*proposer.Settings, error) {
+		if !ps.UpgradeToV2() {
+			return nil, nil
+		}
+		return ps, nil
+	})
+	if err != nil {
 		log.WithError(err).Warn("Failed to persist v1->v2 proposer settings upgrade")
 	}
 }

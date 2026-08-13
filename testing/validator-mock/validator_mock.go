@@ -503,6 +503,20 @@ func (mr *MockValidatorMockRecorder) UpdateDuties(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDuties", reflect.TypeOf((*MockValidator)(nil).UpdateDuties), ctx)
 }
 
+// UpdateProposerSettings mocks base method.
+func (m *MockValidator) UpdateProposerSettings(arg0 context.Context, arg1 func(*proposer.Settings) (*proposer.Settings, error)) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateProposerSettings", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateProposerSettings indicates an expected call of UpdateProposerSettings.
+func (mr *MockValidatorMockRecorder) UpdateProposerSettings(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateProposerSettings", reflect.TypeOf((*MockValidator)(nil).UpdateProposerSettings), arg0, arg1)
+}
+
 // WaitForActivation mocks base method.
 func (m *MockValidator) WaitForActivation(ctx context.Context) error {
 	m.ctrl.T.Helper()

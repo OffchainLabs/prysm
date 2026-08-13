@@ -1341,11 +1341,16 @@ func TestSettingsLoader_V1FileAfterMigratedDB(t *testing.T) {
 	require.NotNil(t, got.DefaultConfig.BuilderConfig)
 	assert.LogsDoNotContain(t, hook, "deprecated v1 schema")
 
-	require.Equal(t, false, got.UpgradeToV2())
 	key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
 	require.NoError(t, err)
 	// Pre-gloas reads still resolve the v1 builder gas limit as a fallback.
 	require.Equal(t, validator.Uint64(60000000), got.GasLimit(bytesutil.ToBytes48(key1)))
+
+	// The cutover scrubs the v1 content even under the v2 stamp, then no-ops.
+	require.Equal(t, true, got.UpgradeToV2())
+	require.IsNil(t, got.DefaultConfig.BuilderConfig)
+	require.Equal(t, validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit), got.GasLimit(bytesutil.ToBytes48(key1)))
+	require.Equal(t, false, got.UpgradeToV2())
 }
 
 func Test_mergeProposerSettings_CreatesDefaultFromGasLimitFlag(t *testing.T) {
@@ -1361,16 +1366,19 @@ func Test_mergeProposerSettings_CreatesDefaultFromGasLimitFlag(t *testing.T) {
 	require.Equal(t, gl, merged.DefaultConfig.Builder.GasLimit)
 }
 
-func Test_mergeProposerSettings_V2GasLimitOnlyGoesToOption(t *testing.T) {
+func Test_mergeProposerSettings_V2GasLimitIsLegacyContent(t *testing.T) {
 	gl := validator.Uint64(12345678)
 	merged := mergeProposerSettings(
 		nil,
 		&validatorpb.ProposerSettingsPayload{Version: proposer.SchemaV2},
 		&flagOptions{gasLimit: &gl},
 	)
+	// The flag writes only legacy builder-level content, so post-fork
+	// resolution and the gas limit schedule are never overridden by it.
 	require.NotNil(t, merged.DefaultConfig)
-	require.IsNil(t, merged.DefaultConfig.Builder)
-	require.Equal(t, gl, merged.DefaultConfig.GasLimit)
+	require.Equal(t, validator.Uint64(0), merged.DefaultConfig.GasLimit)
+	require.NotNil(t, merged.DefaultConfig.Builder)
+	require.Equal(t, gl, merged.DefaultConfig.Builder.GasLimit)
 }
 
 func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
@@ -1458,20 +1466,7 @@ func Test_mergeProposerSettings_V2LoadedOverridesDB(t *testing.T) {
 	})
 }
 
-func Test_mergeProposerSettings_V2GasLimitOverwritesExistingDefault(t *testing.T) {
-	gl := validator.Uint64(12345678)
-	db := &validatorpb.ProposerSettingsPayload{
-		Version:       proposer.SchemaV2,
-		DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0xdb", GasLimit: 1},
-	}
-	merged := mergeProposerSettings(nil, db, &flagOptions{gasLimit: &gl})
-	require.NotNil(t, merged.DefaultConfig)
-	require.IsNil(t, merged.DefaultConfig.Builder)
-	require.Equal(t, "0xdb", merged.DefaultConfig.FeeRecipient)
-	require.Equal(t, gl, merged.DefaultConfig.GasLimit)
-}
-
-func Test_mergeProposerSettings_V2GasLimitOverwritesPerValidator(t *testing.T) {
+func Test_mergeProposerSettings_V2GasLimitNeverOverridesOptions(t *testing.T) {
 	gl := validator.Uint64(12345678)
 	db := &validatorpb.ProposerSettingsPayload{
 		Version:       proposer.SchemaV2,
@@ -1481,8 +1476,11 @@ func Test_mergeProposerSettings_V2GasLimitOverwritesPerValidator(t *testing.T) {
 		},
 	}
 	merged := mergeProposerSettings(nil, db, &flagOptions{gasLimit: &gl})
-	require.Equal(t, gl, merged.DefaultConfig.GasLimit)
-	require.Equal(t, gl, merged.ProposerConfig["0xkey"].GasLimit)
+	// Explicit v2 option-level values are the operator's; the legacy flag
+	// no longer stomps them at any level.
+	require.Equal(t, validator.Uint64(1), merged.DefaultConfig.GasLimit)
+	require.Equal(t, validator.Uint64(2), merged.ProposerConfig["0xkey"].GasLimit)
+	require.Equal(t, gl, merged.DefaultConfig.Builder.GasLimit)
 }
 
 func Test_markExplicitEmptyBuilders(t *testing.T) {

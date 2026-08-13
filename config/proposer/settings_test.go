@@ -538,16 +538,50 @@ func TestSettings_UpgradeToV2(t *testing.T) {
 		require.IsNil(t, ps.ProposeConfig[pk2].BuilderConfig)
 	})
 
-	t.Run("already v2 is left untouched", func(t *testing.T) {
+	t.Run("v1 content under a v2 stamp is still scrubbed", func(t *testing.T) {
 		ps := &Settings{
 			Version: SchemaV2,
 			DefaultConfig: &Option{
 				BuilderConfig: &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(42_000_000)},
 			},
 		}
-		require.Equal(t, false, ps.UpgradeToV2())
+		require.Equal(t, true, ps.UpgradeToV2())
 		require.Equal(t, validator.Uint64(0), ps.DefaultConfig.GasLimit)
+		require.IsNil(t, ps.DefaultConfig.BuilderConfig)
+		require.Equal(t, false, ps.UpgradeToV2())
+	})
+
+	t.Run("mixed config keeps its v2 fields and loses the v1 ones", func(t *testing.T) {
+		ps := &Settings{
+			Version: SchemaV2,
+			DefaultConfig: &Option{
+				BuilderConfig: &BuilderConfig{
+					Enabled:  true,
+					GasLimit: validator.Uint64(42_000_000),
+					Builders: []*BuilderEntry{{URL: "https://b.example"}},
+				},
+			},
+		}
+		require.Equal(t, true, ps.UpgradeToV2())
+		bc := ps.DefaultConfig.BuilderConfig
+		require.NotNil(t, bc)
+		require.Equal(t, false, bc.Enabled)
+		require.Equal(t, validator.Uint64(0), bc.GasLimit)
+		require.Equal(t, 1, len(bc.Builders))
+		require.Equal(t, false, ps.UpgradeToV2())
+	})
+
+	t.Run("explicit empty builders list survives the scrub", func(t *testing.T) {
+		ps := &Settings{
+			Version: SchemaV2,
+			DefaultConfig: &Option{
+				BuilderConfig: &BuilderConfig{Enabled: true, Builders: []*BuilderEntry{}},
+			},
+		}
+		require.Equal(t, true, ps.UpgradeToV2())
 		require.NotNil(t, ps.DefaultConfig.BuilderConfig)
+		require.NotNil(t, ps.DefaultConfig.BuilderConfig.Builders)
+		require.Equal(t, 0, len(ps.DefaultConfig.BuilderConfig.Builders))
 	})
 
 	t.Run("default with no builder and zero GasLimit still bumps to v2", func(t *testing.T) {
@@ -640,11 +674,28 @@ func TestSettings_TargetGasLimit_Schedule(t *testing.T) {
 		require.LogsDoNotContain(t, hook, "exceeds the recommended maximum")
 	})
 
-	t.Run("operator value below the schedule is honored silently", func(t *testing.T) {
+	t.Run("operator value below the schedule is honored with a loud warning", func(t *testing.T) {
 		hook := logtest.NewGlobal()
-		warnedGasLimitScheduleEpoch.Store(0)
+		warnedGasLimitBelowScheduleEpoch.Store(0)
 		ps := &Settings{DefaultConfig: &Option{GasLimit: validator.Uint64(50_000_000)}}
 		require.Equal(t, validator.Uint64(50_000_000), ps.TargetGasLimit(pk, 200))
+		require.LogsContain(t, hook, "below the scheduled network gas limit")
+		require.LogsDoNotContain(t, hook, "exceeds the recommended maximum")
+		// Deduplicated within the epoch, warned again in the next one.
+		hook.Reset()
+		require.Equal(t, validator.Uint64(50_000_000), ps.TargetGasLimit(pk, 200))
+		require.LogsDoNotContain(t, hook, "below the scheduled network gas limit")
+		require.Equal(t, validator.Uint64(50_000_000), ps.TargetGasLimit(pk, 201))
+		require.LogsContain(t, hook, "below the scheduled network gas limit")
+	})
+
+	t.Run("operator value matching the schedule warns nothing", func(t *testing.T) {
+		hook := logtest.NewGlobal()
+		warnedGasLimitScheduleEpoch.Store(0)
+		warnedGasLimitBelowScheduleEpoch.Store(0)
+		ps := &Settings{DefaultConfig: &Option{GasLimit: validator.Uint64(90_000_000)}}
+		require.Equal(t, validator.Uint64(90_000_000), ps.TargetGasLimit(pk, 200))
+		require.LogsDoNotContain(t, hook, "below the scheduled network gas limit")
 		require.LogsDoNotContain(t, hook, "exceeds the recommended maximum")
 	})
 }
@@ -935,8 +986,8 @@ func TestHasBuilderContent(t *testing.T) {
 	require.Equal(t, true, neutral.HasBuilderContent())
 }
 
-// The cutover drops all v1 builder content, including gloas knobs like
-// max_execution_payment; v2 settings are the only source of builder opinions.
+// The cutover scrubs v1 builder fields; v2 content — including an explicit
+// max_execution_payment — survives it.
 func TestUpgradeToV2_DropsBuilderContent(t *testing.T) {
 	key := [fieldparams.BLSPubkeyLength]byte{9}
 	ps := &Settings{
@@ -948,7 +999,10 @@ func TestUpgradeToV2_DropsBuilderContent(t *testing.T) {
 	}
 	require.Equal(t, true, ps.UpgradeToV2())
 	require.Equal(t, SchemaV2, ps.Version)
-	require.IsNil(t, ps.DefaultConfig.BuilderConfig)
+	// The explicit trustless-only ceiling is v2 content and survives.
+	require.NotNil(t, ps.DefaultConfig.BuilderConfig)
+	require.Equal(t, validator.Uint64(0), *ps.DefaultConfig.BuilderConfig.MaxExecutionPayment)
+	// The pure-v1 per-key config is gone entirely.
 	require.IsNil(t, ps.ProposeConfig[key].BuilderConfig)
 	require.Equal(t, false, ps.UpgradeToV2())
 }

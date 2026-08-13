@@ -12,6 +12,7 @@
 ### Deprecated
 
 - `--with-builder` generates legacy (pre-gloas) mev-boost builder settings, which are discontinued at the gloas fork; the command now warns when the flag is used.
+- `--enable-builder` and `--suggested-gas-limit` produce only legacy (pre-gloas) content: they still drive mev-boost registrations before the fork, but never override v2 proposer settings or the gas limit schedule, and warn that they have no effect after gloas. An explicitly configured gas limit below the scheduled network gas limit is honored with a once-per-epoch warning.
 
 ### Fixed
 

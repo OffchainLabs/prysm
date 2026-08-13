@@ -601,29 +601,40 @@ func (ps *Settings) HasBuilderContent() bool {
 	return false
 }
 
-// UpgradeToV2 is the v1 cutover: v1 builder configs, including their gas limits,
-// do not apply to gloas and are dropped. Returns true if anything changed.
+// UpgradeToV2 is the gloas cutover: legacy v1 builder fields are scrubbed
+// wherever they appear — even under a v2 stamp — and the version is stamped.
 func (ps *Settings) UpgradeToV2() bool {
-	if ps == nil || ps.isV2() {
+	if ps == nil {
 		return false
 	}
-	dropped := false
-	drop := func(opt *Option) {
+	scrubbed := false
+	scrub := func(opt *Option) {
 		if opt == nil || opt.BuilderConfig == nil {
 			return
 		}
-		opt.BuilderConfig = nil
-		dropped = true
+		bc := opt.BuilderConfig
+		if bc.Enabled || bc.GasLimit != 0 {
+			bc.Enabled = false
+			bc.GasLimit = 0
+			scrubbed = true
+		}
+		// A config left with no v2 content disappears entirely; an explicit
+		// empty builders list is v2 content and survives.
+		if bc.Builders == nil && bc.MinBid == nil && bc.BuilderBoostFactor == nil && bc.MaxExecutionPayment == nil {
+			opt.BuilderConfig = nil
+			scrubbed = true
+		}
 	}
-	drop(ps.DefaultConfig)
+	scrub(ps.DefaultConfig)
 	for _, opt := range ps.ProposeConfig {
-		drop(opt)
+		scrub(opt)
 	}
+	changed := scrubbed || ps.Version != SchemaV2
 	ps.Version = SchemaV2
-	if dropped {
+	if scrubbed {
 		log.Warn("v1 builder settings, including gas limits, do not apply to gloas and were replaced with defaults; provide v2 proposer settings to configure builders")
 	}
-	return true
+	return changed
 }
 
 // TargetGasLimit resolves pubkey's proposer-preference gas limit at epoch: the
@@ -639,6 +650,9 @@ func (ps *Settings) TargetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, epo
 	}
 	if active && uint64(operator) > scheduled {
 		warnGasLimitExceedsSchedule(uint64(operator), scheduled, epoch)
+	}
+	if active && uint64(operator) < scheduled {
+		warnGasLimitBelowSchedule(uint64(operator), scheduled, epoch)
 	}
 	return operator
 }
@@ -659,17 +673,33 @@ func (ps *Settings) operatorGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) (
 var warnedGasLimitScheduleEpoch atomic.Uint64
 
 func warnGasLimitExceedsSchedule(operator, scheduled uint64, epoch primitives.Epoch) {
-	e := uint64(epoch) + 1
-	for {
-		prev := warnedGasLimitScheduleEpoch.Load()
-		if e <= prev {
-			return
-		}
-		if warnedGasLimitScheduleEpoch.CompareAndSwap(prev, e) {
-			break
-		}
+	if !warnOncePerEpoch(&warnedGasLimitScheduleEpoch, epoch) {
+		return
 	}
 	log.Warnf("Configured gas limit %d exceeds the recommended maximum of %d at epoch %d", operator, scheduled, epoch)
+}
+
+var warnedGasLimitBelowScheduleEpoch atomic.Uint64
+
+func warnGasLimitBelowSchedule(operator, scheduled uint64, epoch primitives.Epoch) {
+	if !warnOncePerEpoch(&warnedGasLimitBelowScheduleEpoch, epoch) {
+		return
+	}
+	log.Warnf("Configured gas limit %d is below the scheduled network gas limit of %d at epoch %d; remove the explicit gas limit to follow the schedule", operator, scheduled, epoch)
+}
+
+// warnOncePerEpoch reports whether the caller won this epoch's single warning slot.
+func warnOncePerEpoch(guard *atomic.Uint64, epoch primitives.Epoch) bool {
+	e := uint64(epoch) + 1
+	for {
+		prev := guard.Load()
+		if e <= prev {
+			return false
+		}
+		if guard.CompareAndSwap(prev, e) {
+			return true
+		}
+	}
 }
 
 // GasLimit resolves pubkey's gas limit: explicitly set option-level values win,
