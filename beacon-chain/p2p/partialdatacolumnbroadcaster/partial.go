@@ -111,6 +111,7 @@ type PartialColumnBroadcaster struct {
 	topics map[string]*pubsub.Topic
 	// subscribedTopics mirrors topics for lookups from the pubsub loop, which cannot touch the broadcaster-owned topics map.
 	subscribedTopics                 sync.Map
+	publishedTopics                  sync.Map
 	peerFeedbackSemaphore            chan struct{}
 	concurrentValidatorSemaphore     chan struct{}
 	concurrentHeaderHandlerSemaphore chan struct{}
@@ -345,9 +346,17 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 		return errors.Errorf("invalid topic ID %q: column index missing or out of bounds", rpc.GetTopicID())
 	}
 
+	// Accept messages for subscribed topics and for topics we have published our own
+	// column on (the proposer publishes on all topics, custody or not). The published
+	// case is essential: this callback records the peer's parts-requests below, and
+	// that request state is the only trigger for sending cells to a partial-requesting
+	// peer — dropping these messages on published topics starves the network of the
+	// proposer's cells.
 	if _, subscribed := p.subscribedTopics.Load(rpc.GetTopicID()); !subscribed {
-		p.logIgnoreUnsubscribedTopic(from, rpc.GetTopicID())
-		return nil
+		if _, published := p.publishedTopics.Load(rpc.GetTopicID()); !published {
+			p.logIgnoreUnsubscribedTopic(from, rpc.GetTopicID())
+			return nil
+		}
 	}
 
 	// Reject groups whose fork does not match the topic's fork digest, e.g. a Fulu group ID
@@ -574,6 +583,7 @@ func (p *PartialColumnBroadcaster) evictExpiredGroups() {
 			delete(msgStore, groupID)
 			if len(msgStore) == 0 {
 				delete(p.partialMsgStore, topic)
+				p.publishedTopics.Delete(topic)
 			}
 		}
 	}
@@ -693,12 +703,13 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 	}
 
 	topicID := rpc.GetTopicID()
-	// Only act on partial messages for topics we are currently subscribed to.
-	// The topic ID is peer-controlled, so this prevents a peer from making us
-	// allocate verifier/header state for columns we never asked for.
+	// Only act on partial messages for topics we are currently subscribed to, OR for
+	// groups we have published our own column for.
 	if _, subscribed := p.topics[topicID]; !subscribed {
-		p.logIgnoreUnsubscribedTopic(rpc.from, topicID)
-		return nil
+		if p.getPartialVerifier(topicID, rpc.GroupID) == nil {
+			p.logIgnoreUnsubscribedTopic(rpc.from, topicID)
+			return nil
+		}
 	}
 
 	message := rpc.message
@@ -1094,6 +1105,10 @@ func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, bl
 		ourColummn := verifier.Column
 
 		p.groupTTL[string(groupIDBytes)] = TTLInSlots
+		// Mark the topic as locally published so incoming parts-requests on it are
+		// accepted even without a subscription (see publishedTopics). Cleared when the
+		// topic's last group is evicted.
+		p.publishedTopics.Store(topic, struct{}{})
 		err := p.publishPartialCol(topic, ourColummn.GroupID(), ourColummn)
 		if err == nil {
 			ourColummn.Published = true
@@ -1146,5 +1161,6 @@ func (p *PartialColumnBroadcaster) unsubscribe(topic string) error {
 	delete(p.topics, topic)
 	p.subscribedTopics.Delete(topic)
 	delete(p.partialMsgStore, topic)
+	p.publishedTopics.Delete(topic)
 	return nil
 }
