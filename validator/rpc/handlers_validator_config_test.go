@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -14,9 +15,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/derived"
 	mocks "github.com/OffchainLabs/prysm/v7/validator/testing"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"go.uber.org/mock/gomock"
 )
 
 // setupConfigServer builds a Server with a derived keymanager holding numKeys
@@ -37,6 +40,28 @@ func setupConfigServer(t *testing.T, numKeys int) (*Server, [][48]byte) {
 	keys, err := dr.FetchValidatingPublicKeys(ctx)
 	require.NoError(t, err)
 	require.Equal(t, numKeys, len(keys))
+	// The CRUD tests exercise POST-then-GET round-trips, so the mocked service
+	// emulates the real store: reads return the stored settings, writes swap them.
+	vs, ok := srv.validatorService.(*validatormock.MockValidatorService)
+	require.Equal(t, true, ok)
+	var stored *proposer.Settings
+	vs.EXPECT().ProposerSettings().DoAndReturn(func() *proposer.Settings {
+		return stored
+	}).AnyTimes()
+	vs.EXPECT().SetProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, s *proposer.Settings) error {
+		stored = s
+		return nil
+	}).AnyTimes()
+	vs.EXPECT().UpdateProposerSettings(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, mutate func(*proposer.Settings) (*proposer.Settings, error)) error {
+		next, err := mutate(stored.Clone())
+		if err != nil {
+			return err
+		}
+		if next != nil {
+			stored = next
+		}
+		return nil
+	}).AnyTimes()
 	return srv, keys
 }
 

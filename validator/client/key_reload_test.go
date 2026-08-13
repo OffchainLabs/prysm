@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
-	"github.com/OffchainLabs/prysm/v7/validator/client/testutil"
 	"github.com/pkg/errors"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
@@ -35,7 +34,7 @@ func TestValidator_HandleKeyReload(t *testing.T) {
 			pubkeyToStatus:  make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 		}
 
-		resp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{inactive.pub[:], active.pub[:]})
+		resp := generateMultipleValidatorStatusResponse([][]byte{inactive.pub[:], active.pub[:]})
 		resp.Statuses[0].Status = ethpb.ValidatorStatus_UNKNOWN_STATUS
 		resp.Statuses[1].Status = ethpb.ValidatorStatus_ACTIVE
 		client.EXPECT().MultipleValidatorStatus(
@@ -66,7 +65,7 @@ func TestValidator_HandleKeyReload(t *testing.T) {
 			pubkeyToStatus:  make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 		}
 
-		resp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{kp.pub[:]})
+		resp := generateMultipleValidatorStatusResponse([][]byte{kp.pub[:]})
 		resp.Statuses[0].Status = ethpb.ValidatorStatus_UNKNOWN_STATUS
 		client.EXPECT().MultipleValidatorStatus(
 			gomock.Any(),

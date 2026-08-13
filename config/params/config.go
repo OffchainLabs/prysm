@@ -21,6 +21,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// BUILDER_PROPOSAL_DELAY_TOLERANCE
+// https://github.com/ethereum/builder-specs/blob/main/specs/bellatrix/validator.md#constants
+const BuilderProposalDelayTolerance = 1 * time.Second
+
 // BeaconChainConfig contains constant configs for node to participate in beacon chain.
 type BeaconChainConfig struct {
 	// Constants (non-configurable)
@@ -267,6 +271,7 @@ type BeaconChainConfig struct {
 	LocalBlockValueBoost             uint64          // LocalBlockValueBoost is the value boost for local block construction. This is used to prioritize local block construction over relay/builder block construction.
 	MinBuilderBid                    uint64          // MinBuilderBid is the minimum value that the builder's block can have to be considered by this node.
 	MinBuilderDiff                   uint64          // MinBuilderDiff is the minimum value above the local block value that the builder has to bid to be considered by this node
+	BuilderHeaderTimeout             time.Duration   // BuilderHeaderTimeout is how long to wait for a builder relay `getHeader` response before falling back to local block building. Known as `BUILDER_PROPOSAL_DELAY_TOLERANCE` in the builder spec.
 	// Execution engine timeout value
 	ExecutionEngineTimeoutValue uint64 // ExecutionEngineTimeoutValue defines the seconds to wait before timing out engine endpoints with execution payload execution semantics (newPayload, forkchoiceUpdated).
 

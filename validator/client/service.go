@@ -37,7 +37,7 @@ import (
 type ValidatorService struct {
 	ctx                     context.Context
 	cancel                  context.CancelFunc
-	validator               iface.Validator
+	validator               *validator
 	db                      db.Database
 	conn                    *validatorHelpers.NodeConnection
 	wallet                  *wallet.Wallet
@@ -59,7 +59,6 @@ type ValidatorService struct {
 
 // Config for the validator service.
 type Config struct {
-	Validator               iface.Validator
 	DB                      db.Database
 	Wallet                  *wallet.Wallet
 	WalletInitializedFeed   *event.Feed
@@ -95,7 +94,6 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 	s := &ValidatorService{
 		ctx:                     ctx,
 		cancel:                  cancel,
-		validator:               cfg.Validator,
 		db:                      cfg.DB,
 		wallet:                  cfg.Wallet,
 		walletInitializedFeed:   cfg.WalletInitializedFeed,
@@ -230,16 +228,15 @@ func (v *ValidatorService) Start() {
 		head:                         newHeadTracker(),
 	}
 
-	val := v.validator.(*validator)
 	if v.distributed {
-		val.aggSelector = newDistributedSelector(val)
+		v.validator.aggSelector = newDistributedSelector(v.validator)
 	} else {
-		selector, err := newLocalSelector(val)
+		selector, err := newLocalSelector(v.validator)
 		if err != nil {
 			log.WithError(err).Error("Could not create aggregator selector")
 			return
 		}
-		val.aggSelector = selector
+		v.validator.aggSelector = selector
 	}
 
 	hm := newHealthMonitor(v.ctx, v.cancel, v.maxHealthChecks, v.validator)

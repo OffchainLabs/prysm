@@ -78,6 +78,13 @@ var (
 			" and the beacon will revert to local building.",
 		Value: 0,
 	}
+	// BuilderHeaderTimeout bounds how long the beacon node waits for a builder relay `getHeader` response
+	// before giving up and using the locally built block.
+	BuilderHeaderTimeout = &cli.DurationFlag{
+		Name:  "builder-header-timeout",
+		Usage: "Timeout to use when fetching a block header from the builder API, as a duration (e.g. 1s, 2s, 2500ms). Must be greater than 0. Only effective up to the Fulu fork.",
+		Value: params.BeaconConfig().BuilderHeaderTimeout,
+	}
 	// ExecutionEngineEndpoint provides an HTTP access endpoint to connect to an execution client on the execution layer
 	ExecutionEngineEndpoint = &cli.StringFlag{
 		Name:  "execution-endpoint",
