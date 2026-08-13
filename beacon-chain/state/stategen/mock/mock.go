@@ -36,7 +36,7 @@ func (_ *StateManager) Resume(_ context.Context, _ state.BeaconState) (state.Bea
 }
 
 // SaveFinalizedState --
-func (_ *StateManager) SaveFinalizedState(_ primitives.Slot, _ [32]byte, _ state.BeaconState) {
+func (_ *StateManager) SaveFinalizedState(_ [32]byte, _ state.BeaconState) {
 	panic("implement me")
 }
 
