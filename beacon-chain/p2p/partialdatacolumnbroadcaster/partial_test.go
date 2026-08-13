@@ -1443,6 +1443,62 @@ func TestPartialColumnBroadcaster_handleIncomingRPC_ignoresUnsubscribedTopic(t *
 	require.Equal(t, 0, len(h.broadcaster.incomingReq))
 }
 
+func TestPartialColumnBroadcaster_handleIncomingRPC_servesPublishedUnsubscribedTopic(t *testing.T) {
+	ps := newMockPubSub(nil, nil)
+	recorder := newCallbackRecorder(8, false, nil, nil)
+	h := newBroadcasterHarness(t, ps)
+	h.broadcaster.callbacks = recorder
+
+	// The proposer holds every cell of its column.
+	col := createPartialColumn(t, 2, map[uint64][]byte{0: {0xA0}, 1: {0xA1}})
+	group := col.GroupID()
+	// Well-formed topic that is published on but never subscribed to.
+	const topic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+
+	require.NoError(t, h.broadcaster.publish(func(yield func(string, blocks.PartialDataColumn) bool) {
+		yield(topic, *col)
+	}))
+	require.Equal(t, 1, ps.publishedColumnCount())
+	_, published := h.broadcaster.publishedTopics.Load(topic)
+	require.Equal(t, true, published)
+
+	// A peer with no cells requesting all of them (the empty-partial fallback shape).
+	// The differing parts metadata must trigger a republish that serves our cells.
+	rpc := buildIncomingRPC(topic, group, nil, mustMarshalPartsMetadata(t, testPartsMetadata(2, nil, []uint64{0, 1})))
+	require.NoError(t, h.broadcaster.handleIncomingRPC(rpc))
+	require.Equal(t, 2, ps.publishedColumnCount())
+
+	// A group we did not publish stays ignored on the unsubscribed topic: peer input
+	// must not allocate verifier/header state there.
+	otherParentRoot := make([]byte, 32)
+	otherParentRoot[0] = 1
+	otherHeader := &ethpb.SignedBeaconBlockHeader{
+		Header: &ethpb.BeaconBlockHeader{
+			ParentRoot: otherParentRoot,
+			StateRoot:  make([]byte, 32),
+			BodyRoot:   make([]byte, 32),
+		},
+		Signature: []byte{1},
+	}
+	otherRoot, err := otherHeader.Header.HashTreeRoot()
+	require.NoError(t, err)
+	otherCol, err := blocks.NewPartialDataColumn(otherRoot, otherHeader, 12, [][]byte{{1}, {2}}, nil)
+	require.NoError(t, err)
+	otherRPC := buildIncomingRPC(topic, otherCol.GroupID(), buildHeaderOnlySidecar(t, &otherCol), nil)
+	require.NoError(t, h.broadcaster.handleIncomingRPC(otherRPC))
+	require.IsNil(t, h.broadcaster.getDataColumn(topic, otherCol.GroupID()))
+	require.Equal(t, 2, ps.publishedColumnCount())
+
+	// Once the published group expires, the topic reverts to fully ignored.
+	for range TTLInSlots + 1 {
+		h.broadcaster.evictExpiredGroups()
+	}
+	_, published = h.broadcaster.publishedTopics.Load(topic)
+	require.Equal(t, false, published)
+	require.NoError(t, h.broadcaster.handleIncomingRPC(rpc))
+	require.Equal(t, 2, ps.publishedColumnCount())
+}
+
 func TestPartialColumnBroadcaster_onIncomingRPC_inputValidation(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
@@ -1810,6 +1866,35 @@ func TestPartialColumnBroadcaster_onIncomingRPC_ignoresUnsubscribedTopic(t *test
 	require.Equal(t, 0, len(h.broadcaster.incomingReq))
 	require.Equal(t, 0, len(peerStates))
 	require.Equal(t, 0, ps.peerFeedbackCallCount())
+}
+
+func TestPartialColumnBroadcaster_onIncomingRPC_acceptsPublishedTopic(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 1_000_000
+	params.OverrideBeaconConfig(cfg)
+
+	const from = peer.ID("peer-a")
+	topic := fmt.Sprintf("/eth2/%x/data_column_sidecar_37/ssz_snappy", params.ForkDigest(cfg.FuluForkEpoch))
+
+	ps := newMockPubSub(nil, nil)
+	h := newBroadcasterHarness(t, ps)
+	// Published on (proposer flow) but intentionally NOT subscribed to.
+	h.broadcaster.publishedTopics.Store(topic, struct{}{})
+
+	rpc := &pubsub_pb.PartialMessagesExtension{
+		TopicID:       &topic,
+		GroupID:       slices.Clone(createPartialColumn(t, 2, nil).GroupID()),
+		PartsMetadata: mustMarshalPartsMetadata(t, testPartsMetadata(2, []uint64{0}, nil)),
+	}
+	peerStates := map[peer.ID]blocks.PartialDataColumnPeerState{}
+
+	require.NoError(t, h.broadcaster.onIncomingRPC(from, peerStates, rpc))
+
+	// The message is decoded, enqueued for the event loop, and the peer's state is
+	// recorded so later publishes can serve it cells.
+	require.Equal(t, 1, len(h.broadcaster.incomingReq))
+	require.Equal(t, 1, len(peerStates))
 }
 
 func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
