@@ -3,10 +3,12 @@ package client
 import (
 	"context"
 	"fmt"
-	"math/bits"
+	"io"
 	"math/rand"
 	"runtime/debug"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -25,8 +27,6 @@ import (
 	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
-	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
-	"github.com/OffchainLabs/prysm/v7/validator/client/testutil"
 	testing2 "github.com/OffchainLabs/prysm/v7/validator/db/testing"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
@@ -34,14 +34,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
-
-func cancelledContext() context.Context {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	return ctx
-}
 
 // walletBackedKeymanager builds a local-keymanager wallet preloaded with numKeys
 // deterministic keys, so the runner's WaitForKeymanagerInitialization resolves a
@@ -67,116 +63,175 @@ func walletBackedKeymanager(t *testing.T, ctx context.Context, numKeys uint64) *
 	return w
 }
 
-// Helper function to run the validator runner for tests
-func runTest(t *testing.T, ctx context.Context, v iface.Validator) {
-	r, err := newRunner(ctx, v, &healthMonitor{isHealthy: true})
-	require.NoError(t, err)
-	r.run(ctx)
+// runnerTestValidator builds a real validator wired to mocked beacon-node clients, so
+// what the runner does is observable as the RPCs it drives.
+func runnerTestValidator(t *testing.T, ctx context.Context) (*validator, *validatormock.MockValidatorClient, *validatormock.MockNodeClient) {
+	ctrl := gomock.NewController(t)
+	vc := validatormock.NewMockValidatorClient(ctrl)
+	nc := validatormock.NewMockNodeClient(ctrl)
+	v := &validator{
+		validatorClient:              vc,
+		nodeClient:                   nc,
+		db:                           testing2.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false),
+		wallet:                       walletBackedKeymanager(t, ctx, 1),
+		duties:                       &dutyStore{},
+		slotFeed:                     &event.Feed{},
+		pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
+		signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
+		submittedAtts:                make(map[submittedAttKey]*submittedAtt),
+		submittedAggregates:          make(map[submittedAttKey]*submittedAtt),
+		attestedSlotsByKeyByEpoch:    make(map[primitives.Epoch]map[[fieldparams.BLSPubkeyLength]byte]primitives.Slot),
+		accountsChangedChannel:       make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
+	}
+	v.aggSelector = testLocalSelector(t, v)
+	return v, vc, nc
 }
 
-func TestCancelledContext_CleansUpValidator(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	v := &testutil.FakeValidator{
-		Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}},
-	}
-	runTest(t, cancelledContext(), v)
-	assert.Equal(t, true, v.DoneCalled, "Expected Done() to be called")
+// expectChainStart answers the genesis handshake initialize() starts with.
+func expectChainStart(vc *validatormock.MockValidatorClient) *gomock.Call {
+	return vc.EXPECT().WaitForChainStart(gomock.Any(), gomock.Any()).Return(&ethpb.ChainStartResponse{
+		Started:               true,
+		GenesisTime:           uint64(time.Now().Unix()) - params.BeaconConfig().SecondsPerSlot,
+		GenesisValidatorsRoot: make([]byte, fieldparams.RootLength),
+	}, nil)
 }
 
-func TestCancelledContext_WaitsForChainStart(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	v := &testutil.FakeValidator{
-		Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}},
-	}
-	runTest(t, cancelledContext(), v)
-	assert.Equal(t, 1, v.WaitForChainStartCalled, "Expected WaitForChainStart() to be called")
+// expectStatuses answers status lookups with the given status for every key asked about.
+func expectStatuses(vc *validatormock.MockValidatorClient, status ethpb.ValidatorStatus) *gomock.Call {
+	return vc.EXPECT().MultipleValidatorStatus(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, req *ethpb.MultipleValidatorStatusRequest) (*ethpb.MultipleValidatorStatusResponse, error) {
+			res := &ethpb.MultipleValidatorStatusResponse{}
+			for i, pk := range req.PublicKeys {
+				res.PublicKeys = append(res.PublicKeys, pk)
+				res.Statuses = append(res.Statuses, &ethpb.ValidatorStatusResponse{Status: status})
+				res.Indices = append(res.Indices, primitives.ValidatorIndex(i))
+			}
+			return res, nil
+		})
+}
+
+// TestInitialize covers what the cancelled-context tests used to: the whole startup
+// sequence runs and leaves the validator ready to attest.
+func TestInitialize(t *testing.T) {
+	t.Run("leaves the validator ready to attest", func(t *testing.T) {
+		ctx := t.Context()
+		v, vc, nc := runnerTestValidator(t, ctx)
+		expectChainStart(vc)
+		nc.EXPECT().SyncStatus(gomock.Any(), gomock.Any()).Return(&ethpb.SyncStatus{Syncing: false}, nil)
+		expectStatuses(vc, ethpb.ValidatorStatus_ACTIVE).AnyTimes()
+
+		require.NoError(t, initialize(ctx, v))
+
+		assert.Equal(t, false, v.genesisTime.IsZero(), "Expected genesis time from the chain start response")
+		require.NotNil(t, v.km, "Expected the keymanager to be initialized from the wallet")
+		keys, err := v.km.FetchValidatingPublicKeys(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(keys))
+		_, err = v.indexFromPubkey(keys[0])
+		require.NoError(t, err, "Expected the status cache to be populated for the validating key")
+	})
+
+	t.Run("logs a duties failure instead of failing", func(t *testing.T) {
+		hook := logTest.NewGlobal()
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		v, vc, nc := runnerTestValidator(t, ctx)
+		expectChainStart(vc)
+		nc.EXPECT().SyncStatus(gomock.Any(), gomock.Any()).Return(&ethpb.SyncStatus{Syncing: false}, nil)
+		expectStatuses(vc, ethpb.ValidatorStatus_ACTIVE).AnyTimes()
+		vc.EXPECT().ConnectionGeneration().Return(uint64(0)).AnyTimes()
+		vc.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(nil, errors.New("bad")).AnyTimes()
+		vc.EXPECT().SubmitValidatorRegistrations(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+		vc.EXPECT().PrepareBeaconProposer(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+		vc.EXPECT().DomainData(gomock.Any(), gomock.Any()).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).AnyTimes()
+
+		_, err := newRunner(ctx, v, &healthMonitor{isHealthy: true})
+		require.NoError(t, err) // duties failures are logged, not fatal
+		require.LogsContain(t, hook, "Failed to update assignments")
+	})
 }
 
 func TestRetry_On_ConnectionError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	retry := 10
-	v := &testutil.FakeValidator{
-		Km:               &mockKeymanager{accountsChangedFeed: &event.Feed{}},
-		RetryTillSuccess: retry,
-	}
+	ctx, cancel := context.WithCancel(t.Context())
+	v, vc, nc := runnerTestValidator(t, ctx)
+
+	// Each failure sends initialize() back to the top of its loop, so the steps before
+	// the failing one run again.
+	var chainStart, sync, activation atomic.Int32
+	vc.EXPECT().WaitForChainStart(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(context.Context, *emptypb.Empty) (*ethpb.ChainStartResponse, error) {
+			if int(chainStart.Add(1)) <= retry {
+				return nil, io.EOF
+			}
+			return &ethpb.ChainStartResponse{
+				Started:               true,
+				GenesisTime:           uint64(time.Now().Unix()) - params.BeaconConfig().SecondsPerSlot,
+				GenesisValidatorsRoot: make([]byte, fieldparams.RootLength),
+			}, nil
+		}).AnyTimes()
+	nc.EXPECT().SyncStatus(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(context.Context, *emptypb.Empty) (*ethpb.SyncStatus, error) {
+			if int(sync.Add(1)) <= retry {
+				return nil, errors.New("no connection")
+			}
+			return &ethpb.SyncStatus{Syncing: false}, nil
+		}).AnyTimes()
+	expectStatuses(vc, ethpb.ValidatorStatus_ACTIVE).Do(func(any, any) { activation.Add(1) }).AnyTimes()
+
 	backOffPeriod = 10 * time.Millisecond
+	go func() {
+		// each step will fail (retry times)=10 this sleep times will wait more then
+		// the time it takes for all steps to succeed before main loop.
+		time.Sleep(time.Duration(retry*6) * backOffPeriod)
+		cancel()
+	}()
+	require.NoError(t, initialize(ctx, v))
 
-	ctx, cancel := context.WithCancel(t.Context())
-	go runTest(t, ctx, v)
+	// every call will fail retry=10 times so first one will be called 2 * retry=10 + 1.
+	assert.Equal(t, int32(retry*2+1), chainStart.Load(), "Expected WaitForChainStart() to be retried")
+	assert.Equal(t, int32(retry+1), sync.Load(), "Expected WaitForSync() to be retried")
+	assert.Equal(t, int32(1), activation.Load(), "Expected WaitForActivation() to be reached once")
+}
 
-	// each step will fail (retry times)=10 this sleep times will wait more then
-	// the time it takes for all steps to succeed before main loop.
-	time.Sleep(time.Duration(retry*6) * backOffPeriod)
+func TestRun_ExitsOnCancelledContext(t *testing.T) {
+	ctx := t.Context()
+	v, vc, nc := runnerTestValidator(t, ctx)
+	expectChainStart(vc)
+	nc.EXPECT().SyncStatus(gomock.Any(), gomock.Any()).Return(&ethpb.SyncStatus{Syncing: false}, nil)
+	expectStatuses(vc, ethpb.ValidatorStatus_ACTIVE).AnyTimes()
+	vc.EXPECT().ConnectionGeneration().Return(uint64(0)).AnyTimes()
+	vc.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(&ethpb.ValidatorDutiesContainer{}, nil).AnyTimes()
+	vc.EXPECT().SubmitValidatorRegistrations(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	vc.EXPECT().PrepareBeaconProposer(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	vc.EXPECT().DomainData(gomock.Any(), gomock.Any()).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).AnyTimes()
+	vc.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+	r, err := newRunner(ctx, v, &healthMonitor{isHealthy: true})
+	require.NoError(t, err)
+
+	cancelled, cancel := context.WithCancel(ctx)
 	cancel()
-	// every call will fail retry=10 times so first one will be called 4 * retry=10.
-	assert.Equal(t, retry*2+1, v.WaitForChainStartCalled, "Expected WaitForChainStart() to be called")
-	assert.Equal(t, retry+1, v.WaitForSyncCalled, "Expected WaitForSync() to be called")
-	assert.Equal(t, 1, v.WaitForActivationCalled, "Expected WaitForActivation() to be called")
-}
-
-func TestCancelledContext_WaitsForActivation(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	v := &testutil.FakeValidator{
-		Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}},
+	done := make(chan struct{})
+	go func() {
+		r.run(cancelled)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("run did not return on a cancelled context")
 	}
-	runTest(t, cancelledContext(), v)
-	assert.Equal(t, 1, v.WaitForActivationCalled, "Expected WaitForActivation() to be called")
-}
-
-func TestUpdateDuties_NextSlot(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}}
-	ctx, cancel := context.WithCancel(t.Context())
-
-	slot := primitives.Slot(55)
-	ticker := make(chan primitives.Slot)
-	v.NextSlotRet = ticker
-	go func() {
-		ticker <- slot
-
-		cancel()
-	}()
-
-	runTest(t, ctx, v)
-
-	require.Equal(t, true, v.UpdateDutiesCalled, "Expected UpdateAssignments(%d) to be called", slot)
-}
-
-func TestUpdateDuties_HandlesError(t *testing.T) {
-	hook := logTest.NewGlobal()
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}}
-	ctx, cancel := context.WithCancel(t.Context())
-
-	slot := primitives.Slot(55)
-	ticker := make(chan primitives.Slot)
-	v.NextSlotRet = ticker
-	go func() {
-		ticker <- slot
-
-		cancel()
-	}()
-	v.UpdateDutiesRet = errors.New("bad")
-
-	runTest(t, ctx, v)
-
-	require.LogsContain(t, hook, "Failed to update assignments")
+	assert.Equal(t, true, v.ticker != nil, "Expected the slot ticker to have been set")
 }
 
 func TestMaybeFetchNextDuties_Gating(t *testing.T) {
 	spe := params.BeaconConfig().SlotsPerEpoch
 	fetchSlot := nextDutiesFetchSlot()
 	tests := []struct {
-		name     string
-		slot     primitives.Slot
-		wantNext bool
+		name string
+		slot primitives.Slot
+		want bool
 	}{
 		{"early slot skips next fetch", 1, false},
 		{"slot before threshold skips next fetch", fetchSlot - 1, false},
@@ -185,216 +240,39 @@ func TestMaybeFetchNextDuties_Gating(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}}
-			ctx, cancel := context.WithCancel(t.Context())
-			ticker := make(chan primitives.Slot)
-			v.NextSlotRet = ticker
-			go func() {
-				ticker <- tt.slot
-				cancel()
-			}()
-
-			runTest(t, ctx, v)
-
-			assert.Equal(t, tt.wantNext, v.MaybeFetchNextDutiesCalled)
+			assert.Equal(t, tt.want, shouldFetchNextDuties(tt.slot))
 		})
 	}
 }
 
-func TestRoleAt_NextSlot(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+// TestKeyReload drives onAccountsChanged. The status lookup decides whether the
+// reloaded key is active, so the key bytes themselves do not matter.
+func TestKeyReload(t *testing.T) {
+	reloaded := [][fieldparams.BLSPubkeyLength]byte{{1}}
 
-	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}}
-	ctx, cancel := context.WithCancel(t.Context())
+	t.Run("active key needs no activation wait", func(t *testing.T) {
+		ctx := t.Context()
+		v, vc, _ := runnerTestValidator(t, ctx)
+		// One status lookup: the key is active, so no activation wait follows.
+		expectStatuses(vc, ethpb.ValidatorStatus_ACTIVE).Times(1)
 
-	slot := primitives.Slot(55)
-	ticker := make(chan primitives.Slot)
-	v.NextSlotRet = ticker
-	go func() {
-		ticker <- slot
-
-		cancel()
-	}()
-
-	runTest(t, ctx, v)
-
-	require.Equal(t, true, v.RoleAtCalled, "Expected RoleAt(%d) to be called", slot)
-	assert.Equal(t, uint64(slot), v.RoleAtArg1, "RoleAt called with the wrong arg")
-}
-
-func TestAttests_NextSlot(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	attSubmitted := make(chan any)
-	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, AttSubmitted: attSubmitted}
-	ctx, cancel := context.WithCancel(t.Context())
-
-	slot := primitives.Slot(55)
-	ticker := make(chan primitives.Slot)
-	v.NextSlotRet = ticker
-	v.RolesAtRet = []iface.ValidatorRole{iface.RoleAttester}
-	go func() {
-		ticker <- slot
-
-		cancel()
-	}()
-	runTest(t, ctx, v)
-	<-attSubmitted
-	require.Equal(t, true, v.AttestToBlockHeadCalled, "SubmitAttestation(%d) was not called", slot)
-	assert.Equal(t, uint64(slot), v.AttestToBlockHeadArg1, "SubmitAttestation was called with wrong arg")
-}
-
-func TestProposes_NextSlot(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	blockProposed := make(chan any)
-	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, BlockProposed: blockProposed}
-	ctx, cancel := context.WithCancel(t.Context())
-
-	slot := primitives.Slot(55)
-	ticker := make(chan primitives.Slot)
-	v.NextSlotRet = ticker
-	v.RolesAtRet = []iface.ValidatorRole{iface.RoleProposer}
-	go func() {
-		ticker <- slot
-
-		cancel()
-	}()
-	runTest(t, ctx, v)
-	<-blockProposed
-
-	require.Equal(t, true, v.ProposeBlockCalled, "ProposeBlock(%d) was not called", slot)
-	assert.Equal(t, uint64(slot), v.ProposeBlockArg1, "ProposeBlock was called with wrong arg")
-}
-
-func TestBothProposesAndAttests_NextSlot(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	blockProposed := make(chan any)
-	attSubmitted := make(chan any)
-	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, BlockProposed: blockProposed, AttSubmitted: attSubmitted}
-	ctx, cancel := context.WithCancel(t.Context())
-
-	slot := primitives.Slot(55)
-	ticker := make(chan primitives.Slot)
-	v.NextSlotRet = ticker
-	v.RolesAtRet = []iface.ValidatorRole{iface.RoleAttester, iface.RoleProposer}
-	go func() {
-		ticker <- slot
-
-		cancel()
-	}()
-	runTest(t, ctx, v)
-	<-blockProposed
-	<-attSubmitted
-	require.Equal(t, true, v.AttestToBlockHeadCalled, "SubmitAttestation(%d) was not called", slot)
-	assert.Equal(t, uint64(slot), v.AttestToBlockHeadArg1, "SubmitAttestation was called with wrong arg")
-	require.Equal(t, true, v.ProposeBlockCalled, "ProposeBlock(%d) was not called", slot)
-	assert.Equal(t, uint64(slot), v.ProposeBlockArg1, "ProposeBlock was called with wrong arg")
-}
-
-func TestKeyReload_ActiveKey(t *testing.T) {
-	ctx := t.Context()
-	km := &mockKeymanager{}
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	v := &testutil.FakeValidator{Km: km, AccountsChannel: make(chan [][fieldparams.BLSPubkeyLength]byte)}
-	current := [][fieldparams.BLSPubkeyLength]byte{testutil.ActiveKey}
-	onAccountsChanged(ctx, v, current)
-	assert.Equal(t, true, v.HandleKeyReloadCalled)
-	// HandleKeyReloadCalled in the FakeValidator returns true if one of the keys is equal to the
-	// ActiveKey. WaitForActivation is only called if none of the keys are active, so it shouldn't be called at all.
-	assert.Equal(t, 0, v.WaitForActivationCalled)
-}
-
-func TestKeyReload_NoActiveKey(t *testing.T) {
-	na := notActive(t)
-	ctx := t.Context()
-	km := &mockKeymanager{}
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	v := &testutil.FakeValidator{Km: km, AccountsChannel: make(chan [][fieldparams.BLSPubkeyLength]byte)}
-	current := [][fieldparams.BLSPubkeyLength]byte{na}
-	onAccountsChanged(ctx, v, current)
-	assert.Equal(t, true, v.HandleKeyReloadCalled)
-	// HandleKeyReloadCalled in the FakeValidator returns true if one of the keys is equal to the
-	// ActiveKey. Since we are using a key we know is not active, it should return false, which
-	// should cause the account change handler to call WaitForActivationCalled.
-	assert.Equal(t, 1, v.WaitForActivationCalled)
-}
-
-func notActive(t *testing.T) [fieldparams.BLSPubkeyLength]byte {
-	var r [fieldparams.BLSPubkeyLength]byte
-	copy(r[:], testutil.ActiveKey[:])
-	for i := range len(r) {
-		r[i] = bits.Reverse8(r[i])
-	}
-	require.DeepNotEqual(t, r, testutil.ActiveKey)
-	return r
-}
-
-func TestUpdateProposerSettingsAt_EpochStart(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}}
-	err := v.SetProposerSettings(t.Context(), &proposer.Settings{
-		DefaultConfig: &proposer.Option{
-			FeeRecipientConfig: &proposer.FeeRecipientConfig{
-				FeeRecipient: common.HexToAddress("0x046Fb65722E7b2455012BFEBf6177F1D2e9738D9"),
-			},
-		},
+		onAccountsChanged(ctx, v, reloaded)
 	})
-	require.NoError(t, err)
-	ctx, cancel := context.WithCancel(t.Context())
-	hook := logTest.NewGlobal()
-	slot := params.BeaconConfig().SlotsPerEpoch
-	ticker := make(chan primitives.Slot)
-	v.NextSlotRet = ticker
-	go func() {
-		ticker <- slot
 
-		cancel()
-	}()
+	t.Run("inactive key waits for activation", func(t *testing.T) {
+		hook := logTest.NewGlobal()
+		ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+		t.Cleanup(cancel)
+		v, vc, _ := runnerTestValidator(t, ctx)
+		require.NoError(t, v.WaitForKeymanagerInitialization(ctx))
+		// The key is not active, so the reload is followed by a wait for activation that
+		// looks the statuses up again and then blocks until the context expires.
+		expectStatuses(vc, ethpb.ValidatorStatus_UNKNOWN_STATUS).MinTimes(2)
 
-	runTest(t, ctx, v)
-	assert.LogsContain(t, hook, "updated proposer settings")
-}
+		onAccountsChanged(ctx, v, reloaded)
 
-func TestUpdateProposerSettingsAt_EpochEndOk(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	v := &testutil.FakeValidator{
-		Km:                  &mockKeymanager{accountsChangedFeed: &event.Feed{}},
-		ProposerSettingWait: time.Duration(params.BeaconConfig().SecondsPerSlot-1) * time.Second,
-	}
-	err := v.SetProposerSettings(t.Context(), &proposer.Settings{
-		DefaultConfig: &proposer.Option{
-			FeeRecipientConfig: &proposer.FeeRecipientConfig{
-				FeeRecipient: common.HexToAddress("0x046Fb65722E7b2455012BFEBf6177F1D2e9738D9"),
-			},
-		},
+		require.LogsContain(t, hook, "Could not wait for validator activation")
 	})
-	require.NoError(t, err)
-	ctx, cancel := context.WithCancel(t.Context())
-	hook := logTest.NewGlobal()
-	slot := params.BeaconConfig().SlotsPerEpoch - 1 //have it set close to the end of epoch
-	ticker := make(chan primitives.Slot)
-	v.NextSlotRet = ticker
-	go func() {
-		ticker <- slot
-		cancel()
-	}()
-
-	runTest(t, ctx, v)
-	// can't test "Failed to update proposer settings" because of log.fatal
-	assert.LogsContain(t, hook, "Mock updated proposer settings")
 }
 
 type tlogger struct {
@@ -617,5 +495,98 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 	}
 	v.aggSelector = testLocalSelector(t, v)
 
-	runTest(t, timedCtx, v)
+	r, err := newRunner(timedCtx, v, &healthMonitor{isHealthy: true})
+	require.NoError(t, err)
+	r.run(timedCtx)
+}
+
+func TestPerformRolesDispatch(t *testing.T) {
+	cfg := params.BeaconConfig()
+	cfg.ElectraForkEpoch = 1
+	cfg.GloasForkEpoch = 2
+	params.SetActiveTestCleanup(t, cfg)
+
+	stop := errors.New("stop after dispatch")
+	tests := []struct {
+		name   string
+		role   validatorRole
+		slot   primitives.Slot
+		expect func(*validator, *mocks, [fieldparams.BLSPubkeyLength]byte)
+	}{
+		{
+			name: "attester",
+			role: roleAttester,
+			slot: 1,
+			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
+				m.validatorClient.EXPECT().AttestationData(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
+			},
+		},
+		{
+			name: "proposer",
+			role: roleProposer,
+			slot: 1,
+			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
+				m.validatorClient.EXPECT().DomainData(gomock.Any(), gomock.Any()).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, fieldparams.RootLength)}, nil).Times(1)
+				m.validatorClient.EXPECT().BeaconBlock(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
+			},
+		},
+		{
+			name: "aggregator",
+			role: roleAggregator,
+			slot: 1,
+			expect: func(v *validator, m *mocks, pubKey [fieldparams.BLSPubkeyLength]byte) {
+				v.aggSelector = &stubAggregatorSelector{proofs: map[[fieldparams.BLSPubkeyLength]byte][]byte{pubKey: {1}}}
+				m.validatorClient.EXPECT().SubmitAggregateSelectionProof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
+			},
+		},
+		{
+			name: "sync committee",
+			role: roleSyncCommittee,
+			slot: 1,
+			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
+				m.validatorClient.EXPECT().SyncMessageBlockRoot(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
+			},
+		},
+		{
+			name: "sync committee aggregator",
+			role: roleSyncCommitteeAggregator,
+			slot: 1,
+			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
+				m.validatorClient.EXPECT().SyncSubcommitteeIndex(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
+			},
+		},
+		{
+			name: "PTC member",
+			role: rolePTCMember,
+			slot: cfg.SlotsPerEpoch.Mul(uint64(cfg.GloasForkEpoch)),
+			expect: func(_ *validator, m *mocks, _ [fieldparams.BLSPubkeyLength]byte) {
+				m.validatorClient.EXPECT().PayloadAttestationData(gomock.Any(), gomock.Any()).Return(nil, stop).Times(1)
+			},
+		},
+		{
+			name: "unknown",
+			role: roleUnknown,
+			slot: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v, m, validatorKey, finish := setup(t, false)
+			defer finish()
+			pubKey := bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())
+			v.duties = testDutyStore(&ethpb.ValidatorDuty{
+				PublicKey:       pubKey[:],
+				ValidatorIndex:  1,
+				CommitteeLength: 1,
+			})
+			if tt.expect != nil {
+				tt.expect(v, m, pubKey)
+			}
+
+			var wg sync.WaitGroup
+			performRoles(t.Context(), map[[fieldparams.BLSPubkeyLength]byte][]validatorRole{pubKey: {tt.role}}, v, tt.slot, &wg, trace.SpanFromContext(t.Context()))
+			wg.Wait()
+		})
+	}
 }

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
@@ -37,6 +38,55 @@ func TestConfigureHistoricalSlasher(t *testing.T) {
 			params.BeaconConfig().SlotsPerArchivedPoint,
 			int(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().MaxAttestations))),
 	)
+}
+
+func TestConfigureBuilderHeaderTimeout(t *testing.T) {
+	newCliCtx := func(t *testing.T, timeout string) *cli.Context {
+		set := flag.NewFlagSet("test", 0)
+		set.Duration(flags.BuilderHeaderTimeout.Name, flags.BuilderHeaderTimeout.Value, "")
+		if timeout != "" {
+			require.NoError(t, set.Set(flags.BuilderHeaderTimeout.Name, timeout))
+		}
+		return cli.NewContext(&cli.App{}, set, nil)
+	}
+
+	t.Run("leaves the config untouched when unset", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		hook := logTest.NewGlobal()
+		c := params.BeaconConfig().Copy()
+		c.BuilderHeaderTimeout = 1234 * time.Millisecond
+		require.NoError(t, params.SetActive(c))
+
+		require.NoError(t, configureBuilderHeaderTimeout(newCliCtx(t, "")))
+
+		assert.Equal(t, 1234*time.Millisecond, params.BeaconConfig().BuilderHeaderTimeout)
+		assert.LogsDoNotContain(t, hook, "Overriding the builder API `getHeader` timeout")
+	})
+
+	for _, timeout := range []string{"0s", "-1ms"} {
+		t.Run("rejects "+timeout, func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+
+			err := configureBuilderHeaderTimeout(newCliCtx(t, timeout))
+
+			require.ErrorContains(t, fmt.Sprintf("--builder-header-timeout must be greater than 0, got %s", timeout), err)
+			assert.Equal(t, params.BuilderProposalDelayTolerance, params.BeaconConfig().BuilderHeaderTimeout)
+		})
+	}
+
+	// Any positive value is accepted: there is no upper bound, and no relay endpoint is required.
+	t.Run("nominal", func(t *testing.T) {
+		const timeout = "2500ms"
+		params.SetupTestConfigCleanup(t)
+		hook := logTest.NewGlobal()
+
+		require.NoError(t, configureBuilderHeaderTimeout(newCliCtx(t, timeout)))
+
+		expected, err := time.ParseDuration(timeout)
+		require.NoError(t, err)
+		assert.Equal(t, expected, params.BeaconConfig().BuilderHeaderTimeout)
+		assert.LogsContain(t, hook, "Overriding the builder API `getHeader` timeout")
+	})
 }
 
 func TestConfigureSlotsPerArchivedPoint(t *testing.T) {

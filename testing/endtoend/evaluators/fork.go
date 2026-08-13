@@ -141,7 +141,7 @@ func forkOccurs(forkEpoch primitives.Epoch, expectedFork int) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), forkDeadline)
 	defer cancel()
-	ticker := time.NewTicker(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	ticker := time.NewTicker(params.BeaconConfig().SlotDuration())
 	defer ticker.Stop()
 
 	for {

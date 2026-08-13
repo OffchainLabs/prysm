@@ -58,6 +58,9 @@ func WithBuilderConfig() SettingsLoaderOption {
 // WithGasLimit applies the --suggested-gas-limit flag to proposer settings
 func WithGasLimit() SettingsLoaderOption {
 	return func(cliCtx *cli.Context, psl *SettingsLoader) error {
+		if !cliCtx.IsSet(flags.BuilderGasLimitFlag.Name) {
+			return nil
+		}
 		sgl := cliCtx.String(flags.BuilderGasLimitFlag.Name)
 		if sgl != "" {
 			gl, err := strconv.ParseUint(sgl, 10, 64)

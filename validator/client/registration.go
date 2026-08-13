@@ -64,7 +64,7 @@ func SubmitValidatorRegistrations(
 }
 
 // Sings validator registration obj with the proposer domain and private key.
-func signValidatorRegistration(ctx context.Context, signer iface.SigningFunc, reg *ethpb.ValidatorRegistrationV1) ([]byte, error) {
+func signValidatorRegistration(ctx context.Context, signer signingFunc, reg *ethpb.ValidatorRegistrationV1) ([]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.signValidatorRegistration")
 	defer span.End()
 
@@ -133,7 +133,7 @@ func (v *validator) signProposerPreferences(
 }
 
 // SignValidatorRegistrationRequest compares and returns either the cached validator registration request or signs a new one.
-func (v *validator) SignValidatorRegistrationRequest(ctx context.Context, signer iface.SigningFunc, newValidatorRegistration *ethpb.ValidatorRegistrationV1) (*ethpb.SignedValidatorRegistrationV1, bool /* isCached */, error) {
+func (v *validator) SignValidatorRegistrationRequest(ctx context.Context, signer signingFunc, newValidatorRegistration *ethpb.ValidatorRegistrationV1) (*ethpb.SignedValidatorRegistrationV1, bool /* isCached */, error) {
 	signedReg, ok := v.signedValidatorRegistrations[bytesutil.ToBytes48(newValidatorRegistration.Pubkey)]
 	if ok && isValidatorRegistrationSame(signedReg.Message, newValidatorRegistration) {
 		return signedReg, true, nil

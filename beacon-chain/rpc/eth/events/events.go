@@ -210,7 +210,7 @@ func (s *Server) StreamEvents(w http.ResponseWriter, r *http.Request) {
 
 	timeout := s.EventWriteTimeout
 	if timeout == 0 {
-		timeout = time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+		timeout = params.BeaconConfig().SlotDuration()
 	}
 	ka := s.KeepAliveInterval
 	if ka == 0 {

@@ -104,6 +104,15 @@ func TestComputeFieldRootsWithHasher_ProgressiveSSZFields(t *testing.T) {
 }
 
 func TestHashTreeRoot(t *testing.T) {
+	t.Run("UnsupportedVersion", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		err := st.initializeProgressiveMerkleTree(t.Context())
+		require.ErrorContains(t, "unsupported version: fulu", err)
+
+		_, err = st.progressiveHashTreeRoot(t.Context())
+		require.ErrorContains(t, "progressive SSZ is not supported for version: fulu", err)
+	})
+
 	t.Run("ProgressiveSSZGate", func(t *testing.T) {
 		st := newGloasStateForProgressiveSSZTests(t)
 

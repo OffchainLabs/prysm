@@ -29,10 +29,12 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	accountsiface "github.com/OffchainLabs/prysm/v7/validator/accounts/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
@@ -132,6 +134,9 @@ type validatorStatus struct {
 	status    *ethpb.ValidatorStatusResponse
 	index     primitives.ValidatorIndex
 }
+
+// signingFunc defines a type for the function that signs a message.
+type signingFunc func(context.Context, *validatorpb.SignRequest) (bls.Signature, error)
 
 // statusCache returns pubkeyToStatus for lock-free reads: entries are never
 // mutated in place, updateValidatorStatusCache replaces the map wholesale.
@@ -369,7 +374,7 @@ func (v *validator) SetTicker() {
 	}
 	// Once the ChainStart log is received, we update the genesis time of the validator client
 	// and begin a slot ticker used to track the current slot the beacon node is in.
-	v.ticker = slots.NewSlotTicker(v.genesisTime, params.BeaconConfig().SecondsPerSlot)
+	v.ticker = slots.NewSlotTicker(v.genesisTime, params.BeaconConfig().SlotDuration())
 	log.WithField("genesisTime", v.genesisTime).Info("Beacon chain started")
 }
 
@@ -452,8 +457,7 @@ func (v *validator) NextSlot() <-chan primitives.Slot {
 
 // SlotDeadline is the start time of the next slot.
 func (v *validator) SlotDeadline(slot primitives.Slot) time.Time {
-	secs := time.Duration((slot + 1).Mul(params.BeaconConfig().SecondsPerSlot))
-	return v.genesisTime.Add(secs * time.Second)
+	return v.genesisTime.Add(params.SlotsDuration(slot+1, params.BeaconConfig()))
 }
 
 // CheckDoppelGanger checks if the current actively provided keys have
@@ -556,7 +560,7 @@ func retrieveLatestRecord(recs []*dbCommon.AttestationRecord) *dbCommon.Attestat
 // RolesAt slot returns the validator roles at the given slot. Returns nil if the
 // validator is known to not have a roles at the slot. Returns UNKNOWN if the
 // validator assignments are unknown. Otherwise, returns a valid ValidatorRole map.
-func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fieldparams.BLSPubkeyLength]byte][]iface.ValidatorRole, error) {
+func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fieldparams.BLSPubkeyLength]byte][]validatorRole, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.RolesAt")
 	defer span.End()
 
@@ -566,12 +570,12 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 	}
 
 	var (
-		rolesAt              = make(map[[fieldparams.BLSPubkeyLength]byte][]iface.ValidatorRole)
+		rolesAt              = make(map[[fieldparams.BLSPubkeyLength]byte][]validatorRole)
 		syncCommitteePubkeys [][fieldparams.BLSPubkeyLength]byte
 	)
 
 	for pk, duty := range snap.currentDuties() {
-		var roles []iface.ValidatorRole
+		var roles []validatorRole
 
 		if duty == nil {
 			continue
@@ -579,14 +583,14 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		if len(duty.ProposerSlots) > 0 {
 			for _, proposerSlot := range duty.ProposerSlots {
 				if proposerSlot != 0 && proposerSlot == slot {
-					roles = append(roles, iface.RoleProposer)
+					roles = append(roles, roleProposer)
 					break
 				}
 			}
 		}
 
 		if duty.AttesterSlot == slot {
-			roles = append(roles, iface.RoleAttester)
+			roles = append(roles, roleAttester)
 
 			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, slot, pk)
 			if err != nil {
@@ -594,7 +598,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 				log.WithError(err).Errorf("Could not check if validator %#x is an aggregator", bytesutil.Trunc(duty.PublicKey))
 			}
 			if aggregator {
-				roles = append(roles, iface.RoleAggregator)
+				roles = append(roles, roleAggregator)
 			}
 		}
 
@@ -604,12 +608,12 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		inSyncCommittee := false
 		if slots.IsEpochEnd(slot) {
 			if snap.isNextSyncCommittee(duty.ValidatorIndex) {
-				roles = append(roles, iface.RoleSyncCommittee)
+				roles = append(roles, roleSyncCommittee)
 				inSyncCommittee = true
 			}
 		} else {
 			if duty.IsSyncCommittee {
-				roles = append(roles, iface.RoleSyncCommittee)
+				roles = append(roles, roleSyncCommittee)
 				inSyncCommittee = true
 			}
 		}
@@ -619,11 +623,11 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		}
 
 		if slices.Contains(snap.ptcSlots(duty.ValidatorIndex), slot) {
-			roles = append(roles, iface.RolePTCMember)
+			roles = append(roles, rolePTCMember)
 		}
 
 		if len(roles) == 0 {
-			roles = append(roles, iface.RoleUnknown)
+			roles = append(roles, roleUnknown)
 		}
 
 		rolesAt[pk] = roles
@@ -635,7 +639,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		return rolesAt, nil
 	}
 	for _, pk := range aggPubkeys {
-		rolesAt[pk] = append(rolesAt[pk], iface.RoleSyncCommitteeAggregator)
+		rolesAt[pk] = append(rolesAt[pk], roleSyncCommitteeAggregator)
 	}
 
 	return rolesAt, nil
@@ -1343,7 +1347,6 @@ func (v *validator) processProposerDuties(
 			continue
 		}
 
-		feeRecipient, gasLimit := v.proposerConfigForKey(pk)
 		for _, proposalSlot := range duty.ProposerSlots {
 			// Skip slots that have passed or are too close. Preferences are
 			// submitted at mid-slot, so the proposer needs to be at least 1
@@ -1355,6 +1358,8 @@ func (v *validator) processProposerDuties(
 				continue
 			}
 
+			// Keyed on the proposal slot's own epoch, the duty store can hold next-epoch duties as current in the last slot of an epoch.
+			feeRecipient, gasLimit := v.proposerConfigForKey(pk, slots.ToEpoch(proposalSlot))
 			pref := &ethpb.ProposerPreferences{
 				DependentRoot:  dependentRoot,
 				ProposalSlot:   proposalSlot,
@@ -1411,13 +1416,10 @@ func (v *validator) releasePrefSlots(prefs []*ethpb.SignedProposerPreferences) {
 	log.WithField("proposalSlots", slots).Debug("Released proposer preference reservations for retry")
 }
 
-// proposerConfigForKey returns the fee recipient and target gas limit for pk.
-// The target gas limit comes from the top-level v2 fields only; builder gas
-// limits are registration-only.
-func (v *validator) proposerConfigForKey(pk pubkey) (common.Address, uint64) {
+func (v *validator) proposerConfigForKey(pk pubkey, epoch primitives.Epoch) (common.Address, uint64) {
 	feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
 	ps := v.ProposerSettings()
-	gasLimit := uint64(ps.TargetGasLimit(pk))
+	gasLimit := uint64(ps.TargetGasLimit(pk, epoch))
 	if ps == nil {
 		return feeRecipient, gasLimit
 	}
@@ -1549,7 +1551,7 @@ func (v *validator) submitProposerPreferences(ctx context.Context) {
 func (v *validator) buildSignedRegReqs(
 	ctx context.Context,
 	activePubkeys [][fieldparams.BLSPubkeyLength]byte,
-	signer iface.SigningFunc,
+	signer signingFunc,
 	slot primitives.Slot,
 	forceFullPush bool,
 ) []*ethpb.SignedValidatorRegistrationV1 {

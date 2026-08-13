@@ -8,14 +8,13 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/sirupsen/logrus"
 )
 
 type healthMonitor struct {
 	ctx             context.Context
 	cancel          context.CancelFunc
-	v               iface.Validator
+	v               *validator
 	maxFails        int
 	healthyCh       chan bool // emits true → healthy, false → unhealthy
 	healthEventFeed *event.Feed
@@ -29,7 +28,7 @@ func newHealthMonitor(
 	parentCtx context.Context,
 	parentCancel context.CancelFunc,
 	maxFails int,
-	v iface.Validator,
+	v *validator,
 ) *healthMonitor {
 	m := &healthMonitor{
 		ctx:             parentCtx,
@@ -90,8 +89,7 @@ func (m *healthMonitor) performHealthCheck() {
 
 func (m *healthMonitor) loop() {
 	log.Debug("Starting health check routine for beacon node apis")
-	interval := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
-	ticker := time.NewTicker(interval)
+	ticker := time.NewTicker(params.BeaconConfig().SlotDuration())
 
 	for ; true; <-ticker.C { // check immediately
 		if m.ctx.Err() != nil {

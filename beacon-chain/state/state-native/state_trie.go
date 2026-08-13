@@ -1115,6 +1115,10 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 }
 
 func (b *BeaconState) progressiveHashTreeRoot(ctx context.Context) ([32]byte, error) {
+	if b.version < version.Gloas {
+		return [32]byte{}, fmt.Errorf("progressive SSZ is not supported for version: %s", version.String(b.version))
+	}
+
 	if err := b.initializeProgressiveMerkleTree(ctx); err != nil {
 		return [32]byte{}, err
 	}
@@ -1122,9 +1126,15 @@ func (b *BeaconState) progressiveHashTreeRoot(ctx context.Context) ([32]byte, er
 		return [32]byte{}, err
 	}
 
-	activeFields := make([]bool, params.BeaconConfig().BeaconStateGloasFieldCount)
-	for i := range activeFields {
-		activeFields[i] = true
+	var activeFields []bool
+	switch b.version {
+	case version.Gloas:
+		activeFields = make([]bool, params.BeaconConfig().BeaconStateGloasFieldCount)
+		for i := range activeFields {
+			activeFields[i] = true
+		}
+	default:
+		return [32]byte{}, fmt.Errorf("unsupported version: %s", version.String(b.version))
 	}
 
 	root, err := ssz.MixInActiveFields(b.progressiveMerkleTree.Root(), activeFields)
@@ -1144,14 +1154,21 @@ func (b *BeaconState) initializeProgressiveMerkleTree(ctx context.Context) error
 		return nil
 	}
 
-	fieldRoots := make([][]byte, params.BeaconConfig().BeaconStateGloasFieldCount)
-	for _, field := range gloasFields {
-		root, err := b.rootSelector(ctx, field)
-		if err != nil {
-			return fmt.Errorf("could not compute progressive field %s: %w", field.String(), err)
+	var fieldRoots [][]byte
+	switch b.version {
+	case version.Gloas:
+		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateGloasFieldCount)
+		for _, field := range gloasFields {
+			root, err := b.rootSelector(ctx, field)
+			if err != nil {
+				return fmt.Errorf("could not compute progressive field %s: %w", field.String(), err)
+			}
+			fieldRoots[field.RealPosition()] = bytesutil.SafeCopyBytes(root[:])
 		}
-		fieldRoots[field.RealPosition()] = bytesutil.SafeCopyBytes(root[:])
+	default:
+		return fmt.Errorf("unsupported version: %s", version.String(b.version))
 	}
+
 	b.progressiveMerkleTree = stateutil.MerkleizeProgressive(fieldRoots)
 	clear(b.dirtyFields)
 	return nil
