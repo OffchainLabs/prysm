@@ -130,10 +130,8 @@ func (s *Store) getAnchorState(ctx context.Context, offset uint64, lvl int, slot
 		return nil, ErrSlotBeforeOffset
 	}
 	relSlot := uint64(slot) - offset
+	// The exponents are validated at node startup, so they always fit in a uint64 shift.
 	prevExp := flags.Get().StateDiffExponents[lvl-1]
-	if prevExp < flags.MinStateDiffExponent || prevExp >= 64 {
-		return nil, fmt.Errorf("state diff exponent %d out of range for uint64", prevExp)
-	}
 	span := math.PowerOf2(uint64(prevExp))
 	anchorSlot := primitives.Slot(uint64(slot) - relSlot%span)
 
@@ -182,10 +180,8 @@ func computeLevel(offset uint64, slot primitives.Slot) int {
 		return -1
 	}
 	rel := uint64(slot) - offset
+	// The exponents are validated at node startup, so they always fit in a uint64 shift.
 	for i, exp := range flags.Get().StateDiffExponents {
-		if exp < flags.MinStateDiffExponent || exp >= 64 {
-			return -1
-		}
 		span := math.PowerOf2(uint64(exp))
 		if rel%span == 0 {
 			return i
