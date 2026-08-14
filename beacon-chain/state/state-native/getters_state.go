@@ -30,7 +30,7 @@ func (b *BeaconState) ToProtoUnsafe() any {
 		inactivityScores = b.inactivityScoresMultiValue.Value(b)
 	}
 	if b.validatorsMultiValue != nil {
-		vals = stateutil.CompactValidatorsToProto(b.validatorsMultiValue.Value(b))
+		vals = stateutil.CompactValidatorsToProtoSlab(b.validatorsMultiValue.Value(b))
 	}
 
 	switch b.version {

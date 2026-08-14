@@ -10,6 +10,10 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
+// keySize is the combined size of the two byte slices of a protobuf Validator:
+// the public key and the withdrawal credentials.
+const keysSize = fieldparams.BLSPubkeyLength + 32
+
 // CompactValidator is a fixed-size, pointer-free representation of a validator.
 // It stores the same data as *ethpb.Validator but in a flat 128-byte struct
 // with zero heap pointers.
@@ -42,6 +46,52 @@ func CompactValidatorsToProto(compactValidators []CompactValidator) []*ethpb.Val
 	validators := make([]*ethpb.Validator, len(compactValidators))
 	for i := range compactValidators {
 		validators[i] = compactValidators[i].ToProto()
+	}
+
+	return validators
+}
+
+// CompactValidatorsToProtoSlab is like CompactValidatorsToProto, but allocates the
+// returned validators and their byte slices out of slabs instead of allocating per
+// validator.
+//
+// The result must be treated as a whole: retaining a single returned validator keeps
+// both slabs alive. Only use it for values that are consumed and dropped together,
+// Use CompactValidatorsToProto instead when the caller may hold on to individual validators.
+func CompactValidatorsToProtoSlab(compactValidators []CompactValidator) []*ethpb.Validator {
+	count := len(compactValidators)
+
+	validators := make([]*ethpb.Validator, count)
+	structs := make([]ethpb.Validator, count)
+	keys := make([]byte, count*keysSize)
+
+	for i := range compactValidators {
+		compactValidator := &compactValidators[i]
+
+		// Carve the public key and the withdrawal credentials out of the keys slab.
+		// The capacities are pinned so that an append by a caller cannot reach into
+		// the next validator's bytes.
+		base := i * keysSize
+		pubKeyEnd := base + fieldparams.BLSPubkeyLength
+		credsEnd := base + keysSize
+
+		publicKey := keys[base:pubKeyEnd:pubKeyEnd]
+		withdrawalCredentials := keys[pubKeyEnd:credsEnd:credsEnd]
+
+		copy(publicKey, compactValidator.PublicKey[:])
+		copy(withdrawalCredentials, compactValidator.WithdrawalCredentials[:])
+
+		validator := &structs[i]
+		validator.PublicKey = publicKey
+		validator.WithdrawalCredentials = withdrawalCredentials
+		validator.EffectiveBalance = compactValidator.EffectiveBalance
+		validator.ActivationEligibilityEpoch = compactValidator.ActivationEligibilityEpoch
+		validator.ActivationEpoch = compactValidator.ActivationEpoch
+		validator.ExitEpoch = compactValidator.ExitEpoch
+		validator.WithdrawableEpoch = compactValidator.WithdrawableEpoch
+		validator.Slashed = compactValidator.Slashed
+
+		validators[i] = validator
 	}
 
 	return validators
