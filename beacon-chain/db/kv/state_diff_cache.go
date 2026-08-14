@@ -238,9 +238,7 @@ func (c *stateDiffCache) reanchor(offset uint64, levelsWithData []bool) {
 	c.offset = offset
 	c.levelsWithData = levelsWithData
 
-	for level := range c.anchors {
-		c.anchors[level] = nil
-	}
+	c.clearAnchorsLocked()
 }
 
 func (c *stateDiffCache) levelHasData(level int) bool {
@@ -277,6 +275,11 @@ func (c *stateDiffCache) setOffset(offset uint64) {
 func (c *stateDiffCache) clearAnchors() {
 	c.Lock()
 	defer c.Unlock()
+	c.clearAnchorsLocked()
+}
+
+// clearAnchorsLocked is clearAnchors, for the callers that already hold the lock.
+func (c *stateDiffCache) clearAnchorsLocked() {
 	c.anchors = make([][]byte, len(flags.Get().StateDiffExponents)-1) // -1 because last level doesn't need to be cached
 	for level := range len(c.anchors) {
 		stateDiffAnchorCacheBytes.WithLabelValues(strconv.Itoa(level)).Set(0)
