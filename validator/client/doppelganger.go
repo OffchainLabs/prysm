@@ -276,9 +276,9 @@ func (v *validator) checkDoppelGangerForKeys(ctx context.Context, pubkeys []pubk
 			return nil, errors.Errorf("attestation record mismatched public key %#x", bytesutil.Trunc(pkey[:]))
 		}
 		watermark := r.Target
-		// Cap a pending key's watermark at its quarantine clock: the node's
-		// recency band must expire before the wait, or answers stay unevaluated.
-		if added, ok := v.doppelGanger.pendingAddedEpoch(pkey); ok && watermark > added {
+		// Pending keys are checked from their import epoch: an older record epoch would
+		// flag pre-import attestations, a newer one defers evaluation past the quarantine.
+		if added, ok := v.doppelGanger.pendingAddedEpoch(pkey); ok {
 			watermark = added
 		}
 		req.ValidatorRequests = append(req.ValidatorRequests,

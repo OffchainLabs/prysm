@@ -375,34 +375,48 @@ func TestCheckDoppelGangerMidEpoch(t *testing.T) {
 		assert.Equal(t, 1, len(v.doppelGanger.pollDue(epoch)))
 	})
 
-	t.Run("watermark is capped at the quarantine clock", func(t *testing.T) {
-		enableDoppelGanger(t)
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-		client := validatormock.NewMockValidatorClient(ctrl)
-		v := pendingDoppelValidator(t, client, 1, keyA)
-		mockSyncedChainHead(ctrl, v, 4)
-		// Imported protection history with a record epoch beyond the quarantine
-		// clock would otherwise keep the node's recency band alive forever.
-		att := &ethpb.IndexedAttestation{Data: &ethpb.AttestationData{
-			BeaconBlockRoot: make([]byte, 32),
-			Source:          &ethpb.Checkpoint{Epoch: 8, Root: make([]byte, 32)},
-			Target:          &ethpb.Checkpoint{Epoch: 9, Root: make([]byte, 32)},
-		}}
-		require.NoError(t, v.db.SaveAttestationsForPubKey(t.Context(), keyA, [][]byte{make([]byte, 32)}, []*ethpb.IndexedAttestation{att}))
+	t.Run("key with imported history is checked from its import epoch", func(t *testing.T) {
+		tests := []struct {
+			name        string
+			recordEpoch primitives.Epoch
+			addedEpoch  primitives.Epoch
+			wantCleared bool
+		}{
+			// A record newer than the import would defer evaluation past the quarantine.
+			{"record newer than the import", 9, 1, true},
+			// A record older than the import would probe pre-import epochs; this key
+			// also stays pending because its wait has not elapsed at head epoch 4.
+			{"record older than the import", 1, 3, false},
+		}
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				enableDoppelGanger(t)
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				client := validatormock.NewMockValidatorClient(ctrl)
+				v := pendingDoppelValidator(t, client, tc.addedEpoch, keyA)
+				mockSyncedChainHead(ctrl, v, 4)
+				att := &ethpb.IndexedAttestation{Data: &ethpb.AttestationData{
+					BeaconBlockRoot: make([]byte, 32),
+					Source:          &ethpb.Checkpoint{Epoch: tc.recordEpoch - 1, Root: make([]byte, 32)},
+					Target:          &ethpb.Checkpoint{Epoch: tc.recordEpoch, Root: make([]byte, 32)},
+				}}
+				require.NoError(t, v.db.SaveAttestationsForPubKey(t.Context(), keyA, [][]byte{make([]byte, 32)}, []*ethpb.IndexedAttestation{att}))
 
-		client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ context.Context, req *ethpb.DoppelGangerRequest) (*ethpb.DoppelGangerResponse, error) {
-				require.Equal(t, 1, len(req.ValidatorRequests))
-				assert.Equal(t, primitives.Epoch(1), req.ValidatorRequests[0].Epoch) // addedEpoch, not the record's 9
-				return &ethpb.DoppelGangerResponse{Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{
-					{PublicKey: keyA[:], DuplicateExists: false},
-				}}, nil
+				client.EXPECT().CheckDoppelGanger(gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, req *ethpb.DoppelGangerRequest) (*ethpb.DoppelGangerResponse, error) {
+						require.Equal(t, 1, len(req.ValidatorRequests))
+						assert.Equal(t, tc.addedEpoch, req.ValidatorRequests[0].Epoch, "request must carry the import epoch")
+						return &ethpb.DoppelGangerResponse{Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{
+							{PublicKey: keyA[:], DuplicateExists: false},
+						}}, nil
+					})
+
+				v.CheckDoppelGangerMidEpoch(t.Context(), slots.CurrentSlot(v.genesisTime))
+				waitForDoppelCheck(t, v)
+				assert.Equal(t, !tc.wantCleared, v.isDoppelGangerPending(keyA))
 			})
-
-		v.CheckDoppelGangerMidEpoch(t.Context(), slots.CurrentSlot(v.genesisTime))
-		waitForDoppelCheck(t, v)
-		assert.Equal(t, false, v.isDoppelGangerPending(keyA))
+		}
 	})
 
 	t.Run("key with no attestation history is checked from its import epoch", func(t *testing.T) {
