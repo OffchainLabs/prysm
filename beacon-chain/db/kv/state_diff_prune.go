@@ -179,8 +179,8 @@ func (s *Store) stateDiffKeysBefore(ctx context.Context, slot uint64, kept map[u
 
 		cursor := bucket.Cursor()
 		for key, _ := cursor.First(); key != nil; key, _ = cursor.Next() {
-			if ctx.Err() != nil {
-				return nil
+			if err := ctx.Err(); err != nil {
+				return err
 			}
 
 			// The bucket also holds metadata keys, which are never pruned.
