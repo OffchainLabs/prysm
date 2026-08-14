@@ -793,11 +793,11 @@ func TestMapExecutionPayloadGloas(t *testing.T) {
 	}
 }
 
-func TestMapExecutionRequests(t *testing.T) {
+func TestMapExecutionRequestsGloas(t *testing.T) {
 	tests := []struct {
 		name     string
-		requests *enginev1.ExecutionRequests
-		want     *types.ExecutionRequests
+		requests *enginev1.ExecutionRequestsGloas
+		want     *types.ExecutionRequestsGloas
 		wantErr  string
 	}{
 		{
@@ -807,16 +807,18 @@ func TestMapExecutionRequests(t *testing.T) {
 		},
 		{
 			name:     "empty slices produce empty (non-nil) slices",
-			requests: &enginev1.ExecutionRequests{},
-			want: &types.ExecutionRequests{
-				Deposits:       []*types.DepositRequest{},
-				Withdrawals:    []*types.WithdrawalRequest{},
-				Consolidations: []*types.ConsolidationRequest{},
+			requests: &enginev1.ExecutionRequestsGloas{},
+			want: &types.ExecutionRequestsGloas{
+				Deposits:        []*types.DepositRequest{},
+				Withdrawals:     []*types.WithdrawalRequest{},
+				Consolidations:  []*types.ConsolidationRequest{},
+				BuilderDeposits: []*types.BuilderDepositRequest{},
+				BuilderExits:    []*types.BuilderExitRequest{},
 			},
 		},
 		{
 			name: "happy path with each request type",
-			requests: &enginev1.ExecutionRequests{
+			requests: &enginev1.ExecutionRequestsGloas{
 				Deposits: []*enginev1.DepositRequest{{
 					Pubkey:                make([]byte, fieldparams.BLSPubkeyLength),
 					WithdrawalCredentials: make([]byte, 32),
@@ -834,8 +836,18 @@ func TestMapExecutionRequests(t *testing.T) {
 					SourcePubkey:  make([]byte, fieldparams.BLSPubkeyLength),
 					TargetPubkey:  make([]byte, fieldparams.BLSPubkeyLength),
 				}},
+				BuilderDeposits: []*enginev1.BuilderDepositRequest{{
+					Pubkey:                make([]byte, fieldparams.BLSPubkeyLength),
+					WithdrawalCredentials: make([]byte, 32),
+					Amount:                1_000_000_000,
+					Signature:             make([]byte, fieldparams.BLSSignatureLength),
+				}},
+				BuilderExits: []*enginev1.BuilderExitRequest{{
+					SourceAddress: make([]byte, fieldparams.FeeRecipientLength),
+					Pubkey:        make([]byte, fieldparams.BLSPubkeyLength),
+				}},
 			},
-			want: &types.ExecutionRequests{
+			want: &types.ExecutionRequestsGloas{
 				Deposits: []*types.DepositRequest{{
 					Pubkey:                make([]byte, fieldparams.BLSPubkeyLength),
 					WithdrawalCredentials: make([]byte, 32),
@@ -853,27 +865,47 @@ func TestMapExecutionRequests(t *testing.T) {
 					SourcePubkey:  make([]byte, fieldparams.BLSPubkeyLength),
 					TargetPubkey:  make([]byte, fieldparams.BLSPubkeyLength),
 				}},
+				BuilderDeposits: []*types.BuilderDepositRequest{{
+					Pubkey:                make([]byte, fieldparams.BLSPubkeyLength),
+					WithdrawalCredentials: make([]byte, 32),
+					Amount:                "1000000000",
+					Signature:             make([]byte, fieldparams.BLSSignatureLength),
+				}},
+				BuilderExits: []*types.BuilderExitRequest{{
+					SourceAddress: make([]byte, fieldparams.FeeRecipientLength),
+					Pubkey:        make([]byte, fieldparams.BLSPubkeyLength),
+				}},
 			},
 		},
 		{
 			name:     "nil deposit in slice errors",
-			requests: &enginev1.ExecutionRequests{Deposits: []*enginev1.DepositRequest{nil}},
+			requests: &enginev1.ExecutionRequestsGloas{Deposits: []*enginev1.DepositRequest{nil}},
 			wantErr:  "deposit request at index 0 is nil",
 		},
 		{
 			name:     "nil withdrawal in slice errors",
-			requests: &enginev1.ExecutionRequests{Withdrawals: []*enginev1.WithdrawalRequest{nil}},
+			requests: &enginev1.ExecutionRequestsGloas{Withdrawals: []*enginev1.WithdrawalRequest{nil}},
 			wantErr:  "withdrawal request at index 0 is nil",
 		},
 		{
 			name:     "nil consolidation in slice errors",
-			requests: &enginev1.ExecutionRequests{Consolidations: []*enginev1.ConsolidationRequest{nil}},
+			requests: &enginev1.ExecutionRequestsGloas{Consolidations: []*enginev1.ConsolidationRequest{nil}},
 			wantErr:  "consolidation request at index 0 is nil",
+		},
+		{
+			name:     "nil builder deposit in slice errors",
+			requests: &enginev1.ExecutionRequestsGloas{BuilderDeposits: []*enginev1.BuilderDepositRequest{nil}},
+			wantErr:  "builder deposit request at index 0 is nil",
+		},
+		{
+			name:     "nil builder exit in slice errors",
+			requests: &enginev1.ExecutionRequestsGloas{BuilderExits: []*enginev1.BuilderExitRequest{nil}},
+			wantErr:  "builder exit request at index 0 is nil",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := types.MapExecutionRequests(tt.requests)
+			got, err := types.MapExecutionRequestsGloas(tt.requests)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, tt.wantErr, err)
 				return
@@ -899,7 +931,7 @@ func TestMapExecutionPayloadEnvelope(t *testing.T) {
 		{
 			name: "nil payload propagates error",
 			envelope: &ethpb.ExecutionPayloadEnvelope{
-				ExecutionRequests: &enginev1.ExecutionRequests{},
+				ExecutionRequests: &enginev1.ExecutionRequestsGloas{},
 			},
 			wantErr: "could not map execution payload: execution payload is nil",
 		},

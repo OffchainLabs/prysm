@@ -121,13 +121,12 @@ type ValidatorRegistrationSignRequest struct {
 	ValidatorRegistration *ValidatorRegistration `json:"validator_registration" validate:"required"`
 }
 
-// ExecutionPayloadBidSignRequest is a request object for web3signer sign api type EXECUTION_PAYLOAD_BID (gloas).
-// Signed by the builder role. Used by Prysm in self-build / in-VC builder mode.
-type ExecutionPayloadBidSignRequest struct {
-	Type                string               `json:"type" validate:"required"`
-	ForkInfo            *ForkInfo            `json:"fork_info" validate:"required"`
-	SigningRoot         hexutil.Bytes        `json:"signingRoot"`
-	ExecutionPayloadBid *ExecutionPayloadBid `json:"execution_payload_bid" validate:"required"`
+// RequestAuthSignRequest is a request object for web3signer sign api type REQUEST_AUTH (gloas builder API).
+// Its domain is fork-independent (genesis fork version, zero genesis validators root), so no fork info.
+type RequestAuthSignRequest struct {
+	Type        string        `json:"type" validate:"required"`
+	SigningRoot hexutil.Bytes `json:"signingRoot"`
+	RequestAuth *RequestAuth  `json:"request_auth" validate:"required"`
 }
 
 // ExecutionPayloadEnvelopeSignRequest is a request object for web3signer sign api type EXECUTION_PAYLOAD_ENVELOPE (gloas).
@@ -401,28 +400,18 @@ type ValidatorRegistration struct {
 	Pubkey       hexutil.Bytes `json:"pubkey"  validate:"required"`       /* bls hexadecimal string */
 }
 
-// ExecutionPayloadBid a sub property of ExecutionPayloadBidSignRequest (gloas).
-type ExecutionPayloadBid struct {
-	ParentBlockHash       hexutil.Bytes   `json:"parent_block_hash"`
-	ParentBlockRoot       hexutil.Bytes   `json:"parent_block_root"`
-	BlockHash             hexutil.Bytes   `json:"block_hash"`
-	PrevRandao            hexutil.Bytes   `json:"prev_randao"`
-	FeeRecipient          hexutil.Bytes   `json:"fee_recipient"`
-	GasLimit              string          `json:"gas_limit"`         /* uint64 */
-	BuilderIndex          string          `json:"builder_index"`     /* uint64 */
-	Slot                  string          `json:"slot"`              /* uint64 */
-	Value                 string          `json:"value"`             /* uint64 (gwei) */
-	ExecutionPayment      string          `json:"execution_payment"` /* uint64 (gwei) */
-	BlobKzgCommitments    []hexutil.Bytes `json:"blob_kzg_commitments"`
-	ExecutionRequestsRoot hexutil.Bytes   `json:"execution_requests_root"`
+// RequestAuth a sub property of RequestAuthSignRequest (gloas builder API).
+type RequestAuth struct {
+	Data hexutil.Bytes `json:"data"` /* ByteList[4096], carries the builder URL */
+	Slot string        `json:"slot"` /* uint64 */
 }
 
 // ExecutionPayloadEnvelope a sub property of ExecutionPayloadEnvelopeSignRequest (gloas).
 type ExecutionPayloadEnvelope struct {
-	Payload           *ExecutionPayloadGloas `json:"payload"`
-	ExecutionRequests *ExecutionRequests     `json:"execution_requests"`
-	BuilderIndex      string                 `json:"builder_index"` /* uint64 */
-	BeaconBlockRoot   hexutil.Bytes          `json:"beacon_block_root"`
+	Payload           *ExecutionPayloadGloas  `json:"payload"`
+	ExecutionRequests *ExecutionRequestsGloas `json:"execution_requests"`
+	BuilderIndex      string                  `json:"builder_index"` /* uint64 */
+	BeaconBlockRoot   hexutil.Bytes           `json:"beacon_block_root"`
 }
 
 // ExecutionPayloadGloas is the gloas execution payload (deneb shape + block_access_list + slot_number).
@@ -456,11 +445,13 @@ type Withdrawal struct {
 	Amount         string        `json:"amount"` /* uint64 */
 }
 
-// ExecutionRequests a sub property of ExecutionPayloadEnvelope (gloas).
-type ExecutionRequests struct {
-	Deposits       []*DepositRequest       `json:"deposits"`
-	Withdrawals    []*WithdrawalRequest    `json:"withdrawals"`
-	Consolidations []*ConsolidationRequest `json:"consolidations"`
+// ExecutionRequestsGloas a sub property of ExecutionPayloadEnvelope (gloas).
+type ExecutionRequestsGloas struct {
+	Deposits        []*DepositRequest        `json:"deposits"`
+	Withdrawals     []*WithdrawalRequest     `json:"withdrawals"`
+	Consolidations  []*ConsolidationRequest  `json:"consolidations"`
+	BuilderDeposits []*BuilderDepositRequest `json:"builder_deposits"`
+	BuilderExits    []*BuilderExitRequest    `json:"builder_exits"`
 }
 
 // DepositRequest a sub property of ExecutionRequests.
@@ -484,6 +475,20 @@ type ConsolidationRequest struct {
 	SourceAddress hexutil.Bytes `json:"source_address"`
 	SourcePubkey  hexutil.Bytes `json:"source_pubkey"`
 	TargetPubkey  hexutil.Bytes `json:"target_pubkey"`
+}
+
+// BuilderDepositRequest a sub property of ExecutionRequestsGloas.
+type BuilderDepositRequest struct {
+	Pubkey                hexutil.Bytes `json:"pubkey"`
+	WithdrawalCredentials hexutil.Bytes `json:"withdrawal_credentials"`
+	Amount                string        `json:"amount"` /* uint64 */
+	Signature             hexutil.Bytes `json:"signature"`
+}
+
+// BuilderExitRequest a sub property of ExecutionRequestsGloas.
+type BuilderExitRequest struct {
+	SourceAddress hexutil.Bytes `json:"source_address"`
+	Pubkey        hexutil.Bytes `json:"pubkey"`
 }
 
 // PayloadAttestationData a sub property of PayloadAttestationMessageSignRequest (gloas).

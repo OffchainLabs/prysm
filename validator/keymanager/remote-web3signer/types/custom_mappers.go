@@ -419,7 +419,7 @@ func MapExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayloadEnvelope) (*Exe
 	if err != nil {
 		return nil, errors.Wrap(err, "could not map execution payload")
 	}
-	requests, err := MapExecutionRequests(envelope.ExecutionRequests)
+	requests, err := MapExecutionRequestsGloas(envelope.ExecutionRequests)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not map execution requests")
 	}
@@ -479,8 +479,8 @@ func MapExecutionPayloadGloas(payload *enginev1.ExecutionPayloadGloas) (*Executi
 	}, nil
 }
 
-// MapExecutionRequests maps the electra+ ExecutionRequests proto to the Web3Signer spec.
-func MapExecutionRequests(requests *enginev1.ExecutionRequests) (*ExecutionRequests, error) {
+// MapExecutionRequestsGloas maps the gloas ExecutionRequestsGloas proto to the Web3Signer spec.
+func MapExecutionRequestsGloas(requests *enginev1.ExecutionRequestsGloas) (*ExecutionRequestsGloas, error) {
 	if requests == nil {
 		return nil, fmt.Errorf("execution requests is nil")
 	}
@@ -519,10 +519,34 @@ func MapExecutionRequests(requests *enginev1.ExecutionRequests) (*ExecutionReque
 			TargetPubkey:  c.TargetPubkey,
 		}
 	}
-	return &ExecutionRequests{
-		Deposits:       deposits,
-		Withdrawals:    withdrawals,
-		Consolidations: consolidations,
+	builderDeposits := make([]*BuilderDepositRequest, len(requests.BuilderDeposits))
+	for i, d := range requests.BuilderDeposits {
+		if d == nil {
+			return nil, fmt.Errorf("builder deposit request at index %d is nil", i)
+		}
+		builderDeposits[i] = &BuilderDepositRequest{
+			Pubkey:                d.Pubkey,
+			WithdrawalCredentials: d.WithdrawalCredentials,
+			Amount:                fmt.Sprint(d.Amount),
+			Signature:             d.Signature,
+		}
+	}
+	builderExits := make([]*BuilderExitRequest, len(requests.BuilderExits))
+	for i, e := range requests.BuilderExits {
+		if e == nil {
+			return nil, fmt.Errorf("builder exit request at index %d is nil", i)
+		}
+		builderExits[i] = &BuilderExitRequest{
+			SourceAddress: e.SourceAddress,
+			Pubkey:        e.Pubkey,
+		}
+	}
+	return &ExecutionRequestsGloas{
+		Deposits:        deposits,
+		Withdrawals:     withdrawals,
+		Consolidations:  consolidations,
+		BuilderDeposits: builderDeposits,
+		BuilderExits:    builderExits,
 	}, nil
 }
 

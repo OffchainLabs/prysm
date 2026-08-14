@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 )
 
@@ -495,44 +494,24 @@ func GetBlockV2BlindedSignRequest(request *validatorpb.SignRequest, genesisValid
 	}, nil
 }
 
-// GetExecutionPayloadBidSignRequest maps the request for signing type EXECUTION_PAYLOAD_BID (gloas, builder role).
-func GetExecutionPayloadBidSignRequest(request *validatorpb.SignRequest, genesisValidatorsRoot []byte) (*ExecutionPayloadBidSignRequest, error) {
+// GetRequestAuthSignRequest maps the request for signing type REQUEST_AUTH (gloas builder API).
+func GetRequestAuthSignRequest(request *validatorpb.SignRequest) (*RequestAuthSignRequest, error) {
 	if request == nil {
 		return nil, errors.New("nil sign request provided")
 	}
-	bidReq, ok := request.Object.(*validatorpb.SignRequest_ExecutionPayloadBid)
+	authReq, ok := request.Object.(*validatorpb.SignRequest_RequestAuth)
 	if !ok {
-		return nil, errors.New("failed to cast request object to execution payload bid")
+		return nil, errors.New("failed to cast request object to request auth")
 	}
-	if bidReq == nil || bidReq.ExecutionPayloadBid == nil {
-		return nil, errors.New("invalid sign request: ExecutionPayloadBid is nil")
+	if authReq == nil || authReq.RequestAuth == nil {
+		return nil, errors.New("invalid sign request: RequestAuth is nil")
 	}
-	fork, err := MapForkInfo(request.SigningSlot, genesisValidatorsRoot)
-	if err != nil {
-		return nil, err
-	}
-	bid := bidReq.ExecutionPayloadBid
-	commitments := make([]hexutil.Bytes, len(bid.BlobKzgCommitments))
-	for i, c := range bid.BlobKzgCommitments {
-		commitments[i] = c
-	}
-	return &ExecutionPayloadBidSignRequest{
-		Type:        "EXECUTION_PAYLOAD_BID",
-		ForkInfo:    fork,
+	return &RequestAuthSignRequest{
+		Type:        "REQUEST_AUTH",
 		SigningRoot: request.SigningRoot,
-		ExecutionPayloadBid: &ExecutionPayloadBid{
-			ParentBlockHash:       bid.ParentBlockHash,
-			ParentBlockRoot:       bid.ParentBlockRoot,
-			BlockHash:             bid.BlockHash,
-			PrevRandao:            bid.PrevRandao,
-			FeeRecipient:          bid.FeeRecipient,
-			GasLimit:              fmt.Sprint(bid.GasLimit),
-			BuilderIndex:          fmt.Sprint(bid.BuilderIndex),
-			Slot:                  fmt.Sprint(bid.Slot),
-			Value:                 fmt.Sprint(bid.Value),
-			ExecutionPayment:      fmt.Sprint(bid.ExecutionPayment),
-			BlobKzgCommitments:    commitments,
-			ExecutionRequestsRoot: bid.ExecutionRequestsRoot,
+		RequestAuth: &RequestAuth{
+			Data: authReq.RequestAuth.Data,
+			Slot: fmt.Sprint(authReq.RequestAuth.Slot),
 		},
 	}, nil
 }

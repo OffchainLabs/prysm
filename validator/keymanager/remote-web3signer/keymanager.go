@@ -464,8 +464,6 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 		return handleBlindedBlockFulu(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlockGloas:
 		return handleBlockGloas(ctx, validator, request, genesisValidatorsRoot)
-	case *validatorpb.SignRequest_ExecutionPayloadBid:
-		return handleExecutionPayloadBid(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_ExecutionPayloadEnvelope:
 		return handleExecutionPayloadEnvelope(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_PayloadAttestationData:
@@ -473,8 +471,7 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 	case *validatorpb.SignRequest_ProposerPreference:
 		return handleProposerPreferences(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_RequestAuth:
-		// TODO: Implement builder request auth signing for web3signer.
-		return nil, fmt.Errorf("web3signer request auth signing not yet implemented")
+		return handleRequestAuth(ctx, validator, request)
 	// We do not support "DEPOSIT" type.
 	/*
 		case *validatorpb.:
@@ -691,15 +688,15 @@ func handleBlockGloas(ctx context.Context, validator *validator.Validate, reques
 	return json.Marshal(signReq)
 }
 
-func handleExecutionPayloadBid(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	signReq, err := types.GetExecutionPayloadBidSignRequest(request, genesisValidatorsRoot)
+func handleRequestAuth(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest) ([]byte, error) {
+	signReq, err := types.GetRequestAuthSignRequest(request)
 	if err != nil {
 		return nil, err
 	}
 	if err = validator.StructCtx(ctx, signReq); err != nil {
 		return nil, err
 	}
-	executionPayloadBidSignRequestsTotal.Inc()
+	requestAuthSignRequestsTotal.Inc()
 	return json.Marshal(signReq)
 }
 

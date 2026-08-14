@@ -475,25 +475,15 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 				BlockGloas: util.HydrateBeaconBlockGloas(&eth.BeaconBlockGloas{}),
 			},
 		}
-	case "EXECUTION_PAYLOAD_BID":
+	case "REQUEST_AUTH":
 		return &validatorpb.SignRequest{
 			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
 			SigningRoot:     make([]byte, fieldparams.RootLength),
 			SignatureDomain: make([]byte, 4),
-			Object: &validatorpb.SignRequest_ExecutionPayloadBid{
-				ExecutionPayloadBid: &eth.ExecutionPayloadBid{
-					ParentBlockHash:       make([]byte, fieldparams.RootLength),
-					ParentBlockRoot:       make([]byte, fieldparams.RootLength),
-					BlockHash:             make([]byte, fieldparams.RootLength),
-					PrevRandao:            make([]byte, fieldparams.RootLength),
-					FeeRecipient:          make([]byte, fieldparams.FeeRecipientLength),
-					GasLimit:              30_000_000,
-					BuilderIndex:          0,
-					Slot:                  0,
-					Value:                 0,
-					ExecutionPayment:      0,
-					BlobKzgCommitments:    [][]byte{},
-					ExecutionRequestsRoot: make([]byte, fieldparams.RootLength),
+			Object: &validatorpb.SignRequest_RequestAuth{
+				RequestAuth: &eth.RequestAuthV1{
+					Data: []byte("https://builder.example.com"),
+					Slot: 0,
 				},
 			},
 			SigningSlot: 0,
@@ -788,25 +778,14 @@ func VoluntaryExitSignRequest() *types.VoluntaryExitSignRequest {
 	}
 }
 
-// ExecutionPayloadBidSignRequest is a mock implementation of the ExecutionPayloadBidSignRequest.
-func ExecutionPayloadBidSignRequest() *types.ExecutionPayloadBidSignRequest {
-	return &types.ExecutionPayloadBidSignRequest{
-		Type:        "EXECUTION_PAYLOAD_BID",
-		ForkInfo:    ForkInfo(),
+// RequestAuthSignRequest is a mock implementation of the RequestAuthSignRequest.
+func RequestAuthSignRequest() *types.RequestAuthSignRequest {
+	return &types.RequestAuthSignRequest{
+		Type:        "REQUEST_AUTH",
 		SigningRoot: make([]byte, fieldparams.RootLength),
-		ExecutionPayloadBid: &types.ExecutionPayloadBid{
-			ParentBlockHash:       make([]byte, fieldparams.RootLength),
-			ParentBlockRoot:       make([]byte, fieldparams.RootLength),
-			BlockHash:             make([]byte, fieldparams.RootLength),
-			PrevRandao:            make([]byte, fieldparams.RootLength),
-			FeeRecipient:          make([]byte, fieldparams.FeeRecipientLength),
-			GasLimit:              "30000000",
-			BuilderIndex:          "0",
-			Slot:                  "0",
-			Value:                 "0",
-			ExecutionPayment:      "0",
-			BlobKzgCommitments:    []hexutil.Bytes{},
-			ExecutionRequestsRoot: make([]byte, fieldparams.RootLength),
+		RequestAuth: &types.RequestAuth{
+			Data: []byte("https://builder.example.com"),
+			Slot: "0",
 		},
 	}
 }
@@ -835,10 +814,12 @@ func ExecutionPayloadEnvelopeProto() *eth.ExecutionPayloadEnvelope {
 			BlockAccessList: []byte{},
 			SlotNumber:      0,
 		},
-		ExecutionRequests: &enginev1.ExecutionRequests{
-			Deposits:       []*enginev1.DepositRequest{},
-			Withdrawals:    []*enginev1.WithdrawalRequest{},
-			Consolidations: []*enginev1.ConsolidationRequest{},
+		ExecutionRequests: &enginev1.ExecutionRequestsGloas{
+			Deposits:        []*enginev1.DepositRequest{},
+			Withdrawals:     []*enginev1.WithdrawalRequest{},
+			Consolidations:  []*enginev1.ConsolidationRequest{},
+			BuilderDeposits: []*enginev1.BuilderDepositRequest{},
+			BuilderExits:    []*enginev1.BuilderExitRequest{},
 		},
 		BuilderIndex:    0,
 		BeaconBlockRoot: make([]byte, fieldparams.RootLength),
@@ -873,10 +854,12 @@ func ExecutionPayloadEnvelopeSignRequest() *types.ExecutionPayloadEnvelopeSignRe
 				BlockAccessList: []byte{},
 				SlotNumber:      "0",
 			},
-			ExecutionRequests: &types.ExecutionRequests{
-				Deposits:       []*types.DepositRequest{},
-				Withdrawals:    []*types.WithdrawalRequest{},
-				Consolidations: []*types.ConsolidationRequest{},
+			ExecutionRequests: &types.ExecutionRequestsGloas{
+				Deposits:        []*types.DepositRequest{},
+				Withdrawals:     []*types.WithdrawalRequest{},
+				Consolidations:  []*types.ConsolidationRequest{},
+				BuilderDeposits: []*types.BuilderDepositRequest{},
+				BuilderExits:    []*types.BuilderExitRequest{},
 			},
 			BuilderIndex:    "0",
 			BeaconBlockRoot: make([]byte, fieldparams.RootLength),

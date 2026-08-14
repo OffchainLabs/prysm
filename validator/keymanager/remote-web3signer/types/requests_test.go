@@ -632,23 +632,17 @@ func TestGetProposerPreferencesSignRequest_NilPref(t *testing.T) {
 	require.ErrorContains(t, "ProposerPreferences is nil", err)
 }
 
-func TestGetExecutionPayloadBidSignRequest(t *testing.T) {
-	got, err := types.GetExecutionPayloadBidSignRequest(
-		mock.GetMockSignRequest("EXECUTION_PAYLOAD_BID"),
-		make([]byte, fieldparams.RootLength),
-	)
-	require.NoError(t, err)
-	gotJSON, err := json.Marshal(got)
-	require.NoError(t, err)
-	wantJSON, err := json.Marshal(mock.ExecutionPayloadBidSignRequest())
-	require.NoError(t, err)
-	require.Equal(t, string(wantJSON), string(gotJSON))
-}
-
-func TestGetExecutionPayloadBidSignRequest_NilBid(t *testing.T) {
-	req := &validatorpb.SignRequest{
-		Object: &validatorpb.SignRequest_ExecutionPayloadBid{},
-	}
-	_, err := types.GetExecutionPayloadBidSignRequest(req, make([]byte, fieldparams.RootLength))
-	require.ErrorContains(t, "ExecutionPayloadBid is nil", err)
+func TestGetRequestAuthSignRequest(t *testing.T) {
+	t.Run("Happy Path Test", func(t *testing.T) {
+		got, err := types.GetRequestAuthSignRequest(mock.GetMockSignRequest("REQUEST_AUTH"))
+		require.NoError(t, err)
+		require.DeepEqual(t, mock.RequestAuthSignRequest(), got)
+	})
+	t.Run("Nil RequestAuth", func(t *testing.T) {
+		req := &validatorpb.SignRequest{
+			Object: &validatorpb.SignRequest_RequestAuth{},
+		}
+		_, err := types.GetRequestAuthSignRequest(req)
+		require.ErrorContains(t, "RequestAuth is nil", err)
+	})
 }
