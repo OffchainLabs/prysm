@@ -183,12 +183,12 @@ func (s *Store) stateDiffKeysBefore(ctx context.Context, slot uint64, kept map[u
 				return nil
 			}
 
-			// Metadata keys are shorter than a tree key, and are never pruned.
-			if len(key) < stateDiffTreeKeyLength {
+			// The bucket also holds metadata keys, which are never pruned.
+			if !isStateDiffTreeKey(key) {
 				continue
 			}
 
-			entrySlot := binary.LittleEndian.Uint64(key[1:9])
+			entrySlot := stateDiffTreeKeySlot(key)
 			if entrySlot >= slot || kept[entrySlot] {
 				continue
 			}
@@ -288,7 +288,7 @@ func (s *Store) reanchorStateDiffCache(offset uint64) error {
 		cursor := bucket.Cursor()
 		for level := range levelsWithData {
 			key, _ := cursor.Seek([]byte{byte(level)})
-			levelsWithData[level] = key != nil && len(key) >= stateDiffTreeKeyLength && key[0] == byte(level)
+			levelsWithData[level] = key != nil && isStateDiffTreeKey(key) && key[0] == byte(level)
 		}
 
 		return nil

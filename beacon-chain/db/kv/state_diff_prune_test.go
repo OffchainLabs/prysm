@@ -135,6 +135,43 @@ func TestStateDiff_DeleteBeforeSlot(t *testing.T) {
 		require.NoError(t, validateStateDiffCache(t.Context(), db, cache))
 	})
 
+	t.Run("keeps the metadata keys, whatever their length", func(t *testing.T) {
+		db := setupPrunableStateDiffTree(t, 384)
+
+		// Metadata keys are told apart from tree keys by their shape, not by their length, so a
+		// metadata key longer than a tree key is not mistaken for an entry to prune.
+		longKeys := [][]byte{
+			// A word longer than a tree key.
+			[]byte("a-metadata-key-longer-than-a-tree-key"),
+			// One whose bytes would otherwise decode as a tree entry at slot 0, below the cutoff.
+			append([]byte("m"), make([]byte, stateDiffTreeKeyLength)...),
+		}
+
+		require.NoError(t, db.db.Update(func(tx *bolt.Tx) error {
+			for _, key := range longKeys {
+				require.Equal(t, true, len(key) > stateDiffTreeKeyLength)
+				if err := tx.Bucket(stateDiffBucket).Put(key, []byte("value")); err != nil {
+					return err
+				}
+			}
+
+			return nil
+		}))
+
+		require.Equal(t, true, drainStateDiffPruning(t, db, 320, 2) > 0)
+
+		require.NoError(t, db.db.View(func(tx *bolt.Tx) error {
+			bucket := tx.Bucket(stateDiffBucket)
+			for _, key := range longKeys {
+				require.DeepEqual(t, []byte("value"), bucket.Get(key))
+			}
+			require.Equal(t, true, bucket.Get(offsetKey) != nil)
+			require.Equal(t, true, bucket.Get(exponentsKey) != nil)
+
+			return nil
+		}))
+	})
+
 	t.Run("is idempotent", func(t *testing.T) {
 		db := setupPrunableStateDiffTree(t, 384)
 
