@@ -379,6 +379,9 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	SubnetsPerNode:                  2,
 	NodeIdBits:                      256,
 
+	// Values related to the fast confirmation rule.
+	ConfirmationByzantineThreshold: 25,
+
 	BlobSchedule: []BlobScheduleEntry{
 		{
 			Epoch:            412672, // December 9, 2025, 02:21:11pm UTC

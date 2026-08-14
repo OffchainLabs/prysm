@@ -149,6 +149,7 @@ func TestGetSpec(t *testing.T) {
 	config.ContributionDueBPSGloas = primitives.BP(129)
 	config.PayloadAttestationDueBPS = primitives.BP(130)
 	config.PayloadDueBPS = primitives.BP(131)
+	config.ConfirmationByzantineThreshold = 132
 	config.TerminalBlockHash = common.HexToHash("TerminalBlockHash")
 	config.TerminalBlockHashActivationEpoch = 72
 	config.TerminalTotalDifficulty = "73"
@@ -244,7 +245,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 212, len(data))
+	assert.Equal(t, 218, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -540,6 +541,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "130", v)
 			case "PAYLOAD_DUE_BPS":
 				assert.Equal(t, "131", v)
+			case "CONFIRMATION_BYZANTINE_THRESHOLD":
+				assert.Equal(t, "132", v)
 			case "MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT":
 				assert.Equal(t, "8", v)
 			case "MAX_REQUEST_LIGHT_CLIENT_UPDATES":
@@ -696,6 +699,16 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.BuilderRegistryLimit), 10), v)
 			case "BUILDER_PENDING_WITHDRAWALS_LIMIT":
 				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.BuilderPendingWithdrawalsLimit), 10), v)
+			case "MAX_SIGNED_AGGREGATE_AND_PROOF_SIZE":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.MaxSignedAggregateAndProofSize), 10), v)
+			case "MAX_ATTESTER_SLASHING_SIZE":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.MaxAttesterSlashingSize), 10), v)
+			case "MAX_DATA_COLUMN_SIDECAR_SIZE":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.MaxDataColumnSidecarSize), 10), v)
+			case "MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.MaxPartialDataColumnSidecarSize), 10), v)
+			case "MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.MaxSignedExecutionPayloadBidSize), 10), v)
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}
