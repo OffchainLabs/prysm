@@ -197,6 +197,9 @@ func (s *Store) stateDiffKeysBefore(ctx context.Context, slot uint64, kept map[u
 				continue
 			}
 
+			// A diff entry is split into a state, a validator and a balances key, which share the
+			// same prefix and hence follow each other. Counting prefixes rather than keys keeps the
+			// budget in entries, and ends the batch between two of them, never in the middle of one.
 			if !bytes.Equal(entryPrefix, key[:stateDiffTreeKeyLength]) {
 				if entries == maxEntries {
 					return nil
