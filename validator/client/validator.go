@@ -904,8 +904,8 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		// Gloas preferences start being prepared one epoch ahead; v1 builder
 		// settings do not apply to them, so warn while there is time to act.
 		if ps := v.ProposerSettings(); currentEpoch+1 >= params.BeaconConfig().GloasForkEpoch &&
-			ps != nil && ps.Version != proposer.SchemaV2 && ps.HasBuilderContent() && slots.IsEpochStart(slot) {
-			log.Warn("Proposer settings still use the v1 schema; gloas proposer preferences are prepared with defaults. Provide v2 proposer settings.")
+			ps.HasLegacyBuilderContent() && slots.IsEpochStart(slot) {
+			log.Warn("Proposer settings contain v1 builder fields, which do not apply to gloas; proposer preferences are prepared with defaults. Configure builders via v2 proposer settings.")
 		}
 	} else {
 		v.upgradeProposerSettingsToV2(ctx)
@@ -1482,7 +1482,8 @@ type builderTarget struct {
 }
 
 // builderTargetsForKey resolves the configured builder list for pk; entries override
-// config-level fallbacks. TODO(gloas): minBid/boost/pubkeys ride the #630 wire.
+// config-level fallbacks. TODO(gloas): per-entry max_execution_payment, minBid,
+// boost and pubkeys ride the beacon-APIs #630 wire.
 func (v *validator) builderTargetsForKey(pk pubkey) []builderTarget {
 	ps := v.ProposerSettings()
 	if ps == nil {

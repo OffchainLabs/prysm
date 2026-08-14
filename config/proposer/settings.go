@@ -173,16 +173,17 @@ func (ps *Settings) RegistrationFor(pubkey [fieldparams.BLSPubkeyLength]byte) (c
 		feeRecipient = opt.FeeRecipientConfig.FeeRecipient
 		hasFeeRecipient = true
 	}
-	// Legacy enabled is object-level: a per-key builder config wins wholesale,
-	// so a disabled one opts the key out even under an enabled default.
-	enabled := ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig.IsEnabled()
-	if opt != nil && opt.BuilderConfig != nil {
-		enabled = opt.BuilderConfig.IsEnabled()
+	enabled := false
+	if ps.DefaultConfig != nil {
+		if in, ok := ps.DefaultConfig.BuilderConfig.registrationEnabled(); ok {
+			enabled = in
+		}
 	}
-	// v2 content opts in independently: a resolved nonempty builders list
-	// participates; an explicit empty list stays opted out.
-	if bc := ps.EffectiveBuilderConfig(pubkey); bc != nil && len(bc.Builders) > 0 {
-		enabled = true
+	// A per-key choice wins over the default's.
+	if opt != nil {
+		if in, ok := opt.BuilderConfig.registrationEnabled(); ok {
+			enabled = in
+		}
 	}
 	// Explicitly set option-level gas limits win; legacy builder-level values
 	// are the pre-gloas fallback.
@@ -266,6 +267,33 @@ func (be *BuilderEntry) EffectiveMaxExecutionPayment(bc *BuilderConfig) validato
 // v2 settings ignore the enabled field entirely.
 func (bc *BuilderConfig) IsEnabled() bool {
 	return bc != nil && bc.Enabled
+}
+
+// hasV2Content reports whether any v2 builder field is set; an explicit empty
+// builders list counts.
+func (bc *BuilderConfig) hasV2Content() bool {
+	return bc != nil && (bc.Builders != nil || bc.MinBid != nil || bc.BuilderBoostFactor != nil || bc.MaxExecutionPayment != nil)
+}
+
+// registrationEnabled reports whether this config opts the key in or out of
+// mev-boost registration. ok is false when the config says neither.
+func (bc *BuilderConfig) registrationEnabled() (enabled, ok bool) {
+	switch {
+	case bc == nil:
+		return false, false
+	case len(bc.Builders) > 0 || bc.Enabled:
+		// A nonempty v2 builders list opts in pre-gloas just like v1 enabled.
+		return true, true
+	case bc.Builders != nil:
+		// An explicit empty list means self-build everywhere: no mev-boost either.
+		return false, true
+	case !bc.hasV2Content():
+		// A pure-v1 config without enabled is the legacy wins-wholesale disable.
+		return false, true
+	default:
+		// Gloas knobs (min_bid etc.) without a builders list: no registration choice.
+		return false, false
+	}
 }
 
 // effectiveBuilderConfig merges two config levels with field-level inheritance;
@@ -573,28 +601,34 @@ func (ps *Settings) isV2() bool {
 	return ps != nil && ps.Version == SchemaV2
 }
 
-// WarnDeprecatedSchema logs a warning when v1 settings are used on a network
-// with gloas scheduled.
+// WarnDeprecatedSchema logs a warning when legacy v1 builder content is loaded
+// on a network with gloas scheduled, regardless of the schema stamp.
 func (ps *Settings) WarnDeprecatedSchema() {
-	if ps == nil || ps.Version == SchemaV2 || !params.GloasEnabled() {
+	if ps == nil || !params.GloasEnabled() {
 		return
 	}
-	// Fee recipients and graffiti behave identically across schemas; only
-	// builder content gives the cutover something to drop.
-	if !ps.HasBuilderContent() {
+	// Fee recipients and graffiti behave identically across schemas; only v1
+	// builder fields give the cutover something to drop.
+	if !ps.HasLegacyBuilderContent() {
 		return
 	}
-	log.Warn("Proposer settings use the deprecated v1 schema; v1 builder settings, including gas limits, are replaced with defaults at the gloas fork (fee recipients and graffiti carry over). Please migrate your settings source to v2.")
+	log.Warn("Proposer settings contain deprecated v1 builder fields (enabled, builder-level gas limits); they stop applying at the gloas fork and are replaced with defaults (fee recipients and graffiti carry over). Configure gloas builders via v2 settings or the keymanager API.")
 }
 
-// HasBuilderContent reports whether any level carries a builder config, i.e.
-// whether the v1 cutover has anything to drop.
-func (ps *Settings) HasBuilderContent() bool {
-	if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil {
+// HasLegacyBuilderContent reports whether any level carries v1 builder fields,
+// i.e. whether the gloas cutover has anything to drop.
+func (ps *Settings) HasLegacyBuilderContent() bool {
+	if ps == nil {
+		return false
+	}
+	legacy := func(opt *Option) bool {
+		return opt != nil && opt.BuilderConfig != nil && (opt.BuilderConfig.Enabled || opt.BuilderConfig.GasLimit != 0)
+	}
+	if legacy(ps.DefaultConfig) {
 		return true
 	}
 	for _, opt := range ps.ProposeConfig {
-		if opt != nil && opt.BuilderConfig != nil {
+		if legacy(opt) {
 			return true
 		}
 	}
@@ -620,7 +654,7 @@ func (ps *Settings) UpgradeToV2() bool {
 		}
 		// A config left with no v2 content disappears entirely; an explicit
 		// empty builders list is v2 content and survives.
-		if bc.Builders == nil && bc.MinBid == nil && bc.BuilderBoostFactor == nil && bc.MaxExecutionPayment == nil {
+		if !bc.hasV2Content() {
 			opt.BuilderConfig = nil
 			scrubbed = true
 		}

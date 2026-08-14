@@ -457,25 +457,43 @@ func TestSettings_WarnDeprecatedSchema(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 		hook := logtest.NewGlobal()
 		v1Settings.WarnDeprecatedSchema()
-		assert.LogsContain(t, hook, "deprecated v1 schema")
+		assert.LogsContain(t, hook, "deprecated v1 builder fields")
 	})
 	t.Run("v1 without gloas scheduled silent", func(t *testing.T) {
 		hook := logtest.NewGlobal()
 		v1Settings.WarnDeprecatedSchema()
-		assert.LogsDoNotContain(t, hook, "deprecated v1 schema")
+		assert.LogsDoNotContain(t, hook, "deprecated v1 builder fields")
 	})
-	t.Run("v2 silent", func(t *testing.T) {
+	t.Run("v2 stamp with v1 content still warns", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 100
+		params.OverrideBeaconConfig(cfg)
+		hook := logtest.NewGlobal()
+		mixed := &Settings{
+			Version: SchemaV2,
+			DefaultConfig: &Option{
+				BuilderConfig: &BuilderConfig{Enabled: true, Builders: []*BuilderEntry{{URL: "https://b.example"}}},
+			},
+		}
+		mixed.WarnDeprecatedSchema()
+		assert.LogsContain(t, hook, "deprecated v1 builder fields")
+	})
+	t.Run("pure v2 content silent", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig().Copy()
 		cfg.GloasForkEpoch = 100
 		params.OverrideBeaconConfig(cfg)
 		hook := logtest.NewGlobal()
 		v2 := &Settings{
-			Version:       SchemaV2,
-			DefaultConfig: &Option{GasLimit: 30000000},
+			Version: SchemaV2,
+			DefaultConfig: &Option{
+				GasLimit:      30000000,
+				BuilderConfig: &BuilderConfig{Builders: []*BuilderEntry{{URL: "https://b.example"}}},
+			},
 		}
 		v2.WarnDeprecatedSchema()
-		assert.LogsDoNotContain(t, hook, "deprecated v1 schema")
+		assert.LogsDoNotContain(t, hook, "deprecated v1 builder fields")
 	})
 }
 
@@ -836,6 +854,66 @@ func TestRegistrationFor(t *testing.T) {
 		require.Equal(t, false, enabled)
 	})
 
+	t.Run("v2-only extras are neutral: key keeps the enabled default's toggle", func(t *testing.T) {
+		// A gloas-only preference (min_bid, no builders list) must not silently
+		// opt the key out of an enabled v1 default.
+		ps := &Settings{
+			Version: SchemaV2,
+			DefaultConfig: &Option{
+				FeeRecipientConfig: &FeeRecipientConfig{FeeRecipient: recipient},
+				BuilderConfig:      &BuilderConfig{Enabled: true},
+			},
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				key: {BuilderConfig: &BuilderConfig{MinBid: uint64ValPtr(5)}},
+			},
+		}
+		_, _, enabled := ps.RegistrationFor(key)
+		require.Equal(t, true, enabled)
+	})
+
+	t.Run("per-key explicit empty builders opts out of an enabled v1 default", func(t *testing.T) {
+		ps := &Settings{
+			Version: SchemaV2,
+			DefaultConfig: &Option{
+				FeeRecipientConfig: &FeeRecipientConfig{FeeRecipient: recipient},
+				BuilderConfig:      &BuilderConfig{Enabled: true},
+			},
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				key: {BuilderConfig: &BuilderConfig{Builders: []*BuilderEntry{}}},
+			},
+		}
+		_, _, enabled := ps.RegistrationFor(key)
+		require.Equal(t, false, enabled)
+	})
+
+	t.Run("transition config registers: enabled with explicit empty builders", func(t *testing.T) {
+		// enabled:true + builders:[] means mev-boost until the fork, self-build after.
+		ps := &Settings{
+			Version: SchemaV2,
+			DefaultConfig: &Option{
+				FeeRecipientConfig: &FeeRecipientConfig{FeeRecipient: recipient},
+				BuilderConfig:      &BuilderConfig{Enabled: true, Builders: []*BuilderEntry{}},
+			},
+		}
+		_, _, enabled := ps.RegistrationFor(key)
+		require.Equal(t, true, enabled)
+	})
+
+	t.Run("per-key v1 disable wins over a default with builders", func(t *testing.T) {
+		ps := &Settings{
+			Version: SchemaV2,
+			DefaultConfig: &Option{
+				FeeRecipientConfig: &FeeRecipientConfig{FeeRecipient: recipient},
+				BuilderConfig:      &BuilderConfig{Builders: []*BuilderEntry{{URL: "https://b.example"}}},
+			},
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				key: {BuilderConfig: &BuilderConfig{Enabled: false}},
+			},
+		}
+		_, _, enabled := ps.RegistrationFor(key)
+		require.Equal(t, false, enabled)
+	})
+
 	t.Run("v1 per-key disabled builder opts the key out", func(t *testing.T) {
 		ps := &Settings{
 			Version: SchemaV1,
@@ -970,20 +1048,27 @@ func TestRegistrationFor(t *testing.T) {
 	})
 }
 
-// Version-neutral settings (fee recipient, graffiti) give the deprecation
-// warning nothing to say; only builder content triggers it.
-func TestHasBuilderContent(t *testing.T) {
+// Version-neutral settings (fee recipient, graffiti) and pure v2 builder content
+// give the deprecation warning nothing to say; only v1 fields trigger it.
+func TestHasLegacyBuilderContent(t *testing.T) {
 	key := [fieldparams.BLSPubkeyLength]byte{9}
-	neutral := &Settings{
+	ps := &Settings{
 		Version:       SchemaV1,
 		DefaultConfig: &Option{FeeRecipientConfig: &FeeRecipientConfig{}},
 		ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
 			key: {GraffitiConfig: &GraffitiConfig{Graffiti: "hi"}},
 		},
 	}
-	require.Equal(t, false, neutral.HasBuilderContent())
-	neutral.ProposeConfig[key].BuilderConfig = &BuilderConfig{}
-	require.Equal(t, true, neutral.HasBuilderContent())
+	require.Equal(t, false, ps.HasLegacyBuilderContent())
+	ps.ProposeConfig[key].BuilderConfig = &BuilderConfig{MinBid: uint64ValPtr(1), Builders: []*BuilderEntry{}}
+	require.Equal(t, false, ps.HasLegacyBuilderContent())
+	ps.ProposeConfig[key].BuilderConfig.GasLimit = 30000000
+	require.Equal(t, true, ps.HasLegacyBuilderContent())
+	ps.ProposeConfig[key].BuilderConfig.GasLimit = 0
+	ps.DefaultConfig.BuilderConfig = &BuilderConfig{Enabled: true}
+	require.Equal(t, true, ps.HasLegacyBuilderContent())
+	var nilSettings *Settings
+	require.Equal(t, false, nilSettings.HasLegacyBuilderContent())
 }
 
 // The cutover scrubs v1 builder fields; v2 content — including an explicit

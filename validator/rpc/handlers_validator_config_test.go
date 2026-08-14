@@ -18,6 +18,7 @@ import (
 	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/derived"
 	mocks "github.com/OffchainLabs/prysm/v7/validator/testing"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/mock/gomock"
 )
@@ -159,6 +160,29 @@ func TestServer_SetBuilders(t *testing.T) {
 
 		_, cfg := getBuilders(t, srv, pkA)
 		require.Equal(t, 0, len(cfg.Builders))
+	})
+
+	t.Run("gloas-only preferences keep the key's pre-fork registration", func(t *testing.T) {
+		srv, keys := setupConfigServer(t, 1)
+		pk := hexutil.Encode(keys[0][:])
+		recipient := common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")
+		require.NoError(t, srv.validatorService.SetProposerSettings(t.Context(), &proposer.Settings{
+			Version: proposer.SchemaV1,
+			DefaultConfig: &proposer.Option{
+				FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: recipient},
+				BuilderConfig:      &proposer.BuilderConfig{Enabled: true},
+			},
+		}))
+		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, `{"min_bid":"5"}`).Code)
+
+		// The POST expressed no registration choice, so the enabled default still applies.
+		_, _, enabled := srv.validatorService.ProposerSettings().RegistrationFor(keys[0])
+		require.Equal(t, true, enabled)
+
+		// An explicit empty list is a registration choice: it opts the key out.
+		require.Equal(t, http.StatusAccepted, postBuilders(t, srv, pk, `{"builders":[]}`).Code)
+		_, _, enabled = srv.validatorService.ProposerSettings().RegistrationFor(keys[0])
+		require.Equal(t, false, enabled)
 	})
 
 	t.Run("upgrades v1 settings in place", func(t *testing.T) {
