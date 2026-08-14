@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
@@ -41,10 +40,7 @@ func (s *Store) LastStateDiffBoundary(slot primitives.Slot) (primitives.Slot, er
 	}
 
 	// The last kept slot is the one of the finest level, hence the closest boundary to the slot.
-	keptSlots, err := stateDiffSlotsToKeep(offset, uint64(slot))
-	if err != nil {
-		return 0, err
-	}
+	keptSlots := stateDiffSlotsToKeep(offset, uint64(slot))
 
 	return primitives.Slot(keptSlots[len(keptSlots)-1]), nil
 }
@@ -82,10 +78,7 @@ func (s *Store) DeleteStateDiffBeforeSlot(ctx context.Context, cutoffSlot primit
 		return 0, nil
 	}
 
-	keptSlots, err := stateDiffSlotsToKeep(offset, cutoff)
-	if err != nil {
-		return 0, fmt.Errorf("state diff slots to keep: %w", err)
-	}
+	keptSlots := stateDiffSlotsToKeep(offset, cutoff)
 
 	// The tree is anchored on the kept level 0 entry from now on.
 	// Refuse to prune a tree that cannot be re-anchored, rather than making it unreadable.
@@ -136,29 +129,18 @@ func (s *Store) DeleteStateDiffBeforeSlot(ctx context.Context, cutoffSlot primit
 
 // stateDiffSlotsToKeep returns, for every level of the tree, the slot of the last entry at or
 // before the given slot. Those are the only entries below it that a state at or after it needs.
-func stateDiffSlotsToKeep(offset, slot uint64) ([]uint64, error) {
+// The exponents are validated at node startup, and the callers check the slot against the offset.
+func stateDiffSlotsToKeep(offset, slot uint64) []uint64 {
 	exponents := flags.Get().StateDiffExponents
-	if len(exponents) == 0 {
-		return nil, errors.New("state diff exponents cannot be empty")
-	}
-
-	if slot < offset {
-		return nil, fmt.Errorf("slot %d is before the state diff offset %d", slot, offset)
-	}
-
 	relativeSlot := slot - offset
 	keptSlots := make([]uint64, 0, len(exponents))
 
 	for _, exponent := range exponents {
-		if exponent < flags.MinStateDiffExponent || exponent >= 64 {
-			return nil, fmt.Errorf("state diff exponent %d out of range for uint64", exponent)
-		}
-
 		span := math.PowerOf2(uint64(exponent))
 		keptSlots = append(keptSlots, offset+relativeSlot/span*span)
 	}
 
-	return keptSlots, nil
+	return keptSlots
 }
 
 // hasStateDiffKey reports whether the given key is present in the state-diff bucket.

@@ -3,7 +3,6 @@ package kv
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -172,21 +171,21 @@ func TestStateDiff_DeleteBeforeSlot(t *testing.T) {
 }
 
 func TestStateDiff_SlotsToKeep(t *testing.T) {
-	t.Run("refuses a slot before the offset", func(t *testing.T) {
+	t.Run("returns the last boundary of every level", func(t *testing.T) {
 		setStateDiffExponents([]int{7, 5})
 
-		_, err := stateDiffSlotsToKeep(256, 128)
-		require.ErrorContains(t, "is before the state diff offset", err)
+		// The levels span 128 and 32 slots, counted from the offset.
+		require.DeepEqual(t, []uint64{256, 320}, stateDiffSlotsToKeep(0, 320))
+		require.DeepEqual(t, []uint64{256, 352}, stateDiffSlotsToKeep(0, 383))
+		require.DeepEqual(t, []uint64{384, 384}, stateDiffSlotsToKeep(0, 384))
 	})
 
-	t.Run("refuses an out of range exponent", func(t *testing.T) {
-		// Too small to be a level span, then too large for a uint64 shift.
-		for _, exponents := range [][]int{{7, flags.MinStateDiffExponent - 1}, {64, 5}} {
-			setStateDiffExponents(exponents)
+	t.Run("counts the boundaries from the offset", func(t *testing.T) {
+		setStateDiffExponents([]int{7, 5})
 
-			_, err := stateDiffSlotsToKeep(0, 320)
-			require.ErrorContains(t, "out of range for uint64", err)
-		}
+		require.DeepEqual(t, []uint64{128, 128}, stateDiffSlotsToKeep(128, 128))
+		require.DeepEqual(t, []uint64{256, 288}, stateDiffSlotsToKeep(128, 300))
+		require.DeepEqual(t, []uint64{256, 256}, stateDiffSlotsToKeep(128, 256))
 	})
 }
 
