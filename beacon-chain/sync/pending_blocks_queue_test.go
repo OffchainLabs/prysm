@@ -973,3 +973,38 @@ func TestExpirationCache_PruneOldBlocksCorrectly(t *testing.T) {
 	assert.Equal(t, false, r.seenPendingBlocks[b2Root])
 	assert.Equal(t, 0, len(r.pendingBlocksInCache(1)))
 }
+
+func TestService_fetchMissingParent_DedupsAndCapsPerSlot(t *testing.T) {
+	chain := &mock.ChainService{
+		FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, 32)},
+		ValidatorsRoot:      [32]byte{},
+		Genesis:             time.Now(),
+	}
+	newService := func() *Service {
+		return &Service{
+			ctx: t.Context(),
+			cfg: &config{
+				p2p:   p2ptest.NewTestP2P(t),
+				chain: chain,
+				clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			},
+			seenPendingBlocks: make(map[[32]byte]bool),
+		}
+	}
+
+	t.Run("same root is only fetched once", func(t *testing.T) {
+		r := newService()
+		for range 128 {
+			r.fetchMissingParent([32]byte{'a'})
+		}
+		require.Equal(t, 1, len(r.parentFetchRoots))
+	})
+
+	t.Run("distinct roots are capped", func(t *testing.T) {
+		r := newService()
+		for i := range 128 {
+			r.fetchMissingParent([32]byte{byte(i)})
+		}
+		require.Equal(t, maxParentFetchesPerSlot, len(r.parentFetchRoots))
+	})
+}

@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
-	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/logging"
@@ -183,19 +182,12 @@ func (s *Service) validateDataColumnFulu(
 	// [IGNORE] The sidecar's block's parent (defined by `block_header.parent_root`) has been seen (via gossip or non-gossip sources
 	// (a client MAY queue sidecars for processing once the parent block is retrieved).
 	if err := verifier.SidecarParentSeen(s.hasBadBlock); err != nil {
-		go func() {
-			customCtx := context.Background()
-			parentRoot, err := roDataColumn.ParentRoot()
-			if err != nil {
-				log.WithError(err).WithFields(logging.DataColumnFields(roDataColumn)).Debug("Failed to get parent root for batch root request")
-				return
-			}
-			roots := [][fieldparams.RootLength]byte{parentRoot}
-			randGenerator := rand.NewGenerator()
-			if reqErr := s.sendBatchRootRequest(customCtx, roots, randGenerator); reqErr != nil {
-				log.WithError(reqErr).WithFields(logging.DataColumnFields(roDataColumn)).Debug("Failed to send batch root request")
-			}
-		}()
+		parentRoot, rootErr := roDataColumn.ParentRoot()
+		if rootErr != nil {
+			log.WithError(rootErr).WithFields(logging.DataColumnFields(roDataColumn)).Debug("Failed to get parent root for batch root request")
+		} else {
+			s.fetchMissingParent(parentRoot)
+		}
 
 		return blocks.VerifiedRODataColumn{}, ignoreValidation(err)
 	}
