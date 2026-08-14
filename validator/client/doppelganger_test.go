@@ -53,11 +53,9 @@ func enableDoppelGanger(t *testing.T) {
 }
 
 func waitForDoppelCheck(t *testing.T, v *validator) {
-	deadline := time.Now().Add(2 * time.Second)
-	for v.doppelGanger.inFlight.Load() && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
-	require.Equal(t, false, v.doppelGanger.inFlight.Load(), "doppelganger check did not finish")
+	require.Eventually(t, func() bool {
+		return !v.doppelGanger.inFlight.Load()
+	}, 2*time.Second, 10*time.Millisecond, "doppelganger check did not finish")
 }
 
 // mockSyncedChainHead points the validator at a chain whose head is at headEpoch,
